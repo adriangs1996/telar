@@ -88,6 +88,7 @@ struct DiagnosticsOptions {
 
     DiagnosticsOptions self{.action = std::string_view{words.front()} == "logs" ? Action::logs : Action::limits};
     Cursor cursor{words.subspan(1)};
+
     while (const auto word = cursor.next()) {
       const std::string_view arg = *word;
       if (arg == "--component" && self.action == Action::logs) {
@@ -162,6 +163,7 @@ struct Options {
     }
 
     Options self{.action = action == "put" ? Action::put : Action::get, .path = words[1]};
+
     if (words.size() == 4) {
       if (self.action != Action::put || std::string_view{words[2]} != "--bytes") {
         throw std::invalid_argument{"InvalidFileArguments"};
@@ -189,9 +191,11 @@ inline FileDescriptor openDirectory(std::string_view path, bool create = false) 
   }
 
   std::size_t start = 1;
+
   while (start < path.size()) {
     const auto end = path.find('/', start);
     const auto component = path.substr(start, end == path.npos ? path.size() - start : end - start);
+
     start = end == path.npos ? path.size() : end + 1;
     if (component.empty()) {
       continue;
@@ -263,6 +267,7 @@ inline void checkSize(std::uint64_t size) {
 inline std::uint64_t copy(int input, int output) {
   std::array<Byte, copy_buffer_bytes> buffer;
   std::uint64_t total = 0;
+
   for (;;) {
     const auto count = ::read(input, buffer.data(), buffer.size());
     if (count < 0 && errno == EINTR) {
@@ -379,6 +384,7 @@ inline std::optional<Log> parseLog(std::string_view name, std::string_view base)
 
   auto suffix = name.substr(base.size(), name.size() - base.size() - std::string_view{".log"}.size());
   auto component = DiagnosticsOptions::Component::all;
+
   if (suffix.starts_with(".runtime-")) {
     component = DiagnosticsOptions::Component::runtime;
     suffix.remove_prefix(std::string_view{".runtime-"}.size());
@@ -404,6 +410,7 @@ inline std::string_view tail(std::string_view bytes, std::uint16_t lines) {
 
   auto index = bytes.size() - (bytes.back() == '\n' ? 1 : 0);
   std::size_t found = 0;
+
   while (index != 0) {
     if (bytes[--index] == '\n' && ++found == lines) {
       return bytes.substr(index + 1);
@@ -417,6 +424,7 @@ inline std::vector<Log> findLogs(DIR *directory, std::string_view base, const Di
   std::vector<Log> logs;
   std::size_t visited = 0;
   std::size_t skipped = 0;
+
   while (const auto *entry = ::readdir(directory)) {
     if (std::string_view{entry->d_name} == "." || std::string_view{entry->d_name} == "..") {
       continue;
@@ -482,6 +490,7 @@ inline void readLogs(std::string_view endpoint, const DiagnosticsOptions &option
   const auto logs = findLogs(directory.get(), base, options);
   std::string bytes(max_tail_bytes, '\0');
   std::string output = options.json ? "[" : "";
+
   for (const auto &log : logs) {
     FileDescriptor file{::openat(::dirfd(directory.get()), log.name.c_str(), O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)};
     if (!file) {
@@ -495,6 +504,7 @@ inline void readLogs(std::string_view endpoint, const DiagnosticsOptions &option
 
     const auto offset = std::max<off_t>(0, inode.st_size - max_tail_bytes);
     std::size_t count = 0;
+
     while (count < bytes.size()) {
       const auto read = ::pread(file.get(), bytes.data() + count, bytes.size() - count, offset + count);
       if (read < 0 && errno == EINTR) {
@@ -520,6 +530,7 @@ inline void readLogs(std::string_view endpoint, const DiagnosticsOptions &option
     const auto selected = tail(text, options.lines);
     const bool truncated = offset != 0 || selected.size() < text.size();
     const auto path = parent + "/" + log.name;
+
     if (options.json) {
       if (&log != logs.data()) {
         output += ',';
@@ -544,6 +555,7 @@ inline void readLogs(std::string_view endpoint, const DiagnosticsOptions &option
 
 inline void printLimits(const LimitList &list, bool json) {
   std::string output;
+
   if (json) {
     output = std::format("{{\"runtime_evicted\":{},\"client_evicted\":{},\"refused_reports\":{},\"limits\":[", list.runtime_evicted, list.client_evicted, list.refused_reports);
   } else if (list.entries.empty()) {
@@ -552,6 +564,7 @@ inline void printLimits(const LimitList &list, bool json) {
 
   for (const auto &entry : list.entries) {
     const auto origin = entry.origin == LimitOrigin::runtime ? "runtime" : "client";
+
     if (json) {
       if (&entry != list.entries.data()) {
         output += ',';
@@ -563,6 +576,7 @@ inline void printLimits(const LimitList &list, bool json) {
       constexpr std::int64_t seconds_per_hour = 60 * 60;
       constexpr std::int64_t seconds_per_minute = 60;
       const auto seconds = std::max<std::int64_t>(0, entry.last_ms / 1000) % seconds_per_day;
+
       output += std::format("{}  ({}{}{}, last {:02}:{:02}:{:02} UTC)\n", limitDescription(entry.reach, entry.hits), origin, entry.reach.route.empty() ? "" : ", ", entry.reach.route, seconds / seconds_per_hour, seconds / seconds_per_minute % seconds_per_minute, seconds % seconds_per_minute);
     }
   }
@@ -580,12 +594,15 @@ template <Allocator Memory>
 int run(Memory &memory, const DiagnosticsOptions &options) {
   try {
     ServerOptions server_options{};
+
     server_options.socket = options.socket.value_or("");
     const RuntimePaths paths{memory, server_options, process_environment};
+
     if (options.action == DiagnosticsOptions::Action::logs) {
       readLogs(paths.socket, options);
     } else {
       ControlSession session{memory, paths.socket.c_str()};
+
       session.receiveTimeout(30);
       printLimits(session.template exchange<LimitList>(QueryLimits{}), options.json);
     }
@@ -593,6 +610,7 @@ int run(Memory &memory, const DiagnosticsOptions &options) {
     return 0;
   } catch (const std::exception &error) {
     const std::string_view reason = commandErrorName(error);
+
     writeText("telar diagnostics: " + std::string{reason} + "\n", STDERR_FILENO);
     if (reason == "DiagnosticLogsNotFound") {
       writeText("  the background runtime writes .runtime.log beside its socket once it starts;\n  per-process telemetry needs a build with -Ddiagnostics.\n", STDERR_FILENO);
@@ -679,12 +697,15 @@ struct HistoryOptions {
     if (value == "auto") {
       return ImportKind::automatic;
     }
+
     if (value == "zsh") {
       return ImportKind::zsh;
     }
+
     if (value == "bash") {
       return ImportKind::bash;
     }
+
     if (value == "fish") {
       return ImportKind::fish;
     }
@@ -694,6 +715,7 @@ struct HistoryOptions {
 
   inline static std::int64_t parseBefore(std::string_view text) {
     constexpr std::int64_t milliseconds_per_second = 1000;
+
     if (!text.contains('-')) {
       const auto seconds = parseInt<std::int64_t>(text);
       if (seconds <= 0 || seconds > std::numeric_limits<std::int64_t>::max() / milliseconds_per_second) {
@@ -704,6 +726,7 @@ struct HistoryOptions {
     }
 
     std::array<std::int64_t, 3> fields{};
+
     for (std::size_t at = 0; at < fields.size(); ++at) {
       const auto end = text.find('-');
       if ((at != fields.size() - 1 && end == text.npos) || (at == fields.size() - 1 && end != text.npos)) {
@@ -733,6 +756,7 @@ struct HistoryOptions {
     const auto adjusted_month = (month + 9) % 12;
     const auto day_of_year = (153 * adjusted_month + 2) / 5 + day - 1;
     const auto day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
+
     return (era * days_per_era + day_of_era - epoch_adjustment) * milliseconds_per_day;
   }
 
@@ -744,6 +768,7 @@ struct HistoryOptions {
     const std::string_view action = words.front();
     HistoryOptions self{.action = Action::list};
     Cursor cursor{words.subspan(1)};
+
     if (action == "list") {
       self.action = Action::list;
     } else if (action == "stats") {
@@ -823,6 +848,7 @@ struct HistoryOptions {
         }
       } else if (arg == "--socket") {
         const auto value = cursor.take("MissingSocketPath");
+
         if (self.socket) {
           throw std::invalid_argument{"DuplicateSocketOption"};
         }
@@ -900,6 +926,7 @@ private:
       constexpr auto max_seconds = std::numeric_limits<std::int64_t>::max() / 1000;
       constexpr auto min_seconds = std::numeric_limits<std::int64_t>::min() / 1000;
       const auto seconds = parseInt<std::int64_t>(text);
+
       return seconds > max_seconds || seconds < min_seconds ? 0 : seconds * 1000;
     } catch (const std::invalid_argument &) {
       return 0;
@@ -941,6 +968,7 @@ private:
     }
 
     auto finished = flush();
+
     if (line.starts_with(": ")) {
       const auto semicolon = line.find(';');
       const auto colon = line.find(':', 2);
@@ -968,6 +996,7 @@ private:
     }
 
     auto finished = flush();
+
     begin(time_, line);
     return finished ? finished : flush();
   }
@@ -977,6 +1006,7 @@ private:
       try {
         const auto seconds = parseInt<std::int64_t>(line.substr(1));
         auto finished = flush();
+
         time_ = timestamp(std::to_string(seconds));
         return finished;
       } catch (const std::invalid_argument &) {
@@ -989,8 +1019,10 @@ private:
   inline std::optional<ImportedLine> fish(std::string_view line) {
     constexpr std::string_view command_prefix = "- cmd: ";
     constexpr std::string_view time_prefix = "  when: ";
+
     if (line.starts_with(command_prefix)) {
       auto finished = flush();
+
       begin(0, line.substr(command_prefix.size()));
       return finished;
     }
@@ -1013,11 +1045,13 @@ private:
 
 inline std::pair<HistoryOptions::ImportKind, std::string> resolveImport(const HistoryOptions &options) {
   using Kind = HistoryOptions::ImportKind;
+
   if (options.import_file) {
     const auto file = *options.import_file;
     const auto kind = options.import_kind != Kind::automatic ? options.import_kind : file.ends_with("fish_history") ? Kind::fish
                                                                                  : file.contains("bash")            ? Kind::bash
                                                                                                                     : Kind::zsh;
+
     return {kind, std::string{file}};
   }
 
@@ -1031,6 +1065,7 @@ inline std::pair<HistoryOptions::ImportKind, std::string> resolveImport(const Hi
       std::pair{Kind::bash, "/.bash_history"},
       std::pair{Kind::fish, "/.local/share/fish/fish_history"},
   };
+
   for (const auto &[kind, suffix] : candidates) {
     if (options.import_kind != Kind::automatic && options.import_kind != kind) {
       continue;
@@ -1056,6 +1091,7 @@ inline std::pair<std::string, bool> newestLines(const std::string &path) {
   const auto offset = size > max_histfile_bytes ? size - max_histfile_bytes : 0;
   std::string text(size - offset, '\0');
   std::size_t used = 0;
+
   while (used < text.size()) {
     const auto count = ::pread(file.get(), text.data() + used, text.size() - used, static_cast<off_t>(offset + used));
     if (count < 0 && errno == EINTR) {
@@ -1077,6 +1113,7 @@ inline std::pair<std::string, bool> newestLines(const std::string &path) {
   if (offset != 0) {
     reportCommandLimit({.name = "history.max_histfile_bytes", .noun = "bytes", .value = max_histfile_bytes, .requested = size});
     const auto newline = text.find('\n');
+
     text.erase(0, newline == text.npos ? text.size() : newline + 1);
   }
 
@@ -1093,6 +1130,7 @@ struct ImportSource {
 inline ImportSource loadImport(const HistoryOptions &options) {
   const auto [kind, path] = resolveImport(options);
   auto [text, truncated] = newestLines(path);
+
   return {.kind = kind, .path = path, .text = std::move(text), .truncated = truncated};
 }
 
@@ -1101,6 +1139,7 @@ int importHistory(ControlSession<Memory> &session, const ImportSource &input) {
   constexpr std::array kind_names{"auto", "zsh", "bash", "fish"};
   const auto source = std::string{kind_names.at(static_cast<std::size_t>(input.kind))} + ":" + input.path;
   std::vector<ImportedLine> batch;
+
   batch.reserve(max_import_entries);
   std::size_t used = 0;
   std::uint64_t total = 0;
@@ -1110,6 +1149,7 @@ int importHistory(ControlSession<Memory> &session, const ImportSource &input) {
     }
 
     std::array<ImportHistoryEntry, max_import_entries> entries;
+
     for (std::size_t index = 0; index < batch.size(); ++index) {
       entries[index] = {.started_at_ms = batch[index].started_at_ms, .command = batch[index].command};
     }
@@ -1119,6 +1159,7 @@ int importHistory(ControlSession<Memory> &session, const ImportSource &input) {
     batch.clear();
     used = 0;
   };
+
   auto push = [&](std::optional<ImportedLine> entry) {
     if (!entry || entry->command.empty()) {
       return;
@@ -1131,10 +1172,13 @@ int importHistory(ControlSession<Memory> &session, const ImportSource &input) {
     used += entry->command.size();
     batch.push_back(std::move(*entry));
   };
+
   ImportParser parser{input.kind};
   std::string_view remaining = input.text;
+
   for (;;) {
     const auto newline = remaining.find('\n');
+
     push(parser.feed(remaining.substr(0, newline)));
     if (newline == remaining.npos) {
       break;
@@ -1148,6 +1192,7 @@ int importHistory(ControlSession<Memory> &session, const ImportSource &input) {
   writeText(std::format("imported {} commands from {}\n", total, input.path));
   if (parser.skipped != 0) {
     const LimitReach reach{.name = "history.import_command_bytes", .noun = "bytes", .value = max_command_bytes, .requested = parser.largest_skipped};
+
     reportCommandLimit(reach);
     try {
       session.send(ReportLimit{.reach = reach, .hits = 1});
@@ -1167,6 +1212,7 @@ namespace telar::runtime::cli::history {
 
 inline std::string field(std::string_view value) {
   std::string result;
+
   for (const unsigned char byte : value) {
     switch (byte) {
     case '\n':
@@ -1192,13 +1238,16 @@ inline std::string field(std::string_view value) {
 
 inline void print(const HistoryResults &results) {
   std::string output;
+
   for (const auto &entry : results.entries) {
     const auto seconds = static_cast<time_t>(std::max<std::int64_t>(0, entry.started_at_ms / 1000));
     std::tm utc{};
+
     ::gmtime_r(&seconds, &utc);
     const auto status = entry.status == HistoryStatus::running ? "RUN" : entry.status == HistoryStatus::interrupted ? "INT"
                                                                      : entry.exit_code                              ? std::to_string(*entry.exit_code)
                                                                                                                     : "?";
+
     output += std::format("#{}  {:04}-{:02}-{:02} {:02}:{:02}:{:02}Z  {}  {}ms  {}  ", entry.id, utc.tm_year + 1900, utc.tm_mon + 1, utc.tm_mday, utc.tm_hour, utc.tm_min, utc.tm_sec, status, std::max<std::int64_t>(0, entry.duration_ns / 1000000), field(entry.cwd));
     if (entry.author == HistoryAuthor::agent && !entry.provider.empty()) {
       output += "\x1b[2m[" + field(entry.provider) + "]\x1b[22m ";
@@ -1241,6 +1290,7 @@ tbc::view<HistoryResults, tbc::lt::b> query(tbc::view<ControlSession<Memory> &, 
 inline bool confirmPrune() {
   constexpr std::size_t confirmation_bytes = 16;
   std::string line;
+
   for (std::size_t index = 0; index < confirmation_bytes; ++index) {
     char byte = 0;
     const auto count = ::read(STDIN_FILENO, &byte, 1);
@@ -1251,6 +1301,7 @@ inline bool confirmPrune() {
     if (byte == '\n') {
       const auto start = line.find_first_not_of(" \r");
       const auto end = line.find_last_not_of(" \r");
+
       return start != line.npos && line.substr(start, end - start + 1) == "yes";
     }
 
@@ -1264,15 +1315,18 @@ template <Allocator Memory>
 void prune(Memory &memory, const char *socket, ControlSession<Memory> &session, const HistoryOptions &options, const HistoryScopeValue &scope) {
   if (options.action == HistoryOptions::Action::remove) {
     const auto result = session.template exchange<HistoryPruned>(DeleteHistory{.id = options.id});
+
     writeText(std::format("removed {} entries\n", result.removed));
     return;
   }
 
   if (options.dry_run || !options.assume_yes) {
     auto preview = options;
+
     preview.author = HistoryAuthorFilter::all;
     preview.limit = HistoryOptions::max_results;
     const auto results = query(session, preview, scope);
+
     if (options.before_ms != 0) {
       writeText(std::format("{} newest entries match the text/scope filters; --before applies on top and is not previewable\n", results.entries.size()));
     } else {
@@ -1291,6 +1345,7 @@ void prune(Memory &memory, const char *socket, ControlSession<Memory> &session, 
   }
 
   ControlSession removal{memory, socket};
+
   removal.receiveTimeout(30);
   const auto result = removal.template exchange<HistoryPruned>(PruneHistory{
       .scope = options.scope,
@@ -1299,6 +1354,7 @@ void prune(Memory &memory, const char *socket, ControlSession<Memory> &session, 
       .failed_only = options.failed_only,
       .match = options.query,
   });
+
   writeText(std::format("removed {} entries\n", result.removed));
 }
 
@@ -1325,7 +1381,9 @@ void stats(ControlSession<Memory> &session, const HistoryOptions &options, const
       .scope_value = scope,
       .since_ms = options.period_days == 0 ? 0 : now - static_cast<std::int64_t>(options.period_days) * milliseconds_per_day,
   });
+
   auto output = std::format("commands: {}\nunique:   {}\n", result.total, result.unique);
+
   if (!result.top.empty()) {
     output += "top:\n";
   }
@@ -1341,18 +1399,23 @@ template <Allocator Memory>
 int run(Memory &memory, const HistoryOptions &options) {
   try {
     std::optional<ImportSource> input;
+
     if (options.action == HistoryOptions::Action::import) {
       input = loadImport(options);
     }
 
     ServerOptions server_options{};
+
     server_options.socket = options.socket.value_or("");
     const RuntimePaths paths{memory, server_options, process_environment};
+
     ensureRuntime(memory, paths);
     ControlSession session{memory, paths.socket.c_str(), max_payload_size, max_batch_payload + 2048};
+
     session.receiveTimeout(30);
     const auto cwd = options.scope == HistoryScope::cwd ? std::filesystem::canonical(".").string() : std::string{};
     const auto scope = scopeValue(options, cwd);
+
     switch (options.action) {
     case HistoryOptions::Action::import:
       return importHistory(session, *input);
@@ -1375,6 +1438,7 @@ int run(Memory &memory, const HistoryOptions &options) {
     return 0;
   } catch (const ControlFailure &error) {
     const auto context = options.action == HistoryOptions::Action::import ? "telar history import: " : "telar history: ";
+
     writeText(context + std::string{error.message().empty() ? error.what() : error.message()} + "\n", STDERR_FILENO);
     writeText(options.action == HistoryOptions::Action::import ? "error: HistoryImportFailed\n" : options.action == HistoryOptions::Action::remove || options.action == HistoryOptions::Action::prune ? "error: HistoryPruneFailed\n"
                                                                                                                                                                                                       : "error: HistoryQueryFailed\n",

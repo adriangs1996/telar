@@ -134,6 +134,7 @@ class PaneHeaderTest : public QObject {
 
   Q_SLOT static void chipUsesPaneWordsAndDoesNotPulse() {
     NativeAgentStatus status;
+
     status.setDisplayMode(NativeAgentStatus::DisplayMode::pane_chip);
     status.setRecord(agentRecord(AgentStatus::working));
     QCOMPARE(status.statusText(), QStringLiteral("working 24h"));
@@ -150,6 +151,7 @@ class PaneHeaderTest : public QObject {
     SystemAllocator memory;
     GraphicsBudget budget;
     Pane pane{memory, 1, budget};
+
     pane.location = {.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 1}, .tab_id = 1};
     pane.generation = 2;
     pane.attachment_generation = 3;
@@ -157,12 +159,14 @@ class PaneHeaderTest : public QObject {
     pane.cwd = "/ignore/cwd";
     std::array<Agent<SystemAllocator>, 1> agents{Agent{memory}};
     auto &agent = agents.front();
+
     agent.pane_id = pane.id;
     agent.location = pane.location;
     agent.pane_generation = 1;
     agent.status = AgentStatus::ready;
     const auto span = std::span<const Agent<SystemAllocator>>{agents};
     auto record = paneChromeRecord(pane, span, 2);
+
     QCOMPARE(record.value(QStringLiteral("program")).toString(), QStringLiteral("shell"));
     QVERIFY(record.value(QStringLiteral("agent")).toMap().isEmpty());
     pane.foreground = "nvim";
@@ -181,6 +185,7 @@ class PaneHeaderTest : public QObject {
     SystemAllocator memory;
     GraphicsBudget budget;
     Pane pane{memory, 1, budget};
+
     pane.location = {.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 1}, .tab_id = 1};
     pane.generation = 2;
     pane.foreground = "zsh";
@@ -190,12 +195,14 @@ class PaneHeaderTest : public QObject {
     pane.title.clear();
     std::array<Agent<SystemAllocator>, 1> agents{Agent{memory}};
     auto &agent = agents.front();
+
     agent.pane_id = pane.id;
     agent.pane_generation = pane.generation;
     agent.location = pane.location;
     agent.title_state = AgentTitleState::ready;
     agent.title = "Fix session restore";
     auto record = paneChromeRecord(pane, std::span<const Agent<SystemAllocator>>{agents}, 1);
+
     QCOMPARE(record.value(QStringLiteral("context")).toString(), QStringLiteral("Fix session restore"));
     QCOMPARE(record.value(QStringLiteral("program")).toString(), QStringLiteral("zsh"));
     ++agent.pane_generation;
@@ -214,24 +221,30 @@ class PaneHeaderTest : public QObject {
                                                                        {QStringLiteral("colors"), colors},
                                                                        {QStringLiteral("typography"), typography},
                                                                    });
+
     auto *background = named(*item, QStringLiteral("paneStatusBackground"));
     const auto *program = named(*item, QStringLiteral("paneProgram"));
+
     QVERIFY(background != nullptr && program != nullptr);
     QCOMPARE(program->property("color").value<QColor>(), colors.value(QStringLiteral("text")).value<QColor>());
     const auto attention_alpha = background->property("color").value<QColor>().alphaF();
+
     record.insert(QStringLiteral("agent"), agentRecord(AgentStatus::ready));
     record.insert(QStringLiteral("needsAttention"), false);
     QVERIFY(item->setProperty("record", record));
     const auto quiet_alpha = background->property("color").value<QColor>().alphaF();
+
     QCOMPARE(quiet_alpha, attention_alpha);
   }
 
   Q_SLOT static void compactHeaderKeepsTheProgramInsteadOfAnAmbiguousEllipsis() {
     QQmlEngine engine;
     QQuickWindow window;
+
     window.resize(120, header_height);
     const ChromeMetrics chrome;
     auto record = headerRecord();
+
     record.insert(QStringLiteral("program"), QStringLiteral("Pi"));
     record.insert(QStringLiteral("context"), QStringLiteral("A long session title that cannot fit in this header"));
     record.insert(QStringLiteral("agent"), agentRecord(AgentStatus::ready));
@@ -240,11 +253,13 @@ class PaneHeaderTest : public QObject {
     record.remove(QStringLiteral("progressSample"));
     record.insert(QStringLiteral("activityKind"), static_cast<int>(TabActivity::Kind::none));
     auto item = createChrome(engine, QStringLiteral("PaneHeader"), {{QStringLiteral("record"), record}, {QStringLiteral("colors"), themeColors(Configuration{})}, {QStringLiteral("typography"), QVariantMap{{QStringLiteral("title"), 15}, {QStringLiteral("body"), chrome.body}, {QStringLiteral("small"), chrome.small}}}});
+
     item->setParentItem(window.contentItem());
     item->setSize({120, header_height});
     window.show();
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
     const auto *program = named(*item, QStringLiteral("paneProgram"));
+
     QVERIFY(program != nullptr);
     QTRY_COMPARE_WITH_TIMEOUT(program->property("text").toString(), QStringLiteral("Pi"), wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(program->width() >= program->implicitWidth(), wait_ms);
@@ -253,6 +268,7 @@ class PaneHeaderTest : public QObject {
   Q_SLOT static void independentHeaderKeepsAttentionBeforeProgress() {
     QQmlEngine engine;
     QQuickWindow window;
+
     window.resize(header_width, header_height);
     const ChromeMetrics chrome;
     const QVariantMap typography{{QStringLiteral("body"), chrome.body}, {QStringLiteral("small"), chrome.small}, {QStringLiteral("title"), chrome.title}};
@@ -261,19 +277,23 @@ class PaneHeaderTest : public QObject {
                                                                        {QStringLiteral("colors"), themeColors(Configuration{})},
                                                                        {QStringLiteral("typography"), typography},
                                                                    });
+
     item->setParentItem(window.contentItem());
     item->setSize({header_width, header_height});
     const auto *layout = qobject_cast<PaneHeaderLayout *>(item.get());
+
     QVERIFY(layout != nullptr);
     window.show();
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
     const auto *program = named(*item, QStringLiteral("paneProgram"));
     const auto *status = qobject_cast<NativeAgentStatus *>(named(*item, QStringLiteral("paneStatus")));
+
     QVERIFY(program != nullptr && status != nullptr);
     QTRY_VERIFY_WITH_TIMEOUT(layout->chipBounds().width() > 0 && layout->progressBounds().width() > 0 && !layout->compactProgress(), wait_ms);
     QCOMPARE(program->property("text").toString(), QStringLiteral("clang++"));
     QCOMPARE(status->statusText(), QStringLiteral("permission"));
     const auto *progress = qobject_cast<NativeTabActivity *>(named(*item, QStringLiteral("paneProgress")));
+
     QVERIFY(progress != nullptr);
     QTRY_VERIFY_WITH_TIMEOUT(progress->fraction() > 0 && !progress->compact(), wait_ms);
     item->setWidth(compact_header_width);
@@ -284,6 +304,7 @@ class PaneHeaderTest : public QObject {
     item->setWidth(status->implicitWidth() + 2 * PaneHeaderGeometry::margin);
     QTRY_VERIFY_WITH_TIMEOUT(layout->indexBounds().isEmpty() && layout->progressBounds().isEmpty() && layout->chipBounds().width() > 0, wait_ms);
     auto record = headerRecord();
+
     record.insert(QStringLiteral("agent"), QVariantMap{});
     record.insert(QStringLiteral("needsAttention"), false);
     item->setProperty("record", record);

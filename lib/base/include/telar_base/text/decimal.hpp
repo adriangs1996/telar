@@ -26,6 +26,7 @@ constexpr std::expected<Integer, NumberError> unsignedNumber(std::string_view te
   }
 
   Integer value = 0;
+
   for (const auto character : text) {
     if (character == '_') {
       continue;
@@ -52,6 +53,7 @@ constexpr std::expected<Integer, NumberError> unsignedNumber(std::string_view te
 template <std::unsigned_integral Integer>
 constexpr std::optional<Integer> unsignedDecimal(std::string_view text) noexcept {
   const auto value = unsignedNumber<Integer>(text);
+
   return value ? std::optional{*value} : std::nullopt;
 }
 

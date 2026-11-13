@@ -43,9 +43,11 @@ inline LinkGrid screenGrid(const Screen<ApplicationAllocator> &screen) {
 inline QString screenText(const Screen<ApplicationAllocator> &screen, ScreenTextLayout layout = ScreenTextLayout::physical) {
   QString text;
   const auto grid = screenGrid(screen);
+
   for (std::size_t row = 0; row < screen.rows(); ++row) {
     const auto cells = screen.row(row);
     const auto padding = layout == ScreenTextLayout::logical && (screen.rowFlags(row) & static_cast<telar::Byte>(telar::RowFlag::wide_padding)) != 0;
+
     for (const auto &cell : cells.first(cells.size() - static_cast<std::size_t>(padding))) {
       text += qt::toQString(cell.utf8());
     }

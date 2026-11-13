@@ -27,6 +27,7 @@ public:
     if (pointer != nullptr) {
       live_.fetch_add(size, std::memory_order_relaxed);
     }
+
     return pointer;
   }
 
@@ -35,6 +36,7 @@ public:
       if (live_.fetch_sub(size, std::memory_order_relaxed) < size) {
         std::abort();
       }
+
       upstream_.deallocate(pointer, size, alignment);
     }
   }

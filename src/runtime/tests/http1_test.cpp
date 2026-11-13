@@ -38,33 +38,44 @@ static void checkHeadAnalysis() {
   using Kind = Http1Framing::Kind;
   // A sign or digit separator would frame the body differently from a peer that follows RFC 9112.
   const std::array invalid_lengths = {"", "1,", ",1", "1,2", "-1", "_1", "1_", "0x10", "18446744073709551616", "1 0", "-0", "+0", "+10", "1_0", "1__0", "-0_0"};
+
   for (const auto length : invalid_lengths) {
     check(!Http1Head::analyze("POST / HTTP/1.1\r\nContent-Length: " + std::string{length} + "\r\n\r\n", false));
   }
+
   for (const auto length : {"0", "00"}) {
     const auto head = Http1Head::analyze("POST / HTTP/1.1\r\nContent-Length: " + std::string{length} + "\r\n\r\n", false);
+
     check(head && head->framing.kind == Kind::content_length && head->framing.length == 0);
   }
+
   const auto repeated = Http1Head::analyze("POST / HTTP/1.1\r\nContent-Length: 10, 10\r\ncontent-LENGTH: 010\r\nConnection: keep-alive, CLOSE\r\n\r\n", false);
+
   check(repeated && repeated->framing.length == 10 && repeated->closes);
   check(!Http1Head::analyze("POST / HTTP/1.1\r\nTransfer-Encoding: chunked\r\nContent-Length: 0\r\n\r\n", false));
   check(!Http1Head::analyze("POST / HTTP/1.1\r\nTransfer-Encoding: chunked\r\nTransfer-Encoding: gzip\r\n\r\n", false));
   for (const auto encoding : {"chunked, gzip", "gzip", "gzip,,chunked", "chunked,"}) {
     check(!Http1Head::analyze("POST / HTTP/1.1\r\nTransfer-Encoding: " + std::string{encoding} + "\r\n\r\n", false));
     const auto response = Http1Head::analyze("HTTP/1.1 200 OK\r\nTransfer-Encoding: " + std::string{encoding} + "\r\n\r\n", true);
+
     check(response && response->framing.kind == Kind::until_close && response->closes);
   }
+
   const auto chunked = Http1Head::analyze("POST / HTTP/1.1\r\nTransfer-Encoding: gzip, CHUNKED\r\n\r\n", false);
+
   check(chunked && chunked->framing.kind == Kind::chunked);
   for (const auto status : {100, 101, 199, 204, 205, 304}) {
     const auto response = Http1Head::analyze("anything " + std::to_string(status) + " OK\r\nContent-Length: invalid\r\nTransfer-Encoding:\r\n\r\n", true);
+
     check(response && response->framing.kind == Kind::none && response->status == status);
     check(response->informational == (status < 200 && status != 101));
     check(response->upgrade == (status == 101));
   }
+
   for (const auto status : {"099", "600", "+200", " 200", "2_0", "two", "20"}) {
     check(!Http1Head::analyze("HTTP/1.1 " + std::string{status} + " OK\r\n\r\n", true));
   }
+
   check(Http1Head::analyze("HTTP/1.1 200 OK\r\nContent-Length: invalid\r\n\r\n", true, true)->framing.kind == Kind::none);
   check(Http1Head::analyze("HEAD / HTTP/1.1\r\n\r\n", false)->head_request);
   check(!Http1Head::analyze("head / HTTP/1.1\r\n\r\n", false)->head_request);
@@ -77,21 +88,26 @@ static void driveMessage(Http1MessageRelay &relay, TestByteStream &source, TestB
       return;
     }
   }
+
   check(false);
 }
 
 static void checkMessageFragments() {
   const std::string head = "POST / HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n";
   const std::string body = "3;ignored=true\r\none\r\n2\r\ntw!!0\r\nX-Value: trailer\r\n\r\n";
+
   for (const auto fragment : {1, 2, 3, 7, 64, 16384}) {
     TestByteStream source;
+
     source.input = head + body + "next-message";
     source.read_limit = fragment;
     TestByteStream destination;
+
     destination.write_limit = 7;
     destination.alternating_writes = true;
     Http1MessageRelay relay;
     MessageObserver observer;
+
     driveMessage(relay, source, destination, observer);
     check(relay.state() == Http1MessageRelay::State::complete);
     check(destination.output == head + body && source.offset == head.size() + body.size());
@@ -100,11 +116,14 @@ static void checkMessageFragments() {
 
   for (const bool response : {false, true}) {
     TestByteStream source;
+
     source.input = std::string{response ? "HTTP/1.1 200 OK" : "POST / HTTP/1.1"} + "\r\nContent-Length: 3\r\n\r\nabcnext";
     TestByteStream destination;
     Http1MessageRelay relay;
+
     relay.reset(response);
     MessageObserver observer;
+
     driveMessage(relay, source, destination, observer);
     check(destination.output == source.input.substr(0, source.input.size() - 4) && observer.captured_body == "abc");
   }
@@ -119,6 +138,7 @@ static void checkMessageFailures() {
     std::size_t chunks = 0;
     std::size_t trailers = 0;
   };
+
   for (const auto &fixture : {
            Fixture{head + "wrong\r\n", head.size() + 7},
            Fixture{head + "+2\r\nab\r\n", head.size() + 4},
@@ -129,13 +149,16 @@ static void checkMessageFailures() {
            Fixture{head + "0\r\n" + std::string(8193, 'a'), head.size() + 3 + 8192, 0, 1},
        }) {
     TestByteStream source;
+
     source.input = fixture.bytes;
     source.ended = true;
     TestByteStream destination;
+
     destination.write_limit = 31;
     destination.alternating_writes = true;
     Http1MessageRelay relay;
     MessageObserver observer;
+
     driveMessage(relay, source, destination, observer);
     check(relay.state() == State::failed && destination.output == fixture.bytes.substr(0, fixture.forwarded));
     check(observer.chunk_limits == fixture.chunks && observer.trailer_limits == fixture.trailers);
@@ -143,14 +166,17 @@ static void checkMessageFailures() {
 
   for (const bool complete : {false, true}) {
     TestByteStream source;
+
     source.input = "GET / HTTP/1.1\r\nX: " + std::string(Http1Head::capacity, 'a');
     source.input.resize(Http1Head::capacity);
     if (complete) {
       source.input.replace(source.input.size() - 4, 4, "\r\n\r\n");
     }
+
     TestByteStream destination;
     Http1MessageRelay relay;
     MessageObserver observer;
+
     driveMessage(relay, source, destination, observer);
     check(relay.state() == (complete ? State::complete : State::head_too_large));
     check(destination.output == (complete ? source.input : ""));
@@ -166,6 +192,7 @@ static void checkConnectionOrdering() {
   const std::string request = "POST /upload HTTP/1.1\r\nContent-Length: 3\r\nExpect: 100-continue\r\n\r\n";
   const std::string interim = "HTTP/1.1 100 Continue\r\n\r\n";
   const std::string response = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok";
+
   child.input = request + "oneGET /second HTTP/1.1\r\n\r\n";
   child.visible = 1;
   origin.input = interim + response + response;
@@ -182,6 +209,7 @@ static void checkConnectionOrdering() {
   for (std::size_t round = 0; round < 4; ++round) {
     connection.advance(child, origin, TunnelReadiness::available());
   }
+
   check(origin.output == child.input && child.output == origin.input && connection.idle() && connection.inflight() == 0);
 }
 
@@ -198,6 +226,7 @@ static void checkConnectionEndings() {
     TestByteStream origin;
     const bool early = std::string_view{response}.find("413") != std::string_view::npos;
     const bool upgrade = std::string_view{response}.find("101") != std::string_view::npos;
+
     child.input = early ? "POST / HTTP/1.1\r\nContent-Length: 100000\r\n\r\npartial" : "GET / HTTP/1.1\r\n\r\n";
     origin.input = response;
     connection.advance(child, origin, TunnelReadiness::available());
@@ -212,11 +241,13 @@ static void checkConnectionEndings() {
     TestByteStream child;
     TestByteStream origin;
     const std::string large(Http1Head::capacity, 'a');
+
     child.input = response ? "GET / HTTP/1.1\r\n\r\n" : large;
     origin.input = large;
     for (std::size_t round = 0; round < 8 && !connection.finished(); ++round) {
       connection.advance(child, origin, TunnelReadiness::available());
     }
+
     check(connection.finished() && counters.read(ProxyCounter::http1_head_too_large) == 1);
     check(child.output.starts_with(response ? "HTTP/1.1 502" : "HTTP/1.1 431"));
     check(origin.output == (response ? child.input : ""));

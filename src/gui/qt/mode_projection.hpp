@@ -31,6 +31,7 @@ namespace telar::gui::qt {
 
 inline QVariantMap statusModeRecord(StatusMode mode, const ModeHints &hints = {}) {
   QVariantList records;
+
   for (const auto &hint : hints.items()) {
     records.append(QVariantMap{
         {QStringLiteral("key"), static_cast<int>(hint.key.key)},

@@ -56,6 +56,7 @@ void ModalRevealLayout::setGeneration(const QString &generation) {
   generation_ = generation;
   bool valid = false;
   const auto identity = generation.toULongLong(&valid);
+
   identity_ = valid ? std::optional<std::uint64_t>{identity} : std::nullopt;
   dirty_ = true;
   synchronize();
@@ -100,6 +101,7 @@ void ModalRevealLayout::prepareFrame() {
   const auto timestamp = clock_->now();
   const auto reveal = motion_.sample(active_ ? identity_ : std::nullopt, timestamp);
   const bool changed = reveal_ != reveal;
+
   reveal_ = reveal;
   next_sample_ns_ = motion_.deadline(timestamp, clock_->frameInterval());
   dirty_ = false;

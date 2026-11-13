@@ -70,8 +70,10 @@ struct NamePromptGeometry {
     const auto width = std::min(wanted.width, static_cast<std::uint16_t>(host.width - (margin_x * 2)));
     const auto height = std::min(wanted.height, static_cast<std::uint16_t>(host.height - (margin_y * 2)));
     NamePromptGeometry result;
+
     result.bounds = {.x = coordinate(static_cast<std::uint32_t>(host.x) + ((host.width - width) / 2)), .y = coordinate(static_cast<std::uint32_t>(host.y) + ((host.height - height) / 2)), .width = width, .height = height};
     const auto content = width > 2 && height > 2 ? result.bounds.inner(1) : result.bounds;
+
     if (width > 4) {
       result.title = {.x = coordinate(static_cast<std::uint32_t>(result.bounds.x) + 2), .y = result.bounds.y, .width = static_cast<std::uint16_t>(width - 4), .height = 1};
     }
@@ -113,6 +115,7 @@ struct AttachmentModalGeometry {
         .width = host.width > margin_columns ? static_cast<std::uint16_t>(host.width - margin_columns) : std::uint16_t{},
         .height = host.height > margin_rows ? static_cast<std::uint16_t>(host.height - margin_rows) : std::uint16_t{},
     };
+
     const auto modal = NamePromptGeometry::measure(host, wanted);
     AttachmentModalGeometry result{.bounds = modal.bounds, .title = modal.title};
     if (result.bounds.width > 4) {
@@ -223,6 +226,7 @@ struct PeekGeometry {
   [[nodiscard]] inline static PeekGeometry measure(CellRectangle host) noexcept {
     const auto modal = NamePromptGeometry::measure(host, requested_size);
     PeekGeometry result;
+
     result.bounds = modal.bounds;
     result.title = modal.title;
     const auto content = result.bounds.width > 2 && result.bounds.height > 2 ? result.bounds.inner(1) : result.bounds;

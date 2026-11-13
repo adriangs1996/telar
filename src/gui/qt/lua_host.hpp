@@ -48,7 +48,9 @@ public:
       Done done;
       LuaOutcome<Value> outcome;
     };
+
     auto task = std::make_shared<Task>(Task{.work = std::move(work), .done = std::move(done), .outcome = {}});
+
     ++pending_;
     QMetaObject::invokeMethod(worker_, [this, task] {
       try {

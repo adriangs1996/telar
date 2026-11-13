@@ -38,10 +38,12 @@ void snapshotNotificationsPreservePositions() {
   const QSignalSpy moved{&model, &QAbstractItemModel::rowsMoved};
   const QSignalSpy reset{&model, &QAbstractItemModel::modelReset};
   const QList<QVariantMap> initial{record(1, 0), record(2, 0), record(3, 0)};
+
   model.replaceRows(initial);
   require(inserted.size() == 1 && inserted.front()[1].toInt() == 0 && inserted.front()[2].toInt() == 2, "Initial rows must be inserted as one range");
   const QPersistentModelIndex position{model.index(1)};
   const QPersistentModelIndex tail{model.index(2)};
+
   model.replaceRows(initial);
   require(changed.empty() && removed.empty() && inserted.size() == 1, "An identical snapshot must not notify views");
   model.replaceRows({record(1, 0), record(8, 1), record(9, 1)});
@@ -65,11 +67,13 @@ void snapshotsMatchKeyedReconciliation() {
   QAbstractItemModelTester tester{&candidate, QAbstractItemModelTester::FailureReportingMode::Fatal};
   std::mt19937 random{0x28b4c31};
   std::vector<int> identities(identity_count);
+
   std::iota(identities.begin(), identities.end(), 0);
   for (int trial = 0; trial < trials; ++trial) {
     std::shuffle(identities.begin(), identities.end(), random);
     const auto count = static_cast<int>(random() % (maximum_rows + 1));
     QList<QVariantMap> incoming;
+
     for (int row = 0; row < count; ++row) {
       incoming.append(record(identities[row], static_cast<int>(random() % 4)));
     }
@@ -82,6 +86,7 @@ void snapshotsMatchKeyedReconciliation() {
     }
 
     const QSignalSpy unchanged{&candidate, &QAbstractItemModel::dataChanged};
+
     candidate.replaceRows(incoming);
     require(unchanged.empty(), "Repeated random snapshots must not notify views");
   }
@@ -91,6 +96,7 @@ void snapshotsMatchKeyedReconciliation() {
 
 int main(int argc, char **argv) {
   QCoreApplication application{argc, argv};
+
   snapshotNotificationsPreservePositions();
   snapshotsMatchKeyedReconciliation();
   std::cout << "Snapshot model: 4096 reference cases and notification contracts passed\n";

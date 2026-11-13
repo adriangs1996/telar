@@ -67,6 +67,7 @@ QByteArray terminalKey(const QKeyEvent &event, const telar::InputModes &modes) {
   int code = 0;
   char suffix = 'u';
   char application = 0;
+
   switch (event.key()) {
   case Qt::Key_Escape:
     code = escape;
@@ -124,8 +125,10 @@ QByteArray terminalKey(const QKeyEvent &event, const telar::InputModes &modes) {
     break;
   default: {
     constexpr std::array function_codes{11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 23, 24};
+
     if (event.key() >= Qt::Key_F1 && event.key() <= Qt::Key_F12) {
       const auto index = event.key() - Qt::Key_F1;
+
       code = function_codes[index];
       suffix = '~';
       if (index < 4 && !(flags && event.key() == Qt::Key_F3)) {
@@ -159,6 +162,7 @@ QByteArray terminalKey(const QKeyEvent &event, const telar::InputModes &modes) {
                 ((flags & disambiguate) && (non_text_modifier || code == escape)));
   if (extended && code) {
     QByteArray result = "\x1b[" + QByteArray::number(code);
+
     if ((flags & alternate_keys) && suffix == 'u' &&
         event.modifiers().testFlag(Qt::ShiftModifier)) {
       const auto points = event.text().toUcs4();
@@ -177,6 +181,7 @@ QByteArray terminalKey(const QKeyEvent &event, const telar::InputModes &modes) {
     if (!released && (flags & associated_text) && !controlModifier(event.modifiers()) &&
         !commandModifier(event.modifiers()) && !event.text().isEmpty()) {
       bool first = true;
+
       for (auto point : event.text().toUcs4()) {
         result += first ? ';' : ':';
         result += QByteArray::number(static_cast<uint>(point));
@@ -214,6 +219,7 @@ QByteArray terminalKey(const QKeyEvent &event, const telar::InputModes &modes) {
   }
 
   QByteArray result;
+
   if (code == escape || code == '\r' || code == '\t' || code == delete_character) {
     result += static_cast<char>(code);
   } else if (controlModifier(event.modifiers()) &&

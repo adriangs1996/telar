@@ -59,6 +59,7 @@ void Application::startPlugin(const PluginInvocation &invocation) {
 
   const auto &client = clientAt(machines_.active());
   const auto execution = next_plugin_execution_++;
+
   plugin_owner_ = PluginOwner{.source = client.key, .runtime_generation = client.runtime_generation, .execution = execution};
   try {
     plugin_worker_.start(invocation, execution, QString::fromStdString(platform::runtime_endpoint::program()));
@@ -74,6 +75,7 @@ void Application::pluginWorkerFinished(std::uint64_t execution, const PluginInvo
   }
 
   const auto owner = *plugin_owner_;
+
   plugin_owner_.reset();
   const auto *client = findClient(owner.source);
   if (client == nullptr || client->key.machine.slot != machines_.active() || client->runtime_generation != owner.runtime_generation || !client->connection.ready() || configuration_source_.configurationGeneration() != invocation.configuration_generation) {
@@ -109,6 +111,7 @@ void Application::applyPluginEffects(const PluginEffects &effects) {
       }
     } else {
       const auto &notification = std::get<NotificationActionDescription>(effect);
+
       publishNotification({.level = notification.level, .target = notification.target, .title = notification.title.view(), .message = notification.message.view(), .link = {}, .duration_ns = static_cast<std::uint64_t>(notification.duration_ms) * NotificationInput::nanoseconds_per_millisecond});
     }
   }

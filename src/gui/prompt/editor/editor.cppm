@@ -165,12 +165,14 @@ public:
     if (keymap_ == Keymap::vim && mode_ != Mode::insert) {
       return;
     }
+
     text_.insert(text, true);
   }
 
   // A bound action, whatever the keymap: the same edits the default keys make.
   inline Request perform(Action action) {
     const auto cursor = text_.cursor();
+
     switch (action) {
     case Action::submit:
       return Request::submit;
@@ -243,14 +245,17 @@ public:
       if (keymap_ == Keymap::vim && mode_ == Mode::insert) {
         enterNormal();
       }
+
       return Request::none;
     case Action::insert_mode:
       if (keymap_ == Keymap::vim && mode_ != Mode::insert) {
         mode_ = Mode::insert;
         reset();
       }
+
       return Request::none;
     }
+
     return Request::unhandled;
   }
 
@@ -259,11 +264,14 @@ public:
       if (replaying_ == 0 && recording_) {
         record(key);
       }
+
       return normal(key);
     }
+
     if (keymap_ == Keymap::vim && replaying_ == 0 && recording_) {
       record(key);
     }
+
     return insert(key);
   }
 
@@ -293,9 +301,11 @@ private:
   inline Request insert(const KeyPress &key) {
     const auto &mods = key.modifiers;
     const auto cursor = text_.cursor();
+
     if (key.key == Key::character && mods.control && !mods.alt) {
       return control(key.character);
     }
+
     if (key.key == Key::character && mods.alt && !mods.control) {
       return meta(key.character);
     }
@@ -305,12 +315,14 @@ private:
       if (!key.text.empty()) {
         text_.insert(key.text, true);
       }
+
       return Request::none;
     case Key::enter:
       if (mods.alt || mods.shift) {
         newline();
         return Request::none;
       }
+
       return Request::submit;
     case Key::backspace:
       if (text_.selecting()) {
@@ -320,6 +332,7 @@ private:
       } else {
         text_.replace(text_.previous(cursor), cursor, {}, true);
       }
+
       return Request::none;
     case Key::delete_forward:
       if (text_.selecting()) {
@@ -327,6 +340,7 @@ private:
       } else {
         text_.replace(cursor, text_.next(cursor), {}, true);
       }
+
       return Request::none;
     case Key::left:
       move(mods.alt || mods.control ? wordStart(cursor, false) : text_.previous(cursor), mods.shift);
@@ -353,18 +367,22 @@ private:
         enterNormal();
         return Request::none;
       }
+
       if (text_.selecting()) {
         text_.moveTo(text_.cursor());
         return Request::none;
       }
+
       return Request::unhandled;
     }
+
     return Request::unhandled;
   }
 
   // readline's control bindings, which vim's insert mode shares for the common ones.
   inline Request control(char32_t character) {
     const auto cursor = text_.cursor();
+
     switch (character) {
     case 'a':
       move(text_.lineStart(cursor));
@@ -389,6 +407,7 @@ private:
       if (text_.empty()) {
         return Request::end_of_file;
       }
+
       text_.replace(cursor, text_.next(cursor), {}, true);
       return Request::none;
     case 'w':
@@ -429,6 +448,7 @@ private:
 
   inline Request meta(char32_t character) {
     const auto cursor = text_.cursor();
+
     switch (character) {
     case 'b':
       move(wordStart(cursor, false));
@@ -455,12 +475,14 @@ private:
     if (direction < 0 && start == 0) {
       return Request::history_previous;
     }
+
     if (direction > 0 && text_.lineEnd(cursor) == text_.size()) {
       return Request::history_next;
     }
 
     const auto column = goal_column_ ? *goal_column_ : text_.column(cursor);
     const auto target_start = direction < 0 ? text_.lineStart(start - 1) : text_.lineEnd(cursor) + 1;
+
     move(text_.atColumn(target_start, column), extend);
     goal_column_ = column;
     return Request::none;
@@ -470,6 +492,7 @@ private:
     if (start == end) {
       return;
     }
+
     kill_ring_.assign(text_.view().substr(start, end - start));
     text_.replace(start, end, {});
   }
@@ -483,13 +506,16 @@ private:
     if (cursor == 0 || text_.size() < 2) {
       return;
     }
+
     if (cursor == text_.size()) {
       cursor = text_.previous(cursor);
     }
+
     const auto before = text_.previous(cursor);
     const auto after = text_.next(cursor);
     const auto view = text_.view();
     std::string swapped{view.substr(cursor, after - cursor)};
+
     swapped.append(view.substr(before, cursor - before));
     text_.replace(before, after, swapped);
   }
@@ -502,22 +528,28 @@ private:
 
   inline CharacterClass kind(std::size_t offset, bool big) const noexcept {
     const auto value = offset >= text_.size() ? CharacterClass::blank : classify(text_.view()[offset]);
+
     return big && value != CharacterClass::blank ? CharacterClass::word : value;
   }
 
   // The start of the word before the offset (readline's backward-word and vim's b).
   inline std::size_t wordStart(std::size_t offset, bool big) const noexcept {
     auto position = offset;
+
     while (position > 0 && blank(text_.previous(position))) {
       position = text_.previous(position);
     }
+
     if (position == 0) {
       return 0;
     }
+
     const auto run = kind(text_.previous(position), big);
+
     while (position > 0 && kind(text_.previous(position), big) == run) {
       position = text_.previous(position);
     }
+
     return position;
   }
 
@@ -528,12 +560,15 @@ private:
   // readline's forward-word: past the next word.
   inline std::size_t wordEnd(std::size_t offset) const noexcept {
     auto position = offset;
+
     while (position < text_.size() && kind(position, false) != CharacterClass::word) {
       position = text_.next(position);
     }
+
     while (position < text_.size() && kind(position, false) == CharacterClass::word) {
       position = text_.next(position);
     }
+
     return position;
   }
 
@@ -546,9 +581,11 @@ private:
         position = text_.next(position);
       }
     }
+
     while (position < text_.size() && blank(position)) {
       position = text_.next(position);
     }
+
     return position;
   }
 
@@ -556,25 +593,32 @@ private:
   inline std::size_t runEnd(std::size_t offset, bool big) const noexcept {
     const auto run = kind(offset, big);
     auto position = offset;
+
     while (text_.next(position) < text_.size() && kind(text_.next(position), big) == run) {
       position = text_.next(position);
     }
+
     return position;
   }
 
   // vim's e: the last character of the current or next word.
   inline std::size_t endOfWord(std::size_t offset, bool big) const noexcept {
     auto position = text_.next(offset);
+
     while (position < text_.size() && blank(position)) {
       position = text_.next(position);
     }
+
     if (position >= text_.size()) {
       return text_.size() == 0 ? 0 : text_.previous(text_.size());
     }
+
     const auto run = kind(position, big);
+
     while (text_.next(position) < text_.size() && kind(text_.next(position), big) == run) {
       position = text_.next(position);
     }
+
     return position;
   }
 
@@ -599,6 +643,7 @@ private:
     } else {
       text_.moveTo(cursor);
     }
+
     reset();
     finishRecording();
   }
@@ -628,18 +673,22 @@ private:
         mode_ = Mode::normal;
         text_.moveTo(text_.cursor());
       }
+
       reset();
       finishRecording();
       return Request::none;
     }
+
     if (key.key == Key::enter && !pending()) {
       return Request::submit;
     }
+
     if (key.key == Key::character && key.modifiers.control) {
       return normalControl(key.character);
     }
 
     char32_t character = key.character;
+
     switch (key.key) {
     case Key::left:
       character = 'h';
@@ -678,31 +727,38 @@ private:
       register_pending_ = false;
       return Request::none;
     }
+
     if (pending_ == Pending::replace) {
       replaceCharacters(key.text);
       return Request::none;
     }
+
     if (pending_ == Pending::find) {
       last_find_ = {find_kind_, character};
       return applyMotion(findMotion(find_kind_, character, count()));
     }
+
     if (pending_ == Pending::g) {
       pending_ = Pending::none;
       if (character == 'g') {
         return applyMotion({0, false, true});
       }
+
       if (character == 'e' || character == 'E') {
         return applyMotion({wordStart(text_.cursor(), character == 'E'), true});
       }
+
       reset();
       return Request::none;
     }
+
     if (pending_ == Pending::text_object) {
       return applyTextObject(character);
     }
 
     if ((character >= '1' && character <= '9') || (character == '0' && (operator_ != 0 ? operator_count_ : count_) != 0)) {
       auto &target = operator_ != 0 ? operator_count_ : count_;
+
       target = std::min<std::size_t>(target * 10 + (character - '0'), 9999);
       return Request::none;
     }
@@ -714,28 +770,34 @@ private:
         reset();
         return Request::history_previous;
       }
+
       if (character == 'j' && text_.lineEnd(cursor) == text_.size()) {
         reset();
         return Request::history_next;
       }
     }
+
     if (const auto motion = motionFor(character)) {
       return applyMotion(*motion);
     }
+
     if ((character == 'i' || character == 'a') && (operator_ != 0 || mode_ == Mode::visual || mode_ == Mode::visual_line)) {
       pending_ = Pending::text_object;
       text_object_inner_ = character == 'i';
       return Request::none;
     }
+
     if (character == 'f' || character == 'F' || character == 't' || character == 'T') {
       pending_ = Pending::find;
       find_kind_ = static_cast<char>(character);
       return Request::none;
     }
+
     if (character == 'g') {
       pending_ = Pending::g;
       return Request::none;
     }
+
     return command(character, key);
   }
 
@@ -745,6 +807,7 @@ private:
       for (std::size_t step = 0; step < count(); ++step) {
         text_.redo();
       }
+
       reset();
       clampNormal();
       return Request::none;
@@ -768,11 +831,14 @@ private:
     const auto repeat = count();
     auto apply = [&](auto step) {
       auto position = cursor;
+
       for (std::size_t index = 0; index < repeat; ++index) {
         position = step(position);
       }
+
       return position;
     };
+
     switch (character) {
     case 'h':
       return Motion{apply([&](std::size_t at) { return at > text_.lineStart(cursor) ? text_.previous(at) : at; })};
@@ -784,11 +850,14 @@ private:
       // cw on a word changes to its end, as vim does.
       if (operator_ == 'c' && !blank(cursor)) {
         auto end = runEnd(cursor, character == 'W');
+
         for (std::size_t index = 1; index < repeat; ++index) {
           end = endOfWord(end, character == 'W');
         }
+
         return Motion{end, true};
       }
+
       return Motion{apply([&](std::size_t at) { return nextWord(at, character == 'W'); })};
     case 'b':
     case 'B':
@@ -802,34 +871,42 @@ private:
       return Motion{firstNonBlank(text_.lineStart(cursor))};
     case '$': {
       auto line = text_.lineStart(cursor);
+
       for (std::size_t index = 1; index < repeat && text_.lineEnd(line) < text_.size(); ++index) {
         line = text_.lineEnd(line) + 1;
       }
+
       const auto end = text_.lineEnd(line);
+
       return Motion{end > line ? text_.previous(end) : end, true};
     }
     case 'G': {
       if (count_ == 0 && operator_count_ == 0) {
         return Motion{text_.lineStart(text_.size()), false, true};
       }
+
       return Motion{lineAt(repeat - 1), false, true};
     }
     case 'j':
     case 'k': {
       auto line = text_.lineStart(cursor);
+
       for (std::size_t index = 0; index < repeat; ++index) {
         if (character == 'j') {
           if (text_.lineEnd(line) == text_.size()) {
             return Motion{cursor, false, true, operator_ != 0 && index > 0};
           }
+
           line = text_.lineEnd(line) + 1;
         } else {
           if (line == 0) {
             return Motion{cursor, false, true, operator_ != 0 && index > 0};
           }
+
           line = text_.lineStart(line - 1);
         }
       }
+
       return Motion{text_.atColumn(line, text_.column(cursor)), false, true};
     }
     case ';':
@@ -837,6 +914,7 @@ private:
       if (last_find_.second == 0) {
         return Motion{cursor, false, false, false};
       }
+
       return findMotion(character == ';' ? last_find_.first : reversed(last_find_.first), last_find_.second, repeat, true);
     case '%':
       return matchingBracket(cursor);
@@ -861,17 +939,21 @@ private:
   inline std::size_t firstNonBlank(std::size_t line) const noexcept {
     auto position = line;
     const auto end = text_.lineEnd(line);
+
     while (position < end && blank(position)) {
       position = text_.next(position);
     }
+
     return position;
   }
 
   inline std::size_t lineAt(std::size_t index) const noexcept {
     std::size_t line = 0;
+
     for (std::size_t current = 0; current < index && text_.lineEnd(line) < text_.size(); ++current) {
       line = text_.lineEnd(line) + 1;
     }
+
     return line;
   }
 
@@ -884,6 +966,7 @@ private:
     const auto start = text_.lineStart(cursor);
     const auto end = text_.lineEnd(cursor);
     auto position = cursor;
+
     for (std::size_t index = 0; index < repeat; ++index) {
       if (kind == 'f' || kind == 't') {
         auto from = text_.next(position);
@@ -891,28 +974,34 @@ private:
         if (repeated && kind == 't' && index == 0 && from < end && view.substr(from, needle.size()) == needle) {
           from = text_.next(from);
         }
+
         const auto found = view.find(needle, from);
         if (found == std::string_view::npos || found >= end) {
           return Motion{cursor, false, false, false};
         }
+
         position = found;
       } else {
         auto from = text_.previous(position);
         if (repeated && kind == 'T' && index == 0 && from > start && view.substr(text_.previous(from), needle.size()) == needle) {
           from = text_.previous(from);
         }
+
         const auto found = position <= start ? std::string_view::npos : view.rfind(needle, from);
         if (found == std::string_view::npos || found < start) {
           return Motion{cursor, false, false, false};
         }
+
         position = found;
       }
     }
+
     if (kind == 't') {
       position = text_.previous(position);
     } else if (kind == 'T') {
       position = text_.next(position);
     }
+
     return Motion{position, kind == 'f' || kind == 't'};
   }
 
@@ -922,24 +1011,30 @@ private:
     const auto view = text_.view();
     auto position = cursor;
     const auto end = text_.lineEnd(cursor);
+
     while (position < end && open.find(view[position]) == std::string_view::npos && close.find(view[position]) == std::string_view::npos) {
       ++position;
     }
+
     if (position >= end) {
       return Motion{cursor, false, false, false};
     }
+
     const auto here = view[position];
     const auto opening = open.find(here);
     const char other = opening != std::string_view::npos ? close[opening] : open[close.find(here)];
     const int step = opening != std::string_view::npos ? 1 : -1;
     int depth = 0;
+
     for (auto index = static_cast<std::ptrdiff_t>(position); index >= 0 && index < static_cast<std::ptrdiff_t>(view.size()); index += step) {
       const auto byte = view[static_cast<std::size_t>(index)];
+
       depth += byte == here ? 1 : byte == other ? -1 : 0;
       if (depth == 0) {
         return Motion{static_cast<std::size_t>(index), true};
       }
     }
+
     return Motion{cursor, false, false, false};
   }
 
@@ -950,21 +1045,27 @@ private:
       reset();
       return Request::none;
     }
+
     if (operator_ != 0) {
       const auto cursor = text_.cursor();
       auto start = std::min(cursor, motion.target);
       auto end = std::max(cursor, motion.target);
+
       if (motion.inclusive) {
         end = text_.next(end);
       }
+
       operate(start, end, motion.linewise);
       return Request::none;
     }
+
     const bool visual = mode_ == Mode::visual || mode_ == Mode::visual_line;
+
     text_.moveTo(motion.target, visual);
     if (!visual) {
       clampNormal();
     }
+
     reset();
     return Request::none;
   }
@@ -976,10 +1077,12 @@ private:
       reset();
       return Request::none;
     }
+
     if (operator_ != 0) {
       operate(range->first, range->second, false);
       return Request::none;
     }
+
     text_.select(range->first, range->second == range->first ? range->first : text_.previous(range->second));
     reset();
     return Request::none;
@@ -988,22 +1091,29 @@ private:
   inline std::optional<std::pair<std::size_t, std::size_t>> textObject(char32_t character, bool inner) const {
     const auto cursor = text_.cursor();
     const auto view = text_.view();
+
     switch (character) {
     case 'w':
     case 'W': {
       const bool big = character == 'W';
+
       if (cursor >= view.size()) {
         return std::nullopt;
       }
+
       const auto run = kind(cursor, big);
       auto start = cursor;
+
       while (start > 0 && kind(text_.previous(start), big) == run) {
         start = text_.previous(start);
       }
+
       auto end = cursor;
+
       while (end < view.size() && kind(end, big) == run) {
         end = text_.next(end);
       }
+
       if (!inner) {
         if (end < view.size() && blank(end) && view[end] != '\n') {
           while (end < view.size() && blank(end) && view[end] != '\n') {
@@ -1015,6 +1125,7 @@ private:
           }
         }
       }
+
       return std::pair{start, end};
     }
     case '"':
@@ -1025,6 +1136,7 @@ private:
       const auto end = text_.lineEnd(cursor);
       auto open = view.rfind(quote, cursor);
       std::size_t close = std::string_view::npos;
+
       if (open != std::string_view::npos && open >= line) {
         close = view.find(quote, open == cursor ? cursor + 1 : std::max(open + 1, cursor));
         if (open == cursor && (close == std::string_view::npos || close >= end)) {
@@ -1035,9 +1147,11 @@ private:
         open = view.find(quote, cursor);
         close = open == std::string_view::npos ? open : view.find(quote, open + 1);
       }
+
       if (open == std::string_view::npos || close == std::string_view::npos || open < line || close >= end || close <= open) {
         return std::nullopt;
       }
+
       return inner ? std::pair{open + 1, close} : std::pair{open, close + 1};
     }
     case '(':
@@ -1064,6 +1178,7 @@ private:
     const auto cursor = std::min(text_.cursor(), view.empty() ? 0 : view.size() - 1);
     int depth = 0;
     std::optional<std::size_t> start;
+
     for (auto index = static_cast<std::ptrdiff_t>(cursor); index >= 0; --index) {
       const auto byte = view[static_cast<std::size_t>(index)];
       if (byte == close && static_cast<std::size_t>(index) != cursor) {
@@ -1073,12 +1188,15 @@ private:
           start = static_cast<std::size_t>(index);
           break;
         }
+
         --depth;
       }
     }
+
     if (!start) {
       return std::nullopt;
     }
+
     depth = 0;
     for (auto index = *start; index < view.size(); ++index) {
       depth += view[index] == open ? 1 : view[index] == close ? -1 : 0;
@@ -1086,12 +1204,14 @@ private:
         return inner ? std::pair{*start + 1, index} : std::pair{*start, index + 1};
       }
     }
+
     return std::nullopt;
   }
 
   // Applies the pending operator to [start, end), whole lines when `linewise`.
   inline void operate(std::size_t start, std::size_t end, bool linewise) {
     const auto action = operator_;
+
     if (linewise) {
       start = text_.lineStart(start);
       end = text_.lineEnd(end);
@@ -1102,7 +1222,9 @@ private:
         --start;
       }
     }
+
     const auto view = text_.view();
+
     store(view.substr(start, end - start), linewise);
     switch (action) {
     case 'd':
@@ -1116,6 +1238,7 @@ private:
       if (linewise && end > start && text_.view()[end - 1] == '\n') {
         --end;
       }
+
       text_.replace(start, end, {});
       mode_ = Mode::insert;
       break;
@@ -1140,6 +1263,7 @@ private:
     default:
       break;
     }
+
     reset();
   }
 
@@ -1149,6 +1273,7 @@ private:
     const auto last = text_.lineEnd(end > first ? end - 1 : first);
     const auto view = text_.view();
     std::string result;
+
     for (auto line = first;;) {
       const auto line_end = text_.lineEnd(line);
       auto content = view.substr(line, line_end - line);
@@ -1156,30 +1281,37 @@ private:
         result += "  ";
       } else if (!right) {
         const auto spaces = std::min<std::size_t>(content.find_first_not_of(' ') == std::string_view::npos ? content.size() : content.find_first_not_of(' '), 2);
+
         content.remove_prefix(spaces);
       }
+
       result += content;
       if (line_end >= last) {
         break;
       }
+
       result += '\n';
       line = line_end + 1;
     }
+
     text_.replace(first, last, result);
     text_.moveTo(firstNonBlank(first));
   }
 
   inline void changeCase(std::size_t start, std::size_t end, char action) {
     std::string changed{text_.view().substr(start, end - start)};
+
     for (auto &byte : changed) {
       const bool lower = byte >= 'a' && byte <= 'z';
       const bool upper = byte >= 'A' && byte <= 'Z';
+
       if ((action == 'U' || action == '~') && lower) {
         byte = static_cast<char>(byte - 32);
       } else if ((action == 'u' || action == '~') && upper) {
         byte = static_cast<char>(byte + 32);
       }
     }
+
     text_.replace(start, end, changed);
     text_.moveTo(start);
   }
@@ -1191,6 +1323,7 @@ private:
       }
     } else if (register_ != '_') {
       auto &target = register_ >= 'a' && register_ <= 'z' ? registers_[register_ - 'a'] : unnamed_;
+
       target.text.assign(text);
       target.linewise = linewise;
       if (register_ != '"') {
@@ -1208,9 +1341,11 @@ private:
     if (register_ == '+' || register_ == '*') {
       return {clipboard_.read ? clipboard_.read() : std::string{}, false};
     }
+
     if (register_ >= 'a' && register_ <= 'z') {
       return registers_[register_ - 'a'];
     }
+
     return unnamed_;
   }
 
@@ -1219,17 +1354,23 @@ private:
     if (value.text.empty()) {
       return;
     }
+
     std::string text;
+
     for (std::size_t index = 0; index < count(); ++index) {
       text += value.text;
     }
+
     const auto cursor = text_.cursor();
+
     if (value.linewise) {
       if (!text.ends_with('\n')) {
         text += '\n';
       }
+
       if (before) {
         const auto line = text_.lineStart(cursor);
+
         text_.replace(line, line, text);
         text_.moveTo(firstNonBlank(line));
       } else {
@@ -1246,9 +1387,11 @@ private:
       }
     } else {
       const auto at = before || text_.empty() || cursor == text_.lineEnd(cursor) ? cursor : text_.next(cursor);
+
       text_.replace(at, at, text);
       text_.moveTo(text_.previous(at + text.size()));
     }
+
     clampNormal();
   }
 
@@ -1256,17 +1399,22 @@ private:
     pending_ = Pending::none;
     const auto cursor = text_.cursor();
     auto end = cursor;
+
     for (std::size_t index = 0; index < count(); ++index) {
       if (end >= text_.lineEnd(cursor)) {
         reset();
         return;
       }
+
       end = text_.next(end);
     }
+
     std::string text;
+
     for (std::size_t index = 0; index < count(); ++index) {
       text += typed;
     }
+
     text_.replace(cursor, end, text);
     text_.moveTo(text_.previous(cursor + text.size()));
     reset();
@@ -1285,13 +1433,16 @@ private:
       if (static_cast<char>(character) == operator_ || (operator_ == 'g' && character == '~')) {
         const auto lines = count() - 1;
         auto last = cursor;
+
         for (std::size_t index = 0; index < lines && text_.lineEnd(last) < text_.size(); ++index) {
           last = text_.lineEnd(last) + 1;
         }
+
         operate(cursor, last, true);
       } else {
         reset();
       }
+
       return Request::none;
     }
 
@@ -1304,6 +1455,7 @@ private:
       if (character != 'y') {
         startRecording(key);
       }
+
       operator_ = static_cast<char>(character);
       return Request::none;
     case '"':
@@ -1328,6 +1480,7 @@ private:
     case 'o': {
       startRecording(key);
       const auto end = text_.lineEnd(cursor);
+
       text_.replace(end, end, "\n");
       mode_ = Mode::insert;
       return Request::none;
@@ -1335,6 +1488,7 @@ private:
     case 'O': {
       startRecording(key);
       const auto start = text_.lineStart(cursor);
+
       text_.replace(start, start, "\n");
       text_.moveTo(start);
       mode_ = Mode::insert;
@@ -1345,6 +1499,7 @@ private:
       startRecording(key);
       auto start = cursor;
       auto end = cursor;
+
       for (std::size_t index = 0; index < count(); ++index) {
         if (character == 'x' && end < text_.lineEnd(cursor)) {
           end = text_.next(end);
@@ -1352,11 +1507,13 @@ private:
           start = text_.previous(start);
         }
       }
+
       if (start != end) {
         store(text_.view().substr(start, end - start), false);
         text_.replace(start, end, {});
         text_.moveTo(start);
       }
+
       clampNormal();
       reset();
       finishRecording();
@@ -1374,11 +1531,14 @@ private:
       if (character != 'Y') {
         startRecording(key);
       }
+
       operator_ = character == 'S' ? 'c' : character == 'C' ? 'c' : character == 'D' ? 'd' : 'y';
       if (character == 'S' || character == 'Y') {
         return command(static_cast<char32_t>(operator_), key);
       }
+
       const auto end = text_.lineEnd(cursor);
+
       operate(cursor, end, false);
       return Request::none;
     }
@@ -1396,9 +1556,11 @@ private:
     case '~': {
       startRecording(key);
       auto end = cursor;
+
       for (std::size_t index = 0; index < count() && end < text_.lineEnd(cursor); ++index) {
         end = text_.next(end);
       }
+
       operator_ = '~';
       operate(cursor, end, false);
       text_.moveTo(end);
@@ -1412,13 +1574,17 @@ private:
         if (end >= text_.size()) {
           break;
         }
+
         auto next = end + 1;
+
         while (next < text_.size() && blank(next) && text_.view()[next] != '\n') {
           ++next;
         }
+
         text_.replace(end, next, " ");
         text_.moveTo(end);
       }
+
       reset();
       finishRecording();
       return Request::none;
@@ -1427,6 +1593,7 @@ private:
       for (std::size_t index = 0; index < count(); ++index) {
         text_.undo();
       }
+
       reset();
       clampNormal();
       return Request::none;
@@ -1457,6 +1624,7 @@ private:
     auto start = text_.selectionStart();
     auto end = text_.next(text_.selectionEnd());
     const bool lines = mode_ == Mode::visual_line;
+
     switch (character) {
     case 'd':
     case 'x':
@@ -1476,6 +1644,7 @@ private:
     }
     case 'o': {
       const auto anchor = text_.anchor();
+
       text_.select(text_.cursor(), anchor);
       return Request::none;
     }
@@ -1487,10 +1656,12 @@ private:
       } else {
         mode_ = character == 'v' ? Mode::visual : Mode::visual_line;
       }
+
       return Request::none;
     case 'p':
     case 'P': {
       const auto value = load();
+
       text_.replace(start, end, value.text);
       mode_ = Mode::normal;
       clampNormal();
@@ -1508,6 +1679,7 @@ private:
     if (replaying_ != 0) {
       return;
     }
+
     recording_ = true;
     recorded_.clear();
     if (count_ != 0) {
@@ -1515,6 +1687,7 @@ private:
         recorded_.push_back({KeyPress{Key::character, static_cast<char32_t>(digit)}, {}});
       }
     }
+
     record(key);
   }
 
@@ -1524,6 +1697,7 @@ private:
       recorded_.clear();
       return;
     }
+
     recorded_.push_back({key, std::string{key.text}});
   }
 
@@ -1536,16 +1710,20 @@ private:
 
   inline void repeat() {
     const auto changes = last_change_;
+
     ++replaying_;
     reset();
     for (const auto &entry : changes) {
       auto key = entry.key;
+
       key.text = entry.text;
       press(key);
     }
+
     if (mode_ == Mode::insert) {
       enterNormal();
     }
+
     --replaying_;
   }
 
@@ -1554,17 +1732,20 @@ private:
       output[0] = static_cast<char>(value);
       return 1;
     }
+
     if (value < 0x800) {
       output[0] = static_cast<char>(0xc0 | (value >> 6));
       output[1] = static_cast<char>(0x80 | (value & 0x3f));
       return 2;
     }
+
     if (value < 0x10000) {
       output[0] = static_cast<char>(0xe0 | (value >> 12));
       output[1] = static_cast<char>(0x80 | ((value >> 6) & 0x3f));
       output[2] = static_cast<char>(0x80 | (value & 0x3f));
       return 3;
     }
+
     output[0] = static_cast<char>(0xf0 | (value >> 18));
     output[1] = static_cast<char>(0x80 | ((value >> 12) & 0x3f));
     output[2] = static_cast<char>(0x80 | ((value >> 6) & 0x3f));

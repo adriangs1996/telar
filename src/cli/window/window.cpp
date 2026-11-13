@@ -61,12 +61,14 @@ constexpr const char *statusName(ClientCommandStatus status) {
 void number(Text &output, std::uint64_t value) {
   std::array<char, std::numeric_limits<std::uint64_t>::digits10 + 2> buffer;
   const auto end = std::to_chars(buffer.data(), buffer.data() + buffer.size(), value).ptr;
+
   output.append(buffer.data(), end);
 }
 
 void signedNumber(Text &output, std::int64_t value) {
   std::array<char, std::numeric_limits<std::int64_t>::digits10 + 3> buffer;
   const auto end = std::to_chars(buffer.data(), buffer.data() + buffer.size(), value).ptr;
+
   output.append(buffer.data(), end);
 }
 
@@ -101,9 +103,11 @@ void descriptor(Text &output, const ClientDescriptor &entry, bool json) {
 
 void clients(Session &session, const ClientOptions &options, Text &output) {
   const auto list = session.exchange<ClientList>(QueryClients{});
+
   if (options.action == ClientOptions::Action::list) {
     output += options.json ? "[" : "CLIENT\tGENERATION\tIDENTITY\tATTACHMENTS\tLAST INPUT PANE\n";
     bool first = true;
+
     for (const auto &entry : list.entries) {
       if (options.json && !first) {
         output += ',';
@@ -116,6 +120,7 @@ void clients(Session &session, const ClientOptions &options, Text &output) {
     if (options.json) {
       output += "]\n";
     }
+
     return;
   }
 
@@ -129,6 +134,7 @@ void clients(Session &session, const ClientOptions &options, Text &output) {
           .client_id = entry.id,
           .client_generation = entry.generation,
       });
+
       if (options.json) {
         output += "{\"id\":";
         number(output, entry.id);
@@ -167,6 +173,7 @@ void plugins(Session &session, ClientCommand command, ClientCommandResult reply,
   Vector<Text, Memory> entries{AllocatorRef<Text, Memory>{output.get_allocator().memory()}};
   std::optional<std::int64_t> generation;
   const std::int64_t limit = command.action == ClientAction::plugin_get ? 65 : 32;
+
   for (std::int64_t page_index = 0;; ++page_index) {
     if (page_index >= limit || reply.status != ClientCommandStatus::applied) {
       throw Failure{"InvalidPluginPage"};
@@ -176,6 +183,7 @@ void plugins(Session &session, ClientCommand command, ClientCommandResult reply,
     const auto version = page.field("generation");
     const auto items = page.field("entries");
     std::int64_t version_number = 0;
+
     if (!version || !items || !items->encoded().starts_with('[')) {
       throw Failure{"InvalidPluginPage"};
     }
@@ -185,24 +193,29 @@ void plugins(Session &session, ClientCommand command, ClientCommandResult reply,
     if (parsed.ec != std::errc{} || parsed.ptr != encoded.data() + encoded.size() || version_number <= 0) {
       throw Failure{"InvalidPluginPage"};
     }
+
     if (generation && *generation != version_number) {
       throw Failure{"StaleConfiguration"};
     }
 
     generation = version_number;
     std::size_t count = 0;
+
     items->eachElement([&](const JsonValue &item) {
       if (++count > 1) {
         throw Failure{"InvalidPluginPage"};
       }
 
       Text entry{output.get_allocator()};
+
       appendJson(entry, item, false);
       entries.push_back(std::move(entry));
     });
+
     if (reply.value == -1) {
       break;
     }
+
     if (reply.value <= command.value || reply.value >= limit) {
       throw Failure{"InvalidPluginPage"};
     }
@@ -228,6 +241,7 @@ void plugins(Session &session, ClientCommand command, ClientCommandResult reply,
       if (!entries[index].starts_with('"')) {
         throw Failure{"InvalidPluginPage"};
       }
+
       if (index > 1) {
         output += ',';
       }
@@ -274,6 +288,7 @@ int routed(Session &session, const RoutedOptions &options, Text &output) {
       .value = options.value,
       .text = options.text,
   };
+
   const auto reply = exchangeCommand(session, command);
   if (reply.status == ClientCommandStatus::failed) {
     std::println(stderr, "telar: {:.{}}", reply.text.data(), static_cast<int>(reply.text.size()));
@@ -342,8 +357,10 @@ int suggest(Session &session, const SuggestionOptions &options, Text &output) {
       .pane_id = options.pane,
       .text = options.text,
   });
+
   constexpr std::array statuses{"ready", "unavailable", "timeout", "failed"};
   const auto *const status = statuses.at(static_cast<std::size_t>(reply.status));
+
   if (options.json) {
     output += "{\"status\":";
     appendJsonText(output, status, JsonEscapes::standard);
@@ -375,6 +392,7 @@ std::string_view utf8Prefix(std::string_view text, std::size_t maximum) {
 
 int notify(Session &session, NotificationBody notification) {
   std::optional<LimitReach> reach;
+
   if (notification.title.size() > max_notification_title_bytes) {
     reach = LimitReach{
         .name = "notifications.max_title_bytes",
@@ -382,6 +400,7 @@ int notify(Session &session, NotificationBody notification) {
         .value = max_notification_title_bytes,
         .requested = notification.title.size(),
     };
+
     notification.title = utf8Prefix(notification.title, max_notification_title_bytes);
   }
 
@@ -392,6 +411,7 @@ int notify(Session &session, NotificationBody notification) {
         .value = max_notification_message_bytes,
         .requested = notification.message.size(),
     };
+
     notification.message = utf8Prefix(notification.message, max_notification_message_bytes);
   }
 
@@ -401,6 +421,7 @@ int notify(Session &session, NotificationBody notification) {
     } catch (const EncodingError &) {
       throw Failure{"InvalidUtf8"};
     }
+
     if (std::ranges::any_of(text, [](unsigned char byte) { return byte < 0x20 || byte == 0x7f; })) {
       throw Failure{"InvalidNotificationText"};
     }
@@ -411,6 +432,7 @@ int notify(Session &session, NotificationBody notification) {
   } catch (const EncodingError &) {
     throw Failure{"InvalidNotificationLink"};
   }
+
   if (notification.link.size() > max_notification_link_bytes) {
     throw Failure{"InvalidNotificationLink"};
   }
@@ -421,6 +443,7 @@ int notify(Session &session, NotificationBody notification) {
   if (shown.delivered_clients == 0) {
     throw Failure{"NoNotificationClients"};
   }
+
   if (reach) {
     try {
       session.send(ReportLimit{
@@ -459,15 +482,18 @@ int connected(const Options &options, const char *prefix, Execute execute) {
     SystemAllocator system;
     Memory memory{system, memory_budget};
     ServerOptions server;
+
     if (const auto socket = socketOption(options)) {
       server.socket = socket;
     }
 
     const RuntimePaths paths{memory, server, process_environment};
     Session session{memory, paths.socket.c_str()};
+
     session.receiveTimeout(receive_timeout);
     Text output{AllocatorRef<char, Memory>{memory}};
     const auto result = execute(session, output);
+
     if (std::fwrite(output.data(), 1, output.size(), stdout) != output.size()) {
       throw Failure{"WriteFailed"};
     }
@@ -476,6 +502,7 @@ int connected(const Options &options, const char *prefix, Execute execute) {
   } catch (const Failure &error) {
     if constexpr (std::is_same_v<Options, NotificationOptions>) {
       const auto *const message = std::string_view{error.what()} == "NoNotificationClients" ? "no UI client is connected" : error.what();
+
       std::println(stderr, "{}{}\nerror: {}", prefix, message, error.what());
     } else {
       std::println(stderr, "{}{}", prefix, error.what());
@@ -487,12 +514,14 @@ int connected(const Options &options, const char *prefix, Execute execute) {
   } catch (const SystemError &error) {
     const bool timeout = error.code() == EAGAIN || error.code() == ETIMEDOUT;
     const char *description = timeout ? "RuntimeTimeout" : error.code() == ENOENT || error.code() == ECONNREFUSED ? systemErrorName(error.code()) : error.what();
+
     if constexpr (std::is_same_v<Options, NotificationOptions>) {
       if (error.code() == ENOENT || error.code() == ECONNREFUSED) {
         std::println(stderr, "{}runtime is not running\nerror: RuntimeNotRunning", prefix);
       } else {
         std::println(stderr, "{}{}\nerror: {}", prefix, description, description);
       }
+
       return 1;
     }
 
@@ -503,6 +532,7 @@ int connected(const Options &options, const char *prefix, Execute execute) {
     const bool timeout = message == "Runtime receive timed out";
     const auto *const description = timeout ? "RuntimeTimeout" : message == "Runtime closed the connection" ? "ConnectionClosed"
                                                                                                             : error.what();
+
     std::println(stderr, "{}{}", prefix, description);
     return timeout ? 3 : 1;
   } catch (const EncodingError &) {
@@ -520,11 +550,13 @@ namespace telar::runtime::cli {
 
 int runRouted(const RoutedOptions &options) {
   using namespace window;
+
   return connected(options, "telar: ", [&](Session &session, Text &output) { return routed(session, options, output); });
 }
 
 int runWindow(Family family, std::span<char *const> words) {
   using namespace window;
+
   if (family == Family::client) {
     const auto options = ClientOptions::parse(words);
 
@@ -568,6 +600,7 @@ int runWindow(Family family, std::span<char *const> words) {
     window::ConfigCheckOptions::parse(words);
     const ExecutablePath helper{"telar-config-check"};
     std::vector<char *> arguments{const_cast<char *>(helper.c_str())};
+
     arguments.insert(arguments.end(), words.begin(), words.end());
     arguments.push_back(nullptr);
     ::execv(helper.c_str(), arguments.data());

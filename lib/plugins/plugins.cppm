@@ -113,6 +113,7 @@ public:
 
   inline Capabilities intersection(Capabilities other) const noexcept {
     Capabilities result;
+
     result.bits_ = bits_ & other.bits_;
     return result;
   }
@@ -121,6 +122,7 @@ public:
     if (contains(capability)) {
       throw std::invalid_argument{"DuplicateCapability"};
     }
+
     bits_ |= bit(capability);
   }
 
@@ -129,6 +131,7 @@ public:
     if (found == names_.end()) {
       throw std::invalid_argument{"UnknownCapability"};
     }
+
     return static_cast<Capability>(found - names_.begin());
   }
 
@@ -140,10 +143,12 @@ public:
   inline static Capabilities parse(Memory &memory, const JsonValue &value) {
     Capabilities result;
     String<Memory> text{AllocatorRef<char, Memory>{memory}};
+
     value.eachElement([&](const JsonValue &element) {
       element.string(text);
       result.insert(parseName(text));
     });
+
     return result;
   }
 
@@ -191,15 +196,18 @@ inline bool validEntrypoint(std::string_view path) noexcept {
   if (path.empty() || path.front() == '/') {
     return false;
   }
+
   for (;;) {
     const auto separator = path.find_first_of("/\\");
     const auto part = path.substr(0, separator);
     if (part.empty() || part == "." || part == "..") {
       return false;
     }
+
     if (separator == std::string_view::npos) {
       return true;
     }
+
     path.remove_prefix(separator + 1);
   }
 }
@@ -259,6 +267,7 @@ struct Manifest {
     }
 
     std::optional<JsonValue> root;
+
     try {
       validateUtf8(bytes);
       root = JsonValue::parse(bytes);
@@ -267,6 +276,7 @@ struct Manifest {
     }
 
     Wire<Memory> wire{memory};
+
     try {
       wire.read(memory, *root);
     } catch (const JsonError &) {
@@ -292,11 +302,13 @@ private:
 
     inline void read(Memory &memory, const JsonValue &root) {
       JsonFields fields{memory, root, field_names};
+
       api_version = number(fields.required("api_version"));
       fields.required("id").string(id);
       fields.required("version").string(version);
       fields.required("entry").string(entry);
       JsonFields origin{memory, fields.required("source"), source_names};
+
       origin.required("url").string(url);
       origin.required("revision").string(revision);
       for (auto [name, list] : {std::pair{"actions", &actions}, std::pair{"capabilities", &capabilities}}) {
@@ -339,6 +351,7 @@ private:
       }
 
       Manifest manifest;
+
       manifest.id.assign(id);
       manifest.version.assign(version);
       manifest.entry.assign(entry);
@@ -401,6 +414,7 @@ private:
     std::size_t depth = 0;
     bool in_string = false;
     bool escaped = false;
+
     for (const char byte : text) {
       if (in_string) {
         escaped = !escaped && byte == '\\';
@@ -461,6 +475,7 @@ namespace telar::runtime::plugins {
 template <Allocator Memory>
 void appendInspection(String<Memory> &output, const Package &package) {
   const auto &manifest = package.manifest;
+
   output += "id: ";
   output += manifest.id.view();
   output += "\nversion: ";
@@ -476,6 +491,7 @@ void appendInspection(String<Memory> &output, const Package &package) {
     output += ' ';
     output += action.view();
   }
+
   output += "\ncapabilities:";
   for (unsigned index = 0; index < static_cast<unsigned>(Capability::count); ++index) {
     const auto capability = static_cast<Capability>(index);
@@ -484,6 +500,7 @@ void appendInspection(String<Memory> &output, const Package &package) {
       output += Capabilities::name(capability);
     }
   }
+
   output += '\n';
 }
 
@@ -533,6 +550,7 @@ public:
       : memory_(memory), entries_(AllocatorRef<Entry, Memory>{memory}) {
     String<Memory> prefix{AllocatorRef<char, Memory>{memory}};
     DirectoryStream iterator{directory};
+
     scan(iterator, prefix);
     std::ranges::sort(entries_, [](const auto &first, const auto &second) { return first.path < second.path; });
   }
@@ -555,11 +573,13 @@ private:
       if (::fstatat(directory, entry->d_name, &status, AT_SYMLINK_NOFOLLOW) != 0) {
         throw SystemError{"Inspect plugin package entry"};
       }
+
       if (!S_ISREG(status.st_mode) && !S_ISDIR(status.st_mode)) {
         throw std::invalid_argument{"Unsupported plugin package file"};
       }
 
       const auto parent_length = prefix.size();
+
 #if defined(__APPLE__)
       prefix.append(entry->d_name, entry->d_namlen);
 #else
@@ -568,16 +588,20 @@ private:
       if (prefix.size() >= PATH_MAX) {
         throw std::invalid_argument{"Plugin package path exceeds its limit"};
       }
+
       entries_.push_back({String<Memory>{prefix, AllocatorRef<char, Memory>{memory_}}, S_ISDIR(status.st_mode)});
       if (S_ISDIR(status.st_mode)) {
         FileDescriptor child{::openat(directory, entry->d_name, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW)};
         if (!child) {
           throw SystemError{"Open plugin package directory"};
         }
+
         prefix += '/';
         DirectoryStream children{std::move(child)};
+
         scan(children, prefix);
       }
+
       prefix.resize(parent_length);
     }
   }
@@ -608,12 +632,14 @@ public:
     if (!source) {
       throw SystemError{"Open plugin package source"};
     }
+
     copyFiles(source, destination);
 
     auto copied = Inspector::inspect(*memory_, path);
     if (copied.manifest.id.view() != package.manifest.id.view() || copied.digest != package.digest) {
       throw std::invalid_argument{"Plugin changed while copying its package"};
     }
+
     return copied;
   }
 
@@ -621,16 +647,19 @@ private:
   inline void copyFiles(const FileDescriptor &source, int destination) {
     const PackageFiles files{*memory_, source.get()};
     std::size_t total = 0;
+
     for (const auto &entry : files.entries()) {
       if (entry.directory) {
         if (::mkdirat(destination, entry.path.c_str(), S_IRWXU) != 0) {
           throw SystemError{"Create plugin package directory"};
         }
+
         continue;
       }
 
       auto original = openBeneath(source.get(), entry.path, O_RDONLY);
       const auto contents = readFileContents(*memory_, original.get(), PackageLimits::total_bytes - total - 1);
+
       total += contents.size();
       auto copied = openBeneath(destination, entry.path, O_WRONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
       const auto error = writeFile(copied, contents);
@@ -646,6 +675,7 @@ private:
       if (count < 0 && errno == EINTR) {
         continue;
       }
+
       if (count <= 0) {
         return count == 0 ? EIO : errno;
       }
@@ -678,6 +708,7 @@ public:
   template <Allocator Memory>
   inline static Package inspectConfigured(Memory &memory, std::string_view directory, std::string_view path) {
     String<Memory> resolved{path, AllocatorRef<char, Memory>{memory}};
+
     resolveRelativePath(resolved, directory);
     return inspect(memory, resolved);
   }
@@ -689,12 +720,14 @@ public:
     }
 
     std::array<char, PATH_MAX> terminated;
+
     std::copy(path.begin(), path.end(), terminated.begin());
     terminated[path.size()] = '\0';
     std::array<char, PATH_MAX> canonical;
     if (::realpath(terminated.data(), canonical.data()) == nullptr) {
       throw SystemError{"Resolve plugin package"};
     }
+
     FileDescriptor directory{::open(canonical.data(), O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW)};
     if (!directory) {
       throw SystemError{"Open plugin package"};
@@ -703,9 +736,11 @@ public:
     auto manifest_file = openBeneath(directory.get(), "plugin.json", O_RDONLY);
     const auto source = readFileContents(memory, manifest_file.get(), PackageLimits::manifest_bytes - 1);
     Package package;
+
     package.root.assign(canonical.data());
     package.manifest = Manifest::parse(memory, source);
     auto entry = openBeneath(directory.get(), package.manifest.entry.view(), O_RDONLY);
+
     readFileContents(memory, entry.get(), Limits::entry_bytes - 1);
     package.digest = digest(memory, directory.get());
     return package;
@@ -717,29 +752,36 @@ private:
     const PackageFiles files{memory, directory};
     Hash hash;
     static constexpr char domain[] = "telar-plugin-package-v1";
+
     hash.update({domain, sizeof(domain)});
     std::size_t total = 0;
+
     for (const auto &entry : files.entries()) {
       if (entry.directory) {
         continue;
       }
+
       auto file = openBeneath(directory, entry.path, O_RDONLY);
       const auto bytes = readFileContents(memory, file.get(), PackageLimits::total_bytes - total - 1);
+
       total += bytes.size();
       hashLength(hash, entry.path.size());
       hash.update(entry.path);
       hashLength(hash, bytes.size());
       hash.update(bytes);
     }
+
     return hash.finish();
   }
 
   inline static void hashLength(Hash &hash, std::uint64_t length) {
     std::array<char, sizeof(length)> encoded;
+
     for (std::size_t index = 0; index < encoded.size(); ++index) {
       encoded[index] = static_cast<char>(length & UINT8_MAX);
       length >>= std::numeric_limits<std::uint8_t>::digits;
     }
+
     hash.update({encoded.data(), encoded.size()});
   }
 };
@@ -783,6 +825,7 @@ public:
 
   inline void install(const Package &package, std::string_view destination) {
     String<Memory> path{destination, AllocatorRef<char, Memory>{memory_}};
+
     resolveAbsolutePath(path);
     if (existing(package, path.c_str())) {
       return;
@@ -790,15 +833,19 @@ public:
 
     const auto separator = path.rfind('/');
     String<Memory> parent{std::string_view{path}.substr(0, separator), AllocatorRef<char, Memory>{memory_}};
+
     createPrivateDirectory(parent);
     auto directory = openPrivateParent(path);
+
     parent += "/.telar-plugin-XXXXXX";
     TemporaryDirectory staging{parent};
     if (::mkdirat(staging.descriptor(), staged_package, 0700) != 0) {
       throw SystemError{"Create plugin installation staging directory"};
     }
+
     auto copied = openBeneath(staging.descriptor(), staged_package, O_RDONLY | O_DIRECTORY);
     String<Memory> staged_path{staging.path(), AllocatorRef<char, Memory>{memory_}};
+
     staged_path += '/';
     staged_path += staged_package;
     PackageCopy{memory_}.copy(package, copied.get(), staged_path);
@@ -807,6 +854,7 @@ public:
       if (errno == EEXIST && existing(package, path.c_str())) {
         return;
       }
+
       throw SystemError{"Publish plugin installation"};
     }
   }
@@ -818,15 +866,19 @@ private:
       if (errno == ENOENT) {
         return false;
       }
+
       throw SystemError{"Inspect plugin installation target"};
     }
+
     if (!S_ISDIR(state.st_mode)) {
       throw std::invalid_argument{"Plugin installation target is not a directory"};
     }
+
     const auto installed = PackageInspector::inspect(memory_, path);
     if (installed.digest != package.digest) {
       throw std::invalid_argument{"Plugin installation target has a different digest"};
     }
+
     return true;
   }
 
@@ -874,19 +926,23 @@ public:
       if (!specification.enabled) {
         continue;
       }
+
       if (packages_.size() == PackageLimits::configured) {
         throw std::invalid_argument{"Too many configured plugins"};
       }
 
       auto package = Inspector::inspectConfigured(memory, directory, specification.path.view());
+
       for (const auto &existing : packages_) {
         if (existing.manifest.id.view() == package.manifest.id.view()) {
           throw std::invalid_argument{"Duplicate plugin ID"};
         }
+
         if (stableId(existing.manifest.id.view()) == stableId(package.manifest.id.view())) {
           throw std::invalid_argument{"Plugin ID hash collision"};
         }
       }
+
       packages_.push_back(std::move(package));
     }
   }
@@ -927,6 +983,7 @@ public:
   template <Allocator Memory, EnvironmentLookup Environment>
   inline static String<Memory> trust(Memory &memory, const Environment &environment) {
     auto path = required(cli::RuntimePaths<Memory>::configHome(memory, environment));
+
     path += "/trust.json";
     return path;
   }
@@ -934,6 +991,7 @@ public:
   template <Allocator Memory, EnvironmentLookup Environment>
   inline static String<Memory> installation(Memory &memory, const Environment &environment, const Package &package) {
     auto path = required(cli::xdgDirectory(memory, environment, "XDG_DATA_HOME", "/.local/share"));
+
     path += "/telar/plugins/";
     path += package.manifest.id.view();
     path += '/';
@@ -947,6 +1005,7 @@ private:
     if (path.empty()) {
       throw std::invalid_argument{"Home directory unavailable for plugins"};
     }
+
     return path;
   }
 };
@@ -976,6 +1035,7 @@ public:
     if (!readPrivateFile(AT_FDCWD, path, bytes, PackageLimits::trust_bytes - 1)) {
       return {};
     }
+
     return parse(memory, {reinterpret_cast<const char *>(bytes.data()), bytes.size()});
   }
 
@@ -988,25 +1048,31 @@ public:
     }
 
     TrustStore store;
+
     root.required("grants").eachElement([&](const JsonValue &value) {
       if (store.count_ == PackageLimits::grants) {
         throw std::invalid_argument{"Too many plugin trust grants"};
       }
+
       JsonFields fields{memory, value, grant_fields};
       auto &grant = store.grants_[store.count_];
+
       grant.plugin.assign(fields.string("plugin"));
       if (!validIdentifier(grant.plugin.view())) {
         throw std::invalid_argument{"Invalid trusted plugin ID"};
       }
+
       for (const auto &existing : std::span{store.grants_}.first(store.count_)) {
         if (existing.plugin.view() == grant.plugin.view()) {
           throw std::invalid_argument{"Duplicate plugin trust grant"};
         }
       }
+
       grant.digest = parseDigest(fields.string("digest"));
       grant.capabilities = Capabilities::parse(memory, fields.required("capabilities"));
       ++store.count_;
     });
+
     return store;
   }
 
@@ -1016,6 +1082,7 @@ public:
         return grant.capabilities;
       }
     }
+
     return {};
   }
 
@@ -1027,11 +1094,13 @@ public:
         return;
       }
     }
+
     if (count_ == grants_.size()) {
       throw std::invalid_argument{"Too many plugin trust grants"};
     }
 
     auto &entry = grants_[count_++];
+
     entry.plugin = manifest.id;
     entry.digest = digest;
     entry.capabilities = capabilities;
@@ -1045,39 +1114,48 @@ public:
       --count_;
       return true;
     }
+
     return false;
   }
 
   template <Allocator Memory>
   inline String<Memory> json(Memory &memory) const {
     String<Memory> output{"{\"version\":1,\"grants\":[", AllocatorRef<char, Memory>{memory}};
+
     for (std::size_t index = 0; index < count_; ++index) {
       if (index != 0) {
         output += ',';
       }
+
       const auto &entry = grants_[index];
+
       output += "{\"plugin\":";
       appendJsonText(output, entry.plugin.view());
       output += ",\"digest\":\"";
       appendLowerHex(output, entry.digest);
       output += "\",\"capabilities\":[";
       bool first = true;
+
       for (unsigned value = 0; value < static_cast<unsigned>(Capability::count); ++value) {
         const auto capability = static_cast<Capability>(value);
         if (entry.capabilities.contains(capability)) {
           if (!first) {
             output += ',';
           }
+
           appendJsonText(output, Capabilities::name(capability));
           first = false;
         }
       }
+
       output += "]}";
     }
+
     output += "]}\n";
     if (output.size() > PackageLimits::trust_bytes) {
       throw std::length_error{"Plugin trust store exceeds its limit"};
     }
+
     return output;
   }
 
@@ -1086,9 +1164,11 @@ public:
     if (text.size() != digest.size() * 2) {
       throw std::invalid_argument{"Invalid plugin digest"};
     }
+
     for (std::size_t index = 0; index < digest.size(); ++index) {
       digest[index] = static_cast<std::uint8_t>((hex(text[2 * index]) << 4) | hex(text[2 * index + 1]));
     }
+
     return digest;
   }
 
@@ -1097,12 +1177,15 @@ private:
     if (byte >= '0' && byte <= '9') {
       return static_cast<unsigned>(byte - '0');
     }
+
     if (byte >= 'a' && byte <= 'f') {
       return static_cast<unsigned>(byte - 'a' + 10);
     }
+
     if (byte >= 'A' && byte <= 'F') {
       return static_cast<unsigned>(byte - 'A' + 10);
     }
+
     throw std::invalid_argument{"Invalid plugin digest"};
   }
 
@@ -1125,6 +1208,7 @@ void saveTrust(Memory &memory, const TrustStore &store, String<Memory> path) {
 
   resolveAbsolutePath(path);
   const auto separator = path.rfind('/');
+
   createPrivateDirectory(std::string_view{path}.substr(0, separator));
   const auto parent = openPrivateParent(path);
   const auto written = writePrivateFile(parent.get(), std::string_view{path}.substr(separator + 1), {reinterpret_cast<const std::uint8_t *>(contents.data()), contents.size()}, PrivateFileMode::replace);
@@ -1136,6 +1220,7 @@ void saveTrust(Memory &memory, const TrustStore &store, String<Memory> path) {
 template <Allocator Memory>
 void updateTrust(Memory &memory, const Package &package, Capabilities capabilities, String<Memory> path) {
   auto store = TrustStore::load(memory, path);
+
   store.upsert(package.manifest, package.digest, capabilities);
   saveTrust(memory, store, std::move(path));
 }
@@ -1143,6 +1228,7 @@ void updateTrust(Memory &memory, const Package &package, Capabilities capabiliti
 template <Allocator Memory>
 void revokeTrust(Memory &memory, std::string_view id, String<Memory> path) {
   auto store = TrustStore::load(memory, path);
+
   store.revoke(id);
   saveTrust(memory, store, std::move(path));
 }

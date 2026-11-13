@@ -44,6 +44,7 @@ static void writeAll(int descriptor, std::string_view bytes) {
 
 static std::string marker(unsigned sequence) {
   std::array<char, 32> buffer{};
+
   std::snprintf(buffer.data(), buffer.size(), "::%06u::", sequence);
   return buffer.data();
 }
@@ -92,6 +93,7 @@ static std::string fixture(std::string_view workload, unsigned sequence) {
         "\x1b[>4;0m\x1b]22;text\x1b\\\x1b[0 q",
         "\x1b[?1049h\x1b[?1049l\x1b[2J",
     };
+
     output += operations[sequence % operations.size()];
   } else if (workload == "graphics-cursor") {
     static constexpr std::array<std::string_view, 8> operations{
@@ -104,6 +106,7 @@ static std::string fixture(std::string_view workload, unsigned sequence) {
         "\x1b[4;3H\x1b_Ga=d,d=I,i=1,q=2;\x1b\\\x1b_Ga=p,i=1,q=2;\x1b\\deleted-image",
         "\x1b[4;3H\x1b_Ga=T,c=7,r=5,C=1,q=2;bad\x1b\\cursor-stays",
     };
+
     output += operations[sequence % operations.size()];
   } else if (workload == "colors") {
     output += "\x1b]10;#123456\x1b\\\x1b]11;#654321\x1b\\\x1b]4;1;#112233\x1b\\";
@@ -130,6 +133,7 @@ static int child(std::string_view workload) {
   writeAll(STDOUT_FILENO, fixture(workload, 0));
   unsigned sequence = 0;
   char command = 0;
+
   while (::read(STDIN_FILENO, &command, 1) == 1) {
     if (command == 'q') {
       writeAll(STDOUT_FILENO, "\x1b[2;1Hfinal-output-before-exit");
@@ -155,6 +159,7 @@ public:
     client_.handshake();
     const timeval timeout{.tv_sec = 5,
                           .tv_usec = 0};
+
     ::setsockopt(client_.descriptor(), SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
     client_.send(ConfigureFrameInterval{.interval_ns = 1'000'000'000 / 240});
   }
@@ -167,6 +172,7 @@ public:
     const std::array<std::string_view, 3> arguments{executable, "--child", workload};
     const TerminalSize size{80, 24, 8, 16};
     const Launch launch{.cwd = "/tmp", .arguments = arguments};
+
     if (fresh_workspace) {
       send(CreateWorkspace{.request_id = 1, .size = size, .name = "Probe", .launch = launch});
     } else {
@@ -182,6 +188,7 @@ public:
 
   void next(unsigned sequence) {
     const std::array<Byte, 1> input{'n'};
+
     send(PaneInput{.pane_id = pane_id_,
                    .bytes = input});
     waitForMarker(sequence);
@@ -204,6 +211,7 @@ public:
     client_.handshake();
     const timeval timeout{.tv_sec = 5,
                           .tv_usec = 0};
+
     ::setsockopt(client_.descriptor(), SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
     send(OpenPane{.request_id = 9,
                   .target = {.kind = PaneTarget::Kind::pane,
@@ -226,6 +234,7 @@ public:
       while (!matches_received_) {
         receive();
       }
+
       output.write(reinterpret_cast<const char *>(matches_.data()), matches_.size());
     }
   }
@@ -243,6 +252,7 @@ public:
       }
 
       const auto size = static_cast<std::uint32_t>(text_.size());
+
       output.write(reinterpret_cast<const char *>(&size), sizeof(size));
       output.write(text_.data(), text_.size());
     }
@@ -258,12 +268,14 @@ public:
     }
 
     const auto size = static_cast<std::uint32_t>(text_.size());
+
     output.write(reinterpret_cast<const char *>(&size), sizeof(size));
     output.write(text_.data(), text_.size());
   }
 
   void finish() {
     const std::array<Byte, 1> input{'q'};
+
     send(PaneInput{.pane_id = pane_id_,
                    .bytes = input});
     while (!exited_) {
@@ -271,6 +283,7 @@ public:
     }
 
     const std::string_view expected = "final-output-before-exit";
+
     for (std::size_t index = 0; index < expected.size(); ++index) {
       if (cells_.at(80 + index).text[0] != expected[index]) {
         throw SocketError{"Exit arrived before final terminal output"};
@@ -281,6 +294,7 @@ public:
   void dump(std::ostream &output) {
     auto remaining = std::span<Byte>{outgoing_};
     auto header = header_;
+
     header.pane_id = 1;
     header.frame_id = 2;
     header.base_frame_id = 1;
@@ -328,29 +342,35 @@ private:
   void receive() {
     const auto payload = client_.receiveFrame(incoming_);
     DecodeStorage storage{scratch_};
+
     switch (static_cast<ServerTag>(payload.front())) {
     case ServerTag::pane_opened: {
       const auto opened = Codec::decode<PaneOpened>(payload, storage);
+
       pane_id_ = opened.pane_id;
       pane_generation_ = opened.pane_generation;
       break;
     }
     case ServerTag::pane_matches: {
       auto matches = Codec::decode<PaneMatches>(payload, storage);
+
       matches.pane_id = 1;
       const auto encoded = Codec::encode(matches, outgoing_);
+
       matches_.assign(encoded.begin(), encoded.end());
       matches_received_ = true;
       break;
     }
     case ServerTag::pane_text: {
       const auto text = Codec::decode<PaneText>(payload, storage);
+
       text_.assign(text.text);
       text_received_ = true;
       break;
     }
     case ServerTag::pane_clipboard: {
       const auto clipboard = Codec::decode<PaneClipboard>(payload, storage);
+
       text_.assign(reinterpret_cast<const char *>(clipboard.bytes.data()), clipboard.bytes.size());
       text_received_ = true;
       break;
@@ -369,6 +389,7 @@ private:
     }
     case ServerTag::request_failed: {
       const auto failure = Codec::decode<RequestFailed>(payload, storage);
+
       std::fprintf(stderr, "Request failed: %.*s\n", static_cast<int>(failure.message.size()), failure.message.data());
       throw SocketError{"Probe request rejected"};
     }
@@ -385,9 +406,11 @@ private:
     cells_.resize(static_cast<std::size_t>(frame.cols) * frame.rows);
     for (const auto &span : frame.spans) {
       auto reader = span.reader();
+
       for (std::size_t offset = 0; offset < span.count; ++offset) {
         const auto cell = *reader.next();
         auto &destination = cells_.at(span.start + offset);
+
         destination = {};
         destination.length = static_cast<Byte>(cell.text.size());
         destination.width = cell.width;
@@ -398,6 +421,7 @@ private:
 
     if (frame.text_metadata) {
       auto remaining = std::span<Byte>{outgoing_};
+
       ValueCodec<TextMetadata>::encode(*frame.text_metadata, remaining);
       metadata_.assign(outgoing_.begin(), outgoing_.begin() + (outgoing_.size() - remaining.size()));
     }
@@ -433,6 +457,7 @@ static void measureConcurrent(Probe &foreground, char **arguments, unsigned iter
   std::jthread background{[&](std::stop_token stopping) {
     try {
       Probe probe{arguments[1]};
+
       probe.open(arguments[0], "bulk", true);
       probe.next(++background_iterations);
       ready.store(true, std::memory_order_release);
@@ -450,14 +475,19 @@ static void measureConcurrent(Probe &foreground, char **arguments, unsigned iter
   }
 
   std::vector<std::int64_t> latencies;
+
   latencies.reserve(iterations);
   const auto started = std::chrono::steady_clock::now();
+
   for (unsigned sequence = 1; sequence <= iterations; ++sequence) {
     const auto sent = std::chrono::steady_clock::now();
+
     foreground.next(sequence);
     latencies.push_back(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - sent).count());
   }
+
   const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - started).count();
+
   background.request_stop();
   background.join();
   if (failure) {
@@ -466,6 +496,7 @@ static void measureConcurrent(Probe &foreground, char **arguments, unsigned iter
 
   std::sort(latencies.begin(), latencies.end());
   std::ofstream dump{arguments[4], std::ios::binary};
+
   foreground.dump(dump);
   foreground.dumpText(dump);
   foreground.finish();
@@ -486,12 +517,15 @@ int main(int argc, char **argv) {
     const unsigned iterations = static_cast<unsigned>(std::stoul(argv[3]));
     Probe probe{argv[1]};
     const bool concurrent = std::string_view{argv[2]} == "concurrent";
+
     probe.open(argv[0], concurrent ? "sparse" : argv[2]);
     if (concurrent) {
       measureConcurrent(probe, argv, iterations);
       return 0;
     }
+
     std::ofstream dump{argv[4], std::ios::binary};
+
     probe.dump(dump);
     const auto begin = std::chrono::steady_clock::now();
 
@@ -500,6 +534,7 @@ int main(int argc, char **argv) {
     }
 
     const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - begin).count();
+
     probe.dump(dump);
     probe.dumpText(dump);
     probe.dumpMatches(dump);

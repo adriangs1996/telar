@@ -8,8 +8,10 @@
 int main(int argc, char **argv) {
   const QGuiApplication application{argc, argv};
   QJsonArray displays;
+
   for (const auto *screen : QGuiApplication::screens()) {
     const auto geometry = screen->geometry();
+
     displays.append(QJsonObject{
         {"name", screen->name()},
         {"primary", screen == QGuiApplication::primaryScreen()},
@@ -26,5 +28,6 @@ int main(int argc, char **argv) {
       {"scope", "Qt screen properties; not measured presentation cadence"},
       {"displays", displays},
   };
+
   std::cout << QJsonDocument{result}.toJson().constData();
 }

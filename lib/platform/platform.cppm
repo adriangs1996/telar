@@ -118,12 +118,14 @@ inline void closeChildDescriptors(int retained, int descriptor_limit) noexcept {
 
   if (bytes > 0 && bytes < static_cast<int>(sizeof(descriptors)) && bytes % sizeof(proc_fdinfo) == 0) {
     const auto count = static_cast<std::size_t>(bytes) / sizeof(proc_fdinfo);
+
     for (std::size_t index = 0; index < count; ++index) {
       const int descriptor = descriptors[index].proc_fd;
       if (descriptor > STDERR_FILENO && descriptor != retained) {
         ::close(descriptor);
       }
     }
+
     return;
   }
 #else
@@ -250,6 +252,7 @@ namespace telar::runtime {
 // A wait status as a shell reports it in $?: the exit status, or 128 plus the killing signal.
 constexpr int shellExitCode(int status) noexcept {
   constexpr int signal_exit_offset = 128;
+
   return WIFEXITED(status) ? WEXITSTATUS(status) : signal_exit_offset + WTERMSIG(status);
 }
 
@@ -274,9 +277,11 @@ inline bool findExecutable(std::string_view path, std::string_view program, std:
     const auto length = base.size() + (relative ? 1 : 0) + directory.size() + 1 + program.size();
     if (length < found.size()) {
       auto *cursor = std::ranges::copy(base, found.data()).out;
+
       if (relative) {
         *cursor++ = '/';
       }
+
       cursor = std::ranges::copy(directory, cursor).out;
       *cursor++ = '/';
       cursor = std::ranges::copy(program, cursor).out;
@@ -330,6 +335,7 @@ public:
 
     if (arguments_.empty()) {
       const char *shell = std::getenv("SHELL");
+
       arguments_.emplace_back(shell != nullptr ? shell : "/bin/sh", AllocatorRef<char, Memory>{memory});
     }
 
@@ -349,6 +355,7 @@ public:
       }
 
       const auto name = std::string_view{entry}.substr(0, entry.find('='));
+
       if (purpose == CommandPurpose::administration) {
         return name == "TELAR_PANE_ID" || name == "TELAR_PANE_GENERATION" || name == "TELAR_WORKSPACE_ID" || name == "TELAR_TAB_ID" || name == "SSH_AUTH_SOCK";
       }
@@ -363,6 +370,7 @@ public:
       setEnvironment("TERM", "xterm-256color");
       setEnvironment("COLORTERM", "truecolor");
     }
+
     resolveExecutable();
   }
 
@@ -379,6 +387,7 @@ public:
         return std::string_view{entry}.substr(name.size() + 1);
       }
     }
+
     return std::nullopt;
   }
 
@@ -404,6 +413,7 @@ public:
 
   inline void setEnvironment(std::string_view name, std::string_view value) {
     String<SensitiveMemory> entry{name, AllocatorRef<char, SensitiveMemory>{environment_memory_}};
+
     entry.push_back('=');
     entry.append(value);
 
@@ -425,6 +435,7 @@ public:
 
     argument_pointers_.push_back(arguments_.front().data());
     const auto rest = spawn_arguments_.empty() ? std::span<String<Memory>>{arguments_}.subspan(1) : std::span<String<Memory>>{spawn_arguments_};
+
     for (auto &argument : rest) {
       argument_pointers_.push_back(argument.data());
     }
@@ -469,6 +480,7 @@ private:
     }
 
     std::string_view path = "/usr/bin:/bin";
+
     for (const auto &entry : environment_) {
       if (std::string_view{entry}.starts_with("PATH=")) {
         path = std::string_view{entry}.substr(5);
@@ -480,6 +492,7 @@ private:
     if (!findExecutable(path, program, found, cwd())) {
       throw SystemError{"resolve pane executable", ENOENT};
     }
+
     executable_.assign(found.data());
   }
 
@@ -610,6 +623,7 @@ public:
 
   inline std::string_view text() const noexcept {
     const auto bytes = output_.readable();
+
     return {reinterpret_cast<const char *>(bytes.data()), bytes.size()};
   }
 
@@ -639,22 +653,26 @@ private:
     PipeProcess process{command.specification({})};
     auto input = options.input;
     std::size_t input_offset = 0;
+
     if (input.empty()) {
       process.closeInput();
     }
 
     std::array<Byte, 16 * 1024> bytes;
+
     while (process.output() >= 0 || process.error() >= 0 || process.input() >= 0) {
       checkCancellation(options.cancelled);
       if (Clock::now() >= deadline) {
         throw RequestError{FailureCode::resource_limit, "Command deadline exceeded"};
       }
+
       std::array<pollfd, 3> descriptors{{{process.output(), POLLIN, 0}, {process.error(), POLLIN, 0}, {process.input(), POLLOUT, 0}}};
       const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - Clock::now()).count();
       const int result = ::poll(descriptors.data(), descriptors.size(), static_cast<int>(std::clamp<std::int64_t>(remaining, 0, 20)));
       if (result < 0 && errno != EINTR) {
         throw SystemError{"Wait for command output"};
       }
+
       if (descriptors[2].fd >= 0 && descriptors[2].revents != 0) {
         writeInput(process, input, input_offset);
       }
@@ -663,11 +681,13 @@ private:
         if (descriptors[index].fd < 0 || descriptors[index].revents == 0) {
           continue;
         }
+
         const auto count = ::read(descriptors[index].fd, bytes.data(), bytes.size());
         if (count > 0) {
           if (index == 0 && !consume(std::span<const Byte>{bytes}.first(static_cast<std::size_t>(count)))) {
             return 0;
           }
+
           if constexpr (!std::is_same_v<std::remove_cvref_t<ErrorConsumer>, std::nullptr_t>) {
             if (index == 1) {
               consume_error(std::span<const Byte>{bytes}.first(static_cast<std::size_t>(count)));
@@ -690,6 +710,7 @@ private:
       if (const auto status = process.reap()) {
         return shellExitCode(*status);
       }
+
       ::poll(nullptr, 0, 1);
     }
 
@@ -749,6 +770,7 @@ public:
     if (::_NSGetExecutablePath(original.data(), &size) != 0) {
       throw SystemError{"Executable path exceeds its limit", ENAMETOOLONG};
     }
+
 #else
     const auto length = ::readlink("/proc/self/exe", original.data(), original.size());
     if (length < 0) {
@@ -786,6 +808,7 @@ public:
     ExecutablePath self;
     const std::string_view own = self.path_.data();
     const auto directory = own.substr(0, own.rfind('/') + 1);
+
     for (const auto candidate : candidates) {
       std::array<char, PATH_MAX> path;
       if (directory.size() + candidate.size() >= path.size()) {
@@ -816,6 +839,7 @@ private:
   inline static bool exactlyNamed(const char *path) noexcept {
 #if defined(__APPLE__)
     attrlist request{};
+
     request.bitmapcount = ATTR_BIT_MAP_COUNT;
     request.commonattr = ATTR_CMN_NAME;
     alignas(attrreference_t) std::array<char, sizeof(std::uint32_t) + sizeof(attrreference_t) + NAME_MAX * 3 + 1> answer{};
@@ -825,6 +849,7 @@ private:
 
     constexpr auto reference_at = sizeof(std::uint32_t);
     attrreference_t reference{};
+
     std::memcpy(&reference, answer.data() + reference_at, sizeof(reference));
     const auto offset = static_cast<std::size_t>(reference.attr_dataoffset);
     const auto length = static_cast<std::size_t>(reference.attr_length);
@@ -835,6 +860,7 @@ private:
     // The length counts the terminating NUL.
     const std::string_view name{answer.data() + reference_at + offset, length - 1};
     const std::string_view written{path};
+
     return name == written.substr(written.rfind('/') + 1);
 #else
     static_cast<void>(path);
@@ -858,6 +884,7 @@ inline void createPrivateDirectory(std::string_view path) {
   }
 
   std::array<char, PATH_MAX> name{};
+
   std::copy(path.begin(), path.end(), name.begin());
   for (std::size_t index = 1; index <= path.size(); ++index) {
     if (index != path.size() && name[index] != '/') {
@@ -865,10 +892,12 @@ inline void createPrivateDirectory(std::string_view path) {
     }
 
     const auto separator = name[index];
+
     name[index] = '\0';
     if (::mkdir(name.data(), 0700) != 0 && errno != EEXIST) {
       throw SystemError{"Create private directory"};
     }
+
     name[index] = separator;
   }
 
@@ -877,9 +906,11 @@ inline void createPrivateDirectory(std::string_view path) {
   if (!directory || ::fstat(directory.get(), &state) != 0) {
     throw SystemError{"Open private directory"};
   }
+
   if (state.st_uid != ::geteuid()) {
     throw SystemError{"Private directory belongs to another user", EACCES};
   }
+
   if (::fchmod(directory.get(), 0700) != 0) {
     throw SystemError{"Restrict private directory permissions"};
   }
@@ -892,6 +923,7 @@ inline FileDescriptor openPrivateParent(std::string_view file_path) {
   }
 
   std::array<char, PATH_MAX> directory{};
+
   std::copy_n(file_path.data(), std::max<std::size_t>(separator, 1), directory.data());
   FileDescriptor parent{::open(directory.data(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
   struct stat state{};
@@ -916,6 +948,7 @@ namespace telar::runtime {
 struct ProcessEnvironment {
   inline std::string_view lookup(const char *name) const noexcept {
     const auto *value = std::getenv(name);
+
     return value == nullptr ? std::string_view{} : std::string_view{value};
   }
 };
@@ -968,6 +1001,7 @@ struct ServerOptions {
   inline static ServerOptions parse(std::span<char *const> arguments) {
     ServerOptions options;
     bool action_selected = false;
+
     if (!arguments.empty() && std::string_view{arguments.front()} == "server") {
       arguments = arguments.subspan(1);
     }
@@ -981,6 +1015,7 @@ struct ServerOptions {
 
         return arguments[index];
       };
+
       if (argument == "stop" || argument == "endpoint" || argument == "bridge") {
         if (action_selected) {
           throw std::invalid_argument{"Duplicate server action"};
@@ -1003,6 +1038,7 @@ struct ServerOptions {
         if (options.no_config) {
           throw std::invalid_argument{"Conflicting configuration options"};
         }
+
         setOnce(options.config, value());
       } else if (argument == "--profile") {
         setOnce(options.profile, value());
@@ -1020,6 +1056,7 @@ struct ServerOptions {
         if (!options.config.empty()) {
           throw std::invalid_argument{"Conflicting configuration options"};
         }
+
         setFlag(options.no_config);
       } else if (argument == "--fresh") {
         setFlag(options.fresh);
@@ -1037,9 +1074,11 @@ struct ServerOptions {
     if (options.fresh && options.action != ServerAction::run) {
       throw std::invalid_argument{"Fresh session requires the run action"};
     }
+
     if (options.action == ServerAction::stop && options.mode != ServerMode::foreground) {
       throw std::invalid_argument{"Conflicting server action"};
     }
+
     if (options.no_config && !options.profile.empty()) {
       throw std::invalid_argument{"A profile requires configuration"};
     }
@@ -1078,6 +1117,7 @@ struct DefaultSocketEnvironment {
 
   inline std::string_view lookup(const char *name) const noexcept {
     const std::string_view key{name};
+
     return key == "TELAR_SOCKET" || key == "TELAR_SOCKET_PATH" ? std::string_view{} : source.lookup(name);
   }
 };
@@ -1088,6 +1128,7 @@ struct DefaultSocketEnvironment {
 template <Allocator Memory, EnvironmentLookup Environment>
 inline String<Memory> xdgDirectory(Memory &memory, const Environment &environment, const char *variable, std::string_view fallback) {
   String<Memory> path{AllocatorRef<char, Memory>{memory}};
+
   if (const auto base = environment.lookup(variable); base.starts_with('/')) {
     path = base;
   } else if (const auto home = environment.lookup("HOME"); home.starts_with('/')) {
@@ -1120,8 +1161,10 @@ public:
       const auto temporary_directory = environment.lookup("TMPDIR");
       std::array<char, 32> name;
       constexpr std::string_view prefix = "telar-";
+
       std::ranges::copy(prefix, name.begin());
       const auto converted = std::to_chars(name.data() + prefix.size(), name.data() + name.size(), user);
+
       location.managed(temporary_directory.empty() ? "/tmp" : temporary_directory, {name.data(), converted.ptr});
     }
 
@@ -1131,6 +1174,7 @@ public:
 
   [[nodiscard]] inline static SocketLocation explicitPath(std::string_view path) {
     SocketLocation location;
+
     location.append(path);
     location.validate();
     return location;
@@ -1228,6 +1272,7 @@ public:
   template <EnvironmentLookup Environment>
   inline bool isDefaultSocket(const Environment &environment) const {
     const RuntimePaths expected{socket.get_allocator().memory(), ServerOptions{}, DefaultSocketEnvironment<Environment>{environment}};
+
     return socket == expected.socket;
   }
 
@@ -1276,6 +1321,7 @@ private:
   template <EnvironmentLookup Environment>
   inline void resolveSocket(std::string_view override, const Environment &environment) {
     const auto location = SocketLocation::resolve(override, environment, ::getuid());
+
     socket = location.path();
     socket_managed = location.managedDirectory().has_value();
   }
@@ -1299,6 +1345,7 @@ inline FixedText<PATH_MAX> loginShell() {
     if (candidate == nullptr || *candidate == '\0' || std::strlen(candidate) > PATH_MAX) {
       return false;
     }
+
     shell.assign(candidate);
     return true;
   };
@@ -1354,8 +1401,10 @@ public:
     }
 
     sigset_t empty;
+
     sigemptyset(&empty);
     sigset_t defaults;
+
     sigfillset(&defaults);
     posix_spawnattr_setsigmask(&attributes, &empty);
     posix_spawnattr_setsigdefault(&attributes, &defaults);
@@ -1434,8 +1483,10 @@ template <Allocator Memory>
 pid_t launchDaemon(Memory &memory, const ServerOptions &options, const RuntimePaths<Memory> &paths, const ExecutablePath &executable) {
   std::array<char, PATH_MAX> config_path;
   Vector<char *, Memory> arguments{AllocatorRef<char *, Memory>{memory}};
+
   arguments.reserve(2 * options.engine_argument_count + 28);
   const auto append = [&](std::string_view value) { arguments.push_back(const_cast<char *>(value.data())); };
+
   append(executable.view());
   append("server");
   append("--daemonized");
@@ -1445,14 +1496,17 @@ pid_t launchDaemon(Memory &memory, const ServerOptions &options, const RuntimePa
     append("--history");
     append(options.history);
   }
+
   if (!options.session.empty()) {
     append("--session");
     append(options.session);
   }
+
   if (!options.trace.empty()) {
     append("--trace");
     append(options.trace);
   }
+
   if (!options.config.empty()) {
     if (::realpath(options.config.data(), config_path.data()) == nullptr) {
       throw SystemError{"Resolve daemon configuration"};
@@ -1461,14 +1515,17 @@ pid_t launchDaemon(Memory &memory, const ServerOptions &options, const RuntimePa
     append("--config");
     append(config_path.data());
   }
+
   if (!options.profile.empty()) {
     append("--profile");
     append(options.profile);
   }
+
   for (const auto argument : std::span{options.engine_arguments}.first(options.engine_argument_count)) {
     append("--engine-arg");
     append(argument);
   }
+
   for (const auto [enabled, flag] : std::array<std::pair<bool, std::string_view>, 4>{{{options.no_config, "--no-config"}, {options.fresh, "--fresh"}, {!options.persist_session, "--no-session"}, {!options.resume_agents, "--no-resume"}}}) {
     if (enabled) {
       append(flag);
@@ -1477,6 +1534,7 @@ pid_t launchDaemon(Memory &memory, const ServerOptions &options, const RuntimePa
 
   arguments.push_back(nullptr);
   String<Memory> log_path{paths.socket, AllocatorRef<char, Memory>{memory}};
+
   log_path += ".runtime.start.log";
   return spawnDaemon(executable.c_str(), arguments.data(), log_path.c_str());
 }
@@ -1502,6 +1560,7 @@ public:
     if (stream_ == nullptr) {
       throw SystemError{"Create directory iterator"};
     }
+
     iterator.release();
   }
 
@@ -1520,6 +1579,7 @@ public:
         if (errno != 0) {
           throw SystemError{"Read directory entry"};
         }
+
         return nullptr;
       }
 
@@ -1558,6 +1618,7 @@ inline tbc::view<std::optional<std::string_view>, tbc::lt::a> readRegularFile(st
   }
 
   std::size_t length = 0;
+
   while (length < buffer.size()) {
     const auto count = ::read(file.get(), buffer.data() + length, buffer.size() - length);
     if (count > 0) {
@@ -1585,6 +1646,7 @@ public:
     while (directory.ends_with('/')) {
       directory.remove_suffix(1);
     }
+
     const auto length = directory.size() + 1 + suffix.size();
     if (length >= buffer.size()) {
       return std::nullopt;
@@ -1601,9 +1663,11 @@ public:
     if (path.empty() || path.contains('\0')) {
       return std::nullopt;
     }
+
     if (!path.starts_with('/')) {
       return join(directory, path, buffer);
     }
+
     if (path.size() >= buffer.size()) {
       return std::nullopt;
     }
@@ -1647,6 +1711,7 @@ public:
     if (!direct) {
       return std::nullopt;
     }
+
     if (const auto contents = readRegularFile(*direct, head_)) {
       return parse(*contents);
     }
@@ -1659,6 +1724,7 @@ public:
 
     const auto linked = GitFiles::join(*directory, "HEAD", path_);
     const auto head = linked ? readRegularFile(*linked, head_) : std::nullopt;
+
     return head ? std::optional{parse(*head)} : std::nullopt;
   }
 
@@ -1666,12 +1732,14 @@ public:
     contents = trimText(contents, " \r\n");
     constexpr std::string_view reference = "ref:";
     constexpr std::string_view branch = "refs/heads/";
+
     if (contents.starts_with(reference)) {
       contents = trimText(contents.substr(reference.size()), " ");
       return contents.starts_with(branch) ? contents.substr(branch.size()) : contents;
     }
 
     constexpr std::size_t abbreviated_hash_length = 8;
+
     return contents.substr(0, abbreviated_hash_length);
   }
 
@@ -1695,22 +1763,27 @@ struct GitRepositoryFacts {
 
   inline static std::optional<GitRepositoryFacts> parse(std::string_view listing) noexcept {
     GitRepositoryFacts facts;
+
     while (!listing.empty()) {
       const auto scope_end = listing.find('\0');
       if (scope_end == 0) {
         break;
       }
+
       if (scope_end == std::string_view::npos) {
         return std::nullopt;
       }
 
       const auto scope = listing.substr(0, scope_end);
+
       listing.remove_prefix(scope_end + 1);
       const auto entry_end = listing.find('\0');
       if (entry_end == std::string_view::npos) {
         return std::nullopt;
       }
+
       const auto entry = listing.substr(0, entry_end);
+
       listing.remove_prefix(entry_end + 1);
       if (scope != "local" && scope != "worktree") {
         continue;
@@ -1727,19 +1800,23 @@ struct GitRepositoryFacts {
       if (!key.starts_with(prefix) || variable < prefix.size()) {
         continue;
       }
+
       const auto driver = key.substr(prefix.size(), variable - prefix.size());
       if (driver.find_first_of("=\n") != std::string_view::npos) {
         return std::nullopt;
       }
 
       bool known = false;
+
       for (std::size_t index = 0; index < facts.driver_count; ++index) {
         known |= facts.drivers[index] == driver;
       }
+
       if (!known) {
         if (facts.driver_count == maximum_drivers) {
           return std::nullopt;
         }
+
         facts.drivers[facts.driver_count++] = driver;
       }
     }
@@ -1852,14 +1929,17 @@ public:
   template <typename Use>
   inline tbc::view<std::invoke_result_t<Use &, Command<Memory> &>, tbc::lt::a> with(std::span<const std::string_view> arguments, tbc::view<Use &&, tbc::lt::a> use) const {
     Vector<std::string_view, Memory> complete{AllocatorRef<std::string_view, Memory>{memory_}};
+
     complete.reserve(git_observation_options.size() + 2 * overrides_.size() + arguments.size());
     complete.insert(complete.end(), git_observation_options.begin(), git_observation_options.end());
     for (const auto &override : overrides_) {
       complete.push_back("-c");
       complete.push_back(override);
     }
+
     complete.insert(complete.end(), arguments.begin(), arguments.end());
     Command command{memory_, Launch{.cwd = root_, .arguments = complete}, CommandPurpose::administration};
+
     configure(command);
     return use(command);
   }
@@ -1884,6 +1964,7 @@ public:
     while (!version.empty() && (version.back() == '\n' || version.back() == '\r')) {
       version.remove_suffix(1);
     }
+
     constexpr std::string_view prefix = "git version ";
     if (!version.starts_with(prefix)) {
       return false;
@@ -1900,6 +1981,7 @@ public:
     const auto subversion = std::from_chars(parsed.ptr + 1, number.data() + number.size(), minor);
     constexpr unsigned lazy_fetch_major = 2;
     constexpr unsigned lazy_fetch_minor = 45;
+
     return subversion.ec == std::errc{} && (major > lazy_fetch_major || (major == lazy_fetch_major && minor >= lazy_fetch_minor));
   }
 
@@ -1927,6 +2009,7 @@ public:
 
     SharedImageStorage storage;
     std::array<std::uint64_t, 2> nonce;
+
     randomBytes(nonce.data(), sizeof(nonce));
     std::snprintf(storage.name_.data(), storage.name_.size(), "/tlr%016llx%08x", static_cast<unsigned long long>(nonce[0]), static_cast<unsigned>(nonce[1]));
     FileDescriptor descriptor{::shm_open(storage.name_.data(), O_CREAT | O_EXCL | O_RDWR, 0600)};
@@ -1934,6 +2017,7 @@ public:
       storage.name_[0] = '\0';
       return std::nullopt;
     }
+
     if (::ftruncate(descriptor.get(), static_cast<off_t>(length)) != 0) {
       return std::nullopt;
     }
@@ -1942,6 +2026,7 @@ public:
     if (!storage.mapping_) {
       return std::nullopt;
     }
+
     return storage;
   }
 
@@ -1964,6 +2049,7 @@ public:
 
   inline Name takeName() noexcept {
     auto name = name_;
+
     name_[0] = '\0';
     return name;
   }
@@ -1995,27 +2081,33 @@ public:
     }
 
     constexpr unsigned maximum_depth = 64;
+
     for (unsigned depth = 0; depth < maximum_depth; ++depth) {
       const auto dot_git = GitFiles::join(directory, ".git", path_);
       if (!dot_git) {
         return std::nullopt;
       }
+
       struct stat status{};
       if (::stat(dot_git->data(), &status) == 0) {
         if (S_ISDIR(status.st_mode)) {
           return std::nullopt;
         }
+
         const auto branch = linkedBranch(directory);
+
         return branch ? std::optional{Found{directory.size(), *branch}} : std::nullopt;
       }
 
       while (directory.size() > 1 && directory.ends_with('/')) {
         directory.remove_suffix(1);
       }
+
       const auto separator = directory.rfind('/');
       if (directory.size() <= 1 || separator == std::string_view::npos) {
         return std::nullopt;
       }
+
       directory = directory.substr(0, std::max<std::size_t>(1, separator));
     }
 
@@ -2042,6 +2134,7 @@ public:
 
     const auto text = trimText(*head, " \r\n");
     constexpr std::string_view prefix = "ref: refs/heads/";
+
     return text.starts_with(prefix) && text.size() > prefix.size() ? std::optional{text.substr(prefix.size())} : std::nullopt;
   }
 
@@ -2058,6 +2151,7 @@ private:
     if (!common_path || !readRegularFile(*common_path, common)) {
       return std::nullopt;
     }
+
     const auto head_path = GitFiles::join(*directory, "HEAD", path_);
     const auto head = head_path ? readRegularFile(*head_path, head_) : std::nullopt;
     if (!head) {
@@ -2065,6 +2159,7 @@ private:
     }
 
     const auto branch = GitHead::parse(*head);
+
     return branch.empty() ? std::nullopt : std::optional{branch};
   }
 
@@ -2106,12 +2201,14 @@ inline FileDescriptor openBeneath(int root, std::string_view path, int flags, mo
 
   FileDescriptor parent;
   std::array<char, PATH_MAX> name;
+
   for (;;) {
     const auto separator = path.find('/');
     const auto component = path.substr(0, separator);
     if (component.empty() || component == "." || component == "..") {
       throw SystemError{"Invalid package-relative component", EINVAL};
     }
+
     std::copy(component.begin(), component.end(), name.begin());
     name[component.size()] = '\0';
 
@@ -2120,6 +2217,7 @@ inline FileDescriptor openBeneath(int root, std::string_view path, int flags, mo
     if (!selected) {
       throw SystemError{"Open package-relative file"};
     }
+
     if (separator == std::string_view::npos) {
       return selected;
     }
@@ -2147,6 +2245,7 @@ inline std::optional<PeerCredentials> peerCredentials(int socket) noexcept {
   if (::getpeereid(socket, &credentials.user, &credentials.group) != 0) {
     return std::nullopt;
   }
+
   return credentials;
 #else
   ucred credentials{};
@@ -2172,6 +2271,7 @@ bool readPrivateFile(int directory, std::string_view name, Vector<unsigned char,
   }
 
   std::array<char, PATH_MAX> terminated;
+
   std::copy(name.begin(), name.end(), terminated.begin());
   terminated[name.size()] = '\0';
   FileDescriptor file{::openat(directory, terminated.data(), O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)};
@@ -2179,6 +2279,7 @@ bool readPrivateFile(int directory, std::string_view name, Vector<unsigned char,
     if (errno == ENOENT) {
       return false;
     }
+
     throw SystemError{"Open private file"};
   }
 
@@ -2186,31 +2287,38 @@ bool readPrivateFile(int directory, std::string_view name, Vector<unsigned char,
   if (::fstat(file.get(), &state) != 0 || !S_ISREG(state.st_mode) || state.st_uid != ::geteuid() || (state.st_mode & 0077) != 0) {
     throw SystemError{"Validate private file", EACCES};
   }
+
   if (state.st_size < 0 || static_cast<std::uint64_t>(state.st_size) > limit) {
     throw SystemError{"Private file exceeds its limit", EFBIG};
   }
 
   bytes.resize(static_cast<std::size_t>(state.st_size));
   std::size_t offset = 0;
+
   while (offset < bytes.size()) {
     const auto count = ::read(file.get(), bytes.data() + offset, bytes.size() - offset);
     if (count < 0 && errno == EINTR) {
       continue;
     }
+
     if (count <= 0) {
       throw SystemError{"Private file changed while reading", EIO};
     }
+
     offset += static_cast<std::size_t>(count);
   }
 
   unsigned char extra;
   ssize_t count;
+
   do {
     count = ::read(file.get(), &extra, 1);
   } while (count < 0 && errno == EINTR);
+
   if (count != 0) {
     throw SystemError{"Private file changed while reading", EIO};
   }
+
   return true;
 }
 
@@ -2248,13 +2356,16 @@ String<Memory> readFileContents(Memory &memory, int descriptor, std::size_t maxi
   }
 
   String<Memory> source{AllocatorRef<char, Memory>{memory}};
+
   source.resize(static_cast<std::size_t>(metadata.st_size));
   std::size_t offset = 0;
+
   while (offset < source.size()) {
     const auto count = ::read(descriptor, source.data() + offset, source.size() - offset);
     if (count < 0 && errno == EINTR) {
       continue;
     }
+
     if (count <= 0) {
       throw FileReadError{FileReadFailure::changed};
     }
@@ -2264,9 +2375,11 @@ String<Memory> readFileContents(Memory &memory, int descriptor, std::size_t maxi
 
   char extra;
   ssize_t extra_count;
+
   do {
     extra_count = ::read(descriptor, &extra, 1);
   } while (extra_count < 0 && errno == EINTR);
+
   if (extra_count != 0) {
     throw FileReadError{FileReadFailure::changed};
   }
@@ -2280,6 +2393,7 @@ String<Memory> readFile(Memory &memory, const char *path, std::size_t maximum_by
   if (!file) {
     throw SystemError{"Open source file"};
   }
+
   return readFileContents(memory, file.get(), maximum_bytes);
 }
 
@@ -2298,6 +2412,7 @@ enum class RenameMode { create_only, replace };
 inline int renameAt(int source_directory, const char *source, int destination_directory, const char *destination, RenameMode mode) noexcept {
 #if defined(__APPLE__)
   const auto flags = mode == RenameMode::create_only ? RENAME_EXCL : 0;
+
   return ::renameatx_np(source_directory, source, destination_directory, destination, flags);
 #elif defined(__GLIBC__)
   const auto flags = mode == RenameMode::create_only ? RENAME_NOREPLACE : 0;
@@ -2323,20 +2438,24 @@ void resolveRelativePath(String<Memory> &path, std::string_view directory) {
   }
 
   String<Memory> combined{directory, path.get_allocator()};
+
   combined += '/';
   combined += path;
   path.clear();
   std::string_view remaining{combined};
+
   while (!remaining.empty()) {
     const auto end = remaining.find('/');
     const auto component = remaining.substr(0, end);
     if (component == "..") {
       const auto slash = path.rfind('/');
+
       path.resize(slash == String<Memory>::npos ? 0 : slash);
     } else if (!component.empty() && component != ".") {
       path += '/';
       path += component;
     }
+
     if (end == std::string_view::npos) {
       break;
     }
@@ -2354,10 +2473,12 @@ void resolveAbsolutePath(String<Memory> &path) {
   if (path.starts_with('/')) {
     return;
   }
+
   std::array<char, PATH_MAX> directory;
   if (::getcwd(directory.data(), directory.size()) == nullptr) {
     throw SystemError{"Resolve working directory"};
   }
+
   resolveRelativePath(path, directory.data());
 }
 
@@ -2378,6 +2499,7 @@ public:
 
   inline std::array<std::uint8_t, SHA256_DIGEST_LENGTH> finish() noexcept {
     std::array<std::uint8_t, SHA256_DIGEST_LENGTH> digest;
+
     SHA256_Final(digest.data(), &context_);
     return digest;
   }
@@ -2451,12 +2573,15 @@ public:
     if (::mkdtemp(path_.data()) == nullptr) {
       throw SystemError{"Create temporary directory"};
     }
+
     directory_.reset(::open(path_.data(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
     if (!directory_ || ::fstat(directory_.get(), &identity_) != 0 || ::fchmod(directory_.get(), 0700) != 0) {
       const auto error = errno;
+
       ::rmdir(path_.data());
       throw SystemError{"Open temporary directory", error};
     }
+
     length_ = pattern.size();
   }
 
@@ -2478,6 +2603,7 @@ private:
   inline static void removeContents(int directory) noexcept {
     try {
       DirectoryStream iterator{directory};
+
       while (const auto *entry = iterator.next()) {
         FileDescriptor child{::openat(directory, entry->d_name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
         if (child) {
@@ -2508,8 +2634,10 @@ namespace telar::runtime {
 inline std::string_view processHome() noexcept {
   static const std::string_view home = [] {
     const char *value = std::getenv("HOME");
+
     return value == nullptr ? std::string_view{} : std::string_view{value};
   }();
+
   return home;
 }
 
@@ -2559,6 +2687,7 @@ namespace telar::runtime {
 inline std::uint64_t currentThreadId() noexcept {
 #if defined(__APPLE__)
   std::uint64_t identity = 0;
+
   ::pthread_threadid_np(nullptr, &identity);
   return identity;
 #else
@@ -2594,12 +2723,14 @@ inline int writeDescriptor(int descriptor, std::span<const std::uint8_t> bytes) 
     if (count < 0 && errno == EINTR) {
       continue;
     }
+
     if (count <= 0) {
       return count == 0 ? EIO : errno;
     }
 
     bytes = bytes.subspan(static_cast<std::size_t>(count));
   }
+
   return 0;
 }
 
@@ -2618,38 +2749,48 @@ inline int writePrivateFile(int directory, std::string_view name, std::span<cons
   }
 
   std::array<char, NAME_MAX + 1> destination;
+
   std::copy(name.begin(), name.end(), destination.begin());
   destination[name.size()] = '\0';
   constexpr unsigned maximum_attempts = 8;
+
   for (unsigned attempt = 0; attempt < maximum_attempts; ++attempt) {
     std::uint64_t nonce;
+
     randomBytes(&nonce, sizeof(nonce));
     std::array<char, 64> temporary;
+
     std::snprintf(temporary.data(), temporary.size(), ".telar-write-%016llx.tmp", static_cast<unsigned long long>(nonce));
     FileDescriptor file{::openat(directory, temporary.data(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600)};
     if (!file) {
       if (errno == EEXIST) {
         continue;
       }
+
       return errno;
     }
 
     const int written = writeDescriptor(file.get(), bytes);
     if (written != 0 || ::fsync(file.get()) != 0) {
       const int failure = written != 0 ? written : errno;
+
       file.reset();
       ::unlinkat(directory, temporary.data(), 0);
       return failure;
     }
+
     file.reset();
 
     if (renameAt(directory, temporary.data(), directory, destination.data(), mode) != 0) {
       const int failure = errno;
+
       ::unlinkat(directory, temporary.data(), 0);
       return failure;
     }
+
     return 0;
   }
+
   return EEXIST;
 }
 

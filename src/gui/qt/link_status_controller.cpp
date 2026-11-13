@@ -54,6 +54,7 @@ QVariantMap Application::runtimeLinkGeometry() const {
   const auto display = displayMetrics(density);
   const auto &workbench = session().workbenchGeometry();
   auto area = workbench.pixels(workbench.cellArea());
+
   area.x += display.geometry.terminal.x;
   area.y += display.geometry.terminal.y;
   const auto geometry = LinkStatusGeometry::measure(area, display.chrome, connection().link().failure().has_value());

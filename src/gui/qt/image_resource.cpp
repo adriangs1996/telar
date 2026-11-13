@@ -67,6 +67,7 @@ uint8x16_t premultiplied(uint8x16_t pixels) noexcept {
   const auto alphas = vorrq_u8(vqtbl1q_u8(pixels, vld1q_u8(alpha_indices.data())), vreinterpretq_u8_u32(vdupq_n_u32(alpha_mask)));
   auto low = vmull_u8(vget_low_u8(pixels), vget_low_u8(alphas));
   auto high = vmull_high_u8(pixels, alphas);
+
   low = vsraq_n_u16(low, low, channel_bits);
   high = vsraq_n_u16(high, high, channel_bits);
 
@@ -78,9 +79,11 @@ void convertRow(const std::uint8_t *input, std::uint8_t *output, int width) noex
   constexpr std::size_t vector_pixels = vector_bytes / sizeof(QRgb);
   constexpr std::uint8_t channel_maximum = 255;
   int column = 0;
+
   for (; column + static_cast<int>(block_pixels) <= width; column += block_pixels) {
     std::array<uint8x16_t, block_pixels / vector_pixels> vectors{};
     auto all = vdupq_n_u8(channel_maximum);
+
     for (std::size_t index = 0; index < vectors.size(); ++index) {
       vectors[index] = vld1q_u8(input + (column * sizeof(QRgb)) + (index * vector_bytes));
       all = vandq_u8(all, vectors[index]);
@@ -99,6 +102,7 @@ void convertRow(const std::uint8_t *input, std::uint8_t *output, int width) noex
 
   for (; column < width; ++column) {
     QRgb pixel = 0;
+
     std::memcpy(&pixel, input + (column * sizeof(QRgb)), sizeof(pixel));
     pixel = qPremultiply(pixel);
     std::memcpy(output + (column * sizeof(QRgb)), &pixel, sizeof(pixel));
@@ -111,12 +115,14 @@ QThreadPool &conversionWorkers() {
 
     Workers() {
       constexpr int maximum_workers = 2;
+
       pool.setMaxThreadCount(std::clamp(QThread::idealThreadCount() - 1, 1, maximum_workers));
 #if QT_VERSION >= QT_VERSION_CHECK(6, 9, 0)
       pool.setServiceLevel(QThread::QualityOfService::High);
 #endif
     }
   };
+
   thread_local Workers workers;
 
   return workers.pool;
@@ -154,6 +160,7 @@ QImage convertedPixels(const QImage &source, QImage &retained) {
       convertRow(input_bytes + (static_cast<qsizetype>(row) * input_stride), output_bytes + (static_cast<qsizetype>(row) * output_stride), width);
     }
   };
+
   constexpr qsizetype parallel_bytes = qsizetype{1024} * 1024;
   if (source.sizeInBytes() >= parallel_bytes && height > 1) {
     auto &workers = conversionWorkers();
@@ -165,11 +172,13 @@ QImage convertedPixels(const QImage &source, QImage &retained) {
       const auto finish_first = qScopeGuard([&] { first_future.waitForFinished(); });
       auto second_future = QtConcurrent::run(&workers, [&] noexcept { convert_rows(second, height); });
       const auto finish_second = qScopeGuard([&] { second_future.waitForFinished(); });
+
       convert_rows(0, first);
     } else {
       const auto middle = height / 2;
       auto future = QtConcurrent::run(&workers, [&] noexcept { convert_rows(middle, height); });
       const auto finish = qScopeGuard([&] { future.waitForFinished(); });
+
       convert_rows(0, middle);
     }
   } else {
@@ -237,11 +246,13 @@ public:
         next_(tbc::raw(resource.first_node_)) {
     setOpacity(0);
     auto node = createSceneImage(window);
+
     node->setTexture(resource_->texture_.get());
     node->setOwnsTexture(false);
     node->setFiltering(QSGTexture::Linear);
     const auto &source = geometry.source;
     const auto &destination = geometry.destination;
+
     node->setSourceRect({source.x, source.y, source.width, source.height});
     node->setRect({destination.x, destination.y, destination.width, destination.height});
     adoptSceneNode(*this, std::move(node));
@@ -282,6 +293,7 @@ public:
 
   [[nodiscard]] ImageTextureHandle admit(ImageDrawBudget &budget) noexcept {
     const auto admitted = budget.take();
+
     setOpacity(admitted ? 1 : 0);
 
     return admitted ? handle_ : 0;
@@ -339,6 +351,7 @@ bool ImageResource::upload(QQuickWindow &window, const QImage &pixels) {
 
   std::ignore = native.release();
   auto uploaded = std::make_unique<UploadTexture>(std::move(wrapped), std::move(owned_pixels), std::move(retained));
+
   upload_texture_ = uploaded.get();
   texture_ = std::move(uploaded);
   ++usage_.allocations;
@@ -358,6 +371,7 @@ ImageTextureHandle ImageResource::admit(QSGNode &node, ImageDrawBudget &budget) 
 void ImageResource::detachNodes() noexcept {
   while (first_node_ != nullptr) {
     std::unique_ptr<ImageDrawNode> node{std::exchange(first_node_, first_node_->next_)};
+
     if (first_node_ != nullptr) {
       first_node_->previous_ = nullptr;
     }

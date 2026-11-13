@@ -13,9 +13,11 @@ inline bool constantTimeEqual(std::string_view left, std::string_view right) noe
   }
 
   unsigned difference = 0;
+
   for (std::size_t index = 0; index < left.size(); ++index) {
     difference |= static_cast<unsigned char>(left[index]) ^ static_cast<unsigned char>(right[index]);
   }
+
   return difference == 0;
 }
 

@@ -62,6 +62,7 @@ void Application::showPathPicker() {
 
 void Application::refreshPathPicker() {
   const auto count = session().pathPicker().matches().size();
+
   path_selection_ = count == 0 ? 0 : std::min(path_selection_, count - 1);
   emit pathPickerChanged();
 }
@@ -72,6 +73,7 @@ void Application::searchPaths(const QString &text) {
   }
 
   const auto measured = Utf16Prefix::fit(QStringView{text}, PathPickerLimits::query_bytes, utf16Encoding());
+
   path_query_ = text.first(static_cast<qsizetype>(measured.units));
   if (!path_query_.isValidUtf16()) {
     path_query_ = QString::fromUtf8(path_query_.toUtf8());
@@ -79,6 +81,7 @@ void Application::searchPaths(const QString &text) {
 
   path_selection_ = 0;
   const auto query = path_query_.toUtf8();
+
   applyInteraction([&] {
     session().requestPaths({query.constData(), static_cast<std::size_t>(query.size())});
     refreshPathPicker();
@@ -98,6 +101,7 @@ void Application::reportPathQueryLimit(qulonglong requested_bytes) {
 
 void Application::movePathSelection(int delta) {
   const auto count = session().pathPicker().matches().size();
+
   if (dialog_ != Dialog::paths) {
     return;
   }
@@ -106,6 +110,7 @@ void Application::movePathSelection(int delta) {
   const auto flipped = line_search_pane_ == 0 && pathPlacement().flipped;
   const auto direction = flipped ? -static_cast<std::int64_t>(delta) : static_cast<std::int64_t>(delta);
   const auto maximum = count == 0 ? 0 : static_cast<std::int64_t>(count - 1);
+
   path_selection_ = static_cast<std::size_t>(std::clamp(static_cast<std::int64_t>(path_selection_) + direction, std::int64_t{0}, maximum));
   emit pathPickerChanged();
 }
@@ -165,6 +170,7 @@ void Application::activatePath(const QVariantMap &choice) {
 
 QVariantMap Application::pathPickerState() const {
   const auto &page = session().pathPicker();
+
   return {
       {QStringLiteral("editorText"), path_query_},
       {QStringLiteral("root"), toQString(page.root())},

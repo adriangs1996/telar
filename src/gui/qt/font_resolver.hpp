@@ -51,6 +51,7 @@ public:
     static_cast<void>(FontGrid::pixelHeight(configuration, static_cast<float>(scale)));
     const FontSource<Memory> source{memory, configuration};
     fonts::Face face{source.bytes(), source.match()};
+
     return resolve(face, configuration, scale);
   }
 

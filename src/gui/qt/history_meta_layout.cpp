@@ -129,6 +129,7 @@ void HistoryMetaLayout::prepareLabels() {
       .has_time = record.contains(QStringLiteral("timestamp")) && record.value(QStringLiteral("timestamp")).toLongLong() >= 0,
       .agent = record.value(QStringLiteral("author")).toString() == QStringLiteral("agent"),
   };
+
   facts_.clear();
   auto append = [this](std::string_view text, PaletteRole color) {
     facts_.append(QVariantMap{
@@ -136,6 +137,7 @@ void HistoryMetaLayout::prepareLabels() {
         {QStringLiteral("color"), QString::fromLatin1(palette_names[static_cast<std::size_t>(color)])},
     });
   };
+
   HistoryFacts::visit(data, append);
   actions_.clear();
   for (const auto label : HistoryActions::labels(style)) {
@@ -153,16 +155,19 @@ QRectF HistoryMetaLayout::logical(Rect area) const noexcept {
 
 QVariantMap HistoryMetaLayout::layout() const {
   QVariantList facts;
+
   for (const auto area : geometry_.facts) {
     facts.append(logical(area));
   }
 
   QVariantList actions;
+
   for (const auto &geometry : geometry_.actions) {
     actions.append(historyHintRecord(geometry, density_));
   }
 
   auto result = historyHintStyle(ratio_);
+
   result.insert(QStringLiteral("facts"), facts);
   result.insert(QStringLiteral("actions"), actions);
   result.insert(QStringLiteral("factCount"), static_cast<qulonglong>(geometry_.fact_count));
@@ -185,8 +190,10 @@ HistoryActionSurface HistoryMetaLayout::actionSurface(std::uint64_t generation) 
   }
 
   const auto labels = HistoryActions::labels(HistoryKeyStyle::pc);
+
   for (std::size_t index = 0; index < geometry_.action_count; ++index) {
     auto bounds = mapRectToScene(logical(geometry_.actions[index].bounds));
+
     for (const auto *ancestor = parentItem(); ancestor != nullptr; ancestor = ancestor->parentItem()) {
       if (ancestor->clip()) {
         bounds = bounds.intersected(ancestor->mapRectToScene(ancestor->boundingRect()));
@@ -208,17 +215,21 @@ void HistoryMetaLayout::updatePolish() {
 
   ratio_ = ratio;
   ChromeMetrics chrome;
+
   chrome.ratio = static_cast<float>(ratio * density_);
   const auto small = input_.value(QStringLiteral("smallPixels")).toDouble() * density_;
+
   chrome.small = std::isfinite(small) ? static_cast<std::uint16_t>(std::clamp(std::round(small), qreal{0}, qreal{std::numeric_limits<std::uint16_t>::max()})) : 0;
   const auto advance = [this](const QVariant &value) {
     const auto measured = value.toDouble();
 
     return std::isfinite(measured) && measured > 0 ? static_cast<float>(measured * density_) : 0;
   };
+
   const auto facts = measurements_.value(QStringLiteral("facts")).toList();
   const auto actions = measurements_.value(QStringLiteral("actions")).toList();
   HistoryMetaMeasurements measured;
+
   measured.fact_count = std::min(static_cast<std::size_t>(facts_.size()), HistoryFacts::capacity);
   measured.selected = input_.value(QStringLiteral("selected"), true).toBool();
   measured.pane_open = input_.value(QStringLiteral("paneOpen")).toBool();
@@ -228,6 +239,7 @@ void HistoryMetaLayout::updatePolish() {
 
   for (std::size_t index = 0; index < measured.actions.size(); ++index) {
     const auto value = actions.value(static_cast<qsizetype>(index)).toMap();
+
     measured.actions[index] = {.key = advance(value.value(QStringLiteral("key"))), .word = advance(value.value(QStringLiteral("word")))};
   }
 

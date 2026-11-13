@@ -79,11 +79,13 @@ public:
     std::size_t emitted = 0;
     std::size_t search_from = 0;
     Statistics statistics;
+
     while (const auto first = AtomicFrame::find(text, search_from)) {
       std::array<SelectedFrame, maximum_placements> selected;
       std::size_t count = 0;
       auto end = first->end;
       bool overflow = !record(selected, count, *first);
+
       while (const auto frame = AtomicFrame::at(text, end)) {
         overflow |= !record(selected, count, *frame);
         end = frame->end;
@@ -91,6 +93,7 @@ public:
 
       if (!overflow) {
         auto entries = std::span{selected}.first(count);
+
         for (auto &entry : entries) {
           for (auto recent = entry.recent_count; recent != 0; --recent) {
             const auto frame = AtomicFrame::at(text, entry.recent[recent - 1]).value();
@@ -103,6 +106,7 @@ public:
 
         output(bytes.subspan(emitted, first->start - emitted), sink);
         auto position = first->start;
+
         while (position < end) {
           const auto frame = AtomicFrame::at(text, position).value();
           const auto selected = selectedStart(entries, frame.control.key);
@@ -124,13 +128,17 @@ public:
               // DECSC still updates the saved cursor when its replacement frame is discarded.
               sink.output({reinterpret_cast<const std::uint8_t *>(AtomicFrame::cursor_save.data()), AtomicFrame::cursor_save.size()});
             }
+
             statistics.unavailable += !selected.has_value();
             statistics.discarded += selected.has_value();
           }
+
           position = frame.end;
         }
+
         emitted = end;
       }
+
       search_from = end;
     }
 
@@ -159,6 +167,7 @@ private:
         std::move(entry.recent.begin() + 1, entry.recent.end(), entry.recent.begin());
         --entry.recent_count;
       }
+
       entry.recent[entry.recent_count++] = frame.start;
       return true;
     }
@@ -166,7 +175,9 @@ private:
     if (count == entries.size()) {
       return false;
     }
+
     auto &entry = entries[count++];
+
     entry.key = frame.control.key;
     entry.recent[0] = frame.start;
     entry.recent_count = 1;
@@ -180,6 +191,7 @@ private:
         return entry.selected;
       }
     }
+
     return std::nullopt;
   }
 
@@ -218,11 +230,13 @@ public:
     }
 
     Handle handle;
+
     if (resource.medium == GraphicsInputMedium::file) {
       handle.file = GraphicsChildFile::open(resource.encoded_name);
       if (!handle.file || handle.file->size < resource.byte_count) {
         return std::nullopt;
       }
+
       return handle;
     }
 
@@ -231,11 +245,13 @@ public:
     if (!handle.shared || ::fstat(handle.shared.get(), &metadata) != 0 || metadata.st_size < 0 || static_cast<std::uint64_t>(metadata.st_size) < resource.byte_count) {
       return std::nullopt;
     }
+
     return handle;
   }
 
   inline static bool available(const AtomicFrameResource &resource) noexcept {
     std::array<std::uint8_t, PATH_MAX + 1> name;
+
     return validate(resource, name).has_value();
   }
 
@@ -263,6 +279,7 @@ public:
     }
 
     GraphicsFramePixels pixels;
+
     if (resource.medium == GraphicsInputMedium::file) {
       pixels.file_ = std::move(handle->file);
       return pixels;
@@ -278,9 +295,11 @@ public:
     if (file_) {
       return file_->read(destination, 0);
     }
+
     if (destination.size() != shared_bytes_) {
       return false;
     }
+
     return GraphicsChildSharedMemory::read(shared_.get(), destination, 0);
   }
 
@@ -316,15 +335,18 @@ public:
   inline Observation observe(GhosttyTerminal terminal, std::span<const std::uint8_t> bytes) {
     Observation observation{.loading_image = loadingImage(storage(terminal))};
     std::size_t position = 0;
+
     while (const auto transition = framing_.advance(bytes, position)) {
       observation.completed_commands += *transition == KittyFraming::Transition::ended;
     }
+
     return observation;
   }
 
   inline Observation observeEncodedChunk(GhosttyTerminal terminal) {
     // Generated control fields and base64 contain no framing transitions. The opening ESC may still terminate an earlier APC.
     constexpr std::array<std::uint8_t, 5> envelope{0x1b, '_', 'G', 0x1b, '\\'};
+
     return observe(terminal, envelope);
   }
 
@@ -338,6 +360,7 @@ public:
     }
 
     const bool exceeded_chunks = loading_chunks_ > chunk_limit_;
+
     if (!loading) {
       loading_chunks_ = 0;
       if (exceeded_chunks && observation.loading_image) {
@@ -345,10 +368,12 @@ public:
         reached_.chunks = true;
         return observation.loading_image;
       }
+
       return std::nullopt;
     }
 
     std::size_t bytes = 0;
+
     checkGhostty(ghostty_kitty_graphics_get(graphics, GHOSTTY_KITTY_GRAPHICS_DATA_LOADING_BYTES, &bytes));
     if (!exceeded_chunks && bytes <= byte_limit_) {
       return std::nullopt;
@@ -368,6 +393,7 @@ public:
 private:
   inline static GhosttyKittyGraphics storage(GhosttyTerminal terminal) {
     GhosttyKittyGraphics graphics = nullptr;
+
     checkGhostty(ghostty_terminal_get(terminal, GHOSTTY_TERMINAL_DATA_KITTY_GRAPHICS, &graphics));
     return graphics;
   }
@@ -412,10 +438,12 @@ public:
     checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_USERDATA, this));
     checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_WRITE_PTY, reinterpret_cast<const void *>(&receiveResponse)));
     const auto storage = limits.screenBytes();
+
     checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_KITTY_IMAGE_STORAGE_LIMIT, &storage));
     checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_APC_MAX_BYTES_KITTY, &GraphicsLimits::payload_bytes));
     const bool disabled = false;
     const bool enabled = true;
+
     checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_GLYPH_PROTOCOL, &disabled));
     checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_KITTY_IMAGE_MEDIUM_FILE, &disabled));
     checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_KITTY_IMAGE_MEDIUM_TEMP_FILE, nullptr));
@@ -430,6 +458,7 @@ public:
       if (consumed != bytes.size()) {
         throw std::logic_error{"Media control filter failed to consume input"};
       }
+
       response_outbox_.drain();
     } catch (...) {
       response_failed_ |= !responses_->closed();
@@ -454,6 +483,7 @@ public:
     if (sequence.kind == control::Kind::osc && sequence.body().starts_with(::telar::render::sequence_begin.substr(0, ::telar::render::sequence_begin.find(';') + 1))) {
       return true;
     }
+
     return sequence.kind != control::Kind::apc && control::streamable(sequence);
   }
 
@@ -466,20 +496,25 @@ public:
             control::forwardPrivateMode(mode, parameters->final, [this](auto command) { ordinary(command); });
           }
         }
+
         return true;
       }
     }
+
     if (!control::query(sequence)) {
       if (sequence.kind == control::Kind::apc) {
         GraphicsFileInput::frame(sequence.bytes, sequence.terminator(), storage_limit_, *this);
         return true;
       }
+
       ordinary(sequence.bytes);
       if (sequence.ending != control::Ending::final_byte) {
         const auto terminator = sequence.terminator();
+
         ordinary({reinterpret_cast<const Byte *>(terminator.data()), terminator.size()});
       }
     }
+
     return true;
   }
 
@@ -518,14 +553,17 @@ public:
         .data = data.data(),
         .data_len = data.size(),
     };
+
     return ghostty_kitty_graphics_image_insert(terminal_.get(), &image) == GHOSTTY_SUCCESS;
   }
 
   inline ImageKey imageKey(std::uint32_t identity) {
     GhosttyKittyGraphics storage = nullptr;
+
     checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_KITTY_GRAPHICS, &storage));
     const auto image = ghostty_kitty_graphics_image(storage, identity);
     ImageKey key{identity, 0};
+
     checkGhostty(ghostty_kitty_graphics_image_get(image, GHOSTTY_KITTY_IMAGE_DATA_GENERATION, &key.generation));
     return key;
   }
@@ -574,11 +612,13 @@ private:
     if (response_failed_) {
       throw ResponseFailure{};
     }
+
     if (const auto image = uploads_.enforce(terminal_.get(), observation)) {
       replyUploadLimit(*image);
     }
 
     bool processing_error = false;
+
     checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_VT_PROCESSING_ERROR, &processing_error));
     if (processing_error) {
       throw TerminalError{GHOSTTY_OUT_OF_MEMORY};
@@ -592,6 +632,7 @@ private:
     auto *identity = std::copy(prefix.begin(), prefix.end(), response.data());
     const auto formatted = std::to_chars(identity, identity + 10, image);
     const auto *end = std::copy(suffix.begin(), suffix.end(), formatted.ptr);
+
     reply({reinterpret_cast<const Byte *>(response.data()), static_cast<std::size_t>(end - response.data())});
   }
 
@@ -602,6 +643,7 @@ private:
     }
 
     auto &self = *static_cast<MediaTerminal *>(context);
+
     try {
       self.response_outbox_.append({bytes, count});
     } catch (...) {
@@ -663,14 +705,17 @@ public:
       terminal_.feed(frame.bytes.subspan(frame.command_end));
       return true;
     }
+
     allocation.release();
 
     place(frame.control.key);
     terminal_.feed(frame.bytes.subspan(frame.command_end));
     if (shared_transport) {
       auto frozen = FrozenImage<Memory>::adoptSharedName(storage->takeName(), frame.control.byte_count);
+
       prepared_.put(terminal_.imageKey(frame.control.key.image_id), std::move(frozen));
     }
+
     return true;
   }
 
@@ -678,6 +723,7 @@ private:
   inline void place(AtomicFrameKey key) {
     std::array<char, 64> command;
     auto *end = std::copy_n("\x1b_Ga=p,i=", 9, command.data());
+
     end = std::to_chars(end, command.data() + command.size(), key.image_id).ptr;
     end = std::copy_n(",p=", 3, end);
     end = std::to_chars(end, command.data() + command.size(), key.placement_id).ptr;
@@ -708,6 +754,7 @@ public:
   inline AtomicFrameFilter::Statistics feed(std::span<const Byte> bytes) {
     terminal_.requireOpen();
     CheckedSource source{{}, terminal_};
+
     return AtomicFrameFilter::feed(bytes, terminal_.storageLimit(), source, *this);
   }
 
@@ -777,6 +824,7 @@ public:
     if (cancelled_) {
       return;
     }
+
     const bool kitty = framing_.touches(bytes);
     auto &batch = batches_[active_];
     if (!batch.append(bytes)) {
@@ -785,9 +833,11 @@ public:
         responses_->stopProducing();
         return;
       }
+
       dropActive(bytes.size());
       batch.append(bytes);
     }
+
     batch.kitty |= kitty;
     TELAR_DIAGNOSTIC(observeQueue());
   }
@@ -796,6 +846,7 @@ public:
     if (cancelled_) {
       return;
     }
+
     current_size_ = size;
     auto &batch = batches_[active_];
     if (!batch.resize(size)) {
@@ -804,9 +855,11 @@ public:
         responses_->stopProducing();
         return;
       }
+
       dropActive(0);
       batch.resize(size);
     }
+
     TELAR_DIAGNOSTIC(observeQueue());
   }
 
@@ -818,18 +871,22 @@ public:
     if (busy_) {
       return false;
     }
+
     if (cancelled_ || responses_->closed()) {
       cancel();
       return false;
     }
+
     if (pending_responses_) {
       if (!responses_->hasCapacityFor(next_response_bytes_)) {
         return false;
       }
+
       drain_only_ = true;
       busy_ = true;
       return true;
     }
+
     if (batches_[active_].events().empty()) {
       return false;
     }
@@ -846,6 +903,7 @@ public:
     if (!drain_only_) {
       batches_[sealed_].clear();
     }
+
     pending_responses_ = progress_.pending_responses;
     next_response_bytes_ = progress_.next_response_bytes;
     failed_ = progress_.failed;
@@ -853,6 +911,7 @@ public:
     if (cancelled_ || progress_.cancelled) {
       cancel();
     }
+
     TELAR_DIAGNOSTIC(observeQueue());
   }
 
@@ -863,19 +922,24 @@ public:
       progress_.cancelled = true;
       return false;
     }
+
     if (drain_only_) {
       if (terminal_) {
         terminal_->drainResponses();
         responseProgress();
       }
+
       return false;
     }
+
     TELAR_TRACE("media.process");
     TELAR_DIAGNOSTIC(AllocationScope allocation_scope{AllocationPath::media});
     TELAR_DIAGNOSTIC(diagnostics::TimedScope timing{batch_metrics_.ingest});
     const auto &batch = batches_[sealed_];
+
     TELAR_DIAGNOSTIC(batch_metrics_.bytes = batch.byteCount());
     bool reset = batch.reset_before || !terminal_;
+
     try {
       if (reset) {
         prepared_.clear();
@@ -885,9 +949,11 @@ public:
       }
 
       MediaInput input{memory_, *terminal_, prepared_, shared_clients_};
+
       for (const auto &event : batch.events()) {
         if (const auto *output = std::get_if<MediaBatch::Output>(&event)) {
           [[maybe_unused]] const auto statistics = input.feed(batch.bytes(*output));
+
           TELAR_DIAGNOSTIC(diagnostics::accumulate(batch_metrics_.discarded_frames, statistics.discarded));
           TELAR_DIAGNOSTIC(diagnostics::accumulate(batch_metrics_.unavailable_frames, statistics.unavailable));
           TELAR_DIAGNOSTIC(diagnostics::accumulate(batch_metrics_.forwarded_frames, statistics.forwarded));
@@ -897,10 +963,12 @@ public:
           input.resize(std::get<TerminalSize>(event));
         }
       }
+
       terminal_->refresh();
       if (shared_clients_.load(std::memory_order_acquire) != 0) {
         prepared_.prepare(terminal_->graphics.images());
       }
+
       requests_.process(terminal_->graphics.images());
     } catch (...) {
       progress_.failed = !responses_->closed() || (terminal_ && terminal_->responseFailed());
@@ -912,6 +980,7 @@ public:
       reset = true;
       TELAR_DIAGNOSTIC(batch_metrics_.failures = progress_.failed);
     }
+
     responseProgress();
     TELAR_DIAGNOSTIC(batch_metrics_.prepared_frames = prepared_.takePreparedCount());
     TELAR_DIAGNOSTIC(batch_metrics_.resets = reset);
@@ -943,6 +1012,7 @@ public:
     }
 
     auto sample = terminal_ ? terminal_->storageMetrics() : diagnostics::GraphicsStorageSnapshot{};
+
     sample.prepared_bytes = prepared_.storedBytes();
     sample.staged_bytes = requests_.storedBytes();
     return sample;
@@ -987,10 +1057,12 @@ public:
         return prepared;
       }
     }
+
     auto frozen = requests_.take(key, shared);
     if (!frozen && requests_.request(key, shared)) {
       output({});
     }
+
     return frozen;
   }
 
@@ -1021,6 +1093,7 @@ private:
       progress_.pending_responses = terminal_->pendingResponses();
       progress_.next_response_bytes = terminal_->nextResponseSize();
     }
+
     progress_.cancelled |= responses_->closed() && !progress_.failed;
   }
 
@@ -1032,6 +1105,7 @@ private:
 
   inline void dropActive(std::size_t incoming) noexcept {
     auto &batch = batches_[active_];
+
     TELAR_DIAGNOSTIC(diagnostics::accumulate(queue_metrics_.dropped_events, batch.events().size() + 1));
     TELAR_DIAGNOSTIC(diagnostics::accumulate(queue_metrics_.dropped_bytes, batch.byteCount() + incoming));
     dropped_bytes_ += batch.byteCount() + incoming;

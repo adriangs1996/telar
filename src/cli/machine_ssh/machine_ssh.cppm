@@ -134,6 +134,7 @@ inline bool acceptable(std::string_view path) {
 inline std::string line() {
   std::string result;
   char byte;
+
   while (std::cin.get(byte)) {
     if (byte == '\n') {
       return result;
@@ -158,6 +159,7 @@ inline bool place(int home, const std::string &path, std::string_view bytes, mod
   }
 
   std::string_view tail{path};
+
   for (;;) {
     const auto slash = tail.find('/');
     if (slash == std::string_view::npos) {
@@ -202,6 +204,7 @@ inline bool place(int home, const std::string &path, std::string_view bytes, mod
       std::array<char, 16 * 1024> buffer;
       std::size_t offset = 0;
       bool same = true;
+
       for (;;) {
         const auto count = ::read(existing.get(), buffer.data(), buffer.size());
         if (count < 0 && errno == EINTR) {
@@ -234,8 +237,10 @@ inline bool place(int home, const std::string &path, std::string_view bytes, mod
   }
 
   std::uint64_t nonce;
+
   randomBytes(&nonce, sizeof(nonce));
   std::array<char, 64> temporary;
+
   std::snprintf(temporary.data(), temporary.size(), ".telar-%016llx", static_cast<unsigned long long>(nonce));
   FileDescriptor file{::openat(parent.get(), temporary.data(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, mode)};
   if (!file) {
@@ -282,6 +287,7 @@ inline int run() {
   std::size_t files = 0;
   std::size_t total = 0;
   std::string output;
+
   for (;;) {
     auto header = line();
     if (header == "end") {
@@ -291,6 +297,7 @@ inline int run() {
 
     std::string_view fields{header};
     std::array<std::string_view, 3> prefix;
+
     for (auto &field : prefix) {
       const auto end = fields.find(' ');
       if (end == std::string_view::npos) {
@@ -302,11 +309,13 @@ inline int run() {
     }
 
     const std::string path{fields};
+
     if (prefix[0] != "file") {
       throw CommandError{"InvalidConfigStream"};
     }
 
     std::size_t size = 0;
+
     try {
       size = parseInt<std::size_t>(prefix[2]);
     } catch (const std::invalid_argument &) {
@@ -335,6 +344,7 @@ inline int run() {
     } else {
       try {
         const auto written = place(home.get(), path, bytes, mode);
+
         output += std::string{written ? "written " : "unchanged "} + path + "\n";
       } catch (const std::exception &error) {
         output += "refused " + path + ": " + error.what() + "\n";
@@ -363,6 +373,7 @@ inline constexpr std::size_t error_limit = 64 * 1024;
 
 inline std::vector<char *> pointers(const std::vector<std::string> &arguments) {
   std::vector<char *> result;
+
   result.reserve(arguments.size() + 1);
   for (const auto &argument : arguments) {
     result.push_back(const_cast<char *>(argument.c_str()));
@@ -374,6 +385,7 @@ inline std::vector<char *> pointers(const std::vector<std::string> &arguments) {
 
 [[noreturn]] inline void replace(const std::vector<std::string> &arguments) {
   const auto argv = pointers(arguments);
+
   ::execvp(argv.front(), argv.data());
   throw CommandError{systemErrorName(errno)};
 }
@@ -383,6 +395,7 @@ inline std::vector<char *> pointers(const std::vector<std::string> &arguments) {
 inline int inherit(const std::vector<std::string> &arguments) {
   const auto argv = pointers(arguments);
   SpawnOptions spawn{0};
+
   for (const int stream : {STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO}) {
     spawn.redirect(stream, stream);
   }
@@ -394,6 +407,7 @@ inline int inherit(const std::vector<std::string> &arguments) {
   }
 
   int status = 0;
+
   while (::waitpid(process, &status, 0) < 0) {
     if (errno != EINTR) {
       throw SystemError{"Wait for child process"};
@@ -416,6 +430,7 @@ struct Output {
     }
 
     const auto start = err.rfind('\n', end);
+
     return std::string_view{err}.substr(start == std::string::npos ? 0 : start + 1, end + 1 - (start == std::string::npos ? 0 : start + 1));
   }
 };
@@ -423,6 +438,7 @@ struct Output {
 template <Allocator Memory>
 inline std::string retained(const RetainedStream<Memory> &stream) {
   std::string text(static_cast<std::size_t>(stream.total() - stream.retainedOffset()), '\0');
+
   static_cast<void>(stream.read(stream.retainedOffset(), {reinterpret_cast<Byte *>(text.data()), text.size()}));
   return text;
 }
@@ -438,6 +454,7 @@ inline Output capture(Memory &memory, const std::vector<std::string> &arguments,
   CommandOutput<Memory> process{memory, 0};
   const std::array pieces{input};
   Output result;
+
   try {
     result.status = process.streamWithInput(
         command, std::chrono::steady_clock::now() + timeout, input.empty() ? std::span<const std::string_view>{} : std::span<const std::string_view>{pieces},
@@ -479,6 +496,7 @@ inline Output captureFile(Memory &memory, const std::vector<std::string> &argume
 
 inline std::string quote(std::string_view value) {
   std::string result = "'";
+
   for (const auto byte : value) {
     result += byte == '\'' ? "'\\''" : std::string(1, byte);
   }
@@ -533,6 +551,7 @@ struct MachineOptions {
     const auto action = result.action;
     const std::size_t positional = action == Action::list || action == Action::receive_config ? 0 : action == Action::add || action == Action::rename ? 2
                                                                                                                                                       : 1;
+
     if (action == Action::receive_config && args.size() != 1) {
       throw std::invalid_argument{"UnknownMachineOption"};
     }
@@ -550,10 +569,12 @@ struct MachineOptions {
     }
 
     Cursor cursor{args.subspan(positional + 1)};
+
     while (const auto next = cursor.next()) {
       const std::string_view word = *next;
       const bool takes_setup = action == Action::add || action == Action::setup;
       const auto value = [&] { return cursor.take("MissingMachineArgument"); };
+
       if (word == "--json" && (action == Action::list || action == Action::check || takes_setup)) {
         result.json = true;
       } else if (word == "--setup" && action == Action::add) {
@@ -566,6 +587,7 @@ struct MachineOptions {
         result.binary = value();
       } else if (word == "--skip" && takes_setup) {
         auto names = value();
+
         do {
           const auto end = names.find(',');
           const auto name = names.substr(0, end);
@@ -630,6 +652,7 @@ inline std::string profilesPath() {
 template <Allocator Memory>
 MachineProfiles load(Memory &memory, const std::string &path) {
   Vector<unsigned char, Memory> source{AllocatorRef<unsigned char, Memory>{memory}};
+
   try {
     if (!readPrivateFile(AT_FDCWD, path, source, MachineLimits::file_bytes)) {
       return {};
@@ -655,6 +678,7 @@ inline std::string localLabel(const MachineProfiles &profiles) {
   }
 
   std::array<char, 256> name{};
+
   return ::gethostname(name.data(), name.size()) == 0 ? std::string{name.data()} : "localhost";
 }
 
@@ -673,6 +697,7 @@ struct Random {
 inline MachineProfile newProfile(const MachineProfiles &profiles, const MachineOptions &options) {
   requireNotLocal(profiles, options.label);
   Random random;
+
   return MachineProfile::create(MachineId::generate(random), {
                                                                  .label = options.label,
                                                                  .destination = options.value,
@@ -705,6 +730,7 @@ inline void change(MachineProfiles &profiles, const MachineOptions &options) {
 template <Allocator Memory, typename Edit>
 void update(Memory &memory, const std::string &path, Edit edit) {
   const auto absolute = std::filesystem::absolute(path);
+
   createPrivateDirectory(absolute.parent_path().string());
   auto parent = openPrivateParent(absolute.string());
   const auto name = absolute.filename().string();
@@ -722,6 +748,7 @@ void update(Memory &memory, const std::string &path, Edit edit) {
   }
 
   auto profiles = load(memory, absolute.string());
+
   edit(profiles);
   const auto source = MachineProfileCodec::format(memory, profiles);
   const auto error = writePrivateFile(parent.get(), name, byteView(source), PrivateFileMode::replace);
@@ -741,11 +768,13 @@ inline const char *describe(std::string_view error) {
 
   const auto code = MachineFailure::named(error);
   const auto description = code ? MachineFailure::description(*code) : std::nullopt;
+
   return description ? description->data() : nullptr;
 }
 
 inline int report(const std::exception &error) {
   const auto *text = describe(error.what());
+
   std::fprintf(stderr, "telar machine: %s\n", text ? text : error.what());
   return 1;
 }
@@ -754,10 +783,12 @@ template <Allocator Memory>
 int list(Memory &memory, const MachineProfiles &profiles, bool json) {
   if (json) {
     String<Memory> output{AllocatorRef<char, Memory>{memory}};
+
     output += "{\"local\":";
     appendJsonText(output, localLabel(profiles));
     output += ",\"machines\":[";
     bool first = true;
+
     for (const auto &profile : profiles.rows()) {
       if (!first) {
         output += ',';
@@ -778,6 +809,7 @@ int list(Memory &memory, const MachineProfiles &profiles, bool json) {
       }
 
       bool first = true;
+
       for (const auto agent : machine_agents) {
         if (const auto login = profile.login(agent)) {
           std::printf("%s%s %s", first ? "\tlogins: " : ", ", machine_agent_names.at(static_cast<std::size_t>(agent)).data(), machine_login_names.at(static_cast<std::size_t>(*login)).data());
@@ -810,6 +842,7 @@ inline std::string encode(std::string_view argument) {
   std::string result{"a"};
   unsigned value = 0;
   unsigned bits = 0;
+
   for (const unsigned char byte : argument) {
     value = (value << 8) | byte;
     bits += 8;
@@ -839,6 +872,7 @@ inline std::string decode(std::string_view word) {
   std::string result;
   unsigned value = 0;
   unsigned bits = 0;
+
   for (const auto byte : word) {
     const auto digit = alphabet.find(byte);
     if (digit == std::string_view::npos) {
@@ -871,18 +905,22 @@ template <Allocator Memory>
 std::vector<std::string> sshOptions(Memory &memory, std::string_view destination) {
   MachineFieldRules::destination(destination);
   const RuntimePaths paths{memory, ServerOptions{}, process_environment};
+
   paths.prepareSocket();
   const auto directory = std::string_view{paths.socket}.substr(0, paths.socket.rfind('/'));
   std::array<unsigned char, SHA256_DIGEST_LENGTH> digest;
+
   ::SHA256(reinterpret_cast<const unsigned char *>(destination.data()), destination.size(), digest.data());
   std::uint64_t hash = 0;
   constexpr unsigned bits_per_byte = 8;
   constexpr unsigned control_hash_shift = 16;
+
   for (std::size_t index = 0; index < sizeof(hash); ++index) {
     hash |= static_cast<std::uint64_t>(digest[index]) << (index * bits_per_byte);
   }
 
   std::array<char, 32> name;
+
   std::snprintf(name.data(), name.size(), "/ssh-%012llx", static_cast<unsigned long long>(hash >> control_hash_shift));
   return {"-o", "BatchMode=yes", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4", "-o", "ForwardAgent=no", "-o", "ControlMaster=auto", "-o", "ControlPersist=600", "-o", "ControlPath=" + std::string{directory} + name.data()};
 }
@@ -890,6 +928,7 @@ std::vector<std::string> sshOptions(Memory &memory, std::string_view destination
 template <Allocator Memory>
 std::vector<std::string> ssh(Memory &memory, std::string_view destination, std::string_view command) {
   auto argv = sshOptions(memory, destination);
+
   argv.insert(argv.begin(), {"ssh", "-T"});
   argv.insert(argv.end(), {"--", std::string{destination}, std::string{command}});
   return argv;
@@ -899,6 +938,7 @@ std::vector<std::string> ssh(Memory &memory, std::string_view destination, std::
 template <Allocator Memory>
 std::string gitSshCommand(Memory &memory, std::string_view destination) {
   std::string command{"ssh"};
+
   for (const auto &word : sshOptions(memory, destination)) {
     if (word.contains('\'')) {
       throw CommandError{"UnquotableSshOption"};
@@ -916,6 +956,7 @@ std::string gitSshCommand(Memory &memory, std::string_view destination) {
 template <typename Words>
 std::string remoteCommand(const MachineProfile &profile, const Words &words) {
   std::string command = std::string{profile.program().value_or("telar")} + " dispatch-argv";
+
   for (const std::string_view word : words) {
     const auto encoded = encode(word);
     if (command.size() + 1 + encoded.size() > command_limit) {
@@ -942,6 +983,7 @@ template <Allocator Memory, typename Words>
 std::string capture(Memory &memory, const MachineProfile &profile, const Words &words, const char *failure, int input = -1) {
   constexpr auto capture_timeout = std::chrono::seconds{900};
   const auto result = launch::captureFile(memory, ssh(memory, profile.destination(), remoteCommand(profile, words)), input, capture_timeout);
+
   std::fwrite(result.err.data(), 1, result.err.size(), stderr);
   if (result.status != 0 || result.dropped != 0) {
     throw CommandError{failure};
@@ -990,6 +1032,7 @@ inline MachineError sshFailure(const launch::Output &output) {
 template <Allocator Memory>
 Discovery discover(Memory &memory, const MachineProfile &profile, std::string &detail) {
   launch::Output output;
+
   try {
     output = launch::capture(memory, ssh(memory, profile.destination(), MachineRemoteCommand::discovery(profile.program()).view()), {}, endpoint_timeout);
   } catch (const std::exception &) {
@@ -997,6 +1040,7 @@ Discovery discover(Memory &memory, const MachineProfile &profile, std::string &d
   }
 
   constexpr std::size_t detail_limit = 1024;
+
   if (output.status != 0) {
     const auto failure = sshFailure(output);
     if (failure == MachineError::remote_program_missing) {
@@ -1007,6 +1051,7 @@ Discovery discover(Memory &memory, const MachineProfile &profile, std::string &d
 
     if (failure == MachineError::host_key_rejected) {
       std::string_view lines{output.err};
+
       while (!lines.empty()) {
         const auto end = lines.find('\n');
         const auto line = lines.substr(0, end);
@@ -1044,11 +1089,13 @@ template <Allocator Memory>
 int check(Memory &memory, const MachineProfile &profile, bool json) {
   std::string detail;
   std::optional<Discovery> found;
+
   try {
     found = discover(memory, profile, detail);
   } catch (const MachineFailure &error) {
     if (json) {
       String<Memory> output{AllocatorRef<char, Memory>{memory}};
+
       output += "{\"label\":";
       appendJsonText(output, profile.label(), JsonEscapes::control);
       output += ",\"reachable\":false,\"error\":";
@@ -1066,8 +1113,10 @@ int check(Memory &memory, const MachineProfile &profile, bool json) {
 
   const auto schema = std::string{found->schema().begin(), found->schema().end()};
   const auto local_schema = std::string{handshake::schema_id.begin(), handshake::schema_id.end()};
+
   if (json) {
     String<Memory> output{AllocatorRef<char, Memory>{memory}};
+
     output += "{\"label\":";
     appendJsonText(output, profile.label(), JsonEscapes::control);
     output += ",\"reachable\":true,\"schema\":\"" + schema + "\",\"local_schema\":\"" + local_schema + "\",\"compatible\":";
@@ -1116,6 +1165,7 @@ inline bool secretKey(std::string_view name, Kind kind) {
   static constexpr auto dropped = std::to_array<std::string_view>({"env", "environment", "headers", "http_headers", "env_http_headers", "auth", "authInfo", "apiKeyHelper", "awsAuthRefresh", "awsCredentialExport", "otelHeadersHelper", "mcpServers", "mcp", "mcp_servers", "token", "accessToken", "access_token", "refreshToken", "refresh_token", "idToken", "id_token"});
   static constexpr auto fragments = std::to_array<std::string_view>({"secret", "password", "passphrase", "apikey", "api_key", "api-key", "credential", "bearer", "private_key", "privatekey", "authorization", "cookie"});
   const auto text = asciiLowerCopy(name);
+
   return std::ranges::find(dropped, name) != dropped.end() || std::ranges::any_of(fragments, [&](auto fragment) { return text.contains(fragment); }) || (kind != Kind::scalar && (text.contains("token") || text.contains("auth")));
 }
 
@@ -1125,6 +1175,7 @@ inline std::string rewriteHome(std::string_view bytes, std::string_view from, st
   }
 
   std::string output;
+
   for (;;) {
     const auto at = bytes.find(from);
     if (at == std::string_view::npos) {
@@ -1134,6 +1185,7 @@ inline std::string rewriteHome(std::string_view bytes, std::string_view from, st
 
     const auto after = at + from.size();
     const bool ends = after == bytes.size() || bytes[after] == '/' || bytes[after] == '"' || bytes[after] == '\'' || whitespace(bytes[after]);
+
     output += bytes.substr(0, at);
     output += ends ? to : from;
     bytes.remove_prefix(after);
@@ -1143,8 +1195,10 @@ inline std::string rewriteHome(std::string_view bytes, std::string_view from, st
 inline std::string stripJsonc(std::string_view bytes) {
   std::string result;
   bool string = false;
+
   for (std::size_t index = 0; index < bytes.size(); ++index) {
     const auto byte = bytes[index];
+
     if (string) {
       result += byte;
       if (byte == '\\' && index + 1 < bytes.size()) {
@@ -1175,9 +1229,11 @@ inline std::string stripJsonc(std::string_view bytes) {
   }
 
   std::string plain;
+
   string = false;
   for (std::size_t index = 0; index < result.size(); ++index) {
     const auto byte = result[index];
+
     if (string) {
       plain += byte;
       if (byte == '\\' && index + 1 < result.size()) {
@@ -1190,6 +1246,7 @@ inline std::string stripJsonc(std::string_view bytes) {
       plain += byte;
     } else if (byte == ',') {
       auto next = index + 1;
+
       while (next < result.size() && whitespace(result[next])) {
         ++next;
       }
@@ -1209,9 +1266,11 @@ template <Allocator Memory>
 void json(Memory &memory, const JsonValue &value, String<Memory> &output, std::vector<std::string> &dropped) {
   const auto source = value.encoded();
   String<Memory> scratch{AllocatorRef<char, Memory>{memory}};
+
   if (source.starts_with('{')) {
     output += '{';
     bool first = true;
+
     value.eachMember([&](JsonValue key, JsonValue child) {
       key.string(scratch);
       const auto encoded = child.encoded();
@@ -1231,10 +1290,12 @@ void json(Memory &memory, const JsonValue &value, String<Memory> &output, std::v
       output += ':';
       json(memory, child, output, dropped);
     });
+
     output += '}';
   } else if (source.starts_with('[')) {
     output += '[';
     bool first = true;
+
     value.eachElement([&](JsonValue child) {
       if (!first) {
         output += ',';
@@ -1243,6 +1304,7 @@ void json(Memory &memory, const JsonValue &value, String<Memory> &output, std::v
       first = false;
       json(memory, child, output, dropped);
     });
+
     output += ']';
   } else {
     output += source;
@@ -1252,6 +1314,7 @@ void json(Memory &memory, const JsonValue &value, String<Memory> &output, std::v
 inline std::size_t skipQuoted(std::string_view text, std::size_t start) {
   const auto quote = text[start];
   auto index = start + 1;
+
   while (index < text.size() && text[index] != quote) {
     index += quote == '"' && text[index] == '\\' ? 2 : 1;
   }
@@ -1270,6 +1333,7 @@ struct TomlValue {
   inline void scan(std::string_view text) {
     for (std::size_t index = 0; index < text.size();) {
       const auto tail = text.substr(index);
+
       if (delimiter != 0) {
         if (delimiter == '"' && text[index] == '\\') {
           index += 2;
@@ -1309,6 +1373,7 @@ inline std::optional<std::string> tomlSecret(std::string_view path, Kind last) {
   constexpr std::size_t max_components = 16;
   std::vector<std::string_view> components;
   std::size_t start = 0;
+
   for (std::size_t index = 0; index <= path.size();) {
     if (index == path.size() || path[index] == '.') {
       if (components.size() == max_components) {
@@ -1342,10 +1407,12 @@ inline std::string toml(std::string_view bytes, std::vector<std::string> &droppe
   bool first = true;
   TomlValue value;
   std::string output;
+
   for (;;) {
     const auto newline = bytes.find('\n');
     const auto line = bytes.substr(0, newline);
     bool keep = !skipping_table;
+
     if (value.open()) {
       value.scan(line);
       keep = keep && !dropping_value;
@@ -1353,16 +1420,19 @@ inline std::string toml(std::string_view bytes, std::vector<std::string> &droppe
       const auto text = trimText(line, " \t\r");
       if (text.starts_with('[')) {
         auto inner = text;
+
         while (inner.starts_with('[')) {
           inner.remove_prefix(1);
         }
 
         std::size_t index = 0;
+
         while (index < inner.size() && inner[index] != ']') {
           index = inner[index] == '"' || inner[index] == '\'' ? skipQuoted(inner, index) + 1 : index + 1;
         }
 
         const auto offending = tomlSecret(inner.substr(0, std::min(index, inner.size())), Kind::container);
+
         skipping_table = offending.has_value();
         keep = !skipping_table;
         if (offending) {
@@ -1370,6 +1440,7 @@ inline std::string toml(std::string_view bytes, std::vector<std::string> &droppe
         }
       } else if (!text.empty() && !text.starts_with('#')) {
         std::size_t equals = 0;
+
         while (equals < text.size() && text[equals] != '=') {
           equals = text[equals] == '"' || text[equals] == '\'' ? skipQuoted(text, equals) + 1 : equals + 1;
         }
@@ -1379,6 +1450,7 @@ inline std::string toml(std::string_view bytes, std::vector<std::string> &droppe
           const auto kind = rest.empty() || rest.front() == '"' || rest.front() == '\'' ? Kind::text : rest.front() == '[' || rest.front() == '{' ? Kind::container
                                                                                                                                                   : Kind::scalar;
           const auto offending = tomlSecret(text.substr(0, equals), kind);
+
           dropping_value = offending.has_value();
           value.scan(rest);
           if (offending) {
@@ -1427,6 +1499,7 @@ inline bool secretName(std::string_view name) {
   static constexpr auto names = std::to_array<std::string_view>({"key", "auth", "pat", "pwd"});
   static constexpr auto fragments = std::to_array<std::string_view>({"token", "secret", "passw", "api_key", "apikey", "api-key", "access_key", "accesskey", "private_key", "authorization", "credential", "webhook", "cookie"});
   static constexpr auto suffixes = std::to_array<std::string_view>({"_key", "-key", "_header", "-header", "_app", "-app"});
+
   return std::ranges::find(names, text) != names.end() || std::ranges::any_of(fragments, [&](auto fragment) { return text.contains(fragment); }) || std::ranges::any_of(suffixes, [&](auto suffix) { return text.ends_with(suffix); }) || text.starts_with("auth_") || text.starts_with("auth-");
 }
 
@@ -1442,6 +1515,7 @@ inline std::optional<std::string_view> nextWord(std::string_view &rest) {
 
   const auto end = rest.find_first_of(" \t\r\n\v\f\"',;");
   const auto word = rest.substr(0, end);
+
   rest.remove_prefix(end == std::string_view::npos ? rest.size() : end);
   return word;
 }
@@ -1471,6 +1545,7 @@ inline bool literalValue(std::string_view rest, bool numbers) {
 
 inline std::optional<std::string_view> finding(std::string_view line) {
   const auto lowered = asciiLowerCopy(line);
+
   if (line.contains("PRIVATE KEY-----")) {
     return "a private key";
   }
@@ -1481,6 +1556,7 @@ inline std::optional<std::string_view> finding(std::string_view line) {
   }
 
   static constexpr auto prefixes = std::to_array<std::pair<std::string_view, std::size_t>>({{"ghp_", 20}, {"gho_", 20}, {"ghu_", 20}, {"ghs_", 20}, {"ghr_", 20}, {"github_pat_", 20}, {"glpat-", 20}, {"sk-", 20}, {"xoxb-", 10}, {"xoxp-", 10}, {"xoxa-", 10}, {"xoxr-", 10}, {"xoxs-", 10}, {"AKIA", 16}, {"ASIA", 16}, {"AIza", 30}, {"npm_", 30}, {"pypi-", 30}, {"hf_", 30}, {"r8_", 30}, {"tvly-", 20}});
+
   for (const auto &[prefix, minimum] : prefixes) {
     for (std::size_t start = 0;;) {
       const auto at = line.find(prefix, start);
@@ -1494,6 +1570,7 @@ inline std::optional<std::string_view> finding(std::string_view line) {
       }
 
       auto end = at + prefix.size();
+
       while (end < line.size() && tokenByte(line[end])) {
         ++end;
       }
@@ -1513,6 +1590,7 @@ inline std::optional<std::string_view> finding(std::string_view line) {
     start = at + 1;
     auto index = at + std::string_view{"bearer"}.size();
     const auto spaces = index;
+
     while (index < line.size() && (line[index] == ' ' || line[index] == '\t')) {
       ++index;
     }
@@ -1522,6 +1600,7 @@ inline std::optional<std::string_view> finding(std::string_view line) {
     }
 
     const auto begin = index;
+
     while (index < line.size() && (tokenByte(line[index]) || std::string_view{"._~+/="}.contains(line[index]))) {
       ++index;
     }
@@ -1550,12 +1629,14 @@ inline std::optional<std::string_view> finding(std::string_view line) {
   const bool database = lowered.contains("mysql") || lowered.contains("mariadb");
   auto words = line;
   bool after_user = false;
+
   while (!words.empty()) {
     words = trimText(words, " \t");
     const auto end = words.find_first_of(" \t");
     const auto word = trimText(words.substr(0, end), "\"'");
     const auto user_password = [](std::string_view text) {
       const auto colon = text.find(':');
+
       return colon != std::string_view::npos && colon + 1 < text.size() && !placeholder(text[colon + 1]);
     };
     if (after_user && user_password(word)) {
@@ -1575,6 +1656,7 @@ inline std::optional<std::string_view> finding(std::string_view line) {
   }
 
   const auto name_byte = [](char byte) { return tokenByte(byte) || byte == '.'; };
+
   for (std::size_t index = 0; index < line.size();) {
     if (!name_byte(line[index])) {
       ++index;
@@ -1582,6 +1664,7 @@ inline std::optional<std::string_view> finding(std::string_view line) {
     }
 
     const auto begin = index;
+
     while (index < line.size() && name_byte(line[index])) {
       ++index;
     }
@@ -1615,6 +1698,7 @@ inline std::optional<std::string_view> finding(std::string_view line) {
 
 inline std::optional<std::pair<std::size_t, std::string_view>> findSecret(std::string_view bytes) {
   std::size_t number = 1;
+
   for (;;) {
     const auto end = bytes.find('\n');
     if (const auto found = finding(bytes.substr(0, end))) {
@@ -1652,6 +1736,7 @@ struct WindowOptions {
     const auto text = asciiLowerCopy(name);
 
     static constexpr auto aliases = std::to_array<std::pair<std::string_view, std::string_view>>({{"catppuccin-mocha", "catppuccin"}, {"mocha", "catppuccin"}, {"tokyonight", "tokyo-night"}, {"tokyo_night", "tokyo-night"}, {"kanagawa-wave", "kanagawa"}, {"kanagawa_wave", "kanagawa"}, {"kanagawa_dragon", "kanagawa-dragon"}, {"default", "terminal"}});
+
     for (const auto &[alias, canonical] : aliases) {
       if (text == alias) {
         return std::string{canonical};
@@ -1669,11 +1754,13 @@ struct WindowOptions {
   inline static WindowOptions parse(std::span<char *const> input, bool gui = false) {
     constexpr std::size_t maximum_arguments = 64;
     WindowOptions result;
+
     if (gui && input.size() > maximum_arguments) {
       throw std::invalid_argument{"a command telar launches takes at most 64 arguments"};
     }
 
     std::vector<std::string_view> args;
+
     for (const std::string_view word : input) {
       if (gui && word == "--login-shell") {
         result.login_shell = true;
@@ -1683,6 +1770,7 @@ struct WindowOptions {
     }
 
     std::size_t index = 0;
+
     for (; index < args.size(); ++index) {
       const auto word = args[index];
       if (word == "--") {
@@ -1716,6 +1804,7 @@ struct WindowOptions {
       std::optional<std::string> *value = nullptr;
       const char *missing = nullptr;
       const char *duplicate = nullptr;
+
       if (flag == "--config") {
         value = &result.config;
         missing = "MissingConfigPath";
@@ -1745,6 +1834,7 @@ struct WindowOptions {
       }
 
       std::string_view text;
+
       if (equals != std::string_view::npos) {
         text = word.substr(equals + 1);
         if (text.empty() && flag != "--theme") {
@@ -1794,6 +1884,7 @@ namespace telar::runtime::cli {
 
 inline std::string guiProgram() {
   const auto found = ExecutablePath::sibling({"telar-gui", "../../MacOS/telar-gui"});
+
   return found ? std::string{found->view()} : std::string{"telar-gui"};
 }
 
@@ -1809,6 +1900,7 @@ inline void relaunchLogin(std::span<char *const> words) {
   }
 
   std::vector<std::string> arguments{std::string{shell.view()}, "-l", "-c", std::string{script}, ExecutablePath{}.c_str(), "gui"};
+
   for (const std::string_view word : words) {
     if (word != "--login-shell") {
       arguments.emplace_back(word);
@@ -1849,6 +1941,7 @@ int openWindow(Memory &memory, const WindowOptions &options) {
   }
 
   ServerOptions server;
+
   server.config = options.config ? std::string_view{*options.config} : std::string_view{};
   server.no_config = options.no_config;
   server.profile = options.profile ? std::string_view{*options.profile} : std::string_view{};
@@ -1866,6 +1959,7 @@ int openWindow(Memory &memory, const WindowOptions &options) {
     constexpr auto start_timeout = std::chrono::seconds{10};
     constexpr auto retry_interval = std::chrono::milliseconds{10};
     const auto deadline = std::chrono::steady_clock::now() + start_timeout;
+
     while (!connectExisting(connection, paths.socket.c_str())) {
       int status = 0;
       if (::waitpid(child, &status, WNOHANG) == child || std::chrono::steady_clock::now() >= deadline) {
@@ -1878,6 +1972,7 @@ int openWindow(Memory &memory, const WindowOptions &options) {
 
   connection.reset();
   std::vector<std::string> arguments{guiProgram(), "--socket", std::string{paths.socket}, "--cwd", std::filesystem::current_path().string()};
+
   for (const auto &[flag, value] : std::array<std::pair<std::string_view, const std::optional<std::string> *>, 5>{{{"--config", &options.config}, {"--profile", &options.profile}, {"--theme", &options.theme}, {"--remote", &options.remote}, {"--machine", &options.machine}}}) {
     if (*value) {
       arguments.emplace_back(flag);

@@ -60,6 +60,7 @@ struct ReporterFixture {
   ReporterFixture() {
     const std::array<std::string_view, 1> arguments{"/bin/cat"};
     Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
+
     model.panes.insert(1, makeOwned<Pane<SystemAllocator>>(memory, memory, 1, TabLocation{}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits}));
     agents.current.observeProcess(ProcessIdentity{42, 1, 1, 0, 42}, AgentProvider::claude);
     agents.current.setProcessContext(SessionHost::pane, false, agents.current.process_identity);
@@ -78,13 +79,16 @@ struct ReporterFixture {
   template <typename Consumer>
   void answerDue(ObservationTime now, Consumer &&consume) {
     const auto due = reports.due(clients, model.panes, agents, now);
+
     for (const auto identity : due.ids()) {
       auto &client = *clients.find(identity);
       Vector<Byte, SystemAllocator> payload{AllocatorRef<Byte, SystemAllocator>{memory}};
+
       reports.open(client, payload);
       if (!client.connection.closing) {
         consume(client, std::span<const Byte>{payload});
       }
+
       DeferredReports<SystemAllocator, RecordedAgents>::close(client, payload);
     }
   }
@@ -98,6 +102,7 @@ static void testRecheckAndRejection() {
   ReporterFixture fixture;
   auto &client = fixture.first.session();
   const std::array<Byte, 2> payload{1, 2};
+
   check(fixture.evaluate(client, payload) == ReportDecision::deferred);
   check(client.connection.read_paused && fixture.pane().process_recheck_requested);
   unsigned answered = 0;
@@ -106,6 +111,7 @@ static void testRecheckAndRejection() {
     check(std::ranges::equal(bytes, payload));
     check(fixture.evaluate(session, bytes) == ReportDecision::rejected);
   };
+
   fixture.answerDue(ObservationTime::now(), receive);
   check(answered == 0);
   ++fixture.pane().process_rechecks;
@@ -124,6 +130,7 @@ static void testRecheckOrderingAndOwnedPayload() {
   auto &first = fixture.first.session();
   auto &second = fixture.second.session();
   std::array<Byte, 2> payload{3, 4};
+
   fixture.pane().process_recheck_running = true;
   check(fixture.evaluate(second, payload) == ReportDecision::deferred);
   check(fixture.evaluate(first, payload) == ReportDecision::deferred);
@@ -137,6 +144,7 @@ static void testRecheckOrderingAndOwnedPayload() {
     check(client.deferred_report.reportTime().nanoseconds == client.deferred_report.observed.nanoseconds);
     check(fixture.evaluate(client, bytes) == ReportDecision::accepted);
   };
+
   fixture.pane().process_rechecks = 1;
   fixture.answerDue(ObservationTime::now(), receive);
   check(order.empty());
@@ -152,15 +160,19 @@ static void testTimeoutAndClosedPane() {
   ReporterFixture fixture;
   auto &client = fixture.first.session();
   const std::array<Byte, 1> payload{7};
+
   check(fixture.evaluate(client, payload) == ReportDecision::deferred);
   auto now = client.deferred_report.observed;
+
   now.nanoseconds += 2'000'000'000;
   unsigned answered = 0;
+
   fixture.answerDue(now, [&](auto &session, auto bytes) {
     ++answered;
     check(!session.deferred_report.answer_rechecked);
     check(fixture.evaluate(session, bytes) == ReportDecision::rejected);
   });
+
   check(answered == 1 && !fixture.pane().rejected_reporter);
   check(fixture.evaluate(client, payload) == ReportDecision::deferred);
   fixture.pane().exit_status = 0;
@@ -173,6 +185,7 @@ static void testTimeoutAndClosedPane() {
   ++fixture.pane().process_rechecks;
   fixture.answerDue(ObservationTime::now(), [&](auto &, auto) { check(false); });
   DeferredReport<SystemAllocator> wrapping{fixture.memory};
+
   wrapping.required_recheck = UINT32_MAX;
   check(wrapping.rechecked(0) && !wrapping.rechecked(UINT32_MAX - 1));
 }

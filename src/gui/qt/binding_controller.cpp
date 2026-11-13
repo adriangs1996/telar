@@ -122,6 +122,7 @@ std::optional<Application::Action> nativeAction(BindingActionKind kind) noexcept
       {Binding::previous_machine, Native::previous_machine},
       {Binding::add_machine, Native::add_machine},
   });
+
   const auto *const found = std::ranges::find(actions, kind, &decltype(actions)::value_type::first);
 
   return found == actions.end() ? std::nullopt : std::optional{found->second};
@@ -134,6 +135,7 @@ std::optional<PaneDirection> navigationDirection(BindingActionKind kind) noexcep
       {BindingActionKind::navigate_up, PaneDirection::up},
       {BindingActionKind::navigate_down, PaneDirection::down},
   });
+
   const auto *const found = std::ranges::find(directions, kind, &decltype(directions)::value_type::first);
 
   return found == directions.end() ? std::nullopt : std::optional{found->second};
@@ -157,6 +159,7 @@ bool supported(const ConfigurationSource &configuration, BindingAction action, c
 
 QVariantList Application::commands() const {
   QVariantList commands;
+
   commands.reserve(static_cast<qsizetype>(palette_actions.size()));
   for (const auto &entry : palette_actions) {
     const auto action = nativeAction(entry.action);
@@ -198,6 +201,7 @@ BindingContext Application::bindingContext() const {
   context.pane_count = static_cast<std::uint16_t>(std::ranges::count_if(active->layout.nodes(), [](const auto &node) {
     return std::holds_alternative<ClientLayoutPane>(node);
   }));
+
   context.tab_count = static_cast<std::uint16_t>(std::ranges::count_if(session().tabs(), [&](const auto &tab) {
     return sameWorkspace(tab->location.workspace, active->location.workspace);
   }));
@@ -226,6 +230,7 @@ bool Application::handleBindingKey(QKeyEvent &event, QQuickItem &recipient, bool
   }
 
   const bool dismiss = event.type() == QEvent::KeyPress && !event.isAutoRepeat() && event.key() == Qt::Key_Escape && event.modifiers() == Qt::NoModifier;
+
   if (pick_controller_.isOpen()) {
     if (dismiss) {
       auto *field = qobject_cast<NativeFormField *>(&recipient);
@@ -263,6 +268,7 @@ bool Application::runBinding(BindingAction action, const ConfigurationSource::Ac
 
     if (action.kind == BindingActionKind::expression) {
       const auto hold = key_bindings_.hold();
+
       configuration_source_.expression(action, bindingContext(), [this, hold](LuaOutcome<InputExpression> outcome) {
         luaBindingFinished(hold, outcome.stale, outcome.error, [&] {
           applyExpression(*outcome.value);
@@ -270,6 +276,7 @@ bool Application::runBinding(BindingAction action, const ConfigurationSource::Ac
       });
     } else if (action.kind == BindingActionKind::callback) {
       const auto hold = key_bindings_.hold();
+
       configuration_source_.invoke(action, bindingContext(), [this, hold](LuaOutcome<ConfigurationSource::Effects> outcome) {
         luaBindingFinished(hold, outcome.stale, outcome.error, [&] {
           applyEffects(**outcome.value);
@@ -356,6 +363,7 @@ void Application::executeBinding(BindingAction action, const ConfigurationSource
   case BindingActionKind::resize_sidebar_right: {
     constexpr float resize_columns = 2;
     const auto change = resize_columns * cell_metrics_.width * (action.kind == BindingActionKind::resize_sidebar_left ? -1.0F : 1.0F);
+
     setSidebarWidth(sidebarWidth() + change);
   } break;
   case BindingActionKind::command_tab:
@@ -373,6 +381,7 @@ void Application::executeBinding(BindingAction action, const ConfigurationSource
     } else {
       executeNotificationBinding(action, resolved);
     }
+
     break;
   default:
     throw std::runtime_error{"Binding action is not yet available in the C++ GUI"};

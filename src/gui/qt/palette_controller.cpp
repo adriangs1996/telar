@@ -107,17 +107,20 @@ QVariantMap navigationRecord(const NavigationTarget &target, const NavigationLab
   const auto split = std::min(text.find(NavigationLabel::detail_separator), text.size());
   auto primary = text.substr(0, split);
   auto secondary = text.substr(split);
+
   secondary.remove_prefix(std::min(secondary.find_first_not_of(' '), secondary.size()));
   if (kind == PaletteRowKind::tab && primary.starts_with(NavigationLabel::tab_prefix)) {
     primary.remove_prefix(NavigationLabel::tab_prefix.size());
   }
 
   QString glyph = QStringLiteral("\uf121");
+
   if (kind == PaletteRowKind::context) {
     glyph = QStringLiteral("\uf07b");
   } else if (kind == PaletteRowKind::tab) {
     glyph = QStringLiteral("\uf2d0");
   }
+
   const auto hint = kind == PaletteRowKind::context ? QStringLiteral("context") : QStringLiteral("tab");
 
   return {
@@ -164,6 +167,7 @@ void Application::searchPalette(const QString &text) {
   const auto before_bytes = palette_query_.toUtf8();
   const auto before = PaletteQuery::parse(paletteBytes(before_bytes));
   const auto measured = Utf16Prefix::fit(QStringView{text}, PaletteQuery::maximum_bytes, utf16Encoding());
+
   palette_query_ = text.first(static_cast<qsizetype>(measured.units));
   if (!palette_query_.isValidUtf16()) {
     palette_query_ = QString::fromUtf8(palette_query_.toUtf8());
@@ -205,6 +209,7 @@ void Application::setPaletteMode(int mode) {
   }
 
   auto replacement = palette_query_;
+
   if (!current.isEmpty() && PaletteQuery::prefix(current.front())) {
     replacement.remove(0, 1);
   }
@@ -222,6 +227,7 @@ void Application::refreshPalette() {
 void Application::collectPaletteNavigation(PaletteMatches &matches, std::string_view query) const {
   for (const auto &workspace : session().workspaces()) {
     NavigationLabel label;
+
     label.append(workspace.name);
     label.appendDetail(workspace.branch);
     matches.add(NavigationTarget{workspace.location}, label.view(), query);
@@ -230,6 +236,7 @@ void Application::collectPaletteNavigation(PaletteMatches &matches, std::string_
   std::array<const Tab<ApplicationAllocator> *, GuiSession::maximum_workspace_tabs> tabs{};
   std::size_t count = 0;
   const auto *active = session().activeTab();
+
   for (const auto &tab : session().tabs()) {
     if (active != nullptr && sameWorkspace(tab->location.workspace, active->location.workspace) && count < tabs.size()) {
       tabs[count++] = tab.get();
@@ -237,9 +244,11 @@ void Application::collectPaletteNavigation(PaletteMatches &matches, std::string_
   }
 
   const auto ordered = std::span{tabs}.first(count);
+
   std::ranges::sort(ordered, {}, &Tab<ApplicationAllocator>::position);
   for (const auto *tab : ordered) {
     NavigationLabel label;
+
     label.append(NavigationLabel::tab_prefix);
     label.append(tab->label.empty() ? tabApplicationName(*tab, session().findPane(tab->focused_pane)) : std::string_view{tab->label});
     matches.add(NavigationTarget{tab->location}, label.view(), query);
@@ -247,6 +256,7 @@ void Application::collectPaletteNavigation(PaletteMatches &matches, std::string_
 
   for (const auto &agent : session().agents()) {
     NavigationLabel label;
+
     label.append(agent.provider_name);
     label.appendDetail(agent.title);
     label.appendDetail(agent.workspace_label);
@@ -262,6 +272,7 @@ bool Application::updatePaletteResults() {
   }
 
   PaletteMatches matches;
+
   if (query.mode == PaletteMode::navigate) {
     collectPaletteNavigation(matches, query.text);
   } else if (query.mode == PaletteMode::actions) {
@@ -269,11 +280,13 @@ bool Application::updatePaletteResults() {
     for (const auto &entry : palette_commands_) {
       const auto command = entry.toMap();
       const auto label = command.value(QStringLiteral("label")).toString().toUtf8();
+
       matches.add(command.value(QStringLiteral("action")).value<Action>(), paletteBytes(label), query.text);
     }
   }
 
   QVariantList rows;
+
   rows.reserve(static_cast<qsizetype>(matches.rows().size()));
   for (const auto &match : matches.rows()) {
     rows.append(paletteRecord(match.target, !query.text.empty()));
@@ -318,6 +331,7 @@ QVariantMap Application::paletteRecord(const PaletteTarget &target, bool queried
 
   const auto &navigation = std::get<NavigationTarget>(target);
   NavigationLabel label;
+
   if (const auto *workspace = std::get_if<WorkspaceLocation>(&navigation)) {
     const auto found = std::ranges::find_if(session().workspaces(), [&](const auto &row) {
       return sameWorkspace(row.location, *workspace);
@@ -404,10 +418,12 @@ QVariantMap Application::paletteGeometry() const {
   const auto kinds = std::span{palette_kinds_}.first(static_cast<std::size_t>(palette_rows_.size()));
   const auto visible = PaletteRowWindow::measure(kinds, palette_selection_, geometry, display.chrome, query.text.empty());
   QVariantList rows;
+
   rows.reserve(static_cast<qsizetype>(visible.count));
   for (std::size_t index = 0; index < visible.count; ++index) {
     const auto &placement = visible.rows[index];
     auto record = palette_rows_[static_cast<qsizetype>(placement.index)].toMap();
+
     record.insert(QStringLiteral("bounds"), local(placement.bounds));
     record.insert(QStringLiteral("groupBounds"), local(placement.group));
     record.insert(QStringLiteral("groupLabel"), groupName(kinds[placement.index]));
@@ -474,6 +490,7 @@ void Application::usePaletteResult(const QVariantMap &choice) {
 
   const auto index = static_cast<std::size_t>(found - palette_rows_.begin());
   const auto target = palette_targets_[index];
+
   applyInteraction([&] {
     if (const auto *machine = std::get_if<MachinePickerTarget>(&target)) {
       chooseMachine(*machine, choice.value(QStringLiteral("alternate"), false).toBool());
@@ -494,6 +511,7 @@ void Application::usePaletteResult(const QVariantMap &choice) {
       const auto cursor = choice.value(QStringLiteral("cursor"), palette_query_.size()).toInt();
       const auto anchor = choice.value(QStringLiteral("anchor"), cursor).toInt();
       PaletteParent parent{.query = palette_query_, .selection = index, .editor = {.anchor = std::clamp(anchor, 0, static_cast<int>(palette_query_.size())), .cursor = std::clamp(cursor, 0, static_cast<int>(palette_query_.size()))}};
+
       showPalette(PaletteMode::suggest);
       palette_parent_ = std::move(parent);
       emit paletteChanged();

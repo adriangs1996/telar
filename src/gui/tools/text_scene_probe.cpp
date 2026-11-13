@@ -99,6 +99,7 @@ struct Options {
 
 Options parseOptions(const QGuiApplication &application) {
   QCommandLineParser parser;
+
   parser.addHelpOption();
   parser.addOption({QStringLiteral("iterations"), QStringLiteral("Measured scene operations per case"), QStringLiteral("count"), QString::number(measured_iterations)});
   parser.addOption({QStringLiteral("warmup"), QStringLiteral("Untimed scene operations per case"), QStringLiteral("count"), QString::number(warmup_iterations)});
@@ -118,6 +119,7 @@ Options parseOptions(const QGuiApplication &application) {
 template <typename Value>
 void hashValue(QCryptographicHash &hash, const Value &value) {
   const auto bytes = std::bit_cast<std::array<char, sizeof(Value)>>(value);
+
   hash.addData(QByteArrayView{bytes.data(), static_cast<qsizetype>(bytes.size())});
 }
 
@@ -131,6 +133,7 @@ void hashMesh(QCryptographicHash &hash, const QSGGeometryNode &node) {
   hashValue(hash, geometry->vertexCount());
   hashValue(hash, geometry->drawingMode());
   const auto *vertices = static_cast<const AlphaMaskVertex *>(geometry->vertexData());
+
   for (const auto &vertex : std::span{vertices, static_cast<std::size_t>(geometry->vertexCount())}) {
     hashValue(hash, vertex.x);
     hashValue(hash, vertex.y);
@@ -140,6 +143,7 @@ void hashMesh(QCryptographicHash &hash, const QSGGeometryNode &node) {
   }
 
   const auto ink = material->foreground();
+
   hashValue(hash, ink.r);
   hashValue(hash, ink.g);
   hashValue(hash, ink.b);
@@ -149,10 +153,12 @@ void hashMesh(QCryptographicHash &hash, const QSGGeometryNode &node) {
 
 QByteArray sceneDigest(const QSGNode &root) {
   QCryptographicHash hash{QCryptographicHash::Sha256};
+
   for (const auto *node = &root; node != nullptr;) {
     hashValue(hash, node->type());
     if (const auto *transform = dynamic_cast<const QSGTransformNode *>(node)) {
       constexpr std::size_t matrix_elements = 16;
+
       for (const auto value : std::span<const float, matrix_elements>{transform->matrix().constData(), matrix_elements}) {
         hashValue(hash, value);
       }
@@ -190,6 +196,7 @@ public:
         images_(ChromeGlyphImages<ResidentFonts>::shared(window, fonts_)) {
     constexpr std::string_view alphabet = "0123456789abcdef ABCDEF -> != ffi ";
     std::string text;
+
     text.reserve(length);
     for (unsigned index = 0; index < length; ++index) {
       text.push_back(alphabet[index % alphabet.size()]);
@@ -197,6 +204,7 @@ public:
 
     auto &face = fonts_->face(fonts::FontRole::primary);
     const auto shaped = face.shape(text, pixel_height);
+
     glyphs_.reserve(shaped.size());
     for (std::size_t index = 0; index < shaped.size(); ++index) {
       glyphs_.push_back(shaped.glyph(index));
@@ -270,11 +278,13 @@ private:
 
 void measure(const TextCase &text, Operation operation, Options options) {
   SceneRun scene{text, operation};
+
   for (unsigned index = 0; index < options.warmup; ++index) {
     scene.step();
   }
 
   const auto started = std::chrono::steady_clock::now();
+
   for (unsigned index = 0; index < options.iterations; ++index) {
     scene.step();
   }
@@ -282,12 +292,14 @@ void measure(const TextCase &text, Operation operation, Options options) {
   const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - started).count();
   const auto name = std::array{QStringLiteral("create"), QStringLiteral("rebuild"), QStringLiteral("repaint")}[std::to_underlying(operation)];
   const QJsonObject row{{QStringLiteral("operation"), name}, {QStringLiteral("glyphs"), static_cast<qint64>(text.paint().glyphs.size())}, {QStringLiteral("iterations"), static_cast<qint64>(options.iterations)}, {QStringLiteral("warmup"), static_cast<qint64>(options.warmup)}, {QStringLiteral("elapsed_ns"), static_cast<qint64>(elapsed)}, {QStringLiteral("scene_sha256"), QString::fromLatin1(scene.digest())}};
+
   std::cout << QJsonDocument{row}.toJson(QJsonDocument::Compact).constData() << '\n';
 }
 
 void runCases(QQuickWindow &window, const std::shared_ptr<const FontCollection> &collection, Options options) {
   for (const auto length : text_lengths) {
     const TextCase text{window, collection, length};
+
     for (const auto operation : {Operation::create, Operation::rebuild, Operation::repaint}) {
       measure(text, operation, options);
     }
@@ -299,16 +311,21 @@ void runCases(QQuickWindow &window, const std::shared_ptr<const FontCollection> 
 int main(int argc, char **argv) {
   platform::configureGraphics();
   QGuiApplication application{argc, argv};
+
   try {
     const auto options = parseOptions(application);
+
     static_cast<void>(bundledFonts());
     const auto collection = std::make_shared<const FontCollection>(FontCollection{
         .primary = ResidentFonts::resolveSource({}, {}),
     });
+
     QQuickWindow window;
+
     window.resize(window_side, window_side);
     std::exception_ptr failure;
     bool completed = false;
+
     QObject::connect(&window, &QQuickWindow::beforeSynchronizing, &window, [&] {
       if (completed) {
         return;
@@ -327,8 +344,10 @@ int main(int argc, char **argv) {
     QTimer::singleShot(timeout_ms, &application, [] {
       QGuiApplication::exit(1);
     });
+
     window.show();
     const auto result = QGuiApplication::exec();
+
     if (failure) {
       std::rethrow_exception(failure);
     }

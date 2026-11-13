@@ -96,6 +96,7 @@ public:
 
   void commandFinished(std::optional<CommandFailure> failure) {
     const auto completed = current_context_;
+
     if (const auto next = opening_.complete()) {
       current_context_ = pending_context_;
       process_.start(*next);

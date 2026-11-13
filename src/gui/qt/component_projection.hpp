@@ -107,6 +107,7 @@ QVariantList componentRecords(const components::Content<Bounds> &content, const 
   constexpr std::array tones{PaletteRole::text, PaletteRole::subtext0, PaletteRole::accent, PaletteRole::green, PaletteRole::yellow, PaletteRole::red};
   std::array<QString, Bounds.nodes> group_names;
   QVariantList result;
+
   result.reserve(static_cast<qsizetype>(content.nodes().size()));
   for (std::size_t index = 0; index < content.nodes().size(); ++index) {
     const auto &node = content.nodes()[index];
@@ -118,6 +119,7 @@ QVariantList componentRecords(const components::Content<Bounds> &content, const 
     }
 
     QVariantList samples;
+
     for (const auto sample : content.samples(node)) {
       samples.append(sample);
     }
@@ -154,12 +156,14 @@ QVariantList componentRecords(const components::Content<Bounds> &content, const 
         {QStringLiteral("telarMark"), icon.telar},
         {QStringLiteral("metric"), static_cast<int>(node.metric)},
     };
+
     result.append(record);
   }
 
   for (std::size_t index = 0; index < content.nodes().size(); ++index) {
     if (content.nodes()[index].kind == components::Kind::group) {
       auto record = result.at(static_cast<qsizetype>(index)).toMap();
+
       record.insert(QStringLiteral("accessibleName"), std::move(group_names.at(index)));
       result[static_cast<qsizetype>(index)] = record;
     }

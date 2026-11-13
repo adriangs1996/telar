@@ -20,6 +20,7 @@ inline constexpr std::size_t vector_bytes = 16;
 
 inline constexpr bool numericSgrByte(std::uint8_t byte) noexcept {
   const auto relative = static_cast<unsigned>(byte) - static_cast<unsigned>('0');
+
   return relative <= static_cast<unsigned>(';' - '0') && byte != ':';
 }
 
@@ -50,6 +51,7 @@ public:
   std::size_t next(std::size_t offset) noexcept {
     while (input_.size() - offset >= vector_bytes) {
       std::uint64_t candidates;
+
       if (offset >= window_begin_ && offset < window_end_) {
         candidates = matches_ & (UINT64_MAX << ((offset - window_begin_) * match_bits));
       } else {
@@ -57,6 +59,7 @@ public:
         const auto bytes = vld1q_u8(input_.data() + offset);
         const auto matches = vorrq_u8(vceqq_u8(bytes, vdupq_n_u8(enquiry)), vceqq_u8(bytes, vdupq_n_u8(escape)));
         const auto packed = vshrn_n_u16(vreinterpretq_u16_u8(matches), match_bits);
+
         matches_ = vget_lane_u64(vreinterpret_u64_u8(packed), 0);
 #elif defined(__SSE2__)
         const auto bytes = _mm_loadu_si128(reinterpret_cast<const __m128i *>(input_.data() + offset));
@@ -69,15 +72,18 @@ public:
         window_end_ = offset + vector_bytes;
         candidates = matches_;
       }
+
       if (candidates != 0) {
         return window_begin_ + std::countr_zero(candidates) / match_bits;
       }
+
       offset = window_end_;
     }
 
     while (offset < input_.size() && input_[offset] != enquiry && input_[offset] != escape) {
       ++offset;
     }
+
     return offset;
   }
 
@@ -101,6 +107,7 @@ inline std::size_t styledOrdinaryLength(std::span<const std::uint8_t> input, std
   styled_detail::ControlScanner scanner{input};
   styled_detail::ShortSgrBlockCache cache;
   auto length = scanner.next(prefix);
+
   while (input.size() - length >= 3) {
     std::uint64_t word = 0;
     const bool has_block = input.size() - length >= styled_detail::ShortSgrBlockCache::block_bytes;
@@ -118,9 +125,11 @@ inline std::size_t styledOrdinaryLength(std::span<const std::uint8_t> input, std
 
     auto end = length + 2;
     const auto limit = end + std::min(input.size() - end, Parameters::capacity + 1);
+
     while (end < limit && styled_detail::numericSgrByte(input[end])) {
       ++end;
     }
+
     if (end == limit || input[end] != 'm') {
       break;
     }
@@ -129,8 +138,10 @@ inline std::size_t styledOrdinaryLength(std::span<const std::uint8_t> input, std
     if (has_block && end + 1 - length <= styled_detail::ShortSgrBlockCache::block_bytes && next - length >= styled_detail::ShortSgrBlockCache::block_bytes) {
       cache.remember(word);
     }
+
     length = next;
   }
+
   return length;
 }
 

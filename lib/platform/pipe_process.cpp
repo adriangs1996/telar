@@ -35,12 +35,14 @@ std::array<FileDescriptor, 2> makePipe(ProcessInput input = ProcessInput::pipe) 
   }
 
   std::array<FileDescriptor, 2> ends{FileDescriptor{raw[0]}, FileDescriptor{raw[1]}};
+
   if (input == ProcessInput::buffered_socket) {
     constexpr int capacity = 256 * 1024;
     if (::setsockopt(ends[0].get(), SOL_SOCKET, SO_RCVBUF, &capacity, sizeof(capacity)) != 0 || ::setsockopt(ends[1].get(), SOL_SOCKET, SO_SNDBUF, &capacity, sizeof(capacity)) != 0) {
       throw SystemError{"Size worker input buffers"};
     }
   }
+
   for (auto &end : ends) {
     if (end.get() <= STDERR_FILENO) {
       const int relocated = ::fcntl(end.get(), F_DUPFD_CLOEXEC, STDERR_FILENO + 1);
@@ -63,11 +65,13 @@ PipeProcess::PipeProcess(const SpawnSpec &specification, ProcessInput input_kind
   auto input = makePipe(input_kind);
   auto output = makePipe();
   auto error = makePipe();
+
   setNonblocking(input[1].get());
 #if defined(F_SETNOSIGPIPE)
   if (::fcntl(input[1].get(), F_SETNOSIGPIPE, 1) < 0) {
     throw SystemError{"Suppress pipe signals"};
   }
+
 #else
   suppressSocketSignals(input[1].get());
 #endif
@@ -75,6 +79,7 @@ PipeProcess::PipeProcess(const SpawnSpec &specification, ProcessInput input_kind
   setNonblocking(error[0].get());
 
   SpawnOptions options{POSIX_SPAWN_SETPGROUP};
+
   options.changeDirectory(specification.cwd);
   options.redirect(input[0].get(), STDIN_FILENO);
   options.redirect(output[1].get(), STDOUT_FILENO);
@@ -92,6 +97,7 @@ PipeProcess::~PipeProcess() {
     ::kill(-process_id_, SIGKILL);
     ::kill(process_id_, SIGKILL);
     int status;
+
     while (::waitpid(process_id_, &status, 0) < 0 && errno == EINTR) {
     }
   }

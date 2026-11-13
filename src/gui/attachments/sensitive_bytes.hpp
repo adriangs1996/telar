@@ -91,6 +91,7 @@ public:
     if (required > capacity_) {
       constexpr std::size_t initial_capacity = 64;
       const auto growth = capacity_ <= limit / 2 ? capacity_ + (capacity_ / 2) : limit;
+
       reserve(std::min(limit, std::max({required, growth, initial_capacity})));
     }
 
@@ -128,6 +129,7 @@ private:
     }
 
     const auto retained = size_;
+
     clear();
     data_ = replacement;
     size_ = retained;

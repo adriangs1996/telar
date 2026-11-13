@@ -97,9 +97,11 @@ namespace telar::gui::qt {
 // Waits for the Lua thread, as a binding does before it applies its effects.
 inline BindingEffects invokeNow(ConfigurationSource &source, BindingAction action, BindingContext context) {
   std::optional<LuaOutcome<ConfigurationSource::Effects>> result;
+
   source.invoke(action, context, [&](LuaOutcome<ConfigurationSource::Effects> outcome) {
     result.emplace(std::move(outcome));
   });
+
   while (!result) {
     QCoreApplication::processEvents(QEventLoop::WaitForMoreEvents);
   }
@@ -145,6 +147,7 @@ public:
       started_.release();
       resume_.acquire();
     });
+
     started_.acquire();
   }
 
@@ -219,11 +222,13 @@ PluginState pluginState(ConfigurationSource &source) {
   const auto root = telar::runtime::JsonValue::parse(page.text);
   PluginState state{.generation = std::string{requiredJsonField(root, "generation").encoded()}};
   bool found = false;
+
   requiredJsonField(root, "entries").eachElement([&](const telar::runtime::JsonValue &entry) {
     state.requested = requiredJsonField(entry, "requested_enabled").boolean();
     state.enabled = requiredJsonField(entry, "enabled").boolean();
     found = true;
   });
+
   if (!found) {
     throw std::runtime_error{"Missing owned plugin metadata"};
   }
@@ -240,18 +245,22 @@ private:
     ApplicationAllocator memory;
     ConfigurationSource source{memory};
     const telar::ClientCommand request{.action = telar::ClientAction::plugin_run, .target_id = telar::runtime::plugins::stableId("run"), .text = "sample"};
+
     QVERIFY_THROWS_EXCEPTION(std::runtime_error, static_cast<void>(source.pluginInvocation(request, {})));
     fixture.open(source);
     QCOMPARE(source.error(), QString{});
     const auto invocation = source.pluginInvocation(request, {});
+
     QCOMPARE(invocation.action.view(), std::string_view{"run"});
     QCOMPARE(invocation.configuration_generation, source.configurationGeneration());
     constexpr telar::Byte toggle_sidebar_tag = 3;
     constexpr std::array<telar::Byte, 2> encoded{1, toggle_sidebar_tag};
     const auto effects = PluginEffects::decode(encoded);
+
     source.authorizePlugin(invocation, effects);
 
     auto stale = invocation;
+
     ++stale.configuration_generation;
     QVERIFY_THROWS_EXCEPTION(std::runtime_error, source.authorizePlugin(stale, effects));
     stale = invocation;
@@ -268,6 +277,7 @@ private:
     QVERIFY(source.configurationGeneration() > invocation.configuration_generation);
     QVERIFY_THROWS_EXCEPTION(std::runtime_error, source.authorizePlugin(invocation, effects));
     const auto replacement = source.pluginInvocation(request, {});
+
     source.authorizePlugin(replacement, effects);
   }
 
@@ -275,13 +285,16 @@ private:
     const PluginFixture fixture;
     ApplicationAllocator memory;
     ConfigurationSource source{memory};
+
     fixture.open(source);
     QCOMPARE(source.error(), QString{});
     QCOMPARE(source.input().length, std::size_t{2});
     const auto initial = pluginState(source);
+
     QVERIFY(initial.enabled && initial.requested);
     const QSignalSpy changes{&source, &ConfigurationSource::changed};
     const QSignalSpy failures{&source, &ConfigurationSource::failed};
+
     QVERIFY_THROWS_EXCEPTION(std::invalid_argument, source.setPluginEnabled({.text = "missing"}, false));
     writeFile(fixture.path, "return {api_version=1}");
     source.setPluginEnabled({.target_id = std::numeric_limits<std::uint64_t>::max(), .text = "sample"}, false);
@@ -307,6 +320,7 @@ private:
 
   Q_SLOT static void disabledPluginReferencedByStaticBarCanReload() {
     const PluginFixture fixture;
+
     writeFile(fixture.path, R"(
       local t=require('telar')
       return {api_version=2,plugins={{path='example'}},client={bars={bottom={
@@ -315,6 +329,7 @@ private:
     )");
     ApplicationAllocator memory;
     ConfigurationSource source{memory};
+
     fixture.open(source);
     QCOMPARE(source.error(), QString{});
     const auto action = [&] {
@@ -326,6 +341,7 @@ private:
 
       return *retained;
     };
+
     const auto plugin_action = [&] {
       const auto retained = source.pluginAction(action(), &source.fixedBar(components::Position::bottom_left)->actions);
       if (!retained) {
@@ -334,20 +350,25 @@ private:
 
       return *retained;
     };
+
     const auto initial = plugin_action();
+
     QVERIFY(source.pluginInvocation(initial, {}).configuration_generation > 0);
     const QSignalSpy changes{&source, &ConfigurationSource::changed};
     const QSignalSpy failures{&source, &ConfigurationSource::failed};
+
     source.setPluginEnabled({.text = "sample"}, false);
     QTRY_COMPARE(changes.count(), 1);
     QCOMPARE(failures.count(), 0);
     QVERIFY(!pluginState(source).enabled);
     const auto disabled = plugin_action();
+
     QVERIFY_THROWS_EXCEPTION(std::invalid_argument, static_cast<void>(source.pluginInvocation(disabled, {})));
     source.setPluginEnabled({.text = "example"}, true);
     QTRY_COMPARE(changes.count(), 2);
     QVERIFY(pluginState(source).enabled);
     const auto enabled = plugin_action();
+
     QCOMPARE(source.pluginInvocation(enabled, {}).configuration_generation, source.configurationGeneration());
     QCOMPARE(source.error(), QString{});
   }
@@ -356,15 +377,18 @@ private:
     const PluginFixture fixture;
     ApplicationAllocator memory;
     ConfigurationSource source{memory};
+
     fixture.open(source);
     QCOMPARE(source.error(), QString{});
     PausedThreadPool pool;
     const QSignalSpy changes{&source, &ConfigurationSource::changed};
+
     source.poll();
     source.setPluginEnabled({.text = "sample"}, false);
     source.setPluginEnabled({.text = "sample"}, true);
     source.setPluginEnabled({.text = "sample"}, false);
     constexpr int debounce_wait_ms = 150;
+
     QTest::qWait(debounce_wait_ms);
     QCOMPARE(changes.count(), 0);
     QVERIFY(!pluginState(source).requested && pluginState(source).enabled);
@@ -380,11 +404,13 @@ private:
     const PluginFixture fixture;
     ApplicationAllocator memory;
     ConfigurationSource source{memory};
+
     fixture.open(source);
     QCOMPARE(source.error(), QString{});
     const auto initial = pluginState(source).generation;
     const QSignalSpy changes{&source, &ConfigurationSource::changed};
     const QSignalSpy failures{&source, &ConfigurationSource::failed};
+
     writeFile(fixture.path, "return {api_version=2,plugins={{path='example'}},client={keybindings={telar.bind({'x'},{kind='plugin',plugin='sample',action='missing'})}}}");
     source.requestReload();
     QTRY_COMPARE(failures.count(), 1);
@@ -400,6 +426,7 @@ private:
     QTRY_COMPARE(changes.count(), 1);
     const auto adopted = pluginState(source).generation;
     const auto alternate = fixture.directory.filePath(QStringLiteral("alternate-trust.json"));
+
     writeFile(alternate, PluginFixture::empty_trust);
     QVERIFY(QFile::setPermissions(alternate, QFileDevice::ReadOwner | QFileDevice::WriteOwner));
     QVERIFY(QFile::remove(fixture.trust));
@@ -420,9 +447,11 @@ private:
     const auto absolute_path = directory.filePath(QStringLiteral("config.lua"));
     const auto path = QDir::current().relativeFilePath(absolute_path);
     const QByteArray valid{"return {api_version=2,client={sound={enabled=false}},profiles={chosen={client={notifications={delivery='system'}}}}}"};
+
     writeFile(absolute_path, valid);
     ApplicationAllocator memory;
     ConfigurationSource source{memory};
+
     source.open({.path = path, .profile = QStringLiteral("chosen"), .theme = QString{}});
     QCOMPARE(source.error(), QString{});
     constexpr std::uint16_t sidebar_columns = 61;
@@ -431,6 +460,7 @@ private:
     const std::string before{source.query(query, view)};
     const auto parsed = telar::runtime::JsonValue::parse(before);
     const auto expected_path = path.toUtf8();
+
     QVERIFY(requiredJsonField(parsed, "source").equals({expected_path.constData(), static_cast<std::size_t>(expected_path.size())}));
     QVERIFY(requiredJsonField(parsed, "profile").equals("chosen"));
     QCOMPARE(requiredJsonField(parsed, "generation").encoded(), std::string_view{"1"});
@@ -438,9 +468,11 @@ private:
     QVERIFY(requiredJsonField(parsed, "workspace_list_collapsed").boolean());
     QCOMPARE(requiredJsonField(parsed, "sidebar_width").encoded(), std::string_view{"61"});
     const QSignalSpy changes{&source, &ConfigurationSource::changed};
+
     source.poll();
     QTRY_COMPARE(QThreadPool::globalInstance()->activeThreadCount(), 0);
     const QSignalSpy failures{&source, &ConfigurationSource::failed};
+
     writeFile(absolute_path, "return {api_version=2,client={sound={enabled='invalid'}}}");
     source.requestReload();
     QTRY_COMPARE(failures.count(), 1);
@@ -449,6 +481,7 @@ private:
     source.requestReload();
     QTRY_COMPARE(changes.count(), 1);
     auto replaced = telar::runtime::JsonValue::parse(source.query(query, view));
+
     QCOMPARE(requiredJsonField(replaced, "generation").encoded(), std::string_view{"2"});
     source.open({.path = QString{}, .profile = QString{}, .theme = QString{}});
     QVERIFY_THROWS_EXCEPTION(std::runtime_error, static_cast<void>(source.query(query, view)));
@@ -460,20 +493,25 @@ private:
   Q_SLOT static void bindingQueriesRetainTheAdoptedGeneration() {
     const QTemporaryDir directory;
     const auto path = directory.filePath(QStringLiteral("config.lua"));
+
     writeFile(path, "return {api_version=2,client={keybindings={telar.bind({'c'},telar.action.command_tab{command={'echo','kept'},label='original'})}}}");
     ApplicationAllocator memory;
     ConfigurationSource source{memory};
+
     source.open({.path = path, .profile = QString{}, .theme = QString{}});
     QCOMPARE(source.error(), QString{});
     const ConfigurationQuery query{.section = ConfigurationQuery::Section::binding};
     const std::string before{source.query(query)};
+
     QVERIFY(before.contains(R"("label":"original","argv":["echo","kept"])"));
     const QSignalSpy failures{&source, &ConfigurationSource::failed};
+
     writeFile(path, "return {api_version=2,client={keybindings={telar.bind({'c'},telar.action.command_tab{command={}})}}}");
     source.requestReload();
     QTRY_COMPARE(failures.count(), 1);
     QCOMPARE(source.query(query), std::string_view{before});
     const QSignalSpy changes{&source, &ConfigurationSource::changed};
+
     writeFile(path, "return {api_version=2,client={keybindings={telar.bind_global({'n'},telar.action.new_tab())}}}");
     source.requestReload();
     QTRY_COMPARE(changes.count(), 1);
@@ -485,9 +523,11 @@ private:
   Q_SLOT static void bindingQueryErrorsPreserveAuthority() {
     ApplicationAllocator memory;
     ConfigurationSource source{memory};
+
     QVERIFY_THROWS_EXCEPTION(std::runtime_error, static_cast<void>(source.query({.section = ConfigurationQuery::Section::binding, .index = -1})));
     const QTemporaryDir directory;
     const auto path = directory.filePath(QStringLiteral("config.lua"));
+
     writeFile(path, "return {api_version=2}");
     source.open({.path = path, .profile = QString{}, .theme = QString{}});
     QCOMPARE(source.error(), QString{});
@@ -499,20 +539,25 @@ private:
     const AppearanceFixture appearance;
     const QTemporaryDir directory;
     const auto path = directory.filePath(QStringLiteral("config.lua"));
+
     writeFile(path, "local n=0;return {api_version=2,theme='terminal',client={appearance={light={colors={text='#010203'}}},keybindings={telar.bind({'s'},function() n=n+1;return telar.action.select_tab{index=n} end)}}}");
     ApplicationAllocator memory;
     ConfigurationSource source{memory};
+
     AppearanceFixture::set(Qt::ColorScheme::Unknown);
     source.open({.path = path, .profile = QString{}, .theme = QString{}});
     QCOMPARE(source.error(), QString{});
     const ConfigurationQuery query{.section = ConfigurationQuery::Section::theme};
     const std::string before{source.query(query)};
     const auto callback = source.input().configured.front().action;
+
     QCOMPARE(invokeNow(source, callback, {}).actions.front().parameter, 0);
     const QSignalSpy configuration_changes{&source, &ConfigurationSource::changed};
     const QSignalSpy theme_changes{&source, &ConfigurationSource::themeChanged};
+
     AppearanceFixture::set(Qt::ColorScheme::Light);
     constexpr auto light_text = Color::rgb(0x010203);
+
     QCOMPARE(source.configuration().theme.chromeColor(PaletteRole::text), light_text);
     QCOMPARE(theme_changes.count(), 1);
     AppearanceFixture::set(Qt::ColorScheme::Light);
@@ -529,18 +574,22 @@ private:
     const AppearanceFixture appearance;
     const QTemporaryDir directory;
     const auto path = directory.filePath(QStringLiteral("config.lua"));
+
     writeFile(path, "return {api_version=2,theme='catppuccin',client={appearance={light='vesper',dark='kanagawa'}}}");
     ApplicationAllocator memory;
     ConfigurationSource source{memory};
+
     source.open({.path = path, .profile = QString{}, .theme = QStringLiteral("shade")});
     QCOMPARE(source.error(), QString{});
     const auto locked = themeByName("shade");
     const QSignalSpy theme_changes{&source, &ConfigurationSource::themeChanged};
+
     AppearanceFixture::set(Qt::ColorScheme::Light);
     QCOMPARE(source.configuration().theme, locked);
     AppearanceFixture::set(Qt::ColorScheme::Dark);
     QCOMPARE(source.configuration().theme, locked);
     const QSignalSpy failures{&source, &ConfigurationSource::failed};
+
     writeFile(path, "return {api_version=2,theme={colors={text='invalid'}}}");
     source.requestReload();
     QTRY_COMPARE(failures.count(), 1);
@@ -552,9 +601,11 @@ private:
   Q_SLOT static void guiAndInputQueriesRetainAdoptedProfiles() {
     const QTemporaryDir directory;
     const auto path = directory.filePath(QStringLiteral("config.lua"));
+
     writeFile(path, "return {api_version=2,gui={font={size=16}},client={prefix='ctrl+b'},profiles={selected={gui={font={size=18.25}},client={prefix='shift+tab'}}}}");
     ApplicationAllocator memory;
     ConfigurationSource source{memory};
+
     source.open({.path = path, .profile = QStringLiteral("selected"), .theme = QString{}});
     QCOMPARE(source.error(), QString{});
     const ConfigurationQuery gui_query{.section = ConfigurationQuery::Section::gui};
@@ -563,19 +614,23 @@ private:
     const std::string saved_input{source.query(input_query)};
     const auto gui = telar::runtime::JsonValue::parse(saved_gui);
     const auto input = telar::runtime::JsonValue::parse(saved_input);
+
     QCOMPARE(requiredJsonField(requiredJsonField(gui, "font"), "size").encoded(), std::string_view{"18.25"});
     QCOMPARE(requiredJsonField(requiredJsonField(input, "prefix"), "code").encoded(), std::string_view{R"({"back_tab":{}})"});
     const QSignalSpy failures{&source, &ConfigurationSource::failed};
+
     writeFile(path, "return {api_version=2,gui={font={size=42}},profiles={selected={},unused={runtime={graphics={pane_mib=0}}}}}");
     source.requestReload();
     QTRY_COMPARE(failures.count(), 1);
     QCOMPARE(source.query(gui_query), std::string_view{saved_gui});
     QCOMPARE(source.query(input_query), std::string_view{saved_input});
     const QSignalSpy changes{&source, &ConfigurationSource::changed};
+
     writeFile(path, "return {api_version=2,gui={font={size=20.25}},profiles={selected={}}}");
     source.requestReload();
     QTRY_COMPARE(changes.count(), 1);
     const auto replaced = telar::runtime::JsonValue::parse(source.query(gui_query));
+
     QCOMPARE(requiredJsonField(requiredJsonField(replaced, "font"), "size").encoded(), std::string_view{"20.25"});
     QCOMPARE(source.error(), QString{});
   }
@@ -583,12 +638,14 @@ private:
   Q_SLOT static void guiAndInputQueryErrorsPreserveAuthority() {
     ApplicationAllocator memory;
     ConfigurationSource source{memory};
+
     for (const auto section : {ConfigurationQuery::Section::gui, ConfigurationQuery::Section::input}) {
       QVERIFY_THROWS_EXCEPTION(std::runtime_error, static_cast<void>(source.query({.section = section, .index = -1})));
     }
 
     const QTemporaryDir directory;
     const auto path = directory.filePath(QStringLiteral("config.lua"));
+
     writeFile(path, "return {api_version=2}");
     source.open({.path = path, .profile = QString{}, .theme = QString{}});
     QCOMPARE(source.error(), QString{});
@@ -601,16 +658,20 @@ private:
   Q_SLOT static void runtimeQueriesRetainAdoptedValuesAfterFailedReload() {
     const QTemporaryDir directory;
     const auto path = directory.filePath(QStringLiteral("config.lua"));
+
     writeFile(path, "return {api_version=2,runtime={history={path='retained.db'},session={persist=false}}}");
     ApplicationAllocator memory;
     ConfigurationSource source{memory};
+
     source.open({.path = path, .profile = QString{}, .theme = QString{}});
     QCOMPARE(source.error(), QString{});
     const ConfigurationQuery query{.section = ConfigurationQuery::Section::runtime};
     auto parsed = telar::runtime::JsonValue::parse(source.query(query));
+
     QVERIFY(requiredJsonField(parsed, "history_path").equals("retained.db"));
     QVERIFY(!requiredJsonField(parsed, "session_persist").boolean());
     const QSignalSpy failures{&source, &ConfigurationSource::failed};
+
     writeFile(path, "return {api_version=2,runtime={graphics={pane_mib=0}}}");
     source.poll();
     QTRY_COMPARE(failures.count(), 1);
@@ -619,6 +680,7 @@ private:
     QVERIFY(!requiredJsonField(parsed, "session_persist").boolean());
     writeFile(path, "return {api_version=2,runtime={history={path='replacement.db'}}}");
     const QSignalSpy changes{&source, &ConfigurationSource::changed};
+
     source.requestReload();
     QTRY_COMPARE(changes.count(), 1);
     parsed = telar::runtime::JsonValue::parse(source.query(query));
@@ -630,9 +692,11 @@ private:
     ApplicationAllocator memory;
     ConfigurationSource source{memory};
     const ConfigurationQuery query{.section = ConfigurationQuery::Section::runtime, .index = -1};
+
     QVERIFY_THROWS_EXCEPTION(std::runtime_error, static_cast<void>(source.query(query)));
     const QTemporaryDir directory;
     const auto path = directory.filePath(QStringLiteral("config.lua"));
+
     writeFile(path, "return {api_version=2}");
     source.open({.path = path, .profile = QString{}, .theme = QString{}});
     QCOMPARE(source.error(), QString{});
@@ -644,12 +708,15 @@ private:
   Q_SLOT static void rootChangesAndForcedReload() {
     const QTemporaryDir directory;
     const auto path = directory.filePath(QStringLiteral("config.lua"));
+
     writeFile(path, valid_configuration);
     ApplicationAllocator memory;
     ConfigurationSource source{memory};
+
     source.open({.path = path, .profile = QString{}, .theme = QString{}});
     QCOMPARE(source.error(), QString{});
     const QSignalSpy changes{&source, &ConfigurationSource::changed};
+
     writeFile(path, visible_configuration);
     source.poll();
     QTRY_COMPARE(changes.count(), 1);
@@ -662,17 +729,21 @@ private:
 
   Q_SLOT static void nestedDependenciesAndFailureRecovery() {
     const QTemporaryDir directory;
+
     QVERIFY(QDir{directory.path()}.mkpath(QStringLiteral("nested")));
     const auto path = directory.filePath(QStringLiteral("config.lua"));
     const auto dependency = directory.filePath(QStringLiteral("nested/preferences.lua"));
+
     writeFile(path, "return require('nested.preferences')");
     writeFile(dependency, valid_configuration);
     ApplicationAllocator memory;
     ConfigurationSource source{memory};
+
     source.open({.path = path, .profile = QString{}, .theme = QString{}});
     QCOMPARE(source.error(), QString{});
     const QSignalSpy changes{&source, &ConfigurationSource::changed};
     const QSignalSpy failures{&source, &ConfigurationSource::failed};
+
     writeFile(dependency, visible_configuration);
     source.poll();
     QTRY_COMPARE(changes.count(), 1);
@@ -692,23 +763,30 @@ private:
   Q_SLOT static void runawayRenderLeavesTheWindowResponsive() {
     const QTemporaryDir directory;
     const auto path = directory.filePath(QStringLiteral("config.lua"));
+
     writeFile(path, "local t=require('telar');return {api_version=2,client={bars={bottom={left=t.bar.dynamic({render=function() while true do end end}),center=t.bar.tabs()}}}}");
     ApplicationAllocator memory;
     ConfigurationSource source{memory};
+
     source.open({.path = path, .profile = QString{}, .theme = QString{}});
     QCOMPARE(source.error(), QString{});
     std::optional<LuaOutcome<ConfigurationSource::BarRender>> result;
     QElapsedTimer clock;
+
     clock.start();
     source.renderBar(components::Position::bottom_left, {}, [&](LuaOutcome<ConfigurationSource::BarRender> outcome) {
       result.emplace(std::move(outcome));
     });
+
     constexpr qint64 posting_ms = 50;
+
     QVERIFY(clock.elapsed() < posting_ms);
     bool ticked = false;
+
     QTimer::singleShot(1, [&] {
       ticked = true;
     });
+
     QTRY_VERIFY_WITH_TIMEOUT(ticked, 1000);
     QVERIFY(!result.has_value());
     QTRY_VERIFY_WITH_TIMEOUT(result.has_value(), 5000);
@@ -718,78 +796,100 @@ private:
 
   Q_SLOT static void modulesLoadedByCallbacksRemainWatched() {
     const QTemporaryDir directory;
+
     QVERIFY(QDir{directory.path()}.mkpath(QStringLiteral("nested")));
     const auto path = directory.filePath(QStringLiteral("config.lua"));
     const auto dependency = directory.filePath(QStringLiteral("nested/action.lua"));
+
     writeFile(path, deferred_module_configuration);
     writeFile(dependency, toggle_module);
     ApplicationAllocator memory;
     ConfigurationSource source{memory};
+
     source.open({.path = path, .profile = QString{}, .theme = QString{}});
     QCOMPARE(source.error(), QString{});
     const auto first = invokeNow(source, source.input().configured[0].action, {});
+
     QCOMPARE(first.actions[0].kind, BindingActionKind::toggle_sidebar);
     const QSignalSpy changes{&source, &ConfigurationSource::changed};
+
     writeFile(dependency, fullscreen_module);
     source.poll();
     QTRY_COMPARE(changes.count(), 1);
     const auto second = invokeNow(source, source.input().configured[0].action, {});
+
     QCOMPARE(second.actions[0].kind, BindingActionKind::toggle_pane_fullscreen);
   }
 
   Q_SLOT static void failedCallbacksKeepTheirLoadedDependencies() {
     const QTemporaryDir directory;
+
     QVERIFY(QDir{directory.path()}.mkpath(QStringLiteral("nested")));
     const auto path = directory.filePath(QStringLiteral("config.lua"));
     const auto dependency = directory.filePath(QStringLiteral("nested/action.lua"));
+
     writeFile(path, deferred_module_configuration);
     writeFile(dependency, "return function() error('fixture failure') end");
     ApplicationAllocator memory;
     ConfigurationSource source{memory};
+
     source.open({.path = path, .profile = QString{}, .theme = QString{}});
     QCOMPARE(source.error(), QString{});
     QVERIFY_THROWS_EXCEPTION(std::exception, static_cast<void>(invokeNow(source, source.input().configured[0].action, {})));
     const QSignalSpy changes{&source, &ConfigurationSource::changed};
+
     writeFile(dependency, toggle_module);
     source.poll();
     QTRY_COMPARE(changes.count(), 1);
     const auto effects = invokeNow(source, source.input().configured[0].action, {});
+
     QCOMPARE(effects.actions[0].kind, BindingActionKind::toggle_sidebar);
   }
 
   Q_SLOT static void unrelatedChangesPreserveCallbackState() {
     const QTemporaryDir directory;
     const auto path = directory.filePath(QStringLiteral("config.lua"));
+
     writeFile(path, stateful_configuration);
     ApplicationAllocator memory;
     ConfigurationSource source{memory};
+
     source.open({.path = path, .profile = QString{}, .theme = QString{}});
     QCOMPARE(source.error(), QString{});
     const auto first = invokeNow(source, source.input().configured[0].action, {});
+
     QCOMPARE(first.actions[0].parameter, std::uint64_t{0});
     writeFile(directory.filePath(QStringLiteral("unused.lua")), "return {}");
     source.poll();
     const auto second = invokeNow(source, source.input().configured[0].action, {});
+
     QCOMPARE(second.actions[0].parameter, std::uint64_t{1});
     const QSignalSpy changes{&source, &ConfigurationSource::changed};
+
     source.requestReload();
     QTRY_COMPARE(changes.count(), 1);
     const auto reset = invokeNow(source, source.input().configured[0].action, {});
+
     QCOMPARE(reset.actions[0].parameter, std::uint64_t{0});
   }
 
   Q_SLOT static void unrelatedDirectoryChangePreservesGeneration() {
     const QTemporaryDir directory;
+
     QVERIFY(directory.isValid());
     const auto path = directory.filePath(QStringLiteral("config.lua"));
+
     writeFile(path, valid_configuration);
     ApplicationAllocator memory;
     ConfigurationSource source{memory};
+
     source.open({.path = path, .profile = QString{}, .theme = QString{}});
     QCOMPARE(source.error(), QString{});
     const QSignalSpy changes{&source, &ConfigurationSource::changed};
+
     writeFile(directory.filePath(QStringLiteral("unrelated.txt")), "unrelated contents");
     constexpr int dependency_poll_wait_ms = 1200;
+
     QTest::qWait(dependency_poll_wait_ms);
     QCOMPARE(changes.count(), 0);
   }
@@ -797,21 +897,26 @@ private:
   Q_SLOT static void pendingReloadPreservesActiveGenerationAndEventLoop() {
     const QTemporaryDir directory;
     const auto path = directory.filePath(QStringLiteral("config.lua"));
+
     writeFile(path, valid_configuration);
     ApplicationAllocator memory;
     ConfigurationSource source{memory};
+
     source.open({.path = path, .profile = QString{}, .theme = QString{}});
     QCOMPARE(source.error(), QString{});
     PausedThreadPool pool;
     const QSignalSpy changes{&source, &ConfigurationSource::changed};
+
     writeFile(path, visible_configuration);
     source.poll();
     QCOMPARE(changes.count(), 0);
     QVERIFY(!source.configuration().sidebar_visible);
     bool heartbeat = false;
+
     QTimer::singleShot(0, &source, [&] {
       heartbeat = true;
     });
+
     QTRY_VERIFY(heartbeat);
     QCOMPARE(changes.count(), 0);
     pool.resume();
@@ -822,20 +927,25 @@ private:
   Q_SLOT static void latestForcedReloadSupersedesPendingCheck() {
     const QTemporaryDir directory;
     const auto path = directory.filePath(QStringLiteral("config.lua"));
+
     writeFile(path, valid_configuration);
     ApplicationAllocator memory;
     ConfigurationSource source{memory};
+
     source.open({.path = path, .profile = QString{}, .theme = QString{}});
     PausedThreadPool pool;
     const QSignalSpy changes{&source, &ConfigurationSource::changed};
+
     source.poll();
     writeFile(path, visible_configuration);
     constexpr int repeated_requests = 3;
+
     for (int request = 0; request < repeated_requests; ++request) {
       source.requestReload();
     }
 
     constexpr int debounce_wait_ms = 150;
+
     QTest::qWait(debounce_wait_ms);
     QCOMPARE(changes.count(), 0);
     QVERIFY(!source.configuration().sidebar_visible);
@@ -850,14 +960,17 @@ private:
     const QTemporaryDir directory;
     const auto first = directory.filePath(QStringLiteral("first.lua"));
     const auto second = directory.filePath(QStringLiteral("second.lua"));
+
     writeFile(first, valid_configuration);
     writeFile(second, visible_configuration);
     ApplicationAllocator memory;
     ConfigurationSource source{memory};
+
     source.open({.path = first, .profile = QString{}, .theme = QString{}});
     PausedThreadPool pool;
     const QSignalSpy changes{&source, &ConfigurationSource::changed};
     const QSignalSpy failures{&source, &ConfigurationSource::failed};
+
     writeFile(first, "invalid configuration");
     source.poll();
     source.open({.path = second, .profile = QString{}, .theme = QString{}});
@@ -871,65 +984,83 @@ private:
 
   Q_SLOT static void callbackDependenciesAddedDuringCheckRemainWatched() {
     const QTemporaryDir directory;
+
     QVERIFY(QDir{directory.path()}.mkpath(QStringLiteral("nested")));
     const auto path = directory.filePath(QStringLiteral("config.lua"));
     const auto dependency = directory.filePath(QStringLiteral("nested/action.lua"));
+
     writeFile(path, deferred_module_configuration);
     writeFile(dependency, toggle_module);
     ApplicationAllocator memory;
     ConfigurationSource source{memory};
+
     source.open({.path = path, .profile = QString{}, .theme = QString{}});
     PausedThreadPool pool;
+
     source.poll();
     const auto effects = invokeNow(source, source.input().configured[0].action, {});
+
     QCOMPARE(effects.actions[0].kind, BindingActionKind::toggle_sidebar);
     pool.finish();
     const QSignalSpy changes{&source, &ConfigurationSource::changed};
+
     writeFile(dependency, fullscreen_module);
     source.poll();
     QTRY_COMPARE(changes.count(), 1);
     const auto updated = invokeNow(source, source.input().configured[0].action, {});
+
     QCOMPARE(updated.actions[0].kind, BindingActionKind::toggle_pane_fullscreen);
   }
 
   Q_SLOT static void failedReloadPreservesCallbackState() {
     const QTemporaryDir directory;
     const auto path = directory.filePath(QStringLiteral("config.lua"));
+
     writeFile(path, stateful_configuration);
     ApplicationAllocator memory;
     ConfigurationSource source{memory};
+
     source.open({.path = path, .profile = QString{}, .theme = QString{}});
     const auto action = source.input().configured[0].action;
     const auto first = invokeNow(source, action, {});
+
     QCOMPARE(first.actions[0].parameter, std::uint64_t{0});
     const QSignalSpy failures{&source, &ConfigurationSource::failed};
+
     writeFile(path, "invalid configuration");
     source.poll();
     QTRY_COMPARE(failures.count(), 1);
     const auto retained = invokeNow(source, action, {});
+
     QCOMPARE(retained.actions[0].parameter, std::uint64_t{1});
     const QSignalSpy changes{&source, &ConfigurationSource::changed};
+
     writeFile(path, stateful_configuration);
     source.poll();
     QTRY_COMPARE(changes.count(), 1);
     QVERIFY_THROWS_EXCEPTION(std::exception, static_cast<void>(invokeNow(source, action, {})));
     const auto replacement = invokeNow(source, source.input().configured[0].action, {});
+
     QCOMPARE(replacement.actions[0].parameter, std::uint64_t{0});
   }
 
   Q_SLOT static void destructionWaitsForWorkerAndDiscardsNotification() {
     const QTemporaryDir directory;
     const auto path = directory.filePath(QStringLiteral("config.lua"));
+
     writeFile(path, valid_configuration);
     ApplicationAllocator memory;
     auto source = std::make_unique<ConfigurationSource>(memory);
+
     source->open({.path = path, .profile = QString{}, .theme = QString{}});
     PausedThreadPool pool;
     const QObject receiver;
     bool changed = false;
+
     connect(source.get(), &ConfigurationSource::changed, &receiver, [&] {
       changed = true;
     });
+
     writeFile(path, visible_configuration);
     source->poll();
     pool.resume();
@@ -941,12 +1072,15 @@ private:
   Q_SLOT static void fontValidationFailurePreservesGeneration() {
     const QTemporaryDir directory;
     const auto path = directory.filePath(QStringLiteral("config.lua"));
+
     writeFile(path, valid_configuration);
     ApplicationAllocator memory;
     ConfigurationSource source{memory};
+
     source.open({.path = path, .profile = QString{}, .theme = QString{}});
     const QSignalSpy changes{&source, &ConfigurationSource::changed};
     const QSignalSpy failures{&source, &ConfigurationSource::failed};
+
     writeFile(path, "return {api_version=2,gui={font={family='Telar Missing Font Fixture'}},client={sidebar={visible=true}}}");
     source.poll();
     QTRY_COMPARE(failures.count(), 1);
@@ -958,13 +1092,17 @@ private:
   Q_SLOT static void adoptionCanDestroySourceAndAllocator() {
     const QTemporaryDir directory;
     const auto path = directory.filePath(QStringLiteral("config.lua"));
+
     writeFile(path, valid_configuration);
     auto owner = std::make_unique<ConfigurationOwner>();
+
     owner->source.open({.path = path, .profile = QString{}, .theme = QString{}});
     const QObject receiver;
+
     connect(&owner->source, &ConfigurationSource::changed, &receiver, [&] {
       owner.reset();
     });
+
     writeFile(path, visible_configuration);
     owner->source.poll();
     QTRY_VERIFY(owner == nullptr);
@@ -975,6 +1113,7 @@ private:
 
 int main(int argc, char **argv) {
   const QGuiApplication application{argc, argv};
+
   bundledFonts();
   ConfigurationSourceTest test;
 

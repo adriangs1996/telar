@@ -32,6 +32,7 @@ static std::vector<Byte> fragment(std::span<const Byte> original, std::size_t of
   const bool ipv6 = original[0] >> 4 == 6;
   const auto prefix = ipv6 ? 40u : 20u;
   std::vector<Byte> result(original.begin(), original.begin() + prefix);
+
   if (ipv6) {
     result.resize(prefix + 8);
     result[6] = 44;
@@ -45,6 +46,7 @@ static std::vector<Byte> fragment(std::span<const Byte> original, std::size_t of
     word(result, 4, static_cast<std::uint16_t>(id));
     word(result, 6, static_cast<std::uint16_t>(offset / 8) | (more ? 0x2000 : 0));
   }
+
   result.insert(result.end(), original.begin() + prefix + offset, original.begin() + prefix + offset + length);
   return result;
 }
@@ -65,20 +67,24 @@ static void reconstructed(TlsTestMemory &memory) {
     std::size_t calls = 0;
     const auto consume = [&](std::span<const Byte> bytes) { ++calls; completed.assign(bytes.begin(), bytes.end()); };
     const auto report = [](const Event &, std::string_view) { check(false); };
+
     fragments.packet(packet(last), consume, report);
     fragments.packet(packet(last), consume, report);
     check(calls == 0);
     fragments.packet(packet(first), consume, report);
     check(calls == 1 && completed.size() == original.size());
     const auto parsed = TcpPacketDecoder::decodeNetwork(completed);
+
     check(parsed && parsed->sequence == 123 && std::ranges::equal(parsed->bytes, body));
     check(std::ranges::equal(std::span{completed}.subspan(head), std::span{original}.subspan(head)));
     if (!ipv6) {
       std::uint32_t sum = 0;
+
       for (std::size_t index = 0; index < 20; index += 2) { sum += NetworkPacket::word(completed, index); }
       while (sum >> 16) { sum = (sum & UINT16_MAX) + (sum >> 16); }
       check(sum == UINT16_MAX);
     }
+
     fragments.expire(report, true);
   }
 }
@@ -94,6 +100,7 @@ static void rejectedAndIsolated(TlsTestMemory &memory) {
     std::size_t completed = 0;
     const auto consume = [&](std::span<const Byte>) { ++completed; };
     const auto report = [&](const Event &event, std::string_view reason) { check(event.interface == "fragment-fixture" && event.session == 42); errors.emplace_back(reason); };
+
     fragments.packet(packet(first), consume, report);
     fragments.packet(packet(overlap), consume, report);
     fragments.packet(packet(last), consume, report);
@@ -103,6 +110,7 @@ static void rejectedAndIsolated(TlsTestMemory &memory) {
 
     fragments.packet(packet(first), consume, report);
     auto separate = packet(last);
+
     separate.interface_index = 8;
     fragments.packet(separate, consume, report);
     separate.interface_index = 7;
@@ -112,10 +120,12 @@ static void rejectedAndIsolated(TlsTestMemory &memory) {
     fragments.packet(packet(last), consume, report);
     check(completed == 1);
     std::size_t expired = 0;
+
     fragments.expire([&](const Event &, std::string_view reason) { check(reason == "ip_fragment_timeout"); ++expired; }, false, std::chrono::steady_clock::now() + std::chrono::seconds{61});
     check(expired == 2);
 
     auto truncated = first;
+
     truncated.pop_back();
     fragments.packet(packet(truncated), consume, report);
     check(errors.back() == "ip_fragment_invalid_or_truncated");
@@ -132,6 +142,7 @@ static void atomicAndExtension(TlsTestMemory &memory) {
   std::size_t completed = 0;
   const auto consume = [&](std::span<const Byte> bytes) { check(TcpPacketDecoder::decodeNetwork(bytes).has_value()); ++completed; };
   const auto report = [](const Event &, std::string_view) { check(false); };
+
   fragments.packet(packet(first), consume, report);
   fragments.packet(packet(atomic), consume, report);
   check(completed == 1);
@@ -143,6 +154,7 @@ static void atomicAndExtension(TlsTestMemory &memory) {
     (*part)[40] = 44;
     word(*part, 4, static_cast<std::uint16_t>(part->size() - 40));
   }
+
   fragments.packet(packet(last), consume, report);
   fragments.packet(packet(first), consume, report);
   check(completed == 3);
@@ -154,10 +166,13 @@ static void capacityAndFlow(TlsTestMemory &memory) {
   const auto original = traffic_test::tcp(false, false, 10, 16, std::string_view{"a\0b-content-1234", 16});
   std::size_t capacity = 0;
   const auto report = [&](const Event &, std::string_view reason) { check(reason == "ip_fragment_capacity" || reason == "ip_fragment_capture_stopped"); capacity += reason == "ip_fragment_capacity"; };
+
   for (unsigned index = 0; index < 33; ++index) {
     const auto first = fragment(original, 0, 24, true, index);
+
     fragments.packet(packet(first), [](std::span<const Byte>) { check(false); }, report);
   }
+
   check(capacity == 1);
   fragments.expire(report, true);
   CaptureAnalysis flows{memory};
@@ -165,10 +180,13 @@ static void capacityAndFlow(TlsTestMemory &memory) {
   const auto emit = [&](const Event &event) {
     check(event.session == 42 && event.interface_index == 7 && event.interface == "fragment-fixture");
     const auto flow = FlowCodec::decode(event.bytes);
+
     if (event.kind == Kind::stream_data) { content.append(reinterpret_cast<const char *>(flow.bytes.data()), flow.bytes.size()); }
   };
+
   const auto last = fragment(original, 24, 12, false);
   const auto first = fragment(original, 0, 24, true);
+
   flows.packet(packet(last), Selection::flows, emit);
   flows.packet(packet(first), Selection::flows, emit);
   check(content == std::string("a\0b-content-1234", 16));
@@ -182,16 +200,20 @@ static void malformedAndPieceLimits(TlsTestMemory &memory) {
     std::vector<std::string> errors;
     const auto report = [&](const Event &, std::string_view reason) { errors.emplace_back(reason); };
     const auto consume = [](std::span<const Byte>) { check(false); };
+
     for (std::size_t index = 0; index < 129; ++index) {
       const auto piece = fragment(original, index * 8, 8, true);
+
       fragments.packet(packet(piece), consume, report);
     }
+
     check(errors == std::vector<std::string>{"ip_fragment_piece_limit"});
     fragments.expire(report, true);
     errors.clear();
 
     const auto first = fragment(original, 0, 24, true);
     auto conflicting = first;
+
     conflicting.back() ^= 1;
     fragments.packet(packet(first), consume, report);
     fragments.packet(packet(conflicting), consume, report);
@@ -212,12 +234,14 @@ static void malformedAndPieceLimits(TlsTestMemory &memory) {
     for (std::size_t length = 0; length < first.size(); ++length) {
       fragments.packet(packet(std::span{first}.first(length)), [](std::span<const Byte>) {}, report);
     }
+
     fragments.expire(report, true);
   }
 
   IpFragments fragments{memory};
   std::minstd_rand random{7918200};
   std::vector<Byte> bytes;
+
   for (unsigned iteration = 0; iteration < 5000; ++iteration) {
     bytes.resize(random() % 512);
     for (auto &byte : bytes) { byte = static_cast<Byte>(random()); }
@@ -231,8 +255,10 @@ static void malformedAndPieceLimits(TlsTestMemory &memory) {
         bytes[6] = 44;
       }
     }
+
     fragments.packet(packet(bytes), [](std::span<const Byte> completed) { check(completed.size() <= 65575); }, [](const Event &, std::string_view) {});
   }
+
   fragments.expire([](const Event &, std::string_view) {}, true);
 }
 
@@ -240,6 +266,7 @@ int main() {
   SystemAllocator system;
   BudgetAllocator budget{system, 32 * 1024 * 1024};
   TlsTestMemory memory{budget};
+
   reconstructed(memory);
   rejectedAndIsolated(memory);
   atomicAndExtension(memory);

@@ -41,11 +41,13 @@ ChildMouseSample sample(MouseButton button = MouseButton::left) {
 
 void independentButtons() {
   std::array<ChildMouseGesture, static_cast<std::size_t>(MouseButton::none)> gestures;
+
   for (const auto button : {MouseButton::left, MouseButton::middle, MouseButton::right}) {
     gestures[static_cast<std::size_t>(button)].begin(view(), sample(button));
   }
 
   auto release = sample();
+
   release.phase = MousePhase::release;
   require(gestures[0].deliver(view(), release) == ChildMouseReport{.button = 0, .x = 1, .y = 1, .released = true}, "the first release must retain its own button");
   require(!gestures[0].owned() && gestures[1].owned() && gestures[2].owned(), "one release must preserve the other button leases");
@@ -61,8 +63,10 @@ void identityAndModes() {
     tab,
     connection,
   };
+
   for (const auto field : {IdentityField::pane, IdentityField::attachment, IdentityField::tab, IdentityField::connection}) {
     auto changed = view();
+
     switch (field) {
     case IdentityField::pane:
       ++changed.pane_id;
@@ -79,6 +83,7 @@ void identityAndModes() {
     }
 
     ChildMouseGesture gesture;
+
     gesture.begin(view(), sample());
     require(!gesture.cancel(changed) && !gesture.owned(), "a stale attachment, pane or tab must consume cancellation without reporting to a replacement");
   }
@@ -86,11 +91,14 @@ void identityAndModes() {
   for (const auto tracking : {MouseTracking::none, MouseTracking::x10, MouseTracking::normal, MouseTracking::button, MouseTracking::any}) {
     for (const bool sgr : {false, true}) {
       auto current = view();
+
       current.protocol = {.tracking = tracking, .sgr = sgr};
       ChildMouseGesture gesture;
+
       gesture.begin(current, sample());
       const auto released = gesture.cancel(current);
       const auto retainable = sgr && tracking != MouseTracking::none && tracking != MouseTracking::x10;
+
       require(released.has_value() == retainable && !gesture.owned(), "only matching SGR modes may retain and finish a press");
     }
   }
@@ -98,20 +106,26 @@ void identityAndModes() {
 
 void retainedGeometry() {
   ChildMouseGesture gesture;
+
   gesture.begin(view(), sample(MouseButton::middle));
   auto hidden = view();
+
   hidden.visible = false;
   hidden.surface.content.x += hidden.surface.content.width;
   auto drag = sample(MouseButton::middle);
+
   drag.phase = MousePhase::drag;
   drag.position.x = view().surface.content.right();
   drag.position.y = view().surface.content.bottom();
   const auto expected = ChildMouseReport{.button = static_cast<unsigned>(MouseButton::middle) | ChildMouseProjection::motion, .x = view().columns, .y = view().rows};
+
   require(gesture.deliver(hidden, drag) == expected, "a hidden pane must preserve and clamp its last displayed content rectangle");
   hidden.visible = true;
   const auto moved = gesture.deliver(hidden, drag);
+
   require(moved && moved->x == 1 && moved->y == view().rows, "visible geometry changes must update the retained projection");
   auto normal = hidden;
+
   normal.protocol.tracking = MouseTracking::normal;
   require(!gesture.deliver(normal, drag) && gesture.owned(), "normal tracking must suppress motion without releasing ownership");
   require(gesture.cancel(normal).has_value(), "a mode-suppressed drag must still retain its final release");
@@ -119,17 +133,21 @@ void retainedGeometry() {
 
 void pixelsAndInvalidGeometry() {
   auto current = view();
+
   current.protocol.pixels = true;
   current.surface.scale = 2;
   current.cell_width_px *= 2;
   current.cell_height_px *= 2;
   auto point = sample();
+
   point.position.x += current.surface.cell.x / 2;
   point.position.y += current.surface.cell.y / 2;
   const auto center = ChildMouseProjection::project(current, point);
+
   require(center && center->x == (current.cell_width_px / 2) + 1U && center->y == (current.cell_height_px / 2) + 1U, "pixel reporting must preserve the exact scaled physical position");
   point.position = {.x = std::numeric_limits<float>::max(), .y = -std::numeric_limits<float>::max()};
   const auto clipped = ChildMouseProjection::project(current, point);
+
   require(clipped && clipped->x == static_cast<unsigned>(current.columns) * current.cell_width_px && clipped->y == 1, "retained coordinates must clamp before integer conversion");
   point.position.x = std::numeric_limits<float>::quiet_NaN();
   require(!ChildMouseProjection::project(current, point), "non-finite input must not reach integer conversion");

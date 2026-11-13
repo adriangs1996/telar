@@ -74,6 +74,7 @@ struct FontCascade {
     }
 
     constexpr std::array fallback{FontRole::primary, FontRole::text, FontRole::symbols};
+
     for (const auto role : fallback) {
       if (FontCoverage::covers(fonts.face(role), text)) {
         return role;
@@ -110,6 +111,7 @@ public:
     }
 
     FontQuery query;
+
     std::ranges::copy(text, query.text_.begin());
     query.text_length_ = static_cast<std::uint8_t>(text.size());
     while (!text.empty()) {
@@ -224,6 +226,7 @@ private:
     inline void remember(std::string_view text) {
       const auto hash = digest(text);
       auto entries = bucket(hash);
+
       for (auto &entry : entries) {
         if (entry == hash) {
           return;
@@ -236,6 +239,7 @@ private:
       }
 
       auto &next = next_[hash % sets];
+
       entries[next] = hash;
       next = (next + 1) % ways;
     }

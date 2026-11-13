@@ -98,6 +98,7 @@ printf '/home/test\n/bin/sh\n/run/test/socket\n%s\n' "$3"
     const auto mismatch = QString{expected.size(), QLatin1Char('Z')};
     const auto legacy_text = telar::textView(std::span{RuntimeProtocol::schema87});
     const auto legacy = QString::fromLatin1(legacy_text.data(), static_cast<qsizetype>(legacy_text.size()));
+
     process.start(QStringLiteral("/bin/sh"), {QStringLiteral("-c"), QString::fromLatin1(script), QStringLiteral("telar-ssh-fixture"), arguments.at(arguments.size() - 2), arguments.back(), expected, mismatch, legacy}, QIODevice::ReadWrite);
   }
 };
@@ -154,26 +155,32 @@ private:
 
   Q_SLOT static void discoveryAndDuplexTransport() {
     const QTemporaryDir directory;
+
     QVERIFY(directory.isValid());
     Observer observer;
     RemoteBridge<TestSshHost, Observer> bridge{observer};
+
     bridge.open(target(directory, QStringLiteral("dev@box")));
     QTRY_COMPARE(observer.channels, std::size_t{1});
     QCOMPARE(observer.discoveries, std::size_t{1});
     QVERIFY(observer.discovery && observer.discovery->home() == "/home/test");
     QCOMPARE(TestSshHost::requests.size(), std::size_t{2});
     const auto &arguments = TestSshHost::requests.front();
+
     QCOMPARE(arguments.front(), QStringLiteral("-T"));
     QCOMPARE(arguments.at(arguments.size() - 3), QStringLiteral("--"));
     QCOMPARE(arguments.at(arguments.size() - 2), QStringLiteral("dev@box"));
     QCOMPARE(TestSshHost::requests.back().back(), QStringLiteral("exec telar server bridge"));
     const auto interactive_control = QStringLiteral("ControlPath=") + directory.path() + QStringLiteral("/ssh-i-7d4a97d4fc1f");
     const auto transfer_control = QStringLiteral("ControlPath=") + directory.path() + QStringLiteral("/ssh-7d4a97d4fc1f");
+
     for (const auto &request : TestSshHost::requests) {
       QVERIFY(request.contains(interactive_control));
       QVERIFY(!request.contains(transfer_control));
     }
+
     const QByteArray payload{"\0first\xfflast", 11};
+
     QCOMPARE(observer.channel.write(payload), payload.size());
     QVERIFY(observer.channel.flush());
     QTRY_COMPARE(observer.channel.bytesAvailable(), payload.size());
@@ -186,9 +193,11 @@ private:
 
   Q_SLOT static void auditedLegacyDiscoveryStartsItsBridge() {
     const QTemporaryDir directory;
+
     QVERIFY(directory.isValid());
     Observer observer;
     RemoteBridge<TestSshHost, Observer> bridge{observer};
+
     bridge.open(target(directory, QStringLiteral("legacy")));
     QTRY_COMPARE(observer.channels, std::size_t{1});
     if (!observer.discovery) {
@@ -216,10 +225,12 @@ private:
         std::pair{"bridge-authentication", MachineError::authentication_failed},
         std::pair{"bridge-closed", MachineError::endpoint_unavailable},
     };
+
     for (const auto &[destination, expected] : cases) {
       const QTemporaryDir directory;
       Observer observer;
       RemoteBridge<TestSshHost, Observer> bridge{observer};
+
       bridge.open(target(directory, QString::fromLatin1(destination)));
       QTRY_VERIFY(observer.failure);
       QCOMPARE(observer.failure, std::optional{expected});
@@ -232,6 +243,7 @@ private:
     const QTemporaryDir directory;
     Observer observer;
     RemoteBridge<ShortDeadlineHost, Observer> bridge{observer};
+
     bridge.open(target(directory, QStringLiteral("timeout")));
     QTRY_VERIFY(observer.failure);
     QCOMPARE(observer.failure, std::optional{MachineError::endpoint_unavailable});
@@ -248,6 +260,7 @@ private:
     const QTemporaryDir directory;
     Observer observer;
     RemoteBridge<TestSshHost, Observer> bridge{observer};
+
     bridge.open(target(directory, QStringLiteral("cancelled")));
     bridge.close();
     bridge.open(target(directory, QStringLiteral("raw-path")));
@@ -262,9 +275,11 @@ private:
     const QTemporaryDir directory;
     Observer observer;
     RemoteBridge<TestSshHost, Observer> bridge{observer};
+
     observer.on_discovery = [&] {
       bridge.open(target(directory, QStringLiteral("replacement")));
     };
+
     bridge.open(target(directory, QStringLiteral("original")));
     QTRY_COMPARE(observer.channels, std::size_t{1});
     QCOMPARE(observer.discoveries, std::size_t{2});
@@ -277,9 +292,11 @@ private:
     const QTemporaryDir directory;
     const auto request = target(directory, QStringLiteral("dev@box"));
     const auto arguments = SshOptions::prepare(request.local_endpoint, request.destination.toUtf8());
+
     QCOMPARE(SshOptions::controlName("dev@box"), QStringLiteral("ssh-i-7d4a97d4fc1f"));
     QCOMPARE(SshOptions::controlName("dev@[2001:db8::1]"), QStringLiteral("ssh-i-46c899f86623"));
     constexpr qsizetype managed_arguments = 14;
+
     QCOMPARE(arguments.size(), managed_arguments);
     QVERIFY(arguments.contains(QStringLiteral("BatchMode=yes")));
     QVERIFY(arguments.contains(QStringLiteral("ForwardAgent=no")));
@@ -288,12 +305,15 @@ private:
     QCOMPARE(arguments.back(), QStringLiteral("ControlPath=") + directory.path() + QLatin1Char('/') + SshOptions::controlName("dev@box"));
     Observer observer;
     RemoteBridge<TestSshHost, Observer> bridge{observer};
+
     QVERIFY_THROWS_EXCEPTION(MachineFailure, bridge.open(target(directory, QStringLiteral("-oProxyCommand=bad"))));
     auto invalid_program = request;
+
     invalid_program.program = QStringLiteral("telar;bad");
     QVERIFY_THROWS_EXCEPTION(MachineFailure, bridge.open(invalid_program));
     QVERIFY(TestSshHost::requests.empty());
     auto invalid_directory = request;
+
     invalid_directory.local_endpoint = directory.filePath(QStringLiteral("missing/runtime.sock"));
     bridge.open(invalid_directory);
     QTRY_VERIFY(observer.failure);

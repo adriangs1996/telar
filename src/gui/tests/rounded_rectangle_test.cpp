@@ -46,6 +46,7 @@ class HomogeneousTransform final : public QQuickTransform {
 public:
   void applyTo(QMatrix4x4 *matrix) const override {
     QMatrix4x4 transform;
+
     transform(3, 3) = 2;
     *matrix *= transform;
   }
@@ -77,11 +78,13 @@ QColor color(const QJsonArray &channels) {
 std::vector<std::unique_ptr<NativeRoundedRectangle>> createShapes(QQuickItem &parent, qreal density) {
   std::vector<std::unique_ptr<NativeRoundedRectangle>> shapes;
   const auto records = fixture().value(QStringLiteral("shapes")).toArray();
+
   shapes.reserve(static_cast<std::size_t>(records.size()));
   for (const auto &value : records) {
     const auto record = value.toObject();
     const auto rect = record.value(QStringLiteral("rect")).toArray();
     auto item = std::make_unique<NativeRoundedRectangle>(&parent);
+
     item->setPosition({rect[0].toDouble() / density, rect[1].toDouble() / density});
     item->setSize({rect[2].toDouble() / density, rect[3].toDouble() / density});
     item->setRadius(record.value(QStringLiteral("radius")).toDouble() / density);
@@ -115,19 +118,23 @@ private:
   Q_SLOT static void originalShaderAtlas() {
     QQuickWindow window;
     const auto density = window.effectiveDevicePixelRatio();
+
     window.resize(qRound(fixture_width / density), qRound(fixture_height / density));
     window.setMinimumSize(window.size());
     window.setMaximumSize(window.size());
     window.setColor(background());
     const auto shapes = createShapes(*window.contentItem(), density);
+
     window.show();
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
     qInfo() << "Scene graph API:" << window.rendererInterface()->graphicsApi();
     const auto actual = window.grabWindow();
     const QImage expected{QStringLiteral(":/telar/test-shapes/rounded-rectangles.png")};
+
     QVERIFY(!actual.isNull() && !expected.isNull());
     QCOMPARE(actual.size(), expected.size());
     const auto comparison = difference(actual, expected);
+
     qInfo() << "Original shader atlas: different pixels" << comparison.pixels << "maximum channel" << comparison.maximum_channel;
     const auto capture = qEnvironmentVariable("TELAR_GUI_SHAPE_CAPTURE");
     if (!capture.isEmpty()) {
@@ -138,7 +145,9 @@ private:
     if (window.rendererInterface()->graphicsApi() == QSGRendererInterface::Metal) {
       QCOMPARE(comparison.pixels, 0);
     }
+
     QQuickItem clipping_parent{window.contentItem()};
+
     clipping_parent.setSize({fixture_width / (2 * density), fixture_height / density});
     clipping_parent.setClip(true);
     for (const auto &shape : shapes) {
@@ -148,6 +157,7 @@ private:
     const auto clipped = window.grabWindow();
     auto clipped_reference = expected;
     constexpr int half_width = fixture_width / 2;
+
     for (int row = 0; row < fixture_height; ++row) {
       for (int column = half_width; column < fixture_width; ++column) {
         clipped_reference.setPixelColor(column, row, background());
@@ -165,70 +175,87 @@ private:
 
   Q_SLOT static void backgroundReplacementKeepsFinalAlphaAndOpaqueInk() {
     QQuickWindow window;
+
     window.resize(240, 180);
     window.setColor(Qt::transparent);
     NativeRoundedRectangle base{window.contentItem()};
+
     base.setSize({240, 180});
     base.setColor(Qt::white);
     NativeRoundedRectangle surface{window.contentItem()};
+
     surface.setPosition({20, 20});
     surface.setSize({160, 120});
     surface.setReplaceBackground(true);
     NativeRoundedRectangle ink{window.contentItem()};
+
     ink.setPosition({80, 60});
     ink.setSize({20, 20});
     ink.setColor(Qt::blue);
     window.show();
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
     const auto density = window.effectiveDevicePixelRatio();
+
     for (const auto opacity : {0.0F, 0.25F, 0.75F, 1.0F, 0.25F}) {
       surface.setColor(QColor::fromRgbF(0.2F, 0.4F, 0.6F, opacity));
       const auto frame = window.grabWindow();
+
       QVERIFY(!frame.isNull());
       const auto pixel = frame.pixelColor(qRound(40 * density), qRound(40 * density));
+
       QVERIFY(std::abs(pixel.alphaF() - opacity) <= 1.0 / 255);
       QCOMPARE(frame.pixelColor(qRound(90 * density), qRound(70 * density)), QColor{Qt::blue});
       QCOMPARE(frame.pixelColor(qRound(5 * density), qRound(5 * density)), QColor{Qt::white});
     }
+
     surface.setRadius(16);
     surface.setBackdropColor(QColor::fromRgbF(0.1F, 0.1F, 0.1F, 0.8F));
     const auto rounded = window.grabWindow();
+
     QVERIFY(std::abs(rounded.pixelColor(qRound(20 * density), qRound(20 * density)).alphaF() - 0.8) <= 1.0 / 255);
     surface.setReplaceBackground(false);
     const auto blended = window.grabWindow();
+
     QCOMPARE(blended.pixelColor(qRound(40 * density), qRound(40 * density)).alpha(), 255);
   }
 
   Q_SLOT static void projectiveParentUsesHomogeneousOrigin() {
     QQuickWindow window;
+
     window.resize(fixture_width, fixture_height);
     window.setColor(background());
     QQuickItem group{window.contentItem()};
     HomogeneousTransform transform;
+
     transform.appendToItem(&group);
     NativeRoundedRectangle shape{&group};
     constexpr qreal side = 80;
+
     shape.setPosition({2 * side, 2 * side});
     shape.setSize({side, side});
     shape.setColor(Qt::green);
     window.show();
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
     const auto actual = window.grabWindow();
+
     QVERIFY(!actual.isNull());
     const auto density = window.effectiveDevicePixelRatio();
     const auto center = shape.mapToScene({side / 2, side / 2}) * density;
     const auto outside = shape.mapToScene({2 * side, side / 2}) * density;
+
     QCOMPARE(actual.pixelColor(qRound(center.x()), qRound(center.y())), QColor{Qt::green});
     QCOMPARE(actual.pixelColor(qRound(outside.x()), qRound(outside.y())), background());
   }
 
   Q_SLOT static void mutationsAndEmptyGeometry() {
     QQuickWindow window;
+
     window.resize(fixture_width, fixture_height);
     window.setColor(background());
     NativeRoundedRectangle shape{window.contentItem()};
     constexpr qreal side = 80;
     constexpr qreal radius = 12;
+
     shape.setPosition({side, side});
     shape.setSize({side, side});
     shape.setRadius(radius);
@@ -238,6 +265,7 @@ private:
     window.show();
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
     const auto original = window.grabWindow();
+
     shape.setColor(Qt::red);
     QVERIFY(window.grabWindow() != original);
     shape.setColor(Qt::green);
@@ -247,8 +275,10 @@ private:
     QCOMPARE(shape.borderWidth(), qreal{2});
     QCOMPARE(window.grabWindow(), original);
     constexpr qreal border_alpha = 0.09;
+
     shape.setBorderAlpha(border_alpha);
     const auto translucent = window.grabWindow();
+
     QVERIFY(translucent != original);
     for (const auto invalid : {std::numeric_limits<qreal>::quiet_NaN(), std::numeric_limits<qreal>::infinity(), std::numeric_limits<qreal>::max(), qreal{-1}}) {
       shape.setBorderAlpha(invalid);
@@ -261,6 +291,7 @@ private:
     shape.setWidth(0);
     const auto empty = window.grabWindow();
     QImage background_image{empty.size(), empty.format()};
+
     background_image.setDevicePixelRatio(empty.devicePixelRatio());
     background_image.fill(background());
     QCOMPARE(empty, background_image);
@@ -282,27 +313,33 @@ private:
     constexpr int clip_left = shape_width / 2;
     QQuickWindow window;
     const auto density = window.effectiveDevicePixelRatio();
+
     window.resize(qRound(fixture_width / density), qRound(fixture_height / density));
     window.setMinimumSize(window.size());
     window.setMaximumSize(window.size());
     window.setColor(background());
     NativeRoundedRectangle shape{window.contentItem()};
+
     shape.setPosition({left / density, top / density});
     shape.setSize({shape_width / density, shape_height / density});
     shape.setRadius(clip_left / density);
     shape.setColor(Qt::white);
     const auto changed = std::make_unique<QSignalSpy>(&shape, &NativeRoundedRectangle::paintClipChanged);
     const auto property = shape.metaObject()->property(shape.metaObject()->indexOfProperty("paintClip"));
+
     QVERIFY(property.isResettable());
     window.show();
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
     const auto original = window.grabWindow();
+
     QVERIFY(!original.isNull());
     const QRectF clip{clip_left / density, 0, clip_left / density, shape_height / density};
+
     shape.setPaintClip(clip);
     QCOMPARE(shape.paintClip(), clip);
     QCOMPARE(changed->count(), 1);
     const auto clipped = window.grabWindow();
+
     QVERIFY(clipped != original);
     QCOMPARE(clipped.pixelColor(left, top + (shape_height / 2)), background());
     QCOMPARE(clipped.pixelColor(left + clip_left, top), background());
@@ -317,6 +354,7 @@ private:
     QCOMPARE(changed->count(), 3);
     const auto empty = window.grabWindow();
     QImage background_image{empty.size(), empty.format()};
+
     background_image.setDevicePixelRatio(empty.devicePixelRatio());
     background_image.fill(background());
     QCOMPARE(empty, background_image);

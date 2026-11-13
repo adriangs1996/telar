@@ -63,6 +63,7 @@ tbc::view<NativeSource, tbc::lt::static_storage> sourceFromFile(const char *path
   auto *const bytes = CFDataGetMutableBytePtr(data.get());
   std::size_t offset = 0;
   const auto size = static_cast<std::size_t>(status.st_size);
+
   while (offset < size) {
     const auto count = ::read(descriptor.get(), bytes + offset, size - offset);
     if (count < 0 && errno == EINTR) {
@@ -81,6 +82,7 @@ tbc::view<NativeSource, tbc::lt::static_storage> sourceFromFile(const char *path
 
   // ImageIO borrows lazily. Keep an immutable copy before clearing the read.
   const NativeReference copy{CFDataCreate(nullptr, bytes, status.st_size)};
+
   eraseSensitiveBytes(std::as_writable_bytes(std::span{bytes, size}));
   if (copy.get() == nullptr) {
     throw std::bad_alloc{};
@@ -97,6 +99,7 @@ tbc::view<NativeSource, tbc::lt::static_storage> sourceFromFile(const char *path
 NativeSource fileSource(NSPasteboard *board, ClipboardImageError &failure) {
   constexpr NSUInteger maximum_files = 16;
   const NSArray *const urls = [board readObjectsForClasses:@[NSURL.class] options:@{NSPasteboardURLReadingFileURLsOnlyKey : @YES}];
+
   for (NSUInteger index = 0; index < std::min(maximum_files, urls.count); ++index) {
     NSURL *const url = urls[index];
     const char *const path = url.fileSystemRepresentation;
@@ -203,6 +206,7 @@ tbc::view<SensitiveBytes<ApplicationAllocator>, tbc::lt::a> encode(tbc::view<App
 
   CGImageDestinationAddImageFromSource(destination.get(), source, 0, nullptr);
   const bool success = CGImageDestinationFinalize(destination.get());
+
   if (writer.failure != nullptr) {
     try {
       std::rethrow_exception(writer.failure);
@@ -282,6 +286,7 @@ AttachmentCapture<ApplicationAllocator> ClipboardImageSource::read(ApplicationAl
       }
 
       const auto size = dimensions(data.get());
+
       request.capture.target.validate();
 
       return {.request = request, .png = encode(memory, data.get()), .width = size.width, .height = size.height};
@@ -292,6 +297,7 @@ AttachmentCapture<ApplicationAllocator> ClipboardImageSource::read(ApplicationAl
     }
 
     const auto size = dimensions(source.get());
+
     request.capture.target.validate();
 
     return {.request = request, .png = encode(memory, source.get()), .width = size.width, .height = size.height};

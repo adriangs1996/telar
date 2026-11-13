@@ -76,6 +76,7 @@ inline std::optional<std::string_view> helpText(HelpTopic topic) noexcept {
 // The command a family's second word names, when its help lists it.
 inline std::string_view knownCommand(Family family, std::string_view word) noexcept {
   const HelpTopic topic{.family = familyName(family), .command = word};
+
   return !word.empty() && helpText(topic) ? word : std::string_view{};
 }
 
@@ -101,6 +102,7 @@ inline std::optional<HelpTopic> findHelp(std::span<char *const> words) noexcept 
   }
 
   bool asked = false;
+
   for (const std::string_view word : words.subspan(1)) {
     if (word == "--") {
       break;
@@ -117,6 +119,7 @@ inline std::optional<HelpTopic> findHelp(std::span<char *const> words) noexcept 
   }
 
   const std::string_view second = words.size() > 1 ? words[1] : "";
+
   return HelpTopic{.family = familyName(*family), .command = knownCommand(*family, second)};
 }
 
@@ -128,6 +131,7 @@ inline std::string helpReference(std::span<char *const> words) {
   }
 
   std::string reference{"telar "};
+
   reference += familyName(*family);
   const auto command = knownCommand(*family, words.size() > 1 ? words[1] : "");
   if (!command.empty()) {
@@ -173,10 +177,12 @@ template <Allocator Memory>
 RuntimeStart startRuntime(Memory &memory, const ServerOptions &options, const RuntimePaths<Memory> &paths) {
   constexpr auto start_window = std::chrono::seconds{10};
   constexpr auto poll_interval = std::chrono::milliseconds{10};
+
   paths.prepareSocket();
   const auto child = launchDaemon(memory, options, paths, ExecutablePath{runtime_program});
   const auto deadline = std::chrono::steady_clock::now() + start_window;
   std::optional<RuntimeConnection> connection;
+
   while (!connectExisting(connection, paths.socket.c_str())) {
     int status = 0;
     if (::waitpid(child, &status, WNOHANG) == child) {
@@ -229,6 +235,7 @@ template <Allocator Memory>
 [[noreturn]] void execRuntime(Memory &memory, std::span<char *const> arguments) {
   const ExecutablePath runtime{runtime_program};
   Vector<char *, Memory> command{AllocatorRef<char *, Memory>{memory}};
+
   command.reserve(arguments.size() + 2);
   command.push_back(const_cast<char *>(runtime.c_str()));
   command.insert(command.end(), arguments.begin(), arguments.end());
@@ -246,6 +253,7 @@ void runServer(Memory &memory, std::span<char *const> arguments) {
 
   const ProcessEnvironment environment;
   const RuntimePaths paths{memory, options, environment};
+
   switch (options.action) {
   case ServerAction::stop:
     stopRuntime(paths.socket.c_str());

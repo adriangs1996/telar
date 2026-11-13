@@ -55,6 +55,7 @@ public:
     }
 
     std::vector<Byte> bytes(Codec::encodedSize(message));
+
     Codec::encode(message, bytes);
     sent.push_back(std::move(bytes));
   }
@@ -85,6 +86,7 @@ public:
 
   std::string inputSince(std::size_t first_message) const {
     std::string input;
+
     for (const auto &bytes : std::span{sent}.subspan(first_message)) {
       if (bytes.front() == static_cast<Byte>(ClientTag::pane_input)) {
         input += textView(Codec::decode<PaneInput>(bytes).bytes);
@@ -97,6 +99,7 @@ public:
   // The commands run at a pane's prompt since a message, as the runtime receives them.
   std::vector<std::string> commandsSince(std::size_t first_message) const {
     std::vector<std::string> commands;
+
     for (const auto &bytes : std::span{sent}.subspan(first_message)) {
       if (bytes.front() == static_cast<Byte>(ClientTag::pane_command)) {
         commands.emplace_back(textView(Codec::decode<PaneCommand>(bytes).text));
@@ -146,6 +149,7 @@ private:
 template <typename Message, typename Client, ClientCommandHandler Handler>
 auto deliver(Client &client, const Message &message, Handler &handler) {
   std::vector<Byte> bytes(Codec::encodedSize(message));
+
   Codec::encode(message, bytes);
 
   return client.consume(bytes, handler);
@@ -165,6 +169,7 @@ void deliverSingleCell(Client &client, FrameBody frame) {
   std::array<Byte, cell_capacity> encoded{};
   const std::array spans{FrameSpan{.start = 0, .count = 1, .cells = CellRunCodec::encode(cells, encoded)}};
   const std::array<Byte, 1> flags{};
+
   frame.cols = frame.rows = 1;
   frame.text_metadata = TextMetadata{.row_flags = flags};
   frame.spans = spans;
@@ -177,12 +182,16 @@ void openFirstPane(Client &client, Transport &transport) {
   require(transport.last<RequestRuntimeState>().interactive, "GUI must subscribe as an interactive client");
   deliver(client, ClientLayoutSnapshot{});
   const auto open = transport.last<OpenPane>();
+
   require(open.launch && !open.launch->arguments.empty(), "default launch must contain a shell");
   const TabLocation location{.workspace = WorkspaceLocation{.kind = WorkspaceLocation::Kind::workspace, .id = 1}, .tab_id = 1};
+
   deliver(client, PaneOpened{.request_id = open.request_id, .pane_id = 1, .location = location, .created = true, .pane_generation = 1});
   const std::array<PaneDescriptor, 1> descriptors{{{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 1}}};
+
   deliver(client, TabSnapshot{.request_id = transport.last<RequestTabSnapshot>().request_id, .location = location, .panes = descriptors});
   const std::array tabs{TabDescriptor{.tab_id = location.tab_id, .pane_count = 1}};
+
   deliver(client, WorkspaceSnapshot{.request_id = transport.last<RequestWorkspaceSnapshot>().request_id, .workspace = location.workspace, .name = "project", .tabs = tabs});
 }
 

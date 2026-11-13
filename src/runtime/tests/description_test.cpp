@@ -45,9 +45,11 @@ static void testQueryEditing() {
       std::pair{"Fix \x1b[200~multiple\nlines\tplease\x1b[201~\r", "Fix multiple lines please"},
       std::pair{"a\x1b[1;5Db\x1bxz\r", "abz"},
   };
+
   for (const auto &[raw, expected] : cases) {
     DescriptionCapture capture;
     bool submitted = false;
+
     for (const auto byte : inputBytes(raw)) {
       submitted |= capture.feed({&byte, 1});
     }
@@ -62,29 +64,36 @@ static void testQueryEditing() {
 
   for (const auto raw : {" \t\r", "\xc0\xaf\r", "\xed\xa0\x80\r", "\xf4\x90\x80\x80\r"}) {
     DescriptionCapture capture;
+
     capture.feed(inputBytes(raw));
     bool rejected = false;
+
     try {
       capture.normalized();
     } catch (const EncodingError &) {
       rejected = true;
     }
+
     check(rejected);
   }
 
   DescriptionCapture large;
   const std::string raw(description_query_capacity + 10, 'x');
+
   check(!large.feed(inputBytes(raw)));
   check(large.feed(inputBytes("\r")));
   check(large.normalized().view().size() == description_query_capacity);
 
   DescriptionQuery query;
+
   query.append("private request");
   const auto original = query.view();
   auto transferred = std::move(query);
+
   check(query.view().empty());
   check(std::ranges::all_of(original, [](char byte) { return byte == 0; }));
   const auto retained = transferred.view();
+
   transferred.clear();
   check(std::ranges::all_of(retained, [](char byte) { return byte == 0; }));
 }
@@ -101,12 +110,15 @@ static void testGenerator(SystemAllocator &memory) {
       std::pair{"cat >/dev/null; exec 1>&- 2>&-; sleep 5", DescriptionStatus::timeout},
       std::pair{"cat >/dev/null; :", DescriptionStatus::invalid_output},
   };
+
   DescriptionRequest request{.identity = {.pane = 2, .generation = 3, .revision = 4}};
+
   request.query.append("A private request");
   for (const auto &[script, expected] : cases) {
     const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", script};
     DescriptionGenerator generator{memory, DescriptionOptions{arguments, std::chrono::milliseconds{100}}};
     const auto result = generator.observe(request);
+
     check(result.identity == request.identity);
     check(result.status == expected);
     if (expected == DescriptionStatus::success) {
@@ -116,16 +128,20 @@ static void testGenerator(SystemAllocator &memory) {
 
   const std::array<std::string_view, 1> absent{"/nonexistent/telar-description-helper"};
   DescriptionGenerator missing{memory, DescriptionOptions{absent}};
+
   check(missing.observe(request).status == DescriptionStatus::unavailable);
 
   const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", "cat >/dev/null; sleep 60"};
   DescriptionGenerator generator{memory, DescriptionOptions{arguments, std::chrono::seconds{60}}};
   const auto started = std::chrono::steady_clock::now();
+
   {
     ObservationWorker<decltype(generator) &> worker{std::in_place, generator};
+
     check(worker.submit(request));
     std::this_thread::sleep_for(std::chrono::milliseconds{30});
   }
+
   check(std::chrono::steady_clock::now() - started < std::chrono::seconds{1});
 }
 
@@ -135,23 +151,29 @@ static void testProcessInput(SystemAllocator &memory) {
   CommandOutput output{memory, 64};
   const std::string body(100'000, 'x');
   const std::array<std::string_view, 3> fragments{body, {}, body};
+
   check(output.runWithInput(command, std::chrono::steady_clock::now() + std::chrono::seconds{2}, fragments) == 0);
   check(output.text().find("200000") != std::string_view::npos);
 }
 
 static void testTitlePersistence(SystemAllocator &memory) {
   Database database{":memory:"};
+
   migrateHistory(database);
   PaneHistoryWriter writer{database};
   HistorySession session{.pane = 7, .started_at_ms = 100, .workspace_path = "/project", .shell = "/bin/sh"};
+
   session.id[0] = 1;
   writer.persist(HistoryEventView{.kind = HistoryEventKind::session_started, .session = session});
   HistorySessionTitle title{.session = session.id, .source = AgentTitleSource::generated, .state = AgentTitleState::ready};
+
   title.title.assign("Fix parser");
   HistoryEvent owned{memory, HistoryEventView{.kind = HistoryEventKind::session_title, .session = {}, .title = title}};
+
   title.title.assign("Changed later");
   writer.persist(owned.view());
   Statement read{database, "SELECT title, title_source, title_state FROM session WHERE id=?1"};
+
   read.bind(1, std::span{session.id});
   check(read.next());
   check(read.text(0) == "Fix parser");
@@ -171,6 +193,7 @@ static void testTitlePersistence(SystemAllocator &memory) {
 
 void testDescriptions() {
   SystemAllocator memory;
+
   testQueryEditing();
   testGenerator(memory);
   testProcessInput(memory);

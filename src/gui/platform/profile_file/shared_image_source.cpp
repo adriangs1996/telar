@@ -37,6 +37,7 @@ SharedImageSource::SharedImageSource(std::string_view name) {
   constexpr std::size_t name_capacity = 32;
   constexpr mode_t nonprivate_permissions = 0077;
   std::array<char, name_capacity> terminated{};
+
   std::ranges::copy(name, terminated.begin());
 #if defined(__linux__)
   constexpr int open_flags = O_RDONLY | O_NONBLOCK;

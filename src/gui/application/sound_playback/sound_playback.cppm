@@ -76,6 +76,7 @@ public:
     [[nodiscard]] inline CellRectangle content(CellRectangle bounds) const noexcept {
       auto result = bounds.inner(border);
       const auto extra = border != 0 && header > border ? std::min<std::uint16_t>(header - border, result.height) : 0;
+
       result.y = static_cast<std::uint16_t>(result.y + extra);
       result.height = static_cast<std::uint16_t>(result.height - extra);
 
@@ -128,6 +129,7 @@ public:
     std::size_t pending = 1;
     std::size_t panes = 0;
     std::array<std::uint64_t, maximum_panes> identities{};
+
     for (const auto &node : nodes) {
       if (pending == 0) {
         throw EncodingError{"Trailing pane layout nodes"};
@@ -209,6 +211,7 @@ public:
       const auto survivor = first == *target ? second : first;
       const auto survivor_end = subtreeEnd(survivor);
       const auto parent_end = subtreeEnd(parent);
+
       std::move(nodes_.begin() + survivor, nodes_.begin() + survivor_end, nodes_.begin() + parent);
       std::move(nodes_.begin() + parent_end, nodes_.begin() + count_, nodes_.begin() + parent_end - 2);
       count_ -= 2;
@@ -304,6 +307,7 @@ public:
     std::uint64_t target = 0;
     auto best_score = std::numeric_limits<std::uint64_t>::max();
     const FocusOrigin origin{.bounds = source->bounds, .direction = request.direction};
+
     for (const auto &placement : placements) {
       if (placement.pane_id == request.pane_id) {
         continue;
@@ -328,6 +332,7 @@ public:
     const auto axis = direction == PaneDirection::left || direction == PaneDirection::right ? ClientLayoutAxis::horizontal : ClientLayoutAxis::vertical;
     const bool decreasing = direction == PaneDirection::left || direction == PaneDirection::up;
     std::optional<std::size_t> fallback;
+
     for (std::size_t parent = *target; parent-- > 0;) {
       const auto *split = std::get_if<ClientLayoutSplit>(&nodes_[parent]);
       if (split == nullptr || split->axis != axis || subtreeEnd(parent) <= *target) {
@@ -367,6 +372,7 @@ public:
 
   [[nodiscard]] inline std::uint16_t displayIndex(std::uint64_t pane_id) const noexcept {
     std::uint16_t index = 0;
+
     for (const auto &node : nodes()) {
       if (const auto *leaf = std::get_if<ClientLayoutPane>(&node)) {
         ++index;
@@ -397,6 +403,7 @@ private:
       }
 
       const bool borderless = placement.bounds == placement.content;
+
       reserved_ = placement.bounds;
       placement.bounds.height = static_cast<std::uint16_t>(placement.bounds.height - height);
       reserved_.y = static_cast<std::uint16_t>(static_cast<std::uint32_t>(reserved_.y) + placement.bounds.height);
@@ -443,6 +450,7 @@ private:
     const auto adjusted = decreasing ? previous_ratio - resize_step : previous_ratio + resize_step;
 
     const auto ratio = static_cast<std::uint16_t>(std::clamp(adjusted, static_cast<int>(ratio_minimum), static_cast<int>(ratio_maximum_split)));
+
     arrange(area, metrics);
     const auto divider = std::ranges::find(dividers(), index, &Divider::node_index);
     if (divider == dividers().end()) {
@@ -468,6 +476,7 @@ private:
 
     std::uint64_t previous = 0;
     bool found = false;
+
     for (const auto &node : nodes()) {
       const auto *pane = std::get_if<ClientLayoutPane>(&node);
       if (pane == nullptr) {
@@ -493,10 +502,12 @@ private:
   [[nodiscard]] inline std::uint16_t minimumExtent(std::size_t root, ClientLayoutAxis axis, Metrics metrics) const noexcept {
     std::array<std::uint16_t, maximum_panes> pending{};
     std::size_t count = 0;
+
     for (auto index = subtreeEnd(root); index-- > root;) {
       if (const auto *split = std::get_if<ClientLayoutSplit>(&nodes_[index])) {
         const auto first = pending[--count];
         const auto second = pending[--count];
+
         pending[count++] = split->axis == axis ? static_cast<std::uint16_t>(first + metrics.gap + second) : std::max(first, second);
       } else {
         pending[count++] = metrics.minimumPaneExtent(axis);
@@ -518,6 +529,7 @@ private:
 
   [[nodiscard]] inline std::size_t subtreeEnd(std::size_t beginning) const noexcept {
     std::size_t pending = 1;
+
     while (pending != 0 && beginning < count_) {
       if (std::holds_alternative<ClientLayoutSplit>(nodes_[beginning++])) {
         ++pending;
@@ -567,6 +579,7 @@ private:
   inline void arrangeNodes(CellRectangle bounds, Metrics metrics) noexcept {
     std::array<CellRectangle, maximum_panes> pending;
     std::size_t pending_count = 1;
+
     pending[0] = bounds;
 
     for (std::size_t index = 0; index < count_; ++index) {
@@ -581,6 +594,7 @@ private:
 
       if (const auto *split = std::get_if<ClientLayoutSplit>(&node)) {
         const auto geometry = partition(current, *split, metrics.gap);
+
         dividers_[divider_count_++] = {.node_index = index, .axis = split->axis, .bounds = geometry.divider, .parent_bounds = current};
         pending[pending_count++] = geometry.second;
         pending[pending_count++] = geometry.first;
@@ -623,6 +637,7 @@ public:
   inline static tbc::view<std::string_view, tbc::lt::a> write(const ClientLayoutSnapshot &snapshot, tbc::view<String<Memory> &, tbc::lt::a> output) {
     std::array<Byte, binary_capacity> binary{};
     const auto encoded = Codec::encode(snapshot, binary);
+
     output.clear();
     output.reserve(encoded.size() * digits_per_byte);
     runtime::appendLowerHex(output, encoded);
@@ -647,6 +662,7 @@ public:
     }
 
     TabLayoutPreset preset;
+
     preset.location = tab.location;
     preset.focused_pane = tab.focused_pane;
     preset.fullscreen = tab.fullscreen;
@@ -668,6 +684,7 @@ private:
 
     constexpr int hexadecimal_base = 16;
     const auto size = text.size() / digits_per_byte;
+
     for (std::size_t index = 0; index < size; ++index) {
       const auto digits = text.substr(index * digits_per_byte, digits_per_byte);
       unsigned value = 0;
@@ -735,6 +752,7 @@ public:
 
   inline void remember(const Bookmark &bookmark) noexcept {
     std::optional<Bookmark> *free = nullptr;
+
     for (auto &entry : entries_) {
       if (entry) {
         if (sameWorkspace(entry->location.workspace, bookmark.location.workspace)) {
@@ -835,6 +853,7 @@ public:
     }
 
     std::array<ClientLayoutNode, PaneLayout::maximum_nodes> captured{};
+
     std::ranges::copy(saved.nodes, captured.begin());
     if (existing) {
       remove(*existing);
@@ -854,6 +873,7 @@ public:
     }
 
     std::array<ClientLayoutNode, PaneLayout::maximum_nodes> captured{};
+
     std::ranges::copy(saved.nodes, captured.begin());
     saved.nodes = std::span{captured}.first(saved.nodes.size());
     while (!remember(saved)) {
@@ -895,6 +915,7 @@ private:
   inline void remove(std::size_t index) noexcept {
     const auto start = rows_[index].start;
     const auto count = rows_[index].count;
+
     std::move(nodes_.begin() + start + count, nodes_.begin() + node_total_, nodes_.begin() + start);
     node_total_ -= count;
     std::move(rows_.begin() + index + 1, rows_.begin() + count_, rows_.begin() + index);

@@ -53,6 +53,7 @@ struct Probe {
     if (active != nullptr) {
       ++active->foreign_calls;
     }
+
     return GHOSTTY_CLIPBOARD_WRITE_RESULT_DENIED;
   }
   SystemAllocator system;
@@ -62,6 +63,7 @@ struct Probe {
 
   explicit Probe(TerminalSize size) : terminal(memory, size, TerminalPurpose::separate_media) {
     ConfigureTerminalColors colors{};
+
     colors.foreground = {255, 255, 255};
     colors.background = {0, 0, 0};
     terminal.configureColors(colors);
@@ -87,10 +89,12 @@ extern "C" bool query_probe_feed(void *context, const Byte *bytes, std::size_t s
   try {
     auto &probe = *static_cast<Probe *>(context);
     const Probe::Active active{probe};
+
     probe.terminal.feed({bytes, size});
     if (probe.clipboard) {
       probe.clipboard->settle(probe.terminal);
     }
+
     return true;
   } catch (...) {
     return false;
@@ -102,6 +106,7 @@ extern "C" std::size_t query_probe_drain(void *context, Byte *destination, std::
   const Probe::Active active{probe};
   auto &terminal = probe.terminal;
   std::size_t written = 0;
+
   while (!terminal.responses().empty()) {
     const auto bytes = terminal.responses();
     if (bytes.size() > capacity - written) {
@@ -123,9 +128,11 @@ extern "C" std::uint64_t query_probe_benchmark(const Byte *bytes, std::size_t si
     const Probe::Active active{probe};
     std::uint64_t observed = 0;
     const auto started = std::chrono::steady_clock::now();
+
     for (std::size_t iteration = 0; iteration < iterations; ++iteration) {
       for (std::size_t offset = 0; offset < size;) {
         const auto count = std::min(fragment == 0 ? size : fragment, size - offset);
+
         probe.terminal.feed({bytes + offset, count});
         offset += count;
         const auto written = query_probe_drain(&probe, output.data(), output.size());
@@ -136,6 +143,7 @@ extern "C" std::uint64_t query_probe_benchmark(const Byte *bytes, std::size_t si
     }
 
     const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - started).count();
+
     observed_terminal_output = observed;
     return elapsed;
   } catch (...) {
@@ -148,6 +156,7 @@ extern "C" bool query_probe_policy(void *context, std::uint32_t flags, const cha
   if (length > policy.answerback.size()) {
     return false;
   }
+
   policy.title_report = (flags & 1) != 0;
   policy.checksum_report = (flags & 2) != 0;
   policy.color_format = (flags & 4) != 0 ? control::ColorFormat::eight_bit : (flags & 8) != 0 ? control::ColorFormat::none : control::ColorFormat::sixteen_bit;
@@ -155,14 +164,17 @@ extern "C" bool query_probe_policy(void *context, std::uint32_t flags, const cha
   if (length != 0) {
     std::copy_n(answerback, length, policy.answerback.begin());
   }
+
   policy.answerback_length = static_cast<std::uint16_t>(length);
   return true;
 }
 
 extern "C" bool query_probe_facts(void *context, bool light, bool visible, bool focused) noexcept {
   auto &probe = *static_cast<Probe *>(context);
+
   try {
     const Probe::Active active{probe};
+
     probe.terminal.configureClientFacts({.light = light, .visible = visible, .focused = focused});
     return true;
   } catch (...) {
@@ -180,10 +192,13 @@ extern "C" bool query_probe_clipboard_config(void *context, std::uint32_t flags)
     if (!probe.clipboard) {
       probe.clipboard = std::make_unique<control_test::MemoryClipboard>();
       constexpr std::array<control::ClipboardRoute, 1> routes{{{1, 13}}};
+
       probe.terminal.clipboardControl().routes(routes, routes[0]);
     }
+
     const auto access = [](unsigned value) { return value == 0 ? control::Access::deny : value == 1 ? control::Access::ask : control::Access::allow; };
     auto &policy = probe.terminal.controlPolicy();
+
     policy.clipboard_read = access(flags & 3);
     policy.clipboard_write = access((flags >> 2) & 3);
     probe.clipboard->consent = (flags >> 4 & 3) == 0 ? control_test::ClipboardConsent::deny : (flags >> 4 & 3) == 1 ? control_test::ClipboardConsent::once : control_test::ClipboardConsent::session;
@@ -203,6 +218,7 @@ extern "C" bool query_probe_clipboard_put(void *context, const char *mime, const
     if (contents.size() == 16 || std::char_traits<char>::length(mime) > 256 || length > 4 * 1024 * 1024) {
       return false;
     }
+
     contents.push_back({mime, {data, data + length}});
     return true;
   } catch (...) {
@@ -217,11 +233,13 @@ extern "C" std::size_t query_probe_clipboard_get(void *context, const char *mime
       return content.data.size();
     }
   }
+
   return SIZE_MAX;
 }
 
 extern "C" std::uint64_t query_probe_clipboard_count(void *context, std::uint32_t kind) noexcept {
   auto &fixture = *static_cast<Probe *>(context)->clipboard;
+
   return kind == 0 ? fixture.reads : kind == 1 ? fixture.writes : fixture.prompts;
 }
 
@@ -229,23 +247,30 @@ extern "C" bool query_probe_clipboard_paste(void *context, bool primary) noexcep
   try {
     auto &probe = *static_cast<Probe *>(context);
     const Probe::Active active{probe};
+
     if (!probe.clipboard) {
       return false;
     }
+
     if (probe.terminal.pasteEvents()) {
       std::array<std::string_view, 16> available;
       std::size_t count = 0;
+
       for (const auto &content : probe.clipboard->contents) {
         if (count == available.size()) {
           break;
         }
+
         available[count++] = content.mime;
       }
+
       if (!probe.terminal.clipboardControl().paste({1, 13}, primary, std::span{available}.first(count))) {
         return false;
       }
+
       probe.terminal.resumeControl();
     }
+
     return true;
   } catch (...) {
     return false;

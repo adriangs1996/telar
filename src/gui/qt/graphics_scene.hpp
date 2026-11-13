@@ -63,8 +63,10 @@ struct ImageRows {
     for (std::size_t row = 0; row < screen.rows(); ++row) {
       cells.push_back(screen.row(row));
     }
+
     const auto &scroll = screen.scroll();
     const auto rows = static_cast<std::uint64_t>(screen.rows());
+
     return {.live_top = scroll.total_rows > rows ? scroll.total_rows - rows : 0, .top = scroll.offset, .rows = cells, .revision = screen.revision()};
   }
 
@@ -73,9 +75,11 @@ struct ImageRows {
     if (folds == nullptr || row < 0) {
       return row - static_cast<std::int64_t>(top);
     }
+
     if (folds->hides(static_cast<std::uint64_t>(row))) {
       return std::nullopt;
     }
+
     return static_cast<std::int64_t>(folds->display(static_cast<std::uint64_t>(row))) - static_cast<std::int64_t>(top);
   }
 };

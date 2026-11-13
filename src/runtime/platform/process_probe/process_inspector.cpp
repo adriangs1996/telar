@@ -23,6 +23,7 @@ constexpr std::size_t maximum_process_argument_bytes = 16 * 1024;
 
 std::optional<ProcessIdentity> ProcessInspector::identity(pid_t process) const noexcept {
   const auto observed = snapshot(process);
+
   return observed ? std::optional{observed->identity} : std::nullopt;
 }
 
@@ -63,11 +64,13 @@ AgentProvider ProcessInspector::provider(pid_t process) const noexcept {
   }
 
   std::array<char, maximum_process_argument_bytes> arguments;
+
   return readArguments(process, arguments).provider(manifests_, path.view());
 }
 
 IdentifiedProcess ProcessInspector::identifyProcess(pid_t process) const noexcept {
   IdentifiedProcess identified;
+
   identified.identity = identity(process);
   if (!identified.identity) {
     return identified;
@@ -76,6 +79,7 @@ IdentifiedProcess ProcessInspector::identifyProcess(pid_t process) const noexcep
   identified.name = name(process);
   std::array<char, maximum_process_argument_bytes> storage;
   const auto arguments = readArguments(process, storage);
+
   identified.provider = arguments.provider(manifests_, identified.name.view());
   identified.session_host = arguments.sessionHost(identified.provider);
   if (const auto *manifest = manifests_.find(identified.provider)) {
@@ -99,6 +103,7 @@ IdentifiedProcess ProcessInspector::identifyGroup(pid_t group, AgentProvider pre
   }
 
   std::optional<IdentifiedProcess> selected;
+
   for (const auto member : std::span{members}.first(count)) {
     if (member <= 0 || member == group) {
       continue;
@@ -108,15 +113,19 @@ IdentifiedProcess ProcessInspector::identifyGroup(pid_t group, AgentProvider pre
     if (!candidate.identity || candidate.identity->process_group != group) {
       continue;
     }
+
     if (candidate.provider == AgentProvider::unknown) {
       if (leader.name.view().empty()) {
         leader = candidate;
       }
+
       continue;
     }
+
     if (preferred == AgentProvider::unknown || candidate.provider == preferred) {
       return candidate;
     }
+
     if (!selected) {
       selected = candidate;
     }

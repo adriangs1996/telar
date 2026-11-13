@@ -31,6 +31,7 @@ public:
 
   inline void append(std::string_view text) {
     const auto available = capacity - text_.view().size();
+
     text_.append(text.substr(0, std::min(available, text.size())));
   }
 
@@ -49,6 +50,7 @@ public:
 
     auto boundary = text.size();
     constexpr unsigned leading_mask = ~Utf8Scalar::continuation_mask;
+
     while (boundary != 0 && (static_cast<unsigned char>(text[boundary - 1]) & leading_mask) == Utf8Scalar::continuation_prefix) {
       --boundary;
     }
@@ -168,6 +170,7 @@ public:
 
   inline void addScored(Target target, std::uint32_t score) {
     auto position = length_;
+
     while (position != 0 && matches_[position - 1].score < score) {
       --position;
     }
@@ -177,6 +180,7 @@ public:
     }
 
     auto tail = std::min(length_, Capacity - 1);
+
     while (tail > position) {
       matches_[tail] = std::move(matches_[tail - 1]);
       --tail;

@@ -21,6 +21,7 @@ namespace telar::runtime {
       if (ghostty_terminal_grid_ref_track(terminal, point, &tracked.ref_) != GHOSTTY_SUCCESS) {
         tracked.ref_ = nullptr;
       }
+
       return tracked;
     }
 
@@ -35,6 +36,7 @@ namespace telar::runtime {
         release();
         ref_ = std::exchange(other.ref_, nullptr);
       }
+
       return *this;
     }
 
@@ -52,10 +54,12 @@ namespace telar::runtime {
       if (ref_ == nullptr || ghostty_tracked_grid_ref_snapshot(ref_, &reference) != GHOSTTY_SUCCESS) {
         return std::nullopt;
       }
+
       GhosttyPointCoordinate coordinate{};
       if (ghostty_terminal_point_from_grid_ref(terminal, &reference, GHOSTTY_POINT_TAG_SCREEN, &coordinate) != GHOSTTY_SUCCESS) {
         return std::nullopt;
       }
+
       return coordinate.y;
     }
 

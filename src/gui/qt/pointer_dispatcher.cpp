@@ -141,6 +141,7 @@ bool PointerDispatcher::occupied() const noexcept {
 void PointerDispatcher::notifyHistoryHover() {
   const auto &identity = history_hover_.hovered();
   const auto *row = identity ? std::get_if<HistoryChoice>(&identity->action) : nullptr;
+
   if (const auto *footer = identity ? std::get_if<HistoryFooterIdentity>(&identity->action) : nullptr; footer != nullptr && footer->submission()) {
     row = &footer->choice;
   }
@@ -194,6 +195,7 @@ void PointerDispatcher::beginChild(const ChildMouseView &view, ChildMouseSample 
   }
 
   auto &lease = captures_[static_cast<std::size_t>(sample.button)];
+
   lease.child.begin(view, sample);
   report(lease.pane_id, ChildMouseProjection::project(view, sample));
 }
@@ -209,6 +211,7 @@ ChildMouseView PointerDispatcher::view(const Capture &lease) const {
   }
 
   ChildMouseView result{.pane_id = current->id, .location = current->location, .protocol = current->screen.mouse(), .columns = current->screen.columns(), .rows = current->screen.rows(), .cell_width_px = current->size.cell_width_px, .cell_height_px = current->size.cell_height_px, .attached = current->attached, .visible = false};
+
   result.surface.attachment_generation = current->attachment_generation;
 
   return result;
@@ -225,6 +228,7 @@ void PointerDispatcher::report(std::uint64_t pane_id, const std::optional<ChildM
 
   MouseEncoder encoder;
   const auto packet = encoder.encode(report->button, report->x, report->y, report->released, true);
+
   application_.input(pane_id, QByteArray{packet.data(), static_cast<qsizetype>(packet.size())}, PaneInputSource::mouse);
 }
 
@@ -267,11 +271,14 @@ void PointerDispatcher::cancel() {
   cancelTabDrag();
   retireHistoryHover();
   const auto previous_recipients = recipients();
+
   for (std::size_t index = 0; index < captures_.size(); ++index) {
     auto &lease = captures_[index];
+
     lease.history.cancel();
     const auto pane_id = lease.pane_id;
     const auto outcome = lease.child.owned() ? std::optional{lease.child.cancel(view(lease))} : std::nullopt;
+
     lease.terminal.clear();
     if (outcome) {
       report(pane_id, *outcome);
@@ -298,6 +305,7 @@ void PointerDispatcher::ungrab(TerminalItem &terminal) {
 
 PointerDispatcher::Recipients PointerDispatcher::recipients() const {
   Recipients result;
+
   for (const auto &[native, semantic] : mouse_buttons) {
     const auto &lease = captures_[static_cast<std::size_t>(semantic)];
     if (!lease.held || lease.terminal == nullptr) {
@@ -315,6 +323,7 @@ PointerDispatcher::Recipients PointerDispatcher::recipients() const {
     }
 
     auto &buttons = lease.child.owned() ? recipient->child_buttons : recipient->view_buttons;
+
     buttons.setFlag(native);
   }
 
@@ -323,6 +332,7 @@ PointerDispatcher::Recipients PointerDispatcher::recipients() const {
 
 void PointerDispatcher::deliver(TerminalItem &terminal, const QMouseEvent &event, Qt::MouseButtons buttons) {
   QMouseEvent forwarded{event.type(), terminal.mapFromScene(event.position()), event.position(), event.globalPosition(), event.button(), buttons, event.modifiers(), event.source(), event.pointingDevice()};
+
   forwarded.setTimestamp(event.timestamp());
   QCoreApplication::sendEvent(&terminal, &forwarded);
 }
@@ -352,8 +362,10 @@ bool PointerDispatcher::press(QMouseEvent &event) {
   }
 
   const QScopedValueRollback handoff{handing_off_, true};
+
   event.setExclusiveGrabber(event.point(0), nullptr);
   const QScopedValueRollback delivery{delivering_, true};
+
   QCoreApplication::sendEvent(window_, &event);
 
   return true;
@@ -373,6 +385,7 @@ bool PointerDispatcher::move(QMouseEvent &event) {
   }
 
   const auto destinations = recipients();
+
   for (const auto &destination : destinations) {
     auto *const terminal = destination.terminal.data();
     if (terminal != nullptr && (destination.child_buttons & event.buttons()) != Qt::NoButton) {
@@ -417,6 +430,7 @@ bool PointerDispatcher::release(QMouseEvent &event) {
     const auto &surface = application_.presented_history_actions_;
     const auto action = previous.history.release(surface, {.x = event.position().x() * surface.scale, .y = event.position().y() * surface.scale});
     const auto choice = surface.choice;
+
     if (application_.dialog_ != Application::Dialog::history || surface.generation != application_.dialog_generation_) {
       return true;
     }
@@ -432,6 +446,7 @@ bool PointerDispatcher::release(QMouseEvent &event) {
     report(previous.pane_id, previous.child.deliver(view(previous), sample(event, MousePhase::release, mouseButton(event.button()))));
   } else if (previous.terminal != nullptr) {
     Qt::MouseButtons held;
+
     for (const auto &recipient : recipients()) {
       if (recipient.terminal == previous.terminal) {
         held = recipient.view_buttons & event.buttons();
@@ -461,6 +476,7 @@ bool PointerDispatcher::eventFilter(QObject *watched, QEvent *event) {
     case QEvent::MouseButtonPress:
     case QEvent::MouseButtonDblClick: {
       auto &mouse = dynamic_cast<QMouseEvent &>(*event);
+
       application_.observeActivityPointer(true, mouse.position());
       observeTabHover(mouse.position());
 
@@ -468,6 +484,7 @@ bool PointerDispatcher::eventFilter(QObject *watched, QEvent *event) {
     }
     case QEvent::MouseMove: {
       auto &mouse = dynamic_cast<QMouseEvent &>(*event);
+
       observeTabHover(mouse.position());
       return move(mouse);
     }
@@ -480,15 +497,18 @@ bool PointerDispatcher::eventFilter(QObject *watched, QEvent *event) {
       observeTabHover(std::nullopt);
       if (tab_drag_.captured()) {
         const auto scale = tab_capture_surface_.scale / tab_capture_surface_.threshold;
+
         tab_drag_.update({tab_pointer_.x() * scale, tab_pointer_.y() * scale}, std::nullopt);
         updateTabDragVisual();
       }
+
       retireHistoryHover();
       application_.attachments_.observePointer(std::nullopt);
       application_.observeActivityPointer(false);
       return false;
     case QEvent::MouseButtonRelease: {
       auto &mouse = dynamic_cast<QMouseEvent &>(*event);
+
       observeTabHover(mouse.position());
       return release(mouse);
     }

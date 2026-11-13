@@ -31,6 +31,7 @@ QVariant paint(const components::ElementColor &color, const Theme &theme, std::o
   }
 
   auto resolved = componentColor(color.value, theme, fallback.value_or(Color{}));
+
   resolved.setAlphaF(resolved.alphaF() * color.alpha / std::numeric_limits<std::uint8_t>::max());
 
   return resolved;
@@ -38,6 +39,7 @@ QVariant paint(const components::ElementColor &color, const Theme &theme, std::o
 
 QString normalizedIcon(std::string_view name) {
   QString result = text(name).toLower();
+
   result.replace(QLatin1Char{'-'}, QLatin1Char{'_'});
 
   return result;
@@ -168,6 +170,7 @@ void ElementSlots::invalidate() {
   // A render may finish at once and change its instance, so each is found again by its id.
   for (const auto id : instances_.keys()) {
     auto &instance = *instances_.find(id);
+
     instance.dirty = true;
     if (!instance.rendering && instance.failures < failure_limit) {
       render(id);
@@ -177,12 +180,14 @@ void ElementSlots::invalidate() {
 
 void ElementSlots::render(std::uint64_t id) {
   auto &instance = *instances_.find(id);
+
   instance.rendering = true;
   instance.dirty = false;
   const auto slot = instance.slot;
   const auto item = instance.item;
   const auto epoch = epoch_;
   const auto context = context_();
+
   try {
     source_.renderElements(slot, id, context, item, [this, id, epoch](LuaOutcome<ConfigurationSource::ElementsRender> outcome) {
       const auto found = instances_.find(id);
@@ -191,6 +196,7 @@ void ElementSlots::render(std::uint64_t id) {
       }
 
       auto &current = *found;
+
       current.rendering = false;
       if (outcome.stale) {
         return;
@@ -226,6 +232,7 @@ void ElementSlots::render(std::uint64_t id) {
 QVariantList ElementSlots::project(const Rendered &rendered, const Theme &theme) {
   constexpr std::array tones{PaletteRole::text, PaletteRole::subtext0, PaletteRole::accent, PaletteRole::green, PaletteRole::yellow, PaletteRole::red};
   QVariantList result;
+
   result.reserve(static_cast<qsizetype>(rendered.elements.size()));
   for (std::size_t index = 0; index < rendered.elements.size(); ++index) {
     const auto &element = rendered.elements[index];
@@ -273,6 +280,7 @@ QVariantList ElementSlots::project(const Rendered &rendered, const Theme &theme)
         {QStringLiteral("url"), text(rendered.view(element.url))},
         {QStringLiteral("since"), static_cast<qint64>(element.since)},
     };
+
     record.insert(QStringLiteral("clickable"), element.action != components::Element::none || element.callback != components::Element::none || element.url.length != 0);
     if (element.max_width >= 0) {
       record.insert(QStringLiteral("maxWidth"), element.max_width);
@@ -288,25 +296,30 @@ QVariantList ElementSlots::project(const Rendered &rendered, const Theme &theme)
 
     if (kind == components::ElementKind::icon) {
       const auto glyph = element.named ? components::Icon::find(normalizedIcon(rendered.view(element.text)).toStdString()).glyph : rendered.view(element.text);
+
       record.insert(QStringLiteral("glyph"), text(glyph));
     } else if (kind == components::ElementKind::mark) {
       const auto name = rendered.view(element.text);
       const auto icon = components::Icon::find(name == "telar" ? std::string_view{"telar_mark"} : (QStringLiteral("provider_") + text(name)).toStdString());
+
       record.insert(QStringLiteral("glyph"), text(icon.glyph));
       record.insert(QStringLiteral("providerMark"), static_cast<int>(icon.provider));
       record.insert(QStringLiteral("telarMark"), icon.telar);
     } else if (kind == components::ElementKind::tile) {
       const auto mark = ApplicationMark::forApplication(rendered.view(element.text));
+
       record.insert(QStringLiteral("glyph"), text(mark.glyph));
       record.insert(QStringLiteral("tile"), text(mark.tile));
       record.insert(QStringLiteral("ink"), text(mark.ink));
       record.insert(QStringLiteral("providerMark"), static_cast<int>(mark.provider));
     } else if (kind == components::ElementKind::canvas) {
       QVariantList operations;
+
       operations.reserve(static_cast<qsizetype>(element.steps_count));
       for (std::uint32_t step_index = element.steps_offset; step_index < element.steps_offset + element.steps_count && step_index < rendered.steps.size(); ++step_index) {
         const auto &step = rendered.steps[step_index];
         QVariantList values;
+
         for (std::uint8_t value = 0; value < step.count; ++value) {
           values.append(step.values[value]);
         }

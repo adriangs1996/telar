@@ -72,6 +72,7 @@ public:
     auto role = fonts_.source(*cluster, preferred_);
     const auto resolved = role.value_or(FontRole::primary);
     std::uint32_t columns = cursor_.columns();
+
     if (resolved == preferred_) {
       while (cursor_.position() < text_.size()) {
         auto candidate = cursor_;
@@ -153,8 +154,10 @@ public:
   inline void shapeCaption(Fonts &fonts, std::string_view text, TextRequest request) {
     clear();
     CaptionRuns runs{text};
+
     while (const auto run = runs.next()) {
       const auto before = advance_;
+
       append(fonts, *run, request);
       if (advance_ <= before) {
         break;
@@ -165,8 +168,10 @@ public:
   template <CascadingFontProvider Fonts>
   [[nodiscard]] inline static std::int32_t measure(Fonts &fonts, std::string_view text, TextRequest request) {
     std::int32_t advance = 0;
+
     visit(fonts, text, request, [&](FontSpan span) {
       const auto run = fonts.face(span.role.value_or(FontRole::primary)).shape(span.text, request.pixel_height);
+
       advance = addAdvance(advance, spanAdvance(fonts, span, request, run.advance()));
     });
 
@@ -187,6 +192,7 @@ private:
       const auto role = span.role.value_or(FontRole::primary);
       const auto run = fonts.face(role).shape(span.text, request.pixel_height);
       const auto start = glyphs_.size();
+
       appendSpan({.first = start, .count = run.size(), .role = role, .offset = advance_, .columns = span.columns});
       glyphs_.resize(start + run.size());
       for (std::size_t index = 0; index < run.size(); ++index) {
@@ -227,6 +233,7 @@ private:
     }
 
     FontRuns runs{fonts, text, request.preferred};
+
     while (const auto span = runs.next()) {
       visitor(*span);
     }
@@ -288,6 +295,7 @@ public:
     clusters_.clear();
     columns_ = 0;
     GraphemeCursor cursor{text};
+
     while (const auto cluster_text = cursor.next()) {
       const auto role = fonts.source(*cluster_text, FontRole::primary).value_or(FontRole::primary);
       const auto shaped = fonts.face(role).shape(*cluster_text, grid.pixel_height);
@@ -307,6 +315,7 @@ public:
 
   [[nodiscard]] inline std::span<const ShapedGlyph> glyphs(std::uint32_t available_columns) const noexcept {
     std::size_t count = 0;
+
     for (const auto &cluster : clusters_) {
       if (cluster.columns > available_columns) {
         break;
@@ -324,6 +333,7 @@ public:
 
   [[nodiscard]] inline std::span<const TextSpan> spans(std::uint32_t available_columns) const noexcept {
     std::size_t count = 0;
+
     for (const auto &cluster : clusters_) {
       if (cluster.columns > available_columns) {
         break;
@@ -370,6 +380,7 @@ struct GlyphTransform {
     const auto bottom = top + (ink.height * scale);
 
     float vertical_shift = 0;
+
     if (top < cell.y) {
       vertical_shift = cell.y - top;
     } else if (bottom > cell.bottom()) {
@@ -449,6 +460,7 @@ public:
 
   [[nodiscard]] inline Rect ink() const noexcept {
     InkBounds bounds;
+
     for (const auto &glyph : glyphs_) {
       bounds.include(glyph.ink);
     }
@@ -465,6 +477,7 @@ public:
     glyphs_.clear();
     FontRuns runs{fonts, text, request.preferred};
     float advance = 0;
+
     while (const auto span = runs.next()) {
       if (!span->role) {
         throw std::runtime_error{"IconFontUnavailable"};
@@ -488,6 +501,7 @@ private:
     const auto shaped = face.shape(text, run.request.pixel_height);
     const auto start = glyphs_.size();
     std::int64_t pen = 0;
+
     for (std::size_t index = 0; index < shaped.size(); ++index) {
       const auto glyph = shaped.glyph(index);
       const auto bitmap = face.rasterize({.index = glyph.index, .pixel_height = run.request.pixel_height, .style = {}});
@@ -498,6 +512,7 @@ private:
 
         const auto x = FontMetrics::roundFixed(pen + glyph.x_offset) + bitmap.left;
         const auto y = -FontMetrics::roundFixed(glyph.y_offset) - bitmap.top;
+
         glyphs_.push_back({.index = glyph.index, .face = run.role, .ink = {.x = static_cast<float>(x), .y = static_cast<float>(y), .width = static_cast<float>(bitmap.width), .height = static_cast<float>(bitmap.height)}});
       }
 
@@ -505,9 +520,11 @@ private:
     }
 
     auto appended = std::span{glyphs_}.subspan(start);
+
     if (fittedFont(run.role)) {
       const auto metrics = fonts.face(FontRole::primary).metrics(run.request.pixel_height);
       const Rect cell{.y = -static_cast<float>(metrics.ascender), .width = static_cast<float>(metrics.maximum_advance) * static_cast<float>(run.columns), .height = static_cast<float>(metrics.line_height)};
+
       fitFallback(appended, cell, run.advance);
 
       return cell.width;
@@ -522,6 +539,7 @@ private:
 
   inline static void fitFallback(std::span<IconGlyph> glyphs, Rect cell, float advance) {
     InkBounds bounds;
+
     for (const auto &glyph : glyphs) {
       bounds.include(glyph.ink);
     }
@@ -532,6 +550,7 @@ private:
     }
 
     const auto transform = GlyphTransform::fit(ink, cell);
+
     for (auto &glyph : glyphs) {
       glyph.ink = {.x = advance + (glyph.ink.x * transform.scale) + transform.x, .y = (glyph.ink.y * transform.scale) + transform.y, .width = glyph.ink.width * transform.scale, .height = glyph.ink.height * transform.scale};
     }
@@ -641,9 +660,12 @@ public:
       cached_face_ = tbc::raw(&primary);
       cached_height_ = request.pixel_height;
     }
+
     const auto &coverage = primary.ligatures();
+
     for (std::size_t column = 0; column < cells.size(); ++column) {
       auto projected = cells[column];
+
       if (request.selection.contains(request.first_cell + column)) {
         projected.style.flags ^= static_cast<std::uint16_t>(CellAttribute::inverse);
       }
@@ -677,6 +699,7 @@ private:
 
   inline void appendPrimary(std::span<const ShapedGlyph> glyphs, std::size_t column, RowTextRequest request) {
     const auto first = glyphs_.size();
+
     glyphs_.insert(glyphs_.end(), glyphs.begin(), glyphs.end());
     cells_[column] = {.first_span = spans_.size(), .span_count = 1};
     spans_.push_back({.first = first, .count = glyphs.size(), .role = FontRole::primary, .offset = cellOffset(column, request), .columns = 1});
@@ -686,8 +709,10 @@ private:
     std::array<char, TextRuns<Memory>::maximum_bytes> bytes{};
     std::array<std::uint32_t, TextRuns<Memory>::maximum_cells> ends{};
     std::size_t length = 0;
+
     for (std::size_t index = 0; index < cells.size(); ++index) {
       const auto text = cells[index].utf8();
+
       std::ranges::copy(text, bytes.begin() + static_cast<std::ptrdiff_t>(length));
       length += text.size();
       ends[index] = static_cast<std::uint32_t>(length);
@@ -699,6 +724,7 @@ private:
     }
 
     std::array<ShapedGlyph, TextRuns<Memory>::maximum_glyphs> saved{};
+
     for (std::size_t index = 0; index < run.size(); ++index) {
       saved[index] = run.glyph(index);
       if (index != 0 && saved[index].cluster < saved[index - 1].cluster) {
@@ -707,13 +733,16 @@ private:
     }
 
     std::size_t first = 0;
+
     for (std::size_t index = 0; index < cells.size(); ++index) {
       auto end = first;
+
       while (end < run.size() && saved[end].cluster < ends[index]) {
         ++end;
       }
 
       const auto share = std::span{saved}.subspan(first, end - first);
+
       appendPrimary(share, column + index, request);
 
       first = end;
@@ -730,6 +759,7 @@ private:
 
     const auto text = cell.utf8();
     auto &face = fonts.face(FontRole::primary);
+
     if (text.size() == 1 && static_cast<unsigned char>(text.front()) < ascii_.size()) {
       auto &cached = ascii_[static_cast<unsigned char>(text.front())];
       if (cached) {
@@ -756,10 +786,12 @@ private:
       *entry = {.key = key};
       if (FontCoverage::covers(face, text)) {
         const auto shaped = face.shape(text, request.pixel_height);
+
         entry->single = shaped.size() == 1;
         entry->glyph = entry->single ? shaped.glyph(0) : ShapedGlyph{};
       }
     }
+
     // A text kept as not one glyph of the primary face takes the general route without asking
     // the face again.
     if (entry != nullptr && entry->single) {
@@ -769,6 +801,7 @@ private:
 
     cell_.shape(fonts, text, {.pixel_height = request.pixel_height, .preferred = FontRole::primary});
     const auto first_glyph = glyphs_.size();
+
     glyphs_.insert(glyphs_.end(), cell_.glyphs().begin(), cell_.glyphs().end());
     cells_[column] = {.first_span = spans_.size(), .span_count = cell_.spans().size()};
     for (auto span : cell_.spans()) {
@@ -788,10 +821,13 @@ private:
     if (text.size() < 2 || text.size() > 4) {
       return 0;
     }
+
     std::uint64_t key = static_cast<std::uint64_t>(text.size()) << cluster_length_shift;
+
     for (std::size_t index = 0; index < text.size(); ++index) {
       key |= static_cast<std::uint64_t>(static_cast<unsigned char>(text[index])) << (std::size_t{std::numeric_limits<unsigned char>::digits} * index);
     }
+
     return key;
   }
 

@@ -6,6 +6,7 @@
 
 static inline void telarFontSmoothing(CGContextRef context, bool enabled, uint8_t strength) {
   const CGFloat maximum_channel = UINT8_MAX;
+
   CGContextSetAllowsFontSmoothing(context, true);
   CGContextSetShouldSmoothFonts(context, enabled);
   CGContextSetAllowsFontSubpixelPositioning(context, true);

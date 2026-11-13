@@ -41,6 +41,7 @@ static void testSharedTerminalResponses() {
   const auto queue = std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, decltype(memory)>{memory});
   Terminal terminal{memory, TerminalSize{80, 24, 0, 0}, TerminalPurpose::separate_media, queue};
   MediaTerminal media{memory, TerminalSize{80, 24, 0, 0}, GraphicsLimits{}, queue};
+
   for (std::size_t index = 0; index < PtyResponseQueue::message_capacity; ++index) {
     media.reply(responseBytes("graphics reply"));
   }
@@ -54,17 +55,20 @@ static void testSharedTerminalResponses() {
     check(std::ranges::equal(media.responses(), responseBytes("graphics reply")));
     terminal.consumeResponses(media.responses().size());
   }
+
   check(std::ranges::equal(media.responses(), responseBytes("\x1b[1;1R")));
   terminal.consumeResponses(media.responses().size());
   check(std::ranges::equal(terminal.responses(), responseBytes("\x1b[1;1R")));
   terminal.consumeResponses(terminal.responses().size());
 
   bool rejected = false;
+
   try {
     media.reply(responseBytes(std::string(PtyResponseQueue::message_byte_capacity + 1, 'x')));
   } catch (const std::length_error &) {
     rejected = true;
   }
+
   check(rejected && queue->empty() && queue->snapshot().dropped == 0);
   terminal.feed(responseBytes("still usable"));
   terminal.refresh();

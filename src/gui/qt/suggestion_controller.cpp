@@ -97,6 +97,7 @@ bool Application::restorePaletteParent() {
   }
 
   auto parent = std::move(*palette_parent_);
+
   showPalette(PaletteMode::actions);
   palette_query_ = std::move(parent.query);
   palette_selection_ = parent.selection;
@@ -123,11 +124,14 @@ QVariantMap Application::suggestionGeometry() const {
 
   QVariantList lines;
   QVariantMap grid;
+
   if (session().suggestion().phase() == SuggestionPhase::ready) {
     const auto &font = configuration().font;
     const auto resolved = FormTextGrid::resolve(toQString(font.family.view()), toQString(font.style.view()), display.chrome.body);
+
     grid = resolved.record(density);
     SuggestionPreview preview{session().suggestion().text(), geometry.preview, resolved.metrics};
+
     while (const auto line = preview.next()) {
       lines.append(QVariantMap{{QStringLiteral("text"), toQString(line->text)}, {QStringLiteral("bounds"), local(line->bounds)}, {QStringLiteral("shortened"), line->shortened}});
     }

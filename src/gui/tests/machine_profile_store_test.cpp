@@ -115,6 +115,7 @@ void batchesCommitEveryEditWithOriginalMetadata() {
   BudgetAllocator memory{system, allocation_budget};
   MemoryFile file;
   MachineProfileStore store{memory, file};
+
   require(store.load().rows().empty(), "a missing profile file must load as an empty list");
   Random random;
   const std::array edits{
@@ -124,13 +125,16 @@ void batchesCommitEveryEditWithOriginalMetadata() {
       MachineEdit{.kind = MachineEditKind::record_login, .label = "gpu", .value = {}, .login_agent = MachineAgent::codex, .login = MachineLogin::done},
       MachineEdit{.kind = MachineEditKind::disable, .label = "gpu", .value = {}},
   };
+
   const auto result = store.change(edits, random, "local");
+
   require(result.rows().size() == 1 && result.rows().front().label() == "gpu", "a committed batch must include the renamed machine");
   require(result.rows().front().destination() == "dev@build" && result.rows().front().program() == "/opt/bin/telar", "a batch must preserve the destination while setting its program path");
   require(result.rows().front().login(MachineAgent::codex) == MachineLogin::done && !result.rows().front().enabled(), "a batch must retain login and enablement edits");
   require(result.rows().front().identity().format().view() == "m-010000000000", "saved identities must come from the injected random source");
   require(file.replacements == 1 && !file.locked, "all edits must reach disk in one replacement before releasing the lock");
   const auto loaded = store.load();
+
   require(loaded.rows().front().label() == "gpu" && loaded.version() == 2, "committed setup metadata must reload through the original JSON format");
   require(memory.liveBytes() == 0, "profile operations must release every temporary byte");
 }
@@ -138,6 +142,7 @@ void batchesCommitEveryEditWithOriginalMetadata() {
 void rejectedBatchesAndWriteFailuresPreserveTheSavedFile() {
   SystemAllocator memory;
   MemoryFile file;
+
   file.source.assign("{\"version\":1,\"machines\":[]}\n");
   const auto original = file.source;
   MachineProfileStore store{memory, file};
@@ -146,7 +151,9 @@ void rejectedBatchesAndWriteFailuresPreserveTheSavedFile() {
       MachineEdit{.kind = MachineEditKind::add, .label = "valid", .value = "dev@valid"},
       MachineEdit{.kind = MachineEditKind::add, .label = "invalid", .value = "bad host"},
   };
+
   bool rejected = false;
+
   try {
     static_cast<void>(store.change(invalid, random, "local"));
   } catch (const MachineFailure &failure) {
@@ -158,6 +165,7 @@ void rejectedBatchesAndWriteFailuresPreserveTheSavedFile() {
   file.fail_replace = true;
   const std::array valid{invalid.front()};
   bool failed = false;
+
   try {
     static_cast<void>(store.change(valid, random, "local"));
   } catch (const std::runtime_error &) {
@@ -173,13 +181,16 @@ void everyTransactionReloadsExternalChangesAndRespectsTheLocalAlias() {
   MachineProfileStore store{memory, file};
   Random random;
   const std::array first{MachineEdit{.kind = MachineEditKind::add, .label = "build", .value = "dev@build"}};
+
   static_cast<void>(store.change(first, random, "hostname"));
   file.source.assign("{\"version\":1,\"local_label\":\"local-alias\",\"machines\":[]}\n");
   const std::array second{MachineEdit{.kind = MachineEditKind::add, .label = "hostname", .value = "dev@other"}};
   const auto profiles = store.change(second, random, "hostname");
+
   require(profiles.rows().size() == 1 && profiles.rows().front().label() == "hostname", "an external local alias must replace the hostname and external file changes must be reloaded under lock");
   const std::array rename{MachineEdit{.kind = MachineEditKind::rename, .label = "hostname", .value = "local-alias"}};
   bool rejected = false;
+
   try {
     static_cast<void>(store.change(rename, random, "hostname"));
   } catch (const MachineFailure &failure) {
@@ -194,10 +205,12 @@ void allocationFailureReleasesTheLockBeforeReturning() {
   SystemAllocator system;
   BudgetAllocator memory{system, 0};
   MemoryFile file;
+
   file.source.assign("{\"version\":1,\"machines\":[]}\n");
   MachineProfileStore store{memory, file};
   Random random;
   bool failed = false;
+
   try {
     static_cast<void>(store.change({}, random, "local"));
   } catch (const std::bad_alloc &) {

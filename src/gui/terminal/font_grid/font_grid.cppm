@@ -124,11 +124,13 @@ struct CopyGrid {
   [[nodiscard]] inline std::array<CopyPoint, 2> pointerSpan(CopyPoint point, CopyGranularity granularity) const noexcept {
     auto first = point;
     auto last = point;
+
     if (granularity == CopyGranularity::line) {
       first.x = 0;
       last.x = columns == 0 ? 0 : columns - 1;
     } else if (granularity == CopyGranularity::word) {
       const auto word = pointerWord(point);
+
       while (first.x != 0 && pointerWord({.x = static_cast<std::uint16_t>(first.x - 1), .y = point.y}) == word) {
         --first.x;
       }
@@ -140,6 +142,7 @@ struct CopyGrid {
 
     const auto *first_cell = cell(first);
     const auto *last_cell = cell(last);
+
     if (first_cell != nullptr && first_cell->width == CellWidth::continuation && first.x != 0) {
       --first.x;
     }
@@ -182,6 +185,7 @@ WheelRoute wheelRoute(const Screen<Memory> &screen) noexcept {
   }
 
   const auto &modes = screen.modes();
+
   return modes.alternate_screen && modes.alternate_scroll && screen.scroll().offset == copyGrid(screen).maximumOffset() ? WheelRoute::keys : WheelRoute::scroll;
 }
 
@@ -200,6 +204,7 @@ public:
     }
 
     CopySelection selection;
+
     selection.pane_id = pane_id;
     selection.start_x = takeCoordinate<std::uint16_t>(text, ',');
     selection.start_y = takeCoordinate<std::uint32_t>(text, ':');
@@ -218,6 +223,7 @@ private:
     }
 
     const auto result = coordinate<Coordinate>(text.substr(0, boundary));
+
     text.remove_prefix(boundary + 1);
 
     return result;

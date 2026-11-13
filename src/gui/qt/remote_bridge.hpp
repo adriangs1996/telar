@@ -90,30 +90,37 @@ public:
   explicit RemoteBridge(Observer &observer)
       : observer_(observer) {
     static_assert(RemoteBridgeObserver<Observer>);
+
     deadline_.setSingleShot(true);
     QObject::connect(&deadline_, &QTimer::timeout, &context_, [this] {
       fail(MachineError::endpoint_unavailable);
     });
+
     QObject::connect(&options_task_, &QFutureWatcher<OptionsResult>::finished, &context_, [this] {
       optionsPrepared();
     });
+
     QObject::connect(&process_, &QProcess::readyReadStandardOutput, &context_, [this] {
       drain(QProcess::StandardOutput);
     });
+
     QObject::connect(&process_, &QProcess::readyReadStandardError, &context_, [this] {
       drain(QProcess::StandardError);
     });
+
     QObject::connect(&process_, &QProcess::started, &context_, [this] {
       if (running_ && phase_ == Phase::bridge) {
         sockets_.child.reset();
         observer_.remoteChannelReady(std::move(sockets_.local));
       }
     });
+
     QObject::connect(&process_, &QProcess::errorOccurred, &context_, [this](QProcess::ProcessError error) {
       if (running_ && error != QProcess::Crashed) {
         fail(MachineError::endpoint_unavailable);
       }
     });
+
     QObject::connect(&process_, &QProcess::finished, &context_, [this](int status, QProcess::ExitStatus outcome) {
       finished(status, outcome);
     });
@@ -125,6 +132,7 @@ public:
     close();
     if (process_.state() != QProcess::NotRunning) {
       constexpr int shutdown_timeout_ms = 1000;
+
       static_cast<void>(process_.waitForFinished(shutdown_timeout_ms));
     }
   }
@@ -136,6 +144,7 @@ public:
 
   void open(RemoteTarget target) {
     const auto destination = target.destination.toUtf8();
+
     MachineFieldRules::profileDestination(view(destination));
     const auto program = target.program.toUtf8();
     if (!program.isEmpty()) {
@@ -194,12 +203,15 @@ private:
     waiting_ = false;
     const auto request = target_;
     const auto generation = generation_;
+
     options_task_.setFuture(QtConcurrent::run([request, generation] {
       OptionsResult result{.arguments = {}, .generation = generation};
+
       try {
         if (request.prepare_directory) {
           const auto endpoint = request.local_endpoint.toUtf8();
           const auto directory = view(endpoint).substr(0, view(endpoint).rfind('/'));
+
           platform::prepareManagedDirectory(directory);
         }
 
@@ -252,6 +264,7 @@ private:
 
   void launch(std::string_view command) {
     auto arguments = options_;
+
     arguments.prepend(QStringLiteral("-T"));
     arguments.append(QStringLiteral("--"));
     arguments.append(target_.destination);
@@ -267,6 +280,7 @@ private:
   void drain(QProcess::ProcessChannel channel) {
     process_.setReadChannel(channel);
     std::array<char, read_chunk_bytes> chunk{};
+
     while (process_.bytesAvailable() > 0) {
       const auto received = process_.read(chunk.data(), static_cast<qint64>(chunk.size()));
       if (received <= 0) {
@@ -308,6 +322,7 @@ private:
     if (phase_ == Phase::bridge || outcome != QProcess::NormalExit || status != 0) {
       constexpr int maximum_exit_status = 255;
       const auto exited = outcome == QProcess::NormalExit && status >= 0 && status <= maximum_exit_status;
+
       fail(MachineConnectionPolicy::failure({.exit_status = exited ? std::optional{static_cast<std::uint8_t>(status)} : std::nullopt, .standard_error = view(errors_)}));
 
       return;
@@ -322,6 +337,7 @@ private:
       }
 
       const auto generation = generation_;
+
       observer_.remoteDiscovered(*discovery_);
       if (closed_ || generation != generation_) {
         return;
@@ -348,12 +364,14 @@ private:
       process_.setInputChannelMode(QProcess::ForwardedInputChannel);
       process_.setProcessChannelMode(QProcess::ForwardedOutputChannel);
       const auto descriptor = sockets_.child.get();
+
       process_.setChildProcessModifier([this, descriptor] {
         const auto error = platform::bindStandardIo(descriptor);
         if (error != 0) {
           process_.failChildProcessModifier("Bind SSH bridge standard input/output", error);
         }
       });
+
       launch(MachineRemoteCommand::bridge(program()).view());
     } catch (const std::exception &) {
       fail(MachineError::endpoint_unavailable);

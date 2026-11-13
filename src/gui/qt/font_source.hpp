@@ -56,6 +56,7 @@ public:
   explicit FontSource(tbc::view<Memory &, tbc::lt::a> memory, const FontConfiguration &font)
       : bytes_(AllocatorRef<std::uint8_t, Memory>{memory}) {
     const auto data = loadFontData(font);
+
     bytes_.assign(data.bytes.cbegin(), data.bytes.cend());
     match_ = data.match;
   }

@@ -78,6 +78,7 @@ class FontResolverTest final : public QObject {
 private:
   Q_SLOT static void fallbackFacesCanBeRasterized() {
     std::size_t checked = 0;
+
     for (const auto *text : {"λ", "á", "漢", "字", "中"}) {
       const auto query = fonts::FontQuery::create(text);
       if (!query) {
@@ -95,6 +96,7 @@ private:
       }
 
       const fonts::Face face{telar::byteView({data->bytes.constData(), static_cast<std::size_t>(data->bytes.size())}), data->match};
+
       QVERIFY(face.monochrome());
       QVERIFY(fonts::FontCoverage::covers(face, text));
       ++checked;
@@ -105,11 +107,13 @@ private:
 
   Q_SLOT static void nativeFallbackHonorsClientValidation() {
     fonts::FontMatch expected{};
+
     QVERIFY(telarGuiFindFallbackFont("λ", &expected) == telar_font_found);
     fonts::FontMatch accepted{};
     const auto allow = [](const telar_font_match *, void *) -> int {
       return telar_font_found;
     };
+
     QCOMPARE(telarGuiFindValidatedFallbackFont("λ", &accepted, allow, nullptr), telar_font_found);
     QVERIFY(fonts::sameFontMatch(expected, accepted));
     std::size_t rejected = 0;
@@ -118,6 +122,7 @@ private:
 
       return telar_font_family_not_found;
     };
+
     QCOMPARE(telarGuiFindValidatedFallbackFont("λ", &accepted, reject, &rejected), telar_font_family_not_found);
     QVERIFY(rejected > 0);
   }
@@ -130,6 +135,7 @@ private:
     const auto height = FontGrid::pixelHeight(configuration, 1);
     const auto grid = FontGrid::resolve(face.metrics(height), configuration, 1);
     const auto font = FontResolver::resolve(memory, configuration, 1).font;
+
     QCOMPARE(font.cell.width(), static_cast<qreal>(grid.width));
     QCOMPARE(font.cell.height(), static_cast<qreal>(grid.height));
     QCOMPARE(font.baseline, static_cast<qreal>(grid.baseline));
@@ -143,12 +149,14 @@ private:
     constexpr std::array line_heights{0.75F, 1.0F, 1.2F, 1.5F, 3.0F};
     const FontSource source{memory, configuration};
     fonts::Face face{source.bytes(), source.match()};
+
     for (const auto size : sizes) {
       configuration.size = size;
       for (const auto scale : scales) {
         for (const auto line_height : line_heights) {
           configuration.line_height = line_height;
           const auto resolved = FontResolver::resolve(face, configuration, scale);
+
           QCOMPARE(resolved.font.cell.width() * scale, static_cast<qreal>(resolved.grid.width));
           QCOMPARE(resolved.font.cell.height() * scale, static_cast<qreal>(resolved.grid.height));
           QCOMPARE(resolved.font.baseline * scale, static_cast<qreal>(resolved.grid.baseline));
@@ -161,16 +169,20 @@ private:
     SystemAllocator system;
     const FontConfiguration configuration;
     BudgetAllocator memory{system, std::numeric_limits<std::size_t>::max()};
+
     {
       const FontSource source{memory, FontConfiguration{}};
+
       QVERIFY(memory.liveBytes() >= source.bytes().size());
     }
 
     QCOMPARE(memory.liveBytes(), std::size_t{0});
     const auto resolved = FontResolver::resolve(memory, configuration, 1);
+
     QCOMPARE(memory.liveBytes(), std::size_t{0});
     QVERIFY(QRawFont::fromFont(resolved.font.faces.front()).supportsCharacter('M'));
     BudgetAllocator exhausted{system, std::size_t{0}};
+
     QVERIFY_THROWS_EXCEPTION(std::bad_alloc, static_cast<void>(FontResolver::resolve(exhausted, configuration, 1)));
     QCOMPARE(exhausted.liveBytes(), std::size_t{0});
   }
@@ -184,6 +196,7 @@ private:
     const auto initial = face.shape(label, pixel_height);
     const auto advance = initial.advance();
     Vector<fonts::ShapedGlyph, SystemAllocator> saved{AllocatorRef<fonts::ShapedGlyph, SystemAllocator>{memory}};
+
     for (std::size_t index = 0; index < initial.size(); ++index) {
       saved.push_back(initial.glyph(index));
     }
@@ -196,17 +209,21 @@ private:
     const auto original_left = original.left;
     const auto original_top = original.top;
     Vector<std::uint8_t, SystemAllocator> pixels{AllocatorRef<std::uint8_t, SystemAllocator>{memory}};
+
     for (std::uint32_t row = 0; row < original.height; ++row) {
       const auto coverage = original.row(row);
+
       pixels.insert(pixels.end(), coverage.begin(), coverage.end());
     }
 
     constexpr std::uint16_t pressure_height = 40;
+
     for (std::size_t index = 0; index <= fonts::Face::maximum_sizes; ++index) {
       static_cast<void>(face.shape(label, static_cast<std::uint16_t>(pressure_height + index)));
     }
 
     const auto restored = face.shape(label, pixel_height);
+
     QCOMPARE(restored.advance(), advance);
     QCOMPARE(restored.size(), saved.size());
     for (std::size_t index = 0; index < restored.size(); ++index) {
@@ -214,6 +231,7 @@ private:
     }
 
     const auto bitmap = face.rasterize(request);
+
     QCOMPARE(bitmap.width, original_width);
     QCOMPARE(bitmap.height, original_height);
     QCOMPARE(bitmap.left, original_left);
@@ -221,6 +239,7 @@ private:
     for (std::uint32_t row = 0; row < bitmap.height; ++row) {
       const auto coverage = bitmap.row(row);
       const auto offset = static_cast<std::size_t>(row) * bitmap.width;
+
       QVERIFY(std::equal(coverage.begin(), coverage.end(), pixels.begin() + static_cast<std::ptrdiff_t>(offset)));
     }
   }
@@ -231,6 +250,7 @@ private:
     fonts::Face face{source.bytes(), source.match()};
     const auto ink = [](fonts::GlyphBitmapView bitmap) {
       std::uint64_t coverage = 0;
+
       for (std::uint32_t row = 0; row < bitmap.height; ++row) {
         for (const auto value : bitmap.row(row)) {
           coverage += value;
@@ -239,21 +259,27 @@ private:
 
       return coverage;
     };
+
     constexpr std::array<std::uint16_t, 4> heights{13, 26, 39, 96};
     constexpr std::array styles{fonts::GlyphStyle{}, fonts::GlyphStyle{.bold = true}, fonts::GlyphStyle{.italic = true}, fonts::GlyphStyle{.bold = true, .italic = true}};
     constexpr std::uint8_t medium_strength = 128;
+
     for (const auto height : heights) {
       const auto shaped = face.shape("M", height);
       const auto glyph = shaped.glyph(0);
       const auto advance = shaped.advance();
       const auto metrics = face.metrics(height);
+
       for (const auto style : styles) {
         fonts::GlyphRasterRequest request{.index = glyph.index, .pixel_height = height, .style = style};
         const auto plain = ink(face.rasterize(request));
+
         request.thicken_strength = medium_strength;
         const auto medium = ink(face.rasterize(request));
+
         request.thicken_strength = FontConfiguration::maximum_thicken_strength;
         const auto strong = ink(face.rasterize(request));
+
         QVERIFY(medium > plain);
         QVERIFY(strong > medium);
         request.thicken_strength = 0;
@@ -263,6 +289,7 @@ private:
       // Grid fitting concentrates the crossbar and stems of "H" into whole pixels.
       const auto partial = [](fonts::GlyphBitmapView bitmap) {
         std::uint64_t count = 0;
+
         for (std::uint32_t row = 0; row < bitmap.height; ++row) {
           for (const auto value : bitmap.row(row)) {
             count += value != 0 && value != std::numeric_limits<std::uint8_t>::max() ? 1 : 0;
@@ -271,19 +298,23 @@ private:
 
         return count;
       };
+
       const auto bar = face.shape("H", height).glyph(0).index;
       const auto native_partial = partial(face.rasterize({.index = bar, .pixel_height = height}));
       const auto full = face.rasterize({.index = bar, .pixel_height = height, .hinting = fonts::GlyphHinting::full});
+
       QVERIFY(ink(full) > 0);
       QVERIFY(partial(full) <= native_partial);
 
       const auto restored = face.shape("M", height);
+
       QVERIFY(restored.glyph(0) == glyph);
       QCOMPARE(restored.advance(), advance);
       QCOMPARE(face.metrics(height).maximum_advance, metrics.maximum_advance);
       QCOMPARE(face.metrics(height).line_height, metrics.line_height);
       QCOMPARE(face.metrics(height).ascender, metrics.ascender);
       const auto space = face.shape(" ", height).glyph(0).index;
+
       QCOMPARE(ink(face.rasterize({.index = space, .pixel_height = height, .style = {}, .thicken_strength = FontConfiguration::maximum_thicken_strength})), std::uint64_t{0});
     }
   }
@@ -291,6 +322,7 @@ private:
   Q_SLOT static void retainsOneSourceAcrossPanelsAndScales() {
     SystemAllocator system;
     BudgetAllocator memory{system, std::numeric_limits<std::size_t>::max()};
+
     {
       FontCache cache{memory};
       FontConfiguration configuration;
@@ -298,8 +330,10 @@ private:
       const auto allocations = memory.allocations();
       const auto live_bytes = memory.liveBytes();
       constexpr std::array scales{1.0, 1.25, 1.5, 2.0, 3.0, 4.0, 6.0, 7.0, 8.0, 1.0};
+
       for (const auto scale : scales) {
         const auto resolved = cache.resolve(configuration, scale);
+
         QCOMPARE(resolved.font.cell.width() * scale, static_cast<qreal>(resolved.grid.width));
         QCOMPARE(memory.allocations(), allocations);
       }
@@ -322,9 +356,11 @@ private:
     SystemAllocator memory;
     FontConfiguration configuration;
     const auto original = FontResolver::resolve(memory, configuration, 1);
+
     configuration.family.assign("tElAr FoRmA");
     configuration.style.assign("rEgUlAr");
     const auto resolved = FontResolver::resolve(memory, configuration, 1);
+
     QCOMPARE(resolved.font.cell, original.font.cell);
     QCOMPARE(resolved.font.baseline, original.font.baseline);
     QCOMPARE(resolved.font.faces, original.font.faces);
@@ -334,6 +370,7 @@ private:
     configuration.family.assign("JetBrains Mono");
     configuration.style.assign("");
     const auto jetbrains = FontResolver::resolve(memory, configuration, 1);
+
     configuration.family.assign("jEtBrAiNs MoNo");
     configuration.style.assign("rEgUlAr");
     QCOMPARE(FontResolver::resolve(memory, configuration, 1).font.faces, jetbrains.font.faces);
@@ -342,38 +379,47 @@ private:
   Q_SLOT static void defaultsToBundledFormaAcrossRenderers() {
     const auto expected = loadFontBytes(QStringLiteral(":/telar/fonts/TelarForma-Regular.ttf"));
     const FontConfiguration configuration;
+
     QCOMPARE(loadFontData(configuration).bytes, expected);
     QCOMPARE(bundledFonts().front(), QStringLiteral("Telar Forma"));
 
     const auto source = ResidentFonts::resolveSource({}, {});
+
     QCOMPARE(source, ResidentFonts::resolveSource(QStringLiteral("Telar Forma"), {}));
     QVERIFY(std::ranges::equal(source->bytes(), telar::byteView({expected.constData(), static_cast<std::size_t>(expected.size())})));
     const auto resident = ResidentFonts::shared(source);
+
     QCOMPARE(resident->face(fonts::FontRole::primary).family(), std::string_view{"Telar Forma"});
     QCOMPARE(resident->face(fonts::FontRole::text).family(), std::string_view{"JetBrains Mono"});
 
     const auto terminal = TerminalFont::resolve({}, 1);
+
     QCOMPARE(QRawFont::fromFont(terminal.faces.front()).familyName(), QStringLiteral("Telar Forma"));
 
     SystemAllocator memory;
     const auto resolved = FontResolver::resolve(memory, configuration, 1);
+
     QCOMPARE(QRawFont::fromFont(resolved.font.faces.front()).familyName(), QStringLiteral("Telar Forma"));
   }
 
   Q_SLOT static void loadsBundledFormaFromResources() {
     const auto expected = loadFontBytes(QStringLiteral(":/telar/fonts/TelarForma-Regular.ttf"));
+
     QVERIFY(QFontDatabase::hasFamily(QStringLiteral("Telar Forma")));
 
     for (const auto *family : {"Telar Forma", "tElAr FoRmA"}) {
       FontConfiguration configuration;
+
       configuration.family.assign(family);
 
       for (const auto *style : {"", "Regular", "rEgUlAr"}) {
         configuration.style.assign(style);
         const auto data = loadFontData(configuration);
+
         QCOMPARE(data.bytes, expected);
 
         fonts::Face face{telar::byteView({data.bytes.constData(), static_cast<std::size_t>(data.bytes.size())}), data.match};
+
         QCOMPARE(face.family(), std::string_view{"Telar Forma"});
         QCOMPARE(face.style(), std::string_view{"Regular"});
         QVERIFY(face.fixedPitch());
@@ -381,6 +427,7 @@ private:
 
         const auto resolved = FontResolver::resolve(face, configuration, 1);
         const auto raw = QRawFont::fromFont(resolved.font.faces.front());
+
         QCOMPARE(raw.familyName(), QStringLiteral("Telar Forma"));
         QVERIFY(resolved.font.fixed_pitch);
         QVERIFY(resolved.font.cell.width() > 0);
@@ -391,6 +438,7 @@ private:
 
   Q_SLOT static void rejectsUnavailableBundledFormaStyles() {
     FontConfiguration configuration;
+
     configuration.family.assign("Telar Forma");
     configuration.style.assign("SemiBold");
 
@@ -405,8 +453,10 @@ private:
   Q_SLOT static void appliesVariableMetricsAndNamedInstances() {
     const FontConfiguration configuration;
     QFile file{QStringLiteral(":/telar/test-fonts/metrics-variable.ttf")};
+
     QVERIFY(file.open(QIODeviceBase::ReadOnly));
     const auto data = file.readAll();
+
     QVERIFY(QFontDatabase::addApplicationFontFromData(data) >= 0);
     const std::vector<std::uint8_t> bytes{data.cbegin(), data.cend()};
     fonts::Face original{bytes};
@@ -414,36 +464,44 @@ private:
     constexpr std::uint32_t width_axis = 0x77647468;
     constexpr float wide_coordinate = 200;
     fonts::FontMatch match{};
+
     match.variation.count = 1;
     match.variation.tags[0] = width_axis;
     match.variation.values[0] = wide_coordinate;
     fonts::Face wide{bytes, match};
     const auto narrow_metrics = original.metrics(physical_height);
     const auto wide_metrics = wide.metrics(physical_height);
+
     QVERIFY(narrow_metrics.ascender != wide_metrics.ascender);
     QVERIFY(narrow_metrics.line_height != wide_metrics.line_height);
     QVERIFY(narrow_metrics.box_stroke != wide_metrics.box_stroke);
     // The wide master scales every advance by 3/2; cells follow the variation's ASCII advances.
     constexpr std::uint16_t narrow_cell = 18;
     constexpr std::uint16_t wide_cell = 27;
+
     QCOMPARE(narrow_metrics.maximum_advance, narrow_cell);
     QCOMPARE(wide_metrics.maximum_advance, wide_cell);
     const auto resolved = FontResolver::resolve(wide, configuration, 2);
+
     QCOMPARE(resolved.grid.box_stroke, wide_metrics.box_stroke);
     QCOMPARE(resolved.font.faces.front().variableAxisValue("wdth"), wide_coordinate);
     const auto wide_raw = QRawFont::fromFont(resolved.font.faces.front());
+
     QVERIFY(!wide_raw.fontTable("MVAR").isEmpty());
     const auto narrow = FontResolver::resolve(original, configuration, 2);
     const auto narrow_raw = QRawFont::fromFont(narrow.font.faces.front());
     const auto wide_glyph = wide_raw.glyphIndexesForString(QStringLiteral("M"));
     const auto narrow_glyph = narrow_raw.glyphIndexesForString(QStringLiteral("M"));
+
     QVERIFY(wide_raw.advancesForGlyphIndexes(wide_glyph).front().x() > narrow_raw.advancesForGlyphIndexes(narrow_glyph).front().x());
     constexpr unsigned named_instance_shift = 16;
     constexpr unsigned wide_instance_index = 2;
     constexpr auto wide_instance = static_cast<std::int32_t>(wide_instance_index << named_instance_shift);
+
     match = {};
     match.face_index = wide_instance;
     fonts::Face named{bytes, match};
+
     QCOMPARE(named.variation().values[0], wide_coordinate);
     QCOMPARE(named.metrics(physical_height).line_height, wide_metrics.line_height);
     match.variation.count = 1;
@@ -454,6 +512,7 @@ private:
 
   Q_SLOT static void sizesCellsByAsciiInsteadOfWidestGlyph() {
     QFile file{QStringLiteral(":/telar/test-fonts/metrics-wide-glyph.ttf")};
+
     QVERIFY(file.open(QIODeviceBase::ReadOnly));
     const auto data = file.readAll();
     const std::vector<std::uint8_t> bytes{data.cbegin(), data.cend()};
@@ -461,23 +520,29 @@ private:
     // 600 of 1000 units at 30 px; the em dash's 1200 units must not double the cell.
     constexpr std::uint16_t height = 30;
     constexpr std::uint16_t cell = 18;
+
     QCOMPARE(face.metrics(height).maximum_advance, cell);
     QCOMPARE(FontGrid::resolve(face.metrics(height), FontConfiguration{}, 1).width, cell);
   }
 
   Q_SLOT static void selectsCollectionFacesAndRejectsMissingNames() {
     QFile file{QStringLiteral(":/telar/test-fonts/metrics-collection.ttc")};
+
     QVERIFY(file.open(QIODeviceBase::ReadOnly));
     const auto data = file.readAll();
     const std::vector<std::uint8_t> bytes{data.cbegin(), data.cend()};
     fonts::FontMatch match{};
+
     match.face_index = 1;
     const fonts::Face indexed{bytes, match};
+
     QCOMPARE(indexed.family(), std::string_view{"Telar Metrics Fixture"});
     match.face_index = -1;
     constexpr std::string_view postscript = "TelarMetricsFixture-Regular";
+
     std::ranges::copy(postscript, std::begin(match.postscript));
     const fonts::Face named{bytes, match};
+
     QCOMPARE(named.family(), indexed.family());
     match.postscript[0] = 'X';
     QVERIFY_THROWS_EXCEPTION(std::runtime_error, (fonts::Face{bytes, match}));
@@ -491,6 +556,7 @@ private:
 
 int main(int argc, char **argv) {
   const QGuiApplication application{argc, argv};
+
   bundledFonts();
   FontResolverTest test;
 

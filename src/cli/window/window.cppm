@@ -97,12 +97,14 @@ struct SetupReport {
     }
 
     const auto begin = text.find_first_not_of(' ');
+
     return begin == std::string::npos ? std::string{} : text.substr(begin, text.find_last_not_of(' ') + 1 - begin);
   }
 
   inline void end(Step step, Status status, std::string detail) {
     const auto index = static_cast<std::size_t>(step);
     auto &result = results.at(index);
+
     result.status = status;
     result.detail = bounded(std::move(detail));
     if (!json) {
@@ -123,6 +125,7 @@ struct SetupReport {
 
     ++note_count;
     auto &result = results.at(static_cast<std::size_t>(step));
+
     result.notes.push_back(bounded(std::move(detail)));
     if (!json && result.status) {
       std::printf("      %s\n", result.notes.back().c_str());
@@ -147,6 +150,7 @@ struct SetupReport {
       std::printf("telar machine setup %s: %.*s.\n", label.c_str(), static_cast<int>(reason.size()), reason.data());
     } else {
       String<Memory> output{AllocatorRef<char, Memory>{memory}};
+
       output += "{\"label\":";
       appendJsonText(output, label, JsonEscapes::control);
       output += ",\"destination\":";
@@ -165,15 +169,18 @@ struct SetupReport {
     const bool failed = has(Status::failed);
     const bool pending = has(Status::pending);
     const bool changed = has(Status::changed);
+
     if (!json) {
       const auto *verdict = failed ? "is not ready; see the failed steps above" : pending ? "takes windows, but a login waits for you there; see Logins above and run setup again once it is done"
                                                                               : changed   ? "is ready"
                                                                                           : "was already set up; nothing changed";
+
       std::printf("%s %s.\n", label.c_str(), verdict);
       return failed ? 1 : 0;
     }
 
     String<Memory> output{AllocatorRef<char, Memory>{memory}};
+
     output += "{\"label\":";
     appendJsonText(output, label, JsonEscapes::control);
     output += ",\"destination\":";
@@ -191,6 +198,7 @@ struct SetupReport {
 
     output += ",\"steps\":[";
     bool first = true;
+
     for (std::size_t index = 0; index < results.size(); ++index) {
       const auto &result = results[index];
       if (!result.status) {
@@ -210,6 +218,7 @@ struct SetupReport {
       appendJsonText(output, result.detail, JsonEscapes::control);
       output += ",\"notes\":[";
       bool first_note = true;
+
       for (const auto &note : result.notes) {
         if (!first_note) {
           output += ',';
@@ -258,6 +267,7 @@ void appendJsonNumber(String<Memory> &output, std::string_view encoded) {
   const auto parsed = std::from_chars(encoded.data(), encoded.data() + encoded.size(), value);
   if (parsed.ec == std::errc::result_out_of_range) {
     const String<Memory> terminated{encoded, output.get_allocator()};
+
     value = std::strtod(terminated.c_str(), nullptr);
   }
 
@@ -283,6 +293,7 @@ void appendJsonNumber(String<Memory> &output, std::string_view encoded) {
   }
 
   int exponent = 0;
+
   std::from_chars(exponent_text.data(), exponent_text.data() + exponent_text.size(), exponent);
   if (mantissa.starts_with('-')) {
     output += '-';
@@ -292,6 +303,7 @@ void appendJsonNumber(String<Memory> &output, std::string_view encoded) {
   const auto dot = mantissa.find('.');
   const int decimal_position = static_cast<int>(dot == std::string_view::npos ? mantissa.size() : dot) + exponent;
   String<Memory> digits{output.get_allocator()};
+
   for (const auto byte : mantissa) {
     if (byte != '.') {
       digits += byte;
@@ -318,6 +330,7 @@ void appendJson(String<Memory> &output, const JsonValue &value, bool pretty, uns
   const auto encoded = value.encoded();
   if (encoded.starts_with('"')) {
     String<Memory> text{output.get_allocator()};
+
     value.string(text);
     appendJsonText(output, text, JsonEscapes::standard);
     return;
@@ -334,17 +347,20 @@ void appendJson(String<Memory> &output, const JsonValue &value, bool pretty, uns
   }
 
   const bool object = encoded.starts_with('{');
+
   output += object ? '{' : '[';
   std::size_t count = 0;
   const auto separator = [&] {
     if (count++ != 0) {
       output += ',';
     }
+
     if (pretty) {
       output += '\n';
       output.append((depth + 1) * 2, ' ');
     }
   };
+
   if (object) {
     value.eachMember([&](const JsonValue &key, const JsonValue &member) {
       separator();
@@ -389,6 +405,7 @@ struct ClientOptions {
     Cursor args{words};
     const auto verb = args.take("MissingClientAction");
     ClientOptions self{};
+
     if (verb == "list") {
       self.action = Action::list;
     } else if (verb == "get") {
@@ -431,6 +448,7 @@ struct SuggestionOptions {
     }
 
     SuggestionOptions self;
+
     self.current = std::string_view{words[1]} == "--current";
     if (!self.current) {
       self.pane = positive(words[1], "InvalidIdentity");
@@ -449,6 +467,7 @@ struct SuggestionOptions {
     }
 
     Cursor args{words.subspan(3)};
+
     while (!args.empty()) {
       const auto option = args.take("UnknownSuggestionOption");
       if (option == "--json" && !self.json) {
@@ -478,6 +497,7 @@ struct NotificationOptions {
     }
 
     NotificationOptions self;
+
     self.notification.title = words[1];
     if (self.notification.title.empty()) {
       throw std::invalid_argument{"EmptyNotificationTitle"};
@@ -485,6 +505,7 @@ struct NotificationOptions {
 
     Cursor args{words.subspan(2)};
     bool body = false, link = false, level = false, duration = false, target = false;
+
     while (!args.empty()) {
       const auto option = args.take("UnknownNotificationOption");
       if (option == "--body") {
@@ -538,6 +559,7 @@ struct NotificationOptions {
 
         const auto missing = option == "--pane" ? "MissingPaneId" : option == "--tab" ? "MissingTabId"
                                                                                       : "MissingWorkspaceId";
+
         self.notification.target.id = parseUnsigned<std::uint64_t>(args.take(missing));
         if (self.notification.target.id == 0) {
           throw std::invalid_argument{option == "--pane" ? "InvalidPaneId" : option == "--tab" ? "InvalidTabId"
@@ -574,6 +596,7 @@ struct ConfigCheckOptions {
 
     ConfigCheckOptions self;
     bool profile_set = false;
+
     while (!args.empty()) {
       const auto option = args.take("TooManyConfigArguments");
       if (option == "--profile") {

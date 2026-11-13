@@ -36,6 +36,7 @@ void check(bool condition, std::string_view what, std::source_location location 
 
 std::string quote(std::string_view text) {
   std::string quoted = "'";
+
   for (const auto character : text) {
     if (character == '\'') {
       quoted += "'\\''";
@@ -43,6 +44,7 @@ std::string quote(std::string_view text) {
       quoted += character;
     }
   }
+
   return quoted + "'";
 }
 
@@ -54,14 +56,18 @@ std::string shell(const std::string &command, bool must_succeed = true) {
     check(false, command);
     return output;
   }
+
   std::array<char, 4096> buffer;
+
   while (const auto count = std::fread(buffer.data(), 1, buffer.size(), pipe)) {
     output.append(buffer.data(), count);
   }
+
   const auto status = ::pclose(pipe);
   if (must_succeed && status != 0) {
     check(false, "command failed: " + command);
   }
+
   return output;
 }
 
@@ -73,11 +79,13 @@ std::string trimmed(std::string text) {
   while (!text.empty() && (text.back() == '\n' || text.back() == ' ')) {
     text.pop_back();
   }
+
   return text;
 }
 
 void write(const std::string &path, std::string_view contents) {
   FILE *file = std::fopen(path.c_str(), "wb");
+
   check(file != nullptr, "open " + path);
   if (file != nullptr) {
     std::fwrite(contents.data(), 1, contents.size(), file);
@@ -91,10 +99,13 @@ std::string slurp(const std::string &path) {
   if (file == nullptr) {
     return contents;
   }
+
   std::array<char, 4096> buffer;
+
   while (const auto count = std::fread(buffer.data(), 1, buffer.size(), file)) {
     contents.append(buffer.data(), count);
   }
+
   std::fclose(file);
   return contents;
 }
@@ -106,12 +117,14 @@ void backdate(const std::string &directory) {
 
 std::string fresh(const std::string &name) {
   const auto directory = root + "/" + name;
+
   shell("rm -rf " + quote(directory) + " && mkdir -p " + quote(directory));
   return directory;
 }
 
 std::string hex(const git::ObjectId &id) {
   std::array<char, 64> buffer;
+
   return std::string{id.hex(buffer)};
 }
 
@@ -129,9 +142,11 @@ Expected porcelain(const std::string &directory) {
   Expected expected;
   const auto output = run(directory, "git status --porcelain=v2 --branch --untracked-files=no --no-renames");
   std::string_view rest{output};
+
   while (!rest.empty()) {
     const auto end = rest.find('\n');
     const auto line = rest.substr(0, end);
+
     rest.remove_prefix(end == std::string_view::npos ? rest.size() : end + 1);
     if (line.starts_with("# branch.oid ")) {
       expected.oid = line.substr(13);
@@ -143,12 +158,14 @@ Expected porcelain(const std::string &directory) {
       expected.has_ab = true;
       const auto values = line.substr(12);
       const auto space = values.find(' ');
+
       std::from_chars(values.data() + 1, values.data() + space, expected.ahead);
       std::from_chars(values.data() + space + 2, values.data() + values.size(), expected.behind);
     } else if (line.starts_with("1 ") || line.starts_with("2 ")) {
       const auto staged = line[2];
       const auto unstaged = line[3];
       auto &counts = expected.changes;
+
       counts.staged_added += staged == 'A';
       counts.staged_modified += staged == 'M' || staged == 'T';
       counts.staged_deleted += staged == 'D';
@@ -159,6 +176,7 @@ Expected porcelain(const std::string &directory) {
       ++expected.changes.conflicted;
     }
   }
+
   return expected;
 }
 
@@ -178,6 +196,7 @@ void agrees(Reader &reader, const std::string &directory, std::string_view label
   const auto &status = reader.read(directory);
   const auto expected = porcelain(directory);
   const auto prefix = std::format("[{} @{}] ", label, location.line());
+
   check(status.repository == git::RepositoryState::ready, prefix + "repository ready");
   if (expected.head == "(detached)") {
     check(status.head == git::HeadState::detached, prefix + "detached");
@@ -186,19 +205,23 @@ void agrees(Reader &reader, const std::string &directory, std::string_view label
   } else {
     check(status.head == git::HeadState::branch && std::string_view{status.branch} == expected.head, prefix + "branch " + expected.head + " got " + std::string{std::string_view{status.branch}});
   }
+
   if (expected.oid != "(initial)") {
     check(hex(status.head_id) == expected.oid, prefix + "head id " + expected.oid + " got " + hex(status.head_id));
   }
+
   if (expected.upstream.empty()) {
     check(status.upstream == git::UpstreamState::none, prefix + "no upstream");
   } else {
     check(std::string_view{status.upstream_name} == expected.upstream, prefix + "upstream " + expected.upstream + " got " + std::string{std::string_view{status.upstream_name}});
     check(status.upstream == (expected.has_ab ? git::UpstreamState::tracking : git::UpstreamState::gone), prefix + "upstream state");
   }
+
   if (expected.has_ab) {
     check(status.divergence == git::Accuracy::exact && status.ahead == expected.ahead && status.behind == expected.behind,
           prefix + std::format("ahead/behind +{} -{} got +{} -{} ({})", expected.ahead, expected.behind, status.ahead, status.behind, static_cast<int>(status.divergence)));
   }
+
   check(status.staged == git::Accuracy::exact && status.unstaged == git::Accuracy::exact, prefix + "changes exact");
   check(sameCounts(status.changes, expected.changes), prefix + "expected " + describe(expected.changes) + " got " + describe(status.changes));
 }
@@ -209,6 +232,7 @@ void configure(const std::string &directory) {
 
 std::string initialize(const std::string &name, std::string_view options = "") {
   const auto directory = fresh(name);
+
   run(directory, "git init -q -b main " + std::string{options} + " .");
   configure(directory);
   return directory;
@@ -220,9 +244,11 @@ void commitAll(const std::string &directory, std::string_view message) {
 
 std::string longMessage(int variant) {
   std::string message = std::format("change {}\n\n", variant);
+
   for (int line = 0; line < 120; ++line) {
     message += std::format("Shared paragraph line {} that makes commits similar enough to deltify.\n", line);
   }
+
   return message;
 }
 
@@ -233,16 +259,20 @@ std::array<int, 8> packEntryKinds(const std::string &path) {
   if (pack.size() < 32) {
     return kinds;
   }
+
   const auto *bytes = reinterpret_cast<const unsigned char *>(pack.data());
   const std::uint32_t count = bytes[8] << 24 | bytes[9] << 16 | bytes[10] << 8 | bytes[11];
   std::size_t position = 12;
   std::vector<unsigned char> sink(1 << 16);
+
   for (std::uint32_t entry = 0; entry < count && position < pack.size(); ++entry) {
     auto byte = bytes[position++];
     const auto kind = (byte >> 4) & 7;
+
     while ((byte & 0x80) != 0) {
       byte = bytes[position++];
     }
+
     if (kind == 6) {
       do {
         byte = bytes[position++];
@@ -250,25 +280,31 @@ std::array<int, 8> packEntryKinds(const std::string &path) {
     } else if (kind == 7) {
       position += 20;
     }
+
     ++kinds[kind];
     z_stream stream{};
+
     inflateInit(&stream);
     stream.next_in = const_cast<Bytef *>(bytes + position);
     stream.avail_in = static_cast<uInt>(pack.size() - position);
     int result = Z_OK;
+
     while (result == Z_OK) {
       stream.next_out = sink.data();
       stream.avail_out = static_cast<uInt>(sink.size());
       result = inflate(&stream, Z_NO_FLUSH);
     }
+
     position += stream.total_in;
     inflateEnd(&stream);
   }
+
   return kinds;
 }
 
 void testPlainBranch(Reader &reader) {
   const auto directory = initialize("plain");
+
   write(directory + "/a.txt", "alpha\n");
   shell("mkdir -p " + quote(directory + "/dir/sub"));
   write(directory + "/dir/b.txt", "beta\n");
@@ -280,6 +316,7 @@ void testPlainBranch(Reader &reader) {
 
   // Repeated reads reuse every cache: no object, no hashing.
   const auto &again = reader.read(directory + "/dir/sub");
+
   check(again.work.objects_read == 0 && again.work.files_hashed == 0 && again.work.commits_read == 0, "cached read does no work");
 
   write(directory + "/a.txt", "alpha changed\n");
@@ -301,10 +338,12 @@ void testPlainBranch(Reader &reader) {
 
 void testDetachedAndPackedRefs(Reader &reader) {
   const auto directory = initialize("detached");
+
   for (int index = 0; index < 3; ++index) {
     write(directory + "/file.txt", std::format("version {}\n", index));
     commitAll(directory, std::format("commit {}", index));
   }
+
   run(directory, "git checkout -q --detach HEAD~1");
   agrees(reader, directory, "detached");
   check(reader.status().branch.empty(), "detached has no branch");
@@ -319,15 +358,18 @@ void testDetachedAndPackedRefs(Reader &reader) {
   run(directory, "git branch fix/nested/deep && git branch zeta");
   reader.read(directory);
   std::set<std::string> names;
+
   reader.branches(100, [&](std::string_view name) { names.emplace(name); });
   check(names == std::set<std::string>{"main", "feature", "fix/nested/deep", "zeta"}, "lists packed and loose branches");
   std::size_t limited = 0;
+
   reader.branches(2, [&](std::string_view) { ++limited; });
   check(limited == 2, "stops at the limit");
 }
 
 void testUnborn(Reader &reader) {
   const auto directory = initialize("unborn");
+
   write(directory + "/first.txt", "first\n");
   run(directory, "git add first.txt");
   agrees(reader, directory, "unborn with a staged file");
@@ -335,11 +377,14 @@ void testUnborn(Reader &reader) {
 
 void testUpstream(Reader &reader) {
   const auto origin = fresh("origin.git");
+
   run(origin, "git init -q --bare -b main .");
   const auto work = root + "/work";
   const auto other = root + "/other";
+
   shell("rm -rf " + quote(work) + " " + quote(other));
   const auto seed = initialize("seed");
+
   write(seed + "/base.txt", "base\n");
   commitAll(seed, "base");
   run(seed, "git remote add origin " + quote(origin) + " && git push -q origin main");
@@ -350,10 +395,12 @@ void testUpstream(Reader &reader) {
     write(work + "/work.txt", longMessage(index));
     run(work, "git add -A && git commit -q -F - <<'EOF'\n" + longMessage(index) + "EOF");
   }
+
   for (int index = 0; index < 3; ++index) {
     write(other + "/other.txt", std::format("other {}\n", index));
     run(other, "git add -A && git commit -q -F - <<'EOF'\n" + longMessage(100 + index) + "EOF");
   }
+
   run(other, "git push -q origin main");
   run(work, "git fetch -q origin");
   agrees(reader, work, "loose objects");
@@ -363,6 +410,7 @@ void testUpstream(Reader &reader) {
   agrees(reader, work, "packed with commit-graph");
   {
     Reader graph_reader{system_memory};
+
     check(graph_reader.read(work).work.commits_read == 0, "the walk reads no commit object when the graph has them all");
   }
 
@@ -374,11 +422,13 @@ void testUpstream(Reader &reader) {
   agrees(reader, work, "commit newer than the graph");
   {
     Reader graph_reader{system_memory};
+
     check(graph_reader.read(work).work.commits_read == 1, "only the commit outside the graph is read");
   }
 
   run(work, "rm -f .git/objects/info/commit-graph && git repack -q -a -d -f --depth=50 --window=250");
   const auto deltas = run(work, "git verify-pack -v .git/objects/pack/*.idx | awk '$2 == \"commit\" && NF == 7' | wc -l");
+
   check(std::stoi(trimmed(deltas)) > 0, "some commits are deltified");
   check(packEntryKinds(work + "/" + trimmed(run(work, "ls .git/objects/pack/*.pack")))[6] > 0, "the pack holds OFS_DELTA entries");
   agrees(reader, work, "OFS_DELTA commits without a graph");
@@ -405,14 +455,17 @@ void testUpstream(Reader &reader) {
   // Walk budget: a tiny limit reports unknown instead of a wrong count.
   Reader small{system_memory, git::Limits{.walk_commits = 2}};
   const auto &limited = small.read(work);
+
   check(limited.divergence == git::Accuracy::unknown, "walk limit reports unknown");
 }
 
 void testWorktree(Reader &reader) {
   const auto directory = initialize("main-tree");
+
   write(directory + "/shared.txt", "shared\n");
   commitAll(directory, "shared");
   const auto linked = root + "/linked";
+
   shell("rm -rf " + quote(linked));
   run(directory, "git worktree add -q -b topic " + quote(linked));
   write(linked + "/shared.txt", "edited in the worktree\n");
@@ -429,6 +482,7 @@ void testWorktree(Reader &reader) {
 void forgeStatData(const std::string &directory, const std::string &file) {
   auto index = slurp(directory + "/.git/index");
   struct stat status{};
+
   ::lstat((directory + "/" + file).c_str(), &status);
   auto put = [&](std::size_t offset, std::uint32_t value) {
     index[offset] = static_cast<char>(value >> 24);
@@ -436,10 +490,12 @@ void forgeStatData(const std::string &directory, const std::string &file) {
     index[offset + 2] = static_cast<char>(value >> 8);
     index[offset + 3] = static_cast<char>(value);
   };
+
   const std::size_t entry = 12;
 #if defined(__APPLE__)
   const auto changed = status.st_ctimespec;
   const auto modified = status.st_mtimespec;
+
 #else
   const auto changed = status.st_ctim;
   const auto modified = status.st_mtim;
@@ -451,6 +507,7 @@ void forgeStatData(const std::string &directory, const std::string &file) {
   put(entry + 20, static_cast<std::uint32_t>(status.st_ino));
   put(entry + 36, static_cast<std::uint32_t>(status.st_size));
   std::array<unsigned char, SHA_DIGEST_LENGTH> digest;
+
   SHA1(reinterpret_cast<const unsigned char *>(index.data()), index.size() - digest.size(), digest.data());
   std::memcpy(index.data() + index.size() - digest.size(), digest.data(), digest.size());
   write(directory + "/.git/index", index);
@@ -458,6 +515,7 @@ void forgeStatData(const std::string &directory, const std::string &file) {
 
 void testRacyEntries(Reader &reader) {
   const auto directory = initialize("racy");
+
   write(directory + "/a.txt", "1111\n");
   commitAll(directory, "racy");
   write(directory + "/a.txt", "2222\n");
@@ -467,30 +525,36 @@ void testRacyEntries(Reader &reader) {
   // The index is older than the file: stat data cannot be trusted, content decides.
   run(directory, "touch -t 201901010000 .git/index");
   const auto &racy = reader.read(directory);
+
   check(racy.unstaged == git::Accuracy::exact && racy.changes.unstaged_modified == 1 && racy.work.files_hashed == 1, "racy entry hashed and found modified");
   agrees(reader, directory, "racy, as git sees it");
 
   // An index newer than the file trusts matching stat data, as git does.
   run(directory, "touch .git/index");
   const auto &trusted = reader.read(directory);
+
   check(trusted.changes.unstaged_modified == 0 && trusted.work.files_hashed == 0, "stat data trusted when not racy");
 
   // Racily clean files hash to their blob and stay clean.
   const auto clean = initialize("racy-clean");
+
   write(clean + "/a.txt", "same\n");
   commitAll(clean, "clean");
   run(clean, "touch -t 202001010000 .git/index");
   const auto &verified = reader.read(clean);
+
   check(verified.changes.unstaged_modified == 0 && verified.work.files_hashed == 1, "racily clean file is clean");
 }
 
 void testSymlinkedDirectory(Reader &reader) {
   const auto directory = initialize("symlinked");
+
   shell("mkdir -p " + quote(directory + "/dir"));
   write(directory + "/dir/one.txt", "one\n");
   write(directory + "/dir/two.txt", "two\n");
   commitAll(directory, "dir");
   const auto outside = fresh("outside");
+
   write(outside + "/one.txt", "one\n");
   write(outside + "/two.txt", "two\n");
   run(directory, "rm -rf dir && ln -s " + quote(outside) + " dir");
@@ -504,6 +568,7 @@ void testSha256(Reader &reader) {
     std::fprintf(stderr, "skip: git cannot create SHA-256 repositories\n");
     return;
   }
+
   configure(directory);
   write(directory + "/a.txt", "alpha\n");
   commitAll(directory, "sha256");
@@ -518,6 +583,7 @@ void testSha256(Reader &reader) {
 
 void testHostile(Reader &reader) {
   const auto directory = initialize("hostile");
+
   write(directory + "/a.txt", "alpha\n");
   write(directory + "/b.txt", "beta\n");
   commitAll(directory, "base");
@@ -525,15 +591,18 @@ void testHostile(Reader &reader) {
 
   write(directory + "/.git/index", index.substr(0, index.size() / 2));
   const auto &truncated = reader.read(directory);
+
   check(truncated.repository == git::RepositoryState::ready && truncated.staged == git::Accuracy::unknown && truncated.unstaged == git::Accuracy::unknown,
         "truncated index is unknown");
 
   auto corrupt = index;
+
   corrupt[20] = static_cast<char>(corrupt[20] ^ 0x55);
   write(directory + "/.git/index", corrupt);
   check(reader.read(directory).unstaged == git::Accuracy::unknown, "index with a bad checksum is unknown");
 
   auto forged = index;
+
   forged[7] = 9; // version 9
   write(directory + "/.git/index", forged);
   check(reader.read(directory).unstaged == git::Accuracy::unsupported, "unknown index version is unsupported");
@@ -554,46 +623,56 @@ void testHostile(Reader &reader) {
   const auto count = static_cast<std::size_t>(static_cast<unsigned char>(bogus[8 + 255 * 4]) << 24 | static_cast<unsigned char>(bogus[8 + 255 * 4 + 1]) << 16 |
                                               static_cast<unsigned char>(bogus[8 + 255 * 4 + 2]) << 8 | static_cast<unsigned char>(bogus[8 + 255 * 4 + 3]));
   const auto offsets = 8 + 1024 + count * 24;
+
   for (std::size_t index_entry = 0; index_entry < count; ++index_entry) {
     bogus[offsets + 4 * index_entry] = 0x7f;
   }
+
   ::chmod((directory + "/" + idx_path).c_str(), 0644);
   write(directory + "/" + idx_path, bogus);
   write(directory + "/a.txt", "touched so the staged comparison reads HEAD\n");
   run(directory, "git -c core.fsmonitor=false update-index --refresh", false);
   const auto &offset = reader.read(directory);
+
   check(offset.repository == git::RepositoryState::ready && offset.head == git::HeadState::branch, "bogus offsets keep the branch");
   // Fresh reader so no cached comparison hides the broken pack.
   Reader fresh_reader{system_memory};
   const auto &broken = fresh_reader.read(directory);
+
   check(broken.staged == git::Accuracy::unknown, "bogus pack offset makes the staged comparison unknown");
   write(directory + "/" + idx_path, pack_index);
 
   // Bogus delta chain: a pack whose entries are all truncated.
   const auto pack_path = idx_path.substr(0, idx_path.size() - 4) + ".pack";
   const auto pack = slurp(directory + "/" + pack_path);
+
   ::chmod((directory + "/" + pack_path).c_str(), 0644);
   write(directory + "/" + pack_path, pack.substr(0, 40) + std::string(pack.size() - 40, '\xff'));
   Reader garbage_reader{system_memory};
+
   check(garbage_reader.read(directory).staged == git::Accuracy::unknown, "garbage pack data is unknown");
   write(directory + "/" + pack_path, pack);
 
   const auto head = slurp(directory + "/.git/HEAD");
+
   write(directory + "/.git/HEAD", "ref: refs/heads/" + std::string(5000, 'x') + "\n");
   check(reader.read(directory).repository != git::RepositoryState::ready || reader.status().head == git::HeadState::unknown, "oversized HEAD is not trusted");
 
   write(directory + "/.git/HEAD", "ref: refs/heads/../../config\n");
   const auto &traversal = reader.read(directory);
+
   check(traversal.head == git::HeadState::unknown, "ref name escaping refs/ is refused");
 
   run(directory, "mkfifo .git/refs/heads/fifo");
   write(directory + "/.git/HEAD", "ref: refs/heads/fifo\n");
   const auto &fifo = reader.read(directory);
+
   check(fifo.head == git::HeadState::unknown, "a FIFO ref is refused without blocking");
   run(directory, "rm .git/refs/heads/fifo");
   write(directory + "/.git/HEAD", head);
 
   const auto config = slurp(directory + "/.git/config");
+
   write(directory + "/.git/config", config + "[core\n");
   check(reader.read(directory).repository == git::RepositoryState::invalid, "malformed config is invalid");
   write(directory + "/.git/config", config + "# " + std::string(2 << 20, 'x') + "\n");
@@ -606,6 +685,7 @@ void testHostile(Reader &reader) {
   agrees(reader, directory, "restored");
 
   const auto gitfile = fresh("gitfile");
+
   write(gitfile + "/.git", "not a gitdir line\n");
   check(reader.read(gitfile).repository == git::RepositoryState::invalid, "malformed .git file is invalid");
   write(gitfile + "/.git", "gitdir: ../does-not-exist\n");
@@ -614,10 +694,12 @@ void testHostile(Reader &reader) {
     // /usr belongs to root: a gitdir owned by someone else is refused before it is read.
     write(gitfile + "/.git", "gitdir: /usr\n");
     const auto state = reader.read(gitfile).repository;
+
     check(state == git::RepositoryState::not_owned || state == git::RepositoryState::invalid, "foreign gitdir refused");
   }
 
   const auto plain = fresh("not-a-repository");
+
   check(reader.read(plain).repository == git::RepositoryState::none, "no repository");
   check(reader.read(root + "/missing-directory").repository == git::RepositoryState::none, "missing directory");
   check(reader.read("relative/path").repository == git::RepositoryState::unknown, "relative path refused");
@@ -630,6 +712,7 @@ void testHostile(Reader &reader) {
 
 void testConflict(Reader &reader) {
   const auto directory = initialize("conflict");
+
   write(directory + "/a.txt", "base\n");
   commitAll(directory, "base");
   run(directory, "git checkout -q -b side");
@@ -645,9 +728,11 @@ void testConflict(Reader &reader) {
 
 void testSubmoduleAndBare(Reader &reader) {
   const auto library = initialize("library");
+
   write(library + "/lib.txt", "lib\n");
   commitAll(library, "library");
   const auto parent = initialize("parent");
+
   write(parent + "/top.txt", "top\n");
   commitAll(parent, "top");
   run(parent, "git -c protocol.file.allow=always submodule --quiet add " + quote(library) + " sub && git commit -q -m submodule");
@@ -658,16 +743,20 @@ void testSubmoduleAndBare(Reader &reader) {
   check(std::string_view{reader.status().branch} == "main", "submodule branch");
 
   const auto bare = root + "/bare.git";
+
   shell("rm -rf " + quote(bare) + " && git clone -q --bare " + quote(library) + " " + quote(bare));
   const auto &status = reader.read(bare);
+
   check(status.repository == git::RepositoryState::ready && status.bare && status.head == git::HeadState::branch && status.unstaged == git::Accuracy::not_applicable,
         "bare repository");
   const auto &inside = reader.read(parent + "/.git/refs");
+
   check(inside.repository == git::RepositoryState::ready && inside.bare, "inside a git directory");
 }
 
 void testLocalUpstream(Reader &reader) {
   const auto directory = initialize("local-upstream");
+
   write(directory + "/a.txt", "a\n");
   commitAll(directory, "a");
   run(directory, "git checkout -q -b feature && git branch -q --set-upstream-to=main feature");
@@ -680,42 +769,53 @@ void testLocalUpstream(Reader &reader) {
 // result, it must not crash, hang or read out of bounds (run under ASan).
 void testCorruption() {
   const auto directory = initialize("fuzz");
+
   for (int index = 0; index < 6; ++index) {
     shell("mkdir -p " + quote(directory + std::format("/d{}", index % 3)));
     write(directory + std::format("/d{}/f{}.txt", index % 3, index), longMessage(index));
     commitAll(directory, longMessage(index));
   }
+
   run(directory, "git branch topic HEAD~3 && git config branch.main.remote . && git config branch.main.merge refs/heads/topic");
   run(directory, "git gc -q && git update-index --index-version 4");
   const auto files = {std::string{".git/index"}, trimmed(run(directory, "ls .git/objects/pack/*.idx")), trimmed(run(directory, "ls .git/objects/pack/*.pack")),
                       std::string{".git/objects/info/commit-graph"}, std::string{".git/packed-refs"}, std::string{".git/config"}, std::string{".git/HEAD"}};
   std::mt19937 random{1234};
   int reads = 0;
+
   for (const auto &name : files) {
     const auto path = directory + "/" + name;
     const auto original = slurp(path);
     if (original.empty()) {
       continue;
     }
+
     ::chmod(path.c_str(), 0644);
     for (int round = 0; round < 40; ++round) {
       auto damaged = original;
       const auto flips = 1 + random() % 8;
+
       for (unsigned flip = 0; flip < flips; ++flip) {
         damaged[random() % damaged.size()] = static_cast<char>(random());
       }
+
       if (round % 5 == 0) {
         damaged.resize(random() % damaged.size());
       }
+
       write(path, damaged);
       Reader fresh_reader{system_memory};
       const auto &status = fresh_reader.read(directory);
+
       reads += status.repository != git::RepositoryState::none;
     }
+
     write(path, original);
   }
+
   check(reads > 0, "corrupted repositories were read");
   Reader final_reader{system_memory};
+
   agrees(final_reader, directory, "after corruption rounds");
 }
 
@@ -731,24 +831,31 @@ void testLongHistory(Reader &reader) {
     if (from != 0) {
       stream += std::format("from :{}\n", from);
     }
+
     const auto content = std::format("{}\n", value);
+
     stream += std::format("M 644 inline file.txt\ndata {}\n{}\n", content.size(), content);
     return mark;
   };
+
   auto previous = commit("main", 0, 1600000000, 0);
   int fork = 0;
+
   for (int index = 1; index <= 700; ++index) {
     previous = commit("main", previous, 1600000000 + index * 60, index);
     if (index == 300) {
       fork = previous;
     }
   }
+
   previous = fork;
   for (int index = 0; index < 450; ++index) {
     // Every 50th commit claims to be a day older than its parent.
     const auto skew = index % 50 == 25 ? -86400 : 0;
+
     previous = commit("side", previous, 1600100000 + index * 60 + skew, 10000 + index);
   }
+
   write(root + "/stream", stream);
   run(directory, "git fast-import --quiet < " + quote(root + "/stream") + " && git checkout -q -f main");
   run(directory, "git config branch.main.remote . && git config branch.main.merge refs/heads/side");
@@ -762,10 +869,12 @@ void testLongHistory(Reader &reader) {
 void testIndexVersions(Reader &reader) {
   for (const auto version : {2, 3, 4}) {
     const auto directory = initialize(std::format("index-v{}", version));
+
     shell("mkdir -p " + quote(directory + "/deep/er/path"));
     for (int index = 0; index < 20; ++index) {
       write(directory + std::format("/deep/er/path/file-{:02}.txt", index), std::format("{}\n", index));
     }
+
     write(directory + "/top.txt", "top\n");
     commitAll(directory, "files");
     run(directory, std::format("git update-index --index-version {}", version));
@@ -780,10 +889,13 @@ int timeReads(const char *directory) {
   Reader reader{memory};
   timeval start{};
   timeval end{};
+
   ::gettimeofday(&start, nullptr);
   const auto &first = reader.read(directory);
+
   ::gettimeofday(&end, nullptr);
   const auto first_us = (end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec);
+
   std::printf("first read: %ld us, repository %d head %d branch %s ahead %u behind %u (%d) staged %d unstaged %d\n", static_cast<long>(first_us),
               static_cast<int>(first.repository), static_cast<int>(first.head), first.branch.c_str(), first.ahead, first.behind, static_cast<int>(first.divergence),
               static_cast<int>(first.staged), static_cast<int>(first.unstaged));
@@ -793,13 +905,16 @@ int timeReads(const char *directory) {
               static_cast<unsigned long long>(first.work.entries_checked), static_cast<unsigned long long>(first.work.files_hashed),
               static_cast<unsigned long long>(first.work.bytes_hashed));
   constexpr int rounds = 200;
+
   ::gettimeofday(&start, nullptr);
   for (int round = 0; round < rounds; ++round) {
     reader.read(directory);
   }
+
   ::gettimeofday(&end, nullptr);
   const auto total = (end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec);
   const auto &last = reader.status();
+
   std::printf("repeated read: %ld us average over %d; last read hashed %llu files, checked %llu entries, read %llu objects\n", static_cast<long>(total / rounds), rounds,
               static_cast<unsigned long long>(last.work.files_hashed), static_cast<unsigned long long>(last.work.entries_checked),
               static_cast<unsigned long long>(last.work.objects_read));
@@ -807,8 +922,10 @@ int timeReads(const char *directory) {
   for (int round = 0; round < rounds; ++round) {
     (void)reader.changed();
   }
+
   ::gettimeofday(&end, nullptr);
   const auto probe = (end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec);
+
   std::printf("changed(): %.2f us average\n", static_cast<double>(probe) / rounds);
   return 0;
 }
@@ -819,19 +936,24 @@ int main(int argc, char **argv) {
   if (argc == 3 && std::string_view{argv[1]} == "--time") {
     return timeReads(argv[2]);
   }
+
   if (std::system("git --version >/dev/null 2>&1") != 0) {
     std::fprintf(stderr, "skip: git is not installed\n");
     return 77;
   }
+
   const char *temporary = std::getenv("TMPDIR");
   auto base = std::string{temporary != nullptr && *temporary != '\0' ? temporary : "/tmp"};
+
   base += "/telar-git-XXXXXX";
   std::vector<char> name(base.begin(), base.end());
+
   name.push_back('\0');
   if (::mkdtemp(name.data()) == nullptr) {
     std::fprintf(stderr, "cannot create a temporary directory\n");
     return 1;
   }
+
   root = name.data();
   // An isolated git: no user or system config, no hooks, no index rewrites by git status.
   ::setenv("HOME", root.c_str(), 1);
@@ -842,9 +964,11 @@ int main(int argc, char **argv) {
   for (const auto *variable : {"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_COMMON_DIR", "GIT_CEILING_DIRECTORIES"}) {
     ::unsetenv(variable);
   }
+
   write(root + "/.gitconfig", "[init]\n\tdefaultBranch = main\n[advice]\n\tdetachedHead = false\n[gc]\n\tauto = 0\n[maintenance]\n\tauto = false\n");
 
   Reader reader{system_memory};
+
   testPlainBranch(reader);
   testDetachedAndPackedRefs(reader);
   testUnborn(reader);
@@ -866,6 +990,7 @@ int main(int argc, char **argv) {
     std::fprintf(stderr, "%d of %d checks failed\n", failures, checks);
     return 1;
   }
+
   std::printf("all %d telar.git checks passed\n", checks);
   return 0;
 }

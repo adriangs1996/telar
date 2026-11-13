@@ -83,6 +83,7 @@ public:
 
   inline Read receive(int socket) noexcept {
     SocketStream stream{socket};
+
     return reader_.receive(stream, storage_.bytes(), "\r\n\r\n");
   }
 
@@ -263,6 +264,7 @@ public:
 
   inline std::array<std::uint64_t, capacity> snapshot() const noexcept {
     std::array<std::uint64_t, capacity> result;
+
     for (std::size_t index = 0; index != capacity; ++index) {
       result[index] = counters_[index].load(std::memory_order_relaxed);
     }
@@ -329,12 +331,15 @@ public:
     if (state_ == State::reading) {
       readHead(now);
     }
+
     if (state_ == State::establishing) {
       connectOrigin(origin_writable);
     }
+
     if (state_ == State::replying) {
       writeResponse(now);
     }
+
     if (state_ == State::draining) {
       drain(now);
     }
@@ -368,6 +373,7 @@ public:
     if (transparent_) {
       return adopted_origin_.get();
     }
+
     return origin_ ? origin_->descriptor() : -1;
   }
 
@@ -375,6 +381,7 @@ public:
     if (transparent_) {
       return 1;
     }
+
     return origin_ ? origin_->attempt() : 0;
   }
 
@@ -418,6 +425,7 @@ private:
       if (count > 0) { state_ = State::established; return; }
       if (count == 0 || (count < 0 && !socketWouldBlock(errno))) { state_ = State::closed; failure_ = "origin_closed_before_client_hello"; return; }
     }
+
     if (probe_until_ == Time{}) { probe_until_ = now + std::chrono::seconds{3}; }
     if (now < probe_after_) { return; }
     const auto read = hello_->peek(child_.get());
@@ -426,19 +434,23 @@ private:
         state_ = hello_->tls() ? State::closed : State::established;
         failure_ = "tls_client_hello_timeout";
       }
+
       probe_after_ = now + std::chrono::milliseconds{2};
       return;
     }
+
     if (read == AlpnOffer::Read::ended) { state_ = State::closed; return; }
     if (!hello_->tls()) { state_ = State::established; return; }
     const auto name = hello_->serverName();
     const auto host = name.empty() ? hostname_.view() : name;
+
     inspected_ = options_.intercept_hosts.contains(host);
     if (inspected_ && (!hello_->valid() || hello_->encrypted())) {
       failure_ = hello_->encrypted() ? "tls_ech_not_supported" : "tls_client_hello_invalid";
       state_ = State::closed;
       return;
     }
+
     if (inspected_ && !name.empty()) { hostname_.assign(name); }
     state_ = State::established;
   }
@@ -467,6 +479,7 @@ private:
         counters_.record(ProxyCounter::rejected_connection);
         counters_.record(rejected->reason == ProxyRejection::Reason::unknown_credential ? ProxyCounter::unknown_credential_rejection : ProxyCounter::invalid_authorization_rejection);
       }
+
       respond(rejected->response());
       head_.reset();
       return;
@@ -476,6 +489,7 @@ private:
     if (!admission.authenticated) {
       counters_.record(ProxyCounter::anonymous_tunnel);
     }
+
     hostname_.assign(admission.target.hostname);
     origin_.emplace(hostname_.view(), admission.target.port);
     head_.reset();
@@ -518,11 +532,14 @@ private:
       if (sent.state != StreamResult::State::blocked) {
         state_ = State::closed;
       }
+
       return;
     }
+
     if (!response_.sent()) {
       return;
     }
+
     if (successful_) {
       state_ = State::established;
     } else if (drain_until_ > now) {
@@ -614,6 +631,7 @@ public:
     }
 
     const auto part = half->headPart();
+
     half->append(part, event.name);
     half->append(part, ": ");
     half->append(part, event.value);
@@ -640,6 +658,7 @@ public:
   inline void body(const Http2Event &event) noexcept {
     if (const auto index = find(event.stream)) {
       auto &half = *slots_[*index];
+
       half->append(half->bodyPart(), event.bytes);
     }
   }
@@ -661,6 +680,7 @@ private:
     if (producer_ == nullptr) {
       return nullptr;
     }
+
     if (const auto existing = find(stream)) {
       return slots_[*existing]->get();
     }
@@ -685,16 +705,19 @@ private:
 
   inline std::optional<std::size_t> find(std::uint32_t stream) const noexcept {
     std::optional<std::size_t> found;
+
     occupied_.forEach([&](std::size_t index) {
       if ((*slots_[index])->key.stream == stream) {
         found = index;
       }
     });
+
     return found;
   }
 
   inline void publish(std::size_t index, CaptureOutcome outcome) noexcept {
     auto half = std::move(*slots_[index]);
+
     slots_[index].reset();
     occupied_.erase(index);
     half->finish(outcome, Clock::now());

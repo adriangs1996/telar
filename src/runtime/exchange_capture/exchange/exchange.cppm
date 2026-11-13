@@ -36,16 +36,19 @@ public:
 
   inline bool reserveExact(std::size_t requested) noexcept {
     auto current = used_.load(std::memory_order_relaxed);
+
     while (requested <= limit_ - current) {
       if (used_.compare_exchange_weak(current, current + requested, std::memory_order_relaxed)) {
         return true;
       }
     }
+
     return false;
   }
 
   inline std::size_t reserveAtMost(std::size_t requested) noexcept {
     auto current = used_.load(std::memory_order_relaxed);
+
     for (;;) {
       const auto granted = std::min(requested, limit_ - current);
       if (granted == 0 || used_.compare_exchange_weak(current, current + granted, std::memory_order_relaxed)) {
@@ -58,7 +61,9 @@ public:
     if (bytes == 0) {
       return;
     }
+
     [[maybe_unused]] const auto previous = used_.fetch_sub(bytes, std::memory_order_relaxed);
+
     assert(previous >= bytes);
   }
 
@@ -96,6 +101,7 @@ public:
       std::memcpy(storage_ + size_, input.data(), accepted);
       size_ += accepted;
     }
+
     truncated = truncated || accepted != input.size();
     return accepted;
   }
@@ -116,9 +122,11 @@ public:
 private:
   inline std::size_t grownCapacity(std::size_t needed) const noexcept {
     auto capacity = std::min(limit_, std::max(initial_capacity, capacity_));
+
     while (capacity < needed) {
       capacity = capacity > limit_ / 2 ? limit_ : capacity * 2;
     }
+
     return capacity;
   }
 
@@ -143,6 +151,7 @@ private:
     if (size_ != 0) {
       std::memcpy(replacement, storage_, size_);
     }
+
     memory_.deallocate(storage_, capacity_, alignof(std::uint8_t));
     quota_.release(capacity_);
     storage_ = replacement;
@@ -214,6 +223,7 @@ public:
     requires std::convertible_to<const Text &, std::string_view>
   inline CaptureHost(const Text &value) noexcept {
     const std::string_view text{value};
+
     oversized_ = text.size() > capacity;
     text_.append(text.substr(0, capacity));
   }
@@ -272,6 +282,7 @@ public:
     if (accepted != allowed) {
       truncation.total = true;
     }
+
     selected->truncated = selected->truncated || accepted != input.size();
     return accepted == input.size() && !selected->truncated;
   }
@@ -287,17 +298,20 @@ public:
       if (line_end == std::string_view::npos) {
         return;
       }
+
       TextFields fields{bytes.substr(0, line_end), " "};
       const auto method = fields.next();
       const auto target = fields.next();
       if (!method || !target) {
         return;
       }
+
       setMethod(*method);
       setTarget(*target);
     }
 
     TextFields lines{bytes, "\r\n"};
+
     lines.next();
     while (const auto line = lines.next()) {
       const auto colon = line->find(':');
@@ -355,6 +369,7 @@ private:
       truncated = true;
       return;
     }
+
     field.clear();
     field.append(value);
   }
@@ -370,6 +385,7 @@ private:
     case CapturePart::response_body:
       return side == CaptureSide::response ? &body : nullptr;
     }
+
     return nullptr;
   }
 
@@ -424,6 +440,7 @@ public:
       if (input.size() < header_size || (input[0] & 15) != compression_method || (input[0] >> 4) > maximum_window_bits) {
         return std::nullopt;
       }
+
       return header_size;
     }
 
@@ -437,15 +454,19 @@ public:
 
     const auto flags = input[3];
     auto offset = header_size;
+
     if (flags & static_cast<unsigned>(GzipFlag::extra)) {
       if (input.size() - offset < sizeof(std::uint16_t)) {
         return std::nullopt;
       }
+
       const auto length = static_cast<std::size_t>(input[offset] | (input[offset + 1] << 8));
+
       offset += sizeof(std::uint16_t);
       if (length > input.size() - offset) {
         return std::nullopt;
       }
+
       offset += length;
     }
 
@@ -454,18 +475,23 @@ public:
         while (offset < input.size() && input[offset] != 0) {
           ++offset;
         }
+
         if (offset == input.size()) {
           return std::nullopt;
         }
+
         ++offset;
       }
     }
+
     if (flags & static_cast<unsigned>(GzipFlag::header_checksum)) {
       if (input.size() - offset < sizeof(std::uint16_t)) {
         return std::nullopt;
       }
+
       offset += sizeof(std::uint16_t);
     }
+
     return offset;
   }
 

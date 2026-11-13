@@ -33,6 +33,7 @@ tbc::view<std::string_view, tbc::lt::a> lockFilename(tbc::view<std::span<char>, 
   }
 
   auto *next = std::ranges::copy(basename, output.data()).out;
+
   next = std::ranges::copy(prefix, next).out;
   const auto formatted = std::to_chars(next, output.data() + output.size() - suffix.size(), slot);
   if (formatted.ec != std::errc{}) {
@@ -64,8 +65,10 @@ WindowLease::WindowLease(std::string_view endpoint) {
   const auto directory_name = endpoint.substr(0, separator == 0 ? 1 : separator);
   const auto basename = endpoint.substr(separator + 1);
   std::array<char, PATH_MAX> directory_path{};
+
   std::ranges::copy(directory_name, directory_path.begin());
   const auto directory = runtime::openPrivateParent(endpoint);
+
   if (::realpath(directory_path.data(), canonical_endpoint_.data()) == nullptr) {
     throw std::runtime_error{"Cannot resolve runtime endpoint directory"};
   }

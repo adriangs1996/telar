@@ -51,6 +51,7 @@ struct HistoryPresentation {
 
   static void describe(const qt::Application &application) {
     const auto &surface = application.presented_history_surface_;
+
     qInfo() << "History presentation" << "delivered" << surface.delivered << "generation" << surface.generation << application.dialog_generation_ << "revision" << surface.revision << application.session().historyBrowser().revision() << "rows" << surface.has_rows << "loading" << application.historyLoading();
   }
 };

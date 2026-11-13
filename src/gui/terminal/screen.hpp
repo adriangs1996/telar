@@ -75,13 +75,16 @@ public:
     // Every span is decoded before anything changes, so a frame that fails to decode leaves the
     // screen as it was.
     std::size_t changed = 0;
+
     for (const auto &span : frame.spans) {
       changed += span.count;
     }
+
     staged_.clear();
     staged_.reserve(changed);
     for (const auto &span : frame.spans) {
       auto reader = span.reader();
+
       while (const auto cell = reader.next()) {
         staged_.emplace_back(*cell);
       }
@@ -95,15 +98,18 @@ public:
     }
 
     const auto *staged = staged_.data();
+
     for (const auto &span : frame.spans) {
       std::copy_n(staged, span.count, cells_.begin() + span.start);
       staged += span.count;
       const auto last = (span.start + span.count - 1) / frame.cols;
+
       std::fill(row_revisions_.begin() + span.start / frame.cols, row_revisions_.begin() + last + 1, revision_ + 1);
     }
 
     if (frame.text_metadata) {
       const auto &metadata = *frame.text_metadata;
+
       metadata_status_ = metadata.status;
       row_flags_.assign(metadata.row_flags.begin(), metadata.row_flags.end());
       links_.assign(metadata.links.begin(), metadata.links.end());
@@ -226,9 +232,11 @@ public:
     cells_.resize(static_cast<std::size_t>(columns_) * rows_);
     for (std::size_t row = 0; row < rows.size(); ++row) {
       const auto cells = rows[row].first(std::min<std::size_t>(columns_, rows[row].size()));
+
       std::ranges::copy(cells, cells_.begin() + static_cast<std::ptrdiff_t>(row * columns_));
       std::fill(cells_.begin() + static_cast<std::ptrdiff_t>((row * columns_) + cells.size()), cells_.begin() + static_cast<std::ptrdiff_t>((row + 1) * columns_), CellValue{});
     }
+
     row_revisions_.assign(rows_, ++revision_);
     row_flags_.assign(flags.begin(), flags.end());
     row_flags_.resize(rows_, 0);
@@ -249,6 +257,7 @@ public:
 
   void setViewport(std::uint32_t offset) noexcept {
     const auto maximum = scroll_.total_rows - std::min<std::uint32_t>(scroll_.total_rows, rows_);
+
     scroll_.offset = std::min(offset, maximum);
   }
 

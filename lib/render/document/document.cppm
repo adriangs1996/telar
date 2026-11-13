@@ -233,11 +233,13 @@ export namespace telar::render {
 
       std::uint16_t u16() noexcept {
         const auto low = u8();
+
         return static_cast<std::uint16_t>(low | (u8() << 8));
       }
 
       std::uint32_t u32() noexcept {
         const auto low = u16();
+
         return low | (static_cast<std::uint32_t>(u16()) << 16);
       }
 
@@ -267,6 +269,7 @@ export namespace telar::render {
   template <Allocator Memory>
   [[nodiscard]] std::optional<std::size_t> encodedSize(const Document<Memory> &document) noexcept {
     const auto size = detail::encodedSize(document.blocks.size(), document.cells.size(), document.runs.size(), document.text.size());
+
     return size <= max_document_bytes ? std::optional<std::size_t>{static_cast<std::size_t>(size)} : std::nullopt;
   }
 
@@ -274,9 +277,11 @@ export namespace telar::render {
   template <Allocator Memory>
   void encode(const Document<Memory> &document, std::span<std::uint8_t> output) noexcept {
     detail::Writer writer{output};
+
     for (const auto byte : magic) {
       writer.u8(byte);
     }
+
     writer.u16(version);
     writer.u16(0);
     writer.u32(static_cast<std::uint32_t>(document.blocks.size()));
@@ -300,6 +305,7 @@ export namespace telar::render {
       writer.u32(block.info.offset);
       writer.u32(block.info.size);
     }
+
     for (const auto &cell : document.cells) {
       writer.u32(cell.first);
       writer.u32(cell.count);
@@ -307,6 +313,7 @@ export namespace telar::render {
       writer.u8(0);
       writer.u16(0);
     }
+
     for (const auto &run : document.runs) {
       writer.u32(run.text.offset);
       writer.u32(run.text.size);
@@ -315,6 +322,7 @@ export namespace telar::render {
       writer.u16(run.style);
       writer.u16(0);
     }
+
     writer.bytes(document.text);
   }
 
@@ -326,12 +334,16 @@ export namespace telar::render {
     if (!size) {
       return false;
     }
+
     Vector<std::uint8_t, Output> bytes(*size, AllocatorRef<std::uint8_t, Output>{output.get_allocator().memory()});
+
     encode(document, bytes);
     const auto encoded = (*size + 2) / 3 * 4;
+
     output.append("\x1b]");
     output.append(sequence_begin);
     const auto body = output.size();
+
     output.resize(body + encoded);
     static_cast<void>(runtime::base64::encode(bytes, std::span<char>{output.data() + body, encoded}));
     output.append("\x1b\\");
@@ -355,9 +367,11 @@ export namespace telar::render {
     if (input.size() > max_document_bytes) {
       return DecodeError::too_large;
     }
+
     if (input.size() < header_bytes) {
       return DecodeError::truncated;
     }
+
     if (!std::equal(magic.begin(), magic.end(), input.begin())) {
       return DecodeError::magic;
     }
@@ -366,9 +380,11 @@ export namespace telar::render {
     if (reader.u16() != version) {
       return DecodeError::version;
     }
+
     if (reader.u16() != 0) {
       return DecodeError::malformed;
     }
+
     const auto block_count = reader.u32();
     const auto cell_count = reader.u32();
     const auto run_count = reader.u32();
@@ -378,6 +394,7 @@ export namespace telar::render {
     if (expected < input.size()) {
       return DecodeError::malformed;
     }
+
     if (expected > input.size()) {
       return DecodeError::truncated;
     }
@@ -394,18 +411,23 @@ export namespace telar::render {
     };
 
     detail::Reader records{input.subspan(header_bytes)};
+
     document.blocks.resize(block_count);
     for (auto &block : document.blocks) {
       const auto kind = records.u8();
+
       block.level = records.u8();
       block.quote = records.u8();
       block.list = records.u8();
       const auto marker = records.u8();
       const auto callout = records.u8();
+
       block.flags = records.u8();
       const auto reserved = records.u8();
+
       block.columns = records.u16();
       const auto reserved_columns = records.u16();
+
       block.number = records.u32();
       block.first = records.u32();
       block.count = records.u32();
@@ -414,6 +436,7 @@ export namespace telar::render {
       if (kind >= static_cast<std::uint8_t>(BlockKind::count) || marker >= static_cast<std::uint8_t>(Marker::count) || callout >= static_cast<std::uint8_t>(Callout::count) || (block.flags & ~Block::known_flags) != 0 || reserved != 0 || reserved_columns != 0 || block.quote > max_nesting || block.list > max_nesting) {
         return fail(DecodeError::malformed);
       }
+
       block.kind = static_cast<BlockKind>(kind);
       block.marker = static_cast<Marker>(marker);
       block.callout = static_cast<Callout>(callout);
@@ -428,6 +451,7 @@ export namespace telar::render {
       if (align >= static_cast<std::uint8_t>(Align::count) || reserved != 0 || records.u16() != 0) {
         return fail(DecodeError::malformed);
       }
+
       cell.align = static_cast<Align>(align);
       if (!detail::within(cell.first, cell.count, run_count)) {
         return fail(DecodeError::range);
@@ -444,6 +468,7 @@ export namespace telar::render {
       if (records.u16() != 0 || (run.style & ~style::all) != 0) {
         return fail(DecodeError::malformed);
       }
+
       if (!detail::validSpan(text, run.text) || !detail::validSpan(text, run.target)) {
         return fail(DecodeError::range);
       }
@@ -466,6 +491,7 @@ export namespace telar::render {
         case BlockKind::count:
           break;
         }
+
         return false;
       }();
       if (!shape) {

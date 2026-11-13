@@ -162,6 +162,7 @@ public:
     auto start = reply.text.size() - std::min(reply.text.size(), PeekLimits::text_bytes);
     constexpr unsigned char continuation_mask = 0xc0;
     constexpr unsigned char continuation_bits = 0x80;
+
     while (start > 0 && start < reply.text.size() && (static_cast<unsigned char>(reply.text[start]) & continuation_mask) == continuation_bits) {
       ++start;
     }
@@ -181,6 +182,7 @@ public:
     text.remove_suffix(text.size() - last - 1);
     auto start = text.size();
     std::uint16_t seen = 0;
+
     while (start > 0 && seen < count) {
       --start;
       if (text[start] == '\n') {

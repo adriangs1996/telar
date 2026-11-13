@@ -77,6 +77,7 @@ public:
     if (lua_isnil(state_, index)) {
       return {};
     }
+
     if (!lua_istable(state_, index)) {
       throw lua::Error{"Invalid effect batch"};
     }
@@ -88,6 +89,7 @@ public:
     }
 
     EffectBatch batch;
+
     batch.count = static_cast<Byte>(count);
     for (std::size_t effect = 0; effect < count; ++effect) {
       lua_geti(state_, absolute, static_cast<lua_Integer>(effect + 1));
@@ -107,6 +109,7 @@ public:
           .message = string(table, "message", false),
       };
     }
+
     return batch;
   }
 
@@ -135,9 +138,11 @@ private:
 
     int valid = 0;
     const auto result = lua_tointegerx(state_, -1, &valid);
+
     if (!valid) {
       throw lua::Error{"Invalid effect"};
     }
+
     return result;
   }
 
@@ -145,15 +150,19 @@ private:
     if (level.empty() || level == "info") {
       return NotificationLevel::info;
     }
+
     if (level == "success") {
       return NotificationLevel::success;
     }
+
     if (level == "warning") {
       return NotificationLevel::warning;
     }
+
     if (level == "failure") {
       return NotificationLevel::failure;
     }
+
     throw lua::Error{"Invalid effect"};
   }
 
@@ -178,6 +187,7 @@ public:
     }
 
     const auto &final_half = exchange.response ? *exchange.response : *exchange.request;
+
     lua_createtable(state, 0, 13);
     if (traffic) { setIdentity(state, "id", exchange.identity.id); }
     else { lua::setField(state, "id", static_cast<lua_Integer>(std::bit_cast<std::int64_t>(exchange.identity.id))); }
@@ -203,6 +213,7 @@ private:
   inline static void setIdentity(lua_State *state, const char *name, std::uint64_t value) {
     std::array<char, 32> text;
     const auto result = std::to_chars(text.data(), text.data() + text.size(), value);
+
     lua::setField(state, name, {text.data(), result.ptr});
   }
 
@@ -215,6 +226,7 @@ private:
     case ExchangeProtocol::upgraded:
       return "upgraded";
     }
+
     return "";
   }
 
@@ -227,6 +239,7 @@ private:
     case CaptureOutcome::reset:
       return "reset";
     }
+
     return "";
   }
 
@@ -252,15 +265,18 @@ private:
       lua::setField(state, "outcome", outcomeName(half->outcome));
       lua::setField(state, "finished_at_ms", static_cast<lua_Integer>(half->finished_at_ms));
     }
+
     lua::pushReadOnly(state, "exchange is immutable");
   }
 
   inline static void pushHead(lua_State *state, std::span<const std::uint8_t> bytes, bool traffic) {
     std::string_view remaining{reinterpret_cast<const char *>(bytes.data()), bytes.size()};
+
     lua_createtable(state, 0, 2);
     lua::setField(state, "raw", remaining);
     lua_createtable(state, 0, 0);
     lua_Integer index = 1;
+
     while (!remaining.empty()) {
       const auto end = remaining.find("\r\n");
       const auto line = remaining.substr(0, end);
@@ -269,20 +285,25 @@ private:
         lua_createtable(state, 0, 2);
         lua::setField(state, "name", traffic ? line.substr(0, colon) : trimText(line.substr(0, colon), " \t"));
         auto value = line.substr(colon + 1);
+
         if (traffic) {
           const auto first = value.find_first_not_of(" \t");
+
           value = first == std::string_view::npos ? std::string_view{} : value.substr(first);
         } else { value = trimText(value, " \t"); }
+
         lua::setField(state, "value", value);
         lua::pushReadOnly(state, "exchange is immutable");
         lua_seti(state, -2, index++);
       }
+
       if (end == std::string_view::npos) {
         break;
       }
 
       remaining.remove_prefix(end + 2);
     }
+
     lua::pushReadOnly(state, "exchange is immutable");
     lua_setfield(state, -2, "fields");
     lua::pushReadOnly(state, "exchange is immutable");
@@ -322,6 +343,7 @@ public:
     if (event.kind == traffic::Kind::ready && !event.bytes.empty()) { lua::setField(state, "reason", std::string_view{reinterpret_cast<const char *>(event.bytes.data()), event.bytes.size()}); }
     if (traffic::isFlow(event.kind) || event.kind == traffic::Kind::intercept_request || event.kind == traffic::Kind::http_intercept_request) {
       const auto flow = traffic::FlowCodec::decode(event.bytes);
+
       lua::setDecimal(state, "flow_id", flow.id);
       lua::setDecimal(state, "offset", flow.offset);
       lua::setDecimal(state, "ticket", flow.ticket);
@@ -342,6 +364,7 @@ public:
       }
     } else if (event.kind == traffic::Kind::datagram) {
       const auto item = traffic::DatagramCodec::decode(event.bytes);
+
       lua::setField(state, "transport", traffic::DatagramCodec::name(item.transport));
       lua::setField(state, "source", std::string_view{"capture"});
       lua::setField(state, "ipv6", item.ipv6);
@@ -373,6 +396,7 @@ public:
     if (!events.present()) { return fallback; }
     events.onlyFields({"packet", "exchange", "flow", "datagram"});
     Byte mask = 0;
+
     if (events.field("packet").boolean(false)) { mask |= static_cast<Byte>(traffic::Selection::packets); }
     if (events.field("exchange").boolean(false)) { mask |= static_cast<Byte>(traffic::Selection::exchanges); }
     if (events.field("flow").boolean(false)) { mask |= static_cast<Byte>(traffic::Selection::flows); }
@@ -400,6 +424,7 @@ public:
     message.header_count = fields(value.field("headers"), message.headers);
     message.trailer_count = fields(value.field("trailers"), message.trailers);
     const auto body = value.field("body").string();
+
     message.body = {reinterpret_cast<const Byte *>(body.data()), body.size()};
     return message;
   }
@@ -410,15 +435,18 @@ private:
     if (count > fields.size()) { throw EncodingError{"Too many HTTP fields"}; }
     for (std::size_t index = 0; index < count; ++index) {
       const auto entry = value.element(static_cast<lua_Integer>(index + 1));
+
       entry.onlyFields({"name", "value"});
       fields[index] = {entry.field("name").string(), entry.field("value").string()};
     }
+
     return count;
   }
 
   inline static void pushFields(lua_State *state, std::span<const HttpMessageView::Field> fields) {
     lua_createtable(state, static_cast<int>(fields.size()), 0);
     lua_Integer index = 1;
+
     for (const auto &entry : fields) {
       lua_createtable(state, 0, 2);
       lua::setField(state, "name", entry.name);
@@ -429,6 +457,7 @@ private:
 
   inline static void pushMessage(lua_State *state, const HttpMessageView &message) {
     constexpr std::array protocols{std::string_view{"http10"}, std::string_view{"http11"}, std::string_view{"h2"}};
+
     lua_createtable(state, 0, 15);
     lua::setField(state, "protocol", protocols[static_cast<std::size_t>(message.version)]);
     lua::setField(state, "response", message.response);
@@ -465,6 +494,7 @@ public:
     if (request.recording) {
       options.onlyFields({"action", "id", "cursor", "max_bytes", "max_events", "max_age_ms", "limit", "events", "filter", "host"});
       auto &recording = *request.recording;
+
       recording.id = identity(options.field("id"));
       recording.cursor = identity(options.field("cursor"));
       recording.max_bytes = options.field("max_bytes").boundedInteger(recording.max_bytes, 1, recording::Limits::session_bytes);
@@ -474,6 +504,7 @@ public:
       recording.selection = LuaTrafficValue::selection(options.field("events"), recording.selection);
       const auto filter = options.field("filter");
       const auto host = options.field("host");
+
       if (filter.present()) { recording.filter = filter.string(); }
       if (host.present()) { recording.host = host.string(); }
     } else if (request.operation == control::Operation::redirect_start) {
@@ -481,6 +512,7 @@ public:
       const auto direction = options.field("direction");
       if (direction.present()) { request.direction = redirect::parseDirection(direction.string()); }
       const auto targets = options.field("targets");
+
       request.target_count = targets.arraySize();
       if (request.target_count > request.targets.size()) { throw lua::Error{"Too many redirect targets"}; }
       for (std::size_t index = 0; index < request.target_count; ++index) { request.targets[index] = targets.element(index + 1).string(); }
@@ -491,6 +523,7 @@ public:
         for (std::size_t index = 0; index < request.process_count; ++index) { request.processes[index] = processes.element(index + 1).boundedInteger(0, 1, INT32_MAX); }
       }
     } else { options.onlyFields({"action"}); }
+
     return request;
   }
 
@@ -499,6 +532,7 @@ public:
     constexpr std::array capture{"disabled", "idle", "live", "offline"};
     constexpr std::array redirect{"disabled", "idle", "starting", "active", "stopping", "cleanup_required"};
     constexpr std::array trust{"absent", "installed", "stale"};
+
     lua_createtable(state, 0, 10);
     lua::setField(state, "result", std::string_view{results[static_cast<std::size_t>(reply.result)]});
     lua::setField(state, "message", reply.message);
@@ -506,9 +540,11 @@ public:
     lua_createtable(state, reply.argument_count, 0);
     for (std::size_t index = 0; index < reply.argument_count; ++index) {
       const auto argument = reply.authorization[index];
+
       lua_pushlstring(state, argument.data(), argument.size());
       lua_rawseti(state, -2, index + 1);
     }
+
     lua_setfield(state, -2, "authorization_argv");
     lua_createtable(state, 0, 4);
     lua::setField(state, "state", std::string_view{capture[static_cast<std::size_t>(reply.status.capture)]});
@@ -560,27 +596,34 @@ private:
 
   inline static void recordings(lua_State *state, const traffic::recording::Page &page) {
     namespace recording = traffic::recording;
+
     if (page.format == recording::Format::list) {
       lua_createtable(state, page.count, 0);
       FrameReader rows{page.rows};
+
       for (std::uint32_t index = 0; index < page.count; ++index) { metadata(state, recording::Protocol::page(rows.bytes())); lua_rawseti(state, -2, index + 1); }
       rows.finish();
       lua_setfield(state, -2, "recordings");
       return;
     }
+
     metadata(state, page);
     lua::setField(state, "pcapng", page.format == recording::Format::pcapng ? std::string_view{reinterpret_cast<const char *>(page.rows.data()), page.rows.size()} : std::string_view{});
     lua_createtable(state, page.format == recording::Format::events ? page.count : 0, 0);
     if (page.format == recording::Format::events) {
       FrameReader rows{page.rows};
+
       for (std::uint32_t index = 0; index < page.count; ++index) {
         const auto cursor = rows.integer<std::uint64_t>();
+
         LuaTrafficValue::push(state, traffic::Protocol::decode(rows.bytes()), 0);
         lua::setDecimal(state, "recording_cursor", cursor);
         lua_rawseti(state, -2, index + 1);
       }
+
       rows.finish();
     }
+
     lua_setfield(state, -2, "events");
     lua_setfield(state, -2, "recording");
   }
@@ -623,12 +666,14 @@ public:
         std::pair{"traffic_subscribe", Operation::subscribe}, std::pair{"traffic_intercept", Operation::intercept},
         std::pair{"traffic_decide", Operation::decide}, std::pair{"cancel", Operation::cancel}, std::pair{"traffic_control", Operation::control},
     };
+
     for (const auto &[name, operation] : operations) {
       lua_pushlightuserdata(state, this);
       lua_pushinteger(state, static_cast<int>(operation));
       lua_pushcclosure(state, &call, 2);
       lua_setfield(state, -2, name);
     }
+
     lua_call(state, 2, 0);
   }
 
@@ -646,6 +691,7 @@ public:
     auto *binding = find(event.registration);
     if (!binding) { return; }
     const auto stage = binding->registration.stage;
+
     lua_rawgeti(state, LUA_REGISTRYINDEX, binding->callback);
     if (stage == TrafficStage::control) {
       unbind(state, *binding);
@@ -653,26 +699,31 @@ public:
       else { lua_pushnil(state); LuaTrafficControl::push(state, traffic::control::Protocol::reply(event.control)); }
       lua_call(state, 2, 1);
       LuaEffects reader{state};
+
       effect_bytes_ = Protocol::encodeEffects(effects_.bytes(), event.event_id, reader.read(-1)).size();
       return;
     }
+
     lua_pushnil(state);
     LuaTrafficValue::push(state, event.event, event.dropped);
     lua_createtable(state, 0, 3);
     lua::setField(state, "id", specification_.name.view());
     lua::setDecimal(state, "generation", specification_.generation);
     std::array<char, 64> digest;
+
     lua::setField(state, "digest", encodeLowerHex(specification_.digest, digest));
     lua_setfield(state, -2, "app");
     lua_call(state, 2, 1);
     if (stage == TrafficStage::observe) {
       LuaEffects reader{state};
+
       effect_bytes_ = Protocol::encodeEffects(effects_.bytes(), event.event_id, reader.read(-1)).size();
     }
   }
 
   inline tbc::view<std::span<const Byte>, tbc::lt::a> finish(std::uint64_t event_id, tbc::view<std::span<Byte>, tbc::lt::a> output) {
     auto &reply = *reply_;
+
     reply.event_id = event_id;
     reply.changed = changed_;
     reply.registration_count = 0;
@@ -681,15 +732,20 @@ public:
         if (binding.callback != LUA_NOREF) { reply.registrations[reply.registration_count++] = binding.registration; }
       }
     }
+
     // The outcome views this host's buffers only while the reply is encoded.
     TrafficOutcome outcome;
+
     outcome.decision_count = decision_count_;
     for (std::size_t index = 0; index < decision_count_; ++index) {
       const auto &queued = queued_[index];
+
       outcome.decisions[index] = {queued.registration, decisions_.readable().subspan(queued.offset, queued.bytes)};
     }
+
     outcome.effects = effects_.bytes().first(effect_bytes_);
     const auto encoded = TrafficProtocol::reply(output, reply, outcome);
+
     changed_ = false;
     return encoded;
   }
@@ -699,6 +755,7 @@ private:
     auto &self = *static_cast<LuaTraffic *>(lua_touserdata(state, lua_upvalueindex(1)));
     const auto operation = static_cast<Operation>(lua_tointeger(state, lua_upvalueindex(2)));
     std::array<char, 1024> error{};
+
     try {
       switch (operation) {
       case Operation::subscribe: lua_pushinteger(state, self.registerCallback(state, false)); return 1;
@@ -709,16 +766,19 @@ private:
         if (auto *binding = self.find(id)) {
           self.unbind(state, *binding);
         }
+
         return 0;
       }
       case Operation::control: lua_pushinteger(state, self.registerControl(state)); return 1;
       }
     } catch (const std::exception &failure) { std::snprintf(error.data(), error.size(), "%s", failure.what()); }
+
     return luaL_error(state, "%s", error.data());
   }
 
   inline static std::uint32_t identifier(lua_State *state, int index) {
     const lua::Value value{state, index, "Traffic operation identifier"};
+
     return static_cast<std::uint32_t>(value.boundedInteger(0, 1, UINT32_MAX));
   }
 
@@ -726,6 +786,7 @@ private:
     for (auto &binding : bindings_) {
       if (binding.callback != LUA_NOREF && binding.registration.id == id) { return &binding; }
     }
+
     return nullptr;
   }
 
@@ -739,6 +800,7 @@ private:
     if (static_cast<std::size_t>(active) >= TrafficLimits::controls) { throw lua::Error{"Traffic control request limit reached"}; }
     const auto encoded = traffic::control::Protocol::encode(scratch_.bytes(), request);
     TrafficRegistration registration;
+
     registration.stage = TrafficStage::control;
     registration.request.assign({reinterpret_cast<const char *>(encoded.data()), encoded.size()});
     return bind(state, registration);
@@ -750,6 +812,7 @@ private:
     if (next_identifier_ == UINT32_MAX) { throw lua::Error{"Traffic identifiers exhausted"}; }
     TrafficRegistration registration;
     const lua::Value options{state, 1, "Traffic options"};
+
     if (intercept) { interception(options, registration); }
     else { subscription(options, registration); }
     return bind(state, registration);
@@ -766,6 +829,7 @@ private:
       changed_ = true;
       return registration.id;
     }
+
     throw lua::Error{"Traffic registration limit reached"};
   }
 
@@ -798,13 +862,16 @@ private:
       if (name != "outbound" && name != "inbound" && name != "both") { throw lua::Error{"Invalid interception direction"}; }
       registration.directions = name == "outbound" ? 1 : name == "inbound" ? 2 : 3;
     }
+
     const auto visibility = options.field("visibility");
+
     registration.visibility = registration.stage == TrafficStage::http ? 3 : 2;
     if (visibility.present()) {
       const auto name = visibility.string();
       if (name != "wire" && name != "plaintext" && name != "both") { throw lua::Error{"Invalid interception visibility"}; }
       registration.visibility = name == "wire" ? 1 : name == "plaintext" ? 2 : 3;
     }
+
     registration.timeout_ms = static_cast<std::uint32_t>(options.field("timeout_ms").boundedInteger(traffic::default_timeout_ms, 1, traffic::maximum_timeout_ms));
     const auto failure = options.field("failure");
     if (failure.present()) {
@@ -827,12 +894,14 @@ private:
     const auto verdict = action == "allow" ? traffic::Verdict::allow : action == "replace" ? traffic::Verdict::replace : action == "reject" ? traffic::Verdict::reject : traffic::Verdict::pending;
     if (verdict == traffic::Verdict::pending) { throw lua::Error{"Invalid interception action"}; }
     std::span<const Byte> encoded;
+
     if (verdict == traffic::Verdict::replace && binding->registration.stage == TrafficStage::http) {
       decision.onlyFields({"action", "message"});
       const auto message = LuaTrafficValue::message(decision.field("message"));
       constexpr auto header_bytes = 2 * sizeof(Byte) + sizeof(std::uint64_t) + sizeof(std::uint32_t);
       const auto payload = HttpMessageCodec::encode(scratch_.bytes().subspan(header_bytes), message);
       FrameWriter writer{scratch_.bytes().first(header_bytes)};
+
       writer.tag(traffic::InterceptionCodec::Command::decision);
       writer.integer(ticket);
       writer.tag(verdict);
@@ -844,8 +913,10 @@ private:
       if (bytes.size() > traffic::FlowControl::chunk_bytes) { throw lua::Error{"Stream replacement exceeds its bound"}; }
       encoded = traffic::InterceptionCodec::decision(scratch_.bytes(), ticket, verdict, {reinterpret_cast<const Byte *>(bytes.data()), bytes.size()});
     }
+
     if (decision_count_ == queued_.size()) { throw lua::Error{"Too many traffic decisions in one callback"}; }
     const auto offset = decisions_.size();
+
     decisions_.append(encoded);
     queued_[decision_count_++] = {id, offset, encoded.size()};
     return true;
@@ -883,14 +954,17 @@ public:
 
     const std::string_view path{resolved.data()};
     const auto separator = path.rfind('/');
+
     package_root_.assign(path.substr(0, separator));
     const auto source = readFile(memory_, resolved.data(), Limits::entry_bytes);
+
     vm_.execute(bootstrap, "@telar-tap-bootstrap.lua");
     lua_setglobal(vm_.state(), "telar");
     if (traffic) { traffic_.emplace(memory_, *traffic); }
     vm_.invoke(&install, this, 0);
     vm_.resetBudget();
     Entrypoint entry{*this, source};
+
     vm_.invoke(&loadEntrypoint, &entry, 0);
     lua_settop(vm_.state(), 0);
   }
@@ -909,20 +983,24 @@ public:
     vm_.resetBudget();
     traffic_->begin();
     TrafficInvocation invocation{*this, event};
+
     try { vm_.invoke(&invokeTrafficCallback, &invocation, 0); }
     catch (const std::exception &) {
       lua_settop(vm_.state(), 0);
       return Protocol::encodeError(output, event.event_id, "unknown Lua error");
     }
+
     return traffic_->finish(event.event_id, output);
   }
 
   inline tbc::view<std::span<const Byte>, tbc::lt::a> invoke(const ExchangeView &exchange, tbc::view<std::span<Byte>, tbc::lt::a> output) {
     TELAR_TRACE("plugins.invokeExchange");
     auto *state = vm_.state();
+
     lua_settop(state, 0);
     vm_.resetBudget();
     Invocation invocation{*this, exchange, output};
+
     try {
       vm_.invoke(&invokeCallback, &invocation, 0);
     } catch (const std::exception &) {
@@ -934,6 +1012,7 @@ public:
     if (invocation.encoding_failed) {
       throw EncodingError{"Tap effects exceed the reply limit"};
     }
+
     return output.first(invocation.encoded_bytes);
   }
 
@@ -957,6 +1036,7 @@ private:
     auto &invocation = *static_cast<TrafficInvocation *>(callContext(state));
     const auto event = invocation.event;
     std::array<char, 1024> error{};
+
     try { invocation.host.traffic_->invoke(state, event); return 0; }
     catch (const std::exception &failure) { std::snprintf(error.data(), error.size(), "%s", failure.what()); }
     return luaL_error(state, "%s", error.data());
@@ -977,11 +1057,13 @@ private:
   inline static std::string_view errorMessage(lua_State *state) {
     std::size_t size = 0;
     const auto *bytes = lua_tolstring(state, -1, &size);
+
     return bytes == nullptr ? std::string_view{"unknown Lua error"} : std::string_view{bytes, size};
   }
 
   inline static int install(lua_State *state) {
     auto &host = context(state);
+
     try {
       lua_getglobal(state, "telar");
       lua_getfield(state, -1, "redact");
@@ -1002,6 +1084,7 @@ private:
     if (luaL_loadbufferx(state, entry.source.data(), entry.source.size(), "@tap-plugin.lua", "t") != LUA_OK) {
       return lua_error(state);
     }
+
     lua_call(state, 0, 1);
     if (!lua_istable(state, -1)) {
       return luaL_error(state, "Invalid tap plugin");
@@ -1012,18 +1095,21 @@ private:
       if (lua_isnil(state, -1) && entry.host.traffic_ && entry.host.traffic_->listening()) { lua_pop(state, 1); return 0; }
       return luaL_error(state, "Missing exchange handler");
     }
+
     entry.host.callback_reference_ = luaL_ref(state, LUA_REGISTRYINDEX);
     return 0;
   }
 
   inline static int invokeCallback(lua_State *state) {
     auto &invocation = *static_cast<Invocation *>(lua_touserdata(state, 1));
+
     lua_rawgeti(state, LUA_REGISTRYINDEX, invocation.host.callback_reference_);
     LuaExchange::push(state, invocation.exchange);
     lua_call(state, 1, 1);
     try {
       LuaEffects reader{state};
       const auto effects = reader.read(-1);
+
       invocation.encoded_bytes = Protocol::encodeEffects(invocation.output, invocation.exchange.identity.id, effects).size();
       return 0;
     } catch (const EncodingError &) {
@@ -1031,6 +1117,7 @@ private:
       return 0;
     } catch (const std::exception &) {
       const auto message = errorMessage(state);
+
       lua_pushlstring(state, message.data(), message.size());
       return lua_error(state);
     }
@@ -1046,6 +1133,7 @@ private:
 
     const std::string_view input{bytes, size};
     const auto output = HistoryFilters::looksLikeSecret(input) ? std::string_view{"[REDACTED]"} : input;
+
     lua_pushlstring(state, output.data(), output.size());
     return 1;
   }
@@ -1074,17 +1162,21 @@ void runWorker(Memory &memory, const char *entry_path, bool traffic = false) {
   PipeStream stream{STDIN_FILENO, STDOUT_FILENO};
   FrameChannel channel{stream};
   std::optional<ServiceSpec> specification;
+
   if (traffic) {
     const auto frame = channel.receive(memory, 4096);
     if (!frame) { return; }
     specification = TrafficProtocol::setup(frame->bytes());
   }
+
   Host host{memory, entry_path, specification ? &*specification : nullptr};
   SensitiveAllocation output{memory, traffic ? TrafficLimits::reply_bytes : Limits::effect_bytes};
+
   if (traffic) { channel.send(host.trafficSetup(output.bytes())); }
   while (auto frame = channel.receive(memory, Limits::frame_bytes)) {
     const auto bytes = frame->bytes();
     std::span<const Byte> encoded;
+
     if (traffic && (bytes.front() == static_cast<Byte>(FrameKind::traffic_event) || bytes.front() == static_cast<Byte>(FrameKind::traffic_control_event))) { encoded = host.invokeTraffic(TrafficProtocol::event(bytes), output.bytes()); }
     else { encoded = host.invoke(Protocol::decodeExchange(bytes), output.bytes().first(Limits::effect_bytes)); }
     channel.send(encoded);

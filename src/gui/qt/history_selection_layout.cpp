@@ -96,6 +96,7 @@ void HistorySelectionLayout::prepareFrame() {
   const auto timestamp = clock_->now();
   const auto expansion = motion_.sample(generation_, selected_, timestamp);
   const bool changed = expansion_.open != expansion.open || expansion_.leaving != expansion.leaving || expansion_.leaving_open != expansion.leaving_open;
+
   expansion_ = expansion;
   leaving_key_ = expansion.leaving ? QString::number(expansion.leaving->id) : QString{};
   next_sample_ns_ = motion_.deadline(timestamp, clock_->frameInterval());

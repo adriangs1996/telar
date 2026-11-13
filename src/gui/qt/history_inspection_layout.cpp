@@ -88,6 +88,7 @@ void HistoryInspectionLayout::setInput(const QVariantMap &input) {
   }
 
   const auto identity_changed = input_.value(QStringLiteral("identity")) != input.value(QStringLiteral("identity"));
+
   input_ = input;
   choice_ = {.index = static_cast<std::size_t>(input_.value(QStringLiteral("selection")).toULongLong()), .revision = input_.value(QStringLiteral("revision")).toULongLong()};
   pane_open_ = input_.value(QStringLiteral("paneOpen")).toBool();
@@ -143,7 +144,9 @@ ChromeMetrics HistoryInspectionLayout::metrics(qreal ratio) const {
   const auto pixels = [&](const QString &name) {
     return static_cast<std::uint16_t>(std::clamp(std::round(physical(input_.value(name))), 0.0F, static_cast<float>(std::numeric_limits<std::uint16_t>::max())));
   };
+
   ChromeMetrics chrome;
+
   chrome.ratio = static_cast<float>(ratio * density_);
   chrome.body = pixels(QStringLiteral("bodyPixels"));
   chrome.small = pixels(QStringLiteral("smallPixels"));
@@ -177,8 +180,10 @@ QVariantMap HistoryInspectionLayout::prepareContent(const HistoryInspectionGeome
   std::array<QByteArray, HistoryInspectionFacts::count> labels;
   std::array<HistoryInspectionLine, HistoryInspectionFacts::count> facts;
   const auto fact_count = std::min(facts.size(), static_cast<std::size_t>(records.size()));
+
   for (std::size_t index = 0; index < fact_count; ++index) {
     const auto record = records[static_cast<qsizetype>(index)].toMap();
+
     texts[index] = record.value(QStringLiteral("text")).toString().toUtf8();
     labels[index] = record.value(QStringLiteral("label")).toString().toUtf8();
     facts[index] = {.kind = HistoryInspectionLine::Kind::fact, .text = bytes(texts[index]), .label = bytes(labels[index]), .color = color(record.value(QStringLiteral("color")).toString()), .mono = record.value(QStringLiteral("mono")).toBool()};
@@ -198,6 +203,7 @@ QVariantMap HistoryInspectionLayout::prepareContent(const HistoryInspectionGeome
   }
 
   QVariantList visible;
+
   for (std::uint16_t index = 0; geometry.columns != 0 && index < geometry.rows; ++index) {
     const auto line = lines.next();
     if (!line) {
@@ -218,12 +224,14 @@ QVariantMap HistoryInspectionLayout::prepareContent(const HistoryInspectionGeome
 QVariantList HistoryInspectionLayout::prepareButtons(const HistoryInspectionGeometry &geometry, ChromeMetrics chrome) {
   std::array<float, HistoryInspectionGeometry::maximum_actions> measured{};
   const auto action_count = std::min(measured.size(), static_cast<std::size_t>(advances_.size()));
+
   for (std::size_t index = 0; index < action_count; ++index) {
     measured[index] = physical(advances_[static_cast<qsizetype>(index)]);
   }
 
   button_bounds_ = geometry.columns == 0 ? decltype(button_bounds_){} : geometry.buttons(std::span{measured}.first(action_count), chrome);
   QVariantList buttons;
+
   for (const auto button : button_bounds_) {
     buttons.append(logical(button));
   }
@@ -238,6 +246,7 @@ std::size_t HistoryInspectionLayout::hoverTargets(std::uint64_t generation, std:
 
   constexpr std::array actions{HistoryInspectionAction::submit, HistoryInspectionAction::alternate, HistoryInspectionAction::copy, HistoryInspectionAction::erase, HistoryInspectionAction::visit};
   std::size_t count = 0;
+
   for (std::size_t index = 0; index < actions.size() && count < destination.size(); ++index) {
     const auto action = actions[index];
     if (button_bounds_[index].empty() || (action == HistoryInspectionAction::visit && (!pane_open_ || !ready_))) {
@@ -245,6 +254,7 @@ std::size_t HistoryInspectionLayout::hoverTargets(std::uint64_t generation, std:
     }
 
     const auto bounds = mapRectToScene(logical(button_bounds_[index]));
+
     destination[count++] = {.identity = {.action = HistoryInspectionIdentity{.action = action, .choice = choice_}, .generation = generation}, .bounds = {.x = static_cast<float>(bounds.x() * density_), .y = static_cast<float>(bounds.y() * density_), .width = static_cast<float>(bounds.width() * density_), .height = static_cast<float>(bounds.height() * density_)}};
   }
 
@@ -260,6 +270,7 @@ void HistoryInspectionLayout::updatePolish() {
   density_ = window() == nullptr ? 1 : window()->effectiveDevicePixelRatio();
   const auto chrome = metrics(ratio);
   const auto geometry = HistoryInspectionGeometry::derive({.width = static_cast<float>(width() * density_), .height = static_cast<float>(height() * density_)}, chrome, {.x = physical(input_.value(QStringLiteral("cellWidth"))), .y = physical(input_.value(QStringLiteral("cellHeight")))});
+
   layout_ = prepareContent(geometry);
   layout_.insert(QStringLiteral("buttons"), prepareButtons(geometry, chrome));
   layout_.insert(QStringLiteral("buttonRadius"), HistoryInspectionGeometry::button_radius * ratio);
@@ -288,6 +299,7 @@ void HistoryInspectionLayout::itemChange(ItemChange change, const ItemChangeData
 void HistoryInspectionLayout::wheelEvent(QWheelEvent *event) {
   if (input_.value(QStringLiteral("interactive")).toBool()) {
     const auto lines = wheel_.consume(scrollSample(*event, input_.value(QStringLiteral("cellHeight")).toDouble()));
+
     setScroll(scroll_ + lines);
   }
 

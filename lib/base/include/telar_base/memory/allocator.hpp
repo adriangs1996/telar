@@ -31,6 +31,7 @@ namespace telar {
       }
 
       void *pointer = nullptr;
+
       return posix_memalign(&pointer, alignment, size) == 0 ? pointer : nullptr;
     }
 
@@ -96,6 +97,7 @@ namespace telar {
 #if TELAR_DIAGNOSTICS
     AllocationStatistics statistics() const noexcept {
       auto result = statistics_;
+
       result.live_bytes = live_bytes_;
       return result;
     }
@@ -135,11 +137,13 @@ namespace telar {
 
     void *allocate(std::size_t size, std::size_t alignment) noexcept {
       const std::lock_guard lock{mutex_};
+
       return upstream_.allocate(size, alignment);
     }
 
     void deallocate(void *pointer, std::size_t size, std::size_t alignment) noexcept {
       const std::lock_guard lock{mutex_};
+
       upstream_.deallocate(pointer, size, alignment);
     }
 
@@ -147,6 +151,7 @@ namespace telar {
       requires requires(const Upstream &upstream) { upstream.statistics(); }
     {
       const std::lock_guard lock{mutex_};
+
       return upstream_.statistics();
     }
 

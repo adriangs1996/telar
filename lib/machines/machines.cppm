@@ -40,6 +40,7 @@ public:
     if (radix == NumberRadix::hexadecimal) {
       length_ = (exponent + hexadecimal_bits - 1) / hexadecimal_bits;
       const auto trailing_bits = exponent % hexadecimal_bits;
+
       digits_[length_ - 1] = static_cast<std::uint8_t>(trailing_bits == 0 ? 1 : 1U << (hexadecimal_bits - trailing_bits));
 
       return;
@@ -79,12 +80,16 @@ private:
 
   inline void deriveDecimal(std::size_t exponent) {
     std::array<std::uint32_t, limb_capacity> limbs{};
+
     limbs.front() = 1;
     std::size_t count = 1;
+
     for (std::size_t power = 0; power < exponent; ++power) {
       std::uint64_t carry = 0;
+
       for (auto &limb : std::span{limbs}.first(count)) {
         const auto product = (static_cast<std::uint64_t>(limb) * half_decimal_radix) + carry;
+
         limb = static_cast<std::uint32_t>(product % decimal_limb_base);
         carry = product / decimal_limb_base;
       }
@@ -95,6 +100,7 @@ private:
     }
 
     auto position = exponent;
+
     for (auto limb : std::span{limbs}.first(count)) {
       for (unsigned digit = 0; digit < decimal_limb_digits && position != 0; ++digit) {
         digits_[--position] = static_cast<std::uint8_t>(limb % decimal_radix);
@@ -233,6 +239,7 @@ public:
         return static_cast<MachineError>(code);
       }
     }
+
     return std::nullopt;
   }
 
@@ -295,6 +302,7 @@ public:
 
     MachineDiscovery result;
     const std::array paths{&result.home_, &result.shell_, &result.endpoint_};
+
     for (auto *const path : paths) {
       const auto end = output.find('\n');
       if (end == std::string_view::npos) {
@@ -302,6 +310,7 @@ public:
       }
 
       const auto text = output.substr(0, end);
+
       validatePath(text, path == &result.endpoint_);
       path->assign(text);
       output.remove_prefix(end + 1);
@@ -354,6 +363,7 @@ private:
 
     constexpr unsigned char first_printable = 0x20;
     constexpr unsigned char delete_character = 0x7f;
+
     for (const auto character : path) {
       const auto byte = static_cast<unsigned char>(character);
       if (byte < first_printable || byte == delete_character || (socket_path && character == ':')) {
@@ -493,6 +503,7 @@ public:
     }
 
     MachineId identity;
+
     identity.value_ = value;
 
     return identity;
@@ -504,6 +515,7 @@ public:
     }
 
     std::uint64_t value = 0;
+
     for (const char digit : text.substr(prefix.size())) {
       const auto index = digits.find(digit);
       if (index == std::string_view::npos) {
@@ -520,10 +532,13 @@ public:
   [[nodiscard]] inline static MachineId generate(Random &random) {
     constexpr unsigned bits_per_byte = 8;
     constexpr unsigned entropy_bits = sizeof(std::uint64_t) * bits_per_byte;
+
     for (;;) {
       std::array<std::uint8_t, sizeof(std::uint64_t)> bytes{};
+
       random.fill(bytes);
       std::uint64_t value = 0;
+
       for (std::size_t index = 0; index < bytes.size(); ++index) {
         value |= static_cast<std::uint64_t>(bytes[index]) << (index * bits_per_byte);
       }
@@ -537,9 +552,11 @@ public:
 
   [[nodiscard]] inline BoundedText<text_bytes> format() const {
     BoundedText<text_bytes> text;
+
     text.append(prefix);
     for (std::size_t position = hex_digits; position != 0; --position) {
       const auto shift = (position - 1) * bits_per_digit;
+
       text.append(digits.substr((value_ >> shift) & digit_mask, 1));
     }
 
@@ -590,6 +607,7 @@ public:
 
     const auto marker = floating_syntax ? text.find_first_of(radix_ == hexadecimal_radix ? "pP" : "eE") : std::string_view::npos;
     const auto mantissa = text.substr(0, marker);
+
     readMantissa(mantissa, floating_syntax);
     if (marker != std::string_view::npos) {
       applyExponent(exponent(text.substr(marker + 1), text.size()));
@@ -620,6 +638,7 @@ public:
 
   [[nodiscard]] inline std::uint32_t integerPart(std::uint32_t maximum) const {
     std::uint32_t value = 0;
+
     for (std::ptrdiff_t position = 0; position < point_; ++position) {
       const auto digit = digitAt(position);
       if (digit > maximum || value > (maximum - digit) / radix_) {
@@ -635,6 +654,7 @@ public:
   template <typename Fraction>
   [[nodiscard]] inline int compareFraction(const Fraction &threshold, bool complement = false) const noexcept {
     const auto extent = std::max(static_cast<std::ptrdiff_t>(threshold.size()), static_cast<std::ptrdiff_t>(digits_.size()) - point_);
+
     for (std::ptrdiff_t position = 0; position < extent; ++position) {
       const auto actual = digitAt(point_ + position);
       const auto expected = complement ? threshold.complementDigit(static_cast<std::size_t>(position), radix()) : threshold.digit(static_cast<std::size_t>(position));
@@ -665,6 +685,7 @@ private:
 
   void readMantissa(std::string_view text, bool floating_syntax) {
     bool point_seen = false;
+
     for (std::size_t position = 0; position < text.size(); ++position) {
       const auto byte = text[position];
       if (byte == '.') {
@@ -712,6 +733,7 @@ private:
 
     const auto budget = static_cast<std::ptrdiff_t>(source_bytes) + minimum_exponent_budget;
     std::ptrdiff_t value = 0;
+
     for (std::size_t position = 0; position < text.size(); ++position) {
       if (text[position] == '_') {
         if (position == 0 || position + 1 == text.size() || !validDigit(text[position - 1], decimal_radix) || !validDigit(text[position + 1], decimal_radix)) {
@@ -747,8 +769,10 @@ private:
 
     point_ += whole;
     unsigned carry = 0;
+
     for (auto digit = digits_.rbegin(); digit != digits_.rend(); ++digit) {
       const auto product = (static_cast<unsigned>(digit_symbols.find(*digit)) << static_cast<unsigned>(remainder)) + carry;
+
       *digit = digit_symbols[product % radix_];
       carry = product / radix_;
     }
@@ -811,6 +835,7 @@ struct JsonUnsignedInteger {
     const RadixNumber number{memory, text, floating};
     const auto maximum = static_cast<std::uint32_t>(std::numeric_limits<Number>::max());
     const auto integral = number.integerPart(maximum);
+
     if (number.integral()) {
       if (number.negative() && integral != 0) {
         invalid();
@@ -912,6 +937,7 @@ public:
     MachineFieldRules::label(fields.label);
     MachineFieldRules::profileDestination(fields.destination);
     MachineProfile profile;
+
     profile.identity_ = identity;
     profile.label_.assign(fields.label);
     profile.destination_.assign(fields.destination);
@@ -1047,6 +1073,7 @@ public:
 
   inline void remove(std::string_view label) {
     const auto position = require(label);
+
     for (auto index = position; index + 1 < length_; ++index) {
       rows_[index] = rows_[index + 1];
     }
@@ -1056,6 +1083,7 @@ public:
 
   inline void rename(std::string_view label, std::string_view replacement) {
     const auto position = require(label);
+
     if (label == replacement) {
       return;
     }
@@ -1125,12 +1153,15 @@ struct MachineProfileCodec {
       const runtime::JsonFields fields{memory, runtime::JsonValue::parse(source), file_fields};
       String<Memory> scratch{AllocatorRef<char, Memory>{memory}};
       const auto version = readVersion(memory, fields.required("version"), scratch);
+
       validateOptionalString(fields.optional("local_label"), scratch);
       std::size_t count = 0;
+
       fields.required("machines").eachElement([&](const runtime::JsonValue &value) {
         validateProfile(memory, value, scratch);
         ++count;
       });
+
       if (version < MachineProfiles::plain_format_version || version > MachineProfiles::extended_format_version) {
         throw MachineFailure{MachineError::incompatible_profiles};
       }
@@ -1140,6 +1171,7 @@ struct MachineProfileCodec {
       }
 
       MachineProfiles profiles;
+
       if (const auto &label = fields.optional("local_label"); label && !isNull(*label)) {
         label->string(scratch);
         profiles.relabelLocal(scratch);
@@ -1162,6 +1194,7 @@ struct MachineProfileCodec {
   template <Allocator Memory>
   [[nodiscard]] inline static String<Memory> format(Memory &memory, const MachineProfiles &profiles) {
     String<Memory> output{AllocatorRef<char, Memory>{memory}};
+
     output += profiles.version() == MachineProfiles::plain_format_version ? "{\"version\":1" : "{\"version\":2";
     if (const auto label = profiles.localLabel()) {
       output += ",\"local_label\":";
@@ -1170,6 +1203,7 @@ struct MachineProfileCodec {
 
     output += ",\"machines\":[";
     bool first = true;
+
     for (const auto &profile : profiles.rows()) {
       output += first ? "\n  " : ",\n  ";
       first = false;
@@ -1235,6 +1269,7 @@ private:
   template <Allocator Memory>
   inline static void validateProfile(Memory &memory, const runtime::JsonValue &value, String<Memory> &scratch) {
     const runtime::JsonFields fields{memory, value, profile_fields};
+
     for (auto const *name : {"id", "label", "destination"}) {
       fields.required(name).string(scratch);
     }
@@ -1247,6 +1282,7 @@ private:
 
     if (const auto &logins = fields.optional("logins"); logins && !isNull(*logins)) {
       const runtime::JsonFields values{memory, *logins, machine_agent_names};
+
       for (const auto name : machine_agent_names) {
         if (const auto &login = values.optional(name); login && !isNull(*login)) {
           static_cast<void>(readLogin(*login, scratch));
@@ -1258,6 +1294,7 @@ private:
   template <Allocator Memory>
   inline static String<Memory> readString(Memory &memory, const runtime::JsonValue &value) {
     String<Memory> text{AllocatorRef<char, Memory>{memory}};
+
     value.string(text);
 
     return text;
@@ -1281,9 +1318,11 @@ private:
                                                         .enabled = !enabled || enabled->boolean(),
                                                         .program = program ? std::optional<std::string_view>{*program} : std::nullopt,
                                                     });
+
     if (const auto &logins = fields.optional("logins"); logins && !isNull(*logins)) {
       const runtime::JsonFields values{memory, *logins, machine_agent_names};
       String<Memory> scratch{AllocatorRef<char, Memory>{memory}};
+
       for (const auto agent : machine_agents) {
         const auto name = machine_agent_names.at(static_cast<std::size_t>(agent));
         if (const auto &login = values.optional(name); login && !isNull(*login)) {
@@ -1316,6 +1355,7 @@ public:
     }
 
     bool first = true;
+
     for (const auto agent : machine_agents) {
       const auto login = profile.login(agent);
       if (!login) {
@@ -1365,6 +1405,7 @@ private:
     }
 
     Text command;
+
     command.append(prefix);
     command.append(program.value_or("telar"));
     command.append(suffix);

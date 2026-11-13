@@ -73,6 +73,7 @@ public:
     SensitiveBytes<Memory> bytes{memory};
     Chunk chunk;
     const auto deadline = now() + timeout;
+
     while (true) {
       waitReadable(descriptor, deadline);
       const auto count = ::read(descriptor, chunk.bytes.data(), chunk.bytes.size());
@@ -259,6 +260,7 @@ template <Allocator Memory>
 // The source bytes are allocated from memory, region `a`.
 [[nodiscard]] tbc::view<std::optional<Vector<Byte, Memory>>, tbc::lt::a> readProfileSource(tbc::view<Memory &, tbc::lt::a> memory, int directory, std::string_view name) {
   Vector<Byte, Memory> bytes{AllocatorRef<Byte, Memory>{memory}};
+
   try {
     if (!runtime::readPrivateFile(directory, name, bytes, MachineLimits::file_bytes)) {
       return std::nullopt;

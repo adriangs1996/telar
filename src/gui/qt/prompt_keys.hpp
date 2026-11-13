@@ -24,6 +24,7 @@ inline std::optional<prompt::KeyPress> promptKey(const QKeyEvent &event, QByteAr
   }
 
   prompt::KeyPress result{.modifiers = {.control = key->has(KeyChord::Modifier::control), .alt = key->has(KeyChord::Modifier::alt), .shift = key->has(KeyChord::Modifier::shift)}};
+
   switch (key->code) {
   case KeyChord::Key::character:
     result.key = prompt::Key::character;
@@ -35,6 +36,7 @@ inline std::optional<prompt::KeyPress> promptKey(const QKeyEvent &event, QByteAr
       text = event.text().toUtf8();
       result.text = {text.constData(), static_cast<std::size_t>(text.size())};
     }
+
     return result;
   case KeyChord::Key::up:
     result.key = prompt::Key::up;

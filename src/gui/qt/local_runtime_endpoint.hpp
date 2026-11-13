@@ -50,6 +50,7 @@ struct LocalRuntimeEndpoint {
     const runtime::cli::RuntimePaths paths(memory, options, environment);
     auto path = QString::fromUtf8(paths.socket.data(), static_cast<qsizetype>(paths.socket.size()));
     QLocalSocket probe;
+
     probe.connectToServer(path);
     constexpr int connect_deadline_ms = 100;
     if (probe.state() == QLocalSocket::ConnectedState || probe.waitForConnected(connect_deadline_ms)) {

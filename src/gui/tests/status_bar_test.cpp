@@ -90,6 +90,7 @@ using BarContent = components::Content<components::Capacity{.nodes = 8, .text = 
 
 void appendNode(BarContent &content, components::Node node, std::string_view text = {}, std::string_view detail = {}, std::string_view url = {}) {
   components::Input input{};
+
   input.node = node;
   input.text = text;
   input.detail = detail;
@@ -99,6 +100,7 @@ void appendNode(BarContent &content, components::Node node, std::string_view tex
 
 QVariantMap treeProperties(const BarContent &content) {
   const auto nodes = componentRecords(content, Configuration{}.theme, {}, [](BindingAction) -> std::optional<NamedActionDescription> { return std::nullopt; });
+
   return {
       {QStringLiteral("width"), 1000},
       {QStringLiteral("height"), bar_height},
@@ -125,9 +127,11 @@ private:
   Q_SLOT static void missingMetricsStayHiddenWithoutAController() {
     QQmlEngine engine;
     const auto bar = createChrome(engine, QStringLiteral("StatusBar"), barProperties(HostMetrics{}));
+
     QVERIFY(!engine.rootContext()->contextProperty(QStringLiteral("telar")).isValid());
     for (const auto *name : {"cpuMetric", "memoryMetric", "batteryMetric"}) {
       const auto *metric = bar->findChild<QQuickItem *>(QString::fromLatin1(name));
+
       QVERIFY(metric != nullptr);
       QVERIFY(!metric->isVisible());
     }
@@ -136,11 +140,13 @@ private:
   Q_SLOT static void metricsUseTheRuntimeValuesAndHideAnAbsentBattery() {
     QQmlEngine engine;
     HostMetrics metrics;
+
     QVERIFY(metrics.update(hostSample(1, initial_cpu, initial_memory, low_battery)));
     auto bar = createChrome(engine, QStringLiteral("StatusBar"), barProperties(metrics));
     const auto *cpu = bar->findChild<QQuickItem *>(QStringLiteral("cpuMetric"));
     const auto *memory = bar->findChild<QQuickItem *>(QStringLiteral("memoryMetric"));
     const auto *battery = bar->findChild<QQuickItem *>(QStringLiteral("batteryMetric"));
+
     QVERIFY(cpu != nullptr && memory != nullptr && battery != nullptr);
     QTRY_VERIFY_WITH_TIMEOUT(cpu->isVisible() && memory->isVisible() && battery->isVisible(), wait_ms);
     QCOMPARE(cpu->property("record").toMap().value(QStringLiteral("text")).toString(), QStringLiteral("42%"));
@@ -155,9 +161,11 @@ private:
   Q_SLOT static void modesReplaceMetricsAndDiagnosticsReserveSpace() {
     QQmlEngine engine;
     HostMetrics metrics;
+
     QVERIFY(metrics.update(hostSample(1, initial_cpu, initial_memory)));
     auto bar = createChrome(engine, QStringLiteral("StatusBar"), barProperties(metrics));
     const auto *cpu = bar->findChild<QQuickItem *>(QStringLiteral("cpuMetric"));
+
     QVERIFY(cpu != nullptr);
     QTRY_VERIFY_WITH_TIMEOUT(cpu->isVisible(), wait_ms);
     QVERIFY(bar->setProperty("mode", statusModeRecord(StatusMode::copy)));
@@ -171,8 +179,10 @@ private:
     QQuickWindow window;
     QQmlEngine engine;
     HostMetrics metrics;
+
     QVERIFY(metrics.update(hostSample(1, initial_cpu, initial_memory)));
     auto bar = createChrome(engine, QStringLiteral("StatusBar"), barProperties(metrics));
+
     bar->setParentItem(window.contentItem());
     window.resize(bar_width, bar_height);
     QVERIFY(bar->setProperty("diagnostic", QStringLiteral("The configuration could not be loaded")));
@@ -187,8 +197,10 @@ private:
 
       return nullptr;
     };
+
     QTRY_VERIFY_WITH_TIMEOUT(findArea() != nullptr, wait_ms);
     const auto *area = findArea();
+
     QTest::mouseMove(&window, area->mapRectToScene(area->boundingRect()).center().toPoint());
     QTRY_COMPARE_WITH_TIMEOUT(window.cursor().shape(), Qt::PointingHandCursor, wait_ms);
   }
@@ -216,15 +228,19 @@ private:
     BarContent content;
     const auto detail_bytes = detail.toUtf8();
     const std::string_view value_text{detail_bytes.constData(), static_cast<std::size_t>(detail_bytes.size())};
+
     appendNode(content, {.kind = components::Kind::group});
     appendNode(content, {.kind = components::Kind::meter, .parent = 0, .value = components::Node::full_scale}, labelled ? "5h" : "", value_text);
     appendNode(content, {.kind = components::Kind::meter, .parent = 0}, labelled ? "7d" : "", value_text);
     auto properties = treeProperties(content);
+
     properties.insert(QStringLiteral("ratio"), ratio);
     if (compact) {
       properties.insert(QStringLiteral("fittedLevels"), QVariantMap{{QStringLiteral("1"), 1}, {QStringLiteral("2"), 1}});
     }
+
     auto tree = createChrome(engine, QStringLiteral("ComponentTree"), properties);
+
     tree->setParentItem(window.contentItem());
     window.resize(1000, bar_height);
     window.show();
@@ -235,20 +251,24 @@ private:
       const auto *meter = ring->parentItem();
       const auto *label = meter->findChild<QQuickItem *>(QStringLiteral("componentMeterLabel"));
       const auto *value = meter->findChild<QQuickItem *>(QStringLiteral("componentMeterValue"));
+
       QVERIFY(label != nullptr && value != nullptr);
       QVERIFY(value->isVisible());
       QTRY_VERIFY_WITH_TIMEOUT(value->implicitWidth() > 0, wait_ms);
       QCOMPARE(label->property("text").toString().contains(QLatin1Char{'%'}), false);
       const auto expected_value = detail.isEmpty() ? (label->property("text").toString() == QStringLiteral("7d") ? QStringLiteral("0%") : QStringLiteral("100%")) : detail;
+
       if (labelled || !detail.isEmpty()) {
         QCOMPARE(value->property("text").toString(), expected_value);
       }
+
       QVERIFY(!label->property("emphasized").toBool());
       QCOMPARE(label->property("color").value<QColor>(), themeColors(Configuration{}).value(QStringLiteral("subtext0")).value<QColor>());
       constexpr qreal ring_side = 16;
       constexpr qreal part_gap = 5;
       const auto label_gap = labelled ? part_gap * ratio : 0;
       const auto ring_width = compact ? qreal{0} : (ring_side + part_gap) * ratio;
+
       QCOMPARE(ring->isVisible(), !compact);
       QCOMPARE(ring->width(), ring_side * ratio);
       QCOMPARE(ring->height(), ring_side * ratio);
@@ -267,23 +287,29 @@ private:
     QQmlEngine engine;
     BarContent content;
     std::array<std::uint8_t, 60> samples{};
+
     samples.back() = 100;
     components::Input input{};
+
     input.node.kind = components::Kind::sparkline;
     input.samples = samples;
     content.append(input);
     const auto tree = createChrome(engine, QStringLiteral("ComponentTree"), treeProperties(content));
+
     tree->setParentItem(window.contentItem());
     window.resize(1000, bar_height);
     window.show();
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
     QTRY_COMPARE_WITH_TIMEOUT(tree->implicitWidth(), qreal{26}, wait_ms);
     const auto columns = visualItems(*tree, QStringLiteral("componentSparklineSample"));
+
     QCOMPARE(columns.size(), 9);
     int full_samples = 0;
+
     for (const auto *column : columns) {
       full_samples += column->property("modelData").toInt() == 100;
     }
+
     QCOMPARE(full_samples, 1);
   }
 
@@ -291,11 +317,13 @@ private:
     QQuickWindow window;
     QQmlEngine engine;
     BarContent content;
+
     appendNode(content, {.kind = components::Kind::group});
     appendNode(content, {.kind = components::Kind::label, .parent = 0}, "Clock");
     appendNode(content, {.kind = components::Kind::group}, {}, {}, "https://example.com");
     appendNode(content, {.kind = components::Kind::meter, .parent = 2, .tone = components::Tone::warning, .value = 600}, "7d");
     const auto tree = createChrome(engine, QStringLiteral("ComponentTree"), treeProperties(content));
+
     tree->setParentItem(window.contentItem());
     window.resize(1000, bar_height);
     window.show();
@@ -303,6 +331,7 @@ private:
     QTRY_COMPARE_WITH_TIMEOUT(visualItems(*tree, QStringLiteral("barPill")).size(), 1, wait_ms);
     QCOMPARE(visualItems(*tree, QStringLiteral("componentGroupSeparator")).size(), 0);
     const auto *pill = visualItems(*tree, QStringLiteral("barPill")).front();
+
     QCOMPARE(pill->property("severity").toInt(), 1);
     QCOMPARE(pill->height(), qreal{22});
   }
@@ -311,11 +340,13 @@ private:
     QQuickWindow window;
     QQmlEngine engine;
     BarContent content;
+
     appendNode(content, {.kind = components::Kind::group}, "system");
     appendNode(content, {.kind = components::Kind::meter, .parent = 0, .value = 300}, "disk");
     appendNode(content, {.kind = components::Kind::meter, .parent = 0, .tone = components::Tone::warning, .value = 920}, "net");
     appendNode(content, {.kind = components::Kind::meter, .parent = 0, .tone = components::Tone::danger, .value = 990}, "gpu");
     const auto tree = createChrome(engine, QStringLiteral("ComponentTree"), treeProperties(content));
+
     tree->setParentItem(window.contentItem());
     window.resize(1000, bar_height);
     window.show();
@@ -323,16 +354,19 @@ private:
     QTRY_COMPARE_WITH_TIMEOUT(visualItems(*tree, QStringLiteral("barRingArc")).size(), 3, wait_ms);
     const auto labels = visualItems(*tree, QStringLiteral("systemSummaryLabel"));
     const auto extras = visualItems(*tree, QStringLiteral("systemSummaryExtra"));
+
     QCOMPARE(labels.size(), 1);
     QCOMPARE(extras.size(), 1);
     const auto *label = labels.front();
     const auto *extra = extras.front();
+
     QCOMPARE(label->property("text").toString(), QStringLiteral("gpu 99%"));
     QCOMPARE(label->property("color").value<QColor>(), themeColors(Configuration{}).value(QStringLiteral("red")).value<QColor>());
     QVERIFY(extra->isVisible());
     QCOMPARE(extra->property("text").toString(), QStringLiteral("+1"));
     QCOMPARE(visualItems(*tree, QStringLiteral("componentMeterRing")).size(), 0);
     const auto *pill = visualItems(*tree, QStringLiteral("barPill")).front();
+
     QCOMPARE(pill->property("severity").toInt(), 2);
     QVERIFY(!window.grabWindow().isNull());
   }
@@ -341,16 +375,20 @@ private:
     QQuickWindow window;
     QQmlEngine engine;
     HostMetrics metrics;
+
     QVERIFY(metrics.update(hostSample(1, BarMetrics::cpu_danger, updated_memory, full_battery)));
     auto bar = createChrome(engine, QStringLiteral("StatusBar"), barProperties(metrics));
+
     bar->setParentItem(window.contentItem());
     window.resize(bar_width, bar_height);
     window.show();
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
     QVERIFY(!window.grabWindow().isNull());
     constexpr int narrow_width = 90;
+
     bar->setWidth(narrow_width);
     const auto *memory = bar->findChild<QQuickItem *>(QStringLiteral("memoryMetric"));
+
     QVERIFY(memory != nullptr);
     QTRY_VERIFY_WITH_TIMEOUT(!memory->isVisible(), wait_ms);
     bar->setWidth(bar_width);

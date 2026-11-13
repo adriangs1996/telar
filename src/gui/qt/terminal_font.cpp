@@ -31,6 +31,7 @@ TerminalFont TerminalFont::resolve(const QVariantMap &settings, qreal scale) {
   }
 
   QFont base = QFontDatabase::systemFont(QFontDatabase::FixedFont);
+
   base.setFamilies(families);
 
   if (!style.isEmpty()) {
@@ -53,6 +54,7 @@ TerminalFont TerminalFont::resolve(const QVariantMap &settings, qreal scale) {
   const auto size = settings.value("size", default_size).toDouble();
   const auto line_height = settings.value("line_height", 1).toDouble();
   const auto letter_spacing = settings.value("letter_spacing", 0).toDouble();
+
   base.setPointSizeF(std::round(size * scale) / scale * points_per_inch / dpi);
 
   const QFontMetricsF metrics(base);
@@ -78,6 +80,7 @@ TerminalFont TerminalFont::fromFont(QFont base, QSizeF cell, qreal baseline) {
   base.setStyleHint(QFont::Monospace);
 
   TerminalFont result;
+
   result.cell = cell;
   result.baseline = baseline;
 
@@ -87,11 +90,13 @@ TerminalFont TerminalFont::fromFont(QFont base, QSizeF cell, qreal baseline) {
     if (index != 0) {
       constexpr std::size_t bold_mask = 1;
       constexpr std::size_t italic_mask = 2;
+
       variant.setBold((index & bold_mask) != 0 || base.bold());
       variant.setItalic((index & italic_mask) != 0 || base.italic());
     }
 
     const auto advance = QFontMetricsF(variant).horizontalAdvance(QLatin1Char('M'));
+
     variant.setLetterSpacing(QFont::AbsoluteSpacing, result.cell.width() - advance);
     result.faces[index] = variant;
   }

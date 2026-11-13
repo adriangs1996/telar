@@ -104,6 +104,7 @@ UnderlineStyle underlineStyle(const CellStyle &style) noexcept {
 
 QTextCharFormat textFormat(Color foreground) {
   QTextCharFormat format;
+
   format.setForeground(toQColor(foreground));
 
   return format;
@@ -118,6 +119,7 @@ CellRectangle visibleCells(const TerminalPresentation &frame) {
 
   // A view scrolled by pixels draws one row past the screen's last, partly shown.
   const auto drawn = frame.rows.empty() ? fitted->rows : fitted->rows + 1;
+
   return {.width = std::min(fitted->cols, frame.screen.columns()), .height = static_cast<std::uint16_t>(std::min<std::size_t>(drawn, frame.rowCount()))};
 }
 
@@ -156,6 +158,7 @@ CellRun cellRun(const TerminalPresentation &frame, std::size_t row_index, std::s
 
   if (hasAttribute(cell.style, CellAttribute::faint)) {
     constexpr float faint_opacity = 0.5F;
+
     run.foreground.a *= faint_opacity;
   }
 
@@ -169,6 +172,7 @@ CellRun textRun(const TerminalPresentation &frame, std::size_t row_index, std::s
   const auto row = frame.row(row_index).first(columns);
   const auto &cell = row[column];
   const auto selected = frame.selected({.x = static_cast<std::uint16_t>(column), .y = static_cast<std::uint32_t>(row_index)});
+
   run.text = run.symbol ? QString{} : toQString(cell.utf8());
   constexpr Byte ascii_limit = 128;
   if (frame.font.fixed_pitch && cell.width == CellWidth::single && cell.length == 1 && cell.text[0] < ascii_limit) {
@@ -194,6 +198,7 @@ void paintUnderline(RowLayers layers, const CellRun &run, const TerminalPresenta
   const auto thickness = 1 / frame.scale;
   const auto y = bounds.bottom() - (underline_inset_pixels / frame.scale);
   const auto color = frame.configuration.theme.resolve(run.style.underline_color, run.foreground);
+
   TerminalDecorations::rectangle(layers.window, layers.decorations, {bounds.x(), y, bounds.width(), thickness}, color, frame.scale);
 }
 
@@ -218,6 +223,7 @@ void paintRun(RowLayers layers, const CellRun &run, const TerminalPresentation &
 
   if (hasAttribute(run.style, CellAttribute::strikethrough)) {
     constexpr qreal strike_position = 0.5;
+
     TerminalDecorations::rectangle(layers.window, layers.decorations, {bounds.x(), bounds.y() + (bounds.height() * strike_position), bounds.width(), 1 / frame.scale}, run.foreground, frame.scale);
   }
 }
@@ -255,6 +261,7 @@ QSGNode *TerminalScene::synchronizeNode(QSGNode *previous, QQuickWindow &window,
   auto *scene = dynamic_cast<TerminalScene *>(node.get());
   if (scene == nullptr) {
     auto replacement = std::make_unique<TerminalScene>(window);
+
     scene = replacement.get();
     node = std::move(replacement);
   }
@@ -277,6 +284,7 @@ void TerminalScene::synchronizeGrid(CellRectangle visible) {
     // Each row can fade and rise into place on its own, for a command's first output.
     QSGOpacityNode *text_opacity = &appendSceneNode<QSGOpacityNode>(rows_);
     QSGOpacityNode *background_opacity = &appendSceneNode<QSGOpacityNode>(cell_backgrounds_);
+
     row_nodes_.append({.text = &appendSceneNode<QSGTransformNode>(*text_opacity), .background = &appendSceneNode<QSGTransformNode>(*background_opacity), .text_opacity = text_opacity, .background_opacity = background_opacity});
   }
 
@@ -286,6 +294,7 @@ void TerminalScene::synchronizeGrid(CellRectangle visible) {
 void TerminalScene::paintRow(const TerminalPresentation &frame, std::size_t row_index) {
   auto &row = row_nodes_[static_cast<qsizetype>(row_index)];
   std::unique_ptr<QSGNode> previous{row.text_content};
+
   row.text_content = nullptr;
   if (previous) {
     row.text->removeChildNode(previous.get());
@@ -295,6 +304,7 @@ void TerminalScene::paintRow(const TerminalPresentation &frame, std::size_t row_
   clearSceneChildren(*row.background);
   auto &shapes = appendSceneNode<QSGNode>(*row.text);
   const QRectF row_bounds{0, static_cast<qreal>(row_index) * frame.font.cell.height(), columns_ * frame.font.cell.width(), frame.font.cell.height()};
+
   text_.begin(row_bounds, frame.scale, frame.bounds, std::move(previous));
   const auto cursor_column = cursorColumn(frame, row_index, columns_);
 
@@ -302,15 +312,18 @@ void TerminalScene::paintRow(const TerminalPresentation &frame, std::size_t row_
   const auto screen_row = frame.screenRow(row_index);
   const auto grouped_text = text_.prepare(cells, {.pixel_height = frame.grid.pixel_height, .cell_width = frame.grid.width, .cursor = cursor_column, .selection = screen_row ? frame.selection : CellSelection{}, .first_cell = screen_row.value_or(0) * frame.screen.columns()});
   auto decorations = std::make_unique<QSGNode>();
+
   for (std::size_t column = 0; column < cells.size(); ++column) {
     const auto run = cellRun(frame, row_index, column);
     std::unique_ptr<QSGNode> inline_ink;
+
     if (grouped_text && run.visible && (run.symbol || underlineStyle(run.style) != UnderlineStyle::none || hasAttribute(run.style, CellAttribute::strikethrough))) {
       inline_ink = std::make_unique<QSGNode>();
     }
 
     const RowLayers layers{.shapes = inline_ink ? *inline_ink : shapes, .backgrounds = *row.background, .decorations = inline_ink ? *inline_ink : *decorations, .window = window_};
     const QPointF origin{static_cast<qreal>(column) * frame.font.cell.width(), static_cast<qreal>(row_index) * frame.font.cell.height()};
+
     paintRun(layers, run, frame, origin, glyphs_);
     if (grouped_text && run.visible && !run.symbol) {
       text_.addCell(cells, column, frame.font.faces[faceIndex(run.style)], run.foreground, glyphStyle(run.style));
@@ -326,6 +339,7 @@ void TerminalScene::paintRow(const TerminalPresentation &frame, std::size_t row_
       const auto run = textRun(frame, row_index, column, cells.size());
       if (run.visible && !run.symbol) {
         const QPointF origin{static_cast<qreal>(column) * frame.font.cell.width(), static_cast<qreal>(row_index) * frame.font.cell.height()};
+
         text_.add(run.text, frame.font.faces[faceIndex(run.style)], textFormat(run.foreground), {.origin = origin, .baseline = frame.font.baseline, .style = glyphStyle(run.style)});
       }
 
@@ -350,10 +364,12 @@ void TerminalScene::synchronize(QQuickWindow &window, const TerminalPresentation
   // The rows, the images and what is drawn over them move up by the shift.
   if (shift_ != frame.shift) {
     QMatrix4x4 rows;
+
     rows.translate(0, static_cast<float>(-frame.shift));
     for (auto *layer : {&cell_backgrounds_, &matches_, &rows_, &overlay_, &below_background_, &below_text_, &above_text_}) {
       layer->setMatrix(rows);
     }
+
     shift_ = frame.shift;
   }
 
@@ -370,16 +386,20 @@ void TerminalScene::synchronize(QQuickWindow &window, const TerminalPresentation
     if (frame.hidden(position)) {
       if (!row.hidden) {
         std::unique_ptr<QSGNode> previous{row.text_content};
+
         row.text_content = nullptr;
         if (previous) {
           row.text->removeChildNode(previous.get());
         }
+
         clearSceneChildren(*row.text);
         clearSceneChildren(*row.background);
         row.hidden = true;
       }
+
       continue;
     }
+
     const auto revealed = frame.revealed(position);
     const auto offset = frame.offset(position);
     if (revealed != row.revealed || offset != row.offset) {
@@ -387,12 +407,14 @@ void TerminalScene::synchronize(QQuickWindow &window, const TerminalPresentation
       row.offset = offset;
       const auto settled = 1.0F - (1.0F - revealed) * (1.0F - revealed) * (1.0F - revealed);
       QMatrix4x4 lift;
+
       lift.translate(0, (static_cast<float>(frame.font.cell.height()) * 0.25F * (1.0F - settled)) + offset);
       row.text->setMatrix(lift);
       row.background->setMatrix(lift);
       row.text_opacity->setOpacity(revealed);
       row.background_opacity->setOpacity(revealed);
     }
+
     const bool shown = std::exchange(row.hidden, false);
     const auto screen_row = frame.screenRow(position);
     const auto selection = screen_row ? frame.selection.within(*screen_row * frame.screen.columns(), frame.screen.columns()) : CellSelection{};
@@ -402,17 +424,20 @@ void TerminalScene::synchronize(QQuickWindow &window, const TerminalPresentation
   }
 
   auto image_rows = ImageRows::of(frame.screen, drawn_cells_);
+
   if (!frame.rows.empty()) {
     // A view's own rows: from its top shown row, through its folds.
     drawn_cells_.clear();
     for (std::size_t index = 0; index < frame.rowCount(); ++index) {
       drawn_cells_.push_back(frame.row(index));
     }
+
     image_rows.top = frame.top_row;
     image_rows.folds = frame.folds;
     image_rows.rows = drawn_cells_;
     image_rows.revision = frame.view_revision;
   }
+
   images_.synchronize(frame.owner != nullptr ? *frame.owner : *window.contentItem(), frame.graphics, image_rows, frame.font.cell, frame.scale);
   paintMatches(frame);
   clearSceneChildren(overlay_);
@@ -430,6 +455,7 @@ void TerminalScene::paintMatches(const TerminalPresentation &frame) {
   if (std::ranges::equal(lit_matches_, frame.matches) && same_offsets && lit_bounds_ == frame.bounds) {
     return;
   }
+
   lit_matches_.assign(frame.matches.begin(), frame.matches.end());
   lit_offsets_.assign(frame.row_offsets.begin(), frame.row_offsets.end());
   lit_bounds_ = frame.bounds;
@@ -437,13 +463,17 @@ void TerminalScene::paintMatches(const TerminalPresentation &frame) {
   constexpr float match_alpha = 0.32F;
   constexpr float current_alpha = 0.8F;
   const auto &theme = frame.configuration.theme;
+
   for (const auto &match : frame.matches) {
     if (match.row >= row_nodes_.size() || frame.hidden(match.row)) {
       continue;
     }
+
     auto color = theme.warning;
+
     color.a *= match.current ? current_alpha : match_alpha;
     const QRectF bounds{static_cast<qreal>(match.column) * frame.font.cell.width(), (static_cast<qreal>(match.row) * frame.font.cell.height()) + frame.offset(match.row), static_cast<qreal>(match.length) * frame.font.cell.width(), frame.font.cell.height()};
+
     appendSceneNode<QSGSimpleRectNode>(matches_, bounds, toQColor(color));
   }
 }
@@ -458,13 +488,16 @@ void TerminalScene::paintHoveredLink(const TerminalPresentation &frame) {
   LinkRegions regions{*frame.hovered_link, grid, screen.linkRuns(), {.columns = columns_, .rows = static_cast<std::uint16_t>(row_nodes_.size())}};
   constexpr qreal underline_inset_pixels = 2;
   constexpr qreal underline_thickness_pixels = 1;
+
   while (const auto area = regions.next()) {
     // On the drawn rows' own screen a row is where it is drawn.
     const auto drawn = frame.link_screen != nullptr ? std::optional<std::size_t>{area->y} : frame.drawnRow(area->y);
     if (!drawn) {
       continue;
     }
+
     const QRectF bounds{area->x * frame.font.cell.width(), ((static_cast<qreal>(*drawn) + 1) * frame.font.cell.height()) + frame.offset(*drawn) - (underline_inset_pixels / frame.scale), area->width * frame.font.cell.width(), underline_thickness_pixels / frame.scale};
+
     appendSceneNode<QSGSimpleRectNode>(overlay_, bounds, toQColor(frame.configuration.theme.accent));
   }
 }
@@ -494,6 +527,7 @@ void TerminalScene::paintCursor(const TerminalPresentation &frame) {
   const auto cell_columns = cell.width == CellWidth::wide ? 2 : 1;
 
   auto shape = cursor.shape == CursorShape::default_shape ? frame.configuration.cursor : cursor.shape;
+
   if (!frame.keyboard) {
     shape = CursorShape::hollow;
   }
@@ -502,6 +536,7 @@ void TerminalScene::paintCursor(const TerminalPresentation &frame) {
   QRectF bounds{static_cast<qreal>(column) * frame.font.cell.width(), (static_cast<qreal>(*drawn) * frame.font.cell.height()) + frame.offset(*drawn), cell_columns * frame.font.cell.width(), frame.font.cell.height()};
   const auto color = toQColor(theme.cursor);
   constexpr qreal cursor_thickness = 2;
+
   if (shape == CursorShape::hollow) {
     paintOutline(overlay_, bounds, color, 1 / frame.scale);
 
@@ -524,6 +559,7 @@ void TerminalScene::paintCursor(const TerminalPresentation &frame) {
   }
 
   const auto foreground = theme.cursor_text.value_or(theme.background);
+
   if (const auto symbol = CellGlyphs::parse(cell.utf8())) {
     glyphs_.paint(overlay_, *symbol, bounds, frame.scale, foreground);
 
@@ -532,6 +568,7 @@ void TerminalScene::paintCursor(const TerminalPresentation &frame) {
 
   overlay_text_.begin(bounds, frame.scale, frame.bounds);
   QTextCharFormat format;
+
   format.setForeground(toQColor(foreground));
   overlay_text_.add(toQString(cell.utf8()), frame.font.faces[faceIndex(cell.style)], format, {.origin = bounds.topLeft(), .baseline = frame.font.baseline, .style = glyphStyle(cell.style)});
   overlay_text_.append(overlay_);
@@ -545,12 +582,15 @@ void TerminalScene::paintPreedit(const TerminalPresentation &frame) {
 
   const auto &cursor = frame.screen.cursor();
   const QRectF bounds{cursor.x * frame.font.cell.width(), static_cast<qreal>(*drawn) * frame.font.cell.height(), static_cast<qreal>(frame.preedit.size()) * frame.font.cell.width(), frame.font.cell.height()};
+
   overlay_text_.begin(bounds, frame.scale, frame.bounds);
   QTextCharFormat format;
+
   format.setForeground(toQColor(frame.configuration.theme.foreground));
   overlay_text_.add(frame.preedit, frame.font.faces[0], format, {.origin = bounds.topLeft(), .baseline = frame.font.baseline});
   overlay_text_.append(overlay_);
   constexpr qreal underline_inset_pixels = 2;
+
   TerminalDecorations::rectangle(window_, overlay_, {bounds.x(), bounds.bottom() - (underline_inset_pixels / frame.scale), bounds.width(), 1 / frame.scale}, frame.configuration.theme.foreground, frame.scale);
 }
 

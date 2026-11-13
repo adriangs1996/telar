@@ -193,6 +193,7 @@ namespace telar {
     template <typename Message>
     inline static void pretty_print(const Message &message, std::FILE *output = stderr) {
       const auto payload = encode(message);
+
       debug::printFrame<HandshakeSchema<Message>>(payload, output);
     }
 #endif
@@ -210,6 +211,7 @@ namespace telar {
       }
 
       const auto tag = static_cast<HandshakeTag>(u8::decode(input));
+
       switch (tag) {
       case HandshakeTag::client_hello:
       case HandshakeTag::server_accept:
@@ -223,11 +225,13 @@ namespace telar {
     template <typename Message>
     inline static Message decodeBody(std::span<const Byte> input) _throw(EncodingError) {
       using Sch = HandshakeSchema<Message>;
+
       if (input.size() != Sch::payload_size - header_size) {
         throw EncodingError{"Invalid handshake response length"};
       }
 
       Message message{};
+
       Sch::decodeBody(input, message);
       return message;
     }
@@ -293,6 +297,7 @@ namespace telar {
         _address = other._address;
         _fd = std::exchange(other._fd, -1);
       }
+
       return *this;
     }
 
@@ -302,6 +307,7 @@ namespace telar {
 
     inline static Client init(const char *socket_path) _throw(SocketError) {
       Client client{};
+
       client._address.sun_family = AF_UNIX;
 
       const auto path_length = std::strlen(socket_path);
@@ -320,6 +326,7 @@ namespace telar {
         client.deinit();
         throw SocketError{"Error configuring socket"};
       }
+
 #endif
       if (client._fd < 0) {
         throw SocketError{"Error opening socket"};
@@ -339,6 +346,7 @@ namespace telar {
 #endif
 
       auto address_ptr = reinterpret_cast<sockaddr *>(&client._address);
+
       while (connect(client._fd, address_ptr, sizeof(client._address)) < 0) {
         if (errno == EINTR) {
           continue;
@@ -363,6 +371,7 @@ namespace telar {
 
       try {
         const ClientHello request{};
+
         sendFrame(HandshakeCodec::encode(request));
 
         std::array<Byte, HandshakeCodec::max_message_size> buffer{};
@@ -410,18 +419,21 @@ namespace telar {
     template <typename Message> inline void send(const Message &message, std::span<Byte> frame_buffer) {
       static_assert(MessageSchema<Message>::direction == Direction::client,
                     "Can only send Client Messages");
+
       if (frame_buffer.size() < frame_prefix_size) {
         throw EncodingError{"Frame buffer too small"};
       }
 
       const auto payload = Codec::encode(message, frame_buffer.subspan(frame_prefix_size));
       auto prefix = frame_buffer.first(frame_prefix_size);
+
       u32::encode(static_cast<std::uint32_t>(payload.size()), prefix);
       writeAll(frame_buffer.data(), frame_prefix_size + payload.size());
     }
 
     inline tbc::view<std::span<const Byte>, tbc::lt::a> receiveFrame(tbc::view<std::span<Byte>, tbc::lt::a> buffer) _throw(SocketError) {
       std::array<Byte, frame_prefix_size> prefix{};
+
       readAll(prefix.data(), prefix.size());
 
       std::span<const Byte> input = prefix;
@@ -455,6 +467,7 @@ namespace telar {
       static_assert(N > 0 && N <= max_payload_size, "Invalid runtime frame length");
       std::array<Byte, frame_prefix_size + N> frame{};
       std::span<Byte> output = frame;
+
       u32::encode(static_cast<std::uint32_t>(payload.size()), output);
 
       std::memcpy(output.data(), payload.data(), payload.size());

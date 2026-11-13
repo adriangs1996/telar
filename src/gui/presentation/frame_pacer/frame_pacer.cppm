@@ -74,6 +74,7 @@ public:
 
   inline void end() noexcept {
     std::size_t kept = 0;
+
     for (std::size_t index = 0; index < count_; ++index) {
       if (seen_[index]) {
         entries_[kept++] = entries_[index];
@@ -99,6 +100,7 @@ private:
 
   [[nodiscard]] inline std::optional<std::size_t> find(PaneAttentionKey key) const noexcept {
     const auto entries = std::span{entries_}.first(count_);
+
     for (std::size_t index = 0; index < entries.size(); ++index) {
       if (entries[index].key == key) {
         return index;
@@ -162,6 +164,7 @@ public:
     std::optional<std::size_t> vacant;
     std::size_t oldest = 0;
     auto oldest_started_ns = std::numeric_limits<std::uint64_t>::max();
+
     for (std::size_t index = 0; index < inputs_.size(); ++index) {
       const auto &previous = inputs_[index];
       if (!previous) {
@@ -360,6 +363,7 @@ struct FullscreenStripGeometry {
     std::size_t focus = 0;
     const auto gap = entry_gap * ratio;
     auto total = gap * static_cast<float>(sizes.size() - 1);
+
     for (std::size_t index = 0; index < sizes.size(); ++index) {
       widths[index] = entryWidth(sizes[index], metrics, measurements.chip, true);
       total += widths[index];
@@ -377,6 +381,7 @@ struct FullscreenStripGeometry {
 
     auto first = focus;
     auto used = std::min(widths[first], band.width);
+
     while (first > 0) {
       const auto required = widths[first - 1] + gap;
       if (required > band.width - used) {
@@ -388,6 +393,7 @@ struct FullscreenStripGeometry {
     }
 
     auto x = band.x;
+
     for (auto index = first; index < sizes.size(); ++index) {
       if (index != first) {
         x += gap;
@@ -399,11 +405,14 @@ struct FullscreenStripGeometry {
       }
 
       auto &entry = result.entries[result.count++];
+
       entry.source = index;
       entry.bounds = {.x = x, .y = band.y, .width = width, .height = height};
       const auto advance = placeEntry(entry, sizes[index], metrics, result.named);
+
       if (sizes[index].focused && measurements.chip > 0) {
         const auto chip_x = std::min(band.right(), x + advance + (chip_gap * ratio));
+
         result.chip = {.x = chip_x, .y = band.y, .width = std::max(0.0F, std::min(measurements.chip, x + width - chip_x)), .height = height};
       }
 
@@ -416,6 +425,7 @@ struct FullscreenStripGeometry {
 private:
   [[nodiscard]] inline static float entryWidth(const FullscreenEntryMeasure &size, const FullscreenStripMetrics &metrics, float chip_width, bool named) noexcept {
     auto width = metrics.mark_side + (part_gap * metrics.ratio) + size.index;
+
     if (named || size.focused) {
       width += (part_gap * metrics.ratio) + size.name;
     }
@@ -436,8 +446,10 @@ private:
     const auto end = bounds.right();
     const auto ratio = metrics.ratio;
     const auto side = metrics.mark_side;
+
     entry.mark = {.x = bounds.x, .y = bounds.y + ((bounds.height - side) / 2), .width = std::max(0.0F, std::min(side, bounds.width)), .height = side};
     auto x = bounds.x + side + (part_gap * ratio);
+
     entry.index = {.x = x, .y = bounds.y, .width = std::max(0.0F, end - x), .height = bounds.height};
     x += std::min(entry.index.width, size.index);
     if (named || size.focused) {
@@ -448,6 +460,7 @@ private:
 
     if (size.attention) {
       const auto diameter = attention_diameter * ratio;
+
       if (x + (((2 * attention_gap) + attention_diameter) * ratio) <= end) {
         entry.attention = {.x = x + (attention_gap * ratio), .y = bounds.y + std::max(0.0F, (bounds.height - diameter) / 2), .width = diameter, .height = std::min(diameter, bounds.height)};
       }
@@ -478,6 +491,7 @@ struct TabMotionFrame {
 
   inline void request(std::uint64_t started, std::uint64_t duration) noexcept {
     std::uint64_t next = 0;
+
     if (now_ns < started) {
       next = started;
     } else if (duration != 0 && now_ns - started < duration) {
@@ -485,6 +499,7 @@ struct TabMotionFrame {
     } else {
       return;
     }
+
     if (!deadline_ns || next < *deadline_ns) {
       deadline_ns = next;
     }
@@ -566,6 +581,7 @@ struct TabCardMotion {
     }
 
     const auto elapsed = now_ns - started;
+
     if (hop) {
       return elapsed < lift_ns ? mix(from, lift, static_cast<float>(elapsed) / static_cast<float>(lift_ns)) : mix(lift, to, static_cast<float>(elapsed - lift_ns) / static_cast<float>(settle_ns));
     }
@@ -589,6 +605,7 @@ public:
   inline std::size_t place(std::span<const TabCardInput> panes, std::span<TabCardPlacement> placed, TabMotionFrame &frame) noexcept {
     std::array<TabCardMotion *, capacity> ordered{};
     std::size_t known = 0;
+
     for (const auto &pane : panes) {
       auto *motion = find(pane.pane);
       const auto fresh = motion == nullptr;
@@ -613,6 +630,7 @@ public:
     const auto input = [&](const TabCardMotion *motion) {
       return *std::ranges::find(panes, motion->pane, &TabCardInput::pane);
     };
+
     std::stable_sort(ordered.begin(), ordered.begin() + known, [&](const TabCardMotion *left, const TabCardMotion *right) {
       const auto a = input(left);
       const auto b = input(right);
@@ -628,11 +646,13 @@ public:
     });
 
     std::size_t written = 0;
+
     for (std::size_t rank = 0; rank < known; ++rank) {
       auto &motion = *ordered[rank];
       const auto target = TabCardMotion::rest[std::min(rank, TabCardMotion::rest.size() - 1)];
       if (motion.to != target) {
         const auto settled = motion.to == TabCardPose{};
+
         motion.from = settled ? target : motion.value(frame.now_ns);
         motion.to = target;
         motion.hop = !settled && rank == 0 && motion.rank != 0;
@@ -654,11 +674,13 @@ public:
 
   inline void finish() noexcept {
     std::size_t kept = 0;
+
     for (std::size_t index = 0; index < count_; ++index) {
       if (entries_[index].seen) {
         if (kept != index) {
           entries_[kept] = entries_[index];
         }
+
         ++kept;
       }
     }
@@ -701,11 +723,14 @@ public:
 
     bool shared = false;
     bool unchanged = placements.size() == count_;
+
     for (const auto &slot : placements) {
       const auto *old = find(slot.id);
+
       shared |= old != nullptr;
       unchanged &= old != nullptr && old->to == slot.bounds;
     }
+
     if (unchanged && !immediate) {
       return;
     }
@@ -713,21 +738,26 @@ public:
     const bool animate = !immediate && shared && placements.size() != count_;
     const auto duration = placements.size() > count_ ? opening_ns : closing_ns;
     std::array<Motion, PaneLayout::maximum_panes> next;
+
     for (std::size_t index = 0; index < placements.size(); ++index) {
       const auto &slot = placements[index];
       const auto *old = find(slot.id);
       auto from = slot.bounds;
+
       if (animate) {
         from = old != nullptr ? old->value(now_ns) : entrance(slot.bounds);
       }
+
       next[index] = {.id = slot.id, .from = from, .to = slot.bounds, .started = now_ns, .duration = from == slot.bounds ? 0 : duration};
     }
+
     std::copy_n(next.begin(), placements.size(), entries_.begin());
     count_ = placements.size();
   }
 
   [[nodiscard]] inline Rect place(std::size_t index, TabMotionFrame &frame) const noexcept {
     const auto &entry = entries_[index];
+
     frame.request(entry.started, entry.duration);
     return entry.value(frame.now_ns);
   }
@@ -744,9 +774,11 @@ private:
       if (duration == 0 || (now_ns >= started && now_ns - started >= duration)) {
         return to;
       }
+
       const float phase = now_ns <= started ? 0 : static_cast<float>(now_ns - started) / static_cast<float>(duration);
       const float remaining = 1 - phase;
       const float eased = 1 - remaining * remaining * remaining;
+
       return {.x = from.x + (to.x - from.x) * eased, .y = from.y + (to.y - from.y) * eased, .width = from.width + (to.width - from.width) * eased, .height = from.height + (to.height - from.height) * eased};
     }
   };
@@ -754,6 +786,7 @@ private:
   [[nodiscard]] inline const Motion *find(std::uint64_t id) const noexcept {
     const auto entries = std::span{entries_}.first(count_);
     const auto found = std::ranges::find(entries, id, &Motion::id);
+
     return found == entries.end() ? nullptr : &*found;
   }
 
@@ -762,6 +795,7 @@ private:
     // the far edge while the surviving leaf moves the shared divider.
     const Motion *parent = nullptr;
     float best_overlap = 0;
+
     for (const auto &entry : std::span{entries_}.first(count_)) {
       const auto &bounds = entry.to;
       const auto overlap = bounds.intersect(target);
@@ -770,9 +804,11 @@ private:
         parent = &entry;
       }
     }
+
     if (parent == nullptr) {
       return target;
     }
+
     const auto &bounds = parent->to;
     if (target.width / bounds.width < target.height / bounds.height) {
       target.x = target.right();
@@ -781,6 +817,7 @@ private:
       target.y = target.bottom();
       target.height = 0;
     }
+
     return target;
   }
 
@@ -904,11 +941,13 @@ struct TabStripGeometry {
       }
 
       float used = 0;
+
       for (auto index = first; index < end; ++index) {
         used += widths[index];
       }
 
       const auto gaps = metrics.gap * static_cast<float>(end - first - 1);
+
       used += gaps;
       if (hidden() != 0) {
         used += metrics.gap + metrics.counter;
@@ -944,6 +983,7 @@ struct TabStripGeometry {
 
     float natural = 0;
     float shortest = 0;
+
     for (std::size_t index = 0; index < sizes.size(); ++index) {
       if (index == focus) {
         continue;
@@ -962,6 +1002,7 @@ struct TabStripGeometry {
       // Preserve every caption before giving extra room to the focused tab.
       width = std::clamp(width, minimum, caption_room);
     }
+
     result.widths[focus] = std::min(width, room.width);
     result.fits[focus] = width >= whole ? Fit::full : Fit::truncated;
     const auto budget = room.width - width - gaps;
@@ -970,6 +1011,7 @@ struct TabStripGeometry {
     }
 
     const auto captioned = captionedTabs(sizes, focus, metrics, budget, shortest <= budget);
+
     distribute(result, sizes, captioned, metrics, budget);
     if (shortest > budget) {
       while (result.footprint(metrics) > room.width && result.end - result.first > 1) {
@@ -990,6 +1032,7 @@ private:
   inline static void naturalWidths(Plan &plan, std::span<const Measure> sizes, const Metrics &metrics) noexcept {
     for (std::size_t index = 0; index < sizes.size(); ++index) {
       const auto maximum = index == plan.focus ? metrics.selected_maximum : metrics.inactive_maximum;
+
       plan.widths[index] = std::min(sizes[index].whole(metrics), maximum);
       plan.fits[index] = sizes[index].whole(metrics) <= maximum ? Fit::full : Fit::truncated;
     }
@@ -997,6 +1040,7 @@ private:
 
   [[nodiscard]] inline static Captioned captionedTabs(std::span<const Measure> sizes, std::size_t focus, const Metrics &metrics, float budget, bool all_fit) noexcept {
     Captioned captioned{};
+
     if (all_fit) {
       captioned.fill(true);
       captioned[focus] = false;
@@ -1005,6 +1049,7 @@ private:
     }
 
     float used = 0;
+
     for (std::size_t index = 0; index < sizes.size(); ++index) {
       if (index != focus) {
         used += sizes[index].compact(metrics);
@@ -1013,6 +1058,7 @@ private:
 
     for (std::size_t distance = 1; distance < sizes.size(); ++distance) {
       const std::array<std::optional<std::size_t>, 2> candidates{focus >= distance ? std::optional{focus - distance} : std::nullopt, focus + distance < sizes.size() ? std::optional{focus + distance} : std::nullopt};
+
       for (const auto candidate : candidates) {
         if (!candidate) {
           continue;
@@ -1033,9 +1079,11 @@ private:
   [[nodiscard]] inline static float largestCap(std::span<const Measure> sizes, const Captioned &captioned, const Metrics &metrics, float budget) noexcept {
     float low = 0;
     auto high = metrics.inactive_maximum;
+
     for (std::size_t iteration = 0; iteration < cap_iterations; ++iteration) {
       const auto cap = (low + high) / 2;
       float used = 0;
+
       for (std::size_t index = 0; index < sizes.size(); ++index) {
         if (captioned[index]) {
           used += std::max(std::min(sizes[index].truncated(metrics), metrics.inactive_maximum), std::min({sizes[index].whole(metrics), metrics.inactive_maximum, cap}));
@@ -1054,6 +1102,7 @@ private:
 
   inline static void distribute(Plan &plan, std::span<const Measure> sizes, const Captioned &captioned, const Metrics &metrics, float budget) noexcept {
     float fixed = 0;
+
     for (std::size_t index = 0; index < sizes.size(); ++index) {
       if (index != plan.focus && !captioned[index]) {
         plan.widths[index] = sizes[index].compact(metrics);
@@ -1063,10 +1112,12 @@ private:
     }
 
     const auto cap = largestCap(sizes, captioned, metrics, budget - fixed);
+
     for (std::size_t index = 0; index < sizes.size(); ++index) {
       if (captioned[index]) {
         const auto minimum = std::min(sizes[index].truncated(metrics), metrics.inactive_maximum);
         const auto width = std::floor(std::max(minimum, std::min({sizes[index].whole(metrics), metrics.inactive_maximum, cap})));
+
         plan.widths[index] = width;
         plan.fits[index] = width >= sizes[index].whole(metrics) ? Fit::full : Fit::truncated;
       }
@@ -1098,11 +1149,13 @@ struct TabMotion {
 
   [[nodiscard]] inline Rect value(std::uint64_t now_ns) const noexcept {
     float progress = 1;
+
     if (now_ns < started) {
       progress = 0;
     } else if (duration != 0 && now_ns - started < duration) {
       progress = static_cast<float>(now_ns - started) / static_cast<float>(duration);
     }
+
     const float remaining = 1 - progress;
     const float eased = 1 - (remaining * remaining * remaining);
 
@@ -1116,12 +1169,14 @@ struct TabMotion {
       duration = 0;
       return bounds;
     }
+
     if (to != bounds) {
       from = value(frame.now_ns);
       to = bounds;
       started = frame.now_ns;
       duration = duration_ns;
     }
+
     frame.request(started, duration);
     return value(frame.now_ns);
   }
@@ -1136,6 +1191,7 @@ public:
       count_ = 0;
       workspace_ = workspace;
     }
+
     for (auto &motion : std::span{entries_}.first(count_)) {
       motion.seen = false;
     }
@@ -1149,6 +1205,7 @@ public:
       entries_[0].duration = 0;
       return slot.bounds;
     }
+
     for (auto &motion : std::span{entries_}.first(count_)) {
       if (motion.id != slot.id) {
         continue;
@@ -1169,16 +1226,20 @@ public:
     if (count_ == 1 && entries_[0].seen) {
       return;
     }
+
     std::size_t kept = 0;
+
     for (std::size_t index = 0; index < count_; ++index) {
       const auto &motion = entries_[index];
       if (motion.seen) {
         if (kept != index) {
           entries_[kept] = motion;
         }
+
         ++kept;
       }
     }
+
     count_ = kept;
   }
 

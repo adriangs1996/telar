@@ -99,18 +99,23 @@ void configuredOrderAndCallbackReferences() {
       .profile = "chosen",
       .generation = 42,
   };
+
   const ConfigurationGeneration generation{memory, source};
   const auto first = query(generation, 0);
+
   require(first.contains(R"("index":0,"prefixed":false)") && first.contains(R"("action":{"type":"select_tab","value":255})"), "binding queries must use configured order and zero-based semantic indices");
   const auto callback = query(generation, 1);
+
   require(callback.contains(R"("bytes":"中\u0000","len":3)") && callback.contains(R"("type":"lua_callback","value":{"generation":42,"id":1})"), "profile callbacks must retain the root's callback identity range and updated prefix");
   const auto expression = query(generation, 2);
+
   require(expression.contains(R"("type":"lua_expr","value":{"generation":42,"id":2})"), "expressions must expose semantic callback ids independently of Lua registry references");
 }
 
 void retainedCommandAndPluginDescriptions() {
   SystemAllocator system;
   BudgetAllocator memory{system, std::numeric_limits<std::size_t>::max()};
+
   {
     const ConfigurationSourceText source{
         .source = R"(
@@ -124,14 +129,18 @@ void retainedCommandAndPluginDescriptions() {
         .directory = {},
         .profile = {},
     };
+
     ConfigurationGeneration generation{memory, source};
     const auto command = query(generation, 0);
     const auto plugin = query(generation, 1);
+
     require(command.contains(R"("value":{"label":"kept","argv":["echo","quoted \"中"]})"), "command bindings must retain complete argv and label values");
     const auto parsed = telar::runtime::JsonValue::parse(plugin);
     const auto value = requiredJsonField(requiredJsonField(parsed, "action"), "value");
+
     require(requiredJsonField(value, "plugin").encoded() == std::to_string(telar::runtime::plugins::stableId("fixture")), "plugin descriptions must use the shared stable identifier algorithm");
     const auto before = memory.allocations();
+
     static_cast<void>(query(generation, 0));
     static_cast<void>(query(generation, 1));
     require(memory.allocations() == before, "repeated binding queries must not allocate through the application allocator");
@@ -155,12 +164,15 @@ void notificationValuesAndDefinitionIndices() {
       .directory = {},
       .profile = {},
   };
+
   const ConfigurationGeneration generation{memory, source};
   const auto encoded = query(generation, 0);
   const auto value = requiredJsonField(requiredJsonField(telar::runtime::JsonValue::parse(encoded), "action"), "value");
+
   require(requiredJsonField(value, "level").equals("warning") && requiredJsonField(value, "duration_ms").encoded() == "750", "notification descriptions must preserve severity and duration");
   require(requiredJsonField(value, "target").encoded() == R"({"pane":99})", "notification targets must retain the original tagged id shape");
   String<SystemAllocator> title{AllocatorRef<char, SystemAllocator>{memory}};
+
   requiredJsonField(value, "title").string(title);
   require(title.size() == telar::max_notification_title_bytes, "notification fitting must preserve complete UTF-8 at the wire's title bound");
   require(query(generation, 1).contains(R"("type":"open_panel","value":1)"), "named definitions must expose their stable sorted indices");
@@ -174,7 +186,9 @@ void byteArgumentsRemainQueryable() {
       .directory = {},
       .profile = {},
   };
+
   const ConfigurationGeneration generation{memory, source};
+
   require(query(generation, 0).contains(R"("argv":["echo",[255]])"), "non-UTF-8 command bytes must retain their numeric-array representation");
 }
 
@@ -191,7 +205,9 @@ void commandLabelsFollowPosixPaths() {
       .directory = {},
       .profile = {},
   };
+
   const ConfigurationGeneration generation{memory, source};
+
   require(query(generation, 0).contains(R"("label":"echo")"), "implicit labels must ignore trailing POSIX separators");
   require(query(generation, 1).contains(R"("label":"")"), "a POSIX root has no basename");
   require(query(generation, 2).contains(R"("label":"a\\b")"), "backslashes must remain literal POSIX filename bytes");
@@ -210,9 +226,12 @@ void boundedRepliesAndSkippedActions() {
       .directory = {},
       .profile = {},
   };
+
   const ConfigurationGeneration generation{memory, source};
+
   require(generation.input().length == 2, "actions past their argument limit must be omitted without leaving query holes");
   bool oversized = false;
+
   try {
     static_cast<void>(query(generation, 0));
   } catch (const std::length_error &error) {
@@ -221,6 +240,7 @@ void boundedRepliesAndSkippedActions() {
 
   require(oversized && query(generation, 1).contains(R"("type":"new_tab","value":null)"), "an oversized JSON action must preserve its valid snapshot and other bindings");
   bool missing = false;
+
   try {
     static_cast<void>(query(generation, generation.input().length));
   } catch (const std::runtime_error &error) {

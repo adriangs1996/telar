@@ -71,6 +71,7 @@ private:
     }
 
     const auto refill = std::max(Clock::duration::zero(), now - *anchor_) / interval_;
+
     return static_cast<unsigned>(std::min<std::int64_t>(idle_burst, credits_ + refill));
   }
 
@@ -111,6 +112,7 @@ class InputScanner {
 public:
   inline InputEvent feed(std::span<const std::uint8_t> bytes) noexcept {
     InputEvent event;
+
     for (const auto byte : bytes) {
       consume(byte, event);
     }
@@ -156,6 +158,7 @@ private:
 
   inline void consume(std::uint8_t byte, InputEvent &event) noexcept {
     const auto control = static_cast<ControlByte>(byte);
+
     switch (state_) {
     case State::ground:
       if (control == ControlByte::escape) {
@@ -176,6 +179,7 @@ private:
           typed_exact_ = false;
         }
       }
+
       break;
     case State::escape:
       if (byte == '[') {
@@ -183,6 +187,7 @@ private:
       } else {
         state_ = State::ground;
       }
+
       break;
     case State::csi:
       sequenceByte(byte, false);
@@ -191,6 +196,7 @@ private:
       if (control == ControlByte::escape) {
         state_ = State::paste_escape;
       }
+
       break;
     case State::paste_escape:
       if (byte == '[') {
@@ -198,6 +204,7 @@ private:
       } else {
         state_ = State::paste;
       }
+
       break;
     case State::paste_csi:
       sequenceByte(byte, true);
@@ -215,6 +222,7 @@ private:
     if (byte >= '0' && byte <= '9') {
       has_parameter_ = true;
       const auto next = static_cast<std::uint32_t>(parameter_) * 10 + byte - '0';
+
       parameter_ = static_cast<std::uint16_t>(next > UINT16_MAX ? UINT16_MAX : next);
       return;
     }
@@ -224,6 +232,7 @@ private:
         state_ = State::paste;
         return;
       }
+
       if (pasted && parameter_ == static_cast<std::uint16_t>(PasteMarker::end)) {
         state_ = State::ground;
         return;
@@ -259,17 +268,20 @@ public:
 
   inline Event next(std::uint8_t byte) noexcept {
     const auto control = static_cast<ControlByte>(byte);
+
     switch (state_) {
     case State::ground:
       if (control == ControlByte::escape) {
         state_ = State::escape;
       }
+
       return Event::none;
     case State::escape:
       if (byte == ']') {
         state_ = State::osc;
         return Event::start;
       }
+
       state_ = State::ground;
       return Event::none;
     case State::osc:
@@ -277,16 +289,19 @@ public:
         state_ = State::ground;
         return Event::end;
       }
+
       if (control == ControlByte::escape) {
         state_ = State::osc_escape;
         return Event::none;
       }
+
       return Event::payload;
     case State::osc_escape:
       if (byte == '\\') {
         state_ = State::ground;
         return Event::end;
       }
+
       state_ = control == ControlByte::escape ? State::escape : State::ground;
       return Event::none;
     }
@@ -329,9 +344,11 @@ public:
     if (response.empty() || queue_->closed()) {
       return;
     }
+
     if (response.size() > PtyResponseQueue::message_byte_capacity || response.size() + header_bytes > maximum_bytes - size_) {
       throw std::length_error{"Graphics acknowledgement exceeds its staging budget"};
     }
+
     const auto length = static_cast<std::uint16_t>(response.size());
     const auto required = size_ + header_bytes + response.size();
     if (overflow_.empty() && required <= inline_.size()) {
@@ -341,13 +358,17 @@ public:
       if (required > overflow_.capacity()) {
         overflow_.reserve(std::min(maximum_bytes, std::max(required, std::max(inline_bytes * 2, overflow_.capacity() * 2))));
       }
+
       if (overflow_.empty()) {
         overflow_.insert(overflow_.end(), inline_.begin(), inline_.begin() + size_);
       }
+
       const auto *header = reinterpret_cast<const std::uint8_t *>(&length);
+
       overflow_.insert(overflow_.end(), header, header + header_bytes);
       overflow_.insert(overflow_.end(), response.begin(), response.end());
     }
+
     size_ = required;
     if (!priority_) {
       priority_ = queue_->retainWorkerPriority();
@@ -359,14 +380,17 @@ public:
       discard();
       return true;
     }
+
     while (pending()) {
       const auto count = nextSize();
       const auto *data = overflow_.empty() ? inline_.data() : overflow_.data();
       if (!queue_->tryPush({data + consumed_ + header_bytes, count})) {
         return false;
       }
+
       consumed_ += header_bytes + count;
     }
+
     discard();
     return true;
   }
@@ -387,8 +411,10 @@ public:
     if (!pending()) {
       return 0;
     }
+
     const auto *data = overflow_.empty() ? inline_.data() : overflow_.data();
     std::uint16_t length;
+
     std::memcpy(&length, data + consumed_, header_bytes);
     assert(length <= size_ - consumed_ - header_bytes);
     return length;
@@ -482,14 +508,17 @@ private:
     if (needle.size() > needle_.size()) {
       throw EncodingError{"Search needle exceeds the wire limit"};
     }
+
     validateUtf8(needle);
     auto text = needle;
+
     while (!text.empty()) {
       const auto first = static_cast<Byte>(text.front());
       const std::size_t length = first < 0x80 ? 1 : first < 0xe0 ? 2
                                                 : first < 0xf0   ? 3
                                                                  : 4;
       std::uint32_t codepoint = length == 1 ? first : first & (0x7f >> length);
+
       for (std::size_t index = 1; index < length; ++index) {
         codepoint = (codepoint << 6) | (static_cast<Byte>(text[index]) & 0x3f);
       }
@@ -504,6 +533,7 @@ private:
     }
 
     std::size_t matched = 0;
+
     for (std::size_t index = 1; index < needle_length_; ++index) {
       while (matched != 0 && needle_[index] != needle_[matched]) {
         matched = prefix_[matched - 1];
@@ -512,6 +542,7 @@ private:
       if (needle_[index] == needle_[matched]) {
         ++matched;
       }
+
       prefix_[index] = matched;
     }
   }
@@ -536,6 +567,7 @@ private:
 
       reference.x = column;
       GhosttyCell cell = 0;
+
       checkGhostty(ghostty_grid_ref_cell(&reference, &cell));
       const auto width = cell_layout::wide(cell);
       if (width == GHOSTTY_CELL_WIDE_SPACER_HEAD || width == GHOSTTY_CELL_WIDE_SPACER_TAIL) {
@@ -545,6 +577,7 @@ private:
       positions[row_length++] = column;
       const auto content = cell_layout::content_tag(cell);
       auto codepoint = content == GHOSTTY_CELL_CONTENT_CODEPOINT || content == GHOSTTY_CELL_CONTENT_CODEPOINT_GRAPHEME ? cell_layout::codepoint(cell) : 0;
+
       codepoint = normalize(codepoint == 0 ? ' ' : codepoint);
       while (matched != 0 && codepoint != needle_[matched]) {
         matched = prefix_[matched - 1];
@@ -556,6 +589,7 @@ private:
 
       if (matched == needle_length_) {
         const auto start = positions[row_length - needle_length_];
+
         found[found_count++] = PaneMatch{.x = start,
                                          .y = row,
                                          .len = static_cast<std::uint16_t>(column - start + 1)};
@@ -568,6 +602,7 @@ private:
         truncated_ = true;
         return false;
       }
+
       matches_[count_++] = found[--found_count];
     }
 

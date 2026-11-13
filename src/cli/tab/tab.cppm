@@ -130,12 +130,14 @@ public:
     text_ = symbol<Text>("sqlite3_column_text");
     length_ = symbol<Length>("sqlite3_column_bytes");
     const auto timeout = symbol<Timeout>("sqlite3_busy_timeout");
+
 #endif
     if (open_(path, &database_, read_only, nullptr) != Result::ok) {
       return false;
     }
 
     constexpr int busy_timeout_ms = 5000;
+
     timeout(database_, busy_timeout_ms);
     return true;
   }
@@ -165,6 +167,7 @@ public:
 
     prepare("SELECT DISTINCT workspace_path FROM session LIMIT 4097");
     std::size_t count = 0;
+
     for (;;) {
       const auto result = step_(statement_);
       if (result == Result::done) {
@@ -374,16 +377,20 @@ void tabSnapshot(Output<Memory> &output, const TabSnapshot &reply, bool json) {
   }
 
   bool first = true;
+
   for (const auto &pane : reply.panes) {
     const auto lifecycle = pane.lifecycle == PaneLifecycle::running ? "running" : "exited";
+
     if (json) {
       if (!first) {
         output.text(",");
       }
+
       output.text("{\"pane_id\":").number(pane.pane_id).text(",\"pane_generation\":").number(pane.pane_generation).text(",\"lifecycle\":").json(lifecycle).text("}");
     } else {
       output.number(pane.pane_id).text("\t").number(pane.pane_generation).text("\t").text(lifecycle).text("\n");
     }
+
     first = false;
   }
 
@@ -396,15 +403,18 @@ template <Allocator Memory>
 void tabList(Output<Memory> &output, const WorkspaceSnapshot &reply, bool json) {
   output.text(json ? "[" : "ID\tPOSITION\tPANES\tLABEL\n");
   bool first = true;
+
   for (const auto &entry : reply.tabs) {
     if (json) {
       if (!first) {
         output.text(",");
       }
+
       output.text("{\"workspace_id\":").number(reply.workspace.id).text(",\"tab_id\":").number(entry.tab_id).text(",\"position\":").number(entry.position).text(",\"pane_count\":").number(entry.pane_count).text(",\"label\":").json(entry.label).text("}");
     } else {
       output.number(entry.tab_id).text("\t").number(entry.position).text("\t").number(entry.pane_count).text("\t").text(entry.label).text("\n");
     }
+
     first = false;
   }
 
@@ -416,8 +426,10 @@ void tabList(Output<Memory> &output, const WorkspaceSnapshot &reply, bool json) 
 template <Allocator Memory>
 void tabOperation(Channel<Memory> &session, Output<Memory> &output, const TabOptions &options, TabLocation location) {
   using Action = TabOptions::Action;
+
   if (options.action == Action::get) {
     const auto reply = session.template exchange<TabSnapshot>(RequestTabSnapshot{.location = location});
+
     checkLocation(reply.location, location);
     tabSnapshot(output, reply, options.json);
     return;
@@ -433,26 +445,31 @@ void tabOperation(Channel<Memory> &session, Output<Memory> &output, const TabOpt
   case Action::rename: {
     wireTabLabel(*options.label);
     const auto reply = session.template exchange<TabRenamed>(RenameTab{.location = location, .label = *options.label});
+
     checkLocation(reply.location, location);
     if (options.json) {
       output.text(",\"label\":").json(reply.label);
     } else {
       output.text(" renamed to ").text(reply.label);
     }
+
     break;
   }
   case Action::close: {
     const auto reply = session.template exchange<TabClosed>(CloseTab{.location = location});
+
     checkLocation(reply.location, location);
     if (options.json) {
       output.text(",\"closed\":true,\"workspace_closed\":").boolean(reply.workspace_closed);
     } else {
       output.text(" closed");
     }
+
     break;
   }
   case Action::move: {
     const auto reply = session.template exchange<TabMoved>(MoveTab{.location = location, .direction = options.direction, .relative_to = options.relative});
+
     checkLocation(reply.location, location);
     output.text(options.json ? ",\"position\":" : " moved to position ").number(reply.position);
     break;
@@ -470,6 +487,7 @@ int tab(Memory &memory, const TabOptions &options) {
     const auto workspace = options.workspace.resolve("TELAR_WORKSPACE_ID");
     Channel session{memory, options.socket, false};
     Output output{memory};
+
     if (options.action == TabOptions::Action::create) {
       Channel catalog_session{memory, options.socket, false};
       const auto catalog = catalog_session.catalog();
@@ -477,10 +495,13 @@ int tab(Memory &memory, const TabOptions &options) {
       if (entry == catalog.entries.end()) {
         throw Failure{"workspace not found"};
       }
+
       const auto login = loginShell();
       const std::array shell{login.view()};
+
       wireTabLabel(options.label.value_or(""), true);
       const auto opened = session.template exchange<PaneOpened>(LaunchTab{.workspace = workspace, .label = options.label.value_or(""), .size = launch_size, .launch = {.cwd = entry->path, .arguments = shell}});
+
       if (options.json) {
         output.text("{\"workspace_id\":").number(workspace).text(",\"tab_id\":").number(opened.location.tab_id).text(",\"pane_id\":").number(opened.pane_id).text(",\"pane_generation\":").number(opened.pane_generation).text("}\n");
       } else {
@@ -491,9 +512,11 @@ int tab(Memory &memory, const TabOptions &options) {
       if (reply.workspace.kind != WorkspaceLocation::Kind::workspace || reply.workspace.id != workspace) {
         throw Failure{"unexpected reply from the runtime"};
       }
+
       tabList(output, reply, options.json);
     } else {
       const TabLocation location{.workspace = {.id = workspace}, .tab_id = options.target.resolve("TELAR_TAB_ID")};
+
       tabOperation(session, output, options, location);
     }
 

@@ -81,6 +81,7 @@ void NativeAgentStatus::setDisplayMode(DisplayMode mode) {
   if (display_mode_ != mode) {
     display_mode_ = mode;
     const QPointer<NativeAgentStatus> alive{this};
+
     synchronize();
     if (alive) {
       emit displayModeChanged();
@@ -95,13 +96,17 @@ void NativeAgentStatus::setRecord(const QVariantMap &record) {
 
   record_ = record;
   const auto timestamp = clock_ ? clock_->now() : platform::AwakeClock::nowNanoseconds();
+
   interval_ = statusAgeInterval(record.value(QStringLiteral("statusClock"))).value_or(StatusAgeInterval{.age_ns = static_cast<std::uint64_t>(record.value(QStringLiteral("age")).toUInt()) * StatusAgeInterval::nanoseconds_per_second, .sampled_ns = timestamp});
   const auto state = record.value(QStringLiteral("statusCode")).toInt();
+
   status_ = state >= static_cast<int>(AgentStatus::unknown) && state <= static_cast<int>(AgentStatus::done) ? static_cast<AgentStatus>(state) : AgentStatus::unknown;
   const auto reason = record.value(QStringLiteral("blockedReason")).toInt();
+
   reason_ = reason >= static_cast<int>(AgentBlockedReason::none) && reason <= static_cast<int>(AgentBlockedReason::other) ? static_cast<AgentBlockedReason>(reason) : AgentBlockedReason::none;
   connected_ = record.value(QStringLiteral("enabled"), true).toBool();
   const QPointer<NativeAgentStatus> alive{this};
+
   synchronize();
   if (alive) {
     emit recordChanged();
@@ -112,6 +117,7 @@ void NativeAgentStatus::setRunning(bool running) {
   if (running_ != running) {
     running_ = running;
     const QPointer<NativeAgentStatus> alive{this};
+
     synchronize();
     if (alive) {
       emit runningChanged();
@@ -140,6 +146,7 @@ std::optional<std::uint64_t> NativeAgentStatus::deadline(std::uint64_t now_ns) c
 void NativeAgentStatus::sample(std::uint64_t now_ns) {
   const auto seconds = interval_.seconds(now_ns);
   AgentStatusPresentation::Text text;
+
   if (display_mode_ == DisplayMode::pane_chip) {
     text = PaneStatusChip::text(status_, reason_, seconds);
   } else if (display_mode_ == DisplayMode::compact) {
@@ -147,6 +154,7 @@ void NativeAgentStatus::sample(std::uint64_t now_ns) {
   } else {
     text = AgentStatusPresentation::text(status_, reason_, seconds, connected_);
   }
+
   const QAnyStringView label{text.view()};
   const auto alpha = display_mode_ != DisplayMode::pane_chip && connected_ && status_ == AgentStatus::working ? AgentAnimation::alpha(now_ns) : 1;
   const auto text_changed = QAnyStringView::compare(status_text_, label) != 0;
@@ -161,6 +169,7 @@ void NativeAgentStatus::sample(std::uint64_t now_ns) {
 
   animated_alpha_ = alpha;
   const QPointer<NativeAgentStatus> alive{this};
+
   if (text_changed) {
     emit statusTextChanged();
   }
@@ -202,6 +211,7 @@ void NativeAgentStatus::itemChange(ItemChange change, const ItemChangeData &data
 
 void NativeAgentStatus::geometryChange(const QRectF &current, const QRectF &previous) {
   const QPointer<NativeAgentStatus> alive{this};
+
   QQuickItem::geometryChange(current, previous);
   if (alive) {
     synchronize();

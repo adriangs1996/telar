@@ -42,21 +42,25 @@ bool NativeFormField::editKey(const QKeyEvent &event) {
       if (!event.isAutoRepeat()) {
         selectAll();
       }
+
       return true;
     case Qt::Key_C:
       if (!event.isAutoRepeat()) {
         copy();
       }
+
       return true;
     case Qt::Key_X:
       if (!event.isAutoRepeat()) {
         cut();
       }
+
       return true;
     case Qt::Key_V:
       if (!event.isAutoRepeat()) {
         paste();
       }
+
       return true;
     default:
       break;
@@ -64,6 +68,7 @@ bool NativeFormField::editKey(const QKeyEvent &event) {
   }
 
   const auto extend = event.modifiers().testFlag(Qt::ShiftModifier);
+
   switch (event.key()) {
   case Qt::Key_Left:
     cancelComposition();
@@ -137,6 +142,7 @@ void NativeFormField::commitInput(const QInputMethodEvent &event) {
     editor_.insert({});
     const auto committed = QString::fromUtf8(editor_.text().data(), static_cast<qsizetype>(editor_.text().size()));
     const auto first = cursorPosition() + event.replacementStart();
+
     editor_.selectRange(bytePosition(committed, first), bytePosition(committed, first + event.replacementLength()));
   }
 
@@ -146,6 +152,7 @@ void NativeFormField::commitInput(const QInputMethodEvent &event) {
 
 void NativeFormField::updateComposition(const QInputMethodEvent &event) {
   const auto committed = QString::fromUtf8(editor_.text().data(), static_cast<qsizetype>(editor_.text().size()));
+
   for (const auto &attribute : event.attributes()) {
     if (attribute.type == QInputMethodEvent::Selection) {
       editor_.selectRange(bytePosition(committed, attribute.start), bytePosition(committed, attribute.start + attribute.length));
@@ -167,6 +174,7 @@ void NativeFormField::updateComposition(const QInputMethodEvent &event) {
     composition_first_ = std::min(editor_.anchor(), editor_.head());
     composition_last_ = std::max(editor_.anchor(), editor_.head());
   }
+
   composition_ = bytes;
   composition_anchor_ = static_cast<std::size_t>(bytes.size());
   composition_head_ = composition_anchor_;
@@ -215,6 +223,7 @@ QVariant NativeFormField::inputMethodQuery(Qt::InputMethodQuery query) const {
     return maximum_bytes_;
   case Qt::ImFont: {
     QFont font{typography_.value(QStringLiteral("primaryFamily")).toString()};
+
     font.setStyleName(typography_.value(QStringLiteral("primaryStyle")).toString());
     font.setPixelSize(static_cast<int>(std::max(qreal{1}, std::round(typography_.value(QStringLiteral("body"), 1).toDouble()))));
 
@@ -235,8 +244,10 @@ std::size_t NativeFormField::pointerPosition(qreal x) const {
   GraphemeCursor cursor{visible.text};
   std::uint32_t columns = 0;
   std::size_t previous = first;
+
   while (cursor.next()) {
     const auto next = columns + cursor.columns();
+
     if (target < static_cast<qreal>(columns) + (static_cast<qreal>(cursor.columns()) / 2)) {
       return previous;
     }
@@ -258,6 +269,7 @@ void NativeFormField::mousePressEvent(QMouseEvent *event) {
   cancelComposition();
   forceActiveFocus(Qt::MouseFocusReason);
   const auto position = pointerPosition(event->position().x());
+
   pressed_anchor_ = event->modifiers().testFlag(Qt::ShiftModifier) ? editor_.anchor() : position;
   editor_.selectRange(pressed_anchor_, position);
   dragging_ = true;

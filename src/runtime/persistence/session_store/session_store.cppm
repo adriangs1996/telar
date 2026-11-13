@@ -194,14 +194,17 @@ public:
     if (!file || ::fstat(file.get(), &state) != 0) {
       throw SystemError{"Open session lock"};
     }
+
     if (!S_ISREG(state.st_mode) || state.st_uid != ::geteuid() || state.st_nlink != 1 || (state.st_mode & 0077) != 0) {
       throw SystemError{"Unsafe session lock", EACCES};
     }
+
     while (::flock(file.get(), LOCK_EX) != 0) {
       if (errno != EINTR) {
         throw SystemError{"Lock session"};
       }
     }
+
     return file;
   }
 
@@ -223,6 +226,7 @@ public:
     const auto parent = openPrivateParent(path);
     const String<Memory> name{path.substr(path.rfind('/') + 1), AllocatorRef<char, Memory>{memory}};
     String<Memory> previous{name, AllocatorRef<char, Memory>{memory}};
+
     previous += ".previous";
     if (::renameat(parent.get(), name.c_str(), parent.get(), previous.c_str()) != 0 && errno != ENOENT) {
       throw SystemError{"Set previous session aside"};
@@ -278,6 +282,7 @@ public:
   template <typename Consumer>
   inline void read(Consumer &&consume) {
     std::size_t pane_count = 0;
+
     for (;;) {
       switch (static_cast<Kind>(u8::decode(input_))) {
       case Kind::end:
@@ -288,6 +293,7 @@ public:
         return;
       case Kind::workspace: {
         const WorkspaceRecord record{u64::decode(input_), text16(), text16(), u64::decode(input_), text16()};
+
         validatePath(record.path);
         if (record.name.size() > 256 || record.first_label.size() > 128 || (version_ < 3 && record.first_label.empty())) {
           throw EncodingError{"Invalid checkpoint workspace label"};
@@ -310,6 +316,7 @@ public:
         if (!record) {
           break;
         }
+
         if (++pane_count > 256) {
           throw EncodingError{"Checkpoint has too many panes"};
         }
@@ -328,11 +335,13 @@ public:
       }
       case Kind::worktree: {
         const auto record = worktree();
+
         try {
           validatePath(record.registration.path);
           if (record.id == 0) {
             throw EncodingError{"Invalid checkpoint worktree identity"};
           }
+
           Codec::encodedSize(record.registration);
         } catch (const EncodingError &) {
           ++skipped_worktrees;
@@ -367,6 +376,7 @@ private:
     }
 
     const std::string_view result{reinterpret_cast<const char *>(input_.data()), length};
+
     input_ = input_.subspan(length);
     return result;
   }
@@ -377,11 +387,13 @@ private:
 
   inline std::span<const Byte> bytes32() {
     const auto value = text(u32::decode(input_));
+
     return {reinterpret_cast<const Byte *>(value.data()), value.size()};
   }
 
   inline std::optional<PaneRecord> pane() {
     PaneRecord record{u64::decode(input_), u64::decode(input_), u64::decode(input_), text16(), u16::decode(input_), u16::decode(input_), u16::decode(input_), {}};
+
     record.arguments = version_ >= 9 ? text(u32::decode(input_)) : text16();
     validatePath(record.cwd);
     if (record.argument_count > 64 || record.arguments.size() > 128 * 1024 || std::ranges::count(record.arguments, '\0') != record.argument_count) {
@@ -393,16 +405,19 @@ private:
     if (!record.session.empty()) {
       validateAgentSession(record.session, false);
     }
+
     if (version_ >= 2) {
       record.title = text16();
       record.title_source = static_cast<AgentTitleSource>(u8::decode(input_));
     }
+
     validateTitle(record.title, record.title_source);
 
     record.in_pane = version_ >= 8 && boolean();
     if (version_ == 4 && boolean()) {
       return std::nullopt;
     }
+
     if (record.argument_count == 0) {
       throw EncodingError{"Checkpoint launch has no arguments"};
     }
@@ -412,8 +427,10 @@ private:
 
   inline WorktreeRecord worktree() {
     WorktreeRecord record{};
+
     record.id = u64::decode(input_);
     auto &registration = record.registration;
+
     registration.request_id = 1;
     registration.source = u64::decode(input_);
     record.workspace = u64::decode(input_);
@@ -421,6 +438,7 @@ private:
     if (created_by != 0) {
       registration.created_by = created_by;
     }
+
     registration.origin = static_cast<WorktreeOrigin>(u8::decode(input_));
     registration.path = text16();
     registration.branch = text16();
@@ -430,9 +448,11 @@ private:
     if (version_ >= 7) {
       registration.dispatched_from = text16();
     }
+
     if (version_ >= 10 && boolean()) {
       CoordinatorReference coordinator;
       const auto session = text(coordinator.session_id.size());
+
       std::copy(session.begin(), session.end(), coordinator.session_id.begin());
       coordinator.pane_id = u64::decode(input_);
       coordinator.pane_generation = u64::decode(input_);
@@ -465,9 +485,11 @@ public:
 
   inline void apply(std::span<const Byte> bytes) {
     Reader reader{bytes};
+
     model_.next_pane_generation = std::max(model_.next_pane_generation, reader.counters.generation);
     std::array<PaneRecord, 256> records;
     std::size_t count = 0;
+
     reader.read([&]<typename Record>(const Record &record) {
       if constexpr (std::same_as<Record, PaneRecord>) {
         records[count++] = record;
@@ -480,6 +502,7 @@ public:
     });
 
     const auto panes = std::span{records}.first(count);
+
     std::ranges::sort(panes, {}, &PaneRecord::id);
     for (const auto &record : panes) {
       try {
@@ -494,11 +517,13 @@ public:
     dropEmptyTabs();
 
     Reader layouts{bytes};
+
     layouts.read([&]<typename Record>(const Record &record) {
       if constexpr (std::same_as<Record, LayoutRecord>) {
         try {
           std::array<Byte, 64 * 1024> scratch;
           DecodeStorage storage{scratch};
+
           layouts_.retain(model_, record.identity, Codec::decode<UpdateClientLayout>(record.payload, storage));
         } catch (const std::exception &) {
         }
@@ -519,6 +544,7 @@ private:
     validateIdentity(record.id);
     validateIdentity(record.first_tab);
     auto workspace = makeOwned<Workspace<Memory>>(memory_, memory_, record.id, record.path, record.name);
+
     workspace->tabs.emplace_back(memory_, record.first_tab, record.first_label);
     model_.workspaces.insert(record.id, std::move(workspace));
     advanceIdentityCounter(model_.next_tab_id, record.first_tab + 1);
@@ -537,6 +563,7 @@ private:
 
   inline void restore(const WorktreeRecord &record) {
     const auto registered = model_.worktrees.registerEntry(record.registration, record.id);
+
     if (record.workspace != 0) {
       model_.worktrees.find(registered.worktree)->workspace = record.workspace;
     }
@@ -552,8 +579,10 @@ private:
 
     std::array<std::string_view, 64> original;
     auto remaining = record.arguments;
+
     for (std::size_t index = 0; index < record.argument_count; ++index) {
       const auto end = remaining.find('\0');
+
       original[index] = remaining.substr(0, end);
       remaining.remove_prefix(end + 1);
     }
@@ -572,20 +601,26 @@ private:
     // Launching changes the model: the tab is found again, and the pane by its identity.
     // No client asked for it: its shell keeps its prompt, which telar's editor covers.
     const auto identity = panes_.launch(model_, nullptr, false, command, TabLocation{.workspace = {.id = record.workspace}, .tab_id = record.tab}, size, record.id).id;
+
     model_.workspaces.find(record.workspace)->tab(record.tab)->panes.push_back(identity);
     auto &pane = *model_.panes.find(identity);
+
     pane.launch.restore(record.arguments, record.argument_count);
     pane.restored_agent = resume;
 
     if (resume && !direct) {
       for (std::size_t index = 0; index < resumed.size(); ++index) {
         const Byte separator = index == 0 ? 0 : ' ';
+
         if (index != 0) {
           pane.input.append({&separator, 1});
         }
+
         pane.input.append({reinterpret_cast<const Byte *>(resumed[index].data()), resumed[index].size()});
       }
+
       constexpr Byte enter = '\r';
+
       pane.input.append({&enter, 1});
       panes_.flushInput(pane);
     }
@@ -603,6 +638,7 @@ private:
     }
 
     AgentResume resume{.provider = record.provider, .title_source = record.title_source, .in_pane = record.in_pane};
+
     resume.session.assign(record.session);
     resume.title.assign(record.title);
     return resume;
@@ -671,6 +707,7 @@ public:
     }
 
     const auto previous = remaining_;
+
     try {
       write(record);
     } catch (const CapacityReached &) {
@@ -681,6 +718,7 @@ public:
 
   inline tbc::view<std::span<const Byte>, tbc::lt::a> finish() {
     const auto count = buffer_.size() - remaining_.size() - 1;
+
     buffer_[count] = static_cast<Byte>(Kind::end);
     return buffer_.first(count + 1);
   }
@@ -735,6 +773,7 @@ private:
     if (record.name.size() > 256 || record.first_label.size() > 128) {
       throw EncodingError{"Invalid checkpoint workspace label"};
     }
+
     kind(Kind::workspace);
     integer(record.id);
     text16(record.path);
@@ -756,6 +795,7 @@ private:
     if (record.argument_count == 0 || record.argument_count > 64 || record.arguments.size() > 128 * 1024 || record.session.size() > 64) {
       throw EncodingError{"Invalid checkpoint launch record"};
     }
+
     kind(Kind::pane);
     integer(record.id);
     integer(record.workspace);
@@ -775,11 +815,13 @@ private:
   inline void write(const WorktreeRecord &record) {
     const auto &registration = record.registration;
     auto checked = registration;
+
     checked.request_id = 1;
     Codec::encodedSize(checked);
     if (record.id == 0) {
       throw EncodingError{"Invalid checkpoint worktree identity"};
     }
+
     kind(Kind::worktree);
     integer(record.id);
     integer(registration.source);
@@ -795,6 +837,7 @@ private:
     integer(static_cast<Byte>(registration.coordinator.has_value()));
     if (registration.coordinator) {
       const auto &coordinator = *registration.coordinator;
+
       raw({reinterpret_cast<const char *>(coordinator.session_id.data()), coordinator.session_id.size()});
       integer(coordinator.pane_id);
       integer(coordinator.pane_generation);
@@ -805,6 +848,7 @@ private:
     if (record.payload.empty() || record.payload.size() > 16 * 1024) {
       throw EncodingError{"Invalid checkpoint layout size"};
     }
+
     kind(Kind::layout);
     integer(record.identity);
     integer(record.last_used);
@@ -836,15 +880,18 @@ public:
   // The bytes view the buffer.
   inline static tbc::view<std::span<const Byte>, tbc::lt::a> encode(const RuntimeModel<Memory> &model, const ClientLayouts<Memory> &layouts, const Agents &agents, tbc::view<std::span<Byte>, tbc::lt::a> buffer, std::size_t &dropped) {
     Writer writer{buffer, Counters{model.workspaces.nextCounter(), model.next_tab_id, model.panes.nextCounter(), model.next_pane_generation}};
+
     for (const auto *workspace : model.workspaces.items()) {
       if (workspace == nullptr || workspace->tabs.empty()) {
         continue;
       }
 
       const auto &first = workspace->tabs.front();
+
       writer.append(WorkspaceRecord{workspace->id, workspace->path, workspace->name, first.id, first.label});
       for (std::size_t index = 1; index < workspace->tabs.size(); ++index) {
         const auto &tab = workspace->tabs[index];
+
         writer.append(TabRecord{workspace->id, tab.id, tab.label});
       }
     }
@@ -855,6 +902,7 @@ public:
       }
 
       const auto entry = worktree->entry();
+
       writer.append(WorktreeRecord{entry.worktree, entry.workspace.value_or(0), RegisterWorktree{.source = entry.source, .created_by = entry.created_by, .origin = entry.origin, .path = entry.path, .branch = entry.branch, .base = entry.base, .title = entry.title, .brief = entry.brief, .dispatched_from = entry.dispatched_from, .coordinator = entry.coordinator}});
     }
 
@@ -864,6 +912,7 @@ public:
       }
 
       PaneRecord record{pane->id, pane->location.workspace.id, pane->location.tab_id, pane->cwd, pane->terminal.screen.cols, pane->terminal.screen.rows, pane->launch.count(), pane->launch.bytes()};
+
       if (const auto *agent = agents.find(pane->id, pane->generation); agent != nullptr && validResumeSession(agent->provider, agent->session.view())) {
         record.provider = agent->provider;
         record.session = agent->session.view();
@@ -871,22 +920,27 @@ public:
           record.title = agent->title.view();
           record.title_source = agent->title_source;
         }
+
         record.in_pane = agent->in_pane;
       } else if (pane->restored_agent) {
         const auto &resume = *pane->restored_agent;
+
         record.provider = resume.provider;
         record.session = resume.session.view();
         record.title = resume.title.view();
         record.title_source = resume.title_source;
         record.in_pane = resume.in_pane;
       }
+
       writer.append(record);
     }
 
     std::array<Byte, 16 * 1024> payload;
+
     layouts.exportRecords(model, [&](std::uint64_t identity, std::uint64_t last_used, const UpdateClientLayout &layout) {
       writer.append(LayoutRecord{identity, last_used, Codec::encode(layout, payload)});
     });
+
     dropped = writer.dropped;
     return writer.finish();
   }
@@ -894,11 +948,14 @@ public:
   inline bool changed(const RuntimeModel<Memory> &model, const ClientLayouts<Memory> &layouts, const Agents &agents) noexcept {
     const std::array revisions{model.workspace_revision, layouts.revision(), agents.revision()};
     bool changed = revisions != revisions_;
+
     revisions_ = revisions;
     const auto panes = model.panes.items();
+
     for (std::size_t index = 0; index < panes.size(); ++index) {
       const auto *pane = panes[index];
       const PaneStamp stamp = pane == nullptr ? PaneStamp{} : PaneStamp{pane->id, pane->cwd_revision, pane->terminal.screen.cols, pane->terminal.screen.rows, pane->output_closed || pane->exit_status.has_value() || pane->close_requested};
+
       changed |= stamp != stamps_[index];
       stamps_[index] = stamp;
     }
@@ -955,11 +1012,14 @@ public:
     }
 
     FileStore<Memory> file{memory_, options.path};
+
     try {
       if (file.load(buffer_)) {
         Reader validation{buffer_};
+
         validation.read([](const auto &) {});
         Restore restore{memory_, model, panes, layouts, options.resume_agents};
+
         restore.apply(buffer_);
       }
     } catch (const EncodingError &) {
@@ -987,6 +1047,7 @@ public:
     if (!dirty_ || pending_) {
       return std::chrono::seconds{1};
     }
+
     if (now < due_) {
       return due_ - now;
     }
@@ -994,6 +1055,7 @@ public:
     try {
       TELAR_TRACE("checkpoint.encode");
       const auto bytes = Snapshot<Memory, Agents>::encode(model, layouts, agents, buffer_, dropped_records);
+
       pending_ = worker_->submit(bytes);
       dirty_ = !pending_;
     } catch (const std::exception &) {

@@ -56,12 +56,15 @@ public:
         process_.kill();
       }
     });
+
     QObject::connect(&process_, &QProcess::readyReadStandardOutput, &context_, [this] {
       drain(QProcess::StandardOutput);
     });
+
     QObject::connect(&process_, &QProcess::readyReadStandardError, &context_, [this] {
       drain(QProcess::StandardError);
     });
+
     QObject::connect(&process_, &QProcess::finished, &context_, [this](int exit_code, QProcess::ExitStatus status) {
       if (!running_) {
         return;
@@ -73,6 +76,7 @@ public:
 
       finish();
     });
+
     QObject::connect(&process_, &QProcess::errorOccurred, &context_, [this](QProcess::ProcessError error) {
       if (!running_) {
         return;
@@ -95,6 +99,7 @@ public:
     shutdown();
     if (process_.state() != QProcess::NotRunning) {
       constexpr auto shutdown_timeout = std::chrono::milliseconds{1000};
+
       static_cast<void>(process_.waitForFinished(static_cast<int>(shutdown_timeout.count())));
     }
   }
@@ -167,10 +172,12 @@ private:
     }
 
     auto &total = output_bytes_[channel == QProcess::StandardOutput ? 0 : 1];
+
     process_.setReadChannel(channel);
     constexpr auto buffer_limit = std::max(output_limit, stdoutLimit());
     const auto limit = channel == QProcess::StandardOutput ? stdoutLimit() : output_limit;
     std::array<char, buffer_limit + 1> buffer{};
+
     while (process_.bytesAvailable() > 0) {
       const auto count = process_.read(buffer.data(), static_cast<qint64>(buffer.size()));
       if (count <= 0) {

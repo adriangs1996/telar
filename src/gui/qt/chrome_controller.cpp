@@ -99,6 +99,7 @@ QVariantMap Application::windowGeometry() const {
   const auto &geometry = display.geometry;
   const auto &chrome = display.chrome;
   auto typography = chromeTypographyRecord(display, font);
+
   typography.insert(QStringLiteral("grid"), QVariantMap{
                                                 {QStringLiteral("cellWidth"), terminal_grid_.cell_width_px / terminal_grid_.scale},
                                                 {QStringLiteral("cellHeight"), terminal_grid_.cell_height_px / terminal_grid_.scale},
@@ -131,6 +132,7 @@ QVariantMap Application::sidebarGeometry() const {
   };
 
   auto result = sidebarRegionsRecord(area, display, static_cast<std::size_t>(workspaces_.rowCount()), sidebarMachines());
+
   result.insert(QStringLiteral("typography"), chromeTypographyRecord(display, configuration().font));
 
   return result;
@@ -179,6 +181,7 @@ void Application::synchronizeWorkbenchGeometry() {
   const auto &configuration = this->configuration();
   const auto &geometry = display.geometry;
   auto grid = terminal_grid_;
+
   grid.scale = 1;
 
   const WorkbenchGeometry workbench{
@@ -191,6 +194,7 @@ void Application::synchronizeWorkbenchGeometry() {
   };
 
   const auto columns = std::clamp(std::floor(geometry.terminal.width / static_cast<float>(grid.cell_width_px)), 1.0F, static_cast<float>(std::numeric_limits<std::uint16_t>::max()));
+
   for (auto &client : clients_) {
     if (client) {
       (*client)->session.setWorkbenchGeometry(workbench);
@@ -236,6 +240,7 @@ float Application::sidebarNaturalWidth() const {
     const auto utf8 = text.toUtf8();
     const std::string_view view{utf8.constData(), static_cast<std::size_t>(utf8.size())};
     const auto role = emphasized ? fonts::FontRole::emphasized : fonts::FontRole::regular;
+
     catalog.request(view, role);
 
     return static_cast<float>(fonts::TextLayout<SystemAllocator>::measure(*fonts, view, {.pixel_height = pixels, .preferred = role}));
@@ -249,16 +254,19 @@ float Application::sidebarNaturalWidth() const {
   // A status whose clock is drawn later reserves a short age.
   const auto age = QStringLiteral("59m");
   float card_width = 0;
+
   for (int row = 0; row < agents_.rowCount(); ++row) {
     const auto record = agents_.data(agents_.index(row), ListModel::record_role).toMap();
     const auto ports = record.value(QStringLiteral("ports")).toString();
     const auto status = record.value(QStringLiteral("status")).toString();
     const auto title = padding + tile + gap + measure(record.value(QStringLiteral("title")).toString(), chrome.body, true) + (ports.isEmpty() ? 0 : gap + measure(ports, chrome.small, false) + chrome.px(2 * AgentCardGeometry::horizontal_padding));
     const auto detail = padding + measure(record.value(QStringLiteral("project")).toString(), chrome.small, false) + gap + status_side + gap + measure(status.isEmpty() ? age : status, chrome.small, false);
+
     card_width = std::max({card_width, title, detail});
   }
 
   float machines_width = 0;
+
   for (std::size_t index = 0; index < clients_.size() && !machine_list_collapsed_; ++index) {
     const auto slot = static_cast<Machines::Slot>(index);
     if (slot == machines_.active() || !machines_.shown(slot)) {
@@ -269,6 +277,7 @@ float Application::sidebarNaturalWidth() const {
     const bool stacked = client && std::ranges::any_of((*client)->session.agents(), [](const auto &agent) {
       return AgentOrder::stacked(agent.status);
     });
+
     machines_width = std::max(machines_width, MachineChromeGeometry::listNaturalWidth(chrome, measure(toQString(machines_.row(slot).label.view()), chrome.body, false), stacked));
   }
 

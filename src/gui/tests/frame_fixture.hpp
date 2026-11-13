@@ -24,6 +24,7 @@ inline bool waitForSynchronizedFrame(QQuickWindow &window, int timeout_ms) {
   bool synchronized = false;
   bool delivered = false;
   const QObject observer;
+
   QObject::connect(&window, &QQuickWindow::afterSynchronizing, &observer, [&] {
     synchronized = true;
   },
@@ -38,6 +39,7 @@ inline bool waitForSynchronizedFrame(QQuickWindow &window, int timeout_ms) {
     return lifetime.isNull() || delivered;
   },
                                              timeout_ms);
+
   if (lifetime.isNull()) {
     return false;
   }
@@ -69,6 +71,7 @@ inline bool showWindow(QQuickWindow &window, int timeout_ms, TestWindowKind kind
 
 inline bool showComponentWindow(QQuickWindow &window, int timeout_ms) {
   const auto requested_size = window.size();
+
   if (!showWindow(window, timeout_ms, TestWindowKind::component)) {
     return false;
   }

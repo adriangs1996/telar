@@ -70,6 +70,7 @@ public:
 
   inline bool accepts(AgentProvider incoming) const noexcept {
     const auto running = process ? process->provider : reporter;
+
     return incoming == AgentProvider::unknown || running == AgentProvider::unknown || running == incoming;
   }
 
@@ -104,6 +105,7 @@ public:
 
     if (incoming.state == AgentReportState::exited) {
       const bool changed = report.has_value();
+
       clearReport();
       work.reset();
       return changed;
@@ -178,6 +180,7 @@ public:
 
   inline std::optional<AgentEvidence> choose(std::int64_t now) const noexcept {
     const auto shown = screen && !screen->expired(now) ? screen : std::nullopt;
+
     if (report && !report->expired(now)) {
       const auto since = work ? work->observed : report->observed;
       if (shown && shown->status == AgentStatus::blocked && provider() == AgentProvider::cursor && since.before(shown->observed)) {
@@ -249,6 +252,7 @@ public:
       if (count_ == task_capacity) {
         return false;
       }
+
       tasks_[count_].subject.assign(report.plan_text);
       tasks_[count_++].status = AgentPlanStatus::pending;
       uses_tasks_ = true;
@@ -257,6 +261,7 @@ public:
       if (report.plan_index < count_) {
         tasks_[report.plan_index].status = report.plan_status;
       }
+
       break;
     case AgentPlanOp::set:
       count_ = 0;
@@ -274,6 +279,7 @@ public:
     if (!uses_tasks_) {
       return done_;
     }
+
     return static_cast<std::uint16_t>(std::count_if(tasks_.begin(), tasks_.begin() + count_, [](const Task &task) { return task.status == AgentPlanStatus::completed; }));
   }
 
@@ -281,6 +287,7 @@ public:
     if (!uses_tasks_) {
       return total_;
     }
+
     return static_cast<std::uint16_t>(std::count_if(tasks_.begin(), tasks_.begin() + count_, [](const Task &task) { return task.status != AgentPlanStatus::deleted; }));
   }
 
@@ -288,11 +295,14 @@ public:
     if (!uses_tasks_) {
       return step_.view();
     }
+
     std::string_view pending;
+
     for (const auto &task : std::span{tasks_}.first(count_)) {
       if (task.status == AgentPlanStatus::in_progress) {
         return task.subject.view();
       }
+
       if (task.status == AgentPlanStatus::pending && pending.empty()) {
         pending = task.subject.view();
       }
@@ -474,6 +484,7 @@ struct Agent {
 
   inline bool setProcessContext(SessionHost host, bool installed, std::optional<ProcessIdentity> identity) noexcept {
     const bool changed = session_host != host || hooks_installed != installed;
+
     session_host = host;
     in_pane = host == SessionHost::pane;
     hooks_installed = installed;
@@ -517,6 +528,7 @@ struct Agent {
     const auto next_reason = next_status == AgentStatus::blocked ? (selected->source == AgentSource::lifecycle_report && evidence.report_reason != AgentBlockedReason::none ? evidence.report_reason : AgentBlockedReason::other) : AgentBlockedReason::none;
     const auto next_event = eventFor(*selected, now);
     const bool changed = provider != next_provider || status != next_status || source != selected->source || authority != evidence.authority || confidence != selected->confidence || observed_at != selected->observed.milliseconds || expires_at != selected->expires_at || blocked_reason != next_reason || event.view() != next_event || projected_process != process_identity;
+
     if (status != next_status || changed_at == 0) {
       changed_at = now;
     }
@@ -569,6 +581,7 @@ struct Agent {
     if (value.size() > 96 || std::ranges::any_of(value, [](unsigned char byte) { return byte < 0x20 || byte == 0x7f; })) {
       throw EncodingError{"Invalid agent session title"};
     }
+
     if (title_source == AgentTitleSource::agent && title.view() == value) {
       return false;
     }
@@ -676,6 +689,7 @@ public:
     if (auto *existing = find(pane, generation)) {
       return *existing;
     }
+
     if (records_.size() == capacity) {
       throw RequestError{FailureCode::resource_limit, "Agent capacity reached"};
     }
@@ -732,6 +746,7 @@ public:
   inline Result observe(const Request &request) noexcept {
     TELAR_TRACE("agents.readSessionTitle");
     Result result{.request = request, .offset = request.watch.offset, .title = std::nullopt};
+
     try {
       path_ = request.watch.path.view();
       switch (request.watch.kind) {
@@ -757,6 +772,7 @@ private:
   inline void codex(const SessionFileWatch &watch, Result &result) {
     Database database{path_.c_str(), DatabaseAccess::read_only};
     Statement statement{database, "SELECT name FROM threads WHERE id = ?1"};
+
     statement.bind(1, watch.session.view());
     if (statement.next()) {
       result.title.emplace().assign(utf8Prefix(statement.text(0), title_capacity));
@@ -767,6 +783,7 @@ private:
     if (session.empty() || session.size() > 64 || !std::ranges::all_of(session, [](char byte) { return (byte >= '0' && byte <= '9') || (byte >= 'a' && byte <= 'f') || (byte >= 'A' && byte <= 'F') || byte == '-'; })) {
       return false;
     }
+
     if (!path.ends_with("/meta.json")) {
       return false;
     }
@@ -800,6 +817,7 @@ private:
       if (!watch.offset) {
         result.offset = 0;
       }
+
       return;
     }
 
@@ -807,6 +825,7 @@ private:
     if (!size) {
       return;
     }
+
     if (!watch.offset) {
       result.offset = *size;
       return;
@@ -815,6 +834,7 @@ private:
     const auto from = *size < *watch.offset ? 0 : *watch.offset;
     const auto input = read(file.get(), from, transcript_capacity);
     std::size_t consumed = 0;
+
     while (consumed < input.size()) {
       const auto newline = input.find('\n', consumed);
       if (newline == std::string_view::npos) {
@@ -822,6 +842,7 @@ private:
       }
 
       const auto line = input.substr(consumed, newline - consumed);
+
       consumed = newline + 1;
       if (line.size() > line_capacity || !line.starts_with("{\"type\":\"custom-title\"")) {
         continue;
@@ -845,6 +866,7 @@ private:
     bool has_title = false;
     bool has_session = false;
     bool matches_session = !session;
+
     object.eachMember([&](const JsonValue &key, const JsonValue &value) {
       key.string(decoded_);
       if (decoded_ == (session ? "customTitle" : "title")) {
@@ -881,6 +903,7 @@ private:
   inline std::string_view read(int descriptor, std::uint64_t offset, std::size_t limit) {
     bytes_.resize(limit);
     std::size_t filled = 0;
+
     while (filled < limit) {
       if (offset > static_cast<std::uint64_t>(INT64_MAX) - filled) {
         throw EncodingError{"Agent session file offset is outside its bounds"};
@@ -890,9 +913,11 @@ private:
       if (count < 0 && errno == EINTR) {
         continue;
       }
+
       if (count < 0) {
         throw SystemError{"Read agent session file"};
       }
+
       if (count == 0) {
         break;
       }
@@ -929,16 +954,19 @@ public:
     auto &placeholders = placeholders_;
     std::size_t count = 0;
     const auto now = wallMilliseconds();
+
     for (const auto &agent : registry.records()) {
       const auto *pane = model.panes.find(agent->pane);
       if (pane == nullptr || pane->generation != agent->generation || agent->sequence == 0) {
         continue;
       }
+
       const auto *workspace = model.workspaces.find(pane->location.workspace.id);
       const auto *tab = workspace == nullptr ? nullptr : workspace->tab(pane->location.tab_id);
       if (tab == nullptr) {
         continue;
       }
+
       const auto position = std::find(tab->panes.begin(), tab->panes.end(), pane->id);
       if (position == tab->panes.end()) {
         continue;
@@ -949,11 +977,13 @@ public:
       if (manifest != nullptr) {
         provider = {manifest->name.view(), manifest->displayName(), manifest->placeholderTitle(placeholders[count]), manifest->attachments};
       }
+
       std::string_view cwd = pane->cwd;
       const auto home = processHome();
       if (!home.empty() && cwd.starts_with(home) && (cwd.size() == home.size() || cwd[home.size()] == '/')) {
         std::array<char, 48> shortened{'~'};
         const auto suffix = utf8Prefix(cwd.substr(home.size()), 47);
+
         std::copy(suffix.begin(), suffix.end(), shortened.begin() + 1);
         directories[count].assign({shortened.data(), suffix.size() + 1});
       } else {
@@ -995,6 +1025,7 @@ public:
           .plan_total = agent->progress.total(),
           .plan_step = agent->progress.step(),
       };
+
       ++count;
     }
 

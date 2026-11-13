@@ -21,8 +21,10 @@ void require(bool condition, std::string_view message, std::source_location loca
   if (!condition) {
     if (current != nullptr) {
       const auto value = current->text().view();
+
       std::fprintf(stderr, "text: [%.*s] cursor %zu\n", static_cast<int>(value.size()), value.data(), current->text().cursor());
     }
+
     std::fprintf(stderr, "%s:%u: %.*s\n", location.file_name(), location.line(), static_cast<int>(message.size()), message.data());
     std::exit(1);
   }
@@ -33,6 +35,7 @@ void require(bool condition, std::string_view message, std::source_location loca
 Request type(Editor &editor, std::string_view keys) {
   current = &editor;
   Request last = Request::none;
+
   for (std::size_t index = 0; index < keys.size(); ++index) {
     const auto byte = keys[index];
     if (byte == '\x1b') {
@@ -43,6 +46,7 @@ Request type(Editor &editor, std::string_view keys) {
       last = editor.press({Key::character, static_cast<char32_t>(static_cast<unsigned char>(byte)), {}, keys.substr(index, 1)});
     }
   }
+
   return last;
 }
 
@@ -60,6 +64,7 @@ std::string_view text(const Editor &editor) {
 
 void textModel() {
   Text value;
+
   value.insert("git ", true);
   value.insert("status", true);
   require(value.view() == "git status", "typing appends");
@@ -80,11 +85,13 @@ void textModel() {
 
   const std::string huge(Text::capacity + 1, 'x');
   Text bounded;
+
   require(!bounded.replace(0, 0, huge) && bounded.empty(), "refuses text beyond the capacity");
 }
 
 void emacs() {
   Editor editor;
+
   type(editor, "git commit -m wip");
   require(text(editor) == "git commit -m wip", "types");
   control(editor, 'w');
@@ -128,6 +135,7 @@ void emacs() {
 
 Editor vim(std::string_view initial) {
   Editor editor{Keymap::vim};
+
   type(editor, initial);
   type(editor, "\x1b");
   return editor;
@@ -135,6 +143,7 @@ Editor vim(std::string_view initial) {
 
 void vimBasics() {
   auto editor = vim("git switch main");
+
   require(editor.mode() == Mode::normal && editor.text().cursor() == 14, "Escape enters normal mode on the last character");
   type(editor, "0");
   require(editor.text().cursor() == 0, "0 goes to the line start");
@@ -160,6 +169,7 @@ void vimBasics() {
 
 void vimOperators() {
   auto editor = vim("git switch main");
+
   type(editor, "0dw");
   require(text(editor) == "switch main", "dw deletes a word and its blanks");
   type(editor, "u");
@@ -188,6 +198,7 @@ void vimOperators() {
 
 void vimObjects() {
   auto editor = vim("echo \"hello world\" (a (b) c)");
+
   type(editor, "0fwci\"bye\x1b");
   require(text(editor) == "echo \"bye\" (a (b) c)", "ci\" changes inside quotes");
   type(editor, "fbda(");
@@ -200,6 +211,7 @@ void vimObjects() {
 
 void vimLines() {
   Editor editor{Keymap::vim};
+
   type(editor, "one\ntwo\nthree");
   type(editor, "\x1bgg");
   require(editor.text().cursor() == 0, "gg goes to the first line");
@@ -223,11 +235,13 @@ void vimLines() {
 
 void vimVisual() {
   auto editor = vim("git log --oneline");
+
   type(editor, "0wviwd");
   require(text(editor) == "git  --oneline", "v with a text object selects and deletes");
   type(editor, "0vey$p");
   require(text(editor) == "git  --onelinegit", "visual y yanks the selection");
   std::string clipboard;
+
   editor.setClipboard({.read = [&] { return std::string{"pasted"}; }, .write = [&](std::string_view text) { clipboard.assign(text); }});
   type(editor, "0\"+yiw");
   require(clipboard == "git", "the + register writes the system clipboard");
@@ -237,6 +251,7 @@ void vimVisual() {
 
 void routing() {
   telar::PaneShell shell{.pane_id = 1, .shell = telar::IntegratedShell::zsh, .phase = telar::ShellPhase::prompt, .shell_foreground = true, .canonical = false, .echo = false, .signal_keys = false, .interrupt = 3, .quit = 28, .suspend = 26, .end_of_file = 4};
+
   require(surface(shell, false, true) == Surface::editor, "the editor takes a shell at its prompt");
   require(surface(shell, false, false) == Surface::none, "classic mode leaves the terminal alone");
   require(surface(shell, true, true) == Surface::none, "the alternate screen belongs to its program");
@@ -264,11 +279,13 @@ void routing() {
   require(surface(shell, false, true) == Surface::none, "panes without integration stay classic");
 
   using namespace std::chrono_literals;
+
   require(PendingPrompt::likely(14, 400ms) && !PendingPrompt::likely(0, 400ms) && !PendingPrompt::likely(14, 100ms), "a quiet unfinished line looks like a prompt");
 }
 
 std::vector<Style> styled(std::string_view text) {
   std::vector<Style> styles(text.size());
+
   classify(text, styles);
   return styles;
 }
@@ -276,42 +293,52 @@ std::vector<Style> styled(std::string_view text) {
 void layoutAndStyles() {
   const std::string_view command = "sudo git commit -m \"wip $USER\" | tee log # done";
   const auto styles = styled(command);
+
   require(styles[0] == Style::command && styles[5] == Style::command, "sudo and the command it runs are commands");
   require(styles[16] == Style::option && styles[19] == Style::string && styles[24] == Style::variable, "options, strings and variables inside them");
   require(styles[command.find('|')] == Style::operator_ && styles[command.find("tee")] == Style::command, "a pipe starts a command");
   require(styles[command.find('#')] == Style::comment, "comments");
   require(styled("gi")[0] == Style::command && styled("sudo gi")[5] == Style::command, "the command being typed is a command already, as the shell colours it");
   const auto variable = styled("echo ${HOME}/x $PATH");
+
   require(variable[5] == Style::variable && variable[10] == Style::variable && variable[15] == Style::variable, "variables");
   require(styled("FOO=1 make all")[6] == Style::command, "an assignment prefix leaves the command after it");
   const auto paths = styled("ls -la ./src /tmp/x y");
+
   require(paths[7] == Style::path && paths[13] == Style::path && paths[19] == Style::plain && paths[3] == Style::option, "arguments naming files are paths");
 
   // An animation group splits runs where it starts and ends, even within one style.
   const std::string grouped = "git status";
   std::vector<std::uint8_t> groups(grouped.size(), 0);
+
   groups[5] = 1;
   const auto split = layout(grouped, styled(grouped), grouped.size(), grouped.size(), 80, groups);
+
   require(split.runs.size() == 4 && split.runs[2].group == 1 && split.runs[2].start == 5 && split.runs[2].end == 6, "a group is a run of its own");
 
   // Wraps at the width, never cutting, and continues under the text.
   const std::string text = "echo abcdefghij";
   const auto wrapped = layout(text, styled(text), text.size(), text.size(), 10);
+
   require(wrapped.rows == 2 && wrapped.runs.back().row == 1 && wrapped.runs.back().column == Layout::indent, "long lines wrap under the text");
   std::uint32_t cells = 0;
+
   for (const auto &run : wrapped.runs) {
     cells += run.columns;
   }
+
   require(cells == text.size(), "every character is laid out");
   require(wrapped.caret_row == 1 && wrapped.caret_column == Layout::indent + 7, "the caret follows the text");
 
   const std::string lines = "for f in *; do\n  echo $f\ndone";
   const auto multiline = layout(lines, styled(lines), 0, lines.size(), 80);
+
   require(multiline.rows == 3 && multiline.caret_row == 0 && multiline.caret_column == Layout::indent, "newlines start rows");
   require(multiline.selection.size() == 3, "a selection spans rows");
 
   const std::string wide = "echo 日本";
   const auto cjk = layout(wide, styled(wide), wide.size(), wide.size(), 80);
+
   require(cjk.caret_column == Layout::indent + 5 + 4, "wide characters take two cells");
 }
 

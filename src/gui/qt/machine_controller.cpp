@@ -53,6 +53,7 @@ namespace telar::gui::qt {
 
 void Application::initializeMachines() {
   const auto slot = machines_.add({.label = {hostname_.constData(), static_cast<std::size_t>(hostname_.size())}, .destination = {}}, Machines::local_slot);
+
   static_cast<void>(createClient(slot));
 }
 
@@ -86,6 +87,7 @@ MachineClient &Application::createClient(Machines::Slot slot) {
   const MachineClientKey key{.machine = machines_.token(slot), .generation = next_client_generation_++};
   auto owned = makeOwned<MachineClient>(memory_, memory_, *this, key);
   auto *client = owned.get();
+
   client->admitted_program.assign(machines_.row(slot).program.view());
   client->identity = QRandomGenerator::system()->generate64() | std::uint64_t{1};
   client->session.configure(configuration_source_.configuration());
@@ -152,6 +154,7 @@ const RuntimeConnection &Application::connection() const noexcept {
 void Application::connectMachine(Machines::Slot slot) {
   auto &client = clientAt(slot);
   const auto key = client.key;
+
   connect(&client.connection, &RuntimeConnection::discovered, this, [this, key](const RemoteDiscovery &discovery) {
     if (auto *source = findClient(key)) {
       discoveredMachine(*source, discovery);
@@ -297,6 +300,7 @@ void Application::summarizeMachine(MachineClientKey key) {
       .agent_revision = client.session.agentRevision(),
       .workspace_revision = client.session.workspaceList().revision(),
   };
+
   if (sample.revision != 0) {
     observation.metrics = MachineMetrics{.cpu_percent = sample.cpu_percent, .cpu_count = sample.cpu_count, .memory_used_decigib = sample.memory_used_decigib, .memory_total_decigib = sample.memory_total_decigib};
     if (summary.metrics_revision != sample.revision) {

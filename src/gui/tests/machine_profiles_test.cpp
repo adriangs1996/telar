@@ -54,10 +54,12 @@ void rejects(MachineError expected, Operation operation) {
 
 void identitiesKeepTheirStableRepresentationAndInjectedEntropy() {
   const auto identity = MachineId::parse("m-0123456789ab");
+
   require(identity.format().view() == "m-0123456789ab", "machine identities must retain all twelve lowercase hexadecimal digits");
   rejects(MachineError::invalid_id, [] {
     static_cast<void>(MachineId::parse("m-000000000000"));
   });
+
   rejects(MachineError::invalid_id, [] {
     static_cast<void>(MachineId::parse("m-0123456789AB"));
   });
@@ -75,14 +77,17 @@ void identitiesKeepTheirStableRepresentationAndInjectedEntropy() {
 
   Random random;
   const auto generated = MachineId::generate(random);
+
   require(random.calls == 2 && generated.format().view() == "m-010000000000", "zero entropy must retry and the generated identity must use the original upper 48 little-endian bits");
 }
 
 void profilesPreserveIdentityOrderAndRejectedEdits() {
   MachineProfiles profiles;
+
   profiles.relabelLocal("local");
   const auto first = MachineId::fromRaw(1);
   const auto second = MachineId::fromRaw(2);
+
   profiles.add(MachineProfile::create(first, {.label = "one", .destination = "user@one"}));
   profiles.add(MachineProfile::create(second, {.label = "two", .destination = "user@two"}));
   profiles.rename("one", "renamed");
@@ -90,12 +95,15 @@ void profilesPreserveIdentityOrderAndRejectedEdits() {
   rejects(MachineError::duplicate_label, [&] {
     profiles.rename("renamed", "two");
   });
+
   rejects(MachineError::duplicate_label, [&] {
     profiles.rename("renamed", "local");
   });
+
   rejects(MachineError::invalid_label, [&] {
     profiles.rename("renamed", "bad name");
   });
+
   require(profiles.rows().front().label() == "renamed", "a rejected rename must retain the original profile");
   profiles.enable("renamed", false);
   require(!profiles.rows().front().enabled(), "disabling must retain the saved row");
@@ -111,6 +119,7 @@ void versionsAndJsonRoundTripsPreserveEveryField() {
   BudgetAllocator memory{system, MachineLimits::file_bytes};
   auto const *source = R"({"version":1,"local_label":"local","machines":[{"id":"m-000000000001","label":"box","destination":"dev@é'box","color":"#a0B1c2","enabled":false}]})";
   auto profiles = MachineProfileCodec::parse(memory, source);
+
   require(profiles.version() == MachineProfiles::plain_format_version, "profiles without setup metadata must stay readable by version-one clients");
   profiles.placeProgram("box", "/home/dev/.local/bin/telar");
   profiles.recordLogin("box", MachineAgent::codex, MachineLogin::done);
@@ -119,6 +128,7 @@ void versionsAndJsonRoundTripsPreserveEveryField() {
     const auto encoded = MachineProfileCodec::format(memory, profiles);
     const auto decoded = MachineProfileCodec::parse(memory, encoded);
     const auto &profile = decoded.rows().front();
+
     require(decoded.localLabel() == "local" && profile.label() == "box" && profile.destination() == "dev@é'box" && profile.color() == "#a0B1c2" && !profile.enabled(), "JSON round trips must retain local and remote identity fields");
     require(profile.program() == "/home/dev/.local/bin/telar" && profile.login(MachineAgent::codex) == MachineLogin::done, "JSON round trips must retain installed program paths and agent login metadata");
   }
@@ -135,6 +145,7 @@ void strictJsonRejectsUnknownDuplicatedAndWronglyTypedFields() {
       R"({"version":1,"machines":[{"id":"m-000000000001","label":"box","destination":"host","logins":{"other":"done"}}]})",
       R"({"version":1,"machines":[{"id":"m-000000000001","label":"box","destination":"host","logins":{"codex":"unknown"}}]})",
   });
+
   for (const auto source : invalid) {
     rejects(MachineError::invalid_profiles, [&] {
       static_cast<void>(MachineProfileCodec::parse(memory, source));
@@ -144,6 +155,7 @@ void strictJsonRejectsUnknownDuplicatedAndWronglyTypedFields() {
   rejects(MachineError::incompatible_profiles, [&] {
     static_cast<void>(MachineProfileCodec::parse(memory, R"({"version":3,"machines":[]})"));
   });
+
   rejects(MachineError::invalid_profiles, [&] {
     static_cast<void>(MachineProfileCodec::parse(memory, R"({"version":3,"machines":[{"id":"broken","unknown":1}]})"));
   });
@@ -151,21 +163,26 @@ void strictJsonRejectsUnknownDuplicatedAndWronglyTypedFields() {
 
 void capacityAndUniquenessHaveTheOriginalAdmissionOrder() {
   MachineProfiles profiles;
+
   for (std::size_t index = 0; index < MachineLimits::profiles; ++index) {
     const auto label = "box" + std::to_string(index);
+
     profiles.add(MachineProfile::create(MachineId::fromRaw(index + 1), {.label = label, .destination = label}));
   }
 
   rejects(MachineError::too_many, [&] {
     profiles.add(profiles.rows().front());
   });
+
   profiles.remove("box0");
   rejects(MachineError::duplicate_id, [&] {
     profiles.add(MachineProfile::create(MachineId::fromRaw(2), {.label = "different", .destination = "different"}));
   });
+
   rejects(MachineError::duplicate_destination, [&] {
     profiles.add(MachineProfile::create(MachineId::fromRaw(1), {.label = "different", .destination = "box1"}));
   });
+
   require(profiles.rows().size() == MachineLimits::profiles - 1, "rejected profile admissions must not consume capacity");
 }
 
@@ -176,18 +193,23 @@ void remoteArgumentsRetainTheirValidationBoundaries() {
   rejects(MachineError::invalid_destination, [] {
     MachineFieldRules::destination("-oProxyCommand=bad");
   });
+
   rejects(MachineError::invalid_destination, [] {
     MachineFieldRules::destination("user@host name");
   });
+
   rejects(MachineError::invalid_destination, [] {
     MachineFieldRules::profileDestination(std::string_view{"host\x80"});
   });
+
   rejects(MachineError::invalid_program, [] {
     MachineFieldRules::program("/safe/../bad");
   });
+
   rejects(MachineError::invalid_program, [] {
     MachineFieldRules::program("/safe/name;command");
   });
+
   rejects(MachineError::invalid_color, [] {
     MachineFieldRules::color("#123");
   });
@@ -198,6 +220,7 @@ void allocationRejectionReleasesEveryTemporary() {
   BudgetAllocator memory{system, 0};
   const auto source = std::string{R"({"version":1,"machines":[{"id":"m-000000000001","label":"box","destination":")"} + std::string(MachineLimits::destination_bytes, 'x') + R"("}]})";
   bool rejected = false;
+
   try {
     static_cast<void>(MachineProfileCodec::parse(memory, source));
   } catch (const std::bad_alloc &) {

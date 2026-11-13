@@ -72,12 +72,15 @@ public:
       reply.send(CommandSuggestion{request.request_id, SuggestionStatus::unavailable});
       return;
     }
+
     SuggestionStatus status = SuggestionStatus::failed;
     std::string_view suggestion;
+
     try {
       idle();
       if (!process_) {
         Command command{memory_, Launch{.cwd = "/", .arguments = options_.arguments}, CommandPurpose::administration};
+
         process_.emplace(command.specification({}));
         input_.clear();
       }
@@ -88,6 +91,7 @@ public:
       encoded_ += "}\n";
       write(encoded_);
       bool settled = false;
+
       while (!settled) {
         nextLine();
         try {
@@ -96,6 +100,7 @@ public:
           if (!type) {
             continue;
           }
+
           settled = type->equals("agent_settled");
           if (type->equals("response")) {
             const auto command = record.field("command");
@@ -118,16 +123,19 @@ public:
         if (!type || !type->equals("response") || !command || !command->equals("get_last_assistant_text") || !success || !success->boolean()) {
           continue;
         }
+
         const auto data = record.field("data");
         const auto text = data ? data->field("text") : std::nullopt;
         if (!text) {
           throw Rejected{};
         }
+
         text->string(text_);
         suggestion = extract(text_);
         if (suggestion.empty()) {
           throw Rejected{};
         }
+
         Text16<1024>::validate(suggestion);
         status = SuggestionStatus::ready;
         last_used_ = Clock::now();
@@ -157,19 +165,24 @@ private:
     while (!text.empty()) {
       const auto newline = text.find('\n');
       auto line = trimText(text.substr(0, newline), " \r\t");
+
       text = newline == std::string_view::npos ? std::string_view{} : text.substr(newline + 1);
       if (line.empty() || line.starts_with("```")) {
         continue;
       }
+
       if (line.size() >= 2 && line.starts_with('`') && line.ends_with('`')) {
         line = trimText(line.substr(1, line.size() - 2), " \r\t");
       }
+
       if (line.empty()) {
         continue;
       }
+
       if (line.size() > 1024 || std::ranges::any_of(line, [](unsigned char byte) { return byte < 0x20; })) {
         return {};
       }
+
       return line;
     }
 
@@ -180,18 +193,23 @@ private:
     if (stopping_) {
       throw Rejected{};
     }
+
     if (Clock::now() >= deadline_) {
       throw Timeout{};
     }
+
     std::array<pollfd, 3> descriptors{{{process_->output(), POLLIN, 0}, {process_->error(), POLLIN, 0}, {writing ? process_->input() : -1, POLLOUT, 0}}};
     if (::poll(descriptors.data(), descriptors.size(), 20) < 0 && errno != EINTR) {
       throw SystemError{"Poll suggestion engine"};
     }
+
     std::array<Byte, 16 * 1024> bytes;
+
     for (unsigned index = 0; index < 2; ++index) {
       if (descriptors[index].fd < 0 || descriptors[index].revents == 0) {
         continue;
       }
+
       const auto count = ::read(descriptors[index].fd, bytes.data(), bytes.size());
       if (count > 0) {
         if (index == 0) {
@@ -201,6 +219,7 @@ private:
         if (index == 0) {
           throw Rejected{};
         }
+
         process_->closeError();
       } else if (!socketWouldBlock(errno)) {
         throw SystemError{"Read suggestion engine"};
@@ -213,9 +232,11 @@ private:
       if (stopping_) {
         throw Rejected{};
       }
+
       if (Clock::now() >= deadline_) {
         throw Timeout{};
       }
+
       const auto count = ::write(process_->input(), bytes.data(), bytes.size());
       if (count > 0) {
         bytes.remove_prefix(static_cast<std::size_t>(count));
@@ -229,6 +250,7 @@ private:
 
   inline void nextLine() {
     bool discarded = false;
+
     for (;;) {
       const auto bytes = input_.readable();
       const auto newline = std::find(bytes.begin(), bytes.end(), '\n');
@@ -239,6 +261,7 @@ private:
           input_.consume(length + 1);
           return;
         }
+
         input_.consume(length + 1);
         discarded = false;
         continue;
@@ -246,6 +269,7 @@ private:
         input_.clear();
         discarded = true;
       }
+
       poll(false);
     }
   }
@@ -273,6 +297,7 @@ namespace telar::runtime {
 template <Allocator Memory>
 String<Memory> suggestionPrompt(Memory &memory, std::string_view cwd, std::string_view screen, std::string_view request) {
   String<Memory> prompt{AllocatorRef<char, Memory>{memory}};
+
   prompt.reserve(9 * 1024);
   prompt = "You are a shell assistant inside a terminal multiplexer. Reply with exactly one shell command line that fulfils the request, and nothing else: no markdown, no code fences, no quotes around the command, no explanation. If one command cannot fulfil the request, reply with one line starting with '#' that says why.\nWorking directory: ";
   prompt += cwd;

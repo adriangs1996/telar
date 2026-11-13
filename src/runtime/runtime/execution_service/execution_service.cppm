@@ -90,6 +90,7 @@ public:
     }
 
     auto &copy = reached_[reports_++];
+
     copy.name.assign(reach.name);
     copy.noun.assign(reach.noun);
     copy.route.assign(reach.route);
@@ -109,6 +110,7 @@ public:
         queueShow(Ledger::runtime, recorded.slot);
       }
     }
+
     reports_ = 0;
     if (dropped_ != 0) {
       model.limits.refused_reports = saturatedAdd(model.limits.refused_reports, dropped_);
@@ -121,6 +123,7 @@ public:
         show(clients, rows[slot]);
       }
     }
+
     shows_ = 0;
   }
 
@@ -165,6 +168,7 @@ private:
     const auto reach = row.reach();
     const char *separator = reach.noun.empty() ? "" : " ";
     int length = 0;
+
     if (reach.requested) {
       length = std::snprintf(text.data(), text.size(), "%.*s: %llu%s%.*s; limit %llu", static_cast<int>(reach.name.size()), reach.name.data(), static_cast<unsigned long long>(*reach.requested), separator, static_cast<int>(reach.noun.size()), reach.noun.data(), static_cast<unsigned long long>(reach.value));
     } else if (reach.value == 0) {
@@ -181,6 +185,7 @@ private:
                                                      .duration_ms = 8000,
                                                      .title = "Limit reached",
                                                      .message = {text.data(), static_cast<std::size_t>(length)}}};
+
     broadcast(clients, [](const ClientSession<Memory> &client) { return client.role == ClientRole::interactive; }, notification);
   }
 
@@ -213,9 +218,11 @@ public:
   inline void begin(std::size_t clients, FileDescriptor descriptor) {
     constexpr std::size_t maximum_clients = client_capacity;
     std::size_t reserved = 0;
+
     for (const auto &pending : pending_) {
       reserved += pending && pending->reservesClient();
     }
+
     const auto requested = clients + reserved + 1;
     const bool refused = requested > maximum_clients;
     if (refused) {
@@ -236,8 +243,10 @@ public:
         drop(slot);
         throw;
       }
+
       return;
     }
+
     limits_.report({"clients.max_pending_handshakes", "handshakes", capacity, {}, {}});
   }
 
@@ -253,11 +262,13 @@ public:
       if (event.kind == EventKind::readable) {
         pending->read();
       }
+
       pending->write();
       switch (pending->stage()) {
       case ClientHandshake::Stage::accepted: {
         poller_.remove(pending->descriptor());
         auto descriptor = pending->takeDescriptor();
+
         pending.reset();
         --count_;
         admit(std::move(descriptor));
@@ -339,6 +350,7 @@ void notifyWorkspaceObservers(ClientStore<Memory> &clients, std::uint64_t worksp
 template <Allocator Memory>
 std::optional<std::uint64_t> previousWorkspace(const WorkspaceStore<Memory> &workspaces, std::uint64_t identity) noexcept {
   const auto items = workspaces.items();
+
   for (std::size_t index = 0; index < items.size(); ++index) {
     if (items[index] == nullptr || items[index]->id != identity) {
       continue;
@@ -350,6 +362,7 @@ std::optional<std::uint64_t> previousWorkspace(const WorkspaceStore<Memory> &wor
         return previous->id;
       }
     }
+
     break;
   }
 
@@ -412,9 +425,11 @@ inline std::string_view launchFailureCause(const std::exception &error) noexcept
   if (dynamic_cast<const std::bad_alloc *>(&error) != nullptr) {
     return "OutOfMemory";
   }
+
   if (const auto *request = dynamic_cast<const RequestError *>(&error)) {
     return request->code() == FailureCode::resource_limit ? "PaneLimitReached" : "Unexpected";
   }
+
   if (const auto *system = dynamic_cast<const SystemError *>(&error)) {
     switch (system->code()) {
     case ENOMEM:
@@ -488,6 +503,7 @@ public:
   // generations do.
   inline static Pane<Memory> &requireGeneration(PaneStore<Memory> &panes, std::uint64_t identity, std::uint64_t generation) {
     auto &pane = require(panes, identity);
+
     if (generation != 0 && findPane(panes, identity, generation) == nullptr) {
       throw RequestError{FailureCode::pane_not_found, "Pane generation no longer exists"};
     }
@@ -499,11 +515,13 @@ public:
   // `bare_prompt`: the client it is for draws telar's editor, so its shell prints no prompt.
   inline tbc::view<Pane<Memory> &, tbc::lt::a> launch(tbc::view<RuntimeModel<Memory> &, tbc::lt::a> model, const ConfigureTerminalColors *owner_colors, bool bare_prompt, const Launch &launch, TabLocation location, TerminalSize size) {
     const auto identity = allocateIdentity(model);
+
     if (launch.environment_mode != EnvironmentMode::inherit_runtime || !launch.environment.empty()) {
       throw RequestError{FailureCode::invalid_request, "custom pane environment is not supported"};
     }
 
     Command command{memory_, launch};
+
     return launchPrepared(model, owner_colors, bare_prompt, command, location, size, identity);
   }
 
@@ -523,6 +541,7 @@ public:
 
     const bool controls_geometry = acquireGeometry(model.panes, model.metrics, client, *workspace);
     auto &pane = require(model.panes, pane_id);
+
     if (controls_geometry) {
       pane.resize(size);
     }
@@ -535,11 +554,13 @@ public:
     // The attachment shares the pane's media through its own handle.
     auto media = pane.media;
     auto attachment = makeOwned<Attachment<Memory>>(memory_, memory_, client.graphics_credit, pane.id, std::move(media));
+
     attachment->slot = slot;
     attachment->graphics.configure(client.shared_graphics);
     attachment->clipboard_revision = pane.terminal.effects.clipboard_revision;
 
     auto &result = *attachment;
+
     client.attachments.push_back(std::move(attachment));
     client.workspace = workspace->id;
     pane.observers |= client.observerBit();
@@ -550,6 +571,7 @@ public:
     if (!release(model, clients, client_id, identity)) {
       return;
     }
+
     if (const auto *client = clients.find(client_id); client != nullptr && client->attachments.empty()) {
       detachAll(model, clients, client_id);
     }
@@ -584,6 +606,7 @@ public:
     const auto bit = client->observerBit();
     std::array<std::uint64_t, ClientSession<Memory>::attachment_capacity> detached{};
     std::size_t count = 0;
+
     for (const auto &attachment : client->attachments) {
       attachment->desktop.reset();
       if (auto *pane = model.panes.find(attachment->pane_id)) {
@@ -593,6 +616,7 @@ public:
     }
 
     const auto workspace = client->workspace;
+
     client->attachments.clear();
     client->workspace.reset();
     if (workspace) {
@@ -613,17 +637,20 @@ public:
     }
 
     bool released = false;
+
     for (auto *client : clients.items()) {
       if (client != nullptr && std::erase_if(client->attachments, [identity](const auto &attachment) { return attachment->pane_id == identity; }) != 0) {
         pane->observers &= ~client->observerBit();
         released = true;
       }
     }
+
     if (released) {
       refreshAfterDetach(model, clients, identity);
     }
 
     auto &removed = require(model.panes, identity);
+
     poller_.remove(removed.process->descriptor());
     if (removed.exit_status && !removed.exit_observed) {
       removed.observer->shellExit(*removed.exitCode());
@@ -676,16 +703,19 @@ public:
       pane.enqueueInput(bytes);
       observe(pane, bytes);
     };
+
     if (!paste) {
       forward(prefix);
       forward(text);
     } else {
       const auto piece = [&](std::string_view bytes) { forward({reinterpret_cast<const Byte *>(bytes.data()), bytes.size()}); };
+
       piece(BracketedPaste::begin);
       BracketedPaste::body(textView(prefix), piece);
       BracketedPaste::body(textView(text), piece);
       piece(BracketedPaste::end);
     }
+
     if (!enter.empty()) {
       forward(enter);
     }
@@ -730,10 +760,12 @@ public:
     if (pane.output_closed) {
       return;
     }
+
     if (pane.media->failed()) {
       failOutput(pane);
       return;
     }
+
     try {
       pane.terminal.resumeControl();
       pane.write();
@@ -762,6 +794,7 @@ public:
     if (attachment == nullptr || client->connection.closing) {
       throw RequestError{FailureCode::invalid_request, "Desktop state requires a live pane attachment"};
     }
+
     if (attachment->desktop == request) {
       return;
     }
@@ -798,6 +831,7 @@ public:
     auto &pane = require(panes, request.pane_id);
     constexpr std::size_t clipboard_limit = 1024 * 1024;
     TextReader reader{memory_, pane.terminal, clipboard_limit};
+
     reader.copy(request);
     if (reader.truncated()) {
       throw RequestError{FailureCode::resource_limit, "Selection exceeds the clipboard limit"};
@@ -848,6 +882,7 @@ public:
     if (!admitInput(pane, required)) {
       std::array<char, 160> message;
       const auto length = std::snprintf(message.data(), message.size(), "the pane's input queue holds its limit of %zu bytes; the program in it is not reading input", Pane<Memory>::input_limit);
+
       client.connection.send(RequestFailed{.request_id = request.request_id,
                                            .code = FailureCode::resource_limit,
                                            .message = {message.data(), static_cast<std::size_t>(length)}});
@@ -870,12 +905,14 @@ public:
     if (client == nullptr || !ClipboardService<Memory>::eligible(*client, pane) || pane.output_closed) {
       throw RequestError{FailureCode::invalid_request, "Clipboard paste requires a live visible attachment"};
     }
+
     if (request.listing_only) {
       // A listing begun before a mode reset completes without reading text.
       if (pane.terminal.pasteEvents()) {
         if (!pane.terminal.clipboardControl().paste({client->id, client->generation}, request.primary, request.available)) {
           throw RequestError{FailureCode::resource_limit, "Clipboard response is pending"};
         }
+
         pane.terminal.resumeControl();
       }
     } else if (!request.text.empty()) {
@@ -883,8 +920,10 @@ public:
       if (!admitInput(pane, typedSize(bracketed, request.text, {}))) {
         throw RequestError{FailureCode::resource_limit, "Paste exceeds available pane input capacity"};
       }
+
       paste(pane, request.text, bracketed);
     }
+
     recordInputOrigin(model, clients, client_id, request.pane_id);
     flushInput(require(model.panes, request.pane_id));
     if (auto *current = clients.find(client_id)) {
@@ -906,6 +945,7 @@ public:
                                            .code = FailureCode::resource_limit,
                                            .message = "Pane search superseded"});
     }
+
     client.search.emplace(request, pane.terminal.contentRevision());
   }
 
@@ -949,6 +989,7 @@ private:
           session->last_input_sequence = 0;
         }
       }
+
       model.input_sequence = 1;
     }
 
@@ -965,15 +1006,19 @@ private:
     control::ClientFacts facts;
     const ConfigurePaneDesktop *theme = nullptr;
     std::uint64_t theme_client = UINT64_MAX;
+
     for (const auto *client : clients.items()) {
       if (client == nullptr || client->connection.closing) {
         continue;
       }
+
       const auto *attachment = client->attachment(pane.id);
       if (attachment == nullptr || !attachment->desktop || attachment->desktop->pane_generation != pane.generation) {
         continue;
       }
+
       const auto &desktop = *attachment->desktop;
+
       facts.visible |= desktop.visible;
       facts.focused |= desktop.focused && desktop.visible;
       if (desktop.visible && client->id < theme_client) {
@@ -989,14 +1034,17 @@ private:
         pane.terminal.configureColors({theme->foreground, theme->background, theme->palette});
         pane.terminal.configureCursorColor(theme->cursor);
       }
+
       pane.desktop_theme = *theme;
     } else if (pane.desktop_theme) {
       pane.desktop_theme.reset();
       const auto *workspace = model.workspaces.find(pane.location.workspace.id);
       const auto *owner = workspace != nullptr && workspace->geometry_client ? clients.find(*workspace->geometry_client) : nullptr;
+
       pane.terminal.configureColors(owner != nullptr && !owner->connection.closing ? owner->colors : ConfigureTerminalColors{});
       pane.terminal.configureCursorColor(std::nullopt);
     }
+
     pane.terminal.configureClientFacts(facts);
     ClipboardService<Memory>::configure(clients, pane);
   }
@@ -1010,11 +1058,13 @@ private:
     if (model.panes.size() + std::max(model.retired_observer_count, model.retired_media_count) >= pane_capacity) {
       throw RequestError{FailureCode::resource_limit, "Pane capacity is occupied by active processes or pending observations"};
     }
+
     if (model.next_pane_generation == 0 || model.next_pane_generation == UINT64_MAX || (restored_identity == 0 && model.panes.nextCounter() == 0)) {
       throw RequestError{FailureCode::spawn_failed, "could not start the command"};
     }
 
     const auto identity = restored_identity == 0 ? model.panes.nextId() : restored_identity;
+
     model.panes.advanceCounter(identity + 1);
     return {identity, model.next_pane_generation++};
   }
@@ -1023,8 +1073,10 @@ private:
     const auto setIdentity = [&](std::string_view name, std::uint64_t value) {
       std::array<char, 32> text{};
       const auto converted = std::to_chars(text.data(), text.data() + text.size(), value);
+
       command.setEnvironment(name, {text.data(), converted.ptr});
     };
+
     setIdentity("TELAR_PANE_ID", identity.id);
     setIdentity("TELAR_PANE_GENERATION", identity.generation);
     setIdentity("TELAR_WORKSPACE_ID", location.workspace.id);
@@ -1033,9 +1085,11 @@ private:
     if (!model.cli_executable.empty()) {
       command.setEnvironment("TELAR_BIN_PATH", model.cli_executable);
     }
+
     proxy_.apply(command);
     const auto shell = shell_integration_.apply(command, bare_prompt);
     auto pane = makeOwned<Pane<Memory>>(memory_, memory_, identity.id, location, command, PaneLaunch{size, model.media_budget, model.graphics_limits, shell});
+
     TELAR_DIAGNOSTIC(pane->counters = &model.metrics.panes);
     pane->generation = identity.generation;
     pane->terminal.controlPolicy() = control_policy_;
@@ -1043,6 +1097,7 @@ private:
     const HistorySession session{.id = pane->history_session, .pane = pane->id, .location = location, .started_at_ms = ObservationTime::now().milliseconds, .workspace_path = workspace == nullptr ? std::string_view{} : std::string_view{workspace->path}, .shell = command.arguments().front()};
     auto phase = LaunchPhase::pane_registration;
     bool registered = false;
+
     try {
       if (owner_colors != nullptr) {
         pane->terminal.configureColors(*owner_colors);
@@ -1050,10 +1105,12 @@ private:
 
       pane->observer->configureHistory(session, model.capture_output);
       const auto handle = model.panes.insert(identity.id, std::move(pane));
+
       registered = true;
       ++model.pane_revision;
       // The pane now lives in the table, where it is found again.
       auto &inserted = *model.panes.find(identity.id);
+
       inserted.event_identity = handle;
       if (handle > maximum_event_identity) {
         throw RequestError{FailureCode::resource_limit, "Pane event identity space exhausted"};
@@ -1154,11 +1211,13 @@ public:
       if (execution->process) {
         execution->process->signal(SIGKILL);
       }
+
       break;
     case ExecutionAction::forget:
       if (execution->state != ExecutionState::exited && execution->state != ExecutionState::failed) {
         throw RequestError{FailureCode::invalid_request, "ExecutionStillRunning"};
       }
+
       break;
     default:
       break;
@@ -1179,10 +1238,12 @@ public:
     }
 
     auto &process = *execution->process;
+
     if (eventSource(event.token) == EventSource::execution_input) {
       if (event.descriptor == process.input()) {
         flushInput(poller_, *execution);
       }
+
       return;
     }
 
@@ -1213,6 +1274,7 @@ public:
 
   inline bool refresh(RuntimeModel<Memory> &model) noexcept {
     bool running = false;
+
     for (auto *execution : executions_.items()) {
       if (execution == nullptr || execution->state != ExecutionState::running) {
         continue;
@@ -1277,6 +1339,7 @@ private:
 
     const std::string_view cwd = request.cwd.empty() ? std::string_view{workspace->path} : request.cwd;
     auto execution = makeOwned<Execution<Memory>>(memory_, memory_, token, request, workspace_id, cwd);
+
     execution->input_owner = request.stdin_open ? std::optional{client_id} : std::nullopt;
     try {
       if (execution->process) {
@@ -1304,6 +1367,7 @@ private:
 
     const auto identity = model.workspaces.nextId();
     auto workspace = makeOwned<Workspace<Memory>>(memory_, memory_, identity, home, "Administration");
+
     model.workspaces.insert(identity, std::move(workspace));
     administration_ = identity;
     ++model.workspace_revision;
@@ -1343,6 +1407,7 @@ private:
       if (request.bytes.size() > execution.input_written - request.input_offset) {
         throw RequestError{FailureCode::invalid_request, "ExecutionInputOverlap"};
       }
+
       return;
     }
 
@@ -1441,6 +1506,7 @@ private:
 
   inline void list(ClientSession<Memory> &client, const ExecutionRequest &request) {
     const Execution<Memory> *selected = nullptr;
+
     for (const auto *execution : executions_.items()) {
       if (execution != nullptr && execution->id > request.execution_id && (selected == nullptr || execution->id < selected->id)) {
         selected = execution;
@@ -1449,6 +1515,7 @@ private:
 
     ExecutionReply reply{.request_id = request.request_id,
                          .state = ExecutionState::exited};
+
     if (selected != nullptr) {
       reply.execution_id = selected->id;
       reply.workspace_id = selected->workspace;

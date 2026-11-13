@@ -57,6 +57,7 @@ constexpr std::array small_pixels{
 AttachmentCapture<ApplicationAllocator> captured(ApplicationAllocator &memory, const QImage &image) {
   QByteArray encoded;
   QBuffer buffer{&encoded};
+
   require(buffer.open(QIODevice::WriteOnly) && image.save(&buffer, "PNG"), "the fixture PNG must encode");
   AttachmentCapture<ApplicationAllocator> result{
       .request = {.capture = {.id = 1, .target = {.pane_id = 1, .pane_generation = 2}}},
@@ -64,6 +65,7 @@ AttachmentCapture<ApplicationAllocator> captured(ApplicationAllocator &memory, c
       .width = static_cast<std::uint32_t>(image.width()),
       .height = static_cast<std::uint32_t>(image.height()),
   };
+
   result.png.append(std::as_bytes(std::span{encoded.constData(), static_cast<std::size_t>(encoded.size())}), AttachmentLimits::maximum_png_bytes);
 
   return result;
@@ -75,26 +77,31 @@ void unchangedExtentsPreservePremultipliedPixels(ApplicationAllocator &memory) {
   const QImage image{small_pixels.data(), width, height, width * channels, QImage::Format_RGBA8888};
   auto capture = captured(memory, image);
   const auto preview = qt::AttachmentPreview::decode(memory, capture);
+
   require(preview.sequence == capture.request.capture.id && preview.thumbnail.size() == image.size() && preview.full.size() == image.size(), "small previews must keep the source extent and exact sequence");
   for (const auto *pixels : {&preview.thumbnail, &preview.full}) {
     for (std::size_t index = 0; index < small_pixels.size(); ++index) {
       const auto alpha = small_pixels[(index / channels * channels) + channels - 1];
       const auto expected = index % channels == channels - 1 ? small_pixels[index] : ((static_cast<std::uint32_t>(small_pixels[index]) * alpha) + half_channel) / maximum_channel;
+
       require(pixels->constBits()[index] == expected, "unchanged image extents must preserve exact premultiplied RGBA");
     }
   }
 
   const QImage retained = preview.full;
+
   capture.png.clear();
   require(retained.constBits()[0] == half_channel + 1, "the render image must retain its pixels after PNG release");
 }
 
 void extremeAspectRatiosRemainBounded(ApplicationAllocator &memory) {
   QImage image{static_cast<int>(thin_width), 1, QImage::Format_RGBA8888};
+
   require(!image.isNull(), "the thin source must fit the explicit pixel quota");
   image.fill(Qt::red);
   const auto capture = captured(memory, image);
   const auto preview = qt::AttachmentPreview::decode(memory, capture);
+
   require(preview.thumbnail.size() == QSize{static_cast<int>(AttachmentPreviewSize::thumbnail_side), 1}, "very wide images must retain one thumbnail row");
   require(preview.full.size() == QSize{static_cast<int>(AttachmentPreviewSize::full_side), 1}, "very wide images must retain one modal row");
 }
@@ -104,6 +111,7 @@ void extremeAspectRatiosRemainBounded(ApplicationAllocator &memory) {
 int main(int argc, char **argv) try {
   const QCoreApplication application{argc, argv};
   ApplicationAllocator memory;
+
   unchangedExtentsPreservePremultipliedPixels(memory);
   extremeAspectRatiosRemainBounded(memory);
 

@@ -85,6 +85,7 @@ struct NativePluginWorkerHost {
     const auto action = command.action.toUtf8();
     const runtime::config::PluginWorkerOptions options{.entry = entry.constData(), .action = action.constData(), .context = command.context};
     QStringList arguments{QString::fromUtf8(options.command.data(), static_cast<qsizetype>(options.command.size()))};
+
     options.eachArgument([&](std::string_view word) { arguments.append(QString::fromUtf8(word.data(), static_cast<qsizetype>(word.size()))); });
     process.start(command.program, arguments, QIODevice::ReadOnly);
   }
@@ -94,6 +95,7 @@ struct PluginWorkerSnapshot {
   explicit PluginWorkerSnapshot(ApplicationAllocator &memory, const PluginInvocation &invocation, const QString &program) {
     using Inspector = runtime::plugins::PackageInspection<PluginPackageHash>;
     const auto copied = runtime::plugins::PackageCopyStorage<ApplicationAllocator, Inspector>{memory}.copy(invocation.package, directory.descriptor(), directory.path());
+
     command = {.program = program, .entry = text(directory.path()) + QStringLiteral("/") + text(copied.manifest.entry.view()), .action = text(invocation.action.view()), .context = invocation.context};
   }
 
@@ -175,6 +177,7 @@ public:
     try {
       preparation_.setFuture(QtConcurrent::run([&memory = memory_, invocation, executable] {
         PluginWorkerPreparation result{memory};
+
         try {
           result.snapshot = makeOwned<PluginWorkerSnapshot>(memory, memory, invocation, executable);
         } catch (const std::exception &error) {
@@ -196,6 +199,7 @@ public:
 
   void commandFinished(std::optional<CommandFailure> failure) {
     PluginWorkerResult result;
+
     if (failure) {
       result.error = *failure == CommandFailure::timeout ? QStringLiteral("PluginWorkerTimedOut") : QStringLiteral("PluginWorkerFailed");
     } else {
@@ -229,6 +233,7 @@ private:
   void deliver(const PluginWorkerResult &result) {
     auto invocation = std::exchange(invocation_, std::nullopt);
     const auto execution = std::exchange(execution_, 0);
+
     snapshot_.reset();
     if (invocation) {
       observer_.pluginWorkerFinished(execution, *invocation, result);

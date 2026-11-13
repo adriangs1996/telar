@@ -84,13 +84,16 @@ public:
   // Each query is written into the output, region `a`.
   [[nodiscard]] inline static tbc::view<std::string_view, tbc::lt::a> write(const Configuration &configuration, const ClientQueryContext &context, tbc::view<std::span<char>, tbc::lt::a> output) {
     JsonWriter writer{output};
+
     writer.object([&](JsonWriter &object) {
       object.member("source", [&](JsonWriter &value) {
         writeOptionalBytes(value, context.source);
       });
+
       object.member("profile", [&](JsonWriter &value) {
         writeOptionalBytes(value, context.profile);
       });
+
       object.member("generation", context.generation);
       object.member("sidebar_visible", context.view.sidebar_visible);
       object.member("sidebar_width", context.view.sidebar_width);
@@ -100,6 +103,7 @@ public:
       object.member("sound", [&](JsonWriter &value) {
         writeSound(value, configuration.sound);
       });
+
       object.member("notification_delivery", configuration.notification_delivery == NotificationDelivery::system ? "system" : "telar");
       object.member("history_show_agent_commands", configuration.history.show_agent_commands);
       object.member("history_enter_runs", configuration.history.enter_runs);
@@ -152,10 +156,12 @@ class GuiQuery {
 public:
   [[nodiscard]] inline static tbc::view<std::string_view, tbc::lt::a> write(const Configuration &configuration, tbc::view<std::span<char>, tbc::lt::a> output, bool default_titlebar) {
     JsonWriter writer{output};
+
     writer.object([&](JsonWriter &object) {
       object.member("font", [&](JsonWriter &value) {
         writeFont(value, configuration.font);
       });
+
       object.member("cursor", [&](JsonWriter &value) {
         value.object([&](JsonWriter &cursor) {
           cursor.member("style", cursorStyle(configuration.cursor));
@@ -163,6 +169,7 @@ public:
           cursor.member("blink_interval_ms", configuration.blink_interval.count());
         });
       });
+
       object.member("scroll", [&](JsonWriter &value) {
         value.object([&](JsonWriter &scroll) {
           scroll.member("smooth", configuration.scroll.smooth);
@@ -171,9 +178,11 @@ public:
           scroll.member("sticky_headers", configuration.scroll.sticky_headers);
         });
       });
+
       object.member("window", [&](JsonWriter &value) {
         writeWindow(value, configuration, default_titlebar);
       });
+
       object.member("opacity", [&](JsonWriter &value) {
         value.object([&](JsonWriter &opacity) {
           for (std::size_t index = 0; index < BackgroundOpacity::names.size(); ++index) {
@@ -181,11 +190,13 @@ public:
           }
         });
       });
+
       object.member("chrome", [&](JsonWriter &value) {
         value.object([&](JsonWriter &chrome) {
           chrome.member("scale", configuration.chrome_scale);
         });
       });
+
       object.member("sidebar", [&](JsonWriter &value) {
         value.object([&](JsonWriter &sidebar) {
           sidebar.member("width", configuration.sidebar_width);
@@ -255,13 +266,16 @@ class ThemeQuery {
 public:
   [[nodiscard]] inline static tbc::view<std::string_view, tbc::lt::a> write(const ThemeSelection &selection, tbc::view<std::span<char>, tbc::lt::a> output) {
     JsonWriter writer{output};
+
     writer.object([&](JsonWriter &object) {
       object.member("base", [&](JsonWriter &value) {
         writeTheme(value, selection.base);
       });
+
       object.member("light", [&](JsonWriter &value) {
         writeOptionalTheme(value, selection.light);
       });
+
       object.member("dark", [&](JsonWriter &value) {
         writeOptionalTheme(value, selection.dark);
       });
@@ -277,6 +291,7 @@ private:
 
   inline static void writeColor(JsonWriter &writer, CellColor color) {
     constexpr std::array names{"default", "indexed", "rgb"};
+
     writer.object([&](JsonWriter &object) {
       object.member("kind", std::string_view{names[static_cast<std::size_t>(color.kind)]});
       object.member("value", [&](JsonWriter &value) {
@@ -291,9 +306,11 @@ private:
       object.member("palette", [&](JsonWriter &value) {
         writePalette(value, theme);
       });
+
       object.member("terminal", [&](JsonWriter &value) {
         writeTerminal(value, theme.terminal);
       });
+
       object.member("syntax_styles", [&](JsonWriter &value) {
         writeSyntaxStyles(value, theme);
       });
@@ -323,15 +340,19 @@ private:
       object.member("foreground", [&](JsonWriter &value) {
         byteValue(value, terminal.foreground);
       });
+
       object.member("background", [&](JsonWriter &value) {
         byteValue(value, terminal.background);
       });
+
       object.member("cursor_color", [&](JsonWriter &value) {
         writeOptionalRgb(value, terminal.cursor_color);
       });
+
       object.member("cursor_text_color", [&](JsonWriter &value) {
         writeOptionalRgb(value, terminal.cursor_text_color);
       });
+
       object.member("palette", [&](JsonWriter &value) {
         writeRgbPalette(value, terminal.palette);
       });
@@ -377,6 +398,7 @@ private:
       object.member("color", [&](JsonWriter &value) {
         writeColor(value, style.color);
       });
+
       object.member("italic", style.italic);
       object.member("bold", style.bold);
     });

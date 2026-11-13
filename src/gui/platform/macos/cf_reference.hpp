@@ -29,6 +29,7 @@ public:
     if (this != &other) {
       reset(std::exchange(other.value_, nullptr));
     }
+
     return *this;
   }
 
@@ -44,6 +45,7 @@ public:
     if (value_ != nullptr) {
       CFRelease(value_);
     }
+
     value_ = value;
   }
 

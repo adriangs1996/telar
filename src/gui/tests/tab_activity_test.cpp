@@ -73,16 +73,20 @@ void selectionAndProgressPrecedence() {
   GraphicsBudget budget;
   const TabLocation location{.workspace = {.id = 1}, .tab_id = 1};
   Tab tab{memory, location};
+
   tab.layout.add(1, ClientLayoutAxis::horizontal, 0);
   Pane pane{memory, 1, budget};
+
   pane.location = location;
   std::array agents{Agent{memory}, Agent{memory}};
+
   for (auto &agent : agents) {
     agent.location = location;
     agent.status = AgentStatus::working;
   }
 
   auto activity = TabActivity::derive(tab, &pane, std::span<const Agent<SystemAllocator>>{agents}, true);
+
   require(activity.kind == TabActivity::Kind::spinner && activity.width() == TabActivity::spinner_side, "working tabs must reserve the original spinner width");
   agents.front().status = AgentStatus::blocked;
   activity = TabActivity::derive(tab, &pane, std::span<const Agent<SystemAllocator>>{agents}, true);
@@ -105,16 +109,19 @@ void transitionRetargetsAndAttachmentReplacement() {
   ProgressMotion motion;
   ProgressSample sample{.pane_id = 1, .attachment = 1, .state = PaneProgressState::set, .percent = 0};
   constexpr std::uint64_t start = 1'000'000'000;
+
   require(motion.sample(sample, start) == 0, "first observation must use the reported percentage");
   sample.percent = ProgressSample::maximum_percent;
   require(motion.sample(sample, start) == 0 && motion.deadline(start) == start + ProgressMotion::duration_ns, "a changed percentage must start from the visible value");
   const auto middle = start + (ProgressMotion::duration_ns / 2);
   constexpr float cubic_midpoint = 0.875F;
+
   require(motion.sample(sample, middle) == cubic_midpoint, "determinate fill must follow the original cubic easing");
   sample.percent = quarter_percent;
   require(motion.sample(sample, middle) == cubic_midpoint, "retargeting must not jump to the new report");
   ++sample.attachment;
   constexpr float replacement_fraction = 0.25F;
+
   require(motion.sample(sample, middle) == replacement_fraction && !motion.deadline(middle), "a replacement attachment must discard its predecessor's motion");
   sample.state = PaneProgressState::pause;
   sample.percent = half_percent;
@@ -131,10 +138,13 @@ void progressMessagesAreOwnedAndDeduplicated() {
   AllocationGate memory{budget};
   Transport transport;
   Session client{memory, transport};
+
   openFirstPane(client, transport);
   const auto allocations = budget.allocations();
+
   memory.permit(0);
   const PaneProgress report{.pane_id = 1, .state = PaneProgressState::set, .percent = quarter_percent};
+
   require(deliver(client, report) == Change::model, "progress must invalidate the projected tab");
   require(client.findPane(1)->progress_state == PaneProgressState::set && client.findPane(1)->progress_percent == quarter_percent, "the pane must retain the runtime-owned fact");
   require(deliver(client, report) == Change::none, "repeated progress must not rebuild the GUI");
@@ -147,10 +157,12 @@ void ringsRemainBounded() {
   constexpr std::size_t maximum_shapes = ProgressRing::segments + 2;
   std::size_t count = 0;
   const ProgressRing ring{.area = {.width = TabActivity::spinner_side, .height = TabActivity::spinner_side}, .color = Color::rgb(0x72b7ae), .fraction = 1};
+
   ring.visit([&](RoundedRectanglePaint paint) {
     require(paint.shape.size.x > 0 && paint.shape.size.y > 0, "ring quads must retain positive bounds");
     ++count;
   });
+
   require(count == maximum_shapes, "a full ring must emit one track and the bounded original arc points");
 }
 

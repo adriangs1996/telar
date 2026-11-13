@@ -120,14 +120,17 @@ void NativeTabActivity::setRecord(const QVariantMap &record) {
 
   record_ = record;
   const auto kind = record.value(QStringLiteral("activityKind")).toInt();
+
   kind_ = kind >= static_cast<int>(TabActivity::Kind::none) && kind <= static_cast<int>(TabActivity::Kind::progress) ? static_cast<TabActivity::Kind>(kind) : TabActivity::Kind::none;
   const auto value = record.value(QStringLiteral("progressSample"));
+
   progress_ = progressSample(value).value_or(ProgressSample{});
   if (kind_ != TabActivity::Kind::progress) {
     motion_ = {};
   }
 
   const QPointer<NativeTabActivity> alive{this};
+
   synchronize();
   if (alive) {
     update();
@@ -156,6 +159,7 @@ void NativeTabActivity::setRunning(bool running) {
   if (running_ != running) {
     running_ = running;
     const QPointer<NativeTabActivity> alive{this};
+
     synchronize();
     if (alive) {
       emit runningChanged();
@@ -178,6 +182,7 @@ std::optional<std::uint64_t> NativeTabActivity::deadline(std::uint64_t now_ns) c
 
   const auto interval = clock_ ? clock_->frameInterval() : 1;
   const auto next_frame = now_ns + std::min(std::numeric_limits<std::uint64_t>::max() - now_ns, interval);
+
   if (progress_.state == PaneProgressState::indeterminate) {
     return next_frame;
   }
@@ -195,6 +200,7 @@ void NativeTabActivity::sample(std::uint64_t now_ns) {
 
   float fraction = 0;
   float turns = 0;
+
   if (kind_ == TabActivity::Kind::spinner) {
     fraction = TabActivity::spinner_fraction;
     turns = static_cast<float>((now_ns / TabActivity::spinner_interval_ns) % TabActivity::spinner_steps) / TabActivity::spinner_steps;
@@ -202,6 +208,7 @@ void NativeTabActivity::sample(std::uint64_t now_ns) {
     fraction = motion_.sample(progress_, now_ns);
     if (progress_.state == PaneProgressState::indeterminate) {
       const auto frame = ProgressAnimation::indeterminate<platform::ProgressCosine>(now_ns);
+
       fraction = frame.fraction;
       turns = frame.turns;
     }
@@ -257,9 +264,11 @@ QSGNode *NativeTabActivity::updatePaintNode(QSGNode *previous, [[maybe_unused]] 
   return paintRoundedShapes<ProgressCapsule::maximum_paints>(*this, previous, [&](auto append, Rect area) {
     if (kind_ == TabActivity::Kind::dot) {
       const auto side = std::min(TabActivity::dot_side * ratio, area.width);
+
       append(RoundedRectanglePaint{.origin = {.x = area.x + area.width - side, .y = area.y + ((area.height - side) / 2)}, .shape = RoundedRectangle::resolve({.x = side, .y = side}, {.fill = color, .radius = side / 2})});
     } else if (kind_ == TabActivity::Kind::spinner) {
       const auto side = std::min(TabActivity::spinner_side * ratio, area.width);
+
       ProgressRing{.area = {.x = area.x + area.width - side, .y = area.y + ((area.height - side) / 2), .width = side, .height = side}, .color = color, .fraction = fraction_, .rotation = turns_}.visit(append);
     } else if (kind_ == TabActivity::Kind::progress) {
       ProgressCapsule{.area = area, .color = color, .ratio = ratio, .state = progress_.state, .fraction = fraction_, .rotation = turns_, .compact = compact_}.visit(append);
@@ -286,6 +295,7 @@ void NativeTabActivity::itemChange(ItemChange change, const ItemChangeData &data
 
 void NativeTabActivity::geometryChange(const QRectF &current, const QRectF &previous) {
   const QPointer<NativeTabActivity> alive{this};
+
   QQuickItem::geometryChange(current, previous);
   if (alive) {
     synchronize();

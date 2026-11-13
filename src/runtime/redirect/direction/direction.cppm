@@ -22,6 +22,7 @@ inline std::string_view directionName(Direction direction) {
   case Direction::inbound: return "inbound";
   case Direction::both: return "both";
   }
+
   throw std::invalid_argument{"Invalid redirect direction"};
 }
 

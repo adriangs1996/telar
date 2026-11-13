@@ -84,6 +84,7 @@ inline CliInstallOptions parseCliInstall(std::span<char *const> args) {
 
   std::optional<std::string_view> directory;
   Cursor cursor{args.subspan(1)};
+
   while (const auto word = cursor.next()) {
     if (*word != "--dir") {
       throw std::invalid_argument{"UnknownCliOption"};
@@ -173,6 +174,7 @@ struct PluginOptions {
     }
 
     PluginOptions options{.action = parseAction(arguments[0]), .path = arguments[1]};
+
     for (std::size_t index = 2; index < arguments.size(); index += 2) {
       if (std::string_view{arguments[index]} != "--capability" || index + 1 >= arguments.size()) {
         usage("InvalidPluginArguments");
@@ -197,15 +199,19 @@ private:
     if (action == "inspect") {
       return PluginAction::inspect;
     }
+
     if (action == "install") {
       return PluginAction::install;
     }
+
     if (action == "trust") {
       return PluginAction::trust;
     }
+
     if (action == "untrust") {
       return PluginAction::untrust;
     }
+
     usage("UnknownPluginAction");
   }
 };
@@ -225,6 +231,7 @@ inline plugins::Capabilities grantedCapabilities(const plugins::Manifest &manife
   }
 
   plugins::Capabilities granted;
+
   for (const auto capability : std::span{options.capabilities}.first(options.capability_count)) {
     if (!manifest.capabilities.contains(capability)) {
       throw std::runtime_error{"CapabilityNotDeclared"};
@@ -245,14 +252,17 @@ void executePlugin(Memory &memory, const PluginOptions &options, const Environme
     if (written != 0) { throw SystemError{"Write plugin command output", written}; }
     return;
   }
+
   const auto package = plugins::PackageInspector::inspect(memory, options.path);
   String<Memory> output{AllocatorRef<char, Memory>{memory}};
+
   switch (options.action) {
   case PluginAction::inspect:
     plugins::appendInspection(output, package);
     break;
   case PluginAction::install: {
     const auto destination = plugins::Paths::installation(memory, environment, package);
+
     plugins::PackageInstallation{memory}.install(package, destination);
     output = "telar plugin installed: ";
     output += destination;
@@ -359,9 +369,11 @@ int runProxyTrust(Memory &memory, const ProxyTrustOptions &options, const Enviro
 
   const proxy_trust::Paths paths{memory, directory};
   std::optional<proxy_trust::Backend> selected;
+
   if (!options.linux_backend.empty()) {
     selected = options.linux_backend == "trust" ? proxy_trust::Backend::trust : proxy_trust::Backend::update_ca_certificates;
   }
+
   // Only installation chooses a backend; status
   // and removal ignore --linux.
   if (options.action == ProxyTrustAction::install) {
@@ -393,14 +405,17 @@ int runProxyTrust(Memory &memory, const ProxyTrustOptions &options, const Enviro
     std::printf("telar proxy trust: %s (%s)\n", proxy_trust::statusName(current.status).data(), directory.c_str());
     if (current.record) {
       const auto &record = *current.record;
+
       std::printf("fingerprint: %.*s\nstore: %.*s\n", static_cast<int>(record.fingerprint.size()), record.fingerprint.data(), static_cast<int>(record.store.view().size()), record.store.view().data());
     }
 
     print_notice();
     return current.status == proxy_trust::Status::stale ? 1 : 0;
   }
+
   if (current.status == proxy_trust::Status::stale && !current.record) {
     const auto record = paths.file(proxy_trust::Record::filename);
+
     std::printf("telar proxy trust: invalid trust record (%s)\n", record.c_str());
     return 1;
   }
@@ -410,6 +425,7 @@ int runProxyTrust(Memory &memory, const ProxyTrustOptions &options, const Enviro
       std::printf("telar proxy trust: already installed (%s)\n", directory.c_str());
     } else {
       const auto record = service.install(current.record);
+
       std::printf("telar proxy trust: installed %.*s\n", static_cast<int>(record.fingerprint.size()), record.fingerprint.data());
     }
 
@@ -501,6 +517,7 @@ struct RoutedOptions {
 
     RoutedOptions self{.action = *action};
     Cursor cursor{words.subspan(consumed)};
+
     self.positionals(cursor);
     self.options(cursor);
     if (self.client_id == 0) {
@@ -514,6 +531,7 @@ private:
   inline static std::optional<ClientAction> parseAction(std::string_view group, std::string_view verb, std::string_view nested) {
     constexpr std::size_t name_limit = 64;
     std::string name{group};
+
     name += '_';
     name += verb;
     if (!nested.empty()) {
@@ -538,6 +556,7 @@ private:
   // Focusing the current pane or a neighbor is the runtime's, too.
   inline static bool excluded(ClientAction action, Arguments rest) {
     const auto contains = [&](std::string_view word) { return std::ranges::any_of(rest, [&](const char *argument) { return word == argument; }); };
+
     if (action == ClientAction::tab_create) {
       return contains("--background");
     }
@@ -551,6 +570,7 @@ private:
 
   inline void positionals(Cursor &cursor) {
     using enum ClientAction;
+
     switch (action) {
     case plugin_run:
       text = cursor.take("MissingPlugin");
@@ -597,6 +617,7 @@ private:
       if (text != "horizontal" && text != "vertical") {
         usage("InvalidSplitAxis");
       }
+
       break;
     case notification_dismiss:
     case pane_fullscreen:

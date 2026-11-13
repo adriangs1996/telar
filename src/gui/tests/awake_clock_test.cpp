@@ -33,6 +33,7 @@ std::uint64_t nativeAwakeNanoseconds() {
 
 int main() try {
   constexpr std::size_t samples = 1000;
+
   for (std::size_t index = 0; index < samples; ++index) {
     const auto before = nativeAwakeNanoseconds();
     const auto sample = telar::gui::platform::AwakeClock::nowNanoseconds();

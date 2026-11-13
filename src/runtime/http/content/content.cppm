@@ -41,29 +41,35 @@ struct ContentCodings {
   inline static ContentCodings parse(std::string_view value) noexcept {
     ContentCodings result;
     TextFields fields{value, ","};
+
     while (const auto field = fields.next()) {
       if (result.count == maximum) {
         result.failure = Failure::too_many;
         break;
       }
+
       const auto name = trimText(*field, " \t");
       if (name.empty()) {
         result.failure = Failure::empty;
         break;
       }
+
       result.codings[result.count++] = coding(name);
     }
+
     return result;
   }
 
   // Whether every element of `value`, however many, names identity.
   inline static bool onlyIdentity(std::string_view value) noexcept {
     TextFields fields{value, ","};
+
     while (const auto field = fields.next()) {
       if (coding(trimText(*field, " \t")) != ContentCoding::identity) {
         return false;
       }
     }
+
     return true;
   }
 
@@ -92,6 +98,7 @@ public:
     if (size != 0 && count > std::numeric_limits<std::size_t>::max() / size) {
       return nullptr;
     }
+
     return allocate(context, static_cast<std::size_t>(count) * size);
   }
 

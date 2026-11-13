@@ -40,6 +40,7 @@ namespace telar {
     template <typename Message, typename Visitor>
     static void visit(const Message &message, std::span<const Byte> &input, Visitor visitor) {
       const auto size = encodedSize(message);
+
       visitor(Name.value, input.first(size), memberValue<Member>(message));
       input = input.subspan(size);
     }
@@ -92,6 +93,7 @@ namespace telar {
     template <typename Message, typename Visitor>
     static void visit(const Message &message, std::span<const Byte> &input, Visitor visitor) {
       const auto size = encodedSize(message);
+
       visitor(Name.value, input.first(size), memberValue<Member>(message));
       input = input.subspan(size);
     }
@@ -132,10 +134,12 @@ namespace telar {
     template <typename Message>
     static void decode(DecodeInput input, tbc::view<Message &, tbc::lt::a> message, DecodeStorage &storage) {
       const auto count = CountCodec::decode(input);
+
       validate(count);
       if (count > input.size() / minimumWidth<ElementCodec>()) {
         throw EncodingError{"Truncated separated list"};
       }
+
       memberValue<Member>(message) = storage.allocate<typename ElementCodec::value_type>(count);
     }
 
@@ -151,9 +155,11 @@ namespace telar {
 
     template <typename Message> static std::size_t encodedSize(const Message &message) {
       std::size_t size = 0;
+
       for (const auto &value : memberValue<Member>(message)) {
         size = checkedWireSize(size, wireSize<ElementCodec>(value));
       }
+
       return size;
     }
 
@@ -170,8 +176,10 @@ namespace telar {
       if (values.size() > input.size() / minimumWidth<ElementCodec>()) {
         throw EncodingError{"Truncated separated list items"};
       }
+
       // SpanCountField created these mutable objects in the caller's storage.
       auto *output = const_cast<typename ElementCodec::value_type *>(values.data());
+
       for (std::size_t i = 0; i < values.size(); ++i) {
         output[i] = decodeValue<ElementCodec>(input, storage);
       }
@@ -180,6 +188,7 @@ namespace telar {
     template <typename Message, typename Visitor>
     static void visit(const Message &message, std::span<const Byte> &input, Visitor visitor) {
       const auto size = encodedSize(message);
+
       visitor(Name.value, input.first(size), memberValue<Member>(message));
       input = input.subspan(size);
     }
@@ -203,6 +212,7 @@ namespace telar {
 
     template <typename Message> static std::size_t encodedSize(const Message &message) {
       std::size_t size = 0;
+
       ((size = checkedWireSize(size, Fields::encodedSize(message))), ...);
 
       return size;

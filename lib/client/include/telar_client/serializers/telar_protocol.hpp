@@ -172,11 +172,14 @@ namespace telar {
       if (!empty_allowed) {
         throw EncodingError{"Missing agent session"};
       }
+
       return;
     }
+
     if (session.size() > 64 || session.front() == '-') {
       throw EncodingError{"Invalid agent session"};
     }
+
     for (const auto character : session) {
       const auto byte = static_cast<Byte>(character);
       if (!((byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') ||
@@ -200,6 +203,7 @@ namespace telar {
     if (name.size() < 2 || name.size() > 31 || name.front() != '/') {
       throw EncodingError{"Invalid shared image name"};
     }
+
     for (const auto byte : name.substr(1)) {
       if (!((byte >= 'a' && byte <= 'z') || (byte >= '0' && byte <= '9') || byte == '-')) {
         throw EncodingError{"Invalid shared image name"};
@@ -219,6 +223,7 @@ namespace telar {
                                        std::span<const ClientTabLayout> tabs) {
     std::size_t nodes = 0;
     bool active_found = !active;
+
     for (std::size_t i = 0; i < tabs.size(); ++i) {
       nodes += tabs[i].nodes.size();
       for (std::size_t j = 0; j < i; ++j) {
@@ -228,10 +233,12 @@ namespace telar {
           throw EncodingError{"Duplicate client layout location"};
         }
       }
+
       if (active && sameTab(*active, tabs[i].location) && tabs[i].workspace_active) {
         active_found = true;
       }
     }
+
     if (nodes > 511 || !active_found) {
       throw EncodingError{"Invalid active client layout"};
     }
@@ -252,6 +259,7 @@ namespace telar {
     static Decoded<value_type>
     decode(DecodeInput input, DecodeStorage &storage, HistoryScope scope) {
       value_type value{};
+
       BodySchema<HistoryScopeValue>::decodeBody(input, value, storage, scope);
       return value;
     }
@@ -265,6 +273,7 @@ namespace telar {
       if ((target.kind == PaneTarget::Kind::default_target) != value.has_value()) {
         throw EncodingError{"Launch and pane target do not match"};
       }
+
       return value ? ValueCodec<Launch>::encodedSize(*value) : 0;
     }
 
@@ -280,6 +289,7 @@ namespace telar {
       if (target.kind != PaneTarget::Kind::default_target) {
         return std::nullopt;
       }
+
       return ValueCodec<Launch>::decode(input, storage);
     }
   };
@@ -716,6 +726,7 @@ namespace telar {
       if (sidebar_width == 0) {
         throw EncodingError{"Invalid sidebar width"};
       }
+
       validateLayoutCollection(active_tab, tabs);
     }
   };
@@ -1480,13 +1491,17 @@ namespace telar {
           (!cwd.empty() && cwd.front() != '/')) {
         throw EncodingError{"Invalid execution request"};
       }
+
       if (action == ExecutionAction::start && (arguments.empty() || arguments.front().empty())) {
         throw EncodingError{"Missing execution arguments"};
       }
+
       std::size_t total = 0;
+
       for (const auto argument : arguments) {
         total = checkedWireSize(total, argument.size());
       }
+
       if (total > 32768) {
         throw EncodingError{"Execution arguments too large"};
       }
@@ -1996,6 +2011,7 @@ namespace telar {
         if (sidebar_width == 0) {
           throw EncodingError{"Invalid sidebar width"};
         }
+
         validateLayoutCollection(active_tab, tabs);
       }
     }
@@ -2209,6 +2225,7 @@ namespace telar {
           percent) {
         throw EncodingError{"Unexpected progress percent"};
       }
+
       if (state == PaneProgressState::set && !percent) {
         throw EncodingError{"Missing progress percent"};
       }
@@ -2454,6 +2471,7 @@ namespace telar {
       if (size > max_size || offset > size || bytes.size() > size - offset || (size != 0 && bytes.empty() && (offset != size || id == 0))) {
         throw EncodingError{"Invalid document part"};
       }
+
       if ((id == 0 && (generation != 0 || first_row != 0 || rows != 0)) || (id != 0 && size != 0 && rows == 0)) {
         throw EncodingError{"Invalid document rows"};
       }
@@ -2496,17 +2514,22 @@ namespace telar {
       if (rows > ReadPaneRows::maximum_rows || count > 130359 || (rows != 0 && cols == 0)) {
         throw EncodingError{"Invalid pane rows header"};
       }
+
       if (rows == 0) {
         if (text_metadata || !cells.empty()) {
           throw EncodingError{"Empty pane rows carry cells"};
         }
+
         return;
       }
+
       if (!text_metadata) {
         throw EncodingError{"Pane rows without metadata"};
       }
+
       text_metadata->validate(cols, rows);
       auto cells_reader = reader();
+
       while (cells_reader.next()) {
       }
     }

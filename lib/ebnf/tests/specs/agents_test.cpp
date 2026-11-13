@@ -10,6 +10,7 @@ TEST_F(SpecTest, ClaudeDescribesOptionsAndValues) {
   EXPECT_EQ(description("claude", {}, "--permission-mode"), "Permission mode for the session");
   EXPECT_EQ(description("claude", {"mcp"}, "add"), "Add an MCP server");
   const auto modes = texts("claude", {"--permission-mode"}, "");
+
   EXPECT_TRUE(contains(modes, "plan"));
   EXPECT_TRUE(contains(modes, "acceptEdits"));
 }
@@ -31,6 +32,7 @@ TEST_F(SpecTest, ClaudeRejectsUnknownSubcommandsAndOptions) {
 TEST_F(SpecTest, CodexDescribesOptionsAndValues) {
   EXPECT_EQ(description("codex", {}, "--sandbox"), "Sandbox policy for model commands");
   const auto modes = texts("codex", {"--sandbox"}, "");
+
   EXPECT_TRUE(contains(modes, "workspace-write"));
   EXPECT_TRUE(contains(modes, "danger-full-access"));
 }
@@ -83,6 +85,7 @@ TEST_F(SpecTest, GeminiAcceptsRealLines) {
 TEST_F(SpecTest, AiderDescribesOptionsAndValues) {
   EXPECT_EQ(description("aider", {}, "--edit-format"), "Edit format the LLM should use");
   const auto formats = texts("aider", {"--edit-format"}, "");
+
   EXPECT_TRUE(contains(formats, "diff"));
   EXPECT_TRUE(contains(formats, "udiff-simple"));
 }

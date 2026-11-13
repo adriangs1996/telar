@@ -31,6 +31,7 @@ namespace {
     ASSERT_EQ(parser_testing::childCount(tree, root), 1u);
 
     const auto rule = parser_testing::nthChild(tree, root, 0);
+
     ASSERT_NE(rule, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(rule), ebnf::node_kind::Rule);
     EXPECT_EQ(tree.getText(rule), "letters");
@@ -49,10 +50,12 @@ namespace {
     ASSERT_EQ(parser_testing::childCount(tree, root), 2u);
 
     const auto first = parser_testing::nthChild(tree, root, 0);
+
     ASSERT_NE(first, ebnf::none_handle);
     EXPECT_EQ(tree.getText(first), "letters");
 
     const auto second = parser_testing::nthChild(tree, root, 1);
+
     ASSERT_NE(second, ebnf::none_handle);
     EXPECT_EQ(tree.getText(second), "digits");
   }
@@ -95,6 +98,7 @@ namespace {
     ASSERT_EQ(parser_testing::childCount(tree, root), 1u);
 
     const auto rule = parser_testing::nthChild(tree, root, 0);
+
     ASSERT_NE(rule, ebnf::none_handle);
     EXPECT_EQ(tree.getText(rule), "letters");
   }
@@ -102,6 +106,7 @@ namespace {
   TEST(Grammar, EndCanBeConsumedWithoutAdvancingPastTheBuffer) {
     auto tokenizer = ebnf::Lexer{};
     ebnf::parser parser{tokenizer};
+
     parser.parse("");
 
     EXPECT_FALSE(parser.consume(ebnf::token_kind::Identifier));

@@ -75,6 +75,7 @@ bool Application::handleCopyKey(std::uint64_t pane_id, const QKeyEvent &event) {
 
 void Application::publishCopyChange(std::uint64_t previous_pane) {
   const auto &copy = copyState();
+
   if (previous_pane != 0) {
     emit terminalChanged(previous_pane);
   }
@@ -90,6 +91,7 @@ void Application::leaveKeyboardCopyMode() {
   const auto &copy = copyState();
   if (copy && !copy->pointer) {
     const auto pane_id = copy->pane_id;
+
     session().leaveCopyMode();
     publishCopyChange(pane_id);
   }
@@ -124,8 +126,10 @@ bool Application::handleCopyPointer(const CopyPointerInput &input) {
   const auto &copy = copyState();
   const auto previous = copy ? copy->pane_id : 0;
   const auto revision = session().copyMode().revision();
+
   try {
     const auto outcome = session().pointer(input);
+
     if (session().copyMode().revision() != revision) {
       publishCopyChange(previous);
     }

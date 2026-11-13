@@ -58,6 +58,7 @@ struct FramePacing {
 
     std::array<FramePacer::Pane, PaneLayout::maximum_panes> panes;
     const auto count = application.collectPacingPanes(panes);
+
     application.frame_pacer_->record(std::span{panes}.first(count), now_ns);
   }
 

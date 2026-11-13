@@ -104,6 +104,7 @@ tbc::view<ModeHints, tbc::lt::static_storage> KeyBindings::modeHints() const noe
 void KeyBindings::configure(const InputConfiguration &configuration, const BindingMap<BindingAction> &map) {
   static_cast<void>(apply(router_.interrupt()));
   Router replacement{map, configuration.prefix};
+
   replacement.inheritLeases(router_);
   replacement.setTimeout(configuration.sequence_timeout_ns);
   router_ = std::move(replacement);
@@ -117,6 +118,7 @@ KeyChord KeyBindings::chord(const QKeyEvent &event) {
 std::uint64_t KeyBindings::physicalIdentity(const QKeyEvent &event) noexcept {
   constexpr auto scan_tag = std::uint64_t{1} << static_cast<unsigned>(std::numeric_limits<std::uint64_t>::digits - 1);
   constexpr auto native_tag = std::uint64_t{1} << static_cast<unsigned>(std::numeric_limits<std::uint64_t>::digits - 2);
+
   if (event.nativeScanCode() != 0) {
     return scan_tag | event.nativeScanCode();
   }
@@ -132,6 +134,7 @@ KeyBindings::RoutedKey KeyBindings::capture(const QKeyEvent &event, QQuickItem &
   const auto *terminal = qobject_cast<TerminalItem *>(&recipient);
 
   auto phase = KeyPhase::press;
+
   if (event.type() == QEvent::KeyRelease) {
     phase = KeyPhase::release;
   } else if (event.isAutoRepeat()) {
@@ -156,6 +159,7 @@ KeyBindings::RoutedKey KeyBindings::capture(const QKeyEvent &event, QQuickItem &
 bool KeyBindings::route(QKeyEvent &event, QQuickItem &recipient, bool captures) {
   auto modifiers = event.modifiers();
   const auto pressed = event.type() != QEvent::KeyRelease;
+
   for (const auto &[key, modifier] : {std::pair{Qt::Key_Shift, Qt::ShiftModifier}, std::pair{Qt::Key_Control, Qt::ControlModifier}, std::pair{Qt::Key_Meta, Qt::MetaModifier}, std::pair{Qt::Key_Alt, Qt::AltModifier}}) {
     if (event.key() == key) {
       modifiers.setFlag(modifier, pressed);
@@ -181,11 +185,13 @@ bool KeyBindings::route(QKeyEvent &event, QQuickItem &recipient, bool captures) 
   }
 
   const auto input = capture(event, recipient);
+
   try {
     const auto repeating = router_.repeatAction();
     const auto policy = repeating ? application_.bindingRepeat(*repeating) : std::nullopt;
     const auto decision = router_.route(input, nowNanoseconds(), {.captures_keys = captures || application_.copyModeActive() || application_.dialog() != Application::Dialog::none || application_.pick_controller_.isOpen(), .repeat = policy});
     const auto consumed = apply(decision);
+
     if (input.phase == KeyPhase::release) {
       auto *const lease = std::ranges::find(recipients_, input.physical, &Recipient::physical);
       if (lease != recipients_.end()) {
@@ -234,6 +240,7 @@ bool KeyBindings::apply(const Decision &decision) {
 
 bool KeyBindings::forward(const RoutedKey &event) {
   auto *lease = std::ranges::find(recipients_, event.physical, &Recipient::physical);
+
   if (event.phase == KeyPhase::press) {
     if (lease == recipients_.end()) {
       lease = std::ranges::find(recipients_, std::uint64_t{0}, &Recipient::physical);
@@ -242,6 +249,7 @@ bool KeyBindings::forward(const RoutedKey &event) {
     if (lease != recipients_.end()) {
       const auto &copy = application_.copyState();
       const auto copying = copy && !copy->pointer && application_.dialog() == Application::Dialog::none;
+
       *lease = {.physical = event.physical, .item = event.recipient, .owner = copying ? copy->pane_id : event.owner, .copy_mode = copying, .machine_view = application_.viewVersion().machine};
     }
 
@@ -258,6 +266,7 @@ bool KeyBindings::forward(const RoutedKey &event) {
   if (lease != recipients_.end() && lease->copy_mode) {
     if (event.phase != KeyPhase::release) {
       const QKeyEvent key{QEvent::KeyPress, event.key, event.modifiers, event.scan, event.native_key, event.native_modifiers, event.text, event.phase == KeyPhase::repeat};
+
       static_cast<void>(application_.handleCopyKey(lease->owner, key));
     }
 
@@ -274,6 +283,7 @@ bool KeyBindings::forward(const RoutedKey &event) {
 
   if (lease->item != event.recipient) {
     auto redirected = event;
+
     redirected.recipient = lease->item;
     deliver(redirected);
 
@@ -285,15 +295,19 @@ bool KeyBindings::forward(const RoutedKey &event) {
 
 void KeyBindings::replay(const RoutedKey &event) {
   const bool held = router_.hasPhysicalKey(event.physical);
+
   if (!forward(event)) {
     deliver(event);
   }
+
   if (!held) {
     auto release = event;
+
     release.phase = KeyPhase::release;
     if (!forward(release)) {
       deliver(release);
     }
+
     auto *const lease = std::ranges::find(recipients_, event.physical, &Recipient::physical);
     if (lease != recipients_.end()) {
       *lease = {};
@@ -308,6 +322,7 @@ void KeyBindings::deliver(const RoutedKey &event) {
 
   const QScopedValueRollback guard{delivering_, true};
   QKeyEvent key{event.phase == KeyPhase::release ? QEvent::KeyRelease : QEvent::KeyPress, event.key, event.modifiers, event.scan, event.native_key, event.native_modifiers, event.text, event.phase == KeyPhase::repeat};
+
   QCoreApplication::sendEvent(event.recipient, &key);
 }
 
@@ -324,6 +339,7 @@ void KeyBindings::schedule() {
     constexpr std::uint64_t nanoseconds_per_millisecond = 1'000'000;
     const auto now_ns = nowNanoseconds();
     const auto remaining = *due - std::min(*due, now_ns);
+
     timeout_.start(static_cast<int>((remaining + nanoseconds_per_millisecond - 1) / nanoseconds_per_millisecond));
   }
 }
@@ -339,6 +355,7 @@ void KeyBindings::expire() {
 
 KeyBindings::Hold KeyBindings::hold() {
   constexpr std::chrono::milliseconds hold_limit{250};
+
   if (holds_++ == 0) {
     hold_timeout_.start(hold_limit);
   }
@@ -357,6 +374,7 @@ void KeyBindings::release(Hold hold) {
 
 void KeyBindings::drain() {
   auto pending = std::exchange(held_, {});
+
   for (qsizetype index = 0; index < pending.size(); ++index) {
     if (holds_ > 0) {
       // A held key started another Lua binding: the rest wait for that one too.
@@ -420,6 +438,7 @@ bool KeyBindings::eventFilter(QObject *watched, QEvent *event) {
     if (auto *terminal = qobject_cast<TerminalItem *>(recipient); terminal != nullptr) {
       terminal->bypassInputMethod();
     }
+
     event->accept();
 
     return true;
@@ -438,6 +457,7 @@ std::optional<KeyChord> KeyBindings::prefixedKeyForAction(const BindingAction &a
 
 void KeyBindings::synthetic(KeyChord chord, std::uint64_t pane_id, const InputModes &modes) {
   auto key = NativeKeyAdapter::fromChord(chord);
+
   application_.input(pane_id, encodeKey(key, modes));
   key.phase = KeyPhase::release;
   application_.input(pane_id, encodeKey(key, modes), PaneInputSource::key_release);

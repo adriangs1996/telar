@@ -39,6 +39,7 @@ public:
                              : Codec::decode<QueryClients>(payload, storage).request_id;
     if (request == blocked_request_) {
       std::unique_lock lock{mutex_};
+
       entered_ = true;
       ready_.notify_one();
       ready_.wait(lock, [&] { return released_; });
@@ -49,11 +50,13 @@ public:
 
   void wait() {
     std::unique_lock lock{mutex_};
+
     check(ready_.wait_for(lock, std::chrono::seconds{2}, [&] { return entered_; }));
   }
 
   void release() {
     const std::lock_guard lock{mutex_};
+
     released_ = true;
     ready_.notify_one();
   }
@@ -80,8 +83,10 @@ template <typename Worker>
 static void collectHistoryQueue(Worker &worker, std::size_t expected, bool superseded) {
   std::size_t completed = 0;
   std::size_t failures = 0;
+
   while (completed != expected) {
     pollfd ready{.fd = worker.descriptor(), .events = POLLIN, .revents = 0};
+
     check(::poll(&ready, 1, 2000) == 1);
     worker.collect([&](std::uint64_t client, ClientTag, std::span<const Byte> payload) {
       ++completed;
@@ -92,6 +97,7 @@ static void collectHistoryQueue(Worker &worker, std::size_t expected, bool super
       std::array<Byte, 256> bytes;
       DecodeStorage storage{bytes};
       const auto failure = Codec::decode<RequestFailed>(payload, storage);
+
       check(client == 1 && failure.request_id == 1 && failure.code == FailureCode::internal && failure.message == "History query superseded");
       ++failures;
     });
@@ -104,6 +110,7 @@ static void collectHistoryQueue(Worker &worker, std::size_t expected, bool super
 static void checkHistoryQueue(SystemAllocator &memory, const HistoryQueueCase &scenario) {
   HistoryQueueGate service{100};
   RequestWorker worker{memory, service};
+
   worker.submit(1, QueryClients{.request_id = 100});
   service.wait();
   worker.submit(1, scenario.first, RequestContext{.persistent_client = scenario.first_persistent});
@@ -118,12 +125,14 @@ static void checkHistoryQueue(SystemAllocator &memory, const HistoryQueueCase &s
 
 void testHistoryQueue() {
   SystemAllocator memory;
+
   checkHistoryQueue(memory, HistoryQueueCase{.superseded = true});
   checkHistoryQueue(memory, HistoryQueueCase{.first_persistent = false});
   checkHistoryQueue(memory, HistoryQueueCase{.second_persistent = false});
   checkHistoryQueue(memory, HistoryQueueCase{.same_client = false});
   checkHistoryQueue(memory, HistoryQueueCase{.barrier = true});
   auto same_request = HistoryQueueCase{};
+
   same_request.second.request_id = same_request.first.request_id;
   checkHistoryQueue(memory, same_request);
 
@@ -131,10 +140,12 @@ void testHistoryQueue() {
                           snapshot,
                           entry,
                           distinct };
+
   for (const auto field : {QueryField::offset, QueryField::snapshot, QueryField::entry, QueryField::distinct}) {
     for (bool first : {false, true}) {
       HistoryQueueCase scenario;
       auto &query = first ? scenario.first : scenario.second;
+
       switch (field) {
       case QueryField::offset:
         query.offset = 1;
@@ -156,6 +167,7 @@ void testHistoryQueue() {
 
   HistoryQueueGate service{1};
   RequestWorker worker{memory, service};
+
   worker.submit(1, QueryHistory{.request_id = 1, .limit = 10}, RequestContext{.persistent_client = true});
   service.wait();
   worker.submit(1, QueryHistory{.request_id = 2, .limit = 10}, RequestContext{.persistent_client = true});

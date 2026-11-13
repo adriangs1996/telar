@@ -132,6 +132,7 @@ public:
 
   inline static void detach(ClientStore<Memory> &clients, std::uint64_t requester_id, const DetachClient &request) {
     auto &requester = requireClient(clients, requester_id);
+
     requireRole(requester, ClientRole::control);
     auto *target = resolve(clients, ClientRoute{request.client_id, request.client_generation});
     if (!routable(target) || target == &requester) {
@@ -144,6 +145,7 @@ public:
 
   inline static void requestCommand(ClientStore<Memory> &clients, std::uint64_t requester_id, const RequestClientCommand &request) {
     auto &requester = requireClient(clients, requester_id);
+
     requireRole(requester, ClientRole::control);
     if (request.status != ClientCommandStatus::request || requester.pending_command) {
       throw RequestError{FailureCode::invalid_request, "Invalid or already pending client command"};
@@ -155,17 +157,20 @@ public:
     }
 
     ClientCommand forwarded = request;
+
     forwarded.route = route(requester);
     try {
       target->connection.send(forwarded);
     } catch (const ResponseQueueFull &) {
       throw RequestError{FailureCode::invalid_request, "ResponseQueueFull"};
     }
+
     requester.pending_command = PendingClientCommand{target->id, request.request_id, request.action, request.target_id};
   }
 
   inline static void completeCommand(ClientStore<Memory> &clients, std::uint64_t sender_id, const CompleteClientCommand &completion) {
     const auto &sender = requireClient(clients, sender_id);
+
     requireRole(sender, ClientRole::interactive);
     auto *requester = resolve(clients, completion.route);
     if (requester == nullptr || requester->connection.closing || requester->role != ClientRole::control || !requester->pending_command) {
@@ -178,6 +183,7 @@ public:
     }
 
     ClientCommandResult result;
+
     static_cast<ClientCommand &>(result) = completion;
     result.route = route(sender);
     requester->connection.send(result);
@@ -186,6 +192,7 @@ public:
 
   inline static void requestFocus(const PaneStore<Memory> &panes, ClientStore<Memory> &clients, std::uint64_t requester_id, const RequestPaneFocus &request) {
     auto &requester = requireClient(clients, requester_id);
+
     requireRole(requester, ClientRole::control);
     const auto *pane = findPane(panes, request.pane_id, request.pane_generation);
     if (pane == nullptr) {
@@ -212,11 +219,13 @@ public:
         .pane_generation = pane->generation,
         .direction = request.direction,
     });
+
     requester.pending_focus = PendingPaneFocus{target->id, request.request_id, pane->id, pane->generation};
   }
 
   inline static void completeFocus(ClientStore<Memory> &clients, std::uint64_t sender_id, const CompletePaneFocus &completion) {
     const auto &sender = requireClient(clients, sender_id);
+
     requireRole(sender, ClientRole::interactive);
     auto *requester = resolve(clients, completion.requester);
     if (requester == nullptr || requester->connection.closing || requester->role != ClientRole::control || !requester->pending_focus) {
@@ -241,12 +250,14 @@ public:
   inline static void notify(ClientStore<Memory> &clients, std::uint64_t requester_id, const ShowNotification &request) {
     NotificationShown confirmation{.request_id = request.request_id};
     const auto offset = requireClient(clients, requester_id).connection.reserve(confirmation);
+
     confirmation.delivered_clients = publish(clients, request.notification);
     requireClient(clients, requester_id).connection.complete(offset, confirmation);
   }
 
   inline static std::uint8_t publish(ClientStore<Memory> &clients, const NotificationBody &body) {
     Notification notification;
+
     static_cast<NotificationBody &>(notification) = body;
     return static_cast<std::uint8_t>(broadcast(clients, [](const ClientSession<Memory> &client) { return client.role == ClientRole::interactive; }, notification));
   }
@@ -283,6 +294,7 @@ private:
 
   inline static ClientSession<Memory> *resolve(ClientStore<Memory> &clients, ClientRoute target) noexcept {
     auto *client = clients.find(target.id);
+
     return client != nullptr && client->generation == target.generation ? client : nullptr;
   }
 
@@ -292,6 +304,7 @@ private:
 
   inline static ClientSession<Memory> *focusOrigin(ClientStore<Memory> &clients, std::uint64_t pane_id) noexcept {
     ClientSession<Memory> *selected = nullptr;
+
     for (auto *client : clients.items()) {
       if (client == nullptr || client->connection.closing || client->role != ClientRole::interactive || client->last_input_pane != pane_id || client->attachment(pane_id) == nullptr || client->last_input_sequence == 0) {
         continue;
@@ -367,18 +380,22 @@ public:
     }
 
     auto *pane = &requireReporterPane(panes, client, reporter.pane, reporter.generation);
+
     if (accepts(agents, reporter)) {
       return ReportDecision::accepted;
     }
 
     auto &report = client.deferred_report;
     const auto rejection = reportingRejection(agents, client, *pane);
+
     if (report.answering) {
       if (report.answer_rechecked && rejection) {
         pane->rejected_reporter = rejection;
       }
+
       return ReportDecision::rejected;
     }
+
     if (rejection && pane->rejected_reporter == rejection) {
       return ReportDecision::rejected;
     }
@@ -406,11 +423,13 @@ public:
   // Marks whether each due report's process was checked again.
   inline Due due(ClientStore<Memory> &clients, const PaneStore<Memory> &panes, const Agents &agents, ObservationTime now) const {
     Due due;
+
     if (pending_ == 0) {
       return due;
     }
 
     std::array<const ClientSession<Memory> *, client_capacity> ready;
+
     for (auto *client : clients.items()) {
       if (client == nullptr || !client->deferred_report.pending) {
         continue;
@@ -429,12 +448,15 @@ public:
     }
 
     auto ordered = std::span{ready}.first(due.count);
+
     std::ranges::sort(ordered, [](const auto *left, const auto *right) {
       return std::bit_cast<std::int64_t>(left->deferred_report.sequence - right->deferred_report.sequence) < 0;
     });
+
     for (std::size_t index = 0; index < due.count; ++index) {
       due.clients[index] = ordered[index]->id;
     }
+
     return due;
   }
 
@@ -457,6 +479,7 @@ public:
 private:
   inline static bool accepts(const Agents &agents, ReporterIdentity reporter) noexcept {
     const auto *agent = agents.find(reporter.pane, reporter.generation);
+
     return agent == nullptr || agent->evidence.accepts(reporter.provider);
   }
 
@@ -470,10 +493,12 @@ private:
     const auto member = agent->agent_identity->pid;
     const auto root = pane.process->processId();
     const auto lineage = client.verified_lineage.ancestors();
+
     for (std::size_t index = 0; index < lineage.size(); ++index) {
       if (lineage[index] != member && lineage[index] != group && lineage[index] != root) {
         continue;
       }
+
       if (index == 0 || lineage[index - 1] == member || lineage[index - 1] == group) {
         return std::nullopt;
       }
@@ -509,6 +534,7 @@ public:
     if (pane == nullptr || pane->exit_status) {
       throw RequestError{FailureCode::pane_not_found, "Pane not found"};
     }
+
     if (client.pending_descent) {
       throw RequestError{FailureCode::resource_limit, "A descent verification is already pending"};
     }
@@ -535,6 +561,7 @@ public:
         finish(clients, panes, completed);
       }
     });
+
     schedule(clients);
   }
 
@@ -549,11 +576,13 @@ public:
     }
 
     typename DescentProbe<Inspector>::Request request;
+
     for (auto *client : clients.items()) {
       if (client != nullptr && client->pending_descent && !client->descent_running && !client->connection.closing) {
         request.checks[request.count++] = *client->pending_descent;
       }
     }
+
     if (request.count == 0 || !worker_.submit(request)) {
       return;
     }
@@ -622,6 +651,7 @@ public:
 
   inline Result observe(const Request &previous) noexcept {
     auto next = previous;
+
     TELAR_DIAGNOSTIC(const auto started = std::chrono::steady_clock::now());
     if (const auto counters = probe_.read()) {
       next.apply(*counters);
@@ -738,10 +768,12 @@ public:
     }
 
     typename Processor::Request request;
+
     enqueueRetired(model, request);
     const auto panes = model.panes.items();
     const bool sole = model.panes.size() == 1;
     const auto now = std::chrono::steady_clock::now();
+
     for (std::size_t visited = 0; visited < panes.size() && request.count < request.entries.size(); ++visited) {
       const auto slot = next_slot_++ % panes.size();
       auto *pane = panes[slot];
@@ -768,6 +800,7 @@ public:
     }
 
     typename Processor::Request request;
+
     enqueue(request, agents, *pane, model.panes.size() == 1, std::chrono::steady_clock::now());
     if (request.count != 0) {
       pending_ = worker_.submit(request);
@@ -792,6 +825,7 @@ public:
       });
 
       typename Processor::Request request;
+
       for (auto *pane : model.panes.items()) {
         if (pane != nullptr && pane->observer->seal()) {
           request.entries[request.count++].observer = pane->observer;
@@ -841,6 +875,7 @@ private:
       if (pane->input_revision == entry.input_revision) {
         pane->needs_foreground_observation = entry.screen.needs_foreground;
       }
+
       const auto directory = entry.observer->observedDirectory();
       if (pane->cwd_revision == entry.cwd_revision && !directory.empty() && pane->cwd != directory) {
         pane->cwd.assign(directory);
@@ -850,6 +885,7 @@ private:
       // Whether the observation still describes the pane's process, asked once: it reads the
       // terminal's foreground group with a system call.
       const bool current = entry.process_result && (entry.process_result->inspected || entry.process_result->ports_inspected) && observes(*pane, *entry.process_result);
+
       if (entry.process_result && entry.process_result->inspected) {
         TELAR_DIAGNOSTIC(diagnostics::accumulate(model.metrics.agent_process_inspections));
         TELAR_DIAGNOSTIC(diagnostics::accumulate(model.metrics.agent_process_misses, entry.process_result->provider == AgentProvider::unknown));
@@ -869,10 +905,12 @@ private:
   // The request shares the observers of region `a`.
   inline static void enqueueRetired(tbc::view<RuntimeModel<Memory> &, tbc::lt::a> model, tbc::view<typename Processor::Request &, tbc::lt::a> request) noexcept {
     auto *link = &model.retired_observers;
+
     while (*link && request.count < request.entries.size()) {
       auto &observer = **link;
       if (observer.idle()) {
         auto next = std::move(observer.retired_next);
+
         *link = std::move(next);
         --model.retired_observer_count;
         continue;
@@ -903,6 +941,7 @@ private:
 
     request.entries[request.count++] = {.pane = pane.id, .generation = pane.generation, .provider = AgentProvider::unknown, .observer = pane.observer, .probe_process = probe_process};
     auto &entry = request.entries[request.count - 1];
+
     entry.input_revision = pane.input_revision;
     entry.process_request = {pane.id, pane.generation, pane.cwd_revision, pane.process->processId(), 0};
     entry.process_request.cache = pane.process_cache;
@@ -946,6 +985,7 @@ private:
   inline static bool applyProcess(Agents &agents, Pane<Memory> &pane, const ProcessProbeResult &observation) {
     pane.process_cache = observation.cache;
     bool listed = false;
+
     if (!observation.name.view().empty() && pane.foreground.view() != observation.name.view()) {
       pane.foreground = observation.name;
       ++pane.foreground_revision;
@@ -1014,11 +1054,13 @@ public:
   inline void read(ClientStore<Memory> &clients, std::uint64_t client_id, const ReadRuntimeClipboard &request) {
     expire(clients, Clock::now());
     auto &client = requireClient(clients, client_id);
+
     if (request.transfer_id != 0) {
       if (pending_ || owner_ != client.id || generation_ != client.generation ||
           transfer_ != request.transfer_id || offset_ != request.offset) {
         throw RequestError{FailureCode::invalid_request, "Clipboard transfer is absent, expired or out of sequence"};
       }
+
       send(client, request.request_id);
       return;
     }
@@ -1026,6 +1068,7 @@ public:
     if (pending_ || owner_ != 0 || !worker_.submit(true)) {
       throw RequestError{FailureCode::resource_limit, "A clipboard capture or transfer is already pending"};
     }
+
     owner_ = client.id;
     generation_ = client.generation;
     transfer_ = request.request_id;
@@ -1042,13 +1085,16 @@ public:
         clear();
         return;
       }
+
       try {
         if (!result) {
           const auto code = result.error() == clipboard::read_error::content_too_large ? FailureCode::resource_limit : FailureCode::invalid_request;
+
           client->connection.send(RequestFailed{.request_id = transfer_, .code = code, .message = errorMessage(result.error())});
           clear();
           return;
         }
+
         content_ = std::move(*result);
         send(*client, transfer_);
       } catch (...) {
@@ -1076,12 +1122,14 @@ private:
     if (error == clipboard::read_error::content_too_large) {
       return "Clipboard exceeds clipboard.max_capture_bytes (33554432 bytes)";
     }
+
     return clipboard::error_message(error);
   }
 
   inline void send(ClientSession<Memory> &client, std::uint64_t request) {
     const auto bytes = std::span<const Byte>{content_.bytes}.subspan(offset_);
     const auto part = bytes.first(std::min(bytes.size(), runtime_clipboard_chunk_bytes));
+
     client.connection.send(RuntimeClipboardChunk{.request_id = request, .transfer_id = transfer_, .offset = offset_, .total_bytes = content_.bytes.size(), .mime = content_.mime_type, .bytes = part});
     offset_ += part.size();
     if (offset_ == content_.bytes.size()) {
@@ -1134,18 +1182,21 @@ public:
       if (pane == nullptr || pane->worktree_checked_cwd == pane->cwd_revision) {
         continue;
       }
+
       pane->worktree_checked_cwd = pane->cwd_revision;
       if (pane->exit_status || pane->location.workspace.kind != WorkspaceLocation::Kind::workspace || !pane->cwd.starts_with('/') || model.worktrees.containing(pane->cwd) != nullptr) {
         continue;
       }
 
       WorktreeDetectionRequest request{.pane = pane->id, .generation = pane->generation, .cwd_revision = pane->cwd_revision};
+
       request.cwd.assign(pane->cwd);
       if (worker_.submit(request)) {
         pending_ = true;
       } else {
         pane->worktree_checked_cwd.reset();
       }
+
       return;
     }
   }
@@ -1165,6 +1216,7 @@ public:
             .path = std::string_view{pane->cwd}.substr(0, result.root_length),
             .branch = result.branch.view(),
         });
+
         model.workspace_revision += registered.created;
       } catch (const RequestError &) {
       }

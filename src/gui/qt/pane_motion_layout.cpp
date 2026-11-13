@@ -27,15 +27,18 @@ void PaneMotionLayout::setModel(QAbstractItemModel *model) {
   if (model_ == model) {
     return;
   }
+
   for (const auto &connection : connections_) {
     QObject::disconnect(connection);
   }
+
   model_ = model;
   immediate_ = true;
   if (model != nullptr) {
     const auto changed = [this] {
       polish();
     };
+
     connections_ = {
         connect(model, &QAbstractItemModel::dataChanged, this, changed),
         connect(model, &QAbstractItemModel::rowsInserted, this, changed),
@@ -51,6 +54,7 @@ void PaneMotionLayout::setModel(QAbstractItemModel *model) {
         }),
     };
   }
+
   polish();
   emit modelChanged();
 }
@@ -59,6 +63,7 @@ void PaneMotionLayout::setMotionEnabled(bool enabled) {
   if (enabled_ == enabled) {
     return;
   }
+
   enabled_ = enabled;
   immediate_ = true;
   polish();
@@ -88,6 +93,7 @@ void PaneMotionLayout::bindClock() {
   if (clock_) {
     clock_->detach(*this);
   }
+
   clock_ = window() == nullptr ? nullptr : &WindowAnimationClock::forWindow(*window());
   if (clock_) {
     clock_->attach(*this);
@@ -98,6 +104,7 @@ void PaneMotionLayout::bindClock() {
       }
     });
   }
+
   immediate_ = true;
   polish();
 }
@@ -106,34 +113,43 @@ void PaneMotionLayout::updatePolish() {
   QList<QVariantMap> records;
   std::array<PaneMotionSlot, PaneLayout::maximum_panes> placements;
   const auto count = model_ ? std::clamp(model_->rowCount(), 0, static_cast<int>(placements.size())) : 0;
+
   records.reserve(count);
   for (int index = 0; index < count; ++index) {
     auto record = model_->data(model_->index(index, 0), ListModel::record_role).toMap();
+
     placements[static_cast<std::size_t>(index)] = {
         .id = record.value(QStringLiteral("key")).toString().toULongLong(),
         .bounds = {.x = record.value(QStringLiteral("x")).toFloat(), .y = record.value(QStringLiteral("y")).toFloat(), .width = record.value(QStringLiteral("width")).toFloat(), .height = record.value(QStringLiteral("height")).toFloat()},
     };
+
     records.append(std::move(record));
   }
+
   const auto context = records.isEmpty() ? QString{} : records.front().value(QStringLiteral("motionContext")).toString();
   const auto now = clock_ ? clock_->now() : 0;
+
   motions_.update(std::span{placements}.first(static_cast<std::size_t>(count)), now, immediate_ || !enabled_ || !eligible() || context != context_);
   context_ = context;
   immediate_ = false;
   TabMotionFrame frame{.now_ns = now, .interval_ns = clock_ ? clock_->frameInterval() : TabMotionFrame::default_interval_ns, .deadline_ns = std::nullopt};
+
   for (int index = 0; index < count; ++index) {
     const auto bounds = motions_.place(static_cast<std::size_t>(index), frame);
     const auto &record = records[index];
     const auto visual = bounds == placements[static_cast<std::size_t>(index)].bounds
                             ? QRectF{record.value(QStringLiteral("x")).toReal(), record.value(QStringLiteral("y")).toReal(), record.value(QStringLiteral("width")).toReal(), record.value(QStringLiteral("height")).toReal()}
                             : QRectF{bounds.x, bounds.y, bounds.width, bounds.height};
+
     records[index].insert(QStringLiteral("visualBounds"), visual);
   }
+
   next_sample_ns_ = frame.deadline_ns;
   frame_requested_ = false;
   if (clock_) {
     clock_->requestSynchronization();
   }
+
   items_.reconcile(std::move(records));
 }
 

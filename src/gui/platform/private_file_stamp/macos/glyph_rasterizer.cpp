@@ -18,9 +18,11 @@ namespace telar::gui::platform {
 GlyphRasterizer::GlyphRasterizer(std::span<std::uint8_t> pixels, std::span<const std::uint8_t> bytes, const fonts::FontMatch &match, std::uint8_t strength)
     : pixels_(pixels) {
   constexpr std::size_t raster_side = telar_glyph_atlas_max_side;
+
   if (pixels_.size() < requiredBytes()) {
     throw std::invalid_argument{"NativeGlyphStorageTooSmall"};
   }
+
   const auto postscript = std::span{match.postscript};
   if (std::ranges::find(postscript, '\0') == postscript.end()) {
     throw std::invalid_argument{"InvalidRasterizerFontName"};
@@ -37,6 +39,7 @@ GlyphRasterizer::GlyphRasterizer(std::span<std::uint8_t> pixels, std::span<const
       .strength = strength,
       .variation = &match.variation,
   };
+
   rasterizer_.reset(telarGlyphRasterizerCreate(&options));
   if (!rasterizer_) {
     throw std::runtime_error{"NativeGlyphRasterizerUnavailable"};

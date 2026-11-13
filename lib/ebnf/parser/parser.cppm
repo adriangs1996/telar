@@ -152,6 +152,7 @@ namespace ebnf {
     inline auto wrap(node_kind kind, node_handle child) -> node_handle {
       auto wrapper = flat_node{.kind_ = kind};
       const auto handle = tree_.addNode(wrapper);
+
       tree_.setParent(child, handle);
       return handle;
     }
@@ -221,12 +222,14 @@ namespace ebnf {
     // rule = lhs , S , "=" , S , alternation , S , terminator ;
     inline auto parseRule() -> node_handle {
       auto rule = flat_node{.kind_ = node_kind::Rule};
+
       rule.text_ = parseIdentifier();
       const auto rule_handle = tree_.addNode(rule);
 
       expect(token_kind::Equal, "Expected = after the rule name");
 
       const auto body = parseAlternation();
+
       tree_.setParent(body, rule_handle);
       parseTerminator();
 
@@ -255,6 +258,7 @@ namespace ebnf {
 
       do {
         const auto sibling_handle = ensureConcatenation(parseConcatenation());
+
         tree_.setSibling(left, sibling_handle);
         left = sibling_handle;
       } while (consume(token_kind::Pipe));
@@ -275,6 +279,7 @@ namespace ebnf {
 
       do {
         const auto sibling_handle = parseFactor();
+
         tree_.setSibling(left, sibling_handle);
         left = sibling_handle;
       } while (consume(token_kind::Comma));
@@ -286,6 +291,7 @@ namespace ebnf {
     inline auto makeBinary(node_kind kind, node_handle left) -> node_handle {
       const auto right = parseTerm();
       const auto handle = wrap(kind, left);
+
       tree_.setSibling(left, right);
       return handle;
     }
@@ -325,6 +331,7 @@ namespace ebnf {
 
       advance();
       const auto inner = parseAlternation();
+
       expect(closer, message);
       --depth_;
       return inner;
@@ -337,6 +344,7 @@ namespace ebnf {
 
       if (consume(token_kind::Colon)) {
         auto description = flat_node{.kind_ = node_kind::Description, .text_ = parseString()};
+
         tree_.setParent(tree_.addNode(description), handle);
       }
 
@@ -363,6 +371,7 @@ namespace ebnf {
         return parseTerminal(node_kind::Dynamic, advance().text);
       default: {
         auto ref = flat_node{.kind_ = node_kind::Reference, .text_ = parseIdentifier()};
+
         return tree_.addNode(ref);
       }
       }

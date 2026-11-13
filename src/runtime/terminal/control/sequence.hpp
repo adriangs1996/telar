@@ -28,6 +28,7 @@ struct Sequence {
 
   std::string_view body() const noexcept {
     const auto prefix = kind == Kind::escape ? 1u : 2u;
+
     return {reinterpret_cast<const char *>(bytes.data() + prefix), bytes.size() - prefix};
   }
 

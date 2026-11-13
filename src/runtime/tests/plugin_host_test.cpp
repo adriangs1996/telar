@@ -57,6 +57,7 @@ namespace tap = telar::runtime::plugins;
 
 static void writePlugin(const std::string &path, std::string_view source) {
   std::ofstream file{path};
+
   file << source;
   check(file.good());
 }
@@ -74,7 +75,9 @@ static tap::ExchangeView sampleExchange() {
       .outcome = CaptureOutcome::finished,
       .finished_at_ms = 121,
   };
+
   auto response = request;
+
   response.status_code = 503;
   response.outcome = CaptureOutcome::failed;
   response.finished_at_ms = 123;
@@ -95,6 +98,7 @@ void testPluginHost() {
   SystemAllocator system;
   BudgetAllocator memory{system, 80 * 1024 * 1024};
   std::array<char, 64> temporary;
+
   std::strcpy(temporary.data(), "/tmp/telar-plugin-host-XXXXXX");
   check(::mkdtemp(temporary.data()) != nullptr);
   const auto root = std::filesystem::canonical(temporary.data()).string();
@@ -144,20 +148,25 @@ end}
 )lua");
   {
     tap::Host host{memory, path.c_str()};
+
     for (int index = 1; index <= 50; ++index) {
       const auto reply = tap::Protocol::decodeEffects(host.invoke(exchange, output));
+
       check(reply.event_id == 21 && reply.batch.count == 1);
       const auto &notification = reply.batch.notifications[0];
+
       check(notification.title == std::to_string(index) && notification.message == std::string_view{"binary\0text", 11});
       check(notification.level == NotificationLevel::warning && notification.duration_ms == 123);
     }
   }
+
   check(memory.liveBytes() == 0);
 
   writePlugin(path, "local first = true; return {on_exchange = function() if first then first = false; error(string.rep('x', 5000), 0) end return {} end}");
   {
     tap::Host host{memory, path.c_str()};
     const auto error = tap::Protocol::decodeError(host.invoke(exchange, output));
+
     check(error.message == "unknown Lua error");
     check(tap::Protocol::decodeEffects(host.invoke(exchange, output)).batch.count == 0);
   }
@@ -165,18 +174,22 @@ end}
   for (const auto result : {"nil", "{}", "{extra=true}"}) {
     writePlugin(path, std::string{"return {on_exchange = function() return "} + result + " end}");
     tap::Host host{memory, path.c_str()};
+
     check(tap::Protocol::decodeEffects(host.invoke(exchange, output)).batch.count == 0);
   }
+
   for (const auto result : {"true", "{{}}", "{telar.effect.notification{title='x',level='invalid'}}", "{telar.effect.notification{title=false}}"}) {
     writePlugin(path, std::string{"return {on_exchange = function() return "} + result + " end}");
     tap::Host host{memory, path.c_str()};
     const auto error = tap::Protocol::decodeError(host.invoke(exchange, output));
+
     check(error.event_id == 21 && error.message == "unknown Lua error");
   }
 
   writePlugin(path, "local first = true; return {on_exchange=function() if first then first=false; while true do end end return nil end}");
   {
     tap::Host host{memory, path.c_str()};
+
     check(tap::Protocol::decodeError(host.invoke(exchange, output)).message == "unknown Lua error");
     check(tap::Protocol::decodeEffects(host.invoke(exchange, output)).batch.count == 0);
   }
@@ -185,22 +198,27 @@ end}
   {
     tap::Host host{memory, path.c_str()};
     bool rejected = false;
+
     try {
       host.invoke(exchange, output);
     } catch (const EncodingError &) {
       rejected = true;
     }
+
     check(rejected);
   }
 
   for (int index = 1; index <= 65; ++index) {
     writePlugin(root + "/module" + std::to_string(index) + ".lua", "return nil");
   }
+
   writePlugin(path, "for i=1,65 do assert(require('module'..i) == true) end return {on_exchange=function() return nil end}");
   {
     tap::Host host{memory, path.c_str()};
+
     check(tap::Protocol::decodeEffects(host.invoke(exchange, output)).batch.count == 0);
   }
+
   check(memory.liveBytes() == 0);
   std::filesystem::remove_all(root);
 }

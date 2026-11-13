@@ -71,6 +71,7 @@ void previewOrder(std::span<std::size_t> order, const QList<QVariantMap> &record
   const auto id_at = [&](std::size_t index) {
     return records[static_cast<qsizetype>(index)].value(QStringLiteral("key")).toString().toULongLong();
   };
+
   const auto source = std::ranges::find(order, move.location.tab_id, id_at);
   const auto anchor = move.relative_to ? std::ranges::find(order, *move.relative_to, id_at) : order.end();
   if (source == order.end() || anchor == order.end() || source == anchor) {
@@ -111,6 +112,7 @@ QVariantMap positionedTab(const QVariantMap &tab, const Geometry::Measure &size,
 
 QString hiddenAttention(const QList<QVariantMap> &records, const Geometry::Plan &plan) {
   QString attention;
+
   for (qsizetype index = 0; index < records.size(); ++index) {
     if (!plan.shows(static_cast<std::size_t>(index))) {
       const auto color = records[index].value(QStringLiteral("attentionColor")).toString();
@@ -153,6 +155,7 @@ void TabStripLayout::setContext(std::uint64_t machine_view, std::optional<Worksp
   if (machine_view_ == machine_view && same_workspace) {
     return;
   }
+
   setPointerHover(std::nullopt);
   machine_view_ = machine_view;
   workspace_ = workspace;
@@ -190,6 +193,7 @@ void TabStripLayout::bindClock() {
   if (!clock_.isNull()) {
     clock_->detach(*this);
   }
+
   clock_ = window() == nullptr ? nullptr : &WindowAnimationClock::forWindow(*window());
   if (!clock_.isNull()) {
     clock_->attach(*this);
@@ -244,8 +248,10 @@ std::size_t TabStripLayout::dropSlots(std::span<TabDropSlot> output) const {
   const auto origin = mapToScene(QPointF{});
   const auto scale = window()->effectiveDevicePixelRatio();
   const auto count = std::min(drop_slot_count_, output.size());
+
   for (std::size_t index = 0; index < count; ++index) {
     const auto &slot = drop_slots_[index];
+
     output[index] = {.id = slot.id, .bounds = {.x = static_cast<float>((origin.x() + slot.bounds.x) * scale), .y = static_cast<float>((origin.y() + slot.bounds.y) * scale), .width = static_cast<float>(slot.bounds.width * scale), .height = static_cast<float>(slot.bounds.height * scale)}};
   }
 
@@ -282,6 +288,7 @@ void TabStripLayout::setModel(QAbstractItemModel *model) {
     const auto changed = [this] {
       polish();
     };
+
     connections_ = {
         connect(model, &QAbstractItemModel::dataChanged, this, changed),
         connect(model, &QAbstractItemModel::rowsInserted, this, changed),
@@ -374,11 +381,13 @@ void TabStripLayout::itemChange(ItemChange change, const ItemChangeData &data) {
   if (change == ItemSceneChange) {
     bindClock();
   }
+
   if (change == ItemVisibleHasChanged) {
     frame_requested_ = false;
     if (!clock_.isNull()) {
       clock_->requestSynchronization();
     }
+
     if (isVisible()) {
       polish();
       if (auto *view = window()) {
@@ -386,6 +395,7 @@ void TabStripLayout::itemChange(ItemChange change, const ItemChangeData &data) {
       }
     }
   }
+
   if (change == ItemDevicePixelRatioHasChanged || change == ItemSceneChange) {
     polish();
   }
@@ -422,8 +432,10 @@ TabStripGeometry::Plan TabStripLayout::measureTabs(QList<QVariantMap> &records, 
   std::size_t active = 0;
   std::size_t focus = 0;
   bool anchored = false;
+
   for (int index = 0; index < count; ++index) {
     auto record = model_->data(model_->index(index, 0), ListModel::record_role).toMap();
+
     record.insert(QStringLiteral("number"), index + 1);
     const auto slot = static_cast<std::size_t>(index);
     const auto kind = record.value(QStringLiteral("activityKind")).toInt();
@@ -432,6 +444,7 @@ TabStripGeometry::Plan TabStripLayout::measureTabs(QList<QVariantMap> &records, 
     const auto path = record.value(QStringLiteral("path")).toString();
     const auto stacked = std::min(static_cast<std::size_t>(std::max<qsizetype>(record.value(QStringLiteral("cards")).toList().size(), 1)), Geometry::chip_widths.size());
     const auto caption = captionAdvance(title) + (path.isEmpty() ? 0 : (Geometry::path_gap * ratio) + captionAdvance(path));
+
     sizes[slot] = {.caption = caption, .chip = Geometry::chip_widths[stacked - 1] * ratio, .status = status_width};
     // A mod tab that sets a root width takes exactly that width.
     const auto drawn = record.value(QStringLiteral("elements")).toMap().value(QStringLiteral("tab")).toMap().value(QStringLiteral("nodes")).toList();
@@ -439,9 +452,11 @@ TabStripGeometry::Plan TabStripLayout::measureTabs(QList<QVariantMap> &records, 
       const auto width = drawn.front().toMap().value(QStringLiteral("width")).toFloat();
       if (width >= 0) {
         const auto metrics = Geometry::Metrics::scaled(ratio);
+
         sizes[slot] = {.caption = std::max(0.0F, (width * ratio) - metrics.leading - metrics.spacing - metrics.trailing), .chip = 0, .status = 0};
       }
     }
+
     if (record.value(QStringLiteral("selected")).toBool()) {
       active = slot;
     }
@@ -473,7 +488,9 @@ QRectF TabStripLayout::placeTab(std::uint64_t id, QRectF bounds, TabMotionFrame 
     if (drag_preview_) {
       drop_marker_ = bounds;
     }
+
     constexpr qreal lift = 3;
+
     bounds.moveLeft(std::clamp(drag_pointer_.x() - drag_grab_offset_, qreal{0}, std::max(qreal{0}, width() - bounds.width())));
     bounds.translate(0, -lift * ratio_);
   }
@@ -482,6 +499,7 @@ QRectF TabStripLayout::placeTab(std::uint64_t id, QRectF bounds, TabMotionFrame 
     const auto density = window() == nullptr ? 1 : window()->effectiveDevicePixelRatio();
     const Rect physical{.x = static_cast<float>(bounds.x() * density), .y = static_cast<float>(bounds.y() * density), .width = static_cast<float>(bounds.width() * density), .height = static_cast<float>(bounds.height() * density)};
     const auto visible = motions_.place({.id = id, .bounds = physical, .immediate = dragging}, frame);
+
     bounds = {visible.x / density, visible.y / density, visible.width / density, visible.height / density};
   }
 
@@ -496,28 +514,34 @@ QVariantList TabStripLayout::placeCards(const QVariantMap &tab, TabMotionFrame &
   const auto source = tab.value(QStringLiteral("cards")).toList();
   std::array<TabCardInput, PaneLayout::maximum_panes> inputs{};
   std::size_t count = 0;
+
   for (const auto &entry : source) {
     if (count == inputs.size()) {
       break;
     }
 
     const auto card = entry.toMap();
+
     inputs[count++] = {.pane = card.value(QStringLiteral("key")).toString().toULongLong(), .focused = card.value(QStringLiteral("focused")).toBool(), .attention = !card.value(QStringLiteral("attentionColor")).toString().isEmpty()};
   }
 
   std::array<TabCardPlacement, TabCardMotions::maximum_cards> placed{};
   const auto written = card_motions_.place(std::span{inputs}.first(count), placed, frame);
+
   // Delegates follow pane order, so a card keeps its item while its pose moves.
   std::sort(placed.begin(), placed.begin() + written, [](const TabCardPlacement &left, const TabCardPlacement &right) {
     return left.pane < right.pane;
   });
 
   QVariantList cards;
+
   for (const auto &card : std::span{placed}.first(written)) {
     const auto row = std::ranges::find(source, card.pane, [](const QVariant &entry) {
       return entry.toMap().value(QStringLiteral("key")).toString().toULongLong();
     });
+
     auto record = row->toMap();
+
     record.insert(QStringLiteral("x"), card.pose.x * ratio_);
     record.insert(QStringLiteral("y"), card.pose.y * ratio_);
     record.insert(QStringLiteral("rotation"), card.pose.rotation);
@@ -559,6 +583,7 @@ void TabStripLayout::rebuild() {
   }
 
   TabMotionFrame frame{.now_ns = clock_.isNull() ? 0 : clock_->now(), .interval_ns = clock_.isNull() ? TabMotionFrame::default_interval_ns : clock_->frameInterval(), .deadline_ns = std::nullopt};
+
   motions_.begin(workspace_);
   card_motions_.begin();
   const auto ratio = static_cast<float>(ratio_);
@@ -575,6 +600,7 @@ void TabStripLayout::rebuild() {
 
   std::array<std::size_t, Geometry::maximum_tabs> order{};
   const auto shown = plan.end - plan.first;
+
   for (std::size_t index = 0; index < shown; ++index) {
     order[index] = plan.first + index;
   }
@@ -584,14 +610,17 @@ void TabStripLayout::rebuild() {
   }
 
   QList<QVariantMap> positioned;
+
   drop_slot_count_ = 0;
   drop_marker_ = {};
   dragged_bounds_ = {};
   std::optional<Rect> selection;
   bool selection_dragging = false;
   float left = 0;
+
   for (std::size_t position = 0; position < shown; ++position) {
     const auto index = order[position];
+
     if (position != 0) {
       left += metrics.gap;
     }
@@ -601,14 +630,17 @@ void TabStripLayout::rebuild() {
     const auto id = record.value(QStringLiteral("key")).toString().toULongLong();
     const auto dragging = dragged_ == id;
     const auto target = bounds;
+
     bounds = placeTab(id, bounds, frame);
     if (record.value(QStringLiteral("selected")).toBool()) {
       const auto selected_bounds = dragging ? bounds : target;
+
       selection = Rect{.x = static_cast<float>(selected_bounds.x() * density), .y = static_cast<float>(selected_bounds.y() * density), .width = static_cast<float>(selected_bounds.width() * density), .height = static_cast<float>(selected_bounds.height() * density)};
       selection_dragging = dragging;
     }
 
     auto entry = positionedTab(record, sizes[index], bounds, plan.fits[index], metrics);
+
     entry.insert(QStringLiteral("dragging"), dragging);
     entry.insert(QStringLiteral("cards"), placeCards(record, frame));
     entry.insert(QStringLiteral("separator"), position + 1 < shown && !record.value(QStringLiteral("selected")).toBool() && !records[static_cast<qsizetype>(order[position + 1])].value(QStringLiteral("selected")).toBool());
@@ -631,7 +663,9 @@ void TabStripLayout::rebuild() {
         {QStringLiteral("attentionColor"), attention},
         {QStringLiteral("key"), records[static_cast<qsizetype>(*nearest)].value(QStringLiteral("key"))},
     };
+
     const auto id = records[static_cast<qsizetype>(*nearest)].value(QStringLiteral("key")).toString().toULongLong();
+
     drop_slots_[drop_slot_count_++] = {.id = id, .bounds = {.x = left, .y = top, .width = counter_width, .height = height}};
     left += counter_width;
   }
@@ -642,7 +676,9 @@ void TabStripLayout::rebuild() {
     if (!selection_motion_) {
       selection_motion_ = TabMotion{.from = *selection, .to = *selection};
     }
+
     const auto visible = selection_motion_->place(*selection, frame, selection_dragging || !workspace_);
+
     selection_bounds_ = {visible.x / density, visible.y / density, visible.width / density, visible.height / density};
   } else {
     selection_motion_.reset();
@@ -662,6 +698,7 @@ void TabStripLayout::rebuild() {
       window()->update();
     }
   }
+
   items_.reconcile(std::move(positioned));
   emit layoutChanged();
 }

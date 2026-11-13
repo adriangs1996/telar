@@ -199,8 +199,10 @@ void followWindowSize(QQuickItem &item, QQuickWindow &window) {
 
 QVariantMap inspectionDetails() {
   QVariantList facts;
+
   for (const auto *label : {"When", "Took", "Exit", "Where", "Pane", "By"}) {
     const auto label_text = QString::fromLatin1(label);
+
     facts.append(QVariantMap{
         {QStringLiteral("label"), label_text},
         {QStringLiteral("text"), QStringLiteral("fixture fact")},
@@ -239,6 +241,7 @@ struct InspectionFixture {
                                                                         {QStringLiteral("width"), wide_width},
                                                                         {QStringLiteral("height"), height},
                                                                     });
+
     item->setParentItem(window.contentItem());
     window.resize(wide_width, height);
     followWindowSize(*item, window);
@@ -267,6 +270,7 @@ class HistoryControlsTest final : public QObject {
     QQmlEngine engine;
     constexpr int empty_height = 360;
     auto item = createChrome(engine, QStringLiteral("HistoryEmpty"), {{QStringLiteral("state"), QVariantMap{}}, {QStringLiteral("colors"), themeColors({})}, {QStringLiteral("typography"), historyTypography()}, {QStringLiteral("workspace"), QStringLiteral("thread 🧵")}, {QStringLiteral("width"), wide_width}, {QStringLiteral("height"), empty_height}});
+
     item->setParentItem(window.contentItem());
     window.resize(wide_width, empty_height);
     QVERIFY(showComponentWindow(window, wait_ms));
@@ -279,6 +283,7 @@ class HistoryControlsTest final : public QObject {
       QString action = QStringLiteral("none");
       bool has_page = true;
     };
+
     const std::array cases{
         Case{.phase = QStringLiteral("loading"), .title = QStringLiteral("Searching your command history…"), .has_page = false},
         Case{.phase = QStringLiteral("failed"), .title = QStringLiteral("Could not load the command history")},
@@ -289,8 +294,10 @@ class HistoryControlsTest final : public QObject {
         Case{.scope = QStringLiteral("pane"), .title = QStringLiteral("No matches in this pane"), .action = QStringLiteral("everywhere")},
         Case{.phase = QStringLiteral("loading"), .title = QStringLiteral("No commands yet"), .action = QStringLiteral("import")},
     };
+
     for (const auto &sample : cases) {
       const QVariantMap state{{QStringLiteral("phase"), sample.phase}, {QStringLiteral("effectiveScope"), sample.scope}, {QStringLiteral("author"), sample.author}, {QStringLiteral("hasPage"), sample.has_page}};
+
       item->setProperty("state", state);
       QTRY_COMPARE_WITH_TIMEOUT(item->property("title").toString(), sample.title, wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(item->property("action").toString(), sample.action, wait_ms);
@@ -298,10 +305,12 @@ class HistoryControlsTest final : public QObject {
     }
 
     auto state = item->property("state").toMap();
+
     state.insert(QStringLiteral("phase"), QStringLiteral("ready"));
     state.insert(QStringLiteral("effectiveScope"), QStringLiteral("workspace"));
     item->setProperty("state", state);
     constexpr int oversized_workspace = 100;
+
     item->setProperty("workspace", QString(oversized_workspace, QLatin1Char('x')));
     QTRY_COMPARE_WITH_TIMEOUT(item->property("title").toString(), QStringLiteral("No matches in this workspace"), wait_ms);
   }
@@ -312,15 +321,18 @@ class HistoryControlsTest final : public QObject {
     constexpr int empty_height = 360;
     QVariantMap state{{QStringLiteral("phase"), QStringLiteral("ready")}, {QStringLiteral("effectiveScope"), QStringLiteral("workspace")}, {QStringLiteral("query"), QStringLiteral("missing")}};
     auto item = createChrome(engine, QStringLiteral("HistoryEmpty"), {{QStringLiteral("state"), state}, {QStringLiteral("colors"), themeColors({})}, {QStringLiteral("typography"), historyTypography()}, {QStringLiteral("workspace"), QStringLiteral("project")}, {QStringLiteral("width"), wide_width}, {QStringLiteral("height"), empty_height}});
+
     item->setParentItem(window.contentItem());
     window.resize(wide_width, empty_height);
     QVERIFY(showComponentWindow(window, wait_ms));
     followWindowSize(*item, window);
     const auto *button = item->findChild<QQuickItem *>(QStringLiteral("historySearchEverywhere"));
+
     QVERIFY(button != nullptr);
     QTRY_VERIFY_WITH_TIMEOUT(button->isVisible() && button->width() > 0, wait_ms);
     const QSignalSpy recovered{item.get(), SIGNAL(searchEverywhere())};
     const auto center = button->mapToScene({button->width() / 2, button->height() / 2}).toPoint();
+
     QTest::mousePress(&window, Qt::LeftButton, Qt::NoModifier, center);
     state.insert(QStringLiteral("phase"), QStringLiteral("failed"));
     item->setProperty("state", state);
@@ -338,34 +350,41 @@ class HistoryControlsTest final : public QObject {
     QQuickWindow window;
     QQmlEngine engine;
     auto item = createChrome(engine, QStringLiteral("HistorySearchBar"), {{QStringLiteral("colors"), themeColors({})}, {QStringLiteral("typography"), historyTypography()}, {QStringLiteral("width"), wide_width}, {QStringLiteral("height"), search_height}});
+
     item->setParentItem(window.contentItem());
     window.resize(wide_width, search_height);
     QVERIFY(showComponentWindow(window, wait_ms));
     followWindowSize(*item, window);
     const auto *loading = item->findChild<HistoryLoadingLayout *>(QStringLiteral("historyLoading"));
+
     QVERIFY(loading != nullptr);
     QElapsedTimer elapsed;
+
     elapsed.start();
     item->setProperty("replacing", true);
     QVERIFY(!loading->cueVisible());
     QCOMPARE(loading->rowsOpacity(), qreal{1});
     QTRY_VERIFY_WITH_TIMEOUT(loading->cueVisible(), wait_ms);
     constexpr std::uint64_t nanoseconds_per_millisecond = 1'000'000;
+
     QVERIFY(elapsed.elapsed() >= static_cast<qint64>(LoadingCue::delay_ns / nanoseconds_per_millisecond));
     QCOMPARE(loading->rowsOpacity(), static_cast<qreal>(HistoryLoading::row_opacity));
     const auto initial = loading->line();
+
     QTRY_VERIFY_WITH_TIMEOUT(loading->line().x() != initial.x(), wait_ms);
     item->setProperty("replacing", false);
     QTRY_VERIFY_WITH_TIMEOUT(!loading->cueVisible(), wait_ms);
     QCOMPARE(loading->rowsOpacity(), qreal{1});
     QVERIFY(loading->line().isEmpty());
     const auto *timer = window.findChild<QTimer *>(QStringLiteral("agentStatusAnimation"));
+
     QVERIFY(timer != nullptr);
     QTRY_VERIFY_WITH_TIMEOUT(!timer->isActive(), wait_ms);
   }
 
   Q_SLOT static void selectionMotionStartsOnAFrameAndParksItsClock() {
     QQuickWindow window;
+
     window.resize(wide_width, search_height);
     QVERIFY(showComponentWindow(window, wait_ms));
     HistorySelectionLayout motion(window.contentItem());
@@ -377,11 +396,13 @@ class HistoryControlsTest final : public QObject {
           {QStringLiteral("id"), identity},
       };
     };
+
     motion.setSelection(selection(0, QStringLiteral("9007199254740993")));
     QVERIFY(waitForSynchronizedFrame(window, wait_ms));
     QCOMPARE(motion.selectedOpen(), qreal{1});
     QCOMPARE(motion.leavingIndex(), -1);
     QList<qreal> samples;
+
     QObject::connect(&motion, &HistorySelectionLayout::frameChanged, &window, [&] { samples.append(motion.selectedOpen()); });
     motion.setSelection(selection(1, QStringLiteral("9007199254740995")));
     QCOMPARE(motion.selectedOpen(), qreal{1});
@@ -393,6 +414,7 @@ class HistoryControlsTest final : public QObject {
     QCOMPARE(motion.leavingIndex(), -1);
     QVERIFY(std::ranges::any_of(samples, [](qreal open) { return open > 0 && open < 1; }));
     const auto *timer = window.findChild<QTimer *>(QStringLiteral("agentStatusAnimation"));
+
     QVERIFY(timer != nullptr);
     QTRY_VERIFY_WITH_TIMEOUT(!timer->isActive(), wait_ms);
     QCOMPARE(window.findChildren<QTimer *>(QStringLiteral("agentStatusAnimation")).size(), 1);
@@ -407,14 +429,17 @@ class HistoryControlsTest final : public QObject {
 
   Q_SLOT static void selectionClockRetiresDestroyedItems() {
     QQuickWindow window;
+
     window.resize(wide_width, search_height);
     QVERIFY(showComponentWindow(window, wait_ms));
     auto motion = std::make_unique<HistorySelectionLayout>(window.contentItem());
+
     motion->setSelection({{QStringLiteral("active"), true}, {QStringLiteral("generation"), QStringLiteral("1")}, {QStringLiteral("id"), QStringLiteral("1")}, {QStringLiteral("index"), 0}});
     QVERIFY(waitForSynchronizedFrame(window, wait_ms));
     motion->setSelection({{QStringLiteral("active"), true}, {QStringLiteral("generation"), QStringLiteral("1")}, {QStringLiteral("id"), QStringLiteral("2")}, {QStringLiteral("index"), 1}});
     QTRY_VERIFY_WITH_TIMEOUT(motion->selectedOpen() < 1, wait_ms);
     const auto *timer = window.findChild<QTimer *>(QStringLiteral("agentStatusAnimation"));
+
     QVERIFY(timer != nullptr);
     motion.reset();
     QTRY_VERIFY_WITH_TIMEOUT(!timer->isActive(), wait_ms);
@@ -423,13 +448,16 @@ class HistoryControlsTest final : public QObject {
 
   Q_SLOT static void loadingClockRetiresDestroyedItems() {
     QQuickWindow window;
+
     window.resize(wide_width, search_height);
     QVERIFY(showComponentWindow(window, wait_ms));
     auto loading = std::make_unique<HistoryLoadingLayout>(window.contentItem());
+
     loading->setSize(window.size());
     loading->setWaiting(true);
     QTRY_VERIFY_WITH_TIMEOUT(loading->cueVisible(), wait_ms);
     const auto *timer = window.findChild<QTimer *>(QStringLiteral("agentStatusAnimation"));
+
     QVERIFY(timer != nullptr);
     loading.reset();
     QTRY_VERIFY_WITH_TIMEOUT(!timer->isActive(), wait_ms);
@@ -439,6 +467,7 @@ class HistoryControlsTest final : public QObject {
   Q_SLOT static void emptyGeometryRejectsNonfiniteTypography() {
     QQuickWindow window;
     HistoryEmptyLayout item{window.contentItem()};
+
     item.setSize({wide_width, search_height});
     item.setInput({{QStringLiteral("bodyPixels"), std::numeric_limits<double>::quiet_NaN()}, {QStringLiteral("smallPixels"), std::numeric_limits<double>::infinity()}});
     window.resize(wide_width, search_height);
@@ -449,18 +478,22 @@ class HistoryControlsTest final : public QObject {
 
   Q_SLOT static void stateObserversCanRetireTheComponent() {
     auto empty = std::make_unique<HistoryEmptyLayout>();
+
     QObject::connect(empty.get(), &HistoryEmptyLayout::inputChanged, [&empty] { empty.reset(); });
     empty->setInput({{QStringLiteral("ratio"), 1}});
     QVERIFY(empty == nullptr);
 
     auto waiting = std::make_unique<HistoryLoadingLayout>();
+
     QObject::connect(waiting.get(), &HistoryLoadingLayout::waitingChanged, [&waiting] { waiting.reset(); });
     waiting->setWaiting(true);
     QVERIFY(waiting == nullptr);
 
     auto ratio = std::make_unique<HistoryLoadingLayout>();
+
     QObject::connect(ratio.get(), &HistoryLoadingLayout::ratioChanged, [&ratio] { ratio.reset(); });
     constexpr qreal doubled_ratio = 2;
+
     ratio->setRatio(doubled_ratio);
     QVERIFY(ratio == nullptr);
   }
@@ -477,32 +510,40 @@ class HistoryControlsTest final : public QObject {
         {QStringLiteral("width"), wide_width},
         {QStringLiteral("height"), header_height},
     });
+
     filters->setParentItem(window.contentItem());
     window.resize(wide_width, header_height);
     QVERIFY(showComponentWindow(window, wait_ms));
     const auto *layout = qobject_cast<HistoryFiltersLayout *>(filters.get());
+
     QVERIFY(layout != nullptr);
     std::array<HistoryHoverTarget, HistoryFiltersLayout::target_count> targets;
     constexpr auto generation = std::numeric_limits<std::uint64_t>::max();
+
     QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets), targets.size(), wait_ms);
     const auto identity = targets[1].identity;
     const auto *action = std::get_if<HistoryFilterAction>(&identity.action);
+
     QVERIFY(action != nullptr);
     QCOMPARE(*action, HistoryFilterAction::workspace);
     QCOMPARE(identity.generation, generation);
     const auto *workspace = chipFor(*filters, QStringLiteral("workspace"));
+
     QVERIFY(workspace != nullptr);
     const auto verify_bounds = [&] {
       const auto bounds = workspace->mapRectToScene(workspace->boundingRect());
       const auto scale = window.effectiveDevicePixelRatio();
+
       QCOMPARE(targets[1].bounds.x, static_cast<float>(bounds.x() * scale));
       QCOMPARE(targets[1].bounds.y, static_cast<float>(bounds.y() * scale));
       QCOMPARE(targets[1].bounds.width, static_cast<float>(bounds.width() * scale));
       QCOMPARE(targets[1].bounds.height, static_cast<float>(bounds.height() * scale));
     };
+
     verify_bounds();
     const auto previous_width = targets[1].bounds.width;
     const auto failed_identity = targets[4].identity;
+
     state.insert(QStringLiteral("effectiveScope"), QStringLiteral("workspace"));
     state.insert(QStringLiteral("scopeValue"), QStringLiteral("workspace detail"));
     state.insert(QStringLiteral("author"), QStringLiteral("agent"));
@@ -519,6 +560,7 @@ class HistoryControlsTest final : public QObject {
     QCOMPARE(layout->hoverTargets(generation, {}), std::size_t{0});
     filters->setWidth(narrow_width);
     constexpr std::size_t scope_count = 4;
+
     QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets), scope_count, wait_ms);
     filters->setVisible(false);
     QCOMPARE(layout->hoverTargets(generation, targets), std::size_t{0});
@@ -535,6 +577,7 @@ class HistoryControlsTest final : public QObject {
                                                                               {QStringLiteral("width"), wide_width},
                                                                               {QStringLiteral("height"), header_height},
                                                                           });
+
     filters->setParentItem(window.contentItem());
     window.resize(wide_width, header_height);
     QVERIFY(showComponentWindow(window, wait_ms));
@@ -543,10 +586,12 @@ class HistoryControlsTest final : public QObject {
     const auto *workspace = chipFor(*filters, QStringLiteral("workspace"));
     const auto *agent = chipFor(*filters, QStringLiteral("agent"));
     const auto *all = chipFor(*filters, QStringLiteral("global"));
+
     QVERIFY(workspace != nullptr && agent != nullptr && all != nullptr);
     QTRY_VERIFY_WITH_TIMEOUT(workspace->width() > 0 && agent->isVisible(), wait_ms);
     const QSignalSpy scopes{filters.get(), SIGNAL(scopeSelected(QString))};
     const QSignalSpy authors{filters.get(), SIGNAL(authorSelected(QString))};
+
     QTest::mouseClick(&window, Qt::LeftButton, Qt::NoModifier, workspace->mapToScene(QPointF{workspace->width() / 2, workspace->height() / 2}).toPoint());
     QCOMPARE(scopes.size(), 1);
     QCOMPARE(scopes.front().front().toString(), QStringLiteral("workspace"));
@@ -555,6 +600,7 @@ class HistoryControlsTest final : public QObject {
     QCOMPARE(authors.front().front().toString(), QStringLiteral("agent"));
     QVERIFY(all->property("selected").toBool());
     auto state = historyState();
+
     state.insert(QStringLiteral("effectiveScope"), QStringLiteral("workspace"));
     filters->setProperty("state", state);
     QVERIFY(workspace->property("selected").toBool());
@@ -562,6 +608,7 @@ class HistoryControlsTest final : public QObject {
     window.resize(narrow_width, header_height);
     QTRY_COMPARE_WITH_TIMEOUT(filters->width(), qreal{narrow_width}, wait_ms);
     const auto *author_group = filters->findChild<QQuickItem *>(QStringLiteral("historyAuthor"));
+
     QVERIFY(author_group != nullptr);
     QTRY_VERIFY_WITH_TIMEOUT(!author_group->isVisible(), wait_ms);
   }
@@ -570,6 +617,7 @@ class HistoryControlsTest final : public QObject {
     QQuickWindow window;
     QQmlEngine engine;
     auto state = historyState();
+
     state.insert(QStringLiteral("effectiveScope"), QStringLiteral("workspace"));
     state.insert(QStringLiteral("scopeValue"), QStringLiteral("project"));
     state.insert(QStringLiteral("macStyle"), true);
@@ -581,23 +629,28 @@ class HistoryControlsTest final : public QObject {
                                                                               {QStringLiteral("width"), wide_width},
                                                                               {QStringLiteral("height"), header_height},
                                                                           });
+
     filters->setParentItem(window.contentItem());
     window.resize(wide_width, header_height);
     QVERIFY(showComponentWindow(window, wait_ms));
     const auto values = visualItems(*filters, QStringLiteral("historyScopeValue"));
+
     QVERIFY(!values.isEmpty());
     const auto selected = std::ranges::find_if(values, [](const auto *value) {
       return value->isVisible() && value->property("text").toString() == QStringLiteral("project");
     });
+
     QVERIFY(selected != values.end());
     const auto keys = visualItems(*filters, QStringLiteral("historyFilterKey"));
     constexpr qsizetype key_count = 3;
+
     QCOMPARE(keys.size(), key_count);
     for (const auto *key : keys) {
       QVERIFY(key->isVisible());
     }
 
     const auto *workspace = chipFor(*filters, QStringLiteral("workspace"));
+
     QVERIFY(workspace != nullptr);
     state.insert(QStringLiteral("effectiveScope"), QStringLiteral("cwd"));
     state.insert(QStringLiteral("scopeValue"), QStringLiteral("/work/project"));
@@ -607,17 +660,21 @@ class HistoryControlsTest final : public QObject {
     QVERIFY(!workspace->property("selected").toBool());
     const auto changed_values = visualItems(*filters, QStringLiteral("historyScopeValue"));
     qsizetype visible_values = 0;
+
     for (const auto *value : changed_values) {
       if (value->isVisible()) {
         ++visible_values;
         QCOMPARE(value->property("text").toString(), QStringLiteral("/work/project"));
       }
     }
+
     QCOMPARE(visible_values, qsizetype{1});
     QStringList key_labels;
+
     for (const auto *key : keys) {
       key_labels.append(key->property("text").toString());
     }
+
     QVERIFY(key_labels.contains(QStringLiteral("Tab")));
     QVERIFY(key_labels.contains(QStringLiteral("Shift+Tab")));
     QVERIFY(key_labels.contains(QStringLiteral("!")));
@@ -627,6 +684,7 @@ class HistoryControlsTest final : public QObject {
     QQuickWindow window;
     QQmlEngine engine;
     auto state = historyState();
+
     state.insert(QStringLiteral("macStyle"), true);
     auto filters = createChrome(engine, QStringLiteral("HistoryFilters"), {
                                                                               {QStringLiteral("state"), state},
@@ -636,6 +694,7 @@ class HistoryControlsTest final : public QObject {
                                                                               {QStringLiteral("width"), wide_width},
                                                                               {QStringLiteral("height"), header_height},
                                                                           });
+
     filters->setParentItem(window.contentItem());
     window.resize(wide_width, header_height);
     QVERIFY(showComponentWindow(window, wait_ms));
@@ -643,21 +702,26 @@ class HistoryControlsTest final : public QObject {
     const auto layout = [&filters] {
       return filters->property("layout").toMap();
     };
+
     QTRY_VERIFY_WITH_TIMEOUT(layout().value(QStringLiteral("showKeys")).toBool(), wait_ms);
     constexpr int controls_only_width = 500;
+
     window.resize(controls_only_width, header_height);
     QTRY_VERIFY_WITH_TIMEOUT(!layout().value(QStringLiteral("showKeys")).toBool(), wait_ms);
     QVERIFY(layout().value(QStringLiteral("showRight")).toBool());
     const auto *failed = filters->findChild<QQuickItem *>(QStringLiteral("historyFailedOnly"));
+
     QVERIFY(failed != nullptr && failed->isVisible());
     const QSignalSpy toggled{filters.get(), SIGNAL(failedToggled())};
     const auto point = failed->mapToScene(QPointF{failed->width() / 2, failed->height() / 2}).toPoint();
+
     QTest::mousePress(&window, Qt::LeftButton, Qt::NoModifier, point);
     window.resize(narrow_width, header_height);
     QTRY_VERIFY_WITH_TIMEOUT(!layout().value(QStringLiteral("showRight")).toBool(), wait_ms);
     QTest::mouseRelease(&window, Qt::LeftButton, Qt::NoModifier, QPoint{narrow_width / 2, header_height / 2});
     QCOMPARE(toggled.size(), 0);
     const auto *scope_group = filters->findChild<QQuickItem *>(QStringLiteral("historyScope"));
+
     QVERIFY(scope_group != nullptr && scope_group->isVisible());
     window.resize(wide_width, header_height);
     QTRY_VERIFY_WITH_TIMEOUT(layout().value(QStringLiteral("showKeys")).toBool(), wait_ms);
@@ -674,6 +738,7 @@ class HistoryControlsTest final : public QObject {
                                                                                {QStringLiteral("width"), wide_width},
                                                                                {QStringLiteral("height"), search_height},
                                                                            });
+
     search->setParentItem(window.contentItem());
     window.resize(wide_width, search_height);
     QVERIFY(showComponentWindow(window, wait_ms));
@@ -681,13 +746,16 @@ class HistoryControlsTest final : public QObject {
     followWindowSize(*search, window);
     const auto *field = search->findChild<QQuickItem *>(QStringLiteral("historySearchHost"));
     const auto *close = search->findChild<QQuickItem *>(QStringLiteral("historyClose"));
+
     QVERIFY(field != nullptr && close != nullptr);
     constexpr qreal expected_field_left = 44;
     constexpr qreal expected_gap = 10;
+
     QCOMPARE(field->x(), expected_field_left);
     QCOMPARE(field->x() + field->width(), close->x() - expected_gap);
     QCOMPARE(field->height(), static_cast<qreal>(search_height));
     const QSignalSpy cancelled{search.get(), SIGNAL(cancelled())};
+
     QTest::mouseClick(&window, Qt::LeftButton, Qt::NoModifier, close->mapToScene(QPointF{close->width() / 2, close->height() / 2}).toPoint());
     QCOMPARE(cancelled.size(), 1);
     window.resize(narrow_width, search_height);
@@ -699,6 +767,7 @@ class HistoryControlsTest final : public QObject {
   Q_SLOT static void rowsFitFactsAndSelectWithoutAnApplicationController() {
     SystemAllocator memory;
     HistoryRow<SystemAllocator> entry{memory};
+
     entry.command = "make test\nnext command";
     entry.cwd = "/work/project";
     entry.provider = "custom-agent";
@@ -706,6 +775,7 @@ class HistoryControlsTest final : public QObject {
     entry.exit_code = 1;
     constexpr std::int64_t two_days_ms = 2 * HistoryLabels::seconds_per_day * HistoryLabels::milliseconds_per_second;
     auto record = historyRecord(entry, {.now_ms = two_days_ms});
+
     QCOMPARE(record.value(QStringLiteral("providerLetter")).toString(), QStringLiteral("C"));
     const auto colors = themeColors({});
     QQuickWindow window;
@@ -718,6 +788,7 @@ class HistoryControlsTest final : public QObject {
                                                                       {QStringLiteral("width"), wide_width},
                                                                       {QStringLiteral("height"), row_height},
                                                                   });
+
     row->setParentItem(window.contentItem());
     window.resize(wide_width, row_height);
     QVERIFY(showComponentWindow(window, wait_ms));
@@ -728,6 +799,7 @@ class HistoryControlsTest final : public QObject {
     const auto *timestamp = row->findChild<QQuickItem *>(QStringLiteral("historyTimestamp"));
     const auto *status = row->findChild<QQuickItem *>(QStringLiteral("historyStatus"));
     const auto *continuation = visualItems(*row, QStringLiteral("historyContinuation")).value(0);
+
     QVERIFY(command != nullptr && directory != nullptr && timestamp != nullptr && status != nullptr && continuation != nullptr);
     QTRY_VERIFY_WITH_TIMEOUT(command->width() > 0 && directory->isVisible() && timestamp->isVisible(), wait_ms);
     QCOMPARE(command->property("text").toString(), QStringLiteral("make test"));
@@ -737,6 +809,7 @@ class HistoryControlsTest final : public QObject {
     QVERIFY(continuation->isVisible());
     const QSignalSpy activated{row.get(), SIGNAL(activated(QString))};
     const auto position = command->mapToScene(QPointF{command->width() / 2, command->height() / 2}).toPoint();
+
     QTest::mouseClick(&window, Qt::LeftButton, Qt::NoModifier, position);
     QCOMPARE(activated.size(), 1);
     row->setProperty("grouped", false);
@@ -745,6 +818,7 @@ class HistoryControlsTest final : public QObject {
     QTRY_COMPARE_WITH_TIMEOUT(row->width(), qreal{fact_limited_width}, wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(!directory->isVisible() && !timestamp->isVisible(), wait_ms);
     const auto *provider = row->findChild<QQuickItem *>(QStringLiteral("historyProvider"));
+
     QVERIFY(provider != nullptr && provider->isVisible());
     record.insert(QStringLiteral("command"), QString(wide_width, QLatin1Char{'x'}));
     row->setProperty("record", record);
@@ -755,6 +829,7 @@ class HistoryControlsTest final : public QObject {
   Q_SLOT static void rowsRetireGesturesWhenTheContentRevisionChanges() {
     SystemAllocator memory;
     HistoryRow<SystemAllocator> entry{memory};
+
     entry.command = "first command";
     auto record = historyRecord(entry, {});
     QQuickWindow window;
@@ -768,12 +843,14 @@ class HistoryControlsTest final : public QObject {
                                                                       {QStringLiteral("width"), wide_width},
                                                                       {QStringLiteral("height"), row_height},
                                                                   });
+
     row->setParentItem(window.contentItem());
     window.resize(wide_width, row_height);
     QVERIFY(showComponentWindow(window, wait_ms));
     QVERIFY(QTest::qWaitForWindowExposed(&window));
     const auto center = QPoint{wide_width / 2, row_height / 2};
     const QSignalSpy activated{row.get(), SIGNAL(activated(QString))};
+
     QTest::mousePress(&window, Qt::LeftButton, Qt::NoModifier, center);
     record.insert(QStringLiteral("command"), QStringLiteral("replacement command"));
     row->setProperty("record", record);
@@ -792,6 +869,7 @@ class HistoryControlsTest final : public QObject {
   Q_SLOT static void queryChangesPreserveRowMeasurements() {
     SystemAllocator memory;
     HistoryRow<SystemAllocator> entry{memory};
+
     entry.command = "git build";
     auto record = historyRecord(entry, {});
     QQuickWindow window;
@@ -805,6 +883,7 @@ class HistoryControlsTest final : public QObject {
         {QStringLiteral("height"), row_height},
         {QStringLiteral("query"), QStringLiteral("gb")},
     });
+
     row->setParentItem(window.contentItem());
     window.resize(wide_width, row_height);
     QVERIFY(showComponentWindow(window, wait_ms));
@@ -812,13 +891,16 @@ class HistoryControlsTest final : public QObject {
     const auto regions = [&] { return row->property("regions").toMap(); };
     const auto geometry = [&] {
       auto result = regions();
+
       result.remove(QStringLiteral("lines"));
       result.remove(QStringLiteral("needed"));
 
       return result;
     };
+
     QTRY_VERIFY_WITH_TIMEOUT(!regions().value(QStringLiteral("lines")).toList().isEmpty(), wait_ms);
     constexpr int settle_ms = 50;
+
     QTest::qWait(settle_ms);
     const auto before = regions();
     const auto before_geometry = geometry();
@@ -827,6 +909,7 @@ class HistoryControlsTest final : public QObject {
     const QSignalSpy regions_changed{row.get(), SIGNAL(regionsChanged())};
     const auto geometry_signal = row->metaObject()->indexOfSignal("geometryRegionsChanged()");
     std::unique_ptr<QSignalSpy> geometry_changed;
+
     if (geometry_signal >= 0) {
       geometry_changed = std::make_unique<QSignalSpy>(row.get(), row->metaObject()->method(geometry_signal));
     }
@@ -841,6 +924,7 @@ class HistoryControlsTest final : public QObject {
         return item->isVisible() && item->property("text").toString() == QStringLiteral("t");
       });
     };
+
     QTRY_VERIFY_WITH_TIMEOUT(has_updated_match(), wait_ms);
     QCOMPARE(measurements_changed.size(), 0);
     QVERIFY2(geometry_changed != nullptr, "Geometry bindings still depend on the full content layout");
@@ -871,6 +955,7 @@ class HistoryControlsTest final : public QObject {
   Q_SLOT static void matchDelegatesRetainPositionsAcrossQueryChanges() {
     SystemAllocator memory;
     HistoryRow<SystemAllocator> entry{memory};
+
     entry.command = "abc";
     auto record = historyRecord(entry, {});
     const auto colors = themeColors({});
@@ -885,19 +970,23 @@ class HistoryControlsTest final : public QObject {
         {QStringLiteral("height"), row_height},
         {QStringLiteral("query"), QStringLiteral("ab")},
     });
+
     row->setParentItem(window.contentItem());
     window.resize(wide_width, row_height);
     QVERIFY(showComponentWindow(window, wait_ms));
     const auto matches = [&] {
       auto items = visualItems(*row, QStringLiteral("historyMatch"));
+
       items.removeIf([](const auto *item) { return !item->isVisible(); });
       std::ranges::sort(items, [](const auto *left, const auto *right) { return left->x() < right->x(); });
 
       return items;
     };
+
     QTRY_COMPARE_WITH_TIMEOUT(matches().size(), qsizetype{2}, wait_ms);
     QPointer<QQuickItem> first = matches()[0];
     QPointer<QQuickItem> second = matches()[1];
+
     QCOMPARE(first->property("text").toString(), QStringLiteral("a"));
     QCOMPARE(second->property("text").toString(), QStringLiteral("b"));
     row->setProperty("query", QStringLiteral("bc"));
@@ -913,6 +1002,7 @@ class HistoryControlsTest final : public QObject {
     QCOMPARE(matches()[0], first.data());
     QCOMPARE(matches()[1], second.data());
     QPointer<QQuickItem> third = matches()[2];
+
     row->setProperty("query", QStringLiteral("a"));
     QTRY_COMPARE_WITH_TIMEOUT(matches().size(), qsizetype{1}, wait_ms);
     QCOMPARE(matches()[0], first.data());
@@ -934,6 +1024,7 @@ class HistoryControlsTest final : public QObject {
     QTRY_COMPARE_WITH_TIMEOUT(matches().size(), qsizetype{2}, wait_ms);
     const auto wide = matches()[0];
     const auto combining = matches()[1];
+
     QCOMPARE(wide->property("text").toString(), QStringLiteral("界"));
     QCOMPARE(combining->property("text").toString(), QStringLiteral("e\u0301"));
     QCOMPARE(wide->width(), qreal{2 * cell_width});
@@ -943,11 +1034,13 @@ class HistoryControlsTest final : public QObject {
     constexpr qsizetype retention_bound = 8;
     constexpr qsizetype overflow = 2;
     const QString many_matches(retention_bound + overflow, QChar{u'a'});
+
     record.insert(QStringLiteral("command"), many_matches);
     row->setProperty("record", record);
     row->setProperty("query", many_matches);
     QTRY_COMPARE_WITH_TIMEOUT(matches().size(), retention_bound + overflow, wait_ms);
     QList<QPointer<QQuickItem>> retained;
+
     for (auto *item : matches()) {
       retained.append(item);
     }
@@ -976,6 +1069,7 @@ class HistoryControlsTest final : public QObject {
   Q_SLOT static void selectedCardsShowEveryExplicitCommandLine() {
     SystemAllocator memory;
     HistoryRow<SystemAllocator> entry{memory};
+
     entry.command = "first command\nsecond command\nthird command";
     const auto record = historyRecord(entry, {});
     constexpr int card_height = 300;
@@ -991,6 +1085,7 @@ class HistoryControlsTest final : public QObject {
                                                                       {QStringLiteral("width"), wide_width},
                                                                       {QStringLiteral("height"), card_height},
                                                                   });
+
     row->setParentItem(window.contentItem());
     window.resize(wide_width, card_height);
     QVERIFY(showComponentWindow(window, wait_ms));
@@ -998,15 +1093,19 @@ class HistoryControlsTest final : public QObject {
     followWindowSize(*row, window);
     const auto command_lines = [&] {
       auto labels = visualItems(*row, QStringLiteral("historyRowCommand"));
+
       labels.removeIf([](const auto *item) {
         return !item->isVisible();
       });
 
       return labels;
     };
+
     constexpr qsizetype expected_lines = 3;
+
     QTRY_COMPARE_WITH_TIMEOUT(command_lines().size(), expected_lines, wait_ms);
     QStringList shown;
+
     for (const auto *line : command_lines()) {
       shown.append(line->property("text").toString());
     }
@@ -1015,18 +1114,23 @@ class HistoryControlsTest final : public QObject {
     QVERIFY(shown.contains(QStringLiteral("second command")));
     QVERIFY(shown.contains(QStringLiteral("third command")));
     constexpr qreal minimum_card_height = row_height + (expected_lines * cell_height);
+
     QVERIFY(row->implicitHeight() > minimum_card_height);
     QVERIFY(row->implicitHeight() < card_height);
     row->setProperty("query", QStringLiteral("cS"));
     constexpr qsizetype expected_matches = 2;
+
     QTRY_COMPARE_WITH_TIMEOUT(visualItems(*row, QStringLiteral("historyMatch")).size(), expected_matches, wait_ms);
     const auto matches = visualItems(*row, QStringLiteral("historyMatch"));
+
     QVERIFY(matches.front()->y() != matches.back()->y());
     constexpr int short_viewport = 100;
+
     row->setProperty("viewportHeight", short_viewport);
     QTRY_COMPARE_WITH_TIMEOUT(command_lines().size(), qsizetype{1}, wait_ms);
     QCOMPARE(row->property("layout").toMap().value(QStringLiteral("more")).toInt(), 2);
     const auto *details = row->findChild<QQuickItem *>(QStringLiteral("historyRowDetails"));
+
     QVERIFY(details != nullptr);
     QVERIFY(details->property("text").toString().contains(QStringLiteral("+2 more lines")));
   }
@@ -1034,6 +1138,7 @@ class HistoryControlsTest final : public QObject {
   Q_SLOT static void runningCardsNameTheirOutcome() {
     SystemAllocator memory;
     HistoryRow<SystemAllocator> entry{memory};
+
     entry.command = "sleep 10";
     entry.status = telar::HistoryStatus::running;
     const auto record = historyRecord(entry, {});
@@ -1050,11 +1155,13 @@ class HistoryControlsTest final : public QObject {
                                                                       {QStringLiteral("width"), wide_width},
                                                                       {QStringLiteral("height"), card_height},
                                                                   });
+
     row->setParentItem(window.contentItem());
     window.resize(wide_width, card_height);
     QVERIFY(showComponentWindow(window, wait_ms));
     QVERIFY(QTest::qWaitForWindowExposed(&window));
     const auto *details = row->findChild<QQuickItem *>(QStringLiteral("historyRowDetails"));
+
     QVERIFY(details != nullptr);
     QTRY_VERIFY_WITH_TIMEOUT(details->property("text").toString().contains(QStringLiteral("running")), wait_ms);
   }
@@ -1066,6 +1173,7 @@ class HistoryControlsTest final : public QObject {
         {QStringLiteral("duration"), QStringLiteral("1.2s")},
         {QStringLiteral("timestamp"), -1},
     };
+
     QQuickWindow window;
     QQmlEngine engine;
     auto metadata = createChrome(engine, QStringLiteral("HistoryMeta"), {
@@ -1077,6 +1185,7 @@ class HistoryControlsTest final : public QObject {
                                                                             {QStringLiteral("width"), wide_width},
                                                                             {QStringLiteral("height"), metadata_height},
                                                                         });
+
     metadata->setParentItem(window.contentItem());
     window.resize(wide_width, metadata_height);
     QVERIFY(showComponentWindow(window, wait_ms));
@@ -1084,21 +1193,28 @@ class HistoryControlsTest final : public QObject {
     const auto action_count = [&] {
       return metadata->property("layout").toMap().value(QStringLiteral("actionCount")).toInt();
     };
+
     constexpr int all_actions = 3;
     constexpr int pane_closed_actions = 2;
+
     QTRY_COMPARE_WITH_TIMEOUT(action_count(), all_actions, wait_ms);
     const QSignalSpy activated{metadata.get(), SIGNAL(actionTriggered(QString))};
     auto hints = visualItems(*metadata, QStringLiteral("historyHint"));
+
     std::ranges::sort(hints, [](const auto *left, const auto *right) {
       return left->x() < right->x();
     });
+
     QCOMPARE(hints.size(), all_actions);
     const QStringList expected_actions{QStringLiteral("copy"), QStringLiteral("erase"), QStringLiteral("visit")};
     const QStringList expected_keys{QStringLiteral("⌘C"), QStringLiteral("⌘⌫"), QStringLiteral("⌥↩")};
+
     for (qsizetype index = 0; index < hints.size(); ++index) {
       const auto *hint = hints[index];
+
       QCOMPARE(hint->property("label").toMap().value(QStringLiteral("key")).toString(), expected_keys[index]);
       const auto center = hint->mapToScene(QPointF{hint->width() / 2, hint->height() / 2}).toPoint();
+
       QTest::mouseClick(&window, Qt::LeftButton, Qt::NoModifier, center);
       QCOMPARE(activated.size(), index + 1);
       QCOMPARE(activated.back().front().toString(), expected_actions[index]);
@@ -1106,11 +1222,13 @@ class HistoryControlsTest final : public QObject {
 
     metadata->setProperty("interactive", false);
     const auto *first = hints.front();
+
     QTest::mouseClick(&window, Qt::LeftButton, Qt::NoModifier, first->mapToScene(QPointF{first->width() / 2, first->height() / 2}).toPoint());
     QCOMPARE(activated.size(), all_actions);
     metadata->setProperty("paneOpen", false);
     QTRY_COMPARE_WITH_TIMEOUT(action_count(), pane_closed_actions, wait_ms);
     constexpr int actionless_width = 160;
+
     metadata->setWidth(actionless_width);
     QTRY_COMPARE_WITH_TIMEOUT(action_count(), 0, wait_ms);
     metadata->setProperty("selected", false);
@@ -1120,6 +1238,7 @@ class HistoryControlsTest final : public QObject {
   Q_SLOT static void metadataRefreshesWhenTheSelectedCommandChanges() {
     SystemAllocator memory;
     HistoryRow<SystemAllocator> entry{memory};
+
     entry.command = "failed command";
     entry.cwd = "/work/project";
     entry.provider = "custom-agent";
@@ -1137,6 +1256,7 @@ class HistoryControlsTest final : public QObject {
                                                                             {QStringLiteral("width"), wide_width},
                                                                             {QStringLiteral("height"), metadata_height},
                                                                         });
+
     metadata->setParentItem(window.contentItem());
     window.resize(wide_width, metadata_height);
     QVERIFY(showComponentWindow(window, wait_ms));
@@ -1150,6 +1270,7 @@ class HistoryControlsTest final : public QObject {
     metadata->setProperty("record", historyRecord(entry, {}));
     QTRY_COMPARE_WITH_TIMEOUT(metadata->property("text").toString(), QStringLiteral("running"), wait_ms);
     const auto labels = metadata->property("facts").toList();
+
     QCOMPARE(labels.size(), 1);
     QCOMPARE(labels.front().toMap().value(QStringLiteral("color")).toString(), QStringLiteral("teal"));
     metadata->setProperty("commandLoaded", false);
@@ -1166,6 +1287,7 @@ class HistoryControlsTest final : public QObject {
     auto state = historyFooterState();
     constexpr auto revision = std::numeric_limits<std::uint64_t>::max();
     constexpr std::uint64_t generation = 41;
+
     state.insert(QStringLiteral("revision"), QString::number(revision));
     state.insert(QStringLiteral("selection"), 2);
     auto footer = createChrome(engine, QStringLiteral("HistoryFooter"), {
@@ -1175,29 +1297,36 @@ class HistoryControlsTest final : public QObject {
         {QStringLiteral("width"), wide_width},
         {QStringLiteral("height"), footer_height},
     });
+
     footer->setParentItem(window.contentItem());
     window.resize(wide_width, footer_height);
     QVERIFY(showComponentWindow(window, wait_ms));
     const auto *layout = qobject_cast<HistoryFooterLayout *>(footer.get());
+
     QVERIFY(layout != nullptr);
     std::array<HistoryHoverTarget, HistoryFooter::capacity> targets;
     constexpr std::size_t browse_count = 3;
+
     QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets), browse_count, wait_ms);
     const auto *submit = std::get_if<HistoryFooterIdentity>(&targets.front().identity.action);
+
     QVERIFY(submit != nullptr);
     QCOMPARE(submit->action, HistoryFooterAction::submit);
     QCOMPARE(submit->choice.revision, revision);
     QCOMPARE(submit->choice.index, std::size_t{2});
     QCOMPARE(targets.front().identity.generation, generation);
     const auto *hint = hintForAction(*footer, QStringLiteral("submit"));
+
     QVERIFY(hint != nullptr);
     const auto bounds = hint->mapRectToScene(hint->boundingRect());
     const auto scale = window.effectiveDevicePixelRatio();
+
     QCOMPARE(targets.front().bounds.x, static_cast<float>(bounds.x() * scale));
     QCOMPARE(targets.front().bounds.y, static_cast<float>(bounds.y() * scale));
     QCOMPARE(targets.front().bounds.width, static_cast<float>(bounds.width() * scale));
     QCOMPARE(targets.front().bounds.height, static_cast<float>(bounds.height() * scale));
     const auto identity = targets.front().identity;
+
     state.insert(QStringLiteral("enterRuns"), true);
     footer->setProperty("state", state);
     QVERIFY(waitForSynchronizedFrame(window, wait_ms));
@@ -1226,14 +1355,17 @@ class HistoryControlsTest final : public QObject {
         {QStringLiteral("width"), wide_width},
         {QStringLiteral("height"), footer_height},
     });
+
     footer->setParentItem(window.contentItem());
     window.resize(wide_width, footer_height);
     QVERIFY(showComponentWindow(window, wait_ms));
     const auto *layout = qobject_cast<HistoryFooterLayout *>(footer.get());
+
     QVERIFY(layout != nullptr);
     std::array<HistoryHoverTarget, HistoryFooter::capacity> targets;
     constexpr std::size_t actions = 3;
     constexpr std::uint64_t generation = 41;
+
     QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets), actions, wait_ms);
     footer->setProperty("interactive", false);
     QCOMPARE(layout->hoverTargets(generation, targets), actions);
@@ -1243,6 +1375,7 @@ class HistoryControlsTest final : public QObject {
     QVERIFY(waitForSynchronizedFrame(window, wait_ms));
     QCOMPARE(layout->hoverTargets(generation, targets), actions);
     const auto *visit = std::get_if<HistoryFooterIdentity>(&targets[actions - 1].identity.action);
+
     QVERIFY(visit != nullptr);
     QCOMPARE(visit->action, HistoryFooterAction::visit);
     state.insert(QStringLiteral("error"), QStringLiteral("fixture failure"));
@@ -1263,6 +1396,7 @@ class HistoryControlsTest final : public QObject {
                                                                             {QStringLiteral("width"), wide_width},
                                                                             {QStringLiteral("height"), footer_height},
                                                                         });
+
     footer->setParentItem(window.contentItem());
     window.resize(wide_width, footer_height);
     QVERIFY(showComponentWindow(window, wait_ms));
@@ -1270,8 +1404,10 @@ class HistoryControlsTest final : public QObject {
     QTRY_VERIFY_WITH_TIMEOUT(hintForAction(*footer, QStringLiteral("inspect")) != nullptr, wait_ms);
     const QSignalSpy activated{footer.get(), SIGNAL(actionTriggered(QString, QString))};
     qsizetype delivered = 0;
+
     for (const auto &action : {QStringLiteral("submit"), QStringLiteral("alternate"), QStringLiteral("inspect")}) {
       const auto *hint = hintForAction(*footer, action);
+
       QVERIFY(hint != nullptr);
       QTest::mouseClick(&window, Qt::LeftButton, Qt::NoModifier, hint->mapToScene(QPointF{hint->width() / 2, hint->height() / 2}).toPoint());
       ++delivered;
@@ -1280,18 +1416,22 @@ class HistoryControlsTest final : public QObject {
     }
 
     constexpr int browse_actions = 3;
+
     QCOMPARE(activated.size(), browse_actions);
     state.insert(QStringLiteral("inspecting"), true);
     footer->setProperty("state", state);
     QTRY_VERIFY_WITH_TIMEOUT(hintForAction(*footer, QStringLiteral("visit")) != nullptr, wait_ms);
     const auto *scroll = hintForAction(*footer, QStringLiteral("none"));
+
     QVERIFY(scroll != nullptr && !scroll->property("actionable").toBool());
     QTest::mouseClick(&window, Qt::LeftButton, Qt::NoModifier, scroll->mapToScene(QPointF{scroll->width() / 2, scroll->height() / 2}).toPoint());
     QCOMPARE(activated.size(), browse_actions);
     const auto *visit = hintForAction(*footer, QStringLiteral("visit"));
+
     QVERIFY(visit != nullptr);
     QTest::mouseClick(&window, Qt::LeftButton, Qt::NoModifier, visit->mapToScene(QPointF{visit->width() / 2, visit->height() / 2}).toPoint());
     constexpr int inspect_actions = 4;
+
     QCOMPARE(activated.size(), inspect_actions);
     QCOMPARE(activated.back().front().toString(), QStringLiteral("visit"));
     footer->setProperty("interactive", false);
@@ -1301,11 +1441,13 @@ class HistoryControlsTest final : public QObject {
 
   Q_SLOT static void footerSubmissionsKeepCaptureWhenEnterBehaviorChanges() {
     const std::array actions{QStringLiteral("submit"), QStringLiteral("alternate")};
+
     for (const auto &action : actions) {
       for (const bool enter_runs : {false, true}) {
         QQuickWindow window;
         QQmlEngine engine;
         auto state = historyFooterState();
+
         state.insert(QStringLiteral("revision"), QStringLiteral("18446744073709551615"));
         state.insert(QStringLiteral("enterRuns"), enter_runs);
         auto footer = createChrome(engine, QStringLiteral("HistoryFooter"), {
@@ -1315,17 +1457,20 @@ class HistoryControlsTest final : public QObject {
             {QStringLiteral("width"), wide_width},
             {QStringLiteral("height"), footer_height},
         });
+
         footer->setParentItem(window.contentItem());
         window.resize(wide_width, footer_height);
         QVERIFY(showComponentWindow(window, wait_ms));
         QTRY_VERIFY_WITH_TIMEOUT(hintForAction(*footer, action) != nullptr, wait_ms);
         const QSignalSpy activated{footer.get(), SIGNAL(actionTriggered(QString, QString))};
         const auto *hint = hintForAction(*footer, action);
+
         QTest::mousePress(&window, Qt::LeftButton, Qt::NoModifier, controlCenter(*hint));
         state.insert(QStringLiteral("enterRuns"), !enter_runs);
         footer->setProperty("state", state);
         QVERIFY(waitForSynchronizedFrame(window, wait_ms));
         const auto *updated = hintForAction(*footer, action);
+
         QCOMPARE(updated, hint);
         QTest::mouseRelease(&window, Qt::LeftButton, Qt::NoModifier, controlCenter(*updated));
         QCOMPARE(activated.size(), 1);
@@ -1339,25 +1484,32 @@ class HistoryControlsTest final : public QObject {
     InspectionFixture fixture;
     constexpr auto revision = std::numeric_limits<std::uint64_t>::max();
     constexpr auto generation = std::numeric_limits<std::uint64_t>::max();
+
     fixture.state.insert(QStringLiteral("revision"), QString::number(revision));
     fixture.state.insert(QStringLiteral("selection"), 2);
     fixture.state.insert(QStringLiteral("paneOpen"), true);
     fixture.item->setProperty("browserState", fixture.state);
     QVERIFY(showComponentWindow(fixture.window, wait_ms));
     const auto *layout = qobject_cast<HistoryInspectionLayout *>(fixture.item.get());
+
     QVERIFY(layout != nullptr);
     std::array<HistoryHoverTarget, history_inspection_action_count> targets;
+
     QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets), targets.size(), wait_ms);
     const std::array actions{QStringLiteral("submit"), QStringLiteral("alternate"), QStringLiteral("copy"), QStringLiteral("erase"), QStringLiteral("visit")};
+
     for (std::size_t index = 0; index < actions.size(); ++index) {
       const auto *identity = std::get_if<HistoryInspectionIdentity>(&targets[index].identity.action);
+
       QVERIFY(identity != nullptr);
       QCOMPARE(identity->action, static_cast<HistoryInspectionAction>(index));
       QCOMPARE(targets[index].identity.generation, generation);
       const auto *button = inspectionAction(*fixture.item, actions[index]);
+
       QVERIFY(button != nullptr);
       const auto bounds = button->mapRectToScene(button->boundingRect());
       const auto scale = fixture.window.effectiveDevicePixelRatio();
+
       QCOMPARE(targets[index].bounds.x, static_cast<float>(bounds.x() * scale));
       QCOMPARE(targets[index].bounds.y, static_cast<float>(bounds.y() * scale));
       QCOMPARE(targets[index].bounds.width, static_cast<float>(bounds.width() * scale));
@@ -1365,10 +1517,12 @@ class HistoryControlsTest final : public QObject {
     }
 
     const auto *submit = std::get_if<HistoryInspectionIdentity>(&targets.front().identity.action);
+
     QVERIFY(submit != nullptr);
     QCOMPARE(submit->choice.revision, revision);
     QCOMPARE(submit->choice.index, std::size_t{2});
     const auto previous = targets;
+
     fixture.state.insert(QStringLiteral("enterRuns"), true);
     fixture.item->setProperty("browserState", fixture.state);
     QVERIFY(waitForSynchronizedFrame(fixture.window, wait_ms));
@@ -1384,6 +1538,7 @@ class HistoryControlsTest final : public QObject {
     QCOMPARE(layout->hoverTargets(generation, targets), targets.size());
     for (std::size_t index = 0; index < targets.size(); ++index) {
       const auto *identity = std::get_if<HistoryInspectionIdentity>(&targets[index].identity.action);
+
       QVERIFY(identity != nullptr);
       QCOMPARE(targets[index].identity == previous[index].identity, !identity->submission());
     }
@@ -1391,22 +1546,27 @@ class HistoryControlsTest final : public QObject {
 
   Q_SLOT static void inspectionHoverTargetsRespectAvailabilityAndBoundedStorage() {
     InspectionFixture fixture;
+
     fixture.state.insert(QStringLiteral("paneOpen"), true);
     fixture.item->setProperty("browserState", fixture.state);
     QVERIFY(showComponentWindow(fixture.window, wait_ms));
     const auto *layout = qobject_cast<HistoryInspectionLayout *>(fixture.item.get());
+
     QVERIFY(layout != nullptr);
     std::array<HistoryHoverTarget, history_inspection_action_count> targets;
     constexpr std::uint64_t generation = 41;
+
     QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets), targets.size(), wait_ms);
     QCOMPARE(layout->hoverTargets(generation, std::span{targets}.first(1)), std::size_t{1});
     QCOMPARE(layout->hoverTargets(generation, {}), std::size_t{0});
     fixture.state.insert(QStringLiteral("phase"), QStringLiteral("loading"));
     fixture.item->setProperty("browserState", fixture.state);
     constexpr std::size_t disabled_actions = 4;
+
     QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets), disabled_actions, wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(inspectionAction(*fixture.item, QStringLiteral("visit")) == nullptr, wait_ms);
     const auto *copy = inspectionAction(*fixture.item, QStringLiteral("copy"));
+
     QVERIFY(copy != nullptr);
     QVERIFY(!copy->property("interactive").toBool());
     fixture.state.insert(QStringLiteral("phase"), QStringLiteral("ready"));
@@ -1422,20 +1582,24 @@ class HistoryControlsTest final : public QObject {
 
   Q_SLOT static void inspectionSubmissionsKeepCaptureWhenEnterBehaviorChanges() {
     const std::array actions{QStringLiteral("submit"), QStringLiteral("alternate")};
+
     for (const auto &action : actions) {
       for (const bool enter_runs : {false, true}) {
         InspectionFixture fixture;
+
         fixture.state.insert(QStringLiteral("enterRuns"), enter_runs);
         fixture.item->setProperty("browserState", fixture.state);
         QVERIFY(showComponentWindow(fixture.window, wait_ms));
         QTRY_VERIFY_WITH_TIMEOUT(inspectionAction(*fixture.item, action) != nullptr, wait_ms);
         const QSignalSpy activated{fixture.item.get(), SIGNAL(actionTriggered(QString, QString))};
         const auto *button = inspectionAction(*fixture.item, action);
+
         QTest::mousePress(&fixture.window, Qt::LeftButton, Qt::NoModifier, controlCenter(*button));
         fixture.state.insert(QStringLiteral("enterRuns"), !enter_runs);
         fixture.item->setProperty("browserState", fixture.state);
         QVERIFY(waitForSynchronizedFrame(fixture.window, wait_ms));
         const auto *updated = inspectionAction(*fixture.item, action);
+
         QCOMPARE(updated, button);
         QTest::mouseRelease(&fixture.window, Qt::LeftButton, Qt::NoModifier, controlCenter(*updated));
         QCOMPARE(activated.size(), 1);
@@ -1447,14 +1611,17 @@ class HistoryControlsTest final : public QObject {
 
   Q_SLOT static void inspectionSemanticActionsKeepCaptureAcrossChoiceChanges() {
     const std::array actions{QStringLiteral("copy"), QStringLiteral("erase"), QStringLiteral("visit")};
+
     for (const auto &action : actions) {
       InspectionFixture fixture;
+
       fixture.state.insert(QStringLiteral("paneOpen"), true);
       fixture.item->setProperty("browserState", fixture.state);
       QVERIFY(showComponentWindow(fixture.window, wait_ms));
       QTRY_VERIFY_WITH_TIMEOUT(inspectionAction(*fixture.item, action) != nullptr, wait_ms);
       const QSignalSpy activated{fixture.item.get(), SIGNAL(actionTriggered(QString, QString))};
       const auto *button = inspectionAction(*fixture.item, action);
+
       QTest::mousePress(&fixture.window, Qt::LeftButton, Qt::NoModifier, controlCenter(*button));
       fixture.state.insert(QStringLiteral("revision"), QStringLiteral("78"));
       fixture.state.insert(QStringLiteral("selection"), 1);
@@ -1462,6 +1629,7 @@ class HistoryControlsTest final : public QObject {
       fixture.item->setProperty("browserState", fixture.state);
       QVERIFY(waitForSynchronizedFrame(fixture.window, wait_ms));
       const auto *updated = inspectionAction(*fixture.item, action);
+
       QCOMPARE(updated, button);
       QTest::mouseRelease(&fixture.window, Qt::LeftButton, Qt::NoModifier, controlCenter(*updated));
       QCOMPARE(activated.size(), 1);
@@ -1474,6 +1642,7 @@ class HistoryControlsTest final : public QObject {
     QQuickWindow window;
     QQmlEngine engine;
     auto state = historyFooterState();
+
     state.insert(QStringLiteral("revision"), QStringLiteral("18446744073709551610"));
     auto footer = createChrome(engine, QStringLiteral("HistoryFooter"), {
                                                                             {QStringLiteral("state"), state},
@@ -1482,6 +1651,7 @@ class HistoryControlsTest final : public QObject {
                                                                             {QStringLiteral("width"), wide_width},
                                                                             {QStringLiteral("height"), footer_height},
                                                                         });
+
     footer->setParentItem(window.contentItem());
     window.resize(wide_width, footer_height);
     QVERIFY(showComponentWindow(window, wait_ms));
@@ -1490,6 +1660,7 @@ class HistoryControlsTest final : public QObject {
     const auto *hint = hintForAction(*footer, QStringLiteral("submit"));
     const auto center = hint->mapToScene(QPointF{hint->width() / 2, hint->height() / 2}).toPoint();
     const QSignalSpy activated{footer.get(), SIGNAL(actionTriggered(QString, QString))};
+
     QTest::mousePress(&window, Qt::LeftButton, Qt::NoModifier, center);
     state.insert(QStringLiteral("revision"), QStringLiteral("18446744073709551611"));
     footer->setProperty("state", state);
@@ -1511,6 +1682,7 @@ class HistoryControlsTest final : public QObject {
     QQuickWindow window;
     QQmlEngine engine;
     auto state = historyFooterState();
+
     state.insert(QStringLiteral("revision"), QStringLiteral("100"));
     auto footer = createChrome(engine, QStringLiteral("HistoryFooter"), {
                                                                             {QStringLiteral("state"), state},
@@ -1519,6 +1691,7 @@ class HistoryControlsTest final : public QObject {
                                                                             {QStringLiteral("width"), wide_width},
                                                                             {QStringLiteral("height"), footer_height},
                                                                         });
+
     footer->setParentItem(window.contentItem());
     window.resize(wide_width, footer_height);
     QVERIFY(showComponentWindow(window, wait_ms));
@@ -1527,6 +1700,7 @@ class HistoryControlsTest final : public QObject {
     const auto *hint = hintForAction(*footer, QStringLiteral("inspect"));
     const auto center = hint->mapToScene(QPointF{hint->width() / 2, hint->height() / 2}).toPoint();
     const QSignalSpy activated{footer.get(), SIGNAL(actionTriggered(QString, QString))};
+
     QTest::mousePress(&window, Qt::LeftButton, Qt::NoModifier, center);
     state.insert(QStringLiteral("revision"), QStringLiteral("101"));
     footer->setProperty("state", state);
@@ -1546,6 +1720,7 @@ class HistoryControlsTest final : public QObject {
                                                                             {QStringLiteral("width"), wide_width},
                                                                             {QStringLiteral("height"), footer_height},
                                                                         });
+
     footer->setParentItem(window.contentItem());
     window.resize(wide_width, footer_height);
     QVERIFY(showComponentWindow(window, wait_ms));
@@ -1553,13 +1728,16 @@ class HistoryControlsTest final : public QObject {
     followWindowSize(*footer, window);
     const auto *range = footer->findChild<QQuickItem *>(QStringLiteral("historyRange"));
     const auto *error = footer->findChild<QQuickItem *>(QStringLiteral("historyFooterError"));
+
     QVERIFY(range != nullptr && error != nullptr);
     QTRY_VERIFY_WITH_TIMEOUT(range->isVisible(), wait_ms);
     QCOMPARE(range->property("text").toString(), QStringLiteral("257–268  ·  ⇞ older  ·  fuzzy"));
     constexpr int constrained_width = 180;
+
     window.resize(constrained_width, footer_height);
     QTRY_COMPARE_WITH_TIMEOUT(footer->width(), qreal{constrained_width}, wait_ms);
     constexpr int browse_hints = 3;
+
     QTRY_VERIFY_WITH_TIMEOUT(footer->property("layout").toMap().value(QStringLiteral("hintCount")).toInt() < browse_hints, wait_ms);
     QVERIFY(!range->isVisible());
     window.resize(wide_width, footer_height);
@@ -1576,6 +1754,7 @@ class HistoryControlsTest final : public QObject {
     state.insert(QStringLiteral("inspecting"), true);
     footer->setProperty("state", state);
     constexpr int inspect_hints = 4;
+
     QTRY_COMPARE_WITH_TIMEOUT(footer->property("hints").toList().size(), inspect_hints, wait_ms);
     state.insert(QStringLiteral("inspecting"), false);
     state.insert(QStringLiteral("enterRuns"), true);
@@ -1586,15 +1765,18 @@ class HistoryControlsTest final : public QObject {
 
   Q_SLOT static void inspectionScrollsTheWholeDocumentAndRetiresItsIdentity() {
     InspectionFixture fixture;
+
     QVERIFY(showComponentWindow(fixture.window, wait_ms));
     const auto layout = [&] {
       return fixture.item->property("layout").toMap();
     };
+
     QTRY_VERIFY_WITH_TIMEOUT(!layout().value(QStringLiteral("lines")).toList().isEmpty(), wait_ms);
     QCOMPARE(layout().value(QStringLiteral("lines")).toList().front().toMap().value(QStringLiteral("text")).toString(), QStringLiteral("echo inspection fixture"));
     QVERIFY(layout().value(QStringLiteral("maximumScroll")).toInt() > 0);
     QVERIFY(QMetaObject::invokeMethod(fixture.item.get(), "page", Q_ARG(QVariant, QVariant{false})));
     constexpr int page_lines = 10;
+
     QTRY_COMPARE_WITH_TIMEOUT(fixture.item->property("scroll").toInt(), page_lines, wait_ms);
     fixture.item->setProperty("scroll", std::numeric_limits<int>::max());
     QTRY_COMPARE_WITH_TIMEOUT(fixture.item->property("scroll").toInt(), layout().value(QStringLiteral("maximumScroll")).toInt(), wait_ms);
@@ -1602,6 +1784,7 @@ class HistoryControlsTest final : public QObject {
     QTRY_VERIFY_WITH_TIMEOUT(fixture.item->property("scroll").toInt() < page_lines, wait_ms);
     fixture.item->setProperty("scroll", 1);
     auto details = inspectionDetails();
+
     details.insert(QStringLiteral("identity"), QStringLiteral("78"));
     fixture.item->setProperty("details", details);
     QCOMPARE(fixture.item->property("scroll").toInt(), 0);
@@ -1609,21 +1792,26 @@ class HistoryControlsTest final : public QObject {
     QTRY_COMPARE_WITH_TIMEOUT(fixture.item->width(), qreal{narrow_width}, wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(layout().value(QStringLiteral("lineCount")).toInt() > 0, wait_ms);
     const auto content = layout().value(QStringLiteral("content")).toRectF();
+
     for (const auto &value : layout().value(QStringLiteral("lines")).toList()) {
       const auto bounds = value.toMap().value(QStringLiteral("bounds")).toRectF();
+
       QVERIFY(content.contains(bounds));
     }
   }
 
   Q_SLOT static void inspectionSubmissionsRetireChoicesAndKeepBehaviorChanges() {
     InspectionFixture fixture;
+
     QVERIFY(showComponentWindow(fixture.window, wait_ms));
     QTRY_VERIFY_WITH_TIMEOUT(inspectionAction(*fixture.item, QStringLiteral("submit")) != nullptr, wait_ms);
     auto *submit = inspectionAction(*fixture.item, QStringLiteral("submit"));
     const auto center = [&] {
       return submit->mapToScene(QPointF{submit->width() / 2, submit->height() / 2}).toPoint();
     };
+
     const QSignalSpy activated{fixture.item.get(), SIGNAL(actionTriggered(QString, QString))};
+
     QTest::mousePress(&fixture.window, Qt::LeftButton, Qt::NoModifier, center());
     fixture.state.insert(QStringLiteral("revision"), QStringLiteral("78"));
     fixture.state.insert(QStringLiteral("selection"), 1);
@@ -1645,6 +1833,7 @@ class HistoryControlsTest final : public QObject {
     QTRY_VERIFY_WITH_TIMEOUT(inspectionAction(*fixture.item, QStringLiteral("visit")) != nullptr, wait_ms);
     const auto *visit = inspectionAction(*fixture.item, QStringLiteral("visit"));
     const auto visit_center = visit->mapToScene(QPointF{visit->width() / 2, visit->height() / 2}).toPoint();
+
     QTest::mousePress(&fixture.window, Qt::LeftButton, Qt::NoModifier, visit_center);
     fixture.state.insert(QStringLiteral("paneOpen"), false);
     fixture.item->setProperty("browserState", fixture.state);
@@ -1660,17 +1849,21 @@ class HistoryControlsTest final : public QObject {
 
   Q_SLOT static void inspectionAccumulatesFractionalWheelAndTrackpadInput() {
     InspectionFixture fixture;
+
     QVERIFY(showComponentWindow(fixture.window, wait_ms));
     QTRY_VERIFY_WITH_TIMEOUT(fixture.item->property("layout").toMap().value(QStringLiteral("maximumScroll")).toInt() > 0, wait_ms);
     const QPointF local{wide_width / 2.0, InspectionFixture::height / 2.0};
     const auto send = [&](QPoint pixels, QPoint angle, Qt::ScrollPhase phase) {
       const auto source = pixels.isNull() ? Qt::MouseEventNotSynthesized : Qt::MouseEventSynthesizedBySystem;
       QWheelEvent event{local, fixture.window.mapToGlobal(local.toPoint()), pixels, angle, Qt::NoButton, Qt::NoModifier, phase, false, source};
+
       QCoreApplication::sendEvent(&fixture.window, &event);
 
       return event.isAccepted();
     };
+
     constexpr int half_notch = 60;
+
     QVERIFY(send({}, {0, -half_notch}, Qt::ScrollBegin));
     QCOMPARE(fixture.item->property("scroll").toInt(), 0);
     QVERIFY(send({}, {0, -half_notch}, Qt::ScrollUpdate));
@@ -1699,15 +1892,19 @@ class HistoryControlsTest final : public QObject {
     const QPointingDevice device{QStringLiteral("shared pointing device"), mouse_device_id, QInputDevice::DeviceType::Mouse, QPointingDevice::PointerType::Generic, QInputDevice::Capability::Position | QInputDevice::Capability::Scroll | QInputDevice::Capability::PixelScroll, single_point, no_buttons};
     const QWheelEvent mouse{position, position, {0, -estimated_pixels}, {0, -angle_notch}, Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false, Qt::MouseEventNotSynthesized, &device};
     const auto step = scrollSample(mouse, row_pixels);
+
     QVERIFY(!step.precise);
     QCOMPARE(step.delta, 1.0);
     const QWheelEvent trackpad{position, position, {0, -estimated_pixels}, {0, -angle_notch}, Qt::NoButton, Qt::NoModifier, Qt::ScrollBegin, false, Qt::MouseEventSynthesizedBySystem};
     const auto precise = scrollSample(trackpad, row_pixels);
+
     QVERIFY(precise.precise);
     QCOMPARE(precise.delta, static_cast<double>(estimated_pixels));
     WheelAccumulator accumulated;
+
     QCOMPARE(accumulated.consume(precise), 0);
     const QWheelEvent update{position, position, {0, -estimated_pixels}, {0, -angle_notch}, Qt::NoButton, Qt::NoModifier, Qt::ScrollUpdate, false, Qt::MouseEventSynthesizedBySystem};
+
     QCOMPARE(accumulated.consume(scrollSample(update, row_pixels)), 1);
   }
 
@@ -1718,13 +1915,16 @@ class HistoryControlsTest final : public QObject {
     ScrollEventSequence sequence;
     WheelAccumulator accumulated;
     QWheelEvent begin{position, position, {}, {half_notch, half_notch}, Qt::NoButton, Qt::NoModifier, Qt::ScrollBegin, false};
+
     begin.setTimestamp(gesture_time);
     QVERIFY(!sequence.compatibilityEvent(begin));
     QCOMPARE(accumulated.consume(scrollSample(begin, cell_height)), 0);
     QWheelEvent compatibility{position, position, {}, {}, Qt::NoButton, Qt::NoModifier, Qt::ScrollBegin, false};
+
     compatibility.setTimestamp(gesture_time);
     QVERIFY(sequence.compatibilityEvent(compatibility));
     QWheelEvent update{position, position, {}, {half_notch, half_notch}, Qt::NoButton, Qt::NoModifier, Qt::ScrollUpdate, false};
+
     update.setTimestamp(gesture_time + 1);
     QVERIFY(!sequence.compatibilityEvent(update));
     QCOMPARE(accumulated.consume(scrollSample(update, cell_height)), -1);

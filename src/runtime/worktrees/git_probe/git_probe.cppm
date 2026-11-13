@@ -59,8 +59,10 @@ public:
     const auto ancestor = line<64>(root, deadline, {"merge-base", base, "HEAD"});
     const auto difference = line<4096>(root, deadline, {"diff", "--no-ext-diff", "--no-textconv", "--ignore-submodules=all", "--shortstat", ancestor.view(), "--"});
     GitDistance result;
+
     parseDiff(difference.view(), result);
     String<Memory> range{ancestor.view(), AllocatorRef<char, Memory>{memory_}};
+
     range += "..HEAD";
     const auto count = line<32>(root, deadline, {"rev-list", "--count", range, "--"});
     const auto text = count.view();
@@ -68,6 +70,7 @@ public:
     if (!ahead) {
       reject();
     }
+
     result.ahead = *ahead;
 
     return result;
@@ -85,6 +88,7 @@ private:
     }
 
     FixedText<Capacity> result;
+
     result.assign(trimmed);
     return result;
   }
@@ -93,6 +97,7 @@ private:
     while (!output.empty()) {
       const auto delimiter = output.find(',');
       const auto part = trimText(output.substr(0, delimiter), " \n");
+
       output = delimiter == std::string_view::npos ? std::string_view{} : output.substr(delimiter + 1);
       const auto separator = part.find(' ');
       if (separator == std::string_view::npos) {
@@ -104,6 +109,7 @@ private:
       if (parsed.ec != std::errc{} || parsed.ptr != part.data() + separator) {
         continue;
       }
+
       const auto label = part.substr(separator + 1);
       if (label.starts_with("file")) {
         result.files = value;
@@ -169,6 +175,7 @@ public:
       } catch (const EncodingError &) {
       }
     }
+
     return result;
   }
 
@@ -227,12 +234,14 @@ public:
   inline Result observe(const Request &request) noexcept {
     TELAR_TRACE("worktrees.gitProbe");
     Result result{.identity = request.identity};
+
     try {
       String<Memory> path{request.path.view(), AllocatorRef<char, Memory>{memory_}};
       struct stat filesystem_status{};
       if (::stat(path.c_str(), &filesystem_status) != 0 || !S_ISDIR(filesystem_status.st_mode)) {
         return result;
       }
+
       result.present = true;
       const auto status = status_.read(request.path.view());
       if (status.present) {
@@ -241,6 +250,7 @@ public:
         } catch (const EncodingError &) {
         }
       }
+
       result.timeout = status.timed_out ? GitProbeTimeout::status : GitProbeTimeout::none;
       result.base = request.base;
       if (result.base.view().empty()) {
@@ -249,13 +259,17 @@ public:
         } catch (const EncodingError &) {
         }
       }
+
       if (!status.dirty) {
         return result;
       }
+
       result.dirty = *status.dirty;
       const auto deadline = std::chrono::steady_clock::now() + git_distance_timeout;
+
       try {
         const auto measured = distance_.read(request.path.view(), result.base.view(), deadline);
+
         result.added = measured.added;
         result.removed = measured.removed;
         result.files = measured.files;
@@ -268,6 +282,7 @@ public:
       }
     } catch (...) {
     }
+
     return result;
   }
 

@@ -70,18 +70,21 @@ void Kqueue::watch(int descriptor, std::uint64_t token) {
 
 void Kqueue::readInterest(int descriptor, std::uint64_t token, bool enabled) {
   struct kevent event{};
+
   EV_SET(&event, descriptor, EVFILT_READ, EV_ADD | (enabled ? EV_ENABLE : EV_DISABLE), 0, 0, reinterpret_cast<void *>(token));
   change(event);
 }
 
 void Kqueue::writeInterest(int descriptor, std::uint64_t token, bool enabled) {
   struct kevent event{};
+
   EV_SET(&event, descriptor, EVFILT_WRITE, EV_ADD | (enabled ? EV_ENABLE : EV_DISABLE), 0, 0, reinterpret_cast<void *>(token));
   change(event);
 }
 
 void Kqueue::remove(int descriptor) noexcept {
   struct kevent events[2]{};
+
   EV_SET(&events[0], descriptor, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
   EV_SET(&events[1], descriptor, EVFILT_WRITE, EV_DELETE, 0, 0, nullptr);
   ::kevent(queue_.get(), events, 2, nullptr, 0, nullptr);
@@ -89,6 +92,7 @@ void Kqueue::remove(int descriptor) noexcept {
 
 void Kqueue::watchSignal(int signal_number) {
   struct kevent event{};
+
   EV_SET(&event, signal_number, EVFILT_SIGNAL, EV_ADD | EV_ENABLE, 0, 0, nullptr);
   change(event);
   // Ignoring SIGCHLD discards the wait status; the event loop must reap it.
@@ -113,6 +117,7 @@ tbc::view<std::span<const Event>, tbc::lt::a> Kqueue::wait(std::chrono::nanoseco
 
   for (int index = 0; index < count; ++index) {
     const auto &source = kernel_events_[index];
+
     events[index] = Event{
         .kind = source.filter == EVFILT_SIGNAL ? EventKind::signal : source.filter == EVFILT_WRITE ? EventKind::writable
                                                                                                    : EventKind::readable,

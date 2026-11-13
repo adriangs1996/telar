@@ -35,6 +35,7 @@ public:
     client_.handshake();
     const timeval timeout{.tv_sec = 15,
                           .tv_usec = 0};
+
     ::setsockopt(client_.descriptor(), SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
   }
 
@@ -50,6 +51,7 @@ public:
     client_ = telar::Client::init(socket);
     client_.handshake();
     const timeval timeout{.tv_sec = 15, .tv_usec = 0};
+
     ::setsockopt(client_.descriptor(), SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
   }
 
@@ -71,11 +73,13 @@ public:
     send(request);
     for (;;) {
       const auto reply = receive<Reply>();
+
       if constexpr (requires { reply.request_id; request.request_id; }) {
         if (reply.request_id != request.request_id) {
           continue;
         }
       }
+
       return reply;
     }
   }
@@ -91,6 +95,7 @@ public:
       const auto payload = client_.receiveFrame(incoming_);
       telar::DecodeStorage storage{scratch_};
       std::optional<std::variant<Replies...>> reply;
+
       ([&] {
         if (payload.front() == static_cast<telar::Byte>(telar::MessageSchema<Replies>::tag)) {
           reply.emplace(std::in_place_type<Replies>, telar::Codec::decode<Replies>(payload, storage));
@@ -100,13 +105,16 @@ public:
       if (reply) {
         return std::move(*reply);
       }
+
       if (payload.front() == static_cast<telar::Byte>(telar::ServerTag::pane_frame)) {
         const auto frame = telar::Codec::decode<telar::PaneFrame>(payload, storage);
+
         if (acknowledge_frames_) {
           send(telar::FrameAck{frame.pane_id, frame.frame_id});
         }
       } else if (payload.front() == static_cast<telar::Byte>(telar::ServerTag::request_failed)) {
         const auto failure = telar::Codec::decode<telar::RequestFailed>(payload, storage);
+
         throw ProtocolFailure{failure.code, failure.message};
       }
     }
@@ -115,6 +123,7 @@ public:
   template <typename Message>
   void record(std::ostream &output, const Message &message) {
     const auto payload = telar::Codec::encode(message, outgoing_);
+
     output.write(reinterpret_cast<const char *>(payload.data()), static_cast<std::streamsize>(payload.size()));
   }
 

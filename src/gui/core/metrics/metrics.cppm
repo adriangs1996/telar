@@ -41,9 +41,11 @@ namespace telar::gui {
 
     [[nodiscard]] inline float minimum(float fallback) const noexcept {
       auto result = 1.0F;
+
       for (std::size_t index = 0; index < names.size(); ++index) {
         result = std::min(result, resolve(static_cast<Surface>(index), fallback));
       }
+
       return result;
     }
   };
@@ -270,6 +272,7 @@ struct Theme {
     }
 
     constexpr unsigned channel_bits = 8;
+
     if (color.kind == CellColor::Kind::rgb) {
       return Color::rgb((static_cast<unsigned>(color.channels[0]) << (channel_bits * 2)) | (static_cast<unsigned>(color.channels[1]) << channel_bits) | color.channels[2]);
     }
@@ -354,6 +357,7 @@ private:
   [[nodiscard]] inline static std::optional<Value> literal(std::string_view name) noexcept {
     constexpr std::string_view pattern = "#RRGGBB";
     constexpr std::string_view digits = "0123456789abcdef";
+
     if (name.size() != pattern.size() || name.front() != '#') {
       return std::nullopt;
     }
@@ -369,6 +373,7 @@ private:
     }
 
     std::uint32_t value = 0;
+
     for (const auto byte : name) {
       if (byte == '_') {
         continue;
@@ -653,9 +658,11 @@ struct ChromeMetrics {
 
   inline static ChromeMetrics resolve(const Configuration &configuration, const Viewport &viewport, const CellMetrics &cells) noexcept {
     ChromeMetrics metrics;
+
     metrics.ratio = viewport.scale;
     const auto base = configuration.font.size * viewport.scale * configuration.chrome_scale;
     const auto bars = base / design_font_size;
+
     metrics.top_bar = std::round(logical_top_bar * bars);
     metrics.status_bar = std::round(logical_status_bar * bars);
     metrics.pane_header = std::round(logical_pane_header * bars);
@@ -718,14 +725,18 @@ struct WindowGeometry {
     const auto maximum = std::max(minimum, std::min(std::round(sidebar_maximum * viewport.scale), room));
 
     WindowGeometry geometry;
+
     geometry.navigation = {.x = 0, .y = 0, .width = width, .height = chrome.top_bar};
     geometry.rail = !configuration.sidebar_visible || room < minimum;
 
     auto requested = std::clamp(std::round(configuration.sidebar_width * viewport.scale), minimum, maximum);
+
     if (geometry.rail) {
       requested = 0;
     }
+
     const auto left = requested > 0 ? requested : margin;
+
     geometry.sidebar = {.x = 0, .y = chrome.top_bar, .width = requested, .height = std::max(0.0F, height - chrome.top_bar)};
     geometry.status = {.x = left, .y = height - chrome.status_bar, .width = std::max(0.0F, width - left), .height = chrome.status_bar};
     geometry.terminal = {.x = left, .y = chrome.top_bar + padding_y, .width = std::max(0.0F, width - left - margin), .height = std::max(0.0F, height - chrome.top_bar - chrome.status_bar - padding_y * 2)};

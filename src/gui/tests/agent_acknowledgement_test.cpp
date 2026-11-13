@@ -71,12 +71,15 @@ std::size_t countAcknowledgements(const Transport &transport) {
 void eachFocusedCompletionIsTakenOnce() {
   auto agent = agentSnapshotEntry();
   AgentAcknowledgement acknowledgement;
+
   require(!acknowledgement.take(&agent), "working agents must not consume an acknowledgement");
   agent.status = AgentStatus::done;
   const auto first = acknowledgement.take(&agent);
+
   require(first && first->pane_id == agent.pane_id && first->pane_generation == agent.pane_generation, "an unseen completion must retain its exact identity");
   require(!acknowledgement.take(&agent), "a retained completion must be acknowledged only once");
   const AgentSnapshotEntry *absent = nullptr;
+
   require(!acknowledgement.take(absent) && !acknowledgement.take(&agent), "missing focus must retain the current completion reservation");
   agent.status = AgentStatus::working;
   require(!acknowledgement.take(&agent), "a later turn must release the matching reservation");
@@ -90,15 +93,19 @@ void committedSnapshotsAcknowledgeTheAlreadyFocusedPane() {
   SystemAllocator memory;
   Transport transport;
   Session client{memory, transport};
+
   openFirstPane(client, transport);
   std::array entries{agentSnapshotEntry()};
   std::uint64_t revision = 1;
+
   deliver(client, AgentSnapshot{.revision = revision++, .entries = entries});
   const auto initial = countAcknowledgements(transport);
+
   entries.front().status = AgentStatus::done;
   deliver(client, AgentSnapshot{.revision = revision++, .entries = entries});
   require(countAcknowledgements(transport) == initial + 1, "a completion arriving after focus must be acknowledged without another click");
   const auto request = transport.last<AcknowledgeAgent>();
+
   require(request.pane_id == entries.front().pane_id && request.pane_generation == entries.front().pane_generation, "the wire acknowledgement must use the committed snapshot identity");
   deliver(client, AgentSnapshot{.revision = revision++, .entries = entries});
   client.focusPane(entries.front().pane_id);
@@ -114,21 +121,26 @@ void onlyTheFocusedTabAndCommittedGenerationAreEligible() {
   SystemAllocator memory;
   Transport transport;
   Session client{memory, transport};
+
   openFirstPane(client, transport);
   std::array entries{agentSnapshotEntry()};
+
   entries.front().status = AgentStatus::done;
   entries.front().location.tab_id = 2;
   const auto initial = countAcknowledgements(transport);
+
   deliver(client, AgentSnapshot{.revision = 1, .entries = entries});
   require(countAcknowledgements(transport) == initial, "an agent in another tab must remain unseen");
   entries.front().location.tab_id = 1;
   constexpr std::uint64_t current_generation = 9;
+
   entries.front().pane_generation = current_generation;
   deliver(client, AgentSnapshot{.revision = 2, .entries = entries});
   require(countAcknowledgements(transport) == initial + 1 && transport.last<AcknowledgeAgent>().pane_generation == current_generation, "acknowledgements must use the snapshot generation rather than stale pane metadata");
   deliver(client, AgentSnapshot{.revision = 1, .entries = entries});
   const std::array duplicate{entries.front(), entries.front()};
   bool rejected = false;
+
   try {
     deliver(client, AgentSnapshot{.revision = 3, .entries = duplicate});
   } catch (const std::invalid_argument &) {

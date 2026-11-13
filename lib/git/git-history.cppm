@@ -24,6 +24,7 @@ public:
     if (loaded_ && identity == identity_ && format == format_) {
       return valid_;
     }
+
     loaded_ = true;
     identity_ = identity;
     format_ = format;
@@ -32,11 +33,14 @@ public:
     if (!identity.present) {
       return true;
     }
+
     if (readWhole(common, "shallow", bytes_, limits.shallow_file) != ReadStatus::ok) {
       valid_ = false;
       return false;
     }
+
     std::string_view lines{bytes_};
+
     while (!lines.empty()) {
       const auto end = lines.find('\n');
       const auto id = ObjectId::fromHex(lines.substr(0, end), format);
@@ -45,9 +49,11 @@ public:
         valid_ = false;
         return false;
       }
+
       ids_.push_back(*id);
       lines.remove_prefix(end == std::string_view::npos ? lines.size() : end + 1);
     }
+
     std::ranges::sort(ids_, [](const ObjectId &left, const ObjectId &right) { return compareBytes(left.view(), right.view()) < 0; });
     bytes_.clear();
     return true;
@@ -91,6 +97,7 @@ public:
     if (left == right) {
       return Divergence{};
     }
+
     objects_ = &objects;
     graph_ = &graph;
     shallow_ = &shallow;
@@ -101,9 +108,11 @@ public:
     if (!left_node || !right_node) {
       return std::nullopt;
     }
+
     mark(*left_node, left_flag);
     mark(*right_node, right_flag);
     const auto result = walk(graph);
+
     release();
     return result;
   }
@@ -117,29 +126,36 @@ private:
     // like git's limit_list the walk drains a few stale commits past the end.
     constexpr unsigned slop = 5;
     unsigned remaining_slop = slop;
+
     while (!heap_.empty()) {
       if (interesting_ == 0) {
         if (!graph.empty() && nodes_[heap_.front().node].graph != no_position) {
           break;
         }
+
         if (remaining_slop-- == 0) {
           break;
         }
       } else {
         remaining_slop = slop;
       }
+
       std::ranges::pop_heap(heap_, std::less{}, &Queued::key);
       const auto index = heap_.back().node;
+
       heap_.pop_back();
       auto &node = nodes_[index];
+
       node.queued = false;
       if (node.flags != both) {
         --interesting_;
       }
+
       if (!expand(index)) {
         return std::nullopt;
       }
     }
+
     return Divergence{ahead_, behind_};
   }
 
@@ -197,28 +213,34 @@ private:
   inline void grow() {
     slots_.assign(slots_.size() * 2, 0);
     const auto mask = slots_.size() - 1;
+
     for (std::size_t node = 0; node < nodes_.size(); ++node) {
       auto index = static_cast<std::size_t>(hashOf(nodes_[node].id)) & mask;
+
       while (slots_[index] != 0) {
         index = (index + 1) & mask;
       }
+
       slots_[index] = static_cast<std::uint32_t>(node + 1);
     }
   }
 
   inline static std::uint64_t hashOf(const ObjectId &id) noexcept {
     std::uint64_t hash;
+
     std::memcpy(&hash, id.bytes.data(), sizeof(hash));
     return hash;
   }
 
   inline std::uint64_t key(std::uint64_t generation, std::int64_t time) const noexcept {
     const auto seconds = static_cast<std::uint64_t>(std::max<std::int64_t>(time, 0)) & time_mask;
+
     return graph_->empty() ? seconds : generation << 34 | seconds;
   }
 
   inline std::uint32_t &slot(const ObjectId &id) noexcept {
     const auto mask = slots_.size() - 1;
+
     for (auto index = static_cast<std::size_t>(hashOf(id)) & mask;; index = (index + 1) & mask) {
       auto &entry = slots_[index];
       if (entry == 0 || nodes_[entry - 1].id == id) {
@@ -232,36 +254,46 @@ private:
     if (2 * (nodes_.size() + 1) > slots_.size()) {
       grow();
     }
+
     auto &entry = slot(id);
     if (entry != 0) {
       return entry - 1;
     }
+
     if (nodes_.size() >= limits_->walk_commits) {
       return std::nullopt;
     }
+
     Node node{.id = id};
+
     if (!position && !graph_->empty()) {
       position = graph_->find(id);
     }
+
     if (position) {
       const auto commit = graph_->commit(*position);
       if (!commit) {
         return std::nullopt;
       }
+
       node.graph = *position;
       node.key = key(commit->generation, commit->time);
     } else {
       CommitHeader header;
+
       node.parents_begin = static_cast<std::uint32_t>(parents_.size());
       if (!readCommit(id, header)) {
         return std::nullopt;
       }
+
       if (shallow_->contains(id)) {
         parents_.resize(node.parents_begin);
       }
+
       node.parents_count = static_cast<std::uint32_t>(parents_.size() - node.parents_begin);
       node.key = key(infinite_generation, header.time);
     }
+
     nodes_.push_back(node);
     entry = static_cast<std::uint32_t>(nodes_.size());
     return entry - 1;
@@ -271,19 +303,23 @@ private:
     ++commits_read;
     const auto begin = parents_.size();
     constexpr std::size_t first_prefix = 4096;
+
     for (const auto prefix : {std::min(first_prefix, limits_->commit_header), limits_->commit_header}) {
       ObjectType type = ObjectType::none;
       if (objects_->read(id, type, object_, prefix) != Lookup::found || type != ObjectType::commit) {
         return false;
       }
+
       if (parseCommit(object_, objects_->format(), limits_->commit_parents, header, parents_)) {
         return true;
       }
+
       parents_.resize(begin);
       if (object_.size() < prefix) {
         return false;
       }
     }
+
     return false;
   }
 
@@ -302,6 +338,7 @@ private:
     if (next == previous) {
       return;
     }
+
     classify(previous, false);
     classify(next, true);
     node.flags = next;
@@ -309,47 +346,60 @@ private:
       if (previous != 0 && next == both) {
         --interesting_;
       }
+
       return;
     }
+
     node.queued = true;
     if (next != both) {
       ++interesting_;
     }
+
     heap_.push_back({node.key, index});
     std::ranges::push_heap(heap_, std::less{}, &Queued::key);
   }
 
   inline bool expand(std::uint32_t index) {
     const auto flags = nodes_[index].flags;
+
     if (nodes_[index].graph != no_position) {
       const auto commit = graph_->commit(nodes_[index].graph);
+
       graph_parents_.clear();
       if (!commit || !graph_->parents(*commit, limits_->commit_parents, [&](std::uint32_t parent) { graph_parents_.push_back(parent); })) {
         return false;
       }
+
       for (const auto parent : graph_parents_) {
         const auto id = graph_->id(parent);
         if (!id) {
           return false;
         }
+
         const auto node = insert(*id, parent);
         if (!node) {
           return false;
         }
+
         mark(*node, flags);
       }
+
       return true;
     }
+
     const auto begin = nodes_[index].parents_begin;
     const auto count = nodes_[index].parents_count;
+
     for (std::uint32_t offset = 0; offset < count; ++offset) {
       const auto parent = parents_[begin + offset];
       const auto node = insert(parent, std::nullopt);
       if (!node) {
         return false;
       }
+
       mark(*node, flags);
     }
+
     return true;
   }
 

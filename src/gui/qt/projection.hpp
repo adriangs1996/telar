@@ -84,6 +84,7 @@ inline QString workspaceKey(WorkspaceLocation location) {
 template <Allocator Memory>
 QVariantMap workspaceRecord(const Workspace<Memory> &workspace, bool selected) {
   QVariantMap record;
+
   record.insert(QStringLiteral("key"), workspaceKey(workspace.location));
   record.insert(QStringLiteral("name"), toQString(workspace.name));
   record.insert(QStringLiteral("path"), toQString(workspace.path));
@@ -91,6 +92,7 @@ QVariantMap workspaceRecord(const Workspace<Memory> &workspace, bool selected) {
   record.insert(QStringLiteral("dirty"), workspace.dirty);
   record.insert(QStringLiteral("selected"), selected);
   const auto mark = WorkspaceMark::resolve(workspace.name);
+
   record.insert(QStringLiteral("initial"), toQString(mark.initial.view()));
   record.insert(QStringLiteral("markHue"), QString::fromLatin1(palette_names[static_cast<std::size_t>(mark.hue)]));
 
@@ -123,10 +125,12 @@ inline QVariantMap applicationMarkRecord(std::string_view application) {
 template <Allocator Memory, typename Owns>
 QVariantMap tabCard(std::uint64_t pane_id, std::string_view program, bool focused, std::span<const Agent<Memory>> agents, Owns owns) {
   auto card = applicationMarkRecord(program);
+
   card.insert(QStringLiteral("key"), QString::number(pane_id));
   card.insert(QStringLiteral("program"), toQString(program));
   card.insert(QStringLiteral("focused"), focused);
   QString attention;
+
   for (const auto &agent : agents) {
     if (owns(agent) && AgentOrder::attention(agent.status) == AgentOrder::Attention::needs_input) {
       attention = QString::fromLatin1(palette_names[static_cast<std::size_t>(AgentStatusPresentation::color(agent.status))]);
@@ -144,6 +148,7 @@ QVariantMap tabCard(std::uint64_t pane_id, std::string_view program, bool focuse
 template <Allocator Memory, typename Panes>
 QVariantList tabCards(const Tab<Memory> &tab, const Panes &panes, std::span<const Agent<Memory>> agents) {
   QVariantList cards;
+
   for (const auto &owned : panes) {
     const Pane<Memory> &candidate = *owned;
     if (!sameTab(candidate.location, tab.location)) {
@@ -171,6 +176,7 @@ QVariantList tabCards(const Tab<Memory> &tab, const Panes &panes, std::span<cons
 template <Allocator Memory, typename Panes>
 QVariantMap tabRecord(const Tab<Memory> &tab, const Pane<Memory> *pane, const Panes &panes, std::span<const Agent<Memory>> agents, bool selected) {
   std::string_view session_title;
+
   if (pane != nullptr) {
     for (const auto &agent : agents) {
       if (agent.pane_id != pane->id || !sameTab(agent.location, tab.location)) {
@@ -189,15 +195,18 @@ QVariantMap tabRecord(const Tab<Memory> &tab, const Pane<Memory> *pane, const Pa
   TabCaption::Buffer storage;
   const auto caption = TabCaption::resolve({.manual = tab.label, .application = application, .directory = pane == nullptr ? std::string_view{} : std::string_view{pane->cwd}, .session_title = session_title}, storage);
   auto label = toQString(caption);
+
   if (tab.fullscreen) {
     label.append(toQString(TabCaption::fullscreen_suffix));
   }
 
   QVariantMap record;
+
   record.insert(QStringLiteral("key"), QString::number(tab.location.tab_id));
   record.insert(QStringLiteral("label"), label);
   record.insert(QStringLiteral("application"), toQString(application));
   auto title = toQString(!tab.label.empty() ? std::string_view{tab.label} : !session_title.empty() ? session_title : application);
+
   if (tab.fullscreen) {
     title.append(toQString(TabCaption::fullscreen_suffix));
   }
@@ -207,6 +216,7 @@ QVariantMap tabRecord(const Tab<Memory> &tab, const Pane<Memory> *pane, const Pa
   record.insert(QStringLiteral("cards"), tabCards(tab, panes, agents));
   record.insert(QStringLiteral("selected"), selected);
   const auto activity = TabActivity::derive(tab, pane, agents, selected);
+
   record.insert(QStringLiteral("activityKind"), static_cast<int>(activity.kind));
   record.insert(QStringLiteral("activityColor"), QString::fromLatin1(palette_names[static_cast<std::size_t>(activity.color)]));
   record.insert(QStringLiteral("statusWidth"), activity.width());
@@ -221,6 +231,7 @@ QVariantMap tabRecord(const Tab<Memory> &tab, const Pane<Memory> *pane, const Pa
 template <Allocator Memory>
 QVariantMap historyRecord(const HistoryRow<Memory> &entry, CalendarSample sampled) {
   QVariantMap record;
+
   record.insert(QStringLiteral("key"), QString::number(entry.id));
   record.insert(QStringLiteral("command"), toQString(entry.command));
   record.insert(QStringLiteral("cwd"), toQString(entry.cwd));
@@ -228,6 +239,7 @@ QVariantMap historyRecord(const HistoryRow<Memory> &entry, CalendarSample sample
   if (entry.exit_code) {
     record.insert(QStringLiteral("exitCode"), *entry.exit_code);
   }
+
   record.insert(QStringLiteral("failed"), entry.exit_code && *entry.exit_code != 0);
   record.insert(QStringLiteral("truncated"), entry.command_truncated);
   record.insert(QStringLiteral("provider"), toQString(entry.provider));
@@ -235,6 +247,7 @@ QVariantMap historyRecord(const HistoryRow<Memory> &entry, CalendarSample sample
   const auto provider = toQString(entry.provider);
   constexpr char last_ascii = '\x7f';
   const auto letter = !provider.isEmpty() && provider.front().unicode() <= last_ascii && provider.front().isLetterOrNumber() ? provider.first(1).toUpper() : QStringLiteral("A");
+
   record.insert(QStringLiteral("providerLetter"), letter);
   record.insert(QStringLiteral("author"), entry.author == HistoryAuthor::agent ? QStringLiteral("agent") : QStringLiteral("human"));
   record.insert(QStringLiteral("status"), static_cast<int>(entry.status));
@@ -243,6 +256,7 @@ QVariantMap historyRecord(const HistoryRow<Memory> &entry, CalendarSample sample
   const auto status = HistoryLabels::status(entry.status, entry.exit_code);
   const auto day = HistoryLabels::localDay(entry.started_at_ms, sampled.utc_offset_min);
   const auto today = HistoryLabels::localDay(sampled.now_ms, sampled.utc_offset_min);
+
   record.insert(QStringLiteral("statusGlyph"), toQString(status.glyph));
   record.insert(QStringLiteral("statusColor"), toQString(palette_names[static_cast<std::size_t>(status.color)]));
   record.insert(QStringLiteral("duration"), toQString(HistoryLabels::duration(entry.duration_ns).view()));
@@ -264,7 +278,9 @@ QVariantMap paneRecord(const Pane<Memory> &pane, const PaneLayout::Placement &pl
 
     return toQRectF(area, density);
   };
+
   QVariantList panels;
+
   if (placement.framed) {
     for (const auto &panel : geometry.panels) {
       if (!panel.empty()) {
@@ -274,6 +290,7 @@ QVariantMap paneRecord(const Pane<Memory> &pane, const PaneLayout::Placement &pl
   }
 
   QVariantMap record;
+
   record.insert(QStringLiteral("key"), QString::number(pane.id));
   record.insert(QStringLiteral("attentionKey"), paneAttentionValue({.pane_id = pane.id, .attachment_generation = pane.attachment_generation}));
   record.insert(QStringLiteral("title"), pane.title.empty() ? toQString(pane.foreground) : toQString(pane.title));
@@ -297,6 +314,7 @@ QVariantMap paneRecord(const Pane<Memory> &pane, const PaneLayout::Placement &pl
 
 inline QVariantMap fontSettings(const FontConfiguration &font) {
   QVariantMap settings;
+
   settings.insert(QStringLiteral("family"), toQString(font.family.view()));
   settings.insert(QStringLiteral("style"), toQString(font.style.view()));
   settings.insert(QStringLiteral("size"), font.size);
@@ -305,6 +323,7 @@ inline QVariantMap fontSettings(const FontConfiguration &font) {
   settings.insert(QStringLiteral("thicken"), font.thicken);
   settings.insert(QStringLiteral("thicken_strength"), font.thicken_strength);
   const auto hinting = telar::runtime::config::font_hinting_names.at(std::to_underlying(font.hinting));
+
   settings.insert(QStringLiteral("hinting"), QString::fromLatin1(hinting.data(), static_cast<qsizetype>(hinting.size())));
 
   return settings;
@@ -316,10 +335,12 @@ inline QVariantMap themeColors(const Configuration &configuration) {
   const bool transparent_panel = configuration.background_opacity < 1;
   const auto panel_background = transparent_panel ? QColor{Qt::transparent} : toQColor(theme.chromeColor(PaletteRole::panel_bg));
   QVariantMap colors;
+
   colors.insert(QStringLiteral("theme"), static_cast<int>(theme.name));
   colors.insert(QStringLiteral("background"), toQColor(theme.background));
   colors.insert(QStringLiteral("panelBackground"), panel_background);
   const auto surfaces = ChromeSurfaces::derive(theme, configuration.background_opacity, configuration.opacity);
+
   colors.insert(QStringLiteral("sidebarBackground"), toQColor(surfaces.sidebar));
   colors.insert(QStringLiteral("topbarBackground"), toQColor(surfaces.topbar));
   colors.insert(QStringLiteral("bottombarBackground"), toQColor(surfaces.bottombar));
@@ -327,6 +348,7 @@ inline QVariantMap themeColors(const Configuration &configuration) {
   colors.insert(QStringLiteral("workbenchBackground"), toQColor(surfaces.workbench));
   colors.insert(QStringLiteral("paneBackground"), toQColor(surfaces.pane));
   auto terminal_background = theme.background;
+
   terminal_background.a = surfaces.pane.a;
   colors.insert(QStringLiteral("terminalBackground"), toQColor(terminal_background));
   colors.insert(QStringLiteral("foreground"), toQColor(theme.chromeColor(PaletteRole::text)));
@@ -340,8 +362,10 @@ inline QVariantMap themeColors(const Configuration &configuration) {
   colors.insert(QStringLiteral("failure"), toQColor(theme.failure));
   for (std::size_t index = 0; index < palette_names.size(); ++index) {
     const auto name = QString::fromLatin1(palette_names[index]);
+
     colors.insert(name, toQColor(theme.chromeColor(static_cast<PaletteRole>(index))));
   }
+
   for (std::size_t index = 0; index < syntax_names.size(); ++index) {
     colors.insert(QStringLiteral("syntax_") + QString::fromLatin1(syntax_names[index]), toQColor(theme.resolve(theme.syntax[index], theme.foreground)));
   }

@@ -37,8 +37,10 @@ public:
 
     const auto unit = sample.precise ? std::max(1.0, sample.cell_height) : 1.0;
     constexpr auto limit = static_cast<double>(maximum_lines);
+
     remainder_ += std::clamp(sample.delta / unit, -limit, limit);
     const auto lines = std::clamp(std::trunc(remainder_), -limit, limit);
+
     remainder_ -= lines;
 
     return static_cast<std::int32_t>(lines);

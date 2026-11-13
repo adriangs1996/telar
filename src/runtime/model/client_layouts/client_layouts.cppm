@@ -80,6 +80,7 @@ public:
     }
 
     Vector<Byte, Memory> replacement{bytes.begin(), bytes.end(), bytes_.get_allocator()};
+
     bytes_.swap(replacement);
     pane_ = pane;
     pending_ = true;
@@ -116,6 +117,7 @@ struct SentDocuments {
   [[nodiscard]] Item *find(std::uint64_t id) noexcept {
     const auto kept = std::span{items}.first(count);
     const auto found = std::ranges::find(kept, id, &Item::id);
+
     return found == kept.end() ? nullptr : &*found;
   }
 
@@ -123,6 +125,7 @@ struct SentDocuments {
     if (count == items.size()) {
       return nullptr;
     }
+
     items[count] = Item{.id = id};
     return &items[count++];
   }
@@ -212,6 +215,7 @@ public:
 
   inline std::size_t availableAttachmentSlot() const {
     std::uint64_t occupied = 0;
+
     for (const auto &entry : attachments) {
       occupied |= std::uint64_t{1} << entry->slot;
     }
@@ -219,6 +223,7 @@ public:
     if (occupied == UINT64_MAX) {
       throw std::bad_alloc{};
     }
+
     return std::countr_zero(~occupied);
   }
 
@@ -326,6 +331,7 @@ public:
     input.reserve(input_limit);
     launch.capture(command.arguments(), command.restorable());
     const auto executable = std::string_view{command.arguments().front()};
+
     foreground.assign(utf8Prefix(executable.substr(executable.rfind('/') + 1), 48));
     process.emplace(command.specification(settings.size));
     terminal.attachMedia(media);
@@ -355,8 +361,10 @@ public:
           blocks->follow();
         }
       }
+
       return result;
     };
+
     for (unsigned attempt = 0; attempt < read_limit && batch_bytes < batch_byte_limit; ++attempt) {
       const auto capacity = std::min(buffer.size(), batch_byte_limit - batch_bytes);
       if (terminal.hasPendingControl() || media->holdsRead(capacity)) {
@@ -368,38 +376,48 @@ public:
       if (count > 0 && echo_sent) {
         timeLink(std::chrono::steady_clock::now() - *std::exchange(echo_sent, std::nullopt));
       }
+
       if (count > 0) {
         const auto bytes = std::span<const Byte>{buffer}.first(static_cast<std::size_t>(count));
+
         TELAR_DIAGNOSTIC(recordRead(bytes.size(), batch_bytes != 0));
         const auto foreground = needs_foreground_observation ? shellForeground() : std::nullopt;
+
         expireProgress(foreground);
         observer->bytes(ObservationKind::output, bytes, foreground);
         ShellCompletions completions{shell_state};
+
         if (shell_zones) {
           const auto before = shell_state.commands;
+
           shell_zones->feed(bytes, ObservationTime{}, completions);
           shell_revision += shell_state.commands != before;
         }
+
         {
           TELAR_DIAGNOSTIC(diagnostics::TimedScope timing{counters == nullptr ? nullptr : &counters->ingest});
           // Up to each signed mark, so a command's block anchors where its mark was printed.
           std::size_t fed = 0;
           const auto now = std::chrono::steady_clock::now();
+
           for (const auto &mark : completions.marks()) {
             if (mark.end > fed) {
               terminal.feed(bytes.subspan(fed, mark.end - fed));
               fed = mark.end;
             }
+
             if (mark.action == 'D') {
               blocks->finished(mark.status, now);
             } else {
               blocks->mark(mark.action, now);
             }
           }
+
           if (fed < bytes.size()) {
             terminal.feed(bytes.subspan(fed));
           }
         }
+
         batch_bytes += bytes.size();
         continue;
       }
@@ -425,6 +443,7 @@ public:
     }
 
     auto next = shell_state;
+
     next.phase = shell_zones->editing() ? ShellPhase::prompt : shell_zones->running() ? ShellPhase::running : ShellPhase::unknown;
     next.remote = shell_zones->remote();
     next.host = shell_zones->remoteHost();
@@ -434,12 +453,15 @@ public:
       link_average_ms = 0;
       echo_sent.reset();
     }
+
     next.shell = next.remote && shell_zones->remoteShell() != IntegratedShell::none ? shell_zones->remoteShell() : local_shell;
     const auto group = process->foregroundProcessGroup();
+
     next.shell_foreground = group && *group == process->processId();
     termios settings{};
     if (::tcgetattr(process->descriptor(), &settings) == 0) {
       const auto character = [&](int index) { return settings.c_cc[index] == _POSIX_VDISABLE ? Byte{0} : static_cast<Byte>(settings.c_cc[index]); };
+
       next.canonical = (settings.c_lflag & ICANON) != 0;
       next.echo = (settings.c_lflag & ECHO) != 0;
       next.signal_keys = (settings.c_lflag & ISIG) != 0;
@@ -448,6 +470,7 @@ public:
       next.suspend = character(VSUSP);
       next.end_of_file = character(VEOF);
     }
+
     if (next != shell_state) {
       shell_state = next;
       ++shell_revision;
@@ -461,11 +484,13 @@ public:
     const auto batch = pty_responses->peekBatch();
     const bool response = batch.count != 0;
     const auto bytes = input.readable();
+
     if (response && batch.bytes == 0) {
       pty_responses->consumeBytes(0);
       terminal.resumeControl();
       return;
     }
+
     if (!response && bytes.empty()) {
       return;
     }
@@ -474,12 +499,16 @@ public:
       TELAR_DIAGNOSTIC(diagnostics::TimedScope timing{counters == nullptr ? nullptr : &counters->input_write});
       if (response) {
         std::array<iovec, PtyResponseQueue::message_capacity> vectors;
+
         for (std::size_t index = 0; index < batch.count; ++index) {
           const auto message = batch.message(index);
+
           vectors[index] = {const_cast<Byte *>(message.data()), message.size()};
         }
+
         return write_responses(process->descriptor(), std::span<const iovec>{vectors}.first(batch.count));
       }
+
       return ::write(process->descriptor(), bytes.data(), bytes.size());
     }();
     if (count > 0) {
@@ -529,6 +558,7 @@ public:
     if (shell_zones) {
       shell_zones->input(bytes);
     }
+
     ++input_revision;
     needs_foreground_observation = true;
   }
@@ -548,6 +578,7 @@ public:
     if (blocks) {
       blocks->follow(true);
     }
+
     process->resize(size);
     observer->resize(size);
     media->resize(size);
@@ -559,6 +590,7 @@ public:
     }
 
     const auto foreground = process->foregroundProcessGroup();
+
     return foreground ? std::optional<bool>{*foreground == process->processId()} : std::nullopt;
   }
 
@@ -678,6 +710,7 @@ private:
     if (!shell_state.remote || sample > longest_ms) {
       return;
     }
+
     link_average_ms = link_average_ms == 0 ? sample : link_average_ms * 0.7 + sample * 0.3;
     const auto shown = static_cast<std::uint32_t>(std::max(1.0, std::round(link_average_ms)));
     const auto published = shell_state.link_ms;
@@ -694,8 +727,10 @@ private:
 
     if (!shell_foreground) {
       const auto group = process->foregroundProcessGroup();
+
       shell_foreground = group && *group == process->processId();
     }
+
     if (*shell_foreground) {
       terminal.effects.setProgress(PaneProgressState::remove, std::nullopt);
     }
@@ -779,10 +814,13 @@ public:
     }
 
     std::string_view directory = path;
+
     while (directory.size() > 1 && directory.back() == '/') {
       directory.remove_suffix(1);
     }
+
     const auto basename = directory.substr(directory.rfind('/') + 1);
+
     return utf8Prefix(basename.empty() ? directory : basename, 256);
   }
 
@@ -903,6 +941,7 @@ public:
 
     const auto identity = restored_identity == 0 ? entries_.nextId() : restored_identity;
     auto entry = makeOwned<Worktree<Memory>>(memory_, memory_, identity, request);
+
     entries_.insert(identity, std::move(entry));
     return {request.request_id, identity, true};
   }
@@ -921,6 +960,7 @@ public:
 
   inline Worktree<Memory> *containing(std::string_view path) noexcept {
     Worktree<Memory> *selected = nullptr;
+
     for (auto *entry : entries_.items()) {
       if (entry == nullptr || !path.starts_with(entry->path)) {
         continue;
@@ -981,6 +1021,7 @@ inline void deliver(ClientStore<Memory> &clients, Admits &&admits, Send &&send) 
     if (client == nullptr || client->connection.closing || !admits(*client)) {
       continue;
     }
+
     try {
       send(*client);
     } catch (...) {
@@ -993,6 +1034,7 @@ inline void deliver(ClientStore<Memory> &clients, Admits &&admits, Send &&send) 
 template <Allocator Memory, typename Admits, typename Message>
 inline std::size_t broadcast(ClientStore<Memory> &clients, Admits &&admits, const Message &message) noexcept {
   std::size_t delivered = 0;
+
   deliver(clients, admits, [&](ClientSession<Memory> &client) { delivered += client.connection.trySend(message); });
   return delivered;
 }
@@ -1016,6 +1058,7 @@ inline ClientSession<Memory> &requireClient(ClientStore<Memory> &clients, std::u
   if (client == nullptr) {
     throw RequestError{FailureCode::invalid_request, "Client does not exist"};
   }
+
   return *client;
 }
 
@@ -1024,12 +1067,14 @@ inline ClientSession<Memory> &requireClient(ClientStore<Memory> &clients, std::u
 template <Allocator Memory>
 inline tbc::view<Pane<Memory> *, tbc::lt::a> findPane(tbc::view<PaneStore<Memory> &, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept {
   auto *pane = panes.find(identity);
+
   return pane != nullptr && pane->generation == generation ? pane : nullptr;
 }
 
 template <Allocator Memory>
 inline tbc::view<const Pane<Memory> *, tbc::lt::a> findPane(tbc::view<const PaneStore<Memory> &, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept {
   const auto *pane = panes.find(identity);
+
   return pane != nullptr && pane->generation == generation ? pane : nullptr;
 }
 
@@ -1037,12 +1082,14 @@ inline tbc::view<const Pane<Memory> *, tbc::lt::a> findPane(tbc::view<const Pane
 template <Allocator Memory>
 inline tbc::view<Pane<Memory> *, tbc::lt::a> livePane(tbc::view<PaneStore<Memory> &, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept {
   auto *pane = findPane(panes, identity, generation);
+
   return pane != nullptr && !pane->exit_status && !pane->close_requested ? pane : nullptr;
 }
 
 template <Allocator Memory>
 inline tbc::view<const Pane<Memory> *, tbc::lt::a> livePane(tbc::view<const PaneStore<Memory> &, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept {
   const auto *pane = findPane(panes, identity, generation);
+
   return pane != nullptr && !pane->exit_status && !pane->close_requested ? pane : nullptr;
 }
 
@@ -1054,9 +1101,11 @@ inline tbc::view<Pane<Memory> &, tbc::lt::a> requireReporterPane(tbc::view<PaneS
   if (pane == nullptr || pane->exit_status) {
     throw RequestError{FailureCode::pane_not_found, "Pane not found"};
   }
+
   if (!client.verifiedFor(*pane)) {
     throw RequestError{FailureCode::foreign_process, "The report does not come from this pane's agent"};
   }
+
   return *pane;
 }
 
@@ -1116,6 +1165,7 @@ public:
     }
 
     bool active_valid = false;
+
     for (const auto &tab : update.tabs) {
       if (sameLocation(tab.location, update.active_tab)) {
         active_valid = current(model, tab);
@@ -1128,6 +1178,7 @@ public:
 
     auto *existing = find(identity);
     Record replacement;
+
     replacement.identity = identity;
     replacement.last_used = clock_ + 1;
     replacement.sidebar_visible = update.sidebar_visible;
@@ -1179,6 +1230,7 @@ public:
     std::array<ClientTabLayout, maximum_tabs> tabs;
     std::size_t count = 0;
     std::optional<TabLocation> active;
+
     for (std::size_t index = 0; index < record->tab_count; ++index) {
       const auto tab = record->tabAt(index);
       if (!current(model, tab)) {
@@ -1226,9 +1278,11 @@ public:
   template <typename Consumer>
   inline void exportRecords(const RuntimeModel<Memory> &model, Consumer &&consume) const {
     std::array<ClientTabLayout, maximum_tabs> tabs;
+
     for (const auto &record : records_) {
       std::size_t count = 0;
       bool active_valid = false;
+
       for (std::size_t index = 0; index < record.tab_count; ++index) {
         const auto tab = record.tabAt(index);
         if (!current(model, tab)) {
@@ -1238,6 +1292,7 @@ public:
         tabs[count++] = tab;
         active_valid |= sameLocation(tab.location, record.active_tab);
       }
+
       if (!active_valid) {
         continue;
       }
@@ -1274,6 +1329,7 @@ private:
 
     inline ClientTabLayout tabAt(std::size_t index) const noexcept {
       const auto &tab = tabs[index];
+
       return ClientTabLayout{tab.location, tab.focused_pane, tab.fullscreen, tab.workspace_active, std::span{nodes}.subspan(tab.node_start, tab.node_count)};
     }
 
@@ -1304,6 +1360,7 @@ private:
     }
 
     std::size_t pane_count = 0;
+
     for (const auto &node : layout.nodes) {
       const auto *leaf = std::get_if<ClientLayoutPane>(&node);
       if (leaf == nullptr) {

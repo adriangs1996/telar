@@ -25,6 +25,7 @@ void testFrameSync() {
   SystemAllocator system;
   BudgetAllocator memory{system, 16 * 1024 * 1024};
   Screen screen{memory};
+
   screen.resize(80, 24);
   screen.scroll.total_rows = 24;
   FrameSync sync{memory, 7};
@@ -33,6 +34,7 @@ void testFrameSync() {
 
   auto payload = sync.prepare(screen);
   auto frame = Codec::decode<PaneFrame>(payload, storage);
+
   check(frame.frame_id == 1);
   check(frame.base_frame_id == 0);
   check(frame.spans.size() == 1);
@@ -57,6 +59,7 @@ void testFrameSync() {
   check(sync.acknowledge(2));
 
   const auto allocations = memory.allocations();
+
   ++screen.revision;
   check(sync.prepare(screen).empty());
   sync.requestSnapshot();

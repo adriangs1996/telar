@@ -97,21 +97,25 @@ void HistoryFiltersLayout::prepareLabels() {
   const auto scope = input_.value(QStringLiteral("scope")).toString();
   const auto author = input_.value(QStringLiteral("author")).toString();
   const auto value = input_.value(QStringLiteral("scopeValue")).toString();
+
   scope_choices_.clear();
   for (const auto &choice : HistoryFilterLabels::scopes) {
     const auto route = label(choice.value);
     const auto selected = route == scope;
+
     scope_choices_.append(QVariantMap{{QStringLiteral("text"), label(choice.text)}, {QStringLiteral("value"), route}, {QStringLiteral("detail"), selected ? value : QString{}}, {QStringLiteral("selected"), selected}});
   }
 
   author_choices_.clear();
   for (const auto &choice : HistoryFilterLabels::authors) {
     const auto route = label(choice.value);
+
     author_choices_.append(QVariantMap{{QStringLiteral("text"), label(choice.text)}, {QStringLiteral("value"), route}, {QStringLiteral("selected"), route == author}});
   }
 
   key_labels_.clear();
   const auto keys = HistoryFilterLabels::keys(input_.value(QStringLiteral("macStyle")).toBool() ? HistoryKeyStyle::mac : HistoryKeyStyle::pc);
+
   for (const auto key : keys) {
     key_labels_.append(label(key));
   }
@@ -134,16 +138,19 @@ QVariantMap HistoryFiltersLayout::chipRecord(const HistoryFilterChipGeometry &ch
 
 QVariantMap HistoryFiltersLayout::layout() const {
   QVariantList scopes;
+
   for (const auto &chip : geometry_.scopes) {
     scopes.append(chipRecord(chip));
   }
 
   QVariantList authors;
+
   for (const auto &chip : geometry_.authors) {
     authors.append(chipRecord(chip));
   }
 
   QVariantList keys;
+
   for (const auto &area : geometry_.keys) {
     keys.append(logical(area));
   }
@@ -178,9 +185,12 @@ std::size_t HistoryFiltersLayout::hoverTargets(std::uint64_t generation, std::sp
     }
 
     const auto bounds = mapRectToScene(logical(area));
+
     destination[count++] = {.identity = {.action = action, .generation = generation}, .bounds = {.x = static_cast<float>(bounds.x() * density_), .y = static_cast<float>(bounds.y() * density_), .width = static_cast<float>(bounds.width() * density_), .height = static_cast<float>(bounds.height() * density_)}};
   };
+
   constexpr std::array scopes{HistoryFilterAction::global, HistoryFilterAction::workspace, HistoryFilterAction::cwd, HistoryFilterAction::pane};
+
   for (std::size_t index = 0; index < scopes.size(); ++index) {
     append(scopes[index], geometry_.scopes[index].bounds);
   }
@@ -188,6 +198,7 @@ std::size_t HistoryFiltersLayout::hoverTargets(std::uint64_t generation, std::sp
   if (geometry_.show_right) {
     append(HistoryFilterAction::failed, geometry_.failed.bounds);
     constexpr std::array authors{HistoryFilterAction::human, HistoryFilterAction::agent, HistoryFilterAction::all};
+
     for (std::size_t index = 0; index < authors.size(); ++index) {
       append(authors[index], geometry_.authors[index].bounds);
     }
@@ -205,27 +216,34 @@ void HistoryFiltersLayout::updatePolish() {
   ratio_ = ratio;
   density_ = window() == nullptr ? 1 : window()->effectiveDevicePixelRatio();
   ChromeMetrics chrome;
+
   chrome.ratio = static_cast<float>(ratio_ * density_);
   const auto advance = [this](const QVariant &value) {
     const auto width = value.toDouble();
 
     return std::isfinite(width) && width > 0 ? static_cast<float>(width * density_) : 0.0F;
   };
+
   const auto scope_widths = measurements_.value(QStringLiteral("scopes")).toList();
   const auto author_widths = measurements_.value(QStringLiteral("authors")).toList();
   const auto key_widths = measurements_.value(QStringLiteral("keys")).toList();
   HistoryFilterMeasurements measured;
+
   for (std::size_t index = 0; index < measured.scopes.size(); ++index) {
     const auto widths = scope_widths.value(static_cast<qsizetype>(index)).toMap();
     const auto choice = scope_choices_.value(static_cast<qsizetype>(index)).toMap();
+
     measured.scopes[index] = {.label = advance(widths.value(QStringLiteral("label"))), .value = advance(widths.value(QStringLiteral("value"))), .has_value = !choice.value(QStringLiteral("detail")).toString().isEmpty()};
   }
+
   for (std::size_t index = 0; index < measured.authors.size(); ++index) {
     measured.authors[index].label = advance(author_widths.value(static_cast<qsizetype>(index)));
   }
+
   for (std::size_t index = 0; index < measured.keys.size(); ++index) {
     measured.keys[index] = advance(key_widths.value(static_cast<qsizetype>(index)));
   }
+
   measured.failed = advance(measurements_.value(QStringLiteral("failed")));
   geometry_ = HistoryFilterGeometry::derive({.width = static_cast<float>(width() * density_), .height = static_cast<float>(height() * density_)}, chrome, measured);
   emit layoutChanged();

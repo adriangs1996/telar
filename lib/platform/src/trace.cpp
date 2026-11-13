@@ -124,6 +124,7 @@ bool writeAll(std::string_view bytes) noexcept {
 
 void format(std::span<const Record> records) noexcept {
   std::array<char, 1024> buffer;
+
   for (const auto &entry : records) {
     if (sink.written > maximum_trace_bytes - buffer.size()) {
       sink.enabled = false;
@@ -144,11 +145,14 @@ void format(std::span<const Record> records) noexcept {
 void *run(void *) noexcept {
   setThreadName("telar.trace");
   std::unique_lock lock{sink.mutex};
+
   while (true) {
     sink.wake.wait_for(lock, std::chrono::seconds{1}, [] { return sink.stopping || sink.count == sink.pending.size(); });
     const auto count = std::exchange(sink.count, 0);
+
     std::swap(sink.pending, sink.draining);
     const bool stopping = sink.stopping;
+
     lock.unlock();
     format(sink.draining.first(count));
     lock.lock();
@@ -167,6 +171,7 @@ void record(const char *name, std::int64_t start, std::int64_t end) noexcept {
   }
 
   std::lock_guard lock{sink.mutex};
+
   if (!sink.enabled.load(std::memory_order_relaxed)) {
     return;
   }
@@ -210,6 +215,7 @@ void open(const char *path, std::span<Record> first, std::span<Record> second) {
 void close() noexcept {
   {
     std::lock_guard lock{sink.mutex};
+
     sink.enabled = false;
     sink.stopping = true;
   }
@@ -218,6 +224,7 @@ void close() noexcept {
   pthread_join(sink.writer, nullptr);
   std::array<char, 256> footer;
   const int length = std::snprintf(footer.data(), footer.size(), "{\"name\":\"process_name\",\"ph\":\"M\",\"pid\":%d,\"args\":{\"name\":\"telar-runtime\",\"dropped_records\":%llu}}\n]\n", ::getpid(), static_cast<unsigned long long>(sink.dropped));
+
   writeAll({footer.data(), static_cast<std::size_t>(length)});
   sink.file.reset();
 }

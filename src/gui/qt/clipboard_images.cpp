@@ -23,6 +23,7 @@ ClipboardImages::ClipboardImages(tbc::view<ApplicationAllocator &, tbc::lt::a> m
       memory_(memory),
       clipboard_(memory) {
   constexpr int maximum_workers = 1;
+
   worker_pool_.setMaxThreadCount(maximum_workers);
   connect(this, &ClipboardImages::queued, this, &ClipboardImages::startQueued, Qt::QueuedConnection);
   connect(&task_, &QFutureWatcher<ClipboardImageResult>::finished, this, &ClipboardImages::complete);
@@ -66,6 +67,7 @@ tbc::view<std::optional<ClipboardImageResult>, tbc::lt::a> ClipboardImages::take
 
 ClipboardImageResult ClipboardImages::prepare(ApplicationAllocator &memory, ClipboardImageJob job, platform::ClipboardImageSource source) {
   ClipboardImageResult result{.job = job};
+
   try {
     result.capture = source.read(memory, job.request);
     result.preview = AttachmentPreview::decode(memory, *result.capture);
@@ -84,6 +86,7 @@ void ClipboardImages::start(ClipboardImageJob job) {
   running_ = job;
   try {
     auto source = clipboard_.snapshot();
+
     task_.setFuture(QtConcurrent::run(&worker_pool_, [memory = &memory_, job, source = std::move(source)] mutable {
       return prepare(*memory, job, std::move(source));
     }));
@@ -105,6 +108,7 @@ void ClipboardImages::complete() {
 
   try {
     auto future = task_.future();
+
     result_ = future.takeResult();
   } catch (const std::exception &error) {
     result_ = ClipboardImageResult{.job = *running_, .error = QString::fromUtf8(error.what())};

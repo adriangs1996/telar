@@ -42,6 +42,7 @@ struct InputConfiguration {
     auto resolved = configured;
     auto count = length;
     const auto explicit_bindings = std::span{configured}.first(length);
+
     for (const auto &original : default_bindings) {
       const Binding binding{.keys = {prefix, original.suffix}, .length = 2, .action = original.action, .prefixed = true};
       const bool overridden = std::ranges::any_of(explicit_bindings, [&](const auto &configured) {
@@ -137,6 +138,7 @@ public:
       constexpr unsigned offset = 32;
       constexpr unsigned maximum_coordinate = 223;
       constexpr unsigned released_button = 3;
+
       if (x > maximum_coordinate || y > maximum_coordinate) {
         return {};
       }
@@ -166,6 +168,7 @@ private:
 
   inline void number(unsigned value) noexcept {
     const auto result = std::to_chars(buffer_.data() + used_, buffer_.data() + buffer_.size(), value);
+
     used_ = static_cast<std::size_t>(result.ptr - buffer_.data());
   }
 

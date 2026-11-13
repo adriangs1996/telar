@@ -60,6 +60,7 @@ namespace telar::runtime::cli::integration {
 template <Allocator Memory>
 String<Memory> joinPath(Memory &memory, std::string_view directory, std::string_view name) {
   String<Memory> path{directory, AllocatorRef<char, Memory>{memory}};
+
   path += '/';
   path += name;
   if (path.size() >= PATH_MAX || path.contains('\0')) {
@@ -113,6 +114,7 @@ template <Allocator Memory>
 void write(Memory &memory, const String<Memory> &path, std::string_view source, bool preserve_settings) {
   String<Memory> target{path, AllocatorRef<char, Memory>{memory}};
   std::optional<mode_t> permissions;
+
   if (preserve_settings) {
     std::array<char, PATH_MAX> resolved;
     if (::realpath(path.c_str(), resolved.data()) != nullptr) {
@@ -138,6 +140,7 @@ void write(Memory &memory, const String<Memory> &path, std::string_view source, 
   if (const int error = writePrivateFile(directory.get(), name, {reinterpret_cast<const unsigned char *>(source.data()), source.size()}, PrivateFileMode::replace)) {
     throw SystemError{"Publish integration file", error};
   }
+
   if (permissions && ::chmod(target.c_str(), *permissions) != 0) {
     throw SystemError{"Restore integration settings permissions"};
   }
@@ -193,6 +196,7 @@ inline constexpr auto skills = std::to_array<Skill>({
 template <Allocator Memory>
 String<Memory> skillPath(Memory &memory, std::string_view root, const Skill &skill) {
   auto path = joinPath(memory, root, "skills");
+
   path = joinPath(memory, path, skill.name);
   return joinPath(memory, path, "SKILL.md");
 }
@@ -209,6 +213,7 @@ Ownership skillOwnership(const String<Memory> &path, const Skill &skill) noexcep
   if (!contents) {
     return Ownership::foreign;
   }
+
   if (contents->contains(skill.marker) || (skill.legacy_header && contents->starts_with(skill.header) && contents->substr(skill.header.size()).starts_with('\n'))) {
     return Ownership::owned;
   }
@@ -226,6 +231,7 @@ void installSkills(Memory &memory, std::string_view root) {
     }
 
     String<Memory> contents{skill.header, AllocatorRef<char, Memory>{memory}};
+
     contents += skill.marker;
     contents += '\n';
     contents += skill.text;
@@ -238,6 +244,7 @@ template <Allocator Memory>
 void reportSkills(Memory &memory, std::string_view root) {
   for (const auto &skill : skills) {
     const auto path = skillPath(memory, root, skill);
+
     std::printf("skill %.*s: %s at %s\n", static_cast<int>(skill.name.size()), skill.name.data(), ownershipName(skillOwnership(path, skill)).data(), path.c_str());
   }
 }
@@ -271,6 +278,7 @@ struct Extension {
     if (provider == AgentProvider::pi) {
       return {"extension", "// telar-integration: pi", assets::pi_extension};
     }
+
     if (provider == AgentProvider::opencode) {
       return {"plugin", "// telar-integration: opencode", assets::opencode_extension};
     }
@@ -287,6 +295,7 @@ struct Extension {
     }
 
     String<Memory> result{source.substr(0, offset), AllocatorRef<char, Memory>{memory}};
+
     appendJsonText(result, executable);
     result += source.substr(offset + placeholder.size());
     if (result.size() > maximum_bytes) {
@@ -308,9 +317,11 @@ int runExtension(Memory &memory, const IntegrationOptions &options, const Enviro
   const auto rendered = extension.render(memory, executable);
   const auto existing = read(memory, path, Extension::maximum_bytes);
   const bool owned = existing && existing->starts_with(extension.marker);
+
   if (options.action == IntegrationAction::status) {
     const auto ownership = !existing ? Ownership::absent : owned ? Ownership::owned
                                                                  : Ownership::foreign;
+
     std::printf("telar %s: %s at %s\n", extension.noun.data(), ownershipName(ownership).data(), path.c_str());
     reportSkills(memory, root);
     return 0;
@@ -319,12 +330,14 @@ int runExtension(Memory &memory, const IntegrationOptions &options, const Enviro
   if (existing && !owned && *existing != rendered) {
     const auto action = options.action == IntegrationAction::install ? "exists and is not telar's" : "is not telar's";
     const auto resolution = options.action == IntegrationAction::install ? "move it first" : "left untouched";
+
     std::fprintf(stderr, "telar integration: %s %s %s; %s\n", path.c_str(), action, extension.noun.data(), resolution);
     return 1;
   }
 
   if (options.action == IntegrationAction::install) {
     const char *state = "already present";
+
     if (!existing || *existing != rendered) {
       write(memory, path, rendered, false);
       state = existing ? "updated" : "installed";
@@ -390,6 +403,7 @@ public:
 
   inline bool install(JsonNode<Memory> &settings) const {
     bool changed = false;
+
     if (provider_.flat_hooks && settings.find("version") == nullptr) {
       settings.setLiteral("version", "1");
       changed = true;
@@ -400,6 +414,7 @@ public:
     }
 
     auto &hooks = settings.ensure("hooks", JsonKind::object);
+
     changed = installEvents(hooks, provider_.events, command_, provider_.timeout) || changed;
     changed = installEvents(hooks, provider_.worktree_events, worktree_command_, worktree_timeout) || changed;
     return changed;
@@ -413,12 +428,14 @@ public:
 
     const bool lifecycle_changed = removeEvents(*hooks, provider_.events);
     const bool worktrees_changed = removeEvents(*hooks, provider_.worktree_events);
+
     return lifecycle_changed || worktrees_changed;
   }
 
 private:
   inline bool isOwnCommand(const JsonNode<Memory> &hook) const noexcept {
     const auto *command = hook.find("command");
+
     return command != nullptr && command->kind() == JsonKind::string && command->text().ends_with(marker_);
   }
 
@@ -432,6 +449,7 @@ private:
     if (hooks == nullptr || hooks->kind() != JsonKind::array) {
       return nullptr;
     }
+
     for (auto &hook : hooks->children()) {
       if (isOwnCommand(hook)) {
         return &hook;
@@ -443,6 +461,7 @@ private:
 
   inline bool installEvents(JsonNode<Memory> &hooks, std::span<const std::string_view> events, std::string_view command, std::string_view timeout) const {
     bool changed = false;
+
     for (const auto event : events) {
       if (const auto *entries = hooks.find(event); entries && entries->kind() != JsonKind::array) {
         throw CommandError{"SettingsFieldNotAnArray"};
@@ -450,6 +469,7 @@ private:
 
       auto &entries = hooks.ensure(event, JsonKind::array);
       bool present = false;
+
       for (auto &entry : entries.children()) {
         auto *hook = findHook(entry);
         if (hook == nullptr) {
@@ -462,6 +482,7 @@ private:
           changed = true;
         }
       }
+
       if (!present) {
         entries.append(newEntry(command, timeout));
         changed = true;
@@ -473,6 +494,7 @@ private:
 
   inline JsonNode<Memory> newEntry(std::string_view command, std::string_view timeout) const {
     JsonNode<Memory> hook{memory_};
+
     if (!provider_.flat_hooks) {
       hook.setString("type", "command");
     }
@@ -484,12 +506,14 @@ private:
     }
 
     JsonNode<Memory> entry{memory_};
+
     entry.ensure("hooks", JsonKind::array).append(std::move(hook));
     return entry;
   }
 
   inline bool removeEvents(JsonNode<Memory> &hooks, std::span<const std::string_view> events) const {
     bool changed = false;
+
     for (const auto event : events) {
       auto *entries = hooks.find(event);
       if (entries == nullptr || entries->kind() != JsonKind::array) {
@@ -499,6 +523,7 @@ private:
       for (std::size_t index = 0; index < entries->children().size();) {
         auto &entry = entries->children()[index];
         bool empty = false;
+
         if (provider_.flat_hooks) {
           empty = isOwnCommand(entry);
           changed = empty || changed;
@@ -521,6 +546,7 @@ private:
           ++index;
         }
       }
+
       if (entries->children().empty()) {
         hooks.remove(event);
       }
@@ -559,9 +585,11 @@ std::optional<String<Memory>> legacySettings(Memory &memory, Provider provider, 
   auto legacy = joinPath(memory, provider.root(memory, environment, true), provider.file);
   std::array<char, PATH_MAX> legacy_path;
   std::array<char, PATH_MAX> current_path;
+
   if (::realpath(legacy.c_str(), legacy_path.data()) == nullptr) {
     return std::nullopt;
   }
+
   if (::realpath(current.c_str(), current_path.data()) != nullptr && std::string_view{legacy_path.data()} == current_path.data()) {
     return std::nullopt;
   }
@@ -577,11 +605,13 @@ bool reportLegacy(Memory &memory, const String<Memory> &path, const HookSettings
   }
 
   std::optional<JsonNode<Memory>> settings;
+
   try {
     settings.emplace(JsonNode<Memory>::parse(memory, *source));
   } catch (const std::exception &) {
     return false;
   }
+
   for (const auto events : {provider.events, provider.worktree_events}) {
     for (const auto event : events) {
       if (hooks.installed(*settings, event)) {
@@ -615,12 +645,14 @@ int runSettings(Memory &memory, const IntegrationOptions &options, const Environ
   const HookSettings hooks{memory, provider, executable};
   const auto source = read(memory, path, maximum_settings_bytes);
   std::optional<JsonNode<Memory>> settings;
+
   try {
     settings.emplace(JsonNode<Memory>::parse(memory, source ? std::string_view{*source} : "{}"));
   } catch (const std::exception &) {
     std::fprintf(stderr, "telar integration: %s is not valid JSON\n", path.c_str());
     return 1;
   }
+
   if (settings->kind() != JsonKind::object) {
     std::fprintf(stderr, "telar integration: %s must contain a JSON object\n", path.c_str());
     return 1;
@@ -657,6 +689,7 @@ int runSettings(Memory &memory, const IntegrationOptions &options, const Environ
 
   const char *state = installing ? changed ? "installed" : "already present" : changed ? "removed"
                                                                                        : "not present";
+
   std::printf("telar integration: %s hooks %s in %s\n", provider.name.data(), state, path.c_str());
   if (installing) {
     installSkills(memory, root);

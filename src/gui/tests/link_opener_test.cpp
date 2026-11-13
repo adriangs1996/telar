@@ -82,6 +82,7 @@ struct TestHost {
 
   static void start(QProcess &process, const LinkTarget &target) {
     const auto text = toQString(target.text());
+
     started.push_back(text);
     QObject::connect(&process, &QProcess::started, &process, [&process] {
       process_id = process.processId();
@@ -115,6 +116,7 @@ case "$1" in
 esac
 printf '%s' "$1"
 )";
+
     process.start(QStringLiteral("/bin/sh"), {QStringLiteral("-c"), QString::fromLatin1(script), QStringLiteral("telar-link-test"), text}, QIODevice::ReadOnly);
   }
 };
@@ -147,6 +149,7 @@ private:
     const auto first = target("https://slow.test");
     const auto omitted = target("https://omitted.test");
     const auto last = target("https://last.test");
+
     opener.request(first);
     opener.request(omitted);
     opener.request(last);
@@ -164,12 +167,14 @@ private:
     constexpr std::uint64_t first_context = 11;
     constexpr std::uint64_t replaced_context = 12;
     constexpr std::uint64_t last_context = 13;
+
     opener.request(target("https://failure.test"), first_context);
     opener.request(target("https://omitted.test"), replaced_context);
     opener.request(target("https://last.test"), last_context);
     QVERIFY(QTest::qWaitFor([&] {
       return observer.results.size() == 2;
     }));
+
     QCOMPARE(observer.results[0].first, first_context);
     QCOMPARE(observer.results[0].second, std::optional{LinkOpeningFailure::process});
     QCOMPARE(observer.results[1].first, last_context);
@@ -179,6 +184,7 @@ private:
   Q_SLOT static void failuresAndRecovery() {
     Observer observer;
     ExternalLinkOpener<TestHost, Observer> opener{observer};
+
     opener.request(target("https://failure.test"));
     opener.request(target("https://recovery.test"));
     QVERIFY(observer.waitFor(2));
@@ -194,6 +200,7 @@ private:
     opener.request(target("https://read-error.test"));
     opener.request(target("https://recovered.test"));
     constexpr std::size_t completed_requests = 6;
+
     QVERIFY(observer.waitFor(completed_requests));
     QCOMPARE(observer.results[completed_requests - 2], std::optional{LinkOpeningFailure::process});
     QVERIFY(!observer.results.back() && !opener.active());
@@ -202,6 +209,7 @@ private:
   Q_SLOT static void outputLimits() {
     Observer observer;
     ExternalLinkOpener<TestHost, Observer> opener{observer};
+
     opener.request(target("https://stdout.test"));
     QVERIFY(observer.waitFor(1));
     QCOMPARE(observer.results.back(), std::optional{LinkOpeningFailure::output_limit});
@@ -215,8 +223,10 @@ private:
 
   Q_SLOT static void timeoutAndShutdown() {
     Observer observer;
+
     {
       ExternalLinkOpener<ShortDeadlineHost, Observer> opener{observer};
+
       opener.request(target("https://timeout.test"));
       opener.request(target("https://recovered.test"));
       QVERIFY(observer.waitFor(2));
@@ -227,6 +237,7 @@ private:
     observer.results.clear();
     {
       ExternalLinkOpener<TestHost, Observer> opener{observer};
+
       TestHost::process_id = 0;
       opener.request(target("https://timeout.test"));
       opener.request(target("https://must-not-open.test"));
@@ -243,6 +254,7 @@ private:
     Observer observer;
     ExternalLinkOpener<TestHost, Observer> opener{observer};
     const auto literal = target("https://literal.test/$(id);date");
+
     opener.request(literal);
     QVERIFY(observer.waitFor(1));
     QCOMPARE(TestHost::started.front(), toQString(literal.text()));
@@ -263,21 +275,27 @@ private:
         static_cast<void>(qputenv(name, previous));
       }
     });
+
     QVERIFY(qunsetenv(name));
     const platform::ProcessEnvironment missing;
+
     QVERIFY(!missing(name));
     QVERIFY(qputenv(name, QByteArray{""}));
     const platform::ProcessEnvironment empty;
     const auto empty_value = empty(name);
+
     QVERIFY(empty_value && empty_value->empty());
     constexpr std::string_view raw_byte = "\xff";
+
     QVERIFY(qputenv(name, QByteArray{raw_byte.data(), static_cast<qsizetype>(raw_byte.size())}));
     const platform::ProcessEnvironment captured;
     const auto retained = captured(name);
+
     QVERIFY(retained && *retained == raw_byte);
     QVERIFY(qputenv(name, QByteArray{"changed"}));
     QVERIFY(captured(name) == retained && retained == std::optional{raw_byte});
     const platform::ProcessEnvironment replacement;
+
     QVERIFY(replacement(name) == std::optional{std::string_view{"changed"}});
   }
 };

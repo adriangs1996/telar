@@ -90,6 +90,7 @@ struct MachineRow {
     destination.assign(fields.destination.substr(0, MachineLimits::destination_bytes));
     color.assign(fields.color.value_or("").substr(0, MachineLimits::color_bytes));
     const auto path = fields.program.value_or("");
+
     program.assign(path.size() <= MachineLimits::program_bytes ? path : std::string_view{});
     enabled = fields.enabled;
   }
@@ -134,6 +135,7 @@ public:
     }
 
     const auto live = row.live;
+
     row = {};
     row.live = live;
     row.used = true;
@@ -156,6 +158,7 @@ public:
 
   inline void remove(Slot slot) {
     auto &row = requireRemote(slot);
+
     row.used = false;
     row.enabled = false;
     row.pinned = false;
@@ -197,6 +200,7 @@ public:
 
   [[nodiscard]] inline std::size_t count() const noexcept {
     std::size_t count = 0;
+
     for (const auto &row : rows_) {
       count += static_cast<std::size_t>(row.used && row.enabled);
     }
@@ -249,6 +253,7 @@ public:
 
   inline void pin(Slot slot) {
     auto &row = requireRemote(slot);
+
     row.pinned = row.id.value() == 0 || !row.enabled;
     row.enabled = true;
     ++revision_;
@@ -279,6 +284,7 @@ public:
     }
 
     const bool attention = agents_changed ? observation.attention : row.attention;
+
     row.agent_revision = observation.agent_revision;
     row.workspace_revision = observation.workspace_revision;
     const auto cpu = observation.metrics ? std::optional{observation.metrics->cpu_percent} : std::nullopt;
@@ -356,6 +362,7 @@ struct MachineOpening {
 
   [[nodiscard]] inline static std::optional<Machines::Slot> admitted(const Machines &machines, std::string_view name) noexcept {
     const auto rows = machines.rows();
+
     for (std::size_t index = 1; index < Machines::capacity; ++index) {
       const auto slot = static_cast<Machines::Slot>(index);
       const auto &row = rows[index];
@@ -389,6 +396,7 @@ struct MachinePicker {
 
   [[nodiscard]] inline static Matches collect(const Machines &machines, std::string_view query) {
     Matches matches;
+
     for (std::size_t index = 0; index < Machines::capacity; ++index) {
       const auto slot = static_cast<Machines::Slot>(index);
       const auto &row = machines.row(slot);

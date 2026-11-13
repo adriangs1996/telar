@@ -91,11 +91,14 @@ void require(bool condition, const char *message) {
 void builtinContent() {
   const auto metrics = components::builtinContent(components::SourceKind::metrics);
   const auto nodes = metrics.nodes();
+
   require(nodes.size() == 4 && nodes.front().kind == components::Kind::group && nodes.front().parent == components::Node::no_parent, "builtin metrics must retain the original root group");
   require(metrics.text(nodes.front().text) == "system", "builtin metrics must name their summary");
   constexpr std::array names{BarMetric::battery, BarMetric::cpu, BarMetric::memory};
+
   for (std::size_t index = 0; index < names.size(); ++index) {
     const auto &node = nodes[index + 1];
+
     require(node.kind == components::Kind::metric && node.parent == 0 && node.metric == names[index], "builtin metrics must list their arcs from the battery, then CPU and memory");
   }
 
@@ -104,6 +107,7 @@ void builtinContent() {
   }
 
   const auto machines = components::builtinContent(components::SourceKind::machines);
+
   require(machines.nodes().size() == 1 && machines.nodes().front().kind == components::Kind::machines && machines.nodes().front().parent == components::Node::no_parent && machines.nodes().front().priority == components::builtin_priority, "builtin machines must be one original-priority root");
   require(!machines.action(machines.nodes().front()), "builtin machine controls must retain their dedicated routing");
   for (const auto kind : {components::SourceKind::empty, components::SourceKind::tabs, components::SourceKind::fixed, components::SourceKind::dynamic, components::SourceKind::command}) {
@@ -160,6 +164,7 @@ ConfigurationSourceText selection(std::string_view profile = {}) {
 
 components::Context context() {
   components::Context result;
+
   result.client.active_tab_index = 1;
   result.time.year = Fixture::year;
   result.time.weekday = Fixture::weekday;
@@ -174,30 +179,37 @@ void profilesAndDefinitions(Memory &memory) {
   const ConfigurationGeneration base{memory, selection("inherited")};
   const auto &configuration = base.components();
   const auto &definitions = configuration.definitions();
+
   require(definitions.panels().size() == 2 && definitions.panels()[0].heading.name.view() == "alpha" && definitions.panels()[1].heading.name.view() == "zebra", "panel names must be retained in action-index order");
   require(definitions.panels()[1].width == Fixture::panel_width && !definitions.panels()[1].source.interval, "panels without every_ms must render only on open/refresh");
   require(definitions.picks().size() == 1 && definitions.picks()[0].refresh, "static picks must retain their default refresh policy");
   require(definitions.source(components::Position::bottom_center).kind == components::SourceKind::tabs && definitions.source(components::Position::bottom_right).interval == Fixture::interval, "an unrelated profile must inherit source positions and cadence");
   const auto &bar = configuration.bar(components::Position::bottom_left);
+
   require(bar.nodes().size() == 2 && bar.text(bar.nodes()[1].text) == "á λ", "static source text must be copied into owned content");
   const auto action = bar.action(bar.nodes()[0]);
   const auto definition = action ? base.definitionAction(*action) : std::nullopt;
+
   require(definition && definition->kind == DefinitionActionDescription::Kind::panel && definition->index == 1, "static component actions must resolve sorted panel indices");
   require(bar.text(bar.nodes().front().url) == "https://action-fallback.test", "components with an action must also retain their configured URL");
   std::size_t argument = 0;
   constexpr auto expected = std::to_array<std::string_view>({"helper", "a b", "$(literal)"});
+
   base.visitArguments(definitions.source(components::Position::top_right).reference, "command", [&](std::string_view value) {
     require(argument < expected.size() && value == expected[argument], "command argv must retain literal argument boundaries");
     ++argument;
   });
+
   require(argument == expected.size(), "all command arguments must be retained");
 
   const ConfigurationGeneration replaced{memory, selection("replaced")};
   const auto &overlay = replaced.components();
+
   require(overlay.definitions().source(components::Position::bottom_left).kind == components::SourceKind::tabs && overlay.definitions().source(components::Position::bottom_center).kind == components::SourceKind::empty, "a declared bottom bar must replace omitted slots");
   require(overlay.bar(components::Position::bottom_left).empty() && overlay.bar(components::Position::bottom_right).text(overlay.bar(components::Position::bottom_right).nodes()[0].text) == "override", "inherited static content must not leak into replaced slots");
   const ConfigurationGeneration reindexed{memory, selection("reindexed")};
   const auto inherited_binding = reindexed.definitionAction(reindexed.input().configured[0].action);
+
   require(inherited_binding && inherited_binding->index == 0 && reindexed.components().definitions().panels().size() == 1, "inherited bindings must resolve panel names against the selected profile rather than reuse base indices");
 }
 
@@ -215,8 +227,10 @@ void footerValidation(Memory &memory) {
       InvalidFooter{R"(local t=require('telar'); return {api_version=2,client={bars={sidebar_footer={t.bar.static('first'),t.bar.metrics(),t.bar.tabs()}}}})", "config.client.bars.sidebar_footer cannot contain tabs", {}},
       InvalidFooter{R"(local t=require('telar'); return {api_version=2,profiles={bad={client={bars={sidebar_footer={t.bar.tabs()}}}}}})", "config.client.bars.sidebar_footer cannot contain tabs", "bad"},
   };
+
   for (const auto &example : invalid) {
     bool rejected = false;
+
     try {
       const ConfigurationGeneration generation{memory, ConfigurationSourceText{.source = example.source, .directory = {}, .profile = example.profile}};
     } catch (const std::exception &error) {
@@ -241,22 +255,27 @@ void footerValidation(Memory &memory) {
     }}
   )";
   constexpr std::array positions{components::Position::footer_left, components::Position::footer_center, components::Position::footer_right};
+
   {
     const ConfigurationGeneration generation{memory, ConfigurationSourceText{.source = valid, .directory = {}, .profile = "inherited"}};
     constexpr std::array kinds{components::SourceKind::metrics, components::SourceKind::machines, components::SourceKind::fixed};
+
     for (std::size_t index = 0; index < positions.size(); ++index) {
       require(generation.components().definitions().source(positions[index]).kind == kinds[index], "valid footer must retain all three ordered sources through inheritance");
     }
 
     const auto &bar = generation.components().bar(components::Position::footer_right);
+
     require(bar.nodes().size() == 1 && bar.text(bar.nodes().front().text) == "third", "valid footer must retain owned static content");
   }
 
   for (const auto *const profile : {"empty", "shorter"}) {
     const ConfigurationGeneration generation{memory, ConfigurationSourceText{.source = valid, .directory = {}, .profile = profile}};
     const bool empty = std::string_view{profile} == "empty";
+
     for (std::size_t index = 0; index < positions.size(); ++index) {
       const auto expected = !empty && index == 0 ? components::SourceKind::fixed : components::SourceKind::empty;
+
       require(generation.components().definitions().source(positions[index]).kind == expected, "declared footer list must replace inherited omitted slots");
     }
   }
@@ -278,14 +297,18 @@ void renderLifetime(Memory &memory) {
   ConfigurationGeneration generation{memory, selection()};
   auto snapshot = context();
   constexpr auto position = components::Position::bottom_right;
+
   generation.renderBar(position, snapshot);
   const auto &bar = generation.components().bar(position);
+
   require(bar.nodes().size() == 2 && bar.text(bar.nodes()[1].text) == snapshot.pane_title, "dynamic sources must receive the immutable render context");
   auto action = required(bar.action(bar.nodes()[0]));
   constexpr std::size_t renders = 2000;
+
   for (std::size_t index = 0; index < renders; ++index) {
     generation.renderBar(position, snapshot);
     const auto next = required(bar.action(bar.nodes()[0]));
+
     require(next != action && rejectedAction(generation, action) && required(generation.definitionAction(next)).index == 1, "old action identities must be rejected even when Lua registry references are reused");
     action = next;
   }
@@ -293,6 +316,7 @@ void renderLifetime(Memory &memory) {
   for (const auto *const failure : {"invalid", "immutable", "infinite"}) {
     snapshot.output = failure;
     bool rejected = false;
+
     try {
       generation.renderBar(position, snapshot);
     } catch (const std::exception &) {
@@ -306,10 +330,12 @@ void renderLifetime(Memory &memory) {
   snapshot.output.reset();
   generation.renderPanel(1, snapshot);
   const auto &panel = generation.components().panel();
+
   require(panel.nodes().size() == 3 && panel.nodes()[2].kind == components::Kind::button && required(panel.action(panel.nodes()[2])).kind == BindingActionKind::close_panel, "open panels must parse block content and native button actions");
   generation.closePanel();
   require(panel.empty(), "closing a panel must release its content");
   auto obsolete = action;
+
   ++obsolete.generation;
   require(rejectedAction(generation, obsolete), "component actions must reject a different configuration generation");
 }
@@ -332,6 +358,7 @@ void pickRendering(Memory &memory) {
   ConfigurationGeneration generation{memory, ConfigurationSourceText{.source = configuration, .directory = {}, .profile = {}}};
   components::PickItems items;
   auto invocation = context();
+
   generation.renderPick(0, invocation, items);
   require(items.size() == 2 && items.at(1).value == "a\tb" && items.at(1).selected, "static pick metadata and literal values must survive parsing");
   invocation.output = " low \n a\tb \n";
@@ -343,6 +370,7 @@ void pickRendering(Memory &memory) {
   for (const auto *const failure : {"infinite", "immutable", "invalid"}) {
     invocation.output = failure;
     bool rejected = false;
+
     try {
       generation.renderPick(2, invocation, items);
     } catch (const std::exception &) {
@@ -384,12 +412,14 @@ void elementRendering(Memory &memory) {
     }}
   )";
   ConfigurationGeneration generation{memory, ConfigurationSourceText{.source = configuration, .directory = {}, .profile = {}}};
+
   require(generation.components().definitions().slot(components::Slot::tab) != LUA_NOREF && generation.components().definitions().slot(components::Slot::pane_header) == LUA_NOREF, "component slots must keep only the functions a configuration names");
   const auto invocation = context();
   constexpr std::uint64_t instance = 7;
   const auto rendered = generation.renderElements(components::Slot::tab, instance, invocation, R"({"title":"Tab λ","panes":[{"program":"nvim"},{"program":"git"}]})");
   const auto &elements = rendered->elements;
   using Kind = components::ElementKind;
+
   require(elements.size() == 9, "an element tree must keep every element in document order");
   require(elements[0].kind == Kind::row && elements[0].width == 180 && elements[0].padding == std::array<float, 4>{10, 2, 10, 2} && elements[0].background.alpha == 0x80, "boxes must read sizes, CSS-ordered padding and colors with alpha");
   require(elements[1].kind == Kind::stack && elements[2].kind == Kind::tile && elements[2].parent == 1 && rendered->view(elements[2].key) == "nvim" && elements[2].z == -2 && elements[2].transition_ms == 180 && elements[2].easing == 1, "stacks must hold keyed tiles with their poses and transitions");
@@ -397,18 +427,22 @@ void elementRendering(Memory &memory) {
   require(rendered->view(elements[5].text) == "Tab λ" && elements[5].bold && elements[5].grow == 1, "labels must keep the item text and their style");
   require(elements[5].action != components::Element::none, "action tables must become element actions");
   const auto *action = rendered->actions.find(rendered->bindings[elements[5].action]);
+
   require(action != nullptr && action->description && std::holds_alternative<DefinitionActionDescription>(*action->description), "element actions must be resolved when the render finishes");
   require(elements[6].named && elements[6].callback == 0 && rendered->callbacks == 1, "on_click functions must be kept as handlers of their instance");
   require(elements[7].kind == Kind::canvas && elements[7].steps_count == 4 && rendered->steps[elements[7].steps_offset + 1].count == 1, "canvas operations must keep their values and optional widths");
   require(elements[8].kind == Kind::builtin && rendered->view(elements[8].text) == "tab_cards", "built-in pieces must name a known piece");
 
   const auto effects = generation.invokeElement(instance, 0, invocation, R"({"title":"Tab λ","panes":[]})");
+
   require(effects->effects.length == 1 && effects->effects.actions[0].kind == BindingActionKind::toggle_sidebar, "a click function must return its actions");
   const auto again = generation.renderElements(components::Slot::tab, instance, invocation, R"({"title":"Tab λ","panes":[]})");
+
   require(again->view(again->elements[2].text) == "plain 1", "a click function's state must reach the next render");
 
   for (const auto *const title : {"loop", "unknown", "builtin"}) {
     bool rejected = false;
+
     try {
       static_cast<void>(generation.renderElements(components::Slot::tab, instance, invocation, std::string{R"({"title":")"} + title + R"(","panes":[]})"));
     } catch (const std::exception &) {
@@ -419,9 +453,11 @@ void elementRendering(Memory &memory) {
   }
 
   const auto effects_after = generation.invokeElement(instance, 0, invocation, "{}");
+
   require(effects_after->effects.length == 1, "a failed render must keep the handlers of the last valid one");
   generation.forgetElements(instance);
   bool forgotten = false;
+
   try {
     static_cast<void>(generation.invokeElement(instance, 0, invocation, "{}"));
   } catch (const std::invalid_argument &) {
@@ -435,11 +471,13 @@ void elementRendering(Memory &memory) {
 template <typename Memory>
 void exampleMods(Memory &memory) {
   std::array<char, PATH_MAX> directory{};
+
   require(::realpath(TELAR_GUI_EXAMPLES_DIR, directory.data()) != nullptr, "the documented examples must exist");
   struct Sample {
     components::Slot slot;
     std::string_view item;
   };
+
   constexpr std::array samples{
       Sample{components::Slot::tab, R"({"index":1,"key":"4","title":"nvim","label":"nvim","path":"~/src","application":"nvim","selected":true,"attention":true,"panes":[{"key":"1","program":"nvim","focused":false,"attention":true},{"key":"2","program":"git","focused":true,"attention":false}]})"},
       Sample{components::Slot::pane_header, R"({"id":"2","index":1,"program":"claude","context":"~/src","focused":true,"fullscreen":false,"images_paused":false,"needs_attention":false,"progress":""})"},
@@ -447,16 +485,20 @@ void exampleMods(Memory &memory) {
       Sample{components::Slot::top_bar, R"({"workspace":"telar","machine":"laptop","tab_count":2,"sidebar_visible":true})"},
       Sample{components::Slot::bottom_bar, R"({"workspace":"telar","machine":"laptop","tab_count":2,"sidebar_visible":true})"},
   };
+
   std::size_t rendered = 0;
+
   for (const auto *const name : {"stack-tabs", "default-tab", "default-pane-header", "default-card", "default-top-bar", "default-bottom-bar"}) {
     const auto source = std::string{"return {api_version=2,client={components=require('mods."} + name + "')}}";
     ConfigurationGeneration generation{memory, ConfigurationSourceText{.source = source, .directory = directory.data(), .profile = {}}};
+
     for (const auto &sample : samples) {
       if (generation.components().definitions().slot(sample.slot) == LUA_NOREF) {
         continue;
       }
 
       const auto elements = generation.renderElements(sample.slot, 1, context(), sample.item);
+
       require(!elements->elements.empty(), "an example mod must draw something for each slot it names");
       ++rendered;
     }
@@ -472,6 +514,7 @@ int main() {
     SystemAllocator system;
     constexpr std::size_t allocation_budget = std::size_t{8} * 1024 * 1024;
     BudgetAllocator memory{system, allocation_budget};
+
     builtinContent();
     profilesAndDefinitions(memory);
     footerValidation(memory);

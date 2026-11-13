@@ -62,6 +62,7 @@ void CellProjection::updateColors(GhosttyTerminal terminal, GhosttyRenderState r
   const auto background_result = ghostty_terminal_get(terminal, GHOSTTY_TERMINAL_DATA_COLOR_BACKGROUND_OVERRIDE, &background);
   GhosttyTerminalModeConfig reverse{.mode = GHOSTTY_MODE_REVERSE_COLORS,
                                     .value = false};
+
   checkGhostty(ghostty_terminal_get(terminal, GHOSTTY_TERMINAL_DATA_MODE, &reverse));
 
   default_style_ = {};
@@ -116,6 +117,7 @@ CellStyle CellProjection::translateStyle(const GhosttyStyle &style) const noexce
   flag(style.strikethrough, CellAttribute::strikethrough);
   flag(style.overline, CellAttribute::overline);
   constexpr unsigned underline_shift = 8;
+
   translated.flags |= static_cast<std::uint16_t>(style.underline << underline_shift);
   return translated;
 }
@@ -126,18 +128,21 @@ void CellProjection::writeGrapheme(GhosttyRenderStateRowCells cells, ScreenCell 
   GhosttyCodepointsBuffer codepoints{.ptr = storage.data(),
                                      .cap = storage.size(),
                                      .len = 0};
+
   checkGhostty(ghostty_render_state_row_cells_get(cells, GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_GRAPHEMES_EXTRA, &codepoints));
   for (const auto codepoint : std::span<const std::uint32_t>{codepoints.ptr, codepoints.len}) {
     constexpr std::size_t maximum_utf8_bytes = 4;
     if (destination.text.size() - destination.length < maximum_utf8_bytes) {
       break;
     }
+
     destination.length += encodeCodepoint(codepoint, destination.text.data() + destination.length);
   }
 }
 
 void CellProjection::copyRow(GhosttyRenderStateRowIterator row, GhosttyRenderStateRowCells cells, std::span<ScreenCell> destination) const {
   GhosttyCellsView source{};
+
   checkGhostty(ghostty_render_state_row_get(row, GHOSTTY_RENDER_STATE_ROW_DATA_CELLS_RAW, &source));
   checkGhostty(ghostty_render_state_row_get(row, GHOSTTY_RENDER_STATE_ROW_DATA_CELLS, &cells));
 
@@ -155,6 +160,7 @@ void CellProjection::copyRow(GhosttyRenderStateRowIterator row, GhosttyRenderSta
     if (style_id != 0 && style_id != previous_style_id) {
       checkGhostty(ghostty_render_state_row_cells_select(cells, static_cast<std::uint16_t>(column)));
       auto style = ghosttySized<GhosttyStyle>();
+
       checkGhostty(ghostty_render_state_row_cells_get(cells, GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_STYLE, &style));
       previous_style = translateStyle(style);
       previous_style_id = style_id;
@@ -195,6 +201,7 @@ void CellProjection::copyRow(GhosttyRenderStateRowIterator row, GhosttyRenderSta
           .g = static_cast<Byte>(cell_layout::g(raw)),
           .b = static_cast<Byte>(cell_layout::b(raw)),
       });
+
       break;
     default:
       throw TerminalError{GHOSTTY_INVALID_VALUE};

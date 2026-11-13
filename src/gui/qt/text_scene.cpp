@@ -75,6 +75,7 @@ TextScene::TextScene(tbc::view<QQuickWindow &, tbc::lt::a> window)
 
 void TextScene::configure(const FontConfiguration &font, FontGrid grid, const std::shared_ptr<const FontCollection> &collection) {
   constexpr std::array hinting{fonts::GlyphHinting::native, fonts::GlyphHinting::light, fonts::GlyphHinting::full};
+
   rasterization_ = {.optical = font.thicken, .strength = font.thicken_strength, .hinting = hinting.at(std::to_underlying(font.hinting))};
 #ifdef Q_OS_MACOS
   if (!rasterization_.coreText()) {
@@ -82,6 +83,7 @@ void TextScene::configure(const FontConfiguration &font, FontGrid grid, const st
   } else if (!optical_) {
     optical_ = OpticalText::create();
   }
+
 #endif
   grid_ = grid;
   collection_ = collection;
@@ -170,8 +172,10 @@ void TextScene::flushCells(std::span<const CellValue> cells) {
   }
 
   const auto batch = std::move(*batch_);
+
   batch_.reset();
   ChromeTextPaint paint;
+
   paint.glyphs = row_.glyphs();
   paint.spans = row_.spans().subspan(batch.first_span, batch.span_count);
   paint.grid = grid_;
@@ -191,14 +195,17 @@ void TextScene::flushCells(std::span<const CellValue> cells) {
 
 void TextScene::addFallbackCells(const Batch &batch, std::span<const CellValue> cells) {
   QTextCharFormat format;
+
   format.setForeground(toQColor(batch.foreground));
   const auto end = std::min(batch.last_column + 1, cells.size());
+
   for (auto column = batch.first_column; column < end; ++column) {
     if (row_.cell(column).span_count == 0) {
       continue;
     }
 
     const QPointF origin{bounds_.x() + (static_cast<qreal>(column) * grid_.width / scale_), bounds_.y()};
+
     addQtText(QString::fromUtf8(cells[column].utf8()), batch.font, format, {.origin = origin, .baseline = grid_.baseline / scale_, .style = batch.style});
   }
 }
@@ -206,14 +213,17 @@ void TextScene::addFallbackCells(const Batch &batch, std::span<const CellValue> 
 void TextScene::appendInline(std::span<const CellValue> cells, std::unique_ptr<QSGNode> node) {
   flushCells(cells);
   const auto previous = takeChunk();
+
   appendChunk(std::move(node));
 }
 
 void TextScene::add(const QString &text, const QFont &font, const QTextCharFormat &format, TextPlacement placement) {
   try {
     const auto bytes = text.toUtf8();
+
     layout_.shape(*fonts_, {bytes.constData(), static_cast<std::size_t>(bytes.size())}, {.pixel_height = grid_.pixel_height, .preferred = fonts::FontRole::primary});
     ChromeTextPaint paint;
+
     paint.glyphs = layout_.glyphs();
     paint.spans = layout_.spans();
     paint.grid = grid_;
@@ -232,12 +242,14 @@ void TextScene::add(const QString &text, const QFont &font, const QTextCharForma
 void TextScene::addQtText(const QString &text, const QFont &font, const QTextCharFormat &format, TextPlacement placement) {
   QTextLayout layout{text, font};
   QTextOption option;
+
   option.setTextDirection(Qt::LeftToRight);
   option.setWrapMode(QTextOption::NoWrap);
   layout.setTextOption(option);
   layout.setFormats({{.start = 0, .length = static_cast<int>(text.size()), .format = format}});
   layout.beginLayout();
   auto line = layout.createLine();
+
   line.setNumColumns(static_cast<int>(text.size()));
   line.setPosition({0, placement.baseline - line.ascent()});
   layout.endLayout();
@@ -247,6 +259,7 @@ void TextScene::addQtText(const QString &text, const QFont &font, const QTextCha
     const auto previous = takeChunk();
     const auto overhang = bounds_.height();
     const auto raster = bounds_.adjusted(-overhang, -overhang, overhang, overhang);
+
     optical_->begin(raster.size(), scale_, rasterization_.strength);
     optical_->add(layout, placement.origin - raster.topLeft(), format.foreground().color());
     if (std::unique_ptr<QSGNode> node{optical_->node(window_, raster.topLeft())}) {
@@ -257,6 +270,7 @@ void TextScene::addQtText(const QString &text, const QFont &font, const QTextCha
   {
     const auto previous = takeChunk();
     std::unique_ptr<QSGTextNode> node{window_.createTextNode()};
+
     node->setRenderType(QSGTextNode::NativeRendering);
     node->addTextLayout(placement.origin, &layout);
     appendChunk(std::move(node));

@@ -43,12 +43,14 @@ public:
   [[nodiscard]] std::optional<qreal> number() {
     skip();
     const auto start = index_;
+
     if (index_ < data_.size() && (data_[index_] == u'-' || data_[index_] == u'+')) {
       ++index_;
     }
 
     bool digits = false;
     bool dot = false;
+
     while (index_ < data_.size() && (data_[index_].isDigit() || (data_[index_] == u'.' && !dot))) {
       dot = dot || data_[index_] == u'.';
       digits = digits || data_[index_].isDigit();
@@ -139,6 +141,7 @@ bool ElementCanvas::appendSvgPath(QPainterPath &path, const QString &data) {
   PathScanner scanner{data};
   QPointF current = path.currentPosition();
   QChar active;
+
   while (!scanner.done()) {
     if (const auto command = scanner.command()) {
       active = *command;
@@ -160,7 +163,9 @@ bool ElementCanvas::appendSvgPath(QPainterPath &path, const QString &data) {
 
       return true;
     };
+
     std::array<qreal, 6> values{};
+
     switch (active.toUpper().unicode()) {
     case u'M':
       if (!read(2, values)) {
@@ -232,12 +237,14 @@ void ElementCanvas::paint(QPainter *painter) {
   qreal line_width = 1;
   auto cap = Qt::FlatCap;
   auto join = Qt::MiterJoin;
+
   for (const auto &entry : operations_) {
     const auto operation = entry.toMap();
     const auto values = operation.value(QStringLiteral("values")).toList();
     const auto value = [&](qsizetype index) {
       return index < values.size() ? values[index].toReal() : 0.0;
     };
+
     switch (operation.value(QStringLiteral("op")).toInt()) {
     case op_move:
       path.moveTo(value(0), value(1));
@@ -256,6 +263,7 @@ void ElementCanvas::paint(QPainter *painter) {
       const QRectF bounds{value(0) - value(2), value(1) - value(2), 2 * value(2), 2 * value(2)};
       const auto start = 90 - value(3);
       const auto sweep = -(value(4) - value(3));
+
       if (path.elementCount() == 0) {
         path.arcMoveTo(bounds, start);
       }
@@ -275,6 +283,7 @@ void ElementCanvas::paint(QPainter *painter) {
       if (!appendSvgPath(path, operation.value(QStringLiteral("text")).toString())) {
         return;
       }
+
       break;
     case op_close:
       path.closeSubpath();
@@ -285,6 +294,7 @@ void ElementCanvas::paint(QPainter *painter) {
       break;
     case op_stroke: {
       QPen pen{operation.value(QStringLiteral("color")).value<QColor>()};
+
       pen.setWidthF(values.isEmpty() ? line_width : value(0));
       pen.setCapStyle(cap);
       pen.setJoinStyle(join);

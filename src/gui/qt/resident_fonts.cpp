@@ -98,6 +98,7 @@ ResidentFonts::ResidentFonts(std::shared_ptr<const FontCollection> collection)
   collection_ = std::move(collection);
   for (std::size_t index = 0; index < collection_->count; ++index) {
     const auto &source = *collection_->fallback[index];
+
     fallbacks_[index].emplace(source.bytes(), source.match());
   }
 }
@@ -152,11 +153,13 @@ std::optional<fonts::FontRole> ResidentFonts::source(std::string_view text, font
 
 std::shared_ptr<const FontAsset> ResidentFonts::resolveSource(const QString &family, const QString &style) {
   thread_local QHash<std::pair<QString, QString>, std::weak_ptr<const FontAsset>> sources;
+
   forgetExpired(sources);
   const std::pair key{family.isEmpty() ? QStringLiteral("Telar Forma") : family, style};
   auto source = sources.value(key).lock();
   if (!source) {
     FontConfiguration configuration;
+
     configuration.family.assign(key.first.toStdString());
     configuration.style.assign(style.toStdString());
     source = std::make_shared<const FontAsset>(loadFontData(configuration));
@@ -168,6 +171,7 @@ std::shared_ptr<const FontAsset> ResidentFonts::resolveSource(const QString &fam
 
 tbc::view<std::shared_ptr<ResidentFonts>, tbc::lt::static_storage> ResidentFonts::shared(const std::shared_ptr<const FontAsset> &source) {
   thread_local QHash<const FontAsset *, std::weak_ptr<ResidentFonts>> cached;
+
   forgetExpired(cached);
   auto fonts = cached.value(source.get()).lock();
   if (!fonts) {
@@ -188,6 +192,7 @@ tbc::view<std::shared_ptr<ResidentFonts>, tbc::lt::static_storage> ResidentFonts
   }
 
   thread_local QHash<const FontCollection *, std::weak_ptr<ResidentFonts>> cached;
+
   forgetExpired(cached);
   auto fonts = cached.value(collection.get()).lock();
   if (!fonts) {

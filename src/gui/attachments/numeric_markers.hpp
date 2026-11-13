@@ -24,6 +24,7 @@ public:
   [[nodiscard]] std::optional<NumericAttachmentMarker> next() noexcept {
     while (position_.y < screen_.rows && static_cast<std::uint32_t>(position_.x) + head.size() <= screen_.columns) {
       const auto point = position_;
+
       if (static_cast<std::uint32_t>(position_.x) + head.size() < screen_.columns) {
         ++position_.x;
       } else {
@@ -65,6 +66,7 @@ public:
     NumericAttachmentMarkers scan{screen};
     std::optional<NumericAttachmentMarker> best;
     auto best_distance = std::numeric_limits<std::uint32_t>::max();
+
     while (const auto candidate = scan.next()) {
       if (candidate->number != number) {
         continue;
@@ -84,6 +86,7 @@ public:
 
   [[nodiscard]] static bool present(AttachmentMarkerScreen screen, std::uint16_t number) noexcept {
     NumericAttachmentMarkers scan{screen};
+
     while (const auto marker = scan.next()) {
       if (marker->number == number) {
         return true;
@@ -100,6 +103,7 @@ public:
 
     std::uint16_t count = 0;
     auto column = first;
+
     while (column < last) {
       const auto marker = parse(screen, {.x = column, .y = row});
       if (marker && marker->start.y == marker->end.y && marker->end.x <= last) {
@@ -107,6 +111,7 @@ public:
         column = marker->end.x;
       } else {
         const auto *const value = screen.cell({.x = column, .y = row});
+
         count = static_cast<std::uint16_t>(count + (value != nullptr && value->width != CellWidth::continuation ? 1 : 0));
         ++column;
       }
@@ -122,6 +127,7 @@ private:
 
   [[nodiscard]] static std::optional<NumericAttachmentMarker> tail(AttachmentMarkerScreen screen, CellPosition start, CellPosition point) noexcept {
     std::uint16_t number = 0;
+
     for (auto column = point.x; column < screen.columns; ++column) {
       const auto *const cell = screen.cell({.x = column, .y = point.y});
       if (cell == nullptr || cell->width == CellWidth::continuation || cell->length != 1) {

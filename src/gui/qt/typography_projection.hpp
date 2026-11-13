@@ -34,6 +34,7 @@ namespace telar::gui::qt {
 inline QVariantMap chromeTypographyRecord(const DisplayMetrics &display, const FontConfiguration &font) {
   const auto &chrome = display.chrome;
   const auto density = display.density;
+
   return {
       {QStringLiteral("body"), chrome.body / density},
       {QStringLiteral("small"), chrome.small / density},

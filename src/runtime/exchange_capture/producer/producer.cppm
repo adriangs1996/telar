@@ -54,6 +54,7 @@ public:
     if (state_ == nullptr) {
       return std::nullopt;
     }
+
     auto available_input = input.size();
     auto available_output = output.size();
     const auto *next_input = input.data();
@@ -62,6 +63,7 @@ public:
     if (status == BROTLI_DECODER_RESULT_SUCCESS || (status == BROTLI_DECODER_RESULT_NEEDS_MORE_OUTPUT && available_output == 0)) {
       return output.size() - available_output;
     }
+
     return std::nullopt;
   }
 
@@ -80,6 +82,7 @@ template <Allocator Memory>
   alignas(std::max_align_t) std::array<std::byte, decoder_scratch_capacity> storage;
   BufferAllocator buffered{memory, storage};
   BrotliDecoder decoder{buffered};
+
   return decoder.decode(input, output);
 }
 
@@ -116,8 +119,10 @@ public:
     if (requested <= minimum_output_capacity) {
       return minimum_output_capacity;
     }
+
     const auto remainder = requested % history_bytes;
     const auto padding = remainder == 0 ? 0 : history_bytes - remainder;
+
     return requested > std::numeric_limits<std::size_t>::max() - padding ? requested : requested + padding;
   }
 
@@ -140,6 +145,7 @@ public:
       // Finishing one complete block lets zlib skip allocating its retained history window.
       const bool single_block = !input.empty() && (input.front() & final_block_flag) != 0;
       const auto flush = single_block ? Z_FINISH : Z_BLOCK;
+
       for (;;) {
         const auto previous_input = stream_.total_in;
         const auto previous_output = stream_.total_out;
@@ -152,18 +158,23 @@ public:
         if (stream_.avail_out == 0 || (kind == BlockKind::stored && written >= requested)) {
           return written;
         }
+
         if (status == Z_STREAM_END) {
           return stream_.avail_in >= FlateEnvelope::footerSize(container) ? std::optional{written} : std::nullopt;
         }
+
         if (previous_input == stream_.total_in && previous_output == stream_.total_out) {
           return std::nullopt;
         }
+
         if ((stream_.data_type & block_boundary) != 0 && (stream_.data_type & final_block) == 0) {
           const auto bit_offset = stream_.total_in * bits_per_byte - (stream_.data_type & unused_bits_mask);
+
           kind = blockKind(input, bit_offset);
         }
       }
     }();
+
     stream_.next_in = nullptr;
     stream_.next_out = nullptr;
     return produced;
@@ -177,13 +188,16 @@ private:
 
   inline static BlockKind blockKind(std::span<const std::uint8_t> input, std::size_t bit_offset) noexcept {
     unsigned kind = 0;
+
     for (std::size_t bit = 0; bit < block_kind_bits; ++bit) {
       const auto position = bit_offset + 1 + bit;
       if (position / bits_per_byte >= input.size()) {
         return BlockKind::invalid;
       }
+
       kind |= ((input[position / bits_per_byte] >> (position % bits_per_byte)) & 1) << bit;
     }
+
     return static_cast<BlockKind>(kind);
   }
 
@@ -216,6 +230,7 @@ struct ZstdBlock {
 
   inline static ZstdBlock parse(std::span<const std::uint8_t, 3> bytes) noexcept {
     const auto value = bytes[0] | (bytes[1] << 8) | (bytes[2] << 16);
+
     return {static_cast<Kind>((value >> 1) & 3), static_cast<std::size_t>(value >> 3)};
   }
 
@@ -228,11 +243,13 @@ struct ZstdBlock {
     if (bytes.empty()) {
       return std::nullopt;
     }
+
     const auto kind = static_cast<unsigned>(bytes[0] & 3);
     const auto format = (bytes[0] >> 2) & 3;
     std::size_t header_size;
     std::size_t payload_size;
     std::size_t regenerated_size;
+
     if (kind <= repeated_literals) {
       header_size = (format == 0 || format == 2) ? 1 : format == 1 ? 2
                                                                    : 3;
@@ -240,6 +257,7 @@ struct ZstdBlock {
       if (!header) {
         return std::nullopt;
       }
+
       regenerated_size = *header >> (header_size == 1 ? 3 : 4);
       payload_size = kind == repeated_literals ? 1 : regenerated_size;
     } else {
@@ -249,8 +267,10 @@ struct ZstdBlock {
       if (!header) {
         return std::nullopt;
       }
+
       const auto field_bits = format <= 1 ? 10 : format == 2 ? 14
                                                              : 18;
+
       regenerated_size = (*header >> 4) & ((std::uint64_t{1} << field_bits) - 1);
       payload_size = (*header >> (4 + field_bits)) & ((std::uint64_t{1} << field_bits) - 1);
     }
@@ -258,6 +278,7 @@ struct ZstdBlock {
     if (payload_size >= bytes.size() - header_size) {
       return std::nullopt;
     }
+
     return Literals{regenerated_size, bytes[header_size + payload_size] != 0};
   }
 
@@ -269,10 +290,13 @@ private:
     if (bytes.size() < count) {
       return std::nullopt;
     }
+
     std::uint64_t value = 0;
+
     for (std::size_t index = 0; index < count; ++index) {
       value |= std::uint64_t{bytes[index]} << (index * 8);
     }
+
     return value;
   }
 
@@ -310,13 +334,16 @@ public:
     if (state_ == nullptr) {
       return std::nullopt;
     }
+
     std::size_t produced = 0;
+
     while (!input.empty()) {
       ZSTD_frameHeader frame{};
       const auto header = ZSTD_getFrameHeader(&frame, input.data(), input.size());
       if (header != 0 || frame.windowSize > maximum_window_bytes || (frame.frameType == ZSTD_frame && (input[frame_descriptor_offset] & dictionary_flags) != 0)) {
         return std::nullopt;
       }
+
       if (ZSTD_isError(ZSTD_decompressBegin(state_))) {
         return std::nullopt;
       }
@@ -324,18 +351,22 @@ public:
       ZstdBlock block;
       const auto frame_start = produced;
       const bool known_size = frame.frameType == ZSTD_frame && frame.frameContentSize != ZSTD_CONTENTSIZE_UNKNOWN;
+
       while (const auto needed = ZSTD_nextSrcSizeToDecompress(state_)) {
         const auto kind = ZSTD_nextInputType(state_);
         const auto remaining = limit - produced;
+
         if (needed > input.size()) {
           if ((kind == ZSTDnit_block || kind == ZSTDnit_lastBlock) && block.kind == ZstdBlock::Kind::raw && input.size() >= remaining && needed > remaining) {
             std::copy_n(input.data(), remaining, output.data() + produced);
             return Result{limit, true};
           }
+
           return std::nullopt;
         }
 
         bool requires_block_capacity = false;
+
         if (kind == ZSTDnit_blockHeader) {
           block = ZstdBlock::parse(input.first<3>());
           if (block.size > frame.blockSizeMax) {
@@ -346,9 +377,11 @@ public:
           if (!literals) {
             return std::nullopt;
           }
+
           requires_block_capacity = literals->has_sequences;
           if (!literals->has_sequences && literals->regenerated_size > remaining) {
             const auto copied = copyLiteralPrefix(input.first(needed), output.subspan(produced, remaining), frame.blockSizeMax);
+
             return copied ? std::optional{Result{produced + *copied, true}} : std::nullopt;
           }
         }
@@ -362,29 +395,37 @@ public:
           } else {
             return std::nullopt;
           }
+
           return Result{limit, true};
         }
+
         // The reference reserves a complete output block before expanding sequences.
         if (requires_block_capacity && remaining < frame.blockSizeMax) {
           return Result{produced, true};
         }
+
         const auto decoded = ZSTD_decompressContinue(state_, output.data() + produced, output.size() - produced, input.data(), needed);
         if (ZSTD_isError(decoded)) {
           return std::nullopt;
         }
+
         if (decoded > remaining) {
           return Result{limit, true};
         }
+
         produced += decoded;
         if (known_size && produced - frame_start > frame.frameContentSize) {
           return std::nullopt;
         }
+
         input = input.subspan(needed);
       }
+
       if (known_size && produced - frame_start != frame.frameContentSize) {
         return std::nullopt;
       }
     }
+
     return Result{produced, false};
   }
 
@@ -410,7 +451,9 @@ private:
     if (ZSTD_isError(decoded)) {
       return std::nullopt;
     }
+
     const auto accepted = std::min(decoded, destination.size());
+
     std::copy_n(storage.bytes().data(), accepted, destination.data());
     return accepted;
   }
@@ -448,38 +491,46 @@ public:
     if (parsed.failure != ContentCodings::Failure::none) {
       return raw(input, limit, true);
     }
+
     auto count = parsed.count;
     if (count == 1 && parsed.codings[0] == ContentCoding::identity) {
       auto result = raw(input, limit, false);
+
       result.decoded = true;
       return result;
     }
 
     auto current = input;
     std::optional<DecodedBody<Memory>> decoded;
+
     while (count != 0) {
       const auto coding = parsed.codings[--count];
       if (coding == ContentCoding::identity) {
         continue;
       }
+
       if (coding == ContentCoding::unknown) {
         decoded.reset();
         return raw(input, limit, false);
       }
 
       std::optional<DecodedBody<Memory>> result;
+
       try {
         result = decodeOne(current, coding, limit);
       } catch (const std::bad_alloc &) {
       }
+
       if (!result || (result->truncated && count != 0)) {
         result.reset();
         decoded.reset();
         return raw(input, limit, true);
       }
+
       decoded = std::move(result);
       current = decoded->bytes();
     }
+
     return decoded ? std::move(*decoded) : raw(input, limit, false);
   }
 
@@ -487,6 +538,7 @@ private:
   inline DecodedBody<Memory> raw(std::span<const std::uint8_t> input, std::size_t limit, bool failed) {
     const auto accepted = std::min(input.size(), limit);
     DecodedBody<Memory> result{memory_, accepted};
+
     std::copy_n(input.data(), accepted, result.storage.bytes().data());
     result.size = accepted;
     result.truncated = accepted != input.size();
@@ -498,6 +550,7 @@ private:
     const bool zstd = coding == ContentCoding::zstd;
     const bool brotli = coding == ContentCoding::brotli;
     const auto container = coding == ContentCoding::gzip ? FlateContainer::gzip : FlateContainer::zlib;
+
     if (!zstd && !brotli && limit < FlateDecoder<Memory>::minimum_output_capacity) {
       return decodeSmallFlate(input, container, limit);
     }
@@ -509,6 +562,7 @@ private:
     const auto storage_capacity = zstd ? ZstdDecoder<Memory>::outputCapacity(input, capacity) : capacity;
     DecodedBody<Memory> result{memory_, storage_capacity};
     std::optional<std::size_t> decoded;
+
     if (zstd) {
       if (const auto progress = ZstdDecoder{memory_}.decode(input, result.storage.bytes(), capacity)) {
         decoded = progress->bytes;
@@ -519,9 +573,11 @@ private:
     } else {
       decoded = FlateDecoder{memory_}.decode(input, result.storage.bytes(), container, limit + 1);
     }
+
     if (!decoded) {
       return std::nullopt;
     }
+
     result.size = std::min(*decoded, limit);
     result.truncated = result.truncated || *decoded > limit;
     result.decoded = true;
@@ -538,6 +594,7 @@ private:
 
     const auto accepted = std::min(*decoded, limit);
     DecodedBody<Memory> result{memory_, accepted};
+
     std::copy_n(temporary.bytes().data(), accepted, result.storage.bytes().data());
     result.size = accepted;
     result.truncated = *decoded > limit;
@@ -575,19 +632,24 @@ public:
 
   inline Half start(CaptureStart context) noexcept {
     Half absent{nullptr, AllocationDeleter<CaptureHalf<Memory>, Memory>{memory_}};
+
     if (!limits_.enabled) {
       return absent;
     }
+
     if (!context.host.oversized()) {
       try {
         auto half = makeOwned<CaptureHalf<Memory>>(memory_, memory_, quota_, limits_, context);
+
         if (context.side == CaptureSide::request) {
           started_.fetch_add(1, std::memory_order_relaxed);
         }
+
         return half;
       } catch (const std::bad_alloc &) {
       }
     }
+
     skipped_.fetch_add(1, std::memory_order_relaxed);
     return absent;
   }
@@ -596,6 +658,7 @@ public:
     if (half->head.truncated || half->body.truncated) {
       truncated_.fetch_add(1, std::memory_order_relaxed);
     }
+
     countTruncation(half->truncation);
     return channel_.publish(std::move(half));
   }
@@ -627,6 +690,7 @@ public:
 
       const bool was_truncated = half.body.truncated;
       const auto previous = half.truncation;
+
       half.body.reset();
       half.append(half.bodyPart(), result.bytes());
       if (result.truncated) {
@@ -636,11 +700,13 @@ public:
           half.truncation.exchange = true;
         }
       }
+
       half.body.truncated = half.body.truncated || result.truncated || was_truncated;
       half.body_decoded = result.decoded;
       if (!was_truncated && half.body.truncated) {
         truncated_.fetch_add(1, std::memory_order_relaxed);
       }
+
       countTruncation({half.truncation.part && !previous.part, half.truncation.exchange && !previous.exchange, half.truncation.total && !previous.total});
     } catch (...) {
       decode_failed_.fetch_add(1, std::memory_order_relaxed);
@@ -649,6 +715,7 @@ public:
 
   inline CaptureMetrics metrics() const noexcept {
     const auto queue = channel_.metrics();
+
     return {
         .started = started_.load(std::memory_order_relaxed),
         .truncated = truncated_.load(std::memory_order_relaxed),
@@ -670,9 +737,11 @@ private:
     if (truncation.part) {
       truncated_part_.fetch_add(1, std::memory_order_relaxed);
     }
+
     if (truncation.exchange) {
       truncated_exchange_.fetch_add(1, std::memory_order_relaxed);
     }
+
     if (truncation.total) {
       truncated_total_.fetch_add(1, std::memory_order_relaxed);
     }

@@ -19,6 +19,7 @@ namespace {
 
 bool adoptHome(const char *const *environment) {
   constexpr std::string_view prefix = "HOME=";
+
   for (const auto *entry = environment; *entry != nullptr; ++entry) {
     const std::string_view value{*entry};
     if (value.starts_with(prefix)) {
@@ -54,6 +55,7 @@ int launch(std::span<char *> input, const char *const *environment) {
 
   const auto script = telar::runtime::loginShellScript(shell);
   std::vector<std::string> arguments;
+
   if (!script.empty()) {
     arguments = {shell, "-l", "-c", std::string{script}, program};
   } else {
@@ -65,6 +67,7 @@ int launch(std::span<char *> input, const char *const *environment) {
   }
 
   std::vector<char *> command;
+
   command.reserve(arguments.size() + 1);
   for (auto &argument : arguments) {
     command.push_back(argument.data());

@@ -53,6 +53,7 @@ struct ImagePixels {
 
   static void release(void *context) noexcept {
     auto *const owner = static_cast<ImagePixels *>(context);
+
     AllocationDeleter<ImagePixels, ApplicationAllocator>{owner->memory}(owner);
   }
 };
@@ -96,6 +97,7 @@ private:
 QImage resampled(ApplicationAllocator &memory, const QImage &source, AttachmentPreviewSize size) {
   const auto byte_count = static_cast<std::size_t>(size.width) * size.height * RgbaImageView::channels;
   auto pixels = makeOwned<ImagePixels>(memory, ImagePixels{.memory = memory, .bytes = SensitiveBytes{memory}});
+
   pixels->bytes.resizeZeroed(byte_count, static_cast<std::size_t>(AttachmentPreviewSize::full_pixels) * RgbaImageView::channels);
   const auto view = pixels->bytes.unsignedBytes();
   auto *const rgba = view.data();
@@ -105,6 +107,7 @@ QImage resampled(ApplicationAllocator &memory, const QImage &source, AttachmentP
       .width = static_cast<std::size_t>(source.width()),
       .height = static_cast<std::size_t>(source.height()),
   };
+
   const std::span output{rgba, byte_count};
   if (!ArtworkResize::rectangle(input, output, size.width, size.height)) {
     throw std::invalid_argument{"InvalidClipboardImage"};

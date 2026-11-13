@@ -219,19 +219,23 @@ void NativeChromeText::refreshLayout() {
   try {
     refreshFonts();
     const auto preferred = emphasized_ ? fonts::FontRole::emphasized : fonts::FontRole::regular;
+
     utf8_ = text_.toUtf8();
     const std::string_view text{utf8_.constData(), static_cast<std::size_t>(utf8_.size())};
+
     if (caption_) {
       glyphs_.shapeCaption(*fonts_, text, {.pixel_height = pixel_height_, .preferred = preferred});
     } else {
       glyphs_.shape(*fonts_, text, {.pixel_height = pixel_height_, .preferred = preferred});
     }
+
     advance_ = glyphs_.advance();
     metrics_ = fonts_->face(preferred).metrics(pixel_height_);
     // The catalog is told before any setter emits, as a handler may replace the text this views.
     if (catalog_ != nullptr) {
       catalog_->request(text, preferred);
     }
+
     setSupported(true);
     setImplicitWidth(advance_ / display_scale_);
     setImplicitHeight(metrics_.line_height / display_scale_);
@@ -275,8 +279,10 @@ void NativeChromeText::refreshFit() {
       const auto measure = [&](std::string_view label) {
         return static_cast<float>(label == text ? advance_ : fonts::TextLayout<SystemAllocator>::measure(*fonts_, label, {.pixel_height = pixel_height_, .preferred = emphasized_ ? fonts::FontRole::emphasized : fonts::FontRole::regular}));
       };
+
       TextFit::Buffer buffer{};
       const auto fitted = TextFit::fit(text, static_cast<float>(width() * display_scale_), measure, buffer);
+
       fit_.shape(*fonts_, fitted, {.pixel_height = pixel_height_, .preferred = emphasized_ ? fonts::FontRole::emphasized : fonts::FontRole::regular});
     }
 

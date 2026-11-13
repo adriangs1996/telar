@@ -123,6 +123,7 @@ struct Selection {
 
 QList<QVariantMap> tabRecords(Selection selection) {
   QList<QVariantMap> rows;
+
   for (std::size_t index = 0; index < selection.count; ++index) {
     rows.append({
         {QStringLiteral("key"), QStringLiteral("tab:%1").arg(index)},
@@ -150,6 +151,7 @@ QVariantMap tabProperties(ListModel &tabs, int width) {
 
 QVariantMap navigationProperties(ListModel &tabs, int width) {
   auto properties = tabProperties(tabs, width);
+
   properties.insert(QStringLiteral("tabModel"), properties.take(QStringLiteral("model")));
   properties.insert(QStringLiteral("workspace"), QVariantMap{});
   properties.insert(QStringLiteral("controlsInset"), 0);
@@ -163,10 +165,12 @@ QRectF tabBounds(const QAbstractItemModel &model, int row) {
 
 QList<QVariantMap> workspaceRecords(Selection selection) {
   QList<QVariantMap> rows;
+
   for (std::size_t index = 0; index < selection.count; ++index) {
     const auto name = QStringLiteral("project-%1").arg(index);
     const auto bytes = name.toUtf8();
     const auto mark = WorkspaceMark::resolve({bytes.constData(), static_cast<std::size_t>(bytes.size())});
+
     rows.append({
         {QStringLiteral("key"), QStringLiteral("workspace:%1").arg(index)},
         {QStringLiteral("name"), name},
@@ -182,6 +186,7 @@ QList<QVariantMap> workspaceRecords(Selection selection) {
 
 QVariantMap projectSwitcherProperties(ListModel &workspaces, int width, int selected) {
   const ChromeMetrics chrome;
+
   return {
       {QStringLiteral("width"), width},
       {QStringLiteral("height"), chrome.top_bar},
@@ -228,6 +233,7 @@ private:
   Q_SLOT static void syntaxColorsReachQml() {
     Configuration configuration;
     const auto keyword = QStringLiteral("syntax_keyword");
+
     QCOMPARE(themeColors(configuration).value(keyword).value<QColor>(), toQColor(configuration.theme.foreground));
     configuration.theme.syntax[static_cast<std::size_t>(SyntaxRole::keyword)] = CellColor{.kind = CellColor::Kind::rgb, .channels = {0x95, 0xa7, 0xba}};
     QCOMPARE(themeColors(configuration).value(keyword).value<QColor>(), QColor(0x95, 0xa7, 0xba));
@@ -250,8 +256,10 @@ private:
         {QStringLiteral("colors"), themeColors(Configuration{})},
         {QStringLiteral("typography"), QVariantMap{{QStringLiteral("small"), chrome.small}}},
     };
+
     const auto status = createChrome(engine, QStringLiteral("StatusBar"), status_properties);
     const std::array<QQuickItem *, 3> bands{navigation.get(), sidebar.get(), status.get()};
+
     for (auto *band : bands) {
       band->setParentItem(window.contentItem());
       // Controls and separators may cover content; isolate the band's background.
@@ -267,13 +275,16 @@ private:
     Configuration configuration;
     constexpr auto explicit_panel = Color::rgb(0x405060);
     constexpr std::array opacities{0.0F, 0.25F, 0.75F, 1.0F, 0.5F};
+
     for (const bool custom_panel : {false, true}) {
       configuration.theme.chrome[static_cast<std::size_t>(PaletteRole::panel_bg)] = custom_panel ? CellColor{.kind = CellColor::Kind::rgb, .channels = {0x40, 0x50, 0x60}} : CellColor{};
       const auto covering = toQColor(custom_panel ? explicit_panel : configuration.theme.background);
+
       for (const auto opacity : opacities) {
         configuration.background_opacity = opacity;
         const auto colors = themeColors(configuration);
         const QColor expected = opacity < 1 ? QColor{Qt::transparent} : covering;
+
         QCOMPARE(colors.value(QStringLiteral("panelBackground")).value<QColor>(), expected);
         QCOMPARE(colors.value(QStringLiteral("panel_bg")).value<QColor>(), covering);
         for (auto *band : bands) {
@@ -281,9 +292,11 @@ private:
           const auto role = band == status.get() ? QStringLiteral("bottombarBackground") : band == sidebar.get() ? QStringLiteral("sidebarBackground")
                                                                                                                  : QStringLiteral("topbarBackground");
           const auto band_color = colors.value(role).value<QColor>();
+
           QCOMPARE(band->property("color").value<QColor>(), band_color);
           QCOMPARE(band->opacity(), qreal{1});
           const auto capture = band->grabToImage();
+
           QVERIFY(!capture.isNull());
           QTRY_VERIFY_WITH_TIMEOUT(!capture->image().isNull(), fixture_wait_ms);
           const auto image = capture->image();
@@ -292,8 +305,10 @@ private:
           // QColor retains 16-bit channels; the render target quantizes premultiplied ink to eight bits.
           const auto actual_ink = qPremultiply(pixel.rgba());
           const auto expected_ink = qPremultiply(band_color.rgba());
+
           QCOMPARE(qAlpha(actual_ink), qAlpha(expected_ink));
           const std::array differences{qRed(actual_ink) - qRed(expected_ink), qGreen(actual_ink) - qGreen(expected_ink), qBlue(actual_ink) - qBlue(expected_ink)};
+
           QVERIFY2(std::ranges::all_of(differences, [](int difference) {
                      return difference >= -1 && difference <= 1;
                    }),
@@ -305,12 +320,15 @@ private:
 
   Q_SLOT static void attachmentOverlaysKeepCoveringPanelColors() {
     QTemporaryFile configuration;
+
     QVERIFY(configuration.open());
     const QByteArray source{"return {api_version=2,theme='terminal',gui={window={background_opacity=0.5}}}"};
+
     QCOMPARE(configuration.write(source), source.size());
     configuration.close();
     ApplicationAllocator memory;
     Application application{memory};
+
     application.loadConfiguration(configuration.fileName(), {}, {});
     QCOMPARE(application.error(), QString{});
     QQmlEngine engine;
@@ -324,12 +342,15 @@ private:
 
       return object;
     };
+
     const auto shelf = load(QFINDTESTDATA("../qt/AttachmentShelf.qml"));
     const auto modal = load(QFINDTESTDATA("../qt/AttachmentModal.qml"));
     QQmlExpression modal_color{qmlContext(modal.get()), modal.get(), QStringLiteral("modal.color")};
     const auto actual = modal_color.evaluate().value<QColor>();
+
     QVERIFY2(!modal_color.hasError(), qPrintable(modal_color.error().toString()));
     const auto expected = application.colors().value(QStringLiteral("panel_bg")).value<QColor>();
+
     QCOMPARE(expected.alpha(), 255);
     QCOMPARE(shelf->property("color").value<QColor>(), expected);
     QCOMPARE(actual, expected);
@@ -339,14 +360,17 @@ private:
     QQuickWindow window;
     QQmlEngine engine;
     ListModel tabs;
+
     tabs.reconcile(tabRecords({.count = 2, .active = 0}));
     auto properties = navigationProperties(tabs, 1000);
     const auto navigation = createChrome(engine, QStringLiteral("NavigationBar"), properties);
+
     navigation->setParentItem(window.contentItem());
     window.resize(1000, ChromeMetrics{}.top_bar);
     window.show();
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), fixture_wait_ms);
     const auto *strip = navigation->findChild<TabStripLayout *>(QStringLiteral("tabStripLayout"));
+
     QVERIFY(strip != nullptr);
     QTRY_COMPARE_WITH_TIMEOUT(visualItems(*navigation, QStringLiteral("tabPill")).size(), 2, fixture_wait_ms);
     QVERIFY(navigation->setProperty("rail", true));
@@ -359,7 +383,9 @@ private:
         {QStringLiteral("colors"), themeColors(Configuration{})},
         {QStringLiteral("typography"), properties.value(QStringLiteral("typography"))},
     };
+
     const auto bottom = createChrome(engine, QStringLiteral("ComponentSlot"), bottom_properties);
+
     QCOMPARE(bottom->implicitWidth(), qreal{0});
     QVERIFY(bottom->findChild<TabStripLayout *>() == nullptr);
   }
@@ -368,10 +394,13 @@ private:
     QQuickWindow window;
     QQmlEngine engine;
     ListModel tabs;
+
     tabs.reconcile(tabRecords({.count = 2, .active = 0}));
     auto strip = createChrome(engine, QStringLiteral("TerminalTabs"), tabProperties(tabs, 600));
+
     strip->setParentItem(window.contentItem());
     auto *layout = strip->findChild<TabStripLayout *>(QStringLiteral("tabStripLayout"));
+
     QVERIFY(layout != nullptr);
     window.resize(600, ChromeMetrics{}.top_bar);
     window.show();
@@ -379,18 +408,23 @@ private:
     QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 2, fixture_wait_ms);
     const auto selected_caption = [&] {
       QString selected;
+
       for (const auto *caption : visualItems(*strip, QStringLiteral("tabCaption"))) {
         if (caption->parentItem()->property("source").toMap().value(QStringLiteral("selected")).toBool()) {
           if (!selected.isEmpty()) {
             return QStringLiteral("multiple");
           }
+
           selected = caption->parentItem()->property("tabKey").toString();
         }
       }
+
       return selected;
     };
+
     QTRY_COMPARE_WITH_TIMEOUT(selected_caption(), QStringLiteral("tab:0"), fixture_wait_ms);
     const std::array before{tabBounds(*layout->items(), 0), tabBounds(*layout->items(), 1)};
+
     tabs.reconcile(tabRecords({.count = 2, .active = 1}));
     QTRY_COMPARE_WITH_TIMEOUT(selected_caption(), QStringLiteral("tab:1"), fixture_wait_ms);
     QCOMPARE(tabBounds(*layout->items(), 0), before[0]);
@@ -403,24 +437,30 @@ private:
     QQuickWindow window;
     QQmlEngine engine;
     ListModel tabs;
+
     tabs.reconcile(tabRecords({.count = 3, .active = 0}));
     auto properties = navigationProperties(tabs, 1000);
+
     properties.insert(QStringLiteral("controller"), QVariant::fromValue(&application));
     properties.insert(QStringLiteral("workspace"), QVariantMap{{QStringLiteral("name"), QStringLiteral("telar")}});
     properties.insert(QStringLiteral("controlsInset"), 80);
     const auto navigation = createChrome(engine, QStringLiteral("NavigationBar"), properties);
+
     navigation->setParentItem(window.contentItem());
     window.resize(1000, ChromeMetrics{}.top_bar);
     window.show();
     QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
     auto *layout = navigation->findChild<TabStripLayout *>(QStringLiteral("tabStripLayout"));
+
     QVERIFY(layout != nullptr);
     const auto names = visualItems(*navigation, QStringLiteral("workspaceContextName"));
     const auto machines = visualItems(*navigation, QStringLiteral("topBarMachineLabel"));
+
     QCOMPARE(names.size(), 1);
     QCOMPARE(machines.size(), 1);
     const auto *name = names.front();
     const auto *machine = machines.front();
+
     QCOMPARE(name->property("text").toString(), QStringLiteral("telar"));
     QVERIFY(!machine->property("text").toString().isEmpty());
     QCOMPARE(machine->property("text").toString(), application.machineContext().value(QStringLiteral("label")).toString());
@@ -430,6 +470,7 @@ private:
       QVERIFY(name->isVisible() && machine->isVisible());
       const auto name_bounds = name->mapRectToItem(navigation.get(), name->boundingRect());
       const auto machine_bounds = machine->mapRectToItem(navigation.get(), machine->boundingRect());
+
       QVERIFY(machine_bounds.left() >= 80);
       QVERIFY(machine_bounds.right() <= name_bounds.left());
       QVERIFY(name_bounds.right() < layout->mapToItem(navigation.get(), QPointF{}).x());
@@ -440,22 +481,27 @@ private:
     QQuickWindow window;
     QQmlEngine engine;
     ListModel tabs;
+
     tabs.reconcile(tabRecords({.count = 3, .active = 0}));
     const auto strip = createChrome(engine, QStringLiteral("TerminalTabs"), tabProperties(tabs, 800));
+
     strip->setParentItem(window.contentItem());
     window.resize(800, ChromeMetrics{}.top_bar);
     window.show();
     QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
     auto *layout = strip->findChild<TabStripLayout *>(QStringLiteral("tabStripLayout"));
+
     QVERIFY(layout != nullptr);
     QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 3, fixture_wait_ms);
     const auto wells = visualItems(*strip, QStringLiteral("tabWell"));
     const auto selections = visualItems(*strip, QStringLiteral("tabSelection"));
+
     QCOMPARE(wells.size(), 1);
     QCOMPARE(selections.size(), 1);
     QCOMPARE(layout->selectionBounds(), tabBounds(*layout->items(), 0));
     const auto *well = wells.front();
     const auto *selection = selections.front();
+
     QVERIFY(well->width() > selection->width());
     QVERIFY(well->mapRectToItem(strip.get(), well->boundingRect()).contains(selection->mapRectToItem(strip.get(), selection->boundingRect())));
     QCOMPARE(selection->property("radius").toReal(), selection->height() / 2);
@@ -482,28 +528,35 @@ private:
     QQuickWindow window;
     QQmlEngine engine;
     ListModel tabs;
+
     tabs.reconcile(tabRecords({.count = 64, .active = 32}));
     auto properties = tabProperties(tabs, width);
     const auto height = ChromeMetrics::logical_top_bar * ratio;
+
     properties.insert(QStringLiteral("height"), height);
     properties.insert(QStringLiteral("ratio"), ratio);
     const auto strip = createChrome(engine, QStringLiteral("TerminalTabs"), properties);
+
     strip->setParentItem(window.contentItem());
     window.resize(width, static_cast<int>(height));
     window.show();
     QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
     auto *layout = strip->findChild<TabStripLayout *>(QStringLiteral("tabStripLayout"));
+
     QVERIFY(layout != nullptr);
     QTRY_VERIFY_WITH_TIMEOUT(layout->items()->rowCount() > 0, fixture_wait_ms);
     const auto wells = visualItems(*strip, QStringLiteral("tabWell"));
+
     QCOMPARE(wells.size(), 1);
     const auto *well = wells.front();
+
     QVERIFY(well->isVisible());
     QVERIFY(well->width() <= width);
     QVERIFY(well->height() <= height);
     QVERIFY(layout->selectionBounds().height() <= well->height());
     QVERIFY(!layout->counter().isEmpty());
     const auto selection = layout->selectionBounds().translated(layout->position());
+
     QVERIFY(selection.left() >= 0 && selection.right() <= width);
   }
 
@@ -512,6 +565,7 @@ private:
     const ChromeMetrics chrome;
     const QVariantMap properties{{QStringLiteral("pixelSize"), chrome.body}, {QStringLiteral("text"), QStringLiteral("\u4e2d")}};
     const auto label = createChrome(engine, QStringLiteral("ChromeText"), properties);
+
     QTRY_VERIFY_WITH_TIMEOUT(label->implicitWidth() > 0, fixture_wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(label->implicitHeight() > 0, fixture_wait_ms);
   }
@@ -520,14 +574,18 @@ private:
     QQmlEngine engine;
     ListModel workspaces;
     ListModel agents;
+
     workspaces.reconcile(workspaceRecords({.count = 1, .active = 0}));
     auto sidebar = createChrome(engine, QStringLiteral("Sidebar"), sidebarProperties(workspaces, agents, true, 0));
+
     QVERIFY(!engine.rootContext()->contextProperty(QStringLiteral("telar")).isValid());
     QVERIFY(sidebar->findChild<QQuickItem *>(QStringLiteral("workspaceList")) == nullptr);
     const auto *activity = sidebar->findChild<QQuickItem *>(QStringLiteral("sidebarActivity"));
+
     QVERIFY(activity != nullptr);
     constexpr QPointF expected_position{8, 40};
     constexpr QSizeF expected_size{264, 884};
+
     QCOMPARE(activity->position(), expected_position);
     QCOMPARE(activity->size(), expected_size);
   }
@@ -545,6 +603,7 @@ private:
     const auto cards = regions.value(QStringLiteral("cards")).toMap();
     constexpr qreal expected_workspace_height = 55.5;
     constexpr qreal expected_card_height = 75.5;
+
     QCOMPARE(regions.value(QStringLiteral("workspaceHeight")).toReal(), expected_workspace_height);
     QCOMPARE(cards.value(QStringLiteral("height")).toReal(), expected_card_height);
     workspaces.reconcile(workspaceRecords({.count = 1, .active = 0}));
@@ -558,9 +617,12 @@ private:
         {QStringLiteral("colors"), themeColors(configuration)},
         {QStringLiteral("agentModel"), QVariant::fromValue(static_cast<QAbstractItemModel *>(&agents))},
     };
+
     const auto sidebar = createChrome(engine, QStringLiteral("Sidebar"), properties);
+
     QVERIFY(!engine.rootContext()->contextProperty(QStringLiteral("telar")).isValid());
     const auto *activity = sidebar->findChild<QQuickItem *>(QStringLiteral("sidebarActivity"));
+
     QVERIFY(activity != nullptr);
     QCOMPARE(activity->height(), regions.value(QStringLiteral("activity")).toRectF().height());
     QVERIFY(sidebar->findChild<QQuickItem *>(QStringLiteral("workspaceList")) == nullptr);
@@ -580,7 +642,9 @@ private:
         {QStringLiteral("colors"), colors},
         {QStringLiteral("mark"), QVariantMap{}},
     };
+
     auto mark = createChrome(engine, QStringLiteral("ApplicationMark"), properties);
+
     mark->setParentItem(window.contentItem());
     window.resize(mark_side, mark_side);
     window.setColor(background);
@@ -588,6 +652,7 @@ private:
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), fixture_wait_ms);
     const auto *sprite = mark->findChild<ProviderMark *>(QStringLiteral("applicationProviderMark"));
     const auto *glyph = mark->findChild<QQuickItem *>(QStringLiteral("applicationGlyph"));
+
     QVERIFY(sprite != nullptr);
     QVERIFY(glyph != nullptr);
     QVERIFY(!engine.rootContext()->contextProperty(QStringLiteral("telar")).isValid());
@@ -595,14 +660,17 @@ private:
     for (const auto *const name : {"Claude Code", "CODEX.EXE", "pi", "Cursor Agent", "OpenCode"}) {
       const auto resolved = ApplicationMark::forApplication(name);
       const QVariantMap record{{QStringLiteral("providerMark"), static_cast<int>(resolved.provider)}, {QStringLiteral("glyph"), toQString(resolved.glyph)}};
+
       QVERIFY(mark->setProperty("mark", record));
       QCOMPARE(sprite->provider(), static_cast<int>(resolved.provider));
       QVERIFY(sprite->isVisible());
       QVERIFY(!glyph->isVisible());
       QVERIFY(ProviderArtwork::image(resolved.provider, ApplicationMark::minimum_cell).hasAlphaChannel());
       const auto pixels = window.grabWindow();
+
       QVERIFY(!pixels.isNull());
       QImage empty{pixels.size(), pixels.format()};
+
       empty.fill(background);
       QVERIFY(pixels != empty);
       QVERIFY(mark->setProperty("dimmed", true));
@@ -619,17 +687,21 @@ private:
     QVERIFY(ProviderArtwork::telar(ApplicationMark::minimum_cell - 1).isNull());
     QVERIFY(ProviderArtwork::telar(ApplicationMark::maximum_cell + 1).isNull());
     const auto application_artwork = ProviderArtwork::telar(mark_side);
+
     QCOMPARE(application_artwork.size(), QSize(mark_side, mark_side));
     QCOMPARE(application_artwork.pixelColor(0, 0).alpha(), 0);
     QImage transparent{application_artwork.size(), application_artwork.format()};
+
     transparent.fill(Qt::transparent);
     QVERIFY(application_artwork != transparent);
     const auto default_mark = ProviderArtwork::telar(mark_side, false);
+
     QVERIFY(!default_mark.isNull());
     // The default mark wears Shade; Cybervenom keeps its own violet mark.
     QVERIFY(ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::cybervenom)) != default_mark);
     QCOMPARE(ProviderArtwork::telar(mark_side, false, std::numeric_limits<int>::max()), default_mark);
     const auto catppuccin_mark = ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::catppuccin));
+
     QVERIFY(!catppuccin_mark.isNull());
     QVERIFY(catppuccin_mark != default_mark);
     QCOMPARE(ProviderArtwork::telar(mark_side, true, static_cast<int>(ThemeName::catppuccin)), ProviderArtwork::telar(mark_side, true));
@@ -644,6 +716,7 @@ private:
     constexpr int mark_side = 14;
     constexpr qreal early_fraction = 0.1;
     constexpr qreal late_fraction = 0.9;
+
     window.resize(window_side, window_side);
     window.setColor(Qt::black);
     mark.setSize({mark_side, mark_side});
@@ -652,8 +725,10 @@ private:
     window.show();
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), fixture_wait_ms);
     const auto scale = window.effectiveDevicePixelRatio();
+
     ancestor.setPosition({early_fraction / scale, early_fraction / scale});
     const auto first = window.grabWindow();
+
     QVERIFY(!first.isNull());
     ancestor.setPosition({late_fraction / scale, late_fraction / scale});
     QCOMPARE(window.grabWindow(), first);
@@ -662,6 +737,7 @@ private:
     ancestor.setParentItem(&holder);
     holder.setPosition({early_fraction / scale, early_fraction / scale});
     const auto reparented = window.grabWindow();
+
     holder.setPosition({late_fraction / scale, late_fraction / scale});
     QCOMPARE(window.grabWindow(), reparented);
     ancestor.setParentItem(window.contentItem());
@@ -673,10 +749,12 @@ private:
     const telar::TabLocation location{.workspace = {.kind = telar::WorkspaceLocation::Kind::workspace, .id = 1}, .tab_id = 1};
     Tab tab{memory, location};
     Pane pane{memory, 1, budget};
+
     pane.location = location;
     pane.cwd = "/work/telar";
     pane.foreground = "Python";
     std::array agents{Agent{memory}, Agent{memory}};
+
     agents.front().pane_id = pane.id;
     agents.back().pane_id = pane.id;
     agents.front().location = {.workspace = location.workspace, .tab_id = 2};
@@ -687,6 +765,7 @@ private:
     for (const auto state : {telar::AgentTitleState::placeholder, telar::AgentTitleState::pending, telar::AgentTitleState::ready, telar::AgentTitleState::failed}) {
       agents.back().title_state = state;
       const auto record = tabRecord(tab, &pane, std::array<const Pane<SystemAllocator> *, 1>{&pane}, std::span<const Agent<SystemAllocator>>{agents}, true);
+
       QCOMPARE(record.value(QStringLiteral("label")).toString(), state == telar::AgentTitleState::placeholder ? QStringLiteral("telar · Python") : QStringLiteral("Session title"));
       QCOMPARE(record.value(QStringLiteral("application")).toString(), QStringLiteral("Python"));
     }
@@ -704,15 +783,19 @@ private:
     const telar::TabLocation location{.workspace = {.kind = telar::WorkspaceLocation::Kind::workspace, .id = 1}, .tab_id = 2};
     Tab tab{memory, location};
     const std::array panes{telar::TabPane{.pane_id = 4, .foreground = "zsh", .cwd = "/work/telar"}, telar::TabPane{.pane_id = 5, .foreground = "nvim", .cwd = "/work/other"}};
+
     tab.observePanes(panes);
     std::array agents{Agent{memory}};
+
     agents.front().pane_id = 5;
     agents.front().location = location;
     agents.front().status = telar::AgentStatus::blocked;
     const auto record = tabRecord(tab, static_cast<const Pane<SystemAllocator> *>(nullptr), std::array<const Pane<SystemAllocator> *, 0>{}, std::span<const Agent<SystemAllocator>>{agents}, false);
+
     QCOMPARE(record.value(QStringLiteral("title")).toString(), QStringLiteral("zsh"));
     QCOMPARE(record.value(QStringLiteral("path")).toString(), QStringLiteral("/work/telar"));
     const auto cards = record.value(QStringLiteral("cards")).toList();
+
     QCOMPARE(cards.size(), 2);
     QCOMPARE(cards[0].toMap().value(QStringLiteral("key")).toString(), QStringLiteral("4"));
     QVERIFY(cards[0].toMap().value(QStringLiteral("focused")).toBool());
@@ -728,14 +811,18 @@ private:
     ListModel tabs;
     QList<QVariantMap> rows;
     constexpr int tab_count = 4;
+
     for (int id = 1; id <= tab_count; ++id) {
       rows.append({{QStringLiteral("key"), QString::number(id)}, {QStringLiteral("label"), QStringLiteral("Terminal")}});
     }
+
     tabs.reconcile(rows);
     TabStripLayout layout{window.contentItem()};
+
     layout.setSize(QSizeF{800, 42});
     layout.setContext(1, telar::WorkspaceLocation{.id = 1});
     QFont font{QStringLiteral("IBM Plex Sans")};
+
     font.setPixelSize(13);
     layout.setFont(font);
     layout.setPixelSize(13);
@@ -750,12 +837,14 @@ private:
     QVERIFY(layout.transitioning());
     auto &clock = WindowAnimationClock::forWindow(window);
     auto *timer = clock.findChild<QTimer *>(QStringLiteral("agentStatusAnimation"));
+
     QVERIFY(timer != nullptr);
     // Isolate frame preparation from the deadline path, even on a slow host.
     QObject::disconnect(&window, &QQuickWindow::afterAnimating, &clock, nullptr);
     QCoreApplication::removePostedEvents(&clock, QEvent::MetaCall);
     timer->stop();
     QSignalSpy samples{&layout, &TabStripLayout::layoutChanged};
+
     QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
     QVERIFY(!samples.isEmpty());
     layout.setVisible(false);
@@ -769,14 +858,18 @@ private:
     QQuickWindow window;
     ListModel tabs;
     QList<QVariantMap> rows;
+
     for (int id = 1; id <= 3; ++id) {
       rows.append({{QStringLiteral("key"), QString::number(id)}, {QStringLiteral("label"), QStringLiteral("Terminal")}, {QStringLiteral("selected"), id == 1}});
     }
+
     tabs.reconcile(rows);
     TabStripLayout layout{window.contentItem()};
+
     layout.setSize(QSizeF{800, ChromeMetrics::logical_top_bar});
     layout.setContext(1, telar::WorkspaceLocation{.id = 1});
     QFont font{QStringLiteral("IBM Plex Sans")};
+
     font.setPixelSize(13);
     layout.setFont(font);
     layout.setPixelSize(13);
@@ -814,14 +907,18 @@ private:
         Geometry::Measure{.caption = 180, .chip = Geometry::chip_widths[0]},
         Geometry::Measure{.caption = 20, .chip = Geometry::chip_widths[0]},
     };
+
     const auto room = sizes[0].whole(metrics) + metrics.gap + sizes[1].whole(metrics);
     const auto plan = Geometry::arrange(sizes, 0, {.width = room, .metrics = metrics});
+
     QCOMPARE(plan.hidden(), std::size_t{0});
     for (std::size_t index = 0; index < sizes.size(); ++index) {
       QCOMPARE(plan.fits[index], Geometry::Fit::full);
       QCOMPARE(plan.widths[index], sizes[index].whole(metrics));
     }
+
     const auto single = Geometry::arrange(std::span{sizes}.first(1), 0, {.width = 150, .metrics = metrics});
+
     QCOMPARE(single.widths[0], 150.0F);
     QCOMPARE(single.fits[0], Geometry::Fit::truncated);
   }
@@ -830,11 +927,14 @@ private:
     using Geometry = TabStripGeometry;
     const auto metrics = Geometry::Metrics::scaled(1);
     std::array<Geometry::Measure, 3> sizes;
+
     sizes.fill({.caption = 400, .chip = Geometry::chip_widths[0]});
     const auto minimum_room = sizes[0].truncated(metrics) * static_cast<float>(sizes.size()) + metrics.gap * static_cast<float>(sizes.size() - 1);
+
     for (const auto room : {minimum_room, minimum_room + 30}) {
       for (std::size_t focus = 0; focus < sizes.size(); ++focus) {
         const auto plan = Geometry::arrange(sizes, focus, {.width = room, .metrics = metrics});
+
         QCOMPARE(plan.hidden(), std::size_t{0});
         QVERIFY(plan.footprint(metrics) <= room);
         for (std::size_t index = 0; index < sizes.size(); ++index) {
@@ -850,6 +950,7 @@ private:
     ListModel tabs;
     TabStripLayout layout{window.contentItem()};
     QFont font{QStringLiteral("IBM Plex Sans")};
+
     font.setPixelSize(13);
     layout.setFont(font);
     layout.setPixelSize(13);
@@ -861,9 +962,11 @@ private:
     window.show();
     QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
     QList<QVariantMap> rows;
+
     for (int id = 1; id <= 3; ++id) {
       rows.append({{QStringLiteral("key"), QString::number(id)}, {QStringLiteral("label"), QString(64, QLatin1Char('W'))}, {QStringLiteral("selected"), id == 1}});
     }
+
     tabs.reconcile(rows);
     QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
     QVERIFY(!layout.counter().isEmpty());
@@ -872,10 +975,12 @@ private:
     const auto record = [&](int index) {
       return layout.items()->data(layout.items()->index(index, 0), ListModel::record_role).toMap();
     };
+
     QVERIFY(layout.counter().isEmpty());
     for (int index = 0; index < 3; ++index) {
       QVERIFY(!record(index).value(QStringLiteral("compact")).toBool());
     }
+
     QVERIFY(tabBounds(*layout.items(), 0).width() > tabBounds(*layout.items(), 2).width());
     rows[0].insert(QStringLiteral("selected"), false);
     rows[2].insert(QStringLiteral("selected"), true);
@@ -895,17 +1000,21 @@ private:
     ListModel tabs;
     constexpr int strip_width = 800;
     constexpr std::size_t tab_count = 4;
+
     tabs.reconcile(tabRecords({.count = tab_count, .active = 0}));
     auto strip = createChrome(engine, QStringLiteral("TerminalTabs"), tabProperties(tabs, strip_width));
+
     strip->setParentItem(window.contentItem());
     window.resize(strip_width, static_cast<int>(ChromeMetrics::logical_top_bar));
     window.show();
     auto *layout = strip->findChild<TabStripLayout *>(QStringLiteral("tabStripLayout"));
+
     QVERIFY(layout != nullptr);
     QVERIFY(!engine.rootContext()->contextProperty(QStringLiteral("telar")).isValid());
     QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), static_cast<int>(tab_count), fixture_wait_ms);
     const auto first = tabBounds(*layout->items(), 0);
     const auto second = tabBounds(*layout->items(), 1);
+
     QCOMPARE(first.top(), (ChromeMetrics::logical_top_bar - TabStripGeometry::pill_height) / 2);
     QCOMPARE(second.left(), first.right() + TabStripGeometry::gap);
     QCOMPARE(first.width(), second.width());
@@ -915,6 +1024,7 @@ private:
     const auto selected = [&] {
       return layout->items()->data(layout->items()->index(1, 0), ListModel::record_role).toMap().value(QStringLiteral("tab")).toMap().value(QStringLiteral("selected")).toBool();
     };
+
     QTRY_VERIFY_WITH_TIMEOUT(selected(), fixture_wait_ms);
     QCOMPARE(tabBounds(*layout->items(), 0), first);
     QCOMPARE(tabBounds(*layout->items(), 1), second);
@@ -929,22 +1039,29 @@ private:
     constexpr int strip_width = 120;
     constexpr std::size_t tab_count = 64;
     constexpr std::size_t selected_index = tab_count / 2;
+
     tabs.reconcile(tabRecords({.count = tab_count, .active = selected_index}));
     auto strip = createChrome(engine, QStringLiteral("TerminalTabs"), tabProperties(tabs, strip_width));
+
     strip->setParentItem(window.contentItem());
     window.resize(strip_width, static_cast<int>(ChromeMetrics::logical_top_bar));
     window.show();
     auto *layout = strip->findChild<TabStripLayout *>(QStringLiteral("tabStripLayout"));
+
     QVERIFY(layout != nullptr);
     QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 1, fixture_wait_ms);
     const auto expected_key = QStringLiteral("tab:%1").arg(selected_index - 1);
+
     QCOMPARE(layout->counter().value(QStringLiteral("key")).toString(), expected_key);
     QCOMPARE(layout->counter().value(QStringLiteral("count")).toULongLong(), tab_count - 1);
     const auto signal = strip->metaObject()->method(strip->metaObject()->indexOfSignal("selected(QString)"));
+
     QVERIFY(signal.isValid());
     const QSignalSpy selected{strip.get(), signal};
+
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), fixture_wait_ms);
     const auto center = layout->counter().value(QStringLiteral("bounds")).toRectF().center().toPoint();
+
     QTest::mouseClick(&window, Qt::LeftButton, Qt::NoModifier, center);
     QTRY_COMPARE_WITH_TIMEOUT(selected.size(), 1, fixture_wait_ms);
     QCOMPARE(selected.front().front().toString(), expected_key);
@@ -954,6 +1071,7 @@ private:
     const auto shown_key = [&] {
       return layout->items()->data(layout->items()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("key")).toString();
     };
+
     QTRY_COMPARE_WITH_TIMEOUT(shown_key(), QStringLiteral("tab:0"), fixture_wait_ms);
     QCOMPARE(layout->counter().value(QStringLiteral("key")).toString(), QStringLiteral("tab:1"));
   }
@@ -964,13 +1082,16 @@ private:
     auto previous = std::make_unique<ListModel>();
     ListModel current;
     constexpr int strip_width = 800;
+
     previous->reconcile(tabRecords({.count = 4, .active = 0}));
     current.reconcile(tabRecords({.count = 1, .active = 0}));
     auto strip = createChrome(engine, QStringLiteral("TerminalTabs"), tabProperties(*previous, strip_width));
+
     strip->setParentItem(window.contentItem());
     window.resize(strip_width, static_cast<int>(ChromeMetrics::logical_top_bar));
     window.show();
     auto *layout = strip->findChild<TabStripLayout *>(QStringLiteral("tabStripLayout"));
+
     QVERIFY(layout != nullptr);
     QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 4, fixture_wait_ms);
     QVERIFY(strip->setProperty("model", QVariant::fromValue(static_cast<QAbstractItemModel *>(&current))));
@@ -987,21 +1108,26 @@ private:
     constexpr int strip_width = 120;
     constexpr std::size_t tab_count = 64;
     constexpr std::size_t selected_index = tab_count / 2;
+
     tabs.reconcile(tabRecords({.count = tab_count, .active = selected_index}));
     auto strip = createChrome(engine, QStringLiteral("TerminalTabs"), tabProperties(tabs, strip_width));
+
     strip->setParentItem(window.contentItem());
     window.resize(strip_width, static_cast<int>(ChromeMetrics::logical_top_bar));
     window.show();
     auto *layout = strip->findChild<TabStripLayout *>(QStringLiteral("tabStripLayout"));
+
     QVERIFY(layout != nullptr);
     QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 1, fixture_wait_ms);
     QTRY_COMPARE_WITH_TIMEOUT(visualItems(*strip, QStringLiteral("applicationNumber")).size(), 1, fixture_wait_ms);
     QTRY_COMPARE_WITH_TIMEOUT(visualItems(*strip, QStringLiteral("applicationGlyph")).size(), 1, fixture_wait_ms);
     const auto *number = visualItems(*strip, QStringLiteral("applicationNumber")).front();
     const auto *glyph = visualItems(*strip, QStringLiteral("applicationGlyph")).front();
+
     QVERIFY(!number->isVisible() && glyph->isVisible());
     const auto bounds = tabBounds(*layout->items(), 0);
     const auto counter = layout->counter();
+
     QVERIFY(strip->setProperty("prefixPending", true));
     QVERIFY(number->isVisible() && !glyph->isVisible());
     QCOMPARE(number->property("text").toString(), QString::number(selected_index + 1));
@@ -1019,8 +1145,10 @@ private:
     ListModel workspaces;
     constexpr int workspace_count = 128;
     constexpr int width = 180;
+
     workspaces.reconcile(workspaceRecords({.count = workspace_count, .active = workspace_count - 1}));
     const auto switcher = createChrome(engine, QStringLiteral("ProjectSwitcher"), projectSwitcherProperties(workspaces, width, workspace_count - 1));
+
     switcher->setParentItem(window.contentItem());
     window.resize(width, static_cast<int>(ChromeMetrics::logical_top_bar));
     window.show();
@@ -1031,18 +1159,24 @@ private:
           return mark;
         }
       }
+
       return nullptr;
     };
+
     QTRY_VERIFY_WITH_TIMEOUT(selected() != nullptr, fixture_wait_ms);
     const auto marks = visualItems(*switcher, QStringLiteral("projectSwitcherMark"));
+
     QVERIFY(marks.size() <= 8);
     QVERIFY(switcher->boundingRect().contains(selected()->mapRectToItem(switcher.get(), selected()->boundingRect())));
     const auto overflow = visualItems(*switcher, QStringLiteral("projectSwitcherOverflow"));
+
     QCOMPARE(overflow.size(), 1);
     QVERIFY(overflow.front()->isVisible());
     const auto signal = switcher->metaObject()->method(switcher->metaObject()->indexOfSignal("overflowRequested()"));
+
     QVERIFY(signal.isValid());
     const QSignalSpy requested{switcher.get(), signal};
+
     QTest::mouseClick(&window, Qt::LeftButton, Qt::NoModifier, overflow.front()->mapRectToScene(overflow.front()->boundingRect()).center().toPoint());
     QTRY_COMPARE_WITH_TIMEOUT(requested.size(), 1, fixture_wait_ms);
     workspaces.reconcile(workspaceRecords({.count = workspace_count, .active = 0}));
@@ -1064,28 +1198,36 @@ private:
     QQmlEngine engine;
     ListModel tabs;
     ListModel workspaces;
+
     tabs.reconcile(tabRecords({.count = 4, .active = 0}));
     workspaces.reconcile(workspaceRecords({.count = 3, .active = 0}));
     auto properties = navigationProperties(tabs, 1000);
+
     properties.insert(QStringLiteral("workspaceModel"), QVariant::fromValue(static_cast<QAbstractItemModel *>(&workspaces)));
     properties.insert(QStringLiteral("workspace"), QVariantMap{{QStringLiteral("index"), 0}});
     const auto navigation = createChrome(engine, QStringLiteral("NavigationBar"), properties);
+
     navigation->setParentItem(window.contentItem());
     window.resize(1000, static_cast<int>(ChromeMetrics::logical_top_bar));
     window.show();
     QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
     auto *strip = navigation->findChild<TabStripLayout *>(QStringLiteral("tabStripLayout"));
+
     QVERIFY(strip != nullptr);
     const auto switchers = visualItems(*navigation, QStringLiteral("projectSwitcher"));
+
     QCOMPARE(switchers.size(), 1);
     auto *switcher = switchers.front();
+
     for (const bool rail : {false, true}) {
       QVERIFY(navigation->setProperty("rail", rail));
       QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
       const auto bounds = switcher->mapRectToItem(navigation.get(), switcher->boundingRect());
+
       QCOMPARE(bounds.right(), qreal{924});
       QVERIFY(strip->mapRectToItem(navigation.get(), strip->boundingRect()).right() < bounds.left());
       const auto marks = visualItems(*switcher, QStringLiteral("projectSwitcherMark"));
+
       QCOMPARE(marks.size(), 3);
       QTest::mouseMove(&window, marks.front()->mapRectToScene(marks.front()->boundingRect()).center().toPoint());
       QTRY_COMPARE_WITH_TIMEOUT(window.cursor().shape(), Qt::PointingHandCursor, fixture_wait_ms);
@@ -1098,8 +1240,10 @@ private:
     ListModel tabs;
     constexpr int strip_width = 300;
     constexpr std::size_t tab_count = 2;
+
     tabs.reconcile(tabRecords({.count = tab_count, .active = 0}));
     auto strip = createChrome(engine, QStringLiteral("TerminalTabs"), tabProperties(tabs, strip_width));
+
     strip->setParentItem(window.contentItem());
     window.resize(strip_width, static_cast<int>(ChromeMetrics::logical_top_bar));
     window.show();
@@ -1113,8 +1257,10 @@ private:
 
       return nullptr;
     };
+
     QTRY_VERIFY_WITH_TIMEOUT(firstArea() != nullptr, fixture_wait_ms);
     const auto *area = firstArea();
+
     QTest::mouseMove(&window, area->mapRectToScene(area->boundingRect()).center().toPoint());
     QTRY_COMPARE_WITH_TIMEOUT(window.cursor().shape(), Qt::PointingHandCursor, fixture_wait_ms);
   }
@@ -1140,7 +1286,9 @@ private:
         {QStringLiteral("pixelSize"), chrome.body},
         {QStringLiteral("text"), QStringLiteral("Action")},
     };
+
     auto required = properties;
+
     if (type == QStringLiteral("FormButton")) {
       required.insert({
           {QStringLiteral("radius"), radius},
@@ -1150,18 +1298,22 @@ private:
     }
 
     auto button = createChrome(engine, type, required);
+
     button->setParentItem(window.contentItem());
     constexpr QSize window_size{120, 40};
+
     button->setSize(window_size);
     window.resize(window_size);
     window.show();
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), fixture_wait_ms);
     constexpr QPoint inside{60, 20};
+
     QTest::mouseMove(&window, inside);
     QTRY_COMPARE_WITH_TIMEOUT(window.cursor().shape(), Qt::PointingHandCursor, fixture_wait_ms);
 
     QVERIFY(button->setProperty(availability.constData(), false));
     constexpr QPoint moved{62, 20};
+
     QTest::mouseMove(&window, moved);
     QTRY_COMPARE_WITH_TIMEOUT(window.cursor().shape(), Qt::ArrowCursor, fixture_wait_ms);
   }
@@ -1170,19 +1322,25 @@ private:
     QQuickWindow window;
     QQmlEngine engine;
     ListModel workspaces;
+
     workspaces.reconcile(workspaceRecords({.count = 3, .active = 0}));
     const auto switcher = createChrome(engine, QStringLiteral("ProjectSwitcher"), projectSwitcherProperties(workspaces, 120, 0));
+
     switcher->setParentItem(window.contentItem());
     window.resize(120, static_cast<int>(ChromeMetrics::logical_top_bar));
     const auto signal = switcher->metaObject()->method(switcher->metaObject()->indexOfSignal("selected(QString)"));
+
     QVERIFY(signal.isValid());
     const QSignalSpy selected{switcher.get(), signal};
+
     window.show();
     QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
     const auto marks = visualItems(*switcher, QStringLiteral("projectSwitcherMark"));
+
     QCOMPARE(marks.size(), 3);
     const auto *mark = marks.back();
     const auto record = mark->property("record").toMap();
+
     QTest::mouseClick(&window, Qt::LeftButton, Qt::NoModifier, mark->mapRectToScene(mark->boundingRect()).center().toPoint());
     QTRY_COMPARE_WITH_TIMEOUT(selected.size(), 1, fixture_wait_ms);
     QCOMPARE(selected.front().front().toString(), record.value(QStringLiteral("key")).toString());

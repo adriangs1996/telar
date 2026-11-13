@@ -49,14 +49,17 @@ export namespace telar::runtime::config {
       const auto directory = resolved.substr(0, resolved.rfind('/'));
       const auto source = readSource(canonical.data());
       lua::Vm vm{memory_};
+
       vm.resetBudget();
       vm.execute(bootstrap, "@telar/bootstrap.lua", 0);
       lua_getglobal(vm.state(), "telar");
       lua::JsonDecoder<Memory>::install(vm.state(), memory_);
       lua_pop(vm.state(), 1);
       LocalModules modules{vm.state(), directory};
+
       vm.execute(source, "@config.lua");
       const lua::Value root{vm.state(), -1, "config"};
+
       SnapshotReader{memory_, values_}.read(root, options.profile);
       resolveRelativePath(values_.history_path, directory);
       resolveRelativePath(values_.session_path, directory);
@@ -72,6 +75,7 @@ export namespace telar::runtime::config {
         if (error.failure() == FileReadFailure::invalid_size) {
           throw lua::Error{"Configuration must be a regular file of at most 1 MiB"};
         }
+
         throw lua::Error{"Configuration changed while reading"};
       } catch (const SystemError &error) {
         throw SystemError{"Open runtime configuration", error.code()};

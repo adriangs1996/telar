@@ -151,6 +151,7 @@ public:
 private:
   inline static std::size_t commandBytes(std::span<const HistoryEntry> entries) {
     std::size_t bytes = 0;
+
     for (const auto &entry : entries) {
       static_cast<void>(ValueCodec<HistoryEntry>::encodedSize(entry));
       if (entry.command.size() > command_preview_bytes && entry.command.size() <= command_cache_bytes - bytes) {
@@ -163,6 +164,7 @@ private:
 
   inline void append(tbc::view<Memory &, tbc::lt::a> memory, const HistoryEntry &entry) {
     auto &row = rows_.emplace_back(memory);
+
     row.id = entry.id;
     row.pane_id = entry.pane_id;
     row.command = runtime::utf8Prefix(entry.command, command_preview_bytes);
@@ -200,6 +202,7 @@ public:
   inline static std::size_t strip(std::span<const Byte> bytes, std::span<char> output) noexcept {
     State state = State::ground;
     std::size_t written = 0;
+
     for (const auto byte : bytes) {
       if (state != State::ground) {
         state = advance(state, byte);
@@ -401,6 +404,7 @@ public:
     auto incoming = copyPage(message.entries);
 
     const bool newer = pending_offset_ < state_.page_offset;
+
     page_.exchangeWith(incoming);
     state_.phase = HistoryPhase::ready;
     state_.snapshot_id = message.snapshot_id;
@@ -722,6 +726,7 @@ private:
     static_cast<void>(Codec::encodedSize(query));
     String<Memory> next_query{query.query, AllocatorRef<char, Memory>{memory_}};
     String<Memory> next_scope{AllocatorRef<char, Memory>{memory_}};
+
     if (const auto *path = std::get_if<std::string_view>(&query.scope_value)) {
       next_scope = *path;
     }
@@ -729,6 +734,7 @@ private:
     query_ = std::move(next_query);
     scope_path_ = std::move(next_scope);
     const auto *const scope_id = std::get_if<std::uint64_t>(&query.scope_value);
+
     criteria_ = {
         .scope = query.scope,
         .scope_id = scope_id == nullptr ? std::nullopt : std::optional{*scope_id},
@@ -738,6 +744,7 @@ private:
         .match = query.match,
         .distinct = query.distinct,
     };
+
     delete_request_ = 0;
 
     return requestPage({.request_id = query.request_id});
@@ -746,6 +753,7 @@ private:
   // The request views the stored query text and scope path.
   [[nodiscard]] inline QueryHistory request(PageRequest page) const noexcept {
     HistoryScopeValue scope_value{};
+
     if (criteria_.scope_path) {
       scope_value = std::string_view{scope_path_};
     } else if (criteria_.scope_id) {

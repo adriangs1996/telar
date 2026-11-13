@@ -65,15 +65,18 @@ void validateRoot(const lua::Value &root) {
   }
 
   constexpr std::array allowed{"api_version", "theme", "client", "gui", "runtime", "plugins", "profiles"};
+
   root.eachField([&](std::string_view name, const lua::Value &) {
     if (std::ranges::find(allowed, name) == allowed.end()) {
       diagnostic(std::string{"unknown field config."} + std::string{name}, "InvalidConfig");
     }
   });
+
   const auto version = root.field("api_version").asInteger();
   if (!version) {
     diagnostic("config.api_version must be an integer", "InvalidConfig");
   }
+
   if (*version != 2) {
     diagnostic("config.api_version is " + std::to_string(*version) + "; this Telar accepts 2", "IncompatibleConfigApi");
   }
@@ -100,9 +103,11 @@ void retiredWarnings(const lua::Value &root) {
   if (input.present() && input.field("escape_timeout_ms").present()) {
     paths.push_back("client.input.escape_timeout_ms");
   }
+
   if (client.field("icons").present()) {
     paths.push_back("client.icons");
   }
+
   if (paths.empty()) {
     return;
   }
@@ -131,6 +136,7 @@ void validatePluginAction(const lua::Value &action, std::span<const plugins::Pac
 
   const auto id = action.field("plugin").string();
   const auto name = action.field("action").string();
+
   for (const auto &package : packages) {
     if (package.manifest.id.view() != id) {
       continue;
@@ -167,15 +173,19 @@ void validateBindings(const lua::Value &client, config::KeyChord prefix, std::sp
 
   std::array<Sequence, config::BindingKeymap::maximum_bindings> sequences{};
   const auto count = std::min(bindings.listLength(), sequences.size());
+
   for (std::size_t index = 0; index < count; ++index) {
     const auto binding = bindings.element(index + 1);
+
     validatePluginAction(binding.field("action"), packages);
     auto &sequence = sequences[index];
+
     if (binding.field("prefixed").boolean(false)) {
       sequence.keys[sequence.count++] = prefix;
     }
 
     const auto keys = binding.field("keys");
+
     for (std::size_t key = 1; key <= keys.listLength(); ++key) {
       sequence.keys[sequence.count++] = config::KeyChordValidator::parse(keys.element(key));
     }
@@ -185,6 +195,7 @@ void validateBindings(const lua::Value &client, config::KeyChord prefix, std::sp
       const auto shared = std::min(other.count, sequence.count);
       if (std::equal(sequence.keys.begin(), sequence.keys.begin() + shared, other.keys.begin())) {
         const auto error = other.count == sequence.count ? "DuplicateBinding" : "AmbiguousBindingPrefix";
+
         std::fprintf(stderr, "telar config: keybindings do not compile: %s\n", error);
         throw ConfigurationFailure{error};
       }
@@ -208,6 +219,7 @@ void validateSelectedBindings(const lua::Value &root, std::string_view profile, 
       if (overlay.field("prefix").present()) {
         prefix = config::KeyChordValidator::parse(overlay.field("prefix"));
       }
+
       if (overlay.field("keybindings").present()) {
         validateBindings(overlay, prefix, packages);
         return;
@@ -227,6 +239,7 @@ int checkConfiguration(const window::ConfigCheckOptions &options) {
     BudgetAllocator memory{system, memory_budget};
     String<decltype(memory)> path{AllocatorRef<char, decltype(memory)>{memory}};
     const ProcessEnvironment environment;
+
     if (options.path != nullptr) {
       path = options.path;
     } else {
@@ -239,6 +252,7 @@ int checkConfiguration(const window::ConfigCheckOptions &options) {
     std::array<char, PATH_MAX> canonical;
     if (::realpath(path.c_str(), canonical.data()) == nullptr) {
       const auto error = systemErrorName(errno);
+
       diagnostic("cannot resolve config '" + std::string{path} + "': " + error, error);
     }
 
@@ -246,17 +260,21 @@ int checkConfiguration(const window::ConfigCheckOptions &options) {
     constexpr std::size_t maximum_source_bytes = 1024 * 1024;
     const auto source = readFile(memory, canonical.data(), maximum_source_bytes);
     lua::Vm vm{memory};
+
     vm.execute(configuration_bootstrap, "@telar/bootstrap.lua", 0);
     lua_getglobal(vm.state(), "telar");
     lua::JsonDecoder<decltype(memory)>::install(vm.state(), memory);
     lua_pop(vm.state(), 1);
     config::LocalModules modules{vm.state(), directory};
+
     executeSource(vm.state(), source);
     config::RuntimeValues values{memory};
     const lua::Value root{vm.state(), -1, "config"};
+
     validateRoot(root);
     config::SnapshotReader{memory, values}.read(root, options.profile);
     plugins::PackageRegistry registry{memory, directory, values.plugins.configured()};
+
     validateSelectedBindings(root, options.profile, registry.packages());
     retiredWarnings(root);
     values.limits.print();

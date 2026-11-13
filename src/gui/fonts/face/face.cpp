@@ -54,6 +54,7 @@ tbc::view<std::unique_ptr<FT_MM_Var, VariationDeleter>, tbc::lt::a> variationMas
   }
 
   std::unique_ptr<FT_MM_Var, VariationDeleter> result{master, {.library = library}};
+
   if (master->num_axis > telar_font_max_axes) {
     throw std::runtime_error{"FontVariationTooLarge"};
   }
@@ -73,6 +74,7 @@ FT_Pos asciiAdvance(FT_Face face) {
   constexpr FT_ULong first_printable = 0x21;
   constexpr FT_ULong last_printable = 0x7E;
   FT_Pos widest = 0;
+
   for (auto scalar = first_printable; scalar <= last_printable; ++scalar) {
     const auto index = FT_Get_Char_Index(face, scalar);
     FT_Fixed advance = 0;
@@ -206,6 +208,7 @@ void Face::applyVariation(const FontVariation &variation) {
   const auto master = variationMaster(library_.get(), face_.get());
   const auto axes = std::span{master->axis, master->num_axis};
   std::array<FT_Fixed, telar_font_max_axes> coordinates{};
+
   for (std::size_t index = 0; index < axes.size(); ++index) {
     coordinates[index] = axes[index].def;
   }
@@ -243,6 +246,7 @@ FontVariation Face::variation() const {
   }
 
   FontVariation result{};
+
   result.count = master->num_axis;
   for (std::size_t index = 0; index < master->num_axis; ++index) {
     result.tags[index] = static_cast<std::uint32_t>(master->axis[index].tag);
@@ -260,6 +264,7 @@ Face::OwnedSize Face::createSize(std::uint16_t pixel_height) {
 
   OwnedSize candidate{handle};
   auto *previous = face_->size;
+
   if (FT_Activate_Size(handle) != 0 || FT_Set_Pixel_Sizes(face_.get(), 0, pixel_height) != 0) {
     if (FT_Activate_Size(previous) != 0) {
       active_height_ = 0;
@@ -283,6 +288,7 @@ void Face::selectSize(std::uint16_t pixel_height) {
   auto *found = std::ranges::find(sizes_, pixel_height, &SizeEntry::height);
   if (found == sizes_.end()) {
     auto candidate = createSize(pixel_height);
+
     found = sizes_.begin() + static_cast<std::ptrdiff_t>(next_size_slot_);
     *found = {.height = pixel_height, .handle = std::move(candidate)};
     next_size_slot_ = (next_size_slot_ + 1) % sizes_.size();
@@ -331,6 +337,7 @@ ShapedRunView Face::shape(std::string_view text, std::uint16_t pixel_height) {
   selectSize(pixel_height);
   initializeShaping();
   auto *buffer = shaping_buffer_.get();
+
   hb_buffer_reset(buffer);
   hb_buffer_add_utf8(buffer, text.data(), static_cast<int>(text.size()), 0, static_cast<int>(text.size()));
   if (hb_buffer_allocation_successful(buffer) == 0) {
@@ -358,6 +365,7 @@ GlyphBitmapView Face::rasterize(GlyphRasterRequest request) {
   }
 
   auto *slot = face_->glyph;
+
   if (request.style.bold) {
     FT_GlyphSlot_Embolden(slot);
   }

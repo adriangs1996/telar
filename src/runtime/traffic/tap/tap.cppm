@@ -40,6 +40,7 @@ public:
     if (traffic_) {
       traffic_->submit(exchange);
     }
+
     plugins_.submit(exchange);
   }
 

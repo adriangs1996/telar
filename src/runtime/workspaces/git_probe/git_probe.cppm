@@ -63,6 +63,7 @@ public:
     TELAR_TRACE("workspaces.gitProbe");
     const auto observed = reader_.read(request.path.view());
     Result result{.identity = request.identity};
+
     result.branch.assign(observed.branch.view().substr(0, 200));
     result.dirty = observed.dirty;
     result.present = observed.present;

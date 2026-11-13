@@ -98,6 +98,7 @@ void RuntimeConnection::openRemote(RemoteTarget target) {
 
   closed_ = false;
   const auto destination = remote_target_->destination.toUtf8();
+
   link_.start({destination.constData(), static_cast<std::size_t>(destination.size())});
   error_.clear();
   emit linkChanged();
@@ -137,10 +138,13 @@ void RuntimeConnection::remoteFailed(MachineError error, std::string_view detail
   remote_error_ = error;
   const std::string_view fallback = link_.phase == MachinePhase::connected ? "EndOfStream" : MachineFailure::name(error);
   const auto message = detail.empty() ? fallback : detail;
+
   if (dispatching_payload_) {
     RuntimeLink bounded;
+
     bounded.fail(message);
     const auto kept = bounded.failure().value_or(std::string_view{});
+
     pending_failure_ = QString::fromUtf8(kept.data(), static_cast<qsizetype>(kept.size()));
   } else {
     fail(message);
@@ -184,6 +188,7 @@ void RuntimeConnection::resumeSession() {
 
   {
     const QScopedValueRollback aborting{closed_, true};
+
     if (remote_) {
       remote_->close();
     }
@@ -241,6 +246,7 @@ void RuntimeConnection::dismissError() {
 
 void RuntimeConnection::recover(std::string_view reason) {
   const auto message = QString::fromUtf8(reason.data(), static_cast<qsizetype>(reason.size()));
+
   if (dispatching_payload_) {
     pending_failure_ = message;
   } else {
@@ -329,6 +335,7 @@ void RuntimeConnection::retrySchema(const SchemaId &schema) {
   schema_retry_pending_ = true;
   connecting_ = false;
   const auto generation = ++read_generation_;
+
   deadline_.stop();
   socket_.abort();
   QTimer::singleShot(std::chrono::milliseconds::zero(), this, [this, generation] {
@@ -377,6 +384,7 @@ void RuntimeConnection::read() {
   } catch (const MachineFailure &error) {
     if (!accepted_) {
       const auto detail = link_.failure_storage;
+
       fail(detail.view());
     } else {
       fail(std::string_view{error.what()});
@@ -389,6 +397,7 @@ void RuntimeConnection::read() {
 void RuntimeConnection::drainInput() {
   constexpr qint64 read_budget_ms = 4;
   QElapsedTimer budget;
+
   budget.start();
   while (socket_.bytesAvailable() > 0) {
     if (!readChunk()) {
@@ -465,10 +474,12 @@ void RuntimeConnection::consume(std::span<const Byte> payload) {
   }
 
   const QScopedValueRollback dispatching{dispatching_payload_, true};
+
   emit payloadReceived(QByteArrayView{
       payload.data(),
       static_cast<qsizetype>(payload.size()),
   });
+
   if (const auto failure = std::exchange(pending_failure_, std::nullopt)) {
     throw std::runtime_error{failure->toStdString()};
   }
@@ -487,6 +498,7 @@ void RuntimeConnection::write(std::span<const Byte> payload) {
 
   std::array<Byte, frame_prefix_size> prefix{};
   std::span<Byte> output{prefix};
+
   u32::encode(static_cast<std::uint32_t>(payload.size()), output);
   const QByteArrayView prefix_view{prefix.data(), static_cast<qsizetype>(prefix.size())};
   const QByteArrayView payload_view{payload.data(), static_cast<qsizetype>(payload.size())};
@@ -499,6 +511,7 @@ void RuntimeConnection::write(std::span<const Byte> payload) {
 
 void RuntimeConnection::fail(const QString &message) {
   const auto utf8 = message.toUtf8();
+
   fail(std::string_view{utf8.constData(), static_cast<std::size_t>(utf8.size())});
 }
 
@@ -514,6 +527,7 @@ void RuntimeConnection::fail(std::string_view message) {
   }
 
   const auto detail = link_.failure().value_or(std::string_view{});
+
   error_ = QString::fromUtf8(detail.data(), static_cast<qsizetype>(detail.size()));
   accepted_ = false;
   connecting_ = false;
@@ -523,6 +537,7 @@ void RuntimeConnection::fail(std::string_view message) {
 
   {
     const QScopedValueRollback aborting{closed_, true};
+
     socket_.abort();
   }
 

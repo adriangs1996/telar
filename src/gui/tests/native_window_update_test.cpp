@@ -68,8 +68,10 @@ public:
 
 int main(int argc, char **argv) try {
   const QGuiApplication application{argc, argv};
+
   require(telar::gui::platform::supportsImmediateWindowUpdates(), "native update test requires Cocoa");
   UpdateWindow window;
+
   window.show();
   require(waitForGuiCondition([&] {
             return window.isExposed();
@@ -80,6 +82,7 @@ int main(int argc, char **argv) try {
   telar::gui::FramePacer::Pane pane{.pane_id = 1, .frame_id = 1, .attached = true, .attachment_generation = 1};
 
   const auto before = window.received;
+
   window.requestUpdate();
   require(window.handle()->hasPendingUpdateRequest(), "Qt must own the pending update");
   pacing.noteInput(pane, telar::gui::platform::AwakeClock::nowNanoseconds());

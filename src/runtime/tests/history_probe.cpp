@@ -33,20 +33,25 @@ public:
   template <typename Reply, typename Request>
   Reply exchange(const Request &request) {
     auto client = Client::init(socket_path_);
+
     try {
       client.handshake();
       const timeval timeout{.tv_sec = 5,
                             .tv_usec = 0};
+
       ::setsockopt(client.descriptor(), SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
       client.send(request, outgoing_);
       const auto payload = client.receiveFrame(incoming_);
       DecodeStorage storage{scratch_};
+
       if (payload.front() == static_cast<Byte>(ServerTag::request_failed)) {
         const auto failure = Codec::decode<RequestFailed>(payload, storage);
+
         std::fprintf(stderr, "request %llu: %.*s\n", static_cast<unsigned long long>(failure.request_id), static_cast<int>(failure.message.size()), failure.message.data());
       }
 
       const auto reply = Codec::decode<Reply>(payload, storage);
+
       output_.write(reinterpret_cast<const char *>(payload.data()), static_cast<std::streamsize>(payload.size()));
       client.deinit();
       return reply;
@@ -87,15 +92,18 @@ static void checkDegradedHistory(HistoryProbe &probe) {
   if (imported.request_id != 6) {
     throw std::runtime_error{"Unavailable history rejected an import"};
   }
+
   checkUnavailable(probe, QueryHistory{.request_id = 7, .limit = 10});
 }
 
 static void disconnectWithQueuedImports(const char *socket) {
   ProtocolPeer peer{socket};
+
   peer.send(RequestRuntimeState{.client_identity = 851, .interactive = false});
   peer.receive<WorkspaceList>();
   for (std::uint64_t sequence = 1; sequence <= 3; ++sequence) {
     const std::array<ImportHistoryEntry, 1> entries{{{100, "retained import"}}};
+
     peer.send(ImportHistory{.request_id = sequence, .source = "disconnected-client", .base_sequence = sequence, .entries = entries});
   }
 
@@ -113,20 +121,25 @@ int main(int argc, char **argv) {
       disconnectWithQueuedImports(argv[1]);
       return 0;
     }
+
     HistoryProbe probe{argv[1], argv[4]};
     const auto started = std::chrono::steady_clock::now();
+
     if (std::string_view{argv[2]} == "history-unavailable") {
       checkDegradedHistory(probe);
       std::puts("{\"requests\":7,\"passed\":true}");
       return 0;
     }
+
     if (std::string_view{argv[2]} == "history-retained") {
       const auto result = probe.exchange<HistoryResults>(QueryHistory{.request_id = 4, .limit = 10});
       if (result.entries.size() != 3) {
         throw std::runtime_error{"Imports were lost after disconnect: " + std::to_string(result.entries.size()) + " retained"};
       }
+
       return 0;
     }
+
     const std::array<ImportHistoryEntry, 6> entries{{
         {100, "git status"},
         {200, "git status"},
@@ -135,16 +148,19 @@ int main(int argc, char **argv) {
         {500, "cargo build"},
         {600, "printf 'café'"},
     }};
+
     const ImportHistory import{.request_id = 1,
                                .source = "history-probe-source-longer-than-forty-eight-bytes-for-identity-compatibility",
                                .base_sequence = 10,
                                .entries = entries};
+
     probe.exchange<RequestCompleted>(import);
     probe.exchange<RequestCompleted>(import);
     const auto first = probe.exchange<HistoryResults>(QueryHistory{.request_id = 2,
                                                                    .limit = 2});
     const auto snapshot = first.snapshot_id;
     const auto newest = first.entries.front().id;
+
     probe.exchange<HistoryResults>(QueryHistory{.request_id = 3,
                                                 .limit = 2,
                                                 .offset = 2,
@@ -172,6 +188,7 @@ int main(int argc, char **argv) {
     probe.exchange<HistoryResults>(QueryHistory{.request_id = 11,
                                                 .limit = 10});
     const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - started).count();
+
     std::printf("{\"iterations\":1,\"elapsed_ns\":%lld,\"ns_per_iteration\":%lld}\n", static_cast<long long>(elapsed), static_cast<long long>(elapsed));
     return 0;
   } catch (const std::exception &error) {

@@ -116,6 +116,7 @@ void Application::searchPeek(const QString &text) {
   }
 
   const auto measured = Utf16Prefix::fit(QStringView{text}, PeekLimits::message_bytes, utf16Encoding());
+
   peek_editor_ = text.first(static_cast<qsizetype>(measured.units));
   if (!peek_editor_.isValidUtf16()) {
     peek_editor_ = QString::fromUtf8(peek_editor_.toUtf8());
@@ -142,6 +143,7 @@ void Application::submitPeek(const QString &revision) {
   }
 
   const auto text = peek_editor_.toUtf8();
+
   applyInteraction([&] {
     if (session().submitPeek({text.constData(), static_cast<std::size_t>(text.size())})) {
       showDialog(Dialog::none);
@@ -153,13 +155,16 @@ QVariantMap Application::peekState() const {
   QString title;
   QString facts;
   QStringList lines;
+
   if (peekOriginValid()) {
     if (const auto *agent = session().peekAgent()) {
       const auto *task = AgentOrder::taskRow(session().workspaceList(), *agent);
+
       title = toQString(PeekLabels::title(*agent, task));
       facts = toQString(PeekLabels::facts(*agent, task).view());
       const auto geometry = PeekGeometry::measure(session().workbenchGeometry().cellArea());
       const auto visible = PeekScreen<ApplicationAllocator>::lastLines(session().peek().text(), geometry.screen.height);
+
       lines = toQString(visible).split(QLatin1Char('\n'));
     }
   }
@@ -173,10 +178,12 @@ QVariantMap Application::peekGeometry() const {
   const auto &workbench = session().workbenchGeometry();
   const auto geometry = PeekGeometry::measure(workbench.cellArea());
   auto bounds = workbench.pixels(geometry.bounds);
+
   bounds.x += display.geometry.terminal.x;
   bounds.y += display.geometry.terminal.y;
   const auto local = [&](CellRectangle cells) {
     auto area = workbench.pixels(cells);
+
     area.x += display.geometry.terminal.x - bounds.x;
     area.y += display.geometry.terminal.y - bounds.y;
 

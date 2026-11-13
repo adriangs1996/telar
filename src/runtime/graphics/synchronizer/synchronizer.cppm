@@ -51,6 +51,7 @@ public:
     if (bytes > available()) {
       return false;
     }
+
     used_ += bytes;
     return true;
   }
@@ -93,6 +94,7 @@ public:
     if (bytes > available_ || !budget_.acquire(bytes)) {
       return false;
     }
+
     available_ -= bytes;
     return true;
   }
@@ -101,6 +103,7 @@ public:
     if (bytes == 0 || bytes > graphics_credit_bytes - available_) {
       return false;
     }
+
     available_ += bytes;
     budget_.release(bytes);
     return true;
@@ -146,10 +149,12 @@ public:
   inline tbc::view<Result, tbc::lt::a> observe(tbc::view<const Request &, tbc::lt::a> request) noexcept {
     TELAR_TRACE("media.worker");
     auto result = request;
+
     for (auto &entry : std::span{result.entries}.first(result.count)) {
       entry.reset = entry.media->process();
       TELAR_DIAGNOSTIC(entry.metrics = entry.media->batchMetrics());
     }
+
     return result;
   }
 
@@ -251,19 +256,23 @@ public:
     if (connection.queuedBytes() > maximum_queue_bytes) {
       return false;
     }
+
     initialize(storage);
 
     if (snapshot_ == SnapshotState::idle && !transfer_ && observed_revision_ == storage.revision()) {
       return false;
     }
+
     const GraphicsHeader header{.pane_id = pane_,
                                 .revision = std::max<std::uint64_t>(1, storage.revision())};
+
     if (snapshot_ == SnapshotState::pending) {
       send(connection, GraphicsSnapshot{.header = header,
                                         .phase = SnapshotPhase::begin});
       snapshot_ = SnapshotState::open;
       return true;
     }
+
     if (transfer_ && publishTransfer(connection, header)) {
       return true;
     }
@@ -272,6 +281,7 @@ public:
       if (known.image_id == 0) {
         continue;
       }
+
       const auto current = std::ranges::find_if(storage.images(), [&](const auto &image) { return image.description.key.image_id == known.image_id; });
       if (current == storage.images().end() || (!sameImage(known, current->description.key) && knows(current->description.key))) {
         send(connection, GraphicsDeleteImage{.header = header,
@@ -281,6 +291,7 @@ public:
             placement = {};
           }
         }
+
         known = {};
         return true;
       }
@@ -299,6 +310,7 @@ public:
       if (known.virtual_id == 0) {
         continue;
       }
+
       const auto current = std::ranges::find_if(storage.placements(), [&](const auto &placement) { return placement.virtual_id == known.virtual_id; });
       if (current == storage.placements().end()) {
         send(connection, GraphicsDeletePlacement{.header = header,
@@ -309,6 +321,7 @@ public:
         return true;
       }
     }
+
     for (const auto &placement : storage.placements()) {
       auto &known = placementSlot(placement.virtual_id);
       if (!samePlacement(known, placement)) {
@@ -318,12 +331,14 @@ public:
         return true;
       }
     }
+
     observed_revision_ = storage.revision();
     if (snapshot_ == SnapshotState::open) {
       send(connection, GraphicsSnapshot{.header = header,
                                         .phase = SnapshotPhase::end});
       snapshot_ = SnapshotState::idle;
     }
+
     return false;
   }
 
@@ -357,6 +372,7 @@ public:
       Transfer transfer{.image = image.description,
                         .revision = std::max<std::uint64_t>(1, storage.revision()),
                         .frozen = std::move(*frozen)};
+
       for (const auto &placement : storage.placements()) {
         if (sameImage(placement.key, image.description.key)) {
           transfer.placements[transfer.placement_count++] = placement;
@@ -428,6 +444,7 @@ private:
 
   inline bool publishTransfer(Connection<Memory> &connection, GraphicsHeader header) {
     auto &transfer = *transfer_;
+
     header.revision = transfer.revision;
     if (!transfer.metadata_sent) {
       if (!transfer.frozen.name().empty()) {
@@ -444,6 +461,7 @@ private:
     if (transfer.offset < transfer.frozen.pixels().size()) {
       const auto bytes = transfer.frozen.pixels().subspan(transfer.offset);
       const auto chunk = bytes.first(std::min(bytes.size(), maximum_chunk_bytes));
+
       send(connection, GraphicsImageChunk{.header = header,
                                           .key = transfer.image.key,
                                           .offset = transfer.offset,
@@ -451,18 +469,22 @@ private:
       transfer.offset += chunk.size();
       return true;
     }
+
     if (transfer.placement_index < transfer.placement_count) {
       const auto &placement = transfer.placements[transfer.placement_index];
+
       send(connection, GraphicsPlacementMessage{.header = header,
                                                 .placement = placement});
       placementSlot(placement.virtual_id) = placement;
       ++transfer.placement_index;
       return true;
     }
+
     const auto empty = std::ranges::find_if(known_images_, [](ImageKey key) { return key.image_id == 0; });
     if (empty == known_images_.end()) {
       throw std::bad_alloc{};
     }
+
     *empty = transfer.image.key;
     transfer_.reset();
     return false;
@@ -477,10 +499,12 @@ private:
     if (existing != known_placements_.end()) {
       return *existing;
     }
+
     auto empty = std::ranges::find_if(known_placements_, [](const auto &placement) { return placement.virtual_id == 0; });
     if (empty == known_placements_.end()) {
       throw std::bad_alloc{};
     }
+
     return *empty;
   }
 

@@ -39,15 +39,19 @@ NSData *_Nonnull imageData(CFStringRef kind) {
       0, 0, 255, 255, 255, 255, 0, 255,
       255, 0, 255, 255, 0, 255, 255, 255,
   };
+
   auto *const color = CGColorSpaceCreateDeviceRGB();
   auto *const provider = CGDataProviderCreateWithData(nullptr, pixels.data(), pixels.size(), nullptr);
   auto *const image = CGImageCreate(image_width, image_height, component_bits, component_bits * components, image_width * components, color, kCGImageAlphaLast, provider, nullptr, false, kCGRenderingIntentDefault);
+
   require(image != nullptr, "the fixture image must be valid");
   NSMutableData *const data = [NSMutableData data];
   auto *const destination = CGImageDestinationCreateWithData((__bridge CFMutableDataRef)data, kind, 1, nullptr);
+
   require(destination != nullptr, "fixture encoding must be supported");
   CGImageDestinationAddImage(destination, image, nullptr);
   const bool success = CGImageDestinationFinalize(destination);
+
   CFRelease(destination);
   CGImageRelease(image);
   CGDataProviderRelease(provider);
@@ -81,10 +85,12 @@ void encodedFormatsAndRevisionChanges(NSPasteboard *board, ApplicationAllocator 
     require([board setData:imageData((__bridge CFStringRef)kind) forType:kind], "the private board must accept fixture data");
     const auto source = ClipboardImageSource::retainPasteboard((__bridge void *)board);
     const auto captured = source.read(memory, request);
+
     require(captured.request.capture == request.capture && captured.width == image_width && captured.height == image_height && captured.png.size() != 0, "supported formats must produce an owned PNG with exact capture identity");
     const auto bytes = captured.png.view();
     NSData *const data = [NSData dataWithBytes:bytes.data() length:bytes.size()];
     auto *const png = CGImageSourceCreateWithData((__bridge CFDataRef)data, nullptr);
+
     require(png != nullptr && CFEqual(CGImageSourceGetType(png), CFSTR("public.png")) != 0, "the worker must normalize each source to PNG");
     CFRelease(png);
     [board clearContents];
@@ -94,33 +100,41 @@ void encodedFormatsAndRevisionChanges(NSPasteboard *board, ApplicationAllocator 
 
 void boundedOwnedFilesAndNonregularSources(NSPasteboard *board, ApplicationAllocator &memory) {
   const QTemporaryDir directory;
+
   require(directory.isValid(), "the owned fixture directory must exist");
   const QString path = directory.filePath(QStringLiteral("image.png"));
   NSData *const png = imageData(CFSTR("public.png"));
+
   require([png writeToFile:nativePath(path) atomically:YES], "the owned fixture PNG must be written");
   [board clearContents];
   require([board writeObjects:@[[NSURL fileURLWithPath:nativePath(path)]]], "the private board must hold a file URL");
   const auto source = ClipboardImageSource::retainPasteboard((__bridge void *)board);
   const auto captured = source.read(memory, request);
+
   require(captured.width == image_width && captured.height == image_height, "owned regular files must capture");
 
   const QString link = directory.filePath(QStringLiteral("symlink.png"));
+
   require(::symlink(path.toUtf8().constData(), link.toUtf8().constData()) == 0, "the symlink fixture must exist");
   const QString fifo = directory.filePath(QStringLiteral("fifo.png"));
+
   require(::mkfifo(fifo.toUtf8().constData(), S_IRUSR | S_IWUSR) == 0, "the FIFO fixture must exist");
   for (const auto &rejected : {link, fifo}) {
     [board clearContents];
     require([board writeObjects:@[[NSURL fileURLWithPath:nativePath(rejected)]]], "the private board must accept a rejected URL");
     const auto unsafe = ClipboardImageSource::retainPasteboard((__bridge void *)board);
+
     expectFailure(unsafe, memory, ClipboardImageError::no_image);
   }
 
   QFile large{directory.filePath(QStringLiteral("too-large.png"))};
+
   require(large.open(QIODevice::WriteOnly) && large.resize(static_cast<qint64>(AttachmentLimits::maximum_source_bytes) + 1), "the oversized sparse fixture must exist");
   large.close();
   [board clearContents];
   require([board writeObjects:@[[NSURL fileURLWithPath:nativePath(large.fileName())]]], "the private board must accept an oversized URL");
   const auto oversized = ClipboardImageSource::retainPasteboard((__bridge void *)board);
+
   expectFailure(oversized, memory, ClipboardImageError::source_bytes);
 }
 
@@ -130,10 +144,13 @@ int main() {
   @autoreleasepool {
     NSPasteboard *const board = [NSPasteboard pasteboardWithUniqueName];
     int result = 0;
+
     try {
       ApplicationAllocator memory;
+
       [board clearContents];
       const auto empty = ClipboardImageSource::retainPasteboard((__bridge void *)board);
+
       expectFailure(empty, memory, ClipboardImageError::no_image);
       encodedFormatsAndRevisionChanges(board, memory);
       boundedOwnedFilesAndNonregularSources(board, memory);

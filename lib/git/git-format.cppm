@@ -61,12 +61,15 @@ inline constexpr int hexValue(char digit) noexcept {
   if (digit >= '0' && digit <= '9') {
     return digit - '0';
   }
+
   if (digit >= 'a' && digit <= 'f') {
     return digit - 'a' + 10;
   }
+
   if (digit >= 'A' && digit <= 'F') {
     return digit - 'A' + 10;
   }
+
   return -1;
 }
 
@@ -83,11 +86,14 @@ struct ObjectId {
   // The first `digits` hexadecimal digits, written into `buffer`.
   inline std::string_view hex(std::span<char, 2 * maximum_hash_size> buffer, std::size_t digits = 2 * maximum_hash_size) const noexcept {
     constexpr std::string_view alphabet = "0123456789abcdef";
+
     digits = std::min(digits, std::size_t{size} * 2);
     for (std::size_t index = 0; index < digits; ++index) {
       const auto byte = bytes[index / 2];
+
       buffer[index] = alphabet[index % 2 == 0 ? byte >> 4 : byte & 15];
     }
+
     return {buffer.data(), digits};
   }
 
@@ -96,7 +102,9 @@ struct ObjectId {
     if (text.size() != 2 * size) {
       return std::nullopt;
     }
+
     ObjectId id;
+
     id.size = static_cast<std::uint8_t>(size);
     for (std::size_t index = 0; index < size; ++index) {
       const auto high = hexValue(text[2 * index]);
@@ -104,14 +112,17 @@ struct ObjectId {
       if (high < 0 || low < 0) {
         return std::nullopt;
       }
+
       id.bytes[index] = static_cast<std::uint8_t>(high << 4 | low);
     }
+
     return id;
   }
 
   // `raw` holds at most maximum_hash_size bytes; callers check its bounds.
   inline static ObjectId fromBytes(std::span<const std::uint8_t> raw) noexcept {
     ObjectId id;
+
     id.size = static_cast<std::uint8_t>(std::min(raw.size(), maximum_hash_size));
     std::copy_n(raw.begin(), id.size, id.bytes.begin());
     return id;
@@ -169,6 +180,7 @@ inline Fingerprint fingerprintAt(int directory, const char *name) noexcept {
   if (directory < 0 || ::fstatat(directory, name, &status, AT_SYMLINK_NOFOLLOW) != 0) {
     return {};
   }
+
   return fingerprintOf(status);
 }
 
@@ -208,6 +220,7 @@ inline int compareBytes(std::span<const std::uint8_t> left, std::span<const std:
       return order;
     }
   }
+
   return left.size() < right.size() ? -1 : left.size() > right.size() ? 1 : 0;
 }
 
@@ -224,9 +237,11 @@ public:
         bytes_[0] = '\0';
         return false;
       }
+
       std::copy(part.begin(), part.end(), bytes_.begin() + static_cast<std::ptrdiff_t>(length_));
       length_ += part.size();
     }
+
     bytes_[length_] = '\0';
     return true;
   }
@@ -253,10 +268,12 @@ inline ReadStatus openRegular(int directory, const char *name, FileDescriptor &f
   if (!file) {
     return errno == ENOENT || errno == ENOTDIR ? ReadStatus::missing : ReadStatus::invalid;
   }
+
   if (::fstat(file.get(), &status) != 0 || !S_ISREG(status.st_mode) || status.st_size < 0) {
     file.reset();
     return ReadStatus::invalid;
   }
+
   return ReadStatus::ok;
 }
 
@@ -264,6 +281,7 @@ inline ReadStatus openRegular(int directory, const char *name, FileDescriptor &f
 // grows or shrinks while it is read is refused rather than half-parsed.
 inline bool readExactly(int descriptor, char *destination, std::size_t size) noexcept {
   std::size_t offset = 0;
+
   while (offset < size) {
     const auto count = ::read(descriptor, destination + offset, size - offset);
     if (count > 0) {
@@ -274,21 +292,26 @@ inline bool readExactly(int descriptor, char *destination, std::size_t size) noe
       return false;
     }
   }
+
   char extra;
   ssize_t count;
+
   do {
     count = ::read(descriptor, &extra, 1);
   } while (count < 0 && errno == EINTR);
+
   return count == 0;
 }
 
 inline bool readAt(int descriptor, void *destination, std::size_t size, std::uint64_t offset) noexcept {
   auto *bytes = static_cast<char *>(destination);
   std::size_t done = 0;
+
   while (done < size) {
     if (offset + done > static_cast<std::uint64_t>(std::numeric_limits<off_t>::max())) {
       return false;
     }
+
     const auto count = ::pread(descriptor, bytes + done, size - done, static_cast<off_t>(offset + done));
     if (count > 0) {
       done += static_cast<std::size_t>(count);
@@ -298,6 +321,7 @@ inline bool readAt(int descriptor, void *destination, std::size_t size, std::uin
       return false;
     }
   }
+
   return true;
 }
 
@@ -308,13 +332,16 @@ inline ReadStatus readSmall(int directory, const char *name, std::span<char> buf
   if (const auto opened = openRegular(directory, name, file, status); opened != ReadStatus::ok) {
     return opened;
   }
+
   const auto size = static_cast<std::uint64_t>(status.st_size);
   if (size > buffer.size() || !readExactly(file.get(), buffer.data(), static_cast<std::size_t>(size))) {
     return ReadStatus::invalid;
   }
+
   if (fingerprint != nullptr) {
     *fingerprint = fingerprintOf(status);
   }
+
   contents = {buffer.data(), static_cast<std::size_t>(size)};
   return ReadStatus::ok;
 }
@@ -328,22 +355,28 @@ ReadStatus readWhole(int directory, const char *name, String<Memory> &bytes, std
   if (const auto opened = openRegular(directory, name, file, status); opened != ReadStatus::ok) {
     return opened;
   }
+
   const auto size = static_cast<std::uint64_t>(status.st_size);
   if (size > limit) {
     return ReadStatus::invalid;
   }
+
   bool complete = false;
+
   bytes.resize_and_overwrite(static_cast<std::size_t>(size), [&](char *destination, std::size_t count) {
     complete = readExactly(file.get(), destination, count);
     return complete ? count : 0;
   });
+
   if (!complete) {
     bytes.clear();
     return ReadStatus::invalid;
   }
+
   if (fingerprint != nullptr) {
     *fingerprint = fingerprintOf(status);
   }
+
   return ReadStatus::ok;
 }
 
@@ -359,6 +392,7 @@ public:
 
   inline std::array<std::uint8_t, SHA_DIGEST_LENGTH> finish() noexcept {
     std::array<std::uint8_t, SHA_DIGEST_LENGTH> digest;
+
     SHA1_Final(digest.data(), &context_);
     return digest;
   }
@@ -383,9 +417,12 @@ public:
   inline ObjectId finish() noexcept {
     if (format_ == ObjectFormat::sha1) {
       const auto digest = sha1_.finish();
+
       return ObjectId::fromBytes(digest);
     }
+
     const auto digest = sha256_.finish();
+
     return ObjectId::fromBytes(digest);
   }
 
@@ -397,6 +434,7 @@ private:
 
 inline ObjectId hashBytes(ObjectFormat format, std::span<const std::uint8_t> bytes) noexcept {
   Hasher hasher{format};
+
   hasher.update(bytes);
   return hasher.finish();
 }
@@ -404,8 +442,10 @@ inline ObjectId hashBytes(ObjectFormat format, std::span<const std::uint8_t> byt
 // Starts hashing an object as git does: "<type> <size>\0" precedes its bytes.
 inline void hashObjectHeader(Hasher &hasher, std::string_view type, std::uint64_t size) noexcept {
   std::array<char, 48> header;
+
   std::copy(type.begin(), type.end(), header.begin());
   auto *cursor = header.data() + type.size();
+
   *cursor++ = ' ';
   cursor = std::to_chars(cursor, header.data() + header.size() - 1, size).ptr;
   *cursor++ = '\0';
@@ -414,6 +454,7 @@ inline void hashObjectHeader(Hasher &hasher, std::string_view type, std::uint64_
 
 inline ObjectId emptyBlob(ObjectFormat format) noexcept {
   Hasher hasher{format};
+
   hashObjectHeader(hasher, "blob", 0);
   return hasher.finish();
 }
@@ -424,20 +465,25 @@ inline bool validReferenceName(std::string_view name, std::size_t maximum_length
   if (name.empty() || name.size() > maximum_length || name == "@" || name.front() == '/' || name.back() == '/' || name.back() == '.') {
     return false;
   }
+
   std::size_t component_start = 0;
+
   for (std::size_t index = 0; index <= name.size(); ++index) {
     if (index == name.size() || name[index] == '/') {
       const auto component = name.substr(component_start, index - component_start);
       if (component.empty() || component.front() == '.' || component.ends_with(".lock")) {
         return false;
       }
+
       component_start = index + 1;
       continue;
     }
+
     const auto byte = static_cast<unsigned char>(name[index]);
     if (byte < 0x20 || byte == 0x7f) {
       return false;
     }
+
     switch (name[index]) {
     case ' ':
     case '~':
@@ -452,16 +498,19 @@ inline bool validReferenceName(std::string_view name, std::size_t maximum_length
       if (index + 1 < name.size() && name[index + 1] == '.') {
         return false;
       }
+
       break;
     case '@':
       if (index + 1 < name.size() && name[index + 1] == '{') {
         return false;
       }
+
       break;
     default:
       break;
     }
   }
+
   return true;
 }
 

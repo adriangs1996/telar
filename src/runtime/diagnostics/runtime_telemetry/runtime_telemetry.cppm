@@ -239,11 +239,13 @@ public:
 
     std::array<char, PATH_MAX> directory_path;
     const auto directory_length = std::max<std::size_t>(1, slash);
+
     std::copy_n(endpoint.begin(), directory_length, directory_path.begin());
     directory_path[directory_length] = '\0';
 
     try {
       DirectoryStream directory{FileDescriptor{::open(directory_path.data(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)}};
+
       for (std::size_t scanned = 0; scanned < cleanup_limit; ++scanned) {
         const auto *entry = directory.next();
         if (entry == nullptr) {
@@ -280,6 +282,7 @@ private:
 
   inline bool rotate() noexcept {
     std::array<char, PATH_MAX + 2> previous;
+
     std::copy_n(path_.begin(), path_length_, previous.begin());
     std::copy_n(".1", 3, previous.begin() + path_length_);
     file_.reset();
@@ -359,6 +362,7 @@ public:
       pending_ = false;
       failed_ = !written;
     });
+
     if (pending_ || failed_) {
       return;
     }
@@ -430,6 +434,7 @@ inline void writeMemorySample(Line &line, const AllocationStatistics &statistics
   line.field("heap_alloc_bytes", statistics.total.bytes);
   const auto &interactive = statistics.paths[static_cast<std::size_t>(AllocationPath::interactive)];
   const auto &terminal = statistics.interactive_terminal;
+
   line.field("interactive_allocs", interactive.count);
   line.field("interactive_alloc_bytes", interactive.bytes);
   line.field("interactive_vt_allocs", terminal.count);
@@ -438,12 +443,15 @@ inline void writeMemorySample(Line &line, const AllocationStatistics &statistics
   line.field("interactive_telar_alloc_bytes", interactive.bytes - terminal.bytes);
 
   const auto &media = statistics.paths[static_cast<std::size_t>(AllocationPath::media)];
+
   line.field("media_allocs", media.count);
   line.field("media_alloc_bytes", media.bytes);
   const auto &observation = statistics.paths[static_cast<std::size_t>(AllocationPath::observation)];
+
   line.field("observation_allocs", observation.count);
   line.field("observation_alloc_bytes", observation.bytes);
   const auto &other = statistics.paths[static_cast<std::size_t>(AllocationPath::other)];
+
   line.field("other_allocs", other.count);
   line.field("other_alloc_bytes", other.bytes);
 }
@@ -507,6 +515,7 @@ void writeRuntimeSample(Line &line, RuntimeModel<Memory> &model, const ClientSto
   MediaQueue media_queue;
   GraphicsStorageSnapshot graphics_storage;
   TerminalStorageSnapshot terminal_storage;
+
   for (const auto *workspace : model.workspaces.items()) {
     if (workspace != nullptr) {
       tabs += workspace->tabs.size();
@@ -538,6 +547,7 @@ void writeRuntimeSample(Line &line, RuntimeModel<Memory> &model, const ClientSto
     pane_input_queue_depth += pane->input.size();
     accumulate(pane_input_dropped_bytes, pane->input_dropped_bytes);
     const auto responses = pane->pty_responses->snapshot();
+
     pty_response_queue_depth += responses.messages;
     pty_response_queue_bytes += responses.bytes;
     accumulate(pty_response_dropped, responses.dropped);

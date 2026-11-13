@@ -37,6 +37,7 @@ public:
 
   std::string package(std::string_view id, std::string_view capabilities = "[\"proxy.tap\",\"notifications\"]") const {
     const auto path = root + '/' + std::string{id};
+
     std::filesystem::create_directories(path + "/lib/empty");
     write(path + "/plugin.json", std::string{"{\"api_version\":1,\"id\":\""} + std::string{id} + "\",\"version\":\"1\",\"entry\":\"main.lua\",\"source\":{\"url\":\"test\",\"revision\":\"1\"},\"capabilities\":" + std::string{capabilities} + '}');
     write(path + "/main.lua", "return {on_exchange=function() return nil end}");
@@ -47,6 +48,7 @@ public:
 
   static void write(const std::string &path, std::string_view bytes) {
     std::ofstream output{path, std::ios::binary};
+
     output.write(bytes.data(), bytes.size());
     check(output.good());
   }
@@ -54,15 +56,18 @@ public:
   static std::string grant(const tap::Package &package, std::string_view capabilities) {
     constexpr std::string_view hex = "0123456789abcdef";
     std::string digest;
+
     for (const auto byte : package.digest) {
       digest += hex[byte >> 4];
       digest += hex[byte & 15];
     }
+
     return "{\"plugin\":\"" + std::string{package.manifest.id.view()} + "\",\"digest\":\"" + digest + "\",\"capabilities\":" + std::string{capabilities} + '}';
   }
 
   void trust(std::string_view grants) const {
     const auto path = root + "/telar/trust.json";
+
     write(path, "{\"version\":1,\"grants\":[" + std::string{grants} + "]}");
     check(::chmod(path.c_str(), 0600) == 0);
   }
@@ -81,16 +86,19 @@ public:
 template <typename Operation>
 void rejects(Operation &&operation) {
   bool rejected = false;
+
   try {
     operation();
   } catch (const std::exception &) {
     rejected = true;
   }
+
   check(rejected);
 }
 
 tap::ConfiguredPlugin configured(std::string_view path, bool enabled = true) {
   tap::ConfiguredPlugin specification;
+
   specification.path.assign(path);
   specification.enabled = enabled;
   return specification;
@@ -99,6 +107,7 @@ tap::ConfiguredPlugin configured(std::string_view path, bool enabled = true) {
 void checkPermissions(const std::string &root) {
   for (const auto &entry : std::filesystem::recursive_directory_iterator(root)) {
     struct stat status{};
+
     check(::lstat(entry.path().c_str(), &status) == 0);
     check((status.st_mode & 0777) == (entry.is_directory() ? 0700 : 0600));
   }
@@ -111,10 +120,13 @@ void testSnapshots() {
   BudgetAllocator memory{system, 32 * 1024 * 1024};
   const auto original = tap::PackageInspector::inspect(memory, source);
   std::string snapshot_root;
+
   {
     tap::PackageSnapshots snapshots{memory};
+
     check(snapshots.path().empty());
     const auto copied = snapshots.copy(original, 0);
+
     snapshot_root = snapshots.path();
     check(copied.digest == original.digest && copied.root.view() != original.root.view());
     checkPermissions(snapshot_root);
@@ -123,17 +135,20 @@ void testSnapshots() {
     rejects([&] { snapshots.copy(original, 1); });
     std::filesystem::create_symlink(fixture.root, snapshot_root + "/outside");
   }
+
   check(!std::filesystem::exists(snapshot_root));
   check(std::filesystem::exists(source + "/plugin.json"));
   check(memory.liveBytes() == 0);
 
   {
     tap::PackageSnapshots snapshots{memory};
+
     std::filesystem::remove(source + "/lib/helper.lua");
     std::filesystem::create_symlink("../main.lua", source + "/lib/helper.lua");
     rejects([&] { snapshots.copy(original, 0); });
     snapshot_root = snapshots.path();
   }
+
   check(!std::filesystem::exists(snapshot_root));
   check(memory.liveBytes() == 0);
 }
@@ -145,15 +160,20 @@ void testTapConfiguration() {
   const auto source = fixture.package("sample");
   auto package = tap::PackageInspector::inspect(memory, source);
   const auto specifications = std::to_array({configured("missing", false), configured("./sample")});
+
   {
     tap::TapConfiguration configuration{memory, fixture.root, std::span{specifications}, fixture};
+
     check(configuration.specifications().empty());
   }
+
   fixture.trust(PackageFixture::grant(package, "[\"proxy.tap\",\"notifications\"]"));
   std::string snapshot_path;
+
   {
     tap::TapConfiguration configuration{memory, fixture.root, std::span{specifications}, fixture};
     const auto selected = configuration.specifications();
+
     check(selected.size() == 1);
     check(selected[0].package_index == 0 && selected[0].generation == 1);
     check(selected[0].plugin_id == tap::stableId("sample") && selected[0].digest == package.digest);
@@ -162,31 +182,39 @@ void testTapConfiguration() {
     snapshot_path = selected[0].entry.view();
     check(std::filesystem::exists(snapshot_path));
   }
+
   check(!std::filesystem::exists(snapshot_path));
   check(memory.liveBytes() == 0);
 
   fixture.trust(PackageFixture::grant(package, "[\"notifications\"]"));
   {
     tap::TapConfiguration configuration{memory, fixture.root, std::span{specifications}, fixture};
+
     check(configuration.specifications().empty());
   }
+
   package.digest[0] ^= 1;
   fixture.trust(PackageFixture::grant(package, "[\"proxy.tap\"]"));
   {
     tap::TapConfiguration configuration{memory, fixture.root, std::span{specifications}, fixture};
+
     check(configuration.specifications().empty());
   }
 
   const auto duplicate = std::to_array({configured("sample"), configured("sample")});
+
   rejects([&] { tap::TapConfiguration configuration{memory, fixture.root, std::span{duplicate}, fixture}; });
   const auto missing = std::to_array({configured("missing")});
+
   rejects([&] { tap::TapConfiguration configuration{memory, fixture.root, std::span{missing}, fixture}; });
   fixture.write(fixture.root + "/telar/trust.json", "invalid");
   rejects([&] { tap::TapConfiguration configuration{memory, fixture.root, std::span<const tap::ConfiguredPlugin>{}, fixture}; });
   {
     tap::TapConfiguration configuration{memory, "", std::span{missing}, fixture};
+
     check(configuration.specifications().empty());
   }
+
   check(memory.liveBytes() == 0);
 }
 
@@ -196,21 +224,28 @@ void testTapWorkerLimit() {
   BudgetAllocator memory{system, 32 * 1024 * 1024};
   std::array<tap::ConfiguredPlugin, tap::Limits::workers + 1> specifications;
   std::string grants;
+
   for (std::size_t index = 0; index < specifications.size(); ++index) {
     const auto name = "plugin-" + std::to_string(index);
     const auto path = fixture.package(name);
+
     specifications[index] = configured(name);
     const auto package = tap::PackageInspector::inspect(memory, path);
+
     if (!grants.empty()) {
       grants += ',';
     }
+
     grants += PackageFixture::grant(package, "[\"proxy.tap\"]");
   }
+
   fixture.trust(grants);
   {
     tap::TapConfiguration configuration{memory, fixture.root, std::span{specifications}.first(tap::Limits::workers), fixture};
+
     check(configuration.specifications().size() == tap::Limits::workers);
   }
+
   rejects([&] { tap::TapConfiguration configuration{memory, fixture.root, std::span{specifications}, fixture}; });
   check(memory.liveBytes() == 0);
 }

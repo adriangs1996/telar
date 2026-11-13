@@ -44,6 +44,7 @@ constexpr std::array vertical{PaneMotionSlot{.id = 1, .bounds = {.width = 800, .
 
 Rect sample(const PaneMotions &motions, std::size_t index, std::uint64_t now) {
   TabMotionFrame frame{.now_ns = now, .deadline_ns = std::nullopt};
+
   return motions.place(index, frame);
 }
 
@@ -53,6 +54,7 @@ QVariantMap record(const PaneMotionSlot &slot, const QString &context = QStringL
 
 QRectF visual(PaneMotionLayout &layout, int index) {
   const auto *model = layout.items();
+
   return model->data(model->index(index, 0), ListModel::record_role).toMap().value(QStringLiteral("visualBounds")).toRectF();
 }
 
@@ -62,19 +64,23 @@ class PaneMotionTest final : public QObject {
   Q_SLOT static void splitsRevealFromTheFarEdgeWithoutChangingTargets() {
     for (const auto &split : {horizontal, vertical}) {
       PaneMotions motions;
+
       motions.update(initial, 0);
       QCOMPARE(sample(motions, 0, 0), whole);
       motions.update(split, 10);
       QCOMPARE(sample(motions, 0, 10), whole);
       const auto entrance = sample(motions, 1, 10);
+
       QVERIFY(entrance.width == 0 || entrance.height == 0);
       QCOMPARE(entrance.right(), split[1].bounds.right());
       QCOMPARE(entrance.bottom(), split[1].bounds.bottom());
       const auto middle = sample(motions, 1, 10 + PaneMotions::opening_ns / 2);
+
       QVERIFY(middle.width > 0 && middle.height > 0);
       QCOMPARE(sample(motions, 0, 10 + PaneMotions::opening_ns), split[0].bounds);
       QCOMPARE(sample(motions, 1, 10 + PaneMotions::opening_ns), split[1].bounds);
       TabMotionFrame frame{.now_ns = 10 + PaneMotions::opening_ns, .deadline_ns = std::nullopt};
+
       (void)motions.place(0, frame);
       (void)motions.place(1, frame);
       QVERIFY(!frame.deadline_ns);
@@ -83,10 +89,12 @@ class PaneMotionTest final : public QObject {
 
   Q_SLOT static void closeAndInterruptedTransitionsStartAtTheVisiblePosition() {
     PaneMotions motions;
+
     motions.update(initial, 0);
     motions.update(horizontal, 10);
     const auto now = 10 + PaneMotions::opening_ns / 2;
     const auto visible = sample(motions, 0, now);
+
     motions.update(initial, now);
     QCOMPARE(sample(motions, 0, now), visible);
     QCOMPARE(sample(motions, 0, now + PaneMotions::closing_ns), whole);
@@ -94,11 +102,13 @@ class PaneMotionTest final : public QObject {
 
   Q_SLOT static void unchangedRefreshDoesNotRestartAndManualResizeIsImmediate() {
     PaneMotions motions;
+
     motions.update(initial, 0);
     motions.update(horizontal, 10);
     motions.update(horizontal, 10 + PaneMotions::opening_ns / 2);
     QCOMPARE(sample(motions, 0, 10 + PaneMotions::opening_ns), horizontal[0].bounds);
     auto resized = horizontal;
+
     resized[0].bounds.width = 300;
     resized[1].bounds.x = 320;
     resized[1].bounds.width = 480;
@@ -111,8 +121,10 @@ class PaneMotionTest final : public QObject {
 
   Q_SLOT static void unrelatedViewsNeverAnimate() {
     PaneMotions motions;
+
     motions.update(initial, 0);
     auto unrelated = horizontal;
+
     unrelated[0].id = 3;
     unrelated[1].id = 4;
     motions.update(unrelated, 10);
@@ -124,6 +136,7 @@ class PaneMotionTest final : public QObject {
     QQuickWindow window;
     ListModel model;
     PaneMotionLayout layout(window.contentItem());
+
     window.resize(800, 600);
     layout.setSize({800, 600});
     layout.setMotionEnabled(true);
@@ -158,6 +171,7 @@ class PaneMotionTest final : public QObject {
     },
                                 wait_ms));
     const auto *timer = window.findChild<QTimer *>(QStringLiteral("agentStatusAnimation"));
+
     QVERIFY(timer != nullptr);
     QVERIFY(waitForGuiCondition([&] {
       return !timer->isActive();
@@ -169,6 +183,7 @@ class PaneMotionTest final : public QObject {
     QQuickWindow window;
     ListModel model;
     PaneMotionLayout layout(window.contentItem());
+
     window.resize(800, 600);
     layout.setSize({800, 600});
     layout.setModel(&model);

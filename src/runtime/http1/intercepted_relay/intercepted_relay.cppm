@@ -88,6 +88,7 @@ public:
     active_ = false;
     for (std::size_t round = 0; round < maximum_rounds; ++round) {
       bool continued = false;
+
       switch (state_) {
       case State::reading_head:
         continued = readHead(source, observer);
@@ -105,30 +106,36 @@ public:
         // consumed; everything else waits in the relay's own storage.
         const bool body_pending = state_ == State::writing_body;
         std::span<const std::uint8_t> pending = storage_.bytes().first(std::min(write_length_, storage_.bytes().size()));
+
         if constexpr (BufferedByteStream<Source>) {
           if (body_pending) {
             pending = source.peekView(write_length_).bytes;
           }
         }
+
         if (pending.size() != write_length_) {
           state_ = State::failed;
           return active_;
         }
+
         continued = writePending(destination, observer, pending);
         if constexpr (BufferedByteStream<Source>) {
           if (body_pending && state_ != State::writing_body) {
             source.consume(write_length_);
           }
         }
+
         break;
       }
       default:
         return active_;
       }
+
       if (!continued) {
         break;
       }
     }
+
     return active_;
   }
 
@@ -175,6 +182,7 @@ private:
     const auto previous = reader_.length();
     const auto result = reader_.receive(source, storage_.bytes(), "\r\n\r\n");
     const bool progress = reader_.length() != previous;
+
     active_ = active_ || progress;
     if (progress && !started_) {
       started_ = true;
@@ -195,6 +203,7 @@ private:
     case DelimitedRead::Result::pending:
       return progress;
     }
+
     return false;
   }
 
@@ -206,6 +215,7 @@ private:
       read_waiting_ = received.waiting;
       return false;
     }
+
     if (received.state != StreamResult::State::data || received.bytes == 0) {
       state_ = body_stage_ == BodyStage::until_close ? State::complete : State::failed;
       return false;
@@ -216,6 +226,7 @@ private:
     if (body_stage_ != BodyStage::until_close) {
       remaining_ -= received.bytes;
     }
+
     prepareWrite(State::writing_body, received.bytes);
     return true;
   }
@@ -225,6 +236,7 @@ private:
   inline StreamResult bodyInput(Source &source, std::size_t maximum) noexcept {
     if constexpr (BufferedByteStream<Source>) {
       const auto peeked = source.peekView(maximum);
+
       return {peeked.state, peeked.bytes.size(), peeked.waiting};
     } else {
       return source.read(storage_.bytes().first(maximum));
@@ -235,16 +247,20 @@ private:
   inline bool readLine(Source &source) noexcept {
     const auto previous = reader_.length();
     const auto capacity = body_stage_ == BodyStage::trailer ? trailer_line_capacity : chunk_line_capacity;
+
     line_result_ = reader_.receive(source, storage_.bytes().first(capacity), "\r\n");
     const bool progress = reader_.length() != previous;
+
     active_ = active_ || progress;
     if (line_result_ == DelimitedRead::Result::pending) {
       return progress;
     }
+
     if (reader_.length() == 0) {
       state_ = State::failed;
       return false;
     }
+
     prepareWrite(State::writing_line, reader_.length());
     return true;
   }
@@ -256,10 +272,12 @@ private:
       write_waiting_ = sent.waiting;
       return false;
     }
+
     if (sent.state != StreamResult::State::data || sent.bytes == 0) {
       if (state_ == State::writing_line) {
         recordLineLimit(observer);
       }
+
       state_ = State::failed;
       write_offset_ = write_length_;
       return false;
@@ -280,6 +298,7 @@ private:
       if constexpr (requires { { observer.chunkSeparator(std::span<const std::uint8_t>{}) } noexcept -> std::same_as<void>; }) {
         if (body_stage_ == BodyStage::chunk_separator) { observer.chunkSeparator(pending); }
       }
+
       observer.payload(body_stage_ == BodyStage::chunk_separator ? std::span<const std::uint8_t>{} : pending);
       finishBodyBuffer();
       break;
@@ -288,16 +307,19 @@ private:
       if constexpr (requires { { observer.chunkLine(std::string_view{}) } noexcept -> std::same_as<void>; }) {
         if (body_stage_ == BodyStage::chunk_size && line_result_ == DelimitedRead::Result::complete) { observer.chunkLine(text(write_length_)); }
       }
+
       if constexpr (requires { { observer.trailer(std::string_view{}) } noexcept -> std::same_as<void>; }) {
         if (body_stage_ == BodyStage::trailer && line_result_ == DelimitedRead::Result::complete && write_length_ > chunk_separator_bytes) {
           observer.trailer(text(write_length_).substr(0, write_length_ - chunk_separator_bytes));
         }
       }
+
       finishLine();
       break;
     default:
       break;
     }
+
     return true;
   }
 
@@ -312,6 +334,7 @@ private:
       state_ = State::complete;
       return;
     }
+
     switch (head_->framing.kind) {
     case Http1Framing::Kind::content_length:
       body_stage_ = BodyStage::content;
@@ -349,12 +372,14 @@ private:
       state_ = State::failed;
       return;
     }
+
     if (body_stage_ == BodyStage::trailer) {
       if (text(write_length_) == "\r\n") {
         state_ = State::complete;
       } else {
         beginLine(BodyStage::trailer);
       }
+
       return;
     }
 
@@ -562,11 +587,13 @@ class Http1InterceptedRelay {
       if (relay.mode_ == Mode::streaming) {
         return relay.hasPrefix() ? StreamResult{StreamResult::State::blocked, 0, StreamReadiness::completion} : destination.write(bytes);
       }
+
       try {
         if (bytes.size() > maximum_wire_body + Http1Head::capacity - relay.wire_.size()) {
           relay.unavailable("http_wire_limit");
           return {relay.mode_ == Mode::failed ? StreamResult::State::failed : StreamResult::State::blocked, 0, StreamReadiness::completion};
         }
+
         relay.wire_.insert(relay.wire_.end(), bytes.begin(), bytes.end());
         return {StreamResult::State::data, bytes.size()};
       } catch (...) {
@@ -610,12 +637,14 @@ public:
     if (mode_ == Mode::failed) { return false; }
     if (mode_ == Mode::buffering && std::chrono::steady_clock::now() >= interception_.collectUntil()) { unavailable("http_collection_timeout"); }
     bool active = flush(destination);
+
     if (synthetic_) { return active; }
     if (mode_ == Mode::waiting) { resolve(); active = flush(destination) || active; }
     if (mode_ == Mode::failed || mode_ == Mode::waiting || (hasPrefix() && mode_ != Mode::buffering)) { return active; }
 
     Sink<Destination> sink{*this, destination};
     Observation<Observer> observation{*this, observer};
+
     active = parser_.advance(source, sink, observation) || active;
     if (mode_ == Mode::buffering && parser_.state() == State::failed) { unavailable("http_incomplete_message"); }
     if (mode_ == Mode::buffering && parser_.state() == State::complete) { finish(); }
@@ -662,10 +691,12 @@ private:
   inline void readHead(std::string_view bytes) noexcept {
     const auto &policy = interception_.select(control_, identity_.event(direction_));
     const bool repair = message_.response && message_.response_to_head != destination_head_;
+
     mode_ = policy.enabled || repair ? Mode::buffering : Mode::streaming;
     if (mode_ == Mode::streaming) { return; }
     try {
       const auto parsed = message_.readHttp1Head(bytes, message_.response_to_head);
+
       head_parsed_ = true;
       if (!message_.response) { original_head_ = parsed.head_request; }
       head_bytes_ = bytes.size();
@@ -720,12 +751,16 @@ private:
       try {
         // Built aside and swapped in, so a message that fails to serialize leaves the wire as it was.
         Bytes wire{AllocatorRef<Byte, Secure>{secure_}};
+
         message_.serializeHttp1(wire);
         wire_.swap(wire);
       } catch (...) { message_.response_to_head = source_head; throw; }
+
       message_.response_to_head = source_head;
     }
+
     const std::string_view text{reinterpret_cast<const char *>(wire_.data()), wire_.size()};
+
     head_bytes_ = text.find("\r\n\r\n") + 4;
     mode_ = Mode::forwarding;
     interception_.release();
@@ -750,6 +785,7 @@ private:
       forwarded_head_ = Http1Head::analyze({reinterpret_cast<const char *>(wire_.data()), head_bytes_}, message_.response, message_.response ? destination_head_ : message_.response_to_head);
       if (forwarded_head_ && parser_.head() && parser_.head()->closes) { forwarded_head_->closes = true; }
     }
+
     if (!hasPrefix()) { wire_.clear(); write_offset_ = 0; }
     return true;
   }

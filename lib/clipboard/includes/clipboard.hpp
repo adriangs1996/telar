@@ -46,6 +46,7 @@ namespace telar::clipboard {
     case read_error::backend_unavailable:
       return "This build has no native clipboard support.";
     }
+
     return "Unknown clipboard error.";
   }
 

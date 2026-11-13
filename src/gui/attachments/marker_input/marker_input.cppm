@@ -60,6 +60,7 @@ public:
     }
 
     const auto completed = capture_;
+
     capture_.reset();
 
     return completed;
@@ -97,6 +98,7 @@ public:
     const auto movement = removal.direction == AttachmentMarkerDirection::left ? KeyChord::Key::left : KeyChord::Key::right;
     const auto restoration = removal.direction == AttachmentMarkerDirection::left ? KeyChord::Key::right : KeyChord::Key::left;
     const auto deletion = removal.deletion == AttachmentMarkerDeletion::backward ? KeyChord::Key::backspace : KeyChord::Key::erase;
+
     append(movement, removal.steps, modes);
     append(deletion, removal.deletions, modes);
     append(restoration, removal.steps, modes);
@@ -110,6 +112,7 @@ private:
   inline void append(KeyChord::Key code, std::uint16_t count, const InputModes &modes) {
     KeyEncoder encoder;
     const auto bytes = encoder.encode(TerminalKey{.code = code}, modes);
+
     for (std::uint16_t index = 0; index < count; ++index) {
       if (bytes.size() > bytes_.size() - used_) {
         throw std::length_error{"AttachmentMarkerRemovalInputTooLarge"};

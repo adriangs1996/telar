@@ -43,6 +43,7 @@ std::vector<Byte> readFrame() {
 void writeFrame(std::span<const Byte> payload) {
   std::array<Byte, frame_prefix_size> prefix{};
   std::span<Byte> output{prefix};
+
   u32::encode(static_cast<std::uint32_t>(payload.size()), output);
   if (std::fwrite(prefix.data(), 1, prefix.size(), stdout) != prefix.size() || std::fwrite(payload.data(), 1, payload.size(), stdout) != payload.size() || std::fflush(stdout) != 0) {
     throw std::runtime_error{"Write SSH fixture frame"};
@@ -52,6 +53,7 @@ void writeFrame(std::span<const Byte> payload) {
 template <typename Message>
 void sendMessage(const Message &message) {
   std::vector<Byte> storage(Codec::encodedSize(message));
+
   writeFrame(Codec::encode(message, storage));
 }
 
@@ -61,6 +63,7 @@ void windowMessage(std::span<const Byte> payload, bool named_launch) {
   constexpr std::size_t decode_capacity = 4096;
   std::array<Byte, decode_capacity> scratch{};
   DecodeStorage decode{scratch};
+
   switch (static_cast<ClientTag>(payload.front())) {
   case ClientTag::request_runtime_state:
     sendMessage(ClientLayoutSnapshot{});
@@ -80,12 +83,14 @@ void windowMessage(std::span<const Byte> payload, bool named_launch) {
   case ClientTag::request_tab_snapshot: {
     const auto request = Codec::decode<RequestTabSnapshot>(payload, decode);
     const std::array panes{PaneDescriptor{.pane_id = pane_id, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
+
     sendMessage(TabSnapshot{.request_id = request.request_id, .location = location, .panes = panes});
     break;
   }
   case ClientTag::request_workspace_snapshot: {
     const auto request = Codec::decode<RequestWorkspaceSnapshot>(payload, decode);
     const std::array tabs{TabDescriptor{.tab_id = location.tab_id, .pane_count = 1}};
+
     sendMessage(WorkspaceSnapshot{.request_id = request.request_id, .workspace = location.workspace, .name = "remote", .tabs = tabs});
     break;
   }
@@ -114,6 +119,7 @@ int sshFixture(std::span<char *> arguments) {
   const std::string_view command{arguments.back()};
   if (!command.starts_with("exec ")) {
     const auto schema = textView(std::span{selected_schema});
+
     static_cast<void>(std::fputs("/home/remote\n/bin/sh\n/run/remote/runtime.sock\n", stdout));
     static_cast<void>(std::fwrite(schema.data(), 1, schema.size(), stdout));
     static_cast<void>(std::fputc('\n', stdout));

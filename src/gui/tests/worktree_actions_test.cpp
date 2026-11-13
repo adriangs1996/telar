@@ -66,16 +66,20 @@ void leavingAWorktreeOpensItsProjectWithoutALaunchCommand() {
   SystemAllocator memory;
   Transport transport;
   Session client{memory, transport};
+
   require(!client.leaveWorktree(), "an unconnected client must not request a workspace handoff");
   openFirstPane(client, transport);
   require(!client.leaveWorktree(), "a project without a worktree must stay selected");
   const auto workspace = client.activeTab()->location.workspace;
   const std::array entries{WorkspaceListEntry{.workspace = project_id, .name = "Project", .path = "/project"}, WorkspaceListEntry{.workspace = workspace.id, .name = "Checkout", .path = "/project/checkout"}};
   const std::array worktrees{WorktreeListEntry{.worktree = checkout_id, .source = project_id, .workspace = workspace.id, .path = "/project/checkout", .branch = "checkout"}};
+
   deliver(client, WorkspaceList{.revision = 1, .entries = entries, .worktrees = worktrees});
   const auto opening_count = transport.count(ClientTag::open_pane);
+
   require(client.leaveWorktree(), "a linked checkout must request its source project");
   const auto request = transport.last<OpenPane>();
+
   require(request.target.kind == PaneTarget::Kind::workspace && request.target.id == project_id && !request.launch, "leaving a worktree must open its source workspace without sending a new launch command");
   require(transport.count(ClientTag::open_pane) == opening_count + 1 && transport.count(ClientTag::detach_pane) == 1 && client.activeTab() == nullptr && client.panes().empty(), "the handoff must retire its checkout only after queuing the source project's canonical open");
   client.disconnected();
@@ -86,8 +90,10 @@ void forgettingOnlyTargetsGoneCheckoutsWithoutTabs() {
   SystemAllocator system;
   BudgetAllocator memory{system, std::numeric_limits<std::size_t>::max()};
   Transport transport;
+
   {
     Session client{memory, transport};
+
     openFirstPane(client, transport);
     const std::array worktrees{
         gone_checkout,
@@ -96,11 +102,14 @@ void forgettingOnlyTargetsGoneCheckoutsWithoutTabs() {
         WorktreeListEntry{.worktree = 42, .source = project_id, .workspace = 2, .state = WorktreeState::gone, .path = "/project/open", .branch = "open"},
         second_gone_checkout,
     };
+
     deliver(client, WorkspaceList{.revision = 1, .worktrees = worktrees});
     const auto first_message = transport.sent.size();
+
     require(client.forgetGoneWorktrees() == 2 && transport.count(ClientTag::forget_worktree) == 2, "only gone worktrees without an owning workspace may be forgotten");
     const auto first = Codec::decode<ForgetWorktree>(transport.sent[first_message]);
     const auto second = transport.last<ForgetWorktree>();
+
     require(first.worktree == checkout_id && second.worktree == second_checkout_id && first.request_id != second.request_id, "cleanup requests must preserve snapshot order and own distinct correlations");
     require(client.workspaceList().worktrees().size() == worktrees.size(), "cleanup must await runtime snapshots instead of mutating its replica");
     require(deliver(client, RequestFailed{.request_id = first.request_id, .code = FailureCode::worktree_not_found, .message = "Already forgotten"}) == Change::none && client.error().empty(), "a concurrently forgotten row must release its correlation without an error");
@@ -117,11 +126,14 @@ void cleanupStopsAtCapacityAndReleasesRejectedDelivery() {
   SystemAllocator memory;
   Transport transport;
   Session client{memory, transport};
+
   openFirstPane(client, transport);
   const std::array worktrees{gone_checkout};
+
   deliver(client, WorkspaceList{.revision = 1, .worktrees = worktrees});
   constexpr auto capacity = decltype(client)::maximum_pending;
   std::array<std::uint64_t, capacity> requests{};
+
   for (std::size_t index = 0; index < capacity - 1; ++index) {
     require(client.forgetGoneWorktrees() == 1, "available correlations must admit cleanup");
     requests[index] = transport.last<ForgetWorktree>().request_id;
@@ -129,6 +141,7 @@ void cleanupStopsAtCapacityAndReleasesRejectedDelivery() {
 
   transport.reject_forget_worktree = true;
   bool rejected = false;
+
   try {
     static_cast<void>(client.forgetGoneWorktrees());
   } catch (const EncodingError &) {
@@ -138,6 +151,7 @@ void cleanupStopsAtCapacityAndReleasesRejectedDelivery() {
   require(rejected, "delivery rejection must remain observable to the caller");
   transport.reject_forget_worktree = false;
   const std::array final_rows{gone_checkout, second_gone_checkout};
+
   deliver(client, WorkspaceList{.revision = 2, .worktrees = final_rows});
   require(client.forgetGoneWorktrees() == 1, "rejected delivery must release its slot and a partially admitted batch must stop at capacity");
   requests.back() = transport.last<ForgetWorktree>().request_id;

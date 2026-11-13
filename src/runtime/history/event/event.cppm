@@ -97,6 +97,7 @@ public:
 
   inline HistoryEventView view() const noexcept {
     auto result = event_;
+
     result.session.workspace_path = workspace_;
     result.session.shell = shell_;
     result.command.command = command_;
@@ -144,6 +145,7 @@ void replyHistoryFailure(const Message &request, EncodedReply<Memory> &reply, bo
     reply.send(HistoryPruned{.request_id = request.request_id, .removed = 0});
   } else {
     std::string_view message = "history database is unavailable";
+
     if (available) {
       if constexpr (std::same_as<Message, QueryHistory>) {
         message = "history query failed";
@@ -294,6 +296,7 @@ private:
     }
 
     auto *header = static_cast<Header *>(pointer) - 1;
+
     active_->deallocate(header, sizeof(Header) + static_cast<std::size_t>(header->bytes), alignof(Header));
   }
 

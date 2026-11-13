@@ -65,8 +65,10 @@ void RuntimeConnection::requestStop() {
   const auto response = client_.receiveFrame(incoming);
   std::array<Byte, 2048> decoded;
   DecodeStorage storage{decoded};
+
   if (!response.empty() && response.front() == static_cast<Byte>(ServerTag::request_failed)) {
     const auto failure = Codec::decode<RequestFailed>(response, storage);
+
     throw std::runtime_error{std::string{failure.message}};
   }
 
@@ -82,21 +84,25 @@ struct RelayDirection {
 
 [[noreturn]] void relay(RelayDirection direction) noexcept {
   std::array<Byte, 64 * 1024> buffer;
+
   for (;;) {
     const auto count = ::read(direction.source, buffer.data(), buffer.size());
     if (count < 0 && errno == EINTR) {
       continue;
     }
+
     if (count <= 0) {
       ::_exit(0);
     }
 
     auto pending = std::span<const Byte>{buffer}.first(static_cast<std::size_t>(count));
+
     while (!pending.empty()) {
       const auto written = ::write(direction.destination, pending.data(), pending.size());
       if (written < 0 && errno == EINTR) {
         continue;
       }
+
       if (written <= 0) {
         ::_exit(0);
       }

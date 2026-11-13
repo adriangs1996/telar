@@ -39,6 +39,7 @@ using telar::gui::test::require;
 float measure(std::string_view text) {
   GraphemeCursor cursor{text};
   std::size_t columns = 0;
+
   while (cursor.next()) {
     ++columns;
   }
@@ -49,6 +50,7 @@ float measure(std::string_view text) {
 void wrappingRetainsWordsAndGraphemes() {
   NotificationText text;
   constexpr float width = 5;
+
   text.wrap(" \t one two three four \r\n", width, measure);
   require(text.count() == NotificationText::maximum_lines && text.line(0) == "one" && text.line(1) == "two" && text.line(2) == "thre…", "wrapping must prefer word boundaries and truncate only the final line");
 
@@ -63,9 +65,11 @@ void wrappingRetainsWordsAndGraphemes() {
 void paragraphsAndOwnedTailsSurviveCopies() {
   NotificationText text;
   constexpr float width = 10;
+
   text.wrap("first\r\nsecond\nthird\nfourth", width, measure);
   require(text.count() == NotificationText::maximum_lines && text.line(0) == "first" && text.line(1) == "second" && text.line(2) == "third…", "a hidden following paragraph must be announced even when the final paragraph fits");
   auto moved = std::move(text);
+
   text = {};
   text.wrap("replacement", width, measure);
   require(moved.line(2) == "third…", "owned ellipsis text must not retain a pointer into its prior object");

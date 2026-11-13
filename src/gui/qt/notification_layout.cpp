@@ -248,6 +248,7 @@ void NotificationLayout::refreshFonts() {
 
 float NotificationLayout::measure(WindowFontCatalog &catalog, ResidentFonts &fonts, std::string_view text, std::uint16_t pixels, bool emphasized) {
   const auto role = emphasized ? fonts::FontRole::emphasized : fonts::FontRole::regular;
+
   catalog.request(text, role);
 
   return static_cast<float>(fonts::TextLayout<SystemAllocator>::measure(fonts, text, {.pixel_height = pixels, .preferred = role}));
@@ -257,6 +258,7 @@ NotificationLayout::Content &NotificationLayout::content(const NotificationItem 
   auto *found = std::ranges::find(contents_, item.id, &Content::id);
   if (found == contents_.end()) {
     const auto retained = controller_->notifications().items();
+
     found = std::ranges::find_if(contents_, [&](const auto &candidate) {
       return candidate.id.value == 0 || std::ranges::none_of(retained, [&](const auto &existing) {
                return existing.id == candidate.id;
@@ -276,9 +278,11 @@ NotificationLayout::Content &NotificationLayout::content(const NotificationItem 
     const auto measure_body = [catalog = tbc::raw(catalog_.data()), &fonts = *fonts_, pixels = chrome_.body](std::string_view label) {
       return measure(*catalog, fonts, label, pixels, false);
     };
+
     found->body.wrap(found->message.view(), width - metrics_.px(NotificationMetrics::text_insets), measure_body);
     found->height = metrics_.height(found->body.count(), item.clickable());
     auto made = contentRecord(item, *found);
+
     found->record = std::move(made.record);
     found->action_advance = made.action_advance;
     found->action_line_height = made.action_line_height;
@@ -290,6 +294,7 @@ NotificationLayout::Content &NotificationLayout::content(const NotificationItem 
 NotificationLayout::ContentRecord NotificationLayout::contentRecord(const NotificationItem &item, const Content &content) const {
   const NotificationCardGeometry geometry{.bounds = {.width = content.width, .height = content.height}, .metrics = metrics_};
   QVariantList body;
+
   for (std::size_t index = 0; index < content.body.count(); ++index) {
     body.append(QVariantMap{{QStringLiteral("text"), toQString(content.body.line(index))}, {QStringLiteral("bounds"), logicalBounds(geometry.body(index), density_)}});
   }
@@ -299,13 +304,16 @@ NotificationLayout::ContentRecord NotificationLayout::contentRecord(const Notifi
   const auto measure_action = [catalog = tbc::raw(catalog_.data()), &fonts = *fonts_, pixels = chrome_.small](std::string_view label) {
     return measure(*catalog, fonts, label, pixels, true);
   };
+
   if (!item.link.view().empty()) {
     action = NotificationActionLabel::fitHost(item.linkHost(), geometry.bodyWidth(), measure_action, link_label);
   }
 
   QVariantList shadows;
+
   for (std::size_t layer = 0; layer < NotificationMetrics::shadow_layers; ++layer) {
     const auto spread = metrics_.px(static_cast<float>(NotificationMetrics::shadow_layers - layer) * NotificationMetrics::shadow_spread);
+
     shadows.append(QVariantMap{{QStringLiteral("bounds"), logicalBounds({.x = -spread, .y = -spread + metrics_.px(NotificationMetrics::shadow_offset), .width = content.width + (2 * spread), .height = content.height + (2 * spread)}, density_)}, {QStringLiteral("radius"), (metrics_.px(NotificationMetrics::radius) + spread) / density_}});
   }
 
@@ -351,6 +359,7 @@ void NotificationLayout::rebuild() {
   density_ = window()->effectiveDevicePixelRatio();
   refreshFonts();
   const auto display = controller_->displayMetrics(density_);
+
   chrome_ = display.chrome;
   metrics_ = {.ratio = chrome_.ratio, .title_row = ChromeMetrics::lineHeight(chrome_.title), .body_row = ChromeMetrics::lineHeight(chrome_.body), .small_row = ChromeMetrics::lineHeight(chrome_.small)};
   const auto physical_host = controller_->notificationHost(display);
@@ -381,15 +390,19 @@ void NotificationLayout::rebuild() {
                                          [&](const NotificationItem &item, float width) {
                                            return content(item, width).height;
                                          });
+
   QList<QVariantMap> records;
+
   for (const auto &placement : placements.items()) {
     const auto &item = controller_->notifications().items()[placement.index];
     const auto &cached = content(item, placement.bounds.width);
     const NotificationCardGeometry geometry{.bounds = placement.bounds, .metrics = metrics_};
     auto underline = geometry.actionUnderline(cached.action_line_height, cached.action_advance);
+
     underline.x -= placement.bounds.x;
     underline.y -= placement.bounds.y;
     auto record = cached.record;
+
     record.insert(QStringLiteral("underlineBounds"), logicalBounds(underline, density_));
     record.insert(QStringLiteral("bounds"), logicalBounds(placement.bounds, density_));
     record.insert(QStringLiteral("opacity"), placement.opacity);

@@ -49,16 +49,21 @@ public:
     if (query.empty()) {
       return 0;
     }
+
     if (query.size() > maximum_needle || query.size() > path.size()) {
       return std::nullopt;
     }
+
     std::array<std::uint16_t, maximum_needle> first_matches;
     std::size_t offset = 0;
+
     for (std::size_t matched = 0; matched < query.size(); ++matched) {
       const char wanted = lower(query[matched]);
+
       while (offset < path.size() && lower(path[offset]) != wanted) {
         ++offset;
       }
+
       if (offset == path.size()) {
         return std::nullopt;
       }
@@ -67,23 +72,28 @@ public:
       if (!positions.empty()) {
         positions[matched] = first_matches[matched];
       }
+
       ++offset;
     }
+
     if (path.size() > maximum_path) {
       return minimum_score / 2;
     }
+
     if (path.size() == query.size()) {
       return std::numeric_limits<std::int32_t>::max() / 2;
     }
 
     std::array<std::int32_t, maximum_path> bonuses;
     char previous = '/';
+
     for (std::size_t index = 0; index < path.size(); ++index) {
       bonuses[index] = bonus(previous, path[index]);
       previous = path[index];
     }
 
     const bool retain_rows = !positions.empty();
+
     for (std::size_t index = 0; index < query.size(); ++index) {
       const auto current = retain_rows ? index : index % 2;
       const auto preceding = retain_rows ? (index == 0 ? 0 : index - 1) : 1 - current;
@@ -96,6 +106,7 @@ public:
       auto running = minimum_score;
       // Earlier columns cannot reach this query prefix; later columns leave too few bytes for its suffix.
       const auto alignment_end = path.size() - (query.size() - index - 1);
+
       for (std::size_t column = first_matches[index]; column < alignment_end; ++column) {
         if (lower(path[column]) != wanted) {
           ending[column] = minimum_score;
@@ -105,6 +116,7 @@ public:
         }
 
         auto cell = minimum_score;
+
         if (index == 0) {
           cell = static_cast<int>(column) * leading_gap + bonuses[column];
         } else if (column != 0) {
@@ -120,6 +132,7 @@ public:
     if (retain_rows) {
       bool required = false;
       std::size_t column = path.size();
+
       for (std::size_t index = query.size(); index != 0;) {
         --index;
         while (column > first_matches[index]) {
@@ -128,6 +141,7 @@ public:
           if (cell == minimum_score || (!required && cell != row(index, true)[column])) {
             continue;
           }
+
           required = index != 0 && column != 0 && cell == plus(row(index - 1, false)[column - 1], consecutive_score);
           positions[index] = static_cast<std::uint16_t>(column);
           break;
@@ -152,6 +166,7 @@ private:
     if (!((folded >= 'a' && folded <= 'z') || (value >= '0' && value <= '9'))) {
       return 0;
     }
+
     switch (previous) {
     case '/':
       return 900;
@@ -249,6 +264,7 @@ public:
     if (count % publication_batch == 0) {
       published.store(count, std::memory_order_release);
     }
+
     return true;
   }
 
@@ -307,6 +323,7 @@ public:
         if (insideGit(root)) {
           tracked(root);
         }
+
         if (storage_.count == 0 && !storage_.cancelled.load(std::memory_order_relaxed)) {
           walk(directory.get());
         }
@@ -334,9 +351,11 @@ private:
 
   inline static bool insideGit(std::string_view path) noexcept {
     std::array<char, 4102> marker;
+
     while (!path.empty() && path.ends_with('/')) {
       path.remove_suffix(1);
     }
+
     for (;;) {
       if (path.size() + 6 > marker.size()) {
         return false;
@@ -347,10 +366,12 @@ private:
       if (::access(marker.data(), F_OK) == 0) {
         return true;
       }
+
       const auto parent = path.rfind('/');
       if (parent == std::string_view::npos) {
         return false;
       }
+
       path = path.substr(0, parent);
     }
   }
@@ -369,6 +390,7 @@ private:
       if (!storage_.append(directory, PathKind::directory)) {
         return false;
       }
+
       directories.insert(storage_.path(storage_.entry(storage_.count - 1)));
     }
 
@@ -389,10 +411,12 @@ private:
           if (storage_.cancelled.load(std::memory_order_relaxed)) {
             return false;
           }
+
           if (byte == 0) {
             if (!oversized && !appendTracked({relative.data(), length}, directories)) {
               return false;
             }
+
             length = 0;
             oversized = false;
           } else if (length < relative.size()) {
@@ -411,18 +435,22 @@ private:
 
   inline static FileDescriptor openRelative(int root, std::string_view relative) {
     FileDescriptor current{::fcntl(root, F_DUPFD_CLOEXEC, 3)};
+
     while (current && !relative.empty()) {
       const auto separator = relative.find('/');
       const auto name = relative.substr(0, separator);
       std::array<char, NAME_MAX + 1> component{};
+
       if (name.empty() || name.size() > NAME_MAX || name == "..") {
         return FileDescriptor{};
       }
+
       std::copy(name.begin(), name.end(), component.begin());
       current.reset(::openat(current.get(), component.data(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
       if (separator == std::string_view::npos) {
         break;
       }
+
       relative.remove_prefix(separator + 1);
     }
 
@@ -435,6 +463,7 @@ private:
       if (storage_.cancelled.load(std::memory_order_relaxed) || storage_.truncated) {
         return;
       }
+
       const auto &entry = storage_.entry(index);
       if (entry.kind != PathKind::directory) {
         continue;
@@ -454,11 +483,13 @@ private:
     if (!stream) {
       return;
     }
+
     copy.release();
     while (const auto *entry = ::readdir(stream.get())) {
       if (storage_.cancelled.load(std::memory_order_relaxed)) {
         return;
       }
+
       const std::string_view name{entry->d_name};
       if (name.starts_with('.')) {
         continue;
@@ -468,6 +499,7 @@ private:
       if (::fstatat(directory, entry->d_name, &status, AT_SYMLINK_NOFOLLOW) != 0) {
         continue;
       }
+
       const bool child_directory = S_ISDIR(status.st_mode);
       if (child_directory && (name == "node_modules" || name == "zig-out" || name == "target" || name == "__pycache__")) {
         continue;
@@ -478,6 +510,7 @@ private:
       if (length > relative.size()) {
         continue;
       }
+
       std::copy(prefix.begin(), prefix.end(), relative.begin());
       std::copy(name.begin(), name.end(), relative.begin() + prefix.size());
       if (child_directory) {
@@ -538,6 +571,7 @@ public:
     constexpr std::size_t maximum_inline_entries = 256;
     constexpr std::size_t maximum_inline_steps = 16 * 1024;
     const auto query_length = std::max<std::size_t>(1, request.query.size());
+
     return complete() && !request.refresh && root_ == request.root && storage_.count <= maximum_inline_entries && storage_.bytes_used <= maximum_inline_steps / query_length;
   }
 
@@ -547,6 +581,7 @@ public:
       reset(request.root);
       build();
     }
+
     queryPublished(request, reply);
   }
 
@@ -555,44 +590,57 @@ public:
     TELAR_TRACE("paths.query");
     const bool complete = this->complete();
     const auto published = storage_.published.load(std::memory_order_acquire);
+
     if (complete && storage_.failure == PathBuildFailure::unreadable) {
       throw RequestError{FailureCode::permission_denied, "Path root is not readable"};
     }
+
     if (complete && storage_.failure == PathBuildFailure::allocation) {
       throw std::bad_alloc{};
     }
+
     std::array<Candidate, 50> ranked;
     std::size_t count = 0;
+
     for (std::size_t index = 0; index < published; ++index) {
       const auto &entry = storage_.entry(index);
       if ((request.kind == PathKindFilter::files && entry.kind != PathKind::file) || (request.kind == PathKindFilter::directories && entry.kind != PathKind::directory)) {
         continue;
       }
+
       const auto score = matcher_.score(path(entry), request.query);
       if (!score) {
         continue;
       }
+
       const Candidate candidate{index, *score};
       std::size_t position = count;
+
       while (position != 0 && better(candidate, ranked[position - 1], request.query.empty())) {
         --position;
       }
+
       if (position >= request.limit) {
         continue;
       }
+
       const auto kept = std::min<std::size_t>(count, request.limit - 1);
+
       for (std::size_t moved = kept; moved > position; --moved) {
         ranked[moved] = ranked[moved - 1];
       }
+
       ranked[position] = candidate;
       count = kept + 1;
     }
 
     std::array<PathMatch, 50> matches;
     std::array<std::array<std::uint16_t, 64>, 50> positions;
+
     for (std::size_t index = 0; index < count; ++index) {
       const auto &entry = storage_.entry(ranked[index].entry);
       const auto value = path(entry);
+
       matcher_.score(value, request.query, positions[index]);
       matches[index] = {value, entry.kind, std::span{positions[index]}.first(request.query.size())};
     }
@@ -624,10 +672,12 @@ private:
     const auto &right_entry = storage_.entry(right.entry);
     const auto left_path = path(left_entry);
     const auto right_path = path(right_entry);
+
     if (browse) {
       if (depth(left_path) != depth(right_path)) {
         return depth(left_path) < depth(right_path);
       }
+
       if (left_entry.kind != right_entry.kind) {
         return left_entry.kind == PathKind::directory;
       }
@@ -635,6 +685,7 @@ private:
       if (left.score != right.score) {
         return left.score > right.score;
       }
+
       if (left_path.size() != right_path.size()) {
         return left_path.size() < right_path.size();
       }
@@ -710,6 +761,7 @@ public:
   inline Result observe(const Request &request) noexcept {
     try {
       const bool complete = index_.queryPublished(request.view(), reply_);
+
       return {complete, reply_.payload()};
     } catch (const RequestError &error) {
       reply_.send(RequestFailed{.request_id = request.request_id, .code = error.code(), .message = error.what()});

@@ -91,6 +91,7 @@ private:
   template <typename Item>
   static std::optional<std::uint64_t> nextDeadline(const QList<QPointer<Item>> &items, std::uint64_t timestamp) {
     std::optional<std::uint64_t> earliest;
+
     for (const auto &item : items) {
       if (item && item->eligible()) {
         const auto deadline = item->deadline(timestamp);

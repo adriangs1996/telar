@@ -63,6 +63,7 @@ struct GraphicsLifetime {
   [[nodiscard]] inline static GraphicsLifetime next() noexcept {
     static std::atomic<std::uint64_t> next_value{1};
     auto candidate = next_value.load(std::memory_order_relaxed);
+
     while (candidate != std::numeric_limits<std::uint64_t>::max()) {
       if (next_value.compare_exchange_weak(candidate, candidate + 1, std::memory_order_relaxed)) {
         return {.value = candidate};
@@ -181,6 +182,7 @@ public:
     now_ns_ = now_ns;
     started_this_frame_ = 0;
     std::size_t index = 0;
+
     while (index < count_) {
       const auto row = occupied_[index];
       const auto deadline = expiry(states_[row]);
@@ -213,6 +215,7 @@ public:
     }
 
     auto &state = states_[*row];
+
     if (size.width > maximum_side || size.height > maximum_side) {
       return {.handle = handleOf(*row)};
     }
@@ -322,6 +325,7 @@ public:
 
   [[nodiscard]] inline ImageTextureHandle newestReady(ImageTextureIdentity identity) const noexcept {
     std::optional<Row> best;
+
     for (const auto row : rows()) {
       const auto &state = states_[row];
       if (state.stage == ImageTextureStage::ready && state.identity.sameImage(identity) && (!best || states_[*best].identity.generation < state.identity.generation)) {
@@ -338,6 +342,7 @@ public:
 
   [[nodiscard]] inline std::uint32_t wakeupAfter(std::uint64_t now_ns) const noexcept {
     std::optional<std::uint64_t> earliest;
+
     for (const auto row : rows()) {
       const auto deadline = expiry(states_[row]);
       if (deadline && (!earliest || *deadline < *earliest)) {
@@ -402,6 +407,7 @@ private:
   template <typename IsRetained>
   inline void sweepRows(const IsRetained &is_retained) noexcept(noexcept(is_retained(Row{}))) {
     std::size_t index = 0;
+
     while (index < count_) {
       const auto row = occupied_[index];
       const auto &state = states_[row];
@@ -426,6 +432,7 @@ private:
 
   [[nodiscard]] inline static std::size_t byteSize(ImageTextureSize size) noexcept {
     constexpr std::size_t rgba_channels = 4;
+
     return static_cast<std::size_t>(size.width) * size.height * rgba_channels;
   }
 
@@ -435,12 +442,14 @@ private:
     }
 
     const auto lifetime = state.stage == ImageTextureStage::spare ? spare_lifetime_ns : idle_lifetime_ns;
+
     return state.used_ns + std::min(lifetime, std::numeric_limits<std::uint64_t>::max() - state.used_ns);
   }
 
   [[nodiscard]] inline std::size_t uploadsOf(ImageTextureIdentity identity) const noexcept {
     return uploading_ == 0 ? 0 : static_cast<std::size_t>(std::ranges::count_if(rows(), [&](Row row) {
       const auto &state = states_[row];
+
       return state.stage == ImageTextureStage::uploading && state.identity.sameImage(identity);
     }));
   }
@@ -465,6 +474,7 @@ private:
     }
 
     const auto row = free_[--free_count_];
+
     position_[row] = static_cast<Row>(count_);
     occupied_[count_++] = row;
     assign(row, identity);
@@ -476,6 +486,7 @@ private:
 
   inline void assign(Row row, ImageTextureIdentity identity) noexcept {
     auto &state = states_[row];
+
     state.stage = ImageTextureStage::failed;
     state.identity = identity;
     state.used_frame = 0;
@@ -494,6 +505,7 @@ private:
 
   [[nodiscard]] inline bool evictOne() noexcept {
     std::optional<Row> oldest;
+
     for (const auto row : rows()) {
       const auto &state = states_[row];
       const bool evictable = state.stage == ImageTextureStage::spare || (state.stage == ImageTextureStage::ready && state.used_frame + 1 < frame_);
@@ -534,6 +546,7 @@ private:
     state.bytes = 0;
     const auto index = position_[row];
     const auto last = occupied_[--count_];
+
     occupied_[index] = last;
     position_[last] = index;
     free_[free_count_++] = row;
@@ -657,9 +670,11 @@ public:
 
   [[nodiscard]] inline bool finish() noexcept {
     const auto candidates = std::span{candidates_}.first(candidate_count_);
+
     std::ranges::sort(candidates, {}, [](const Candidate &candidate) {
       return identityKey(candidate.identity);
     });
+
     const auto previous = std::span{selected_}.first(selected_count_);
     const bool changed = !std::ranges::equal(candidates, previous, {}, &Candidate::identity);
     if (!changed) {
@@ -674,6 +689,7 @@ public:
     }
 
     const auto images = std::span{images_}.first(image_count_);
+
     std::ranges::sort(images);
     image_count_ = static_cast<std::size_t>(std::ranges::unique(images).begin() - images.begin());
     ++revision_;
@@ -683,6 +699,7 @@ public:
 
   [[nodiscard]] inline bool contains(GraphicsLifetime catalog, std::uint64_t virtual_id) const noexcept {
     const auto selected = std::span{selected_}.first(selected_count_);
+
     return std::ranges::binary_search(selected, std::tuple{catalog.value, virtual_id}, {}, [](const Identity &identity) {
       return identityKey(identity);
     });
@@ -747,10 +764,12 @@ private:
 
   inline void siftDown() noexcept {
     std::size_t index = 0;
+
     while (true) {
       auto lowest = index;
       const auto left = (heap_children * index) + 1;
       const auto right = left + 1;
+
       if (left < candidate_count_ && paintsBelow(candidates_[left], candidates_[lowest])) {
         lowest = left;
       }
@@ -931,9 +950,11 @@ public:
     for (std::size_t index = images_.size(); index-- > 0;) {
       if (!images_[index]->ready()) {
         const auto key = images_[index]->description().key;
+
         std::erase_if(placements_, [&](const auto &placement) {
           return sameKey(placement.key, key);
         });
+
         eraseImage(index);
       }
     }
@@ -961,6 +982,7 @@ public:
     const auto previous = findImage(message.image.key);
     const auto previous_bytes = previous == nullptr ? 0 : previous->description().byte_len;
     const auto requested = message.image.byte_len;
+
     if (!containsImageId(message.image.key.image_id) && logicalImageCount() == image_capacity) {
       reached(GraphicsLimitKind::images);
     }
@@ -980,6 +1002,7 @@ public:
     }
 
     auto replacement = makeOwned<Image>(memory_, memory_, message.image);
+
     images_.push_back(std::move(replacement));
     bytes_ += requested;
     budget_.used += requested;
@@ -1004,6 +1027,7 @@ public:
 
       throw;
     }
+
     if (image->ready()) {
       retireOtherGenerations(message.key);
       ++revision_;
@@ -1039,6 +1063,7 @@ public:
     }
 
     const auto &placement = message.placement;
+
     validatePlacement(placement);
     const auto found = std::find_if(placements_.begin(), placements_.end(), [&](const auto &entry) {
       return entry.virtual_id == placement.virtual_id;
@@ -1072,6 +1097,7 @@ public:
     std::erase_if(placements_, [&](const auto &placement) {
       return sameKey(placement.key, message.key);
     });
+
     collectRetired(message.key.image_id);
     ++revision_;
 
@@ -1110,6 +1136,7 @@ public:
     }
 
     const Image *latest = nullptr;
+
     for (const auto &image : images_) {
       if (image->description().key.image_id == key.image_id && image->ready() && !image->retired() && (latest == nullptr || image->description().key.generation > latest->description().key.generation)) {
         latest = image.get();
@@ -1191,6 +1218,7 @@ private:
   [[nodiscard]] inline std::size_t logicalImageCount() const noexcept {
     std::array<std::uint32_t, image_capacity> identifiers{};
     std::size_t count = 0;
+
     for (const auto &image : images_) {
       const auto id = image->description().key.image_id;
       const auto known = std::span{identifiers}.first(count);
@@ -1246,6 +1274,7 @@ private:
 
   inline void eraseImage(std::size_t index) noexcept {
     const auto released = images_[index]->description().byte_len;
+
     bytes_ -= released;
     budget_.used -= released;
     released_bytes_ += released;

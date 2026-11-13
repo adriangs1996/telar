@@ -42,6 +42,7 @@ void Application::registerTabStrip(QQuickItem *strip) {
 void Application::synchronizeTabStrip() {
   if (auto *strip = qobject_cast<TabStripLayout *>(tab_strip_.data())) {
     const auto *active = session().activeTab();
+
     strip->setContext(machine_view_revision_, active == nullptr ? std::nullopt : std::optional{active->location.workspace});
   }
 }
@@ -51,6 +52,7 @@ void Application::selectCapturedTab() {
   if (!captured) {
     return;
   }
+
   const auto id = captured->tab_id;
   const auto *active = session().activeTab();
   const auto &surface = presented_tabs_;
@@ -83,6 +85,7 @@ TabDropSurface Application::tabDropSurface() const {
   result.count = strip->dropSlots(result.targets);
   const auto origin = strip->mapToScene(QPointF{});
   const auto create = strip->plus();
+
   result.create = {.x = static_cast<float>((origin.x() + create.x()) * result.scale), .y = static_cast<float>((origin.y() + create.y()) * result.scale), .width = static_cast<float>(create.width() * result.scale), .height = static_cast<float>(create.height() * result.scale)};
 
   return result;
@@ -93,8 +96,10 @@ void PointerDispatcher::observeTabHover(std::optional<QPointF> position) {
   if (strip == nullptr) {
     return;
   }
+
   const auto &surface = application_.presented_tabs_;
   const auto *target = position && application_.dialog_ == Application::Dialog::none && surface.machine_view == application_.machine_view_revision_ ? surface.at({position->x() * surface.scale, position->y() * surface.scale}) : nullptr;
+
   strip->setPointerHover(target == nullptr ? std::nullopt : std::optional{target->id});
 }
 
@@ -102,19 +107,24 @@ bool PointerDispatcher::tabKey(QKeyEvent &event) {
   if (event.key() != Qt::Key_Escape) {
     return false;
   }
+
   if (event.type() == QEvent::KeyRelease && tab_escape_held_) {
     if (!event.isAutoRepeat()) {
       tab_escape_held_ = false;
     }
+
     return true;
   }
+
   if (!tab_drag_.captured() || event.type() == QEvent::KeyRelease) {
     return false;
   }
+
   if (event.type() == QEvent::KeyPress) {
     tab_escape_held_ = true;
     cancelTabDrag();
   }
+
   event.accept();
 
   return true;
@@ -131,6 +141,7 @@ void PointerDispatcher::updateTabDragVisual() {
   auto *strip = qobject_cast<TabStripLayout *>(application_.tab_strip_.data());
   if (strip != nullptr) {
     const auto source = tab_drag_.dragging() && tab_drag_.source() ? std::optional{tab_drag_.source()->tab_id} : std::nullopt;
+
     strip->setDrag(tab_drag_.preview().has_value() ? tab_drag_.preview() : pending_tab_move_, source, tab_pointer_, tab_grab_offset_);
   }
 }
@@ -158,11 +169,13 @@ void PointerDispatcher::presentTabs(const TabDropSurface &surface) {
 
   std::array<std::uint64_t, TabDropSlots::capacity> tabs{};
   std::size_t count = 0;
+
   for (const auto &tab : application_.session().tabs()) {
     if (tab->location.workspace.kind == surface.workspace.kind && tab->location.workspace.id == surface.workspace.id && count < tabs.size()) {
       tabs[count++] = tab->location.tab_id;
     }
   }
+
   tab_drag_.validate(surface.workspace, std::span{tabs}.first(count), application_.dialog_ != Application::Dialog::none);
   if (!tab_drag_.source()) {
     updateTabDragVisual();
@@ -212,13 +225,16 @@ bool PointerDispatcher::updateTabDrag(QMouseEvent &event, bool released) {
 
   tab_pointer_ = event.position();
   const TabDrag::Position point{event.position().x() * tab_capture_surface_.scale, event.position().y() * tab_capture_surface_.scale};
+
   tab_drag_.update({point[0] / tab_capture_surface_.threshold, point[1] / tab_capture_surface_.threshold}, tab_drop_slots_.at(point));
   if (released) {
     if (const auto move = tab_drag_.finish(); move && application_.session().requestTabMove(*move)) {
       pending_tab_move_ = move;
     }
+
     event.setExclusiveGrabber(event.point(0), nullptr);
   }
+
   updateTabDragVisual();
 
   return true;

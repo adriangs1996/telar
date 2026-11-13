@@ -74,9 +74,11 @@ public:
     if (name == ":status") {
       status_ = parseHttpStatus(value).value_or(0);
     }
+
     if (name == ":method") {
       request_ = true;
     }
+
     if (asciiEqualIgnoreCase(name, "content-type")) {
       if (content_type_seen_) {
         metadata_valid_ = false;
@@ -85,6 +87,7 @@ public:
         event_stream_ = isEventStream(value);
       }
     }
+
     if (asciiEqualIgnoreCase(name, "content-encoding") && !ContentCodings::onlyIdentity(value)) {
       identity_encoding_ = false;
     }
@@ -140,6 +143,7 @@ public:
     if (!ready_) {
       return false;
     }
+
     for (;;) {
       nghttp2_nv field;
       int flags = NGHTTP2_HD_INFLATE_NONE;
@@ -148,14 +152,17 @@ public:
         ready_ = false;
         return false;
       }
+
       bytes = bytes.subspan(static_cast<std::size_t>(consumed));
       if ((flags & NGHTTP2_HD_INFLATE_EMIT) != 0) {
         visit({reinterpret_cast<const char *>(field.name), field.namelen}, {reinterpret_cast<const char *>(field.value), field.valuelen});
       }
+
       if ((flags & NGHTTP2_HD_INFLATE_FINAL) != 0) {
         ready_ = nghttp2_hd_inflate_end_headers(inflater_) == 0;
         return ready_;
       }
+
       if (consumed == 0 && (flags & NGHTTP2_HD_INFLATE_EMIT) == 0) {
         ready_ = false;
         return false;
@@ -187,11 +194,13 @@ public:
 
   inline tbc::view<std::optional<std::span<const std::uint8_t>>, tbc::lt::a> headers(tbc::view<const Http2FrameEvent &, tbc::lt::a> event) noexcept {
     std::size_t prefix = 0;
+
     if (event.frame.kind == Http2FrameKind::headers && event.frame.has(Http2Flag::priority)) {
       prefix = priority_bytes;
     } else if (event.frame.kind == Http2FrameKind::push_promise) {
       prefix = promised_stream_bytes;
     }
+
     return extract(event, prefix);
   }
 
@@ -207,11 +216,13 @@ private:
     if (prefix > event.frame.length || padding_ > event.frame.length - prefix) {
       return std::nullopt;
     }
+
     const auto start = std::max(event.offset, prefix);
     const auto end = std::min(event.offset + event.bytes.size(), event.frame.length - padding_);
     if (start >= end) {
       return std::span<const std::uint8_t>{};
     }
+
     return event.bytes.subspan(start - event.offset, end - start);
   }
 
@@ -270,6 +281,7 @@ public:
     if (framing_.incomplete() || continuation_stream_ != 0) {
       fail();
     }
+
     return statistics_;
   }
 
@@ -292,6 +304,7 @@ private:
         block_stream_ = frame.stream;
         block_kind_ = BlockKind::headers;
       }
+
       return;
     }
 
@@ -300,6 +313,7 @@ private:
         fail();
         return;
       }
+
       block_length_ = 0;
       block_stream_ = frame.stream;
       block_kind_ = frame.kind == Http2FrameKind::headers ? BlockKind::headers : BlockKind::push_promise;
@@ -316,6 +330,7 @@ private:
   inline void payload(const Http2FrameEvent &event, Sink &sink) noexcept {
     if (event.frame.kind == Http2FrameKind::data && !event.bytes.empty()) {
       Http2StreamTracker::Response response;
+
       if (direction_ == Http2Direction::response) {
         response = streams_.response(event.frame.stream);
         sink.emit({Http2Event::Kind::response_activity, event.frame.stream, response.status});
@@ -336,16 +351,19 @@ private:
     if (statistics_.decode_failed || !event.frame.containsHeaders()) {
       return;
     }
+
     const auto headers = fragment_.headers(event);
     if (!headers) {
       fail();
       return;
     }
+
     if (headers->size() > maximum_header_bytes - block_length_) {
       statistics_.header_block_too_large = true;
       fail();
       return;
     }
+
     if (!headers->empty()) {
       std::memcpy(block_.bytes().data() + block_length_, headers->data(), headers->size());
       block_length_ += headers->size();
@@ -379,6 +397,7 @@ private:
   template <Http2EventSink Sink>
   inline void finishHeaders(Sink &sink) noexcept {
     const auto metadata = statistics_.decode_failed ? Http2HeaderMetadata{} : decodeHeaders(sink);
+
     if (block_kind_ == BlockKind::headers) {
       if (direction_ == Http2Direction::request) {
         if (metadata.request() && streams_.startRequest(block_stream_)) {
@@ -423,6 +442,7 @@ private:
             .value = value,
         });
       }
+
       metadata.observe(name, value);
     });
 
@@ -430,6 +450,7 @@ private:
       fail();
       return {};
     }
+
     return metadata;
   }
 
@@ -474,9 +495,11 @@ public:
       if (std::memcmp(bytes.data(), client_preface.data() + preface_offset_, count) != 0) {
         observer_.fail();
       }
+
       preface_offset_ += count;
       bytes = bytes.subspan(count);
     }
+
     observer_.observe(bytes, sink);
   }
 
@@ -484,6 +507,7 @@ public:
     if (direction_ == Http2Direction::request && preface_offset_ != client_preface.size()) {
       observer_.fail();
     }
+
     return observer_.finish();
   }
 

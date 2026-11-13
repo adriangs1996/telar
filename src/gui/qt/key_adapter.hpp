@@ -36,6 +36,7 @@ public:
 
   [[nodiscard]] static unsigned modifiers(Qt::KeyboardModifiers native) noexcept {
     unsigned result = 0;
+
     for (const auto &[modifier, normalized] : {std::pair{control_modifier, Modifier::control}, std::pair{super_modifier, Modifier::super}, std::pair{Qt::AltModifier, Modifier::alt}, std::pair{Qt::ShiftModifier, Modifier::shift}}) {
       if (native.testFlag(modifier)) {
         result |= static_cast<unsigned>(normalized);
@@ -94,17 +95,21 @@ public:
       if (character >= 'A' && character <= 'Z' && (modified || !event.modifiers().testFlag(Qt::ShiftModifier))) {
         character += 'a' - 'A';
       }
+
       if (!modified) {
         flags &= ~static_cast<unsigned>(Modifier::shift);
       }
+
       return {.character = KeyCharacter::pack(character), .modifiers = flags};
     }
+
     const auto key = terminalKey(event);
     if (!key) {
       return {.character = std::numeric_limits<std::uint32_t>::max(), .modifiers = modifiers(event.modifiers())};
     }
 
     KeyChord result{.key = key->code, .modifiers = key->modifiers};
+
     if (key->code == Code::character) {
       result.character = KeyCharacter::pack(key->codepoint);
     }
@@ -114,6 +119,7 @@ public:
 
   [[nodiscard]] static TerminalKey fromChord(KeyChord chord) {
     TerminalKey result{.code = chord.key, .modifiers = chord.modifiers};
+
     if (chord.key == Code::character) {
       result.codepoint = KeyCharacter::codepoint(chord.character);
     }

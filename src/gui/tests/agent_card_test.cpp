@@ -119,6 +119,7 @@ private:
   Q_SLOT static void projectionKeepsOriginalLabelsAndBlockedReasons() {
     SystemAllocator memory;
     Agent agent{memory};
+
     agent.pane_id = pane_id;
     agent.provider_name = "codex";
     agent.provider_kind = AgentProvider::codex;
@@ -128,6 +129,7 @@ private:
     agent.detail = "live event";
     AgentRecordContext context{.machine = "machine", .branch = "feature", .selected = true};
     auto record = agentRecord(agent, context);
+
     QCOMPARE(record.value(QStringLiteral("title")).toString(), QStringLiteral("Agent"));
     QCOMPARE(record.value(QStringLiteral("project")).toString(), QStringLiteral("machine · project"));
     QCOMPARE(record.value(QStringLiteral("status")).toString(), QStringLiteral("Approval"));
@@ -162,38 +164,46 @@ private:
   Q_SLOT static void cardRowsAndSelectionNeedNoController() {
     SystemAllocator memory;
     Agent agent{memory};
+
     agent.pane_id = pane_id;
     agent.title = "Session title";
     QQuickWindow window;
     QQmlEngine engine;
     const auto record = agentRecord(agent, {.machine = {}, .branch = {}, .selected = true});
     const auto card = createChrome(engine, QStringLiteral("AgentCard"), properties(record));
+
     card->setParentItem(window.contentItem());
     window.resize(static_cast<int>(list_width), viewport_height);
     const auto title = visualItems(*card, QStringLiteral("agentTitleLabel"));
     const auto project = visualItems(*card, QStringLiteral("agentProjectLabel"));
     const auto background = visualItems(*card, QStringLiteral("agentCardBackground"));
+
     QCOMPARE(title.size(), 1);
     QCOMPARE(project.size(), 1);
     QCOMPARE(background.size(), 1);
     constexpr qreal expected_height = 55;
     constexpr QPointF title_origin{32, 8};
     constexpr qreal detail_origin_y = 31;
+
     QCOMPARE(card->height(), expected_height);
     QCOMPARE(title.front()->position(), title_origin);
     QCOMPARE(title.front()->height(), qreal{19});
     QCOMPARE(project.front()->parentItem()->y(), detail_origin_y);
     const auto colors = themeColors(Configuration{});
     auto selection_color = colors.value(QStringLiteral("text")).value<QColor>();
+
     selection_color.setAlphaF(telar::gui::ChromeStyle::selection_alpha);
     QCOMPARE(background.front()->property("color").value<QColor>(), selection_color);
     QCOMPARE(background.front()->property("radius").toReal(), qreal{telar::gui::ChromeStyle::surface_radius});
     const auto signal = card->metaObject()->method(card->metaObject()->indexOfSignal("selected(QString)"));
+
     QVERIFY(signal.isValid());
     const QSignalSpy selected{card.get(), signal};
+
     window.show();
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
     constexpr QPoint card_center{128, 34};
+
     QTest::mouseClick(&window, Qt::LeftButton, Qt::NoModifier, card_center);
     QTRY_COMPARE_WITH_TIMEOUT(selected.size(), 1, wait_ms);
     QCOMPARE(selected.front().front().toString(), QStringLiteral("42"));
@@ -202,17 +212,21 @@ private:
   Q_SLOT static void offlineCardsRetireTheirHoveredBackground() {
     SystemAllocator memory;
     Agent agent{memory};
+
     agent.pane_id = pane_id;
     QQuickWindow window;
     QQmlEngine engine;
     const auto card = createChrome(engine, QStringLiteral("AgentCard"), properties(agentRecord(agent, {.machine = {}, .branch = {}})));
+
     card->setParentItem(window.contentItem());
     window.resize(static_cast<int>(list_width), viewport_height);
     const auto background = visualItems(*card, QStringLiteral("agentCardBackground"));
+
     QCOMPARE(background.size(), 1);
     window.show();
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
     constexpr QPoint card_center{128, 34};
+
     QTest::mouseMove(&window, card_center);
     QTRY_VERIFY_WITH_TIMEOUT(background.front()->isVisible(), wait_ms);
     QVERIFY(card->setProperty("record", agentRecord(agent, {.machine = {}, .branch = {}, .connected = false})));
@@ -225,21 +239,25 @@ private:
   Q_SLOT static void onlyEnabledCardsShowThePointingCursor() {
     SystemAllocator memory;
     Agent agent{memory};
+
     agent.pane_id = pane_id;
     QQuickWindow window;
     QQmlEngine engine;
     const auto card = createChrome(engine, QStringLiteral("AgentCard"), properties(agentRecord(agent, {.machine = {}, .branch = {}})));
+
     card->setParentItem(window.contentItem());
     window.resize(static_cast<int>(list_width), viewport_height);
     window.show();
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
     constexpr QPoint card_center{128, 34};
+
     QTest::mouseMove(&window, card_center);
     QTRY_COMPARE_WITH_TIMEOUT(window.cursor().shape(), Qt::PointingHandCursor, wait_ms);
 
     QVERIFY(card->setProperty("record", agentRecord(agent, {.machine = {}, .branch = {}, .connected = false})));
     QTRY_VERIFY_WITH_TIMEOUT(!card->isEnabled(), wait_ms);
     constexpr QPoint moved_within_card{130, 34};
+
     QTest::mouseMove(&window, moved_within_card);
     QTRY_COMPARE_WITH_TIMEOUT(window.cursor().shape(), Qt::ArrowCursor, wait_ms);
   }
@@ -247,18 +265,22 @@ private:
   Q_SLOT static void deliveredHoverIdentityOverridesGeometricHover() {
     SystemAllocator memory;
     Agent agent{memory};
+
     agent.pane_id = pane_id;
     QQuickWindow window;
     QQmlEngine engine;
     const auto card = createChrome(engine, QStringLiteral("AgentCard"), properties(agentRecord(agent, {.machine = {}, .branch = {}})));
+
     card->setParentItem(window.contentItem());
     static_cast<void>(card->setProperty("semanticHover", true));
     window.resize(static_cast<int>(list_width), viewport_height);
     const auto background = visualItems(*card, QStringLiteral("agentCardBackground"));
+
     QCOMPARE(background.size(), 1);
     window.show();
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
     constexpr QPoint card_center{128, 34};
+
     QTest::mouseMove(&window, card_center);
     QTRY_VERIFY_WITH_TIMEOUT(!background.front()->isVisible(), wait_ms);
     QVERIFY(card->setProperty("heldHover", true));
@@ -274,6 +296,7 @@ private:
     const WorkspaceLocation second{.kind = WorkspaceLocation::Kind::workspace, .id = 2};
     WorkspaceReplica workspaces{memory};
     const std::array projects{WorkspaceListEntry{.workspace = first.id, .name = "first", .path = "/first"}, WorkspaceListEntry{.workspace = second.id, .name = "second", .path = "/second"}};
+
     QVERIFY(workspaces.apply({.revision = 1, .entries = projects}));
     for (std::size_t index = 0; index < agents.size(); ++index) {
       agents[index].pane_id = index + 1;
@@ -285,8 +308,10 @@ private:
     agents[2].location.workspace = second;
     agents[3].status = AgentStatus::blocked;
     const auto plan = AgentOrder::arrange(std::span<const Agent<SystemAllocator>>{agents}, workspaces);
+
     QCOMPARE(plan.count, agents.size());
     const std::array<std::size_t, 4> expected{3, 1, 0, 2};
+
     for (std::size_t index = 0; index < expected.size(); ++index) {
       QCOMPARE(plan.entries[index].agent, expected[index]);
       QCOMPARE(plan.entries[index].first_in_project, index == 0 || index == expected.size() - 1);
@@ -296,17 +321,21 @@ private:
   Q_SLOT static void statusDropsDurationBeforeItsWordAndGlyph() {
     SystemAllocator memory;
     Agent agent{memory};
+
     agent.status = AgentStatus::working;
     constexpr std::uint32_t large_age = 1'000'000'000;
+
     agent.status_age_s = large_age;
     QQuickWindow window;
     QQmlEngine engine;
     const auto status = createChrome(engine, QStringLiteral("AgentStatus"), properties(agentRecord(agent, {})));
+
     status->setParentItem(window.contentItem());
     constexpr qreal complete_width = 200;
     constexpr qreal word_only_width = 70;
     constexpr qreal glyph_only_width = 10;
     constexpr qreal row_height = 15;
+
     status->setSize({complete_width, row_height});
     window.resize(static_cast<int>(list_width), viewport_height);
     window.show();
@@ -325,6 +354,7 @@ private:
     ListModel model;
     QList<QVariantMap> records;
     constexpr std::uint64_t agent_count = 64;
+
     for (std::uint64_t index = 0; index < agent_count; ++index) {
       agent.pane_id = index + 1;
       records.append(agentRecord(agent, {}));
@@ -334,9 +364,11 @@ private:
     QQuickWindow window;
     QQmlEngine engine;
     auto settings = properties({});
+
     settings.remove(QStringLiteral("record"));
     settings.insert(QStringLiteral("model"), QVariant::fromValue(static_cast<QAbstractItemModel *>(&model)));
     const auto list = createChrome(engine, QStringLiteral("ActivityList"), settings);
+
     list->setParentItem(window.contentItem());
     list->setSize({list_width, viewport_height});
     window.resize(static_cast<int>(list_width), viewport_height);
@@ -344,6 +376,7 @@ private:
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(!visualItems(*list, QStringLiteral("agentCard")).empty(), wait_ms);
     constexpr qsizetype maximum_visible_cards = 4;
+
     QVERIFY(visualItems(*list, QStringLiteral("agentCard")).size() <= maximum_visible_cards);
   }
 };

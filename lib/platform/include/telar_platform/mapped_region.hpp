@@ -33,6 +33,7 @@ public:
       reset();
       bytes_ = std::exchange(other.bytes_, {});
     }
+
     return *this;
   }
 

@@ -43,6 +43,7 @@ struct NetworkAddress {
 
   inline static NetworkAddress ipv4(const in_addr &host, std::uint16_t port = 0) noexcept {
     sockaddr_in address{};
+
 #if defined(__APPLE__)
     address.sin_len = sizeof(address);
 #endif
@@ -54,6 +55,7 @@ struct NetworkAddress {
 
   inline static NetworkAddress ipv6(const in6_addr &host, std::uint16_t port = 0) noexcept {
     sockaddr_in6 address{};
+
 #if defined(__APPLE__)
     address.sin6_len = sizeof(address);
 #endif
@@ -67,12 +69,14 @@ struct NetworkAddress {
     if (source == nullptr || (source->sa_family != AF_INET && source->sa_family != AF_INET6)) {
       return std::nullopt;
     }
+
     const auto expected = source->sa_family == AF_INET ? sizeof(sockaddr_in) : sizeof(sockaddr_in6);
     if (size < expected) {
       return std::nullopt;
     }
 
     NetworkAddress address;
+
     address.length = static_cast<socklen_t>(expected);
     std::memcpy(&address.storage, source, expected);
     address.setPort(0);
@@ -95,6 +99,7 @@ private:
   template <typename Address>
   inline static NetworkAddress of(const Address &address) noexcept {
     NetworkAddress result;
+
     std::memcpy(&result.storage, &address, sizeof(address));
     result.length = sizeof(address);
     return result;
@@ -117,29 +122,36 @@ class SystemNameResolver {
 public:
   inline static ResolutionSummary resolve(const char *hostname, std::span<NetworkAddress> addresses) noexcept {
     addrinfo hints{};
+
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP;
     addrinfo *entries = nullptr;
     int error;
+
     do {
       error = ::getaddrinfo(hostname, nullptr, &hints, &entries);
     } while (error == EAI_SYSTEM && errno == EINTR);
+
     if (error != 0) {
       return {.error = error};
     }
 
     std::size_t found = 0;
+
     for (const auto *entry = entries; entry != nullptr; entry = entry->ai_next) {
       const auto address = NetworkAddress::copy(entry->ai_addr, entry->ai_addrlen);
       if (!address) {
         continue;
       }
+
       if (found < addresses.size()) {
         addresses[found] = *address;
       }
+
       ++found;
     }
+
     ::freeaddrinfo(entries);
     return {.found = found};
   }
@@ -223,20 +235,24 @@ public:
         reset();
         index_ = std::exchange(other.index_, capacity);
       }
+
       return *this;
     }
 
     inline bool collect(Result &result) const noexcept {
       const Lock lock;
+
       if (index_ == capacity || state_.rows[index_].phase != Phase::resolved) {
         return false;
       }
 
       const auto &stored = state_.rows[index_].result;
+
       result.summary = stored.summary;
       if (stored.summary.error == 0) {
         std::copy_n(stored.addresses.begin(), std::min(stored.summary.found, maximum_addresses), result.addresses.begin());
       }
+
       return true;
     }
 
@@ -269,12 +285,14 @@ public:
       if (available == state_.subscribers.end()) {
         throw SystemError{"Too many proxy resolver subscribers", ENOSPC};
       }
+
       *available = &signal;
       index_ = static_cast<std::size_t>(available - state_.subscribers.begin());
     }
 
     inline ~Notifications() {
       const Lock lock;
+
       state_.subscribers[index_] = nullptr;
     }
 
@@ -292,6 +310,7 @@ public:
 
     const Lock lock;
     std::optional<std::size_t> available;
+
     for (std::size_t index = 0; index < state_.rows.size(); ++index) {
       auto &row = state_.rows[index];
       if (row.phase == Phase::free) {
@@ -303,11 +322,13 @@ public:
         return Ticket{index};
       }
     }
+
     if (!available) {
       return std::nullopt;
     }
 
     auto &row = state_.rows[*available];
+
     row.phase = Phase::resolving;
     row.length = hostname.size();
     std::copy(hostname.begin(), hostname.end(), row.hostname.begin());
@@ -318,11 +339,13 @@ public:
       row.phase = Phase::resolved;
       notify();
     }
+
     return Ticket{*available};
   }
 
   inline static std::size_t pending() noexcept {
     const Lock lock;
+
     return std::ranges::count_if(state_.rows, [](const auto &row) { return row.phase == Phase::resolving; });
   }
 
@@ -338,10 +361,13 @@ private:
     if (error == 0) {
       error = ::pthread_attr_setstacksize(&attributes, worker_stack_bytes);
     }
+
     if (error == 0) {
       pthread_t thread;
+
       error = ::pthread_create(&thread, &attributes, &resolve, &row);
     }
+
     ::pthread_attr_destroy(&attributes);
     return error;
   }
@@ -354,6 +380,7 @@ private:
 #endif
     const auto summary = Resolver::resolve(row.hostname.data(), row.result.addresses);
     const Lock lock;
+
     if (row.waiters == 0) {
       row.phase = Phase::free;
       return nullptr;
@@ -401,6 +428,7 @@ inline FileDescriptor openOriginSocket(int family) {
   if (!socket) {
     throw SystemError{"Create proxy origin socket"};
   }
+
   configureProxySocket(socket.get());
 
   struct Option {
@@ -408,6 +436,7 @@ inline FileDescriptor openOriginSocket(int family) {
     int name;
     int value;
   };
+
   constexpr int enabled = 1;
   constexpr int idle_seconds = 60;
   constexpr int interval_seconds = 10;
@@ -418,11 +447,13 @@ inline FileDescriptor openOriginSocket(int family) {
   constexpr int idle_option = TCP_KEEPIDLE;
 #endif
   constexpr Option options[] = {{SOL_SOCKET, SO_KEEPALIVE, enabled}, {IPPROTO_TCP, idle_option, idle_seconds}, {IPPROTO_TCP, TCP_KEEPINTVL, interval_seconds}, {IPPROTO_TCP, TCP_KEEPCNT, probe_count}};
+
   for (const auto &option : options) {
     if (::setsockopt(socket.get(), option.level, option.name, &option.value, sizeof(option.value)) != 0) {
       throw SystemError{"Configure proxy origin keepalive"};
     }
   }
+
   return socket;
 }
 
@@ -452,6 +483,7 @@ public:
     }
 
     std::array<char, ProxyHostname::maximum_bytes + 1> terminated{};
+
     std::copy(hostname.begin(), hostname.end(), terminated.begin());
     in_addr numeric{};
     if (::inet_pton(AF_INET, terminated.data(), &numeric) == 1) {
@@ -472,6 +504,7 @@ public:
       if (!resolution_->collect(resolved_)) {
         return state_;
       }
+
       resolution_.reset();
       if (resolved_.summary.error != 0) {
         state_ = State::failed;
@@ -487,6 +520,7 @@ public:
         attemptNext();
       }
     }
+
     return state_;
   }
 
@@ -512,8 +546,10 @@ private:
   inline void attemptNext() noexcept {
     socket_.reset();
     const auto count = std::min(resolved_.summary.found, Resolutions::maximum_addresses);
+
     while (next_address_ < count) {
       auto &address = resolved_.addresses[next_address_++];
+
       address.setPort(port_);
       try {
         socket_ = openOriginSocket(address.storage.ss_family);
@@ -525,12 +561,15 @@ private:
         state_ = State::connected;
         return;
       }
+
       if (errno == EINPROGRESS || errno == EINTR) {
         state_ = State::connecting;
         return;
       }
+
       socket_.reset();
     }
+
     state_ = State::failed;
   }
 
@@ -555,6 +594,7 @@ public:
 
   inline StreamResult read(std::span<std::uint8_t> destination) noexcept {
     const auto received = ::read(descriptor_, destination.data(), destination.size());
+
     return result(received, StreamReadiness::readable);
   }
 
@@ -564,6 +604,7 @@ public:
 
   inline StreamResult write(std::span<const std::uint8_t> bytes) noexcept {
     const auto sent = ::write(descriptor_, bytes.data(), bytes.size());
+
     return result(sent, StreamReadiness::writable);
   }
 
@@ -576,9 +617,11 @@ private:
     if (count > 0) {
       return {StreamResult::State::data, static_cast<std::size_t>(count)};
     }
+
     if (count == 0) {
       return {StreamResult::State::ended};
     }
+
     return socketWouldBlock(errno) ? StreamResult{StreamResult::State::blocked, 0, waiting} : StreamResult{StreamResult::State::failed};
   }
 
@@ -623,6 +666,7 @@ public:
     }
   inline Progress advance(Source &source, Destination &destination, Observer observe) noexcept {
     Progress progress;
+
     if (wantsRead()) {
       const auto received = source.read(bytes_);
       if (received.state == StreamResult::State::data) {
@@ -661,6 +705,7 @@ public:
       destination.halfClose();
       shutdown_ = true;
     }
+
     return progress;
   }
 

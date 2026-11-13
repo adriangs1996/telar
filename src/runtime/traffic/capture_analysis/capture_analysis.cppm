@@ -37,16 +37,19 @@ public:
 
   inline static std::span<const Byte> decode(const Event &event) noexcept {
     auto bytes = event.bytes;
+
     switch (event.link_type) {
     case DLT_EN10MB: {
       if (bytes.size() < 14) { return {}; }
       auto protocol = word(bytes, 12);
+
       bytes = bytes.subspan(14);
       for (unsigned depth = 0; protocol == 0x8100 || protocol == 0x88a8; ++depth) {
         if (depth == 2 || bytes.size() < 4) { return {}; }
         protocol = word(bytes, 2);
         bytes = bytes.subspan(4);
       }
+
       if (protocol != 0x0800 && protocol != 0x86dd) { return {}; }
       return bytes;
     }
@@ -87,6 +90,7 @@ struct IpPayload {
 
   inline static std::array<char, INET6_ADDRSTRLEN> addressText(const std::array<Byte, 16> &address, bool ipv6) noexcept {
     std::array<char, INET6_ADDRSTRLEN> text{};
+
     ::inet_ntop(ipv6 ? AF_INET6 : AF_INET, address.data(), text.data(), text.size());
     return text;
   }
@@ -94,6 +98,7 @@ struct IpPayload {
   inline static std::optional<IpPayload> decode(std::span<const Byte> bytes) noexcept {
     if (bytes.empty()) { return {}; }
     IpPayload result;
+
     if ((bytes[0] >> 4) == 4) {
       if (bytes.size() < 20 || (NetworkPacket::word(bytes, 6) & 0x3fff) != 0) { return {}; }
       const auto head = std::size_t{bytes[0] & 15u} * 4;
@@ -111,6 +116,7 @@ struct IpPayload {
       std::ranges::copy(bytes.subspan(8, 16), result.source.begin());
       std::ranges::copy(bytes.subspan(24, 16), result.destination.begin());
       const auto length = std::size_t{NetworkPacket::word(bytes, 4)} + 40;
+
       result.truncated = bytes.size() < length;
       result.protocol = bytes[6];
       bytes = bytes.first(std::min(bytes.size(), length)).subspan(40);
@@ -123,8 +129,10 @@ struct IpPayload {
         bytes = bytes.subspan(head);
         result.original_bytes -= head;
       }
+
       result.bytes = bytes;
     } else { return {}; }
+
     return result;
   }
 };
@@ -160,12 +168,14 @@ class DatagramCodec {
 public:
   inline static std::string_view name(DatagramTransport transport) noexcept {
     constexpr std::array names{std::string_view{"udp"}, std::string_view{"icmp"}, std::string_view{"icmpv6"}};
+
     return names[static_cast<std::size_t>(transport)];
   }
 
   inline static tbc::view<std::span<const Byte>, tbc::lt::a> encode(tbc::view<std::span<Byte>, tbc::lt::a> output, const DatagramEvent &event) {
     validate(event);
     plugins::FrameWriter writer{output};
+
     writer.tag(event.transport);
     writer.boolean(event.ipv6);
     writer.bytes(event.source_address);
@@ -183,6 +193,7 @@ public:
   inline static DatagramEvent decode(std::span<const Byte> input) {
     plugins::FrameReader reader{input};
     DatagramEvent event;
+
     event.transport = reader.tag(DatagramTransport::icmpv6);
     event.ipv6 = reader.boolean();
     const auto source = reader.bytes();
@@ -204,6 +215,7 @@ public:
 
   inline static std::optional<DatagramEvent> parse(const IpPayload &ip) noexcept {
     DatagramEvent event{.ipv6 = ip.ipv6, .source_address = ip.source, .destination_address = ip.destination};
+
     if (ip.protocol == IPPROTO_UDP) {
       if (ip.bytes.size() < 8) { return {}; }
       const auto length = NetworkPacket::word(ip.bytes, 4);
@@ -220,6 +232,7 @@ public:
       event.original_bytes = static_cast<std::uint32_t>(ip.original_bytes);
       event.bytes = ip.bytes;
     } else { return {}; }
+
     event.truncated = event.bytes.size() < event.original_bytes;
     return event;
   }
@@ -291,6 +304,7 @@ public:
     auto fragment = parse(network);
     if (!fragment) { consume(network); return; }
     auto &part = *fragment;
+
     part.key.session = event.session;
     part.key.interface = event.interface_index;
     part.key.link_type = event.link_type;
@@ -298,6 +312,7 @@ public:
     if (!part.error.empty()) { report(event, part.error); return; }
     if (part.key.ipv6 && part.offset == 0 && !part.more) {
       Entry atomic;
+
       initialize(atomic, event, part.key);
       atomic.storage.emplace(memory_, maximum_prefix + maximum_payload);
       const auto error = append(atomic, part);
@@ -308,31 +323,39 @@ public:
 
     const auto now = Clock::now();
     std::optional<Entry> *slot = nullptr;
+
     for (auto &entry : entries_) {
       if (entry && entry->key == part.key) { slot = &entry; break; }
     }
+
     if (slot && now - (*slot)->created >= lifetime) {
       if ((*slot)->storage) { failure(**slot, "ip_fragment_timeout", report); }
       slot->reset();
     }
+
     if (!slot) {
       const auto free = std::ranges::find_if(entries_, [](const auto &entry) { return !entry; });
+
       slot = free == entries_.end() ? &*std::min_element(entries_.begin(), entries_.end(), [](const auto &first, const auto &second) { return first->created < second->created; }) : &*free;
       if (*slot && (*slot)->storage) { failure(**slot, "ip_fragment_capacity", report); }
       slot->reset();
     }
+
     if (!*slot) {
       Entry entry;
+
       initialize(entry, event, part.key);
       entry.storage.emplace(memory_, maximum_prefix + maximum_payload);
       slot->emplace(std::move(entry));
     }
+
     auto &entry = **slot;
     if (!entry.storage) { return; }
     const auto error = append(entry, part);
     if (!error.empty()) { failure(entry, error, report); return; }
     if (entry.prefix != 0 && entry.length && entry.received == *entry.length) {
       auto completed = std::move(*slot);
+
       slot->reset();
       consume(assembled(*completed));
     }
@@ -352,9 +375,11 @@ private:
   inline static std::optional<Fragment> parse(std::span<const Byte> bytes) noexcept {
     if (bytes.empty()) { return {}; }
     Fragment part;
+
     if ((bytes[0] >> 4) == 4) {
       if (bytes.size() < 20 || (NetworkPacket::word(bytes, 6) & 0x3fff) == 0) { return {}; }
       const auto flags = NetworkPacket::word(bytes, 6);
+
       part.offset = std::size_t{flags & 0x1fffu} * 8;
       part.more = (flags & 0x2000) != 0;
       part.key.identification = NetworkPacket::word(bytes, 4);
@@ -370,25 +395,30 @@ private:
       const auto length = std::size_t{NetworkPacket::word(bytes, 4)} + 40;
       auto protocol = bytes[6];
       std::size_t offset = 40;
+
       part.previous_header = 6;
       for (unsigned depth = 0; protocol != 44; ++depth) {
         if (depth == 8 || offset > bytes.size() || bytes.size() - offset < 2 || (protocol != 0 && protocol != 43 && protocol != 60 && protocol != 51)) { return {}; }
         const auto head = protocol == 51 ? (std::size_t{bytes[offset + 1]} + 2) * 4 : (std::size_t{bytes[offset + 1]} + 1) * 8;
+
         part.previous_header = offset;
         protocol = bytes[offset];
         offset += head;
       }
+
       part.key.ipv6 = true;
       if (offset > bytes.size() || bytes.size() - offset < 8 || length > bytes.size() || length <= offset + 8 || offset > maximum_prefix) { part.error = "ip_fragment_invalid_or_truncated"; return part; }
       std::copy_n(bytes.begin() + 8, 32, part.key.addresses.begin());
       part.key.identification = (std::uint32_t{NetworkPacket::word(bytes, offset + 4)} << 16) | NetworkPacket::word(bytes, offset + 6);
       const auto flags = NetworkPacket::word(bytes, offset + 2);
+
       part.offset = flags & 0xfff8u;
       part.more = (flags & 1) != 0;
       part.next_header = bytes[offset];
       part.prefix = bytes.first(offset);
       part.payload = bytes.subspan(offset + 8, length - offset - 8);
     } else { return {}; }
+
     if ((part.more && part.payload.size() % 8 != 0) || part.offset + part.payload.size() > maximum_payload) { part.error = "ip_fragment_size_limit"; }
     return part;
   }
@@ -410,9 +440,11 @@ private:
         if (part.offset == 0 && (entry.prefix != part.prefix.size() || (part.key.ipv6 && entry.next_header != part.next_header))) { return "ip_fragment_overlap"; }
         return {};
       }
+
       if (part.offset < range.offset + range.size && range.offset < end) { return "ip_fragment_overlap"; }
       if (!part.more && range.offset + range.size > end) { return "ip_fragment_conflicting_length"; }
     }
+
     if (entry.count == entry.ranges.size()) { return "ip_fragment_piece_limit"; }
     if (part.offset == 0) {
       entry.prefix = part.prefix.size();
@@ -420,6 +452,7 @@ private:
       std::ranges::copy(part.prefix, entry.storage->bytes().begin() + maximum_prefix - entry.prefix);
       if (part.key.ipv6) { entry.storage->bytes()[maximum_prefix - entry.prefix + part.previous_header] = part.next_header; }
     }
+
     std::ranges::copy(part.payload, entry.storage->bytes().begin() + maximum_prefix + part.offset);
     entry.ranges[entry.count++] = {part.offset, part.payload.size(), part.more};
     entry.received += part.payload.size();
@@ -432,17 +465,21 @@ private:
     auto bytes = entry.storage->bytes().subspan(maximum_prefix - entry.prefix, entry.prefix + *entry.length);
     const auto length = bytes.size() - (entry.key.ipv6 ? 40 : 0);
     const auto offset = entry.key.ipv6 ? 4u : 2u;
+
     bytes[offset] = static_cast<Byte>(length >> 8);
     bytes[offset + 1] = static_cast<Byte>(length);
     if (!entry.key.ipv6) {
       bytes[6] = bytes[7] = bytes[10] = bytes[11] = 0;
       std::uint32_t sum = 0;
+
       for (std::size_t index = 0; index < entry.prefix; index += 2) { sum += NetworkPacket::word(bytes, index); }
       while (sum >> 16) { sum = (sum & UINT16_MAX) + (sum >> 16); }
       const auto checksum = static_cast<std::uint16_t>(~sum);
+
       bytes[10] = static_cast<Byte>(checksum >> 8);
       bytes[11] = static_cast<Byte>(checksum);
     }
+
     return bytes;
   }
 
@@ -450,6 +487,7 @@ private:
   inline static void failure(Entry &entry, std::string_view reason, Report report) {
     entry.storage.reset();
     auto event = entry.event;
+
     event.interface = {entry.key.name.data(), strnlen(entry.key.name.data(), entry.key.name.size())};
     report(event, reason);
   }
@@ -473,6 +511,7 @@ struct TcpEndpoint {
 
   inline std::string text() const {
     const auto host = IpPayload::addressText(address, ipv6);
+
     return (ipv6 ? "[" + std::string{host.data()} + "]:" : std::string{host.data()} + ":") + std::to_string(port);
   }
 };
@@ -498,12 +537,14 @@ public:
 
   inline static std::optional<TcpPacket> decodeNetwork(std::span<const Byte> bytes) noexcept {
     const auto ip = IpPayload::decode(bytes);
+
     return ip ? decodePayload(*ip) : std::nullopt;
   }
 
   inline static tbc::view<std::optional<TcpPacket>, tbc::lt::a> decodePayload(const IpPayload &ip) noexcept {
     if (ip.protocol != IPPROTO_TCP) { return {}; }
     TcpPacket packet;
+
     packet.source.address = ip.source;
     packet.destination.address = ip.destination;
     packet.source.ipv6 = packet.destination.ipv6 = ip.ipv6;
@@ -545,6 +586,7 @@ class TcpFlows {
     inline std::size_t operator()(const Key &key) const noexcept {
       std::size_t hash = key.session;
       auto add = [&](unsigned value) { hash = (hash ^ value) * 1099511628211ull; };
+
       add(key.interface);
       for (const auto c : key.name) { add(static_cast<unsigned char>(c)); }
       for (const auto *endpoint : {&key.first, &key.second}) {
@@ -552,6 +594,7 @@ class TcpFlows {
         add(endpoint->port);
         add(endpoint->ipv6);
       }
+
       return hash;
     }
   };
@@ -599,6 +642,7 @@ public:
   inline void expire(Emit emit, bool stop = false) {
     const auto now = Clock::now();
     Event event;
+
     for (auto cursor = flows_.begin(); cursor != flows_.end();) {
       auto current = cursor++;
       const auto &flow = current->second;
@@ -615,6 +659,7 @@ private:
   inline void consumePacket(const Event &event, const TcpPacket &packet, Emit emit) {
     const bool reverse = packet.destination < packet.source;
     Key key{.session = event.session, .interface = event.interface_index, .first = reverse ? packet.destination : packet.source, .second = reverse ? packet.source : packet.destination};
+
     std::ranges::copy(event.interface, key.name.begin());
     auto found = flows_.find(key);
     if (found != flows_.end() && (packet.flags & syn) && !(packet.flags & ack)) {
@@ -624,47 +669,60 @@ private:
         found = flows_.end();
       }
     }
+
     if (found == flows_.end()) {
       if (flows_.size() == maximum_flows) {
         auto oldest = std::min_element(flows_.begin(), flows_.end(), [](const auto &a, const auto &b) { return a.second.touched < b.second.touched; });
+
         close(oldest, event, "flow_limit", emit, true);
       }
+
       const bool initial_reverse = (packet.flags & syn) && (packet.flags & ack) ? !reverse : reverse;
+
       found = flows_.try_emplace(key, memory_, (std::uint64_t{1} << 63) | ++next_, initial_reverse, event.offline).first;
       publish(Kind::flow_open, *found, event, {}, emit);
       if (!(packet.flags & syn)) {
         publish(Kind::flow_gap, *found, event, {.reason = "capture_started_midstream"}, emit);
       }
     }
+
     auto &flow = found->second;
     const auto direction = reverse == flow.reverse ? Direction::outbound : Direction::inbound;
     auto &side = direction == Direction::outbound ? flow.outbound : flow.inbound;
+
     flow.touched = Clock::now();
     if (packet.truncated) {
       close(found, event, "truncated_packet", emit, true);
       return;
     }
+
     if (packet.flags & rst) {
       close(found, event, "reset", emit, false);
       return;
     }
+
     const auto sequence = packet.sequence + ((packet.flags & syn) ? 1u : 0u);
+
     if (!side.started) {
       side.started = true;
       side.initial = side.next = sequence;
     }
+
     if (packet.flags & fin) {
       side.fin = sequence + static_cast<std::uint32_t>(packet.bytes.size());
       if (distance(*side.fin, side.next) > 0 && !side.gap) { side.gap = Clock::now(); }
     }
+
     if (side.closed && !packet.bytes.empty() && distance(sequence + static_cast<std::uint32_t>(packet.bytes.size()), side.next - 1u) > 0) {
       close(found, event, "data_after_fin", emit, true);
       return;
     }
+
     if (!consume(*found, direction, buffered_, memory_, packet, event, emit)) {
       close(found, event, "reassembly_limit_or_overlap", emit, true);
       return;
     }
+
     auto &consumed = found->second;
     auto &settled = direction == Direction::outbound ? consumed.outbound : consumed.inbound;
     if (settled.fin && settled.next == *settled.fin && !settled.closed) { ++settled.next; settled.closed = true; }
@@ -684,9 +742,11 @@ private:
     const auto behind = distance(side.next, sequence);
     if (behind > 0) {
       const auto skip = std::min(bytes.size(), static_cast<std::size_t>(behind));
+
       bytes = bytes.subspan(skip);
       sequence += static_cast<std::uint32_t>(skip);
     }
+
     for (const auto &pending : side.pending) {
       if (bytes.empty()) { break; }
       if (pending.sequence == sequence && std::ranges::equal(pending.bytes, bytes)) { return true; }
@@ -698,6 +758,7 @@ private:
         if (!std::ranges::equal(bytes.subspan(incoming, count), std::span<const Byte>{pending.bytes}.subspan(queued, count))) { return false; }
       }
     }
+
     if (!bytes.empty() && sequence == side.next) {
       publish(Kind::stream_data, entry, event, {.direction = direction, .offset = side.offset, .bytes = bytes}, emit);
       side.next += static_cast<std::uint32_t>(bytes.size());
@@ -709,6 +770,7 @@ private:
       total_buffered += bytes.size();
       if (!side.gap) { side.gap = Clock::now(); }
     }
+
     for (std::size_t index = 0; index < side.pending.size();) {
       auto &pending = side.pending[index];
       if (distance(pending.sequence, side.next) > 0) { ++index; continue; }
@@ -719,11 +781,13 @@ private:
         side.next += static_cast<std::uint32_t>(ready.size());
         side.offset += ready.size();
       }
+
       total_buffered -= pending.bytes.size();
       flow.buffered -= pending.bytes.size();
       side.pending.erase(side.pending.begin() + index);
       index = 0;
     }
+
     if (side.pending.empty() && (!side.fin || side.closed || *side.fin == side.next)) { side.gap.reset(); }
     return true;
   }
@@ -733,11 +797,13 @@ private:
     const auto &[key, flow] = entry;
     const auto client = (flow.reverse ? key.second : key.first).text();
     const auto server = (flow.reverse ? key.first : key.second).text();
+
     item.id = flow.id;
     item.source = FlowSource::capture;
     item.client = client;
     item.server = server;
     SensitiveBuffer<Limits::frame_bytes> output;
+
     event.kind = kind;
     event.session = key.session;
     event.offline = flow.offline;
@@ -791,6 +857,7 @@ public:
       if (!datagram) { return; }
       SensitiveAllocation storage{memory_, datagram->bytes.size() + Limits::metadata_bytes};
       auto publication = event;
+
       publication.kind = Kind::datagram;
       publication.bytes = DatagramCodec::encode(storage.bytes(), *datagram);
       emit(publication);

@@ -48,6 +48,7 @@ public:
 
     try {
       Command command{memory, Launch{.cwd = cwd, .arguments = request.arguments}, CommandPurpose::administration};
+
       process.emplace(command.specification({}));
       state = ExecutionState::running;
     } catch (const SystemError &failure) {

@@ -83,11 +83,13 @@ public:
     if (count <= 0) {
       return count < 0 && socketWouldBlock(errno) ? Read::pending : Read::ended;
     }
+
     tls_ = bytes_[0] == handshake_record;
     if (!tls_) { return Read::complete; }
 
     const auto available = static_cast<std::size_t>(count);
     std::size_t cursor = 0, collected = 0;
+
     while (cursor < available) {
       if (available - cursor < record_header_bytes) { return incomplete(available); }
       const auto *header = bytes_.data() + cursor;
@@ -106,6 +108,7 @@ public:
         }
       }
     }
+
     return incomplete(available);
   }
 
@@ -115,6 +118,7 @@ public:
       parseStored(0);
       return;
     }
+
     std::ranges::copy(handshake, bytes_.begin());
     parseStored(handshake.size());
   }
@@ -129,6 +133,7 @@ public:
 private:
   inline void parseStored(std::size_t size) noexcept {
     const auto handshake = std::span<const std::uint8_t>{bytes_}.first(size);
+
     protocols_offset_ = protocols_size_ = 0;
     valid_ = false;
     encrypted_ = false;
@@ -146,13 +151,16 @@ private:
     if (record.failed()) { return; }
     if (record.empty()) { valid_ = true; return; }
     const auto extension_bytes = record.take(record.word());
+
     if (record.failed() || !record.empty()) { return; }
 
     bool seen_alpn = false, seen_name = false;
     Cursor extensions{extension_bytes};
+
     while (!extensions.empty()) {
       const auto kind = extensions.word();
       const auto body = extensions.take(extensions.word());
+
       if (extensions.failed()) { return; }
       if (kind == alpn_extension) {
         if (seen_alpn) { return; }
@@ -165,6 +173,7 @@ private:
         encrypted_ = true;
       }
     }
+
     valid_ = true;
   }
 
@@ -179,18 +188,22 @@ private:
         bytes_ = {};
         return {};
       }
+
       const auto result = bytes_.first(count);
+
       bytes_ = bytes_.subspan(count);
       return result;
     }
 
     inline std::uint8_t byte() noexcept {
       const auto value = take(1);
+
       return value.empty() ? 0 : value.front();
     }
 
     inline std::uint16_t word() noexcept {
       const auto value = take(2);
+
       return value.empty() ? 0 : static_cast<std::uint16_t>((std::uint16_t{value[0]} << 8) | value[1]);
     }
 
@@ -220,6 +233,7 @@ private:
     while (!names.empty()) {
       const auto type = names.byte();
       const auto value = names.take(names.word());
+
       if (names.failed()) { return false; }
       if (type == 0) {
         const std::string_view host{reinterpret_cast<const char *>(value.data()), value.size()};
@@ -227,6 +241,7 @@ private:
         server_name_.assign(host);
       }
     }
+
     return true;
   }
 
@@ -236,9 +251,11 @@ private:
     if (names.failed() || declared == 0 || declared != names.remaining()) { return false; }
     while (!names.empty()) {
       const auto length = names.byte();
+
       names.take(length);
       if (names.failed() || length == 0) { return false; }
     }
+
     protocols_offset_ = static_cast<std::size_t>(extension.data() - bytes_.data()) + 2;
     protocols_size_ = extension.size() - 2;
     return true;
@@ -275,6 +292,7 @@ public:
     if (protocol.size() > name_.size()) {
       return false;
     }
+
     std::copy(protocol.begin(), protocol.end(), name_.begin());
     length_ = static_cast<unsigned char>(protocol.size());
     return true;
@@ -292,19 +310,24 @@ public:
     }
 
     std::span<const unsigned char> names{offered, offered_length};
+
     while (!names.empty()) {
       const auto size = names.front();
+
       names = names.subspan(1);
       if (size > names.size()) {
         return SSL_TLSEXT_ERR_ALERT_FATAL;
       }
+
       if (std::ranges::equal(names.first(size), selection->protocol())) {
         *selected = selection->name_.data();
         *length = selection->length_;
         return SSL_TLSEXT_ERR_OK;
       }
+
       names = names.subspan(size);
     }
+
     return SSL_TLSEXT_ERR_ALERT_FATAL;
   }
 
@@ -333,30 +356,36 @@ public:
     requireTls(!encoded.empty() && encoded.size() <= maximum_certificate_bytes, "Invalid TLS root certificate size");
     auto *position = encoded.data();
     TlsCertificate certificate{d2i_X509(nullptr, &position, static_cast<long>(encoded.size()))};
+
     requireTls(certificate != nullptr && position == encoded.data() + encoded.size(), "Decode TLS root certificate");
     add(certificate.get());
   }
 
   inline void add(X509 *certificate) {
     TlsHandle<ASN1_TIME, ASN1_TIME_free> now{ASN1_TIME_set(nullptr, std::time(nullptr))};
+
     requireTls(now != nullptr, "Read TLS trust validation time");
     const int expiration = ASN1_TIME_compare(X509_get0_notAfter(certificate), now.get());
+
     requireTls(expiration != -2, "Invalid TLS root expiration");
     if (expiration < 0) {
       return;
     }
 
     const auto *objects = X509_STORE_get0_objects(store_.get());
+
     for (int index = 0; index < sk_X509_OBJECT_num(objects); ++index) {
       const auto *object = sk_X509_OBJECT_value(objects, index);
       if (X509_OBJECT_get_type(object) != X509_LU_X509) {
         continue;
       }
+
       const auto *existing = X509_OBJECT_get0_X509(object);
       if (X509_cmp(existing, certificate) == 0) {
         return;
       }
     }
+
     requireTls(X509_STORE_add_cert(store_.get(), certificate) == 1, "Add TLS trust anchor");
     ++count_;
   }
@@ -399,6 +428,7 @@ public:
       SSL_CTX_set_mode(context, SSL_MODE_ENABLE_PARTIAL_WRITE | SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
       SSL_CTX_set_session_cache_mode(context, SSL_SESS_CACHE_OFF);
     }
+
     SSL_CTX_set_verify(origin_.get(), SSL_VERIFY_PEER, nullptr);
     requireTls(SSL_CTX_set1_verify_cert_store(origin_.get(), trust.native()) == 1, "Set TLS origin trust");
     requireTls(SSL_CTX_set_num_tickets(child_.get(), 0) == 1, "Disable TLS session tickets");
@@ -474,6 +504,7 @@ public:
     if (child_) {
       SSL_shutdown(child_.get());
     }
+
     if (origin_) {
       SSL_shutdown(origin_.get());
     }
@@ -488,6 +519,7 @@ public:
       if (state_ == State::initialize) {
         initialize();
       }
+
       if (state_ == State::offer) {
         if (!offered_) {
           const auto now = std::chrono::steady_clock::now();
@@ -497,21 +529,26 @@ public:
             offer_after_ = now + std::chrono::milliseconds{2};
             return state_;
           }
+
           failure_ = Failure::client_hello;
           requireTls(read == AlpnOffer::Read::complete, "Read TLS ClientHello");
         }
+
         const auto names = offer_->encoded();
+
         failure_ = Failure::origin_handshake;
         // OpenSSL copies the protocols, so the offer is done with.
         requireTls(SSL_set_alpn_protos(origin_.get(), names.data(), static_cast<unsigned>(names.size())) == 0, "Set TLS origin ALPN offer");
         offer_.reset();
         state_ = State::origin;
       }
+
       if (state_ == State::origin && handshake(origin_.get(), origin_waiting_)) {
         mirrorProtocol();
         state_ = State::child;
         failure_ = Failure::child_handshake;
       }
+
       if (state_ == State::child && handshake(child_.get(), child_waiting_)) {
         state_ = State::established;
         failure_ = Failure::none;
@@ -519,6 +556,7 @@ public:
     } catch (...) {
       state_ = State::failed;
     }
+
     return state_;
   }
 
@@ -535,6 +573,7 @@ public:
       return state_ == State::offer ? (offer_after_ == std::chrono::steady_clock::time_point{} ? StreamReadiness::readable : StreamReadiness::none) : state_ == State::child ? child_waiting_
                                                                                          : StreamReadiness::none;
     }
+
     return state_ == State::origin ? origin_waiting_ : StreamReadiness::none;
   }
 
@@ -546,6 +585,7 @@ public:
     const auto selected = selection_.protocol();
     if (selected.size() == 2 && selected[0] == 'h' && selected[1] == '2') { return HttpProtocol::http2; }
     constexpr std::string_view http11 = "http/1.1";
+
     return std::ranges::equal(selected, http11) ? HttpProtocol::http11 : HttpProtocol::other;
   }
 
@@ -556,6 +596,7 @@ public:
     if (!buffer.empty()) {
       return {StreamResult::State::data, buffer.copyTo(destination)};
     }
+
     return readNative(side, destination);
   }
 
@@ -563,10 +604,12 @@ public:
     if (state_ != State::established) {
       return {StreamResult::State::failed};
     }
+
     ERR_clear_error();
     std::size_t sent = 0;
     auto *connection = endpoint(side);
     const int result = SSL_write_ex(connection, bytes.data(), bytes.size(), &sent);
+
     return result == 1 ? StreamResult{StreamResult::State::data, sent} : ioFailure(connection, result);
   }
 
@@ -575,6 +618,7 @@ public:
     if (!visible.bytes.empty()) {
       std::memcpy(destination.data(), visible.bytes.data(), visible.bytes.size());
     }
+
     return {visible.state, visible.bytes.size(), visible.waiting};
   }
 
@@ -588,6 +632,7 @@ public:
 
   inline bool buffered(TlsSide side) const noexcept {
     const auto &buffer = side == TlsSide::child ? child_input_ : origin_input_;
+
     return state_ == State::established && (!buffer.empty() || SSL_pending(endpoint(side)) > 0);
   }
 
@@ -600,10 +645,12 @@ private:
     if (state_ != State::established) {
       return {StreamResult::State::failed};
     }
+
     ERR_clear_error();
     std::size_t received = 0;
     auto *connection = endpoint(side);
     const int result = SSL_read_ex(connection, destination.data(), destination.size(), &received);
+
     return result == 1 ? StreamResult{StreamResult::State::data, received} : ioFailure(connection, result);
   }
 
@@ -622,6 +669,7 @@ private:
     SSL_set_app_data(child_.get(), &selection_);
 
     std::array<char, ProxyHostname::maximum_bytes + 1> terminated{};
+
     std::copy(hostname_.view().begin(), hostname_.view().end(), terminated.begin());
     if (TlsHostname::numeric(hostname_.view())) {
       requireTls(X509_VERIFY_PARAM_set1_ip_asc(SSL_get0_param(origin_.get()), terminated.data()) == 1, "Set TLS origin IP verification");
@@ -632,6 +680,7 @@ private:
 
     failure_ = Failure::mint;
     const auto leaf = authority_->mint(hostname_.view());
+
     requireTls(SSL_use_certificate(child_.get(), leaf.certificate.get()) == 1 && SSL_use_PrivateKey(child_.get(), leaf.key.get()) == 1 && SSL_add1_chain_cert(child_.get(), authority_->certificate()) == 1, "Configure TLS child certificate");
     state_ = State::offer;
   }
@@ -643,7 +692,9 @@ private:
       waiting = StreamReadiness::none;
       return true;
     }
+
     const auto failure = ioFailure(connection, result);
+
     requireTls(failure.state == StreamResult::State::blocked, "TLS handshake failed");
     waiting = failure.waiting;
     return false;
@@ -652,6 +703,7 @@ private:
   inline void mirrorProtocol() {
     const unsigned char *selected = nullptr;
     unsigned length = 0;
+
     SSL_get0_alpn_selected(origin_.get(), &selected, &length);
     requireTls(selection_.assign({selected, length}), "Invalid TLS origin ALPN selection");
   }
@@ -719,11 +771,13 @@ public:
 
   inline tbc::view<std::shared_ptr<const CertificateAuthority<Memory>>, tbc::lt::a> snapshot() const noexcept {
     std::lock_guard lock{mutex_};
+
     return replacement_;
   }
 
   inline void replace(tbc::view<std::shared_ptr<const CertificateAuthority<Memory>>, tbc::lt::a> authority) noexcept {
     std::lock_guard lock{mutex_};
+
     replacement_.swap(authority);
   }
   inline void suspend(bool value) noexcept { suspended_.store(value, std::memory_order_release); }

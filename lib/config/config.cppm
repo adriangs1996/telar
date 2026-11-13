@@ -90,9 +90,11 @@ public:
         if (reach.requested) {
           entry.requested = std::max(entry.requested.value_or(0), *reach.requested);
         }
+
         return;
       }
     }
+
     if (count_ == entries_.size()) {
       return;
     }
@@ -108,6 +110,7 @@ public:
     for (const auto &entry : entries()) {
       std::fprintf(stderr, "telar config: limit reached, the excess was left out: %.*s: ", static_cast<int>(entry.name.size()), entry.name.data());
       const auto *separator = entry.noun.empty() ? "" : " ";
+
       if (entry.requested) {
         std::fprintf(stderr, "%" PRIu64 "%s%.*s; limit %" PRIu64 "\n", *entry.requested, separator, static_cast<int>(entry.noun.size()), entry.noun.data(), entry.value);
       } else if (entry.value == 0) {
@@ -154,6 +157,7 @@ inline void optionalUtf8Text(const lua::Value &value, std::size_t maximum_bytes)
   }
 
   const auto text = value.string();
+
   validateUtf8(text);
   if (text.size() > maximum_bytes || text.contains('\0')) {
     value.fail("exceeds its text bounds or contains NUL");
@@ -214,6 +218,7 @@ inline tbc::view<std::string_view, tbc::lt::a> fittedUiText(tbc::view<std::strin
     reach.requested = text.size();
     limits.add(reach);
   }
+
   return utf8Prefix(text, reach.value);
 }
 
@@ -259,6 +264,7 @@ public:
     std::array<std::string_view, maximum_definitions> names;
     std::size_t kept = 0;
     std::size_t total = 0;
+
     table.eachField([&](std::string_view name, const lua::Value &) {
       ++total;
       const auto end = names.begin() + kept;
@@ -268,10 +274,12 @@ public:
       }
 
       const auto last = kept < names.size() ? end : end - 1;
+
       std::move_backward(insertion, last, last + 1);
       *insertion = name;
       kept = std::min(kept + 1, names.size());
     });
+
     if (total > kept) {
       reach.requested = total;
       limits.add(reach);
@@ -279,6 +287,7 @@ public:
 
     for (const auto name : std::span{names}.first(kept)) {
       const auto definition = table.entry(name);
+
       validate_definition(name, definition);
     }
   }
@@ -290,6 +299,7 @@ public:
 
     const auto title = definition.field("title");
     const auto text = title.present() ? title.string() : name;
+
     printableUiText(title, fittedUiText(text, {"panels.title_bytes", "title bytes", maximum_title_bytes, {}, {}}, limits));
   }
 
@@ -324,9 +334,11 @@ public:
         return indexOf(definitions, name);
       }
     }
+
     if (inherited_ != nullptr && inherited_->present()) {
       return indexOf(inherited_->field(section), name);
     }
+
     return std::nullopt;
   }
 
@@ -338,13 +350,16 @@ private:
 
     bool found = false;
     std::size_t preceding = 0;
+
     definitions.eachField([&](std::string_view candidate, const lua::Value &) {
       found |= candidate == name;
       preceding += candidate < name;
     });
+
     if (!found) {
       return std::nullopt;
     }
+
     return preceding < NamedDefinitionsValidator::maximum_definitions ? static_cast<std::uint8_t>(preceding) : std::numeric_limits<std::uint8_t>::max();
   }
 
@@ -437,6 +452,7 @@ public:
     std::array<Byte, maximum_encoded_bytes> encoded{};
     const auto length = encode(arguments, label, encoded);
     const auto row = std::span{encoded}.first(length);
+
     for (std::size_t index = 0; index < rows_; ++index) {
       const auto stored = rowBytes(index);
       if (stored.size() == row.size() && std::ranges::equal(stored, row)) {
@@ -449,6 +465,7 @@ public:
     }
 
     const auto index = rows_++;
+
     offsets_[index] = static_cast<std::uint32_t>(used_);
     std::ranges::copy(row, bytes_.begin() + used_);
     used_ += row.size();
@@ -463,12 +480,15 @@ public:
 
     const auto row = rowBytes(reference.id);
     CommandTabView result;
+
     result.count = row[0];
     const auto label_length = row[1];
     auto offset = header_bytes + (result.count * argument_length_bytes);
+
     for (std::size_t argument = 0; argument < result.count; ++argument) {
       const auto entry = header_bytes + (argument * argument_length_bytes);
       const auto length = static_cast<std::size_t>(row[entry]) | (static_cast<std::size_t>(row[entry + 1]) << upper_byte_shift);
+
       result.arguments[argument] = textView(row.subspan(offset, length));
       offset += length;
     }
@@ -539,6 +559,7 @@ private:
     }
 
     std::size_t argument_bytes = 0;
+
     for (const auto argument : arguments) {
       if (argument.empty() || argument.size() > CommandTabView::maximum_argument_bytes - argument_bytes || argument.contains('\0')) {
         throw EncodingError{"Invalid command tab argument"};
@@ -548,6 +569,7 @@ private:
     }
 
     std::size_t length = 0;
+
     encoded[length++] = static_cast<Byte>(arguments.size());
     encoded[length++] = static_cast<Byte>(label.size());
     for (const auto argument : arguments) {
@@ -653,9 +675,11 @@ public:
     if (action.is(LUA_TFUNCTION)) {
       return true;
     }
+
     if (expression) {
       action.fail("requires a function for an expression binding");
     }
+
     if (action.is(LUA_TSTRING)) {
       builtin(action);
       return true;
@@ -695,6 +719,7 @@ public:
       builtin(kind_value);
       action.onlyFields({"kind"});
     }
+
     return true;
   }
 
@@ -702,6 +727,7 @@ public:
     if (action.is(LUA_TFUNCTION)) {
       action.fail("cannot be a callback in a static component");
     }
+
     return validate(action);
   }
 
@@ -712,6 +738,7 @@ private:
     if (std::ranges::find(names, name) != std::end(names)) {
       return;
     }
+
     for (const std::string_view prefix : {"select-tab-", "select-workspace-"}) {
       if (name.starts_with(prefix)) {
         const auto number = name.substr(prefix.size());
@@ -720,6 +747,7 @@ private:
         }
       }
     }
+
     value.fail("names an unknown action");
   }
 
@@ -737,6 +765,7 @@ private:
   inline static void direction(const lua::Value &action, std::initializer_list<std::string_view> choices) {
     action.onlyFields({"kind", "direction"});
     const auto direction = action.field("direction");
+
     direction.string();
     optionalChoice(direction, choices);
   }
@@ -755,9 +784,11 @@ private:
     const auto count = command.listLength();
     constexpr std::size_t maximum_arguments = 32;
     constexpr std::size_t maximum_bytes = 4096;
+
     if (count == 0) {
       command.fail("requires a command");
     }
+
     if (count > maximum_arguments) {
       limits_.add({"command_tab.max_arguments", "arguments", maximum_arguments, count, {}});
       return false;
@@ -766,30 +797,37 @@ private:
     command.arraySize();
     std::array<std::string_view, maximum_arguments> arguments;
     std::size_t total_bytes = 0;
+
     for (std::size_t index = 0; index < count; ++index) {
       const auto argument = command.element(index + 1);
+
       arguments[index] = argument.string();
       if (arguments[index].empty()) {
         argument.fail("must be nonempty");
       }
+
       total_bytes += arguments[index].size();
     }
+
     const auto label = action.field("label");
     if (label.is(LUA_TSTRING) && label.string().size() > 32) {
       label.fail("exceeds the label limit");
     }
 
     std::size_t kept_bytes = 0;
+
     for (const auto argument : std::span{arguments}.first(count)) {
       if (argument.contains('\0')) {
         command.fail("contains NUL");
       }
+
       kept_bytes += argument.size();
       if (kept_bytes > maximum_bytes) {
         limits_.add({"command_tab.max_command_bytes", "argv bytes", maximum_bytes, total_bytes, {}});
         return false;
       }
     }
+
     return commands_.keep(std::span{arguments}.first(count), label.is(LUA_TSTRING) ? label.string() : std::string_view{}, limits_);
   }
 
@@ -799,9 +837,11 @@ private:
     NotificationBody body{.duration_ms = static_cast<std::uint32_t>(action.field("duration_ms").boundedInteger(default_notification_duration_ms, min_notification_duration_ms, max_notification_duration_ms))};
     const auto title = action.field("title");
     const auto message = action.field("body");
+
     body.title = fitted(title.string(), {"notifications.max_title_bytes", "bytes", max_notification_title_bytes, {}, {}});
     body.message = message.present() ? fitted(message.string(), {"notifications.max_message_bytes", "bytes", max_notification_message_bytes, {}, {}}) : std::string_view{};
     unsigned target_count = 0;
+
     for (const auto *name : {"pane_id", "tab_id", "workspace_id"}) {
       const auto target = action.field(name);
       if (target.present()) {
@@ -809,10 +849,13 @@ private:
         ++target_count;
       }
     }
+
     if (target_count > 1) {
       action.fail("accepts only one notification target");
     }
+
     std::array<Byte, 1024> storage;
+
     Codec::encode(ShowNotification{.request_id = 1, .notification = body}, storage);
   }
 
@@ -821,6 +864,7 @@ private:
       limit.requested = text.size();
       limits_.add(limit);
     }
+
     return utf8Prefix(text, limit.value);
   }
 
@@ -873,6 +917,7 @@ struct AgentEvidence {
     const auto expiry = working ? (state == AgentReportState::settling ? screen_working_expiry : report_working_expiry) : settled_expiry;
     const auto status = working ? AgentStatus::working : state == AgentReportState::blocked ? AgentStatus::blocked
                                                                                             : AgentStatus::ready;
+
     return {provider, status, AgentSource::lifecycle_report, 100, now, now.milliseconds + expiry.count()};
   }
 
@@ -920,6 +965,7 @@ inline ProviderDescription describeProvider(AgentProvider provider) noexcept {
 
 inline AgentProvider builtinProviderFromExecutable(std::string_view name) noexcept {
   const auto stem = withoutExecutableSuffix(name);
+
   for (const auto provider : {AgentProvider::claude, AgentProvider::codex, AgentProvider::pi, AgentProvider::cursor, AgentProvider::opencode}) {
     for (const auto process : describeProvider(provider).process_names) {
       if (!process.empty() && asciiEqualIgnoreCase(stem, process)) {
@@ -1031,6 +1077,7 @@ struct AgentManifest {
 
     std::array<char, 96> bytes{};
     const auto display = displayName();
+
     std::memcpy(bytes.data(), "New ", 4);
     std::memcpy(bytes.data() + 4, display.data(), display.size());
     std::memcpy(bytes.data() + 4 + display.size(), " session", 8);
@@ -1073,6 +1120,7 @@ public:
     }
 
     const auto builtin = providerNamed(name);
+
     for (auto &entry : std::span{entries_}.first(count_)) {
       if (entry.name.view() == name) {
         if (builtin == AgentProvider::unknown) {
@@ -1088,6 +1136,7 @@ public:
     }
 
     auto &entry = entries_[count_++];
+
     entry.provider = builtin == AgentProvider::unknown ? static_cast<AgentProvider>(first_custom_provider + custom_count_++) : builtin;
     entry.name.assign(name);
     return &entry;
@@ -1115,6 +1164,7 @@ public:
 
   inline AgentProvider fromExecutable(std::string_view name) const noexcept {
     const auto stem = withoutExecutableSuffix(name);
+
     for (const auto &entry : entries()) {
       for (const auto &candidate : entry.process_names.entries()) {
         if (asciiEqualIgnoreCase(stem, candidate.view())) {
@@ -1207,8 +1257,10 @@ public:
 
     const auto count = agents.arraySize();
     std::size_t dropped = 0;
+
     for (std::size_t position = 1; position <= count; ++position) {
       const auto entry = agents.element(static_cast<lua_Integer>(position));
+
       entry.onlyFields({"name", "process_names", "process_paths", "brand", "identity", "working", "blocked", "ready_prompt", "display_name", "placeholder", "icon", "attachments", "command_tools"});
       auto *manifest = manifests_.tryAdd(entry.field("name").string());
       if (manifest == nullptr) {
@@ -1226,6 +1278,7 @@ public:
       commandTools(entry.field("command_tools"), *manifest);
       presentation(entry, *manifest);
     }
+
     if (dropped != 0) {
       limits_.add({"agent_manifest.max_custom_agents", "agents", 27, 27 + dropped, {}});
     }
@@ -1234,6 +1287,7 @@ public:
 private:
   inline static tbc::view<std::string_view, tbc::lt::a> printable(const lua::Value &value) {
     const auto text = value.string();
+
     validateUtf8(text);
     if (text.empty() || std::ranges::any_of(text, [](unsigned char byte) { return byte < 0x20 || byte == 0x7f; })) {
       value.fail("must be a printable string");
@@ -1249,6 +1303,7 @@ private:
     }
 
     const auto count = value.arraySize();
+
     for (std::size_t position = 1; position <= count; ++position) {
       const auto text = printable(value.element(static_cast<lua_Integer>(position)));
       if (text.size() > TextCapacity) {
@@ -1278,18 +1333,22 @@ private:
     }
 
     const auto count = value.arraySize();
+
     for (std::size_t position = 1; position <= count; ++position) {
       const auto mapping = value.element(static_cast<lua_Integer>(position));
+
       mapping.onlyFields({"tool", "field"});
       const auto tool = mapping.field("tool").string();
       const auto field = mapping.field("field").string();
       if (tool.empty() || field.empty()) {
         mapping.fail("requires nonempty tool and field strings");
       }
+
       if (tool.size() > 64 || field.size() > 32) {
         if (tool.size() > 64) {
           limits_.add({"agent_manifest.max_tool_name_bytes", "bytes", 64, tool.size(), {}});
         }
+
         if (field.size() > 32) {
           limits_.add({"agent_manifest.max_command_field_bytes", "bytes", 32, field.size(), {}});
         }
@@ -1312,21 +1371,26 @@ private:
   inline static unsigned iconWidth(std::string_view text) noexcept {
     std::array<std::uint32_t, 8> codepoints;
     std::size_t count = 0;
+
     for (std::size_t offset = 0; offset < text.size();) {
       const auto lead = static_cast<unsigned char>(text[offset++]);
       const unsigned continuation = lead < 0x80 ? 0 : lead < 0xe0 ? 1
                                                   : lead < 0xf0   ? 2
                                                                   : 3;
       std::uint32_t codepoint = continuation == 0 ? lead : lead & (0x7f >> continuation);
+
       for (unsigned index = 0; index < continuation; ++index) {
         codepoint = (codepoint << 6) | (static_cast<unsigned char>(text[offset++]) & 0x3f);
       }
+
       codepoints[count++] = codepoint;
     }
 
     unsigned width = 0;
+
     for (std::size_t offset = 0; offset < count;) {
       std::uint8_t cluster_width = 0;
+
       offset += ghostty_unicode_grapheme_width(codepoints.data() + offset, count - offset, &cluster_width);
       width += std::max<unsigned>(1, cluster_width);
     }
@@ -1353,6 +1417,7 @@ private:
     }
 
     const auto policy = printable(attachments);
+
     for (const auto &[name, kind] : std::array<std::pair<std::string_view, AgentAttachmentMarkers>, 4>{{{"none", AgentAttachmentMarkers::none}, {"ordered", AgentAttachmentMarkers::ordered}, {"stable_number", AgentAttachmentMarkers::stable_number}, {"pasted_path", AgentAttachmentMarkers::pasted_path}}}) {
       if (name == policy) {
         manifest.attachments = kind;
@@ -1376,9 +1441,11 @@ namespace telar::runtime {
 
 inline AgentManifests makeBuiltinManifests() {
   AgentManifests table;
+
   for (const auto provider : {AgentProvider::claude, AgentProvider::codex, AgentProvider::pi, AgentProvider::cursor, AgentProvider::opencode}) {
     const auto description = describeProvider(provider);
     auto &manifest = table.add(description.name);
+
     manifest.display_name.assign(description.display_name);
     manifest.attachments = description.attachments;
     manifest.interrupt = AgentInterruptKey::escape;
@@ -1390,6 +1457,7 @@ inline AgentManifests makeBuiltinManifests() {
   }
 
   auto &claude = table.add("claude");
+
   claude.process_paths.append("/@anthropic-ai/claude-code/");
   claude.process_paths.append("\\@anthropic-ai\\claude-code\\");
   claude.brand.append("claude");
@@ -1405,6 +1473,7 @@ inline AgentManifests makeBuiltinManifests() {
   }
 
   auto &codex = table.add("codex");
+
   codex.process_paths.append("/@openai/codex/");
   codex.process_paths.append("\\@openai\\codex\\");
   codex.brand.append("codex");
@@ -1414,6 +1483,7 @@ inline AgentManifests makeBuiltinManifests() {
   codex.addCommandTool("shell", "command");
 
   auto &pi = table.add("pi");
+
   pi.process_paths.append("/@earendil-works/pi-coding-agent/");
   pi.process_paths.append("\\@earendil-works\\pi-coding-agent\\");
   pi.process_paths.append("/@mariozechner/pi-coding-agent/");
@@ -1421,6 +1491,7 @@ inline AgentManifests makeBuiltinManifests() {
   pi.addCommandTool("bash", "command");
 
   auto &cursor = table.add("cursor");
+
   cursor.process_paths.append("/cursor-agent/versions/");
   cursor.addCommandTool("Shell", "command");
   for (const auto phrase : {"not in allowlist:", "skip & tell the agent what to do instead", "yes, build locally", "do you trust the contents of this directory?"}) {
@@ -1428,6 +1499,7 @@ inline AgentManifests makeBuiltinManifests() {
   }
 
   auto &opencode = table.add("opencode");
+
   opencode.interrupt = AgentInterruptKey::escape_twice;
   opencode.addCommandTool("bash", "command");
   return table;
@@ -1504,12 +1576,14 @@ public:
 
   inline void count(const ComponentShape &shape, unsigned rank) noexcept {
     const auto needed = usage(shape);
+
     offered_ = offered_ + needed;
     ranked_[rank] = ranked_[rank] + needed;
   }
 
   inline void prepare() noexcept {
     Usage above;
+
     for (unsigned rank = rank_count; rank-- > 0;) {
       const auto next = above + ranked_[rank];
       if (!next.fits(staging_capacity)) {
@@ -1517,8 +1591,10 @@ public:
         room_ = staging_capacity - above;
         return;
       }
+
       above = next;
     }
+
     room_ = staging_capacity;
   }
 
@@ -1526,6 +1602,7 @@ public:
     if (rank < cutoff_) {
       return false;
     }
+
     if (rank > cutoff_) {
       return true;
     }
@@ -1534,6 +1611,7 @@ public:
     if (!next.fits(room_)) {
       return false;
     }
+
     taken_ = next;
     return true;
   }
@@ -1549,6 +1627,7 @@ public:
     if (!next.fits(staging_capacity)) {
       return false;
     }
+
     staged_ = next;
     return true;
   }
@@ -1564,6 +1643,7 @@ public:
         {"bars.max_bar_actions", "click actions", 32, offered_.actions, {}},
         {"bars.max_samples", "sparkline samples", 256, offered_.samples, {}},
     }};
+
     for (const auto &reach : reaches) {
       if (reach.requested > reach.value) {
         limits.add(reach);
@@ -1602,6 +1682,7 @@ public:
         color(value);
       }
     }
+
     for (const auto *name : {"bold", "italic", "faint", "underline", "strikethrough"}) {
       component.field(name).boolean(false);
     }
@@ -1613,6 +1694,7 @@ private:
       if (*index < 0 || *index > 255) {
         value.fail("is outside the color index range");
       }
+
       return;
     }
 
@@ -1621,9 +1703,11 @@ private:
     if (std::ranges::any_of(names, [text](std::string_view name) { return equalUiName(text, name); })) {
       return;
     }
+
     if (text.size() == 7 && text.front() == '#' && hexadecimal(text.substr(1))) {
       return;
     }
+
     value.fail("is not a supported color");
   }
 
@@ -1632,8 +1716,10 @@ private:
     if (negative || digits.front() == '+') {
       digits.remove_prefix(1);
     }
+
     // At most six digits follow '#', so the value never reaches the limit.
     const auto value = unsignedNumber<unsigned>(digits, std::numeric_limits<unsigned>::max(), 16);
+
     return value && (!negative || *value == 0);
   }
 };
@@ -1650,10 +1736,12 @@ public:
   // A shape views the value's strings, which belong to the state in the value's region `a`.
   inline static tbc::view<ComponentShape, tbc::lt::a> read(const lua::Value &value, unsigned inherited_priority, LimitNotices &limits) {
     ComponentShape shape;
+
     shape.kind = kind(value.field("ui"));
     fields(value, shape.kind);
     shape.priority = static_cast<unsigned>(std::round(value.field("priority").boundedNumber(inherited_priority, 0, 100)));
     const auto tone = value.field("tone");
+
     optionalChoice(tone, {"neutral", "muted", "accent", "success", "warning", "danger"});
     if (tone.present()) {
       shape.tone_bonus = tone.string() == "danger" ? 40 : tone.string() == "warning" ? 20
@@ -1671,6 +1759,7 @@ public:
       if (shape.text.size() > maximum_glyph_bytes || (shape.text.empty() && !value.field("name").present())) {
         value.fail("requires an icon name or a glyph of at most 16 bytes");
       }
+
       break;
     case ComponentKind::mark:
       uiMark(value.field("name"));
@@ -1695,6 +1784,7 @@ public:
       if (shape.text.size() > maximum_clock_bytes) {
         value.fail("exceeds the clock format limit");
       }
+
       break;
     case ComponentKind::metric:
       value.field("name").string();
@@ -1705,6 +1795,7 @@ public:
       if (const auto mark = value.field("mark"); mark.present()) {
         uiMark(mark);
       }
+
       shape.action_field = value.field("on_click").present() ? "on_click" : nullptr;
       shape.url = text(value, "url");
       // A summary group shows one indicator for its metrics and meters, named by this text.
@@ -1727,18 +1818,21 @@ public:
       if (shape.action_field == nullptr && shape.url.empty()) {
         value.fail("requires an action or URL");
       }
+
       break;
     case ComponentKind::machines:
     case ComponentKind::actions:
     case ComponentKind::divider:
       break;
     }
+
     return shape;
   }
 
   inline static ComponentShape segment(const lua::Value &value, unsigned priority) {
     value.onlyFields({"text", "icon", "fg", "bg", "bold", "italic", "faint", "underline", "strikethrough"});
     ComponentShape shape;
+
     shape.text = text(value, "text");
     shape.kind = shape.text.empty() ? ComponentKind::icon : ComponentKind::label;
     shape.priority = priority;
@@ -1754,6 +1848,7 @@ private:
     if (found == std::end(names)) {
       value.fail("names an unknown component");
     }
+
     return static_cast<ComponentKind>(found - std::begin(names));
   }
 
@@ -1810,6 +1905,7 @@ private:
 
   inline static tbc::view<std::string_view, tbc::lt::a> text(const lua::Value &value, const char *name, tbc::view<std::string_view, tbc::lt::a> fallback = {}) {
     const auto field = value.field(name);
+
     return field.present() ? field.string() : fallback;
   }
 
@@ -1831,13 +1927,16 @@ private:
     if (total > kept) {
       limits.add({"bars.max_node_samples", "sparkline values", maximum_samples, total, {}});
     }
+
     for (std::size_t index = total - kept + 1; index <= total; ++index) {
       const auto sample = values.element(index);
       if (!sample.present()) {
         sample.fail("must be a number");
       }
+
       sample.boundedNumber(0, 0, std::numeric_limits<double>::max());
     }
+
     return kept;
   }
 
@@ -1889,24 +1988,29 @@ private:
     if (!value.present()) {
       return;
     }
+
     if (value.is(LUA_TSTRING)) {
       append(value, {.text = value.string(), .priority = position.priority}, position);
       return;
     }
+
     if (value.field("ui").present()) {
       component(value, position);
       return;
     }
+
     if (value.field("text").present() || value.field("icon").present()) {
       append(value, ComponentShapeReader::segment(value, position.priority), position);
       return;
     }
+
     if (position.depth == maximum_list_depth) {
       value.fail("exceeds the component nesting limit");
     }
 
     ++position.depth;
     const auto count = value.arraySize();
+
     for (std::size_t index = 1; index <= count; ++index) {
       walk(value.element(index), position);
     }
@@ -1919,6 +2023,7 @@ private:
     }
 
     const auto rank = std::min(shape.priority + shape.tone_bonus, position.rank);
+
     if (shape.kind == ComponentKind::group) {
       children(value, {Place::group, shape.priority, rank});
       walk(value.field("tooltip"), {Place::tooltip, default_priority, rank});
@@ -1931,6 +2036,7 @@ private:
 
   inline void children(const lua::Value &value, Position position) {
     const auto count = value.listLength();
+
     for (std::size_t index = 1; index <= count; ++index) {
       walk(value.element(index), position);
     }
@@ -1942,17 +2048,21 @@ private:
     }
 
     const auto rank = std::min(shape.priority + shape.tone_bonus, position.rank);
+
     if (counting_) {
       budget_.count(shape, rank);
       return true;
     }
+
     if (!budget_.admit(shape, rank)) {
       return false;
     }
+
     if (shape.action_field != nullptr && !actions_.component(value.field(shape.action_field))) {
       budget_.release(shape, rank);
       return false;
     }
+
     if (budget_.nodesFull()) {
       return false;
     }
@@ -1961,6 +2071,7 @@ private:
     if (!budget_.stage(shape)) {
       return false;
     }
+
     printableUiText(value, shape.text);
     printableUiText(value, shape.detail);
     return true;
@@ -1977,6 +2088,7 @@ private:
     case Place::buttons:
       return kind == ComponentKind::button;
     }
+
     return false;
   }
 
@@ -1984,9 +2096,11 @@ private:
     if (url.empty()) {
       return;
     }
+
     if (url.size() > maximum_url_bytes || url.contains(' ') || (!url.starts_with("https://") && !url.starts_with("http://"))) {
       value.fail("requires an HTTP or HTTPS URL without spaces");
     }
+
     printableUiText(value, url);
   }
 
@@ -2016,15 +2130,19 @@ public:
 
     std::size_t bytes = 0;
     bool receives_choice = false;
+
     for (std::size_t index = 0; index < count; ++index) {
       const auto value = command.element(index + 1);
       const auto argument = value.string();
+
       bytes += argument.size();
       if ((index == 0 && argument.empty()) || argument.contains('\0') || bytes > maximum_bytes) {
         value.fail("is not a valid bounded command argument");
       }
+
       receives_choice |= index > 0 && argument == "{}";
     }
+
     return receives_choice;
   }
 
@@ -2053,6 +2171,7 @@ public:
       if (kind.string() != "dynamic") {
         kind.fail("requires a render function or a command");
       }
+
       source.onlyFields({"bar_kind", "every_ms", "render"});
     }
 
@@ -2082,6 +2201,7 @@ public:
     if (!bars.present()) {
       return;
     }
+
     bars.onlyFields({"bottom", "top", "sidebar_footer"});
     bottom(bars.field("bottom"));
     const auto top = bars.field("top");
@@ -2099,6 +2219,7 @@ public:
       if (count > maximum_footer_slots) {
         footer.fail(std::format("accepts at most {} slots", maximum_footer_slots).c_str());
       }
+
       for (std::size_t index = 1; index <= count; ++index) {
         if (source(footer.element(index)) == Source::tabs) {
           footer.fail("cannot contain tabs");
@@ -2117,14 +2238,17 @@ private:
     if (!bar.present()) {
       return;
     }
+
     bar.onlyFields({"left", "center", "right"});
     unsigned tabs = 0;
+
     for (const auto *name : {"left", "center", "right"}) {
       const auto value = bar.field(name);
       if (value.present() && source(value) == Source::tabs) {
         ++tabs;
       }
     }
+
     if (tabs != 1) {
       bar.fail("must contain exactly one tabs source");
     }
@@ -2137,12 +2261,14 @@ private:
       value.onlyFields({"bar_kind"});
       return kind == "tabs" ? Source::tabs : Source::content;
     }
+
     if (kind == "static") {
       value.onlyFields({"bar_kind", "value"});
       ComponentValidator{actions_, limits_}.validate(value.field("value"));
     } else {
       DynamicSourceValidator::validate(value);
     }
+
     return Source::content;
   }
 
@@ -2234,12 +2360,15 @@ public:
 
   inline void report(LimitNotices &limits) const noexcept {
     std::size_t wanted = count_;
+
     for (const auto suffix : defaultSuffixes()) {
       const bool overridden = std::ranges::any_of(std::span{bindings_}.first(count_), [&](const Sequence &binding) {
         return binding.keys[0] == prefix_ && (binding.length == 1 || binding.keys[1] == suffix);
       });
+
       wanted += !overridden;
     }
+
     if (wanted > maximum_bindings) {
       limits.add({"config.max_bindings", "key bindings", maximum_bindings, wanted, {}});
     }
@@ -2252,6 +2381,7 @@ private:
     using Key = KeyChord::Key;
     constexpr auto shift = static_cast<unsigned>(KeyChord::Modifier::shift);
     constexpr auto alt = static_cast<unsigned>(KeyChord::Modifier::alt);
+
     return std::array<KeyChord, 43>{{
         {Key::character, '-'},
         {Key::character, '='},
@@ -2324,6 +2454,7 @@ public:
     auto remaining = value.string();
     KeyChord chord;
     bool has_key = false;
+
     for (;;) {
       const auto separator = remaining.find('+');
       const auto part = remaining.substr(0, separator);
@@ -2337,6 +2468,7 @@ public:
         if ((chord.modifiers & bit) != 0) {
           value.fail("repeats a modifier");
         }
+
         chord.modifiers |= bit;
       } else {
         parseKey(value, part, chord);
@@ -2346,12 +2478,14 @@ public:
       if (separator == std::string_view::npos) {
         break;
       }
+
       remaining.remove_prefix(separator + 1);
     }
 
     if (!has_key) {
       value.fail("has no key");
     }
+
     return chord;
   }
 
@@ -2364,20 +2498,25 @@ private:
     if (matches(name, "ctrl") || matches(name, "control")) {
       return Modifier::control;
     }
+
     if (matches(name, "alt")) {
       return Modifier::alt;
     }
+
     if (matches(name, "shift")) {
       return Modifier::shift;
     }
+
     if (matches(name, "super") || matches(name, "cmd") || matches(name, "command")) {
       return Modifier::super;
     }
+
     return Modifier::none;
   }
 
   inline static void parseKey(const lua::Value &value, std::string_view name, KeyChord &chord) {
     constexpr std::pair<std::string_view, Key> named_keys[]{{"up", Key::up}, {"down", Key::down}, {"left", Key::left}, {"right", Key::right}, {"home", Key::home}, {"end", Key::end}, {"delete", Key::erase}, {"del", Key::erase}, {"pageup", Key::page_up}, {"page-up", Key::page_up}, {"pagedown", Key::page_down}, {"page-down", Key::page_down}, {"enter", Key::enter}, {"return", Key::enter}, {"escape", Key::escape}, {"esc", Key::escape}, {"backspace", Key::backspace}, {"tab", Key::tab}, {"backtab", Key::back_tab}};
+
     for (const auto &[known, key] : named_keys) {
       if (matches(name, known)) {
         chord.key = key;
@@ -2385,6 +2524,7 @@ private:
           chord.key = Key::back_tab;
           chord.modifiers = 0;
         }
+
         return;
       }
     }
@@ -2394,6 +2534,7 @@ private:
     } else if (matches(name, "plus")) {
       name = "+";
     }
+
     validateUtf8(name);
     const auto codepoints = std::ranges::count_if(name, [](unsigned char byte) { return (byte & 0xc0) != 0x80; });
     if (codepoints != 1) {
@@ -2404,11 +2545,13 @@ private:
     if (name.size() == 1 && (chord.has(Modifier::control) || chord.has(Modifier::super))) {
       chord.character = static_cast<unsigned char>(asciiLower(name.front()));
     }
+
     if (chord.has(Modifier::shift) && !chord.has(Modifier::super)) {
       const bool letter = name.size() == 1 && asciiLower(name.front()) >= 'a' && asciiLower(name.front()) <= 'z';
       if (chord.has(Modifier::control) || (!letter && name != " ")) {
         value.fail("cannot represent this shifted character");
       }
+
       chord.character = letter ? static_cast<unsigned char>(asciiLower(name.front()) - ('a' - 'A')) : ' ';
       chord.modifiers &= ~static_cast<unsigned>(Modifier::shift);
     }
@@ -2431,14 +2574,18 @@ public:
     }
 
     constexpr auto maximum_bindings = BindingKeymap::maximum_bindings;
+
     keymap.clear();
     const auto listed = bindings.listLength();
     const auto count = std::min(listed, maximum_bindings);
+
     if (listed > maximum_bindings) {
       limits.add({"config.max_bindings", "key bindings", maximum_bindings, listed, {}});
     }
+
     for (std::size_t index = 1; index <= count; ++index) {
       const auto binding = bindings.element(index);
+
       binding.onlyFields({"keys", "action", "expression", "prefixed"});
       const auto prefix = binding.field("prefixed");
       if (!prefix.present()) {
@@ -2452,10 +2599,13 @@ public:
       if (key_count == 0 || key_count > maximum_keys - prefixed) {
         keys.fail("has an invalid number of keys");
       }
+
       BindingKeymap::Sequence sequence{.length = key_count + prefixed, .prefixed = prefixed};
+
       if (prefixed) {
         sequence.keys[0] = keymap.prefix();
       }
+
       for (std::size_t key = 1; key <= key_count; ++key) {
         const auto parsed = KeyChordValidator::parse(keys.element(key));
         const auto position = key - 1 + prefixed;
@@ -2501,6 +2651,7 @@ struct PluginWorkerOptions {
     }
 
     std::array<char *, argument_count> fields = {};
+
     std::ranges::copy(arguments, fields.begin());
     const auto [entry_arg, action_arg, sidebar_arg, tab_count_arg, active_tab_index_arg, pane_count_arg, focused_pane_id_arg] = fields;
 
@@ -2544,6 +2695,7 @@ struct PluginWorkerOptions {
     for (const std::uint64_t value : {std::uint64_t{context.tab_count}, std::uint64_t{context.active_tab_index}, std::uint64_t{context.pane_count}, context.focused_pane_id}) {
       std::array<char, 20> digits;
       const auto written = std::to_chars(digits.data(), digits.data() + digits.size(), value);
+
       consume(std::string_view{digits.data(), static_cast<std::size_t>(written.ptr - digits.data())});
     }
   }
@@ -2575,6 +2727,7 @@ public:
 
   inline static int invoke(lua_State *state) {
     const auto &invocation = *static_cast<CallbackInvocation *>(lua_touserdata(state, 1));
+
     lua_rawgeti(state, LUA_REGISTRYINDEX, invocation.reference_);
     invocation.pushContext(state);
     lua_call(state, 1, 1);
@@ -2611,10 +2764,12 @@ public:
 
   inline void validate(const lua::Value &items) {
     const auto count = items.arraySize();
+
     for (std::size_t index = 1; index <= count; ++index) {
       const auto item = items.element(index);
       if (item.is(LUA_TSTRING)) {
         const auto label = item.string();
+
         keep(item, label, label, {});
         continue;
       }
@@ -2623,6 +2778,7 @@ public:
       const auto label = item.field("label");
       const auto value = item.field("value");
       const auto detail = item.field("detail");
+
       item.field("selected").boolean(false);
       swatch(item.field("swatch"));
       keep(item, label.string(), value.present() ? value.string() : label.string(), detail.present() ? detail.string() : std::string_view{});
@@ -2631,14 +2787,17 @@ public:
     if (count > maximum_items) {
       limits_.add({"picks.max_items", "options", maximum_items, count, {}});
     }
+
     if (text_full_) {
       limits_.add({"picks.max_text_bytes", "option text bytes", maximum_text_bytes, offered_text_bytes_, {}});
     }
+
     const std::array<LimitReach, 3> text_limits{{
         {"picks.max_label_bytes", "label bytes", maximum_label_bytes, longest_label_, {}},
         {"picks.max_value_bytes", "value bytes", maximum_value_bytes, longest_value_, {}},
         {"picks.max_detail_bytes", "detail bytes", maximum_detail_bytes, longest_detail_, {}},
     }};
+
     for (const auto &reach : text_limits) {
       if (reach.requested > reach.value) {
         limits_.add(reach);
@@ -2657,6 +2816,7 @@ private:
     if (value.size() > maximum_value_bytes) {
       return;
     }
+
     if (kept_items_ == maximum_items || text_full_) {
       return;
     }
@@ -2664,6 +2824,7 @@ private:
     if (label.empty() || value.empty()) {
       item.fail("needs a nonempty label and value");
     }
+
     printableUiText(item, label);
     printableUiText(item, detail);
     printableUiText(item, value, true);
@@ -2673,6 +2834,7 @@ private:
       text_full_ = true;
       return;
     }
+
     text_bytes_ += needed;
     ++kept_items_;
   }
@@ -2681,9 +2843,11 @@ private:
     if (!value.present()) {
       return;
     }
+
     if (value.arraySize() != 3) {
       value.fail("must contain three RGB colors");
     }
+
     for (lua_Integer index = 1; index <= 3; ++index) {
       hexadecimalColor(value.element(index));
     }
@@ -2722,6 +2886,7 @@ public:
       if (mark.is(LUA_TSTRING)) {
         uiMark(mark);
       }
+
       const auto icon = definition.field("icon");
       if (icon.is(LUA_TSTRING)) {
         uiIcon(icon);
@@ -2756,6 +2921,7 @@ public:
       if (!CommandArgumentsValidator::validate(definition.field("on_select"))) {
         definition.fail("requires a choice placeholder after the program");
       }
+
       definition.field("refresh").boolean(false);
     });
   }
@@ -2848,6 +3014,7 @@ public:
   template <typename Binding>
   [[nodiscard]] inline static PromptSettings read(const lua::Value &table, Binding &&binding) {
     PromptSettings settings;
+
     if (!table.present()) {
       return settings;
     }
@@ -2861,8 +3028,10 @@ public:
       if (count > PromptBounds::bindings) {
         bindings.fail("has more than 256 bindings");
       }
+
       for (std::size_t index = 0; index < count; ++index) {
         const auto entry = bindings.element(static_cast<lua_Integer>(index) + 1);
+
         entry.onlyFields({"keys", "action", "mode"});
         const auto chord = KeyChordValidator::parse(entry.field("keys"));
         const auto action = entry.field("action");
@@ -2870,10 +3039,13 @@ public:
         if (found == prompt_action_names.end()) {
           action.fail("names an unknown prompt action");
         }
+
         const auto mode = optionalChoice<std::uint8_t>(entry.field("mode"), prompt_binding_mode_names);
+
         binding(PromptBindingSetting{.chord = chord, .action = static_cast<std::uint8_t>(found - prompt_action_names.begin()), .normal = mode == 1});
       }
     }
+
     settings.skin = optionalChoice<PromptSkin>(table.field("skin"), prompt_skin_names);
     settings.motion = optionalChoice<PromptMotion>(table.field("motion"), prompt_motion_names);
     settings.keymap = optionalChoice<PromptKeymap>(table.field("keymap"), prompt_keymap_names);
@@ -2881,6 +3053,7 @@ public:
     if (const auto lines = table.field("max_lines"); lines.present()) {
       settings.max_lines = static_cast<std::uint8_t>(lines.boundedInteger(PromptBounds::max_lines.minimum, PromptBounds::max_lines.minimum, PromptBounds::max_lines.maximum));
     }
+
     return settings;
   }
 };
@@ -2926,6 +3099,7 @@ public:
     ClientDefinitionsValidator::validate(client, limits);
     const ClientDefinitions definitions{client, inherited};
     const BasicActionValidator actions{definitions, limits, state.commands};
+
     BindingValidator::validate(client.field("keybindings"), actions, state.keymap, limits);
     BarsValidator{actions, limits}.validate(client.field("bars"));
     components(client.field("components"));
@@ -2940,6 +3114,7 @@ private:
     value.eachField([](std::string_view name, const lua::Value &entry) {
       if (std::ranges::find(component_slots, name) == component_slots.end()) {
         const auto message = std::string{"names an unknown component slot \""} + std::string{name} + "\"";
+
         entry.fail(message.c_str());
       }
 
@@ -3022,18 +3197,23 @@ inline void readControlPolicy(const lua::Value &table, control::Policy &policy) 
     if (!value.present()) {
       return fallback;
     }
+
     const auto text = value.string();
     if (text == "deny") {
       return control::Access::deny;
     }
+
     if (text == "ask") {
       return control::Access::ask;
     }
+
     if (text == "allow") {
       return control::Access::allow;
     }
+
     value.fail("must be deny, ask or allow");
   };
+
   policy.clipboard_read = access(table.field("clipboard_read"), policy.clipboard_read);
   policy.clipboard_write = access(table.field("clipboard_write"), policy.clipboard_write);
   policy.title_report = table.field("title_report").boolean(policy.title_report);
@@ -3059,6 +3239,7 @@ inline void readControlPolicy(const lua::Value &table, control::Policy &policy) 
     if (text.size() > policy.answerback.size()) {
       answerback.fail("exceeds 1024 bytes");
     }
+
     std::copy(text.begin(), text.end(), policy.answerback.begin());
     policy.answerback_length = static_cast<std::uint16_t>(text.size());
   }
@@ -3105,6 +3286,7 @@ struct IntegrationProvider {
   template <Allocator Memory, EnvironmentLookup Environment>
   inline String<Memory> root(Memory &memory, const Environment &environment, bool legacy = false) const {
     String<Memory> result{AllocatorRef<char, Memory>{memory}};
+
     if (this->environment != nullptr && !legacy) {
       result = environment.lookup(this->environment);
       if (!result.empty()) {
@@ -3229,6 +3411,7 @@ class GuiReader {
 public:
   [[nodiscard]] inline static GuiSettings read(const lua::Value &gui) {
     GuiSettings settings;
+
     if (!gui.present()) {
       return settings;
     }
@@ -3267,7 +3450,9 @@ private:
     if (!value.present()) {
       return std::nullopt;
     }
+
     GuiSettings::FontName name;
+
     name.assign(value.string());
     return name;
   }
@@ -3329,6 +3514,7 @@ private:
     if (!table.present()) {
       return;
     }
+
     table.onlyFields(surface_names);
     for (std::size_t index = 0; index < surface_names.size(); ++index) {
       opacity[index] = optionalNumber(table.field(surface_names[index].data()), GuiBounds::opacity);
@@ -3343,6 +3529,7 @@ private:
         if (width.string() != "auto") {
           width.fail("must be a number or \"auto\"");
         }
+
         sidebar.automatic = true;
       } else {
         sidebar.width = optionalNumber(width, GuiBounds::sidebar_width);
@@ -3364,6 +3551,7 @@ public:
     if (pattern.empty() || pattern.find('\0') != std::string_view::npos) {
       throw std::invalid_argument{"History filter patterns must not be empty or contain NUL"};
     }
+
     if (count_ == patterns_.size()) {
       throw std::length_error{"History filter exceeds 64 patterns"};
     }
@@ -3409,6 +3597,7 @@ public:
         TokenRule{"xoxb-", 10},
         TokenRule{"xoxp-", 10},
     };
+
     for (const auto &rule : tokens) {
       if (matchesToken(command, rule)) {
         return true;
@@ -3420,6 +3609,7 @@ public:
     }
 
     constexpr std::array<std::string_view, 5> assignments{"password=", "passwd=", "token=", "secret=", "api_key="};
+
     for (const auto marker : assignments) {
       if (matchesAssignment(command, marker)) {
         return true;
@@ -3452,9 +3642,11 @@ private:
 
       const auto suffix = command.substr(found + rule.marker.size());
       std::size_t length = 0;
+
       while (length < suffix.size() && tokenByte(suffix[length])) {
         ++length;
       }
+
       if (length >= rule.minimum_length) {
         return true;
       }
@@ -3468,6 +3660,7 @@ private:
   inline static bool matchesAssignment(std::string_view command, std::string_view marker) noexcept {
     for (std::size_t offset = 0; offset + marker.size() < command.size(); ++offset) {
       bool matches = true;
+
       for (std::size_t index = 0; index < marker.size(); ++index) {
         const unsigned char byte = command[offset + index];
         const auto lower = byte >= 'A' && byte <= 'Z' ? byte + ('a' - 'A') : byte;
@@ -3521,6 +3714,7 @@ public:
     destination.count = 0;
     for (std::size_t index = 0; index < count; ++index) {
       const auto specification = value.element(static_cast<lua_Integer>(index + 1));
+
       specification.onlyFields({"path", "enabled"});
       const auto path_value = specification.field("path");
       const auto path = path_value.string();
@@ -3529,6 +3723,7 @@ public:
       }
 
       auto &plugin = destination.entries[destination.count];
+
       plugin.path.assign(path);
       plugin.enabled = specification.field("enabled").boolean(true);
       ++destination.count;
@@ -3586,10 +3781,12 @@ public:
     }
 
     std::array<char, INET6_ADDRSTRLEN> numeric{};
+
     if (const auto address = ProxyHostname::ipv6(pattern)) {
       ::inet_ntop(AF_INET6, &*address, numeric.data(), numeric.size());
       pattern = numeric.data();
     }
+
     patterns_.emplace_back(pattern, AllocatorRef<char, Memory>{patterns_.get_allocator().memory()});
     std::ranges::transform(patterns_.back(), patterns_.back().begin(), asciiLower);
     return true;
@@ -3598,6 +3795,7 @@ public:
   inline void finish() {
     std::ranges::sort(patterns_);
     const auto duplicates = std::ranges::unique(patterns_);
+
     patterns_.erase(duplicates.begin(), duplicates.end());
   }
 
@@ -3609,20 +3807,24 @@ public:
     if (hostname.empty() || patterns_.empty()) {
       return false;
     }
+
     if (patterns_.front() == "*") {
       return true;
     }
+
     if (hostname.size() > maximum_hostname_bytes) {
       return false;
     }
 
     if (const auto address = ProxyHostname::ipv6(hostname)) {
       std::array<char, INET6_ADDRSTRLEN> numeric{};
+
       ::inet_ntop(AF_INET6, &*address, numeric.data(), numeric.size());
       return find(numeric.data());
     }
 
     std::array<char, maximum_hostname_bytes + wildcard_prefix.size()> canonical;
+
     std::ranges::transform(hostname, canonical.begin() + wildcard_prefix.size(), asciiLower);
     const std::string_view exact{canonical.data() + wildcard_prefix.size(), hostname.size()};
     if (find(exact)) {
@@ -3631,11 +3833,13 @@ public:
 
     for (auto dot = hostname.find('.'); dot != std::string_view::npos; dot = hostname.find('.', dot + 1)) {
       const auto start = dot + 1;
+
       std::ranges::copy(wildcard_prefix, canonical.data() + start);
       if (find({canonical.data() + start, hostname.size() - start + wildcard_prefix.size()})) {
         return true;
       }
     }
+
     return false;
   }
 
@@ -3646,6 +3850,7 @@ public:
 private:
   inline bool find(std::string_view pattern) const noexcept {
     const auto found = std::lower_bound(patterns_.begin(), patterns_.end(), pattern, [](const auto &entry, std::string_view value) { return std::string_view{entry} < value; });
+
     return found != patterns_.end() && *found == pattern;
   }
 
@@ -3709,6 +3914,7 @@ public:
     if (values.transparent_redirect && !values.enabled) {
       table.fail("transparent_redirect requires the proxy to be enabled");
     }
+
     capture(table.field("capture"), values.capture);
     const auto directory = table.field("ca_dir");
     if (directory.present()) {
@@ -3716,6 +3922,7 @@ public:
       if (text.empty() || text.size() > maximum_path_bytes || text.contains('\0')) {
         directory.fail("is invalid");
       }
+
       values.authority_directory = text;
     }
 
@@ -3723,6 +3930,7 @@ public:
     if (!hosts.present()) {
       return;
     }
+
     const auto count = hosts.arraySize();
     if (count > ProxyHostPolicy<Memory>::maximum_hosts) {
       hosts.fail("exceeds 256 entries");
@@ -3735,6 +3943,7 @@ public:
         host.fail("is not a valid hostname");
       }
     }
+
     values.intercept_hosts.finish();
   }
 
@@ -3757,14 +3966,17 @@ private:
     if (timeout > static_cast<std::size_t>(std::chrono::duration_cast<std::chrono::milliseconds>(ProxyCaptureLimits::maximum_join_timeout).count())) {
       table.field("join_timeout_ms").fail("exceeds its 3600000 ms ceiling");
     }
+
     limits.join_timeout = std::chrono::milliseconds{timeout};
 
     if (limits.exchange_bytes < 2 || limits.part_bytes > limits.exchange_bytes || limits.exchange_bytes > limits.total_bytes) {
       table.fail("byte limits must satisfy part <= exchange <= total");
     }
+
     if (limits.exchange_bytes > ProxyCaptureLimits::maximum_exchange_bytes) {
       table.field("max_exchange_bytes").fail("exceeds its 67108864-byte ceiling");
     }
+
     if (limits.total_bytes > ProxyCaptureLimits::maximum_total_bytes) {
       table.field("max_total_bytes").fail("exceeds its 1073741824-byte ceiling");
     }
@@ -3799,9 +4011,11 @@ struct CommandValues {
 
   [[nodiscard]] inline Views views() const noexcept {
     Views views;
+
     for (const auto &argument : arguments) {
       views.words[views.count++] = argument;
     }
+
     return views;
   }
 
@@ -3905,6 +4119,7 @@ private:
     }
 
     const auto count = field.arraySize();
+
     for (std::size_t index = 1; index <= count; ++index) {
       destination.append(field.element(static_cast<lua_Integer>(index)).string());
     }
@@ -3952,9 +4167,11 @@ private:
     } else {
       table.onlyFields({"command", "timeout_ms"});
     }
+
     const auto command = table.field("command");
     const auto count = command.arraySize();
     static_assert(CommandValues<Memory>::maximum_arguments == 32, "the message names the limit");
+
     if (count == 0 || count > CommandValues<Memory>::maximum_arguments) {
       command.fail("must contain 1..32 arguments");
     }
@@ -3962,6 +4179,7 @@ private:
     destination.arguments.clear();
     auto &memory = destination.arguments.get_allocator().memory();
     std::size_t bytes = 0;
+
     for (std::size_t index = 1; index <= count; ++index) {
       const auto argument = command.element(static_cast<lua_Integer>(index));
       const auto text = argument.string();
@@ -4002,6 +4220,7 @@ public:
       if (theme.present() && alias.present()) {
         theme.fail("cannot be combined with client.theme");
       }
+
       validate(alias);
       appearance(client.field("appearance"));
     }
@@ -4013,6 +4232,7 @@ public:
     if (!theme.present()) {
       return;
     }
+
     if (theme.is(LUA_TSTRING)) {
       preset(theme);
       return;
@@ -4050,9 +4270,11 @@ private:
     if (allow_default && text == "default") {
       return;
     }
+
     if (text.size() != 7 || text.front() != '#') {
       value.fail("must be an RGB hexadecimal color");
     }
+
     if (!std::ranges::all_of(text.substr(1), [](char byte) { return (byte >= '0' && byte <= '9') || (asciiLower(byte) >= 'a' && asciiLower(byte) <= 'f'); })) {
       value.fail("contains an invalid hexadecimal digit");
     }
@@ -4076,14 +4298,17 @@ private:
     for (const auto *name : {"foreground", "background", "cursor_color", "cursor_text_color"}) {
       color(table.field(name), false);
     }
+
     const auto palette = table.field("palette");
     if (palette.present()) {
       constexpr std::size_t palette_size = 16;
       if (palette.arraySize() != palette_size) {
         palette.fail("must contain 16 RGB colors");
       }
+
       for (std::size_t index = 1; index <= palette_size; ++index) {
         const auto entry = palette.element(static_cast<lua_Integer>(index));
+
         entry.string();
         color(entry, false);
       }
@@ -4137,6 +4362,7 @@ public:
 
   inline void read(const lua::Value &root, std::string_view selected_profile) {
     auto state = makeOwned<ClientValidationState>(memory_);
+
     read(root, selected_profile, *state);
   }
 
@@ -4148,6 +4374,7 @@ public:
     }
 
     const auto base_client = root.field("client");
+
     ThemeValidator::selection(root);
     ClientValidator::validate(base_client, values_.limits, client_state);
     static_cast<void>(GuiReader::read(root.field("gui")));
@@ -4158,6 +4385,7 @@ public:
       if (!selected_profile.empty()) {
         profiles.fail("does not define the selected profile");
       }
+
       client_state.keymap.report(values_.limits);
       return;
     }
@@ -4166,29 +4394,35 @@ public:
       if (!validProfileName(name)) {
         profile.fail("has an invalid name");
       }
+
       if (name != selected_profile) {
         auto checked = makeOwned<RuntimeValues<Memory>>(memory_, values_);
         const auto saved_commands = client_state.commands.checkpoint();
         const auto saved_keymap = client_state.keymap;
+
         readProfile(profile.as("config"), *checked, base_client, client_state);
         client_state.commands.restore(saved_commands);
         client_state.keymap = saved_keymap;
       }
     });
+
     if (selected_profile.empty()) {
       client_state.keymap.report(values_.limits);
       return;
     }
 
     std::array<char, 65> name{};
+
     if (!validProfileName(selected_profile)) {
       profiles.fail("has an invalid selected profile name");
     }
+
     std::copy(selected_profile.begin(), selected_profile.end(), name.begin());
     const auto selected = profiles.field(name.data());
     if (!selected.present()) {
       selected.fail("is not defined");
     }
+
     readProfile(selected.as("config"), values_, base_client, client_state);
     client_state.keymap.report(values_.limits);
   }

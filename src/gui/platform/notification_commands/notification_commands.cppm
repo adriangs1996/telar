@@ -44,6 +44,7 @@ struct CommandLine {
   [[nodiscard]] static constexpr tbc::view<CommandLine, tbc::lt::a> withArguments(tbc::view<std::string_view, tbc::lt::a> executable, tbc::view<std::array<std::string_view, Count>, tbc::lt::a> arguments) noexcept {
     static_assert(Count <= maximum_arguments);
     CommandLine command{.executable = executable, .count = Count};
+
     std::copy(arguments.begin(), arguments.end(), command.values.begin());
 
     return command;
@@ -145,6 +146,7 @@ public:
 
   [[nodiscard]] inline static CommandLine prepare(SoundAttempt request) {
     const std::string_view file = request.sound == AgentSound::ready ? "/usr/share/sounds/freedesktop/stereo/complete.oga" : "/usr/share/sounds/freedesktop/stereo/dialog-warning.oga";
+
     switch (backends.at(request.backend)) {
     case Backend::canberra:
       return CommandLine::withArguments("canberra-gtk-play", std::to_array<std::string_view>({"--id", request.sound == AgentSound::ready ? "complete" : "dialog-warning"}));

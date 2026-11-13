@@ -58,10 +58,12 @@ public:
   inline std::span<const Byte> encode(const lua::Value &result) {
     auto output = std::span{storage_}.subspan(1);
     Byte count = 0;
+
     if (result.field("kind").present()) {
       count = static_cast<Byte>(append(result, output));
     } else {
       const auto length = std::min(result.listLength(), ActionProtocol::maximum_effects);
+
       for (std::size_t index = 0; index < length; ++index) {
         count += static_cast<Byte>(append(result.element(static_cast<lua_Integer>(index) + 1), output));
       }
@@ -116,6 +118,7 @@ private:
         {"resize-sidebar", ActionTag::resize_sidebar},
         {"move-tab", ActionTag::move_tab},
     });
+
     const auto *found = std::ranges::find(kinds, name, &decltype(kinds)::value_type::first);
     if (found == kinds.end()) {
       throw lua::Error{"Unsupported directional plugin effect"};
@@ -124,6 +127,7 @@ private:
     const auto kind = found->second;
     constexpr std::array directions{"left", "right", "up", "down"};
     Byte index = 0;
+
     if (kind == ActionTag::split) {
       index = static_cast<Byte>(direction == "vertical");
     } else if (kind == ActionTag::move_tab) {
@@ -150,6 +154,7 @@ private:
         {"rename-workspace", ActionTag::rename_workspace},
         {"leave-worktree", ActionTag::leave_worktree},
     });
+
     for (const auto &[known, value] : simple) {
       if (name == known) {
         tag(value, output);
@@ -170,6 +175,7 @@ private:
         {"focus-", "focus-pane"},
         {"resize-", "resize-pane"},
     });
+
     for (const auto &[prefix, kind] : stems) {
       if (name.starts_with(prefix)) {
         directional(kind, name.substr(prefix.size()), output);
@@ -208,11 +214,13 @@ private:
     tag(ActionTag::notification, output);
     const auto level = value.field("level");
     constexpr std::array levels{"info", "success", "warning", "failure"};
+
     u8::encode(level.present() ? static_cast<Byte>(std::ranges::find(levels, level.string()) - levels.begin()) : Byte{0}, output);
     u32::encode(static_cast<std::uint32_t>(value.field("duration_ms").boundedInteger(default_notification_duration_ms, min_notification_duration_ms, max_notification_duration_ms)), output);
     constexpr std::array targets{"pane_id", "tab_id", "workspace_id"};
     Byte target_kind = 0;
     std::uint64_t target_id = 0;
+
     for (std::size_t index = 0; index < targets.size(); ++index) {
       const auto target = value.field(targets[index]);
       if (target.present()) {
@@ -228,6 +236,7 @@ private:
 
     text(utf8Prefix(value.field("title").string(), max_notification_title_bytes), output);
     const auto body = value.field("body");
+
     text(body.present() ? utf8Prefix(body.string(), max_notification_message_bytes) : std::string_view{}, output);
   }
 
@@ -254,11 +263,13 @@ public:
 
     std::array<char, 32> name;
     constexpr std::string_view prefix = "package-";
+
     std::copy(prefix.begin(), prefix.end(), name.begin());
     const auto suffix = std::to_chars(name.data() + prefix.size(), name.data() + name.size() - 1, index);
     if (suffix.ec != std::errc{}) {
       throw std::length_error{"Plugin package index exceeds its limit"};
     }
+
     *suffix.ptr = '\0';
     if (::mkdirat(directory_->descriptor(), name.data(), 0700) != 0) {
       throw SystemError{"Create plugin snapshot"};
@@ -266,6 +277,7 @@ public:
 
     auto target = openBeneath(directory_->descriptor(), name.data(), O_RDONLY | O_DIRECTORY);
     String<Memory> destination{directory_->path(), AllocatorRef<char, Memory>{memory_}};
+
     destination += '/';
     destination += name.data();
     return PackageCopy{memory_}.copy(package, target.get(), destination);
@@ -311,17 +323,22 @@ public:
       if (count < 0 && errno == EINTR) {
         continue;
       }
+
       if (count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK) && wait_.ready(input_, POLLIN)) {
         continue;
       }
+
       if (count < 0) {
         return {StreamResult::State::failed};
       }
+
       if (count == 0) {
         return {StreamResult::State::ended};
       }
+
       return {StreamResult::State::data, static_cast<std::size_t>(count)};
     }
+
     return {StreamResult::State::failed};
   }
 
@@ -330,7 +347,9 @@ public:
         iovec{const_cast<std::uint8_t *>(prefix.data()), prefix.size()},
         iovec{const_cast<std::uint8_t *>(payload.data()), payload.size()},
     };
+
     std::size_t first = 0;
+
     while (first < vectors.size()) {
       if (!wait_.active()) {
         throw SystemError{"Wait for tap pipe"};
@@ -340,18 +359,22 @@ public:
       if (count < 0 && errno == EINTR) {
         continue;
       }
+
       if (count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK) && wait_.ready(output_, POLLOUT)) {
         continue;
       }
+
       if (count <= 0) {
         throw SystemError{"Write tap frame", count == 0 ? EPIPE : errno};
       }
 
       auto consumed = static_cast<std::size_t>(count);
+
       while (first < vectors.size() && consumed >= vectors[first].iov_len) {
         consumed -= vectors[first].iov_len;
         ++first;
       }
+
       if (first < vectors.size()) {
         vectors[first].iov_base = static_cast<std::uint8_t *>(vectors[first].iov_base) + consumed;
         vectors[first].iov_len -= consumed;
@@ -382,6 +405,7 @@ public:
       restarts_[count_++] = now;
       return count_ == restarts_.size() && now - restarts_.front() <= Limits::restart_window;
     }
+
     if (now - restarts_.front() <= Limits::restart_window) {
       return true;
     }
@@ -460,6 +484,7 @@ public:
       dropped_.fetch_add(1, std::memory_order_relaxed);
       return std::nullopt;
     }
+
     return Charge{quota_, bytes};
   }
 
@@ -511,18 +536,21 @@ public:
 
     const auto trust = loadTrust(memory, environment);
     const PackageRegistry registry{memory, directory, configured};
+
     for (const auto &package : registry.packages()) {
       const auto granted = trust.granted(package.manifest.id.view(), package.digest);
       const auto allowed = [&](Capability capability) { return package.manifest.capabilities.contains(capability) && granted.contains(capability); };
       if (!allowed(Capability::proxy_tap) && std::ranges::none_of(ServiceSpec::traffic_capabilities, allowed)) {
         continue;
       }
+
       if (count_ == specifications_.size()) {
         throw std::invalid_argument{"Too many tap plugins"};
       }
 
       const auto copied = snapshots_.copy(package, count_);
       auto &specification = specifications_[count_];
+
       specification.package_index = static_cast<std::uint8_t>(count_);
       specification.plugin_id = stableId(copied.manifest.id.view());
       specification.digest = copied.digest;
@@ -531,6 +559,7 @@ public:
       specification.declared = copied.manifest.capabilities;
       specification.granted = granted;
       String<Memory> entry{copied.root.view(), AllocatorRef<char, Memory>{memory}};
+
       entry += '/';
       entry += copied.manifest.entry.view();
       specification.entry.assign(entry);

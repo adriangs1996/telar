@@ -40,9 +40,11 @@ void Application::configureRemoteLaunch(const QString &destination, const QStrin
   }
 
   const auto encoded = destination.toUtf8();
+
   MachineFieldRules::profileDestination({encoded.constData(), static_cast<std::size_t>(encoded.size())});
   if (!arguments.isEmpty()) {
     const LaunchArguments prepared{arguments};
+
     BodySchema<Launch>::validate({.cwd = "/", .arguments = prepared.argv()});
   }
 
@@ -68,8 +70,10 @@ void Application::openRequestedMachine() {
   }
 
   auto &client = clientAt(opened);
+
   if (!request.arguments.isEmpty()) {
     const LaunchArguments prepared{request.arguments};
+
     client.session.setLaunchArguments(prepared.argv());
     client.named_launch = true;
   }

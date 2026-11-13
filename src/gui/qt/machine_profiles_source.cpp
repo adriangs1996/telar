@@ -72,6 +72,7 @@ MachineProfilesSource::MachineProfilesSource(ApplicationAllocator &memory, QObje
     : QObject(parent),
       memory_(memory) {
   constexpr int poll_interval_ms = 1000;
+
   poll_.setInterval(poll_interval_ms);
   connect(&poll_, &QTimer::timeout, this, &MachineProfilesSource::poll);
   connect(&task_, &QFutureWatcher<Result>::finished, this, &MachineProfilesSource::complete);
@@ -192,9 +193,11 @@ MachineProfilesSource::Result MachineProfilesSource::prepare(ApplicationAllocato
 
     platform::ProfileFile file{textView(request.path), request.stop};
     MachineProfileStore store{memory, file};
+
     if (request.edit) {
       platform::SecureRandom random;
       const std::array edits{request.edit->view()};
+
       result.profiles = store.change(edits, random, textView(request.local_label));
     } else {
       result.profiles = store.load();
@@ -218,6 +221,7 @@ void MachineProfilesSource::start() {
   }
 
   const auto failure_source = pending_edit_ ? FailureSource::edit : FailureSource::profile;
+
   try {
     cancellation_ = std::stop_source{};
     Request request{
@@ -229,6 +233,7 @@ void MachineProfilesSource::start() {
         .generation = generation_,
         .force = !loaded_ || rescan_pending_,
     };
+
     pending_edit_.reset();
     busy_ = true;
     editing_ = request.edit.has_value();
@@ -247,6 +252,7 @@ void MachineProfilesSource::start() {
 
 void MachineProfilesSource::complete() {
   const auto was_editing = editing_;
+
   busy_ = false;
   editing_ = false;
   try {

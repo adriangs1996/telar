@@ -64,6 +64,7 @@ static void moveAboveStandardStreams(FileDescriptor &descriptor) {
   if (duplicated < 0) {
     throw SystemError{"reserve child descriptor"};
   }
+
   descriptor.reset(duplicated);
 }
 
@@ -102,6 +103,7 @@ PtyProcess::PtyProcess(const SpawnSpec &specification) {
 
   FileDescriptor status_reader{pipe_descriptors[0]};
   FileDescriptor status_writer{pipe_descriptors[1]};
+
   moveAboveStandardStreams(status_reader);
   moveAboveStandardStreams(status_writer);
   setCloseOnExec(status_reader.get());
@@ -116,6 +118,7 @@ PtyProcess::PtyProcess(const SpawnSpec &specification) {
 
   master_.reset(master);
   FileDescriptor slave_descriptor{slave};
+
   moveAboveStandardStreams(master_);
   moveAboveStandardStreams(slave_descriptor);
   master = master_.get();
@@ -144,6 +147,7 @@ PtyProcess::PtyProcess(const SpawnSpec &specification) {
     closeChildDescriptors(status_writer.get(), descriptor_limit);
 
     sigset_t signals;
+
     sigemptyset(&signals);
     sigprocmask(SIG_SETMASK, &signals, nullptr);
     for (int signal_number = 1; signal_number < NSIG; ++signal_number) {
@@ -182,6 +186,7 @@ PtyProcess::PtyProcess(const SpawnSpec &specification) {
     ::kill(process_id_, SIGKILL);
     while (::waitpid(process_id_, nullptr, 0) < 0 && errno == EINTR) {
     }
+
     process_id_ = -1;
     throw SystemError{"execute pane command", received == sizeof(failure) ? failure : EIO};
   }
@@ -229,6 +234,7 @@ void PtyProcess::shutdown() const noexcept {
   if (const auto foreground = foregroundProcessGroup(); foreground && *foreground != ::getpgrp()) {
     ::kill(-*foreground, SIGKILL);
   }
+
   ::kill(process_id_, SIGKILL);
 
   // Darwin can retain a dying session leader while unread terminal output drains.

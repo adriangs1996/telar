@@ -78,6 +78,7 @@ private:
       if (tag != Request::tag) {
         return false;
       }
+
       consume.template operator()<typename Request::Type>();
       return true;
     }
@@ -85,18 +86,21 @@ private:
 
   static constexpr auto roles = [] {
     std::array<ClientRole, 256> result;
+
     result.fill(ClientRole::interactive);
     ((result[std::to_underlying(Requests::tag)] = Requests::role), ...);
     return result;
   }();
   static constexpr auto lanes = [] {
     std::array<RequestLane, 256> result;
+
     result.fill(RequestLane::runtime);
     ((result[std::to_underlying(Requests::tag)] = Requests::lane), ...);
     return result;
   }();
   static_assert([] {
     std::array<bool, 256> seen{};
+
     return ((!std::exchange(seen[std::to_underlying(Requests::tag)], true)) && ...);
   }(), "Two requests share a tag");
 };
@@ -217,6 +221,7 @@ public:
     inline PaneText response(const ReadPane &request) const noexcept {
       std::string_view text{bytes.data(), length};
       const auto last = text.find_last_not_of("\n ");
+
       text = last == std::string_view::npos ? std::string_view{} : text.substr(0, last + 1);
       auto start = text.size();
       unsigned lines = 0;
@@ -225,6 +230,7 @@ public:
         if (text[start - 1] == '\n' && ++lines == request.rows) {
           break;
         }
+
         --start;
       }
 
@@ -238,6 +244,7 @@ public:
 
   inline void record(std::uint64_t pane_id, std::uint64_t generation, const PaneText &text) noexcept {
     auto &entry = entries_[next_];
+
     entry.pane_id = pane_id;
     entry.generation = generation;
     entry.exit_code = text.exit_code.value_or(0);
@@ -254,6 +261,7 @@ public:
         return &entry;
       }
     }
+
     return nullptr;
   }
 
@@ -391,6 +399,7 @@ public:
 
   inline std::uint64_t insert(std::uint64_t id, Owned<Value, Memory> value) {
     const auto handle = insertProvisional(id, std::move(value));
+
     advanceCounter(id + 1);
     return handle;
   }
@@ -401,6 +410,7 @@ public:
     }
 
     std::size_t slot = 0;
+
     while (items_[slot] != nullptr) {
       ++slot;
     }
@@ -419,11 +429,13 @@ public:
 
   inline Value *findHandle(std::uint64_t handle) const noexcept {
     const auto slot = handle % Capacity;
+
     return generations_[slot] == handle / Capacity ? items_[slot] : nullptr;
   }
 
   inline Value *find(std::uint64_t id) const noexcept {
     const auto slot = slotOf(id);
+
     return slot ? items_[*slot] : nullptr;
   }
 
@@ -435,6 +447,7 @@ public:
 
     const auto position = bucket(id);
     const auto slot = lookup_[position] - 1;
+
     removeBucket(position);
     identities_[slot] = 0;
     items_[slot] = nullptr;
@@ -460,6 +473,7 @@ public:
 
   inline std::optional<std::size_t> slotOf(std::uint64_t id) const noexcept {
     const auto stored = id == 0 ? 0 : lookup_[bucket(id)];
+
     return stored == 0 ? std::nullopt : std::optional<std::size_t>{stored - 1};
   }
 
@@ -472,6 +486,7 @@ private:
 
   inline std::size_t bucket(std::uint64_t identity) const noexcept {
     auto position = hash(identity);
+
     while (lookup_[position] != 0 && identities_[lookup_[position] - 1] != identity) {
       position = (position + 1) % lookup_capacity;
     }
@@ -481,6 +496,7 @@ private:
 
   inline void removeBucket(std::size_t hole) noexcept {
     auto position = (hole + 1) % lookup_capacity;
+
     while (lookup_[position] != 0) {
       const auto origin = hash(identities_[lookup_[position] - 1]);
       const auto distance = (position + lookup_capacity - origin) % lookup_capacity;

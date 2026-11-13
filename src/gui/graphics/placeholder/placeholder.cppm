@@ -78,13 +78,16 @@ struct ImageDisplayBox {
     const auto offset_y = cell.height == 0 ? 0 : std::min(placement.offset_y, cell.height - 1);
     auto width = source.width;
     auto height = source.height;
+
     if (placement.columns != 0) {
       const auto filled = filledExtent(cell.width, placement.columns);
+
       width = filled - std::min(filled, offset_x);
     }
 
     if (placement.rows != 0) {
       const auto filled = filledExtent(cell.height, placement.rows);
+
       height = filled - std::min(filled, offset_y);
     }
 
@@ -236,6 +239,7 @@ inline std::optional<std::uint32_t> placeholderMark(std::string_view &text) noex
   constexpr unsigned three_byte_prefix = 0xe0;
   constexpr unsigned four_byte_prefix = 0xf0;
   std::size_t length = 1;
+
   if (first >= four_byte_prefix) {
     length = 4;
   } else if (first >= three_byte_prefix) {
@@ -243,6 +247,7 @@ inline std::optional<std::uint32_t> placeholderMark(std::string_view &text) noex
   } else if (first >= two_byte_prefix) {
     length = 2;
   }
+
   if (text.size() < length) {
     text = {};
 
@@ -256,6 +261,7 @@ inline std::optional<std::uint32_t> placeholderMark(std::string_view &text) noex
   constexpr std::array<unsigned, 4> leading_masks{0x7f, 0x1f, 0x0f, 0x07};
   const auto first_mask = leading_masks[length - 1];
   auto codepoint = first & first_mask;
+
   for (std::size_t index = 1; index < length; ++index) {
     const auto continuation = static_cast<unsigned>(static_cast<unsigned char>(text[index]));
     if ((continuation & continuation_prefix_mask) != continuation_prefix) {
@@ -275,6 +281,7 @@ inline std::optional<std::uint32_t> placeholderMark(std::string_view &text) noex
 
 inline std::uint32_t placeholderColor(const CellColor &color) noexcept {
   constexpr unsigned channel_bits = 8;
+
   if (color.kind == CellColor::Kind::default_color) {
     return 0;
   }
@@ -290,6 +297,7 @@ inline std::optional<PlaceholderCell> parsePlaceholder(const CellValue &cell) no
 
   text.remove_prefix(placeholder_prefix.size());
   PlaceholderCell result;
+
   result.image_low = placeholderColor(cell.style.foreground);
   result.placement = placeholderColor(cell.style.underline_color);
   result.row = placeholderMark(text);
@@ -436,6 +444,7 @@ struct RoundedRectanglePaint {
     const auto right = std::fmax(left, std::fmin(origin.x + size.x, clip.x + clip.width));
     const auto bottom = std::fmax(top, std::fmin(origin.y + size.y, clip.y + clip.height));
     auto paint = *this;
+
     paint.origin = {.x = left, .y = top};
     paint.shape.size = {.x = right - left, .y = bottom - top};
 
@@ -474,6 +483,7 @@ struct ProgressRing {
     const auto stroke = stroke_width > 0 ? std::min(side / 2, stroke_width) : std::min(side / 4, std::max(1.0F, side * stroke_ratio));
     const Point origin{.x = area.x + ((area.width - side) / 2), .y = area.y + ((area.height - side) / 2)};
     auto ring_track = track.value_or(color);
+
     if (!track) {
       ring_track.a *= track_alpha;
     }
@@ -481,6 +491,7 @@ struct ProgressRing {
     if (ring_track.a > 0) {
       visitor(RoundedRectanglePaint{.origin = origin, .shape = RoundedRectangle::resolve({.x = side, .y = side}, {.border = ring_track, .radius = side / 2, .border_width = stroke})});
     }
+
     const auto filled = std::clamp(fraction, 0.0F, 1.0F);
     if (filled == 0) {
       return;
@@ -491,10 +502,12 @@ struct ProgressRing {
     const auto cosine = -axis.y;
     const auto sine = axis.x;
     const auto steps = static_cast<std::size_t>(std::ceil(filled * segments));
+
     for (std::size_t index = 0; index <= steps; ++index) {
       const auto point = index == steps ? endpoint(filled) : circle[index];
       const auto x = (point.x * cosine) - (point.y * sine);
       const auto y = (point.x * sine) + (point.y * cosine);
+
       visitor(RoundedRectanglePaint{.origin = {.x = origin.x + radius + (x * radius), .y = origin.y + radius + (y * radius)}, .shape = RoundedRectangle::resolve({.x = stroke, .y = stroke}, {.fill = color, .radius = stroke / 2})});
     }
   }
@@ -508,6 +521,7 @@ private:
 
   inline static const auto circle = [] noexcept {
     std::array<Point, segments> points{};
+
     for (std::size_t index = 0; index < points.size(); ++index) {
       points[index] = endpoint(static_cast<float>(index) / segments);
     }
@@ -542,6 +556,7 @@ struct ProgressCapsule {
     const auto geometry = ProgressGeometry::derive(area, ratio, state, compact);
     const auto bounds = geometry.background;
     auto background = color;
+
     background.a *= ProgressGeometry::background_alpha;
     append(RoundedRectanglePaint{.origin = {.x = bounds.x, .y = bounds.y}, .shape = RoundedRectangle::resolve({.x = bounds.width, .y = bounds.height}, {.fill = background, .radius = bounds.height / 2})});
     if (geometry.ring.width <= 0) {
@@ -551,6 +566,7 @@ struct ProgressCapsule {
     ProgressRing{.area = geometry.ring, .color = color, .fraction = fraction, .rotation = rotation}.visit(append);
     for (std::size_t index = 0; index < geometry.mark_count; ++index) {
       const auto mark = geometry.marks[index];
+
       append(RoundedRectanglePaint{.origin = {.x = mark.x, .y = mark.y}, .shape = RoundedRectangle::resolve({.x = mark.width, .y = mark.height}, {.fill = color, .radius = geometry.mark_radius})});
     }
   }

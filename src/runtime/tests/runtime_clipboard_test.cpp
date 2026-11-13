@@ -102,13 +102,17 @@ struct Reader {
     while (blocked.load()) {
       std::this_thread::sleep_for(std::chrono::milliseconds{1});
     }
+
     if (fail) {
       return std::unexpected(clipboard::read_error::session_unavailable);
     }
+
     clipboard::content value{.mime_type = "image/png", .bytes = std::vector<Byte>(size)};
+
     for (std::size_t index = 0; index < value.bytes.size(); ++index) {
       value.bytes[index] = static_cast<Byte>(index);
     }
+
     return value;
   }
 
@@ -119,6 +123,7 @@ struct Reader {
 
 void collect(auto &service, auto &clients) {
   pollfd ready{.fd = service.descriptor(), .events = POLLIN, .revents = 0};
+
   check(::poll(&ready, 1, 2000) == 1);
   service.collect(clients);
 }
@@ -138,6 +143,7 @@ void transferTests(SystemAllocator &memory) {
   ClientPeer first{memory, model, clients, ClientRole::control};
   ClientPeer other{memory, model, clients, ClientRole::control};
   RuntimeClipboardService<SystemAllocator, Reader> service;
+
   Reader::blocked = true;
   service.read(clients, first.session().id, {.request_id = 1});
   // Submitting a blocked native read must return without blocking the runtime.
@@ -145,15 +151,18 @@ void transferTests(SystemAllocator &memory) {
   Reader::blocked = false;
   collect(service, clients);
   auto chunk = first.receive<RuntimeClipboardChunk>();
+
   check(chunk.request_id == 1 && chunk.transfer_id == 1 && chunk.offset == 0);
   check(chunk.total_bytes == Reader::size && chunk.mime == "image/png");
   check(chunk.bytes.size() == runtime_clipboard_chunk_bytes);
   for (std::size_t index = 0; index < chunk.bytes.size(); ++index) {
     check(chunk.bytes[index] == static_cast<Byte>(index));
   }
+
   rejected([&] { service.read(clients, other.session().id, {.request_id = 3, .transfer_id = 1, .offset = chunk.bytes.size()}); }, FailureCode::invalid_request);
   rejected([&] { service.read(clients, first.session().id, {.request_id = 3, .transfer_id = 1, .offset = 7}); }, FailureCode::invalid_request);
   std::size_t received = chunk.bytes.size();
+
   while (received < Reader::size) {
     service.read(clients, first.session().id, {.request_id = 4, .transfer_id = 1, .offset = received});
     chunk = first.receive<RuntimeClipboardChunk>();
@@ -161,8 +170,10 @@ void transferTests(SystemAllocator &memory) {
     for (std::size_t index = 0; index < chunk.bytes.size(); ++index) {
       check(chunk.bytes[index] == static_cast<Byte>(received + index));
     }
+
     received += chunk.bytes.size();
   }
+
   check(Reader::calls == 1);
   rejected([&] { service.read(clients, first.session().id, {.request_id = 5, .transfer_id = 1, .offset = received}); }, FailureCode::invalid_request);
 
@@ -182,6 +193,7 @@ void transferTests(SystemAllocator &memory) {
   service.read(clients, first.session().id, {.request_id = 9});
   collect(service, clients);
   const auto failure = first.receive<RequestFailed>();
+
   check(failure.request_id == 9 && failure.message.find("graphical session") != std::string_view::npos);
   Reader::fail = false;
 
@@ -199,11 +211,13 @@ void transferTests(SystemAllocator &memory) {
 
 void bounds() {
   std::array<Byte, 128> wire;
+
   try {
     Codec::encode(ReadRuntimeClipboard{.request_id = 1, .offset = 1}, wire);
     check(false);
   } catch (const EncodingError &) {
   }
+
   try {
     Codec::encode(RuntimeClipboardChunk{.request_id = 1, .transfer_id = 1, .offset = 1, .total_bytes = 0, .mime = "image/png"}, wire);
     check(false);
@@ -214,6 +228,7 @@ void bounds() {
 
 int main() {
   SystemAllocator memory;
+
   transferTests(memory);
   bounds();
 #ifdef TELAR_TEST_NATIVE_CLIPBOARD

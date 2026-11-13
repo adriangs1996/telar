@@ -83,17 +83,21 @@ QVariantList pathRows(const PathPickerPage &page, const PathPickerGeometry &geom
   constexpr std::uint16_t label_inset = 3;
   constexpr std::uint16_t icon_inset = 1;
   QVariantList rows;
+
   rows.reserve(static_cast<qsizetype>(geometry.row_count));
   for (std::size_t index = 0; index < geometry.row_count; ++index) {
     const auto &row = geometry.rows[index];
     const auto &match = page.matches()[row.index];
     const auto label_offset = std::min(row.bounds.width, label_inset);
     auto available = row.bounds;
+
     available.x = static_cast<std::uint16_t>(available.x + label_offset);
     available.width = static_cast<std::uint16_t>(available.width - label_offset);
     PathLabel label;
+
     label.layout(page.path(match), match.highlights(), available.width);
     QVariantList runs;
+
     runs.reserve(static_cast<qsizetype>(label.runs().size()));
     for (const auto &run : label.runs()) {
       if (available.width == 0) {
@@ -102,6 +106,7 @@ QVariantList pathRows(const PathPickerPage &page, const PathPickerGeometry &geom
 
       const auto columns = static_cast<std::uint16_t>(std::min<std::uint32_t>(available.width, cellTextColumns(run.text)));
       auto run_bounds = available;
+
       run_bounds.width = columns;
 
       runs.append(QVariantMap{{QStringLiteral("text"), toQString(run.text)}, {QStringLiteral("bounds"), local(run_bounds)}, {QStringLiteral("colorRole"), pathRunColor(run.tone)}, {QStringLiteral("bold"), run.tone == PathLabelTone::match}});
@@ -111,6 +116,7 @@ QVariantList pathRows(const PathPickerPage &page, const PathPickerGeometry &geom
 
     auto icon = row.bounds;
     const auto inset = std::min(icon.width, icon_inset);
+
     icon.x = static_cast<std::uint16_t>(icon.x + inset);
     icon.width = static_cast<std::uint16_t>(std::min<std::uint16_t>(1, icon.width - inset));
     rows.append(QVariantMap{
@@ -135,12 +141,15 @@ QVariantList Application::pathPickerRows(int columns, int first, int count) cons
   const auto end = std::min(matches.size(), begin + static_cast<std::size_t>(std::max(0, count)));
   const auto width = static_cast<std::uint16_t>(std::clamp(columns, 1, static_cast<int>(std::numeric_limits<std::uint16_t>::max())));
   QVariantList rows;
+
   rows.reserve(static_cast<qsizetype>(end - begin));
   for (auto index = begin; index < end; ++index) {
     const auto &match = matches[index];
     PathLabel label;
+
     label.layout(page.path(match), match.highlights(), width);
     QVariantList runs;
+
     runs.reserve(static_cast<qsizetype>(label.runs().size()));
     for (const auto &run : label.runs()) {
       runs.append(QVariantMap{{QStringLiteral("text"), toQString(run.text)}, {QStringLiteral("colorRole"), pathRunColor(run.tone)}, {QStringLiteral("bold"), run.tone == PathLabelTone::match}});
@@ -163,8 +172,10 @@ PathPickerPlacement Application::pathPlacement() const {
   const auto host = workbench.cellArea();
   auto *tab = session().activeTab();
   std::optional<CellPosition> cursor;
+
   if (tab != nullptr) {
     const auto fullscreen = tab->fullscreen ? std::optional{tab->focused_pane} : std::nullopt;
+
     for (const auto &placement : tab->layout.arrange(host, workbench.layout_metrics, fullscreen)) {
       const auto *pane = session().findPane(placement.pane_id);
       if (pane == nullptr || pane->id != tab->focused_pane || !pane->attached) {
@@ -194,11 +205,14 @@ QVariantMap Application::pathPickerGeometry() const {
                                                                                                            .root = static_cast<std::uint16_t>(cellTextColumns(PathPickerLabels::root(page.root()))),
                                                                                                            .count = static_cast<std::uint16_t>(cellTextColumns(count_text.view())),
                                                                                                        });
+
   auto bounds = workbench.pixels(placement.area);
+
   bounds.x += display.geometry.terminal.x;
   bounds.y += display.geometry.terminal.y;
   const auto local = [&](CellRectangle cells) {
     auto area = workbench.pixels(cells);
+
     area.x += display.geometry.terminal.x - bounds.x;
     area.y += display.geometry.terminal.y - bounds.y;
 
@@ -211,10 +225,13 @@ QVariantMap Application::pathPickerGeometry() const {
 
     return static_cast<std::uint32_t>(std::ceil(static_cast<double>(std::max(0, advance)) / std::max<std::uint16_t>(1, workbench.grid.cell_width_px)));
   });
+
   QVariantList hints;
+
   hints.reserve(static_cast<qsizetype>(footer.count));
   for (std::size_t index = 0; index < footer.count; ++index) {
     const auto &hint = footer.hints[index];
+
     hints.append(QVariantMap{{QStringLiteral("key"), toQString(hint.label.key)}, {QStringLiteral("word"), toQString(hint.label.word)}, {QStringLiteral("keyBounds"), local(hint.key)}, {QStringLiteral("wordBounds"), local(hint.word)}});
   }
 

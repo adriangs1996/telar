@@ -25,6 +25,7 @@ public:
 
     const auto comma = remaining_.find(',');
     const auto field = remaining_.substr(0, comma);
+
     remaining_ = comma == std::string_view::npos ? std::string_view{} : remaining_.substr(comma + 1);
     if (field.size() < 3 || field.find('=') != 1 || (comma != std::string_view::npos && remaining_.empty())) {
       valid_ = false;

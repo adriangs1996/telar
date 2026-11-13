@@ -28,17 +28,20 @@ struct GraphicsBase64Tables {
 alignas(16) inline constexpr auto graphics_base64_tables = [] {
   GraphicsBase64Tables tables;
   constexpr unsigned first_group = '+' >> 4;
+
   for (std::size_t index = 0; index < base64::alphabet.size(); ++index) {
     const auto byte = static_cast<std::uint8_t>(base64::alphabet[index]);
     const auto high = byte >> 4;
     const auto low = byte & 15;
     const auto group = static_cast<std::uint8_t>(1u << (high - first_group));
+
     tables.high[high] = group;
     tables.low[low] |= group;
     if (byte != '/') {
       tables.offset[high] = static_cast<std::uint8_t>(index - byte);
     }
   }
+
   return tables;
 }();
 
@@ -51,6 +54,7 @@ inline GraphicsBase64Lanes graphicsBase64Lanes(uint8x16_t bytes) noexcept {
   const auto offset = vqtbl1q_u8(vld1q_u8(graphics_base64_tables.offset.data()), high);
   constexpr auto slash_correction = static_cast<std::uint8_t>('/' - '+' - 1);
   const auto correction = vandq_u8(vceqq_u8(bytes, vdupq_n_u8('/')), vdupq_n_u8(slash_correction));
+
   return {vsubq_u8(vaddq_u8(bytes, offset), correction), valid};
 }
 #endif
@@ -74,6 +78,7 @@ inline bool decodeGraphicsWideBlock(const char *input, std::uint8_t *output) noe
       vorrq_u8(vshlq_n_u8(second.values, 4), vshrq_n_u8(third.values, 2)),
       vorrq_u8(vshlq_n_u8(third.values, 6), fourth.values),
   }};
+
   vst3q_u8(output, decoded);
   return true;
 #else

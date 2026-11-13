@@ -37,6 +37,7 @@ void checkSqlite(int result) {
 
 static std::array<char, PATH_MAX> prepareDatabaseFile(const char *path) {
   std::array<char, PATH_MAX> canonical{};
+
   if (std::string_view{path} == ":memory:") {
     std::memcpy(canonical.data(), path, sizeof(":memory:"));
     return canonical;
@@ -155,10 +156,12 @@ std::int64_t Statement::integer(int column) const noexcept {
 std::string_view Statement::text(int column) const {
   const auto *bytes = sqlite3_column_text(statement_, column);
   const auto length = sqlite3_column_bytes(statement_, column);
+
   if (bytes == nullptr) {
     if (sqlite3_errcode(sqlite3_db_handle(statement_)) == SQLITE_NOMEM) {
       throw std::bad_alloc{};
     }
+
     return {};
   }
 

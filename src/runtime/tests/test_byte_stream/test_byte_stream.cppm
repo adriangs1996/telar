@@ -19,6 +19,7 @@ public:
     if (count == 0) {
       return {ended ? Result::State::ended : Result::State::blocked, {}, Readiness::readable};
     }
+
     return {Result::State::data, {reinterpret_cast<const std::uint8_t *>(input.data() + offset), count}};
   }
 
@@ -32,12 +33,14 @@ public:
     if (count == 0) {
       return ended ? Result{Result::State::ended} : Result{Result::State::blocked, 0, Readiness::readable};
     }
+
     std::memcpy(destination.data(), input.data() + offset, count);
     return {Result::State::data, count};
   }
 
   Result read(std::span<std::uint8_t> destination) noexcept {
     const auto result = peek(destination);
+
     offset += result.bytes;
     return result;
   }
@@ -47,12 +50,15 @@ public:
       check(pending.size() == bytes.size() && std::memcmp(pending.data(), bytes.data(), bytes.size()) == 0);
       pending.clear();
     }
+
     if (block_next_write) {
       pending.assign(reinterpret_cast<const char *>(bytes.data()), bytes.size());
       block_next_write = false;
       return {Result::State::blocked, 0, Readiness::writable};
     }
+
     const auto count = std::min(write_limit, bytes.size());
+
     output.append(reinterpret_cast<const char *>(bytes.data()), count);
     block_next_write = alternating_writes;
     return {Result::State::data, count};

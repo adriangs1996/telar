@@ -86,6 +86,7 @@ inline std::string normalize(std::string_view url) {
   const auto at = authority.rfind('@');
   auto host = authority.substr(at == authority.npos ? 0 : at + 1);
   std::size_t colon;
+
   if (host.starts_with('[')) {
     const auto close = host.find(']');
     if (close == host.npos) {
@@ -189,6 +190,7 @@ public:
   // `revisions` are rev-list arguments: the ref, then any exclusions.
   inline void bundle(std::span<const std::string_view> revisions, int descriptor) {
     std::vector<std::string_view> args{"bundle", "create", "-"};
+
     args.insert(args.end(), revisions.begin(), revisions.end());
     CommandOutput output{memory_, max_git_output};
     std::size_t total = 0;
@@ -214,6 +216,7 @@ private:
     constexpr std::size_t max_configuration_bytes = 64 * 1024;
     CommandOutput output{memory_, bounded ? max_git_output : max_configuration_bytes};
     const auto status = output.run(command, std::chrono::steady_clock::now() + git_timeout, true);
+
     if (output.truncated()) {
       if (bounded) {
         reportCommandLimit({.name = "repository.max_git_output_bytes", .noun = "bytes", .value = max_git_output});
@@ -242,6 +245,7 @@ void ready(Git<Memory> &git, std::string_view commit) {
 
   const auto tree = git.read({"ls-tree", "-rz", commit});
   std::string_view remaining = tree;
+
   while (!remaining.empty()) {
     const auto end = remaining.find('\0');
     const auto line = remaining.substr(0, end);
@@ -323,6 +327,7 @@ inline void appendWorktreeCheckout(Text &path, std::string_view root, std::strin
   path.append(root);
   path.append("-worktrees/");
   const auto suffix = path.size();
+
   path.append(branch);
   std::replace(path.begin() + static_cast<std::ptrdiff_t>(suffix), path.end(), '/', '-');
   std::replace(path.begin() + static_cast<std::ptrdiff_t>(suffix), path.end(), '\\', '-');
@@ -410,6 +415,7 @@ struct WorkspaceOptions {
     }
 
     Cursor cursor{words.subspan(1)};
+
     if (self.action == Action::get || self.action == Action::rename) {
       self.target = Target::parse(cursor.take("MissingWorkspaceTarget"));
     }
@@ -426,6 +432,7 @@ struct WorkspaceOptions {
         if (self.command.empty()) {
           usage("MissingWorkspaceCommand");
         }
+
         break;
       } else if (arg == "--columns" && self.action == Action::create) {
         const auto value = maybeUnsigned(cursor.take("MissingWorkspaceColumns"));
@@ -433,9 +440,11 @@ struct WorkspaceOptions {
         if (!value || *value < minimum_columns || *value > maximum_columns) {
           usage("InvalidWorkspaceColumns");
         }
+
         self.columns = static_cast<std::uint16_t>(*value);
       } else if (arg == "--worktree" && self.action == Action::create) {
         const auto value = cursor.take("MissingWorktreeBranch");
+
         single(self.worktree, value, "DuplicateWorktreeOption");
         branch(value);
       } else if (arg == "--name" && self.action == Action::create) {
@@ -454,12 +463,15 @@ struct WorkspaceOptions {
     if (self.action == Action::create && !self.worktree && !self.directory) {
       usage("MissingWorktreeBranch");
     }
+
     if (self.worktree && (!self.command.empty() || self.columns)) {
       usage("UnknownWorkspaceOption");
     }
+
     if (self.directory && self.directory->empty()) {
       usage("EmptyWorkspaceDirectory");
     }
+
     return self;
   }
 };
@@ -504,6 +516,7 @@ struct TabOptions {
     }
 
     Cursor cursor{words.subspan(1)};
+
     if (self.action != Action::list && self.action != Action::create) {
       self.target = Target::parse(cursor.take("MissingTabTarget"));
     }
@@ -525,43 +538,51 @@ struct TabOptions {
     }
 
     bool workspace_seen = false;
+
     while (const auto word = cursor.next()) {
       const std::string_view arg = *word;
       if (arg == "--relative-to" && self.action == Action::move) {
         if (self.relative) {
           usage("DuplicateRelativeTarget");
         }
+
         const auto target = Target::parse(cursor.take("MissingRelativeTarget"));
         if (!target.id) {
           usage("InvalidRelativeTarget");
         }
+
         self.relative = target.id;
       } else if (arg == "--background" && self.action == Action::create) {
         if (self.background) {
           usage("DuplicateBackgroundOption");
         }
+
         self.background = true;
       } else if (arg == "--label" && self.action == Action::create) {
         if (self.label) {
           usage("DuplicateLabelOption");
         }
+
         self.label = cursor.take("MissingTabLabel");
         text(*self.label, tab_label_bytes, "InvalidTabLabel", true);
       } else if (arg == "--workspace") {
         if (workspace_seen) {
           usage("DuplicateWorkspaceOption");
         }
+
         self.workspace = Target::parse(cursor.take("MissingWorkspaceTarget"));
         workspace_seen = true;
       } else if (arg == "--socket") {
         if (self.socket) {
           usage("DuplicateSocketOption");
         }
+
         self.socket = cursor.take("MissingSocketPath");
       } else if (arg == "--json") {
         if (self.json) {
           usage("DuplicateJsonOption");
         }
+
         self.json = true;
       } else {
         usage("UnknownTabOption");
@@ -571,6 +592,7 @@ struct TabOptions {
     if (self.action == Action::create && !self.background) {
       usage("MissingClientId");
     }
+
     return self;
   }
 };
@@ -586,6 +608,7 @@ namespace telar::runtime::cli::sessions {
 inline std::string realDirectory(std::string_view path) {
   std::error_code error;
   auto resolved = std::filesystem::canonical(path, error);
+
   if (error) {
     throw Failure{error == std::errc::no_such_file_or_directory ? "FileNotFound" : error == std::errc::not_a_directory ? "NotDir"
                                                                                                                        : "AccessDenied"};
@@ -602,11 +625,13 @@ inline void wireTabLabel(std::string_view value, bool empty = false) {
   if ((!empty && value.empty()) || value.size() > tab_label_bytes) {
     throw Failure{"InvalidByteString"};
   }
+
   try {
     validateUtf8(value);
   } catch (const EncodingError &) {
     throw Failure{"InvalidUtf8"};
   }
+
   for (const unsigned char byte : value) {
     if (byte < ' ' || byte == 0x7f) {
       throw Failure{"InvalidTabLabel"};
@@ -668,6 +693,7 @@ public:
 private:
   inline static ServerOptions socketOptions(std::optional<std::string_view> socket) {
     ServerOptions options;
+
     options.socket = socket.value_or("");
     return options;
   }
@@ -675,6 +701,7 @@ private:
   // An errno a connection can meet is named as everywhere; anything else is described.
   inline static const char *connectionFailure(int code) noexcept {
     const auto *name = systemErrorName(code);
+
     return std::string_view{name} == "Unexpected" ? "the local runtime is not reachable" : name;
   }
 
@@ -715,11 +742,13 @@ inline void checkLocation(TabLocation actual, TabLocation expected) {
 
 inline ClientDescriptor chooseClient(std::span<const ClientDescriptor> clients, std::uint64_t wanted) {
   std::optional<ClientDescriptor> chosen;
+
   for (const auto &client : clients) {
     if (wanted != 0) {
       if (client.id == wanted) {
         return client;
       }
+
       continue;
     }
 
@@ -731,6 +760,7 @@ inline ClientDescriptor chooseClient(std::span<const ClientDescriptor> clients, 
   if (!chosen) {
     throw Failure{"ClientNotFound", 2};
   }
+
   return *chosen;
 }
 
@@ -755,6 +785,7 @@ int workspace(Memory &memory, const WorkspaceOptions &options) {
   try {
     using Action = WorkspaceOptions::Action;
     Output output{memory};
+
     if (options.action == Action::create) {
       const auto directory = realDirectory(*options.directory);
       const auto default_name = std::filesystem::path{directory}.filename().string();
@@ -762,25 +793,32 @@ int workspace(Memory &memory, const WorkspaceOptions &options) {
       if (name.empty()) {
         throw Failure{"MissingWorkspaceName"};
       }
+
       if (options.command.size() > workspace_command_words) {
         throw Failure{"WorkspaceCommandTooLong"};
       }
 
       std::array<std::string_view, workspace_command_words> command;
       std::size_t count = 0;
+
       for (const auto word : options.command) {
         command[count++] = word;
       }
+
       if (count == 0) {
         const auto configured = ::getenv("SHELL");
+
         command[count++] = configured && *configured ? configured : "/bin/sh";
       }
 
       auto size = workspace_size;
+
       size.cols = options.columns.value_or(size.cols);
       Channel session{memory, options.socket, true};
+
       wireTabLabel(name);
       const auto opened = session.template exchange<PaneOpened>(CreateWorkspace{.size = size, .name = name, .launch = {.cwd = directory, .arguments = std::span{command}.first(count)}}, false);
+
       if (options.json) {
         output.text("{\"workspace_id\":").number(opened.location.workspace.id).text(",\"tab_id\":").number(opened.location.tab_id).text(",\"pane_id\":").number(opened.pane_id).text(",\"directory\":").json(directory, JsonEscapes::control).text("}\n");
       } else {
@@ -789,11 +827,13 @@ int workspace(Memory &memory, const WorkspaceOptions &options) {
     } else if (options.action == Action::rename) {
       const auto id = options.target.resolve("TELAR_WORKSPACE_ID");
       Channel session{memory, options.socket, false};
+
       wireTabLabel(*options.name);
       const auto reply = session.template exchange<WorkspaceSnapshot>(RenameWorkspace{.workspace = {.id = id}, .name = *options.name}, false);
       if (reply.workspace.kind != WorkspaceLocation::Kind::workspace || reply.workspace.id != id) {
         throw Failure{"unexpected reply from the runtime"};
       }
+
       if (options.json) {
         output.text("{\"workspace_id\":").number(id).text(",\"name\":").json(reply.name).text("}\n");
       } else {
@@ -803,17 +843,22 @@ int workspace(Memory &memory, const WorkspaceOptions &options) {
       const auto wanted = options.action == Action::get ? std::optional{options.target.resolve("TELAR_WORKSPACE_ID")} : std::nullopt;
       Channel session{memory, options.socket, false};
       const auto catalog = session.catalog();
+
       if (!wanted) {
         output.text(options.json ? "[" : "ID\tNAME\tDIRECTORY\tTABS\tBRANCH\tGIT\n");
       }
+
       bool first = true;
+
       for (const auto &entry : catalog.entries) {
         if (wanted && entry.workspace != *wanted) {
           continue;
         }
+
         if (options.json && !first) {
           output.text(",");
         }
+
         workspaceEntry(output, entry, options.json);
         first = false;
       }
@@ -821,6 +866,7 @@ int workspace(Memory &memory, const WorkspaceOptions &options) {
       if (wanted && first) {
         throw Failure{"workspace not found"};
       }
+
       if (options.json) {
         output.text(wanted ? "\n" : "]\n");
       }
@@ -855,6 +901,7 @@ public:
   // streams. Every invocation uses literal argv and a bounded deadline.
   inline std::string run(std::span<const std::string_view> arguments, const char *failure = "NotARepository", bool stream = false, bool hardened = false, std::span<const std::pair<std::string_view, std::string_view>> environment = {}) {
     Command command{memory_, Launch{.arguments = arguments}, CommandPurpose::configured_helper};
+
     for (const auto &[name, value] : environment) {
       command.setEnvironment(name, value);
     }
@@ -862,6 +909,7 @@ public:
     if (hardened) {
       HardenedGit<Memory>::configure(command);
     }
+
     constexpr std::size_t diagnostic_bytes = 64 * 1024;
     constexpr std::size_t listing_bytes = 1024 * 1024;
     constexpr unsigned git_timeout_seconds = 300;
@@ -875,6 +923,7 @@ public:
         if (bytes.size() > listing_bytes - kept.size()) { throw Failure{"StreamTooLong"}; }
         kept.append(reinterpret_cast<const char *>(bytes.data()), bytes.size());
       }
+
       return true; }, [&](std::span<const Byte> bytes) {
       if (stream) { std::fwrite(bytes.data(), 1, bytes.size(), stderr); }
       else { diagnostics.append(bytes); } });
@@ -883,11 +932,14 @@ public:
       if (std::string_view{failure} != "NotARepository" && !stream) {
         std::array<Byte, diagnostic_bytes> bytes;
         const auto tail = diagnostics.read(diagnostics.retainedOffset(), bytes);
+
         if (diagnostics.retainedOffset() != 0) {
           std::fprintf(stderr, "(%llu earlier bytes of Git's output omitted)\n", static_cast<unsigned long long>(diagnostics.retainedOffset()));
         }
+
         std::fwrite(tail.data(), 1, tail.size(), stderr);
       }
+
       throw Failure{failure};
     }
 
@@ -904,18 +956,22 @@ public:
     if (start == std::string::npos) {
       throw Failure{"NotARepository"};
     }
+
     return value.substr(start, end - start + 1);
   }
 
   inline std::string root(std::string_view directory) {
     auto common = line({"git", "-C", directory, "rev-parse", "--path-format=absolute", "--git-common-dir"});
+
     while (common.ends_with('/')) {
       common.pop_back();
     }
+
     constexpr std::string_view suffix = "/.git";
     if (!common.starts_with('/') || !common.ends_with(suffix) || common.size() <= suffix.size()) {
       throw Failure{"not inside a git repository"};
     }
+
     common.resize(common.size() - suffix.size());
     return common;
   }
@@ -951,9 +1007,11 @@ public:
     constexpr std::size_t maximum_untracked = 256;
     bool first = true;
     std::string_view remaining = bytes;
+
     while (!remaining.empty()) {
       const auto end = remaining.find('\n');
       const auto line = remaining.substr(0, end);
+
       remaining.remove_prefix(end == std::string_view::npos ? remaining.size() : end + 1);
       if (line.starts_with("worktree ")) {
         path = line.substr(std::string_view{"worktree "}.size());
@@ -963,6 +1021,7 @@ public:
         if (!first && !path.empty() && !branch.empty() && keep(path) && result.size() < maximum_untracked) {
           result.push_back(GitWorktree{.path = std::string{path}, .branch = std::string{branch}});
         }
+
         first = false;
         path = {};
         branch = {};
@@ -979,6 +1038,7 @@ public:
     try {
       repository::Git git{memory_, root};
       std::string against = "HEAD";
+
       try {
         against = git.read({"rev-parse", "--verify", "--quiet", "--end-of-options", std::string{branch} + "@{upstream}"});
       } catch (const std::exception &) {
@@ -1011,8 +1071,10 @@ inline CoordinatorReference coordinatorReference(std::string_view value) {
   if (value.size() <= session_hex_bytes || value[session_hex_bytes] != ':') {
     usage("InvalidCoordinatorReference");
   }
+
   CoordinatorReference result;
   bool nonzero = false;
+
   for (std::size_t index = 0; index < result.session_id.size(); ++index) {
     unsigned byte{};
     const auto begin = value.data() + index * 2;
@@ -1020,6 +1082,7 @@ inline CoordinatorReference coordinatorReference(std::string_view value) {
     if (parsed.ec != std::errc{} || parsed.ptr != begin + 2) {
       usage("InvalidCoordinatorReference");
     }
+
     result.session_id[index] = static_cast<Byte>(byte);
     nonzero |= byte != 0;
   }
@@ -1029,6 +1092,7 @@ inline CoordinatorReference coordinatorReference(std::string_view value) {
   if (colon == std::string_view::npos || !nonzero) {
     usage("InvalidCoordinatorReference");
   }
+
   result.pane_id = positive(value.substr(0, colon), "InvalidCoordinatorReference");
   result.pane_generation = positive(value.substr(colon + 1), "InvalidCoordinatorReference");
   return result;
@@ -1039,6 +1103,7 @@ inline void machineLabel(std::string_view value) {
   if (value.empty() || value.size() > machine_label_bytes || !alphanumeric(value.front())) {
     usage("InvalidMachineLabel");
   }
+
   for (const auto byte : value) {
     if (!alphanumeric(byte) && byte != '-' && byte != '_' && byte != '.') {
       usage("InvalidMachineLabel");
@@ -1069,6 +1134,7 @@ struct WorktreeOptions {
     if (words.empty()) {
       usage("MissingWorktreeAction");
     }
+
     WorktreeOptions self;
     const std::string_view verb = words.front();
     if (verb == "create") {
@@ -1092,16 +1158,19 @@ struct WorktreeOptions {
     }
 
     Cursor cursor{words.subspan(1)};
+
     if (self.action != Action::list && self.action != Action::resolve) {
       const auto value = cursor.take("MissingWorktreeBranch");
       if (value.starts_with('-')) {
         usage("MissingWorktreeBranch");
       }
+
       if (self.action == Action::create || self.action == Action::fetch) {
         sessions::branch(value);
       } else {
         printable(value, branch_bytes);
       }
+
       self.branch = value;
     }
 
@@ -1111,13 +1180,16 @@ struct WorktreeOptions {
         if (self.action != Action::create && self.action != Action::exec) {
           usage("UnexpectedWorktreeCommand");
         }
+
         self.command = cursor.rest();
         if (self.command.empty()) {
           usage("MissingWorktreeCommand");
         }
+
         if (self.command.size() > command_words) {
           usage("TooManyCommandArguments");
         }
+
         break;
       } else if (arg == "--setup" && self.action == Action::create) {
         self.setup = true;
@@ -1143,13 +1215,16 @@ struct WorktreeOptions {
         printable(*self.dispatched_from, machine_label_bytes);
       } else if (arg == "--coordinator" && self.action == Action::create) {
         const auto value = cursor.take("MissingCoordinatorReference");
+
         if (self.coordinator) {
           usage("DuplicateWorktreeOption");
         }
+
         self.coordinator = coordinatorReference(value);
       } else if (arg == "--repository" && self.action == Action::resolve) {
         single(self.repository, cursor.take("MissingRepository"), "DuplicateWorktreeOption");
         constexpr std::size_t repository_bytes = 512;
+
         printable(*self.repository, repository_bytes);
       } else if (arg == "--workspace" && (self.action == Action::create || self.action == Action::list || self.action == Action::resolve)) {
         single(self.workspace, cursor.take("MissingWorkspaceTarget"), "DuplicateWorktreeOption");
@@ -1167,13 +1242,16 @@ struct WorktreeOptions {
         self.wait = true;
       } else if (arg == "--timeout" && self.action == Action::exec) {
         auto value = cursor.take("MissingTimeout");
+
         while (value.ends_with('s')) {
           value.remove_suffix(1);
         }
+
         const auto seconds = maybeUnsigned(value);
         if (!seconds || *seconds == 0 || *seconds > max_wait_seconds) {
           usage("InvalidTimeout");
         }
+
         self.timeout = static_cast<unsigned>(*seconds);
       } else if (arg == "--json") {
         self.json = true;
@@ -1187,18 +1265,23 @@ struct WorktreeOptions {
     if (self.action == Action::exec && self.command.empty()) {
       usage("MissingWorktreeCommand");
     }
+
     if (self.action == Action::create && !self.command.empty() && !self.title) {
       usage("MissingWorktreeTitle");
     }
+
     if (self.action == Action::fetch && !self.machine) {
       usage("MissingMachineLabel");
     }
+
     if (self.action == Action::resolve && !self.repository) {
       usage("MissingRepository");
     }
+
     if (self.machine && self.directory) {
       usage("DirectoryOnAnotherMachine");
     }
+
     return self;
   }
 };

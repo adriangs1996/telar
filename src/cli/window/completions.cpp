@@ -30,9 +30,11 @@ int runCompletionsCommand(std::span<char *const> words) {
   if (words.empty()) {
     throw std::invalid_argument{"MissingCompletionsAction"};
   }
+
   if (std::string_view{words.front()} != "check") {
     throw std::invalid_argument{"UnknownCompletionsAction"};
   }
+
   if (words.size() != 2) {
     throw std::invalid_argument{"telar completions check takes one FILE"};
   }
@@ -41,24 +43,31 @@ int runCompletionsCommand(std::span<char *const> words) {
   if (path.extension() != ".ebnf" || !commandName(path.stem().string())) {
     return fail(path, "name the file after its command, as nmap.ebnf");
   }
+
   std::error_code error;
   const auto size = std::filesystem::file_size(path, error);
+
   if (error) {
     return fail(path, error.message());
   }
+
   if (size > maximum_spec) {
     return fail(path, "larger than 256 KiB");
   }
+
   std::ifstream file{path, std::ios::binary};
   const std::string source{std::istreambuf_iterator<char>{file}, std::istreambuf_iterator<char>{}};
+
   if (!file && !file.eof()) {
     return fail(path, "could not be read");
   }
+
   try {
     static_cast<void>(ebnf::command_spec::compile(source));
   } catch (const std::exception &exception) {
     return fail(path, exception.what());
   }
+
   std::puts("telar completions: OK");
   return 0;
 }

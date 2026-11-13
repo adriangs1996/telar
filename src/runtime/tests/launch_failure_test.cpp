@@ -133,11 +133,13 @@ void checkLaunchRollback(Memory &memory, BackgroundService<Memory> &service) {
   constexpr std::array<std::string_view, 1> arguments{"/bin/cat"};
   const Launch launch{.cwd = "/", .arguments = arguments};
   auto workspace = makeOwned<Workspace<Memory>>(memory, memory, location.workspace.id, "/workspace with spaces", "Failure fixture");
+
   model.workspaces.insert(location.workspace.id, std::move(workspace));
 
   for (const bool accepting : {true, false}) {
     history.accepting = accepting;
     bool failed = false;
+
     try {
       panes.launch(model, nullptr, false, launch, location, size);
     } catch (const SystemError &error) {
@@ -154,26 +156,31 @@ void checkLaunchRollback(Memory &memory, BackgroundService<Memory> &service) {
   history.accepting = true;
   poller.fail = false;
   auto &pane = panes.launch(model, nullptr, false, launch, location, size);
+
   check(model.panes.size() == 1 && pane.generation == 3 && history.submissions == 2);
   const auto retained_process = pane.process->processId();
   Command command{memory, launch};
   bool registration_failed = false;
+
   try {
     panes.launch(model, nullptr, false, command, location, size, pane.id);
   } catch (const std::bad_alloc &) {
     registration_failed = true;
   }
+
   check(registration_failed && history.submissions == 3 && model.panes.size() == 1);
   check(panes.require(model.panes, pane.id).process->processId() == retained_process && ::kill(retained_process, 0) == 0);
   panes.remove(model, clients, pane.id);
 
   constexpr std::array<std::string_view, 1> missing{"/nonexistent/telar-launch-test"};
   bool missing_rejected = false;
+
   try {
     panes.launch(model, nullptr, false, Launch{.cwd = "/", .arguments = missing}, location, size);
   } catch (const std::exception &) {
     missing_rejected = true;
   }
+
   check(missing_rejected && history.submissions == 3 && model.panes.size() == 0);
 }
 
@@ -181,13 +188,16 @@ template <ConcurrentAllocator Memory>
 void checkLaunchPersistence(Memory &memory) {
   TemporaryDirectory directory{"/tmp/telar-launch-history-XXXXXX"};
   const auto path = std::string{directory.path()} + "/history.sqlite";
+
   {
     BackgroundService service{memory, path.c_str()};
+
     checkLaunchRollback(memory, service);
   }
 
   Database database{path.c_str(), DatabaseAccess::read_only};
   Statement row{database, "SELECT pane_id, pane_generation, location_kind, location_id, tab_id, workspace_path, shell, started_at_ms, failed_at_ms, phase, cause FROM launch_attempt ORDER BY id"};
+
   check(row.next());
   check(row.integer(0) == 1 && row.integer(1) == 1 && row.integer(2) == 0 && row.integer(3) == 7 && row.integer(4) == 11);
   check(row.text(5) == "/workspace with spaces" && row.text(6) == "/bin/cat");
@@ -198,20 +208,24 @@ void checkLaunchPersistence(Memory &memory) {
   check(row.integer(7) > 0 && row.integer(8) >= row.integer(7));
   check(!row.next());
   Statement sessions{database, "SELECT COUNT(*) FROM session"};
+
   check(sessions.next() && sessions.integer(0) == 0);
 }
 
 template <ConcurrentAllocator Memory>
 void checkLaunchEventOwnership(Memory &memory) {
   Database database{":memory:"};
+
   migrateHistory(database);
   LaunchHistoryWriter writer{database};
+
   for (const auto phase : {LaunchPhase::pane_registration, LaunchPhase::wait_actor, LaunchPhase::output_actor}) {
     std::string workspace = "/retained/workspace";
     std::string shell = "/retained/shell";
     std::string cause = "RetainedFailureCause";
     const auto identity = static_cast<unsigned>(phase) + 1;
     HistoryEvent owned{memory, HistoryEventView{.kind = HistoryEventKind::launch_failed, .session = {.pane = identity, .started_at_ms = 100, .workspace_path = workspace, .shell = shell}, .finished_at_ms = 200, .failure = {identity, phase, cause}}};
+
     workspace.assign("modified");
     shell.assign("modified");
     cause.assign("modified");
@@ -219,10 +233,12 @@ void checkLaunchEventOwnership(Memory &memory) {
   }
 
   Statement rows{database, "SELECT phase, workspace_path, shell, cause FROM launch_attempt ORDER BY phase"};
+
   for (std::int64_t phase = 0; phase < 3; ++phase) {
     check(rows.next() && rows.integer(0) == phase);
     check(rows.text(1) == "/retained/workspace" && rows.text(2) == "/retained/shell" && rows.text(3) == "RetainedFailureCause");
   }
+
   check(!rows.next());
 }
 
@@ -232,6 +248,7 @@ void testLaunchFailures() {
   SystemAllocator system;
   BudgetAllocator budget{system, 64 * 1024 * 1024};
   SynchronizedAllocator memory{budget};
+
   checkLaunchPersistence(memory);
   checkLaunchEventOwnership(memory);
   check(budget.liveBytes() == 0);

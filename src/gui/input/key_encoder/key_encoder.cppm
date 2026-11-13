@@ -89,6 +89,7 @@ public:
     }
 
     const auto ordered = std::span{order_}.first(length_);
+
     std::ranges::sort(ordered, [this](auto left, auto right) {
       return std::lexicographical_compare(bindings_[left].sequence().begin(), bindings_[left].sequence().end(), bindings_[right].sequence().begin(), bindings_[right].sequence().end(), [](KeyChord first, KeyChord second) {
         return compareChords(first, second) < 0;
@@ -155,8 +156,10 @@ struct KeyCharacter {
 
   [[nodiscard]] inline static Utf8Scalar text(std::uint32_t storage) noexcept {
     Utf8Scalar result;
+
     result.bytes = std::bit_cast<std::array<char, sizeof(storage)>>(storage);
     const auto *const terminator = std::ranges::find(result.bytes, '\0');
+
     result.length = std::max<std::size_t>(1, static_cast<std::size_t>(terminator - result.bytes.begin()));
 
     return result;
@@ -443,6 +446,7 @@ private:
 
   inline void encodeKitty(const TerminalKey &key, const Encoding &encoding) {
     const auto associated = associatedText(key, encoding);
+
     append("\x1b[");
     kittyCodepoints(key, encoding);
     if (encoding.modifier != 1 || encoding.event || associated) {
@@ -473,6 +477,7 @@ private:
 
   inline static std::optional<char> controlByte(std::uint32_t codepoint) noexcept {
     constexpr unsigned control_mask = 0x1f;
+
     if ((codepoint >= 'a' && codepoint <= 'z') || (codepoint >= 'A' && codepoint <= 'Z')) {
       return static_cast<char>(codepoint & control_mask);
     }
@@ -496,6 +501,7 @@ private:
         {'?', erase},
         {'8', erase},
     });
+
     for (const auto &[known, value] : controls) {
       if (codepoint == known) {
         return value;
@@ -621,6 +627,7 @@ public:
 
   [[nodiscard]] inline static Text chord(std::optional<KeyChord> prefix, KeyChord key, KeyLabelStyle style) {
     Text text;
+
     if (prefix) {
       append(text, *prefix, style);
       text.append(" ");
@@ -651,6 +658,7 @@ private:
         {.modifier = KeyChord::Modifier::shift, .pc = "Shift+", .mac = "⇧"},
         {.modifier = KeyChord::Modifier::super, .pc = "Super+", .mac = "⌘"},
     });
+
     for (const auto &modifier : modifiers) {
       if (key.has(modifier.modifier)) {
         text.append(style == KeyLabelStyle::mac ? modifier.mac : modifier.pc);
@@ -661,6 +669,7 @@ private:
       constexpr auto case_offset = 'a' - 'A';
       const auto ascii_lower = key.character >= 'a' && key.character <= 'z';
       const auto character = style == KeyLabelStyle::mac && ascii_lower ? key.character - case_offset : key.character;
+
       text.append(Utf8Scalar::encode(character).view());
 
       return;
@@ -682,6 +691,7 @@ private:
         {.key = KeyChord::Key::tab, .pc = "Tab", .mac = "⇥"},
         {.key = KeyChord::Key::back_tab, .pc = "Shift+Tab", .mac = "⇧⇥"},
     });
+
     for (const auto &name : names) {
       if (name.key == key.key) {
         text.append(style == KeyLabelStyle::mac ? name.mac : name.pc);
@@ -809,6 +819,7 @@ public:
 
     if (context.captures_keys) {
       auto decision = replay();
+
       transfer(event.physical);
       if (decision.outcome == Outcome::replay) {
         decision.event = event;
@@ -956,6 +967,7 @@ private:
     }
 
     const auto owner = lease->owner;
+
     *lease = leases_[--lease_count_];
 
     return owner;
@@ -1011,6 +1023,7 @@ private:
     const auto &binding = map_.at(matched.begin);
     if (binding.length == depth_ + 1) {
       const auto action = binding.action;
+
       resetMatch();
 
       return {.outcome = Outcome::action, .action = action, .event = event, .now_ns = now_ns};
@@ -1042,6 +1055,7 @@ private:
 
   inline Decision replay() {
     Decision decision;
+
     if (depth_ != 0 && !prefix_pending_) {
       decision.outcome = Outcome::replay;
       decision.held_count = depth_;
@@ -1093,6 +1107,7 @@ struct PasteEncoding {
     }
 
     BoundedText<Capacity + BracketedPaste::framing_bytes> encoded;
+
     BracketedPaste::encode(text, bracketed, [&](std::string_view piece) { encoded.append(piece); });
 
     return encoded;

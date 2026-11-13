@@ -51,8 +51,10 @@ public:
 
 static void testProjection() {
   HostSampler sampler;
+
   check(!sampler.latest() && sampler.revision() == 1);
   HostCounters counters{.busy_ticks = 100, .total_ticks = 200, .memory_used_bytes = 3 * gib / 2, .memory_total_bytes = 16 * gib, .cpu_count = 8, .battery_percent = std::nullopt};
+
   sampler.apply(counters);
   check(sampler.latest()->cpu_percent == 0 && sampler.revision() == 2);
   check(sampler.latest()->memory_used_decigib == 15 && sampler.latest()->memory_total_decigib == 160);
@@ -83,6 +85,7 @@ static void testProjection() {
   FakeHostMetrics probe;
   HostMetricsReader<FakeHostMetrics &> reader{probe};
   const auto retained = reader.observe(sampler);
+
   check(retained.latest() == sampler.latest() && retained.revision() == sampler.revision());
 #if TELAR_DIAGNOSTICS
   check(retained.diagnostics().sample.count == 1);
@@ -96,9 +99,11 @@ static void testDelivery() {
   ClientStore<SystemAllocator> clients{memory};
   ClientPeer client{memory, model, clients, ClientRole::interactive};
   FakeHostMetrics probe;
+
   probe.next = HostCounters{.busy_ticks = 2, .total_ticks = 10, .memory_used_bytes = 4 * gib, .memory_total_bytes = 16 * gib, .cpu_count = 8, .battery_percent = 81};
   const HostMetricsService<FakeHostMetrics>::Clock::time_point started{};
   HostMetricsService<FakeHostMetrics &> metrics{started, probe};
+
   metrics.publish(client.session());
   check(client.session().metrics_revision == 0);
   client.session().subscribed = true;
@@ -108,17 +113,20 @@ static void testDelivery() {
   metrics.tick(started + std::chrono::seconds{2});
 
   pollfd completion{.fd = metrics.descriptor(), .events = POLLIN, .revents = 0};
+
   check(::poll(&completion, 1, 1000) == 1);
   for (unsigned attempt = 0; attempt < 1000 && client.session().metrics_revision != 2; ++attempt) {
     metrics.collect();
     metrics.publish(client.session());
     std::this_thread::yield();
   }
+
   check(client.session().metrics_revision == 2);
 #if TELAR_DIAGNOSTICS
   check(metrics.diagnostics().sample.count == 1);
 #endif
   const auto message = client.receive<SystemMetrics>();
+
   check(message.cpu_percent == 0 && message.cpu_count == 8 && message.memory_used_decigib == 40 && message.memory_total_decigib == 160);
   check(message.has_battery && message.battery_percent == 81);
   metrics.publish(client.session());
@@ -130,6 +138,7 @@ void testMetrics() {
   testDelivery();
   NativeHostMetrics probe;
   const auto counters = probe.read();
+
   check(counters.has_value());
   check(counters->total_ticks >= counters->busy_ticks && counters->memory_used_bytes > 0 && counters->memory_total_bytes > 0 && counters->cpu_count > 0);
   check(!counters->battery_percent || *counters->battery_percent <= 100);

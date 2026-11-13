@@ -56,8 +56,10 @@ struct FallbackRequest {
 
 int acceptFallbackFont(const fonts::FontMatch *match, void *context) noexcept {
   auto &request = *static_cast<FallbackRequest *>(context);
+
   try {
     FontData data;
+
     data.match = *match;
     data.bytes = loadFontBytes(QString::fromUtf8(match->path));
     const auto bytes = telar::byteView({data.bytes.constData(), static_cast<std::size_t>(data.bytes.size())});
@@ -82,6 +84,7 @@ FontData loadFontData(const FontConfiguration &font) {
   const auto regular_style = style.isEmpty() || style.compare(QStringLiteral("Regular"), Qt::CaseInsensitive) == 0;
   FontData data;
   QString path;
+
   if (family.compare(QStringLiteral("JetBrains Mono"), Qt::CaseInsensitive) == 0 && regular_style) {
     path = QStringLiteral(":/telar/fonts/JetBrainsMono-Regular.ttf");
   } else if (family.compare(QStringLiteral("Telar Forma"), Qt::CaseInsensitive) == 0) {

@@ -56,6 +56,7 @@ public:
     for (const auto byte : input) {
       if (raw_.view().size() < description_query_capacity) {
         const char character = static_cast<char>(byte);
+
         raw_.append({&character, 1});
       }
 
@@ -81,6 +82,7 @@ public:
     DescriptionQuery query;
     auto remaining = raw_.view();
     bool pasted = false;
+
     while (!remaining.empty()) {
       if (remaining.starts_with("\x1b[200~") || remaining.starts_with("\x1b[201~")) {
         pasted = remaining[4] == '0';
@@ -89,6 +91,7 @@ public:
       }
 
       const auto byte = static_cast<unsigned char>(remaining.front());
+
       remaining.remove_prefix(1);
       if (byte == static_cast<Byte>(ControlByte::escape)) {
         skipEscape(remaining);
@@ -114,6 +117,7 @@ public:
         }
       } else if (byte >= ' ') {
         const auto scalar = nextScalar(byte, remaining);
+
         validateUtf8(scalar);
         query.append(scalar);
         remaining.remove_prefix(scalar.size() - 1);
@@ -123,6 +127,7 @@ public:
     if (query.view().ends_with(' ')) {
       query.truncate(query.view().size() - 1);
     }
+
     if (query.view().empty()) {
       throw EncodingError{"Empty agent description query"};
     }
@@ -140,10 +145,12 @@ private:
     }
 
     const bool sequence = remaining.front() == '[';
+
     remaining.remove_prefix(1);
     if (sequence) {
       while (!remaining.empty()) {
         const auto byte = static_cast<unsigned char>(remaining.front());
+
         remaining.remove_prefix(1);
         if (byte >= 0x40 && byte <= 0x7e) {
           break;
@@ -176,6 +183,7 @@ private:
     }
 
     std::size_t length = text.size() - 1;
+
     while (length != 0 && (static_cast<unsigned char>(text[length]) & 0xc0) == 0x80) {
       --length;
     }
@@ -255,6 +263,7 @@ inline FixedText<96> normalizeDescriptionTitle(std::string_view output) {
 
   validateUtf8(output);
   FixedText<96> title;
+
   title.assign(output);
   return title;
 }
@@ -280,6 +289,7 @@ public:
   inline Result observe(const Request &request) noexcept {
     TELAR_TRACE("agents.generateDescription");
     Result result{.identity = request.identity};
+
     if (options_.arguments.empty()) {
       result.status = DescriptionStatus::unavailable;
       return result;
@@ -289,6 +299,7 @@ public:
       Command command{memory_, Launch{.cwd = "/", .arguments = options_.arguments}, CommandPurpose::configured_helper};
       const std::array input{prompt_prefix, request.query.view(), std::string_view{"\n"}};
       const int status = output_.runWithInput(command, std::chrono::steady_clock::now() + options_.timeout, input);
+
       if (output_.truncated()) {
         result.status = DescriptionStatus::invalid_output;
       } else if (status == 0) {

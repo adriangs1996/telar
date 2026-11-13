@@ -66,6 +66,7 @@ struct HistoryLabels {
   [[nodiscard]] inline static Text duration(std::int64_t nanoseconds) {
     const auto milliseconds = std::max(nanoseconds, std::int64_t{0}) / nanoseconds_per_millisecond;
     Text result;
+
     if (milliseconds < milliseconds_per_second) {
       result.appendDecimal(static_cast<std::uint64_t>(milliseconds));
       result.append("ms");
@@ -88,6 +89,7 @@ struct HistoryLabels {
   [[nodiscard]] inline static Text age(std::int64_t milliseconds) {
     const auto seconds = std::max(milliseconds, std::int64_t{0}) / milliseconds_per_second;
     Text result;
+
     if (seconds < seconds_per_minute) {
       result.append("now");
     } else if (seconds < seconds_per_hour) {
@@ -121,6 +123,7 @@ struct HistoryLabels {
   [[nodiscard]] inline static Text clock(std::int64_t milliseconds, std::int16_t utc_offset_min) {
     const auto seconds = positiveRemainder(localSeconds(milliseconds, utc_offset_min), seconds_per_day);
     Text result;
+
     appendClockPart(result, static_cast<std::uint64_t>(seconds / seconds_per_hour));
     result.append(":");
     appendClockPart(result, static_cast<std::uint64_t>((seconds % seconds_per_hour) / seconds_per_minute));
@@ -130,6 +133,7 @@ struct HistoryLabels {
 
   [[nodiscard]] inline static Text dayLabel(std::int64_t day, std::int64_t today) {
     Text result;
+
     if (day == today) {
       result.append("Today");
       return result;
@@ -157,6 +161,7 @@ struct HistoryLabels {
     result.append(month_names[static_cast<unsigned>(date->month()) - 1]);
     result.append(" ");
     const auto now = calendar(today);
+
     result.appendDecimal(now && now->year() == date->year() ? static_cast<unsigned>(date->day()) : static_cast<unsigned>(static_cast<int>(date->year())));
 
     return result;
@@ -170,6 +175,7 @@ struct HistoryLabels {
     }
 
     Text result;
+
     if (day < today) {
       const auto distance = static_cast<std::uint64_t>(today) - static_cast<std::uint64_t>(day);
       if (distance == 1) {
@@ -301,6 +307,7 @@ struct TabCaption {
 
     auto length = std::min(path.size(), directory_capacity);
     constexpr unsigned continuation_mask = static_cast<unsigned char>(~Utf8Scalar::continuation_mask);
+
     while (length != 0 && length < path.size() && (static_cast<unsigned char>(path[length]) & continuation_mask) == Utf8Scalar::continuation_prefix) {
       --length;
     }
@@ -390,6 +397,7 @@ struct HistoryInspectionFacts {
   // The facts view the entry's directory, region `a`.
   [[nodiscard]] inline static tbc::view<HistoryInspectionFacts, tbc::lt::a> derive(tbc::view<HistoryInspectionEntry, tbc::lt::a> entry, CalendarSample sampled) {
     HistoryInspectionFacts result;
+
     result.directory = entry.directory;
     result.took = HistoryLabels::duration(entry.duration_ns);
     result.describeWhen(entry, sampled);
@@ -417,6 +425,7 @@ struct HistoryInspectionFacts {
 
   [[nodiscard]] inline static BoundedText<text_capacity> outputHeading(HistoryPhase phase, bool truncated, std::size_t bytes) {
     BoundedText<text_capacity> result;
+
     switch (phase) {
     case HistoryPhase::idle:
       result.append("No captured output");
@@ -440,6 +449,7 @@ struct HistoryInspectionFacts {
     if (phase == HistoryPhase::ready && bytes != 0) {
       constexpr std::size_t kibibyte = 1024;
       constexpr std::size_t decimal_base = 10;
+
       result.append("  ·  ");
       result.appendDecimal(bytes < kibibyte ? bytes : bytes / kibibyte);
       if (bytes >= kibibyte) {
@@ -504,6 +514,7 @@ private:
 
     if (entry.author == HistoryAuthor::agent) {
       constexpr std::array origins{std::string_view{"pane"}, std::string_view{"hook"}, std::string_view{"plugin"}};
+
       by.append("  ·  ");
       by.append(origins.at(static_cast<std::size_t>(entry.origin)));
     }
@@ -531,6 +542,7 @@ public:
 
   [[nodiscard]] inline std::optional<HistoryInspectionLine> next() noexcept {
     using Kind = HistoryInspectionLine::Kind;
+
     while (true) {
       switch (phase_) {
       case Phase::command:
@@ -573,6 +585,7 @@ public:
   [[nodiscard]] inline std::uint32_t count() const noexcept {
     auto remaining = *this;
     std::uint32_t total = 0;
+
     while (remaining.next()) {
       ++total;
     }
@@ -639,6 +652,7 @@ struct HistoryPath {
     }
 
     Text result;
+
     result.append(prefix);
     append(result, candidate.substr(start));
 
@@ -653,6 +667,7 @@ private:
 
   [[nodiscard]] inline static std::size_t codepoints(std::string_view cluster) noexcept {
     std::size_t count = 0;
+
     for (const auto byte : cluster) {
       const auto value = static_cast<unsigned char>(byte);
       if ((value & utf8_prefix_mask) != Utf8Scalar::continuation_prefix) {
@@ -668,6 +683,7 @@ private:
     auto left = right;
     std::size_t bytes = 0;
     std::size_t scalars = 0;
+
     while (const auto cluster = right.nextReplacingInvalid()) {
       bytes += cluster->size();
       scalars += codepoints(*cluster);
@@ -687,6 +703,7 @@ private:
 
   inline static void append(Text &destination, std::string_view path) {
     GraphemeCursor cursor{path};
+
     while (const auto cluster = cursor.nextReplacingInvalid()) {
       destination.append(*cluster);
     }
@@ -694,6 +711,7 @@ private:
 
   [[nodiscard]] inline static Text copy(std::string_view path) {
     Text result;
+
     append(result, path);
 
     return result;
@@ -743,6 +761,7 @@ public:
   // The labels of the hints a router binds are literals.
   [[nodiscard]] inline static tbc::view<ModeHints, tbc::lt::static_storage> resolve(const Router &router) noexcept {
     ModeHints result;
+
     for (const auto &[action, label] : actions) {
       if (const auto key = router.prefixedKeyForAction({.kind = action})) {
         result.append({.key = *key, .label = label});
@@ -781,6 +800,7 @@ struct ModeKeyLabel {
 
   [[nodiscard]] inline static Text format(KeyChord key) {
     Text result;
+
     if (key.has(KeyChord::Modifier::control)) {
       result.append("Ctrl+");
     }
@@ -795,6 +815,7 @@ struct ModeKeyLabel {
 
     if (key.key == KeyChord::Key::character) {
       const auto text = KeyCharacter::text(key.character);
+
       static_cast<void>(Utf8Scalar::decode(text.view()));
       result.append(text.view());
     } else {
@@ -874,6 +895,7 @@ public:
 
   [[nodiscard]] inline static ModeBarLabels resolve(StatusMode mode, const ModeHints &hints) {
     ModeBarLabels result;
+
     switch (mode) {
     case StatusMode::normal:
       return result;
@@ -908,6 +930,7 @@ public:
 private:
   inline void append(std::string_view key, std::string_view word) {
     auto &hint = hints_[count_++];
+
     hint.key.append(key);
     hint.word.append(word);
   }
@@ -932,6 +955,7 @@ struct WorkspaceMark {
 
   [[nodiscard]] inline static WorkspaceMark resolve(std::string_view name) {
     WorkspaceMark mark;
+
     mark.hue = hues[hash(name) % hues.size()];
     if (name.empty()) {
       return mark;
@@ -946,6 +970,7 @@ struct WorkspaceMark {
     try {
       const auto scalar = Utf8Scalar::decode(name.substr(0, length));
       const auto upper = scalar >= 'a' && scalar <= 'z' ? scalar - ('a' - 'A') : scalar;
+
       mark.initial = Utf8Scalar::encode(upper);
     } catch (const std::invalid_argument &) {
       return mark;
@@ -959,6 +984,7 @@ private:
     constexpr std::uint32_t offset_basis = 2166136261U;
     constexpr std::uint32_t prime = 16777619U;
     auto value = offset_basis;
+
     for (const auto byte : name) {
       value = (value ^ static_cast<unsigned char>(byte)) * prime;
     }

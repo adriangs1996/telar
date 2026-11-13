@@ -58,6 +58,7 @@ std::optional<CurveMaskRef> CurveScene::createMask(glyphs::BoxCurve::Shape shape
 
   glyphs::BoxCurve{shape, cell, thickness}.rasterize({.pixels = std::span{alpha.bits(), static_cast<std::size_t>(alpha.sizeInBytes())}, .stride = static_cast<std::size_t>(alpha.bytesPerLine()), .width = static_cast<std::uint16_t>(alpha.width()), .height = static_cast<std::uint16_t>(alpha.height())});
   std::unique_ptr<QSGTexture> texture;
+
   if (window_.rendererInterface()->graphicsApi() != QSGRendererInterface::Software) {
     texture.reset(window_.createTextureFromImage(alpha.convertToFormat(QImage::Format_RGBA8888_Premultiplied)));
     if (!texture) {
@@ -118,6 +119,7 @@ void CurveScene::paint(QSGNode &parent, const CurvePaint &paint) {
 void CurveScene::software(QSGNode &parent, const CurveMaskRef &mask, const CurvePaint &paint) const {
   auto pixels = mask->alpha.convertToFormat(QImage::Format_ARGB32_Premultiplied);
   QPainter painter{&pixels};
+
   painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
   painter.fillRect(pixels.rect(), toQColor(paint.foreground));
   painter.end();
@@ -127,6 +129,7 @@ void CurveScene::software(QSGNode &parent, const CurveMaskRef &mask, const Curve
   }
 
   auto node = std::make_unique<QSGSimpleTextureNode>();
+
   node->setOwnsTexture(true);
   node->setTexture(texture.release());
   node->setFiltering(QSGTexture::Linear);

@@ -136,6 +136,7 @@ struct NotificationActionLabel {
     }
 
     auto keep = std::min(host.size(), static_cast<std::size_t>(std::floor(static_cast<float>(host.size()) * width / full)));
+
     while (keep > 0) {
       format(host.substr(host.size() - keep), true, buffer);
       if (measure(buffer.view()) <= width) {
@@ -213,6 +214,7 @@ struct NotificationMetrics {
 
   [[nodiscard]] inline float height(std::size_t body_lines, bool clickable) const noexcept {
     auto height = px(vertical_padding) + title_row;
+
     if (body_lines > 0) {
       height += px(body_gap) + (static_cast<float>(body_lines) * body_row);
     }
@@ -239,6 +241,7 @@ struct NotificationCardGeometry {
 
   [[nodiscard]] inline Rect body(std::size_t row) const noexcept {
     auto y = bounds.y + metrics.px(NotificationMetrics::body_top) + metrics.title_row;
+
     for (std::size_t index = 0; index < row; ++index) {
       y += metrics.body_row;
     }
@@ -330,6 +333,7 @@ public:
     auto y = request.host.y + margin;
     std::size_t painted = 0;
     std::array<NotificationPlacement, maximum_visible> cards;
+
     for (std::size_t index = 0; index < request.items.size() && painted < maximum_visible; ++index) {
       const auto &item = request.items[index];
       if (hidden(item) || (item.phase == NotificationItem::Phase::exiting && item.transition_position_ns == 0)) {
@@ -375,12 +379,14 @@ public:
 
   [[nodiscard]] inline std::optional<std::uint64_t> nextDeadline(std::uint64_t now_ns, std::uint64_t interval_ns) const noexcept {
     std::optional<std::uint64_t> earliest;
+
     for (const auto &motion : motions_) {
       if (motion.id.value == 0 || motion.from == motion.to || (now_ns >= motion.started_ns && now_ns - motion.started_ns >= motion_duration_ns)) {
         continue;
       }
 
       const auto deadline = std::min(NotificationItem::deadlineAfter(now_ns, interval_ns), NotificationItem::deadlineAfter(motion.started_ns, motion_duration_ns));
+
       earliest = earliest ? std::min(*earliest, deadline) : deadline;
     }
 
@@ -396,6 +402,7 @@ private:
 
     inline float position(float target, const NotificationStackRequest &frame) noexcept {
       const auto now_ns = frame.now_ns;
+
       if (to != target) {
         from = value(now_ns);
         to = target;
@@ -458,10 +465,12 @@ struct PeekLabels {
   template <Allocator Memory>
   [[nodiscard]] inline static Facts facts(const Agent<Memory> &agent, const Worktree<Memory> *task) {
     Facts result;
+
     append(result, AgentCardLabels::title({}, agent.display_name));
     append(result, " · ");
     constexpr std::array statuses{std::string_view{"unknown"}, std::string_view{"working"}, std::string_view{"blocked"}, std::string_view{"ready"}, std::string_view{"failed"}, std::string_view{"done"}};
     const auto status = static_cast<std::size_t>(agent.status);
+
     append(result, statuses[status < statuses.size() ? status : 0]);
     if (task != nullptr) {
       append(result, "  \u2387 ");
@@ -492,6 +501,7 @@ private:
     constexpr auto capacity = std::numeric_limits<std::uint16_t>::digits10 + 1;
     std::array<char, capacity> digits{};
     const auto result = std::to_chars(digits.data(), digits.data() + digits.size(), value);
+
     append(storage, {digits.data(), static_cast<std::size_t>(result.ptr - digits.data())});
   }
 };

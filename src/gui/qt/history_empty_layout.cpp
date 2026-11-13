@@ -88,6 +88,7 @@ void HistoryEmptyLayout::setInput(const QVariantMap &input) {
     prepareLabels();
     polish();
     const QPointer<HistoryEmptyLayout> alive{this};
+
     emit inputChanged();
     if (alive) {
       emit labelsChanged();
@@ -115,6 +116,7 @@ void HistoryEmptyLayout::prepareLabels() {
       .has_query = !state.value(QStringLiteral("query")).toString().isEmpty(),
       .failed_only = state.value(QStringLiteral("failedOnly")).toBool(),
   };
+
   if (phase == QStringLiteral("loading")) {
     options.phase = HistoryPhase::loading;
   } else if (phase == QStringLiteral("failed")) {
@@ -160,18 +162,22 @@ void HistoryEmptyLayout::updatePolish() {
   ratio_ = ratio;
   density_ = window() == nullptr ? 1 : window()->effectiveDevicePixelRatio();
   ChromeMetrics chrome;
+
   chrome.ratio = static_cast<float>(ratio * density_);
   const auto pixels = [this](const QString &key) {
     const auto value = input_.value(key).toDouble() * density_;
 
     return std::isfinite(value) ? static_cast<std::uint16_t>(std::clamp(std::round(value), 0.0, static_cast<double>(std::numeric_limits<std::uint16_t>::max()))) : 0;
   };
+
   chrome.body = pixels(QStringLiteral("bodyPixels"));
   chrome.small = pixels(QStringLiteral("smallPixels"));
   const auto advance = [this](const QString &key) {
     return std::max(0.0F, static_cast<float>(measurements_.value(key).toDouble() * density_));
   };
+
   const HistoryEmptyMeasurements measured{.title = advance(QStringLiteral("title")), .subtitle = advance(QStringLiteral("subtitle")), .import = advance(QStringLiteral("import")), .action = content_.action};
+
   geometry_ = HistoryEmptyGeometry::derive({.width = static_cast<float>(width() * density_), .height = static_cast<float>(height() * density_)}, chrome, measured);
   emit layoutChanged();
 }

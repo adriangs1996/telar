@@ -27,26 +27,31 @@ namespace {
     ASSERT_EQ(parser_testing::childCount(tree, root), 1u);
 
     const auto rule = parser_testing::nthChild(tree, root, 0);
+
     ASSERT_NE(rule, ebnf::none_handle);
     EXPECT_EQ(tree.getText(rule), "identifier");
     ASSERT_EQ(parser_testing::childCount(tree, rule), 1u);
 
     const auto rhs = parser_testing::nthChild(tree, rule, 0);
+
     ASSERT_NE(rhs, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(rhs), ebnf::node_kind::Concatenation);
     ASSERT_EQ(parser_testing::childCount(tree, rhs), 2u);
 
     const auto first = parser_testing::nthChild(tree, rhs, 0);
+
     ASSERT_NE(first, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(first), ebnf::node_kind::Reference);
     EXPECT_EQ(tree.getText(first), "letter");
 
     const auto rep = parser_testing::nthChild(tree, rhs, 1);
+
     ASSERT_NE(rep, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(rep), ebnf::node_kind::ZeroOrMore);
     ASSERT_EQ(parser_testing::childCount(tree, rep), 1u);
 
     const auto alt = parser_testing::nthChild(tree, rep, 0);
+
     ASSERT_NE(alt, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(alt), ebnf::node_kind::Alternative);
     ASSERT_EQ(parser_testing::childCount(tree, alt), 3u);
@@ -57,9 +62,11 @@ namespace {
     for (const auto text : expected_texts) {
       SCOPED_TRACE(index);
       const auto branch = parser_testing::nthChild(tree, alt, index);
+
       ASSERT_EQ(tree.getKind(branch), ebnf::node_kind::Concatenation);
       ASSERT_EQ(parser_testing::childCount(tree, branch), 1u);
       const auto factor = tree.getFirstChild(branch);
+
       EXPECT_EQ(tree.getKind(factor), index == 2 ? ebnf::node_kind::Literal : ebnf::node_kind::Reference);
       EXPECT_EQ(tree.getText(factor), text);
       ++index;
@@ -75,21 +82,25 @@ namespace {
     ASSERT_EQ(parser_testing::childCount(tree, root), 1u);
 
     const auto rule = parser_testing::nthChild(tree, root, 0);
+
     ASSERT_NE(rule, ebnf::none_handle);
     EXPECT_EQ(tree.getText(rule), "terminal");
     ASSERT_EQ(parser_testing::childCount(tree, rule), 1u);
 
     const auto rhs = parser_testing::nthChild(tree, rule, 0);
+
     ASSERT_NE(rhs, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(rhs), ebnf::node_kind::Concatenation);
     ASSERT_EQ(parser_testing::childCount(tree, rhs), 4u);
 
     const auto c0 = parser_testing::nthChild(tree, rhs, 0);
+
     ASSERT_NE(c0, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(c0), ebnf::node_kind::Literal);
     EXPECT_EQ(tree.getText(c0), "'");
 
     const auto c1 = parser_testing::nthChild(tree, rhs, 1);
+
     ASSERT_NE(c1, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(c1), ebnf::node_kind::Exception);
     ASSERT_EQ(parser_testing::childCount(tree, c1), 2u);
@@ -97,15 +108,18 @@ namespace {
     EXPECT_EQ(tree.getText(parser_testing::nthChild(tree, c1, 1)), "'");
 
     const auto c2 = parser_testing::nthChild(tree, rhs, 2);
+
     ASSERT_NE(c2, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(c2), ebnf::node_kind::ZeroOrMore);
     ASSERT_EQ(parser_testing::childCount(tree, c2), 1u);
 
     const auto inner = parser_testing::nthChild(tree, c2, 0);
+
     ASSERT_NE(inner, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(inner), ebnf::node_kind::Exception);
 
     const auto c3 = parser_testing::nthChild(tree, rhs, 3);
+
     ASSERT_NE(c3, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(c3), ebnf::node_kind::Literal);
     EXPECT_EQ(tree.getText(c3), "'");
@@ -125,11 +139,13 @@ namespace {
     ASSERT_EQ(parser_testing::childCount(tree, root), 1u);
 
     const auto rule = parser_testing::nthChild(tree, root, 0);
+
     ASSERT_NE(rule, ebnf::none_handle);
     EXPECT_EQ(tree.getText(rule), "factor");
     ASSERT_EQ(parser_testing::childCount(tree, rule), 1u);
 
     const auto rhs = parser_testing::nthChild(tree, rule, 0);
+
     ASSERT_NE(rhs, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(rhs), ebnf::node_kind::Alternative);
     ASSERT_EQ(parser_testing::childCount(tree, rhs), 5u);
@@ -138,14 +154,17 @@ namespace {
       SCOPED_TRACE(index);
 
       const auto child = parser_testing::nthChild(tree, rhs, index);
+
       ASSERT_NE(child, ebnf::none_handle);
       EXPECT_EQ(tree.getKind(child), ebnf::node_kind::Concatenation);
     }
 
     const auto last = parser_testing::nthChild(tree, rhs, 4);
+
     ASSERT_EQ(tree.getKind(last), ebnf::node_kind::Concatenation);
     ASSERT_EQ(parser_testing::childCount(tree, last), 1u);
     const auto factor = tree.getFirstChild(last);
+
     EXPECT_EQ(tree.getKind(factor), ebnf::node_kind::Reference);
     EXPECT_EQ(tree.getText(factor), "term");
   }
@@ -159,26 +178,31 @@ namespace {
     ASSERT_EQ(parser_testing::childCount(tree, root), 1u);
 
     const auto rule = parser_testing::nthChild(tree, root, 0);
+
     ASSERT_NE(rule, ebnf::none_handle);
     EXPECT_EQ(tree.getText(rule), "concatenation");
     ASSERT_EQ(parser_testing::childCount(tree, rule), 1u);
 
     const auto rhs = parser_testing::nthChild(tree, rule, 0);
+
     ASSERT_NE(rhs, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(rhs), ebnf::node_kind::OneOrMore);
     ASSERT_EQ(parser_testing::childCount(tree, rhs), 1u);
 
     const auto group = parser_testing::nthChild(tree, rhs, 0);
+
     ASSERT_NE(group, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(group), ebnf::node_kind::Concatenation);
     ASSERT_EQ(parser_testing::childCount(tree, group), 2u);
 
     const auto g0 = parser_testing::nthChild(tree, group, 0);
+
     ASSERT_NE(g0, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(g0), ebnf::node_kind::Reference);
     EXPECT_EQ(tree.getText(g0), "factor");
 
     const auto g1 = parser_testing::nthChild(tree, group, 1);
+
     ASSERT_NE(g1, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(g1), ebnf::node_kind::Optional);
   }
@@ -192,16 +216,19 @@ namespace {
     ASSERT_EQ(parser_testing::childCount(tree, root), 1u);
 
     const auto rule = parser_testing::nthChild(tree, root, 0);
+
     ASSERT_NE(rule, ebnf::none_handle);
     EXPECT_EQ(tree.getText(rule), "grammar");
     ASSERT_EQ(parser_testing::childCount(tree, rule), 1u);
 
     const auto rhs = parser_testing::nthChild(tree, rule, 0);
+
     ASSERT_NE(rhs, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(rhs), ebnf::node_kind::ZeroOrMore);
     ASSERT_EQ(parser_testing::childCount(tree, rhs), 1u);
 
     const auto inner = parser_testing::nthChild(tree, rhs, 0);
+
     ASSERT_NE(inner, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(inner), ebnf::node_kind::Reference);
     EXPECT_EQ(tree.getText(inner), "rule");
@@ -218,21 +245,25 @@ namespace {
     ASSERT_EQ(parser_testing::childCount(tree, root), 2u);
 
     const auto r0 = parser_testing::nthChild(tree, root, 0);
+
     ASSERT_NE(r0, ebnf::none_handle);
     EXPECT_EQ(tree.getText(r0), "lhs");
     ASSERT_EQ(parser_testing::childCount(tree, r0), 1u);
 
     const auto rhs0 = parser_testing::nthChild(tree, r0, 0);
+
     ASSERT_NE(rhs0, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(rhs0), ebnf::node_kind::Reference);
     EXPECT_EQ(tree.getText(rhs0), "identifier");
 
     const auto r1 = parser_testing::nthChild(tree, root, 1);
+
     ASSERT_NE(r1, ebnf::none_handle);
     EXPECT_EQ(tree.getText(r1), "rhs");
     ASSERT_EQ(parser_testing::childCount(tree, r1), 1u);
 
     const auto rhs1 = parser_testing::nthChild(tree, r1, 0);
+
     ASSERT_NE(rhs1, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(rhs1), ebnf::node_kind::Reference);
     EXPECT_EQ(tree.getText(rhs1), "alternation");
@@ -252,15 +283,18 @@ namespace {
     ASSERT_EQ(parser_testing::childCount(tree, root), 1u);
 
     const auto rule = parser_testing::nthChild(tree, root, 0);
+
     ASSERT_NE(rule, ebnf::none_handle);
     ASSERT_EQ(parser_testing::childCount(tree, rule), 1u);
 
     const auto rhs = parser_testing::nthChild(tree, rule, 0);
+
     ASSERT_NE(rhs, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(rhs), ebnf::node_kind::Alternative);
     ASSERT_EQ(parser_testing::childCount(tree, rhs), 5u);
 
     const auto first_concat = parser_testing::nthChild(tree, rhs, 0);
+
     ASSERT_NE(first_concat, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(first_concat), ebnf::node_kind::Concatenation);
     ASSERT_EQ(parser_testing::childCount(tree, first_concat), 3u);
@@ -269,16 +303,20 @@ namespace {
     EXPECT_EQ(tree.getText(parser_testing::nthChild(tree, first_concat, 2)), ")");
 
     const auto fourth = parser_testing::nthChild(tree, rhs, 3);
+
     ASSERT_EQ(tree.getKind(fourth), ebnf::node_kind::Concatenation);
     ASSERT_EQ(parser_testing::childCount(tree, fourth), 1u);
     const auto terminal = tree.getFirstChild(fourth);
+
     EXPECT_EQ(tree.getKind(terminal), ebnf::node_kind::Reference);
     EXPECT_EQ(tree.getText(terminal), "terminal");
 
     const auto fifth = parser_testing::nthChild(tree, rhs, 4);
+
     ASSERT_EQ(tree.getKind(fifth), ebnf::node_kind::Concatenation);
     ASSERT_EQ(parser_testing::childCount(tree, fifth), 1u);
     const auto identifier = tree.getFirstChild(fifth);
+
     EXPECT_EQ(tree.getKind(identifier), ebnf::node_kind::Reference);
     EXPECT_EQ(tree.getText(identifier), "identifier");
   }
@@ -292,10 +330,12 @@ namespace {
     ASSERT_EQ(parser_testing::childCount(tree, root), 1u);
 
     const auto rule = parser_testing::nthChild(tree, root, 0);
+
     ASSERT_NE(rule, ebnf::none_handle);
     ASSERT_EQ(parser_testing::childCount(tree, rule), 1u);
 
     const auto rhs = parser_testing::nthChild(tree, rule, 0);
+
     ASSERT_NE(rhs, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(rhs), ebnf::node_kind::Concatenation);
     ASSERT_EQ(parser_testing::childCount(tree, rhs), 4u);
@@ -315,15 +355,18 @@ namespace {
     ASSERT_EQ(parser_testing::childCount(tree, root), 1u);
 
     const auto rule = parser_testing::nthChild(tree, root, 0);
+
     ASSERT_NE(rule, ebnf::none_handle);
     ASSERT_EQ(parser_testing::childCount(tree, rule), 1u);
 
     const auto rhs = parser_testing::nthChild(tree, rule, 0);
+
     ASSERT_NE(rhs, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(rhs), ebnf::node_kind::ZeroOrMore);
     ASSERT_EQ(parser_testing::childCount(tree, rhs), 1u);
 
     const auto alt = parser_testing::nthChild(tree, rhs, 0);
+
     ASSERT_NE(alt, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(alt), ebnf::node_kind::Alternative);
     ASSERT_EQ(parser_testing::childCount(tree, alt), 3u);
@@ -332,9 +375,11 @@ namespace {
       SCOPED_TRACE(index);
 
       const auto child = parser_testing::nthChild(tree, alt, index);
+
       ASSERT_EQ(tree.getKind(child), ebnf::node_kind::Concatenation);
       ASSERT_EQ(parser_testing::childCount(tree, child), 1u);
       const auto literal = tree.getFirstChild(child);
+
       EXPECT_EQ(tree.getKind(literal), ebnf::node_kind::Literal);
       EXPECT_EQ(tree.getText(literal), std::string_view{" \n\t"}.substr(index, 1));
     }
@@ -361,19 +406,23 @@ namespace {
     EXPECT_EQ(tree.getText(parser_testing::nthChild(tree, root, 3)), "grammar");
 
     const auto digit_rule = parser_testing::nthChild(tree, root, 0);
+
     ASSERT_NE(digit_rule, ebnf::none_handle);
     ASSERT_EQ(parser_testing::childCount(tree, digit_rule), 1u);
 
     const auto digit_rhs = parser_testing::nthChild(tree, digit_rule, 0);
+
     ASSERT_NE(digit_rhs, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(digit_rhs), ebnf::node_kind::Alternative);
     EXPECT_EQ(parser_testing::childCount(tree, digit_rhs), 10u);
 
     const auto grammar_rule = parser_testing::nthChild(tree, root, 3);
+
     ASSERT_NE(grammar_rule, ebnf::none_handle);
     ASSERT_EQ(parser_testing::childCount(tree, grammar_rule), 1u);
 
     const auto grammar_rhs = parser_testing::nthChild(tree, grammar_rule, 0);
+
     ASSERT_NE(grammar_rhs, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(grammar_rhs), ebnf::node_kind::ZeroOrMore);
   }

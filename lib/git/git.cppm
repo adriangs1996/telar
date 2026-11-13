@@ -152,6 +152,7 @@ inline std::string_view trimLineEnd(std::string_view text) noexcept {
   while (!text.empty() && (text.back() == '\n' || text.back() == '\r')) {
     text.remove_suffix(1);
   }
+
   return text;
 }
 
@@ -161,16 +162,19 @@ inline bool mapRefspec(std::string_view source, std::string_view destination, st
   if (star == std::string_view::npos) {
     return source == reference && mapped.assign({destination});
   }
+
   const auto prefix = source.substr(0, star);
   const auto suffix = source.substr(star + 1);
   if (reference.size() < prefix.size() + suffix.size() || !reference.starts_with(prefix) || !reference.ends_with(suffix)) {
     return false;
   }
+
   const auto captured = reference.substr(prefix.size(), reference.size() - prefix.size() - suffix.size());
   const auto target = destination.find('*');
   if (target == std::string_view::npos) {
     return false;
   }
+
   return mapped.assign({destination.substr(0, target), captured, destination.substr(target + 1)});
 }
 
@@ -180,6 +184,7 @@ inline std::string_view shortReference(std::string_view name) noexcept {
       return name.substr(prefix.size());
     }
   }
+
   return name;
 }
 
@@ -233,10 +238,12 @@ public:
       forget();
       reset(RepositoryState::unknown);
     }
+
     try {
       objects_.trim();
     } catch (...) {
     }
+
     return status_;
   }
 
@@ -248,11 +255,13 @@ public:
     if (status_.repository != RepositoryState::ready) {
       return;
     }
+
     try {
       static_cast<void>(parseConfig(std::string_view{config_bytes_}, config_scratch_, [&](const ConfigEntry &entry) {
         if (asciiEqualIgnoreCase(entry.section, "remote") && asciiEqualIgnoreCase(entry.key, "url") && !entry.subsection.empty()) {
           visit(entry.subsection);
         }
+
         return true;
       }));
     } catch (...) {
@@ -264,11 +273,13 @@ public:
     if (status_.repository != RepositoryState::ready || !common_) {
       return 0;
     }
+
     try {
       String<Memory> log{AllocatorRef<char, Memory>{memory_}};
       if (readWhole(common_.get(), "logs/refs/stash", log, limits_.packed_refs, nullptr) != ReadStatus::ok) {
         return 0;
       }
+
       return std::min<std::size_t>(limit, static_cast<std::size_t>(std::ranges::count(std::string_view{log}, '\n')));
     } catch (...) {
       return 0;
@@ -283,7 +294,9 @@ public:
     if (status_.repository != RepositoryState::ready || !common_) {
       return;
     }
+
     std::size_t count = 0;
+
     try {
       std::string name{"refs/heads"};
       FileDescriptor heads{::openat(common_.get(), "refs/heads", O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
@@ -292,19 +305,24 @@ public:
       }
     } catch (...) {
     }
+
     if (packed_state_ != ReadStatus::ok) {
       return;
     }
+
     constexpr std::string_view prefix = "refs/heads/";
     const std::string_view text{packed_refs_};
+
     for (std::size_t from = 0; from < text.size() && count < limit;) {
       const auto end = std::min(text.find('\n', from), text.size());
       const auto line = trimLineEnd(text.substr(from, end - from));
+
       from = end + 1;
       const auto space = line.find(' ');
       if (line.starts_with('#') || line.starts_with('^') || space == std::string_view::npos) {
         continue;
       }
+
       const auto reference = line.substr(space + 1);
       if (reference.starts_with(prefix) && validReferenceName(reference, limits_.path_length)) {
         visit(reference.substr(prefix.size()));
@@ -322,6 +340,7 @@ public:
     if (!gitdir_ || status_.repository != RepositoryState::ready) {
       return true;
     }
+
     return probe() != inputs_ || (worktree_ && fingerprintAt(gitdir_.get(), "index") != index_.fingerprint);
   }
 
@@ -365,6 +384,7 @@ private:
 
   inline Inputs probe() const noexcept {
     Inputs inputs;
+
     inputs.head = fingerprintAt(gitdir_.get(), "HEAD");
     inputs.config = fingerprintAt(common_.get(), "config");
     inputs.worktree_config = config_.worktree_config ? fingerprintAt(gitdir_.get(), "config.worktree") : Fingerprint{};
@@ -380,6 +400,7 @@ private:
     if (name.empty() || !path.assign({name})) {
       return {};
     }
+
     return fingerprintAt(perWorktreeReference(name) ? gitdir_.get() : common_.get(), path.c_str());
   }
 
@@ -395,6 +416,7 @@ private:
     FileDescriptor worktree;
     FileDescriptor gitdir;
     FileDescriptor common;
+
     switch (discover(directory, worktree, gitdir, common)) {
     case Discovered::repository:
       break;
@@ -423,6 +445,7 @@ private:
       reset(RepositoryState::unknown);
       return;
     }
+
     const auto gitdir_identity = fingerprintOf(gitdir_status);
     const auto common_identity = fingerprintOf(common_status);
     if (gitdir_identity.device != gitdir_identity_.device || gitdir_identity.inode != gitdir_identity_.inode ||
@@ -431,6 +454,7 @@ private:
       gitdir_identity_ = gitdir_identity;
       common_identity_ = common_identity;
     }
+
     worktree_ = std::move(worktree);
     gitdir_ = std::move(gitdir);
     common_ = std::move(common);
@@ -441,6 +465,7 @@ private:
       reset(state);
       return;
     }
+
     if (config_.bare) {
       worktree_.reset();
     } else if (config_.has_worktree && !status_.linked_worktree) {
@@ -450,6 +475,7 @@ private:
         return;
       }
     }
+
     status_.repository = RepositoryState::ready;
     status_.format = config_.format;
     status_.bare = !worktree_;
@@ -459,10 +485,12 @@ private:
       reset(RepositoryState::invalid);
       return;
     }
+
     const auto inputs = probe();
     if (!refs_current_ || inputs != inputs_) {
       readReferences();
     }
+
     readDivergence();
     readChanges();
 
@@ -482,15 +510,19 @@ private:
     if (directory.empty() || directory.front() != '/' || !start.assign({directory})) {
       return Discovered::error;
     }
+
     FileDescriptor current{::open(start.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
     if (!current) {
       return errno == ENOENT || errno == ENOTDIR ? Discovered::none : Discovered::error;
     }
+
     struct stat current_status{};
     if (::fstat(current.get(), &current_status) != 0) {
       return Discovered::error;
     }
+
     const auto device = current_status.st_dev;
+
     for (std::size_t depth = 0; depth < limits_.discovery_depth; ++depth) {
       struct stat dot{};
       if (::fstatat(current.get(), ".git", &dot, 0) == 0) {
@@ -499,15 +531,18 @@ private:
           if (!candidate) {
             return Discovered::error;
           }
+
           if (looksLikeGitDirectory(candidate.get())) {
             if (!ownedByCaller(current_status)) {
               return Discovered::not_owned;
             }
+
             const auto checked = checkGitDirectory(candidate.get(), common);
             if (checked == Discovered::repository) {
               worktree = std::move(current);
               gitdir = std::move(candidate);
             }
+
             return checked;
           }
         } else if (S_ISREG(dot.st_mode)) {
@@ -524,6 +559,7 @@ private:
         if (checked == Discovered::repository) {
           gitdir = std::move(current);
         }
+
         return checked;
       }
 
@@ -532,12 +568,15 @@ private:
       if (!parent || ::fstat(parent.get(), &parent_status) != 0) {
         return Discovered::error;
       }
+
       if (sameFile(parent_status, current_status) || parent_status.st_dev != device) {
         return Discovered::none;
       }
+
       current = std::move(parent);
       current_status = parent_status;
     }
+
     return Discovered::none;
   }
 
@@ -545,30 +584,36 @@ private:
     if (!ownedByCaller(current_status) || !ownedByCaller(dot)) {
       return Discovered::not_owned;
     }
+
     std::array<char, 4096> bytes;
     std::string_view contents;
     if (readSmall(current.get(), ".git", std::span{bytes}.first(std::min(bytes.size(), limits_.small_file)), contents) != ReadStatus::ok) {
       return Discovered::invalid;
     }
+
     contents = trimLineEnd(contents);
     constexpr std::string_view prefix = "gitdir:";
     if (!contents.starts_with(prefix)) {
       return Discovered::invalid;
     }
+
     const auto target = trimText(contents.substr(prefix.size()), " \t");
     PathName path;
     if (target.empty() || !path.assign({target})) {
       return Discovered::invalid;
     }
+
     auto candidate = openDirectory(current.get(), path.c_str());
     if (!candidate || !looksLikeGitDirectory(candidate.get())) {
       return Discovered::invalid;
     }
+
     const auto checked = checkGitDirectory(candidate.get(), common);
     if (checked == Discovered::repository) {
       worktree = std::move(current);
       gitdir = std::move(candidate);
     }
+
     return checked;
   }
 
@@ -578,9 +623,11 @@ private:
     if (::fstatat(directory, "HEAD", &status, AT_SYMLINK_NOFOLLOW) != 0 || !S_ISREG(status.st_mode)) {
       return false;
     }
+
     if (::fstatat(directory, "commondir", &status, AT_SYMLINK_NOFOLLOW) == 0 && S_ISREG(status.st_mode)) {
       return true;
     }
+
     return ::fstatat(directory, "objects", &status, 0) == 0 && S_ISDIR(status.st_mode) && ::fstatat(directory, "refs", &status, 0) == 0 && S_ISDIR(status.st_mode);
   }
 
@@ -591,9 +638,11 @@ private:
     if (::fstat(directory, &status) != 0) {
       return Discovered::error;
     }
+
     if (!ownedByCaller(status)) {
       return Discovered::not_owned;
     }
+
     std::array<char, 4096> bytes;
     std::string_view contents;
     const auto small = std::span{bytes}.first(std::min(bytes.size(), limits_.small_file));
@@ -604,32 +653,40 @@ private:
       if (target.empty() || !path.assign({target})) {
         return Discovered::invalid;
       }
+
       common = openDirectory(directory, path.c_str());
     } else if (common_file == ReadStatus::missing) {
       common = openDirectory(directory, ".");
     } else {
       return Discovered::invalid;
     }
+
     if (!common) {
       return Discovered::invalid;
     }
+
     if (::fstat(common.get(), &status) != 0) {
       return Discovered::error;
     }
+
     if (!ownedByCaller(status)) {
       return Discovered::not_owned;
     }
+
     if (readSmall(directory, "HEAD", small, contents) != ReadStatus::ok) {
       return Discovered::invalid;
     }
+
     contents = trimLineEnd(contents);
     const bool symbolic = contents.starts_with("ref:") && trimText(contents.substr(4), " \t").starts_with("refs/");
     if (!symbolic && !ObjectId::fromHex(contents, ObjectFormat::sha1) && !ObjectId::fromHex(contents, ObjectFormat::sha256)) {
       return Discovered::invalid;
     }
+
     if (::fstatat(common.get(), "objects", &status, 0) != 0 || !S_ISDIR(status.st_mode) || ::fstatat(common.get(), "refs", &status, 0) != 0 || !S_ISDIR(status.st_mode)) {
       return Discovered::invalid;
     }
+
     return Discovered::repository;
   }
 
@@ -638,14 +695,17 @@ private:
     if (configured_worktree_.empty() || !path.assign({configured_worktree_})) {
       return RepositoryState::invalid;
     }
+
     auto directory = openDirectory(gitdir_.get(), path.c_str());
     struct stat status{};
     if (!directory || ::fstat(directory.get(), &status) != 0) {
       return RepositoryState::invalid;
     }
+
     if (!ownedByCaller(status)) {
       return RepositoryState::not_owned;
     }
+
     worktree_ = std::move(directory);
     return RepositoryState::ready;
   }
@@ -658,6 +718,7 @@ private:
     if (config_loaded_ && identity == inputs_.config && (!config_.worktree_config || worktree_identity == inputs_.worktree_config)) {
       return config_state_;
     }
+
     config_loaded_ = true;
     refs_current_ = false;
     config_ = {};
@@ -665,29 +726,35 @@ private:
     config_state_ = RepositoryState::ready;
     Fingerprint read_identity;
     const auto read = readWhole(common_.get(), "config", config_bytes_, limits_.config_file, &read_identity);
+
     inputs_.config = read_identity;
     if (read == ReadStatus::invalid) {
       config_state_ = RepositoryState::invalid;
       return config_state_;
     }
+
     bool valid = true;
     const auto visit = [&](bool worktree_file) {
       return [&, worktree_file](const ConfigEntry &entry) {
         if (asciiEqualIgnoreCase(entry.section, "core") && entry.subsection.empty()) {
           if (asciiEqualIgnoreCase(entry.key, "repositoryformatversion") && !worktree_file) {
             const auto version = entry.value ? telar::runtime::unsignedDecimal<unsigned>(*entry.value) : std::nullopt;
+
             valid = valid && version.has_value();
             config_.version = version.value_or(0);
           } else if (asciiEqualIgnoreCase(entry.key, "bare")) {
             const auto value = configBoolean(entry.value);
+
             valid = valid && value.has_value();
             config_.bare = value.value_or(false);
           } else if (asciiEqualIgnoreCase(entry.key, "filemode")) {
             const auto value = configBoolean(entry.value);
+
             valid = valid && value.has_value();
             config_.file_mode = value.value_or(true);
           } else if (asciiEqualIgnoreCase(entry.key, "symlinks")) {
             const auto value = configBoolean(entry.value);
+
             valid = valid && value.has_value();
             config_.symlinks = value.value_or(true);
           } else if (asciiEqualIgnoreCase(entry.key, "worktree") && entry.value) {
@@ -697,17 +764,20 @@ private:
         } else if (asciiEqualIgnoreCase(entry.section, "extensions") && entry.subsection.empty() && !worktree_file) {
           extension(entry);
         }
+
         return true;
       };
     };
     if (read == ReadStatus::ok && !parseConfig(std::string_view{config_bytes_}, config_scratch_, visit(false))) {
       valid = false;
     }
+
     if (valid && config_.version == 0) {
       // Repository format 0 ignores extensions, except that it honours worktreeConfig.
       config_.format = ObjectFormat::sha1;
       config_.unsupported = false;
     }
+
     if (valid && config_.worktree_config) {
       const auto worktree_read = readWhole(gitdir_.get(), "config.worktree", worktree_config_bytes_, limits_.config_file, &inputs_.worktree_config);
       if (worktree_read == ReadStatus::invalid ||
@@ -717,16 +787,19 @@ private:
     } else {
       inputs_.worktree_config = {};
     }
+
     if (!valid) {
       config_state_ = RepositoryState::invalid;
     } else if (config_.version > 1 || config_.unsupported) {
       config_state_ = RepositoryState::unsupported;
     }
+
     return config_state_;
   }
 
   inline void extension(const ConfigEntry &entry) {
     const auto value = entry.value.value_or("");
+
     if (asciiEqualIgnoreCase(entry.key, "objectformat")) {
       if (asciiEqualIgnoreCase(value, "sha1")) {
         config_.format = ObjectFormat::sha1;
@@ -742,9 +815,11 @@ private:
     } else {
       // Extensions that change nothing this reader reads; any other is unknown to it.
       bool known = false;
+
       for (const auto name : {"noop", "noop-v1", "preciousobjects", "partialclone", "compatobjectformat", "relativeworktrees", "submodulepathconfig"}) {
         known = known || asciiEqualIgnoreCase(entry.key, name);
       }
+
       config_.unsupported = config_.unsupported || !known;
     }
   }
@@ -785,22 +860,27 @@ private:
         inputs_.packed_refs = {};
       }
     }
+
     if (readSmall(gitdir_.get(), "HEAD", small, contents, &inputs_.head) != ReadStatus::ok) {
       inputs_.head = {};
       return;
     }
+
     contents = trimLineEnd(contents);
     if (!contents.starts_with("ref:")) {
       if (const auto id = ObjectId::fromHex(contents, config_.format)) {
         status_.head = HeadState::detached;
         status_.head_id = *id;
       }
+
       return;
     }
+
     const auto target = trimText(contents.substr(4), " \t");
     if (!target.starts_with("refs/") || !validReferenceName(target, limits_.path_length)) {
       return;
     }
+
     head_reference_.assign(target);
     status_.branch.assign(target.starts_with("refs/heads/") ? target.substr(11) : target);
     switch (resolve(head_reference_, status_.head_id, &inputs_.branch)) {
@@ -814,6 +894,7 @@ private:
       status_.head = HeadState::unknown;
       return;
     }
+
     readUpstream();
   }
 
@@ -822,6 +903,7 @@ private:
     if (!head_reference_.starts_with("refs/heads/")) {
       return;
     }
+
     const std::string_view branch{status_.branch};
     PathName remote;
     PathName merge;
@@ -832,6 +914,7 @@ private:
       if (!asciiEqualIgnoreCase(entry.section, "branch") || entry.subsection != branch || !entry.value) {
         return true;
       }
+
       if (asciiEqualIgnoreCase(entry.key, "remote")) {
         have_remote = remote.assign({*entry.value});
         valid = valid && have_remote;
@@ -840,6 +923,7 @@ private:
         have_merge = merge.assign({*entry.value});
         valid = valid && have_merge;
       }
+
       return true;
     };
     if (!parseConfig(std::string_view{config_bytes_}, config_scratch_, branches) ||
@@ -847,14 +931,18 @@ private:
       status_.upstream = UpstreamState::unknown;
       return;
     }
+
     if (!have_merge || !have_remote || remote.view().empty()) {
       return;
     }
+
     if (!merge.view().starts_with("refs/") || !validReferenceName(merge.view(), limits_.path_length)) {
       status_.upstream = UpstreamState::unknown;
       return;
     }
+
     PathName tracking;
+
     if (remote.view() == ".") {
       tracking.assign({merge.view()});
     } else {
@@ -864,34 +952,42 @@ private:
         if (!asciiEqualIgnoreCase(entry.section, "remote") || entry.subsection != remote.view() || !asciiEqualIgnoreCase(entry.key, "fetch") || !entry.value) {
           return true;
         }
+
         auto spec = *entry.value;
         if (spec.starts_with('^')) {
           spec.remove_prefix(1);
           PathName ignored;
+
           excluded = excluded || (spec.contains('*') ? mapRefspec(spec, "*", merge.view(), ignored) : spec == merge.view());
           return true;
         }
+
         if (spec.starts_with('+')) {
           spec.remove_prefix(1);
         }
+
         const auto colon = spec.find(':');
         if (!matched && colon != std::string_view::npos) {
           matched = mapRefspec(spec.substr(0, colon), spec.substr(colon + 1), merge.view(), tracking);
         }
+
         return true;
       };
       if (!parseConfig(std::string_view{config_bytes_}, config_scratch_, remotes)) {
         status_.upstream = UpstreamState::unknown;
         return;
       }
+
       if (!matched || excluded) {
         return;
       }
     }
+
     if (!validReferenceName(tracking.view(), limits_.path_length)) {
       status_.upstream = UpstreamState::unknown;
       return;
     }
+
     upstream_reference_.assign(tracking.view());
     status_.upstream_name.assign(shortReference(tracking.view()));
     switch (resolve(upstream_reference_, status_.upstream_id, &inputs_.upstream)) {
@@ -914,36 +1010,45 @@ private:
       if (!validReferenceName(name, limits_.path_length) || !path.assign({name})) {
         return RefLookup::invalid;
       }
+
       std::array<char, 4096> bytes;
       std::string_view contents;
       Fingerprint loose;
       const auto read = readSmall(perWorktreeReference(name) ? gitdir_.get() : common_.get(), path.c_str(), std::span{bytes}.first(std::min(bytes.size(), limits_.small_file)), contents, &loose);
+
       if (depth == 0 && identity != nullptr) {
         *identity = read == ReadStatus::ok ? loose : Fingerprint{};
       }
+
       if (read == ReadStatus::invalid) {
         return RefLookup::invalid;
       }
+
       if (read == ReadStatus::missing) {
         return packedReference(name, id);
       }
+
       contents = trimLineEnd(contents);
       if (contents.starts_with("ref:")) {
         const auto target = trimText(contents.substr(4), " \t");
         if (!target.starts_with("refs/")) {
           return RefLookup::invalid;
         }
+
         symbolic_.assign(target);
         name = symbolic_;
         continue;
       }
+
       const auto parsed = ObjectId::fromHex(trimText(contents, " \t"), config_.format);
       if (!parsed) {
         return RefLookup::invalid;
       }
+
       id = *parsed;
       return RefLookup::found;
     }
+
     return RefLookup::invalid;
   }
 
@@ -952,29 +1057,36 @@ private:
     if (packed_state_ == ReadStatus::missing) {
       return RefLookup::missing;
     }
+
     if (packed_state_ != ReadStatus::ok) {
       return RefLookup::invalid;
     }
+
     const std::string_view text{packed_refs_};
     const auto digits = 2 * hashSize(config_.format);
+
     for (std::size_t from = 0;;) {
       const auto found = text.find(name, from);
       if (found == std::string_view::npos) {
         return RefLookup::missing;
       }
+
       from = found + 1;
       const auto after = found + name.size();
       if (found < digits + 1 || text[found - 1] != ' ' || (after < text.size() && text[after] != '\n' && text[after] != '\r')) {
         continue;
       }
+
       const auto line = found - digits - 1;
       if (line != 0 && text[line - 1] != '\n') {
         continue;
       }
+
       const auto parsed = ObjectId::fromHex(text.substr(line, digits), config_.format);
       if (!parsed) {
         return RefLookup::invalid;
       }
+
       id = *parsed;
       return RefLookup::found;
     }
@@ -987,6 +1099,7 @@ private:
       status_.behind = 0;
       return;
     }
+
     // Commits never change, so a divergence holds while both tips do. A failed
     // walk is kept as well, so a limit is not hit again on every read.
     if (!divergence_current_ || status_.head_id != divergence_left_ || status_.upstream_id != divergence_right_) {
@@ -1004,6 +1117,7 @@ private:
         }
       }
     }
+
     status_.divergence = divergence_result_;
     status_.ahead = divergence_.ahead;
     status_.behind = divergence_.behind;
@@ -1016,6 +1130,7 @@ private:
       status_.changes = {};
       return;
     }
+
     const auto state = index_.load(gitdir_.get(), config_.format, limits_);
     if (state != IndexState::ready) {
       status_.staged = state == IndexState::unsupported ? Accuracy::unsupported : Accuracy::unknown;
@@ -1024,6 +1139,7 @@ private:
       staged_current_ = false;
       return;
     }
+
     if (status_.head == HeadState::unknown) {
       status_.staged = Accuracy::unknown;
       staged_current_ = false;
@@ -1038,7 +1154,9 @@ private:
     } else {
       status_.staged = staged_result_;
     }
+
     ChangeCounts counts;
+
     status_.unstaged = unstaged_.compare(worktree_.get(), index_, {config_.format, config_.file_mode, config_.symlinks}, limits_, counts) ? Accuracy::exact : Accuracy::unknown;
     status_.changes = status_.unstaged == Accuracy::exact ? counts : ChangeCounts{};
     if (status_.staged == Accuracy::exact) {
@@ -1050,16 +1168,20 @@ private:
 
   inline bool compareStaged() {
     std::optional<ObjectId> tree;
+
     if (status_.head_id) {
       ObjectType type = ObjectType::none;
       CommitHeader header;
+
       parents_.clear();
       if (objects_.read(status_.head_id, type, commit_, limits_.commit_header) != Lookup::found || type != ObjectType::commit ||
           !parseCommit(commit_, config_.format, limits_.commit_parents, header, parents_)) {
         return false;
       }
+
       tree = header.tree;
     }
+
     return staged_.compare(objects_, index_, tree, limits_, staged_counts_);
   }
 
@@ -1072,19 +1194,24 @@ private:
   inline void looseBranches(int directory, std::string &name, unsigned depth, std::size_t limit, std::size_t &count, Visit &visit) const {
     constexpr unsigned maximum_depth = 16;
     runtime::DirectoryStream entries{directory};
+
     while (const auto *entry = entries.next()) {
       if (count >= limit) {
         return;
       }
+
       const std::string_view child{entry->d_name};
       if (child == "." || child == "..") {
         continue;
       }
+
       struct stat state{};
       if (::fstatat(directory, entry->d_name, &state, AT_SYMLINK_NOFOLLOW) != 0) {
         continue;
       }
+
       const auto size = name.size();
+
       name.push_back('/');
       name.append(child);
       if (S_ISDIR(state.st_mode) && depth < maximum_depth) {
@@ -1096,6 +1223,7 @@ private:
         visit(std::string_view{name}.substr(std::string_view{"refs/heads/"}.size()));
         ++count;
       }
+
       name.resize(size);
     }
   }

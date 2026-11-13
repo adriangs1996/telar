@@ -39,6 +39,7 @@ Color shapeColor(const QColor &color) {
 std::optional<Rect> physicalClipBounds(const QRectF &bounds, qreal density) {
   const std::array values{bounds.x() * density, bounds.y() * density, bounds.width() * density, bounds.height() * density};
   constexpr auto maximum = static_cast<qreal>(std::numeric_limits<float>::max());
+
   for (const auto value : values) {
     if (!std::isfinite(value) || std::abs(value) > maximum) {
       return std::nullopt;
@@ -179,10 +180,12 @@ QSGNode *NativeRoundedRectangle::updatePaintNode(QSGNode *previous, [[maybe_unus
   }
 
   auto border = shapeColor(border_color_);
+
   border.a *= border_alpha_;
   const auto shape = RoundedRectangle::resolve({.x = physical_width, .y = physical_height}, {.fill = shapeColor(color_), .border = border, .radius = static_cast<float>(radius_ * density), .border_width = static_cast<float>(border_width_ * density), .backdrop = shapeColor(backdrop_color_), .replace_background = replace_background_});
 
   RoundedRectanglePaint paint{.shape = shape};
+
   if (paint_clip_) {
     const auto clip = physicalClipBounds(*paint_clip_, density);
     if (!clip) {

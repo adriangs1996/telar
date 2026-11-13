@@ -74,6 +74,7 @@ constexpr std::uint64_t stale_delivery_ns = 8 * second;
 void fractionsAndResets() {
   StatusAge clock;
   StatusAgeSample sample{.pane_id = 1, .pane_generation = 1, .status = AgentStatus::working, .provider = AgentProvider::codex, .reported_seconds = initial_age};
+
   clock.observe(sample, second);
   clock.observe(sample, second + (second / 2));
   require(clock.interval().seconds(2 * second) == initial_age + 1, "same-age reports must retain fractional progress");
@@ -94,6 +95,7 @@ void fractionsAndResets() {
   require(clock.interval().seconds(generation_change_ns) == 2, "pane reuse must reset elapsed age");
   require(clock.interval().seconds(0) == 2, "backward timestamps must not subtract age");
   constexpr StatusAgeInterval saturated{.age_ns = std::numeric_limits<std::uint64_t>::max() - second, .sampled_ns = 0};
+
   require(saturated.elapsed(std::numeric_limits<std::uint64_t>::max()) == std::numeric_limits<std::uint64_t>::max(), "elapsed nanoseconds must saturate");
   require(saturated.seconds(std::numeric_limits<std::uint64_t>::max()) == std::numeric_limits<std::uint32_t>::max(), "display seconds must saturate");
 }
@@ -102,6 +104,7 @@ void revisionsAndSourceReplacement() {
   SystemAllocator memory;
   AgentReplica replica{memory};
   std::array entries{agentSnapshotEntry(initial_age), agentSnapshotEntry(initial_age)};
+
   entries.back().pane_id = 2;
   require(replica.apply({.revision = 1, .entries = entries}, second), "first revision must be accepted");
   require(!replica.apply({.revision = 1, .entries = {}}, stale_delivery_ns), "duplicate revisions must not erase agents");
@@ -111,6 +114,7 @@ void revisionsAndSourceReplacement() {
   require(replica.entries().front().pane_id == 2 && replica.entries().front().status_clock.interval().seconds(2 * second) == initial_age + 1, "clocks must follow identity through reordering");
   entries.back() = entries.front();
   bool rejected = false;
+
   try {
     replica.apply({.revision = 3, .entries = entries}, 3 * second);
   } catch (const std::invalid_argument &) {
@@ -129,6 +133,7 @@ void attachmentCapabilitiesFollowExactAgentIdentities() {
   SystemAllocator memory;
   AgentReplica replica{memory};
   std::array entries{agentSnapshotEntry(), agentSnapshotEntry()};
+
   entries[0].attachments = AgentAttachmentMarkers::stable_number;
   entries[1].pane_id = 2;
   entries[1].attachments = AgentAttachmentMarkers::pasted_path;
@@ -150,6 +155,7 @@ void statusChangesFollowCommittedIdentities() {
   SystemAllocator memory;
   AgentReplica replica{memory};
   std::array entries{agentSnapshotEntry(), agentSnapshotEntry(), agentSnapshotEntry()};
+
   entries[1].pane_id = 2;
   entries[2].pane_id = 3;
   replica.apply({.revision = 1, .entries = entries}, second);
@@ -158,12 +164,14 @@ void statusChangesFollowCommittedIdentities() {
   std::swap(entries[0], entries[2]);
   entries[0].status = AgentStatus::blocked;
   constexpr std::uint16_t changed_pane_index = 9;
+
   entries[0].pane_index = changed_pane_index;
   entries[0].provider = AgentProvider::claude;
   entries[1].status = AgentStatus::done;
   ++entries[1].pane_generation;
   replica.apply({.revision = 2, .entries = entries}, 2 * second);
   const auto changes = replica.statusChanges();
+
   require(changes.size() == 1, "a replacement generation must not inherit a prior status");
   require(changes.front().pane_id == 3 && changes.front().pane_index == changed_pane_index && changes.front().provider == AgentProvider::claude, "changes must retain new metadata in snapshot order");
   require(changes.front().previous == AgentStatus::working && changes.front().current == AgentStatus::blocked, "changes must name both committed statuses");
@@ -171,6 +179,7 @@ void statusChangesFollowCommittedIdentities() {
   entries[0].status = AgentStatus::failed;
   entries[2] = entries[0];
   bool rejected = false;
+
   try {
     replica.apply({.revision = 3, .entries = entries}, 3 * second);
   } catch (const std::invalid_argument &) {
@@ -214,18 +223,22 @@ private:
 
 void allocationFailurePreservesTheReplica() {
   RejectingAllocator memory;
+
   {
     AgentReplica replica{memory};
     std::array entries{agentSnapshotEntry(initial_age)};
+
     replica.apply({.revision = 1, .entries = entries}, second);
     replica.apply({.revision = 2, .entries = entries}, second);
     const auto interval = replica.entries().front().status_clock.interval();
     const auto live_bytes = memory.liveBytes();
     const std::string title(80, 'x');
+
     entries.front().session_title = title;
     entries.front().status = AgentStatus::blocked;
     memory.setRejecting(true);
     bool rejected = false;
+
     try {
       replica.apply({.revision = 3, .entries = entries}, 4 * second);
     } catch (const std::bad_alloc &) {
@@ -252,6 +265,7 @@ void warmedSnapshotsReuseStorage() {
   AgentReplica replica{memory};
   std::string title(title_bytes, 'x');
   std::array<AgentSnapshotEntry, decltype(replica)::capacity> entries;
+
   for (std::size_t index = 0; index < entries.size(); ++index) {
     entries[index] = agentSnapshotEntry(initial_age);
     entries[index].pane_id = index + 1;
@@ -264,6 +278,7 @@ void warmedSnapshotsReuseStorage() {
   const auto allocations = memory.allocations();
   constexpr std::uint64_t revisions = 100;
   constexpr std::uint64_t alphabet_size = 26;
+
   for (std::uint64_t revision = 3; revision <= revisions; ++revision) {
     title.front() = static_cast<char>('a' + (revision % alphabet_size));
     replica.apply({.revision = revision, .entries = entries}, revision * second);
@@ -286,6 +301,7 @@ void sessionUsesTheInjectedClock() {
   telar::gui::test::Transport transport;
   Session<SystemAllocator, telar::gui::test::Transport, FakeClock> session{memory, transport};
   const std::array entries{agentSnapshotEntry(initial_age)};
+
   FakeClock::current = second;
   telar::gui::test::deliver(session, AgentSnapshot{.revision = 1, .entries = entries});
   require(session.agents().front().status_clock.interval().sampled_ns == second, "session must use the compile-time clock dependency");
@@ -305,14 +321,17 @@ void paneListRevisions() {
       PaneListEntry{.pane_id = 1, .pane_generation = 1, .location = location, .foreground = "node", .foreground_age_s = initial_age, .ports = ports},
       PaneListEntry{.pane_id = 2, .pane_generation = 1, .location = location, .foreground = "zsh", .shell = true},
   };
+
   FakeClock::current = second;
   telar::gui::test::deliver(session, PaneList{.revision = 2, .entries = entries});
   const auto listed = session.paneList();
+
   require(session.paneListRevision() == 2 && listed.size() == 2 && listed.front().foreground.view() == "node" && listed.back().shell, "the pane list must replace the replica");
   require(listed.front().age.seconds(2 * second) == initial_age + 1, "a foreground age must advance from its arrival");
   require(std::ranges::equal(listed.front().ports(), ports) && listed.back().ports().empty(), "listening ports must follow their pane");
   const std::array<std::uint16_t, 2> unordered{9229, 3000};
   bool unsorted = false;
+
   try {
     telar::gui::test::deliver(session, PaneList{.revision = 3, .entries = std::array{PaneListEntry{.pane_id = 1, .pane_generation = 1, .location = location, .foreground = "node", .ports = unordered}}});
   } catch (const EncodingError &) {
@@ -324,6 +343,7 @@ void paneListRevisions() {
   require(session.paneList().size() == 2, "a stale revision must not replace the pane list");
   entries.back().pane_id = 1;
   bool rejected = false;
+
   try {
     telar::gui::test::deliver(session, PaneList{.revision = 3, .entries = entries});
   } catch (const std::invalid_argument &) {
@@ -338,11 +358,13 @@ void paneListRevisions() {
 
 void animationBoundaries() {
   constexpr auto interval = AgentAnimation::pulse_interval_ns;
+
   require(AgentAnimation::deadline(AgentStatus::working, true, interval) == 2 * interval, "working animation must request the next global 120 ms boundary");
   require(AgentAnimation::deadline(AgentStatus::ready, true, second) == 2 * second, "ready clocks must request the next global second");
   require(!AgentAnimation::deadline(AgentStatus::blocked, true, second), "blocked status must not animate");
   require(!AgentAnimation::deadline(AgentStatus::working, false, second), "offline status must not animate");
   constexpr std::uint64_t frame_rollover = 256;
+
   require(AgentAnimation::alpha(frame_rollover * interval) == AgentAnimation::alpha(0), "pulse phase must retain the original eight-bit rollover");
 }
 

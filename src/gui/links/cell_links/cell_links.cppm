@@ -54,6 +54,7 @@ struct UriView {
     UriView result{.scheme = text.substr(0, colon), .path = {}};
     const auto rest = text.substr(colon + 1);
     auto path_start = std::size_t{0};
+
     if (rest.starts_with("//")) {
       path_start = std::min(rest.find_first_of("/?#", 2), rest.size());
       if (!result.authority(rest.substr(2, path_start - 2), rest.substr(2).starts_with('/'))) {
@@ -62,10 +63,12 @@ struct UriView {
     }
 
     const auto path_end = std::min(rest.find_first_of("?#", path_start), rest.size());
+
     result.path = rest.substr(path_start, path_end - path_start);
     auto suffix = rest.substr(path_end);
     if (suffix.starts_with('?')) {
       const auto query_end = std::min(suffix.find('#', 1), suffix.size());
+
       result.query = suffix.substr(1, query_end - 1);
       suffix.remove_prefix(query_end);
     }
@@ -85,6 +88,7 @@ private:
     }
 
     const auto value = runtime::unsignedDecimal<std::uint16_t>(text);
+
     return !value || (negative && *value != 0) ? std::nullopt : value;
   }
 
@@ -94,10 +98,12 @@ private:
     }
 
     std::size_t host_start = 0;
+
     if (const auto user_info_end = text.find('@'); user_info_end != std::string_view::npos) {
       host_start = user_info_end + 1;
       const auto info = text.substr(0, user_info_end);
       const auto separator = info.find(':');
+
       user = info.substr(0, separator);
       if (separator != std::string_view::npos && separator + 1 < info.size()) {
         password = info.substr(separator + 1);
@@ -113,6 +119,7 @@ private:
     }
 
     auto host_end = text.size();
+
     if (text[host_start] == '[') {
       const auto bracket = text.rfind(']');
       if (bracket == std::string_view::npos) {
@@ -195,6 +202,7 @@ public:
 
     const auto lower = byte_offset - std::min(byte_offset, LinkText::maximum_uri_bytes - 1);
     auto index = byte_offset + 1;
+
     while (index > lower) {
       --index;
       const auto prefix = prefixAt(line.substr(index));
@@ -204,6 +212,7 @@ public:
 
       const auto limit = index + std::min(line.size() - index, LinkText::maximum_uri_bytes + 1);
       auto end = index;
+
       while (end < limit && !LinkText::separator(line[end])) {
         ++end;
       }
@@ -265,6 +274,7 @@ private:
     constexpr std::string_view closers{")]}"};
     constexpr std::size_t pair_count = 3;
     std::array<std::ptrdiff_t, pair_count> balance{};
+
     for (const auto byte : text) {
       if (const auto index = openers.find(byte); index < balance.size()) {
         --balance[index];
@@ -274,6 +284,7 @@ private:
     }
 
     auto end = text.size();
+
     while (end != 0) {
       const auto byte = text[end - 1];
       if (std::string_view{".,;:!?"}.contains(byte)) {
@@ -372,6 +383,7 @@ public:
 
     const auto lower = byte_offset - std::min(byte_offset, LinkText::maximum_span_bytes);
     auto index = byte_offset + 1;
+
     while (index > lower) {
       --index;
       if (line[index] != '[') {
@@ -391,6 +403,7 @@ private:
     constexpr std::size_t label_delimiters = 2;
     const auto label_limit = start + std::min(line.size() - start, label_delimiters + LinkText::maximum_label_bytes);
     auto label_end = start + 1;
+
     while (label_end < label_limit && line[label_end] != ']') {
       if (LinkText::control(line[label_end])) {
         return {};
@@ -407,6 +420,7 @@ private:
     const auto limit = destination_start + std::min(line.size() - destination_start, LinkText::maximum_uri_bytes + 1);
     std::size_t depth = 0;
     auto end = destination_start;
+
     while (end < limit) {
       const auto byte = line[end];
       if (byte == '(') {
@@ -458,11 +472,13 @@ public:
     }
 
     auto start = byte_offset;
+
     while (start > 0 && tokenByte(line[start - 1])) {
       --start;
     }
 
     auto end = byte_offset + 1;
+
     while (end < line.size() && tokenByte(line[end])) {
       ++end;
     }
@@ -472,6 +488,7 @@ public:
     }
 
     auto segment = start;
+
     while (segment < end) {
       const auto separator = std::min(line.substr(0, end).find(':', segment), end);
       const auto suffix_end = positionEnd(line.substr(0, end), separator);
@@ -496,10 +513,12 @@ public:
 
     PathLocation result{.path = text.substr(0, separator)};
     const auto line_digits = numberLength(text.substr(separator + 1));
+
     result.line = number(text.substr(separator + 1, line_digits));
     const auto column_start = separator + 1 + line_digits;
     if (line_digits != 0 && column_start < text.size() && text[column_start] == ':') {
       const auto column_digits = numberLength(text.substr(column_start + 1));
+
       result.column = number(text.substr(column_start + 1, column_digits));
     }
 
@@ -517,6 +536,7 @@ public:
     }
 
     PathLocation result{.path = {}, .line = number(text.substr(0, line_digits))};
+
     text.remove_prefix(line_digits);
     if (text.starts_with(':') || text.starts_with('C') || text.starts_with('c')) {
       const auto column_digits = numberLength(text.substr(1));
@@ -543,6 +563,7 @@ private:
 
   [[nodiscard]] inline static std::uint32_t number(std::string_view text) noexcept {
     std::uint32_t result = 0;
+
     static_cast<void>(std::from_chars(text.data(), text.data() + text.size(), result));
 
     return result;
@@ -590,6 +611,7 @@ private:
 
   [[nodiscard]] inline static std::size_t trimLeading(std::string_view text) noexcept {
     std::size_t start = 0;
+
     while (start < text.size() && static_cast<unsigned char>(text[start]) >= LinkText::first_non_ascii) {
       ++start;
     }
@@ -599,6 +621,7 @@ private:
 
   [[nodiscard]] inline static std::size_t trimTrailing(std::string_view text) noexcept {
     auto end = text.size();
+
     while (end != 0 && (text[end - 1] == '.' || static_cast<unsigned char>(text[end - 1]) >= LinkText::first_non_ascii)) {
       --end;
     }
@@ -703,6 +726,7 @@ private:
   [[nodiscard]] inline static std::optional<std::size_t> windowStart(const LinkGrid &grid, std::size_t index) noexcept {
     std::size_t visited = 0;
     std::size_t bytes = 0;
+
     while (bytes <= LinkText::maximum_span_bytes) {
       if (visited++ == maximum_walk_cells) {
         return {};
@@ -724,6 +748,7 @@ private:
     std::size_t visited = 0;
     std::size_t length = 0;
     std::optional<std::size_t> cursor_offset;
+
     while (true) {
       if (visited++ == maximum_walk_cells) {
         return {};
@@ -758,6 +783,7 @@ private:
   [[nodiscard]] inline static std::optional<std::pair<CellPosition, CellPosition>> positions(const LinkGrid &grid, std::size_t index, TextRange extent) noexcept {
     std::size_t offset = 0;
     std::optional<CellPosition> first;
+
     while (true) {
       const auto end = offset + grid.cells[index].utf8().size();
       if (!first && offset <= extent.start && end > extent.start) {
@@ -851,6 +877,7 @@ private:
   template <std::size_t Capacity>
   [[nodiscard]] inline static BoundedText<Capacity> decode(std::string_view text, EscapePolicy policy = EscapePolicy::strict) {
     BoundedText<Capacity> decoded;
+
     while (!text.empty()) {
       if (!text.starts_with('%')) {
         decoded.append(text.substr(0, 1));
@@ -904,6 +931,7 @@ private:
     }
 
     PathLocation location{.path = {}};
+
     if (parsed->fragment) {
       const auto fragment = PathRecognizer::fragment(*parsed->fragment);
       if (!fragment) {

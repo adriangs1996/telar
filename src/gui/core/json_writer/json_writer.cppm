@@ -53,6 +53,7 @@ public:
   // The samples are copied into the buffer, region `a`, in the order they were taken.
   [[nodiscard]] inline tbc::view<std::span<const std::uint8_t>, tbc::lt::a> ordered(tbc::view<Samples &, tbc::lt::a> buffer) const noexcept {
     const auto start = (next_ + capacity - count_) % capacity;
+
     for (std::size_t index = 0; index < count_; ++index) {
       buffer[index] = samples_[(start + index) % capacity];
     }
@@ -129,6 +130,7 @@ struct MetricLevels {
       return value + margin >= danger ? MetricSeverity::danger : value + margin >= warning ? MetricSeverity::warning
                                                                                             : MetricSeverity::normal;
     };
+
     switch (metric) {
     case BarMetric::cpu:
       return rising(cpu_warning, cpu_danger);
@@ -156,6 +158,7 @@ public:
     for (std::size_t index = 0; index < states_.size(); ++index) {
       const auto metric = static_cast<BarMetric>(index);
       auto &state = states_[index];
+
       if (!MetricLevels::available(metric, sample)) {
         state = {};
         continue;
@@ -169,6 +172,7 @@ public:
           state.current = raw;
           state.pending_count = 0;
         }
+
         continue;
       }
 
@@ -260,6 +264,7 @@ private:
   inline void container(Container kind, Consumer &&consume) {
     append(kind == Container::object ? "{" : "[");
     const auto previous = std::exchange(first_, true);
+
     std::invoke(std::forward<Consumer>(consume), *this);
     append(kind == Container::object ? "}" : "]");
     first_ = previous;
@@ -299,6 +304,7 @@ private:
   void write(const Text &text) {
     const auto bytes = std::span{text};
     const auto end = std::ranges::find(bytes, '\0');
+
     write(std::string_view{bytes.data(), static_cast<std::size_t>(end - bytes.begin())});
   }
 

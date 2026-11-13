@@ -28,6 +28,7 @@ public:
     if (routes.size() > routes_.size()) {
       throw std::logic_error{"Too many clipboard client routes"};
     }
+
     std::copy(routes.begin(), routes.end(), routes_.begin());
     route_count_ = routes.size();
     preferred_ = preferred;
@@ -43,6 +44,7 @@ public:
     if (separator == std::string_view::npos || separator > 1) {
       return;
     }
+
     const char kind = separator == 0 ? 'c' : payload.front();
     const char selection = kind == 'p' || kind == 's' ? kind : 'c';
     const auto encoded = payload.substr(separator + 1);
@@ -51,12 +53,15 @@ public:
     if (access == Access::deny || pending_ || cancellation_ || reply_count_ != 0 || !preferred_) {
       return;
     }
+
     try {
       if (!read && !decode<base64::Padding::optional>(encoded)) {
         return;
       }
+
       pending_ = makeOwned<Pending>(memory_, memory_);
       auto &request = *pending_;
+
       request.traditional = true;
       request.selection = selection;
       request.write = !read;
@@ -81,14 +86,19 @@ public:
     if (!metadata) {
       return;
     }
+
     const auto data = separator == std::string_view::npos ? std::string_view{} : payload.substr(separator + 1);
+
     if (metadata->invalid_values) {
       if (transaction_ && (metadata->operation == ClipboardOperation::data || metadata->operation == ClipboardOperation::alias)) {
         abort(ClipboardStatus::invalid, ending, reply);
       }
+
       return;
     }
+
     const bool had_pending = pending_ != nullptr;
+
     try {
       switch (metadata->operation) {
       case ClipboardOperation::read:
@@ -101,30 +111,36 @@ public:
         } else {
           transaction_ = makeOwned<ClipboardWrite<Memory>>(memory_, memory_, *metadata, maximum_bytes);
         }
+
         return;
       case ClipboardOperation::data:
       case ClipboardOperation::alias:
         if (!transaction_) {
           return;
         }
+
         if (metadata->operation == ClipboardOperation::data && metadata->mime.view().empty()) {
           commit(ending, policy, reply);
           return;
         }
+
         if (metadata->mime.view().empty()) {
           abort(ClipboardStatus::invalid, ending, reply);
           return;
         }
+
         const auto result = metadata->operation == ClipboardOperation::data ? transaction_->data(metadata->mime.view(), data) : transaction_->alias(metadata->mime.view(), data);
         if (result != ClipboardStatus::ok) {
           abort(result, ending, reply);
         }
+
         return;
       }
     } catch (const std::bad_alloc &) {
       if (!had_pending) {
         pending_.reset();
       }
+
       if (transaction_) {
         abort(ClipboardStatus::io_error, ending, reply);
       } else {
@@ -139,9 +155,12 @@ public:
     if (!pending_ || pending_->announced) {
       return std::nullopt;
     }
+
     auto &pending = *pending_;
+
     pending.ticket = {pane, generation, pending.route.generation, pending.nonce};
     const auto contents = pending.prepareViews();
+
     return ClipboardDesktopRequest{
         .ticket = pending.ticket,
         .write = pending.write,
@@ -169,34 +188,42 @@ public:
     if (!pending_ || !pending_->announced || pending_->route != sender || pending_->ticket != completion.ticket || !live(sender)) {
       return false;
     }
+
     completion.validate();
     if (completion.prepared) {
       if (pending_->committed) {
         return false;
       }
+
       if (completion.status != ClipboardDesktopStatus::success) {
         if (pending_->traditional && !pending_->write && completion.status == ClipboardDesktopStatus::denied) {
           auto builder = buildReply();
+
           builder.reply().append("\x1b]52;");
           builder.reply().append({&pending_->selection, 1});
           builder.reply().append(";\x1b\\");
           builder.commit();
         }
+
         finish(completion.status == ClipboardDesktopStatus::unsupported ? ClipboardStatus::unsupported : completion.status == ClipboardDesktopStatus::denied ? ClipboardStatus::denied : ClipboardStatus::io_error);
         return true;
       }
+
       pending_->prepared = true;
       pending_->remember = completion.remember;
       return true;
     }
+
     if (!pending_->committed) {
       return false;
     }
+
     try {
       completeResult(sender, completion);
     } catch (const std::bad_alloc &) {
       finish(ClipboardStatus::io_error);
     }
+
     return true;
   }
 
@@ -204,15 +231,19 @@ private:
   void completeResult(ClipboardRoute sender, const CompleteClipboardDesktop &completion) {
     const auto result = completion.status == ClipboardDesktopStatus::success ? ClipboardStatus::done : completion.status == ClipboardDesktopStatus::denied ? ClipboardStatus::denied : completion.status == ClipboardDesktopStatus::unsupported ? ClipboardStatus::unsupported : ClipboardStatus::io_error;
     auto &pending = *pending_;
+
     if (result != ClipboardStatus::done) {
       finish(result);
       return;
     }
+
     if (pending.remember && !pending.metadata.name.view().empty() && !pending.metadata.password.view().empty()) {
       grants_.grant(pending.metadata.password.view(), sender, pending.write, false);
     }
+
     auto builder = buildReply();
     auto &asynchronous_reply = builder.reply();
+
     if (pending.traditional) {
       if (!pending.write) {
         asynchronous_reply.append("\x1b]52;");
@@ -224,6 +255,7 @@ private:
             break;
           }
         }
+
         asynchronous_reply.append("\x1b\\");
       }
     } else if (pending.write) {
@@ -232,25 +264,31 @@ private:
       std::array<ClipboardContentView, 4> contents;
       std::size_t count = 0;
       std::size_t total = 0;
+
       for (std::size_t index = 0; index < pending.mime_count; ++index) {
         const auto mime = pending.mimes[index].view();
+
         for (const auto &content : completion.contents) {
           if (content.mime != mime && !(textMime(mime) && textMime(content.mime))) {
             continue;
           }
+
           if (content.data.size() > maximum_bytes - total) {
             status(pending.metadata, ClipboardStatus::too_large, pending.ending, asynchronous_reply);
             builder.commit();
             pending_.reset();
             return;
           }
+
           contents[count++] = {mime, content.data};
           total += content.data.size();
           break;
         }
       }
+
       clipboardReadSuccess(asynchronous_reply, ClipboardPacket{.primary = pending.metadata.primary, .id = pending.metadata.id.view(), .ending = pending.ending}, std::span{contents}.first(count), completion.available, pending.listing);
     }
+
     builder.commit();
     pending_.reset();
     return;
@@ -261,6 +299,7 @@ public:
     if (pending_) {
       cancelPending();
     }
+
     pending_.reset();
     transaction_.reset();
     grants_.clear();
@@ -268,6 +307,7 @@ public:
     for (auto &reply : asynchronous_replies_) {
       reply.discard();
     }
+
     reply_count_ = 0;
     reply_head_ = 0;
   }
@@ -286,10 +326,12 @@ public:
       if (!reply.publish(sink)) {
         return false;
       }
+
       reply.clear();
       reply_head_ = (reply_head_ + 1) % asynchronous_replies_.size();
       --reply_count_;
     }
+
     return true;
   }
 
@@ -302,6 +344,7 @@ public:
       cancelPending();
       finish(ClipboardStatus::denied);
     }
+
     transaction_.reset();
     grants_.clear();
   }
@@ -310,10 +353,12 @@ public:
     if (!live(route) || reply_count_ != 0) {
       return false;
     }
+
     try {
       const auto password = ClipboardGrants::password();
       auto builder = buildReply();
       auto &asynchronous_reply = builder.reply();
+
       clipboardReadSuccess(asynchronous_reply, ClipboardPacket{.primary = primary, .password = password.view()}, {}, available, true);
       grants_.grant(password.view(), route, false, true);
       builder.commit();
@@ -335,6 +380,7 @@ public:
     if (pending_ && pending_->prepared && !pending_->committed) {
       return ClipboardDesktopExecute{pending_->ticket};
     }
+
     return std::nullopt;
   }
 
@@ -363,7 +409,9 @@ private:
       for (std::size_t index = 0; index < mime_count; ++index) {
         mime_views[index] = mimes[index].view();
       }
+
       std::size_t contents = 0;
+
       if (transaction) {
         for (const auto &content : transaction->contents()) {
           content_views[contents++] = {content.mime, content.data};
@@ -371,6 +419,7 @@ private:
       } else if (traditional && write) {
         content_views[contents++] = {"text/plain", text};
       }
+
       return contents;
     }
 
@@ -410,11 +459,13 @@ private:
     if (encoded.size() > maximum_encoded_bytes) {
       return false;
     }
+
     decoded_.resize(std::min(maximum_bytes, encoded.size() / 4 * 3 + encoded.size() % 4 * 3 / 4));
     const auto size = base64::decode<Rule>(encoded, decoded_);
     if (!size) {
       return false;
     }
+
     decoded_.resize(*size);
     return true;
   }
@@ -437,9 +488,11 @@ private:
   void finish(ClipboardStatus result) {
     if (!pending_->traditional) {
       auto builder = buildReply();
+
       status(pending_->metadata, result, pending_->ending, builder.reply());
       builder.commit();
     }
+
     pending_.reset();
   }
 
@@ -450,6 +503,7 @@ private:
         return granted;
       }
     }
+
     return std::nullopt;
   }
 
@@ -457,22 +511,28 @@ private:
     if (!decode(data)) {
       return;
     }
+
     std::string_view decoded{reinterpret_cast<const char *>(decoded_.data()), decoded_.size()};
+
     try {
       validateUtf8(decoded);
     } catch (const EncodingError &) {
       return;
     }
+
     if (policy.clipboard_read == Access::deny || !preferred_) {
       status(metadata, ClipboardStatus::denied, ending, reply);
       return;
     }
+
     if (pending_ || cancellation_ || reply_count_ != 0) {
       status(metadata, ClipboardStatus::busy, ending, reply);
       return;
     }
+
     pending_ = makeOwned<Pending>(memory_, memory_);
     auto &request = *pending_;
+
     request.metadata = metadata;
     request.ending = ending;
     while (const auto mime = ClipboardWrite<Memory>::token(decoded)) {
@@ -482,7 +542,9 @@ private:
         request.mimes[request.mime_count++].assign(*mime);
       }
     }
+
     const auto granted = authorizedRoute(grants_, metadata, false, request.mime_count == 0);
+
     request.route = granted.value_or(*preferred_);
     request.prompt = policy.clipboard_read == Access::ask && request.mime_count != 0 && !granted;
   }
@@ -493,20 +555,25 @@ private:
       abort(result, ending, reply);
       return;
     }
+
     if (policy.clipboard_write == Access::deny || !preferred_) {
       abort(ClipboardStatus::denied, ending, reply);
       return;
     }
+
     if (pending_ || cancellation_ || reply_count_ != 0) {
       abort(ClipboardStatus::busy, ending, reply);
       return;
     }
+
     pending_ = makeOwned<Pending>(memory_, memory_);
     auto &request = *pending_;
+
     request.metadata = transaction_->metadata;
     request.write = true;
     request.ending = ending;
     const auto granted = authorizedRoute(grants_, request.metadata, true, false);
+
     request.route = granted.value_or(*preferred_);
     request.prompt = policy.clipboard_write == Access::ask && !granted;
     request.transaction = std::move(transaction_);

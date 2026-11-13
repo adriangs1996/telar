@@ -112,6 +112,7 @@ struct AgentCardGeometry {
 
   [[nodiscard]] inline Rect row(Rect bounds, Row role) const noexcept {
     float top = 0;
+
     if (role == Row::title) {
       top = small_row + px(title_gap);
     } else if (role == Row::detail) {
@@ -203,6 +204,7 @@ struct HistoryModalGeometry {
         .width = width,
         .height = height,
     };
+
     const auto compact = width < chrome.px(compact_width) || height < chrome.px(compact_height);
     auto content = bounds;
     const auto footer = takeBottom(content, footer_height);
@@ -210,6 +212,7 @@ struct HistoryModalGeometry {
     const auto header = takeTop(content, compact ? 0 : header_height);
     auto list = content;
     Rect inspection{.x = content.x, .y = content.y};
+
     if (inspecting) {
       inspection = content;
       if (width >= chrome.px(split_width)) {
@@ -251,6 +254,7 @@ private:
 
   inline static Rect takeBottom(Rect &remaining, float height) noexcept {
     const auto taken = std::min(remaining.height, height);
+
     remaining.height -= taken;
 
     return {.x = remaining.x, .y = remaining.y + remaining.height, .width = remaining.width, .height = taken};
@@ -259,6 +263,7 @@ private:
   inline static Rect takeTop(Rect &remaining, float height) noexcept {
     const auto taken = std::min(remaining.height, height);
     const Rect top{.x = remaining.x, .y = remaining.y, .width = remaining.width, .height = taken};
+
     remaining.y += taken;
     remaining.height -= taken;
 
@@ -294,6 +299,7 @@ struct HistoryInspectionGeometry {
 
   [[nodiscard]] inline static HistoryInspectionGeometry derive(Rect area, ChromeMetrics chrome, Point cell) noexcept {
     HistoryModalGeometry modal{};
+
     modal.inspection = area;
     const auto content = modal.inspectionContent(chrome);
     const auto bounded = [](float value) {
@@ -322,6 +328,7 @@ struct HistoryInspectionGeometry {
   [[nodiscard]] inline std::array<Rect, maximum_actions> buttons(std::span<const float> advances, ChromeMetrics chrome) const noexcept {
     std::array<Rect, maximum_actions> result{};
     auto x = actions.x;
+
     for (std::size_t index = 0; index < std::min(advances.size(), result.size()); ++index) {
       const auto width = advances[index] + chrome.px(button_padding);
       if (x + width > actions.right()) {
@@ -383,6 +390,7 @@ struct PaneDecorationGeometry {
 
     const auto right = content.right();
     const auto bottom = content.bottom();
+
     return {
         .outer = outer,
         .content = content,

@@ -94,6 +94,7 @@ struct GlyphPlacement {
     const auto y = -FontMetrics::roundFixed(glyph.y_offset) - top;
     const auto width = static_cast<float>(mask->alpha.width());
     const auto height = static_cast<float>(mask->alpha.height());
+
     if (natural) {
       return {.x = static_cast<float>(x), .y = std::round(origin.baseline) + static_cast<float>(y), .width = width, .height = height};
     }
@@ -128,10 +129,12 @@ struct TextProjection {
     }
 
     float opacity = 1;
+
     if (fade_width > 0) {
       const auto start = std::max(area.x, area.right() - fade_width);
       const auto span = area.right() - start;
       const auto center = clipped.x + (clipped.width / 2);
+
       opacity = span == 0 ? static_cast<float>(center < area.right()) : std::clamp((area.right() - center) / span, 0.0F, 1.0F);
     }
 
@@ -139,6 +142,7 @@ struct TextProjection {
       constexpr float pixel_center = 0.5F;
       const auto right = std::ceil(clipped.right() - pixel_center);
       const auto bottom = std::ceil(clipped.bottom() - pixel_center);
+
       clipped.x = std::ceil(clipped.x - pixel_center);
       clipped.y = std::ceil(clipped.y - pixel_center);
       clipped.width = std::max(0.0F, right - clipped.x);
@@ -183,6 +187,7 @@ TextProjection projection(const ChromeTextPaint &paint) {
     const auto y = static_cast<float>((placement.origin.y() + placement.baseline) * paint.scale);
     const auto &clip = placement.clip;
     const Rect area{.x = static_cast<float>(clip.x() * paint.scale), .y = static_cast<float>(clip.y() * paint.scale), .width = static_cast<float>(clip.width() * paint.scale), .height = static_cast<float>(clip.height() * paint.scale)};
+
     validateCoordinates({x, y, area.x, area.y, area.width, area.height});
 
     return {.origin = {.fixed_x = static_cast<std::int64_t>(std::round(x * fixed_unit)), .baseline = y, .x = x}, .anchor = {}, .area = area, .scale = paint.scale};
@@ -192,11 +197,14 @@ TextProjection projection(const ChromeTextPaint &paint) {
   const auto raw_y = static_cast<float>(paint.scene_origin.y() * paint.scale);
   const auto width = static_cast<float>(paint.bounds.width() * paint.scale);
   const auto height = static_cast<float>(paint.bounds.height() * paint.scale);
+
   validateCoordinates({raw_x, raw_y, width, height});
 
   auto x = raw_x;
+
   if (paint.horizontal_alignment.testFlag(Qt::AlignHCenter)) {
     const auto inset = std::max(0.0F, width - static_cast<float>(paint.advance)) / 2;
+
     x += paint.whole_pixel_centering ? std::floor(inset) : inset;
   } else if (paint.horizontal_alignment.testFlag(Qt::AlignRight)) {
     x += std::max(0.0F, width - static_cast<float>(paint.advance));
@@ -263,10 +271,12 @@ public:
   void paint(const TextProjection &position, Color foreground) {
     auto *vertices = static_cast<AlphaMaskVertex *>(geometry_.vertexData());
     std::size_t offset = 0;
+
     for (const auto &glyph : glyphs_) {
       const auto quad = position.quad(glyph, placement_);
       const auto atlas = glyph.mask->texture->normalizedTextureSubRect();
       const QRectF source{atlas.x() + (quad.source.x() * atlas.width()), atlas.y() + (quad.source.y() * atlas.height()), quad.source.width() * atlas.width(), quad.source.height() * atlas.height()};
+
       writeAlphaMaskQuad(std::span<AlphaMaskVertex, alpha_mask_triangle_vertices>{vertices + offset, alpha_mask_triangle_vertices}, quad.bounds, source, quad.opacity);
       offset += alpha_mask_triangle_vertices;
     }
@@ -306,6 +316,7 @@ public:
   void paint(ChromeGlyphImages<FontSet, optical> &images, const ChromeTextPaint &paint, const TextProjection &position) {
     auto colored = images.colored(placed_.glyph.index, paint.pixel_height, placed_.role, paint.style, paint.color);
     const auto quad = position.quad(placed_, MaskSampling::pixel_centers);
+
     image_.setTexture(colored->texture.get());
     colored_ = std::move(colored);
     image_.setRect(quad.bounds);
@@ -359,6 +370,7 @@ public:
 
     const auto position = projection(paint);
     QMatrix4x4 transform;
+
     transform.translate(static_cast<float>((position.anchor.x() / paint.scale) - paint.scene_origin.x()), static_cast<float>((position.anchor.y() / paint.scale) - paint.scene_origin.y()));
     setMatrix(transform);
     for (auto *mesh : meshes_) {
@@ -375,17 +387,21 @@ private:
     const auto fitted = std::ranges::any_of(glyphs, [](const auto &glyph) {
       return fonts::fittedFont(glyph.role);
     });
+
     const auto sampling = AlphaMaskSampling::standard;
     const auto blend = paint.foreground ? AlphaMaskBlend::straight : AlphaMaskBlend::premultiplied;
     const auto placement = fitted ? MaskSampling::pixel_centers : MaskSampling::continuous;
+
     if constexpr (retain_meshes) {
       const auto index = retained_.next_mesh++;
       if (index < meshes_.size() && meshes_[index]->accepts(glyphs, sampling, blend, placement)) {
         meshes_[index]->replace(glyphs);
       } else {
         auto mesh = std::make_unique<GlyphMesh>(std::move(glyphs), ink(paint), sampling, blend, placement);
+
         if (index < meshes_.size()) {
           const std::unique_ptr<GlyphMesh> previous{meshes_[index]};
+
           insertChildNodeBefore(mesh.get(), previous.get());
           meshes_[index] = mesh.release();
         } else {
@@ -394,6 +410,7 @@ private:
       }
     } else {
       auto mesh = std::make_unique<GlyphMesh>(std::move(glyphs), ink(paint), sampling, blend, placement);
+
       meshes_.append(&adoptSceneNode(*this, std::move(mesh)));
     }
   }
@@ -408,6 +425,7 @@ private:
     if constexpr (retain_meshes) {
       retained_.next_mesh = 0;
       auto group = std::move(retained_.group);
+
       group.clear();
       rebuildGroups(paint, group);
       retained_.group = std::move(group);
@@ -416,6 +434,7 @@ private:
       }
     } else {
       QList<GlyphPlacement> group;
+
       rebuildGroups(paint, group);
     }
   }
@@ -445,11 +464,13 @@ private:
 
     fonts::InkBounds bounds;
     std::int64_t advance = 0;
+
     for (const auto &glyph : paint.glyphs.subspan(span.first, span.count)) {
       const auto &image = images_->glyph(glyph.index, paint.pixel_height, span.role, paint.style);
       if (!image.mask->alpha.isNull()) {
         const auto x = FontMetrics::roundFixed(advance + glyph.x_offset) + image.left;
         const auto y = -FontMetrics::roundFixed(glyph.y_offset) - image.top;
+
         bounds.include({.x = static_cast<float>(x), .y = static_cast<float>(y), .width = static_cast<float>(image.mask->alpha.width()), .height = static_cast<float>(image.mask->alpha.height())});
       }
 
@@ -465,9 +486,11 @@ private:
   void appendSpan(const fonts::TextSpan &span, const ChromeTextPaint &paint, QList<GlyphPlacement> &group) {
     const auto transform = spanTransform(span, paint);
     std::int64_t advance = 0;
+
     for (const auto &glyph : paint.glyphs.subspan(span.first, span.count)) {
       const auto &image = images_->glyph(glyph.index, paint.pixel_height, span.role, paint.style);
       GlyphPlacement placed{.glyph = glyph, .mask = image.mask, .advance_before = advance, .transform = transform, .role = span.role, .run_offset = span.offset, .left = image.left, .top = image.top};
+
       advance += glyph.x_advance;
       if (image.mask->alpha.isNull()) {
         continue;
@@ -475,6 +498,7 @@ private:
 
       if (images_->software()) {
         auto node = std::make_unique<SoftwareGlyph<FontSet, retain_meshes>>(window_, std::move(placed));
+
         node->paint(*images_, paint, projection(paint));
         software_glyphs_.append(&adoptSceneNode(*this, std::move(node)));
       } else {
@@ -510,6 +534,7 @@ tbc::view<QSGNode *, tbc::lt::a> paintText(tbc::view<QSGNode *, tbc::lt::a> prev
   auto *scene = dynamic_cast<ChromeScene<ResidentFonts, retain_meshes> *>(owner.get());
   if (scene == nullptr || scene->fonts() != fonts.get() || (retain_meshes && scene->rasterization() != rasterization)) {
     auto replacement = std::make_unique<ChromeScene<ResidentFonts, retain_meshes>>(window, std::move(fonts), rasterization);
+
     scene = replacement.get();
     owner = std::move(replacement);
   }

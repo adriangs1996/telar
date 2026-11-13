@@ -60,6 +60,7 @@ public:
     if (size > live_) {
       std::abort();
     }
+
     system_.deallocate(pointer, size, alignment);
     add(phase.frees, 1);
     add(phase.freed, size);
@@ -77,6 +78,7 @@ private:
       valid_ = false;
       return false;
     }
+
     value += count;
     return true;
   }
@@ -103,6 +105,7 @@ struct Component {
     const GhosttyColorRgb background{0, 0, 0};
     const bool blink = true;
     const bool disabled = false;
+
     checkGhostty(ghostty_terminal_set(terminal.get(), GHOSTTY_TERMINAL_OPT_COLOR_FOREGROUND, &foreground));
     checkGhostty(ghostty_terminal_set(terminal.get(), GHOSTTY_TERMINAL_OPT_COLOR_BACKGROUND, &background));
     checkGhostty(ghostty_terminal_set(terminal.get(), GHOSTTY_TERMINAL_OPT_DEFAULT_CURSOR_BLINK, &blink));
@@ -123,24 +126,29 @@ struct Workload {
 
 void execute(Component &probe, Workload &work, std::size_t iterations) {
   std::array<Byte, 65536> output;
+
   for (std::size_t iteration = 0; iteration < iterations; ++iteration) {
     for (std::size_t offset = 0; offset < work.input.size();) {
       const auto count = std::min(work.fragment == 0 ? work.input.size() : work.fragment, work.input.size() - offset);
       if (probe.controller.feed(work.input.subspan(offset, count)) != count) {
         throw std::runtime_error{"Accounting input was blocked"};
       }
+
       offset += count;
 
       const auto batch = probe.responses->peekBatch();
       std::size_t written = 0;
+
       for (std::size_t index = 0; index < batch.count; ++index) {
         const auto response = batch.message(index);
         if (response.size() > output.size() - written) {
           throw std::runtime_error{"Accounting sink capacity exceeded"};
         }
+
         std::copy(response.begin(), response.end(), output.data() + written);
         written += response.size();
       }
+
       work.messages += batch.count;
       work.sink_copy_bytes += written;
       probe.responses->consumeBytes(written);
@@ -157,6 +165,7 @@ std::size_t number(std::string_view input) {
   if (parsed.ec != std::errc{} || parsed.ptr != input.data() + input.size() || value > 100000) {
     throw std::runtime_error{"Invalid accounting argument"};
   }
+
   return value;
 }
 
@@ -170,39 +179,49 @@ int main(int argc, char **argv) {
     if (argc != 6) {
       throw std::runtime_error{"Expected input path, iterations, fragment, setup and warmup iterations"};
     }
+
     const auto iterations = number(argv[2]);
     const auto fragment = number(argv[3]);
     const auto setup = number(argv[4]);
     const auto warmup = number(argv[5]);
+
     if (setup > 4 || iterations == 0) {
       throw std::runtime_error{"Invalid accounting setup"};
     }
+
     std::ifstream input{argv[1], std::ios::binary};
     std::vector<Byte> data(1024 * 1024 + 1);
+
     input.read(reinterpret_cast<char *>(data.data()), data.size());
     if (!input.eof() || input.gcount() == 0 || input.gcount() == static_cast<std::streamsize>(data.size())) {
       throw std::runtime_error{"Accounting input must contain1byte to1MiB"};
     }
+
     data.resize(static_cast<std::size_t>(input.gcount()));
     CountingMemory counter;
     Memory memory{counter, 64 * 1024 * 1024};
     std::array<Counters, 5> phases;
     Workload work{data, fragment};
+
     {
       Component probe{memory};
+
       phases[0] = counter.phase;
       counter.begin();
       probe.controller.policy.checksum_report = setup != 0;
       if (setup >= 2) {
         const std::string_view cell = setup == 2 ? "A" : setup == 3 ? "\x1b[1;3mA\x1b[0mB" : "Á";
         Workload seed{{reinterpret_cast<const Byte *>(cell.data()), cell.size()}, 0};
+
         execute(probe, seed, setup == 3 ? 80 * 24 / 2 : 80 * 24);
         if (setup == 4) {
           constexpr std::string_view flags = "\x1b[4#y";
           Workload options{{reinterpret_cast<const Byte *>(flags.data()), flags.size()}, 0};
+
           execute(probe, options, 1);
         }
       }
+
       phases[1] = counter.phase;
       counter.begin();
       execute(probe, work, warmup);
@@ -213,6 +232,7 @@ int main(int argc, char **argv) {
       phases[3] = counter.phase;
       counter.begin();
     }
+
     phases[4] = counter.phase;
     if (!counter.valid() || memory.liveBytes() != 0 || memory.failures() != 0) {
       throw std::runtime_error{"Accounting overflow, allocation failure or leaked owned bytes"};
@@ -223,8 +243,10 @@ int main(int argc, char **argv) {
       if (index != 0) {
         std::putchar(',');
       }
+
       print(phases[index]);
     }
+
     std::puts("]}");
     return 0;
   } catch (const std::exception &error) {

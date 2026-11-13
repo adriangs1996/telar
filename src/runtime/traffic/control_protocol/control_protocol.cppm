@@ -110,6 +110,7 @@ public:
     }
 
     plugins::FrameWriter writer{output};
+
     writer.integer(magic);
     writer.tag(role);
     writer.tag(selection);
@@ -120,12 +121,14 @@ public:
   inline static std::size_t encodedSize(const Event &event) {
     validate(event);
     constexpr auto fixed_bytes = 2 * sizeof(Byte) + 6 * sizeof(std::uint64_t) + 5 * sizeof(std::uint32_t);
+
     return fixed_bytes + event.interface.size() + event.bytes.size();
   }
 
   inline static auto encode(tbc::view<std::span<Byte>, tbc::lt::a> output, const Event &event) -> tbc::view<std::span<const Byte>, tbc::lt::a> {
     validate(event);
     plugins::FrameWriter writer{output};
+
     writer.tag(event.kind);
     writer.integer(event.session);
     writer.integer(event.sequence);
@@ -149,6 +152,7 @@ public:
 
     plugins::FrameReader reader{input};
     Event event;
+
     event.kind = reader.tag(Kind::datagram);
     event.session = reader.integer<std::uint64_t>();
     event.sequence = reader.integer<std::uint64_t>();
@@ -174,6 +178,7 @@ public:
 
     std::array<Byte, prefix_bytes> output{};
     plugins::FrameWriter writer{output};
+
     writer.integer(static_cast<std::uint32_t>(bytes));
     writer.integer(dropped);
     return output;
@@ -181,6 +186,7 @@ public:
 
   inline static auto name(Kind kind) noexcept -> std::string_view {
     constexpr std::array names{"ready", "packet", "interface.open", "interface.closed", "interface.error", "statistics", "capture.started", "capture.stopped", "error", "exchange", "flow.open", "stream.data", "flow.close", "flow.error", "flow.gap", "intercept.request", "http.intercept.request", "datagram"};
+
     return names.at(static_cast<std::size_t>(kind));
   }
 
@@ -263,6 +269,7 @@ public:
   // The request views the reader's frame.
   inline static tbc::view<Request, tbc::lt::a> read(plugins::FrameReader &reader) {
     Request request;
+
     request.operation = reader.tag(Operation::list);
     request.id = reader.integer<std::uint64_t>();
     request.cursor = reader.integer<std::uint64_t>();
@@ -296,6 +303,7 @@ public:
     if (input.size() > Limits::page_bytes || input.size() < page_header_bytes) { throw EncodingError{"Invalid recording page size"}; }
     plugins::FrameReader reader{input.first(page_header_bytes)};
     Page page;
+
     page.id = reader.integer<std::uint64_t>();
     page.active = reader.boolean();
     page.gap = reader.boolean();
@@ -321,6 +329,7 @@ private:
     if (request.max_bytes == 0 || request.max_bytes > Limits::session_bytes || request.max_events == 0 || request.max_events > Limits::events || request.max_age_ms == 0 || request.max_age_ms > Limits::age_ms || request.limit == 0 || request.limit > Limits::page_events || selection == 0 || selection > static_cast<Byte>(Selection::all) || request.filter.size() > traffic::Limits::filter_bytes || request.filter.contains('\0') || request.host.size() > 255 || request.host.contains('\0') || (no_identity ? request.id != 0 : request.id == 0)) {
       throw EncodingError{"Invalid recording request"};
     }
+
     if (request.operation != Operation::start && !request.filter.empty()) { throw EncodingError{"A recording filter is set at creation"}; }
   }
 };
@@ -410,6 +419,7 @@ public:
     if (size == 0 || size > Limits::reply_bytes) { throw EncodingError{"Invalid network control frame size"}; }
     std::array<Byte, prefix_bytes> output;
     plugins::FrameWriter writer{output};
+
     writer.integer(static_cast<std::uint32_t>(size));
     return output;
   }
@@ -417,6 +427,7 @@ public:
   inline static tbc::view<std::span<const Byte>, tbc::lt::a> encode(tbc::view<std::span<Byte>, tbc::lt::a> output, const Request &request) {
     validate(request);
     plugins::FrameWriter writer{output.first(std::min(output.size(), Limits::request_bytes))};
+
     writer.integer(request.direction != redirect::Direction::outbound ? direction_magic : request.process_count != 0 ? selection_magic : request.recording ? recording_magic : magic);
     writer.tag(request.operation);
     writer.integer(static_cast<Byte>(request.target_count));
@@ -426,6 +437,7 @@ public:
       writer.integer(static_cast<Byte>(request.process_count));
       for (const auto pid : std::span{request.processes}.first(request.process_count)) { writer.integer(pid); }
     }
+
     if (request.direction != redirect::Direction::outbound) { writer.tag(request.direction); }
     return writer.finish();
   }
@@ -436,6 +448,7 @@ public:
     const auto version = reader.integer<std::uint32_t>();
     if (version != magic && version != recording_magic && version != selection_magic && version != direction_magic) { throw EncodingError{"Incompatible network control protocol"}; }
     Request request;
+
     request.operation = reader.tag(version != magic ? Operation::recording : Operation::ca_rotate);
     request.target_count = reader.integer<Byte>();
     if (request.target_count > request.targets.size()) { throw EncodingError{"Too many redirect targets"}; }
@@ -446,6 +459,7 @@ public:
       if (request.process_count > request.processes.size()) { throw EncodingError{"Too many selected processes"}; }
       for (auto &pid : std::span{request.processes}.first(request.process_count)) { pid = reader.integer<std::uint32_t>(); }
     }
+
     if (version == direction_magic) { request.direction = reader.tag(redirect::Direction::both); }
     reader.finish();
     validate(request);
@@ -455,6 +469,7 @@ public:
   inline static tbc::view<std::span<const Byte>, tbc::lt::a> encode(tbc::view<std::span<Byte>, tbc::lt::a> output, const Reply &reply) {
     validate(reply);
     plugins::FrameWriter writer{output.first(std::min(output.size(), Limits::reply_bytes))};
+
     writer.integer(reply.recording.empty() ? magic : recording_magic);
     writer.tag(reply.result);
     writer.tag(reply.status.capture);
@@ -485,6 +500,7 @@ public:
     const auto version = reader.integer<std::uint32_t>();
     if (version != magic && version != recording_magic) { throw EncodingError{"Incompatible network control protocol"}; }
     Reply reply;
+
     reply.result = reader.tag(Result::cleanup_required);
     reply.status.capture = reader.tag(CaptureState::offline);
     reply.status.redirect = reader.tag(RedirectState::cleanup_required);
@@ -516,13 +532,16 @@ private:
     if ((!redirect::allowsIncoming(request.direction) && !redirect::allowsOutgoing(request.direction)) || (request.direction != redirect::Direction::outbound && request.operation != Operation::redirect_start) || (redirect::allowsIncoming(request.direction) && request.process_count != 0)) { throw EncodingError{"Incoming redirect selects local services by account; process selection is outbound only"}; }
     if (request.process_count > request.processes.size() || (request.process_count != 0 && request.operation != Operation::redirect_start)) { throw EncodingError{"Processes are only valid for redirect selection"}; }
     const auto processes = std::span{request.processes}.first(request.process_count);
+
     for (std::size_t index = 0; index < processes.size(); ++index) {
       if (processes[index] == 0 || processes[index] > INT32_MAX || std::ranges::find(processes.first(index), processes[index]) != processes.first(index).end()) { throw EncodingError{"Invalid or duplicate selected process"}; }
     }
+
     if ((request.operation == Operation::recording) != request.recording.has_value()) { throw EncodingError{"Recording operation requires a recording request"}; }
     if (request.target_count > request.targets.size() || (request.operation == Operation::redirect_start ? request.target_count == 0 : request.target_count != 0)) {
       throw EncodingError{"Redirect start requires targets; other operations accept none"};
     }
+
     for (const auto target : std::span{request.targets}.first(request.target_count)) {
       if (target.empty() || target.size() > Limits::target_bytes || target.find_first_of("\r\n\0", 0, 3) != std::string_view::npos) {
         throw EncodingError{"Invalid redirect target"};
@@ -535,6 +554,7 @@ private:
     if (reply.message.size() > 1024 || reply.certificate.size() > Limits::certificate_bytes || reply.argument_count > reply.authorization.size() || (!reply.fingerprint_sha1.empty() && reply.fingerprint_sha1.size() != 40) || (!reply.fingerprint_sha256.empty() && reply.fingerprint_sha256.size() != 64)) {
       throw EncodingError{"Invalid network control reply"};
     }
+
     for (const auto argument : std::span{reply.authorization}.first(reply.argument_count)) {
       if (argument.empty() || argument.size() > 4096 || argument.contains('\0')) { throw EncodingError{"Invalid authorization argument"}; }
     }
@@ -570,6 +590,7 @@ public:
     if (expression.contains('\0')) {
       throw std::invalid_argument{"Traffic filter contains NUL"};
     }
+
     expression_.assign(expression);
 
     // Validate syntax before accepting a subscription, including before capture starts.
@@ -588,6 +609,7 @@ public:
         return apply(entry->program, event);
       }
     }
+
     for (auto &entry : programs_) {
       if (!entry) {
         entry.emplace();
@@ -596,6 +618,7 @@ public:
         return apply(entry->program, event);
       }
     }
+
     throw std::runtime_error{"Traffic filter link-type limit reached"};
   }
 
@@ -610,6 +633,7 @@ private:
     }
 
     std::array<char, Limits::filter_bytes + 1> expression{};
+
     std::ranges::copy(filter, expression.begin());
     if (pcap_compile(dead.get(), &program.value, expression.data(), 1, PCAP_NETMASK_UNKNOWN) < 0) {
       throw std::invalid_argument{pcap_geterr(dead.get())};
@@ -618,6 +642,7 @@ private:
 
   inline static bool apply(const Program &program, const Event &event) noexcept {
     pcap_pkthdr header{};
+
     header.caplen = static_cast<bpf_u_int32>(event.bytes.size());
     header.len = event.original_bytes;
     return pcap_offline_filter(&program.value, &header, event.bytes.data()) != 0;
@@ -668,6 +693,7 @@ struct FlowIdentity {
 
   inline static FlowIdentity of(const FlowEvent &event) noexcept {
     FlowIdentity identity{.id = event.id, .visibility = event.visibility, .source = event.source};
+
     identity.client.assign(event.client.substr(0, endpoint_bytes));
     identity.server.assign(event.server.substr(0, endpoint_bytes));
     identity.host.assign(event.host.substr(0, ProxyHostname::maximum_bytes));
@@ -683,6 +709,7 @@ class FlowCodec {
 public:
   inline static auto encode(tbc::view<std::span<Byte>, tbc::lt::a> output, const FlowEvent &event) -> tbc::view<std::span<const Byte>, tbc::lt::a> {
     plugins::FrameWriter writer{output};
+
     writer.integer(event.id);
     writer.tag(event.direction);
     writer.tag(event.visibility);
@@ -700,6 +727,7 @@ public:
   inline static FlowEvent decode(std::span<const Byte> input) {
     plugins::FrameReader reader{input};
     FlowEvent event;
+
     event.id = reader.integer<std::uint64_t>();
     event.direction = reader.tag(Direction::inbound);
     event.visibility = reader.tag(Visibility::plaintext);
@@ -715,6 +743,7 @@ public:
     if (event.client.size() > 128 || event.server.size() > 128 || event.host.size() > 253 || event.reason.size() > 128) {
       throw EncodingError{"Invalid flow metadata"};
     }
+
     return event;
   }
 };
@@ -787,6 +816,7 @@ public:
   inline static void packet(plugins::FrameWriter &writer, const Event &event, std::uint32_t interface) {
     if (event.kind != Kind::packet || event.link_type > UINT16_MAX) { throw EncodingError{"Packet cannot be represented in PCAPNG"}; }
     const auto interface_bytes = static_cast<std::uint32_t>(20 + 8 + padded(event.interface.size()));
+
     writer.integer<std::uint32_t>(1);
     writer.integer(interface_bytes);
     writer.integer(static_cast<std::uint16_t>(event.link_type));
@@ -798,6 +828,7 @@ public:
     writer.integer<std::uint32_t>(0);
     writer.integer(interface_bytes);
     const auto packet_bytes = static_cast<std::uint32_t>(32 + padded(event.bytes.size()));
+
     writer.integer<std::uint32_t>(6);
     writer.integer(packet_bytes);
     writer.integer(interface);

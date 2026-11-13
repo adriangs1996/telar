@@ -60,30 +60,35 @@ struct AtomicFrameControl {
     bool cursor_static = false;
     bool quiet = false;
     KittyControlFields fields{text};
+
     while (const auto field = fields.next()) {
       switch (field->key) {
       case 'a':
         if (transmit || field->value != "T") {
           return std::nullopt;
         }
+
         transmit = true;
         break;
       case 't':
         if (medium || (field->value != "s" && field->value != "f")) {
           return std::nullopt;
         }
+
         medium = field->value == "s" ? GraphicsInputMedium::shared_memory : GraphicsInputMedium::file;
         break;
       case 'C':
         if (cursor_static || field->value != "1") {
           return std::nullopt;
         }
+
         cursor_static = true;
         break;
       case 'q':
         if (quiet || field->value != "2") {
           return std::nullopt;
         }
+
         quiet = true;
         break;
       case 'i':
@@ -99,6 +104,7 @@ struct AtomicFrameControl {
         if (destination || !value || *value == 0) {
           return std::nullopt;
         }
+
         destination = *value;
         break;
       }
@@ -180,6 +186,7 @@ struct AtomicFrame {
         return frame;
       }
     }
+
     return std::nullopt;
   }
 
@@ -224,17 +231,20 @@ struct KittyFileRange {
     KittyFileRange range;
     bool file = false;
     KittyControlFields fields{control};
+
     while (const auto field = fields.next()) {
       switch (field->key) {
       case 'a':
         if (field->value != "t" && field->value != "T") {
           return std::nullopt;
         }
+
         break;
       case 't':
         if (field->value != "f" && field->value != "t") {
           return std::nullopt;
         }
+
         file = true;
         range.temporary = field->value == "t";
         break;
@@ -242,6 +252,7 @@ struct KittyFileRange {
         if (field->value != "0") {
           return std::nullopt;
         }
+
         break;
       case 'S':
       case 'O': {
@@ -249,17 +260,20 @@ struct KittyFileRange {
         if (!number) {
           return std::nullopt;
         }
+
         if (field->key == 'S') {
           range.size = *number;
         } else {
           range.offset = *number;
         }
+
         break;
       }
       default:
         break;
       }
     }
+
     return file && fields.valid() ? std::optional{range} : std::nullopt;
   }
 };
@@ -285,6 +299,7 @@ public:
     const std::string_view text{reinterpret_cast<const char *>(bytes.data()), bytes.size()};
     std::size_t emitted = 0;
     std::size_t search_from = 0;
+
     while (const auto parsed = nextCommand(text, search_from)) {
       const auto &[start, control, path] = *parsed;
       const auto command = text.substr(start + introducer.size(), search_from - terminator.size() - start - introducer.size());
@@ -296,6 +311,7 @@ public:
       if (!range) {
         continue;
       }
+
       sink.ingest(bytes.subspan(emitted, start - emitted));
       emitted = start;
       if (forward(Transmission{control, path, *range, storage_limit}, sink)) {
@@ -324,6 +340,7 @@ public:
         }
       }
     }
+
     sink.ingest(bytes);
     sink.ingest({reinterpret_cast<const std::uint8_t *>(ending.data()), ending.size()});
   }
@@ -342,6 +359,7 @@ private:
       if (start == std::string_view::npos) {
         return std::nullopt;
       }
+
       const auto end = text.find(terminator, start + introducer.size());
       if (end == std::string_view::npos) {
         return std::nullopt;
@@ -369,6 +387,7 @@ private:
     if (!file || request.range.offset > file->size) {
       return false;
     }
+
     GraphicsTemporaryPath temporary{*file};
     if (request.range.temporary && !temporary.authorize().empty()) {
       return false;
@@ -383,6 +402,7 @@ private:
     std::array<std::uint8_t, raw_chunk_bytes * chunks_per_read> raw;
     std::array<char, chunk_capacity> chunk;
     std::uint64_t sent = 0;
+
     while (sent < length) {
       auto batch = std::span{raw}.first(static_cast<std::size_t>(std::min<std::uint64_t>(raw.size(), length - sent)));
       if (!file->read(batch, request.range.offset + sent)) {
@@ -393,6 +413,7 @@ private:
           }
 
           constexpr std::string_view final_chunk = "\x1b_Gm=0;\x1b\\";
+
           sink.ingest({reinterpret_cast<const std::uint8_t *>(final_chunk.data()), final_chunk.size()});
           return true;
         }
@@ -401,27 +422,33 @@ private:
       while (!batch.empty()) {
         const auto bytes = batch.first(std::min(batch.size(), raw_chunk_bytes));
         const auto control = sent == 0 ? request.control : std::string_view{};
+
         sent += bytes.size();
         sink.ingestEncodedChunk(encodeChunk(chunk, control, bytes, sent < length));
         batch = batch.subspan(bytes.size());
       }
     }
+
     return true;
   }
 
   inline static tbc::view<std::span<const std::uint8_t>, tbc::lt::a> encodeChunk(tbc::view<std::span<char>, tbc::lt::a> chunk, std::string_view control, std::span<const std::uint8_t> raw, bool more) {
     auto *end = std::copy(introducer.begin(), introducer.end(), chunk.data());
+
     if (!control.empty()) {
       KittyControlFields fields{control};
+
       while (const auto field = fields.next()) {
         if (field->key == 't' || field->key == 'S' || field->key == 'O' || field->key == 'm') {
           continue;
         }
+
         *end++ = field->key;
         *end++ = '=';
         end = std::copy(field->value.begin(), field->value.end(), end);
         *end++ = ',';
       }
+
       end = std::copy_n("t=d,", 4, end);
     }
 
@@ -456,10 +483,12 @@ public:
     if (placeholder_ == nullptr) {
       return;
     }
+
     if (!memory_.reserve(byte_count)) {
       memory_.deallocate(std::exchange(placeholder_, nullptr), placeholder_bytes, alignof(std::uint8_t));
       return;
     }
+
     reserved_bytes_ = byte_count;
   }
 
@@ -471,6 +500,7 @@ public:
     if (reserved_bytes_ != 0) {
       memory_.release(std::exchange(reserved_bytes_, 0));
     }
+
     memory_.deallocate(std::exchange(placeholder_, nullptr), placeholder_bytes, alignof(std::uint8_t));
   }
 
@@ -540,11 +570,13 @@ public:
     if (!bytes.empty()) {
       std::memcpy(bytes_.data() + byte_count_, bytes.data(), bytes.size());
     }
+
     if (previous != nullptr) {
       previous->length += bytes.size();
     } else {
       events_[event_count_++] = Output{byte_count_, bytes.size()};
     }
+
     byte_count_ += bytes.size();
     return true;
   }
@@ -554,6 +586,7 @@ public:
       events_[event_count_ - 1] = size;
       return true;
     }
+
     if (event_count_ == event_capacity) {
       return false;
     }
@@ -583,6 +616,7 @@ public:
 
   inline bool hasReadCapacity(std::size_t bytes) const noexcept {
     constexpr std::size_t reserved_events = 2;
+
     return bytes <= byte_capacity - byte_count_ && event_count_ + reserved_events <= event_capacity;
   }
 

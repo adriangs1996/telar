@@ -229,6 +229,7 @@ void Application::activateHistoryCardAction(HistoryCardAction action, HistoryCho
 HistoryScrollSurface Application::historyScrollSurface(const HistoryModalMetrics &metrics, HistoryHoverFrame &hover) const {
   const auto density = window_ == nullptr ? 1 : window_->effectiveDevicePixelRatio();
   const auto &browser = session().historyBrowser();
+
   hover.generation = dialog_generation_;
   hover.scale = density;
   HistoryScrollSurface surface{
@@ -238,11 +239,13 @@ HistoryScrollSurface Application::historyScrollSurface(const HistoryModalMetrics
       .cell_height = metrics.cell_height,
       .scale = density,
   };
+
   if (history_panel_ == nullptr || history_panel_->window() != window_ || !history_panel_->isVisible()) {
     return surface;
   }
 
   const auto bounds = history_panel_->mapRectToScene(history_panel_->boundingRect());
+
   surface.bounds = {.x = static_cast<float>(bounds.x() * density), .y = static_cast<float>(bounds.y() * density), .width = static_cast<float>(bounds.width() * density), .height = static_cast<float>(bounds.height() * density)};
   surface.delivered = bounds.width() > 0 && bounds.height() > 0 && history_search_host_ != nullptr && history_search_host_->isVisible() && history_search_host_->width() > 0 && history_search_host_->height() > 0;
   if (history_viewport_ == nullptr || history_content_ == nullptr) {
@@ -251,6 +254,7 @@ HistoryScrollSurface Application::historyScrollSurface(const HistoryModalMetrics
 
   const auto viewport = history_viewport_->mapRectToScene(history_viewport_->boundingRect());
   std::optional<float> row_height;
+
   for (const auto *delegate : history_content_->childItems()) {
     for (const auto *item : delegate->childItems()) {
       const auto *row = qobject_cast<const HistoryRowLayout *>(item);
@@ -267,6 +271,7 @@ HistoryScrollSurface Application::historyScrollSurface(const HistoryModalMetrics
       const auto index = row->historyIndex();
       if (index >= 0 && std::cmp_less(index, HistoryBrowser<ApplicationAllocator>::page_entries)) {
         const auto bounds = row->mapRectToScene(toQRectF(frame, density)).intersected(viewport);
+
         hover.append({.identity = {.action = HistoryChoice{.index = static_cast<std::size_t>(index), .revision = browser.revision()}, .generation = dialog_generation_}, .bounds = {.x = static_cast<float>(bounds.x() * density), .y = static_cast<float>(bounds.y() * density), .width = static_cast<float>(bounds.width() * density), .height = static_cast<float>(bounds.height() * density)}});
       }
     }
@@ -325,12 +330,14 @@ void Application::scrollHistory(HistoryScrollPosition pointer, ScrollSample samp
 
 void Application::moveHistoryRows(std::int32_t steps) {
   const auto &browser = session().historyBrowser();
+
   for (std::int32_t remaining = std::abs(steps); remaining > 0; --remaining) {
     if (historyLoading() || browser.rows().empty()) {
       break;
     }
 
     const auto selected = browser.state().selection;
+
     if (steps < 0) {
       if (selected + 1 < browser.rows().size()) {
         session().selectHistoryRow(selected + 1);

@@ -47,6 +47,7 @@ TEST_F(SpecTest, YarnClassicCommands) {
 
 TEST_F(SpecTest, BunRunsFilesAndScripts) {
   const auto run = texts("bun", {"run"}, "");
+
   EXPECT_TRUE(contains(run, "@package_script"));
   EXPECT_TRUE(contains(run, "@file"));
   EXPECT_EQ(description("bun", {}, "x"), "Run a package binary, installing it if needed");

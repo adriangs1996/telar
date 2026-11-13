@@ -50,6 +50,7 @@ struct CaptureFixture {
 
   void emit(const CapturedCommand &command) {
     auto metadata = command;
+
     metadata.command = {};
     metadata.directory = {};
     metadata.output = {};
@@ -71,6 +72,7 @@ struct CaptureFixture {
 
 static void testInputBoundaries() {
   CommandInputScanner scanner;
+
   check(!scanner.feed(byteSpan("abc\x7f\x08z")).submitted);
   check(scanner.typedText() == "az");
   check(scanner.feed(byteSpan("\r")).submitted);
@@ -90,6 +92,7 @@ static void testInputBoundaries() {
 
 static void testRenderedCommand() {
   CaptureFixture fixture;
+
   check(!fixture.tracker.needsForegroundObservation());
   fixture.output("$ ");
   fixture.input("echo wrong");
@@ -109,8 +112,10 @@ static void testRenderedCommand() {
 
 static void testWrappedAndUnicodeCommand() {
   CaptureFixture fixture;
+
   fixture.output("$ ");
   const std::string command = "printf 'á好🙂abcdefghijklmno'";
+
   fixture.input(command + "\r");
   fixture.output(command + "\r\n");
   fixture.finish();
@@ -119,6 +124,7 @@ static void testWrappedAndUnicodeCommand() {
 
 static void testRightPrompt() {
   CaptureFixture fixture;
+
   fixture.output("$ \x1b[1;15Hclock\x1b[1;3H");
   fixture.input("ls\r");
   fixture.output("ls\r\n");
@@ -128,6 +134,7 @@ static void testRightPrompt() {
 
 static void testMovedEdit() {
   CaptureFixture fixture;
+
   fixture.input("ls");
   fixture.output("\r\n$ ls");
   fixture.input("\r");
@@ -136,6 +143,7 @@ static void testMovedEdit() {
   check(fixture.commands.size() == 1 && fixture.commands[0].command == "ls");
 
   CaptureFixture cleared;
+
   cleared.output("$ ");
   cleared.input("ls");
   cleared.output("ls");
@@ -149,6 +157,7 @@ static void testMovedEdit() {
 
 static void testCompletionEvidence() {
   CaptureFixture fixture;
+
   fixture.output("$ ");
   fixture.input("cmd\r");
   fixture.output("cmd\r\n", 110, false);
@@ -158,6 +167,7 @@ static void testCompletionEvidence() {
   check(fixture.commands[0].metadata.duration_ns == 30'000'000);
 
   CaptureFixture next_input;
+
   next_input.output("$ ");
   next_input.input("cmd\r");
   next_input.output("cmd\r\n$ ", 120);
@@ -165,9 +175,11 @@ static void testCompletionEvidence() {
   check(next_input.commands.size() == 1 && next_input.commands[0].metadata.duration_ns == 20'000'000);
 #if TELAR_DIAGNOSTICS
   const auto foreground = fixture.tracker.takeMetrics();
+
   check(foreground.submissions == 1 && foreground.captures == 1 && foreground.foreground_completions == 1);
   check(foreground.next_input_completions == 0 && foreground.auxiliary_completions == 0);
   const auto next = next_input.tracker.takeMetrics();
+
   check(next.submissions == 1 && next.captures == 1 && next.next_input_completions == 1);
   check(next.foreground_completions == 0 && next.auxiliary_completions == 0);
 #endif
@@ -175,6 +187,7 @@ static void testCompletionEvidence() {
 
 static void testShellMarkers() {
   CaptureFixture fixture;
+
   fixture.output("\x1b]7;file://host/new%20path\x07\x1b]133;A\x07$ \x1b]133;B\x07");
   fixture.input("false\r", 100, std::nullopt);
   fixture.output("false\r\n\x1b]133;C\x07output\r\n\x1b]133;D;7;ignored\x1b\\", 130, std::nullopt);
@@ -185,6 +198,7 @@ static void testShellMarkers() {
   check(fixture.commands[0].metadata.duration_ns == 30'000'000);
 #if TELAR_DIAGNOSTICS
   const auto metrics = fixture.tracker.takeMetrics();
+
   check(metrics.prompt_markers == 1 && metrics.input_markers == 1 && metrics.output_markers == 1 && metrics.finished_markers == 1);
   check(metrics.osc_started == 5 && metrics.osc_finished == 5);
   check(metrics.submissions == 1 && metrics.captures == 1 && metrics.capture_failures == 0 && metrics.auxiliary_completions == 1);
@@ -194,6 +208,7 @@ static void testShellMarkers() {
 
 static void testDiscardedEdits() {
   CaptureFixture cancelled;
+
   cancelled.output("$ ");
   cancelled.input("bad\x03");
   cancelled.output("bad\r\n");
@@ -201,6 +216,7 @@ static void testDiscardedEdits() {
   check(cancelled.commands.empty());
 
   CaptureFixture alternate;
+
   alternate.output("\x1b[?1049h");
   alternate.input("not shell\r");
   alternate.output("not shell\r\n");
@@ -208,6 +224,7 @@ static void testDiscardedEdits() {
   check(alternate.commands.empty());
 
   CaptureFixture erased;
+
   erased.output("$ ");
   erased.input("lost\r");
   erased.output("\x1b[2J\x1b[3;1Hnot command\r\n");
@@ -223,6 +240,7 @@ static void testDiscardedEdits() {
 static void testOutputTailBounds() {
   SystemAllocator memory;
   CommandOutputTail tail{memory, true};
+
   tail.append(byteSpan(std::string(60'000, 'a')));
   tail.append(byteSpan(std::string(40'000, 'b')));
   check(tail.bytes().size() == tail.capacity && tail.observed() == 100'000);
@@ -234,8 +252,10 @@ static void testOutputTailBounds() {
 
 static void testCaptureBoundsAndResize() {
   CaptureFixture large;
+
   large.output("$ ");
   const std::string command = std::string(CommandSelection<SystemAllocator>::maximum_bytes - 1, 'a') + "🙂";
+
   large.input(command + "\r");
   large.output(command + "\r\n");
   large.finish();
@@ -243,6 +263,7 @@ static void testCaptureBoundsAndResize() {
   check(large.commands[0].command == command.substr(0, CommandSelection<SystemAllocator>::maximum_bytes - 1));
 
   CaptureFixture resized;
+
   resized.output("$ ");
   resized.input("echo abcdefghijklmnop");
   resized.output("echo abcdefghijklmnop");
@@ -264,9 +285,11 @@ static void testOscFragments() {
 
   const std::string prompt = "ignored\x1b]7;kitty-shell-cwd://host/new%20directory\x1b\\\x1b]133;A\x07$ \x1b]133;B\x07";
   const std::string completion = "\x1b]133;C\x07output\x1b]133;D;+12;extra\x1b\\";
+
   for (std::size_t width = 1; width <= prompt.size(); ++width) {
     CommandZones zones{"/initial"};
     Completions sink;
+
     for (std::size_t offset = 0; offset < prompt.size(); offset += width) {
       zones.feed(byteSpan(std::string_view{prompt}.substr(offset, width)), {100, 100}, sink);
     }
@@ -281,6 +304,7 @@ static void testOscFragments() {
     check(sink.values[0].status == HistoryStatus::completed && sink.values[0].time.nanoseconds == 200);
 #if TELAR_DIAGNOSTICS
     const auto metrics = zones.takeMetrics();
+
     check(metrics.osc_started == 5 && metrics.osc_finished == 5);
     check(metrics.prompt_markers == 1 && metrics.input_markers == 1 && metrics.output_markers == 1 && metrics.finished_markers == 1);
     check(zones.takeMetrics().osc_started == 0);
@@ -303,6 +327,7 @@ static void testSignedMarks() {
   const auto forged = ";telar=" + std::string(ShellToken::length, '0');
   CommandZones zones{"/", token};
   Completions sink;
+
   zones.feed(byteSpan("\x1b]133;A\x07\x1b]133;B\x07"), {}, sink);
   zones.feed(byteSpan("\x1b]133;A" + forged + "\x07\x1b]133;B" + forged + "\x07"), {}, sink);
   check(!zones.markersReady() && !zones.editing());
@@ -364,12 +389,14 @@ static void testNestedMarks() {
 
   // The nonce is spent: a second answer cannot replace the remote token.
   const auto other = ShellToken::generate();
+
   zones.feed(byteSpan("\x1b]6973;nest=" + std::string{nonce.text()} + ";token=" + std::string{other.text()} + "\x07"), {}, sink);
   zones.feed(byteSpan("\x1b]133;A;telar=" + std::string{other.text()} + "\x07\x1b]133;C" + remote_signature + "\x07"), {}, sink);
   check(zones.running());
 
   // ssh returned: the pane's shell marks again, and finishes the ssh command with its status.
   const auto remote_commands = sink.values.size();
+
   zones.feed(byteSpan("\x1b]133;D;5" + signature + "\x07\x1b]133;A" + signature + "\x07"), {}, sink);
   check(!zones.remote() && zones.remoteShell() == IntegratedShell::none);
   check(sink.values.size() == remote_commands + 1 && sink.values.back().exit_code == 5);

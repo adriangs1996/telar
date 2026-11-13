@@ -49,6 +49,7 @@ bool Application::openLink(const LinkTarget &target, std::optional<std::uint64_t
       const platform::ProcessEnvironment environment;
       const auto configured = configuration().editor.view();
       const auto executable = configured.empty() ? environment("EDITOR").value_or(std::string_view{}) : configured;
+
       session().openFile(FilePath::parse(target), executable, environment, source_id);
     } else {
       link_opener_.request(target, clientAt(machines_.active()).key);
@@ -81,6 +82,7 @@ void Application::linkOpeningFinished(MachineClientKey source, std::optional<Lin
   }
 
   std::string_view message;
+
   switch (*failure) {
   case LinkOpeningFailure::launch:
     message = "Could not open link: host opener is unavailable";

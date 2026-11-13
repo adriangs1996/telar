@@ -100,12 +100,15 @@ struct AgentOrder {
   template <Allocator Memory>
   [[nodiscard]] inline static Plan arrange(std::span<const Agent<Memory>> agents, const WorkspaceReplica<Memory> &workspaces, std::optional<std::uint64_t> focused = std::nullopt) noexcept {
     Plan plan;
+
     plan.count = std::min(agents.size(), maximum_agents);
     const auto entries = std::span{plan.entries}.first(plan.count);
+
     for (std::size_t index = 0; index < plan.count; ++index) {
       const auto &agent = agents[index];
       const auto *row = taskRow(workspaces, agent);
       const auto project = projectOf(workspaces, agent);
+
       entries[index] = {.agent = index, .project = project, .card = cardFor(agent, row != nullptr, focused)};
     }
 
@@ -116,6 +119,7 @@ struct AgentOrder {
     std::ranges::sort(entries, [&](const Entry &left, const Entry &right) {
       return lessThan(agents, workspaces, left, right);
     });
+
     for (std::size_t index = 0; index < entries.size(); ++index) {
       entries[index].first_in_project = index == 0 || entries[index].project != entries[index - 1].project;
     }
@@ -174,6 +178,7 @@ private:
 
     for (const auto &candidate : entries) {
       const auto &parent = agents[candidate.agent];
+
       if (candidate.agent == entry.agent || candidate.card != ActivityCard::agent || candidate.project != entry.project) {
         continue;
       }
@@ -273,6 +278,7 @@ public:
     }
 
     ActivityOrder order{sources, output};
+
     order.collect(active_slot);
     order.findParents();
     order.breakCycles();
@@ -303,15 +309,18 @@ private:
       const auto fleet = AgentOrder::arrange(source.agents, source.workspaces, active ? source.focused : std::nullopt);
       const auto &worktrees = source.workspaces.worktrees();
       std::array<bool, WorkspaceReplica<Memory>::maximum_worktrees> represented{};
+
       for (const auto &entry : fleet.view()) {
         if (!active && AgentOrder::attention(source.agents[entry.agent].status) != AgentOrder::Attention::needs_input) {
           continue;
         }
 
         auto &node = nodes_[count_++];
+
         node = {.source = source_index, .agent = entry.agent, .project = entry.project, .card = entry.card};
         if (const auto *row = AgentOrder::taskRow(source.workspaces, source.agents[entry.agent])) {
           const auto index = static_cast<std::size_t>(row - worktrees.data());
+
           node.worktree = index;
           represented[index] = true;
         }
@@ -339,6 +348,7 @@ private:
 
   [[nodiscard]] inline const Worktree<Memory> *rowOf(const Entry &entry) const noexcept {
     const auto &source = sources_[entry.source];
+
     if (entry.worktree) {
       return &source.workspaces.worktrees()[*entry.worktree];
     }
@@ -359,6 +369,7 @@ private:
       auto candidate = std::ranges::lower_bound(agents, target, {}, [this](std::size_t agent) {
         return identityAt(agent);
       });
+
       while (candidate != agents.end() && identityAt(*candidate) == target) {
         if (*candidate != index) {
           return *candidate;
@@ -375,6 +386,7 @@ private:
     }
 
     std::size_t start = index;
+
     while (start != 0 && nodes_[start - 1].source == entry.source) {
       --start;
     }
@@ -392,6 +404,7 @@ private:
   inline void findParents() {
     std::array<std::size_t, maximum_entries> agents{};
     std::size_t agent_count = 0;
+
     for (std::size_t index = 0; index < count_; ++index) {
       if (nodes_[index].agent) {
         agents[agent_count++] = index;
@@ -399,9 +412,11 @@ private:
     }
 
     const auto indices = std::span{agents}.first(agent_count);
+
     std::ranges::sort(indices, [this](std::size_t left, std::size_t right) {
       return std::tuple{identityAt(left), left} < std::tuple{identityAt(right), right};
     });
+
     for (std::size_t index = 0; index < count_; ++index) {
       nodes_[index].parent = parentOf(indices, index);
     }
@@ -410,6 +425,7 @@ private:
   inline void breakChainCycle(std::size_t start, std::span<Visit> visits, std::span<std::size_t> path) noexcept {
     std::size_t path_length = 0;
     std::optional<std::size_t> current{start};
+
     while (current) {
       const auto index = *current;
       if (visits[index] != Visit::unseen) {
@@ -433,6 +449,7 @@ private:
   inline void breakCycles() noexcept {
     std::array<Visit, maximum_entries> visits{};
     std::array<std::size_t, maximum_entries> path{};
+
     for (std::size_t start = 0; start < count_; ++start) {
       if (visits[start] != Visit::finished) {
         breakChainCycle(start, visits, path);
@@ -448,6 +465,7 @@ private:
 
   [[nodiscard]] inline Children linkChildren() noexcept {
     Children children;
+
     for (std::size_t index = 0; index < count_; ++index) {
       if (const auto parent = nodes_[index].parent) {
         nodes_[*parent].coordinator = true;
@@ -469,6 +487,7 @@ private:
     std::array<std::size_t, maximum_entries> positions{};
     std::optional<std::size_t> previous_source;
     std::optional<std::uint64_t> previous_project;
+
     output_.count = 0;
     for (std::size_t root_index = 0; root_index < count_; ++root_index) {
       const auto &root = nodes_[root_index];
@@ -478,8 +497,10 @@ private:
 
       auto current = root_index;
       std::size_t depth = 0;
+
       while (true) {
         auto entry = nodes_[current];
+
         entry.depth = depth;
         entry.parent = entry.parent ? std::optional{positions[*entry.parent]} : std::nullopt;
         positions[current] = output_.count;
@@ -604,6 +625,7 @@ struct AgentStatusPresentation {
 
   [[nodiscard]] inline static Age age(std::uint32_t seconds, bool duration = false) {
     Age result;
+
     if (seconds < seconds_per_minute) {
       if (duration) {
         result.appendDecimal(seconds);
@@ -627,6 +649,7 @@ struct AgentStatusPresentation {
 
   [[nodiscard]] inline static Text text(AgentStatus status, AgentBlockedReason reason, std::uint32_t seconds, bool connected = true) {
     Text result;
+
     if (status == AgentStatus::ready && connected) {
       result.append(age(seconds).view());
     } else {
@@ -690,8 +713,10 @@ struct ProgressGeometry {
     ProgressGeometry geometry;
     const auto capsule_height = std::min(area.height, height * ratio);
     const auto capsule_width = compact ? std::min(area.width, compactWidth(ratio)) : area.width;
+
     geometry.background = {.x = area.x + area.width - capsule_width, .y = area.y + ((area.height - capsule_height) / 2), .width = capsule_width, .height = capsule_height};
     const auto side = std::max(0.0F, std::min({ring_side * ratio, capsule_height - (ring_inset * ratio), capsule_width - (2 * padding * ratio)}));
+
     geometry.ring = {.x = geometry.background.x + (padding * ratio), .y = geometry.background.y + ((capsule_height - side) / 2), .width = side, .height = side};
     if (side <= 0) {
       return geometry;
@@ -700,6 +725,7 @@ struct ProgressGeometry {
     const auto stroke = std::max(1.0F, side * mark_stroke_ratio);
     const auto center = geometry.ring.x + (side / 2);
     const auto top = geometry.ring.y + (side * mark_top_ratio);
+
     geometry.mark_radius = stroke / 2;
     if (state == PaneProgressState::pause) {
       for (const auto offset : pause_offsets) {
@@ -730,6 +756,7 @@ struct PaneStatusChip {
 
   [[nodiscard]] inline static Text text(AgentStatus status, AgentBlockedReason reason, std::uint32_t seconds) {
     Text result;
+
     switch (status) {
     case AgentStatus::blocked:
       switch (reason) {
@@ -746,6 +773,7 @@ struct PaneStatusChip {
         result.append("blocked");
         break;
       }
+
       break;
     case AgentStatus::working:
       result.append("working ");
@@ -759,6 +787,7 @@ struct PaneStatusChip {
         result.appendDecimal(seconds / AgentStatusPresentation::seconds_per_hour);
         result.append("h");
       }
+
       break;
     case AgentStatus::done:
       result.append("done");
@@ -787,6 +816,7 @@ struct PaneProgressPresentation {
 
   [[nodiscard]] inline static Text text(PaneProgressState state, std::uint8_t percent) {
     Text result;
+
     switch (state) {
     case PaneProgressState::indeterminate:
       result.append("Working");
@@ -875,6 +905,7 @@ struct PaneHeaderGeometry {
     const auto end = band.x + band.width;
     const auto index_room = measurements.needs_attention ? std::max(0.0F, band.width - measurements.chip - part_gap * ratio) : band.width;
     const auto index_width = std::min(measurements.index, index_room);
+
     result.index = {.x = band.x, .y = band.y, .width = index_width, .height = band.height};
     auto x = band.x + index_width + (index_width > 0 ? part_gap * ratio : 0);
     const auto chip_width = measurements.chip <= end - x ? measurements.chip : 0;
@@ -882,6 +913,7 @@ struct PaneHeaderGeometry {
     const auto paused_width = measurements.paused > 0 ? measurements.paused + (chip_gap * ratio) : 0;
     const bool paused_fits = paused_width != 0 && paused_width <= text_end - x;
     const auto name_width = std::max(0.0F, text_end - x - (paused_fits ? paused_width : 0));
+
     result.name = {.x = x, .y = band.y, .width = name_width, .height = band.height};
     x += std::min(name_width, measurements.name);
     if (paused_fits) {
@@ -920,6 +952,7 @@ struct ProjectActivity {
   // The activity names the project's path in the replica, region `a`.
   [[nodiscard]] inline static tbc::view<ProjectActivity, tbc::lt::a> derive(tbc::view<const WorkspaceReplica<Memory> &, tbc::lt::a> workspaces, std::span<const Agent<Memory>> agents, std::uint64_t project) noexcept {
     ProjectActivity result;
+
     result.worktrees = static_cast<std::size_t>(std::ranges::count(workspaces.worktrees(), project, &Worktree<Memory>::source));
     const auto index = workspaces.indexOf(project);
     if (index < workspaces.entries().size()) {
@@ -972,6 +1005,7 @@ struct ProjectActivity {
 
   [[nodiscard]] inline Attention attentionLabel() const {
     Attention label;
+
     if (waiting != 0) {
       label.append("! ");
       label.appendDecimal(waiting);
@@ -1022,6 +1056,7 @@ struct TabActivity {
   template <Allocator Memory>
   [[nodiscard]] inline static TabActivity derive(const Tab<Memory> &tab, const Pane<Memory> *focused, std::span<const Agent<Memory>> agents, bool selected) noexcept {
     const Agent<Memory> *urgent = nullptr;
+
     for (const auto &agent : agents) {
       if (sameTab(agent.location, tab.location) && (urgent == nullptr || AgentOrder::priority(agent) < AgentOrder::priority(*urgent))) {
         urgent = &agent;
@@ -1029,6 +1064,7 @@ struct TabActivity {
     }
 
     TabActivity activity;
+
     if (urgent != nullptr && AgentOrder::attention(urgent->status) == AgentOrder::Attention::needs_input) {
       activity.attention = AgentStatusPresentation::color(urgent->status);
     }
@@ -1097,6 +1133,7 @@ struct TaskCardLabels {
   template <Allocator Memory>
   [[nodiscard]] inline static Text facts(std::string_view machine, const Worktree<Memory> &task) {
     Text result;
+
     if (!machine.empty()) {
       append(result, machine);
       append(result, " · ");
@@ -1146,6 +1183,7 @@ struct TaskCardLabels {
 
   [[nodiscard]] inline static Plan plan(std::uint16_t done, std::uint16_t total) {
     Plan result;
+
     result.cells = std::min<std::size_t>(total, maximum_plan_cells);
     result.filled = total == 0 ? 0 : ((static_cast<std::size_t>(done) * result.cells) + total - 1) / total;
     result.count.appendDecimal(done);
@@ -1175,6 +1213,7 @@ struct TaskCardLabels {
   // The facts are written into the storage, or are the state alone when they do not fit: region `a`.
   [[nodiscard]] inline static tbc::view<std::string_view, tbc::lt::a> commandFacts(std::string_view machine, const Worktree<Memory> &task, bool connected, tbc::view<Text &, tbc::lt::a> storage) {
     const auto status = commandState(task, connected);
+
     storage.truncate(0);
     try {
       if (!machine.empty()) {
@@ -1201,6 +1240,7 @@ private:
     constexpr auto decimal_digits = std::numeric_limits<std::uint32_t>::digits10 + 1;
     std::array<char, decimal_digits> digits{};
     const auto result = std::to_chars(digits.data(), digits.data() + digits.size(), value);
+
     append(storage, {digits.data(), static_cast<std::size_t>(result.ptr - digits.data())});
   }
 };

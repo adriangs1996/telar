@@ -94,6 +94,7 @@ struct DisplayMetrics {
         .scale = static_cast<float>(density),
         .controls = physicalExtent(logical_viewport.controls, density),
     };
+
     const auto chrome = ChromeMetrics::resolve(configuration, physical, cells);
 
     return {.density = density, .viewport = physical, .chrome = chrome, .geometry = WindowGeometry::measure(configuration, physical, cells, chrome)};
@@ -134,12 +135,14 @@ struct HistoryCommandLine {
 
   [[nodiscard]] inline static HistoryCommandLine derive(Rect bounds, HistoryCommandMetrics metrics) noexcept {
     HistoryCommandLine result;
+
     result.text = bounds;
     const auto cell = std::max(1.0F, metrics.cell_width);
     const auto columns = std::floor(bounds.width / cell);
     const auto overflows = metrics.needed > bounds.width;
     if ((overflows || metrics.continues) && columns >= minimum_marked_columns) {
       const auto tail_limit = (columns - 1) * cell;
+
       result.text.width = overflows ? tail_limit : std::min(metrics.needed + cell, tail_limit);
       result.marker = {.x = bounds.x + result.text.width, .y = bounds.y, .width = cell, .height = bounds.height};
       result.mark = overflows ? ellipsis : continuation;
@@ -356,6 +359,7 @@ public:
     }
 
     const auto target = report.reported();
+
     if (report.state != PaneProgressState::set || !report.percent || !known_) {
       from_ = target;
       to_ = target;
@@ -386,6 +390,7 @@ public:
 private:
   [[nodiscard]] inline float value(std::uint64_t now_ns) const noexcept {
     float phase = 0;
+
     if (now_ns >= started_ns_) {
       if (duration_ == 0 || now_ns - started_ns_ >= duration_) {
         return to_;

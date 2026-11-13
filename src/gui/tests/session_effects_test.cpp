@@ -147,8 +147,10 @@ void acceptedInputObservesTheQueuedPaneIdentity() {
   Transport transport;
   InputObservations observations;
   InputClient client{memory, transport, InputEffects{transport, observations}};
+
   openFirstPane(client, transport);
   const auto *pane = client.focusedPane();
+
   require(pane != nullptr, "input observation requires the opened pane");
   client.findPane(pane->id)->graphics.detach();
   require(pane->graphics.revision() != 0, "input observation must exercise a nonzero graphics revision");
@@ -157,10 +159,12 @@ void acceptedInputObservesTheQueuedPaneIdentity() {
   client.input(pane->id, "c", PaneInputSource::key_release);
   client.paste(pane->id, "d");
   constexpr std::size_t accepted_inputs = 4;
+
   require(observations.count == accepted_inputs, "keyboard, mouse, release and paste must observe accepted input");
 
   for (std::size_t index = 0; index < observations.count; ++index) {
     const auto &entry = observations.entries[index];
+
     require(entry.pane.pane_id == pane->id && entry.pane.attached && entry.pane.attachment_generation == pane->attachment_generation && entry.pane.frame_id == pane->screen.frameId(), "input grace must retain the actual frame and attachment identity");
     require(entry.pane.graphics_revision == pane->graphics.revision(), "input grace must retain the current graphics revision");
     require(entry.at_ns == InputClock::now_ns && entry.queued_inputs == index + 1, "the clock and observation must follow successful transport admission");
@@ -172,8 +176,10 @@ void emptyRejectedAndProtocolInputDoNotGrantGrace() {
   Transport transport;
   InputObservations observations;
   InputClient client{memory, transport, InputEffects{transport, observations}};
+
   openFirstPane(client, transport);
   auto *pane = client.findPane(1);
+
   require(pane != nullptr, "input rejection requires the opened pane");
   client.input(pane->id, {});
   client.input(0, "missing");
@@ -186,6 +192,7 @@ void emptyRejectedAndProtocolInputDoNotGrantGrace() {
   client.input(pane->id, "report", PaneInputSource::terminal_report);
   transport.reject_input_after = transport.count(ClientTag::pane_input);
   bool rejected = false;
+
   try {
     client.input(pane->id, "rejected");
   } catch (const EncodingError &) {
@@ -200,10 +207,12 @@ void acceptedPrefixRetainsItsGraceWhenTheNextChunkFails() {
   Transport transport;
   InputObservations observations;
   InputClient client{memory, transport, InputEffects{transport, observations}};
+
   openFirstPane(client, transport);
   transport.reject_input_after = transport.count(ClientTag::pane_input) + 1;
   const std::string input(InputClient::input_chunk_size + 1, 'x');
   bool rejected = false;
+
   try {
     client.input(1, input);
   } catch (const EncodingError &) {
@@ -217,8 +226,10 @@ void absentObserverDoesNotReadTheClock() {
   SystemAllocator memory;
   Transport transport;
   Session<SystemAllocator, Transport, InputClock> client{memory, transport};
+
   openFirstPane(client, transport);
   const auto previous_reads = InputClock::reads;
+
   client.input(1, "without observer");
   require(InputClock::reads == previous_reads, "an absent input observer must compile out clock sampling");
 }
@@ -228,13 +239,16 @@ void systemDeliveryKeepsEveryPublicationAndDoesNotReplaceTheCenter() {
   Transport transport;
   Recorder recorder;
   Client client{memory, transport, Effects{recorder}};
+
   client.publishNotification({.title = "Local only", .message = "body", .link = {}});
   require(recorder.notifications.empty() && client.notifications().items().size() == 1, "default delivery must retain a card without contacting the desktop");
 
   Configuration configuration;
+
   configuration.notification_delivery = NotificationDelivery::system;
   client.configure(configuration);
   const NotificationInput input{.title = "--help\n\"quoted\"\\end", .message = "body\t\"quoted\"\\end", .link = {}};
+
   client.publishNotification(input);
   client.publishNotification(input);
   require(recorder.notifications.size() == 2, "desktop delivery must retain duplicate publications even when the center coalesces them");
@@ -252,15 +266,18 @@ void wireDeliveryAndCommittedAgentAlertsUseTheSameHostBoundary() {
   Recorder recorder;
   Client client{memory, transport, Effects{recorder}};
   Configuration configuration;
+
   configuration.notification_delivery = NotificationDelivery::system;
   client.configure(configuration);
   Notification notice;
+
   notice.title = "Runtime notice";
   notice.message = "body";
   deliver(client, notice);
   require(recorder.notifications.size() == 1 && recorder.notifications.front().title.view() == "Runtime notice", "wire notifications must reach the configured host once");
 
   std::array agents{agentSnapshotEntry()};
+
   agents.front().status = AgentStatus::working;
   deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
   require(recorder.notifications.size() == 1, "initial agent discovery must not deliver a host alert");
@@ -280,12 +297,15 @@ void soundsRequireExactAgentIdentityAndCoalesceThroughCompletion() {
   Client client{memory, transport, Effects{recorder}};
   const std::array agents{agentSnapshotEntry()};
   const auto &agent = agents.front();
+
   deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
   const AgentSoundNotification ready{.pane_id = agent.pane_id, .pane_generation = agent.pane_generation, .sound = AgentSound::ready};
   auto stale = ready;
+
   ++stale.pane_generation;
   deliver(client, stale);
   auto missing = ready;
+
   ++missing.pane_id;
   deliver(client, missing);
   require(recorder.sounds.empty(), "unknown panes and stale generations must not start host playback");
@@ -293,6 +313,7 @@ void soundsRequireExactAgentIdentityAndCoalesceThroughCompletion() {
   deliver(client, ready);
   deliver(client, ready);
   auto attention = ready;
+
   attention.sound = AgentSound::needs_input;
   deliver(client, attention);
   deliver(client, ready);
@@ -312,9 +333,11 @@ void policyReloadAndAdmissionFailureDoNotLeavePlaybackReserved() {
   Recorder recorder;
   Client client{memory, transport, Effects{recorder}};
   const std::array agents{agentSnapshotEntry()};
+
   deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
   const auto &agent = agents.front();
   const AgentSoundNotification ready{.pane_id = agent.pane_id, .pane_generation = agent.pane_generation, .sound = AgentSound::ready};
+
   recorder.accept_sound = false;
   deliver(client, ready);
   recorder.accept_sound = true;
@@ -323,6 +346,7 @@ void policyReloadAndAdmissionFailureDoNotLeavePlaybackReserved() {
   deliver(client, ready);
 
   Configuration configuration;
+
   configuration.sound.enabled = false;
   client.configure(configuration);
   client.completeAgentSound();

@@ -73,6 +73,7 @@ void HistoryLoadingLayout::setWaiting(bool waiting) {
   if (waiting_ != waiting) {
     waiting_ = waiting;
     const QPointer<HistoryLoadingLayout> alive{this};
+
     emit waitingChanged();
     if (alive) {
       synchronize();
@@ -84,6 +85,7 @@ void HistoryLoadingLayout::setRatio(qreal ratio) {
   if (std::isfinite(ratio) && ratio > 0 && ratio_ != ratio) {
     ratio_ = ratio;
     const QPointer<HistoryLoadingLayout> alive{this};
+
     emit ratioChanged();
     if (alive) {
       synchronize();
@@ -107,6 +109,7 @@ void HistoryLoadingLayout::sample(std::uint64_t now_ns) {
   const auto visible = cue_.sample(waiting_, now_ns);
   const auto density = window() == nullptr ? 1 : window()->effectiveDevicePixelRatio();
   ChromeMetrics chrome;
+
   chrome.ratio = static_cast<float>(ratio_ * density);
   const Rect area{.width = static_cast<float>(width() * density), .height = static_cast<float>(height() * density)};
   const auto line = visible ? toQRectF(HistoryLoading::line(area, chrome, now_ns), density) : QRectF{};

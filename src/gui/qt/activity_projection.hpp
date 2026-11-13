@@ -51,6 +51,7 @@ QVariantMap taskRecord(const Agent<Memory> &agent, const Worktree<Memory> &task,
   const auto activity = TaskCardLabels::activity(agent);
   const auto facts = TaskCardLabels::facts(context.machine, task);
   const auto plan = TaskCardLabels::plan(agent.plan_done, agent.plan_total);
+
   record.insert(QStringLiteral("task"), true);
   record.insert(QStringLiteral("compact"), compact);
   record.insert(QStringLiteral("dim"), context.connected && agent.status == AgentStatus::ready);
@@ -94,6 +95,7 @@ inline QString portsLabel(std::span<const std::uint16_t> ports) {
   }
 
   auto label = QLatin1Char(':') + QString::number(ports.front());
+
   if (ports.size() > 1) {
     label += QStringLiteral(" +") + QString::number(ports.size() - 1);
   }

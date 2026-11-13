@@ -100,11 +100,13 @@ int main(int argc, char **argv) {
   constexpr std::size_t memory_budget = std::size_t{512} * 1024 * 1024;
   BudgetAllocator memory{system, memory_budget};
   const std::string_view binary = argv[1];
+
   try {
     const RepositoryOptions options{.action = RepositoryOptions::Action::prepare};
     const auto prepared = repository::prepare(memory, options, binary, [&](std::span<const std::string_view> words, int descriptor) {
       std::optional<MappedBundle> bundle;
       std::vector<std::string_view> input;
+
       if (descriptor >= 0) {
         if (::lseek(descriptor, 0, SEEK_CUR) != 0) {
           throw std::runtime_error{"BundleWasNotRewound"};
@@ -116,6 +118,7 @@ int main(int argc, char **argv) {
       }
 
       std::vector<std::string_view> arguments{binary};
+
       arguments.insert(arguments.end(), words.begin(), words.end());
       Command command{memory, Launch{.arguments = arguments}, CommandPurpose::configured_helper};
       constexpr std::size_t max_reply = 4 * 1024 * 1024;
@@ -130,6 +133,7 @@ int main(int argc, char **argv) {
 
       return std::string{output.text()};
     });
+
     writeText(prepared.json());
     return 0;
   } catch (const std::exception &error) {

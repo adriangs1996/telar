@@ -49,20 +49,25 @@ public:
           if ((pending_ & bit) == 0) {
             continue;
           }
+
           pending_ &= ~bit;
           if (enabled) {
             encode(report, state, facts);
           }
+
           prepared_ = true;
           break;
         }
       }
+
       if (!reply_.publish(queue)) {
         return false;
       }
+
       reply_.clear();
       prepared_ = false;
     }
+
     return true;
   }
 
@@ -73,21 +78,25 @@ private:
       if (state.mode(scheme_mode)) {
         reply_.append(facts.light ? "\x1b[?997;2n" : "\x1b[?997;1n");
       }
+
       break;
     case Report::visibility:
       if (state.mode(visibility_mode)) {
         reply_.append(facts.visible ? "\x1b[?999;1n" : "\x1b[?999;2n");
       }
+
       break;
     case Report::focus:
       if (state.mode(focus_mode)) {
         reply_.append(facts.focused ? "\x1b[I" : "\x1b[O");
       }
+
       break;
     case Report::size:
       if (state.mode(size_mode)) {
         sizeReport<SizeReport::event>(reply_, state.size());
       }
+
       break;
     }
   }

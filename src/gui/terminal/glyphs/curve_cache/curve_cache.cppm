@@ -108,6 +108,7 @@ public:
     }
 
     auto result = build(cell, codepoint);
+
     result.translate({.x = cell.x, .y = cell.y});
 
     return result;
@@ -147,6 +148,7 @@ private:
     if (codepoint >= first_shade && codepoint <= last_shade) {
       constexpr float quarter_coverage = 0.25F;
       Paint result{static_cast<float>(codepoint - first_shade + 1) * quarter_coverage};
+
       result.push({.width = cell.width, .height = cell.height});
 
       return result;
@@ -185,12 +187,14 @@ private:
 
   [[nodiscard]] inline static Paint slab(Rect cell, Side side, unsigned eighths) {
     Paint result;
+
     switch (side) {
     case Side::top:
       result.push({.width = cell.width, .height = split(cell.height, eighths)});
       break;
     case Side::bottom: {
       const auto top = split(cell.height, full_eighths - eighths);
+
       result.push({.y = top, .width = cell.width, .height = cell.height - top});
       break;
     }
@@ -199,6 +203,7 @@ private:
       break;
     case Side::right: {
       const auto left = split(cell.width, full_eighths - eighths);
+
       result.push({.x = left, .width = cell.width - left, .height = cell.height});
       break;
     }
@@ -213,6 +218,7 @@ private:
     const std::array<float, 2> tops{0, middle_y};
     const std::array<float, 2> bottoms{middle_y, cell.height};
     Paint result;
+
     for (std::size_t row = 0; row < tops.size(); ++row) {
       const auto left = (mask & (upper_left << (2 * row))) != 0;
       const auto right = (mask & (upper_right << (2 * row))) != 0;
@@ -222,6 +228,7 @@ private:
 
       const auto x = left ? 0 : middle_x;
       const auto right_edge = right ? cell.width : middle_x;
+
       result.appendMerged({.x = x, .y = tops[row], .width = right_edge - x, .height = bottoms[row] - tops[row]});
     }
 
@@ -274,6 +281,7 @@ public:
 
   [[nodiscard]] inline static Paint draw(std::uint32_t codepoint, Rect cell, float thickness) {
     const auto metrics = BoxMetrics::resolve(cell, thickness);
+
     if (codepoint < Symbol::first_box || codepoint > Symbol::last_box || (codepoint >= Symbol::first_box_curve && codepoint <= Symbol::last_box_curve)) {
       throw std::invalid_argument{"InvalidStraightBox"};
     }
@@ -292,6 +300,7 @@ public:
     }
 
     auto result = unite(box.strokes_.rectangles());
+
     result.translate({.x = cell.x, .y = cell.y});
 
     return result;
@@ -356,6 +365,7 @@ private:
   inline void intersection(const BoxEdges &edges) {
     const auto horizontal = x_.join(edges.up, edges.down, edges.left == edges.right);
     const auto vertical = y_.join(edges.left, edges.right, edges.up == edges.down);
+
     upperArm(edges, vertical.backward_end);
     rightArm(edges, horizontal.forward_start);
     lowerArm(edges, vertical.forward_start);
@@ -439,9 +449,11 @@ private:
     const auto vertical = (codepoint & vertical_bit) != 0;
     const auto thickness = (codepoint & heavy_bit) != 0 ? metrics_.heavy : metrics_.light;
     auto desired_gap = std::max(standard_gap, metrics_.light);
+
     if (count == 2) {
       desired_gap = codepoint == first_double_dash ? metrics_.light : metrics_.heavy;
     }
+
     const auto extent = vertical ? metrics_.height : metrics_.width;
     const auto across = vertical ? metrics_.width : metrics_.height;
     const auto center = std::max(0.0F, std::floor((across - thickness) / 2));
@@ -457,10 +469,13 @@ private:
     const auto length = std::floor(total / dash_count);
     auto remainder = total - (length * dash_count);
     auto start = vertical ? 0 : std::floor(gap / 2);
+
     for (unsigned index = 0; index < count; ++index) {
       const auto extra = std::min(1.0F, remainder);
+
       remainder -= extra;
       const auto end = start + length + extra;
+
       addDash(vertical, center, start, end, thickness);
       start = end + gap;
     }
@@ -469,6 +484,7 @@ private:
   [[nodiscard]] inline static unsigned dashCount(std::uint32_t codepoint) noexcept {
     constexpr std::uint32_t first_double_dash = 0x254c;
     constexpr std::uint32_t first_quadruple_dash = 0x2508;
+
     if (codepoint >= first_double_dash) {
       return 2;
     }
@@ -486,14 +502,17 @@ private:
 
   [[nodiscard]] inline static Paint unite(std::span<const Rect> strokes) {
     std::array<float, 2 * stroke_capacity> edges{};
+
     for (std::size_t index = 0; index < strokes.size(); ++index) {
       edges[2 * index] = strokes[index].y;
       edges[(2 * index) + 1] = strokes[index].bottom();
     }
 
     const auto rows = std::span{edges}.first(2 * strokes.size());
+
     std::ranges::sort(rows);
     Paint result;
+
     for (std::size_t index = 1; index < rows.size(); ++index) {
       const auto top = rows[index - 1];
       const auto bottom = rows[index];
@@ -508,6 +527,7 @@ private:
   inline static void uniteBand(Paint &result, std::span<const Rect> strokes, float top, float bottom) {
     std::array<Interval, stroke_capacity> storage{};
     std::size_t count = 0;
+
     for (const auto rectangle : strokes) {
       if (rectangle.y <= top && rectangle.bottom() >= bottom) {
         storage[count++] = {.left = rectangle.x, .right = rectangle.right()};
@@ -515,10 +535,12 @@ private:
     }
 
     const auto intervals = std::span{storage}.first(count);
+
     std::ranges::sort(intervals, {}, &Interval::left);
     for (std::size_t index = 0; index < intervals.size();) {
       const auto left = intervals[index].left;
       auto right = intervals[index++].right;
+
       while (index < intervals.size() && intervals[index].left <= right) {
         right = std::max(right, intervals[index++].right);
       }
@@ -618,12 +640,14 @@ public:
     validateCell(cell);
     const auto grid = cell.width < columns || cell.height < rows ? fractionalGrid(cell) : integerGrid(cell);
     Paint result;
+
     if (grid.diameter == 0) {
       return result;
     }
 
     constexpr std::array<unsigned, dot_count> dot_columns{0, 0, 0, 1, 1, 1, 0, 1};
     constexpr std::array<unsigned, dot_count> dot_rows{0, 1, 2, 0, 1, 2, 3, 3};
+
     for (std::size_t bit = 0; bit < dot_count; ++bit) {
       if ((dots & (1U << bit)) != 0) {
         result.push({.x = grid.x[dot_columns[bit]], .y = grid.y[dot_rows[bit]], .width = grid.diameter, .height = grid.diameter});
@@ -649,6 +673,7 @@ private:
     const auto diameter = std::min(cell.width / columns, cell.height / rows);
     constexpr std::array<float, rows> row_centers{1, 3, 5, 7};
     Grid result{.x = {cell.x + (cell.width / horizontal_divisions) - (diameter / 2), cell.x + (3 * cell.width / horizontal_divisions) - (diameter / 2)}, .diameter = diameter};
+
     for (std::size_t row = 0; row < result.y.size(); ++row) {
       result.y[row] = cell.y + (row_centers[row] * cell.height / vertical_divisions) - (diameter / 2);
     }
@@ -707,6 +732,7 @@ private:
     }
 
     Grid result{.diameter = static_cast<float>(diameter)};
+
     for (std::size_t column = 0; column < result.x.size(); ++column) {
       result.x[column] = cell.x + static_cast<float>(x_margin + (static_cast<int>(column) * (diameter + x_spacing)));
     }
@@ -738,6 +764,7 @@ public:
     requires std::invocable<Builder> && std::same_as<std::invoke_result_t<Builder>, std::optional<Payload>>
   [[nodiscard]] Payload *resolve(const BoxMetrics &metrics, BoxCurve::Shape shape, Builder &&build) {
     const Key key{.width_bits = std::bit_cast<std::uint32_t>(metrics.width), .height_bits = std::bit_cast<std::uint32_t>(metrics.height), .thickness_bits = std::bit_cast<std::uint32_t>(metrics.light), .shape = shape};
+
     for (auto &entry : std::span{entries_}.first(count_)) {
       if (entry.key == key) {
         return entry.payload ? &*entry.payload : nullptr;
@@ -749,6 +776,7 @@ public:
     }
 
     auto &entry = entries_[count_++];
+
     entry.key = key;
     entry.payload = std::invoke(std::forward<Builder>(build));
 

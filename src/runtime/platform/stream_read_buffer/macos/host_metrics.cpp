@@ -51,6 +51,7 @@ std::optional<std::uint8_t> batteryPercent() noexcept {
 
   const auto array = static_cast<CFArrayRef>(sources.get());
   const auto count = CFArrayGetCount(array);
+
   for (CFIndex index = 0; index < count; ++index) {
     const auto description = IOPSGetPowerSourceDescription(information.get(), CFArrayGetValueAtIndex(array, index));
     if (description == nullptr) {
@@ -91,6 +92,7 @@ std::optional<HostCounters> NativeHostMetrics::read() noexcept {
   vm_statistics64_data_t memory{};
   mach_msg_type_number_t memory_words = HOST_VM_INFO64_COUNT;
   const auto memory_result = ::host_statistics64(host, HOST_VM_INFO64, reinterpret_cast<host_info64_t>(&memory), &memory_words);
+
   ::mach_port_deallocate(::mach_task_self(), host);
   if (cpu_result != KERN_SUCCESS || memory_result != KERN_SUCCESS) {
     return std::nullopt;
@@ -99,6 +101,7 @@ std::optional<HostCounters> NativeHostMetrics::read() noexcept {
   const auto busy = static_cast<std::uint64_t>(cpu.cpu_ticks[CPU_STATE_USER]) + cpu.cpu_ticks[CPU_STATE_SYSTEM] + cpu.cpu_ticks[CPU_STATE_NICE];
   const auto used_pages = static_cast<std::uint64_t>(memory.active_count) + memory.wire_count + memory.compressor_page_count;
   const auto cpu_count = std::clamp(systemCounter<int>("hw.logicalcpu"), 0, static_cast<int>(std::numeric_limits<std::uint16_t>::max()));
+
   return HostCounters{
       .busy_ticks = busy,
       .total_ticks = busy + cpu.cpu_ticks[CPU_STATE_IDLE],

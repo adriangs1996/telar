@@ -91,7 +91,9 @@ public:
         {QStringLiteral("failure"), failureText(failure)},
         {QStringLiteral("elapsed_ms"), elapsed_.elapsed()},
     };
+
     const auto output = QJsonDocument{result}.toJson(QJsonDocument::Compact);
+
     std::cout << output.constData() << '\n';
     QCoreApplication::exit(static_cast<int>(failure ? ExitStatus::failed : ExitStatus::success));
   }
@@ -115,9 +117,11 @@ int main(int argc, char **argv) try {
   CommandProcess<NativeNotificationHost, NotificationPayload, Observer> notice{observer};
   SoundPlayer<NativeSoundHost, Observer> sound{observer};
   constexpr qsizetype sound_argument_count = 2;
+
   if (arguments.size() == static_cast<qsizetype>(Argument::count) && mode == QStringLiteral("notify")) {
     const auto title = arguments[static_cast<qsizetype>(Argument::title)].toUtf8();
     const auto message = arguments[static_cast<qsizetype>(Argument::message)].toUtf8();
+
     notice.start(NotificationPayload::create({title.constData(), static_cast<std::size_t>(title.size())}, {message.constData(), static_cast<std::size_t>(message.size())}));
   } else if (arguments.size() == sound_argument_count && (mode == QStringLiteral("ready") || mode == QStringLiteral("needs-input"))) {
     sound.start(mode == QStringLiteral("ready") ? AgentSound::ready : AgentSound::needs_input);

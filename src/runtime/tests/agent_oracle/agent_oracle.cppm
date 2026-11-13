@@ -9,6 +9,7 @@ export {
 void recordAgents(ProtocolPeer &peer, std::ostream &dump) {
   auto snapshot = peer.exchange<AgentSnapshot>(QueryAgents{999});
   std::vector<AgentSnapshotEntry> entries{snapshot.entries.begin(), snapshot.entries.end()};
+
   for (auto &entry : entries) {
     entry.pane_id = 1;
     entry.pane_generation = 1;
@@ -21,6 +22,7 @@ void recordAgents(ProtocolPeer &peer, std::ostream &dump) {
     entry.observed_at_ms = 0;
     entry.expires_at_ms = 0;
   }
+
   snapshot.entries = entries;
   snapshot.revision = 1;
   peer.record(dump, snapshot);

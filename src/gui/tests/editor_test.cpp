@@ -36,11 +36,13 @@ void require(bool condition, const char *message) {
 void replacementsOwnAliasedInputAndRejectAtomically() {
   constexpr std::size_t capacity = 8;
   BoundedEditor<capacity> editor;
+
   require(editor.setText("abcdef"), "valid bounded initialization must succeed");
   require(editor.replace(0, 1, editor.text().substr(2, 3)), "replacement must accept its own borrowed text");
   require(editor.text() == "cdebcdef", "tail movement must not overwrite aliased input");
   editor.selectRange(1, 4);
   const auto before = editor;
+
   require(!editor.replace(0, 0, "overflow"), "overflow must reject the complete edit");
   require(!editor.replace(0, 1, "\xff"), "replacement must reject invalid UTF-8");
   require(!editor.selectRange(0, capacity + 1), "selection must reject offsets beyond the field");
@@ -50,6 +52,7 @@ void replacementsOwnAliasedInputAndRejectAtomically() {
 
 void editsKeepGraphemesWhole() {
   Editor editor;
+
   require(editor.setText("a👩‍💻é"), "Unicode input must fit");
   editor.backspace();
   require(editor.text() == "a👩‍💻", "backspace must remove a combining cluster");
@@ -65,6 +68,7 @@ void editsKeepGraphemesWhole() {
 
 void fit(Editor &editor, std::uint16_t width) {
   const auto view = editor.view(width);
+
   require(width == 0 ? view.cursor == 0 : view.cursor < width, "the visible cursor must remain inside its columns");
   telar::validateUtf8(view.text);
 }
@@ -72,6 +76,7 @@ void fit(Editor &editor, std::uint16_t width) {
 void staleScrollCannotCrossTheCursor() {
   constexpr std::uint16_t wide_columns = 16;
   Editor editor;
+
   require(editor.setText("🇪🇸👩‍💻á\tá"), "the original crash fixture must initialize");
   fit(editor, 1);
   editor.insert("é");
@@ -97,11 +102,14 @@ void formGeometryKeepsPhysicalCellsAndInsets() {
   constexpr Rect expected_content{.x = 12, .y = 16, .width = 176, .height = 20};
   constexpr Rect expected_caret{.x = 180, .y = 16, .width = 1, .height = 20};
   constexpr std::uint16_t expected_columns = 22;
+
   require(geometry.content == expected_content && geometry.columns == expected_columns, "form content must retain the original body grid and insets");
   constexpr std::uint16_t outside_column = 100;
+
   require(geometry.caret(outside_column) == expected_caret, "the insertion caret must clamp to the last visible column");
   constexpr Rect empty_bounds;
   const auto empty = FormFieldGeometry::derive(empty_bounds, chrome, grid);
+
   require(empty.columns == 0 && empty.caret(0).empty(), "empty form controls must produce no cursor");
 }
 

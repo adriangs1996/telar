@@ -51,6 +51,7 @@ std::optional<LinkPreview> LinkPreview::layout(const LinkHit &hit, const Termina
   const auto rows = static_cast<int>(std::min(qreal{maximum_rows}, room));
   QTextLayout text{toQString(hit.match.target.text()), font};
   QTextOption options;
+
   options.setWrapMode(QTextOption::WrapAnywhere);
   options.setTextDirection(Qt::LeftToRight);
   text.setTextOption(options);
@@ -58,6 +59,7 @@ std::optional<LinkPreview> LinkPreview::layout(const LinkHit &hit, const Termina
   QStringList lines;
   auto widest = qreal{0};
   bool clipped = false;
+
   while (true) {
     auto line = text.createLine();
     if (!line.isValid()) {
@@ -78,6 +80,7 @@ std::optional<LinkPreview> LinkPreview::layout(const LinkHit &hit, const Termina
   if (clipped) {
     constexpr char16_t ellipsis = u'\u2026';
     const QFontMetricsF metrics{font};
+
     lines.back() = metrics.elidedText(lines.back() + QChar{ellipsis}, Qt::ElideRight, available - (2 * pad));
   }
 

@@ -13,6 +13,7 @@ namespace {
   TEST(public_signature, preservesNativeViewTypes) {
     static_assert(std::is_same_v<text_a, std::string_view>);
     static_assert(std::is_same_v<tbc::view<std::span<const int>>, std::span<const int>>);
+
     EXPECT_EQ(sizeof(text_a), sizeof(std::string_view));
   }
 
@@ -20,6 +21,7 @@ namespace {
     static_assert(std::is_same_v<text_a, text_b>);
     const text_b second = "native value";
     const text_a first = second;
+
     EXPECT_EQ(first, second);
   }
 
@@ -27,6 +29,7 @@ namespace {
     static_assert(std::is_same_v<tbc::view<int &, tbc::lt::a>, int &>);
     int value = 1;
     tbc::view<int &> reference = value;
+
     reference = 2;
     EXPECT_EQ(value, 2);
   }
@@ -34,6 +37,7 @@ namespace {
   TEST(public_signature, distinguishesElisionFromExplicitRegionSyntax) {
     static_assert(std::is_same_v<tbc::view<std::string_view>, tbc::view<std::string_view, tbc::lt::elided>>);
     const tbc::view<std::string_view> text = "elided";
+
     EXPECT_EQ(text, "elided");
   }
 
@@ -45,6 +49,7 @@ namespace {
     static_assert(std::is_same_v<tbc::view<record, tbc::lt::a>, record>);
     const record original{"borrowed contents"};
     const tbc::view<record, tbc::lt::a> copied = original;
+
     EXPECT_EQ(copied.text.data(), original.text.data());
   }
 
@@ -53,6 +58,7 @@ namespace {
     using request_lifetime = tbc::lifetime<request>;
     static_assert(std::is_same_v<tbc::view<std::string_view, request_lifetime>, std::string_view>);
     const tbc::view<std::string_view, request_lifetime> text = "request";
+
     EXPECT_EQ(text, "request");
   }
 }

@@ -181,11 +181,13 @@ void FullscreenStripLayout::refreshFonts() {
 
 float FullscreenStripLayout::advance(const QString &text, fonts::FontRole role) {
   const auto pixels = static_cast<std::uint16_t>(std::clamp(std::round(pixel_size_ * density_), qreal{1}, static_cast<qreal>(ChromeMetrics::maximum_text)));
+
   try {
     if (fonts_) {
       const auto utf8 = text.toUtf8();
       const std::string_view label{utf8.constData(), static_cast<std::size_t>(utf8.size())};
       const auto width = fonts::TextLayout<SystemAllocator>::measure(*fonts_, label, {.pixel_height = pixels, .preferred = role});
+
       if (catalog_) {
         catalog_->request(label, role);
       }
@@ -197,6 +199,7 @@ float FullscreenStripLayout::advance(const QString &text, fonts::FontRole role) 
   }
 
   QFont font{QStringLiteral("IBM Plex Sans")};
+
   font.setPixelSize(pixels);
   font.setWeight(role == fonts::FontRole::emphasized ? QFont::DemiBold : QFont::Normal);
 
@@ -218,9 +221,11 @@ void FullscreenStripLayout::refreshLayout() {
 
   std::array<FullscreenEntryMeasure, PaneLayout::maximum_panes> sizes{};
   const auto count = std::min(static_cast<std::size_t>(entries_.size()), sizes.size());
+
   for (std::size_t index = 0; index < count; ++index) {
     const auto entry = entries_[static_cast<qsizetype>(index)].toMap();
     const auto focused = entry.value(QStringLiteral("focused")).toBool();
+
     sizes[index] = {.index = advance(entry.value(QStringLiteral("index")).toString(), focused ? fonts::FontRole::emphasized : fonts::FontRole::regular), .name = advance(entry.value(QStringLiteral("program")).toString(), fonts::FontRole::regular), .focused = focused, .attention = !entry.value(QStringLiteral("attentionColor")).toString().isEmpty()};
   }
 
@@ -229,17 +234,20 @@ void FullscreenStripLayout::refreshLayout() {
 
     return std::isfinite(value) && value > 0 ? static_cast<float>(value * density_) : 0;
   };
+
   constexpr qreal mark_size_ratio = 0.85;
   const auto body_pixels = std::clamp(std::round(pixel_size_ * density_), qreal{1}, static_cast<qreal>(ChromeMetrics::maximum_text));
   const FullscreenStripMetrics metrics{.ratio = static_cast<float>(ratio_ * density_), .maximum_band_height = static_cast<float>(band_height_ * density_), .mark_side = static_cast<float>(std::round(body_pixels * mark_size_ratio))};
   const auto plan = FullscreenStripGeometry::derive({.width = static_cast<float>(width() * density_), .height = static_cast<float>(height() * density_)}, metrics, std::span{sizes}.first(count), {.chip = measured(QStringLiteral("chip")), .progress = measured(QStringLiteral("progress")), .compact_progress = measured(QStringLiteral("compactProgress"))});
   QVariantList items;
+
   items.reserve(static_cast<qsizetype>(plan.count));
   for (const auto &entry : std::span{plan.entries}.first(plan.count)) {
     const auto bounds = logical(entry.bounds);
     const auto local = [&](Rect part) {
       return logical(part).translated(-bounds.topLeft());
     };
+
     items.append(QVariantMap{
         {QStringLiteral("entry"), entries_[static_cast<qsizetype>(entry.source)]},
         {QStringLiteral("bounds"), bounds},

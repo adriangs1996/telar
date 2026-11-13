@@ -35,6 +35,7 @@ public:
     const auto device = event.device() == nullptr ? 0 : event.device()->systemId();
     const auto has_delta = !event.angleDelta().isNull() || !event.pixelDelta().isNull();
     const auto compatibility = !has_delta && event.phase() == Qt::ScrollBegin && previous_had_delta_ && previous_phase_ == Qt::ScrollBegin && event.timestamp() == previous_timestamp_ && event.position() == previous_position_ && device == previous_device_;
+
     previous_had_delta_ = has_delta;
     previous_phase_ = event.phase();
     previous_timestamp_ = event.timestamp();

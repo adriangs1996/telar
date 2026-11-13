@@ -95,6 +95,7 @@ struct NotificationItem {
 
   [[nodiscard]] inline static NotificationItem create(std::uint64_t now_ns, NotificationInput input) {
     NotificationItem item;
+
     item.level = input.level;
     item.target = input.target;
     item.transition_updated_ns = now_ns;
@@ -139,6 +140,7 @@ struct NotificationItem {
 
   inline bool advance(std::uint64_t now_ns) noexcept {
     bool changed = false;
+
     if (phase == Phase::entering) {
       changed = advanceEntering(now_ns);
     }
@@ -177,6 +179,7 @@ struct NotificationItem {
 
   [[nodiscard]] inline float opacity(std::uint64_t now_ns) const noexcept {
     auto sampled = *this;
+
     sampled.advance(now_ns);
 
     return sampled.opacity();
@@ -187,6 +190,7 @@ private:
   inline static void copyText(runtime::FixedText<Capacity> &destination, std::string_view text) {
     constexpr std::string_view invalid_text = "invalid notification text";
     const auto valid = inspectUtf8(text) == Utf8Validation::valid ? text : invalid_text;
+
     destination.assign(runtime::utf8Prefix(valid, Capacity));
   }
 
@@ -196,6 +200,7 @@ private:
     }
 
     const auto previous = transition_position_ns;
+
     transition_position_ns = std::min(transition_duration_ns, deadlineAfter(previous, now_ns - transition_updated_ns));
     transition_updated_ns = now_ns;
     if (transition_position_ns == transition_duration_ns) {
@@ -211,6 +216,7 @@ private:
     }
 
     const auto previous = transition_position_ns;
+
     transition_position_ns -= std::min(transition_position_ns, now_ns - transition_updated_ns);
     transition_updated_ns = now_ns;
 
@@ -245,12 +251,14 @@ public:
 
   inline NotificationId push(std::uint64_t now_ns, NotificationInput input) {
     auto item = NotificationItem::create(now_ns, input);
+
     for (auto &existing : std::span{items_}.first(count_)) {
       if (existing.phase == NotificationItem::Phase::exiting || !existing.same(item)) {
         continue;
       }
 
       const auto started = existing.phase == NotificationItem::Phase::entering ? NotificationItem::deadlineAfter(now_ns, NotificationItem::transition_duration_ns) : now_ns;
+
       existing.expires_at_ns = NotificationItem::deadlineAfter(started, input.duration_ns);
 
       return existing.id;
@@ -272,11 +280,14 @@ public:
   inline bool advance(std::uint64_t now_ns) noexcept {
     bool changed = false;
     std::size_t index = 0;
+
     while (index < count_) {
       auto &item = items_[index];
+
       changed = item.advance(now_ns) || changed;
       if (item.phase == NotificationItem::Phase::exiting && item.transition_position_ns == 0) {
         const auto tail = std::span{items_}.subspan(index + 1, count_ - index - 1);
+
         std::ranges::move(tail, items_.begin() + static_cast<std::ptrdiff_t>(index));
         --count_;
         changed = true;
@@ -318,6 +329,7 @@ public:
     }
 
     auto deadline = std::numeric_limits<std::uint64_t>::max();
+
     for (const auto &item : items()) {
       deadline = std::min(deadline, item.nextDeadline(now_ns, frame_interval_ns));
     }
@@ -375,6 +387,7 @@ public:
     const auto individual = count > NotificationCenter::capacity ? NotificationCenter::capacity - 1 : count;
     std::size_t published = 0;
     AgentAlerts folded;
+
     for (const auto &change : changes) {
       if (!alertable(change)) {
         continue;
@@ -488,6 +501,7 @@ private:
     appendCount(message, done_, AgentStatus::done, blocked_ != 0);
     appendCount(message, failed_, AgentStatus::failed, blocked_ + done_ != 0);
     auto severity = AgentStatus::done;
+
     if (blocked_ != 0) {
       severity = AgentStatus::blocked;
     }
@@ -688,8 +702,10 @@ struct Tab {
 
     members.reserve(panes.size());
     const auto *selected = &panes.front();
+
     for (const auto &pane : panes) {
       auto &member = members.emplace_back();
+
       member.pane_id = pane.pane_id;
       member.foreground.assign(pane.foreground);
       if (pane.pane_id == focused_pane) {
@@ -723,6 +739,7 @@ struct Tab {
 template <Allocator Memory>
 [[nodiscard]] inline tbc::view<std::string_view, tbc::lt::a> tabApplicationName(tbc::view<const Tab<Memory> &, tbc::lt::a> tab, tbc::view<std::type_identity_t<const Pane<Memory> *>, tbc::lt::a> pane) noexcept {
   constexpr std::string_view fallback = "shell";
+
   if (pane != nullptr) {
     if (!pane->foreground.empty()) {
       return pane->foreground;
@@ -769,6 +786,7 @@ struct Worktree {
 
   [[nodiscard]] inline std::string_view handle() const noexcept {
     std::string_view name{branch};
+
     for (const auto prefix : {std::string_view{"worktree-"}, std::string_view{"worktree/"}}) {
       if (name.starts_with(prefix) && name.size() > prefix.size()) {
         name.remove_prefix(prefix.size());
@@ -813,9 +831,11 @@ struct Agent {
 
   [[nodiscard]] inline std::string_view finalLine() const noexcept {
     std::string_view remaining{final_message};
+
     while (!remaining.empty()) {
       const auto end = remaining.find('\n');
       auto line = remaining;
+
       line.remove_suffix(line.size() - std::min(end, line.size()));
       const auto first = line.find_first_not_of(" \t");
       if (first != std::string_view::npos) {
@@ -918,13 +938,16 @@ public:
     std::array<AgentStatusChange, capacity> status_changes;
     std::size_t status_change_count = 0;
     const auto sample_ns = std::max(now_ns_, now_ns);
+
     for (std::size_t index = 0; index < snapshot.entries.size(); ++index) {
       const auto &entry = snapshot.entries[index];
       auto &agent = staging_[index];
+
       assign(agent, entry);
       const auto previous = std::ranges::find_if(entries_, [&](const auto &candidate) {
         return candidate.pane_id == entry.pane_id && candidate.pane_generation == entry.pane_generation;
       });
+
       agent.status_clock = retain_clocks_ && previous != entries_.end() ? previous->status_clock : StatusAge{};
       agent.status_clock.observe({.pane_id = agent.pane_id, .pane_generation = agent.pane_generation, .status = agent.status, .provider = agent.provider_kind, .reported_seconds = agent.status_age_s}, sample_ns);
 
@@ -947,6 +970,7 @@ private:
   inline static void validate(const AgentSnapshot &snapshot) {
     for (std::size_t index = 0; index < snapshot.entries.size(); ++index) {
       const auto &entry = snapshot.entries[index];
+
       BodySchema<AgentSnapshotEntry>::validate(entry);
       for (const auto &previous : snapshot.entries.first(index)) {
         if (previous.pane_id == entry.pane_id && previous.pane_generation == entry.pane_generation) {
@@ -1068,6 +1092,7 @@ public:
 
     for (std::size_t index = 0; index < list.entries.size(); ++index) {
       const auto &entry = list.entries[index];
+
       for (const auto &previous : list.entries.first(index)) {
         if (previous.pane_id == entry.pane_id) {
           throw std::invalid_argument{"DuplicateListedPane"};
@@ -1080,6 +1105,7 @@ public:
     entries_.clear();
     for (const auto &entry : list.entries) {
       auto &pane = entries_.emplace_back();
+
       pane.pane_id = entry.pane_id;
       pane.pane_generation = entry.pane_generation;
       pane.location = entry.location;
@@ -1204,6 +1230,7 @@ public:
 
     std::array<const WorkspaceListEntry *, maximum_workspaces> ordered{};
     std::size_t count = 0;
+
     for (const auto &entry : snapshot.entries) {
       if (!holdsWorktree(snapshot, entry.workspace)) {
         ordered[count++] = &entry;
@@ -1211,6 +1238,7 @@ public:
     }
 
     const auto project_count = count;
+
     for (const auto &entry : snapshot.entries) {
       if (holdsWorktree(snapshot, entry.workspace)) {
         ordered[count++] = &entry;
@@ -1218,6 +1246,7 @@ public:
     }
 
     const auto retained = retainedCount(std::span{ordered}.first(count));
+
     prepare(staging_entries_, retained, memory_);
     prepare(staging_worktrees_, snapshot.worktrees.size(), memory_);
     for (std::size_t index = 0; index < retained; ++index) {
@@ -1256,8 +1285,10 @@ private:
 
   inline static std::size_t retainedCount(std::span<const WorkspaceListEntry *const> ordered) {
     std::size_t path_bytes = 0;
+
     for (std::size_t index = 0; index < ordered.size(); ++index) {
       const auto &entry = *ordered[index];
+
       static_cast<void>(ValueCodec<WorkspaceListEntry>::encodedSize(entry));
       if (entry.path.size() > path_pool_bytes - path_bytes) {
         return index;

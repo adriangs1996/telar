@@ -34,6 +34,7 @@ public:
     const auto shared = std::min(rows_.size(), incoming.size());
     auto first_changed = shared;
     qsizetype last_changed = 0;
+
     for (qsizetype index = 0; index < shared; ++index) {
       if (rows_[index] != incoming[index]) {
         rows_[index] = std::move(incoming[index]);
@@ -65,6 +66,7 @@ public:
     for (qsizetype index = 0; index < incoming.size(); ++index) {
       const auto key = incoming[index].value(QStringLiteral("key"));
       auto found = index;
+
       while (found < rows_.size() && rows_[found].value(QStringLiteral("key")) != key) {
         ++found;
       }

@@ -103,11 +103,13 @@ void waitFor(const std::function<bool()> &ready) {
 
   QEventLoop loop;
   QTimer poll;
+
   QObject::connect(&poll, &QTimer::timeout, &loop, [&] {
     if (ready()) {
       loop.quit();
     }
   });
+
   poll.start(observation_interval);
   QTimer::singleShot(observation_timeout, &loop, &QEventLoop::quit);
   loop.exec();
@@ -162,8 +164,10 @@ struct Source {
   template <typename Done>
   void renderPick(std::size_t index, const components::Context &context, Done done) {
     LuaOutcome<Owned<components::PickItems, Memory>> outcome;
+
     try {
       auto items = makeOwned<components::PickItems>(memory);
+
       generation.renderPick(index, context, *items);
       outcome.value.emplace(std::move(items));
     } catch (const std::exception &error) {
@@ -175,6 +179,7 @@ struct Source {
 
   [[nodiscard]] QList<QByteArray> commandArguments(int reference, const char *field) const {
     QList<QByteArray> result;
+
     generation.visitArguments(reference, field, [&](std::string_view argument) {
       result.append(QByteArray{argument.data(), static_cast<qsizetype>(argument.size())});
     });
@@ -197,6 +202,7 @@ QVariantList rows(const Controller &controller) {
 template <typename Memory>
 void lifecycle(Memory &memory) {
   const QTemporaryDir directory{QStringLiteral("/tmp/telar-pick-test-XXXXXX")};
+
   require(directory.isValid(), "pick state must be private and disposable");
   const auto marker = directory.filePath(QStringLiteral("choice"));
   const auto barrier = directory.filePath(QStringLiteral("complete"));
@@ -212,19 +218,23 @@ void lifecycle(Memory &memory) {
       f=t.pick({items={'quiet'},on_select=save,refresh=false}),
     }}}
   )";
+
   for (const auto &[token, value] : {std::pair{"MARKER", marker}, std::pair{"BARRIER", barrier}}) {
     const auto encoded = value.toUtf8();
+
     script.replace(script.find(token), std::string_view{token}.size(), encoded.constData(), static_cast<std::size_t>(encoded.size()));
   }
 
   Source source{memory, script};
   Host host;
   PickController controller{host, memory, source};
+
   controller.open(0);
   require(rows(controller).size() == 2 && controller.state().value(QStringLiteral("preferredRow")).toInt() == 1, "static choices must expose selected row and metadata");
   controller.filter(QStringLiteral("detail"));
   require(rows(controller).size() == 1 && rows(controller).first().toMap().value(QStringLiteral("swatch")).toList().size() == 3, "filtering must retain matching details and swatch metadata");
   const auto first_identity = controller.state().value(QStringLiteral("identity")).toString();
+
   controller.choose(0, first_identity);
   require(!controller.isOpen(), "an admitted choice must close its prompt");
   controller.open(0);
@@ -233,6 +243,7 @@ void lifecycle(Memory &memory) {
   waitFor([&] {
     return host.commits == 1;
   });
+
   require(contents(marker) == QByteArray::fromHex("c3a120cebb3b24286c69746572616c29"), "chosen Unicode and shell metacharacters must remain one literal argument");
   controller.choose(0, first_identity);
   require(controller.isOpen(), "a stale prompt identity must not choose from a replacement prompt");
@@ -242,26 +253,31 @@ void lifecycle(Memory &memory) {
   waitFor([&] {
     return !controller.state().value(QStringLiteral("loading")).toBool();
   });
+
   require(rows(controller).size() == 1 && rows(controller).first().toMap().value(QStringLiteral("label")).toString() == QStringLiteral("new"), "a cancelled source must not overwrite a replacement list");
   controller.open(3);
   waitFor([&] {
     return !controller.state().value(QStringLiteral("loading")).toBool();
   });
+
   require(controller.isOpen() && rows(controller).isEmpty() && !controller.state().value(QStringLiteral("error")).toString().isEmpty(), "a failed list must leave a usable dismissible prompt");
   controller.open(4);
   controller.choose(0, controller.state().value(QStringLiteral("identity")).toString());
   waitFor([&] {
     return !host.error.isEmpty();
   });
+
   require(host.commits == 1, "failed choices must not refresh surfaces");
 
   require(QFile::remove(barrier), "selection completion barrier must be reset");
   constexpr std::size_t quiet_pick = 5;
+
   controller.open(quiet_pick);
   controller.choose(0, controller.state().value(QStringLiteral("identity")).toString());
   waitFor([&] {
     return !controller.state().value(QStringLiteral("selecting")).toBool();
   });
+
   require(contents(barrier) == "done" && host.commits == 1, "refresh=false must execute its choice without refreshing surfaces");
   require(QFile::remove(barrier), "stale selection barrier must be reset");
   controller.open(0);
@@ -270,6 +286,7 @@ void lifecycle(Memory &memory) {
   waitFor([&] {
     return !controller.state().value(QStringLiteral("selecting")).toBool();
   });
+
   require(contents(barrier) == "done" && host.commits == 1, "an old runtime's completed selection must not refresh its replacement");
   controller.close();
 }
@@ -278,10 +295,12 @@ void lifecycle(Memory &memory) {
 
 int main(int argc, char **argv) {
   const QCoreApplication application{argc, argv};
+
   try {
     SystemAllocator system;
     constexpr std::size_t allocation_budget = std::size_t{8} * 1024 * 1024;
     BudgetAllocator memory{system, allocation_budget};
+
     lifecycle(memory);
     require(memory.liveBytes() == 0, "pick teardown must release every injected allocation");
     std::cout << "Pick filtering, literal selection, cancellation, failures and stale ownership passed\n";

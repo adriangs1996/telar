@@ -114,6 +114,7 @@ public:
     }
 
     auto button = static_cast<unsigned>(sample.button) | sample.modifiers;
+
     if (sample.phase == MousePhase::drag || sample.phase == MousePhase::move) {
       button |= motion;
     }
@@ -181,6 +182,7 @@ public:
     }
 
     auto projected = view;
+
     projected.surface = capture_->surface;
     projected.cell_width_px = capture_->cell_width_px;
     projected.cell_height_px = capture_->cell_height_px;
@@ -190,6 +192,7 @@ public:
 
   [[nodiscard]] inline std::optional<ChildMouseReport> cancel(const ChildMouseView &view) noexcept {
     auto release = last_;
+
     release.phase = MousePhase::release;
 
     return deliver(view, release);
@@ -397,6 +400,7 @@ public:
 
   inline bool cancel() noexcept {
     const bool changed = hovered_.has_value();
+
     hovered_.reset();
 
     return changed;
@@ -416,6 +420,7 @@ public:
     }
 
     std::optional<HistoryHoverIdentity> next;
+
     if (observation == Observation::point) {
       for (auto index = targets.size(); index > 0; --index) {
         const auto &target = targets[index - 1];
@@ -427,6 +432,7 @@ public:
     }
 
     const bool changed = next != hovered_;
+
     hovered_ = next;
 
     return changed;
@@ -548,6 +554,7 @@ public:
     }
 
     constexpr double threshold = 1;
+
     dragging_ = dragging_ || std::abs(point[0] - origin_[0]) >= threshold || std::abs(point[1] - origin_[1]) >= threshold;
     destination_ = dragging_ && destination && destination->relative_to != source_->tab_id ? destination : std::nullopt;
   }
@@ -562,6 +569,7 @@ public:
 
   [[nodiscard]] inline std::optional<TabDragMove> finish() noexcept {
     const auto result = preview();
+
     *this = {};
 
     return result;
@@ -617,6 +625,7 @@ public:
     double distance = std::numeric_limits<double>::infinity();
     double left = std::numeric_limits<double>::infinity();
     double right = -std::numeric_limits<double>::infinity();
+
     for (const auto &slot : std::span{entries_}.first(count_)) {
       if (point[1] < slot.bounds.y || point[1] >= slot.bounds.y + slot.bounds.height) {
         continue;
@@ -671,11 +680,13 @@ struct TabDropSurface {
     if (contains(create)) {
       return nullptr;
     }
+
     for (const auto &target : std::span{targets}.first(count) | std::views::reverse) {
       if (contains(target.bounds)) {
         return &target;
       }
     }
+
     return nullptr;
   }
 

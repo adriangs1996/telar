@@ -69,6 +69,7 @@ namespace telar {
     template <std::size_t N> auto valueText(const std::array<Byte, N> &value) {
       std::array<char, N * 4 + 3> text{};
       std::size_t position = 0;
+
       text[position++] = '"';
 
       for (const auto byte : value) {
@@ -91,6 +92,7 @@ namespace telar {
     template <typename Value> auto valueText(Value value) {
       if constexpr (std::same_as<Value, bool>) {
         std::array<char, sizeof("false")> text{};
+
         std::snprintf(text.data(), text.size(), "%s", value ? "true" : "false");
         return text;
       } else if constexpr (std::is_enum_v<Value>) {
@@ -99,6 +101,7 @@ namespace telar {
         static_assert(std::unsigned_integral<Value>, "Add a formatter for this field type");
 
         std::array<char, std::numeric_limits<Value>::digits10 + 2> text{};
+
         std::snprintf(text.data(), text.size(), "%llu", static_cast<unsigned long long>(value));
         return text;
       }
@@ -129,6 +132,7 @@ namespace telar {
       if (more) {
         const auto bytes_width = bytes.empty() ? 0 : bytes.size() * 3 - 1;
         const auto padding = columnWidth(bytes.size(), name, value) - bytes_width;
+
         std::fprintf(output, "%*s | ", static_cast<int>(padding), "");
       }
     }
@@ -139,6 +143,7 @@ namespace telar {
 
       if (separator[0] != '\0') {
         const auto padding = width - std::strlen(text);
+
         std::fprintf(output, "%*s%s", static_cast<int>(padding), "", separator);
       }
     }
@@ -179,6 +184,7 @@ namespace telar {
       if (count == 0) {
         return {};
       }
+
       if (count > remaining.size() / sizeof(T)) {
         throw EncodingError{"Decode storage is too small"};
       }
@@ -192,6 +198,7 @@ namespace telar {
 
       auto *elements = static_cast<T *>(pointer);
       auto *next = static_cast<Byte *>(pointer) + bytes;
+
       remaining = {next, available - bytes};
       for (std::size_t i = 0; i < count; ++i) {
         std::construct_at(elements + i);
@@ -229,6 +236,7 @@ namespace telar {
 
       for (std::size_t i = 0; i < width; ++i) {
         const auto byte = static_cast<T>(input[i]);
+
         result |= byte << (i * 8);
       }
 
@@ -265,6 +273,7 @@ namespace telar {
       }
 
       std::array<Byte, N> value{};
+
       for (std::size_t i = 0; i < width; ++i) {
         value[i] = input[i];
       }

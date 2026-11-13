@@ -20,10 +20,13 @@ namespace {
     for (std::size_t i = 0; i < rounds / 10; ++i) {
       work();
     }
+
     const auto begin = Clock::now();
+
     for (std::size_t i = 0; i < rounds; ++i) {
       work();
     }
+
     return std::chrono::duration<double, std::nano>(Clock::now() - begin).count() / static_cast<double>(rounds);
   }
 
@@ -38,20 +41,26 @@ int main() {
       {"fish", Syntax{Dialect::fish},
        "for f in (find . -name '*.fish' -type f); if test -s $f; and not string match -q '*test*' $f; set -l n (wc -l < $f); echo \"$f: $n lines\" >> /tmp/report.txt 2>&1; else; echo skip $f; end; end | sort -k2 -n"},
   };
+
   std::array<Token, 512> tokens;
   std::array<Word, 512> words;
   std::array<char, 1024> text;
   constexpr std::size_t rounds = 200000;
+
   for (const Sample &sample : samples) {
     const std::size_t cursor = sample.line.size() / 2;
     const double lexing = nanoseconds(rounds, [&] {
       sink = sink + lex(sample.line, sample.syntax, tokens).tokens;
     });
+
     const double query = nanoseconds(rounds, [&] {
       const Lexed lexed = lex(sample.line, sample.syntax, tokens, cursor);
+
       sink = sink + commandAt(sample.line, sample.syntax, tokens, lexed, words, text).words;
     });
+
     const Lexed lexed = lex(sample.line, sample.syntax, tokens);
+
     std::println("{:<15} {:>3} bytes {:>3} tokens  lex {:>7.1f} ns  lex+commandAt {:>7.1f} ns", sample.name,
                  sample.line.size(), lexed.tokens, lexing, query);
   }

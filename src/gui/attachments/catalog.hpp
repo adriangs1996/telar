@@ -94,6 +94,7 @@ public:
 
   [[nodiscard]] AttachmentSnapshot snapshot() const noexcept {
     AttachmentSnapshot result;
+
     for (const auto &slot : slots_) {
       if (slot && target_ && slot->owns(*target_)) {
         result.items[result.count++] = {.id = slot->capture.request.capture.id, .width = slot->capture.width, .height = slot->capture.height};
@@ -103,6 +104,7 @@ public:
     std::sort(result.items.begin(), result.items.begin() + static_cast<std::ptrdiff_t>(result.count), [](const auto &left, const auto &right) {
       return left.id < right.id;
     });
+
     for (std::size_t index = 0; index < result.count; ++index) {
       if (result.items[index].id == modal_) {
         result.modal = modal_;
@@ -125,6 +127,7 @@ public:
   [[nodiscard]] std::optional<AttachmentEviction> adopt(AttachmentCapture<Memory> &capture) {
     validate(capture);
     std::optional<AttachmentEviction> evicted;
+
     while (const auto reach = evictionReach(capture.png.size())) {
       const auto oldest = oldestReleasable();
       if (!oldest) {
@@ -172,6 +175,7 @@ public:
 
   std::size_t removeVisible(AttachmentTarget target) noexcept {
     std::size_t count = 0;
+
     for (std::size_t index = 0; index < slots_.size(); ++index) {
       const auto &slot = slots_[index];
       if (slot && slot->owns(target)) {
@@ -200,6 +204,7 @@ public:
       }
 
       AttachmentMarkerPlan plan;
+
       if (slot->capture.request.marker_policy == AttachmentMarkerPolicy::pasted_path) {
         const auto *const path = markerPath(*slot);
         if (path != nullptr) {
@@ -207,6 +212,7 @@ public:
         }
       } else {
         const auto number = markerNumber(*slot).value_or(static_cast<std::uint16_t>(index + 1));
+
         plan = AttachmentMarkerPlanning::placeholder(screen, number);
       }
 
@@ -222,6 +228,7 @@ public:
 
   [[nodiscard]] std::optional<std::uint64_t> markerAtDeletion(AttachmentMarkerScreen screen, AttachmentMarkerDeletion deletion) const noexcept {
     const auto visible = snapshot();
+
     for (std::size_t index = 0; index < visible.count; ++index) {
       const auto *const slot = find(visible.items[index].id);
       if (slot == nullptr) {
@@ -253,6 +260,7 @@ public:
     }
 
     std::size_t removed = 0;
+
     for (std::size_t index = 0; index < slots_.size(); ++index) {
       const auto &slot = slots_[index];
       if (slot && slot->marker && slot->owns(target) && !markerPresent(*slot, screen)) {
@@ -287,6 +295,7 @@ public:
 
     std::array<PathAttachmentMarker, AttachmentLimits::maximum_items * 2> paths{};
     const auto count = PathAttachmentMarkers::collect(screen, paths);
+
     for (std::size_t index = 0; index < count; ++index) {
       const auto &path = paths[index];
       if (!pathClaimed(*target_, path.uuid) && PathAttachmentMarkers::cursorAt(screen, deletion == AttachmentMarkerDeletion::backward ? path.end : path.start)) {
@@ -361,6 +370,7 @@ private:
 
     NumericAttachmentMarkers scan{screen};
     const CellPosition cursor{.x = screen.cursor.x, .y = screen.cursor.y};
+
     while (const auto marker = scan.next()) {
       if (marker->number == number && (deletion == AttachmentMarkerDeletion::backward ? marker->end : marker->start) == cursor) {
         return true;
@@ -411,6 +421,7 @@ private:
     std::array<std::uint16_t, AttachmentLimits::maximum_items> candidates{};
     std::size_t count = 0;
     NumericAttachmentMarkers scan{screen};
+
     while (const auto marker = scan.next()) {
       const auto kept = std::span{candidates}.first(count);
       if (numberClaimed(target, marker->number) || std::ranges::find(kept, marker->number) != kept.end()) {
@@ -418,6 +429,7 @@ private:
       }
 
       auto index = count;
+
       if (count < candidates.size()) {
         ++count;
       } else if (marker->number <= candidates.back()) {
@@ -447,6 +459,7 @@ private:
     const auto count = PathAttachmentMarkers::collect(screen, paths);
     std::array<AttachmentPathUuid, paths.size()> candidates{};
     std::size_t available = 0;
+
     for (std::size_t index = 0; index < count; ++index) {
       if (!pathClaimed(target, paths[index].uuid)) {
         candidates[available++] = paths[index].uuid;
@@ -482,6 +495,7 @@ private:
 
   void learnMarkers(AttachmentTarget target, AttachmentMarkerScreen screen) noexcept {
     const auto visible = snapshot();
+
     for (std::size_t index = 0; index < visible.count; ++index) {
       auto *const slot = findMutable(visible.items[index].id);
       if (slot != nullptr && !slot->marker && slot->owns(target)) {
@@ -521,6 +535,7 @@ private:
   [[nodiscard]] std::optional<std::size_t> oldestReleasable() const noexcept {
     std::optional<std::size_t> oldest;
     auto oldest_id = std::numeric_limits<std::uint64_t>::max();
+
     for (std::size_t index = 0; index < slots_.size(); ++index) {
       const auto &slot = slots_[index];
       if (slot && delivery_.canRelease(slot->delivery) && slot->capture.request.capture.id < oldest_id) {
@@ -534,6 +549,7 @@ private:
 
   void retire(std::size_t index) noexcept {
     auto &slot = *slots_[index];
+
     delivery_.retire(slot.delivery);
     slot.retired = true;
     if (modal_ == slot.capture.request.capture.id) {

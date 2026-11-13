@@ -37,6 +37,7 @@ FileDescriptor openStartLog(const char *path) noexcept {
   if (!file || ::fstat(file.get(), &state) != 0 || !S_ISREG(state.st_mode) || state.st_uid != ::getuid() || state.st_nlink != 1) {
     return FileDescriptor{};
   }
+
   if (::fchmod(file.get(), 0600) != 0 || ::ftruncate(file.get(), 0) != 0) {
     return FileDescriptor{};
   }
@@ -52,12 +53,14 @@ pid_t spawnDaemon(const char *executable, char *const *arguments, const char *lo
   }
 
   SpawnOptions spawn{POSIX_SPAWN_SETSID};
+
   spawn.redirect(ignored.get(), STDIN_FILENO);
   spawn.redirect(ignored.get(), STDOUT_FILENO);
   spawn.redirect(log ? log.get() : ignored.get(), STDERR_FILENO);
   spawn.changeDirectory("/");
   spawn.closeOthers();
   pid_t child = -1;
+
   checkSpawn(::posix_spawn(&child, executable, &spawn.actions, &spawn.attributes, arguments, environ));
   return child;
 }

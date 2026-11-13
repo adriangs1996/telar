@@ -106,12 +106,15 @@ int dispatchMachine(std::span<char *const> words, Dispatch dispatch) {
     std::fputs("telar clipboard: pipe clipboard content to a consumer or redirect stdout to a file\n", stderr);
     return 1;
   }
+
   if (command.empty() || (!family && first != "--version" && first != "-V" && first != "--skill" && first != "plugin-worker") || family == Family::gui) {
     WindowOptions options;
+
     try {
       options = WindowOptions::parse(family == Family::gui ? command.subspan(1) : command, family == Family::gui);
     } catch (const std::invalid_argument &error) {
       const auto reference = helpReference(command);
+
       std::fprintf(stderr, "telar: %s; see `%s`\n", error.what(), reference.c_str());
       return 1;
     }
@@ -133,11 +136,13 @@ int dispatchMachine(std::span<char *const> words, Dispatch dispatch) {
     }
   } catch (const std::invalid_argument &error) {
     const auto reference = helpReference(command);
+
     std::fprintf(stderr, "telar: %s; see `%s`\n", error.what(), reference.c_str());
     return 1;
   }
 
   std::optional<machines::MachineProfile> target;
+
   try {
     target = machine::resolve(memory, label);
   } catch (const std::exception &error) {
@@ -150,11 +155,13 @@ int dispatchMachine(std::span<char *const> words, Dispatch dispatch) {
 
 int dispatchArguments(std::span<char *const> words, Dispatch dispatch) {
   std::vector<std::string> decoded;
+
   for (const std::string_view word : words) {
     decoded.push_back(machine::decode(word));
   }
 
   auto arguments = launch::pointers(decoded);
+
   arguments.pop_back();
   return dispatch(arguments);
 }

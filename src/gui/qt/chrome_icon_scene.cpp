@@ -102,8 +102,10 @@ public:
   void paint(const IconProjection &position, Color foreground) {
     auto *vertices = static_cast<AlphaMaskVertex *>(geometry_.vertexData());
     std::size_t offset = 0;
+
     for (const auto &quad : glyphs_) {
       const auto source = quad.mask->texture->normalizedTextureSubRect();
+
       writeAlphaMaskQuad(std::span<AlphaMaskVertex, alpha_mask_triangle_vertices>{vertices + offset, alpha_mask_triangle_vertices}, position.map(quad.glyph.ink), source, 1);
       offset += alpha_mask_triangle_vertices;
     }
@@ -137,6 +139,7 @@ public:
 
   void paint(IconImages &images, const ChromeIconPaint &paint, const IconProjection &position) {
     auto colored = images.colored(glyph_.index, paint.pixel_height, glyph_.face, {}, paint.color);
+
     image_.setTexture(colored->texture.get());
     mask_ = std::move(colored);
     image_.setSourceRect({0, 0, static_cast<qreal>(mask_->alpha.width()), static_cast<qreal>(mask_->alpha.height())});
@@ -168,6 +171,7 @@ public:
 
     const auto position = projection(paint);
     QMatrix4x4 transform;
+
     transform.translate(static_cast<float>((position.anchor.x() / paint.scale) - paint.scene_origin.x()), static_cast<float>((position.anchor.y() / paint.scale) - paint.scene_origin.y()));
     setMatrix(transform);
     for (auto *mesh : meshes_) {
@@ -182,6 +186,7 @@ public:
 private:
   void appendMesh(QList<IconQuad> group, const ChromeIconPaint &paint) {
     auto mesh = std::make_unique<IconMesh>(std::move(group), ink(paint.color));
+
     meshes_.append(&adoptSceneNode(*this, std::move(mesh)));
   }
 
@@ -190,10 +195,13 @@ private:
     meshes_.clear();
     software_glyphs_.clear();
     QList<IconQuad> group;
+
     for (const auto &glyph : paint.glyphs) {
       const auto &image = images_->glyph(glyph.index, paint.pixel_height, glyph.face);
+
       if (images_->software()) {
         auto node = std::make_unique<SoftwareIcon>(window_, glyph);
+
         node->paint(*images_, paint, projection(paint));
         software_glyphs_.append(&adoptSceneNode(*this, std::move(node)));
       } else {

@@ -85,8 +85,10 @@ constexpr std::uint64_t pixel_bytes = std::uint64_t{image_side} * image_side * 4
 
 void failedSnapshot(WireRuntime &runtime, std::uint64_t revision) {
   const GraphicsHeader snapshot{.pane_id = 1, .revision = revision};
+
   runtime.send(GraphicsSnapshot{.header = snapshot, .phase = SnapshotPhase::begin});
   constexpr auto overflow = GraphicsStore<SystemAllocator>::image_capacity + 1;
+
   for (std::uint32_t id = 1; id <= overflow; ++id) {
     runtime.send(GraphicsImage{.header = snapshot, .image = {.key = {.image_id = id, .generation = 1}, .format = ImageFormat::rgba, .width = image_side, .height = image_side, .byte_len = pixel_bytes}});
   }
@@ -106,23 +108,29 @@ class GraphicsRecoverySceneTest : public QObject {
   Q_SLOT static void pauseNoticeHeaderAndTimerFollowTheRuntimeWire() {
     ControlledAwakeClock::set(0);
     const QTemporaryDir directory;
+
     QVERIFY(directory.isValid());
     QLocalServer listener;
     const auto endpoint = directory.filePath(QStringLiteral("runtime.sock"));
+
     QVERIFY(listener.listen(endpoint));
     ApplicationAllocator memory;
     Application application{memory};
+
     application.open(endpoint);
     QTRY_VERIFY_WITH_TIMEOUT(listener.hasPendingConnections(), wait_ms);
     const std::unique_ptr<QLocalSocket> socket{listener.nextPendingConnection()};
     WireRuntime runtime{*socket};
+
     QTRY_VERIFY_WITH_TIMEOUT(application.connected(), wait_ms);
     runtime.send(ClientLayoutSnapshot{});
     QTRY_COMPARE_WITH_TIMEOUT(runtime.count(ClientTag::open_pane), 1, wait_ms);
     const auto opening = runtime.last<OpenPane>();
     const TabLocation location{.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 1}, .tab_id = 1};
+
     runtime.send(PaneOpened{.request_id = opening.request_id, .pane_id = 1, .location = location, .created = true, .pane_generation = 1});
     const std::array<PaneDescriptor, 1> descriptors{{{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 1}}};
+
     runtime.send(TabSnapshot{.request_id = 1, .location = location, .panes = descriptors});
     runtime.send(PaneForeground{.pane_id = 1, .name = "nvim"});
     QTRY_COMPARE_WITH_TIMEOUT(application.panes()->rowCount(), 1, wait_ms);
@@ -130,17 +138,22 @@ class GraphicsRecoverySceneTest : public QObject {
 
     QQmlEngine engine;
     QQuickWindow window;
+
     window.resize(header_width, header_height);
     const ChromeMetrics metrics;
     auto item = createChrome(engine, QStringLiteral("PaneHeader"), {{QStringLiteral("record"), paneChrome(application)}, {QStringLiteral("colors"), application.colors()}, {QStringLiteral("typography"), QVariantMap{{QStringLiteral("body"), metrics.body}, {QStringLiteral("small"), metrics.small}}}});
+
     item->setParentItem(window.contentItem());
     item->setSize(window.size());
     QObject::connect(application.panes(), &QAbstractItemModel::dataChanged, item.get(), [&] {
       item->setProperty("record", paneChrome(application));
     });
+
     const auto labels = visualItems(*item, QStringLiteral("paneImagesPaused"));
+
     QCOMPARE(labels.size(), 1);
     const auto *label = labels.front();
+
     QVERIFY(!label->isVisible());
     window.show();
     for (std::uint64_t revision = 1; revision <= 3; ++revision) {
@@ -155,6 +168,7 @@ class GraphicsRecoverySceneTest : public QObject {
     QCOMPARE(runtime.count(ClientTag::report_limit), 1);
 
     constexpr auto window_ns = GraphicsPauses::healthy_window_ns;
+
     ControlledAwakeClock::set(window_ns - NotificationInput::nanoseconds_per_millisecond);
     failedSnapshot(runtime, 4);
     QTRY_COMPARE_WITH_TIMEOUT(application.pane(1)->graphics.revision(), 4, wait_ms);
@@ -164,12 +178,14 @@ class GraphicsRecoverySceneTest : public QObject {
     QVERIFY(application.connected());
     QVERIFY(label->isVisible());
     const GraphicsHeader resumed{.pane_id = 1, .revision = 5};
+
     runtime.send(GraphicsSnapshot{.header = resumed, .phase = SnapshotPhase::begin});
     runtime.send(GraphicsSnapshot{.header = resumed, .phase = SnapshotPhase::end});
     QTRY_VERIFY_WITH_TIMEOUT(!label->isVisible(), wait_ms);
     QVERIFY(!paneChrome(application).value(QStringLiteral("imagesPaused")).toBool());
 
     const QSignalSpy connection_changes{&application, &Application::stateChanged};
+
     runtime.send(GraphicsImageChunk{.header = resumed, .key = {.image_id = 1, .generation = 1}, .bytes = std::array<Byte, pixel_bytes>{}});
     QTRY_VERIFY_WITH_TIMEOUT(!application.connected(), wait_ms);
     QTRY_COMPARE_WITH_TIMEOUT(socket->state(), QLocalSocket::UnconnectedState, wait_ms);
@@ -181,6 +197,7 @@ class GraphicsRecoverySceneTest : public QObject {
 
 int main(int argc, char **argv) {
   const QGuiApplication application{argc, argv};
+
   bundledFonts();
   QGuiApplication::setFont(QFont{QStringLiteral("IBM Plex Sans")});
   GraphicsRecoverySceneTest test;

@@ -13,6 +13,7 @@ int main() try {
   const std::string first{"short"};
   const std::string second{"a longer string"};
   const auto selected = longerText(first, second);
+
   return selected == second ? 0 : 1;
 } catch (...) {
   return 1;

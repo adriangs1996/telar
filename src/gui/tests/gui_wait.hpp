@@ -23,6 +23,7 @@ bool waitForGuiCondition(const Predicate &condition, int timeout_ms) {
   QEventLoop events;
   QTimer observation;
   QTimer deadline;
+
   deadline.setSingleShot(true);
   QObject::connect(&deadline, &QTimer::timeout, &events, &QEventLoop::quit);
   QObject::connect(&observation, &QTimer::timeout, &events, [&] {
@@ -30,6 +31,7 @@ bool waitForGuiCondition(const Predicate &condition, int timeout_ms) {
       events.quit();
     }
   });
+
   observation.start(poll_interval);
   deadline.start(timeout_ms);
   events.exec();

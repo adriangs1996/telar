@@ -33,10 +33,12 @@ public:
     if (now < next_sample_) {
       return;
     }
+
     next_sample_ = now + sample_interval;
 
     struct stat status;
     const bool available = !path_.empty() && path_ != ":memory:" && ::lstat(path_.c_str(), &status) == 0 && S_ISREG(status.st_mode) && status.st_size >= 0;
+
     bytes_.store(available ? static_cast<std::uint64_t>(status.st_size) : 0, std::memory_order_relaxed);
   }
 
@@ -83,6 +85,7 @@ struct GraphicsStorageSnapshot {
     line.field("graphics_images", images);
     line.field("graphics_placements", placements);
     auto resident = resident_bytes;
+
     accumulate(resident, transfer_bytes);
     line.field("graphics_resident_bytes", resident);
     line.field("graphics_loading_bytes", loading_bytes);
@@ -154,6 +157,7 @@ public:
   inline void observe(std::uint64_t duration, bool failed) noexcept {
     total_ns_.fetch_add(duration, std::memory_order_relaxed);
     auto maximum = maximum_ns_.load(std::memory_order_relaxed);
+
     while (duration > maximum && !maximum_ns_.compare_exchange_weak(maximum, duration, std::memory_order_relaxed)) {
     }
 

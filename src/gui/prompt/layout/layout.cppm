@@ -71,13 +71,16 @@ struct Layout {
 inline void classify(std::string_view text, std::span<Style> styles, shell::Syntax syntax = {}) {
   std::ranges::fill(styles, Style::plain);
   thread_local std::vector<shell::Token> tokens;
+
   tokens.resize(text.size() + 1);
   const auto lexed = shell::lex(text, syntax, tokens);
   static constexpr std::array<std::string_view, 7> wrappers{"sudo", "env", "exec", "time", "command", "nohup", "doas"};
   std::uint32_t wrapped = shell::no_command;
+
   for (const auto &token : std::span{tokens}.first(lexed.tokens)) {
     Style style = Style::plain;
     const auto word = text.substr(token.begin, token.end - token.begin);
+
     switch (token.kind) {
     case shell::TokenKind::command:
       style = Style::command;
@@ -90,6 +93,7 @@ inline void classify(std::string_view text, std::span<Style> styles, shell::Synt
       } else if (word.find('/') != std::string_view::npos && !word.starts_with('-')) {
         style = Style::path;
       }
+
       break;
     case shell::TokenKind::option:
       style = Style::option;
@@ -117,6 +121,7 @@ inline void classify(std::string_view text, std::span<Style> styles, shell::Synt
       style = Style::error;
       break;
     }
+
     for (auto position = token.begin; position < token.end && position < styles.size(); ++position) {
       styles[position] = style;
     }
@@ -126,6 +131,7 @@ inline void classify(std::string_view text, std::span<Style> styles, shell::Synt
 // Whether the shell would read more lines before running `text`.
 inline bool incomplete(std::string_view text, shell::Syntax syntax = {}) {
   thread_local std::vector<shell::Token> tokens;
+
   tokens.resize(text.size() + 1);
   return shell::lex(text, syntax, tokens).completeness != shell::Completeness::complete;
 }
@@ -134,6 +140,7 @@ inline bool incomplete(std::string_view text, shell::Syntax syntax = {}) {
 // when given, the animation each byte takes part in: a run never spans two.
 inline Layout layout(std::string_view text, std::span<const Style> styles, std::size_t cursor, std::size_t anchor, std::uint32_t columns, std::span<const std::uint8_t> groups = {}) {
   Layout result;
+
   columns = std::max<std::uint32_t>(columns, Layout::indent + 1);
   std::uint32_t row = 0;
   std::uint32_t column = Layout::indent;
@@ -146,10 +153,12 @@ inline Layout layout(std::string_view text, std::span<const Style> styles, std::
       result.caret_columns = std::max<std::uint32_t>(1, width);
     }
   };
+
   const auto select = [&](std::size_t offset, std::uint32_t at_row, std::uint32_t at_column, std::uint32_t width) {
     if (offset < selection_start || offset >= selection_end) {
       return;
     }
+
     if (!result.selection.empty() && result.selection.back().row == at_row && result.selection.back().column + result.selection.back().columns == at_column) {
       result.selection.back().columns += width;
     } else if (result.selection.size() < Layout::maximum_runs) {
@@ -159,12 +168,14 @@ inline Layout layout(std::string_view text, std::span<const Style> styles, std::
 
   GraphemeCursor graphemes{text};
   std::size_t offset = 0;
+
   while (true) {
     const auto start = offset;
     const auto grapheme = graphemes.nextReplacingInvalid();
     if (!grapheme) {
       break;
     }
+
     offset = graphemes.position();
     if (text[start] == '\n') {
       caret(start, row, column, 1);
@@ -179,6 +190,7 @@ inline Layout layout(std::string_view text, std::span<const Style> styles, std::
       ++row;
       column = Layout::indent;
     }
+
     caret(start, row, column, width);
     select(start, row, column, width);
     const auto style = start < styles.size() ? styles[start] : Style::plain;
@@ -190,18 +202,22 @@ inline Layout layout(std::string_view text, std::span<const Style> styles, std::
     } else if (runs.size() < Layout::maximum_runs) {
       runs.push_back({row, column, width, start, offset, style, group});
     }
+
     column += width;
     result.width = std::max(result.width, column);
   }
+
   if (cursor >= text.size()) {
     if (column >= columns) {
       ++row;
       column = Layout::indent;
     }
+
     result.caret_row = row;
     result.caret_column = column;
     result.caret_columns = 1;
   }
+
   result.rows = row + 1;
   result.width = std::max(result.width, std::min(columns, result.caret_column + 1));
   return result;

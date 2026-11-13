@@ -110,6 +110,7 @@ struct CopyState {
   inline void horizontal(const CopyGrid &grid, std::int32_t delta) noexcept {
     const auto columns = grid.columns;
     const auto last = columns == 0 ? 0 : columns - 1;
+
     cursor.x = static_cast<std::uint16_t>(std::clamp<std::int64_t>(static_cast<std::int64_t>(cursor.x) + delta, 0, last));
   }
 
@@ -152,6 +153,7 @@ struct CopyState {
 
   inline void beginPointer(CopyGranularity granularity, const CopyGrid &grid) noexcept {
     const auto span = grid.pointerSpan(cursor, granularity);
+
     pointer = CopyPointer{.start = span[0], .end = span[1], .granularity = granularity, .columns = grid.columns, .rows = grid.rows};
     anchor = granularity == CopyGranularity::character ? std::nullopt : std::optional{span[0]};
     cursor = span[1];
@@ -167,6 +169,7 @@ struct CopyState {
     point.y = std::clamp(point.y, grid.scroll.offset, grid.scroll.offset + grid.rows - 1);
     const auto span = grid.pointerSpan(point, pointer->granularity);
     const auto backwards = point < pointer->start;
+
     anchor = backwards ? pointer->end : pointer->start;
     cursor = backwards ? span[0] : span[1];
     if (pointer->granularity == CopyGranularity::character && span[0] == pointer->start && span[1] == pointer->end) {
@@ -177,6 +180,7 @@ struct CopyState {
   inline void onFrame(std::uint32_t previous_offset, Scroll scroll) noexcept {
     if (scroll.offset < previous_offset && viewport_offset == previous_offset) {
       const auto pruned = previous_offset - scroll.offset;
+
       cursor.y -= std::min(cursor.y, pruned);
       if (anchor) {
         anchor->y -= std::min(anchor->y, pruned);
@@ -189,6 +193,7 @@ struct CopyState {
     }
 
     const auto last = scroll.total_rows == 0 ? 0 : scroll.total_rows - 1;
+
     cursor.y = std::min(cursor.y, last);
     if (anchor) {
       anchor->y = std::min(anchor->y, last);
@@ -210,6 +215,7 @@ struct CopyState {
     }
 
     const auto &match = matches[index];
+
     match_index = index;
     cursor = {.x = match.x, .y = std::min(match.y, grid.lastRow())};
     revealWithMargin(grid);
@@ -226,6 +232,7 @@ struct CopyState {
     if (cursor.y < top || cursor.y >= bottom) {
       viewport_offset = cursor.y - std::min<std::uint32_t>(cursor.y, rows / 2);
     }
+
     viewport_offset = std::min(viewport_offset, grid.maximumOffset());
   }
 
@@ -236,6 +243,7 @@ struct CopyState {
     }
 
     std::size_t selected = search_direction == CopyDirection::forward ? 0 : matches.size() - 1;
+
     if (search_direction == CopyDirection::forward) {
       for (std::size_t index = 0; index < matches.size(); ++index) {
         const CopyPoint start{.x = matches[index].x, .y = matches[index].y};
@@ -371,6 +379,7 @@ private:
 
   inline static Command command(const TerminalKey &key) noexcept {
     using Code = KeyChord::Key;
+
     switch (key.code) {
     case Code::left:
       return Command::left;
@@ -441,6 +450,7 @@ private:
         {'y', Command::copy},
         {'q', Command::leave},
     });
+
     const auto *const found = std::ranges::find(characters, key.codepoint, &decltype(characters)::value_type::first);
 
     return found == characters.end() ? Command::none : found->second;
@@ -448,6 +458,7 @@ private:
 
   inline static bool move(CopyState &state, Command action, const CopyGrid &grid) noexcept {
     const auto page = static_cast<std::int32_t>(std::max<unsigned>(1, grid.rows == 0 ? 0 : grid.rows - 1));
+
     switch (action) {
     case Command::left:
       state.horizontal(grid, -1);
@@ -513,6 +524,7 @@ private:
 
   inline static void nonBlank(CopyState &state, const CopyGrid &grid, bool last) noexcept {
     const auto last_column = static_cast<std::uint16_t>(grid.columns == 0 ? 0 : grid.columns - 1);
+
     if (grid.cell({.x = 0, .y = state.cursor.y}) == nullptr) {
       state.cursor.x = last ? last_column : 0;
 
@@ -520,6 +532,7 @@ private:
     }
 
     auto column = last ? last_column : std::uint16_t{0};
+
     while (true) {
       const auto *value = grid.cell({.x = column, .y = state.cursor.y});
       if (value != nullptr && !value->utf8().empty() && !CopyGrid::whitespace(value->utf8().front())) {
@@ -570,6 +583,7 @@ private:
     }
 
     auto point = state.cursor;
+
     if (end && *initial != CopyWordClass::space) {
       point = lastInClass(point, *initial, grid, CopyDirection::forward);
     } else {
@@ -586,6 +600,7 @@ private:
 
   inline static void wordBackward(CopyState &state, const CopyGrid &grid) noexcept {
     auto point = grid.step(state.cursor, CopyDirection::backward);
+
     while (grid.wordClass(point) == CopyWordClass::space) {
       const auto previous = grid.step(point, CopyDirection::backward);
       if (previous == point) {
@@ -609,6 +624,7 @@ private:
 
   inline static void paragraph(CopyState &state, const CopyGrid &grid, CopyDirection direction) noexcept {
     auto row = state.cursor.y;
+
     while (true) {
       const auto next = direction == CopyDirection::backward ? row - std::min<std::uint32_t>(row, 1) : row + static_cast<std::uint32_t>(row < grid.lastRow());
       if (next == row) {
@@ -631,6 +647,7 @@ private:
     }
 
     const auto index = (state.match_index + matches.size() + (forward ? std::size_t{1} : matches.size() - 1)) % matches.size();
+
     state.gotoMatch(static_cast<std::uint16_t>(index), matches, grid);
   }
 };
@@ -690,6 +707,7 @@ public:
 
     click_pane_ = press.pane_id;
     const auto granularity = clicks_.press(press.position, press.now_ns);
+
     state_ = CopyState{.pane_id = press.pane_id, .cursor = {.x = press.position.x, .y = grid.scroll.offset + press.position.y}, .entry_offset = grid.scroll.offset, .viewport_offset = grid.scroll.offset};
     state_->beginPointer(granularity, grid);
     gesture_ = press.pane_id;
@@ -705,12 +723,14 @@ public:
     }
 
     auto next = *state_;
+
     next.movePointer({.x = local.x, .y = grid.scroll.offset + std::min<std::uint32_t>(local.y, grid.rows == 0 ? 0 : grid.rows - 1)}, grid);
     if (released && !next.anchor) {
       return leave(grid);
     }
 
     auto result = plan(next, grid);
+
     if (released) {
       result.selection = next.selectionRequest();
     }
@@ -747,6 +767,7 @@ public:
         .entry_offset = grid.scroll.offset,
         .viewport_offset = grid.scroll.offset,
     };
+
     match_count_ = 0;
     ++revision_;
 
@@ -781,6 +802,7 @@ public:
 
     if (effect.exit) {
       auto plan = leave(grid);
+
       plan.effect = effect;
       if (effect.copy) {
         plan.selection = next.selectionRequest();
@@ -788,6 +810,7 @@ public:
         const auto found = matches();
         if (!plan.selection && next.match_index < found.size() && next.cursor == CopyPoint{.x = found[next.match_index].x, .y = found[next.match_index].y}) {
           const auto &match = found[next.match_index];
+
           plan.selection = CopySelection{.pane_id = next.pane_id, .start_x = match.x, .start_y = match.y, .end_x = static_cast<std::uint16_t>(static_cast<std::uint32_t>(match.x) + match.len - 1), .end_y = match.y, .linewise = false};
         }
       }
@@ -808,6 +831,7 @@ public:
     }
 
     auto next = *state_;
+
     next.vertical(rows, grid);
 
     return next == *state_ ? std::nullopt : std::optional{plan(next, grid)};
@@ -815,6 +839,7 @@ public:
 
   [[nodiscard]] inline CopyPlan leave(const CopyGrid &grid) const noexcept {
     CopyPlan result{.revision = revision_, .effect = {.exit = true}};
+
     if (state_ && !state_->pointer) {
       result.viewport = viewport(std::min(state_->entry_offset, grid.maximumOffset()), grid);
     }
@@ -859,12 +884,15 @@ public:
     }
 
     auto next = *state_;
+
     if (origin) {
       next.cursor = *origin;
       next.reveal(grid);
     }
+
     next.applyMatches(results, grid, origin.has_value());
     auto result = plan(next, grid);
+
     result.replacement_matches = results;
 
     return result;
@@ -882,6 +910,7 @@ public:
     }
 
     auto next = *state_;
+
     next.onFrame(previous_offset, grid.scroll);
     if (next != *state_) {
       state_ = next;
@@ -1081,6 +1110,7 @@ public:
   inline void append(const Coverage &coverage, const CellValue &cell, bool alone) {
     const auto role = alone || !shapeable(cell) ? fonts::LigatureRole::none : coverage.role(cell.utf8());
     const auto joins = role != fonts::LigatureRole::none && !columns_.empty() && columns_.back().role != fonts::LigatureRole::none && inkStyle(previous_.style) == inkStyle(cell.style) && !typographic(previous_, cell);
+
     columns_.push_back({.role = role, .joins = joins});
     previous_ = cell;
     inputs_ += static_cast<std::size_t>(role == fonts::LigatureRole::input);
@@ -1093,6 +1123,7 @@ public:
 
     const auto limit = reach == 0 || reach > maximum_cells ? maximum_cells : reach;
     auto since = far;
+
     for (auto &column : columns_) {
       if (!column.joins) {
         since = far;
@@ -1103,8 +1134,10 @@ public:
     }
 
     auto until = far;
+
     for (auto iterator = columns_.rbegin(); iterator != columns_.rend(); ++iterator) {
       auto &column = *iterator;
+
       until = distanceFromInput(column.role, until);
       column.kept = column.role != fonts::LigatureRole::none && std::min(column.since, until) < limit;
       if (!column.joins) {
@@ -1119,6 +1152,7 @@ public:
     }
 
     auto end = start + 1;
+
     while (end < columns_.size() && columns_[end].kept && columns_[end].joins) {
       ++end;
     }
@@ -1160,6 +1194,7 @@ private:
     constexpr unsigned underline_shift = 8;
     constexpr unsigned underline_width = 7;
     constexpr auto decorations = (underline_width << underline_shift) | static_cast<unsigned>(CellAttribute::overline) | static_cast<unsigned>(CellAttribute::strikethrough);
+
     style.underline_color = {};
     style.flags &= static_cast<std::uint16_t>(~decorations);
 

@@ -68,10 +68,12 @@ WindowImages::WindowImages(QQuickWindow &window)
   timer_.setTimerType(Qt::PreciseTimer);
   connect(&timer_, &QTimer::timeout, this, [this] {
     auto expected = active_timer_deadline_ns_;
+
     timer_deadline_ns_.compare_exchange_strong(expected, 0, std::memory_order_relaxed);
     active_timer_deadline_ns_ = 0;
     window_.update();
   });
+
   connect(&window_, &QQuickWindow::beforeSynchronizing, this, &WindowImages::prepare, Qt::DirectConnection);
   connect(&window_, &QQuickWindow::afterSynchronizing, this, &WindowImages::finish, Qt::DirectConnection);
   connect(&window_, &QQuickWindow::sceneGraphAboutToStop, this, &WindowImages::stopRendering, Qt::DirectConnection);
@@ -151,8 +153,10 @@ bool WindowImages::placementSourcesChanged(std::span<const ImagePlacementSource>
   }
 
   bool changed = !placement_sources_cached_ || placement_source_count_ != sources.size();
+
   for (std::size_t index = 0; index < sources.size(); ++index) {
     const auto stamp = placementStamp(sources[index]);
+
     changed = changed || placement_sources_[index] != stamp;
     placement_sources_[index] = stamp;
   }
@@ -178,6 +182,7 @@ bool WindowImages::placementHasExtent(GraphicsLifetime catalog, const GraphicsPl
     }
 
     const auto box = ImageDisplayBox::resolve(placement, source, placementStamp(view).cell);
+
     return box.width != 0 && box.height != 0;
   });
 }
@@ -230,15 +235,18 @@ void WindowImages::observeCatalog(const GraphicsStore<ApplicationAllocator> &sto
 
   const auto lifetime = store.lifetime();
   auto handle = catalogs_[catalogBucket(lifetime)].first_row;
+
   while (handle != 0) {
     const auto row = handle - 1;
     const auto *state = residency_.state(handle);
+
     handle = next_catalog_row_[row];
     if (state == nullptr || state->identity.catalog != lifetime) {
       continue;
     }
 
     const auto *image = store.findImage({.image_id = state->identity.image_id, .generation = state->identity.generation});
+
     retained_[row] = image != nullptr && !image->retired();
   }
 }
@@ -247,6 +255,7 @@ std::size_t WindowImages::catalogBucket(GraphicsLifetime lifetime) const noexcep
   static_assert(std::has_single_bit(catalog_bucket_capacity));
   constexpr auto bucket_mask = catalog_bucket_capacity - 1;
   auto bucket = static_cast<std::size_t>(lifetime.value & bucket_mask);
+
   while (catalogs_[bucket].first_row != 0 && catalogs_[bucket].lifetime != lifetime) {
     bucket = (bucket + 1) & bucket_mask;
   }
@@ -284,6 +293,7 @@ void WindowImages::prepare() {
   });
 
   const auto revision = residency_.revision();
+
   residency_.beginFrame(now_ns_);
   if (residency_.revision() != revision) {
     wakeWaitingScenes();
@@ -320,12 +330,14 @@ void WindowImages::observeVisibleTextures(const Use &use) noexcept {
   }
 
   std::array<bool, Residency::capacity> visible{};
+
   visitVisibleTextures([&](ImageTextureHandle handle) noexcept {
     visible[handle - 1] = true;
     use(handle);
   });
 
   bool released = false;
+
   for (std::size_t row = 0; row < visible.size(); ++row) {
     released = released || (visible_rows_[row] && !visible[row]);
   }
@@ -343,6 +355,7 @@ void WindowImages::finish() {
   });
 
   const auto revision = residency_.revision();
+
   residency_.sweep(std::span{retained_});
 
   if (residency_.revision() != revision) {
@@ -357,6 +370,7 @@ void WindowImages::finish() {
   }
 
   const auto delay = residency_.wakeupAfter(now_ns_);
+
   for (const auto *scene = first_scene_; scene != nullptr; scene = scene->next_) {
     if (scene->invalidated_ && scene->owner_ != nullptr && scene->owner_->isVisible()) {
       requestUpdate(*scene);
@@ -368,11 +382,14 @@ void WindowImages::finish() {
 
 void WindowImages::orderScenes() {
   auto *pending = std::exchange(first_scene_, nullptr);
+
   while (pending != nullptr) {
     auto *scene = pending;
+
     pending = scene->next_;
     auto *next = first_scene_;
     GraphicsScene *previous = nullptr;
+
     while (next != nullptr && !sceneNodePrecedes(*scene->layers_.below_background, *next->layers_.below_background)) {
       previous = next;
       next = next->next_;
@@ -394,6 +411,7 @@ void WindowImages::orderScenes() {
 
 void WindowImages::admitDraws() {
   std::size_t candidates = 0;
+
   for (const auto *scene = first_scene_; scene != nullptr; scene = scene->next_) {
     if (scene->owner_ != nullptr && scene->owner_->isVisible()) {
       candidates += scene->draw_count_;
@@ -405,6 +423,7 @@ void WindowImages::admitDraws() {
   }
 
   ImageDrawBudget budget;
+
   for (const auto *scene = first_scene_; scene != nullptr; scene = scene->next_) {
     if (scene->owner_ == nullptr || !scene->owner_->isVisible()) {
       continue;
@@ -428,6 +447,7 @@ void WindowImages::admitLayer(const QSGNode &layer, ImageDrawBudget &budget) {
 
 void WindowImages::scheduleTimer(std::uint32_t delay_ms) {
   const auto armed = timer_deadline_ns_.load(std::memory_order_relaxed);
+
   if (delay_ms == 0) {
     if (armed != 0) {
       cancelTimer();
@@ -485,6 +505,7 @@ void WindowImages::stopRendering() {
 
 void WindowImages::requestUpdate(const GraphicsScene &scene) {
   const auto owner = scene.owner_;
+
   QTimer::singleShot(0, this, [owner] {
     if (owner != nullptr) {
       owner->update();
@@ -502,8 +523,10 @@ void WindowImages::wakeWaitingScenes() noexcept {
 
 WindowImageStatistics WindowImages::statistics() const noexcept {
   WindowImageStatistics statistics{.frame = residency_.frame(), .resident_bytes = residency_.residentBytes(), .images = residency_.size(), .spares = residency_.spares(), .uploads_started = residency_.uploadsStarted(), .image_draws = image_draws_, .placements = placements_.selected().size(), .dropped_placements = placements_.dropped()};
+
   for (const auto &image : resources_.images) {
     const auto usage = image.usage();
+
     statistics.resources.allocations += usage.allocations;
     statistics.resources.rewrites += usage.rewrites;
     statistics.resources.releases += usage.releases;
@@ -523,6 +546,7 @@ bool WindowImages::upload(ImageTextureHandle handle, const Image &image) {
   constexpr int rgba_channels = 4;
   const auto channels = description.format == ImageFormat::rgba ? rgba_channels : rgb_channels;
   const QImage pixels{image.pixels().data(), static_cast<int>(description.width), static_cast<int>(description.height), static_cast<qsizetype>(description.width) * channels, format};
+
   return resources_.images[handle - 1].upload(window_, pixels);
 }
 
@@ -539,12 +563,14 @@ bool WindowImages::canRetry(const Image &image, std::size_t retained_bytes) cons
   }
 
   std::array<bool, Residency::capacity> visible{};
+
   visitVisibleTextures([&visible](ImageTextureHandle handle) noexcept {
     visible[handle - 1] = true;
   });
 
   return std::ranges::any_of(residency_.rows(), [this, &visible](auto row) {
     const auto *state = residency_.state(Residency::handleOf(row));
+
     return !visible[row] && state != nullptr && state->stage == ImageTextureStage::ready && state->used_frame + 1 == residency_.frame();
   });
 }
@@ -585,6 +611,7 @@ void WindowImages::requestImage(GraphicsScene &scene, const GraphicsStore<Applic
 
   if (admission.upload) {
     const auto success = upload(admission.handle, image);
+
     residency_.complete(admission.handle, success, now_ns_);
     if (success) {
       notifyReady(scene, identity);

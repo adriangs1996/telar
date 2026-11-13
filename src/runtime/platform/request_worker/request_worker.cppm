@@ -78,8 +78,10 @@ public:
   inline ~ObservationWorker() {
     {
       const std::lock_guard lock{mutex_};
+
       stopping_ = true;
     }
+
     service_.stop();
     ready_.notify_one();
     thread_.join();
@@ -91,9 +93,11 @@ public:
   // The worker keeps the request, region `a`, until its result is collected.
   inline bool submit(tbc::view<Request, tbc::lt::a> request) {
     const std::lock_guard lock{mutex_};
+
     if (busy_ || stopping_) {
       return false;
     }
+
     request_ = std::move(request);
     busy_ = true;
     ready_.notify_one();
@@ -107,6 +111,7 @@ public:
     }
 
     std::optional<Result> result;
+
     {
       const std::unique_lock lock{mutex_, std::try_to_lock};
       if (!lock.owns_lock()) {
@@ -130,8 +135,10 @@ public:
   template <typename Consumer>
   inline void wait(Consumer &&consume) {
     std::optional<Result> result;
+
     {
       std::unique_lock lock{mutex_};
+
       if (!busy_) {
         return;
       }
@@ -152,24 +159,31 @@ private:
     for (;;) {
       {
         std::unique_lock lock{mutex_};
+
         ready_.wait(lock, [&] { return stopping_ || request_.has_value(); });
         if (stopping_) {
           return;
         }
+
         processing_ = std::move(request_);
         request_.reset();
       }
+
       // A result may view the request it answers, which stays here until the next one is accepted.
       auto result = service_.observe(*processing_);
+
       {
         const std::lock_guard lock{mutex_};
+
         result_ = std::move(result);
         signal_.notify();
         result_ready_.store(true, std::memory_order_release);
       }
+
       if (completion_ != nullptr) {
         completion_->notify();
       }
+
       completed_.notify_one();
     }
   }
@@ -209,6 +223,7 @@ public:
       busy_ = true;
       return;
     }
+
     waiting_.push_back(request);
   }
 
@@ -227,8 +242,10 @@ public:
       busy_ = false;
       consume(result);
     });
+
     while (!busy_ && !waiting_.empty()) {
       const auto next = waiting_.front();
+
       waiting_.erase(waiting_.begin());
       busy_ = worker.submit(next);
     }
@@ -280,6 +297,7 @@ public:
   inline Value &emplace(Arguments &&...arguments) {
     assert(!full());
     auto &value = slots_[(head_ + count_) % Capacity].emplace(std::forward<Arguments>(arguments)...);
+
     ++count_;
     return value;
   }
@@ -293,6 +311,7 @@ public:
   inline Value take() noexcept {
     assert(!empty());
     auto value = std::move(*slots_[head_]);
+
     slots_[head_].reset();
     head_ = (head_ + 1) % Capacity;
     --count_;
@@ -350,6 +369,7 @@ public:
   inline ~RequestWorker() {
     {
       const std::lock_guard lock{mutex_};
+
       stopping_ = true;
       active_cancelled_ = true;
       cancelQueued([](const Job &) { return true; });
@@ -358,6 +378,7 @@ public:
     if constexpr (requires { service_.stop(); }) {
       service_.stop();
     }
+
     ready_.notify_one();
     completion_available_.notify_one();
     thread_.join();
@@ -370,6 +391,7 @@ public:
   inline void submit(std::uint64_t client, const Message &message, RequestContext context = {}) {
     static_assert(MessageSchema<Message>::direction == Direction::client);
     const std::lock_guard lock{mutex_};
+
     if constexpr (std::same_as<Message, FindPaths>) {
       for (auto *queue : {&batch_, &requests_}) {
         for (std::size_t index = 0; index < queue->size(); ++index) {
@@ -383,6 +405,7 @@ public:
         }
       }
     }
+
     if (admissionFull() || stopping_) {
       TELAR_DIAGNOSTIC(++queue_metrics_.dropped);
       if constexpr (history_queue && std::same_as<Message, ImportHistory>) {
@@ -393,6 +416,7 @@ public:
     }
 
     auto &job = requests_.emplace(memory_, client, message.request_id);
+
     try {
       // The job owns its texts; the views the caller's context carries are rebuilt from them when it runs.
       job.context = RequestContext{
@@ -403,6 +427,7 @@ public:
           .editor_candidate_count = context.editor_candidate_count,
           .persistent_client = context.persistent_client,
       };
+
       if constexpr (std::same_as<Message, QueryHistory>) {
         job.history_query.emplace(message, context.persistent_client);
       }
@@ -428,8 +453,10 @@ public:
 
     for (;;) {
       std::optional<Completion> completed;
+
       {
         const std::lock_guard lock{mutex_};
+
         if (completions_.empty()) {
           return;
         }
@@ -453,12 +480,14 @@ public:
     }
 
     const std::lock_guard lock{mutex_};
+
     if (admissionFull() || stopping_) {
       TELAR_DIAGNOSTIC(++queue_metrics_.dropped);
       throw RequestError{FailureCode::resource_limit, queue_full_message};
     }
 
     auto &job = requests_.emplace(memory_, 0, 0);
+
     try {
       job.internal.emplace(memory_, event);
     } catch (...) {
@@ -478,14 +507,17 @@ public:
 
   inline void cancel(std::uint64_t client) noexcept {
     const std::lock_guard lock{mutex_};
+
     if (active_client_ == client) {
       active_cancelled_ = true;
     }
+
     cancelQueued([&](const Job &job) { return job.client == client; });
   }
 
   inline bool pending() noexcept {
     const std::lock_guard lock{mutex_};
+
     return outstanding_ != 0;
   }
 
@@ -497,6 +529,7 @@ public:
   inline diagnostics::RequestQueueSnapshot queueMetrics() const noexcept {
     const std::lock_guard lock{mutex_};
     auto snapshot = queue_metrics_;
+
     snapshot.depth = queuedCount();
     return snapshot;
   }
@@ -525,11 +558,13 @@ private:
       if (internal) {
         return true;
       }
+
       if (request.empty()) {
         return false;
       }
 
       const auto tag = static_cast<ClientTag>(request.front());
+
       return tag == ClientTag::report_agent_command || tag == ClientTag::import_history;
     }
 
@@ -577,8 +612,10 @@ private:
   inline void run() noexcept {
     for (;;) {
       std::optional<Job> job;
+
       {
         std::unique_lock lock{mutex_};
+
         ready_.wait_for(lock, std::chrono::seconds{1}, [&] { return stopping_ || !batch_.empty() || !requests_.empty(); });
         if (stopping_ && batch_.empty() && requests_.empty()) {
           return;
@@ -589,6 +626,7 @@ private:
           if constexpr (requires { service_.idle(); }) {
             service_.idle();
           }
+
           continue;
         }
 
@@ -601,6 +639,7 @@ private:
           --outstanding_;
           continue;
         }
+
         job->superseded = historySuperseded(*job);
         active_client_ = job->client;
         active_cancelled_ = false;
@@ -613,6 +652,7 @@ private:
 
   inline void complete(Job &job) noexcept {
     std::unique_lock lock{mutex_};
+
     active_client_ = 0;
     const bool acknowledged_import = history_queue && !job.request.empty() && job.request.front() == static_cast<Byte>(ClientTag::import_history);
     if (job.internal || acknowledged_import) {
@@ -673,6 +713,7 @@ private:
 
       if constexpr (requires { service_.process(job.request, job.reply, job.context); }) {
         auto context = job.context;
+
         context.workspace_path = job.workspace_path;
         context.prompt = job.prompt;
         context.cancelled = &active_cancelled_;

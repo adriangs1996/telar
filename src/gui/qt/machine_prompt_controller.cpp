@@ -77,6 +77,7 @@ void Application::searchMachinePrompt(const QString &text) {
   }
 
   const auto measured = Utf16Prefix::fit(QStringView{text}, machinePromptLimit(), utf16Encoding());
+
   machine_prompt_->text = text.first(static_cast<qsizetype>(measured.units));
   if (!machine_prompt_->text.isValidUtf16()) {
     machine_prompt_->text = QString::fromUtf8(machine_prompt_->text.toUtf8());
@@ -94,6 +95,7 @@ void Application::reportMachinePromptLimit(qulonglong requested_bytes) {
   }
 
   const auto *const name = machine_prompt_->mode == MachinePromptMode::add_destination ? "prompt.machine_destination_bytes" : "prompt.machine_label_bytes";
+
   session().reportLimit({.name = name, .noun = "bytes", .value = machinePromptLimit(), .requested = requested_bytes, .route = {}});
   refreshNotifications();
 }
@@ -115,6 +117,7 @@ void Application::submitMachinePrompt(const QString &revision) {
 
   const auto text = machine_prompt_->text.toUtf8();
   const std::string_view value{text.constData(), static_cast<std::size_t>(text.size())};
+
   if (machine_prompt_->mode == MachinePromptMode::rename) {
     const auto renamed = machine_prompt_->renamed;
     if (renamed && machines_.contains(*renamed)) {
@@ -122,6 +125,7 @@ void Application::submitMachinePrompt(const QString &revision) {
     }
   } else {
     const auto label = machine_prompt_->label.toUtf8();
+
     static_cast<void>(machine_profiles_.edit({.kind = MachineEditKind::add, .label = {label.constData(), static_cast<std::size_t>(label.size())}, .value = value}));
   }
 
@@ -132,6 +136,7 @@ void Application::submitMachinePrompt(const QString &revision) {
 QVariantMap Application::machinePromptState() const {
   QString title;
   QString text;
+
   if (machine_prompt_) {
     text = machine_prompt_->text;
     switch (machine_prompt_->mode) {
@@ -156,10 +161,12 @@ QVariantMap Application::machinePromptGeometry() const {
   const auto &workbench = session().workbenchGeometry();
   const auto geometry = NamePromptGeometry::measure(workbench.cellArea());
   auto bounds = workbench.pixels(geometry.bounds);
+
   bounds.x += display.geometry.terminal.x;
   bounds.y += display.geometry.terminal.y;
   const auto local = [&](CellRectangle cells) {
     auto area = workbench.pixels(cells);
+
     area.x += display.geometry.terminal.x - bounds.x;
     area.y += display.geometry.terminal.y - bounds.y;
 

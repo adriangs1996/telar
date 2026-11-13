@@ -47,6 +47,7 @@ StdioSocket openStdioSocket() {
   }
 
   StdioSocket result;
+
   result.local.reset(descriptors[0]);
   result.child.reset(descriptors[1]);
   prepareDescriptor(result.local);

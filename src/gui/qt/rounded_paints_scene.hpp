@@ -46,6 +46,7 @@ tbc::view<QSGNode *, tbc::lt::a> paintRoundedShapes(QQuickItem &item, tbc::view<
   }
 
   QMatrix4x4 transform;
+
   transform.translate(static_cast<float>(-anchor.x()), static_cast<float>(-anchor.y()));
   root->setMatrix(transform);
   std::array<RoundedRectanglePaint, Capacity> paints;
@@ -57,6 +58,7 @@ tbc::view<QSGNode *, tbc::lt::a> paintRoundedShapes(QQuickItem &item, tbc::view<
 
     paints[count++] = paint;
   };
+
   draw(append, area);
   paintRoundedRectangles(window, *root, std::span{paints}.first(count), density);
 

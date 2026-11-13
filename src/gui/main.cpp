@@ -78,6 +78,7 @@ void configureParser(QCommandLineParser &parser) {
 QString telarConfigFile(const QString &name) {
   telar::SystemAllocator memory;
   const auto directory = telar::runtime::cli::RuntimePaths<telar::SystemAllocator>::configHome(memory, telar::runtime::process_environment);
+
   return directory.empty() ? QString{} : QString::fromUtf8(directory.data(), static_cast<qsizetype>(directory.size())) + QLatin1Char('/') + name;
 }
 
@@ -94,6 +95,7 @@ QString configurationPath(const QCommandLineParser &parser) {
   telar::SystemAllocator memory;
   const auto file = telar::runtime::cli::RuntimePaths<telar::SystemAllocator>::configFile(memory, telar::runtime::process_environment);
   const auto path = QString::fromUtf8(file.data(), static_cast<qsizetype>(file.size()));
+
   return !path.isEmpty() && QFileInfo::exists(path) ? path : QString{};
 }
 
@@ -176,6 +178,7 @@ void scheduleSmokeTest(const QCommandLineParser &parser, telar::gui::qt::Applica
 
   const auto screenshot_path = parser.value(QStringLiteral("screenshot"));
   const auto capture_screenshot = parser.isSet(QStringLiteral("screenshot"));
+
   QTimer::singleShot(duration, &client, [&client, &window, screenshot_path, capture_screenshot] {
     if (capture_screenshot && !window.grabWindow().save(screenshot_path)) {
       QGuiApplication::exit(EXIT_FAILURE);
@@ -185,6 +188,7 @@ void scheduleSmokeTest(const QCommandLineParser &parser, telar::gui::qt::Applica
 
     std::cout << "connected=" << client.connected() << " panes=" << client.panes()->rowCount() << " graphics_api=" << static_cast<int>(window.rendererInterface()->graphicsApi()) << " background_opacity=" << client.configuration().background_opacity << " clear_alpha=" << window.color().alphaF() << " alpha_buffer_bits=" << window.format().alphaBufferSize() << " error=" << client.error().toStdString() << '\n';
     const auto healthy = client.connected() && client.panes()->rowCount() > 0 && client.error().isEmpty();
+
     QGuiApplication::exit(healthy ? EXIT_SUCCESS : EXIT_FAILURE);
   });
 }
@@ -196,12 +200,14 @@ int main(int argc, char **argv) {
   QGuiApplication::setOrganizationName(QStringLiteral("Telar"));
   telar::gui::platform::configureKeyRepeat();
   const QGuiApplication application{argc, argv};
+
   telar::gui::platform::configureGraphics();
   QQuickStyle::setStyle(QStringLiteral("Basic"));
   // Wayland compositors find the icon and name through share/applications/telar.desktop.
   QGuiApplication::setDesktopFileName(QStringLiteral("telar"));
 
   QCommandLineParser parser;
+
   configureParser(parser);
   parser.process(application);
 
@@ -209,21 +215,26 @@ int main(int argc, char **argv) {
     telar::gui::qt::bundledFonts();
     QFont chrome_font{QStringLiteral("IBM Plex Sans")};
     constexpr int chrome_font_pixels = 13;
+
     chrome_font.setPixelSize(chrome_font_pixels);
     QGuiApplication::setFont(chrome_font);
     telar::gui::ApplicationAllocator memory;
     const auto remote = initialMachine(parser, memory);
     telar::gui::qt::Application client{memory};
+
     QObject::connect(&client, &telar::gui::qt::Application::machineLaunchFailed, &application, [](const QString &error) {
       std::cerr << "telar-gui: " << error.toStdString() << '\n';
       QGuiApplication::exit(EXIT_FAILURE);
     });
+
     client.configureLaunch(parser.value(QStringLiteral("cwd")), remote ? QStringList{} : parser.positionalArguments(), !parser.isSet(QStringLiteral("fresh")));
     if (remote) {
       client.configureRemoteLaunch(*remote, parser.positionalArguments());
     }
+
     client.loadConfiguration(configurationPath(parser), parser.value(QStringLiteral("profile")), parser.value(QStringLiteral("theme")), trustStorePath());
     QQmlApplicationEngine engine;
+
     engine.rootContext()->setContextProperty(QStringLiteral("telar"), &client);
     engine.loadFromModule(QStringLiteral("Telar.Gui"), QStringLiteral("Main"));
 
@@ -244,6 +255,7 @@ int main(int argc, char **argv) {
     return QGuiApplication::exec();
   } catch (const telar::gui::MachineFailure &error) {
     const auto *message = error.code() == telar::gui::MachineError::unknown_machine ? "no saved machine or local label has that name; see telar machine list" : error.what();
+
     std::cerr << "telar-gui: " << message << '\n';
 
     return EXIT_FAILURE;

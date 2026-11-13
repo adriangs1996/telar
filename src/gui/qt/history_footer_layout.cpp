@@ -120,6 +120,7 @@ void HistoryFooterLayout::prepareLabels() {
       .fuzzy = state.value(QStringLiteral("matchFuzzy")).toBool(),
       .has_query = !state.value(QStringLiteral("query")).toString().isEmpty(),
   };
+
   footer_ = HistoryFooter::resolve(options);
   choice_ = {.index = static_cast<std::size_t>(std::max(0, state.value(QStringLiteral("selection")).toInt())), .revision = state.value(QStringLiteral("revision")).toString().toULongLong()};
 
@@ -127,6 +128,7 @@ void HistoryFooterLayout::prepareLabels() {
   hints_.clear();
   for (std::size_t index = 0; index < footer_.count; ++index) {
     const auto hint = footer_.hints[index];
+
     hints_.append(QVariantMap{
         {QStringLiteral("key"), footerLabel(hint.key)},
         {QStringLiteral("word"), footerLabel(hint.word)},
@@ -141,11 +143,13 @@ QRectF HistoryFooterLayout::logical(Rect area) const noexcept {
 
 QVariantMap HistoryFooterLayout::layout() const {
   QVariantList hints;
+
   for (const auto &hint : geometry_.hints) {
     hints.append(historyHintRecord(hint, density_));
   }
 
   auto result = historyHintStyle(ratio_);
+
   result.insert(QStringLiteral("hints"), hints);
   result.insert(QStringLiteral("hintCount"), static_cast<qulonglong>(geometry_.count));
   result.insert(QStringLiteral("separator"), logical(geometry_.separator));
@@ -163,6 +167,7 @@ std::size_t HistoryFooterLayout::hoverTargets(std::uint64_t generation, std::spa
   }
 
   std::size_t count = 0;
+
   for (std::size_t index = 0; index < geometry_.count && count < destination.size(); ++index) {
     const auto action = footer_.hints[index].action;
     if (action == HistoryFooterAction::none) {
@@ -170,6 +175,7 @@ std::size_t HistoryFooterLayout::hoverTargets(std::uint64_t generation, std::spa
     }
 
     const auto bounds = mapRectToScene(logical(geometry_.hints[index].bounds));
+
     destination[count++] = {.identity = {.action = HistoryFooterIdentity{.action = action, .choice = choice_}, .generation = generation}, .bounds = {.x = static_cast<float>(bounds.x() * density_), .y = static_cast<float>(bounds.y() * density_), .width = static_cast<float>(bounds.width() * density_), .height = static_cast<float>(bounds.height() * density_)}};
   }
 
@@ -185,23 +191,28 @@ void HistoryFooterLayout::updatePolish() {
   density_ = window() == nullptr ? 1 : window()->effectiveDevicePixelRatio();
   ratio_ = ratio;
   ChromeMetrics chrome;
+
   chrome.ratio = static_cast<float>(ratio * density_);
   const auto small = input_.value(QStringLiteral("smallPixels")).toDouble() * density_;
+
   chrome.small = std::isfinite(small) ? static_cast<std::uint16_t>(std::clamp(std::round(small), qreal{0}, qreal{std::numeric_limits<std::uint16_t>::max()})) : 0;
   const auto advance = [this](const QVariant &value) {
     const auto measured = value.toDouble();
 
     return std::isfinite(measured) && measured > 0 ? static_cast<float>(measured * density_) : 0;
   };
+
   const auto state = input_.value(QStringLiteral("state")).toMap();
   const auto hints = measurements_.value(QStringLiteral("hints")).toList();
   HistoryFooterMeasurements measured;
+
   measured.count = std::min(static_cast<std::size_t>(hints_.size()), HistoryFooter::capacity);
   measured.range = advance(measurements_.value(QStringLiteral("range")));
   measured.empty = state.value(QStringLiteral("count")).toInt() == 0;
   measured.error = !state.value(QStringLiteral("error")).toString().isEmpty();
   for (std::size_t index = 0; index < measured.count; ++index) {
     const auto hint = hints.value(static_cast<qsizetype>(index)).toMap();
+
     measured.hints[index] = {.key = advance(hint.value(QStringLiteral("key"))), .word = advance(hint.value(QStringLiteral("word")))};
   }
 

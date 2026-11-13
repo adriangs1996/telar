@@ -37,6 +37,7 @@ inline std::string_view clipboardStatusName(ClipboardStatus status) noexcept {
   case ClipboardStatus::io_error: return "EIO";
   case ClipboardStatus::unsupported: return "ENOSYS";
   }
+
   return "EINVAL";
 }
 
@@ -62,6 +63,7 @@ struct ClipboardMetadata {
 
   static std::optional<ClipboardMetadata> parse(std::string_view input) {
     std::string_view operation, location, id, mime, password, name;
+
     while (true) {
       const auto colon = input.find(':');
       const auto record = input.substr(0, colon);
@@ -69,8 +71,10 @@ struct ClipboardMetadata {
       if (equal == std::string_view::npos) {
         return std::nullopt;
       }
+
       const auto key = record.substr(0, equal);
       const auto value = record.substr(equal + 1);
+
       if (key == "type") {
         operation = value;
       } else if (key == "loc") {
@@ -84,13 +88,16 @@ struct ClipboardMetadata {
       } else if (key == "name") {
         name = value;
       }
+
       if (colon == std::string_view::npos) {
         break;
       }
+
       input.remove_prefix(colon + 1);
     }
 
     ClipboardMetadata result;
+
     if (operation == "read") {
       result.operation = ClipboardOperation::read;
     } else if (operation == "write") {
@@ -102,18 +109,23 @@ struct ClipboardMetadata {
     } else {
       return std::nullopt;
     }
+
     result.primary = location == "primary";
     std::array<char, maximum_id> sanitized;
     std::size_t size = 0;
+
     for (const auto byte : id) {
       const bool accepted = (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9') || byte == '-' || byte == '_' || byte == '+' || byte == '.';
+
       if (size == sanitized.size()) {
         break;
       }
+
       if (accepted) {
         sanitized[size++] = byte;
       }
     }
+
     result.id.assign({sanitized.data(), size});
     result.invalid_values = decode(mime, result.mime) != MetadataValue::valid || decode(name, result.name) != MetadataValue::valid;
     // Oversized passwords cannot match a bounded grant. Their contents do not
@@ -129,20 +141,25 @@ private:
     if (encoded.size() > (Capacity + 2) / 3 * 4) {
       return MetadataValue::overflow;
     }
+
     std::array<std::uint8_t, Capacity + 2> output;
     const auto length = base64::decode<base64::Padding::required>(encoded, output);
     if (!length) {
       return MetadataValue::invalid;
     }
+
     if (*length > Capacity) {
       return MetadataValue::overflow;
     }
+
     const std::string_view decoded{reinterpret_cast<const char *>(output.data()), *length};
+
     try {
       validateUtf8(decoded);
     } catch (const EncodingError &) {
       return MetadataValue::invalid;
     }
+
     destination.assign(decoded);
     return MetadataValue::valid;
   }

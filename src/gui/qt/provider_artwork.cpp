@@ -51,6 +51,7 @@ const QByteArray &providerSheet() {
     }
 
     const auto bytes = source.read(static_cast<qint64>(sheet_bytes) + 1);
+
     return bytes.size() == static_cast<qsizetype>(sheet_bytes) ? bytes : QByteArray{};
   }();
 
@@ -80,6 +81,7 @@ QString telarSource(bool monochrome, int theme) {
       ThemedMark{.theme = ThemeName::terminal, .source = u":/telar/fonts/telar-mark-terminal.svg"},
       ThemedMark{.theme = ThemeName::cybervenom, .source = u":/telar/fonts/telar-mark-cybervenom.svg"},
   };
+
   const auto *const found = std::ranges::find_if(marks, [theme](const ThemedMark &mark) {
     return static_cast<int>(mark.theme) == theme;
   });
@@ -135,6 +137,7 @@ QImage ProviderArtwork::telar(int side, bool monochrome, int theme) {
   output.fill(Qt::transparent);
   {
     QPainter painter{&output};
+
     painter.setRenderHint(QPainter::Antialiasing);
     renderer.render(&painter);
   }

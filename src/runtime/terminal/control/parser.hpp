@@ -28,6 +28,7 @@ public:
     std::size_t consumed = 0;
     std::size_t next_escape = 0;
     bool escape_searched = false;
+
     while (true) {
       if (phase_ == Phase::ready) {
         if (!consumer.complete(Sequence{kind_, bytes(), ending_})) {
@@ -58,16 +59,19 @@ public:
         if (const auto length = completeCsi(remaining)) {
           beforeEscape(consumer);
           const auto sequence = remaining.first(length);
+
           consumed += length;
           if (consumer.complete(Sequence{Kind::csi, sequence, Ending::final_byte})) {
             continue;
           }
+
           // Only a blocked request needs a retained copy. The successful
           // whole-slice path lends input for this synchronous callback.
           clear();
           for (const auto byte : sequence) {
             append(byte);
           }
+
           kind_ = Kind::csi;
           ending_ = Ending::final_byte;
           after_ready_ = Phase::ground;
@@ -82,16 +86,20 @@ public:
           continue;
         } else {
           const auto remaining = input.subspan(consumed);
+
           if (!escape_searched || consumed > next_escape) {
             const auto *found = static_cast<const std::uint8_t *>(std::memchr(remaining.data(), escape, remaining.size()));
+
             next_escape = found == nullptr ? input.size() : static_cast<std::size_t>(found - input.data());
             escape_searched = true;
           }
+
           auto count = next_escape - consumed;
           const auto *first_enquiry = static_cast<const std::uint8_t *>(std::memchr(remaining.data(), enquiry, count));
           if (first_enquiry != nullptr) {
             count = static_cast<std::size_t>(first_enquiry - remaining.data());
           }
+
           if (count != 0) {
             consumer.ordinary(remaining.first(count));
             consumed += count;
@@ -105,6 +113,7 @@ public:
         if (!feedString(input, consumed, consumer)) {
           return consumed;
         }
+
         continue;
       }
 
@@ -114,6 +123,7 @@ public:
         if (!consumer.enquire()) {
           return consumed;
         }
+
         ++consumed;
         continue;
       }
@@ -141,6 +151,7 @@ public:
           executeC1(byte, consumer);
           phase_ = Phase::ground;
         }
+
         continue;
       }
 
@@ -152,6 +163,7 @@ public:
       if (byte == delete_byte || byte > c1_last) {
         continue;
       }
+
       if (byte < space) {
         consumer.ordinary(input.subspan(consumed - 1, 1));
         continue;
@@ -162,6 +174,7 @@ public:
           phase_ = Phase::ground;
           clear();
         }
+
         continue;
       }
 
@@ -244,6 +257,7 @@ private:
     if constexpr (requires { consumer.streamComplete(); }) {
       return consumer.streamComplete();
     }
+
     return true;
   }
 
@@ -259,6 +273,7 @@ private:
     // C1 controls executed inside a control sequence are not UTF-8 text.
     // Preserve that context for the non-query backend using an ESC prefix.
     const std::array<std::uint8_t, 2> control{escape, byte};
+
     consumer.ordinary(control);
   }
 
@@ -266,16 +281,20 @@ private:
     if (input.size() < 3 || input[1] != '[') {
       return 0;
     }
+
     const auto limit = std::min(input.size(), header_limit);
+
     for (std::size_t index = 2; index < limit; ++index) {
       const auto byte = input[index];
       if (byte >= final_first && byte <= final_last) {
         return index + 1;
       }
+
       if (byte < space || byte > '?') {
         return 0;
       }
     }
+
     return 0;
   }
 
@@ -309,15 +328,18 @@ private:
             ++cancelled_;
             continue;
           }
+
           if (phase_ == Phase::streaming) {
             consumer.ordinary(input.subspan(consumed - 1, 1));
           }
+
           clear();
           phase_ = Phase::ground;
           ++cancelled_;
           if (!finishStream(consumer)) {
             return false;
           }
+
           continue;
         }
 
@@ -325,12 +347,14 @@ private:
         after_ready_ = byte == escape ? Phase::escape : Phase::ground;
         if (phase_ == Phase::streaming) {
           const auto terminator = ending_ == Ending::bell ? std::string_view{"\a"} : std::string_view{"\x1b\\"};
+
           consumer.ordinary(asBytes(terminator));
           clear();
           phase_ = after_ready_;
           if (phase_ == Phase::escape) {
             append(escape);
           }
+
           if (!finishStream(consumer)) {
             return false;
           }
@@ -343,6 +367,7 @@ private:
         } else {
           phase_ = Phase::ready;
         }
+
         continue;
       }
 
@@ -352,6 +377,7 @@ private:
           ++consumed;
           continue;
         }
+
         if (kind_ == Kind::apc && phase_ == Phase::string) {
           ending_ = Ending::escape;
           after_ready_ = Phase::ground;
@@ -360,10 +386,12 @@ private:
           ++consumed;
           continue;
         }
+
         const bool streamed = phase_ == Phase::streaming;
         if (streamed) {
           consumer.ordinary(asBytes("\x18"));
         }
+
         clear();
         phase_ = Phase::escape;
         ++cancelled_;
@@ -371,18 +399,22 @@ private:
           executeC1(byte, consumer);
           phase_ = Phase::ground;
         }
+
         ++consumed;
         if (streamed && !finishStream(consumer)) {
           return false;
         }
+
         continue;
       }
 
       if (phase_ == Phase::streaming) {
         std::size_t end = consumed + 1;
+
         while (end < input.size() && !stringControl(input[end])) {
           ++end;
         }
+
         consumer.ordinary(input.subspan(consumed, end - consumed));
         consumed = end;
         continue;
@@ -399,12 +431,15 @@ private:
       if (byte < space && (kind_ == Kind::osc || (kind_ == Kind::dcs && !string_payload_))) {
         continue;
       }
+
       if (kind_ == Kind::dcs && byte == delete_byte) {
         continue;
       }
+
       if (byte > c1_last && (kind_ == Kind::apc || (kind_ == Kind::dcs && !string_payload_))) {
         continue;
       }
+
       const auto limit = kind_ == Kind::osc ? osc_limit : kind_ == Kind::dcs ? dcs_limit : apc_limit;
       if (size_ == limit || !append(byte)) {
         phase_ = Phase::discard_string;
@@ -423,6 +458,7 @@ private:
           appendOscRun(input, consumed);
         }
       }
+
       continue;
     }
 
@@ -438,6 +474,7 @@ private:
     if (remaining[2] != 'G') {
       return std::nullopt;
     }
+
     const auto length = completeAsciiApc(remaining, apc_limit);
     if (length <= inline_bytes) {
       return std::nullopt;
@@ -450,6 +487,7 @@ private:
     }
 
     const bool delivered = consumer.complete(Sequence{Kind::apc, sequence, Ending::escape});
+
     clear();
     consumed = start + length + 1;
     ending_ = Ending::escape;
@@ -462,6 +500,7 @@ private:
       size_ = sequence.size();
       phase_ = Phase::ready;
     }
+
     return delivered;
   }
 
@@ -508,7 +547,9 @@ private:
       phase_ = Phase::ready;
       return true;
     }
+
     char introducer = 0;
+
     switch (byte) {
     case 0x90: introducer = 'P'; break;
     case 0x98: introducer = 'X'; break;
@@ -537,9 +578,11 @@ private:
     }
 
     std::size_t length = 0;
+
     while (length < available && input[consumed + length] >= space) {
       ++length;
     }
+
     appendRun(input.subspan(consumed, length));
     consumed += length;
   }
@@ -550,6 +593,7 @@ private:
     while (!input.empty()) {
       if (size_ < inline_.size()) {
         const auto count = std::min(input.size(), inline_.size() - size_);
+
         std::memcpy(inline_.data() + size_, input.data(), count);
         size_ += count;
         input = input.subspan(count);
@@ -560,11 +604,13 @@ private:
         overflow_.reserve(inline_.size() * 2);
         overflow_.insert(overflow_.end(), inline_.begin(), inline_.end());
       }
+
       if (overflow_.size() == overflow_.capacity()) {
         overflow_.reserve(std::min(string_limit, overflow_.capacity() * 2));
       }
 
       const auto count = std::min(input.size(), overflow_.capacity() - overflow_.size());
+
       overflow_.insert(overflow_.end(), input.begin(), input.begin() + count);
       size_ += count;
       input = input.subspan(count);
@@ -589,6 +635,7 @@ private:
     if (overflow_.size() == overflow_.capacity()) {
       overflow_.reserve(std::min(string_limit, overflow_.capacity() * 2));
     }
+
     overflow_.push_back(byte);
     ++size_;
     return true;

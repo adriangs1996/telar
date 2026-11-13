@@ -142,6 +142,7 @@ public:
 
     Transaction transaction{database_};
     const auto now = context.received_at_ms != 0 ? context.received_at_ms : wallMilliseconds();
+
     session_.reset();
     session_.bind(1, std::span{context.history_session});
     session_.bind(2, static_cast<std::int64_t>(request.pane_id));
@@ -162,6 +163,7 @@ public:
       } else {
         finish_.bindNull(4);
       }
+
       finish_.bind(5, std::span{context.history_session});
       finish_.bind(6, request.tool_call_id);
       finish_.bind(7, context.workspace_path);
@@ -188,6 +190,7 @@ public:
     } else {
       insert_.bindNull(10);
     }
+
     insert_.bind(11, static_cast<std::int64_t>(request.phase == AgentCommandPhase::started ? HistoryStatus::running : HistoryStatus::completed));
     insert_.bind(12, request.provider);
     if (request.tool_call_id.empty()) {
@@ -195,6 +198,7 @@ public:
     } else {
       insert_.bind(13, request.tool_call_id);
     }
+
     insert_.finish();
     transaction.commit();
   }
@@ -251,6 +255,7 @@ public:
     const auto low = hash(import_seed, source);
     const auto high = hash(low, source);
     static_assert(std::endian::native == std::endian::little);
+
     std::memcpy(session.data(), &low, sizeof(low));
     std::memcpy(session.data() + sizeof(low), &high, sizeof(high));
     pane = (low & ((std::uint64_t{1} << 62) - 1)) | 1;
@@ -260,6 +265,7 @@ public:
   inline static std::uint64_t hash(std::uint64_t seed, std::string_view input) noexcept {
     constexpr std::array<std::uint64_t, 4> secret{0xa0761d6478bd642f, 0xe7037ed1a0b428db, 0x8ebc6af09c88c6e3, 0x589965cc75374cc3};
     std::array<std::uint64_t, 3> state;
+
     state.fill(seed ^ mix(seed ^ secret[0], secret[1]));
     std::uint64_t left = 0;
     std::uint64_t right = 0;
@@ -268,6 +274,7 @@ public:
       if (input.size() >= 4) {
         const auto end = input.size() - 4;
         const auto quarter = (input.size() >> 3) << 2;
+
         left = (read<std::uint32_t>(input.data()) << 32) | read<std::uint32_t>(input.data() + quarter);
         right = (read<std::uint32_t>(input.data() + end) << 32) | read<std::uint32_t>(input.data() + end - quarter);
       } else if (!input.empty()) {
@@ -275,13 +282,16 @@ public:
       }
     } else {
       std::size_t offset = 0;
+
       if (input.size() >= 48) {
         while (offset + 48 < input.size()) {
           for (std::size_t lane = 0; lane < state.size(); ++lane) {
             state[lane] = mix(read<std::uint64_t>(input.data() + offset + 16 * lane) ^ secret[lane + 1], read<std::uint64_t>(input.data() + offset + 16 * lane + 8) ^ state[lane]);
           }
+
           offset += 48;
         }
+
         state[0] ^= state[1] ^ state[2];
       }
 
@@ -289,11 +299,13 @@ public:
         state[0] = mix(read<std::uint64_t>(input.data() + offset) ^ secret[1], read<std::uint64_t>(input.data() + offset + 8) ^ state[0]);
         offset += 16;
       }
+
       left = read<std::uint64_t>(input.data() + input.size() - 16);
       right = read<std::uint64_t>(input.data() + input.size() - 8);
     }
 
     const __uint128_t product = static_cast<__uint128_t>(left ^ secret[1]) * (right ^ state[0]);
+
     return mix(static_cast<std::uint64_t>(product) ^ secret[0] ^ input.size(), static_cast<std::uint64_t>(product >> 64) ^ secret[1]);
   }
 
@@ -304,12 +316,14 @@ private:
   template <typename Integer>
   inline static std::uint64_t read(const char *bytes) noexcept {
     Integer value;
+
     std::memcpy(&value, bytes, sizeof(value));
     return value;
   }
 
   inline static std::uint64_t mix(std::uint64_t left, std::uint64_t right) noexcept {
     const __uint128_t product = static_cast<__uint128_t>(left) * right;
+
     return static_cast<std::uint64_t>(product) ^ static_cast<std::uint64_t>(product >> 64);
   }
 };
@@ -384,9 +398,11 @@ public:
     }
 
     Transaction transaction{database_};
+
     if (event.kind != HistoryEventKind::session_title) {
       ensureSession(event.session);
     }
+
     switch (event.kind) {
     case HistoryEventKind::session_started:
     case HistoryEventKind::launch_failed:
@@ -410,6 +426,7 @@ public:
       if (::sqlite3_changes(database_.handle()) != 1) {
         throw RequestError{FailureCode::invalid_request, "History session does not exist"};
       }
+
       break;
     }
 
@@ -529,6 +546,7 @@ public:
 
     // The kept entry starts with no text and views only the copies these rows hold.
     auto entry = header(row);
+
     entry.command = copy(stored.command);
     entry.cwd = copy(stored.cwd);
     entry.workspace_path = copy(stored.workspace_path);
@@ -540,6 +558,7 @@ public:
 
   inline std::string_view copy(std::string_view text) {
     const auto offset = text_.size();
+
     text_.append(std::span{reinterpret_cast<const Byte *>(text.data()), text.size()});
     return {reinterpret_cast<const char *>(text_.readable().data() + offset), text.size()};
   }
@@ -551,6 +570,7 @@ public:
 private:
   inline static HistoryEntry view(const Statement &row) {
     auto entry = header(row);
+
     entry.provider = row.text(11);
     entry.command = row.text(6);
     entry.cwd = row.text(7);
@@ -691,6 +711,7 @@ inline void migrateHistory(Database &database) {
 
   for (const auto &migration : migrations) {
     Statement columns{database, "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2"};
+
     columns.bind(1, std::string_view{migration.table});
     columns.bind(2, std::string_view{migration.column});
     if (!columns.next()) {
@@ -703,8 +724,10 @@ inline void migrateHistory(Database &database) {
 
 inline bool enableHistoryIndex(Database &database) {
   bool exists = false;
+
   {
     Statement table{database, "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'command_fts'"};
+
     exists = table.next();
   }
 
@@ -761,6 +784,7 @@ public:
     if (!agent_commands_) {
       agent_commands_.emplace(database_);
     }
+
     agent_commands_->persist(request, context);
     reply.send(RequestCompleted{.request_id = request.request_id});
   }
@@ -799,6 +823,7 @@ public:
     const ImportIdentity identity{request.source};
     Transaction transaction{database_};
     Statement session{database_, "INSERT OR IGNORE INTO session(id, pane_id, location_kind, location_id, tab_id, workspace_path, shell, started_at_ms) VALUES(?1, ?2, 0, ?2, ?2, '', ?3, ?4)"};
+
     session.bind(1, std::span{identity.session});
     session.bind(2, integer(identity.pane));
     session.bind(3, request.source);
@@ -806,6 +831,7 @@ public:
     session.finish();
 
     Statement command{database_, "INSERT OR IGNORE INTO command(session_id, pane_id, location_kind, location_id, tab_id, sequence, command, cwd, workspace_path, started_at_ms, duration_ns, exit_code, status, author, origin) VALUES(?1, ?2, 0, ?2, ?2, ?3, ?4, '', '', ?5, 0, NULL, 0, 0, 0)"};
+
     for (std::size_t index = 0; index < request.entries.size(); ++index) {
       command.bind(1, std::span{identity.session});
       command.bind(2, integer(identity.pane));
@@ -824,6 +850,7 @@ public:
     rows_.clear();
     if (request.snapshot_id == 0) {
       Statement boundary{database_, "SELECT COALESCE(MAX(id), 0) FROM command"};
+
       checkRow(boundary);
       request.snapshot_id = static_cast<std::uint64_t>(boundary.integer(0));
     }
@@ -834,22 +861,27 @@ public:
     }
 
     auto sql = string("SELECT ");
+
     sql += entry_columns;
     sql += " FROM command WHERE id <= ?1";
     if (request.entry_id != 0) {
       sql += " AND id = ?2";
     }
+
     appendMatch(sql, request.query);
     appendFilters(sql, request);
     // A distinct page counts its offset in commands, not rows: SQL cannot cut it, so the rows
     // stream newest first and stop once the page and one more command are found.
     const bool distinct = request.distinct && request.entry_id == 0;
+
     sql += distinct ? " ORDER BY started_at_ms DESC, id DESC" : " ORDER BY started_at_ms DESC, id DESC LIMIT ?7 OFFSET ?8";
     Statement statement{database_, sql};
+
     statement.bind(1, integer(request.snapshot_id));
     if (request.entry_id != 0) {
       statement.bind(2, integer(request.entry_id));
     }
+
     bindMatch(statement, request.query);
     bindFilters(statement, request);
     if (!distinct) {
@@ -860,6 +892,7 @@ public:
     HashSet seen{0, std::hash<std::uint64_t>{}, std::equal_to<std::uint64_t>{}, AllocatorRef<std::uint64_t, Memory>{memory_}};
     std::uint32_t skipped = 0;
     bool more = false;
+
     while (statement.next()) {
       if (distinct) {
         if (!seen.insert(ImportIdentity::hash(command_hash_seed, statement.text(6))).second) {
@@ -886,6 +919,7 @@ public:
 
   inline void remove(const DeleteHistory &request, EncodedReply<Memory> &reply) {
     Statement statement{database_, "DELETE FROM command WHERE id = ?1"};
+
     statement.bind(1, integer(request.id));
     statement.finish();
     reply.send(HistoryPruned{.request_id = request.request_id,
@@ -894,19 +928,24 @@ public:
 
   inline void prune(const PruneHistory &request, EncodedReply<Memory> &reply) {
     auto sql = string("DELETE FROM command WHERE 1=1");
+
     appendMatch(sql, request.match);
     if (request.failed_only) {
       sql += " AND exit_code IS NOT NULL AND exit_code <> 0";
     }
+
     if (request.before_ms != 0) {
       sql += " AND started_at_ms < ?4";
     }
+
     appendScope(sql, request.scope);
     Statement statement{database_, sql};
+
     bindMatch(statement, request.match);
     if (request.before_ms != 0) {
       statement.bind(4, request.before_ms);
     }
+
     bindScope(statement, request.scope, request.scope_value);
     statement.finish();
     reply.send(HistoryPruned{.request_id = request.request_id,
@@ -915,11 +954,14 @@ public:
 
   inline void readOutput(const ReadHistoryOutput &request, EncodedReply<Memory> &reply) {
     Statement statement{database_, "SELECT content, truncated, observed_bytes FROM command_output WHERE command_id = ?1"};
+
     statement.bind(1, integer(request.id));
     HistoryOutput result{.request_id = request.request_id,
                          .id = request.id};
+
     if (statement.next()) {
       const auto text = statement.text(0);
+
       result.content = std::span{reinterpret_cast<const Byte *>(text.data()), text.size()};
       result.truncated = statement.integer(1) != 0;
       result.observed_bytes = static_cast<std::uint64_t>(statement.integer(2));
@@ -931,17 +973,22 @@ public:
   inline void stats(const HistoryStatsQuery &request, EncodedReply<Memory> &reply) {
     rows_.clear();
     auto filters = string(" WHERE 1=1");
+
     appendScope(filters, request.scope);
     if (request.since_ms != 0) {
       filters += " AND started_at_ms >= ?1";
     }
+
     auto sql = string("SELECT COUNT(*), COUNT(DISTINCT command) FROM command");
+
     sql += filters;
     Statement totals{database_, sql};
+
     bindScope(totals, request.scope, request.scope_value);
     if (request.since_ms != 0) {
       totals.bind(1, request.since_ms);
     }
+
     checkRow(totals);
     HistoryStatsResult result{.request_id = request.request_id,
                               .total = static_cast<std::uint64_t>(totals.integer(0)),
@@ -951,6 +998,7 @@ public:
     sql += filters;
     sql += " GROUP BY command ORDER BY n DESC LIMIT 400";
     Statement top{database_, sql};
+
     bindScope(top, request.scope, request.scope_value);
     if (request.since_ms != 0) {
       top.bind(1, request.since_ms);
@@ -958,6 +1006,7 @@ public:
 
     std::array<HistoryStatsEntry, maximum_stats_candidates> groups;
     std::size_t count = 0;
+
     while (top.next()) {
       const auto group = historyGroup(top.text(0));
       const auto occurrences = static_cast<std::uint64_t>(top.integer(1));
@@ -974,6 +1023,7 @@ public:
     std::sort(groups.begin(), groups.begin() + count, [](const auto &left, const auto &right) {
       return left.count == right.count ? left.command < right.command : left.count > right.count;
     });
+
     result.top = std::span{groups}.first(std::min(count, maximum_stats_results));
     reply.send(result);
   }
@@ -1005,22 +1055,27 @@ private:
     // The newest candidates, newest first: SQLite stops at the limit through the started_at
     // index instead of every command being read and scored on each keystroke.
     auto sql = string("SELECT id, command FROM command WHERE id <= ?1");
+
     appendFilters(sql, request);
     sql += " ORDER BY started_at_ms DESC, id DESC LIMIT ";
     sql += fuzzy_candidate_limit;
 
     Statement statement{database_, sql};
+
     statement.bind(1, integer(request.snapshot_id));
     bindFilters(statement, request);
     Vector<RankedEntry, Memory> ranked{AllocatorRef<RankedEntry, Memory>{memory_}};
+
     ranked.reserve(maximum_fuzzy_candidates);
     HashSet seen{0, std::hash<std::uint64_t>{}, std::equal_to<std::uint64_t>{}, AllocatorRef<std::uint64_t, Memory>{memory_}};
 
     Vector<FuzzyCandidate, Memory> candidates{AllocatorRef<FuzzyCandidate, Memory>{memory_}};
+
     candidates.reserve(maximum_fuzzy_candidates);
     while (statement.next()) {
       FuzzyCandidate candidate{.id = statement.integer(0)};
       const auto command = statement.text(1);
+
       if (request.distinct) {
         candidate.command_hash = ImportIdentity::hash(command_hash_seed, command);
       }
@@ -1030,6 +1085,7 @@ private:
     }
 
     std::uint32_t order = 0;
+
     for (const auto &candidate : candidates) {
       if (request.distinct && !seen.insert(candidate.command_hash).second) {
         continue;
@@ -1043,19 +1099,23 @@ private:
     const auto precedes = [](const RankedEntry &left, const RankedEntry &right) {
       return left.score == right.score ? left.order < right.order : left.score > right.score;
     };
+
     const auto end = std::min(std::uint64_t{request.offset} + request.limit, static_cast<std::uint64_t>(ranked.size()));
+
     std::partial_sort(ranked.begin(), ranked.begin() + end, ranked.end(), precedes);
     sql.assign("SELECT ");
     sql += entry_columns;
     sql += " FROM command WHERE id = ?1";
     Statement detail{database_, sql};
     const auto start = std::min<std::size_t>(request.offset, ranked.size());
+
     for (std::size_t index = start; index < end; ++index) {
       detail.bind(1, ranked[index].id);
       checkRow(detail);
       if (!rows_.append(detail)) {
         break;
       }
+
       detail.reset();
     }
 
@@ -1073,6 +1133,7 @@ private:
     if (value > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())) {
       throw RequestError{FailureCode::invalid_request, "History identity exceeds the database integer range"};
     }
+
     return static_cast<std::int64_t>(value);
   }
 
@@ -1084,9 +1145,11 @@ private:
 
   bool useIndex(std::string_view query) const noexcept {
     std::size_t characters = 0;
+
     for (const unsigned char byte : query) {
       characters += (byte & 0xc0) != 0x80;
     }
+
     return indexed_ && characters >= 3;
   }
 
@@ -1100,18 +1163,21 @@ private:
     if (query.empty()) {
       return;
     }
+
     if (!useIndex(query)) {
       statement.bind(3, query);
       return;
     }
 
     auto quoted = string("\"");
+
     for (const char byte : query) {
       quoted += byte;
       if (byte == '"') {
         quoted += '"';
       }
     }
+
     quoted += '"';
     statement.bind(3, std::string_view{quoted});
   }
@@ -1144,9 +1210,11 @@ private:
     if (request.failed_only) {
       sql += " AND exit_code IS NOT NULL AND exit_code <> 0";
     }
+
     if (request.author != HistoryAuthorFilter::all) {
       sql += " AND author = ?5";
     }
+
     appendScope(sql, request.scope);
   }
 
@@ -1154,6 +1222,7 @@ private:
     if (request.author != HistoryAuthorFilter::all) {
       statement.bind(5, static_cast<std::int64_t>(request.author == HistoryAuthorFilter::agent));
     }
+
     bindScope(statement, request.scope, request.scope_value);
   }
 

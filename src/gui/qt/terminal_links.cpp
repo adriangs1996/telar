@@ -60,6 +60,7 @@ namespace telar::gui::qt {
 
 ViewVersion Application::viewVersion() const noexcept {
   auto version = session().viewVersion();
+
   version.machine = machine_view_revision_;
 
   return version;
@@ -120,17 +121,22 @@ std::uint64_t TerminalItem::drawnScreenKey() const noexcept {
   if (current == nullptr) {
     return 0;
   }
+
   constexpr std::uint64_t prime = 0x100000001b3;
   auto key = current->screen.revision();
+
   for (const auto value : {top_row_, current->fold_revision, current->scrollback_trimmed, static_cast<std::uint64_t>(view_rows_.size()), static_cast<std::uint64_t>(fold_motion_ ? fold_shown_ + 1 : 0)}) {
     key = (key ^ value) * prime;
   }
+
   for (const auto &view : view_rows_) {
     if (view.exists && view.screen_row < 0) {
       const auto kept = current->rows.find(current->scrollback_trimmed + view.row);
+
       key = (key ^ (kept ? kept->revision : view.row)) * prime;
     }
   }
+
   return key;
 }
 
@@ -139,15 +145,18 @@ const Screen<ApplicationAllocator> *TerminalItem::drawnScreen() const {
   if (current == nullptr || application_ == nullptr || !mapsRows() || view_rows_.empty()) {
     return nullptr;
   }
+
   const auto key = drawnScreenKey();
   if (drawn_screen_ && drawn_screen_key_ == key) {
     return &*drawn_screen_;
   }
+
   if (!drawn_screen_) {
     drawn_screen_.emplace(application_->memory_);
   }
 
   const auto &screen = current->screen;
+
   drawn_spans_.clear();
   drawn_flags_.clear();
   drawn_links_.clear();
@@ -156,6 +165,7 @@ const Screen<ApplicationAllocator> *TerminalItem::drawnScreen() const {
   for (std::size_t index = 0; index < view_rows_.size(); ++index) {
     appendDrawnRow(index);
   }
+
   std::ranges::sort(drawn_runs_, {}, &MetadataRun::start);
   drawn_screen_->compose(screen.columns(), drawn_spans_, drawn_flags_, TextMetadata{.status = screen.metadataStatus(), .row_flags = drawn_flags_, .links = drawn_links_, .runs = drawn_runs_, .uris = drawn_uris_});
   drawn_screen_key_ = key;
@@ -170,13 +180,16 @@ void TerminalItem::appendDrawnRow(std::size_t index) const {
   // A link on this row, from `column` on, with its target.
   const auto link = [&](std::uint32_t column, std::uint32_t length, std::string_view uri) {
     const auto offset = drawn_uris_.size();
+
     drawn_uris_.insert(drawn_uris_.end(), uri.begin(), uri.end());
     drawn_links_.push_back({.offset = static_cast<std::uint32_t>(offset), .len = static_cast<std::uint16_t>(uri.size())});
     drawn_runs_.push_back({.start = static_cast<std::uint32_t>(index * columns) + column, .len = length, .link_index = static_cast<std::uint16_t>(drawn_links_.size() - 1)});
   };
+
   const auto &view = view_rows_[index];
   if (view.exists && view.screen_row >= 0) {
     const auto row = static_cast<std::uint32_t>(view.screen_row);
+
     drawn_spans_.push_back(screen.row(row));
     drawn_flags_.push_back(screen.rowFlags(row));
     for (const auto &run : screen.linkRuns()) {
@@ -184,8 +197,10 @@ void TerminalItem::appendDrawnRow(std::size_t index) const {
         link(run.start - (row * columns), run.len, screen.linkAt(run.start));
       }
     }
+
     return;
   }
+
   const auto stable = current->scrollback_trimmed + view.row;
   if (const auto kept = view.exists ? current->rows.find(stable) : std::nullopt) {
     drawn_spans_.push_back(kept->cells);
@@ -193,8 +208,10 @@ void TerminalItem::appendDrawnRow(std::size_t index) const {
     current->rows.links(stable, [&](const auto &kept_link) {
       link(kept_link.column, kept_link.length, kept_link.uri);
     });
+
     return;
   }
+
   drawn_spans_.emplace_back();
   drawn_flags_.push_back(0);
 }
@@ -207,14 +224,17 @@ std::optional<CellPosition> TerminalItem::visibleCellAt(QPointF position) const 
 
   const auto column = std::floor(position.x() / font_.cell.width());
   const auto columns = std::min(static_cast<qreal>(current->screen.columns()), std::floor(width() / font_.cell.width()));
+
   // A view that draws its own rows answers with the row drawn there, wherever it came from.
   if (!view_rows_.empty()) {
     const auto drawn = std::floor((position.y() + shift_) / font_.cell.height());
     if (column < 0 || column >= columns || drawn < 0 || drawn >= static_cast<qreal>(view_rows_.size()) || !view_rows_[static_cast<std::size_t>(drawn)].exists) {
       return {};
     }
+
     return CellPosition{.x = static_cast<std::uint16_t>(column), .y = static_cast<std::uint32_t>(drawn)};
   }
+
   // The screen row drawn under the pointer; rows drawn from beyond the screen carry no links.
   const auto row = screenRowAt((position.y() + shift_) / font_.cell.height());
   if (column < 0 || column >= columns || !row) {
@@ -253,6 +273,7 @@ TerminalItem::ResolvedLink TerminalItem::resolveLink(QPointF position, LinkModif
   }
 
   const auto surface = terminalSurface();
+
   return {
       .affordance = affordance,
       .hit = LinkHit{
@@ -307,6 +328,7 @@ void TerminalItem::refreshLinkHover() {
   }
 
   const auto rebuild_preview = !link_stamp_ || link_stamp_->surface != surface || link_stamp_->version.configuration != stamp.version.configuration;
+
   link_stamp_ = stamp;
   auto resolved = resolveLink(position, linkModifiers(stamp.modifiers));
   if (resolved.hit != link_hover_.current()) {
@@ -320,6 +342,7 @@ void TerminalItem::refreshLinkHover() {
   }
 
   const auto changed = link_hover_.assign(std::move(resolved.hit), surface, presented_frame_id_ == current->screen.frameId());
+
   link_gesture_.validate(link_hover_.current(), stamp.version);
   setCursor(resolved.affordance == LinkAffordance::text ? Qt::IBeamCursor : Qt::PointingHandCursor);
   if (changed || rebuild_preview) {
@@ -331,6 +354,7 @@ void TerminalItem::refreshLinkHover() {
 
 void TerminalItem::clearLinkHover() {
   const auto changed = link_hover_.current().has_value() || link_preview_.has_value();
+
   link_hover_.clear();
   shared_link_.reset();
   link_gesture_.cancel();
@@ -353,6 +377,7 @@ QVariantMap TerminalItem::linkPreview() const {
   }
 
   const auto &preview = *link_preview_;
+
   return {{QStringLiteral("visible"), true}, {QStringLiteral("x"), preview.bounds.x()}, {QStringLiteral("y"), preview.bounds.y()}, {QStringLiteral("width"), preview.bounds.width()}, {QStringLiteral("height"), preview.bounds.height()}, {QStringLiteral("lines"), preview.lines}, {QStringLiteral("font"), preview.font}, {QStringLiteral("inset"), preview.inset}, {QStringLiteral("rowHeight"), preview.row_height}, {QStringLiteral("radius"), preview.corner_radius}};
 }
 
@@ -364,6 +389,7 @@ void TerminalItem::setLinkPreviewBounds(const QRectF &bounds) {
     const auto top = std::floor(bounds.top() / font_.cell.height()) * font_.cell.height();
     const auto right = std::ceil(bounds.right() / font_.cell.width()) * font_.cell.width();
     const auto bottom = std::ceil(bounds.bottom() / font_.cell.height()) * font_.cell.height();
+
     preview_cover_ = Rect{.x = static_cast<float>(left), .y = static_cast<float>(top), .width = static_cast<float>(right - left), .height = static_cast<float>(bottom - top)};
   }
 
@@ -406,6 +432,7 @@ bool TerminalItem::beginLinkPress(const QMouseEvent &event) {
   const auto forced = right ? resolveLink(event.position(), {.native = true, .shift = true}) : ResolvedLink{};
   const auto &hit = right ? forced.hit : link_hover_.current();
   auto button = LinkButton::middle;
+
   if (right) {
     button = LinkButton::right;
   } else if (event.button() == Qt::LeftButton) {
@@ -426,6 +453,7 @@ bool TerminalItem::beginLinkPress(const QMouseEvent &event) {
   }
 
   const auto consumed = plan == LinkPress::arm_exclusive || plan == LinkPress::discard || plan == LinkPress::copy;
+
   captured_link_buttons_.setFlag(event.button(), consumed);
 
   return consumed;

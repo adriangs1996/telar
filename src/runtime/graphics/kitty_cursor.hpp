@@ -22,9 +22,11 @@ public:
         }
 
         const auto first = *pending_;
+
         pending_.reset();
         return execute(first, cell_width, cell_height);
       }
+
       if (header->action == 'd') {
         pending_.reset();
       }
@@ -69,6 +71,7 @@ private:
         slot = &sizes_[next_size_];
         next_size_ = (next_size_ + 1) % sizes_.size();
       }
+
       *slot = header;
     }
 
@@ -80,22 +83,27 @@ private:
           *slot = {};
         }
       }
+
       return std::nullopt;
     }
+
     if ((header.action != 'T' && header.action != 'p') || header.stays) {
       return std::nullopt;
     }
 
     auto width = header.width;
     auto height = header.height;
+
     if (header.action == 'p') {
       const auto *known = find(header);
       if (known == nullptr) {
         return std::nullopt;
       }
+
       width = known->width;
       height = known->height;
     }
+
     if ((width == 0 || height == 0) && (header.requested.columns == 0 || header.requested.rows == 0)) {
       return std::nullopt;
     }
@@ -109,6 +117,7 @@ private:
                                      .offset_y = header.offset_y,
                                      .cell_width = cell_width,
                                      .cell_height = cell_height});
+
     return cells.columns != 0 && cells.rows != 0 ? std::optional{cells} : std::nullopt;
   }
 
@@ -118,6 +127,7 @@ private:
         return &size;
       }
     }
+
     return nullptr;
   }
 
@@ -129,8 +139,10 @@ private:
     bool direct = true;
     bool compressed = false;
     KittyControlFields fields{command.control};
+
     while (const auto field = fields.next()) {
       const auto number = kittyUnsigned<std::uint32_t>(field->value).value_or(0);
+
       switch (field->key) {
       case 'a':
         header.action = field->value.front();
@@ -197,6 +209,7 @@ private:
         break;
       }
     }
+
     if (!fields.valid()) {
       return std::nullopt;
     }
@@ -211,6 +224,7 @@ private:
         }
       }
     }
+
     return header;
   }
 
@@ -229,6 +243,7 @@ private:
     const auto bigEndian = [&](std::size_t offset) {
       return (static_cast<std::uint32_t>(bytes[offset]) << 24) | (static_cast<std::uint32_t>(bytes[offset + 1]) << 16) | (static_cast<std::uint32_t>(bytes[offset + 2]) << 8) | bytes[offset + 3];
     };
+
     return std::array{bigEndian(width_offset), bigEndian(height_offset)};
   }
 

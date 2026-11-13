@@ -88,6 +88,7 @@ public:
         slots_[*existing].reset();
         occupied_.erase(*existing);
       }
+
       result.exchange.include(std::move(half));
       return result;
     }
@@ -101,6 +102,7 @@ public:
 
     const auto maximum_time = std::numeric_limits<std::int64_t>::max();
     const auto deadline = now_ms > maximum_time - timeout_ms_ ? maximum_time : now_ms + timeout_ms_;
+
     slots_[*available].emplace(std::move(half), deadline);
     occupied_.insert(*available);
     return result;
@@ -108,16 +110,19 @@ public:
 
   inline tbc::view<std::optional<CapturedExchange<Memory>>, tbc::lt::a> expire(std::int64_t now_ms) noexcept {
     std::optional<std::size_t> expired;
+
     occupied_.forEach([&](std::size_t index) {
       if (!expired && slots_[index]->expires_at_ms <= now_ms) {
         expired = index;
       }
     });
+
     if (!expired) {
       return std::nullopt;
     }
 
     CapturedExchange<Memory> result{memory_};
+
     result.include(std::move(slots_[*expired]->half));
     slots_[*expired].reset();
     occupied_.erase(*expired);
@@ -134,11 +139,13 @@ private:
 
   inline std::optional<std::size_t> find(CaptureKey key) const noexcept {
     std::optional<std::size_t> found;
+
     occupied_.forEach([&](std::size_t index) {
       if (slots_[index]->half->key == key) {
         found = index;
       }
     });
+
     return found;
   }
 
@@ -176,6 +183,7 @@ public:
     if (half && request.decode) {
       producer_.decodeBody(**half);
     }
+
     return half;
   }
 
@@ -227,11 +235,13 @@ public:
   inline bool collect() noexcept {
     TELAR_TRACE("proxy.collectCaptures");
     const auto now = Clock::now();
+
     while (auto expired = joiner_.expire(now)) {
       tap_.submit(*expired);
     }
 
     bool full = false;
+
     worker_.collect([&](auto &half) noexcept {
       if (!half) {
         return;
@@ -240,11 +250,14 @@ public:
       worker_.submit({tap_.listening()});
       auto joined = joiner_.push(now, std::move(*half));
       using State = typename CaptureJoiner<Memory>::State;
+
       if (joined.state != State::pending) {
         tap_.submit(joined.exchange);
       }
+
       full = joined.state == State::full;
     });
+
     return full;
   }
 

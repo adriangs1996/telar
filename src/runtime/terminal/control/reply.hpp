@@ -31,9 +31,11 @@ public:
     if (text.empty()) {
       return;
     }
+
     if (owned_) {
       rejectSealedAppend();
     }
+
     if (text.size() > maximum_bytes - size_) {
       throw std::length_error{"Control reply exceeds its configured limit"};
     }
@@ -45,17 +47,21 @@ public:
         overflow_.reserve(std::max(inline_.size() * 2, size_ + text.size()));
         overflow_.insert(overflow_.end(), inline_.begin(), inline_.begin() + size_);
       }
+
       if (size_ + text.size() > overflow_.capacity()) {
         overflow_.reserve(std::min(maximum_bytes, std::max(size_ + text.size(), overflow_.capacity() * 2)));
       }
+
       overflow_.insert(overflow_.end(), text.begin(), text.end());
     }
+
     size_ += text.size();
   }
 
   void number(std::uint64_t value) {
     std::array<char, std::numeric_limits<std::uint64_t>::digits10 + 1> bytes;
     const auto formatted = std::to_chars(bytes.data(), bytes.data() + bytes.size(), value);
+
     append({bytes.data(), static_cast<std::size_t>(formatted.ptr - bytes.data())});
   }
 
@@ -63,16 +69,20 @@ public:
     constexpr std::string_view lower_digits = "0123456789abcdef";
     constexpr std::string_view upper_digits = "0123456789ABCDEF";
     std::array<char, sizeof(value) * 2> bytes;
+
     width = std::min<unsigned>(width, bytes.size());
     const auto digits = upper ? upper_digits : lower_digits;
     auto offset = bytes.size();
+
     do {
       bytes[--offset] = digits[value & (digits.size() - 1)];
       value >>= 4;
     } while (value != 0);
+
     while (bytes.size() - offset < width) {
       bytes[--offset] = '0';
     }
+
     append({bytes.data() + offset, bytes.size() - offset});
   }
 

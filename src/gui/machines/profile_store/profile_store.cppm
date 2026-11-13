@@ -83,6 +83,7 @@ struct MachineProfileEdits {
                                                                            .color = edit.color,
                                                                            .enabled = edit.enabled,
                                                                        }));
+
       break;
     case MachineEditKind::remove:
       profiles.remove(edit.label);
@@ -133,6 +134,7 @@ public:
     }
 
     OwnedMachineEdit result;
+
     result.kind_ = edit.kind;
     result.enabled_ = edit.enabled;
     result.login_agent_ = edit.login_agent;
@@ -212,6 +214,7 @@ public:
   [[nodiscard]] inline MachineProfiles change(std::span<const MachineEdit> edits, Random &random, std::string_view local_fallback) {
     auto transaction = storage_.lock();
     auto profiles = read(transaction);
+
     for (const auto &edit : edits) {
       MachineProfileEdits::apply(profiles, edit, random, local_fallback);
     }

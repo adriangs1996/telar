@@ -100,6 +100,7 @@ public:
     }
 
     const auto index = extended_.size();
+
     extended_.push_back(description);
 
     return static_cast<std::int32_t>(index);
@@ -213,6 +214,7 @@ private:
         {.kind = BindingActionKind::move_tab_previous, .type = "move_tab", .value = "previous"},
         {.kind = BindingActionKind::move_tab_next, .type = "move_tab", .value = "next"},
     });
+
     for (const auto &description : directions) {
       if (description.kind == kind) {
         writeValue(writer, description.type, description.value);
@@ -244,6 +246,7 @@ private:
         {BindingActionKind::add_machine, "add_machine"},
         {BindingActionKind::copy_mode, "enter_copy_mode"},
     });
+
     for (const auto &[action_kind, type] : voids) {
       if (kind == action_kind) {
         writeValue(writer, type, nullptr);
@@ -295,6 +298,7 @@ private:
       object.member("label", [&](JsonWriter &value) {
         value.bytes(byteView(command.label()));
       });
+
       object.member("argv", [&](JsonWriter &value) {
         writeArguments(value, command.argv());
       });
@@ -319,6 +323,7 @@ private:
 
   inline static void writeNotification(JsonWriter &writer, const NotificationActionDescription &description) {
     constexpr std::array levels{"info", "success", "warning", "failure"};
+
     writer.object([&](JsonWriter &object) {
       object.member("title", description.title.view());
       object.member("message", description.message.view());
@@ -337,8 +342,10 @@ private:
 
   inline static void writeTarget(JsonWriter &writer, NotificationTarget target) {
     constexpr std::array targets{"none", "pane", "tab", "workspace"};
+
     writer.object([&](JsonWriter &object) {
       const auto name = std::string_view{targets[static_cast<std::size_t>(target.kind)]};
+
       if (target.kind == NotificationTarget::Kind::none) {
         object.member(name, emptyObject);
       } else {
@@ -373,10 +380,12 @@ public:
   // Each query is written into the output, region `a`.
   [[nodiscard]] inline static tbc::view<std::string_view, tbc::lt::a> write(const InputConfiguration &input, tbc::view<std::span<char>, tbc::lt::a> output) {
     JsonWriter writer{output};
+
     writer.object([&](JsonWriter &object) {
       object.member("prefix", [&](JsonWriter &value) {
         writeKey(value, input.prefix);
       });
+
       object.member("sequence_timeout_ns", input.sequence_timeout_ns);
       object.member("binding_count", input.length);
     });
@@ -389,6 +398,7 @@ public:
       object.member("code", [&](JsonWriter &value) {
         writeCode(value, key);
       });
+
       object.member("mods", [&](JsonWriter &value) {
         value.object([&](JsonWriter &modifiers) {
           modifiers.member("shift", key.has(KeyChord::Modifier::shift));
@@ -397,6 +407,7 @@ public:
           modifiers.member("super", key.has(KeyChord::Modifier::super));
         });
       });
+
       object.member("phase", "press");
       object.member("physical", nullptr);
       object.member("kitty", nullptr);
@@ -427,6 +438,7 @@ private:
     const auto bytes = std::bit_cast<std::array<char, sizeof(key.character)>>(key.character);
     const auto first = static_cast<unsigned char>(bytes.front());
     std::size_t length = 1;
+
     while (length < Utf8Scalar::leading_prefixes.size() && first >= Utf8Scalar::leading_prefixes[length]) {
       ++length;
     }
@@ -465,12 +477,14 @@ public:
 
     const auto &binding = input.configured[index];
     JsonWriter writer{output};
+
     writer.object([&](JsonWriter &object) {
       object.member("index", index);
       object.member("prefixed", binding.prefixed);
       object.member("keys", [&](JsonWriter &value) {
         writeKeys(value, binding.sequence());
       });
+
       object.member("action", [&](JsonWriter &value) {
         ActionQuery::write(value, binding.action, descriptions, commands);
       });
@@ -601,6 +615,7 @@ public:
     }
 
     std::size_t loaded = 0;
+
     for (const auto &specification : specifications_.first(index)) {
       loaded += static_cast<std::size_t>(specification.enabled);
     }
@@ -678,6 +693,7 @@ public:
     catalog.validateGeneration(request.target_id);
     const auto index = page(request.value, catalog.size());
     JsonWriter writer{output};
+
     writePage(writer, catalog.generation(), [&](JsonWriter &array) {
       if (index < catalog.size()) {
         array.element([&](JsonWriter &value) {
@@ -696,6 +712,7 @@ public:
     const auto count = package == nullptr ? 0 : package->manifest.action_count;
     const auto selected = page(request.value, count);
     JsonWriter writer{output};
+
     writePage(writer, catalog.generation(), [&](JsonWriter &array) {
       if (selected == 0) {
         array.element([&](JsonWriter &value) {
@@ -731,6 +748,7 @@ private:
   inline static void listEntry(JsonWriter &writer, const PluginCatalog &catalog, std::size_t index) {
     const auto &specification = catalog.specification(index);
     const auto *package = catalog.package(index);
+
     writer.object([&](JsonWriter &object) {
       object.member("index", index);
       object.member("path", specification.path.view());
@@ -744,6 +762,7 @@ private:
   inline static void metadata(JsonWriter &writer, const PluginCatalog &catalog, std::size_t index) {
     const auto &specification = catalog.specification(index);
     const auto *package = catalog.package(index);
+
     writer.object([&](JsonWriter &object) {
       object.member("path", specification.path.view());
       object.member("requested_enabled", catalog.requestedEnabled(index));
@@ -755,6 +774,7 @@ private:
       }
 
       const auto &manifest = package->manifest;
+
       object.member("id", manifest.id.view());
       object.member("version", manifest.version.view());
       object.member("entry", manifest.entry.view());
@@ -763,6 +783,7 @@ private:
       object.member("digest", [&](JsonWriter &value) {
         digest(value, package->digest);
       });
+
       object.member("capabilities", [&](JsonWriter &value) {
         writeCapabilities(value, manifest.capabilities);
       });
@@ -771,6 +792,7 @@ private:
 
   inline static void writeCapabilities(JsonWriter &writer, runtime::plugins::Capabilities capabilities) {
     using runtime::plugins::Capability;
+
     writer.array([&](JsonWriter &array) {
       for (unsigned bit = 0; bit <= static_cast<unsigned>(Capability::runtime_control); ++bit) {
         const auto capability = static_cast<Capability>(bit);
@@ -788,6 +810,7 @@ private:
     constexpr unsigned nibble_mask = 0xf;
     std::array<char, runtime::plugins::PackageDigest{}.size() * characters_per_byte> encoded{};
     std::size_t offset = 0;
+
     for (const auto byte : digest) {
       encoded[offset++] = digits[byte >> nibble_bits];
       encoded[offset++] = digits[byte & nibble_mask];

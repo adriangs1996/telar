@@ -48,6 +48,7 @@ ImageTextureIdentity identity(std::uint32_t image_id, std::uint64_t generation =
 
 ImageTextureHandle ready(Residency &images, ImageTextureIdentity key, ImageTextureSize size = small) {
   const auto admission = images.request({.identity = key, .size = size, .retained_bytes = 0, .now_ns = images.frame()});
+
   require(admission.upload && images.complete(admission.handle, true, images.frame()), "a valid image must reach ready residency");
   return admission.handle;
 }
@@ -55,8 +56,10 @@ ImageTextureHandle ready(Residency &images, ImageTextureIdentity key, ImageTextu
 void retainedPixelsAndTexturesShareAdmission() {
   Releases releases;
   Residency images{releases};
+
   images.beginFrame(0);
   const auto first = images.request({.identity = identity(1), .size = quarter_budget, .retained_bytes = Residency::byte_capacity - quarter_bytes, .now_ns = 0});
+
   require(first.upload && images.residentBytes() == quarter_bytes, "CPU pixels and the requested RGBA texture must fit together at the exact quota boundary");
   require(!images.request({.identity = identity(2), .size = small, .retained_bytes = Residency::byte_capacity - quarter_bytes, .now_ns = 0}).upload, "an uploading texture cannot be evicted to exceed the shared quota");
   require(images.complete(first.handle, true, 0), "the admitted upload must complete");
@@ -71,15 +74,19 @@ void retainedPixelsAndTexturesShareAdmission() {
 void spareReusePreservesItsHandleAndChargedBytes() {
   Releases releases;
   Residency images{releases};
+
   images.beginFrame(0);
   const auto first = ready(images, identity(1));
   const auto charged = images.residentBytes();
+
   images.beginFrame(1);
   images.sweep([](auto) noexcept {
     return false;
   });
+
   require(images.spares() == 1 && releases.count == 0, "an unreferenced ready texture becomes a charged spare");
   const auto reused = images.request({.identity = identity(2), .size = small, .retained_bytes = Residency::byte_capacity, .now_ns = 1});
+
   require(reused.upload && reused.reuse && reused.handle == first, "same-size spare reuse must avoid a new allocation even when no extra budget remains");
   require(images.spares() == 0 && images.residentBytes() == charged, "reusing a spare must neither double-charge nor release it");
 }
@@ -87,15 +94,19 @@ void spareReusePreservesItsHandleAndChargedBytes() {
 void evictionUsesAgeAcrossReadyTexturesAndSpares() {
   Releases releases;
   Residency images{releases};
+
   images.beginFrame(0);
   const auto older_ready = ready(images, identity(1));
   const auto newer_spare = ready(images, identity(2));
+
   images.beginFrame(2);
   images.sweep([](auto key) noexcept {
     return key.image_id == 1;
   });
+
   images.beginFrame(3);
   const auto admitted = images.request({.identity = identity(3), .size = quarter_budget, .retained_bytes = Residency::byte_capacity - quarter_bytes, .now_ns = 2});
+
   require(admitted.upload, "idle resources must make room for a fitting texture");
   require(releases.count == 2 && releases.handles[0] == older_ready && releases.handles[1] == newer_spare, "eviction follows age across both stages rather than unconditionally taking spares first");
 }
@@ -103,12 +114,15 @@ void evictionUsesAgeAcrossReadyTexturesAndSpares() {
 void uploadsAreBoundedPerImageAndPerFrame() {
   Releases releases;
   Residency images{releases};
+
   images.beginFrame(0);
   const auto first = images.request({.identity = identity(1), .size = small, .retained_bytes = 0, .now_ns = 0});
   const auto next = images.request({.identity = identity(1, 2), .size = small, .retained_bytes = 0, .now_ns = 0});
+
   require(first.upload && next.upload && !images.request({.identity = identity(1, 3), .size = small, .retained_bytes = 0, .now_ns = 0}).upload, "only two generations of one logical image may upload concurrently");
   const auto other = images.request({.identity = identity(2), .size = small, .retained_bytes = 0, .now_ns = 0});
   const auto last = images.request({.identity = identity(3), .size = small, .retained_bytes = 0, .now_ns = 0});
+
   require(other.upload && last.upload && images.uploading() == Residency::maximum_uploads, "four logical uploads share the global in-flight bound");
   require(images.complete(last.handle, true, 0) && !images.request({.identity = identity(4), .size = small, .retained_bytes = 0, .now_ns = 0}).upload, "early completion does not admit a fifth upload into the same prepared frame");
   images.beginFrame(1);
@@ -118,10 +132,12 @@ void uploadsAreBoundedPerImageAndPerFrame() {
 void failedUploadsKeepTheNewestDrawableStandIn() {
   Releases releases;
   Residency images{releases};
+
   images.beginFrame(0);
   const auto stand_in = ready(images, identity(1));
   const auto newer = images.request({.identity = identity(1, 3), .size = small, .retained_bytes = 0, .now_ns = 0});
   const auto older = images.request({.identity = identity(1, 2), .size = small, .retained_bytes = 0, .now_ns = 0});
+
   require(images.complete(newer.handle, true, 0) && images.complete(older.handle, false, 0), "out-of-order completions must handle success and failure independently");
   require(images.newestReady(identity(1)) == newer.handle && images.newestReady(identity(2)) == 0, "the numerically newest ready generation supplies a stand-in only for the same logical image");
   require(images.residentBytes() == images.state(stand_in)->bytes + images.state(newer.handle)->bytes, "a failed upload must release its charged GPU bytes");
@@ -132,18 +148,23 @@ void failedUploadsKeepTheNewestDrawableStandIn() {
 void idleExpiryUsesTheOriginalDeadlinesAndRounding() {
   Releases releases;
   Residency images{releases};
+
   images.beginFrame(0);
   const auto handle = ready(images, identity(1));
+
   images.markNeeded(handle);
   constexpr std::uint32_t idle_milliseconds = 5000;
+
   require(images.wakeupAfter(1) == idle_milliseconds, "the idle deadline rounds upwards to milliseconds");
   require(images.wakeupAfter(Residency::idle_lifetime_ns) == 1, "a due texture schedules a nonzero wakeup");
   images.beginFrame(Residency::idle_lifetime_ns);
   require(images.state(handle) == nullptr && images.residentBytes() == 0 && images.wakeupAfter(0) == 0, "an idle texture leaves the table and releases its resource");
   const auto spare = ready(images, identity(2));
+
   images.sweep([](auto) noexcept {
     return false;
   });
+
   images.beginFrame(Residency::idle_lifetime_ns + Residency::spare_lifetime_ns - 1);
   require(images.state(spare) != nullptr, "a spare survives until its shorter deadline");
   images.beginFrame(Residency::idle_lifetime_ns + Residency::spare_lifetime_ns);
@@ -154,9 +175,11 @@ void unsupportedTexturesConsumeRowsWithoutPixelCharges() {
   Releases releases;
   Residency images{releases};
   const ImageTextureSize oversized{.width = Residency::maximum_side + 1, .height = 1};
+
   images.beginFrame(0);
   for (std::uint32_t index = 1; index <= Residency::capacity; ++index) {
     const auto admission = images.request({.identity = identity(index), .size = oversized, .retained_bytes = Residency::byte_capacity, .now_ns = 0});
+
     require(admission.handle == index && !admission.upload, "unsupported dimensions must occupy a stable failed row without attempting an upload");
   }
 
@@ -164,6 +187,7 @@ void unsupportedTexturesConsumeRowsWithoutPixelCharges() {
   images.sweep([](auto) noexcept {
     return false;
   });
+
   require(images.size() == 0 && releases.count == Residency::capacity, "sweeping a full table must visit rows moved into removed slots");
 }
 
@@ -171,10 +195,13 @@ void catalogLifetimesAndClockExtremesStayDistinct() {
   Releases releases;
   Residency images{releases};
   constexpr auto latest_clock = std::numeric_limits<std::uint64_t>::max();
+
   images.beginFrame(latest_clock - 1);
   const auto first = ready(images, identity(1));
+
   require(!images.complete(first, true, latest_clock - 1), "an already-ready row cannot accept another completion");
   auto other_catalog = identity(1);
+
   other_catalog.catalog.value = 2;
   require(images.newestReady(other_catalog) == 0, "the same image key in another catalog lifetime cannot share pixels");
   require(!images.request({.identity = {.catalog = {.value = 0}, .image_id = 1, .generation = 1}, .size = small, .retained_bytes = 0, .now_ns = 0}).upload, "an exhausted lifetime identity cannot enter the reusable table");
@@ -184,11 +211,14 @@ void catalogLifetimesAndClockExtremesStayDistinct() {
 void contextCleanupAbandonsUploadsAndReleasesEveryHandle() {
   Releases releases;
   Residency images{releases};
+
   images.beginFrame(0);
   const auto first = ready(images, identity(1));
   const auto pending = images.request({.identity = identity(2), .size = small});
+
   require(pending.upload, "cleanup must include an upload whose pixels may still be in use by the backend");
   std::array<bool, Residency::capacity> retained{};
+
   retained[first - 1] = true;
   images.sweep(std::span{retained});
   require(images.state(first)->stage == ImageTextureStage::ready, "indexed retention must preserve the requested stable row");
@@ -200,8 +230,10 @@ void contextCleanupAbandonsUploadsAndReleasesEveryHandle() {
 void keepingVisiblePixelsWarmDoesNotProtectDeletedPlacements() {
   Releases releases;
   Residency images{releases};
+
   images.beginFrame(0);
   const auto handle = ready(images, identity(1));
+
   images.markNeeded(handle);
   images.keepWarm({.handle = handle, .now_ns = Residency::idle_lifetime_ns});
   images.beginFrame(Residency::idle_lifetime_ns);
@@ -209,6 +241,7 @@ void keepingVisiblePixelsWarmDoesNotProtectDeletedPlacements() {
   images.sweep([](auto) noexcept {
     return false;
   });
+
   require(images.spares() == 1, "refreshing the idle clock must not claim that a deleted placement drew in the new frame");
   images.beginFrame(Residency::idle_lifetime_ns + Residency::spare_lifetime_ns);
   require(images.size() == 0 && releases.count == 1, "the retired texture must still expire at its spare deadline");

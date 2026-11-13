@@ -55,6 +55,7 @@ void mapsErrors() {
 void walksWords() {
   std::array<const char *, 3> words{"--socket", "path", "--json"};
   Cursor cursor{{const_cast<char *const *>(words.data()), words.size()}};
+
   check(cursor.next() == "--socket");
   check(cursor.take("MissingSocketPath") == "path");
   check(cursor.rest().size() == 1);

@@ -20,9 +20,11 @@ public:
 
   bool reserve(std::size_t &pane_used, std::size_t pane_limit, std::size_t bytes) noexcept {
     const std::lock_guard lock{mutex_};
+
     if (pane_used > pane_limit || bytes > pane_limit - pane_used || bytes > limit_ - used_) {
       return false;
     }
+
     pane_used += bytes;
     used_ += bytes;
     return true;
@@ -30,17 +32,20 @@ public:
 
   void release(std::size_t &pane_used, std::size_t bytes) noexcept {
     const std::lock_guard lock{mutex_};
+
     pane_used -= bytes;
     used_ -= bytes;
   }
 
   std::size_t used() const noexcept {
     const std::lock_guard lock{mutex_};
+
     return used_;
   }
 
   std::size_t usedBy(const std::size_t &pane_used) const noexcept {
     const std::lock_guard lock{mutex_};
+
     return pane_used;
   }
 
@@ -73,6 +78,7 @@ public:
     if (pointer == nullptr) {
       release(size);
     }
+
     return pointer;
   }
 
@@ -81,6 +87,7 @@ public:
       auto mapping = mappings_.take(pointer);
       if (mapping) {
         const auto bytes = mapping.bytes().size();
+
         mapping = {};
         release(bytes);
       }

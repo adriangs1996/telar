@@ -15,8 +15,10 @@ public:
 
   inline static ShellToken generate() noexcept {
     std::array<unsigned char, length / 2> random;
+
     randomBytes(random.data(), random.size());
     ShellToken token;
+
     static_cast<void>(encodeLowerHex(random, token.text_));
     return token;
   }
@@ -26,7 +28,9 @@ public:
     if (text.size() != length || !std::ranges::all_of(text, [](char digit) { return (digit >= '0' && digit <= '9') || (digit >= 'a' && digit <= 'f'); })) {
       return std::nullopt;
     }
+
     ShellToken token;
+
     std::ranges::copy(text, token.text_.begin());
     return token;
   }

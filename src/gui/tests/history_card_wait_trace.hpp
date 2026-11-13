@@ -48,6 +48,7 @@ public:
       ++frames_;
       record(Phase::animation);
     });
+
     connections_[1] = connect(&window_, &QQuickWindow::afterSynchronizing, this, [samples = samples_] {
       samples->record({.phase = Phase::synchronized, .timestamp = platform::AwakeClock::nowNanoseconds()});
     },
@@ -76,6 +77,7 @@ public:
     }
 
     const auto rows = visualItems(*window_.contentItem(), QStringLiteral("historyResult"));
+
     qInfo() << "History card wait diagnostic: frames" << frames_ << "active" << window_.isActive() << "exposed" << window_.isExposed() << "rows" << rows.size() << "clock active" << (!timer_.isNull() && timer_->isActive()) << "remaining ms" << (timer_.isNull() ? 0 : timer_->remainingTime());
     for (auto *row : rows) {
       for (const auto *card : visualItems(*row, QStringLiteral("historyRow"))) {
@@ -86,8 +88,10 @@ public:
     const std::scoped_lock lock{samples_->mutex};
     const auto count = std::min(samples_->count, samples_->values.size());
     const auto begin = samples_->count - count;
+
     for (std::size_t index = begin; index < samples_->count; ++index) {
       const auto &sample = samples_->values[index % samples_->values.size()];
+
       qInfo() << "History frame trace: phase" << static_cast<int>(sample.phase) << "elapsed ns" << sample.timestamp - samples_->start << "open" << sample.open << "leaving" << sample.leaving << "timer ms" << sample.timer_ms;
     }
   }
@@ -131,6 +135,7 @@ private:
 
     void record(Sample sample) {
       const std::scoped_lock lock{mutex};
+
       values[count++ % values.size()] = sample;
     }
 

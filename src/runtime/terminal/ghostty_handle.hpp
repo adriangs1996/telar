@@ -11,6 +11,7 @@ namespace telar::runtime {
 template <typename Value>
 Value ghosttySized() noexcept {
   Value value{};
+
   value.size = sizeof(Value);
   return value;
 }

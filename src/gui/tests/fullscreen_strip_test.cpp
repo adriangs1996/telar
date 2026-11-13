@@ -97,6 +97,7 @@ QVariantMap focusedRecord() {
 QVariantList entries(int focused) {
   QVariantList result;
   constexpr int pane_count = 4;
+
   for (int index = 0; index < pane_count; ++index) {
     result.append(QVariantMap{
         {QStringLiteral("key"), QString::number(index + 1)},
@@ -138,12 +139,14 @@ class FullscreenStripTest final : public QObject {
     GraphicsBudget budget;
     constexpr std::uint64_t pane_id = 7;
     Pane pane{memory, pane_id, budget};
+
     pane.location.tab_id = 1;
     pane.generation = 2;
     pane.attachment_generation = 3;
     pane.foreground = "claude";
     std::array<Agent<SystemAllocator>, 1> agents{{Agent<SystemAllocator>{memory}}};
     auto &agent = agents.front();
+
     agent.location = pane.location;
     agent.pane_id = pane.id;
     agent.pane_generation = pane.generation;
@@ -151,6 +154,7 @@ class FullscreenStripTest final : public QObject {
     const auto source = std::span<const Agent<SystemAllocator>>{agents};
     const FullscreenPaneEntry entry{.pane_id = pane.id, .index = 4};
     const auto record = fullscreenPaneRecord(&pane, source, entry);
+
     QCOMPARE(record.value(QStringLiteral("index")).toString(), QStringLiteral("4"));
     QCOMPARE(record.value(QStringLiteral("program")).toString(), QStringLiteral("claude"));
     QCOMPARE(record.value(QStringLiteral("attentionColor")).toString(), QStringLiteral("yellow"));
@@ -160,6 +164,7 @@ class FullscreenStripTest final : public QObject {
     agent.pane_generation = pane.generation;
     QVERIFY(fullscreenPaneRecord(&pane, source, {.pane_id = pane.id, .index = 4, .focused = true}).value(QStringLiteral("attentionColor")).toString().isEmpty());
     const auto missing = fullscreenPaneRecord<SystemAllocator>(nullptr, source, entry);
+
     QCOMPARE(missing.value(QStringLiteral("program")).toString(), QStringLiteral("shell"));
     QCOMPARE(missing.value(QStringLiteral("key")).toString(), QString::number(pane.id));
   }
@@ -167,6 +172,7 @@ class FullscreenStripTest final : public QObject {
   Q_SLOT static void independentStripKeepsFocusAndRoutesOnlyHiddenEntries() {
     QQmlEngine engine;
     QQuickWindow window;
+
     window.resize(expanded_width, strip_height);
     const ChromeMetrics chrome;
     const QVariantMap typography{{QStringLiteral("body"), chrome.body}, {QStringLiteral("small"), chrome.small}};
@@ -177,22 +183,27 @@ class FullscreenStripTest final : public QObject {
                                                                             {QStringLiteral("colors"), themeColors(Configuration{})},
                                                                             {QStringLiteral("typography"), typography},
                                                                         });
+
     item->setParentItem(window.contentItem());
     item->setSize({expanded_width, strip_height});
     const auto *layout = qobject_cast<FullscreenStripLayout *>(item.get());
+
     QVERIFY(layout != nullptr);
     const QSignalSpy selected{item.get(), SIGNAL(selected(QString))};
     const QSignalSpy leave{item.get(), SIGNAL(leaveFullscreen())};
+
     QVERIFY(selected.isValid() && leave.isValid());
     window.show();
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed() && layout->items().size() == 4 && layout->named(), wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(layout->chipBounds().width() > 0 && layout->progressBounds().width() > 0, wait_ms);
     const auto *hidden = entryFor(*item, QStringLiteral("1"));
+
     QVERIFY(hidden != nullptr);
     QTest::mouseClick(&window, Qt::LeftButton, Qt::NoModifier, hidden->mapToScene({hidden->width() / 2, hidden->height() / 2}).toPoint());
     QCOMPARE(selected.size(), 1);
     QCOMPARE(selected.front().front().toString(), QStringLiteral("1"));
     const auto *focused = entryFor(*item, QStringLiteral("3"));
+
     QVERIFY(focused != nullptr);
     QTest::mouseClick(&window, Qt::LeftButton, Qt::NoModifier, focused->mapToScene({focused->width() / 2, focused->height() / 2}).toPoint());
     QCOMPARE(selected.size(), 1);

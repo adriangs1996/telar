@@ -57,6 +57,7 @@ LigatureCoverage::LigatureCoverage(FT_Face face, hb_font_t *font) {
   constexpr auto substitutions = HB_TAG('G', 'S', 'U', 'B');
   auto *layout = hb_font_get_face(font);
   const auto lookups = createSet();
+
   hb_ot_layout_collect_lookups(layout, substitutions, nullptr, nullptr, features.data(), lookups.get());
   if (hb_set_is_empty(lookups.get()) != 0) {
     return;
@@ -65,6 +66,7 @@ LigatureCoverage::LigatureCoverage(FT_Face face, hb_font_t *font) {
   const auto input_glyphs = createSet();
   const auto context_glyphs = createSet();
   hb_codepoint_t lookup = HB_SET_VALUE_INVALID;
+
   while (hb_set_next(lookups.get(), &lookup) != 0) {
     hb_ot_layout_lookup_collect_glyphs(layout, substitutions, lookup, context_glyphs.get(), input_glyphs.get(), context_glyphs.get(), nullptr);
   }
@@ -73,11 +75,14 @@ LigatureCoverage::LigatureCoverage(FT_Face face, hb_font_t *font) {
   if (!mapping) {
     throw std::bad_alloc{};
   }
+
   const auto unicodes = createSet();
+
   hb_face_collect_nominal_glyph_mapping(layout, mapping.get(), unicodes.get());
   input_ = createSet();
   context_ = createSet();
   hb_codepoint_t codepoint = HB_SET_VALUE_INVALID;
+
   while (hb_set_next(unicodes.get(), &codepoint) != 0) {
     const auto glyph = hb_map_get(mapping.get(), codepoint);
     const auto found = lookupRole(input_glyphs.get(), context_glyphs.get(), glyph);
@@ -121,6 +126,7 @@ LigatureRole LigatureCoverage::role(std::string_view text) const noexcept {
   }
 
   auto strongest = LigatureRole::none;
+
   try {
     while (!text.empty()) {
       const auto length = Utf8Scalar::sequenceLength(static_cast<unsigned char>(text.front()));

@@ -53,20 +53,24 @@ void rejects(MachineError expected, Operation operation) {
 
 void discoveryOwnsPathsAndKeepsProtocolIdentity() {
   std::string source = "/home/dev\n/bin/zsh\n/run/telar.sock\n";
+
   for (const auto byte : telar::handshake::schema_id) {
     source.push_back(static_cast<char>(byte));
   }
 
   source.append("\n\n");
   auto discovery = Discovery::parse(source);
+
   source.assign(source.size(), 'x');
   require(discovery.home() == "/home/dev" && discovery.shell() == "/bin/zsh" && discovery.endpoint() == "/run/telar.sock", "discovery must own all paths after its input storage changes");
   require(discovery.compatible() && discovery.schema() == telar::handshake::schema_id, "discovery must preserve the complete current wire schema");
   const auto copy = discovery;
+
   require(copy.endpoint() == discovery.endpoint() && copy.endpoint().data() != discovery.endpoint().data(), "copying discovery must retain independent inline path storage");
   discovery = Discovery::parse("/new-home\n/bin/bash\n/run/other.sock\n12345678");
   require(copy.endpoint() == "/run/telar.sock" && discovery.endpoint() == "/run/other.sock", "replacing the source discovery must preserve the copied endpoint");
   auto changed = telar::handshake::schema_id;
+
   changed.front() = 'x';
   require(!discovery.compatible(changed), "another schema must remain incompatible");
 }
@@ -80,15 +84,18 @@ void discoveryRejectsUnframedUnsafeAndOversizedReplies() {
 
   const auto boundary = "/" + std::string(path_capacity - 1, 'a');
   const auto valid = boundary + "\n/bin/sh\n/run/socket\n12345678";
+
   require(Discovery::parse(valid).home().size() == path_capacity, "an absolute path at the native limit must remain valid");
   rejects(MachineError::discovery_unreadable, [&] {
     static_cast<void>(Discovery::parse("/" + valid));
   });
+
   rejects(MachineError::discovery_unreadable, [&] {
     static_cast<void>(Discovery::parse(valid + std::string(Discovery::max_output_bytes, '\n')));
   });
 
   const auto spaced = Discovery::parse("/home/with space\n/bin/sh\n/run/socket\n12345678");
+
   require(spaced.home() == "/home/with space", "discovered paths must retain ordinary spaces without shell reinterpretation");
 }
 
@@ -109,6 +116,7 @@ void sshFailuresPreservePrecedenceAndRetryPolicy() {
   const auto failed = [](std::optional<std::uint8_t> status, std::string_view text) {
     return MachineConnectionPolicy::failure({.exit_status = status, .standard_error = text});
   };
+
   require(failed(std::nullopt, "telar protocol mismatch") == MachineError::endpoint_unavailable, "a signaled process must remain a transient endpoint failure");
   require(failed(program_missing, "telar protocol mismatch") == MachineError::remote_runtime_incompatible, "a reported runtime mismatch must precede shell exit classification");
   require(failed(program_missing, "Host key verification failed") == MachineError::remote_program_missing, "shell command failure must precede SSH diagnostics");

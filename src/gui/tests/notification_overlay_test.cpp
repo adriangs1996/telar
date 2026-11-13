@@ -100,15 +100,18 @@ private:
     Application client{memory};
     QQuickWindow window;
     QQmlEngine engine;
+
     window.resize(window_width, window_height);
     client.setWindow(window);
     const auto overlay = createChrome(engine, QStringLiteral("NotificationOverlay"), properties(client));
+
     overlay->setParentItem(window.contentItem());
     window.show();
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
     client.publishNotification({.level = NotificationLevel::warning, .title = "Agent needs input", .message = "Agent in pane 1 is waiting for input", .link = {}});
     QTRY_COMPARE_WITH_TIMEOUT(visualItems(*overlay, QStringLiteral("notificationCard")).size(), 1, wait_ms);
     auto *layout = qobject_cast<NotificationLayout *>(overlay.get());
+
     QVERIFY(layout != nullptr);
     QTRY_COMPARE_WITH_TIMEOUT(client.notifications().items().front().phase, NotificationItem::Phase::visible, wait_ms);
     QTRY_COMPARE_WITH_TIMEOUT(layout->cards()->data(layout->cards()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("opacity")).toFloat(), 1.0F, wait_ms);
@@ -116,10 +119,13 @@ private:
     const auto bounds = [&] {
       return card->property("record").toMap().value(QStringLiteral("bounds")).toRectF();
     };
+
     constexpr qreal margin = 16;
+
     QTRY_COMPARE_WITH_TIMEOUT(bounds().right(), layout->host().right() - margin, wait_ms);
     QTRY_COMPARE_WITH_TIMEOUT(bounds().top(), layout->host().top() + margin, wait_ms);
     const auto record = card->property("record").toMap();
+
     QCOMPARE(record.value(QStringLiteral("accent")).toString(), QStringLiteral("yellow"));
     QCOMPARE(record.value(QStringLiteral("shadows")).toList().size(), 3);
     QVERIFY(!window.grabWindow().isNull());
@@ -128,6 +134,7 @@ private:
     QCOMPARE(client.notifications().items().size(), std::size_t{1});
     QCOMPARE(client.notifications().items().front().phase, NotificationItem::Phase::visible);
     const auto close = visualItems(*overlay, QStringLiteral("notificationClose"));
+
     QCOMPARE(close.size(), 1);
     QTest::mouseClick(&window, Qt::LeftButton, Qt::NoModifier, close.front()->mapToScene({close.front()->width() / 2, close.front()->height() / 2}).toPoint());
     QCOMPARE(client.notifications().items().front().phase, NotificationItem::Phase::exiting);
@@ -140,9 +147,11 @@ private:
     Application client{memory};
     QQuickWindow window;
     QQmlEngine engine;
+
     window.resize(window_width, window_height);
     client.setWindow(window);
     const auto overlay = createChrome(engine, QStringLiteral("NotificationOverlay"), properties(client));
+
     overlay->setParentItem(window.contentItem());
     window.show();
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
@@ -150,14 +159,17 @@ private:
     client.publishNotification({.title = "Middle", .message = "second", .link = {}});
     client.publishNotification({.title = "Newest", .message = "first\nsecond\nthird\nfourth", .link = "https://example.com/path"});
     auto *layout = qobject_cast<NotificationLayout *>(overlay.get());
+
     QVERIFY(layout != nullptr);
     QTRY_COMPARE_WITH_TIMEOUT(layout->cards()->rowCount(), 2, wait_ms);
     const auto older = layout->cards()->data(layout->cards()->index(0, 0), ListModel::record_role).toMap();
     const auto newest = layout->cards()->data(layout->cards()->index(1, 0), ListModel::record_role).toMap();
+
     QCOMPARE(older.value(QStringLiteral("title")).toString(), QStringLiteral("Middle"));
     QCOMPARE(newest.value(QStringLiteral("title")).toString(), QStringLiteral("Newest"));
     QCOMPARE(newest.value(QStringLiteral("action")).toString(), QStringLiteral("Open example.com ↗"));
     const auto lines = newest.value(QStringLiteral("body")).toList();
+
     QCOMPARE(lines.size(), 3);
     QCOMPARE(lines.back().toMap().value(QStringLiteral("text")).toString(), QStringLiteral("third…"));
     QVERIFY(newest.value(QStringLiteral("accessible")).toString().contains(QStringLiteral("opens example.com")));
@@ -168,13 +180,16 @@ private:
     Application client{memory};
     QQuickWindow window;
     QQmlEngine engine;
+
     window.resize(window_width, window_height);
     client.setWindow(window);
     const auto overlay = createChrome(engine, QStringLiteral("NotificationOverlay"), properties(client));
+
     overlay->setParentItem(window.contentItem());
     window.show();
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
     const auto *timer = window.findChild<QTimer *>(QStringLiteral("agentStatusAnimation"));
+
     QVERIFY(timer != nullptr);
     QTRY_VERIFY_WITH_TIMEOUT(!timer->isActive(), wait_ms);
     QTest::qWait(idle_observation_ms);
@@ -186,9 +201,11 @@ private:
     Application client{memory};
     QQuickWindow window;
     QQmlEngine engine;
+
     window.resize(window_width, window_height);
     client.setWindow(window);
     const auto overlay = createChrome(engine, QStringLiteral("NotificationOverlay"), properties(client));
+
     overlay->setParentItem(window.contentItem());
     window.show();
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
@@ -204,6 +221,7 @@ private:
     const auto *underline = visualItems(*overlay, QStringLiteral("notificationUnderline")).front();
     const auto *body_focus = visualItems(*overlay, QStringLiteral("notificationBodyFocus")).front();
     const auto *close_focus = visualItems(*overlay, QStringLiteral("notificationCloseFocus")).front();
+
     QTest::mouseMove(&window, body_point);
     QTRY_VERIFY_WITH_TIMEOUT(underline->isVisible(), wait_ms);
     const auto density = window.effectiveDevicePixelRatio();
@@ -211,6 +229,7 @@ private:
     const auto column = static_cast<int>(std::floor(underline_center.x() * density));
     const auto row = static_cast<int>(std::floor(underline_center.y() * density));
     const auto accent = underline->property("color").value<QColor>().rgba();
+
     QTRY_COMPARE_WITH_TIMEOUT(window.grabWindow().pixelColor(column, row).rgba(), accent, wait_ms);
     QVERIFY(!body_focus->isVisible() && !close_focus->isVisible());
     QTest::mouseMove(&window, close_point);
@@ -234,10 +253,12 @@ private:
     Application client{memory};
     QQuickWindow window;
     QQmlEngine engine;
+
     window.resize(window_width, window_height);
     client.setWindow(window);
     client.execute(Application::Action::toggle_sidebar);
     const auto overlay = createChrome(engine, QStringLiteral("NotificationOverlay"), properties(client));
+
     overlay->setParentItem(window.contentItem());
     window.show();
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
@@ -245,12 +266,14 @@ private:
     QTRY_VERIFY_WITH_TIMEOUT(window.isActive(), wait_ms);
     constexpr std::array keys{Qt::Key_Return, Qt::Key_Enter, Qt::Key_Space};
     const std::array controls{QStringLiteral("notificationBody"), QStringLiteral("notificationClose")};
+
     for (const auto &control : controls) {
       for (const auto key : keys) {
         client.publishNotification({.title = "Keyboard notice", .message = "Ready", .link = {}, .duration_ns = fixture_notification_duration_ns});
         QTRY_COMPARE_WITH_TIMEOUT(client.notifications().items().front().phase, NotificationItem::Phase::visible, wait_ms);
         QTRY_COMPARE_WITH_TIMEOUT(visualItems(*overlay, control).size(), 1, wait_ms);
         auto *button = visualItems(*overlay, control).front();
+
         button->forceActiveFocus(Qt::TabFocusReason);
         QTest::keyPress(&window, key);
         QCOMPARE(client.notifications().items().front().phase, NotificationItem::Phase::exiting);
@@ -262,9 +285,11 @@ private:
 
   Q_SLOT static void configuredAndCallbackActionsPublishWithoutStealingFocus() {
     const QTemporaryDir directory;
+
     QVERIFY(directory.isValid());
     const auto path = directory.filePath(QStringLiteral("config.lua"));
     QFile file{path};
+
     QVERIFY(file.open(QIODevice::WriteOnly));
     const QByteArray source{R"(
       return {api_version=2,client={keybindings={
@@ -274,6 +299,7 @@ private:
         end)
       }}}
     )"};
+
     QCOMPARE(file.write(source), source.size());
     file.close();
 
@@ -281,11 +307,13 @@ private:
     Application client{memory};
     QQuickWindow window;
     QQmlEngine engine;
+
     window.resize(window_width, window_height);
     client.setWindow(window);
     client.loadConfiguration(path, {}, {});
     QCOMPARE(client.error(), QString{});
     const auto overlay = createChrome(engine, QStringLiteral("NotificationOverlay"), properties(client));
+
     overlay->setParentItem(window.contentItem());
     window.show();
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);

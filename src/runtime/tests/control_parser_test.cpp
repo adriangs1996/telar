@@ -25,6 +25,7 @@ struct Consumer {
 
   void ordinary(std::span<const std::uint8_t> input) {
     const std::string_view value{reinterpret_cast<const char *>(input.data()), input.size()};
+
     if (!events.empty() && events.back().starts_with("text:")) {
       events.back().append(value);
     } else {
@@ -61,9 +62,11 @@ struct Consumer {
 
 void partitions(std::string_view input, const std::vector<std::string> &expected) {
   SystemAllocator memory;
+
   for (std::size_t split = 0; split <= input.size(); ++split) {
     Parser parser{memory};
     Consumer consumer;
+
     require(parser.feed(bytes(input.substr(0, split)), consumer) == split);
     require(parser.feed(bytes(input.substr(split)), consumer) == input.size() - split);
     require(consumer.events == expected);
@@ -71,25 +74,30 @@ void partitions(std::string_view input, const std::vector<std::string> &expected
 
   Parser parser{memory};
   Consumer consumer;
+
   for (const auto &byte : input) {
     require(parser.feed(bytes({&byte, 1}), consumer) == 1);
   }
+
   require(consumer.events == expected);
 }
 
 void oversizedRecovery() {
   SystemAllocator upstream;
   BudgetAllocator memory{upstream, 8 * 1024 * 1024};
+
   {
     Parser parser{memory};
     Consumer consumer;
     std::string request{"\x1bP+q"};
+
     request.append(Parser<decltype(memory)>::dcs_limit, 'A');
     require(parser.feed(bytes(request), consumer) == request.size());
     require(parser.overLimit() == 1 && consumer.events.empty());
     require(parser.feed(bytes("\x1b[6n"), consumer) == 4);
     require(consumer.events == std::vector<std::string>{"1:6n:0"});
   }
+
   require(memory.liveBytes() == 0);
 }
 
@@ -100,13 +108,16 @@ void parameterFallback() {
     std::string_view modifiers;
     bool colon;
   };
+
   constexpr Case cases[]{
     {"?1234;5n", 2, "?", false},
     {"?1234:5n", 2, "?", true},
     {"?1234\x7f$n", 1, "?$", false},
   };
+
   for (const auto &item : cases) {
     const auto parsed = Parameters::parse(item.body);
+
     require(parsed.has_value());
     require(parsed->count == item.count && parsed->modifiers() == item.modifiers);
     require(parsed->colon == item.colon && parsed->final == 'n');
@@ -122,8 +133,10 @@ void backpressure() {
   SystemAllocator memory;
   Parser parser{memory};
   Consumer consumer;
+
   consumer.accept = false;
   const std::string query = "\x1b[6nremaining";
+
   require(parser.feed(bytes(query), consumer) == 4);
   require(parser.blocked());
   require(parser.feed(bytes("unconsumed"), consumer) == 0);
@@ -148,10 +161,12 @@ void csiBurstBackpressure() {
       return Consumer::complete(sequence);
     }
   };
+
   SystemAllocator memory;
   Parser parser{memory};
   PausingConsumer consumer;
   std::string input = "\x1b[5n\x1b[6n\x1b[?6nremaining";
+
   require(parser.feed(bytes(input), consumer) == 13);
   require(parser.blocked());
   require(consumer.events == std::vector<std::string>{"1:5n:0", "1:6n:0"});
@@ -170,14 +185,17 @@ void csiBurstBackpressure() {
   Parser retained{denied};
   PausingConsumer blocked;
   std::string long_query = "\x1b[5n\x1b[6n\x1b[";
+
   long_query.append(254, '0');
   long_query.append("5n");
   bool failed = false;
+
   try {
     retained.feed(bytes(long_query), blocked);
   } catch (const std::bad_alloc &) {
     failed = true;
   }
+
   require(failed && denied.failures() == 1);
   require(blocked.events == std::vector<std::string>{"1:5n:0", "1:6n:0"});
   retained.discard();
@@ -197,20 +215,26 @@ void stringHeaderClassificationOnce() {
       return false;
     }
   };
+
   SystemAllocator memory;
   Parser parser{memory};
   HeaderConsumer consumer;
+
   for (const auto *prefix : {"\x1b_Ga=q,i=9,s=1,v=1,X=", "\x1b]5522;type=read;", "\x1bP+q"}) {
     const auto request = std::string{prefix} + std::string(1024, 'x') + ';' + std::string(4096, ';') + "\x1b\\";
     const auto before = consumer.classifications;
+
     for (const auto &byte : request) {
       require(parser.feed(bytes({&byte, 1}), consumer) == 1);
     }
+
     require(consumer.classifications == before + 1);
     require(parser.ground());
   }
+
   parser.feed(bytes("\x1b_Ga=q;"), consumer);
   const auto before = consumer.classifications;
+
   parser.discard();
   parser.feed(bytes("\x1b_Ga=q;;\x1b\\"), consumer);
   require(consumer.classifications == before + 1);
@@ -219,36 +243,46 @@ void stringHeaderClassificationOnce() {
 
 void apcOwnedRuns() {
   SystemAllocator memory;
+
   for (unsigned byte = 0; byte <= UINT8_MAX; ++byte) {
     std::string input{"\x1b_Ga=q,i=9;"};
+
     input.append(260, 'A');
     input.push_back(static_cast<char>(byte));
     input.append(32, 'B');
     input.append("\x1b\\\x1b[5n");
     Parser scalar{memory};
     Consumer expected;
+
     for (const auto &character : input) {
       require(scalar.feed(bytes({&character, 1}), expected) == 1);
     }
+
     partitions(input, expected.events);
   }
 
   for (const auto length : {255u, 256u, 257u, 511u, 512u, 513u}) {
     std::string input{"\x1b_G"};
+
     input.append(length - input.size(), 'A');
     input.append("\x1b\\");
     const auto body = input.substr(2, length - 2);
+
     partitions(input, {"4:" + body + ":1", "0:\\:0"});
   }
 
   Parser parser{memory};
   Consumer consumer;
+
   consumer.accept = false;
   std::string input{"\x1b_Ga=q;"};
+
   input.append(4096, 'A');
   const auto expected = "4:" + input.substr(2) + ":1";
+
   input.append("\x1b\\unconsumed");
   const auto consumed = parser.feed(bytes(input), consumer);
+
   require(consumed == input.size() - 11 && parser.blocked());
   input.assign(input.size(), 'z');
   consumer.accept = true;
@@ -268,10 +302,12 @@ struct StreamingConsumer : Consumer {
 
 void apcLateStreaming() {
   SystemAllocator memory;
+
   for (const auto length : {254u, 255u, 256u, 257u, 512u}) {
     Parser parser{memory};
     StreamingConsumer consumer;
     std::string input{"\x1b_G"};
+
     input.append(length - input.size(), 'A');
     input.append(";payload;still-streaming\x1b\\");
     require(parser.feed(bytes(input), consumer) == input.size());
@@ -294,6 +330,7 @@ struct SizeConsumer {
       require(sequence.body().front() == 'G');
       require(sequence.body().find_first_not_of('A', 1) == std::string_view::npos);
     }
+
     return true;
   }
 };
@@ -303,30 +340,36 @@ void apcLimitAndAllocation() {
   BudgetAllocator memory{upstream, 2 * Parser<SystemAllocator>::apc_limit};
   constexpr auto limit = Parser<SystemAllocator>::apc_limit;
   std::string input{"\x1b_G"};
+
   input.append(limit - input.size(), 'A');
   for (const auto &extra : {std::string{}, std::string{"\x98\xa0\xff", 3}, std::string{"A"}}) {
     Parser parser{memory};
     SizeConsumer consumer;
+
     require(parser.feed(bytes(input), consumer) == input.size());
     require(parser.overLimit() == 0);
     require(parser.feed(bytes(extra), consumer) == extra.size());
     require(parser.feed(bytes("\x1b\\"), consumer) == 2);
     const bool oversized = extra == "A";
+
     require(parser.overLimit() == (oversized ? 1u : 0u));
     require(consumer.completions == (oversized ? 0u : 1u));
     require(oversized || consumer.body_size == limit - 2);
   }
+
   require(memory.liveBytes() == 0);
 
   BudgetAllocator denied{upstream, 0};
   Parser parser{denied};
   SizeConsumer consumer;
   bool failed = false;
+
   try {
     parser.feed(bytes(input).first(1024), consumer);
   } catch (const std::bad_alloc &) {
     failed = true;
   }
+
   require(failed && denied.failures() == 1);
   parser.discard();
   require(denied.liveBytes() == 0);
@@ -337,25 +380,31 @@ void borrowedApcMemory() {
   SystemAllocator upstream;
   BudgetAllocator memory{upstream, 0};
   std::string input{"\x1b_Ga=q;"};
+
   input.append(4096, 'A');
   input.append("\x1b\\");
   {
     Parser parser{memory};
     Consumer consumer;
+
     require(parser.feed(bytes(input), consumer) == input.size());
     require(consumer.events.size() == 2 && parser.ground());
     require(memory.allocations() == 0 && memory.failures() == 0);
   }
+
   {
     Parser parser{memory};
     Consumer consumer;
+
     consumer.accept = false;
     bool failed = false;
+
     try {
       parser.feed(bytes(input), consumer);
     } catch (const std::bad_alloc &) {
       failed = true;
     }
+
     require(failed && memory.failures() == 1);
     parser.discard();
     require(memory.liveBytes() == 0 && parser.ground());
@@ -364,11 +413,13 @@ void borrowedApcMemory() {
   for (const bool oversized : {false, true}) {
     constexpr auto limit = Parser<SystemAllocator>::apc_limit;
     std::string full{"\x1b_Ga=q;"};
+
     full.append(limit - full.size() + oversized, 'A');
     full.append("\x1b\\");
     BudgetAllocator bounded{upstream, limit * 2};
     Parser parser{bounded};
     Consumer consumer;
+
     // Consumer's event strings use the system heap; the parser's budget is
     // independent, allowing the zero-allocation borrowing path to be checked.
     require(parser.feed(bytes(full), consumer) == full.size());
@@ -386,18 +437,22 @@ void boundedFuzz() {
   SystemAllocator system;
   BudgetAllocator memory{system, 8 * 1024 * 1024};
   std::mt19937 random{0x435349};
+
   for (unsigned run = 0; run < 2000; ++run) {
     Parser parser{memory};
     Consumer consumer;
     std::string input;
+
     input.resize(random() % 2048);
     for (auto &byte : input) {
       byte = static_cast<char>(random());
     }
 
     std::size_t offset = 0;
+
     while (offset < input.size()) {
       const auto count = std::min<std::size_t>(1 + random() % 31, input.size() - offset);
+
       require(parser.feed(bytes(input).subspan(offset, count), consumer) == count);
       offset += count;
     }
@@ -406,6 +461,7 @@ void boundedFuzz() {
     require(parser.ground());
     require(consumer.events.back() == "1:6n:0");
   }
+
   require(memory.liveBytes() == 0);
 }
 }
@@ -413,6 +469,7 @@ void boundedFuzz() {
 int main() {
   for (const auto control : {std::uint8_t{0x98}, std::uint8_t{0x9e}, std::uint8_t{0x9f}}) {
     const auto input = std::string{"\x1b_Ga=q,i=9;"} + static_cast<char>(control) + "AAAA\x1b\\";
+
     partitions(input, {"4:Ga=q,i=9;AAAA:1", "0:\\:0"});
   }
 

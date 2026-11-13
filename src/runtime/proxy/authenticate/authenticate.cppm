@@ -53,6 +53,7 @@ public:
 
   inline static ProxySecret generate() noexcept {
     ProxySecret secret;
+
     randomBytes(secret.bytes_.data(), secret.bytes_.size());
     return secret;
   }
@@ -63,14 +64,17 @@ public:
     }
 
     ProxySecret secret;
+
     for (std::size_t index = 0; index < byte_count; ++index) {
       const auto high = digit(text[index * 2]);
       const auto low = digit(text[index * 2 + 1]);
       if (!high || !low) {
         return std::nullopt;
       }
+
       secret.bytes_[index] = static_cast<std::uint8_t>((*high << 4) | *low);
     }
+
     return secret;
   }
 
@@ -83,9 +87,11 @@ public:
 
   inline bool matches(const ProxySecret &other) const noexcept {
     volatile unsigned difference = 0;
+
     for (std::size_t index = 0; index < byte_count; ++index) {
       difference = difference | (bytes_[index] ^ other.bytes_[index]);
     }
+
     return difference == 0;
   }
 
@@ -98,6 +104,7 @@ public:
       destination[index * 2] = hexadecimal[bytes_[index] >> 4];
       destination[index * 2 + 1] = hexadecimal[bytes_[index] & 15];
     }
+
     return std::string_view{destination.data(), hexadecimal_bytes};
   }
 
@@ -110,6 +117,7 @@ public:
     }
 
     auto *end = std::copy(prefix.begin(), prefix.end(), destination.data());
+
     formatHexadecimal({end, hexadecimal_bytes});
     end += hexadecimal_bytes;
     end = std::copy(address.begin(), address.end(), end);
@@ -122,6 +130,7 @@ private:
 
   inline static std::optional<unsigned> digit(char character) noexcept {
     const auto position = hexadecimal.find(asciiLower(character));
+
     return position == std::string_view::npos ? std::nullopt : std::optional{static_cast<unsigned>(position)};
   }
 
@@ -140,6 +149,7 @@ class ProxyAuthorization {
 public:
   inline static std::optional<ProxySecret> parse(std::string_view head) noexcept {
     std::optional<ProxySecret> secret;
+
     while (const auto value = next(head)) {
       if (secret) {
         return std::nullopt;
@@ -155,6 +165,7 @@ public:
       if (!length || *length != userinfo_prefix.size() + ProxySecret::hexadecimal_bytes) {
         return std::nullopt;
       }
+
       const std::string_view userinfo{reinterpret_cast<const char *>(decoded.bytes().data()), *length};
       if (!userinfo.starts_with(userinfo_prefix)) {
         return std::nullopt;
@@ -165,6 +176,7 @@ public:
         return std::nullopt;
       }
     }
+
     return secret;
   }
 
@@ -179,6 +191,7 @@ private:
       head = {};
       return std::nullopt;
     }
+
     head.remove_prefix(line_end + 2);
     while (!head.empty()) {
       line_end = head.find("\r\n");
@@ -187,8 +200,10 @@ private:
       if (colon != std::string_view::npos && asciiEqualIgnoreCase(line.substr(0, colon), "proxy-authorization")) {
         return line.substr(colon + 1);
       }
+
       head.remove_prefix(line_end == std::string_view::npos ? head.size() : line_end + 2);
     }
+
     return std::nullopt;
   }
 
@@ -236,6 +251,7 @@ struct ProxyTarget {
     if (port == 0) {
       return std::nullopt;
     }
+
     return ProxyTarget{hostname, port};
   }
 };
@@ -265,6 +281,7 @@ struct ProxyRejection {
     if (reason == Reason::invalid_target) {
       return "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n";
     }
+
     return "HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"telar\"\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
   }
 };
@@ -279,9 +296,11 @@ tbc::view<ProxyDecision, tbc::lt::a> authenticateProxy(const ProxySecret &secret
     if (!target) {
       return ProxyRejection{ProxyRejection::Reason::invalid_target};
     }
+
     if (policy.contains(target->hostname)) {
       return ProxyRejection{ProxyRejection::Reason::invalid_authorization};
     }
+
     return ProxyAdmission{*target, false};
   }
 
@@ -289,6 +308,7 @@ tbc::view<ProxyDecision, tbc::lt::a> authenticateProxy(const ProxySecret &secret
   if (!presented) {
     return ProxyRejection{ProxyRejection::Reason::invalid_authorization};
   }
+
   if (!secret.matches(*presented)) {
     return ProxyRejection{ProxyRejection::Reason::unknown_credential};
   }
@@ -297,6 +317,7 @@ tbc::view<ProxyDecision, tbc::lt::a> authenticateProxy(const ProxySecret &secret
   if (!target) {
     return ProxyRejection{ProxyRejection::Reason::invalid_target};
   }
+
   return ProxyAdmission{*target, true};
 }
 
@@ -318,13 +339,16 @@ public:
     }
 
     std::string_view text{reinterpret_cast<const char *>(bytes.data()), bytes.size()};
+
     while (!text.empty() && (text.back() == '\r' || text.back() == '\n')) {
       text.remove_suffix(1);
     }
+
     const auto secret = ProxySecret::fromHexadecimal(text);
     if (!secret) {
       throw SystemError{"Invalid proxy secret", EINVAL};
     }
+
     return secret;
   }
 
@@ -336,12 +360,14 @@ public:
 
     const auto secret = ProxySecret::generate();
     SensitiveBuffer<ProxySecret::hexadecimal_bytes + 1> line;
+
     secret.formatHexadecimal({reinterpret_cast<char *>(line.bytes().data()), ProxySecret::hexadecimal_bytes});
     line.bytes().back() = '\n';
     const auto failure = writePrivateFile(directory, filename, line.bytes(), PrivateFileMode::create_only);
     if (failure != 0) {
       throw SystemError{"Create proxy secret", failure};
     }
+
     return secret;
   }
 

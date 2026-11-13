@@ -12,6 +12,7 @@ inline tbc::view<const char *, tbc::lt::a> copyGraphicsName(std::span<const std:
   if (decoded.empty() || decoded.size() >= destination.size() || std::find(decoded.begin(), decoded.end(), 0) != decoded.end()) {
     return nullptr;
   }
+
   std::copy(decoded.begin(), decoded.end(), destination.begin());
   destination[decoded.size()] = 0;
   return reinterpret_cast<const char *>(destination.data());

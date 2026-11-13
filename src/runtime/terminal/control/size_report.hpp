@@ -27,6 +27,7 @@ void sizeReport(Reply<Memory> &reply, TerminalSize size) {
   auto *next = std::copy(prefix.begin(), prefix.end(), encoded.data());
   const auto number = [&](std::uint32_t value) {
     const auto result = std::to_chars(next, encoded.data() + encoded.size(), value);
+
     assert(result.ec == std::errc{});
     next = result.ptr;
   };
@@ -50,6 +51,7 @@ void sizeReport(Reply<Memory> &reply, TerminalSize size) {
       number(static_cast<std::uint32_t>(size.cols) * size.cell_width_px);
     }
   }
+
   *next++ = 't';
   reply.append({encoded.data(), static_cast<std::size_t>(next - encoded.data())});
 }

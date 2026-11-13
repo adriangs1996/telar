@@ -44,6 +44,7 @@ public:
     }
 
     std::array<char, PATH_MAX> terminated;
+
     std::memcpy(terminated.data(), path.data(), path.size());
     terminated[path.size()] = '\0';
     FileDescriptor file{::open(terminated.data(), O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)};
@@ -54,11 +55,13 @@ public:
 
     std::array<char, 64 * 1024> window;
     std::size_t held = 0;
+
     for (;;) {
       const auto received = ::read(file.get(), window.data() + held, window.size() - held);
       if (received < 0 && errno == EINTR) {
         continue;
       }
+
       if (received < 0) {
         count_ = 0;
         return;
@@ -66,6 +69,7 @@ public:
 
       const auto filled = held + static_cast<std::size_t>(received);
       const auto consumed = scan({window.data(), filled}, received == 0);
+
       if (received == 0) {
         return;
       }
@@ -88,6 +92,7 @@ private:
 
     item.remove_prefix(offset + key.size());
     const auto end = item.find('"');
+
     return end == std::string_view::npos ? std::string_view{} : item.substr(0, end);
   }
 
@@ -114,6 +119,7 @@ private:
     } else if (kind == "completed" && index != count_) {
       // The last identifier fills the gap; copied first, as one element is read while another is written.
       const auto last = identifiers_[--count_];
+
       identifiers_[index] = last;
     }
   }
@@ -122,6 +128,7 @@ private:
     constexpr std::string_view marker = "\"item\":{\"type\":\"SubAgentActivity\"";
     constexpr std::size_t maximum_item_bytes = 1024;
     std::size_t cursor = 0;
+
     for (;;) {
       const auto start = bytes.find(marker, cursor);
       if (start == std::string_view::npos) {
@@ -144,6 +151,7 @@ private:
     }
 
     const auto tail = std::min(bytes.size(), marker.size() - 1);
+
     return at_end ? bytes.size() : std::max(cursor, bytes.size() - tail);
   }
 
@@ -220,6 +228,7 @@ public:
       value.pane_id = target_.pane_id;
       value.pane_generation = target_.generation;
     }
+
     if constexpr (requires { value.provider = AgentProvider{}; }) {
       value.provider = target_.provider;
     }

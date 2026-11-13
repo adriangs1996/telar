@@ -63,10 +63,12 @@ public:
     if (!control) { throw SystemError{"Open PF log interface control"}; }
     for (unsigned candidate = maximum; candidate != 0; --candidate) {
       ifreq request{};
+
       std::snprintf(request.ifr_name, sizeof(request.ifr_name), "pflog%u", candidate - 1);
       if (::ioctl(control.get(), SIOCIFCREATE, &request) == 0) { return candidate - 1; }
       if (errno != EEXIST) { throw SystemError{"Create private PF log interface"}; }
     }
+
     throw SystemError{"No private PF log interface available", ENOSPC};
   }
 
@@ -75,6 +77,7 @@ public:
     FileDescriptor control{::socket(AF_INET, SOCK_DGRAM, 0)};
     if (!control) { throw SystemError{"Open PF log interface control"}; }
     ifreq request{};
+
     std::snprintf(request.ifr_name, sizeof(request.ifr_name), "pflog%u", index);
     if (::ioctl(control.get(), SIOCIFDESTROY, &request) != 0 && errno != ENXIO && errno != ENODEV) {
       throw SystemError{"Remove private PF log interface"};
@@ -115,8 +118,10 @@ public:
     if (!device) {
       throw SystemError{"Open PF loopback control"};
     }
+
     InterfaceRequest request{};
     constexpr std::string_view loopback = "lo0";
+
     std::copy(loopback.begin(), loopback.end(), request.name);
     request.flags = skip_flag;
     const auto operation = skipped ? Operation::set_flags : Operation::clear_flags;
@@ -133,6 +138,7 @@ public:
 
   inline bool skipped() {
     constexpr std::array<std::string_view, 5> arguments{"-v", "-s", "Interfaces", "-i", "lo0"};
+
     return parse(command_.run(arguments));
   }
 
@@ -153,18 +159,23 @@ public:
         if (first == std::string_view::npos) {
           return false;
         }
+
         line.remove_prefix(first);
         line = line.substr(0, line.find_last_not_of(" \t\r") + 1);
         if (line == "(skip)") {
           return true;
         }
+
         break;
       }
+
       if (newline == std::string_view::npos) {
         break;
       }
+
       output.remove_prefix(newline + 1);
     }
+
     throw std::runtime_error{"Cannot read PF loopback skip status"};
   }
 
@@ -189,21 +200,27 @@ public:
     if (name.empty() || name.size() > 64 || name.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_") != std::string_view::npos) {
       throw std::invalid_argument{"Invalid redirect record name"};
     }
+
     constexpr std::string_view directory = "/var/run/telar-redirect";
+
     createPrivateDirectory(directory);
     directory_.reset(::open(directory.data(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
     String<Memory> lock_name{name_, AllocatorRef<char, Memory>{memory}};
+
     lock_name += ".lock";
     lock_.reset(::openat(directory_.get(), lock_name.c_str(), O_RDWR | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0600));
     if (!directory_ || !lock_) {
       throw SystemError{"Open redirect recovery lock"};
     }
+
     validate(lock_.get());
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{6};
+
     while (::flock(lock_.get(), LOCK_EX | LOCK_NB) != 0) {
       if (mode == RecordLock::owner || errno != EWOULDBLOCK || std::chrono::steady_clock::now() >= deadline) {
         throw SystemError{"Redirect helper already active or recovery update busy"};
       }
+
       std::this_thread::sleep_for(std::chrono::milliseconds{10});
     }
   }
@@ -213,9 +230,11 @@ public:
     if (!file && errno == ENOENT) {
       return std::nullopt;
     }
+
     if (!file) {
       throw SystemError{"Read redirect recovery record"};
     }
+
     validate(file.get());
     return readFileContents(memory_, file.get(), 4096);
   }
@@ -268,11 +287,14 @@ public:
     if (!present && owners_.size() / owner_bytes >= maximum_owners) {
       throw std::runtime_error{"Too many transparent redirect loopback owners"};
     }
+
     const bool skipped = interface.skipped();
+
     restore_skip_ = restore_skip_ || skipped;
     if (!present) {
       owners_.append(marker);
     }
+
     // Persist before the ioctl so a failed change or a crash can be recovered.
     save(store);
     if (skipped) {
@@ -289,11 +311,13 @@ public:
     if (position == String<Memory>::npos) {
       return;
     }
+
     owners_.erase(position, marker.size());
     if (owners_.empty()) {
       if (restore_skip_) {
         interface.setSkipped(true);
       }
+
       store.clear();
     } else {
       save(store);
@@ -312,6 +336,7 @@ private:
 
   inline String<Memory> ownerMarker(std::string_view owner) {
     String<Memory> marker{owner, AllocatorRef<char, Memory>{memory_}};
+
     marker += '\n';
     return marker;
   }
@@ -324,22 +349,27 @@ private:
     if (!saved) {
       return;
     }
+
     auto content = std::string_view{*saved};
     if (!content.starts_with("skip\n") && !content.starts_with("filter\n")) {
       throw std::runtime_error{"Invalid PF loopback recovery record"};
     }
+
     restore_skip_ = content.starts_with("skip\n");
     content.remove_prefix(restore_skip_ ? 5 : 7);
     if (content.empty() || content.size() % owner_bytes != 0 || content.size() > maximum_owners * owner_bytes) {
       throw std::runtime_error{"Invalid PF loopback owner list"};
     }
+
     while (!content.empty()) {
       const auto owner = content.substr(0, owner_bytes - 1);
+
       validateOwner(owner);
       const auto marker = content.substr(0, owner_bytes);
       if (marker.back() != '\n' || std::string_view{owners_}.contains(marker)) {
         throw std::runtime_error{"Invalid or duplicate PF loopback owner"};
       }
+
       owners_.append(marker);
       content.remove_prefix(owner_bytes);
     }
@@ -348,6 +378,7 @@ private:
   template <typename Store>
   inline void save(Store &store) {
     String<Memory> content{restore_skip_ ? "skip\n" : "filter\n", AllocatorRef<char, Memory>{memory_}};
+
     content.append(owners_);
     store.save(content);
   }
@@ -366,12 +397,14 @@ public:
   inline void acquire() {
     RecordFile file{memory_, "loopback", RecordLock::update};
     LoopbackLeases leases{memory_};
+
     leases.acquire(file, interface_, owner_);
   }
 
   inline void release() {
     RecordFile file{memory_, "loopback", RecordLock::update};
     LoopbackLeases leases{memory_};
+
     leases.release(file, interface_, owner_);
   }
 
@@ -425,14 +458,18 @@ public:
       LogInterface::remove(index_);
       throw;
     }
+
     std::array<char, 16> name{};
+
     std::snprintf(name.data(), name.size(), "pflog%u", index_);
     std::array<char, PCAP_ERRBUF_SIZE> error{};
+
     capture_.reset(pcap_create(name.data(), error.data()));
     if (!capture_) { throw std::runtime_error{error.data()}; }
     if (pcap_set_snaplen(capture_.get(), 65600) != 0 || pcap_set_timeout(capture_.get(), 1) != 0 || pcap_set_immediate_mode(capture_.get(), 1) != 0 || pcap_activate(capture_.get()) < 0 || pcap_datalink(capture_.get()) != DLT_PFLOG || pcap_setnonblock(capture_.get(), 1, error.data()) != 0) {
       throw std::runtime_error{"Cannot capture private PF discovery log"};
     }
+
     setCloseOnExec(pcap_fileno(capture_.get()));
     bpf_insn instructions[] = {
       BPF_STMT(BPF_LD | BPF_W | BPF_ABS, offsetof(Header, uid)),
@@ -440,6 +477,7 @@ public:
       BPF_STMT(BPF_RET | BPF_K, 65600),
       BPF_STMT(BPF_RET | BPF_K, 0),
     };
+
     bpf_program filter{.bf_len = std::size(instructions), .bf_insns = instructions};
     if (pcap_setfilter(capture_.get(), &filter) != 0) { throw std::runtime_error{pcap_geterr(capture_.get())}; }
   }
@@ -455,12 +493,14 @@ public:
     if (result == 0) { return {}; }
     if (result < 0) { throw std::runtime_error{pcap_geterr(capture_.get())}; }
     const auto frame = normalize({packet, header->caplen}, uid_, bytes_, &metadata_, direction_);
+
     return std::span{bytes_}.first(frame);
   }
 
   inline static std::size_t normalize(std::span<const Byte> packet, uid_t uid, std::span<Byte> output, Metadata *metadata = nullptr, Direction direction = Direction::outbound) {
     if (output.size() < sizeof(std::uint32_t) || packet.size() < sizeof(Header)) { return 0; }
     Header header;
+
     std::memcpy(&header, packet.data(), sizeof(header));
     const bool incoming = header.direction == static_cast<Byte>(PfDirection::incoming);
     const bool outgoing = header.direction == static_cast<Byte>(PfDirection::outgoing);
@@ -472,10 +512,13 @@ public:
       metadata->incoming = incoming;
       metadata->interface.assign({header.interface.data(), end});
       std::array<char, IFNAMSIZ> name{};
+
       std::copy(header.interface.begin(), end, name.begin());
       metadata->interface_index = ::if_nametoindex(name.data());
     }
+
     const auto family = htonl(static_cast<std::uint32_t>(header.family));
+
     std::memcpy(output.data(), &family, sizeof(family));
     std::copy(packet.begin() + sizeof(Header), packet.end(), output.begin() + sizeof(family));
     return sizeof(family) + packet.size() - sizeof(Header);
@@ -508,10 +551,12 @@ public:
     if (!content) {
       return std::nullopt;
     }
+
     const auto newline = content->find('\n');
     if (newline == String<Memory>::npos || std::string_view{*content}.substr(0, newline) != endpoint_) {
       throw std::runtime_error{"Redirect recovery record belongs to another endpoint"};
     }
+
     auto value = std::string_view{*content}.substr(newline + 1);
     const auto log = value.find('\n');
     if (log != std::string_view::npos) {
@@ -520,28 +565,35 @@ public:
       if (index >= LogInterface::maximum) {
         throw std::runtime_error{"Invalid redirect log recovery record"};
       }
+
       log_index_ = index;
       value = value.substr(0, log);
     }
+
     const auto token = parseExact<std::uint64_t>(value);
     if (!token) {
       throw std::runtime_error{"Invalid redirect recovery token"};
     }
+
     last_token_ = *token;
     return *token;
   }
 
   inline void save(std::uint64_t token) {
     String<Memory> content{endpoint_, AllocatorRef<char, Memory>{memory_}};
+
     content += '\n';
     std::array<char, 32> value{};
     const auto result = std::to_chars(value.data(), value.data() + value.size(), token);
+
     content.append(value.data(), static_cast<std::size_t>(result.ptr - value.data()));
     if (log_index_) {
       content += '\n';
       const auto log = std::to_chars(value.data(), value.data() + value.size(), *log_index_);
+
       content.append(value.data(), static_cast<std::size_t>(log.ptr - value.data()));
     }
+
     file_.save(content);
     last_token_ = token;
   }
@@ -549,6 +601,7 @@ public:
   inline void saveLog(unsigned index) {
     if (!last_token_ || index >= LogInterface::maximum) { throw std::runtime_error{"Redirect session must exist before reserving a log interface"}; }
     const auto previous = log_index_;
+
     log_index_ = index;
     try {
       save(*last_token_);
@@ -564,6 +617,7 @@ public:
       log_index_.reset();
       save(last_token_.value_or(0));
     }
+
     file_.clear();
     log_index_.reset();
     last_token_.reset();

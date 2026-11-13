@@ -89,6 +89,7 @@ public:
 
   inline Result observe(const Request &request) noexcept {
     Result result{.client = request.client, .request = request.request, .words = {}, .truncated = false};
+
     if (request.spec) {
       result.spec = true;
       result.command.assign(request.prefix.view());
@@ -98,21 +99,27 @@ public:
         result.spec_state = CommandSpecState::unavailable;
         result.source.clear();
       }
+
       return result;
     }
+
     try {
       const auto prefix = request.prefix.view();
       const auto add = [&](std::string_view word, std::string_view description = {}) {
         if (word.empty() || !word.starts_with(prefix) || word.size() > 256 || !printable(word)) {
           return;
         }
+
         if (result.words.size() >= maximum_words * 4) {
           result.truncated = true;
           return;
         }
+
         result.words.push_back({std::string{word}, printable(description) ? std::string{description.substr(0, 256)} : std::string{}});
       };
+
       const auto add_word = [&](std::string_view word) { add(word); };
+
       switch (request.provider) {
       case CompletionProvider::command:
         commands(request.path.view(), prefix, add);
@@ -122,6 +129,7 @@ public:
         } else {
           result.truncated = true;
         }
+
         break;
       case CompletionProvider::branch:
         git_.read(request.directory.view());
@@ -134,9 +142,11 @@ public:
       case CompletionProvider::stash: {
         git_.read(request.directory.view());
         const auto count = git_.stashes(maximum_words);
+
         for (std::size_t index = 0; index < count; ++index) {
           add("stash@{" + std::to_string(index) + "}");
         }
+
         break;
       }
       case CompletionProvider::process:
@@ -158,11 +168,14 @@ public:
         composeServices(request.directory.view(), add);
         break;
       }
+
       // Processes keep the newest first; everything else reads best sorted.
       if (request.provider != CompletionProvider::process) {
         std::ranges::sort(result.words);
       }
+
       const auto [first, last] = std::ranges::unique(result.words, {}, &Word::text);
+
       result.words.erase(first, last);
       if (result.words.size() > maximum_words) {
         result.words.resize(maximum_words);
@@ -171,6 +184,7 @@ public:
     } catch (...) {
       result.words.clear();
     }
+
     return result;
   }
 
@@ -184,6 +198,7 @@ private:
     if (!specName(name)) {
       return;
     }
+
     // An alias completes as the command it stands for.
     if (request.names) {
       result.expansion = expand(*request.names, name);
@@ -195,23 +210,28 @@ private:
         }
       }
     }
+
     if (!runs(request, name)) {
       result.expansion.clear();
       return;
     }
+
     auto source = userSpec(name);
     if (source.empty()) {
       const auto shipped = std::ranges::find(shipped::specs, name, &std::pair<std::string_view, std::string_view>::first);
       if (shipped == shipped::specs.end()) {
         return;
       }
+
       source.assign(shipped->second);
     }
+
     result.digest = digest(source);
     if (result.digest == request.known_digest) {
       result.spec_state = CommandSpecState::unchanged;
       return;
     }
+
     result.spec_state = CommandSpecState::available;
     result.source = std::move(source);
   }
@@ -222,6 +242,7 @@ private:
   inline static std::string expand(std::string_view names, std::string_view name) {
     std::string words{name};
     bool expanded = false;
+
     for (int depth = 0; depth < 4; ++depth) {
       const auto first = std::string_view{words}.substr(0, words.find(' '));
       std::string_view value;
@@ -232,11 +253,14 @@ private:
           found = true;
         }
       };
+
       entries(names, find);
       if (!found) {
         break;
       }
+
       std::string decoded;
+
       for (std::size_t index = 0; index < value.size(); ++index) {
         if (value.substr(index).starts_with("%20")) {
           decoded.push_back(' ');
@@ -248,17 +272,21 @@ private:
           decoded.push_back(value[index]);
         }
       }
+
       if (decoded.empty() || decoded.size() > 256 || !printable(decoded) || decoded.front() == ' ') {
         return {};
       }
+
       const auto rest = std::string_view{words}.substr(first.size());
       const bool same = std::string_view{decoded}.substr(0, decoded.find(' ')) == first;
+
       words = decoded + std::string{rest};
       expanded = true;
       if (same) {
         break;
       }
     }
+
     return expanded ? words : std::string{};
   }
 
@@ -272,21 +300,26 @@ private:
   inline static bool runs(const Request &request, std::string_view name) {
     bool found = false;
     const auto exact = [&](std::string_view word, std::string_view = {}) { found |= word == name; };
+
     builtins(request.shell, exact);
     if (request.names) {
       words(*request.names, exact);
     }
+
     // No directory holds a file whose name is longer than NAME_MAX.
     std::array<char, NAME_MAX + 1> file;
     if (found || name.size() >= file.size()) {
       return found;
     }
+
     *std::ranges::copy(name, file.data()).out = '\0';
     forEachPathDirectory(request.path.view(), [&](int directory) {
       struct stat state{};
+
       found = ::fstatat(directory, file.data(), &state, 0) == 0 && S_ISREG(state.st_mode) && ::faccessat(directory, file.data(), X_OK, 0) == 0;
       return !found;
     });
+
     return found;
   }
 
@@ -296,29 +329,36 @@ private:
     if (completions_.empty()) {
       return {};
     }
+
     FileDescriptor folder{::open(completions_.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
     if (!folder) {
       return {};
     }
+
     const auto file = std::string{name} + ".ebnf";
     auto source = readSmall(folder.get(), file.c_str(), CommandSpec::maximum_source);
     if (source.empty()) {
       return {};
     }
+
     const auto key = digest(source);
     auto known = compiled_.find(key);
     if (known == compiled_.end()) {
       bool compiles = true;
+
       try {
         static_cast<void>(ebnf::command_spec::compile(source));
       } catch (...) {
         compiles = false;
       }
+
       if (compiled_.size() >= 256) {
         compiled_.clear();
       }
+
       known = compiled_.emplace(key, compiles).first;
     }
+
     return known->second ? source : std::string{};
   }
 
@@ -326,6 +366,7 @@ private:
   // tools find their files. Empty when there is none.
   inline static std::string nearest(std::string_view directory, std::span<const std::string_view> names) {
     std::string current{directory};
+
     for (int depth = 0; depth < 32 && !current.empty() && current.front() == '/'; ++depth) {
       FileDescriptor folder{::open(current.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
       if (folder) {
@@ -336,12 +377,16 @@ private:
           }
         }
       }
+
       if (current == "/") {
         break;
       }
+
       const auto slash = current.rfind('/');
+
       current.resize(slash == 0 ? 1 : slash);
     }
+
     return {};
   }
 
@@ -353,16 +398,19 @@ private:
     const auto source = nearest(directory, names);
     std::string_view comment;
     bool hidden = false;
+
     lines(source, [&](std::string_view line) {
       if (line.empty() || line.front() == ' ' || line.front() == '\t') {
         comment = {};
         hidden = false;
         return;
       }
+
       if (line.front() == '#') {
         comment = trimText(line.substr(line.find_first_not_of('#')), " \t");
         return;
       }
+
       if (line.front() == '[') {
         hidden |= line.find("private") != std::string_view::npos;
         if (const auto doc = line.find("doc("); doc != std::string_view::npos) {
@@ -372,29 +420,36 @@ private:
             comment = line.substr(open + 1, close - open - 1);
           }
         }
+
         return;
       }
+
       const auto description = std::exchange(comment, std::string_view{});
       const bool private_recipe = std::exchange(hidden, false);
+
       if (line.starts_with("alias ")) {
         const auto rest = trimText(line.substr(6), " \t");
         const auto assign = rest.find(":=");
         if (assign != std::string_view::npos) {
           add(trimText(rest.substr(0, assign), " \t"), "Alias of " + std::string{trimText(rest.substr(assign + 2), " \t")});
         }
+
         return;
       }
+
       for (const auto keyword : {"set ", "import ", "mod ", "export "}) {
         if (line.starts_with(keyword)) {
           return;
         }
       }
+
       auto header = line.front() == '@' ? line.substr(1) : line;
       const auto end = header.find_first_of(" :");
       const auto colon = header.find(':');
       if (end == std::string_view::npos || colon == std::string_view::npos || header.substr(colon).starts_with(":=")) {
         return;
       }
+
       const auto name = header.substr(0, end);
       const bool valid = !name.empty() && (std::isalpha(static_cast<unsigned char>(name.front())) || name.front() == '_') && std::ranges::all_of(name, [](char byte) { return std::isalnum(static_cast<unsigned char>(byte)) || byte == '_' || byte == '-'; });
       if (valid && name.front() != '_' && !private_recipe) {
@@ -411,13 +466,16 @@ private:
     if (source.empty()) {
       return;
     }
+
     const auto package = JsonValue::parse(source);
     const auto scripts = package.field("scripts");
     if (!scripts) {
       return;
     }
+
     String<SystemAllocator> name{AllocatorRef<char, SystemAllocator>{memory_}};
     String<SystemAllocator> command{AllocatorRef<char, SystemAllocator>{memory_}};
+
     scripts->eachMember([&](const JsonValue &key, const JsonValue &value) {
       key.string(name);
       try {
@@ -425,6 +483,7 @@ private:
       } catch (const JsonError &) {
         command.clear();
       }
+
       add(std::string_view{name}, std::string_view{command}.substr(0, 256));
     });
   }
@@ -436,29 +495,36 @@ private:
     const auto source = nearest(directory, names);
     bool services = false;
     std::size_t indent = 0;
+
     lines(source, [&](std::string_view line) {
       const auto first = line.find_first_not_of(' ');
       if (first == std::string_view::npos || line[first] == '#') {
         return;
       }
+
       if (first == 0) {
         services = trimText(line.substr(0, line.find('#')), " \t") == "services:";
         indent = 0;
         return;
       }
+
       if (!services) {
         return;
       }
+
       if (indent == 0) {
         indent = first;
       }
+
       if (first != indent) {
         return;
       }
+
       auto key = trimText(line.substr(first, line.find(':', first) == std::string_view::npos ? std::string_view::npos : line.find(':', first) - first), " \t");
       if (key.size() >= 2 && (key.front() == '"' || key.front() == '\'') && key.back() == key.front()) {
         key = key.substr(1, key.size() - 2);
       }
+
       if (!key.empty() && line.find(':', first) != std::string_view::npos) {
         add(key);
       }
@@ -468,6 +534,7 @@ private:
   // FNV-1a: names a spec's text, so a client asks again only for one that changed.
   inline static std::uint64_t digest(std::string_view text) noexcept {
     const auto value = fnv1a64(text);
+
     return value == 0 ? 1 : value;
   }
 
@@ -487,6 +554,7 @@ private:
         add(name);
       }
     };
+
     switch (shell) {
     case IntegratedShell::zsh:
       each(posix);
@@ -512,8 +580,10 @@ private:
       if (start == std::string_view::npos) {
         return;
       }
+
       names.remove_prefix(start);
       const auto end = names.find(' ');
+
       visit(names.substr(0, end));
       names.remove_prefix(end == std::string_view::npos ? names.size() : end);
     }
@@ -523,6 +593,7 @@ private:
   template <typename Add>
   inline static void words(std::string_view names, Add &add) {
     const auto name = [&](std::string_view entry) { add(entry.substr(0, entry.find('='))); };
+
     entries(names, name);
   }
 
@@ -530,21 +601,26 @@ private:
   template <typename Add>
   inline static void commands(std::string_view path, std::string_view prefix, Add &add) {
     std::size_t scanned = 0;
+
     forEachPathDirectory(path, [&](int directory) {
       DirectoryStream entries{directory};
+
       while (const auto *found = entries.next()) {
         if (++scanned > maximum_entries) {
           return false;
         }
+
         const std::string_view name{found->d_name};
         if (!name.starts_with(prefix) || name.starts_with('.')) {
           continue;
         }
+
         struct stat state{};
         if (::fstatat(directory, found->d_name, &state, 0) == 0 && S_ISREG(state.st_mode) && ::faccessat(directory, found->d_name, X_OK, 0) == 0) {
           add(name);
         }
       }
+
       return scanned < maximum_entries;
     });
   }
@@ -555,13 +631,16 @@ private:
   template <typename Visit>
   inline static void forEachPathDirectory(std::string_view path, Visit &&visit) {
     std::array<char, PATH_MAX> name;
+
     while (!path.empty()) {
       const auto separator = path.find(':');
       const auto entry = path.substr(0, separator);
+
       path.remove_prefix(separator == std::string_view::npos ? path.size() : separator + 1);
       if (entry.empty() || entry.front() != '/' || entry.size() >= name.size()) {
         continue;
       }
+
       *std::ranges::copy(entry, name.data()).out = '\0';
       FileDescriptor directory{::open(name.data(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
       if (directory && !visit(directory.get())) {
@@ -577,15 +656,19 @@ private:
     if (!file || ::fstat(file.get(), &state) != 0 || !S_ISREG(state.st_mode) || static_cast<std::size_t>(state.st_size) > limit) {
       return {};
     }
+
     std::string bytes(static_cast<std::size_t>(state.st_size), '\0');
     std::size_t done = 0;
+
     while (done < bytes.size()) {
       const auto count = ::read(file.get(), bytes.data() + done, bytes.size() - done);
       if (count <= 0) {
         break;
       }
+
       done += static_cast<std::size_t>(count);
     }
+
     bytes.resize(done);
     return bytes;
   }
@@ -598,6 +681,7 @@ private:
       if (line.ends_with('\r')) {
         line.remove_suffix(1);
       }
+
       visit(line);
       text.remove_prefix(end == std::string_view::npos ? text.size() : end + 1);
     }
@@ -609,18 +693,23 @@ private:
     if (home.empty() || home.front() != '/') {
       return;
     }
+
     const std::string directory_name{std::string{home} + "/.ssh"};
     FileDescriptor directory{::open(directory_name.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
     if (!directory) {
       return;
     }
+
     const auto text = readSmall(directory.get(), "config");
+
     lines(text, [&](std::string_view line) {
       line = trimText(line, " \t");
       if (line.size() < 5 || (line[0] | 0x20) != 'h' || (line[1] | 0x20) != 'o' || (line[2] | 0x20) != 's' || (line[3] | 0x20) != 't' || (line[4] != ' ' && line[4] != '\t' && line[4] != '=')) {
         return;
       }
+
       auto names = line.substr(5);
+
       while (!names.empty()) {
         names = trimText(names, " \t");
         const auto end = names.find_first_of(" \t");
@@ -628,6 +717,7 @@ private:
         if (!name.empty() && name.find_first_of("*?!=") == std::string_view::npos) {
           add(name);
         }
+
         names.remove_prefix(end == std::string_view::npos ? names.size() : end);
       }
     });
@@ -639,30 +729,38 @@ private:
     if (directory_path.empty() || directory_path.front() != '/') {
       return;
     }
+
     const std::string directory_name{directory_path};
     FileDescriptor directory{::open(directory_name.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
     if (!directory) {
       return;
     }
+
     std::string text;
+
     for (const auto *name : {"GNUmakefile", "makefile", "Makefile"}) {
       text = readSmall(directory.get(), name);
       if (!text.empty()) {
         break;
       }
     }
+
     lines(text, [&](std::string_view line) {
       if (line.empty() || line.front() == '\t' || line.front() == ' ' || line.front() == '#' || line.front() == '.') {
         return;
       }
+
       const auto colon = line.find(':');
       if (colon == std::string_view::npos || (colon + 1 < line.size() && line[colon + 1] == '=') || line.substr(0, colon).find_first_of("=$%") != std::string_view::npos) {
         return;
       }
+
       auto targets = line.substr(0, colon);
+
       while (!targets.empty()) {
         targets = trimText(targets, " \t");
         const auto end = targets.find_first_of(" \t");
+
         add(targets.substr(0, end));
         targets.remove_prefix(end == std::string_view::npos ? targets.size() : end);
       }
@@ -676,15 +774,19 @@ private:
 #if defined(__APPLE__)
     std::vector<pid_t> pids(4096);
     const auto count = ::proc_listallpids(pids.data(), static_cast<int>(pids.size() * sizeof(pid_t)));
+
     for (int index = 0; index < count && index < static_cast<int>(pids.size()); ++index) {
       proc_bsdshortinfo info{};
       if (pids[index] <= 0 || ::proc_pidinfo(pids[index], PROC_PIDT_SHORTBSDINFO, 0, &info, sizeof(info)) != sizeof(info) || info.pbsi_uid != ::geteuid()) {
         continue;
       }
+
       std::array<char, 2 * MAXCOMLEN + 1> name{};
       const auto length = ::proc_name(pids[index], name.data(), static_cast<std::uint32_t>(name.size()));
+
       found.emplace_back(pids[index], std::string{name.data(), static_cast<std::size_t>(std::max(0, length))});
     }
+
 #else
     FileDescriptor proc{::open("/proc", O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
     if (!proc) {
@@ -741,6 +843,7 @@ public:
     if (std::ranges::count(queue_.waiting(), request.client, &WordRequest::client) >= 4) {
       return;
     }
+
     queue_.request(worker_, request);
   }
 

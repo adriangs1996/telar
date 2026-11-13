@@ -97,8 +97,10 @@ MachineActivityTarget activityTarget(const MachineClient &source, const Order::E
 QString activityIdentity(const MachineActivityTarget &target) {
   const auto &source = target.source;
   const auto prefix = QStringLiteral("machine:") + QString::number(source.machine.slot) + QLatin1Char(':') + QString::number(source.machine.generation) + QLatin1Char(':') + QString::number(source.generation) + QLatin1Char(':') + QString::number(target.runtime_generation);
+
   if (const auto *agent = std::get_if<MachineActivityTarget::Agent>(&target.owner)) {
     QByteArray session;
+
     session.reserve(static_cast<qsizetype>(agent->session.size()));
     for (const auto byte : agent->session) {
       session.append(static_cast<char>(byte));
@@ -164,8 +166,10 @@ QVariantMap activityRecord(const GuiSession &session, const Order::Entry &entry,
   const auto workspace = std::ranges::find_if(workspaces, [&](const auto &candidate) {
     return agent.location.workspace.kind == WorkspaceLocation::Kind::workspace && sameWorkspace(agent.location.workspace, candidate.location);
   });
+
   context.branch = workspace == workspaces.end() ? std::string_view{} : std::string_view{workspace->branch};
   const auto *tab = active_source ? session.activeTab() : nullptr;
+
   context.selected = tab != nullptr && agent.pane_id == tab->focused_pane && sameTab(agent.location, tab->location);
   if (entry.worktree) {
     return taskRecord(agent, session.workspaceList().worktrees()[*entry.worktree], context, entry.card == ActivityCard::task_compact);
@@ -181,7 +185,9 @@ void Application::refreshAgents() {
   const auto machineLabel = [this](const ActivitySourceVersion &version, Machines::Slot slot) {
     return slot == machines_.active() ? std::string_view{} : version.label.view();
   };
+
   std::array<std::optional<ActivitySourceVersion>, Machines::capacity> versions;
+
   for (std::size_t index = 0; index < clients_.size(); ++index) {
     const auto &client = clients_[index];
     const auto &row = machines_.row(static_cast<Machines::Slot>(index));
@@ -199,6 +205,7 @@ void Application::refreshAgents() {
   }
 
   Vector<Order::Source, ApplicationAllocator> sources{AllocatorRef<Order::Source, ApplicationAllocator>{memory_}};
+
   sources.reserve(Machines::capacity);
   for (std::size_t index = 0; index < versions.size(); ++index) {
     if (!versions[index]) {
@@ -208,14 +215,18 @@ void Application::refreshAgents() {
     const auto slot = static_cast<Machines::Slot>(index);
     const auto &session = clientAt(slot).session;
     const auto *tab = session.activeTab();
+
     sources.push_back({.slot = slot, .agents = session.agents(), .workspaces = session.workspaceList(), .focused = tab == nullptr ? std::nullopt : std::optional{tab->focused_pane}});
   }
 
   Order::Plan order;
+
   Order::write(sources, machines_.active(), order);
   QList<QVariantMap> records;
+
   records.reserve(static_cast<qsizetype>(order.count));
   Vector<ActivityRowTarget, ApplicationAllocator> targets{AllocatorRef<ActivityRowTarget, ApplicationAllocator>{memory_}};
+
   targets.reserve(order.count);
   for (const auto &entry : order.view()) {
     const auto slot = sources[entry.source].slot;
@@ -229,6 +240,7 @@ void Application::refreshAgents() {
     const auto identity = activityIdentity(target);
     const AgentRecordContext context{.machine = machineLabel(*version, slot), .branch = {}, .connected = version->connected, .coordinator = entry.coordinator, .starts_project = entry.first_in_project, .depth = entry.depth};
     auto record = activityRecord(source.session, entry, context, slot == machines_.active());
+
     record.insert(QStringLiteral("key"), identity);
     if (element_slots_.active()) {
       record.insert(QStringLiteral("elements"), elementsFor({components::Slot::agent_card, components::Slot::agent_mark, components::Slot::agent_title, components::Slot::agent_project, components::Slot::agent_status}, identity, ElementSlots::agentItem(record)));
@@ -240,6 +252,7 @@ void Application::refreshAgents() {
 
   const auto agent_count = static_cast<int>(records.size());
   Vector<ListedProcess, ApplicationAllocator> processes{AllocatorRef<ListedProcess, ApplicationAllocator>{memory_}};
+
   // Processes are the active machine's; the other machines are summarized by their sidebar row.
   for (std::size_t index = 0; index < sources.size(); ++index) {
     if (sources[index].slot != machines_.active()) {
@@ -247,6 +260,7 @@ void Application::refreshAgents() {
     }
 
     const auto &session = clientAt(sources[index].slot).session;
+
     for (const auto &pane : session.paneList()) {
       const auto held = std::ranges::any_of(session.agents(), [&](const auto &agent) {
         return agent.pane_id == pane.pane_id && agent.pane_generation == pane.pane_generation;
@@ -274,6 +288,7 @@ void Application::refreshAgents() {
     const auto *tab = slot == machines_.active() ? source.session.activeTab() : nullptr;
     const AgentRecordContext context{.machine = machineLabel(version, slot), .selected = tab != nullptr && pane.pane_id == tab->focused_pane && sameTab(pane.location, tab->location), .connected = version.connected};
     auto record = processRecord(pane, workspaceName(source.session, pane), context);
+
     record.insert(QStringLiteral("key"), identity);
     records.append(std::move(record));
     targets.push_back({.identity = identity, .target = target});
@@ -326,6 +341,7 @@ void Application::selectActivity(const QString &identity, bool peek) {
   }
 
   const auto target = row->target;
+
   selectMachine(target.source.machine);
   hoverActivity(identity);
   pending_activity_ = PendingActivity{.target = target, .window = window_generation_, .peek = peek, .pointer_revision = pointer_revision_};

@@ -55,6 +55,7 @@ std::string_view view(const QByteArray &bytes) noexcept {
 
 QVariantMap Application::workspaceFormState() const {
   QStringList entries;
+
   if (workspaceListingCurrent()) {
     for (const auto &name : workspace_form_.completion.entries) {
       entries.append(QString::fromStdString(name));
@@ -88,6 +89,7 @@ void Application::editWorkspaceDirectory(const QString &text) {
     try {
       const auto typed = text.toUtf8();
       const auto expanded = expandWorkspaceDirectory(text).toUtf8();
+
       workspace_form_.wanted = QString::fromStdString(DirectoryCompletion::query({.text = view(typed), .expanded = view(expanded)}));
     } catch (const std::exception &) {
       // An unexpandable path lists nothing; submitting it reports why.
@@ -109,6 +111,7 @@ void Application::moveWorkspaceDirectory(int delta) {
   }
 
   const auto selected = static_cast<long long>(workspace_form_.selection) + delta;
+
   workspace_form_.selection = static_cast<std::size_t>(std::clamp(selected, 0LL, static_cast<long long>(count - 1)));
   emit workspaceFormChanged();
 }
@@ -157,6 +160,7 @@ void Application::listWorkspaceDirectory() {
 
 void Application::landWorkspaceDirectory() {
   auto result = workspace_listing_.result();
+
   if (dialog_ != Dialog::new_workspace) {
     return;
   }
@@ -183,11 +187,13 @@ bool Application::submitWorkspace(const QVariantMap &input) {
   const auto typed = input.value(QStringLiteral("path")).toString();
   const bool local = machines_.active() == Machines::local_slot;
   QString directory;
+
   if (!typed.trimmed().isEmpty()) {
     directory = local ? expandWorkspaceDirectory(typed) : typed;
   }
 
   bool create = false;
+
   if (local && !directory.isEmpty()) {
     const QFileInfo folder{directory};
     if (folder.exists() && !folder.isDir()) {

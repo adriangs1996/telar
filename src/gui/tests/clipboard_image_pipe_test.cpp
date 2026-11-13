@@ -55,6 +55,7 @@ struct Pipe {
 
   void send(std::span<const std::byte> bytes) const {
     const auto written = ::write(writing.get(), bytes.data(), bytes.size());
+
     require(written >= 0 && static_cast<std::size_t>(written) == bytes.size(), "the private fixture must write its complete small payload");
   }
 
@@ -77,14 +78,17 @@ void expectFailure(const Pipe &pipe, ErasureAllocator &memory, ClipboardImagePip
 
 void binaryEofKeepsExactLimitsAndDescriptorOwnership() {
   constexpr std::size_t larger_png_limit = 64;
+
   for (const auto png_limit : std::array{binary.size(), larger_png_limit}) {
     Pipe pipe;
     ErasureAllocator memory;
+
     pipe.send(binary);
     pipe.writing.reset();
     require(telarGuiTestClipboardPipeHasReceiveFlags(pipe.reading.get()) != 0, "the native source must own a nonblocking close-on-exec read end");
     {
       const auto bytes = ClipboardImagePipe::read(memory, pipe.reading.get(), {.source_bytes = binary.size(), .png_bytes = png_limit});
+
       require(std::ranges::equal(bytes.view(), binary), "EOF at both exact byte limits must return unchanged binary data including NUL");
       require(memory.live == bytes.size(), "a small completed transfer must retain its allocator owner without exceeding the source cap when the PNG cap is larger");
     }
@@ -98,9 +102,11 @@ void overflowAndEmptyTransfersNeverReturnPartialData() {
   constexpr auto below_payload = binary.size() - 1;
   constexpr std::array limits{ClipboardImagePipeLimits{.source_bytes = below_payload, .png_bytes = binary.size()}, ClipboardImagePipeLimits{.source_bytes = binary.size(), .png_bytes = below_payload}, ClipboardImagePipeLimits{.source_bytes = below_payload, .png_bytes = below_payload}};
   constexpr std::array failures{ClipboardImageError::source_bytes, ClipboardImageError::png_bytes, ClipboardImageError::source_bytes};
+
   for (std::size_t index = 0; index < limits.size(); ++index) {
     Pipe pipe;
     ErasureAllocator memory;
+
     pipe.send(binary);
     pipe.writing.reset();
     expectFailure(pipe, memory, limits[index], failures[index]);
@@ -108,14 +114,17 @@ void overflowAndEmptyTransfersNeverReturnPartialData() {
 
   Pipe empty;
   ErasureAllocator memory;
+
   empty.writing.reset();
   const ClipboardImagePipeLimits defaults;
+
   expectFailure(empty, memory, defaults, ClipboardImageError::no_image);
 }
 
 void allocationFailureRetainsTheSourceAndClearsItsStorage() {
   Pipe pipe;
   ErasureAllocator memory;
+
   memory.fail = true;
   pipe.send(binary);
   pipe.writing.reset();
@@ -136,17 +145,23 @@ void providerActivityCannotRestartTheFiveSecondDeadline() {
   const auto started = std::chrono::steady_clock::now();
   std::jthread provider{[descriptor = pipe.writing.get(), &delivered] {
     constexpr std::chrono::seconds first_chunk_delay{3};
+
     std::this_thread::sleep_for(first_chunk_delay);
     constexpr std::byte byte{0x5a};
+
     delivered.store(::write(descriptor, &byte, sizeof(byte)) == sizeof(byte));
   }};
+
   const ClipboardImagePipeLimits defaults;
+
   expectFailure(pipe, memory, defaults, ClipboardImageError::read_failed);
   const auto elapsed = std::chrono::steady_clock::now() - started;
+
   provider.join();
   constexpr std::chrono::seconds original_deadline{5};
   constexpr std::chrono::milliseconds clock_resolution{1};
   constexpr std::chrono::seconds restarted_deadline_threshold{7};
+
   require(delivered.load() && elapsed + clock_resolution >= original_deadline && elapsed < restarted_deadline_threshold, "a partially active provider must expire at the original total deadline, not five seconds after its latest chunk");
 }
 

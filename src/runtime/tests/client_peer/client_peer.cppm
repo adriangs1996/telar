@@ -43,21 +43,26 @@ public:
         clients_(clients),
         id_(clients.nextId()) {
     int sockets[2];
+
     check(::socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) == 0);
     peer_ = telar::runtime::FileDescriptor{sockets[1]};
     timeval timeout{.tv_sec = 2,
                     .tv_usec = 0};
+
     check(::setsockopt(peer_.get(), SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) == 0);
     telar::runtime::setNonblocking(sockets[0]);
     auto client = telar::makeOwned<telar::runtime::ClientSession<telar::SystemAllocator>>(memory, memory, id_, telar::runtime::FileDescriptor{sockets[0]});
+
     client->role = role;
     client->connection.negotiated = true;
     const auto handle = clients.insert(id_, std::move(client));
+
     clients.find(id_)->event_identity = handle;
   }
 
   telar::runtime::ClientSession<telar::SystemAllocator> &session() const {
     auto *client = clients_.find(id_);
+
     check(client != nullptr);
     return *client;
   }
@@ -73,19 +78,24 @@ public:
   std::variant<Messages...> receiveAny() {
     session().connection.write(telar::runtime::ResponseProjection{memory_, model_});
     std::array<telar::Byte, telar::frame_prefix_size> prefix;
+
     readExact(prefix);
     std::span<const telar::Byte> encoded_length = prefix;
     const auto length = telar::u32::decode(encoded_length);
+
     check(length <= payload_.size());
     auto payload = std::span{payload_}.first(length);
+
     readExact(payload);
     telar::DecodeStorage storage{decode_};
     std::optional<std::variant<Messages...>> result;
+
     ([&] {
       if (payload.front() == static_cast<telar::Byte>(telar::MessageSchema<Messages>::tag)) {
         result.emplace(std::in_place_type<Messages>, telar::Codec::decode<Messages>(payload, storage));
       }
     }(), ...);
+
     check(result.has_value());
     return std::move(*result);
   }

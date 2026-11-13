@@ -29,13 +29,16 @@ void unicodeScalars() {
   for (std::uint32_t codepoint = 0; codepoint <= Utf8Scalar::maximum_codepoint; ++codepoint) {
     if (Utf8Scalar::valid(codepoint)) {
       const auto encoded = Utf8Scalar::encode(codepoint);
+
       require(Utf8Scalar::decode(encoded.view()) == codepoint, "every Unicode scalar must round-trip without allocation");
     }
   }
 
   constexpr auto invalid = std::to_array<std::string_view>({"", "ab", "\x80", "\xc0\x80", "\xe0\x80\x80", "\xed\xa0\x80", "\xf4\x90\x80\x80", "\xf0\x80\x80\x80", "\xf0\x9f", "\xf0\x9f\x8c\x20"});
+
   for (const auto text : invalid) {
     bool rejected = false;
+
     try {
       static_cast<void>(Utf8Scalar::decode(text));
     } catch (const std::invalid_argument &) {
@@ -48,6 +51,7 @@ void unicodeScalars() {
 
 void legacyControls() {
   KeyEncoder encoder;
+
   require(encoder.encode({.code = Code::backspace, .modifiers = static_cast<unsigned>(Modifier::control)}, {}) == "\x08", "legacy Ctrl+Backspace must emit Backspace");
   require(encoder.encode({.codepoint = '2', .modifiers = static_cast<unsigned>(Modifier::control)}, {}) == std::string_view{"\0", 1}, "legacy Ctrl+2 must preserve its NUL byte");
   require(encoder.encode({.codepoint = '8', .modifiers = static_cast<unsigned>(Modifier::control)}, {}) == "\x7f", "legacy Ctrl+8 must emit DEL");
@@ -61,6 +65,7 @@ void kittyEvents() {
   constexpr auto report_events = static_cast<telar::Byte>(KittyKeyboardFlag::report_events);
   constexpr auto all_keys = static_cast<telar::Byte>(KittyKeyboardFlag::all_keys);
   constexpr auto alternate_keys = static_cast<telar::Byte>(KittyKeyboardFlag::alternate_keys);
+
   require(encoder.encode({.codepoint = 'c', .modifiers = static_cast<unsigned>(Modifier::control)}, {.kitty_keyboard_flags = report_events}) == "\x1b[99;5u", "Kitty presses must omit the default event field");
   require(encoder.encode({.codepoint = 'c', .modifiers = static_cast<unsigned>(Modifier::control), .phase = KeyPhase::repeat}, {.kitty_keyboard_flags = report_events}) == "\x1b[99;5:2u", "Kitty repeats must report event two");
   require(encoder.encode({.codepoint = 'a', .phase = KeyPhase::release}, {.kitty_keyboard_flags = report_events}).empty(), "text-only keys without metadata must not acquire unmatched releases");
@@ -74,11 +79,13 @@ void kittyMetadata() {
   KeyEncoder encoder;
   constexpr telar::Byte all_flags = 31;
   constexpr std::uint32_t base_codepoint = 113;
+
   require(encoder.encode({.codepoint = 'a', .kitty = KittyCodepoints{.primary = 'a', .base = base_codepoint}}, {.kitty_keyboard_flags = all_flags}) == "\x1b[97::113;1;97u", "a missing shifted codepoint must retain its empty Kitty field");
   require(encoder.encode({.codepoint = 'a', .modifiers = static_cast<unsigned>(Modifier::shift), .kitty = KittyCodepoints{.primary = 'a', .shifted = 'A'}}, {.kitty_keyboard_flags = all_flags}) == "\x1b[97:65;2;65u", "associated text must use the shifted semantic character");
   require(encoder.encode({.codepoint = 'a', .modifiers = static_cast<unsigned>(Modifier::alt)}, {.kitty_keyboard_flags = all_flags}) == "\x1b[97;3u", "Alt chords must not carry associated text");
   constexpr auto maximum = std::numeric_limits<std::uint32_t>::max();
   const auto maximal = encoder.encode({.codepoint = Utf8Scalar::maximum_codepoint, .phase = KeyPhase::repeat, .kitty = KittyCodepoints{.primary = maximum, .shifted = maximum, .base = maximum}}, {.kitty_keyboard_flags = all_flags});
+
   require(maximal == "\x1b[4294967295:4294967295:4294967295;1:2;1114111u" && maximal.size() <= KeyEncoder::capacity, "the fixed encoder capacity must admit full-width Kitty fields");
 }
 
@@ -91,18 +98,23 @@ std::uint64_t sweepDigest() {
     for (const auto byte : bytes) {
       digest = (digest ^ static_cast<unsigned char>(byte)) * 1099511628211ULL;
     }
+
     digest = (digest ^ 0xffU) * 1099511628211ULL;
   };
+
   constexpr auto codepoints = std::to_array<std::uint32_t>({'a', 'A', 'c', 'z', '2', '8', ' ', '@', '[', '\\', ']', '^', '_', '/', '?', '~', 0xe9, 0x4e2d, 0x1f600});
   constexpr auto kitty_flags = std::to_array<telar::Byte>({0, 1, 2, 3, 8, 10, 31});
+
   for (const auto flags : kitty_flags) {
     for (unsigned mode = 0; mode < 8; ++mode) {
       const telar::InputModes modes{.cursor_keys = (mode & 1U) != 0, .keypad_keys = (mode & 2U) != 0, .kitty_keyboard_flags = flags, .modify_other_keys_2 = (mode & 4U) != 0};
+
       for (unsigned modifiers = 0; modifiers < 16; ++modifiers) {
         for (const auto phase : {KeyPhase::press, KeyPhase::repeat, KeyPhase::release}) {
           for (auto code = static_cast<unsigned>(Code::up); code <= static_cast<unsigned>(Code::back_tab); ++code) {
             fold(encoder.encode({.code = static_cast<Code>(code), .modifiers = modifiers, .phase = phase}, modes));
           }
+
           for (const auto codepoint : codepoints) {
             fold(encoder.encode({.codepoint = codepoint, .modifiers = modifiers, .phase = phase}, modes));
             fold(encoder.encode({.codepoint = codepoint, .modifiers = modifiers, .phase = phase, .kitty = KittyCodepoints{.primary = codepoint, .shifted = codepoint + 1, .base = 'q'}}, modes));
@@ -111,6 +123,7 @@ std::uint64_t sweepDigest() {
       }
     }
   }
+
   return digest;
 }
 
@@ -118,6 +131,7 @@ std::uint64_t sweepDigest() {
 // protocol the application asked for typed keys.
 void alternateScroll() {
   KeyEncoder encoder;
+
   require(encoder.alternateScroll(true, {}) == "\x1b[A" && encoder.alternateScroll(false, {}) == "\x1b[B", "alternate scroll must send normal cursor keys");
   require(encoder.alternateScroll(true, {.cursor_keys = true}) == "\x1bOA" && encoder.alternateScroll(false, {.cursor_keys = true}) == "\x1bOB", "alternate scroll must honor application cursor keys");
   require(encoder.alternateScroll(true, {.kitty_keyboard_flags = 31, .modify_other_keys_2 = true}) == "\x1b[A", "alternate scroll must ignore keyboard protocols");
@@ -129,6 +143,7 @@ void golden() {
   if (digest != expected) {
     std::fprintf(stderr, "gui-key-encoder: sweep digest %llu\n", static_cast<unsigned long long>(digest));
   }
+
   require(digest == expected, "the key encoder's bytes must match the golden sweep");
 }
 

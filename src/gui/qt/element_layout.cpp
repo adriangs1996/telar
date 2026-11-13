@@ -213,11 +213,13 @@ ElementLayout::Pose ElementLayout::animate(const QString &key, const Pose &targe
   }
 
   auto &motion = motions_[key];
+
   motion.seen = true;
   const bool fresh = motion.duration_ns == 0 && motion.start_ns == 0;
   const auto same = [](const Pose &left, const Pose &right) {
     return left.x == right.x && left.y == right.y && left.rotation == right.rotation && left.scale == right.scale && left.opacity == right.opacity;
   };
+
   if (fresh) {
     // A new element appears at its pose; only later changes ease.
     motion = {.from = target, .to = target, .shown = target, .start_ns = now_ns, .duration_ns = 1, .easing = easing, .seen = true};
@@ -236,6 +238,7 @@ ElementLayout::Pose ElementLayout::animate(const QString &key, const Pose &targe
   const auto elapsed = now_ns > motion.start_ns ? now_ns - motion.start_ns : 0;
   const auto progress = motion.duration_ns == 0 ? 1.0 : std::min(1.0, static_cast<qreal>(elapsed) / static_cast<qreal>(motion.duration_ns));
   const auto amount = eased(progress, motion.easing);
+
   motion.shown = {
       .x = mix(motion.from.x, motion.to.x, amount),
       .y = mix(motion.from.y, motion.to.y, amount),
@@ -243,8 +246,10 @@ ElementLayout::Pose ElementLayout::animate(const QString &key, const Pose &targe
       .scale = mix(motion.from.scale, motion.to.scale, amount),
       .opacity = mix(motion.from.opacity, motion.to.opacity, amount),
   };
+
   if (progress < 1 && clock_ != nullptr) {
     const auto next = now_ns + clock_->frameInterval();
+
     next_sample_ns_ = next_sample_ns_ ? std::min(*next_sample_ns_, next) : next;
   }
 
@@ -255,6 +260,7 @@ void ElementLayout::updatePolish() {
   frame_requested_ = false;
   next_sample_ns_.reset();
   const auto now_ns = clock_.isNull() ? std::uint64_t{0} : clock_->now();
+
   for (auto &motion : motions_) {
     motion.seen = false;
   }
@@ -264,12 +270,14 @@ void ElementLayout::updatePolish() {
   const auto scaled = [this](qreal value) {
     return value * ratio_;
   };
+
   const qreal left = scaled(padding_[0]);
   const qreal top = scaled(padding_[1]);
   const qreal right = scaled(padding_[2]);
   const qreal bottom = scaled(padding_[3]);
   const qreal gap = scaled(gap_);
   QList<Child> children;
+
   for (auto *item : childItems()) {
     const auto element = item->property("element").toMap();
     if (element.isEmpty() || !item->isVisible()) {
@@ -280,6 +288,7 @@ void ElementLayout::updatePolish() {
     const auto height = number(element, "height", -1);
     const auto natural_width = std::clamp(width >= 0 ? scaled(width) : item->implicitWidth(), scaled(number(element, "minWidth", 0)), scaled(number(element, "maxWidth", std::numeric_limits<qreal>::max() / 4)));
     const auto natural_height = std::clamp(height >= 0 ? scaled(height) : item->implicitHeight(), scaled(number(element, "minHeight", 0)), scaled(number(element, "maxHeight", std::numeric_limits<qreal>::max() / 4)));
+
     children.append({
         .item = item,
         .element = element,
@@ -294,6 +303,7 @@ void ElementLayout::updatePolish() {
   const qreal inner_height = std::max<qreal>(0, height() - top - bottom);
   qreal natural_main = 0;
   qreal natural_cross = 0;
+
   for (const auto &child : children) {
     natural_main = stack ? std::max(natural_main, child.main) : natural_main + child.main;
     natural_cross = std::max(natural_cross, child.cross);
@@ -311,9 +321,11 @@ void ElementLayout::updatePolish() {
   qreal remaining = available_main - natural_main;
   qreal spacing = gap;
   qreal offset = 0;
+
   if (!stack) {
     qreal growth = 0;
     qreal flexible = 0;
+
     for (const auto &child : children) {
       growth += child.grow;
       flexible += child.fixed_main ? 0 : child.main;
@@ -328,6 +340,7 @@ void ElementLayout::updatePolish() {
     } else if (remaining < 0 && flexible > 0) {
       // Too little room: shrink the children without a set size, so their text elides.
       const auto factor = std::max<qreal>(0, (flexible + remaining) / flexible);
+
       for (auto &child : children) {
         if (!child.fixed_main) {
           child.main *= factor;
@@ -349,11 +362,13 @@ void ElementLayout::updatePolish() {
   }
 
   qreal cursor = offset;
+
   for (const auto &child : children) {
     const auto alignment = child.element.contains(QStringLiteral("alignSelf")) ? child.element.value(QStringLiteral("alignSelf")).toInt() : align_;
     // A child never overflows the cross axis: text inside it elides instead.
     const auto cross = alignment == align_stretch ? available_cross : std::min(child.cross, std::max<qreal>(0, available_cross));
     qreal cross_offset = 0;
+
     if (alignment == align_center) {
       cross_offset = (available_cross - cross) / 2;
     } else if (alignment == align_end) {
@@ -363,6 +378,7 @@ void ElementLayout::updatePolish() {
     // A stack lays children over each other: `justify` places them along x, `align` along y.
     const auto main = stack && justify_ == justify_between ? available_main : child.main;
     qreal main_offset = stack ? 0 : cursor;
+
     if (stack) {
       if (justify_ == justify_center) {
         main_offset = (available_main - main) / 2;
@@ -380,7 +396,9 @@ void ElementLayout::updatePolish() {
         .scale = number(child.element, "scale", 1),
         .opacity = number(child.element, "opacity", 1),
     };
+
     const auto shown = animate(child.element.value(QStringLiteral("key")).toString(), target, number(child.element, "transition", 0), child.element.value(QStringLiteral("easing")).toInt(), now_ns);
+
     child.item->setSize({std::max<qreal>(0, item_width), std::max<qreal>(0, item_height)});
     child.item->setPosition({shown.x, shown.y});
     child.item->setRotation(shown.rotation);
@@ -395,6 +413,7 @@ void ElementLayout::updatePolish() {
   motions_.removeIf([](const auto &entry) {
     return !entry.value().seen;
   });
+
   if (!clock_.isNull()) {
     clock_->requestSynchronization();
   }

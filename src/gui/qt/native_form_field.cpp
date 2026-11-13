@@ -138,6 +138,7 @@ void NativeFormField::setMaximumBytes(int capacity) {
     emit maximumBytesChanged();
     if (editor_.text().size() > static_cast<std::size_t>(maximum_bytes_)) {
       const auto previous = text_;
+
       text_.clear();
       setText(previous);
     }
@@ -211,6 +212,7 @@ void NativeFormField::cut() {
 void NativeFormField::paste() {
   cancelComposition();
   auto pasted = QGuiApplication::clipboard()->text();
+
   pasted.replace(QStringLiteral("\r\n"), QStringLiteral(" "));
   pasted.replace(QLatin1Char('\r'), QLatin1Char(' '));
   pasted.replace(QLatin1Char('\n'), QLatin1Char(' '));
@@ -226,6 +228,7 @@ void NativeFormField::insertText(const QString &text) {
   const auto encoded = prefix.toUtf8();
   const std::string_view source{encoded.constData(), static_cast<std::size_t>(encoded.size())};
   const auto kept = runtime::utf8Prefix(source, remaining);
+
   editor_.insert(kept);
 
   if (measured.bytes < measured.requested_bytes) {
@@ -236,6 +239,7 @@ void NativeFormField::insertText(const QString &text) {
 void NativeFormField::publish(bool edited) {
   const auto value = fieldString(editor_.text());
   const auto changed = text_ != value;
+
   text_ = value;
   updateInputContext();
   if (changed) {
@@ -254,6 +258,7 @@ void NativeFormField::publish(bool edited) {
 
 void NativeFormField::updateInputContext() {
   std::optional<FormInputContext::Replacement> replacement;
+
   if (!composition_.isEmpty()) {
     replacement = FormInputContext::Replacement{.first = utf16Position(editor_.text(), composition_first_), .last = utf16Position(editor_.text(), composition_last_)};
   }
@@ -270,6 +275,7 @@ void NativeFormField::clearComposition() {
 
 bool NativeFormField::cancelComposition() {
   const auto composing = !composition_.isEmpty();
+
   clearComposition();
   if (composing) {
     updateInputContext();
@@ -278,6 +284,7 @@ bool NativeFormField::cancelComposition() {
   if (composing && hasActiveFocus()) {
     {
       const QScopedValueRollback discarding{discarding_composition_, true};
+
       QGuiApplication::inputMethod()->reset();
     }
 
@@ -312,6 +319,7 @@ void NativeFormField::resolveGrid() {
   const auto style = typography_.value(QStringLiteral("primaryStyle")).toString();
   const auto pixels = std::clamp(std::round(typography_.value(QStringLiteral("body"), 1).toDouble() * density_), qreal{1}, static_cast<qreal>(std::numeric_limits<std::uint16_t>::max()));
   const auto resolved = FormTextGrid::resolve(family, style, static_cast<std::uint16_t>(pixels));
+
   font_grid_ = resolved.metrics;
   grid_ = resolved.record(density_);
   metrics_dirty_ = false;
@@ -325,10 +333,13 @@ void NativeFormField::updatePolish() {
     }
 
     ChromeMetrics chrome;
+
     chrome.ratio = static_cast<float>(ratio_ * density_);
     const Rect bounds{.width = static_cast<float>(width() * density_), .height = static_cast<float>(height() * density_)};
+
     geometry_ = form_control_ ? FormFieldGeometry::derive(bounds, chrome, font_grid_) : FormFieldGeometry::terminal(bounds, font_grid_);
     BoundedEditor<display_capacity> display;
+
     display.setText(editor_.text());
     display.selectRange(editor_.anchor(), editor_.head());
     if (!composition_.isEmpty()) {
@@ -340,7 +351,9 @@ void NativeFormField::updatePolish() {
     const auto logical = [this](Rect area) {
       return QRectF{area.x / density_, area.y / density_, area.width / density_, area.height / density_};
     };
+
     const auto underline = geometry_.underline(cellTextColumns(view.text));
+
     layout_ = {{QStringLiteral("available"), true}, {QStringLiteral("text"), fieldString(view.text)}, {QStringLiteral("grid"), grid_}, {QStringLiteral("content"), logical(geometry_.content)}, {QStringLiteral("caret"), logical(geometry_.caret(view.cursor))}, {QStringLiteral("selection"), logical(view.selection ? geometry_.selection(*view.selection) : Rect{})}, {QStringLiteral("underline"), logical(underline)}, {QStringLiteral("composing"), !composition_.isEmpty()}};
   } catch (const std::exception &) {
     layout_ = emptyLayout(grid_);
@@ -368,6 +381,7 @@ void NativeFormField::itemChange(ItemChange change, const ItemChangeData &data) 
     metrics_dirty_ = true;
     invalidateLayout();
   }
+
   if ((change == ItemVisibleHasChanged && !isVisible()) || (change == ItemEnabledHasChanged && !isEnabled())) {
     dragging_ = false;
     cancelComposition();

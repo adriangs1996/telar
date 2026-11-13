@@ -59,9 +59,11 @@ void gestureContexts() {
   constexpr ViewVersion original;
   constexpr auto fields = std::to_array<std::uint64_t ViewVersion::*>({&ViewVersion::workspace, &ViewVersion::active_tab, &ViewVersion::tabs, &ViewVersion::panes, &ViewVersion::host, &ViewVersion::configuration, &ViewVersion::viewport});
   LinkGesture gesture;
+
   for (const auto field : fields) {
     gesture.begin(hit(), original);
     auto changed = original;
+
     ++(changed.*field);
     gesture.validate(hit(), changed);
     require(!gesture.finish(hit(), original), "a restored context must not revive an intervening cancellation");
@@ -89,8 +91,10 @@ void completeHitIdentity() {
     metadata,
     destination,
   };
+
   for (const auto field : {Field::pane, Field::attachment, Field::workspace, Field::tab, Field::content, Field::viewport, Field::area, Field::start, Field::end, Field::metadata, Field::destination}) {
     auto changed = hit();
+
     switch (field) {
     case Field::pane:
       ++changed.pane_id;
@@ -128,6 +132,7 @@ void completeHitIdentity() {
     }
 
     LinkGesture gesture;
+
     gesture.begin(hit(), {});
     gesture.validate(changed, {});
     require(!gesture.finish(hit(), {}), "every part of a link hit must retain its identity throughout the click");
@@ -136,13 +141,16 @@ void completeHitIdentity() {
 
 void preparedPresentation() {
   LinkHover hover;
+
   static_cast<void>(hover.assign(hit(), surface(), true));
   require(!hover.openable(surface()), "unpresented geometry must not authorize a link");
   const auto prepared = hover.prepare(surface(), {});
+
   static_cast<void>(hover.assign(hit("https://second.test"), surface(), false));
   hover.present(prepared);
   require(!hover.openable(surface()), "a frame must publish its captured target rather than a later pointer resolution");
   const auto next = hover.prepare(surface(), {});
+
   hover.present(next, false);
   require(!hover.openable(surface()), "a discarded frame must not authorize its target");
   hover.present(next);
@@ -151,14 +159,17 @@ void preparedPresentation() {
   static_cast<void>(hover.assign(hit("https://third.test"), surface(), true));
   require(hover.openable(surface()), "a new hover over an already displayed terminal frame needs no extra frame");
   auto moved = surface();
+
   ++moved.content.x;
   require(!hover.openable(moved), "pointer input must wait for matching displayed geometry");
 }
 
 void deliveredCover() {
   LinkHover hover;
+
   static_cast<void>(hover.assign(hit(), surface(), false));
   const Rect cover{.x = 2, .y = 3, .width = 10, .height = 2};
+
   hover.present(hover.prepare(surface(), cover));
   require(hover.covers({.x = 3, .y = 4}) && !hover.covers({.x = cover.x + cover.width, .y = 4}), "tooltip coverage must use its delivered rectangle with an exclusive right edge");
   hover.clear();
@@ -188,10 +199,13 @@ void regionTraversal() {
   const std::array<Byte, rows> flags{static_cast<Byte>(RowFlag::wide_padding), 0, 0};
   const LinkGrid grid{.cells = cells, .columns = columns, .rows = rows, .scroll = {.total_rows = offset + rows, .offset = offset}, .row_flags = flags};
   auto match = hit().match;
+
   match.start = {.x = 2, .y = offset};
   constexpr std::uint16_t last_column = 5;
+
   match.end = {.x = last_column, .y = offset + 2};
   LinkRegions plain{match, grid, {}};
+
   require(plain.next() == LinkRegion{.x = 2, .y = 0, .width = last_column}, "plain underlines must skip wide-glyph padding");
   require(plain.next() == LinkRegion{.x = 0, .y = 1, .width = columns}, "plain underlines must continue across logical rows");
   require(plain.next() == LinkRegion{.x = 0, .y = 2, .width = last_column} && !plain.next(), "plain underlines must stop at the exclusive link end");
@@ -199,9 +213,11 @@ void regionTraversal() {
   match.metadata_index = 1;
   const std::array runs{MetadataRun{.start = 1, .len = 2, .link_index = 1}, MetadataRun{.start = last_column, .len = 2, .link_index = 0}, MetadataRun{.start = columns + 1, .len = 3, .link_index = 1}};
   LinkRegions osc8{match, grid, runs};
+
   require(osc8.next() == LinkRegion{.x = 1, .y = 0, .width = 2}, "OSC 8 underlines must use metadata run bounds");
   require(osc8.next() == LinkRegion{.x = 1, .y = 1, .width = 3} && !osc8.next(), "every run of an OSC 8 identity must be underlined without including neighboring identities");
   LinkRegions clipped{match, grid, runs, {.columns = 2, .rows = 1}};
+
   require(clipped.next() == LinkRegion{.x = 1, .y = 0, .width = 1} && !clipped.next(), "the iterator must clip to the visible pane before producing render geometry");
 }
 

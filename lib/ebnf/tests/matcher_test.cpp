@@ -34,6 +34,7 @@ namespace {
       for (std::size_t index = 0; index < completed.result.count; ++index) {
         const auto &candidate = out_[index];
         auto text = std::string{candidate.prefix.empty() ? "" : std::string{candidate.prefix} + "|"};
+
         text += candidate.kind == ebnf::candidate_kind::provider ? "@" + std::string{candidate.text} : std::string{candidate.text};
         completed.shown.push_back(text);
         completed.descriptions.push_back(candidate.description);
@@ -48,6 +49,7 @@ namespace {
 
     auto firstInvalid(const ebnf::command_spec &spec, const words &line) -> std::int64_t {
       const auto result = check(spec, line);
+
       return result.status == ebnf::match_status::invalid ? std::int64_t{result.word} : -1;
     }
   };
@@ -66,6 +68,7 @@ namespace {
     switch_option = "-c" : "Create a branch" , @branch | "--color=" ~ when | "--quiet" | "-q" ;
     when = "always" : "Always color" | "never" | "auto" ;
   )ebnf");
+
     return spec;
   }
 
@@ -111,6 +114,7 @@ namespace {
     EXPECT_EQ(complete(vcs(), {"switch"}, "--color").shown, (shown{"--color="}));
 
     const auto values = complete(vcs(), {"switch"}, "--color=");
+
     EXPECT_EQ(values.shown, (shown{"--color=|always", "--color=|never", "--color=|auto"}));
     EXPECT_EQ(values.descriptions[0], "Always color");
 
@@ -229,6 +233,7 @@ namespace {
 
     // Every split of the words is a derivation, so Earley sets grow with the line until they overflow.
     const auto ambiguous = ebnf::command_spec::compile(R"(s = { a } ; a = { @any } ;)");
+
     EXPECT_EQ(check(ambiguous, words(ebnf::max_words, "w")).status, ebnf::match_status::unknown);
   }
 
@@ -275,11 +280,13 @@ namespace {
   TEST(MatcherCompile, SpecOutlivesItsSource) {
     auto source = std::make_unique<std::string>(R"(s = "keep" : "kept" ;)");
     const auto spec = ebnf::command_spec::compile(*source);
+
     source.reset();
 
     auto scratch = std::make_unique<ebnf::match_scratch>();
     std::array<ebnf::candidate, 4> out{};
     const auto result = spec.complete({}, "", *scratch, out);
+
     ASSERT_EQ(result.count, 1u);
     EXPECT_EQ(out[0].text, "keep");
     EXPECT_EQ(out[0].description, "kept");

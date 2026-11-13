@@ -24,6 +24,7 @@ namespace telar::gui::qt {
 
 inline void startHostCommand(QProcess &process, const platform::CommandLine &command) {
   QStringList arguments;
+
   arguments.reserve(static_cast<qsizetype>(command.count));
   for (const auto argument : command.arguments()) {
     arguments.append(toQString(argument));

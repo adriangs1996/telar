@@ -50,6 +50,7 @@ public:
       if (count < 0 && socketWouldBlock(errno)) {
         return;
       }
+
       if (count <= 0) {
         throw SystemError{"read client handshake"};
       }
@@ -58,11 +59,13 @@ public:
       if (used_bytes_ != expected_bytes_) {
         return;
       }
+
       if (stage_ == Stage::prefix) {
         std::span<const Byte> prefix{bytes_.data(), frame_prefix_size};
         if (u32::decode(prefix) != HandshakeSchema<ClientHello>::payload_size) {
           throw EncodingError{"Invalid client hello size"};
         }
+
         expected_bytes_ += HandshakeSchema<ClientHello>::payload_size;
         stage_ = Stage::hello;
       } else {
@@ -80,6 +83,7 @@ public:
     if (count < 0 && socketWouldBlock(errno)) {
       return;
     }
+
     if (count <= 0) {
       throw SystemError{"write client handshake"};
     }
@@ -113,6 +117,7 @@ public:
 private:
   inline void negotiate() {
     const auto hello = HandshakeCodec::decode<ClientHello>(std::span<const Byte>{bytes_}.subspan(frame_prefix_size, HandshakeSchema<ClientHello>::payload_size));
+
     accepted_ = !capacity_refused_ && hello.schema == handshake::schema_id;
     if (accepted_) {
       reply(ServerAccept{.schema = handshake::schema_id});
@@ -125,6 +130,7 @@ private:
   inline void reply(const Message &message) {
     const auto payload = HandshakeCodec::encode(message);
     std::span<Byte> output = bytes_;
+
     u32::encode(payload.size(), output);
     std::copy(payload.begin(), payload.end(), output.begin());
     used_bytes_ = 0;
@@ -373,12 +379,14 @@ public:
   inline void append(const Message &message) {
     static_assert(MessageSchema<Message>::direction == Direction::server);
     const auto lane = deliveryLane(MessageSchema<Message>::tag);
+
     requireCapacity(lane);
     const auto size = Codec::encodedSize(message);
     const auto previous_size = bytes_.size();
 
     try {
       auto frame = bytes_.appendUninitialized(frame_prefix_size + size);
+
       u32::encode(static_cast<std::uint32_t>(size), frame);
       Codec::encode(message, frame);
     } catch (...) {
@@ -395,8 +403,10 @@ public:
     }
 
     const auto lane = deliveryLane(static_cast<ServerTag>(payload.front()));
+
     requireCapacity(lane);
     auto frame = bytes_.appendUninitialized(frame_prefix_size + payload.size());
+
     u32::encode(static_cast<std::uint32_t>(payload.size()), frame);
     std::copy(payload.begin(), payload.end(), frame.begin());
     inserted(lane);
@@ -409,6 +419,7 @@ public:
   inline std::size_t reserve(const Message &message) {
     static_assert(MessageSchema<Message>::fixed_size);
     const auto offset = bytes_.size() + frame_prefix_size;
+
     append(message);
     return offset;
   }
@@ -417,6 +428,7 @@ public:
   template <typename Message>
   inline void complete(std::size_t offset, const Message &message) {
     std::array<Byte, MessageSchema<Message>::payload_size> payload;
+
     Codec::encode(message, payload);
     bytes_.overwrite(offset, payload);
   }
@@ -441,6 +453,7 @@ public:
 
     const auto lane = static_cast<DeliveryLane>(std::countr_zero(pending_lanes_));
     auto offset = std::size_t{0};
+
     while (offset < bytes_.size() && inspect(offset).lane != lane) {
       offset += inspect(offset).size;
     }
@@ -451,8 +464,10 @@ public:
     }
 
     const auto frame = inspect(offset);
+
     start(offset, frame);
     auto end = offset + frame.size;
+
     while (end < bytes_.size() && end - offset < limit) {
       if (lane == DeliveryLane::management && deferred_.precedes(end)) {
         break;
@@ -475,6 +490,7 @@ public:
     auto remaining = count;
     const auto first_offset = active_offset_;
     auto offset = first_offset;
+
     while (remaining >= active_remaining_ && active_remaining_ != 0) {
       remaining -= active_remaining_;
       offset += active_remaining_;
@@ -519,15 +535,18 @@ private:
   inline void resolve(Encoder &encode) {
     const auto offset = deferred_.offset();
     std::size_t resolved_size = 0;
+
     encode(deferred_.response(), [&](const auto &message) {
       using Message = std::remove_cvref_t<decltype(message)>;
       static_assert(deliveryLane(MessageSchema<Message>::tag) == DeliveryLane::management);
+
       if (resolved_size != 0) {
         throw std::logic_error{"A deferred response must produce exactly one frame"};
       }
 
       const auto size = Codec::encodedSize(message);
       auto frame = bytes_.insertUninitialized(offset, frame_prefix_size + size);
+
       try {
         u32::encode(static_cast<std::uint32_t>(size), frame);
         Codec::encode(message, frame);
@@ -535,12 +554,14 @@ private:
         bytes_.erase(offset, frame_prefix_size + size);
         throw;
       }
+
       resolved_size = frame_prefix_size + size;
     });
 
     if (resolved_size == 0) {
       throw std::logic_error{"A deferred response must produce exactly one frame"};
     }
+
     deferred_.resolved(resolved_size);
   }
 
@@ -552,6 +573,7 @@ private:
   inline Frame inspect(std::size_t offset) const noexcept {
     auto payload = bytes_.readable().subspan(offset);
     const auto size = u32::decode(payload);
+
     return {frame_prefix_size + size, deliveryLane(static_cast<ServerTag>(payload.front()))};
   }
 
@@ -563,6 +585,7 @@ private:
 
   inline void inserted(DeliveryLane lane) noexcept {
     const auto index = static_cast<std::size_t>(lane);
+
     ++lane_counts_[index];
     pending_lanes_ |= std::uint32_t{1} << index;
     if (responseLane(lane)) {
@@ -672,6 +695,7 @@ public:
       }
 
       DecodeStorage storage{frames.decode};
+
       visitor(bytes.first(length), storage);
       frames.input.consume(frame_prefix_size + length);
     }
@@ -720,6 +744,7 @@ public:
     } catch (const std::bad_alloc &) {
       output_.recordDrop();
     }
+
     return false;
   }
 
@@ -745,6 +770,7 @@ public:
     } catch (const ResponseQueueFull &) {
     } catch (const std::bad_alloc &) {
     }
+
     return false;
   }
 

@@ -33,6 +33,7 @@ inline QVariantMap historyHintRecord(const HistoryHintGeometry &geometry, qreal 
   const auto local = [&](Rect area) {
     return QRectF{(area.x - geometry.bounds.x) / density, (area.y - geometry.bounds.y) / density, area.width / density, area.height / density};
   };
+
   const auto bounds = geometry.bounds;
 
   return {

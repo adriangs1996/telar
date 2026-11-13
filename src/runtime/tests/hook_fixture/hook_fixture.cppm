@@ -33,6 +33,7 @@ inline std::string runHook(std::string_view provider, std::string_view input, bo
   using namespace telar;
   using namespace telar::runtime;
   const char *binary = std::getenv("TELAR_BIN_PATH");
+
   require(binary != nullptr, "Pane did not receive its runtime executable");
   SystemAllocator memory;
   const std::array<std::string_view, 3> arguments{binary, "hook", provider};
@@ -44,11 +45,13 @@ inline std::string runHook(std::string_view provider, std::string_view input, bo
   if (output.runWithInput(command, std::chrono::steady_clock::now() + std::chrono::seconds{10}, parts) != 0) {
     throw std::runtime_error{std::string{"Hook command failed: "} + std::string{output.text()}};
   }
+
   return std::string{output.text()};
 }
 
 inline void waitProvider(ProtocolPeer &peer, telar::AgentProvider provider) {
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
+
   do {
     const auto snapshot = peer.exchange<telar::AgentSnapshot>(telar::QueryAgents{1});
     if (snapshot.entries.size() == 1 && snapshot.entries[0].provider == provider) {

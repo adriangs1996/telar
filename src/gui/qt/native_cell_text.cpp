@@ -116,12 +116,14 @@ void NativeCellText::invalidateLayout() {
 
 void NativeCellText::refreshLayout() {
   const QPointer<NativeCellText> alive{this};
+
   layout_dirty_ = false;
   try {
     scale_ = window() == nullptr ? 1 : window()->effectiveDevicePixelRatio();
     resolved_ = CellTextGrid::resolve(grid_, scale_);
     refreshFonts();
     const auto utf8 = text_.toUtf8();
+
     layout_.shape(*fonts_, {utf8.constData(), static_cast<std::size_t>(utf8.size())}, resolved_.metrics);
     setImplicitWidth((static_cast<qreal>(layout_.columns()) * resolved_.metrics.width) / scale_);
     if (!alive) {
@@ -166,6 +168,7 @@ void NativeCellText::refreshFonts() {
   }
 
   const auto source = ResidentFonts::resolveSource(resolved_.family, resolved_.style);
+
   if (catalog != nullptr) {
     collection_ = catalog->collectionFor(source);
   } else if (!collection_ || collection_->primary != source) {
@@ -216,6 +219,7 @@ QSGNode *NativeCellText::updatePaintNode(QSGNode *previous, [[maybe_unused]] Upd
     const auto columns = static_cast<std::uint32_t>(std::clamp(std::floor(width() * scale_ / resolved_.metrics.width), qreal{0}, qreal{maximum_columns}));
 
     ChromeTextPaint paint;
+
     paint.glyphs = layout_.glyphs(columns);
     paint.spans = layout_.spans(columns);
     paint.grid = resolved_.metrics;

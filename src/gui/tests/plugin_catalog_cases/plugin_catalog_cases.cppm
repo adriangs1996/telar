@@ -25,6 +25,7 @@ inline void checkPluginCatalog(bool condition) {
 template <typename Operation>
 void pluginQueryError(Operation &&operation, std::string_view expected) {
   bool failed = false;
+
   try {
     std::forward<Operation>(operation)();
   } catch (const std::invalid_argument &error) {
@@ -37,12 +38,14 @@ void pluginQueryError(Operation &&operation, std::string_view expected) {
 inline void pluginCatalogCases() {
   namespace plugins = runtime::plugins;
   std::array<plugins::ConfiguredPlugin, 3> specifications{};
+
   specifications[0].path.assign("disabled");
   specifications[0].enabled = false;
   specifications[1].path.assign("./enabled");
   specifications[2].path.assign("last");
   std::array<plugins::Package, 2> packages{};
   auto &manifest = packages[0].manifest;
+
   manifest.id.assign("sample");
   manifest.version.assign("1");
   manifest.entry.assign("main.lua");
@@ -56,11 +59,13 @@ inline void pluginCatalogCases() {
   packages[1].manifest.id.assign("last-id");
   constexpr std::uint64_t generation = 42;
   const PluginCatalog catalog{generation, specifications, packages};
+
   checkPluginCatalog(catalog.package(0) == nullptr && catalog.package(1) == packages.data() && catalog.package(2) == &packages[1]);
   checkPluginCatalog(catalog.find("disabled") == 0 && catalog.find("./enabled") == 1 && catalog.find("sample") == 1);
   std::array<char, 4096> output{};
   ClientCommand request{.action = ClientAction::plugin_list};
   auto page = PluginQuery::list(catalog, request, output);
+
   checkPluginCatalog(page.next == 1 && page.text == R"({"generation":42,"entries":[{"index":0,"path":"disabled","id":null,"version":null,"requested_enabled":false,"enabled":false}]})");
   request.value = 1;
   page = PluginQuery::list(catalog, request, output);

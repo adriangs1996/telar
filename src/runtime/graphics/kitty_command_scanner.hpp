@@ -27,6 +27,7 @@ public:
 
   std::optional<KittyCommandView> next(std::span<const std::uint8_t> bytes) noexcept {
     std::size_t position = 0;
+
     for (;;) {
       const auto start = position;
       const bool inside = framing_.inside();
@@ -35,8 +36,10 @@ public:
         if (inside) {
           capture(bytes.subspan(start));
         }
+
         return std::nullopt;
       }
+
       if (*transition == KittyFraming::Transition::started) {
         control_length_ = 0;
         payload_length_ = 0;
@@ -55,6 +58,7 @@ private:
       if (!KittyFraming::content(byte)) {
         continue;
       }
+
       if (!in_payload_) {
         if (byte == ';') {
           in_payload_ = true;

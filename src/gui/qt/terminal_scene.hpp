@@ -130,6 +130,7 @@ struct TerminalPresentation {
     if (rows.empty()) {
       return screen.row(index);
     }
+
     return index < rows.size() ? rows[index].cells : std::span<const CellValue>{};
   }
 
@@ -137,6 +138,7 @@ struct TerminalPresentation {
     if (rows.empty()) {
       return screen.rowRevision(index);
     }
+
     return index < rows.size() ? rows[index].revision : 0;
   }
 
@@ -144,6 +146,7 @@ struct TerminalPresentation {
     if (rows.empty()) {
       return index;
     }
+
     return index < rows.size() ? rows[index].source : 0;
   }
 
@@ -152,9 +155,11 @@ struct TerminalPresentation {
     if (rows.empty()) {
       return index;
     }
+
     if (index >= rows.size() || rows[index].screen_row < 0) {
       return std::nullopt;
     }
+
     return static_cast<std::size_t>(rows[index].screen_row);
   }
 
@@ -163,17 +168,20 @@ struct TerminalPresentation {
     if (rows.empty()) {
       return screen_row;
     }
+
     for (std::size_t index = 0; index < rows.size(); ++index) {
       if (std::cmp_equal(rows[index].screen_row, screen_row)) {
         return index;
       }
     }
+
     return std::nullopt;
   }
 
   // Whether the cell at `cell.x` of drawn row `cell.y` is selected.
   [[nodiscard]] bool selected(CellPosition cell) const noexcept {
     const auto screen_row = screenRow(cell.y);
+
     return screen_row && selection.contains((*screen_row * screen.columns()) + cell.x);
   }
 

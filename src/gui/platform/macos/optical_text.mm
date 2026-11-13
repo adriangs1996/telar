@@ -54,10 +54,12 @@ QSize physicalSize(QSizeF size, qreal scale) {
 
 CGRect drawGlyphs(CGContextRef context, CTFontRef font, std::span<const CGGlyph> indexes, std::span<const CGPoint> positions, bool bold) {
   const auto stroke = CTFontGetSize(font) / synthetic_bold_divisor;
+
   CGContextSetTextDrawingMode(context, bold ? kCGTextFillStroke : kCGTextFill);
   CGContextSetLineWidth(context, stroke);
   const auto extra = (bold ? stroke / 2 : 0) + smoothing_margin;
   auto ink = CGRectNull;
+
   for (std::size_t index = 0; index < indexes.size(); ++index) {
     const auto bounds = CTFontGetBoundingRectsForGlyphs(font, kCTFontOrientationHorizontal, &indexes[index], nullptr, 1);
     if (CGRectIsEmpty(bounds)) {
@@ -69,6 +71,7 @@ CGRect drawGlyphs(CGContextRef context, CTFontRef font, std::span<const CGGlyph>
     const auto right = std::ceil(CGRectGetMaxX(bounds) + extra);
     const auto top = std::ceil(CGRectGetMaxY(bounds) + extra);
     const auto clip = CGRectMake(positions[index].x + left, positions[index].y + bottom, right - left, top - bottom);
+
     ink = CGRectUnion(ink, clip);
     CGContextSaveGState(context);
     CGContextClipToRect(context, clip);
@@ -147,6 +150,7 @@ struct OpticalText::State {
         .native = {native, CFRelease},
         .synthesized = synthesized,
     });
+
     return &fonts.back();
   }
 
@@ -165,6 +169,7 @@ struct OpticalText::State {
       }
 
       const auto offset = static_cast<std::size_t>(index);
+
       indexes[offset] = static_cast<CGGlyph>(glyphs[index]);
       positions[offset] = {
           .x = (origin.x() + points[index].x()) * scale,
@@ -190,8 +195,10 @@ struct OpticalText::State {
         if (alpha != 0) {
           const auto pixel = pixels.subspan(offset * sizeof(QRgb), sizeof(QRgb));
           QRgb previous = 0;
+
           std::memcpy(&previous, pixel.data(), sizeof(previous));
           const auto composite = compositePixel(previous, color, alpha);
+
           std::memcpy(pixel.data(), &composite, sizeof(composite));
           first = std::min(first, column);
           last = column;
@@ -287,6 +294,7 @@ void OpticalText::add(const QTextLayout &layout, QPointF position, QColor color)
 
     if (font == nullptr) {
       QPainter painter(&self.image);
+
       painter.setPen(color);
       painter.drawGlyphRun(position, run);
       self.ink =
@@ -298,9 +306,11 @@ void OpticalText::add(const QTextLayout &layout, QPointF position, QColor color)
 
     // Positioning reuses the state's buffers, so the font is found again by its index.
     const auto font_index = static_cast<std::size_t>(font - self.fonts.data());
+
     self.positionGlyphs(run, position);
     const auto &positioned = self.fonts[font_index];
     const bool bold = (positioned.synthesized & static_cast<unsigned>(QFontEngine::SynthesizedBold)) != 0;
+
     // The context is a Core Graphics object the state retains; drawing reaches it by address.
     bounds = CGRectUnion(bounds, drawGlyphs(tbc::raw(self.context.get()), positioned.native.get(), self.indexes, self.positions, bold));
   }
@@ -320,6 +330,7 @@ void OpticalText::add(const QTextLayout &layout, QPointF position, QColor color)
     const auto line = layout.lineAt(0);
     const auto baseline = position.y() + line.y() + line.ascent();
     QPainter painter(&self.image);
+
     painter.setPen(QPen(color, metrics.lineWidth()));
     const auto rule = [&](qreal y) {
       painter.drawLine(QPointF(position.x(), y),
@@ -358,6 +369,7 @@ QSGNode *OpticalText::node(QQuickWindow &window, QPointF position) {
   }
 
   auto node = std::make_unique<QSGSimpleTextureNode>();
+
   node->setOwnsTexture(true);
   node->setTexture(texture.release());
   node->setRect(QRectF(position + QPointF(ink.topLeft()) / self.scale, QSizeF(ink.size()) / self.scale));

@@ -38,11 +38,13 @@ std::optional<NativeScrollInput> nativeScrollInput(std::string_view event_type, 
   }
 
   const auto *const event = (__bridge NSEvent *)message;
+
   if (event.type != NSEventTypeScrollWheel) {
     return {};
   }
 
   const auto *const view = (__bridge NSView *)std::bit_cast<const void *>(window.winId());
+
   if (event.window != view.window) {
     return {};
   }

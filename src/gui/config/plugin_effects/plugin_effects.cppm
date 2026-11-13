@@ -122,6 +122,7 @@ public:
   // A caller must finish this whole-batch check before applying the first effect.
   inline void authorize(const runtime::plugins::Package &package, const runtime::plugins::TrustStore &trust) const {
     const auto grants = trust.granted(package.manifest.id.view(), package.digest);
+
     for (const auto &effect : effects()) {
       const auto *action = std::get_if<BindingAction>(&effect);
       const auto required = action == nullptr ? runtime::plugins::Capability::notifications : capability(action->kind);
@@ -153,9 +154,11 @@ private:
 
   inline static NotificationActionDescription notification(std::span<const Byte> &input) {
     NotificationActionDescription value;
+
     value.level = EnumByte<NotificationLevel, static_cast<Byte>(NotificationLevel::failure)>::decode(input);
     value.duration_ms = BoundedInteger<u32, min_notification_duration_ms, max_notification_duration_ms>::decode(input);
     DecodeStorage storage{};
+
     value.target = ValueCodec<NotificationTarget>::decode(input, storage);
     value.title.assign(DisplayText16<max_notification_title_bytes, false>::decode(input));
     value.message.assign(DisplayText16<max_notification_message_bytes>::decode(input));
@@ -178,6 +181,7 @@ private:
         {Tag::rename_workspace, Kind::rename_workspace},
         {Tag::leave_worktree, Kind::leave_worktree},
     });
+
     const auto tag = static_cast<Tag>(u8::decode(input));
     const auto *found = std::ranges::find(simple, tag, &decltype(simple)::value_type::first);
     if (found != simple.end()) {
@@ -189,6 +193,7 @@ private:
     constexpr std::array resize{Kind::resize_left, Kind::resize_right, Kind::resize_up, Kind::resize_down};
     constexpr std::array move{Kind::move_tab_previous, Kind::move_tab_next};
     constexpr std::array sidebar{Kind::resize_sidebar_left, Kind::resize_sidebar_right};
+
     switch (tag) {
     case Tag::split:
       return indexed(split, input);
@@ -215,6 +220,7 @@ private:
 
   inline static std::optional<runtime::plugins::Capability> capability(BindingActionKind kind) {
     using Kind = BindingActionKind;
+
     switch (kind) {
     case Kind::split_horizontal:
     case Kind::split_vertical:
@@ -283,6 +289,7 @@ public:
   // The query is written into the output, region `a`.
   [[nodiscard]] inline static tbc::view<std::string_view, tbc::lt::a> write(const runtime::config::RuntimeValues<Memory> &values, tbc::view<std::span<char>, tbc::lt::a> output) {
     JsonWriter writer{output};
+
     writer.object([&](JsonWriter &object) {
       object.member("graphics_pane_bytes", values.graphics.pane_bytes);
       object.member("graphics_global_bytes", values.graphics.global_bytes);
@@ -316,6 +323,7 @@ private:
         }
       });
     });
+
     writer.member("proxy_capture_enabled", proxy.capture.enabled);
     writer.member("proxy_capture_max_part_bytes", proxy.capture.part_bytes);
     writer.member("proxy_capture_max_exchange_bytes", proxy.capture.exchange_bytes);

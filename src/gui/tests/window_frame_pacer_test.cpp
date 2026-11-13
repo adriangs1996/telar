@@ -78,6 +78,7 @@ public:
 
   void request() {
     QEvent event{QEvent::UpdateRequest};
+
     QCoreApplication::sendEvent(this, &event);
   }
 
@@ -171,6 +172,7 @@ private:
 
   Q_SLOT static void pendingFrameArrivesWithoutAnotherUpdate() {
     FrameFixture window;
+
     window.request();
     QVERIFY(window.framePacer().pending());
     QCOMPARE(window.admitted(), 0);
@@ -185,6 +187,7 @@ private:
 
   Q_SLOT static void visiblePaneOutputUsesItsInputGrace() {
     FrameFixture window;
+
     window.request();
     ControlledClock::now_ns = next_input_ns;
     window.framePacer().noteInput(window.pane(), ControlledClock::now_ns);
@@ -201,6 +204,7 @@ private:
 
   Q_SLOT static void outputRequestsAFrameBeforeThePlatformUpdate() {
     FrameFixture window;
+
     ControlledClock::now_ns = idle_input_ns;
     window.framePacer().noteInput(window.pane(), ControlledClock::now_ns);
     ++window.pane().frame_id;
@@ -215,6 +219,7 @@ private:
     QVERIFY(!window.framePacer().pending());
 
     constexpr int observation_ms = 50;
+
     QVERIFY(!waitForGuiCondition([&] {
       return window.admitted() != 1;
     },
@@ -223,6 +228,7 @@ private:
 
   Q_SLOT static void inputDuringContinuousRenderingKeepsPlatformDelivery() {
     FrameFixture window;
+
     ControlledClock::now_ns = next_input_ns;
     window.framePacer().noteInput(window.pane(), ControlledClock::now_ns);
     ++window.pane().frame_id;
@@ -236,6 +242,7 @@ private:
 
   Q_SLOT static void graphicsOnlyInputRequestsOneFrameAfterIdle() {
     FrameFixture window;
+
     ControlledClock::now_ns = idle_input_ns;
     window.framePacer().noteInput(window.pane(), ControlledClock::now_ns);
     ++window.pane().graphics_revision;
@@ -256,12 +263,14 @@ private:
   Q_SLOT static void graphicsGraceRequiresFreshAttachedOutputAndDoesNotRefreshItsDeadline() {
     FramePacer pacing;
     FramePacer::Pane pane{.pane_id = 1, .frame_id = 4, .attached = true, .attachment_generation = 2, .graphics_revision = 3};
+
     pacing.noteInput(pane, started_ns);
     QVERIFY(!pacing.canAdvanceInput(pane, next_input_ns));
     ++pane.graphics_revision;
     QVERIFY(pacing.canAdvanceInput(pane, next_input_ns));
 
     auto stale = pane;
+
     --stale.frame_id;
     QVERIFY(!pacing.canAdvanceInput(stale, next_input_ns));
     stale = pane;
@@ -272,6 +281,7 @@ private:
     QVERIFY(!pacing.canAdvanceInput(pane, started_ns + FramePacer::input_grace_ns));
 
     auto detached = pane;
+
     detached.attached = false;
     QVERIFY(!pacing.canAdvanceInput(detached, next_input_ns));
     ++pane.attachment_generation;
@@ -280,8 +290,10 @@ private:
 
   Q_SLOT static void graphicsGraceConsumesTheExistingFrameBudget() {
     FramePacer pacing;
+
     pacing.configure(FramePacer::maximum_interval_ns, std::nullopt);
     std::array panes{FramePacer::Pane{.pane_id = 1, .frame_id = 1, .attached = true, .attachment_generation = 1}};
+
     pacing.record(panes, started_ns);
     pacing.noteInput(panes.front(), next_input_ns);
     for (std::uint32_t index = 0; index < FramePacer::input_frame_budget; ++index) {
@@ -297,6 +309,7 @@ private:
 
   Q_SLOT static void earlyInputDeliveryRequiresTwoIdleIntervals() {
     FrameFixture window;
+
     ControlledClock::now_ns = idle_input_ns - 1;
     window.framePacer().noteInput(window.pane(), ControlledClock::now_ns);
     ++window.pane().frame_id;
@@ -314,6 +327,7 @@ private:
 
   Q_SLOT static void backgroundOutputDoesNotAdvancePlatformDelivery() {
     FrameFixture window;
+
     ++window.pane().frame_id;
     window.framePacer().requestInputFrame(window.pane());
     QVERIFY(!window.framePacer().pending());
@@ -329,12 +343,14 @@ private:
 
   Q_SLOT static void onlyANewFrameFromTheInputAttachmentCanAdvanceDelivery() {
     FrameFixture window;
+
     ControlledClock::now_ns = idle_input_ns;
     window.framePacer().noteInput(window.pane(), ControlledClock::now_ns);
     window.framePacer().requestInputFrame(window.pane());
     QVERIFY(!window.framePacer().pending());
 
     auto other = window.pane();
+
     ++other.pane_id;
     ++other.frame_id;
     window.framePacer().requestInputFrame(other);
@@ -361,6 +377,7 @@ private:
 
   Q_SLOT static void hidingBeforeOutputDeliveryCancelsTheRequest() {
     FrameFixture window;
+
     ControlledClock::now_ns = idle_input_ns;
     window.framePacer().noteInput(window.pane(), ControlledClock::now_ns);
     ++window.pane().frame_id;
@@ -379,15 +396,18 @@ private:
 
   Q_SLOT static void anotherPaneCannotReleaseThePendingFrame() {
     FrameFixture window;
+
     window.request();
     ControlledClock::now_ns = next_input_ns;
     auto other = window.pane();
+
     ++other.pane_id;
     window.framePacer().noteInput(other, ControlledClock::now_ns);
     ++window.pane().frame_id;
     window.framePacer().reconsider(window.panes());
 
     constexpr int observation_ms = 50;
+
     QVERIFY(!waitForGuiCondition([&] {
       return window.admitted() != 0;
     },
@@ -402,6 +422,7 @@ private:
 
   Q_SLOT static void fasterCadenceReconsidersTheExistingRequest() {
     FrameFixture window;
+
     window.request();
     ControlledClock::now_ns += FramePacer::minimum_interval_ns;
     window.framePacer().configure(FramePacer::minimum_interval_ns, telar::gui::Configuration::maximum_fps);
@@ -415,13 +436,16 @@ private:
 
   Q_SLOT static void hidingCancelsTheDeferredRequest() {
     FrameFixture window;
+
     window.request();
     window.hide();
     window.request();
     QVERIFY(!window.framePacer().pending());
     const auto admitted = window.admitted();
+
     ControlledClock::now_ns += FramePacer::maximum_interval_ns;
     constexpr int observation_ms = 50;
+
     QVERIFY(!waitForGuiCondition([&] {
       return window.admitted() != admitted;
     },
@@ -430,6 +454,7 @@ private:
 
   Q_SLOT static void destroyingTheAdapterReturnsTheHeldRequest() {
     FrameFixture window;
+
     window.request();
     QVERIFY(window.framePacer().pending());
     window.releasePacer();
@@ -444,6 +469,7 @@ private:
     auto window = std::make_unique<ControlledWindow>();
     TestFramePacer pacing{*window};
     const std::array panes{FramePacer::Pane{.pane_id = 1, .frame_id = 1, .attached = true, .attachment_generation = 1}};
+
     pacing.record(panes, ControlledClock::now_ns);
     QVERIFY(pacing.defer(panes));
     window.reset();

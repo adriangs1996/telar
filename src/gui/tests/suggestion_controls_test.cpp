@@ -53,6 +53,7 @@ constexpr int window_height = 640;
 
 QString luaLiteral(const QString &text) {
   QString delimiter;
+
   while (text.contains(QLatin1Char(']') + delimiter + QLatin1Char(']'))) {
     delimiter += QLatin1Char('=');
   }
@@ -73,10 +74,12 @@ private:
                              .arg(luaLiteral(QString::fromUtf8(TELAR_GUI_TEST_PYTHON)), luaLiteral(QString::fromUtf8(TELAR_GUI_SUGGESTION_FIXTURE)), luaLiteral(marker_))
                              .toUtf8();
     QFile file{configuration};
+
     QVERIFY(file.open(QIODevice::WriteOnly));
     QCOMPARE(file.write(command), command.size());
     file.close();
     auto environment = QProcessEnvironment::systemEnvironment();
+
     for (const auto &name : environment.keys()) {
       if (name.startsWith(QLatin1StringView("TELAR_"))) {
         environment.remove(name);
@@ -103,6 +106,7 @@ private:
     client_->open(socket_);
     QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 1, wait_ms);
     const auto record = client_->panes()->data(client_->panes()->index(0, 0), ListModel::record_role).toMap();
+
     pane_id_ = record.value(QStringLiteral("key")).toString().toULongLong();
     terminal_ = std::make_unique<TerminalItem>(window_->contentItem());
     terminal_->setApplication(client_.get());
@@ -112,6 +116,7 @@ private:
         errors_ += error.toString() + QLatin1Char('\n');
       }
     });
+
     panel_ = test::createChrome(engine_, QStringLiteral("PalettePanel"), {{QStringLiteral("controller"), QVariant::fromValue(client_.get())}, {QStringLiteral("ratio"), client_->chromeRatio()}});
     panel_->setParentItem(window_->contentItem());
     connect(client_.get(), &Application::windowGeometryChanged, this, &SuggestionControlsTest::synchronizeSurfaces);
@@ -145,6 +150,7 @@ private:
     submit();
     QTRY_VERIFY_WITH_TIMEOUT(state().value(QStringLiteral("ready")).toBool(), wait_ms);
     const auto command = state().value(QStringLiteral("text")).toString();
+
     QVERIFY(command.contains(QLatin1StringView("ALTERNATE_REVIEW")));
     QVERIFY(!QFileInfo::exists(marker_));
     query()->forceActiveFocus();
@@ -155,8 +161,10 @@ private:
     terminal_->forceActiveFocus();
     QTest::keyClick(window_.get(), Qt::Key_Return);
     const QByteArray expected{"ALTERNATE_REVIEW"};
+
     QTRY_COMPARE_WITH_TIMEOUT(QFileInfo{marker_}.size(), expected.size(), wait_ms);
     QFile marker{marker_};
+
     QVERIFY(marker.open(QIODevice::ReadOnly));
     QCOMPARE(marker.readAll(), expected);
     marker.close();
@@ -177,9 +185,11 @@ private:
     submit();
     QTRY_VERIFY_WITH_TIMEOUT(state().value(QStringLiteral("ready")).toBool(), wait_ms);
     auto const *button = panel_->findChild<QQuickItem *>(QStringLiteral("suggestionSubmit"));
+
     QVERIFY(button != nullptr);
     QVERIFY(test::waitForSynchronizedFrame(*window_, wait_ms));
     const auto point = button->mapToScene({button->width() / 2, button->height() / 2}).toPoint();
+
     QTest::mousePress(window_.get(), Qt::LeftButton, Qt::NoModifier, point);
     client_->searchPalette(QStringLiteral("?edited before release"));
     QTest::mouseRelease(window_.get(), Qt::LeftButton, Qt::NoModifier, point);
@@ -194,8 +204,10 @@ private:
     submit();
     QTRY_VERIFY_WITH_TIMEOUT(state().value(QStringLiteral("ready")).toBool(), wait_ms);
     const auto lines = client_->suggestionGeometry().value(QStringLiteral("lines")).toList();
+
     QVERIFY(!lines.empty() && lines.back().toMap().value(QStringLiteral("shortened")).toBool());
     const auto command = state().value(QStringLiteral("text")).toString();
+
     submit();
     QTRY_VERIFY_WITH_TIMEOUT((client_->dialog() == telar::gui::qt::Application::Dialog::none), wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(screenText(client_->pane(pane_id_)->screen, ScreenTextLayout::logical).contains(command), wait_ms);
@@ -223,9 +235,11 @@ private:
     }
 
     const auto terminal = client_->windowGeometry().value(QStringLiteral("terminal")).toRectF();
+
     terminal_->setPosition(terminal.topLeft());
     terminal_->setSize(terminal.size());
     const auto palette = client_->paletteGeometry().value(QStringLiteral("bounds")).toRectF();
+
     panel_->setPosition(palette.topLeft());
     panel_->setSize(palette.size());
     panel_->setVisible(client_->dialog() == telar::gui::qt::Application::Dialog::palette);

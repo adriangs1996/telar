@@ -93,6 +93,7 @@ private:
   inline auto materialize(Coded coded, bool encode) -> tbc::view<DecodedBody<Memory>, tbc::lt::a> {
     if (coded.storage) { return std::move(*coded.storage); }
     DecodedBody<Memory> result{memory_, coded.input.size()};
+
     std::ranges::copy(coded.input, result.storage.bytes().begin());
     result.size = coded.input.size();
     result.decoded = !encode;
@@ -114,14 +115,17 @@ private:
     // `input` moves from the entity to each coding's output; with no coding applied it is the entity.
     auto input = entity;
     std::optional<DecodedBody<Memory>> previous;
+
     for (std::size_t step = 0; step < count; ++step) {
       const auto selected = codings[encode ? step : count - step - 1];
       if (selected == ContentCoding::identity) { continue; }
       const auto capacity = step + 1 == count ? limit : std::min(maximum_bytes, limit + coding_overhead_bytes);
       auto output = one(input, selected, capacity, encode);
+
       previous = std::move(output);
       input = previous->bytes();
     }
+
     if (input.size() > limit) { throw std::length_error{"HTTP entity exceeds its limit"}; }
     if (previous) { return {std::move(previous), {}}; }
     return {std::nullopt, entity};
@@ -130,6 +134,7 @@ private:
   inline auto one(std::span<const std::uint8_t> input, ContentCoding selected, std::size_t limit, bool encode) -> tbc::view<DecodedBody<Memory>, tbc::lt::a> {
     DecodedBody<Memory> result{memory_, limit + 1};
     auto output = result.storage.bytes();
+
     if (selected == ContentCoding::gzip || selected == ContentCoding::deflate) {
       result.size = flate(input, output, selected == ContentCoding::gzip, encode);
     } else if (selected == ContentCoding::brotli) {
@@ -137,6 +142,7 @@ private:
     } else {
       result.size = zstd(input, output, encode);
     }
+
     if (result.size > limit) { throw std::length_error{"HTTP entity exceeds its limit"}; }
 
     result.decoded = !encode;
@@ -147,6 +153,7 @@ private:
     const int window = gzip ? MAX_WBITS + gzip_window_offset : MAX_WBITS;
     Flate state{memory_, encode, window};
     auto &stream = state.stream;
+
     stream.next_in = const_cast<std::uint8_t *>(input.data());
     stream.avail_in = static_cast<uInt>(input.size());
     stream.next_out = output.data();
@@ -160,6 +167,7 @@ private:
         if (!encode && gzip && inflateReset2(&stream, window) == Z_OK) { continue; }
         throw std::invalid_argument{"Trailing HTTP compressed bytes"};
       }
+
       if (stream.avail_out == 0) { throw std::length_error{"HTTP entity exceeds its limit"}; }
       if (result != Z_OK || (stream.avail_in == before_input && stream.avail_out == before_output)) {
         throw std::invalid_argument{"Invalid or incomplete HTTP compressed entity"};
@@ -173,6 +181,7 @@ private:
     auto remaining_output = output.size();
     const auto *next_input = input.data();
     auto *next_output = output.data();
+
     if (encode) {
       auto state = std::unique_ptr<BrotliEncoderState, decltype(&BrotliEncoderDestroyInstance)>{BrotliEncoderCreateInstance(&DecoderMemory<Memory>::allocate, &DecoderMemory<Memory>::release, &memory), &BrotliEncoderDestroyInstance};
       if (!state) { throw std::bad_alloc{}; }
@@ -180,6 +189,7 @@ private:
       while (!BrotliEncoderIsFinished(state.get())) {
         const auto before_input = remaining_input;
         const auto before_output = remaining_output;
+
         if (!BrotliEncoderCompressStream(state.get(), BROTLI_OPERATION_FINISH, &remaining_input, &next_input, &remaining_output, &next_output, nullptr)) { throw std::invalid_argument{"Brotli encoding failed"}; }
         if (BrotliEncoderIsFinished(state.get())) { break; }
         if (remaining_output == 0 || (remaining_input == before_input && remaining_output == before_output)) { throw std::length_error{"HTTP entity exceeds its limit"}; }
@@ -191,12 +201,14 @@ private:
       if (remaining_output == 0 && result == BROTLI_DECODER_RESULT_NEEDS_MORE_OUTPUT) { throw std::length_error{"HTTP entity exceeds its limit"}; }
       if (result != BROTLI_DECODER_RESULT_SUCCESS || remaining_input != 0) { throw std::invalid_argument{"Invalid or incomplete Brotli entity"}; }
     }
+
     return output.size() - remaining_output;
   }
 
   inline auto zstd(std::span<const std::uint8_t> input, std::span<std::uint8_t> output, bool encode) -> std::size_t {
     DecoderMemory memory{memory_};
     const ZSTD_customMem allocator{&DecoderMemory<Memory>::allocate, &DecoderMemory<Memory>::release, &memory};
+
     if (encode) {
       auto state = std::unique_ptr<ZSTD_CCtx, decltype(&ZSTD_freeCCtx)>{ZSTD_createCCtx_advanced(allocator), &ZSTD_freeCCtx};
       if (!state) { throw std::bad_alloc{}; }
@@ -211,6 +223,7 @@ private:
     if (ZSTD_isError(ZSTD_DCtx_setParameter(state.get(), ZSTD_d_windowLogMax, maximum_window_log))) { throw std::invalid_argument{"Invalid Zstd parameters"}; }
     ZSTD_inBuffer source{input.data(), input.size(), 0};
     ZSTD_outBuffer destination{output.data(), output.size(), 0};
+
     for (;;) {
       const auto before_input = source.pos;
       const auto before_output = destination.pos;
@@ -247,6 +260,7 @@ public:
     // The field copies its name and value into storage of the allocator, region `a`.
     inline Field(tbc::view<Memory &, tbc::lt::a> memory, std::string_view name, std::string_view value) : storage_(memory, name.size() + value.size()), name_bytes_(name.size()) {
       auto bytes = storage_.bytes();
+
       std::ranges::copy(name, bytes.begin());
       std::ranges::copy(value, bytes.begin() + name.size());
     }
@@ -257,6 +271,7 @@ public:
   private:
     inline auto text() const noexcept -> std::string_view {
       const auto bytes = storage_.bytes();
+
       return {reinterpret_cast<const char *>(bytes.data()), bytes.size()};
     }
 
@@ -286,6 +301,7 @@ public:
     if (name.size() + value.size() > maximum_bytes - (bytes_ - old_bytes)) { throw std::length_error{"HTTP fields exceed their limit"}; }
 
     Field replacement{upstream_, name, value};
+
     bytes_ = bytes_ - old_bytes + name.size() + value.size();
     *previous = std::move(replacement);
     for (auto cursor = std::next(previous); cursor != fields_.end();) {
@@ -298,12 +314,15 @@ public:
 
   inline void remove(std::string_view name) noexcept {
     std::array<bool, maximum_fields> matching{};
+
     for (std::size_t index = 0; index < fields_.size(); ++index) {
       matching[index] = asciiEqualIgnoreCase(fields_[index].name(), name);
     }
+
     for (auto index = fields_.size(); index != 0; --index) {
       if (matching[index - 1]) {
         const auto cursor = fields_.begin() + index - 1;
+
         bytes_ -= cursor->name().size() + cursor->value().size() + line_overhead;
         fields_.erase(cursor);
       }
@@ -314,6 +333,7 @@ public:
     for (const auto &field : fields_) {
       if (asciiEqualIgnoreCase(field.name(), name)) { return field.value(); }
     }
+
     return std::nullopt;
   }
 
@@ -377,6 +397,7 @@ public:
   inline static auto encode(tbc::view<std::span<Byte>, tbc::lt::a> output, const HttpMessageView &message) -> tbc::view<std::span<const Byte>, tbc::lt::a> {
     validate(message);
     plugins::FrameWriter writer{output};
+
     writer.tag(message.version);
     writer.boolean(message.response);
     writer.boolean(message.response_to_head);
@@ -397,6 +418,7 @@ public:
     if (input.size() > HttpMessageLimits::message_bytes) { throw EncodingError{"HTTP message exceeds its frame limit"}; }
     plugins::FrameReader reader{input};
     HttpMessageView message;
+
     message.version = reader.tag(HttpVersion::http2);
     message.response = reader.boolean();
     message.response_to_head = reader.boolean();
@@ -418,6 +440,7 @@ public:
   template <typename Message>
   inline static auto encodeMessage(tbc::view<std::span<Byte>, tbc::lt::a> output, const Message &message) -> tbc::view<std::span<const Byte>, tbc::lt::a> {
     HttpMessageView view{.version = message.version, .response = message.response, .response_to_head = message.response_to_head, .stream = message.stream, .method = message.method, .target = message.target, .reason = message.reason, .scheme = message.scheme, .authority = message.authority, .status = message.status, .body = message.body};
+
     for (const auto &field : message.headers.fields()) { view.headers[view.header_count++] = {field.name(), field.value()}; }
     for (const auto &field : message.trailers.fields()) { view.trailers[view.trailer_count++] = {field.name(), field.value()}; }
     return encode(output, view);
@@ -512,6 +535,7 @@ public:
     response_to_head = head_response;
     TextFields lines{input, "\r\n"};
     const auto start = *lines.next();
+
     if (response) {
       if (start.size() < status_line_prefix_bytes || start[8] != ' ' || start[12] != ' ') { throw std::invalid_argument{"Invalid HTTP status line"}; }
       version = readVersion(start.substr(0, 8));
@@ -553,6 +577,7 @@ public:
     } else {
       body.assign(bytes.begin(), bytes.end());
     }
+
     body_materialized = true;
   }
 
@@ -561,6 +586,7 @@ public:
   // Whether the body is an event stream, which never completes for a hook to see it whole.
   inline bool streamingBody() const {
     const auto type = headers.get("content-type");
+
     return type && isEventStream(*type);
   }
 
@@ -587,8 +613,10 @@ public:
         validateRequest();
         if ((scheme != "http" && scheme != "https") || (!target.starts_with('/') && !(method == "OPTIONS" && target == "*"))) { throw std::invalid_argument{"Invalid HTTP/2 target"}; }
       }
+
       if (std::ranges::any_of(authority, [](unsigned char byte) { return byte <= 32 || byte >= 127 || std::string_view{"/,#?@\\"}.contains(byte); })) { throw std::invalid_argument{"Invalid HTTP/2 authority"}; }
     }
+
     validateTrailers();
     for (const auto &field : headers.fields()) {
       if (asciiEqualIgnoreCase(field.name(), "connection") || asciiEqualIgnoreCase(field.name(), "keep-alive") || asciiEqualIgnoreCase(field.name(), "proxy-connection") || asciiEqualIgnoreCase(field.name(), "transfer-encoding") || asciiEqualIgnoreCase(field.name(), "upgrade") || (asciiEqualIgnoreCase(field.name(), "te") && !asciiEqualIgnoreCase(field.value(), "trailers"))) { throw std::invalid_argument{"Connection-specific HTTP/2 field"}; }
@@ -598,6 +626,7 @@ public:
   // Framing is regenerated from the complete entity, never copied from an application's length field.
   inline auto serializeHttp1() -> Bytes {
     Bytes output{AllocatorRef<std::uint8_t, Secure>{memory_}};
+
     serializeHttp1(output);
     return output;
   }
@@ -617,11 +646,13 @@ public:
     if (chunked && version == HttpVersion::http10) { throw std::invalid_argument{"HTTP/1.0 cannot carry trailers"}; }
     validateTrailers();
     const auto protocol = version == HttpVersion::http10 ? "HTTP/1.0" : "HTTP/1.1";
+
     if (response) {
       append(output, protocol); append(output, " "); number(output, status); append(output, " "); append(output, reason); append(output, "\r\n");
     } else {
       append(output, method); append(output, " "); append(output, target); append(output, " "); append(output, protocol); append(output, "\r\n");
     }
+
     for (const auto &field : headers.fields()) {
       if (!framingField(field.name())) { fieldLine(output, field.name(), field.value()); }
     }
@@ -629,11 +660,13 @@ public:
     if (without_body) {
       if (response_to_head && !bodylessResponse(status, false) && (body_materialized || !body.empty())) {
         const auto entity = encodeBody();
+
         append(output, "Content-Length: "); number(output, entity.bytes().size()); append(output, "\r\n");
       } else if (status >= 200 && status != 204 && status != 205 && (response_to_head || status == 304) && headers.get("content-length")) {
         validateLengths();
         fieldLine(output, "Content-Length", *headers.get("content-length"));
       } else if (status == 205) { fieldLine(output, "Content-Length", "0"); }
+
       append(output, "\r\n");
       validateHeadSize(output);
       return;
@@ -641,20 +674,24 @@ public:
 
     const auto encoded = encodeBody();
     const auto entity = encoded.bytes();
+
     if (chunked) {
       fieldLine(output, "Transfer-Encoding", "chunked");
       append(output, "Trailer: ");
       bool first = true;
+
       for (const auto &field : trailers.fields()) {
         if (!first) { append(output, ", "); }
         append(output, field.name());
         first = false;
       }
+
       append(output, "\r\n\r\n");
       validateHeadSize(output);
       if (!entity.empty()) {
         number(output, entity.size(), 16); append(output, "\r\n"); append(output, entity); append(output, "\r\n");
       }
+
       append(output, "0\r\n");
       for (const auto &field : trailers.fields()) { fieldLine(output, field.name(), field.value()); }
       append(output, "\r\n");
@@ -690,21 +727,25 @@ private:
   inline void validateHost() const {
     if (response) { return; }
     std::size_t hosts = 0;
+
     for (const auto &field : headers.fields()) {
       if (asciiEqualIgnoreCase(field.name(), "host")) {
         if (field.value().empty() || std::ranges::any_of(field.value(), [](unsigned char byte) { return byte <= 32 || byte >= 127 || std::string_view{"/,#?@\\"}.contains(byte); })) { throw std::invalid_argument{"Invalid HTTP Host field"}; }
         ++hosts;
       }
     }
+
     if (hosts > 1 || (version == HttpVersion::http11 && hosts != 1)) { throw std::invalid_argument{"HTTP request requires one Host field"}; }
   }
 
   inline void validateLengths() const {
     std::optional<std::size_t> length;
     bool transfer = false;
+
     for (const auto &field : headers.fields()) {
       if (asciiEqualIgnoreCase(field.name(), "content-length")) {
         TextFields values{field.value(), ","};
+
         while (const auto value = values.next()) {
           const auto parsed = parseHttpNumber<10>(trimText(*value, " \t"));
           if (!parsed) { throw std::invalid_argument{"Invalid HTTP length"}; }
@@ -712,11 +753,13 @@ private:
           length = parsed;
         }
       }
+
       if (asciiEqualIgnoreCase(field.name(), "transfer-encoding")) {
         if (transfer || !asciiEqualIgnoreCase(field.value(), "chunked")) { throw std::invalid_argument{"Unsupported HTTP transfer coding"}; }
         transfer = true;
       }
     }
+
     if (transfer && length) { throw std::invalid_argument{"Ambiguous HTTP framing"}; }
   }
 
@@ -727,6 +770,7 @@ private:
       for (const auto &header : headers.fields()) {
         if (!asciiEqualIgnoreCase(header.name(), "connection")) { continue; }
         TextFields tokens{header.value(), ","};
+
         while (const auto token = tokens.next()) {
           if (asciiEqualIgnoreCase(field.name(), trimText(*token, " \t"))) { throw std::invalid_argument{"Hop-by-hop HTTP trailer"}; }
         }
@@ -736,6 +780,7 @@ private:
 
   inline auto contentEncoding() -> Text {
     Text encoding{AllocatorRef<char, Secure>{memory_}};
+
     for (const auto &field : headers.fields()) {
       if (asciiEqualIgnoreCase(field.name(), "content-encoding")) {
         if (trimText(field.value(), " \t").empty()) { throw std::invalid_argument{"Empty HTTP content coding"}; }
@@ -743,6 +788,7 @@ private:
         encoding += field.value();
       }
     }
+
     return encoding;
   }
 

@@ -146,6 +146,7 @@ void Application::refreshHistory() {
   const auto selection = browser.state().selection;
   const auto *pane = dialog_ == Dialog::history && selection < browser.rows().size() ? session().findPane(browser.rows()[selection].pane_id) : nullptr;
   BoundedText<TabCaption::capacity> tab_name;
+
   tab_name.append(historyTabName(pane));
   const auto pane_open = pane != nullptr;
   if (history_view_version_ == browser.viewVersion() && history_scope_value_ == scope_value && history_pane_open_ == pane_open && history_tab_name_.view() == tab_name.view()) {
@@ -154,14 +155,17 @@ void Application::refreshHistory() {
 
   if (history_rows_version_ != browser.rowsVersion()) {
     const auto sampled = platform::WallClock::sample();
+
     history_calendar_ = sampled;
     QList<QVariantMap> rows;
+
     rows.reserve(static_cast<qsizetype>(browser.rows().size()));
     for (std::size_t index = 0; index < browser.rows().size(); ++index) {
       const auto &entry = browser.rows()[index];
       auto record = historyRecord(entry, sampled);
       const auto day = HistoryLabels::localDay(entry.started_at_ms, sampled.utc_offset_min);
       const auto group_ends = index + 1 == browser.rows().size() || day != HistoryLabels::localDay(browser.rows()[index + 1].started_at_ms, sampled.utc_offset_min);
+
       record.insert(QStringLiteral("groupEnds"), group_ends);
       rows.append(std::move(record));
     }
@@ -207,6 +211,7 @@ QString Application::historyScopeValue() {
   if (QByteArrayView{history_directory_source_} != source) {
     const auto compact = HistoryPath::compact(std::string_view{pane->cwd.data(), pane->cwd.size()});
     auto value = toQString(compact.view());
+
     history_directory_source_.assign(source);
     history_directory_value_ = std::move(value);
   }
@@ -282,6 +287,7 @@ QVariantMap Application::historyInspection() const {
 
   const auto details = HistoryInspectionFacts::derive({.directory = entry.cwd, .provider = entry.provider, .tab = tab_name, .id = entry.id, .pane_id = entry.pane_id, .started_at_ms = entry.started_at_ms, .duration_ns = entry.duration_ns, .exit_code = entry.exit_code, .status = entry.status, .author = entry.author, .origin = entry.origin, .pane_open = pane != nullptr}, history_calendar_);
   QVariantList facts;
+
   for (const auto &fact : details.lines()) {
     facts.append(QVariantMap{
         {QStringLiteral("label"), toQString(fact.label)},
@@ -318,6 +324,7 @@ void Application::reportHistoryQueryLimit(qulonglong requested_bytes) {
 void Application::setHistoryFilters(const QVariantMap &filters) {
   applyInteraction([&] {
     auto next = history_filters_;
+
     if (filters.contains(QStringLiteral("scope"))) {
       next.scope = parseScope(filters.value(QStringLiteral("scope")).toString());
     }
@@ -332,6 +339,7 @@ void Application::setHistoryFilters(const QVariantMap &filters) {
 
     history_filters_ = next;
     const auto query = history_query_;
+
     searchHistory(query);
   });
 }
@@ -376,6 +384,7 @@ void Application::executeHistory(HistoryAction action, const QString &entry_id) 
       const auto &browser = session().historyBrowser();
       const auto &rows = browser.rows();
       const auto identity = entry_id.isEmpty() && !rows.empty() ? rows[browser.state().selection].id : entry_id.toULongLong();
+
       if (action == HistoryAction::copy) {
         session().copyHistory(identity);
         QGuiApplication::clipboard()->setText(toQString(session().clipboard()));

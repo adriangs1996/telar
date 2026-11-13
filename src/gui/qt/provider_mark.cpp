@@ -55,6 +55,7 @@ QImage coloredMark(AgentProvider provider, int side, const QColor &color, bool t
   auto image = telar_mark ? ProviderArtwork::telar(side, monochrome, theme) : ProviderArtwork::image(provider, side);
   if (!image.isNull() && (monochrome || (!telar_mark && ApplicationMark{.provider = provider}.followsTheme()))) {
     QPainter painter{&image};
+
     painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
     painter.fillRect(image.rect(), color);
   }
@@ -157,6 +158,7 @@ void ProviderMark::setRatio(qreal ratio) {
 
 QSGNode *ProviderMark::updatePaintNode(QSGNode *previous, [[maybe_unused]] UpdatePaintNodeData *data) {
   std::unique_ptr<ProviderNode> node{dynamic_cast<ProviderNode *>(previous)};
+
   if (window() == nullptr || width() <= 0 || height() <= 0 || (provider_ == AgentProvider::unknown && !telar_mark_)) {
     return nullptr;
   }
@@ -167,6 +169,7 @@ QSGNode *ProviderMark::updatePaintNode(QSGNode *previous, [[maybe_unused]] Updat
   constexpr qreal supersample = 2;
   const auto wanted = static_cast<float>(std::round(std::max(width(), height()) * scale * supersample));
   const auto side = static_cast<int>(std::clamp(wanted, static_cast<float>(ApplicationMark::minimum_cell), static_cast<float>(ApplicationMark::maximum_cell)));
+
   if (!node) {
     node = std::make_unique<ProviderNode>();
   }
@@ -193,6 +196,7 @@ QSGNode *ProviderMark::updatePaintNode(QSGNode *previous, [[maybe_unused]] Updat
   const auto origin = mapToScene(QPointF{});
   const QPointF offset{(std::floor(origin.x() * scale) / scale) - origin.x(), (std::floor(origin.y() * scale) / scale) - origin.y()};
   QMatrix4x4 transform;
+
   transform.translate(static_cast<float>(offset.x()), static_cast<float>(offset.y()));
   node->setMatrix(transform);
   node->image.setRect(QRectF{QPointF{}, size()});

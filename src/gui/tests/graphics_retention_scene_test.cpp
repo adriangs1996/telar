@@ -146,6 +146,7 @@ protected:
     auto *node = dynamic_cast<ImageNode *>(owned.get());
     if (node == nullptr) {
       auto replacement = std::make_unique<ImageNode>();
+
       node = replacement.get();
       owned = std::move(replacement);
     }
@@ -172,12 +173,15 @@ public:
         screen_(memory_),
         item_(catalog_, screen_, *window_.contentItem()) {
     auto &images = WindowImages::forWindow(window_);
+
     QObject::connect(&window_, &QQuickWindow::afterAnimating, &window_, [this] {
       preparePlacements();
     });
+
     QObject::connect(&window_, &QQuickWindow::beforeSynchronizing, &window_, [this, &images] {
       images.beginCatalogSnapshot();
       std::vector<ImagePlacementSource> sources;
+
       collectSources(*window_.contentItem(), sources, false);
       for (const auto &source : sources) {
         images.observeCatalog(*source.store);
@@ -190,6 +194,7 @@ public:
                      Qt::DirectConnection);
     QObject::connect(&window_, &QQuickWindow::sceneGraphAboutToStop, &window_, [this, &images] {
       const auto sample = images.statistics();
+
       QTimer::singleShot(0, &window_, [this, sample] {
         if (sample.frame >= statistics_.frame) {
           statistics_ = sample;
@@ -243,6 +248,7 @@ public:
   ImageDescription begin(std::uint64_t generation, std::uint32_t width = 2, std::uint32_t height = 2, ImageFormat format = ImageFormat::rgba) {
     const auto channels = format == ImageFormat::rgb ? rgb_channels : pixel_channels;
     const ImageDescription image{.key = {.image_id = 1, .generation = generation}, .format = format, .width = width, .height = height, .byte_len = std::uint64_t{width} * height * static_cast<std::uint64_t>(channels)};
+
     graphics().image({.header = header, .image = image});
 
     return image;
@@ -252,8 +258,10 @@ public:
     require(!pattern.empty(), "the image fixture must provide its pixel colors");
     const auto channels = image.format == ImageFormat::rgb ? rgb_channels : pixel_channels;
     std::vector<Byte> pixels(static_cast<std::size_t>(image.byte_len));
+
     for (std::size_t index = 0; index < pixels.size(); index += static_cast<std::size_t>(channels)) {
       const auto color = pattern[(index / static_cast<std::size_t>(channels)) % pattern.size()];
+
       pixels[index] = static_cast<Byte>(color.red());
       pixels[index + 1] = static_cast<Byte>(color.green());
       pixels[index + 2] = static_cast<Byte>(color.blue());
@@ -267,6 +275,7 @@ public:
 
   void finish(const ImageDescription &image, QColor color) {
     const std::array pattern{color};
+
     finishPattern(image, pattern);
   }
 
@@ -290,13 +299,16 @@ public:
     preparePlacements();
     item_.update();
     const auto image = window_.grabWindow();
+
     require(!image.isNull(), "the image fixture must capture a rendered frame");
     const auto capture_directory = qEnvironmentVariable("TELAR_GUI_GRAPHICS_CAPTURE_DIR");
     if (!capture_directory.isEmpty()) {
       const QDir directory{capture_directory};
+
       require(directory.mkpath(QStringLiteral(".")), "the image fixture must create its capture directory");
       const auto suffix = capture_phase_.isEmpty() ? QString::number(++capture_index_) : capture_phase_;
       const auto name = QStringLiteral("%1-%2.png").arg(QString::fromLatin1(QTest::currentTestFunction()), suffix);
+
       require(image.save(directory.filePath(name)), "the image fixture must save its captured frame");
     }
 
@@ -306,6 +318,7 @@ public:
   void placeholders() {
     constexpr std::array<std::string_view, 4> graphemes{"\xf4\x8e\xbb\xae\xcc\x85\xcc\x85", "\xf4\x8e\xbb\xae\xcc\x85\xcc\x8d", "\xf4\x8e\xbb\xae\xcc\x8d\xcc\x85", "\xf4\x8e\xbb\xae\xcc\x8d\xcc\x8d"};
     std::array<Cell, 4> cells;
+
     for (std::size_t index = 0; index < cells.size(); ++index) {
       cells[index].text = byteView(graphemes[index]);
       cells[index].style.foreground = {.kind = CellColor::Kind::rgb, .channels = {0, 0, 1}};
@@ -320,6 +333,7 @@ public:
     const std::array<FrameSpan, 1> spans{{{.start = 0, .count = static_cast<std::uint32_t>(cells.size()), .cells = run}}};
     const std::vector<Byte> flags(size.rows);
     PaneFrame frame;
+
     frame.pane_id = 1;
     frame.frame_id = screen_.frameId() + 1;
     frame.cols = size.cols;
@@ -344,6 +358,7 @@ public:
 private:
   void preparePlacements() {
     std::vector<ImagePlacementSource> sources;
+
     collectSources(*window_.contentItem(), sources, true);
     if (const auto reach = WindowImages::forWindow(window_).preparePlacements(sources)) {
       placement_limits_.push_back(*reach);
@@ -352,8 +367,10 @@ private:
 
   static void collectSources(QQuickItem &parent, std::vector<ImagePlacementSource> &sources, bool visible_only) {
     std::vector<QQuickItem *> pending{&parent};
+
     while (!pending.empty()) {
       auto *item = pending.back();
+
       pending.pop_back();
       require(item != nullptr, "the image fixture tree must contain live items");
       if (visible_only && !item->isVisible()) {
@@ -361,6 +378,7 @@ private:
       }
 
       const auto children = item->childItems();
+
       pending.insert(pending.end(), children.crbegin(), children.crend());
 
       if (auto *view = dynamic_cast<ImageItem *>(item)) {
@@ -391,10 +409,13 @@ class GraphicsRetentionSceneTest : public QObject {
     constexpr std::int64_t below = 20;
     FoldMap<> folds;
     const std::array spans{FoldMap<>::Span{.first = fold_first, .count = fold_rows}};
+
     folds.assign(spans);
     const ImageRows plain{.top = top};
+
     QCOMPARE(plain.drawn(below), std::optional<std::int64_t>{below - static_cast<std::int64_t>(top)});
     const ImageRows folded{.top = top, .folds = &folds};
+
     QCOMPARE(folded.drawn(above), std::optional<std::int64_t>{above - static_cast<std::int64_t>(top)});
     QCOMPARE(folded.drawn(below), std::optional<std::int64_t>{below - fold_rows - static_cast<std::int64_t>(top)});
     QVERIFY(!folded.drawn(fold_first + 1));
@@ -404,19 +425,23 @@ class GraphicsRetentionSceneTest : public QObject {
   Q_SLOT static void highestPlacementsAreSelectedBeforeAnyUpload() {
     Fixture fixture;
     const auto image = fixture.begin(1);
+
     fixture.finish(image, red);
     fixture.place(image);
     fixture.placeholders();
     constexpr auto placements_per_view = GraphicsStore<ApplicationAllocator>::placement_capacity;
     constexpr auto view_count = (ImagePlacementSelection::capacity / placements_per_view) + 1;
+
     for (std::size_t index = 0; index < placements_per_view; ++index) {
       fixture.graphics().placement({.header = header, .placement = {.key = image.key, .virtual_id = index + 1, .columns = 2, .rows = 2, .z_index = std::numeric_limits<std::int32_t>::max(), .location = PlacementLocation::placeholders}});
     }
 
     std::array<std::optional<GraphicsStore<ApplicationAllocator>>, view_count - 1> catalogs;
     std::vector<std::unique_ptr<ImageItem>> views;
+
     for (std::size_t index = 1; index < view_count; ++index) {
       auto &catalog = catalogs[index - 1];
+
       catalog.emplace(fixture.memory_, fixture.budget_);
       catalog->image({.header = header, .image = image});
       catalog->chunk({.header = header, .key = image.key, .bytes = fixture.graphics().findImage(image.key)->pixels()});
@@ -425,6 +450,7 @@ class GraphicsRetentionSceneTest : public QObject {
       }
 
       auto view = std::make_unique<ImageItem>(catalog, fixture.screen_, *fixture.window().contentItem());
+
       view->setX(static_cast<qreal>(index * window_side));
       views.push_back(std::move(view));
     }
@@ -456,10 +482,12 @@ class GraphicsRetentionSceneTest : public QObject {
   Q_SLOT static void incompleteReplacementPreservesThePreviousTexture() {
     Fixture fixture;
     const auto previous = fixture.begin(1);
+
     fixture.finish(previous, red);
     fixture.place(previous);
     QCOMPARE(fixture.sample({cell_side, cell_side}), red);
     const auto current = fixture.begin(2);
+
     fixture.place(current);
     QCOMPARE(fixture.sample({cell_side, cell_side}), red);
     fixture.finish(current, blue);
@@ -469,12 +497,15 @@ class GraphicsRetentionSceneTest : public QObject {
   Q_SLOT static void retainedPlacementUsesItsOwnGeometryWithANewerTexture() {
     Fixture fixture;
     const auto previous = fixture.begin(1);
+
     fixture.finish(previous, red);
     fixture.place(previous, false);
     constexpr QPoint lower_half{cell_side, cell_side + (cell_side / 2)};
+
     QCOMPARE(fixture.sample(lower_half), red);
     const auto current = fixture.begin(2, 4, 2);
     constexpr std::array bands{blue, blue, red, red};
+
     fixture.finishPattern(current, bands);
     QCOMPARE(fixture.sample(lower_half), blue);
     QVERIFY(fixture.graphics().findImage(previous.key) != nullptr);
@@ -484,12 +515,15 @@ class GraphicsRetentionSceneTest : public QObject {
     Fixture fixture;
     const auto previous = fixture.begin(1);
     constexpr std::array quadrants{red, green, blue, yellow};
+
     fixture.finishPattern(previous, quadrants);
     fixture.placeholders();
     fixture.graphics().placement({.header = header, .placement = {.key = previous.key, .virtual_id = 1, .columns = 2, .rows = 2, .location = PlacementLocation::placeholders}});
     constexpr QPoint first_cell{cell_side / 2, cell_side / 2};
+
     QVERIFY(closeColor(fixture.sample(first_cell), red));
     const auto current = fixture.begin(2, 4, 4);
+
     fixture.graphics().placement({.header = header, .placement = {.key = current.key, .virtual_id = 1, .source_x = 2, .source_y = 2, .source_width = 2, .source_height = 2, .columns = 2, .rows = 2, .location = PlacementLocation::placeholders}});
     QVERIFY(closeColor(fixture.sample(first_cell), red));
     QVERIFY(closeColor(fixture.sample({cell_side + (cell_side / 2), cell_side / 2}), green));
@@ -500,11 +534,13 @@ class GraphicsRetentionSceneTest : public QObject {
   Q_SLOT static void reattachedCatalogDoesNotShowPixelsFromThePreviousLifetime() {
     Fixture fixture;
     const auto previous = fixture.begin(1);
+
     fixture.finish(previous, red);
     fixture.place(previous);
     QCOMPARE(fixture.sample({cell_side, cell_side}), red);
     fixture.graphics().detach();
     const auto current = fixture.begin(1);
+
     fixture.finish(current, blue);
     fixture.place(current);
     QCOMPARE(fixture.sample({cell_side, cell_side}), blue);
@@ -513,13 +549,16 @@ class GraphicsRetentionSceneTest : public QObject {
   Q_SLOT static void reconstructedCatalogAtTheSameAddressReplacesItsTexture() {
     Fixture fixture;
     const auto previous = fixture.begin(1);
+
     fixture.finish(previous, red);
     fixture.place(previous);
     QCOMPARE(fixture.sample({cell_side, cell_side}), red);
     const auto *previous_address = std::addressof(fixture.graphics());
+
     fixture.reconstructCatalog();
     QCOMPARE(std::addressof(fixture.graphics()), previous_address);
     const auto current = fixture.begin(1);
+
     fixture.finish(current, blue);
     fixture.place(current);
     QCOMPARE(fixture.sample({cell_side, cell_side}), blue);
@@ -528,6 +567,7 @@ class GraphicsRetentionSceneTest : public QObject {
   Q_SLOT static void rgbRowsKeepTheirColorWithoutAnAlphaChannel() {
     Fixture fixture;
     const auto image = fixture.begin(1, 2, 2, ImageFormat::rgb);
+
     fixture.finish(image, red);
     fixture.place(image);
     QCOMPARE(fixture.sample({cell_side, cell_side}), red);
@@ -538,6 +578,7 @@ class GraphicsRetentionSceneTest : public QObject {
     constexpr int half_opacity = 128;
     const auto image = fixture.begin(1);
     auto translucent_red = red;
+
     translucent_red.setAlpha(half_opacity);
     fixture.finish(image, translucent_red);
     fixture.place(image);
@@ -547,10 +588,12 @@ class GraphicsRetentionSceneTest : public QObject {
   Q_SLOT static void drawBudgetIncludesRetainedScenesInPaintOrder() {
     Fixture fixture;
     const auto image = fixture.begin(1);
+
     fixture.finish(image, red);
     constexpr std::size_t global_draw_capacity = 2048;
     constexpr auto draws_per_view = GraphicsStore<ApplicationAllocator>::placement_capacity;
     constexpr auto view_count = (global_draw_capacity / draws_per_view) + 1;
+
     for (std::size_t index = 0; index < draws_per_view; ++index) {
       fixture.graphics().placement({.header = header, .placement = {.key = image.key, .virtual_id = index + 1, .columns = 2, .rows = 2}});
     }
@@ -558,17 +601,21 @@ class GraphicsRetentionSceneTest : public QObject {
     ApplicationAllocator memory;
     const Screen<ApplicationAllocator> screen{memory};
     QQuickItem group{fixture.window().contentItem()};
+
     group.setSize({static_cast<qreal>(view_count * window_side), window_side});
     std::vector<std::unique_ptr<ImageItem>> views;
+
     for (std::size_t index = 1; index < view_count; ++index) {
       auto &parent = index + 1 == view_count ? *fixture.window().contentItem() : group;
       auto view = std::make_unique<ImageItem>(fixture.catalog(), screen, parent);
+
       view->setX(static_cast<qreal>(index * window_side));
       views.push_back(std::move(view));
     }
 
     fixture.window().resize(static_cast<int>(view_count * window_side), window_side);
     const auto last_view_x = static_cast<int>((view_count - 1) * window_side) + cell_side;
+
     fixture.setCapturePhase(QStringLiteral("initial"));
     QCOMPARE(fixture.sample({cell_side, cell_side}), red);
     QCOMPARE(fixture.sample({last_view_x, cell_side}), QColor{Qt::black});
@@ -579,9 +626,11 @@ class GraphicsRetentionSceneTest : public QObject {
     fixture.setCapturePhase(QStringLiteral("reordered"));
     fixture.setImageVisible(true);
     auto &last = *views.back();
+
     last.setParentItem(&group);
     last.stackBefore(views.front().get());
     const auto displaced_view_x = static_cast<int>((view_count - 2) * window_side) + cell_side;
+
     QTRY_COMPARE(fixture.sample({last_view_x, cell_side}), red);
     QCOMPARE(fixture.sample({displaced_view_x, cell_side}), QColor{Qt::black});
     fixture.setCapturePhase(QStringLiteral("last-hidden"));
@@ -592,16 +641,19 @@ class GraphicsRetentionSceneTest : public QObject {
   Q_SLOT static void placeholderDrawsPrecedeAboveTextImagesAtTheBound() {
     Fixture fixture;
     const auto image = fixture.begin(1);
+
     fixture.finish(image, red);
     fixture.graphics().placement({.header = header, .placement = {.key = image.key, .virtual_id = 1, .columns = 1, .rows = 1, .location = PlacementLocation::placeholders}});
     constexpr std::uint16_t screen_side = window_side;
     auto upper = image;
+
     upper.key.image_id = 2;
     fixture.graphics().image({.header = header, .image = upper});
     fixture.finish(upper, blue);
     fixture.graphics().placement({.header = header, .placement = {.key = upper.key, .virtual_id = 2, .columns = screen_side, .rows = screen_side, .z_index = 1}});
     constexpr std::string_view first_fragment{"\xf4\x8e\xbb\xae\xcc\x85\xcc\x85"};
     std::vector<Cell> cells(static_cast<std::size_t>(screen_side) * screen_side);
+
     for (auto &cell : cells) {
       cell.text = byteView(first_fragment);
       cell.style.foreground = {.kind = CellColor::Kind::rgb, .channels = {0, 0, 1}};
@@ -611,10 +663,12 @@ class GraphicsRetentionSceneTest : public QObject {
     fixture.item_.setCellSize({1, 1});
     constexpr QPoint admitted{window_side / 4, window_side / 4};
     constexpr QPoint omitted{window_side / 4, (window_side * 3) / 4};
+
     fixture.setCapturePhase(QStringLiteral("saturated"));
     QCOMPARE(fixture.sample(admitted), red);
     QCOMPARE(fixture.sample(omitted), QColor{Qt::black});
     constexpr std::size_t global_draw_capacity = 2048;
+
     QCOMPARE(fixture.statistics().image_draws, global_draw_capacity);
     fixture.setCapturePhase(QStringLiteral("above-text"));
     fixture.graphics().erase(GraphicsDeletePlacement{.header = header, .virtual_id = 1});
@@ -625,6 +679,7 @@ class GraphicsRetentionSceneTest : public QObject {
   Q_SLOT static void imageGeometryIsClippedToItsOwnView() {
     Fixture fixture;
     const auto image = fixture.begin(1);
+
     fixture.finish(image, red);
     fixture.graphics().placement({.header = header, .placement = {.key = image.key, .virtual_id = 1, .x = 2, .columns = 2, .rows = 2}});
     fixture.window().resize(window_side * 2, window_side);
@@ -644,11 +699,14 @@ class GraphicsRetentionSceneTest : public QObject {
 
   Q_SLOT static void visibleImagesAdvanceAcrossTheUploadBound() {
     Fixture fixture;
+
     fixture.capture();
     constexpr std::uint32_t image_count = 7;
     constexpr std::size_t bytes_per_image = 16;
+
     for (std::uint32_t index = 1; index <= image_count; ++index) {
       const ImageDescription image{.key = {.image_id = index, .generation = 1}, .format = ImageFormat::rgba, .width = 2, .height = 2, .byte_len = bytes_per_image};
+
       fixture.graphics().image({.header = header, .image = image});
       fixture.finish(image, index == image_count ? blue : red);
       fixture.graphics().placement({.header = header, .placement = {.key = image.key, .virtual_id = index, .columns = 2, .rows = 2, .z_index = static_cast<std::int32_t>(index)}});
@@ -659,17 +717,20 @@ class GraphicsRetentionSceneTest : public QObject {
     QCOMPARE(fixture.sample({cell_side, cell_side}), blue);
     QCOMPARE(fixture.statistics().resident_bytes, image_count * bytes_per_image);
     constexpr std::size_t maximum_uploads = 4;
+
     QVERIFY(fixture.statistics().uploads_started <= maximum_uploads);
   }
 
   Q_SLOT static void twoViewsShareOneTextureAndRefreshTogether() {
     Fixture fixture;
     const auto image = fixture.begin(1);
+
     fixture.finish(image, red);
     fixture.place(image);
     ApplicationAllocator memory;
     const Screen<ApplicationAllocator> screen{memory};
     ImageItem other{fixture.catalog(), screen, *fixture.window().contentItem()};
+
     other.setX(window_side);
     fixture.window().resize(window_side * 2, window_side);
     QCOMPARE(fixture.sample({cell_side, cell_side}), red);
@@ -677,6 +738,7 @@ class GraphicsRetentionSceneTest : public QObject {
     QCOMPARE(fixture.statistics().images, std::size_t{1});
     QCOMPARE(fixture.statistics().resources.allocations, std::uint64_t{1});
     const auto newer = fixture.begin(2);
+
     fixture.finish(newer, blue);
     fixture.place(newer);
     QCOMPARE(fixture.sample({cell_side, cell_side}), blue);
@@ -686,10 +748,12 @@ class GraphicsRetentionSceneTest : public QObject {
   Q_SLOT static void panesCompeteForOneGlobalTextureBudget() {
     Fixture fixture;
     const auto image = fixture.begin(1);
+
     fixture.finish(image, red);
     fixture.place(image);
     ApplicationAllocator memory;
     constexpr std::size_t colliding_catalog_distance = image_texture_capacity * 2;
+
     for (std::size_t index = 1; index < colliding_catalog_distance; ++index) {
       const GraphicsStore temporary{memory, fixture.budget()};
     }
@@ -698,31 +762,38 @@ class GraphicsRetentionSceneTest : public QObject {
     constexpr std::size_t texture_bytes = 16;
     constexpr Byte full_channel = 255;
     const std::array<Byte, texture_bytes> pixels{0, 0, full_channel, full_channel, 0, 0, full_channel, full_channel, 0, 0, full_channel, full_channel, 0, 0, full_channel, full_channel};
+
     catalog->image({.header = header, .image = image});
     catalog->chunk({.header = header, .key = image.key, .bytes = pixels});
     catalog->placement({.header = header, .placement = {.key = image.key, .virtual_id = 1, .columns = 2, .rows = 2}});
     const Screen<ApplicationAllocator> screen{memory};
     ImageItem other{catalog, screen, *fixture.window().contentItem()};
+
     other.setX(window_side);
     fixture.window().resize(window_side * 2, window_side);
     const QObject observation;
+
     QObject::connect(&fixture.window(), &QQuickWindow::beforeSynchronizing, &observation, [&] {
       WindowImages::findWindow(fixture.window())->observeCatalog(*catalog);
     },
                      Qt::DirectConnection);
     const auto real_retained_bytes = fixture.budget().used;
+
     fixture.budget().used = GraphicsBudget::global_capacity - texture_bytes;
     const auto frame = fixture.capture();
     const auto scale = fixture.window().devicePixelRatio();
     const auto first = frame.pixelColor(static_cast<int>(cell_side * scale), static_cast<int>(cell_side * scale));
     const auto second = frame.pixelColor(static_cast<int>((window_side + cell_side) * scale), static_cast<int>(cell_side * scale));
+
     QVERIFY((first == red && second == Qt::black) || (first == Qt::black && second == blue));
     QCOMPARE(fixture.statistics().resident_bytes, texture_bytes);
     other.update();
     fixture.capture();
     constexpr int settle_ms = 100;
+
     QTest::qWait(settle_ms);
     const auto settled_frame = fixture.statistics().frame;
+
     QTest::qWait(settle_ms);
     QVERIFY2(fixture.statistics().frame <= settled_frame + 1, "a protected texture budget must wait for state changes rather than force continuous frames");
     if (first == red) {
@@ -732,6 +803,7 @@ class GraphicsRetentionSceneTest : public QObject {
     }
 
     constexpr int admission_wait_ms = 1000;
+
     QTRY_COMPARE_WITH_TIMEOUT(fixture.statistics().resources.allocations, std::uint64_t{2}, admission_wait_ms);
     fixture.budget().used = real_retained_bytes;
     fixture.setImageVisible(true);
@@ -745,6 +817,7 @@ class GraphicsRetentionSceneTest : public QObject {
   Q_SLOT static void aSpareOfTheSameSizeReusesItsNativeTexture() {
     Fixture fixture;
     const auto image = fixture.begin(1);
+
     fixture.finish(image, red);
     fixture.place(image);
     QCOMPARE(fixture.sample({cell_side, cell_side}), red);
@@ -753,7 +826,9 @@ class GraphicsRetentionSceneTest : public QObject {
       fixture.capture();
       return fixture.statistics().spares == 1;
     })());
+
     const auto newer = fixture.begin(2);
+
     fixture.finish(newer, blue);
     fixture.place(newer);
     QCOMPARE(fixture.sample({cell_side, cell_side}), blue);
@@ -766,6 +841,7 @@ class GraphicsRetentionSceneTest : public QObject {
   Q_SLOT static void hidingTheWindowReleasesAndRestoresItsImages() {
     Fixture fixture;
     const auto image = fixture.begin(1);
+
     fixture.finish(image, red);
     fixture.place(image);
     QCOMPARE(fixture.sample({cell_side, cell_side}), red);
@@ -779,11 +855,13 @@ class GraphicsRetentionSceneTest : public QObject {
   Q_SLOT static void idleImagesExpireWhileTheirPaneIsHidden() {
     Fixture fixture;
     const auto image = fixture.begin(1);
+
     fixture.finish(image, red);
     fixture.place(image);
     QCOMPARE(fixture.sample({cell_side, cell_side}), red);
     fixture.setImageVisible(false);
     constexpr int expiry_wait_ms = 7000;
+
     QTRY_COMPARE_WITH_TIMEOUT(fixture.statistics().resident_bytes, std::size_t{0}, expiry_wait_ms);
     fixture.setImageVisible(true);
     QTRY_COMPARE(fixture.sample({cell_side, cell_side}), red);
@@ -793,10 +871,12 @@ class GraphicsRetentionSceneTest : public QObject {
   Q_SLOT static void visibleImagesRemainResidentAtAnIdleDeadline() {
     Fixture fixture;
     const auto image = fixture.begin(1);
+
     fixture.finish(image, red);
     fixture.place(image);
     QCOMPARE(fixture.sample({cell_side, cell_side}), red);
     constexpr int beyond_idle_deadline_ms = 5500;
+
     QTest::qWait(beyond_idle_deadline_ms);
     QCOMPARE(fixture.sample({cell_side, cell_side}), red);
     QCOMPARE(fixture.statistics().resources.allocations, std::uint64_t{1});
@@ -805,6 +885,7 @@ class GraphicsRetentionSceneTest : public QObject {
   Q_SLOT static void aTemporaryRenderStopKeepsTheVisibleImageResident() {
     Fixture fixture;
     const auto image = fixture.begin(1);
+
     fixture.finish(image, red);
     fixture.place(image);
     QCOMPARE(fixture.sample({cell_side, cell_side}), red);
@@ -813,6 +894,7 @@ class GraphicsRetentionSceneTest : public QObject {
     WindowImageStatistics stopped;
     bool injected = false;
     const QObject observation;
+
     QObject::connect(&fixture.window(), &QQuickWindow::afterSynchronizing, &observation, [&] {
       if (!injected) {
         injected = true;
@@ -831,11 +913,13 @@ class GraphicsRetentionSceneTest : public QObject {
   Q_SLOT static void oversizedTextureKeepsItsDrawableStandIn() {
     Fixture fixture;
     const auto previous = fixture.begin(1);
+
     fixture.finish(previous, red);
     fixture.place(previous);
     QCOMPARE(fixture.sample({cell_side, cell_side}), red);
     constexpr std::uint32_t beyond_texture_limit = 16385;
     const auto current = fixture.begin(2, beyond_texture_limit, 1);
+
     fixture.finish(current, blue);
     fixture.place(current);
     QCOMPARE(fixture.sample({cell_side, cell_side}), red);

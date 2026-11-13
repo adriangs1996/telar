@@ -47,8 +47,10 @@ public:
           received_.emplace_back(payload.begin(), payload.end());
         }
       };
+
       stream_.feed(byteView({bytes.constData(), static_cast<std::size_t>(bytes.size())}), consume);
     });
+
     write(HandshakeCodec::encode(ServerAccept{handshake::schema_id}));
   }
 
@@ -64,6 +66,7 @@ public:
   template <typename Message>
   void send(const Message &message) {
     std::vector<Byte> bytes(Codec::encodedSize(message));
+
     write(Codec::encode(message, bytes));
   }
 
@@ -88,9 +91,11 @@ private:
   void write(std::span<const Byte> payload) {
     std::array<Byte, frame_prefix_size> prefix{};
     std::span<Byte> output{prefix};
+
     u32::encode(static_cast<std::uint32_t>(payload.size()), output);
     const auto prefix_text = textView(prefix);
     const auto payload_text = textView(payload);
+
     socket_.write(prefix_text.data(), static_cast<qint64>(prefix_text.size()));
     socket_.write(payload_text.data(), static_cast<qint64>(payload_text.size()));
   }

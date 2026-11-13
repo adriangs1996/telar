@@ -42,10 +42,12 @@ bool acceptsHistory(std::string_view text, bool bracketed_paste) {
 void historyTextSafety() {
   constexpr unsigned first_printable = 0x20;
   constexpr unsigned delete_control = 0x7f;
+
   for (unsigned code = 0; code <= delete_control; ++code) {
     const auto character = static_cast<char>(code);
     const std::string_view text{&character, 1};
     const bool printable = code >= first_printable && code != delete_control;
+
     require(acceptsHistory(text, false) == printable, "unframed history must reject every ASCII control");
     require(acceptsHistory(text, true) == (printable || character == '\n' || character == '\t'), "bracketed history may additionally contain newlines and tabs");
   }
@@ -53,12 +55,15 @@ void historyTextSafety() {
   constexpr unsigned first_extended_control = 0x80;
   constexpr unsigned last_extended_control = 0x9f;
   constexpr unsigned extended_control_lead = 0xc2;
+
   for (unsigned code = first_extended_control; code <= last_extended_control; ++code) {
     const std::array text{static_cast<char>(extended_control_lead), static_cast<char>(code)};
+
     require(!acceptsHistory({text.data(), text.size()}, true), "UTF-8 C1 controls must not bypass history validation");
   }
 
   constexpr auto malformed = std::to_array<std::string_view>({"\x80", "\xc0\xaf", "\xed\xa0\x80", "\xf4\x90\x80\x80", "\xc2"});
+
   for (const auto text : malformed) {
     require(!acceptsHistory(text, true), "malformed UTF-8 must be rejected before history input");
   }
@@ -67,6 +72,7 @@ void historyTextSafety() {
   require(acceptsHistory("printf '\xc2\xa0'", false), "nonbreaking space must not be confused with C1 controls");
   require(!acceptsHistory({}, true), "empty history commands must be rejected");
   std::string bounded(telar::gui::HistoryText::maximum_bytes, 'a');
+
   require(acceptsHistory(bounded, true), "maximum-size captured commands must be accepted");
   bounded.push_back('a');
   require(!acceptsHistory(bounded, true), "oversized commands must be rejected without truncation");
@@ -78,8 +84,10 @@ void borrowedByteViews() {
   constexpr std::string_view raw{"a\0\xff", 3};
   constexpr Byte high_byte = 0xff;
   const auto bytes = byteView(raw);
+
   require(bytes.size() == raw.size() && bytes[0] == 'a' && bytes[1] == 0 && bytes[2] == high_byte, "shared byte views must preserve embedded zero and high-bit bytes");
   const auto text = textView(bytes);
+
   require(text == raw && text.data() == raw.data(), "shared character views must borrow the existing representation without copying");
 }
 
@@ -95,6 +103,7 @@ void screenFrames() {
     Screen screen{memory};
     const std::array<Byte, 1> text{'x'};
     std::array<Cell, 4> cells;
+
     for (auto &cell : cells) {
       cell.text = text;
     }
@@ -105,6 +114,7 @@ void screenFrames() {
     const std::array<FrameSpan, 1> spans{{{.start = 0, .count = 4, .cells = run}}};
     const std::array<Byte, 2> flags{};
     PaneFrame frame;
+
     frame.pane_id = 1;
     frame.frame_id = 1;
     frame.cols = 2;
@@ -118,11 +128,13 @@ void screenFrames() {
     require(screen.apply(frame) == FrameApplication::stale, "duplicate frame must be ignored");
 
     const auto second_row_revision = screen.rowRevision(1);
+
     frame.frame_id = 2;
     frame.base_frame_id = 1;
     frame.text_metadata.reset();
     const auto delta_run = CellRunCodec::encode(std::span{cells}.first(1), encoded);
     const std::array<FrameSpan, 1> delta_spans{{{.start = 0, .count = 1, .cells = delta_run}}};
+
     frame.spans = delta_spans;
     require(screen.apply(frame) == FrameApplication::applied, "delta must apply");
     require(screen.rowRevision(1) == second_row_revision, "unchanged row must retain its revision");
@@ -134,8 +146,10 @@ void screenFrames() {
     frame.base_frame_id = 2;
     const std::array<Byte, 1> malformed{0xff};
     const std::array<FrameSpan, 1> bad_spans{{{.start = 0, .count = 1, .cells = malformed}}};
+
     frame.spans = bad_spans;
     bool rejected = false;
+
     try {
       screen.apply(frame);
     } catch (const EncodingError &) {
@@ -148,6 +162,7 @@ void screenFrames() {
     const std::array<Cell, 1> changed{{{.text = replacement}}};
     const auto changed_run = CellRunCodec::encode(changed, encoded);
     const std::array<FrameSpan, 2> late_bad_spans{{{.start = 0, .count = 1, .cells = changed_run}, {.start = 3, .count = 1, .cells = malformed}}};
+
     frame.spans = late_bad_spans;
     rejected = false;
     try {
@@ -159,6 +174,7 @@ void screenFrames() {
     require(rejected && screen.frameId() == 2 && screen.cells()[0].utf8() == "x", "a malformed later span must not commit an earlier decoded span");
     require(screen.rowRevision(1) == second_row_revision, "a rejected frame must retain row revisions");
     const std::array<FrameSpan, 2> recovered_spans{{{.start = 0, .count = 1, .cells = changed_run}, {.start = 3, .count = 1, .cells = changed_run}}};
+
     frame.spans = recovered_spans;
     require(screen.apply(frame) == FrameApplication::applied, "valid delta must recover after a rejected frame");
     require(screen.cells()[0].utf8() == "y" && screen.cells()[3].utf8() == "y", "delta spans must commit at their own positions");
@@ -167,6 +183,7 @@ void screenFrames() {
     const std::array before_crossing{screen.rowRevision(0), screen.rowRevision(1)};
     const auto crossing_run = CellRunCodec::encode(std::array<Cell, 2>{changed[0], changed[0]}, encoded);
     const std::array<FrameSpan, 1> crossing_spans{{{.start = 1, .count = 2, .cells = crossing_run}}};
+
     frame.base_frame_id = frame.frame_id++;
     frame.spans = crossing_spans;
     require(screen.apply(frame) == FrameApplication::applied, "a span across rows must apply");
@@ -175,6 +192,7 @@ void screenFrames() {
 
     const std::array prior_rows{screen.rowRevision(0), screen.rowRevision(1)};
     const std::array<Byte, 2> wrapped_flags{static_cast<Byte>(RowFlag::wrap), 0};
+
     frame.base_frame_id = frame.frame_id++;
     frame.spans = {};
     frame.cursor = {.visible = true, .x = 1, .y = 1};
@@ -195,14 +213,17 @@ void splitLayout() {
   using namespace telar::gui;
 
   PaneLayout layout;
+
   require(layout.add(1, ClientLayoutAxis::horizontal, 0), "first pane");
   require(layout.add(2, ClientLayoutAxis::horizontal, 1), "horizontal split");
   require(layout.add(3, ClientLayoutAxis::vertical, 2), "vertical split");
   constexpr CellRectangle viewport{.width = 100, .height = 100};
   const auto placements = layout.arrange(viewport, {.gap = 2});
+
   require(placements.size() == 3, "three leaves");
   constexpr std::uint16_t expected_pane_width = 49;
   constexpr std::uint16_t expected_nested_top = 51;
+
   require(placements[0].bounds.width == expected_pane_width, "split must account for separator");
   require(placements[2].bounds.y == expected_nested_top, "nested vertical split");
   require(layout.dividers().size() == 2, "every split must expose an independent resize handle");
@@ -220,7 +241,9 @@ void splitLayout() {
       ClientLayoutSplit{.axis = ClientLayoutAxis::horizontal, .ratio = 5000},
       ClientLayoutPane{7},
   };
+
   bool rejected = false;
+
   try {
     layout.restore(incomplete);
   } catch (const EncodingError &) {
@@ -232,8 +255,10 @@ void splitLayout() {
 
 void requireLayoutCoverage(const telar::gui::PaneLayout &layout, std::span<const telar::gui::PaneLayout::Placement> placements, telar::gui::CellRectangle viewport) {
   std::uint64_t area = 0;
+
   for (const auto &placement : placements) {
     const auto &bounds = placement.bounds;
+
     require(bounds.x >= viewport.x && bounds.y >= viewport.y && bounds.right() <= viewport.right() && bounds.bottom() <= viewport.bottom(), "every pane must remain inside its viewport");
     require(bounds.width >= 0 && bounds.height >= 0, "collapsed panes cannot have negative extents");
     area += static_cast<std::uint64_t>(bounds.width) * bounds.height;
@@ -261,19 +286,23 @@ void layoutCapacity() {
 
   for (const bool deepest_first : {false, true}) {
     PaneLayout layout;
+
     require(layout.add(first_pane, ClientLayoutAxis::horizontal, 0), "create capacity fixture");
     for (std::size_t index = 1; index < PaneLayout::maximum_panes; ++index) {
       const auto axis = index % 2 == 0 ? ClientLayoutAxis::horizontal : ClientLayoutAxis::vertical;
       const auto beside = deepest_first ? first_pane : index;
+
       require(layout.add(index + first_pane, axis, beside), "every pane within the capacity must be admitted");
     }
 
     require(!layout.add(PaneLayout::maximum_panes + first_pane, ClientLayoutAxis::horizontal, first_pane), "capacity must reject an additional pane");
     const auto placements = layout.arrange(viewport, {.gap = gap});
+
     require(placements.size() == PaneLayout::maximum_panes, "deep layouts must retain every leaf");
     require(layout.dividers().size() == PaneLayout::maximum_panes - 1, "deep layouts must retain every divider");
     requireLayoutCoverage(layout, placements, viewport);
     const auto fullscreen = layout.arrange(viewport, {.gap = gap}, first_pane);
+
     require(fullscreen.size() == 1 && fullscreen.front().bounds == viewport && layout.dividers().empty(), "fullscreen must discard split geometry");
   }
 }
@@ -286,6 +315,7 @@ void fragmentedTransport() {
   const auto payload = Codec::encode(PaneExited{.pane_id = 1, .kind = ExitKind::exited, .value = 0});
   std::array<Byte, frame_prefix_size + payload.size()> bytes{};
   std::span<Byte> output{bytes};
+
   u32::encode(payload.size(), output);
   std::ranges::copy(payload, output.begin());
 
@@ -321,6 +351,7 @@ void fragmentedTransport() {
     require(Codec::decode<PaneExited>(frame).pane_id == 1, "reset frames must decode with a fresh prefix");
     ++received;
   };
+
   stream.feed(bytes, count_frame);
   require(received == 1, "a reset must discard the failed connection's partial frame");
 }
@@ -332,10 +363,12 @@ void terminalConsumerStopsBeforeTheNextFrame() {
   SystemAllocator upstream;
   constexpr std::size_t payload_bytes = 1;
   BudgetAllocator memory{upstream, payload_bytes};
+
   {
     FrameStream stream{memory};
     std::array<Byte, (2 * frame_prefix_size) + payload_bytes> bytes{};
     std::span<Byte> output{bytes};
+
     u32::encode(payload_bytes, output);
     output.front() = 'T';
     std::size_t received = 0;
@@ -345,6 +378,7 @@ void terminalConsumerStopsBeforeTheNextFrame() {
 
       return false;
     };
+
     try {
       stream.feed(bytes, terminal);
     } catch (const EncodingError &) {
@@ -365,6 +399,7 @@ void mouseEncoding() {
   constexpr unsigned column = 12;
   constexpr unsigned row = 34;
   constexpr unsigned first_unrepresentable_coordinate = 224;
+
   require(encoder.encode(0, column, row, false, true) == "\x1b[<0;12;34M", "SGR mouse press");
   require(encoder.encode(0, column, row, true, true) == "\x1b[<0;12;34m", "SGR mouse release");
   require(encoder.encode(0, first_unrepresentable_coordinate, 1, false, false).empty(), "legacy mouse coordinates must remain within the protocol bound");
@@ -379,13 +414,16 @@ void copyRanges() {
   constexpr std::uint32_t start_row = 10;
   constexpr std::uint16_t end_column = 79;
   constexpr std::uint32_t end_row = 12;
+
   require(range.pane_id == pane_id && range.start_x == 0 && range.start_y == start_row && range.end_x == end_column && range.end_y == end_row && !range.linewise, "copy range must preserve inclusive history coordinates");
 
   const auto maximum = CopyRangeParser::parse(pane_id, "65__535,4_294_967_295:000,0");
+
   require(maximum.start_x == std::numeric_limits<std::uint16_t>::max() && maximum.start_y == std::numeric_limits<std::uint32_t>::max() && maximum.end_x == 0, "copy coordinates must accept the original parser's decimal separators and full capacities");
 
   for (const auto *const text : {"", "0,1", "0,1:2", "0,1:2,3:4", "0,1,2:3,4", ",1:2,3", "0,:2,3", "0,1:,3", "0,1:2,", "65536,1:2,3", "0,4294967296:2,3", "_0,1:2,3", "0_,1:2,3", "+0,1:2,3", "-0,1:2,3", " 0,1:2,3", "0,1:2,3 "}) {
     bool rejected = false;
+
     try {
       CopyRangeParser::parse(pane_id, text);
     } catch (const EncodingError &) {
@@ -401,20 +439,24 @@ void independentPaneHeaders() {
   using namespace telar::gui;
 
   PaneLayout layout;
+
   require(layout.add(1, ClientLayoutAxis::horizontal, 0) && layout.add(2, ClientLayoutAxis::horizontal, 1), "header fixture must split");
   constexpr CellRectangle area{.width = 100, .height = 40};
   constexpr PaneLayout::Metrics metrics{.header = 3};
   const auto split = layout.prospectiveSplit(area, ClientLayoutAxis::vertical, 1, metrics);
+
   require(split.has_value(), "independent headers must permit a sufficiently large split");
   for (const auto &placement : layout.arrange(area, metrics)) {
     require(placement.content.y == placement.bounds.y + metrics.header, "a pane header must reserve complete terminal rows");
     require(placement.content.x == placement.bounds.x + metrics.border && placement.content.width + 2 * metrics.border == placement.bounds.width, "header reservation must not change horizontal borders");
     require(placement.content.bottom() + metrics.border == placement.bounds.bottom(), "independent headers must retain the bottom border");
   }
+
   require(split->existing_content == metrics.content({.width = 49, .height = 19}), "prospective and committed split sizes must reserve the same header");
   require(!layout.prospectiveSplit({.width = 20, .height = 10}, ClientLayoutAxis::vertical, 1, metrics), "a split must refuse to consume the last content row");
   require(metrics.content({.width = 2, .height = 2}).empty(), "tiny headers must saturate instead of underflowing");
   constexpr PaneLayout::Metrics borderless{.border = 0, .header = 3};
+
   require(borderless.content(area) == area, "disabled borders must not reserve an invisible header");
 }
 
@@ -427,18 +469,22 @@ void windowGeometry() {
   const auto initial = WindowGeometry::measure(configuration, viewport, cells);
   const auto original_chrome = ChromeMetrics::resolve(configuration, viewport, cells);
   constexpr float increased_chrome_scale = 1.5F;
+
   configuration.chrome_scale = increased_chrome_scale;
   const auto scaled = WindowGeometry::measure(configuration, viewport, cells);
   const auto scaled_chrome = ChromeMetrics::resolve(configuration, viewport, cells);
+
   require(original_chrome.top_bar < scaled_chrome.top_bar && original_chrome.title < scaled_chrome.title, "chrome scale must scale text and bands together");
 
   configuration.chrome_scale = 1;
   ChromeMetrics previous;
+
   previous.small = 0;
   previous.top_bar = 0;
   for (const float terminal_size : {6.0F, 15.0F, 32.0F}) {
     configuration.font.size = terminal_size;
     const auto chrome = ChromeMetrics::resolve(configuration, viewport, cells);
+
     require(chrome.title == static_cast<std::uint16_t>(terminal_size) && chrome.small > previous.small && chrome.top_bar > previous.top_bar, "chrome must follow the terminal font");
     previous = chrome;
   }
@@ -446,14 +492,18 @@ void windowGeometry() {
   configuration.font.size = FontConfiguration::default_size;
   constexpr float horizontal_padding = 10;
   constexpr float vertical_padding = 12;
+
   configuration.padding_x = horizontal_padding;
   configuration.padding_y = vertical_padding;
   const auto padded = WindowGeometry::measure(configuration, viewport, cells);
+
   require(padded.terminal.y == padded.navigation.height + vertical_padding && padded.terminal.right() == static_cast<float>(viewport.width) - horizontal_padding, "window padding must apply once in logical coordinates");
   const auto narrow = WindowGeometry::measure(configuration, {.width = 300, .height = 200, .scale = 1}, cells);
+
   require(narrow.rail && narrow.sidebar.width == 0 && narrow.terminal.x == horizontal_padding && narrow.terminal.width > 0, "narrow windows must hide the sidebar without reserving an empty project rail");
   configuration.sidebar_visible = false;
   const auto hidden = WindowGeometry::measure(configuration, viewport, cells);
+
   require(hidden.sidebar.width == 0 && hidden.terminal.x == horizontal_padding, "hiding the sidebar must return its full width to the terminal");
 }
 }

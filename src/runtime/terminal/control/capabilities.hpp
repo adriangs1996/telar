@@ -304,6 +304,7 @@ struct EncodedCapability {
 consteval auto encodeCapabilities() {
   std::array<EncodedCapability, capabilities.size()> result;
   constexpr std::string_view digits = "0123456789ABCDEF";
+
   for (std::size_t index = 0; index < capabilities.size(); ++index) {
     auto &output = result[index];
     const auto append = [&](std::string_view value, bool hex) {
@@ -316,14 +317,17 @@ consteval auto encodeCapabilities() {
         }
       }
     };
+
     append("\033P1+r", false);
     append(capabilities[index].name, true);
     if (capabilities[index].has_value) {
       append("=", false);
       append(capabilities[index].value, true);
     }
+
     append("\033\\", false);
   }
+
   return result;
 }
 
@@ -339,26 +343,32 @@ inline std::span<const std::uint8_t> capability(std::string_view hex) noexcept {
     if (value >= '0' && value <= '9') {
       return value - '0';
     }
+
     if (value >= 'A' && value <= 'F') {
       return value - 'A' + 10;
     }
+
     if (value >= 'a' && value <= 'f') {
       return value - 'a' + 10;
     }
+
     return -1;
   };
+
   for (std::size_t index = 0; index < hex.size(); index += 2) {
     const auto high = digit(hex[index]);
     const auto low = digit(hex[index + 1]);
     if (high < 0 || low < 0) {
       return {};
     }
+
     decoded[index / 2] = static_cast<char>(high * 16 + low);
   }
 
   const std::string_view name{decoded.data(), hex.size() / 2};
   std::size_t first = 0;
   std::size_t last = capabilities.size();
+
   while (first != last) {
     const auto middle = first + (last - first) / 2;
     if (capabilities[middle].name < name) {
@@ -367,6 +377,7 @@ inline std::span<const std::uint8_t> capability(std::string_view hex) noexcept {
       last = middle;
     }
   }
+
   return first < capabilities.size() && capabilities[first].name == name ? encoded_capabilities[first].view() : std::span<const std::uint8_t>{};
 }
 

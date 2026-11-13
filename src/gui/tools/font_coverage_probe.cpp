@@ -56,9 +56,11 @@ constexpr std::array<char32_t, 3> outside_unicode{unicode_count, 0x1fffff, std::
 
 fonts::FontMatch matchVariant(std::string_view variant) {
   fonts::FontMatch match{};
+
   if (variant == "wide") {
     constexpr std::uint32_t width_axis = 0x77647468;
     constexpr float wide_coordinate = 200;
+
     match.variation.count = 1;
     match.variation.tags[0] = width_axis;
     match.variation.values[0] = wide_coordinate;
@@ -72,6 +74,7 @@ fonts::FontMatch matchVariant(std::string_view variant) {
 // The bitmap is allocated from memory, region `a`.
 tbc::view<Vector<std::uint8_t, SystemAllocator>, tbc::lt::a> coverage(const fonts::Face &face, tbc::view<SystemAllocator &, tbc::lt::a> memory) {
   Vector<std::uint8_t, SystemAllocator> result(bitmap_bytes + outside_unicode.size(), 0, AllocatorRef<std::uint8_t, SystemAllocator>{memory});
+
   for (std::size_t scalar = 0; scalar < unicode_count; ++scalar) {
     if (face.covers(static_cast<char32_t>(scalar))) {
       result[scalar / bits_per_byte] |= static_cast<std::uint8_t>(1U << (scalar % bits_per_byte));
@@ -90,8 +93,10 @@ void exerciseFace(fonts::Face &face, std::uint16_t height) {
   constexpr std::string_view text = "AV fi e\u0301 \u4e2d \uf07b \U0001f600";
   // Rasterizing reaches the face, so the shaped glyphs are copied first.
   std::vector<std::uint32_t> glyphs;
+
   {
     const auto run = face.shape(text, height);
+
     glyphs.reserve(run.size());
     for (std::size_t index = 0; index < run.size(); ++index) {
       glyphs.push_back(run.glyph(index).index);
@@ -110,6 +115,7 @@ void runProbe(const char *path, std::string_view variant) {
   fonts::Face face{bytes, matchVariant(variant)};
   const auto expected = coverage(face, memory);
   constexpr std::array<std::uint16_t, 3> heights{9, 13, 31};
+
   for (const auto height : heights) {
     exerciseFace(face, height);
     if (coverage(face, memory) != expected) {

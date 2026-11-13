@@ -35,16 +35,19 @@ struct HookOptions {
     }
 
     std::optional<AgentProvider> provider;
+
     for (const auto candidate : {AgentProvider::claude, AgentProvider::codex, AgentProvider::pi, AgentProvider::cursor, AgentProvider::opencode}) {
       if (describeProvider(candidate).name == arguments.front()) {
         provider = candidate;
       }
     }
+
     if (!provider) {
       throw std::invalid_argument{"Unknown hook agent"};
     }
 
     HookOptions options{.provider = *provider, .socket = {}};
+
     for (std::size_t index = 1; index < arguments.size(); index += 2) {
       if (std::string_view{arguments[index]} != "--socket" || index + 1 >= arguments.size()) {
         throw std::invalid_argument{"Unknown hook option"};
@@ -75,6 +78,7 @@ public:
 
     value.eachMember([&](JsonValue key, JsonValue entry) {
       String<Memory> name{AllocatorRef<char, Memory>{memory_}};
+
       key.string(name);
       members_.push_back(Member{.name = std::move(name), .value = entry, .text = std::nullopt, .position = members_.size()});
     });
@@ -87,6 +91,7 @@ public:
     if (member != nullptr) {
       checkUnique(*member);
     }
+
     return member == nullptr ? std::nullopt : std::optional{member->value};
   }
 
@@ -106,11 +111,13 @@ public:
 
   inline std::string_view text(std::string_view name) {
     auto *member = find(name);
+
     return member == nullptr ? std::string_view{} : decode(*member);
   }
 
   inline std::optional<std::string_view> stringField(std::string_view name) {
     const auto field = value(name);
+
     return field && field->encoded().starts_with('"') ? optionalText(name) : std::nullopt;
   }
 
@@ -119,6 +126,7 @@ public:
     if (!field || field->encoded() == "null") {
       return std::nullopt;
     }
+
     if (field->encoded() != "true" && field->encoded() != "false") {
       throw std::invalid_argument{"Expected hook boolean"};
     }
@@ -168,6 +176,7 @@ private:
 
   inline Member *find(std::string_view name) noexcept {
     const auto found = std::lower_bound(members_.begin(), members_.end(), name, [](const Member &member, std::string_view key) { return member.name < key; });
+
     return found != members_.end() && found->name == name ? &*found : nullptr;
   }
 
@@ -178,6 +187,7 @@ private:
   inline void indexMembers() {
     std::ranges::sort(members_, [](const Member &left, const Member &right) { return left.name == right.name ? left.position < right.position : left.name < right.name; });
     std::size_t unique = 0;
+
     for (std::size_t index = 0; index < members_.size(); ++index) {
       if (unique != 0 && members_[unique - 1].name == members_[index].name) {
         members_[unique - 1] = std::move(members_[index]);
@@ -198,6 +208,7 @@ private:
     checkUnique(member);
     if (!member.text) {
       String<Memory> decoded{AllocatorRef<char, Memory>{memory_}};
+
       member.value.string(decoded);
       member.text = std::move(decoded);
     }
@@ -234,6 +245,7 @@ void validateUnicodeEscapes(Memory &memory, std::string_view input) {
 
   String<Memory> decoded{AllocatorRef<char, Memory>{memory}};
   std::optional<std::size_t> start;
+
   for (std::size_t index = 0; index < input.size(); ++index) {
     if (start && input[index] == '\\') {
       ++index;
@@ -256,6 +268,7 @@ template <Allocator Memory>
 void validateDynamicValue(Memory &memory, JsonValue value) {
   if (value.encoded().starts_with('{')) {
     Object fields{memory, value};
+
     fields.requireUnique();
     fields.eachValue([&](JsonValue child) { validateDynamicValue(memory, child); });
   } else if (value.encoded().starts_with('[')) {
@@ -316,9 +329,11 @@ public:
         for (const auto name : {"conversation_id", "tool_output", "chat_meta"}) {
           fields.text(name);
         }
+
         if (const auto roots = fields.value("workspace_roots")) {
           roots->eachElement([&](JsonValue root) {
             String<Memory> decoded{AllocatorRef<char, Memory>{memory}};
+
             root.string(decoded);
             if (!workspace_) {
               workspace_ = std::move(decoded);
@@ -335,11 +350,13 @@ public:
           for (const auto name : {"session_title", "notification_type", "message", "last_assistant_message", "new_cwd"}) {
             fields.text(name);
           }
+
           if (const auto tasks = fields.value("background_tasks")) {
             tasks->eachElement([&](JsonValue value) {
               Object task{memory, value, true};
               const auto type = task.text("type");
               const auto status = task.text("status");
+
               running_subagents += type == "subagent" && status == "running";
             });
           }
@@ -363,12 +380,15 @@ public:
 
   inline std::string_view toolEvent() {
     const auto name = event();
+
     if (provider != AgentProvider::cursor) {
       return name;
     }
+
     if (name == "preToolUse") {
       return "PreToolUse";
     }
+
     if (name == "postToolUse" || name == "postToolUseFailure") {
       return "PostToolUse";
     }
@@ -402,6 +422,7 @@ private:
 
   inline static JsonValue toolObject(const Object<Memory> &fields) {
     const auto value = fields.value("tool_input");
+
     return value && value->encoded().starts_with('{') ? *value : JsonValue{"{}"};
   }
 
@@ -452,6 +473,7 @@ inline std::string_view validPrefix(std::string_view text) noexcept {
 inline void eventLine(FixedText<96> &output, std::string_view text) {
   const auto control = std::ranges::find_if(text, [](unsigned char byte) { return byte < 0x20 || byte == 0x7f; });
   const auto prefix = utf8Prefix(text.substr(0, static_cast<std::size_t>(control - text.begin())), 96);
+
   try {
     validateUtf8(prefix);
     output.assign(prefix);
@@ -464,18 +486,22 @@ template <std::size_t Capacity>
 void displayText(FixedText<Capacity> &output, std::string_view text, bool multiline) {
   std::array<char, Capacity> bytes;
   std::size_t length = 0;
+
   for (const unsigned char byte : text) {
     if (length == bytes.size() || (!multiline && byte == '\n')) {
       break;
     }
+
     if ((byte >= 0x20 && byte != 0x7f) || (multiline && (byte == '\n' || byte == '\t'))) {
       bytes[length++] = static_cast<char>(byte);
     }
   }
 
   std::string_view result{bytes.data(), length};
+
   if (multiline) {
     const auto first = result.find_first_not_of(" \n\t");
+
     result = first == std::string_view::npos ? std::string_view{} : result.substr(first, result.find_last_not_of(" \n\t") - first + 1);
   }
 
@@ -484,6 +510,7 @@ void displayText(FixedText<Capacity> &output, std::string_view text, bool multil
 
 inline bool defaultOpenCodeTitle(std::string_view title) noexcept {
   constexpr std::string_view shape = "0000-00-00T00:00:00.000Z";
+
   for (const auto prefix : {std::string_view{"New session - "}, std::string_view{"Child session - "}}) {
     if (!title.starts_with(prefix) || title.size() != prefix.size() + shape.size()) {
       continue;
@@ -514,18 +541,22 @@ std::optional<std::int32_t> commandExitCode(Payload<Memory> &input) {
   if (input.provider == AgentProvider::claude) {
     return input.event() == "PostToolUse" ? std::optional<std::int32_t>{0} : std::nullopt;
   }
+
   if (input.provider == AgentProvider::codex) {
     return std::nullopt;
   }
+
   if (input.provider != AgentProvider::cursor) {
     return input.fields.template integer<std::int32_t>("exit_code");
   }
+
   if (input.event() != "postToolUse" || input.fields.text("tool_name") != "Shell") {
     return std::nullopt;
   }
 
   try {
     Object output{input.memory, JsonValue::parse(input.fields.text("tool_output")), true};
+
     return output.template integer<std::int32_t>("exitCode");
   } catch (const std::exception &) {
     return std::nullopt;
@@ -554,6 +585,7 @@ std::optional<ReportAgentCommand> commandReport(Payload<Memory> &input) {
   }
 
   const auto cwd = input.fields.text("cwd");
+
   return ReportAgentCommand{
       .phase = started ? AgentCommandPhase::started : AgentCommandPhase::finished,
       .provider = provider,
@@ -584,9 +616,11 @@ void toolEvent(FixedText<96> &output, Payload<Memory> &input) {
   std::size_t length = 0;
   const auto append = [&](std::string_view text) {
     const auto count = std::min(text.size(), buffer.size() - length);
+
     std::memcpy(buffer.data() + length, text.data(), count);
     length += count;
   };
+
   append("» ");
   append(name);
   for (const auto key : {"command", "cmd", "file_path", "filePath", "filepath", "path", "pattern", "url", "query", "prompt", "description"}) {
@@ -609,6 +643,7 @@ bool questionEvent(FixedText<96> &output, Payload<Memory> &input) {
 
   bool first = true;
   bool found = false;
+
   questions->eachElement([&](JsonValue value) {
     if (!std::exchange(first, false) || !value.encoded().starts_with('{')) {
       return;
@@ -627,6 +662,7 @@ bool questionEvent(FixedText<96> &output, Payload<Memory> &input) {
 inline void backgroundEvent(FixedText<96> &output, std::size_t count) {
   std::array<char, 96> buffer;
   const auto length = std::snprintf(buffer.data(), buffer.size(), "waiting for %zu background %s", count, count == 1 ? "agent" : "agents");
+
   output.assign({buffer.data(), static_cast<std::size_t>(length)});
 }
 

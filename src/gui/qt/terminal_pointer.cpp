@@ -94,11 +94,13 @@ void TerminalItem::mousePacket(unsigned button, QPointF position, bool released)
   const auto y = static_cast<unsigned>(std::clamp(position.y() * scale / (current->screen.mouse().pixels ? 1 : font_.cell.height()), 0.0, static_cast<double>(maximum_y - 1))) + 1;
   MouseEncoder encoder;
   const auto packet = encoder.encode(button, x, y, released, current->screen.mouse().sgr);
+
   send(QByteArray{packet.data(), static_cast<qsizetype>(packet.size())}, PaneInputSource::mouse);
 }
 
 unsigned TerminalItem::mouseModifiers(Qt::KeyboardModifiers modifiers) noexcept {
   unsigned result = modifiers.testFlag(Qt::ShiftModifier) ? mouse_shift : 0;
+
   result |= modifiers.testFlag(Qt::AltModifier) ? mouse_alt : 0;
   result |= modifiers.testFlag(NativeKeyAdapter::control_modifier) ? mouse_control : 0;
 
@@ -131,6 +133,7 @@ CopyPointerInput TerminalItem::pointerInput(QPointF position, CopyPointerKind ki
   }
 
   const auto columns = current->screen.columns();
+
   input.position = {.x = static_cast<std::uint16_t>(index % columns), .y = static_cast<std::uint32_t>(index / columns)};
 
   return input;
@@ -173,6 +176,7 @@ void TerminalItem::mousePressEvent(QMouseEvent *event) {
   if (child_tracking && button != MouseButton::none) {
     const auto view = childMouseView();
     const auto sample = childMouseSample(*event, MousePhase::press, button);
+
     application_->pointerDispatcher().beginChild(view, sample);
   } else if (left && input.pane_id != 0 && input.inside) {
     selecting_ = application_->beginSelection(pane_id_, input.position);
@@ -219,6 +223,7 @@ void TerminalItem::mouseReleaseEvent(QMouseEvent *event) {
       application_->pointerDispatcher().release(button);
     }
   });
+
   if (captured_link_buttons_.testFlag(event->button())) {
     captured_link_buttons_.setFlag(event->button(), false);
     finishLinkRelease(*event);
@@ -230,6 +235,7 @@ void TerminalItem::mouseReleaseEvent(QMouseEvent *event) {
   const auto left = event->button() == Qt::LeftButton;
   const auto input = pointerInput(event->position(), CopyPointerKind::release, left);
   const auto copied = application_ != nullptr && application_->handleCopyPointer(input);
+
   if (left) {
     selecting_ = false;
   }
@@ -297,20 +303,25 @@ void TerminalItem::dispatchWheel(const QWheelEvent &event, std::int32_t lines) {
   }
 
   const auto rows = lines * WheelAccumulator::rows_per_line;
+
   switch (wheelRoute(current->screen)) {
   case WheelRoute::report: {
     const auto modifiers = mouseModifiers(event.modifiers());
+
     for (int step = 0; step < std::abs(lines); ++step) {
       mousePacket((lines < 0 ? MouseEncoder::wheel_up : MouseEncoder::wheel_down) | modifiers, event.position(), false);
     }
+
     return;
   }
   case WheelRoute::keys: {
     KeyEncoder encoder;
     const auto bytes = encoder.alternateScroll(rows < 0, current->screen.modes());
+
     for (int step = 0; step < std::abs(rows); ++step) {
       send(QByteArray{bytes.data(), static_cast<qsizetype>(bytes.size())});
     }
+
     return;
   }
   case WheelRoute::scroll:
@@ -321,6 +332,7 @@ void TerminalItem::dispatchWheel(const QWheelEvent &event, std::int32_t lines) {
 
 void TerminalItem::hoverMoveEvent(QHoverEvent *event) {
   const auto *current = pane();
+
   if (application_ != nullptr && application_->handleCopyPointer(pointerInput(event->position(), CopyPointerKind::move, false))) {
     setCursor(Qt::IBeamCursor);
     event->accept();
@@ -330,6 +342,7 @@ void TerminalItem::hoverMoveEvent(QHoverEvent *event) {
 
   if (application_ != nullptr && current != nullptr && current->screen.mouse().sgr && current->screen.mouse().tracking == MouseTracking::any && visibleCellAt(event->position()) && application_->dialog() == Application::Dialog::none && !link_hover_.covers({.x = static_cast<float>(event->position().x()), .y = static_cast<float>(event->position().y())})) {
     const auto no_button = static_cast<unsigned>(MouseButton::none);
+
     mousePacket(ChildMouseProjection::motion | no_button | mouseModifiers(event->modifiers()), event->position(), false);
   }
 

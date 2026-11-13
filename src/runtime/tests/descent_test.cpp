@@ -49,6 +49,7 @@ struct GatedLineageInspector {
     while (!released.load(std::memory_order_acquire)) {
       std::this_thread::yield();
     }
+
     return {.processes = {root}, .count = 1, .descends = true};
   }
 };
@@ -56,6 +57,7 @@ struct GatedLineageInspector {
 template <typename Condition>
 static void waitUntil(Condition &&condition) {
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
+
   while (!condition()) {
     check(std::chrono::steady_clock::now() < deadline);
     std::this_thread::yield();
@@ -68,12 +70,14 @@ void testDescent() {
   ClientStore<SystemAllocator> clients{memory};
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
   Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
+
   model.panes.insert(1, makeOwned<Pane<SystemAllocator>>(memory, memory, 1, TabLocation{}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits}));
   auto &pane = *model.panes.find(1);
   GatedLineageInspector inspector;
   DescentService<SystemAllocator, decltype(inspector)> service{inspector};
   ClientPeer first{memory, model, clients, ClientRole::control};
   ClientPeer second{memory, model, clients, ClientRole::control};
+
   first.session().peer_identity = ProcessIdentity{41};
   second.session().peer_identity = ProcessIdentity{42};
   service.verify(model.panes, first.session(), VerifyPaneDescent{1, 1, 1});
@@ -89,6 +93,7 @@ void testDescent() {
     service.collect(clients, model.panes);
     return !first.session().pending_descent && !second.session().pending_descent;
   });
+
   check(first.receive<RequestFailed>().code == FailureCode::pane_not_found);
   check(second.receive<RequestFailed>().code == FailureCode::pane_not_found);
   check(first.session().verified_pane == 0 && second.session().verified_pane == 0);
@@ -106,6 +111,7 @@ void testDescent() {
     service.collect(clients, model.panes);
     return !first.session().pending_descent && !second.session().pending_descent;
   });
+
   check(!first.session().connection.hasOutput() && first.session().verified_pane == 0);
   check(second.receive<RequestCompleted>().request_id == 4);
   check(second.session().verified_generation == pane.generation);

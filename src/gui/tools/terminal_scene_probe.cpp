@@ -121,6 +121,7 @@ struct Options {
 
 Options parseOptions(const QGuiApplication &application) {
   QCommandLineParser parser;
+
   parser.addHelpOption();
   parser.addOption({"iterations", "Measured terminal repaints", "count", QString::number(default_iterations)});
   parser.addOption({"warmup", "Untimed terminal repaints", "count", QString::number(default_warmup)});
@@ -156,6 +157,7 @@ Options parseOptions(const QGuiApplication &application) {
       .floating_window = parser.isSet("floating-window"),
       .colored_backgrounds = parser.isSet("colored-backgrounds"),
   };
+
   constexpr unsigned maximum_iterations = 1000;
   if (!iterations_valid || !warmup_valid || !scale_valid || options.iterations == 0 || options.iterations > maximum_iterations || options.warmup > maximum_iterations || (options.scale != 1 && options.scale != 2)) {
     throw std::invalid_argument{"Invalid terminal scene probe counts or scale"};
@@ -165,6 +167,7 @@ Options parseOptions(const QGuiApplication &application) {
   bool height_valid = false;
   bool spacing_valid = false;
   bool strength_valid = false;
+
   options.font_size = parser.value("font-size").toFloat(&size_valid);
   options.line_height = parser.value("line-height").toFloat(&height_valid);
   options.letter_spacing = parser.value("letter-spacing").toFloat(&spacing_valid);
@@ -220,6 +223,7 @@ public:
     configuration_.font.thicken_strength = static_cast<std::uint8_t>(options_.strength);
     configuration_.font.hinting = options_.hinting;
     auto asset = std::make_shared<const FontAsset>(loadFontData(configuration_.font));
+
     collection_ = std::make_shared<const FontCollection>(FontCollection{.primary = std::move(asset)});
     fonts_ = ResidentFonts::shared(collection_);
     resolved_ = FontResolver::resolve(fonts_->face(fonts::FontRole::primary), configuration_.font, options_.scale);
@@ -246,6 +250,7 @@ public:
 protected:
   QSGNode *updatePaintNode(QSGNode *previous, [[maybe_unused]] UpdatePaintNodeData *data) override {
     std::unique_ptr<QSGNode> root{previous != nullptr ? previous : new QSGNode};
+
     if (completed_ || !frame_requested_) {
       return root.release();
     }
@@ -255,10 +260,13 @@ protected:
     try {
       const auto total_frames = options_.warmup + options_.iterations;
       const auto end = options_.render_each_frame ? next_frame_ + 1 : total_frames;
+
       for (; next_frame_ < end; ++next_frame_) {
         const auto measured = next_frame_ >= options_.warmup;
+
         prepareFrame(measured ? next_frame_ - options_.warmup : next_frame_);
         const auto started = std::chrono::steady_clock::now();
+
         paint(root);
 
         if (measured) {
@@ -272,6 +280,7 @@ protected:
       }
 
       const QJsonObject result{{"iterations", static_cast<int>(options_.iterations)}, {"warmup", static_cast<int>(options_.warmup)}, {"elapsed_ns", elapsed_}, {"apply_ns", total_apply_elapsed_}, {"apply_and_paint_ns", elapsed_ + total_apply_elapsed_}, {"render_each_frame", options_.render_each_frame}, {"snapshot_workload", options_.snapshot_workload}, {"colored_backgrounds", options_.colored_backgrounds}, {"columns", static_cast<int>(columns_)}, {"rows", static_cast<int>(rows_)}, {"scale", options_.scale}, {"font", options_.family}, {"thicken", options_.thicken}, {"fixed_pitch", resolved_.font.fixed_pitch}};
+
       std::cout << QJsonDocument{result}.toJson(QJsonDocument::Compact).constData() << '\n';
     } catch (...) {
       failure_ = std::current_exception();
@@ -285,13 +294,16 @@ protected:
 private:
   void prepareText() {
     const CellColor foreground{.kind = CellColor::Kind::rgb, .channels = {static_cast<Byte>(options_.foreground.red()), static_cast<Byte>(options_.foreground.green()), static_cast<Byte>(options_.foreground.blue())}};
+
     for (unsigned row = 0; row < rows_; ++row) {
       // One code point per cell; each cell owns a four-byte UTF-8 slot.
       const auto line = options_.text[static_cast<qsizetype>(row)].toUcs4();
+
       for (unsigned column = 0; column < columns_; ++column) {
         const auto offset = (row * columns_) + column;
         const auto bytes = Utf8Scalar::encode(column < static_cast<unsigned>(line.size()) ? line[column] : U' ');
         const auto slot = std::span{characters_}.subspan(offset * utf8_slot, utf8_slot);
+
         std::ranges::transform(bytes.view(), slot.begin(), [](char byte) { return static_cast<Byte>(byte); });
         cells_[offset] = {.width = CellWidth::single, .style = {.foreground = foreground}, .text = slot.first(bytes.view().size())};
       }
@@ -318,20 +330,26 @@ private:
     // covers: accented Latin, Greek and Cyrillic, each a multi-byte cell.
     static constexpr std::u32string_view letters = U"áéíóúñüçàèâêîôûäëïöÿßæøåαβγδεζηθλμπσφψωабвгдежзиклмнопрстуфхцчшщ";
     const bool unicode = options_.snapshot_workload == "unicode";
+
     for (unsigned row = 0; row < terminal_rows; ++row) {
       const auto phase = options_.snapshot_workload == "retained" || (options_.snapshot_workload == "sparse" && row != 0) ? 0U : frame;
+
       for (unsigned column = 0; column < terminal_columns; ++column) {
         const auto offset = (row * terminal_columns) + column;
         const auto value = (row * row_stride) + (column * column_stride) + phase;
         auto text = std::span{characters_}.subspan(offset, 1);
+
         if (unicode) {
           const auto bytes = Utf8Scalar::encode(letters[value % letters.size()]);
+
           text = std::span{characters_}.subspan(offset * utf8_slot, bytes.view().size());
           std::ranges::transform(bytes.view(), text.begin(), [](char byte) { return static_cast<Byte>(byte); });
         } else {
           characters_[offset] = static_cast<Byte>(printable_first + (value % printable_count));
         }
+
         const auto green = (column + row + phase) % bright_period == 0 ? bright_green : dim_green;
+
         cells_[offset] = {.width = CellWidth::single, .style = {.foreground = {.kind = CellColor::Kind::rgb, .channels = {0, green, 0}}}, .text = text};
 
         if (options_.colored_backgrounds && column % bright_period != 0) {
@@ -349,6 +367,7 @@ private:
     const FrameSpan span{.start = 0, .count = static_cast<std::uint32_t>(cells_.size()), .cells = encoded};
     const std::array spans{span};
     PaneFrame snapshot;
+
     snapshot.pane_id = 1;
     snapshot.frame_id = ++frame_id_;
     snapshot.cols = columns_;
@@ -358,6 +377,7 @@ private:
     snapshot.spans = spans;
     const auto started = std::chrono::steady_clock::now();
     const auto applied = screen_.apply(snapshot);
+
     apply_elapsed_ = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - started).count();
     if (applied != FrameApplication::applied) {
       throw std::runtime_error{"Terminal scene fixture was not applied"};
@@ -366,6 +386,7 @@ private:
 
   void paint(std::unique_ptr<QSGNode> &root) {
     const TerminalPresentation frame{.screen = screen_, .graphics = graphics_, .configuration = configuration_, .font = resolved_.font, .preedit = preedit_, .fonts = collection_, .grid = resolved_.grid, .selection = selection_, .bounds = boundingRect(), .scale = options_.scale, .appearance = 1, .owner = this};
+
     root.reset(TerminalScene::synchronizeNode(root.release(), *window(), frame));
   }
 
@@ -402,15 +423,20 @@ private:
 int main(int argc, char **argv) {
   platform::configureGraphics();
   QGuiApplication application{argc, argv};
+
   try {
     const auto options = parseOptions(application);
+
     static_cast<void>(bundledFonts());
     QQuickWindow window;
+
     window.setFlag(Qt::Tool, options.floating_window);
     window.setColor(options.background);
     TerminalProbe probe{window, options};
+
     window.resize(static_cast<int>(probe.width()), static_cast<int>(probe.height()));
     bool captured = false;
+
     QObject::connect(&window, &QQuickWindow::frameSwapped, &application, [&] {
       if (captured) {
         return;
@@ -429,11 +455,14 @@ int main(int argc, char **argv) {
 
       QGuiApplication::quit();
     });
+
     QTimer::singleShot(timeout_ms, &application, [] {
       QGuiApplication::exit(1);
     });
+
     window.show();
     const auto result = QGuiApplication::exec();
+
     if (probe.failure()) {
       std::rethrow_exception(probe.failure());
     }

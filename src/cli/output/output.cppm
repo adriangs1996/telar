@@ -135,6 +135,7 @@ public:
   inline Output &number(Integer value) {
     std::array<char, 32> buffer;
     const auto end = std::to_chars(buffer.data(), buffer.data() + buffer.size(), value).ptr;
+
     data.append(buffer.data(), end);
     return *this;
   }

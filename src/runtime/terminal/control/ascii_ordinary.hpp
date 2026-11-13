@@ -20,12 +20,14 @@ inline ByteVector load(const std::uint8_t *input) noexcept { return vld1q_u8(inp
 inline std::uint64_t stopMask(ByteVector bytes) noexcept {
   const auto controls = vorrq_u8(vceqq_u8(bytes, vdupq_n_u8(styled_detail::enquiry)), vceqq_u8(bytes, vdupq_n_u8(styled_detail::escape)));
   const auto stops = vorrq_u8(controls, vcgeq_u8(bytes, vdupq_n_u8(non_ascii_first)));
+
   return vget_lane_u64(vreinterpret_u64_u8(vshrn_n_u16(vreinterpretq_u16_u8(stops), match_bits)), 0);
 }
 
 inline void widenBlock(ByteVector bytes, std::uint32_t *output) noexcept {
   const auto low = vmovl_u8(vget_low_u8(bytes));
   const auto high = vmovl_high_u8(bytes);
+
   vst1q_u32(output, vmovl_u16(vget_low_u16(low)));
   vst1q_u32(output + 4, vmovl_high_u16(low));
   vst1q_u32(output + 8, vmovl_u16(vget_low_u16(high)));
@@ -57,6 +59,7 @@ inline bool eligible(std::span<const std::uint8_t> input) noexcept {
   if (input.size() < gate_bytes) {
     return false;
   }
+
 #if (defined(__aarch64__) && defined(__AARCH64EL__)) || defined(__SSE2__)
   return stopMask(load(input.data())) == 0 && stopMask(load(input.data() + styled_detail::vector_bytes)) == 0;
 #else
@@ -65,6 +68,7 @@ inline bool eligible(std::span<const std::uint8_t> input) noexcept {
       return false;
     }
   }
+
   return true;
 #endif
 }
@@ -74,14 +78,17 @@ inline bool eligible(std::span<const std::uint8_t> input) noexcept {
 inline std::size_t widen(std::span<const std::uint8_t> input, std::span<std::uint32_t> output) noexcept {
   const auto capacity = std::min(input.size(), output.size());
   std::size_t offset = 0;
+
 #if (defined(__aarch64__) && defined(__AARCH64EL__)) || defined(__SSE2__)
   while (capacity - offset >= styled_detail::vector_bytes) {
     const auto bytes = load(input.data() + offset);
     const auto stops = stopMask(bytes);
+
     widenBlock(bytes, output.data() + offset);
     if (stops != 0) {
       return offset + std::countr_zero(stops) / match_bits;
     }
+
     offset += styled_detail::vector_bytes;
   }
 #endif
@@ -91,8 +98,10 @@ inline std::size_t widen(std::span<const std::uint8_t> input, std::span<std::uin
     if (byte >= non_ascii_first || byte == styled_detail::escape || byte == styled_detail::enquiry) {
       break;
     }
+
     output[offset++] = byte;
   }
+
   return offset;
 }
 

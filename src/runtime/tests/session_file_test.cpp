@@ -28,16 +28,20 @@ using namespace telar::runtime;
 
 static void writeSessionFile(const std::string &path, std::string_view contents, bool append = false) {
   std::ofstream file{path, std::ios::binary | (append ? std::ios::app : std::ios::trunc)};
+
   file << contents;
   check(file.good());
 }
 
 static void testTranscript(SessionFileReader<SystemAllocator> &reader, const std::string &root) {
   const auto path = root + "/claude.jsonl";
+
   writeSessionFile(path, "{\"type\":\"custom-title\",\"sessionId\":\"session\",\"customTitle\":\"old title\"}\n");
   SessionFileRequest request;
+
   request.watch.configure("session", path, AgentSessionFileKind::claude_transcript);
   auto result = reader.observe(request);
+
   check(result.offset == std::filesystem::file_size(path) && !result.title);
   request.watch.offset = result.offset;
   writeSessionFile(path, "{\"type\":\"custom-title\",\"sessionId\":\"session\",\"customTitle\":\"new café title\"}\n{\"type\":\"custom-title\",\"sessionId\":\"other\",\"customTitle\":\"foreign\"}\n", true);
@@ -71,12 +75,15 @@ static void testTranscript(SessionFileReader<SystemAllocator> &reader, const std
 
 static void testCursorMetadata(SessionFileReader<SystemAllocator> &reader, const std::string &root) {
   const auto directory = root + "/0192-abcd";
+
   std::filesystem::create_directory(directory);
   const auto path = directory + "/meta.json";
   SessionFileRequest request;
+
   request.watch.configure("0192-abcd", path, AgentSessionFileKind::cursor_meta);
   writeSessionFile(path, "{\"title\":\"Cursor title\"}");
   auto result = reader.observe(request);
+
   check(result.title && result.title->view() == "Cursor title");
   request.watch.session.assign("other");
   check(!reader.observe(request).title);
@@ -102,12 +109,15 @@ static void testCursorMetadata(SessionFileReader<SystemAllocator> &reader, const
 static void testCodexDatabase(SessionFileReader<SystemAllocator> &reader, const std::string &root) {
   const auto path = root + "/codex.sqlite";
   SessionFileRequest request;
+
   request.watch.configure("thread", path, AgentSessionFileKind::codex_state);
   check(!reader.observe(request).title && !std::filesystem::exists(path));
   Database database{path.c_str()};
+
   database.execute("CREATE TABLE threads(id TEXT PRIMARY KEY, name TEXT)");
   database.execute("INSERT INTO threads VALUES('thread','Codex title')");
   auto result = reader.observe(request);
+
   check(result.title && result.title->view() == "Codex title");
   database.execute("UPDATE threads SET name=NULL");
   result = reader.observe(request);
@@ -115,13 +125,16 @@ static void testCodexDatabase(SessionFileReader<SystemAllocator> &reader, const 
   database.execute("DELETE FROM threads");
   check(!reader.observe(request).title);
   Database read_only{path.c_str(), DatabaseAccess::read_only};
+
   check(!read_only.tryExecute("INSERT INTO threads VALUES('thread','forbidden')"));
 }
 
 static void testWatchAndTitle() {
   SessionFileWatch watch;
+
   watch.configure("session", "/tmp/a", AgentSessionFileKind::claude_transcript);
   const auto revision = watch.revision;
+
   watch.offset = 19;
   check(watch.remember("title") && !watch.remember("title"));
   watch.configure("session", "/tmp/a", AgentSessionFileKind::claude_transcript);
@@ -130,6 +143,7 @@ static void testWatchAndTitle() {
   check(!watch.offset && !watch.last_title && watch.revision != revision);
 
   Agent agent{1, 1};
+
   agent.title.assign("Generated");
   agent.title_source = AgentTitleSource::generated;
   agent.title_state = AgentTitleState::ready;
@@ -143,9 +157,11 @@ void testSessionFiles() {
   SystemAllocator memory;
   SessionFileReader reader{memory};
   std::array<char, 64> temporary{};
+
   std::strcpy(temporary.data(), "/tmp/telar-session-file-XXXXXX");
   check(::mkdtemp(temporary.data()) != nullptr);
   const std::string root{temporary.data()};
+
   testTranscript(reader, root);
   testCursorMetadata(reader, root);
   testCodexDatabase(reader, root);

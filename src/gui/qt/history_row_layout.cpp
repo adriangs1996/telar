@@ -83,6 +83,7 @@ QRectF HistoryRowLayout::logical(Rect area) const noexcept {
 
 QVariantMap HistoryRowLayout::layout() const {
   auto result = geometryLayout();
+
   result.insert(QStringLiteral("needed"), command_width_ / density_);
   result.insert(QStringLiteral("lines"), commandLines());
 
@@ -136,6 +137,7 @@ QVariantMap HistoryRowLayout::commandLine(std::string_view text, Rect bounds, bo
         {QStringLiteral("text"), QString::fromUtf8(cluster.data(), static_cast<qsizetype>(cluster.size()))},
     });
   };
+
   highlight.paint(text, line.text, cell_width_, record);
 
   return {
@@ -150,17 +152,21 @@ QVariantMap HistoryRowLayout::commandLine(std::string_view text, Rect bounds, bo
 QVariantList HistoryRowLayout::commandLines() const {
   HistoryMatchHighlight highlight{{query_bytes_.constData(), static_cast<std::size_t>(query_bytes_.size())}};
   QVariantList result;
+
   if (!expanded_) {
     const std::string_view text{command_bytes_.constData(), static_cast<std::size_t>(command_bytes_.size())};
     const auto end = text.find_first_of("\r\n");
+
     result.append(commandLine(text.substr(0, end), geometry_.command, end != std::string_view::npos, highlight));
 
     return result;
   }
 
   const std::string_view command{command_bytes_.constData(), static_cast<std::size_t>(command_bytes_.size())};
+
   for (std::uint16_t index = 0; index < card_.shown; ++index) {
     const Rect area{.x = geometry_.command.x, .y = card_.text_y + (static_cast<float>(index) * cell_height_), .width = geometry_.command.width, .height = cell_height_};
+
     result.append(commandLine(HistoryCard::line(command, card_.lines[index]), area, false, highlight));
   }
 
@@ -173,6 +179,7 @@ void HistoryRowLayout::prepareCommand() {
     command_text_ = text;
     command_bytes_ = text.toUtf8();
     const std::string_view bytes{command_bytes_.constData(), static_cast<std::size_t>(command_bytes_.size())};
+
     first_line_columns_ = cellTextColumns(bytes.substr(0, bytes.find_first_of("\r\n")));
   }
 }
@@ -192,12 +199,14 @@ void HistoryRowLayout::updatePolish() {
 
     return std::isfinite(value) && value > 0 ? static_cast<float>(value * density) : 0;
   };
+
   const auto ratio = measurements_.value(QStringLiteral("ratio"), 1).toDouble();
   if (!std::isfinite(ratio) || ratio <= 0) {
     return;
   }
 
   ChromeMetrics chrome;
+
   chrome.ratio = static_cast<float>(ratio * density);
   chrome.small = static_cast<std::uint16_t>(std::clamp(std::round(advance(QStringLiteral("smallPixels"))), 0.0F, static_cast<float>(std::numeric_limits<std::uint16_t>::max())));
   prepareCommand();
@@ -214,10 +223,12 @@ void HistoryRowLayout::updatePolish() {
       .has_time = measurements_.value(QStringLiteral("hasTime")).toBool(),
       .expanded = measurements_.value(QStringLiteral("expanded")).toBool(),
   };
+
   const auto row_height = advance(QStringLiteral("rowHeight"));
   const auto geometry = HistoryRowGeometry::derive({.width = static_cast<float>(width() * density), .height = static_cast<float>(height() * density)}, chrome, row_height, measured);
   if (geometry != geometry_ || density != density_ || ratio != ratio_ || command_width != command_width_ || measurements_dirty_) {
     const auto previous_geometry = geometryState();
+
     geometry_ = geometry;
     density_ = density;
     ratio_ = ratio;
@@ -233,6 +244,7 @@ void HistoryRowLayout::updatePolish() {
       const auto opened = std::round(row_height + delta);
       const auto viewport_height = advance(QStringLiteral("viewportHeight"));
       const auto tallest = std::max(row_height, viewport_height - chrome.px(HistoryCard::viewport_clearance));
+
       card_.height = viewport_height > 0 ? std::min(tallest, opened) : opened;
     }
 

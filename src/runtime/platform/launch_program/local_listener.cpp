@@ -32,6 +32,7 @@ LocalListener::LocalListener(std::string_view path) {
   auto parent = openPrivateParent(path);
 
   std::array<char, sizeof(sockaddr_un::sun_path) + sizeof(".lock")> lock_path{};
+
   std::copy(path.begin(), path.end(), lock_path.begin());
   std::memcpy(lock_path.data() + path.size(), ".lock", sizeof(".lock"));
   lock_.reset(::open(lock_path.data(), O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0600));
@@ -49,6 +50,7 @@ LocalListener::LocalListener(std::string_view path) {
   }
 
   sockaddr_un address{};
+
   address.sun_family = AF_UNIX;
   std::memcpy(address.sun_path, path_.data(), path.size() + 1);
   removeStaleSocket(address);
@@ -74,6 +76,7 @@ LocalListener::LocalListener(std::string_view path) {
 
   if (::chmod(path_.data(), 0600) != 0 || ::listen(socket_.get(), 32) != 0) {
     const int failure = errno;
+
     cleanup();
     throw SystemError{"listen on runtime socket", failure};
   }

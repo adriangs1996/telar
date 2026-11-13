@@ -24,6 +24,7 @@ id nextDrawable(CAMetalLayer *layer, SEL selector) {
   if (!layer.displaySyncEnabled) {
     synchronized_display.store(false, std::memory_order_relaxed);
   }
+
   return current_drawable;
 }
 
@@ -40,10 +41,12 @@ void recordAnimationPresentation(std::uint64_t cycle, double value) {
 
   [current_drawable addPresentedHandler:^(id<MTLDrawable> drawable) {
     const auto timestamp = drawable.presentedTime;
+
     dispatch_async(dispatch_get_main_queue(), ^{
       presentations.append(QJsonObject{{QStringLiteral("cycle"), static_cast<qint64>(cycle)}, {QStringLiteral("value"), value}, {QStringLiteral("presented_seconds"), timestamp}});
     });
   }];
+
   current_drawable = nil;
 }
 
@@ -54,6 +57,7 @@ QJsonArray animationPresentations() {
 QJsonObject animationDisplay(const QQuickWindow &window) {
   auto *const view = (__bridge NSView *)std::bit_cast<const void *>(window.winId());
   NSScreen *const screen = view.window.screen;
+
   return {
       {QStringLiteral("name"), QString::fromNSString(screen.localizedName)},
       {QStringLiteral("maximum_fps"), static_cast<int>(screen.maximumFramesPerSecond)},

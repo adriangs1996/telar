@@ -101,6 +101,7 @@ struct Node {
 
   [[nodiscard]] inline unsigned effectivePriority() const noexcept {
     unsigned bonus = 0;
+
     if (tone == Tone::warning) {
       bonus = warning_bonus;
     } else if (tone == Tone::danger) {
@@ -167,6 +168,7 @@ public:
     }
 
     auto remaining = Bounds.text - text_length_;
+
     for (const auto value : {input.text, input.detail, input.url}) {
       if (value.size() > remaining) {
         throw std::length_error{"BarTextTooLong"};
@@ -178,6 +180,7 @@ public:
 
     validateUrl(input.url);
     auto node = input.node;
+
     node.priority = std::min(node.priority, Node::maximum_priority);
     node.text = copyText(input.text);
     node.detail = copyText(input.detail);
@@ -192,6 +195,7 @@ public:
     }
 
     const auto index = node_count_++;
+
     nodes_[index] = node;
 
     return static_cast<std::uint8_t>(index);
@@ -260,8 +264,10 @@ public:
     std::array<unsigned, Node::maximum_nodes> ranks{};
     std::array<std::uint8_t, Node::maximum_nodes> order{};
     auto empty_containers = known_children == nullptr ? Parents{} : *known_children;
+
     for (std::size_t index = 0; index < count; ++index) {
       const auto &node = source.nodes()[index];
+
       ranks[index] = node.effectivePriority();
       order[index] = static_cast<std::uint8_t>(index);
       if (node.parent != Node::no_parent) {
@@ -271,11 +277,14 @@ public:
     }
 
     const auto sorted = std::span{order}.first(count);
+
     std::ranges::sort(sorted, [&](auto left, auto right) {
       return ranks[left] == ranks[right] ? left < right : ranks[left] > ranks[right];
     });
+
     Parents kept{};
     Usage used;
+
     for (const auto index : sorted) {
       const auto &node = source.nodes()[index];
       if (empty_containers[index] || (node.parent != Node::no_parent && !kept[node.parent])) {
@@ -292,6 +301,7 @@ public:
     dropEmpty(source.nodes(), kept, known_children);
     clear();
     std::array<std::uint8_t, Node::maximum_nodes> copied{};
+
     for (std::size_t index = 0; index < count; ++index) {
       if (!kept[index]) {
         continue;
@@ -325,6 +335,7 @@ private:
   inline static void dropEmpty(std::span<const Node> source, Parents &kept, const Parents *known_children) noexcept {
     auto had_children = known_children == nullptr ? Parents{} : *known_children;
     std::array<std::uint8_t, Node::maximum_nodes> children{};
+
     for (std::size_t index = 0; index < source.size(); ++index) {
       const auto &node = source[index];
       if (node.parent != Node::no_parent) {
@@ -386,6 +397,7 @@ private:
 
   inline Range copyText(std::string_view value) noexcept {
     const Range range{.offset = static_cast<std::uint16_t>(text_length_), .length = static_cast<std::uint16_t>(value.size())};
+
     std::ranges::copy(value, text_.begin() + static_cast<std::ptrdiff_t>(text_length_));
     text_length_ += value.size();
 
@@ -453,6 +465,7 @@ public:
   template <Capacity Bounds>
   inline void keepOnly(const Content<Bounds> &content) {
     std::size_t kept = 0;
+
     for (const auto retained : std::span{references_}.first(count_)) {
       const bool used = std::ranges::any_of(content.nodes(), [&](const Node &node) {
         const auto action = content.action(node);
@@ -535,6 +548,7 @@ class ValueReader {
 public:
   inline static Style style(const runtime::lua::Value &value) {
     Style result;
+
     result.foreground = color(value.field("fg"));
     result.background = color(value.field("bg"));
     constexpr auto fields = std::to_array<std::pair<const char *, bool Style::*>>({
@@ -544,6 +558,7 @@ public:
         {"underline", &Style::underline},
         {"strikethrough", &Style::strikethrough},
     });
+
     for (const auto &[name, member] : fields) {
       result.*member = value.field(name).boolean(false);
     }
@@ -558,6 +573,7 @@ public:
 
     constexpr std::array names{"neutral", "muted", "accent", "success", "warning", "danger"};
     const auto name = value.string();
+
     for (std::size_t index = 0; index < names.size(); ++index) {
       if (name == names[index]) {
         return static_cast<Tone>(index);
@@ -606,6 +622,7 @@ public:
     std::ranges::transform(name, normalized.begin(), [](char byte) {
       return byte == '-' ? '_' : runtime::asciiLower(byte);
     });
+
     result.assign({normalized.data(), name.size()});
 
     return result;
@@ -626,6 +643,7 @@ public:
     const auto values = value.field("values");
     const auto total = values.listLength();
     SampleValues result;
+
     result.length = std::min(total, result.values.size());
     if (total > result.length) {
       limits.add({.name = "bars.max_node_samples", .noun = "sparkline values", .value = Node::maximum_samples, .requested = total, .route = {}});
@@ -633,6 +651,7 @@ public:
 
     std::array<double, Node::maximum_samples> kept{};
     double largest = 0;
+
     for (std::size_t index = 0; index < result.length; ++index) {
       const auto sample = values.element(static_cast<lua_Integer>(total - result.length) + static_cast<lua_Integer>(index) + 1);
       if (!sample.present()) {
@@ -640,14 +659,17 @@ public:
       }
 
       const auto number = sample.boundedNumber(0, 0, std::numeric_limits<double>::max());
+
       kept[index] = number;
       largest = std::max(largest, number);
     }
 
     const auto scale = maximum.boundedNumber(largest, std::numeric_limits<double>::lowest(), std::numeric_limits<double>::max());
     constexpr double percent_scale = 100;
+
     for (std::size_t index = 0; index < result.length; ++index) {
       const auto fraction = scale > 0 ? std::clamp(kept[index] / scale, 0.0, 1.0) : 0;
+
       result.values[index] = static_cast<std::uint8_t>(std::round(fraction * percent_scale));
     }
 
@@ -661,6 +683,7 @@ private:
     }
 
     constexpr auto maximum_index = std::numeric_limits<std::uint8_t>::max();
+
     if (const auto index = value.asInteger()) {
       if (*index < 0 || std::cmp_greater(*index, maximum_index)) {
         value.fail("is outside the component color index range");
@@ -706,6 +729,7 @@ public:
     builder_.counting_ = true;
     builder_.staged_.clear();
     const Position root{.place = builder_.surface_ == Surface::bar ? Place::bar : Place::panel};
+
     walk(value, root);
     builder_.budget_.prepare();
     builder_.counting_ = false;
@@ -765,6 +789,7 @@ private:
     }
 
     auto &frame = frames_[frame_count_++];
+
     frame.index = lua_gettop(&state_);
     frame.value.emplace(&state_, frame.index, "component");
     frame.position = position;
@@ -776,6 +801,7 @@ private:
 
   inline void pop() noexcept {
     auto &frame = frames_[--frame_count_];
+
     frame.value.reset();
     lua_settop(&state_, frame.index - 1);
   }
@@ -783,6 +809,7 @@ private:
   // The explicit traversal stack bounds both nested lists and container work.
   inline void walk(const runtime::lua::Value &value, Position position) {
     const auto original_top = lua_gettop(&state_);
+
     value.pushCopy();
     try {
       push(position);
@@ -804,6 +831,7 @@ private:
 
   inline void advance() {
     auto &frame = frames_[frame_count_ - 1];
+
     switch (frame.phase) {
     case Phase::visit:
       builder_.visit(frame);
@@ -816,13 +844,16 @@ private:
         lua_rawgeti(&state_, frame.index, static_cast<lua_Integer>(++frame.next));
         push(frame.child);
       }
+
       break;
     case Phase::tooltip:
     case Phase::button: {
       const bool tooltip = frame.phase == Phase::tooltip;
+
       frame.phase = Phase::done;
       lua_getfield(&state_, frame.index, tooltip ? "tooltip" : "button");
       auto child = frame.child;
+
       child.place = tooltip ? Place::tooltip : Place::buttons;
       child.priority = Node::default_priority;
       push(child);
@@ -847,6 +878,7 @@ private:
     inline void visit(Frame &frame) {
       const auto &value = frameValue(frame);
       const auto position = frame.position;
+
       frame.phase = Phase::done;
       if (!value.present()) {
         return;
@@ -854,9 +886,11 @@ private:
 
       if (value.is(LUA_TSTRING)) {
         Input input;
+
         input.node.priority = static_cast<std::uint8_t>(position.priority);
         input.text = value.string();
         const runtime::config::ComponentShape shape{.text = input.text, .priority = position.priority};
+
         static_cast<void>(append(value, shape, input, position));
 
         return;
@@ -875,6 +909,7 @@ private:
       if (value.field("text").present() || value.field("icon").present()) {
         const auto shape = runtime::config::ComponentShapeReader::segment(value, position.priority);
         Input input;
+
         input.node.kind = shape.kind;
         input.node.priority = static_cast<std::uint8_t>(shape.priority);
         input.node.icon = ValueReader::icon(value.field("icon"));
@@ -899,6 +934,7 @@ private:
       const auto &value = frameValue(frame);
       const auto shape = runtime::config::ComponentShapeReader::read(value, frame.position.priority, limits_);
       Input input;
+
       input.node.kind = shape.kind;
       input.node.priority = static_cast<std::uint8_t>(shape.priority);
       input.node.tone = ValueReader::tone(value.field("tone"));
@@ -906,6 +942,7 @@ private:
       input.detail = shape.detail;
       input.url = shape.url;
       SampleValues samples;
+
       values(value, input, samples);
       const auto node = append(value, shape, input, frame.position);
       if (!node) {
@@ -978,6 +1015,7 @@ private:
       }
 
       const auto rank = std::min(shape.priority + shape.tone_bonus, position.rank);
+
       if (counting_) {
         budget_.count(shape, rank);
         demand_ = demand_ + usage(shape);
@@ -1046,6 +1084,7 @@ private:
           {.name = panel ? "panels.max_panel_actions" : "bars.max_bar_actions", .noun = "click actions", .value = bounds.actions, .requested = demand_.actions, .route = {}},
           {.name = panel ? "panels.max_samples" : "bars.max_samples", .noun = "sparkline samples", .value = bounds.samples, .requested = demand_.samples, .route = {}},
       });
+
       for (const auto &reach : reaches) {
         if (reach.requested.value_or(0) > reach.value) {
           limits_.add(reach);
@@ -1089,6 +1128,7 @@ public:
     const ActionReader reader{actions, pending, next_reference};
     Content<Bounds> next;
     constexpr auto surface = Bounds.nodes == PanelContent::capacity.nodes ? Surface::panel : Surface::bar;
+
     ContentReader{state_, reader, limits, staged, surface}.read(value, next);
     pending.keepOnly(next);
     references_.swap(pending);
@@ -1197,6 +1237,7 @@ struct Source {
 
   inline static Source read(lua_State &state, const runtime::lua::Value &value, bool panel = false) {
     Source result;
+
     if (!value.present()) {
       return result;
     }
@@ -1235,6 +1276,7 @@ struct Heading {
   inline void read(std::string_view key, const runtime::lua::Value &value) {
     name.assign(key);
     const auto text = value.field("title");
+
     title.assign(runtime::utf8Prefix(text.present() ? text.string() : key, maximum_title_bytes));
   }
 };
@@ -1280,14 +1322,17 @@ public:
     slots(state, client.field("components"));
     named(client.field("panels"), panel_count_, [&](std::string_view name, const runtime::lua::Value &value, std::size_t index) {
       auto &panel = panels_[index];
+
       panel.heading.read(name, value);
       panel.width = static_cast<std::uint16_t>(value.field("width").boundedInteger(Panel::default_width, Panel::minimum_width, Panel::maximum_width));
       panel.mark = ValueReader::mark(value.field("mark"));
       panel.icon = ValueReader::icon(value.field("icon"));
       panel.source = Source::read(state, value.field("source"), true);
     });
+
     named(client.field("picks"), pick_count_, [&](std::string_view name, const runtime::lua::Value &value, std::size_t index) {
       auto &pick = picks_[index];
+
       pick.heading.read(name, value);
       pick.timeout = std::chrono::milliseconds{value.field("timeout_ms").boundedInteger(Source::default_timeout.count(), Source::minimum_timeout_ms, Pick::maximum_timeout_ms)};
       pick.command = value.field("command").present();
@@ -1330,6 +1375,7 @@ private:
     const auto bottom = value.field("bottom");
     if (bottom.present()) {
       constexpr std::array names{"left", "center", "right"};
+
       for (std::size_t index = 0; index < names.size(); ++index) {
         sources_[index] = Source::read(state, bottom.field(names[index]));
       }
@@ -1344,6 +1390,7 @@ private:
     if (footer.present()) {
       constexpr std::size_t footer_slots = 3;
       const auto count = footer.arraySize();
+
       for (std::size_t index = 0; index < footer_slots; ++index) {
         sources_[static_cast<std::size_t>(Position::footer_left) + index] = index < count ? Source::read(state, footer.element(static_cast<lua_Integer>(index) + 1)) : Source{};
       }
@@ -1359,6 +1406,7 @@ private:
       const auto *const found = std::ranges::find(slot_names, name);
       if (found == slot_names.end()) {
         const auto message = std::string{"names an unknown component slot \""} + std::string{name} + "\"";
+
         entry.fail(message.c_str());
       }
 
@@ -1383,6 +1431,7 @@ private:
     }
 
     std::array<std::string_view, maximum_definitions> names;
+
     count = 0;
     value.eachField([&](std::string_view name, const runtime::lua::Value &) {
       auto *const end = names.begin() + static_cast<std::ptrdiff_t>(count);
@@ -1392,10 +1441,12 @@ private:
       }
 
       auto *const last = count < names.size() ? end : end - 1;
+
       std::move_backward(place, last, last + 1);
       *place = name;
       count = std::min(count + 1, names.size());
     });
+
     for (std::size_t index = 0; index < count; ++index) {
       read(names[index], value.entry(names[index]), index);
     }
@@ -1408,6 +1459,7 @@ private:
   std::size_t pick_count_ = 0;
   std::array<int, static_cast<std::size_t>(Slot::count)> slots_ = [] {
     std::array<int, static_cast<std::size_t>(Slot::count)> result{};
+
     result.fill(LUA_NOREF);
 
     return result;
@@ -1439,10 +1491,12 @@ public:
   template <typename Actions>
   inline void readFixed(const Actions &actions, runtime::config::LimitNotices &limits) {
     const runtime::lua::Value registry{&state_, LUA_REGISTRYINDEX, "bar registry"};
+
     for (std::size_t index = 0; index < bars_.size(); ++index) {
       const auto &source = definitions_.source(static_cast<Position>(index));
       if (source.kind == SourceKind::fixed) {
         const auto value = registry.element(source.reference);
+
         bars_[index].read(value.field("value"), actions, limits, staged_, next_reference_);
       }
     }
@@ -1485,6 +1539,7 @@ public:
         }
       }
     };
+
     for (const auto &bar : bars_) {
       visit(bar.content());
     }

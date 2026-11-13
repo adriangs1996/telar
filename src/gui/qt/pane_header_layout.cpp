@@ -116,6 +116,7 @@ void PaneHeaderLayout::refreshLayout() {
 
     return std::isfinite(value) && value > 0 ? static_cast<float>(value * density) : 0;
   };
+
   const PaneHeaderMeasurements measurements{
       .index = advance(QStringLiteral("index")),
       .name = advance(QStringLiteral("name")),
@@ -125,6 +126,7 @@ void PaneHeaderLayout::refreshLayout() {
       .compact_progress = advance(QStringLiteral("compactProgress")),
       .needs_attention = measurements_.value(QStringLiteral("needsAttention")).toBool(),
   };
+
   const auto layout = PaneHeaderGeometry::derive({.width = static_cast<float>(width() * density), .height = static_cast<float>(height() * density)}, {.ratio = static_cast<float>(ratio_ * density), .maximum_band_height = static_cast<float>(band_height_ * density)}, measurements);
   if (layout != layout_ || density_ != density) {
     layout_ = layout;

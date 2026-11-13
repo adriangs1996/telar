@@ -44,6 +44,7 @@ struct RgbaImageView {
 
   [[nodiscard]] inline std::array<std::uint8_t, channels> pixel(std::size_t x, std::size_t y) const noexcept {
     const auto source = pixels.subspan((y * stride) + (x * channels)).first<channels>();
+
     return {std::to_integer<std::uint8_t>(source[0]), std::to_integer<std::uint8_t>(source[1]), std::to_integer<std::uint8_t>(source[2]), std::to_integer<std::uint8_t>(source[3])};
   }
 };
@@ -69,6 +70,7 @@ public:
       for (std::size_t column = 0; column < side; ++column) {
         const auto output = destination.subspan(((row * side) + column) * RgbaImageView::channels).first<RgbaImageView::channels>();
         const auto sample = source.width >= side && source.height >= side ? areaSample(source, Span::of(column, horizontal), Span::of(row, vertical)) : linearSample(source, Tap::of(column, horizontal), Tap::of(row, vertical));
+
         sample.write(output);
       }
     }
@@ -87,10 +89,13 @@ public:
 
     const Axis horizontal{.extent = source.width, .scale = static_cast<float>(source.width) / static_cast<float>(width)};
     const Axis vertical{.extent = source.height, .scale = static_cast<float>(source.height) / static_cast<float>(height)};
+
     for (std::size_t row = 0; row < height; ++row) {
       const auto rows = Span::of(row, vertical);
+
       for (std::size_t column = 0; column < width; ++column) {
         const auto output = destination.subspan(((row * width) + column) * RgbaImageView::channels).first<RgbaImageView::channels>();
+
         areaSample(source, Span::of(column, horizontal), rows).write(output);
       }
     }
@@ -100,8 +105,10 @@ public:
 
   inline static void premultiply(std::span<std::uint8_t> pixels) noexcept {
     constexpr auto half_channel = channel_maximum / 2;
+
     for (std::size_t offset = 0; offset + RgbaImageView::channels <= pixels.size(); offset += RgbaImageView::channels) {
       const auto alpha = pixels[offset + color_channels];
+
       for (std::size_t channel = 0; channel < color_channels; ++channel) {
         pixels[offset + channel] = static_cast<std::uint8_t>(((static_cast<std::uint32_t>(pixels[offset + channel]) * alpha) + half_channel) / channel_maximum);
       }
@@ -163,6 +170,7 @@ private:
 
     inline void add(std::span<const std::uint8_t, RgbaImageView::channels> pixel, float weight) noexcept {
       const auto contribution = static_cast<float>(pixel[color_channels]) * weight;
+
       alpha += contribution;
       total += weight;
       for (std::size_t channel = 0; channel < colors.size(); ++channel) {
@@ -185,8 +193,10 @@ private:
 
   [[nodiscard]] inline static Sample areaSample(RgbaImageView source, Span columns, Span rows) noexcept {
     Sample sample;
+
     for (auto row = rows.first; row < rows.end; ++row) {
       const auto row_weight = rows.weight(row);
+
       for (auto column = columns.first; column < columns.end; ++column) {
         sample.add(source.pixel(column, row), row_weight * columns.weight(column));
       }
@@ -197,6 +207,7 @@ private:
 
   [[nodiscard]] inline static Sample linearSample(RgbaImageView source, Tap x, Tap y) noexcept {
     Sample sample;
+
     sample.add(source.pixel(x.index, y.index), (1 - x.fraction) * (1 - y.fraction));
     sample.add(source.pixel(x.next, y.index), x.fraction * (1 - y.fraction));
     sample.add(source.pixel(x.index, y.next), (1 - x.fraction) * y.fraction);
@@ -257,6 +268,7 @@ public:
     }
 
     auto earliest = std::numeric_limits<std::uint64_t>::max();
+
     for (const auto &row : rows()) {
       if (row.waiting) {
         earliest = std::min(earliest, row.due_ns);
@@ -274,6 +286,7 @@ public:
       auto &row = rows_[*slot];
       if (row.resumed_ns) {
         const auto resumed = *row.resumed_ns;
+
         row.resumed_ns.reset();
         ++revision_;
         if (elapsed(now_ns, resumed) >= healthy_window_ns) {
@@ -289,6 +302,7 @@ public:
     }
 
     auto &row = rows_[*slot];
+
     row.snapshot_begun = false;
     if (row.waiting) {
       return;
@@ -328,6 +342,7 @@ public:
     requires std::invocable<const Request &, std::uint64_t>
   void focus(Focus event, const Request &request) {
     const auto [pane_id, now_ns] = event;
+
     if (waiting_count_ == 0) {
       return;
     }
@@ -346,6 +361,7 @@ public:
     }
 
     auto &row = rows_[*slot];
+
     if (phase == SnapshotPhase::begin) {
       row.snapshot_begun = true;
     } else if (row.snapshot_begun) {
@@ -401,6 +417,7 @@ private:
 
   [[nodiscard]] inline std::size_t oldest() const noexcept {
     std::size_t found = 0;
+
     for (std::size_t slot = 1; slot < count_; ++slot) {
       const bool resumed = rows_[slot].resumed_ns.has_value();
       const bool current_resumed = rows_[found].resumed_ns.has_value();
@@ -418,6 +435,7 @@ private:
     if (count_ == capacity) {
       const auto slot = oldest();
       const auto evicted = rows_[slot];
+
       remove(slot);
       if (evicted.waiting) {
         request(evicted.pane_id);
@@ -425,6 +443,7 @@ private:
     }
 
     const auto slot = count_++;
+
     rows_[slot] = {.pane_id = pane_id, .since_ns = now_ns, .due_ns = now_ns};
     ++revision_;
 
@@ -453,6 +472,7 @@ private:
 
   inline void resume(std::size_t slot, std::uint64_t now_ns) noexcept {
     auto &row = rows_[slot];
+
     row.resyncs = 1;
     row.since_ns = now_ns;
     row.snapshot_begun = false;

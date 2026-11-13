@@ -82,20 +82,24 @@ public:
     while (!input.empty()) {
       if (header_length_ != header_.size()) {
         const auto count = std::min(header_.size() - header_length_, input.size());
+
         std::memcpy(header_.data() + header_length_, input.data(), count);
         header_length_ += count;
         input = input.subspan(count);
         if (header_length_ != header_.size()) {
           continue;
         }
+
         decodeHeader();
         receive(Http2FrameEvent{Http2FrameEvent::Kind::begin, frame_});
       } else {
         const auto count = std::min(frame_.length - payload_offset_, input.size());
+
         receive(Http2FrameEvent{Http2FrameEvent::Kind::payload, frame_, payload_offset_, input.first(count)});
         payload_offset_ += count;
         input = input.subspan(count);
       }
+
       if (payload_offset_ == frame_.length) {
         receive(Http2FrameEvent{Http2FrameEvent::Kind::end, frame_});
         header_length_ = 0;
@@ -143,6 +147,7 @@ public:
     if (available == ids_.end()) {
       return false;
     }
+
     *available = stream;
     ++count_;
     return true;
@@ -157,6 +162,7 @@ public:
     if (existing == ids_.end()) {
       return false;
     }
+
     *existing = 0;
     --count_;
     return true;
@@ -197,11 +203,13 @@ public:
     }
 
     Response *available = nullptr;
+
     for (auto &entry : responses_) {
       if (entry.stream == response.stream) {
         entry = response;
         return true;
       }
+
       if (entry.stream == 0 && available == nullptr) {
         available = &entry;
       }
@@ -210,6 +218,7 @@ public:
     if (available == nullptr) {
       return false;
     }
+
     *available = response;
     ++response_count_;
     return true;
@@ -221,6 +230,7 @@ public:
         return entry;
       }
     }
+
     return {};
   }
 
@@ -228,6 +238,7 @@ public:
     if (stream == 0) {
       return;
     }
+
     for (auto &entry : responses_) {
       if (entry.stream == stream) {
         entry = {};

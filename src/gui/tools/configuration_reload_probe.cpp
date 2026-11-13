@@ -68,6 +68,7 @@ void writeFile(const QString &path, const QByteArray &source) {
 
 void createModules(const QTemporaryDir &directory) {
   const auto source = QByteArray{"--"} + QByteArray{module_padding_bytes, 'x'} + "\nreturn true";
+
   for (int index = 1; index <= module_count; ++index) {
     writeFile(directory.filePath(QStringLiteral("part%1.lua").arg(index)), source);
   }
@@ -88,9 +89,11 @@ void measure() {
 
   createModules(directory);
   const auto path = directory.filePath(QStringLiteral("config.lua"));
+
   writeFile(path, rootSource(false));
   ApplicationAllocator memory;
   ConfigurationSource source{memory};
+
   source.open({.path = path, .profile = QString{}, .theme = QString{}});
   if (!source.error().isEmpty()) {
     throw std::runtime_error{source.error().toStdString()};
@@ -100,13 +103,16 @@ void measure() {
   QElapsedTimer clock;
   QEventLoop loop;
   QTimer timeout;
+
   timeout.setSingleShot(true);
   qint64 completion_ns = 0;
   qint64 heartbeat_ns = 0;
+
   QObject::connect(&source, &ConfigurationSource::changed, &loop, [&] {
     completion_ns = clock.nsecsElapsed();
     loop.quit();
   });
+
   QObject::connect(&source, &ConfigurationSource::failed, &loop, &QEventLoop::quit);
   QObject::connect(&timeout, &QTimer::timeout, &loop, &QEventLoop::quit);
   timeout.start(reload_timeout_ms);
@@ -114,8 +120,10 @@ void measure() {
   QTimer::singleShot(0, &loop, [&] {
     heartbeat_ns = clock.nsecsElapsed();
   });
+
   source.poll();
   const auto call_ns = clock.nsecsElapsed();
+
   if (completion_ns == 0 && source.error().isEmpty()) {
     loop.exec();
   }
@@ -127,6 +135,7 @@ void measure() {
 
   // The callback runs on the Lua thread; wait for its result like a binding does.
   std::optional<BindingEffects> effects;
+
   source.invoke(source.input().configured[0].action, {}, [&](LuaOutcome<ConfigurationSource::Effects> outcome) {
     if (outcome.value) {
       effects = (*outcome.value)->effects;
@@ -134,6 +143,7 @@ void measure() {
 
     loop.quit();
   });
+
   loop.exec();
   if (!effects || effects->length != 1 || effects->actions[0].kind != BindingActionKind::toggle_sidebar) {
     throw std::runtime_error{"The configuration benchmark changed its callback result"};
@@ -146,6 +156,7 @@ void measure() {
 
 int main(int argc, char **argv) {
   const QGuiApplication application{argc, argv};
+
   bundledFonts();
 
   try {

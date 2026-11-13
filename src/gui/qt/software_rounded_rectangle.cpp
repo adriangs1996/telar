@@ -68,6 +68,7 @@ public:
     const QRectF interior{padding, 0, std::max(0.0, (shape.size.x / density) - (2 * padding)), shape.size.y / density};
     if (item_to_device.type() <= QTransform::TxScale && interior.width() > 0) {
       const auto device_interior = item_to_device.mapRect(interior);
+
       interior_left_ = device_interior.left();
       interior_right_ = device_interior.right();
     }
@@ -77,6 +78,7 @@ public:
     constexpr qreal pixel_center = 0.5;
     const auto interior_begin = static_cast<int>(std::clamp(std::ceil(interior_left_ - pixel_center), static_cast<qreal>(bounds.left()), static_cast<qreal>(bounds.right() + 1)));
     const auto interior_end = static_cast<int>(std::clamp(std::ceil(interior_right_ - pixel_center), static_cast<qreal>(interior_begin), static_cast<qreal>(bounds.right() + 1)));
+
     for (int row = bounds.top(); row <= bounds.bottom(); ++row) {
       paintRange(row, bounds.left(), interior_begin);
       if (interior_end > interior_begin) {
@@ -124,6 +126,7 @@ private:
 
     auto color = sample(begin, row);
     auto span_begin = begin;
+
     for (int column = begin + 1; column < end; ++column) {
       const auto next = sample(column, row);
       if (color != next) {
@@ -193,6 +196,7 @@ public:
     const Point raster_size{.x = (origin_.x + shape_.size.x) - origin_.x, .y = (origin_.y + shape_.size.y) - origin_.y};
     const QRectF local_bounds{0, 0, raster_size.x / density_, raster_size.y / density_};
     const auto bounds = item_to_device.mapRect(local_bounds).toAlignedRect().intersected(QRect{0, 0, painter->device()->width(), painter->device()->height()});
+
     painter->resetTransform();
     painter->setWorldTransform(painter->deviceTransform().inverted());
     painter->setOpacity(inheritedOpacity());
@@ -215,6 +219,7 @@ QSGNode *paintSoftwareRoundedRectangleAt(QQuickWindow &window, QSGNode *previous
   auto *node = dynamic_cast<SoftwareRoundedRectangleNode *>(previous);
   if (node == nullptr) {
     auto replacement = std::make_unique<SoftwareRoundedRectangleNode>(window);
+
     node = replacement.get();
     owner = std::move(replacement);
   }

@@ -42,10 +42,12 @@ std::size_t settle(ScrollMotion &motion, ScrollTime &now) {
   constexpr std::int64_t frame = 8'333'333;
   constexpr std::size_t most_frames = 1000;
   std::size_t frames = 0;
+
   while (motion.advance(now = {.nanoseconds = now.nanoseconds + frame})) {
     ++frames;
     require(frames < most_frames, "a motion must come to rest");
   }
+
   return frames;
 }
 
@@ -57,13 +59,16 @@ void wheelEasesToItsTarget() {
   constexpr double far = -10'000;
   constexpr std::size_t fewest_frames = 3;
   ScrollMotion motion;
+
   motion.setLimit(limit);
   motion.place(start);
   auto now = at(0);
+
   motion.wheel(notch, now);
   motion.wheel(notch, now);
   require(motion.destination() == target, "notches add to where the last ones were going");
   const auto frames = settle(motion, now);
+
   require(frames > fewest_frames && motion.position() == target && !motion.moving(), "a notch eases over several frames to its target");
   motion.wheel(far, now);
   settle(motion, now);
@@ -79,6 +84,7 @@ void precisePixelsFollowOneToOne() {
   constexpr std::int64_t second_ms = 8;
   constexpr std::int64_t frame_ms = 16;
   ScrollMotion motion;
+
   motion.setLimit(limit);
   motion.place(start);
   motion.follow(down, at(0));
@@ -98,16 +104,20 @@ void releaseFlings() {
   constexpr std::int64_t later_ms = 1000;
   constexpr std::int64_t rested_ms = 1200;
   ScrollMotion motion;
+
   motion.setLimit(limit);
   motion.place(start);
   for (std::int64_t step = 0; step < steps; ++step) {
     motion.follow(step_pixels, at(step * step_ms));
   }
+
   const auto lifted = at(steps * step_ms);
+
   motion.release(lifted);
   require(motion.moving() && motion.destination() > motion.position(), "a fast gesture flings on");
   const auto left = motion.position();
   auto now = lifted;
+
   settle(motion, now);
   require(motion.position() > left, "the fling carries the rows past where the finger left them");
 
@@ -127,6 +137,7 @@ void glidesJumpCloseFirst() {
   constexpr double grown = 1200;
   constexpr std::int64_t growth_ms = 50;
   ScrollMotion motion;
+
   motion.setLimit(limit);
   motion.place(0);
   motion.glide(target, at(0), viewport);
@@ -134,6 +145,7 @@ void glidesJumpCloseFirst() {
   motion.advance(at(partway_ms));
   require(motion.position() > approach && motion.position() < target, "a glide eases toward its target");
   auto now = at(partway_ms);
+
   settle(motion, now);
   require(motion.position() == target, "a glide ends on its target");
 
@@ -161,8 +173,10 @@ void foldsCountShownRows() {
   constexpr std::uint64_t indexes = 40;
   constexpr std::uint64_t total = 50;
   FoldMap<> folds;
+
   require(folds.display(any_row) == any_row && folds.row(any_row) == any_row, "without folds rows are their own display index");
   const std::array<FoldMap<>::Span, 3> spans{{{.first = later_fold, .count = later_rows}, {.first = first_fold, .count = fold_rows}, {.first = overlapping, .count = fold_rows}}};
+
   folds.assign(spans);
   require(folds.spans().size() == 2 && folds.spans()[0].first == first_fold && folds.spans()[0].count == joined_rows, "overlapping folds join, in order");
   require(folds.hides(first_fold) && folds.hides(after_first - 1) && !folds.hides(after_first) && !folds.hides(first_fold - 1), "a fold hides its rows only");
@@ -170,8 +184,10 @@ void foldsCountShownRows() {
   require(folds.display(overlapping) == first_fold, "a hidden row takes the index of the first shown row under its fold");
   for (std::uint64_t index = 0; index < indexes; ++index) {
     const auto row = folds.row(index);
+
     require(!folds.hides(row) && folds.display(row) == index, "a display index names one shown row and back");
   }
+
   require(folds.shownRows(total) == total - joined_rows - later_rows, "the shown rows of a scrollback leave the hidden out");
 }
 
@@ -190,10 +206,12 @@ struct RowsReply {
     for (std::size_t index = 0; index < letters.size(); ++index) {
       letters[index] = static_cast<Byte>('a' + index);
     }
+
     for (std::uint16_t row = 0; row < rows; ++row) {
       cells.push_back(Cell{.text = std::span<const Byte>{letters}.subspan(row % letters.size(), 1)});
       flags.push_back(0);
     }
+
     reply = header;
     reply.pane_id = 1;
     reply.cols = 1;
@@ -208,6 +226,7 @@ struct RowsReply {
 void documentsShowTheirOwnRows() {
   FoldMap<> folds;
   const std::array<FoldMap<>::Span, 3> spans{{{.first = 40, .count = 10, .shown = 4}, {.first = 10, .count = 5}, {.first = 20, .count = 3, .shown = 6}}};
+
   folds.assign(spans);
   require(folds.display(9) == 9 && folds.display(12) == 10 && folds.display(15) == 10, "a fold still hides its rows");
   require(folds.display(20) == 15 && folds.display(22) == 17 && folds.display(23) == 21, "a document longer than its rows pushes the rows below down");
@@ -218,6 +237,7 @@ void documentsShowTheirOwnRows() {
   require(!folds.hides(23) && folds.hides(12) && folds.hides(46) && !folds.hides(41), "rows past what a document shows are hidden");
 
   const std::array<FoldMap<>::Span, 2> covered{{{.first = 20, .count = 3, .shown = 6}, {.first = 18, .count = 10}}};
+
   folds.assign(covered);
   require(folds.spans().size() == 1 && folds.spans()[0].shown == 0 && folds.spans()[0].count == 10, "a fold over a document hides it");
 }
@@ -230,16 +250,20 @@ void rowCacheKeepsRowsByStableNumber() {
   constexpr std::uint64_t third = from + 2;
   SystemAllocator memory;
   RowCache<SystemAllocator> cache{memory};
+
   cache.number(generation);
   require(cache.empty() && !cache.find(0), "a cache holds nothing before its first rows");
   cache.ask(request, from, count);
   require(!cache.missing(from, from + count - 1) && cache.missing(from, from + count) == from + count, "rows asked for are not missing");
   const RowsReply reply{{.request_id = request, .generation = generation, .from = from}, count};
+
   require(cache.store(reply.reply, 1) && !cache.full(), "a reply of the cache's generation is kept and settles its request");
   const auto row = cache.find(third);
+
   require(row && row->cells.size() == 1 && row->cells.front().utf8() == "c", "a row is found by its stable number");
   require(!cache.find(third + RowCache<SystemAllocator>::slot_count), "a slot answers only for the row it holds");
   const RowsReply stale{{.request_id = request + 1, .generation = generation - 1, .from = from}, 1};
+
   require(!cache.store(stale.reply, 1), "rows of another generation are not kept");
   cache.number(generation + 1);
   require(!cache.find(third), "a new generation forgets the rows numbered by the old one");
@@ -266,17 +290,21 @@ void keptRowsKeepTheirLinks() {
   const PaneRows reply{.request_id = 1, .pane_id = 1, .generation = generation, .from = from, .cols = columns, .rows = rows, .text_metadata = TextMetadata{.row_flags = flags, .links = links, .runs = runs, .uris = uri_bytes}, .cells = CellRunCodec::encode(cells, encoded)};
   SystemAllocator memory;
   RowCache<SystemAllocator> cache{memory};
+
   cache.number(generation);
   require(cache.store(reply, columns), "rows with links are kept");
   std::string kept;
   std::uint16_t kept_column = 0;
+
   cache.links(from + 1, [&](const RowCache<SystemAllocator>::LinkView &link) {
     kept.assign(link.uri);
     kept_column = link.column;
     require(link.length == linked_cells, "a kept link covers its cells");
   });
+
   require(kept == uri && kept_column == linked_column, "a kept row keeps its link and target");
   bool none = true;
+
   cache.links(from, [&](const RowCache<SystemAllocator>::LinkView &) { none = false; });
   require(none, "a row without links has none");
 
@@ -286,9 +314,11 @@ void keptRowsKeepTheirLinks() {
   const std::array spans{row->cells, std::span<const CellValue>{}};
   const std::array<Byte, rows> drawn_flags{row->flags, 0};
   const std::array drawn_runs{MetadataRun{.start = linked_column, .len = linked_cells, .link_index = 0}};
+
   drawn.compose(columns, spans, drawn_flags, TextMetadata{.row_flags = drawn_flags, .links = links, .runs = drawn_runs, .uris = uri_bytes});
   require(drawn.rows() == rows && drawn.scroll().offset == 0 && drawn.linkAt(linked_column) == uri, "a composed screen holds its rows' links");
   const auto found = CellLinks::resolve(drawn, CellPosition{.x = linked_column, .y = 0});
+
   require(found && found->start.x == linked_column && found->start.y == 0, "a link on a composed screen resolves where it is drawn");
 }
 
@@ -304,18 +334,22 @@ void sessionAsksForRowsBeyondTheScreen() {
   SystemAllocator memory;
   Transport transport;
   Session client{memory, transport};
+
   openFirstPane(client, transport);
   const FrameBody frame{.pane_id = 1, .frame_id = 1, .scroll = {.total_rows = total, .offset = total - 1}};
+
   deliverSingleCell(client, frame);
   client.requestRows(1, 0, first);
   require(transport.count(ClientTag::read_pane_rows) == 0, "rows are not asked for before the runtime numbers them");
   deliver(client, PaneScrollback{.pane_id = 1, .generation = generation, .trimmed = trimmed});
   client.requestRows(1, first, last);
   const auto asked = transport.last<ReadPaneRows>();
+
   require(transport.count(ClientTag::read_pane_rows) == 2 && asked.from == second_from && asked.count == last - second_from + 1, "rows are asked for in bounded requests");
   client.requestRows(1, first, last);
   require(transport.count(ClientTag::read_pane_rows) == 2, "rows already asked for are not asked for again");
   const RowsReply reply{{.request_id = asked.request_id, .generation = generation, .from = asked.from}, kept};
+
   deliver(client, reply.reply);
   require(client.findPane(1)->rows.find(asked.from + 1).has_value(), "the reply's rows are kept");
   deliver(client, PaneScrollback{.pane_id = 1, .generation = generation, .trimmed = trimmed + dropped});
@@ -323,6 +357,7 @@ void sessionAsksForRowsBeyondTheScreen() {
 
   Transport legacy_transport;
   Session legacy{memory, legacy_transport};
+
   legacy.connected(1, false);
   require(!legacy.readsRows(), "a runtime without scrollback rows is not asked for them");
 }
@@ -338,23 +373,29 @@ void foldedBlocksHideTheirOutput() {
   SystemAllocator memory;
   Transport transport;
   Session client{memory, transport};
+
   openFirstPane(client, transport);
   const FrameBody frame{.pane_id = 1, .frame_id = 1, .scroll = {.total_rows = total, .offset = total - 1}};
+
   deliverSingleCell(client, frame);
   deliver(client, PaneScrollback{.pane_id = 1, .generation = 1, .trimmed = trimmed});
   const auto blocks_at = [](std::uint32_t shift) {
     return std::array{CommandBlock{.row = first_row - shift, .rows = first_rows, .state = CommandBlockState::succeeded, .command = "ls"}, CommandBlock{.row = second_row - shift, .rows = 1, .state = CommandBlockState::failed, .status = 1, .command = "make"}, CommandBlock{.row = third_row - shift, .rows = 1, .state = CommandBlockState::running, .command = "tail"}};
   };
+
   const auto blocks = blocks_at(0);
+
   deliver(client, PaneBlocks{.pane_id = 1, .blocks = blocks});
   client.fold(1, 0, true);
   const auto &pane = *client.findPane(1);
   const auto output = first_row + first_rows;
+
   require(client.folded(1, 0) && pane.folds.hides(output) && pane.folds.hides(second_row - 1) && !pane.folds.hides(second_row) && !pane.folds.hides(output - 1), "a fold hides the rows between its prompt and the next");
   client.foldAll(1, true);
   require(client.folded(1, 1) && !client.folded(1, 2), "folding all leaves the running command open");
   deliver(client, PaneScrollback{.pane_id = 1, .generation = 1, .trimmed = trimmed + dropped});
   const auto moved = blocks_at(dropped);
+
   deliver(client, PaneBlocks{.pane_id = 1, .blocks = moved});
   require(client.folded(1, 0) && client.folded(1, 1) && pane.folds.hides(output - dropped) && !pane.folds.hides(second_row - dropped), "folds stay with their blocks when the scrollback drops rows above them");
   deliver(client, PaneScrollback{.pane_id = 1, .generation = 2, .trimmed = 0});
@@ -383,5 +424,6 @@ int main() {
     std::cerr << "gui-scroll: " << error.what() << '\n';
     return 1;
   }
+
   return 0;
 }

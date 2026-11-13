@@ -42,6 +42,7 @@ QStringList registerFonts() {
 
 const QStringList &bundledFonts() {
   static const QStringList families = registerFonts();
+
   return families;
 }
 }

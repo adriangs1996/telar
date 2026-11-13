@@ -77,6 +77,7 @@ bool Application::executeMachineAction(Action action) {
 
 void Application::moveMachine(int delta) {
   auto slot = static_cast<int>(machines_.active());
+
   for (std::size_t step = 0; step < Machines::capacity; ++step) {
     slot = (slot + delta + static_cast<int>(Machines::capacity)) % static_cast<int>(Machines::capacity);
     const auto candidate = static_cast<Machines::Slot>(slot);
@@ -97,6 +98,7 @@ void Application::refreshMachinePicker() {
 bool Application::updateMachinePickerResults(std::string_view query) {
   const auto matches = MachinePicker::collect(machines_, query);
   QVariantList rows;
+
   rows.reserve(static_cast<qsizetype>(matches.rows().size()) + 1);
   for (const auto &match : matches.rows()) {
     rows.append(machinePickerRecord({.machine = match.target}));
@@ -113,6 +115,7 @@ bool Application::updateMachinePickerResults(std::string_view query) {
   }
 
   const auto last = matches.rows().size();
+
   palette_targets_[last] = MachinePickerTarget{.machine = std::nullopt};
   palette_kinds_[last] = PaletteRowKind::machine;
   palette_rows_ = std::move(rows);
@@ -128,6 +131,7 @@ QVariantMap Application::machinePickerRecord(MachinePickerTarget target) const {
       {QStringLiteral("detailBelow"), false},
       {QStringLiteral("shortcut"), false},
   };
+
   if (!target.machine) {
     result.insert(QStringLiteral("key"), QStringLiteral("machine:add"));
     result.insert(QStringLiteral("icon"), QStringLiteral("+"));
@@ -141,6 +145,7 @@ QVariantMap Application::machinePickerRecord(MachinePickerTarget target) const {
   const auto token = *target.machine;
   const auto &row = machines_.row(token.slot);
   QString state;
+
   if (!row.enabled) {
     state = QStringLiteral("disabled · enter enables");
   } else if (token.slot == machines_.active()) {
@@ -180,6 +185,7 @@ std::optional<MachinePickerTarget> Application::chosenMachine(const QVariantMap 
   }
 
   const auto key = choice.value(QStringLiteral("key")).toString();
+
   for (qsizetype index = 0; index < palette_rows_.size(); ++index) {
     if (palette_rows_[index].toMap().value(QStringLiteral("key")).toString() == key) {
       if (const auto *target = std::get_if<MachinePickerTarget>(&palette_targets_[static_cast<std::size_t>(index)])) {
@@ -205,6 +211,7 @@ void Application::chooseMachine(MachinePickerTarget target, bool alternate) {
   }
 
   const auto token = *target.machine;
+
   if (intent == MachinePicker::Intent::setup) {
     setupMachine(token);
   } else if (intent == MachinePicker::Intent::enable || intent == MachinePicker::Intent::disable) {
@@ -213,6 +220,7 @@ void Application::chooseMachine(MachinePickerTarget target, bool alternate) {
     }
 
     const auto label = machines_.row(token.slot).label.view();
+
     static_cast<void>(machine_profiles_.edit({.kind = intent == MachinePicker::Intent::enable ? MachineEditKind::enable : MachineEditKind::disable, .label = label, .value = {}}));
   } else if (clients_[token.slot]) {
     auto &client = clientAt(token.slot);
@@ -234,11 +242,13 @@ void Application::editMachineResult(const QVariantMap &choice, MachineEditAction
   }
 
   const auto token = *target->machine;
+
   applyInteraction([&] {
     if (action == MachineEditAction::rename) {
       showMachinePrompt(token);
     } else {
       const auto label = machines_.row(token.slot).label.view();
+
       static_cast<void>(machine_profiles_.edit({.kind = MachineEditKind::remove, .label = label, .value = {}}));
     }
   });
@@ -253,11 +263,13 @@ void Application::setupMachine(MachineToken target) {
   const auto program = platform::runtime_endpoint::program();
   constexpr std::string_view title_prefix = "Set up ";
   BoundedText<title_prefix.size() + MachineLimits::label_bytes> title;
+
   title.append(title_prefix);
   title.append(row.label.view());
   const auto name = row.id.value() == 0 ? row.destination.view() : row.label.view();
   const std::array<std::string_view, 5> arguments{program, "machine", "setup", name, "--confirm"};
   runtime::config::CommandTabView command{.count = arguments.size(), .configured_label = title.view()};
+
   std::ranges::copy(arguments, command.arguments.begin());
   selectMachine(machines_.token(Machines::local_slot));
   static_cast<void>(session().createCommandTab(command));

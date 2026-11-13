@@ -22,8 +22,10 @@ namespace {
   std::vector<Byte> encoded(std::string_view markdown) {
     SystemAllocator memory;
     render::Document<SystemAllocator> document{memory};
+
     require(render::markdown::render(markdown, document) == render::markdown::Error::none, "the fixture renders");
     std::vector<Byte> bytes(*render::encodedSize(document));
+
     render::encode(document, bytes);
     return bytes;
   }
@@ -43,6 +45,7 @@ namespace {
     SystemAllocator memory;
     Transport transport;
     Session client{memory, transport};
+
     openFirstPane(client, transport);
     auto *pane = client.findPane(1);
     const auto bytes = encoded("# Title\n\nSome *text*.\n\n- one\n- two\n");
@@ -63,8 +66,10 @@ namespace {
     SystemAllocator memory;
     Transport transport;
     Session client{memory, transport};
+
     openFirstPane(client, transport);
     auto bytes = encoded("text");
+
     bytes[0] = 'X';
     deliver(client, part(1, bytes, 0, bytes.size()));
     require(!client.findPane(1)->document_shown, "a corrupt document does not show");

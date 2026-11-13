@@ -43,6 +43,7 @@ public:
     if (size != 0) {
       std::memcpy(message_.data(), message.data(), size);
     }
+
     message_[size] = '\0';
   }
 
@@ -132,6 +133,7 @@ private:
 
   inline static Vm &owner(lua_State *state) noexcept {
     void *context = nullptr;
+
     lua_getallocf(state, &context);
     return *static_cast<Vm *>(context);
   }
@@ -140,11 +142,13 @@ private:
     auto &vm = *static_cast<Vm *>(context);
     const auto previous = pointer == nullptr ? 0 : old_size;
     const auto retained = vm.used_bytes_ - previous;
+
     if (new_size == 0) {
       vm.release(pointer);
       vm.used_bytes_ = retained;
       return nullptr;
     }
+
     if (new_size > vm.limits_.memory - retained || new_size > std::numeric_limits<std::size_t>::max() - sizeof(Allocation)) {
       return nullptr;
     }
@@ -172,12 +176,14 @@ private:
   inline void release(void *pointer) noexcept {
     if (pointer != nullptr) {
       auto *allocation = static_cast<Allocation *>(pointer) - 1;
+
       memory_.deallocate(allocation, sizeof(Allocation) + allocation->capacity, alignof(Allocation));
     }
   }
 
   inline static void instructionHook(lua_State *state, lua_Debug *) {
     auto &vm = owner(state);
+
     vm.instructions_ += instruction_interval;
     if (vm.instructions_ > vm.limits_.instructions || Clock::now() > vm.deadline_) {
       luaL_error(state, "Telar Lua execution budget exceeded");
@@ -187,6 +193,7 @@ private:
   inline static int panic(lua_State *state) {
     std::size_t size = 0;
     const auto *message = lua_tolstring(state, -1, &size);
+
     throw Error{message == nullptr ? std::string_view{"Unprotected Lua failure"} : std::string_view{message, size}};
   }
 
@@ -194,6 +201,7 @@ private:
     if (status == LUA_OK) {
       return;
     }
+
     if (status == LUA_ERRMEM) {
       throw std::bad_alloc{};
     }
@@ -210,6 +218,7 @@ private:
         luaL_Reg{LUA_TABLIBNAME, luaopen_table},
         luaL_Reg{LUA_UTF8LIBNAME, luaopen_utf8},
     };
+
     for (const auto &library : libraries) {
       luaL_requiref(state, library.name, library.func, 1);
       lua_pop(state, 1);
@@ -226,6 +235,7 @@ private:
         luaL_Reg{"clock", &osClock},
         luaL_Reg{"date", &osDate},
     };
+
     lua_createtable(state, 0, static_cast<int>(clock.size()));
     for (const auto &function : clock) {
       lua_pushcfunction(state, function.func);
@@ -282,9 +292,11 @@ private:
     }
 
     std::array<char, maximum_format_bytes + 1> pattern{};
+
     std::ranges::copy(format, pattern.begin());
     std::array<char, maximum_output_bytes> output{};
     const auto written = format.empty() ? 0 : std::strftime(output.data(), output.size(), pattern.data(), &calendar);
+
     lua_pushlstring(state, output.data(), written);
 
     return 1;
@@ -330,16 +342,19 @@ private:
 
     std::size_t size = 0;
     const auto *bytes = lua_tolstring(state, 1, &size);
+
     if (size > maximum_input_bytes) {
       return luaL_error(state, "JSON input is too large");
     }
 
     try {
       const std::string_view input{bytes, size};
+
       validateUtf8(input);
       const auto document = JsonValue::parse(input, maximum_depth - 1);
       auto &memory = *static_cast<Memory *>(lua_touserdata(state, lua_upvalueindex(1)));
       JsonDecoder decoder{memory};
+
       decoder.push(state, document, 0);
       return 1;
     } catch (const std::exception &error) {
@@ -366,14 +381,17 @@ private:
       break;
     case '[': {
       int count = 0;
+
       value.eachElement([&](const JsonValue &) { ++count; });
       lua_createtable(state, count, 0);
       const auto table = lua_absindex(state, -1);
       lua_Integer index = 0;
+
       value.eachElement([&](const JsonValue &element) {
         push(state, element, depth + 1);
         lua_rawseti(state, table, ++index);
       });
+
       break;
     }
     case '{':
@@ -389,11 +407,14 @@ private:
 
   inline void object(lua_State *state, const JsonValue &value, unsigned depth) {
     int count = 0;
+
     value.eachMember([&](const JsonValue &, const JsonValue &) { ++count; });
     lua_createtable(state, 0, count);
     const auto table = lua_absindex(state, -1);
+
     lua_newtable(state);
     const auto names = lua_absindex(state, -1);
+
     value.eachMember([&](const JsonValue &key, const JsonValue &member) {
       key.string(text_);
       lua_pushlstring(state, text_.data(), text_.size());
@@ -410,6 +431,7 @@ private:
       push(state, member, depth + 1);
       lua_rawset(state, table);
     });
+
     lua_pop(state, 1);
   }
 
@@ -436,6 +458,7 @@ public:
   inline explicit LocalModules(lua_State *state, std::string_view directory) {
     directory_.assign(directory);
     constexpr int expected_modules = 16;
+
     lua_createtable(state, 0, expected_modules);
     cache_ = luaL_ref(state, LUA_REGISTRYINDEX);
     lua_pushlightuserdata(state, this);
@@ -458,12 +481,14 @@ public:
     }
 
     const auto initial_top = lua_gettop(state);
+
     lua_rawgeti(state, LUA_REGISTRYINDEX, cache_);
     lua_pushnil(state);
     try {
       while (lua_next(state, -2) != 0) {
         std::size_t length = 0;
         const auto *name = lua_tolstring(state, -2, &length);
+
         visit(std::string_view{name, length});
         lua_pop(state, 1);
       }
@@ -483,6 +508,7 @@ private:
 
   inline static int require(lua_State *state) {
     auto &modules = *static_cast<LocalModules *>(lua_touserdata(state, lua_upvalueindex(1)));
+
     if (domain == ModuleDomain::configuration && lua_type(state, 1) != LUA_TSTRING) {
       return luaL_error(state, "require expects a module name");
     }
@@ -498,12 +524,14 @@ private:
       lua_getglobal(state, "telar");
       return 1;
     }
+
     if (domain == ModuleDomain::package && name == "telar.traffic") {
       lua_getglobal(state, "telar");
       lua_getfield(state, -1, "traffic");
       if (lua_isnil(state, -1)) { return luaL_error(state, "Traffic API is unavailable"); }
       return 1;
     }
+
     if (!validIdentifier(name)) {
       return raise(state, "Invalid local module name", "invalid local module name");
     }
@@ -514,6 +542,7 @@ private:
     if (!lua_isnil(state, -1)) {
       return 1;
     }
+
     lua_pop(state, 1);
 
     const auto directory = modules.directory_.view();
@@ -525,10 +554,12 @@ private:
     std::memcpy(path.data(), directory.data(), directory.size());
     path[directory.size()] = '/';
     auto *suffix = path.data() + directory.size() + 1;
+
     std::transform(name.begin(), name.end(), suffix, [](char byte) { return byte == '.' ? '/' : byte; });
     std::array<char, PATH_MAX> canonical;
     // A folder module, such as mods/tabs/init.lua, answers to the folder's name.
     bool found = false;
+
     for (const std::string_view ending : {std::string_view{".lua"}, std::string_view{"/init.lua"}}) {
       std::memcpy(suffix + name.size(), ending.data(), ending.size());
       suffix[name.size() + ending.size()] = '\0';
@@ -546,17 +577,21 @@ private:
     if (!resolved.starts_with(directory) || (resolved.size() != directory.size() && resolved[directory.size()] != '/')) {
       return raise(state, "Local configuration module escapes the configuration directory", "module escapes package");
     }
+
     struct stat metadata{};
     if (::stat(canonical.data(), &metadata) != 0 || !S_ISREG(metadata.st_mode)) {
       return luaL_error(state, "Local configuration module must be a regular file");
     }
+
     if (luaL_loadfilex(state, canonical.data(), "t") != LUA_OK || lua_pcall(state, 0, 1, 0) != LUA_OK) {
       return lua_error(state);
     }
+
     if (lua_isnil(state, -1)) {
       lua_pop(state, 1);
       lua_pushboolean(state, true);
     }
+
     if (domain == ModuleDomain::configuration && modules.loaded_ == module_limit) {
       return luaL_error(state, "Configuration requires too many local modules");
     }
@@ -564,6 +599,7 @@ private:
     if constexpr (domain == ModuleDomain::configuration) {
       ++modules.loaded_;
     }
+
     lua_pushvalue(state, 1);
     lua_pushvalue(state, -2);
     lua_rawset(state, -4);
@@ -604,6 +640,7 @@ inline void setField(lua_State *state, const char *name, lua_Integer value) {
 inline void setDecimal(lua_State *state, const char *name, std::uint64_t value) {
   std::array<char, 32> text;
   const auto result = std::to_chars(text.data(), text.data() + text.size(), value);
+
   setField(state, name, std::string_view{text.data(), result.ptr});
 }
 
@@ -619,6 +656,7 @@ inline void pushReadOnly(lua_State *state, const char *message) {
     lua_pushvalue(raised, lua_upvalueindex(1));
     return lua_error(raised);
   }, 1);
+
   lua_setfield(state, -2, "__newindex");
   lua_pushboolean(state, 0);
   lua_setfield(state, -2, "__metatable");
@@ -688,6 +726,7 @@ public:
     require(LUA_TSTRING, "must be a string");
     std::size_t size = 0;
     const auto *text = lua_tolstring(state_, index_, &size);
+
     return {text, size};
   }
 
@@ -703,6 +742,7 @@ public:
   inline lua_Integer integer() const {
     int valid = 0;
     const auto result = lua_tointegerx(state_, index_, &valid);
+
     if (!valid) {
       fail("must be an integer");
     }
@@ -713,6 +753,7 @@ public:
   inline std::optional<lua_Integer> asInteger() const noexcept {
     int valid = 0;
     const auto result = lua_tointegerx(state_, index_, &valid);
+
     return valid ? std::optional{result} : std::nullopt;
   }
 
@@ -750,6 +791,7 @@ public:
   inline void onlyFields(std::span<const std::string_view> allowed, bool allow_children = false) const {
     require(LUA_TTABLE, "must be a table");
     const auto children = allow_children ? lua_rawlen(state_, index_) : 0;
+
     lua_pushnil(state_);
     while (lua_next(state_, index_) != 0) {
       if (children != 0 && lua_isinteger(state_, -2)) {
@@ -757,6 +799,7 @@ public:
         if (position < 1 || static_cast<std::uint64_t>(position) > children) {
           fail("children must form an array");
         }
+
         lua_pop(state_, 1);
         continue;
       }
@@ -776,6 +819,7 @@ public:
   inline std::size_t arraySize() const {
     require(LUA_TTABLE, "must be an array");
     const auto size = lua_rawlen(state_, index_);
+
     lua_pushnil(state_);
     while (lua_next(state_, index_) != 0) {
       int valid = 0;
@@ -803,14 +847,17 @@ public:
       {
         const Value key{state_, -2, label_};
         const Value value{state_, -1, label_};
+
         consume(key.string(), value);
       }
+
       lua_pop(state_, 1);
     }
   }
 
   [[noreturn]] inline void fail(const char *message) const {
     std::array<char, 512> description;
+
     std::snprintf(description.data(), description.size(), "%s %s", label_.c_str(), message);
     throw Error{description.data()};
   }

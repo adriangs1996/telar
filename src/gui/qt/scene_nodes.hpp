@@ -31,6 +31,7 @@ inline std::unique_ptr<QSGImageNode> createSceneImage(const QQuickWindow &window
 template <std::derived_from<QSGNode> Node>
 tbc::view<Node &, tbc::lt::a> adoptSceneNode(tbc::view<QSGNode &, tbc::lt::a> parent, std::unique_ptr<Node> node, SceneOrder order = SceneOrder::last) {
   auto &result = *tbc::raw(node.get());
+
   if (order == SceneOrder::first) {
     parent.prependChildNode(node.release());
   } else {
@@ -48,12 +49,14 @@ tbc::view<Node &, tbc::lt::a> appendSceneNode(tbc::view<QSGNode &, tbc::lt::a> p
 inline void clearSceneChildren(QSGNode &parent) {
   while (parent.firstChild() != nullptr) {
     const std::unique_ptr<QSGNode> child{parent.firstChild()};
+
     parent.removeChildNode(child.get());
   }
 }
 
 inline std::size_t sceneNodeDepth(const QSGNode &node) noexcept {
   std::size_t depth = 0;
+
   for (const auto *parent = node.parent(); parent != nullptr; parent = parent->parent()) {
     ++depth;
   }
@@ -66,6 +69,7 @@ inline bool sceneNodePrecedes(const QSGNode &first, const QSGNode &second) noexc
   const auto second_depth = sceneNodeDepth(second);
   const auto *left = &first;
   const auto *right = &second;
+
   for (auto depth = first_depth; depth > second_depth; --depth) {
     left = left->parent();
   }

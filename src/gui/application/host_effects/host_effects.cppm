@@ -46,6 +46,7 @@ public:
     }
 
     const bool already = acknowledged_ && acknowledged_->pane_id == agent->pane_id && acknowledged_->pane_generation == agent->pane_generation;
+
     if (agent->status != AgentStatus::done) {
       if (already) {
         acknowledged_.reset();
@@ -128,6 +129,7 @@ private:
 
   [[nodiscard]] inline static std::size_t completePrefix(std::string_view text) noexcept {
     auto length = text.size();
+
     while (length > 0 && continuation(static_cast<unsigned char>(text[length - 1]))) {
       --length;
     }
@@ -142,6 +144,7 @@ private:
   template <std::size_t Capacity>
   [[nodiscard]] inline static runtime::FixedText<Capacity> sanitize(std::string_view text) {
     BoundedText<Capacity> sanitized;
+
     for (const auto character : text) {
       const auto byte = static_cast<unsigned char>(character);
       if (byte < first_printable || byte == delete_control || byte == '"' || byte == '\\') {
@@ -160,6 +163,7 @@ private:
     }
 
     runtime::FixedText<Capacity> result;
+
     result.assign(sanitized.view());
 
     return result;
@@ -291,6 +295,7 @@ public:
     const auto found = find(name);
     const auto slot = found ? *found : insert(name);
     auto &row = rows_[slot];
+
     row.noun.assign(reach.noun.substr(0, noun_capacity));
     row.route.assign(reach.route.substr(0, route_capacity));
     row.value = reach.value;
@@ -316,6 +321,7 @@ public:
     }
 
     const auto hits = std::exchange(row.unreported, 0);
+
     row.reported_ms = awake_ms;
 
     return hits;
@@ -323,6 +329,7 @@ public:
 
   inline void restoreReport(Slot slot, std::uint32_t hits) noexcept {
     auto &row = rows_[slot.value];
+
     row.unreported = saturatedAdd(row.unreported, hits);
     row.reported_ms.reset();
   }
@@ -341,6 +348,7 @@ public:
 
   [[nodiscard]] inline static BoundedText<description_capacity> describe(LimitReach reach, std::uint64_t hits) {
     BoundedText<description_capacity> text;
+
     text.append(reach.name);
     text.append(": ");
     if (reach.requested) {
@@ -395,6 +403,7 @@ private:
 
   inline std::size_t insert(std::string_view name) {
     std::size_t slot = count_;
+
     if (count_ < capacity) {
       ++count_;
     } else {
@@ -410,6 +419,7 @@ private:
 
   [[nodiscard]] inline std::size_t oldest() const noexcept {
     std::size_t found = 0;
+
     for (std::size_t slot = 1; slot < count_; ++slot) {
       if (rows_[slot].last_ms < rows_[found].last_ms) {
         found = slot;

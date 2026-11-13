@@ -100,6 +100,7 @@ constexpr ConfigurationSourceText source{
 template <typename Read>
 void rejects(Read read) {
   bool rejected = false;
+
   try {
     read();
   } catch (const std::invalid_argument &) {
@@ -113,19 +114,24 @@ void configuredActionsRetainTheirCompiledValuesWithoutAllocating() {
   SystemAllocator system;
   constexpr std::size_t budget_bytes = std::size_t{8} * 1024 * 1024;
   BudgetAllocator memory{system, budget_bytes};
+
   {
     ConfigurationGeneration generation{memory, source};
     const auto binding = generation.input().configured[0].action;
     const auto expected = generation.notificationAction(binding);
+
     require(expected && expected->title.view() == "Retained notice" && expected->message.view() == "original body", "configured notification values must come from their retained description");
     constexpr std::uint32_t duration_ms = 750;
     constexpr std::uint64_t pane_id = 99;
+
     require(expected && expected->level == NotificationLevel::warning && expected->duration_ms == duration_ms && expected->target.kind == NotificationTarget::Kind::pane && expected->target.id == pane_id, "description lookup must preserve severity, duration and semantic target");
     static_cast<void>(generation.invoke(generation.input().configured[2].action, {}));
     const auto allocations = memory.allocations();
     constexpr std::size_t repetitions = 100;
+
     for (std::size_t index = 0; index < repetitions; ++index) {
       const auto notification = generation.notificationAction(binding);
+
       require(notification && notification->title.view() == "Retained notice" && notification->level == NotificationLevel::warning, "Lua table mutation must not rewrite an already compiled action");
     }
 
@@ -141,22 +147,29 @@ void callbackDescriptionsOwnTextAndRetireTheirRegistryReferences() {
   ConfigurationGeneration generation{memory, source};
   const auto callback = generation.input().configured[1].action;
   const auto first = generation.invoke(callback, {});
+
   require(first.length == 1 && first.actions.front().kind == BindingActionKind::extended, "a callback must retain its validated notification effect");
   const auto copied = generation.notificationAction(first.actions.front());
+
   require(copied && copied->title.view() == "Run 1" && copied->target.kind == NotificationTarget::Kind::workspace && copied->target.id == 2, "callback notification fields must be decoded from their current registry value");
   const auto second = generation.invoke(callback, {});
   const auto next = generation.notificationAction(second.actions.front());
+
   require(next && next->title.view() == "Run 2" && copied && copied->title.view() == "Run 1", "an owned description must remain usable after another callback replaces transient Lua values");
   static_cast<void>(generation.invoke(generation.input().configured[2].action, {}));
   rejects([&] {
     static_cast<void>(generation.notificationAction(second.actions.front()));
   });
+
   auto obsolete = generation.input().configured[0].action;
+
   ++obsolete.generation;
   rejects([&] {
     static_cast<void>(generation.notificationAction(obsolete));
   });
+
   auto forged = generation.input().configured[0].action;
+
   ++forged.parameter;
   rejects([&] {
     static_cast<void>(generation.notificationAction(forged));

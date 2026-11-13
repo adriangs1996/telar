@@ -41,6 +41,7 @@ namespace telar {
       if (kind != other.kind) {
         return false;
       }
+
       return kind == Kind::default_color ||
              (kind == Kind::indexed ? channels[0] == other.channels[0]
                                     : channels == other.channels);
@@ -69,6 +70,7 @@ namespace telar {
       if (raw_width > 2 || text.size() > 16 || (raw_width == 0 ? !text.empty() : text.empty())) {
         throw EncodingError{"Invalid terminal cell"};
       }
+
       style.validate();
     }
   };
@@ -86,6 +88,7 @@ namespace telar {
 
     static void encodeBody(const CellColor &value, std::span<Byte> &output) {
       const auto size = encodedSize(value);
+
       EnumByte<CellColor::Kind, 2>::encode(value.kind, output);
       for (std::size_t i = 0; i < size - 1; ++i) {
         u8::encode(value.channels[i], output);

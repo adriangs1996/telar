@@ -54,15 +54,19 @@ ResolvedFont FontResolver::resolve(fonts::Face &face, const FontConfiguration &c
 
 ResolvedFont FontResolver::compose(const fonts::Face &face, FontGrid grid, qreal scale) {
   auto families = bundledFonts();
+
   families.prepend(toQString(face.family()));
   QFont base;
+
   base.setFamilies(families);
   base.setStyleName(toQString(face.style()));
   constexpr qreal points_per_inch = 72;
   const auto *screen = QGuiApplication::primaryScreen();
   const auto dpi = screen != nullptr ? screen->logicalDotsPerInchY() : points_per_inch;
+
   base.setPointSizeF(grid.pixel_height / scale * points_per_inch / dpi);
   const auto variation = face.variation();
+
   for (std::size_t index = 0; index < variation.count; ++index) {
     const auto tag = QFont::Tag::fromValue(variation.tags[index]);
     if (!tag) {
@@ -73,6 +77,7 @@ ResolvedFont FontResolver::compose(const fonts::Face &face, FontGrid grid, qreal
   }
 
   auto font = TerminalFont::fromFont(std::move(base), {grid.width / scale, grid.height / scale}, grid.baseline / scale);
+
   font.fixed_pitch = face.fixedPitch();
 
   return {.font = std::move(font), .grid = grid};

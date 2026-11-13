@@ -46,6 +46,7 @@ export namespace telar::runtime::cli {
     constexpr std::string_view suffix = "\"]\nif type(callback) ~= \"function\" then error(\"plugin action is not a function\") end\nreturn {telar.bind_global({\"escape\"}, callback)}";
 
     String<Memory> wrapped{AllocatorRef<char, Memory>{memory}};
+
     wrapped.reserve(prefix.size() + source.size() + middle.size() + action.size() + suffix.size());
     wrapped.append(prefix).append(source).append(middle).append(action).append(suffix);
 
@@ -55,6 +56,7 @@ export namespace telar::runtime::cli {
   inline int retainPluginCallback(lua_State *state, const config::RetainedActionValidator &validator, config::LimitNotices &limits) {
     const auto bindings = lua::Value{state, -1, "plugin binding"};
     config::BindingKeymap keymap;
+
     config::BindingValidator::validate(bindings, validator, keymap, limits);
     const auto binding = bindings.element(1);
     const auto callback = binding.field("action");
@@ -74,6 +76,7 @@ export namespace telar::runtime::cli {
     const auto directory = std::filesystem::canonical(std::filesystem::absolute(options.entry).parent_path()).string();
 
     lua::Vm vm{memory};
+
     vm.resetBudget();
     vm.execute(config::bootstrap, "@telar/bootstrap.lua", 0);
     lua_getglobal(vm.state(), "telar");
@@ -83,17 +86,21 @@ export namespace telar::runtime::cli {
     const auto wrapped = pluginCallbackSource(memory, source, options.action);
     config::LimitNotices limits;
     config::RetainedCommandTabRegistry commands;
+
     lua_pushnil(vm.state());
     const lua::Value empty{vm.state(), -1, "client"};
     const config::ClientDefinitions definitions{empty};
     const config::RetainedActionValidator validator{definitions, limits, commands};
+
     vm.execute(wrapped, "@plugin-worker.lua");
     const int reference = retainPluginCallback(vm.state(), validator, limits);
+
     lua_settop(vm.state(), 1);
 
     config::CallbackInvocation invocation{reference, options.context};
     constexpr std::uint64_t callback_instructions = 100'000;
     constexpr auto callback_deadline = std::chrono::milliseconds{100};
+
     vm.resetBudget(callback_instructions, callback_deadline);
     vm.invoke(&config::CallbackInvocation::invoke, &invocation, 1);
     const lua::Value result{vm.state(), -1, "plugin callback result"};
@@ -164,6 +171,7 @@ export namespace telar::runtime::cli {
     }
 
     String<Memory> endpoint{socket, AllocatorRef<char, Memory>{memory}};
+
     endpoint += redirect::socket_suffix;
 
     if (endpoint.front() != '/' || endpoint.size() >= sizeof(sockaddr_un::sun_path)) {
@@ -182,6 +190,7 @@ export namespace telar::runtime::cli {
       redirect::PfLoopback interface{command};
       redirect::SharedLoopback loopback{memory, interface, identity.label};
       redirect::PfSession session{command, state, identity, loopback};
+
       session.recover();
       std::println("telar redirect: recovered {}", identity.anchor.c_str());
       return;
@@ -207,10 +216,12 @@ export namespace telar::runtime::cli {
       const auto rules = helper.plan(metadata.st_uid, identity, true);
       redirect::PfCommand command{memory};
       const std::array<std::string_view, 5> arguments{"-n", "-a", identity.anchor, "-f", "-"};
+
       command.run(arguments, rules);
       std::fwrite(rules.data(), 1, rules.size(), stdout);
       return;
     }
+
     helper.run(identity);
   }
 
@@ -236,6 +247,7 @@ export namespace telar::runtime::cli {
 
     // Shells keep starting without the integration when its scripts cannot be written.
     String<Memory> shell_integration{AllocatorRef<char, Memory>{memory}};
+
     if (configuration.shell_integration && !paths.data_home.empty()) {
       try {
         shell_integration = ShellIntegration<Memory>::install(memory, paths.data_home);
@@ -243,14 +255,19 @@ export namespace telar::runtime::cli {
         std::fprintf(stderr, "telar runtime: shell integration disabled: %s\n", error.what());
       }
     }
+
     SqliteAllocator sqlite_memory{memory};
     std::optional<traffic::Service<Memory>> traffic_service;
+
     if (configuration.proxy.network_capture) {
       String<Memory> endpoint{paths.socket, AllocatorRef<char, Memory>{memory}};
+
       endpoint += traffic::socket_suffix;
       traffic_service.emplace(memory, endpoint, configuration.proxy.stream_interception);
     }
+
     plugins::Service plugin_service{memory, tap_configuration.specifications(), executable.c_str(), options.trace, traffic_service ? &*traffic_service : nullptr};
+
     if (!tap_configuration.specifications().empty()) {
       plugin_service.watchTrust(plugins::Paths::trust(memory, process_environment));
     }
@@ -266,13 +283,17 @@ export namespace telar::runtime::cli {
                                                                                                                 .interception = configuration.proxy.stream_interception,
                                                                                                                 .administration = configuration.proxy.network_control,
                                                                                                             }};
+
     std::optional<traffic::control::Service<Memory, decltype(network_backend)>> network_control;
+
     if (traffic_service) {
       String<Memory> endpoint{paths.socket, AllocatorRef<char, Memory>{memory}};
+
       endpoint += traffic::control::socket_suffix;
       network_control.emplace(memory, endpoint, network_backend);
       traffic_service->packageControl(&*network_control);
     }
+
     // Queued halves borrow the proxy's capture quota, so workers must release them before the proxy is destroyed.
     plugins::ShutdownGuard stop_plugins{plugin_service};
     BackgroundService background_service{memory, paths.history.c_str(), configuration.history_filters};
@@ -284,6 +305,7 @@ export namespace telar::runtime::cli {
     const auto description_arguments = configuration.descriptions.views();
     BackgroundPool background{memory, background_service, path_service, editor_service, suggestion_service};
     NativeEventLoop<Memory> poller{memory};
+
     poller.watchSignal(SIGTERM);
     poller.watchSignal(SIGINT);
     poller.watchSignal(SIGCHLD);
@@ -305,7 +327,9 @@ export namespace telar::runtime::cli {
         .ssh_integration = configuration.ssh_integration,
         .configuration_directory = configuration_directory.empty() ? std::string_view{config_home} : configuration_directory,
     };
+
     Runtime runtime{memory, poller, background, runtime_options, proxy.clientConfiguration()};
+
     runtime.run(proxy, plugin_service);
   }
 
@@ -315,6 +339,7 @@ export namespace telar::runtime::cli {
       std::puts("Usage: telar-runtime server [--socket PATH] [--no-config] [--fresh]\n       telar-runtime --socket PATH [--history PATH] [--session PATH | --no-session] [--no-resume]\n\n`telar server stop|endpoint|bridge` talks to a running runtime.");
       return;
     }
+
     requireTracingBuild(!options.trace.empty());
 
     if (options.action != ServerAction::run) {
@@ -325,15 +350,18 @@ export namespace telar::runtime::cli {
     RuntimePaths paths{memory, options, environment};
 
     config::RuntimeValues configuration{memory};
+
     config::Loader{memory, configuration}.load(options, environment);
     configuration.limits.print();
     auto resolved_options = options;
     if (resolved_options.history.empty()) {
       resolved_options.history = configuration.history_path;
     }
+
     if (resolved_options.session.empty()) {
       resolved_options.session = configuration.session_path;
     }
+
     resolved_options.persist_session = options.persist_session && configuration.persist_session;
     resolved_options.resume_agents = options.resume_agents && configuration.resume_agents;
 
@@ -354,6 +382,7 @@ export namespace telar::runtime::cli {
       std::puts("Usage: telar-runtime traffic capture --socket RUNTIME_SOCKET\n       telar-runtime traffic import --socket RUNTIME_SOCKET --file CAPTURE.pcap\n       telar-runtime traffic redirect --socket RUNTIME_SOCKET --target IP:PORT [--target [IPv6]:PORT] [--direction outbound|inbound|both] [--process PID] [--dry-run]\n       telar-runtime traffic redirect-cleanup --socket RUNTIME_SOCKET\n\nCapture/import require runtime.proxy.network_capture. Capture needs root; import is unprivileged.\nRedirect requires runtime.proxy.enabled and transparent_redirect. It selects local TCP connections\nfrom the runtime's user to numeric destinations, using a private PF anchor. Repeat --process to\nselect explicit account-owned PIDs; descendants are not implicit. --dry-run validates rules\nwithout applying them. Only capture/redirect/redirect-cleanup need root. TLS inspection is opt-in.");
       return;
     }
+
     if (arguments.empty()) {
       throw std::invalid_argument{"Expected traffic capture|import; use traffic --help"};
     }
@@ -363,12 +392,15 @@ export namespace telar::runtime::cli {
       runRedirect(memory, arguments.subspan(1), action == "redirect-cleanup");
       return;
     }
+
     const char *socket = nullptr;
     const char *file = nullptr;
+
     for (std::size_t index = 1; index < arguments.size(); index += 2) {
       if (index + 1 == arguments.size()) {
         throw std::invalid_argument{"Missing traffic option value"};
       }
+
       const std::string_view option{arguments[index]};
       if (option == "--socket" && socket == nullptr) {
         socket = arguments[index + 1];
@@ -378,13 +410,16 @@ export namespace telar::runtime::cli {
         throw std::invalid_argument{"Unknown or duplicate traffic option"};
       }
     }
+
     if (socket == nullptr || (action != "capture" && action != "import") || ((action == "import") != (file != nullptr))) {
       throw std::invalid_argument{"Expected traffic capture --socket PATH or traffic import --socket PATH --file PCAP"};
     }
 
     String<Memory> path{socket, AllocatorRef<char, Memory>{memory}};
+
     path += traffic::socket_suffix;
     traffic::Capture capture{memory, traffic::connect(path)};
+
     if (file != nullptr) {
       capture.offline(file);
     } else {

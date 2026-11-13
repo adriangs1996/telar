@@ -21,6 +21,7 @@ Command::Command()
     storage_.push_back("-l");
     storage_.push_back("-i");
   }
+
   for (const auto &argument : storage_) {
     arguments_.push_back(argument);
   }

@@ -83,6 +83,7 @@ public:
     if (specifications.empty()) {
       return;
     }
+
     if (specifications.size() > Limits::workers) {
       throw std::invalid_argument{"Too many tap workers"};
     }
@@ -111,6 +112,7 @@ public:
     refreshTrust();
     trust_monitor_ = std::jthread{[this] {
       pollfd wake{cancellation_->descriptor(), POLLIN, 0};
+
       while (!cancellation_->requested()) {
         const auto ready = ::poll(&wake, 1, static_cast<int>(Limits::trust_check_interval.count()));
         if (ready < 0 && errno == EINTR) { continue; }
@@ -124,13 +126,16 @@ public:
     if (stopped_.exchange(true, std::memory_order_acq_rel)) {
       return;
     }
+
     if (cancellation_) {
       cancellation_->request();
     }
+
     if (trust_monitor_.joinable()) { trust_monitor_.join(); }
     for (const auto &worker : workers_) {
       worker->stop();
     }
+
     results_.close();
   }
 
@@ -140,16 +145,21 @@ public:
   inline void submit(CapturedExchange<Memory> &captured) noexcept {
     TELAR_TRACE("plugins.submitExchange");
     auto owned = std::move(captured);
+
     if (!listening() || stopped_.load(std::memory_order_acquire)) {
       return;
     }
+
     auto charged = budget_.charge(SharedExchange<Memory>::capturedBytes(owned));
     if (!charged) {
       return;
     }
+
     const auto event_id = next_event_.fetch_add(1, std::memory_order_relaxed);
+
     try {
       auto shared = std::allocate_shared<SharedExchange<Memory>>(AllocatorRef<SharedExchange<Memory>, Memory>{memory_}, std::move(*charged), event_id, std::move(owned));
+
       for (const auto &worker : workers_) {
         worker->submit(shared);
       }
@@ -168,12 +178,15 @@ public:
 
   inline TapMetrics metrics() const noexcept {
     TapMetrics totals{.dropped_bytes = budget_.dropped()};
+
     for (const auto &worker : workers_) {
       const auto metrics = worker->metrics();
+
       totals.dropped_queue += metrics.dropped;
       totals.timeouts += metrics.timeouts;
       totals.disabled += metrics.disabled;
     }
+
     return totals;
   }
 
@@ -183,6 +196,7 @@ private:
   inline void refreshTrust() noexcept {
     try {
       const auto trust = TrustStore::load(memory_, trust_path_.view());
+
       for (const auto &worker : workers_) {
         const auto &specification = worker->specification();
         if (!specification.stillAuthorized(trust.granted(specification.name.view(), specification.digest))) { worker->revoke(); }

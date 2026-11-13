@@ -30,6 +30,7 @@ inline void require(bool condition, const char *message) {
 template <typename Operation>
 void rejects(const Operation &operation) {
   bool rejected = false;
+
   try {
     operation();
   } catch (const std::exception &) {
@@ -51,11 +52,13 @@ struct Bytes {
 inline Bytes bytes(std::string_view hex) {
   constexpr std::string_view digits = "0123456789abcdef";
   Bytes result;
+
   require(hex.size() % 2 == 0 && hex.size() / 2 <= result.data.size(), "hex fixture must fit its bound");
   result.length = hex.size() / 2;
   for (std::size_t index = 0; index < result.length; ++index) {
     const auto high = digits.find(hex[index * 2]);
     const auto low = digits.find(hex[(index * 2) + 1]);
+
     require(high != std::string_view::npos && low != std::string_view::npos, "hex fixture must be valid");
     result.data[index] = static_cast<Byte>((high * digits.size()) + low);
   }
@@ -101,11 +104,14 @@ inline void decoding() {
       {.original_hex = "010601", .kind = BindingActionKind::select_tab_offset, .parameter = 1},
       {.original_hex = "0106ff", .kind = BindingActionKind::select_tab_offset, .parameter = -1},
   });
+
   for (const auto &entry : cases) {
     const auto input = bytes(entry.original_hex);
     const auto decoded = PluginEffects::decode(input.view());
+
     require(decoded.effects().size() == 1, "original worker must decode one effect");
     const auto *action = std::get_if<BindingAction>(&decoded.effects().front());
+
     require(action != nullptr && action->kind == entry.kind && action->parameter == entry.parameter, "original worker semantics must match");
     for (std::size_t length = 0; length < input.length; ++length) {
       rejects([&] {
@@ -116,6 +122,7 @@ inline void decoding() {
 
   require(PluginEffects::decode(bytes("00").view()).effects().empty(), "zero-effect protocol batch is valid");
   const auto limit = PluginEffects::decode(bytes("1003030303030303030303030303030303").view());
+
   require(limit.effects().size() == BindingEffects::maximum_effects, "original worker clamps at sixteen effects");
   require(std::ranges::all_of(limit.effects(), [](const auto &effect) {
             return std::get<BindingAction>(effect).kind == BindingActionKind::toggle_sidebar;
@@ -128,6 +135,7 @@ inline void decoding() {
   }
 
   const Bytes oversized;
+
   rejects([&] {
     static_cast<void>(PluginEffects::decode(oversized.data));
   });
@@ -136,21 +144,27 @@ inline void decoding() {
 inline void authorization() {
   namespace plugins = runtime::plugins;
   plugins::Package package;
+
   package.manifest.id.assign("fixture");
   plugins::TrustStore trust;
   const auto harmless = PluginEffects::decode(bytes("0103").view());
+
   harmless.authorize(package, trust);
   const auto mixed = PluginEffects::decode(bytes("020305").view());
+
   rejects([&] {
     mixed.authorize(package, trust);
   });
+
   package.manifest.capabilities.insert(plugins::Capability::runtime_control);
   rejects([&] {
     mixed.authorize(package, trust);
   });
+
   trust.upsert(package.manifest, package.digest, package.manifest.capabilities);
   mixed.authorize(package, trust);
   auto changed = package;
+
   changed.digest.front() ^= 1U;
   rejects([&] {
     mixed.authorize(changed, trust);
@@ -158,17 +172,21 @@ inline void authorization() {
 
   const auto notification = PluginEffects::decode(bytes("011200a00f0000000d00747275653a333a323a323a34320000").view());
   const auto *value = std::get_if<NotificationActionDescription>(&notification.effects().front());
+
   require(value != nullptr && value->title.view() == "true:3:2:2:42" && value->message.view().empty() && value->duration_ms == default_notification_duration_ms && value->target.kind == NotificationTarget::Kind::none, "original immutable callback context must retain its notification payload");
   rejects([&] {
     notification.authorize(package, trust);
   });
+
   package.manifest.capabilities.insert(plugins::Capability::notifications);
   rejects([&] {
     notification.authorize(package, trust);
   });
+
   trust.upsert(package.manifest, package.digest, package.manifest.capabilities);
   notification.authorize(package, trust);
   const auto original = bytes("011200a00f0000000d00747275653a333a323a323a34320000");
+
   for (std::size_t length = 0; length < original.length; ++length) {
     rejects([&] {
       static_cast<void>(PluginEffects::decode(original.view().first(length)));
@@ -181,6 +199,7 @@ inline void authorization() {
 inline void pluginEffectCases() {
   constexpr std::size_t original_worker_limit = 10033;
   static_assert(PluginEffects::maximum_bytes == original_worker_limit);
+
   plugin_effect_detail::decoding();
   plugin_effect_detail::authorization();
 }

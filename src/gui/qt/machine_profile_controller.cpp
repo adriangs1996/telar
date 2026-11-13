@@ -69,12 +69,14 @@ void Application::initializeMachineProfiles() {
 
   machine_retry_.setSingleShot(true);
   constexpr int profile_retry_ms = 1000;
+
   machine_retry_.setInterval(profile_retry_ms);
   connect(&machine_profiles_, &MachineProfilesSource::changed, this, &Application::applyMachineProfiles);
   connect(&machine_retry_, &QTimer::timeout, this, &Application::applyMachineProfiles);
   connect(&machine_profiles_, &MachineProfilesSource::failed, this, [this] {
     const auto detail = machine_profiles_.error().toUtf8();
     const auto *const title = machine_profiles_.editError() ? "Machine not saved" : "machines.json not applied";
+
     publishNotification({.level = NotificationLevel::failure, .title = title, .message = bytes(detail), .link = {}});
     if (remote_launch_) {
       applyMachineProfiles();
@@ -88,8 +90,10 @@ void Application::openMachines(const QString &path) {
   }
 
   const platform::ProcessEnvironment environment;
+
   try {
     const auto runtime = MachineRuntimeLocation::resolve(environment, platform::currentUserId());
+
     machine_control_endpoint_ = toQString(runtime.endpoint());
     prepare_machine_directory_ = runtime.managedDirectory().has_value();
   } catch (const MachineFailure &) {
@@ -165,6 +169,7 @@ void Application::reconcileMachine(const MachineProfile &profile) {
 
   if (!slot) {
     const auto added = machines_.add(fields);
+
     if (fields.enabled) {
       admitMachine(added);
     }
@@ -177,9 +182,11 @@ void Application::reconcileMachine(const MachineProfile &profile) {
   }
 
   const auto &previous = machines_.row(*slot);
+
   fields.enabled = profile.enabled() || previous.pinned;
   const auto was_enabled = previous.enabled;
   const auto moved = previous.destination.view() != fields.destination || previous.program.view() != fields.program.value_or("");
+
   machines_.update(*slot, fields);
   if (!fields.enabled) {
     if (was_enabled) {
@@ -199,6 +206,7 @@ void Application::reconcileMachine(const MachineProfile &profile) {
 void Application::admitMachine(Machines::Slot slot) {
   {
     auto &created = createClient(slot);
+
     created.identity = WindowIdentity::remote(clientAt(Machines::local_slot).identity, machines_.row(slot).destination.view());
     created.session.setRestoreLayout(restore_layout_);
   }
@@ -206,6 +214,7 @@ void Application::admitMachine(Machines::Slot slot) {
   synchronizeWorkbenchGeometry();
   auto &client = clientAt(slot);
   const auto &row = machines_.row(slot);
+
   client.connection.openRemote({.destination = toQString(row.destination.view()), .program = toQString(row.program.view()), .local_endpoint = machine_control_endpoint_, .prepare_directory = prepare_machine_directory_});
   summarizeMachine(client.key);
 }
@@ -213,10 +222,12 @@ void Application::admitMachine(Machines::Slot slot) {
 void Application::retireMachine(Machines::Slot slot, MachineRetirement reason) {
   if (slot == machines_.active()) {
     const auto label = toQString(machines_.row(slot).label.view());
+
     selectMachine(machines_.token(Machines::local_slot));
     const auto state = reason == MachineRetirement::disabled ? QStringLiteral("disabled") : QStringLiteral("removed");
     const auto local = toQString(machines_.row(Machines::local_slot).label.view());
     const auto detail = (label + QStringLiteral(" was ") + state + QStringLiteral("; the window shows ") + local).toUtf8();
+
     publishNotification({.title = "Machine left the window", .message = bytes(detail), .link = {}});
   }
 
@@ -239,6 +250,7 @@ void Application::discoveredMachine(MachineClient &client, const RemoteDiscovery
 
   const auto path = discovery.shell();
   const std::array arguments{path, std::string_view{"-l"}, std::string_view{"-i"}};
+
   client.session.setLaunch({.cwd = discovery.home(), .arguments = std::span{arguments}.first(!runtime::loginShellScript(path).empty() ? arguments.size() : 1)});
 }
 

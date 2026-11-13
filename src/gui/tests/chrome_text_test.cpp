@@ -123,6 +123,7 @@ std::uint32_t over(std::uint32_t coverage, std::uint32_t background) noexcept {
 void stamp(QImage &expected, fonts::GlyphBitmapView bitmap, QPoint origin, bool red) {
   for (std::uint32_t row = 0; row < bitmap.height; ++row) {
     const auto coverage = bitmap.row(row);
+
     for (std::uint32_t column = 0; column < bitmap.width; ++column) {
       const auto x = origin.x() + static_cast<int>(column);
       const auto y = origin.y() + static_cast<int>(row);
@@ -131,6 +132,7 @@ void stamp(QImage &expected, fonts::GlyphBitmapView bitmap, QPoint origin, bool 
       }
 
       const auto value = static_cast<int>(over(coverage[column], static_cast<std::uint32_t>(qRed(expected.pixel(x, y)))));
+
       expected.setPixel(x, y, red ? qRgb(value, 0, 0) : qRgb(value, value, value));
     }
   }
@@ -148,12 +150,14 @@ QImage reference(QSize size, const QString &text, const ReferencePaint &paint) {
   const auto baseline = static_cast<std::int64_t>(std::floor(y + ((box_height - static_cast<float>(metrics.line_height)) / 2)) + static_cast<float>(metrics.ascender));
   auto pen = static_cast<std::int64_t>(std::round(static_cast<float>(paint.origin.x() * paint.scale) * fixed_unit));
   QImage expected{size, QImage::Format_RGB32};
+
   expected.fill(Qt::black);
   for (std::size_t index = 0; index < run.size(); ++index) {
     const auto glyph = run.glyph(index);
     const auto bitmap = face.rasterize({.index = glyph.index, .pixel_height = height, .style = {}});
     const auto left = static_cast<std::int64_t>(FontMetrics::roundFixed(pen + glyph.x_offset)) + bitmap.left;
     const auto top = baseline - FontMetrics::roundFixed(glyph.y_offset) - bitmap.top;
+
     stamp(expected, bitmap, {static_cast<int>(left), static_cast<int>(top)}, paint.red);
 
     pen += glyph.x_advance;
@@ -176,6 +180,7 @@ bool containsInk(const QImage &image) {
 
 QImage grabFrame(QQuickWindow &window) {
   auto frame = window.grabWindow();
+
   frame.setDevicePixelRatio(1);
 
   return frame.convertToFormat(QImage::Format_RGB32);
@@ -215,16 +220,19 @@ private:
     AncestorItem second;
     auto middle = std::make_unique<AncestorItem>();
     AncestorItem nearest;
+
     middle->setParentItem(&first);
     nearest.setParentItem(middle.get());
     const auto absent = first.observerCounts();
     auto present = absent;
+
     for (auto &count : present) {
       ++count;
     }
 
     {
       NativeChromeText label{&nearest};
+
       QCOMPARE(first.observerCounts(), present);
       QCOMPARE(middle->observerCounts(), present);
       QCOMPARE(nearest.observerCounts(), present);
@@ -265,6 +273,7 @@ private:
 
   Q_SLOT static void reparentedAncestorsKeepChromePixelsExact() {
     QQuickWindow window;
+
     window.setColor(Qt::black);
     window.resize(window_width, window_height);
     QQuickItem first{window.contentItem()};
@@ -272,6 +281,7 @@ private:
     QQuickItem middle{&first};
     QQuickItem nearest{&middle};
     NativeChromeText label{&nearest};
+
     label.setPosition({label_left, label_top});
     label.setSize({label_width, label_height});
     label.setPixelSize(font_size);
@@ -282,6 +292,7 @@ private:
     constexpr qreal first_phase = 0.1;
     constexpr qreal second_phase = 0.9;
     constexpr qreal root_offset = 3;
+
     first.setX(first_phase / scale);
     second.setPosition({root_offset, root_offset});
     QVERIFY(test::showComponentWindow(window, wait_ms));
@@ -292,6 +303,7 @@ private:
 
       return !actual.isNull() && containsInk(actual) && actual == reference(actual.size(), label.text(), paint);
     };
+
     QTRY_VERIFY_WITH_TIMEOUT(matches(), wait_ms);
     middle.setParentItem(&second);
     QTRY_VERIFY_WITH_TIMEOUT(matches(), wait_ms);
@@ -315,33 +327,41 @@ private:
     QSGNode parent;
     auto previous = std::make_unique<ObservedSceneNode>(destroyed);
     auto child = std::make_unique<ObservedSceneNode>(destroyed);
+
     previous->appendChildNode(child.release());
     parent.appendChildNode(previous.release());
     const ChromeTextPaint paint;
+
     QVERIFY_THROWS_EXCEPTION(std::invalid_argument, static_cast<void>(paintChromeText(parent.firstChild(), window, paint, {})));
     constexpr unsigned expected_destroyed = 2;
+
     QCOMPARE(destroyed, expected_destroyed);
     QVERIFY(parent.firstChild() == nullptr);
   }
 
   Q_SLOT static void cellTextDiscoversTheContinuationGlyph() {
     QQuickWindow window;
+
     window.setColor(Qt::black);
     window.resize(window_width, window_height);
     NativeCellText label{window.contentItem()};
+
     label.setPosition({label_left, label_top});
     label.setSize({label_width, label_height});
     label.setGrid(cellTextGrid());
     label.setColor(Qt::white);
     label.setText(QStringLiteral("A↵B"));
     qreal initial_width = 0;
+
     connect(&label, &QQuickItem::implicitWidthChanged, &window, [&] {
       if (initial_width == 0) {
         initial_width = label.implicitWidth();
       }
     });
+
     const auto &catalog = WindowFontCatalog::forWindow(window);
     const auto original = catalog.collection();
+
     QVERIFY(!ResidentFonts::shared(original)->source("↵", fonts::FontRole::primary));
     QVERIFY(test::showComponentWindow(window, wait_ms));
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed() && label.available(), wait_ms);
@@ -353,6 +373,7 @@ private:
     QVERIFY(initial_width > 0);
     QCOMPARE(label.implicitWidth(), initial_width);
     const auto collection = catalog.collection();
+
     label.setText(QStringLiteral("B↵A"));
     QTRY_COMPARE_WITH_TIMEOUT(label.implicitWidth(), initial_width, wait_ms);
     QVERIFY(!catalog.busy());
@@ -373,35 +394,43 @@ private:
     const FontAsset asset{*data};
     const fonts::Face discovered{asset.bytes(), asset.match()};
     FontConfiguration configuration;
+
     configuration.family.assign(discovered.family());
     configuration.style.assign(discovered.style());
     QQuickWindow window;
+
     window.setColor(Qt::black);
     window.resize(window_width, window_height);
     auto &catalog = WindowFontCatalog::forWindow(window);
+
     catalog.configure(configuration);
     QVERIFY(ResidentFonts::shared(catalog.collection())->source("↵", fonts::FontRole::primary).has_value());
     const auto primary = ResidentFonts::resolveSource(QStringLiteral("JetBrains Mono"), {});
     const auto original = catalog.collectionFor(primary);
+
     QCOMPARE(original->primary, primary);
     QCOMPARE(catalog.collectionFor(primary), original);
     QVERIFY(!ResidentFonts::shared(original)->source("↵", fonts::FontRole::primary));
     NativeCellText label{window.contentItem()};
+
     label.setSize({label_width, label_height});
     label.setGrid(cellTextGrid());
     label.setColor(Qt::white);
     label.setText(QStringLiteral("A↵B"));
     qreal initial_width = 0;
+
     connect(&label, &QQuickItem::implicitWidthChanged, &window, [&] {
       if (initial_width == 0) {
         initial_width = label.implicitWidth();
       }
     });
+
     QVERIFY(test::showComponentWindow(window, wait_ms));
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed() && label.available(), wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(catalog.collection()->count > 0, wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(!catalog.busy(), wait_ms);
     const auto updated = catalog.collectionFor(primary);
+
     QVERIFY(updated != original);
     QCOMPARE(updated->primary, primary);
     QCOMPARE(catalog.collectionFor(primary), updated);
@@ -418,6 +447,7 @@ private:
     const auto retire = [&label] {
       label.reset();
     };
+
     label = std::make_unique<NativeCellText>();
     connect(label.get(), &NativeCellText::textChanged, label.get(), retire);
     label->setText(QStringLiteral("retired"));
@@ -438,6 +468,7 @@ private:
 
   Q_SLOT static void cellTextLayoutObserversMayRetireTheItem() {
     QQuickWindow window;
+
     window.resize(window_width, window_height);
     std::unique_ptr<NativeCellText> label;
     const auto create = [&] {
@@ -446,9 +477,11 @@ private:
       label->setText(QStringLiteral("retired"));
       label->setColor(Qt::white);
     };
+
     const auto retire = [&label] {
       label.reset();
     };
+
     create();
     connect(label.get(), &QQuickItem::implicitWidthChanged, &window, retire);
     QVERIFY(test::showComponentWindow(window, wait_ms));
@@ -460,6 +493,7 @@ private:
 
   Q_SLOT static void centeredChromeUsesOriginalWholePixelInset() {
     QQuickWindow window;
+
     window.setColor(Qt::black);
     window.resize(window_width, window_height);
     const auto scale = window.effectiveDevicePixelRatio();
@@ -467,8 +501,10 @@ private:
     constexpr qreal physical_free_space = 5;
     constexpr qreal original_inset = 2;
     const auto text = QStringLiteral("H");
+
     QVERIFY(ChromeFonts::shared()->covers(text.toStdString(), false));
     NativeChromeText label{window.contentItem()};
+
     label.setPosition({label_left, label_top});
     label.setSize({label_width, label_height});
     label.setPixelSize(physical_font_size / scale);
@@ -486,11 +522,13 @@ private:
 
       return !actual.isNull() && actual == reference(actual.size(), text, paint);
     };
+
     QTRY_VERIFY_WITH_TIMEOUT(matches(), wait_ms);
   }
 
   Q_SLOT static void centeredFormChromeKeepsOriginalFractionalInset() {
     QQuickWindow window;
+
     window.setColor(Qt::black);
     window.resize(window_width, window_height);
     const auto scale = window.effectiveDevicePixelRatio();
@@ -498,8 +536,10 @@ private:
     constexpr qreal physical_free_space = 5;
     constexpr qreal original_inset = 2.5;
     const auto text = QStringLiteral("H");
+
     QVERIFY(ChromeFonts::shared()->covers(text.toStdString(), false));
     NativeChromeText label{window.contentItem()};
+
     label.setPosition({label_left, label_top});
     label.setSize({label_width, label_height});
     label.setPixelSize(physical_font_size / scale);
@@ -516,6 +556,7 @@ private:
 
       return !actual.isNull() && actual == reference(actual.size(), text, paint);
     };
+
     QTRY_VERIFY_WITH_TIMEOUT(matches(), wait_ms);
   }
 
@@ -529,19 +570,23 @@ private:
 
   Q_SLOT static void mixedLabelsRetainPreferredInkDuringDiscovery() {
     QQuickWindow window;
+
     window.setColor(Qt::black);
     window.resize(window_width, window_height);
     NativeChromeText label{window.contentItem()};
+
     label.setPosition({label_left, label_top});
     label.setSize({label_width, label_height});
     label.setPixelSize(font_size);
     label.setColor(Qt::white);
     label.setText(QStringLiteral("ABC \u2387 AV"));
     const QSignalSpy frames{&window, &QQuickWindow::frameSwapped};
+
     QVERIFY(test::showComponentWindow(window, wait_ms));
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(label.available(), wait_ms);
     const auto &catalog = WindowFontCatalog::forWindow(window);
+
     QTRY_VERIFY_WITH_TIMEOUT(!catalog.busy(), wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(!frames.isEmpty(), wait_ms);
     const auto scale = window.effectiveDevicePixelRatio();
@@ -554,15 +599,18 @@ private:
 
       return !actual.isNull() && actual.copy(prefix) == reference(actual.size(), QStringLiteral("ABC "), paint).copy(prefix);
     };
+
     QTRY_VERIFY_WITH_TIMEOUT(matches(), wait_ms);
 
     const auto collection = catalog.collection();
     const auto font_set = ResidentFonts::shared(collection);
     const auto expected = font_set->face(fonts::FontRole::regular).shape("ABC ", font_height).advance() + font_set->face(fonts::FontRole::primary).metrics(font_height).maximum_advance + font_set->face(fonts::FontRole::regular).shape(" AV", font_height).advance();
+
     QCOMPARE(label.implicitWidth(), expected / scale);
     qInfo() << "Discovered branch-font faces:" << collection->count;
     const auto changes = QSignalSpy{&catalog, &WindowFontCatalog::fontsChanged};
     const auto previous_frames = frames.count();
+
     label.setText(QStringLiteral("ABC \u2387 AV again"));
     QTRY_VERIFY_WITH_TIMEOUT(label.available(), wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(frames.count() > previous_frames, wait_ms);
@@ -575,14 +623,18 @@ private:
     QQuickWindow window;
     auto &catalog = WindowFontCatalog::forWindow(window);
     const auto previous = catalog.collection();
+
     catalog.request("\u2387", fonts::FontRole::regular);
     QVERIFY(catalog.busy());
     FontConfiguration replacement;
+
     replacement.family.assign("JetBrains Mono");
     const QSignalSpy changes{&catalog, &WindowFontCatalog::fontsChanged};
+
     catalog.configure(replacement);
     QVERIFY(catalog.collection() != previous);
     const auto current = catalog.collection();
+
     QTRY_VERIFY_WITH_TIMEOUT(!catalog.busy(), wait_ms);
     QCOMPARE(catalog.collection(), current);
     QCOMPARE(catalog.collection()->count, std::size_t{0});
@@ -597,6 +649,7 @@ private:
     auto window = std::make_unique<QQuickWindow>();
     auto &catalog = WindowFontCatalog::forWindow(*window);
     const QPointer<WindowFontCatalog> lifetime{&catalog};
+
     catalog.request("\u2387", fonts::FontRole::regular);
     QVERIFY(catalog.busy());
     window.reset();
@@ -609,6 +662,7 @@ private:
     const QPointer<WindowFontCatalog> lifetime{&catalog};
     std::string missing;
     constexpr std::uint32_t first_noncharacter = 0xfdd0;
+
     for (std::size_t index = 0; index <= fonts::FontRequests::pending_capacity; ++index) {
       missing.append(Utf8Scalar::encode(first_noncharacter + static_cast<std::uint32_t>(index)).view());
     }
@@ -616,12 +670,14 @@ private:
     connect(&catalog, &WindowFontCatalog::fontsChanged, &catalog, [&window] {
       window.reset();
     });
+
     catalog.request(missing, fonts::FontRole::regular);
     QTRY_VERIFY_WITH_TIMEOUT(lifetime.isNull(), wait_ms);
   }
 
   Q_SLOT static void fittedLabelsKeepNativeMasksAndFullMeasurement() {
     QQuickWindow window;
+
     window.setColor(Qt::black);
     window.resize(window_width, window_height);
     const auto scale = window.effectiveDevicePixelRatio();
@@ -629,17 +685,20 @@ private:
     constexpr qreal wider_pixels = 70;
     const auto original = QStringLiteral("Adrians-MacBook-Pro.local");
     NativeChromeText label{window.contentItem()};
+
     label.setPosition({label_left, label_top});
     label.setSize({narrow_pixels / scale, label_height});
     label.setPixelSize(font_size / scale);
     label.setColor(Qt::white);
     label.setText(original);
     const QSignalSpy frames{&window, &QQuickWindow::frameSwapped};
+
     QVERIFY(test::showComponentWindow(window, wait_ms));
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(label.available(), wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(!frames.isEmpty(), wait_ms);
     const auto full_width = label.implicitWidth();
+
     QVERIFY(full_width > wider_pixels / scale);
     ReferencePaint paint{.origin = label.mapToScene({0, 0}), .height = label.height(), .pixel_size = label.pixelSize(), .scale = scale};
     const auto matches = [&](const QString &text) {
@@ -647,6 +706,7 @@ private:
 
       return !actual.isNull() && actual == reference(actual.size(), text, paint);
     };
+
     QTRY_VERIFY_WITH_TIMEOUT(matches(QStringLiteral("Adrian…")), wait_ms);
 
     label.setWidth(wider_pixels / scale);
@@ -678,10 +738,12 @@ private:
 
   static void verifyMasks(bool emphasized) {
     QQuickWindow window;
+
     window.setColor(Qt::black);
     window.resize(window_width, window_height);
     QQuickItem ancestor{window.contentItem()};
     NativeChromeText label{&ancestor};
+
     label.setPosition({label_left, label_top});
     label.setSize({label_width, label_height});
     label.setPixelSize(font_size);
@@ -693,8 +755,10 @@ private:
     const auto scale = window.effectiveDevicePixelRatio();
     constexpr qreal first_phase = 0.1;
     constexpr qreal second_phase = 0.9;
+
     ancestor.setX(first_phase / scale);
     const QSignalSpy frames{&window, &QQuickWindow::frameSwapped};
+
     QVERIFY(test::showComponentWindow(window, wait_ms));
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(label.available(), wait_ms);
@@ -705,13 +769,16 @@ private:
 
       return containsInk(frame);
     };
+
     QTRY_VERIFY_WITH_TIMEOUT(grab(), wait_ms);
     const auto expected = reference(frame.size(), label.text(), {.origin = label.mapToScene({0, 0}), .height = label.height(), .scale = scale, .emphasized = emphasized, .red = false});
     if (frame != expected) {
       QTemporaryDir diagnostic;
+
       diagnostic.setAutoRemove(false);
       const auto actual_path = diagnostic.filePath(QStringLiteral("actual.png"));
       const auto expected_path = diagnostic.filePath(QStringLiteral("expected.png"));
+
       QVERIFY(frame.save(actual_path));
       QVERIFY(expected.save(expected_path));
       qInfo() << "Chrome text pixel mismatch:" << diagnostic.path();
@@ -721,10 +788,12 @@ private:
 
     ancestor.setX(second_phase / scale);
     const auto shifted = reference(frame.size(), label.text(), {.origin = label.mapToScene({0, 0}), .height = label.height(), .scale = scale, .emphasized = emphasized, .red = false});
+
     QTRY_COMPARE_WITH_TIMEOUT(grabFrame(window), shifted, wait_ms);
 
     label.setColor(Qt::red);
     const auto recolored = reference(frame.size(), label.text(), {.origin = label.mapToScene({0, 0}), .height = label.height(), .scale = scale, .emphasized = emphasized, .red = true});
+
     QTRY_COMPARE_WITH_TIMEOUT(grabFrame(window), recolored, wait_ms);
 
     label.setColor(Qt::white);
@@ -733,10 +802,12 @@ private:
     label.setText(QStringLiteral("w0 £ ß XYZ"));
     QTRY_VERIFY_WITH_TIMEOUT(label.available(), wait_ms);
     const auto replaced = reference(frame.size(), label.text(), {.origin = label.mapToScene({0, 0}), .height = label.height(), .scale = scale, .emphasized = emphasized, .red = false});
+
     QTRY_COMPARE_WITH_TIMEOUT(grabFrame(window), replaced, wait_ms);
 
     constexpr QSize alternate_window{333, 83};
     const auto previous_pixels = grabFrame(window).size();
+
     window.resize(alternate_window);
     QTRY_COMPARE_WITH_TIMEOUT(window.size(), alternate_window, wait_ms);
     const auto resized_matches = [&] {
@@ -744,6 +815,7 @@ private:
 
       return !actual.isNull() && actual.size() != previous_pixels && containsInk(actual) && actual == reference(actual.size(), label.text(), {.origin = label.mapToScene({0, 0}), .height = label.height(), .scale = scale, .emphasized = emphasized, .red = false});
     };
+
     QTRY_VERIFY_WITH_TIMEOUT(resized_matches(), wait_ms);
   }
 };
@@ -752,6 +824,7 @@ private:
 
 int main(int argc, char **argv) {
   const QGuiApplication application{argc, argv};
+
   bundledFonts();
   ChromeTextTest test;
 

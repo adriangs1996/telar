@@ -44,6 +44,7 @@ public:
       kittyColors(context, remaining, sequence.terminator());
       return true;
     }
+
     if (*operation >= 10 && *operation <= 19) {
       for (unsigned selector = *operation; selector <= 19 && !remaining.empty(); ++selector) {
         const auto value = takeField(remaining);
@@ -55,8 +56,10 @@ public:
           forwardOsc(context, selector, value);
         }
       }
+
       return true;
     }
+
     return false;
   }
 
@@ -67,28 +70,34 @@ public:
     enabled_ = enabled;
     auto body = sequence.body();
     const auto operation = oscOperation(takeField(body));
+
     if (!palette_active_) {
       palette_active_ = true;
       palette_offset_ = 0;
       context.reply.clear();
     }
+
     while (true) {
       if (palette_publishing_) {
         if (!context.reply.publish(queue)) {
           return false;
         }
+
         context.reply.clear();
         palette_publishing_ = false;
       }
+
       auto remaining = body.substr(palette_offset_);
       if (remaining.empty()) {
         palette_active_ = false;
         return true;
       }
+
       while (!remaining.empty()) {
         const auto index_field = takeField(remaining);
         const auto index = decimal(index_field);
         const auto value = takeField(remaining);
+
         palette_offset_ = body.size() - remaining.size();
         if (index && *index < 256 && !value.empty()) {
           if (value == "?") {
@@ -98,13 +107,16 @@ public:
           } else {
             queue.release();
             const auto count = static_cast<std::size_t>(value.data() + value.size() - index_field.data());
+
             forwardOsc(context, *operation, {index_field.data(), count});
           }
         }
+
         if (context.reply.size() > PtyResponseQueue::message_byte_capacity - maximum_color_reply) {
           break;
         }
       }
+
       palette_publishing_ = true;
     }
   }
@@ -120,6 +132,7 @@ private:
     std::array<char, inline_osc_bytes> packet;
     auto *position = std::copy(introducer.begin(), introducer.end(), packet.data());
     const auto number = std::to_chars(position, packet.data() + packet.size() - 1, operation);
+
     assert(number.ec == std::errc{});
     *number.ptr = ';';
     position = number.ptr + 1;
@@ -130,6 +143,7 @@ private:
         std::memcpy(position, payload.data(), payload.size());
         position += payload.size();
       }
+
       position = std::copy(terminator.begin(), terminator.end(), position);
       context.state.write({reinterpret_cast<const std::uint8_t *>(packet.data()), static_cast<std::size_t>(position - packet.data())});
       return;
@@ -146,24 +160,29 @@ private:
     static_assert(std::string_view{";foreground=rgb:00/00/00"}.size() <= maximum_color_reply);
     std::array<char, maximum_color_reply> encoded;
     auto *position = encoded.data();
+
     *position++ = ';';
     if (selector < VtState::foreground) {
       const auto number = std::to_chars(position, encoded.data() + encoded.size(), selector);
+
       assert(number.ec == std::errc{});
       position = number.ptr;
     } else {
       position = std::copy(key.begin(), key.end(), position);
     }
+
     *position++ = '=';
 
     if (const auto color = context.state.color(selector)) {
       position = std::copy_n("rgb:", 4, position);
       constexpr std::string_view digits = "0123456789abcdef";
       const std::array components{color->r, color->g, color->b};
+
       for (std::size_t index = 0; index < components.size(); ++index) {
         if (index != 0) {
           *position++ = '/';
         }
+
         *position++ = digits[components[index] >> 4];
         *position++ = digits[components[index] & 0x0f];
       }
@@ -182,6 +201,7 @@ private:
     if (!color && operation == 12) {
       color = context.state.color(VtState::foreground);
     }
+
     if (!color) {
       return;
     }
@@ -190,25 +210,31 @@ private:
     auto *position = std::copy_n("\x1b]", 2, encoded.data());
     const auto number = [&](unsigned value) {
       const auto formatted = std::to_chars(position, encoded.data() + encoded.size(), value);
+
       assert(formatted.ec == std::errc{});
       position = formatted.ptr;
     };
+
     number(operation);
     *position++ = ';';
     if (index) {
       number(*index);
       *position++ = ';';
     }
+
     position = std::copy_n("rgb:", 4, position);
     constexpr std::string_view digits = "0123456789abcdef";
     const std::array components{color->r, color->g, color->b};
     const bool sixteen_bit = context.policy.color_format == ColorFormat::sixteen_bit;
+
     for (std::size_t component = 0; component < components.size(); ++component) {
       if (component != 0) {
         *position++ = '/';
       }
+
       const auto high = digits[components[component] >> 4];
       const auto low = digits[components[component] & 0x0f];
+
       *position++ = high;
       *position++ = low;
       if (sixteen_bit) {
@@ -216,6 +242,7 @@ private:
         *position++ = low;
       }
     }
+
     position = std::copy(terminator.begin(), terminator.end(), position);
     context.reply.append({encoded.data(), static_cast<std::size_t>(position - encoded.data())});
   }
@@ -224,14 +251,17 @@ private:
     if (key == "foreground") {
       return VtState::foreground;
     }
+
     if (key == "background") {
       return VtState::background;
     }
+
     if (key == "cursor") {
       return VtState::cursor_color;
     }
 
     const auto index = decimal(key);
+
     return index && *index < 256 ? index : std::nullopt;
   }
 
@@ -243,22 +273,27 @@ private:
     if (std::count(remaining.begin(), remaining.end(), ';') < maximum_keys) {
       return true;
     }
+
     unsigned keys = 0;
+
     while (true) {
       if (keys == maximum_keys) {
         return false;
       }
+
       const bool had_separator = remaining.find(';') != std::string_view::npos;
       const auto pair = takeField(remaining);
       const auto equal = pair.find('=');
       const auto key = pair.substr(0, equal);
       auto value = equal == std::string_view::npos ? std::string_view{} : pair.substr(equal + 1);
       const auto first = value.find_first_not_of(' ');
+
       value = first == std::string_view::npos ? std::string_view{} : value.substr(first, value.find_last_not_of(' ') - first + 1);
       const bool known = colorKey(key).has_value() || std::find(unsupported_colors.begin(), unsupported_colors.end(), key) != unsupported_colors.end();
       if (known && (value.empty() || value == "?" || colorValue(value))) {
         ++keys;
       }
+
       if (remaining.empty()) {
         return keys != maximum_keys || !had_separator;
       }
@@ -270,14 +305,17 @@ private:
     if (remaining.size() > maximum_kitty_color_bytes || !validKittyColors(remaining)) {
       return;
     }
+
     while (!remaining.empty()) {
       const auto pair = takeField(remaining);
       const auto separator = pair.find('=');
       const auto key = pair.substr(0, separator);
       auto value = separator == std::string_view::npos ? std::string_view{} : pair.substr(separator + 1);
+
       while (!value.empty() && value.front() == ' ') {
         value.remove_prefix(1);
       }
+
       while (!value.empty() && value.back() == ' ') {
         value.remove_suffix(1);
       }
@@ -287,12 +325,15 @@ private:
         if (enabled_ && value == "?" && std::find(unsupported_colors.begin(), unsupported_colors.end(), key) != unsupported_colors.end() && context.reply.size() == 0) {
           context.reply.append("\x1b]21");
         }
+
         continue;
       }
+
       if (value != "?") {
         forwardOsc(context, 21, pair);
         continue;
       }
+
       if (!enabled_) {
         continue;
       }
@@ -300,6 +341,7 @@ private:
       if (context.reply.size() == 0) {
         context.reply.append("\x1b]21");
       }
+
       kittyColorItem(context, *selector, key);
     }
 

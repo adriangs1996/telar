@@ -145,6 +145,7 @@ public:
     }
 
     QImage alpha;
+
     if (mask_bytes != 0) {
       alpha = QImage{static_cast<int>(bitmap.width), static_cast<int>(bitmap.height), QImage::Format_Alpha8};
       if (alpha.isNull()) {
@@ -154,21 +155,25 @@ public:
       alpha.fill(0);
       for (std::uint32_t row = 0; row < bitmap.height; ++row) {
         const auto coverage = bitmap.row(row);
+
         std::memcpy(alpha.scanLine(static_cast<int>(row)), coverage.data(), coverage.size());
       }
     }
 
     std::unique_ptr<QSGTexture> texture;
+
     if (!software_ && !alpha.isNull()) {
       texture = createTexture(window_, alpha.convertToFormat(QImage::Format_RGBA8888_Premultiplied));
     }
 
     const auto mask = AlphaMaskRef{new AlphaMask{std::move(alpha), std::move(texture)}};
     CachedGlyph created;
+
     created.mask = mask;
     created.left = bitmap.left;
     created.top = bitmap.top;
     const auto inserted = images_.emplace(key, std::move(created));
+
     mask_bytes_ += mask_bytes;
 
     return inserted.value();
@@ -178,6 +183,7 @@ public:
   [[nodiscard]] AlphaMaskRef colored(std::uint32_t index, std::uint16_t pixel_height, fonts::FontRole role, fonts::GlyphStyle style, const QColor &color) {
     auto &window = window_;
     auto &glyph = this->glyph(index, pixel_height, role, style);
+
     for (const auto &entry : glyph.colors) {
       if (entry.mask && entry.color == color) {
         return entry.mask;
@@ -185,13 +191,16 @@ public:
     }
 
     auto image = glyph.mask->alpha.convertToFormat(QImage::Format_RGBA8888_Premultiplied);
+
     {
       QPainter painter{&image};
+
       painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
       painter.fillRect(image.rect(), color);
     }
 
     auto mask = AlphaMaskRef{new AlphaMask{glyph.mask->alpha, createTexture(window, image)}};
+
     glyph.colors[glyph.next_color] = {.color = color, .mask = mask};
     glyph.next_color = (glyph.next_color + 1) % glyph.colors.size();
 
@@ -202,6 +211,7 @@ public:
     using Source = QPair<QQuickWindow *, const FontSet *>;
     using Key = std::conditional_t<optical, std::pair<Source, std::uint32_t>, Source>;
     thread_local QHash<Key, std::weak_ptr<ChromeGlyphImages>> caches;
+
     for (auto entry = caches.begin(); entry != caches.end();) {
       if (entry.value().expired()) {
         entry = caches.erase(entry);
@@ -217,6 +227,7 @@ public:
         return {&window, fonts.get()};
       }
     }();
+
     auto cached = caches.value(key).lock();
     if (!cached) {
       cached = std::make_shared<ChromeGlyphImages>(window, fonts, rasterization);
@@ -237,6 +248,7 @@ private:
           throw std::invalid_argument{"OpticalFontAssetsUnavailable"};
         }
       }
+
 #endif
       if (rasterization_.settings.optical) {
         request.thicken_strength = rasterization_.settings.strength;
@@ -260,6 +272,7 @@ private:
       }
 
       const auto &asset = fonts_->asset(role);
+
       rasterizer = std::make_unique<platform::GlyphRasterizer>(rasterization_.pixels, asset.bytes(), asset.match(), rasterization_.settings.strength);
     }
 

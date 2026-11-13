@@ -19,6 +19,7 @@ struct FormInputContext {
 
   [[nodiscard]] static FormInputContext capture(QString text, int cursor, int anchor, std::optional<Replacement> replacement = std::nullopt) {
     FormInputContext result{.text = std::move(text), .cursor = cursor, .anchor = anchor};
+
     if (replacement) {
       result.text.remove(replacement->first, replacement->last - replacement->first);
       result.cursor = replacement->first;

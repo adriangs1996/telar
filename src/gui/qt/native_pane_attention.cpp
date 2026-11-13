@@ -157,6 +157,7 @@ void NativePaneAttention::sample(std::uint64_t now_ns) {
   }
 
   const auto frame = clock_->sampleAttention(*key_, now_ns);
+
   deadline_ns_ = frame.deadline_ns;
   setAlpha(frame.alpha);
 }
@@ -218,6 +219,7 @@ QSGNode *NativePaneAttention::updatePaintNode(QSGNode *previous, [[maybe_unused]
 
 void NativePaneAttention::geometryChange(const QRectF &current, const QRectF &previous) {
   const QPointer<NativePaneAttention> alive{this};
+
   QQuickItem::geometryChange(current, previous);
   if (alive) {
     synchronize();

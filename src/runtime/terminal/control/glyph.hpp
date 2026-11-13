@@ -16,11 +16,13 @@ inline std::optional<std::uint32_t> glyphCodepoint(std::string_view value) noexc
 
   constexpr std::uint32_t maximum_codepoint = (1u << 21) - 1;
   const auto result = unsignedNumber<std::uint32_t>(value, maximum_codepoint, 16);
+
   return result ? std::optional{*result} : std::nullopt;
 }
 
 inline tbc::view<std::optional<std::string_view>, tbc::lt::a> glyphOption(tbc::view<std::string_view, tbc::lt::a> options, std::string_view key) noexcept {
   std::optional<std::string_view> result;
+
   while (!options.empty()) {
     const auto end = options.find(';');
     const auto pair = options.substr(0, end);
@@ -28,11 +30,14 @@ inline tbc::view<std::optional<std::string_view>, tbc::lt::a> glyphOption(tbc::v
     if (separator != std::string_view::npos && pair.substr(0, separator) == key) {
       result = pair.substr(separator + 1);
     }
+
     if (end == std::string_view::npos) {
       break;
     }
+
     options.remove_prefix(end + 1);
   }
+
   return result;
 }
 
@@ -45,6 +50,7 @@ void glyph(std::string_view request, Reply<Memory> &reply) {
   }
 
   const auto options = request.size() > 1 ? request.substr(2) : std::string_view{};
+
   switch (request.front()) {
   case 's':
     reply.append("\x1b_25a1;s;fmt=\x1b\\");
@@ -57,6 +63,7 @@ void glyph(std::string_view request, Reply<Memory> &reply) {
       reply.hex(*codepoint, 1);
       reply.append(";status=\x1b\\");
     }
+
     break;
   }
   case 'r': {
@@ -64,12 +71,15 @@ void glyph(std::string_view request, Reply<Memory> &reply) {
     if (payload_separator == std::string_view::npos) {
       return;
     }
+
     const auto metadata = options.substr(0, payload_separator);
     if (glyphOption(metadata, "reply") == "0") {
       return;
     }
+
     const auto encoded = glyphOption(metadata, "cp");
     const auto codepoint = encoded ? glyphCodepoint(*encoded) : std::nullopt;
+
     reply.append("\x1b_25a1;r;cp=");
     reply.hex(codepoint.value_or(0), 1);
     reply.append(";status=1;reason=unsupported_format\x1b\\");

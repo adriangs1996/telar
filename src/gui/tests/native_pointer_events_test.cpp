@@ -65,18 +65,22 @@ void deliver(QWindow &window, QEvent::Type kind, QPointF position, Qt::MouseButt
 void rawMotionExcludesQtButtonSplitting(ApplicationAllocator &memory) {
   NativePointerEvents events{memory};
   QWindow window;
+
   window.show();
   QCoreApplication::processEvents();
   Recorder recorder{events};
+
   window.installEventFilter(&recorder);
   constexpr QPointF first{20, 20};
   constexpr QPointF clicked{40, 40};
   constexpr QPointF last{60, 60};
+
   deliver(window, QEvent::MouseMove, first, Qt::NoButton, Qt::NoButton);
   deliver(window, QEvent::MouseButtonPress, clicked, Qt::LeftButton, Qt::LeftButton);
   deliver(window, QEvent::MouseButtonRelease, clicked, Qt::NoButton, Qt::LeftButton);
   deliver(window, QEvent::MouseMove, last, Qt::NoButton, Qt::NoButton);
   constexpr std::size_t expected_deliveries = 5;
+
   require(recorder.observations().size() == expected_deliveries, "the observer must preserve both native events and Qt's extra move before a changed-position press");
   require(recorder.observations()[0].moving && recorder.observations()[4].moving, "actual native motion must be observable during delivery");
   require(recorder.observations()[1].type == QEvent::MouseMove && !recorder.observations()[1].moving, "Qt's button-position synchronization must not become an observed hover motion");
@@ -91,15 +95,19 @@ void observersMayRetireOutOfOrder(ApplicationAllocator &memory) {
   std::optional<NativePointerEvents> second{std::in_place, memory};
   std::optional<NativePointerEvents> third{std::in_place, memory};
   const auto *const head = QWindowSystemInterfacePrivate::eventHandler;
+
   second.reset();
   first.reset();
   require(QWindowSystemInterfacePrivate::eventHandler == head, "retiring earlier windows must preserve the live observer chain head");
   QWindow window;
+
   window.show();
   QCoreApplication::processEvents();
   Recorder recorder{*third};
+
   window.installEventFilter(&recorder);
   constexpr QPointF point{80, 80};
+
   deliver(window, QEvent::MouseMove, point, Qt::NoButton, Qt::NoButton);
   require(recorder.observations().size() == 1 && recorder.observations()[0].moving, "a live observer must dispatch safely after its predecessors have retired");
   window.removeEventFilter(&recorder);
@@ -133,11 +141,14 @@ void observerMayRetireDuringDelivery(ApplicationAllocator &memory) {
   const auto *const original = QWindowSystemInterfacePrivate::eventHandler;
   std::optional<NativePointerEvents> events{std::in_place, memory};
   QWindow window;
+
   window.show();
   QCoreApplication::processEvents();
   RetiringObserver retiring{events};
+
   window.installEventFilter(&retiring);
   constexpr QPointF point{100, 100};
+
   deliver(window, QEvent::MouseMove, point, Qt::NoButton, Qt::NoButton);
   require(!events.has_value(), "native dispatch must survive the recipient destroying its observer");
   require(QWindowSystemInterfacePrivate::eventHandler == original, "synchronous retirement must restore Qt's previous handler");
@@ -148,6 +159,7 @@ void observerMayRetireDuringDelivery(ApplicationAllocator &memory) {
 int main(int argc, char **argv) try {
   const QGuiApplication application{argc, argv};
   ApplicationAllocator memory;
+
   rawMotionExcludesQtButtonSplitting(memory);
   observersMayRetireOutOfOrder(memory);
   observerMayRetireDuringDelivery(memory);

@@ -40,6 +40,7 @@ using telar::gui::test::require;
 
 void soundsCoalesceIntoOnePrioritizedSuccessor() {
   SoundPlayback playback;
+
   require(playback.request(AgentSound::ready).state == SoundRequestOutcome::State::start && playback.active(), "an idle permitted sound must reserve one worker");
   require(playback.request(AgentSound::ready).state == SoundRequestOutcome::State::queued, "an active worker must retain one successor");
   require(playback.request(AgentSound::needs_input).state == SoundRequestOutcome::State::queued, "input attention must coalesce with queued completion sounds");
@@ -51,6 +52,7 @@ void soundsCoalesceIntoOnePrioritizedSuccessor() {
 
 void policyChangesLeaveRunningWorkAndRemoveDisallowedSuccessors() {
   SoundPlayback playback;
+
   static_cast<void>(playback.request(AgentSound::ready));
   static_cast<void>(playback.request(AgentSound::needs_input));
   playback.configure({.needs_input = false});
@@ -68,12 +70,15 @@ void policyChangesLeaveRunningWorkAndRemoveDisallowedSuccessors() {
 void hostPayloadsOwnSanitizedBoundedUtf8() {
   std::string title = R"(A "quoted" title\)";
   const auto payload = NotificationPayload::create(title, "first\nsecond\tline\x7f");
+
   title.assign("changed");
   require(payload.title.view() == "A quoted title" && payload.message.view() == "firstsecondline", "host payloads must own text with the original quote, slash and control filtering");
   const std::string prefix(max_notification_title_bytes - 1, 'a');
   const auto truncated = NotificationPayload::create(prefix + "é", "message");
+
   require(truncated.title.view() == prefix, "a title ending inside a multibyte scalar must drop that whole scalar");
   const auto filtered = NotificationPayload::create(std::string(max_notification_title_bytes, '"') + "kept", std::string(max_notification_message_bytes + 1, 'b'));
+
   require(filtered.title.view() == "kept", "filtering must happen before the output capacity is consumed");
   require(filtered.message.view().size() == max_notification_message_bytes, "host detail storage must respect the shared wire capacity");
 }

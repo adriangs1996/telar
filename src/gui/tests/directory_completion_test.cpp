@@ -27,12 +27,14 @@ struct Fixture {
 
   Fixture() {
     std::string pattern = (std::filesystem::temp_directory_path() / "telar-directories-XXXXXX").string();
+
     require(::mkdtemp(pattern.data()) != nullptr, "temporary directory");
     root = std::filesystem::canonical(pattern);
   }
 
   ~Fixture() {
     std::error_code ignored;
+
     std::filesystem::remove_all(root, ignored);
   }
 
@@ -55,6 +57,7 @@ void queriesAskForChildrenOnlyAfterASeparator() {
 
 void listsMatchingDirectoriesOnly() {
   const Fixture fixture;
+
   for (const auto *name : {"telar", "tools", "notes", ".hidden", ".tooling"}) {
     std::filesystem::create_directory(fixture.root / name);
   }
@@ -63,15 +66,18 @@ void listsMatchingDirectoriesOnly() {
   std::filesystem::create_directory_symlink(fixture.root / "telar", fixture.root / "terminal");
 
   const auto prefix = DirectoryCompletion::list(fixture.path("t"));
+
   require(prefix.base == fixture.root.string(), "the base is the directory listed");
   require(prefix.entries == std::vector<std::string>{"telar", "terminal", "tools"}, "directories and links to them, sorted, files left out");
   require(!prefix.exact_exists, "a partial name is not a directory");
 
   const auto children = DirectoryCompletion::list(fixture.path("") + "/");
+
   require(children.entries == std::vector<std::string>{"notes", "telar", "terminal", "tools"}, "hidden directories stay out without a leading dot");
   require(children.exact_exists, "the listed directory exists");
 
   const auto hidden = DirectoryCompletion::list(fixture.path(".t"));
+
   require(hidden.entries == std::vector<std::string>{".tooling"}, "a leading dot lists hidden directories");
 
   require(DirectoryCompletion::list(fixture.path("telar")).exact_exists, "an exact name is a directory");
@@ -81,11 +87,13 @@ void listsMatchingDirectoriesOnly() {
 void keepsTheFirstNamesOfALargeDirectory() {
   const Fixture fixture;
   const auto total = DirectoryCompletion::maximum_entries + 6;
+
   for (std::size_t index = total; index > 0; --index) {
     std::filesystem::create_directory(fixture.root / std::format("d{:03}", index));
   }
 
   const auto result = DirectoryCompletion::list(fixture.path("") + "/");
+
   require(result.matched == total, "every match is counted");
   require(result.entries.size() == DirectoryCompletion::maximum_entries, "the result is bounded");
   require(result.entries.front() == "d001" && result.entries.back() == "d064", "the first names by order are kept");
@@ -94,6 +102,7 @@ void keepsTheFirstNamesOfALargeDirectory() {
 void rejectsRelativeAndMissingQueries() {
   require(DirectoryCompletion::list("relative/path").entries.empty(), "relative queries list nothing");
   const auto missing = DirectoryCompletion::list("/telar-missing-directory/child");
+
   require(missing.entries.empty() && !missing.exact_exists, "a missing directory lists nothing");
 }
 

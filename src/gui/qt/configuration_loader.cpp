@@ -97,8 +97,10 @@ ConfigurationPreparation::~ConfigurationPreparation() = default;
 
 PreparedConfiguration ConfigurationLoader::prepare(ApplicationAllocator &memory, const ConfigurationReloadRequest &request) {
   auto observed = request.watch;
+
   observed.root = request.selection.path.isEmpty() ? std::nullopt : fileStamp(request.selection.path);
   const auto trust_path = QFile::encodeName(request.selection.trust_path);
+
   observed.trust = trust_path.isEmpty() ? std::nullopt : platform::PrivateFileStamp::read(trust_path.constData());
   for (auto iterator = request.watch.modules.cbegin(); iterator != request.watch.modules.cend(); ++iterator) {
     const auto stamp = fileStamp(iterator->path);
@@ -112,6 +114,7 @@ PreparedConfiguration ConfigurationLoader::prepare(ApplicationAllocator &memory,
   }
 
   auto result = makeOwned<ConfigurationPreparation>(memory, memory);
+
   result->revision = request.revision;
   result->observed = std::move(observed);
 
@@ -131,6 +134,7 @@ void ConfigurationLoader::load(tbc::view<ApplicationAllocator &, tbc::lt::a> mem
   result.configuration.theme = projectTheme(result.configuration.themes.base);
   if (!request.selection.trust_path.isEmpty()) {
     const auto path = QFile::encodeName(request.selection.trust_path);
+
     result.trust = runtime::plugins::TrustStore::load(memory, {path.constData(), static_cast<std::size_t>(path.size())});
   }
 
@@ -161,16 +165,20 @@ void ConfigurationLoader::load(tbc::view<ApplicationAllocator &, tbc::lt::a> mem
         .generation = request.generation,
         .plugin_overrides = &request.plugin_overrides,
     };
+
     result.generation = makeOwned<ConfigurationGeneration<ApplicationAllocator>>(memory, memory, generation_source);
     const auto &generation = *result.generation;
     const auto &configured = generation.runtimeValues().plugins.configured();
+
     result.plugins.emplace(memory, generation_source.directory, configured);
     const PluginCatalog catalog{generation.number(), configured, result.plugins->packages()};
+
     generation.visitPluginActions([&](const PluginActionDescription &action) {
       if (!request.plugin_overrides.disabled(action.plugin, configured)) {
         static_cast<void>(catalog.resolve(action));
       }
     });
+
     result.configuration = generation.configuration();
     trackModules(generation, result.directory, result.modules);
     snapshot(memory, generation, result.snapshot);
@@ -178,6 +186,7 @@ void ConfigurationLoader::load(tbc::view<ApplicationAllocator &, tbc::lt::a> mem
 
   if (!request.selection.theme.isEmpty()) {
     const auto name = request.selection.theme.toLower().toUtf8();
+
     result.locked_theme = themeValuesByName({name.constData(), static_cast<std::size_t>(name.size())});
     result.configuration.theme = projectTheme(*result.locked_theme);
   }
@@ -187,12 +196,16 @@ void ConfigurationLoader::snapshot(tbc::view<ApplicationAllocator &, tbc::lt::a>
   result.commands = makeOwned<runtime::config::RetainedCommandTabRegistry>(memory, generation.commandTabs());
   const auto store = [&](int reference, const char *field) {
     QList<QByteArray> arguments;
+
     generation.visitArguments(reference, field, [&](std::string_view argument) {
       arguments.append(QByteArray{argument.data(), static_cast<qsizetype>(argument.size())});
     });
+
     result.arguments.insert({reference, QByteArray{field}}, std::move(arguments));
   };
+
   const auto &definitions = generation.components().definitions();
+
   for (std::size_t index = 0; index < components::Definitions::positions; ++index) {
     const auto position = static_cast<components::Position>(index);
     const auto &source = definitions.source(position);
@@ -219,20 +232,24 @@ void ConfigurationLoader::snapshot(tbc::view<ApplicationAllocator &, tbc::lt::a>
 
 void ConfigurationLoader::trackModules(const ConfigurationGeneration<ApplicationAllocator> &generation, const QString &root, ConfigurationWatch::Modules &modules) {
   QStringList names;
+
   generation.visitLocalModules([&](std::string_view name) {
     names.append(toQString(name));
   });
+
   trackModuleNames(names, root, modules);
 }
 
 void ConfigurationLoader::trackModuleNames(const QStringList &names, const QString &root, ConfigurationWatch::Modules &modules) {
   const QDir directory{root};
+
   for (const auto &key : names) {
     if (modules.contains(key)) {
       continue;
     }
 
     auto relative = key;
+
     relative.replace(QLatin1Char('.'), QLatin1Char('/'));
     auto path = QFileInfo{directory.filePath(relative + QLatin1StringView{".lua"})}.canonicalFilePath();
     if (path.isEmpty()) {

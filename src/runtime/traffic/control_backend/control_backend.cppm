@@ -162,6 +162,7 @@ public:
 
   inline static auto rule(tbc::view<std::span<Byte>, tbc::lt::a> output, InterceptionRule rule) -> tbc::view<std::span<const Byte>, tbc::lt::a> {
     plugins::FrameWriter writer{output};
+
     writer.tag(rule.http ? Command::http_rule : Command::rule);
     writer.text(rule.host);
     writer.integer(rule.directions);
@@ -173,16 +174,19 @@ public:
 
   inline static auto readRule(plugins::FrameReader &reader) -> InterceptionRule {
     InterceptionRule rule{.host = reader.text(), .directions = reader.integer<Byte>(), .visibility = reader.integer<Byte>(), .timeout_ms = reader.integer<std::uint32_t>(), .fail_closed = reader.boolean()};
+
     reader.finish();
 
     if (!ProxyHostname::validPattern(rule.host) || rule.directions == 0 || rule.directions > 3 || rule.visibility == 0 || rule.visibility > 3 || rule.timeout_ms == 0 || rule.timeout_ms > maximum_timeout_ms) {
       throw EncodingError{"Invalid interception rule"};
     }
+
     return rule;
   }
 
   inline static auto decision(tbc::view<std::span<Byte>, tbc::lt::a> output, std::uint64_t ticket, Verdict verdict, std::span<const Byte> bytes = {}) -> tbc::view<std::span<const Byte>, tbc::lt::a> {
     plugins::FrameWriter writer{output};
+
     writer.tag(Command::decision);
     writer.integer(ticket);
     writer.tag(verdict);
@@ -272,17 +276,20 @@ public:
     if (active_.load(std::memory_order_acquire) == 0) { return {}; }
     std::scoped_lock lock{mutex_};
     HttpPolicy result;
+
     for (const auto &entry : registrations_) {
       if (entry && entry->hosts.contains(event.host) && (entry->directions & (1 << static_cast<Byte>(event.direction))) && (entry->visibility & (1 << static_cast<Byte>(event.visibility)))) {
         result.enabled = true;
         result.fail_closed |= entry->route.fail_closed;
       }
     }
+
     return result;
   }
 
   inline void configure(Owner owner, InterceptionRule rule, std::uint64_t order = UINT64_MAX) {
     std::scoped_lock lock{mutex_};
+
     if (owner == 0 || registration(owner)) {
       throw EncodingError{"Interception owner already registered"};
     }
@@ -300,6 +307,7 @@ public:
 
   inline void disconnect(Owner owner = default_owner) noexcept {
     std::scoped_lock lock{mutex_};
+
     for (auto &slot : registrations_) {
       if (slot && slot->route.owner == owner) {
         slot.reset();
@@ -322,6 +330,7 @@ public:
     for (auto &pending : pending_) {
       if (pending && pending->verdict == Verdict::pending && pending->chain[pending->step].owner == owner) { advance(*pending, failure(*pending), registrations_, next_, completion_, request_signal_); }
     }
+
     if (available) {
       entry->route.generation = ++generation_;
       entry->available = true;
@@ -335,6 +344,7 @@ public:
     for (const auto &pending : pending_) {
       if (pending && pending->verdict == Verdict::pending && pending->decision_ticket == ticket && pending->chain[pending->step].owner == owner && pending->chain[pending->step].generation == entry->route.generation && std::chrono::steady_clock::now() < pending->deadline) { return true; }
     }
+
     return false;
   }
 
@@ -347,12 +357,14 @@ public:
     std::array<Route, Limits::subscribers> matches;
     std::size_t count = 0;
     bool fail_closed = false;
+
     for (const auto &entry : registrations_) {
       if (entry && entry->hosts.contains(event.host) && (entry->directions & (1 << static_cast<Byte>(event.direction))) && (entry->visibility & (1 << static_cast<Byte>(event.visibility)))) {
         if (!entry->available) {
           if (entry->route.fail_closed) { return rejected_ticket; }
           continue;
         }
+
         matches[count++] = entry->route;
         fail_closed |= entry->route.fail_closed;
       }
@@ -365,6 +377,7 @@ public:
     std::ranges::sort(std::span{matches}.first(count), [](const auto &left, const auto &right) {
       return left.order < right.order || (left.order == right.order && left.generation < right.generation);
     });
+
     for (auto &slot : pending_) {
       if (!slot) {
         try {
@@ -396,6 +409,7 @@ public:
     }
 
     std::scoped_lock lock{mutex_};
+
     for (auto &slot : pending_) {
       if (slot && slot->decision_ticket == ticket && slot->verdict == Verdict::pending && slot->chain[slot->step].owner == owner) {
         if (std::chrono::steady_clock::now() >= slot->deadline) {
@@ -421,32 +435,39 @@ public:
     }
 
     std::scoped_lock lock{mutex_};
+
     for (auto &slot : pending_) {
       if (slot && slot->ticket == ticket) {
         if (slot->verdict == Verdict::pending && std::chrono::steady_clock::now() >= slot->deadline) {
           advance(*slot, failure(*slot), registrations_, next_, completion_, request_signal_);
         }
+
         const auto verdict = slot->verdict;
         if (verdict == Verdict::pending) {
           return {verdict};
         }
+
         const auto count = verdict == Verdict::replace ? slot->bytes.size() : 0;
         if (count > replacement.size()) {
           slot.reset();
           return {.verdict = Verdict::reject};
         }
+
         if (count != 0) {
           std::ranges::copy(slot->bytes, replacement.begin());
         }
+
         slot.reset();
         return {verdict, count};
       }
     }
+
     return {.verdict = Verdict::reject};
   }
 
   inline auto pending(std::uint64_t ticket) noexcept -> bool {
     std::scoped_lock lock{mutex_};
+
     for (const auto &slot : pending_) {
       if (slot && slot->ticket == ticket) {
         return slot->verdict == Verdict::pending && std::chrono::steady_clock::now() < slot->deadline;
@@ -460,6 +481,7 @@ public:
   template <typename Consumer>
   inline void deliver(Owner owner, Consumer &&consumer) noexcept {
     std::scoped_lock lock{mutex_};
+
     for (auto &slot : pending_) {
       if (!slot || slot->verdict != Verdict::pending || slot->chain[slot->step].owner != owner || slot->delivered) {
         continue;
@@ -500,11 +522,13 @@ public:
 
   inline std::optional<FlowControl::Time> deadline(std::uint64_t ticket) noexcept {
     std::lock_guard lock{mutex_};
+
     for (const auto &slot : pending_) {
       if (slot && slot->ticket == ticket) {
         return slot->deadline;
       }
     }
+
     return std::chrono::steady_clock::now();
   }
 
@@ -695,9 +719,11 @@ public:
     const std::unique_lock lock{mutex_, std::try_to_lock};
     if (!lock.owns_lock()) { contention_drops_.fetch_add(1, std::memory_order_relaxed); return shared; }
     const auto now = Clock::now();
+
     for (auto &slot : sessions_) {
       if (!slot || !slot->active || !slot->owner.authorized() || !selected(slot->selection, event.kind)) { continue; }
       auto &session = *slot;
+
       session.expire(now);
       try {
         if (!session.filter.matches(event) || !matches(session.host, event)) { continue; }
@@ -709,11 +735,13 @@ public:
           shared = std::allocate_shared<EventFrame<Memory>>(AllocatorRef<EventFrame<Memory>, Memory>{memory_}, memory_, size);
           Protocol::encode(shared->bytes.bytes(), event);
         }
+
         session.entries[(session.head + session.count) % session.entries.size()].emplace(Entry{session.next++, now, shared});
         ++session.count;
         session.bytes += size;
       } catch (...) { ++session.dropped; }
     }
+
     return shared;
   }
 
@@ -725,6 +753,7 @@ public:
 
   inline void revoke(const recording::Owner &owner) noexcept {
     const std::lock_guard lock{mutex_};
+
     for (auto &session : sessions_) { if (session && owner.matches(session->owner)) { session->active = false; } }
     refreshInterest();
   }
@@ -734,32 +763,41 @@ public:
     if (output.size() < recording::Protocol::page_header_bytes) { throw EncodingError{"Recording output is too small"}; }
     std::array<Byte, 8192> validation;
     plugins::FrameWriter validated{validation};
+
     recording::Protocol::write(validated, request);
     ProxyHostPolicy scope{memory_};
     if (!request.host.empty() && !scope.append(request.host)) { throw EncodingError{"Invalid recording query host"}; }
     scope.finish();
     const std::lock_guard lock{mutex_};
+
     if (!owner.authorized()) { throw EncodingError{"Recording package permission has been revoked"}; }
     if (request.operation == recording::Operation::list) {
       output = output.first(std::min(output.size(), recording::Limits::page_bytes));
       plugins::FrameWriter rows{output.subspan(recording::Protocol::page_header_bytes)};
       recording::Page page{.format = recording::Format::list};
+
       for (auto &slot : sessions_) {
         if (!slot || !owner.canRead(slot->owner)) { continue; }
         slot->expire(Clock::now());
         std::array<Byte, recording::Protocol::page_header_bytes> bytes;
         plugins::FrameWriter child{bytes};
+
         recording::Protocol::header(child, describe(*slot, contention_drops_.load(std::memory_order_relaxed)));
         rows.bytes(child.finish());
         ++page.count;
       }
+
       plugins::FrameWriter header{output.first(recording::Protocol::page_header_bytes)};
+
       recording::Protocol::header(header, page);
       return output.first(header.finish().size() + rows.finish().size());
     }
+
     Session *session = nullptr;
+
     if (request.operation == recording::Operation::start) {
       std::uint64_t reserved = request.max_bytes;
+
       for (const auto &existing : sessions_) { if (existing) { reserved += existing->budget; } }
       if (reserved > recording::Limits::total_bytes) { throw EncodingError{"Recording runtime budget exhausted"}; }
       for (auto &slot : sessions_) {
@@ -769,23 +807,28 @@ public:
         session = &*slot;
         break;
       }
+
       if (!session) { throw EncodingError{"Recording session limit reached"}; }
       refreshInterest();
     } else {
       for (auto &slot : sessions_) { if (slot && slot->id == request.id && owner.canRead(slot->owner)) { session = &*slot; break; } }
       if (!session) { throw EncodingError{"Unknown or expired recording identity"}; }
     }
+
     session->expire(Clock::now());
     if (request.operation == recording::Operation::stop) { session->active = false; refreshInterest(); }
     auto page = describe(*session, contention_drops_.load(std::memory_order_relaxed));
+
     output = output.first(std::min(output.size(), recording::Limits::page_bytes));
     if (output.size() < recording::Protocol::page_header_bytes) { throw EncodingError{"Recording output is too small"}; }
     plugins::FrameWriter rows{output.subspan(recording::Protocol::page_header_bytes)};
+
     if (request.operation == recording::Operation::query || request.operation == recording::Operation::pcapng) {
       if (request.cursor > session->next) { throw EncodingError{"Recording cursor is beyond the current end"}; }
       page.gap = request.cursor != 0 && request.cursor < page.oldest;
       page.next = request.cursor == 0 ? page.oldest : std::max(request.cursor, page.oldest);
       const bool pcapng = request.operation == recording::Operation::pcapng;
+
       page.format = pcapng ? recording::Format::pcapng : recording::Format::events;
       if (pcapng) { Pcapng::section(rows); }
       for (std::size_t index = 0; index < session->count; ++index) {
@@ -801,13 +844,16 @@ public:
         page.next = entry.cursor + 1;
       }
     }
+
     if (request.operation == recording::Operation::erase) {
       page.active = false;
       page.bytes = 0;
       for (auto &slot : sessions_) { if (slot && &*slot == session) { slot.reset(); break; } }
       refreshInterest();
     }
+
     plugins::FrameWriter header{output.first(recording::Protocol::page_header_bytes)};
+
     recording::Protocol::header(header, page);
     return output.first(header.finish().size() + rows.finish().size());
   }
@@ -825,6 +871,7 @@ private:
     const auto mask = static_cast<Byte>(selection);
     const auto bit = kind == Kind::packet ? Selection::packets : kind == Kind::exchange ? Selection::exchanges : kind == Kind::datagram ? Selection::datagrams : Selection::flows;
     const bool public_event = kind == Kind::packet || kind == Kind::exchange || kind == Kind::datagram || (kind >= Kind::flow_open && kind <= Kind::flow_gap);
+
     return public_event && (mask & static_cast<Byte>(bit)) != 0;
   }
 
@@ -837,6 +884,7 @@ private:
 
   inline void refreshInterest() noexcept {
     Byte mask = 0;
+
     for (const auto &session : sessions_) { if (session && session->active) { mask |= static_cast<Byte>(session->selection); } }
     interest_.store(mask, std::memory_order_release);
   }
@@ -945,6 +993,7 @@ public:
     std::array<int, 2> descriptors;
     if (::socketpair(AF_UNIX, SOCK_STREAM, 0, descriptors.data()) != 0) { throw SystemError{"Create package traffic channel"}; }
     FileDescriptor native{descriptors[0]}, client{descriptors[1]};
+
     configureProxySocket(native.get());
     configureProxySocket(client.get());
     const auto order = (static_cast<std::uint64_t>(specification.package_index) << 32) | registration;
@@ -967,6 +1016,7 @@ public:
     std::array<char, 128> reason;
     const auto name = specification.name.view();
     const auto length = std::snprintf(reason.data(), reason.size(), "app_callback_error:%.*s", static_cast<int>(name.size()), name.data());
+
     event.reason = {reason.data(), length > 0 ? std::min(static_cast<std::size_t>(length), reason.size() - 1) : 0};
     event.bytes = {};
     observeFlow(Kind::flow_error, event);
@@ -982,11 +1032,13 @@ public:
 
   inline CaptureStatus captureStatus() const noexcept {
     std::lock_guard lock{capture_mutex_};
+
     return capture_status_;
   }
 
   inline std::uint64_t stopCapture() noexcept {
     const auto revision = capture_stop_.fetch_add(1, std::memory_order_release) + 1;
+
     wake_.notify();
     return revision;
   }
@@ -1003,6 +1055,7 @@ public:
       const auto sequence = next_exchange_.fetch_add(1, std::memory_order_relaxed);
       const auto payload = plugins::Protocol::encodeExchange(output.bytes(), {sequence, session_}, exchange, Limits::http_part_bytes);
       auto frame = encode(Event{.kind = Kind::exchange, .session = session_, .sequence = sequence, .bytes = payload});
+
       injections_.publish(std::move(frame));
       wake_.notify();
     } catch (const std::exception &) {
@@ -1014,11 +1067,13 @@ public:
     if (kind != Kind::intercept_request && flow_subscribers_.load(std::memory_order_acquire) == 0 && !recordings_.selects(Selection::flows)) {
       return;
     }
+
     try {
       SensitiveBuffer<FlowControl::chunk_bytes + Limits::metadata_bytes> output;
       const auto payload = FlowCodec::encode(output.bytes(), flow);
       const auto now = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
       auto frame = encode(Event{.kind = kind, .session = session_, .sequence = next_exchange_.fetch_add(1, std::memory_order_relaxed), .timestamp_us = static_cast<std::uint64_t>(now), .bytes = payload});
+
       injections_.publish(std::move(frame));
       wake_.notify();
     } catch (const std::exception &) {
@@ -1056,11 +1111,13 @@ private:
 
   inline void step() {
     std::array<pollfd, maximum_peers + 3> descriptors{};
+
     descriptors[0] = {.fd = listener_.descriptor(), .events = POLLIN, .revents = 0};
     descriptors[1] = {.fd = wake_.descriptor(), .events = POLLIN, .revents = 0};
     descriptors[2] = {.fd = interception_.requestDescriptor(), .events = POLLIN, .revents = 0};
     for (std::size_t index = 0; index < peers_.size(); ++index) {
       const auto &peer = peers_[index];
+
       descriptors[index + 3] = {.fd = peer ? peer->socket.get() : -1, .events = static_cast<short>(POLLIN | (peer && peer->count ? POLLOUT : 0)), .revents = 0};
     }
 
@@ -1069,15 +1126,18 @@ private:
     if (result < 0 && errno != EINTR) {
       throw SystemError{"Poll traffic sockets"};
     }
+
     if (stopping_.load(std::memory_order_acquire)) {
       return;
     }
+
     const auto stop_capture = capture_stop_.load(std::memory_order_acquire);
     if (stop_capture != capture_stopped_.load(std::memory_order_relaxed)) {
       for (auto &peer : peers_) {
         if (peer && (peer->role == Role::live_capture || peer->role == Role::offline_capture)) { peer->failed = true; }
       }
     }
+
     if (descriptors[1].revents & POLLIN) {
       wake_.drain();
       while (auto attachment = attachments_.tryReceive()) {
@@ -1090,8 +1150,10 @@ private:
           }
         }
       }
+
       while (auto frame = injections_.tryReceive()) {
         const auto event = Protocol::decode((*frame)->bytes.bytes());
+
         publish(event, std::move(*frame));
       }
     }
@@ -1105,11 +1167,14 @@ private:
       if (!peer) {
         continue;
       }
+
       const auto ready = descriptors[index + 3].revents;
+
       try {
         if (ready & (POLLIN | POLLHUP)) {
           read(*peer);
         }
+
         if (ready & POLLOUT) {
           write(*peer);
         }
@@ -1121,26 +1186,33 @@ private:
       const bool expired = !peer->role && std::chrono::steady_clock::now() - peer->connected >= handshake_timeout;
       if (peer->failed || expired || (ready & (POLLERR | POLLNVAL))) {
         const bool producer = peer->role == Role::live_capture || peer->role == Role::offline_capture;
+
         if (peer->role == Role::intercept) {
           interception_.disconnect(peer->owner);
           http_interception_.disconnect(peer->owner);
         }
+
         if (peer->role == Role::subscribe && selects(peer->selection, Selection::exchanges)) {
           exchange_subscribers_.fetch_sub(1, std::memory_order_release);
         }
+
         if (peer->role == Role::subscribe && selects(peer->selection, Selection::flows)) {
           flow_subscribers_.fetch_sub(1, std::memory_order_release);
         }
+
         if (peer->role == Role::subscribe && selects(peer->selection, Selection::datagrams)) {
           datagram_subscribers_.fetch_sub(1, std::memory_order_release);
         }
+
         peer.reset();
         if (producer) {
           producer_ = false;
           {
             std::lock_guard lock{capture_mutex_};
+
             capture_status_ = {};
           }
+
           analysis_.expire([&](const Event &event) { publish(event); }, true);
           publish(Event{.kind = Kind::capture_stopped});
         }
@@ -1166,9 +1238,11 @@ private:
         SensitiveAllocation output{upstream_, flow.bytes.size() + Limits::metadata_bytes};
         const auto payload = FlowCodec::encode(output.bytes(), flow);
         const auto now = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+
         enqueue(*peer, encode(Event{.kind = peer->http ? Kind::http_intercept_request : Kind::intercept_request, .session = session_, .sequence = next_exchange_.fetch_add(1, std::memory_order_relaxed), .timestamp_us = static_cast<std::uint64_t>(now), .bytes = payload}));
         return true;
       };
+
       if (peer->http) { http_interception_.deliver(peer->owner, deliver); }
       else { interception_.deliver(peer->owner, deliver); }
     }
@@ -1192,6 +1266,7 @@ private:
     if (!credentials) {
       return;
     }
+
     for (auto &slot : peers_) {
       if (!slot) {
         slot.emplace(memory_, std::move(socket), credentials->user);
@@ -1202,8 +1277,10 @@ private:
 
   inline void read(Peer &peer) {
     constexpr std::size_t frames_per_tick = 32;
+
     for (std::size_t frame = 0; frame < frames_per_tick; ++frame) {
       const auto previous = peer.input.size();
+
       peer.input.resize(peer.expected);
       const auto count = ::recv(peer.socket.get(), peer.input.data() + previous, peer.expected - previous, 0);
       if (count <= 0) {
@@ -1211,8 +1288,10 @@ private:
         if (count == 0 || !socketWouldBlock(errno)) {
           peer.failed = true;
         }
+
         return;
       }
+
       peer.input.resize(previous + static_cast<std::size_t>(count));
       if (peer.input.size() != peer.expected) {
         return;
@@ -1234,6 +1313,7 @@ private:
           if (size == 0 || size > limit || reader.integer<std::uint64_t>() != 0) {
             throw EncodingError{"Invalid capture frame prefix"};
           }
+
           peer.expected = size;
           peer.input.clear();
           continue;
@@ -1245,24 +1325,29 @@ private:
           peer.expected = Protocol::prefix_bytes;
           continue;
         }
+
         auto event = Protocol::decode(peer.input);
         if (event.kind >= Kind::exchange) {
           throw EncodingError{"Capture helpers cannot publish decrypted exchanges"};
         }
+
         event.offline = *peer.role == Role::offline_capture;
         if (event.kind != Kind::packet) {
           std::lock_guard lock{capture_mutex_};
+
           capture_status_.session = event.session;
           if (event.kind == Kind::interface_open) { ++capture_status_.interfaces; }
           else if (event.kind == Kind::interface_closed && capture_status_.interfaces != 0) { --capture_status_.interfaces; }
           else if (event.kind == Kind::interface_error) { ++capture_status_.interface_errors; }
         }
+
         publish(event);
         if (event.kind == Kind::packet) {
           const bool flows = flow_subscribers_.load(std::memory_order_acquire) != 0 || recordings_.selects(Selection::flows);
           const bool datagrams = datagram_subscribers_.load(std::memory_order_acquire) != 0 || recordings_.selects(Selection::datagrams);
           if (flows || datagrams) {
             const auto selected = static_cast<Selection>((flows ? static_cast<Byte>(Selection::flows) : 0) | (datagrams ? static_cast<Byte>(Selection::datagrams) : 0));
+
             analysis_.packet(event, selected, [&](const Event &item) { publish(item); });
           }
         }
@@ -1279,16 +1364,19 @@ private:
     if (LittleEndian<std::uint32_t>::decode(input) != Protocol::magic) {
       throw EncodingError{"Incompatible traffic protocol"};
     }
+
     const auto role = LittleEndian<Byte>::decode(input);
     const auto selection = LittleEndian<Byte>::decode(input);
     const auto size = LittleEndian<std::uint32_t>::decode(input);
     if (role < static_cast<Byte>(Role::subscribe) || role > static_cast<Byte>(Role::intercept) || selection < static_cast<Byte>(Selection::packets) || selection > static_cast<Byte>(Selection::all) || size > Limits::filter_bytes) {
       throw EncodingError{"Invalid traffic greeting"};
     }
+
     if (peer.expected == Protocol::greeting_bytes && size != 0) {
       peer.expected += size;
       return false;
     }
+
     if (input.size() != size) {
       throw EncodingError{"Truncated traffic filter"};
     }
@@ -1297,19 +1385,23 @@ private:
     if (peer.package && !((selected == Role::subscribe && peer.package->observe) || (selected == Role::intercept && peer.package->intercept))) {
       throw EncodingError{"Package traffic capability denied"};
     }
+
     peer.selection = static_cast<Selection>(selection);
     if (selected == Role::subscribe) {
       const auto subscribers = std::ranges::count_if(peers_, [](const auto &slot) { return slot && slot->role == Role::subscribe; });
       if (static_cast<std::size_t>(subscribers) >= Limits::subscribers || peer.uid != ::geteuid()) {
         throw EncodingError{"Traffic subscription is unavailable"};
       }
+
       peer.filter.emplace(std::string_view{reinterpret_cast<const char *>(input.data()), input.size()});
       if (selects(peer.selection, Selection::flows)) {
         flow_subscribers_.fetch_add(1, std::memory_order_release);
       }
+
       if (selects(peer.selection, Selection::datagrams)) {
         datagram_subscribers_.fetch_add(1, std::memory_order_release);
       }
+
       if (selects(peer.selection, Selection::exchanges)) {
         exchange_subscribers_.fetch_add(1, std::memory_order_release);
       }
@@ -1324,17 +1416,22 @@ private:
       if (producer_ || size != 0 || (selected == Role::live_capture && peer.uid != 0)) {
         throw EncodingError{"Traffic capture requires one authorized helper"};
       }
+
       producer_ = true;
     }
+
     peer.role = selected;
     enqueue(peer, encode(Event{.kind = Kind::ready}));
     if (selected == Role::live_capture || selected == Role::offline_capture) {
       {
         std::lock_guard lock{capture_mutex_};
+
         capture_status_ = {.state = selected == Role::live_capture ? CaptureState::live : CaptureState::offline};
       }
+
       publish(Event{.kind = Kind::capture_started, .offline = selected == Role::offline_capture});
     }
+
     return true;
   }
 
@@ -1346,9 +1443,12 @@ private:
       if (peer.configured) {
         throw EncodingError{"Interception rule already registered"};
       }
+
       const auto rule = InterceptionCodec::readRule(reader);
+
       peer.http = command == InterceptionCodec::Command::http_rule;
       const auto order = peer.package ? peer.package->order : UINT64_MAX;
+
       if (peer.http) { http_interception_.configure(peer.owner, rule, order); }
       else { interception_.configure(peer.owner, rule, order); }
       peer.configured = true;
@@ -1357,6 +1457,7 @@ private:
       const auto ticket = reader.integer<std::uint64_t>();
       const auto verdict = reader.tag(Verdict::reject);
       const auto bytes = reader.bytes();
+
       reader.finish();
       if (peer.http) {
         if (verdict == Verdict::replace) { HttpMessageCodec::decode(bytes); }
@@ -1369,6 +1470,7 @@ private:
 
   inline std::shared_ptr<Frame> encode(const Event &event) {
     auto frame = std::allocate_shared<Frame>(AllocatorRef<Frame, SensitiveMemory>{memory_}, upstream_, Protocol::encodedSize(event));
+
     Protocol::encode(frame->bytes.bytes(), event);
     return frame;
   }
@@ -1379,19 +1481,24 @@ private:
       if (!peer || peer->failed) {
         continue;
       }
+
       if (peer->role != Role::subscribe || event.kind == Kind::intercept_request || event.kind == Kind::http_intercept_request) {
         continue;
       }
+
       try {
         if ((event.kind == Kind::packet && !selects(peer->selection, Selection::packets)) || (event.kind == Kind::exchange && !selects(peer->selection, Selection::exchanges)) || (isFlow(event.kind) && !selects(peer->selection, Selection::flows)) || (event.kind == Kind::datagram && !selects(peer->selection, Selection::datagrams))) {
           continue;
         }
+
         if (peer->filter && !peer->filter->matches(event)) {
           continue;
         }
+
         if (!shared) {
           shared = encode(event);
         }
+
         enqueue(*peer, shared);
       } catch (const std::exception &) {
         peer->failed = true;
@@ -1406,6 +1513,7 @@ private:
     }
 
     auto &delivery = peer.queue[(peer.head + peer.count) % peer.queue.size()];
+
     delivery.prefix = Protocol::prefix(frame->bytes.bytes().size(), peer.dropped);
     delivery.frame = std::move(frame);
     delivery.offset = 0;
@@ -1423,6 +1531,7 @@ private:
         if (count == 0 || !socketWouldBlock(errno)) {
           peer.failed = true;
         }
+
         return;
       }
 
@@ -1518,6 +1627,7 @@ public:
     if (capture_child_ > 0 && capture_) { capture_->stopCapture(); }
     if (redirect_child_ > 0) { proxy_.stopRedirect(); }
     const auto deadline = Clock::now() + std::chrono::seconds{5};
+
     while ((capture_child_ > 0 || redirect_child_ > 0) && Clock::now() < deadline) {
       tick();
       ::poll(nullptr, 0, 5);
@@ -1538,6 +1648,7 @@ public:
     Reply reply;
     std::optional<SensitiveAllocation<Memory>> recording_output;
     std::array<char, 1025> error{};
+
     try {
       if (package && !authorized(*package, request)) {
         reply.result = Result::disabled;
@@ -1560,6 +1671,7 @@ public:
           const auto revision = capture_->stopCapture();
           if (!wait([&] { return capture_->captureStopped(revision) && capture_child_ <= 0; }, cancelled)) { reply.result = Result::busy; reply.message = "Capture is stopping"; }
         }
+
         break;
       case Operation::redirect_stop:
         if (!configuration_.redirect) { reply.result = Result::disabled; }
@@ -1575,6 +1687,7 @@ public:
             authorization(request, reply, "redirect-cleanup");
           }
         }
+
         break;
       case Operation::ca_install:
       case Operation::ca_uninstall:
@@ -1582,8 +1695,10 @@ public:
         if (!configuration_.proxy) { reply.result = Result::disabled; }
         else {
           TrustCommand command{memory_, cancelled};
+
           proxy_.manageAuthority(request.operation == Operation::ca_install ? proxy_trust::Action::install : request.operation == Operation::ca_uninstall ? proxy_trust::Action::uninstall : proxy_trust::Action::rotate, command);
         }
+
         break;
       case Operation::recording:
         if (!capture_) { reply.result = Result::disabled; }
@@ -1591,11 +1706,13 @@ public:
           recording_output.emplace(memory_, recording::Limits::page_bytes);
           reply.recording = capture_->recording(*request.recording, recording_output->bytes(), package ? recording::Owner::package(*package) : recording::Owner{});
         }
+
         break;
       }
     } catch (const std::exception &failure) {
       reply.result = Result::failed;
       const auto message = std::string_view{failure.what()}.substr(0, error.size() - 1);
+
       std::ranges::copy(message, error.begin());
       reply.message = {error.data(), message.size()};
     }
@@ -1603,6 +1720,7 @@ public:
     reply.status = status();
     if (package && !package->allows(plugins::Capability::traffic_control)) { reply.status.administration = false; }
     const auto authority = proxy_.authorityStatus(request.operation == Operation::ca_certificate);
+
     reply.status.tls_accepting = authority.accepting;
     reply.status.trust = static_cast<TrustState>(authority.trust);
     if (authority.active) {
@@ -1610,6 +1728,7 @@ public:
       reply.fingerprint_sha256 = {authority.fingerprint_sha256.data(), authority.fingerprint_sha256.size()};
       reply.certificate = std::span{authority.certificate}.first(authority.certificate_bytes);
     } else if (request.operation == Operation::ca_certificate) { reply.result = Result::disabled; }
+
     return Protocol::encode(output, reply);
   }
 
@@ -1617,18 +1736,22 @@ private:
   inline Status status() const noexcept {
     Status status{.proxy = configuration_.proxy, .transparent_tls = configuration_.transparent_tls, .interception = configuration_.interception, .administration = configuration_.administration};
     const auto proxy = proxy_.clientConfiguration().status();
+
     status.port = proxy.port.value_or(0);
     if (capture_) {
       const auto capture = capture_->captureStatus();
+
       switch (capture.state) {
       case traffic::Service<Memory>::CaptureState::idle: status.capture = CaptureState::idle; break;
       case traffic::Service<Memory>::CaptureState::live: status.capture = CaptureState::live; break;
       case traffic::Service<Memory>::CaptureState::offline: status.capture = CaptureState::offline; break;
       }
+
       status.capture_session = capture.session;
       status.interfaces = capture.interfaces;
       status.interface_errors = capture.interface_errors;
     }
+
     if (configuration_.redirect) {
       switch (proxy_.redirectStatus()) {
       case redirect::MonitorState::idle: status.redirect = RedirectState::idle; break;
@@ -1638,6 +1761,7 @@ private:
       case redirect::MonitorState::cleanup_required: status.redirect = RedirectState::cleanup_required; break;
       }
     }
+
     return status;
   }
 
@@ -1655,10 +1779,12 @@ private:
         reply.authorization[reply.argument_count++] = "--target";
         reply.authorization[reply.argument_count++] = selection_->argument(index);
       }
+
       for (std::size_t index = 0; index < request.process_count; ++index) {
         reply.authorization[reply.argument_count++] = "--process";
         reply.authorization[reply.argument_count++] = process_arguments_[index].view();
       }
+
       if (request.direction != redirect::Direction::outbound) {
         reply.authorization[reply.argument_count++] = "--direction";
         reply.authorization[reply.argument_count++] = redirect::directionName(request.direction);
@@ -1675,22 +1801,28 @@ private:
       reply.message = "An existing helper must stop before its selection changes";
       return;
     }
+
     if (!capture) {
       const ProcessInspector inspector;
+
       for (std::size_t index = 0; index < request.process_count; ++index) {
         const auto process = inspector.identity(static_cast<pid_t>(request.processes[index]));
         if (!process) { throw std::invalid_argument{"Selected process must be running under the runtime account"}; }
         process_arguments_[index] = redirect::ProcessToken::format(*process);
       }
+
       selection_.emplace(std::span{request.targets}.first(request.target_count), cancelled, Clock::now() + std::chrono::seconds{3});
       redirect::LocalAddresses::selection(selection_->targets(), request.direction);
     }
+
     auto &child = capture ? capture_child_ : redirect_child_;
+
     tick();
     if (child > 0) { reply.result = Result::busy; reply.message = "The previous helper is still stopping"; return; }
     (capture ? capture_cancelled_ : redirect_cancelled_) = false;
     authorization(request, reply, capture ? "capture" : "redirect");
     std::array<std::string_view, Limits::arguments> arguments;
+
     arguments[0] = "/usr/bin/sudo";
     arguments[1] = "-n";
     arguments[2] = "-l";
@@ -1703,6 +1835,7 @@ private:
       reply.message = "Run authorization_argv in a terminal to authorize this native helper";
       return;
     }
+
     arguments[2] = "--";
     std::ranges::copy(std::span{reply.authorization}.subspan(2, reply.argument_count - 2), arguments.begin() + 3);
     Command command{memory_, Launch{.arguments = std::span{arguments}.first(count - 1)}, CommandPurpose::administration};
@@ -1715,9 +1848,11 @@ private:
     spawn.redirect(STDERR_FILENO, STDERR_FILENO);
     spawn.closeOthers();
     pid_t started;
+
     checkSpawn(::posix_spawn(&started, specification.executable, &spawn.actions, &spawn.attributes, specification.arguments, specification.environment));
     child = started;
     const auto ready = [&] { return capture ? capture_->captureStatus().state == traffic::Service<Memory>::CaptureState::live : proxy_.redirectStatus() == redirect::MonitorState::active; };
+
     wait([&] { return ready() || child <= 0; }, cancelled);
     if (!ready()) {
       reply.result = Result::failed;
@@ -1727,18 +1862,21 @@ private:
       if (!capture) { proxy_.stopRedirect(); }
       return;
     }
+
     reply.argument_count = 0;
   }
 
   template <typename Predicate>
   inline bool wait(Predicate predicate, const std::atomic<bool> &cancelled) {
     const auto deadline = Clock::now() + std::chrono::seconds{5};
+
     while (!predicate()) {
       if (cancelled.load(std::memory_order_acquire)) { throw std::runtime_error{"Network control is stopping"}; }
       if (Clock::now() >= deadline) { return false; }
       tick();
       ::poll(nullptr, 0, 5);
     }
+
     return true;
   }
 
@@ -1813,6 +1951,7 @@ public:
     std::array<int, 2> descriptors;
     if (::socketpair(AF_UNIX, SOCK_STREAM, 0, descriptors.data()) != 0) { throw SystemError{"Create package control channel"}; }
     FileDescriptor native{descriptors[0]}, client{descriptors[1]};
+
     configureProxySocket(native.get());
     configureProxySocket(client.get());
     if (!attachments_.publish({std::move(native), package})) { throw SystemError{"Package control attachment queue is full", EBUSY}; }
@@ -1830,12 +1969,15 @@ private:
 
   inline void step() {
     std::array<pollfd, Limits::peers + 2> descriptors{};
+
     descriptors[0] = {.fd = listener_.descriptor(), .events = POLLIN, .revents = 0};
     descriptors[1] = {.fd = wake_.descriptor(), .events = POLLIN, .revents = 0};
     for (std::size_t index = 0; index < peers_.size(); ++index) {
       const auto &peer = peers_[index];
+
       descriptors[index + 2] = {.fd = peer ? peer->socket.get() : -1, .events = static_cast<short>(peer && peer->reply_bytes ? POLLOUT : POLLIN)};
     }
+
     if (::poll(descriptors.data(), descriptors.size(), 100) < 0 && errno != EINTR) { throw SystemError{"Poll network control"}; }
     if (stopping_.load(std::memory_order_acquire)) { return; }
     handler_.tick();
@@ -1854,11 +1996,14 @@ private:
       if (!peer) { continue; }
       const auto readiness = descriptors[index + 2].revents;
       bool close = (readiness & (POLLERR | POLLNVAL)) || Clock::now() >= peer->deadline;
+
       try {
         if (!close && (readiness & (POLLIN | POLLOUT | POLLHUP))) { close = advance(*peer, handler_, stopping_); }
       } catch (const std::exception &) { close = true; }
+
       if (close) { peer.reset(); }
     }
+
     if (descriptors[0].revents & POLLIN) {
       auto socket = listener_.accept();
       if (!socket) { return; }
@@ -1877,6 +2022,7 @@ private:
       peer.sent += static_cast<std::size_t>(count);
       return peer.sent == peer.reply_bytes;
     }
+
     for (std::size_t round = 0; round < 2; ++round) {
       const auto count = ::recv(peer.socket.get(), peer.input.bytes().data() + peer.received, peer.expected - peer.received, 0);
       if (count < 0 && socketWouldBlock(errno)) { return false; }
@@ -1890,19 +2036,24 @@ private:
         peer.expected += length;
         continue;
       }
+
       const auto request = Protocol::request(peer.input.bytes().subspan(Protocol::prefix_bytes, peer.expected - Protocol::prefix_bytes));
       const auto output = peer.output.bytes().subspan(Protocol::prefix_bytes);
       std::span<const Byte> reply;
+
       try { reply = handler.handle(request, output, stopping, peer.package ? &*peer.package : nullptr); }
       catch (const std::exception &error) {
         reply = Protocol::encode(output, Reply{.result = Result::failed, .message = std::string_view{error.what()}.substr(0, 1024)});
       }
+
       const auto prefix = Protocol::prefix(reply.size());
+
       std::ranges::copy(prefix, peer.output.bytes().begin());
       peer.reply_bytes = prefix.size() + reply.size();
       peer.deadline = Clock::now() + std::chrono::seconds{5};
       return false;
     }
+
     return false;
   }
 

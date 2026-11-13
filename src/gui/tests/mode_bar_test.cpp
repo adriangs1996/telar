@@ -114,13 +114,16 @@ private:
         Binding{.keys = {prefix, {.key = KeyChord::Key::up}}, .length = 2, .action = {.kind = BindingActionKind::split_horizontal}},
         Binding{.keys = {prefix, {.key = KeyChord::Key::down}, first}, .length = 3, .action = {.kind = BindingActionKind::copy_mode}},
     };
+
     const KeyRouter router{BindingMap<BindingAction>{bindings}, prefix};
     const auto hints = ModeHints::resolve(router);
+
     QCOMPARE(hints.items().size(), std::size_t{2});
     QCOMPARE(hints.items().front().label, std::string_view{"split right"});
     QCOMPARE(hints.items().back().label, std::string_view{"new tab"});
     QVERIFY(hints.items().back().key == first);
     const KeyRouter without_prefix{BindingMap<BindingAction>{bindings}};
+
     QVERIFY(ModeHints::resolve(without_prefix).items().empty());
   }
 
@@ -129,6 +132,7 @@ private:
       const KeyChord key{.character = KeyCharacter::pack(scalar), .modifiers = static_cast<unsigned>(KeyChord::Modifier::control)};
       const auto label = ModeKeyLabel::format(key);
       const auto expected = QStringLiteral("Ctrl+") + QString::fromUcs4(&scalar, 1);
+
       QCOMPARE(QString::fromUtf8(label.view()), expected);
       QCOMPARE(KeyCharacter::codepoint(key.character), static_cast<std::uint32_t>(scalar));
     }
@@ -136,8 +140,10 @@ private:
 
   Q_SLOT static void prefixLabelsLeadWithCancelThenTheBoundActions() {
     ModeHints hints;
+
     hints.append({.key = {.key = KeyChord::Key::character, .character = 's'}, .label = "split right"});
     const auto labels = ModeBarLabels::resolve(StatusMode::prefix, hints);
+
     QCOMPARE(labels.title(), std::string_view{"PREFIX"});
     QCOMPARE(labels.hints().size(), std::size_t{2});
     QCOMPARE(labels.hints().front().key.view(), ModeBarLabels::cancel_key);
@@ -156,7 +162,9 @@ private:
         {QStringLiteral("colors"), themeColors(Configuration{})},
         {QStringLiteral("mode"), statusModeRecord(StatusMode::copy)},
     };
+
     auto bar = createChrome(engine, QStringLiteral("ModeBar"), properties);
+
     bar->setParentItem(window.contentItem());
     window.resize(wide_width, row_height);
     window.show();
@@ -166,8 +174,10 @@ private:
     const auto count = [&bar] {
       return bar->property("layout").toMap().value(QStringLiteral("hintCount")).toULongLong();
     };
+
     QTRY_COMPARE_WITH_TIMEOUT(count(), qulonglong{ModeBarLabels::copy_hints.size()}, wait_ms);
     const auto title = bar->property("layout").toMap().value(QStringLiteral("title")).toRectF();
+
     QVERIFY(title.width() > 0);
     bar->setWidth(title.width() + 1);
     QTRY_COMPARE_WITH_TIMEOUT(count(), qulonglong{0}, wait_ms);
@@ -177,6 +187,7 @@ private:
   Q_SLOT static void cellTextRetainsItsWidthAndUsesWholeCellClipping() {
     QQuickWindow window;
     NativeCellText text{window.contentItem()};
+
     text.setGrid(testGrid());
     text.setText(QStringLiteral("WI"));
     text.setColor(Qt::white);
@@ -189,15 +200,19 @@ private:
     const auto density = window.effectiveDevicePixelRatio();
     const auto resolved = CellTextGrid::resolve(testGrid(), density);
     const auto expected_width = (2 * resolved.metrics.width) / density;
+
     QCOMPARE(text.implicitWidth(), expected_width);
     const auto regular = window.grabWindow();
+
     QVERIFY(!regular.isNull());
     text.setBold(true);
     const auto bold = window.grabWindow();
+
     QVERIFY(!bold.isNull() && regular != bold);
     text.setWidth(cell_width - 1);
     const auto clipped = window.grabWindow();
     QImage empty{clipped.size(), clipped.format()};
+
     empty.setDevicePixelRatio(clipped.devicePixelRatio());
     empty.fill(Qt::black);
     QCOMPARE(clipped, empty);

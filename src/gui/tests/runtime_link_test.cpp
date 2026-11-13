@@ -41,12 +41,15 @@ using namespace telar::gui::test;
 void failuresKeepTheOriginalBoundedSingleLineUtf8() {
   RuntimeLink link;
   constexpr std::string_view text = " \tbroken\n\rconnection\x7f \t";
+
   link.fail(text);
   require(link.failure() && *link.failure() == "broken  connection ", "failure text must trim only the original outer whitespace and replace interior control bytes");
   const std::string target(RuntimeLink::target_bytes - 1, 'x');
+
   link.name(target + "🌍");
   require(link.target() == target, "a target must stop before a split UTF-8 scalar");
   const std::string failure(RuntimeLink::failure_bytes - 1, 'x');
+
   link.fail(failure + "🌍");
   require(link.failure() == failure, "the bounded failure must stop at the same UTF-8 boundary");
   link.fail("\xff");
@@ -60,10 +63,12 @@ void failuresKeepTheOriginalBoundedSingleLineUtf8() {
 
 void retriesSaturateAndOnlyHealthyConnectionsEarnFastBackoff() {
   RuntimeLink link;
+
   link.start("host");
   require(link.phase == MachinePhase::connecting && link.headline().view() == "Connecting to host…", "a first start must name its target without a retry counter");
   link.connectionFailed(MachineError::endpoint_unavailable, "Timed out");
   constexpr std::array delays{500, 1000, 2000, 4000, 8000, 16000, 30000, 30000};
+
   for (const auto delay : delays) {
     require(link.phase == MachinePhase::lost && link.retryDelayMilliseconds() == delay, "the original retry doubles from half a second up to thirty seconds");
     require(link.retry(), "a lost link must admit its next attempt");
@@ -73,6 +78,7 @@ void retriesSaturateAndOnlyHealthyConnectionsEarnFastBackoff() {
 
   constexpr std::uint64_t first_connected_ns = 1;
   const auto attempts = link.attempt;
+
   link.adopt(first_connected_ns);
   require(link.sessions == 1 && !link.failure() && link.attempt == attempts, "a short recovered session must retain its retry history");
   link.lose("Lost quickly", first_connected_ns + RuntimeLink::healthy_after_ns - 1);
@@ -90,6 +96,7 @@ void retriesSaturateAndOnlyHealthyConnectionsEarnFastBackoff() {
 
 void permanentFailureWaitsForThePersonAndRetainsItsReasonUntilAdoption() {
   RuntimeLink link;
+
   link.start("host");
   link.connectionFailed(MachineError::authentication_failed, "Permission denied");
   require(link.phase == MachinePhase::failed && !link.setup_repairs && !link.retry(), "an authentication failure must wait for an explicit retry");

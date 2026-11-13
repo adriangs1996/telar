@@ -49,16 +49,20 @@ void verify(std::uint32_t rgb, std::uint32_t alpha) {
       std::bit_cast<std::uint32_t>(referenceChannel(rgb & channel_mask)),
       alpha,
   };
+
   const auto actual = std::bit_cast<ColorBits>(Color::rgb(rgb, std::bit_cast<float>(alpha)));
+
   require(actual == expected, "RGB normalization must preserve all color and alpha bits");
 }
 
 std::size_t everyChannel() {
   constexpr std::uint32_t other_channels = 0xa55aa55a;
   std::size_t checks = 0;
+
   for (const auto shift : {0U, channel_bits, channel_bits * 2}) {
     for (std::uint32_t channel = 0; channel <= channel_mask; ++channel) {
       const auto rgb = (other_channels & ~(channel_mask << shift)) | (channel << shift);
+
       for (const auto alpha : alpha_bits) {
         verify(rgb, alpha);
         ++checks;
@@ -75,6 +79,7 @@ std::size_t combinedChannels() {
   constexpr std::uint32_t increment = 1013904223;
   constexpr std::uint32_t seed = 0x4b2719e3;
   auto state = seed;
+
   for (std::size_t sample = 0; sample < samples; ++sample) {
     state = (state * multiplier) + increment;
     for (const auto alpha : alpha_bits) {
@@ -92,6 +97,7 @@ int main() {
     require(std::fegetround() == FE_TONEAREST, "RGB oracle requires round-to-nearest");
     constexpr std::size_t expected_checks = 38912;
     const auto checks = everyChannel() + combinedChannels();
+
     require(checks == expected_checks, "RGB oracle must execute every declared case");
     std::puts("gui-color: 38912 bit-exact cases passed");
   } catch (const std::exception &error) {

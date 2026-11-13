@@ -36,6 +36,7 @@ class WindowTest final : public QObject {
 private:
   Q_SLOT static void readingControlsDoesNotCreateNativeResources() {
     const QWindow window;
+
     QVERIFY(window.handle() == nullptr);
     QCOMPARE(platform::windowControls(window), 0.0F);
     QVERIFY(window.handle() == nullptr);
@@ -45,8 +46,10 @@ private:
     ApplicationAllocator memory;
     Application client{memory};
     QQuickWindow window;
+
     client.setWindow(window);
     const QSignalSpy geometry{&client, &Application::windowGeometryChanged};
+
     client.setWindow(window);
     QCOMPARE(geometry.size(), 0);
 
@@ -59,9 +62,11 @@ private:
     Application client{memory};
     QQuickWindow previous;
     QQuickWindow current;
+
     client.setWindow(previous);
     client.setWindow(current);
     const QSignalSpy geometry{&client, &Application::windowGeometryChanged};
+
     previous.screenChanged(previous.screen());
     QCOMPARE(geometry.size(), 0);
 
@@ -74,10 +79,12 @@ private:
     Application client{memory};
     auto previous = std::make_unique<QQuickWindow>();
     QQuickWindow current;
+
     client.setWindow(*previous);
     client.setWindow(current);
     previous.reset();
     const QSignalSpy geometry{&client, &Application::windowGeometryChanged};
+
     client.setWindow(current);
     QCOMPARE(geometry.size(), 0);
 
@@ -93,18 +100,22 @@ private:
     QImage image{target_size, QImage::Format_ARGB32_Premultiplied};
     QQuickWindow previous;
     QQuickWindow current;
+
     client.setWindow(previous);
     client.setWindow(current);
     const QSignalSpy geometry{&client, &Application::windowGeometryChanged};
     auto target = QQuickRenderTarget::fromPaintDevice(&image);
+
     target.setDevicePixelRatio(current.effectiveDevicePixelRatio() * scale_factor);
     previous.setRenderTarget(target);
     current.setRenderTarget(target);
     QEvent previous_density{QEvent::DevicePixelRatioChange};
+
     QCoreApplication::sendEvent(&previous, &previous_density);
     QCOMPARE(geometry.size(), 0);
 
     QEvent current_density{QEvent::DevicePixelRatioChange};
+
     QCoreApplication::sendEvent(&current, &current_density);
     QCOMPARE(geometry.size(), 1);
 
@@ -115,14 +126,18 @@ private:
   Q_SLOT static void aWindowCanBeDestroyedBeforeItsApplication() {
     ApplicationAllocator memory;
     Application client{memory};
+
     {
       QQuickWindow previous;
+
       client.setWindow(previous);
     }
 
     QQuickWindow current;
+
     client.setWindow(current);
     const QSignalSpy geometry{&client, &Application::windowGeometryChanged};
+
     current.screenChanged(current.screen());
     QCOMPARE(geometry.size(), 1);
   }
@@ -133,6 +148,7 @@ private:
     QQuickWindow window;
     constexpr QSize logical_size{801, 503};
     constexpr QSize target_size{64, 64};
+
     window.resize(logical_size);
     client.setWindow(window);
     QImage image{target_size, QImage::Format_ARGB32_Premultiplied};
@@ -150,19 +166,24 @@ private:
         Sample{.density = 1.25, .navigation = 59, .footer = 51, .small_row = 21},
         Sample{.density = 2, .navigation = 94, .footer = 81, .small_row = 34},
     };
+
     for (const auto sample : samples) {
       auto target = QQuickRenderTarget::fromPaintDevice(&image);
+
       target.setDevicePixelRatio(sample.density);
       window.setRenderTarget(target);
       QEvent changed{QEvent::DevicePixelRatioChange};
+
       QCoreApplication::sendEvent(&window, &changed);
       QCOMPARE(window.effectiveDevicePixelRatio(), sample.density);
       const auto geometry = client.windowGeometry();
       const auto typography = geometry.value(QStringLiteral("typography")).toMap();
+
       QCOMPARE(geometry.value(QStringLiteral("navigation")).toRectF().height(), sample.navigation / sample.density);
       QCOMPARE(geometry.value(QStringLiteral("status")).toRectF().height(), sample.footer / sample.density);
       QCOMPARE(typography.value(QStringLiteral("smallRow")).toReal(), sample.small_row / sample.density);
       const auto sidebar = client.sidebarGeometry();
+
       QCOMPARE(sidebar.value(QStringLiteral("typography")).toMap().value(QStringLiteral("smallRow")).toReal(), sample.small_row / sample.density);
     }
   }
@@ -173,6 +194,7 @@ private:
     ApplicationAllocator memory;
     Application client{memory};
     QQuickWindow window;
+
     window.resize(initial_size);
     client.setWindow(window);
     QCOMPARE(client.windowGeometry().value(QStringLiteral("navigation")).toRectF().width(), initial_size.width());
@@ -191,12 +213,15 @@ private:
     QImage image{target_size, QImage::Format_ARGB32_Premultiplied};
     QQuickWindow window;
     TerminalItem terminal{window.contentItem()};
+
     terminal.setApplication(&client);
     for (const auto scale : scales) {
       auto target = QQuickRenderTarget::fromPaintDevice(&image);
+
       target.setDevicePixelRatio(scale);
       window.setRenderTarget(target);
       QEvent density{QEvent::DevicePixelRatioChange};
+
       QCoreApplication::sendEvent(&window, &density);
       QCOMPARE(window.effectiveDevicePixelRatio(), scale);
       QCOMPARE(terminal.cellSize(), client.resolveFont(scale).font.cell);
@@ -207,14 +232,17 @@ private:
     ApplicationAllocator memory;
     QQuickWindow window;
     auto client = std::make_unique<Application>(memory);
+
     client->setWindow(window);
     const QPointer<Application> lifetime{client.get()};
     const QSignalSpy geometry{client.get(), &Application::windowGeometryChanged};
+
     client.reset();
     QVERIFY(lifetime.isNull());
 
     window.screenChanged(window.screen());
     QEvent density{QEvent::DevicePixelRatioChange};
+
     QCoreApplication::sendEvent(&window, &density);
     QCOMPARE(geometry.size(), 0);
   }
@@ -224,6 +252,7 @@ private:
 
 int main(int argc, char **argv) {
   const QGuiApplication application{argc, argv};
+
   bundledFonts();
   WindowTest test;
 

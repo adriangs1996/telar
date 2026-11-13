@@ -65,17 +65,21 @@ struct DirectoryCompletion {
   // filter itself starts with '.'.
   [[nodiscard]] inline static DirectoryCompletion list(std::string_view query) {
     DirectoryCompletion result;
+
     if (!query.starts_with('/')) {
       return result;
     }
 
     const auto split = query.rfind('/');
+
     result.base = split == 0 ? std::string{"/"} : std::string{query.substr(0, split)};
     const auto partial = query.substr(split + 1);
     std::error_code error;
+
     result.exact_exists = partial.empty() || std::filesystem::is_directory(std::filesystem::path{std::string{query}}, error);
 
     std::filesystem::directory_iterator directory{result.base, std::filesystem::directory_options::skip_permission_denied, error};
+
     for (const std::filesystem::directory_iterator end; !error && directory != end; directory.increment(error)) {
       const auto name = directory->path().filename().string();
       if (!name.starts_with(partial) || (name.starts_with('.') && !partial.starts_with('.'))) {
@@ -238,6 +242,7 @@ public:
     page_used_ = 0;
     for (const auto &match : results.matches) {
       auto &retained = matches_[count_];
+
       retained.offset = static_cast<std::uint16_t>(page_used_);
       retained.length = static_cast<std::uint16_t>(match.path.size());
       retained.kind = match.kind;
@@ -396,6 +401,7 @@ public:
 
   [[nodiscard]] inline static AbsolutePath join(JoinParts parts) {
     AbsolutePath path;
+
     path.append(parts.root);
     if (parts.root.size() != 1) {
       path.append("/");
@@ -429,6 +435,7 @@ public:
 
   [[nodiscard]] inline static std::optional<Quoted> quote(std::string_view word) {
     Quoted output;
+
     if (word.empty()) {
       return output;
     }
@@ -469,6 +476,7 @@ public:
     const auto &match = page.matches()[std::min(choice.selection, page.matches().size() - 1)];
     const auto full = join({.root = page.root(), .relative = page.path(match)});
     auto word = full.view();
+
     if (!choice.absolute) {
       if (const auto relative = relativeTo(page.anchor(), word)) {
         word = *relative;
@@ -526,6 +534,7 @@ public:
   inline void layout(tbc::view<std::string_view, tbc::lt::a> path, std::span<const std::uint16_t> positions, std::uint16_t width) {
     count_ = 0;
     const auto name_start = nameStart(path);
+
     if (cellTextColumns(path) <= width) {
       appendSpan({.path = path, .positions = positions, .end = path.size(), .name_start = name_start});
 
@@ -535,6 +544,7 @@ public:
     const auto name_width = cellTextColumns(path.substr(name_start));
     const auto head_width = width > name_width + ellipsis_columns ? width - name_width - ellipsis_columns : 0;
     const auto head_end = fitting(path.substr(0, name_start), head_width);
+
     appendSpan({.path = path, .positions = positions, .end = head_end, .name_start = name_start});
     push({.text = ellipsis, .tone = PathLabelTone::ellipsis});
     appendSpan({.path = path, .positions = positions, .start = name_start, .end = path.size(), .name_start = name_start});
@@ -555,6 +565,7 @@ private:
 
   [[nodiscard]] inline static std::size_t nameStart(std::string_view path) noexcept {
     const auto last = path.find_last_not_of('/');
+
     path.remove_suffix(last == std::string_view::npos ? path.size() : path.size() - last - 1);
     const auto split = path.rfind('/');
 
@@ -571,6 +582,7 @@ private:
   [[nodiscard]] inline static std::size_t fitting(std::string_view text, std::uint32_t width) {
     std::uint32_t used = 0;
     std::size_t end = 0;
+
     while (end < text.size()) {
       const auto next = nextScalar(text, end);
       const auto columns = cellTextColumns(text.substr(end, next - end));
@@ -603,6 +615,7 @@ private:
     auto run_start = span.start;
     auto tone = toneAt(span, span.start, nextScalar(span.path, span.start));
     auto cursor = span.start;
+
     while (cursor < span.end) {
       const auto next = nextScalar(span.path, cursor);
       const auto current = toneAt(span, cursor, next);
@@ -655,6 +668,7 @@ struct PathPickerLabels {
 
   [[nodiscard]] inline static Count count(const PathPickerPage &page) {
     Count result;
+
     result.appendDecimal(page.matches().size());
     result.append(" of ");
     result.appendDecimal(page.scanned());
@@ -664,6 +678,7 @@ struct PathPickerLabels {
 
   [[nodiscard]] inline static Status status(const PathPickerPage &page) {
     Status result;
+
     if (page.phase() == PathPickerPhase::failed) {
       result.append(page.error());
 

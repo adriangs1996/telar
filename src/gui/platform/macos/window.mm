@@ -71,12 +71,14 @@ void configureContentLayout(NSWindow *window) {
 
     return rect;
   });
+
   class_replaceMethod(base, selector, replacement, method_getTypeEncoding(method));
   objc_setAssociatedObject(base, &content_layout_key, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
 NativeBlurFunctions blurFunctions() noexcept {
   const auto symbols = telarGuiBlurSymbols();
+
   return {.connection = symbols.connection, .set_radius = symbols.set_radius};
 }
 
@@ -91,12 +93,15 @@ public:
         apply();
       }
     });
+
     connect(&window_, &QWindow::windowStateChanged, this, [this] {
       apply();
     });
+
     connect(&window_, &QWindow::widthChanged, this, [this] {
       apply();
     });
+
     connect(&window_, &QWindow::heightChanged, this, [this] {
       apply();
     });
@@ -113,20 +118,24 @@ private:
     if (window == nil) {
       return;
     }
+
     const bool numeric = radius_.apply({.number = static_cast<std::int64_t>(window.windowNumber), .style = static_cast<std::uint64_t>(window.styleMask)}, appearance_);
     NSView *const content = window.contentView;
     NSView *const backdrop = content.superview;
     NSVisualEffectView *effect = nil;
+
     for (NSView *child in backdrop.subviews) {
       if ([child.identifier isEqualToString:@"telar.background.blur"]) {
         effect = (NSVisualEffectView *)child;
         break;
       }
     }
+
     if (appearance_.background_opacity >= 1 || appearance_.background_blur == 0) {
       [effect removeFromSuperview];
       return;
     }
+
     if (effect == nil) {
       effect = [[NSVisualEffectView alloc] initWithFrame:content.frame];
       effect.identifier = @"telar.background.blur";
@@ -136,6 +145,7 @@ private:
       effect.state = NSVisualEffectStateActive;
       [backdrop addSubview:effect positioned:NSWindowBelow relativeTo:content];
     }
+
     effect.frame = content.frame;
     effect.hidden = numeric;
   }
@@ -171,6 +181,7 @@ public:
   void set(WindowAppearance appearance) {
     height_ = appearance.navigation_height;
     NSWindow *const window = nativeWindow(window_);
+
     observe(appearance.titlebar ? nil : window);
     apply();
   }
@@ -188,6 +199,7 @@ private:
     for (id token in tokens_) {
       [NSNotificationCenter.defaultCenter removeObserver:token];
     }
+
     tokens_ = nil;
     views_ = nil;
     observed_ = window;
@@ -198,6 +210,7 @@ private:
     // Measured once, before any move: the native spacing differs between releases.
     NSButton *const close = [window standardWindowButton:NSWindowCloseButton];
     NSButton *const zoom = [window standardWindowButton:NSWindowZoomButton];
+
     side_ = zoom.frame.size.width;
     pitch_ = std::max(side_, (zoom.frame.origin.x - close.frame.origin.x) / 2);
   }
@@ -211,14 +224,17 @@ private:
     for (id token in tokens_) {
       [NSNotificationCenter.defaultCenter removeObserver:token];
     }
+
     views_ = views;
     auto *const tokens = [NSMutableArray arrayWithCapacity:views.count];
+
     for (NSView *view in views) {
       view.postsFrameChangedNotifications = YES;
       [tokens addObject:[NSNotificationCenter.defaultCenter addObserverForName:NSViewFrameDidChangeNotification object:view queue:nil usingBlock:^(NSNotification *) {
         schedule();
       }]];
     }
+
     tokens_ = tokens;
   }
 
@@ -250,6 +266,7 @@ private:
 
     applying_ = true;
     auto bar = container.frame;
+
     bar.size.height = height_;
     bar.origin.y = window.frame.size.height - height_;
     if (!NSEqualRects(bar, container.frame)) {
@@ -258,15 +275,18 @@ private:
 
     auto *const views = [NSMutableArray<NSView *> arrayWithObject:container];
     CGFloat horizontal = controls_leading;
+
     for (const auto kind : control_kinds) {
       NSButton *const control = [window standardWindowButton:kind];
       const NSPoint origin{.x = horizontal, .y = std::round((height_ - control.frame.size.height) / 2)};
       if (!NSEqualPoints(origin, control.frame.origin)) {
         [control setFrameOrigin:origin];
       }
+
       horizontal += pitch_;
       [views addObject:control];
     }
+
     applying_ = false;
     track(views);
   }
@@ -297,7 +317,9 @@ void configureControls(QWindow &window, WindowAppearance appearance) {
     controls->set(appearance);
     return;
   }
+
   auto controls = std::make_unique<WindowControls>(window);
+
   controls->set(appearance);
   std::ignore = controls.release();
 }
@@ -309,7 +331,9 @@ void configureBlur(QWindow &window, WindowAppearance appearance) {
       return;
     }
   }
+
   auto blur = std::make_unique<WindowBlur>(window);
+
   blur->set(appearance);
   std::ignore = blur.release();
 }
@@ -321,6 +345,7 @@ void configureBlur(QWindow &window, WindowAppearance appearance) {
 void configureKeyRepeat() {
   NSUserDefaults *preferences = NSUserDefaults.standardUserDefaults;
   NSMutableDictionary *arguments = [[preferences volatileDomainForName:NSArgumentDomain] mutableCopy];
+
   arguments[@"ApplePressAndHoldEnabled"] = @NO;
   [preferences setVolatileDomain:arguments forName:NSArgumentDomain];
 }

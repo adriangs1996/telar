@@ -66,39 +66,48 @@ namespace {
 std::string query(auto &terminal, std::string_view input) {
   terminal.feed({reinterpret_cast<const Byte *>(input.data()), input.size()});
   std::string output;
+
   while (!terminal.responses().empty()) {
     const auto response = terminal.responses();
+
     output.append(reinterpret_cast<const char *>(response.data()), response.size());
     terminal.consumeResponses(response.size());
   }
+
   return output;
 }
 
 void policyConfiguration(SystemAllocator &memory) {
   lua::Vm vm{memory};
+
   vm.execute("return {clipboard_read='allow', clipboard_write='deny', title_report=true, checksum_report=true, color_format='8-bit', answerback='telar'}", "control-policy");
   control::Policy policy;
+
   config::readControlPolicy(lua::Value{vm.state(), -1, "control_queries"}, policy);
   check(policy.clipboard_read == control::Access::allow && policy.clipboard_write == control::Access::deny);
   check(policy.title_report && policy.checksum_report && policy.color_format == control::ColorFormat::eight_bit);
   check(std::string_view{policy.answerback.data(), policy.answerback_length} == "telar");
   vm.execute("return {clipboard_read='invalid'}", "invalid-control-policy");
   bool refused = false;
+
   try {
     config::readControlPolicy(lua::Value{vm.state(), -1, "control_queries"}, policy);
   } catch (const lua::Error &) {
     refused = true;
   }
+
   check(refused);
 }
 
 void ptyReports(auto &pane, auto &panes, std::string_view expected) {
   constexpr std::string_view marker = "\x1b[0n";
   constexpr std::string_view status = "\x1b[5n";
+
   pane.terminal.feed({reinterpret_cast<const Byte *>(status.data()), status.size()});
   panes.flushInput(pane);
   std::string actual;
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{3};
+
   while (actual.size() < expected.size() + marker.size() || !actual.ends_with(marker)) {
     check(std::chrono::steady_clock::now() < deadline);
     pollfd input{.fd = pane.process->descriptor(), .events = POLLIN, .revents = 0};
@@ -106,6 +115,7 @@ void ptyReports(auto &pane, auto &panes, std::string_view expected) {
     if (ready < 0 && errno == EINTR) {
       continue;
     }
+
     check(ready >= 0);
     if (ready == 0) {
       continue;
@@ -116,17 +126,21 @@ void ptyReports(auto &pane, auto &panes, std::string_view expected) {
     if (count < 0 && (errno == EINTR || errno == EAGAIN)) {
       continue;
     }
+
     check(count > 0);
     actual.append(bytes.data(), static_cast<std::size_t>(count));
     check(actual.size() <= bytes.size());
   }
+
   if (actual != std::string{expected} + std::string{marker}) {
     std::fputs("Unexpected desktop PTY bytes: ", stderr);
     for (const auto byte : actual) {
       std::fprintf(stderr, "%02x", static_cast<unsigned char>(byte));
     }
+
     std::fputc('\n', stderr);
   }
+
   check(actual == std::string{expected} + std::string{marker});
 }
 
@@ -139,13 +153,16 @@ void paletteNotification(SystemAllocator &memory) {
   WorkspaceService<SystemAllocator, decltype(poller)> workspaces{memory};
   ClientPeer client{memory, model, clients, ClientRole::interactive};
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
+
   workspaces.open(model, panes, clients, client.session().id, OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
   auto &pane = panes.require(model.panes, client.receive<PaneOpened>().pane_id);
   termios settings{};
+
   check(::tcgetattr(pane.process->descriptor(), &settings) == 0);
   ::cfmakeraw(&settings);
   check(::tcsetattr(pane.process->descriptor(), TCSANOW, &settings) == 0);
   ConfigurePaneDesktop desktop{.pane_id = pane.id, .pane_generation = pane.generation, .visible = true, .light = true};
+
   panes.configureDesktop(model, clients, client.session().id, desktop);
   query(pane.terminal, "\x1b[?2031h");
   ptyReports(pane, panes, "");
@@ -169,22 +186,28 @@ void notificationTransitions(SystemAllocator &memory) {
   ClientPeer first{memory, model, clients, ClientRole::interactive};
   ClientPeer second{memory, model, clients, ClientRole::interactive};
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
+
   workspaces.open(model, panes, clients, first.session().id, OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
   auto &pane = panes.require(model.panes, first.receive<PaneOpened>().pane_id);
+
   check(!pane.terminal.hasPendingControl());
   termios settings{};
+
   check(::tcgetattr(pane.process->descriptor(), &settings) == 0);
   ::cfmakeraw(&settings);
   check(::tcsetattr(pane.process->descriptor(), TCSANOW, &settings) == 0);
   ConfigurePaneDesktop one{.pane_id = pane.id, .pane_generation = pane.generation, .visible = true, .light = true};
+
   panes.configureDesktop(model, clients, first.session().id, one);
   constexpr std::string_view subscriptions = "\x1b[?2031;2033;1004;2048h";
+
   pane.terminal.feed({reinterpret_cast<const Byte *>(subscriptions.data()), subscriptions.size()});
   ptyReports(pane, panes, "\x1b[?999;1n\x1b[O\x1b[48;24;80;432;720t");
   panes.attach(model, second.session(), pane.id, {80, 24, 9, 18});
   ptyReports(pane, panes, "");
 
   auto two = one;
+
   two.light = false;
   two.focused = true;
   panes.configureDesktop(model, clients, second.session().id, two);
@@ -216,12 +239,14 @@ void notificationTransitions(SystemAllocator &memory) {
   ptyReports(pane, panes, "\x1b[?997;1n\x1b[?999;2n\x1b[O");
   check(query(pane.terminal, "\x1b[18t") == "\x1b[8;40;100t");
   ClientPeer reconnected{memory, model, clients, ClientRole::interactive};
+
   panes.attach(model, reconnected.session(), pane.id, {100, 40, 8, 16});
   check(!pane.terminal.hasPendingControl());
   ptyReports(pane, panes, "\x1b[?997;1n");
   panes.resize(model, reconnected.session(), PaneResize{.pane_id = pane.id, .size = {120, 50, 8, 16}});
   ptyReports(pane, panes, "\x1b[48;50;120;800;960t");
   auto three = two;
+
   three.focused = false;
   panes.configureDesktop(model, clients, reconnected.session().id, three);
   ptyReports(pane, panes, "\x1b[?997;1n\x1b[?999;1n");
@@ -233,6 +258,7 @@ void notificationTransitions(SystemAllocator &memory) {
   ptyReports(pane, panes, "");
   check(query(pane.terminal, "\x1b[?2031h").empty());
   ConfigureTerminalColors colors{.foreground = std::array<Byte, 3>{22, 33, 44}};
+
   panes.configureColors(model, reconnected.session(), colors);
   ptyReports(pane, panes, "\x1b[?997;1n");
   panes.configureColors(model, reconnected.session(), colors);
@@ -249,27 +275,35 @@ void interruptedResponseWrites(SystemAllocator &memory) {
   WorkspaceService<SystemAllocator, decltype(poller)> workspaces{memory};
   ClientPeer client{memory, model, clients, ClientRole::interactive};
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
+
   workspaces.open(model, panes, clients, client.session().id, OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
   auto &pane = panes.require(model.panes, client.receive<PaneOpened>().pane_id);
   termios settings{};
+
   check(::tcgetattr(pane.process->descriptor(), &settings) == 0);
   ::cfmakeraw(&settings);
   check(::tcsetattr(pane.process->descriptor(), TCSANOW, &settings) == 0);
   constexpr std::size_t owned_bytes = 2048;
   auto owned = std::make_shared<std::vector<Byte>>(owned_bytes, 'x');
   const std::weak_ptr lifetime{owned};
+
   check(pane.pty_responses->tryPushOwned(*owned, owned));
   std::string expected(owned_bytes, 'x');
+
   owned.reset();
   for (std::size_t index = 1; index < PtyResponseQueue::message_capacity; ++index) {
     const auto response = "\x1b[" + std::to_string(index) + "n";
+
     check(pane.pty_responses->tryPush({reinterpret_cast<const Byte *>(response.data()), response.size()}));
     expected += response;
   }
+
   constexpr std::string_view status = "\x1b[5n";
+
   pane.terminal.feed({reinterpret_cast<const Byte *>(status.data()), status.size()});
   check(pane.terminal.hasPendingControl());
   constexpr std::string_view user_input = "USER";
+
   pane.input.append({reinterpret_cast<const Byte *>(user_input.data()), user_input.size()});
   expected += "\x1b[0n";
   expected += user_input;
@@ -279,6 +313,7 @@ void interruptedResponseWrites(SystemAllocator &memory) {
   bool crossed_message = false;
   const auto writer = [&](int descriptor, std::span<const iovec> vectors) -> ssize_t {
     const auto result = calls < results.size() ? results[calls] : Result::drain;
+
     ++calls;
     if (result == Result::interrupted || result == Result::interrupted_again || result == Result::would_block) {
       errno = result == Result::would_block ? EAGAIN : EINTR;
@@ -288,23 +323,29 @@ void interruptedResponseWrites(SystemAllocator &memory) {
     auto remaining = result == Result::short_header ? 2 : result == Result::across_boundary ? owned_bytes + 7 : SIZE_MAX;
     std::array<iovec, PtyResponseQueue::message_capacity> prefix;
     std::size_t count = 0;
+
     for (const auto vector : vectors) {
       const auto length = std::min(remaining, vector.iov_len);
+
       prefix[count++] = {vector.iov_base, length};
       remaining -= length;
       if (remaining == 0) {
         break;
       }
     }
+
     const auto written = ::writev(descriptor, prefix.data(), static_cast<int>(count));
+
     check(written > 0 || (written < 0 && (errno == EAGAIN || errno == EINTR)));
     if (written > 0 && static_cast<std::size_t>(written) > vectors.front().iov_len) {
       crossed_message = true;
     }
+
     return written;
   };
 
   const auto original = pane.pty_responses->snapshot();
+
   pane.write(writer);
   check(calls == 1 && pane.pty_responses->snapshot().bytes == original.bytes && !lifetime.expired());
   pane.write(writer);
@@ -314,13 +355,16 @@ void interruptedResponseWrites(SystemAllocator &memory) {
   pane.write(writer);
   check(calls == 4 && pane.pty_responses->snapshot().bytes < original.bytes - 2);
   const auto retained = pane.pty_responses->snapshot();
+
   pane.write(writer);
   check(calls == 5 && pane.pty_responses->snapshot().bytes == retained.bytes);
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{3};
+
   while (!pane.pty_responses->empty()) {
     check(std::chrono::steady_clock::now() < deadline);
     pane.write(writer);
   }
+
   check(calls >= results.size() && crossed_message && lifetime.expired() && !pane.terminal.hasPendingControl() && !pane.input.empty());
   pane.write();
   check(!pane.hasInput() && pane.pty_responses->snapshot().dropped == 0);
@@ -340,11 +384,14 @@ void multipleClients(SystemAllocator &memory) {
   ClientPeer outsider{memory, model, clients, ClientRole::interactive};
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
   const Launch launch{.cwd = "/tmp", .arguments = arguments};
+
   workspaces.open(model, panes, clients, first.session().id, OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = launch});
   const auto opened = first.receive<PaneOpened>();
   auto &pane = panes.require(model.panes, opened.pane_id);
+
   panes.attach(model, second.session(), pane.id, {80, 24, 9, 18});
   auto *workspace = model.workspaces.find(pane.location.workspace.id);
+
   check(workspace != nullptr);
   workspace->geometry_client = second.session().id;
 
@@ -361,9 +408,11 @@ void multipleClients(SystemAllocator &memory) {
   std::array<Byte, 512> arena;
   DecodeStorage storage{arena};
   const auto decoded = Codec::decode<ConfigurePaneDesktop>(Codec::encode(one, encoded), storage);
+
   check(decoded == one);
   panes.configureDesktop(model, clients, first.session().id, decoded);
   auto two = one;
+
   two.light = false;
   two.focused = true;
   two.cursor = std::array<Byte, 3>{4, 5, 6};
@@ -372,19 +421,23 @@ void multipleClients(SystemAllocator &memory) {
 
   bool stale = false;
   auto old = one;
+
   ++old.pane_generation;
   try {
     panes.configureDesktop(model, clients, first.session().id, old);
   } catch (const RequestError &) {
     stale = true;
   }
+
   check(stale);
   bool unattached = false;
+
   try {
     panes.configureDesktop(model, clients, outsider.session().id, one);
   } catch (const RequestError &) {
     unattached = true;
   }
+
   check(unattached);
 
   panes.release(model, clients, first.session().id, pane.id);
@@ -398,6 +451,7 @@ void multipleClients(SystemAllocator &memory) {
 
 int main() {
   SystemAllocator memory;
+
   policyConfiguration(memory);
   multipleClients(memory);
   paletteNotification(memory);

@@ -110,12 +110,16 @@ void windowLimitUsesTheSharedReportAndNotificationLedger() {
   SystemAllocator memory;
   RecoveryTransport transport;
   Session<SystemAllocator, RecoveryTransport, Clock> client{memory, transport};
+
   openFirstPane(client, transport);
   constexpr LimitReach reach{.name = ImagePlacementSelection::limit_name, .noun = ImagePlacementSelection::limit_noun, .value = ImagePlacementSelection::capacity, .requested = ImagePlacementSelection::capacity + 1};
+
   client.reportLimit(reach);
   const auto report = transport.last<ReportLimit>();
+
   require(report.reach.name == reach.name && report.reach.noun == reach.noun && report.reach.value == reach.value && report.reach.requested == reach.requested && report.reach.route.empty(), "a window limit must preserve its named bound without pretending to be a failed runtime message");
   const auto &notice = client.notifications().items().front();
+
   require(notice.title.view() == "Limit reached" && notice.level == NotificationLevel::warning && notice.target.kind == NotificationTarget::Kind::none, "a window limit must publish the original global warning");
   require(notice.message.view() == "gui.images.placements_per_frame: 2049 image placements; limit 2048", "the warning must include requested and available placements");
   client.reportLimit(reach);
@@ -134,13 +138,16 @@ void replacementDoesNotConsumeAnotherLogicalImageSlot() {
   SystemAllocator memory;
   GraphicsBudget budget;
   GraphicsStore store{memory, budget};
+
   for (std::uint32_t id = 1; id <= decltype(store)::image_capacity; ++id) {
     const auto image = description(id);
+
     store.image({.header = header, .image = image});
     store.chunk({.header = header, .key = image.key, .bytes = pixels});
   }
 
   const auto replacement = description(1, 2);
+
   store.image({.header = header, .image = replacement});
   require(store.findImage({.image_id = 1, .generation = 1}) == nullptr && store.readyImage(replacement.key) == nullptr, "a replacement must release unreferenced CPU pixels while a presentation cache owns its stand-in");
   store.chunk({.header = header, .key = replacement.key, .bytes = pixels});
@@ -152,6 +159,7 @@ void supersededIncompleteHeadersStayWithinOneImageAllocation() {
   GraphicsBudget budget;
   GraphicsStore store{memory, budget};
   constexpr std::uint64_t generations = decltype(store)::image_capacity * 2;
+
   for (std::uint64_t generation = 1; generation <= generations; ++generation) {
     store.image({.header = header, .image = description(1, generation)});
     require(budget.used == pixel_bytes, "superseded incomplete headers must release their pixel storage before admission");
@@ -166,9 +174,11 @@ void virtualPlacementIdentityDoesNotDependOnItsImage() {
   GraphicsStore store{memory, budget};
   const auto first = description(1);
   const auto second = description(2);
+
   store.image({.header = header, .image = first});
   store.image({.header = header, .image = second});
   constexpr std::uint64_t placement_id = 7;
+
   store.placement({.header = header, .placement = {.key = first.key, .virtual_id = placement_id}});
   store.placement({.header = header, .placement = {.key = second.key, .virtual_id = placement_id}});
   require(store.placements().size() == 1 && store.placements().front().key.image_id == second.key.image_id, "updating a virtual placement to another image must replace the existing placement");
@@ -177,8 +187,10 @@ void virtualPlacementIdentityDoesNotDependOnItsImage() {
 template <typename Client>
 void failedSnapshot(Client &client, std::uint64_t revision) {
   const GraphicsHeader snapshot{.pane_id = 1, .revision = revision};
+
   deliver(client, GraphicsSnapshot{.header = snapshot, .phase = SnapshotPhase::begin});
   constexpr auto image_count = GraphicsStore<SystemAllocator>::image_capacity + 1;
+
   for (std::uint32_t id = 1; id <= image_count; ++id) {
     deliver(client, GraphicsImage{.header = snapshot, .image = description(id)});
   }
@@ -190,13 +202,16 @@ void repeatedOversizedSnapshotsUseThePaneBudget() {
   SystemAllocator memory;
   Transport transport;
   Session<SystemAllocator, Transport, Clock> client{memory, transport};
+
   openFirstPane(client, transport);
   constexpr std::uint64_t failed_snapshots = 4;
+
   for (std::uint64_t revision = 1; revision <= failed_snapshots; ++revision) {
     failedSnapshot(client, revision);
   }
 
   constexpr std::size_t expected_resyncs = 3;
+
   require(transport.count(ClientTag::request_graphics_snapshot) == expected_resyncs, "a fourth oversized snapshot must wait instead of creating an unbounded retry loop");
   require(client.notifications().items().size() == 1, "one pause must publish one notice across repeated failed snapshots");
   require(client.ready(), "a graphics pause must preserve the runtime link and terminal input");
@@ -207,23 +222,28 @@ void pausedDeletesReturnCreditAndACompleteSnapshotClearsTheMarker() {
   SystemAllocator memory;
   RecoveryTransport transport;
   Session<SystemAllocator, RecoveryTransport, Clock> client{memory, transport};
+
   openFirstPane(client, transport);
   deliver(client, PaneForeground{.pane_id = 1, .name = "nvim"});
   failedSnapshot(client, 1);
   require(client.graphicsPaused(1), "the marker must start with the first failed transfer");
   const auto &notice = client.notifications().items().front();
+
   require(notice.title.view() == "Images paused in pane 1: nvim", "a pause must name the pane by its displayed index and foreground");
   require(notice.message.view() == "GraphicsImageLimitExceeded: limit reached" && notice.level == NotificationLevel::warning, "the pause must describe the actual limit as a warning");
   require(notice.target.kind == NotificationTarget::Kind::pane && notice.target.id == 1, "a pause notice must focus its pane when clicked");
   const auto report = transport.last<ReportLimit>();
+
   require(report.hits == 1 && report.reach.name == "GraphicsImageLimitExceeded" && report.reach.route == "runtime_message", "the runtime must receive the first limit reach");
 
   deliver(client, GraphicsDeleteImage{.header = header, .key = description(1).key});
   require(transport.last<GraphicsCredit>().bytes == pixel_bytes, "deletes must still release credits while the image stream is paused");
   constexpr GraphicsHeader resumed{.pane_id = 1, .revision = 2};
+
   deliver(client, GraphicsSnapshot{.header = resumed, .phase = SnapshotPhase::begin});
   require(client.graphicsPaused(1), "a snapshot begin alone must retain the paused marker");
   const auto image = description(1, 2);
+
   deliver(client, GraphicsImage{.header = resumed, .image = image});
   deliver(client, GraphicsImageChunk{.header = resumed, .key = image.key, .bytes = pixels});
   deliver(client, GraphicsSnapshot{.header = resumed, .phase = SnapshotPhase::end});
@@ -235,12 +255,14 @@ void resumeDeadlineAndFocusKeepTheBackoff() {
   SystemAllocator memory;
   RecoveryTransport transport;
   Session<SystemAllocator, RecoveryTransport, Clock> client{memory, transport};
+
   openFirstPane(client, transport);
   for (std::uint64_t revision = 1; revision <= 4; ++revision) {
     failedSnapshot(client, revision);
   }
 
   constexpr auto window = GraphicsPauses::healthy_window_ns;
+
   require(client.graphicsResumeDeadline() == window, "the first exhausted window must wait sixty awake seconds");
   Clock::now_ns = window - 1;
   client.resumeGraphics();
@@ -250,6 +272,7 @@ void resumeDeadlineAndFocusKeepTheBackoff() {
   require(transport.count(ClientTag::request_graphics_snapshot) == 4 && !client.graphicsResumeDeadline(), "a timer must request recovery without receiving a runtime message");
   constexpr std::uint64_t first_retry_revision = 5;
   constexpr std::uint64_t last_retry_revision = 7;
+
   for (auto revision = first_retry_revision; revision <= last_retry_revision; ++revision) {
     failedSnapshot(client, revision);
   }
@@ -265,6 +288,7 @@ void failedReportsRetainHitsAndNeverDropTheLink() {
   SystemAllocator memory;
   RecoveryTransport transport;
   Session<SystemAllocator, RecoveryTransport, Clock> client{memory, transport};
+
   openFirstPane(client, transport);
   transport.reject_reports = true;
   failedSnapshot(client, 1);
@@ -285,9 +309,11 @@ void criticalDeliveryAndMalformedImagesRecoverTheRuntimeLink() {
     SystemAllocator memory;
     RecoveryTransport transport;
     Session<SystemAllocator, RecoveryTransport, Clock> client{memory, transport};
+
     openFirstPane(client, transport);
     transport.reject_graphics = !malformed;
     bool failed = false;
+
     try {
       if (malformed) {
         deliver(client, GraphicsImageChunk{.header = header, .key = description(1).key, .bytes = pixels});
@@ -307,6 +333,7 @@ void snapshotMismatchRequestsRecoveryWithoutALimitNotice() {
   SystemAllocator memory;
   Transport transport;
   Session<SystemAllocator, Transport, Clock> client{memory, transport};
+
   openFirstPane(client, transport);
   deliver(client, GraphicsSnapshot{.header = header, .phase = SnapshotPhase::begin});
   deliver(client, GraphicsImage{.header = {.pane_id = 1, .revision = 2}, .image = description(1)});

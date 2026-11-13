@@ -21,6 +21,7 @@ namespace tbc_lint {
         if (declaration != nullptr && declaration->getQualifiedNameAsString() == "tbc::view") {
           const auto arguments = specialization->template_arguments();
           const clang::Type *region = nullptr;
+
           if (arguments.size() > 1 && arguments[1].getKind() == clang::TemplateArgument::Type) {
             region = arguments[1].getAsType().getCanonicalType().getTypePtr();
             const auto *record = region->getAsCXXRecordDecl();
@@ -46,15 +47,18 @@ namespace tbc_lint {
 
   inline const clang::FunctionDecl &contractDeclaration(const clang::FunctionDecl &function, const clang::ASTContext &context) {
     const clang::FunctionDecl *selected = &function;
+
     for (const auto *declaration : function.redecls()) {
       const auto annotation = viewAnnotation(declaration->getDeclaredReturnType(), context);
       if (annotation.region != nullptr) {
         return *declaration;
       }
+
       if (annotation.present) {
         selected = declaration;
       }
     }
+
     if (!viewAnnotation(selected->getDeclaredReturnType(), context).present) {
       for (const auto *declaration : function.redecls()) {
         for (const auto *parameter : declaration->parameters()) {
@@ -64,11 +68,13 @@ namespace tbc_lint {
         }
       }
     }
+
     return *selected;
   }
 
   inline bool selfRegion(const clang::Type *region) {
     const auto *record = region != nullptr ? region->getAsCXXRecordDecl() : nullptr;
+
     return record != nullptr && record->getQualifiedNameAsString() == "tbc::lt::self";
   }
 
@@ -79,6 +85,7 @@ namespace tbc_lint {
 
   inline bool staticRegion(const clang::Type *region) {
     const auto *record = region != nullptr ? region->getAsCXXRecordDecl() : nullptr;
+
     return record != nullptr && record->getQualifiedNameAsString() == "tbc::lt::static_storage";
   }
 
@@ -93,6 +100,7 @@ namespace tbc_lint {
   // static storage, declares none.
   inline bool lifetimeField(const clang::FieldDecl &field) {
     const auto *region = viewAnnotation(field.getType(), field.getASTContext()).region;
+
     return region != nullptr && !selfRegion(region) && !staticRegion(region);
   }
 
@@ -106,7 +114,9 @@ namespace tbc_lint {
     if (function == nullptr) {
       return viewAnnotation(parameter.getType(), context);
     }
+
     const auto &contract = contractDeclaration(*function, context);
+
     return viewAnnotation(contract.getParamDecl(parameter.getFunctionScopeIndex())->getType(), context);
   }
 
@@ -119,11 +129,14 @@ namespace tbc_lint {
     if (record == nullptr) {
       return false;
     }
+
     const auto *context = record->getDeclContext();
+
     while (const auto *space = llvm::dyn_cast<clang::NamespaceDecl>(context)) {
       if (space->isStdNamespace()) {
         return true;
       }
+
       context = space->getParent();
     }
 
@@ -136,11 +149,13 @@ namespace tbc_lint {
     if (record == nullptr) {
       return false;
     }
+
     return standardRecord(type) || record->getASTContext().getSourceManager().isInSystemHeader(record->getLocation());
   }
 
   inline bool standardType(clang::QualType type, llvm::StringRef name) {
     const auto *record = recordOf(type);
+
     return record != nullptr && standardRecord(type) && record->getName() == name;
   }
 
@@ -173,22 +188,28 @@ namespace tbc_lint {
     if (specialization == nullptr || !specialization->hasDefinition() || specialization->getName() == "owning_view" || !standardDeclaration(*specialization)) {
       return false;
     }
+
     bool adaptor = false;
+
     specialization->getDefinition()->forallBases([&](const clang::CXXRecordDecl *base) {
       adaptor = adaptor || (base->getName() == "view_interface" && standardDeclaration(*base));
       return true;
     });
+
     if (!adaptor) {
       return false;
     }
+
     if (specialization->getName() == "ref_view") {
       return true;
     }
+
     for (const auto &argument : specialization->getTemplateArgs().asArray()) {
       if (argument.getKind() == clang::TemplateArgument::Type && nativeView(argument.getAsType())) {
         return true;
       }
     }
+
     return false;
   }
 
@@ -202,7 +223,9 @@ namespace tbc_lint {
     if (record == nullptr || record->getDefinition() == nullptr) {
       return false;
     }
+
     auto &identifiers = record->getASTContext().Idents;
+
     for (const char *name : names) {
       for (const auto *declaration : record->getDefinition()->lookup(&identifiers.get(name))) {
         const auto *alias = llvm::dyn_cast<clang::TypedefNameDecl>(declaration);
@@ -221,6 +244,7 @@ namespace tbc_lint {
     if (const auto *array = range->getAsArrayTypeUnsafe()) {
       return result->isPointerType() && sameType(result->getPointeeType(), array->getElementType());
     }
+
     return namesMemberType(range, {"iterator", "const_iterator", "reverse_iterator", "const_reverse_iterator", "pointer", "const_pointer"}, result);
   }
 
@@ -234,6 +258,7 @@ namespace tbc_lint {
     if (record == nullptr || record->getDefinition() == nullptr) {
       return false;
     }
+
     return !record->getDefinition()->lookup(&record->getASTContext().Idents.get(name)).empty();
   }
 
@@ -247,6 +272,7 @@ namespace tbc_lint {
     if (!smartPointer(type)) {
       return false;
     }
+
     for (const auto *constructor : recordOf(type)->getDefinition()->ctors()) {
       if (constructor->isCopyConstructor() && constructor->isDeleted()) {
         return true;
@@ -264,8 +290,10 @@ namespace tbc_lint {
     if (standardType(type, "optional")) {
       // An optional owner hands over what the owner it holds owns.
       const auto value = memberType(type, "value_type");
+
       return !value.isNull() && transfersAllocation(value);
     }
+
     return smartPointer(type) || (standardRecord(type) && !standardType(type, "basic_string") && declaresMember(type, "allocator_type"));
   }
 
@@ -275,6 +303,7 @@ namespace tbc_lint {
     if (record == nullptr || record->getDefinition() == nullptr) {
       return {};
     }
+
     for (const auto *declaration : record->getDefinition()->lookup(&record->getASTContext().Idents.get(name))) {
       if (const auto *alias = llvm::dyn_cast<clang::TypedefNameDecl>(declaration)) {
         return alias->getUnderlyingType();
@@ -295,7 +324,9 @@ namespace tbc_lint {
     if (record == nullptr || !libraryRecord(type) || record->getDefinition() == nullptr) {
       return false;
     }
+
     auto &category = record->getASTContext().Idents.get("iterator_category");
+
     return !record->getDefinition()->lookup(&category).empty();
   }
 
@@ -310,10 +341,12 @@ namespace tbc_lint {
     if (pointerLike(type)) {
       return true;
     }
+
     const auto *pair = llvm::dyn_cast_or_null<clang::ClassTemplateSpecializationDecl>(recordOf(type));
     if (pair == nullptr || !standardType(type, "pair")) {
       return false;
     }
+
     for (const auto &argument : pair->getTemplateArgs().asArray()) {
       if (argument.getKind() == clang::TemplateArgument::Type && pointerLike(argument.getAsType())) {
         return true;
@@ -335,7 +368,9 @@ namespace tbc_lint {
     if (!owner || specialization == nullptr) {
       return false;
     }
+
     llvm::SmallVector<clang::QualType, 4> elements;
+
     for (const auto &template_argument : specialization->getTemplateArgs().asArray()) {
       if (template_argument.getKind() == clang::TemplateArgument::Pack) {
         for (const auto &element : template_argument.pack_elements()) {
@@ -345,7 +380,9 @@ namespace tbc_lint {
         elements.push_back(template_argument.getAsType());
       }
     }
+
     const bool positional = (standardType(wrapper, "pair") || standardType(wrapper, "tuple")) && elements.size() == count;
+
     for (unsigned element = 0; element < elements.size(); ++element) {
       if ((!positional || element == index) && (nativeView(elements[element]) || elements[element]->isPointerType())) {
         return true;
@@ -365,6 +402,7 @@ namespace tbc_lint {
     if (record == nullptr || !libraryRecord(type)) {
       return false;
     }
+
     return standardRecord(type) || record->getDefinition() == nullptr || !record->getDefinition()->hasTrivialDestructor();
   }
 
@@ -381,6 +419,7 @@ namespace tbc_lint {
       if (argument.getKind() == clang::TemplateArgument::Pack && templateHoldsViews(argument.pack_elements(), seen)) {
         return true;
       }
+
       if (argument.getKind() == clang::TemplateArgument::Type && containsViews(argument.getAsType(), seen)) {
         return true;
       }
@@ -393,39 +432,48 @@ namespace tbc_lint {
     if (type->isReferenceType()) {
       return true;
     }
+
     type = type.getCanonicalType();
     if (!seen.insert(type.getTypePtr()).second) {
       return false;
     }
+
     if (nativeView(type) || type->isPointerType()) {
       return true;
     }
+
     if (standardType(type, "basic_string")) {
       return false;
     }
+
     if (const auto *array = llvm::dyn_cast<clang::ArrayType>(type.getTypePtr())) {
       return containsViews(array->getElementType(), seen);
     }
+
     if (const auto *record = recordOf(type)) {
       if (libraryRecord(type)) {
         if (iteratorRecord(type)) {
           return true;
         }
+
         // A library owner holds views only through its type arguments. A std::function can hold any
         // callable, so it keeps whatever the callable it wraps borrows.
         if (libraryOwner(type)) {
           // Outside the standard library, only a container is known to hold its type arguments.
           const auto *specialization = llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(record);
           const bool holds = standardRecord(type) || declaresMember(type, "value_type");
+
           return specialization != nullptr && holds && (standardType(type, "function") || templateHoldsViews(specialization->getTemplateArgs().asArray(), seen));
         }
       }
+
       if (const auto *definition = record->getDefinition()) {
         for (const auto *field : definition->fields()) {
           if (!selfBorrowing(*field) && !staticField(*field) && containsViews(field->getType(), seen)) {
             return true;
           }
         }
+
         for (const auto &base : definition->bases()) {
           if (containsViews(base.getType(), seen)) {
             return true;
@@ -439,6 +487,7 @@ namespace tbc_lint {
 
   inline bool containsViews(clang::QualType type) {
     llvm::SmallPtrSet<const clang::Type *, 16> seen;
+
     return containsViews(type, seen);
   }
 
@@ -449,16 +498,21 @@ namespace tbc_lint {
     if (type->isReferenceType() || type->isPointerType()) {
       return type->getPointeeType();
     }
+
     if (smartPointer(type)) {
       return memberType(type, "element_type");
     }
+
     if (standardType(type, "reference_wrapper")) {
       return memberType(type, "type");
     }
+
     if (nativeView(type) || iteratorRecord(type)) {
       return elementType(type);
     }
+
     const auto element = elementType(type);
+
     return element.isNull() ? clang::QualType{} : designatedType(element);
   }
 
@@ -469,18 +523,22 @@ namespace tbc_lint {
     if (type->isReferenceType() || type->isScalarType() || viewType(type) || transfersAllocation(type)) {
       return true;
     }
+
     if (const auto *array = llvm::dyn_cast<clang::ConstantArrayType>(type.getTypePtr())) {
       return ownsNothingInline(array->getElementType());
     }
+
     const auto *record = recordOf(type);
     if (record == nullptr || libraryRecord(type) || record->getDefinition() == nullptr) {
       return false;
     }
+
     for (const auto *field : record->getDefinition()->fields()) {
       if (!ownsNothingInline(field->getType())) {
         return false;
       }
     }
+
     for (const auto &base : record->getDefinition()->bases()) {
       if (!ownsNothingInline(base.getType())) {
         return false;

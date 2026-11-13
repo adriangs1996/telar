@@ -59,6 +59,7 @@ std::uint64_t number(std::string_view value) {
 
 Options parseOptions(int argc, const char *const *argv) {
   Options result;
+
   for (int index = 1; index < argc; index += 2) {
     if (index + 1 >= argc) {
       throw std::invalid_argument{"Options require a value"};
@@ -66,6 +67,7 @@ Options parseOptions(int argc, const char *const *argv) {
 
     const std::string_view key{argv[index]};
     const std::string_view value{argv[index + 1]};
+
     if (key == "--case") {
       const auto *found = std::ranges::find(workload_names, value);
       if (found == workload_names.end()) {
@@ -107,6 +109,7 @@ public:
         screen_(memory_),
         flags_(options.rows) {
     const auto count = static_cast<std::size_t>(options.columns) * options.rows;
+
     switch (options.workload) {
     case Workload::empty:
       changed_ = 0;
@@ -126,6 +129,7 @@ public:
 
     for (std::size_t variant = 0; variant < text_.size(); ++variant) {
       std::vector<Cell> cells(count);
+
       for (auto &cell : cells) {
         cell.text = std::span{text_}.subspan(variant, 1);
       }
@@ -133,6 +137,7 @@ public:
       full_bytes_[variant].resize(CellRunCodec::encodedSize(cells));
       CellRunCodec::encode(cells, full_bytes_[variant]);
       const auto subset = std::span{cells}.first(changed_);
+
       delta_bytes_[variant].resize(CellRunCodec::encodedSize(subset));
       CellRunCodec::encode(subset, delta_bytes_[variant]);
     }
@@ -155,11 +160,13 @@ public:
 
     const auto allocations = memory_.allocations();
     const auto started = std::chrono::steady_clock::now();
+
     for (std::uint64_t index = 0; index < options_.iterations; ++index) {
       advance(options_.warmup + index);
     }
 
     const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - started).count();
+
     verify(allocations);
     std::cout << R"({"case":")" << workload_names[static_cast<std::size_t>(options_.workload)]
               << R"(","columns":)" << options_.columns << ",\"rows\":" << options_.rows
@@ -173,6 +180,7 @@ private:
   void advance(std::uint64_t index) {
     const auto snapshot = options_.workload == Workload::snapshot || options_.workload == Workload::retained;
     const auto variant = options_.workload == Workload::retained ? 0 : index % text_.size();
+
     frame_.base_frame_id = snapshot ? 0 : frame_.frame_id;
     ++frame_.frame_id;
     if (!snapshot) {
@@ -193,6 +201,7 @@ private:
   void verify(std::size_t allocations) const {
     const auto last = options_.warmup + options_.iterations - 1;
     const auto variant = options_.workload == Workload::retained ? 0 : last % text_.size();
+
     if (screen_.frameId() != last + 2 || memory_.allocations() != allocations) {
       throw std::runtime_error{"Screen identity or warm allocation count changed unexpectedly"};
     }

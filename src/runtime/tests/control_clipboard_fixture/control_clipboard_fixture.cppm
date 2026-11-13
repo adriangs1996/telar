@@ -18,11 +18,13 @@ struct MemoryClipboard {
   ClipboardResult read(const OwnedClipboardTask &task) {
     ++reads;
     ClipboardResult result{.status = ClipboardDesktopStatus::success};
+
     for (const auto &content : contents) {
       if (task.listing) {
         result.available.push_back(content.mime);
       }
     }
+
     for (const auto &mime : task.mimes) {
       for (const auto &content : contents) {
         if (mime == content.mime || (clipboardTextMime(mime) && content.mime == "text/plain")) {
@@ -31,6 +33,7 @@ struct MemoryClipboard {
         }
       }
     }
+
     return result;
   }
 
@@ -40,6 +43,7 @@ struct MemoryClipboard {
     if (contents.empty()) {
       contents.push_back({"text/plain", {}});
     }
+
     return {.status = ClipboardDesktopStatus::success};
   }
 
@@ -50,18 +54,23 @@ struct MemoryClipboard {
     if (!request) {
       return;
     }
+
     OwnedClipboardTask task{*request};
+
     clipboard.announced();
     if (!supports(task.primary)) {
       if (!clipboard.complete({1, 13}, CompleteClipboardDesktop{.ticket = task.ticket, .status = ClipboardDesktopStatus::unsupported, .prepared = true})) {
         throw std::logic_error{"Clipboard fixture capability check failed"};
       }
+
       terminal.resumeControl();
       return;
     }
+
     if (task.prompt) {
       ++prompts;
     }
+
     const bool allowed = !task.prompt || consent != ClipboardConsent::deny;
     if (!clipboard.complete({1, 13}, CompleteClipboardDesktop{
         .ticket = task.ticket,
@@ -71,17 +80,21 @@ struct MemoryClipboard {
     })) {
       throw std::logic_error{"Clipboard fixture preparation failed"};
     }
+
     if (allowed) {
       if (!clipboard.execution()) {
         throw std::logic_error{"Clipboard fixture received no execution grant"};
       }
+
       clipboard.committed();
       const auto result = executeClipboard(task, consent, *this);
       std::array<ClipboardRepresentation, 4> representations;
       std::array<std::string_view, 16> available;
+
       for (std::size_t index = 0; index < result.contents.size(); ++index) {
         representations[index] = {result.contents[index].mime, result.contents[index].data};
       }
+
       std::copy(result.available.begin(), result.available.end(), available.begin());
       if (!clipboard.complete({1, 13}, CompleteClipboardDesktop{
           .ticket = task.ticket,
@@ -92,6 +105,7 @@ struct MemoryClipboard {
         throw std::logic_error{"Clipboard fixture completion failed"};
       }
     }
+
     terminal.resumeControl();
   }
 };

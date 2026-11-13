@@ -37,10 +37,12 @@ inline Surface surface(const PaneShell &shell, bool alternate_screen, bool telar
     if (!shell.canonical) {
       return Surface::none;
     }
+
     return shell.echo ? Surface::running : Surface::secret;
   case ShellPhase::unknown:
     break;
   }
+
   return Surface::none;
 }
 
@@ -55,6 +57,7 @@ inline bool controlKey(const PaneShell &shell, std::string_view bytes) noexcept 
   if (shell.signal_keys && (byte == shell.interrupt || byte == shell.quit || byte == shell.suspend)) {
     return true;
   }
+
   return shell.canonical && byte == shell.end_of_file;
 }
 

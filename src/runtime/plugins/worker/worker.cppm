@@ -89,6 +89,7 @@ public:
     if (!readExact(frame.bytes())) {
       throw SystemError{"Incomplete tap frame", EPIPE};
     }
+
     return frame;
   }
 
@@ -99,6 +100,7 @@ public:
 
     std::array<Byte, Protocol::prefix_bytes> prefix;
     std::span<Byte> remaining{prefix};
+
     LittleEndian<std::uint32_t>::encode(static_cast<std::uint32_t>(payload.size()), remaining);
     stream_.write(prefix, payload);
   }
@@ -113,17 +115,20 @@ private:
 
       destination = destination.subspan(count);
     }
+
     return true;
   }
 
   inline std::size_t readNext(std::span<Byte> destination) {
     if (input_.empty() && destination.size() >= input_capacity) {
       const auto received = stream_.read(destination);
+
       requireReadable(received.state);
       return received.bytes;
     }
 
     const auto view = input_.peek([this](std::span<Byte> bytes) noexcept { return stream_.read(bytes); }, destination.size());
+
     requireReadable(view.state);
     return input_.copyTo(destination);
   }
@@ -156,6 +161,7 @@ struct Result {
   inline explicit Result(const ServiceSpec &specification, tbc::view<SensitiveAllocation<Memory>, tbc::lt::a> storage, std::size_t effects_offset, std::size_t effects_size, bool traffic = false)
       : package_index(specification.package_index), plugin_id(specification.plugin_id), digest(specification.digest), generation(specification.generation), storage(std::move(storage)), traffic(traffic), effects_offset_(effects_offset), effects_size_(effects_size) {
     const auto effects = Protocol::decodeEffects(effectBytes());
+
     event_id = effects.event_id;
     batch_count = effects.batch.count;
   }
@@ -165,6 +171,7 @@ struct Result {
 
   inline bool authorized(const ServiceSpec &specification) const noexcept {
     const bool source = traffic ? specification.traffic() : specification.allows(Capability::proxy_tap);
+
     return package_index == specification.package_index && plugin_id == specification.plugin_id && digest == specification.digest && generation == specification.generation && source && (batch_count == 0 || specification.allows(Capability::notifications));
   }
 
@@ -247,10 +254,12 @@ public:
       errno = ECANCELED;
       return false;
     }
+
     if (deadline_ != Clock::time_point::max() && Clock::now() >= deadline_) {
       errno = ETIMEDOUT;
       return false;
     }
+
     return true;
   }
 
@@ -261,21 +270,26 @@ public:
           pollfd{process_.error(), POLLIN, 0},
           pollfd{cancellation_.descriptor(), POLLIN, 0},
       };
+
       const auto timeout = remainingMilliseconds();
       if (timeout == 0) {
         errno = ETIMEDOUT;
         return false;
       }
+
       const auto count = ::poll(watches.data(), watches.size(), timeout);
       if (count < 0 && errno == EINTR) {
         continue;
       }
+
       if (count <= 0) {
         if (count == 0) {
           errno = ETIMEDOUT;
         }
+
         return false;
       }
+
       if (watches[2].revents != 0) {
         errno = ECANCELED;
         return false;
@@ -284,6 +298,7 @@ public:
       if (watches[1].revents != 0) {
         drainError();
       }
+
       if (watches[0].revents != 0) {
         return true;
       }
@@ -293,20 +308,24 @@ public:
   inline void drainError() noexcept {
     std::array<char, error_chunk_bytes> bytes;
     std::size_t drained = 0;
+
     while (process_.error() >= 0 && drained < maximum_error_drain_bytes) {
       const auto count = ::read(process_.error(), bytes.data(), bytes.size());
       if (count < 0 && errno == EINTR) {
         continue;
       }
+
       if (count <= 0) {
         if (count == 0 || (errno != EAGAIN && errno != EWOULDBLOCK)) {
           process_.closeError();
         }
+
         return;
       }
 
       const auto received = static_cast<std::size_t>(count);
       const auto retained = std::min(received, Limits::stderr_bytes - error_.view().size());
+
       error_.append({bytes.data(), retained});
       drained += received;
     }
@@ -323,7 +342,9 @@ private:
     if (deadline_ == Clock::time_point::max()) {
       return -1;
     }
+
     const auto remaining = std::chrono::ceil<std::chrono::milliseconds>(deadline_ - Clock::now()).count();
+
     return static_cast<int>(std::clamp<decltype(remaining)>(remaining, 0, INT_MAX));
   }
 
@@ -353,7 +374,9 @@ struct TapWorkerOptions {
     if (words.empty()) {
       throw std::invalid_argument{"Expected tap-worker ENTRY [--traffic] [--trace PATH]"};
     }
+
     TapWorkerOptions options{.entry = words.front()};
+
     for (std::size_t index = 1; index < words.size(); ++index) {
       const std::string_view option{words[index]};
       if (option == "--traffic" && !options.traffic) {
@@ -364,6 +387,7 @@ struct TapWorkerOptions {
         throw std::invalid_argument{"Expected tap-worker ENTRY [--traffic] [--trace PATH]"};
       }
     }
+
     return options;
   }
 
@@ -372,14 +396,17 @@ struct TapWorkerOptions {
   inline static tbc::view<std::array<char *, 7>, tbc::lt::a> arguments(tbc::view<const TapWorkerOptions &, tbc::lt::a> options, tbc::view<const char *, tbc::lt::a> executable) noexcept {
     std::array<char *, 7> words{const_cast<char *>(executable), const_cast<char *>(command.data()), const_cast<char *>(options.entry)};
     std::size_t count = 3;
+
     if (options.traffic) {
       words[count++] = const_cast<char *>("--traffic");
     }
+
 #if TELAR_DEBUG
     if (options.trace_path != nullptr) {
       words[count++] = const_cast<char *>("--trace");
       words[count++] = const_cast<char *>(options.trace_path);
     }
+
 #endif
     words[count] = nullptr;
     return words;
@@ -406,6 +433,7 @@ public:
     if (tracing_) {
       finishTrace();
     }
+
 #endif
     process_.signal(SIGKILL);
     stream_.wait().drainError();
@@ -426,11 +454,14 @@ public:
 
     if (received.bytes().front() == static_cast<Byte>(FrameKind::error)) {
       const auto failure = Protocol::decodeError(received.bytes());
+
       requireEvent(event_id, failure.event_id);
       return {nullptr, AllocationDeleter<Result<Memory>, Memory>{memory_}};
     }
+
     const auto size = received.bytes().size();
     auto result = makeOwned<Result<Memory>>(memory_, specification, std::move(received), 0, size);
+
     requireEvent(event_id, result->event_id);
     return result;
   }
@@ -454,6 +485,7 @@ private:
     const TapWorkerOptions worker{.entry = options.entry, .traffic = options.traffic, .trace_path = options.trace_path};
     auto arguments = TapWorkerOptions::arguments(worker, options.executable);
     std::array<char *, 1> environment{nullptr};
+
     return PipeProcess{SpawnSpec{.executable = options.executable, .cwd = "/", .arguments = arguments.data(), .environment = environment.data(), .size = {}}, ProcessInput::buffered_socket};
   }
 
@@ -467,6 +499,7 @@ private:
   inline void finishTrace() noexcept {
     process_.closeInput();
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds{100};
+
     while (!process_.reap() && std::chrono::steady_clock::now() < deadline) {
       stream_.wait().drainError();
       std::this_thread::sleep_for(std::chrono::milliseconds{1});
@@ -551,6 +584,7 @@ class TrafficProtocol {
 public:
   inline static tbc::view<std::span<const Byte>, tbc::lt::a> setup(tbc::view<std::span<Byte>, tbc::lt::a> output, const ServiceSpec &specification) {
     FrameWriter writer{output};
+
     writer.tag(FrameKind::traffic_setup);
     writer.integer(specification.plugin_id);
     writer.bytes(specification.digest);
@@ -565,8 +599,10 @@ public:
 
   inline static ServiceSpec setup(std::span<const Byte> input) {
     FrameReader reader{input};
+
     reader.require(FrameKind::traffic_setup);
     ServiceSpec specification;
+
     specification.plugin_id = reader.integer<std::uint64_t>();
     const auto digest = reader.bytes();
     if (digest.size() != specification.digest.size()) { throw EncodingError{"Invalid traffic package digest"}; }
@@ -576,6 +612,7 @@ public:
     for (const auto capability : {Capability::traffic_observe, Capability::traffic_intercept, Capability::traffic_control, Capability::traffic_record}) {
       if (reader.boolean()) { specification.declared.insert(capability); specification.granted.insert(capability); }
     }
+
     reader.finish();
     if (specification.plugin_id == 0 || specification.generation == 0) { throw EncodingError{"Invalid traffic package identity"}; }
     return specification;
@@ -584,6 +621,7 @@ public:
   inline static tbc::view<std::span<const Byte>, tbc::lt::a> event(tbc::view<std::span<Byte>, tbc::lt::a> output, std::uint64_t event_id, std::uint32_t registration, std::span<const Byte> frame, std::uint64_t dropped = 0) {
     traffic::Protocol::decode(frame);
     FrameWriter writer{output};
+
     writer.tag(FrameKind::traffic_event);
     writer.integer(event_id);
     writer.integer(registration);
@@ -597,6 +635,7 @@ public:
     const auto kind = reader.tag(FrameKind::traffic_control_event);
     if (kind != FrameKind::traffic_event && kind != FrameKind::traffic_control_event) { throw EncodingError{"Unexpected worker event"}; }
     TrafficEvent event{.event_id = reader.integer<std::uint64_t>(), .registration = reader.integer<std::uint32_t>(), .dropped = 0, .event = {}};
+
     if (kind == FrameKind::traffic_event) { event.dropped = reader.integer<std::uint64_t>(); event.event = traffic::Protocol::decode(reader.bytes()); }
     else {
       event.error = reader.text();
@@ -604,12 +643,14 @@ public:
       if (event.error.size() > 1024 || (event.error.empty() == event.control.empty())) { throw EncodingError{"Invalid worker control result"}; }
       if (!event.control.empty()) { traffic::control::Protocol::reply(event.control); }
     }
+
     reader.finish();
     return event;
   }
 
   inline static tbc::view<std::span<const Byte>, tbc::lt::a> controlEvent(tbc::view<std::span<Byte>, tbc::lt::a> output, std::uint64_t event_id, std::uint32_t registration, std::span<const Byte> frame, std::string_view error = {}) {
     FrameWriter writer{output};
+
     writer.tag(FrameKind::traffic_control_event);
     writer.integer(event_id);
     writer.integer(registration);
@@ -621,6 +662,7 @@ public:
   inline static tbc::view<std::span<const Byte>, tbc::lt::a> reply(tbc::view<std::span<Byte>, tbc::lt::a> output, const TrafficReply &reply, const TrafficOutcome &outcome) {
     if (reply.registration_count > reply.registrations.size() || outcome.decision_count > outcome.decisions.size() || (!reply.changed && reply.registration_count != 0)) { throw EncodingError{"Invalid traffic worker reply"}; }
     FrameWriter writer{output};
+
     writer.tag(FrameKind::traffic_reply);
     writer.integer(reply.event_id);
     writer.boolean(reply.changed);
@@ -631,12 +673,14 @@ public:
       writer.integer(decision.registration);
       writer.bytes(decision.payload);
     }
+
     writer.bytes(outcome.effects);
     return writer.finish();
   }
 
   inline static TrafficReply reply(std::span<const Byte> input) {
     TrafficReply reply;
+
     readReply(input, reply);
     return reply;
   }
@@ -645,6 +689,7 @@ public:
   inline static tbc::view<TrafficOutcome, tbc::lt::a> readReply(tbc::view<std::span<const Byte>, tbc::lt::a> input, TrafficReply &reply) {
     if (input.size() > TrafficLimits::reply_bytes) { throw EncodingError{"Traffic worker reply exceeds its bound"}; }
     FrameReader reader{input};
+
     reader.require(FrameKind::traffic_reply);
     reply.event_id = reader.integer<std::uint64_t>();
     reply.changed = reader.boolean();
@@ -652,12 +697,14 @@ public:
     if (reply.registration_count > reply.registrations.size() || (!reply.changed && reply.registration_count != 0)) { throw EncodingError{"Invalid traffic registration count"}; }
     for (auto &registration : std::span{reply.registrations}.first(reply.registration_count)) { registration = read(reader); }
     TrafficOutcome outcome;
+
     outcome.decision_count = reader.integer<Byte>();
     if (outcome.decision_count > outcome.decisions.size()) { throw EncodingError{"Invalid traffic decision count"}; }
     for (auto &decision : std::span{outcome.decisions}.first(outcome.decision_count)) {
       decision.registration = reader.integer<std::uint32_t>();
       decision.payload = reader.bytes();
     }
+
     outcome.effects = reader.bytes();
     reader.finish();
     return outcome;
@@ -679,6 +726,7 @@ private:
 
   inline static TrafficRegistration read(FrameReader &reader) {
     TrafficRegistration registration;
+
     registration.id = reader.integer<std::uint32_t>();
     registration.stage = reader.tag(TrafficStage::control);
     registration.selection = reader.tag(traffic::Selection::all);
@@ -735,6 +783,7 @@ public:
   inline void attach(Session<Memory> &session) {
     std::array<Byte, 1024> output;
     auto initialized = session.request(TrafficProtocol::setup(output, specification_), TrafficLimits::reply_bytes);
+
     apply(0, initialized.bytes());
     for (auto &connection : connections_) {
       if (connection && connection->registration.stage != TrafficStage::control) {
@@ -766,12 +815,15 @@ public:
         catch (const SystemError &failure) { if (failure.code() != EAGAIN) { connection->error.assign(std::string_view{failure.what()}.substr(0, 1024)); } }
         catch (const std::exception &failure) { connection->error.assign(std::string_view{failure.what()}.substr(0, 1024)); }
       }
+
       if (!connection->error.view().empty()) {
         const auto error = connection->error;
+
         dispatchControl(session, index, {}, error.view(), consume);
         return;
       }
     }
+
     for (std::size_t index = 0; index < connections_.size(); ++index) {
       auto &connection = connections_[index];
       if (connection && connection->notify_ready) {
@@ -779,26 +831,33 @@ public:
         constexpr std::string_view reason = "worker_restarted";
         std::array<Byte, 128> output;
         const auto ready = traffic::Protocol::encode(output, {.kind = traffic::Kind::ready, .bytes = {reinterpret_cast<const Byte *>(reason.data()), reason.size()}});
+
         dispatch(session, index, ready, connection->dropped, consume);
       }
     }
+
     std::array<pollfd, TrafficLimits::registrations + 3> descriptors{};
     std::array<std::uint32_t, TrafficLimits::registrations> identities{};
+
     descriptors[0] = {wake, POLLIN, 0};
     descriptors[1] = {cancellation.descriptor(), POLLIN, 0};
     descriptors[2] = {session ? session->outputDescriptor() : -1, POLLIN, 0};
     for (std::size_t index = 0; index < connections_.size(); ++index) {
       const auto &connection = connections_[index];
+
       identities[index] = connection ? connection->registration.id : 0;
       descriptors[index + 3] = {connection ? connection->socket.get() : -1, static_cast<short>(POLLIN | (connection && connection->output.size() ? POLLOUT : 0)), 0};
     }
+
     if (::poll(descriptors.data(), descriptors.size(), immediate ? 0 : 100) < 0) {
       if (errno == EINTR) { return; }
       throw SystemError{"Poll package traffic"};
     }
+
     if (cancellation.requested()) { return; }
     if (descriptors[2].revents != 0) { throw SystemError{"Traffic worker sent an unsolicited reply or exited", EPIPE}; }
     enum class Priority { intercept, observe, control };
+
     for (const auto priority : {Priority::intercept, Priority::observe, Priority::control}) {
       for (std::size_t index = 0; index < connections_.size(); ++index) {
         auto &connection = connections_[index];
@@ -808,24 +867,31 @@ public:
         if (selected != priority) { continue; }
         if (connection->registration.id != identities[index]) { continue; }
         const auto readiness = descriptors[index + 3].revents;
+
         if (stage == TrafficStage::control) {
           std::optional<SensitiveAllocation<Memory>> frame;
+
           try {
             if (readiness & (POLLERR | POLLNVAL)) { throw SystemError{"Package control channel failed", EPIPE}; }
             if (readiness & POLLOUT) { write(*connection); }
             if (readiness & (POLLIN | POLLHUP)) { frame = read(memory_, *connection); }
           } catch (const std::exception &failure) { connection->error.assign(std::string_view{failure.what()}.substr(0, 1024)); }
+
           if (!connection->error.view().empty()) {
             const auto error = connection->error;
+
             dispatchControl(session, index, {}, error.view(), consume);
           } else if (frame) { traffic::control::Protocol::reply(frame->bytes()); dispatchControl(session, index, frame->bytes(), {}, consume); }
+
           continue;
         }
+
         if (readiness & (POLLERR | POLLNVAL)) { transport_failed_ = true; throw SystemError{"Package traffic channel failed", EPIPE}; }
         try { if (readiness & POLLOUT) { write(*connection); } }
         catch (...) { transport_failed_ = true; throw; }
         if (readiness & (POLLIN | POLLHUP)) {
           std::optional<SensitiveAllocation<Memory>> frame;
+
           try { frame = read(memory_, *connection); }
           catch (...) { transport_failed_ = true; throw; }
           if (!frame) { continue; }
@@ -843,10 +909,12 @@ private:
   template <typename Consumer>
   inline void dispatchControl(Session<Memory> *session, std::size_t index, std::span<const Byte> frame, std::string_view error, Consumer &&consume) {
     auto &connection = connections_[index];
+
     if (!session) { connection.reset(); return; }
     SensitiveAllocation request{memory_, frame.size() + error.size() + 128};
     const auto event_id = ++next_event_;
     const auto encoded = TrafficProtocol::controlEvent(request.bytes(), event_id, connection->registration.id, frame, error);
+
     connection.reset();
     auto response = session->request(encoded, TrafficLimits::reply_bytes);
     if (response.bytes().front() == static_cast<Byte>(FrameKind::error)) {
@@ -854,7 +922,9 @@ private:
       ++errors_;
       return;
     }
+
     const auto effects = apply(event_id, response.bytes()).effects;
+
     publishEffects(event_id, std::move(response), effects, consume);
   }
 
@@ -875,15 +945,18 @@ private:
     const auto event = traffic::Protocol::decode(frame);
     const bool control = event.kind == traffic::Kind::intercept_request || event.kind == traffic::Kind::http_intercept_request;
     std::optional<traffic::FlowEvent> flow;
+
     if (control) {
       flow = traffic::FlowCodec::decode(event.bytes);
       if (!port_.packagePending(connection.owner, flow->ticket, connection.registration.stage == TrafficStage::http)) { return; }
     }
+
     if (!session) {
       if (control) { fail(connection, *flow); }
       else { ++dropped_observations_; }
       return;
     }
+
     SensitiveAllocation request{memory_, frame.size() + 64};
     const auto event_id = ++next_event_;
     auto response = session->request(TrafficProtocol::event(request.bytes(), event_id, connection.registration.id, frame, dropped + dropped_observations_), TrafficLimits::reply_bytes);
@@ -894,12 +967,15 @@ private:
       if (control) { fail(*connections_[index], *flow); port_.packageFailure(specification_, *flow); }
       return;
     }
+
     const auto effects = apply(event_id, response.bytes()).effects;
+
     publishEffects(event_id, std::move(response), effects, consume);
   }
 
   inline static void fail(Connection &connection, const traffic::FlowEvent &flow) {
     std::array<Byte, 32> decision;
+
     enqueue(connection, traffic::InterceptionCodec::decision(decision, flow.ticket, connection.registration.fail_closed ? traffic::Verdict::reject : traffic::Verdict::allow));
   }
 
@@ -911,26 +987,33 @@ private:
   // What the reply decided views the input, region `a`; its registrations land in the bridge.
   inline tbc::view<TrafficOutcome, tbc::lt::a> apply(std::uint64_t event_id, tbc::view<std::span<const Byte>, tbc::lt::a> input) {
     const auto outcome = TrafficProtocol::readReply(input, *reply_);
+
     if (reply_->event_id != event_id) { throw EncodingError{"Stale traffic worker reply"}; }
     const auto registrations = std::span{reply_->registrations}.first(reply_->registration_count);
+
     if (reply_->changed) {
       std::size_t controls = 0;
+
       for (std::size_t index = 0; index < registrations.size(); ++index) {
         const auto &registration = registrations[index];
         if (registration.stage == TrafficStage::control) {
           if (++controls > TrafficLimits::controls || !traffic::control::authorized(specification_, traffic::control::Protocol::request(registration.requestBytes()))) { throw EncodingError{"Package control capability denied"}; }
         } else if (!specification_.allows(registration.stage == TrafficStage::observe ? Capability::traffic_observe : Capability::traffic_intercept)) { throw EncodingError{"Package traffic capability denied"}; }
+
         if (std::ranges::any_of(registrations.first(index), [&](const auto &other) { return other.id == registration.id; })) { throw EncodingError{"Duplicate traffic registration"}; }
       }
+
       for (auto &connection : connections_) {
         if (connection && !std::ranges::any_of(registrations, [&](const auto &registration) { return registration.id == connection->registration.id; })) { connection.reset(); }
       }
+
       for (const auto &registration : registrations) {
         if (auto *existing = find(registration.id)) {
           const auto &before = existing->registration;
           if (before != registration) { throw EncodingError{"Traffic registrations are immutable"}; }
           continue;
         }
+
         for (auto &connection : connections_) {
           if (connection) { continue; }
           if (registration.stage == TrafficStage::control) {
@@ -939,33 +1022,41 @@ private:
             connection->output.append(registration.requestBytes());
             break;
           }
+
           connection.emplace(secure_, registration, port_.openPackage(specification_, registration.id));
           std::array<Byte, traffic::Protocol::greeting_bytes + traffic::Limits::filter_bytes> greeting;
           const auto hello = traffic::Protocol::greeting(greeting, registration.stage == TrafficStage::observe ? traffic::Role::subscribe : traffic::Role::intercept, registration.filter.view(), registration.selection);
+
           connection->output.append(hello);
           if (registration.stage != TrafficStage::observe) {
             const auto rule = traffic::InterceptionCodec::rule(greeting, registration.rule());
+
             enqueue(*connection, rule);
           }
+
           break;
         }
       }
     }
+
     for (const auto &decision : std::span{outcome.decisions}.first(outcome.decision_count)) {
       auto *connection = find(decision.registration);
       if (!connection) { continue; }
       if (connection->registration.stage != TrafficStage::stream && connection->registration.stage != TrafficStage::http) { throw EncodingError{"Only interceptors can decide traffic"}; }
       FrameReader reader{decision.payload};
+
       reader.require(traffic::InterceptionCodec::Command::decision);
       reader.integer<std::uint64_t>();
       const auto verdict = reader.tag(traffic::Verdict::reject);
       const auto bytes = reader.bytes();
+
       reader.finish();
       if (verdict == traffic::Verdict::pending || (verdict != traffic::Verdict::replace && !bytes.empty())) { throw EncodingError{"Invalid worker decision"}; }
       if (connection->registration.stage == TrafficStage::http && verdict == traffic::Verdict::replace) { HttpMessageCodec::decode(bytes); }
       else if (bytes.size() > traffic::FlowControl::chunk_bytes) { throw EncodingError{"Worker stream decision exceeds its bound"}; }
       enqueue(*connection, decision.payload);
     }
+
     return outcome;
   }
 
@@ -993,12 +1084,14 @@ private:
       if (connection.prefix_bytes != prefix_bytes) { return std::nullopt; }
       FrameReader prefix{std::span<const Byte>{connection.prefix}.first(prefix_bytes)};
       const auto size = prefix.integer<std::uint32_t>();
+
       if (connection.registration.stage != TrafficStage::control) { connection.dropped = prefix.integer<std::uint64_t>(); }
       const auto maximum = connection.registration.stage == TrafficStage::control ? traffic::control::Limits::reply_bytes : connection.registration.stage == TrafficStage::http ? traffic::Limits::http_frame_bytes : traffic::Limits::frame_bytes;
       if (size == 0 || size > maximum) { throw EncodingError{"Invalid package traffic frame size"}; }
       connection.input.emplace(memory, size);
       connection.received = 0;
     }
+
     const auto bytes = connection.input->bytes();
     const auto count = ::recv(connection.socket.get(), bytes.data() + connection.received, bytes.size() - connection.received, 0);
     if (count < 0 && socketWouldBlock(errno)) { return std::nullopt; }
@@ -1006,6 +1099,7 @@ private:
     connection.received += static_cast<std::size_t>(count);
     if (connection.received != bytes.size()) { return std::nullopt; }
     auto frame = std::move(connection.input);
+
     connection.input.reset();
     connection.prefix_bytes = 0;
     return frame;
@@ -1072,6 +1166,7 @@ public:
     if (thread_.joinable()) {
       thread_.join();
     }
+
     bridge_.reset();
     session_.reset();
   }
@@ -1132,18 +1227,21 @@ private:
         if (::poll(watches.data(), watches.size(), -1) < 0 && errno != EINTR) { return; }
         continue;
       }
+
       try {
         if (!session_) {
           ensureSession(true);
           if (!bridge_) { bridge_ = makeOwned<TrafficBridge<Memory>>(memory_, memory_, specification_, *launch_.traffic); }
           bridge_->attach(*session_);
         }
+
         wake_.drain();
         if (auto request = requests_.tryReceive()) { process(**request); }
         if (!bridge_) { continue; }
         bridge_->step(session_ ? &*session_ : nullptr, wake_.descriptor(), cancellation_, [&](OwnedResult<Memory> result) {
           results_.publish(std::move(result));
         }, requests_.metrics().queued != 0);
+
         callback_errors_.store(callback_errors_base_ + bridge_->errors(), std::memory_order_relaxed);
       } catch (const SystemError &error) {
         if (!recover(error)) { return; }
@@ -1166,12 +1264,15 @@ private:
       if (!charged) {
         return;
       }
+
       const auto encoded_size = Protocol::exchangeBytes(shared.exchange);
       if (encoded_size > size) {
         return;
       }
+
       SensitiveAllocation frame{memory_, encoded_size};
       const auto payload = Protocol::encodeExchange(frame.bytes(), {shared.event_id, specification_.generation}, shared.exchange);
+
       exchange(shared.event_id, payload);
     } catch (...) {
     }
@@ -1195,6 +1296,7 @@ private:
     if (session_) {
       return;
     }
+
     prepareTrace();
     session_.emplace(memory_, SessionOptions{.executable = launch_.executable, .entry = entry_.c_str(), .cancellation = cancellation_, .timeout = launch_.timeout, .trace_path = trace_path_.empty() ? nullptr : trace_path_.c_str(), .traffic = traffic});
   }
@@ -1205,9 +1307,11 @@ private:
     if (error.code() == ECANCELED) {
       return false;
     }
+
     if (error.code() == ETIMEDOUT) {
       timeouts_.fetch_add(1, std::memory_order_relaxed);
     }
+
     restart();
     return true;
   }
@@ -1217,6 +1321,7 @@ private:
       bridge_->detach();
       if (bridge_->transportFailed()) { callback_errors_base_ += bridge_->errors(); bridge_.reset(); }
     }
+
     session_.reset();
     const auto now = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch());
     if (restarts_.record(now)) {
@@ -1229,8 +1334,10 @@ private:
     if (launch_.trace_prefix.empty()) {
       return;
     }
+
     std::array<char, 64> suffix;
     const auto length = std::snprintf(suffix.data(), suffix.size(), ".tap-%u-%llu.json", static_cast<unsigned>(specification_.package_index), static_cast<unsigned long long>(session_number_++));
+
     trace_path_ = launch_.trace_prefix;
     trace_path_.append(suffix.data(), static_cast<std::size_t>(length));
 #endif

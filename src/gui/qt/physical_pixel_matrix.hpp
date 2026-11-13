@@ -21,6 +21,7 @@ inline QMatrix4x4 physicalPixelMatrix(const QSGMaterialShader::RenderState &stat
   const auto horizontal_correction = density / horizontal_scale;
   const auto vertical_correction = density / vertical_scale;
   QMatrix4x4 correction;
+
   correction(0, 0) = horizontal_correction;
   correction(1, 1) = vertical_correction;
   correction(0, 3) = projection(0, 3) * (1 - horizontal_correction);

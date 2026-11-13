@@ -22,11 +22,13 @@ struct PrivateClipboard::Native {
     }
 
     NSPasteboard *const selected = board;
+
     replacement = imp_implementationWithBlock(^id(id receiver) {
       static_cast<void>(receiver);
 
       return selected;
     });
+
     if (replacement == nullptr) {
       [board releaseGlobally];
       throw std::runtime_error{"PrivateClipboardUnavailable"};

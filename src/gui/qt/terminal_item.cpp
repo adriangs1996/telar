@@ -107,6 +107,7 @@ TerminalItem::TerminalItem(QQuickItem *parent)
     cursor_on_ = !cursor_on_;
     update();
   });
+
   // At rest, with nothing drawn from them, the rows kept beyond the screen are given back.
   scroll_release_.setSingleShot(true);
   connect(&scroll_release_, &QTimer::timeout, this, [this] {
@@ -128,6 +129,7 @@ TerminalItem::TerminalItem(QQuickItem *parent)
     bindScrollClock();
     measure();
   });
+
   // An item built inside a window already has it, without the change above.
   bindScrollClock();
 }
@@ -184,11 +186,13 @@ void TerminalItem::setApplication(QObject *application) {
       update();
       emit applicationChanged();
     });
+
     connect(application_, &Application::terminalChanged, this, [this](qulonglong pane_id) {
       if (pane_id == pane_id_) {
         refresh();
       }
     });
+
     connect(application_, &Application::promptChanged, this, [this](qulonglong pane_id) {
       if (pane_id == pane_id_) {
         refreshBlocks();
@@ -279,6 +283,7 @@ void TerminalItem::measure() {
     link_stamp_.reset();
     const auto scale = window() == nullptr ? 1 : window()->effectiveDevicePixelRatio();
     auto resolved = application_->resolveFont(scale);
+
     font_ = std::move(resolved.font);
     font_grid_ = resolved.grid;
     font_scale_ = scale;
@@ -369,12 +374,14 @@ void TerminalItem::updatePolish() {
   if (scroll_frame_requested_ || animating()) {
     advanceScroll();
   }
+
   const auto *current = pane();
   if (current == nullptr || !font_catalog_) {
     return;
   }
 
   const auto &screen = current->screen;
+
   font_row_revisions_.resize(screen.rows());
   for (std::size_t row = 0; row < screen.rows(); ++row) {
     auto &revision = font_row_revisions_[static_cast<qsizetype>(row)];
@@ -385,6 +392,7 @@ void TerminalItem::updatePolish() {
     requestRowFonts(screen.row(row));
     revision = screen.rowRevision(row);
   }
+
   // Rows drawn from beyond the screen need their fonts too.
   for (const auto &view : view_rows_) {
     if (view.exists && view.screen_row < 0) {
@@ -396,6 +404,7 @@ void TerminalItem::updatePolish() {
 
   if (!preedit_.isEmpty()) {
     const auto bytes = preedit_.toUtf8();
+
     font_catalog_->request({bytes.constData(), static_cast<std::size_t>(bytes.size())}, fonts::FontRole::primary);
   }
 
@@ -404,6 +413,7 @@ void TerminalItem::updatePolish() {
 
 void TerminalItem::requestRowFonts(std::span<const CellValue> cells) {
   const auto &primary = fonts_->face(fonts::FontRole::primary);
+
   for (const auto &cell : cells) {
     if (cell.width == CellWidth::continuation || cell.utf8().empty()) {
       continue;
@@ -415,6 +425,7 @@ void TerminalItem::requestRowFonts(std::span<const CellValue> cells) {
       }
     } catch (const std::invalid_argument &) {
       const auto normalized = QString::fromUtf8(cell.utf8()).toUtf8();
+
       font_catalog_->request({normalized.constData(), static_cast<std::size_t>(normalized.size())}, fonts::FontRole::primary);
     }
   }
@@ -446,6 +457,7 @@ void TerminalItem::setPromptCaret(const QRectF &caret) {
     if (hasActiveFocus()) {
       QGuiApplication::inputMethod()->update(Qt::ImCursorRectangle);
     }
+
     emit promptCaretChanged();
   }
 }
@@ -467,6 +479,7 @@ static PromptRows promptRows(const Screen<ApplicationAllocator> &screen, bool ed
   if (!editing || rows == 0) {
     return {};
   }
+
   const auto offset = static_cast<std::uint64_t>(screen.scroll().offset);
   const auto bottom = static_cast<std::uint64_t>(copyGrid(screen).maximumOffset());
   const auto &cursor = screen.cursor();
@@ -475,7 +488,9 @@ static PromptRows promptRows(const Screen<ApplicationAllocator> &screen, bool ed
   if (last >= rows) {
     return {};
   }
+
   constexpr std::size_t search = 8;
+
   for (std::size_t row = last + 1; row-- > 0 && last - row < search;) {
     if ((screen.rowFlags(row) & static_cast<Byte>(RowFlag::prompt)) != 0) {
       // A prompt above where the last command's rows end is that command's: the shell's state
@@ -483,13 +498,16 @@ static PromptRows promptRows(const Screen<ApplicationAllocator> &screen, bool ed
       if (offset + row < live_from) {
         return {};
       }
+
       // The cursor is at or under the scrollback's live screen, at most `search` rows under its prompt.
       if (below && offset + row + search <= bottom) {
         return {};
       }
+
       return {row, last - row + 1, !below};
     }
   }
+
   return {};
 }
 
@@ -511,21 +529,26 @@ static QString blockState(CommandBlockState state) {
   case CommandBlockState::interrupted:
     break;
   }
+
   return QStringLiteral("interrupted");
 }
 
 std::size_t TerminalItem::liveSession(const Pane<ApplicationAllocator> &pane) noexcept {
   const auto &blocks = pane.blocks;
   auto first = blocks.size();
+
   if (!pane.shell.remote) {
     return first;
   }
+
   while (first > 0 && blocks[first - 1].nest == CommandBlockNest::inside) {
     --first;
   }
+
   if (first > 0 && blocks[first - 1].nest == CommandBlockNest::opens) {
     --first;
   }
+
   return first;
 }
 
@@ -543,6 +566,7 @@ void TerminalItem::refreshBlocks() {
   int cursor_row = -1;
   int screen_rows = 0;
   int rows_below = 0;
+
   hidden_rows_.clear();
   if (current != nullptr && application_ != nullptr) {
     const auto &screen = current->screen;
@@ -552,33 +576,41 @@ void TerminalItem::refreshBlocks() {
     if (mapped) {
       layoutRows();
     }
+
     const auto drawn = mapped ? view_rows_.size() : rows;
     const auto top = static_cast<std::uint64_t>(screen.scroll().offset);
     const auto absolute = [&](std::size_t index) -> std::optional<std::uint64_t> {
       if (!mapped) {
         return top + index;
       }
+
       return view_rows_[index].exists ? std::optional{view_rows_[index].row} : std::nullopt;
     };
+
     const auto drawnRow = [&](std::size_t screen_row) -> std::optional<std::size_t> {
       if (!mapped) {
         return screen_row < rows ? std::optional{screen_row} : std::nullopt;
       }
+
       for (std::size_t index = 0; index < view_rows_.size(); ++index) {
         if (view_rows_[index].screen_row >= 0 && static_cast<std::size_t>(view_rows_[index].screen_row) == screen_row) {
           return index;
         }
       }
+
       return std::nullopt;
     };
+
     hidden_rows_.assign(drawn, 0);
     const bool editing = application_->promptSurface(pane_id_) == prompt::Surface::editor;
     const auto [first, count, cursor] = promptRows(screen, editing, liveFrom(current->blocks));
+
     for (auto row = first; row < first + count && row < rows; ++row) {
       if (const auto index = drawnRow(row)) {
         hidden_rows_[*index] = 1;
       }
     }
+
     // The live prompt drawn from rows kept apart from the screen, as while the view glides
     // there: hidden from where it was last seen to start, past the last command's rows.
     if (mapped && editing && current->live_prompt_row && *current->live_prompt_row >= liveFrom(current->blocks)) {
@@ -588,45 +620,56 @@ void TerminalItem::refreshBlocks() {
         }
       }
     }
+
     // The command's own row, where its separator will be, and the prompt's first.
     if (count != 0 && cursor) {
       prompt_row = static_cast<int>(drawnRow(first + count - 1).value_or(static_cast<std::size_t>(-1)));
     }
+
     if (count != 0) {
       prompt_top = static_cast<int>(drawnRow(first).value_or(static_cast<std::size_t>(-1)));
     }
+
     // On the live screen the cursor is always in view, wherever the program hid it.
     const auto bottom = static_cast<std::uint64_t>(copyGrid(screen).maximumOffset());
     const auto &shown = screen.cursor();
     if (!screen.modes().alternate_screen && (top >= bottom || shown.visible) && shown.y < rows) {
       cursor_row = static_cast<int>(drawnRow(shown.y).value_or(static_cast<std::size_t>(-1)));
     }
+
     screen_rows = static_cast<int>(rows);
     if (mapped) {
       const auto total_shown = current->folds.shownRows(screen.scroll().total_rows);
+
       rows_below = total_shown > top_row_ + rows ? static_cast<int>(std::min<std::uint64_t>(total_shown - top_row_ - rows, std::numeric_limits<int>::max())) : 0;
     } else {
       rows_below = bottom > top ? static_cast<int>(std::min<std::uint64_t>(bottom - top, std::numeric_limits<int>::max())) : 0;
     }
+
     const bool telar = application_->configuration().prompt.mode == PromptMode::telar && current->shell.shell != IntegratedShell::none && !screen.modes().alternate_screen;
     const auto selected = application_->selectedBlock(pane_id_);
     auto &session = application_->session();
     const auto live_session = liveSession(*current);
     const auto host = current->shell.host.empty() ? QString{} : QString::fromUtf8(current->shell.host.data(), static_cast<qsizetype>(current->shell.host.size()));
+
     for (std::size_t index = 0; telar && index < current->blocks.size(); ++index) {
       const auto &block = current->blocks[index];
+
       rail.push_back(QVariantMap{{QStringLiteral("state"), blockState(block.state)}, {QStringLiteral("index"), static_cast<int>(index)}, {QStringLiteral("selected"), selected == index}});
       const auto begin = static_cast<std::uint64_t>(block.row);
       const auto end = begin + block.rows;
+
       for (std::size_t drawn_index = 0; drawn_index < drawn; ++drawn_index) {
         const auto row = absolute(drawn_index);
         if (!row || *row < begin || *row >= end) {
           continue;
         }
+
         hidden_rows_[drawn_index] = 1;
         // On the command's last row: the prompt's other rows stay empty above it, as a margin.
         if (*row == end - 1) {
           const auto [output_first, output_end] = GuiSession::blockRows(*current, index);
+
           separators.push_back(QVariantMap{
               {QStringLiteral("row"), static_cast<int>(drawn_index)},
               {QStringLiteral("command"), QString::fromUtf8(block.command.data(), static_cast<qsizetype>(block.command.size()))},
@@ -645,32 +688,41 @@ void TerminalItem::refreshBlocks() {
         }
       }
     }
+
     // Each session's rows, from its ssh to the end of its last command's output; the one the
     // pane is in runs on to the live end.
     std::array<std::pair<std::uint64_t, std::uint64_t>, 8> stretches{};
     std::size_t stretch_count = 0;
     const auto &blocks = current->blocks;
+
     for (std::size_t index = 0; telar && index < blocks.size();) {
       if (blocks[index].nest == CommandBlockNest::none) {
         ++index;
         continue;
       }
+
       // From the separator's row, under the margin its prompt left.
       const auto begin = static_cast<std::uint64_t>(blocks[index].row) + blocks[index].rows - 1;
       auto last = index;
+
       while (last + 1 < blocks.size() && blocks[last + 1].nest == CommandBlockNest::inside) {
         ++last;
       }
+
       const auto end = last + 1 == blocks.size() && current->shell.remote ? std::numeric_limits<std::uint64_t>::max() : static_cast<std::uint64_t>(GuiSession::blockRows(*current, last).second);
+
       if (stretch_count == stretches.size()) {
         // The oldest give way to the newest.
         std::shift_left(stretches.begin(), stretches.end(), 1);
         --stretch_count;
       }
+
       stretches[stretch_count++] = {begin, end};
       index = last + 1;
     }
+
     int run_first = -1;
+
     for (std::size_t index = 0; stretch_count != 0 && index <= drawn; ++index) {
       const auto row = index < drawn ? absolute(index) : std::nullopt;
       const bool inside = row && std::ranges::any_of(std::span{stretches}.first(stretch_count), [&](const auto &stretch) { return *row >= stretch.first && *row < stretch.second; });
@@ -681,29 +733,37 @@ void TerminalItem::refreshBlocks() {
         run_first = -1;
       }
     }
+
     // Documents drawn in place of the rows they stand for: where each one's display rows start
     // among the drawn rows, its cells left unpainted under it. One the view is yet to measure is
     // listed unplaced, for the view to lay it out and measure it.
     const auto &folds = mapped ? viewFolds() : current->folds;
+
     for (const auto &document : current->inline_documents) {
       if (!document.shown) {
         continue;
       }
+
       const auto id = static_cast<qulonglong>(document.id);
       const auto first = document.first_row - current->scrollback_trimmed;
       const auto placed = mapped && document.view_rows != 0 && std::ranges::any_of(folds.spans(), [&](const FoldMap<>::Span &span) { return span.first == first && span.shown != 0; });
+
       documents.push_back(QVariantMap{{QStringLiteral("id"), id}, {QStringLiteral("rows"), placed ? static_cast<int>(document.view_rows) : 0}, {QStringLiteral("placed"), placed}});
       if (!placed) {
         continue;
       }
+
       const auto start = static_cast<std::int64_t>(folds.display(first)) - static_cast<std::int64_t>(top_row_);
       const auto end = start + document.view_rows;
+
       for (auto index = std::max<std::int64_t>(start, 0); index < std::min<std::int64_t>(end, static_cast<std::int64_t>(drawn)); ++index) {
         hidden_rows_[static_cast<std::size_t>(index)] = 1;
       }
+
       document_rows.insert(QString::number(id), static_cast<int>(std::clamp<std::int64_t>(start, -1'000'000, 1'000'000)));
     }
   }
+
   if (prompt_top != prompt_top_ || cursor_row != cursor_row_ || screen_rows != rows_ || rows_below != rows_below_) {
     prompt_top_ = prompt_top;
     cursor_row_ = cursor_row;
@@ -711,20 +771,26 @@ void TerminalItem::refreshBlocks() {
     rows_below_ = rows_below;
     emit placeChanged();
   }
+
   if (documents != documents_) {
     documents_ = std::move(documents);
     emit documentsChanged();
   }
+
   if (separators != separators_) {
     QList<QVariantMap> rows;
+
     rows.reserve(separators.size());
     for (const auto &separator : separators) {
       auto row = separator.toMap();
+
       row.insert(QStringLiteral("key"), row.value(QStringLiteral("index")));
       rows.append(std::move(row));
     }
+
     separator_rows_.reconcile(std::move(rows));
   }
+
   if (separators != separators_ || document_rows != document_rows_ || rail != rail_ || remote_rows != remote_rows_ || prompt_row != prompt_row_ || font_.cell != shown_cell_) {
     separators_ = std::move(separators);
     document_rows_ = std::move(document_rows);
@@ -734,6 +800,7 @@ void TerminalItem::refreshBlocks() {
     shown_cell_ = font_.cell;
     emit blocksChanged();
   }
+
   refreshScrollViews();
 }
 
@@ -789,12 +856,14 @@ QSGNode *TerminalItem::updatePaintNode(QSGNode *previous, [[maybe_unused]] Updat
     selection = copy->selection(copyGrid(current->screen));
     if (!copy->pointer) {
       const auto offset = current->screen.scroll().offset;
+
       cursor_override = Cursor{};
       if (copy->cursor.y >= offset && copy->cursor.y - offset < current->screen.rows()) {
         cursor_override = Cursor{.visible = true, .x = copy->cursor.x, .y = static_cast<std::uint16_t>(copy->cursor.y - offset), .shape = CursorShape::block, .blink = false};
       }
     }
   }
+
   // Where no key would land, the terminal's cursor is not drawn (see hidesTerminalCursor).
   if (!cursor_override && application_->hidesTerminalCursor(pane_id_)) {
     cursor_override = Cursor{};
@@ -807,14 +876,17 @@ QSGNode *TerminalItem::updatePaintNode(QSGNode *previous, [[maybe_unused]] Updat
   if (mapped) {
     layoutRows();
     const auto &screen = current->screen;
+
     drawn_rows_.reserve(view_rows_.size());
     constexpr std::uint64_t kept_source = std::uint64_t{1} << 63U;
     constexpr std::uint64_t missing_source = std::uint64_t{1} << 62U;
+
     for (const auto &view : view_rows_) {
       if (!view.exists) {
         drawn_rows_.push_back({.source = missing_source});
       } else if (view.screen_row >= 0 && view.screen_row < screen.rows()) {
         const auto row = static_cast<std::size_t>(view.screen_row);
+
         drawn_rows_.push_back({.cells = screen.row(row), .revision = screen.rowRevision(row), .source = row, .screen_row = view.screen_row});
       } else if (const auto kept = current->rows.find(current->scrollback_trimmed + view.row)) {
         drawn_rows_.push_back({.cells = kept->cells, .revision = kept->revision, .source = kept_source | (current->scrollback_trimmed + view.row)});
@@ -833,11 +905,14 @@ QSGNode *TerminalItem::updatePaintNode(QSGNode *previous, [[maybe_unused]] Updat
     for (auto row = static_cast<std::size_t>(fold_from_); row < row_offsets_.size(); ++row) {
       row_offsets_[row] = static_cast<float>(fold_offset_);
     }
+
     if (fold_fade_row_ >= 0 && std::cmp_less(fold_fade_row_, view_rows_.size())) {
       if (revealed_rows_.empty()) {
         revealed_rows_.assign(view_rows_.size(), 1.0F);
       }
+
       auto &revealed = revealed_rows_[static_cast<std::size_t>(fold_fade_row_)];
+
       revealed = std::min(revealed, fold_fade_);
     }
   }
@@ -874,7 +949,9 @@ QSGNode *TerminalItem::updatePaintNode(QSGNode *previous, [[maybe_unused]] Updat
       .matches = match_marks_,
       .link_screen = mapped && link_hover_.current() ? drawnScreen() : nullptr,
   };
+
   auto *node = TerminalScene::synchronizeNode(previous, *window(), frame);
+
   prepared_frame_ = {
       .pane = {.pane_id = current->id, .frame_id = current->screen.frameId(), .attached = current->attached, .attachment_generation = current->attachment_generation, .graphics_revision = current->graphics.revision()},
       .links = prepareLinkPresentation(),
@@ -889,14 +966,17 @@ QSGNode *TerminalItem::updatePaintNode(QSGNode *previous, [[maybe_unused]] Updat
 std::uint64_t TerminalItem::viewRevision(const Pane<ApplicationAllocator> &current) const noexcept {
   constexpr std::uint64_t prime = 0x100000001b3;
   auto revision = current.screen.revision();
+
   for (const auto value : {top_row_, current.fold_revision, static_cast<std::uint64_t>(fold_motion_ ? fold_shown_ + 1 : 0)}) {
     revision = (revision ^ value) * prime;
   }
+
   for (const auto &row : drawn_rows_) {
     if (row.screen_row < 0) {
       revision = (revision ^ row.source ^ row.revision) * prime;
     }
   }
+
   return revision;
 }
 
@@ -942,6 +1022,7 @@ void TerminalItem::keyPressEvent(QKeyEvent *event) {
   }
 
   const bool cursor_changed = !std::exchange(cursor_on_, true);
+
   if (blink_.isActive()) {
     blink_.start();
   }
@@ -982,6 +1063,7 @@ bool TerminalItem::sendKeyPress(const QKeyEvent &event, const InputModes &modes)
       .text = event.text(),
       .semantic = semantic,
   };
+
   const bool delivered = send(bytes);
   if (delivered && semantic && application_ != nullptr) {
     application_->attachmentKey(pane_id_, *semantic);
@@ -1004,6 +1086,7 @@ void TerminalItem::keyReleaseEvent(QKeyEvent *event) {
   });
   if (current != nullptr && entry != pressed_keys_.end() && !event->isAutoRepeat()) {
     const auto released = std::exchange(*entry, PressedKey{});
+
     send(released.release(current->screen.modes()), PaneInputSource::key_release);
   }
 
@@ -1024,6 +1107,7 @@ void TerminalItem::inputMethodEvent(QInputMethodEvent *event) {
   if (std::exchange(preedit_, event->preeditString()) != preedit_) {
     emit preeditChanged();
   }
+
   polish();
   update();
   event->accept();
@@ -1041,6 +1125,7 @@ void TerminalItem::sendCommittedText(const QString &text) {
     const auto length = paired ? 2 : 1;
     const auto scalar = QString::fromRawData(text.constData() + offset, length);
     const QKeyEvent key{QEvent::KeyPress, Qt::Key_unknown, Qt::NoModifier, scalar};
+
     static_cast<void>(application_->handleCopyKey(pane_id_, key));
     offset += length;
   }
@@ -1053,6 +1138,7 @@ QVariant TerminalItem::inputMethodQuery(Qt::InputMethodQuery query) const {
   }
 
   const auto &cursor = current->screen.cursor();
+
   switch (query) {
   case Qt::ImEnabled:
     return current->attached && !input_method_bypassed_;
@@ -1060,6 +1146,7 @@ QVariant TerminalItem::inputMethodQuery(Qt::InputMethodQuery query) const {
     if (application_ != nullptr && application_->editsPrompt(pane_id_) && prompt_caret_.isValid()) {
       return prompt_caret_;
     }
+
     return QRectF{cursor.x * font_.cell.width(), cursor.y * font_.cell.height(), font_.cell.width(), font_.cell.height()};
   case Qt::ImFont:
     return font_.faces[0];
@@ -1121,12 +1208,14 @@ void TerminalItem::synchronizeFocus() {
 
 void TerminalItem::releaseKeys() {
   const auto *current = pane();
+
   for (auto &key : pressed_keys_) {
     if (key.key == 0) {
       continue;
     }
 
     const auto held = std::exchange(key, PressedKey{});
+
     if (current != nullptr) {
       send(held.release(current->screen.modes()), PaneInputSource::key_release);
     }
@@ -1136,6 +1225,7 @@ void TerminalItem::releaseKeys() {
 QByteArray TerminalItem::PressedKey::release(const InputModes &modes) const {
   if (semantic) {
     auto release = *semantic;
+
     release.phase = KeyPhase::release;
 
     return encodeKey(release, modes);

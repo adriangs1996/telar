@@ -47,6 +47,7 @@ private:
 
     const auto first = static_cast<unsigned char>(text_[position_]);
     const auto start = position_;
+
     if (first >= first_printable_ascii && first < ascii_delete && (position_ + 1 == text_.size() || static_cast<unsigned char>(text_[position_ + 1]) < first_multibyte)) {
       ++position_;
       columns_ = 1;
@@ -58,6 +59,7 @@ private:
     std::array<std::size_t, codepoint_window + 1> offsets{};
     std::size_t count = 0;
     auto cursor = position_;
+
     while (count < codepoints.size() && cursor < text_.size()) {
       const auto leading = static_cast<unsigned char>(text_[cursor]);
       const auto length = Utf8Scalar::sequenceLength(leading);
@@ -94,6 +96,7 @@ private:
     }
 
     const auto consumed = ghostty_unicode_grapheme_width(codepoints.data(), count, &columns_);
+
     columns_ = std::max(std::uint8_t{1}, columns_);
     position_ = offsets[consumed];
     if (codepoints.front() < first_printable_ascii || (codepoints.front() >= ascii_delete && codepoints.front() <= last_control)) {
@@ -124,6 +127,7 @@ namespace telar::gui {
 inline std::uint32_t cellTextColumns(std::string_view text) {
   GraphemeCursor cursor{text};
   std::uint32_t columns = 0;
+
   while (cursor.next()) {
     columns += cursor.columns();
   }
@@ -196,6 +200,7 @@ public:
     if (!value.empty()) {
       std::memmove(bytes_.data(), value.data(), value.size());
     }
+
     length_ = value.size();
     head_ = length_;
     anchor_ = length_;
@@ -210,6 +215,7 @@ public:
     }
 
     const auto changed = anchor_ != anchor || head_ != head;
+
     anchor_ = anchor;
     head_ = head;
 
@@ -237,13 +243,16 @@ public:
 
     const auto changed = std::string_view{bytes_.data() + first, last - first} != value || head_ != first + value.size() || anchor_ != first + value.size();
     std::array<char, Capacity> copied{};
+
     if (!value.empty()) {
       std::memcpy(copied.data(), value.data(), value.size());
     }
+
     std::memmove(bytes_.data() + first + value.size(), bytes_.data() + last, length_ - last);
     if (!value.empty()) {
       std::memcpy(bytes_.data() + first, copied.data(), value.size());
     }
+
     length_ = remaining + value.size();
     head_ = first + value.size();
     anchor_ = head_;
@@ -322,9 +331,11 @@ public:
 
   inline void moveWordLeft(bool extend) noexcept {
     auto position = head_;
+
     while (position > 0 && isSpace(bytes_[position - 1])) {
       --position;
     }
+
     while (position > 0 && !isSpace(bytes_[position - 1])) {
       --position;
     }
@@ -343,9 +354,11 @@ public:
     if (head_ < scroll_) {
       scroll_ = startOfLine(head_, width);
     }
+
     while (!boundary(scroll_)) {
       --scroll_;
     }
+
     while (cellTextColumns(text().substr(scroll_, head_ - scroll_)) >= width) {
       const auto next = clusterAfter(scroll_);
       if (!next) {
@@ -357,6 +370,7 @@ public:
 
     auto last = scroll_;
     std::uint32_t used = 0;
+
     while (last < length_) {
       const auto next = clusterAfter(last);
       if (!next) {
@@ -373,9 +387,11 @@ public:
     }
 
     EditorView result{.text = text().substr(scroll_, last - scroll_), .cursor = columnsBetween(scroll_, head_), .selection = std::nullopt, .clipped_left = scroll_ > 0, .clipped_right = last < length_};
+
     if (hasSelection()) {
       const auto first_selected = std::max(std::min(head_, anchor_), scroll_);
       const auto last_selected = std::min(std::max({head_, anchor_, scroll_}), last);
+
       result.selection = {.first = columnsBetween(scroll_, first_selected), .last = columnsBetween(scroll_, last_selected)};
     }
 
@@ -388,6 +404,7 @@ private:
 
   [[nodiscard]] inline static bool validUtf8(std::string_view value) noexcept {
     std::size_t position = 0;
+
     while (position < value.size()) {
       const auto length = Utf8Scalar::sequenceLength(static_cast<unsigned char>(value[position]));
       if (length == 0 || length > value.size() - position || !Utf8Scalar::tryDecode({value.data() + position, length})) {
@@ -414,6 +431,7 @@ private:
     }
 
     const auto first = std::min(head_, anchor_);
+
     remove(first, std::max(head_, anchor_));
     head_ = first;
     anchor_ = first;
@@ -436,6 +454,7 @@ private:
 
     GraphemeCursor cursor{text()};
     std::size_t previous = 0;
+
     while (cursor.next()) {
       if (cursor.position() >= position) {
         return previous;
@@ -462,6 +481,7 @@ private:
 
   [[nodiscard]] inline std::size_t startOfLine(std::size_t position, std::uint16_t width) const {
     auto first = position;
+
     while (first > 0) {
       const auto previous = clusterBefore(first);
       if (!previous || cellTextColumns(text().substr(*previous, position - *previous)) > static_cast<std::uint16_t>(width - 1)) {
@@ -507,6 +527,7 @@ public:
     std::size_t count = 0;
     std::size_t break_length = 0;
     auto word_end = cursor_;
+
     while (cursor_.position() < bytes_) {
       const auto before = cursor_;
       const auto cluster = cursor_.nextReplacingInvalid();
@@ -646,8 +667,10 @@ public:
     auto word_start = start;
     std::uint32_t used = 0;
     auto remaining = text_;
+
     remaining.remove_prefix(start);
     GraphemeCursor cursor{remaining};
+
     while (start + cursor.position() < text_.size()) {
       const auto before = start + cursor.position();
       if (text_[before] == '\n' || text_[before] == '\r') {
@@ -662,6 +685,7 @@ public:
       }
 
       const auto cluster = cursor.nextReplacingInvalid();
+
       if (used + cursor.columns() > columns_) {
         position_ = before;
         if (used == 0) {

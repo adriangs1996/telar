@@ -106,6 +106,7 @@ struct Options {
 
 inline void socketOption(tbc::view<Options &, tbc::lt::a> options, Cursor &cursor) {
   const auto value = cursor.take("MissingSocketPath");
+
   if (options.socket) {
     usage("DuplicateSocketOption");
   }
@@ -224,6 +225,7 @@ inline Options parseAgent(std::span<char *const> words) {
   if (action == "report-command") {
     constexpr std::array<std::string_view, 2> phases{"started", "finished"};
     const auto phase = cursor.take("MissingCommandReport");
+
     options.command.command = cursor.take("MissingCommandReport");
     options.command.phase = choice<AgentCommandPhase>(phase, "InvalidCommandPhase", phases);
   } else if (action == "report-state") {
@@ -277,6 +279,7 @@ inline Options parseAgent(std::span<char *const> words) {
       options.wait = true;
     } else if (arg == "--until" && action == "wait") {
       auto status = cursor.take("MissingWaitStatus");
+
       options.finished = status == "finished";
       if (status == "idle") {
         status = "ready";
@@ -290,6 +293,7 @@ inline Options parseAgent(std::span<char *const> words) {
       }
     } else if (arg == "--timeout" && (action == "wait" || action == "prompt")) {
       auto text = cursor.take("MissingTimeout");
+
       while (text.ends_with('s')) {
         text.remove_suffix(1);
       }
@@ -408,6 +412,7 @@ inline void validateReport(const Options &options) {
     }
   } else if (options.action == "report-command") {
     const auto &command = options.command;
+
     validateBytes(command.provider, 64, false);
     validateBytes(command.tool_call_id, 256);
     validateBytes(command.command, max_input_bytes, false);
@@ -424,6 +429,7 @@ inline bool equalTitle(std::string_view left, std::string_view right) {
 
 inline ServerOptions socketOptions(const char *socket) {
   ServerOptions options;
+
   options.socket = socket ? socket : "";
   return options;
 }
@@ -434,6 +440,7 @@ template <Allocator Memory>
 void connectRuntime(Memory &memory, const RuntimePaths<Memory> &paths, bool start) {
   try {
     const RuntimeConnection probe{paths.socket.c_str()};
+
     return;
   } catch (const SystemError &error) {
     if (!start || (error.code() != ENOENT && error.code() != ECONNREFUSED)) {
@@ -451,11 +458,13 @@ template <Allocator Memory>
 void writeAgent(Output<Memory> &out, const AgentSnapshotEntry &agent, bool json) {
   const auto provider = agent.provider_name.empty() ? std::string_view{"unknown"} : agent.provider_name;
   const auto status = status_names[static_cast<std::size_t>(agent.status)];
+
   if (json) {
     out.text("{\"pane_id\":").number(agent.pane_id).text(",\"pane_generation\":").number(agent.pane_generation).text(",\"workspace_id\":").number(agent.location.workspace.id).text(",\"tab_id\":").number(agent.location.tab_id).text(",\"pane_index\":").number(agent.pane_index).text(",\"provider\":").json(provider, JsonEscapes::control).text(",\"provider_index\":").number(static_cast<unsigned>(agent.provider)).text(",\"status\":").json(status, JsonEscapes::control);
     out.text(",\"workspace\":").json(agent.workspace_label, JsonEscapes::control).text(",\"tab\":").json(agent.tab_label, JsonEscapes::control).text(",\"title\":").json(agent.session_title, JsonEscapes::control).text(",\"cwd\":").json(agent.cwd_label, JsonEscapes::control).text(",\"blocked_reason\":").json(blocked_reasons[static_cast<std::size_t>(agent.blocked_reason)], JsonEscapes::control).text(",\"status_age_s\":").number(agent.status_age_s).text(",\"worktree_id\":").number(agent.work_tree).text(",\"last_event\":").json(agent.last_event, JsonEscapes::control);
     out.text(",\"plan\":{\"done\":").number(agent.plan_done).text(",\"total\":").number(agent.plan_total).text(",\"step\":").json(agent.plan_step, JsonEscapes::control).text("},\"final_message\":").json(agent.final_message, JsonEscapes::control).text(",\"session_id\":\"");
     std::array<char, 2 * sizeof(agent.session_id)> session;
+
     out.text(encodeLowerHex(agent.session_id, session));
 
     out.text("\"}");
@@ -468,14 +477,17 @@ void writeAgent(Output<Memory> &out, const AgentSnapshotEntry &agent, bool json)
       out.data.append(width - text.size(), ' ');
     }
   };
+
   const auto numeric = [&](std::uint64_t value, std::size_t width) {
     const auto start = out.data.size();
+
     out.number(value);
     const auto used = out.data.size() - start;
     if (used < width) {
       out.data.append(width - used, ' ');
     }
   };
+
   numeric(agent.pane_id, 6);
   numeric(agent.pane_generation, 5);
   column(status, 9);
@@ -542,9 +554,11 @@ WorkspaceList runtimeList(ControlSession<Memory> &session) {
 template <Allocator Memory>
 tbc::view<Vector<PaneRecord, Memory>, tbc::lt::a> paneCatalog(tbc::view<Memory &, tbc::lt::a> memory, const char *socket, const Options &options) {
   ControlSession session{memory, socket};
+
   session.receiveTimeout(30);
   Vector<std::uint64_t, Memory> workspaces{AllocatorRef<std::uint64_t, Memory>{memory}};
   Vector<PaneRecord, Memory> records{AllocatorRef<PaneRecord, Memory>{memory}};
+
   if (options.workspace) {
     workspaces.push_back(entityId(*options.workspace, "TELAR_WORKSPACE_ID"));
   } else {
@@ -556,6 +570,7 @@ tbc::view<Vector<PaneRecord, Memory>, tbc::lt::a> paneCatalog(tbc::view<Memory &
   for (const auto workspace : workspaces) {
     Vector<std::uint64_t, Memory> tabs{AllocatorRef<std::uint64_t, Memory>{memory}};
     const WorkspaceLocation location{.id = workspace};
+
     if (options.tab) {
       tabs.push_back(entityId(*options.tab, "TELAR_TAB_ID"));
     } else {
@@ -577,6 +592,7 @@ tbc::view<Vector<PaneRecord, Memory>, tbc::lt::a> paneCatalog(tbc::view<Memory &
       }
 
       std::uint16_t position = 0;
+
       for (const auto pane : snapshot.panes) {
         records.push_back(PaneRecord{.location = target, .position = position++, .pane = pane});
       }
@@ -589,10 +605,13 @@ tbc::view<Vector<PaneRecord, Memory>, tbc::lt::a> paneCatalog(tbc::view<Memory &
 template <Allocator Memory>
 std::uint64_t worktreeId(Memory &memory, const char *socket, std::string_view reference) {
   ControlSession session{memory, socket};
+
   session.receiveTimeout(30);
   const auto list = runtimeList(session);
+
   for (const bool branch : {true, false}) {
     std::optional<std::uint64_t> found;
+
     for (const auto &tree : list.worktrees) {
       if (branch ? tree.branch == reference : equalTitle(tree.title, reference)) {
         if (found) {
@@ -614,6 +633,7 @@ std::uint64_t worktreeId(Memory &memory, const char *socket, std::string_view re
 inline tbc::view<AgentSnapshotEntry, tbc::lt::a> resolve(tbc::view<const AgentSnapshot &, tbc::lt::a> snapshot, std::string_view target, std::optional<std::uint64_t> worktree = std::nullopt) {
   const auto wanted = target == "--current" ? std::optional{current("TELAR_PANE_ID")} : maybeUnsigned(target);
   std::optional<AgentSnapshotEntry> found;
+
   for (const auto &entry : snapshot.entries) {
     if (worktree ? entry.work_tree == *worktree : wanted ? entry.pane_id == *wanted
                                                          : equalTitle(entry.session_title, target)) {
@@ -657,6 +677,7 @@ inline int commandFailure(const char *family, const std::exception &error) {
   const auto *system = dynamic_cast<const SystemError *>(&error);
   const auto socket_timeout = dynamic_cast<const SocketError *>(&error) && (errno == EAGAIN || errno == EWOULDBLOCK);
   const auto timeout = socket_timeout || (system && (system->code() == EAGAIN || system->code() == EWOULDBLOCK));
+
   std::fprintf(stderr, "%s: %s\n", family, timeout ? "RuntimeTimeout" : error.what());
   if (timeout) {
     return 1;
@@ -688,6 +709,7 @@ void interruptAgent(ControlSession<Memory> &session, const AgentSnapshotEntry &a
 template <Allocator Memory>
 int waitAgent(ControlSession<Memory> &session, const Options &options, std::optional<std::uint64_t> worktree, Output<Memory> &out) {
   const auto deadline = std::chrono::system_clock::now() + std::chrono::seconds{options.timeout};
+
   for (;;) {
     const auto snapshot = session.template exchange<AgentSnapshot>(QueryAgents{});
     const auto agent = resolve(snapshot, options.target, worktree);
@@ -708,8 +730,10 @@ int waitAgent(ControlSession<Memory> &session, const Options &options, std::opti
 template <Allocator Memory>
 void settleAgent(ControlSession<Memory> &session, AgentSnapshotEntry agent) {
   const auto pane = agent.pane_id;
+
   interruptAgent(session, agent);
   const auto deadline = std::chrono::system_clock::now() + interrupt_settle;
+
   while (std::chrono::system_clock::now() < deadline) {
     std::this_thread::sleep_for(poll_interval);
     const auto snapshot = session.template exchange<AgentSnapshot>(QueryAgents{});
@@ -730,6 +754,7 @@ template <Allocator Memory>
 int promptAgent(ControlSession<Memory> &session, const Options &options, AgentSnapshotEntry agent, Output<Memory> &out) {
   const auto pane = agent.pane_id;
   const auto generation = agent.pane_generation;
+
   if (options.interrupt && agent.status == AgentStatus::working) {
     settleAgent(session, agent);
   }
@@ -742,6 +767,7 @@ int promptAgent(ControlSession<Memory> &session, const Options &options, AgentSn
   const auto start_deadline = std::chrono::system_clock::now() + start_grace;
   const auto deadline = std::chrono::system_clock::now() + std::chrono::seconds{options.timeout};
   bool started = false;
+
   for (;;) {
     const auto snapshot = session.template exchange<AgentSnapshot>(QueryAgents{});
     const auto found = std::find_if(snapshot.entries.begin(), snapshot.entries.end(), [&](const auto &entry) { return entry.pane_id == pane; });
@@ -782,6 +808,7 @@ void reportAgent(ControlSession<Memory> &session, const Options &options, const 
     message.pane_generation = pane.second;
     session.template exchange<RequestCompleted>(message);
   };
+
   if (options.action == "report-state") {
     report(options.report);
   } else if (options.action == "report-command") {
@@ -798,6 +825,7 @@ void reportAgent(ControlSession<Memory> &session, const Options &options, const 
 template <Allocator Memory>
 int executeAgent(Memory &memory, const RuntimePaths<Memory> &paths, const Options &options, Output<Memory> &out) {
   ControlSession session{memory, paths.socket.c_str()};
+
   session.receiveTimeout(30);
   const bool report = options.action == "report-title" || options.action == "report-state" || options.action == "report-command";
   std::optional<std::uint64_t> tree;
@@ -805,6 +833,7 @@ int executeAgent(Memory &memory, const RuntimePaths<Memory> &paths, const Option
   if (options.target.starts_with(prefix) && options.target.size() > prefix.size()) {
     if (report) {
       ControlSession catalog{memory, paths.socket.c_str()};
+
       catalog.receiveTimeout(30);
       runtimeList(catalog);
     } else {
@@ -818,6 +847,7 @@ int executeAgent(Memory &memory, const RuntimePaths<Memory> &paths, const Option
   }
 
   const auto snapshot = session.template exchange<AgentSnapshot>(QueryAgents{});
+
   if (options.action == "list") {
     if (options.json) {
       out.text("{\"revision\":").number(snapshot.revision).text(",\"agents\":[");
@@ -826,6 +856,7 @@ int executeAgent(Memory &memory, const RuntimePaths<Memory> &paths, const Option
     }
 
     bool first = true;
+
     for (const auto &agent : snapshot.entries) {
       if (options.json && !first) {
         out.text(",");
@@ -854,25 +885,30 @@ int executeAgent(Memory &memory, const RuntimePaths<Memory> &paths, const Option
   if (options.action == "prompt") {
     const auto refreshed = session.template exchange<AgentSnapshot>(QueryAgents{});
     const auto again = resolve(refreshed, options.target, tree);
+
     return promptAgent(session, options, again, out);
   }
 
   const auto agent = resolve(snapshot, options.target, tree);
+
   if (report) {
     reportAgent(session, options, {agent.pane_id, agent.pane_generation}, out);
   } else if (options.action == "get") {
     writeOne(out, agent, options.json);
   } else if (options.action == "read") {
     const auto reply = session.template exchange<PaneText>(ReadPane{.pane_id = agent.pane_id, .pane_generation = agent.pane_generation, .rows = options.lines, .source = options.source});
+
     writeText(out, reply, options.json, true);
   } else if (options.action == "interrupt") {
     Output saved{memory};
+
     writeOne(saved, agent, options.json);
     interruptAgent(session, agent);
     out.text(saved.data);
   } else if (options.action == "acknowledge") {
     const auto pane = agent.pane_id;
     const auto generation = agent.pane_generation;
+
     session.send(AcknowledgeAgent{.pane_id = pane, .pane_generation = generation});
     const auto updated = session.template exchange<AgentSnapshot>(QueryAgents{});
     const auto found = std::find_if(updated.entries.begin(), updated.entries.end(), [&](const auto &entry) { return entry.pane_id == pane; });
@@ -901,10 +937,13 @@ template <Allocator Memory>
 int runAgent(Memory &memory, const pane_agents::Options &options) {
   using namespace pane_agents;
   const RuntimePaths paths{memory, socketOptions(options.socket), process_environment};
+
   connectRuntime(memory, paths, options.action != "acknowledge" && options.action != "report-title" && options.action != "report-state" && options.action != "report-command");
   Output out{memory};
+
   try {
     const auto result = executeAgent(memory, paths, options, out);
+
     out.flush();
     return result;
   } catch (const std::exception &error) {
@@ -948,6 +987,7 @@ struct ExecutionOptions {
     ExecutionOptions self;
     Cursor cursor{words};
     constexpr std::array names{"start", "status", "output", "cancel", "forget", "list"};
+
     if (!words.empty()) {
       for (std::size_t action = 0; action < names.size(); ++action) {
         if (words.front() == std::string_view{names[action]}) {
@@ -966,6 +1006,7 @@ struct ExecutionOptions {
       const std::string_view arg = *word;
       if (arg == "--") {
         const auto command = cursor.rest();
+
         self.argument_count = command.size();
         if (self.argument_count > max_arguments) {
           throw std::invalid_argument{self.action == Action::start ? "InvalidExecutionArguments" : "InvalidExecutionOptions"};
@@ -983,6 +1024,7 @@ struct ExecutionOptions {
         self.stdin_open = false;
       } else {
         const auto value = cursor.take("MissingExecutionOptionValue");
+
         if (arg == "--cwd") {
           self.cwd = value;
         } else if (arg == "--socket") {
@@ -1036,6 +1078,7 @@ inline constexpr std::size_t max_chunk = 4096;
 
 inline std::string_view stateName(ExecutionState state) {
   constexpr std::array names{"starting", "running", "exited", "failed"};
+
   return names.at(static_cast<std::size_t>(state));
 }
 
@@ -1078,6 +1121,7 @@ template <Allocator Memory>
 void list(ControlSession<Memory> &session) {
   ExecutionRequest request{.action = ExecutionAction::list};
   std::string output = "[";
+
   for (;;) {
     const auto reply = exchange(session, request);
     if (reply.execution_id == 0) {
@@ -1112,6 +1156,7 @@ int observe(ControlSession<Memory> &session, ExecutionRequest request, Execution
   bool stdin_open = request.stdin_open;
   const auto stdout_end = reply.stdout_total;
   const auto stderr_end = reply.stderr_total;
+
   request.action = ExecutionAction::status;
   request.arguments = {};
   request.cwd = {};
@@ -1154,6 +1199,7 @@ int observe(ControlSession<Memory> &session, ExecutionRequest request, Execution
           }
 
           auto chunk = request;
+
           chunk.action = count == 0 ? ExecutionAction::eof : ExecutionAction::input;
           chunk.bytes = std::span{bytes}.first(static_cast<std::size_t>(count));
           chunk.input_offset = reply.input_offset;
@@ -1195,6 +1241,7 @@ int start(ControlSession<Memory> &session, const ExecutionOptions &options) {
 
   try {
     const auto reply = exchange(session, request);
+
     if (options.action == ExecutionOptions::Action::status || options.action == ExecutionOptions::Action::cancel || options.action == ExecutionOptions::Action::forget || options.detach) {
       writeText(statusJson(reply));
       return 0;
@@ -1214,10 +1261,13 @@ template <Allocator Memory>
 int run(Memory &memory, const ExecutionOptions &options) {
   try {
     ServerOptions server_options{};
+
     server_options.socket = options.socket;
     const RuntimePaths paths{memory, server_options, process_environment};
+
     ensureRuntime(memory, paths);
     ControlSession session{memory, paths.socket.c_str()};
+
     session.receiveTimeout(30);
     return start(session, options);
   } catch (const ControlFailure &error) {
@@ -1243,6 +1293,7 @@ template <Allocator Memory>
 void writePane(Output<Memory> &out, const PaneRecord &entry, bool json) {
   const auto &pane = entry.pane;
   const auto lifecycle = lifecycles.at(static_cast<std::size_t>(pane.lifecycle));
+
   if (json) {
     out.text("{\"workspace_id\":").number(entry.location.workspace.id).text(",\"tab_id\":").number(entry.location.tab_id).text(",\"position\":").number(entry.position).text(",\"pane_id\":").number(pane.pane_id).text(",\"pane_generation\":").number(pane.pane_generation).text(",\"lifecycle\":").json(lifecycle, JsonEscapes::standard).text("}");
   } else {
@@ -1253,8 +1304,10 @@ void writePane(Output<Memory> &out, const PaneRecord &entry, bool json) {
 template <Allocator Memory>
 void inspectPanes(Memory &memory, const char *socket, const Options &options, Output<Memory> &out) {
   const auto catalog = paneCatalog(memory, socket, options);
+
   if (options.action == "get") {
     const auto wanted = paneId(options.target);
+
     for (const auto &entry : catalog) {
       if (entry.pane.pane_id == wanted) {
         writePane(out, entry, options.json);
@@ -1271,6 +1324,7 @@ void inspectPanes(Memory &memory, const char *socket, const Options &options, Ou
 
   out.text(options.json ? "[" : "WORKSPACE\tTAB\tPANE\tGENERATION\tLIFECYCLE\n");
   bool first = true;
+
   for (const auto &entry : catalog) {
     if (options.json && !first) {
       out.text(",");
@@ -1290,6 +1344,7 @@ void watchPane(ControlSession<Memory> &session, const Options &options, const Pa
   std::optional<std::array<unsigned char, SHA256_DIGEST_LENGTH>> previous;
   bool previous_truncated = false;
   std::uint64_t count = 0;
+
   for (;;) {
     const auto reply = session.template exchange<PaneText>(ReadPane{.pane_id = pane.pane_id, .pane_generation = pane.pane_generation, .rows = options.lines, .source = options.source});
     if (reply.pane_id != pane.pane_id) {
@@ -1297,6 +1352,7 @@ void watchPane(ControlSession<Memory> &session, const Options &options, const Pa
     }
 
     std::array<unsigned char, SHA256_DIGEST_LENGTH> digest;
+
     SHA256(reinterpret_cast<const unsigned char *>(reply.text.data()), reply.text.size(), digest.data());
     if (!previous || digest != *previous || reply.truncated != previous_truncated) {
       out.text("{\"pane_id\":").number(pane.pane_id).text(",\"pane_generation\":").number(pane.pane_generation).text(",\"truncated\":").boolean(reply.truncated).text(",\"text\":").json(reply.text, JsonEscapes::standard).text("}\n");
@@ -1316,10 +1372,12 @@ void watchPane(ControlSession<Memory> &session, const Options &options, const Pa
 template <Allocator Memory>
 int executePane(Memory &memory, const RuntimePaths<Memory> &paths, Options options, Output<Memory> &out) {
   ControlSession session{memory, paths.socket.c_str()};
+
   session.receiveTimeout(30);
   String<Memory> input{AllocatorRef<char, Memory>{memory}};
   // The text to send: the option's, or what stdin gave, which lives here rather than in the options.
   std::string_view text = options.text;
+
   if (options.stdin_text) {
     input.resize(max_input_bytes + 1);
     const auto count = std::fread(input.data(), 1, input.size(), stdin);
@@ -1346,8 +1404,10 @@ int executePane(Memory &memory, const RuntimePaths<Memory> &paths, Options optio
   }
 
   const auto wanted = paneId(options.target);
+
   if (options.action == "watch") {
     const auto catalog = paneCatalog(memory, paths.socket.c_str(), options);
+
     for (const auto &entry : catalog) {
       if (entry.pane.pane_id == wanted) {
         watchPane(session, options, entry.pane, out);
@@ -1363,10 +1423,12 @@ int executePane(Memory &memory, const RuntimePaths<Memory> &paths, Options optio
   }
 
   std::uint64_t generation = 0;
+
   if (options.action == "focus") {
     generation = current("TELAR_PANE_GENERATION", true);
   } else {
     const auto snapshot = session.template exchange<AgentSnapshot>(QueryAgents{});
+
     for (const auto &agent : snapshot.entries) {
       if (agent.pane_id == wanted) {
         generation = agent.pane_generation;
@@ -1377,6 +1439,7 @@ int executePane(Memory &memory, const RuntimePaths<Memory> &paths, Options optio
 
   if (options.action == "read") {
     const auto reply = session.template exchange<PaneText>(ReadPane{.pane_id = wanted, .pane_generation = generation, .rows = options.lines, .source = options.source});
+
     writeText(out, reply, options.json, false);
   } else if (options.action == "send-keys") {
     validateBytes(text, max_input_bytes, false);
@@ -1396,6 +1459,7 @@ int executePane(Memory &memory, const RuntimePaths<Memory> &paths, Options optio
     }
 
     bool first = true;
+
     for (const auto &match : reply.matches) {
       if (options.json) {
         out.text(first ? "" : ",").text("{\"x\":").number(match.x).text(",\"y\":").number(match.y).text(",\"len\":").number(match.len).text("}");
@@ -1411,6 +1475,7 @@ int executePane(Memory &memory, const RuntimePaths<Memory> &paths, Options optio
     }
   } else if (options.action == "focus") {
     const auto reply = session.template exchange<PaneFocusResult>(RequestPaneFocus{.pane_id = wanted, .pane_generation = generation, .direction = *options.direction});
+
     if (options.json) {
       out.text("{\"changed\":").boolean(reply.outcome == PaneFocusOutcome::focused).text(",\"focused_pane_id\":").number(reply.focused_pane_id).text(",\"reason\":").json(focus_outcomes.at(static_cast<std::size_t>(reply.outcome)), JsonEscapes::control).text("}\n");
     }
@@ -1427,10 +1492,13 @@ template <Allocator Memory>
 int runPane(Memory &memory, const pane_agents::Options &options) {
   using namespace pane_agents;
   const RuntimePaths paths{memory, socketOptions(options.socket), process_environment};
+
   connectRuntime(memory, paths, options.action == "read" || options.action == "send-keys" || options.action == "focus");
   Output out{memory};
+
   try {
     const auto result = executePane(memory, paths, options, out);
+
     out.flush();
     return result;
   } catch (const std::exception &error) {
@@ -1482,6 +1550,7 @@ const char *recipeJsonFailure(Memory &memory, std::string_view text) {
   std::string closing;
   bool in_string = false;
   bool escaped = false;
+
   for (const char byte : text) {
     if (in_string) {
       if (escaped) {
@@ -1506,20 +1575,24 @@ const char *recipeJsonFailure(Memory &memory, std::string_view text) {
 
   std::reverse(closing.begin(), closing.end());
   constexpr std::array completions{"", "\"", "0", "null", ":null", "\":null", "\"\":null", "n\"", "0\"", "00\"", "000\"", "0000\"", "rue", "ue", "e", "alse", "lse", "se", "ull", "ll", "l"};
+
   for (const std::string_view suffix : completions) {
     if (suffix.empty() && closing.empty()) {
       continue;
     }
 
     std::string candidate{text};
+
     candidate += suffix;
     candidate += closing;
     try {
       const auto completed = JsonValue::parse(candidate);
       const char *diagnostic = "UnexpectedEndOfInput";
+
       if (completed.encoded().starts_with('{')) {
         completed.eachMember([&](JsonValue key, JsonValue value) {
           String<Memory> name{AllocatorRef<char, Memory>{memory}};
+
           key.string(name);
           const auto key_end = static_cast<std::size_t>(key.encoded().data() - candidate.data()) + key.encoded().size();
           if (key_end <= text.size() && name != "version" && name != "argv") {
@@ -1595,11 +1668,13 @@ std::vector<std::string> recipeArguments(Memory &memory, std::string_view text) 
   if (number < 0 || number > std::numeric_limits<std::uint8_t>::max()) {
     throw std::runtime_error{"Overflow"};
   }
+
   if (number != 1 || argv->children().empty() || argv->children().size() > ExecutionOptions::max_arguments) {
     throw std::runtime_error{"InvalidProjectRecipe"};
   }
 
   std::vector<std::string> result;
+
   result.reserve(argv->children().size());
   for (const auto &argument : argv->children()) {
     if (argument.kind() != JsonKind::string) {
@@ -1617,6 +1692,7 @@ std::optional<std::vector<std::string>> loadRecipe(Memory &memory, std::string_v
   const auto path = std::string{cwd} + "/.telar/setup.json";
   FileDescriptor parent;
   FileDescriptor file;
+
   try {
     parent = file_transfer::openParent(path);
     file = file_transfer::openRegular(parent.get(), "setup.json");
@@ -1638,8 +1714,10 @@ std::optional<std::vector<std::string>> loadRecipe(Memory &memory, std::string_v
   }
 
   std::string text;
+
   text.reserve(static_cast<std::size_t>(inode.st_size));
   std::array<char, max_recipe_bytes> bytes;
+
   for (;;) {
     const auto count = ::read(file.get(), bytes.data(), bytes.size());
     if (count < 0 && errno == EINTR) {
@@ -1669,6 +1747,7 @@ void awaitSetup(ControlSession<Memory> &session, ExecutionRequest request, Execu
   request.action = ExecutionAction::status;
   request.arguments = {};
   const auto started = std::chrono::steady_clock::now();
+
   for (;;) {
     if (request.stdout_offset != reply.stdout_offset || request.stderr_offset != reply.stderr_offset) {
       throw std::runtime_error{"SetupOutputRetentionExceeded"};
@@ -1699,14 +1778,17 @@ void awaitSetup(ControlSession<Memory> &session, ExecutionRequest request, Execu
 template <Allocator Memory>
 std::uint64_t execute(ControlSession<Memory> &session, std::string_view cwd, std::span<const std::string> recipe, bool detach) {
   std::array<std::string_view, ExecutionOptions::max_arguments> argv;
+
   for (std::size_t index = 0; index < recipe.size(); ++index) {
     argv[index] = recipe[index];
   }
 
   const auto id = randomIdentity();
   ExecutionRequest request{.action = ExecutionAction::start, .execution_id = id, .cwd = cwd, .arguments = std::span{argv}.first(recipe.size())};
+
   writeText(std::format("telar project: setup execution {}; each explicit invocation repeats the recipe\n", id), STDERR_FILENO);
   const auto reply = execution::exchange(session, request);
+
   if (!detach) {
     awaitSetup(session, request, reply);
   }
@@ -1734,10 +1816,13 @@ std::optional<std::uint64_t> prepare(Memory &memory, std::string_view cwd, bool 
   }
 
   ServerOptions server_options{};
+
   server_options.socket = socket;
   const RuntimePaths paths{memory, server_options, process_environment};
+
   ensureRuntime(memory, paths);
   ControlSession session{memory, paths.socket.c_str()};
+
   session.receiveTimeout(30);
   return execute(session, cwd, *recipe, detach);
 }
@@ -1746,6 +1831,7 @@ template <Allocator Memory>
 int run(Memory &memory, const Options &options) {
   try {
     const auto id = prepare(memory, options.cwd, true, options.detach, {});
+
     writeText(std::format("{{\"execution_id\":{},\"environment\":{},\"ready\":{}}}\n", id ? std::to_string(*id) : "null", quoteJson(!id ? "not_declared" : options.detach ? "running"
                                                                                                                                                                           : "ready"),
                           jsonBoolean(id && !options.detach)));

@@ -90,7 +90,9 @@ void waitForProfileLock(int descriptor, const std::stop_token &stop) {
   const std::stop_callback notify_stop{stop, [&cancellation] {
                                          cancellation.release();
                                        }};
+
   constexpr auto retry_interval = std::chrono::milliseconds{20};
+
   for (;;) {
     if (stop.stop_requested()) {
       throw ProfileOperationCancelled{};
@@ -117,6 +119,7 @@ public:
   explicit TemporaryProfileFile(int parent)
       : parent_(parent) {
     constexpr unsigned maximum_attempts = 8;
+
     for (unsigned attempt = 0; attempt < maximum_attempts; ++attempt) {
       generateName();
       try {
@@ -169,10 +172,12 @@ private:
 
   void generateName() {
     std::array<std::uint8_t, nonce_bytes> nonce{};
+
     SecureRandom::fill(nonce);
 
     std::ranges::copy(prefix, name_.begin());
     auto position = prefix.size();
+
     for (const auto byte : nonce) {
       name_[position++] = hexadecimal[byte >> hexadecimal_bits];
       name_[position++] = hexadecimal[byte % hexadecimal.size()];
@@ -194,6 +199,7 @@ ProfileFile::ProfileFile(std::string_view path, std::stop_token stop)
   }
 
   BoundedText<PathLimits::path_bytes - 1> absolute;
+
   if (!path.starts_with('/')) {
     std::array<char, PathLimits::path_bytes> current{};
     if (::getcwd(current.data(), current.size()) == nullptr) {
@@ -221,12 +227,14 @@ std::string_view ProfileFile::path() const noexcept {
 ProfileFileTransaction ProfileFile::lock() const {
   std::array<char, PathLimits::path_bytes> parent_path{};
   const auto parent_length = std::max<std::size_t>(1, name_offset_ - 1);
+
   std::copy_n(path_.begin(), parent_length, parent_path.begin());
   runtime::createPrivateDirectory({parent_path.data(), parent_length});
   auto parent = runtime::openPrivateParent(path());
   const auto name = path().substr(name_offset_);
   constexpr std::string_view lock_suffix = ".lock";
   BoundedText<PathLimits::component_bytes> lock_name;
+
   lock_name.append(name);
   lock_name.append(lock_suffix);
   auto held = openProfileLockFile(parent.get(), lock_name.view());
@@ -245,6 +253,7 @@ ProfileFileTransaction::ProfileFileTransaction(runtime::FileDescriptor parent, r
 
 void ProfileFileTransaction::replace(std::string_view source) const {
   TemporaryProfileFile temporary{parent_.get()};
+
   temporary.replace(name_.data(), source);
 }
 

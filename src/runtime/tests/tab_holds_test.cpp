@@ -58,22 +58,26 @@ using namespace telar::runtime;
 
 static void testHeldTabCapacity() {
   HeldTabs held;
+
   for (std::size_t index = 0; index < HeldTabs::capacity; ++index) {
     check(held.insert(TabLocation{.workspace = {.id = 1}, .tab_id = index + 1}));
   }
 
   const TabLocation first{.workspace = {.id = 1}, .tab_id = 1};
   const TabLocation other_workspace{.workspace = {.id = 2}, .tab_id = 1};
+
   check(held.insert(first));
   check(!held.contains(other_workspace) && !held.insert(other_workspace));
   check(held.erase(first) && !held.erase(first));
   check(held.insert(other_workspace));
 
   std::size_t count = 0;
+
   while (const auto location = held.pop()) {
     check(!held.contains(*location));
     ++count;
   }
+
   check(count == HeldTabs::capacity);
 }
 
@@ -90,6 +94,7 @@ static void testHeldTabLifecycle() {
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
   const Launch launch{.cwd = "/tmp", .arguments = arguments};
   constexpr TerminalSize size{80, 24, 0, 0};
+
   workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 1, .size = size, .launch = launch});
   const auto opened = owner.receive<PaneOpened>();
   const auto location = opened.location;
@@ -100,6 +105,7 @@ static void testHeldTabLifecycle() {
   }
 
   auto &pane = panes.require(model.panes, opened.pane_id);
+
   pane.output_closed = true;
   pane.exit_status = 0;
   panes.release(model, clients, owner.session().id, pane.id);
@@ -118,6 +124,7 @@ static void testHeldTabLifecycle() {
 
   workspaces.createPane(model, panes, clients, owner.session().id, CreatePane{.request_id = 5, .location = location, .size = size, .launch = launch});
   const auto reopened = owner.receive<PaneOpened>();
+
   check(reopened.location.tab_id == location.tab_id);
   workspaces.releaseHeldTabs(model, panes, clients, holder.session().id);
   check(!tabHeld(clients, location) && !workspaces.requireTab(model.workspaces, location).panes.empty());
@@ -143,12 +150,15 @@ static void testHeldTabRelease() {
   ClientPeer holder{memory, model, clients, ClientRole::control};
   const auto workspace_id = model.workspaces.nextId();
   auto workspace = makeOwned<Workspace<SystemAllocator>>(memory, memory, workspace_id, "/tmp", "Held tabs");
+
   for (std::size_t index = 0; index < HeldTabs::capacity; ++index) {
     workspace->tabs.emplace_back(memory, index + 1, "Empty");
   }
+
   model.workspaces.insert(workspace_id, std::move(workspace));
   const auto other_id = model.workspaces.nextId();
   auto other = makeOwned<Workspace<SystemAllocator>>(memory, memory, other_id, "/", "Other workspace");
+
   other->tabs.emplace_back(memory, HeldTabs::capacity + 1, "Empty");
   model.workspaces.insert(other_id, std::move(other));
   owner.session().workspace = workspace_id;
@@ -157,20 +167,24 @@ static void testHeldTabRelease() {
 
   for (std::size_t index = 0; index < HeldTabs::capacity; ++index) {
     auto location = first;
+
     location.tab_id += index;
     workspaces.holdTab(model, panes, clients, owner.session().id, HoldTab{.request_id = index + 1, .location = location, .held = true});
     owner.receive<RequestCompleted>();
   }
 
   auto overflow = first;
+
   overflow.workspace.id = other_id;
   overflow.tab_id = HeldTabs::capacity + 1;
   bool refused = false;
+
   try {
     workspaces.holdTab(model, panes, clients, owner.session().id, HoldTab{.request_id = 100, .location = overflow, .held = true});
   } catch (const RequestError &error) {
     refused = error.code() == FailureCode::resource_limit && std::string_view{error.what()} == "this client holds too many tabs";
   }
+
   check(refused);
 
   workspaces.holdTab(model, panes, clients, holder.session().id, HoldTab{.request_id = 101, .location = first, .held = true});
@@ -191,11 +205,13 @@ static void testHeldTabRelease() {
   check(model.workspaces.find(other_id) == nullptr);
 
   bool missing = false;
+
   try {
     workspaces.holdTab(model, panes, clients, holder.session().id, HoldTab{.request_id = 103, .location = first, .held = false});
   } catch (const RequestError &error) {
     missing = error.code() == FailureCode::tab_not_found && std::string_view{error.what()} == "tab not found";
   }
+
   check(missing);
 }
 

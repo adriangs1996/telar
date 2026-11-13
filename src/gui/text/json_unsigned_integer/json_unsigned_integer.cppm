@@ -78,12 +78,14 @@ struct TextFit {
     const auto room = width - tail;
     const auto estimate = static_cast<std::size_t>(std::floor(static_cast<float>(prefixes.graphemes) * room / full));
     auto keep = std::min(estimate, prefixes.stored);
+
     while (keep > 0 && measureText(measure, text.substr(0, prefixes.bytes[keep])) > room) {
       --keep;
     }
 
     const auto prefix = text.substr(0, prefixes.bytes[keep]);
     auto *output = std::ranges::copy(prefix, buffer.begin()).out;
+
     output = std::ranges::copy(ellipsis, output).out;
 
     return {buffer.data(), static_cast<std::size_t>(output - buffer.begin())};
@@ -110,6 +112,7 @@ private:
     GraphemeCursor cursor{text};
     Prefixes result;
     std::size_t bytes = 0;
+
     while (const auto cluster = cursor.next()) {
       ++result.graphemes;
       bytes += cluster->size();

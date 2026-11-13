@@ -44,12 +44,14 @@ using namespace telar::runtime;
 
 static void testLinkedFiles() {
   std::array<char, 64> pattern;
+
   std::strcpy(pattern.data(), "/tmp/telar-linked-test.XXXXXX");
   check(::mkdtemp(pattern.data()) != nullptr);
   const std::filesystem::path root{pattern.data()};
   const auto main = root / "main";
   const auto linked = root / "linked";
   const auto metadata = main / ".git/worktrees/feature";
+
   std::filesystem::create_directories(metadata);
   std::filesystem::create_directories(linked / "nested/child");
   std::ofstream{main / ".git/HEAD"} << "ref: refs/heads/main\n";
@@ -57,8 +59,10 @@ static void testLinkedFiles() {
   std::ofstream{metadata / "commondir"} << "../..\n";
   std::ofstream{linked / ".git"} << "gitdir: ../main/.git/worktrees/feature\n";
   LinkedWorktree reader;
+
   check(!reader.find(main.string()));
   const auto found = reader.find((linked / "nested/child").string());
+
   check(found && found->root_length == linked.string().size() && found->branch == "feature/topic");
   check(reader.mainBranch(linked.string()) == "main");
   std::ofstream{main / ".git/HEAD"} << "0123456789abcdef\n";
@@ -77,8 +81,10 @@ static void testLinkedFiles() {
 
   WorktreeDetectionProbe probe;
   WorktreeDetectionRequest request{.pane = 7, .generation = 11, .cwd_revision = 13};
+
   request.cwd.assign((linked / "nested").string());
   const auto observation = probe.observe(request);
+
   check(observation.pane == 7 && observation.generation == 11 && observation.cwd_revision == 13);
   check(observation.root_length == linked.string().size() && observation.branch.view() == "feature/topic");
   std::ofstream{metadata / "HEAD"} << "ref: refs/heads/" << std::string(201, 'x') << '\n';
@@ -94,6 +100,7 @@ public:
   Result observe(const Request &request) noexcept {
     released.wait(false, std::memory_order_acquire);
     Result result{.pane = request.pane, .generation = request.generation, .cwd_revision = request.cwd_revision, .root_length = request.cwd.view().size()};
+
     result.branch.assign("external");
     return result;
   }
@@ -112,14 +119,17 @@ public:
 
 static void collect(RuntimeModel<SystemAllocator> &model, WorktreeDetectionService<SystemAllocator, GatedWorktreeDetector &> &service) {
   pollfd completion{.fd = service.descriptor(), .events = POLLIN, .revents = 0};
+
   check(::poll(&completion, 1, 1000) == 1);
   for (unsigned attempt = 0; attempt < 1000; ++attempt) {
     service.collect(model);
     if (::poll(&completion, 1, 0) == 0) {
       return;
     }
+
     std::this_thread::yield();
   }
+
   check(false);
 }
 
@@ -129,10 +139,12 @@ static void testDetectionLifecycle() {
   ClientStore<SystemAllocator> clients{memory};
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
   Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
+
   model.panes.insert(1, makeOwned<Pane<SystemAllocator>>(memory, memory, 1, TabLocation{.workspace = {.id = 7}, .tab_id = 1}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits}));
   auto &pane = *model.panes.find(1);
   GatedWorktreeDetector probe;
   WorktreeDetectionService<SystemAllocator, GatedWorktreeDetector &> service{probe};
+
   service.tick(model);
   pane.cwd = "/tmp/changed";
   ++pane.cwd_revision;
@@ -150,16 +162,20 @@ static void testDetectionLifecycle() {
   service.tick(model);
   collect(model, service);
   const auto *entry = model.worktrees.containing(pane.cwd);
+
   check(entry != nullptr && entry->source == 7 && entry->branch.view() == "external" && entry->origin == WorktreeOrigin::external);
   const auto revision = model.workspace_revision;
+
   ++pane.cwd_revision;
   service.tick(model);
   check(model.workspace_revision == revision);
 
   for (unsigned index = 0; index < 47; ++index) {
     const auto path = "/external/" + std::to_string(index);
+
     model.worktrees.registerEntry(RegisterWorktree{.source = 7, .origin = WorktreeOrigin::external, .path = path, .branch = "external"});
   }
+
   pane.cwd = "/tmp/another";
   ++pane.cwd_revision;
   service.tick(model);
@@ -167,8 +183,10 @@ static void testDetectionLifecycle() {
   check(model.worktrees.containing(pane.cwd) == nullptr);
   for (unsigned index = 0; index < 16; ++index) {
     const auto path = "/managed/" + std::to_string(index);
+
     model.worktrees.registerEntry(RegisterWorktree{.source = 7, .path = path, .branch = "managed"});
   }
+
   check(model.worktrees.containing("/managed/15") != nullptr);
 }
 

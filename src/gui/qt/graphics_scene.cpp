@@ -83,6 +83,7 @@ const WindowImage *GraphicsScene::texture(const GraphicsStore<ApplicationAllocat
   }
 
   auto &entry = resolved_[resolved_count_++];
+
   entry = {.image_id = key.image_id, .texture = std::nullopt};
   entry.texture = images_->resolve(*this, store, key);
   return entry.texture ? &*entry.texture : nullptr;
@@ -127,6 +128,7 @@ void GraphicsScene::synchronize(QQuickItem &owner, const GraphicsStore<Applicati
 
   std::array<GraphicsPlacement, GraphicsStore<ApplicationAllocator>::placement_capacity> placements;
   const auto count = store.placements().size();
+
   std::copy(store.placements().begin(), store.placements().end(), placements.begin());
   std::sort(placements.begin(), placements.begin() + count, placementOrder);
   cell_ = cell;
@@ -136,6 +138,7 @@ void GraphicsScene::synchronize(QQuickItem &owner, const GraphicsStore<Applicati
   const auto sorted = std::span{placements}.first(count);
   const auto below_text = std::ranges::lower_bound(sorted, below_background_limit, {}, &GraphicsPlacement::z_index);
   const auto above_text = std::ranges::lower_bound(sorted, 0, {}, &GraphicsPlacement::z_index);
+
   drawPlacements(store, {sorted.begin(), below_text}, rows);
   drawPlacements(store, {below_text, above_text}, rows);
   placeholders(store, rows);
@@ -186,6 +189,7 @@ void GraphicsScene::drawPlacements(const GraphicsStore<ApplicationAllocator> &st
     if (!drawn) {
       continue;
     }
+
     geometry.destination.y += static_cast<float>(*drawn - row) * height;
     if (geometry.source.empty() || geometry.destination.empty()) {
       continue;
@@ -218,6 +222,7 @@ void GraphicsScene::drawPlaceholder(const GraphicsStore<ApplicationAllocator> &s
     const Point cell{.x = static_cast<float>(cell_.width()), .y = static_cast<float>(cell_.height())};
     const auto base = ImageGeometry::resolve(placement, image->description(), cell, static_cast<float>(scale_));
     auto geometry = placeholderGeometry(run, placement, base, cell, static_cast<float>(scale_));
+
     geometry.destination.y += static_cast<float>(row * cell_.height());
     if (geometry.source.empty() || geometry.destination.empty()) {
       return;
@@ -247,6 +252,7 @@ void GraphicsScene::placeholders(const GraphicsStore<ApplicationAllocator> &stor
 
 void GraphicsScene::placeholderRow(const GraphicsStore<ApplicationAllocator> &store, std::span<const CellValue> row, std::uint16_t row_index) {
   std::optional<PlaceholderRun> run;
+
   for (std::size_t column = 0; column < row.size(); ++column) {
     const auto placeholder = parsePlaceholder(row[column]);
     if (!placeholder) {

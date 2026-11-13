@@ -96,6 +96,7 @@ public:
 
   [[nodiscard]] inline std::int32_t advance() const {
     std::int64_t advance = 0;
+
     for (const auto &position : positions_) {
       advance += position.x_advance;
     }

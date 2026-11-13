@@ -50,11 +50,13 @@ inline bool builtinSource(SourceKind kind) noexcept {
 inline BarContent builtinContent(SourceKind kind) {
   BarContent content;
   Input input{};
+
   input.node.priority = builtin_priority;
   if (kind == SourceKind::metrics) {
     input.node.kind = Kind::group;
     input.text = "system";
     const auto group = content.append(input);
+
     input.text = {};
     input.node.kind = Kind::metric;
     input.node.parent = group;
@@ -108,6 +110,7 @@ public:
 
   inline static int invoke(lua_State *state) {
     const auto &invocation = *static_cast<const Invocation *>(lua_touserdata(state, 1));
+
     lua_rawgeti(state, LUA_REGISTRYINDEX, invocation.reference_);
     if (invocation.field_ != nullptr) {
       lua_getfield(state, -1, invocation.field_);
@@ -197,6 +200,7 @@ public:
     }
 
     Text result;
+
     for (std::size_t index = 0; index < pattern.size(); ++index) {
       if (pattern[index] == '%' && index + 1 < pattern.size()) {
         directive(result, pattern[++index], time);
@@ -390,6 +394,7 @@ public:
   // A value remains one argv element; only labels and details may be shortened.
   inline void keep(const PickInput &input) {
     const auto value = input.value.value_or(input.label);
+
     offer(offered_.items, 1);
     for (const auto text : {input.label, value, input.detail}) {
       offer(offered_.text, text.size());
@@ -404,6 +409,7 @@ public:
 
     const auto label = runtime::utf8Prefix(input.label, maximum_label_bytes);
     const auto detail = runtime::utf8Prefix(input.detail, maximum_detail_bytes);
+
     if (label.empty() || value.empty()) {
       throw std::invalid_argument{"A pick option needs a label and value"};
     }
@@ -419,6 +425,7 @@ public:
     }
 
     Row row;
+
     row.label = store(label);
     row.value = shared ? row.label : store(value);
     row.detail = store(detail);
@@ -449,6 +456,7 @@ public:
         {.name = "picks.max_value_bytes", .noun = "value bytes", .value = maximum_value_bytes, .requested = offered_.value, .route = {}},
         {.name = "picks.max_detail_bytes", .noun = "detail bytes", .value = maximum_detail_bytes, .requested = offered_.detail, .route = {}},
     });
+
     for (const auto &reach : reaches) {
       if (reach.requested.value_or(0) > reach.value) {
         limits.add(reach);
@@ -500,6 +508,7 @@ private:
 
   inline Range store(std::string_view value) noexcept {
     const Range range{.offset = static_cast<std::uint32_t>(used_), .length = static_cast<std::uint16_t>(value.size())};
+
     std::ranges::copy(value, bytes_.begin() + static_cast<std::ptrdiff_t>(used_));
     used_ += value.size();
 
@@ -529,6 +538,7 @@ public:
   inline static void read(const runtime::lua::Value &value, PickItems &output, runtime::config::LimitNotices &limits) {
     PickItems next;
     const auto count = value.arraySize();
+
     for (std::size_t index = 0; index < count; ++index) {
       item(value.element(static_cast<lua_Integer>(index) + 1), next);
     }
@@ -540,9 +550,11 @@ public:
   inline static void lines(std::string_view text, PickItems &output, runtime::config::LimitNotices &limits) {
     PickItems next;
     std::array<char, PickItems::maximum_label_bytes> label{};
+
     while (!text.empty()) {
       const auto newline = text.find('\n');
       const auto line = text.substr(0, newline);
+
       text = newline == std::string_view::npos ? std::string_view{} : text.substr(newline + 1);
       constexpr std::string_view blanks = " \t\r";
       const auto first = line.find_first_not_of(blanks);
@@ -552,8 +564,10 @@ public:
 
       const auto option = line.substr(first, line.find_last_not_of(blanks) - first + 1);
       const auto shown = runtime::utf8Prefix(option, label.size());
+
       std::ranges::transform(shown, label.begin(), [](char byte) { return byte == '\t' ? ' ' : byte; });
       PickInput input;
+
       input.label = {label.data(), shown.size()};
       input.value = option;
       next.keep(input);
@@ -566,6 +580,7 @@ public:
 private:
   inline static void item(const runtime::lua::Value &value, PickItems &items) {
     PickInput input;
+
     if (value.is(LUA_TSTRING)) {
       input.label = value.string();
       items.keep(input);
@@ -577,6 +592,7 @@ private:
     const auto label = value.field("label");
     const auto chosen = value.field("value");
     const auto detail = value.field("detail");
+
     input.label = label.string();
     if (chosen.present()) {
       input.value = chosen.string();
@@ -602,8 +618,10 @@ private:
     }
 
     constexpr int hexadecimal_base = 16;
+
     for (std::size_t index = 0; index < result.size(); ++index) {
       const auto color = value.element(static_cast<lua_Integer>(index) + 1);
+
       runtime::config::hexadecimalColor(color);
       const auto text = color.string();
       const auto parsed = std::from_chars(text.data() + 1, text.data() + text.size(), result[index], hexadecimal_base);
@@ -682,6 +700,7 @@ public:
 
       return static_cast<std::uint16_t>(text.size());
     };
+
     count_ = view.count;
     for (std::size_t index = 0; index < view.count; ++index) {
       lengths_[index] = store(view.arguments[index]);
@@ -692,8 +711,10 @@ public:
 
   [[nodiscard]] inline View view() const noexcept {
     View result;
+
     result.count = count_;
     std::size_t offset = 0;
+
     for (std::size_t index = 0; index < count_; ++index) {
       result.arguments[index] = {bytes_.data() + offset, lengths_[index]};
       offset += lengths_[index];

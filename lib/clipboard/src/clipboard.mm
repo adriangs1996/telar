@@ -9,9 +9,12 @@ namespace telar::clipboard {
       if (data.length > maximum_bytes) {
         return std::unexpected(read_error::content_too_large);
       }
+
       content result{.mime_type = mime_type, .bytes = {}};
+
       if (data.length != 0) {
         const auto *bytes = static_cast<const byte *>(data.bytes);
+
         result.bytes.assign(bytes, bytes + data.length);
       }
 
@@ -32,6 +35,7 @@ namespace telar::clipboard {
 
       // Prefer PNG/JPEG over TIFF, which AppKit can synthesize for legacy consumers.
       NSArray<NSPasteboardType> *types = board.types;
+
       for (const auto &format : formats) {
         if (![types containsObject:format.type]) {
           continue;
@@ -66,6 +70,7 @@ namespace telar::clipboard {
 
       try {
         auto result = capture(board, maximum_bytes);
+
         if (board.changeCount != revision) {
           return std::unexpected(read_error::changed);
         }

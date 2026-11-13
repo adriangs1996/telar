@@ -40,10 +40,12 @@ SurfaceCommand::SurfaceCommand() {
   deadline_.setTimerType(Qt::PreciseTimer);
   grace_.setSingleShot(true);
   constexpr std::chrono::milliseconds termination_grace{200};
+
   grace_.setInterval(termination_grace);
   QObject::connect(&deadline_, &QTimer::timeout, &context_, [this] {
     stop(SurfaceCommandFailure::timeout);
   });
+
   QObject::connect(&grace_, &QTimer::timeout, &context_, [this] {
     platform::signalProcessGroup(group_, true);
     if (exited_) {
@@ -52,6 +54,7 @@ SurfaceCommand::SurfaceCommand() {
       process_.kill();
     }
   });
+
   QObject::connect(&process_, &QProcess::started, &context_, [this] {
     group_ = process_.processId();
     if (result_.failure) {
@@ -61,9 +64,11 @@ SurfaceCommand::SurfaceCommand() {
       process_.closeWriteChannel();
     }
   });
+
   QObject::connect(&process_, &QProcess::readyReadStandardOutput, &context_, [this] {
     drain();
   });
+
   QObject::connect(&process_, &QProcess::finished, &context_, [this](int code, QProcess::ExitStatus status) {
     if (!running_) {
       return;
@@ -74,6 +79,7 @@ SurfaceCommand::SurfaceCommand() {
     normal_exit_ = status == QProcess::NormalExit;
     drain();
   });
+
   QObject::connect(&process_, &QProcess::errorOccurred, &context_, [this](QProcess::ProcessError error) {
     if (running_ && error == QProcess::FailedToStart) {
       result_.failure = SurfaceCommandFailure::launch;
@@ -94,6 +100,7 @@ SurfaceCommand::~SurfaceCommand() {
   if (process_.state() != QProcess::NotRunning) {
     process_.kill();
     constexpr std::chrono::milliseconds shutdown_wait{1000};
+
     static_cast<void>(process_.waitForFinished(static_cast<int>(shutdown_wait.count())));
   }
 }
@@ -116,6 +123,7 @@ void SurfaceCommand::start(const SurfaceCommandRequest &request, tbc::view<Compl
   constexpr qsizetype maximum_arguments = 32;
   constexpr qsizetype maximum_argument_bytes = 4096;
   qsizetype argument_bytes = 0;
+
   for (const auto &argument : request.arguments) {
     argument_bytes += argument.size();
     if (argument.contains('\0') || argument_bytes > maximum_argument_bytes) {
@@ -142,6 +150,7 @@ void SurfaceCommand::start(const SurfaceCommandRequest &request, tbc::view<Compl
   normal_exit_ = true;
   running_ = true;
   QProcess::UnixProcessParameters parameters;
+
   parameters.flags = QProcess::UnixProcessFlag::CloseFileDescriptors | QProcess::UnixProcessFlag::CreateNewSession | QProcess::UnixProcessFlag::ResetSignalHandlers;
   process_.setUnixProcessParameters(parameters);
   process_.setStandardInputFile(QString{});
@@ -166,6 +175,7 @@ void SurfaceCommand::stop(std::optional<SurfaceCommandFailure> failure) {
   if (failure) {
     result_.failure = failure;
   }
+
   deadline_.stop();
   platform::signalProcessGroup(group_, false);
   grace_.start();
@@ -191,6 +201,7 @@ void SurfaceCommand::drain() {
   constexpr std::size_t maximum_chunks = 16;
   std::array<char, chunk_bytes> buffer{};
   std::size_t chunks = 0;
+
   while (process_.bytesAvailable() > 0 && chunks++ < maximum_chunks) {
     const auto count = process_.read(buffer.data(), static_cast<qint64>(buffer.size()));
     if (count <= 0) {
@@ -204,6 +215,7 @@ void SurfaceCommand::drain() {
     result_.observed_bytes += static_cast<std::size_t>(count);
     const auto room = outputLimit() - static_cast<std::size_t>(result_.output.size());
     const auto kept = std::min(room, static_cast<std::size_t>(count));
+
     result_.output.append(buffer.data(), static_cast<qsizetype>(kept));
     if (std::cmp_not_equal(kept, count)) {
       result_.truncated = true;
@@ -218,6 +230,7 @@ void SurfaceCommand::drain() {
       }
     });
   }
+
   finishWhenDrained();
 }
 
@@ -230,11 +243,13 @@ void SurfaceCommand::normalizeOutput() {
   const bool rendered = request_.output != SurfaceOutputUse::line;
   if (result_.truncated && rendered) {
     const auto last = text.find_last_of('\n');
+
     text = last == std::string_view::npos ? std::string_view{} : text.substr(0, last);
   }
 
   constexpr std::string_view whitespace = " \t\r\n";
   const auto first = text.find_first_not_of(whitespace);
+
   text = first == std::string_view::npos ? std::string_view{} : text.substr(first, text.find_last_not_of(whitespace) - first + 1);
   if (!rendered && text.size() > SurfaceCommandRequest::line_output_bytes) {
     text = runtime::utf8Prefix(text, SurfaceCommandRequest::line_output_bytes);
@@ -243,6 +258,7 @@ void SurfaceCommand::normalizeOutput() {
 
   constexpr unsigned first_printable = 0x20;
   constexpr unsigned delete_control = 0x7f;
+
   try {
     validateUtf8(text);
     for (const auto byte : text) {

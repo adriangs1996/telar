@@ -40,6 +40,7 @@ struct RecordingAllocator {
     if (result != nullptr) {
       live += size;
     }
+
     return result;
   }
 
@@ -98,6 +99,7 @@ struct Pair {
     std::size_t new_count = 0;
     bool old_failed = false;
     bool new_failed = false;
+
     try { old_count = old_parser.feed(bytes(input), old_consumer); } catch (const std::bad_alloc &) { old_failed = true; }
     try { new_count = new_parser.feed(bytes(input), new_consumer); } catch (const std::bad_alloc &) { new_failed = true; }
     require(old_failed == new_failed);
@@ -113,11 +115,13 @@ struct Pair {
 void partitions(std::string_view input) {
   for (std::size_t split = 0; split <= input.size(); ++split) {
     Pair pair;
+
     require(pair.feed(input.substr(0, split)) == split);
     require(pair.feed(input.substr(split)) == input.size() - split);
   }
 
   Pair pair;
+
   for (const auto &character : input) {
     require(pair.feed({&character, 1}) == 1);
   }
@@ -126,6 +130,7 @@ void partitions(std::string_view input) {
 void bytesAndBoundaries() {
   for (unsigned value = 0; value <= UINT8_MAX; ++value) {
     auto input = std::string{"\x1b]21;foreground=?;"} + std::string(32, 'a');
+
     input.push_back(static_cast<char>(value));
     input.append(32, 'b');
     input.append("\a\x1b[5n");
@@ -134,6 +139,7 @@ void bytesAndBoundaries() {
 
   for (const auto length : {255u, 256u, 257u, 511u, 512u, 513u, 1023u, 1024u, 1025u}) {
     auto input = std::string{"\x1b]52;c;"};
+
     input.append(length - input.size(), 'A');
     input.append("\x1b\\tail");
     partitions(input);
@@ -141,6 +147,7 @@ void bytesAndBoundaries() {
 
   for (const bool streaming : {false, true}) {
     Pair pair;
+
     pair.old_consumer.streaming = pair.new_consumer.streaming = streaming;
     pair.feed(std::string_view{"\x1b]5\x00" "2\x05", 6});
     pair.feed(";c;payload;more\x1b\\");
@@ -151,12 +158,15 @@ void bytesAndBoundaries() {
 void ownershipAndRetainedCapacity() {
   for (const auto warmup_size : {0u, 513u, 4096u}) {
     Pair pair;
+
     if (warmup_size != 0) {
       std::string apc{"\x1b_Ga=q;"};
+
       apc.append(warmup_size - apc.size(), 'A');
       apc.append("\x1b\\");
       pair.accept(false);
       const auto consumed = pair.feed(apc);
+
       require(consumed == apc.size() - 1);
       apc.assign(apc.size(), 'z');
       pair.feed({});
@@ -166,6 +176,7 @@ void ownershipAndRetainedCapacity() {
     }
 
     std::string input{"\x1b]52;c;"};
+
     input.append(4097, 'A');
     input.append("\x1b\\tail");
     pair.accept(false);
@@ -182,8 +193,10 @@ void ownershipAndRetainedCapacity() {
 
 void retainedCapacityFailureAndBellOwnership() {
   Pair pair;
+
   pair.accept(false);
   std::string apc{"\x1b_Ga=q;"};
+
   apc.append(513 - apc.size(), 'A');
   apc.append("\x1b\\");
   require(pair.feed(apc) == apc.size() - 1);
@@ -194,12 +207,14 @@ void retainedCapacityFailureAndBellOwnership() {
   pair.new_memory.fail_at = pair.new_memory.count + 1;
 
   const auto request = std::string{"\x1b]52;c;"} + std::string(600, 'B');
+
   require(pair.feed(request) == std::string_view::npos);
   pair.feed("\a");
   pair.discard();
 
   pair.accept(false);
   auto blocked = request + "\atail";
+
   require(pair.feed(blocked) == request.size() + 1);
   blocked.assign(blocked.size(), 'z');
   pair.feed({});
@@ -211,10 +226,12 @@ void retainedCapacityFailureAndBellOwnership() {
 
 void exactLimit() {
   constexpr auto limit = Parser<SystemAllocator>::osc_limit;
+
   for (const auto length : {limit - 1, limit, limit + 1}) {
     for (const auto &suffix : {std::string{"\0\a", 2}, std::string{"\x9c\a", 2}, std::string{"\x18"}, std::string{"\x1b\\"}}) {
       Pair pair;
       std::string input{"\x1b]52;c;"};
+
       input.append(length - input.size(), 'A');
       require(pair.feed(input) == input.size());
       require(pair.feed(suffix) == suffix.size());
@@ -227,8 +244,10 @@ void exactLimit() {
 void allocationFailures() {
   for (std::size_t failure = 1; failure <= 7; ++failure) {
     Pair pair;
+
     pair.old_memory.fail_at = pair.new_memory.fail_at = failure;
     std::string input{"\x1b]52;c;"};
+
     input.append(16384, 'A');
     require(pair.feed(input) == std::string_view::npos);
     // The failing allocation must preserve the same owned prefix. Completing
@@ -236,23 +255,29 @@ void allocationFailures() {
     pair.feed("\a");
     pair.discard();
     constexpr std::string_view recovery{"\x1b]21;foreground=?\a"};
+
     require(pair.feed(recovery) == recovery.size());
   }
 }
 
 void boundedFuzz() {
   std::mt19937 random{0x4f5343};
+
   for (unsigned run = 0; run < 1000; ++run) {
     Pair pair;
     std::string input{"\x1b]52;c;"};
+
     input.append(random() % 2048, 'a');
     for (unsigned index = 0; index < 64; ++index) {
       input.push_back(static_cast<char>(random()));
     }
+
     input.append("\x18\x1b[5n");
     std::size_t offset = 0;
+
     while (offset < input.size()) {
       const auto size = std::min<std::size_t>(1 + random() % 127, input.size() - offset);
+
       require(pair.feed(std::string_view{input}.substr(offset, size)) == size);
       offset += size;
     }

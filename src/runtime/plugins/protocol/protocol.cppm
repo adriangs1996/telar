@@ -131,6 +131,7 @@ public:
     if (value > static_cast<Byte>(maximum)) {
       throw EncodingError{"Unknown tap enumeration value"};
     }
+
     return static_cast<Enum>(value);
   }
 
@@ -147,13 +148,16 @@ public:
     if (length > remaining_.size()) {
       throw EncodingError{"Truncated tap field"};
     }
+
     const auto value = remaining_.first(length);
+
     remaining_ = remaining_.subspan(length);
     return value;
   }
 
   inline tbc::view<std::string_view, tbc::lt::a> text() {
     const auto value = bytes();
+
     return {reinterpret_cast<const char *>(value.data()), value.size()};
   }
 
@@ -190,6 +194,7 @@ public:
     if (value.size() > UINT32_MAX) {
       throw EncodingError{"Tap field exceeds its frame buffer"};
     }
+
     integer(std::uint32_t{});
     add(value.size());
   }
@@ -243,6 +248,7 @@ public:
     if (!value.empty()) {
       std::memcpy(remaining_.data(), value.data(), value.size());
     }
+
     remaining_ = remaining_.subspan(value.size());
   }
 
@@ -289,6 +295,7 @@ public:
   template <Allocator Memory>
   inline static tbc::view<std::span<const Byte>, tbc::lt::a> encodeExchange(tbc::view<std::span<Byte>, tbc::lt::a> output, ExchangeIdentity identity, const CapturedExchange<Memory> &exchange, std::size_t part_limit = SIZE_MAX) {
     FrameWriter writer{output};
+
     writeExchange(writer, identity, exchange, part_limit);
     return writer.finish();
   }
@@ -296,14 +303,17 @@ public:
   template <Allocator Memory>
   inline static std::size_t exchangeBytes(const CapturedExchange<Memory> &exchange) {
     FrameSize size;
+
     writeExchange(size, {}, exchange);
     return size.finish();
   }
 
   inline static ExchangeView decodeExchange(std::span<const Byte> input) {
     FrameReader reader{input};
+
     reader.require(FrameKind::exchange);
     ExchangeView exchange;
+
     exchange.identity.id = reader.integer<std::uint64_t>();
     exchange.identity.generation = reader.integer<std::uint64_t>();
     exchange.protocol = reader.tag(ExchangeProtocol::upgraded);
@@ -325,6 +335,7 @@ public:
     }
 
     FrameWriter writer{output};
+
     writer.tag(FrameKind::effects);
     writer.integer(event_id);
     writer.integer(batch.count);
@@ -335,13 +346,16 @@ public:
       writer.text(notification.title);
       writer.text(notification.message);
     }
+
     return writer.finish();
   }
 
   inline static EffectReply decodeEffects(std::span<const Byte> input) {
     FrameReader reader{input};
+
     reader.require(FrameKind::effects);
     EffectReply result;
+
     result.event_id = reader.integer<std::uint64_t>();
     result.batch.count = reader.integer<Byte>();
     if (result.batch.count > Limits::effects) {
@@ -355,12 +369,14 @@ public:
       notification.title = reader.text();
       notification.message = reader.text();
     }
+
     reader.finish();
     return result;
   }
 
   inline static tbc::view<std::span<const Byte>, tbc::lt::a> encodeError(tbc::view<std::span<Byte>, tbc::lt::a> output, std::uint64_t event_id, std::string_view message) {
     FrameWriter writer{output};
+
     writer.tag(FrameKind::error);
     writer.integer(event_id);
     writer.text(message.substr(0, Limits::error_bytes));
@@ -369,8 +385,10 @@ public:
 
   inline static ErrorReply decodeError(std::span<const Byte> input) {
     FrameReader reader{input};
+
     reader.require(FrameKind::error);
     const ErrorReply reply{reader.integer<std::uint64_t>(), reader.text()};
+
     reader.finish();
     return reply;
   }
@@ -408,6 +426,7 @@ private:
     case CaptureProtocol::upgraded:
       return ExchangeProtocol::upgraded;
     }
+
     throw EncodingError{"Unknown captured protocol"};
   }
 
@@ -435,6 +454,7 @@ private:
     }
 
     HalfView half;
+
     half.head = reader.bytes();
     half.body = reader.bytes();
     half.encoding = reader.text();

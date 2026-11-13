@@ -59,6 +59,7 @@ bool editsLearnedMarkers(AttachmentMarkerPolicy policy, const TerminalKey &key) 
   const bool alt = key.has(KeyChord::Modifier::alt);
   const bool shift = key.has(KeyChord::Modifier::shift);
   const bool character_deletion = key.code == KeyChord::Key::backspace || key.code == KeyChord::Key::erase;
+
   if (!control && !alt && !shift) {
     return character_deletion;
   }
@@ -91,6 +92,7 @@ AttachmentShelf::Delivery::SlotState AttachmentShelf::Delivery::create() {
   }
 
   SlotState slot{.preview = std::move(*landing)};
+
   landing.reset();
 
   return slot;
@@ -207,6 +209,7 @@ void AttachmentShelf::adopt(ClipboardImageResult &result) {
 void AttachmentShelf::clearPrompt(AttachmentTarget target) {
   const bool cancelled = captures_.cancel(target);
   const bool removed = catalog_.removeVisible(target) != 0;
+
   catalog_.reapRetired();
   if (cancelled || removed) {
     emit changed();
@@ -215,6 +218,7 @@ void AttachmentShelf::clearPrompt(AttachmentTarget target) {
 
 bool AttachmentShelf::remove(std::uint64_t id) {
   const bool removed = catalog_.remove(id);
+
   catalog_.reapRetired();
   if (removed) {
     emit changed();
@@ -233,6 +237,7 @@ void AttachmentShelf::reconcile(AttachmentMarkerScreen screen) {
   }
 
   const auto removed = catalog_.reconcileMarkers(capture_prompt_->target, screen);
+
   catalog_.reapRetired();
   if (removed != 0) {
     emit changed();
@@ -271,8 +276,10 @@ void AttachmentShelf::observeKey(const TerminalKey &key, AttachmentMarkerScreen 
 QVariantList AttachmentShelf::items() const {
   const auto snapshot = catalog_.snapshot();
   QVariantList result;
+
   for (std::size_t index = 0; index < snapshot.count; ++index) {
     const auto item = snapshot.items[index];
+
     result.append(QVariantMap{{QStringLiteral("id"), QString::number(item.id)}, {QStringLiteral("width"), item.width}, {QStringLiteral("height"), item.height}});
   }
 

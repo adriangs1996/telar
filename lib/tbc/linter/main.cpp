@@ -38,6 +38,7 @@ namespace {
         analysis_.beginTranslationUnit();
         return;
       }
+
       const auto *function = result.Nodes.getNodeAs<clang::FunctionDecl>("function");
       if (function != nullptr && visited_.insert(function->getCanonicalDecl()).second) {
         analysis_.analyze(*function, *result.Context);
@@ -137,11 +138,13 @@ namespace {
 
     llvm::raw_string_ostream stream(output);
     clang::DiagnosticOptions options;
+
     options.setShowColors(settings.colors ? clang::ShowColorsKind::On : clang::ShowColorsKind::Off);
     clang::TextDiagnosticPrinter printer(stream, options);
     // The process-wide file system changes the process's working directory for each compile command;
     // a physical one keeps its own, which concurrent units need.
     clang::tooling::ClangTool tool(compilations, {source}, std::make_shared<clang::PCHContainerOperations>(), llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem>(llvm::vfs::createPhysicalFileSystem().release()));
+
     tool.setDiagnosticConsumer(&printer);
     tool.appendArgumentsAdjuster(clang::tooling::getInsertArgumentAdjuster("-resource-dir=" TBC_CLANG_RESOURCE_DIR, clang::tooling::ArgumentInsertPosition::END));
     unit_actions actions(settings.lifetime || settings.blank_lines ? &finder : nullptr, settings);
@@ -223,6 +226,7 @@ int main(int argc, const char **argv) try {
     std::string output;
     const bool unit_failed = checkUnit(compilations, source, configuration, output) != 0;
     const std::scoped_lock lock(print);
+
     llvm::errs() << output;
     if (unit_failed) {
       failed = true;
@@ -236,9 +240,11 @@ int main(int argc, const char **argv) try {
     }
   } else {
     llvm::DefaultThreadPool pool(strategy);
+
     for (const auto &source : sources) {
       pool.async([&check, &source] { check(source); });
     }
+
     pool.wait();
   }
 

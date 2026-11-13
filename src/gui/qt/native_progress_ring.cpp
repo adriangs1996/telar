@@ -103,6 +103,7 @@ void NativeProgressRing::setTrackColor(const QColor &color) {
 
 QSGNode *NativeProgressRing::updatePaintNode(QSGNode *previous, [[maybe_unused]] UpdatePaintNodeData *data) {
   auto root = std::unique_ptr<QSGNode>{previous};
+
   if (window() == nullptr || width() <= 0 || height() <= 0 || color_.alphaF() <= 0) {
     return nullptr;
   }

@@ -81,9 +81,11 @@ using Packet = std::array<Byte, family_bytes + ipv4_bytes + udp_bytes + payload_
 
 static std::uint16_t checksum(std::span<const Byte> bytes) {
   std::uint32_t sum = 0;
+
   for (std::size_t offset = 0; offset < bytes.size(); offset += 2) {
     sum += traffic::NetworkPacket::word(bytes, offset);
   }
+
   while (sum >> 16) { sum = (sum & UINT16_MAX) + (sum >> 16); }
 
   return static_cast<std::uint16_t>(~sum);
@@ -92,9 +94,11 @@ static std::uint16_t checksum(std::span<const Byte> bytes) {
 static Packet packet() {
   Packet frame{};
   const std::uint32_t family = htonl(AF_INET);
+
   std::memcpy(frame.data(), &family, sizeof(family));
   const auto ip = std::span{frame}.subspan(family_bytes);
   const auto word = [&](std::size_t offset, std::uint16_t value) { ip[offset] = value >> 8; ip[offset + 1] = value; };
+
   ip[0] = 0x45;
   word(2, ip.size());
   ip[8] = 1;
@@ -117,6 +121,7 @@ static int run() {
   if (::geteuid() != 0) { throw std::invalid_argument{"The interface probe requires sudo"}; }
   const auto frame = packet();
   std::optional<PrivateTunnel> tunnel;
+
   std::printf("{\"ready\":true,\"token\":\"");
   for (const auto byte : std::span{frame}.last(payload_bytes)) { std::printf("%02x", byte); }
   std::puts("\"}");
@@ -143,6 +148,7 @@ static int run() {
     } else if (action == "quit\n") {
       return 0;
     } else { throw std::invalid_argument{"Invalid interface probe command"}; }
+
     std::fflush(stdout);
   }
 }
@@ -152,13 +158,16 @@ int main(int argc, char **argv) {
     if (argc == 2 && std::string_view{argv[1]} == "--self-test") {
       const auto frame = packet();
       const auto ip = traffic::IpPayload::decode(std::span{frame}.subspan(family_bytes));
+
       check(ip && !ip->ipv6 && checksum(std::span{frame}.subspan(family_bytes, ipv4_bytes)) == 0);
       const auto udp = traffic::DatagramCodec::parse(*ip);
+
       check(udp && udp->source_port == fixture_port && udp->destination_port == fixture_port && !udp->truncated);
       check(std::ranges::equal(udp->bytes, std::span{frame}.last(payload_bytes)) && udp->bytes.back() == 0);
       std::puts("Virtual-interface packet fixture verified");
       return 0;
     }
+
     if (argc != 1) { throw std::invalid_argument{"Expected no arguments, or --self-test"}; }
 
     return run();

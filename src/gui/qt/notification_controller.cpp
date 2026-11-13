@@ -120,6 +120,7 @@ bool Application::notificationTargetVisible(NotificationTarget target) const noe
 Rect Application::notificationHost(const DisplayMetrics &display) const {
   const auto &geometry = display.geometry;
   auto grid = terminal_grid_;
+
   grid.scale = 1;
   const auto size = grid.fit(geometry.terminal.width, geometry.terminal.height);
 
@@ -138,6 +139,7 @@ void Application::refreshNotifications() {
 
 void Application::scheduleNotifications() {
   const auto now_ns = platform::AwakeClock::nowNanoseconds();
+
   scheduleDeadline(notification_timer_, notifications().nextDeadline(now_ns, std::numeric_limits<std::uint64_t>::max()), now_ns);
 }
 
@@ -176,6 +178,7 @@ void Application::activateNotification(const QString &identity) {
   }
 
   const auto link = LinkTarget::fromUri(item->link.view());
+
   applyInteraction([&] {
     if (session().activateNotification(*id)) {
       if (link) {
@@ -195,6 +198,7 @@ void Application::retireNotificationFocus(const QString &identity, QQuickItem *r
   }
 
   const NotificationFocus target{.window = window_generation_, .machine = machine_view_revision_, .pane = pane->id, .generation = pane->generation, .attachment = pane->attachment_generation};
+
   // A delivered control can disappear before its disabled record is painted.
   // Complete its retirement before restoring the captured pane's keyboard owner.
   QMetaObject::invokeMethod(this, [this, target] {

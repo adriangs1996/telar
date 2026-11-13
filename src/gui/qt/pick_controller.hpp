@@ -98,6 +98,7 @@ public:
     close();
     items_ = makeOwned<components::PickItems>(memory_);
     const auto &definition = definitions->picks()[index];
+
     title_ = text(definition.heading.title.view());
     placeholder_ = QStringLiteral("Filter choices…");
     owner_ = host_.pickOwner();
@@ -158,8 +159,10 @@ public:
     const auto &definition = source_.definitions()->picks()[*index_];
     const auto selected = items_->at(matches[static_cast<std::size_t>(row)].index);
     SurfaceCommandRequest request;
+
     request.arguments = source_.commandArguments(definition.reference, "on_select");
     const QByteArray value{selected.value.data(), static_cast<qsizetype>(selected.value.size())};
+
     for (qsizetype argument = 1; argument < request.arguments.size(); ++argument) {
       if (request.arguments[argument] == "{}") {
         request.arguments[argument] = value;
@@ -171,6 +174,7 @@ public:
     const auto owner = owner_;
     const auto refresh = definition.refresh;
     const auto name = text(definition.heading.name.view());
+
     selection_.start(request, [this, owner, refresh, name](const SurfaceCommandResult &result) {
       if (host_.pickOwnerCurrent(owner)) {
         if (result.failure) {
@@ -182,6 +186,7 @@ public:
 
       host_.pickChanged();
     });
+
     close();
   }
 
@@ -216,11 +221,13 @@ private:
     try {
       const auto &definition = source_.definitions()->picks()[*index_];
       SurfaceCommandRequest request;
+
       request.arguments = source_.commandArguments(definition.reference, "command");
       request.timeout = definition.timeout;
       request.output = SurfaceOutputUse::options;
       const auto identity = identity_;
       const auto owner = owner_;
+
       listing_.start(request, [this, identity, owner](const SurfaceCommandResult &result) {
         listingFinished(identity, owner, result);
         startListing();
@@ -288,6 +295,7 @@ private:
     rows_.reserve(static_cast<qsizetype>(matches_.rows().size()));
     preferred_row_ = 0;
     bool selected = false;
+
     for (const auto &match : matches_.rows()) {
       const auto option = items_->at(match.index);
       if (option.selected && !selected) {
@@ -296,10 +304,12 @@ private:
       }
 
       QVariantList swatch;
+
       if (option.swatch) {
         for (const auto rgb : *option.swatch) {
           constexpr int hexadecimal = 16;
           constexpr int rgb_digits = 6;
+
           swatch.append(QStringLiteral("#") + QString::number(rgb, hexadecimal).rightJustified(rgb_digits, QLatin1Char{'0'}));
         }
       }

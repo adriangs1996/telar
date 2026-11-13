@@ -17,6 +17,7 @@ public:
     if (count == 0) {
       return {telar::runtime::StreamResult::State::ended};
     }
+
     std::memcpy(destination.data(), input_.bytes + result_.consumed, count);
     result_.consumed += count;
     return {telar::runtime::StreamResult::State::data, count};
@@ -26,6 +27,7 @@ public:
     if (bytes.size() > input_.fail_after - result_.forwarded) {
       return {telar::runtime::StreamResult::State::failed};
     }
+
     std::memcpy(input_.wire + result_.forwarded, bytes.data(), bytes.size());
     result_.forwarded += bytes.size();
     return {telar::runtime::StreamResult::State::data, bytes.size()};

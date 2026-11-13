@@ -19,6 +19,7 @@ static void setHold(ProtocolPeer &peer, TabLocation location, bool held, std::os
 
 static void expectEmpty(ProtocolPeer &peer, TabLocation location, std::ostream &dump) {
   auto snapshot = peer.exchange<TabSnapshot>(RequestTabSnapshot{3, location});
+
   check(snapshot.panes.empty());
   snapshot.location = {.workspace = {.id = 1}, .tab_id = 1};
   peer.record(dump, snapshot);
@@ -31,6 +32,7 @@ static void closePane(ProtocolPeer &peer, std::uint64_t pane) {
 
 static void expectRemoved(ProtocolPeer &peer, TabLocation location, std::ostream &dump) {
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
+
   for (;;) {
     peer.send(RequestTabSnapshot{4, location});
     const auto reply = peer.receiveAny<TabSnapshot, RequestFailed>();
@@ -49,6 +51,7 @@ static void checkRelease(const char *socket, std::ostream &dump) {
   ProtocolPeer owner{socket};
   ProtocolPeer holder{socket};
   const auto opened = openTab(owner);
+
   setHold(owner, opened.location, true, dump);
   setHold(holder, opened.location, true, dump);
   setHold(holder, opened.location, true, dump);
@@ -58,6 +61,7 @@ static void checkRelease(const char *socket, std::ostream &dump) {
   expectEmpty(owner, opened.location, dump);
 
   const auto reopened = owner.exchange<PaneOpened>(CreatePane{.request_id = 5, .location = opened.location, .size = size, .launch = {.cwd = "/tmp", .arguments = arguments}});
+
   check(reopened.created && reopened.location.tab_id == opened.location.tab_id);
   setHold(holder, opened.location, false, dump);
   check(owner.exchange<TabSnapshot>(RequestTabSnapshot{6, opened.location}).panes.size() == 1);
@@ -67,6 +71,7 @@ static void checkRelease(const char *socket, std::ostream &dump) {
   setHold(holder, opened.location, false, dump);
   expectRemoved(owner, opened.location, dump);
   const auto missing = holder.exchange<RequestFailed>(HoldTab{.request_id = 7, .location = opened.location, .held = true});
+
   check(missing.code == FailureCode::tab_not_found && missing.message == "tab not found");
   holder.record(dump, missing);
 }
@@ -76,6 +81,7 @@ static void checkDisconnect(const char *socket, std::ostream &dump) {
   auto first = std::make_unique<ProtocolPeer>(socket);
   auto second = std::make_unique<ProtocolPeer>(socket);
   const auto opened = openTab(owner);
+
   setHold(*first, opened.location, true, dump);
   setHold(*second, opened.location, true, dump);
   closePane(owner, opened.pane_id);
@@ -88,10 +94,12 @@ static void checkDisconnect(const char *socket, std::ostream &dump) {
 static void checkExplicitClose(const char *socket, std::ostream &dump) {
   ProtocolPeer owner{socket};
   const auto opened = openTab(owner);
+
   setHold(owner, opened.location, true, dump);
   closePane(owner, opened.pane_id);
   expectEmpty(owner, opened.location, dump);
   const auto closed = owner.exchange<TabClosed>(CloseTab{.request_id = 8, .location = opened.location});
+
   check(closed.workspace_closed && closed.location.tab_id == opened.location.tab_id);
   expectRemoved(owner, opened.location, dump);
 }
@@ -100,6 +108,7 @@ static std::int64_t checkRoundtrip(const char *socket, unsigned iterations, std:
   ProtocolPeer owner{socket};
   const auto opened = openTab(owner);
   const auto started = std::chrono::steady_clock::now();
+
   for (unsigned index = 0; index < iterations; ++index) {
     setHold(owner, opened.location, true, dump);
     setHold(owner, opened.location, false, dump);
@@ -117,14 +126,17 @@ int main(int argc, char **argv) {
     std::ofstream dump{argv[4], std::ios::binary};
     const std::string_view workload{argv[2]};
     std::int64_t elapsed = 0;
+
     if (workload == "tab-holds") {
       const auto started = std::chrono::steady_clock::now();
+
       checkRelease(argv[1], dump);
       checkDisconnect(argv[1], dump);
       checkExplicitClose(argv[1], dump);
       elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - started).count();
     } else if (workload == "tab-hold-roundtrip") {
       const auto iterations = std::stoul(argv[3]);
+
       check(iterations > 0);
       elapsed = checkRoundtrip(argv[1], iterations, dump);
     } else {

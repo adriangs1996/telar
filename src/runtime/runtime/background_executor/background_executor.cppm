@@ -111,6 +111,7 @@ public:
     std::array<Byte, 1024> scratch;
     DecodeStorage storage{scratch};
     const auto request = Codec::decode<SuggestCommand>(payload, storage);
+
     engine_.suggest(request, context.prompt, reply);
   }
 

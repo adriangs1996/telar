@@ -48,9 +48,11 @@ public:
   bool touches(std::span<const std::uint8_t> bytes) noexcept {
     bool kitty = inside();
     std::size_t position = 0;
+
     while (advance(bytes, position)) {
       kitty = true;
     }
+
     return kitty;
   }
 
@@ -62,25 +64,31 @@ public:
           position = bytes.size();
           return std::nullopt;
         }
+
         position = static_cast<std::size_t>(escape - bytes.data()) + 1;
         state_ = State::escape;
         continue;
       }
 
       const auto byte = bytes[position++];
+
       if (state_ == State::escape) {
         state_ = opens(byte) ? State::identify : byte == escape_byte ? State::escape
                                                                      : State::ground;
         continue;
       }
+
       if (ends(byte)) {
         const bool kitty = inside();
+
         state_ = byte == escape_byte ? State::escape : State::ground;
         if (kitty) {
           return Transition::ended;
         }
+
         continue;
       }
+
       if (state_ == State::identify && content(byte)) {
         state_ = byte == 'G' ? State::kitty : State::other;
         if (inside()) {
@@ -88,6 +96,7 @@ public:
         }
       }
     }
+
     return std::nullopt;
   }
 

@@ -64,6 +64,7 @@ components::Context Application::pickContext() const {
 
 void Application::pickCommitted() {
   const auto now = ComponentSlotState::Clock::now();
+
   for (auto &bar : component_surfaces_.bars) {
     bar.next = now;
   }
@@ -103,6 +104,7 @@ QVariantMap Application::componentPick() const {
 
 void Application::closeComponentPick() {
   const bool open = pick_controller_.isOpen();
+
   pick_controller_.close();
   if (open) {
     restoreComponentPickFocus();
@@ -113,6 +115,7 @@ void Application::closeComponentPick() {
 
 void Application::restoreComponentPickFocus() {
   const auto target = std::exchange(component_pick_return_focus_, {});
+
   if (component_surfaces_.open_panel && component_surfaces_.generation == configuration_source_.configurationGeneration()) {
     if (target != nullptr && target->window() == window_ && target->isVisible() && target->isEnabled()) {
       target->forceActiveFocus(Qt::OtherFocusReason);

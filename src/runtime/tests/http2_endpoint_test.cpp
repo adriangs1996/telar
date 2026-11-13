@@ -50,16 +50,20 @@ struct Owner : HttpControl {
   }
   void answer(const Request &request, bool edit = true) {
     auto message = HttpMessageCodec::decode(request.bytes);
+
     if (!edit) { broker.decide(request.ticket, Verdict::allow, {}); return; }
     const auto prefix = message.response ? std::string{"response\0", 9} : std::string{"request\0", 8};
     auto body = prefix + std::string{reinterpret_cast<const char *>(message.body.data()), message.body.size()};
+
     message.body = {reinterpret_cast<const Byte *>(body.data()), body.size()};
     const auto path = std::string{"/edited"} + std::string{message.target};
+
     if (!message.response) { message.target = path; }
     if (!message.response && path == "/edited/be-head") { message.method = "HEAD"; }
     if (!message.response && path == "/edited/be-get") { message.method = "GET"; }
     if (message.response) { message.status = 202; }
     SensitiveAllocation output{memory, HttpMessageLimits::message_bytes};
+
     broker.decide(request.ticket, Verdict::replace, HttpMessageCodec::encode(output.bytes(), message));
   }
 };
@@ -79,6 +83,7 @@ public:
   };
   explicit Peer(bool server) {
     nghttp2_session_callbacks *callbacks = nullptr;
+
     check(nghttp2_session_callbacks_new(&callbacks) == 0);
     nghttp2_session_callbacks_set_on_header_callback(callbacks, &header);
     nghttp2_session_callbacks_set_on_data_chunk_recv_callback(callbacks, &data);
@@ -95,15 +100,18 @@ public:
   auto request(std::string_view path, std::string body, std::string_view method = "POST") -> std::int32_t {
     const auto id = nghttp2_session_get_next_stream_id(session_);
     auto &stream = streams[id];
+
     stream.outgoing = std::move(body);
     const std::array<std::pair<std::string_view, std::string_view>, 4> fields{{{":method", method}, {":scheme", "https"}, {":authority", "fixture.test"}, {":path", path}}};
     const auto native = nativeFields(fields);
     const nghttp2_data_provider2 provider{.source = {.ptr = &stream}, .read_callback = &read};
+
     check(nghttp2_submit_request2(session_, nullptr, native.data(), native.size(), &provider, nullptr) == static_cast<std::int32_t>(id));
     return static_cast<std::int32_t>(id);
   }
   void respond(std::int32_t id, std::string body) {
     auto &stream = streams.at(id);
+
     stream.outgoing = std::move(body);
     stream.sent = 0;
     stream.responded = true;
@@ -111,6 +119,7 @@ public:
     const std::array<std::pair<std::string_view, std::string_view>, 2> fields{{{":status", "200"}, {"content-length", length}}};
     const auto native = nativeFields(fields);
     const nghttp2_data_provider2 provider{.source = {.ptr = &stream}, .read_callback = &read};
+
     check(nghttp2_submit_response2(session_, id, native.data(), native.size(), stream.field(":method") == "HEAD" ? nullptr : &provider) == 0);
   }
   void echo() {
@@ -125,6 +134,7 @@ public:
     for (unsigned count = 0; count < 128; ++count) {
       const std::uint8_t *bytes = nullptr;
       const auto size = nghttp2_session_mem_send2(session_, &bytes);
+
       check(size >= 0);
       if (!size) { return; }
       transport.input.append(reinterpret_cast<const char *>(bytes), static_cast<std::size_t>(size));
@@ -134,6 +144,7 @@ public:
     const auto bytes = std::string_view{transport.output}.substr(received_);
     if (bytes.empty()) { return; }
     const auto count = nghttp2_session_mem_recv2(session_, reinterpret_cast<const std::uint8_t *>(bytes.data()), bytes.size());
+
     check(count >= 0 && static_cast<std::size_t>(count) == bytes.size());
     received_ += bytes.size();
   }
@@ -145,15 +156,19 @@ private:
   template <std::size_t Size>
   static auto nativeFields(const std::array<std::pair<std::string_view, std::string_view>, Size> &fields) -> std::array<nghttp2_nv, Size> {
     std::array<nghttp2_nv, Size> native;
+
     for (std::size_t index = 0; index < Size; ++index) {
       const auto &[name, value] = fields[index];
+
       native[index] = {reinterpret_cast<std::uint8_t *>(const_cast<char *>(name.data())), reinterpret_cast<std::uint8_t *>(const_cast<char *>(value.data())), name.size(), value.size(), NGHTTP2_NV_FLAG_NONE};
     }
+
     return native;
   }
   static nghttp2_ssize read(nghttp2_session *, std::int32_t, std::uint8_t *output, std::size_t capacity, std::uint32_t *flags, nghttp2_data_source *source, void *) noexcept {
     auto &stream = *static_cast<Stream *>(source->ptr);
     const auto bytes = std::string_view{stream.outgoing}.substr(stream.sent, capacity);
+
     std::ranges::copy(bytes, output);
     stream.sent += bytes.size();
     if (stream.sent == stream.outgoing.size()) { *flags |= NGHTTP2_DATA_FLAG_EOF; }
@@ -161,6 +176,7 @@ private:
   }
   static int header(nghttp2_session *, const nghttp2_frame *frame, const std::uint8_t *name, std::size_t name_size, const std::uint8_t *value, std::size_t value_size, std::uint8_t, void *context) noexcept {
     auto &peer = *static_cast<Peer *>(context);
+
     peer.streams[frame->hd.stream_id].headers.emplace_back(std::string{reinterpret_cast<const char *>(name), name_size}, std::string{reinterpret_cast<const char *>(value), value_size});
     return 0;
   }
@@ -170,6 +186,7 @@ private:
   }
   static int frame(nghttp2_session *, const nghttp2_frame *frame, void *context) noexcept {
     auto &peer = *static_cast<Peer *>(context);
+
     if (frame->hd.type == NGHTTP2_PING && (frame->hd.flags & NGHTTP2_FLAG_ACK)) { peer.pong = true; }
     if ((frame->hd.type == NGHTTP2_HEADERS || frame->hd.type == NGHTTP2_DATA) && (frame->hd.flags & NGHTTP2_FLAG_END_STREAM)) { peer.streams[frame->hd.stream_id].complete = true; }
     return 0;
@@ -211,6 +228,7 @@ struct Fixture {
       std::fprintf(stderr, "H2: active=%u failed=%d owner=%zu client=%zu origin=%zu errors=%zu\n", connection.inflight(), connection.finished(), owner.requests.size(), client.streams.size(), server.streams.size(), owner.errors.size());
       for (const auto &error : owner.errors) { std::fprintf(stderr, "H2 error: %s\n", error.c_str()); }
     }
+
     check(done(), location);
   }
 };
@@ -219,11 +237,13 @@ void multiplexed() {
   Fixture fixture;
   const auto held = fixture.client.request("/held", std::string(65536, 'h'));
   const auto fast = fixture.client.request("/fast", std::string(128 * 1024, '\0'));
+
   fixture.client.ping();
   fixture.until([&] {
     fixture.automatic(held);
     return fixture.client.streams[fast].complete && fixture.client.pong;
   });
+
   check(!fixture.client.streams[held].complete && fixture.owner.requests.size() == 1);
   check(fixture.server.streams.size() == 1 && fixture.server.streams.begin()->second.field(":path") == "/edited/fast");
   check(fixture.client.streams[fast].field(":status") == "202");
@@ -235,12 +255,15 @@ void multiplexed() {
 void rejectedStream() {
   Fixture fixture;
   const auto rejected = fixture.client.request("/reject", "secret");
+
   fixture.until([&] { return !fixture.owner.requests.empty(); });
   const auto ticket = fixture.owner.requests.front().ticket;
+
   fixture.owner.broker.decide(ticket, Verdict::reject, {});
   fixture.owner.requests.clear();
   fixture.until([&] { return fixture.client.streams[rejected].reset == NGHTTP2_CANCEL; });
   const auto next = fixture.client.request("/survives", "next");
+
   fixture.until([&] { fixture.automatic(); return fixture.client.streams[next].complete; });
   check(!fixture.connection.finished() && fixture.server.streams.size() == 1);
 }
@@ -248,8 +271,10 @@ void rejectedStream() {
 void cancellation() {
   Fixture fixture;
   const auto canceled = fixture.client.request("/cancel", "secret");
+
   fixture.until([&] { return !fixture.owner.requests.empty(); });
   const auto ticket = fixture.owner.requests.front().ticket;
+
   fixture.client.reset(canceled);
   fixture.until([&] { return !fixture.owner.broker.pending(ticket); });
   fixture.owner.broker.decide(ticket, Verdict::replace, {});
@@ -260,6 +285,7 @@ void streaming() {
   Fixture fixture{false, "unselected.test"};
   std::string body(2 * 1024 * 1024, 'x');
   const auto stream = fixture.client.request("/large", body);
+
   fixture.until([&] { return fixture.client.streams[stream].complete; });
   check(fixture.owner.requests.empty() && fixture.owner.errors.empty());
   check(fixture.client.streams[stream].body == std::string{"origin\0", 7} + body);
@@ -268,14 +294,17 @@ void streaming() {
 void originEof() {
   Fixture fixture;
   const auto stream = fixture.client.request("/last", "last");
+
   fixture.until([&] {
     for (auto cursor = fixture.owner.requests.begin(); cursor != fixture.owner.requests.end();) {
       if (HttpMessageCodec::decode(cursor->bytes).response) { return true; }
       fixture.owner.answer(*cursor);
       cursor = fixture.owner.requests.erase(cursor);
     }
+
     return false;
   });
+
   fixture.origin.ended = true;
   fixture.step();
   check(!fixture.connection.finished());
@@ -286,6 +315,7 @@ void originEof() {
 void goaway() {
   Fixture fixture;
   const auto held = fixture.client.request("/held", "held");
+
   fixture.until([&] { return !fixture.owner.requests.empty(); });
   fixture.server.goaway(0);
   fixture.until([&] { return fixture.client.streams[held].reset != 0; });
@@ -296,14 +326,17 @@ void timeout() {
   for (const bool closed : {false, true}) {
     Fixture fixture{closed, "fixture.test", 50};
     const auto stream = fixture.client.request("/timeout", "original");
+
     fixture.until([&] { return !fixture.owner.requests.empty(); });
     const auto pending = fixture.owner.requests.front().ticket;
+
     check(fixture.connection.deadline().has_value());
     std::this_thread::sleep_for(std::chrono::milliseconds{60});
     fixture.until([&] {
       fixture.automatic(0, false);
       return closed ? fixture.client.streams[stream].reset != 0 : fixture.client.streams[stream].complete;
     });
+
     check(!fixture.owner.broker.pending(pending));
     if (!closed) { check(fixture.client.streams[stream].body == std::string{"origin\0original", 15}); }
     check(!fixture.connection.finished());
@@ -314,6 +347,7 @@ void headMethods() {
   for (const bool original_head : {false, true}) {
     Fixture fixture;
     const auto stream = fixture.client.request(original_head ? "/be-get" : "/be-head", {}, original_head ? "HEAD" : "POST");
+
     fixture.until([&] { fixture.automatic(); return fixture.client.streams[stream].complete || fixture.client.streams[stream].reset != 0; });
     check(fixture.client.streams[stream].complete && fixture.client.streams[stream].reset == 0);
     check(original_head ? fixture.client.streams[stream].body.empty() : fixture.client.streams[stream].body == std::string{"response\0", 9});

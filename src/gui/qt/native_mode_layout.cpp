@@ -143,6 +143,7 @@ void NativeModeLayout::setMeasurements(const QVariantMap &measurements) {
 void NativeModeLayout::prepareLabels() {
   QString title;
   QVariantList hints;
+
   try {
     const auto kind = mode_.value(QStringLiteral("kind")).toInt();
     if (kind < static_cast<int>(StatusMode::normal) || kind > static_cast<int>(StatusMode::copy)) {
@@ -153,11 +154,13 @@ void NativeModeLayout::prepareLabels() {
     std::array<QByteArray, ModeHints::capacity> storage;
     ModeHints bound;
     const auto count = std::min(records.size(), static_cast<qsizetype>(storage.size()));
+
     for (qsizetype index = 0; index < count; ++index) {
       bound.append(readHint(records[index].toMap(), storage[static_cast<std::size_t>(index)]));
     }
 
     const auto labels = ModeBarLabels::resolve(static_cast<StatusMode>(kind), bound);
+
     title = text(labels.title());
     for (const auto &hint : labels.hints()) {
       hints.append(QVariantMap{{QStringLiteral("key"), text(hint.key.view())}, {QStringLiteral("word"), text(hint.word.view())}});
@@ -177,25 +180,30 @@ void NativeModeLayout::prepareLabels() {
 void NativeModeLayout::refreshLayout() {
   const auto density = window() == nullptr ? 1 : window()->effectiveDevicePixelRatio();
   ChromeMetrics chrome;
+
   chrome.ratio = static_cast<float>(ratio_ * density);
   chrome.small = static_cast<std::uint16_t>(std::clamp(std::round(pixel_size_ * density), qreal{0}, qreal{std::numeric_limits<std::uint16_t>::max()}));
   const auto measured_hints = measurements_.value(QStringLiteral("hints")).toList();
   ModeBarMeasurements measured;
+
   measured.title = advance(measurements_.value(QStringLiteral("title")), density);
   measured.count = std::min({static_cast<std::size_t>(hints_.size()), static_cast<std::size_t>(measured_hints.size()), ModeBarMeasurements::capacity});
   for (std::size_t index = 0; index < measured.count; ++index) {
     const auto hint = measured_hints[static_cast<qsizetype>(index)].toMap();
+
     measured.hints[index] = {.key = advance(hint.value(QStringLiteral("key")), density), .word = advance(hint.value(QStringLiteral("word")), density)};
   }
 
   const auto geometry = title_.isEmpty() ? ModeBarGeometry{} : ModeBarGeometry::derive({.width = static_cast<float>(width() * density), .height = static_cast<float>(height() * density)}, chrome, measured);
   QVariantList hints;
+
   for (std::size_t index = 0; index < geometry.count; ++index) {
     hints.append(historyHintRecord(geometry.hints[index], density));
   }
 
   auto layout = historyHintStyle(ratio_);
   const auto title = geometry.title;
+
   layout.insert(QStringLiteral("title"), QRectF{title.x / density, title.y / density, title.width / density, title.height / density});
   layout.insert(QStringLiteral("hints"), hints);
   layout.insert(QStringLiteral("hintCount"), static_cast<qulonglong>(geometry.count));

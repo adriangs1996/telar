@@ -46,6 +46,7 @@ inline std::string proxyStatusJson(const ProxyStatus &status) {
 
 inline std::string metricsJson(const SystemMetrics &metrics, bool event) {
   auto result = std::format("{{\"revision\":{},\"cpu_percent\":{},\"memory_used_decigib\":{},", metrics.revision, metrics.cpu_percent, metrics.memory_used_decigib);
+
   if (event) {
     result += std::format("\"has_battery\":{},\"battery_percent\":{},\"cpu_count\":{},\"memory_total_decigib\":{}}}", jsonBoolean(metrics.has_battery), metrics.battery_percent, metrics.cpu_count, metrics.memory_total_decigib);
   } else {
@@ -57,6 +58,7 @@ inline std::string metricsJson(const SystemMetrics &metrics, bool event) {
 
 inline std::string workspaceEventJson(const WorkspaceList &list) {
   std::string result = std::format("{{\"type\":\"workspace_list\",\"revision\":{},\"data\":[", list.revision);
+
   for (const auto &entry : list.entries) {
     if (&entry != list.entries.data()) {
       result += ',';
@@ -74,11 +76,13 @@ inline std::string agentEventEntryJson(const AgentSnapshotEntry &agent) {
   const auto session = lowerHex(agent.session_id);
 
   constexpr auto escapes = JsonEscapes::control;
+
   return std::format("{{\"pane_id\":{},\"pane_generation\":{},\"workspace_id\":{},\"tab_id\":{},\"pane_index\":{},\"provider\":{},\"provider_index\":{},\"status\":{},\"workspace\":{},\"tab\":{},\"title\":{},\"cwd\":{},\"blocked_reason\":{},\"status_age_s\":{},\"worktree_id\":{},\"last_event\":{},\"plan\":{{\"done\":{},\"total\":{},\"step\":{}}},\"final_message\":{},\"session_id\":{}}}", agent.pane_id, agent.pane_generation, agent.location.workspace.id, agent.location.tab_id, agent.pane_index, quoteJson(agent.provider_name.empty() ? "unknown" : agent.provider_name, escapes), static_cast<Byte>(agent.provider), quoteJson(status_names.at(static_cast<std::size_t>(agent.status)), escapes), quoteJson(agent.workspace_label, escapes), quoteJson(agent.tab_label, escapes), quoteJson(agent.session_title, escapes), quoteJson(agent.cwd_label, escapes), quoteJson(reason_names.at(static_cast<std::size_t>(agent.blocked_reason)), escapes), agent.status_age_s, agent.work_tree, quoteJson(agent.last_event, escapes), agent.plan_done, agent.plan_total, quoteJson(agent.plan_step, escapes), quoteJson(agent.final_message, escapes), quoteJson(session, escapes));
 }
 
 inline std::string agentEventJson(const AgentSnapshot &snapshot) {
   std::string result = std::format("{{\"type\":\"agent_snapshot\",\"revision\":{},\"data\":[", snapshot.revision);
+
   for (const auto &entry : snapshot.entries) {
     if (&entry != snapshot.entries.data()) {
       result += ',';
@@ -285,6 +289,7 @@ inline int run(Arguments words) {
   }
 
   bool json = false;
+
   for (const std::string_view word : words.subspan(1)) {
     if (word != "--json") {
       throw std::invalid_argument{"UnknownApiOption"};
@@ -294,11 +299,13 @@ inline int run(Arguments words) {
   }
 
   std::string fingerprint;
+
   for (const auto byte : handshake::schema_id) {
     fingerprint += std::format("{:02x}", byte);
   }
 
   std::string output;
+
   if (json) {
     output = "{\"schema_version\":" + quoteJson(nativeSchemaVersion()) + ",\"fingerprint\":" + quoteJson(fingerprint) + ",\"client_requests\":{";
     appendTable(output, client_requests, true);
@@ -474,8 +481,10 @@ public:
     for (;;) {
       const auto frame = connection_.receive(incoming_);
       DecodeStorage storage{decoded_};
+
       if (frame.front() == static_cast<Byte>(MessageSchema<Reply>::tag)) {
         auto reply = Codec::decode<Reply>(frame, storage);
+
         if constexpr (requires { reply.request_id; }) {
           if (request_id && reply.request_id != *request_id) {
             continue;
@@ -520,8 +529,10 @@ struct Options {
     if (words.empty() || std::string_view{words.front()} != "get") {
       throw std::invalid_argument{"UnknownClipboardAction"};
     }
+
     Options options;
     Cursor cursor{words.subspan(1)};
+
     while (const auto word = cursor.next()) {
       if (*word == "--socket" && !options.socket) {
         options.socket = cursor.take("MissingSocketPath");
@@ -529,6 +540,7 @@ struct Options {
         throw std::invalid_argument{"UnknownClipboardOption"};
       }
     }
+
     return options;
   }
 };
@@ -539,21 +551,26 @@ int run(Memory &memory, const Options &options) {
   if (::isatty(STDOUT_FILENO)) {
     throw std::runtime_error{"Pipe clipboard content to a consumer or redirect stdout to a file"};
   }
+
   try {
     ServerOptions server_options{};
+
     server_options.socket = options.socket.value_or("");
     const RuntimePaths paths{memory, server_options, process_environment};
     constexpr std::size_t frame_bytes = runtime_clipboard_chunk_bytes + 1024;
     ControlSession session{memory, paths.socket.c_str(), frame_bytes, 128};
+
     session.receiveTimeout(10);
     ReadRuntimeClipboard request;
     std::uint64_t total = 0;
     std::string mime;
+
     for (;;) {
       const auto chunk = session.template exchange<RuntimeClipboardChunk>(request);
       if (chunk.offset != request.offset) {
         throw std::runtime_error{"Clipboard chunk arrived out of sequence"};
       }
+
       if (request.transfer_id == 0) {
         request.transfer_id = chunk.transfer_id;
         total = chunk.total_bytes;
@@ -561,6 +578,7 @@ int run(Memory &memory, const Options &options) {
       } else if (chunk.transfer_id != request.transfer_id || chunk.total_bytes != total || chunk.mime != mime) {
         throw std::runtime_error{"Clipboard transfer metadata changed"};
       }
+
       writeBytes(STDOUT_FILENO, chunk.bytes);
       request.offset += chunk.bytes.size();
       if (request.offset == total) {
@@ -605,6 +623,7 @@ struct RuntimeOptions {
     RuntimeOptions self{.action = action == "status" ? Action::status : action == "metrics" ? Action::metrics
                                                                                             : Action::watch};
     Cursor cursor{words.subspan(1)};
+
     while (const auto word = cursor.next()) {
       const std::string_view arg = *word;
       if (arg == "--json" || (self.action == Action::watch && arg == "--jsonl")) {
@@ -651,6 +670,7 @@ inline void printRuntimeStatus(const ProxyStatus &status, bool json) {
   }
 
   auto output = std::format("Runtime: running\nSchema: {}\nProxy: {}\n", nativeSchemaVersion(), status.active ? "active" : "disabled");
+
   if (status.port) {
     if (!status.preferred_port) {
       output += std::format("Proxy port: {} (none remembered for this runtime)\n", *status.port);
@@ -698,24 +718,29 @@ inline std::string runtimeEventJson(std::span<const Byte> frame, DecodeStorage &
 template <Allocator Memory>
 void observeRuntime(Memory &memory, const RuntimeOptions &options) {
   ServerOptions server_options{};
+
   server_options.socket = options.socket.value_or("");
   const RuntimePaths paths{memory, server_options, process_environment};
   RuntimeConnection connection{paths.socket.c_str()};
+
   if (options.action != RuntimeOptions::Action::watch) {
     connection.receiveTimeout(30);
   }
 
   std::array<Byte, 32> outgoing;
+
   connection.send(RequestRuntimeState{.client_identity = randomIdentity(), .interactive = false}, outgoing);
   Vector<Byte, Memory> incoming(max_payload_size, Byte{}, AllocatorRef<Byte, Memory>{memory});
   Vector<Byte, Memory> decoded(max_payload_size, Byte{}, AllocatorRef<Byte, Memory>{memory});
   std::uint64_t count = 0;
+
   for (;;) {
     const auto frame = connection.receive(incoming);
     DecodeStorage storage{decoded};
     const auto tag = static_cast<ServerTag>(frame.front());
     if (tag == ServerTag::request_failed) {
       const auto failure = Codec::decode<RequestFailed>(frame, storage);
+
       throw ControlFailure{failure.code, failure.message};
     }
 
@@ -755,10 +780,12 @@ int runRuntime(Memory &memory, const RuntimeOptions &options) {
     return 0;
   } catch (const SystemError &error) {
     const bool timeout = error.code() == EAGAIN || error.code() == ETIMEDOUT;
+
     writeText(std::string{"telar runtime: "} + (timeout ? "RuntimeTimeout" : systemErrorName(error.code())) + "\n", STDERR_FILENO);
     return timeout ? 3 : 1;
   } catch (const std::exception &error) {
     const auto reason = commandErrorName(error);
+
     writeText("telar runtime: " + std::string{reason} + "\n", STDERR_FILENO);
     return reason == "RuntimeTimeout" ? 3 : 1;
   }

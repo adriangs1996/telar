@@ -69,8 +69,10 @@ public:
       }
 
       QEvent request{QEvent::UpdateRequest};
+
       QCoreApplication::sendEvent(window_, &request);
     });
+
     QObject::connect(&window, &QObject::destroyed, &deadline_, [this] {
       pending_ = false;
       deadline_.stop();
@@ -124,6 +126,7 @@ public:
       constexpr std::uint64_t nanoseconds_per_millisecond = 1'000'000;
       const auto remaining = *deadline - now_ns;
       const auto milliseconds = (remaining / nanoseconds_per_millisecond) + static_cast<std::uint64_t>(remaining % nanoseconds_per_millisecond != 0);
+
       delivery_ = Delivery::held;
       pending_ = true;
       deadline_.start(static_cast<int>(std::min<std::uint64_t>(milliseconds, std::numeric_limits<int>::max())));

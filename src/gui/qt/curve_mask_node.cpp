@@ -38,10 +38,13 @@ public:
     geometry_.setDrawingMode(QSGGeometry::DrawTriangleStrip);
     constexpr std::array corners{QPointF{0, 0}, QPointF{1, 0}, QPointF{0, 1}, QPointF{1, 1}};
     const auto vertices = std::span{static_cast<AlphaMaskVertex *>(geometry_.vertexData()), corners.size()};
+
     for (std::size_t index = 0; index < corners.size(); ++index) {
       const auto corner = corners[index];
+
       vertices[index] = {.x = static_cast<float>(bounds.x() + (corner.x() * bounds.width())), .y = static_cast<float>(bounds.y() + (corner.y() * bounds.height())), .u = static_cast<float>(corner.x()), .v = static_cast<float>(corner.y()), .opacity = 1};
     }
+
     setGeometry(&geometry_);
     setMaterial(&material_);
   }

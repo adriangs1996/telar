@@ -83,6 +83,7 @@ public:
 
   inline static NotificationActionDescription notification(const runtime::lua::Value &value) {
     NotificationActionDescription result;
+
     result.title.assign(runtime::utf8Prefix(value.field("title").string(), max_notification_title_bytes));
     const auto body = value.field("body");
     if (body.present()) {
@@ -92,6 +93,7 @@ public:
     const auto level = value.field("level");
     if (level.present()) {
       constexpr std::array names{"info", "success", "warning", "failure"};
+
       for (std::size_t index = 0; index < names.size(); ++index) {
         if (level.string() == names[index]) {
           result.level = static_cast<NotificationLevel>(index);
@@ -101,6 +103,7 @@ public:
 
     result.duration_ms = static_cast<std::uint32_t>(value.field("duration_ms").boundedInteger(default_notification_duration_ms, min_notification_duration_ms, max_notification_duration_ms));
     constexpr std::array targets{"pane_id", "tab_id", "workspace_id"};
+
     for (std::size_t index = 0; index < targets.size(); ++index) {
       const auto target = value.field(targets[index]);
       if (target.present()) {
@@ -206,6 +209,7 @@ private:
         {"resize-sidebar", "resize-sidebar-"},
         {"move-tab", "move-tab-"},
     });
+
     const auto *const found = std::ranges::find(stems, name, &decltype(stems)::value_type::first);
     if (found == stems.end()) {
       value.fail("names an unknown binding action");
@@ -220,6 +224,7 @@ private:
     }
 
     const auto copied = std::ranges::copy(found->second, combined.begin());
+
     std::ranges::copy(suffix, copied.out);
     const auto action = builtinBindingAction({combined.data(), found->second.size() + suffix.size()});
     if (!action) {
@@ -272,6 +277,7 @@ public:
       constexpr std::uint64_t minimum_timeout_ms = 10;
       constexpr std::uint64_t maximum_timeout_ms = 10'000;
       constexpr std::uint64_t nanoseconds_per_millisecond = 1'000'000;
+
       input.sequence_timeout_ns = options.field("sequence_timeout_ms").boundedInteger(input.sequence_timeout_ns / nanoseconds_per_millisecond, minimum_timeout_ms, maximum_timeout_ms) * nanoseconds_per_millisecond;
     }
 
@@ -281,6 +287,7 @@ public:
     }
 
     const auto count = bindings.listLength();
+
     input.length = 0;
     input.dropped = count - std::min(count, BindingLimits::bindings);
     for (std::size_t index = 0; index < std::min(count, BindingLimits::bindings); ++index) {
@@ -334,15 +341,19 @@ inline std::string_view canonicalThemeName(std::string_view name) noexcept {
   if (name == "catppuccin-mocha" || name == "mocha") {
     return "catppuccin";
   }
+
   if (name == "tokyonight" || name == "tokyo_night") {
     return "tokyo-night";
   }
+
   if (name == "kanagawa-wave" || name == "kanagawa_wave") {
     return "kanagawa";
   }
+
   if (name == "kanagawa_dragon") {
     return "kanagawa-dragon";
   }
+
   if (name == "default") {
     return "terminal";
   }
@@ -357,9 +368,11 @@ inline ThemeValues themeValuesByName(std::string_view name) {
   }
 
   std::array<char, maximum_name_bytes> lowercase{};
+
   std::ranges::transform(name, lowercase.begin(), [](char character) {
     return character >= 'A' && character <= 'Z' ? static_cast<char>(character + 'a' - 'A') : character;
   });
+
   const auto canonical = canonicalThemeName({lowercase.data(), name.size()});
   const auto *const found = std::ranges::find_if(theme_presets, [&](const auto &preset) {
     return preset.name == canonical;
@@ -433,6 +446,7 @@ private:
     }
 
     auto result = variant.value_or(base);
+
     applyTheme(value, result);
     variant = result;
   }
@@ -483,6 +497,7 @@ private:
   inline static void applyOptionalRgb(const Value &value, std::optional<ThemeRgb> &destination) {
     if (value.present()) {
       ThemeRgb result{};
+
       applyRgb(value, result);
       destination = result;
     }
@@ -517,6 +532,7 @@ private:
       }
 
       auto style = theme.syntaxStyle(static_cast<SyntaxRole>(index));
+
       if (entry.is(LUA_TTABLE)) {
         const auto foreground = entry.field("fg");
         if (foreground.present()) {
@@ -569,6 +585,7 @@ public:
   // Maps a configuration runtime::config::SnapshotReader already validated, profile included.
   inline static Configuration read(const runtime::lua::Value &root, std::string_view profile) {
     Configuration result;
+
     result.themes.base = default_theme_values;
     apply(root, result);
 
@@ -597,6 +614,7 @@ private:
 
   inline static void gui(const runtime::config::GuiSettings &gui, Configuration &configuration) {
     using Settings = runtime::config::GuiSettings;
+
     font(gui.font, configuration.font);
     const Settings::Cursor &cursor = gui.cursor;
     if (cursor.style) {
@@ -609,6 +627,7 @@ private:
     }
 
     auto &scroll = configuration.scroll;
+
     scroll.smooth = gui.scroll.smooth.value_or(scroll.smooth);
     scroll.wheel_ms = gui.scroll.wheel_ms.value_or(scroll.wheel_ms);
     scroll.overscan = static_cast<float>(gui.scroll.overscan.value_or(scroll.overscan));
@@ -685,15 +704,19 @@ private:
     if (settings.bindings) {
       prompt.bindings = std::move(bindings);
     }
+
     if (settings.mode) {
       prompt.mode = mapped<PromptMode>(*settings.mode);
     }
+
     if (settings.motion) {
       prompt.motion = mapped<PromptMotion>(*settings.motion);
     }
+
     if (settings.keymap) {
       prompt.keymap = mapped<PromptKeymap>(*settings.keymap);
     }
+
     prompt.ghost = settings.ghost.value_or(prompt.ghost);
     prompt.max_lines = settings.max_lines.value_or(prompt.max_lines);
   }
@@ -706,6 +729,7 @@ private:
     history.show_agent_commands = table.field("show_agent_commands").boolean(history.show_agent_commands);
     const auto enter = table.field("enter");
     const auto match = table.field("match");
+
     if (enter.present()) {
       history.enter_runs = enter.string() == "run";
     }
@@ -818,6 +842,7 @@ public:
     if (root.is(LUA_TTABLE) && !root.field("ui").present()) {
       Element row;
       const auto index = append(root, row);
+
       children(root, index, 1);
 
       return;
@@ -838,6 +863,7 @@ private:
 
     if (value.is(LUA_TSTRING)) {
       Element label;
+
       label.kind = Kind::label;
       label.parent = parent;
       label.text = text(value);
@@ -864,10 +890,12 @@ private:
     }
 
     Element result;
+
     result.kind = static_cast<Kind>(found - components::element_kind_names.begin());
     result.parent = parent;
     fields(value, result);
     const auto index = append(value, result);
+
     if (result.kind == Kind::row || result.kind == Kind::column || result.kind == Kind::stack) {
       children(value, index, depth + 1);
     }
@@ -875,6 +903,7 @@ private:
 
   inline void children(const Value &value, std::uint32_t parent, unsigned depth) {
     const auto count = value.listLength();
+
     for (std::size_t index = 0; index < count; ++index) {
       element(value.element(static_cast<lua_Integer>(index) + 1), parent, depth);
     }
@@ -919,6 +948,7 @@ private:
       if (element.text.length == 0) {
         value.fail("requires an icon name or a glyph");
       }
+
       typography(value, element);
       break;
     case Kind::mark:
@@ -1076,6 +1106,7 @@ private:
     // CSS order: {all}, {vertical, horizontal} or {top, right, bottom, left}.
     const auto count = value.listLength();
     std::array<float, 4> sides{};
+
     for (std::size_t index = 0; index < std::min<std::size_t>(count, 4); ++index) {
       sides[index] = length(value.element(static_cast<lua_Integer>(index) + 1), 0);
     }
@@ -1098,6 +1129,7 @@ private:
       bool text;
       bool color;
     };
+
     // Matches ElementCanvas::Operation, in order.
     constexpr std::array<Shape, 21> shapes{{
         {"move", 2, false, false}, {"line", 2, false, false}, {"curve", 6, false, false}, {"quad", 4, false, false},
@@ -1107,8 +1139,10 @@ private:
         {"translate", 2, false, false}, {"rotate", 1, false, false}, {"scale", 2, false, false}, {"save", 0, false, false},
         {"restore", 0, false, false},
     }};
+
     element.steps_offset = static_cast<std::uint32_t>(output_.steps.size());
     const auto count = ops.present() ? ops.listLength() : 0;
+
     for (std::size_t index = 0; index < count; ++index) {
       if (output_.steps.size() == Element::maximum_steps) {
         ops.fail("exceeds 4096 canvas operations");
@@ -1122,8 +1156,10 @@ private:
       }
 
       components::CanvasStep step;
+
       step.op = static_cast<std::uint8_t>(shape - shapes.begin());
       lua_Integer next = 2;
+
       if (shape->text) {
         step.text = text(op.element(next++));
       }
@@ -1133,6 +1169,7 @@ private:
       }
 
       const auto available = op.listLength() - static_cast<std::size_t>(next - 1);
+
       step.count = static_cast<std::uint8_t>(std::min<std::size_t>(available, shape->numbers));
       if ((step.count < shape->numbers && shape->name != "stroke" && shape->name != "scale") || available > shape->numbers) {
         op.fail("has the wrong number of values");
@@ -1150,6 +1187,7 @@ private:
 
   inline components::ElementColor color(const Value &value) const {
     components::ElementColor result;
+
     if (!value.present()) {
       return result;
     }
@@ -1220,6 +1258,7 @@ private:
   // The fields name what the base and the extra names view, region `a`.
   inline static tbc::view<Fields, tbc::lt::a> combined(tbc::view<std::span<const std::string_view>, tbc::lt::a> base, tbc::view<std::initializer_list<std::string_view>, tbc::lt::a> extra) {
     Fields result;
+
     for (const auto name : base) {
       result.names[result.count++] = name;
     }
@@ -1254,6 +1293,7 @@ private:
     }
 
     const components::ElementText range{.offset = static_cast<std::uint32_t>(output_.text.size()), .length = static_cast<std::uint32_t>(text.size())};
+
     output_.text.append(text);
 
     return range;
@@ -1308,6 +1348,7 @@ public:
 
   inline void renderBar(components::Position position, const components::Context &context) {
     const auto source = components_->definitions().source(position);
+
     renderComponents(source, context, [&](const auto &value, const auto &actions) {
       components_->readBar(position, value, actions, notices_);
     });
@@ -1320,6 +1361,7 @@ public:
     }
 
     const auto source = panels[index].source;
+
     renderComponents(source, context, [&](const auto &value, const auto &actions) {
       components_->readPanel(value, actions, notices_);
     });
@@ -1346,6 +1388,7 @@ public:
   // The copy allocates from memory, region `b`.
   [[nodiscard]] inline tbc::view<Owned<RenderedContent<Bounds, Memory>, Memory>, tbc::lt::b> copied(tbc::view<Memory &, tbc::lt::b> memory, const components::Content<Bounds> &content) const {
     auto result = makeOwned<RenderedContent<Bounds, Memory>>(memory, memory);
+
     result->content = content;
     for (const auto &node : content.nodes()) {
       if (const auto action = content.action(node)) {
@@ -1358,6 +1401,7 @@ public:
 
   [[nodiscard]] inline ResolvedAction resolve(BindingAction action) const {
     ResolvedAction result{.action = action};
+
     if (action.kind == BindingActionKind::extended) {
       result.description = extendedAction(action);
     } else if (action.kind == BindingActionKind::command_tab) {
@@ -1371,6 +1415,7 @@ public:
 
   [[nodiscard]] inline Owned<ResolvedEffects<Memory>, Memory> invokeResolved(BindingAction action, BindingContext context) {
     auto result = makeOwned<ResolvedEffects<Memory>>(memory_, memory_);
+
     result->effects = invoke(action, context);
     for (const auto effect : std::span{result->effects.actions}.first(result->effects.length)) {
       if (effect.kind == BindingActionKind::extended || effect.kind == BindingActionKind::command_tab) {
@@ -1396,16 +1441,19 @@ public:
         luaL_unref(machine_.state(), LUA_REGISTRYINDEX, handler);
       }
     };
+
     client_state_.commands.beginRender();
     try {
       lua_settop(machine_.state(), 0);
       machine_.resetBudget(lua_call_instructions, lua_call_deadline);
       components::Invocation invocation{reference, context, nullptr, item};
+
       machine_.invoke(&components::Invocation::invoke, &invocation, 1);
       const runtime::lua::Value root{machine_.state(), -1, "element"};
       const auto action = [&](const runtime::lua::Value &value) {
         return elementAction(value, static_cast<std::uint32_t>(result->bindings.size()));
       };
+
       const auto callback = [&](const runtime::lua::Value &value) {
         if (handlers.size() == components::Element::maximum_actions) {
           value.fail("exceeds 1024 click functions");
@@ -1416,6 +1464,7 @@ public:
 
         return static_cast<std::uint32_t>(handlers.size() - 1);
       };
+
       ElementReader<Memory, decltype(action), decltype(callback)>{*result, action, callback}.read(root);
     } catch (...) {
       release();
@@ -1429,6 +1478,7 @@ public:
     lua_settop(machine_.state(), 0);
     result->callbacks = static_cast<std::uint32_t>(handlers.size());
     auto &kept = handlersOf(instance);
+
     std::swap(kept.references, handlers);
     release();
 
@@ -1450,6 +1500,7 @@ public:
 
     transient_count_ = 0;
     components::Invocation invocation{found->references[callback], context, nullptr, item};
+
     machine_.invoke(&components::Invocation::invoke, &invocation, 1);
     auto result = makeOwned<ResolvedEffects<Memory>>(memory_, memory_);
     const runtime::lua::Value value{machine_.state(), -1, "click result"};
@@ -1514,13 +1565,17 @@ public:
       if (pick.render) {
         constexpr std::uint64_t pick_instructions = lua_call_instructions;
         constexpr auto pick_deadline = lua_call_deadline;
+
         machine_.resetBudget(pick_instructions, pick_deadline);
         components::Invocation invocation{pick.reference, context, "items"};
+
         machine_.invoke(&components::Invocation::invoke, &invocation, 1);
         const runtime::lua::Value result{machine_.state(), -1, "pick items"};
+
         components::PickItemsReader::read(result, items, notices_);
       } else {
         const runtime::lua::Value registry{machine_.state(), LUA_REGISTRYINDEX, "pick registry"};
+
         components::PickItemsReader::read(registry.element(pick.reference).field("items"), items, notices_);
       }
     } catch (...) {
@@ -1538,6 +1593,7 @@ public:
     const auto source = registry.element(reference);
     const auto command = source.field(field);
     const auto count = command.listLength();
+
     for (std::size_t index = 0; index < count; ++index) {
       visit(command.element(static_cast<lua_Integer>(index) + 1).string());
     }
@@ -1614,6 +1670,7 @@ public:
         visitor(*plugin);
       }
     };
+
     for (const auto &binding : std::span{input_.configured}.first(input_.length)) {
       visit(binding.action);
     }
@@ -1648,11 +1705,13 @@ public:
 
   inline InputExpression expression(BindingAction action, BindingContext context) {
     const auto &binding = callbackBinding(action, BindingActionKind::expression);
+
     invokeFunction(action.reference, context);
     const runtime::lua::Value result{machine_.state(), -1, "expression result"};
     const auto kind_value = result.field("input_kind");
     const auto kind = kind_value.string();
     InputExpression decision;
+
     if (kind == "consume" || kind == "forward") {
       result.onlyFields({"input_kind"});
       decision.kind = kind == "consume" ? InputExpression::Kind::consume : InputExpression::Kind::forward;
@@ -1689,20 +1748,25 @@ private:
 
     client_state_.commands.beginRender();
     const auto checkpoint = client_state_.commands.checkpoint();
+
     try {
       lua_settop(machine_.state(), 0);
       if (source.has_render) {
         constexpr std::uint64_t render_instructions = lua_call_instructions;
         constexpr auto render_deadline = lua_call_deadline;
+
         machine_.resetBudget(render_instructions, render_deadline);
         components::Invocation invocation{source.reference, context};
+
         machine_.invoke(&components::Invocation::invoke, &invocation, 1);
       } else {
         const auto output = context.output.value_or(std::string_view{});
+
         lua_pushlstring(machine_.state(), output.data(), output.size());
       }
 
       const runtime::lua::Value result{machine_.state(), -1, "component render result"};
+
       withActions([&](const auto &actions) {
         consume(result, actions);
       });
@@ -1740,19 +1804,23 @@ private:
     const auto action = withActions([&](const auto &reader) {
       return reader.read(value);
     });
+
     lua_pop(machine_.state(), 1);
     if (!action) {
       return std::nullopt;
     }
 
     ResolvedAction resolved;
+
     resolved.action = *action;
     if (action->kind == BindingActionKind::extended) {
       resolved.description = withDefinitions([&](const auto &definitions) {
         return ActionDescriptionReader::read(value, definitions);
       });
+
       luaL_unref(machine_.state(), LUA_REGISTRYINDEX, action->reference);
       constexpr int first_element_reference = -16;
+
       resolved.action.reference = first_element_reference - static_cast<int>(index);
     } else if (action->kind == BindingActionKind::command_tab) {
       if (const auto command = commandTab(*action)) {
@@ -1797,6 +1865,7 @@ private:
     const runtime::lua::Value registry{machine_.state(), LUA_REGISTRYINDEX, "configuration registry"};
     const auto root = registry.element(root_reference_);
     const auto client = root.field("client");
+
     if (profile_.view().empty()) {
       const runtime::config::ClientDefinitions definitions{client};
 
@@ -1814,6 +1883,7 @@ private:
 
   void readConfiguration(tbc::view<Memory &, tbc::lt::a> memory, const PluginOverrides *overrides) {
     const runtime::lua::Value root{machine_.state(), -1, "config"};
+
     runtime::config::SnapshotReader{memory, *runtime_}.read(root, profile_.view(), client_state_);
     validateUtf8(runtime_->history_path);
     validateUtf8(runtime_->session_path);
@@ -1822,12 +1892,14 @@ private:
     root.pushCopy();
     root_reference_ = luaL_ref(machine_.state(), LUA_REGISTRYINDEX);
     const auto client = root.field("client");
+
     readClient(client);
     if (!profile_.view().empty()) {
       const auto profiles = root.field("profiles");
       const auto selected = profiles.entry(profile_.view());
       const auto profile_config = selected.as("config");
     const auto overlay = profile_config.field("client");
+
       readClient(overlay, &client);
     }
 
@@ -1841,11 +1913,13 @@ private:
     withActions([&](const auto &reader) {
       components_->readFixed(reader, notices_);
     });
+
     client_state_.commands.seal();
   }
 
   void removeDisabledPluginBindings(const PluginOverrides &overrides) {
     std::size_t retained = 0;
+
     for (const auto &binding : std::span{input_.configured}.first(input_.length)) {
       if (binding.action.kind == BindingActionKind::extended) {
         const auto *plugin = std::get_if<PluginActionDescription>(&descriptions_.at(binding.action.parameter));
@@ -1864,6 +1938,7 @@ private:
   // A profile can replace named definitions while inheriting its keybindings.
   void rebindDefinitions() {
     const runtime::lua::Value registry{machine_.state(), LUA_REGISTRYINDEX, "binding registry"};
+
     for (const auto &binding : std::span{input_.configured}.first(input_.length)) {
       const auto action = binding.action;
       if (action.kind != BindingActionKind::extended || !std::holds_alternative<DefinitionActionDescription>(descriptions_.at(action.parameter))) {
@@ -1874,6 +1949,7 @@ private:
       const auto description = withDefinitions([&](const auto &definitions) {
         return ActionDescriptionReader::read(value, definitions);
       });
+
       descriptions_.replaceDefinition(action.parameter, std::get<DefinitionActionDescription>(description));
     }
   }
@@ -1883,11 +1959,13 @@ private:
     const runtime::config::ClientDefinitions definitions{client, inherited};
     const runtime::config::RetainedActionValidator validator{definitions, notices_, client_state_.commands};
     const BindingActionReader reader{*machine_.state(), validator, client_state_.commands, number_};
+
     if (client.present() && client.field("keybindings").present()) {
       descriptions_.replaceBindings();
     }
 
     const RecordingActionReader actions{reader, descriptions_, definitions};
+
     BindingReader::apply(client, input_, actions);
   }
 
@@ -1896,6 +1974,7 @@ private:
     lua_rawgeti(machine_.state(), LUA_REGISTRYINDEX, root_reference_);
     const runtime::lua::Value root{machine_.state(), -1, "config"};
     const auto client = root.field("client");
+
     if (profile_.view().empty()) {
       const runtime::config::ClientDefinitions definitions{client};
       const runtime::config::RetainedActionValidator validator{definitions, notices_, client_state_.commands};
@@ -1932,6 +2011,7 @@ private:
   void invokeFunction(int reference, BindingContext context) {
     constexpr std::uint64_t callback_instructions = lua_call_instructions;
     constexpr auto callback_deadline = lua_call_deadline;
+
     for (const auto reference : std::span{transient_references_}.first(transient_count_)) {
       luaL_unref(machine_.state(), LUA_REGISTRYINDEX, reference);
     }
@@ -1940,6 +2020,7 @@ private:
     lua_settop(machine_.state(), 0);
     machine_.resetBudget(callback_instructions, callback_deadline);
     CallbackInvocation invocation{reference, context};
+
     machine_.invoke(&CallbackInvocation::invoke, &invocation, 1);
   }
 
@@ -1970,6 +2051,7 @@ private:
     }
 
     const auto count = result.listLength();
+
     batch.dropped = count - std::min(count, BindingEffects::maximum_effects);
     for (std::size_t index = 0; index < std::min(count, BindingEffects::maximum_effects); ++index) {
       appendEffect(result.element(static_cast<lua_Integer>(index) + 1), reader, batch);

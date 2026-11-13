@@ -71,6 +71,7 @@ WindowFontCatalog &WindowFontCatalog::forWindow(QQuickWindow &window) {
   auto *catalog = window.findChild<WindowFontCatalog *>(QString{}, Qt::FindDirectChildrenOnly);
   if (catalog == nullptr) {
     auto created = std::make_unique<WindowFontCatalog>(window);
+
     catalog = created.release();
   }
 
@@ -101,6 +102,7 @@ std::shared_ptr<const FontCollection> WindowFontCatalog::collectionFor(const std
   auto collection = primary_collections_.value(primary.get()).lock();
   if (!collection) {
     auto updated = std::make_shared<FontCollection>(*collection_);
+
     updated->primary = primary;
     collection = std::move(updated);
     primary_collections_.insert(primary.get(), collection);
@@ -137,6 +139,7 @@ void WindowFontCatalog::request(std::string_view text, fonts::FontRole preferred
   }
 
   GraphemeCursor cursor{text};
+
   while (const auto cluster = cursor.next()) {
     if (!fonts->source(*cluster, preferred)) {
       requests_.request(*cluster);
@@ -148,6 +151,7 @@ void WindowFontCatalog::request(std::string_view text, fonts::FontRole preferred
 
 WindowFontCatalog::Discovery WindowFontCatalog::discover(fonts::FontQuery query, std::uint64_t generation) {
   Discovery result{.query = query, .source = {}, .generation = generation};
+
   try {
     const auto data = loadFallbackFontData(query);
     if (data) {
@@ -178,6 +182,7 @@ void WindowFontCatalog::start() {
     const auto future = QtConcurrent::run([query = *query, generation = generation_] {
       return discover(query, generation);
     });
+
     running_ = true;
     task_.setFuture(future);
   } catch (const std::exception &) {
@@ -197,6 +202,7 @@ bool WindowFontCatalog::adopt(const Discovery &result) {
   }
 
   auto updated = std::make_shared<FontCollection>(*collection_);
+
   updated->fallback[updated->count++] = result.source;
   collection_ = std::move(updated);
   primary_collections_.clear();
@@ -206,10 +212,12 @@ bool WindowFontCatalog::adopt(const Discovery &result) {
 
 void WindowFontCatalog::complete() {
   const QPointer<WindowFontCatalog> lifetime{this};
+
   running_ = false;
   const auto result = task_.result();
   if (result.generation == generation_) {
     bool changed = false;
+
     try {
       changed = adopt(result);
     } catch (const std::exception &) {

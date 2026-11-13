@@ -59,6 +59,7 @@ inline QVariantMap metricRecord(BarMetric metric, const HostMetrics &metrics) {
 inline QVariantMap metricsRecord(const HostMetrics &metrics) {
   CpuHistory::Samples buffer;
   QVariantList history;
+
   for (const auto sample : metrics.history().ordered(buffer)) {
     history.append(sample);
   }

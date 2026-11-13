@@ -47,13 +47,16 @@ public:
     if (execute(arguments, retain_prefix) != 0) {
       reject();
     }
+
     auto text = output_.text();
     if (text.size() > maximum_bytes) {
       reject();
     }
+
     while (!text.empty() && (text.back() == '\n' || text.back() == '\r')) {
       text.remove_suffix(1);
     }
+
     return text;
   }
 
@@ -120,6 +123,7 @@ public:
     result.present = true;
     result.branch.assign(*branch);
     const auto deadline = Clock::now() + git_status_timeout;
+
     try {
       GitRepository git{memory_, root, deadline, cancelled_};
       bool printed = false;

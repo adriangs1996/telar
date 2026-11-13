@@ -39,6 +39,7 @@ public:
     }
 
     const RoundedRectanglePaint paint{.origin = {.x = static_cast<float>(bounds.x() * scale), .y = static_cast<float>(bounds.y() * scale)}, .shape = {.size = {.x = static_cast<float>(bounds.width() * scale), .y = static_cast<float>(bounds.height() * scale)}, .style = {.fill = foreground}}};
+
     adoptSceneNode(parent, std::unique_ptr<QSGNode>{paintRoundedRectangleAt(window, nullptr, paint, scale)});
   }
 };

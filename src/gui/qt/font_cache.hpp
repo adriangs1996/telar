@@ -92,6 +92,7 @@ private:
   ResolvedFont replace(const FontConfiguration &font, qreal scale) {
     auto replacement = makeOwned<Generation>(memory_, memory_, font);
     auto resolved = FontResolver::resolve(replacement->face, font, scale);
+
     generation_ = std::move(replacement);
     for (auto &entry : entries_) {
       entry.font.reset();
@@ -105,6 +106,7 @@ private:
   ResolvedFont remember(ResolvedFont &&font, qreal scale) {
     auto &entry = entries_[next_slot_];
     const auto &stored = entry.font.emplace(std::move(font));
+
     entry.scale = scale;
     next_slot_ = (next_slot_ + 1) % entries_.size();
 

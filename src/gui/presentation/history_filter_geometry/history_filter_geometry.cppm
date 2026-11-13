@@ -63,6 +63,7 @@ struct BarMetrics {
 
   [[nodiscard]] inline static Value value(BarMetric metric, const SystemMetrics &sample) {
     Value result;
+
     if (!available(metric, sample)) {
       return result;
     }
@@ -206,6 +207,7 @@ struct HistoryEmpty {
 
   [[nodiscard]] inline static tbc::view<HistoryEmpty, tbc::lt::static_storage> derive(const HistoryEmptyOptions &options) {
     HistoryEmpty result;
+
     if (options.phase == HistoryPhase::loading && !options.has_page) {
       result.title.append("Searching your command history…");
 
@@ -336,6 +338,7 @@ struct HistoryFilterChipGeometry {
 
   [[nodiscard]] inline static float width(ChromeMetrics chrome, HistoryFilterChipMeasurements measured) noexcept {
     auto result = measured.label + chrome.px(horizontal_padding * 2);
+
     if (measured.has_value) {
       result += measured.value + chrome.px(value_gap);
     }
@@ -345,10 +348,12 @@ struct HistoryFilterChipGeometry {
 
   [[nodiscard]] inline static HistoryFilterChipGeometry derive(Rect bounds, ChromeMetrics chrome, HistoryFilterChipMeasurements measured) noexcept {
     HistoryFilterChipGeometry result;
+
     result.bounds = bounds;
     result.label = {.x = bounds.x + chrome.px(horizontal_padding), .y = bounds.y, .width = std::max(0.0F, bounds.width - chrome.px(horizontal_padding * 2)), .height = bounds.height};
     const auto painted = result.label.empty() ? 0.0F : std::min(measured.label, result.label.width);
     const auto value_x = result.label.x + (painted + chrome.px(value_gap));
+
     result.value = {.x = value_x, .y = bounds.y, .width = std::max(0.0F, bounds.right() - chrome.px(horizontal_padding) - value_x), .height = bounds.height};
 
     return result;
@@ -425,6 +430,7 @@ struct HistoryFilterGeometry {
 
   [[nodiscard]] inline static HistoryFilterGeometry derive(Rect area, ChromeMetrics chrome, const HistoryFilterMeasurements &measured) noexcept {
     HistoryFilterGeometry result;
+
     if (area.empty()) {
       return result;
     }
@@ -435,9 +441,11 @@ struct HistoryFilterGeometry {
     const auto y = area.y + std::floor((area.height - height) / 2);
     auto scope_total = chrome.px(group_padding);
     auto author_total = chrome.px(group_padding);
+
     for (const auto &chip : measured.scopes) {
       scope_total += HistoryFilterChipGeometry::width(chrome, chip) + chrome.px(chip_inset);
     }
+
     for (const auto &chip : measured.authors) {
       author_total += HistoryFilterChipGeometry::width(chrome, chip) + chrome.px(chip_inset);
     }
@@ -450,24 +458,30 @@ struct HistoryFilterGeometry {
     const auto failed_key_width = measured.keys[2] + key_spacing;
     const auto available = area.width - chrome.px(horizontal_inset * 2);
     const auto with_keys = scope_total + scope_key_width + gap + author_total + author_key_width + gap + failed_width + failed_key_width;
+
     result.show_keys = with_keys <= available;
     result.show_right = result.show_keys || scope_total + gap + author_total + gap + failed_width <= available;
 
     const auto left = area.x + chrome.px(horizontal_inset);
+
     result.scope_group = {.x = left, .y = y, .width = scope_total, .height = height};
     const auto scope_end = placeGroup(result.scopes, result.scope_group, chrome, measured.scopes);
+
     if (result.show_keys) {
       result.keys[0] = {.x = scope_end + key_spacing, .y = y, .width = scope_key_width, .height = height};
     }
+
     if (!result.show_right) {
       return result;
     }
 
     auto right = area.right() - chrome.px(horizontal_inset);
+
     if (result.show_keys) {
       right -= failed_key_width;
       result.keys[2] = {.x = right + key_spacing, .y = y, .width = failed_key_width, .height = height};
     }
+
     right -= failed_width;
     result.failed = HistoryFilterChipGeometry::derive({.x = right, .y = y, .width = failed_width, .height = height}, chrome, {.label = measured.failed});
     right -= gap;
@@ -475,6 +489,7 @@ struct HistoryFilterGeometry {
       right -= author_key_width;
       result.keys[1] = {.x = right + key_spacing, .y = y, .width = author_key_width, .height = height};
     }
+
     right -= author_total;
     result.author_group = {.x = right, .y = y, .width = author_total, .height = height};
     placeGroup(result.authors, result.author_group, chrome, measured.authors);
@@ -486,8 +501,10 @@ private:
   template <std::size_t Count>
   inline static float placeGroup(std::array<HistoryFilterChipGeometry, Count> &destination, Rect group, ChromeMetrics chrome, const std::array<HistoryFilterChipMeasurements, Count> &measured) noexcept {
     auto x = group.x + chrome.px(chip_inset);
+
     for (std::size_t index = 0; index < Count; ++index) {
       const auto width = HistoryFilterChipGeometry::width(chrome, measured[index]);
+
       destination[index] = HistoryFilterChipGeometry::derive({.x = x, .y = group.y + chrome.px(chip_inset), .width = width, .height = std::max(0.0F, group.height - chrome.px(chip_inset * 2))}, chrome, measured[index]);
       x += width + chrome.px(chip_inset);
     }
@@ -582,6 +599,7 @@ struct MachineFacts {
 
   [[nodiscard]] inline static CpuText cpu(MachinePhase phase, std::optional<std::uint8_t> percent) {
     CpuText value;
+
     if (phase == MachinePhase::connected && percent) {
       value.appendDecimal(*percent);
       value.append("%");
@@ -596,6 +614,7 @@ struct MachineFacts {
 
   [[nodiscard]] inline static Geometry geometry(Rect area, const ChromeMetrics &chrome, Widths parts) noexcept {
     Geometry result;
+
     result.bounds = {.x = area.x, .y = area.y, .width = width(chrome, parts), .height = area.height};
     result.glyph = {.x = area.x, .y = area.y, .width = parts.glyph, .height = area.height};
     result.label = {.x = result.glyph.right() + chrome.px(part_gap), .y = area.y, .width = parts.label, .height = area.height};

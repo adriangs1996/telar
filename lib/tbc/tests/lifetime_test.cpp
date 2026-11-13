@@ -22,6 +22,7 @@ namespace {
   TEST(lifetime, refersToTheOriginalObject) {
     int value = 7;
     const borrow_type borrowed(value);
+
     borrowed.get() = 9;
     EXPECT_EQ(value, 9);
     EXPECT_EQ(std::addressof(borrowed.get()), std::addressof(value));
@@ -31,6 +32,7 @@ namespace {
     const int value = 7;
     const tbc::borrow<const int, scope> borrowed(value);
     static_assert(std::is_same_v<decltype(borrowed.get()), const int &>);
+
     EXPECT_EQ(borrowed.get(), 7);
   }
 
@@ -42,6 +44,7 @@ namespace {
     } value;
 
     const tbc::borrow<value_type, scope> borrowed(value);
+
     EXPECT_EQ(std::addressof(borrowed.get()), std::addressof(value));
   }
 
@@ -49,10 +52,13 @@ namespace {
     constexpr bool valid = [] {
       int value = 3;
       const borrow_type borrowed(value);
+
       borrowed.get() = 4;
       return value == 4;
     }();
+
     static_assert(valid);
+
     EXPECT_TRUE(valid);
   }
 }

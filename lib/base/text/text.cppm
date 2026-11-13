@@ -87,9 +87,11 @@ inline constexpr char asciiLower(char value) noexcept {
 // `text` with its ASCII capitals lowered.
 inline std::string asciiLowerCopy(std::string_view text) {
   std::string result{text};
+
   for (auto &byte : result) {
     byte = asciiLower(byte);
   }
+
   return result;
 }
 
@@ -97,11 +99,13 @@ inline constexpr bool asciiEqualIgnoreCase(std::string_view left, std::string_vi
   if (left.size() != right.size()) {
     return false;
   }
+
   for (std::size_t index = 0; index < left.size(); ++index) {
     if (asciiLower(left[index]) != asciiLower(right[index])) {
       return false;
     }
   }
+
   return true;
 }
 
@@ -120,6 +124,7 @@ constexpr std::uint64_t fnv1a64(std::string_view bytes, std::uint64_t hash = fnv
   for (const auto byte : bytes) {
     hash = (hash ^ static_cast<unsigned char>(byte)) * fnv1a64_prime;
   }
+
   return hash;
 }
 
@@ -151,9 +156,11 @@ struct BracketedPaste {
       if (found != 0) {
         sink(text.substr(0, found));
       }
+
       sink(std::string_view{" "});
       text.remove_prefix(found + 1);
     }
+
     if (!text.empty()) {
       sink(text);
     }
@@ -166,8 +173,10 @@ struct BracketedPaste {
       if (!text.empty()) {
         sink(text);
       }
+
       return;
     }
+
     sink(begin);
     body(text, sink);
     sink(end);
@@ -207,13 +216,16 @@ public:
     if (finished_) {
       return std::nullopt;
     }
+
     const auto boundary = remaining_.find(delimiter_);
     const auto field = remaining_.substr(0, boundary);
+
     if (boundary == std::string_view::npos) {
       finished_ = true;
     } else {
       remaining_.remove_prefix(boundary + delimiter_.size());
     }
+
     return field;
   }
 
@@ -228,6 +240,7 @@ inline tbc::view<std::string_view, tbc::lt::a> trimText(tbc::view<std::string_vi
   if (start == std::string_view::npos) {
     return {};
   }
+
   return text.substr(start, text.find_last_not_of(characters) - start + 1);
 }
 
@@ -242,23 +255,27 @@ namespace telar::runtime {
 // `output`, which must hold them, and returns what it wrote.
 constexpr tbc::view<std::string_view, tbc::lt::a> encodeLowerHex(std::span<const std::uint8_t> bytes, tbc::view<std::span<char>, tbc::lt::a> output) noexcept {
   constexpr std::string_view digits = "0123456789abcdef";
+
   assert(output.size() >= 2 * bytes.size());
   for (std::size_t index = 0; index < bytes.size(); ++index) {
     output[2 * index] = digits[bytes[index] >> 4];
     output[2 * index + 1] = digits[bytes[index] & 15];
   }
+
   return {output.data(), 2 * bytes.size()};
 }
 
 template <Allocator Memory>
 void appendLowerHex(String<Memory> &output, std::span<const std::uint8_t> bytes) {
   const auto start = output.size();
+
   output.resize(start + 2 * bytes.size());
   static_cast<void>(encodeLowerHex(bytes, std::span{output}.subspan(start)));
 }
 
 inline std::string lowerHex(std::span<const std::uint8_t> bytes) {
   std::string text(2 * bytes.size(), '\0');
+
   static_cast<void>(encodeLowerHex(bytes, text));
   return text;
 }
@@ -315,6 +332,7 @@ public:
   template <typename Consumer>
   inline void eachElement(Consumer &&consume) const {
     auto input = bytes_;
+
     take(input, '[');
     whitespace(input);
     if (input.starts_with(']')) {
@@ -323,6 +341,7 @@ public:
 
     for (;;) {
       const auto before = input;
+
       skip(input, 0, maximum_depth_);
       consume(JsonValue{before.substr(0, before.size() - input.size()), maximum_depth_});
       whitespace(input);
@@ -338,6 +357,7 @@ public:
   template <typename Consumer>
   inline void eachMember(Consumer &&consume) const {
     auto input = bytes_;
+
     take(input, '{');
     whitespace(input);
     if (input.starts_with('}')) {
@@ -346,12 +366,15 @@ public:
 
     for (;;) {
       const auto key_start = input;
+
       stringToken(input);
       const JsonValue key{key_start.substr(0, key_start.size() - input.size()), maximum_depth_};
+
       whitespace(input);
       take(input, ':');
       whitespace(input);
       const auto before = input;
+
       skip(input, 0, maximum_depth_);
       consume(key, JsonValue{before.substr(0, before.size() - input.size()), maximum_depth_});
       whitespace(input);
@@ -366,6 +389,7 @@ public:
 
   inline tbc::view<std::optional<JsonValue>, tbc::lt::b> field(std::string_view name) const {
     auto input = bytes_;
+
     whitespace(input);
     take(input, '{');
     while (true) {
@@ -373,26 +397,33 @@ public:
       if (input.starts_with('}')) {
         return std::nullopt;
       }
+
       const auto key = stringToken(input);
+
       whitespace(input);
       take(input, ':');
       whitespace(input);
       const auto before = input;
+
       skip(input, 0, maximum_depth_);
       const auto value = before.substr(0, before.size() - input.size());
+
       if (key == name) {
         return JsonValue{value, maximum_depth_};
       }
+
       whitespace(input);
       if (input.starts_with('}')) {
         return std::nullopt;
       }
+
       take(input, ',');
     }
   }
 
   inline bool equals(std::string_view expected) const {
     auto input = bytes_;
+
     return input.starts_with('"') && stringToken(input) == expected;
   }
 
@@ -404,6 +435,7 @@ public:
   inline void string(String<Memory> &output) const {
     auto input = bytes_;
     const auto encoded = stringToken(input);
+
     output.clear();
     for (std::size_t index = 0; index < encoded.size(); ++index) {
       const char byte = encoded[index];
@@ -411,9 +443,11 @@ public:
         output.push_back(byte);
         continue;
       }
+
       if (++index == encoded.size()) {
         invalid();
       }
+
       switch (encoded[index]) {
       case '"':
       case '\\':
@@ -437,20 +471,24 @@ public:
         break;
       case 'u': {
         auto codepoint = hex(encoded, index + 1);
+
         index += 4;
         if (codepoint >= 0xd800 && codepoint <= 0xdbff) {
           if (encoded.substr(index + 1, 2) != "\\u") {
             invalid();
           }
+
           const auto low = hex(encoded, index + 3);
           if (low < 0xdc00 || low > 0xdfff) {
             invalid();
           }
+
           codepoint = 0x10000 + ((codepoint - 0xd800) << 10) + low - 0xdc00;
           index += 6;
         } else if (codepoint >= 0xdc00 && codepoint <= 0xdfff) {
           invalid();
         }
+
         appendUtf8(output, codepoint);
         break;
       }
@@ -463,12 +501,15 @@ public:
   inline static tbc::view<JsonValue, tbc::lt::b> parse(tbc::view<std::string_view, tbc::lt::b> input, unsigned maximum_depth = 32) {
     whitespace(input);
     const auto original = input;
+
     skip(input, 0, maximum_depth);
     const auto value = original.substr(0, original.size() - input.size());
+
     whitespace(input);
     if (!input.empty()) {
       invalid();
     }
+
     return JsonValue{value, maximum_depth};
   }
 
@@ -479,6 +520,7 @@ private:
 
   inline static void whitespace(std::string_view &input) noexcept {
     const auto end = input.find_first_not_of(" \r\n\t");
+
     input.remove_prefix(end == std::string_view::npos ? input.size() : end);
   }
 
@@ -486,6 +528,7 @@ private:
     if (!input.starts_with(byte)) {
       invalid();
     }
+
     input.remove_prefix(1);
   }
 
@@ -493,11 +536,13 @@ private:
     if (offset > input.size() || input.size() - offset < 4) {
       invalid();
     }
+
     std::uint32_t value = 0;
     const auto result = std::from_chars(input.data() + offset, input.data() + offset + 4, value, 16);
     if (result.ec != std::errc{} || result.ptr != input.data() + offset + 4) {
       invalid();
     }
+
     return value;
   }
 
@@ -505,19 +550,23 @@ private:
     take(input, '"');
     const auto original = input;
     std::size_t index = 0;
+
     while (index < original.size()) {
       const auto byte = static_cast<unsigned char>(original[index]);
       if (byte == '"') {
         input.remove_prefix(index + 1);
         return original.substr(0, index);
       }
+
       if (byte < 0x20) {
         invalid();
       }
+
       if (byte == '\\') {
         if (++index == original.size()) {
           invalid();
         }
+
         if (original[index] == 'u') {
           hex(original, index + 1);
           index += 4;
@@ -525,8 +574,10 @@ private:
           invalid();
         }
       }
+
       ++index;
     }
+
     invalid();
   }
 
@@ -534,19 +585,23 @@ private:
     if (depth > maximum_depth || input.empty()) {
       invalid();
     }
+
     if (input.front() == '"') {
       stringToken(input);
       return;
     }
+
     if (input.front() == '{' || input.front() == '[') {
       const bool object = input.front() == '{';
       const char close = object ? '}' : ']';
+
       input.remove_prefix(1);
       whitespace(input);
       if (input.starts_with(close)) {
         input.remove_prefix(1);
         return;
       }
+
       for (;;) {
         if (object) {
           stringToken(input);
@@ -554,12 +609,14 @@ private:
           take(input, ':');
           whitespace(input);
         }
+
         skip(input, depth + 1, maximum_depth);
         whitespace(input);
         if (input.starts_with(close)) {
           input.remove_prefix(1);
           return;
         }
+
         take(input, ',');
         whitespace(input);
       }
@@ -572,42 +629,51 @@ private:
       if (number.starts_with('-')) {
         number.remove_prefix(1);
       }
+
       if (number.empty()) {
         invalid();
       }
+
       if (number.front() == '0') {
         number.remove_prefix(1);
       } else {
         if (number.front() < '1' || number.front() > '9') {
           invalid();
         }
+
         digits(number);
       }
+
       if (number.starts_with('.')) {
         number.remove_prefix(1);
         if (digits(number) == 0) {
           invalid();
         }
       }
+
       if (number.starts_with('e') || number.starts_with('E')) {
         number.remove_prefix(1);
         if (number.starts_with('+') || number.starts_with('-')) {
           number.remove_prefix(1);
         }
+
         if (digits(number) == 0) {
           invalid();
         }
       }
+
       if (!number.empty()) {
         invalid();
       }
     }
+
     input.remove_prefix(atom.size());
   }
 
   inline static std::size_t digits(std::string_view &input) noexcept {
     const auto length = input.find_first_not_of("0123456789");
     const auto consumed = length == std::string_view::npos ? input.size() : length;
+
     input.remove_prefix(consumed);
     return consumed;
   }
@@ -650,9 +716,11 @@ void escapeJson(std::string_view text, JsonEscapes escapes, Emit &&emit) {
   constexpr unsigned char first_printable = 0x20;
   constexpr unsigned char delete_byte = 0x7f;
   std::size_t plain = 0;
+
   for (std::size_t index = 0; index < text.size(); ++index) {
     const auto byte = static_cast<unsigned char>(text[index]);
     char shorthand = 0;
+
     switch (byte) {
     case '"': shorthand = '"'; break;
     case '\\': shorthand = '\\'; break;
@@ -663,19 +731,24 @@ void escapeJson(std::string_view text, JsonEscapes escapes, Emit &&emit) {
     case '\f': shorthand = escapes == JsonEscapes::standard ? 'f' : 0; break;
     default: break;
     }
+
     if (shorthand == 0 && byte >= first_printable && !(byte == delete_byte && escapes == JsonEscapes::control)) {
       continue;
     }
+
     emit(text.substr(plain, index - plain));
     plain = index + 1;
     if (shorthand != 0) {
       const std::array escaped{'\\', shorthand};
+
       emit(std::string_view{escaped.data(), escaped.size()});
     } else {
       const std::array escaped{'\\', 'u', '0', '0', hex[byte >> 4], hex[byte & 15]};
+
       emit(std::string_view{escaped.data(), escaped.size()});
     }
   }
+
   emit(text.substr(plain));
 }
 
@@ -706,6 +779,7 @@ public:
       if (values_[index]) {
         throw std::invalid_argument{"Duplicate JSON field"};
       }
+
       values_[index] = value;
     });
   }
@@ -719,6 +793,7 @@ public:
     if (!value) {
       throw std::invalid_argument{"Missing JSON field"};
     }
+
     return *value;
   }
 
@@ -733,6 +808,7 @@ private:
     if (found == names_.end()) {
       throw std::invalid_argument{"Unknown JSON field"};
     }
+
     return static_cast<std::size_t>(found - names_.begin());
   }
 
@@ -767,6 +843,7 @@ public:
     if (inspectUtf8(source) != Utf8Validation::valid) {
       throw JsonError{};
     }
+
     return fromValue(memory, JsonValue::parse(source, maximum_depth));
   }
 
@@ -781,6 +858,7 @@ public:
     }
 
     const auto found = std::ranges::find_if(children_, [name](const auto &child) { return child.name_ == name; });
+
     return found == children_.end() ? nullptr : &*found;
   }
 
@@ -792,6 +870,7 @@ public:
     if (kind_ != JsonKind::object) {
       throw std::invalid_argument{"Expected JSON object"};
     }
+
     if (auto *existing = find(name)) {
       if (existing->kind_ != kind) {
         throw std::invalid_argument{"Unexpected JSON field type"};
@@ -801,6 +880,7 @@ public:
     }
 
     JsonNode child{memory(), kind};
+
     child.name_ = name;
     children_.push_back(std::move(child));
     return children_.back();
@@ -808,11 +888,13 @@ public:
 
   inline void setString(std::string_view name, std::string_view value) {
     auto &child = ensure(name, JsonKind::string);
+
     child.text_ = value;
   }
 
   inline void setLiteral(std::string_view name, std::string_view value) {
     auto &child = ensure(name, JsonKind::literal);
+
     child.text_ = value;
   }
 
@@ -834,6 +916,7 @@ public:
 
   inline String<Memory> format() const {
     String<Memory> output{AllocatorRef<char, Memory>{memory()}};
+
     appendFormatted(output, 0);
     output += '\n';
     return output;
@@ -851,18 +934,22 @@ private:
                                                                 : encoded.starts_with('"')   ? JsonKind::string
                                                                                              : JsonKind::literal;
     JsonNode node{memory, kind};
+
     if (kind == JsonKind::object) {
       value.eachMember([&](JsonValue key, JsonValue item) {
         auto child = fromValue(memory, item);
+
         key.string(child.name_);
         node.children_.push_back(std::move(child));
       });
 
       Vector<std::string_view, Memory> names{AllocatorRef<std::string_view, Memory>{memory}};
+
       names.reserve(node.children_.size());
       for (const auto &child : node.children_) {
         names.push_back(child.name_);
       }
+
       std::ranges::sort(names);
       if (std::adjacent_find(names.begin(), names.end()) != names.end()) {
         throw std::invalid_argument{"Duplicate JSON field"};
@@ -883,6 +970,7 @@ private:
       appendJsonText(output, text_);
       return;
     }
+
     if (kind_ == JsonKind::literal) {
       output += text_;
       return;
@@ -893,6 +981,7 @@ private:
       output += index == 0 ? "\n" : ",\n";
       output.append((depth + 1) * indentation, ' ');
       const auto &child = children_[index];
+
       if (kind_ == JsonKind::object) {
         appendJsonText(output, child.name_);
         output += ": ";
@@ -900,6 +989,7 @@ private:
 
       child.appendFormatted(output, depth + 1);
     }
+
     if (!children_.empty()) {
       output += '\n';
       output.append(depth * indentation, ' ');
@@ -926,11 +1016,13 @@ class SchemaVersion {
 public:
   inline static bool isOne(Memory &memory, const JsonValue &value) {
     String<Memory> text{AllocatorRef<char, Memory>{memory}};
+
     if (value.encoded().starts_with('"')) {
       value.string(text);
     } else {
       text = value.encoded();
     }
+
     return SchemaVersion{memory}.parse(text);
   }
 
@@ -939,9 +1031,11 @@ private:
 
   inline bool parse(std::string_view text) {
     const bool floating = text.find_first_of(".eE") != std::string_view::npos;
+
     if (text.starts_with('+')) {
       text.remove_prefix(1);
     }
+
     if (text.empty() || text.starts_with('-') || text.front() == '_' || text.back() == '_') {
       return false;
     }
@@ -950,6 +1044,7 @@ private:
     if (hexadecimal) {
       text.remove_prefix(2);
     }
+
     const unsigned base = hexadecimal ? 16 : 10;
     const auto exponent_at = text.find_first_of(hexadecimal ? "pP" : "eE");
     const auto mantissa = text.substr(0, exponent_at);
@@ -961,6 +1056,7 @@ private:
     if (exponent_at != std::string_view::npos && (!floating || !readExponent(text.substr(exponent_at + 1), exponent))) {
       return false;
     }
+
     const auto first = digits_.find_first_not_of('0');
     if (first == String<Memory>::npos) {
       return false;
@@ -970,7 +1066,9 @@ private:
     if (hexadecimal && (digits_.size() - (first / 4) * 4) / 4 > 32) {
       truncateHexFallback();
     }
+
     const auto significant = std::string_view{digits_}.substr(first);
+
     if (!floating) {
       return exponent == 1 && compare(significant, "1") == 0;
     }
@@ -979,9 +1077,11 @@ private:
     // interval around one; double precision would accept different versions.
     const auto lower = hexadecimal ? std::string_view{binary_lower.data(), binary_lower.size()} : decimal_lower;
     const auto upper = hexadecimal ? std::string_view{binary_upper.data(), binary_upper.size()} : decimal_upper;
+
     if (exponent == 0) {
       return compare(significant, lower) >= 0;
     }
+
     return exponent == 1 && compare(significant, upper) <= 0;
   }
 
@@ -990,28 +1090,34 @@ private:
     // 10^31, so its discarded tail cannot participate in binary128 rounding.
     __uint128_t coefficient = 0;
     std::size_t consumed = 0;
+
     while (consumed < digits_.size() && coefficient < hex_fallback_coefficient) {
       for (unsigned bit = 0; bit < 4; ++bit) {
         coefficient = coefficient * 2 + static_cast<unsigned>(digits_[consumed++] - '0');
       }
     }
+
     digits_.resize(consumed);
   }
 
   inline bool readMantissa(std::string_view text, unsigned base, bool floating) {
     bool point = false;
+
     for (std::size_t index = 0; index < text.size(); ++index) {
       const char byte = text[index];
       if (byte == '_') {
         if (index == 0 || index + 1 == text.size() || (floating && (digit(text[index - 1]) >= base || digit(text[index + 1]) >= base))) {
           return false;
         }
+
         continue;
       }
+
       if (byte == '.' && floating && !point) {
         point = true;
         continue;
       }
+
       const auto value = digit(byte);
       if (value >= base) {
         return false;
@@ -1024,10 +1130,12 @@ private:
       } else {
         digits_ += byte;
       }
+
       if (!point) {
         integer_digits_ += base == 16 ? 4 : 1;
       }
     }
+
     return !digits_.empty();
   }
 
@@ -1036,6 +1144,7 @@ private:
     if (negative || text.starts_with('+')) {
       text.remove_prefix(1);
     }
+
     if (text.empty()) {
       return false;
     }
@@ -1045,14 +1154,18 @@ private:
         if (index == 0 || index + 1 == text.size() || digit(text[index - 1]) >= 10 || digit(text[index + 1]) >= 10) {
           return false;
         }
+
         continue;
       }
+
       const auto number = digit(text[index]);
       if (number >= 10) {
         return false;
       }
+
       value = std::min(exponent_limit, value * 10 + number);
     }
+
     value = negative ? -value : value;
     return true;
   }
@@ -1061,12 +1174,15 @@ private:
     if (byte >= '0' && byte <= '9') {
       return static_cast<unsigned>(byte - '0');
     }
+
     if (byte >= 'a' && byte <= 'f') {
       return static_cast<unsigned>(byte - 'a' + 10);
     }
+
     if (byte >= 'A' && byte <= 'F') {
       return static_cast<unsigned>(byte - 'A' + 10);
     }
+
     return 16;
   }
 
@@ -1078,26 +1194,31 @@ private:
         return first < second ? -1 : 1;
       }
     }
+
     return 0;
   }
 
   static constexpr std::int64_t exponent_limit = 1'000'000;
   static constexpr auto hex_fallback_coefficient = [] {
     __uint128_t value = 1;
+
     for (unsigned power = 0; power < 31; ++power) {
       value *= 10;
     }
+
     return value;
   }();
   static constexpr std::string_view decimal_lower = "999999999999999999999999999999999951851751390319103673600551435376817036547458794615295119001530110836029052734375";
   static constexpr std::string_view decimal_upper = "100000000000000000000000000000000009629649721936179265279889712924636592690508241076940976199693977832794189453125";
   static constexpr auto binary_lower = [] {
     std::array<char, 114> digits;
+
     digits.fill('1');
     return digits;
   }();
   static constexpr auto binary_upper = [] {
     std::array<char, 114> digits;
+
     digits.fill('0');
     digits.front() = '1';
     digits.back() = '1';
@@ -1123,13 +1244,16 @@ public:
     if (pattern.empty() || pattern.size() > maximum_bytes) {
       return false;
     }
+
     if (pattern.contains(':')) { return ipv6(pattern).has_value(); }
     if (pattern == "*") {
       return true;
     }
+
     if (pattern.starts_with("*.")) {
       pattern.remove_prefix(2);
     }
+
     return validLabels(pattern);
   }
 
@@ -1137,18 +1261,22 @@ public:
     if (hostname.empty() || hostname.size() > maximum_bytes) {
       return false;
     }
+
     if (hostname.contains(':')) { return ipv6(hostname).has_value(); }
     if (hostname.ends_with('.')) {
       hostname.remove_suffix(1);
     }
+
     return validLabels(hostname);
   }
 
   inline static std::optional<in6_addr> ipv6(std::string_view host) noexcept {
     if (host.empty() || host.size() >= INET6_ADDRSTRLEN || host.contains('\0')) { return {}; }
     std::array<char, INET6_ADDRSTRLEN> text{};
+
     std::ranges::copy(host, text.begin());
     in6_addr address{};
+
     return ::inet_pton(AF_INET6, text.data(), &address) == 1 ? std::optional{address} : std::nullopt;
   }
 
@@ -1156,26 +1284,32 @@ private:
   inline static bool validLabels(std::string_view pattern) noexcept {
     std::size_t label_length = 0;
     char previous = '\0';
+
     for (const char byte : pattern) {
       if (byte == '.') {
         if (label_length == 0 || label_length > maximum_label_bytes || previous == '-') {
           return false;
         }
+
         label_length = 0;
       } else if (byte == '-') {
         if (label_length == 0) {
           return false;
         }
+
         ++label_length;
       } else {
         const char lower = asciiLower(byte);
         if ((lower < 'a' || lower > 'z') && (byte < '0' || byte > '9')) {
           return false;
         }
+
         ++label_length;
       }
+
       previous = byte;
     }
+
     return label_length != 0 && label_length <= maximum_label_bytes && previous != '-';
   }
 

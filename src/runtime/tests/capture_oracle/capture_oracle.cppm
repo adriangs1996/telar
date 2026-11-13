@@ -41,9 +41,11 @@ public:
 
   void integer(std::uint64_t value) noexcept {
     std::uint8_t bytes[8];
+
     for (std::size_t index = 0; index < sizeof(value); ++index) {
       bytes[index] = static_cast<std::uint8_t>(value >> (8 * index));
     }
+
     append(bytes);
   }
 
@@ -62,6 +64,7 @@ private:
       result_.overflow = 1;
       return;
     }
+
     if (!bytes.empty()) {
       std::memcpy(input_.output + result_.length, bytes.data(), bytes.size());
       result_.length += bytes.size();

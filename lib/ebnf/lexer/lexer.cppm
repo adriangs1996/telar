@@ -197,6 +197,7 @@ namespace ebnf {
       }
 
       const auto kind = punctuationKind(character);
+
       ++cursor;
 
       return token{
@@ -236,6 +237,7 @@ namespace ebnf {
       }
 
       const auto text = source.substr(start, cursor - start);
+
       ++cursor;
 
       return token{

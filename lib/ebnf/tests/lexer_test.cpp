@@ -57,6 +57,7 @@ namespace {
         const auto source = std::string(1, quote) + std::string(escape) + quote;
         // Its tokens borrow this iteration's source, which dies before the next one.
         ebnf::parsing_ring_buffer buffer;
+
         SCOPED_TRACE(source);
         const auto count = ebnf::Lexer{}.tokenizeSourceIntoBuffer(source, buffer, buffer.size());
 
@@ -92,6 +93,7 @@ namespace {
     }
 
     const auto embedded_null = std::string_view{"\"\\\0\"", 4};
+
     EXPECT_THROW(ebnf::Lexer{}.tokenizeSourceIntoBuffer(embedded_null, buffer, buffer.size()), std::invalid_argument);
   }
 
@@ -134,6 +136,7 @@ namespace {
         ebnf::token_kind::Minus,
         ebnf::token_kind::Dot,
     };
+
     ebnf::parsing_ring_buffer buffer;
     const auto count = ebnf::Lexer{}.tokenizeSourceIntoBuffer(source, buffer, buffer.size());
 
@@ -218,6 +221,7 @@ namespace {
 
   TEST(Lexer, ReservesCapacityForEndWithoutOverwritingTheLimit) {
     ebnf::parsing_ring_buffer buffer;
+
     buffer[3] = ebnf::token{
         .kind = ebnf::token_kind::String,
         .text = "untouched",

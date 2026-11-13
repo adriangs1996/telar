@@ -64,6 +64,7 @@ Integer parseDecimal(std::string_view text, Sign sign) {
   if (!parsed) {
     usage(parsed.error() == NumberError::overflow ? "Overflow" : "InvalidCharacter");
   }
+
   const auto value = *parsed;
 
   if constexpr (std::is_signed_v<Integer>) {
@@ -155,6 +156,7 @@ public:
     }
 
     const std::string_view word = words_.front();
+
     words_ = words_.subspan(1);
     return word;
   }
@@ -185,6 +187,7 @@ namespace telar::runtime::cli {
 
 inline std::string quoteJson(std::string_view text, JsonEscapes escapes = JsonEscapes::standard) {
   std::string result;
+
   result.reserve(text.size() + 2);
   appendJsonText(result, text, escapes);
   return result;
@@ -215,6 +218,7 @@ inline std::string_view textBytes(std::span<const Byte> bytes) {
 
 inline std::uint64_t randomIdentity() {
   std::uint64_t value = 0;
+
   while (value == 0) {
     randomBytes(&value, sizeof(value));
   }
@@ -248,6 +252,7 @@ namespace telar::runtime::cli {
 inline std::string limitDescription(const LimitReach &reach, std::uint64_t hits = 1) {
   std::string output = std::string{reach.name} + ": ";
   const auto noun = reach.noun.empty() ? "" : " " + std::string{reach.noun};
+
   if (reach.requested) {
     output += std::format("{}{}; limit {}", *reach.requested, noun, reach.value);
   } else if (reach.value == 0) {

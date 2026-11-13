@@ -89,30 +89,37 @@ void completeThemeInheritanceAndProjection() {
       .directory = {},
       .profile = "selected",
   };
+
   const ConfigurationGeneration generation{memory, source};
   const auto &themes = generation.configuration().themes;
+
   require(themes.base.base == ThemeName::catppuccin, "a profile base must replace the complete root theme");
   require(themes.light && themes.light->base == ThemeName::vesper, "appearance overlays must inherit an existing variant independently of the new profile base");
   require(themes.dark && themes.dark->base == ThemeName::catppuccin, "a new appearance variant must inherit the profile's current base");
   const auto light = themes.resolve(Appearance::light);
   const auto keyword = light.syntaxStyle(SyntaxRole::keyword);
   constexpr ThemeRgb inherited_keyword{4, 5, 6};
+
   require(keyword.italic && !keyword.bold && keyword.color.channels == inherited_keyword, "style-only edits must retain the palette-derived ink and style fields");
   const auto projected = projectTheme(light);
   constexpr auto terminal_foreground = Color::rgb(0x102030);
   constexpr auto chrome_foreground = Color::rgb(0x334455);
+
   require(projected.foreground == terminal_foreground && projected.chromeColor(PaletteRole::text) == chrome_foreground, "terminal and chrome foreground colors must remain independent");
   require(projected.chromeColor(PaletteRole::panel_bg) == projected.background, "default chrome backgrounds must resolve against the active terminal background");
   const auto dark = projectTheme(themes.resolve(Appearance::dark));
   constexpr auto selected_surface = Color::rgb(0x667788);
+
   require(dark.elevated == selected_surface && dark.selection == selected_surface, "surface overrides must also reach the selection projection");
   const auto locked = themeValuesByName("terminal");
+
   require(themes.resolve(Appearance::light, locked) == locked && themes.resolve(Appearance::unknown) == themes.base, "CLI locks must outrank appearance and an unknown appearance must use the base");
 }
 
 void themeQueriesRetainValuesWithoutAllocation() {
   SystemAllocator system;
   BudgetAllocator memory{system, std::numeric_limits<std::size_t>::max()};
+
   {
     const ConfigurationSourceText source{
         .source = R"(
@@ -124,19 +131,23 @@ void themeQueriesRetainValuesWithoutAllocation() {
         .directory = {},
         .profile = {},
     };
+
     ConfigurationGeneration generation{memory, source};
     std::array<char, ConfigurationQuery::capacity> output{};
     const auto allocations = memory.allocations();
     const std::string before{ThemeQuery::write(generation.configuration().themes, output)};
+
     require(memory.allocations() == allocations, "serializing a retained theme must not allocate through the application allocator");
     require(before.contains(R"("kind":"rgb","value":"\u0001\u0002\u0003")"), "valid RGB UTF-8 storage must serialize as a JSON string");
     require(before.contains(R"("foreground":[255,255,255])"), "invalid RGB UTF-8 storage must serialize as numeric elements");
     static_cast<void>(generation.invoke(generation.input().configured.front().action, {}));
     require(ThemeQuery::write(generation.configuration().themes, output) == before, "callbacks must not change the adopted theme snapshot");
     auto all = generation.configuration().themes;
+
     all.light = themeValuesByName("shade");
     all.dark = themeValuesByName("kanagawa");
     bool rejected = false;
+
     try {
       static_cast<void>(ThemeQuery::write(all, output));
     } catch (const std::length_error &error) {
@@ -153,28 +164,36 @@ void themeQueriesRetainValuesWithoutAllocation() {
 void syntaxFallbackAndAliases() {
   const auto theme = themeValuesByName("VESPER");
   const auto alias = themeValuesByName("Mocha");
+
   require(alias.base == ThemeName::catppuccin, "preset aliases must remain case insensitive");
   const auto fallback = theme.syntaxStyle(SyntaxRole::keyword);
+
   require(fallback.color == theme.color(PaletteRole::mauve) && !fallback.bold, "unconfigured syntax roles must follow the semantic chrome palette");
   const auto shade = themeValuesByName("shade");
   bool shade_italic = false;
+
   for (std::size_t index = 0; index < syntax_names.size(); ++index) {
     shade_italic = shade_italic || shade.syntaxStyle(static_cast<SyntaxRole>(index)).italic;
   }
+
   require(!shade_italic, "Shade must not set italic syntax roles");
   const auto plain = shade.syntaxStyle(SyntaxRole::plain).color;
   const auto func = shade.syntaxStyle(SyntaxRole::func).color;
   const auto type = shade.syntaxStyle(SyntaxRole::type).color;
+
   require(func != plain && type != plain && func != type, "Shade must color functions and types apart from the text and each other");
   require(shade.syntaxStyle(SyntaxRole::parameter).color == plain && shade.syntaxStyle(SyntaxRole::property).color != plain, "Shade must keep parameters in the text color and color properties");
   require(default_theme_values == shade, "Shade must be the default theme");
   const auto projected = projectTheme(shade);
   bool syntax_kept = true;
+
   for (std::size_t index = 0; index < syntax_names.size(); ++index) {
     syntax_kept = syntax_kept && projected.syntax[index] == shade.syntaxStyle(static_cast<SyntaxRole>(index)).color;
   }
+
   require(syntax_kept, "the projected theme must keep every syntax color for GUI-highlighted text");
   const auto dragon = themeValuesByName("kanagawa_dragon");
+
   require(dragon.syntaxStyle(SyntaxRole::keyword).italic && dragon.syntaxStyle(SyntaxRole::comment).italic, "generated preset metadata must retain keyword and comment italics");
 }
 
@@ -185,9 +204,12 @@ void utf8InspectionPreservesValidationErrors() {
                        "AB"},
       std::string_view{"\xe0\x80\x80"},
   };
+
   constexpr std::array messages{"Invalid UTF-8", "Invalid UTF-8 continuation", "Invalid UTF-8 scalar"};
+
   for (std::size_t index = 0; index < texts.size(); ++index) {
     bool rejected = false;
+
     try {
       telar::validateUtf8(texts[index]);
     } catch (const telar::EncodingError &error) {

@@ -35,6 +35,7 @@ public:
     }
 
     const auto height = static_cast<std::uint16_t>(pixel_height);
+
     if (!raw.isValid()) {
       return glyphs::BoxStroke{}.pixels(height);
     }

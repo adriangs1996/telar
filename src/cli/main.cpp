@@ -127,12 +127,14 @@ int printSkill(std::span<char *const> words) {
   }
 
   const auto text = which == "telar" ? integration::assets::telar_skill : integration::assets::coordinator_skill;
+
   std::fwrite(text.data(), 1, text.size(), stdout);
   return 0;
 }
 
 int runFamily(BudgetAllocator<SystemAllocator> &memory, Family family, std::span<char *const> words) {
   const auto options = words.subspan(1);
+
   switch (family) {
   case Family::pane:
     return runPane(memory, pane_agents::parsePane(options));
@@ -184,11 +186,13 @@ int runFamily(BudgetAllocator<SystemAllocator> &memory, Family family, std::span
   case Family::proxy: {
     if (!options.empty() && std::string_view{options.front()} == "watch") {
       auto parsed = RuntimeOptions::parse(options);
+
       parsed.proxy_only = true;
       return runRuntime(memory, parsed);
     }
 
     SynchronizedAllocator synchronized{memory};
+
     return runProxyTrust(synchronized, ProxyTrustOptions::parse(options), process_environment);
   }
   case Family::server:
@@ -199,6 +203,7 @@ int runFamily(BudgetAllocator<SystemAllocator> &memory, Family family, std::span
       const auto parsed = sessions::WorkspaceOptions::parse(options);
       if (parsed.worktree) {
         sessions::WorktreeOptions worktree;
+
         worktree.action = sessions::WorktreeOptions::Action::create;
         worktree.branch = parsed.worktree;
         worktree.title = parsed.name;
@@ -207,6 +212,7 @@ int runFamily(BudgetAllocator<SystemAllocator> &memory, Family family, std::span
         worktree.json = parsed.json;
         return sessions::worktree(memory, worktree);
       }
+
       return sessions::workspace(memory, parsed);
     }
   case Family::tab:
@@ -225,6 +231,7 @@ int runResolved(std::span<char *const> words) {
     return run(words);
   } catch (const std::invalid_argument &error) {
     const auto reference = helpReference(words);
+
     std::fprintf(stderr, "telar: %s; see `%s`\n", error.what(), reference.c_str());
     return 1;
   }
@@ -233,6 +240,7 @@ int runResolved(std::span<char *const> words) {
 int run(std::span<char *const> words) {
   if (const auto topic = findHelp(words)) {
     const auto text = helpText(*topic).value_or(helpText({}).value_or(""));
+
     std::fwrite(text.data(), 1, text.size(), stdout);
     return 0;
   }
@@ -252,6 +260,7 @@ int run(std::span<char *const> words) {
   if (words.empty()) {
     SystemAllocator system;
     BudgetAllocator memory{system, memory_budget};
+
     return runWindowCommand(memory, words, false);
   }
 
@@ -267,6 +276,7 @@ int run(std::span<char *const> words) {
 
   SystemAllocator system;
   BudgetAllocator memory{system, memory_budget};
+
   // The GUI runs plugin actions through `telar plugin-worker`; the worker lives in the runtime.
   if (first == "plugin-worker") {
     execRuntime(memory, words);
@@ -293,6 +303,7 @@ auto main(int argc, char **argv) -> int {
     return cli::run(words);
   } catch (const std::invalid_argument &error) {
     const auto reference = cli::helpReference(words);
+
     std::fprintf(stderr, "telar: %s; see `%s`\n", error.what(), reference.c_str());
   } catch (const cli::CommandError &error) {
     std::fprintf(stderr, "error: %s\n", error.what());

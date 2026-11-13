@@ -31,12 +31,15 @@ class ModalRevealTest final : public QObject {
   Q_SLOT static void entranceStartsAtZeroAndSettles() {
     QQuickWindow window;
     ModalRevealLayout item(window.contentItem());
+
     window.resize(window_width, window_height);
     QVERIFY(showComponentWindow(window, wait_ms));
     std::vector<qreal> samples;
+
     QObject::connect(&item, &ModalRevealLayout::frameChanged, &window, [&] {
       samples.push_back(item.reveal());
     });
+
     item.setGeneration(QStringLiteral("11"));
     item.setActive(true);
     QVERIFY(waitForGuiCondition([&] {
@@ -49,7 +52,9 @@ class ModalRevealTest final : public QObject {
     QVERIFY(std::ranges::all_of(samples, [](qreal value) {
       return value >= 0 && value <= 1;
     }));
+
     const auto *timer = window.findChild<QTimer *>(QStringLiteral("agentStatusAnimation"));
+
     QVERIFY(timer != nullptr);
     QVERIFY(waitForGuiCondition([&] {
       return !timer->isActive();
@@ -60,12 +65,15 @@ class ModalRevealTest final : public QObject {
   Q_SLOT static void onlyANewGenerationRestartsTheEntrance() {
     QQuickWindow window;
     ModalRevealLayout item(window.contentItem());
+
     window.resize(window_width, window_height);
     QVERIFY(showComponentWindow(window, wait_ms));
     int zero_samples = 0;
+
     QObject::connect(&item, &ModalRevealLayout::frameChanged, &window, [&] {
       zero_samples += item.reveal() == 0;
     });
+
     item.setGeneration(QStringLiteral("11"));
     item.setActive(true);
     QVERIFY(waitForGuiCondition([&] {
@@ -87,15 +95,18 @@ class ModalRevealTest final : public QObject {
 
   Q_SLOT static void destructionDuringTheFirstFrameRetiresTheClockEntry() {
     QQuickWindow window;
+
     window.resize(window_width, window_height);
     QVERIFY(showComponentWindow(window, wait_ms));
     auto item = std::make_unique<ModalRevealLayout>(window.contentItem());
     const QPointer<ModalRevealLayout> observer{item.get()};
+
     QObject::connect(item.get(), &ModalRevealLayout::frameChanged, &window, [&] {
       if (item->reveal() == 0) {
         item.reset();
       }
     });
+
     item->setGeneration(QStringLiteral("11"));
     item->setActive(true);
     QVERIFY(waitForGuiCondition([&] {

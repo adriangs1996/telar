@@ -42,14 +42,17 @@ void requireNavigationControls(QQuickWindow &window, NSWindow *native, CGFloat n
   const auto middle = native.frame.size.height - (navigation_height / 2);
   CGFloat previous = 0;
   CGFloat trailing = 0;
+
   for (const auto kind : {NSWindowCloseButton, NSWindowMiniaturizeButton, NSWindowZoomButton}) {
     NSButton *const button = [native standardWindowButton:kind];
     const auto frame = [button convertRect:button.bounds toView:nil];
+
     require(std::abs(NSMidY(frame) - middle) <= 1, "window controls must be vertically centered in the navigation bar");
     require(previous == 0 || frame.origin.x - previous == pitch, "window controls must keep AppKit's spacing");
     previous = frame.origin.x;
     trailing = NSMaxX(frame);
   }
+
   require(telar::gui::platform::windowControls(window) > trailing, "navigation controls must start after the window controls");
 }
 
@@ -72,6 +75,7 @@ protected:
       if (static_cast<QMouseEvent *>(event)->buttons().testFlag(Qt::LeftButton)) {
         ++drags;
       }
+
       return true;
     case QEvent::MouseButtonRelease:
       ++releases;
@@ -96,8 +100,10 @@ void verifyNavigationMouseDelivery(QQuickWindow &window) {
   const auto origin = window.position();
   QEventLoop delivery;
   NavigationPointerProbe probe{delivery};
+
   window.installEventFilter(&probe);
   QTimer deadline;
+
   deadline.setSingleShot(true);
   QObject::connect(&deadline, &QTimer::timeout, &delivery, &QEventLoop::quit);
   const auto timestamp = NSProcessInfo.processInfo.systemUptime;
@@ -105,8 +111,10 @@ void verifyNavigationMouseDelivery(QQuickWindow &window) {
   const auto end = NSMakePoint(start.x + drag_distance, start.y);
   const auto post = [&](NSEventType type, NSPoint point) {
     NSEvent *const event = [NSEvent mouseEventWithType:type location:point modifierFlags:0 timestamp:timestamp windowNumber:native.windowNumber context:nil eventNumber:0 clickCount:1 pressure:type == NSEventTypeLeftMouseUp ? 0 : 1];
+
     [NSApp postEvent:event atStart:NO];
   };
+
   post(NSEventTypeLeftMouseDown, start);
   post(NSEventTypeLeftMouseDragged, end);
   post(NSEventTypeLeftMouseUp, end);
@@ -122,6 +130,7 @@ void verifyAppearance() {
   constexpr QSize resized_size{800, 600};
   constexpr int frame_timeout_ms = 5'000;
   QQuickWindow window;
+
   window.resize(initial_size);
   window.create();
   auto *const view = (__bridge NSView *)std::bit_cast<const void *>(window.winId());
@@ -130,11 +139,13 @@ void verifyAppearance() {
   using telar::gui::platform::configureWindow;
   const auto pitch = controlsPitch(native);
   const telar::gui::platform::WindowAppearance blurred{.titlebar = false, .navigation_height = 42, .background_opacity = 0.98F, .background_blur = 20};
+
   configureWindow(window, blurred);
   requireHiddenTitleLayout(native);
   require(native.contentView == content, "appearance must preserve the Qt content view");
   require(effectIn(content) == nil, "native blur must not cover Qt's Metal layer as a child of its content view");
   NSView *const effect = effectIn(content.superview);
+
   require(effect != nil, "blur must be a sibling behind the Qt content view");
   require([effect isKindOfClass:NSVisualEffectView.class], "background must retain native visual effects");
   require([content.superview.subviews indexOfObject:effect] < [content.superview.subviews indexOfObject:content], "Qt content must composite above native blur");
@@ -142,6 +153,7 @@ void verifyAppearance() {
 
   QEventLoop painted;
   QTimer deadline;
+
   deadline.setSingleShot(true);
   QObject::connect(&deadline, &QTimer::timeout, &painted, &QEventLoop::quit);
   QObject::connect(&window, &QQuickWindow::frameSwapped, &painted, &QEventLoop::quit, Qt::QueuedConnection);
@@ -162,6 +174,7 @@ void verifyAppearance() {
   requireHiddenTitleLayout(native);
   requireNavigationControls(window, native, blurred.navigation_height, pitch);
   auto titled = blurred;
+
   titled.titlebar = true;
   configureWindow(window, titled);
   require(native.titleVisibility == NSWindowTitleVisible, "enabling the native title must restore its visibility");
@@ -175,9 +188,11 @@ void verifyAppearance() {
   requireHiddenTitleLayout(native);
 
   QQuickWindow other;
+
   other.resize(initial_size);
   other.create();
   auto *const other_view = (__bridge NSView *)std::bit_cast<const void *>(other.winId());
+
   require(other_view.window.contentLayoutRect.size.height < other_view.window.frame.size.height, "custom navigation must not change the layout of unrelated Qt windows");
   other.show();
   QGuiApplication::processEvents();
@@ -193,6 +208,7 @@ void verifyAppearance() {
 int main(int argc, char **argv) {
   try {
     const QGuiApplication application{argc, argv};
+
     telar::gui::platform::configureGraphics();
     verifyAppearance();
     std::cout << "native window appearance passed\n";

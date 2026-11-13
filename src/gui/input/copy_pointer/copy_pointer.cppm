@@ -151,9 +151,11 @@ inline std::optional<BindingAction> builtinBindingAction(std::string_view name) 
     }
 
     auto digits = name;
+
     digits.remove_prefix(prefix.size());
     constexpr unsigned maximum_index = 255;
     const auto index = runtime::unsignedNumber<unsigned>(digits, maximum_index).value_or(0);
+
     return index == 0 ? std::nullopt : std::optional{BindingAction{.kind = kind, .parameter = static_cast<std::int32_t>(index) - 1}};
   }
 
@@ -177,6 +179,7 @@ public:
     const auto nearby = position.y == last_.y && distance <= 1;
     const auto elapsed = now_ns - std::min(now_ns, last_ns_);
     const auto repeated = count_ != 0 && elapsed <= interval_ns;
+
     count_ = nearby && repeated ? std::min(count_ + 1, maximum_clicks) : 1;
     last_ = position;
     last_ns_ = now_ns;

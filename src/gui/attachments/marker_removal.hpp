@@ -44,6 +44,7 @@ public:
     }
 
     std::optional<AttachmentMarkerRemoval> removal;
+
     if (screen.cursor.y == marker->end.y && screen.cursor.x >= marker->end.x) {
       const auto steps = NumericAttachmentMarkers::steps(screen, static_cast<std::uint16_t>(marker->end.y), marker->end.x, screen.cursor.x);
       if (steps) {
@@ -97,8 +98,10 @@ private:
     }
 
     std::uint16_t count = 0;
+
     for (auto column = first; column < last; ++column) {
       const auto *const value = screen.cell({.x = column, .y = row});
+
       count = static_cast<std::uint16_t>(count + (value != nullptr && value->width != CellWidth::continuation ? 1 : 0));
     }
 

@@ -63,19 +63,24 @@ public:
     if (closed_) {
       return input.size();
     }
+
     if (awaiting_media_) {
       return 0;
     }
+
     const ReleaseProducer release{responses_};
+
     if (parser_.blocked()) {
       parser_.feed({}, *this);
       if (parser_.blocked()) {
         return 0;
       }
     }
+
     if ((clipboard_.hasReply() && !clipboard_.publish(responses_)) || !reports_.publish(responses_, state_, facts_, enabled_)) {
       return 0;
     }
+
     return parser_.feed(input, *this);
   }
 
@@ -86,10 +91,12 @@ public:
     media_boundaries_ = false;
     try {
       const auto consumed = feed(input);
+
       media_boundaries_ = true;
       if (consumed != input.size()) {
         throw std::logic_error{"Atomic graphics envelope was interrupted"};
       }
+
       awaiting_media_ = true;
       return consumed;
     } catch (...) {
@@ -122,6 +129,7 @@ public:
     }
 
     const auto end = styledOrdinaryLength(input, offset);
+
     responses_.release();
     state_.writeNonGraphics(input.subspan(offset, end - offset));
     return end;
@@ -139,6 +147,7 @@ public:
     if (stream && media_boundaries_ && sequence.kind == Kind::apc && sequence.body().starts_with('G')) {
       streamed_media_ = true;
     }
+
     return stream;
   }
 
@@ -151,6 +160,7 @@ public:
       awaiting_media_ = true;
       return false;
     }
+
     return true;
   }
 
@@ -159,6 +169,7 @@ public:
     if (!enabled_ || policy.answerback_length == 0) {
       return true;
     }
+
     return responses_.tryPush({reinterpret_cast<const std::uint8_t *>(policy.answerback.data()), policy.answerback_length});
   }
 
@@ -168,15 +179,18 @@ public:
     if (awaiting_media_) {
       return false;
     }
+
     // A retry already ran the sequence, and whatever it left of the flags stays.
     const bool history_erased = !prepared_ && std::exchange(history_erased_, false);
     const bool homed = !prepared_ && std::exchange(homed_, false);
+
     if (sequence.kind == Kind::osc) {
       const auto operation = oscOperation(sequence.body().substr(0, sequence.body().find(';')));
       if (operation == 4 || operation == 5) {
         return colors_.palette({state_, reply_, policy}, sequence, enabled_, responses_);
       }
     }
+
     if (sequence.kind == Kind::dcs) {
       const auto header_end = sequence.body().find_first_of("@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~");
       if (header_end != std::string_view::npos) {
@@ -196,6 +210,7 @@ public:
       case Kind::osc: osc(sequence); break;
       case Kind::apc: apc(sequence); break;
       }
+
       clipboard_before_reply_ = clipboard_.hasReply();
       prepared_ = true;
       if (media_boundaries_ && sequence.kind == Kind::apc && sequence.body().starts_with('G')) {
@@ -207,6 +222,7 @@ public:
     if (enabled_ && clipboard_before_reply_ && clipboard_.hasReply() && !clipboard_.publish(responses_)) {
       return false;
     }
+
     if (enabled_ && !reply_.publish(responses_)) {
       return false;
     }
@@ -215,6 +231,7 @@ public:
     if (enabled_ && clipboard_.hasReply() && !clipboard_.publish(responses_)) {
       return false;
     }
+
     prepared_ = false;
     clipboard_before_reply_ = false;
     return true;
@@ -232,15 +249,19 @@ public:
       facts_ = facts;
       return;
     }
+
     if (facts.light != facts_.light) {
       reports_.changed(Report::scheme);
     }
+
     if (facts.visible != facts_.visible) {
       reports_.changed(Report::visibility);
     }
+
     if (facts.focused != facts_.focused) {
       reports_.changed(Report::focus);
     }
+
     facts_ = facts;
   }
 
@@ -248,7 +269,9 @@ public:
     if (closed_ || awaiting_media_) {
       return;
     }
+
     const ReleaseProducer release{responses_};
+
     if (!parser_.blocked() && (!clipboard_.hasReply() || clipboard_.publish(responses_))) {
       reports_.publish(responses_, state_, facts_, enabled_);
     }
@@ -280,7 +303,9 @@ public:
     if (zones_.empty()) {
       return std::nullopt;
     }
+
     std::optional<Zone> zone{std::move(zones_.front())};
+
     zones_.erase(zones_.begin());
     return zone;
   }
@@ -290,6 +315,7 @@ public:
     if (!document_pending_) {
       return false;
     }
+
     into.swap(document_);
     document_.clear();
     document_pending_ = false;
@@ -311,12 +337,14 @@ private:
     if (!enabled_ || encoded.size() > ::telar::render::max_sequence_body - ::telar::render::sequence_begin.size()) {
       return;
     }
+
     try {
       Vector<std::uint8_t, Memory> bytes(encoded.size() / 4 * 3 + 3, document_.get_allocator());
       const auto size = base64::decode<base64::Padding::optional>(encoded, bytes);
       if (!size || *size > ::telar::render::max_document_bytes) {
         return;
       }
+
       bytes.resize(*size);
       if (state_.primaryScreen()) {
         open_zone_.emplace(Zone{.bytes = std::move(bytes), .first = state_.trackCursorRow(), .end = {}, .end_inclusive = false});
@@ -333,17 +361,21 @@ private:
     if (!open_zone_ || !state_.primaryScreen()) {
       return;
     }
+
     auto zone = std::move(*open_zone_);
+
     open_zone_.reset();
     zone.end_inclusive = state_.cursor().column != 0;
     zone.end = state_.trackCursorRow();
     if (!zone.first || !zone.end) {
       return;
     }
+
     try {
       if (zones_.size() == ::telar::render::max_pane_documents) {
         zones_.erase(zones_.begin());
       }
+
       zones_.push_back(std::move(zone));
     } catch (const std::bad_alloc &) {
     }
@@ -352,6 +384,7 @@ private:
   [[gnu::noinline]] std::size_t ordinaryAscii(std::span<const std::uint8_t> input) {
     static_assert(ascii_detail::codepoint_capacity == GHOSTTY_TELAR_ASCII_CODEPOINT_LIMIT);
     std::array<std::uint32_t, ascii_detail::codepoint_capacity> codepoints;
+
     assert(input.size() >= ascii_detail::gate_bytes);
 
     // ordinaryRun has already validated these bytes synchronously. Only the
@@ -365,6 +398,7 @@ private:
 #endif
 
     const auto count = ascii_detail::gate_bytes + ascii_detail::widen(input.subspan(ascii_detail::gate_bytes), std::span{codepoints}.subspan(ascii_detail::gate_bytes));
+
     responses_.release();
     state_.writeAscii(std::span{codepoints}.first(count));
     return count;
@@ -381,6 +415,7 @@ private:
     state_.write(sequence.bytes);
     if (sequence.ending != Ending::final_byte) {
       const auto terminator = sequence.terminator();
+
       state_.write({reinterpret_cast<const std::uint8_t *>(terminator.data()), terminator.size()});
     }
   }
@@ -389,6 +424,7 @@ private:
     if (sequence.body() == "\\") {
       return;
     }
+
     if (sequence.body() == "Z") {
       attributes(false);
       return;
@@ -400,6 +436,7 @@ private:
       saved_desktop_modes_.fill(false);
       clipboard_.reset();
     }
+
     passthrough(sequence);
   }
 
@@ -407,6 +444,7 @@ private:
     if (!enabled_) {
       return;
     }
+
     if (secondary) {
       reply_.append("\x1b[>1;0;0c");
     } else {
@@ -420,6 +458,7 @@ private:
       operatingStatus();
       return;
     }
+
     if (body == "6n" || body == "?6n") {
       reportCursor(body.size() == 3);
       return;
@@ -432,6 +471,7 @@ private:
 
     const auto &parameters = *parsed;
     const auto modifiers = parameters.modifiers();
+
     if (parameters.colon && parameters.final != 'm') {
       return;
     }
@@ -443,12 +483,14 @@ private:
         history_erased_ = history_erased;
         homed_ = parameters.count <= 2 && std::all_of(parameters.values.begin(), parameters.values.begin() + parameters.count, [](std::uint16_t value) { return value <= 1; });
       }
+
       break;
     case 'J':
       if (modifiers.empty() && parameters.count <= 1) {
         eraseDisplay(sequence, parameters.count == 0 ? 0 : parameters.values[0], history_erased, homed);
         return;
       }
+
       break;
     case 'h':
     case 'l':
@@ -456,6 +498,7 @@ private:
         privateModes(parameters);
         return;
       }
+
       break;
     case 's':
     case 'r':
@@ -463,6 +506,7 @@ private:
         privateModes(parameters);
         return;
       }
+
       break;
     case 'y':
       if (modifiers == "*" && parameters.count <= 6) {
@@ -473,34 +517,42 @@ private:
           reply_.hex(checksum_.compute(state_, parameters), 4, true);
           reply_.append("\x1b\\");
         }
+
         return;
       }
+
       if (modifiers == "#" && parameters.count <= 1) {
         if (policy.checksum_report) {
           checksum_.flags = parameters.count == 0 ? 0 : parameters.values[0] & 31;
         }
+
         return;
       }
+
       break;
     case 'c':
       if (modifiers.empty() || modifiers == ">") {
         attributes(modifiers == ">");
       }
+
       return;
     case 'n':
       if (modifiers.empty() || modifiers == "?") {
         status(parameters);
         return;
       }
+
       break;
     case 'p':
       if (modifiers == "!") {
         checksum_.flags = 0;
       }
+
       if (modifiers == "$" || modifiers == "?$") {
         modeReport(parameters);
         return;
       }
+
       break;
     case 'q':
       if (modifiers == ">") {
@@ -509,14 +561,17 @@ private:
           reply_.append(program_version);
           reply_.append("\x1b\\");
         }
+
         return;
       }
+
       break;
     case 't':
       if (modifiers.empty() && parameters.count == 1 && parameters.values[0] >= 14 && parameters.values[0] <= 21) {
         sizeReport(parameters.values[0]);
         return;
       }
+
       break;
     case 'u':
       if (modifiers == "?") {
@@ -525,8 +580,10 @@ private:
           reply_.number(state_.keyboard());
           reply_.append("u");
         }
+
         return;
       }
+
       break;
     default:
       break;
@@ -544,6 +601,7 @@ private:
   void eraseDisplay(Sequence sequence, unsigned mode, bool history_erased, bool homed) {
     static constexpr std::array<std::uint8_t, 4> erase_history{0x1b, '[', '3', 'J'};
     static constexpr std::array<std::uint8_t, 4> erase_screen{0x1b, '[', '2', 'J'};
+
     if (mode == 0 && homed && homeOnPrimary()) {
       responses_.release();
       state_.write(erase_screen);
@@ -551,6 +609,7 @@ private:
     } else {
       passthrough(sequence);
     }
+
     if (mode == 3) {
       history_erased_ = true;
     } else if (mode == 2 && history_erased) {
@@ -560,6 +619,7 @@ private:
 
   bool homeOnPrimary() const {
     const auto cursor = state_.cursor();
+
     return cursor.column == 0 && cursor.row == 0 && state_.primaryScreen();
   }
 
@@ -569,11 +629,14 @@ private:
       const auto owned = std::find(desktop_modes.begin(), desktop_modes.end(), mode);
       if (owned != desktop_modes.end()) {
         const auto slot = static_cast<std::size_t>(owned - desktop_modes.begin());
+
         if (parameters.final == 's') {
           saved_desktop_modes_[slot] = state_.mode(mode);
           continue;
         }
+
         const bool enabled = parameters.final == 'r' ? saved_desktop_modes_[slot] : parameters.final == 'h';
+
         state_.setMode(mode, enabled);
         modeEffect(mode, enabled);
         continue;
@@ -592,16 +655,19 @@ private:
       if (set && enabled_) {
         reply_.append(facts_.focused ? "\x1b[I" : "\x1b[O");
       }
+
       break;
     case visibility_mode:
       if (set && enabled_) {
         reply_.append(facts_.visible ? "\x1b[?999;1n" : "\x1b[?999;2n");
       }
+
       break;
     case size_events_mode:
       if (set) {
         sizeEvent();
       }
+
       break;
     default:
       break;
@@ -617,6 +683,7 @@ private:
     if (!clipboard_.hasReply() && responses_.tryPushFixed(response)) {
       return;
     }
+
     reply_.append("\x1b[0n");
   }
 
@@ -644,8 +711,10 @@ private:
     }
 
     auto position = state_.cursor();
+
     if (state_.mode(origin_mode)) {
       const auto margins = state_.margins();
+
       position.column -= std::min(position.column, margins.left);
       position.row -= std::min(position.row, margins.top);
     }
@@ -677,6 +746,7 @@ private:
     const auto value = parameters.values[0];
     const bool ansi = parameters.modifiers() == "$";
     ModeStatus report = ModeStatus::unknown;
+
     if (!ansi && value == paste_events_mode) {
       report = paste_events_ ? ModeStatus::set : ModeStatus::reset;
     } else if (knownMode(value, ansi)) {
@@ -704,6 +774,7 @@ private:
     if (!enabled_) {
       return;
     }
+
     control::sizeReport<SizeReport::event>(reply_, state_.size());
   }
 
@@ -711,34 +782,43 @@ private:
     if (!enabled_) {
       return;
     }
+
     if (request == title_request) {
       if (policy.title_report) {
         reply_.append("\x1b]l");
         auto title = state_.title();
+
         while (!title.empty()) {
           const auto first = static_cast<std::uint8_t>(title.front());
           const std::size_t count = first < 0x80 ? 1 : first < 0xe0 ? 2 : first < 0xf0 ? 3 : 4;
           if (title.size() < count) {
             break;
           }
+
           const auto text = title.substr(0, count);
+
           title.remove_prefix(count);
           if ((count == 1 && (first < ' ' || first == '\x7f')) || (count == 2 && first == 0xc2 && static_cast<std::uint8_t>(text[1]) < 0xa0)) {
             continue;
           }
+
           try {
             validateUtf8(text);
           } catch (const EncodingError &) {
             continue;
           }
+
           reply_.append(text);
         }
+
         reply_.append("\x1b\\");
       }
+
       return;
     }
 
     const auto size = state_.size();
+
     switch (request) {
     case pixels_request:
       control::sizeReport<SizeReport::pixels>(reply_, size);
@@ -763,6 +843,7 @@ private:
     if (!enabled_) {
       return true;
     }
+
     while (capability_offset_ < request.size()) {
       const auto end = request.find(';', capability_offset_);
       const auto count = (end == std::string_view::npos ? request.size() : end) - capability_offset_;
@@ -770,8 +851,10 @@ private:
       if (!response.empty() && !responses_.tryPush(response)) {
         return false;
       }
+
       capability_offset_ += count + 1;
     }
+
     capability_offset_ = 0;
     return true;
   }
@@ -785,6 +868,7 @@ private:
         return;
       }
     }
+
     if (sequence.body().starts_with("+q")) {
       return;
     }
@@ -799,6 +883,7 @@ private:
 
     const bool horizontal = request == "s" && state_.mode(left_right_margin_mode);
     const bool valid = request == "m" || request == " q" || request == "r" || horizontal;
+
     reply_.append(valid ? "\x1bP1$r" : "\x1bP0$r");
     if (request == "m") {
       attributesString();
@@ -807,23 +892,28 @@ private:
       const auto cursor = state_.visualCursor();
       const auto shape = cursor.visual_style;
       const unsigned style = shape == GHOSTTY_RENDER_STATE_CURSOR_VISUAL_STYLE_BAR ? 5 : shape == GHOSTTY_RENDER_STATE_CURSOR_VISUAL_STYLE_UNDERLINE ? 3 : 1;
+
       reply_.number(style + !state_.mode(cursor_blink_mode));
       reply_.append(" q");
     } else if (request == "r" || horizontal) {
       const auto margins = state_.margins();
+
       reply_.number(static_cast<unsigned>(horizontal ? margins.left : margins.top) + 1);
       reply_.append(";");
       reply_.number(static_cast<unsigned>(horizontal ? margins.right : margins.bottom) + 1);
       reply_.append(horizontal ? "s" : "r");
     }
+
     reply_.append("\x1b\\");
   }
 
   void attributesString() {
     const auto style = state_.style();
+
     reply_.append("0");
     const std::array<bool, 9> flags{style.bold, style.faint, style.italic, style.underline != 0, style.overline, style.blink, style.inverse, style.invisible, style.strikethrough};
     constexpr std::array<unsigned, flags.size()> codes{1, 2, 3, 4, 53, 5, 7, 8, 9};
+
     for (std::size_t index = 0; index < flags.size(); ++index) {
       if (flags[index]) {
         reply_.append(";");
@@ -871,25 +961,32 @@ private:
       } else if (body == ::telar::render::sequence_end) {
         closeZone();
       }
+
       return;
     }
+
     if (colors_.handle({state_, reply_, policy}, sequence, enabled_)) {
       return;
     }
+
     auto remaining = sequence.body();
     const auto operation = oscOperation(takeField(remaining));
     if (operation == 52) {
       if (enabled_) {
         clipboard_.traditional(remaining, policy);
       }
+
       return;
     }
+
     if (operation == 5522) {
       if (enabled_) {
         clipboard_.kitty(remaining, sequence.ending, policy, reply_);
       }
+
       return;
     }
+
     passthrough(sequence);
   }
 
@@ -898,11 +995,14 @@ private:
       if (enabled_) {
         glyph(sequence.body().substr(5), reply_);
       }
+
       return;
     }
+
     if (sequence.body().starts_with('G') && graphics_queries_.handle(sequence.body(), reply_, enabled_)) {
       return;
     }
+
     passthrough(sequence);
   }
 

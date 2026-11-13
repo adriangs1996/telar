@@ -65,16 +65,21 @@ namespace telar::gui::qt {
     if (!git.repository || git.branch.empty()) {
       return {};
     }
+
     auto text = QStringLiteral("\u2387 ") + toQString(git.branch);
+
     if (git.changes_known && git.staged + git.unstaged + git.conflicted != 0) {
       text += QStringLiteral(" \u25CF") + QString::number(git.staged + git.unstaged + git.conflicted);
     }
+
     if (git.divergence_known && git.ahead != 0) {
       text += QStringLiteral(" \u2191") + QString::number(git.ahead);
     }
+
     if (git.divergence_known && git.behind != 0) {
       text += QStringLiteral(" \u2193") + QString::number(git.behind);
     }
+
     return text;
   }
 
@@ -84,10 +89,13 @@ namespace telar::gui::qt {
     if (!pane.shell.remote) {
       return {};
     }
+
     auto text = pane.shell.host.empty() ? QStringLiteral("remote") : toQString(pane.shell.host);
+
     if (pane.shell.link_ms != 0) {
       text += QStringLiteral(" \u00B7 link ") + QString::number(pane.shell.link_ms) + QStringLiteral(" ms");
     }
+
     return text;
   }
 
@@ -96,6 +104,7 @@ namespace telar::gui::qt {
     QVariantMap agent_record;
     std::string_view context;
     bool needs_attention = false;
+
     for (const auto &agent : agents) {
       if (agent.pane_id == pane.id && agent.pane_generation == pane.generation && sameTab(agent.location, pane.location)) {
         agent_record = {
@@ -105,10 +114,12 @@ namespace telar::gui::qt {
             {QStringLiteral("statusClock"), agent.status_clock.observed() ? statusAgeValue(agent.status_clock.interval()) : QVariant{}},
             {QStringLiteral("age"), agent.status_age_s},
         };
+
         needs_attention = AgentOrder::attention(agent.status) == AgentOrder::Attention::needs_input;
         if (agent.title_state != AgentTitleState::placeholder) {
           context = agent.title;
         }
+
         break;
       }
     }
@@ -117,6 +128,7 @@ namespace telar::gui::qt {
     const auto mark = ApplicationMark::forApplication(application);
     const auto safe_context = WindowTitle::render("{pane_title}", {.workspace = {}, .tab = {}, .pane_title = context, .hostname = {}});
     const auto progress_color = PaneProgressPresentation::color(pane.progress_state);
+
     return {
         {QStringLiteral("index"), QString::number(index)},
         {QStringLiteral("program"), pane.foreground.empty() ? QStringLiteral("shell") : toQString(pane.foreground)},
@@ -141,11 +153,13 @@ namespace telar::gui::qt {
   QVariantMap fullscreenPaneRecord(const Pane<Memory> *pane, std::span<const Agent<Memory>> agents, FullscreenPaneEntry entry) {
     auto record = pane == nullptr ? QVariantMap{} : paneChromeRecord(*pane, agents, entry.index);
     const auto program = pane == nullptr || pane->foreground.empty() ? std::string_view{"shell"} : std::string_view{pane->foreground};
+
     record.insert(QStringLiteral("key"), QString::number(entry.pane_id));
     record.insert(QStringLiteral("index"), QString::number(entry.index));
     record.insert(QStringLiteral("program"), toQString(program));
     record.insert(QStringLiteral("focused"), entry.focused);
     const auto agent = record.value(QStringLiteral("agent")).toMap();
+
     record.insert(QStringLiteral("attentionColor"), !entry.focused && record.value(QStringLiteral("needsAttention")).toBool() ? agent.value(QStringLiteral("statusColor")).toString() : QString{});
 
     return record;

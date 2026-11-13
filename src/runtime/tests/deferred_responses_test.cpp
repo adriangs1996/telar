@@ -67,21 +67,26 @@ void testDeferredResponses() {
   ClientPeer owner{memory, model, clients, ClientRole::interactive};
   ClientPeer reader{memory, model, clients, ClientRole::control};
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
+
   workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 1, .size = {80, 24, 0, 0}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
   const auto opened = owner.receive<PaneOpened>();
   auto &pane = panes.require(model.panes, opened.pane_id);
   const auto location = pane.location;
   auto &workspace = workspaces.require(model.workspaces, location.workspace);
   const ReadPane read{.request_id = 2, .pane_id = pane.id, .pane_generation = pane.generation, .rows = 24, .source = PaneTextSource::screen};
+
   panes.readText(reader.session(), read);
   constexpr std::string_view changed = "Current text";
+
   pane.terminal.feed({reinterpret_cast<const Byte *>(changed.data()), changed.size()});
   check(reader.receive<PaneText>().text == changed);
 
   auto stale = read;
+
   stale.pane_generation = pane.generation + 1;
   panes.readText(reader.session(), stale);
   const auto missing = reader.receive<RequestFailed>();
+
   check(missing.code == FailureCode::pane_not_found && missing.message == "pane closed before its text was read");
 
   workspaces.tabSnapshot(model, clients, reader.session().id, RequestTabSnapshot{3, location});
@@ -91,6 +96,7 @@ void testDeferredResponses() {
   pane.close_requested = true;
   check(reader.receive<TabSnapshot>().panes.empty());
   const auto snapshot = reader.receive<WorkspaceSnapshot>();
+
   check(snapshot.name == "Current workspace" && snapshot.tabs.size() == 1);
   check(snapshot.tabs.front().label == "Current tab" && snapshot.tabs.front().pane_count == 0 && snapshot.tabs.front().panes.empty());
 
@@ -98,10 +104,12 @@ void testDeferredResponses() {
   pane.cwd.assign("/tmp/described");
   workspaces.workspaceSnapshot(model, reader.session(), RequestWorkspaceSnapshot{10, location.workspace});
   const auto described = reader.receive<WorkspaceSnapshot>();
+
   check(described.tabs.front().panes.size() == 1 && described.tabs.front().panes.front().pane_id == pane.id && described.tabs.front().panes.front().cwd == "/tmp/described");
   pane.cwd.assign(std::string_view{"/tmp/\0hostile", 13});
   workspaces.workspaceSnapshot(model, reader.session(), RequestWorkspaceSnapshot{11, location.workspace});
   const auto hostile = reader.receive<WorkspaceSnapshot>();
+
   check(hostile.tabs.front().panes.size() == 1 && hostile.tabs.front().panes.front().cwd.empty());
 
   workspaces.tabSnapshot(model, clients, reader.session().id, RequestTabSnapshot{5, location});
@@ -114,6 +122,7 @@ void testDeferredResponses() {
   model.limits.runtime.record(LimitReach{.name = "deferred.capacity", .value = 10}, 4);
   model.limits.refused_reports = 9;
   const auto listed = reader.receive<LimitList>();
+
   check(listed.entries.size() == 1 && listed.entries.front().hits == 4 && listed.refused_reports == 9);
 
   workspaces.workspaceSnapshot(model, reader.session(), RequestWorkspaceSnapshot{7, location.workspace});
@@ -123,15 +132,18 @@ void testDeferredResponses() {
   panes.remove(model, clients, pane.id);
   model.workspaces.erase(location.workspace.id);
   const auto closed = reader.receive<RequestFailed>();
+
   check(closed.request_id == 7 && closed.code == FailureCode::workspace_not_found && closed.message == "workspace closed before its snapshot was sent");
   check(reader.receive<TabSnapshot>().panes.empty());
   const auto exited = reader.receive<PaneText>();
+
   check(exited.text == "Exited text" && exited.exit_code == 17);
 
   panes.readText(reader.session(), read);
   for (unsigned index = 0; index < ExitedPanes::capacity; ++index) {
     model.exited_panes.record(read.pane_id + index + 1, 1, PaneText{});
   }
+
   check(reader.receive<RequestFailed>().code == FailureCode::pane_not_found);
   reader.session().connection.send(RequestCompleted{.request_id = 9});
   check(reader.receive<RequestCompleted>().request_id == 9 && !reader.session().connection.closing);

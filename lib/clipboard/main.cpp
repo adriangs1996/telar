@@ -7,6 +7,7 @@
 
 int main(int argc, char **argv) {
   const char *output_path = nullptr;
+
   if (argc == 2 && std::string_view(argv[1]) == "--help") {
     std::puts("Usage: clipboard [--output PATH]\nRead current text or image. Images keep their original format.\nBinary output requires --output PATH or redirected stdout.");
     return 0;

@@ -57,6 +57,7 @@ struct CellRectangle {
     }
 
     constexpr auto maximum = std::numeric_limits<std::uint16_t>::max();
+
     return {
         .x = static_cast<std::uint16_t>(std::min(static_cast<std::uint32_t>(x) + margin, static_cast<std::uint32_t>(maximum))),
         .y = static_cast<std::uint16_t>(std::min(static_cast<std::uint32_t>(y) + margin, static_cast<std::uint32_t>(maximum))),
@@ -153,14 +154,17 @@ struct Utf8Scalar {
     }
 
     Utf8Scalar result;
+
     while (codepoint > maximum_codepoints[result.length]) {
       ++result.length;
     }
 
     const auto continuation_count = result.length;
+
     result.bytes[0] = static_cast<char>(leading_prefixes[continuation_count] | (codepoint >> (continuation_bits * continuation_count)));
     for (std::size_t index = 0; index < continuation_count; ++index) {
       const auto shift = continuation_bits * (continuation_count - index - 1);
+
       result.bytes[index + 1] = static_cast<char>(continuation_prefix | ((codepoint >> shift) & continuation_mask));
     }
 
@@ -171,6 +175,7 @@ struct Utf8Scalar {
 
   [[nodiscard]] inline static std::uint32_t decode(std::string_view text) {
     const auto decoded = read(text);
+
     switch (decoded.error) {
     case DecodeError::none:
       return decoded.value;
@@ -224,6 +229,7 @@ private:
 
     auto codepoint = static_cast<std::uint32_t>(first & leading_masks[length - 1]);
     auto continuations = text;
+
     continuations.remove_prefix(1);
     for (const auto byte : continuations) {
       const auto continuation = static_cast<unsigned char>(byte);

@@ -56,6 +56,7 @@ inline FileDescriptor connect(std::string_view path) {
   if (!socket) {
     throw SystemError{"Create traffic connection"};
   }
+
   setCloseOnExec(socket.get());
   suppressSocketSignals(socket.get());
   if (::connect(socket.get(), reinterpret_cast<const sockaddr *>(&address), sizeof(address)) != 0) {
@@ -67,6 +68,7 @@ inline FileDescriptor connect(std::string_view path) {
   if (!credentials || credentials->user != before.st_uid || (::geteuid() != 0 && credentials->user != ::geteuid()) || ::lstat(address.sun_path, &after) != 0 || before.st_dev != after.st_dev || before.st_ino != after.st_ino) {
     throw SystemError{"Traffic endpoint identity changed", EACCES};
   }
+
   return socket;
 }
 
@@ -76,9 +78,11 @@ inline void sendAll(int socket, std::span<const Byte> bytes) {
     if (count < 0 && errno == EINTR) {
       continue;
     }
+
     if (count <= 0) {
       throw SystemError{"Send traffic frame"};
     }
+
     bytes = bytes.subspan(static_cast<std::size_t>(count));
   }
 }
@@ -102,6 +106,7 @@ public:
     // A reopened handle gets a fresh Sample; the session total stays intact.
     const auto delta = std::uint64_t{static_cast<std::uint32_t>(buffer - previous.buffer)} + static_cast<std::uint32_t>(interface - previous.interface);
     constexpr auto maximum = std::numeric_limits<std::uint64_t>::max();
+
     total_ = delta > maximum - total_ ? maximum : total_ + delta;
     previous = {.buffer = buffer, .interface = interface};
   }
@@ -146,9 +151,11 @@ public:
     if (::geteuid() != 0) {
       throw std::invalid_argument{"Live interface capture requires the privileged capture helper"};
     }
+
     greet(Role::live_capture);
     Signals signals;
     auto discovery = std::chrono::steady_clock::time_point::min();
+
     while (!signals.stopped()) {
       const auto now = std::chrono::steady_clock::now();
       if (discovery == std::chrono::steady_clock::time_point::min() || now - discovery >= std::chrono::seconds{1}) {
@@ -158,17 +165,21 @@ public:
       }
 
       std::array<pollfd, Limits::interfaces + 1> descriptors{};
+
       descriptors[0] = {.fd = socket_.get(), .events = POLLIN, .revents = 0};
       for (std::size_t index = 0; index < devices_.size(); ++index) {
         descriptors[index + 1] = {.fd = devices_[index] ? pcap_get_selectable_fd(devices_[index]->handle.get()) : -1, .events = POLLIN, .revents = 0};
       }
+
       constexpr int poll_ms = 100;
       if (::poll(descriptors.data(), descriptors.size(), poll_ms) < 0 && errno != EINTR) {
         throw SystemError{"Poll packet capture"};
       }
+
       if (descriptors[0].revents & (POLLHUP | POLLERR | POLLNVAL)) {
         return;
       }
+
       drainControl();
       for (std::size_t slot = 0; slot < devices_.size(); ++slot) {
         if (devices_[slot] && !drain(slot)) {
@@ -184,6 +195,7 @@ public:
     if (!file) {
       throw std::runtime_error{error.data()};
     }
+
     greet(Role::offline_capture);
     offline_ = true;
     for (;;) {
@@ -193,12 +205,15 @@ public:
       if (result == PCAP_ERROR_BREAK) {
         return;
       }
+
       if (result < 0) {
         throw std::runtime_error{pcap_geterr(file.get())};
       }
+
       if (result > 0) {
         packet(static_cast<std::uint32_t>(pcap_datalink(file.get())), *header, bytes, "offline", 0);
       }
+
       drainControl();
     }
   }
@@ -220,6 +235,7 @@ private:
 
     inline bool stopped() const noexcept {
       sigset_t pending;
+
       return ::sigpending(&pending) == 0 && (sigismember(&pending, SIGTERM) || sigismember(&pending, SIGINT));
     }
 
@@ -230,6 +246,7 @@ private:
 
   inline void greet(Role role) {
     std::array<Byte, Protocol::greeting_bytes> output;
+
     sendAll(socket_.get(), Protocol::greeting(output, role));
     setNonblocking(socket_.get());
   }
@@ -250,6 +267,7 @@ private:
     event.kernel_drops = kernel_drops_.count();
     const auto payload = Protocol::encode(std::span{output_}.subspan(Protocol::prefix_bytes), event);
     const auto prefix = Protocol::prefix(payload.size());
+
     std::ranges::copy(prefix, output_.begin());
 
     // Once any part of a frame is written it must finish, or close the channel.
@@ -260,18 +278,23 @@ private:
       ++dropped_;
       return;
     }
+
     if (count < 0 && errno == EINTR) {
       ++dropped_;
       return;
     }
+
     if (count <= 0) {
       throw SystemError{"Publish captured packet"};
     }
+
     auto remaining = bytes.subspan(static_cast<std::size_t>(count));
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{1};
+
     while (!remaining.empty()) {
       pollfd descriptor{.fd = socket_.get(), .events = POLLOUT, .revents = 0};
       constexpr int write_poll_ms = 20;
+
       ::poll(&descriptor, 1, write_poll_ms);
       const auto written = ::send(socket_.get(), remaining.data(), remaining.size(), 0);
       if (written > 0) {
@@ -279,6 +302,7 @@ private:
       } else if (written == 0 || !socketWouldBlock(errno)) {
         throw SystemError{"Publish partial capture frame"};
       }
+
       if (std::chrono::steady_clock::now() >= deadline) {
         throw SystemError{"Capture data channel stalled", ETIMEDOUT};
       }
@@ -295,7 +319,9 @@ private:
     if (pcap_findalldevs(&raw, error.data()) < 0) {
       throw std::runtime_error{error.data()};
     }
+
     const std::unique_ptr<pcap_if_t, decltype(&pcap_freealldevs)> interfaces{raw, &pcap_freealldevs};
+
     for (auto &device : devices_) {
       if (device) {
         device->seen = false;
@@ -308,6 +334,7 @@ private:
       if ((interface->flags & PCAP_IF_UP) == 0 || name.size() > Limits::interface_bytes || index == 0) {
         continue;
       }
+
       auto existing = std::ranges::find_if(devices_, [&](auto &device) { return device && device->name.view() == name; });
       if (existing != devices_.end()) {
         if ((*existing)->index == index) {
@@ -323,11 +350,13 @@ private:
         notice(Kind::interface_error, name, "Capture interface limit reached", index);
         continue;
       }
+
       pcap_t *handle = pcap_create(interface->name, error.data());
       if (!handle) {
         notice(Kind::interface_error, name, error.data(), index);
         continue;
       }
+
       slot->emplace(handle, name, index);
       auto &capture = slot->value();
       constexpr int read_timeout_ms = 50;
@@ -337,6 +366,7 @@ private:
         slot->reset();
         continue;
       }
+
       if (::if_nametoindex(interface->name) != index) {
         notice(Kind::interface_error, name, "Interface changed during capture activation", index);
         slot->reset();
@@ -362,6 +392,7 @@ private:
     const auto name = devices_[slot]->name;
     const auto index = devices_[slot]->index;
     const auto link_type = static_cast<std::uint32_t>(pcap_datalink(handle));
+
     for (std::size_t round = 0; round < batch_packets; ++round) {
       pcap_pkthdr *header;
       const u_char *bytes;
@@ -369,10 +400,12 @@ private:
       if (result == 0) {
         return true;
       }
+
       if (result < 0) {
         notice(Kind::interface_error, name.view(), pcap_geterr(handle), index);
         return false;
       }
+
       packet(link_type, *header, bytes, name.view(), index);
     }
 
@@ -382,6 +415,7 @@ private:
   inline void packet(std::uint32_t link_type, const pcap_pkthdr &header, const u_char *bytes, std::string_view interface, std::uint32_t index) {
     constexpr std::uint64_t micros_per_second = 1000000;
     const auto captured = std::min<std::size_t>(header.caplen, Limits::packet_bytes);
+
     emit(Event{
         .kind = Kind::packet,
         .timestamp_us = static_cast<std::uint64_t>(header.ts.tv_sec) * micros_per_second + static_cast<std::uint64_t>(header.ts.tv_usec),
@@ -397,6 +431,7 @@ private:
     for (auto &device : devices_) {
       if (device) { sample(kernel_drops_, *device); }
     }
+
     emit(Event{.kind = Kind::statistics});
   }
 
@@ -411,6 +446,7 @@ private:
     sample(kernel_drops_, *devices_[slot]);
     const auto name = devices_[slot]->name;
     const auto index = devices_[slot]->index;
+
     notice(Kind::interface_closed, name.view(), {}, index);
     devices_[slot].reset();
   }

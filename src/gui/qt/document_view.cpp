@@ -26,6 +26,7 @@ namespace telar::gui::qt {
 
     QString color(const QVariantMap &colors, const char *name, const char *fallback) {
       const auto value = colors.value(QLatin1StringView{name}).toString();
+
       return value.isEmpty() ? QString::fromLatin1(fallback) : value;
     }
 
@@ -46,6 +47,7 @@ namespace telar::gui::qt {
       case BlockKind::count:
         break;
       }
+
       return {};
     }
 
@@ -114,21 +116,25 @@ namespace telar::gui::qt {
     // The document a view shows, whether it shows, and what changes when it does.
     const Document *findDocument(const Application *application, std::uint64_t pane_id, std::uint64_t document_id, bool &shown, std::uint64_t &version) {
       const auto *pane = application == nullptr ? nullptr : application->pane(pane_id);
+
       shown = false;
       version = 0;
       if (pane == nullptr) {
         return nullptr;
       }
+
       if (document_id == 0) {
         shown = pane->document_shown;
         version = pane->document_version;
         return &pane->document;
       }
+
       using Inline = Pane<ApplicationAllocator>::InlineDocument;
       const auto found = std::ranges::find(pane->inline_documents, document_id, &Inline::id);
       if (found == pane->inline_documents.end()) {
         return nullptr;
       }
+
       // An inline document never changes once whole.
       shown = found->shown;
       version = found->whole ? 1 : 0;
@@ -147,42 +153,54 @@ namespace telar::gui::qt {
 
       QString runs(std::span<const render::Run> runs) const {
         QString html;
+
         for (std::size_t index = 0; index < runs.size(); ++index) {
           const auto &run = runs[index];
           const auto style = run.style;
           const bool link = (style & render::style::link) != 0;
           const bool opens_link = link && (index == 0 || runs[index - 1].target != run.target || (runs[index - 1].style & render::style::link) == 0);
           const bool closes_link = link && (index + 1 == runs.size() || runs[index + 1].target != run.target || (runs[index + 1].style & render::style::link) == 0);
+
           if (opens_link) {
             html += QStringLiteral("<a href=\"%1\" style=\"%2\">").arg(fromUtf8(document_.view(run.target)).toHtmlEscaped(), link_style_);
           }
+
           QString text = escape(fromUtf8(document_.view(run.text)));
+
           if ((style & render::style::image) != 0) {
             text = QStringLiteral("<span style=\"%1\">[image: %2]</span>").arg(muted_style_, text);
           }
+
           if ((style & (render::style::code | render::style::math)) != 0) {
             text = QStringLiteral("<span style=\"%1\">&nbsp;%2&nbsp;</span>").arg(code_style_, text);
           }
+
           if ((style & render::style::html) != 0) {
             text = QStringLiteral("<span style=\"%1\">%2</span>").arg(muted_style_, text);
           }
+
           if ((style & render::style::superscript) != 0) {
             text = QStringLiteral("<sup>%1</sup>").arg(text);
           }
+
           if ((style & render::style::strike) != 0) {
             text = QStringLiteral("<s>%1</s>").arg(text);
           }
+
           if ((style & render::style::emphasis) != 0) {
             text = QStringLiteral("<i>%1</i>").arg(text);
           }
+
           if ((style & render::style::strong) != 0) {
             text = QStringLiteral("<b>%1</b>").arg(text);
           }
+
           html += text;
           if (closes_link) {
             html += QStringLiteral("</a>");
           }
         }
+
         return html;
       }
 
@@ -204,9 +222,11 @@ namespace telar::gui::qt {
     if (current == nullptr || !current->document_shown) {
       return false;
     }
+
     const auto modifiers = event.modifiers() & (Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier);
     const auto key = event.key();
     const char *action = nullptr;
+
     if (modifiers == Qt::ControlModifier) {
       action = key == Qt::Key_D ? "half_down" : key == Qt::Key_U ? "half_up"
                                                                  : nullptr;
@@ -226,9 +246,11 @@ namespace telar::gui::qt {
         action = "bottom";
       }
     }
+
     if (action == nullptr) {
       return false;
     }
+
     emit documentScroll(pane_id, QString::fromLatin1(action));
     return true;
   }
@@ -253,9 +275,11 @@ namespace telar::gui::qt {
     if (application_ == next) {
       return;
     }
+
     if (application_ != nullptr) {
       disconnect(application_, nullptr, this, nullptr);
     }
+
     application_ = next;
     if (application_ != nullptr) {
       connect(application_, &Application::documentChanged, this, [this](qulonglong pane_id) {
@@ -263,12 +287,14 @@ namespace telar::gui::qt {
           refresh();
         }
       });
+
       connect(application_, &Application::documentScroll, this, [this](qulonglong pane_id, const QString &action) {
         if (pane_id == pane_id_ && document_id_ == 0 && shown_) {
           emit scrollRequested(action);
         }
       });
     }
+
     stale_ = true;
     refresh();
     emit applicationChanged();
@@ -328,6 +354,7 @@ namespace telar::gui::qt {
     if (!url.isValid() || (scheme != QLatin1StringView{"https"} && scheme != QLatin1StringView{"http"} && scheme != QLatin1StringView{"mailto"})) {
       return false;
     }
+
     return QDesktopServices::openUrl(url);
   }
 
@@ -343,10 +370,12 @@ namespace telar::gui::qt {
   void DocumentView::refresh() {
     bool shown = false;
     std::uint64_t version = 0;
+
     static_cast<void>(findDocument(application_, pane_id_, document_id_, shown, version));
     if (shown == shown_ && version == version_ && !stale_) {
       return;
     }
+
     shown_ = shown;
     version_ = version;
     stale_ = false;
@@ -355,6 +384,7 @@ namespace telar::gui::qt {
     } else {
       blocks_.clear();
     }
+
     emit documentChanged();
   }
 
@@ -363,6 +393,7 @@ namespace telar::gui::qt {
     std::uint64_t version = 0;
     const auto &document = *findDocument(application_, pane_id_, document_id_, shown, version);
     const RichText rich{document, colors_, mono_family_};
+
     blocks_.clear();
     blocks_.reserve(static_cast<qsizetype>(document.blocks.size()));
     for (const auto &block : document.blocks) {
@@ -377,6 +408,7 @@ namespace telar::gui::qt {
           {QStringLiteral("opensCallout"), (block.flags & render::Block::opens_callout) != 0},
           {QStringLiteral("tight"), (block.flags & render::Block::tight) != 0},
       };
+
       switch (block.kind) {
       case BlockKind::paragraph:
       case BlockKind::heading:
@@ -390,16 +422,19 @@ namespace telar::gui::qt {
       case BlockKind::table: {
         QVariantList rows;
         QVariantList row;
+
         for (const auto &cell : document.cellsOf(block)) {
           row.append(QVariantMap{
               {QStringLiteral("html"), rich.runs(document.runsOf(cell))},
               {QStringLiteral("align"), alignName(cell.align)},
           });
+
           if (row.size() == block.columns) {
             rows.append(QVariant{row});
             row.clear();
           }
         }
+
         item.insert(QStringLiteral("columns"), block.columns);
         item.insert(QStringLiteral("rows"), rows);
         break;
@@ -408,6 +443,7 @@ namespace telar::gui::qt {
       case BlockKind::count:
         break;
       }
+
       blocks_.append(item);
     }
   }

@@ -45,6 +45,7 @@ struct NativeNotificationHost {
   static void start(QProcess &process, const NotificationPayload &payload) {
 #ifdef __APPLE__
     platform::NativeNotificationCommand command;
+
     startHostCommand(process, command.prepare(payload));
 #else
     startHostCommand(process, platform::NativeNotificationCommand::prepare(payload));
@@ -71,6 +72,7 @@ public:
 
   [[nodiscard]] std::size_t activeCount() const noexcept {
     std::size_t count = 0;
+
     for (const auto &delivery : deliveries_) {
       if (delivery && (*delivery)->process.active()) {
         ++count;

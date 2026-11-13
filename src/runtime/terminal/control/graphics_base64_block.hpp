@@ -16,6 +16,7 @@ inline bool decodeGraphicsBlock(const char *input, std::uint8_t *output) noexcep
   using Bytes = std::uint8_t __attribute__((ext_vector_type(16)));
   using Words = std::uint32_t __attribute__((ext_vector_type(4)));
   Bytes bytes;
+
   std::memcpy(&bytes, input, sizeof(bytes));
   const Bytes upper = __builtin_bit_cast(Bytes, (bytes >= 'A') & (bytes <= 'Z'));
   const Bytes lower = __builtin_bit_cast(Bytes, (bytes >= 'a') & (bytes <= 'z'));
@@ -25,6 +26,7 @@ inline bool decodeGraphicsBlock(const char *input, std::uint8_t *output) noexcep
   if (__builtin_reduce_and(upper | lower | digit | plus | slash) != UINT8_MAX) {
     return false;
   }
+
   const Bytes values = ((bytes - 'A') & upper) | ((bytes - 'a' + 26) & lower) | ((bytes - '0' + 52) & digit) | (plus & 62) | (slash & 63);
   // The packed-word form is defined for the two little-endian targets we
   // compile. Other architectures retain the scalar decoder.
@@ -32,6 +34,7 @@ inline bool decodeGraphicsBlock(const char *input, std::uint8_t *output) noexcep
   const Words decoded = ((words & 0x0000003fu) << 18) | ((words & 0x00003f00u) << 4) | ((words & 0x003f0000u) >> 10) | ((words & 0x3f000000u) >> 24);
   const auto packed = __builtin_bit_cast(Bytes, decoded);
   const Bytes ordered = __builtin_shufflevector(packed, packed, 2, 1, 0, 6, 5, 4, 10, 9, 8, 14, 13, 12, 3, 7, 11, 15);
+
   std::memcpy(output, &ordered, graphics_base64_block_output);
   return true;
 #else

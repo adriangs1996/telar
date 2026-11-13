@@ -165,6 +165,7 @@ public:
     if (exchange_.response) {
       exchange_.response->status_code = status;
     }
+
     finish(CaptureSide::response, !complete || status >= 400 ? CaptureOutcome::failed : CaptureOutcome::finished);
   }
 
@@ -304,21 +305,26 @@ public:
     }
 
     bool active = false;
+
     for (std::size_t round = 0; round < maximum_rounds && !finished_ && !upgraded_; ++round) {
       bool request_progress = advanceMessage(request_, CaptureSide::request, counters_, capture_, child, origin, readiness);
+
       active = active || request_progress;
       if (sendContinue(child)) {
         active = true;
         request_progress = advanceMessage(request_, CaptureSide::request, counters_, capture_, child, origin, TunnelReadiness::available()) || request_progress;
       }
+
       if (request_.state() == State::head_too_large) {
         rejectHead(true);
         return sendRejection(child) || active;
       }
+
       if (request_.state() == State::failed) {
         if (request_.head()) {
           capture_.fail();
         }
+
         finished_ = true;
         break;
       }
@@ -332,58 +338,71 @@ public:
         response_.destinationHead(request_.originalHead());
         response_started_ = true;
       }
+
       if (!response_started_) {
         break;
       }
 
       const bool response_progress = advanceMessage(response_, CaptureSide::response, counters_, capture_, origin, child, {readiness.origin, readiness.child});
+
       active = active || response_progress;
       if (response_.state() == State::head_too_large) {
         capture_.fail();
         rejectHead(false);
         return sendRejection(child) || active;
       }
+
       if (response_.state() == State::failed) {
         capture_.fail();
         finished_ = true;
         break;
       }
+
       if (response_.state() == State::complete) {
         finishResponse();
         continue;
       }
+
       if (!request_progress && !response_progress) {
         break;
       }
     }
+
     return active;
   }
 
   inline SocketInterest childInterest() const noexcept {
     if (!rejection_.empty()) {
       SocketInterest interest;
+
       interest.include(rejection_waiting_);
       return interest;
     }
+
     SocketInterest interest;
+
     interest.include(request_.sourceInterest());
     if (!request_.continueReply().remaining().empty()) {
       interest.include(continue_waiting_);
     }
+
     if (response_started_) {
       interest.include(response_.destinationInterest());
     }
+
     return interest;
   }
 
   inline SocketInterest originInterest() const noexcept {
     SocketInterest interest;
+
     if (rejection_.empty()) {
       interest.include(request_.destinationInterest());
       if (response_started_) {
         interest.include(response_.sourceInterest());
       }
     }
+
     return interest;
   }
 
@@ -425,7 +444,9 @@ private:
     if (!expired && !readiness.child.satisfies(message.sourceInterest()) && !readiness.origin.satisfies(message.destinationInterest())) {
       return false;
     }
+
     Http1TransportObserver observer{counters, capture, side};
+
     return message.advance(source, destination, observer);
   }
 
@@ -476,10 +497,12 @@ private:
       rejection_waiting_ = sent.waiting;
       return false;
     }
+
     if (sent.state != StreamResult::State::data || sent.bytes == 0) {
       finished_ = true;
       return false;
     }
+
     finished_ = rejection_.sent();
     return true;
   }
@@ -509,15 +532,18 @@ public:
   template <EventLoop Poller>
   inline void update(Poller &poller, int descriptor, std::uint64_t token, SocketInterest interest) {
     const bool changed = descriptor != descriptor_ || token != token_ || interest != interest_;
+
     if (descriptor != descriptor_) {
       remove(poller);
       descriptor_ = descriptor;
     }
+
     token_ = token;
     if (changed && descriptor_ >= 0) {
       poller.readInterest(descriptor_, token_, interest.readable);
       poller.writeInterest(descriptor_, token_, interest.writable);
     }
+
     interest_ = interest;
   }
 
@@ -527,6 +553,7 @@ public:
       poller.remove(descriptor_);
       descriptor_ = -1;
     }
+
     interest_ = {};
   }
 
@@ -571,6 +598,7 @@ public:
   inline bool advance(Child &child, Origin &origin, TunnelReadiness readiness) noexcept {
     const bool outgoing = transfer(outbound_, child, origin, readiness.child, readiness.origin);
     const bool incoming = transfer(inbound_, origin, child, readiness.origin, readiness.child);
+
     return outgoing || incoming;
   }
 
@@ -587,6 +615,7 @@ public:
 
   inline SocketInterest childInterest() const noexcept {
     SocketInterest interest;
+
     interest.include(outbound_.sourceInterest());
     interest.include(inbound_.destinationInterest());
     return interest;
@@ -594,6 +623,7 @@ public:
 
   inline SocketInterest originInterest() const noexcept {
     SocketInterest interest;
+
     interest.include(inbound_.sourceInterest());
     interest.include(outbound_.destinationInterest());
     return interest;
@@ -607,13 +637,16 @@ private:
     }
 
     bool active = false;
+
     for (std::size_t round = 0; round < maximum_rounds; ++round) {
       const auto progress = direction.advance(source, destination);
+
       active = active || progress.active();
       if (direction.wantsWrite() || progress.read < Direction::capacity) {
         break;
       }
     }
+
     return active;
   }
 
@@ -685,7 +718,9 @@ public:
     if (!control_) {
       return;
     }
+
     auto closed = event(traffic::Direction::outbound);
+
     closed.reason = outbound_.rejected_ ? outbound_.failure_ : inbound_.rejected_ ? inbound_.failure_ : reason_;
     control_->observeFlow(traffic::Kind::flow_close, closed);
     for (const auto *gate : {&outbound_, &inbound_}) {
@@ -717,6 +752,7 @@ public:
     reason_ = value;
     if (control_) {
       auto failed = event(traffic::Direction::outbound);
+
       failed.reason = value;
       control_->observeFlow(traffic::Kind::flow_error, failed);
     }
@@ -726,11 +762,13 @@ public:
 
   inline std::optional<traffic::FlowControl::Time> deadline() const noexcept {
     std::optional<traffic::FlowControl::Time> soonest;
+
     for (const auto *gate : {&outbound_, &inbound_}) {
       if (const auto due = gate->ticket_ ? control_->deadline(gate->ticket_) : std::nullopt) {
         soonest = earliest(soonest, due);
       }
     }
+
     return soonest;
   }
 
@@ -740,10 +778,12 @@ public:
     if (gate.rejected_) {
       return;
     }
+
     gate.rejected_ = true;
     gate.failure_ = reason;
     if (control_) {
       auto failed = event(reading ? opposite(direction) : direction);
+
       failed.offset = gate.offset_;
       failed.reason = reason;
       control_->observeFlow(traffic::Kind::flow_error, failed);
@@ -757,27 +797,33 @@ public:
     if (gate.rejected_) {
       return {StreamResult::State::failed};
     }
+
     if (!control_) {
       return stream.write(bytes);
     }
+
     if (!gate.offered_) {
       auto offered = event(direction);
+
       offered.offset = gate.offset_;
       offered.bytes = bytes.first(std::min(bytes.size(), traffic::FlowControl::chunk_bytes));
       gate.original_size_ = offered.bytes.size();
       gate.ticket_ = control_->intercept(offered);
       gate.offered_ = true;
     }
+
     if (gate.ticket_) {
       const auto decision = control_->poll(gate.ticket_, gate.replacement_.bytes());
       if (decision.verdict == traffic::Verdict::pending) {
         return {StreamResult::State::blocked, 0, StreamReadiness::completion};
       }
+
       gate.ticket_ = 0;
       if (decision.verdict == traffic::Verdict::reject) {
         fail(direction, "hook_rejected");
         return {StreamResult::State::failed};
       }
+
       gate.replacing_ = decision.verdict == traffic::Verdict::replace;
       gate.replacement_size_ = decision.bytes;
     }
@@ -787,12 +833,15 @@ public:
     if (output.empty()) {
       return complete(gate);
     }
+
     const auto result = stream.write(output);
     if (result.state != StreamResult::State::data) {
       if (result.state == StreamResult::State::failed || result.state == StreamResult::State::ended) { fail(direction, "socket_write_failed"); }
       return result;
     }
+
     auto written = event(direction);
+
     written.offset = gate.offset_;
     written.bytes = output.first(result.bytes);
     control_->observeFlow(traffic::Kind::stream_data, written);
@@ -801,6 +850,7 @@ public:
       gate.sent_ += result.bytes;
       return gate.sent_ == gate.replacement_size_ ? complete(gate) : StreamResult{StreamResult::State::blocked, 0, StreamReadiness::writable};
     }
+
     gate.offered_ = false;
     return result;
   }
@@ -820,6 +870,7 @@ private:
 
   inline static StreamResult complete(FlowGate &gate) noexcept {
     const auto count = gate.original_size_;
+
     eraseSensitive(gate.replacement_.bytes().data(), gate.replacement_size_);
     gate.offered_ = gate.replacing_ = false;
     gate.sent_ = gate.replacement_size_ = 0;
@@ -833,6 +884,7 @@ private:
     std::array<char, NI_MAXSERV> port{};
     if (::getpeername(socket, reinterpret_cast<sockaddr *>(&address), &size) == 0 && ::getnameinfo(reinterpret_cast<sockaddr *>(&address), size, host.data(), host.size(), port.data(), port.size(), NI_NUMERICHOST | NI_NUMERICSERV) == 0) {
       std::array<char, 128> text{};
+
       std::snprintf(text.data(), text.size(), address.ss_family == AF_INET6 ? "[%s]:%s" : "%s:%s", host.data(), port.data());
       result.assign(text.data());
     }
@@ -886,6 +938,7 @@ public:
 
   inline void observe(Http2Direction direction, const Http2Event &event) noexcept {
     auto &streams = select(direction);
+
     switch (event.kind) {
     case Http2Event::Kind::request_header:
     case Http2Event::Kind::response_header:
@@ -949,10 +1002,12 @@ public:
 
     const bool outgoing = transfer(request_, streams_, capture_, child, origin, readiness);
     const bool incoming = transfer(response_, streams_, capture_, origin, child, {readiness.origin, readiness.child});
+
     if (finished()) {
       origin.halfClose();
       settle();
     }
+
     return outgoing || incoming;
   }
 
@@ -964,6 +1019,7 @@ public:
 
   inline SocketInterest childInterest() const noexcept {
     SocketInterest interest;
+
     interest.include(request_.relay.sourceInterest());
     interest.include(response_.relay.destinationInterest());
     return interest;
@@ -971,6 +1027,7 @@ public:
 
   inline SocketInterest originInterest() const noexcept {
     SocketInterest interest;
+
     interest.include(response_.relay.sourceInterest());
     interest.include(request_.relay.destinationInterest());
     return interest;
@@ -989,6 +1046,7 @@ private:
     } else if (event.kind == Http2Event::Kind::response_ended || event.kind == Http2Event::Kind::stream_reset) {
       streams.finish(event.stream);
     }
+
     capture.observe(direction, event);
   }
 
@@ -1016,22 +1074,27 @@ private:
     }
 
     bool active = false;
+
     for (std::size_t round = 0; round < maximum_rounds; ++round) {
       const auto progress = direction.relay.advance(source, destination, [&](RelayDirection<>::Observation stage, std::span<const std::uint8_t> bytes) noexcept {
         const bool request = direction.kind == Http2Direction::request;
         if ((request && stage == RelayDirection<>::Observation::received) || (!request && stage == RelayDirection<>::Observation::forwarded)) {
           DirectionSink sink{streams, capture, direction.kind};
+
           direction.observer.observe(bytes, sink);
         }
       });
+
       active = active || progress.active();
       if (direction.relay.wantsWrite() || progress.read < RelayDirection<>::capacity) {
         break;
       }
     }
+
     if (direction.relay.finished()) {
       capture.finish(direction.kind);
     }
+
     return active;
   }
 
@@ -1039,6 +1102,7 @@ private:
     if (settled_) {
       return;
     }
+
     settled_ = true;
     record(request_.observer.finish());
     record(response_.observer.finish());
@@ -1050,9 +1114,11 @@ private:
     if (statistics.decode_failed) {
       counters_.record(ProxyCounter::h2_decode_failure);
     }
+
     if (statistics.header_block_too_large) {
       counters_.record(ProxyCounter::h2_header_block_too_large);
     }
+
     counters_.record(ProxyCounter::h2_stream_untracked, statistics.untracked_streams);
   }
 
@@ -1116,6 +1182,7 @@ class Http2EndpointConnection {
       nghttp2_session_callbacks *raw_callbacks = nullptr;
       if (nghttp2_session_callbacks_new(&raw_callbacks) != 0) { throw std::bad_alloc{}; }
       const auto callbacks = std::unique_ptr<nghttp2_session_callbacks, decltype(&nghttp2_session_callbacks_del)>{raw_callbacks, &nghttp2_session_callbacks_del};
+
       nghttp2_session_callbacks_set_on_begin_headers_callback(callbacks.get(), &beginHeaders);
       nghttp2_session_callbacks_set_on_header_callback(callbacks.get(), &header);
       nghttp2_session_callbacks_set_on_data_chunk_recv_callback(callbacks.get(), &data);
@@ -1125,6 +1192,7 @@ class Http2EndpointConnection {
       nghttp2_option *raw_options = nullptr;
       if (nghttp2_option_new(&raw_options) != 0) { throw std::bad_alloc{}; }
       const auto options = std::unique_ptr<nghttp2_option, decltype(&nghttp2_option_del)>{raw_options, &nghttp2_option_del};
+
       nghttp2_option_set_no_auto_window_update(options.get(), 1);
       nghttp2_option_set_max_outbound_ack(options.get(), maximum_streams);
       const auto result = child ? nghttp2_session_server_new3(&session, callbacks.get(), this, options.get(), this->memory.callbacks()) : nghttp2_session_client_new3(&session, callbacks.get(), this, options.get(), this->memory.callbacks());
@@ -1141,6 +1209,7 @@ class Http2EndpointConnection {
 
     inline static int beginHeaders(nghttp2_session *, const nghttp2_frame *frame, void *context) noexcept {
       auto &endpoint = *static_cast<Endpoint *>(context);
+
       try { return endpoint.owner->beginHeaders(endpoint.child, *frame); }
       catch (...) { return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE; }
     }
@@ -1163,6 +1232,7 @@ class Http2EndpointConnection {
     }
     inline static int frame(nghttp2_session *, const nghttp2_frame *frame, void *context) noexcept {
       auto &endpoint = *static_cast<Endpoint *>(context);
+
       try { endpoint.owner->frame(endpoint.child, *frame); return 0; }
       catch (...) {
         if (auto *stream = endpoint.stream(frame->hd.stream_id)) { endpoint.owner->reject(*stream, "http2_message_failed"); return 0; }
@@ -1177,15 +1247,18 @@ class Http2EndpointConnection {
           stream->origin_canceled_for_head = true;
           nghttp2_submit_rst_stream(endpoint.owner->origin_.session, 0, stream->origin_id, NGHTTP2_CANCEL);
         }
+
         if (error != NGHTTP2_NO_ERROR && !endpoint.owner->closing_) {
           if (!endpoint.child && stream->origin_canceled_for_head) { endpoint.owner->capture_.observe(Http2Direction::response, {.kind = Http2Event::Kind::stream_reset, .stream = static_cast<std::uint32_t>(stream->child_id)}); }
           else { endpoint.owner->reject(*stream, "http2_stream_reset", error); }
         }
       }
+
       return 0;
     }
     inline static int notSent(nghttp2_session *, const nghttp2_frame *frame, int, void *context) noexcept {
       auto &endpoint = *static_cast<Endpoint *>(context);
+
       if (frame->hd.type != NGHTTP2_HEADERS) { return 0; }
       for (auto &slot : endpoint.owner->streams_) {
         auto *stream = tbc::raw(slot.get());
@@ -1194,6 +1267,7 @@ class Http2EndpointConnection {
         endpoint.owner->reject(*stream, "http2_headers_not_sent");
         break;
       }
+
       return 0;
     }
 
@@ -1219,6 +1293,7 @@ class Http2EndpointConnection {
     inline void add(std::string_view name, std::string_view value) {
       names_.emplace_back(name, AllocatorRef<char, Secure>{names_.get_allocator().memory()});
       auto &lower = names_.back();
+
       std::ranges::transform(lower, lower.begin(), asciiLower);
       fields_.push_back({reinterpret_cast<std::uint8_t *>(lower.data()), reinterpret_cast<std::uint8_t *>(const_cast<char *>(value.data())), lower.size(), value.size(), NGHTTP2_NV_FLAG_NONE});
     }
@@ -1246,8 +1321,10 @@ public:
   inline bool advance(Child &child, Origin &origin, TunnelReadiness readiness) noexcept {
     if (failed_) { return false; }
     bool active = false;
+
     for (unsigned round = 0; round < maximum_rounds; ++round) {
       bool progress = false;
+
       progress = send(true, child, readiness.child) || progress;
       progress = send(false, origin, readiness.origin) || progress;
       progress = receive(true, child, readiness.child) || progress;
@@ -1258,9 +1335,11 @@ public:
         if (!stream->rejected) { resolve(stream->request); resolve(stream->response); }
         if (stream->child_closed && (stream->origin_closed || stream->origin_id == 0)) { slot.reset(); }
       }
+
       active |= progress;
       if (!progress || failed_) { break; }
     }
+
     const bool drained_origin = origin_.eof || (origin_.output_size == 0 && !nghttp2_session_want_write(origin_.session));
     if ((origin_.eof || child_.eof || draining_) && inflight() == 0 && child_.output_size == 0 && !nghttp2_session_want_write(child_.session) && drained_origin) { failed_ = true; }
     if (failed_) { child.halfClose(); origin.halfClose(); }
@@ -1276,6 +1355,7 @@ public:
   inline auto originInterest() const noexcept -> SocketInterest { return interest(origin_); }
   inline auto deadline() const noexcept -> std::optional<Time> {
     std::optional<Time> result;
+
     for (const auto &stream : streams_) {
       if (!stream || stream->rejected) { continue; }
       for (const auto *half : {&stream->request, &stream->response}) {
@@ -1284,6 +1364,7 @@ public:
         if (next && (!result || *next < *result)) { result = next; }
       }
     }
+
     return result;
   }
 
@@ -1311,9 +1392,11 @@ private:
         break;
       }
     }
+
     if (!stream || stream->rejected) { return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE; }
     const bool head_request = stream->request.message.method == "HEAD";
     auto &half = this->half(child, *stream);
+
     half.trailer_block = half.headers_complete;
     if (!half.trailer_block) {
       half.header_bytes = 0;
@@ -1321,6 +1404,7 @@ private:
       half.message.status = 0;
       if (!child) { half.message.response_to_head = head_request; }
     }
+
     return 0;
   }
 
@@ -1329,6 +1413,7 @@ private:
     if (name.size() + value.size() + 4 > HttpMessageLimits::head_bytes - half.header_bytes) { throw std::length_error{"HTTP/2 header limit"}; }
     half.header_bytes += name.size() + value.size() + 4;
     const auto direction = child ? Http2Direction::request : Http2Direction::response;
+
     capture_.observe(direction, {.kind = child ? Http2Event::Kind::request_header : Http2Event::Kind::response_header, .stream = static_cast<std::uint32_t>(stream.child_id), .name = name, .value = value});
     if (half.trailer_block) { half.message.trailers.append(name, value); return; }
     if (name == ":method") { half.message.method.assign(value); }
@@ -1352,9 +1437,11 @@ private:
           if (stream && (stream->origin_id == 0 || stream->origin_id > frame.goaway.last_stream_id)) { reject(*stream, "http2_origin_goaway", NGHTTP2_REFUSED_STREAM); }
         }
       }
+
       check(nghttp2_submit_goaway(side(!child).session, NGHTTP2_FLAG_NONE, child ? 0 : highest_forwarded_, frame.goaway.error_code, nullptr, 0));
       return;
     }
+
     auto *stream = side(child).stream(frame.hd.stream_id);
     if (!stream || stream->rejected || (frame.hd.type != NGHTTP2_HEADERS && frame.hd.type != NGHTTP2_DATA)) { return; }
     auto &half = this->half(child, *stream);
@@ -1365,14 +1452,17 @@ private:
         stream->original_head = half.message.method == "HEAD";
         if (half.message.authority.empty()) { if (const auto host = half.message.headers.get("host")) { half.message.authority.assign(*host); } }
       }
+
       half.message.validateHttp2();
       const auto &policy = half.interception.select(control_, context(half));
+
       half.streaming = !policy.enabled;
       if (policy.enabled) {
         if (const auto length = half.message.headers.get("content-length")) {
           if (const auto size = parseExact<std::uint64_t>(*length); size && *size > wire_body_bytes) { unavailable(half, "http2_body_limit"); }
         }
       }
+
       const bool tunnel = child ? half.message.method == "CONNECT" : stream->request.message.method == "CONNECT" && half.message.status >= 200 && half.message.status < 300;
       if (policy.enabled && (tunnel || half.message.streamingBody())) { unavailable(half, tunnel ? "http2_tunnel_body" : "http2_streaming_body"); }
       if (half.streaming && !stream->rejected) { forward(half, false); }
@@ -1384,6 +1474,7 @@ private:
         }
       }
     }
+
     if ((frame.hd.flags & NGHTTP2_FLAG_END_STREAM) && !stream->rejected) {
       half.ended = true;
       capture_.observe(child ? Http2Direction::request : Http2Direction::response, {.kind = child ? Http2Event::Kind::request_finished : Http2Event::Kind::response_ended, .stream = static_cast<std::uint32_t>(stream->child_id), .status = half.message.status});
@@ -1394,6 +1485,7 @@ private:
 
   inline void data(bool child, Stream &stream, std::span<const Byte> bytes, bool end) {
     auto &half = this->half(child, stream);
+
     half.uncredited += bytes.size();
     capture_.observe(child ? Http2Direction::request : Http2Direction::response, {.kind = child ? Http2Event::Kind::request_body : Http2Event::Kind::response_body, .stream = static_cast<std::uint32_t>(stream.child_id), .bytes = bytes});
     if (half.discard_body && half.streaming) { credit(half, bytes.size()); return; }
@@ -1413,6 +1505,7 @@ private:
 
   inline void resolve(Half &half) noexcept {
     using Outcome = HttpInterceptionSlot<Local>::Outcome;
+
     if (half.interception.waiting()) {
       try {
         const auto outcome = half.interception.poll(*control_, half.message);
@@ -1438,6 +1531,7 @@ private:
     if (++half.informational > maximum_informational) { reject(half.stream, "http2_informational_limit"); return; }
     Fields fields{secure_};
     std::array<char, 3> status{};
+
     std::to_chars(status.data(), status.data() + status.size(), half.message.status);
     fields.add(":status", {status.data(), status.size()});
     for (const auto &field : half.message.headers.fields()) { fields.add(field.name(), field.value()); }
@@ -1448,11 +1542,13 @@ private:
     if (half.forwarded || half.stream.rejected) { return; }
     half.message.validateHttp2();
     const bool source_head = half.message.response_to_head;
+
     if (half.message.response) {
       changed |= source_head != half.stream.original_head;
       half.message.response_to_head = half.stream.original_head;
       half.discard_body = half.message.bodyless();
     }
+
     if (changed) {
       half.queue.clear();
       const bool head_representation = half.message.response && half.message.response_to_head && !bodylessResponse(half.message.status, false);
@@ -1462,11 +1558,14 @@ private:
       if (!half.message.bodyless() || half.message.status == 205 || materialized_head) {
         std::array<char, 32> length;
         const auto formatted = std::to_chars(length.data(), length.data() + length.size(), half.queue.size());
+
         half.message.headers.append("content-length", {length.data(), formatted.ptr});
       }
     }
+
     Fields fields{secure_};
     std::array<char, 3> status{};
+
     if (half.message.response) {
       std::to_chars(status.data(), status.data() + status.size(), half.message.status);
       fields.add(":status", {status.data(), status.size()});
@@ -1475,17 +1574,21 @@ private:
       if (half.message.method != "CONNECT") { fields.add(":scheme", half.message.scheme); fields.add(":path", half.message.target); }
       fields.add(":authority", half.message.authority);
     }
+
     for (const auto &field : half.message.headers.fields()) { fields.add(field.name(), field.value()); }
     nghttp2_data_provider2 provider{.source = {.ptr = &half}, .read_callback = &readBody};
     auto &endpoint = target(half);
+
     if (half.message.response) {
       check(nghttp2_submit_response2(endpoint.session, half.stream.child_id, fields.bytes().data(), fields.bytes().size(), half.message.bodyless() ? nullptr : &provider));
     } else {
       const auto id = nghttp2_submit_request2(endpoint.session, nullptr, fields.bytes().data(), fields.bytes().size(), &provider, &half.stream);
+
       check(id);
       half.stream.origin_id = id;
       highest_forwarded_ = std::max(highest_forwarded_, half.stream.child_id);
     }
+
     half.forwarded = true;
     half.message.response_to_head = source_head;
     if (half.discard_body) { half.queue.clear(); credit(half, half.uncredited); }
@@ -1508,12 +1611,14 @@ private:
       if (!half.message.trailers.fields().empty()) {
         try {
           Fields fields{endpoint.owner->secure_};
+
           for (const auto &field : half.message.trailers.fields()) { fields.add(field.name(), field.value()); }
           *flags |= NGHTTP2_DATA_FLAG_NO_END_STREAM;
           check(nghttp2_submit_trailer(session, id, fields.bytes().data(), fields.bytes().size()));
         } catch (...) { endpoint.owner->reject(half.stream, "http2_trailer_failed"); return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE; }
       }
     }
+
     return static_cast<nghttp2_ssize>(bytes.size());
   }
 
@@ -1551,11 +1656,14 @@ private:
         side(child).output_size = 0;
         for (auto &slot : streams_) { if (auto *stream = tbc::raw(slot.get()); stream && !stream->origin_closed) { reject(*stream, "http2_origin_closed"); } }
       }
+
       return true;
     }
+
     side(child).read_wait = StreamReadiness::readable;
     // The session calls back into this connection while it parses the input.
     const auto consumed = nghttp2_session_mem_recv2(side(child).session, input.data(), read.bytes);
+
     eraseSensitive(input.data(), read.bytes);
     if (consumed < 0 || static_cast<std::size_t>(consumed) != read.bytes) { fail("http2_connection_failed"); }
     return read.bytes != 0;
@@ -1577,6 +1685,7 @@ private:
         endpoint.output_size = static_cast<std::size_t>(size);
         endpoint.output_offset = 0;
       }
+
       const auto result = destination.write(endpoint.output->bytes().subspan(endpoint.output_offset, endpoint.output_size - endpoint.output_offset));
       if (result.state == StreamResult::State::blocked) { endpoint.write_wait = result.waiting; return false; }
       if (result.state != StreamResult::State::data || result.bytes == 0) { fail("http2_socket_write_failed"); return false; }
@@ -1586,12 +1695,14 @@ private:
         eraseSensitive(endpoint.output->bytes().data(), endpoint.output_size);
         endpoint.output_size = 0;
       }
+
       return true;
     } catch (...) { fail("http2_output_limit"); return false; }
   }
 
   inline static auto interest(const Endpoint &endpoint) noexcept -> SocketInterest {
     SocketInterest result;
+
     if (!endpoint.eof) { result.include(endpoint.read_wait); }
     if ((!endpoint.eof || endpoint.child) && (endpoint.output_size != 0 || nghttp2_session_want_write(endpoint.session))) { result.include(endpoint.write_wait); }
     return result;
@@ -1657,6 +1768,7 @@ public:
   inline StreamResult read(std::span<std::uint8_t> bytes) noexcept {
     if (prefix_.empty()) { return stream_.read(bytes); }
     const auto count = std::min(prefix_.bytes().size(), bytes.size());
+
     std::memcpy(bytes.data(), prefix_.bytes().data(), count);
     prefix_.consume(count);
     return {StreamResult::State::data, count};
@@ -1664,6 +1776,7 @@ public:
   inline StreamResult peek(std::span<std::uint8_t> bytes) noexcept {
     if (prefix_.empty()) { return stream_.peek(bytes); }
     const auto count = std::min(prefix_.bytes().size(), bytes.size());
+
     std::memcpy(bytes.data(), prefix_.bytes().data(), count);
     return {StreamResult::State::data, count};
   }
@@ -1701,6 +1814,7 @@ public:
       if (!unnegotiated) {
         protocol_ = protocol;
       }
+
       selected_ = true;
     }
   }
@@ -1711,6 +1825,7 @@ public:
 
     if (!protocol_) {
       const auto read = prefix_.fill(child_stream);
+
       active = read.state == StreamResult::State::data;
       identify();
       std::array<Byte, Http2Frame::header_bytes> banner{};
@@ -1727,6 +1842,7 @@ public:
         });
 
         const bool h2_settings = initial && initial->kind == Http2FrameKind::settings && initial->stream == 0 && initial->flags == 0 && initial->length % Http2Frame::settings_entry_bytes == 0;
+
         protocol_ = h2_settings ? HttpProtocol::http2 : HttpProtocol::other;
       }
 
@@ -1760,6 +1876,7 @@ public:
     if (relays_.http2_endpoint_) {
       return relays_.http2_endpoint_->halfClosed();
     }
+
     return relays_.http2_ ? relays_.http2_->halfClosed() : relays_.duplex_.halfClosed();
   }
 
@@ -1771,6 +1888,7 @@ public:
     if (relays_.http2_endpoint_) {
       return relays_.http2_endpoint_->inflight();
     }
+
     return relays_.http2_ ? relays_.http2_->inflight() : relays_.http1_ ? relays_.http1_->inflight()
                                                 : 0;
   }
@@ -1783,6 +1901,7 @@ public:
     if (relays_.http2_endpoint_) {
       return relays_.http2_endpoint_->readsChild();
     }
+
     return relays_.http2_ ? relays_.http2_->readsChild() : relays_.http1_ && !relays_.http1_->upgraded() ? relays_.http1_->readsChild()
                                                                          : relays_.duplex_.readsChild();
   }
@@ -1791,6 +1910,7 @@ public:
     if (relays_.http2_endpoint_) {
       return relays_.http2_endpoint_->readsOrigin();
     }
+
     return relays_.http2_ ? relays_.http2_->readsOrigin() : relays_.http1_ && !relays_.http1_->upgraded() ? relays_.http1_->readsOrigin()
                                                                           : relays_.duplex_.readsOrigin();
   }
@@ -1799,9 +1919,11 @@ public:
     if (relays_.http2_endpoint_) {
       return relays_.http2_endpoint_->deadline();
     }
+
     if (relays_.http1_) {
       return relays_.http1_->deadline();
     }
+
     return !protocol_ && sniff_until_ != traffic::FlowControl::Time{} ? std::optional{sniff_until_} : std::nullopt;
   }
 
@@ -1809,9 +1931,11 @@ public:
     if (!protocol_ && !prefix_.empty()) {
       return {.readable = side == TlsSide::child};
     }
+
     if (relays_.http2_endpoint_) {
       return side == TlsSide::child ? relays_.http2_endpoint_->childInterest() : relays_.http2_endpoint_->originInterest();
     }
+
     if (relays_.http1_ && !relays_.http1_->upgraded()) {
       return side == TlsSide::child ? relays_.http1_->childInterest() : relays_.http1_->originInterest();
     }
@@ -1860,6 +1984,7 @@ private:
       const auto end = head.find("\r\n");
       if (end != std::string_view::npos) {
         const auto line = head.substr(0, end);
+
         protocol_ = line.ends_with(" HTTP/1.1") || line.ends_with(" HTTP/1.0") ? HttpProtocol::http11 : HttpProtocol::other;
         return;
       }
@@ -1900,6 +2025,7 @@ private:
             auto *control = observation_.flows ? observation_.flows->http() : nullptr;
             if (control) {
               const auto event = flow ? flow->context() : traffic::FlowEvent{.id = observation_.identity, .host = hostname_.view()};
+
               http2_endpoint_ = makeOwned<Http2Endpoint>(memory_, memory_, std::move(capture), control, event);
             } else {
               http2_ = makeOwned<Http2>(memory_, memory_, observation_.counters, std::move(capture));
@@ -1919,6 +2045,7 @@ private:
             Http1Capture capture{memory_, observation_.captures, captureStart(CaptureProtocol::http1)};
             const auto event = flow ? flow->context() : traffic::FlowEvent{.id = observation_.identity, .host = hostname_.view()};
             const HttpRelayContext context{observation_.flows ? observation_.flows->http() : nullptr, event};
+
             http1_ = makeOwned<Http1>(memory_, memory_, observation_.counters, std::move(capture), context);
           } catch (...) {
             failed_ = true;
@@ -1928,6 +2055,7 @@ private:
 
         if (!http1_->upgraded()) {
           const bool active = http1_->advance(child, origin, readiness);
+
           if (!http1_->upgraded()) {
             return active;
           }
@@ -1971,6 +2099,7 @@ public:
   // `flow` is the connection's flow, or null when no hook watches it.
   inline bool advance(TunnelReadiness readiness, FlowState *flow) noexcept {
     SocketStream child{sockets_.child}, origin{sockets_.origin};
+
     return application_.advance(child, origin, readiness, flow);
   }
   inline bool finished() const noexcept { return application_.finished(); }
@@ -2034,6 +2163,7 @@ public:
 
     TlsStream child{*session_, TlsSide::child};
     TlsStream origin{*session_, TlsSide::origin};
+
     readiness.child.readable = readiness.child.readable || session_->buffered(TlsSide::child);
     readiness.origin.readable = readiness.origin.readable || session_->buffered(TlsSide::origin);
     application_.select(session_->protocol(), session_->unnegotiated());
@@ -2044,6 +2174,7 @@ public:
   inline auto deadline() const noexcept {
     const auto session = session_->deadline();
     const auto application = application_.deadline();
+
     return earliest(session, application);
   }
 
@@ -2077,6 +2208,7 @@ public:
     }
 
     SocketInterest interest;
+
     interest.include(session_->waiting(side));
     return interest;
   }
@@ -2084,6 +2216,7 @@ public:
 private:
   inline tbc::view<std::string_view, tbc::lt::static_storage> recordFailure() noexcept {
     using Failure = typename TlsSession<Memory>::Failure;
+
     switch (session_->failure()) {
     case Failure::context:
       observation_.counters.record(ProxyCounter::tls_context_failure);
@@ -2133,7 +2266,9 @@ public:
       flow_ = makeOwned<FlowState>(memory_);
       flow_->open(observation.flows, observation.identity, handshake.childDescriptor(), handshake.originDescriptor(), handshake.hostname());
     }
+
     const TunnelSockets sockets{handshake.childDescriptor(), handshake.originDescriptor()};
+
     if (handshake.intercept()) {
       tls_ = makeOwned<TlsTunnel<Memory>>(memory_, memory_, interception, sockets, handshake.hostname(), handshake.takeOffer(), observation);
     } else {
@@ -2160,12 +2295,14 @@ public:
     if (plain_) {
       return plain_->interest(side);
     }
+
     return tls_->interest(side);
   }
 
   inline std::optional<traffic::FlowControl::Time> deadline() const noexcept {
     const auto flow = flow_ ? flow_->deadline() : std::nullopt;
     const auto tls = plain_ ? plain_->deadline() : tls_ ? tls_->deadline() : std::nullopt;
+
     return earliest(flow, tls);
   }
   inline void reason(tbc::view<std::string_view, tbc::lt::static_storage> value) noexcept { if (flow_) { flow_->reason(value); } }
@@ -2229,24 +2366,30 @@ public:
     if (closed_) {
       return;
     }
+
     if (!transport_.opened()) {
       handshake_.advance(readiness.origin.writable, now);
       if (!observation_ && !handshake_.hostname().empty()) {
         observation_.emplace(observations.connection());
       }
+
       if (handshake_.state() == Handshake::State::closed) {
         if (observation_ && observation_->flows) {
           observation_->flows->observeFlow(traffic::Kind::flow_error, {.id = observation_->identity, .host = handshake_.hostname(), .reason = handshake_.failure()});
         }
+
         closed_ = true;
         return;
       }
+
       if (handshake_.state() != Handshake::State::reading && policy_.phase() == Phase::connect_head) {
         enter(Phase::establishing, now);
       }
+
       if (handshake_.state() != Handshake::State::established) {
         return;
       }
+
       try {
         transport_.open(interception, handshake_, *observation_);
         readiness = TunnelReadiness::available();
@@ -2254,6 +2397,7 @@ public:
         if (handshake_.intercept()) {
           counters_.record(ProxyCounter::tls_context_failure);
         }
+
         transport_.error(handshake_.intercept() ? "tls_context_failed" : "transport_setup_failed");
         closed_ = true;
         return;
@@ -2263,6 +2407,7 @@ public:
     if (transport_.advance(readiness)) {
       policy_.touch(now);
     }
+
     policy_.exchanges(transport_.inflight());
     if (transport_.finished()) {
       closed_ = true;
@@ -2290,6 +2435,7 @@ public:
         handshake_.expire();
         enter(Phase::closing, now);
       }
+
       break;
     case Closure::half_closed_timeout:
       closed_ = true;
@@ -2303,9 +2449,11 @@ public:
     if (transport_.opened()) {
       return transport_.interest(side);
     }
+
     if (side == TlsSide::child) {
       return {.readable = handshake_.wantsChildRead(), .writable = handshake_.wantsChildWrite()};
     }
+
     return {.readable = handshake_.wantsOriginRead(), .writable = handshake_.wantsOriginWrite()};
   }
 
@@ -2328,6 +2476,7 @@ public:
   inline std::optional<Time> deadline() const noexcept {
     const auto handshake = handshake_.deadline();
     const auto transport = transport_.deadline();
+
     return earliest(handshake, transport);
   }
 
@@ -2396,14 +2545,17 @@ public:
       if (!url) {
         throw SystemError{"Format child proxy URL", EOVERFLOW};
       }
+
       command.setEnvironment("HTTPS_PROXY", *url);
       command.setEnvironment("https_proxy", *url);
       command.setEnvironment("NODE_USE_ENV_PROXY", "1");
     }
+
     command.setEnvironment("NODE_EXTRA_CA_CERTS", identity_->certificate.view());
     for (const auto name : {"SSL_CERT_FILE", "CURL_CA_BUNDLE", "REQUESTS_CA_BUNDLE", "AWS_CA_BUNDLE", "GIT_SSL_CAINFO", "CLOUDSDK_CORE_CUSTOM_CA_CERTS_FILE"}) {
       command.setEnvironment(name, identity_->bundle.view());
     }
+
     command.setEnvironment("TELAR_PROXY_TLS", "1");
   }
 
@@ -2450,11 +2602,13 @@ public:
         if (reserved.test(offset) != use_reserved) {
           continue;
         }
+
         if (auto listener = tryPort(ProxyPortRange::first + offset, false)) {
           return std::move(*listener);
         }
       }
     }
+
     throw SystemError{"No proxy port available", EADDRINUSE};
   }
 
@@ -2464,6 +2618,7 @@ public:
       if (socketWouldBlock(errno)) {
         return child;
       }
+
       throw SystemError{"Accept proxy connection"};
     }
 
@@ -2493,6 +2648,7 @@ private:
     if (!socket) {
       throw SystemError{"Create proxy socket"};
     }
+
     configureProxySocket(socket.get());
     return socket;
   }
@@ -2507,14 +2663,17 @@ private:
       // BSD reuse can shadow a wildcard listener; reclaim only a refused port.
       socket = listen(port, true);
     }
+
     if (!socket) {
       return std::nullopt;
     }
+
     return ProxyListener{std::move(socket), port};
   }
 
   inline static FileDescriptor listen(std::uint16_t port, bool reuse_closed) {
     auto socket = openSocket();
+
     if (reuse_closed) {
       const int enabled = 1;
       if (::setsockopt(socket.get(), SOL_SOCKET, SO_REUSEADDR, &enabled, sizeof(enabled)) != 0) {
@@ -2527,8 +2686,10 @@ private:
       if (errno == EADDRINUSE) {
         return FileDescriptor{};
       }
+
       throw SystemError{"Bind proxy listener"};
     }
+
     return socket;
   }
 
@@ -2539,9 +2700,11 @@ private:
       if (::connect(socket.get(), loopback.address(), loopback.length) == 0) {
         return true;
       }
+
       if (errno == ECONNREFUSED) {
         return false;
       }
+
       if (errno != EINPROGRESS) {
         return true;
       }
@@ -2550,8 +2713,10 @@ private:
       if (::poll(&pending, 1, probe_timeout_ms) != 1) {
         return true;
       }
+
       int failure = 0;
       socklen_t length = sizeof(failure);
+
       return ::getsockopt(socket.get(), SOL_SOCKET, SO_ERROR, &failure, &length) != 0 || failure != ECONNREFUSED;
     } catch (...) {
       return true;
@@ -2587,6 +2752,7 @@ public:
     if (const auto record = recall(name_.data(), bytes)) {
       own_ = record->port;
     }
+
     if (inherit_legacy) {
       if (const auto record = recall(legacy_name, bytes)) {
         legacy_ = record->port;
@@ -2600,6 +2766,7 @@ public:
         reserved_.set(record.port - ProxyPortRange::first);
       }
     });
+
     if (own_ && legacy_) {
       reserved_.set(*legacy_ - ProxyPortRange::first);
     }
@@ -2624,6 +2791,7 @@ public:
 
     std::array<char, maximum_record_bytes> record;
     auto *end = std::to_chars(record.data(), record.data() + record.size(), port).ptr;
+
     *end++ = '\n';
     end = std::copy(endpoint_.begin(), endpoint_.end(), end);
     *end++ = '\n';
@@ -2635,6 +2803,7 @@ public:
     if (!own_ && legacy_ == port) {
       ::unlinkat(directory_, legacy_name, 0);
     }
+
     if (reserved_.test(port - ProxyPortRange::first)) {
       scan([&](const char *name, const Record &record) {
         if (record.port == port) {
@@ -2642,6 +2811,7 @@ public:
         }
       });
     }
+
     return true;
   }
 
@@ -2659,13 +2829,16 @@ private:
 
   inline void identify(std::string_view endpoint) noexcept {
     Sha256 hash;
+
     hash.update(endpoint);
     const auto digest = hash.finish();
     auto *end = std::copy(file_prefix.begin(), file_prefix.end(), name_.begin());
+
     for (std::size_t index = 0; index < digest_bytes; ++index) {
       *end++ = hexadecimal[digest[index] >> 4];
       *end++ = hexadecimal[digest[index] & 15];
     }
+
     *end = '\0';
   }
 
@@ -2684,12 +2857,14 @@ private:
     if (number.starts_with('+')) {
       number.remove_prefix(1);
     }
+
     const auto port = unsignedDecimal<std::uint16_t>(number);
     if (!port || !ProxyPortRange::contains(*port)) {
       return std::nullopt;
     }
 
     const auto tail = newline == std::string_view::npos ? std::string_view{} : text.substr(newline + 1);
+
     return Record{*port, trimCarriageReturns(tail.substr(0, tail.find('\n')))};
   }
 
@@ -2700,22 +2875,27 @@ private:
       if (!descriptor) {
         return;
       }
+
       std::unique_ptr<DIR, DirectoryCloser> directory{::fdopendir(descriptor.get())};
       if (!directory) {
         return;
       }
+
       descriptor.release();
 
       Vector<unsigned char, Memory> bytes{AllocatorRef<unsigned char, Memory>{memory_}};
+
       for (std::size_t scanned = 0; scanned < maximum_scanned_entries; ++scanned) {
         const auto *entry = ::readdir(directory.get());
         if (entry == nullptr) {
           return;
         }
+
         const std::string_view name{entry->d_name};
         if (entry->d_type != DT_REG || name == filename() || !isPortFile(name)) {
           continue;
         }
+
         if (const auto record = recall(name, bytes)) {
           visit(entry->d_name, *record);
         }
@@ -2739,9 +2919,11 @@ private:
     if (length >= parent.size()) {
       return false;
     }
+
     std::copy_n(endpoint.data(), length, parent.data());
     parent[length] = '\0';
     struct stat metadata{};
+
     return ::stat(parent.data(), &metadata) != 0 && errno == ENOENT;
   }
 
@@ -2749,6 +2931,7 @@ private:
     while (text.ends_with('\r')) {
       text.remove_suffix(1);
     }
+
     return text;
   }
 
@@ -2787,17 +2970,22 @@ public:
     if (now >= deadline_) {
       return true;
     }
+
     SocketStream stream{socket_.get()};
+
     if (!response_.sent()) {
       const auto sent = response_.write(stream);
       if (sent.state != StreamResult::State::data) {
         return sent.state != StreamResult::State::blocked;
       }
+
       if (!response_.sent()) {
         return false;
       }
+
       stream.halfClose();
     }
+
     return drainEnded(stream);
   }
 
@@ -2884,10 +3072,12 @@ public:
     if (stopping_.load(std::memory_order_acquire) || failed()) {
       return false;
     }
+
     const bool accepted = adoptions_.publish(std::move(connection));
     if (!accepted) {
       limit_drops_.fetch_add(1, std::memory_order_relaxed);
     }
+
     adoption_signal_.notify();
     return accepted;
   }
@@ -2914,9 +3104,11 @@ private:
     try {
       std::array<Event, Poller::event_capacity> ready{};
       auto reap_at = Policy::Clock::now() + reap_interval;
+
       while (!stopping_.load(std::memory_order_acquire)) {
         const auto now = Policy::Clock::now();
         auto wake_at = reap_at;
+
         advanceRefusal(now);
         if (refusal_) {
           wake_at = std::min(wake_at, refusal_->deadline());
@@ -2931,30 +3123,36 @@ private:
 
         occupied_.forEach([&](std::size_t index) {
           auto &slot = slots_[index];
+
           if (now >= reap_at) {
             slot->connection->expire(now);
             advance(index, {}, now);
           } else if (slot->connection->buffered() || (slot->connection->deadline() && now >= *slot->connection->deadline())) {
             advance(index, TunnelReadiness::available(), now);
           }
+
           if (slot) {
             if (const auto deadline = slot->connection->deadline()) {
               wake_at = std::min(wake_at, *deadline);
             }
+
             if (slot->connection->buffered()) {
               wake_at = now;
             }
           }
         });
+
         if (now >= reap_at) {
           reap_at = now + reap_interval;
         }
 
         const auto events = poller_.wait(wake_at - Policy::Clock::now(), ready);
+
         for (const auto &event : events) {
           if (stopping_.load(std::memory_order_acquire)) {
             break;
           }
+
           dispatch(event, Policy::Clock::now());
         }
       }
@@ -2997,6 +3195,7 @@ private:
         if (!index) {
           continue;
         }
+
         try {
           keep(makeOwned<Connection>(memory_, memory_, std::move(*connection), options_, secret_, observations_.counters), *index, now);
         } catch (...) {
@@ -3013,6 +3212,7 @@ private:
       if (slot && (slot->child.matches(event) || slot->origin.matches(event))) {
         TunnelReadiness readiness;
         auto &side = slot->origin.matches(event) ? readiness.origin : readiness.child;
+
         side = {.readable = event.kind == EventKind::readable, .writable = event.kind == EventKind::writable};
         advance(index, readiness, now);
       }
@@ -3023,6 +3223,7 @@ private:
     TELAR_TRACE("proxy.acceptConnections");
     for (std::size_t accepted = 0; accepted < maximum_accept_batch; ++accepted) {
       FileDescriptor child;
+
       try {
         child = listener_.accept();
       } catch (const SystemError &error) {
@@ -3030,8 +3231,10 @@ private:
           accept_after_ = now + descriptor_backoff;
           poller_.readInterest(listener_.descriptor(), listener_token, false);
         }
+
         return;
       }
+
       if (!child) {
         return;
       }
@@ -3043,8 +3246,10 @@ private:
         advanceRefusal(now);
         return;
       }
+
       try {
         auto connection = makeOwned<Connection>(memory_, memory_, std::move(child), options_, secret_, observations_.counters);
+
         keep(std::move(connection), *index, now);
       } catch (...) {
         release(*index);
@@ -3061,6 +3266,7 @@ private:
 
   inline std::optional<std::size_t> admit(Time now, bool authenticated = false) noexcept {
     std::size_t unauthenticated = 0;
+
     occupied_.forEach([&](std::size_t index) { unauthenticated += slots_[index]->connection->policy().phase() == Policy::Phase::connect_head; });
     if (!authenticated && unauthenticated >= Policy::maximum_unauthenticated) {
       if (const auto evicted = oldest(Policy::Closure::evict_head, now)) {
@@ -3075,6 +3281,7 @@ private:
     if (const auto available = occupied_.firstUnused()) {
       return available;
     }
+
     for (const auto reason : {Policy::Closure::evict_head, Policy::Closure::evict_idle, Policy::Closure::evict_silent}) {
       if (const auto evicted = oldest(reason, now)) {
         release(*evicted);
@@ -3082,6 +3289,7 @@ private:
         return evicted;
       }
     }
+
     limit_drops_.fetch_add(1, std::memory_order_relaxed);
     return std::nullopt;
   }
@@ -3089,6 +3297,7 @@ private:
   inline std::optional<std::size_t> oldest(Policy::Closure reason, Time now) const noexcept {
     std::optional<std::size_t> found;
     auto since = Time::max();
+
     occupied_.forEach([&](std::size_t index) {
       const auto &policy = slots_[index]->connection->policy();
       const auto started = reason == Policy::Closure::evict_head ? policy.since() : policy.active();
@@ -3097,11 +3306,13 @@ private:
         found = index;
       }
     });
+
     return found;
   }
 
   inline void advance(std::size_t index, TunnelReadiness readiness, Time now) noexcept {
     auto &slot = *slots_[index];
+
     slot.connection->advance(interception_, observations_, readiness, now);
     if (slot.connection->closed()) {
       release(index);
@@ -3113,6 +3324,7 @@ private:
         slot.origin_attempt = slot.connection->originAttempt();
         slot.origin_generation = nextGeneration();
       }
+
       slot.child.update(poller_, slot.connection->descriptor(TlsSide::child), token(index, slot.child_generation, TlsSide::child), slot.connection->interest(TlsSide::child));
       slot.origin.update(poller_, slot.connection->descriptor(TlsSide::origin), token(index, slot.origin_generation, TlsSide::origin), slot.connection->interest(TlsSide::origin));
     } catch (const std::exception &error) {
@@ -3127,6 +3339,7 @@ private:
     if (!refusal_) {
       return;
     }
+
     if (refusal_->advance(now)) {
       refusal_watch_.remove(poller_);
       refusal_.reset();
@@ -3155,6 +3368,7 @@ private:
     if (generation_ == (UINT64_MAX >> generation_shift)) {
       throw SystemError{"Proxy event generations exhausted", EOVERFLOW};
     }
+
     return ++generation_;
   }
 
@@ -3235,6 +3449,7 @@ public:
     }
 
     const bool system_trusted = system_trust.inspect().status == proxy_trust::Status::installed;
+
     if (!options.enabled) {
       return;
     }
@@ -3248,6 +3463,7 @@ public:
 
     const auto authority_kind = system_trusted ? AuthorityKind::system_trust : AuthorityKind::private_local;
     auto authority = std::allocate_shared<CertificateAuthority<Memory>>(AllocatorRef<CertificateAuthority<Memory>, Memory>{memory}, CertificateAuthority<Memory>::loadOrCreate(memory, *library_, directory.get(), authority_kind));
+
     publishAuthority(*authority, directory.get());
     trust_.emplace(memory, *library_);
     SystemCertificates::read([this](std::span<const std::uint8_t> bytes) { trust_->addDer(bytes); });
@@ -3256,6 +3472,7 @@ public:
     secret_.emplace(ProxySecretFile::ensure(memory, directory.get()));
     ProxyPortMemory ports{memory, directory.get(), endpoint, inherit_legacy};
     auto listener = ProxyListener::bind(ports.preferred(), ports.reserved());
+
     ports.remember(listener.port());
 
     certificate_path_ = path;
@@ -3270,15 +3487,18 @@ public:
     status_.scope = std::ranges::any_of(options.intercept_hosts.patterns(), [](const auto &host) { return host.starts_with('*'); }) ? ProxyScope::wildcard : ProxyScope::exact;
     using Identity = ProxyClientConfiguration::Identity;
     auto identity = std::allocate_shared<Identity>(AllocatorRef<Identity, Memory>{memory}, Identity{.status = status_, .secret = *secret_, .https_proxy = options.pane_https_proxy});
+
     identity->certificate.assign(certificate_path_);
     identity->bundle.assign(bundle_path_);
     client_ = std::move(identity);
     service_.emplace(memory, options, *secret_, *interception_, std::move(listener), flowControl(tap));
     if (options.transparent_redirect) {
       String<Memory> redirect_path{endpoint, AllocatorRef<char, Memory>{memory}};
+
       redirect_path += redirect::socket_suffix;
       redirect_.emplace(redirect_path, *service_);
     }
+
     if (options.capture.enabled) {
       captures_.emplace(memory, service_->captures(), options.capture, tap);
     }
@@ -3318,13 +3538,16 @@ public:
 
   inline AuthorityStatus authorityStatus(bool include_certificate = false) const {
     AuthorityStatus result;
+
     if (!interception_) { return result; }
     const proxy_trust::Paths paths{memory_, authority_directory_};
     const auto destination = paths.nativeDestination(memory_, process_environment);
     const auto inspection = proxy_trust::inspect(memory_, *library_, paths, destination);
     const auto current = interception_->snapshot();
+
     requireTls(current != nullptr, "TLS authority is unavailable");
     const auto &authority = *current;
+
     result.active = true;
     result.accepting = !interception_->suspended();
     result.trust = inspection.status;
@@ -3333,9 +3556,11 @@ public:
     if (inspection.record && inspection.record->fingerprint != result.fingerprint_sha1) { result.trust = proxy_trust::Status::stale; }
     if (include_certificate) {
       const PemDocument certificate{authority.certificate()};
+
       std::ranges::copy(certificate.bytes(), result.certificate.begin());
       result.certificate_bytes = certificate.bytes().size();
     }
+
     return result;
   }
 
@@ -3353,6 +3578,7 @@ public:
     interception_->suspend(true);
     const auto directory = paths.prepare();
     auto kind = AuthorityKind::private_local;
+
     if (action == proxy_trust::Action::uninstall) {
       if (previous.record) { trust.uninstall(*previous.record); }
     } else if (action == proxy_trust::Action::install || previous.record) {
@@ -3360,10 +3586,13 @@ public:
       kind = AuthorityKind::system_trust;
     } else {
       proxy_trust::PreparedAuthority prepared{memory_, *library_, directory.get(), proxy_trust::AuthorityPreparation{.kind = AuthorityKind::private_local, .force_rotation = true}};
+
       prepared.activate();
       prepared.commit();
     }
+
     auto authority = std::allocate_shared<CertificateAuthority<Memory>>(AllocatorRef<CertificateAuthority<Memory>, Memory>{memory_}, CertificateAuthority<Memory>::loadOrCreate(memory_, *library_, directory.get(), kind));
+
     publishAuthority(*authority, directory.get());
     interception_->replace(std::move(authority));
     interception_->suspend(false);
@@ -3382,6 +3611,7 @@ private:
     if constexpr (requires { tap.flowControl(); }) {
       return tap.flowControl();
     }
+
     return nullptr;
   }
 

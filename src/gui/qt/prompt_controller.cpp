@@ -28,6 +28,7 @@ const prompt::Line *Application::promptLine(std::uint64_t pane_id) const noexcep
 
 std::string_view Application::promptSuggestion(std::uint64_t pane_id) const noexcept {
   const auto *line = session().promptLine(pane_id);
+
   return line == nullptr ? std::string_view{} : line->suggestion(session().promptHistory());
 }
 
@@ -49,6 +50,7 @@ void Application::selectBlock(std::uint64_t pane_id, std::optional<std::size_t> 
   } catch (const std::exception &error) {
     fail(error);
   }
+
   emit promptChanged(pane_id);
   emit terminalChanged(pane_id);
 }
@@ -67,6 +69,7 @@ bool Application::promptKey(std::uint64_t pane_id, const prompt::KeyPress &key) 
     if (outcome == prompt::Outcome::terminal) {
       return false;
     }
+
     if (outcome == prompt::Outcome::search_history) {
       execute(Action::history);
       return true;
@@ -79,16 +82,19 @@ bool Application::promptKey(std::uint64_t pane_id, const prompt::KeyPress &key) 
   if (session().takeClipboardWrite()) {
     QGuiApplication::clipboard()->setText(toQString(session().clipboard()));
   }
+
   emit promptChanged(pane_id);
   // A block selected or left scrolls the pane, and copy mode may begin on it.
   if (session().takeBlockChange()) {
     emit terminalChanged(pane_id);
     emit stateChanged();
   }
+
   // A search of a command's output asks for its query.
   if (session().takeSearchRequest()) {
     showDialog(Dialog::copy_search);
   }
+
   return true;
 }
 
@@ -97,6 +103,7 @@ void Application::toggleCopySearchScope() {
   emit dialogChanged();
   // The query typed so far, looked for again where it now looks.
   const auto query = session().copySearch().query;
+
   searchScrollback(QString::fromUtf8(query.data(), static_cast<qsizetype>(query.size())));
 }
 
@@ -105,12 +112,15 @@ void Application::searchScrollback(const QString &text) {
   if (!copy) {
     return;
   }
+
   try {
     const auto bytes = text.toUtf8();
+
     session().searchCopy({bytes.constData(), static_cast<std::size_t>(bytes.size())});
   } catch (const std::exception &error) {
     fail(error);
   }
+
   emit terminalChanged(copy->pane_id);
   emit copySearchChanged();
 }
@@ -120,11 +130,13 @@ void Application::stepScrollbackMatch(bool forward) {
   if (!copy) {
     return;
   }
+
   try {
     session().stepCopyMatch(forward);
   } catch (const std::exception &error) {
     fail(error);
   }
+
   emit terminalChanged(copy->pane_id);
   emit copySearchChanged();
 }
@@ -138,6 +150,7 @@ void Application::finishScrollbackSearch() {
 
 QVariantMap Application::copySearchState() const {
   const auto state = session().copySearch();
+
   return {
       {QStringLiteral("query"), QString::fromUtf8(state.query.data(), static_cast<qsizetype>(state.query.size()))},
       {QStringLiteral("searching"), state.searching},
@@ -156,7 +169,9 @@ QString Application::copySearchScope() const {
   if (pane == nullptr || *block >= pane->blocks.size()) {
     return {};
   }
+
   const auto command = pane->blocks[*block].command;
+
   return QString::fromUtf8(command.data(), static_cast<qsizetype>(command.size()));
 }
 
@@ -170,6 +185,7 @@ bool Application::promptText(std::uint64_t pane_id, const QString &text) {
   }
 
   const auto bytes = text.toUtf8();
+
   session().promptText(pane_id, {bytes.constData(), static_cast<std::size_t>(bytes.size())});
   publishPromptWrite();
   return true;

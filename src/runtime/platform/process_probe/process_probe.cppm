@@ -34,6 +34,7 @@ namespace telar::runtime {
 
 inline std::string_view processBasename(std::string_view path) noexcept {
   const auto slash = path.find_last_of("/\\");
+
   return path.substr(slash == std::string_view::npos ? 0 : slash + 1);
 }
 
@@ -48,6 +49,7 @@ public:
     }
 
     int count = 0;
+
     std::memcpy(&count, buffer.data(), sizeof(count));
     std::string_view remaining{buffer.data() + sizeof(count), buffer.size() - sizeof(count)};
     const auto executable_end = remaining.find('\0');
@@ -62,6 +64,7 @@ public:
 
     remaining.remove_prefix(first_argument);
     std::size_t length = 0;
+
     for (int index = 0; index < count; ++index) {
       const auto end = remaining.find('\0', length);
       if (end == std::string_view::npos) {
@@ -90,6 +93,7 @@ public:
     if (detected != AgentProvider::unknown) {
       return detected;
     }
+
     if (!genericRuntime(command) && !genericRuntime(*first)) {
       return AgentProvider::unknown;
     }
@@ -113,10 +117,12 @@ public:
 
     auto host = SessionHost::shared_server;
     auto remaining = arguments_;
+
     while (const auto argument = next(remaining)) {
       if (isCodexBatchArgument(*argument)) {
         return SessionHost::unknown;
       }
+
       if (*argument == codex_pane_argument) {
         host = SessionHost::pane;
       }
@@ -135,6 +141,7 @@ private:
     remaining.remove_prefix(first);
     const auto end = remaining.find('\0');
     const auto argument = remaining.substr(0, end);
+
     remaining = end == std::string_view::npos ? std::string_view{} : remaining.substr(end + 1);
     return argument;
   }
@@ -309,9 +316,11 @@ public:
   inline Result observe(const Request &request) noexcept {
     TELAR_TRACE("agents.verifyDescent");
     Result result;
+
     for (const auto &check : std::span{request.checks}.first(request.count)) {
       result.checks[result.count++] = {check, inspector_.lineage(check.peer, check.root)};
     }
+
     return result;
   }
 
@@ -347,6 +356,7 @@ struct ProcessCache {
     if (identified.name.view().empty()) {
       identified.name.assign("process");
     }
+
     hooks_installed = installed;
   }
 
@@ -422,6 +432,7 @@ public:
   inline Result observe(const Request &request) noexcept {
     TELAR_TRACE("process.observe");
     Result result;
+
     for (const auto &pane : std::span{request.panes}.first(request.count)) {
       const auto root = inspector_.snapshot(pane.root);
       const auto foreground_group = pane.discover_foreground && root ? root->terminal_foreground : pane.foreground;
@@ -431,6 +442,7 @@ public:
 
       const auto foreground = foreground_group == pane.root ? std::optional{root->identity} : inspector_.identity(foreground_group);
       auto &observation = result.panes[result.count];
+
       observation.request = pane;
       observation.request.foreground = foreground_group;
       observation.identity = foreground.value_or(ProcessIdentity{.pid = foreground_group, .process_group = foreground_group});
@@ -439,10 +451,12 @@ public:
       if (observation.inspected) {
         const auto preferred = pane.cache.preferred(foreground_group);
         const auto identified = inspector_.identifyGroup(foreground_group, preferred);
+
         observation.cache.update(foreground_group, identified, hooksInstalled(identified.provider, identified.session_host));
       }
 
       const auto &identified = observation.cache.identified;
+
       observation.provider = identified.provider;
       observation.agent_identity = identified.identity;
       observation.session_host = identified.session_host;

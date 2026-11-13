@@ -124,8 +124,10 @@ ConfigurationSource::ConfigurationSource(tbc::view<ApplicationAllocator &, tbc::
       commands_(nullptr, AllocationDeleter<runtime::config::RetainedCommandTabRegistry, ApplicationAllocator>{memory}) {
   debounce_.setSingleShot(true);
   constexpr int reload_debounce_ms = 100;
+
   debounce_.setInterval(reload_debounce_ms);
   constexpr int dependency_poll_ms = 1000;
+
   poll_.setInterval(dependency_poll_ms);
   connect(&poll_, &QTimer::timeout, this, &ConfigurationSource::poll);
   connect(&debounce_, &QTimer::timeout, this, &ConfigurationSource::reload);
@@ -133,6 +135,7 @@ ConfigurationSource::ConfigurationSource(tbc::view<ApplicationAllocator &, tbc::
   configuration_.themes.base = default_theme_values;
   configuration_.theme = projectTheme(configuration_.themes.base);
   const auto *style_hints = QGuiApplication::styleHints();
+
   appearance_ = hostAppearance(style_hints->colorScheme());
   connect(style_hints, &QStyleHints::colorSchemeChanged, this, [this](Qt::ColorScheme scheme) {
     updateAppearance(hostAppearance(scheme));
@@ -167,6 +170,7 @@ struct ContextCopy {
 
   [[nodiscard]] components::Context view() const {
     auto result = context;
+
     result.output = has_output ? std::optional{std::string_view{output.constData(), static_cast<std::size_t>(output.size())}} : std::nullopt;
     result.pane_title = {pane_title.constData(), static_cast<std::size_t>(pane_title.size())};
 
@@ -195,6 +199,7 @@ struct TrackedResult {
 template <typename Generation>
 QStringList loadedModules(const Generation &generation, std::size_t known) {
   QStringList names;
+
   if (generation.localModuleCount() != known) {
     generation.visitLocalModules([&](std::string_view name) {
       names.append(QString::fromUtf8(name.data(), static_cast<qsizetype>(name.size())));
@@ -215,8 +220,10 @@ void ConfigurationSource::run(Work work, Done<Value> done) {
   auto *generation = generation_.get();
   const auto number = generation->number();
   const auto known = static_cast<std::size_t>(watch_.modules.size());
+
   lua_.post([generation, known, work = std::move(work)]() mutable {
     TrackedResult<Value> result;
+
     try {
       result.value.emplace(work(*generation));
     } catch (const std::exception &error) {
@@ -228,6 +235,7 @@ void ConfigurationSource::run(Work work, Done<Value> done) {
     return result;
   }, [this, number, done = std::move(done)](LuaOutcome<TrackedResult<Value>> tracked) {
     LuaOutcome<Value> outcome;
+
     outcome.stale = configurationGeneration() != number;
     if (tracked.value) {
       outcome.value = std::move(tracked.value->value);
@@ -304,6 +312,7 @@ void ConfigurationSource::forgetElements(std::uint64_t instance) {
 void ConfigurationSource::renderPick(std::size_t index, const components::Context &context, Done<PickRender> done) {
   run<PickRender>([this, index, context = ContextCopy{context}](Generation &generation) {
     auto items = makeOwned<components::PickItems>(memory_);
+
     generation.renderPick(index, context.view(), *items);
 
     return items;
@@ -406,6 +415,7 @@ PluginInvocation ConfigurationSource::pluginInvocation(PluginActionDescription a
   const auto packages = plugins_->packages();
   const PluginCatalog catalog{generation_->number(), generation_->runtimeValues().plugins.configured(), packages};
   const auto &package = catalog.resolve(action);
+
   for (const auto &name : std::span{package.manifest.actions}.first(package.manifest.action_count)) {
     if (runtime::plugins::stableId(name.view()) == action.action) {
       return {.package = package, .action = name, .context = context, .configuration_generation = generation_->number(), .package_index = static_cast<std::size_t>(&package - packages.data())};
@@ -580,6 +590,7 @@ PluginPage ConfigurationSource::queryPlugins(const ClientCommand &request) {
   }
 
   const PluginCatalog catalog{generation_->number(), generation_->runtimeValues().plugins.configured(), plugins_->packages(), &plugin_overrides_};
+
   if (request.action == ClientAction::plugin_list) {
     return PluginQuery::list(catalog, request, query_buffer_);
   }
@@ -603,8 +614,10 @@ void ConfigurationSource::setPluginEnabled(const ClientCommand &request, bool en
   const PluginCatalog catalog{generation_->number(), generation_->runtimeValues().plugins.configured(), plugins_->packages()};
   const auto index = catalog.find(request.text);
   auto specification = catalog.specification(index);
+
   specification.enabled = enabled;
   const auto *package = catalog.package(index);
+
   plugin_overrides_.set(specification, package == nullptr ? std::nullopt : std::optional{runtime::plugins::stableId(package->manifest.id.view())});
   requestReload();
 }
@@ -622,6 +635,7 @@ void ConfigurationSource::retire() {
   }
 
   std::shared_ptr<Generation> previous{std::move(generation_)};
+
   lua_.post([previous = std::move(previous)]() mutable {
     previous.reset();
   }, [](LuaOutcome<void>) {});
@@ -641,6 +655,7 @@ void ConfigurationSource::schedule(bool force) {
 
   try {
     auto work = request(force);
+
     active_revision_ = work.revision;
 
     const auto future = QtConcurrent::run([memory = &memory_, work = std::move(work)] {
@@ -721,6 +736,7 @@ void ConfigurationSource::adopt(tbc::view<PreparedConfiguration, tbc::lt::a> res
   if (generation_) {
     next_generation_ = generation_->number() + 1;
   }
+
   module_root_ = std::move(result->directory);
   watch_.modules = std::move(result->modules);
   loaded_ = !path_.isEmpty();

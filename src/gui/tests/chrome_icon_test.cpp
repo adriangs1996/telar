@@ -149,20 +149,25 @@ private:
     const auto *gui_face = &gui_fonts->face(fonts::FontRole::regular);
     const std::jthread worker{[source, gui_face, &result] {
       const auto render_fonts = ResidentFonts::shared(source);
+
       result.set_value(&render_fonts->face(fonts::FontRole::regular) != gui_face);
     }};
+
     QVERIFY(completed.get());
   }
 
   Q_SLOT static void differentSamplersCannotBatchTogether() {
     AtlasTexture nearest;
     AtlasTexture linear;
+
     nearest.setFiltering(QSGTexture::Nearest);
     linear.setFiltering(QSGTexture::Linear);
     const AlphaMaskMaterial first{nearest, Color::rgb(shade_subtext)};
     const AlphaMaskMaterial second{linear, Color::rgb(shade_subtext)};
+
     QVERIFY(first.compare(&second) != 0);
     const AlphaMaskMaterial stable{nearest, Color::rgb(shade_subtext), AlphaMaskSampling::stable_nearest};
+
     QVERIFY(first.type() != stable.type());
     QVERIFY(first.compare(&stable) != 0);
   }
@@ -170,6 +175,7 @@ private:
   Q_SLOT static void adjacentColorsMatchIsolatedRenderingAfterRecoloring() {
     QQmlEngine engine;
     QQuickWindow window;
+
     window.resize(window_size);
     window.setMinimumSize(window_size);
     window.setMaximumSize(window_size);
@@ -177,6 +183,7 @@ private:
     const QVariantMap properties{{QStringLiteral("glyph"), QStringLiteral("\uf07b")}, {QStringLiteral("pixelSize"), title_pixels}, {QStringLiteral("color"), QColor{Qt::white}}};
     auto first = createChrome(engine, QStringLiteral("ChromeIcon"), properties);
     auto second = createChrome(engine, QStringLiteral("ChromeIcon"), properties);
+
     first->setParentItem(window.contentItem());
     second->setParentItem(window.contentItem());
     first->setSize(status_size);
@@ -184,11 +191,13 @@ private:
     constexpr qreal first_inset = 16.25;
     constexpr qreal second_inset = 16.5;
     constexpr qreal half = 0.5;
+
     first->setPosition({first_inset, first_inset});
     second->setPosition({(window_size.width() * half) + second_inset, first_inset});
     QVERIFY(showComponentWindow(window, wait_ms));
     const std::array first_colors{QColor{255, 0, 0, 191}, QColor{0, 255, 0, 127}};
     const std::array second_colors{QColor{0, 0, 255, 127}, QColor{255, 255, 0, 191}};
+
     for (std::size_t index = 0; index < first_colors.size(); ++index) {
       QVERIFY(first->setProperty("color", first_colors[index]));
       QVERIFY(second->setProperty("color", second_colors[index]));
@@ -196,19 +205,23 @@ private:
       second->setVisible(false);
       QVERIFY(waitForSynchronizedFrame(window, wait_ms));
       const auto first_only = window.grabWindow();
+
       first->setVisible(false);
       second->setVisible(true);
       QVERIFY(waitForSynchronizedFrame(window, wait_ms));
       const auto second_only = window.grabWindow();
+
       QVERIFY(!first_only.isNull() && first_only != second_only);
       first->setVisible(true);
       QVERIFY(waitForSynchronizedFrame(window, wait_ms));
       const auto together = window.grabWindow();
+
       QCOMPARE(together.size(), first_only.size());
       QCOMPARE(together.size(), second_only.size());
       const auto half_width = together.width() / 2;
       const QRect left{0, 0, half_width, together.height()};
       const QRect right{half_width, 0, together.width() - half_width, together.height()};
+
       QCOMPARE(together.copy(left), first_only.copy(left));
       QCOMPARE(together.copy(right), second_only.copy(right));
     }
@@ -217,8 +230,10 @@ private:
   Q_SLOT static void qmlIconNeedsNoApplicationController() {
     QQmlEngine engine;
     const auto icon = createChrome(engine, QStringLiteral("ChromeIcon"), {{QStringLiteral("glyph"), QStringLiteral("?")}, {QStringLiteral("pixelSize"), title_pixels}, {QStringLiteral("color"), QColor{shade_overlay}}});
+
     icon->setSize(status_size);
     QQuickWindow window;
+
     icon->setParentItem(window.contentItem());
     window.resize(window_size);
     window.show();
@@ -228,19 +243,23 @@ private:
 
   static void verifyReference(const IconReference &expected) {
     const QImage golden{QStringLiteral(":/telar/test-icons/") + expected.filename};
+
     QVERIFY(!golden.isNull());
     QQuickWindow window;
+
     window.setColor(QColor{shade_background});
     window.resize(window_size);
     const auto scale = window.effectiveDevicePixelRatio();
     QQuickItem ancestor{window.contentItem()};
     NativeChromeIcon icon{&ancestor};
+
     icon.setPosition(QPointF{physical_origin} / scale);
     icon.setSize(QSizeF{expected.size} / scale);
     icon.setPixelSize(expected.pixel_size / scale);
     icon.setColor(expected.color);
     icon.setGlyph(expected.glyph);
     const QSignalSpy frames{&window, &QQuickWindow::frameSwapped};
+
     window.show();
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(icon.available(), wait_ms);
@@ -250,12 +269,14 @@ private:
     const auto retain_mismatch = qScopeGuard([&] {
       if (QTest::currentTestFailed() && !last_mismatch.isNull()) {
         QTemporaryDir diagnostic;
+
         diagnostic.setAutoRemove(false);
         QVERIFY(last_mismatch.save(diagnostic.filePath(QStringLiteral("actual.png"))));
         QVERIFY(golden.save(diagnostic.filePath(QStringLiteral("expected.png"))));
         qInfo() << "Final icon pixel mismatch:" << diagnostic.path();
       }
     });
+
     const auto matches = [&](QPoint origin) {
       const auto image = window.grabWindow();
       const auto crop = image.copy(QRect{origin, expected.size});
@@ -266,9 +287,11 @@ private:
 
       return same;
     };
+
     const auto actual = window.grabWindow().copy(QRect{physical_origin, expected.size}).convertToFormat(QImage::Format_RGB32);
     if (!matchesReference(actual, golden, channel_tolerance)) {
       QTemporaryDir diagnostic;
+
       diagnostic.setAutoRemove(false);
       QVERIFY(actual.save(diagnostic.filePath(QStringLiteral("actual.png"))));
       QVERIFY(golden.save(diagnostic.filePath(QStringLiteral("expected.png"))));
@@ -279,6 +302,7 @@ private:
 
     ancestor.setX(1 / scale);
     const QPoint moved{physical_origin.x() + 1, physical_origin.y()};
+
     QTRY_VERIFY_WITH_TIMEOUT(matches(moved), wait_ms);
     ancestor.setX(0);
     QTRY_VERIFY_WITH_TIMEOUT(matches(physical_origin), wait_ms);

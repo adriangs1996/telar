@@ -14,19 +14,23 @@ class TBC_SHARED MappedImages {
 public:
   bool adopt(const void *placeholder, MappedRegion &pixels) noexcept {
     const std::lock_guard lock{mutex_};
+
     if (placeholder == nullptr || !pixels) {
       return false;
     }
 
     Entry *available = nullptr;
+
     for (auto &entry : entries_) {
       if (entry.placeholder == placeholder) {
         return false;
       }
+
       if (entry.placeholder == nullptr && available == nullptr) {
         available = &entry;
       }
     }
+
     if (available == nullptr) {
       return false;
     }
@@ -43,6 +47,7 @@ public:
     }
 
     const std::lock_guard lock{mutex_};
+
     for (auto &entry : entries_) {
       if (entry.placeholder == placeholder) {
         entry.placeholder = nullptr;
@@ -50,6 +55,7 @@ public:
         return std::move(entry.pixels);
       }
     }
+
     return {};
   }
 
@@ -60,11 +66,13 @@ public:
     }
 
     const std::lock_guard lock{mutex_};
+
     for (const auto &entry : entries_) {
       if (entry.placeholder == bytes.data()) {
         return entry.pixels.bytes();
       }
     }
+
     return bytes;
   }
 

@@ -57,6 +57,7 @@ public:
 
   inline Event feed(std::span<const Byte> bytes) noexcept {
     Event event;
+
     for (const auto byte : bytes) {
       switch (state_) {
       case State::ground:
@@ -72,6 +73,7 @@ public:
         if (byte == escape) {
           state_ = State::paste_escape;
         }
+
         break;
       case State::paste_escape:
         beginSequence(byte, true);
@@ -135,6 +137,7 @@ private:
       } else {
         typed_exact_ = false;
       }
+
       break;
     }
   }
@@ -234,11 +237,13 @@ public:
       }
 
       const auto byte = bytes[offset];
+
       switch (parser_) {
       case ParserState::ground:
         if (byte == escape) {
           parser_ = ParserState::escape;
         }
+
         break;
       case ParserState::escape:
         parser_ = byte == ']' ? ParserState::osc : ParserState::ground;
@@ -247,6 +252,7 @@ public:
           length_ = 0;
           overflow_ = false;
         }
+
         break;
       case ParserState::osc:
         if (byte == bell) {
@@ -259,12 +265,14 @@ public:
         } else {
           overflow_ = true;
         }
+
         break;
       case ParserState::osc_escape:
         parser_ = byte == escape ? ParserState::escape : ParserState::ground;
         if (byte == '\\') {
           finishSequence(time, sink, offset + 1);
         }
+
         break;
       }
     }
@@ -352,6 +360,7 @@ private:
       if (std::string_view{bytes_.data(), length_}.starts_with("6973;")) {
         names_.reset();
       }
+
       return;
     }
 
@@ -359,6 +368,7 @@ private:
     const auto separator = sequence.find(';');
     const auto code = sequence.substr(0, separator);
     const auto body = separator == std::string_view::npos ? std::string_view{} : sequence.substr(separator + 1);
+
     if (code == "133") {
       semantic(body, time, sink, end);
     } else if (code == "7") {
@@ -386,6 +396,7 @@ private:
     if (!token_) {
       return false;
     }
+
     const auto signature = option(body, "telar=");
     if (signature.empty()) {
       const auto token = ShellToken::parse(option(body, "token="));
@@ -400,27 +411,35 @@ private:
         nested_running_ = std::exchange(running_, false);
         return true;
       }
+
       return false;
     }
+
     if (!token_->signs(signature)) {
       return false;
     }
+
     if (body.find(";names=") != std::string_view::npos) {
       // The last option, so its names may be anything but the sequence's terminators.
       const auto names = body.substr(body.find(";names=") + 7);
+
       names_ = std::make_shared<const std::string>(names);
       return false;
     }
+
     if (const auto nonce = option(body, "nest="); !nonce.empty()) {
       nest_ = ShellToken::parse(nonce);
       return false;
     }
+
     std::array<char, path_capacity> decoded;
+
     if (const auto path = option(body, "path="); !path.empty()) {
       if (const auto count = percentDecode(path, decoded)) {
         path_.assign({decoded.data(), *count});
       }
     }
+
     return false;
   }
 
@@ -436,11 +455,14 @@ private:
       if (entry.starts_with(key)) {
         return entry.substr(key.size());
       }
+
       if (end == std::string_view::npos) {
         break;
       }
+
       options.remove_prefix(end + 1);
     }
+
     return {};
   }
 
@@ -448,25 +470,30 @@ private:
   template <std::size_t Capacity>
   inline static std::optional<std::size_t> percentDecode(std::string_view encoded, std::array<char, Capacity> &output) noexcept {
     std::size_t count = 0;
+
     for (std::size_t index = 0; index < encoded.size(); ++index) {
       if (count == output.size()) {
         return std::nullopt;
       }
+
       if (encoded[index] == '%') {
         if (encoded.size() - index < 3) {
           return std::nullopt;
         }
+
         unsigned byte = 0;
         const auto converted = std::from_chars(encoded.data() + index + 1, encoded.data() + index + 3, byte, 16);
         if (converted.ec != std::errc{} || converted.ptr != encoded.data() + index + 3) {
           return std::nullopt;
         }
+
         output[count++] = static_cast<char>(byte);
         index += 2;
       } else {
         output[count++] = encoded[index];
       }
     }
+
     return count;
   }
 
@@ -475,6 +502,7 @@ private:
     const auto separator = body.find(';');
     const auto action = body.substr(0, separator);
     const auto options = separator == std::string_view::npos ? std::string_view{} : body.substr(separator + 1);
+
     if (token_) {
       const auto signature = option(options, "telar=");
       if (token_->signs(signature)) {
@@ -485,6 +513,7 @@ private:
           zone_ = Zone::output;
           note(sink, 'U', end);
         }
+
         if (action == "A" || action == "D") {
           nest_.reset();
         }
@@ -496,6 +525,7 @@ private:
     if (action.size() == 1 && (action == "A" || action == "B" || action == "C" || action == "D")) {
       note(sink, action.front(), end);
     }
+
     if (action == "A" || action == "P") {
       TELAR_DIAGNOSTIC(diagnostics::accumulate(metrics_.prompt_markers));
       if (running_) {
@@ -532,13 +562,16 @@ private:
     if (negative || value.starts_with('+')) {
       value.remove_prefix(1);
     }
+
     const auto limit = static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max()) + negative;
     const auto parsed = unsignedNumber<std::uint32_t>(value, limit);
     if (!parsed) {
       return std::nullopt;
     }
+
     const auto magnitude = *parsed;
     const auto signed_value = negative ? -static_cast<std::int64_t>(magnitude) : magnitude;
+
     return static_cast<int>(signed_value);
   }
 
@@ -553,23 +586,29 @@ private:
       if (slash == std::string_view::npos) {
         return;
       }
+
       std::array<char, directory_capacity> decoded;
       const auto count = percentDecode(remainder.substr(slash), decoded);
+
       if (!remote_) {
         if (count) {
           directory_.assign({decoded.data(), *count});
         }
+
         return;
       }
+
       // A remote shell's report names a place on its host, which clients show as text.
       const auto printable = [](char byte) { return static_cast<unsigned char>(byte) >= 0x20 && byte != 0x7f; };
       const auto host = remainder.substr(0, slash);
       if (host.size() <= host_capacity && std::ranges::all_of(host, [&](char byte) { return byte != ' ' && printable(byte); })) {
         host_.assign(host);
       }
+
       if (count && std::ranges::all_of(std::string_view{decoded.data(), *count}, printable)) {
         remote_directory_.assign({decoded.data(), *count});
       }
+
       return;
     }
   }
@@ -627,6 +666,7 @@ public:
 
     if (length_ + bytes.size() > capacity) {
       const auto keep = std::min(capacity / 2, capacity - bytes.size());
+
       std::move(bytes_.begin() + length_ - keep, bytes_.begin() + length_, bytes_.begin());
       length_ = keep;
     }
@@ -662,12 +702,14 @@ public:
   inline explicit CommandSelection(Terminal<Memory> &terminal)
       : terminal_(terminal) {
     const auto position = point(GHOSTTY_POINT_TAG_ACTIVE, cursor());
+
     checkGhostty(ghostty_terminal_grid_ref_track(terminal.handle(), position, anchor_.output()));
     checkGhostty(ghostty_terminal_grid_ref_track(terminal.handle(), position, right_prompt_.output()));
   }
 
   inline bool primary() const {
     GhosttyTerminalScreen screen{};
+
     checkGhostty(ghostty_terminal_get(terminal_.handle(), GHOSTTY_TERMINAL_DATA_ACTIVE_SCREEN, &screen));
     return screen == GHOSTTY_TERMINAL_SCREEN_PRIMARY;
   }
@@ -688,6 +730,7 @@ public:
     const auto position = cursor();
     const auto current = reference(GHOSTTY_POINT_TAG_ACTIVE, position);
     auto start = position.x;
+
     if (typed && !typed->empty() && typed->size() <= position.x && matches(current, *typed)) {
       start -= typed->size();
     }
@@ -727,10 +770,12 @@ public:
 
     finish = selectionFinish(start, finish);
     auto selection = ghosttySized<GhosttySelection>();
+
     selection.start = *anchor;
     selection.end = reference(GHOSTTY_POINT_TAG_SCREEN, finish);
     destination.resize(maximum_bytes + utf8_maximum_width);
     PrefixWriter writer{destination};
+
     formatTerminalSelection(terminal_, selection, true, TrailingSpaces::trimmed, GhosttyWriter{.write = PrefixWriter::receive, .userdata = &writer});
     destination.resize(writer.length);
     if (destination.empty()) {
@@ -739,6 +784,7 @@ public:
 
     const bool truncated = writer.overflow || destination.size() > maximum_bytes;
     const std::string_view text{reinterpret_cast<const char *>(destination.data()), destination.size()};
+
     destination.resize(utf8Prefix(text, maximum_bytes).size());
     return truncated;
   }
@@ -757,6 +803,7 @@ private:
     inline static bool receive(void *context, const Byte *bytes, std::size_t count) noexcept {
       auto &writer = *static_cast<PrefixWriter *>(context);
       const auto copied = std::min(count, writer.destination.size() - writer.length);
+
       std::copy_n(bytes, copied, writer.destination.data() + writer.length);
       writer.length += copied;
       writer.overflow |= copied != count;
@@ -771,6 +818,7 @@ private:
   inline GhosttyPointCoordinate cursor() const {
     std::uint16_t column = 0;
     std::uint16_t row = 0;
+
     checkGhostty(ghostty_terminal_get(terminal_.handle(), GHOSTTY_TERMINAL_DATA_CURSOR_X, &column));
     checkGhostty(ghostty_terminal_get(terminal_.handle(), GHOSTTY_TERMINAL_DATA_CURSOR_Y, &row));
     return {column, row};
@@ -797,6 +845,7 @@ private:
 
   inline GhosttyPointCoordinate coordinates(const GhosttyGridRef &reference) const {
     GhosttyPointCoordinate result{};
+
     checkGhostty(ghostty_terminal_point_from_grid_ref(terminal_.handle(), &reference, GHOSTTY_POINT_TAG_SCREEN, &result));
     return result;
   }
@@ -812,6 +861,7 @@ private:
   inline static GhosttyCell cell(GhosttyGridRef reference, std::uint16_t column) {
     reference.x = column;
     GhosttyCell result = 0;
+
     checkGhostty(ghostty_grid_ref_cell(&reference, &result));
     return result;
   }
@@ -829,6 +879,7 @@ private:
 
   inline static bool matches(GhosttyGridRef cursor, std::string_view typed) {
     const auto start = cursor.x - typed.size();
+
     for (std::size_t index = 0; index < typed.size(); ++index) {
       const auto value = cell(cursor, start + index);
       const auto codepoint = cellHasText(value) ? cell_layout::codepoint(value) : ' ';
@@ -842,6 +893,7 @@ private:
 
   inline std::uint64_t hash(GhosttyGridRef start) const {
     auto result = hash_basis;
+
     for (auto column = start.x; column < columns(); ++column) {
       result = (result ^ cell(start, column)) * hash_prime;
     }
@@ -853,6 +905,7 @@ private:
     right_prompt_active_ = false;
     auto anchor = *snapshot(anchor_);
     unsigned blank_columns = 0;
+
     for (auto column = anchor.x; column < columns(); ++column) {
       if (!cellHasText(cell(anchor, column))) {
         ++blank_columns;
@@ -916,10 +969,12 @@ public:
       if (running_) {
         finish(CommandBlockState::interrupted, 0, now);
       }
+
       // The pane's shell is back without saying how ssh ended.
       if (closing_) {
         closeSession(CommandBlockState::interrupted, 0, now);
       }
+
       prompt_ = selection_.primary() ? track() : std::nullopt;
       break;
     case 'B':
@@ -932,6 +987,7 @@ public:
       if (running_) {
         finish(CommandBlockState::succeeded, 0, now);
       }
+
       break;
     case 'N':
       // The running command, ssh, now hosts the remote shell, whose commands follow it.
@@ -940,6 +996,7 @@ public:
         entry(count_ - 1).nest = CommandBlockNest::opens;
         ++revision_;
       }
+
       running_ = false;
       prompt_.reset();
       nested_ = true;
@@ -949,6 +1006,7 @@ public:
       if (running_) {
         finish(CommandBlockState::interrupted, 0, now);
       }
+
       prompt_.reset();
       nested_ = false;
       closing_ = true;
@@ -962,6 +1020,7 @@ public:
   inline void finished(std::optional<int> status, std::chrono::steady_clock::time_point now) {
     const auto code = status.value_or(0);
     const auto state = code == 0 ? CommandBlockState::succeeded : CommandBlockState::failed;
+
     if (closing_) {
       closeSession(state, code, now);
     } else if (running_) {
@@ -977,25 +1036,31 @@ public:
     if (count_ == 0 || !selection_.primary()) {
       return;
     }
+
     if (!reflowed) {
       const auto oldest = row(entry(0).anchor);
       if (oldest && *oldest == entry(0).row) {
         return;
       }
     }
+
     std::size_t kept = 0;
+
     for (std::size_t index = 0; index < count_; ++index) {
       auto &current = entry(index);
       const auto position = row(current.anchor);
       if (!position) {
         continue;
       }
+
       current.row = *position;
       if (kept != index) {
         std::swap(entry(kept), current);
       }
+
       ++kept;
     }
+
     count_ = kept;
     ++revision_;
   }
@@ -1007,6 +1072,7 @@ public:
   inline PaneBlocks message(std::uint64_t pane_id, std::array<CommandBlock, capacity> &storage) const {
     for (std::size_t index = 0; index < count_; ++index) {
       const auto &current = entry(index);
+
       storage[index] = CommandBlock{.row = current.row,
                                     .rows = current.rows,
                                     .lines = current.lines,
@@ -1016,6 +1082,7 @@ public:
                                     .command = current.command.view(),
                                     .nest = current.nest};
     }
+
     return PaneBlocks{.pane_id = pane_id, .blocks = std::span<const CommandBlock>{storage}.first(count_)};
   }
 
@@ -1033,6 +1100,7 @@ private:
         release();
         handle_ = std::exchange(other.handle_, nullptr);
       }
+
       return *this;
     }
     inline ~TrackedReference() {
@@ -1082,12 +1150,14 @@ private:
   // A reference that follows the cursor's row as the terminal scrolls.
   inline std::optional<TrackedReference> track() {
     std::uint16_t row = 0;
+
     checkGhostty(ghostty_terminal_get(terminal_.handle(), GHOSTTY_TERMINAL_DATA_CURSOR_Y, &row));
     TrackedReference tracked;
     const GhosttyPoint point{.tag = GHOSTTY_POINT_TAG_ACTIVE, .value = {.coordinate = {0, row}}};
     if (ghostty_terminal_grid_ref_track(terminal_.handle(), point, tracked.output()) != GHOSTTY_SUCCESS) {
       return std::nullopt;
     }
+
     return tracked;
   }
 
@@ -1097,10 +1167,12 @@ private:
     if (ghostty_tracked_grid_ref_snapshot(tracked.get(), &reference) != GHOSTTY_SUCCESS) {
       return std::nullopt;
     }
+
     GhosttyPointCoordinate coordinate{};
     if (ghostty_terminal_point_from_grid_ref(terminal_.handle(), &reference, GHOSTTY_POINT_TAG_SCREEN, &coordinate) != GHOSTTY_SUCCESS) {
       return std::nullopt;
     }
+
     return coordinate.y;
   }
 
@@ -1110,16 +1182,20 @@ private:
     if (!prompt || !selection_.primary()) {
       return;
     }
+
     const auto first = row(*prompt);
     const auto output = track();
     const auto last = output ? row(*output) : std::nullopt;
     if (!first || !last || *last <= *first || !selection_.capture(text_)) {
       return;
     }
+
     std::string_view text{reinterpret_cast<const char *>(text_.data()), text_.size()};
+
     while (text.ends_with('\n')) {
       text.remove_suffix(1);
     }
+
     const auto line = text.substr(0, text.find('\n'));
     if (line.find_first_not_of(' ') == std::string_view::npos) {
       return;
@@ -1129,7 +1205,9 @@ private:
       first_ = (first_ + 1) % capacity;
       --count_;
     }
+
     auto &added = entry(count_++);
+
     added.anchor = std::move(*prompt);
     added.row = *first;
     added.rows = static_cast<std::uint16_t>(std::min<std::uint32_t>(*last - *first, std::numeric_limits<std::uint16_t>::max()));
@@ -1142,6 +1220,7 @@ private:
     // Display text: control bytes the grid may hold become blanks.
     std::array<char, command_bytes> clean;
     const auto kept = utf8Prefix(line, command_bytes);
+
     std::ranges::transform(kept, clean.begin(), [](char byte) { return static_cast<unsigned char>(byte) < 0x20 || byte == 0x7f ? ' ' : byte; });
     added.command.assign({clean.data(), kept.size()});
     running_ = true;
@@ -1170,6 +1249,7 @@ private:
     block.state = state;
     block.status = status;
     const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - block.started).count();
+
     block.duration_ms = static_cast<std::uint32_t>(std::clamp<std::int64_t>(elapsed, 0, std::numeric_limits<std::uint32_t>::max()));
     ++revision_;
   }
@@ -1213,10 +1293,12 @@ public:
   inline std::size_t input(const CommandByteObservation &observation, Sink &sink) {
     TELAR_TRACE("history.captureInput");
     const bool shell_foreground = observation.shell_foreground.value_or(zones_.editing());
+
     zones_.input(observation.bytes);
     if (observation.bytes.empty()) {
       return 0;
     }
+
     if (!shell_foreground || !selection_.primary()) {
       submitted_.clear();
       return 0;
@@ -1225,6 +1307,7 @@ public:
     if (phase_ == Phase::running) {
       TELAR_DIAGNOSTIC(diagnostics::accumulate(metrics_.next_input_completions));
       auto finished = observation.time;
+
       if (last_output_ns_ >= started_.nanoseconds) {
         finished.nanoseconds = last_output_ns_;
       }
@@ -1269,6 +1352,7 @@ public:
       const bool committed = boundary != observation.bytes.end();
       const auto count = committed ? static_cast<std::size_t>(boundary - observation.bytes.begin()) + 1 : observation.bytes.size();
       const auto part = observation.bytes.first(count);
+
       terminal_.feed(part);
       terminal_.discardResponses();
       if (committed) {
@@ -1342,6 +1426,7 @@ public:
 #if TELAR_DIAGNOSTICS
   inline diagnostics::CommandCaptureCounters takeMetrics() noexcept {
     auto result = std::exchange(metrics_, {});
+
     result.merge(zones_.takeMetrics());
     return result;
   }
@@ -1391,6 +1476,7 @@ private:
     }
 
     CompletionRelay<Sink> relay{*this, sink};
+
     zones_.feed(observation.bytes, observation.time, relay);
     if (phase_ != Phase::running || !observation.shell_foreground) {
       return;

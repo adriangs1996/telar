@@ -34,9 +34,11 @@ public:
     }
 
     std::size_t size = 0;
+
     for (const auto &argument : arguments) {
       size += argument.size() + 1;
     }
+
     if (arguments.size() > 64 || size > 128 * 1024) {
       throw EncodingError{"Pane launch exceeds checkpoint limits"};
     }
@@ -46,6 +48,7 @@ public:
       bytes_.append(argument);
       bytes_.push_back('\0');
     }
+
     count_ = static_cast<std::uint16_t>(arguments.size());
   }
 

@@ -32,6 +32,7 @@ struct GraphicsQuery {
 
   static std::optional<GraphicsQuery> parse(std::string_view header, bool has_payload) noexcept {
     bool query = false;
+
     return parse(header, has_payload, query);
   }
 
@@ -44,26 +45,32 @@ struct GraphicsQuery {
     std::array<std::optional<std::uint32_t>, static_cast<std::size_t>(Field::ignored)> values;
     const bool valid = GraphicsHeader::scan(header, has_payload, [&](std::uint8_t key, std::string_view text) noexcept {
       const auto value = GraphicsHeader::value(key, text);
+
       if (key == 'a') {
         query = value == static_cast<std::uint32_t>('q');
       }
+
       if (!value) {
         values_valid = false;
         return true;
       }
+
       const auto field = parameterField(key);
       if (field != Field::ignored) {
         values[static_cast<std::size_t>(field)] = *value;
       }
+
       return true;
     });
     if (!valid || !values_valid) {
       return std::nullopt;
     }
+
     const auto number = [&](Field field, std::uint32_t fallback = 0) { return values[static_cast<std::size_t>(field)].value_or(fallback); };
     if (number(Field::action) != 'q') {
       return std::nullopt;
     }
+
     result.image = number(Field::image);
     result.number = number(Field::number);
     result.placement = number(Field::placement);
@@ -73,6 +80,7 @@ struct GraphicsQuery {
     if (result.format == 0) {
       result.format = 32;
     }
+
     result.quiet = number(Field::quiet);
     result.offset = number(Field::offset);
     result.length = number(Field::length);
@@ -80,11 +88,13 @@ struct GraphicsQuery {
     if (medium > UINT8_MAX || std::string_view{"dfst"}.find(static_cast<char>(medium)) == std::string_view::npos) {
       return std::nullopt;
     }
+
     result.medium = static_cast<char>(medium);
     const auto compression = values[static_cast<std::size_t>(Field::compression)];
     if (compression && *compression != 'z') {
       return std::nullopt;
     }
+
     result.compressed = compression.has_value();
     return result;
   }
@@ -126,9 +136,11 @@ public:
     const auto separator = body.find(';');
     bool query = false;
     const auto request = GraphicsQuery::parse(body.substr(1, separator == std::string_view::npos ? separator : separator - 1), separator != std::string_view::npos, query);
+
     if (!query) {
       return false;
     }
+
     if (!enabled || image_limit_ == 0 || !request || request->image == 0) {
       return true;
     }
@@ -137,13 +149,16 @@ public:
     if (payload.size() > maximum_encoded_bytes) {
       return true;
     }
+
     std::string_view result;
+
     try {
       decoded_.resize(payload.size() / 4 * 3 + (payload.size() % 4 == 0 ? 0 : 3));
       const auto decoded_size = decodeGraphicsPayload(payload, decoded_);
       if (!decoded_size) {
         return true;
       }
+
       decoded_.resize(*decoded_size);
       result = request->number != 0 ? "EINVAL: image ID and number are mutually exclusive" : validate(*request);
     } catch (const std::bad_alloc &) {
@@ -151,6 +166,7 @@ public:
     } catch (const std::length_error &) {
       result = "ENOMEM: out of memory";
     }
+
     if (result == invalid_encoding || request->quiet > 1 || (request->quiet == 1 && result == "OK")) {
       return true;
     }
@@ -173,18 +189,22 @@ private:
     auto *next = std::copy(image_prefix.begin(), image_prefix.end(), encoded.data());
     const auto identifier = [&](std::uint32_t value) {
       const auto formatted = std::to_chars(next, encoded.data() + maximum_prefix_bytes, value);
+
       assert(formatted.ec == std::errc{});
       next = formatted.ptr;
     };
+
     identifier(request.image);
     if (request.number != 0) {
       next = std::copy(number_prefix.begin(), number_prefix.end(), next);
       identifier(request.number);
     }
+
     if (request.placement != 0) {
       next = std::copy(placement_prefix.begin(), placement_prefix.end(), next);
       identifier(request.placement);
     }
+
     *next++ = ';';
 
     // Result strings are internal diagnostics. Keep the bound explicit if a
@@ -192,6 +212,7 @@ private:
     if (result.size() > static_cast<std::size_t>(encoded.data() + encoded.size() - next) - terminator.size()) {
       throw std::length_error{"Graphics query reply exceeds its configured limit"};
     }
+
     next = std::copy(result.begin(), result.end(), next);
     next = std::copy(terminator.begin(), terminator.end(), next);
     reply.append({encoded.data(), static_cast<std::size_t>(next - encoded.data())});
@@ -201,12 +222,15 @@ private:
     if (request.format != 24 && request.format != 32 && request.format != 100) {
       return "EINVAL: unsupported format";
     }
+
     if (request.format != 100 && (request.width > maximum_dimension || request.height > maximum_dimension)) {
       return "EINVAL: dimensions too large";
     }
+
     if (request.medium != 'd') {
       std::optional<GraphicsChildFile> file;
       std::array<std::uint8_t, PATH_MAX + 1> name;
+
       if (request.medium == 'f' || request.medium == 't') {
         file = GraphicsChildFile::openDecoded(decoded_);
       } else {
@@ -216,15 +240,19 @@ private:
           file = GraphicsChildFile{std::move(descriptor), static_cast<std::uint64_t>(metadata.st_size)};
         }
       }
+
       if (!file || request.offset > file->size) {
         return "EINVAL: invalid data";
       }
+
       GraphicsTemporaryPath temporary{*file};
+
       if (request.medium == 't') {
         if (const auto error = temporary.authorize(); !error.empty()) {
           return error;
         }
       }
+
       struct SharedCleanup {
         const char *name;
         ~SharedCleanup() {
@@ -233,13 +261,17 @@ private:
           }
         }
       } shared{request.medium == 's' ? reinterpret_cast<const char *>(name.data()) : nullptr};
+
       auto count = request.length != 0 ? request.length : file->size - request.offset;
+
       if (request.medium == 's' && request.length == 0 && !request.compressed && request.format != 100) {
         count = static_cast<std::uint64_t>(request.width) * request.height * (request.format == 24 ? 3 : 4);
       }
+
       if (count > image_limit_ || count > file->size - request.offset) {
         return "EINVAL: invalid data";
       }
+
       decoded_.resize(static_cast<std::size_t>(count));
       const bool read = request.medium == 's' ? GraphicsChildSharedMemory::read(file->descriptor.get(), decoded_, request.offset) : file->read(decoded_, request.offset);
       if (!read) {
@@ -248,36 +280,45 @@ private:
     }
 
     std::span<const std::uint8_t> data = decoded_;
+
     if (request.compressed) {
       z_stream stream{};
+
       stream.opaque = &memory_;
       stream.zalloc = &allocateInflate;
       stream.zfree = &freeInflate;
       if (::inflateInit(&stream) != Z_OK) {
         return "EINVAL: decompression failed";
       }
+
       struct Inflater {
         z_stream &stream;
         ~Inflater() { ::inflateEnd(&stream); }
       } owner{stream};
+
       stream.next_in = const_cast<Bytef *>(data.data());
       stream.avail_in = static_cast<uInt>(data.size());
       inflated_.clear();
       int status = Z_OK;
+
       while (status == Z_OK) {
         if (inflated_.size() == image_limit_) {
           return "EINVAL: dimensions too large";
         }
+
         const auto start = inflated_.size();
+
         inflated_.resize(std::min(image_limit_, start + inflate_chunk_bytes));
         stream.next_out = inflated_.data() + start;
         stream.avail_out = static_cast<uInt>(inflated_.size() - start);
         status = ::inflate(&stream, Z_NO_FLUSH);
         inflated_.resize(inflated_.size() - stream.avail_out);
       }
+
       if (status != Z_STREAM_END) {
         return "EINVAL: decompression failed";
       }
+
       data = inflated_;
     }
 
@@ -286,19 +327,24 @@ private:
       if (!decodePngImage(allocator_.get(), data, image, image_limit_)) {
         return "EINVAL: invalid data";
       }
+
       ghostty_free(allocator_.get(), image.data, image.data_len);
       return image.width > maximum_dimension || image.height > maximum_dimension ? "EINVAL: dimensions too large" : "OK";
     }
+
     if (request.width == 0 || request.height == 0) {
       return "EINVAL: dimensions required";
     }
+
     if (request.width > maximum_dimension || request.height > maximum_dimension) {
       return "EINVAL: dimensions too large";
     }
+
     const auto bytes = static_cast<std::uint64_t>(request.width) * request.height * (request.format == 24 ? 3 : 4);
     if (bytes > image_limit_) {
       return "EINVAL: dimensions too large";
     }
+
     return data.size() != bytes ? "EINVAL: invalid data" : "OK";
   }
 
@@ -315,11 +361,13 @@ private:
     if (size != 0 && count > (SIZE_MAX - sizeof(InflateAllocation)) / size) {
       return nullptr;
     }
+
     const auto bytes = static_cast<std::size_t>(count) * size + sizeof(InflateAllocation);
     auto *allocation = static_cast<InflateAllocation *>(static_cast<QueryMemory *>(context)->allocate(bytes, alignof(InflateAllocation)));
     if (allocation == nullptr) {
       return nullptr;
     }
+
     allocation->bytes = bytes;
     return allocation + 1;
   }
@@ -327,6 +375,7 @@ private:
   static void freeInflate(void *context, void *pointer) noexcept {
     if (pointer != nullptr) {
       auto *allocation = static_cast<InflateAllocation *>(pointer) - 1;
+
       static_cast<QueryMemory *>(context)->deallocate(allocation, allocation->bytes, alignof(InflateAllocation));
     }
   }

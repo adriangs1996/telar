@@ -68,10 +68,12 @@ constexpr std::uint8_t invalid_cpu = 101;
 void revisionsKeepTheLatestSampleAndHistory() {
   HostMetrics metrics;
   CpuHistory::Samples buffer;
+
   require(!BarMetrics::available(BarMetric::cpu, metrics.sample()), "Missing metrics must stay hidden");
   require(metrics.history().ordered(buffer).empty(), "Missing metrics must have no CPU history");
 
   constexpr std::uint64_t first_revision = 8;
+
   require(metrics.update(hostSample(first_revision, initial_cpu)), "The first runtime sample must be accepted");
   require(!metrics.update(hostSample(first_revision, old_cpu)), "Repeated revisions must not alter the replica");
   require(!metrics.update(hostSample(first_revision - 1, old_cpu)), "Old revisions must not alter the replica");
@@ -90,13 +92,16 @@ void historyKeepsOnlyTheLastSamplesInOrder() {
   CpuHistory::Samples buffer;
   constexpr std::uint64_t sample_count = (3 * CpuHistory::capacity) + 7;
   constexpr std::uint64_t percent_count = 101;
+
   for (std::uint64_t revision = 1; revision <= sample_count; ++revision) {
     require(metrics.update(hostSample(revision, static_cast<std::uint8_t>(revision % percent_count))), "Increasing revisions must be accepted");
     const auto samples = metrics.history().ordered(buffer);
     const auto count = std::min<std::size_t>(revision, CpuHistory::capacity);
+
     require(samples.size() == count, "CPU history must stop growing at its fixed capacity");
     for (std::size_t index = 0; index < samples.size(); ++index) {
       const auto expected = (revision - count + 1 + index) % percent_count;
+
       require(samples[index] == expected, "Ring wraparound must preserve the most recent samples in chronological order");
     }
   }
@@ -106,14 +111,18 @@ void connectionReplacementAcceptsARevisionRestart() {
   SystemAllocator memory;
   telar::gui::test::Transport transport;
   Session session{memory, transport};
+
   session.connected(1);
   constexpr std::uint64_t previous_revision = 9;
+
   require(telar::gui::test::deliver(session, hostSample(previous_revision, initial_cpu)) == Change::metrics, "Metrics must publish their own change category");
   require(telar::gui::test::deliver(session, hostSample(previous_revision, old_cpu)) == Change::none, "Duplicate wire messages must not invalidate the UI");
   const ProxyStatus proxy{.active = true, .scope = ProxyScope::wildcard, .system_trusted = true};
+
   require(telar::gui::test::deliver(session, proxy) == Change::model, "Proxy status must join the same runtime session");
   session.disconnected();
   CpuHistory::Samples buffer;
+
   require(session.metrics().revision == previous_revision && session.metrics().cpu_percent == initial_cpu && session.hostMetrics().history().ordered(buffer).size() == 1, "A lost runtime must retain its last metric sample and CPU history until replacement adoption");
   require(session.proxyStatus().active && session.proxyStatus().scope == ProxyScope::wildcard && session.proxyStatus().system_trusted, "A lost runtime must retain proxy status while the old session stays visible");
   session.disconnected();
@@ -133,6 +142,7 @@ void alertsDebouncePeaksAndReleaseWithAMargin() {
     require(metrics.update(hostSample(++revision, percent, 0, battery)), "Each sample must be accepted");
     return metrics.severity(BarMetric::cpu);
   };
+
   require(cpu(MetricLevels::cpu_danger) == MetricSeverity::normal, "One CPU peak must not raise an alert");
   require(cpu(MetricLevels::cpu_danger) == MetricSeverity::normal, "Two CPU peaks must not raise an alert");
   require(cpu(MetricLevels::cpu_danger) == MetricSeverity::danger, "A peak held for three samples must raise the alert");
@@ -151,6 +161,7 @@ void alertsDebouncePeaksAndReleaseWithAMargin() {
 
 void memoryAlertsUseTheShareOfTheTotal() {
   auto sample = hostSample(1, 0, 150);
+
   require(MetricLevels::severity(BarMetric::memory, sample) == MetricSeverity::normal, "Memory without a total must not alert");
   sample.memory_total_decigib = 160;
   require(MetricLevels::percent(BarMetric::memory, sample) == 94 && MetricLevels::severity(BarMetric::memory, sample) == MetricSeverity::warning, "15 of 16 GB must be a memory warning");

@@ -118,30 +118,38 @@ namespace telar {
            (!links.empty() || !runs.empty() || !uris.empty()))) {
         throw EncodingError{"Invalid text metadata counts"};
       }
+
       for (const auto flags : row_flags) {
         if ((flags & 0xc0) != 0 || ((flags & 48) == 48) || ((flags & 4) != 0 && ((flags & 1) == 0 || cols < 2))) {
           throw EncodingError{"Invalid text row flags"};
         }
       }
+
       std::size_t uri_end = 0;
+
       for (const auto &link : links) {
         if (link.offset != uri_end || link.len == 0 || link.len > 4096 ||
             link.len > uris.size() - uri_end) {
           throw EncodingError{"Invalid metadata link"};
         }
+
         uri_end += link.len;
       }
+
       if (uri_end != uris.size()) {
         throw EncodingError{"Unreferenced URI bytes"};
       }
+
       std::uint64_t previous_end = 0;
       const auto cells = static_cast<std::uint32_t>(cols) * rows;
+
       for (const auto &run : runs) {
         const auto end = static_cast<std::uint64_t>(run.start) + run.len;
         if (cols == 0 || run.len == 0 || run.start < previous_end || end > cells ||
             run.link_index >= links.size() || run.start / cols != (end - 1) / cols) {
           throw EncodingError{"Invalid hyperlink run"};
         }
+
         previous_end = end;
       }
     }
@@ -150,10 +158,12 @@ namespace telar {
       if (index >= links.size()) {
         throw EncodingError{"Invalid hyperlink index"};
       }
+
       const auto &entry = links[index];
       if (entry.offset > uris.size() || entry.len > uris.size() - entry.offset) {
         throw EncodingError{"Invalid hyperlink bounds"};
       }
+
       return uris.subspan(entry.offset, entry.len);
     }
   };
@@ -178,6 +188,7 @@ namespace telar {
           value.uris.size() > 65536) {
         throw EncodingError{"Text metadata exceeds capacity"};
       }
+
       return 11 + value.row_flags.size() + value.links.size() * 6 + value.runs.size() * 10 +
              value.uris.size();
     }
@@ -193,9 +204,11 @@ namespace telar {
       for (const auto &link : value.links) {
         ValueCodec<MetadataLink>::encode(link, output);
       }
+
       for (const auto &run : value.runs) {
         ValueCodec<MetadataRun>::encode(run, output);
       }
+
       TailBytes<65536>::encode(value.uris, output);
     }
 
@@ -212,16 +225,20 @@ namespace telar {
               input.size()) {
         throw EncodingError{"Invalid text metadata lengths"};
       }
+
       value.row_flags = input.first(rows);
       input = input.subspan(rows);
       auto link_storage = storage.allocate<MetadataLink>(links);
       auto run_storage = storage.allocate<MetadataRun>(runs);
+
       for (auto &link : link_storage) {
         link = ValueCodec<MetadataLink>::decode(input, storage);
       }
+
       for (auto &run : run_storage) {
         run = ValueCodec<MetadataRun>::decode(input, storage);
       }
+
       value.links = link_storage;
       value.runs = run_storage;
       value.uris = input.first(uri_length);
@@ -233,9 +250,11 @@ namespace telar {
     visitFields(const TextMetadata &value, std::span<const Byte> &input, Visitor visitor) {
       const auto take = [&](std::size_t size) {
         const auto bytes = input.first(size);
+
         input = input.subspan(size);
         return bytes;
       };
+
       visitor("status", take(1), value.status);
       visitor("row_count", take(2), value.row_flags.size());
       visitor("link_count", take(2), value.links.size());
@@ -268,14 +287,18 @@ namespace telar {
       if (length == 0) {
         return std::nullopt;
       }
+
       if (length > 153098 || length > input.size()) {
         throw EncodingError{"Invalid frame metadata length"};
       }
+
       auto body = input.first(length);
       auto value = ValueCodec<TextMetadata>::decode(body, storage);
+
       if (!body.empty()) {
         throw EncodingError{"Trailing metadata bytes"};
       }
+
       input = input.subspan(length);
       return value;
     }
@@ -322,6 +345,7 @@ namespace telar {
       }
 
       std::uint64_t previous_end = 0;
+
       for (const auto &span : spans) {
         const auto end = static_cast<std::uint64_t>(span.start) + span.count;
 
@@ -458,9 +482,11 @@ namespace telar {
     template <typename Frame> static void encodeBody(const Frame &frame, std::span<Byte> &output) {
       for (const auto &span : frame.spans) {
         auto reader = span.reader();
+
         while (reader.next()) {
         }
       }
+
       FrameSerializer::encodeBody(frame, output);
     }
   };

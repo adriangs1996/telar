@@ -92,9 +92,11 @@ public:
         .strength = strength,
         .variation = &variation_,
     };
+
     handle_.reset(telarGlyphRasterizerCreate(&options));
     require(handle_ != nullptr, "Original CoreText rasterizer initialization failed");
     auto native_options = options;
+
     native_options.pixels = native_reference_.data();
     native_options.side = telar_glyph_atlas_max_side;
     native_handle_.reset(telarGlyphRasterizerCreate(&native_options));
@@ -109,18 +111,22 @@ public:
 
   void paint(std::uint32_t index, GlyphStyle style, QPoint origin, QImage &image) {
     telar_glyph_raster glyph{.index = index, .style = static_cast<std::uint32_t>(style), .x = 0, .y = 0, .width = 0, .height = 0, .left = 0, .top = 0};
+
     require(telarGlyphRasterizerMeasure(handle_.get(), &glyph) == 0, "Original CoreText glyph measurement failed");
     glyph.x = static_cast<std::uint32_t>(origin.x() + glyph.left);
     glyph.y = static_cast<std::uint32_t>(origin.y() - glyph.top);
     telarGlyphRasterizerDraw(handle_.get(), &glyph);
     const auto cached = native_.rasterize({.index = index, .pixel_height = pixel_height_, .style = {.bold = style == GlyphStyle::bold || style == GlyphStyle::bold_italic, .italic = style == GlyphStyle::italic || style == GlyphStyle::bold_italic}});
+
     require(cached.width == glyph.width && cached.height == glyph.height && cached.left == glyph.left && cached.top == glyph.top, "Cached native glyph metrics differ from the optical oracle");
     auto native_glyph = glyph;
+
     native_glyph.x = 0;
     native_glyph.y = 0;
     telarGlyphRasterizerDraw(native_handle_.get(), &native_glyph);
     for (std::size_t row = 0; row < cached.height; ++row) {
       const auto expected = std::span{native_reference_}.subspan(row * telar_glyph_atlas_max_side, glyph.width);
+
       require(std::ranges::equal(cached.row(row), expected), "Cached native glyph pixels differ from the canonical atlas reference");
     }
 
@@ -129,6 +135,7 @@ public:
         const auto alpha = pixels_[((glyph.y + row) * atlas_side) + glyph.x + column];
         const auto x = origin.x() + glyph.left + static_cast<int>(column);
         const auto y = origin.y() - glyph.top + static_cast<int>(row);
+
         require(image.rect().contains(x, y), "Original glyph exceeded the comparison surface");
         image.setPixel(x, y, qRgba(alpha, alpha, alpha, alpha));
       }
@@ -151,6 +158,7 @@ private:
 
 void shapeGlyph(QTextLayout &layout, const QString &text, int pixel_height, GlyphStyle style) {
   QFont font{QStringLiteral("JetBrains Mono")};
+
   font.setStyleName(QStringLiteral("Regular"));
   font.setPixelSize(pixel_height);
   font.setBold(style == GlyphStyle::bold || style == GlyphStyle::bold_italic);
@@ -159,6 +167,7 @@ void shapeGlyph(QTextLayout &layout, const QString &text, int pixel_height, Glyp
   layout.setText(text);
   layout.beginLayout();
   auto line = layout.createLine();
+
   line.setNumColumns(static_cast<int>(text.size()));
   line.setPosition({0, -line.ascent()});
   layout.endLayout();
@@ -166,17 +175,21 @@ void shapeGlyph(QTextLayout &layout, const QString &text, int pixel_height, Glyp
 
 void compareGlyph(telar::gui::qt::OpticalText &optical, OriginalRasterizer &original, const QTextLayout &layout, int scale, GlyphStyle style) {
   const auto runs = layout.glyphRuns();
+
   require(runs.size() == 1 && runs.front().glyphIndexes().size() == 1, "The optical oracle requires a single glyph");
   const auto &run = runs.front();
   const QPoint origin{glyph_margin, glyph_margin + layout.font().pixelSize()};
+
   optical.add(layout, origin, Qt::white);
   const auto actual = optical.snapshot();
   QImage expected{actual.size(), QImage::Format_ARGB32_Premultiplied};
+
   expected.setDevicePixelRatio(scale);
   expected.fill(Qt::transparent);
   original.paint(run.glyphIndexes().front(), style, origin * scale, expected);
   if (actual != expected) {
     QTemporaryDir directory;
+
     require(directory.isValid(), "Cannot create optical diagnostic directory");
     directory.setAutoRemove(false);
     actual.save(directory.filePath(QStringLiteral("actual.png")));
@@ -188,6 +201,7 @@ void compareGlyph(telar::gui::qt::OpticalText &optical, OriginalRasterizer &orig
 
 QImage coloredMask(QImage image, QColor color) {
   QPainter painter{&image};
+
   painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
   painter.fillRect(image.rect(), color);
   painter.end();
@@ -203,6 +217,7 @@ void verifySnapshotAndCompositing() {
   constexpr QColor translucent_red{255, 0, 0, 128};
   constexpr QColor translucent_blue{0, 0, 255, 64};
   QTextLayout layout;
+
   shapeGlyph(layout, QStringLiteral("M"), pixel_height, GlyphStyle::regular);
   optical->begin({image_extent, image_extent}, 1, strength);
   optical->add(layout, origin, Qt::white);
@@ -211,6 +226,7 @@ void verifySnapshotAndCompositing() {
   auto expected = coloredMask(mask, translucent_red);
   const auto upper_layer = coloredMask(mask, translucent_blue);
   QPainter compositor{&expected};
+
   compositor.drawImage(QPoint{}, upper_layer);
   compositor.end();
   optical->begin({image_extent, image_extent}, 1, strength);
@@ -218,11 +234,13 @@ void verifySnapshotAndCompositing() {
   optical->add(layout, origin, translucent_blue);
   require(mask == preserved, "A retained optical snapshot must survive another raster batch");
   const auto actual = optical->snapshot();
+
   for (int row = 0; row < actual.height(); ++row) {
     for (int column = 0; column < actual.width(); ++column) {
       const auto difference = actual.pixel(column, row);
       const auto reference = expected.pixel(column, row);
       constexpr int channel_tolerance = 1;
+
       for (const auto delta : {qRed(difference) - qRed(reference), qGreen(difference) - qGreen(reference), qBlue(difference) - qBlue(reference), qAlpha(difference) - qAlpha(reference)}) {
         require(std::abs(delta) <= channel_tolerance, "Optical source-over must preserve premultiplied color and opacity");
       }
@@ -233,8 +251,10 @@ void verifySnapshotAndCompositing() {
 void verifyInvalidDimensions() {
   const auto optical = telar::gui::qt::OpticalText::create();
   constexpr std::array invalid_extents{0.0, -1.0, std::numeric_limits<qreal>::infinity(), std::numeric_limits<qreal>::quiet_NaN()};
+
   for (const auto extent : invalid_extents) {
     bool rejected = false;
+
     try {
       optical->begin({extent, image_extent}, 1, 0);
     } catch (const std::invalid_argument &) {
@@ -249,11 +269,13 @@ std::size_t compareSize(telar::gui::qt::OpticalText &optical, OriginalRasterizer
   constexpr std::array texts{"M", "g", "@"};
   constexpr std::array styles{GlyphStyle::regular, GlyphStyle::bold, GlyphStyle::italic, GlyphStyle::bold_italic};
   std::size_t comparisons = 0;
+
   original.select(static_cast<std::uint32_t>(pixel_height * scale));
   for (const auto style : styles) {
     for (const auto *const text : texts) {
       optical.begin({image_extent / scale, image_extent / scale}, scale, strength);
       QTextLayout layout;
+
       shapeGlyph(layout, QString::fromLatin1(text), pixel_height, style);
       compareGlyph(optical, original, layout, scale, style);
       ++comparisons;
@@ -266,16 +288,20 @@ std::size_t compareSize(telar::gui::qt::OpticalText &optical, OriginalRasterizer
 void verifyRasters() {
   telar::gui::qt::bundledFonts();
   QFile font{QStringLiteral(":/telar/fonts/JetBrainsMono-Regular.ttf")};
+
   require(font.open(QIODeviceBase::ReadOnly), "Bundled optical oracle font is missing");
   const auto bytes = font.readAll();
   const auto optical = telar::gui::qt::OpticalText::create();
+
   require(optical != nullptr, "macOS optical text is unavailable");
   constexpr std::array<std::uint8_t, 3> strengths{0, 128, opaque_channel};
   constexpr std::array pixel_heights{8, 12, 15, 32, 60, 96};
   constexpr std::array scales{1, 2};
   std::size_t comparisons = 0;
+
   for (const auto strength : strengths) {
     OriginalRasterizer original{bytes, strength};
+
     for (const auto scale : scales) {
       for (const auto pixel_height : pixel_heights) {
         comparisons += compareSize(*optical, original, strength, scale, pixel_height);
@@ -291,6 +317,7 @@ void verifyRasters() {
 int main(int argc, char **argv) {
   try {
     const QGuiApplication application{argc, argv};
+
     verifyRasters();
     verifySnapshotAndCompositing();
     verifyInvalidDimensions();

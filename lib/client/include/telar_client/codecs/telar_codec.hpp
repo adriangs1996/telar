@@ -16,6 +16,7 @@ namespace telar {
 
     template <typename Value> std::string inspectValue(const Value &value) {
       using T = std::remove_cvref_t<Value>;
+
       if constexpr (std::is_same_v<T, bool>) {
         return value ? "true" : "false";
       } else if constexpr (std::is_enum_v<T>) {
@@ -24,16 +25,19 @@ namespace telar {
         return std::to_string(value);
       } else if constexpr (std::is_same_v<T, std::string_view>) {
         std::string text = "\"";
+
         for (const auto character : value) {
           const auto byte = static_cast<Byte>(character);
           if (byte >= 0x20 && byte <= 0x7e && byte != '"' && byte != '\\') {
             text += character;
           } else {
             char escaped[5]{};
+
             std::snprintf(escaped, sizeof(escaped), "\\x%02x", static_cast<unsigned>(byte));
             text += escaped;
           }
         }
+
         return text + "\"";
       } else if constexpr (requires {
                              value.has_value();
@@ -53,12 +57,15 @@ namespace telar {
                              value.begin();
                            }) {
         std::string text = "[";
+
         for (const auto &entry : value) {
           if (text.size() > 1) {
             text += ", ";
           }
+
           text += inspectValue(entry);
         }
+
         return text + "]";
       } else if constexpr (requires {
                              value.kind;
@@ -85,6 +92,7 @@ namespace telar {
       const auto visitor = [&](const char *field, std::span<const Byte> raw, const auto &entry) {
         appendColumns(columns, name + "." + field, raw, entry);
       };
+
       if constexpr (requires { BodySchema<T>::visitFields(value, bytes, visitor); }) {
         BodySchema<T>::visitFields(value, bytes, visitor);
       } else if constexpr (requires {
@@ -92,6 +100,7 @@ namespace telar {
                              *value;
                            }) {
         using Element = std::remove_cvref_t<decltype(*value)>;
+
         if constexpr (requires { BodySchema<Element>::encodedSize(*value); }) {
           if (value) {
             const auto size = BodySchema<Element>::encodedSize(*value);
@@ -99,6 +108,7 @@ namespace telar {
             if (prefix != 0) {
               columns.push_back({name + ".length_or_present", bytes.first(prefix), "present"});
             }
+
             appendColumns(columns, std::move(name), bytes.subspan(prefix), *value);
           } else {
             columns.push_back({std::move(name), bytes, "null"});
@@ -111,24 +121,30 @@ namespace telar {
                              value.size();
                            }) {
         using Element = std::remove_cv_t<typename T::element_type>;
+
         if constexpr (requires(const Element &entry) { BodySchema<Element>::encodedSize(entry); }) {
           std::size_t size = 0;
+
           for (const auto &entry : value) {
             size += BodySchema<Element>::encodedSize(entry);
           }
+
           const auto prefix = bytes.size() - size;
           if (prefix != 0) {
             columns.push_back({name + ".count", bytes.first(prefix), inspectValue(value.size())});
           }
+
           bytes = bytes.subspan(prefix);
           for (std::size_t i = 0; i < value.size(); ++i) {
             const auto width = BodySchema<Element>::encodedSize(value[i]);
+
             appendColumns(columns,
                           name + "[" + std::to_string(i) + "]",
                           bytes.first(width),
                           value[i]);
             bytes = bytes.subspan(width);
           }
+
           if (value.empty() && prefix == 0) {
             columns.push_back({std::move(name), {}, "[]"});
           }
@@ -166,11 +182,13 @@ namespace telar {
       if constexpr (requires { Sch::magic; }) {
         const auto bytes = input.first(Sch::magic.size());
         const auto value = valueText(FixedBytes<Sch::magic.size()>::decode(input));
+
         printColumn<Row>(bytes, "magic", value.data(), output, !input.empty());
       }
 
       const auto tag_bytes = input.first(u8::width);
       std::array<char, sizeof("0x00")> tag_value{};
+
       std::snprintf(tag_value.data(),
                     tag_value.size(),
                     "0x%02x",
@@ -191,6 +209,7 @@ namespace telar {
     printFrameRow(std::span<const Byte> prefix, std::span<const Byte> payload, std::FILE *output) {
       auto input = prefix;
       const auto length_value = valueText(u32::decode(input));
+
       printColumn<Row>(prefix, "length", length_value.data(), output, true);
       printPayload<Sch, Row>(payload, output);
       std::fputc('\n', output);
@@ -199,6 +218,7 @@ namespace telar {
     template <typename Sch> void printFrame(std::span<const Byte> payload, std::FILE *output) {
       std::array<Byte, frame_prefix_size> prefix{};
       std::span<Byte> prefix_output = prefix;
+
       u32::encode(static_cast<std::uint32_t>(payload.size()), prefix_output);
 
       std::fputs("Frame:\n", output);
@@ -235,6 +255,7 @@ namespace telar {
       }
 
       auto output = buffer.first(size);
+
       u8::encode(static_cast<Byte>(MessageSchema<Message>::tag), output);
       MessageSchema<Message>::encodeBody(message, output);
 
@@ -252,26 +273,32 @@ namespace telar {
       const auto payload = encode(message, buffer);
       std::array<Byte, frame_prefix_size> prefix{};
       auto prefix_output = std::span<Byte>{prefix};
+
       u32::encode(static_cast<std::uint32_t>(payload.size()), prefix_output);
       std::vector<debug::Column> columns;
+
       columns.push_back({"length", prefix, debug::inspectValue(payload.size())});
       char tag_text[5]{};
+
       std::snprintf(tag_text,
                     sizeof(tag_text),
                     "0x%02x",
                     static_cast<unsigned>(MessageSchema<Message>::tag));
       columns.push_back({"tag", payload.first(1), tag_text});
       auto body = std::span<const Byte>{payload.subspan(1)};
+
       MessageSchema<Message>::visitFields(message,
                                           body,
                                           [&](const char *name, auto bytes, const auto &value) {
                                             debug::appendColumns(columns, name, bytes, value);
                                           });
+
       std::fputs("Frame:\n", output);
       for (int row = 0; row < 3; ++row) {
         for (std::size_t i = 0; i < columns.size(); ++i) {
           const auto &column = columns[i];
           const auto more = i + 1 < columns.size();
+
           if (row == 0) {
             debug::printBytes(column.bytes,
                               column.name.c_str(),
@@ -292,6 +319,7 @@ namespace telar {
                               more);
           }
         }
+
         std::fputc('\n', output);
       }
     }
@@ -303,6 +331,7 @@ namespace telar {
       static_assert(Sch::payload_size <= max_payload_size);
 
       std::array<Byte, Sch::payload_size> bytes{};
+
       encode(message, bytes);
 
       return bytes;
@@ -311,12 +340,14 @@ namespace telar {
     template <typename Message>
     static Message decode(std::span<const Byte> input) _throw(EncodingError) {
       DecodeStorage storage{};
+
       return decode<Message>(input, storage);
     }
 
     template <typename Message>
     static Decoded<Message> decode(DecodeFrame input, DecodeStorage &storage) {
       using Sch = MessageSchema<Message>;
+
       if (input.empty() || input.size() > max_payload_size) {
         throw EncodingError{"Invalid message length"};
       }
@@ -326,10 +357,12 @@ namespace telar {
       }
 
       Message message{};
+
       Sch::decodeBody(input, message, storage);
       if (!input.empty()) {
         throw EncodingError{"Trailing bytes in message"};
       }
+
       validate(message);
 
       return message;

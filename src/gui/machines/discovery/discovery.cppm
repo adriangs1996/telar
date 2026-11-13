@@ -175,6 +175,7 @@ public:
   template <MachineRuntimeEnvironment Environment>
   [[nodiscard]] inline static MachineRuntimeLocation resolve(const Environment &environment, std::uint32_t user) {
     const Lookup<Environment> lookup{environment};
+
     return located([&] { return runtime::cli::SocketLocation::resolve({}, lookup, user); });
   }
 

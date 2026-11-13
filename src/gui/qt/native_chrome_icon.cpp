@@ -151,9 +151,11 @@ void NativeChromeIcon::refreshLayout() {
     display_scale_ = window() == nullptr ? 1 : window()->effectiveDevicePixelRatio();
     const auto pixels = std::clamp(std::round(static_cast<float>(pixel_size_ * display_scale_)), 1.0F, ChromeMetrics::maximum_text);
     using Layout = fonts::IconLayout<SystemAllocator>;
+
     pixel_height_ = static_cast<std::uint16_t>(std::min(pixels * Layout::oversample, static_cast<float>(Layout::maximum_pixel_height)));
     target_side_ = std::round(pixels * Layout::size_ratio);
     const auto utf8 = glyph_.toUtf8();
+
     layout_.shape(*fonts_, {utf8.constData(), static_cast<std::size_t>(utf8.size())}, {.pixel_height = pixel_height_});
     ++revision_;
     setAvailable(true);

@@ -47,12 +47,14 @@ struct FormFieldGeometry {
 
   [[nodiscard]] inline static FormFieldGeometry derive(Rect bounds, ChromeMetrics chrome, const FontGrid &grid) noexcept {
     FormFieldGeometry result;
+
     if (bounds.empty()) {
       return result;
     }
 
     result.content = bounds;
     const auto inset = std::min(chrome.px(horizontal_padding), bounds.width / 4);
+
     result.content.x += inset;
     result.content.width = std::max(0.0F, bounds.width - (2 * inset));
     result.content.height = std::min(static_cast<float>(grid.height), bounds.height - std::min(chrome.px(vertical_padding), bounds.height / 3));
@@ -77,6 +79,7 @@ struct FormFieldGeometry {
 
   [[nodiscard]] inline static FormFieldGeometry terminal(Rect bounds, const FontGrid &grid) noexcept {
     FormFieldGeometry result;
+
     if (bounds.empty()) {
       return result;
     }
@@ -131,6 +134,7 @@ public:
   inline void paint(std::string_view text, Rect bounds, float cell_width, Sink &sink) {
     GraphemeCursor cursor{text};
     std::uint32_t column = 0;
+
     while (static_cast<float>(column) * cell_width < bounds.width && matched_ < query_.size()) {
       const auto cluster = cursor.nextReplacingInvalid();
       if (!cluster) {
@@ -197,6 +201,7 @@ struct PathPickerFooter {
     PathPickerFooter result;
     const auto &labels = mac_style ? mac_hints : pc_hints;
     std::uint32_t used = measure_columns(status) + status_gap;
+
     for (const auto &label : labels) {
       const auto key = cellTextColumns(label.key);
       const auto word = measure_columns(label.word);
@@ -210,6 +215,7 @@ struct PathPickerFooter {
           .key = {.x = static_cast<std::uint16_t>(row.x + used), .y = row.y, .width = static_cast<std::uint16_t>(key), .height = row.height},
           .word = {.x = static_cast<std::uint16_t>(row.x + used + key_room), .y = row.y, .width = static_cast<std::uint16_t>(word), .height = row.height},
       };
+
       used += key_room + word + word_gap;
     }
 
@@ -243,6 +249,7 @@ struct PathPickerPlacement {
   [[nodiscard]] inline static PathPickerPlacement place(CellRectangle host, std::optional<CellPosition> cursor, std::uint16_t requested_width, std::uint16_t requested_height) noexcept {
     const auto width = std::min(requested_width, host.width);
     const auto height = std::min(requested_height, host.height);
+
     if (!cursor) {
       return {.area = {.x = static_cast<std::uint16_t>(host.x + ((host.width - width) / 2)), .y = static_cast<std::uint16_t>(host.y + ((host.height - height) / fallback_vertical_divisor)), .width = width, .height = height}};
     }
@@ -299,6 +306,7 @@ struct PathPickerGeometry {
     }
 
     auto field = content;
+
     field.y = placement.flipped ? static_cast<std::uint16_t>(content.y + content.height - 1) : content.y;
     field.height = 1;
     result.footer = field;
@@ -307,8 +315,10 @@ struct PathPickerGeometry {
     const auto count_room = std::min<std::uint16_t>(field.width, static_cast<std::uint16_t>(count_columns + 1));
     const auto field_columns = static_cast<std::uint16_t>(field.width - count_room);
     const auto count_inset = std::min<std::uint16_t>(1, count_room);
+
     result.count_label = {.x = static_cast<std::uint16_t>(field.x + field_columns + count_inset), .y = field.y, .width = static_cast<std::uint16_t>(count_room - count_inset), .height = 1};
     const auto root_columns = std::min<std::uint16_t>(static_cast<std::uint16_t>(columns.root + 1), field_columns / 2);
+
     result.root_label = {.x = field.x, .y = field.y, .width = root_columns, .height = 1};
     result.query = {.x = static_cast<std::uint16_t>(field.x + root_columns), .y = field.y, .width = static_cast<std::uint16_t>(field_columns - root_columns), .height = 1};
 
@@ -316,9 +326,11 @@ struct PathPickerGeometry {
     const auto count = std::min<std::size_t>({row_area.height, total, result.rows.size()});
     const auto selected = total == 0 ? 0 : std::min(selection, total - 1);
     const auto first = selected + 1 > count ? selected + 1 - count : 0;
+
     result.empty = {.x = static_cast<std::uint16_t>(row_area.x + std::min<std::uint16_t>(2, row_area.width)), .y = placement.flipped ? static_cast<std::uint16_t>(row_area.y + row_area.height - 1) : row_area.y, .width = static_cast<std::uint16_t>(row_area.width - std::min<std::uint16_t>(2, row_area.width)), .height = 1};
     for (std::size_t offset = 0; offset < count; ++offset) {
       const auto row = placement.flipped ? row_area.height - 1 - offset : offset;
+
       result.rows[offset] = {.bounds = {.x = row_area.x, .y = static_cast<std::uint16_t>(row_area.y + row), .width = row_area.width, .height = 1}, .index = first + offset};
     }
 
@@ -362,6 +374,7 @@ public:
     }
 
     const Rect row{.x = bounds_.x, .y = y_, .width = bounds_.width, .height = line_height_};
+
     y_ += line_height_;
     if (y_ + line_height_ > bounds_.bottom() && lines_.next()) {
       finished_ = true;

@@ -116,10 +116,12 @@ QVariantMap Application::attachmentModalGeometry() const {
 
     return toQRectF(area, density);
   };
+
   const auto geometry = AttachmentModalGeometry::measure(host.cellArea());
   const auto bounds = host.pixels(geometry.bounds);
   const auto local = [&](CellRectangle cells) {
     auto area = host.pixels(cells);
+
     area.x -= bounds.x;
     area.y -= bounds.y;
 
@@ -154,15 +156,18 @@ void Application::initializeAttachments() {
   connect(&attachments_, &AttachmentShelf::dismissRequested, this, &Application::dismissAttachment);
   connect(&attachments_, &AttachmentShelf::failed, this, [this](const QString &message) {
     const auto bytes = message.toUtf8();
+
     clientAt(Machines::local_slot).session.publishNotification({.level = NotificationLevel::failure, .title = "Image preview failed", .message = {bytes.constData(), static_cast<std::size_t>(bytes.size())}, .link = {}});
     if (machines_.active() == Machines::local_slot) {
       refreshNotifications();
     }
   });
+
   connect(&attachments_, &AttachmentShelf::quotaReached, this, [this](platform::ClipboardImageError error) {
     std::string_view name;
     std::string_view noun = "bytes";
     std::uint64_t value = 0;
+
     switch (error) {
     case platform::ClipboardImageError::source_bytes:
       name = "attachments.max_source_bytes";
@@ -183,14 +188,17 @@ void Application::initializeAttachments() {
 
     clientAt(Machines::local_slot).session.reportLimit({.name = name, .noun = noun, .value = value});
   });
+
   connect(&attachments_, &AttachmentShelf::evicted, this, [this](AttachmentEviction reason, qulonglong requested) {
     const bool items = reason == AttachmentEviction::items;
+
     clientAt(Machines::local_slot).session.reportLimit({.name = items ? "attachments.max_items" : "attachments.max_retained_bytes", .noun = items ? "previews" : "bytes", .value = items ? AttachmentLimits::maximum_items : AttachmentLimits::maximum_retained_bytes, .requested = requested});
   });
 }
 
 void Application::synchronizeAttachments() {
   const auto &local = clientAt(Machines::local_slot);
+
   attachments_.setSource({.source = local.key, .runtime_generation = local.runtime_generation});
   std::optional<AttachmentPrompt> prompt;
   const auto *const pane = local.session.focusedPane();
@@ -206,6 +214,7 @@ void Application::synchronizeAttachments() {
 
   attachments_.setPrompt(prompt, machines_.active() == Machines::local_slot);
   std::optional<PaneBottomReservation> reservation;
+
   if (prompt && attachments_.hasVisibleItems()) {
     reservation = PaneBottomReservation{.pane_id = prompt->target.pane_id};
   }
@@ -246,6 +255,7 @@ void Application::dismissAttachment(std::uint64_t identity) try {
     std::string_view name;
     std::string_view noun = "editor steps";
     std::uint64_t value = 0;
+
     switch (*plan.limit) {
     case AttachmentMarkerReach::navigation:
       name = "attachments.max_marker_navigation_steps";
@@ -269,6 +279,7 @@ void Application::dismissAttachment(std::uint64_t identity) try {
 
   if (plan.removal) {
     const AttachmentMarkerInput input{*plan.removal, pane->screen.modes()};
+
     session().input(pane->id, input.view());
     static_cast<void>(attachments_.remove(identity));
   }

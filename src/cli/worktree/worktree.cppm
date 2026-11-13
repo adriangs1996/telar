@@ -83,11 +83,14 @@ struct Catalog {
 template <Allocator Memory>
 Catalog catalog(Memory &memory, const char *socket) {
   RuntimeConnection connection{socket};
+
   connection.receiveTimeout(30);
   std::array<Byte, 32> outgoing;
+
   connection.send(RequestRuntimeState{.client_identity = randomIdentity(), .interactive = false}, outgoing);
   Vector<Byte, Memory> incoming(max_payload_size, Byte{}, AllocatorRef<Byte, Memory>{memory});
   Vector<Byte, Memory> decoded(max_payload_size, Byte{}, AllocatorRef<Byte, Memory>{memory});
+
   for (;;) {
     const auto frame = connection.receive(incoming);
     if (static_cast<ServerTag>(frame.front()) != ServerTag::workspace_list) {
@@ -97,6 +100,7 @@ Catalog catalog(Memory &memory, const char *socket) {
     DecodeStorage storage{decoded};
     const auto list = Codec::decode<WorkspaceList>(frame, storage);
     Catalog result;
+
     for (const auto &entry : list.entries) {
       result.workspaces.emplace_back(entry.workspace, entry.path);
     }
@@ -124,8 +128,10 @@ inline std::string managedPath(std::string_view identity) {
   }
 
   std::array<unsigned char, SHA256_DIGEST_LENGTH> digest;
+
   ::SHA256(reinterpret_cast<const unsigned char *>(identity.data()), identity.size(), digest.data());
   auto result = base + "/telar/repositories/";
+
   for (const auto byte : digest) {
     result += std::format("{:02x}", byte);
   }
@@ -138,6 +144,7 @@ std::string mainRoot(Memory &memory, std::string_view path) {
   Git git{memory, path};
   const auto common = git.read({"rev-parse", "--path-format=absolute", "--git-common-dir"});
   auto trimmed = std::string_view{common};
+
   while (trimmed.ends_with('/')) {
     trimmed.remove_suffix(1);
   }
@@ -162,6 +169,7 @@ std::optional<std::string> matching(Memory &memory, std::string_view path, std::
   }
 
   std::string root;
+
   try {
     root = mainRoot(memory, path);
   } catch (const std::exception &) {
@@ -169,6 +177,7 @@ std::optional<std::string> matching(Memory &memory, std::string_view path, std::
   }
 
   auto directory = file_transfer::openDirectory(root);
+
   try {
     Git git{memory, root};
     if (normalize(git.read({"config", "--get", "remote.origin.url"})) != identity) {
@@ -188,15 +197,19 @@ template <Allocator Memory>
 std::optional<std::string> find(Memory &memory, std::string_view identity, std::optional<std::string_view> selected, std::optional<std::string_view> socket = std::nullopt) {
   const ProcessEnvironment environment;
   ServerOptions server;
+
   if (socket) {
     server.socket = *socket;
   }
 
   const RuntimePaths paths{memory, server, environment};
+
   ensureRuntime(memory, paths);
   const auto available = catalog(memory, paths.socket.c_str());
+
   if (selected) {
     std::string path{*selected};
+
     if (const auto id = maybeUnsigned(*selected)) {
       const auto found = std::ranges::find(available.workspaces, *id, &std::pair<std::uint64_t, std::string>::first);
       if (found == available.workspaces.end()) {
@@ -227,6 +240,7 @@ std::optional<std::string> find(Memory &memory, std::string_view identity, std::
 
     result = candidate;
   };
+
   for (const auto &[id, path] : available.workspaces) {
     consider(path);
   }
@@ -236,6 +250,7 @@ std::optional<std::string> find(Memory &memory, std::string_view identity, std::
   }
 
   RuntimePaths storage_paths{memory, ServerOptions{}, environment};
+
   storage_paths.resolveStorage(ServerOptions{}, environment);
   historyPaths(storage_paths.history.c_str(), consider);
 
@@ -279,6 +294,7 @@ struct RepositoryOptions {
 
     RepositoryOptions self{.action = action == "prepare" ? Action::prepare : action == "receive" ? Action::receive : Action::tips};
     Cursor cursor{words.subspan(1)};
+
     while (const auto word = cursor.next()) {
       const std::string_view arg = *word;
       if (arg == "--json") {
@@ -287,6 +303,7 @@ struct RepositoryOptions {
       }
 
       const auto value = cursor.take("MissingRepositoryOptionValue");
+
       if (arg == "--machine" && self.action == Action::prepare) {
         self.machine = value;
       } else if (arg == "--from" && self.action == Action::prepare) {
@@ -335,6 +352,7 @@ struct PreparedRepository {
 
   inline std::string json(bool receiver = false) const {
     const auto prefix = std::format("{{\"path\":{},\"commit\":{},\"repository\":{},", quoteJson(path), quoteJson(commit), quoteJson(repository));
+
     return prefix + (receiver ? "\"repository_ready\":true,\"reused\":" + std::string{jsonBoolean(reused)} : "\"reused\":" + std::string{jsonBoolean(reused)} + ",\"repository_ready\":true") + ",\"environment\":\"not_run\"}\n";
   }
 };
@@ -346,6 +364,7 @@ public:
 
   inline ~StagingDirectory() {
     std::error_code ignored;
+
     std::filesystem::remove_all(path_, ignored);
   }
 
@@ -359,6 +378,7 @@ private:
 inline bool validCommit(std::string_view commit) {
   constexpr std::size_t sha1_chars = 40;
   constexpr std::size_t sha256_chars = 64;
+
   return (commit.size() == sha1_chars || commit.size() == sha256_chars) && std::ranges::all_of(commit, [](unsigned char byte) {
            return (byte >= '0' && byte <= '9') || (byte >= 'a' && byte <= 'f') || (byte >= 'A' && byte <= 'F');
          });
@@ -408,6 +428,7 @@ void clearPriorStage(Memory &memory, const std::string &stage, std::string_view 
 inline void receiveBundle(int descriptor, std::uint64_t expected) {
   std::array<Byte, file_transfer::copy_buffer_bytes> bytes;
   std::uint64_t total = 0;
+
   for (;;) {
     const auto count = ::read(STDIN_FILENO, bytes.data(), bytes.size());
     if (count < 0 && errno == EINTR) {
@@ -448,6 +469,7 @@ PreparedRepository receive(Memory &memory, const RepositoryOptions &options) {
   auto lock = lockRepository(parent.get(), base);
   const auto existing = find(memory, options.identity, options.workspace);
   const auto stage = managed + ".stage";
+
   clearPriorStage(memory, stage, options.identity);
   const auto stage_name = base + ".stage";
   if (::mkdirat(parent.get(), stage_name.c_str(), 0700) != 0) {
@@ -471,11 +493,13 @@ PreparedRepository receive(Memory &memory, const RepositoryOptions &options) {
   const auto bundle_path = stage + "/history.bundle";
   const auto staged_repository = stage + "/repository";
   const auto root = existing.value_or(staged_repository);
+
   if (!existing && ::mkdirat(directory.get(), "repository", 0700) != 0) {
     throw std::runtime_error{file_transfer::fileError(errno)};
   }
 
   Git git{memory, root};
+
   if (!existing) {
     git.read({"init", "--template="});
   }
@@ -491,6 +515,7 @@ PreparedRepository receive(Memory &memory, const RepositoryOptions &options) {
     git.read({"config", "remote.origin.url", options.transport});
     git.read({"checkout", "--detach", options.commit});
     const auto relative = stage_name + "/repository";
+
     try {
       file_transfer::publish(parent.get(), relative.c_str(), base.c_str());
     } catch (const std::runtime_error &error) {
@@ -522,6 +547,7 @@ std::string tips(Memory &memory, const RepositoryOptions &options) {
 
   Git git{memory, *found};
   std::string listing;
+
   try {
     listing = git.read({"rev-parse", "--verify", "--quiet", "HEAD"}) + '\n';
   } catch (const std::exception &) {
@@ -550,18 +576,21 @@ inline void appendHashes(std::vector<std::string> &hashes, std::string_view list
 template <Allocator Memory>
 std::vector<std::string> exclusions(Git<Memory> &git, std::string_view commit, std::string_view listing) {
   std::vector<std::string> tips;
+
   appendHashes(tips, listing);
   if (tips.empty()) {
     return tips;
   }
 
   std::vector<std::string_view> count{"rev-list", "--count", "--ignore-missing", commit, "--not"};
+
   count.insert(count.end(), tips.begin(), tips.end());
   if (git.read(count) != "0") {
     return tips;
   }
 
   std::vector<std::string> parents;
+
   appendHashes(parents, git.read({"rev-parse", std::string{commit} + "^@"}));
   return parents;
 }
@@ -591,6 +620,7 @@ PreparedRepository prepare(Memory &memory, const RepositoryOptions &options, std
   const auto root = mainRoot(memory, cwd);
   Git git{memory, root};
   std::string commit;
+
   try {
     commit = git.read({"rev-parse", "--verify", "--quiet", "--end-of-options", std::string{options.from} + "^{commit}"});
   } catch (const std::exception &) {
@@ -604,11 +634,13 @@ PreparedRepository prepare(Memory &memory, const RepositoryOptions &options, std
   const auto status = git.read({"status", "--porcelain"});
   if (!status.empty()) {
     const auto dirty = static_cast<std::size_t>(std::count(status.begin(), status.end(), '\n')) + 1;
+
     writeText(std::format("telar repository: {} uncommitted files stay on this machine\n", dirty), STDERR_FILENO);
   }
 
   // Through `exec` like `receive`, so discovery there sees what it will see.
   std::vector<std::string_view> query{"exec", "--no-stdin", "--", remote_program, "repository", "tips", "--identity", identity};
+
   if (options.workspace) {
     query.push_back("--workspace");
     query.push_back(*options.workspace);
@@ -616,6 +648,7 @@ PreparedRepository prepare(Memory &memory, const RepositoryOptions &options, std
 
   // Without an answer the whole history travels, as to a new clone.
   std::string listing;
+
   try {
     listing = capture(std::span<const std::string_view>{query}, -1);
   } catch (const std::exception &) {
@@ -643,6 +676,7 @@ PreparedRepository prepare(Memory &memory, const RepositoryOptions &options, std
   }
 
   const auto ref = "refs/telar/transfer/" + std::filesystem::path{temporary}.filename().string();
+
   git.read({"update-ref", ref, commit, ""});
   const auto delete_ref = [&] {
     try {
@@ -650,8 +684,10 @@ PreparedRepository prepare(Memory &memory, const RepositoryOptions &options, std
     } catch (const std::exception &) {
     }
   };
+
   try {
     std::vector<std::string_view> revisions{ref};
+
     if (!excluded.empty()) {
       revisions.insert(revisions.end(), {"--ignore-missing", "--not"});
       revisions.insert(revisions.end(), excluded.begin(), excluded.end());
@@ -669,6 +705,7 @@ PreparedRepository prepare(Memory &memory, const RepositoryOptions &options, std
 
     const auto size = std::to_string(inode.st_size);
     std::vector<std::string_view> words{"exec", "--", remote_program, "repository", "receive", "--identity", identity, "--transport", transport, "--commit", commit, "--ref", ref, "--bytes", size};
+
     if (options.workspace) {
       words.push_back("--workspace");
       words.push_back(*options.workspace);
@@ -676,6 +713,7 @@ PreparedRepository prepare(Memory &memory, const RepositoryOptions &options, std
 
     const auto output = capture(std::span<const std::string_view>{words}, bundle.get());
     auto result = parsePrepared(memory, output, commit, identity);
+
     delete_ref();
     return result;
   } catch (...) {
@@ -747,7 +785,9 @@ inline std::string_view describeDispatchError(std::string_view name) {
       {"UnquotableSshOption", "telar's runtime directory has a quote in its path, which git cannot be given safely"},
       {"NotARepository", "not inside a git repository"},
   }};
+
   const auto found = std::ranges::find(descriptions, name, &std::pair<std::string_view, std::string_view>::first);
+
   return found == descriptions.end() ? name : found->second;
 }
 
@@ -771,7 +811,9 @@ public:
         .from = commit,
         .workspace = options_.workspace,
     };
+
     const auto clone = repository::prepare(memory_, prepare_options, profile_).path;
+
     transfer(clone, commit + ":refs/heads/" + std::string{branch}, GitDirection::push);
     const auto profiles = machine::load(memory_, machine::profilesPath());
     const auto local = machine::localLabel(profiles).substr(0, machines::MachineLimits::label_bytes);
@@ -783,6 +825,7 @@ public:
         words.push_back(std::move(*value));
       }
     };
+
     optional("--title", options_.title ? std::optional<std::string>{*options_.title} : std::nullopt);
     optional("--label", options_.label ? std::optional<std::string>{*options_.label} : std::nullopt);
     optional("--coordinator", coordinator ? std::optional{formatCoordinator(*coordinator)} : std::nullopt);
@@ -808,9 +851,11 @@ public:
     const auto label = *options_.machine;
     const auto clone = findClone();
     const auto ref = std::format("refs/remotes/{}/{}", label, branch);
+
     transfer(clone, std::format("+refs/heads/{}:{}", branch, ref), GitDirection::fetch);
     const auto commit = commitOf(ref);
     Output output{memory_};
+
     if (options_.json) {
       output.text("{\"machine\":").json(label).text(",\"branch\":").json(branch).text(",\"ref\":").json(ref).text(",\"commit\":").json(commit).text("}\n");
     } else {
@@ -832,6 +877,7 @@ private:
 
   inline std::string originIdentity() {
     std::string url;
+
     try {
       url = git_.line({"git", "-C", root_, "config", "--get", "remote.origin.url"});
     } catch (const std::exception &) {
@@ -845,6 +891,7 @@ private:
   inline std::string findClone() {
     const std::vector<std::string> words{"worktree", "resolve", "--repository", originIdentity(), "--json"};
     const auto output = machine::capture(memory_, profile_, words, "MachineCommandFailed");
+
     try {
       const auto resolved = JsonNode<Memory>::parse(memory_, output);
       const auto *path = resolved.find("path");
@@ -868,11 +915,14 @@ private:
     const auto url = std::format("ssh://{}{}", destination, clone);
     const auto ssh = machine::gitSshCommand(memory_, destination);
     const std::array<std::pair<std::string_view, std::string_view>, 2> environment{{{"GIT_SSH_COMMAND", ssh}, {"GIT_TERMINAL_PROMPT", "0"}}};
+
     if (direction == GitDirection::push) {
       const std::array<std::string_view, 8> argv{"git", "-C", root_, "push", "--quiet", "--", url, refspec};
+
       git_.run(argv, "GitPushFailed", true, false, environment);
     } else {
       const std::array<std::string_view, 9> argv{"git", "-C", root_, "fetch", "--quiet", "--no-tags", "--", url, refspec};
+
       git_.run(argv, "GitFetchFailed", true, false, environment);
     }
   }
@@ -888,8 +938,10 @@ private:
 
     try {
       Channel<Memory> session{memory_, std::nullopt, false};
+
       session.template exchange<RequestCompleted>(VerifyPaneDescent{.pane_id = *id, .pane_generation = *generation});
       const auto agents = session.template exchange<AgentSnapshot>(QueryAgents{});
+
       for (const auto &entry : agents.entries) {
         if (entry.pane_id == *id && entry.pane_generation == *generation && std::ranges::any_of(entry.session_id, [](Byte byte) { return byte != 0; })) {
           return CoordinatorReference{.session_id = entry.session_id, .pane_id = *id, .pane_generation = *generation};
@@ -903,6 +955,7 @@ private:
 
   inline static std::string formatCoordinator(const CoordinatorReference &reference) {
     std::string text;
+
     for (const auto byte : reference.session_id) {
       text += std::format("{:02x}", static_cast<unsigned>(byte));
     }
@@ -943,6 +996,7 @@ inline std::string_view agentStatus(AgentStatus status) {
   case AgentStatus::failed:
     return "failed";
   }
+
   return "unknown";
 }
 
@@ -959,12 +1013,14 @@ inline std::string_view blockedReason(AgentBlockedReason reason) {
   case AgentBlockedReason::other:
     return "other";
   }
+
   return "none";
 }
 
 template <Allocator Memory>
 void worktreeAgent(Output<Memory> &output, const AgentSnapshotEntry &agent) {
   constexpr auto escapes = JsonEscapes::control;
+
   output.text("{\"pane_id\":").number(agent.pane_id).text(",\"pane_generation\":").number(agent.pane_generation).text(",\"workspace_id\":").number(agent.location.workspace.id).text(",\"tab_id\":").number(agent.location.tab_id).text(",\"pane_index\":").number(agent.pane_index).text(",\"provider\":").json(agent.provider_name.empty() ? "unknown" : agent.provider_name, escapes).text(",\"provider_index\":").number(static_cast<Byte>(agent.provider)).text(",\"status\":").json(agentStatus(agent.status), escapes).text(",\"workspace\":").json(agent.workspace_label, escapes).text(",\"tab\":").json(agent.tab_label, escapes).text(",\"title\":").json(agent.session_title, escapes).text(",\"cwd\":").json(agent.cwd_label, escapes).text(",\"blocked_reason\":").json(blockedReason(agent.blocked_reason), escapes).text(",\"status_age_s\":").number(agent.status_age_s).text(",\"worktree_id\":").number(agent.work_tree).text(",\"last_event\":").json(agent.last_event, escapes).text(",\"plan\":{\"done\":").number(agent.plan_done).text(",\"total\":").number(agent.plan_total).text(",\"step\":").json(agent.plan_step, escapes).text("},\"final_message\":").json(agent.final_message, escapes).text(",\"session_id\":").json(hexSession(agent.session_id), escapes).text("}");
 }
 
@@ -977,6 +1033,7 @@ inline std::string_view worktreeState(WorktreeState state) {
   case WorktreeState::gone:
     return "gone";
   }
+
   return "active";
 }
 
@@ -989,14 +1046,17 @@ inline std::string_view commandState(CommandState state) {
   case CommandState::exited:
     return "exited";
   }
+
   return "none";
 }
 
 template <Allocator Memory>
 void worktreeEntry(Output<Memory> &output, const WorktreeListEntry &entry, std::span<const AgentSnapshotEntry> agents, bool json) {
   constexpr auto escapes = JsonEscapes::control;
+
   if (!json) {
     const auto member = std::ranges::find(agents, entry.worktree, &AgentSnapshotEntry::work_tree);
+
     output.text(entry.branch).text("\t").text(entry.title.empty() ? entry.branch : entry.title).text("\t").text(worktreeState(entry.state)).text("\t").text(member == agents.end() ? "-" : agentStatus(member->status)).text("\t+").number(entry.diff_added).text(" -").number(entry.diff_removed).text(" ").number(entry.diff_files).text(" files\t").text(entry.command_label.empty() ? "-" : entry.command_label).text(" ").text(commandState(entry.command_state)).text("\t").text(entry.path).text("\n");
     return;
   }
@@ -1007,24 +1067,30 @@ void worktreeEntry(Output<Memory> &output, const WorktreeListEntry &entry, std::
   } else {
     output.text("null");
   }
+
   output.text(",\"path\":").json(entry.path, escapes).text(",\"origin\":").json(entry.origin == WorktreeOrigin::telar ? "telar" : "external").text(",\"state\":").json(worktreeState(entry.state)).text(",\"source_workspace_id\":").number(entry.source).text(",\"workspace_id\":");
   if (entry.workspace) {
     output.number(*entry.workspace);
   } else {
     output.text("null");
   }
+
   output.text(",\"diff\":{\"added\":").number(entry.diff_added).text(",\"removed\":").number(entry.diff_removed).text(",\"files\":").number(entry.diff_files).text(",\"commits_ahead\":").number(entry.commits_ahead).text("},\"command\":{\"label\":").json(entry.command_label, escapes).text(",\"state\":").json(commandState(entry.command_state)).text(",\"exit_code\":").number(entry.command_exit).text("},\"agents\":[");
   bool first = true;
+
   for (const auto &agent : agents) {
     if (agent.work_tree != entry.worktree) {
       continue;
     }
+
     if (!first) {
       output.text(",");
     }
+
     worktreeAgent(output, agent);
     first = false;
   }
+
   output.text("]}");
 }
 
@@ -1044,6 +1110,7 @@ void worktreeLaunch(Output<Memory> &output, const WorktreeLaunch &launch, bool j
     } else {
       output.text("null");
     }
+
     output.text(",\"environment\":").json(launch.setup ? "ready" : "not_declared").text(",\"branch\":").json(launch.branch).text(",\"base\":").json(launch.base).text(",\"path\":").json(launch.path).text(",\"workspace_id\":").number(launch.opened.location.workspace.id).text(",\"tab_id\":").number(launch.opened.location.tab_id).text(",\"pane_id\":").number(launch.opened.pane_id).text(",\"pane_generation\":").number(launch.opened.pane_generation).text("}\n");
   } else {
     output.text("worktree ").text(launch.branch).text(" at ").text(launch.path).text(": pane ").number(launch.opened.pane_id).text(" in workspace ").number(launch.opened.location.workspace.id).text("\n");
@@ -1059,6 +1126,7 @@ namespace telar::runtime::cli::sessions {
 
 inline std::optional<std::uint64_t> currentWorkspace() {
   const auto value = ::getenv("TELAR_WORKSPACE_ID");
+
   return value ? maybeUnsigned(value) : std::nullopt;
 }
 
@@ -1066,16 +1134,19 @@ inline bool confirmRemoval(const char *question) {
   if (!::isatty(STDIN_FILENO)) {
     throw Failure{"this removal needs a person to confirm it at a terminal"};
   }
+
   std::fprintf(stderr, "%s? [y/N] ", question);
   std::array<char, 16> buffer;
   if (!std::fgets(buffer.data(), buffer.size(), stdin)) {
     return false;
   }
+
   std::string answer{buffer.data()};
   const auto begin = answer.find_first_not_of(" \r\t\n"), end = answer.find_last_not_of(" \r\t\n");
   if (begin == std::string::npos) {
     return false;
   }
+
   answer = asciiLowerCopy(answer.substr(begin, end - begin + 1));
   return answer == "y" || answer == "yes";
 }
@@ -1098,6 +1169,7 @@ public:
   inline int run() {
     using Action = WorktreeOptions::Action;
     int result = 0;
+
     switch (options_.action) {
     case Action::create:
       create();
@@ -1131,6 +1203,7 @@ public:
 private:
   inline const WorkspaceListEntry *workspace(std::uint64_t id) const {
     const auto found = std::ranges::find(catalog_.entries, id, &WorkspaceListEntry::workspace);
+
     return found == catalog_.entries.end() ? nullptr : &*found;
   }
 
@@ -1141,20 +1214,25 @@ private:
         return &entry;
       }
     }
+
     return nullptr;
   }
 
   inline const WorktreeListEntry *find(std::string_view reference) const {
     const WorktreeListEntry *found = nullptr;
+
     for (const auto &entry : catalog_.worktrees) {
       if (entry.branch != reference) {
         continue;
       }
+
       if (found) {
         throw Failure{"more than one worktree has that branch or title; name it by the other"};
       }
+
       found = &entry;
     }
+
     if (found) {
       return found;
     }
@@ -1163,11 +1241,14 @@ private:
       if (!asciiEqualIgnoreCase(entry.title, reference)) {
         continue;
       }
+
       if (found) {
         throw Failure{"more than one worktree has that branch or title; name it by the other"};
       }
+
       found = &entry;
     }
+
     return found;
   }
 
@@ -1178,8 +1259,10 @@ private:
         if (!entry) {
           throw Failure{"workspace not found", 2};
         }
+
         return std::string{entry->path};
       }
+
       return realDirectory(*options_.workspace);
     }
 
@@ -1188,6 +1271,7 @@ private:
         return std::string{entry->path};
       }
     }
+
     return realDirectory(".");
   }
 
@@ -1197,6 +1281,7 @@ private:
         return *id;
       }
     }
+
     if (const auto id = currentWorkspace()) {
       if (const auto entry = workspace(*id)) {
         try {
@@ -1207,6 +1292,7 @@ private:
         }
       }
     }
+
     if (const auto entry = workspaceAt(root)) {
       return entry->workspace;
     }
@@ -1215,6 +1301,7 @@ private:
     const auto login = loginShell();
     const std::array shell{login.view()};
     const auto opened = session_.template exchange<PaneOpened>(CreateWorkspace{.size = workspace_size, .name = name, .launch = {.cwd = root, .arguments = shell}});
+
     return opened.location.workspace.id;
   }
 
@@ -1227,6 +1314,7 @@ private:
     if (!id || !generation || *id == 0 || *generation == 0) {
       return std::nullopt;
     }
+
     try {
       session_.template exchange<RequestCompleted>(VerifyPaneDescent{.pane_id = *id, .pane_generation = *generation});
       verified_generation_ = *generation;
@@ -1240,33 +1328,41 @@ private:
     if (options_.coordinator) {
       return options_.coordinator;
     }
+
     if (!pane) {
       return std::nullopt;
     }
+
     const auto agents = session_.template exchange<AgentSnapshot>(QueryAgents{});
+
     for (const auto &entry : agents.entries) {
       if (entry.pane_id == *pane && entry.pane_generation == verified_generation_ && std::ranges::any_of(entry.session_id, [](Byte byte) { return byte != 0; })) {
         return CoordinatorReference{.session_id = entry.session_id, .pane_id = *pane, .pane_generation = verified_generation_};
       }
     }
+
     return std::nullopt;
   }
 
   inline std::string brief() const {
     std::string result;
+
     for (std::size_t index = 1; index < options_.command.size(); ++index) {
       if (index != 1 && result.size() < brief_bytes) {
         result += ' ';
       }
+
       for (const unsigned char byte : std::string_view{options_.command[index]}) {
         if (result.size() == brief_bytes) {
           break;
         }
+
         if ((byte >= ' ' && byte != 0x7f) || byte == '\n' || byte == '\t') {
           result += static_cast<char>(byte);
         }
       }
     }
+
     while (!result.empty()) {
       try {
         validateUtf8(result);
@@ -1275,6 +1371,7 @@ private:
         result.pop_back();
       }
     }
+
     return result;
   }
 
@@ -1282,6 +1379,7 @@ private:
     std::vector<std::string_view> argv;
     const auto login = loginShell();
     const auto shell = login.view();
+
     if (options_.command.empty()) {
       argv.push_back(shell);
     } else {
@@ -1289,10 +1387,12 @@ private:
       if (!line.empty()) {
         argv = {shell, "-l", "-i", "-c", line};
       }
+
       for (const auto word : options_.command) {
         argv.push_back(word);
       }
     }
+
     return session_.template exchange<PaneOpened>(LaunchWorktree{.worktree = id, .label = options_.label.value_or(""), .size = launch_size, .launch = {.cwd = directory, .arguments = argv}});
   }
 
@@ -1301,27 +1401,34 @@ private:
     const auto root = git_.root(directory);
     const auto branch = *options_.branch;
     std::string checkout;
+
     if (options_.directory) {
       checkout = *options_.directory;
     } else {
       sessions::appendWorktreeCheckout(checkout, root, branch);
     }
+
     for (const auto &entry : catalog_.worktrees) {
       if (entry.path == checkout || entry.branch == branch) {
         throw Failure{"that worktree already exists; use `telar worktree exec` to run more there"};
       }
     }
+
     const auto base = options_.from ? std::string{*options_.from} : git_.currentBranch(root);
+
     try {
       sessions::branch(base);
     } catch (const std::invalid_argument &) {
       throw Failure{"UnusableBase"};
     }
+
     constexpr std::size_t maximum_worktrees = 64;
     if (catalog_.worktrees.size() >= maximum_worktrees) {
       throw Failure{"WorktreeLimitReached"};
     }
+
     const auto source = sourceWorkspace(root);
+
     git_.add(root, checkout, branch, base);
     const auto pane = attributedPane();
     const auto reference = coordinator(pane);
@@ -1329,16 +1436,19 @@ private:
     const auto registered = session_.template exchange<WorktreeRegistered>(RegisterWorktree{.source = source, .created_by = pane, .path = checkout, .branch = branch, .base = base, .title = options_.title.value_or(""), .brief = description, .dispatched_from = options_.dispatched_from.value_or(""), .coordinator = reference});
     const auto setup = project_setup::prepare(memory_, session_.control(), checkout, options_.setup);
     const auto opened = launch(registered.worktree, checkout);
+
     worktreeLaunch(output_, WorktreeLaunch{.setup = setup, .worktree = registered.worktree, .path = checkout, .branch = branch, .base = base, .opened = opened}, options_.json);
   }
 
   inline std::vector<GitWorktree> untracked() {
     std::vector<GitWorktree> entries;
+
     try {
       entries = git_.listed(realDirectory("."), [&](std::string_view path) { return std::ranges::none_of(catalog_.worktrees, [&](const auto &tracked) { return tracked.path == path; }); });
     } catch (const std::exception &) {
       return {};
     }
+
     return entries;
   }
 
@@ -1346,11 +1456,14 @@ private:
     if (const auto entry = find(*options_.branch)) {
       return *entry;
     }
+
     for (const auto &entry : untracked()) {
       if (entry.branch != *options_.branch) {
         continue;
       }
+
       const auto root = git_.root(entry.path);
+
       adopted_path_ = entry.path;
       adopted_branch_ = entry.branch;
       adopted_base_ = git_.currentBranch(root);
@@ -1358,17 +1471,21 @@ private:
       const auto pane = attributedPane();
       const auto reference = coordinator(pane);
       const auto registered = session_.template exchange<WorktreeRegistered>(RegisterWorktree{.source = source, .created_by = pane, .path = adopted_path_, .branch = adopted_branch_, .base = adopted_base_, .coordinator = reference});
+
       return {.worktree = registered.worktree, .source = source, .path = adopted_path_, .branch = adopted_branch_, .base = adopted_base_};
     }
+
     throw Failure{"no tracked worktree matches that branch or title", 2};
   }
 
   inline int exec() {
     const auto entry = findOrAdopt();
     const auto opened = launch(entry.worktree, entry.path);
+
     if (options_.wait) {
       return wait(opened);
     }
+
     worktreeLaunch(output_, WorktreeLaunch{.worktree = entry.worktree, .path = entry.path, .branch = entry.branch, .base = entry.base, .opened = opened}, options_.json);
     return 0;
   }
@@ -1377,13 +1494,16 @@ private:
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{options_.timeout};
     constexpr std::uint16_t maximum_rows = 2000;
     constexpr unsigned wait_poll_ms = 250;
+
     for (;;) {
       const auto reply = session_.template exchange<PaneText>(ReadPane{.pane_id = opened.pane_id, .pane_generation = opened.pane_generation, .rows = maximum_rows, .source = PaneTextSource::recent});
       if (reply.exit_code) {
         auto text = reply.text;
+
         while (text.ends_with(' ') || text.ends_with('\n')) {
           text.remove_suffix(1);
         }
+
         if (options_.json) {
           output_.text("{\"pane_id\":").number(opened.pane_id).text(",\"exit_code\":").number(*reply.exit_code).text(",\"truncated\":").boolean(reply.truncated).text(",\"output\":").json(text).text("}\n");
         } else {
@@ -1392,12 +1512,15 @@ private:
             std::fprintf(stderr, "telar worktree: older rows were omitted\n");
           }
         }
+
         return *reply.exit_code >= 0 && *reply.exit_code <= std::numeric_limits<std::uint8_t>::max() ? *reply.exit_code : 1;
       }
+
       if (std::chrono::steady_clock::now() >= deadline) {
         std::fprintf(stderr, "telar worktree: the command is still running after %us; pane %llu\n", options_.timeout, static_cast<unsigned long long>(opened.pane_id));
         return 3;
       }
+
       std::this_thread::sleep_for(std::chrono::milliseconds{wait_poll_ms});
     }
   }
@@ -1406,6 +1529,7 @@ private:
     Channel agents_channel{memory_, options_.socket, false};
     const auto agents = agents_channel.template exchange<AgentSnapshot>(QueryAgents{});
     std::optional<std::uint64_t> source;
+
     if (options_.workspace) {
       source = maybeUnsigned(*options_.workspace);
       if (!source) {
@@ -1413,32 +1537,41 @@ private:
         if (!entry) {
           throw Failure{"workspace not found", 2};
         }
+
         source = entry->workspace;
       }
     }
+
     output_.text(options_.json ? "[" : "BRANCH\tTITLE\tSTATE\tAGENT\tDIFF\tCOMMAND\tPATH\n");
     bool first = true;
+
     for (const auto &entry : catalog_.worktrees) {
       if (source && entry.source != *source) {
         continue;
       }
+
       if (options_.json && !first) {
         output_.text(",");
       }
+
       worktreeEntry(output_, entry, agents.entries, options_.json);
       first = false;
     }
+
     for (const auto &entry : untracked()) {
       if (options_.json) {
         if (!first) {
           output_.text(",");
         }
+
         output_.text("{\"worktree_id\":null,\"branch\":").json(entry.branch, JsonEscapes::control).text(",\"path\":").json(entry.path, JsonEscapes::control).text(",\"origin\":\"untracked\",\"agents\":[]}");
       } else {
         output_.text(entry.branch).text("\t-\tuntracked\t-\t-\t-\t").text(entry.path).text("\n");
       }
+
       first = false;
     }
+
     if (options_.json) {
       output_.text("]\n");
     }
@@ -1449,17 +1582,22 @@ private:
     if (!entry) {
       throw Failure{"no tracked worktree matches that branch or title", 2};
     }
+
     if (!entry->workspace) {
       throw Failure{"nothing was launched in that worktree yet; use `telar worktree exec`", 2};
     }
+
     const auto clients = session_.template exchange<ClientList>(QueryClients{});
     ClientDescriptor client;
+
     try {
       client = chooseClient(clients.entries, options_.client);
     } catch (const Failure &) {
       throw Failure{"no UI client is attached; pass --client ID"};
     }
+
     RequestClientCommand request;
+
     request.route = {.id = client.id, .generation = client.generation};
     request.action = ClientAction::workspace_select;
     request.target_id = *entry->workspace;
@@ -1467,6 +1605,7 @@ private:
     if (reply.status == ClientCommandStatus::failed) {
       throw Failure{"the UI client could not open the worktree"};
     }
+
     if (options_.json) {
       output_.text("{\"worktree_id\":").number(entry->worktree).text(",\"workspace_id\":").number(*entry->workspace).text(",\"client_id\":").number(client.id).text("}\n");
     } else {
@@ -1478,9 +1617,11 @@ private:
     const auto entry = findOrAdopt();
     const auto against = options_.uncommitted ? std::string{"HEAD"} : git_.line({"git", "-C", entry.path, "merge-base", entry.base.empty() ? "HEAD" : entry.base, "HEAD"});
     std::vector<std::string_view> argv{"git", "-C", entry.path, "--no-pager", "diff"};
+
     if (options_.stat) {
       argv.push_back("--stat");
     }
+
     argv.push_back(against);
     git_.run(argv, "GitDiffFailed", true);
   }
@@ -1490,21 +1631,27 @@ private:
     if (!entry) {
       throw Failure{"no tracked worktree matches that branch or title", 2};
     }
+
     std::optional<std::string> root;
+
     try {
       root = git_.root(entry->path);
     } catch (const std::exception &) {
     }
+
     if (root && !options_.force && !git_.run({"git", "-C", entry->path, "status", "--porcelain"}, "GitFailed").empty()) {
       throw Failure{"the worktree has local changes; commit them or pass --force"};
     }
+
     if (options_.force && !confirmRemoval("Remove the worktree and discard its local changes")) {
       throw Failure{"removal cancelled"};
     }
+
     const bool merged = options_.delete_branch && root && git_.merged(*root, entry->branch);
     if (options_.delete_branch && !merged && !confirmRemoval("Also delete its branch and the commits no other branch has")) {
       throw Failure{"removal cancelled"};
     }
+
     session_.template exchange<RequestCompleted>(ForgetWorktree{.worktree = entry->worktree});
     if (root) {
       if (options_.force) {
@@ -1512,10 +1659,12 @@ private:
       } else {
         git_.run({"git", "-C", *root, "worktree", "remove", "--", entry->path}, "git worktree remove failed");
       }
+
       if (options_.delete_branch) {
         git_.run({"git", "-C", *root, "branch", merged ? "-d" : "-D", "--", entry->branch}, "git branch deletion failed; the branch may not be merged");
       }
     }
+
     if (options_.json) {
       output_.text("{\"worktree_id\":").number(entry->worktree).text(",\"path\":").json(entry->path).text(",\"branch_deleted\":").boolean(options_.delete_branch).text("}\n");
     } else {
@@ -1531,7 +1680,9 @@ private:
         {"WorkspaceNotFound", "workspace not found"},
         {"NotARepository", "not inside a git repository"},
     }};
+
     std::optional<std::string> found;
+
     try {
       found = repository::find(memory_, *options_.repository, options_.workspace, options_.socket);
     } catch (const std::runtime_error &error) {
@@ -1573,6 +1724,7 @@ int worktree(Memory &memory, const WorktreeOptions &options) {
     if (options.machine) {
       if (const auto profile = machine::resolve(memory, *options.machine)) {
         WorktreeDispatch dispatch{memory, options, *profile};
+
         return options.action == WorktreeOptions::Action::fetch ? dispatch.fetch() : dispatch.create();
       }
 
@@ -1584,10 +1736,12 @@ int worktree(Memory &memory, const WorktreeOptions &options) {
     return WorktreeCommand{memory, options}.run();
   } catch (const Failure &error) {
     const auto message = describeDispatchError(error.what());
+
     std::fprintf(stderr, "telar worktree: %.*s\n", static_cast<int>(message.size()), message.data());
     return error.status() == 2 || error.code() == FailureCode::worktree_not_found || error.code() == FailureCode::workspace_not_found ? 2 : 1;
   } catch (const std::exception &error) {
     const auto message = describeDispatchError(error.what());
+
     std::fprintf(stderr, "telar worktree: %.*s\n", static_cast<int>(message.size()), message.data());
     return 1;
   }

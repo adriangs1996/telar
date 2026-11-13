@@ -89,6 +89,7 @@ template <ByteStream Stream>
 inline bool drainEnded(Stream &stream) noexcept {
   std::array<std::uint8_t, 4096> discarded;
   const auto read = stream.read(discarded);
+
   return read.state == StreamResult::State::ended || read.state == StreamResult::State::failed;
 }
 
@@ -124,9 +125,11 @@ public:
     if (complete_) {
       return Result::complete;
     }
+
     if (length_ == storage.size()) {
       return Result::too_large;
     }
+
     if constexpr (BufferedByteStream<Stream>) {
       return receiveBuffered(source, storage, delimiter);
     }
@@ -180,6 +183,7 @@ private:
     const auto incoming = std::string_view{reinterpret_cast<const char *>(visible.bytes.data()), visible.bytes.size()};
     const auto boundary = delimiterEnd(previous, incoming, delimiter);
     const auto consumed = boundary == std::string_view::npos ? visible.bytes.size() : boundary;
+
     std::memcpy(storage.data() + length_, visible.bytes.data(), consumed);
     source.consume(consumed);
     length_ += consumed;
@@ -191,13 +195,16 @@ private:
 
   inline static std::size_t delimiterEnd(std::string_view previous, std::string_view incoming, std::string_view delimiter) noexcept {
     const auto overlap = std::min(previous.size(), delimiter.size() - 1);
+
     for (std::size_t prefix = overlap; prefix != 0; --prefix) {
       const auto suffix = delimiter.size() - prefix;
       if (suffix <= incoming.size() && previous.ends_with(delimiter.substr(0, prefix)) && incoming.starts_with(delimiter.substr(prefix))) {
         return suffix;
       }
     }
+
     const auto position = incoming.find(delimiter);
+
     return position == std::string_view::npos ? position : position + delimiter.size();
   }
 
@@ -206,6 +213,7 @@ private:
       waiting_ = result.waiting;
       return Result::pending;
     }
+
     return Result::ended;
   }
 
@@ -236,16 +244,19 @@ enum class EventSource : std::uint64_t {
 
 inline constexpr std::uint64_t eventToken(EventSource source, std::uint64_t identity) noexcept {
   constexpr unsigned source_bits = 3;
+
   return (identity << source_bits) | static_cast<std::uint64_t>(source);
 }
 
 inline constexpr std::uint64_t eventIdentity(std::uint64_t token) noexcept {
   constexpr unsigned source_bits = 3;
+
   return token >> source_bits;
 }
 
 inline constexpr EventSource eventSource(std::uint64_t token) noexcept {
   constexpr std::uint64_t source_mask = 7;
+
   return static_cast<EventSource>(token & source_mask);
 }
 
@@ -283,9 +294,11 @@ public:
       if (received.state != StreamResult::State::data || received.bytes == 0) {
         return {received.state, {}, received.waiting};
       }
+
       offset_ = 0;
       length_ = received.bytes;
     }
+
     return {StreamResult::State::data, storage_.bytes().subspan(offset_, std::min(maximum, length_ - offset_))};
   }
 
@@ -295,6 +308,7 @@ public:
       std::memcpy(destination.data(), storage_.bytes().data() + offset_, count);
       consume(count);
     }
+
     return count;
   }
 

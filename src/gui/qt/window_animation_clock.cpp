@@ -62,10 +62,12 @@ WindowAnimationClock::WindowAnimationClock(QQuickWindow &window)
       synchronize();
     }
   });
+
   window.installEventFilter(this);
   connect(&window, &QWindow::visibilityChanged, this, [this] {
     requestSynchronization();
   });
+
   connect(&window, &QQuickWindow::afterAnimating, this, [this] {
     if (!synchronization_pending_ && !deadline_ns_) {
       return;
@@ -177,6 +179,7 @@ void WindowAnimationClock::synchronize() {
 
   const auto timestamp = now();
   std::optional<std::uint64_t> earliest;
+
   std::apply([&](const auto &...items) {
     for (const auto deadline : {nextDeadline(items, timestamp)...}) {
       if (deadline && (!earliest || *deadline < *earliest)) {
@@ -191,6 +194,7 @@ void WindowAnimationClock::synchronize() {
     constexpr std::uint64_t nanoseconds_per_millisecond = 1'000'000;
     const auto delta = *earliest > timestamp ? *earliest - timestamp : 0;
     const auto delay = (delta / nanoseconds_per_millisecond) + static_cast<std::uint64_t>(delta % nanoseconds_per_millisecond != 0);
+
     timer_.start(static_cast<int>(std::clamp<std::uint64_t>(delay, 1, std::numeric_limits<int>::max())));
   }
 }

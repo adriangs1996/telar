@@ -56,12 +56,16 @@ public:
     if (!possibly_pending_input_) {
       return;
     }
+
     bool ground = false;
+
     checkGhostty(ghostty_terminal_get(terminal_, GHOSTTY_TERMINAL_DATA_VT_GROUND, &ground));
     if (!ground) {
       constexpr std::array<std::uint8_t, 2> boundary{0x1b, 0x18};
+
       write(boundary);
     }
+
     possibly_pending_input_ = false;
   }
 
@@ -78,6 +82,7 @@ public:
   TerminalSize size() const {
     return size_cache_.get(epoch_, [&] {
       auto result = size_;
+
       checkGhostty(ghostty_terminal_get(terminal_, GHOSTTY_TERMINAL_DATA_COLS, &result.cols));
       checkGhostty(ghostty_terminal_get(terminal_, GHOSTTY_TERMINAL_DATA_ROWS, &result.rows));
       return result;
@@ -88,16 +93,19 @@ public:
     auto &entry = modes_[(number ^ (ansi ? mode_ansi_hash : 0)) % modes_.size()];
     if (entry.epoch != epoch_ || entry.number != number || entry.ansi != ansi) {
       GhosttyTerminalModeConfig query{.mode = ghostty_mode_new(number, ansi), .value = false};
+
       entry.value = ghostty_terminal_get(terminal_, GHOSTTY_TERMINAL_DATA_MODE, &query) == GHOSTTY_SUCCESS && query.value;
       entry.number = number;
       entry.ansi = ansi;
       entry.epoch = epoch_;
     }
+
     return entry.value;
   }
 
   void setMode(std::uint16_t number, bool enabled) {
     const GhosttyTerminalModeConfig config{.mode = ghostty_mode_new(number, false), .value = enabled};
+
     checkGhostty(ghostty_terminal_set(terminal_, GHOSTTY_TERMINAL_OPT_MODE, &config));
     invalidate();
   }
@@ -118,6 +126,7 @@ public:
 
   bool primaryScreen() const {
     GhosttyTerminalScreen screen{};
+
     checkGhostty(ghostty_terminal_get(terminal_, GHOSTTY_TERMINAL_DATA_ACTIVE_SCREEN, &screen));
     return screen == GHOSTTY_TERMINAL_SCREEN_PRIMARY;
   }
@@ -127,6 +136,7 @@ public:
       Margins result{};
       const GhosttyTerminalData keys[] = {GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_TOP, GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_BOTTOM, GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_LEFT, GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_RIGHT};
       void *values[] = {&result.top, &result.bottom, &result.left, &result.right};
+
       checkGhostty(ghostty_terminal_get_multi(terminal_, std::size(keys), keys, values, nullptr));
       return result;
     });
@@ -135,6 +145,7 @@ public:
   std::uint8_t keyboard() const {
     return keyboard_cache_.get(epoch_, [&] {
       std::uint8_t result = 0;
+
       checkGhostty(ghostty_terminal_get(terminal_, GHOSTTY_TERMINAL_DATA_KITTY_KEYBOARD_FLAGS, &result));
       return result;
     });
@@ -143,6 +154,7 @@ public:
   GhosttyStyle style() const {
     return style_cache_.get(epoch_, [&] {
       auto result = ghosttySized<GhosttyStyle>();
+
       checkGhostty(ghostty_terminal_get(terminal_, GHOSTTY_TERMINAL_DATA_CURSOR_STYLE, &result));
       return result;
     });
@@ -152,6 +164,7 @@ public:
     return visual_cursor_cache_.get(epoch_, [&] {
       checkGhostty(ghostty_render_state_update(render_, terminal_));
       auto result = ghosttySized<GhosttyRenderStateCursor>();
+
       checkGhostty(ghostty_render_state_get(render_, GHOSTTY_RENDER_STATE_DATA_CURSOR, &result));
       return result;
     });
@@ -163,19 +176,23 @@ public:
         checkGhostty(ghostty_terminal_get(terminal_, GHOSTTY_TERMINAL_DATA_COLOR_PALETTE, palette_.data()));
         palette_valid_ = true;
       }
+
       return palette_[selector];
     }
 
     if (selector > cursor_color) {
       return std::nullopt;
     }
+
     const auto index = selector - foreground;
     if (!color_valid_[index]) {
       const auto key = selector == foreground ? GHOSTTY_TERMINAL_DATA_COLOR_FOREGROUND : selector == background ? GHOSTTY_TERMINAL_DATA_COLOR_BACKGROUND : GHOSTTY_TERMINAL_DATA_COLOR_CURSOR;
       GhosttyColorRgb result{};
+
       colors_[index] = ghostty_terminal_get(terminal_, key, &result) == GHOSTTY_SUCCESS ? std::optional{result} : std::nullopt;
       color_valid_[index] = true;
     }
+
     return colors_[index];
   }
 
@@ -185,11 +202,13 @@ public:
     if (ghostty_terminal_grid_ref(terminal_, point, &result) != GHOSTTY_SUCCESS) {
       return std::nullopt;
     }
+
     return result;
   }
 
   std::string_view title() const {
     GhosttyString result{};
+
     checkGhostty(ghostty_terminal_get(terminal_, GHOSTTY_TERMINAL_DATA_TITLE, &result));
     return {reinterpret_cast<const char *>(result.ptr), result.len};
   }
@@ -213,10 +232,12 @@ private:
     invalidate();
     possibly_pending_input_ = codepoints.back() < 0x20;
     std::size_t consumed = 0;
+
     checkGhostty(ghostty_terminal_vt_write_ascii(terminal_, codepoints.data(), codepoints.size(), &consumed));
     if (consumed != codepoints.size()) {
       throw TerminalError{GHOSTTY_INVALID_VALUE};
     }
+
     if (write_failed_) {
       throw TerminalError{GHOSTTY_OUT_OF_MEMORY};
     }
@@ -228,13 +249,16 @@ private:
     invalidate();
     if (!bytes.empty()) {
       const auto last = bytes.back();
+
       possibly_pending_input_ = last >= 0x80 || last < 0x20;
     }
+
     if (separate_media_ && (CheckGraphics || !graphics_cursor_.ground())) {
       graphics_cursor_.feed(terminal_, bytes, size_);
     } else {
       ghostty_terminal_vt_write(terminal_, bytes.data(), bytes.size());
     }
+
     if (write_failed_) {
       throw TerminalError{GHOSTTY_OUT_OF_MEMORY};
     }
@@ -251,6 +275,7 @@ private:
         value_ = read();
         epoch_ = epoch;
       }
+
       return value_;
     }
 
@@ -327,8 +352,10 @@ private:
     }
 
     const auto &result = snapshot.state;
+
     margin_cache_.store(epoch_, {result.top, result.bottom, result.left, result.right});
     auto &origin = modes_[origin_mode % modes_.size()];
+
     origin = {epoch_, origin_mode, false, result.origin != 0};
     return result;
   }

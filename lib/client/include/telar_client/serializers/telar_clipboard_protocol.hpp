@@ -32,10 +32,12 @@ struct BodySchema<ClipboardRepresentation>
 
 inline void validateClipboardContents(std::span<const ClipboardRepresentation> contents) {
   std::size_t size = 0;
+
   for (const auto &content : contents) {
     if (content.mime.empty() || content.mime.contains('\0') || content.data.size() > clipboard_content_limit - size) {
       throw EncodingError{"Invalid clipboard representation or aggregate size"};
     }
+
     size += content.data.size();
   }
 }
@@ -55,6 +57,7 @@ struct ClipboardDesktopRequest {
     if (mimes.size() > 4 || contents.size() > 128) {
       throw EncodingError{"Invalid clipboard request bounds"};
     }
+
     validateClipboardContents(contents);
     if (!write && !contents.empty()) {
       throw EncodingError{"Clipboard read request contains write data"};
@@ -95,6 +98,7 @@ struct CompleteClipboardDesktop {
     if (contents.size() > 4 || available.size() > 16 || (prepared && (!contents.empty() || !available.empty()))) {
       throw EncodingError{"Invalid clipboard completion phase or bounds"};
     }
+
     validateClipboardContents(contents);
     if (status != ClipboardDesktopStatus::success && (!contents.empty() || !available.empty() || remember)) {
       throw EncodingError{"Unsuccessful clipboard completion carries data"};

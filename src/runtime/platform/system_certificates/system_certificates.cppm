@@ -98,6 +98,7 @@ inline std::array<char, PATH_MAX> descriptorPath(int descriptor) {
   if (!descriptorPath(descriptor, path)) {
     throw SystemError{"Resolve open file path"};
   }
+
   return path;
 }
 
@@ -515,6 +516,7 @@ private:
     if (SecKeychainOpen(path, &opened) != errSecSuccess) {
       throw SystemError{"Open system certificate keychain", EACCES};
     }
+
     const Resource keychain{opened, &CFRelease};
     const void *search_items[]{opened};
     const Resource search{CFArrayCreate(kCFAllocatorDefault, search_items, 1, &kCFTypeArrayCallBacks), &CFRelease};
@@ -532,25 +534,31 @@ private:
     CFTypeRef matched = nullptr;
     const auto status = SecItemCopyMatching(static_cast<CFDictionaryRef>(query.get()), &matched);
     const Resource result{matched, &CFRelease};
+
     if (status == errSecItemNotFound) {
       return;
     }
+
     if (status != errSecSuccess || !result || CFGetTypeID(result.get()) != CFArrayGetTypeID()) {
       throw SystemError{"Read system certificate keychain", EIO};
     }
 
     const auto certificates = static_cast<CFArrayRef>(result.get());
+
     for (CFIndex index = 0; index < CFArrayGetCount(certificates); ++index) {
       const auto item = CFArrayGetValueAtIndex(certificates, index);
       if (item == nullptr || CFGetTypeID(item) != SecCertificateGetTypeID()) {
         throw SystemError{"Invalid system certificate entry", EINVAL};
       }
+
       const auto certificate = static_cast<SecCertificateRef>(const_cast<void *>(item));
       const Resource encoded{SecCertificateCopyData(certificate), &CFRelease};
       if (!encoded) {
         throw std::bad_alloc{};
       }
+
       const auto data = static_cast<CFDataRef>(encoded.get());
+
       consume(std::span<const std::uint8_t>{CFDataGetBytePtr(data), static_cast<std::size_t>(CFDataGetLength(data))});
     }
   }

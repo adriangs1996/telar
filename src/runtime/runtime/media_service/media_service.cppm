@@ -143,6 +143,7 @@ public:
     requires requires(const History &service) { service.historyMetrics(); }
   {
     auto snapshot = history_service_.historyMetrics();
+
     snapshot.queue = history_.queueMetrics();
     snapshot.query_submissions = history_queries_;
     snapshot.query_refusals = history_query_failures_;
@@ -204,6 +205,7 @@ public:
     if (!std::holds_alternative<HistoryStore<Memory>>(history_)) {
       history_.template emplace<HistoryFilters>(filters);
     }
+
     TELAR_DIAGNOSTIC(idle());
   }
 
@@ -212,6 +214,7 @@ public:
     TELAR_DIAGNOSTIC(idle());
     const bool known = ClientRequests::dispatch<RequestLane::service>(static_cast<ClientTag>(payload.front()), [&]<typename Message> {
       DecodeStorage storage{decode_};
+
       execute(Codec::decode<Message>(payload, storage), reply, context);
     });
     if (!known) {
@@ -248,6 +251,7 @@ public:
 
   inline HistoryMetrics historyMetrics() const noexcept {
     auto snapshot = counters_.snapshot(std::holds_alternative<HistoryStore<Memory>>(history_));
+
     snapshot.sqlite_bytes = storage_.bytes();
     return snapshot;
   }
@@ -333,6 +337,7 @@ public:
 
   inline std::optional<DescriptionRequest> nextDescription(AgentRegistry<Memory> &agents) {
     std::size_t pending = 0;
+
     for (const auto &agent : agents.records()) {
       if (agent->description_phase == DescriptionPhase::running) {
         return std::nullopt;
@@ -355,6 +360,7 @@ public:
 
       try {
         auto query = agent->description_capture.normalized();
+
         agent->description_capture.clear();
         agent->description_phase = DescriptionPhase::running;
         agent->description_revision = ++description_revision_;
@@ -377,6 +383,7 @@ public:
     }
 
     HistorySessionTitle finished{.session = agent->session_id};
+
     if (result.status == DescriptionStatus::success) {
       try {
         finished.title = normalizeDescriptionTitle(result.title.view());
@@ -495,28 +502,35 @@ public:
     }
 
     typename Processor::Request request;
+
     enqueueRetired(model, request);
     const auto panes = model.panes.items();
+
     for (std::size_t visited = 0; visited < panes.size() && request.count < request.entries.size(); ++visited) {
       auto *pane = panes[next_slot_++ % panes.size()];
       if (pane == nullptr) {
         continue;
       }
+
       if (pane->media->failed()) {
         if (!pane->output_closed) {
           service.failOutput(*pane);
         }
+
         continue;
       }
 
       if (!pane->media->busy()) {
         pane->media->discardUnwantedTransfers([&](ImageKey key, bool shared) { return wanted(clients, pane->id, key, shared); });
       }
+
       if (pane->media->seal()) {
         request.entries[request.count++] = {pane->id, pane->generation, pane->media};
       }
+
       updateReadInterest(*pane);
     }
+
     if (request.count != 0) {
       pending_ = worker_.submit(request);
     }
@@ -546,9 +560,11 @@ public:
         pane->media->cancel();
       }
     }
+
     for (auto media = model.retired_media; media; media = media->retired_next) {
       media->cancel();
     }
+
     for (;;) {
       worker_.wait([&](const typename Processor::Result &result) {
         pending_ = false;
@@ -558,18 +574,22 @@ public:
       });
 
       typename Processor::Request request;
+
       enqueueRetired(model, request);
       for (auto *pane : model.panes.items()) {
         if (request.count == request.entries.size()) {
           break;
         }
+
         if (pane != nullptr && pane->media->seal()) {
           request.entries[request.count++] = {pane->id, pane->generation, pane->media};
         }
       }
+
       if (request.count == 0) {
         return;
       }
+
       pending_ = worker_.submit(request);
     }
   }
@@ -586,16 +606,19 @@ private:
         return true;
       }
     }
+
     return false;
   }
 
   // The request shares the model's retired media, and so what that media keeps: region `a`.
   inline static void enqueueRetired(tbc::view<RuntimeModel<Memory> &, tbc::lt::a> model, tbc::view<typename Processor::Request &, tbc::lt::a> request) noexcept {
     auto *link = &model.retired_media;
+
     while (*link && request.count < request.entries.size()) {
       auto &media = **link;
       if (media.idle()) {
         auto next = std::move(media.retired_next);
+
         *link = std::move(next);
         --model.retired_media_count;
         continue;
@@ -604,6 +627,7 @@ private:
       if (media.seal()) {
         request.entries[request.count++].media = *link;
       }
+
       link = &media.retired_next;
     }
   }
@@ -620,6 +644,7 @@ private:
       if (pane == nullptr) {
         continue;
       }
+
       if (entry.media->failed()) {
         service.failOutput(*pane);
         continue;
@@ -637,9 +662,11 @@ private:
         reportLimits(model.graphics_limits, *terminal);
         stageTransfers(clients, model.metrics, pane->id, terminal->graphics);
       }
+
       if (!pane->output_closed) {
         service.flushInput(*pane);
       }
+
       updateReadInterest(*pane);
     }
   }
@@ -662,6 +689,7 @@ private:
     if (const auto images = storage.takeTrimmedImages()) {
       limits_.report(LimitReach{.name = "graphics.images_per_screen", .noun = "images", .value = graphics_image_count, .requested = images});
     }
+
     if (const auto placements = storage.takeTrimmedPlacements()) {
       limits_.report(LimitReach{.name = "graphics.placements_per_screen", .noun = "placements", .value = graphics_placement_count, .requested = placements});
     }
@@ -670,6 +698,7 @@ private:
     if (uploads.chunks) {
       limits_.report(LimitReach{.name = "graphics.max_chunks_per_image", .noun = "chunks", .value = GraphicsLimits::maximum_chunks_per_image});
     }
+
     if (uploads.bytes) {
       limits_.report(LimitReach{.name = "graphics.max_image_bytes_per_screen", .noun = "bytes", .value = graphics.screenBytes()});
     }
@@ -715,6 +744,7 @@ public:
 
   inline void submit(std::uint64_t client, const FindPaths &request) {
     auto &slot = acquire(client);
+
     slot.used = ++clock_;
     slot.rebuild |= request.refresh || slot.wanted.root.view() != request.root;
     slot.wanted.assign(request);
@@ -744,16 +774,19 @@ public:
       }
 
       auto &slot = *owned;
+
       slot.build_worker.collect([&](bool) {
         slot.building = false;
         slot.pending |= slot.answered_partial && !slot.querying;
       });
+
       slot.query_worker.collect([&](const typename PathQueryTask<Memory, Index>::Result &result) {
         slot.querying = false;
         slot.answered_partial = !result.complete;
         if (!result.complete && slot.index.complete() && !slot.rebuild) {
           slot.pending = true;
         }
+
         if (!slot.abandoned) {
           consume(slot.client, ClientTag::find_paths, result.payload);
         }
@@ -818,6 +851,7 @@ private:
         return slot.get();
       }
     }
+
     return nullptr;
   }
 
@@ -827,15 +861,18 @@ private:
     }
 
     Owned<Slot, Memory> *selected = nullptr;
+
     for (auto &slot : slots_) {
       if (!slot) {
         selected = &slot;
         break;
       }
+
       if (!slot->building && !slot->querying && (selected == nullptr || slot->used < (*selected)->used)) {
         selected = &slot;
       }
     }
+
     if (selected == nullptr) {
       throw RequestError{FailureCode::resource_limit, "Every path picker slot is busy"};
     }
@@ -857,6 +894,7 @@ private:
       slot.answered_partial = false;
       slot.building = slot.build_worker.submit(true);
     }
+
     if (slot.pending && !slot.querying) {
       slot.querying = slot.query_worker.submit(slot.wanted);
       slot.pending = !slot.querying;
@@ -896,11 +934,13 @@ public:
     if (pending_) {
       return probe_interval;
     }
+
     if (now < next_check_ && checked_revision_ == model.workspace_revision) {
       return next_check_ - now;
     }
 
     Workspace<Memory> *oldest = nullptr;
+
     next_check_ = now + probe_interval;
     checked_revision_ = model.workspace_revision;
     for (auto *workspace : model.workspaces.items()) {
@@ -909,6 +949,7 @@ public:
       }
 
       const auto due = workspace->git_checked_at + probe_interval;
+
       next_check_ = std::min(next_check_, due);
       if (due <= now && (oldest == nullptr || workspace->git_checked_at < oldest->git_checked_at)) {
         oldest = workspace;
@@ -917,10 +958,12 @@ public:
 
     if (oldest != nullptr) {
       WorkspaceGitRequest request{.identity = oldest->id};
+
       request.path.assign(oldest->path);
       if (worker_.submit(request)) {
         pending_ = oldest->id;
       }
+
       return probe_interval;
     }
 
@@ -943,6 +986,7 @@ public:
       if (result.timed_out && !workspace->git_timed_out) {
         limits_.report(LimitReach{.name = "gitstatus.status_timeout", .noun = "milliseconds", .value = std::chrono::duration_cast<std::chrono::milliseconds>(git_status_timeout).count()});
       }
+
       workspace->git_timed_out = result.timed_out;
       workspace->git_checked_at = now;
       const auto branch = result.present ? result.branch.view() : std::string_view{};

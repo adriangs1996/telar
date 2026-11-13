@@ -102,6 +102,7 @@ class LinkHover {
 public:
   [[nodiscard]] inline bool assign(std::optional<LinkHit> hit, const TerminalSurface &surface, bool frame_presented) {
     const auto changed = hit != current_;
+
     current_ = std::move(hit);
     if (current_ && frame_presented && surfaceVisible(surface)) {
       shown_ = current_;
@@ -177,6 +178,7 @@ public:
 
   [[nodiscard]] inline std::optional<LinkTarget> complete() {
     auto next = std::move(pending_);
+
     pending_.reset();
     active_ = next.has_value();
 
@@ -241,6 +243,7 @@ public:
       const auto row = row_++;
       const auto relative = static_cast<std::uint32_t>(row - grid_.scroll.offset);
       auto right = row == match_.end.y ? match_.end.x : grid_.columns;
+
       if (relative < grid_.row_flags.size() && (grid_.row_flags[relative] & static_cast<Byte>(RowFlag::wide_padding)) != 0) {
         right = std::min<std::uint16_t>(right, grid_.columns - 1);
       }

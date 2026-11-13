@@ -172,8 +172,10 @@ struct MachineWindow {
 
   static void completePluginFailure(qt::Application &application, std::uint64_t execution) {
     PluginInvocation invocation;
+
     invocation.configuration_generation = application.configuration_source_.configurationGeneration();
     qt::PluginWorkerResult result;
+
     result.error = QStringLiteral("OwnedPluginFailure");
     application.pluginWorkerFinished(execution, invocation, result);
   }
@@ -181,6 +183,7 @@ struct MachineWindow {
   static qt::MachineClientKey add(qt::Application &application, const QString &endpoint) {
     const auto slot = application.machines_.add({.label = "Build", .destination = "dev@build"});
     auto &client = application.createClient(slot);
+
     application.synchronizeWorkbenchGeometry();
     client.connection.open(endpoint);
 
@@ -217,12 +220,14 @@ struct MachineWindow {
 
   static void rename(qt::Application &application, Machines::Slot slot, std::string_view label) {
     const auto &row = application.machines_.row(slot);
+
     application.machines_.update(slot, {.label = label, .destination = row.destination.view()});
     emit application.machinesChanged();
   }
 
   static void recolor(qt::Application &application, Machines::Slot slot, std::string_view color) {
     const auto &row = application.machines_.row(slot);
+
     application.machines_.update(slot, {.id = row.id, .label = row.label.view(), .destination = row.destination.view(), .color = color, .enabled = row.enabled, .program = row.program.view()});
     emit application.machinesChanged();
   }
@@ -233,6 +238,7 @@ struct MachineWindow {
     application.machines_.remove(slot);
     const auto added = application.machines_.add({.label = "Replacement", .destination = "dev@replacement"}, slot);
     const auto key = application.createClient(added).key;
+
     emit application.machinesChanged();
 
     return key;
@@ -240,6 +246,7 @@ struct MachineWindow {
 
   static auto capture(qt::Application &application) {
     qt::Application::PresentedFrame frame;
+
     application.prepareFrame(frame);
     const auto *pane = application.session().focusedPane();
     if (pane != nullptr) {
@@ -285,6 +292,7 @@ bool finishOpening(WireRuntime &runtime) {
   }
 
   const auto opening = runtime.last<OpenPane>();
+
   runtime.send(PaneOpened{.request_id = opening.request_id, .pane_id = pane_id, .location = location, .created = true, .pane_generation = 1});
   if (!waitForGuiCondition([&] {
         return runtime.count(ClientTag::request_tab_snapshot) != 0 && runtime.count(ClientTag::request_workspace_snapshot) != 0;
@@ -294,8 +302,10 @@ bool finishOpening(WireRuntime &runtime) {
   }
 
   const std::array descriptors{PaneDescriptor{.pane_id = pane_id, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
+
   runtime.send(TabSnapshot{.request_id = runtime.last<RequestTabSnapshot>().request_id, .location = location, .panes = descriptors});
   const std::array tabs{TabDescriptor{.tab_id = location.tab_id, .pane_count = 1}};
+
   runtime.send(WorkspaceSnapshot{.request_id = runtime.last<RequestWorkspaceSnapshot>().request_id, .workspace = location.workspace, .name = "project", .tabs = tabs});
 
   return true;
@@ -307,6 +317,7 @@ void sendFrame(WireRuntime &runtime) {
   std::array<Byte, cell_capacity> encoded{};
   const std::array spans{FrameSpan{.start = 0, .count = 1, .cells = CellRunCodec::encode(cells, encoded)}};
   const std::array<Byte, 1> flags{};
+
   runtime.send(PaneFrame{FrameBody{.pane_id = pane_id, .frame_id = 1, .cols = 1, .rows = 1, .scroll = {.total_rows = 1}, .text_metadata = TextMetadata{.row_flags = flags}, .spans = spans}});
 }
 
@@ -316,6 +327,7 @@ void sendAttachmentFrame(WireRuntime &runtime) {
   constexpr std::size_t columns = 12;
   constexpr std::size_t encoded_capacity = 512;
   std::array<Cell, columns> cells{};
+
   cells.fill(Cell{.text = byteView(" ")});
   for (std::size_t index = 0; index < marker.size(); ++index) {
     cells[index].text = byteView(marker.substr(index, 1));
@@ -324,6 +336,7 @@ void sendAttachmentFrame(WireRuntime &runtime) {
   std::array<Byte, encoded_capacity> encoded{};
   const std::array spans{FrameSpan{.start = 0, .count = cells.size(), .cells = CellRunCodec::encode(cells, encoded)}};
   const std::array<Byte, 1> flags{};
+
   runtime.send(PaneFrame{FrameBody{.pane_id = pane_id, .frame_id = 2, .cols = columns, .rows = 1, .cursor = {.visible = true, .x = marker.size()}, .scroll = {.total_rows = 1}, .text_metadata = TextMetadata{.row_flags = flags}, .spans = spans}});
 }
 
@@ -335,6 +348,7 @@ bool captureAttachmentImage(const QImage &image, const char *setting) {
 
 bool attachmentRendererMatchesRequest(const QQuickWindow &window) {
   const auto api = window.rendererInterface()->graphicsApi();
+
   qInfo() << "Attachment graphics API" << api;
 
   return qEnvironmentVariable("QSG_RHI_BACKEND") != QStringLiteral("metal") || api == QSGRendererInterface::Metal;
@@ -432,10 +446,12 @@ class MachineWindowTest : public QObject {
 
   Q_SLOT static void pluginCompletionStaysWithItsExecutionMachineAndRuntime() {
     MachineFixture fixture;
+
     QVERIFY(fixture.start());
     auto &application = fixture.application;
     const auto &local = MachineWindow::client(application, Machines::local_slot);
     constexpr std::uint64_t execution = 1;
+
     MachineWindow::armPlugin(application, local.key, execution, local.runtime_generation);
     MachineWindow::completePluginFailure(application, execution + 1);
     QVERIFY(MachineWindow::pendingPlugin(application));
@@ -453,8 +469,10 @@ class MachineWindowTest : public QObject {
     QCOMPARE(application.error(), QString{});
 
     const auto &remote = MachineWindow::client(application, fixture.remote.machine.slot);
+
     MachineWindow::armPlugin(application, remote.key, execution, remote.runtime_generation);
     const auto replacement = MachineWindow::replace(application, fixture.remote.machine.slot);
+
     MachineWindow::completePluginFailure(application, execution);
     QVERIFY(!MachineWindow::pendingPlugin(application));
     QCOMPARE(application.error(), QString{});
@@ -473,13 +491,16 @@ class MachineWindowTest : public QObject {
     AttachmentShelf shelf{memory};
     const MachineClientKey key{.machine = {.generation = 1}, .generation = 1};
     const AttachmentPrompt prompt{.source = key, .runtime_generation = 1, .target = {.pane_id = pane_id, .pane_generation = 1}, .attachment_generation = 1};
+
     shelf.setSource({.source = key, .runtime_generation = 1});
     shelf.setPrompt(prompt);
     const QSignalSpy adopted{&shelf, &AttachmentShelf::adopted};
     QImage image{2, 3, QImage::Format_RGBA8888};
+
     image.fill(Qt::red);
     QByteArray png;
     QBuffer output{&png};
+
     QVERIFY(output.open(QIODevice::WriteOnly) && image.save(&output, "PNG"));
     board.setPng(std::as_bytes(std::span{png.constData(), static_cast<std::size_t>(png.size())}));
     shelf.requestCapture();
@@ -492,6 +513,7 @@ class MachineWindowTest : public QObject {
 
     shelf.requestCapture();
     auto replacement = prompt;
+
     ++replacement.runtime_generation;
     shelf.setSource({.source = key, .runtime_generation = replacement.runtime_generation});
     shelf.setPrompt(replacement);
@@ -502,6 +524,7 @@ class MachineWindowTest : public QObject {
 
     const QSignalSpy failed{&shelf, &AttachmentShelf::failed};
     constexpr std::string_view invalid = "invalid PNG";
+
     board.setPng(std::as_bytes(std::span{invalid.data(), invalid.size()}));
     shelf.requestCapture();
     shelf.setPrompt(replacement, false);
@@ -521,6 +544,7 @@ class MachineWindowTest : public QObject {
     const auto modal_geometry = application.attachmentModalGeometry();
     const auto modal_host = modal_geometry.value(QStringLiteral("host")).toRectF();
     const auto terminal_region = application.windowGeometry().value(QStringLiteral("terminal")).toRectF();
+
     QCOMPARE(modal_host.topLeft(), terminal_region.topLeft());
     QVERIFY(terminal_region.contains(modal_host));
     QVERIFY(modal_host.left() > 0 && modal_host.top() > 0);
@@ -531,12 +555,15 @@ class MachineWindowTest : public QObject {
     const auto host = application.attachmentModalGeometry().value(QStringLiteral("host")).toRectF();
     const auto point = (host.topLeft() + QPointF{1, 1}).toPoint();
     const std::array buttons{Qt::LeftButton, Qt::RightButton, Qt::MiddleButton};
+
     for (const auto button : buttons) {
       application.attachments()->open(identity);
       QTest::mousePress(&window, button, Qt::NoModifier, point);
       const bool held = !application.attachments()->modal().isEmpty();
+
       QTest::mouseRelease(&window, button, Qt::NoModifier, point);
       const bool closed = application.attachments()->modal().isEmpty();
+
       application.attachments()->close();
       QVERIFY2(held, "A held backdrop press must retain the preview's modal input ownership");
       QCOMPARE(closed, button == Qt::LeftButton);
@@ -549,6 +576,7 @@ class MachineWindowTest : public QObject {
     auto &application = fixture.application;
     QQuickWindow window;
     constexpr QSize size{800, 600};
+
     window.resize(size);
     application.setWindow(window);
     QVERIFY(fixture.start());
@@ -556,31 +584,38 @@ class MachineWindowTest : public QObject {
     QVERIFY(finishOpening(*fixture.local_runtime));
     sendFrame(*fixture.local_runtime);
     auto agent = activityAgent("Clipboard");
+
     agent.attachments = AgentAttachmentMarkers::ordered;
     const std::array agents{agent};
+
     fixture.local_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
     QTRY_VERIFY_WITH_TIMEOUT(application.attachments()->prompt().has_value(), wait_ms);
     const auto before = application.panes()->data(application.panes()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("height")).toReal();
 
     QImage image{2, 3, QImage::Format_RGBA8888};
+
     image.fill(Qt::red);
     QByteArray png;
     QBuffer output{&png};
+
     QVERIFY(output.open(QIODevice::WriteOnly) && image.save(&output, "PNG"));
     board.setPng(std::as_bytes(std::span{png.constData(), static_cast<std::size_t>(png.size())}));
     TerminalItem terminal{window.contentItem()};
+
     terminal.setApplication(&application);
     terminal.setPaneId(QString::number(pane_id));
     const auto previous_font = QGuiApplication::font();
     const auto restore_font = qScopeGuard([&] { QGuiApplication::setFont(previous_font); });
     QFont chrome_font{QStringLiteral("IBM Plex Sans")};
     constexpr int chrome_pixels = 13;
+
     chrome_font.setPixelSize(chrome_pixels);
     QGuiApplication::setFont(chrome_font);
     QQmlEngine engine;
     const QVariantMap properties{{QStringLiteral("application"), QVariant::fromValue(&application)}};
     const auto shelf_view = createChrome(engine, QStringLiteral("AttachmentShelf"), properties);
     const auto modal_view = createChrome(engine, QStringLiteral("AttachmentModal"), properties);
+
     shelf_view->setParentItem(window.contentItem());
     modal_view->setParentItem(window.contentItem());
     modal_view->setSize(size);
@@ -594,15 +629,18 @@ class MachineWindowTest : public QObject {
     QVERIFY(waitForSynchronizedFrame(window, wait_ms));
     const auto previous_input = fixture.local_runtime->count(ClientTag::pane_input);
     QKeyEvent paste{QEvent::KeyPress, Qt::Key_V, NativeKeyAdapter::control_modifier};
+
     QCoreApplication::sendEvent(&terminal, &paste);
     QTRY_COMPARE_WITH_TIMEOUT(application.attachments()->items().size(), 1, wait_ms);
     QTRY_COMPARE_WITH_TIMEOUT(fixture.local_runtime->count(ClientTag::pane_input), previous_input + 1, wait_ms);
     const auto delivered = fixture.local_runtime->last<PaneInput>();
+
     QCOMPARE(textView(delivered.bytes), std::string_view{"\x16"});
     QTRY_VERIFY_WITH_TIMEOUT(application.attachmentGeometry().value(QStringLiteral("height")).toReal() > 0, wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(shelf_view->isVisible(), wait_ms);
     QVERIFY(waitForSynchronizedFrame(window, wait_ms));
     const auto shelf_pixels = window.grabWindow();
+
     QVERIFY(!shelf_pixels.isNull());
     QVERIFY(attachmentRendererMatchesRequest(window));
     QVERIFY(captureAttachmentImage(shelf_pixels, "TELAR_GUI_TEST_ATTACHMENT_SHELF_CAPTURE"));
@@ -613,24 +651,30 @@ class MachineWindowTest : public QObject {
         return item->inherits("QQuickMouseArea") && item->cursor().shape() == Qt::PointingHandCursor;
       });
     };
+
     QCOMPARE(pointingAreas(*shelf_view), 2);
     QCOMPARE(pointingAreas(*modal_view), 1);
     const auto after = application.panes()->data(application.panes()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("height")).toReal();
     const auto rows = application.windowGeometry().value(QStringLiteral("typography")).toMap().value(QStringLiteral("grid")).toMap().value(QStringLiteral("cellHeight")).toReal();
+
     QCOMPARE(before - after, PaneBottomReservation::shelf_rows * rows);
 
     const auto identity = application.attachments()->items().front().toMap().value(QStringLiteral("id")).toString();
+
     application.attachments()->open(identity);
     QVERIFY(!application.attachments()->modal().isEmpty());
     QTRY_VERIFY_WITH_TIMEOUT(modal_view->isVisible(), wait_ms);
     verifyAttachmentModalHost(application);
     QVERIFY(waitForSynchronizedFrame(window, wait_ms));
     const auto modal_pixels = window.grabWindow();
+
     QVERIFY(!modal_pixels.isNull() && modal_pixels != shelf_pixels);
     QVERIFY(captureAttachmentImage(modal_pixels, "TELAR_GUI_TEST_ATTACHMENT_MODAL_CAPTURE"));
     QKeyEvent blocked{QEvent::KeyPress, Qt::Key_X, Qt::NoModifier, QStringLiteral("x")};
+
     QVERIFY(application.handleBindingKey(blocked, terminal));
     QKeyEvent escape{QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier};
+
     QVERIFY(application.handleBindingKey(escape, terminal));
     QVERIFY(application.attachments()->modal().isEmpty());
     verifyAttachmentHoverReactivation(application, window);
@@ -648,6 +692,7 @@ class MachineWindowTest : public QObject {
     QCoreApplication::sendEvent(&terminal, &paste);
     QTRY_COMPARE_WITH_TIMEOUT(application.attachments()->items().size(), 1, wait_ms);
     QKeyEvent submit{QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier};
+
     QCoreApplication::sendEvent(&terminal, &submit);
     QTRY_VERIFY_WITH_TIMEOUT(application.attachments()->items().isEmpty() && application.attachmentGeometry().isEmpty(), wait_ms);
     QTRY_COMPARE_WITH_TIMEOUT(fixture.local_runtime->count(ClientTag::pane_input), previous_input + 4, wait_ms);
@@ -660,12 +705,14 @@ class MachineWindowTest : public QObject {
     Application application{memory};
     QQuickWindow window;
     constexpr QSize size{800, 600};
+
     window.resize(size);
     application.setWindow(window);
     QQmlEngine engine;
     const QVariantMap properties{{QStringLiteral("application"), QVariant::fromValue(&application)}};
     const auto shelf = createChrome(engine, QStringLiteral("AttachmentShelf"), properties);
     const auto modal = createChrome(engine, QStringLiteral("AttachmentModal"), properties);
+
     QVERIFY(shelf != nullptr && modal != nullptr);
     QVERIFY(!shelf->isVisible() && !modal->isVisible());
   }
@@ -696,8 +743,10 @@ class MachineWindowTest : public QObject {
     MachineFixture fixture;
     QQuickWindow window;
     constexpr QSize size{800, 600};
+
     window.resize(size);
     auto &application = fixture.application;
+
     application.setWindow(window);
     QVERIFY(fixture.start());
     fixture.local_runtime->send(ClientLayoutSnapshot{});
@@ -712,6 +761,7 @@ class MachineWindowTest : public QObject {
     const auto &remote = MachineWindow::client(application, fixture.remote.machine.slot);
     constexpr std::uint8_t retained_cpu = 92;
     constexpr std::uint8_t trailing_cpu = 13;
+
     fixture.remote_runtime->send(hostSample(1, retained_cpu));
     QTRY_COMPARE_WITH_TIMEOUT(remote.session.metrics().cpu_percent, retained_cpu, wait_ms);
     switch (status) {
@@ -735,12 +785,14 @@ class MachineWindowTest : public QObject {
     fixture.remote_runtime.reset();
     fixture.remote_socket_->disconnectFromServer();
     constexpr int observe_retry_ms = RuntimeLink::first_retry_ms * 2;
+
     QTest::qWait(observe_retry_ms);
     QCOMPARE(remote.phase, MachinePhase::connected);
     QVERIFY(!fixture.remote_listener_.hasPendingConnections());
     QVERIFY(window.isVisible());
     const auto identity = remote.identity;
     const auto generation = remote.runtime_generation;
+
     MachineWindow::select(application, fixture.remote.machine);
     QTRY_VERIFY_WITH_TIMEOUT(fixture.remote_listener_.hasPendingConnections(), wait_ms);
     fixture.remote_socket_.reset(fixture.remote_listener_.nextPendingConnection());
@@ -760,8 +812,10 @@ class MachineWindowTest : public QObject {
     MachineFixture fixture;
     QQuickWindow window;
     constexpr QSize size{800, 600};
+
     window.resize(size);
     auto &application = fixture.application;
+
     application.setWindow(window);
     QVERIFY(fixture.start());
     fixture.local_runtime->send(ClientLayoutSnapshot{});
@@ -773,12 +827,14 @@ class MachineWindowTest : public QObject {
     fixture.remote_runtime->send(RuntimeStopping{});
     const auto &local = MachineWindow::client(application, Machines::local_slot).session;
     const auto &remote = MachineWindow::client(application, fixture.remote.machine.slot).session;
+
     QTRY_VERIFY_WITH_TIMEOUT(local.presented(), wait_ms);
     QVERIFY(!remote.presented());
     QVERIFY(!remote.ready());
     QVERIFY(window.isVisible());
     QTRY_COMPARE_WITH_TIMEOUT(fixture.local_runtime->count(ClientTag::open_pane), 2, wait_ms);
     const auto opening = fixture.local_runtime->last<OpenPane>();
+
     fixture.local_runtime->send(PaneOpened{.request_id = opening.request_id, .pane_id = pane_id, .location = location, .pane_generation = 1});
     QTRY_VERIFY_WITH_TIMEOUT(local.findPane(pane_id) != nullptr && local.findPane(pane_id)->attached, wait_ms);
     application.input(pane_id, QByteArrayLiteral("LOCAL_AFTER_REMOTE_STOP"));
@@ -799,8 +855,10 @@ class MachineWindowTest : public QObject {
     MachineFixture fixture;
     QQuickWindow window;
     constexpr QSize size{800, 600};
+
     window.resize(size);
     auto &application = fixture.application;
+
     application.setWindow(window);
     QVERIFY(fixture.start());
     fixture.local_runtime->send(ClientLayoutSnapshot{});
@@ -820,6 +878,7 @@ class MachineWindowTest : public QObject {
     QVERIFY(window.isVisible());
     QTRY_COMPARE_WITH_TIMEOUT(fixture.local_runtime->count(ClientTag::open_pane), 2, wait_ms);
     const auto opening = fixture.local_runtime->last<OpenPane>();
+
     fixture.local_runtime->send(PaneOpened{.request_id = opening.request_id, .pane_id = pane_id, .location = location, .pane_generation = 1});
   }
 
@@ -827,6 +886,7 @@ class MachineWindowTest : public QObject {
     MachineFixture fixture;
     QQuickWindow window;
     constexpr QSize size{800, 600};
+
     window.resize(size);
     fixture.application.setWindow(window);
     QVERIFY(fixture.start());
@@ -839,8 +899,10 @@ class MachineWindowTest : public QObject {
     MachineFixture fixture;
     QQuickWindow window;
     constexpr QSize size{800, 600};
+
     window.resize(size);
     auto &application = fixture.application;
+
     application.setWindow(window);
     QVERIFY(fixture.start());
     fixture.local_runtime->send(ClientLayoutSnapshot{});
@@ -861,8 +923,10 @@ class MachineWindowTest : public QObject {
     MachineFixture fixture;
     QQuickWindow window;
     constexpr QSize size{800, 600};
+
     window.resize(size);
     auto &application = fixture.application;
+
     application.setWindow(window);
     QVERIFY(fixture.start());
     fixture.remote_runtime->send(ClientLayoutSnapshot{});
@@ -871,6 +935,7 @@ class MachineWindowTest : public QObject {
     window.show();
     fixture.remote_socket_->disconnectFromServer();
     const auto &remote = MachineWindow::client(application, fixture.remote.machine.slot).session;
+
     QTRY_VERIFY_WITH_TIMEOUT(!remote.ready(), wait_ms);
     QVERIFY(remote.presented());
     QVERIFY(!MachineWindow::client(application, Machines::local_slot).session.presented());
@@ -881,8 +946,10 @@ class MachineWindowTest : public QObject {
     MachineFixture fixture;
     QQuickWindow window;
     constexpr QSize size{800, 600};
+
     window.resize(size);
     auto &application = fixture.application;
+
     application.setWindow(window);
     QVERIFY(fixture.start());
     fixture.local_runtime->send(ClientLayoutSnapshot{});
@@ -896,10 +963,12 @@ class MachineWindowTest : public QObject {
     const auto percent = [&] {
       return application.hostMetrics().value(QStringLiteral("cpu")).toMap().value(QStringLiteral("percent")).toInt();
     };
+
     fixture.local_runtime->send(hostSample(revision, local_cpu));
     QTRY_COMPARE_WITH_TIMEOUT(percent(), local_cpu, wait_ms);
     const auto local_changes = changed.size();
     const auto &remote = MachineWindow::client(application, fixture.remote.machine.slot);
+
     fixture.remote_runtime->send(hostSample(revision, remote_cpu));
     QTRY_COMPARE_WITH_TIMEOUT(remote.session.metrics().cpu_percent, remote_cpu, wait_ms);
     QCOMPARE(changed.size(), local_changes);
@@ -916,6 +985,7 @@ class MachineWindowTest : public QObject {
     fixture.remote_socket_.reset(fixture.remote_listener_.nextPendingConnection());
     fixture.remote_runtime = std::make_unique<WireRuntime>(*fixture.remote_socket_);
     const auto lost_changes = changed.size();
+
     QTRY_VERIFY_WITH_TIMEOUT(remote.session.ready(), wait_ms);
     QVERIFY(changed.size() > lost_changes);
     QVERIFY(!application.hostMetrics().value(QStringLiteral("cpu")).toMap().value(QStringLiteral("available")).toBool());
@@ -930,6 +1000,7 @@ class MachineWindowTest : public QObject {
     QQuickWindow window;
     QQmlEngine engine;
     constexpr QSize size{400, 240};
+
     window.resize(size);
     fixture.application.setWindow(window);
     QVERIFY(fixture.start());
@@ -937,6 +1008,7 @@ class MachineWindowTest : public QObject {
     fixture.remote_runtime->send(ClientLayoutSnapshot{});
     QVERIFY(finishOpening(*fixture.local_runtime));
     std::array agents{activityAgent("Remote waiting"), activityAgent("Remote working"), activityAgent("Remote idle")};
+
     agents[0].status = AgentStatus::blocked;
     agents[0].blocked_reason = AgentBlockedReason::question;
     agents[1].status = AgentStatus::working;
@@ -947,21 +1019,26 @@ class MachineWindowTest : public QObject {
     constexpr qreal row_width = 300;
     constexpr qreal row_height = 32;
     auto chrome = createChrome(engine, QStringLiteral("MachineChrome"), {{QStringLiteral("controller"), QVariant::fromValue(&fixture.application)}, {QStringLiteral("colors"), fixture.application.colors()}, {QStringLiteral("width"), row_width}, {QStringLiteral("height"), row_height}});
+
     chrome->setParentItem(window.contentItem());
     window.show();
     auto *layout = qobject_cast<MachineChromeLayout *>(chrome.get());
+
     QVERIFY(layout != nullptr);
     const auto row = [&] {
       return layout->items()->data(layout->items()->index(0, 0), ListModel::record_role).toMap();
     };
+
     QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 1, wait_ms);
     QCOMPARE(row().value(QStringLiteral("text")).toString(), QStringLiteral("Build"));
     QTRY_COMPARE_WITH_TIMEOUT(row().value(QStringLiteral("cards")).toList().size(), 2, wait_ms);
     const auto cards = row().value(QStringLiteral("cards")).toList();
+
     QVERIFY2(!cards[0].toMap().value(QStringLiteral("attentionColor")).toString().isEmpty(), "the agent that waits goes in front, tinted");
     QVERIFY(cards[1].toMap().value(QStringLiteral("attentionColor")).toString().isEmpty());
     QVERIFY(cards[0].toMap().value(QStringLiteral("layer")).toInt() > cards[1].toMap().value(QStringLiteral("layer")).toInt());
     const auto preferred = layout->preferredWidth();
+
     QVERIFY(preferred > 0);
     chrome->setVisible(false);
     QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 0, wait_ms);
@@ -969,6 +1046,7 @@ class MachineWindowTest : public QObject {
     chrome->setVisible(true);
     QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 1, wait_ms);
     const auto bounds = row().value(QStringLiteral("bounds")).toRectF();
+
     QTest::mouseClick(&window, Qt::LeftButton, Qt::NoModifier, bounds.center().toPoint());
     QTRY_VERIFY_WITH_TIMEOUT(MachineWindow::client(fixture.application, fixture.remote.machine.slot).session.presented(), wait_ms);
     QVERIFY(!MachineWindow::client(fixture.application, Machines::local_slot).session.presented());
@@ -981,8 +1059,10 @@ class MachineWindowTest : public QObject {
     QQuickWindow window;
     QQmlEngine engine;
     constexpr QSize size{640, 240};
+
     window.resize(size);
     auto &application = fixture.application;
+
     window.setColor(application.colors().value(QStringLiteral("panelBackground")).value<QColor>());
     application.setWindow(window);
     QVERIFY(fixture.start());
@@ -992,8 +1072,10 @@ class MachineWindowTest : public QObject {
     constexpr qreal row_width = 600;
     constexpr qreal row_height = 26;
     auto chrome = createChrome(engine, QStringLiteral("MachineChrome"), {{QStringLiteral("controller"), QVariant::fromValue(&application)}, {QStringLiteral("colors"), application.colors()}, {QStringLiteral("width"), row_width}, {QStringLiteral("height"), row_height}});
+
     chrome->setParentItem(window.contentItem());
     auto *layout = qobject_cast<MachineChromeLayout *>(chrome.get());
+
     QVERIFY(layout != nullptr);
     QVERIFY(layout->setProperty("inlineFacts", true));
     window.show();
@@ -1001,8 +1083,10 @@ class MachineWindowTest : public QObject {
     const auto row = [&](int index) {
       return layout->items()->data(layout->items()->index(index, 0), ListModel::record_role).toMap();
     };
+
     constexpr std::uint8_t local_cpu = 11;
     constexpr std::uint8_t remote_cpu = 92;
+
     fixture.local_runtime->send(hostSample(1, local_cpu));
     fixture.remote_runtime->send(hostSample(1, remote_cpu));
     QTRY_COMPARE_WITH_TIMEOUT(row(0).value(QStringLiteral("cpu")).toString(), QStringLiteral("11%"), wait_ms);
@@ -1030,16 +1114,20 @@ class MachineWindowTest : public QObject {
     }
 
     const QTemporaryDir theme_directory;
+
     QVERIFY(theme_directory.isValid());
     const auto theme_path = theme_directory.filePath(QStringLiteral("config.lua"));
     QFile theme_file{theme_path};
+
     QVERIFY(theme_file.open(QIODevice::WriteOnly));
     const QByteArray theme_source{"return {api_version=2,theme={colors={green='default'}}}"};
+
     QCOMPARE(theme_file.write(theme_source), theme_source.size());
     theme_file.close();
     application.loadConfiguration(theme_path, {}, {});
     QVERIFY2(application.error().isEmpty(), qPrintable(application.error()));
     const auto default_ink = application.colors().value(QStringLiteral("green")).value<QColor>();
+
     QVERIFY(default_ink.alpha() > 0);
     QTRY_COMPARE_WITH_TIMEOUT(row(0).value(QStringLiteral("ink")).value<QColor>(), default_ink, wait_ms);
     QTRY_COMPARE_WITH_TIMEOUT(row(1).value(QStringLiteral("ink")).value<QColor>(), default_ink, wait_ms);
@@ -1055,6 +1143,7 @@ class MachineWindowTest : public QObject {
     QTRY_COMPARE_WITH_TIMEOUT(row(1).value(QStringLiteral("glyph")).toString(), QStringLiteral("✕"), wait_ms);
     QCOMPARE(row(1).value(QStringLiteral("cpu")).toString(), QString{});
     const auto preferred = layout->preferredWidth();
+
     QVERIFY(preferred > 0);
     chrome->setVisible(false);
     QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 0, wait_ms);
@@ -1069,19 +1158,23 @@ class MachineWindowTest : public QObject {
     QQuickWindow window;
     QQmlEngine engine;
     constexpr QSize size{400, 240};
+
     window.resize(size);
     fixture.application.setWindow(window);
     QVERIFY(fixture.start());
     const std::array agents{activityAgent("Remote waiting")};
     auto blocked = agents;
+
     blocked.front().status = AgentStatus::blocked;
     blocked.front().blocked_reason = AgentBlockedReason::question;
     fixture.remote_runtime->send(AgentSnapshot{.revision = 1, .entries = blocked});
     constexpr qreal segment_width = 200;
     constexpr qreal segment_height = 26;
     auto chrome = createChrome(engine, QStringLiteral("MachineChrome"), {{QStringLiteral("controller"), QVariant::fromValue(&fixture.application)}, {QStringLiteral("colors"), fixture.application.colors()}, {QStringLiteral("width"), segment_width}, {QStringLiteral("height"), segment_height}});
+
     chrome->setParentItem(window.contentItem());
     auto *layout = qobject_cast<MachineChromeLayout *>(chrome.get());
+
     QVERIFY(layout != nullptr);
     layout->setSegment(true);
     window.show();
@@ -1089,6 +1182,7 @@ class MachineWindowTest : public QObject {
     const auto row = [&] {
       return layout->items()->data(layout->items()->index(0, 0), ListModel::record_role).toMap();
     };
+
     QTRY_VERIFY_WITH_TIMEOUT(row().value(QStringLiteral("attentionBounds")).toRectF().width() > 0, wait_ms);
     QVERIFY(layout->preferredWidth() > 0 && layout->preferredWidth() <= segment_width);
     QVERIFY(row().value(QStringLiteral("text")).toString().endsWith(QStringLiteral(" ▾")));
@@ -1097,6 +1191,7 @@ class MachineWindowTest : public QObject {
     MachineWindow::recolor(fixture.application, Machines::local_slot, "red");
     QTRY_COMPARE_WITH_TIMEOUT(row().value(QStringLiteral("ink")).value<QColor>(), fixture.application.colors().value(QStringLiteral("red")).value<QColor>(), wait_ms);
     const auto preferred = layout->preferredWidth();
+
     chrome->setVisible(false);
     QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 0, wait_ms);
     QCOMPARE(layout->preferredWidth(), preferred);
@@ -1110,24 +1205,30 @@ class MachineWindowTest : public QObject {
     QQuickWindow replacement;
     QQmlEngine engine;
     constexpr QSize size{400, 240};
+
     window.resize(size);
     fixture.application.setWindow(window);
     QVERIFY(fixture.start());
     constexpr qreal row_width = 300;
     constexpr qreal row_height = 32;
     auto chrome = createChrome(engine, QStringLiteral("MachineChrome"), {{QStringLiteral("controller"), QVariant::fromValue(&fixture.application)}, {QStringLiteral("colors"), fixture.application.colors()}, {QStringLiteral("width"), row_width}, {QStringLiteral("height"), row_height}});
+
     chrome->setParentItem(window.contentItem());
     window.show();
     auto *layout = qobject_cast<MachineChromeLayout *>(chrome.get());
+
     QVERIFY(layout != nullptr);
     QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 1, wait_ms);
     const auto remote_key = [&] {
       return layout->items()->data(layout->items()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("key")).toString();
     };
+
     const auto retired = remote_key();
     const auto bounds = layout->items()->data(layout->items()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("bounds")).toRectF();
+
     QTest::mousePress(&window, Qt::LeftButton, Qt::NoModifier, bounds.center().toPoint());
     const auto admitted = MachineWindow::reuse(fixture.application, fixture.remote.machine.slot);
+
     QTRY_VERIFY_WITH_TIMEOUT(remote_key() != retired, wait_ms);
     QTest::mouseRelease(&window, Qt::LeftButton, Qt::NoModifier, bounds.center().toPoint());
     QVERIFY(fixture.application.connected());
@@ -1151,6 +1252,7 @@ class MachineWindowTest : public QObject {
     QQuickWindow window;
     QQmlEngine engine;
     constexpr QSize size{400, 240};
+
     window.resize(size);
     application.setWindow(window);
     const auto geometry = application.sidebarGeometry().value(QStringLiteral("cards")).toMap();
@@ -1158,13 +1260,16 @@ class MachineWindowTest : public QObject {
     constexpr qreal card_width = 200;
     constexpr qreal card_height = 80;
     auto frame = createChrome(engine, QStringLiteral("ActivityFrame"), {{QStringLiteral("colors"), application.colors()}, {QStringLiteral("geometry"), geometry}, {QStringLiteral("record"), record}, {QStringLiteral("width"), card_width}, {QStringLiteral("height"), card_height}});
+
     frame->setParentItem(window.contentItem());
     const QSignalSpy selected{frame.get(), SIGNAL(selected(QString))};
     const QSignalSpy peeked{frame.get(), SIGNAL(peekRequested(QString))};
+
     QVERIFY(selected.isValid() && peeked.isValid());
     window.show();
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
     const auto point = frame->boundingRect().center().toPoint();
+
     QTest::mousePress(&window, Qt::LeftButton, Qt::NoModifier, point);
     QCOMPARE(selected.count(), 1);
     QCOMPARE(peeked.count(), 0);
@@ -1187,8 +1292,10 @@ class MachineWindowTest : public QObject {
     QQuickWindow window;
     QQmlEngine engine;
     constexpr QSize size{800, 600};
+
     window.resize(size);
     auto &application = fixture.application;
+
     application.setWindow(window);
     QVERIFY(fixture.start());
     fixture.local_runtime->send(ClientLayoutSnapshot{});
@@ -1196,15 +1303,18 @@ class MachineWindowTest : public QObject {
     QVERIFY(finishOpening(*fixture.local_runtime));
     constexpr std::uint64_t inspected_pane = 9;
     auto agent = activityAgent("Remote inspected");
+
     agent.pane_id = inspected_pane;
     agent.session_id.front() = 1;
     // Another machine lists only the agents that wait on the person.
     agent.status = AgentStatus::blocked;
     agent.blocked_reason = AgentBlockedReason::question;
     std::array agents{agent};
+
     fixture.remote_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
     QTRY_COMPARE_WITH_TIMEOUT(application.agents()->rowCount(), 1, wait_ms);
     const auto key = activityRow(application, 0).value(QStringLiteral("key")).toString();
+
     application.peekActivity(key);
     QVERIFY(MachineWindow::pendingActivity(application));
     QVERIFY(finishOpening(*fixture.remote_runtime));
@@ -1214,11 +1324,13 @@ class MachineWindowTest : public QObject {
     QCOMPARE(fixture.local_runtime->count(ClientTag::read_pane), 0);
     QVERIFY(MachineWindow::client(application, fixture.remote.machine.slot).session.findPane(inspected_pane) == nullptr);
     const auto read = fixture.remote_runtime->last<ReadPane>();
+
     QCOMPARE(read.pane_id, inspected_pane);
     fixture.remote_runtime->send(PaneText{.request_id = read.request_id, .pane_id = inspected_pane, .text = "OWNED_REMOTE_PEEK", .exit_code = {}});
     QTRY_VERIFY_WITH_TIMEOUT(application.peekState().value(QStringLiteral("lines")).toStringList().contains(QStringLiteral("OWNED_REMOTE_PEEK")), wait_ms);
     const auto bounds = application.peekGeometry().value(QStringLiteral("bounds")).toRectF();
     auto panel = createChrome(engine, QStringLiteral("PeekPanel"), {{QStringLiteral("controller"), QVariant::fromValue(&application)}, {QStringLiteral("width"), bounds.width()}, {QStringLiteral("height"), bounds.height()}});
+
     panel->setParentItem(window.contentItem());
     window.show();
     QTRY_VERIFY_WITH_TIMEOUT(window.activeFocusItem() != nullptr && window.activeFocusItem()->objectName() == QStringLiteral("commandSearch"), wait_ms);
@@ -1227,10 +1339,12 @@ class MachineWindowTest : public QObject {
     for (const auto byte : std::string_view{"Continue the remote task"}) {
       QTest::keyClick(&window, byte);
     }
+
     QTRY_COMPARE_WITH_TIMEOUT(application.peekState().value(QStringLiteral("editorText")).toString(), QStringLiteral("Continue the remote task"), wait_ms);
     QTest::keyClick(&window, Qt::Key_Return);
     QTRY_COMPARE_WITH_TIMEOUT(fixture.remote_runtime->count(ClientTag::send_pane_text), 1, wait_ms);
     const auto message = fixture.remote_runtime->last<SendPaneText>();
+
     QCOMPARE(message.pane_id, inspected_pane);
     QCOMPARE(message.mode, PaneTextMode::prompt);
     QCOMPARE(message.text, "Continue the remote task");
@@ -1242,8 +1356,10 @@ class MachineWindowTest : public QObject {
     application.peekActivity(key);
     QTRY_COMPARE_WITH_TIMEOUT(application.dialog(), telar::gui::qt::Application::Dialog::peek, wait_ms);
     const auto stale_revision = application.peekState().value(QStringLiteral("revision")).toString();
+
     QTRY_COMPARE_WITH_TIMEOUT(fixture.remote_runtime->count(ClientTag::read_pane), 2, wait_ms);
     const auto retired = fixture.remote_runtime->last<ReadPane>();
+
     ++agents.front().session_id.front();
     fixture.remote_runtime->send(AgentSnapshot{.revision = 2, .entries = agents});
     QTRY_COMPARE_WITH_TIMEOUT(application.dialog(), telar::gui::qt::Application::Dialog::none, wait_ms);
@@ -1259,22 +1375,28 @@ class MachineWindowTest : public QObject {
     QQuickWindow window;
     QQuickWindow replacement;
     constexpr QSize size{800, 600};
+
     window.resize(size);
     replacement.resize(size);
     auto &application = fixture.application;
+
     application.setWindow(window);
     QVERIFY(fixture.start());
     fixture.local_runtime->send(ClientLayoutSnapshot{});
     QVERIFY(finishOpening(*fixture.local_runtime));
     const std::array agents{activityAgent("Local inspected")};
+
     fixture.local_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
     QTRY_COMPARE_WITH_TIMEOUT(application.agents()->rowCount(), 1, wait_ms);
     const auto key = activityRow(application, 0).value(QStringLiteral("key")).toString();
+
     application.peekActivity(key);
     QCOMPARE(application.dialog(), telar::gui::qt::Application::Dialog::peek);
     const auto retired = application.peekState().value(QStringLiteral("revision")).toString();
+
     QTRY_COMPARE_WITH_TIMEOUT(fixture.local_runtime->count(ClientTag::read_pane), 1, wait_ms);
     const auto retired_read = fixture.local_runtime->last<ReadPane>();
+
     application.setWindow(replacement);
     QCOMPARE(application.dialog(), telar::gui::qt::Application::Dialog::none);
     application.searchPeek(QStringLiteral("/stop"));
@@ -1297,14 +1419,17 @@ class MachineWindowTest : public QObject {
     MachineFixture fixture;
     QQuickWindow window;
     constexpr QSize size{800, 600};
+
     window.resize(size);
     auto &application = fixture.application;
+
     application.setWindow(window);
     QVERIFY(fixture.start());
     fixture.local_runtime->send(ClientLayoutSnapshot{});
     fixture.remote_runtime->send(ClientLayoutSnapshot{});
     QVERIFY(finishOpening(*fixture.local_runtime));
     std::array agents{activityAgent("Remote inspected")};
+
     // Another machine lists only the agents that wait on the person.
     agents.front().status = AgentStatus::blocked;
     fixture.remote_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
@@ -1334,14 +1459,18 @@ class MachineWindowTest : public QObject {
     MachineFixture fixture;
     auto &application = fixture.application;
     QQmlApplicationEngine engine;
+
     engine.rootContext()->setContextProperty(QStringLiteral("telar"), &application);
     const QSignalSpy warnings{&engine, &QQmlEngine::warnings};
+
     engine.loadFromModule(QStringLiteral("Telar.Gui"), QStringLiteral("Main"));
     QCOMPARE(engine.rootObjects().size(), 1);
     auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().front());
+
     QVERIFY(window != nullptr);
     constexpr QSize original_size{1200, 800};
     constexpr QSize latest_size{900, 600};
+
     window->resize(original_size);
     application.setWindow(*window);
     if (!external_window_ready.isEmpty()) {
@@ -1364,6 +1493,7 @@ class MachineWindowTest : public QObject {
     const std::array<ClientLayoutNode, 1> nodes{ClientLayoutPane{pane_id}};
     const std::array layouts{ClientTabLayout{.location = location, .focused_pane = pane_id, .workspace_active = true, .nodes = nodes}};
     constexpr std::uint16_t restored_sidebar_columns = 32;
+
     runtime.send(ClientLayoutSnapshot{.restored = true, .sidebar_visible = false, .sidebar_width = restored_sidebar_columns, .active_tab = location, .tabs = layouts});
     if (hidden_remote) {
       QTRY_VERIFY_WITH_TIMEOUT(!session.configuration().sidebar_visible, wait_ms);
@@ -1375,6 +1505,7 @@ class MachineWindowTest : public QObject {
     QTRY_COMPARE_WITH_TIMEOUT(runtime.count(ClientTag::open_pane), 1, wait_ms);
     QVERIFY(!application.sidebarVisible());
     const auto opening = runtime.last<OpenPane>();
+
     QVERIFY(!opening.launch);
     window->resize(latest_size);
     application.execute(Application::Action::toggle_sidebar);
@@ -1385,12 +1516,15 @@ class MachineWindowTest : public QObject {
 
       return size && (size->cols != opening.size.cols || size->rows != opening.size.rows);
     };
+
     QTRY_VERIFY2_WITH_TIMEOUT(geometry_changed(), qPrintable(QStringLiteral("window=%1x%2 open=%3x%4 area=%5x%6").arg(window->width()).arg(window->height()).arg(opening.size.cols).arg(opening.size.rows).arg(session.workbenchGeometry().area.width).arg(session.workbenchGeometry().area.height)), wait_ms);
     QVERIFY(application.sidebarVisible());
     const auto terminal = application.windowGeometry().value(QStringLiteral("terminal")).toRectF();
+
     QCOMPARE(session.workbenchGeometry().area.width, terminal.width() * window->effectiveDevicePixelRatio());
     QCOMPARE(session.workbenchGeometry().area.height, terminal.height() * window->effectiveDevicePixelRatio());
     const auto expected = session.workbenchGeometry().launchSize();
+
     QVERIFY(expected.has_value());
     QVERIFY(expected->cols != opening.size.cols || expected->rows != opening.size.rows);
     QVERIFY(finishOpening(runtime));
@@ -1399,6 +1533,7 @@ class MachineWindowTest : public QObject {
     QTRY_COMPARE_WITH_TIMEOUT(application.pane(pane_id)->size.rows, expected->rows, wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(runtime.count(ClientTag::pane_resize) != 0, wait_ms);
     const auto resized = runtime.last<PaneResize>();
+
     QCOMPARE(resized.size.cols, expected->cols);
     QCOMPARE(resized.size.rows, expected->rows);
     QCOMPARE(resized.size.cell_width_px, expected->cell_width_px);
@@ -1413,16 +1548,20 @@ class MachineWindowTest : public QObject {
     MachineFixture fixture;
     QQuickWindow window;
     constexpr QSize size{800, 600};
+
     window.resize(size);
     auto &application = fixture.application;
+
     application.setWindow(window);
     QVERIFY(fixture.start());
     fixture.local_runtime->send(ClientLayoutSnapshot{});
     fixture.remote_runtime->send(ClientLayoutSnapshot{});
     QVERIFY(finishOpening(*fixture.local_runtime));
     std::array local_agents{activityAgent("Local hover")};
+
     local_agents.front().session_id.front() = 1;
     std::array remote_agents{activityAgent("Remote hover")};
+
     remote_agents.front().session_id.front() = 2;
     // Another machine lists only the agents that wait on the person.
     remote_agents.front().status = AgentStatus::blocked;
@@ -1431,6 +1570,7 @@ class MachineWindowTest : public QObject {
     QTRY_COMPARE_WITH_TIMEOUT(application.agents()->rowCount(), 2, wait_ms);
     const auto local = activityNamed(application, QStringLiteral("Local hover")).value(QStringLiteral("key")).toString();
     const auto remote = activityNamed(application, QStringLiteral("Remote hover")).value(QStringLiteral("key")).toString();
+
     application.hoverActivity(local);
     QVERIFY(application.activityHover().isEmpty());
     MachineWindow::pointerMoved(application);
@@ -1465,24 +1605,29 @@ class MachineWindowTest : public QObject {
     constexpr QPointF terminal_pointer{600, 300};
     MachineFixture fixture;
     QQuickWindow window;
+
     window.resize(window_size);
     auto &application = fixture.application;
+
     application.setWindow(window);
     QVERIFY(fixture.start());
     fixture.local_runtime->send(ClientLayoutSnapshot{});
     fixture.remote_runtime->send(ClientLayoutSnapshot{});
     QVERIFY(finishOpening(*fixture.local_runtime));
     std::array agents{activityAgent("Pointer geometry")};
+
     agents.front().session_id.front() = 1;
     fixture.local_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
     QTRY_COMPARE_WITH_TIMEOUT(application.agents()->rowCount(), 1, wait_ms);
     const auto identity = activityNamed(application, QStringLiteral("Pointer geometry")).value(QStringLiteral("key")).toString();
 
     QQuickItem clipper{window.contentItem()};
+
     clipper.setPosition(card_origin);
     clipper.setSize(clip_size);
     clipper.setClip(true);
     QQuickItem card{&clipper};
+
     card.setSize(card_size);
     window.show();
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
@@ -1505,10 +1650,12 @@ class MachineWindowTest : public QObject {
 
     const QQuickWindow foreign_window;
     QQuickItem foreign_card{foreign_window.contentItem()};
+
     application.hoverActivity(QString{}, &foreign_card);
     QCOMPARE(application.activityHover(), identity);
 
     QQuickItem peer_card{&clipper};
+
     peer_card.setSize(card_size);
     application.hoverActivity(identity, &peer_card);
     application.hoverActivity(identity, &card);
@@ -1536,30 +1683,38 @@ class MachineWindowTest : public QObject {
     constexpr QSize wide{800, 600};
     constexpr QSize narrow{800, 300};
     constexpr QSize tiny{800, 80};
+
     window.resize(wide);
     auto &application = fixture.application;
+
     application.setWindow(window);
     QVERIFY(fixture.start());
     fixture.local_runtime->send(ClientLayoutSnapshot{});
     QVERIFY(finishOpening(*fixture.local_runtime));
     const std::array agents{activityAgent("Local inspected")};
+
     fixture.local_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
     QTRY_COMPARE_WITH_TIMEOUT(application.agents()->rowCount(), 1, wait_ms);
     application.peekActivity(activityRow(application, 0).value(QStringLiteral("key")).toString());
     QTRY_COMPARE_WITH_TIMEOUT(fixture.local_runtime->count(ClientTag::read_pane), 1, wait_ms);
     const auto read = fixture.local_runtime->last<ReadPane>();
+
     fixture.local_runtime->send(PaneText{.request_id = read.request_id, .pane_id = pane_id, .text = "one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\nRECENT_TAIL", .exit_code = {}});
     constexpr qsizetype line_count = 11;
+
     QTRY_COMPARE_WITH_TIMEOUT(application.peekState().value(QStringLiteral("lines")).toStringList().size(), line_count, wait_ms);
     const auto bounds = application.peekGeometry().value(QStringLiteral("bounds")).toRectF();
     auto panel = createChrome(engine, QStringLiteral("PeekPanel"), {{QStringLiteral("controller"), QVariant::fromValue(&application)}, {QStringLiteral("width"), bounds.width()}, {QStringLiteral("height"), bounds.height()}});
+
     panel->setParentItem(window.contentItem());
     const auto lines = [&] {
       return panel->property("state").toMap().value(QStringLiteral("lines")).toStringList();
     };
+
     window.show();
     QTRY_VERIFY_WITH_TIMEOUT(window.activeFocusItem() != nullptr && window.activeFocusItem()->objectName() == QStringLiteral("commandSearch"), wait_ms);
     const auto *editor = window.activeFocusItem();
+
     window.resize(narrow);
     QTRY_VERIFY_WITH_TIMEOUT(lines().size() < line_count, wait_ms);
     QVERIFY(!lines().isEmpty());
@@ -1574,24 +1729,30 @@ class MachineWindowTest : public QObject {
 
   Q_SLOT static void activityCombinesSourcesWithoutOpeningHiddenScreens() {
     MachineFixture fixture;
+
     QVERIFY(fixture.start());
     auto &application = fixture.application;
     const auto &remote = MachineWindow::client(application, fixture.remote.machine.slot);
+
     fixture.local_runtime->send(ClientLayoutSnapshot{});
     fixture.remote_runtime->send(ClientLayoutSnapshot{});
     QVERIFY(finishOpening(*fixture.local_runtime));
     QTRY_VERIFY_WITH_TIMEOUT(application.pane(pane_id) != nullptr && application.pane(pane_id)->attached, wait_ms);
     std::array local_agents{activityAgent("Local agent")};
+
     local_agents.front().session_id.front() = 1;
     std::array remote_agents{activityAgent("Remote agent")};
+
     remote_agents.front().session_id.front() = 2;
     // Another machine lists only the agents that wait on the person.
     remote_agents.front().status = AgentStatus::blocked;
     const std::array projects{WorkspaceListEntry{.workspace = 1, .name = "project", .path = "/project", .branch = "own-branch"}, WorkspaceListEntry{.workspace = 2, .name = "command", .path = "/command"}};
     std::array local_tasks{worktreeEntry()};
+
     local_tasks.front().title = "Local command";
     local_tasks.front().command_state = CommandState::running;
     std::array remote_tasks{local_tasks.front()};
+
     remote_tasks.front().title = "Remote command";
     remote_tasks.front().created_by.reset();
     remote_tasks.front().coordinator = coordinatorReference(pane_id);
@@ -1602,6 +1763,7 @@ class MachineWindowTest : public QObject {
     QTRY_COMPARE_WITH_TIMEOUT(application.agents()->rowCount(), 3, wait_ms);
     const auto local = activityNamed(application, QStringLiteral("Local agent"));
     const auto hidden = activityNamed(application, QStringLiteral("Remote agent"));
+
     QVERIFY(local.value(QStringLiteral("selected")).toBool());
     QVERIFY(!hidden.value(QStringLiteral("selected")).toBool());
     QVERIFY(hidden.value(QStringLiteral("project")).toString().contains(QStringLiteral("Build")));
@@ -1614,6 +1776,7 @@ class MachineWindowTest : public QObject {
     QCOMPARE(fixture.remote_runtime->count(ClientTag::acknowledge_agent), 0);
     const auto *cached = MachineWindow::cachedActivityTargets(application);
     constexpr std::size_t unchanged_refreshes = 256;
+
     for (std::size_t iteration = 0; iteration < unchanged_refreshes; ++iteration) {
       MachineWindow::refreshActivity(application);
       QCOMPARE(MachineWindow::cachedActivityTargets(application), cached);
@@ -1625,6 +1788,7 @@ class MachineWindowTest : public QObject {
     QVERIFY(remote.session.panes().empty());
     QCOMPARE(fixture.remote_runtime->count(ClientTag::acknowledge_agent), 0);
     const auto identity = hidden.value(QStringLiteral("key"));
+
     MachineWindow::rename(application, fixture.remote.machine.slot, "Renamed");
     QTRY_VERIFY_WITH_TIMEOUT(activityNamed(application, QStringLiteral("Remote still waiting")).value(QStringLiteral("project")).toString().contains(QStringLiteral("Renamed")), wait_ms);
     QCOMPARE(activityNamed(application, QStringLiteral("Remote still waiting")).value(QStringLiteral("key")), identity);
@@ -1638,13 +1802,16 @@ class MachineWindowTest : public QObject {
 
   Q_SLOT static void activityRejectsReusedSessionsAndWaitsForCanonicalSnapshots() {
     MachineFixture fixture;
+
     QVERIFY(fixture.start());
     auto &application = fixture.application;
+
     fixture.local_runtime->send(ClientLayoutSnapshot{});
     fixture.remote_runtime->send(ClientLayoutSnapshot{});
     QVERIFY(finishOpening(*fixture.local_runtime));
     constexpr std::uint64_t agent_pane = 9;
     std::array agents{activityAgent("Remote target")};
+
     agents.front().pane_id = agent_pane;
     agents.front().session_id.front() = 1;
     // Another machine lists only the agents that wait on the person.
@@ -1652,6 +1819,7 @@ class MachineWindowTest : public QObject {
     fixture.remote_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
     QTRY_COMPARE_WITH_TIMEOUT(application.agents()->rowCount(), 1, wait_ms);
     const auto retired = activityRow(application, 0).value(QStringLiteral("key")).toString();
+
     agents.front().session_id.front() = 2;
     fixture.remote_runtime->send(AgentSnapshot{.revision = 2, .entries = agents});
     QTRY_VERIFY_WITH_TIMEOUT(activityRow(application, 0).value(QStringLiteral("key")).toString() != retired, wait_ms);
@@ -1659,6 +1827,7 @@ class MachineWindowTest : public QObject {
     QCOMPARE(fixture.remote_runtime->count(ClientTag::open_pane), 0);
     QVERIFY(!MachineWindow::pendingActivity(application));
     const auto current = activityRow(application, 0).value(QStringLiteral("key")).toString();
+
     application.execute(Application::Action::select_agent, current);
     QVERIFY(MachineWindow::pendingActivity(application));
     QTRY_COMPARE_WITH_TIMEOUT(fixture.remote_runtime->count(ClientTag::open_pane), 1, wait_ms);
@@ -1666,6 +1835,7 @@ class MachineWindowTest : public QObject {
     QVERIFY(finishOpening(*fixture.remote_runtime));
     QTRY_COMPARE_WITH_TIMEOUT(fixture.remote_runtime->count(ClientTag::open_pane), 2, wait_ms);
     const auto handoff = fixture.remote_runtime->last<OpenPane>();
+
     QCOMPARE(handoff.target.kind, PaneTarget::Kind::pane);
     QCOMPARE(handoff.target.id, agent_pane);
     QVERIFY(!handoff.launch);
@@ -1679,22 +1849,27 @@ class MachineWindowTest : public QObject {
 
   Q_SLOT static void commandTargetsRejectWorkspaceReuseDuringHandoff() {
     MachineFixture fixture;
+
     QVERIFY(fixture.start());
     auto &application = fixture.application;
+
     fixture.local_runtime->send(ClientLayoutSnapshot{});
     fixture.remote_runtime->send(ClientLayoutSnapshot{});
     QVERIFY(finishOpening(*fixture.local_runtime));
     std::array tasks{worktreeEntry()};
+
     tasks.front().created_by.reset();
     tasks.front().command_state = CommandState::running;
     tasks.front().title = "Remote command";
     constexpr std::uint64_t replacement_workspace = 3;
     const std::array projects{WorkspaceListEntry{.workspace = 1, .name = "project", .path = "/project"}, WorkspaceListEntry{.workspace = 2, .name = "command", .path = "/command"}, WorkspaceListEntry{.workspace = replacement_workspace, .name = "replacement", .path = "/replacement"}};
+
     // Only the active machine lists its tracked commands; the remote one is selected but still opening.
     MachineWindow::select(application, fixture.remote.machine);
     fixture.remote_runtime->send(WorkspaceList{.revision = 1, .entries = projects, .worktrees = tasks});
     QTRY_COMPARE_WITH_TIMEOUT(application.agents()->rowCount(), 1, wait_ms);
     const auto retired = activityRow(application, 0).value(QStringLiteral("key")).toString();
+
     application.execute(Application::Action::select_agent, retired);
     QVERIFY(MachineWindow::pendingActivity(application));
     tasks.front().workspace = replacement_workspace;
@@ -1705,14 +1880,17 @@ class MachineWindowTest : public QObject {
     const auto local_requests = fixture.local_runtime->count(ClientTag::request_workspace_snapshot);
     const auto openings = fixture.remote_runtime->count(ClientTag::open_pane);
     const auto local_openings = fixture.local_runtime->count(ClientTag::open_pane);
+
     application.execute(Application::Action::select_agent, retired);
     QCOMPARE(fixture.remote_runtime->count(ClientTag::request_workspace_snapshot), workspace_requests);
     QCOMPARE(fixture.remote_runtime->count(ClientTag::open_pane), openings);
     const auto current = activityRow(application, 0).value(QStringLiteral("key")).toString();
+
     QVERIFY(current != retired);
     application.execute(Application::Action::select_agent, current);
     QTRY_COMPARE_WITH_TIMEOUT(fixture.remote_runtime->count(ClientTag::open_pane), openings + 1, wait_ms);
     const auto opening = fixture.remote_runtime->last<OpenPane>();
+
     QCOMPARE(opening.target.kind, PaneTarget::Kind::workspace);
     QCOMPARE(opening.target.id, replacement_workspace);
     QVERIFY(!opening.launch);
@@ -1724,12 +1902,15 @@ class MachineWindowTest : public QObject {
 
   Q_SLOT static void aLaterInteractionCancelsPendingActivity() {
     MachineFixture fixture;
+
     QVERIFY(fixture.start());
     auto &application = fixture.application;
+
     fixture.local_runtime->send(ClientLayoutSnapshot{});
     fixture.remote_runtime->send(ClientLayoutSnapshot{});
     constexpr std::uint64_t agent_pane = 9;
     std::array agents{activityAgent("Pending agent")};
+
     agents.front().pane_id = agent_pane;
     fixture.local_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
     QTRY_COMPARE_WITH_TIMEOUT(application.agents()->rowCount(), 1, wait_ms);
@@ -1745,20 +1926,25 @@ class MachineWindowTest : public QObject {
 
   Q_SLOT static void reconnectingRuntimeInvalidatesActivityWithRestartedRevisions() {
     MachineFixture fixture;
+
     QVERIFY(fixture.start());
     auto &application = fixture.application;
     const auto &remote = MachineWindow::client(application, fixture.remote.machine.slot);
+
     fixture.local_runtime->send(ClientLayoutSnapshot{});
     fixture.remote_runtime->send(ClientLayoutSnapshot{});
     QVERIFY(finishOpening(*fixture.local_runtime));
     std::array agents{activityAgent("Before reconnect")};
+
     // Another machine lists only the agents that wait on the person, not its tracked commands.
     agents.front().status = AgentStatus::blocked;
     const std::array projects{WorkspaceListEntry{.workspace = 1, .name = "project", .path = "/project"}};
+
     fixture.remote_runtime->send(WorkspaceList{.revision = 1, .entries = projects});
     fixture.remote_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
     QTRY_COMPARE_WITH_TIMEOUT(application.agents()->rowCount(), 1, wait_ms);
     const auto old_agent = activityNamed(application, QStringLiteral("Before reconnect")).value(QStringLiteral("key")).toString();
+
     fixture.remote_socket_->disconnectFromServer();
     QTRY_VERIFY_WITH_TIMEOUT(!remote.session.ready(), wait_ms);
     fixture.remote_runtime.reset();
@@ -1788,6 +1974,7 @@ class MachineWindowTest : public QObject {
     QQuickWindow previous;
     QQuickWindow current;
     constexpr QSize window_size{320, 240};
+
     previous.resize(window_size);
     current.resize(window_size);
     previous.show();
@@ -1801,13 +1988,16 @@ class MachineWindowTest : public QObject {
     QVERIFY(finishOpening(*fixture.local_runtime));
     QTRY_VERIFY_WITH_TIMEOUT(application.pane(pane_id) != nullptr && application.pane(pane_id)->attached, wait_ms);
     TerminalItem old_terminal{previous.contentItem()};
+
     old_terminal.setApplication(&application);
     old_terminal.setPaneId(QString::number(pane_id));
     TerminalItem terminal{current.contentItem()};
+
     terminal.setApplication(&application);
     terminal.setPaneId(QString::number(pane_id));
     application.publishNotification({.title = "Local", .message = "local focus", .link = {}});
     const auto local_key = application.notificationIdentity(application.notifications().items().front().id);
+
     previous.contentItem()->forceActiveFocus();
     application.retireNotificationFocus(local_key);
     application.setWindow(current);
@@ -1826,6 +2016,7 @@ class MachineWindowTest : public QObject {
     QCOMPARE(current.activeFocusItem(), current.contentItem());
     application.retireNotificationFocus(local_key);
     QQuickItem editor{current.contentItem()};
+
     editor.forceActiveFocus();
     QCoreApplication::sendPostedEvents(&application, QEvent::MetaCall);
     QCOMPARE(current.activeFocusItem(), &editor);
@@ -1835,6 +2026,7 @@ class MachineWindowTest : public QObject {
     QTRY_VERIFY_WITH_TIMEOUT(application.pane(pane_id) != nullptr && application.pane(pane_id)->attached, wait_ms);
     application.publishNotification({.title = "Remote", .message = "remote focus", .link = {}});
     const auto remote_key = application.notificationIdentity(application.notifications().items().front().id);
+
     editor.setFocus(false);
     current.contentItem()->forceActiveFocus();
     QCOMPARE(current.activeFocusItem(), current.contentItem());
@@ -1848,37 +2040,46 @@ class MachineWindowTest : public QObject {
 
   Q_SLOT static void heldKeysCannotRepeatOnAnotherMachine() {
     MachineFixture fixture;
+
     QVERIFY(fixture.start());
     auto &application = fixture.application;
+
     fixture.local_runtime->send(ClientLayoutSnapshot{});
     fixture.remote_runtime->send(ClientLayoutSnapshot{});
     QVERIFY(finishOpening(*fixture.local_runtime));
     QTRY_VERIFY_WITH_TIMEOUT(application.pane(pane_id) != nullptr, wait_ms);
     TerminalItem terminal;
+
     terminal.setApplication(&application);
     terminal.setPaneId(QString::number(pane_id));
     QKeyEvent press{QEvent::KeyPress, Qt::Key_A, Qt::NoModifier, QStringLiteral("a")};
+
     QCoreApplication::sendEvent(&terminal, &press);
     QTRY_COMPARE_WITH_TIMEOUT(fixture.local_runtime->count(ClientTag::pane_input), 1, wait_ms);
     MachineWindow::select(application, fixture.remote.machine);
     QVERIFY(finishOpening(*fixture.remote_runtime));
     QTRY_VERIFY_WITH_TIMEOUT(application.pane(pane_id) != nullptr, wait_ms);
     QKeyEvent repeat{QEvent::KeyPress, Qt::Key_A, Qt::NoModifier, QStringLiteral("a"), true};
+
     QCoreApplication::sendEvent(&terminal, &repeat);
     QKeyEvent release{QEvent::KeyRelease, Qt::Key_A, Qt::NoModifier, QStringLiteral("a")};
+
     QCoreApplication::sendEvent(&terminal, &release);
     QCoreApplication::sendEvent(&terminal, &press);
     QTRY_COMPARE_WITH_TIMEOUT(fixture.remote_runtime->count(ClientTag::pane_input), 1, wait_ms);
     const auto input = fixture.remote_runtime->last<PaneInput>();
+
     QCOMPARE(textView(input.bytes), std::string_view{"a"});
   }
 
   Q_SLOT static void hiddenSessionsAndOldFramesKeepTheirMachine() {
     MachineFixture fixture;
+
     QVERIFY(fixture.start());
     auto &application = fixture.application;
     const auto &local = MachineWindow::client(application, Machines::local_slot);
     const auto &remote = MachineWindow::client(application, fixture.remote.machine.slot);
+
     fixture.local_runtime->send(ClientLayoutSnapshot{});
     fixture.remote_runtime->send(ClientLayoutSnapshot{});
     QVERIFY(finishOpening(*fixture.local_runtime));
@@ -1889,6 +2090,7 @@ class MachineWindowTest : public QObject {
     QTRY_COMPARE_WITH_TIMEOUT(local.session.findPane(pane_id)->screen.frameId(), 1, wait_ms);
     const auto previous_view = application.viewVersion();
     const auto old_frame = MachineWindow::capture(application);
+
     MachineWindow::select(application, fixture.remote.machine);
     QVERIFY(finishOpening(*fixture.remote_runtime));
     QTRY_VERIFY_WITH_TIMEOUT(local.session.panes().empty() && remote.session.activeTab() != nullptr, wait_ms);
@@ -1908,14 +2110,18 @@ class MachineWindowTest : public QObject {
 
   Q_SLOT static void notificationsRejectCallbacksFromAnotherPresentation() {
     MachineFixture fixture;
+
     QVERIFY(fixture.start());
     auto &application = fixture.application;
+
     application.publishNotification({.title = "Local", .message = "local notice", .link = {}});
     const auto old_id = application.notifications().items().front().id;
     const auto old_key = application.notificationIdentity(old_id);
+
     MachineWindow::select(application, fixture.remote.machine);
     application.publishNotification({.title = "Remote", .message = "remote notice", .link = {}});
     const auto current_id = application.notifications().items().front().id;
+
     QCOMPARE(old_id.value, current_id.value);
     application.dismissNotification(old_key);
     QCOMPARE(application.notifications().items().front().phase, NotificationItem::Phase::entering);
@@ -1927,9 +2133,11 @@ class MachineWindowTest : public QObject {
 
   Q_SLOT static void rebuildingAClientRejectsItsPreviousAdmission() {
     MachineFixture fixture;
+
     QVERIFY(fixture.start());
     const auto previous = fixture.remote;
     const auto replacement = MachineWindow::replace(fixture.application, previous.machine.slot);
+
     QCOMPARE(previous.machine, replacement.machine);
     QVERIFY(previous.generation != replacement.generation);
     QVERIFY(!MachineWindow::contains(fixture.application, previous));
@@ -1938,15 +2146,18 @@ class MachineWindowTest : public QObject {
 
   Q_SLOT static void linkFailuresStayWithTheirOriginalClient() {
     MachineFixture fixture;
+
     QVERIFY(fixture.start());
     auto &application = fixture.application;
     const auto &local = MachineWindow::client(application, Machines::local_slot);
     const auto original = local.key;
+
     MachineWindow::select(application, fixture.remote.machine);
     application.linkOpeningFinished(original, LinkOpeningFailure::launch);
     QVERIFY(application.notifications().items().empty());
     QCOMPARE(local.session.notifications().items().size(), 1);
     const auto retired = fixture.remote;
+
     static_cast<void>(MachineWindow::replace(application, retired.machine.slot));
     application.linkOpeningFinished(retired, LinkOpeningFailure::process);
     QVERIFY(application.notifications().items().empty());
@@ -1957,6 +2168,7 @@ class MachineWindowTest : public QObject {
 
 int main(int argc, char **argv) {
   const QGuiApplication application{argc, argv};
+
   QQuickStyle::setStyle(QStringLiteral("Basic"));
   bundledFonts();
   MachineWindowTest test;

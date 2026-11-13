@@ -26,6 +26,7 @@ struct ErasureAllocator {
 
   void deallocate(void *pointer, std::size_t size, std::size_t alignment) noexcept {
     const std::span bytes{static_cast<const std::byte *>(pointer), size};
+
     dirty_release = dirty_release || std::ranges::any_of(bytes, [](std::byte value) { return value != std::byte{}; });
     upstream_.deallocate(pointer, size, alignment);
     live -= size;

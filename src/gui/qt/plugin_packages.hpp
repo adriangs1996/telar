@@ -49,6 +49,7 @@ public:
   [[nodiscard]] runtime::plugins::PackageDigest finish() const {
     runtime::plugins::PackageDigest result{};
     const auto bytes = hash_.resultView();
+
     std::ranges::copy(bytes, result.begin());
 
     return result;

@@ -30,6 +30,7 @@ CalendarSample WallClock::sample() noexcept {
   constexpr int maximum_offset_hours = 14;
   constexpr int maximum_offset_minutes = maximum_offset_hours * minutes_per_hour;
   auto day_delta = local.tm_yday - utc.tm_yday;
+
   if (local.tm_year != utc.tm_year) {
     day_delta = local.tm_year > utc.tm_year ? 1 : -1;
   }

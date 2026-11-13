@@ -119,6 +119,7 @@ public:
     shell_.assign(session.shell);
     // The session kept views the observer's own copies of its texts.
     auto kept = session;
+
     kept.workspace_path = workspace_path_;
     kept.shell = shell_;
     session_ = kept;
@@ -150,6 +151,7 @@ public:
     }
 
     const auto offset = batch.byte_count;
+
     std::copy(bytes.begin(), bytes.end(), batch.bytes.begin() + offset);
     batch.byte_count += bytes.size();
     batch.events[batch.event_count++] = {kind, ObservationTime::now(), static_cast<std::uint32_t>(offset), static_cast<std::uint32_t>(bytes.size()), shell_foreground};
@@ -196,12 +198,14 @@ public:
     TELAR_DIAGNOSTIC(AllocationScope allocation_scope{AllocationPath::observation});
     ScreenObservationResult result;
     const auto &batch = batches_[*sealed_];
+
     try {
       if (!session_started_ && session_.pane != 0) {
         session_started_ = history.recordHistory({HistoryEventKind::session_started, session_});
       }
 
       CommandRelay<History> commands{session_, history, injected_submissions_};
+
       TELAR_DIAGNOSTIC(commands.metrics = &result.metrics);
       if (batch.reset_before || reset_needed_) {
         tracker_.resetObservation();
@@ -213,6 +217,7 @@ public:
       }
 
       bool output = false;
+
       for (const auto &event : std::span{batch.events}.first(batch.event_count)) {
         switch (event.kind) {
         case ObservationKind::output:
@@ -226,6 +231,7 @@ public:
           break;
         case ObservationKind::input: {
           [[maybe_unused]] const auto candidate_bytes = tracker_.input({batch.bytesOf(event), event.time, event.shell_foreground}, commands);
+
           TELAR_DIAGNOSTIC(diagnostics::accumulate(result.metrics.candidate_input_bytes, candidate_bytes));
           break;
         }
@@ -240,6 +246,7 @@ public:
           if (session_.pane != 0) {
             history.recordHistory({.kind = HistoryEventKind::session_finished, .session = session_, .finished_at_ms = event.time.milliseconds});
           }
+
           break;
         }
       }
@@ -247,6 +254,7 @@ public:
       if (output && inspect_screen) {
         result.signal = inference_.observe(terminal_, manifests, provider, result.time);
       }
+
       result.shell_markers = tracker_.markersReady();
       result.needs_foreground = tracker_.needsForegroundObservation();
     } catch (...) {
@@ -262,6 +270,7 @@ public:
 
   inline ScreenObservationResult observe(const AgentManifests &manifests, AgentProvider provider, bool inspect_screen = true) noexcept {
     DiscardedHistory history;
+
     return observe(manifests, provider, history, inspect_screen);
   }
 
@@ -280,12 +289,14 @@ private:
     inline void emit(const CapturedCommand &command) {
       if (session.pane != 0) {
         auto captured = command;
+
         if (injected_submissions.load(std::memory_order_relaxed) != 0) {
           injected_submissions.fetch_sub(1, std::memory_order_relaxed);
           captured.author = HistoryAuthor::agent;
         }
 
         [[maybe_unused]] const bool accepted = history.recordHistory({HistoryEventKind::command_finished, session, captured});
+
         TELAR_DIAGNOSTIC(diagnostics::accumulate(accepted ? metrics->captured : metrics->dropped));
       }
     }
@@ -385,6 +396,7 @@ public:
   inline tbc::view<Result, tbc::lt::a> observe(tbc::view<const Request &, tbc::lt::a> request) noexcept {
     Result result;
     typename Probe::Request process_request;
+
     for (const auto &entry : std::span{request.entries}.first(request.count)) {
       if (entry.probe_process) {
         process_request.panes[process_request.count++] = entry.process_request;
@@ -392,12 +404,14 @@ public:
     }
 
     std::optional<typename Probe::Result> processes;
+
     if (process_request.count != 0) {
       processes = probe_.observe(process_request);
     }
 
     for (const auto &entry : std::span{request.entries}.first(request.count)) {
       auto &observed = result.entries[result.count++];
+
       observed.pane = entry.pane;
       observed.generation = entry.generation;
       observed.cwd_revision = entry.process_request.cwd_revision;
@@ -405,6 +419,7 @@ public:
       observed.process_recheck = entry.process_request.recheck;
       observed.observer = entry.observer;
       auto provider = entry.provider;
+
       if (processes) {
         for (const auto &process : std::span{processes->panes}.first(processes->count)) {
           if (process.request.pane != entry.pane) {
@@ -416,6 +431,7 @@ public:
           if (const auto *manifest = manifests_.find(provider)) {
             observed.process_result->name.assign(manifest->displayName());
           }
+
           break;
         }
       }

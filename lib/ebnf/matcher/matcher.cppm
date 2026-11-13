@@ -456,6 +456,7 @@ namespace ebnf {
       scratch.set_count_ = 0;
       scratch.overflow_ = false;
       auto current = openSet(scratch);
+
       predict(scratch, start_);
       close(scratch);
       sealSet(scratch);
@@ -463,6 +464,7 @@ namespace ebnf {
       for (std::size_t position = 0; position < words.size() && !scratch.overflow_; ++position) {
         const auto word = words[position];
         auto next = openSet(scratch);
+
         scan(scratch, current, word);
 
         if (scratch.set_size_ == 0 && !scratch.overflow_ && detail::looksLikeCluster(word)) {
@@ -520,17 +522,20 @@ namespace ebnf {
         if (text(terminal.text).starts_with(partial)) {
           stage(scratch, count, terminal.key, id, detail::no_value);
         }
+
         return;
       case detail::terminal_kind::operand:
         if (!detail::looksLikeOption(partial)) {
           stage(scratch, count, terminal.key, id, detail::no_value);
         }
+
         return;
       case detail::terminal_kind::any:
       case detail::terminal_kind::number:
         if (offersValue(terminal, partial)) {
           stage(scratch, count, terminal.key, id, detail::no_value);
         }
+
         return;
       case detail::terminal_kind::glue: {
         const auto prefix = text(terminal.text);
@@ -547,6 +552,7 @@ namespace ebnf {
         } else if (prefix.starts_with(partial)) {
           stage(scratch, count, terminal.key, id, detail::no_value);
         }
+
         return;
       }
       }
@@ -594,6 +600,7 @@ namespace ebnf {
       }
 
       const auto staged = std::span{scratch.staged_}.first(count);
+
       std::ranges::sort(staged, {}, &match_scratch::staged_candidate::key);
       const auto written = std::min<std::size_t>(count, out.size());
 
@@ -649,6 +656,7 @@ namespace ebnf {
 
       static auto decode(std::string_view raw) -> std::string {
         auto decoded = std::string{};
+
         decoded.reserve(raw.size());
 
         for (std::size_t index = 0; index < raw.size(); ++index) {
@@ -696,6 +704,7 @@ namespace ebnf {
             .offset = static_cast<std::uint32_t>(spec_.pool_.size()),
             .size = static_cast<std::uint32_t>(text.size()),
         };
+
         spec_.pool_ += text;
         interned_.emplace(std::move(text), ref);
         return ref;
@@ -728,6 +737,7 @@ namespace ebnf {
           entry.text = intern(decode(nodeText(node)));
         } else {
           const auto name = nodeText(node);
+
           entry.kind = name == "any" ? terminal_kind::any : name == "number" ? terminal_kind::number : terminal_kind::operand;
           entry.text = intern(std::string{nodeText(node)});
         }
@@ -758,6 +768,7 @@ namespace ebnf {
         case node_kind::Literal:
         case node_kind::Dynamic: {
           const auto terminal = addTerminal(node);
+
           spec_.values_.push_back({.terminal = terminal, .key = 0});
           return;
         }
@@ -765,6 +776,7 @@ namespace ebnf {
           for (const auto child : children(node)) {
             collectValues(child, depth + 1);
           }
+
           return;
         case node_kind::Concatenation: {
           const auto parts = children(node);
@@ -793,6 +805,7 @@ namespace ebnf {
         }
 
         const auto values_begin = spec_.values_.size();
+
         collectValues(value, 0);
 
         if (spec_.values_.size() - values_begin > std::numeric_limits<std::uint16_t>::max()) {
@@ -800,6 +813,7 @@ namespace ebnf {
         }
 
         auto entry = spec_.terminals_[addTerminal(prefix)];
+
         spec_.terminals_.pop_back();
         entry.kind = terminal_kind::glue;
         entry.values_begin = static_cast<std::uint32_t>(values_begin);
@@ -817,6 +831,7 @@ namespace ebnf {
           for (const auto child : children(node)) {
             appendSequence(sequence, child);
           }
+
           return;
         }
 
@@ -830,6 +845,7 @@ namespace ebnf {
 
         for (const auto alternative : alternatives) {
           auto sequence = std::vector<std::uint16_t>{};
+
           appendSequence(sequence, alternative);
           sequences.push_back(std::move(sequence));
         }
@@ -865,17 +881,20 @@ namespace ebnf {
         case node_kind::Alternative:
         case node_kind::Concatenation: {
           const auto nonterminal = newNonterminal();
+
           emitAlternatives(nonterminal, sequencesOf(node));
           return nonterminal;
         }
         case node_kind::Optional: {
           const auto nonterminal = newNonterminal();
+
           emitAlternatives(nonterminal, sequencesOf(tree_.getFirstChild(node)));
           productions_[nonterminal].emplace_back();
           return nonterminal;
         }
         case node_kind::ZeroOrMore: {
           const auto nonterminal = newNonterminal();
+
           productions_[nonterminal].emplace_back();
           emitRepetition(nonterminal, sequencesOf(tree_.getFirstChild(node)));
           return nonterminal;
@@ -884,6 +903,7 @@ namespace ebnf {
           // N = a | N a, sharing the symbols built for `a`.
           const auto nonterminal = newNonterminal();
           auto sequences = sequencesOf(tree_.getFirstChild(node));
+
           emitRepetition(nonterminal, sequences);
           emitAlternatives(nonterminal, std::move(sequences));
           return nonterminal;
@@ -916,10 +936,12 @@ namespace ebnf {
 
         done[id] = 1;
         auto &terminal = spec_.terminals_[id];
+
         terminal.key = keyFor(candidateKind(terminal.kind), {}, terminal.text);
 
         for (auto index = terminal.values_begin; index < terminal.values_begin + terminal.values_count; ++index) {
           auto &value = spec_.values_[index];
+
           value.key = keyFor(candidateKind(spec_.terminals_[value.terminal].kind), terminal.text, spec_.terminals_[value.terminal].text);
         }
       }
@@ -935,6 +957,7 @@ namespace ebnf {
         auto visited = std::vector<std::uint8_t>(productions_.size());
         auto done = std::vector<std::uint8_t>(spec_.terminals_.size());
         auto stack = std::vector<frame>{{.nonterminal = spec_.start_, .production = 0, .symbol = 0}};
+
         visited[spec_.start_] = 1;
 
         while (!stack.empty()) {
@@ -1054,6 +1077,7 @@ namespace ebnf {
     auto tokenizer = Lexer{};
     auto spec_parser = std::make_unique<parser<Lexer>>(tokenizer);
     auto tree = spec_parser->parse(source);
+
     return detail::spec_builder{tree}.build();
   }
 }

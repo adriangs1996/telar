@@ -67,32 +67,39 @@ public:
     if (reply.generation != generation_ || reply.rows == 0 || reply.cols != columns || columns == 0) {
       return false;
     }
+
     if (columns_ != columns) {
       forget();
       columns_ = columns;
     }
+
     if (slots_.empty()) {
       slots_.resize(slot_count);
       cells_.resize(slot_count * columns_);
     }
 
     auto reader = reply.reader();
+
     for (std::uint16_t row = 0; row < reply.rows; ++row) {
       const auto stable = reply.from + row;
       auto &slot = slots_[stable % slot_count];
       if (slot.held) {
         dropLinks(slot.stable);
       }
+
       slot.stable = stable;
       slot.flags = reply.text_metadata ? reply.text_metadata->row_flags[row] : Byte{0};
       slot.revision = ++revision_;
       slot.held = true;
       const auto first = (stable % slot_count) * columns_;
+
       for (std::uint16_t column = 0; column < columns_; ++column) {
         const auto cell = reader.next();
+
         cells_[first + column] = cell ? CellValue{*cell} : CellValue{};
       }
     }
+
     if (reply.text_metadata) {
       keepLinks(reply, *reply.text_metadata);
     }
@@ -113,6 +120,7 @@ public:
     if (!holds(stable)) {
       return;
     }
+
     for (const auto &link : links_) {
       if (link.stable == stable) {
         visit(LinkView{.column = link.column, .length = link.length, .uri = textView(std::span{uris_}.subspan(link.uri_offset, link.uri_length))});
@@ -124,6 +132,7 @@ public:
     if (slots_.empty()) {
       return std::nullopt;
     }
+
     const auto index = stable % slot_count;
     const auto &slot = slots_[index];
     if (!slot.held || slot.stable != stable) {
@@ -145,6 +154,7 @@ public:
         return stable;
       }
     }
+
     return std::nullopt;
   }
 
@@ -170,6 +180,7 @@ public:
         return true;
       }
     }
+
     return false;
   }
 
@@ -177,12 +188,16 @@ public:
   void release() {
     forget();
     Vector<Slot, Memory> slots{slots_.get_allocator()};
+
     slots_.swap(slots);
     Vector<CellValue, Memory> cells{cells_.get_allocator()};
+
     cells_.swap(cells);
     Vector<Link, Memory> links{links_.get_allocator()};
+
     links_.swap(links);
     Vector<Byte, Memory> uris{uris_.get_allocator()};
+
     uris_.swap(uris);
   }
 
@@ -212,6 +227,7 @@ private:
     for (auto &slot : slots_) {
       slot.held = false;
     }
+
     pending_ = {};
     links_.clear();
     uris_.clear();
@@ -226,15 +242,19 @@ private:
     if (metadata.runs.empty()) {
       return;
     }
+
     if (uris_.size() > uri_compaction_bytes) {
       compactUris();
     }
+
     for (const auto &run : metadata.runs) {
       if (run.link_index >= metadata.links.size() || reply.cols == 0) {
         continue;
       }
+
       const auto &target = metadata.links[run.link_index];
       const auto offset = uris_.size();
+
       uris_.insert(uris_.end(), metadata.uris.begin() + target.offset, metadata.uris.begin() + target.offset + target.len);
       links_.push_back({.stable = reply.from + (run.start / reply.cols), .column = static_cast<std::uint16_t>(run.start % reply.cols), .length = run.len, .uri_offset = static_cast<std::uint32_t>(offset), .uri_length = target.len});
     }
@@ -243,11 +263,14 @@ private:
   // Keeps only the targets of links still held.
   void compactUris() {
     Vector<Byte, Memory> kept{uris_.get_allocator()};
+
     for (auto &link : links_) {
       const auto offset = kept.size();
+
       kept.insert(kept.end(), uris_.begin() + link.uri_offset, uris_.begin() + link.uri_offset + link.uri_length);
       link.uri_offset = static_cast<std::uint32_t>(offset);
     }
+
     uris_.swap(kept);
   }
 

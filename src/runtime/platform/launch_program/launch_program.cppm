@@ -44,6 +44,7 @@ inline std::string_view launchedProgram(std::span<const std::string_view> argume
   }
 
   const auto script = loginShellScript(arguments.front());
+
   return !script.empty() && arguments[4] == script ? arguments[wrapped_program_index] : arguments.front();
 }
 

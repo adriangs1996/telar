@@ -19,6 +19,7 @@ namespace {
 
 String<SystemAllocator> escaped(SystemAllocator &memory, std::string_view text, JsonEscapes escapes) {
   String<SystemAllocator> output{AllocatorRef<char, SystemAllocator>{memory}};
+
   appendJsonText(output, text, escapes);
   return output;
 }
@@ -30,6 +31,7 @@ String<SystemAllocator> escaped(SystemAllocator &memory, std::string_view text, 
 int main() {
   SystemAllocator memory;
   constexpr std::string_view input{"a\"b\\c\n\r\t\b\f\x01\x1f\x7f\xc3\xa9", 15};
+
   check(escaped(memory, input, JsonEscapes::standard) == "\"a\\\"b\\\\c\\n\\r\\t\\b\\f\\u0001\\u001f\x7f\xc3\xa9\"");
   check(escaped(memory, input, JsonEscapes::control) == "\"a\\\"b\\\\c\\n\\r\\t\\u0008\\u000c\\u0001\\u001f\\u007f\xc3\xa9\"");
   check(escaped(memory, "", JsonEscapes::control) == "\"\"");

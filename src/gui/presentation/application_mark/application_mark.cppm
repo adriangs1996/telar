@@ -84,6 +84,7 @@ struct ApplicationMark {
       std::string_view tile;
       std::string_view ink;
     };
+
     // Terminal programs have no operating system icon of their own.
     static constexpr std::array known{
         Known{"nvim", "\ue62b", "#5fb095", "#0f1a16"}, Known{"vim", "\ue62b", "#5fb095", "#0f1a16"}, Known{"vi", "\ue62b", "#5fb095", "#0f1a16"},
@@ -96,6 +97,7 @@ struct ApplicationMark {
         Known{"go", "\ue626", "#00add8", "#08252b"},
         Known{"bun", "B", "#fbf0df", "#1a1627"},
     };
+
     for (const auto &entry : known) {
       if (entry.name == name) {
         return {.provider = AgentProvider::unknown, .glyph = entry.glyph, .tile = entry.tile, .ink = entry.ink};
@@ -125,6 +127,7 @@ public:
     }
 
     const auto since = since_ns_.value_or(*now_ns);
+
     since_ns_ = since;
 
     return *now_ns >= visibleAt(since);
@@ -183,6 +186,7 @@ class StatusAge {
 public:
   inline void observe(StatusAgeSample sample, std::uint64_t now_ns) noexcept {
     auto age_ns = static_cast<std::uint64_t>(sample.reported_seconds) * StatusAgeInterval::nanoseconds_per_second;
+
     if (sample.continues(sample_)) {
       age_ns = std::max(age_ns, interval_.elapsed(now_ns));
     }
@@ -225,6 +229,7 @@ public:
 
   [[nodiscard]] inline static WindowTitle render(std::string_view pattern, Tokens tokens) {
     WindowTitle result;
+
     while (!pattern.empty()) {
       const auto consumed = result.expand(pattern, tokens);
       if (consumed != 0) {
@@ -244,6 +249,7 @@ public:
     constexpr unsigned continuation_mask = 0xc0;
     const auto suffix_length = std::min(suffix.size(), capacity);
     auto kept = std::min(length_, capacity - suffix_length);
+
     while (kept > 0 && kept < length_ && (static_cast<unsigned char>(bytes_[kept]) & continuation_mask) == Utf8Scalar::continuation_prefix) {
       --kept;
     }
@@ -315,6 +321,7 @@ private:
     constexpr unsigned control_end = 0x9f;
     std::size_t position = 0;
     std::size_t written = 0;
+
     while (position < length_) {
       const auto first = static_cast<unsigned char>(bytes_[position]);
       const auto size = first <= Utf8Scalar::maximum_codepoints.front() ? std::size_t{1} : static_cast<std::size_t>(std::countl_one(first));

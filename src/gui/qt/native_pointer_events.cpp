@@ -29,6 +29,7 @@ struct NativePointerEvents::Native final : QWindowSystemEventHandler {
       }
     } else {
       auto *current = dynamic_cast<Native *>(head);
+
       while (current != nullptr) {
         if (current->previous_ == this) {
           current->previous_ = previous_;
@@ -47,6 +48,7 @@ struct NativePointerEvents::Native final : QWindowSystemEventHandler {
 
   bool sendEvent(QWindowSystemInterfacePrivate::WindowSystemEvent *event) override {
     QEvent::Type kind = QEvent::None;
+
     if (event->type == QWindowSystemInterfacePrivate::Mouse) {
       kind = dynamic_cast<const QWindowSystemInterfacePrivate::MouseEvent &>(*event).buttonType;
     }

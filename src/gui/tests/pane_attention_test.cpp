@@ -105,6 +105,7 @@ void configure(NativePaneAttention &item, PaneAttentionKey key = {.pane_id = 1, 
 bool frameAt(QQuickWindow &window, std::uint64_t now_ns) {
   ControlledAwakeClock::set(now_ns);
   const QSignalSpy frames{&window, &QQuickWindow::afterAnimating};
+
   window.update();
 
   return telar::gui::test::waitForGuiCondition([&frames] {
@@ -125,10 +126,12 @@ QJsonObject fixture() {
 std::vector<std::unique_ptr<NativePaneAttention>> createAtlas(const QQuickWindow &window, const QJsonObject &source) {
   std::vector<std::unique_ptr<NativePaneAttention>> items;
   const auto density = window.effectiveDevicePixelRatio();
+
   for (const auto &value : source.value(QStringLiteral("items")).toArray()) {
     const auto record = value.toObject();
     const auto bounds = record.value(QStringLiteral("rect")).toArray();
     auto item = std::make_unique<NativePaneAttention>(window.contentItem());
+
     configure(*item, {.pane_id = static_cast<std::uint64_t>(record.value(QStringLiteral("pane_id")).toInteger()), .attachment_generation = 1});
     item->setSize({bounds[2].toDouble() / density, bounds[3].toDouble() / density});
     item->setPosition({bounds[0].toDouble() / density, bounds[1].toDouble() / density});
@@ -155,6 +158,7 @@ private:
     QQuickWindow window;
     NativePaneAttention first{window.contentItem()};
     NativePaneAttention second{window.contentItem()};
+
     configure(first);
     configure(second);
     window.resize(window_width, window_height);
@@ -163,6 +167,7 @@ private:
     QVERIFY(frameAt(window, 0));
     QCOMPARE(first.alpha(), 0);
     const auto timers = window.findChildren<QTimer *>(QStringLiteral("agentStatusAnimation"));
+
     QCOMPARE(timers.size(), 1);
     QVERIFY(timers.front()->isActive());
 
@@ -176,6 +181,7 @@ private:
     QTRY_VERIFY_WITH_TIMEOUT(!timers.front()->isActive(), wait_ms);
 
     NativePaneAttention replacement{window.contentItem()};
+
     configure(replacement);
     QVERIFY(frameAt(window, duration_ns));
     QTRY_COMPARE_WITH_TIMEOUT(replacement.alpha(), 1, wait_ms);
@@ -196,9 +202,11 @@ private:
   Q_SLOT static void frameCapChangesCadenceWithoutRestartingFade() {
     QQuickWindow window;
     NativePaneAttention item{window.contentItem()};
+
     configure(item);
     auto &clock = telar::gui::qt::WindowAnimationClock::forWindow(window);
     const auto uncapped_interval = clock.frameInterval();
+
     window.resize(window_width, window_height);
     window.show();
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
@@ -220,6 +228,7 @@ private:
     QVERIFY(frameAt(window, duration_ns));
     QCOMPARE(item.alpha(), 1);
     const auto timers = window.findChildren<QTimer *>(QStringLiteral("agentStatusAnimation"));
+
     QCOMPARE(timers.size(), 1);
     QTRY_VERIFY_WITH_TIMEOUT(!timers.front()->isActive(), wait_ms);
   }
@@ -227,6 +236,7 @@ private:
   Q_SLOT static void absentRingsArePrunedAndRestartOnReturn() {
     QQuickWindow window;
     NativePaneAttention item{window.contentItem()};
+
     configure(item);
     window.resize(window_width, window_height);
     window.show();
@@ -253,6 +263,7 @@ private:
   Q_SLOT static void firstExposureStartsTheFadeAndHidingKeepsItsIdentity() {
     QQuickWindow window;
     NativePaneAttention item{window.contentItem()};
+
     configure(item);
     window.resize(window_width, window_height);
     QCoreApplication::sendPostedEvents();
@@ -272,6 +283,7 @@ private:
     QVERIFY(frameAt(window, duration_ns * 3));
     QCOMPARE(item.alpha(), 1);
     const auto *timer = window.findChild<QTimer *>(QStringLiteral("agentStatusAnimation"));
+
     QVERIFY(timer != nullptr && !timer->isActive());
   }
 
@@ -279,6 +291,7 @@ private:
     QQuickWindow first;
     QQuickWindow second;
     NativePaneAttention item{first.contentItem()};
+
     configure(item);
     first.resize(window_width, window_height);
     second.resize(window_width, window_height);
@@ -297,6 +310,7 @@ private:
     QVERIFY(frameAt(second, duration_ns + quarter_ns));
     QCOMPARE(item.alpha(), quarter_alpha);
     const auto *timer = first.findChild<QTimer *>(QStringLiteral("agentStatusAnimation"));
+
     QVERIFY(timer != nullptr);
     QTRY_VERIFY_WITH_TIMEOUT(!timer->isActive(), wait_ms);
   }
@@ -305,15 +319,18 @@ private:
     auto window = std::make_unique<QQuickWindow>();
     auto owned_item = std::make_unique<NativePaneAttention>(window->contentItem());
     const QPointer<NativePaneAttention> alive{owned_item.get()};
+
     configure(*owned_item);
     window->resize(window_width, window_height);
     window->show();
     QTRY_VERIFY_WITH_TIMEOUT(window->isExposed(), wait_ms);
     QVERIFY(frameAt(*window, 0));
     const auto *const item = owned_item.release();
+
     connect(item, &NativePaneAttention::alphaChanged, window.get(), [&window] {
       window.reset();
     });
+
     ControlledAwakeClock::set(quarter_ns);
     window->update();
     QTRY_VERIFY_WITH_TIMEOUT(alive.isNull(), wait_ms);
@@ -322,8 +339,10 @@ private:
 
   Q_SLOT static void attentionRadiusFollowsPaneSurfaces() {
     NativePaneAttention item;
+
     QCOMPARE(item.radius(), qreal{telar::gui::PaneDecorationGeometry::frame_radius});
     const QSignalSpy changes{&item, &NativePaneAttention::radiusChanged};
+
     item.setRadius(4);
     QCOMPARE(item.radius(), qreal{4});
     QCOMPARE(changes.size(), 1);
@@ -336,12 +355,14 @@ private:
   Q_SLOT static void attachmentIdentityKeepsAllIntegerBits() {
     constexpr PaneAttentionKey key{.pane_id = 0xFEDCBA9876543210, .attachment_generation = 0xABCDEF0123456789};
     const auto restored = paneAttentionKey(paneAttentionValue(key));
+
     QVERIFY(restored.has_value());
     QCOMPARE(restored.value_or(PaneAttentionKey{}), key);
     QVERIFY(!paneAttentionKey(QVariant::fromValue(1)).has_value());
 
     QQmlEngine engine;
     QQmlComponent component{&engine};
+
     component.setData(R"(
       import Telar.Gui
       NativePaneAttention {
@@ -351,8 +372,10 @@ private:
     )",
                       QUrl{});
     const auto item = std::unique_ptr<QObject>{component.createWithInitialProperties({{QStringLiteral("record"), QVariantMap{{QStringLiteral("attentionKey"), paneAttentionValue(key)}}}})};
+
     QVERIFY2(item != nullptr, qPrintable(component.errorString()));
     const auto *ring = qobject_cast<NativePaneAttention *>(item.get());
+
     QVERIFY(ring != nullptr);
     QCOMPARE(paneAttentionKey(ring->attachment()).value_or(PaneAttentionKey{}), key);
   }
@@ -362,15 +385,18 @@ private:
     auto source = fixture();
     const auto density = window.effectiveDevicePixelRatio();
     const QSize physical{source.value(QStringLiteral("width")).toInt(), source.value(QStringLiteral("height")).toInt()};
+
     window.resize(qRound(physical.width() / density), qRound(physical.height() / density));
     window.setMinimumSize(window.size());
     window.setMaximumSize(window.size());
     window.setColor(QColor::fromRgb(background_rgb));
     const auto items = createAtlas(window, source);
+
     window.show();
     QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
     QVERIFY(frameAt(window, 0));
     const auto exact = window.rendererInterface()->graphicsApi() == QSGRendererInterface::Metal;
+
     qInfo() << "Graphics API:" << window.rendererInterface()->graphicsApi() << "effective density:" << density;
     const auto capture_dir = qEnvironmentVariable("TELAR_GUI_ATTENTION_CAPTURE_DIR");
     if (!capture_dir.isEmpty()) {
@@ -379,6 +405,7 @@ private:
 
     for (const auto &value : source.value(QStringLiteral("frames")).toArray()) {
       const auto phase = value.toObject();
+
       QVERIFY(frameAt(window, static_cast<std::uint64_t>(phase.value(QStringLiteral("now_ns")).toInteger())));
       for (const auto &item : items) {
         QCOMPARE(item->alpha(), phase.value(QStringLiteral("alpha")).toDouble());
@@ -386,10 +413,12 @@ private:
 
       const auto capture_name = phase.value(QStringLiteral("capture")).toString();
       const QImage expected{QStringLiteral(":/telar/test-pane-attention/") + capture_name};
+
       QVERIFY(!expected.isNull());
       source.insert(QStringLiteral("shapes"), phase.value(QStringLiteral("shapes")));
       const auto budget = shapeCompositingBudget(source, exact ? 0 : cross_backend_error_per_layer);
       auto image = window.grabWindow();
+
       image.setDevicePixelRatio(1);
       qInfo() << "Drawable pixels" << image.size() << "atlas pixels" << physical;
       QVERIFY(image.width() >= physical.width() && image.height() >= physical.height());
@@ -399,6 +428,7 @@ private:
 
       image = image.copy(0, 0, physical.width(), physical.height());
       const auto error = compareShapeImages(image, {.pixels = expected, .budget = budget});
+
       qInfo() << capture_name << "exact Metal:" << exact << "different pixels:" << error.pixels << "maximum channel:" << error.maximum_channel << "outside budget:" << error.outside_budget;
       if (!capture_dir.isEmpty()) {
         QVERIFY(image.save(QDir{capture_dir}.filePath(capture_name)));

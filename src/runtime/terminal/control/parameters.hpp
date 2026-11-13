@@ -11,6 +11,7 @@ namespace telar::runtime::control {
 inline std::string_view takeField(std::string_view &remaining, char separator = ';') noexcept {
   const auto end = remaining.find(separator);
   const auto result = remaining.substr(0, end);
+
   remaining = end == std::string_view::npos ? std::string_view{} : remaining.substr(end + 1);
   return result;
 }
@@ -38,11 +39,13 @@ struct Parameters {
     }
 
     Parameters result;
+
     result.final = body.back();
     body.remove_suffix(1);
     bool intermediate_phase = false;
     std::uint32_t accumulator = 0;
     unsigned digits = 0;
+
     for (const auto byte : body) {
       if (byte == '\x7f') {
         continue;
@@ -52,6 +55,7 @@ struct Parameters {
         if (++digits > maximum_digits) {
           return std::nullopt;
         }
+
         accumulator = std::min(maximum_value, accumulator * 10 + static_cast<unsigned>(byte - '0'));
         continue;
       }
@@ -60,6 +64,7 @@ struct Parameters {
         if (result.count == capacity) {
           return std::nullopt;
         }
+
         result.values[result.count++] = static_cast<std::uint16_t>(accumulator);
         result.colon |= byte == ':';
         accumulator = 0;
@@ -72,6 +77,7 @@ struct Parameters {
         if (result.intermediate_count == intermediate_capacity) {
           return std::nullopt;
         }
+
         result.intermediate[result.intermediate_count++] = byte;
         intermediate_phase |= !prefix;
         continue;
@@ -84,8 +90,10 @@ struct Parameters {
       if (result.count == capacity) {
         return std::nullopt;
       }
+
       result.values[result.count++] = static_cast<std::uint16_t>(accumulator);
     }
+
     return result;
   }
 };

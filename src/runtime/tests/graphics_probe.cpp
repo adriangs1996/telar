@@ -19,9 +19,11 @@ static void writeAll(std::string_view bytes) {
     if (count < 0 && errno == EINTR) {
       continue;
     }
+
     if (count <= 0) {
       throw SocketError{"Graphics fixture write failed"};
     }
+
     bytes.remove_prefix(static_cast<std::size_t>(count));
   }
 }
@@ -31,6 +33,7 @@ static std::string encodeBase64(std::span<const Byte> bytes) {
   if (runtime::base64::encode(bytes, result) != result.size()) {
     throw SocketError{"Cannot encode graphics fixture"};
   }
+
   return result;
 }
 
@@ -51,10 +54,12 @@ public:
         throw SocketError{"Runtime did not unlink the child shared object"};
       }
     }
+
     clear();
 
     std::array<char, 64> name;
     int descriptor;
+
     if (shared_) {
       std::snprintf(name.data(), name.size(), "/tlrprobe%08x%08x", ::arc4random(), ::arc4random());
       descriptor = ::shm_open(name.data(), O_CREAT | O_EXCL | O_RDWR, 0600);
@@ -62,9 +67,11 @@ public:
       std::strcpy(name.data(), "/tmp/telar-graphics-probe-XXXXXX");
       descriptor = ::mkstemp(name.data());
     }
+
     if (descriptor < 0) {
       throw SocketError{"Cannot create graphics fixture resource"};
     }
+
     name_ = name.data();
     const std::size_t offset = atomic ? 0 : 64;
     const auto length = offset + pixels.size();
@@ -74,14 +81,17 @@ public:
     }
 
     void *mapping = ::mmap(nullptr, length, PROT_READ | PROT_WRITE, MAP_SHARED, descriptor, 0);
+
     ::close(descriptor);
     if (mapping == MAP_FAILED) {
       throw SocketError{"Cannot map graphics fixture resource"};
     }
+
     std::memcpy(static_cast<Byte *>(mapping) + offset, pixels.data(), pixels.size());
     ::munmap(mapping, length);
     const auto encoded = encodeBase64({reinterpret_cast<const Byte *>(name_.data()), name_.size()});
     const std::string medium = shared_ ? "s" : "f";
+
     if (atomic) {
       writeAll("\x1b[?2026h\x1b[H\x1b_Ga=T,t=" + medium + ",f=32,s=256,v=256,i=1,p=3,C=1,q=2;" + encoded + "\x1b\\\x1b[?2026l");
     } else {
@@ -97,6 +107,7 @@ private:
       } else {
         ::unlink(name_.c_str());
       }
+
       name_.clear();
     }
   }
@@ -110,10 +121,12 @@ static int graphicsChild(std::string_view workload) {
   if (::tcgetattr(STDIN_FILENO, &settings) != 0) {
     return 2;
   }
+
   ::cfmakeraw(&settings);
   if (::tcsetattr(STDIN_FILENO, TCSANOW, &settings) != 0) {
     return 2;
   }
+
   writeAll("ready");
   std::vector<Byte> pixels(256 * 256 * 4);
   const bool external = workload.starts_with("graphics-file") || workload.starts_with("graphics-shm");
@@ -121,20 +134,24 @@ static int graphicsChild(std::string_view workload) {
   ChildImageResource resource{workload.starts_with("graphics-shm")};
   unsigned sequence = 0;
   char command = 0;
+
   while (::read(STDIN_FILENO, &command, 1) == 1) {
     if (command == 'q') {
       return 0;
     }
+
     if (command == 'd') {
       writeAll("\x1b_Ga=d,d=I,i=1,q=2;\x1b\\");
       continue;
     }
+
     for (std::size_t index = 0; index < pixels.size(); index += 4) {
       pixels[index] = static_cast<Byte>(sequence);
       pixels[index + 1] = static_cast<Byte>(index / 4);
       pixels[index + 2] = 17;
       pixels[index + 3] = 255;
     }
+
     writeAll("\x1b[2;3H");
     if (external) {
       resource.transmit(pixels, atomic);
@@ -144,18 +161,22 @@ static int graphicsChild(std::string_view workload) {
 
     const auto encoded = encodeBase64(pixels);
     std::size_t offset = 0;
+
     while (offset < encoded.size()) {
       const auto take = std::min<std::size_t>(4096, encoded.size() - offset);
       const bool more = offset + take != encoded.size();
       std::string header = offset == 0 ? "\x1b_Ga=T,f=32,s=256,v=256,i=1,p=3,c=20,r=10,C=1,q=2,m=" : "\x1b_Gm=";
+
       header += more ? "1;" : "0;";
       writeAll(header);
       writeAll(std::string_view{encoded}.substr(offset, take));
       writeAll("\x1b\\");
       offset += take;
     }
+
     ++sequence;
   }
+
   return 0;
 }
 
@@ -168,29 +189,37 @@ static ImageDescription image(ProtocolPeer &peer, bool shared, std::vector<Byte>
     if (descriptor < 0) {
       throw SocketError{"Shared image missing"};
     }
+
     struct stat status{};
     if (::fstat(descriptor, &status) != 0 || status.st_size < static_cast<off_t>(description.byte_len)) {
       throw SocketError{"Shared image size mismatch"};
     }
+
     const void *mapping = ::mmap(nullptr, description.byte_len, PROT_READ, MAP_SHARED, descriptor, 0);
+
     ::close(descriptor);
     if (mapping == MAP_FAILED) {
       throw SocketError{"Shared image mapping failed"};
     }
+
     pixels.assign(static_cast<const Byte *>(mapping), static_cast<const Byte *>(mapping) + description.byte_len);
     ::munmap(const_cast<void *>(mapping), description.byte_len);
     ::shm_unlink(name.c_str());
     return description;
   }
+
   const auto description = peer.receive<GraphicsImage>().image;
+
   pixels.clear();
   while (pixels.size() != description.byte_len) {
     const auto chunk = peer.receive<GraphicsImageChunk>();
     if (chunk.key.image_id != description.key.image_id || chunk.key.generation != description.key.generation || chunk.offset != pixels.size() || chunk.bytes.size() > description.byte_len - pixels.size()) {
       throw SocketError{"Invalid image transfer"};
     }
+
     pixels.insert(pixels.end(), chunk.bytes.begin(), chunk.bytes.end());
   }
+
   return description;
 }
 
@@ -199,9 +228,11 @@ int main(int argc, char **argv) {
     if (argc == 3 && std::string_view{argv[1]} == "--child") {
       return graphicsChild(argv[2]);
     }
+
     if (argc != 5 && (argc != 6 || std::string_view{argv[5]} != "retain")) {
       return 2;
     }
+
     ProtocolPeer peer{argv[1]};
     const bool shared = std::string_view{argv[2]}.ends_with("-shared");
     const auto iterations = static_cast<unsigned>(std::stoul(argv[3]));
@@ -210,34 +241,44 @@ int main(int argc, char **argv) {
                                                          .size = {80, 24, 8, 16},
                                                          .launch = Launch{.cwd = "/tmp",
                                                                           .arguments = arguments}});
+
     for (;;) {
       const auto frame = peer.receive<PaneFrame>();
+
       peer.send(FrameAck{frame.pane_id, frame.frame_id});
       bool ready = false;
+
       for (const auto &span : frame.spans) {
         auto reader = span.reader();
+
         for (std::size_t index = 0; index < span.count; ++index) {
           const auto cell = reader.next();
+
           ready |= span.start + index == 0 && cell && cell->text.size() == 1 && cell->text[0] == 'r';
         }
       }
+
       if (ready) {
         break;
       }
     }
+
     peer.send(ConfigureGraphics{shared});
     std::ofstream dump{argv[4], std::ios::binary};
     std::vector<Byte> pixels;
     std::uint64_t previous_generation = 0;
     const auto started = std::chrono::steady_clock::now();
+
     for (unsigned index = 0; index < iterations; ++index) {
       const std::array<Byte, 1> next{'n'};
+
       peer.send(PaneInput{pane.pane_id, next});
       auto description = image(peer, shared, pixels);
       auto placed = peer.receive<GraphicsPlacementMessage>();
       if (description.key.generation == previous_generation || placed.placement.key.generation != description.key.generation || pixels.size() != 256 * 256 * 4 || pixels[0] != static_cast<Byte>(index) || pixels[3] != 255) {
         throw SocketError{"Graphics state mismatch"};
       }
+
       previous_generation = description.key.generation;
       peer.send(GraphicsCredit{pane.pane_id, description.byte_len});
       description.key.generation = index + 1;
@@ -248,7 +289,9 @@ int main(int argc, char **argv) {
       dump.write(reinterpret_cast<const char *>(pixels.data()), static_cast<std::streamsize>(pixels.size()));
       peer.record(dump, placed);
     }
+
     const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - started).count();
+
     if (argc == 6) {
       std::puts("retained");
       std::fflush(stdout);
@@ -258,14 +301,18 @@ int main(int argc, char **argv) {
     }
 
     const std::array<Byte, 1> remove{'d'};
+
     peer.send(PaneInput{pane.pane_id, remove});
     while (peer.receive<GraphicsDeleteImage>().key.generation != previous_generation) {
     }
+
     peer.send(RequestGraphicsSnapshot{pane.pane_id});
     if (peer.receive<GraphicsSnapshot>().phase != SnapshotPhase::begin || peer.receive<GraphicsSnapshot>().phase != SnapshotPhase::end) {
       throw SocketError{"Empty graphics snapshot mismatch"};
     }
+
     const std::array<Byte, 1> quit{'q'};
+
     peer.send(PaneInput{pane.pane_id, quit});
     std::printf("{\"iterations\":%u,\"elapsed_ns\":%lld,\"ns_per_iteration\":%lld}\n", iterations, static_cast<long long>(elapsed), static_cast<long long>(elapsed / iterations));
     return 0;

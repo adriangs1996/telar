@@ -68,6 +68,7 @@ FixedText<48> ProcessInspector::name(pid_t process) const noexcept {
   proc_bsdinfo information{};
   if (::proc_pidinfo(process, PROC_PIDTBSDINFO, 0, &information, sizeof(information)) == sizeof(information)) {
     const std::string_view candidate{information.pbi_comm, ::strnlen(information.pbi_comm, sizeof(information.pbi_comm))};
+
     try {
       DisplayText16<48, false>::validate(candidate);
       result.assign(candidate);
@@ -99,6 +100,7 @@ FixedText<4096> ProcessInspector::executable(pid_t process) noexcept {
   if (length > 0) {
     result.assign(path.data());
   }
+
   return result;
 }
 
@@ -109,6 +111,7 @@ ListeningPorts ProcessInspector::listeningPorts(pid_t group) const noexcept {
   ListeningPorts ports;
   std::array<pid_t, maximum_group_processes> members;
   std::array<proc_fdinfo, maximum_descriptors> descriptors;
+
   for (const auto member : std::span{members}.first(groupMembers(group, members))) {
     const auto bytes = ::proc_pidinfo(member, PROC_PIDLISTFDS, 0, descriptors.data(), static_cast<int>(sizeof(descriptors)));
     if (bytes <= 0) {
@@ -137,6 +140,7 @@ ListeningPorts ProcessInspector::listeningPorts(pid_t group) const noexcept {
 
 std::size_t ProcessInspector::groupMembers(pid_t group, std::span<pid_t> members) noexcept {
   const auto bytes = ::proc_listpids(PROC_PGRP_ONLY, static_cast<std::uint32_t>(group), members.data(), members.size_bytes());
+
   return bytes > 0 ? std::min(members.size(), static_cast<std::size_t>(bytes) / sizeof(pid_t)) : 0;
 }
 
@@ -146,9 +150,11 @@ FixedText<4096> ProcessInspector::terminal(pid_t process) const noexcept {
   std::array<char, 128> name{};
   if (::proc_pidinfo(process, PROC_PIDTBSDINFO, 0, &information, sizeof(information)) == sizeof(information) && ::devname_r(information.e_tdev, S_IFCHR, name.data(), name.size()) != nullptr) {
     std::array<char, 4096> path{};
+
     std::snprintf(path.data(), path.size(), "/dev/%s", name.data());
     result.assign(path.data());
   }
+
   return result;
 }
 

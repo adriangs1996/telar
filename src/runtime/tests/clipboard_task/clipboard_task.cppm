@@ -18,9 +18,11 @@ struct OwnedClipboardTask {
     if (request.mimes.size() > 4 || request.contents.size() > 128 || request.name.size() > 256) {
       throw telar::EncodingError{"Invalid clipboard request bounds"};
     }
+
     for (const auto mime : request.mimes) {
       mimes.emplace_back(mime);
     }
+
     for (const auto &content : request.contents) {
       contents.push_back({std::string{content.mime}, {content.data.begin(), content.data.end()}});
     }
@@ -62,33 +64,43 @@ ClipboardResult executeClipboard(const OwnedClipboardTask &task, ClipboardConsen
   if (task.prompt && consent == ClipboardConsent::deny) {
     return {.status = telar::ClipboardDesktopStatus::denied};
   }
+
   ClipboardResult result;
+
   try {
     if (!provider.supports(task.primary)) {
       return {.status = telar::ClipboardDesktopStatus::unsupported};
     }
+
     result = task.write ? provider.write(task) : provider.read(task);
   } catch (const std::bad_alloc &) {
     return {.status = telar::ClipboardDesktopStatus::failure};
   }
+
   if (result.status != telar::ClipboardDesktopStatus::success) {
     return {.status = result.status};
   }
+
   std::size_t size = 0;
+
   if (result.contents.size() > 4 || result.available.size() > 16) {
     return {.status = telar::ClipboardDesktopStatus::failure};
   }
+
   for (const auto &content : result.contents) {
     if (content.mime.empty() || content.mime.size() > 256 || content.data.size() > telar::clipboard_content_limit - size) {
       return {.status = telar::ClipboardDesktopStatus::failure};
     }
+
     size += content.data.size();
   }
+
   for (const auto &mime : result.available) {
     if (mime.empty() || mime.size() > 256) {
       return {.status = telar::ClipboardDesktopStatus::failure};
     }
   }
+
   return result;
 }
 

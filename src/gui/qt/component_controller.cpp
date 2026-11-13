@@ -85,6 +85,7 @@ using Clock = ComponentSlotState::Clock;
 void registerComponentFonts() {
   static const bool ready = [] {
     constexpr std::array paths{":/telar/fonts/IBMPlexSans-Regular.ttf", ":/telar/fonts/IBMPlexSans-SemiBold.ttf", ":/telar/fonts/SymbolsNerdFontMono-Regular.ttf", ":/telar/fonts/JetBrainsMono-Regular.ttf", ":/telar/fonts/TelarForma-Regular.ttf"};
+
     for (const auto *const path : paths) {
       if (QFontDatabase::addApplicationFont(QString::fromLatin1(path)) < 0) {
         throw std::runtime_error{"Could not register a bundled UI font"};
@@ -93,6 +94,7 @@ void registerComponentFonts() {
 
     return true;
   }();
+
   static_cast<void>(ready);
 }
 
@@ -136,6 +138,7 @@ Clock::time_point nextClock(const components::Content<Bounds> &content) {
   constexpr auto minute = second * 60;
   auto period = minute;
   bool found = false;
+
   for (const auto &node : content.nodes()) {
     if (node.kind == components::Kind::clock) {
       found = true;
@@ -169,12 +172,14 @@ void Application::initializeComponents() {
       emit componentsChanged();
     }
   });
+
   connect(this, &Application::machineChanged, this, &Application::resetComponents);
   connect(this, &Application::dialogChanged, this, [this] {
     if (dialog_ != Dialog::none && component_surfaces_.open_panel) {
       closeComponentPanel();
     }
   });
+
   connect(qGuiApp, &QGuiApplication::applicationStateChanged, this, [this](Qt::ApplicationState state) {
     if (state == Qt::ApplicationActive) {
       projectComponents();
@@ -189,6 +194,7 @@ components::Context Application::componentContext() const {
   const auto time = local.time();
   constexpr int days_per_week = 7;
   components::Context context;
+
   context.client = bindingContext();
   context.time = {
       .unix_seconds = local.toSecsSinceEpoch(),
@@ -200,6 +206,7 @@ components::Context Application::componentContext() const {
       .second = static_cast<std::uint8_t>(time.second()),
       .weekday = static_cast<std::uint8_t>(date.dayOfWeek() % days_per_week),
   };
+
   const auto &sample = session().hostMetrics().sample();
   if (sample.revision != 0) {
     context.metrics = sample;
@@ -222,6 +229,7 @@ void Application::resetComponents() {
   if (definitions != nullptr) {
     for (std::size_t index = 0; index < component_surfaces_.bars.size(); ++index) {
       auto &state = component_surfaces_.bars[index];
+
       state.revision = ++next_component_revision_;
       state.identity = state.revision;
       const auto kind = definitions->source(static_cast<components::Position>(index)).kind;
@@ -248,10 +256,13 @@ void Application::projectComponentSource(std::size_t index, bool panel) {
     const auto resolve = [&](BindingAction action) {
       return configuration_source_.namedAction(action, &actions);
     };
+
     state.nodes = componentRecords(content, theme, time, resolve);
     state.clock_next = nextClock(content);
   };
+
   const auto kind = panel ? components::SourceKind::dynamic : definitions->source(static_cast<components::Position>(index)).kind;
+
   if (panel) {
     if (state.panel) {
       project(state.panel->content, state.panel->actions);
@@ -261,9 +272,11 @@ void Application::projectComponentSource(std::size_t index, bool panel) {
     }
   } else if (components::builtinSource(kind)) {
     const ConfigurationSource::Actions none{memory_};
+
     state.nodes = componentRecords(components::builtinContent(kind), theme, time, [&](BindingAction action) {
       return configuration_source_.namedAction(action, &none);
     });
+
     state.clock_next = Clock::time_point::max();
   } else if (const auto *content = componentBar(index)) {
     project(content->content, content->actions);
@@ -343,7 +356,9 @@ void Application::renderComponentSource(std::size_t index, bool panel) {
           .source = client.key,
           .runtime = client.runtime_generation,
       };
+
       SurfaceCommandRequest request;
+
       request.arguments = configuration_source_.commandArguments(source.reference, "command");
       request.timeout = source.timeout;
       request.output = source.has_render ? SurfaceOutputUse::lines : SurfaceOutputUse::line;
@@ -372,6 +387,7 @@ void Application::applyComponentRender(std::size_t index, bool panel, const comp
     }
 
     auto &current = surfaceState(component_surfaces_, index, panel);
+
     current.rendering = false;
     if (outcome.stale) {
       return;
@@ -412,11 +428,13 @@ void Application::componentCommandFinished(const ComponentCommandOwner &owner, S
   }
 
   auto &state = surfaceState(component_surfaces_, owner.index, owner.panel);
+
   try {
     if (result.failure) {
       state.error = commandError(*result.failure);
     } else {
       auto context = componentContext();
+
       context.output = std::string_view{result.output.constData(), static_cast<std::size_t>(result.output.size())};
       applyComponentRender(owner.index, owner.panel, context, result.truncated);
     }
@@ -445,6 +463,7 @@ void Application::tickComponents() {
     }
 
     const auto source = surfaceSource(*definitions, index, panel);
+
     if (surfaceState(component_surfaces_, index, panel).clock_next <= now) {
       projectComponentSource(index, panel);
       emit componentsChanged();
@@ -457,6 +476,7 @@ void Application::tickComponents() {
       renderComponentSource(index, panel);
     }
   };
+
   if (component_surfaces_.open_panel) {
     tick(*component_surfaces_.open_panel, true);
   }
@@ -478,12 +498,14 @@ void Application::armComponents() {
   const auto consider = [&](std::size_t index, bool panel) {
     const auto &state = surfaceState(component_surfaces_, index, panel);
     const auto &source = surfaceSource(*definitions, index, panel);
+
     next = std::min(next, state.clock_next);
     const bool live = source.kind == components::SourceKind::dynamic || source.kind == components::SourceKind::command;
     if (live && !state.rendering && (source.kind != components::SourceKind::command || !component_command_.active())) {
       next = std::min(next, state.next);
     }
   };
+
   for (std::size_t index = 0; index < component_surfaces_.bars.size(); ++index) {
     consider(index, false);
   }
@@ -494,6 +516,7 @@ void Application::armComponents() {
 
   if (next != Clock::time_point::max()) {
     const auto delay = std::max(std::chrono::milliseconds{0}, std::chrono::ceil<std::chrono::milliseconds>(next - Clock::now()));
+
     component_timer_.start(delay);
   }
 }
@@ -505,8 +528,10 @@ QVariantMap Application::componentBars() const {
   const auto *configured = configuration_source_.definitions();
   const auto &definitions = configured == nullptr ? defaults : *configured;
   QVariantMap result;
+
   for (std::size_t index = 0; index < names.size(); ++index) {
     const auto &state = component_surfaces_.bars[index];
+
     result.insert(QString::fromLatin1(names[index]), QVariantMap{
                                                          {QStringLiteral("kind"), QString::fromLatin1(kinds[static_cast<std::size_t>(definitions.source(static_cast<components::Position>(index)).kind)])},
                                                          {QStringLiteral("source"), static_cast<int>(index)},
@@ -609,8 +634,10 @@ void Application::activateComponent(int source, int node, const QString &generat
 
     const auto &content = rendered->content;
     const auto &item = content.nodes()[static_cast<std::size_t>(node)];
+
     activateComponentAction(content.action(item), content.text(item.url), state.nodes.at(node).toMap().value(QStringLiteral("actionIdentity")).toString(), anchor, rendered->actions);
   };
+
   if (panel) {
     activate(state.panel.get());
   } else {
@@ -630,6 +657,7 @@ void Application::activateComponentAction(std::optional<BindingAction> action, s
       const auto restore = qScopeGuard([&] {
         component_action_anchor_ = previous;
       });
+
       static_cast<void>(runBinding(*action, &resolved));
     } else if (!url.empty()) {
       if (const auto target = LinkTarget::fromUri(url)) {

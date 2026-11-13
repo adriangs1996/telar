@@ -61,23 +61,30 @@ namespace telar::gui::qt {
         }
 
         bool changed = false;
+
         if (last == nullptr) {
           const float replace = replace_background_ ? 1 : 0;
+
           std::memcpy(buffer.data() + offsetof(ShapeUniforms, replace_background), &replace, sizeof(replace));
           changed = true;
         }
+
         if (state.isMatrixDirty() || last == nullptr) {
           auto matrix = physicalPixelMatrix(state);
+
           if (physical_coordinates_) {
             const auto inverse_density = 1 / state.devicePixelRatio();
+
             matrix.scale(inverse_density, inverse_density);
           }
+
           std::memcpy(buffer.data() + offsetof(ShapeUniforms, matrix), matrix.constData(), sizeof(ShapeUniforms::matrix));
           changed = true;
         }
 
         if (state.isOpacityDirty() || last == nullptr) {
           const auto opacity = state.opacity();
+
           std::memcpy(buffer.data() + offsetof(ShapeUniforms, opacity), &opacity, sizeof(opacity));
           changed = true;
         }
@@ -111,6 +118,7 @@ namespace telar::gui::qt {
 
       [[nodiscard]] QSGMaterialType *type() const override {
         static std::array<QSGMaterialType, 4> types;
+
         return &types[static_cast<std::size_t>(physical_coordinates_) + 2 * static_cast<std::size_t>(replace_background_)];
       }
 
@@ -163,6 +171,7 @@ namespace telar::gui::qt {
           QSGGeometry::Attribute::create(5, 4, QSGGeometry::FloatType),
           QSGGeometry::Attribute::create(6, 4, QSGGeometry::FloatType),
       };
+
       static const QSGGeometry::AttributeSet layout{.count = static_cast<int>(attributes.size()), .stride = sizeof(ShapeVertex), .attributes = attributes.data()};
 
       return layout;
@@ -187,10 +196,12 @@ namespace telar::gui::qt {
         if (material_.setReplacement(shape.style.replace_background)) {
           markDirty(DirtyMaterial);
         }
+
         shape_ = shape;
         origin_ = paint.origin;
         density_ = density;
         const auto vertices = std::span{static_cast<ShapeVertex *>(geometry_.vertexData()), corners.size()};
+
         for (std::size_t index = 0; index < corners.size(); ++index) {
           vertices[index] = shapeVertex(paint, corners[index], density);
         }
@@ -222,6 +233,7 @@ namespace telar::gui::qt {
         if (material_.setReplacement(replace)) {
           markDirty(DirtyMaterial);
         }
+
         const auto vertex_count = static_cast<int>(paints.size() * triangle_vertices);
         const auto resized = geometry_.vertexCount() != vertex_count;
         if (resized) {
@@ -230,10 +242,12 @@ namespace telar::gui::qt {
 
         bool changed = resized;
         const auto vertices = std::span{static_cast<ShapeVertex *>(geometry_.vertexData()), static_cast<std::size_t>(vertex_count)};
+
         for (std::size_t index = 0; index < paints.size(); ++index) {
           if (paints[index].shape.style.replace_background != replace) {
             throw std::invalid_argument{"Mixed background composition in a rounded rectangle batch"};
           }
+
           for (std::size_t corner = 0; corner < corners.size(); ++corner) {
             const auto offset = (index * triangle_vertices) + corner;
             const auto vertex = shapeVertex(paints[index], corners[corner], 1);
@@ -258,8 +272,10 @@ namespace telar::gui::qt {
     // The result is the first of the root's children left unpainted.
     tbc::view<QSGNode *, tbc::lt::a> paintSoftwareBatch(QQuickWindow &window, tbc::view<QSGNode &, tbc::lt::a> root, std::span<const RoundedRectanglePaint> paints, qreal density) {
       auto *next = root.firstChild();
+
       for (const auto &paint : paints) {
         auto *current = next;
+
         next = current == nullptr ? nullptr : current->nextSibling();
         auto *painted = paintSoftwareRoundedRectangleAt(window, current, paint, density);
         if (painted == current) {
@@ -286,6 +302,7 @@ namespace telar::gui::qt {
     auto *node = dynamic_cast<RoundedRectangleNode *>(previous);
     if (node == nullptr) {
       auto replacement = std::make_unique<RoundedRectangleNode>();
+
       node = replacement.get();
       owner = std::move(replacement);
     }
@@ -297,6 +314,7 @@ namespace telar::gui::qt {
 
   void paintRoundedRectangles(QQuickWindow &window, QSGNode &root, std::span<const RoundedRectanglePaint> paints, qreal density) {
     auto *next = root.firstChild();
+
     if (window.rendererInterface()->graphicsApi() == QSGRendererInterface::Software) {
       next = paintSoftwareBatch(window, root, paints, density);
     } else {
@@ -313,6 +331,7 @@ namespace telar::gui::qt {
 
     while (next != nullptr) {
       auto *retired = next;
+
       next = next->nextSibling();
       root.removeChildNode(retired);
       const std::unique_ptr<QSGNode> owner{retired};

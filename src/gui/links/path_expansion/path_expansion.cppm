@@ -110,6 +110,7 @@ public:
   // The arguments view copies this launch keeps, valid until its next call.
   [[nodiscard]] inline std::span<const std::string_view> arguments(std::string_view executable, std::string_view path, std::uint32_t line, std::uint32_t column) {
     const auto convention = conventionOf(executable);
+
     executable_.truncate(0);
     executable_.append(executable);
     path_.truncate(0);
@@ -385,6 +386,7 @@ struct LinkGrid {
 
   [[nodiscard]] inline CellPosition cellEnd(std::size_t index) const noexcept {
     auto result = position(index);
+
     result.x = static_cast<std::uint16_t>(std::min<unsigned>(columns, result.x + std::max(1U, static_cast<unsigned>(cells[index].width))));
 
     return result;
@@ -446,6 +448,7 @@ public:
     try {
       const auto expanded = substitute(input.text, environment);
       BoundedText<maximum_bytes> anchored;
+
       if (!expanded.view().starts_with('/')) {
         if (!input.base.starts_with('/')) {
           throw std::invalid_argument{"BaseUnavailable"};
@@ -473,8 +476,10 @@ private:
   template <PathEnvironment Environment>
   [[nodiscard]] inline static BoundedText<maximum_bytes> substitute(std::string_view text, const Environment &environment) {
     const auto first = text.find_first_not_of(' ');
+
     text = first == std::string_view::npos ? std::string_view{} : text.substr(first, text.find_last_not_of(' ') - first + 1);
     BoundedText<maximum_bytes> expanded;
+
     if (text == "~" || text.starts_with("~/")) {
       const auto home = environment("HOME");
       if (!home) {
@@ -527,9 +532,11 @@ private:
 
   [[nodiscard]] inline static PathText collapse(std::string_view path) {
     BoundedText<maximum_bytes> result;
+
     while (!path.empty()) {
       const auto separator = path.find('/');
       const auto segment = path.substr(0, separator);
+
       path.remove_prefix(std::min(separator, path.size()));
       if (!path.empty()) {
         path.remove_prefix(1);
@@ -541,6 +548,7 @@ private:
 
       if (segment == "..") {
         const auto previous = result.view().rfind('/');
+
         result.truncate(previous == std::string_view::npos ? 0 : previous);
       } else {
         result.append("/");
@@ -549,6 +557,7 @@ private:
     }
 
     PathText normalized;
+
     normalized.assign(result.view().empty() ? "/" : result.view());
 
     return normalized;

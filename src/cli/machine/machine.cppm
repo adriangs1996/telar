@@ -91,6 +91,7 @@ struct Platform {
     }
 
     Platform result;
+
     while (output.ends_with('\n')) {
       output.remove_suffix(1);
     }
@@ -116,6 +117,7 @@ struct Platform {
 
         return std::string{value};
       };
+
       if (key == "os") {
         if (value == "Linux") {
           result.os = "linux";
@@ -214,6 +216,7 @@ inline bool answeredYes() {
   }
 
   const auto text = asciiLowerCopy(trimText(answer, " \t\r\n"));
+
   return text == "y" || text == "yes";
 }
 
@@ -235,6 +238,7 @@ inline std::set<std::string> localAgents() {
   }
 
   std::array<char, PATH_MAX> executable;
+
   for (std::size_t agent = 0; agent < agent_names.size(); ++agent) {
     if (findExecutable(path, agent_commands[agent], executable)) {
       found.emplace(agent_names[agent]);
@@ -246,6 +250,7 @@ inline std::set<std::string> localAgents() {
 
 inline std::string names(const std::set<std::string> &agents) {
   std::string text;
+
   for (const auto agent : agent_names) {
     if (agents.contains(std::string{agent})) {
       if (!text.empty()) {
@@ -277,15 +282,19 @@ fetch https://claude.ai/install.sh
 bash "$installer" </dev/null
 )"};
   }
+
   if (agent == "codex") {
     return {.tools = {"curl", "tar"}, .script = "fetch https://chatgpt.com/codex/install.sh\nCODEX_NON_INTERACTIVE=1 sh \"$installer\" </dev/null\n"};
   }
+
   if (agent == "pi") {
     return {.tools = {"curl", "node", "npm"}, .script = "fetch https://pi.dev/install.sh\nsh \"$installer\" </dev/null\n"};
   }
+
   if (agent == "opencode") {
     return {.tools = {"curl", "bash", "tar"}, .script = "fetch https://opencode.ai/install\nbash \"$installer\" --no-modify-path </dev/null\n"};
   }
+
   return {.tools = {"curl", "bash"}, .script = "fetch https://cursor.com/install\nbash \"$installer\" </dev/null\n", .musl = false};
 }
 
@@ -302,20 +311,24 @@ inline std::optional<std::string> missingPrerequisite(const Platform &platform, 
   if (platform.libc == "musl" && !installer.musl) {
     return "its binary needs glibc and this machine has musl";
   }
+
   for (const auto tool : installer.tools) {
     if (!platform.tools.contains(std::string{tool})) {
       if (tool == "node" || tool == "npm") {
         return "Node.js 22.19 or newer with npm is missing there; its installer would need sudo or a terminal to add it";
       }
+
       return std::string{tool} + " is missing there";
     }
   }
 
   if (agent == "pi") {
     auto text = platform.node ? std::string_view{*platform.node} : std::string_view{};
+
     while (text.starts_with('v')) {
       text.remove_prefix(1);
     }
+
     const auto dot = text.find('.');
     const auto major = maybeVersion(text.substr(0, dot));
     const auto minor = dot == std::string_view::npos ? std::nullopt : maybeVersion(text.substr(dot + 1, text.find('.', dot + 1) - dot - 1));
@@ -335,13 +348,16 @@ bool installAgents(Memory &memory, SetupReport &report, const std::string &desti
     report.end(Step::agents, Status::skipped, "no agent on this machine's PATH to install there");
     return false;
   }
+
   bool ran = false;
   bool failed = false;
+
   for (const auto name : agent_names) {
     const std::string agent{name};
     if (!wanted.contains(agent)) {
       continue;
     }
+
     if (const auto existing = platform.agents.find(agent); existing != platform.agents.end()) {
       report.note(Step::agents, agent + ": already at " + existing->second);
       continue;
@@ -362,6 +378,7 @@ fetch() {
     curl --proto '=https' --tlsv1.2 -fsSL "$1" -o "$installer"
 }
 )Agent";
+
     try {
       const auto output = runScript(memory, destination, std::string{prelude} + installer.script, install_timeout);
       if (output.status == 0) {
@@ -392,6 +409,7 @@ void integrateAgents(Memory &memory, SetupReport &report, const std::string &des
   bool changed = false;
   bool failed = false;
   std::set<std::string> present;
+
   for (const auto name : agent_names) {
     const std::string agent{name};
     if (!platform.agents.contains(agent)) {
@@ -408,6 +426,7 @@ void integrateAgents(Memory &memory, SetupReport &report, const std::string &des
       }
 
       const bool unchanged = whole(output).contains("already present");
+
       changed = changed || !unchanged;
       report.note(Step::integrations, agent + (unchanged ? ": already integrated" : ": integrated"));
     } catch (const std::exception &error) {
@@ -443,6 +462,7 @@ struct SyncEntry {
 
 inline std::vector<SyncEntry> entriesFor(std::string_view agent) {
   using enum SyncEntry::Format;
+
   if (agent == "claude") {
     return {{"settings.json", json, true}, {"CLAUDE.md"}, {"keybindings.json", json}, {"rules", tree}, {"skills", tree}, {"commands", tree}, {"agents", tree}, {"output-styles", tree}, {"themes", tree}};
   }
@@ -488,12 +508,14 @@ inline std::string localRoot(std::string_view agent, const std::string &home) {
                                                                : agent == "opencode" ? "XDG_CONFIG_HOME"
                                                                                      : "CURSOR_CONFIG_DIR";
   const auto *override = std::getenv(variable);
+
   return override && *override ? std::string{override} + (agent == "opencode" ? "/opencode" : "") : home + "/" + remoteRoot(agent);
 }
 
 inline std::vector<std::string_view> commandTokens(std::string_view command) {
   constexpr std::string_view separators = " \t\n;&|()'\"=";
   std::vector<std::string_view> tokens;
+
   while (!command.empty()) {
     const auto start = command.find_first_not_of(separators);
     if (start == std::string_view::npos) {
@@ -502,6 +524,7 @@ inline std::vector<std::string_view> commandTokens(std::string_view command) {
 
     command.remove_prefix(start);
     const auto end = command.find_first_of(separators);
+
     tokens.push_back(command.substr(0, end));
     if (end == std::string_view::npos) {
       break;
@@ -532,9 +555,11 @@ void commands(Memory &memory, JsonValue value, std::vector<std::string> &output,
   if (value.encoded().starts_with('{')) {
     value.eachMember([&](JsonValue key, JsonValue child) {
       String<Memory> name{AllocatorRef<char, Memory>{memory}};
+
       key.string(name);
       if (inside && name == "command" && child.encoded().starts_with('"')) {
         String<Memory> text{AllocatorRef<char, Memory>{memory}};
+
         child.string(text);
         output.emplace_back(text);
       }
@@ -592,6 +617,7 @@ class ConfigSync {
   inline bool addRoot(const std::string &remote, const std::string &local) {
     std::error_code error;
     const auto real = std::filesystem::canonical(local, error);
+
     if (error) {
       return false;
     }
@@ -602,6 +628,7 @@ class ConfigSync {
 
   inline static bool owned(std::string_view remote) {
     static constexpr auto paths = std::to_array<std::string_view>({"skills/telar", "skills/telar-coordinator", "extensions/telar.ts", "plugins/telar.ts"});
+
     return std::ranges::any_of(paths, [&](auto path) { return remote == path || below(remote, path); });
   }
 
@@ -612,6 +639,7 @@ class ConfigSync {
 
     std::error_code error;
     const auto real = std::filesystem::canonical(local, error).string();
+
     if (error) {
       return;
     }
@@ -650,6 +678,7 @@ class ConfigSync {
 
     std::string bytes;
     std::array<char, 16 * 1024> buffer;
+
     for (;;) {
       const auto count = ::read(file.get(), buffer.data(), buffer.size());
       if (count < 0 && errno == EINTR) {
@@ -681,6 +710,7 @@ class ConfigSync {
     // their names for the denylist, then reuse acceptable's leaf checks.
     auto tail = std::string_view{path};
     const auto &directories = config_receive::credential_directories;
+
     for (;;) {
       const auto slash = tail.find('/');
       const auto component = asciiLowerCopy(tail.substr(0, slash));
@@ -700,6 +730,7 @@ class ConfigSync {
 
   inline void addTree(const std::string &local, const std::string &remote, unsigned depth) {
     constexpr unsigned max_depth = 16;
+
     if (owned(remote)) {
       return;
     }
@@ -711,6 +742,7 @@ class ConfigSync {
 
     std::error_code error;
     const auto real = std::filesystem::canonical(local, error);
+
     if (error) {
       return;
     }
@@ -721,6 +753,7 @@ class ConfigSync {
     }
 
     std::filesystem::directory_iterator iterator{local, error};
+
     if (error) {
       return;
     }
@@ -758,6 +791,7 @@ class ConfigSync {
 
   inline void bringCommands(const JsonValue &value) {
     std::vector<std::string> found;
+
     commands(memory_, value, found);
     for (const auto &command : found) {
       for (const auto token : commandTokens(command)) {
@@ -768,11 +802,13 @@ class ConfigSync {
 
         // The roots are read before files are added, as adding one changes the plan.
         std::vector<std::string> remotes;
+
         for (const auto &[agent, root] : local_roots_) {
           if (below(*local, root)) {
             remotes.push_back(remoteRoot(agent) + local->substr(root.size()));
           }
         }
+
         for (const auto &remote : remotes) {
           addFile(*local, remote, {*local});
         }
@@ -787,12 +823,15 @@ class ConfigSync {
       const auto hooks = files_[index].hooks;
       std::vector<std::string> dropped;
       bool retain = true;
+
       if (files_[index].format == SyncEntry::Format::json) {
         try {
           const auto plain = filter::stripJsonc(original);
+
           // Validate duplicates and UTF-8 before traversing JsonValue.
           static_cast<void>(JsonNode<Memory>::parse(memory_, plain));
           String<Memory> filtered{AllocatorRef<char, Memory>{memory_}};
+
           filter::json(memory_, JsonValue::parse(plain, config_json_depth), filtered, dropped);
           bringCommands(JsonValue::parse(filtered, config_json_depth));
           auto node = JsonNode<Memory>::parse(memory_, filtered);
@@ -800,15 +839,18 @@ class ConfigSync {
           // Rewriting encoded strings keeps JSON escapes intact, including
           // a remote home containing quotes or backslashes.
           const auto rewritten = rewriteJson(JsonValue::parse(formatted, config_json_depth));
+
           node = JsonNode<Memory>::parse(memory_, rewritten);
           if (hooks) {
             const auto provider = *hooks == "claude" ? AgentProvider::claude : *hooks == "codex" ? AgentProvider::codex
                                                                                                  : AgentProvider::cursor;
+
             if (node.kind() != JsonKind::object) {
               throw CommandError{"InvalidSettings"};
             }
 
             integration::HookSettings settings{memory_, integration::Provider::describe(provider), program};
+
             settings.install(node);
           }
 
@@ -828,11 +870,13 @@ class ConfigSync {
         }
       } else {
         const auto filtered = files_[index].format == SyncEntry::Format::toml ? filter::toml(original, dropped) : original;
+
         retain = keep(index, filter::rewriteHome(filtered, home_, remote_home_));
       }
 
       if (!dropped.empty()) {
         std::string names;
+
         for (const auto &name : dropped) {
           if (!names.empty()) {
             names += ", ";
@@ -857,11 +901,13 @@ class ConfigSync {
     const auto encoded = value.encoded();
     if (encoded.starts_with('"')) {
       String<Memory> text{AllocatorRef<char, Memory>{memory_}};
+
       value.string(text);
       appendJsonText(output, filter::rewriteHome(text, home_, remote_home_), JsonEscapes::standard);
     } else if (encoded.starts_with('{')) {
       output += '{';
       bool first = true;
+
       value.eachMember([&](JsonValue key, JsonValue child) {
         if (!first) {
           output += ',';
@@ -872,10 +918,12 @@ class ConfigSync {
         output += ':';
         output += rewriteJson(child);
       });
+
       output += '}';
     } else if (encoded.starts_with('[')) {
       output += '[';
       bool first = true;
+
       value.eachElement([&](JsonValue child) { if (!first) { output += ','; } first = false; output += rewriteJson(child); });
       output += ']';
     } else {
@@ -888,6 +936,7 @@ class ConfigSync {
   inline static std::vector<std::string> paths(std::string_view remote_home, std::string_view command) {
     std::vector<std::string> result;
     const std::string home{remote_home};
+
     for (const auto token : commandTokens(command)) {
       if (token.starts_with('/')) {
         result.emplace_back(token);
@@ -901,6 +950,7 @@ class ConfigSync {
 
   inline std::set<std::string> queryPaths(const std::string &destination) {
     std::vector<std::string> asked;
+
     for (const auto &file : files_) {
       if (!file.json) {
         continue;
@@ -908,6 +958,7 @@ class ConfigSync {
 
       std::vector<std::string> found;
       const auto formatted = file.json->format();
+
       commands(memory_, JsonValue::parse(formatted, config_json_depth), found);
       for (const auto &command : found) {
         for (const auto &path : paths(remote_home_, command)) {
@@ -919,11 +970,13 @@ class ConfigSync {
     }
 
     std::set<std::string> result;
+
     if (asked.empty()) {
       return result;
     }
 
     std::string script = "while IFS= read -r path; do if [ -e \"$path\" ]; then printf '%s\\n' \"$path\"; fi; done <<'TELAR_PATHS'\n";
+
     for (const auto &path : asked) {
       script += path + "\n";
     }
@@ -935,6 +988,7 @@ class ConfigSync {
     }
 
     auto lines = std::string_view{output.out};
+
     if (output.dropped != 0) {
       throw CommandError{"RemoteOutputTooLong"};
     }
@@ -982,6 +1036,7 @@ class ConfigSync {
 
     if (node.kind() == JsonKind::array || node.kind() == JsonKind::object) {
       const bool had_items = !node.children().empty();
+
       for (std::size_t index = 0; index < node.children().size();) {
         auto &child = node.children()[index];
         const bool container = child.kind() == JsonKind::object || child.kind() == JsonKind::array;
@@ -1013,6 +1068,7 @@ public:
       }
 
       const auto root = localRoot(agent, home_);
+
       local_roots_[agent] = root;
       const auto remote = remoteRoot(agent);
       if (!addRoot(remote, root)) {
@@ -1022,6 +1078,7 @@ public:
       for (const auto entry : entriesFor(agent)) {
         const auto local_path = root + "/" + std::string{entry.name};
         const auto remote_path = remote + "/" + std::string{entry.name};
+
         if (entry.format == SyncEntry::Format::tree) {
           addTree(local_path, remote_path, 0);
         } else {
@@ -1047,9 +1104,11 @@ public:
     const auto existing = queryPaths(destination);
     // The files already staged, named apart from the files the commands are pruned in.
     std::set<std::string, std::less<>> staged;
+
     for (const auto &file : files_) {
       staged.insert(file.remote);
     }
+
     for (auto &file : files_) {
       if (!file.json || file.json->kind() != JsonKind::object) {
         continue;
@@ -1065,6 +1124,7 @@ public:
     }
 
     std::string stream = "telar-config 1\n";
+
     for (std::size_t index = 0; index < files_.size();) {
       if (files_[index].json) {
         std::string formatted{files_[index].json->format()};
@@ -1091,6 +1151,7 @@ public:
     const auto contents = whole(output);
     auto lines = std::string_view{contents};
     std::size_t written = 0;
+
     while (!lines.empty()) {
       const auto end = lines.find('\n');
       const auto line = lines.substr(0, end);
@@ -1130,6 +1191,7 @@ void syncConfig(Memory &memory, SetupReport &report, const std::string &destinat
     }
 
     ConfigSync sync{memory, std::string{home}, platform.home};
+
     sync.run(report, destination, platform, wanted);
   } catch (const std::exception &error) {
     report.end(Step::configuration, Status::failed, std::string{error.what()} + "; nothing more was written there");
@@ -1193,6 +1255,7 @@ struct LoginLink {
 
 inline std::optional<LoginLink> findLoginLink(std::string_view text, const LoginPlan &plan) {
   std::string_view url;
+
   for (std::size_t start = 0;;) {
     const auto at = text.find("https://", start);
     if (at == std::string_view::npos) {
@@ -1201,11 +1264,13 @@ inline std::optional<LoginLink> findLoginLink(std::string_view text, const Login
 
     start = at + 1;
     auto end = at;
+
     while (end < text.size() && static_cast<unsigned char>(text[end]) > ' ' && static_cast<unsigned char>(text[end]) < 0x7f && !std::string_view{"\"'<>`"}.contains(text[end])) {
       ++end;
     }
 
     auto candidate = text.substr(at, end - at);
+
     while (candidate.size() > notification_link_scheme.size() && std::string_view{".,;:)]}"}.contains(candidate.back())) {
       candidate.remove_suffix(1);
     }
@@ -1228,6 +1293,7 @@ inline std::optional<LoginLink> findLoginLink(std::string_view text, const Login
   }
 
   LoginLink result{.url = std::string{url}};
+
   if (!plan.code_marker) {
     return result;
   }
@@ -1238,6 +1304,7 @@ inline std::optional<LoginLink> findLoginLink(std::string_view text, const Login
   }
 
   auto lines = text.substr(marker + plan.code_marker->size());
+
   for (;;) {
     const auto end = lines.find('\n');
     const auto line = trimText(lines.substr(0, end), " \t\r");
@@ -1290,6 +1357,7 @@ class Logins {
 
   inline std::string string(JsonValue value) {
     String<Memory> result{AllocatorRef<char, Memory>{memory_}};
+
     value.string(result);
     return std::string{result};
   }
@@ -1302,6 +1370,7 @@ class Logins {
     // The same encoded command, length limit included, as every dispatch.
     const auto command = remoteCommand(profile_, words);
     const auto output = launch::capture(memory_, ssh(memory_, profile_.destination(), command), input.value_or(std::string_view{}), status_timeout);
+
     std::fwrite(output.err.data(), 1, output.err.size(), stderr);
     if (output.status != 0) {
       throw CommandError{"MachineCommandFailed"};
@@ -1316,6 +1385,7 @@ class Logins {
 
   inline std::optional<std::string> command(const std::vector<std::string> &words, bool missing_pane) {
     std::string bytes = "exec " + launch::quote(profile_.program().value_or("telar"));
+
     for (const auto &word : words) {
       bytes += " " + launch::quote(word);
     }
@@ -1323,6 +1393,7 @@ class Logins {
     bytes += '\n';
     const auto output = script(bytes);
     auto diagnostic = std::string_view{output.err};
+
     while (diagnostic.ends_with('\n') || diagnostic.ends_with('\r')) {
       diagnostic.remove_suffix(1);
     }
@@ -1376,11 +1447,13 @@ class Logins {
 
     const auto workspaces = capture({"workspace", "list", "--json"});
     bool named = false;
+
     JsonValue::parse(workspaces).eachElement([&](JsonValue value) {
       if (number(required(value, "workspace_id")) == noted.workspace && string(required(value, "name")) == title) {
         named = true;
       }
     });
+
     if (!named) {
       forget(agent);
       return std::nullopt;
@@ -1394,6 +1467,7 @@ class Logins {
       }
 
       bool found = false;
+
       required(parsed, "panes").eachElement([&](JsonValue value) { found = found || number(required(value, "pane_id")) == noted.pane; });
       if (found) {
         return noted;
@@ -1428,6 +1502,7 @@ class Logins {
 
   inline LoginPane open(const std::string &agent, const std::string &path, const LoginPlan &plan) {
     std::vector<std::string> words{"workspace", "create", "--directory", platform_.home, "--name", plan.title, "--columns", "1024", "--json", "--"};
+
     if (plan.environment) {
       words.push_back("/usr/bin/env");
       words.push_back(*plan.environment);
@@ -1437,6 +1512,7 @@ class Logins {
     words.insert(words.end(), plan.arguments.begin(), plan.arguments.end());
     const auto output = capture(words);
     LoginPane created;
+
     try {
       created = pane(JsonValue::parse(output));
     } catch (const std::exception &) {
@@ -1469,6 +1545,7 @@ class Logins {
 
     const auto root = localRoot(agent, home);
     const auto filenames = agent == "pi" ? std::vector<std::string>{"settings.json"} : std::vector<std::string>{"opencode.json", "opencode.jsonc"};
+
     for (const auto &name : filenames) {
       try {
         String<Memory> path{root + "/" + name, AllocatorRef<char, Memory>{memory_}};
@@ -1489,6 +1566,7 @@ class Logins {
         }
 
         const auto value = string(*field);
+
         if (agent == "pi") {
           return value;
         }
@@ -1506,6 +1584,7 @@ class Logins {
 
   inline bool loggedIn(const std::string &agent, const std::string &path, const std::optional<std::string> &provider) {
     std::string check;
+
     if (agent == "claude") {
       check = "\"$agent\" auth status >/dev/null 2>&1";
     } else if (agent == "codex") {
@@ -1545,6 +1624,7 @@ class Logins {
 
       const auto exit = required(value, "exit_code").encoded();
       std::optional<int> code;
+
       if (exit != "null") {
         const auto parsed = parseExact<int>(exit);
         if (!parsed) {
@@ -1581,6 +1661,7 @@ class Logins {
 
   inline bool announce(const LoginPlan &plan, const LoginLink &found) {
     std::string body = "on " + std::string{profile_.label()} + ": " + plan.instructions;
+
     if (found.code) {
       body += ". Code: " + *found.code;
     }
@@ -1592,8 +1673,10 @@ class Logins {
     try {
       const RuntimePaths paths{memory_, ServerOptions{}, process_environment};
       ControlSession session{memory_, paths.socket.c_str()};
+
       session.receiveTimeout(static_cast<unsigned>(status_timeout.count()));
       const auto result = session.template exchange<NotificationShown>(ShowNotification{.notification = {.duration_ms = max_notification_duration_ms, .title = utf8Prefix(plan.title, max_notification_title_bytes), .message = utf8Prefix(body, max_notification_message_bytes), .link = found.url}});
+
       return result.delivered_clients != 0;
     } catch (const std::exception &) {
       return false;
@@ -1618,6 +1701,7 @@ class Logins {
     const auto &plan = request.plan;
     const auto existing = find(agent, plan.title);
     const auto pane = existing ? *existing : open(agent, path, plan);
+
     try {
       if (existing) {
         report_.progress(plan.title + " on " + std::string{profile_.label()} + ": the login setup started before is still open there");
@@ -1628,6 +1712,7 @@ class Logins {
       if (plan.link) {
         const auto deadline = std::chrono::steady_clock::now() + link_timeout;
         std::optional<LoginLink> found;
+
         while (std::chrono::steady_clock::now() < deadline) {
           const auto value = read(pane);
           if (const auto result = ended(agent, path, provider, value, pane)) {
@@ -1685,6 +1770,7 @@ class Logins {
 
       const auto deadline = std::chrono::steady_clock::now() + finish_timeout;
       auto status_at = std::chrono::steady_clock::now();
+
       while (std::chrono::steady_clock::now() < deadline) {
         if (const auto result = ended(agent, path, provider, read(pane), pane)) {
           close(agent, pane, plan);
@@ -1727,6 +1813,7 @@ public:
   inline void run(const std::set<std::string> &wanted, const std::string &profiles_path) {
     std::map<std::string, MachineLogin> results;
     bool started = false;
+
     for (const auto name : agent_names) {
       const std::string agent{name};
       if (!wanted.contains(agent) || !platform_.agents.contains(agent)) {
@@ -1736,6 +1823,7 @@ public:
       const auto &path = platform_.agents.at(agent);
       const auto selected = provider(agent);
       bool logged_in = false;
+
       try {
         logged_in = loggedIn(agent, path, selected);
       } catch (const std::exception &error) {
@@ -1745,6 +1833,7 @@ public:
       }
 
       const auto plan = planFor(agent, selected);
+
       if (logged_in) {
         try {
           if (plan) {
@@ -1782,12 +1871,14 @@ public:
         update(memory_, profiles_path, [&](MachineProfiles &profiles) {
           for (const auto &[agent, result] : results) {
             const auto found = std::ranges::find(machine_agent_names, agent);
+
             profiles.recordLogin(profile_.label(), static_cast<MachineAgent>(found - machine_agent_names.begin()), result);
           }
         });
       }
     } catch (const std::exception &error) {
       const auto *text = describe(error.what());
+
       report_.note(Step::logins, std::string{"machines.json keeps the logins it had: "} + (text ? text : error.what()));
     }
 
@@ -1797,6 +1888,7 @@ public:
                                               : pending           ? Status::pending
                                               : started           ? Status::changed
                                                                   : Status::ok;
+
     report_.end(Step::logins, status, failed ? "a login failed; see the notes" : results.empty() ? "no agent there to log in"
                                                                              : pending           ? "a login waits for you; run setup again to see it done"
                                                                              : started           ? "every started login finished"
@@ -1840,6 +1932,7 @@ inline Target resolve(const MachineProfiles &profiles, const MachineOptions &opt
 
   host = host.substr(0, host.find_first_of(":]/"));
   std::string label{host.substr(0, MachineLimits::label_bytes)};
+
   for (auto &byte : label) {
     if (!((byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9') || byte == '.' || byte == '_' || byte == '-')) {
       byte = '-';
@@ -1862,6 +1955,7 @@ inline Target resolve(const MachineProfiles &profiles, const MachineOptions &opt
 
   MachineOptions trial{.action = MachineOptions::Action::add, .label = label, .value = options.label};
   auto copy = profiles;
+
   change(copy, trial);
   return {.label = label, .destination = std::string{options.label}};
 }
@@ -1875,6 +1969,7 @@ inline std::string fileDigest(const std::string &path) {
 
   Sha256 digest;
   std::array<std::uint8_t, 64 * 1024> buffer;
+
   for (;;) {
     const auto count = ::read(file.get(), buffer.data(), buffer.size());
     if (count < 0 && errno == EINTR) {
@@ -1900,6 +1995,7 @@ std::optional<Platform> reach(Memory &memory, SetupReport &report, const Target 
   launch::Output probe;
   bool confirmed = false;
   const auto run = [&] { return runScript(memory, target.destination, assign("dir", directory) + std::string{assets::probe}); };
+
   try {
     probe = run();
     const auto failure = sshFailure(probe);
@@ -1935,6 +2031,7 @@ std::optional<Platform> reach(Memory &memory, SetupReport &report, const Target 
   report.end(Step::ssh, confirmed ? Status::changed : Status::ok, "batch-mode SSH to " + target.destination + " works");
   try {
     const auto platform = Platform::parse(whole(probe));
+
     report.end(Step::platform, Status::ok, std::string{platform.os == "linux" ? "Linux " : "macOS "} + platform.arch + (platform.libc == "musl" ? " (musl)" : "") + ", " + platform.assetName());
     return platform;
   } catch (const std::exception &error) {
@@ -1951,6 +2048,7 @@ struct Install {
 
 inline std::string releasesUrl() {
   const auto *configured = std::getenv("TELAR_RELEASES_URL");
+
   return configured && *configured ? configured : "https://github.com/adriangs1996/telar/releases";
 }
 
@@ -1962,8 +2060,10 @@ inline std::string releaseDigest(const std::string &asset) {
   }
 
   launch::Output output;
+
   try {
     SystemAllocator memory;
+
     output = launch::capture(memory, {"curl", "--proto", "=https,file", "--tlsv1.2", "-fsSL", "--", url}, {}, probe_timeout);
   } catch (const std::exception &) {
     throw CommandError{"ReleaseUnavailable"};
@@ -1976,6 +2076,7 @@ inline std::string releaseDigest(const std::string &asset) {
 
   std::istringstream lines{output.out};
   std::string line;
+
   while (std::getline(lines, line)) {
     std::istringstream words{line};
     std::string digest;
@@ -2010,6 +2111,7 @@ std::optional<bool> installRuntime(Memory &memory, SetupReport &report, const Ta
   }
 
   bool changed = false;
+
   for (const auto *tool : {"telar-runtime", "telar-config-check"}) {
     const auto sibling = std::filesystem::path{*build.binary}.parent_path() / tool;
     if (::access(sibling.c_str(), R_OK) != 0) {
@@ -2079,6 +2181,7 @@ bool install(Memory &memory, SetupReport &report, const Target &target, const Pl
   }
 
   std::string script;
+
   if (build.binary) {
     const auto upload_command = "exec /bin/sh -c 'umask 077 && mkdir -p \"$HOME/.local/share/telar/versions\" && exec cat > \"$HOME/.local/share/telar/versions/.upload-" + build.digest->substr(0, MachineId::hex_digits) + "\"'";
     FileDescriptor binary{::open(build.binary->c_str(), O_RDONLY | O_CLOEXEC)};
@@ -2113,6 +2216,7 @@ bool install(Memory &memory, SetupReport &report, const Target &target, const Pl
     }
 
     std::string digest;
+
     try {
       digest = releaseDigest(platform.assetName());
     } catch (const std::exception &error) {
@@ -2158,6 +2262,7 @@ template <Allocator Memory>
 bool startRuntime(Memory &memory, SetupReport &report, const Target &target, const MachineProfile &remote, bool interactive) {
   const std::string program{*remote.program()};
   std::string detail;
+
   try {
     const auto found = discover(memory, remote, detail);
     if (!found.compatible()) {
@@ -2175,6 +2280,7 @@ bool startRuntime(Memory &memory, SetupReport &report, const Target &target, con
   }
 
   bool agreed = false;
+
   if (interactive) {
     std::printf("A telar runtime of another build runs on %s. Stopping it ends every pane and agent it runs. Stop it now? [y/N] ", target.label.c_str());
     std::fflush(stdout);
@@ -2195,6 +2301,7 @@ done
 echo 'no telar there could stop the running runtime' >&2
 exit 1
 )Stop";
+
   try {
     const auto stopped = runScript(memory, target.destination, script);
     if (stopped.status != 0) {
@@ -2208,6 +2315,7 @@ exit 1
 
   constexpr unsigned restart_attempts = 20;
   constexpr auto restart_wait = std::chrono::milliseconds{250};
+
   for (unsigned attempt = 0; attempt < restart_attempts; ++attempt) {
     try {
       const auto found = discover(memory, remote, detail);
@@ -2232,6 +2340,7 @@ int setup(Memory &memory, const MachineOptions &options) {
   const auto profiles = load(memory, path);
   Target target;
   Install build;
+
   try {
     target = resolve(profiles, options);
     build.directory = version;
@@ -2253,6 +2362,7 @@ int setup(Memory &memory, const MachineOptions &options) {
       std::fprintf(stderr, "telar machine setup: the label for %.*s is taken by another machine; name it with --label\n", static_cast<int>(options.label.size()), options.label.data());
     } else {
       const auto *detail = describe(error.what());
+
       std::fprintf(stderr, "telar machine setup: %s\n", detail ? detail : error.what());
     }
 
@@ -2265,6 +2375,7 @@ int setup(Memory &memory, const MachineOptions &options) {
   }
 
   const bool interactive = !options.json && ::isatty(STDIN_FILENO);
+
   if (options.confirm) {
     if (!interactive) {
       return report.refuse(memory, target.label, target.destination, "--confirm needs a terminal to ask on; nothing was changed");
@@ -2286,6 +2397,7 @@ int setup(Memory &memory, const MachineOptions &options) {
   Random random;
   auto remote = MachineProfile::create(MachineId::generate(random), {.label = target.label, .destination = target.destination, .program = platform->target});
   std::string detail;
+
   if (!startRuntime(memory, report, target, remote, interactive)) {
     return report.finish(memory, target.label, target.destination);
   }
@@ -2308,6 +2420,7 @@ mkdir -p "$HOME/.local/bin" && "$telar" cli install --dir "$HOME/.local/bin" >/d
       update(memory, path, [&](MachineProfiles &saved) {
         if (!target.saved) {
           MachineOptions add{.action = MachineOptions::Action::add, .label = target.label, .value = target.destination, .disabled = options.disabled};
+
           change(saved, add);
         }
 
@@ -2320,14 +2433,17 @@ mkdir -p "$HOME/.local/bin" && "$telar" cli install --dir "$HOME/.local/bin" >/d
 
     const bool enabled = (target.saved && target.saved->enabled()) || !options.disabled;
     const std::string state = enabled ? "enabled" : "disabled, as asked";
+
     report.end(Step::profile, changed ? Status::changed : Status::ok, changed ? target.label + (target.saved ? " updated, " : " saved, ") + state + ", telar at " + platform->target : target.label + " is saved, " + state + " and names " + platform->target);
   } catch (const std::exception &error) {
     const auto *description = describe(error.what());
+
     report.end(Step::profile, Status::failed, description ? description : error.what());
   }
 
   const auto wanted = localAgents();
   auto current = *platform;
+
   if (options.skip[0]) {
     report.end(Step::agents, Status::skipped, "--skip agents");
   } else if (installAgents(memory, report, target.destination, current, wanted)) {
@@ -2351,6 +2467,7 @@ mkdir -p "$HOME/.local/bin" && "$telar" cli install --dir "$HOME/.local/bin" >/d
     report.end(Step::logins, Status::skipped, "--skip login");
   } else {
     std::optional<MachineProfile> saved;
+
     try {
       const auto profiles_now = load(memory, path);
       if (const auto row = profiles_now.find(target.label); row && profiles_now.rows()[*row].destination() == target.destination) {
@@ -2361,6 +2478,7 @@ mkdir -p "$HOME/.local/bin" && "$telar" cli install --dir "$HOME/.local/bin" >/d
 
     if (saved) {
       Logins logins{memory, report, *saved, current, interactive};
+
       logins.run(wanted, path);
     } else {
       report.end(Step::logins, Status::skipped, target.label + " is not saved, so its logins cannot be recorded");
@@ -2369,6 +2487,7 @@ mkdir -p "$HOME/.local/bin" && "$telar" cli install --dir "$HOME/.local/bin" >/d
 
   try {
     const auto found = discover(memory, remote, detail);
+
     report.end(Step::check, found.compatible() ? Status::ok : Status::failed, found.compatible() ? "a window can attach: schema " + std::string{handshake::schema_id.begin(), handshake::schema_id.end()} + " on both sides" : "schema " + std::string{found.schema().begin(), found.schema().end()} + " there, " + std::string{handshake::schema_id.begin(), handshake::schema_id.end()} + " here");
   } catch (const MachineFailure &error) {
     report.end(Step::check, Status::failed, std::string{error.what()} + ": " + std::string{trimText(detail, " \t\r\n")});
@@ -2391,8 +2510,10 @@ int runMachine(Memory &memory, const MachineOptions &options) {
   }
 
   const auto path = machine::profilesPath();
+
   try {
     const auto profiles = machine::load(memory, path);
+
     switch (options.action) {
     case MachineOptions::Action::list:
       return machine::list(memory, profiles, options.json);
@@ -2409,6 +2530,7 @@ int runMachine(Memory &memory, const MachineOptions &options) {
 
     case MachineOptions::Action::add: {
       const auto profile = machine::newProfile(profiles, options);
+
       if (options.check && !options.setup) {
         const auto status = machine::check(memory, profile, options.json);
         if (status != 0) {

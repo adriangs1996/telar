@@ -43,14 +43,17 @@ void Application::initializeElements() {
   connect(this, &Application::configurationChanged, this, [this] {
     element_slots_.adopt(configuration_source_.configurationGeneration());
   });
+
   connect(&configuration_source_, &ConfigurationSource::themeChanged, this, [this] {
     element_slots_.invalidate();
   });
+
   connect(&element_slots_, &ElementSlots::contentChanged, this, [this] {
     // Agent records skip unchanged activity; mod content is a change of its own.
     activity_versions_ = {};
     refresh();
   });
+
   connect(&element_slots_, &ElementSlots::failed, this, [this](const QString &message) {
     fail(std::runtime_error{message.toStdString()});
   });
@@ -62,6 +65,7 @@ QVariantMap Application::elementsFor(std::initializer_list<components::Slot> pie
   }
 
   QVariantMap result;
+
   for (const auto slot : pieces) {
     auto content = element_slots_.attach(slot, key, item);
     if (!content.isEmpty()) {
@@ -84,6 +88,7 @@ void Application::refreshElementBars() {
       {QStringLiteral("tab_count"), tabs_.rowCount()},
       {QStringLiteral("sidebar_visible"), sidebarVisible()},
   };
+
   element_bars_ = elementsFor({components::Slot::top_bar, components::Slot::bottom_bar}, QStringLiteral("window"), item);
 }
 
@@ -93,8 +98,10 @@ QVariantMap Application::elementBars() const {
 
 QVariantMap ElementSlots::tabItem(const QVariantMap &record, int position) {
   QVariantList panes;
+
   for (const auto &entry : record.value(QStringLiteral("cards")).toList()) {
     const auto card = entry.toMap();
+
     panes.append(QVariantMap{
         {QStringLiteral("key"), card.value(QStringLiteral("key"))},
         {QStringLiteral("program"), card.value(QStringLiteral("program"))},
@@ -128,6 +135,7 @@ QVariantMap ElementSlots::paneItem(const QVariantMap &pane, const QVariantMap &c
       {QStringLiteral("needs_attention"), chrome.value(QStringLiteral("needsAttention"))},
       {QStringLiteral("progress"), chrome.value(QStringLiteral("progressText"))},
   };
+
   const auto agent = chrome.value(QStringLiteral("agent")).toMap();
   if (!agent.isEmpty()) {
     item.insert(QStringLiteral("agent"), QVariantMap{
@@ -167,13 +175,16 @@ void Application::activateElement(const QString &slot, const QString &key, const
   // Hold the content: a render may replace the instance while the click runs.
   const auto rendered = instance->rendered;
   const auto &node = rendered->elements[static_cast<std::size_t>(element)];
+
   try {
     if (node.callback != components::Element::none) {
       const auto hold = key_bindings_.hold();
+
       configuration_source_.invokeElement(instance->id, node.callback, componentContext(), instance->item, [this, hold](LuaOutcome<ConfigurationSource::Effects> outcome) {
               luaBindingFinished(hold, outcome.stale, outcome.error, [&] {
           applyEffects(**outcome.value);
         });
+
         // The function may have changed state any slot reads.
         element_slots_.invalidate();
       });

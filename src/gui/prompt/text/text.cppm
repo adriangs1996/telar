@@ -61,6 +61,7 @@ public:
     if (!extend) {
       anchor_ = cursor_;
     }
+
     group_ = Group::none;
   }
 
@@ -85,6 +86,7 @@ public:
     if (!joined) {
       record();
     }
+
     bytes_.replace(start, end - start, text);
     cursor_ = anchor_ = start + text.size();
     group_ = kind;
@@ -128,10 +130,12 @@ public:
     if (offset >= bytes_.size()) {
       return bytes_.size();
     }
+
     ++offset;
     while (offset < bytes_.size() && continuation(bytes_[offset])) {
       ++offset;
     }
+
     return offset;
   }
 
@@ -139,20 +143,24 @@ public:
     if (offset == 0) {
       return 0;
     }
+
     --offset;
     while (offset > 0 && continuation(bytes_[offset])) {
       --offset;
     }
+
     return offset;
   }
 
   inline std::size_t lineStart(std::size_t offset) const noexcept {
     const auto found = bytes_.rfind('\n', offset == 0 ? std::string::npos : offset - 1);
+
     return offset == 0 || found == std::string::npos ? 0 : found + 1;
   }
 
   inline std::size_t lineEnd(std::size_t offset) const noexcept {
     const auto found = bytes_.find('\n', offset);
+
     return found == std::string::npos ? bytes_.size() : found;
   }
 
@@ -167,18 +175,22 @@ public:
   // The code points between the line start and the offset, for keeping a column across lines.
   inline std::size_t column(std::size_t offset) const noexcept {
     std::size_t count = 0;
+
     for (auto position = lineStart(offset); position < offset; position = next(position)) {
       ++count;
     }
+
     return count;
   }
 
   inline std::size_t atColumn(std::size_t line_start, std::size_t column) const noexcept {
     const auto end = lineEnd(line_start);
     auto position = line_start;
+
     for (std::size_t count = 0; count < column && position < end; ++count) {
       position = next(position);
     }
+
     return position;
   }
 
@@ -202,6 +214,7 @@ private:
     while (offset > 0 && offset < bytes_.size() && continuation(bytes_[offset])) {
       --offset;
     }
+
     return offset;
   }
 
@@ -209,6 +222,7 @@ private:
     if (undo_.size() == undo_capacity) {
       undo_.erase(undo_.begin());
     }
+
     undo_.push_back({bytes_, cursor_});
   }
 
@@ -248,9 +262,11 @@ inline CharacterClass classify(char byte) noexcept {
   if (value == ' ' || value == '\t' || value == '\n') {
     return CharacterClass::blank;
   }
+
   if (value >= 0x80 || value == '_' || (value >= '0' && value <= '9') || ((value | 0x20) >= 'a' && (value | 0x20) <= 'z')) {
     return CharacterClass::word;
   }
+
   return CharacterClass::punctuation;
 }
 

@@ -59,11 +59,13 @@ struct Answer {
 // otherwise the one the login shell finds on PATH, as a terminal would.
 std::string telarProgram() {
   const auto found = telar::runtime::ExecutablePath::sibling({"../Resources/bin/telar", "telar"});
+
   return found ? std::string{found->view()} : std::string{"telar"};
 }
 
 void keep(std::string &buffer, std::span<const telar::Byte> bytes, std::size_t limit) {
   const auto kept = std::min(bytes.size(), limit - buffer.size());
+
   buffer.append(reinterpret_cast<const char *>(bytes.data()), kept);
 }
 
@@ -76,6 +78,7 @@ Answer ask(const std::vector<std::string> &arguments) {
   telar::runtime::Command command{memory, telar::Launch{.arguments = words}, telar::runtime::CommandPurpose::configured_helper};
   telar::runtime::CommandOutput<telar::SystemAllocator> process{memory, 0};
   Answer answer;
+
   try {
     // One byte past the answer's limit tells an oversized answer from one that fits.
     answer.status = process.streamDiagnostics(
@@ -94,6 +97,7 @@ Answer ask(const std::vector<std::string> &arguments) {
 
 std::string_view trimmed(std::string_view text) {
   const auto end = text.find_last_not_of(" \t\r\n");
+
   return end == std::string_view::npos ? std::string_view{} : text.substr(0, end + 1);
 }
 

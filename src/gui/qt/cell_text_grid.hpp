@@ -47,6 +47,7 @@ struct CellTextGrid {
 
   [[nodiscard]] static CellTextGrid resolve(const QVariantMap &value, qreal scale) {
     CellTextGrid result;
+
     result.metrics.width = dimension(value, "cellWidth", scale);
     result.metrics.height = dimension(value, "cellHeight", scale);
     result.metrics.pixel_height = dimension(value, "pixelHeight", scale);

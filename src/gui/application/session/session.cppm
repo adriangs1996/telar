@@ -143,6 +143,7 @@ public:
 
   inline void setLaunchDirectory(std::string_view directory) {
     auto launch = defaultLaunch();
+
     launch.cwd = directory;
     BodySchema<Launch>::validate(launch);
     launch_cwd_ = directory;
@@ -150,6 +151,7 @@ public:
 
   inline void setLaunchArguments(std::span<const std::string_view> arguments) {
     auto launch = defaultLaunch();
+
     launch.arguments = arguments;
     setLaunch(launch);
   }
@@ -222,6 +224,7 @@ public:
     }
 
     const auto bookmark = machineBookmark();
+
     if (ready_) {
       retainLayout();
       for (auto &pane : panes_) {
@@ -416,11 +419,13 @@ public:
 
     active_tab_ = location;
     auto &tab = ensureTab(location);
+
     for (const auto &candidate : tabs_) {
       if (sameWorkspace(candidate->location.workspace, location.workspace)) {
         candidate->workspace_active = candidate.get() == &tab;
       }
     }
+
     if (!tab.loaded && !tab.loading) {
       tab.loading = true;
       sendSnapshotRequest(RequestTabSnapshot{.location = location});
@@ -437,6 +442,7 @@ public:
 
     const auto *bookmark = navigation_history_.find(location);
     const auto target = bookmark != nullptr ? PaneTarget{.kind = PaneTarget::Kind::pane, .id = bookmark->pane_id} : PaneTarget{.kind = PaneTarget::Kind::workspace, .id = location.id};
+
     handoffWorkspace(target, location.id);
 
     return true;
@@ -462,11 +468,13 @@ public:
       // The agent's row is read before the pane table can grow.
       const auto location = agent->location;
       const auto generation = agent->pane_generation;
+
       pane = &ensurePane(pane_id, location);
       pane->generation = generation;
     }
 
     auto &tab = ensureTab(pane->location);
+
     setPaneFocus(tab, pane_id);
     selectTab(pane->location);
     synchronizeAttachments();
@@ -480,6 +488,7 @@ public:
     }
 
     const auto workspace = *row->workspace;
+
     return selectWorkspace({.kind = WorkspaceLocation::Kind::workspace, .id = workspace});
   }
 
@@ -494,6 +503,7 @@ public:
     }
 
     const auto source = row->source;
+
     return selectWorkspace({.kind = WorkspaceLocation::Kind::workspace, .id = source});
   }
 
@@ -503,6 +513,7 @@ public:
     }
 
     std::size_t sent = 0;
+
     for (const auto &row : workspaces_.worktrees()) {
       if (row.state != WorktreeState::gone || row.workspace) {
         continue;
@@ -535,6 +546,7 @@ public:
   // Without a directory the workspace starts where the focused pane is.
   inline void createWorkspace(WorkspaceDraft draft) {
     auto launch = defaultLaunch();
+
     if (!draft.path.empty()) {
       launch.cwd = draft.path;
     } else if (const auto *pane = focusedPane(); pane != nullptr) {
@@ -571,6 +583,7 @@ public:
         .source = {.pane_id = source->id, .pane_generation = source->generation, .attachment_generation = source->attachment_generation, .location = source->location},
         .target = EditorTarget{executable, path.text().starts_with('/') ? path.text() : anchored.view(), path.line(), path.column()},
     };
+
     if (source->generation == 0) {
       splitEditorPane(request);
 
@@ -667,6 +680,7 @@ public:
     const auto index = static_cast<std::int64_t>(active - ordered.begin());
     const auto size = static_cast<std::int64_t>(count);
     const auto next = (((index + offset) % size) + size) % size;
+
     selectTab(ordered[static_cast<std::size_t>(next)]->location);
   }
 
@@ -712,6 +726,7 @@ public:
         {PaneDirection::up, 'k'},
         {PaneDirection::down, 'j'},
     });
+
     const auto *const found = std::ranges::find(characters, direction, &decltype(characters)::value_type::first);
     if (found == characters.end()) {
       return;
@@ -719,6 +734,7 @@ public:
 
     const TerminalKey key{.codepoint = static_cast<std::uint32_t>(found->second), .modifiers = static_cast<unsigned>(KeyChord::Modifier::control)};
     KeyEncoder encoder;
+
     input(pane->id, encoder.encode(key, pane->screen.modes()));
   }
 
@@ -749,6 +765,7 @@ public:
     if (source == PaneInputSource::keyboard && promptSurface(pane_id) == prompt::Surface::secret) {
       const auto byte = static_cast<unsigned char>(bytes.front());
       auto &line = lineEntry(pane_id).line;
+
       if (byte == 0x7f || byte == 0x08 || byte == 0x15) {
         line.clearSecret();
       } else if (byte >= 0x20) {
@@ -764,8 +781,10 @@ public:
     }
 
     auto pending_bytes = byteView(bytes);
+
     while (!pending_bytes.empty()) {
       const auto count = std::min(pending_bytes.size(), input_chunk_size);
+
       transport_.send(PaneInput{.pane_id = pane_id, .bytes = pending_bytes.first(count)});
       if (source != PaneInputSource::terminal_report && pending_bytes.size() == bytes.size()) {
         notePaneInput(*pane);
@@ -821,6 +840,7 @@ public:
     if (pane == nullptr || !pane->attached || pane->exited || (copy_mode_.active() && configuration_.prompt.mode != PromptMode::telar)) {
       return prompt::Surface::none;
     }
+
     return prompt::surface(pane->shell, pane->screen.modes().alternate_screen, configuration_.prompt.mode == PromptMode::telar);
   }
 
@@ -839,21 +859,26 @@ public:
     if (pane == nullptr || !pane->attached || !readsRows() || pane->scrollback_generation == 0 || last < first) {
       return;
     }
+
     const auto screen_first = pane->scrollback_trimmed + pane->screen.cellsOffset();
     const auto screen_last = screen_first + pane->screen.rows();
     auto from = first;
+
     while (!pane->rows.full()) {
       const auto missing = pane->rows.missing(from, last);
       if (!missing) {
         return;
       }
+
       // Rows on the screen come in its frames.
       if (*missing >= screen_first && *missing < screen_last) {
         from = screen_last;
         continue;
       }
+
       const auto count = static_cast<std::uint16_t>(std::min<std::uint64_t>(RowCache<Memory>::request_rows, last - *missing + 1));
       const auto request_id = nextRequest();
+
       transport_.send(ReadPaneRows{.request_id = request_id, .pane_id = pane_id, .from = *missing, .count = count});
       pane->rows.ask(request_id, *missing, count);
       from = *missing + count;
@@ -864,6 +889,7 @@ public:
   // moves up by as many to keep showing the same rows.
   [[nodiscard]] inline std::uint64_t takeDroppedRows(std::uint64_t pane_id) noexcept {
     auto *pane = findPane(pane_id);
+
     return pane == nullptr ? 0 : std::exchange(pane->scrollback_dropped, 0);
   }
 
@@ -876,6 +902,7 @@ public:
 
   [[nodiscard]] inline bool folded(std::uint64_t pane_id, std::size_t index) const noexcept {
     const auto *pane = findPane(pane_id);
+
     return pane != nullptr && index < pane->blocks.size() && std::ranges::find(pane->folded, blockKey(*pane, index)) != pane->folded.end();
   }
 
@@ -886,16 +913,19 @@ public:
     if (pane == nullptr || index >= pane->blocks.size() || (fold && !readsRows())) {
       return;
     }
+
     const auto key = blockKey(*pane, index);
     const auto found = std::ranges::find(pane->folded, key);
     if (fold == (found != pane->folded.end())) {
       return;
     }
+
     if (fold) {
       pane->folded.push_back(key);
     } else {
       pane->folded.erase(found);
     }
+
     refreshFolds(*pane);
     changed_pane_ = pane_id;
   }
@@ -906,12 +936,14 @@ public:
     if (pane == nullptr || (fold && !readsRows())) {
       return;
     }
+
     pane->folded.clear();
     for (std::size_t index = 0; fold && index < pane->blocks.size(); ++index) {
       if (pane->blocks[index].state != CommandBlockState::running) {
         pane->folded.push_back(blockKey(*pane, index));
       }
     }
+
     refreshFolds(*pane);
     changed_pane_ = pane_id;
   }
@@ -923,6 +955,7 @@ public:
     const auto &block = pane.blocks[index];
     const auto first = block.row + block.rows;
     std::uint32_t end = pane.screen.scroll().total_rows;
+
     if (index + 1 < pane.blocks.size()) {
       end = pane.blocks[index + 1].row;
     } else if (block.state != CommandBlockState::running) {
@@ -934,6 +967,7 @@ public:
         end = *pane.live_prompt_row;
       }
     }
+
     return {first, std::max(first, end)};
   }
 
@@ -945,6 +979,7 @@ public:
     if (found == lines_.end() || pane == nullptr || !found->second.block || *found->second.block >= pane->blocks.size()) {
       return std::nullopt;
     }
+
     return found->second.block;
   }
 
@@ -954,19 +989,24 @@ public:
     if (pane == nullptr) {
       return;
     }
+
     auto &entry = lineEntry(pane_id);
+
     entry.pending = 0;
     if (index && *index < pane->blocks.size()) {
       if (!entry.block) {
         entry.live_prompt = livePromptRow(*pane);
       }
+
       entry.block = index;
       const auto row = pane->blocks[*index].row;
+
       scrollToRow(pane_id, row == 0 ? 0 : row - 1);
     } else {
       entry.block.reset();
       scrollToRow(pane_id, std::numeric_limits<std::uint32_t>::max());
     }
+
     changed_pane_ = pane_id;
     block_changed_ = true;
   }
@@ -978,6 +1018,7 @@ public:
     if (pane == nullptr || configuration_.prompt.mode != PromptMode::telar || pane->blocks.empty() || promptSurface(pane->id) != prompt::Surface::editor || selectedBlock(pane->id)) {
       return false;
     }
+
     selectBlock(pane->id, pane->blocks.size() - 1);
     return true;
   }
@@ -986,6 +1027,7 @@ public:
   // suggestion, a path) since the last call, for its view to show it.
   [[nodiscard]] inline std::optional<std::uint64_t> takePromptWrite() noexcept {
     const auto written = std::exchange(prompt_written_, 0);
+
     return written == 0 ? std::nullopt : std::optional{written};
   }
 
@@ -1002,6 +1044,7 @@ public:
   // Whether text meant for the pane belongs in telar's editor instead.
   [[nodiscard]] inline bool editsPrompt(std::uint64_t pane_id) const noexcept {
     const auto surface = promptSurface(pane_id);
+
     return surface == prompt::Surface::editor || surface == prompt::Surface::running;
   }
 
@@ -1015,17 +1058,21 @@ public:
     if (pane == nullptr) {
       return false;
     }
+
     const auto surface = promptSurface(pane_id);
     // At the prompt every key goes to telar's editor, whatever frame the terminal still shows.
     if (surface == prompt::Surface::editor) {
       return true;
     }
+
     if (pane->screen.cursor().x != 0) {
       return false;
     }
+
     switch (surface) {
     case prompt::Surface::running: {
       const auto found = lines_.find(pane_id);
+
       return found == lines_.end() || !found->second.line.answering();
     }
     case prompt::Surface::none:
@@ -1034,6 +1081,7 @@ public:
     case prompt::Surface::secret:
       break;
     }
+
     return false;
   }
 
@@ -1043,6 +1091,7 @@ public:
 
   [[nodiscard]] inline const prompt::Line *promptLine(std::uint64_t pane_id) const noexcept {
     const auto found = lines_.find(pane_id);
+
     return found == lines_.end() ? nullptr : &found->second.line;
   }
 
@@ -1054,13 +1103,16 @@ public:
     }
 
     auto &entry = lineEntry(pane_id);
+
     if (surface == prompt::Surface::editor) {
       if (const auto outcome = blockKey(pane_id, entry, key)) {
         return *outcome;
       }
     }
+
     if (surface == prompt::Surface::running && !entry.line.answering()) {
       const auto *pane = findPane(pane_id);
+
       // Signal and end-of-file keys always reach the program, as does typing while it seems
       // to ask a question.
       if (key.key == prompt::Key::character && key.modifiers.control && !key.modifiers.alt && key.character < 0x80) {
@@ -1069,6 +1121,7 @@ public:
           return prompt::Outcome::terminal;
         }
       }
+
       if (entry.line.editor().text().empty() && prompt::PendingPrompt::likely(pane->screen.cursor().x, std::chrono::nanoseconds{Clock::nowNanoseconds() - entry.output})) {
         return prompt::Outcome::terminal;
       }
@@ -1082,6 +1135,7 @@ public:
       beginCompletion(pane_id, entry.line, syntax);
       return prompt::Outcome::edited;
     }
+
     deliverPrompt(pane_id, outcome, entry.line);
     return outcome;
   }
@@ -1094,17 +1148,21 @@ public:
     if (pane == nullptr || pane->shell.remote || !ready_ || word.empty() || word.size() > 256) {
       return CommandPresence::unknown;
     }
+
     auto &checks = commandChecks(*pane);
     if (checks.learned.contains(word)) {
       return CommandPresence::found;
     }
+
     if (const auto known = checks.words.find(word); known != checks.words.end()) {
       return known->second;
     }
+
     if (word.find('/') == std::string_view::npos) {
       for (const auto &[prefix, commands] : checks.listed) {
         if (word.starts_with(prefix)) {
           const auto presence = std::ranges::find(commands, word) != commands.end() ? CommandPresence::found : CommandPresence::missing;
+
           checks.words.emplace(std::string{word}, presence);
           return presence;
         }
@@ -1112,6 +1170,7 @@ public:
     }
 
     const auto request_id = nextRequest();
+
     try {
       const auto slash = word.rfind('/');
       if (slash == std::string_view::npos) {
@@ -1119,23 +1178,28 @@ public:
       } else {
         // A command named by its path: a file there, from the directory the shell is in.
         std::string root{word.starts_with('/') ? std::string_view{} : std::string_view{pane->cwd}};
+
         if (!word.starts_with('/')) {
           root.push_back('/');
         }
+
         root.append(word.substr(0, slash));
         while (root.size() > 1 && root.ends_with('/')) {
           root.pop_back();
         }
+
         const auto name = word.substr(slash + 1);
         if (name.empty() || name.size() > 64 || !root.starts_with('/')) {
           return CommandPresence::unknown;
         }
+
         transport_.send(FindPaths{.request_id = request_id, .root = root, .query = name, .kind = PathKindFilter::any, .limit = 50});
       }
     } catch (const std::exception &) {
       checks.words.emplace(std::string{word}, CommandPresence::unknown);
       return CommandPresence::unknown;
     }
+
     checks.words.emplace(std::string{word}, CommandPresence::pending);
     command_requests_.emplace(request_id, CommandRequest{pane_id, std::string{word}});
     return CommandPresence::pending;
@@ -1158,6 +1222,7 @@ public:
   // and tab are dropped: they would act on the shell instead of being written.
   inline void promptText(std::uint64_t pane_id, std::string_view text) {
     std::string clean;
+
     clean.reserve(text.size());
     for (const auto byte : text) {
       const auto value = static_cast<unsigned char>(byte);
@@ -1165,6 +1230,7 @@ public:
         clean.push_back(value == 0x7f ? ' ' : byte);
       }
     }
+
     lineEntry(pane_id).line.insertText(clean);
     prompt_written_ = pane_id;
   }
@@ -1203,12 +1269,14 @@ public:
 
     if (editsPrompt(pane->id)) {
       auto &text = lineEntry(pane->id).line.editor().text();
+
       text.assign(command);
       text.moveTo(text.size());
       prompt_written_ = pane->id;
       if (configuration_.history.enter_runs != alternate) {
         promptKey(pane->id, prompt::KeyPress{prompt::Key::enter});
       }
+
       return;
     }
 
@@ -1237,6 +1305,7 @@ public:
 
   inline bool submitSuggestion(std::string_view text) {
     const auto *pane = focusedPane();
+
     if (suggestion_.phase() == SuggestionPhase::ready) {
       if (!ready_ || pane == nullptr || !pane->attached || pane->exited || copy_mode_.active()) {
         return false;
@@ -1248,8 +1317,10 @@ public:
       }
 
       const auto bracketed = pane->screen.modes().bracketed_paste;
+
       HistoryText::validate(suggestion_.text(), bracketed);
       const auto encoded = PasteEncoding::encode<SuggestionLimits::text_bytes>(suggestion_.text(), bracketed);
+
       input(pane->id, encoded.view());
 
       return true;
@@ -1261,6 +1332,7 @@ public:
 
     if (!ready_ || pane == nullptr || !pane->attached || pane->exited) {
       constexpr std::uint64_t failed_request = 1;
+
       suggestion_.expect(failed_request);
       static_cast<void>(suggestion_.receive({.request_id = failed_request, .status = SuggestionStatus::failed}));
 
@@ -1268,6 +1340,7 @@ public:
     }
 
     const SuggestCommand request{.request_id = nextRequest(), .pane_id = pane->id, .text = text};
+
     transport_.send(request);
     suggestion_.expect(request.request_id);
 
@@ -1305,6 +1378,7 @@ public:
         .limit = static_cast<std::uint16_t>(PathPickerLimits::results),
         .refresh = path_picker_.refreshRequested(),
     };
+
     try {
       transport_.send(request);
     } catch (const std::length_error &) {
@@ -1331,6 +1405,7 @@ public:
 
     auto relative = path_picker_.path(match);
     const auto last = relative.find_last_not_of('/');
+
     relative.remove_suffix(last == std::string_view::npos ? relative.size() : relative.size() - last - 1);
     const auto directory = PathInsertion::join({.root = path_picker_.root(), .relative = relative});
     if (directory.view().size() > PathPickerLimits::root_bytes) {
@@ -1428,11 +1503,14 @@ public:
       const auto agent = std::ranges::find_if(agents_, [&](const auto &entry) {
         return entry.pane_id == pane_id && (!generation || entry.pane_generation == *generation);
       });
+
       const auto listed = std::ranges::find_if(pane_list_.entries(), [&](const auto &entry) {
         return entry.pane_id == pane_id && (!generation || entry.pane_generation == *generation);
       });
+
       const auto location = agent != agents_.end() ? std::optional{agent->location} : listed != pane_list_.entries().end() ? std::optional{listed->location} : std::nullopt;
       const auto fallback = location && location->workspace.kind == WorkspaceLocation::Kind::workspace ? std::optional{location->workspace.id} : std::nullopt;
+
       handoffPane(pane_id, fallback);
     }
   }
@@ -1594,15 +1672,18 @@ public:
     switch (wheelRoute(pane->screen)) {
     case WheelRoute::report: {
       MouseEncoder encoder;
+
       input(pane->id, encoder.encode(direction == ScrollDirection::up ? MouseEncoder::wheel_up : MouseEncoder::wheel_down, 1, 1, false, true), PaneInputSource::mouse);
       return;
     }
     case WheelRoute::keys: {
       KeyEncoder encoder;
       const auto bytes = encoder.alternateScroll(direction == ScrollDirection::up, pane->screen.modes());
+
       for (std::int32_t step = 0; step < WheelAccumulator::rows_per_line; ++step) {
         input(pane->id, bytes, PaneInputSource::mouse);
       }
+
       return;
     }
     case WheelRoute::scroll:
@@ -1643,6 +1724,7 @@ public:
   inline CopyPointerDecision::Outcome pointer(const CopyPointerInput &input) {
     const auto decision = routeCopyPointer(input, pointerAuthority(input));
     const auto finish = decision.cancel || (decision.motion && input.kind == CopyPointerKind::release);
+
     try {
       if (decision.leave) {
         leaveCopyMode();
@@ -1724,6 +1806,7 @@ public:
     if (!copy_search_origin_) {
       copy_search_origin_ = copy_mode_.state()->cursor;
     }
+
     copy_search_query_.assign(needle);
     if (needle.empty()) {
       // Nothing to look for: no matches, and the cursor back where the search began.
@@ -1732,15 +1815,19 @@ public:
       if (const auto plan = copy_mode_.search({}, copyGrid(pane->screen), copy_search_origin_)) {
         applyCopyPlan(*plan, *pane);
       }
+
       changed_pane_ = pane->id;
       return;
     }
+
     const auto request_id = nextRequest();
+
     if (copy_search_rows_ && copy_search_scoped_ && readsRows()) {
       transport_.send(SearchPaneRows{.request_id = request_id, .pane_id = pane->id, .needle = needle, .first_row = copy_search_rows_->first, .last_row = copy_search_rows_->last});
     } else {
       transport_.send(SearchPane{.request_id = request_id, .pane_id = pane->id, .needle = needle});
     }
+
     copy_search_request_ = request_id;
   }
 
@@ -1762,12 +1849,14 @@ public:
 
   [[nodiscard]] inline CopySearchState copySearch() const noexcept {
     const auto &state = copy_mode_.state();
+
     return {.query = copy_search_query_, .searching = copy_search_request_ != 0, .count = copy_mode_.matches().size(), .index = state ? std::size_t{state->match_index} : std::size_t{0}, .truncated = copy_search_truncated_};
   }
 
   // The next match or the one before, as n and N go.
   inline void stepCopyMatch(bool forward) {
     TerminalKey key{.code = KeyChord::Key::character, .codepoint = static_cast<std::uint32_t>(forward ? 'n' : 'N')};
+
     static_cast<void>(copyKey(key));
   }
 
@@ -1801,6 +1890,7 @@ public:
     const auto parsed = HistorySearch::parse(query, filters.failed_only);
     // Each command once, at its newest run that passes the filters.
     QueryHistory request{.request_id = nextRequest(), .query = parsed.query, .failed_only = parsed.failed_only, .author = filters.author, .match = configuration_.history.match_fts ? HistoryMatch::fts : HistoryMatch::fuzzy, .distinct = true};
+
     resolveHistoryScope(request, filters.scope);
     sendHistory(history_.begin(request));
   }
@@ -1874,6 +1964,7 @@ public:
   inline void configureCadence() {
     const auto maximum_fps = configuration_.max_fps == 0 ? std::nullopt : std::optional{configuration_.max_fps};
     const auto interval_ns = FramePacer::resolveInterval(FramePacer::nanoseconds_per_second / display_fps_, maximum_fps);
+
     transport_.send(ConfigureFrameInterval{static_cast<std::uint32_t>(interval_ns)});
   }
 
@@ -1972,6 +2063,7 @@ public:
     if (recorded.show) {
       const auto &row = limit_reports_.row(recorded.slot);
       const auto message = LimitReports::describe(row.reach(), row.hits);
+
       publishNotification({.level = NotificationLevel::warning, .title = "Limit reached", .message = message.view(), .link = {}, .duration_ns = limit_notice_duration_ns});
     }
   }
@@ -2041,12 +2133,14 @@ public:
     const auto *tab = activeTab();
     const auto *pane = focusedPane();
     WindowTitle::Tokens tokens{.workspace = {}, .tab = {}, .pane_title = pane != nullptr ? std::string_view{pane->title} : std::string_view{}, .hostname = hostname};
+
     if (tab != nullptr) {
       if (!tab->label.empty()) {
         tokens.tab = tab->label;
       } else {
         tokens.tab = tabApplicationName(*tab, pane);
       }
+
       const auto workspace = std::ranges::find_if(workspaces_, [&](const auto &entry) {
         return sameWorkspace(entry.location, tab->location.workspace);
       });
@@ -2056,6 +2150,7 @@ public:
     }
 
     const auto pattern = configuration_.window_title.view();
+
     return WindowTitle::render(pattern.empty() ? WindowTitle::default_title : pattern, tokens);
   }
 
@@ -2077,11 +2172,13 @@ public:
     if (pane == nullptr) {
       return false;
     }
+
     using Inline = typename Pane<Memory>::InlineDocument;
     const auto found = std::ranges::find(pane->inline_documents, id, &Inline::id);
     if (found == pane->inline_documents.end() || found->view_rows == rows) {
       return false;
     }
+
     found->view_rows = rows;
     ++pane->inline_version;
     refreshFolds(*pane);
@@ -2102,6 +2199,7 @@ public:
 
   inline void configure(const Configuration &configuration) {
     const bool prompt_changed = configuration_.prompt.mode != configuration.prompt.mode;
+
     configuration_ = configuration;
     sound_playback_.configure(configuration.sound);
     ++view_version_.configuration;
@@ -2279,6 +2377,7 @@ private:
     }
 
     const auto request_id = pending(RequestKind::peek_screen);
+
     try {
       if (const auto request = peek_.request(request_id)) {
         transport_.send(*request);
@@ -2296,6 +2395,7 @@ private:
     requires(std::same_as<Request, InterruptAgent> || std::same_as<Request, SendPaneText> || std::same_as<Request, LaunchWorktree>)
   void sendPeekAction(Request request, std::uint64_t pane_id) {
     constexpr auto kind = std::same_as<Request, LaunchWorktree> ? RequestKind::peek_diff : RequestKind::peek_action;
+
     sendRegistered(kind, request, pane_id);
   }
 
@@ -2308,6 +2408,7 @@ private:
     constexpr std::string_view script = R"("$TELAR_BIN_PATH" worktree diff "$1" --stat; echo; "$TELAR_BIN_PATH" worktree diff "$1"; exec "${SHELL:-/bin/sh}")";
     constexpr TerminalSize size{.cols = 160, .rows = 48, .cell_width_px = 0, .cell_height_px = 0};
     const std::array<std::string_view, 5> arguments{"sh", "-c", script, "sh", row->branch};
+
     sendPeekAction(LaunchWorktree{.worktree = row->id, .label = "diff", .size = size, .launch = {.cwd = row->path.empty() ? std::string_view{"/"} : std::string_view{row->path}, .arguments = arguments}}, agent.pane_id);
   }
 
@@ -2323,6 +2424,7 @@ private:
     }
 
     constexpr std::uint64_t duration_ns = 7'000'000'000;
+
     publishNotification({.level = NotificationLevel::failure, .target = {.kind = NotificationTarget::Kind::pane, .id = request.pane_id}, .title = "The agent did not take it", .message = failure.message, .link = {}, .duration_ns = duration_ns});
 
     return Change::notification;
@@ -2354,6 +2456,7 @@ private:
     requires(std::same_as<Request, RequestTabSnapshot> || std::same_as<Request, RequestWorkspaceSnapshot>)
   void sendSnapshotRequest(Request request) {
     constexpr auto kind = std::same_as<Request, RequestTabSnapshot> ? RequestKind::tab_snapshot : RequestKind::workspace_snapshot;
+
     sendRegistered(kind, request, 0, [](Pending &registered, const Request &sent) {
       if constexpr (std::same_as<Request, RequestTabSnapshot>) {
         registered.location = sent.location;
@@ -2413,9 +2516,11 @@ private:
 
     const auto request_id = pending(RequestKind::split, pane_id, axis);
     auto &registration = pending_[pending_count_ - 1];
+
     registration.location = tab->location;
     registration.size = sizes->added;
     const auto registered = registration;
+
     launch.cwd_source = pane_id;
     try {
       transport_.send(PaneResize{.pane_id = pane_id, .size = sizes->existing});
@@ -2449,6 +2554,7 @@ private:
   void resizeVisiblePanes(Tab<Memory> &tab) {
     const auto fullscreen = tab.fullscreen ? std::optional{tab.focused_pane} : std::nullopt;
     const auto placements = tab.layout.arrange(workbench_geometry_.cellArea(), workbench_geometry_.layout_metrics, fullscreen);
+
     for (const auto &placement : placements) {
       if (const auto size = workbench_geometry_.contentSize(placement.content)) {
         resize(placement.pane_id, *size);
@@ -2490,10 +2596,12 @@ private:
     }
 
     auto &pane = allocateSplitPane(request, message);
+
     pane.generation = message.pane_generation;
     pane.size = request.size;
     pane.attaching = false;
     const auto beside = tab->layout.contains(request.pane_id) ? request.pane_id : tab->layout.firstPane();
+
     if (!tab->layout.contains(pane.id)) {
       tab->layout.add(pane.id, request.axis, beside);
     }
@@ -2562,6 +2670,7 @@ private:
 
     constexpr std::size_t growth_factor = 2;
     const auto grown = values.capacity() > maximum / growth_factor ? maximum : values.capacity() * growth_factor;
+
     values.reserve(std::max(values.size() + 1, grown));
   }
 
@@ -2571,6 +2680,7 @@ private:
     }
 
     constexpr std::size_t maximum_label_bytes = 128;
+
     DisplayText16<maximum_label_bytes>::validate(label);
     const auto *tab = activeTab();
     const auto *pane = focusedPane();
@@ -2579,6 +2689,7 @@ private:
     }
 
     auto launch = defaultLaunch();
+
     launch.cwd_source = pane->id;
     if (!arguments.empty()) {
       launch.arguments = arguments;
@@ -2645,6 +2756,7 @@ private:
     }
 
     const auto request = nextRequest();
+
     pending_[pending_count_++] = {.id = request, .kind = kind, .pane_id = pane_id, .axis = axis};
 
     return request;
@@ -2654,6 +2766,7 @@ private:
     for (std::size_t index = 0; index < pending_count_; ++index) {
       if (pending_[index].id == request_id) {
         const auto result = pending_[index];
+
         pending_[index] = pending_[--pending_count_];
 
         return result;
@@ -2723,6 +2836,7 @@ private:
     }
 
     const auto launch = defaultLaunch();
+
     sendOpeningRequest(RequestKind::open_default, OpenPane{.size = launchSize(), .launch = launch});
   }
 
@@ -2733,6 +2847,7 @@ private:
     }
 
     std::optional<std::uint64_t> fallback;
+
     if (tab->location.workspace.kind == WorkspaceLocation::Kind::workspace) {
       fallback = tab->location.workspace.id;
     } else if (const auto *row = workspaces_.worktree(tab->location.workspace.id)) {
@@ -2759,6 +2874,7 @@ private:
 
   void handoffWorkspace(PaneTarget target, std::optional<std::uint64_t> fallback_workspace) {
     const OpenPane opening{.target = target, .size = launchSize()};
+
     try {
       retainLayout();
       for (auto &pane : panes_) {
@@ -2773,6 +2889,7 @@ private:
       sendOpeningRequest(RequestKind::visit_pane, opening, {}, fallback_workspace);
     } catch (...) {
       const auto failure = std::current_exception();
+
       try {
         synchronizeAttachments();
       } catch (...) {
@@ -2831,6 +2948,7 @@ private:
     if (initial_open_pending_) {
       if (deferred_tab_) {
         const auto location = *deferred_tab_;
+
         openRestoredWorkspace(location);
       } else {
         openDefault();
@@ -2846,6 +2964,7 @@ private:
     if (left_machine_) {
       const auto bookmark = *left_machine_;
       const auto target = bookmark.pane_id != 0 ? PaneTarget{.kind = PaneTarget::Kind::pane, .id = bookmark.pane_id} : PaneTarget{.kind = PaneTarget::Kind::workspace, .id = bookmark.fallback_workspace.value_or(bookmark.location.workspace.id)};
+
       sendOpeningRequest(RequestKind::restore_machine, OpenPane{.target = target, .size = launchSize()}, bookmark.location, bookmark.fallback_workspace);
     }
   }
@@ -2857,6 +2976,7 @@ private:
     }
 
     const auto fallback = location.workspace.kind == WorkspaceLocation::Kind::workspace ? std::optional{location.workspace.id} : std::nullopt;
+
     sendOpeningRequest(RequestKind::restore_machine, OpenPane{.target = {.kind = PaneTarget::Kind::pane, .id = saved->pane_id}, .size = launchSize()}, location, fallback);
   }
 
@@ -2896,6 +3016,7 @@ private:
   void createEditorTab(const EditorTarget &target) {
     EditorLaunch command;
     auto launch = defaultLaunch();
+
     launch.arguments = command.arguments(target.editor(), target.path(), target.line(), target.column());
     if (activeTab() != nullptr) {
       static_cast<void>(requestTabCreation({}, launch.arguments));
@@ -2908,6 +3029,7 @@ private:
     EditorLaunch command;
     auto launch = defaultLaunch();
     const auto &target = request.target;
+
     launch.arguments = command.arguments(target.editor(), target.path(), target.line(), target.column());
     if (!requestPaneSplit(request.source.pane_id, ClientLayoutAxis::horizontal, launch)) {
       throw std::runtime_error{"PaneSplitUnavailable"};
@@ -2941,6 +3063,7 @@ private:
 
     acknowledgeFocusedAgent();
     const auto *active = activeTab();
+
     for (auto &pane : panes_) {
       const auto visible = active != nullptr && active->layout.contains(pane->id) && (!active->fullscreen || pane->id == active->focused_pane);
       if (visible && !pane->attached && !pane->attaching && !pane->exited) {
@@ -3055,6 +3178,7 @@ private:
   void applyPointerMotion(const CopyPointerDecision &decision, bool released, Pane<Memory> &pane) {
     const auto grid = copyGrid(pane.screen);
     std::optional<CopyPlan> plan;
+
     if (decision.motion) {
       plan = copy_mode_.pointer(*decision.motion, grid, released);
     } else if (decision.vertical) {
@@ -3081,6 +3205,7 @@ private:
     if (plan) {
       applyCopyPlan(*plan, *pane);
     }
+
     copy_search_truncated_ = message.truncated;
 
     copy_search_request_ = 0;
@@ -3106,6 +3231,7 @@ private:
       if (copy_mode_.state() && copy_mode_.state()->pane_id == pane->id) {
         copy_mode_.onFrame(previous_offset, copyGrid(pane->screen));
       }
+
       if (const auto line = lines_.find(pane->id); line != lines_.end()) {
         line->second.output = Clock::nowNanoseconds();
       }
@@ -3114,9 +3240,11 @@ private:
       if (const auto prompt = livePromptRow(*pane)) {
         pane->live_prompt_row = prompt;
       }
+
       if (!pane->folded.empty()) {
         refreshFolds(*pane);
       }
+
       changed_pane_ = pane->id;
 
       return Change::terminal;
@@ -3133,9 +3261,12 @@ private:
         pane.folds.clear();
         ++pane.fold_revision;
       }
+
       return;
     }
+
     std::vector<typename FoldMap<>::Span> spans;
+
     // Each document drawn in place of its rows, in the rows the view measured it in, while the
     // rows are numbered as the runtime numbered them for it.
     for (const auto &document : pane.inline_documents) {
@@ -3143,17 +3274,21 @@ private:
         spans.push_back({.first = static_cast<std::uint32_t>(document.first_row - pane.scrollback_trimmed), .count = document.rows, .shown = document.view_rows});
       }
     }
+
     std::vector<std::uint64_t> kept;
+
     for (std::size_t index = 0; index < pane.blocks.size(); ++index) {
       if (std::ranges::find(pane.folded, blockKey(pane, index)) == pane.folded.end()) {
         continue;
       }
+
       kept.push_back(blockKey(pane, index));
       const auto [first, end] = blockRows(pane, index);
       if (end > first) {
         spans.push_back({.first = first, .count = end - first});
       }
     }
+
     pane.folded = std::move(kept);
     if (!std::ranges::equal(pane.folds.spans(), spans)) {
       pane.folds.assign(spans);
@@ -3166,6 +3301,7 @@ private:
     if constexpr (std::same_as<Message, GraphicsSnapshot> || std::same_as<Message, GraphicsImage> || std::same_as<Message, GraphicsSharedImage> || std::same_as<Message, GraphicsImageChunk> || std::same_as<Message, GraphicsPlacementMessage> || std::same_as<Message, GraphicsDeleteImage> || std::same_as<Message, GraphicsDeletePlacement>) {
       try {
         const auto change = apply(Codec::decode<Message>(payload, storage));
+
         resumeGraphics();
 
         return change;
@@ -3189,6 +3325,7 @@ private:
     }
 
     bool changed = false;
+
     try {
       if constexpr (std::same_as<Message, GraphicsSnapshot>) {
         changed = pane->graphics.snapshot(message);
@@ -3255,6 +3392,7 @@ private:
     if (const auto hits = limit_reports_.takeReport(recorded.slot, awake_ms)) {
       const ReportLimit report{.reach = limit_reports_.row(recorded.slot).reach(), .hits = *hits};
       bool delivered = false;
+
       try {
         if constexpr (requires { { transport_.report(report) } -> std::same_as<bool>; }) {
           delivered = transport_.report(report);
@@ -3276,6 +3414,7 @@ private:
 
   void pauseGraphics(std::uint64_t pane_id, const GraphicsLimitError &error) {
     const auto slot = countLimitReach({.name = error.what(), .route = "runtime_message"}).slot;
+
     graphics_pauses_.pause(pane_id, Clock::nowNanoseconds(), [this](std::uint64_t paused_pane) {
       requestGraphicsSnapshot(paused_pane);
     },
@@ -3288,11 +3427,13 @@ private:
     const auto &row = limit_reports_.row(slot);
     const auto message = LimitReports::describe(row.reach(), row.hits);
     const auto title = graphicsPauseTitle(pane_id);
+
     publishNotification({.level = NotificationLevel::warning, .target = {.kind = NotificationTarget::Kind::pane, .id = pane_id}, .title = title.view(), .message = message.view(), .link = {}, .duration_ns = limit_notice_duration_ns});
   }
 
   [[nodiscard]] BoundedText<max_notification_title_bytes> graphicsPauseTitle(std::uint64_t pane_id) const {
     BoundedText<max_notification_title_bytes> title;
+
     title.append("Images paused");
     const auto *pane = findPane(pane_id);
     const auto *tab = pane == nullptr ? nullptr : findTab(pane->location);
@@ -3300,6 +3441,7 @@ private:
     if (index != 0) {
       const std::string_view foreground{pane->foreground};
       const auto name = !foreground.empty() && inspectUtf8(foreground) == Utf8Validation::valid ? foreground : "shell";
+
       title.append(" in pane ");
       title.appendDecimal(static_cast<std::uint16_t>(index));
       title.append(": ");
@@ -3386,6 +3528,7 @@ private:
     }
 
     const auto desired_size = discovered ? pane.size : request->size;
+
     pane.size = request->size;
 
     pane.generation = message.pane_generation;
@@ -3394,12 +3537,14 @@ private:
     pane.attaching = false;
     pane.exited = false;
     auto &tab = ensureTab(message.location);
+
     if (request->kind != RequestKind::attach) {
       stageWorkspaceLayout(tab);
     }
 
     const auto axis = request ? request->axis : ClientLayoutAxis::horizontal;
     const auto beside = request && request->kind == RequestKind::split ? request->pane_id : tab.focused_pane;
+
     tab.layout.add(pane.id, axis, beside);
 
     if (!tab.loading && !tab.loaded) {
@@ -3431,6 +3576,7 @@ private:
     const auto cached = std::ranges::find_if(tabs_, [&](const auto &tab) {
       return sameTab(tab->location, message.location);
     });
+
     const bool discovered = cached != tabs_.end();
     if ((discovered && ((*cached)->loaded || (*cached)->loading || !(*cached)->layout.nodes().empty())) || findPane(message.root_pane_id) != nullptr) {
       throw EncodingError{"Tab or pane already exists"};
@@ -3446,6 +3592,7 @@ private:
     }
 
     auto tab = makeOwned<Tab<Memory>>(memory_, memory_, message.location);
+
     tab->label = message.label;
     tab->position = message.position;
     if (discovered) {
@@ -3457,6 +3604,7 @@ private:
     tab->focused_pane = message.root_pane_id;
     tab->loaded = true;
     auto pane = makeOwned<Pane<Memory>>(memory_, memory_, message.root_pane_id, graphics_budget_);
+
     pane->generation = message.pane_generation;
     pane->location = message.location;
     pane->size = request->size;
@@ -3497,11 +3645,13 @@ private:
     }
 
     auto &tab = ensureTab(message.location);
+
     restoreCanonicalLayout(tab);
     tab.loaded = true;
     tab.loading = false;
     std::array<std::uint64_t, PaneLayout::maximum_panes> removed{};
     std::size_t removed_count = 0;
+
     for (const auto &node : tab.layout.nodes()) {
       const auto *leaf = std::get_if<ClientLayoutPane>(&node);
       if (leaf != nullptr && std::none_of(message.panes.begin(), message.panes.end(), [&](const auto &pane) {
@@ -3542,9 +3692,11 @@ private:
 
   Change apply(const WorkspaceSnapshot &message) {
     const bool current_workspace = active_tab_ && sameWorkspace(active_tab_->workspace, message.workspace);
+
     completeRequest(RequestKind::workspace_snapshot, message.request_id);
     std::array<TabLocation, maximum_tabs> removed;
     std::size_t removed_count = 0;
+
     for (const auto &tab : tabs_) {
       if (sameWorkspace(tab->location.workspace, message.workspace) && std::none_of(message.tabs.begin(), message.tabs.end(), [&](const auto &entry) {
             return entry.tab_id == tab->location.tab_id;
@@ -3611,6 +3763,7 @@ private:
     workspace_list_collapsed_ = message.workspace_list_collapsed;
     for (const auto &saved : message.tabs) {
       PaneLayout validated;
+
       validated.restore(saved.nodes);
       if (!validated.contains(saved.focused_pane)) {
         throw EncodingError{"InvalidClientLayoutFocus"};
@@ -3642,6 +3795,7 @@ private:
     const bool closing_known = closing != nullptr;
     const auto position = closing_known ? closing->position : std::uint16_t{};
     const auto replacement = tabAfterRemoval(message.location, position);
+
     discardTab(message.location);
     if (closing_known) {
       for (auto &tab : tabs_) {
@@ -3670,6 +3824,7 @@ private:
   [[nodiscard]] std::optional<TabLocation> tabAfterRemoval(TabLocation closing, std::uint16_t position) const noexcept {
     const Tab<Memory> *previous = nullptr;
     const Tab<Memory> *next = nullptr;
+
     for (const auto &tab : tabs_) {
       if (!sameWorkspace(tab->location.workspace, closing.workspace) || sameTab(tab->location, closing)) {
         continue;
@@ -3707,9 +3862,11 @@ private:
     std::erase_if(tabs_, [&](const auto &tab) {
       return sameTab(tab->location, location);
     });
+
     removePanes([&](const Pane<Memory> &pane) {
       return sameTab(pane.location, location);
     });
+
     if (active_tab_ && sameTab(*active_tab_, location)) {
       active_tab_.reset();
     }
@@ -3724,9 +3881,11 @@ private:
         forgetPane(pane->id);
       }
     }
+
     std::erase_if(panes_, [&](const auto &pane) {
       return removed(*pane);
     });
+
     forgetClosedGraphics();
   }
 
@@ -3736,10 +3895,13 @@ private:
       copy_mode_.reset();
       copy_search_request_ = 0;
     }
+
     if (path_seed_.pane_id == pane_id) {
       path_seed_ = {};
     }
+
     const auto owned = [pane_id](const auto &entry) { return entry.second.pane_id == pane_id; };
+
     std::erase_if(command_requests_, owned);
     std::erase_if(spec_requests_, owned);
     std::erase_if(path_completions_, owned);
@@ -3788,6 +3950,7 @@ private:
       }
 
       const auto previous = tab->position;
+
       for (auto &entry : tabs_) {
         if (!sameWorkspace(entry->location.workspace, message.location.workspace) || entry.get() == tab) {
           continue;
@@ -3905,6 +4068,7 @@ private:
 
     const auto previous_host = pane->shell_host;
     const auto previous = std::exchange(pane->shell, message);
+
     pane->shell_host.assign(message.host);
     pane->shell.host = pane->shell_host;
     pane->shell_directory.assign(message.directory);
@@ -3913,13 +4077,16 @@ private:
     chrome_changed_ |= previous.remote != message.remote || previous_host != pane->shell_host || previous.link_ms != message.link_ms;
     if (const auto found = lines_.find(pane->id); found != lines_.end()) {
       auto &line = found->second.line;
+
       if (message.phase != ShellPhase::running || message.echo) {
         line.clearSecret();
       }
+
       if (previous.phase == ShellPhase::running && message.phase == ShellPhase::prompt) {
         deliverPrompt(pane->id, line.promptReturned(message.commands != previous.commands && message.status == 0), line);
       }
     }
+
     changed_pane_ = pane->id;
     return Change::terminal;
   }
@@ -3929,28 +4096,35 @@ private:
     if (request == spec_requests_.end()) {
       return Change::none;
     }
+
     const auto [pane_id, command] = std::move(request->second);
+
     spec_requests_.erase(request);
     // An alias's spec is the one of the command it stands for, kept under that command's name.
     const auto expansion = message.command == command ? message.expansion : std::string_view{};
     const auto target = expansion.empty() ? std::string_view{command} : expansion.substr(0, expansion.find(' '));
     auto state = SpecState::unavailable;
+
     if (message.state == CommandSpecState::available && message.command == command) {
       state = prompt_specs_.install(target, message.digest, message.source) ? SpecState::available : SpecState::unavailable;
     } else if (message.state == CommandSpecState::unchanged && prompt_specs_.find(target) != nullptr && prompt_specs_.digest(target) == message.digest) {
       state = SpecState::available;
     }
+
     auto &checks = command_checks_[pane_id];
     if (const auto known = checks.specs.find(command); known != checks.specs.end()) {
       known->second = state;
     }
+
     if (state == SpecState::available && !expansion.empty()) {
       checks.aliases.insert_or_assign(command, std::string{expansion});
       if (checks.alias_targets.size() >= 256) {
         checks.alias_targets.clear();
       }
+
       checks.alias_targets.insert_or_assign(command, std::string{target});
     }
+
     // A Tab that waited for it completes now, if the line is still the one it was for.
     const auto waiting = spec_completions_.find(pane_id);
     const auto line = lines_.find(pane_id);
@@ -3958,11 +4132,14 @@ private:
     if (waiting == spec_completions_.end() || line == lines_.end() || pane == nullptr) {
       return Change::none;
     }
+
     const bool same = waiting->second == line->second.line.editor().text().view();
+
     spec_completions_.erase(waiting);
     if (!same) {
       return Change::none;
     }
+
     beginCompletion(pane_id, line->second.line, shell::Syntax{.dialect = pane->shell.shell == IntegratedShell::fish ? shell::Dialect::fish : shell::Dialect::posix});
     changed_pane_ = pane_id;
     return Change::terminal;
@@ -3975,17 +4152,21 @@ private:
     }
 
     std::size_t bytes = 0;
+
     for (const auto &block : message.blocks) {
       bytes += block.command.size();
     }
+
     pane->blocks_text.clear();
     pane->blocks_text.reserve(bytes);
     pane->blocks.assign(message.blocks.begin(), message.blocks.end());
     for (auto &block : pane->blocks) {
       const auto start = pane->blocks_text.size();
+
       pane->blocks_text.append(block.command);
       block.command = std::string_view{pane->blocks_text}.substr(start, block.command.size());
     }
+
     // A command that ran without the shell finding it missing (status 127) exists, though the
     // shell never reported it: a function defined since its last report, say.
     if (!pane->blocks.empty() && !pane->shell.remote) {
@@ -3994,14 +4175,17 @@ private:
         learnCommand(pane->id, last.command, pane->shell.shell == IntegratedShell::fish ? shell::Dialect::fish : shell::Dialect::posix);
       }
     }
+
     if (!pane->refold.empty()) {
       for (const auto index : pane->refold) {
         if (index < pane->blocks.size()) {
           pane->folded.push_back(blockKey(*pane, index));
         }
       }
+
       pane->refold.clear();
     }
+
     refreshFolds(*pane);
     changed_pane_ = pane->id;
     return Change::terminal;
@@ -4014,21 +4198,26 @@ private:
     if (pane == nullptr) {
       return Change::none;
     }
+
     if (message.id != 0) {
       return applyInline(*pane, message);
     }
+
     if (message.revision != pane->document_revision || message.offset == 0) {
       pane->document_revision = message.revision;
       pane->document_parts.clear();
     }
+
     if (message.offset != pane->document_parts.size()) {
       return Change::none;
     }
+
     if (message.size == 0) {
       pane->document_parts.shrink_to_fit();
       if (!pane->document_shown) {
         return Change::none;
       }
+
       pane->document.clear();
       pane->document_shown = false;
     } else {
@@ -4036,10 +4225,12 @@ private:
       if (pane->document_parts.size() < message.size) {
         return Change::none;
       }
+
       pane->document_shown = render::decode(pane->document_parts, pane->document) == render::DecodeError::none;
       pane->document_parts.clear();
       pane->document_parts.shrink_to_fit();
     }
+
     ++pane->document_version;
     changed_pane_ = pane->id;
     return Change::document;
@@ -4050,24 +4241,29 @@ private:
   Change applyInline(Pane<Memory> &pane, const PaneDocument &message) {
     using Inline = typename Pane<Memory>::InlineDocument;
     auto found = std::ranges::find(pane.inline_documents, message.id, &Inline::id);
+
     if (message.size == 0) {
       if (found == pane.inline_documents.end()) {
         return Change::none;
       }
+
       pane.inline_documents.erase(found);
     } else {
       if (found == pane.inline_documents.end()) {
         if (message.offset != 0) {
           return Change::none;
         }
+
         pane.inline_documents.emplace_back(memory_, message.id);
         found = std::prev(pane.inline_documents.end());
       }
+
       auto &document = *found;
       if (!document.whole) {
         if (message.offset != document.parts.size()) {
           return Change::none;
         }
+
         document.parts.insert(document.parts.end(), message.bytes.begin(), message.bytes.end());
         if (document.parts.size() == message.size) {
           document.shown = render::decode(document.parts, document.document) == render::DecodeError::none;
@@ -4076,13 +4272,16 @@ private:
           document.parts.shrink_to_fit();
         }
       }
+
       if (document.rows != message.rows) {
         document.view_rows = 0;
       }
+
       document.generation = message.generation;
       document.first_row = message.first_row;
       document.rows = message.rows;
     }
+
     ++pane.inline_version;
     refreshFolds(pane);
     changed_pane_ = pane.id;
@@ -4099,11 +4298,13 @@ private:
       // The blocks come again with their rows moved up; until then they are moved here, so
       // their folds keep hiding the same rows.
       const auto dropped = message.trimmed - pane->scrollback_trimmed;
+
       pane->scrollback_dropped += dropped;
       std::erase_if(pane->blocks, [dropped](const CommandBlock &block) { return block.row < dropped; });
       for (auto &block : pane->blocks) {
         block.row -= static_cast<std::uint32_t>(dropped);
       }
+
       if (pane->live_prompt_row) {
         pane->live_prompt_row = *pane->live_prompt_row >= dropped ? std::optional{static_cast<std::uint32_t>(*pane->live_prompt_row - dropped)} : std::nullopt;
       }
@@ -4116,11 +4317,14 @@ private:
           pane->refold.push_back(index);
         }
       }
+
       pane->folded.clear();
     }
+
     if (pane->scrollback_generation != message.generation) {
       pane->live_prompt_row.reset();
     }
+
     pane->scrollback_generation = message.generation;
     pane->scrollback_trimmed = message.trimmed;
     pane->rows.number(message.generation);
@@ -4138,6 +4342,7 @@ private:
     if (!pane->rows.store(message, pane->screen.columns())) {
       return Change::none;
     }
+
     changed_pane_ = pane->id;
     return Change::terminal;
   }
@@ -4184,8 +4389,10 @@ private:
           prompt_history_.emplace_back(entry.command);
         }
       }
+
       return Change::none;
     }
+
     if (!history_.apply(message)) {
       return Change::none;
     }
@@ -4212,25 +4419,33 @@ private:
   Change apply(const CompletionWords &message) {
     if (const auto checked = command_requests_.find(message.request_id); checked != command_requests_.end()) {
       const auto found = std::ranges::any_of(message.words, [&](const CompletionWord &word) { return word.text == checked->second.word; });
+
       if (!message.truncated) {
         listCommands(checked->second.pane_id, checked->second.word, message.words);
       }
+
       return settleCommand(checked, found ? CommandPresence::found : message.truncated ? CommandPresence::unknown : CommandPresence::missing);
     }
+
     const auto pending = path_completions_.find(message.request_id);
     if (pending == path_completions_.end()) {
       return Change::none;
     }
+
     const auto [pane_id, base, query] = std::move(pending->second);
+
     path_completions_.erase(pending);
     const auto line = lines_.find(pane_id);
     if (line == lines_.end()) {
       return Change::none;
     }
+
     std::vector<prompt::Choice> words;
+
     for (const auto &word : message.words) {
       words.push_back({.text = base + std::string{word.text}, .description = std::string{word.description}});
     }
+
     line->second.line.receive(message.request_id, words, message.truncated);
     changed_pane_ = pane_id;
     return Change::terminal;
@@ -4240,15 +4455,19 @@ private:
     if (const auto checked = command_requests_.find(message.request_id); checked != command_requests_.end()) {
       const auto name = std::string_view{checked->second.word}.substr(checked->second.word.rfind('/') + 1);
       const auto found = std::ranges::any_of(message.matches, [&](const PathMatch &match) { return match.kind != PathKind::directory && match.path == name; });
+
       return settleCommand(checked, found ? CommandPresence::found : message.truncated ? CommandPresence::unknown : CommandPresence::missing);
     }
+
     if (const auto pending = path_completions_.find(message.request_id); pending != path_completions_.end()) {
       const auto [pane_id, base, query] = std::move(pending->second);
+
       path_completions_.erase(pending);
       if (const auto line = lines_.find(pane_id); line != lines_.end()) {
         // The shell completes one directory at a time: children of the root that start with
         // what was typed, not the deeper matches the search also finds.
         std::vector<prompt::Choice> paths;
+
         for (const auto &match : message.matches) {
           // Directories arrive with their trailing slash.
           const bool directory = match.kind == PathKind::directory;
@@ -4257,12 +4476,15 @@ private:
             paths.push_back({.text = base + std::string{match.path}, .directory = directory});
           }
         }
+
         line->second.line.receive(message.request_id, paths, message.truncated);
         changed_pane_ = pane_id;
         return Change::terminal;
       }
+
       return Change::none;
     }
+
     return path_picker_.receive(message) ? Change::paths : Change::none;
   }
 
@@ -4287,6 +4509,7 @@ private:
     }
 
     const auto paths_revision = path_picker_.revision();
+
     if (path_picker_.fail(message)) {
       return paths_revision != path_picker_.revision() ? Change::paths : Change::none;
     }
@@ -4424,6 +4647,7 @@ private:
       const auto active_closed = active_tab_ && sameWorkspace(active_tab_->workspace, message.workspace);
       std::array<TabLocation, maximum_tabs> removed;
       std::size_t removed_count = 0;
+
       for (const auto &tab : tabs_) {
         if (sameWorkspace(tab->location.workspace, message.workspace)) {
           removed[removed_count++] = tab->location;
@@ -4518,6 +4742,7 @@ private:
   template <ClientCommandHandler Handler>
   Change apply(const ClientCommand &message, Handler &handler) {
     CompleteClientCommand reply;
+
     static_cast<ClientCommand &>(reply) = message;
     // The reply starts as the command, text included: the actions
     // whose text is only a request argument clear it.
@@ -4615,6 +4840,7 @@ private:
       }
 
       const auto before = *active_tab_;
+
       selectTabOffset(message.action == ClientAction::tab_next ? 1 : -1);
       reply.status = sameTab(before, *active_tab_) ? ClientCommandStatus::applied : ClientCommandStatus::admitted;
       break;
@@ -4625,6 +4851,7 @@ private:
       }
 
       const WorkspaceLocation location{WorkspaceLocation::Kind::workspace, message.target_id};
+
       if (std::ranges::none_of(workspaces_, [&](const auto &workspace) {
             return workspace.location.kind == WorkspaceLocation::Kind::workspace && workspace.location.id == message.target_id;
           })) {
@@ -4706,6 +4933,7 @@ private:
       break;
     case ClientAction::pane_resize: {
       const auto direction = parseDirection(message.text);
+
       focusCommandPane(message.target_id);
       if (!resizeDirection(direction)) {
         throw EncodingError{"PaneResizeUnavailable"};
@@ -4745,8 +4973,10 @@ private:
 
   inline Change executeSidebarCommand(const ClientCommand &message, CompleteClientCommand &reply) {
     bool changed = false;
+
     if (message.action == ClientAction::sidebar_resize) {
       const auto width = SidebarColumns::clamp(host_columns_, message.value);
+
       changed = width != sidebar_columns_;
       sidebar_columns_ = width;
       if (changed) {
@@ -4811,6 +5041,7 @@ private:
         .workspace_active = true,
         .nodes = tab->layout.nodes(),
     };
+
     const std::array tabs{saved_tab};
     const ClientLayoutSnapshot snapshot{
         .restored = true,
@@ -4850,6 +5081,7 @@ private:
 
   inline void validateLayoutMembership(const TabLayoutPreset &preset) const {
     std::size_t leaves = 0;
+
     for (const auto &node : preset.layout.nodes()) {
       if (const auto *leaf = std::get_if<ClientLayoutPane>(&node)) {
         const auto *pane = findPane(leaf->pane_id);
@@ -4871,6 +5103,7 @@ private:
 
   inline std::size_t orderedTabs(tbc::view<std::array<Tab<Memory> *, maximum_tabs> &, tbc::lt::a> ordered) const noexcept {
     std::size_t count = 0;
+
     if (!active_tab_) {
       return count;
     }
@@ -4902,6 +5135,7 @@ private:
     const auto *source = focusedPane();
     if (source != nullptr && source->id == message.pane_id && source->generation == message.pane_generation) {
       const auto neighbor = neighboringPane(message.direction);
+
       outcome = neighbor == 0 ? PaneFocusOutcome::no_neighbor : PaneFocusOutcome::focused;
       if (neighbor != 0) {
         focusPane(neighbor);
@@ -4909,6 +5143,7 @@ private:
     }
 
     const auto *focused = focusedPane();
+
     transport_.send(CompletePaneFocus{message.requester, message.request_id, message.pane_id, message.pane_generation, outcome, focused == nullptr ? 0 : focused->id});
 
     return Change::model;
@@ -4943,6 +5178,7 @@ private:
     if (pane == nullptr || configuration_.prompt.mode != PromptMode::telar) {
       return std::nullopt;
     }
+
     const auto &editor = entry.line.editor();
     const bool normal = editor.keymap() == prompt::Keymap::vim && editor.mode() == prompt::Mode::normal && !editor.pending();
     const auto count = pane->blocks.size();
@@ -4951,31 +5187,38 @@ private:
       entry.pending = 0;
       return std::nullopt;
     }
+
     const bool plain = key.key == prompt::Key::character && !key.modifiers.control && !key.modifiers.alt;
     const auto character = plain ? key.character : 0U;
     const auto select = [&](std::optional<std::size_t> index) {
       recordJump(*pane, entry);
       selectBlock(pane_id, index);
     };
+
     const auto step = [&](int direction) {
       if (count == 0) {
         return;
       }
+
       if (!selected) {
         if (direction < 0) {
           select(count - 1);
         }
+
         return;
       }
+
       if (direction < 0) {
         select(*entry.block == 0 ? 0 : *entry.block - 1);
       } else {
         select(*entry.block + 1 < count ? std::optional<std::size_t>{*entry.block + 1} : std::nullopt);
       }
     };
+
     // The next failed block above or below the selected one, or from the live end.
     const auto step_failed = [&](int direction) {
       auto index = selected ? static_cast<std::ptrdiff_t>(*entry.block) : static_cast<std::ptrdiff_t>(count);
+
       for (index += direction; index >= 0 && std::cmp_less(index, count); index += direction) {
         if (pane->blocks[static_cast<std::size_t>(index)].state == CommandBlockState::failed) {
           select(static_cast<std::size_t>(index));
@@ -5000,20 +5243,25 @@ private:
         break;
       }
     }
+
     const auto pending = std::exchange(entry.pending, 0);
     if (pending == '[' || pending == ']') {
       const int direction = pending == '[' ? -1 : 1;
+
       if (character == static_cast<unsigned>(pending)) {
         step(direction);
       } else if (character == 'f') {
         step_failed(direction);
       }
+
       return prompt::Outcome::edited;
     }
+
     if (character == '[' || character == ']') {
       entry.pending = static_cast<char>(character);
       return prompt::Outcome::edited;
     }
+
     if (!selected) {
       return std::nullopt;
     }
@@ -5023,18 +5271,21 @@ private:
     const auto rows = static_cast<std::uint64_t>(pane->screen.rows());
     const auto top = shownTop(*pane);
     const auto separator = pane->folds.display(static_cast<std::uint64_t>(block.row) + block.rows - 1);
+
     switch (pending) {
     case 'y':
       if (character == 'c') {
         clipboard_.assign(block.command);
         clipboard_written_ = true;
       }
+
       return prompt::Outcome::edited;
     case 'g':
       if (character == 'g') {
         recordJump(*pane, entry);
         scrollToShownRow(*pane, 0);
       }
+
       return prompt::Outcome::edited;
     case 'z':
       switch (character) {
@@ -5064,18 +5315,21 @@ private:
       case 'b': {
         recordJump(*pane, entry);
         const auto end = pane->folds.display(blockRows(*pane, index).second);
+
         scrollToShownRow(*pane, end > rows ? end - rows : 0);
         break;
       }
       default:
         break;
       }
+
       changed_pane_ = pane_id;
       block_changed_ = true;
       return prompt::Outcome::edited;
     default:
       break;
     }
+
     switch (character) {
     case 'j':
     case 'k':
@@ -5105,12 +5359,14 @@ private:
     default:
       break;
     }
+
     // Back to the prompt: Esc and q stay in normal mode; i, a, I, A and any other key go on
     // to the editor, which enters insert mode or edits.
     selectBlock(pane_id, std::nullopt);
     if (key.key == prompt::Key::escape) {
       return prompt::Outcome::edited;
     }
+
     return std::nullopt;
   }
 
@@ -5122,6 +5378,7 @@ private:
   // Scrolls the pane so that shown row `display`, folds counted, is the view's top.
   inline void scrollToShownRow(const Pane<Memory> &pane, std::uint64_t display) {
     const auto row = pane.folds.row(display);
+
     scrollToRow(pane.id, static_cast<std::uint32_t>(std::min<std::uint64_t>(row, std::numeric_limits<std::uint32_t>::max())));
     changed_pane_ = pane.id;
     block_changed_ = true;
@@ -5131,13 +5388,16 @@ private:
   inline void recordJump(const Pane<Memory> &pane, LineEntry &entry) {
     constexpr std::size_t maximum_jumps = 64;
     const auto here = pane.scrollback_trimmed + pane.folds.row(shownTop(pane));
+
     entry.jumps.resize(std::min(entry.jump, entry.jumps.size()));
     if (entry.jumps.empty() || entry.jumps.back() != here) {
       entry.jumps.push_back(here);
     }
+
     if (entry.jumps.size() > maximum_jumps) {
       entry.jumps.erase(entry.jumps.begin());
     }
+
     entry.jump = entry.jumps.size();
   }
 
@@ -5147,23 +5407,29 @@ private:
       if (entry.jump == 0 || entry.jumps.empty()) {
         return;
       }
+
       if (entry.jump == entry.jumps.size()) {
         // The first step back remembers where it left, for Ctrl-I to return to.
         const auto here = pane.scrollback_trimmed + pane.folds.row(shownTop(pane));
         if (entry.jumps.back() != here) {
           entry.jumps.push_back(here);
         }
+
         entry.jump = entry.jumps.size() - 1;
       }
+
       --entry.jump;
     } else {
       if (entry.jump + 1 >= entry.jumps.size()) {
         return;
       }
+
       ++entry.jump;
     }
+
     const auto stable = entry.jumps[entry.jump];
     const auto row = stable > pane.scrollback_trimmed ? stable - pane.scrollback_trimmed : 0;
+
     scrollToRow(pane.id, static_cast<std::uint32_t>(std::min<std::uint64_t>(row, std::numeric_limits<std::uint32_t>::max())));
     changed_pane_ = pane.id;
     block_changed_ = true;
@@ -5174,9 +5440,11 @@ private:
   inline void searchBlockOutput(Pane<Memory> &pane, std::size_t index) {
     const auto [first, last] = blockOutput(pane, index);
     const auto grid = copyGrid(pane.screen);
+
     if (folded(pane.id, index)) {
       fold(pane.id, index, false);
     }
+
     if (copy_mode_.enterAt(pane.id, grid, CopyPoint{.x = 0, .y = first}, std::nullopt, false)) {
       copy_search_request_ = 0;
       copy_search_rows_ = CopySearchRows{.block = index, .first = first, .last = last};
@@ -5194,11 +5462,13 @@ private:
     const auto &block = pane.blocks[index];
     const auto first = block.row + block.rows;
     std::uint32_t end = pane.screen.scroll().total_rows;
+
     if (index + 1 < pane.blocks.size()) {
       end = pane.blocks[index + 1].row;
     } else if (const auto found = lines_.find(pane.id); found != lines_.end() && found->second.live_prompt) {
       end = *found->second.live_prompt;
     }
+
     return {first, std::max(first, end == 0 ? 0 : end - 1)};
   }
 
@@ -5219,6 +5489,7 @@ private:
   inline void copyBlockOutput(const Pane<Memory> &pane, std::size_t index) {
     const auto [first, last] = blockOutput(pane, index);
     const auto columns = pane.screen.columns();
+
     transport_.send(CopySelection{.pane_id = pane.id, .start_x = 0, .start_y = first, .end_x = static_cast<std::uint16_t>(columns == 0 ? 0 : columns - 1), .end_y = last, .linewise = true});
   }
 
@@ -5230,22 +5501,27 @@ private:
     if (static_cast<std::uint64_t>(scroll.offset) + screen.rows() < scroll.total_rows) {
       return std::nullopt;
     }
+
     const auto cursor = static_cast<std::size_t>(screen.cursor().y);
+
     for (auto row = cursor + 1; row-- > 0 && cursor - row < 8;) {
       if ((screen.rowFlags(row) & static_cast<Byte>(RowFlag::prompt)) != 0) {
         return scroll.offset + static_cast<std::uint32_t>(row);
       }
     }
+
     return std::nullopt;
   }
 
   inline LineEntry &lineEntry(std::uint64_t pane_id) {
     const auto keymap = configuration_.prompt.keymap == PromptKeymap::vim ? prompt::Keymap::vim : prompt::Keymap::emacs;
     auto [found, inserted] = lines_.try_emplace(pane_id, LineEntry{prompt::Line{keymap}});
+
     found->second.line.setKeymap(keymap);
     if (inserted && prompt_history_.empty()) {
       requestPromptHistory();
     }
+
     return found->second;
   }
 
@@ -5254,7 +5530,9 @@ private:
     if (!ready_ || !configuration_.prompt.ghost || prompt_history_request_ != 0) {
       return;
     }
+
     const QueryHistory query{.request_id = nextRequest(), .author = HistoryAuthorFilter::human, .distinct = true, .limit = prompt_history_limit};
+
     try {
       transport_.send(query);
       prompt_history_request_ = query.request_id;
@@ -5297,22 +5575,28 @@ private:
       case prompt::Key::escape:
         return Chord::Key::escape;
       }
+
       return std::nullopt;
     }();
     if (!named) {
       return std::nullopt;
     }
+
     unsigned modifiers = (key.modifiers.control ? static_cast<unsigned>(Chord::Modifier::control) : 0U) | (key.modifiers.alt ? static_cast<unsigned>(Chord::Modifier::alt) : 0U);
+
     // A shifted character is its own character; Shift counts only with named keys.
     if (*named != Chord::Key::character && key.modifiers.shift) {
       modifiers |= static_cast<unsigned>(Chord::Modifier::shift);
     }
+
     const auto character = *named == Chord::Key::character ? KeyCharacter::pack(key.character) : 0U;
+
     for (const auto &binding : configuration_.prompt.bindings) {
       if (binding.normal == normal && binding.key == static_cast<std::uint8_t>(*named) && binding.modifiers == modifiers && binding.character == character) {
         return static_cast<prompt::Action>(binding.action);
       }
     }
+
     return std::nullopt;
   }
 
@@ -5323,7 +5607,9 @@ private:
     if (pane == nullptr || !pane->attached || pane->exited) {
       return;
     }
+
     const auto text = line.delivery();
+
     switch (outcome) {
     case prompt::Outcome::run:
       HistoryText::validate(text, pane->screen.modes().bracketed_paste);
@@ -5334,10 +5620,12 @@ private:
       if (prompt_history_.size() > prompt_history_limit) {
         prompt_history_.pop_back();
       }
+
       break;
     case prompt::Outcome::answer: {
       HistoryText::validate(text.empty() ? std::string_view{" "} : text, false);
       std::string answer{text};
+
       answer.push_back('\r');
       input(pane_id, answer);
       break;
@@ -5363,6 +5651,7 @@ private:
     // A command's spec comes from the runtime, for the commands this pane's shell runs; while
     // it is on its way, Tab waits for it and completes once it arrives.
     const ebnf::command_spec *spec = nullptr;
+
     if (!context->command_position && !pane->shell.remote && ready_) {
       switch (specState(pane_id, context->command)) {
       case SpecState::available: {
@@ -5370,13 +5659,16 @@ private:
         const auto &aliases = command_checks_[pane_id].aliases;
         if (const auto alias = aliases.find(context->command); alias != aliases.end()) {
           std::vector<std::string> words;
+
           for (auto rest = std::string_view{alias->second}; !rest.empty();) {
             const auto end = rest.find(' ');
             if (end != 0) {
               words.emplace_back(rest.substr(0, end));
             }
+
             rest.remove_prefix(end == std::string_view::npos ? rest.size() : end + 1);
           }
+
           if (!words.empty()) {
             context->command = words.front().substr(words.front().rfind('/') + 1);
             context->words.insert(context->words.begin(), words.begin() + 1, words.end());
@@ -5385,6 +5677,7 @@ private:
         } else {
           spec = prompt_specs_.find(context->command);
         }
+
         break;
       }
       case SpecState::pending:
@@ -5394,12 +5687,14 @@ private:
         break;
       }
     }
+
     auto completion = prompt::complete(*context, spec, prompt_specs_.scratch(), line.recent());
     const auto wants = [&](std::string_view provider) { return std::ranges::find(completion.providers, provider) != completion.providers.end(); };
     auto partial = std::string_view{context->partial};
     if (partial.starts_with(completion.provider_prefix)) {
       partial.remove_prefix(completion.provider_prefix.size());
     }
+
     std::vector<std::uint64_t> requests;
     // A remote shell's files, branches and commands are on its host: only the spec's own
     // choices apply there.
@@ -5411,13 +5706,16 @@ private:
       if (!directory.starts_with('/') && !root.ends_with('/')) {
         root.push_back('/');
       }
+
       root.append(directory);
       while (root.size() > 1 && root.ends_with('/')) {
         root.pop_back();
       }
+
       const auto query = slash == std::string_view::npos ? partial : partial.substr(slash + 1);
       if (root.starts_with('/') && query.size() <= 64) {
         const FindPaths find{.request_id = nextRequest(), .root = root, .query = query, .kind = wants("file") ? PathKindFilter::any : PathKindFilter::directories, .limit = 50};
+
         try {
           transport_.send(find);
           requests.push_back(find.request_id);
@@ -5430,12 +5728,15 @@ private:
     // Commands on the shell's PATH, branches, SSH hosts and make targets come from the runtime.
     // A spec's @ref is a branch name as far as the editor completes it.
     static constexpr std::array<std::pair<std::string_view, CompletionProvider>, 10> providers{{{"command", CompletionProvider::command}, {"branch", CompletionProvider::branch}, {"ssh_host", CompletionProvider::ssh_host}, {"make_target", CompletionProvider::make_target}, {"remote", CompletionProvider::remote}, {"stash", CompletionProvider::stash}, {"process", CompletionProvider::process}, {"just_recipe", CompletionProvider::just_recipe}, {"package_script", CompletionProvider::package_script}, {"compose_service", CompletionProvider::compose_service}}};
+
     for (const auto &[name, provider] : providers) {
       const bool asked = context->command_position ? provider == CompletionProvider::command : wants(name) || (provider == CompletionProvider::branch && wants("ref"));
       if (!ready_ || !local || !asked || partial.size() > 256) {
         continue;
       }
+
       const CompleteWords request{.request_id = nextRequest(), .pane_id = pane_id, .provider = provider, .prefix = partial};
+
       try {
         transport_.send(request);
         requests.push_back(request.request_id);
@@ -5443,19 +5744,24 @@ private:
       } catch (const std::length_error &) {
       }
     }
+
     // The heading names where the choices come from.
     const auto label = [&]() -> std::string {
       if (context->command_position) {
         return "commands";
       }
+
       static constexpr std::array<std::pair<std::string_view, std::string_view>, 12> sources{{{"branch", "branches · git"}, {"ref", "branches · git"}, {"remote", "remotes · git"}, {"stash", "stashes · git"}, {"ssh_host", "hosts · ssh"}, {"make_target", "targets · make"}, {"just_recipe", "recipes · just"}, {"package_script", "scripts · package.json"}, {"compose_service", "services · compose"}, {"process", "processes"}, {"file", "files"}, {"directory", "directories"}}};
+
       for (const auto &[provider, name] : sources) {
         if (wants(provider)) {
           return std::string{name};
         }
       }
+
       return context->command;
     };
+
     line.offer(std::move(completion.choices), context->replace_begin, context->replace_end, std::move(requests), syntax.dialect, label());
   }
 
@@ -5513,27 +5819,34 @@ private:
       checks.specs.clear();
       checks.aliases.clear();
     }
+
     return checks;
   }
 
   // The first command `line` runs, as the editor colours it.
   inline void learnCommand(std::uint64_t pane_id, std::string_view line, shell::Dialect dialect) {
     std::vector<prompt::Style> styles(line.size());
+
     prompt::classify(line, styles, shell::Syntax{.dialect = dialect});
     const auto start = std::ranges::find_if(styles, [](prompt::Style style) { return style == prompt::Style::command || style == prompt::Style::pending; });
     if (start == styles.end()) {
       return;
     }
+
     const auto first = static_cast<std::size_t>(start - styles.begin());
     auto end = first;
+
     while (end < styles.size() && styles[end] == styles[first]) {
       ++end;
     }
+
     auto &checks = command_checks_[pane_id];
     if (checks.learned.size() >= 256) {
       checks.learned.clear();
     }
+
     const auto word = line.substr(first, end - first);
+
     checks.learned.emplace(word);
     if (const auto known = checks.words.find(word); known != checks.words.end()) {
       known->second = CommandPresence::found;
@@ -5546,23 +5859,28 @@ private:
     if (command.empty() || command.size() > 64) {
       return SpecState::unavailable;
     }
+
     const auto *pane = findPane(pane_id);
     if (pane == nullptr) {
       return SpecState::unavailable;
     }
+
     auto &checks = commandChecks(*pane);
     if (const auto known = checks.specs.find(command); known != checks.specs.end()) {
       return known->second;
     }
+
     // An alias's spec is its command's: the digest of the one held for what it last stood for.
     const auto target = checks.alias_targets.find(command);
     const RequestCommandSpec request{.request_id = nextRequest(), .pane_id = pane_id, .command = command, .known_digest = prompt_specs_.digest(target == checks.alias_targets.end() ? command : std::string_view{target->second})};
+
     try {
       transport_.send(request);
     } catch (const std::exception &) {
       checks.specs.emplace(std::string{command}, SpecState::unavailable);
       return SpecState::unavailable;
     }
+
     checks.specs.emplace(std::string{command}, SpecState::pending);
     spec_requests_.emplace(request.request_id, CommandRequest{pane_id, std::string{command}});
     return SpecState::pending;
@@ -5575,11 +5893,14 @@ private:
     if (checks == command_checks_.end()) {
       return;
     }
+
     const auto known = checks->second.words.find(prefix);
     if (known == checks->second.words.end() || known->second != CommandPresence::pending) {
       return;
     }
+
     auto &listed = checks->second.listed[std::string{prefix}];
+
     listed.clear();
     listed.reserve(words.size());
     for (const auto &word : words) {
@@ -5594,27 +5915,34 @@ private:
     if (const auto checked = command_requests_.find(request_id); checked != command_requests_.end()) {
       return settleCommand(checked, CommandPresence::unknown);
     }
+
     if (const auto request = spec_requests_.find(request_id); request != spec_requests_.end()) {
       const auto [pane_id, command] = std::move(request->second);
+
       spec_requests_.erase(request);
       if (const auto checks = command_checks_.find(pane_id); checks != command_checks_.end()) {
         if (const auto known = checks->second.specs.find(command); known != checks->second.specs.end() && known->second == SpecState::pending) {
           known->second = SpecState::unavailable;
         }
       }
+
       spec_completions_.erase(pane_id);
       return Change::none;
     }
+
     if (const auto pending = path_completions_.find(request_id); pending != path_completions_.end()) {
       const auto pane_id = pending->second.pane_id;
+
       path_completions_.erase(pending);
       const auto line = lines_.find(pane_id);
       if (line == lines_.end() || !line->second.line.receive(request_id, {}, true)) {
         return Change::none;
       }
+
       changed_pane_ = pane_id;
       return Change::terminal;
     }
+
     return std::nullopt;
   }
 
@@ -5623,9 +5951,11 @@ private:
       while (!command_requests_.empty()) {
         static_cast<void>(failPromptRequest(command_requests_.begin()->first));
       }
+
       while (!spec_requests_.empty()) {
         static_cast<void>(failPromptRequest(spec_requests_.begin()->first));
       }
+
       while (!path_completions_.empty()) {
         static_cast<void>(failPromptRequest(path_completions_.begin()->first));
       }
@@ -5640,19 +5970,23 @@ private:
 
   inline Change settleCommand(typename std::unordered_map<std::uint64_t, CommandRequest>::iterator request, CommandPresence presence) {
     const auto [pane_id, word] = std::move(request->second);
+
     command_requests_.erase(request);
     // A command the shell runs may have a spec: asked now, it is there by the first Tab.
     if (presence == CommandPresence::found && word.find('/') == std::string::npos) {
       static_cast<void>(specState(pane_id, word));
     }
+
     const auto checks = command_checks_.find(pane_id);
     if (checks == command_checks_.end()) {
       return Change::none;
     }
+
     const auto known = checks->second.words.find(word);
     if (known == checks->second.words.end() || known->second != CommandPresence::pending) {
       return Change::none;
     }
+
     known->second = presence;
     changed_pane_ = pane_id;
     return Change::terminal;

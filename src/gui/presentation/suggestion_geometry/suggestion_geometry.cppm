@@ -45,6 +45,7 @@ struct LinkStatusGeometry {
     const auto block_height = (lines * height) + ((lines - 1) * gap);
     const Rect headline{.x = area.x + chrome.px(inset), .y = area.y + std::max(0.0F, (area.height - block_height) / 2), .width = std::max(0.0F, area.width - 2 * chrome.px(inset)), .height = height};
     auto detail = headline;
+
     detail.y += height + gap;
 
     return {.bounds = area, .headline = headline, .detail = detail};
@@ -115,15 +116,18 @@ struct MachineChromeGeometry {
     const auto disc = chrome.px(list_disc);
     const auto gap = chrome.px(list_gap);
     ListRow row;
+
     row.bounds = {.x = area.x, .y = area.y + (height * static_cast<float>(index)), .width = area.width, .height = height};
     row.disc = {.x = area.x + padding, .y = row.bounds.y + ((height - disc) / 2), .width = disc, .height = disc};
     if (stacked) {
       const auto width = chrome.px(stack_width);
+
       row.stack = {.x = area.right() - padding - width, .y = row.bounds.y, .width = width, .height = height};
     }
 
     const auto left = row.disc.right() + gap;
     const auto right = stacked ? row.stack.x - gap : area.right() - padding;
+
     row.label = {.x = left, .y = row.bounds.y, .width = std::max(0.0F, right - left), .height = height};
 
     return row;
@@ -146,11 +150,13 @@ struct MachineChromeGeometry {
     const auto dot_space = attention ? chrome.px(attention_diameter + attention_gap) : 0;
     const auto inset = fold ? dot_space : padding + side + gap;
     Control result;
+
     result.bounds = area;
     result.label = {.x = area.x + inset, .y = area.y, .width = std::max(0.0F, area.width - (2 * inset) - (fold ? 0 : dot_space)), .height = area.height};
     result.radius = area.height / 2;
     if (fold) {
       const auto width = std::min(result.label.width, advance);
+
       result.label.x += std::floor((result.label.width - width) / 2);
       result.label.width = width;
     } else {
@@ -159,6 +165,7 @@ struct MachineChromeGeometry {
 
     if (attention) {
       const auto diameter = chrome.px(attention_diameter);
+
       result.attention = {.x = std::max(area.x, area.right() - chrome.px(attention_gap) - diameter), .y = area.y + std::max(0.0F, (area.height - diameter) / 2), .width = std::min(diameter, area.width), .height = std::min(diameter, area.height)};
     }
 
@@ -230,6 +237,7 @@ struct PaletteGeometry {
     const auto tabs_height = nested ? 0 : std::max(chrome.px(tabs_minimum), ChromeMetrics::lineHeight(chrome.small) + chrome.px(tabs_padding));
     const auto footer_height = std::max(chrome.px(footer_minimum), ChromeMetrics::lineHeight(chrome.small) + chrome.px(footer_padding));
     auto list_height = (row_height * maximum_pick_rows) + chrome.px(list_padding);
+
     if (options.suggest) {
       list_height = chrome.px(suggestion_height);
     } else if (options.pick_rows) {
@@ -260,6 +268,7 @@ private:
   inline static Rect takeTop(Rect &remaining, float height) noexcept {
     const auto taken = std::min(remaining.height, height);
     const Rect result{.x = remaining.x, .y = remaining.y, .width = remaining.width, .height = taken};
+
     remaining.y += taken;
     remaining.height -= taken;
 
@@ -299,6 +308,7 @@ struct PaletteRowWindow {
 
   [[nodiscard]] inline static PaletteRowWindow measure(std::span<const PaletteRowKind> kinds, std::size_t selection, const PaletteGeometry &geometry, const ChromeMetrics &chrome, bool grouped) noexcept {
     PaletteRowWindow result;
+
     if (kinds.empty()) {
       return result;
     }
@@ -307,6 +317,7 @@ struct PaletteRowWindow {
     const auto selected = std::min(selection, kinds.size() - 1);
     auto start = selected;
     auto used = rowHeight(kinds[selected], geometry) + (grouped ? geometry.group_height : 0);
+
     while (start != 0 && selected - start + 1 < capacity) {
       const auto preceding = start - 1;
       const auto extra = rowHeight(kinds[preceding], geometry) + (grouped && kinds[preceding] != kinds[start] ? geometry.group_height : 0);
@@ -321,9 +332,11 @@ struct PaletteRowWindow {
     result.first = start;
     auto y = bounds.y;
     std::optional<PaletteRowKind> previous;
+
     for (auto index = start; index < kinds.size() && result.count < capacity; ++index) {
       const auto height = rowHeight(kinds[index], geometry);
       Rect group;
+
       if (grouped && previous != kinds[index]) {
         if (y + geometry.group_height + height > bounds.bottom()) {
           break;
@@ -387,6 +400,7 @@ struct SidebarGeometry {
     const auto header = chrome.pane_header;
     const auto gap = 0.0F;
     SidebarGeometry geometry;
+
     if (content.width <= 0 || content.height < header) {
       return geometry;
     }
@@ -400,6 +414,7 @@ struct SidebarGeometry {
       const auto row = chrome.px(MachineChromeGeometry::list_row);
       const auto room = std::max(0.0F, content.height - ((minimum_machine_headers - 1) * header));
       const auto rows = std::min(static_cast<float>(machines.rows), std::floor(room / row));
+
       geometry.machines = {.x = content.x, .y = content.y, .width = content.width, .height = rows * row};
       content.y += geometry.machines.height + gap;
       content.height -= geometry.machines.height + gap;
@@ -448,8 +463,10 @@ struct SuggestionGeometry {
   [[nodiscard]] inline static SuggestionGeometry measure(const PaletteGeometry &palette, const ChromeMetrics &chrome, bool has_parent) noexcept {
     auto title = PaletteGeometry::inset(palette.heading, chrome.px(title_inset));
     Rect back;
+
     if (has_parent) {
       const auto width = std::min(title.width, chrome.px(back_width));
+
       back = {.x = title.x, .y = palette.heading.y, .width = width, .height = palette.heading.height};
       title.x += width;
       title.width -= width;
@@ -463,6 +480,7 @@ struct SuggestionGeometry {
     const auto gap = chrome.px(body_gap);
     const Rect body{.x = content.x, .y = content.y + heading_height + gap, .width = content.width, .height = std::max(0.0F, content.height - heading_height - gap)};
     auto message = body;
+
     message.height = std::min(body.height, ChromeMetrics::lineHeight(chrome.body));
     const auto width = std::min(chrome.px(button_width), footer.width / 2);
     const auto inset = std::min(chrome.px(footer_inset), footer.width / 8);
@@ -497,6 +515,7 @@ inline Color themeRgb(ThemeRgb bytes) noexcept {
 
 inline Theme projectTheme(const ThemeValues &values) noexcept {
   Theme result;
+
   result.name = values.base;
   result.foreground = themeRgb(values.terminal.foreground);
   result.background = themeRgb(values.terminal.background);
@@ -507,6 +526,7 @@ inline Theme projectTheme(const ThemeValues &values) noexcept {
   for (std::size_t index = 0; index < result.syntax.size(); ++index) {
     result.syntax[index] = values.syntaxStyle(static_cast<SyntaxRole>(index)).color;
   }
+
   result.surface = result.resolve(values.color(PaletteRole::surface0), result.background);
   result.elevated = result.resolve(values.color(PaletteRole::surface1), result.background);
   result.border = result.resolve(values.color(PaletteRole::overlay0), result.foreground);

@@ -33,6 +33,7 @@ inline DisplayCells displayCells(const ImageDisplayRequest &request) noexcept {
   if (request.requested.columns != 0 && request.requested.rows != 0) {
     return request.requested;
   }
+
   if (request.cell_width == 0 || request.cell_height == 0) {
     return {};
   }
@@ -41,6 +42,7 @@ inline DisplayCells displayCells(const ImageDisplayRequest &request) noexcept {
   const auto offset_y = std::min(request.offset_y, request.cell_height - 1);
   auto width = request.width;
   auto height = request.height;
+
   if (request.requested.columns != 0) {
     width = saturatedDimension(static_cast<std::uint64_t>(request.cell_width) * request.requested.columns) - offset_x;
     height = scaledDimension(width, request.height, request.width);
@@ -51,6 +53,7 @@ inline DisplayCells displayCells(const ImageDisplayRequest &request) noexcept {
 
   const auto occupied_width = saturatedDimension(static_cast<std::uint64_t>(width) + offset_x);
   const auto occupied_height = saturatedDimension(static_cast<std::uint64_t>(height) + offset_y);
+
   return {occupied_width / request.cell_width + (occupied_width % request.cell_width != 0), occupied_height / request.cell_height + (occupied_height % request.cell_height != 0)};
 }
 

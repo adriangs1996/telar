@@ -91,19 +91,23 @@ int telar::gui::test::runAgentReportFixture(int &argc, char **argv) {
   ApplicationAllocator memory;
   qt::RuntimeConnection connection{memory};
   QTimer deadline;
+
   deadline.setSingleShot(true);
   ReportAgent report{.request_id = static_cast<std::uint64_t>(Request::report), .pane_id = pane, .pane_generation = generation, .provider = AgentProvider::claude, .state = AgentReportState::blocked, .session = "gui-attention", .blocked_reason = AgentBlockedReason::question, .event = "GUI_ATTENTION_READY"};
   QSocketNotifier input{0, QSocketNotifier::Read};
   QObject callbacks;
+
   QObject::connect(&input, &QSocketNotifier::activated, &callbacks, [&] {
     std::string command;
     if (!std::getline(std::cin, command)) {
       QCoreApplication::quit();
       return;
     }
+
     if (command != "ready" && command != "question") {
       return;
     }
+
     ++report.request_id;
     report.state = command == "ready" ? AgentReportState::ready : AgentReportState::blocked;
     report.blocked_reason = command == "ready" ? AgentBlockedReason::none : AgentBlockedReason::question;
@@ -111,23 +115,28 @@ int telar::gui::test::runAgentReportFixture(int &argc, char **argv) {
     deadline.start(timeout_ms);
     connection.send(report);
   });
+
   QObject::connect(&connection, &qt::RuntimeConnection::connected, &callbacks, [&] {
     connection.send(VerifyPaneDescent{.request_id = static_cast<std::uint64_t>(Request::verify), .pane_id = pane, .pane_generation = generation});
   });
+
   QObject::connect(&connection, &qt::RuntimeConnection::payloadReceived, &callbacks, [&](QByteArrayView payload) {
     if (consume(connection, report, payload)) {
       deadline.stop();
     }
   });
+
   QObject::connect(&connection, &qt::RuntimeConnection::errorChanged, &callbacks, [&] {
     if (!connection.error().isEmpty()) {
       std::cerr << connection.error().toStdString() << '\n';
       QCoreApplication::exit(1);
     }
   });
+
   QObject::connect(&deadline, &QTimer::timeout, &callbacks, [] {
     QCoreApplication::exit(1);
   });
+
   deadline.start(timeout_ms);
   connection.open(arguments[static_cast<qsizetype>(Argument::socket)]);
 

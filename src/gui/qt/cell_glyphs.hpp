@@ -56,6 +56,7 @@ public:
 
   void paint(QSGNode &parent, glyphs::Symbol symbol, const QRectF &bounds, qreal scale, Color foreground) {
     const Rect cell{.x = static_cast<float>(bounds.x() * scale), .y = static_cast<float>(bounds.y() * scale), .width = static_cast<float>(bounds.width() * scale), .height = static_cast<float>(bounds.height() * scale)};
+
     switch (symbol.kind) {
     case glyphs::SymbolKind::braille:
       append(parent, glyphs::Braille::draw(cell, static_cast<std::uint8_t>(symbol.codepoint - glyphs::Symbol::first_braille)), scale, foreground);
@@ -70,6 +71,7 @@ public:
       } else {
         append(parent, glyphs::Box::draw(symbol.codepoint, cell, thickness_), scale, foreground);
       }
+
       break;
     }
   }
@@ -79,6 +81,7 @@ private:
   static void append(QSGNode &parent, const glyphs::Ink<Capacity> &ink, qreal scale, Color foreground) {
     foreground.a *= ink.coverage();
     const auto color = toQColor(foreground);
+
     for (const auto rectangle : ink.rectangles()) {
       appendSceneNode<QSGSimpleRectNode>(parent, QRectF{rectangle.x / scale, rectangle.y / scale, rectangle.width / scale, rectangle.height / scale}, color);
     }

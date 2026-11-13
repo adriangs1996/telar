@@ -37,11 +37,13 @@ inline constexpr ScriptFile ssh{"ssh", "ssh.sh", shell_scripts::ssh};
 inline constexpr std::uint64_t digest = [] {
   std::uint64_t hash = fnv1a64_basis;
   const auto mix = [&](std::string_view part) { hash = fnv1a64(part, hash); };
+
   for (const auto &file : shells) {
     mix(file.directory);
     mix(file.name);
     mix(file.content);
   }
+
   mix(ssh.content);
   mix(shell_scripts::remote);
   return hash;
@@ -50,9 +52,11 @@ inline constexpr std::uint64_t digest = [] {
 inline constexpr std::array<char, 16> digest_digits = [] {
   constexpr std::string_view digits = "0123456789abcdef";
   std::array<char, 16> text{};
+
   for (std::size_t index = 0; index < text.size(); ++index) {
     text[index] = digits[(digest >> (60 - 4 * index)) & 0x0f];
   }
+
   return text;
 }();
 
@@ -65,8 +69,10 @@ inline constexpr bool heredocSafe(std::string_view content) {
     if (content.substr(start, end - start) == heredoc_end) {
       return false;
     }
+
     start = end + 1;
   }
+
   return true;
 }
 static_assert(std::ranges::all_of(shells, [](const ScriptFile &file) { return heredocSafe(file.content); }));
@@ -75,6 +81,7 @@ static_assert(std::ranges::all_of(shells, [](const ScriptFile &file) { return he
 // start the login shell with them.
 inline constexpr std::string remoteScript() {
   std::string script{shell_scripts::remote};
+
   script += "_telar_prepare ";
   script.append(digest_digits.data(), digest_digits.size());
   script += '\n';
@@ -90,9 +97,11 @@ inline constexpr std::string remoteScript() {
     if (!file.content.ends_with('\n')) {
       script += '\n';
     }
+
     script += heredoc_end;
     script += '\n';
   }
+
   script += "_telar_start \"$1\" \"${2-}\"\n";
   return script;
 }
@@ -104,10 +113,13 @@ inline constexpr std::string remoteScript() {
 inline constexpr std::string remoteCommand() {
   const auto script = remoteScript();
   std::vector<std::uint8_t> bytes(script.size());
+
   std::ranges::transform(script, bytes.begin(), [](char byte) { return static_cast<std::uint8_t>(byte); });
   std::string encoded((bytes.size() + 2) / 3 * 4, '=');
+
   static_cast<void>(base64::encode(bytes, encoded));
   std::string command{"exec /bin/sh -c 'p="};
+
   command += encoded;
   command += ";{ s=$(printf %s \"$p\" | base64 -d 2>/dev/null) || s=$(printf %s \"$p\" | base64 -D); } && eval \"$s\" || exec \"${SHELL:-/bin/sh}\" -l' telar";
   return command;
@@ -115,6 +127,7 @@ inline constexpr std::string remoteCommand() {
 
 inline constexpr auto remote_command = [] {
   std::array<char, remoteCommand().size()> text{};
+
   std::ranges::copy(remoteCommand(), text.begin());
   return text;
 }();
@@ -145,8 +158,10 @@ inline std::optional<IntegratedShell> integrableShell(const Arguments &arguments
   }
 
   auto program = std::string_view{*argument};
+
   program = program.substr(program.rfind('/') + 1);
   std::optional<IntegratedShell> shell;
+
   if (program == "zsh") {
     shell = IntegratedShell::zsh;
   } else if (program == "bash") {
@@ -161,6 +176,7 @@ inline std::optional<IntegratedShell> integrableShell(const Arguments &arguments
       return std::nullopt;
     }
   }
+
   return shell;
 }
 
@@ -181,6 +197,7 @@ public:
       sentinel_ += '/';
       sentinel_ += files.back().name;
     }
+
     if (!directory_.empty() && ssh) {
       ssh_.assign(directory_);
       ssh_ += '/';
@@ -194,6 +211,7 @@ public:
   // their content, so runtimes of different versions never overwrite each other's.
   inline static String<Memory> install(Memory &memory, std::string_view data_home) {
     String<Memory> directory{data_home, AllocatorRef<char, Memory>{memory}};
+
     directory += "/telar/shell-integration/";
     directory.append(shell_files::digest_digits.data(), shell_files::digest_digits.size());
     writeScripts(directory);
@@ -215,14 +233,18 @@ public:
     }
 
     const auto token = ShellToken::generate();
+
     command.setEnvironment("TELAR_SHELL_TOKEN", token.text());
     if (!ssh_.empty()) {
       command.setEnvironment("TELAR_SHELL_SSH", ssh_);
     }
+
     if (bare_prompt) {
       command.setEnvironment("TELAR_PROMPT_MODE", "telar");
     }
+
     String<Memory> path{directory_, AllocatorRef<char, Memory>{memory_}};
+
     switch (*shell) {
     case IntegratedShell::none:
       break;
@@ -230,8 +252,10 @@ public:
       // Copy before setting: setting a variable can move the one a view points into.
       if (const auto previous = command.environment("ZDOTDIR")) {
         const String<Memory> saved{*previous, AllocatorRef<char, Memory>{memory_}};
+
         command.setEnvironment("TELAR_ZSH_ZDOTDIR", saved);
       }
+
       path += "/zsh";
       command.setEnvironment("ZDOTDIR", path);
       break;
@@ -240,8 +264,10 @@ public:
       if (std::ranges::any_of(command.arguments() | std::views::drop(1), [](std::string_view option) { return option == "-l" || option == "-il" || option == "-li" || option == "--login"; })) {
         command.setEnvironment("TELAR_BASH_LOGIN", "1");
       }
+
       path += "/bash/telar.bash";
       const std::array<std::string_view, 3> arguments{"--rcfile", path, "-i"};
+
       command.replaceSpawnArguments(arguments);
       break;
     }
@@ -252,15 +278,18 @@ public:
       if (previous) {
         saved.assign(*previous);
       }
+
       path += "/fish:";
       path += saved;
       if (previous) {
         command.setEnvironment("TELAR_FISH_XDG_DATA_DIRS", saved);
       }
+
       command.setEnvironment("XDG_DATA_DIRS", path);
       break;
     }
     }
+
     return ShellLaunch{*shell, token};
   }
 
@@ -276,6 +305,7 @@ private:
       if (length >= path.size()) {
         throw SystemError{"Shell integration path is too long", ENAMETOOLONG};
       }
+
       std::ranges::copy(root, path.begin());
       path[root.size()] = '/';
       std::ranges::copy(file.directory, path.begin() + root.size() + 1);
@@ -287,6 +317,7 @@ private:
       }
 
       std::array<char, NAME_MAX + 1> name{};
+
       std::ranges::copy(file.name, name.begin());
       struct stat state{};
       if (::fstatat(directory.get(), name.data(), &state, AT_SYMLINK_NOFOLLOW) == 0 && S_ISREG(state.st_mode)) {

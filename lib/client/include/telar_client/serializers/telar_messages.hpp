@@ -712,6 +712,7 @@ namespace telar {
       if (static_cast<Byte>(value.kind) == 0) {
         return 1;
       }
+
       NonzeroU64::validate(value.id);
 
       return 9;
@@ -755,18 +756,21 @@ namespace telar {
         if (std::holds_alternative<std::monostate>(value)) {
           return 0;
         }
+
         break;
       case HistoryScope::cwd:
       case HistoryScope::workspace:
         if (const auto *path = std::get_if<std::string_view>(&value)) {
           return PathCodec::encodedSize(*path);
         }
+
         break;
       case HistoryScope::pane:
         if (const auto *id = std::get_if<std::uint64_t>(&value)) {
           NonzeroU64::validate(*id);
           return 8;
         }
+
         break;
       }
 
@@ -858,14 +862,18 @@ namespace telar {
       }
 
       std::size_t arguments = 0;
+
       for (const auto argument : value.arguments) {
         arguments = checkedWireSize(arguments, argument.size());
       }
+
       std::size_t environment = 0;
+
       for (const auto &entry : value.environment) {
         environment = checkedWireSize(environment, entry.name.size());
         environment = checkedWireSize(environment, entry.value.size());
       }
+
       if (arguments > 128 * 1024 || environment > 512 * 1024) {
         throw EncodingError{"Launch byte budget exceeded"};
       }
@@ -907,6 +915,7 @@ namespace telar {
       if (value.panes.size() > value.pane_count) {
         throw EncodingError{"Too many tab pane entries"};
       }
+
       for (std::size_t i = 0; i < value.panes.size(); ++i) {
         for (std::size_t j = 0; j < i; ++j) {
           if (value.panes[i].pane_id == value.panes[j].pane_id) {
@@ -1021,11 +1030,13 @@ namespace telar {
            value.blocked_reason != AgentBlockedReason::none)) {
         throw EncodingError{"Invalid agent state"};
       }
+
       switch (value.title_source) {
       case AgentTitleSource::telar:
         if (value.title_state == AgentTitleState::ready) {
           throw EncodingError{"Invalid agent title"};
         }
+
         break;
       case AgentTitleSource::generated:
       case AgentTitleSource::manual:
@@ -1033,11 +1044,13 @@ namespace telar {
         if (value.title_state != AgentTitleState::ready || value.session_title.empty()) {
           throw EncodingError{"Invalid agent title"};
         }
+
         break;
       case AgentTitleSource::terminal:
         if (value.session_title.empty()) {
           throw EncodingError{"Invalid agent title"};
         }
+
         break;
       }
     }
@@ -1079,6 +1092,7 @@ namespace telar {
       if (const auto *pane = std::get_if<ClientLayoutPane>(&value)) {
         return 1 + ValueCodec<ClientLayoutPane>::encodedSize(*pane);
       }
+
       if (const auto *split = std::get_if<ClientLayoutSplit>(&value)) {
         return 1 + ValueCodec<ClientLayoutSplit>::encodedSize(*split);
       }
@@ -1131,26 +1145,31 @@ namespace telar {
       std::size_t pane_count = 0;
       std::size_t pending = 1;
       bool focused = false;
+
       for (const auto &node : value.nodes) {
         if (pending == 0) {
           throw EncodingError{"Invalid layout tree"};
         }
+
         --pending;
         if (const auto *pane = std::get_if<ClientLayoutPane>(&node)) {
           if (pane_count == panes.size()) {
             throw EncodingError{"Too many layout panes"};
           }
+
           for (std::size_t i = 0; i < pane_count; ++i) {
             if (panes[i] == pane->pane_id) {
               throw EncodingError{"Duplicate layout pane"};
             }
           }
+
           panes[pane_count++] = pane->pane_id;
           focused = focused || pane->pane_id == value.focused_pane;
         } else {
           pending += 2;
         }
       }
+
       if (pending != 0 || !focused) {
         throw EncodingError{"Invalid layout tree or focus"};
       }
@@ -1173,9 +1192,11 @@ namespace telar {
       if (link.empty()) {
         return;
       }
+
       if (!link.starts_with(notification_link_scheme)) {
         throw EncodingError{"Notification link must use HTTPS"};
       }
+
       for (const auto character : link) {
         const auto byte = static_cast<Byte>(character);
         if (byte <= 0x20 || byte >= 0x7f || byte == '\\') {
@@ -1187,6 +1208,7 @@ namespace telar {
       if (host.empty() || host.front() == '.' || host.front() == '-' || host.back() == '.') {
         throw EncodingError{"Invalid notification host"};
       }
+
       for (const auto byte : host) {
         const auto alphanumeric = (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') ||
                                   (byte >= '0' && byte <= '9');
@@ -1271,11 +1293,14 @@ namespace telar {
       if (value.path.empty() || (value.kind == PathKind::directory) != (value.path.back() == '/')) {
         throw EncodingError{"Invalid path kind"};
       }
+
       std::size_t next = 0;
+
       for (const auto position : value.positions) {
         if (position < next || position >= value.path.size()) {
           throw EncodingError{"Invalid path match positions"};
         }
+
         next = static_cast<std::size_t>(position) + 1;
       }
     }

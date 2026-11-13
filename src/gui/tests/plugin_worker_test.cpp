@@ -105,6 +105,7 @@ int child(std::span<char *> arguments, const char *const *environment) {
     const std::string_view inode_text{arguments[8]};
     const auto parsed_inode = std::from_chars(inode_text.data(), inode_text.data() + inode_text.size(), inode);
     struct stat metadata{};
+
     if (parsed.ec != std::errc{} || parsed_inode.ec != std::errc{} || descriptor < 0 || std::filesystem::current_path() != "/") {
       return EXIT_FAILURE;
     }
@@ -115,23 +116,28 @@ int child(std::span<char *> arguments, const char *const *environment) {
   }
 
   std::array<telar::Byte, PluginEffects::maximum_bytes + 1> storage{};
+
   if (action == "overflow") {
     return telar::runtime::writeDescriptor(STDOUT_FILENO, storage) == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
   }
 
   std::span<telar::Byte> output{storage};
+
   telar::u8::encode(1, output);
   if (action == "snapshot") {
     constexpr telar::Byte notification_tag = 18;
+
     telar::u8::encode(notification_tag, output);
     telar::EnumByte<telar::NotificationLevel, 3>::encode(telar::NotificationLevel::info, output);
     telar::u32::encode(telar::default_notification_duration_ms, output);
     const telar::NotificationTarget target;
+
     telar::ValueCodec<telar::NotificationTarget>::encode(target, output);
     telar::DisplayText16<telar::max_notification_title_bytes, false>::encode(arguments[2], output);
     telar::DisplayText16<telar::max_notification_message_bytes>::encode({}, output);
   } else {
     constexpr telar::Byte toggle_sidebar_tag = 3;
+
     telar::u8::encode(action == "malformed" ? 0 : toggle_sidebar_tag, output);
   }
 
@@ -154,6 +160,7 @@ struct Fixture {
     write(directory.filePath(QStringLiteral("plugin.json")), R"({"api_version":1,"id":"fixture","version":"1","entry":"main.lua","source":{"url":"fixture","revision":"1"},"actions":["toggle","snapshot","environment","timeout","overflow","malformed","failure"],"capabilities":[]})");
     write(directory.filePath(QStringLiteral("main.lua")), "return {}");
     const auto path = directory.path().toUtf8();
+
     invocation.package = telar::runtime::plugins::PackageInspection<PluginPackageHash>::inspect(memory, {path.constData(), static_cast<std::size_t>(path.size())});
     invocation.action.assign("toggle");
   }
@@ -184,10 +191,12 @@ class PluginWorkerTest final : public QObject {
   Q_SLOT static void successRetainsBusyRunAndReleasesSnapshot() {
     ApplicationAllocator memory;
     Fixture fixture{memory};
+
     fixture.invocation.action.assign("snapshot");
     Observer observer;
     PluginWorker worker{memory, observer};
     const auto program = QCoreApplication::applicationFilePath();
+
     worker.start(fixture.invocation, 1, program);
     QVERIFY(worker.active());
     QVERIFY_THROWS_EXCEPTION(std::runtime_error, worker.start(fixture.invocation, 2, program));
@@ -206,6 +215,7 @@ class PluginWorkerTest final : public QObject {
     }
 
     const auto entry = QString::fromUtf8(notification->title.view().data(), static_cast<qsizetype>(notification->title.view().size()));
+
     QVERIFY(entry.startsWith(QLatin1StringView{"/tmp/telar-gui-plugin-worker-"}));
     QVERIFY(!QFile::exists(entry));
     QVERIFY(QFile::exists(fixture.directory.filePath(QStringLiteral("main.lua"))));
@@ -223,10 +233,13 @@ class PluginWorkerTest final : public QObject {
         static_cast<void>(qputenv(name.c_str(), previous));
       }
     });
+
     QVERIFY(qputenv(name.c_str(), "test-only"));
     const auto path = fixture.directory.filePath(QStringLiteral("inherited-file"));
+
     write(path, "must remain in parent");
     QFile file{path};
+
     QVERIFY(file.open(QIODevice::ReadOnly));
     const int source = file.handle();
     if (source < 0) {
@@ -240,15 +253,18 @@ class PluginWorkerTest final : public QObject {
     }
 
     struct stat metadata{};
+
     QCOMPARE(::fstat(inherited, &metadata), 0);
     fixture.invocation.context.tab_count = static_cast<std::uint16_t>(inherited);
     fixture.invocation.context.focused_pane_id = static_cast<std::uint64_t>(metadata.st_ino);
     fixture.invocation.action.assign("environment");
     // Refresh the expected package after adding the descriptor fixture.
     const auto root = fixture.directory.path().toUtf8();
+
     fixture.invocation.package = telar::runtime::plugins::PackageInspection<PluginPackageHash>::inspect(memory, {root.constData(), static_cast<std::size_t>(root.size())});
     Observer observer;
     PluginWorker worker{memory, observer};
+
     worker.start(fixture.invocation, 1, QCoreApplication::applicationFilePath());
     QVERIFY(observer.waitFor(1));
     QCOMPARE(observer.results.front().error, QString{});
@@ -268,6 +284,7 @@ class PluginWorkerTest final : public QObject {
 
     constexpr std::array cases{Case{.action = "overflow", .error = "PluginWorkerFailed"}, Case{.action = "malformed", .error = "UnknownWorkerEffect"}, Case{.action = "failure", .error = "PluginWorkerFailed"}, Case{.action = "timeout", .error = "PluginWorkerTimedOut"}};
     std::size_t completed = 0;
+
     for (const auto &entry : cases) {
       fixture.invocation.action.assign(entry.action);
       worker.start(fixture.invocation, ++completed, QCoreApplication::applicationFilePath());
@@ -281,9 +298,11 @@ class PluginWorkerTest final : public QObject {
   Q_SLOT static void changedPackageNeverStartsWorker() {
     ApplicationAllocator memory;
     const Fixture fixture{memory};
+
     write(fixture.directory.filePath(QStringLiteral("main.lua")), "return {changed=true}");
     Observer observer;
     PluginWorker worker{memory, observer};
+
     worker.start(fixture.invocation, 1, QCoreApplication::applicationFilePath());
     QVERIFY(observer.waitFor(1));
     QVERIFY(!observer.results.front().error.isEmpty());

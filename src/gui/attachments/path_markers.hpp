@@ -29,6 +29,7 @@ public:
 
   [[nodiscard]] static std::optional<PathAttachmentMarker> find(AttachmentMarkerScreen screen, const AttachmentPathUuid &uuid) noexcept {
     Scan scan{screen};
+
     while (const auto point = scan.position()) {
       const auto head = parseHead(screen, *point);
       if (head && head->uuid == uuid) {
@@ -48,8 +49,10 @@ public:
 
     std::size_t count = 0;
     Scan scan{screen};
+
     while (const auto point = scan.position()) {
       const auto head = parseHead(screen, *point);
+
       scan.step();
       if (!head || std::ranges::any_of(output.first(count), [&](const auto &known) { return known.uuid == head->uuid; })) {
         continue;
@@ -153,6 +156,7 @@ private:
     for (const auto extension : extensions) {
       auto attempt = scan;
       bool matched = true;
+
       for (const auto byte : extension) {
         matched = matched && attempt.expect(static_cast<std::uint8_t>(byte));
       }
@@ -171,6 +175,7 @@ private:
     }
 
     Scan scan{screen, start};
+
     for (const auto byte : prefix) {
       if (!scan.expect(static_cast<std::uint8_t>(byte))) {
         return std::nullopt;
@@ -178,6 +183,7 @@ private:
     }
 
     AttachmentPathUuid uuid{};
+
     for (std::size_t index = 0; index < uuid.size(); ++index) {
       const auto point = scan.position();
       const auto *const cell = point ? screen.cell(*point) : nullptr;
@@ -228,6 +234,7 @@ private:
   [[nodiscard]] static CellPosition pathStart(AttachmentMarkerScreen screen, CellPosition marker) noexcept {
     auto point = marker;
     std::optional<CellPosition> slash;
+
     for (;;) {
       if (point.x == 0) {
         if (point.y == 0 || !rowForceWrapped(screen, point.y - 1)) {
@@ -269,6 +276,7 @@ private:
 
     Scan scan{screen, start};
     std::uint16_t count = 0;
+
     for (;;) {
       if (scan.rawPosition() == end) {
         return count;

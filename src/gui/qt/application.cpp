@@ -139,6 +139,7 @@ auto parseLocation(const QString &key) -> WorkspaceLocation {
 
 auto paneDirection(Application::Action action) noexcept -> PaneDirection {
   using Action = Application::Action;
+
   switch (action) {
   case Action::focus_left:
   case Action::resize_left:
@@ -157,6 +158,7 @@ auto paneDirection(Application::Action action) noexcept -> PaneDirection {
 auto dialogFor(Application::Action action) -> Application::Dialog {
   using Action = Application::Action;
   using Dialog = Application::Dialog;
+
   switch (action) {
   case Action::palette:
     return Dialog::palette;
@@ -194,6 +196,7 @@ Application::Application(ApplicationAllocator &memory, QObject *parent)
     colors_.reset();
     font_.reset();
   });
+
   initializeMachines();
   initializeMachineProfiles();
   initializeAttachments();
@@ -239,6 +242,7 @@ Application::Application(ApplicationAllocator &memory, QObject *parent)
   initializeGraphicsRecovery();
 
   constexpr int history_debounce_ms = 60;
+
   history_timer_.setInterval(history_debounce_ms);
 
   connect(&configuration_source_, &ConfigurationSource::changed, this, [this] {
@@ -267,6 +271,7 @@ Application::Application(ApplicationAllocator &memory, QObject *parent)
         (*client)->session.setTheme(configuration_source_.configuration().theme);
       }
     }
+
     emit configurationChanged();
     refresh();
   });
@@ -287,10 +292,12 @@ Application::Application(ApplicationAllocator &memory, QObject *parent)
   connect(&history_timer_, &QTimer::timeout, this, [this] {
     try {
       const auto query = history_query_.toUtf8();
+
       session().queryHistory(std::string_view{query.constData(), static_cast<std::size_t>(query.size())}, history_filters_);
     } catch (const std::exception &error) {
       fail(error);
     }
+
     refreshHistory();
   });
 
@@ -333,6 +340,7 @@ void Application::configureLaunch(const QString &directory, const QStringList &a
   const platform::login_shell::Command shell;
   const LaunchArguments prepared{arguments};
   const auto command = arguments.isEmpty() ? shell.arguments() : prepared.argv();
+
   session().setLaunch(Launch{.cwd = {cwd.constData(), static_cast<std::size_t>(cwd.size())}, .arguments = command});
   restore_layout_ = restore;
   session().setRestoreLayout(restore);
@@ -357,18 +365,23 @@ Application::~Application() {
 void Application::open(const QString &endpoint) {
   auto &client = clientAt(Machines::local_slot);
   const auto path = endpoint.toUtf8();
+
   client.identity_lease.emplace(std::string_view{path.constData(), static_cast<std::size_t>(path.size())});
   QCryptographicHash hash{QCryptographicHash::Sha256};
   constexpr auto identity_namespace = std::to_array("telar-gui-window-v1");
   const auto canonical_endpoint = client.identity_lease->endpoint();
+
   hash.addData(QByteArrayView{identity_namespace.data(), static_cast<qsizetype>(identity_namespace.size())});
   hash.addData(QByteArrayView{canonical_endpoint.data(), static_cast<qsizetype>(canonical_endpoint.size())});
   constexpr char separator = '\0';
+
   hash.addData(QByteArrayView{&separator, 1});
   const auto slot = static_cast<char>(client.identity_lease->slot());
+
   hash.addData(QByteArrayView{&slot, 1});
   const auto digest = hash.result();
   auto identity_bytes = byteView({digest.constData(), static_cast<std::size_t>(digest.size())}).first(sizeof(std::uint64_t));
+
   client.identity = u64::decode(identity_bytes) | std::uint64_t{1};
   client.connection.open(endpoint);
 }
@@ -457,6 +470,7 @@ void Application::observeFrames(QQuickWindow &window) {
   // Preparation runs while the scene graph synchronizes, with the GUI thread blocked, so it
   // never overlaps a present on the GUI thread.
   const auto frames = std::allocate_shared<PresentedFrames>(AllocatorRef<PresentedFrames, ApplicationAllocator>{memory_});
+
   connect(&window, &QQuickWindow::beforeSynchronizing, this, [this, frames, generation] {
     if (generation == window_generation_) {
       prepareFrame(frames->next());
@@ -466,6 +480,7 @@ void Application::observeFrames(QQuickWindow &window) {
   connect(&window, &QQuickWindow::afterSynchronizing, this, [this, frames, generation] {
     if (generation == window_generation_) {
       auto &frame = frames->prepared[frames->current];
+
       prepareTerminalFrames(frame);
       recordPreparedFrame(frame);
     }
@@ -478,6 +493,7 @@ void Application::observeFrames(QQuickWindow &window) {
       this,
       [this, frames, generation] {
         const auto slot = frames->current;
+
         QMetaObject::invokeMethod(
             this,
             [this, frames, slot, sequence = frames->sequences[slot], generation] {
@@ -536,6 +552,7 @@ void Application::prepareFrame(PresentedFrame &frame) {
   }
 
   const auto &history = session().historyBrowser();
+
   if (dialog_ == Dialog::history) {
     frame.history_actions = historyActionSurface();
     auto &hover = frame.history_hover.emplace();
@@ -545,6 +562,7 @@ void Application::prepareFrame(PresentedFrame &frame) {
     }
 
     const auto surface = historyScrollSurface(historyMetrics(), hover);
+
     for (const auto &target : frame.history_actions.targets) {
       hover.append({.identity = {.action = target.action, .generation = frame.history_actions.generation}, .bounds = target.bounds});
     }
@@ -608,6 +626,7 @@ std::size_t Application::collectPacingPanes(std::span<FramePacer::Pane, PaneLayo
   }
 
   std::size_t count = 0;
+
   forEachLeaf(*tab, true, [&](const ClientLayoutPane &leaf) {
     if (visibleTerminal(leaf.pane_id) == nullptr) {
       return;
@@ -627,6 +646,7 @@ void Application::recordPreparedFrame(const PresentedFrame &frame) {
   }
 
   std::array<FramePacer::Pane, PaneLayout::maximum_panes> panes;
+
   for (std::size_t index = 0; index < frame.pane_count; ++index) {
     panes[index] = frame.panes[index].frame.pane;
   }
@@ -641,6 +661,7 @@ void Application::reconsiderFrame() {
 
   std::array<FramePacer::Pane, PaneLayout::maximum_panes> panes;
   const auto count = collectPacingPanes(panes);
+
   frame_pacer_->reconsider(std::span{panes}.first(count));
 }
 
@@ -686,6 +707,7 @@ void Application::synchronizeCadence() {
   const auto rate = window_->screen()->refreshRate();
   if (std::isfinite(rate) && rate > 0) {
     const auto fps = static_cast<std::uint16_t>(std::clamp(std::round(rate), qreal{Configuration::minimum_fps}, qreal{Configuration::maximum_fps}));
+
     setClientsDisplayRefresh(fps);
   }
 
@@ -698,10 +720,12 @@ void Application::configureWindow() {
   }
 
   const auto &configuration = session().configuration();
+
   WindowAnimationClock::forWindow(*window_).setMaximumFrameRate(configuration.max_fps == 0 ? std::nullopt : std::optional{configuration.max_fps});
   configureFramePacer();
   const QPointer<Application> lifetime{this};
   const auto owner = window_;
+
   WindowFontCatalog::forWindow(*owner).configure(configuration.font);
   if (lifetime.isNull() || owner.isNull() || window_ != owner) {
     return;
@@ -786,6 +810,7 @@ void Application::consume(MachineClient &client, QByteArrayView payload) {
     if (notification_revision != session().notificationRevision()) {
       refreshNotifications();
     }
+
     if (graphics_revision != session().graphicsRecoveryRevision()) {
       refreshPanes();
       scheduleGraphicsRecovery();
@@ -814,6 +839,7 @@ void Application::presentChange(Change change) {
     if (session().takeChromeChange() && !refresh_timer_.isActive()) {
       refresh_timer_.start();
     }
+
     if (dialog_ == Dialog::paths) {
       emit pathPickerGeometryChanged();
     }
@@ -859,12 +885,14 @@ void Application::presentChange(Change change) {
     if (!refresh_timer_.isActive()) {
       refresh_timer_.start();
     }
+
     break;
   case Change::stopped:
   case Change::closed:
     if (window_ != nullptr) {
       window_->close();
     }
+
     break;
   case Change::none:
     break;
@@ -885,6 +913,7 @@ bool Application::answerConfiguration(tbc::view<Application &, tbc::lt::a> appli
     // The query rewrites the source's buffer, so the state views a copy of the title, not the session.
     const auto title = application.configuration().window_title;
     auto state = application.session().clientViewState();
+
     state.window_title = title.view();
     reply.text = application.configuration_source_.query(ConfigurationQuery::parse(message.text, message.value), state);
 
@@ -893,6 +922,7 @@ bool Application::answerConfiguration(tbc::view<Application &, tbc::lt::a> appli
   case ClientAction::plugin_list:
   case ClientAction::plugin_get: {
     const auto page = application.configuration_source_.queryPlugins(message);
+
     reply.text = page.text;
     reply.value = page.next;
 
@@ -946,6 +976,7 @@ void Application::executeHostCommand(const ClientCommand &message, CompleteClien
         throw EncodingError{"CopyModeUnavailable"};
       }
     }
+
     break;
   case ClientAction::client_open_link: {
     const auto target = LinkTarget::fromUri(message.text);
@@ -975,6 +1006,7 @@ void Application::refresh() {
   const auto *active = session().activeTab();
   QVariantMap workspace_context;
   std::optional<std::uint64_t> selected_project;
+
   if (active != nullptr && active->location.workspace.kind == WorkspaceLocation::Kind::workspace) {
     selected_project = session().workspaceList().projectOf(active->location.workspace.id);
     const auto current = std::ranges::find_if(session().workspaces(), [&](const auto &workspace) {
@@ -988,6 +1020,7 @@ void Application::refresh() {
   for (const auto &workspace : session().workspaceList().projects()) {
     const bool selected = selected_project == workspace.location.id;
     auto record = projectRecord(workspace, session().workspaceList(), std::span<const Agent<ApplicationAllocator>>{session().agents()}, selected);
+
     record.insert(QStringLiteral("index"), workspaces.size());
     if (selected) {
       workspace_context.insert(QStringLiteral("index"), workspaces.size());
@@ -1000,6 +1033,7 @@ void Application::refresh() {
   workspaces_.reconcile(std::move(workspaces));
 
   QList<const Tab<ApplicationAllocator> *> ordered_tabs;
+
   for (const auto &tab : session().tabs()) {
     if (active != nullptr && sameWorkspace(tab->location.workspace, active->location.workspace)) {
       ordered_tabs.append(tab.get());
@@ -1009,10 +1043,13 @@ void Application::refresh() {
   std::ranges::stable_sort(ordered_tabs, [](const auto *left, const auto *right) {
     return left->position < right->position;
   });
+
   QList<QVariantMap> tabs;
+
   for (const auto *tab : ordered_tabs) {
     const auto *pane = session().findPane(tab->focused_pane);
     auto record = tabRecord(*tab, pane, session().panes(), std::span<const Agent<ApplicationAllocator>>{session().agents()}, tab == active);
+
     if (element_slots_.active()) {
       record.insert(QStringLiteral("elements"), elementsFor({components::Slot::tab, components::Slot::tab_cards, components::Slot::tab_title, components::Slot::tab_path, components::Slot::tab_activity}, record.value(QStringLiteral("key")).toString(), ElementSlots::tabItem(record, static_cast<int>(tabs.size()))));
     }
@@ -1039,12 +1076,14 @@ void Application::refresh() {
 
 QVariantList Application::fullscreenEntries(const Tab<ApplicationAllocator> &tab) {
   QVariantList entries;
+
   if (!tab.fullscreen) {
     return entries;
   }
 
   std::uint16_t index = 0;
   const auto agents = std::span<const Agent<ApplicationAllocator>>{session().agents()};
+
   forEachLeaf(tab, false, [&](const ClientLayoutPane &leaf) {
     ++index;
     entries.append(fullscreenPaneRecord(session().findPane(leaf.pane_id), agents, {.pane_id = leaf.pane_id, .index = index, .focused = tab.focused_pane == leaf.pane_id}));
@@ -1058,6 +1097,7 @@ void Application::refreshPanes() {
   auto *tab = session().activeTab();
   QList<QVariantMap> panes;
   QList<QVariantMap> dividers;
+
   if (tab != nullptr) {
     const auto &geometry = session().workbenchGeometry();
     const auto fullscreen = tab->fullscreen ? std::optional{tab->focused_pane} : std::nullopt;
@@ -1076,12 +1116,15 @@ void Application::refreshPanes() {
       }
 
       auto record = paneRecord(*pane, placement, geometry, tab->focused_pane == pane->id, terminal_grid_.scale);
+
       record.insert(QStringLiteral("motionContext"), motion_context);
       record.insert(QStringLiteral("fullscreen"), tab->fullscreen);
       if (tab->fullscreen) {
         record.insert(QStringLiteral("fullscreenEntries"), fullscreen_entries);
       }
+
       auto chrome = paneChromeRecord(*pane, std::span<const Agent<ApplicationAllocator>>{session().agents()}, placement.display_index, session().graphicsPaused(pane->id));
+
       if (element_slots_.active()) {
           chrome.insert(QStringLiteral("elements"), elementsFor({components::Slot::pane_header, components::Slot::pane_mark, components::Slot::pane_program, components::Slot::pane_context, components::Slot::pane_status, components::Slot::pane_progress, components::Slot::pane_actions}, record.value(QStringLiteral("key")).toString(), ElementSlots::paneItem(record, chrome)));
       }
@@ -1093,6 +1136,7 @@ void Application::refreshPanes() {
     for (const auto &divider : tab->layout.dividers()) {
       const auto bounds = geometry.pixels(divider.bounds);
       QVariantMap record;
+
       record.insert(QStringLiteral("key"), QString::number(divider.node_index));
       record.insert(QStringLiteral("x"), bounds.x / terminal_grid_.scale);
       record.insert(QStringLiteral("y"), bounds.y / terminal_grid_.scale);
@@ -1128,6 +1172,7 @@ void Application::resizeDivider(int index, qreal x, qreal y, bool commit) {
     const bool horizontal = divider->axis == ClientLayoutAxis::horizontal;
     const auto extent = horizontal ? parent_bounds.width - divider_bounds.width : parent_bounds.height - divider_bounds.height;
     const auto offset = horizontal ? (x * terminal_grid_.scale) - parent_bounds.x - (divider_bounds.width / 2) : (y * terminal_grid_.scale) - parent_bounds.y - (divider_bounds.height / 2);
+
     if (extent <= 0) {
       return;
     }
@@ -1164,6 +1209,7 @@ void Application::submitDialog(const QVariantMap &input) {
     const auto name = input.value(QStringLiteral("text")).toString().toUtf8();
     const auto path = input.value(QStringLiteral("path")).toString().toUtf8();
     const std::string_view text{name.constData(), static_cast<std::size_t>(name.size())};
+
     if (dialog_ == Dialog::new_workspace) {
       if (!submitWorkspace(input)) {
         return;
@@ -1231,6 +1277,7 @@ const Application::PresentedHistory *Application::presentedHistory(const QString
 
   bool valid_revision = false;
   const auto requested_revision = revision.toULongLong(&valid_revision);
+
   return valid_revision && presented.choice.revision == requested_revision ? &presented : nullptr;
 }
 
@@ -1240,6 +1287,7 @@ bool Application::historyLoading() const {
 
 bool Application::executeNavigation(Action action, const QString &target) {
   const auto identity = target.toULongLong();
+
   if (action == Action::new_tab) {
     session().createTab();
   } else if (action == Action::select_tab) {
@@ -1316,10 +1364,12 @@ void Application::executeWindowAction(Action action) {
     showDialog(Dialog::history);
     // At the prompt line, the search starts from the command being written.
     QString seed;
+
     if (const auto *line = line_search_pane_ == 0 ? nullptr : session().promptLine(line_search_pane_)) {
       seed = toQString(line->editor().text().view());
       seed.replace(QLatin1Char('\n'), QLatin1Char(' '));
     }
+
     searchHistory(seed);
   } else if (action == Action::palette || action == Action::goto_picker) {
     showPalette(action == Action::palette ? PaletteMode::actions : PaletteMode::navigate);
@@ -1354,6 +1404,7 @@ void Application::cancelCurrentInteraction() {
   const auto &copy = session().copyMode().state();
   if (dialog_ == Dialog::none && copy && !copy->pointer) {
     const auto pane_id = copy->pane_id;
+
     session().leaveCopyMode();
     emit terminalChanged(pane_id);
     emit stateChanged();
@@ -1371,6 +1422,7 @@ void Application::synchronizeFontMetrics() {
   const auto scale = window_ == nullptr ? 1 : window_->effectiveDevicePixelRatio();
   const auto resolved = resolveFont(scale);
   const auto &font = resolved.font;
+
   cell_metrics_.width = static_cast<float>(font.cell.width());
   cell_metrics_.height = static_cast<float>(font.cell.height());
   cell_metrics_.baseline = static_cast<float>(font.baseline);
@@ -1380,6 +1432,7 @@ void Application::synchronizeFontMetrics() {
 
 bool Application::updateViewport(qreal width, qreal height) {
   constexpr qreal maximum_dimension = std::numeric_limits<std::uint16_t>::max();
+
   if (!std::isfinite(width) || !std::isfinite(height)) {
     return false;
   }
@@ -1404,6 +1457,7 @@ void Application::synchronizeWindowSize() {
 
 void Application::searchHistory(const QString &query) {
   const auto measured = Utf16Prefix::fit(QStringView{query}, HistorySearch::maximum_query_bytes, utf16Encoding());
+
   history_query_ = query.first(static_cast<qsizetype>(measured.units));
   if (!history_query_.isValidUtf16()) {
     history_query_ = QString::fromUtf8(history_query_.toUtf8());
@@ -1426,6 +1480,7 @@ bool Application::input(std::uint64_t pane_id, const QByteArray &bytes, PaneInpu
   const auto &copy = session().copyMode().state();
   const auto previous = copy && copy->pointer ? copy->pane_id : 0;
   bool delivered = false;
+
   try {
     session().input(pane_id, {bytes.constData(), static_cast<std::size_t>(bytes.size())}, source);
     delivered = true;
@@ -1443,10 +1498,12 @@ bool Application::input(std::uint64_t pane_id, const QByteArray &bytes, PaneInpu
 void Application::paste(std::uint64_t pane_id, const QString &text) {
   try {
     const auto bytes = text.toUtf8();
+
     session().paste(pane_id, {bytes.constData(), static_cast<std::size_t>(bytes.size())});
   } catch (const std::exception &error) {
     fail(error);
   }
+
   publishPromptWrite();
 }
 
@@ -1525,6 +1582,7 @@ QVariantMap Application::colors() const {
   if (!colors_) {
     colors_ = themeColors(session().configuration());
   }
+
   return *colors_;
 }
 
@@ -1532,6 +1590,7 @@ QVariantMap Application::font() const {
   if (!font_) {
     font_ = fontSettings(session().configuration().font);
   }
+
   return *font_;
 }
 

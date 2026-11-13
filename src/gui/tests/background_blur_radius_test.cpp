@@ -42,6 +42,7 @@ struct Observation {
 
 Observation &observation() {
   static Observation value;
+
   return value;
 }
 
@@ -52,6 +53,7 @@ void *connection() {
 std::int32_t setRadius(void *handle, std::size_t native_window, int native_radius) {
   require(handle == &observation(), "numeric blur must use its injected native connection");
   auto &observed = *static_cast<Observation *>(handle);
+
   ++observed.calls;
   observed.last = std::pair{native_window, native_radius};
   return static_cast<std::int32_t>(observed.reply);
@@ -65,6 +67,7 @@ void verifyRadius() {
   auto &observed = observation();
   BlurRadius blur{{.connection = connection, .set_radius = setRadius}};
   WindowAppearance appearance{.background_opacity = translucent_opacity, .background_blur = initial_radius};
+
   require(blur.apply(initial, appearance), "supported numeric blur must disable the material fallback");
   verifyCalls(Calls::initial);
   require(observed.last == std::pair{static_cast<std::size_t>(initial.number), static_cast<int>(initial_radius)}, "blur must preserve the configured window and numeric radius");
@@ -91,9 +94,11 @@ void verifyRadius() {
   require(!blur.apply(initial, appearance), "unchanged rejected state must retain reference retry policy");
   verifyCalls(Calls::rejected);
   const NativeBlurTarget unassigned;
+
   require(!blur.apply(unassigned, appearance), "unassigned native windows must not be sent to the server");
   verifyCalls(Calls::rejected);
   BlurRadius unavailable{{}};
+
   require(!unavailable.apply(initial, appearance), "unavailable symbols must retain material fallback");
 }
 }

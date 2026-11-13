@@ -65,6 +65,7 @@ public:
     while (!input.empty()) {
       if (prefix_used_ < prefix_.size()) {
         const auto count = std::min(input.size(), prefix_.size() - prefix_used_);
+
         std::copy_n(input.begin(), count, prefix_.begin() + prefix_used_);
         prefix_used_ += count;
         input = input.subspan(count);
@@ -74,6 +75,7 @@ public:
         }
 
         std::span<const Byte> prefix{prefix_};
+
         expected_ = u32::decode(prefix);
         if (expected_ == 0) {
           throw EncodingError{"InvalidLength"};
@@ -92,6 +94,7 @@ public:
       }
 
       const auto count = std::min(input.size(), expected_ - payload_.size());
+
       payload_.insert(payload_.end(), input.begin(), input.begin() + count);
       input = input.subspan(count);
 
@@ -147,6 +150,7 @@ struct RuntimeProtocol {
 
   [[nodiscard]] inline static bool supports(const SchemaId &schema, ClientTag tag) noexcept {
     const bool current = tag == ClientTag::read_pane_rows || tag == ClientTag::search_pane_rows || tag == ClientTag::pane_command || tag == ClientTag::configure_shell_prompt;
+
     return supports(schema) && (schema != schema87 || tag != ClientTag::hold_tab) && (!current || readsRows(schema));
   }
 
@@ -210,6 +214,7 @@ struct RuntimeHandshake {
 private:
   [[nodiscard]] inline static Result failure(MachineError error, std::string_view message) {
     Result result{.error = error};
+
     result.detail.append(message);
 
     return result;
@@ -221,6 +226,7 @@ private:
     }
 
     Result result{.error = MachineError::incompatible_schema};
+
     result.detail.append("the runtime speaks wire schema ");
     result.detail.append(textView(std::span{reply.expected_schema}));
     result.detail.append("; this telar speaks ");
@@ -238,6 +244,7 @@ private:
         std::pair{"Unexpected handshake response", "UnexpectedMessage"},
         std::pair{"Unknown handshake rejection reason", "UnknownRejectReason"},
     };
+
     for (const auto &[native, original] : names) {
       if (message == native) {
         return original;
@@ -292,8 +299,10 @@ struct RuntimeLink {
     const auto last = text.find_last_not_of(" \t\r\n");
     const auto kept = validPrefix(text.substr(first, last - first + 1), failure_bytes);
     std::array<char, failure_bytes> cleaned{};
+
     for (std::size_t index = 0; index < kept.size(); ++index) {
       const auto byte = static_cast<unsigned char>(kept[index]);
+
       cleaned[index] = byte < static_cast<unsigned char>(' ') || byte == static_cast<unsigned char>(ControlByte::delete_character) ? ' ' : kept[index];
     }
 
@@ -376,6 +385,7 @@ struct RuntimeLink {
 
   [[nodiscard]] inline int retryDelayMilliseconds() const noexcept {
     const auto shift = std::min(static_cast<unsigned>(attempt), maximum_backoff_doublings);
+
     return static_cast<int>(std::min(std::uint64_t{first_retry_ms} << shift, std::uint64_t{longest_retry_ms}));
   }
 
@@ -390,6 +400,7 @@ struct RuntimeLink {
 
       {
         auto result = assemble({.prefix = "Reconnecting to ", .suffix = "", .fallback = "Reconnecting…"});
+
         result.append(" (attempt ");
         result.appendDecimal(static_cast<std::uint32_t>(attempt) + 1);
         result.append(")…");
@@ -426,6 +437,7 @@ private:
 
   [[nodiscard]] inline Headline assemble(Label label) const {
     Headline result;
+
     if (label.prefix.size() + target().size() + label.suffix.size() > headline_bytes) {
       result.append(label.fallback);
     } else {

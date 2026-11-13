@@ -56,6 +56,7 @@ class ClipboardService {
 public:
   inline static bool eligible(const ClientSession<Memory> &client, const Pane<Memory> &pane) noexcept {
     const auto *attachment = client.attachment(pane.id);
+
     return !pane.close_requested && !pane.output_closed && client.role == ClientRole::interactive && !client.connection.closing && attachment != nullptr && attachment->desktop && attachment->desktop->pane_generation == pane.generation && attachment->desktop->visible && attachment->desktop->clipboard;
   }
 
@@ -63,23 +64,28 @@ public:
     std::array<control::ClipboardRoute, control::ClipboardGrants::capacity> routes;
     std::size_t count = 0;
     const ClientSession<Memory> *preferred = nullptr;
+
     for (const auto *client : clients.items()) {
       if (client == nullptr || !eligible(*client, pane)) {
         continue;
       }
+
       if (count == routes.size()) {
         break;
       }
+
       routes[count++] = {client->id, client->generation};
       if (preferred == nullptr || precedes(*client, *preferred, pane.id)) {
         preferred = client;
       }
     }
+
     pane.terminal.clipboardControl().routes(std::span{routes}.first(count), preferred != nullptr ? std::optional{control::ClipboardRoute{preferred->id, preferred->generation}} : std::nullopt);
   }
 
   inline static bool advance(ClientStore<Memory> &clients, Pane<Memory> &pane, std::chrono::steady_clock::time_point now) {
     auto &clipboard = pane.terminal.clipboardControl();
+
     clipboard.expire(now);
     if (const auto cancellation = clipboard.cancellation()) {
       auto *client = clients.find(cancellation->route.client);
@@ -94,6 +100,7 @@ public:
         }
       }
     }
+
     const auto route = clipboard.route();
     if (route) {
       auto *client = clients.find(route->client);
@@ -118,10 +125,12 @@ public:
         }
       }
     }
+
     if (clipboard.hasReply()) {
       pane.terminal.resumeControl();
       return true;
     }
+
     return false;
   }
 
@@ -130,10 +139,12 @@ public:
     if (pane == nullptr || sender.generation != completion.ticket.client_generation || !eligible(sender, *pane)) {
       return nullptr;
     }
+
     pane->terminal.clipboardControl().expire(std::chrono::steady_clock::now());
     if (!pane->terminal.clipboardControl().complete({sender.id, sender.generation}, completion)) {
       return nullptr;
     }
+
     pane->terminal.resumeControl();
     return pane;
   }
@@ -145,8 +156,10 @@ private:
     if (candidate_focus != current_focus) {
       return candidate_focus;
     }
+
     const auto candidate_input = candidate.last_input_pane == pane ? candidate.last_input_sequence : 0;
     const auto current_input = current.last_input_pane == pane ? current.last_input_sequence : 0;
+
     return candidate_input != current_input ? candidate_input > current_input : candidate.id < current.id;
   }
 
@@ -180,8 +193,10 @@ public:
   inline bool prepare(RuntimeModel<Memory> &model, ClientSession<Memory> &client, DeliveryLane lane, Clock::time_point now, std::chrono::nanoseconds &timeout) {
     const auto start = client.next_attachment;
     auto candidates = std::rotr(occupied_, static_cast<int>(start));
+
     while (candidates != 0) {
       const auto slot = (start + std::countr_zero(candidates)) % ClientSession<Memory>::attachment_capacity;
+
       candidates &= candidates - 1;
       auto &attachment = *client.attachments[slots_[slot].index];
       auto &pane = *model.panes.find(attachment.pane_id);
@@ -211,6 +226,7 @@ private:
 
   inline bool prepare(Output &output, Attachment<Memory> &attachment, Pane<Memory> &pane, DeliveryLane lane, Clock::time_point now, std::chrono::nanoseconds &timeout) {
     const auto &effects = pane.terminal.effects;
+
     switch (lane) {
     case DeliveryLane::scrollback:
       return scrollback(output.connection, attachment, pane);
@@ -267,6 +283,7 @@ private:
 
     const auto size = static_cast<std::uint32_t>(effects.document.size());
     const auto chunk = std::min(size - attachment.document_offset, PaneDocument::chunk_bytes);
+
     connection.send(PaneDocument{
         .pane_id = pane.id,
         .revision = effects.document_revision,
@@ -274,6 +291,7 @@ private:
         .offset = attachment.document_offset,
         .bytes = std::span<const Byte>{effects.document}.subspan(attachment.document_offset, chunk),
     });
+
     attachment.document_offset += chunk;
     attachment.document_whole = attachment.document_offset == size;
     return true;
@@ -303,14 +321,17 @@ private:
       if (document.rows == 0) {
         continue;
       }
+
       auto *item = sent.find(document.id);
       if (item == nullptr && (item = sent.add(document.id)) == nullptr) {
         continue;
       }
+
       const auto size = static_cast<std::uint32_t>(document.bytes.size());
       const auto first_row = trimmed + document.row;
       if (item->offset < size || item->generation != generation || item->first_row != first_row || item->rows != document.rows) {
         const auto chunk = std::min(size - item->offset, PaneDocument::chunk_bytes);
+
         connection.send(PaneDocument{
             .pane_id = pane.id,
             .id = document.id,
@@ -322,6 +343,7 @@ private:
             .offset = item->offset,
             .bytes = std::span<const Byte>{document.bytes}.subspan(item->offset, chunk),
         });
+
         item->offset += chunk;
         item->generation = generation;
         item->first_row = first_row;
@@ -329,6 +351,7 @@ private:
         return true;
       }
     }
+
     sent.settle(effects.inline_revision, generation, trimmed);
     return false;
   }
@@ -339,6 +362,7 @@ private:
     }
 
     std::array<CommandBlock, PaneBlocks::capacity> storage;
+
     connection.send(pane.blocks->message(pane.id, storage));
     attachment.blocks_revision = pane.blocks->revision();
     return true;
@@ -355,9 +379,11 @@ private:
 
     if (attachment.viewport && attachment.scrollback_generation == generation && trimmed > attachment.scrollback_trimmed) {
       const auto dropped = trimmed - attachment.scrollback_trimmed;
+
       attachment.viewport = static_cast<std::uint32_t>(*attachment.viewport > dropped ? *attachment.viewport - dropped : 0);
       attachment.frames.requestSnapshot();
     }
+
     connection.send(PaneScrollback{.pane_id = pane.id, .generation = generation, .trimmed = trimmed});
     attachment.scrollback_generation = generation;
     attachment.scrollback_trimmed = trimmed;
@@ -407,6 +433,7 @@ private:
 
     pane.terminal.refresh();
     const auto payload = attachment.frames.prepare(pane.terminal.screen);
+
     TELAR_DIAGNOSTIC(output.metrics.frames.merge(attachment.frames.takeCounters()));
     slots_[attachment.slot].cells_current = true;
     if (attachment.viewport) {
@@ -416,6 +443,7 @@ private:
     if (!snapshot) {
       attachment.pacer.record(now, deadline);
     }
+
     if (payload.empty()) {
       return false;
     }
@@ -430,11 +458,13 @@ private:
     }
 
     const auto status = *pane.exit_status;
+
     output.connection.send(PaneExited{
         .pane_id = pane.id,
         .kind = WIFEXITED(status) ? ExitKind::exited : ExitKind::signaled,
         .value = static_cast<std::uint32_t>(WIFEXITED(status) ? WEXITSTATUS(status) : WTERMSIG(status)),
     });
+
     attachment.exit_sent = true;
     output.completing_exit = pane.id;
     return true;
@@ -442,20 +472,24 @@ private:
 
   inline static bool graphics(Output &output, Attachment<Memory> &attachment, Pane<Memory> &pane, std::chrono::nanoseconds &timeout) {
     const bool sent = publishGraphics(output.connection, attachment, pane, timeout);
+
     TELAR_DIAGNOSTIC(output.metrics.graphics.merge(attachment.graphics.takeCounters()));
     return sent;
   }
 
   inline static bool publishGraphics(Connection<Memory> &connection, Attachment<Memory> &attachment, Pane<Memory> &pane, std::chrono::nanoseconds &timeout) {
     const auto queued = connection.queuedBytes();
+
     if (pane.media->busy()) {
       if (attachment.graphics.advanceTransfer(connection)) {
         timeout = std::chrono::nanoseconds::zero();
       }
+
       return connection.queuedBytes() != queued;
     }
 
     auto *terminal = pane.media->terminal();
+
     try {
       const bool pending = terminal == nullptr ? attachment.graphics.publish(connection, pane.terminal.graphics) : attachment.graphics.publish(connection, terminal->graphics);
       if (pending) {
@@ -464,6 +498,7 @@ private:
     } catch (const std::bad_alloc &) {
       attachment.graphics.abandon(terminal == nullptr ? pane.terminal.graphics.revision() : terminal->graphics.revision());
     }
+
     return connection.queuedBytes() != queued;
   }
 
@@ -510,11 +545,13 @@ private:
       } else {
         send(RequestFailed{.request_id = request.request_id, .code = FailureCode::pane_not_found, .message = "pane closed before its text was read"});
       }
+
       return;
     }
 
     constexpr std::size_t maximum_text_bytes = 262144;
     TextReader reader{memory_, pane->terminal, maximum_text_bytes};
+
     reader.read(request.source, request.rows);
     send(PaneText{.request_id = request.request_id, .pane_id = pane->id, .truncated = reader.truncated(), .text = reader.text(), .exit_code = pane->exitCode()});
   }
@@ -522,6 +559,7 @@ private:
   inline void project(const RequestTabSnapshot &request, auto &send) const {
     std::array<PaneDescriptor, 64> descriptors;
     std::size_t count = 0;
+
     for (const auto *pane : model_.panes.items()) {
       if (pane != nullptr && matchesSnapshot(*pane, request.location)) {
         descriptors[count++] = PaneDescriptor{.pane_id = pane->id, .lifecycle = PaneLifecycle::running, .pane_generation = pane->generation};
@@ -542,17 +580,21 @@ private:
     std::array<TabPane, 256> panes;
     std::size_t pane_count = 0;
     std::size_t count = 0;
+
     for (const auto &tab : workspace->tabs) {
       const auto first = pane_count;
       const TabLocation location{request.workspace, tab.id};
+
       for (const auto *pane : model_.panes.items()) {
         if (pane != nullptr && matchesSnapshot(*pane, location)) {
           const auto name = pane->foreground.view();
+
           panes[pane_count++] = TabPane{.pane_id = pane->id, .foreground = name.empty() ? "shell" : name, .cwd = snapshotDirectory(pane->cwd)};
         }
       }
 
       const auto members = std::span{panes}.subspan(first, pane_count - first);
+
       descriptors[count] = TabDescriptor{.tab_id = tab.id, .position = static_cast<std::uint16_t>(count), .pane_count = static_cast<std::uint16_t>(members.size()), .label = tab.label, .panes = members};
       ++count;
     }
@@ -563,6 +605,7 @@ private:
   inline void project(const QueryLimits &request, auto &send) const {
     std::array<LimitListEntry, 2 * LimitLedger::capacity> entries;
     std::size_t count = 0;
+
     for (const auto &row : model_.limits.runtime.rows()) {
       entries[count++] = {row.reach(), LimitOrigin::runtime, row.hits, row.last_ms};
     }
@@ -609,6 +652,7 @@ public:
   inline Result write(ClientSession<Memory> &client, Source &source, Clock::time_point now) {
     TELAR_TRACE("runtime.deliverClient");
     Result result;
+
     if (!client.connection.writing() && !client.connection.closing) {
       prepare(client, source, now, result.timeout);
     }
@@ -622,6 +666,7 @@ public:
       result.timeout = std::chrono::nanoseconds::zero();
       result.detach_pane = std::exchange(client.completing_exit, std::nullopt);
     }
+
     return result;
   }
 
@@ -644,6 +689,7 @@ private:
     }
 
     AttachmentDelivery<Memory> attachments{model_, client};
+
     for (const auto lane : {DeliveryLane::shell, DeliveryLane::scrollback, DeliveryLane::cells}) {
       if (queued_lane <= lane || attachments.prepare(model_, client, lane, now, timeout)) {
         return;
@@ -678,6 +724,7 @@ private:
 
     TELAR_DIAGNOSTIC(diagnostics::accumulate(model_.metrics.client_resyncs));
     auto &change = *client.workspace_resync;
+
     change.workspace_closed = model_.workspaces.find(change.workspace.id) == nullptr;
     client.connection.send(change);
     client.workspace_resync.reset();
@@ -701,6 +748,7 @@ private:
       attachment->clipboard_revision = pane->terminal.effects.clipboard_revision;
       return true;
     }
+
     return false;
   }
 
@@ -711,6 +759,7 @@ private:
 
     std::array<PaneListEntry, max_pane_list_entries> entries;
     std::size_t count = 0;
+
     for (const auto *pane : model_.panes.items()) {
       if (pane == nullptr || pane->exit_status || pane->close_requested) {
         continue;
@@ -722,6 +771,7 @@ private:
 
       const auto age = std::chrono::duration_cast<std::chrono::seconds>(now - pane->foreground_since).count();
       const auto name = pane->foreground.view();
+
       entries[count++] = {
           .pane_id = pane->id,
           .pane_generation = pane->generation,
@@ -745,6 +795,7 @@ private:
     }
 
     const auto panes = model_.panes.items();
+
     for (std::size_t slot = 0; slot < panes.size(); ++slot) {
       const auto *pane = panes[slot];
       if (pane == nullptr || pane->exit_status || pane->close_requested || (pane->observers & client.observerBit()) != 0) {
@@ -758,6 +809,7 @@ private:
         return true;
       }
     }
+
     return false;
   }
 
@@ -798,6 +850,7 @@ public:
         client.layout_sent = true;
         return true;
       }
+
       return false;
     case DeliveryLane::proxy:
       if (client.subscribed && !client.proxy_status_sent) {
@@ -805,6 +858,7 @@ public:
         client.proxy_status_sent = true;
         return true;
       }
+
       return false;
     case DeliveryLane::agents:
       if (client.agent_snapshot_requested || (client.subscribed && (client.agent_revision != agents_.revision() || client.agent_workspace_revision != model.workspace_revision))) {
@@ -812,9 +866,11 @@ public:
         client.agent_snapshot_requested = false;
         return true;
       }
+
       return false;
     case DeliveryLane::metrics: {
       const auto queued = client.connection.queuedBytes();
+
       metrics_.publish(client);
       return queued != client.connection.queuedBytes();
     }
@@ -823,6 +879,7 @@ public:
         workspaces_.publishList(model, client);
         return true;
       }
+
       return false;
     default:
       return false;
@@ -856,6 +913,7 @@ public:
   inline void process(std::span<const Byte> payload, EncodedReply<Memory> &reply, const RequestContext &context = {}) {
     std::array<Byte, 1024> scratch;
     DecodeStorage storage{scratch};
+
     editor_.open(Codec::decode<OpenEditor>(payload, storage), context, reply);
   }
 

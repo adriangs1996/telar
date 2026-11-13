@@ -25,6 +25,7 @@ void prepareManagedDirectory(std::string_view path) {
   }
 
   std::array<char, PathLimits::path_bytes> name{};
+
   std::ranges::copy(path, name.begin());
   constexpr mode_t owner_only = 0700;
   if (::mkdir(name.data(), owner_only) != 0 && errno != EEXIST) {

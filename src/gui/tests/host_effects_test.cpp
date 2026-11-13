@@ -141,6 +141,7 @@ private:
   Q_SLOT static void successfulAudioStopsAtTheFirstAvailableBackend() {
     Observer observer;
     SoundPlayer<SoundHost, Observer> player{observer};
+
     player.start(AgentSound::ready);
     QTRY_COMPARE_WITH_TIMEOUT(observer.results.size(), std::size_t{1}, wait_ms);
     QCOMPARE(SoundHost::started.size(), std::size_t{1});
@@ -150,9 +151,11 @@ private:
 
   Q_SLOT static void failedBackendsRetainTheSemanticSoundAndStopAfterSuccess() {
     constexpr std::size_t successful_backend = 2;
+
     SoundHost::successful_backend = successful_backend;
     Observer observer;
     SoundPlayer<SoundHost, Observer> player{observer};
+
     player.start(AgentSound::needs_input);
     QTRY_COMPARE_WITH_TIMEOUT(observer.results.size(), std::size_t{1}, wait_ms);
     QCOMPARE(SoundHost::started.size(), successful_backend + 1);
@@ -167,6 +170,7 @@ private:
     SoundHost::successful_backend = SoundHost::attempts;
     Observer observer;
     SoundPlayer<SoundHost, Observer> player{observer};
+
     player.start(AgentSound::ready);
     QTRY_COMPARE_WITH_TIMEOUT(observer.results.size(), std::size_t{1}, wait_ms);
     QCOMPARE(SoundHost::started.size(), SoundHost::attempts);
@@ -186,6 +190,7 @@ private:
       SoundHost::failure = failure;
       Observer observer;
       SoundPlayer<SoundHost, Observer> player{observer};
+
       player.start(AgentSound::ready);
       QTRY_COMPARE_WITH_TIMEOUT(observer.results.size(), std::size_t{1}, wait_ms);
       QCOMPARE(SoundHost::started.size(), std::size_t{2});
@@ -197,6 +202,7 @@ private:
     SoundHost::successful_backend = 1;
     Observer observer;
     SoundPlayer<SoundHost, Observer> player{observer};
+
     player.start(AgentSound::needs_input);
     QVERIFY_THROWS_EXCEPTION(std::logic_error, player.start(AgentSound::ready));
     QTRY_COMPARE_WITH_TIMEOUT(observer.results.size(), std::size_t{1}, wait_ms);
@@ -206,8 +212,10 @@ private:
 
   Q_SLOT static void teardownCancelsDeferredAudioWithoutCallingTheHost() {
     Observer observer;
+
     {
       SoundPlayer<SoundHost, Observer> player{observer};
+
       player.start(AgentSound::ready);
     }
 
@@ -219,9 +227,11 @@ private:
   Q_SLOT static void completionMayDestroyThePlayer() {
     Observer observer;
     auto player = std::make_unique<SoundPlayer<SoundHost, Observer>>(observer);
+
     observer.completed = [&] {
       player.reset();
     };
+
     player->start(AgentSound::ready);
     QTRY_VERIFY_WITH_TIMEOUT(!player, wait_ms);
     QCOMPARE(observer.results.size(), std::size_t{1});
@@ -231,6 +241,7 @@ private:
     SystemAllocator memory;
     SystemNotifier<NotificationHost, SystemAllocator> notifier{memory};
     auto payload = NotificationPayload::create("Original", "Owned message");
+
     QVERIFY(notifier.post(payload));
     payload.title.assign("Modified");
     QTRY_COMPARE_WITH_TIMEOUT(NotificationHost::started.size(), std::size_t{1}, wait_ms);
@@ -246,6 +257,7 @@ private:
     SystemAllocator memory;
     SystemNotifier<NotificationHost, SystemAllocator, capacity> notifier{memory};
     const auto payload = NotificationPayload::create("Retained", "message");
+
     for (std::size_t index = 0; index < capacity; ++index) {
       QVERIFY(notifier.post(payload));
     }
@@ -266,6 +278,7 @@ private:
       NotificationHost::failure = failure;
       SystemAllocator memory;
       SystemNotifier<NotificationHost, SystemAllocator> notifier{memory};
+
       QVERIFY(notifier.post(NotificationPayload::create("Unavailable", "message")));
       QTRY_COMPARE_WITH_TIMEOUT(notifier.activeCount(), std::size_t{0}, wait_ms);
       QCOMPARE(NotificationHost::started.size(), std::size_t{1});
@@ -277,6 +290,7 @@ private:
     test::AllocationGate<SystemAllocator> gated{memory};
     SystemNotifier<NotificationHost, decltype(gated)> notifier{gated};
     const auto payload = NotificationPayload::create("Allocation test", "message");
+
     gated.permit(0);
     QVERIFY_THROWS_EXCEPTION(std::bad_alloc, static_cast<void>(notifier.post(payload)));
     QCOMPARE(notifier.activeCount(), std::size_t{0});

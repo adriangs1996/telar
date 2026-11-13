@@ -797,6 +797,7 @@ inline bool hexadecimalColorChannel(std::string_view value) noexcept {
   if (value.empty() || value.size() > 4) {
     return false;
   }
+
   return std::all_of(value.begin(), value.end(), [](char c) { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'); });
 }
 
@@ -805,18 +806,22 @@ inline bool intensityColorChannel(std::string_view value) noexcept {
   if (negative || value.starts_with('+')) {
     value.remove_prefix(1);
   }
+
   unsigned integral = 0;
   bool fractional = false;
   bool nonzero_fraction = false;
   bool digit = false;
+
   for (const auto c : value) {
     if (c == '.' && !fractional) {
       fractional = true;
       continue;
     }
+
     if (c < '0' || c > '9') {
       return false;
     }
+
     digit = true;
     if (fractional) {
       nonzero_fraction |= c != '0';
@@ -827,6 +832,7 @@ inline bool intensityColorChannel(std::string_view value) noexcept {
       }
     }
   }
+
   return digit && (!negative || (integral == 0 && !nonzero_fraction)) && (integral == 0 || !nonzero_fraction);
 }
 
@@ -835,44 +841,57 @@ inline bool colorValue(std::string_view value) noexcept {
   if (start == std::string_view::npos) {
     return false;
   }
+
   value = value.substr(start, value.find_last_not_of(" \t") - start + 1);
   if (value.starts_with('#')) {
     value.remove_prefix(1);
     if (value.size() != 3 && value.size() != 6 && value.size() != 9 && value.size() != 12) {
       return false;
     }
+
     const auto width = value.size() / 3;
+
     return hexadecimalColorChannel(value.substr(0, width)) && hexadecimalColorChannel(value.substr(width, width)) && hexadecimalColorChannel(value.substr(width * 2));
   }
+
   if ((value.size() == 3 || value.size() == 6) && hexadecimalColorChannel(value.substr(0, value.size() / 3)) && hexadecimalColorChannel(value.substr(value.size() / 3, value.size() / 3)) && hexadecimalColorChannel(value.substr(value.size() * 2 / 3))) {
     return true;
   }
+
   if (value.starts_with("rgb:") || value.starts_with("rgbi:")) {
     const bool intensity = value.starts_with("rgbi:");
+
     value.remove_prefix(intensity ? 5 : 4);
     for (unsigned channel = 0; channel < 3; ++channel) {
       const auto slash = value.find('/');
       if ((slash == std::string_view::npos) != (channel == 2)) {
         return false;
       }
+
       const auto token = value.substr(0, slash);
       if (!(intensity ? intensityColorChannel(token) : hexadecimalColorChannel(token))) {
         return false;
       }
+
       if (slash != std::string_view::npos) {
         value.remove_prefix(slash + 1);
       }
     }
+
     return true;
   }
+
   std::array<char, 64> lower;
   if (value.size() > lower.size()) {
     return false;
   }
+
   for (std::size_t i = 0; i < value.size(); ++i) {
     const auto c = value[i];
+
     lower[i] = c >= 'A' && c <= 'Z' ? static_cast<char>(c + ('a' - 'A')) : c;
   }
+
   return std::binary_search(named_colors.begin(), named_colors.end(), std::string_view{lower.data(), value.size()});
 }
 

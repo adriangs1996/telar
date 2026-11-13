@@ -154,20 +154,24 @@ public:
     }
 
     auto *start = bytes_ == nullptr ? nullptr : bytes_ + written_;
+
     written_ += count;
     return {start, count};
   }
 
   inline void append(std::span<const std::uint8_t> input) {
     auto output = appendUninitialized(input.size());
+
     std::copy(input.begin(), input.end(), output.begin());
   }
 
   inline std::span<std::uint8_t> insertUninitialized(std::size_t offset, std::size_t count) {
     const auto previous_size = size();
+
     assert(offset <= previous_size);
     appendUninitialized(count);
     auto *start = bytes_ + consumed_ + offset;
+
     std::memmove(start + count, start, previous_size - offset);
     return {start, count};
   }
@@ -198,6 +202,7 @@ public:
     }
 
     auto *start = bytes_ + consumed_ + offset;
+
     std::memmove(start, start + count, size() - offset - count);
     written_ -= count;
   }
@@ -221,10 +226,12 @@ public:
     }
 
     const auto retained = readable();
+
     std::copy(retained.begin(), retained.end(), storage);
     if (bytes_ != nullptr) {
       memory_.deallocate(bytes_, capacity_, alignof(std::uint8_t));
     }
+
     written_ = retained.size();
     consumed_ = 0;
     bytes_ = storage;
@@ -243,6 +250,7 @@ private:
   inline void compact() noexcept {
     if (consumed_ != 0) {
       const auto remaining = size();
+
       std::memmove(bytes_, bytes_ + consumed_, remaining);
       written_ = remaining;
       consumed_ = 0;
@@ -273,10 +281,12 @@ public:
     if (size > std::numeric_limits<std::size_t>::max() - sizeof(Header)) {
       return nullptr;
     }
+
     auto *header = static_cast<Header *>(memory_.allocate(sizeof(Header) + size, alignof(Header)));
     if (header == nullptr) {
       return nullptr;
     }
+
     std::construct_at(header, Header{size});
     return header + 1;
   }
@@ -285,16 +295,19 @@ public:
     if (size != 0 && count > std::numeric_limits<std::size_t>::max() / size) {
       return nullptr;
     }
+
     auto *pointer = allocate(count * size);
     if (pointer != nullptr) {
       std::memset(pointer, 0, count * size);
     }
+
     return pointer;
   }
 
   inline void release(void *pointer) noexcept {
     if (pointer != nullptr) {
       auto *header = static_cast<Header *>(pointer) - 1;
+
       memory_.deallocate(header, sizeof(Header) + header->size, alignof(Header));
     }
   }
@@ -303,6 +316,7 @@ public:
     if (pointer == nullptr) {
       return allocate(size);
     }
+
     if (size == 0) {
       release(pointer);
       return nullptr;
@@ -311,9 +325,11 @@ public:
     auto *replacement = allocate(size);
     if (replacement != nullptr) {
       const auto *header = static_cast<const Header *>(pointer) - 1;
+
       std::memcpy(replacement, pointer, std::min(header->size, size));
       release(pointer);
     }
+
     return replacement;
   }
 
@@ -379,25 +395,30 @@ public:
 
   inline std::optional<Value> receive() {
     std::unique_lock lock{mutex_};
+
     ready_.wait(lock, [&] { return count_ != 0 || closed_; });
     return take();
   }
 
   inline std::optional<Value> tryReceive() noexcept {
     const auto lock = acquire();
+
     return lock.owns_lock() ? take() : std::nullopt;
   }
 
   inline void close() noexcept {
     std::array<std::optional<Value>, Capacity> discarded;
+
     {
       const std::lock_guard lock{mutex_};
+
       closed_ = true;
       discarded.swap(slots_);
       count_ = 0;
       head_ = 0;
       queued_.store(0, std::memory_order_relaxed);
     }
+
     ready_.notify_all();
   }
 
@@ -418,7 +439,9 @@ private:
     if (count_ == 0) {
       return std::nullopt;
     }
+
     auto value = std::move(slots_[head_]);
+
     slots_[head_].reset();
     head_ = (head_ + 1) % Capacity;
     --count_;
@@ -504,6 +527,7 @@ public:
   inline ~RecyclingAllocator() {
     for (std::size_t index = 0; index < available_.size(); ++index) {
       const auto capacity = (index + 1) * block_alignment;
+
       while (auto *block = available_[index]) {
         available_[index] = block->next;
         eraseSensitive(block, capacity);
@@ -522,11 +546,13 @@ public:
 
     const auto index = bucket(size);
     const auto capacity = (index + 1) * block_alignment;
+
     if (auto *block = available_[index]) {
       available_[index] = block->next;
       retained_bytes_ -= capacity;
       return block;
     }
+
     return upstream_.allocate(capacity, block_alignment);
   }
 
@@ -534,6 +560,7 @@ public:
     if (pointer == nullptr) {
       return;
     }
+
     if (!recyclable(size, alignment)) {
       eraseSensitive(pointer, size);
       upstream_.deallocate(pointer, size, alignment);
@@ -542,6 +569,7 @@ public:
 
     const auto index = bucket(size);
     const auto capacity = (index + 1) * block_alignment;
+
     eraseSensitive(pointer, capacity);
     if (capacity > maximum_retained_bytes - retained_bytes_) {
       upstream_.deallocate(pointer, capacity, block_alignment);
@@ -609,6 +637,7 @@ public:
     bytes = bytes.last(std::min(bytes.size(), capacity_));
     const auto start = static_cast<std::size_t>((total_ - bytes.size()) % capacity_);
     const auto first = std::min(bytes.size(), capacity_ - start);
+
     std::memcpy(bytes_ + start, bytes.data(), first);
     std::memcpy(bytes_, bytes.data() + first, bytes.size() - first);
   }
@@ -622,6 +651,7 @@ public:
     const auto count = static_cast<std::size_t>(std::min<std::uint64_t>(destination.size(), total_ - offset));
     const auto start = static_cast<std::size_t>(offset % capacity_);
     const auto first = std::min(count, capacity_ - start);
+
     std::memcpy(destination.data(), bytes_ + start, first);
     std::memcpy(destination.data() + first, bytes_, count - first);
     return destination.first(count);
@@ -680,6 +710,7 @@ public:
       storage_ = std::exchange(other.storage_, nullptr);
       size_ = std::exchange(other.size_, 0);
     }
+
     return *this;
   }
 
@@ -689,6 +720,7 @@ public:
 private:
   inline void release() noexcept {
     ErasingAllocator sensitive{*memory_};
+
     sensitive.deallocate(storage_, size_, alignof(std::uint8_t));
   }
 
@@ -870,9 +902,11 @@ public:
     for (std::size_t word = 0; word < words_.size(); ++word) {
       if (const auto available = ~words_[word]; available != 0) {
         const auto index = word * word_bits + std::countr_zero(available);
+
         return index < Capacity ? std::optional{index} : std::nullopt;
       }
     }
+
     return std::nullopt;
   }
 
@@ -880,8 +914,10 @@ public:
   inline void forEach(Visitor &&visit) const {
     for (std::size_t word = 0; word < words_.size(); ++word) {
       auto remaining = words_[word];
+
       while (remaining != 0) {
         const auto bit = std::countr_zero(remaining);
+
         remaining &= remaining - 1;
         visit(word * word_bits + bit);
       }

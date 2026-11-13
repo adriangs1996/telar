@@ -19,9 +19,11 @@ enum class Padding {
 
 inline constexpr auto encoded_pairs = [] {
   std::array<std::array<char, 2>, alphabet.size() * alphabet.size()> pairs;
+
   for (std::size_t index = 0; index < pairs.size(); ++index) {
     pairs[index] = {alphabet[index / alphabet.size()], alphabet[index % alphabet.size()]};
   }
+
   return pairs;
 }();
 
@@ -34,6 +36,7 @@ inline std::optional<std::size_t> decode(std::string_view encoded, std::span<std
 
   std::size_t written = 0;
   const auto complete = encoded.size() - remainder;
+
   for (std::size_t offset = 0; offset < complete; offset += 4) {
     const auto first = alphabet.find(encoded[offset]);
     const auto second = alphabet.find(encoded[offset + 1]);
@@ -55,6 +58,7 @@ inline std::optional<std::size_t> decode(std::string_view encoded, std::span<std
     if (count > 1) {
       destination[written++] = static_cast<std::uint8_t>((second << 4) | (third >> 2));
     }
+
     if (count > 2) {
       destination[written++] = static_cast<std::uint8_t>((third << 6) | fourth);
     }
@@ -67,11 +71,13 @@ inline std::optional<std::size_t> decode(std::string_view encoded, std::span<std
     if (first == std::string_view::npos || second == std::string_view::npos || third == std::string_view::npos || remainder - 1 > destination.size() - written) {
       return std::nullopt;
     }
+
     destination[written++] = static_cast<std::uint8_t>((first << 2) | (second >> 4));
     if (remainder == 3) {
       destination[written++] = static_cast<std::uint8_t>((second << 4) | (third >> 2));
     }
   }
+
   return written;
 }
 
@@ -86,10 +92,12 @@ inline constexpr std::optional<std::size_t> encode(std::span<const std::uint8_t>
   constexpr auto pair_mask = encoded_pairs.size() - 1;
   std::size_t written = 0;
   std::size_t offset = 0;
+
   for (std::size_t group = 0; group < complete_groups; ++group) {
     const auto value = (static_cast<std::uint32_t>(bytes[offset]) << 16) | (static_cast<std::uint32_t>(bytes[offset + 1]) << 8) | bytes[offset + 2];
     const auto &first = encoded_pairs[value >> pair_bits];
     const auto &second = encoded_pairs[value & pair_mask];
+
     std::copy(first.begin(), first.end(), destination.data() + written);
     std::copy(second.begin(), second.end(), destination.data() + written + first.size());
     offset += 3;
@@ -99,6 +107,7 @@ inline constexpr std::optional<std::size_t> encode(std::span<const std::uint8_t>
   if (remaining != 0) {
     const auto value = (static_cast<std::uint32_t>(bytes[offset]) << 16) | (remaining == 2 ? static_cast<std::uint32_t>(bytes[offset + 1]) << 8 : 0);
     const auto &first = encoded_pairs[value >> pair_bits];
+
     std::copy(first.begin(), first.end(), destination.data() + written);
     destination[written + 2] = remaining == 2 ? alphabet[(value >> 6) & (alphabet.size() - 1)] : '=';
     destination[written + 3] = '=';

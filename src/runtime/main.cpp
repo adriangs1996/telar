@@ -40,15 +40,18 @@ auto main(int argc, char **argv) -> int {
 
     if (command == plugins::TapWorkerOptions::command && argc >= 3) {
       const auto options = plugins::TapWorkerOptions::parse(args.subspan<2>());
+
       requireTracingBuild(options.trace_path != nullptr);
 #if TELAR_DEBUG
       trace::Session tracing{budget, options.trace_path};
+
 #endif
       plugins::runWorker(budget, options.entry, options.traffic);
       return 0;
     }
 
     SynchronizedAllocator memory{budget};
+
     cli::runServer(memory, cli::ServerOptions::parse(args.subspan<1>()));
     return 0;
   } catch (const SystemError &error) {

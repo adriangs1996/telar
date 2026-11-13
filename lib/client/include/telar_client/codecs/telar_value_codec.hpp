@@ -127,9 +127,11 @@ namespace telar {
           throw EncodingError{"Embedded NUL in text"};
         }
       }
+
       if constexpr (Rule != TextRule::bytes && Rule != TextRule::opaque) {
         validateUtf8(value);
       }
+
       if constexpr (Rule == TextRule::display || Rule == TextRule::multiline) {
         for (const auto character : value) {
           const auto byte = static_cast<Byte>(character);
@@ -156,6 +158,7 @@ namespace telar {
       if (!value.empty()) {
         std::memcpy(output.data(), value.data(), value.size());
       }
+
       output = output.subspan(value.size());
     }
 
@@ -166,6 +169,7 @@ namespace telar {
       }
 
       const auto value = textView(input.first(length));
+
       validate(value);
       input = input.subspan(length);
 
@@ -196,6 +200,7 @@ namespace telar {
       if (value.size() < Minimum || value.size() > Maximum) {
         throw EncodingError{"Invalid binary field length"};
       }
+
       return checkedWireSize(LengthCodec::width, value.size());
     }
 
@@ -203,10 +208,12 @@ namespace telar {
       if (output.size() < encodedSize(value)) {
         throw EncodingError{"Output buffer too small"};
       }
+
       LengthCodec::encode(static_cast<typename LengthCodec::value_type>(value.size()), output);
       if (!value.empty()) {
         std::memcpy(output.data(), value.data(), value.size());
       }
+
       output = output.subspan(value.size());
     }
 
@@ -215,7 +222,9 @@ namespace telar {
       if (length < Minimum || length > Maximum || length > input.size()) {
         throw EncodingError{"Invalid binary field length"};
       }
+
       const auto value = input.first(length);
+
       input = input.subspan(length);
       return value;
     }
@@ -229,6 +238,7 @@ namespace telar {
       if (value.size() < Minimum || value.size() > Maximum) {
         throw EncodingError{"Invalid tail length"};
       }
+
       return value.size();
     }
 
@@ -236,15 +246,18 @@ namespace telar {
       if (output.size() < encodedSize(value)) {
         throw EncodingError{"Output buffer too small"};
       }
+
       if (!value.empty()) {
         std::memcpy(output.data(), value.data(), value.size());
       }
+
       output = output.subspan(value.size());
     }
 
     static value_type decode(std::span<const Byte> &input) {
       (void)encodedSize(input);
       const auto value = input;
+
       input = {};
       return value;
     }
@@ -259,6 +272,7 @@ namespace telar {
       if (value.size() > Maximum) {
         throw EncodingError{"Error message too long"};
       }
+
       return value.size();
     }
 
@@ -270,6 +284,7 @@ namespace telar {
     static value_type decode(std::span<const Byte> &input) {
       const auto bytes = TailBytes<Maximum>::decode(input);
       const auto value = textView(bytes);
+
       (void)encodedSize(value);
       return value;
     }
@@ -301,6 +316,7 @@ namespace telar {
       if (value && *value > 100) {
         throw EncodingError{"Invalid progress percentage"};
       }
+
       u8::encode(value.value_or(255), output);
     }
 
@@ -309,9 +325,11 @@ namespace telar {
       if (value == 255) {
         return std::nullopt;
       }
+
       if (value > 100) {
         throw EncodingError{"Invalid progress percentage"};
       }
+
       return value;
     }
   };
@@ -365,6 +383,7 @@ namespace telar {
     static std::size_t encodedSize(value_type values) {
       validateCount(values.size());
       std::size_t size = CountCodec::width;
+
       for (const auto &value : values) {
         size = checkedWireSize(size, wireSize<ElementCodec>(value));
       }
@@ -385,12 +404,14 @@ namespace telar {
 
     static Decoded<value_type> decode(DecodeInput input, DecodeStorage &storage) {
       const auto count = CountCodec::decode(input);
+
       validateCount(count);
       if (count > input.size() / minimumWidth<ElementCodec>()) {
         throw EncodingError{"Truncated list"};
       }
 
       auto values = storage.allocate<Element>(count);
+
       for (auto &value : values) {
         value = decodeValue<ElementCodec>(input, storage);
       }
@@ -425,6 +446,7 @@ namespace telar {
 
     static Decoded<Value> decode(DecodeInput input, DecodeStorage &storage) {
       Value value{};
+
       BodySchema<Value>::decodeBody(input, value, storage);
       validateBody(value);
 
@@ -449,6 +471,7 @@ namespace telar {
       }
 
       auto output = buffer.first(size);
+
       BodySchema<Value>::encodeBody(value, output, context...);
       if (!output.empty()) {
         throw EncodingError{"Body serializer size mismatch"};
@@ -464,10 +487,12 @@ namespace telar {
       }
 
       Value value{};
+
       BodySchema<Value>::decodeBody(input, value, storage, context...);
       if (!input.empty()) {
         throw EncodingError{"Trailing bytes in body"};
       }
+
       validateBody(value);
 
       return value;

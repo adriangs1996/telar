@@ -44,6 +44,7 @@ public:
     setShaderFileName(VertexStage, QStringLiteral(":/telar/shaders/alpha_mask.vert.qsb"));
     const auto prefix = blend == AlphaMaskBlend::straight ? QStringLiteral(":/telar/shaders/straight/") : QStringLiteral(":/telar/shaders/");
     const auto fragment = sampling == AlphaMaskSampling::stable_nearest ? QStringLiteral("nearest_alpha_mask.frag.qsb") : sampling == AlphaMaskSampling::filtered ? QStringLiteral("filtered_alpha_mask.frag.qsb") : QStringLiteral("alpha_mask.frag.qsb");
+
     setShaderFileName(FragmentStage, prefix + fragment);
     if (blend == AlphaMaskBlend::straight) {
       setFlag(UpdatesGraphicsPipelineState);
@@ -62,14 +63,17 @@ bool MaskShader::updateUniformData(RenderState &state, QSGMaterial *new_material
   }
 
   bool changed = false;
+
   if (state.isMatrixDirty() || old_material == nullptr) {
     const auto matrix = physicalPixelMatrix(state);
+
     std::memcpy(buffer.data() + offsetof(MaskUniforms, matrix), matrix.constData(), sizeof(MaskUniforms::matrix));
     changed = true;
   }
 
   if (state.isOpacityDirty() || old_material == nullptr) {
     const auto opacity = state.opacity();
+
     std::memcpy(buffer.data() + offsetof(MaskUniforms, opacity), &opacity, sizeof(opacity));
     changed = true;
   }
@@ -144,6 +148,7 @@ int AlphaMaskMaterial::compare(const QSGMaterial *other) const {
   if (left_key < right_key) {
     return -1;
   }
+
   return left_key == right_key ? 0 : 1;
 }
 

@@ -23,12 +23,15 @@ inline EditorKind identifyEditor(std::string_view path) noexcept {
   if (name == "nvim") {
     return EditorKind::neovim;
   }
+
   if (name == "vi" || name == "vim" || name.starts_with("vim.")) {
     return EditorKind::vim;
   }
+
   if (name == "emacs" || name == "Emacs" || name == "emacsclient" || name.starts_with("emacs-")) {
     return EditorKind::emacs;
   }
+
   return EditorKind::unsupported;
 }
 
