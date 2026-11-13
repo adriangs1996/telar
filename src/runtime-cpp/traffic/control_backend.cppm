@@ -24,7 +24,6 @@ module;
 #include <netinet/tcp.h>
 #include <poll.h>
 
-#include <pthread.h>
 #include <brotli/decode.h>
 #include <zlib.h>
 #include <zstd.h>
@@ -919,16 +918,13 @@ class TBC_SHARED Service : public FlowControl, public HttpControl, public Packag
 public:
   inline explicit Service(Memory &memory, std::string_view path, bool allow_interception = false) : upstream_(memory), memory_(memory), listener_(path), interception_(memory), http_interception_(memory, &interception_.completionSignal(), &interception_.requestSignal()), analysis_(memory), recordings_(memory), allow_interception_(allow_interception) {
     randomBytes(&session_, sizeof(session_));
-    const auto error = ::pthread_create(&thread_, nullptr, &start, this);
-    if (error != 0) {
-      throw SystemError{"Start traffic service", error};
-    }
+    thread_ = startThread("Start traffic service", [this] { run(); });
   }
 
   inline ~Service() {
     stopping_.store(true, std::memory_order_release);
     wake_.notify();
-    ::pthread_join(thread_, nullptr);
+    thread_.join();
   }
 
   Service(const Service &) = delete;
@@ -1054,11 +1050,6 @@ public:
   inline void httpUnavailable(const FlowEvent &event) noexcept override { observeFlow(Kind::flow_error, event); }
 
 private:
-  inline static void *start(void *context) noexcept {
-    static_cast<Service *>(context)->run();
-    return nullptr;
-  }
-
   inline void run() noexcept {
     while (!stopping_.load(std::memory_order_acquire)) {
       try {
@@ -1456,7 +1447,7 @@ private:
   CompletionSignal wake_;
   std::atomic<bool> stopping_{false};
   std::array<std::optional<Peer>, maximum_peers> peers_{};
-  pthread_t thread_{};
+  std::jthread thread_;
   std::chrono::steady_clock::time_point heartbeat_ = std::chrono::steady_clock::now();
   bool producer_ = false;
   std::atomic<std::uint64_t> next_owner_{0};

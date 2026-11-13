@@ -7,7 +7,6 @@ module;
 #include <cstdint>
 
 
-#include <pthread.h>
 
 #include <cassert>
 
@@ -73,10 +72,7 @@ public:
   inline ObservationWorker(CompletionSignal *completion, std::in_place_t, Arguments &&...arguments)
       : service_(std::forward<Arguments>(arguments)...),
         completion_(completion) {
-    const auto error = ::pthread_create(&thread_, nullptr, &start, this);
-    if (error != 0) {
-      throw SystemError{"Start observation worker", error};
-    }
+    thread_ = startThread("Start observation worker", [this] { run(); });
   }
 
   inline ~ObservationWorker() {
@@ -86,7 +82,7 @@ public:
     }
     service_.stop();
     ready_.notify_one();
-    ::pthread_join(thread_, nullptr);
+    thread_.join();
   }
 
   ObservationWorker(const ObservationWorker &) = delete;
@@ -152,11 +148,6 @@ public:
   }
 
 private:
-  inline static void *start(void *context) noexcept {
-    static_cast<ObservationWorker *>(context)->run();
-    return nullptr;
-  }
-
   inline void run() noexcept {
     for (;;) {
       {
@@ -186,7 +177,7 @@ private:
   Service service_;
   CompletionSignal *completion_;
   CompletionSignal signal_;
-  pthread_t thread_{};
+  std::jthread thread_;
   std::mutex mutex_;
   std::condition_variable ready_;
   std::condition_variable completed_;
@@ -304,10 +295,7 @@ public:
         requests_(memory),
         batch_(memory),
         completions_(memory) {
-    const int error = ::pthread_create(&thread_, nullptr, &start, this);
-    if (error != 0) {
-      throw SystemError{"start request worker", error};
-    }
+    thread_ = startThread("start request worker", [this] { run(); });
   }
 
   inline ~RequestWorker() {
@@ -323,7 +311,7 @@ public:
     }
     ready_.notify_one();
     completion_available_.notify_one();
-    ::pthread_join(thread_, nullptr);
+    thread_.join();
   }
 
   RequestWorker(const RequestWorker &) = delete;
@@ -537,11 +525,6 @@ private:
     }
   }
 
-  inline static void *start(void *context) noexcept {
-    static_cast<RequestWorker *>(context)->run();
-    return nullptr;
-  }
-
   inline void run() noexcept {
     for (;;) {
       std::optional<Job> job;
@@ -671,7 +654,7 @@ private:
   static constexpr std::size_t maximum_failure_message = 192;
   Service &service_;
   CompletionSignal signal_;
-  pthread_t thread_{};
+  std::jthread thread_;
   mutable std::mutex mutex_;
   std::condition_variable ready_;
   std::condition_variable completion_available_;
