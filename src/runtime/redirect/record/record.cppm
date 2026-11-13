@@ -46,6 +46,7 @@ export import telar.platform;
 export import telar.runtime.redirect.pf_rules;
 import telar.base.diagnostics;
 import telar.platform.primitives;
+import telar.vocabulary;
 
 // Interface: redirect/log_interface.cppm
 export {

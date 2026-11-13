@@ -35,6 +35,7 @@ export import telar.platform;
 export import telar.plugins;
 import telar.base.diagnostics;
 import telar.platform.primitives;
+import telar.vocabulary;
 
 // Interface: redirect/flow_key.cppm
 export {
