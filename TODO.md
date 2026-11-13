@@ -200,17 +200,19 @@ graph LR
 - **Qué hace:** esqueleto de `telar.sys.posix`, `telar.sys.socket`, `telar.sys.process`, `telar.sys.apple` y `telar.sys.linux`, siguiendo el patrón `using ::open;` de `telar.platform.primitives`. Este es el único sitio con includes de C. Las conversiones de macros las hace P6.4.
 - **Hecho cuando:** los módulos compilan, `telar.platform.primitives` pasa a reexportar desde `telar.sys.*` y la capa `sys` está en `modules.json`, por debajo de `platform`.
 
-### [ ] P3.2 · `telar.wire.vocabulary`
+### [x] P3.2 · `telar.wire.vocabulary`
 - **Depende de:** P1.2
 - **Toca:** `telar.client.protocol`, `lib/wire/` nuevo.
 - **Qué hace:** sacar de `telar.client.protocol` los tipos base, enums y codecs (`Byte`, `TerminalSize`, `FailureCode`, `TabLocation`, `Cursor`…) a `telar.wire.vocabulary`, y pasar `telar_protocol.hpp` y `telar_messages.hpp` a código de módulo. `telar.client.protocol` queda como agregador.
 - **Hecho cuando:** compila sin cambiar ningún importador.
+- **Resultado:** `a2f0cedd6`. `lib/wire` con `telar.wire.vocabulary`, dueño de las cabeceras de codecs, serializer, celdas, frame y mensajes, que reexporta los tipos base. El vocabulario de `telar_protocol.hpp` pasa a `telar_messages.hpp`, y `telar_protocol.hpp` se queda con los mensajes y sus schemas. Compilan los tres procesos y pasan los tests del área. **No convierte las cabeceras a código de módulo:** las incluyen unos 170 adaptadores Qt, tests y los fragmentos globales de `runtime.terminal.control`, `gui.core.primitives` y `gui.terminal.screen`, que no pueden importar módulos. Por eso el agregador reexporta el vocabulario desde su propio fragmento en vez de `export import telar.wire.vocabulary`: con dos BMI que llevan copia del texto, cada importador las fusiona (+7,8 % al compilar `client_control`). `telar-wire` toma sus cabeceras de `lib/client/include` hasta esa conversión.
 
 ### [ ] P3.3 · Schemas de mensajes por dominio
 - **Depende de:** P3.2
 - **Toca:** `lib/wire/`.
 - **Qué hace:** repartir los 128 `MessageSchema` en `telar.wire.<dominio>`: pane I/O, agentes, historial, tráfico y layout (la lista final sale del análisis). El agregador sigue reexportando.
 - **Hecho cuando:** compila sin cambiar importadores y cada schema vive en un único dominio.
+- **De P3.2:** mientras `telar_protocol.hpp` siga siendo textual, un `export import` de cada dominio desde el agregador hace que cada importador fusione copias del mismo texto (medido +7,8 % en P3.2). Cada dominio tiene que ser dueño de su propia cabecera, o hay que convertir antes los usuarios textuales (fragmentos globales de `runtime.terminal.control`, `gui.core.primitives`, `gui.terminal.screen` y los adaptadores Qt).
 
 ### [ ] P3.4a–e · Migrar los importadores de `telar.client.protocol`
 - **Depende de:** P3.3
