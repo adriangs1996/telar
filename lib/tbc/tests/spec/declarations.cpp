@@ -1508,3 +1508,135 @@ bool declarationAbstractSharedSiblingUnmarked(declarations::arena& system) {
 }
 
 // END CASE
+
+// CASE: declaration.abstract_shared_release_read_first
+// PAIR: declaration.abstract_shared_release
+// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: Runtime::closeWorkspace (removeTab erases the workspace through SlotStore and AllocationDeleter)
+// STATUS: implemented
+// CONTRACT: A call through an abstract TBC_SHARED type's virtual deallocate releases only the block it is given, after the caller has evaluated the call's arguments.
+// SCENARIO: The identity is copied into a local, then a call releases the group it was read from through `memory &`, and the group is found again; accept.
+namespace declarations {
+  struct released_group {
+    std::size_t id;
+  };
+
+  // Releases a group through the memory it came from, as AllocationDeleter does.
+  class group_deleter {
+  public:
+    explicit group_deleter(memory& memory) noexcept
+        : memory_(&memory) {}
+
+    void operator()(released_group* group) const noexcept {
+      std::destroy_at(group);
+      memory_->deallocate(group, sizeof(released_group), alignof(released_group));
+    }
+
+  private:
+    memory* memory_;
+  };
+
+  // Slots of groups that it releases on erase, as SlotStore does.
+  class group_store {
+  public:
+    explicit group_store(memory& memory) noexcept
+        : memory_(memory) {}
+
+    group_store(const group_store&) = delete;
+    group_store& operator=(const group_store&) = delete;
+
+    const std::array<released_group*, 4>& items() const noexcept {
+      return items_;
+    }
+
+    released_group* find(std::size_t id) const noexcept {
+      return items_[id % 4];
+    }
+
+    void erase(std::size_t id) noexcept {
+      auto* group = find(id);
+      if (group == nullptr) {
+        return;
+      }
+
+      items_[id % 4] = nullptr;
+      group_deleter{memory_}(group);
+    }
+
+  private:
+    memory& memory_;
+    std::array<released_group*, 4> items_{};
+  };
+
+  inline void releaseGroup(group_store& groups, std::size_t group, std::size_t tab) noexcept {
+    static_cast<void>(tab);
+    groups.erase(group);
+  }
+}
+
+void declarationAbstractSharedReleaseReadFirst(declarations::group_store& groups, std::size_t id) {
+  auto* current = groups.find(id);
+
+  while (current != nullptr) {
+    const auto tab = current->id;
+
+    declarations::releaseGroup(groups, id, tab);
+    current = groups.find(id);
+  }
+}
+
+// END CASE
+
+// CASE: declaration.abstract_shared_release_use
+// PAIR: declaration.abstract_shared_release
+// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: Runtime::closeWorkspace (removeTab erases the workspace through SlotStore and AllocationDeleter)
+// STATUS: implemented
+// CONTRACT: A call through an abstract TBC_SHARED type's virtual deallocate releases only the block it is given, after the caller has evaluated the call's arguments.
+// SCENARIO: The group is read after the call that releases it through `memory &`; reject at the call.
+std::size_t declarationAbstractSharedReleaseUse(declarations::group_store& groups, std::size_t id) {
+  auto* current = groups.find(id);
+  if (current == nullptr) {
+    return 0;
+  }
+
+  declarations::releaseGroup(groups, id, 0); // expected-error [tbc-invalidated-borrow]
+  return current->id;
+}
+
+// END CASE
+
+// CASE: declaration.abstract_shared_release_argument
+// PAIR: declaration.abstract_shared_release
+// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: Runtime::closeWorkspace (removeTab erases the workspace through SlotStore and AllocationDeleter)
+// STATUS: pending
+// CONTRACT: A call through an abstract TBC_SHARED type's virtual deallocate releases only the block it is given, after the caller has evaluated the call's arguments.
+// SCENARIO: The identity is read from the group as a by-value argument of the call that releases it; the read completes before the call runs, as when it is copied into a local first; accept. Today tbc rejects it at the call.
+void declarationAbstractSharedReleaseArgument(declarations::group_store& groups, std::size_t id) {
+  auto* current = groups.find(id);
+
+  while (current != nullptr) {
+    declarations::releaseGroup(groups, id, current->id);
+    current = groups.find(id);
+  }
+}
+
+// END CASE
+
+// CASE: declaration.abstract_shared_release_iteration
+// PAIR: declaration.abstract_shared_release
+// SOURCE: src/runtime/persistence/session_store/session_store.cppm :: Restore::dropEmptyTabs (erases workspaces while iterating the store's slots)
+// STATUS: pending
+// CONTRACT: A call through an abstract TBC_SHARED type's virtual deallocate releases only the block it is given, after the caller has evaluated the call's arguments.
+// SCENARIO: The store's slot array is iterated while one slot's group is released through `memory &`; the release frees that group, not the array the loop reads; accept. Today tbc rejects it at the erase.
+void declarationAbstractSharedReleaseIteration(declarations::group_store& groups) {
+  for (auto* group : groups.items()) {
+    if (group == nullptr) {
+      continue;
+    }
+
+    const auto id = group->id;
+
+    groups.erase(id);
+  }
+}
+
+// END CASE
