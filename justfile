@@ -148,6 +148,16 @@ runtime-lifetime directory="out": lifetime-checker (runtime-configure directory 
 gui-lifetime: lifetime-checker (gui-configure "out" "Debug")
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out --target gui-lifetime
 
+# Check that the runtime, CLI and telar library interfaces keep no function body outside the allowlist.
+[working-directory: "src/runtime-cpp"]
+runtime-interface-bodies directory="out": lifetime-checker (runtime-configure directory "Debug")
+    "{{ justfile_directory() }}/tools/cpp" exec -- cmake "-DRUNTIME_BUILD_DIRECTORY={{ directory }}" -P cmake/interface_bodies.cmake
+
+# Check that the GUI interfaces keep no function body outside the allowlist.
+[working-directory: "src/gui-cpp"]
+gui-interface-bodies: lifetime-checker (gui-configure "out" "Debug")
+    "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out --target gui-interface-bodies
+
 # Package the Release Telar.app, install it under APPS and link its `telar` into BIN.
 [macos]
 install-gui apps=(home_directory() / "Applications") bin=(home_directory() / ".local/bin"): renderer (runtime-configure "out-release" "Release" no_tests) (gui-configure "out-release" "Release" no_tests)

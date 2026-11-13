@@ -1,8 +1,11 @@
 #include "blank_lines.hpp"
+#include "interface_bodies.hpp"
 #include "lifetime_analysis.hpp"
 
 #include <clang/ASTMatchers/ASTMatchFinder.h>
 #include <clang/Basic/DiagnosticOptions.h>
+#include <clang/Frontend/FrontendAction.h>
+#include <clang/Frontend/MultiplexConsumer.h>
 #include <clang/Frontend/TextDiagnosticPrinter.h>
 #include <clang/Tooling/ArgumentsAdjusters.h>
 #include <clang/Tooling/CommonOptionsParser.h>
@@ -16,9 +19,11 @@
 
 #include <atomic>
 #include <exception>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace {
   class borrow_check final : public clang::ast_matchers::MatchFinder::MatchCallback {
@@ -54,15 +59,61 @@ namespace {
   enum class checker {
     lifetime,
     blank_lines,
+    interface_bodies,
   };
 
   struct settings {
     bool lifetime;
     bool blank_lines;
+    bool interface_bodies;
     bool errors;
     bool colors;
     std::string header_filter;
     tbc_lint::blank_line_fixes &fixes;
+    tbc_lint::interface_modules &interfaces;
+  };
+
+  // Runs the matchers of the lifetime and blank-lines checks, when there are any, after the
+  // interface-bodies check, which walks only what the unit parsed before the matchers load the rest.
+  class unit_action final : public clang::ASTFrontendAction {
+  public:
+    unit_action(clang::ast_matchers::MatchFinder *finder, const settings &settings)
+        : finder_(finder),
+          settings_(settings) {}
+
+  protected:
+    std::unique_ptr<clang::ASTConsumer> CreateASTConsumer(clang::CompilerInstance &, llvm::StringRef) override {
+      std::vector<std::unique_ptr<clang::ASTConsumer>> consumers;
+
+      if (settings_.interface_bodies) {
+        consumers.push_back(std::make_unique<tbc_lint::interface_body_check>(settings_.interfaces, settings_.errors));
+      }
+
+      if (finder_ != nullptr) {
+        consumers.push_back(finder_->newASTConsumer());
+      }
+
+      return std::make_unique<clang::MultiplexConsumer>(std::move(consumers));
+    }
+
+  private:
+    clang::ast_matchers::MatchFinder *finder_;
+    const settings &settings_;
+  };
+
+  class unit_actions final : public clang::tooling::FrontendActionFactory {
+  public:
+    unit_actions(clang::ast_matchers::MatchFinder *finder, const settings &settings)
+        : finder_(finder),
+          settings_(settings) {}
+
+    std::unique_ptr<clang::FrontendAction> create() override {
+      return std::make_unique<unit_action>(finder_, settings_);
+    }
+
+  private:
+    clang::ast_matchers::MatchFinder *finder_;
+    const settings &settings_;
   };
 
   // Checks one translation unit with its own tool and analysis, so units can run on separate threads.
@@ -93,7 +144,9 @@ namespace {
     clang::tooling::ClangTool tool(compilations, {source}, std::make_shared<clang::PCHContainerOperations>(), llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem>(llvm::vfs::createPhysicalFileSystem().release()));
     tool.setDiagnosticConsumer(&printer);
     tool.appendArgumentsAdjuster(clang::tooling::getInsertArgumentAdjuster("-resource-dir=" TBC_CLANG_RESOURCE_DIR, clang::tooling::ArgumentInsertPosition::END));
-    return tool.run(clang::tooling::newFrontendActionFactory(&finder).get());
+    unit_actions actions(settings.lifetime || settings.blank_lines ? &finder : nullptr, settings);
+
+    return tool.run(&actions);
   }
 }
 
@@ -106,11 +159,13 @@ int main(int argc, const char **argv) try {
       llvm::cl::desc("Comma-separated checks to run; lifetime when none is given"),
       llvm::cl::values(
           clEnumValN(checker::lifetime, "lifetime", "Borrow checking"),
-          clEnumValN(checker::blank_lines, "blank-lines", "Blank lines between the statements of a block")),
+          clEnumValN(checker::blank_lines, "blank-lines", "Blank lines between the statements of a block"),
+          clEnumValN(checker::interface_bodies, "interface-bodies", "Function bodies in module interface units")),
       llvm::cl::CommaSeparated,
       llvm::cl::cat(category));
   const llvm::cl::opt<bool> fix("fix", llvm::cl::desc("Insert the blank lines that blank-lines asks for"), llvm::cl::cat(category));
   const llvm::cl::opt<std::string> header_filter("header-filter", llvm::cl::desc("Regular expression for the headers blank-lines checks besides each main file"), llvm::cl::cat(category));
+  const llvm::cl::opt<std::string> interface_allowlist("interface-allowlist", llvm::cl::desc("File naming the modules interface-bodies allows to keep bodies, one per line"), llvm::cl::cat(category));
 
   auto options = clang::tooling::CommonOptionsParser::create(argc, argv, category);
   if (!options) {
@@ -129,14 +184,35 @@ int main(int argc, const char **argv) try {
     return 2;
   }
 
+  const bool interface_bodies = checks.isSet(checker::interface_bodies);
+  if (!interface_allowlist.empty() && !interface_bodies) {
+    llvm::errs() << "tbc-lint: --interface-allowlist needs --checks=interface-bodies\n";
+    return 2;
+  }
+
+  llvm::StringSet<> allowed;
+
+  if (!interface_allowlist.empty()) {
+    auto modules = tbc_lint::readInterfaceAllowlist(interface_allowlist);
+    if (!modules) {
+      llvm::errs() << "tbc-lint: " << llvm::toString(modules.takeError()) << '\n';
+      return 2;
+    }
+
+    allowed = std::move(*modules);
+  }
+
   tbc_lint::blank_line_fixes fixes;
+  tbc_lint::interface_modules interfaces(std::move(allowed));
   const settings configuration{
       .lifetime = checks.getBits() == 0 || checks.isSet(checker::lifetime),
       .blank_lines = blank_lines,
+      .interface_bodies = interface_bodies,
       .errors = warnings_as_errors,
       .colors = llvm::errs().has_colors(),
       .header_filter = header_filter,
       .fixes = fixes,
+      .interfaces = interfaces,
   };
 
   const auto &compilations = options->getCompilations();
@@ -167,6 +243,10 @@ int main(int argc, const char **argv) try {
   }
 
   if (fix && !fixes.apply(llvm::errs())) {
+    return 1;
+  }
+
+  if (!interface_allowlist.empty() && interfaces.reportStale(llvm::errs(), warnings_as_errors, interface_allowlist) && warnings_as_errors) {
     return 1;
   }
 

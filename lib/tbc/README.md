@@ -234,6 +234,51 @@ headers only when their path matches `--header-filter`, and a header that
 several units include is reported and fixed once. Checks combine, as in
 `--checks=lifetime,blank-lines`; without `--checks` only lifetimes are checked.
 
+## Interface bodies
+
+`--checks=interface-bodies` reports `tbc-interface-body` on each function body
+that a module interface unit (`export module X;` or `export module X:part;`)
+keeps in its purview. An interface carries declarations; a body belongs to an
+implementation unit, so that changing it recompiles that unit and not every
+importer. Templates are reported too: their bodies move to an implementation
+unit that instantiates them explicitly, behind `extern template` in the
+interface.
+
+These bodies stay:
+
+- `constexpr` and `consteval` functions, whose bodies importers evaluate, and a
+  lambda that a `constexpr` variable holds when it can be evaluated too.
+- Hot paths marked `TBC_HOT_PATH`, from `<tbc/hot_path.hpp>`, so that importers
+  can inline them. A marked function that is not a template must also be
+  `inline`: the body of a non-inline function never reaches an importer, and a
+  member defined in its class is not implicitly inline in a module. On a class,
+  the mark covers the bodies of all its members, as for a small template that
+  stays one; on a variable, the lambdas that initialize it.
+
+```cpp
+export TBC_HOT_PATH inline std::size_t next(std::size_t index) {
+  return index + 1;
+}
+
+export template <typename type>
+class TBC_HOT_PATH Vector {
+  // ...
+};
+```
+
+What the global module fragment includes and what follows `module :private;`
+are no part of the interface, and implementation units are not checked. A body
+that a function holds, such as a local class or a lambda, belongs to it.
+
+```sh
+./out/debug/tbc-lint --checks=interface-bodies --interface-allowlist=allowlist.txt -p out/debug interface.cppm
+```
+
+`--interface-allowlist` names the modules that may still keep bodies, one per
+line, where blank lines and lines starting with `#` are ignored. A partition
+counts as its module. The allowlist also reports an allowed module whose checked
+interfaces keep no body, so that its entry is removed once its bodies move.
+
 ## Neovim
 
 Configure Debug before editing. `.clangd` selects `out/debug/compile_commands.json`

@@ -9,6 +9,7 @@ on:
       - 'packaging/release/install-linux-deps.sh'
       - 'lib/telar-*/**'
       - 'lib/tbc/**'
+      - 'docs/build/interface-bodies-allowlist.txt'
       - 'cmake/**'
       - 'justfile'
       - 'tools/check-cpp-*.py'
@@ -25,6 +26,7 @@ on:
       - 'packaging/release/install-linux-deps.sh'
       - 'lib/telar-*/**'
       - 'lib/tbc/**'
+      - 'docs/build/interface-bodies-allowlist.txt'
       - 'cmake/**'
       - 'justfile'
       - 'tools/check-cpp-*.py'
@@ -105,3 +107,7 @@ jobs:
           tools/cpp configure tbc -B lib/tbc/out/release --config Release -- -DBUILD_TESTING=OFF
           tools/cpp build tbc -B lib/tbc/out/release -- --target tbc-lint --parallel 3
           cmake --build src/gui-cpp/out --target gui-lifetime
+
+      - name: Check interface bodies
+        if: matrix.configuration == 'Release'
+        run: cmake --build src/gui-cpp/out --target gui-interface-bodies
