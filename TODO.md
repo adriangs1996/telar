@@ -315,9 +315,10 @@ graph LR
 - **Toca:** `cli.tab`, su unidad `integration.cpp`, `cli.integration.settings`, `cli.server`.
 - **Cierra:** `integration → (root)` (`→ cli.server`, `→ cli.tab`) y el ciclo.
 
-### [ ] P3.15b · Ciclo `cli.window` ↔ `cli.machine`
+### [x] P3.15b · Ciclo `cli.window` ↔ `cli.machine`
 - **Depende de:** P1.2
 - **Toca:** `cli.window`, `cli.machine`, `launch_commands.cpp`.
+- **Resultado:** `5287efcf6`. `launch_commands.cpp` y `completions.cpp` pasan a un módulo nuevo, `telar.cli.launch_commands`, por encima de `cli.machine` y `cli.window`, con las declaraciones de arranque que estaban en `window.cppm`. Compila el CLI y pasan sus 6 tests; `cli-window-tests` falló una vez y luego pasó 5 de 5 (intermitente). El checker solo lee interfaces, así que este ciclo, que pasaba por una unidad de implementación, no lo veía: P3.17 tiene que cubrirlo.
 
 ### [ ] P3.15c · `cli.hooks.session` → `cli.runtime_observer`
 - **Depende de:** P1.2
