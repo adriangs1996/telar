@@ -43,7 +43,6 @@ export module telar.runtime.tls.interception;
 
 import std;
 
-export import telar.runtime.proxy.relay_direction;
 export import telar.config;
 
 export import telar.tls;

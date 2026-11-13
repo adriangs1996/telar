@@ -114,12 +114,12 @@ telar.gui.text.notification_payload
 telar.gui.transport.runtime_link
 telar.lua
 telar.machines
-telar.platform
 telar.platform.daemon
 telar.platform.error
 telar.platform.events
 telar.platform.fs
 telar.platform.graphics
+telar.platform.net
 telar.platform.paths
 telar.platform.process
 telar.platform.sha256
@@ -163,6 +163,7 @@ telar.runtime.persistence.session_store
 telar.runtime.platform.background_executor
 telar.runtime.platform.git_status
 telar.runtime.platform.launch_program
+telar.runtime.platform.name_resolutions
 telar.runtime.platform.private_tunnel
 telar.runtime.platform.process_probe
 telar.runtime.platform.request_worker

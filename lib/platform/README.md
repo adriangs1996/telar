@@ -12,12 +12,12 @@ family:
 | `telar.platform.paths` | the process environment, XDG directories, the runtime's socket and storage paths and its server options |
 | `telar.platform.daemon` | the runtime's background launch |
 | `telar.platform.events` | observation timestamps and deadlines |
+| `telar.platform.net` | nonblocking byte streams, socket addresses and options, peer credentials and `SocketStream` |
 | `telar.platform.sha256` | SHA-256 on OpenSSL, which its consumers link |
 | `telar.platform.graphics` | shared memory for images handed to the GUI |
 | `telar.platform.primitives` | the owner of the textual headers: owned descriptors, mapped regions, random bytes and debug tracing |
 
-`telar.platform` imports every family, plus the socket helpers that have no family
-yet. Import the family a file uses instead. Git checkout files and hardened git
+`telar.platform` imports every family. Import the family a file uses instead. Git checkout files and hardened git
 commands live in `telar.git.checkout`, in `lib/git/checkout`.
 
 It builds a static library for the sources in `src/` and the implementation units

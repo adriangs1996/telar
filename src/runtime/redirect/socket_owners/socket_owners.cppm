@@ -124,8 +124,6 @@ export import telar.runtime.redirect.pf_rules;
 export import telar.runtime.redirect.ingress;
 export import telar.platform;
 
-export import telar.runtime.proxy.relay_direction;
-
 export import telar.runtime.platform.process_probe;
 import telar.base.diagnostics;
 import telar.platform.primitives;

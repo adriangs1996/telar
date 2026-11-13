@@ -211,51 +211,6 @@ export {
   }
 }
 
-// Interface: proxy/target.cppm
-export {
-  namespace telar::runtime {
-
-    struct ProxyTarget {
-      std::string_view hostname;
-      std::uint16_t port;
-
-      inline static std::optional<ProxyTarget> parse(std::string_view head) noexcept {
-        constexpr std::string_view method = "CONNECT ";
-        constexpr std::string_view version = " HTTP/1.1";
-        const auto line_end = head.find("\r\n");
-        if (line_end == std::string_view::npos) {
-          return std::nullopt;
-        }
-
-        const auto line = head.substr(0, line_end);
-        if (!line.starts_with(method) || !line.ends_with(version) || line.size() <= method.size() + version.size()) {
-          return std::nullopt;
-        }
-
-        const auto authority = line.substr(method.size(), line.size() - method.size() - version.size());
-        const auto colon = authority.rfind(':');
-        if (colon == std::string_view::npos || colon == 0 || colon > ProxyHostname::maximum_bytes) {
-          return std::nullopt;
-        }
-
-        const auto hostname = authority.substr(0, colon);
-        if (!ProxyHostname::validTarget(hostname)) {
-          return std::nullopt;
-        }
-
-        const auto port_text = authority.substr(colon + 1);
-        const auto port = parseExact<std::uint16_t>(port_text).value_or(0);
-        if (port == 0) {
-          return std::nullopt;
-        }
-
-        return ProxyTarget{hostname, port};
-      }
-    };
-
-  }
-}
-
 // Interface: proxy/authenticate.cppm
 export {
   namespace telar::runtime {
