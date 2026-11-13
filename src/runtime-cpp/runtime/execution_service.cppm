@@ -925,7 +925,7 @@ public:
     requires std::same_as<Request, SearchPane> || std::same_as<Request, SearchPaneRows>
   inline static void search(PaneStore<Memory> &panes, ClientSession<Memory> &client, const Request &request) {
     auto &pane = require(panes, request.pane_id);
-    if (client.interactive && client.attachment(pane.id) == nullptr) {
+    if (client.role == ClientRole::interactive && client.attachment(pane.id) == nullptr) {
       throw RequestError{FailureCode::pane_not_found, "Pane is not attached"};
     }
 

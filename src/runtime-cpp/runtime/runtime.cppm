@@ -2323,7 +2323,6 @@ export {
         }
 
         client.identity = message.client_identity;
-        client.interactive = message.interactive;
         client.subscribed = true;
         client.workspace_revision = 0;
         client.agent_snapshot_requested = true;

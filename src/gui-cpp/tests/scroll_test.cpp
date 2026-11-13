@@ -351,7 +351,6 @@ void foldedBlocksHideTheirOutput() {
   const auto &pane = *client.findPane(1);
   const auto output = first_row + first_rows;
   require(client.folded(1, 0) && pane.folds.hides(output) && pane.folds.hides(second_row - 1) && !pane.folds.hides(second_row) && !pane.folds.hides(output - 1), "a fold hides the rows between its prompt and the next");
-  require(client.takeFoldChange() && !client.takeFoldChange(), "a fold change is reported once");
   client.foldAll(1, true);
   require(client.folded(1, 1) && !client.folded(1, 2), "folding all leaves the running command open");
   deliver(client, PaneScrollback{.pane_id = 1, .generation = 1, .trimmed = trimmed + dropped});

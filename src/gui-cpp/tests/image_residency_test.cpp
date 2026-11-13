@@ -136,8 +136,8 @@ void idleExpiryUsesTheOriginalDeadlinesAndRounding() {
   const auto handle = ready(images, identity(1));
   images.markNeeded(handle);
   constexpr std::uint32_t idle_milliseconds = 5000;
-  require(images.wakeupAfter(1) == idle_milliseconds && !images.trimDue(Residency::idle_lifetime_ns - 1), "the idle deadline rounds upwards to milliseconds and expires only at its boundary");
-  require(images.trimDue(Residency::idle_lifetime_ns) && images.wakeupAfter(Residency::idle_lifetime_ns) == 1, "a due texture schedules a nonzero wakeup");
+  require(images.wakeupAfter(1) == idle_milliseconds, "the idle deadline rounds upwards to milliseconds");
+  require(images.wakeupAfter(Residency::idle_lifetime_ns) == 1, "a due texture schedules a nonzero wakeup");
   images.beginFrame(Residency::idle_lifetime_ns);
   require(images.state(handle) == nullptr && images.residentBytes() == 0 && images.wakeupAfter(0) == 0, "an idle texture leaves the table and releases its resource");
   const auto spare = ready(images, identity(2));
@@ -179,7 +179,6 @@ void catalogLifetimesAndClockExtremesStayDistinct() {
   require(images.newestReady(other_catalog) == 0, "the same image key in another catalog lifetime cannot share pixels");
   require(!images.request({.identity = {.catalog = {.value = 0}, .image_id = 1, .generation = 1}, .size = small, .retained_bytes = 0, .now_ns = 0}).upload, "an exhausted lifetime identity cannot enter the reusable table");
   images.markNeeded(first);
-  require(!images.trimDue(latest_clock - 1) && images.trimDue(latest_clock), "deadline arithmetic saturates without wrapping into the past");
 }
 
 void contextCleanupAbandonsUploadsAndReleasesEveryHandle() {

@@ -140,7 +140,8 @@ void failureRecovery() {
     fixture.open();
     const auto request_id = transport.last<OpenEditor>().request_id;
     require(deliver(fixture.client, EditorOpened{.request_id = request_id, .outcome = outcome}) == Change::notification, "failed and missing replies must publish link feedback");
-    require(fixture.client.notice() == (outcome == EditorOutcome::missing ? "Could not open link: FileNotFound" : "Could not open link: EditorOpenFailed"), "failure feedback must retain the runtime outcome");
+    const auto expected = outcome == EditorOutcome::missing ? std::string_view{"FileNotFound"} : std::string_view{"EditorOpenFailed"};
+    require(std::ranges::any_of(fixture.client.notifications().items(), [&](const auto &notice) { return notice.title.view() == "Could not open link" && notice.message.view() == expected; }), "failure feedback must retain the runtime outcome");
   }
 
   fixture.open();
@@ -286,7 +287,7 @@ void targetAndCapacityGuards() {
   fixture.open();
   const auto full_request = fixture.transport.last<OpenEditor>().request_id;
   const auto count = fixture.transport.count(ClientTag::create_pane);
-  require(deliver(fixture.client, EditorOpened{.request_id = full_request, .outcome = EditorOutcome::unavailable}) == Change::notification && fixture.client.notice() == "Could not open link: PaneSplitUnavailable", "a full tab must report its unavailable split without creating a pane");
+  require(deliver(fixture.client, EditorOpened{.request_id = full_request, .outcome = EditorOutcome::unavailable}) == Change::notification && std::ranges::any_of(fixture.client.notifications().items(), [](const auto &notice) { return notice.message.view() == "PaneSplitUnavailable"; }), "a full tab must report its unavailable split without creating a pane");
   require(fixture.transport.count(ClientTag::create_pane) == count, "capacity rejection must preserve runtime process ownership");
   bool rejected = false;
   try {

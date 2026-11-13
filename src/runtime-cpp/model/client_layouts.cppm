@@ -261,7 +261,6 @@ public:
   bool proxy_status_sent = false;
   bool agent_snapshot_requested = false;
   bool subscribed = false;
-  bool interactive = false;
   bool shared_graphics = false;
   std::uint64_t editor_source = 0;
   std::uint64_t editor_generation = 0;
@@ -605,7 +604,6 @@ public:
   ListeningPorts listening_ports;
   std::chrono::steady_clock::time_point ports_checked{};
   bool output_closed = false;
-  bool exit_published = false;
   bool exit_observed = false;
   bool shell_markers = false;
   bool needs_foreground_observation = false;

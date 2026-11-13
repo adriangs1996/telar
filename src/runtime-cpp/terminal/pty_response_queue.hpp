@@ -121,11 +121,6 @@ public:
     return append(response, std::move(owner));
   }
 
-  bool hasCapacity() const noexcept {
-    const std::lock_guard lock{mutex_};
-    return !closed_ && count_ != message_capacity && byte_count_ < total_byte_capacity;
-  }
-
   bool hasCapacityFor(std::size_t bytes) const noexcept {
     const std::lock_guard lock{mutex_};
     return !closed_ && count_ != message_capacity && bytes <= total_byte_capacity - byte_count_;

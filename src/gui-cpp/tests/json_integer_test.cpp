@@ -23,11 +23,12 @@ static_assert(true);
 #include "core/memory.hpp"
 
 
-import telar.gui.text.json_unsigned_integer;
+import telar.machines;
 
 namespace {
 
 using namespace telar::gui;
+using namespace telar::runtime::machines;
 using telar::gui::test::require;
 
 template <Allocator Memory>

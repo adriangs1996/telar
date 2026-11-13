@@ -89,7 +89,6 @@ template <Allocator Memory, RuntimeTransport Transport, MonotonicClock Clock = p
 class Session {
 public:
   static constexpr std::size_t decode_capacity = std::size_t{2} * 1024 * 1024;
-  static constexpr std::size_t maximum_workspaces = 128;
   static constexpr std::size_t maximum_tabs = 256;
   static constexpr std::size_t maximum_workspace_tabs = 64;
   static constexpr std::size_t maximum_panes = maximum_tabs * PaneLayout::maximum_panes;
@@ -98,7 +97,6 @@ public:
   static constexpr std::size_t input_chunk_size = 65536;
   // A viewport past any bottom: the runtime follows the output.
   static constexpr std::uint32_t follow_output = std::numeric_limits<std::uint32_t>::max();
-  static constexpr std::uint16_t history_page_size = HistoryBrowser<Memory>::page_entries;
   static constexpr std::size_t maximum_history_query_bytes = HistoryBrowser<Memory>::maximum_query_bytes;
   static constexpr std::uint16_t default_sidebar_columns = SidebarColumns::minimum_width;
   static constexpr std::size_t maximum_launch_arguments = 64;
@@ -118,7 +116,6 @@ public:
         peek_(memory),
         decode_(AllocatorRef<Byte, Memory>{memory}),
         clipboard_(AllocatorRef<char, Memory>{memory}),
-        notice_(AllocatorRef<char, Memory>{memory}),
         error_(AllocatorRef<char, Memory>{memory}),
         command_response_(AllocatorRef<char, Memory>{memory}),
         launch_cwd_(AllocatorRef<char, Memory>{memory}),
@@ -913,7 +910,6 @@ public:
     }
     refreshFolds(*pane);
     changed_pane_ = pane_id;
-    fold_changed_ = true;
   }
 
   // Folds every block but a running one, or unfolds them all.
@@ -930,13 +926,8 @@ public:
     }
     refreshFolds(*pane);
     changed_pane_ = pane_id;
-    fold_changed_ = true;
   }
 
-  // Whether a fold opened or closed since the last call.
-  [[nodiscard]] inline bool takeFoldChange() noexcept {
-    return std::exchange(fold_changed_, false);
-  }
 
   // The rows of block `index`'s output, from under its prompt to above the next prompt, or to
   // the live prompt or the scrollback's end for the last; empty when it printed nothing.
@@ -1954,10 +1945,6 @@ public:
 
   [[nodiscard]] inline std::string_view clipboard() const noexcept {
     return clipboard_;
-  }
-
-  [[nodiscard]] inline std::string_view notice() const noexcept {
-    return notice_;
   }
 
   [[nodiscard]] inline const NotificationCenter &notifications() const noexcept {
@@ -4408,8 +4395,6 @@ private:
   }
 
   Change reportLinkFailure(std::string_view message) {
-    notice_ = "Could not open link: ";
-    notice_ += message;
     publishNotification({.level = NotificationLevel::failure, .title = "Could not open link", .message = message, .link = {}});
 
     return Change::notification;
@@ -4495,12 +4480,6 @@ private:
   }
 
   Change apply(const Notification &message) {
-    notice_ = message.title;
-    if (!message.message.empty()) {
-      notice_ += ": ";
-      notice_ += message.message;
-    }
-
     publishNotification({.level = message.level, .target = message.target, .title = message.title, .message = message.message, .link = message.link, .duration_ns = static_cast<std::uint64_t>(message.duration_ms) * NotificationInput::nanoseconds_per_millisecond});
 
     return Change::notification;
@@ -5764,7 +5743,6 @@ private:
   SuggestionState suggestion_;
   tbc::view<Vector<Byte, Memory>, tbc::lt::a> decode_;
   tbc::view<String<Memory>, tbc::lt::a> clipboard_;
-  tbc::view<String<Memory>, tbc::lt::a> notice_;
   tbc::view<String<Memory>, tbc::lt::a> error_;
   tbc::view<String<Memory>, tbc::lt::a> command_response_;
   tbc::view<String<Memory>, tbc::lt::a> launch_cwd_;
@@ -5788,7 +5766,6 @@ private:
   bool attachment_resize_pending_ = false;
   bool ready_ = false;
   bool reads_rows_ = false;
-  bool fold_changed_ = false;
   bool presented_ = true;
   bool leave_pending_ = false;
   bool initial_open_pending_ = false;

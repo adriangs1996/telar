@@ -647,7 +647,7 @@ void semanticFailureDuringResume() {
       failed.terminal.feed(bytes("\x1b[5n"));
     }
     failed.terminal.feed(bytes("\x1b[5n\x1b]2;unavailable\x1b\\\x1b[5n"));
-    check(failed.terminal.hasPendingControl() && !failed.pty_responses->hasCapacity());
+    check(failed.terminal.hasPendingControl() && !failed.pty_responses->hasCapacityFor(1));
 
     upstream.failNext();
     panes.flushInput(failed);

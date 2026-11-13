@@ -154,7 +154,7 @@ static void testClosedGeneration() {
   resume_callback.store(true, std::memory_order_release);
   worker.join();
   queue.clear();
-  check(queue.empty() && !queue.hasCapacity());
+  check(queue.empty() && !queue.hasCapacityFor(1));
   check(queue.snapshot().dropped == 0);
   check(!queue.tryPushOwned({}, std::make_shared<int>(1)));
 }
@@ -184,7 +184,7 @@ static void testResponseOutbox() {
   {
     ResponseOutbox outbox{memory, shared_queue};
     outbox.append(ack);
-    check(queue.hasCapacity() && !queue.hasCapacityFor(ack.size()));
+    check(queue.hasCapacityFor(1) && !queue.hasCapacityFor(ack.size()));
     check(!outbox.drain() && outbox.nextSize() == ack.size());
     queue.consume(1);
     check(!queue.hasCapacityFor(ack.size()));

@@ -115,7 +115,13 @@ constexpr int fixture_sidebar_width = 280;
 constexpr int fixture_rail_width = 52;
 constexpr int fixture_wait_ms = 5'000;
 
-QList<QVariantMap> tabRecords(WorkspaceWindow::Selection selection) {
+// How many rows a fixture holds and which one is selected.
+struct Selection {
+  std::size_t count = 0;
+  std::size_t active = 0;
+};
+
+QList<QVariantMap> tabRecords(Selection selection) {
   QList<QVariantMap> rows;
   for (std::size_t index = 0; index < selection.count; ++index) {
     rows.append({
@@ -155,7 +161,7 @@ QRectF tabBounds(const QAbstractItemModel &model, int row) {
   return model.data(model.index(row, 0), ListModel::record_role).toMap().value(QStringLiteral("bounds")).toRectF();
 }
 
-QList<QVariantMap> workspaceRecords(WorkspaceWindow::Selection selection) {
+QList<QVariantMap> workspaceRecords(Selection selection) {
   QList<QVariantMap> rows;
   for (std::size_t index = 0; index < selection.count; ++index) {
     const auto name = QStringLiteral("project-%1").arg(index);

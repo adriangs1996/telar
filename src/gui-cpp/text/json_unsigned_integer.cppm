@@ -27,34 +27,10 @@ import telar.base.diagnostics;
 import telar.base.memory;
 import telar.gui.core.primitives;
 
-// Interface: text/number_radix.cppm
-// Shared with the CLI: telar.machines defines it.
-export namespace telar::gui {
-using telar::runtime::machines::NumberRadix;
-}
-
-// Interface: text/binary_fraction.cppm
-// Shared with the CLI: telar.machines defines it.
-export namespace telar::gui {
-using telar::runtime::machines::BinaryFraction;
-}
-
 // Interface: text/bounded_text.cppm
 // Shared with the CLI: telar.machines defines it.
 export namespace telar::gui {
 using telar::runtime::machines::BoundedText;
-}
-
-// Interface: text/radix_number.cppm
-// Shared with the CLI: telar.machines defines it.
-export namespace telar::gui {
-using telar::runtime::machines::RadixNumber;
-}
-
-// Interface: text/json_unsigned_integer.cppm
-// Shared with the CLI: telar.machines defines it.
-export namespace telar::gui {
-using telar::runtime::machines::JsonUnsignedInteger;
 }
 
 // Interface: text/label_text.cppm
