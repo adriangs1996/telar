@@ -101,6 +101,8 @@ registra `FILE_SET CXX_MODULES` públicos y aplica una variante coherente a todo
 los proveedores e importadores. Debug activa `TELAR_DEBUG` y `TELAR_DIAGNOSTICS`;
 Release puede activar `TELAR_DIAGNOSTICS`. `TELAR_SANITIZERS` instrumenta todo el
 grafo C/C++ propio. Los nombres antiguos de opciones sanitizer siguen aceptándose.
+Release y RelWithDebInfo enlazan con ThinLTO (`TELAR_THIN_LTO`, activa por
+defecto); [thinlto.md](thinlto.md) recoge lo que cuesta y lo que gana.
 Cada variante necesita su directorio de build; las macros del importador no
 reconfiguran un BMI.
 
