@@ -250,10 +250,11 @@ graph LR
 - **Hecho cuando:** graphics y terminal importan solo el vocabulario y esas 6 aristas salen de la allowlist.
 - **Resultado:** `ace1ea675`. El colector pasa entero (con el log, `LogSession` y los samples) a `telar.runtime.runtime.runtime_telemetry`, junto a `runtime.runtime`; el namespace no cambia. En `runtime/diagnostics` quedan `line`, `operation` y `runtime_counters`, que solo importan librerías, y `diagnostics` pasa a ser el primero de `process_layers.runtime`. Salen 7 aristas, no 6: también cae `runtime_telemetry → exchange_capture.exchange`, que no estaba en la tabla. Los tres módulos de vocabulario no se fusionan en uno: habría ensanchado los imports de más de 60 importadores. `upward_imports` de 48 a 41.
 
-### [ ] P3.8 · Romper `history.event` → `command_capture.tracker`
+### [x] P3.8 · Romper `history.event` → `command_capture.tracker`
 - **Depende de:** P1.2
 - **Toca:** `runtime.history.event`, `runtime.command_capture.tracker`, `runtime.platform.request_worker`.
 - **Cierra:** `history → command_capture` y `platform → history` (`request_worker → history.event`). Las dos están en el camino crítico de 20 módulos.
+- **Resultado:** `e36bfddca`. `CapturedCommand` pasa a `telar.runtime.history.command` (lo importan el tracker y `history.event`), `HistoryQueryOrder` a `request_worker`, su único usuario, y `history` baja por debajo de `command_capture` en `process_layers`; de rebote deja de subir `agents.snapshot → history.store`. Tres módulos de `redirect` usaban `Byte` por una cadena de re-exports cortada y ahora importan `telar.vocabulary`. Camino crítico de 22 a 21.
 - **Hecho cuando:** salen de la allowlist.
 
 ### [ ] P3.9 · Romper `terminal.text_reader` → graphics
