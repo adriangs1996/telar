@@ -91,7 +91,8 @@ ya no está en el fichero también hace fallar el checker.
 | Área | Interfaces finales | Organización |
 | --- | ---: | --- |
 | base | 5 | memoria, texto, diagnósticos, editores, historial |
-| client, platform, Lua, plugins, config, TLS | 6 | un módulo por biblioteca |
+| client, platform, Lua, plugins, TLS | 5 | un módulo por biblioteca |
+| config | 5 | un módulo por proceso, más un agregador mientras migran los importadores |
 | runtime | 73 | transporte, terminal, persistencia, proxy, tráfico y servicios |
 | CLI | 17 | argumentos, conexión y familias de comandos |
 | GUI | 58 | dominios y adaptadores C++; incluye una partición de vistas de fuentes |
@@ -103,6 +104,16 @@ Esto evita tanto un único módulo de la aplicación como un BMI por cada peque�
 header. Las unidades `.cpp` que definen miembros fuera de clase son unidades de
 implementación del módulo correspondiente. Sus cambios no necesitan recompilar
 los importadores de la interfaz.
+
+Una biblioteca que importan varios procesos se parte en módulos por proceso, no en
+particiones: una partición no se puede importar desde fuera de su módulo, así que
+todos los importadores seguirían recompilando con cualquier cambio. `telar-config`
+tiene `telar.config.core` (lo que comparten los tres procesos: avisos de límites,
+restricciones de valores, proveedores de agentes e integraciones, módulos Lua
+locales), `.runtime` (la sección `runtime`: agentes, proxy, historial, control y
+`RuntimeValues`), `.client` (la sección `client`: comandos, acciones, componentes,
+atajos y prompt), `.gui` (las secciones `gui` y `theme`) y `.snapshot`, que valida
+el config entero con todas ellas. Lo que solo usa el propio módulo no se exporta.
 
 Los templates y funciones calientes permanecen visibles en `.cppm`. Las funciones
 originalmente definidas dentro de una clase conservan `inline` explícito: en un

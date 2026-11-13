@@ -251,7 +251,7 @@ void declarationClassParameterKept() {
 
 // CASE: declaration.retained_copy
 // PAIR: declaration.retained_argument
-// SOURCE: lib/config/config.cppm :: LimitNotices::add
+// SOURCE: lib/config/core/core.cppm :: LimitNotices::add
 // STATUS: implemented
 // CONTRACT: A labeled reference parameter retained into fields that hold values keeps what the argument holds, not the argument.
 // SCENARIO: A temporary limit is copied into the notices, which are used after it dies; accept.
@@ -264,7 +264,7 @@ void declarationRetainedCopy(declarations::notices& kept) {
 
 // CASE: declaration.retained_reference
 // PAIR: declaration.retained_argument
-// SOURCE: lib/config/config.cppm :: LimitNotices::add
+// SOURCE: lib/config/core/core.cppm :: LimitNotices::add
 // STATUS: implemented
 // CONTRACT: A labeled reference parameter retained into fields that hold values keeps what the argument holds, not the argument.
 // SCENARIO: A holder whose region keeps a view retains the temporary string itself; reject where it dies.

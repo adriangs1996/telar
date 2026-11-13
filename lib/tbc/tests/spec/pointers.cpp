@@ -179,7 +179,7 @@ void pointerArrowCallLive(std::string_view text) {
 
 // CASE: pointer.parameter_pointee_live
 // PAIR: pointer.parameter_pointee
-// SOURCE: lib/config/config.cppm :: AgentManifests::find
+// SOURCE: lib/config/runtime/runtime.cppm :: AgentManifests::find
 // STATUS: implemented
 // CONTRACT: A field read through a pointer parameter borrows the pointee's contents, not the pointee.
 // SCENARIO: The returned text outlives the local record that held it; accept.
@@ -192,7 +192,7 @@ std::string_view pointerParameterPointeeLive(std::string_view source) {
 
 // CASE: pointer.parameter_pointee_dead
 // PAIR: pointer.parameter_pointee
-// SOURCE: lib/config/config.cppm :: AgentManifests::find
+// SOURCE: lib/config/runtime/runtime.cppm :: AgentManifests::find
 // STATUS: implemented
 // CONTRACT: Contents read through a pointer parameter keep the dependency on their own source.
 // SCENARIO: The text's source dies before the returned view is read.
