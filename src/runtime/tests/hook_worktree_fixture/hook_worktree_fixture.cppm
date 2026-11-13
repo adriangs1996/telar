@@ -4,6 +4,9 @@ module;
 export module telar.runtime.tests.hook_worktree_fixture;
 
 import std;
+import telar.wire.content;
+import telar.wire.layout;
+import telar.wire.worktrees;
 export import telar.runtime.tests.hook_fixture;
 
 export {

@@ -9,9 +9,9 @@ static_assert(true);
 
 import std;
 import telar.base.memory;
-import telar.client.protocol;
 import telar.runtime.diagnostics.line;
 import telar.runtime.command_capture.tracker;
+import telar.vocabulary;
 
 using namespace telar;
 using namespace telar::runtime;

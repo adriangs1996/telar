@@ -9,13 +9,14 @@ static_assert(true);
 #include <cstdio>
 
 import std;
-import telar.client.protocol;
 import telar.config;
 import telar.gui.core.primitives;
 import telar.gui.terminal.screen;
 import telar.gui.core.metrics;
 import telar.gui.graphics.placeholder;
 import telar.gui.graphics.texture_cache;
+import telar.wire.graphics;
+import telar.wire.vocabulary;
 
 namespace {
 

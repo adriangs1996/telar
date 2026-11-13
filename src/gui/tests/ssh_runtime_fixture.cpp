@@ -8,8 +8,10 @@ static_assert(true);
 #include <cstdio>
 
 import std;
-import telar.client.protocol;
 import telar.client;
+import telar.wire.layout;
+import telar.wire.pane_io;
+import telar.wire.vocabulary;
 
 namespace {
 

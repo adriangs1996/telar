@@ -12,9 +12,12 @@ static_assert(true);
 import std;
 import telar.base.memory;
 import telar.base.text;
-import telar.client.protocol;
 import telar.runtime.tests.agent_oracle;
 import telar.runtime.platform.process_probe;
+import telar.wire.agents;
+import telar.wire.pane_io;
+import telar.wire.runtime;
+import telar.wire.vocabulary;
 
 using namespace telar;
 

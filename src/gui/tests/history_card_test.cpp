@@ -11,7 +11,6 @@ static_assert(true);
 
 import std;
 import telar.base.memory;
-import telar.client.protocol;
 import telar.gui.core.primitives;
 import telar.gui.core.metrics;
 import telar.gui.core.unicode_scalar;

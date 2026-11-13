@@ -61,7 +61,6 @@ static_assert(true);
 import std;
 import telar.base.memory;
 import telar.base.text;
-import telar.client.protocol;
 import telar.git.checkout;
 import telar.platform.primitives;
 import telar.runtime.tests.check;
@@ -70,6 +69,8 @@ import telar.runtime.platform.launch_program;
 import telar.runtime.platform.process_probe;
 import telar.platform;
 import telar.runtime.transport.connection;
+import telar.wire.runtime;
+import telar.wire.vocabulary;
 
 using namespace telar;
 using namespace telar::runtime;

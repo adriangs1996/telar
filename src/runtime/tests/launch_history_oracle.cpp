@@ -14,9 +14,9 @@ import std;
 import telar.base.diagnostics;
 import telar.base.memory;
 import telar.base.text;
-import telar.client.protocol;
 import telar.platform.primitives;
 import telar.runtime.history.store;
+import telar.wire.vocabulary;
 
 using namespace telar;
 using namespace telar::runtime;

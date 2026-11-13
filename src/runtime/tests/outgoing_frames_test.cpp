@@ -9,9 +9,13 @@ static_assert(true);
 
 import std;
 import telar.base.memory;
-import telar.client.protocol;
 import telar.runtime.tests.check;
 import telar.runtime.transport.connection;
+import telar.wire.clients;
+import telar.wire.clipboard;
+import telar.wire.content;
+import telar.wire.runtime;
+import telar.wire.vocabulary;
 
 using namespace telar;
 using namespace telar::runtime;

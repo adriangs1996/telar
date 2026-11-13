@@ -1,7 +1,8 @@
 export module telar.runtime.tests.clipboard_task;
 
 import std;
-export import telar.client.protocol;
+export import telar.wire.clipboard;
+export import telar.wire.vocabulary;
 
 export {
   namespace telar::runtime::control_test {

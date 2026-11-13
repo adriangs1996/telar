@@ -1,6 +1,8 @@
 export module telar.runtime.tests.backpressure;
 
 import std;
+import telar.wire.clients;
+import telar.wire.content;
 export import telar.runtime.tests.check;
 export import telar.runtime.tests.protocol_peer;
 

@@ -10,7 +10,6 @@ static_assert(true);
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <QString>
 #include <QtCore/qchar.h>
 #include <algorithm>

@@ -6,8 +6,15 @@ module;
 export module telar.gui.tests.session_fixture;
 
 import std;
-export import telar.client.protocol;
 export import telar.gui.application.host_effects;
+export import telar.wire.clipboard;
+export import telar.wire.editor;
+export import telar.wire.history;
+export import telar.wire.layout;
+export import telar.wire.pane_io;
+export import telar.wire.runtime;
+export import telar.wire.vocabulary;
+export import telar.wire.worktrees;
 
 export {
   namespace telar::gui::test {

@@ -9,7 +9,7 @@ static_assert(true);
 #include "assertions.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_client/codecs/telar_cells.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_client/protocol/content.hpp"
 #include <array>
 #include <cmath>
 #include <cstdint>

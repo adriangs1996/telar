@@ -22,10 +22,10 @@ import std;
 import telar.base.memory;
 import telar.base.text;
 import telar.cli.tests.check;
-import telar.client.protocol;
 import telar.platform.primitives;
 import telar.cli.hook;
 import telar.platform;
+import telar.wire.vocabulary;
 
 using namespace telar;
 using namespace telar::runtime;

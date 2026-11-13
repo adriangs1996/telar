@@ -9,7 +9,6 @@ static_assert(true);
 #include <cstdio>
 
 import std;
-import telar.client.protocol;
 import telar.gui.core.metrics;
 
 namespace {

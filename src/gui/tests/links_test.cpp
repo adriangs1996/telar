@@ -9,11 +9,12 @@ static_assert(true);
 
 import std;
 import telar.base.memory;
-import telar.client.protocol;
 import telar.gui.core.primitives;
 import telar.gui.terminal.screen;
 import telar.gui.links.cell_links;
 import telar.gui.links.path_expansion;
+import telar.wire.pane_io;
+import telar.wire.vocabulary;
 
 namespace {
 

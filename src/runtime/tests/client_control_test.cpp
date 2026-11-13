@@ -43,7 +43,6 @@ import std;
 import telar.base.diagnostics;
 import telar.base.memory;
 import telar.base.text;
-import telar.client.protocol;
 import telar.config;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
@@ -55,6 +54,11 @@ import telar.runtime.runtime.client_control;
 import telar.runtime.runtime.runtime;
 #if (TELAR_DIAGNOSTICS)
 import telar.runtime.runtime.runtime_telemetry;
+import telar.wire.clients;
+import telar.wire.layout;
+import telar.wire.pane_io;
+import telar.wire.runtime;
+import telar.wire.vocabulary;
 #endif
 
 using namespace telar;

@@ -23,13 +23,16 @@ static_assert(true);
 import std;
 import telar.base.memory;
 import telar.base.text;
-import telar.client.protocol;
 import telar.platform.primitives;
 import telar.runtime.tests.check;
 import telar.runtime.editors.remote_editor;
 import telar.runtime.paths.query_task;
 import telar.runtime.platform.request_worker;
 import telar.runtime.suggestions.engine;
+import telar.wire.clients;
+import telar.wire.editor;
+import telar.wire.runtime;
+import telar.wire.vocabulary;
 
 using namespace telar;
 using namespace telar::runtime;

@@ -4,7 +4,8 @@ module;
 export module telar.gui.tests.metrics_fixture;
 
 import std;
-export import telar.client.protocol;
+export import telar.wire.runtime;
+export import telar.wire.vocabulary;
 
 export {
   namespace telar::gui::test {

@@ -10,7 +10,6 @@ static_assert(true);
 
 import std;
 import telar.base.memory;
-import telar.client.protocol;
 import telar.gui.core.primitives;
 import telar.gui.terminal.screen;
 import telar.gui.layout.geometry;
@@ -19,6 +18,8 @@ import telar.gui.core.metrics;
 import telar.gui.input.configuration;
 import telar.gui.terminal.font_grid;
 import telar.gui.transport.runtime_link;
+import telar.wire.pane_io;
+import telar.wire.vocabulary;
 
 namespace {
 

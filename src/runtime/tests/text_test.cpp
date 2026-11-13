@@ -17,7 +17,6 @@ static_assert(true);
 
 import std;
 import telar.base.memory;
-import telar.client.protocol;
 import telar.config;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
@@ -26,6 +25,9 @@ import telar.runtime.terminal.control;
 import telar.runtime.tests.check;
 import telar.runtime.terminal.osc_scanner;
 import telar.runtime.terminal.text_reader;
+import telar.wire.clipboard;
+import telar.wire.content;
+import telar.wire.vocabulary;
 
 using namespace telar;
 using namespace telar::runtime;

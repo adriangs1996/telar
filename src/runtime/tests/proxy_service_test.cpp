@@ -58,7 +58,6 @@ static_assert(true);
 import std;
 import telar.base.memory;
 import telar.base.text;
-import telar.client.protocol;
 import telar.platform.primitives;
 import telar.runtime.tests.http2_fixture;
 import telar.runtime.tests.tls_fixture;

@@ -13,7 +13,6 @@ static_assert(true);
 
 import std;
 import telar.base.memory;
-import telar.client.protocol;
 import telar.platform;
 import telar.platform.primitives;
 import telar.runtime.tests.check;
@@ -23,6 +22,10 @@ import telar.runtime.shell_integration;
 import telar.runtime.runtime.client_control;
 import telar.runtime.shell_integration.git_context;
 import telar.runtime.shell_integration.words;
+import telar.wire.content;
+import telar.wire.editor;
+import telar.wire.pane_io;
+import telar.wire.vocabulary;
 
 using namespace telar;
 using namespace telar::runtime;

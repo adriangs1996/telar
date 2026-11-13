@@ -14,9 +14,13 @@ static_assert(true);
 #include <unistd.h>
 
 import std;
-import telar.client.protocol;
 import telar.runtime.tests.protocol_peer;
 import telar.client;
+import telar.wire.clients;
+import telar.wire.history;
+import telar.wire.layout;
+import telar.wire.runtime;
+import telar.wire.vocabulary;
 
 using namespace telar;
 

@@ -10,7 +10,6 @@ static_assert(true);
 
 import std;
 import telar.base.memory;
-import telar.client.protocol;
 import telar.gui.links.path_expansion;
 import telar.gui.links.cell_links;
 

@@ -29,7 +29,6 @@ import std;
 import telar.base.diagnostics;
 import telar.base.memory;
 import telar.base.text;
-import telar.client.protocol;
 import telar.config;
 import telar.git.checkout;
 import telar.platform.primitives;
@@ -39,6 +38,7 @@ import telar.runtime.terminal.control;
 import telar.runtime.tests.check;
 import telar.runtime.tests.client_peer;
 import telar.runtime.runtime.media_service;
+import telar.wire.runtime;
 
 using namespace telar;
 using namespace telar::runtime;

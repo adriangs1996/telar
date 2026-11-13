@@ -13,12 +13,12 @@ static_assert(true);
 
 import std;
 import telar.base.memory;
-import telar.client.protocol;
 import telar.platform.primitives;
 import telar.runtime.tests.check;
 import telar.runtime.tests.test_byte_stream;
 import telar.runtime.http1.intercepted_relay;
 import telar.runtime.proxy.runtime;
+import telar.wire.vocabulary;
 
 using namespace telar;
 using namespace telar::runtime;

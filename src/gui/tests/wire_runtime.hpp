@@ -6,7 +6,7 @@ static_assert(true);
 #include "../core/memory.hpp"
 #include "telar_client/codecs/telar_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
 #include "telar_client/serializers/telar_serializer.hpp"
 #include <QLocalSocket>
 #include <QObject>

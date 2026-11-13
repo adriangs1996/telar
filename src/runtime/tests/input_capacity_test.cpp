@@ -95,7 +95,6 @@ import std;
 import telar.base.diagnostics;
 import telar.base.memory;
 import telar.base.text;
-import telar.client.protocol;
 import telar.config;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
@@ -105,6 +104,10 @@ import telar.runtime.tests.client_peer;
 import telar.runtime.runtime.runtime_telemetry;
 #endif
 import telar.runtime.runtime.runtime;
+import telar.wire.clients;
+import telar.wire.pane_io;
+import telar.wire.runtime;
+import telar.wire.vocabulary;
 
 using namespace telar;
 using namespace telar::runtime;

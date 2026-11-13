@@ -19,7 +19,6 @@ static_assert(true);
 
 import std;
 import telar.base.memory;
-import telar.client.protocol;
 import telar.config;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
@@ -27,6 +26,8 @@ import telar.runtime.graphics.kitty;
 import telar.runtime.terminal.control;
 import telar.runtime.tests.check;
 import telar.runtime.terminal.text_reader;
+import telar.wire.pane_io;
+import telar.wire.vocabulary;
 
 extern "C" std::uint64_t scroll_census_count;
 #endif

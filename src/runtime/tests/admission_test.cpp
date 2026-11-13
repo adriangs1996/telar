@@ -9,10 +9,10 @@ static_assert(true);
 #include <unistd.h>
 
 import std;
-import telar.client.protocol;
 import telar.platform.primitives;
 import telar.runtime.tests.check;
 import telar.runtime.transport.connection;
+import telar.wire.vocabulary;
 
 using namespace telar;
 using namespace telar::runtime;

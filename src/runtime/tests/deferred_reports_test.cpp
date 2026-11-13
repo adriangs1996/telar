@@ -26,7 +26,6 @@ import std;
 import telar.base.diagnostics;
 import telar.base.memory;
 import telar.base.text;
-import telar.client.protocol;
 import telar.config;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
@@ -34,6 +33,7 @@ import telar.runtime.graphics.kitty;
 import telar.runtime.terminal.control;
 import telar.runtime.tests.client_peer;
 import telar.runtime.runtime.client_control;
+import telar.wire.vocabulary;
 
 using namespace telar;
 using namespace telar::runtime;

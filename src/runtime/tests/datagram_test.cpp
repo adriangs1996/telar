@@ -13,13 +13,13 @@ static_assert(true);
 
 import std;
 import telar.base.memory;
-import telar.client.protocol;
 import telar.platform.primitives;
 import telar.runtime.tests.check;
 import telar.runtime.tests.packet_fixture;
 import telar.runtime.tests.tls_fixture;
 import telar.runtime.traffic.capture_analysis;
 import telar.runtime.traffic.control_backend;
+import telar.vocabulary;
 
 using namespace telar;
 using namespace telar::runtime;
