@@ -210,19 +210,20 @@ graph LR
 ### [ ] P3.3 · Schemas de mensajes por dominio
 - **Depende de:** P3.2
 - **Toca:** `lib/wire/`.
-- **Qué hace:** repartir los 128 `MessageSchema` en `telar.wire.<dominio>`: pane I/O, agentes, historial, tráfico y layout (la lista final sale del análisis). El agregador sigue reexportando.
-- **Hecho cuando:** compila sin cambiar importadores y cada schema vive en un único dominio.
-- **De P3.2:** mientras `telar_protocol.hpp` siga siendo textual, un `export import` de cada dominio desde el agregador hace que cada importador fusione copias del mismo texto (medido +7,8 % en P3.2). Cada dominio tiene que ser dueño de su propia cabecera, o hay que convertir antes los usuarios textuales (fragmentos globales de `runtime.terminal.control`, `gui.core.primitives`, `gui.terminal.screen` y los adaptadores Qt).
+- **Qué hace:** repartir los 128 `MessageSchema` en `telar.wire.<dominio>`: pane I/O, agentes, historial, tráfico y layout (la lista final sale del análisis). **El texto también se parte:** `telar_protocol.hpp` se divide en una cabecera por dominio (`protocol/pane_io.hpp`…), cada una con un único dueño, su módulo `telar.wire.<dominio>`. `telar_protocol.hpp` queda solo como paraguas que incluye las de dominio, y el agregador sigue reexportando. No migra includers ni importadores: eso es P3.4.
+- **Por qué:** los adaptadores Qt nunca podrán importar módulos (moc no entiende `import` y sus cabeceras declaran señales con tipos del protocolo), así que partir solo los módulos no corta la cascada real. Medido sobre `ef8914a51`: `telar_protocol.hpp` lo incluyen 155 ficheros (77 adaptadores Qt, 67 tests, 44 cabeceras y su dueño), y llega por fragmento global a `gui.core.primitives` (`terminal_size.hpp`), `gui.terminal.screen` (`row_cache.hpp`) y `runtime.client_control` (`clipboard.hpp`). Un `export import` de dominios con una cabecera textual compartida además obliga a fusionar copias del texto (+7,8 % medido en P3.2).
+- **Hecho cuando:** compila sin cambiar importadores, cada schema vive en un único dominio y cada cabecera de dominio tiene un único módulo dueño.
 
 ### [ ] P3.4a–e · Migrar los importadores de `telar.client.protocol`
 - **Depende de:** P3.3
 - **Toca:** a = runtime, b = gui, c = cli, d = lib, e = tests. Las cinco van en paralelo.
-- **Qué hace:** cada unidad importa solo `telar.wire.vocabulary` y los dominios que usa. Las 33 unidades que no usan ningún nombre del módulo pierden el import.
-- **Hecho cuando:** ningún fichero del árbol importa `telar.client.protocol`.
+- **Qué hace:** cada unidad importa solo `telar.wire.vocabulary` y los dominios que usa. Las 33 unidades que no usan ningún nombre del módulo pierden el import. Cada fichero textual (adaptadores Qt en b, tests en e, cabeceras en su árbol) incluye solo las cabeceras de dominio que usa en lugar del paraguas, y lo mismo las tres cabeceras que llegan por fragmento global (`terminal_size.hpp`, `row_cache.hpp`, `clipboard.hpp`).
+- **Hecho cuando:** ningún fichero del árbol importa `telar.client.protocol` ni incluye `telar_protocol.hpp`.
 
 ### [ ] P3.5 · Borrar el agregador `telar.client.protocol`
 - **Depende de:** P3.4a–e
-- **Hecho cuando:** el módulo no existe y P0.2 da, para un cambio en un dominio, solo los dependientes de ese dominio.
+- **Qué hace:** borra el módulo y la cabecera paraguas `telar_protocol.hpp`.
+- **Hecho cuando:** ni el módulo ni la cabecera paraguas existen, y `ninja -n` tras tocar la cabecera de un dominio recompila solo a sus usuarios, adaptadores Qt y tests incluidos (no basta con el grafo de módulos de P0.2).
 
 ### [ ] P3.6 · Bajar `background_executor` y limpiar `runtime/platform`
 - **Depende de:** P1.2
