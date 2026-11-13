@@ -15,7 +15,7 @@ module;
 #include <sys/types.h>
 #include <sys/wait.h>
 
-module telar.platform;
+module telar.platform.process;
 
 import std;
 

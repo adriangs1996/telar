@@ -149,6 +149,16 @@ corrupted indexes, bogus pack offsets, garbage packs, oversized and FIFO
 refs, ref names escaping `refs/`, malformed and oversized config, unknown
 extensions, foreign git directories and random byte corruption.
 
+## Checkout files and hardened git
+
+`telar.git.checkout`, in `checkout/`, holds what telar reads from a checkout
+without this reader: `GitFiles` (paths under `.git` and `gitdir:` files),
+`GitHead`, `LinkedWorktree`, and `HardenedGit`, which runs the git CLI against a
+repository that may be hostile, with no hooks, fsmonitor, prompts, lazy fetch,
+inherited `GIT_*` environment or filter drivers. It is its own target,
+`telar::git-checkout`, without zlib, so the CLI links it alone; `telar::git`
+links it too.
+
 ## Editor
 
 Use the [pinned C++ workflow](../../docs/build/cpp-modules.md).

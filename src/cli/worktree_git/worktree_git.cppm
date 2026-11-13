@@ -48,6 +48,7 @@ import telar.wire.vocabulary;
 import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.runtime;
+import telar.git.checkout;
 import telar.platform.primitives;
 
 // Interface: repository_identity.cppm

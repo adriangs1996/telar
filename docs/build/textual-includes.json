@@ -272,6 +272,12 @@
     "<cstdint>",
     "<tbc/view.hpp>"
   ],
+  "lib/git/checkout/checkout.cppm": [
+    "<cstring>",
+    "<limits.h>",
+    "<sys/stat.h>",
+    "tbc/view.hpp"
+  ],
   "lib/git/git-format.cppm": [
     "<cerrno>",
     "<fcntl.h>",
@@ -325,7 +331,7 @@
     "<cstdint>",
     "<cstring>"
   ],
-  "lib/platform/daemon.cpp": [
+  "lib/platform/daemon/daemon.cpp": [
     "<cerrno>",
     "<csignal>",
     "<cstddef>",
@@ -342,6 +348,36 @@
     "<sys/wait.h>",
     "<unistd.h>",
     "telar_platform/process_environment.h"
+  ],
+  "lib/platform/daemon/daemon.cppm": [
+    "<cstdlib>",
+    "<limits.h>",
+    "<sys/types.h>"
+  ],
+  "lib/platform/error/error.cppm": [
+    "<cerrno>"
+  ],
+  "lib/platform/fs/fs.cppm": [
+    "<cerrno>",
+    "<cstdio>",
+    "<cstdlib>",
+    "<cstring>",
+    "<dirent.h>",
+    "<fcntl.h>",
+    "<limits.h>",
+    "<linux/fs.h>",
+    "<sys/stat.h>",
+    "<sys/syscall.h>",
+    "<sys/types.h>",
+    "<unistd.h>",
+    "tbc/view.hpp"
+  ],
+  "lib/platform/graphics/graphics.cppm": [
+    "<cstdio>",
+    "<fcntl.h>",
+    "<sys/mman.h>",
+    "<sys/types.h>",
+    "<unistd.h>"
   ],
   "lib/platform/include/telar_platform/descriptor_path.hpp": [
     "<array>",
@@ -391,7 +427,25 @@
     "telar_base/memory/allocator.hpp",
     "telar_platform/trace_macro.hpp"
   ],
-  "lib/platform/pipe_process.cpp": [
+  "lib/platform/paths/paths.cppm": [
+    "<cstdlib>",
+    "<sys/un.h>",
+    "<unistd.h>"
+  ],
+  "lib/platform/platform.cppm": [
+    "<cerrno>",
+    "<csignal>",
+    "<sys/socket.h>",
+    "<sys/types.h>",
+    "<unistd.h>"
+  ],
+  "lib/platform/primitives/primitives.cppm": [
+    "telar_platform/graphics/child_shared_memory.hpp",
+    "telar_platform/mapped_region.hpp",
+    "telar_platform/random_bytes.hpp",
+    "telar_platform/trace.hpp"
+  ],
+  "lib/platform/process/pipe_process.cpp": [
     "<cerrno>",
     "<csignal>",
     "<cstddef>",
@@ -407,13 +461,9 @@
     "<sys/wait.h>",
     "<unistd.h>"
   ],
-  "lib/platform/platform.cppm": [
-    "<cassert>",
+  "lib/platform/process/process.cppm": [
     "<cerrno>",
     "<csignal>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
     "<cstdlib>",
     "<cstring>",
     "<dirent.h>",
@@ -421,34 +471,20 @@
     "<libproc.h>",
     "<limits.h>",
     "<linux/close_range.h>",
-    "<linux/fs.h>",
     "<mach-o/dyld.h>",
-    "<new>",
-    "<openssl/sha.h>",
     "<poll.h>",
-    "<pthread.h>",
     "<pwd.h>",
     "<spawn.h>",
-    "<stdlib.h>",
     "<sys/attr.h>",
-    "<sys/mman.h>",
-    "<sys/socket.h>",
     "<sys/stat.h>",
     "<sys/syscall.h>",
     "<sys/types.h>",
-    "<sys/un.h>",
     "<sys/wait.h>",
     "<unistd.h>",
     "tbc/view.hpp",
     "telar_platform/process_environment.h"
   ],
-  "lib/platform/primitives/primitives.cppm": [
-    "telar_platform/graphics/child_shared_memory.hpp",
-    "telar_platform/mapped_region.hpp",
-    "telar_platform/random_bytes.hpp",
-    "telar_platform/trace.hpp"
-  ],
-  "lib/platform/pty_process.cpp": [
+  "lib/platform/process/pty_process.cpp": [
     "<cerrno>",
     "<csignal>",
     "<cstddef>",
@@ -467,6 +503,9 @@
     "<termios.h>",
     "<unistd.h>",
     "<util.h>"
+  ],
+  "lib/platform/sha256/sha256.cppm": [
+    "<openssl/sha.h>"
   ],
   "lib/platform/src/file_descriptor.cpp": [
     "<cerrno>",
@@ -493,6 +532,10 @@
     "<unistd.h>",
     "telar_platform/file_descriptor.hpp",
     "telar_platform/trace.hpp"
+  ],
+  "lib/platform/thread/thread.cppm": [
+    "<pthread.h>",
+    "<unistd.h>"
   ],
   "lib/plugins/plugins.cppm": [
     "<cerrno>",

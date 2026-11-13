@@ -323,7 +323,7 @@ void functionLive() {
 
 // CASE: std.converted_owner_escape
 // PAIR: std.converted_owner
-// SOURCE: lib/platform/platform.cppm :: LinkedWorktree
+// SOURCE: lib/git/checkout/checkout.cppm :: LinkedWorktree
 // STATUS: implemented
 // CONTRACT: A wrapper whose element is a view borrows an owner converted into that element.
 // SCENARIO: An optional view of a local string is returned.
@@ -336,7 +336,7 @@ std::optional<std::string_view> convertedOwnerEscape() {
 
 // CASE: std.converted_owner_copied
 // PAIR: std.converted_owner
-// SOURCE: lib/platform/platform.cppm :: LinkedWorktree
+// SOURCE: lib/git/checkout/checkout.cppm :: LinkedWorktree
 // STATUS: implemented
 // CONTRACT: An owner stored in an owning element of a pair is copied, not borrowed.
 // SCENARIO: Only the first element is a view; the temporary string fills the owned second element; accept.

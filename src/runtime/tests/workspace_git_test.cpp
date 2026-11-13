@@ -31,6 +31,7 @@ import telar.base.memory;
 import telar.base.text;
 import telar.client.protocol;
 import telar.config;
+import telar.git.checkout;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
 import telar.runtime.graphics.kitty;

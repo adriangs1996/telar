@@ -31,6 +31,7 @@ import telar.wire.vocabulary;
 import telar.wire.agents;
 import telar.wire.pane_io;
 import telar.wire.runtime;
+import telar.git.checkout;
 import telar.platform.primitives;
 
 // Interface: hooks/codex_subagents.cppm

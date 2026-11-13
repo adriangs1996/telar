@@ -31,7 +31,7 @@ module;
 #include <pty.h>
 #endif
 
-module telar.platform;
+module telar.platform.process;
 
 import std;
 

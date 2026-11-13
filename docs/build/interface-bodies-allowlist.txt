@@ -34,6 +34,7 @@ telar.cli.worktree_git
 telar.client
 telar.config
 telar.git
+telar.git.checkout
 telar.gui.application.host_effects
 telar.gui.application.session
 telar.gui.application.sound_playback
@@ -101,6 +102,15 @@ telar.gui.transport.runtime_link
 telar.lua
 telar.machines
 telar.platform
+telar.platform.daemon
+telar.platform.error
+telar.platform.events
+telar.platform.fs
+telar.platform.graphics
+telar.platform.paths
+telar.platform.process
+telar.platform.sha256
+telar.platform.thread
 telar.plugins
 telar.render.document
 telar.render.markdown

@@ -1073,7 +1073,7 @@ void inferredOpaqueReceiverRetained() {
 
 // CASE: inference.self_borrow_pinned
 // PAIR: inference.self_borrow
-// SOURCE: lib/platform/platform.cppm :: Command::environment_
+// SOURCE: lib/platform/process/process.cppm :: Command::environment_
 // STATUS: implemented
 // CONTRACT: An object may borrow its own fields through a field labeled `lt::self` when it can be neither copied nor moved, as Rust admits self-references only behind `Pin`.
 // SCENARIO: A labeled field keeps a pointer to a sibling field of a non-copyable, non-movable object; accept.
@@ -1105,7 +1105,7 @@ char inferredSelfBorrowPinned() {
 
 // CASE: inference.self_borrow_relocatable
 // PAIR: inference.self_borrow
-// SOURCE: lib/platform/platform.cppm :: Command::environment_
+// SOURCE: lib/platform/process/process.cppm :: Command::environment_
 // STATUS: implemented
 // CONTRACT: An object may borrow its own fields when it can be neither copied nor moved, as Rust admits self-references only behind `Pin`.
 // SCENARIO: A copy of the object would keep pointing into the source's field; reject at the initializer that takes the borrow.
@@ -1134,7 +1134,7 @@ char inferredSelfBorrowRelocatable() {
 
 // CASE: inference.constructor_unwinding
 // PAIR: inference.constructor_entry
-// SOURCE: lib/platform/platform.cppm :: DirectoryStream
+// SOURCE: lib/platform/fs/fs.cppm :: DirectoryStream
 // STATUS: implemented
 // CONTRACT: A constructor's fields hold nothing before it initializes them; a path that throws constructs no object.
 // SCENARIO: A pointer field is set from a C function after a branch that throws; the object is used afterwards; accept.
@@ -1175,7 +1175,7 @@ bool inferredConstructorUnwinding() {
 
 // CASE: inference.constructor_unwinding_escape
 // PAIR: inference.constructor_entry
-// SOURCE: lib/platform/platform.cppm :: DirectoryStream
+// SOURCE: lib/platform/fs/fs.cppm :: DirectoryStream
 // STATUS: implemented
 // CONTRACT: A constructor's fields hold nothing before it initializes them; a path that throws constructs no object.
 // SCENARIO: A field set after a throwing branch still carries its argument's borrow out of the function.

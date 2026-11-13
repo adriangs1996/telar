@@ -47,6 +47,7 @@ import telar.wire.agents;
 import telar.wire.layout;
 import telar.wire.runtime;
 import telar.wire.worktrees;
+import telar.git.checkout;
 import telar.platform.primitives;
 
 // Interface: hooks/input.cppm

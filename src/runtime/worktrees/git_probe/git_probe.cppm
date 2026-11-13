@@ -26,6 +26,7 @@ export import telar.runtime.platform.git_status;
 export import telar.platform;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
+import telar.git.checkout;
 import telar.platform.primitives;
 
 // Interface: worktrees/base_distance.cppm
