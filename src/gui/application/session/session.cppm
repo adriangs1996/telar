@@ -34,6 +34,7 @@ export import telar.gui.peek.screen;
 export import telar.gui.platform.profile_file;
 export import telar.gui.presentation.notification_stack;
 export import telar.gui.presentation.activity_order;
+export import telar.gui.presentation.client_view_state;
 export import telar.gui.presentation.frame_pacer;
 export import telar.gui.presentation.display_metrics;
 export import telar.gui.presentation.application_mark;

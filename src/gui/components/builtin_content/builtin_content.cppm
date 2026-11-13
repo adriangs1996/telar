@@ -19,7 +19,7 @@ import std;
 
 export import telar.gui.components.configuration;
 
-export import telar.gui.config.plugin_effects;
+export import telar.gui.input.binding_effects;
 
 export import telar.gui.text.json_unsigned_integer;
 

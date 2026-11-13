@@ -11,9 +11,12 @@ import std;
 
 export import telar.gui.input.copy_pointer;
 export import telar.gui.input.key_encoder;
-
-export import telar.gui.config.gui_query;
 import telar.wire.vocabulary;
+
+// Interface: config/default_bindings.cppm
+export {
+#include "input/default_bindings.inc"
+}
 
 // Interface: input/configuration.cppm
 export {

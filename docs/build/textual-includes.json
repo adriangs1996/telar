@@ -1415,7 +1415,6 @@
     "<cstdint>",
     "<cstdio>",
     "<cstring>",
-    "config/default_bindings.inc",
     "config/palette_actions.inc",
     "config/theme_presets.inc",
     "tbc/view.hpp"
@@ -1585,7 +1584,8 @@
     "<cstddef>",
     "<cstdint>",
     "<cstdio>",
-    "<cstring>"
+    "<cstring>",
+    "input/default_bindings.inc"
   ],
   "src/gui/input/copy_mode/copy_mode.cppm": [
     "tbc/view.hpp"
