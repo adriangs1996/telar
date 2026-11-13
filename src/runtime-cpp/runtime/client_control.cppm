@@ -860,14 +860,17 @@ private:
         ++pane->cwd_revision;
       }
 
+      // Whether the observation still describes the pane's process, asked once: it reads the
+      // terminal's foreground group with a system call.
+      const bool current = entry.process_result && (entry.process_result->inspected || entry.process_result->ports_inspected) && observes(*pane, *entry.process_result);
       if (entry.process_result && entry.process_result->inspected) {
         TELAR_DIAGNOSTIC(diagnostics::accumulate(model.metrics.agent_process_inspections));
         TELAR_DIAGNOSTIC(diagnostics::accumulate(model.metrics.agent_process_misses, entry.process_result->provider == AgentProvider::unknown));
-        model.pane_revision += applyProcess(agents, *pane, *entry.process_result);
+        model.pane_revision += current && applyProcess(agents, *pane, *entry.process_result);
       }
 
       if (entry.process_result && entry.process_result->ports_inspected) {
-        model.pane_revision += applyPorts(*pane, *entry.process_result);
+        model.pane_revision += current && applyPorts(*pane, *entry.process_result);
       }
 
       if (entry.screen.signal) {
@@ -941,9 +944,9 @@ private:
     return pane.generation == observation.request.generation && !pane.exit_status && pane.process->processId() == observation.request.root && pane.process->foregroundProcessGroup().value_or(0) == observation.request.foreground;
   }
 
-  // Whether the pane list changed.
+  // Whether the pane list changed, for an observation of the pane's current process.
   inline static bool applyPorts(Pane<Memory> &pane, const ProcessProbeResult &observation) {
-    if (!observes(pane, observation) || pane.listening_ports == observation.ports) {
+    if (pane.listening_ports == observation.ports) {
       return false;
     }
 
@@ -952,12 +955,8 @@ private:
     return true;
   }
 
-  // Whether the pane list changed.
+  // Whether the pane list changed, for an observation of the pane's current process.
   inline static bool applyProcess(Agents &agents, Pane<Memory> &pane, const ProcessProbeResult &observation) {
-    if (!observes(pane, observation)) {
-      return false;
-    }
-
     pane.process_cache = observation.cache;
     bool listed = false;
     if (!observation.name.view().empty() && pane.foreground.view() != observation.name.view()) {
