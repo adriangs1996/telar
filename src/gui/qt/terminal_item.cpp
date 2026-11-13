@@ -87,7 +87,7 @@ import telar.gui.fonts.font_requests;
 import telar.gui.fonts.face;
 import telar.gui.input.key_encoder;
 import telar.gui.terminal.font_grid;
-import telar.gui.terminal.copy_mode;
+import telar.gui.terminal.selection;
 
 namespace telar::gui::qt {
 

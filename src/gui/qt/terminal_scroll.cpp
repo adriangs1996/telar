@@ -27,7 +27,7 @@ static_assert(true);
 #include "terminal/screen.hpp"
 
 import telar.gui.application.workspace_replica;
-import telar.gui.terminal.copy_mode;
+import telar.gui.input.copy_mode;
 
 namespace telar::gui::qt {
 

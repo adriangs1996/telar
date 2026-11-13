@@ -32,7 +32,7 @@ static_assert(true);
 
 import telar.gui.core.metrics;
 import telar.gui.terminal.glyphs.curve_cache;
-import telar.gui.terminal.copy_mode;
+import telar.gui.terminal.glyphs;
 
 namespace telar::gui::qt {
 

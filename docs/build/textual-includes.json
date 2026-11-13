@@ -1587,6 +1587,9 @@
     "<cstdio>",
     "<cstring>"
   ],
+  "src/gui/input/copy_mode/copy_mode.cppm": [
+    "tbc/view.hpp"
+  ],
   "src/gui/input/copy_pointer/copy_pointer.cppm": [
     "<cmath>",
     "<cstddef>",
@@ -2007,16 +2010,6 @@
     "<cstdint>",
     "<cstdio>",
     "<cstring>"
-  ],
-  "src/gui/terminal/copy_mode/copy_mode.cppm": [
-    "<cmath>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>",
-    "tbc/view.hpp"
   ],
   "src/gui/terminal/fold_map/fold_map.cppm": [
     "terminal/fold_map.hpp"

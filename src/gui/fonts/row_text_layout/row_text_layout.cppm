@@ -28,7 +28,9 @@ export import telar.gui.terminal.font_grid;
 export import telar.gui.core.metrics;
 
 export import telar.gui.core.json_writer;
-export import telar.gui.terminal.copy_mode;
+export import telar.gui.fonts.text_runs;
+export import telar.gui.terminal.selection;
+import telar.gui.terminal.glyphs;
 import telar.base.diagnostics;
 import telar.gui.core.primitives;
 import telar.gui.terminal.screen;

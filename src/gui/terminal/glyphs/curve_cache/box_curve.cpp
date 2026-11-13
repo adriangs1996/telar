@@ -11,7 +11,7 @@ import std;
 import telar.gui.terminal.font_grid;
 
 import telar.gui.core.metrics;
-import telar.gui.terminal.copy_mode;
+import telar.gui.terminal.glyphs;
 
 namespace telar::gui::glyphs {
 

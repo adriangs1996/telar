@@ -94,7 +94,7 @@ import telar.gui.graphics.texture_cache;
 import telar.gui.links.link_hover;
 import telar.gui.links.cell_links;
 import telar.gui.terminal.font_grid;
-import telar.gui.terminal.copy_mode;
+import telar.gui.terminal.selection;
 
 namespace {
 

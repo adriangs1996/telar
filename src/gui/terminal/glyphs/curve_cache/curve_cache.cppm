@@ -10,7 +10,7 @@ import std;
 
 export import telar.gui.core.metrics;
 
-export import telar.gui.terminal.copy_mode;
+export import telar.gui.terminal.glyphs;
 
 export import telar.gui.terminal.font_grid;
 

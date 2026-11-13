@@ -17,7 +17,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.terminal.copy_mode;
+import telar.gui.terminal.glyphs;
 
 namespace telar::gui::qt {
 

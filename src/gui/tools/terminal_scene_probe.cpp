@@ -74,7 +74,7 @@ import telar.gui.core.metrics;
 import telar.config;
 import telar.gui.fonts.face;
 import telar.gui.graphics.texture_cache;
-import telar.gui.terminal.copy_mode;
+import telar.gui.terminal.selection;
 import telar.gui.core.unicode_scalar;
 
 namespace {
