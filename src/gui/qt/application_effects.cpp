@@ -28,7 +28,7 @@ static_assert(true);
 #include <utility>
 #include <variant>
 
-import telar.gui.application.host_effects;
+import telar.gui.text.notification_payload;
 import telar.gui.presentation.frame_pacer;
 
 namespace telar::gui::qt {

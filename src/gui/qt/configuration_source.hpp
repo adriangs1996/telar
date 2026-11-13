@@ -64,7 +64,7 @@ static_assert(true);
 
 import telar.gui.components.builtin_content;
 import telar.gui.components.configuration;
-import telar.gui.application.host_effects;
+import telar.gui.presentation.client_view_state;
 import telar.gui.config.plugin_query;
 import telar.gui.config.plugin_effects;
 import telar.gui.config.gui_query;

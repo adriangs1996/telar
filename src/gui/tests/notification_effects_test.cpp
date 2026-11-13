@@ -26,7 +26,7 @@ static_assert(true);
 #include <system_error>
 #include <utility>
 
-import telar.gui.application.host_effects;
+import telar.gui.text.notification_payload;
 import telar.gui.application.sound_playback;
 
 namespace {

@@ -17,7 +17,7 @@ export module telar.gui.platform.notification_commands;
 
 import std;
 
-export import telar.gui.application.host_effects;
+export import telar.gui.text.notification_payload;
 
 export import telar.gui.text.json_unsigned_integer;
 

@@ -80,7 +80,7 @@ static_assert(true);
 #include "application/dependencies.hpp"
 #include "platform/window.hpp"
 
-import telar.gui.application.host_effects;
+import telar.gui.presentation.client_view_state;
 import telar.gui.components.configuration;
 import telar.gui.components.builtin_content;
 import telar.gui.config.plugin_query;

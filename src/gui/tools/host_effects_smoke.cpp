@@ -34,7 +34,7 @@ static_assert(true);
 #include "qt/sound_player.hpp"
 #include "qt/system_notifier.hpp"
 
-import telar.gui.application.host_effects;
+import telar.gui.text.notification_payload;
 
 namespace {
 

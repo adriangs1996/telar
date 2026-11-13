@@ -12,7 +12,7 @@ export module telar.gui.config.gui_query;
 
 import std;
 
-export import telar.gui.application.host_effects;
+export import telar.gui.presentation.client_view_state;
 export import telar.gui.core.metrics;
 export import telar.gui.core.json_writer;
 
