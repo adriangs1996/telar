@@ -18,7 +18,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.presentation.application_mark;
+import telar.gui.model.records;
 
 namespace telar::gui::qt {
 

@@ -213,7 +213,7 @@ namespace telar::gui::qt {
     record.insert(QStringLiteral("path"), tab.label.empty() ? displayPath(pane != nullptr ? std::string_view{pane->cwd} : std::string_view{tab.directory}) : QString{});
     record.insert(QStringLiteral("cards"), tabCards(tab, panes, agents));
     record.insert(QStringLiteral("selected"), selected);
-    const auto activity = TabActivity::derive(tab, pane, agents, selected);
+    const auto activity = TabActivity::derive(tab, pane != nullptr ? pane->progress_state : PaneProgressState::remove, agents, selected);
 
     record.insert(QStringLiteral("activityKind"), static_cast<int>(activity.kind));
     record.insert(QStringLiteral("activityColor"), QString::fromLatin1(palette_names[static_cast<std::size_t>(activity.color)]));

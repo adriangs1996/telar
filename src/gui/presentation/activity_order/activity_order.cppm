@@ -15,7 +15,7 @@ export module telar.gui.presentation.activity_order;
 import std;
 
 export import telar.gui.presentation.application_mark;
-export import telar.gui.application.workspace_replica;
+export import telar.gui.model.replicas;
 
 export import telar.gui.core.metrics;
 export import telar.gui.text.json_unsigned_integer;
@@ -1051,8 +1051,9 @@ export {
         }
       }
 
+      // `focused` is the progress of the tab's focused pane, `remove` when it has none.
       template <Allocator Memory>
-      [[nodiscard]] inline static TabActivity derive(const Tab<Memory>& tab, const Pane<Memory>* focused, std::span<const Agent<Memory>> agents, bool selected) noexcept {
+      [[nodiscard]] inline static TabActivity derive(const Tab<Memory>& tab, PaneProgressState focused, std::span<const Agent<Memory>> agents, bool selected) noexcept {
         const Agent<Memory>* urgent = nullptr;
 
         for (const auto& agent : agents) {
@@ -1067,11 +1068,11 @@ export {
           activity.attention = AgentStatusPresentation::color(urgent->status);
         }
 
-        if (selected && tab.layout.nodes().size() == 1 && focused != nullptr && focused->progress_state != PaneProgressState::remove) {
+        if (selected && tab.layout.nodes().size() == 1 && focused != PaneProgressState::remove) {
           activity.kind = Kind::progress;
-          if (focused->progress_state == PaneProgressState::error) {
+          if (focused == PaneProgressState::error) {
             activity.color = PaletteRole::red;
-          } else if (focused->progress_state == PaneProgressState::pause) {
+          } else if (focused == PaneProgressState::pause) {
             activity.color = PaletteRole::yellow;
           }
 

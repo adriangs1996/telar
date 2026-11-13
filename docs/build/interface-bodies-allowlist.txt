@@ -72,6 +72,8 @@ telar.gui.links.path_expansion
 telar.gui.machines.discovery
 telar.gui.machines.picker
 telar.gui.machines.profile_store
+telar.gui.model.records
+telar.gui.model.replicas
 telar.gui.palette.navigation_label
 telar.gui.paths.label
 telar.gui.peek.screen
@@ -87,6 +89,7 @@ telar.gui.presentation.history_filter_geometry
 telar.gui.presentation.history_inspection
 telar.gui.presentation.history_inspection_geometry
 telar.gui.presentation.history_meta_geometry
+telar.gui.presentation.notification_center
 telar.gui.presentation.notification_stack
 telar.gui.presentation.suggestion_geometry
 telar.gui.presentation.suggestion_labels
