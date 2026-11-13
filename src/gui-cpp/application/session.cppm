@@ -512,13 +512,7 @@ public:
         break;
       }
 
-      const auto request_id = pending(RequestKind::forget_worktree);
-      try {
-        transport_.send(ForgetWorktree{.request_id = request_id, .worktree = row.id});
-      } catch (...) {
-        complete(request_id);
-        throw;
-      }
+      sendRegistered(RequestKind::forget_worktree, ForgetWorktree{.request_id = 0, .worktree = row.id});
 
       ++sent;
     }
@@ -637,13 +631,7 @@ public:
       return false;
     }
 
-    const auto request_id = pending(RequestKind::close_pane, pane_id);
-    try {
-      transport_.send(ClosePane{request_id, pane_id});
-    } catch (...) {
-      complete(request_id);
-      throw;
-    }
+    sendRegistered(RequestKind::close_pane, ClosePane{0, pane_id}, pane_id);
 
     return true;
   }
@@ -2308,13 +2296,7 @@ private:
     requires(std::same_as<Request, InterruptAgent> || std::same_as<Request, SendPaneText> || std::same_as<Request, LaunchWorktree>)
   void sendPeekAction(Request request, std::uint64_t pane_id) {
     constexpr auto kind = std::same_as<Request, LaunchWorktree> ? RequestKind::peek_diff : RequestKind::peek_action;
-    request.request_id = pending(kind, pane_id);
-    try {
-      transport_.send(request);
-    } catch (...) {
-      complete(request.request_id);
-      throw;
-    }
+    sendRegistered(kind, request, pane_id);
   }
 
   inline void openPeekDiff(const Agent<Memory> &agent) {
@@ -2358,41 +2340,27 @@ private:
   template <typename Request>
     requires(std::same_as<Request, OpenPane> || std::same_as<Request, CreateWorkspace>)
   void sendOpeningRequest(RequestKind kind, Request request, TabLocation location = TabLocation(), std::optional<std::uint64_t> fallback_workspace = std::nullopt) {
-    request.request_id = pending(kind);
-    auto &registered = pending_[pending_count_ - 1];
-    registered.size = request.size;
-    registered.location = location;
-    registered.fallback_workspace = fallback_workspace;
-    if constexpr (std::same_as<Request, OpenPane>) {
-      registered.pane_id = request.target.kind == PaneTarget::Kind::pane ? request.target.id : 0;
-    }
-
-    try {
-      transport_.send(request);
-    } catch (...) {
-      complete(request.request_id);
-      throw;
-    }
+    sendRegistered(kind, request, 0, [&](Pending &registered, const Request &sent) {
+      registered.size = sent.size;
+      registered.location = location;
+      registered.fallback_workspace = fallback_workspace;
+      if constexpr (std::same_as<Request, OpenPane>) {
+        registered.pane_id = sent.target.kind == PaneTarget::Kind::pane ? sent.target.id : 0;
+      }
+    });
   }
 
   template <typename Request>
     requires(std::same_as<Request, RequestTabSnapshot> || std::same_as<Request, RequestWorkspaceSnapshot>)
   void sendSnapshotRequest(Request request) {
     constexpr auto kind = std::same_as<Request, RequestTabSnapshot> ? RequestKind::tab_snapshot : RequestKind::workspace_snapshot;
-    request.request_id = pending(kind);
-    auto &registered = pending_[pending_count_ - 1];
-    if constexpr (std::same_as<Request, RequestTabSnapshot>) {
-      registered.location = request.location;
-    } else {
-      registered.location.workspace = request.workspace;
-    }
-
-    try {
-      transport_.send(request);
-    } catch (...) {
-      complete(request.request_id);
-      throw;
-    }
+    sendRegistered(kind, request, 0, [](Pending &registered, const Request &sent) {
+      if constexpr (std::same_as<Request, RequestTabSnapshot>) {
+        registered.location = sent.location;
+      } else {
+        registered.location.workspace = sent.workspace;
+      }
+    });
   }
 
   bool completeRequest(RequestKind kind, std::uint64_t request_id) noexcept {
@@ -2557,21 +2525,33 @@ private:
 
   template <typename Request>
   void sendTabOperation(RequestKind kind, Request request) {
-    request.request_id = pending(kind);
-    auto &registered = pending_[pending_count_ - 1];
-    if constexpr (std::same_as<Request, CreateTab>) {
-      registered.location.workspace = request.workspace;
-      registered.size = request.size;
-    } else {
-      registered.location = request.location;
-    }
+    sendRegistered(kind, request, 0, [](Pending &registered, const Request &sent) {
+      if constexpr (std::same_as<Request, CreateTab>) {
+        registered.location.workspace = sent.workspace;
+        registered.size = sent.size;
+      } else {
+        registered.location = sent.location;
+      }
+    });
+  }
 
+  // Sends `request` under a new pending id of `kind`, once `fill` recorded in the pending entry
+  // what the reply will need; a request the transport refuses leaves nothing pending.
+  template <typename Request, typename Fill>
+  void sendRegistered(RequestKind kind, Request request, std::uint64_t pane_id, Fill &&fill) {
+    request.request_id = pending(kind, pane_id);
+    fill(pending_[pending_count_ - 1], std::as_const(request));
     try {
       transport_.send(request);
     } catch (...) {
       complete(request.request_id);
       throw;
     }
+  }
+
+  template <typename Request>
+  void sendRegistered(RequestKind kind, Request request, std::uint64_t pane_id = 0) {
+    sendRegistered(kind, request, pane_id, [](Pending &, const Request &) {});
   }
 
   template <typename Value>
