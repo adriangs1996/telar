@@ -229,11 +229,12 @@ graph LR
 - **Qué hace:** borra el módulo y la cabecera paraguas `telar_protocol.hpp`.
 - **Hecho cuando:** ni el módulo ni la cabecera paraguas existen, y `ninja -n` tras tocar la cabecera de un dominio recompila solo a sus usuarios, adaptadores Qt y tests incluidos (no basta con el grafo de módulos de P0.2).
 
-### [ ] P3.6 · Bajar `background_executor` y limpiar `runtime/platform`
+### [x] P3.6 · Bajar `background_executor` y limpiar `runtime/platform`
 - **Depende de:** P1.2
 - **Toca:** `telar.runtime.runtime.background_executor`, `runtime.platform.request_worker`, `runtime.platform.stream_read_buffer`, `runtime.platform.process_probe`, `runtime.history.store`, `runtime.editors.remote_editor`, `runtime.metrics.host_sampler`, `runtime.agents.session_host`.
 - **Cierra:** `platform → runtime`, `editors → runtime`, `history → runtime` (las tres por `background_executor`), `platform → metrics`, `platform → agents`.
 - **Hecho cuando:** `background_executor` vive en platform o en un componente de ejecución base y esas 5 aristas salen de la allowlist de P2.1.
+- **Resultado:** `53ae00b9f`. `telar.runtime.platform.background_executor` (con `RequestContext`, `EditorCandidate` y `SuggestionService`), `platform.session_host` (antes en agents) y `platform.host_metrics` (`HostCounters`, `HostMetricsProbe`, `NativeHostMetrics` y sus `.cpp` de macOS y Linux). El concept `BackgroundExecutor` no puede bajar sin crear el ciclo `platform ↔ worktrees` y la arista `platform → history`, así que sube con `SubmitsRequest` a `runtime.runtime`, su único usuario. `upward_imports` de 53 a 48. El `host_metrics.cpp` de Linux no se ha compilado.
 
 ### [ ] P3.7 · Separar el vocabulario de diagnóstico del colector de telemetría
 - **Depende de:** P1.2
