@@ -194,11 +194,12 @@ graph LR
 
 ## Fase 3 · Capas
 
-### [ ] P3.1 · Crear `lib/sys` (`telar.sys.*`)
+### [x] P3.1 · Crear `lib/sys` (`telar.sys.*`)
 - **Depende de:** P1.2
 - **Toca:** `lib/sys/` nuevo.
 - **Qué hace:** esqueleto de `telar.sys.posix`, `telar.sys.socket`, `telar.sys.process`, `telar.sys.apple` y `telar.sys.linux`, siguiendo el patrón `using ::open;` de `telar.platform.primitives`. Este es el único sitio con includes de C. Las conversiones de macros las hace P6.4.
 - **Hecho cuando:** los módulos compilan, `telar.platform.primitives` pasa a reexportar desde `telar.sys.*` y la capa `sys` está en `modules.json`, por debajo de `platform`.
+- **Resultado:** `3fd821cef`. `telar.sys.posix`, `.socket`, `.process`, `.apple` y `.linux` en `lib/sys/<familia>/`, con los nombres que el árbol llama hoy (`using ::open;`); `apple` y `linux` solo se compilan en su plataforma, y las extensiones solo de glibc van bajo `__GLIBC__` porque el código soporta musl. `telar.platform.primitives` hace `export import telar.sys.posix`. El orden de capas de las librerías pasa del checker a `library_layers` en `docs/build/modules.json`. Compilan los tres procesos en macOS; los módulos de Linux, sueltos, en Fedora (glibc) y Alpine (musl).
 
 ### [x] P3.2 · `telar.wire.vocabulary`
 - **Depende de:** P1.2
