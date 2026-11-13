@@ -69,18 +69,19 @@
     "<cstring>",
     "tbc/view.hpp"
   ],
+  "lib/base/text/json/json.cppm": [
+    "tbc/view.hpp"
+  ],
   "lib/base/text/text.cppm": [
     "<algorithm>",
     "<arpa/inet.h>",
     "<array>",
     "<cassert>",
-    "<charconv>",
     "<chrono>",
     "<concepts>",
     "<cstddef>",
     "<cstdint>",
     "<cstdlib>",
-    "<exception>",
     "<initializer_list>",
     "<limits>",
     "<memory>",
@@ -89,7 +90,6 @@
     "<new>",
     "<optional>",
     "<span>",
-    "<stdexcept>",
     "<string>",
     "<string_view>",
     "<utility>",
