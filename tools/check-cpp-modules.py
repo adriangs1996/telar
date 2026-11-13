@@ -9,24 +9,6 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[1]
 SCOPES = ('lib/', 'src/runtime/', 'src/cli/',
           'src/gui/', 'src/auth-daemon/')
-# The libraries each library's modules may import, lowest layer first. A library reaching a
-# higher one, or a sibling it does not list, rebuilds and drags in more than it uses.
-LIBRARY_LAYERS = {
-    'base': set(),
-    'vocabulary': set(),
-    'shell': set(),
-    'ebnf': set(),
-    'wire': {'base', 'vocabulary'},
-    'client': {'base', 'wire'},
-    'lua': {'base'},
-    'render': {'base'},
-    'platform': {'base', 'vocabulary'},
-    'machines': {'base', 'client'},
-    'git': {'base', 'platform'},
-    'tls': {'base', 'platform'},
-    'plugins': {'base', 'client', 'platform'},
-    'config': {'base', 'client', 'lua', 'platform', 'plugins'},
-}
 # The first segment after `telar.` that names a process tree in src/; any other module is a library.
 PROCESSES = {'runtime': 'src/runtime', 'gui': 'src/gui', 'cli': 'src/cli'}
 PLATFORMS = ('linux', 'macos')
@@ -56,7 +38,7 @@ def main():
         graph[name] = {name.split(':')[0] + item if item.startswith(':') else item for item in dependencies} - {'std'}
         if '#include' in text and not text.startswith('module;'):
             raise RuntimeError('Textual dependencies need a global fragment: ' + source)
-    check_library_layers(inventory['interfaces'], graph)
+    check_library_layers(inventory['library_layers'], inventory['interfaces'], graph)
     check_module_paths(owned)
     visited, active = set(), []
     def visit(name):
@@ -99,22 +81,25 @@ def global_fragment(text):
     return text[:match.start()] if match else ''
 
 
-def check_library_layers(interfaces, graph):
+def check_library_layers(layers, interfaces, graph):
+    """`library_layers` in modules.json lists the libraries each library's modules may import,
+    lowest layer first. A library reaching a higher one, or a sibling it does not list, rebuilds
+    and drags in more than it uses."""
     library_of = {}
     for source, name in interfaces.items():
         match = re.match(r'lib/([^/]+)/', source)
         if match:
             library_of[name.split(':')[0]] = match[1]
     for name, library in library_of.items():
-        if library not in LIBRARY_LAYERS:
-            raise RuntimeError(f'Place {library} in LIBRARY_LAYERS before {name} imports anything')
+        if library not in layers:
+            raise RuntimeError(f'Place {library} in library_layers before {name} imports anything')
     for source, name in interfaces.items():
         library = library_of.get(name.split(':')[0])
         if library is None:
             continue
         for dependency in graph[name]:
             target = library_of.get(dependency.split(':')[0])
-            if target and target != library and target not in LIBRARY_LAYERS[library]:
+            if target and target != library and target not in layers[library]:
                 raise RuntimeError(f'{name} imports {dependency}: {library} may not depend on {target}')
 
 

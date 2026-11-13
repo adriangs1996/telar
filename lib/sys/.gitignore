@@ -1,0 +1,6 @@
+/out/
+/out-*/
+/build/
+/compile_commands.json
+/.cache/
+__pycache__/
