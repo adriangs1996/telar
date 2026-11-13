@@ -70,8 +70,8 @@ headers incluidos desde un `export`. [modules.json](modules.json) registra cada
 interfaz, su propietario actual y la correspondencia de 1021 interfaces de origen
 con las unidades finales. `python3 tools/check-cpp-modules.py` comprueba propietarios,
 proveedores, ausencia de ciclos y la explicación de cada header residual. También
-comprueba las capas de `lib/`: `LIBRARY_LAYERS` lista las bibliotecas que cada una
-puede importar, de modo que `telar-platform` no vuelve a depender del protocolo ni
+comprueba las capas de `lib/`: `library_layers` en `modules.json` lista las bibliotecas
+que cada una puede importar, de modo que `telar-platform` no vuelve a depender del protocolo ni
 `telar-tls` de la configuración sin cambiar esa tabla a la vista de quien revisa.
 
 | Área | Interfaces finales | Organización |

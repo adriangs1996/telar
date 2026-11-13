@@ -1,4 +1,49 @@
 {
+  "library_layers": {
+    "base": [],
+    "sys": [],
+    "vocabulary": [],
+    "shell": [],
+    "ebnf": [],
+    "client": [
+      "base"
+    ],
+    "lua": [
+      "base"
+    ],
+    "render": [
+      "base"
+    ],
+    "platform": [
+      "base",
+      "sys",
+      "vocabulary"
+    ],
+    "machines": [
+      "base",
+      "client"
+    ],
+    "git": [
+      "base",
+      "platform"
+    ],
+    "tls": [
+      "base",
+      "platform"
+    ],
+    "plugins": [
+      "base",
+      "client",
+      "platform"
+    ],
+    "config": [
+      "base",
+      "client",
+      "lua",
+      "platform",
+      "plugins"
+    ]
+  },
   "interfaces": {
     "lib/plugins/plugins.cppm": "telar.plugins",
     "lib/tls/tls.cppm": "telar.tls",
@@ -226,7 +271,12 @@
     "lib/render/terminal/terminal.cppm": "telar.render.terminal",
     "lib/render/markdown/markdown.cppm": "telar.render.markdown",
     "src/cli/render/render.cppm": "telar.cli.render",
-    "src/gui/terminal/fold_map/fold_map.cppm": "telar.gui.terminal.fold_map"
+    "src/gui/terminal/fold_map/fold_map.cppm": "telar.gui.terminal.fold_map",
+    "lib/sys/posix/posix.cppm": "telar.sys.posix",
+    "lib/sys/socket/socket.cppm": "telar.sys.socket",
+    "lib/sys/process/process.cppm": "telar.sys.process",
+    "lib/sys/apple/apple.cppm": "telar.sys.apple",
+    "lib/sys/linux/linux.cppm": "telar.sys.linux"
   },
   "textual_boundaries": {
     "lib/clipboard/includes/clipboard.hpp": "Native clipboard ABI shared with Objective-C++ and platform backends",

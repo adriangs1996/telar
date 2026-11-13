@@ -13,7 +13,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 PROJECTS = {'runtime': 'src/runtime', 'cli': 'src/cli',
             'gui': 'src/gui', 'auth': 'src/auth-daemon',
-            **{name: 'lib/' + name for name in ('base', 'vocabulary', 'client', 'machines', 'platform', 'lua', 'plugins', 'config', 'tls', 'shell', 'git', 'render')},
+            **{name: 'lib/' + name for name in ('base', 'sys', 'vocabulary', 'client', 'machines', 'platform', 'lua', 'plugins', 'config', 'tls', 'shell', 'git', 'render')},
             'tbc': 'lib/tbc', 'ebnf': 'lib/ebnf'}
 CACHE = ROOT / '.toolchain'
 
