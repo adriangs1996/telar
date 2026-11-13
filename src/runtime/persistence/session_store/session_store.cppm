@@ -60,7 +60,6 @@ import std;
 export import telar.platform;
 
 export import telar.runtime.model.client_layouts;
-export import telar.runtime.runtime.execution_service;
 
 export import telar.runtime.agents.snapshot;
 
@@ -472,10 +471,17 @@ export {
 export {
   namespace telar::runtime::checkpoint {
 
-    template <Allocator Memory, EventLoop Poller, HistoryEventSink History = DiscardedHistory>
+    // The service that launches the restored panes and writes the input that resumes their agents.
+    template <typename Panes, typename Memory>
+    concept PaneLauncher = requires(Panes& panes, RuntimeModel<Memory>& model, Command<Memory>& command, Pane<Memory>& pane, TabLocation location, TerminalSize size, std::uint64_t identity) {
+      panes.launch(model, nullptr, false, command, location, size, identity).id;
+      panes.flushInput(pane);
+    };
+
+    template <Allocator Memory, PaneLauncher<Memory> Panes>
     class Restore {
     public:
-      inline explicit Restore(Memory& memory, RuntimeModel<Memory>& model, PaneService<Memory, Poller, History>& panes, ClientLayouts<Memory>& layouts, bool resume_agents)
+      inline explicit Restore(Memory& memory, RuntimeModel<Memory>& model, Panes& panes, ClientLayouts<Memory>& layouts, bool resume_agents)
           : memory_(memory),
             model_(model),
             panes_(panes),
@@ -667,13 +673,10 @@ export {
 
       Memory& memory_;
       RuntimeModel<Memory>& model_;
-      PaneService<Memory, Poller, History>& panes_;
+      Panes& panes_;
       ClientLayouts<Memory>& layouts_;
       bool resume_agents_;
     };
-
-    template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-    Restore(Memory& memory, RuntimeModel<Memory>& model, PaneService<Memory, Poller, History>& panes, ClientLayouts<Memory>& layouts, bool resume_agents) -> Restore<Memory, Poller, History>;
 
   }
 }
@@ -988,13 +991,11 @@ export {
 export {
   namespace telar::runtime::checkpoint {
 
-    template <ConcurrentAllocator Memory, EventLoop Poller, AgentSource Agents, HistoryEventSink History = DiscardedHistory>
+    template <ConcurrentAllocator Memory, AgentSource Agents>
     class SessionStore {
       using Clock = std::chrono::steady_clock;
 
     public:
-      using Panes = PaneService<Memory, Poller, History>;
-
       inline explicit SessionStore(Memory& memory)
           : memory_(memory),
             buffer_(AllocatorRef<Byte, Memory>{memory}) {}
@@ -1008,6 +1009,7 @@ export {
       SessionStore(const SessionStore&) = delete;
       SessionStore& operator=(const SessionStore&) = delete;
 
+      template <PaneLauncher<Memory> Panes>
       inline void configure(RuntimeModel<Memory>& model, Panes& panes, ClientLayouts<Memory>& layouts, Options options) {
         if (options.path.empty()) {
           return;
