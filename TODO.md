@@ -462,11 +462,12 @@ Cada tarea empieza localizando todas las copias, crea un módulo con una interfa
 
 ## Fase 8 · `telar::Memory` con tipo borrado en la frontera de servicio
 
-### [ ] P8.1 · `Memory`, `ConcurrentMemory`, `ErasingMemory`, `MemoryAdapter<A>`
+### [x] P8.1 · `Memory`, `ConcurrentMemory`, `ErasingMemory`, `MemoryAdapter<A>`
 - **Depende de:** P0.3, P4.2a
 - **Qué hace:** una interfaz de unas 20 líneas con `allocate`/`deallocate` virtuales `noexcept` que devuelven `nullptr` al fallar (no `std::pmr`). `ConcurrentMemory : Memory` sustituye al concept `ConcurrentAllocator` y `ErasingMemory : Memory` cubre los secretos. `MemoryAdapter<A>` envuelve cualquier `Allocator`, también los fakes de los tests.
 - **Hecho cuando:** está en la familia de allocators de base, tiene tests con los fakes que fallan y con presupuesto, y el lifetime checker lo acepta en el build real. No se migra ningún servicio en esta tarea.
 - **De P0.3:** `TBC_SHARED` no se hereda. `Memory`, `ConcurrentMemory`, `ErasingMemory`, `MemoryAdapter<A>` y cada implementación llevan su propia marca.
+- **Resultado:** `812d232a1`, en `telar.base.memory.allocators`. `Memory` tiene destructor protegido no virtual y prohíbe la copia, y cumple el concept `Allocator`, así que `Vector<T, Memory>` funciona sin cambios. `ConcurrentMemory` lleva `thread_safe = true`. `ErasingMemory` se detecta con un concept nuevo, `SensitiveAllocator` (`erasing = true` en `ErasingAllocator` y `RecyclingAllocator`). `MemoryAdapter<A>` es `final`, guarda el allocator por referencia y toma el tipo más fuerte que `A` permite, con el borrado por delante de la concurrencia. `testMemoryInterface` cubre un fake que rechaza todo, un presupuesto que se agota y el borrado. Sin avisos del lifetime checker en `lib/base`. Compilan runtime, CLI y GUI, y pasan los tests de base y de render.
 
 ### [ ] P8.2 · Medir el coste de la llamada virtual
 - **Depende de:** P8.1, P0.5
