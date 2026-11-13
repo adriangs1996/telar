@@ -39,7 +39,8 @@ export import telar.cli.hooks.session;
 
 export import telar.base.text;
 
-export import telar.base.memory;
+export import telar.base.memory.allocators;
+export import telar.base.memory.containers;
 import telar.cli.worktree_git;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;

@@ -9,7 +9,7 @@ export module telar.git.checkout;
 
 import std;
 
-export import telar.base.memory;
+export import telar.base.memory.allocators;
 export import telar.platform.process;
 
 import telar.base.text;

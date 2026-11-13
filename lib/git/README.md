@@ -17,7 +17,7 @@ target_link_libraries(your_target PRIVATE telar::git)
 ```
 
 ```cpp
-import telar.base.memory;
+import telar.base.memory.allocators;
 import telar.git;
 
 telar::SystemAllocator memory;

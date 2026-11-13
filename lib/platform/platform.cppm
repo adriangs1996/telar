@@ -9,7 +9,6 @@ export module telar.platform;
 
 import std;
 
-export import telar.base.memory;
 export import telar.base.text;
 export import telar.platform.daemon;
 export import telar.platform.error;

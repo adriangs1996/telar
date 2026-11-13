@@ -7,7 +7,7 @@ export module telar.platform.daemon;
 
 import std;
 
-export import telar.base.memory;
+export import telar.base.memory.allocators;
 export import telar.platform.paths;
 export import telar.platform.process;
 

@@ -6,7 +6,7 @@ static_assert(true);
 #include <cstdint>
 
 import std;
-import telar.base.memory;
+import telar.base.memory.allocators;
 import telar.runtime.paths.query_task;
 
 using namespace telar;

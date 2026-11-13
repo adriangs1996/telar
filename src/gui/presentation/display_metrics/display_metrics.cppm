@@ -15,7 +15,6 @@ export import telar.gui.core.metrics;
 
 export import telar.gui.core.json_writer;
 import telar.base.diagnostics;
-import telar.base.memory;
 import telar.gui.core.primitives;
 import telar.wire.vocabulary;
 

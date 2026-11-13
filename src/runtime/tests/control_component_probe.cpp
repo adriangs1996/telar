@@ -5,7 +5,7 @@ static_assert(true);
 #include <ghostty/vt.h>
 
 import std;
-import telar.base.memory;
+import telar.base.memory.allocators;
 import telar.runtime.terminal.control;
 import telar.runtime.terminal.control.engine;
 import telar.runtime.terminal.text_reader;

@@ -6,7 +6,7 @@ export module telar.gui.layout.snapshots;
 import std;
 
 export import telar.gui.layout.geometry;
-import telar.base.memory;
+import telar.base.memory.allocators;
 import telar.wire.layout;
 import telar.wire.vocabulary;
 

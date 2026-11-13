@@ -21,7 +21,8 @@ import telar.runtime.tests.http2_fixture;
 import telar.runtime.tests.test_byte_stream;
 import telar.runtime.http2.direction_observer;
 import telar.runtime.proxy.runtime;
-import telar.base.memory;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
 
 using namespace telar;
 using namespace telar::runtime;

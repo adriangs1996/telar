@@ -9,7 +9,7 @@ export import telar.gui.core.unicode_scalar;
 export import telar.gui.model.records;
 export import telar.gui.text.json_unsigned_integer;
 import telar.base.diagnostics;
-import telar.base.memory;
+import telar.base.memory.containers;
 import telar.gui.core.primitives;
 import telar.wire.vocabulary;
 

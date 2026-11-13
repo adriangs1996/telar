@@ -10,7 +10,7 @@ static_assert(true);
 #include <ghostty/vt.h>
 
 import std;
-import telar.base.memory;
+import telar.base.memory.allocators;
 import telar.config;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;

@@ -23,6 +23,7 @@ static_assert(true);
 #include "core/memory.hpp"
 #include "platform/font.h"
 
+import telar.base.memory.allocators;
 import telar.platform;
 
 using namespace telar;

@@ -20,7 +20,8 @@ import std;
 export import telar.runtime.http.content;
 export import telar.base.text;
 
-export import telar.base.memory;
+export import telar.base.memory.allocators;
+export import telar.base.memory.sensitive;
 
 export import telar.runtime.plugins.protocol;
 

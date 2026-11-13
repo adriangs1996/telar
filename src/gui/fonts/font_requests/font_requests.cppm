@@ -18,7 +18,6 @@ export import telar.gui.fonts.face;
 
 export import telar.gui.core.json_writer;
 import telar.base.diagnostics;
-import telar.base.memory;
 
 // Interface: fonts/font_coverage.cppm
 export {

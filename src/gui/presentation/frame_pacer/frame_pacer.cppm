@@ -15,7 +15,6 @@ export import telar.gui.layout.geometry;
 
 export import telar.gui.core.metrics;
 import telar.base.diagnostics;
-import telar.base.memory;
 import telar.wire.vocabulary;
 
 // Interface: presentation/attention_fades.cppm

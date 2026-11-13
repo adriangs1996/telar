@@ -14,7 +14,7 @@ static_assert(true);
 #include <lualib.h>
 
 import std;
-import telar.base.memory;
+import telar.base.memory.allocators;
 import telar.base.text;
 import telar.gui.core.primitives;
 import telar.gui.components.builtin_content;

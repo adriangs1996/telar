@@ -17,7 +17,7 @@ static_assert(true);
 #include <unistd.h>
 
 import std;
-import telar.base.memory;
+import telar.base.memory.allocators;
 import telar.platform.primitives;
 import telar.runtime.plugins.tap_configuration;
 import telar.platform;

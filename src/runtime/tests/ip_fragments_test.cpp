@@ -10,7 +10,7 @@ static_assert(true);
 #include <pcap/pcap.h>
 
 import std;
-import telar.base.memory;
+import telar.base.memory.allocators;
 import telar.runtime.tests.check;
 import telar.runtime.tests.packet_fixture;
 import telar.runtime.tests.tls_fixture;

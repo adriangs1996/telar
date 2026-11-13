@@ -17,7 +17,8 @@ import std;
 
 export import telar.runtime.traffic.control_protocol;
 
-export import telar.base.memory;
+export import telar.base.memory.allocators;
+export import telar.base.memory.sensitive;
 import telar.base.diagnostics;
 import telar.vocabulary;
 

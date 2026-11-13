@@ -17,7 +17,8 @@ static_assert(true);
 #include <sys/stat.h>
 
 import std;
-import telar.base.memory;
+import telar.base.memory.allocators;
+import telar.base.memory.sensitive;
 import telar.platform.primitives;
 import telar.runtime.tests.check;
 import telar.platform;

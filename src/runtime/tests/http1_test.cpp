@@ -8,7 +8,7 @@ static_assert(true);
 #include <cstring>
 
 import std;
-import telar.base.memory;
+import telar.base.memory.allocators;
 import telar.platform.primitives;
 import telar.runtime.tests.check;
 import telar.runtime.tests.test_byte_stream;

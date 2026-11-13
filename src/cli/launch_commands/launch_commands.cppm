@@ -4,7 +4,7 @@ export module telar.cli.launch_commands;
 
 import std;
 
-import telar.base.memory;
+import telar.base.memory.allocators;
 
 export {
   namespace telar::runtime::cli {

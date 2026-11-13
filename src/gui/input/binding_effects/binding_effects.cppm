@@ -5,7 +5,7 @@ import std;
 export import telar.config;
 export import telar.gui.input.copy_pointer;
 export import telar.gui.input.key_encoder;
-import telar.base.memory;
+import telar.base.memory.containers;
 import telar.wire.vocabulary;
 
 // Interface: config/callback.cppm

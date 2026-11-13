@@ -13,7 +13,7 @@ module;
 
 export module telar.base.diagnostics;
 
-import telar.base.memory;
+import telar.base.memory.containers;
 
 // Owned textual headers stay in this global module fragment only; importers
 // reach their names through these declarations instead of including them.

@@ -8,7 +8,6 @@ static_assert(true);
 #include <cstring>
 
 import std;
-import telar.base.memory;
 import telar.runtime.diagnostics.line;
 import telar.runtime.command_capture.tracker;
 import telar.vocabulary;

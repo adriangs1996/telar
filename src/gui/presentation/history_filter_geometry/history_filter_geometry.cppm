@@ -22,7 +22,6 @@ export import telar.gui.history.browser;
 
 export import telar.gui.machines.picker;
 import telar.base.diagnostics;
-import telar.base.memory;
 import telar.gui.core.primitives;
 import telar.wire.vocabulary;
 

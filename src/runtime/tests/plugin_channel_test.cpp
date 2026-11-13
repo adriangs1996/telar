@@ -10,7 +10,7 @@ static_assert(true);
 #include <cstring>
 
 import std;
-import telar.base.memory;
+import telar.base.memory.allocators;
 import telar.runtime.tests.check;
 import telar.runtime.plugins.worker;
 import telar.wire.vocabulary;

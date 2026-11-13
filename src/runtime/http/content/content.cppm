@@ -8,7 +8,9 @@ export module telar.runtime.http.content;
 
 import std;
 
-export import telar.base.memory;
+export import telar.base.memory.allocators;
+export import telar.base.memory.containers;
+export import telar.base.memory.sensitive;
 export import telar.base.text;
 
 // Interface: http/content_codings.cppm

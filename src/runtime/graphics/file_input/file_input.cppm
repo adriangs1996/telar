@@ -20,7 +20,7 @@ export module telar.runtime.graphics.file_input;
 import std;
 
 import telar.base.diagnostics;
-import telar.base.memory;
+import telar.base.memory.allocators;
 import telar.base.text;
 import telar.vocabulary;
 import telar.platform.primitives;

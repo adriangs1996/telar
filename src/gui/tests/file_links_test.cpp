@@ -9,7 +9,6 @@ static_assert(true);
 #include <cstring>
 
 import std;
-import telar.base.memory;
 import telar.gui.links.path_expansion;
 import telar.gui.links.cell_links;
 

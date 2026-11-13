@@ -16,7 +16,7 @@ static_assert(true);
 #include <sys/mman.h>
 
 import std;
-import telar.base.memory;
+import telar.base.memory.allocators;
 import telar.config;
 import telar.gui.terminal.screen;
 import telar.platform.primitives;

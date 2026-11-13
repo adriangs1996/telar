@@ -4,7 +4,6 @@ module;
 export module telar.gui.tests.json_fixture;
 
 import std;
-export import telar.base.memory;
 export import telar.base.text;
 
 export {

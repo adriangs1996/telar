@@ -3,7 +3,7 @@ export module telar.gui.fonts.text_runs;
 import std;
 
 export import telar.gui.fonts.face;
-import telar.base.memory;
+import telar.base.memory.allocators;
 import telar.gui.terminal.glyphs;
 import telar.gui.terminal.screen;
 import telar.wire.vocabulary;

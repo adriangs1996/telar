@@ -11,7 +11,7 @@ export module telar.gui.suggestions.state;
 import std;
 
 import telar.base.diagnostics;
-import telar.base.memory;
+import telar.base.memory.containers;
 import telar.base.text;
 import telar.wire.editor;
 import telar.wire.vocabulary;

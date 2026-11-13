@@ -21,7 +21,7 @@ export module telar.platform.fs;
 
 import std;
 
-export import telar.base.memory;
+export import telar.base.memory.allocators;
 
 import telar.platform.error;
 import telar.platform.primitives;

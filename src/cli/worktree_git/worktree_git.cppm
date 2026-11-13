@@ -42,7 +42,8 @@ export import telar.cli.runtime_observer;
 export import telar.cli.output;
 export import telar.cli.server;
 
-export import telar.base.memory;
+export import telar.base.memory.allocators;
+export import telar.base.memory.containers;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.wire.layout;

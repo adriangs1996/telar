@@ -14,7 +14,7 @@ export module telar.runtime.tests.hook_fixture;
 import std;
 export import telar.runtime.tests.protocol_peer;
 export import telar.base.text;
-export import telar.base.memory;
+export import telar.base.memory.allocators;
 export import telar.platform.primitives;
 export import telar.config;
 export import telar.platform;

@@ -92,7 +92,9 @@ export import telar.runtime.plugins.tap_configuration;
 export import telar.runtime.traffic.control_protocol;
 
 export import telar.runtime.platform.request_worker;
-export import telar.base.memory;
+export import telar.base.memory.allocators;
+export import telar.base.memory.containers;
+export import telar.base.memory.sensitive;
 export import telar.config;
 
 export import telar.platform;

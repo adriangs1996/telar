@@ -19,7 +19,7 @@ static_assert(true);
 #include <zstd.h>
 
 import std;
-import telar.base.memory;
+import telar.base.memory.allocators;
 import telar.platform.primitives;
 import telar.runtime.tests.capture_oracle;
 import telar.runtime.tests.http2_oracle_stream;

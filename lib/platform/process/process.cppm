@@ -32,7 +32,9 @@ export module telar.platform.process;
 
 import std;
 
-export import telar.base.memory;
+export import telar.base.memory.allocators;
+export import telar.base.memory.containers;
+export import telar.base.memory.sensitive;
 
 import telar.base.text;
 import telar.platform.error;

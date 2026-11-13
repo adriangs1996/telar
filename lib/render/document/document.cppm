@@ -4,7 +4,7 @@ module;
 export module telar.render.document;
 
 import std;
-export import telar.base.memory;
+export import telar.base.memory.allocators;
 import telar.base.text;
 
 // A rendered document: what every renderer produces and what a client draws.

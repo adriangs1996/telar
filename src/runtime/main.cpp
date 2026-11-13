@@ -9,7 +9,7 @@ static_assert(true);
 #include <cstdio>
 
 import std;
-import telar.base.memory;
+import telar.base.memory.allocators;
 import telar.platform;
 import telar.platform.primitives;
 import telar.runtime.terminal.control;

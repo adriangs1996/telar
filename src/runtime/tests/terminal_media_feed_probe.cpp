@@ -11,7 +11,7 @@
 #include <cstdlib>
 
 import std;
-import telar.base.memory;
+import telar.base.memory.allocators;
 import telar.client.protocol;
 import telar.config;
 import telar.runtime.graphics.kitty;

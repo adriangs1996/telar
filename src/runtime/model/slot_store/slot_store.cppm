@@ -13,7 +13,7 @@ export module telar.runtime.model.slot_store;
 import std;
 
 import telar.base.diagnostics;
-import telar.base.memory;
+import telar.base.memory.allocators;
 import telar.base.text;
 import telar.wire.vocabulary;
 import telar.wire.agents;

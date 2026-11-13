@@ -12,7 +12,7 @@ static_assert(true);
 #include "command_specs.hpp"
 
 import std;
-import telar.base.memory;
+import telar.base.memory.allocators;
 import telar.platform;
 import telar.platform.primitives;
 import telar.runtime.tests.check;

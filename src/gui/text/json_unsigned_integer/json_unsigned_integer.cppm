@@ -21,7 +21,6 @@ export import telar.machines;
 
 export import telar.gui.text.bounded_editor;
 import telar.base.diagnostics;
-import telar.base.memory;
 import telar.gui.core.primitives;
 
 // Interface: text/bounded_text.cppm

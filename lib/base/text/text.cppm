@@ -37,7 +37,7 @@ module;
 export module telar.base.text;
 
 import telar.base.diagnostics;
-import telar.base.memory;
+import telar.base.memory.allocators;
 
 // Aggregates JSON and UTF-8 while importers move to the module they use.
 export import telar.base.text.json;

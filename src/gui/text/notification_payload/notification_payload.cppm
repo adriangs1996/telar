@@ -2,7 +2,7 @@ export module telar.gui.text.notification_payload;
 
 import std;
 
-import telar.base.memory;
+import telar.base.memory.containers;
 import telar.gui.text.json_unsigned_integer;
 import telar.wire.vocabulary;
 

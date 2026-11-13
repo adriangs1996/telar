@@ -11,7 +11,7 @@ export module telar.runtime.persistence.launch_record;
 import std;
 
 import telar.base.diagnostics;
-import telar.base.memory;
+import telar.base.memory.allocators;
 import telar.base.text;
 
 // Interface: persistence/launch_record.cppm

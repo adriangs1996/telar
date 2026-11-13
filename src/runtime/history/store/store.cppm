@@ -27,7 +27,8 @@ export import telar.base.diagnostics;
 
 export import telar.runtime.history.event;
 
-export import telar.base.memory;
+export import telar.base.memory.allocators;
+export import telar.base.memory.containers;
 
 export import telar.runtime.transport.connection;
 
