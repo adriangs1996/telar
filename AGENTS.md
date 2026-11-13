@@ -53,6 +53,9 @@ Watch out for memory problems. Take inspiration from Rust for keeping track of m
 
 - DO NOT SCOPE CREEP. Keep tasks scoped to what the user ask for.
 
+- Code layout: before writing or editing C++, read `docs/code-style.md`. It covers
+  line breaks, trailing commas and blank lines between logical blocks.
+
 ## Commit style
 
 When writing commit messages, descriptions or PRs:

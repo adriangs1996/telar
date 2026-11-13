@@ -1,0 +1,49 @@
+# Single formatting source for every C++, Objective-C++ and module file in the repository.
+# docs/code-style.md covers what this file cannot enforce.
+BasedOnStyle: LLVM
+Standard: Latest
+IndentWidth: 2
+ContinuationIndentWidth: 4
+
+# No column limit: the author decides where a line breaks. A break right after an opening
+# parenthesis or brace is normalised to one item per line with the closing bracket alone.
+ColumnLimit: 0
+AlignAfterOpenBracket: false
+BreakAfterOpenBracketFunction: true
+BreakBeforeCloseBracketFunction: true
+BreakAfterOpenBracketBracedList: true
+BreakBeforeCloseBracketBracedList: true
+PackArguments:
+  BinPack: OnePerLine
+PackParameters:
+  BinPack: OnePerLine
+AllowAllArgumentsOnNextLine: false
+AllowAllParametersOfDeclarationOnNextLine: false
+BreakConstructorInitializers: BeforeColon
+PackConstructorInitializers: Never
+BreakBeforeBinaryOperators: None
+
+# A trailing comma in a braced list puts one element per line; enums always get one.
+Cpp11BracedListStyle: AlignFirstComment
+EnumTrailingComma: Insert
+
+PointerAlignment: Left
+ReferenceAlignment: Pointer
+
+NamespaceIndentation: All
+CompactNamespaces: false
+FixNamespaceComments: false
+
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortLambdasOnASingleLine: Empty
+AllowShortBlocksOnASingleLine: Never
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortEnumsOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+InsertBraces: true
+
+SeparateDefinitionBlocks: Always
+MaxEmptyLinesToKeep: 1
+KeepEmptyLines:
+  AtStartOfBlock: false

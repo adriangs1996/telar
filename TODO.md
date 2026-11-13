@@ -1,0 +1,537 @@
+# TODO · Refactor a módulos profundos
+
+Plan de origen: <https://claude.ai/artifact/LMd2ChCBMECmUbfQnPU7yx> (grafo de módulos de telar).
+Estado de partida: `main @ 2890f72b1`, con `refactor/audit-39` abierta (30 commits por delante).
+
+## Cómo se usa esta lista
+
+- Cada tarea tiene un ID, sus dependencias (**Depende de**), lo que toca (**Toca**) y un criterio de cierre (**Hecho cuando**).
+- Una tarea se puede empezar cuando todas sus dependencias están marcadas `[x]`.
+- Cada tarea se ejecuta en su propio worktree y se integra al terminar. Un coordinador de telar las reparte entre máquinas: ver "Ejecución" más abajo.
+- Dos tareas listas pueden ir a la vez si lo que tocan no se solapa. Si solo comparten ficheros calientes, también pueden ir a la vez y el conflicto se resuelve al integrar. Si se solapan en algo más, la segunda se despacha cuando la primera está integrada.
+- Ficheros calientes que tocan casi todas las tareas: `docs/build/modules.json`, los `CMakeLists.txt` de cada árbol y `tools/check-cpp-modules.py`. Cada tarea toca ahí lo mínimo, para que el conflicto al integrar sea trivial.
+- Cada regla nueva del checker entra en modo estricto con una **allowlist** de las violaciones que existen hoy. Cada tarea de arreglo borra sus entradas. Así las reglas entran pronto y los arreglos no dependen unos de otros. Si una tarea de arreglo llega antes que su regla, no hay entrada que borrar y no pasa nada.
+- **Patrón agregador** para partir un módulo con muchos importadores: (1) crear los módulos nuevos y dejar el antiguo como agregador que hace `export import` de todos ellos, (2) migrar los importadores a los imports estrechos, un árbol por tarea (runtime, gui, cli, lib, tests) y en paralelo, (3) borrar el agregador. Las tareas con sufijo `a/b/c…` siguen este patrón.
+- Tests: solo los del área tocada. La suite completa se ejecuta en P1.2, en los cierres de fase y en P11.1.
+- Después de mover ficheros (P1.2) las rutas cambian. Por eso las tareas posteriores nombran módulos y no rutas.
+
+## Ejecución
+
+El coordinador es un agente en el checkout principal que usa la skill `telar-coordinator`. Es el único que edita esta lista y el único que integra.
+
+- **Rama de integración:** `refactor/deep-modules`, creada desde `main` después de P0.1. Contiene esta lista, `docs/code-style.md` y `.clang-format` commiteados, porque a otra máquina solo viajan commits. Cuándo pasa a `main` lo decides tú; los cierres de fase (P3.17, P6.8, P9.11 y P11.1) son puntos estables.
+- **Rama de cada tarea:** `refactor-<id>`, por ejemplo `refactor-p3-6`, creada desde la cabeza de la rama de integración en el momento de despacharla.
+- **Elegir máquina:** el coordinador compara `telar --machine <label> runtime metrics --json` de las máquinas habilitadas (hoy, esta y `Personal`) y despacha a la que tenga más memoria libre. No pasa del máximo de tareas simultáneas por máquina, que sale del pico de memoria de un build en frío medido en P0.2. Cada worktree empieza sin build, así que cada tarea paga un build completo.
+- **Despachar:** la rama se crea en local (`git branch refactor-<id> refactor/deep-modules`) y después se lanza `telar worktree create refactor-<id> [--machine <label>] --setup --title "<id> · <título>" --json -- claude "<brief>"`. El brief cabe en 32 palabras: *"Lee la tarea <id> de TODO.md y docs/code-style.md. Impleméntala, cumple su Hecho cuando y commitea en esta rama. No edites TODO.md."*
+- **Integrar:** cuando el agente termina, el coordinador revisa el diff y ejecuta en el worktree el checker y los tests del área (`telar [--machine <label>] worktree exec`). Si la tarea corrió en otra máquina, la trae con `telar worktree fetch refactor-<id> --machine <label>`. Después hace merge en la rama de integración, resuelve los conflictos de los ficheros calientes, compila y prueba el área sobre el resultado, marca la tarea `[x]` aquí, commitea y borra el worktree con `--delete-branch`.
+- **Barreras:** P1.2 y P1.3 se despachan solas, sin ninguna otra tarea en vuelo. Tocan todo el árbol, y cualquier tarea abierta tendría que rehacerse.
+- **Límite de telar:** sigue como mucho 64 worktrees por máquina, así que los worktrees se borran al integrar.
+
+## Vista por olas
+
+Cada ola puede ejecutarse entera en paralelo cuando la anterior ha cerrado las dependencias que necesita. No hace falta esperar a que termine toda la ola anterior; manda el campo **Depende de** de cada tarea.
+
+| Ola | Tareas |
+|---|---|
+| 0 · desde el día 1 | P0.7 primero; después P0.1, P0.2, P0.3, P0.4, P0.5, P0.6, P1.1, P2.4 (desarrollo del linter) |
+| 1 · bloqueante | P1.2 → P1.3, P6.1 |
+| 2 · tras el movimiento | P2.1, P2.2, P2.3, P2.4, P3.1, P3.2, P3.6–P3.16, P4.1a, P4.2a, P4.3a, P4.4a, P6.2, P6.7, P10.1–P10.3 |
+| 3 | P3.3, P3.4a–e, P4.1b, P4.2b, P4.3b, P4.4b, P4.5, P5.1–P5.7, P6.3, P6.4, P7.1, P8.1 |
+| 4 | P3.5, P4.1c, P4.2c, P4.3c, P4.4c, P6.5a–e, P6.6, P8.2, P8.3, P9.6–P9.9 |
+| 5 | P3.17, P6.8, P7.2, P9.1–P9.5 |
+| 6 · cierres | P9.10, P9.11, P11.1 |
+
+Camino crítico: P0.1 → P1.2 → P1.3 → P4.2a → P8.1 → P9.x → P9.11 → P11.1. P0.3 tiene que estar verde antes de P8.1; si falla, la decisión de `Memory` se replantea antes de seguir.
+
+```mermaid
+graph LR
+  P0_1["P0.1 audit-39"] --> P1_2["P1.2 mover ficheros"]
+  P1_1["P1.1 mapeo"] --> P1_2
+  P1_2 --> P1_3["P1.3 formato"]
+  P0_6["P0.6 líneas en blanco"] --> P1_3
+  P1_3 --> F2["P2.x reglas"]
+  P1_3 --> F3["P3.x capas"]
+  P1_3 --> F4["P4.x hubs"]
+  P1_3 --> F6["P6.x includes"]
+  P1_3 --> F10["P10.x colapsos"]
+  P3_1["P3.1 sys"] --> F6
+  P3_1 --> F5["P5.x módulos profundos"]
+  F4 --> F5
+  P0_3["P0.3 spike TBC"] --> P8_1["P8.1 Memory"]
+  P4_2a["P4.2a base.memory"] --> P8_1
+  P8_1 --> F9["P9.x cuerpos fuera"]
+  P0_5["P0.5 ThinLTO"] --> F9
+  P2_4["P2.4 regla 3"] --> F9
+  F3 --> F9
+  F4 --> F9
+  F2 --> F7["P7.x re-exports"]
+  F9 --> P11_1["P11.1 medición final"]
+  F6 --> P11_1
+  F7 --> P11_1
+  F10 --> P11_1
+```
+
+---
+
+## Fase 0 · Preparación (sin dependencias)
+
+### [ ] P0.1 · Integrar `refactor/audit-39`
+- **Depende de:** —
+- **Toca:** la rama entera (worktree `telar-worktrees/refactor`).
+- **Hecho cuando:** el worktree del refactor parte de `main` con audit-39 integrada. Anotar en esta lista qué partes de P3.11 (caso 31), P3.14 (caso 34), P6.1 y P10.3 (caso 38) ya cubre la rama, para no repetirlas.
+
+### [ ] P0.7 · Receta de setup para worktrees nuevos
+- **Depende de:** —. Va antes que cualquier otra tarea y la ejecuta el coordinador en local, porque sin ella ningún worktree puede compilar.
+- **Toca:** `.telar/setup.json` (nuevo).
+- **Qué hace:** declara la receta que prepara un worktree recién creado: el bootstrap del toolchain fijado (`tools/cpp bootstrap`, que crea `.toolchain/`, ignorado por git) y lo que haga falta para configurar el build. Tiene que funcionar en cualquier máquina, sin rutas de una máquina concreta.
+- **Hecho cuando:** `telar worktree create … --setup` deja un worktree que compila los tres procesos, tanto en local como en `Personal`.
+
+### [ ] P0.2 · Script de métricas y línea base
+- **Depende de:** — (el script se escribe ya; la línea base se toma después de P0.1)
+- **Toca:** `tools/` (script nuevo), `docs/build/` (fichero con la línea base).
+- **Mide:** porcentaje del código de módulos que está en interfaces (hoy 94,7%), dependientes transitivos de los hubs (`telar.client.protocol` 148, `telar.base.memory` 167), aristas hacia arriba (hoy 41 entre componentes y 55 entre módulos), ciclos (5), aristas `export import` (681 de 1236), líneas en fragmentos globales (4,84 M) y unidades que recompila `ninja -n` después de tocar la interfaz de cada hub. Además, el tiempo y el pico de memoria de un build en frío en cada máquina, que el coordinador usa para decidir cuántas tareas caben a la vez.
+- **Hecho cuando:** el script es reproducible y los números de partida están commiteados. P11.1 los vuelve a medir.
+
+### [ ] P0.3 · Spike: el lifetime checker de TBC con `tbc::view<Memory &, …>` sobre un tipo abstracto
+- **Depende de:** —
+- **Toca:** código desechable fuera del árbol del refactor. Se borra al terminar.
+- **Hecho cuando:** hay un ejemplo mínimo que el checker acepta (o un parche a TBC que lo hace posible). Si no es viable, se para P8.1 y se replantea la decisión de `Memory` con tipo borrado.
+
+### [ ] P0.4 · Launcher que conserva el `.pcm` cuando no cambia
+- **Depende de:** —
+- **Toca:** `cmake/managed_build.cmake` (ya cablea `CMAKE_CXX_COMPILER_LAUNCHER`), un launcher nuevo en `tools/`.
+- **Qué hace:** compila a un fichero temporal y solo sustituye el BMI si el contenido cambia, para que `restat = 1` de ninja corte la cascada en los importadores directos.
+- **Hecho cuando:** está medido en el build real, con el número de unidades que recompila tocar un comentario y un cuerpo no inline en un hub, antes y después. Si no compensa, se descarta con los números.
+
+### [ ] P0.5 · ThinLTO en los builds optimizados
+- **Depende de:** —
+- **Toca:** `cmake/` y los presets de release. Hoy no hay `-flto` en ningún sitio.
+- **Hecho cuando:** release y dev-release enlazan con ThinLTO, y están medidos el tiempo de build, el tamaño del binario y los benchmarks de hot path existentes (`tools/bench_*`, probes de latencia). Las regresiones quedan anotadas para P9.
+
+### [ ] P1.1 · Tabla y script de destino de cada fichero
+- **Depende de:** — (se escribe ya; se vuelve a ejecutar sobre `main` después de P0.1)
+- **Toca:** `tools/` (script de movimiento), un fichero de mapeo.
+- **Reglas del mapeo:** la carpeta es el módulo y la ruta sale del nombre actual del módulo, sin renombrar nada (`telar.base.memory` → `lib/base/memory/memory.cppm`). Las unidades de implementación van a la carpeta del módulo que declaran. Las particiones de interfaz se llaman `<módulo>-<partición>.cppm`. `src/runtime-cpp` → `src/runtime`, `src/gui-cpp` → `src/gui`, `src/cli-cpp` → `src/cli`. Las carpetas no llevan números.
+- **Decisión abierta:** destino de las librerías que el árbol propuesto no nombra: `telar-git`, `telar-tls`, `telar-plugins`, `telar-lua`, `telar-machines`, `telar-render`, `telar-shell`, `telar-vocabulary`, `websock`, `ebnf`, `tbc`, `clipboard` y `src/auth-daemon`. Se decide aquí y queda escrita en el mapeo.
+- **Hecho cuando:** el script genera el mapeo completo de forma determinista y `--dry-run` no deja ningún fichero sin destino.
+
+### [ ] P2.4 · Regla 3 en el linter de TBC: la interfaz solo lleva declaraciones
+- **Depende de:** — para desarrollarla en `lib/tbc/linter`. Para activarla en el build, de P1.2.
+- **Toca:** `lib/tbc/linter`, `cmake/lint_prepare.cmake`.
+- **Qué comprueba (sobre el AST, no con regex):** no hay cuerpos de función en unidades de interfaz salvo los `inline` de hot path anotados (definir la anotación aquí) y las plantillas que siguen siéndolo (primitivas de `base`).
+- **Hecho cuando:** corre en CI con una allowlist por módulo, que hoy los contiene casi todos. P9.x la vacía.
+
+### [ ] P0.6 · Reglas de líneas en blanco de `docs/code-style.md` en el linter de TBC
+- **Depende de:** —
+- **Toca:** `lib/tbc/linter` y su integración en `cmake/lint_prepare.cmake`. Lo comparte con P2.4: no se ejecutan a la vez.
+- **Qué comprueba sobre el AST, y cómo lo arregla insertando la línea en blanco:**
+  - Una sentencia que acaba en su propia llave de cierre (bucle, `if`, `switch`, lambda o lista con llaves de varias líneas) va seguida de una línea en blanco, salvo que lo siguiente sea `else`, `catch`, el `while` de un `do` o el `}` que cierra el bloque.
+  - Un grupo de declaraciones va seguido de una línea en blanco antes de la primera sentencia que no es una declaración. Hay una excepción: un `if` cuya condición usa la variable recién declarada va pegado a ella.
+  - Una traza (`TELAR_TRACE(...)`) al principio de la función no exige línea en blanco.
+- **Límites:** solo inserta líneas en blanco y nunca las borra, porque una línea en blanco que ya existe puede separar dos bloques por lo que hacen, que es la parte que no se puede automatizar. Lo que inserte se conserva después de clang-format (`MaxEmptyLinesToKeep: 1`).
+- **Hecho cuando:** el linter avisa en cada caso, tiene un modo que aplica los arreglos y hay tests para cada regla y cada excepción, incluido que el resultado no cambia al pasarle clang-format.
+
+---
+
+## Fase 1 · Movimiento físico
+
+### [ ] P1.2 · Commit que solo mueve ficheros
+- **Depende de:** P0.1, P1.1
+- **Toca:** todo el árbol, CMake, `docs/build/modules.json`, `tools/check-cpp-modules.py` (`SCOPES`, `LIBRARY_LAYERS`), `cmake/lifetime_check.cmake`, `cmake/lint_prepare.cmake` y los scripts de `tools/` con rutas fijas.
+- **Contenido permitido:** `git mv`, rutas de `#include` relativas y CMake. Nada más.
+- **Regla 1 en el checker:** ruta = nombre del módulo, ninguna unidad de implementación fuera de la carpeta de su módulo, ningún fichero de la carpeta declara otro módulo y las particiones siguen la forma `process-spawn.cppm` ↔ `:spawn`. Las particiones internas (`module X:detail;`) están permitidas.
+- **Hecho cuando:** compilan los tres procesos, pasa la suite completa y pasa el checker con la regla 1 sin allowlist. Los módulos cajón (P3.14) y los ciclos (P3.13a, P3.14a, P3.15a, P3.15b) quedan a la vista en el árbol, pero cumplen la regla porque cada unidad está en la carpeta del módulo que declara.
+
+### [ ] P1.3 · Aplicar el estilo de `docs/code-style.md` a todo el árbol
+- **Depende de:** P1.2, P0.6. Todas las tareas que dependen de P1.2 dependen también de esta: el reformateo toca todos los ficheros, así que ninguna otra tarea puede estar editando mientras corre.
+- **Toca:** todo el árbol (sin `vendor/`).
+- **Qué hace:** borra los 16 `.clang-format` por directorio (hoy hay 4 variantes, y tapan al de la raíz). Aplica los arreglos de líneas en blanco de P0.6, ejecuta después el `clang-format` del toolchain sobre todos los ficheros C++, Objective-C++ y de módulo, y añade los commits del movimiento y del formato a `.git-blame-ignore-revs`. Las comas finales en listas con llaves y la separación de bloques por lo que hacen no se pueden aplicar de forma mecánica: las aplica cada tarea a los ficheros que toca.
+- **Hecho cuando:** solo queda `.clang-format` en la raíz, `clang-format --dry-run --Werror` y las reglas de P0.6 pasan en todo el árbol y se comprueban en CI, compilan los tres procesos y pasa la suite completa.
+
+---
+
+## Fase 2 · Reglas del checker (en paralelo tras P1.2)
+
+### [ ] P2.1 · Regla 2: solo se importa hacia abajo
+- **Depende de:** P1.2
+- **Toca:** `tools/check-cpp-modules.py`, `docs/build/modules.json`.
+- **Qué hace:** generaliza `LIBRARY_LAYERS` a todos los componentes de `src/` y mueve el orden de capas a `modules.json`. La allowlist inicial son las 55 aristas entre módulos de la sección "Aristas hacia arriba" del final.
+- **Hecho cuando:** el checker falla con cualquier arista hacia arriba nueva.
+
+### [ ] P2.2 · Regla 4: `export import` solo si el tipo aparece en la interfaz exportada
+- **Depende de:** P1.2
+- **Toca:** el linter de TBC (lo más fiable sobre el AST) o el checker si basta una aproximación.
+- **Hecho cuando:** la allowlist contiene los re-exports actuales que no cumplen (al menos los 67 que no mencionan ningún tipo del módulo re-exportado) y falla con cualquiera nuevo.
+
+### [ ] P2.3 · Regla 5: ningún `#include` fuera de las excepciones
+- **Depende de:** P1.2
+- **Toca:** `tools/check-cpp-modules.py`, `textual_boundaries` en `modules.json`.
+- **Excepciones permitidas:** `lib/sys`, las cabeceras de macros del proyecto (P6.3), Qt/moc y Objective-C++.
+- **Hecho cuando:** hay allowlist por fichero con los includes de hoy y el checker falla con cualquiera nuevo.
+
+---
+
+## Fase 3 · Capas
+
+### [ ] P3.1 · Crear `lib/sys` (`telar.sys.*`)
+- **Depende de:** P1.2
+- **Toca:** `lib/sys/` nuevo.
+- **Qué hace:** esqueleto de `telar.sys.posix`, `telar.sys.socket`, `telar.sys.process`, `telar.sys.apple` y `telar.sys.linux`, siguiendo el patrón `using ::open;` de `telar.platform.primitives`. Este es el único sitio con includes de C. Las conversiones de macros las hace P6.4.
+- **Hecho cuando:** los módulos compilan, `telar.platform.primitives` pasa a reexportar desde `telar.sys.*` y la capa `sys` está en `modules.json`, por debajo de `platform`.
+
+### [ ] P3.2 · `telar.wire.vocabulary`
+- **Depende de:** P1.2
+- **Toca:** `telar.client.protocol`, `lib/wire/` nuevo.
+- **Qué hace:** sacar de `telar.client.protocol` los tipos base, enums y codecs (`Byte`, `TerminalSize`, `FailureCode`, `TabLocation`, `Cursor`…) a `telar.wire.vocabulary`, y pasar `telar_protocol.hpp` y `telar_messages.hpp` a código de módulo. `telar.client.protocol` queda como agregador.
+- **Hecho cuando:** compila sin cambiar ningún importador.
+
+### [ ] P3.3 · Schemas de mensajes por dominio
+- **Depende de:** P3.2
+- **Toca:** `lib/wire/`.
+- **Qué hace:** repartir los 128 `MessageSchema` en `telar.wire.<dominio>`: pane I/O, agentes, historial, tráfico y layout (la lista final sale del análisis). El agregador sigue reexportando.
+- **Hecho cuando:** compila sin cambiar importadores y cada schema vive en un único dominio.
+
+### [ ] P3.4a–e · Migrar los importadores de `telar.client.protocol`
+- **Depende de:** P3.3
+- **Toca:** a = runtime, b = gui, c = cli, d = lib, e = tests. Las cinco van en paralelo.
+- **Qué hace:** cada unidad importa solo `telar.wire.vocabulary` y los dominios que usa. Las 33 unidades que no usan ningún nombre del módulo pierden el import.
+- **Hecho cuando:** ningún fichero del árbol importa `telar.client.protocol`.
+
+### [ ] P3.5 · Borrar el agregador `telar.client.protocol`
+- **Depende de:** P3.4a–e
+- **Hecho cuando:** el módulo no existe y P0.2 da, para un cambio en un dominio, solo los dependientes de ese dominio.
+
+### [ ] P3.6 · Bajar `background_executor` y limpiar `runtime/platform`
+- **Depende de:** P1.2
+- **Toca:** `telar.runtime.runtime.background_executor`, `runtime.platform.request_worker`, `runtime.platform.stream_read_buffer`, `runtime.platform.process_probe`, `runtime.history.store`, `runtime.editors.remote_editor`, `runtime.metrics.host_sampler`, `runtime.agents.session_host`.
+- **Cierra:** `platform → runtime`, `editors → runtime`, `history → runtime` (las tres por `background_executor`), `platform → metrics`, `platform → agents`.
+- **Hecho cuando:** `background_executor` vive en platform o en un componente de ejecución base y esas 5 aristas salen de la allowlist de P2.1.
+
+### [ ] P3.7 · Separar el vocabulario de diagnóstico del colector de telemetría
+- **Depende de:** P1.2
+- **Toca:** `runtime.diagnostics.*`, `runtime.diagnostics.runtime_telemetry`, `runtime.platform.request_worker`.
+- **Qué hace:** los contadores y las operaciones van a un módulo base sin dependencias. El colector (`runtime_telemetry`) sube junto a `runtime.runtime`.
+- **Cierra:** `diagnostics → graphics, history, model, proxy, terminal` y `platform → diagnostics` (`request_worker → diagnostics.operation`).
+- **Hecho cuando:** graphics y terminal importan solo el vocabulario y esas 6 aristas salen de la allowlist.
+
+### [ ] P3.8 · Romper `history.event` → `command_capture.tracker`
+- **Depende de:** P1.2
+- **Toca:** `runtime.history.event`, `runtime.command_capture.tracker`, `runtime.platform.request_worker`.
+- **Cierra:** `history → command_capture` y `platform → history` (`request_worker → history.event`). Las dos están en el camino crítico de 20 módulos.
+- **Hecho cuando:** salen de la allowlist.
+
+### [ ] P3.9 · Romper `terminal.text_reader` → graphics
+- **Depende de:** P1.2
+- **Toca:** `runtime.terminal.text_reader`, `runtime.graphics.kitty`, `runtime.graphics.pane_media`, `runtime.graphics.prepared_images`.
+- **Cierra:** `terminal → graphics` (3 aristas).
+
+### [ ] P3.10 · Bajar lo que usan otros de `model.client_layouts` y de `execution_service`
+- **Depende de:** P1.2
+- **Toca:** `runtime.model.client_layouts`, `runtime.agents.snapshot`, `runtime.persistence.session_store`, `runtime.runtime.execution_service`.
+- **Cierra:** `agents → model`, `persistence → model` y `persistence → runtime`. La arista `diagnostics → model` la cierra P3.7.
+
+### [ ] P3.11a · `telar.platform.net`
+- **Depende de:** P1.2. Antes, revisar qué dejó hecho el caso 31 de audit-39.
+- **Toca:** `telar.platform` (nueva familia `net`), `runtime.proxy.relay_direction` y sus importadores (tls, traffic, redirect, plugins).
+- **Qué hace:** socket, address y would-block salen de `relay_direction` a `telar.platform.net`.
+- **Cierra:** `plugins → proxy`, `redirect → proxy` (3), `tls → proxy`, `traffic → proxy` (2). Con eso caen los ciclos proxy ↔ tls, proxy ↔ redirect y proxy ↔ traffic.
+
+### [ ] P3.11b · `traffic.vocabulary`
+- **Depende de:** P1.2. Comparte `traffic.control_backend` con P3.11a: no se ejecutan a la vez.
+- **Toca:** `runtime.plugins.protocol`, `runtime.plugins.tap_configuration`, `runtime.traffic.control_protocol`, `runtime.traffic.control_backend`, `runtime.http.message`, `runtime.http1.intercepted_relay`, `runtime.redirect.ingress`, `runtime.redirect.socket_owners`.
+- **Qué hace:** lo que comparten proxy, plugins, traffic y http pasa a un módulo de vocabulario por debajo de todos ellos.
+- **Cierra:** `traffic → plugins` (3), `redirect → plugins`, `redirect → traffic`, `http → plugins`, `http1 → http`, `http1 → traffic`. Con eso caen los ciclos plugins ↔ traffic y http ↔ plugins.
+
+### [ ] P3.12a · Sacar `PaneLayout` y la geometría de `gui.application.sound_playback`
+- **Depende de:** P1.2
+- **Toca:** `gui.application.sound_playback` (contiene `pane_layout`, `workbench_geometry`, `pane_bottom_reservation`, `layout_token`, `navigation_history`, `saved_layouts`), `gui.presentation.frame_pacer`, `gui.presentation.history_inspection_geometry`, `gui.graphics.pauses`.
+- **Cierra:** `presentation → application` (2) y `graphics → application`.
+- **Hecho cuando:** `sound_playback` contiene solo la reproducción de sonido y la geometría vive en su propio módulo, por debajo de presentation.
+
+### [ ] P3.12b · Sacar las notificaciones y los records de `gui.application.workspace_replica`
+- **Depende de:** P1.2
+- **Toca:** `gui.application.workspace_replica`, `gui.presentation.notification_stack`, `gui.presentation.activity_order`.
+- **Cierra:** `presentation → application` (2).
+
+### [ ] P3.12c · Sacar el payload de notificación y el estado de vista de `gui.application.host_effects`
+- **Depende de:** P1.2
+- **Toca:** `gui.application.host_effects`, `gui.config.gui_query`, `gui.platform.notification_commands`.
+- **Cierra:** `config → application` y `platform → application`.
+
+### [ ] P3.13a · `gui.terminal.copy_mode` y el ciclo con `gui.fonts.face`
+- **Depende de:** P1.2
+- **Toca:** `gui.terminal.copy_mode` (contiene Symbol, box_edges y text_runs), `gui.fonts.face` (su `face.cpp` cierra el ciclo), `gui.input.copy_pointer`, `gui.input.key_encoder`.
+- **Cierra:** `terminal → fonts`, `terminal → input` (2) y el ciclo `fonts.face` ↔ `terminal.copy_mode`.
+
+### [ ] P3.13b · Sacar tab drag/drop de `gui.input.child_mouse`
+- **Depende de:** P1.2
+- **Toca:** `gui.input.child_mouse`, `gui.presentation.frame_pacer`, `gui.presentation.history_filter_geometry`, `gui.presentation.history_meta_geometry`.
+- **Cierra:** `input → presentation` (3).
+
+### [ ] P3.13c · `gui.input.configuration` y `gui.components.builtin_content` contra config
+- **Depende de:** P1.2
+- **Toca:** `gui.input.configuration`, `gui.config.gui_query`, `gui.components.builtin_content`, `gui.config.plugin_effects`.
+- **Cierra:** `input → config` y `components → config`.
+
+### [ ] P3.14a · Módulo cajón `gui.platform.profile_file` y el ciclo con `login_shell`
+- **Depende de:** P1.2. Antes, revisar qué cubre el caso 34 de audit-39.
+- **Toca:** `gui.platform.profile_file` (implementa `awake_clock`, `runtime_endpoint`, `shared_image_source` y un fichero de test), `gui.platform.login_shell` (`managed_directory.cpp`, `runtime_endpoint.cpp`), `gui.attachments.catalog`, `gui.machines.discovery`.
+- **Qué hace:** cada unidad pasa a su propio módulo. `tests/controlled_awake_clock.cpp` deja de ser una unidad de un módulo de producción.
+- **Cierra:** `platform → attachments`, `platform → machines` y el ciclo `login_shell` ↔ `profile_file`.
+
+### [ ] P3.14b · Módulo cajón `gui.platform.private_file_stamp`
+- **Depende de:** P1.2
+- **Toca:** sus unidades `background_effect`, `glyph_rasterizer`, `peer_identity`, `process_group` y `secure_random`.
+- **Cierra:** `platform → fonts`.
+
+### [ ] P3.14c · Módulo cajón `gui.platform.notification_commands`
+- **Depende de:** P1.2. Toca `host_effects`, igual que P3.12c.
+- **Toca:** sus unidades `stdio_socket`, `wall_clock` y `window_lease`.
+
+### [ ] P3.14d · Módulos cajón del runtime
+- **Depende de:** P1.2
+- **Toca:** `runtime.platform.system_certificates` (contiene `event_loop`) y `runtime.platform.launch_program` (contiene `local_listener`).
+
+### [ ] P3.15a · Ciclo `cli.tab` ↔ `cli.integration.settings`
+- **Depende de:** P1.2
+- **Toca:** `cli.tab`, su unidad `integration.cpp`, `cli.integration.settings`, `cli.server`.
+- **Cierra:** `integration → (root)` (`→ cli.server`, `→ cli.tab`) y el ciclo.
+
+### [ ] P3.15b · Ciclo `cli.window` ↔ `cli.machine`
+- **Depende de:** P1.2
+- **Toca:** `cli.window`, `cli.machine`, `launch_commands.cpp`.
+
+### [ ] P3.15c · `cli.hooks.session` → `cli.runtime_observer`
+- **Depende de:** P1.2
+- **Cierra:** `hooks → (root)`.
+
+### [ ] P3.16 · `gui.core.primitives` sin application ni input
+- **Depende de:** P1.2
+- **Toca:** `gui.core.primitives`, que incluye `application/dependencies.hpp` e `input/wheel_accumulator.hpp`.
+- **Hecho cuando:** core no incluye ni importa nada de application ni de input.
+
+### [ ] P3.17 · Cierre de capas
+- **Depende de:** P2.1, P3.6–P3.16
+- **Hecho cuando:** la allowlist de la regla 2 está vacía, el checker no encuentra ciclos (tampoco a través de unidades de implementación) y P0.2 da 0 aristas hacia arriba. Se ejecuta la suite completa.
+
+---
+
+## Fase 4 · Estrechar los hubs anchos
+
+Cada hub sigue el patrón agregador: `a` crea los módulos y deja el agregador, `b` migra a los importadores (una subtarea por árbol, en paralelo) y `c` borra el agregador.
+
+### [ ] P4.1a/b/c · `telar.platform` por familias
+- **Depende de:** a: P1.2 · b: P4.1a · c: P4.1b, P3.11a
+- **Familias:** process (`Command`, `PipeProcess`, `PtyProcess`, `SpawnOptions`), git (`GitFiles`, `GitHead`, `LinkedWorktree`; decidir si se une con `telar.git`), fs (`PrivateDirectory`, `ReadFile`, `WritePrivateFile`, `OpenBeneath`), paths y entorno, events. La familia `net` la crea P3.11a.
+- **Contexto:** 127 dependientes, 34 secciones, cada importador usa de media el 8%.
+
+### [ ] P4.2a/b/c · `telar.base.memory` por familias
+- **Depende de:** a: P1.2 · b: P4.2a · c: P4.2b
+- **Familias propuestas:** allocators (`allocator`, `buffer`, `recycling`, estadísticas), sensibles (`erasing_allocator`, `sensitive_allocation`, `sensitive_buffer`, `sensitive_text`) y contenedores (`byte_queue`, `slot_indexes`, `retained_stream`, `drop_channel`, `fixed_text`, `c_allocation_blocks`).
+- **Contexto:** 167 dependientes, 7% de uso medio.
+
+### [ ] P4.3a/b/c · `telar.base.text`: JSON aparte
+- **Depende de:** a: P1.2 · b: P4.3a · c: P4.3b
+- **Qué hace:** `json`, `json_error`, `json_fields` y `json_node` a `telar.base.text.json`. ASCII, `fields`, `hostname` y `schema_version` se quedan en su propio módulo.
+
+### [ ] P4.4a/b/c · `telar.config` por proceso
+- **Depende de:** a: P1.2 · b: P4.4a · c: P4.4b
+- **Decisión abierta (bloquea a):** el plan propone particiones (`telar.config:runtime`, `:client`, `:gui`) para conservar la decisión de un módulo por librería (`docs/build/cpp-modules.md:81`). Las particiones no se pueden importar desde fuera del módulo: los importadores importan `telar.config`, cuyo BMI incluye todas las particiones de interfaz. Un cambio en la interfaz de `:gui` sigue recompilando a los importadores del runtime. Las particiones solo ahorran recompilaciones dentro del propio módulo y, cuando los cuerpos salen (P9.5), en los cambios de implementación. Para cortar la cascada entre procesos hacen falta módulos separados (`telar.config.core`, `.runtime`, `.client`, `.gui`), y eso obliga a revisar la decisión documentada.
+- **Contexto:** 86 dependientes, 45 secciones, 4,3% de uso medio y 15 secciones que nadie usa desde fuera. Las 15 se borran o se pasan a internas en `a`.
+
+### [ ] P4.5 · Un solo lector tipado del schema de config
+- **Depende de:** P4.4a
+- **Qué hace:** hoy el schema se valida en la lib y la GUI lo vuelve a leer por su cuenta, por eso la GUI rechaza `client.prompt.skin` y la lib lo acepta. Queda un único lector tipado y la GUI consume su resultado.
+- **Hecho cuando:** hay un test que cubre `client.prompt.skin` en los dos procesos y no queda código de lectura del schema en la GUI.
+
+---
+
+## Fase 5 · Módulos profundos para el conocimiento duplicado
+
+Cada tarea empieza localizando todas las copias, crea un módulo con una interfaz mínima y borra las copias.
+
+| ID | Conocimiento | Copias | Destino | Depende de |
+|---|---|---|---|---|
+| [ ] P5.1 | Ruta del config | 6 | `telar.platform.paths` | P4.1a |
+| [ ] P5.2 | Paste framing / paste encoder | 3 | módulo en platform | P1.2 |
+| [ ] P5.3 | Hardening de git | 3 | `telar.platform.git` | P4.1a |
+| [ ] P5.4 | `setup.json` | 2 | módulo dueño único (decidir capa) | P1.2 |
+| [ ] P5.5 | Login shell | 4 | `telar.platform.process` o `telar.sys.process` | P4.1a, P3.1 |
+| [ ] P5.6 | Nombres de errno | 8 | `telar.sys.posix` (`lastError()` y el nombre) | P3.1 |
+| [ ] P5.7 | Spawn con higiene de descriptores | — | `telar.platform.process` | P4.1a, P3.1 |
+
+---
+
+## Fase 6 · Includes
+
+### [ ] P6.1 · Borrar los includes muertos
+- **Depende de:** P0.1 (audit-39 trae "Drop the remaining unused code, options and includes": revisar antes qué queda). Puede entrar antes o después de P1.2, porque el movimiento va por script.
+- **Toca:** `Security.h` en `proxy/runtime.cppm`, `traffic/control_backend.cppm` y `platform/system_certificates.cppm` (34 mil líneas cada uno). `<print>` textual en `cli/server.cppm` (26 600 líneas) pasa a `import std;`.
+
+### [ ] P6.2 · Partir `tbc/view.hpp`
+- **Depende de:** P1.2
+- **Qué hace:** una cabecera mínima solo con las anotaciones TBC (`TBC_SHARED`) y un módulo con el resto. Los `UINT*_MAX` pasan a `std::numeric_limits`.
+- **Contexto:** 98 unidades de módulo y 456 mil líneas; 68 de ellas no usan ninguna macro suya.
+
+### [ ] P6.3 · Cabeceras de macros del proyecto (categoría C)
+- **Depende de:** P6.2
+- **Qué hace:** dos o tres cabeceras sin includes propios: traza (`TELAR_TRACE`), diagnóstico (`TELAR_DIAGNOSTIC(S)`, `TELAR_DEBUG`) y anotaciones TBC (la de P6.2). Se registran como excepción en la regla 5.
+
+### [ ] P6.4 · Convertir macros de sistema en `telar.sys.*` (categoría B)
+- **Depende de:** P3.1
+- **Qué hace:** las constantes pasan a `inline constexpr` (`O_CLOEXEC`, `EINTR`, `PATH_MAX`, `POLLIN`…), las macros con forma de función a funciones `inline` (`WIFEXITED`, `S_ISREG`, `htons`) y `errno` a `lastError()`. `isfinite` pasa a `std::isfinite`. Las comprobaciones de plataforma (`__APPLE__`) no necesitan include.
+- **Se puede partir por familia en paralelo:** fs, wait/process, socket, apple y linux.
+
+### [ ] P6.5a–e · Sustituir los includes por imports (categorías A y B)
+- **Depende de:** P3.1, P6.4, P6.3
+- **Toca:** a = lib, b = runtime, c = gui (sin Qt ni `.mm`), d = cli, e = auth-daemon. Las cinco van en paralelo.
+- **Qué hace:** la libc estándar pasa a `import std;` o `import std.compat;` (está en el toolchain y hoy nadie lo usa), las cabeceras del proyecto al módulo dueño y POSIX/Apple a `telar.sys.*`. Cada subtarea borra sus entradas de la allowlist de P2.3.
+
+### [ ] P6.6 · Los hubs dejan de ser dueños textuales
+- **Depende de:** P4.2a, P4.3a, P4.4a
+- **Toca:** `base.memory`, `base.text`, `base.diagnostics` y `telar.config`, que incluyen entre 7 y 20 cabeceras de C++ en su fragmento global por compartir cabeceras con Objective-C++ y Qt.
+- **Qué hace:** lo que cruza a `.mm` y a Qt se reduce a una cabecera C o de tipos mínima. El resto pasa a código de módulo con `import std`.
+
+### [ ] P6.7 · Cabeceras pesadas que convierten módulos pequeños en sumideros
+- **Depende de:** P1.2
+- **Qué hace:** partir `runtime.terminal.control` (118 líneas propias y 13 256 de cabeceras, `control/engine.hpp` y sus 28 headers) por familia de secuencias: graphics, clipboard, glyph y checksum. Revisar `gui.terminal.screen` (6456 líneas de cabeceras) y `gui.attachments.catalog` (7784). Lo de `gui.core.primitives` es P3.16.
+- **Se puede partir:** a = terminal.control, b = gui.terminal.screen, c = attachments.catalog.
+
+### [ ] P6.8 · Cierre de includes
+- **Depende de:** P2.3, P6.1–P6.7
+- **Hecho cuando:** la allowlist de la regla 5 está vacía y P0.2 da la nueva cifra de líneas en fragmentos globales.
+
+---
+
+## Fase 7 · Re-exports
+
+### [ ] P7.1 · Quitar los `export import` que no cumplen la regla 4
+- **Depende de:** P2.2
+- **Se puede partir por árbol:** runtime (`runtime.runtime` re-exporta 23 y `runtime.cli.server` ve 90), gui (`gui.application.session` re-exporta 29, `gui.machines.profile_store` ×3…) y cli.
+- **Qué hace:** los importadores que dependían del transitivo pasan a import explícito. Los 443 imports directos "redundantes" se quedan, porque la regla elige el estilo explícito.
+
+### [ ] P7.2 · Cierre de re-exports
+- **Depende de:** P7.1
+- **Hecho cuando:** la allowlist de la regla 4 está vacía.
+
+---
+
+## Fase 8 · `telar::Memory` con tipo borrado en la frontera de servicio
+
+### [ ] P8.1 · `Memory`, `ConcurrentMemory`, `ErasingMemory`, `MemoryAdapter<A>`
+- **Depende de:** P0.3, P4.2a
+- **Qué hace:** una interfaz de unas 20 líneas con `allocate`/`deallocate` virtuales `noexcept` que devuelven `nullptr` al fallar (no `std::pmr`). `ConcurrentMemory : Memory` sustituye al concept `ConcurrentAllocator` y `ErasingMemory : Memory` cubre los secretos. `MemoryAdapter<A>` envuelve cualquier `Allocator`, también los fakes de los tests.
+- **Hecho cuando:** está en la familia de allocators de base, tiene tests con los fakes que fallan y con presupuesto, y el lifetime checker lo acepta en el build real. No se migra ningún servicio en esta tarea.
+
+### [ ] P8.2 · Medir el coste de la llamada virtual
+- **Depende de:** P8.1, P0.5
+- **Qué mide:** alloc+free con `Memory` frente al concept, con ThinLTO y con `-fwhole-program-vtables` (lo medido sin LTO es de +0,50 a +1,08 ns sobre 13 a 26 ns de `malloc`). También los hot paths del proxy y del render.
+- **Hecho cuando:** los números están en `docs/build/` y queda decidido si `-fwhole-program-vtables` entra en release.
+
+### [ ] P8.3 · Allocators de producción detrás de `Memory`
+- **Depende de:** P8.1
+- **Toca:** las raíces de composición que combinan `BudgetAllocator<SystemAllocator>`, `Synchronized`, `Erasing`, `Recycling` y `Buffer`, y el allocator de la GUI que elige `TELAR_GUI_ALLOCATOR`.
+- **Hecho cuando:** cada raíz de composición construye un `MemoryAdapter` y lo pasa como `Memory &`, `ConcurrentMemory &` o `ErasingMemory &`.
+
+---
+
+## Fase 9 · Cuerpos fuera de las interfaces
+
+Para cada módulo: `extern template class X<Memory>;` en la interfaz, la instancia con los cuerpos en una unidad de implementación de la carpeta y las funciones no plantilla a `module X;`. Lo que se quede inline en la interfaz lleva la anotación de hot path de P2.4 y una medición. Cada tarea borra sus entradas de la allowlist de la regla 3. Siguen siendo plantillas las primitivas pequeñas y calientes de `base`: `Vector`/`String` sobre `AllocatorRef`, `ByteQueue`, `FixedText`, `SlotIndexes` y `SensitiveAllocation`.
+
+| ID | Módulos | Depende de |
+|---|---|---|
+| [ ] P9.1 | `telar.wire.*` | P3.5, P8.1, P2.4 |
+| [ ] P9.2 | `telar.platform.*` | P4.1c, P8.1, P2.4 |
+| [ ] P9.3 | `telar.base.text.*`, `telar.base.diagnostics` | P4.3c, P6.6, P8.1, P2.4 |
+| [ ] P9.4 | `telar.base.memory.*` (solo lo que no es primitiva) | P4.2c, P6.6, P8.1, P2.4 |
+| [ ] P9.5 | `telar.config.*` | P4.4c, P4.5, P8.1, P2.4 |
+| [ ] P9.6 | Resto de `lib/`: git, tls, plugins, lua, machines, render, shell | P1.2, P8.1, P2.4 |
+| [ ] P9.7 | Runtime, una subtarea por dominio en paralelo (terminal, panes, agents, history, traffic/{proxy,tls,http,redirect}, plugins, graphics…) | P8.1, P0.5, P2.4 y las tareas de P3 del dominio |
+| [ ] P9.8 | GUI, una subtarea por dominio. `gui.application.session` (5815 líneas) pasa a `session/session.cppm` con `prompt.cpp`, `blocks.cpp`, `copy_mode.cpp`… | P8.1, P0.5, P2.4 y las tareas de P3 del dominio |
+| [ ] P9.9 | CLI | P8.1, P2.4, P3.15a–c |
+
+- **Hecho cuando (cada una):** compila, pasan los tests del área, y en runtime y GUI los benchmarks de hot path no empeoran respecto a P0.5 o la diferencia está justificada.
+
+### [ ] P9.10 · Quitar el parámetro de plantilla `Memory` donde ya no aporta
+- **Depende de:** P9.1–P9.9
+- **Qué hace:** los servicios que solo se instancian con `Memory` dejan de ser plantillas y se borran los `extern template`.
+
+### [ ] P9.11 · Cierre de la regla 3
+- **Depende de:** P9.1–P9.10
+- **Hecho cuando:** la allowlist de la regla 3 está vacía y se ejecuta la suite completa.
+
+---
+
+## Fase 10 · Colapsos (prioridad baja)
+
+### [ ] P10.1 · Módulos pequeños con un solo importador pasan a partición del importador
+- **Depende de:** P1.2
+- **Módulos:** `gui.terminal.fold_map` (10 líneas), `telar.vocabulary` (19), `runtime.traffic.tap` (60, con 21 includes), `runtime.tls.system_root_bundle` (63), `runtime.persistence.launch_record` (71), `gui.prompt.routing` (71), `runtime.workspaces.git_probe` (82), `runtime.execution.execution` (93).
+
+### [ ] P10.2 · Cadenas lineales
+- **Depende de:** P1.2
+- **Qué hace:** evaluar si se colapsan `gui.prompt.text` → `prompt.editor` → `prompt.line` y `render.document` → `render.terminal` → `cli.render`. Comparte `prompt` con P9.8: no se ejecutan a la vez.
+
+### [ ] P10.3 · Módulos sin importadores
+- **Depende de:** P0.1 (el caso 38 cubre `telar.websock`)
+- **Qué hace:** borrar `gui.input.scroll_motion`, `gui.tools.probe_io` y, si sigue vivo, `telar.websock`.
+
+---
+
+## Fase 11 · Cierre
+
+### [ ] P11.1 · Medición final frente a la línea base
+- **Depende de:** P3.17, P6.8, P7.2, P9.11, P10.1–P10.3
+- **Hecho cuando:** P0.2 se vuelve a ejecutar y el resultado se compara en `docs/build/` con la línea base. Cifras a comparar: código en interfaces (94,7%), dependientes del hub de protocolo (148), dependientes de `base.memory` (167), aristas hacia arriba (55 → 0), ciclos (5 → 0), `export import` (681), líneas en fragmentos globales (4,84 M), unidades recompiladas al tocar cada hub y longitud del camino crítico (20 módulos). Se ejecuta la suite completa.
+
+---
+
+## Fuera de alcance
+
+- La pasada de includes de los tests (19,9 M de líneas, 12,2 M de cabeceras de fixtures).
+- La clase dios `Application` de Qt (`qt/application.hpp`, 38 TUs y 1,0 M de líneas a través del PCH).
+- Header units: CMake no las soporta (4.4 ni 4.5-rc).
+
+## Aristas hacia arriba (allowlist inicial de P2.1)
+
+| Componente → componente | Arista entre módulos | Tarea |
+|---|---|---|
+| cli/hooks → cli/(root) | `cli.hooks.session → cli.runtime_observer` | P3.15c |
+| cli/integration → cli/(root) | `cli.integration.settings → cli.server`, `→ cli.tab` | P3.15a |
+| gui/components → gui/config | `gui.components.builtin_content → gui.config.plugin_effects` | P3.13c |
+| gui/config → gui/application | `gui.config.gui_query → gui.application.host_effects` | P3.12c |
+| gui/graphics → gui/application | `gui.graphics.pauses → gui.application.sound_playback` | P3.12a |
+| gui/input → gui/config | `gui.input.configuration → gui.config.gui_query` | P3.13c |
+| gui/input → gui/presentation | `gui.input.child_mouse → presentation.frame_pacer`, `→ history_filter_geometry`, `→ history_meta_geometry` | P3.13b |
+| gui/platform → gui/application | `gui.platform.notification_commands → gui.application.host_effects` | P3.12c |
+| gui/platform → gui/attachments | `gui.platform.profile_file → gui.attachments.catalog` | P3.14a |
+| gui/platform → gui/fonts | `gui.platform.private_file_stamp → gui.fonts.face` | P3.14b |
+| gui/platform → gui/machines | `gui.platform.profile_file → gui.machines.discovery` | P3.14a |
+| gui/presentation → gui/application | `frame_pacer → sound_playback`, `history_inspection_geometry → sound_playback` | P3.12a |
+| gui/presentation → gui/application | `notification_stack → workspace_replica`, `activity_order → workspace_replica` | P3.12b |
+| gui/terminal → gui/fonts | `gui.terminal.copy_mode → gui.fonts.face` | P3.13a |
+| gui/terminal → gui/input | `gui.terminal.copy_mode → input.copy_pointer`, `→ input.key_encoder` | P3.13a |
+| runtime/agents → runtime/model | `runtime.agents.snapshot → runtime.model.client_layouts` | P3.10 |
+| runtime/diagnostics → graphics, history, model, proxy, terminal | `runtime.diagnostics.runtime_telemetry → graphics.kitty`, `history.event`, `model.client_layouts`, `proxy.http2_capture_streams`, `terminal.control` | P3.7 |
+| runtime/editors → runtime/runtime | `runtime.editors.remote_editor → runtime.background_executor` | P3.6 |
+| runtime/history → runtime/command_capture | `runtime.history.event → runtime.command_capture.tracker` | P3.8 |
+| runtime/history → runtime/runtime | `runtime.history.store → runtime.background_executor` | P3.6 |
+| runtime/http → runtime/plugins | `runtime.http.message → runtime.plugins.protocol` | P3.11b |
+| runtime/http1 → runtime/http | `runtime.http1.intercepted_relay → runtime.http.message` | P3.11b |
+| runtime/http1 → runtime/traffic | `runtime.http1.intercepted_relay → runtime.traffic.control_protocol` | P3.11b |
+| runtime/persistence → runtime/model | `runtime.persistence.session_store → runtime.model.client_layouts` | P3.10 |
+| runtime/persistence → runtime/runtime | `runtime.persistence.session_store → runtime.execution_service` | P3.10 |
+| runtime/platform → runtime/agents | `runtime.platform.process_probe → runtime.agents.session_host` | P3.6 |
+| runtime/platform → runtime/diagnostics | `runtime.platform.request_worker → runtime.diagnostics.operation` | P3.7 |
+| runtime/platform → runtime/history | `runtime.platform.request_worker → runtime.history.event` | P3.8 |
+| runtime/platform → runtime/metrics | `runtime.platform.stream_read_buffer → runtime.metrics.host_sampler` | P3.6 |
+| runtime/platform → runtime/runtime | `runtime.platform.request_worker → runtime.background_executor` | P3.6 |
+| runtime/plugins → runtime/proxy | `runtime.plugins.worker → runtime.proxy.relay_direction` | P3.11a |
+| runtime/redirect → runtime/plugins | `runtime.redirect.ingress → runtime.plugins.protocol` | P3.11b |
+| runtime/redirect → runtime/proxy | `redirect.socket_owners → proxy.relay_direction`, `redirect.ingress → proxy.authenticate`, `redirect.ingress → proxy.relay_direction` | P3.11a |
+| runtime/redirect → runtime/traffic | `runtime.redirect.socket_owners → runtime.traffic.capture` | P3.11b |
+| runtime/terminal → runtime/graphics | `runtime.terminal.text_reader → graphics.kitty`, `→ graphics.pane_media`, `→ graphics.prepared_images` | P3.9 |
+| runtime/tls → runtime/proxy | `runtime.tls.interception → runtime.proxy.relay_direction` | P3.11a |
+| runtime/traffic → runtime/plugins | `traffic.control_protocol → plugins.protocol`, `traffic.control_backend → plugins.protocol`, `→ plugins.tap_configuration` | P3.11b |
+| runtime/traffic → runtime/proxy | `runtime.traffic.control_backend → proxy.relay_direction`, `→ proxy.runtime` | P3.11a |
