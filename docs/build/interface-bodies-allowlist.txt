@@ -169,6 +169,7 @@ telar.runtime.shell_integration.git_context
 telar.runtime.shell_integration.token
 telar.runtime.shell_integration.words
 telar.runtime.suggestions.engine
+telar.runtime.terminal.graphics_storage
 telar.runtime.terminal.osc_scanner
 telar.runtime.terminal.text_reader
 telar.runtime.tls.interception

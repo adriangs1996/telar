@@ -34,8 +34,7 @@ import std;
 export import telar.runtime.diagnostics.runtime_counters;
 
 export import telar.runtime.diagnostics.operation;
-export import telar.runtime.graphics.pane_media;
-export import telar.runtime.graphics.prepared_images;
+export import telar.runtime.terminal.graphics_storage;
 
 export import telar.runtime.terminal.osc_scanner;
 export import telar.base.memory;
@@ -44,7 +43,6 @@ import telar.client.protocol;
 import telar.config;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
-import telar.runtime.graphics.kitty;
 import telar.runtime.terminal.control;
 
 // Interface: terminal/text_metadata.cppm
@@ -828,6 +826,39 @@ export {
       observation,
     };
 
+    // The media a separate_media terminal feeds. It lives in graphics, above the terminal, so the
+    // terminal reaches it through these entries instead of naming its type.
+    template <typename Media>
+    concept TerminalMedia = requires(Media& media, const Media& state, std::span<const Byte> bytes) {
+      { media.requireOrderedInput() } noexcept;
+      { Media::atomicPrefix(bytes) } noexcept -> std::same_as<std::size_t>;
+      { media.output(bytes) } noexcept;
+      { state.failed() } noexcept -> std::same_as<bool>;
+      { state.idle() } noexcept -> std::same_as<bool>;
+    };
+
+    struct TerminalMediaEntries {
+      // The prefix of the input made of whole atomic frames, which the terminal parses as one unit.
+      std::size_t (*atomic_prefix)(std::span<const Byte> bytes) noexcept;
+      void (*output)(void* media, std::span<const Byte> bytes) noexcept;
+      bool (*failed)(const void* media) noexcept;
+      bool (*idle)(const void* media) noexcept;
+    };
+
+    template <TerminalMedia Media>
+    inline constexpr TerminalMediaEntries terminal_media_entries{
+        .atomic_prefix = &Media::atomicPrefix,
+        .output = [](void* media, std::span<const Byte> bytes) noexcept {
+          static_cast<Media*>(media)->output(bytes);
+        },
+        .failed = [](const void* media) noexcept {
+          return static_cast<const Media*>(media)->failed();
+        },
+        .idle = [](const void* media) noexcept {
+          return static_cast<const Media*>(media)->idle();
+        },
+    };
+
     template <Allocator Memory>
     class Terminal {
     public:
@@ -932,7 +963,7 @@ export {
         }
 
         if (control_.awaitingMedia()) {
-          if (media_ == nullptr || !media_->idle()) {
+          if (media_ == nullptr || !media_entries_->idle(media_.get())) {
             return;
           }
 
@@ -954,10 +985,12 @@ export {
 
       // The terminal shares the media it feeds, so either may go first. Only the
       // runtime touches this ingress port; workers own sealed batches.
-      inline void attachMedia(tbc::view<std::shared_ptr<PaneMedia<Memory>>, tbc::lt::a> media) noexcept {
+      template <TerminalMedia Media>
+      inline void attachMedia(tbc::view<std::shared_ptr<Media>, tbc::lt::a> media) noexcept {
         assert(purpose_ == TerminalPurpose::separate_media && media_ == nullptr);
+        media->requireOrderedInput();
+        media_entries_ = &terminal_media_entries<Media>;
         media_ = std::move(media);
-        media_->requireOrderedInput();
         control_.enableMediaBoundaries();
       }
 
@@ -1235,7 +1268,7 @@ export {
 
     private:
       inline std::size_t feedControl(std::span<const Byte> bytes) {
-        const auto atomic = media_ != nullptr && control_.ground() && !control_.blocked() ? atomicMediaPrefix(bytes) : 0;
+        const auto atomic = media_ != nullptr && control_.ground() && !control_.blocked() ? media_entries_->atomic_prefix(bytes) : 0;
         const auto consumed = atomic != 0 ? control_.feedAtomicMedia(bytes.first(atomic)) : control_.feed(bytes);
 
         if (control_.takeDocument(effects.document)) {
@@ -1247,31 +1280,10 @@ export {
         }
 
         if (media_ != nullptr && consumed != 0) {
-          media_->output(bytes.first(consumed));
-          if (media_->failed()) {
+          media_entries_->output(media_.get(), bytes.first(consumed));
+          if (media_entries_->failed(media_.get())) {
             throw TerminalError{GHOSTTY_OUT_OF_MEMORY};
           }
-        }
-
-        return consumed;
-      }
-
-      inline static std::size_t atomicMediaPrefix(std::span<const Byte> bytes) noexcept {
-        constexpr unsigned maximum_frames = 8;
-        constexpr std::size_t maximum_pixels_bytes = GraphicsLimits::maximum_pane_bytes / 2;
-        constexpr std::string_view filename_alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
-        const std::string_view input{reinterpret_cast<const char*>(bytes.data()), bytes.size()};
-        std::size_t consumed = 0;
-        std::size_t pixels = 0;
-
-        for (unsigned count = 0; count < maximum_frames; ++count) {
-          const auto frame = AtomicFrame::at(input, consumed);
-          if (!frame || frame->control.byte_count > maximum_pixels_bytes - pixels || frame->encoded_name.find_first_not_of(filename_alphabet) != std::string_view::npos) {
-            break;
-          }
-
-          consumed = frame->end;
-          pixels += frame->control.byte_count;
         }
 
         return consumed;
@@ -1585,7 +1597,8 @@ export {
       RowCellsHandle row_cells_;
       tbc::view<std::shared_ptr<PtyResponseQueue>, tbc::lt::a> responses_;
       tbc::view<ResponseOutbox<Memory>, tbc::lt::a> response_outbox_;
-      tbc::view<std::shared_ptr<PaneMedia<Memory>>, tbc::lt::a> media_;
+      tbc::view<std::shared_ptr<void>, tbc::lt::a> media_;
+      const TerminalMediaEntries* media_entries_ = nullptr;
       static constexpr std::size_t control_input_limit = 128 * 1024;
       // The engine keeps the queue responses_ owns, a shared type, so the terminal stays where it was built.
       tbc::view<control::Engine<Memory>, tbc::lt::a> control_;
