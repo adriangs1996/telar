@@ -51,7 +51,7 @@ if(BUILD_TESTING)
   set_tests_properties(clipboard-smoke PROPERTIES TIMEOUT 30)
 
   if(APPLE AND TELAR_CLIPBOARD_NATIVE)
-    set(clipboard_test_support "${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui-cpp/tests")
+    set(clipboard_test_support "${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/tests")
     add_executable(clipboard-test
       tests/clipboard_test.mm
       "${clipboard_test_support}/platform/macos/private_clipboard.mm"

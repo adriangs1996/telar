@@ -51,7 +51,7 @@ just install-gui    # bundle into ~/Applications, telar into ~/.local/bin
 ```
 
 `just install-gui` builds the runtime and the GUI in Release, stages them with
-`src/gui-cpp/tools/package_macos.py --release`, replaces
+`src/gui/tools/package_macos.py --release`, replaces
 `~/Applications/Telar.app` and links `~/.local/bin/telar` to the bundled CLI;
 both directories are recipe parameters. Published releases come from
 `packaging/release/macos.sh`, which also builds a distributable runtime and
@@ -64,7 +64,7 @@ The bundle layout:
 ```
 Telar.app/Contents/
   Info.plist                 packaging/macos/Info.plist.in, version from VERSION
-  MacOS/Telar                launcher, src/gui-cpp/tools/macos_launcher.cpp
+  MacOS/Telar                launcher, src/gui/tools/macos_launcher.cpp
   MacOS/telar-gui, telar-gui-command   the C++ client and its surface helper
   Frameworks/, PlugIns/      the managed Qt the client loads
   Resources/telar.icns       packaging/macos/telar.icns
@@ -112,14 +112,14 @@ telar-linux-ARCH/
   share/telar/licenses/
 ```
 
-`src/gui-cpp/tools/package_linux.py` stages it. It copies the Qt
+`src/gui/tools/package_linux.py` stages it. It copies the Qt
 libraries the client and its plugins name, directly or through each other,
 and gives every ELF file an `$ORIGIN` RUNPATH into `lib`, so the tree runs
 from wherever it is unpacked. `telar` finds `telar-gui` and `telar-runtime`
 beside the file a symlink resolves to.
 
 The build for servers, where remote mode runs the runtime, is the C++
-runtime and CLI without a window: `src/runtime-cpp` builds `telar`,
+runtime and CLI without a window: `src/runtime` builds `telar`,
 `telar-runtime` and `telar-config-check` side by side. The release makes
 them static musl executables ([details](#the-linux-headless-build)), and
 the desktop archive carries the same files.

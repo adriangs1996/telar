@@ -68,8 +68,8 @@ clipboard requests then fail explicitly. Static headless Linux distribution
 builds default to this setting, preserving their dependency-free linkage.
 
 ```sh
-cmake --build src/runtime-cpp/out --target telar telar-runtime runtime-clipboard-tests
-ctest --test-dir src/runtime-cpp/out \
+cmake --build src/runtime/out --target telar telar-runtime runtime-clipboard-tests
+ctest --test-dir src/runtime/out \
   -R '^(runtime-clipboard-tests|clipboard-cli-tests|cli-help-tests)$' --output-on-failure
 ```
 

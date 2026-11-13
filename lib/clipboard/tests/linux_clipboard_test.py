@@ -13,7 +13,7 @@ import time
 
 from PIL import Image
 
-TOOLS = Path(__file__).resolve().parents[3] / 'src/gui-cpp/tools'
+TOOLS = Path(__file__).resolve().parents[3] / 'src/gui/tools'
 sys.path.insert(0, str(TOOLS))
 from check_wayland_clipboard import stop, wait_for
 

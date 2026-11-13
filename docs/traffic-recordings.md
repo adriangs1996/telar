@@ -138,10 +138,10 @@ export format through their ordinary filesystem API.
 ## Verification
 
 ```sh
-cmake --build src/runtime-cpp/out --target traffic-recording-tests
-ctest --test-dir src/runtime-cpp/out -R '^traffic-recording-tests$' --output-on-failure
-python3 src/runtime-cpp/tools/check_traffic_recordings.py \
-  --runtime src/runtime-cpp/out/telar-runtime \
+cmake --build src/runtime/out --target traffic-recording-tests
+ctest --test-dir src/runtime/out -R '^traffic-recording-tests$' --output-on-failure
+python3 src/runtime/tools/check_traffic_recordings.py \
+  --runtime src/runtime/out/telar-runtime \
   --lua-probe src/desktop-mode/out/debug/traffic_dbg
 ```
 

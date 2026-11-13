@@ -197,7 +197,7 @@ namespace inferred {
 
 // CASE: inference.temporary_leaf
 // PAIR: inference.leaf
-// SOURCE: lib/ebnf/parser.cppm :: node::text
+// SOURCE: lib/ebnf/parser/parser.cppm :: node::text
 // STATUS: implemented
 // CONTRACT: A native aggregate result retains the inferred source dependency.
 // SCENARIO: A leaf borrows a temporary string and is observed after its full expression.
@@ -210,7 +210,7 @@ void inferredTemporaryLeaf() {
 
 // CASE: inference.retained_leaf
 // PAIR: inference.leaf
-// SOURCE: lib/ebnf/parser.cppm :: node::text
+// SOURCE: lib/ebnf/parser/parser.cppm :: node::text
 // STATUS: implemented
 // CONTRACT: A native aggregate may borrow an owner that remains alive through every use.
 // SCENARIO: A leaf's source remains in scope.
@@ -224,7 +224,7 @@ void inferredRetainedLeaf() {
 
 // CASE: inference.temporary_branch
 // PAIR: inference.branch
-// SOURCE: lib/ebnf/parser.cppm :: node::children
+// SOURCE: lib/ebnf/parser/parser.cppm :: node::children
 // STATUS: implemented
 // CONTRACT: Moving a child into a vector preserves the child's source dependency.
 // SCENARIO: A parent is observed after the source temporary dies.
@@ -237,7 +237,7 @@ void inferredTemporaryBranch() {
 
 // CASE: inference.retained_branch
 // PAIR: inference.branch
-// SOURCE: lib/ebnf/parser.cppm :: node::children
+// SOURCE: lib/ebnf/parser/parser.cppm :: node::children
 // STATUS: implemented
 // CONTRACT: Copies and moves of descriptors do not borrow the local descriptor objects.
 // SCENARIO: A copied and moved parent still borrows its live source.
@@ -253,7 +253,7 @@ void inferredRetainedBranch() {
 
 // CASE: inference.local_owner_escape
 // PAIR: inference.owner
-// SOURCE: lib/ebnf/parser.cppm :: node::text
+// SOURCE: lib/ebnf/parser/parser.cppm :: node::text
 // STATUS: implemented
 // CONTRACT: A native string_view return cannot escape its local owner.
 // SCENARIO: An inferred helper returns a substring of a local string.
@@ -266,7 +266,7 @@ std::string_view inferredLocalOwnerEscape() {
 
 // CASE: inference.caller_owner
 // PAIR: inference.owner
-// SOURCE: lib/ebnf/parser.cppm :: node::text
+// SOURCE: lib/ebnf/parser/parser.cppm :: node::text
 // STATUS: implemented
 // CONTRACT: A reference input can supply the storage borrowed by a native value result.
 // SCENARIO: A view borrows caller-owned string bytes through an inferred helper.
@@ -278,7 +278,7 @@ std::string_view inferredCallerOwner(const std::string &source) {
 
 // CASE: inference.temporary_reference
 // PAIR: inference.reference
-// SOURCE: lib/ebnf/parser.cppm :: node
+// SOURCE: lib/ebnf/parser/parser.cppm :: node
 // STATUS: implemented
 // CONTRACT: A returned reference borrows its descriptor object, not just its text.
 // SCENARIO: A reference to a temporary record is read after the record dies.
@@ -291,7 +291,7 @@ void inferredTemporaryReference() {
 
 // CASE: inference.descriptor_copy
 // PAIR: inference.reference
-// SOURCE: lib/ebnf/parser.cppm :: node
+// SOURCE: lib/ebnf/parser/parser.cppm :: node
 // STATUS: implemented
 // CONTRACT: Copying borrowed fields does not keep a borrow of the source descriptor.
 // SCENARIO: A copied record can outlive a local record when the text source stays alive.
@@ -305,7 +305,7 @@ inferred::record inferredDescriptorCopy(std::string_view source) {
 
 // CASE: inference.temporary_selected_argument
 // PAIR: inference.selected_argument
-// SOURCE: lib/ebnf/parser.cppm :: parseIdentifier
+// SOURCE: lib/ebnf/parser/parser.cppm :: parseIdentifier
 // STATUS: implemented
 // CONTRACT: A native result depends on the argument actually returned.
 // SCENARIO: The selected input is temporary despite another input remaining alive.
@@ -319,7 +319,7 @@ void inferredTemporarySelectedArgument() {
 
 // CASE: inference.unselected_temporary
 // PAIR: inference.selected_argument
-// SOURCE: lib/ebnf/parser.cppm :: parseIdentifier
+// SOURCE: lib/ebnf/parser/parser.cppm :: parseIdentifier
 // STATUS: implemented
 // CONTRACT: Reading a second argument during the call does not make it a result dependency.
 // SCENARIO: An unused result origin is temporary, while the selected input remains alive.
@@ -333,7 +333,7 @@ void inferredUnselectedTemporary() {
 
 // CASE: inference.branch_temporary
 // PAIR: inference.control_flow
-// SOURCE: lib/ebnf/parser.cppm :: parseRule
+// SOURCE: lib/ebnf/parser/parser.cppm :: parseRule
 // STATUS: implemented
 // CONTRACT: A result returned from either branch depends on both possible origins.
 // SCENARIO: One branch may return a temporary string's view.
@@ -347,7 +347,7 @@ void inferredBranchTemporary(bool pick_first) {
 
 // CASE: inference.branch_retained
 // PAIR: inference.control_flow
-// SOURCE: lib/ebnf/parser.cppm :: parseRule
+// SOURCE: lib/ebnf/parser/parser.cppm :: parseRule
 // STATUS: implemented
 // CONTRACT: Multiple possible inferred input origins are valid while both owners live.
 // SCENARIO: The function may return either retained source without explicit regions.
@@ -361,7 +361,7 @@ void inferredBranchRetained(bool pick_first) {
 
 // CASE: inference.recursive_temporary
 // PAIR: inference.recursion
-// SOURCE: lib/ebnf/parser.cppm :: parseAlternation
+// SOURCE: lib/ebnf/parser/parser.cppm :: parseAlternation
 // STATUS: implemented
 // CONTRACT: Mutually recursive summaries propagate their base-case dependency.
 // SCENARIO: A recursive helper's source temporary expires before the result's use.
@@ -374,7 +374,7 @@ void inferredRecursiveTemporary() {
 
 // CASE: inference.recursive_retained
 // PAIR: inference.recursion
-// SOURCE: lib/ebnf/parser.cppm :: parseAlternation
+// SOURCE: lib/ebnf/parser/parser.cppm :: parseAlternation
 // STATUS: implemented
 // CONTRACT: Recursive summary solving must preserve a valid caller dependency.
 // SCENARIO: A recursive helper returns a view of its retained input.
@@ -386,7 +386,7 @@ std::string_view inferredRecursiveRetained(std::string_view source) {
 
 // CASE: inference.receiver_owned_escape
 // PAIR: inference.receiver
-// SOURCE: lib/ebnf/parser.cppm :: parser
+// SOURCE: lib/ebnf/parser/parser.cppm :: parser
 // STATUS: implemented
 // CONTRACT: A getter of receiver-owned bytes borrows the receiver's storage.
 // SCENARIO: Returning a local receiver's owned string view escapes the receiver.
@@ -399,7 +399,7 @@ std::string_view inferredReceiverOwnedEscape() {
 
 // CASE: inference.receiver_borrowed_copy
 // PAIR: inference.receiver
-// SOURCE: lib/ebnf/parser.cppm :: parser
+// SOURCE: lib/ebnf/parser/parser.cppm :: parser
 // STATUS: implemented
 // CONTRACT: Copying a borrowed field need not borrow the receiver object itself.
 // SCENARIO: A getter's result outlives a local descriptor but not its caller-owned bytes.
@@ -412,7 +412,7 @@ std::string_view inferredReceiverBorrowedCopy(std::string_view source) {
 
 // CASE: inference.parser_temporary
 // PAIR: inference.ebnf
-// SOURCE: lib/ebnf/parser.cppm :: parseRule
+// SOURCE: lib/ebnf/parser/parser.cppm :: parseRule
 // STATUS: implemented
 // CONTRACT: Parser helper chains propagate the source without result annotations.
 // SCENARIO: An AST is used after the source temporary expires.
@@ -425,7 +425,7 @@ void inferredEbnfTemporary() {
 
 // CASE: inference.parser_retained
 // PAIR: inference.ebnf
-// SOURCE: lib/ebnf/parser.cppm :: parseRule
+// SOURCE: lib/ebnf/parser/parser.cppm :: parseRule
 // STATUS: implemented
 // CONTRACT: The AST borrows source bytes rather than the local parser object.
 // SCENARIO: An AST returned through an inferred helper retains a live source.
@@ -439,7 +439,7 @@ void inferredEbnfRetained() {
 
 // CASE: inference.explicit_contract_mismatch
 // PAIR: inference.explicit_contract
-// SOURCE: lib/ebnf/parser.cppm :: parse
+// SOURCE: lib/ebnf/parser/parser.cppm :: parse
 // STATUS: implemented
 // CONTRACT: An explicit region is checked even when the returned helper has an inferred summary.
 // SCENARIO: Inferred propagation must not bypass a mismatched public contract.
@@ -452,7 +452,7 @@ tbc::view<std::string_view, tbc::lt::a> inferredExplicitMismatch(tbc::view<std::
 
 // CASE: inference.explicit_contract_match
 // PAIR: inference.explicit_contract
-// SOURCE: lib/ebnf/parser.cppm :: parse
+// SOURCE: lib/ebnf/parser/parser.cppm :: parse
 // STATUS: implemented
 // CONTRACT: A helper's inferred result can satisfy an explicit public region.
 // SCENARIO: The public result returns the input named by its region.
@@ -464,7 +464,7 @@ tbc::view<std::string_view, tbc::lt::a> inferredExplicitMatch(tbc::view<std::str
 
 // CASE: inference.opaque_boundary
 // PAIR: inference.boundary
-// SOURCE: lib/ebnf/parser.cppm :: i_tokenizer
+// SOURCE: lib/ebnf/parser/parser.cppm :: i_tokenizer
 // STATUS: implemented
 // CONTRACT: An unavailable implementation without a contract follows Rust's lifetime elision and never implies a static result.
 // SCENARIO: The result borrows its only input, a temporary that dies before the result is read.
@@ -477,7 +477,7 @@ void inferredOpaqueBoundary() {
 
 // CASE: inference.opaque_elided_input
 // PAIR: inference.boundary
-// SOURCE: lib/ebnf/parser.cppm :: i_tokenizer
+// SOURCE: lib/ebnf/parser/parser.cppm :: i_tokenizer
 // STATUS: implemented
 // CONTRACT: An unavailable implementation without a contract follows Rust's lifetime elision and never implies a static result.
 // SCENARIO: The result borrows its only input, which outlives the result; accept.
@@ -489,7 +489,7 @@ void inferredOpaqueElidedInput(std::string_view source) {
 
 // CASE: inference.opaque_ambiguous
 // PAIR: inference.boundary
-// SOURCE: lib/ebnf/parser.cppm :: i_tokenizer
+// SOURCE: lib/ebnf/parser/parser.cppm :: i_tokenizer
 // STATUS: implemented
 // CONTRACT: An unavailable implementation without a contract follows Rust's lifetime elision and never implies a static result.
 // SCENARIO: Two inputs can lend, so elision names no source, as in Rust; the declaration needs a contract.
@@ -502,7 +502,7 @@ void inferredOpaqueAmbiguous(std::string_view first, std::string_view second) {
 
 // CASE: inference.static_result
 // PAIR: inference.boundary
-// SOURCE: lib/ebnf/parser.cppm :: peek
+// SOURCE: lib/ebnf/parser/parser.cppm :: peek
 // STATUS: implemented
 // CONTRACT: A visible body returning literal-backed text has no expiring input dependency.
 // SCENARIO: An inferred constant result requires no artificial lifetime parameter.
@@ -514,7 +514,7 @@ std::string_view inferredStaticResult() {
 
 // CASE: inference.receiver_write_temporary
 // PAIR: inference.receiver_write
-// SOURCE: lib/ebnf/parser.cppm :: parse
+// SOURCE: lib/ebnf/parser/parser.cppm :: parse
 // STATUS: implemented
 // CONTRACT: A call's inferred writes update the receiver's borrowed fields.
 // SCENARIO: A later getter reads state retained from a temporary source.
@@ -529,7 +529,7 @@ void inferredReceiverWriteTemporary() {
 
 // CASE: inference.receiver_write_retained
 // PAIR: inference.receiver_write
-// SOURCE: lib/ebnf/parser.cppm :: parse
+// SOURCE: lib/ebnf/parser/parser.cppm :: parse
 // STATUS: implemented
 // CONTRACT: Inferred receiver writes preserve a live caller dependency.
 // SCENARIO: A later getter reads a source retained by an earlier call.
@@ -604,7 +604,7 @@ void inferredEnvironmentImmediateRead() {
 
 // CASE: inference.output_argument_temporary
 // PAIR: inference.output_argument
-// SOURCE: lib/ebnf/lexer.cppm :: tokenizeSourceIntoBuffer
+// SOURCE: lib/ebnf/lexer/lexer.cppm :: tokenizeSourceIntoBuffer
 // STATUS: implemented
 // CONTRACT: Inferred output-argument writes retain their actual source dependency.
 // SCENARIO: An aggregate is filled through a reference alias from a temporary source.
@@ -618,7 +618,7 @@ void inferredOutputArgumentTemporary() {
 
 // CASE: inference.output_argument_retained
 // PAIR: inference.output_argument
-// SOURCE: lib/ebnf/lexer.cppm :: tokenizeSourceIntoBuffer
+// SOURCE: lib/ebnf/lexer/lexer.cppm :: tokenizeSourceIntoBuffer
 // STATUS: implemented
 // CONTRACT: An inferred write through a local reference alias updates the actual argument.
 // SCENARIO: A retained source supplies a borrowed output aggregate without annotations.
@@ -633,7 +633,7 @@ void inferredOutputArgumentRetained() {
 
 // CASE: inference.explicit_choice_temporary
 // PAIR: inference.explicit_choice
-// SOURCE: lib/ebnf/parser.cppm :: parse
+// SOURCE: lib/ebnf/parser/parser.cppm :: parse
 // STATUS: implemented
 // CONTRACT: An explicit public region remains authoritative rather than narrowing to the body.
 // SCENARIO: A shared-region contract permits returning a temporary second input.
@@ -647,7 +647,7 @@ void inferredExplicitChoiceTemporary() {
 
 // CASE: inference.explicit_choice_retained
 // PAIR: inference.explicit_choice
-// SOURCE: lib/ebnf/parser.cppm :: parse
+// SOURCE: lib/ebnf/parser/parser.cppm :: parse
 // STATUS: implemented
 // CONTRACT: Explicit shared-region inputs may both supply the result while they remain alive.
 // SCENARIO: Both inputs satisfy the explicit result contract.
@@ -661,7 +661,7 @@ void inferredExplicitChoiceRetained() {
 
 // CASE: inference.independent_calls_bad
 // PAIR: inference.independent_calls
-// SOURCE: lib/ebnf/parser.cppm :: parseRule
+// SOURCE: lib/ebnf/parser/parser.cppm :: parseRule
 // STATUS: implemented
 // CONTRACT: Reusing a cached summary must not overwrite a previous call's result dependencies.
 // SCENARIO: A later valid call must not erase an earlier temporary borrow.
@@ -676,7 +676,7 @@ void inferredIndependentCallsBad() {
 
 // CASE: inference.independent_calls_good
 // PAIR: inference.independent_calls
-// SOURCE: lib/ebnf/parser.cppm :: parseRule
+// SOURCE: lib/ebnf/parser/parser.cppm :: parseRule
 // STATUS: implemented
 // CONTRACT: Each call instantiates an inferred summary using its own actual arguments.
 // SCENARIO: An unused expired borrow must not poison a later independent result.
@@ -690,7 +690,7 @@ void inferredIndependentCallsGood() {
 
 // CASE: inference.reachable_local_return
 // PAIR: inference.reachability
-// SOURCE: lib/ebnf/parser.cppm :: parseIdentifier
+// SOURCE: lib/ebnf/parser/parser.cppm :: parseIdentifier
 // STATUS: implemented
 // CONTRACT: A reachable local-reference return is rejected without an annotation.
 // SCENARIO: One branch returns a local reference instead of the input.
@@ -706,7 +706,7 @@ const int &inferredReachableLocalReturn(const int &input, bool bad) {
 
 // CASE: inference.unreachable_local_return
 // PAIR: inference.reachability
-// SOURCE: lib/ebnf/parser.cppm :: parseIdentifier
+// SOURCE: lib/ebnf/parser/parser.cppm :: parseIdentifier
 // STATUS: implemented
 // CONTRACT: Inference uses reachable CFG paths rather than every syntactic return.
 // SCENARIO: A statically unreachable local return must not contaminate the input dependency.
@@ -722,7 +722,7 @@ const int &inferredUnreachableLocalReturn(const int &input) {
 
 // CASE: inference.default_argument_escape
 // PAIR: inference.default_argument
-// SOURCE: lib/ebnf/parser.cppm :: parseIdentifier
+// SOURCE: lib/ebnf/parser/parser.cppm :: parseIdentifier
 // STATUS: implemented
 // CONTRACT: A default argument's temporary belongs to the caller's full expression.
 // SCENARIO: A default temporary source expires before the inferred result is observed.
@@ -735,7 +735,7 @@ void inferredDefaultArgumentEscape() {
 
 // CASE: inference.default_argument_immediate
 // PAIR: inference.default_argument
-// SOURCE: lib/ebnf/parser.cppm :: parseIdentifier
+// SOURCE: lib/ebnf/parser/parser.cppm :: parseIdentifier
 // STATUS: implemented
 // CONTRACT: A default source temporary remains alive throughout the full expression.
 // SCENARIO: The borrowed result is consumed immediately without escaping the expression.
@@ -747,7 +747,7 @@ void inferredDefaultArgumentImmediate() {
 
 // CASE: inference.constructor_escape
 // PAIR: inference.constructor
-// SOURCE: lib/ebnf/parser.cppm :: parser
+// SOURCE: lib/ebnf/parser/parser.cppm :: parser
 // STATUS: implemented
 // CONTRACT: Constructor member initializers propagate actual borrowed data dependencies.
 // SCENARIO: An object returned by value retains a view of a local string.
@@ -760,7 +760,7 @@ inferred::constructed_view inferredConstructorEscape() {
 
 // CASE: inference.constructor_retained
 // PAIR: inference.constructor
-// SOURCE: lib/ebnf/parser.cppm :: parser
+// SOURCE: lib/ebnf/parser/parser.cppm :: parser
 // STATUS: implemented
 // CONTRACT: An inferred constructor may retain bytes owned by its caller.
 // SCENARIO: A constructed view borrows an external source rather than a local descriptor.
@@ -772,7 +772,7 @@ inferred::constructed_view inferredConstructorRetained(const std::string &source
 
 // CASE: inference.reference_member_escape
 // PAIR: inference.reference_member
-// SOURCE: lib/ebnf/parser.cppm :: parser
+// SOURCE: lib/ebnf/parser/parser.cppm :: parser
 // STATUS: implemented
 // CONTRACT: A reference member and its getter retain the referent's dependency.
 // SCENARIO: An inferred getter returns bytes of a local string through a reference member.
@@ -786,7 +786,7 @@ std::string_view inferredReferenceMemberEscape() {
 
 // CASE: inference.reference_member_retained
 // PAIR: inference.reference_member
-// SOURCE: lib/ebnf/parser.cppm :: parser
+// SOURCE: lib/ebnf/parser/parser.cppm :: parser
 // STATUS: implemented
 // CONTRACT: A local descriptor with a reference member does not own the referenced string.
 // SCENARIO: A getter can return caller-owned bytes independently of the local descriptor.
@@ -799,7 +799,7 @@ std::string_view inferredReferenceMemberRetained(const std::string &source) {
 
 // CASE: inference.self_pointer_escape
 // PAIR: inference.self_pointer
-// SOURCE: lib/ebnf/parser.cppm :: parser
+// SOURCE: lib/ebnf/parser/parser.cppm :: parser
 // STATUS: implemented
 // CONTRACT: Returning this borrows the receiver object rather than its borrowed fields.
 // SCENARIO: An inferred self pointer escapes a local receiver that has no borrowed fields.
@@ -812,7 +812,7 @@ const inferred::self_reference *inferredSelfPointerEscape() {
 
 // CASE: inference.self_pointer_retained
 // PAIR: inference.self_pointer
-// SOURCE: lib/ebnf/parser.cppm :: parser
+// SOURCE: lib/ebnf/parser/parser.cppm :: parser
 // STATUS: implemented
 // CONTRACT: A self pointer may borrow a caller-owned receiver.
 // SCENARIO: A method's inferred object dependency propagates through a reference input.
@@ -824,7 +824,7 @@ const inferred::self_reference *inferredSelfPointerRetained(const inferred::self
 
 // CASE: inference.declaration_contract_mismatch
 // PAIR: inference.declaration_contract
-// SOURCE: lib/ebnf/parser.cppm :: parseIdentifier
+// SOURCE: lib/ebnf/parser/parser.cppm :: parseIdentifier
 // STATUS: implemented
 // CONTRACT: An explicit declaration remains binding when its definition omits the aliases.
 // SCENARIO: A plain definition returns the origin excluded by its prior declaration.
@@ -839,7 +839,7 @@ std::string_view inferredDeclarationMismatch(std::string_view renamed_first, std
 
 // CASE: inference.declaration_contract_match
 // PAIR: inference.declaration_contract
-// SOURCE: lib/ebnf/parser.cppm :: parseIdentifier
+// SOURCE: lib/ebnf/parser/parser.cppm :: parseIdentifier
 // STATUS: implemented
 // CONTRACT: The contract may be written once on the declaration rather than repeated in the definition.
 // SCENARIO: A plain definition satisfies its annotated declaration after renaming parameters.
@@ -853,7 +853,7 @@ std::string_view inferredDeclarationMatch(std::string_view renamed) {
 
 // CASE: inference.helper_invalidates_borrow
 // PAIR: inference.helper_invalidation
-// SOURCE: lib/ebnf/parser.cppm :: node::text
+// SOURCE: lib/ebnf/parser/parser.cppm :: node::text
 // STATUS: implemented
 // CONTRACT: A modeled invalidation propagates through an inferred helper summary.
 // SCENARIO: A source is cleared by a helper before its borrowed text is read.
@@ -868,7 +868,7 @@ void inferredHelperInvalidatesBorrow() {
 
 // CASE: inference.helper_preserves_owned_copy
 // PAIR: inference.helper_invalidation
-// SOURCE: lib/ebnf/parser.cppm :: node::text
+// SOURCE: lib/ebnf/parser/parser.cppm :: node::text
 // STATUS: implemented
 // CONTRACT: An owning text copy does not depend on the source invalidated by a helper.
 // SCENARIO: A deep copy is observed after the helper clears its original source.
@@ -884,7 +884,7 @@ void inferredHelperPreservesOwnedCopy() {
 
 // CASE: inference.moved_aggregate_escape
 // PAIR: inference.moved_aggregate
-// SOURCE: lib/ebnf/parser.cppm :: node::children
+// SOURCE: lib/ebnf/parser/parser.cppm :: node::children
 // STATUS: implemented
 // CONTRACT: Moving an aggregate preserves borrowed contents without projecting them a second time.
 // SCENARIO: A move must not erase the dependency on a local owning string.
@@ -898,7 +898,7 @@ inferred::record inferredMovedAggregateEscape() {
 
 // CASE: inference.moved_aggregate_retained
 // PAIR: inference.moved_aggregate
-// SOURCE: lib/ebnf/parser.cppm :: node::children
+// SOURCE: lib/ebnf/parser/parser.cppm :: node::children
 // STATUS: implemented
 // CONTRACT: Moving an aggregate preserves the source dependency rather than the local descriptor's address.
 // SCENARIO: A moved result may borrow caller-owned text after the local descriptor dies.
@@ -911,7 +911,7 @@ inferred::record inferredMovedAggregateRetained(const std::string &source) {
 
 // CASE: inference.cleared_receiver_refill
 // PAIR: inference.cleared_receiver
-// SOURCE: lib/ebnf/parser.cppm :: parser::parse
+// SOURCE: lib/ebnf/parser/parser.cppm :: parser::parse
 // STATUS: implemented
 // CONTRACT: Clearing a container discards its previous loans before a declared result region is checked.
 // SCENARIO: A builder clears its retained list through a helper, refills it from the source, and returns it; accept.
@@ -929,7 +929,7 @@ struct cleared_builder {
 
 // CASE: inference.uncleared_receiver_refill
 // PAIR: inference.cleared_receiver
-// SOURCE: lib/ebnf/parser.cppm :: parser::parse
+// SOURCE: lib/ebnf/parser/parser.cppm :: parser::parse
 // STATUS: implemented
 // CONTRACT: Items retained by an earlier call can reach a declared result unless the container is cleared.
 // SCENARIO: A builder without a region keeps the source, which its declaration does not allow, and returns a list that may still hold items from a previous source.
@@ -946,7 +946,7 @@ struct uncleared_builder {
 
 // CASE: inference.exchanged_receiver_escape
 // PAIR: inference.exchanged_receiver
-// SOURCE: lib/ebnf/parser.cppm :: parser::parse
+// SOURCE: lib/ebnf/parser/parser.cppm :: parser::parse
 // STATUS: implemented
 // CONTRACT: A call result is substituted with the receiver state before that call overwrites the receiver.
 // SCENARIO: The exchanged previous value views a source that dies before the read.
@@ -966,7 +966,7 @@ void inferredExchangedReceiverEscape() {
 
 // CASE: inference.exchanged_receiver_retained
 // PAIR: inference.exchanged_receiver
-// SOURCE: lib/ebnf/parser.cppm :: parser::parse
+// SOURCE: lib/ebnf/parser/parser.cppm :: parser::parse
 // STATUS: implemented
 // CONTRACT: An exchanged previous value may be read while its own source is alive.
 // SCENARIO: Both sources outlive every read; accept.
@@ -983,7 +983,7 @@ void inferredExchangedReceiverRetained() {
 
 // CASE: inference.labeled_receiver_escape
 // PAIR: inference.labeled_receiver
-// SOURCE: lib/ebnf/parser.cppm :: parser::tokens_
+// SOURCE: lib/ebnf/parser/parser.cppm :: parser::tokens_
 // STATUS: implemented
 // CONTRACT: A receiver field in the declared result region can supply the result even when a parameter shares the region.
 // SCENARIO: The declared result is the previous field value, which views a source that dies before the read.
@@ -1003,7 +1003,7 @@ void inferredLabeledReceiverEscape() {
 
 // CASE: inference.labeled_receiver_retained
 // PAIR: inference.labeled_receiver
-// SOURCE: lib/ebnf/parser.cppm :: parser::tokens_
+// SOURCE: lib/ebnf/parser/parser.cppm :: parser::tokens_
 // STATUS: implemented
 // CONTRACT: A result supplied by a receiver field may be read while that field's source is alive.
 // SCENARIO: Both sources outlive every read; accept.
@@ -1020,7 +1020,7 @@ void inferredLabeledReceiverRetained() {
 
 // CASE: inference.opaque_receiver_retains_argument
 // PAIR: inference.opaque_receiver
-// SOURCE: lib/ebnf/parser.cppm :: parser::tokens_
+// SOURCE: lib/ebnf/parser/parser.cppm :: parser::tokens_
 // STATUS: implemented
 // CONTRACT: A mutating declaration with a parameter in a receiver field's region may retain that argument, whatever it returns.
 // SCENARIO: A void setter keeps a view of a source that dies before a later read.
@@ -1037,7 +1037,7 @@ void inferredOpaqueReceiverRetainsArgument() {
 
 // CASE: inference.opaque_receiver_accumulates
 // PAIR: inference.opaque_receiver
-// SOURCE: lib/ebnf/parser.cppm :: parser::tokens_
+// SOURCE: lib/ebnf/parser/parser.cppm :: parser::tokens_
 // STATUS: implemented
 // CONTRACT: A later mutating call does not erase an argument retained by an earlier call.
 // SCENARIO: A probe with a live source follows a setter whose source dies before the read.
@@ -1056,7 +1056,7 @@ void inferredOpaqueReceiverAccumulates() {
 
 // CASE: inference.opaque_receiver_retained
 // PAIR: inference.opaque_receiver
-// SOURCE: lib/ebnf/parser.cppm :: parser::tokens_
+// SOURCE: lib/ebnf/parser/parser.cppm :: parser::tokens_
 // STATUS: implemented
 // CONTRACT: Arguments retained by the receiver may be read while every retained source is alive.
 // SCENARIO: Both sources outlive the receiver's last read; accept.
@@ -1073,7 +1073,7 @@ void inferredOpaqueReceiverRetained() {
 
 // CASE: inference.self_borrow_pinned
 // PAIR: inference.self_borrow
-// SOURCE: lib/telar-platform/include/telar_platform/platform.cppm :: Command::environment_
+// SOURCE: lib/platform/platform.cppm :: Command::environment_
 // STATUS: implemented
 // CONTRACT: An object may borrow its own fields through a field labeled `lt::self` when it can be neither copied nor moved, as Rust admits self-references only behind `Pin`.
 // SCENARIO: A labeled field keeps a pointer to a sibling field of a non-copyable, non-movable object; accept.
@@ -1105,7 +1105,7 @@ char inferredSelfBorrowPinned() {
 
 // CASE: inference.self_borrow_relocatable
 // PAIR: inference.self_borrow
-// SOURCE: lib/telar-platform/include/telar_platform/platform.cppm :: Command::environment_
+// SOURCE: lib/platform/platform.cppm :: Command::environment_
 // STATUS: implemented
 // CONTRACT: An object may borrow its own fields when it can be neither copied nor moved, as Rust admits self-references only behind `Pin`.
 // SCENARIO: A copy of the object would keep pointing into the source's field; reject at the initializer that takes the borrow.
@@ -1134,7 +1134,7 @@ char inferredSelfBorrowRelocatable() {
 
 // CASE: inference.constructor_unwinding
 // PAIR: inference.constructor_entry
-// SOURCE: lib/telar-platform/include/telar_platform/platform.cppm :: DirectoryStream
+// SOURCE: lib/platform/platform.cppm :: DirectoryStream
 // STATUS: implemented
 // CONTRACT: A constructor's fields hold nothing before it initializes them; a path that throws constructs no object.
 // SCENARIO: A pointer field is set from a C function after a branch that throws; the object is used afterwards; accept.
@@ -1175,7 +1175,7 @@ bool inferredConstructorUnwinding() {
 
 // CASE: inference.constructor_unwinding_escape
 // PAIR: inference.constructor_entry
-// SOURCE: lib/telar-platform/include/telar_platform/platform.cppm :: DirectoryStream
+// SOURCE: lib/platform/platform.cppm :: DirectoryStream
 // STATUS: implemented
 // CONTRACT: A constructor's fields hold nothing before it initializes them; a path that throws constructs no object.
 // SCENARIO: A field set after a throwing branch still carries its argument's borrow out of the function.
@@ -1203,7 +1203,7 @@ inferred::checked_view inferredConstructorUnwindingEscape() {
 
 // CASE: inference.function_address
 // PAIR: inference.function_address
-// SOURCE: src/runtime-cpp/redirect/socket_owners.cppm :: LocalAddresses
+// SOURCE: src/runtime/redirect/socket_owners/socket_owners.cppm :: LocalAddresses
 // STATUS: implemented
 // CONTRACT: A function's address is static storage, not a borrow of the object that keeps it.
 // SCENARIO: A copyable owner keeps a deleter function pointer; accept.
@@ -1231,7 +1231,7 @@ void inferredFunctionAddress() {
 
 // CASE: inference.function_address_object
 // PAIR: inference.function_address
-// SOURCE: src/runtime-cpp/redirect/socket_owners.cppm :: LocalAddresses
+// SOURCE: src/runtime/redirect/socket_owners/socket_owners.cppm :: LocalAddresses
 // STATUS: implemented
 // CONTRACT: A function's address is static storage, not a borrow of the object that keeps it.
 // SCENARIO: A copyable owner keeps the address of its own field instead; reject.
@@ -1256,7 +1256,7 @@ void inferredFunctionAddressObject() {
 
 // CASE: inference.binding_escape
 // PAIR: inference.binding
-// SOURCE: src/runtime-cpp/traffic/capture_analysis.cppm :: structured binding over a flow map entry
+// SOURCE: src/runtime/traffic/capture_analysis/capture_analysis.cppm :: structured binding over a flow map entry
 // STATUS: implemented
 // CONTRACT: A structured binding names the part of the object its declaration decomposes.
 // SCENARIO: A view of a binding into a local pair is returned; reject.
@@ -1271,7 +1271,7 @@ std::string_view inferredBindingEscape() {
 
 // CASE: inference.binding_retained
 // PAIR: inference.binding
-// SOURCE: src/runtime-cpp/traffic/capture_analysis.cppm :: structured binding over a flow map entry
+// SOURCE: src/runtime/traffic/capture_analysis/capture_analysis.cppm :: structured binding over a flow map entry
 // STATUS: implemented
 // CONTRACT: A structured binding names the part of the object its declaration decomposes.
 // SCENARIO: A view of a binding into the caller's pair is returned; accept.
@@ -1285,7 +1285,7 @@ std::string_view inferredBindingRetained(const std::pair<std::string, int> &row)
 
 // CASE: inference.inherited_constructor_retained
 // PAIR: inference.base_construction
-// SOURCE: lib/telar-plugins/include/telar_plugins/plugins.cppm :: PackageCopy
+// SOURCE: lib/plugins/plugins.cppm :: PackageCopy
 // STATUS: implemented
 // CONTRACT: An inheriting constructor and a base initializer write the base's fields as the base constructor does.
 // SCENARIO: An object built through an inherited constructor keeps a pointer to the caller's allocator; accept.
@@ -1325,7 +1325,7 @@ inferred::allocating_copy<std::string> inferredInheritedConstructorRetained(std:
 
 // CASE: inference.inherited_constructor_escape
 // PAIR: inference.base_construction
-// SOURCE: lib/telar-plugins/include/telar_plugins/plugins.cppm :: PackageCopy
+// SOURCE: lib/plugins/plugins.cppm :: PackageCopy
 // STATUS: implemented
 // CONTRACT: An inheriting constructor and a base initializer write the base's fields as the base constructor does.
 // SCENARIO: An object built through an inherited constructor keeps a pointer to a local and is returned.
@@ -1338,7 +1338,7 @@ inferred::allocating_copy<std::string> inferredInheritedConstructorEscape() {
 
 // CASE: inference.base_initializer_escape
 // PAIR: inference.base_construction
-// SOURCE: lib/telar-plugins/include/telar_plugins/plugins.cppm :: PackageCopy
+// SOURCE: lib/plugins/plugins.cppm :: PackageCopy
 // STATUS: implemented
 // CONTRACT: An inheriting constructor and a base initializer write the base's fields as the base constructor does.
 // SCENARIO: A derived constructor passes a local through its base initializer and the object is returned.
@@ -1351,7 +1351,7 @@ inferred::named_view inferredBaseInitializerEscape() {
 
 // CASE: inference.base_initializer_retained
 // PAIR: inference.base_construction
-// SOURCE: lib/telar-plugins/include/telar_plugins/plugins.cppm :: PackageCopy
+// SOURCE: lib/plugins/plugins.cppm :: PackageCopy
 // STATUS: implemented
 // CONTRACT: An inheriting constructor and a base initializer write the base's fields as the base constructor does.
 // SCENARIO: A derived constructor passes the caller's string through its base initializer; accept.

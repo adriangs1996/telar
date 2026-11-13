@@ -61,7 +61,7 @@ namespace flow {
 
 // CASE: flow.branch_invalidates
 // PAIR: flow.branch_paths
-// SOURCE: lib/telar-base/include/telar_base/memory.cppm :: reserve
+// SOURCE: lib/base/memory/memory.cppm :: reserve
 // STATUS: pending
 // CONTRACT: A borrow needed after a join must survive every incoming reachable path.
 // SCENARIO: Only one branch reallocates, but that path still reaches the old view's read.
@@ -77,7 +77,7 @@ void branchInvalidates(tbc::view<spec::byte_queue &> queue, bool grow) {
 
 // CASE: flow.invalidating_branch_returns
 // PAIR: flow.branch_paths
-// SOURCE: lib/telar-base/include/telar_base/memory.cppm :: reserve
+// SOURCE: lib/base/memory/memory.cppm :: reserve
 // STATUS: pending
 // CONTRACT: A view need not stay live on a path which cannot reach a later use.
 // SCENARIO: The invalidating branch returns; the read is reachable only without growth.
@@ -94,7 +94,7 @@ void invalidatingBranchReturns(tbc::view<spec::byte_queue &> queue, bool grow) {
 
 // CASE: flow.unwind_destroys_source
 // PAIR: flow.exception_cleanup
-// SOURCE: lib/telar-base/include/telar_base/memory/allocator.hpp :: makeOwned exception cleanup
+// SOURCE: lib/base/include/telar_base/memory/allocator.hpp :: makeOwned exception cleanup
 // STATUS: pending
 // CONTRACT: Unwinding destroys local owners before entering the surrounding handler.
 // SCENARIO: A descriptor assigned outside try still points into an unwound local string.
@@ -113,7 +113,7 @@ void unwindDestroysSource() {
 
 // CASE: flow.unwind_preserves_owned_copy
 // PAIR: flow.exception_cleanup
-// SOURCE: lib/telar-base/include/telar_base/memory/allocator.hpp :: makeOwned exception cleanup
+// SOURCE: lib/base/include/telar_base/memory/allocator.hpp :: makeOwned exception cleanup
 // STATUS: pending
 // CONTRACT: An owned copy declared outside try is not destroyed by unwinding its inner scope.
 // SCENARIO: Copy the text before throwing; catch may safely read the independent owner.
@@ -132,7 +132,7 @@ void unwindPreservesOwnedCopy() {
 
 // CASE: flow.conditional_retention
 // PAIR: flow.retention_paths
-// SOURCE: src/runtime-cpp/terminal/pty_response_queue.hpp :: PtyResponseQueue::append
+// SOURCE: src/runtime/terminal/pty_response_queue.hpp :: PtyResponseQueue::append
 // STATUS: implemented
 // CONTRACT: A function that retains an argument on one path retains it for every call.
 // SCENARIO: The queue copies a reply without an owner, but one store keeps either the copy or the reply depending on a field; the local reply dies before the read.
@@ -149,7 +149,7 @@ void conditionalRetention() {
 
 // CASE: flow.split_retention_copied
 // PAIR: flow.retention_paths
-// SOURCE: src/runtime-cpp/terminal/pty_response_queue.hpp :: PtyResponseQueue::append
+// SOURCE: src/runtime/terminal/pty_response_queue.hpp :: PtyResponseQueue::append
 // STATUS: implemented
 // CONTRACT: A function that only copies an argument does not retain it.
 // SCENARIO: Copying and retaining are separate functions; the copying one keeps nothing of the local reply.
@@ -166,7 +166,7 @@ void splitRetentionCopied() {
 
 // CASE: flow.unrelated_owner
 // PAIR: flow.reply_owner
-// SOURCE: src/runtime-cpp/terminal/control/reply.hpp :: Reply::publish
+// SOURCE: src/runtime/terminal/control/reply.hpp :: Reply::publish
 // STATUS: implemented
 // CONTRACT: An owner retained beside a view keeps alive only the object it owns.
 // SCENARIO: The retaining function keeps the local reply; the owner is unrelated to its bytes, so the read is rejected.
@@ -183,7 +183,7 @@ void unrelatedOwner() {
 
 // CASE: flow.shared_owner_alive
 // PAIR: flow.reply_owner
-// SOURCE: src/runtime-cpp/terminal/control/reply.hpp :: Reply::publish
+// SOURCE: src/runtime/terminal/control/reply.hpp :: Reply::publish
 // STATUS: pending
 // CONTRACT: An owner retained beside a view keeps alive only the object it owns.
 // SCENARIO: The queue keeps a copy of the shared owner of the reply's bytes, so the local owner's destruction does not destroy them; accept.

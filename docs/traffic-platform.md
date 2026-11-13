@@ -354,12 +354,12 @@ nor forwarding acceptance.
 The consolidated native verifier can include the prepared optional stages:
 
 ```sh
-cmake --build src/runtime-cpp/out --target telar-runtime traffic-interface-probe
-sudo -v && /usr/bin/python3 src/runtime-cpp/tools/check_network.py \
-  --runtime src/runtime-cpp/out/telar-runtime \
+cmake --build src/runtime/out --target telar-runtime traffic-interface-probe
+sudo -v && /usr/bin/python3 src/runtime/tools/check_network.py \
+  --runtime src/runtime/out/telar-runtime \
   --lua-probe src/desktop-mode/out/debug/traffic_dbg \
   --ssh-origin YOUR_CONTROLLED_LAN_HOST --selection --incoming \
-  --interface-probe src/runtime-cpp/out/traffic-interface-probe
+  --interface-probe src/runtime/out/traffic-interface-probe
 ```
 
 Supply the documented VPN host, address and interface options separately when a

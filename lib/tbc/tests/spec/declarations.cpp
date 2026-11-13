@@ -125,7 +125,7 @@ namespace declarations {
 
 // CASE: declaration.static_literal
 // PAIR: declaration.static_field
-// SOURCE: lib/telar-base/include/telar_base/diagnostics/limit_reach.hpp :: LimitReach
+// SOURCE: lib/base/include/telar_base/diagnostics/limit_reach.hpp :: LimitReach
 // STATUS: implemented
 // CONTRACT: A field labeled `lt::static_storage` holds only storage that outlives every caller, so its object borrows nothing through it.
 // SCENARIO: A limit named by a literal is kept after the function that built it returns; accept.
@@ -137,7 +137,7 @@ declarations::limit declarationStaticLiteral() {
 
 // CASE: declaration.static_local
 // PAIR: declaration.static_field
-// SOURCE: lib/telar-base/include/telar_base/diagnostics/limit_reach.hpp :: LimitReach
+// SOURCE: lib/base/include/telar_base/diagnostics/limit_reach.hpp :: LimitReach
 // STATUS: implemented
 // CONTRACT: A field labeled `lt::static_storage` holds only storage that outlives every caller, so its object borrows nothing through it.
 // SCENARIO: A local string's view is written to the static field; reject where it is written.
@@ -150,7 +150,7 @@ declarations::limit declarationStaticLocal() {
 
 // CASE: declaration.shared_allocator
 // PAIR: declaration.shared_type
-// SOURCE: lib/telar-base/include/telar_base/memory/allocator.hpp :: SynchronizedAllocator
+// SOURCE: lib/base/include/telar_base/memory/allocator.hpp :: SynchronizedAllocator
 // STATUS: implemented
 // CONTRACT: A call through a TBC_SHARED type invalidates nothing, as a Rust type with interior mutability through `&self`.
 // SCENARIO: A block is read after the allocator hands out another one; accept.
@@ -164,7 +164,7 @@ char declarationSharedAllocator(declarations::arena &memory) {
 
 // CASE: declaration.unshared_pool
 // PAIR: declaration.shared_type
-// SOURCE: lib/telar-base/include/telar_base/memory/allocator.hpp :: SynchronizedAllocator
+// SOURCE: lib/base/include/telar_base/memory/allocator.hpp :: SynchronizedAllocator
 // STATUS: implemented
 // CONTRACT: A call through a TBC_SHARED type invalidates nothing, as a Rust type with interior mutability through `&self`.
 // SCENARIO: Without the mark, a second allocation may move the first block; reject at the call.
@@ -178,7 +178,7 @@ char declarationUnsharedPool(declarations::pool &memory) {
 
 // CASE: declaration.constructed_copy
 // PAIR: declaration.constructs
-// SOURCE: lib/telar-base/include/telar_base/memory/allocator.hpp :: makeOwned
+// SOURCE: lib/base/include/telar_base/memory/allocator.hpp :: makeOwned
 // STATUS: implemented
 // CONTRACT: A TBC_CONSTRUCTS factory keeps what the constructor it forwards to keeps.
 // SCENARIO: The entry copies a local number and keeps a view of a live string; accept.
@@ -195,7 +195,7 @@ std::size_t declarationConstructedCopy(declarations::arena &memory, const std::s
 
 // CASE: declaration.constructed_view
 // PAIR: declaration.constructs
-// SOURCE: lib/telar-base/include/telar_base/memory/allocator.hpp :: makeOwned
+// SOURCE: lib/base/include/telar_base/memory/allocator.hpp :: makeOwned
 // STATUS: implemented
 // CONTRACT: A TBC_CONSTRUCTS factory keeps what the constructor it forwards to keeps.
 // SCENARIO: The entry keeps a view of a local string that dies before it is read.
@@ -212,7 +212,7 @@ std::size_t declarationConstructedView(declarations::arena &memory) {
 
 // CASE: declaration.class_parameter_callback
 // PAIR: declaration.class_parameter
-// SOURCE: src/runtime-cpp/runtime/runtime.cppm :: PaneService::sendText
+// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: PaneService::sendText
 // STATUS: implemented
 // CONTRACT: An object keeps only arguments its class template's own parameters spell, as a Rust struct keeps a `T` only in a field of type `T`.
 // SCENARIO: A callback capturing a local is only called, so the box is read after the local dies; accept.
@@ -229,7 +229,7 @@ std::size_t declarationClassParameterCallback(declarations::box<int> &values) {
 
 // CASE: declaration.class_parameter_kept
 // PAIR: declaration.class_parameter
-// SOURCE: src/runtime-cpp/runtime/runtime.cppm :: PaneService::sendText
+// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: PaneService::sendText
 // STATUS: implemented
 // CONTRACT: An object keeps only arguments its class template's own parameters spell, as a Rust struct keeps a `T` only in a field of type `T`.
 // SCENARIO: The box keeps a view of a local string of its own `T`, and is used after it dies.
@@ -246,7 +246,7 @@ void declarationClassParameterKept() {
 
 // CASE: declaration.retained_copy
 // PAIR: declaration.retained_argument
-// SOURCE: lib/telar-config/include/telar_config/config.cppm :: LimitNotices::add
+// SOURCE: lib/config/config.cppm :: LimitNotices::add
 // STATUS: implemented
 // CONTRACT: A labeled reference parameter retained into fields that hold values keeps what the argument holds, not the argument.
 // SCENARIO: A temporary limit is copied into the notices, which are used after it dies; accept.
@@ -259,7 +259,7 @@ void declarationRetainedCopy(declarations::notices &kept) {
 
 // CASE: declaration.retained_reference
 // PAIR: declaration.retained_argument
-// SOURCE: lib/telar-config/include/telar_config/config.cppm :: LimitNotices::add
+// SOURCE: lib/config/config.cppm :: LimitNotices::add
 // STATUS: implemented
 // CONTRACT: A labeled reference parameter retained into fields that hold values keeps what the argument holds, not the argument.
 // SCENARIO: A holder whose region keeps a view retains the temporary string itself; reject where it dies.
@@ -272,7 +272,7 @@ std::size_t declarationRetainedReference(declarations::holder &kept) {
 
 // CASE: declaration.receiver_shared
 // PAIR: declaration.receiver_fields
-// SOURCE: src/runtime-cpp/runtime/runtime.cppm :: Runtime::handle
+// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: Runtime::handle
 // STATUS: implemented
 // CONTRACT: A method called on `this` borrows every field of the object, as a Rust method takes `&self` or `&mut self` whole.
 // SCENARIO: A const method reads a field passed to it, so both borrows are shared; accept.
@@ -300,7 +300,7 @@ std::size_t declarationReceiverShared(const declarations::reader &counted) {
 
 // CASE: declaration.receiver_exclusive
 // PAIR: declaration.receiver_fields
-// SOURCE: src/runtime-cpp/runtime/runtime.cppm :: Runtime::handle
+// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: Runtime::handle
 // STATUS: implemented
 // CONTRACT: A method called on `this` borrows every field of the object, as a Rust method takes `&self` or `&mut self` whole.
 // SCENARIO: A mutating method is passed one of the fields it may change; reject at that argument.
@@ -328,7 +328,7 @@ void declarationReceiverExclusive(declarations::writer &counted) {
 
 // CASE: declaration.shared_sibling_pinned
 // PAIR: declaration.shared_sibling
-// SOURCE: src/runtime-cpp/runtime/runtime.cppm :: Runtime (limits_ kept by its services)
+// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: Runtime (limits_ kept by its services)
 // STATUS: implemented
 // CONTRACT: A field may keep a TBC_SHARED sibling only while their object can be neither copied nor moved, as Rust shares through `Pin`.
 // SCENARIO: A lender keeps the arena beside it in a pinned object; accept.
@@ -356,7 +356,7 @@ void declarationSharedSiblingPinned() {
 
 // CASE: declaration.shared_sibling_copied
 // PAIR: declaration.shared_sibling
-// SOURCE: src/runtime-cpp/runtime/runtime.cppm :: Runtime (limits_ kept by its services)
+// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: Runtime (limits_ kept by its services)
 // STATUS: implemented
 // CONTRACT: A field may keep a TBC_SHARED sibling only while their object can be neither copied nor moved, as Rust shares through `Pin`.
 // SCENARIO: The object holding the lender and its arena can be copied; reject where the constructor lends the arena.
@@ -381,7 +381,7 @@ void declarationSharedSiblingCopied() {
 
 // CASE: declaration.lending_output_live
 // PAIR: declaration.lending_output
-// SOURCE: src/runtime-cpp/runtime/runtime.cppm :: AgentService::authorize
+// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: AgentService::authorize
 // STATUS: implemented
 // CONTRACT: A labeled reference to a table that holds borrows lends to a result of its region, as `fn f<'a>(store: &'a mut Store) -> &'a Entry` lends the store.
 // SCENARIO: The entry found in a live table is read; accept.
@@ -398,7 +398,7 @@ std::size_t declarationLendingOutputLive(std::vector<declarations::entry> &entri
 
 // CASE: declaration.lending_output_dead
 // PAIR: declaration.lending_output
-// SOURCE: src/runtime-cpp/runtime/runtime.cppm :: AgentService::authorize
+// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: AgentService::authorize
 // STATUS: implemented
 // CONTRACT: A labeled reference to a table that holds borrows lends to a result of its region, as `fn f<'a>(store: &'a mut Store) -> &'a Entry` lends the store.
 // SCENARIO: The table dies while the entry found in it is still read; reject where it dies.
@@ -416,7 +416,7 @@ std::size_t declarationLendingOutputDead(const std::string &text) {
 
 // CASE: declaration.value_parameter_copy
 // PAIR: declaration.parameter_write
-// SOURCE: src/cli-cpp/window.cpp :: plugins
+// SOURCE: src/cli/window/window.cpp :: plugins
 // STATUS: implemented
 // CONTRACT: Only a parameter that designates the caller's object hands a write back to the caller; a parameter passed by value is the callee's own copy.
 // SCENARIO: A view passed by value is pointed at another argument and read before the function returns; accept.
@@ -429,7 +429,7 @@ std::size_t declarationValueParameterCopy(std::string_view text, const std::stri
 
 // CASE: declaration.reference_parameter_kept
 // PAIR: declaration.parameter_write
-// SOURCE: src/cli-cpp/window.cpp :: plugins
+// SOURCE: src/cli/window/window.cpp :: plugins
 // STATUS: implemented
 // CONTRACT: Only a parameter that designates the caller's object hands a write back to the caller; a parameter passed by value is the callee's own copy.
 // SCENARIO: A view passed by reference is pointed at another argument the declaration does not let it keep; reject the write.
@@ -441,7 +441,7 @@ void declarationReferenceParameterKept(std::string_view &text, const std::string
 
 // CASE: declaration.shared_reached
 // PAIR: declaration.shared_reach
-// SOURCE: src/runtime-cpp/runtime/runtime.cppm :: Runtime (session_.configure)
+// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: Runtime (session_.configure)
 // STATUS: implemented
 // CONTRACT: An object of a TBC_SHARED type is never invalidated, whatever a call does to the inputs that keep it, as a Rust type with interior mutability keeps every borrow it lent valid.
 // SCENARIO: A store builds a pass over a model that keeps the shared arena and mutates the model; the model, keeping the arena too, stays valid; accept.
@@ -497,7 +497,7 @@ void declarationSharedReached(declarations::arena &memory) {
 
 // CASE: declaration.unshared_reached
 // PAIR: declaration.shared_reach
-// SOURCE: src/runtime-cpp/runtime/runtime.cppm :: Runtime (session_.configure)
+// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: Runtime (session_.configure)
 // STATUS: implemented
 // CONTRACT: An object of a TBC_SHARED type is never invalidated, whatever a call does to the inputs that keep it, as a Rust type with interior mutability keeps every borrow it lent valid.
 // SCENARIO: The same store over a pool without the mark may invalidate the pool its argument keeps; reject at the argument.
@@ -553,7 +553,7 @@ void declarationUnsharedReached(declarations::pool &memory) {
 
 // CASE: declaration.self_field_elided
 // PAIR: declaration.self_field_lifetimes
-// SOURCE: src/runtime-cpp/terminal/text_reader.cppm :: Terminal (response_outbox_)
+// SOURCE: src/runtime/terminal/text_reader/text_reader.cppm :: Terminal (response_outbox_)
 // STATUS: implemented
 // CONTRACT: A field labeled lt::self or lt::static_storage declares no lifetime of its class, so a constructor of a class whose other fields carry no label still keeps every argument that lends.
 // SCENARIO: A pinned recorder keeps a view of its own buffer and the caller's name, and is read while the name lives; accept.
@@ -587,7 +587,7 @@ std::size_t declarationSelfFieldElided(const std::string &name) {
 
 // CASE: declaration.self_field_elided_dangling
 // PAIR: declaration.self_field_lifetimes
-// SOURCE: src/runtime-cpp/terminal/text_reader.cppm :: Terminal (response_outbox_)
+// SOURCE: src/runtime/terminal/text_reader/text_reader.cppm :: Terminal (response_outbox_)
 // STATUS: implemented
 // CONTRACT: A field labeled lt::self or lt::static_storage declares no lifetime of its class, so a constructor of a class whose other fields carry no label still keeps every argument that lends.
 // SCENARIO: The recorder outlives the name it was built from; reject where the name dies.
@@ -604,7 +604,7 @@ std::size_t declarationSelfFieldElidedDangling(declarations::arena &memory) {
 
 // CASE: declaration.shared_kept
 // PAIR: declaration.shared_kept
-// SOURCE: src/runtime-cpp/config/loader.cppm :: Loader::load (lua::JsonDecoder::install)
+// SOURCE: src/runtime/config/loader/loader.cppm :: Loader::load (lua::JsonDecoder::install)
 // STATUS: implemented
 // CONTRACT: An object of a TBC_SHARED type is never invalidated, also when it is reached through an object that keeps it, as a Rust type with interior mutability keeps every borrow it lent valid.
 // SCENARIO: A machine keeps the loader's arena and is passed with that arena to a call that may mutate the machine; accept.
@@ -655,7 +655,7 @@ void declarationSharedKept(declarations::arena &memory) {
 
 // CASE: declaration.unshared_kept
 // PAIR: declaration.shared_kept
-// SOURCE: src/runtime-cpp/config/loader.cppm :: Loader::load (lua::JsonDecoder::install)
+// SOURCE: src/runtime/config/loader/loader.cppm :: Loader::load (lua::JsonDecoder::install)
 // STATUS: implemented
 // CONTRACT: An object of a TBC_SHARED type is never invalidated, also when it is reached through an object that keeps it, as a Rust type with interior mutability keeps every borrow it lent valid.
 // SCENARIO: The same loader over a pool without the mark lets the call invalidate the pool the machine keeps; reject at the call.
@@ -683,7 +683,7 @@ void declarationUnsharedKept(declarations::pool &memory) {
 
 // CASE: declaration.exclusive_field_call
 // PAIR: declaration.exclusive_field
-// SOURCE: src/runtime-cpp/graphics/pane_media.cppm :: PaneMedia::process (MediaInput::feed)
+// SOURCE: src/runtime/graphics/pane_media/pane_media.cppm :: PaneMedia::process (MediaInput::feed)
 // STATUS: implemented
 // CONTRACT: What a receiver designates through its own reference fields it borrows exclusively, as a Rust `&mut` field is: a call through it invalidates other borrows of those objects, not the receiver's own.
 // SCENARIO: A feeder keeps a screen by reference and is fed twice, each feed growing the screen's cells; accept.
@@ -715,7 +715,7 @@ void declarationExclusiveFieldCall(const std::vector<int> &values) {
 
 // CASE: declaration.exclusive_field_alias
 // PAIR: declaration.exclusive_field
-// SOURCE: src/runtime-cpp/graphics/pane_media.cppm :: PaneMedia::process (MediaInput::feed)
+// SOURCE: src/runtime/graphics/pane_media/pane_media.cppm :: PaneMedia::process (MediaInput::feed)
 // STATUS: implemented
 // CONTRACT: What a receiver designates through its own reference fields it borrows exclusively, as a Rust `&mut` field is: a call through it invalidates other borrows of those objects, not the receiver's own.
 // SCENARIO: The screen is resized directly while the feeder that keeps it is fed again; reject at the resize.
@@ -735,7 +735,7 @@ void declarationExclusiveFieldAlias(const std::vector<int> &values) {
 
 // CASE: declaration.static_input
 // PAIR: declaration.static_input
-// SOURCE: src/runtime-cpp/proxy/http2_capture_streams.cppm :: respond (ProxyRejection::response)
+// SOURCE: src/runtime/proxy/http2_capture_streams/http2_capture_streams.cppm :: respond (ProxyRejection::response)
 // STATUS: implemented
 // CONTRACT: A parameter labeled static_storage takes only storage that outlives every caller, which the call checks at the argument, so it supplies static fields and results, as a Rust `&'static str` parameter does.
 // SCENARIO: A reply keeps a literal it is handed and forwards another; accept.
@@ -760,7 +760,7 @@ std::size_t declarationStaticInput(declarations::reply &out) {
 
 // CASE: declaration.static_input_owned
 // PAIR: declaration.static_input
-// SOURCE: src/runtime-cpp/proxy/http2_capture_streams.cppm :: respond (ProxyRejection::response)
+// SOURCE: src/runtime/proxy/http2_capture_streams/http2_capture_streams.cppm :: respond (ProxyRejection::response)
 // STATUS: implemented
 // CONTRACT: A parameter labeled static_storage takes only storage that outlives every caller, which the call checks at the argument, so it supplies static fields and results, as a Rust `&'static str` parameter does.
 // SCENARIO: The reply is handed a local string; reject at the argument.
@@ -773,7 +773,7 @@ std::size_t declarationStaticInputOwned() {
 
 // CASE: declaration.constant_referent
 // PAIR: declaration.constant_referent
-// SOURCE: src/runtime-cpp/cli/server.cppm :: runServer (runRuntime)
+// SOURCE: src/runtime/cli/server/server.cppm :: runServer (runRuntime)
 // STATUS: implemented
 // CONTRACT: What a reference to const designates cannot change through it, as a Rust `&T` parameter cannot, so a call that receives it invalidates no borrow of it.
 // SCENARIO: A launcher reads settings through a const reference while an options copy keeps a view of them; accept.
@@ -813,7 +813,7 @@ std::size_t declarationConstantReferent(const declarations::settings &values) {
 
 // CASE: declaration.mutable_referent
 // PAIR: declaration.constant_referent
-// SOURCE: src/runtime-cpp/cli/server.cppm :: runServer (runRuntime)
+// SOURCE: src/runtime/cli/server/server.cppm :: runServer (runRuntime)
 // STATUS: implemented
 // CONTRACT: What a reference to const designates cannot change through it, as a Rust `&T` parameter cannot, so a call that receives it invalidates no borrow of it.
 // SCENARIO: The same settings passed by mutable reference to a call that replaces them while a view of them is used later; reject at the call.
@@ -833,7 +833,7 @@ std::size_t declarationMutableReferent(declarations::settings &values) {
 
 // CASE: declaration.raw_pointer
 // PAIR: declaration.raw_pointer
-// SOURCE: src/runtime-cpp/proxy/runtime.cppm :: Http2EndpointConnection::advance
+// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: Http2EndpointConnection::advance
 // STATUS: implemented
 // CONTRACT: A pointer passed through tbc::raw carries no borrow, as Rust's `as *mut T` does, so the code that dereferences it answers for the object being alive.
 // SCENARIO: A connection resolves each stream of its own table through a raw pointer; accept.
@@ -873,7 +873,7 @@ void declarationRawPointer(declarations::raw_connection &connection) {
 
 // CASE: declaration.checked_pointer
 // PAIR: declaration.raw_pointer
-// SOURCE: src/runtime-cpp/proxy/runtime.cppm :: Http2EndpointConnection::advance
+// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: Http2EndpointConnection::advance
 // STATUS: implemented
 // CONTRACT: A pointer passed through tbc::raw carries no borrow, as Rust's `as *mut T` does, so the code that dereferences it answers for the object being alive.
 // SCENARIO: The same connection resolves its streams through the table's own pointers; reject the overlapping argument.
@@ -905,7 +905,7 @@ void declarationCheckedPointer(declarations::checked_connection &connection) {
 
 // CASE: declaration.template_constructor_copy
 // PAIR: declaration.template_constructor
-// SOURCE: src/runtime-cpp/proxy/runtime.cppm :: ApplicationRelay::transfer (Http1Connection)
+// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: ApplicationRelay::transfer (Http1Connection)
 // STATUS: implemented
 // CONTRACT: A constructor template keeps by its declaration, as any constructor does: a parameter taken by value keeps a copy of what its argument holds, not the argument.
 // SCENARIO: A factory builds a relay from a moved local through a constructor template taking it by value; accept.
@@ -959,7 +959,7 @@ void declarationTemplateConstructorCopy(declarations::arena &memory, declaration
 
 // CASE: declaration.template_constructor_reference
 // PAIR: declaration.template_constructor
-// SOURCE: src/runtime-cpp/proxy/runtime.cppm :: ApplicationRelay::transfer (Http1Connection)
+// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: ApplicationRelay::transfer (Http1Connection)
 // STATUS: implemented
 // CONTRACT: A constructor template keeps by its declaration, as any constructor does: a parameter taken by value keeps a copy of what its argument holds, not the argument.
 // SCENARIO: The relay's constructor template keeps the observer by reference, and the local dies before the relay is used; reject at the use.
@@ -989,7 +989,7 @@ int declarationTemplateConstructorReference(declarations::arena &memory, declara
 
 // CASE: declaration.static_field_result
 // PAIR: declaration.static_field_result
-// SOURCE: src/runtime-cpp/proxy/runtime.cppm :: FlowGate::failureReason
+// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: FlowGate::failureReason
 // STATUS: implemented
 // CONTRACT: What a field labeled static_storage holds outlives every caller, so it supplies a static result and may be kept anywhere, as a static input may.
 // SCENARIO: A gate keeps the literal it fails with and returns it; a transport forwards a literal to the gate it owns; accept.
@@ -1025,7 +1025,7 @@ std::size_t declarationStaticFieldResult(declarations::failure_transport &transp
 
 // CASE: declaration.dynamic_field_result
 // PAIR: declaration.static_field_result
-// SOURCE: src/runtime-cpp/proxy/runtime.cppm :: FlowGate::failureReason
+// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: FlowGate::failureReason
 // STATUS: implemented
 // CONTRACT: What a field labeled static_storage holds outlives every caller, so it supplies a static result and may be kept anywhere, as a static input may.
 // SCENARIO: A gate returns a field without the label as static; reject the result.
@@ -1048,7 +1048,7 @@ std::size_t declarationDynamicFieldResult(const declarations::dynamic_gate &gate
 
 // CASE: declaration.owned_receiver_call
 // PAIR: declaration.owned_receiver
-// SOURCE: src/runtime-cpp/proxy/runtime.cppm :: ApplicationRelay::Relays::transfer (http1_->advance)
+// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: ApplicationRelay::Relays::transfer (http1_->advance)
 // STATUS: implemented
 // CONTRACT: The object a sole owner holds, as a unique_ptr's, is that owner's own: a call through it invalidates other borrows of what it designates, not the owner's own.
 // SCENARIO: An owner feeds a screen twice through the feeder its unique_ptr holds; accept.
@@ -1076,7 +1076,7 @@ void declarationOwnedReceiverCall(declarations::screen &shown) {
 
 // CASE: declaration.owned_receiver_alias
 // PAIR: declaration.owned_receiver
-// SOURCE: src/runtime-cpp/proxy/runtime.cppm :: ApplicationRelay::Relays::transfer (http1_->advance)
+// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: ApplicationRelay::Relays::transfer (http1_->advance)
 // STATUS: pending
 // CONTRACT: The object a sole owner holds, as a unique_ptr's, is that owner's own: a call through it invalidates other borrows of what it designates, not the owner's own.
 // SCENARIO: A view of the screen's cells is read after the owned feeder grows them; reject at the feed.
@@ -1093,7 +1093,7 @@ std::size_t declarationOwnedReceiverAlias() {
 
 // CASE: declaration.shared_reference_result
 // PAIR: declaration.shared_reference_result
-// SOURCE: src/gui-cpp/qt/native_chrome_text.cpp :: NativeChromeText::refreshLayout (ResidentFonts::face)
+// SOURCE: src/gui/qt/native_chrome_text.cpp :: NativeChromeText::refreshLayout (ResidentFonts::face)
 // STATUS: implemented
 // CONTRACT: A reference a shared type's method returns is storage the shared object keeps valid, as a pointer it returns is, so a call through it invalidates nothing of its caller.
 // SCENARIO: An item measures through a face its shared fonts hand out while a view of its own text is used later; accept.
@@ -1143,7 +1143,7 @@ std::size_t declarationSharedReferenceResult(declarations::shared_fonts &fonts) 
 
 // CASE: declaration.unshared_reference_result
 // PAIR: declaration.shared_reference_result
-// SOURCE: src/gui-cpp/qt/native_chrome_text.cpp :: NativeChromeText::refreshLayout (ResidentFonts::face)
+// SOURCE: src/gui/qt/native_chrome_text.cpp :: NativeChromeText::refreshLayout (ResidentFonts::face)
 // STATUS: implemented
 // CONTRACT: A reference a shared type's method returns is storage the shared object keeps valid, as a pointer it returns is, so a call through it invalidates nothing of its caller.
 // SCENARIO: A face the item owns grows a buffer a view of it was taken from before; reject the later use.
@@ -1167,7 +1167,7 @@ std::size_t declarationUnsharedReferenceResult(declarations::buffered_face &face
 
 // CASE: declaration.pinned_shared_field
 // PAIR: declaration.pinned_shared_field
-// SOURCE: src/gui-cpp/config/generation.cppm :: ConfigurationGeneration::readConfiguration (lua::Vm)
+// SOURCE: src/gui/config/generation/generation.cppm :: ConfigurationGeneration::readConfiguration (lua::Vm)
 // STATUS: implemented
 // CONTRACT: A field of a TBC_SHARED type that can be neither assigned nor moved lives as long as its object, so a call that mutates the object keeps every borrow the field lent valid, as a pinned Rust value with interior mutability does.
 // SCENARIO: A value read from the owner's pinned machine is used after the owner records it; accept.
@@ -1206,7 +1206,7 @@ int declarationPinnedSharedField() {
 
 // CASE: declaration.movable_shared_field
 // PAIR: declaration.pinned_shared_field
-// SOURCE: src/gui-cpp/config/generation.cppm :: ConfigurationGeneration::readConfiguration (lua::Vm)
+// SOURCE: src/gui/config/generation/generation.cppm :: ConfigurationGeneration::readConfiguration (lua::Vm)
 // STATUS: pending
 // CONTRACT: A field of a TBC_SHARED type that can be neither assigned nor moved lives as long as its object, so a call that mutates the object keeps every borrow the field lent valid, as a pinned Rust value with interior mutability does.
 // SCENARIO: A machine that can be assigned may be replaced by the call, dropping the value it lent; reject at the call.
@@ -1241,7 +1241,7 @@ int declarationMovableSharedField() {
 
 // CASE: declaration.abstract_shared_memory
 // PAIR: declaration.abstract_shared
-// SOURCE: lib/telar-base/include/telar_base/memory/allocator.hpp :: ConcurrentAllocator (the type-erased Memory planned to replace it)
+// SOURCE: lib/base/include/telar_base/memory/allocator.hpp :: ConcurrentAllocator (the type-erased Memory planned to replace it)
 // STATUS: implemented
 // CONTRACT: An abstract TBC_SHARED type is shared through a reference to it, as a Rust `&dyn Trait` of a type with interior mutability: its virtual calls invalidate nothing.
 // SCENARIO: Two holders keep one `Memory &`, and allocations through it and through each holder leave a block read later valid; accept.
@@ -1348,7 +1348,7 @@ char declarationAbstractSharedMemory(tbc::view<declarations::memory &, tbc::lt::
 
 // CASE: declaration.abstract_shared_escapes
 // PAIR: declaration.abstract_shared
-// SOURCE: lib/telar-base/include/telar_base/memory/allocator.hpp :: ConcurrentAllocator (the type-erased Memory planned to replace it)
+// SOURCE: lib/base/include/telar_base/memory/allocator.hpp :: ConcurrentAllocator (the type-erased Memory planned to replace it)
 // STATUS: implemented
 // CONTRACT: An abstract TBC_SHARED type is shared through a reference to it, as a Rust `&dyn Trait` of a type with interior mutability: its virtual calls invalidate nothing.
 // SCENARIO: Sharing does not extend the referent: a buffer keeps a local adapter through `Memory &` and outlives it; reject at the return.
@@ -1362,7 +1362,7 @@ declarations::erased_bytes declarationAbstractSharedEscapes(declarations::arena 
 
 // CASE: declaration.abstract_shared_sibling_marked
 // PAIR: declaration.abstract_shared_sibling
-// SOURCE: src/runtime-cpp/proxy/runtime.cppm :: Http2EndpointConnection (budget_ lent to sibling fields)
+// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: Http2EndpointConnection (budget_ lent to sibling fields)
 // STATUS: implemented
 // CONTRACT: The TBC_SHARED mark is not inherited: a field keeps a sibling through a shared base only when the sibling's own type is marked and its object is pinned.
 // SCENARIO: A pinned service lends its marked adapter to a buffer beside it as `Memory &`; accept.
@@ -1396,7 +1396,7 @@ bool declarationAbstractSharedSiblingMarked(declarations::arena &system) {
 
 // CASE: declaration.abstract_shared_sibling_unmarked
 // PAIR: declaration.abstract_shared_sibling
-// SOURCE: src/runtime-cpp/proxy/runtime.cppm :: Http2EndpointConnection (budget_ lent to sibling fields)
+// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: Http2EndpointConnection (budget_ lent to sibling fields)
 // STATUS: implemented
 // CONTRACT: The TBC_SHARED mark is not inherited: a field keeps a sibling through a shared base only when the sibling's own type is marked and its object is pinned.
 // SCENARIO: The adapter derives from the marked interface but is not marked itself; reject where the constructor lends it.

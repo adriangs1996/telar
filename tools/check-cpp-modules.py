@@ -7,24 +7,24 @@ import re
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
-SCOPES = ('lib/', 'src/runtime-cpp/', 'src/cli-cpp/',
-          'src/gui-cpp/', 'src/auth-daemon/')
+SCOPES = ('lib/', 'src/runtime/', 'src/cli/',
+          'src/gui/', 'src/auth-daemon/')
 # The libraries each library's modules may import, lowest layer first. A library reaching a
 # higher one, or a sibling it does not list, rebuilds and drags in more than it uses.
 LIBRARY_LAYERS = {
-    'telar-base': set(),
-    'telar-vocabulary': set(),
-    'telar-shell': set(),
+    'base': set(),
+    'vocabulary': set(),
+    'shell': set(),
     'ebnf': set(),
-    'telar-client': {'telar-base'},
-    'telar-lua': {'telar-base'},
-    'telar-render': {'telar-base'},
-    'telar-platform': {'telar-base', 'telar-vocabulary'},
-    'telar-machines': {'telar-base', 'telar-client'},
-    'telar-git': {'telar-base', 'telar-platform'},
-    'telar-tls': {'telar-base', 'telar-platform'},
-    'telar-plugins': {'telar-base', 'telar-client', 'telar-platform'},
-    'telar-config': {'telar-base', 'telar-client', 'telar-lua', 'telar-platform', 'telar-plugins'},
+    'client': {'base'},
+    'lua': {'base'},
+    'render': {'base'},
+    'platform': {'base', 'vocabulary'},
+    'machines': {'base', 'client'},
+    'git': {'base', 'platform'},
+    'tls': {'base', 'platform'},
+    'plugins': {'base', 'client', 'platform'},
+    'config': {'base', 'client', 'lua', 'platform', 'plugins'},
 }
 
 
@@ -113,8 +113,13 @@ def check_library_layers(interfaces, graph):
                 raise RuntimeError(f'{name} imports {dependency}: {library} may not depend on {target}')
 
 
+# Test doubles that implement a production module live in its folder (rule 1), so the path no
+# longer marks them as tests; only test executables link them.
+TEST_UNITS = {'src/gui/platform/profile_file/controlled_awake_clock.cpp'}
+
+
 def owned_units(files):
-    return sorted(name for name in files if name.endswith(('.cppm', '.cpp'))
+    return sorted(name for name in files if name.endswith(('.cppm', '.cpp')) and name not in TEST_UNITS
                   and not re.search(r'/(tests|tools)/', name) and global_fragment((ROOT / name).read_text()))
 
 
