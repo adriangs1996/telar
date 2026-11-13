@@ -237,12 +237,13 @@ graph LR
 - **Hecho cuando:** `background_executor` vive en platform o en un componente de ejecución base y esas 5 aristas salen de la allowlist de P2.1.
 - **Resultado:** `53ae00b9f`. `telar.runtime.platform.background_executor` (con `RequestContext`, `EditorCandidate` y `SuggestionService`), `platform.session_host` (antes en agents) y `platform.host_metrics` (`HostCounters`, `HostMetricsProbe`, `NativeHostMetrics` y sus `.cpp` de macOS y Linux). El concept `BackgroundExecutor` no puede bajar sin crear el ciclo `platform ↔ worktrees` y la arista `platform → history`, así que sube con `SubmitsRequest` a `runtime.runtime`, su único usuario. `upward_imports` de 53 a 48. El `host_metrics.cpp` de Linux no se ha compilado.
 
-### [ ] P3.7 · Separar el vocabulario de diagnóstico del colector de telemetría
+### [x] P3.7 · Separar el vocabulario de diagnóstico del colector de telemetría
 - **Depende de:** P1.2
 - **Toca:** `runtime.diagnostics.*`, `runtime.diagnostics.runtime_telemetry`, `runtime.platform.request_worker`.
 - **Qué hace:** los contadores y las operaciones van a un módulo base sin dependencias. El colector (`runtime_telemetry`) sube junto a `runtime.runtime`.
 - **Cierra:** `diagnostics → graphics, history, model, proxy, terminal` y `platform → diagnostics` (`request_worker → diagnostics.operation`).
 - **Hecho cuando:** graphics y terminal importan solo el vocabulario y esas 6 aristas salen de la allowlist.
+- **Resultado:** `ace1ea675`. El colector pasa entero (con el log, `LogSession` y los samples) a `telar.runtime.runtime.runtime_telemetry`, junto a `runtime.runtime`; el namespace no cambia. En `runtime/diagnostics` quedan `line`, `operation` y `runtime_counters`, que solo importan librerías, y `diagnostics` pasa a ser el primero de `process_layers.runtime`. Salen 7 aristas, no 6: también cae `runtime_telemetry → exchange_capture.exchange`, que no estaba en la tabla. Los tres módulos de vocabulario no se fusionan en uno: habría ensanchado los imports de más de 60 importadores. `upward_imports` de 48 a 41.
 
 ### [ ] P3.8 · Romper `history.event` → `command_capture.tracker`
 - **Depende de:** P1.2
