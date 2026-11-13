@@ -17,7 +17,7 @@ static_assert(true);
 #include <span>
 #include <variant>
 
-import telar.gui.application.sound_playback;
+import telar.gui.layout.geometry;
 import telar.gui.core.unicode_scalar;
 
 namespace {

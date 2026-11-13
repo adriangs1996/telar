@@ -58,6 +58,8 @@ telar.gui.input.child_mouse
 telar.gui.input.configuration
 telar.gui.input.copy_pointer
 telar.gui.input.key_encoder
+telar.gui.layout.geometry
+telar.gui.layout.snapshots
 telar.gui.links.cell_links
 telar.gui.links.link_hover
 telar.gui.links.path_expansion

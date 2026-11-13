@@ -10,7 +10,7 @@ import std;
 import telar.base.memory;
 import telar.client.protocol;
 import telar.gui.core.primitives;
-import telar.gui.application.sound_playback;
+import telar.gui.layout.snapshots;
 import telar.gui.core.unicode_scalar;
 
 namespace {

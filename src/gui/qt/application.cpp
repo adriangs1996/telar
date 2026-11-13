@@ -95,7 +95,7 @@ static_assert(true);
 #include "platform/window.hpp"
 #include "qt/utf16_encoding.hpp"
 
-import telar.gui.application.sound_playback;
+import telar.gui.layout.geometry;
 import telar.gui.application.workspace_replica;
 import telar.gui.application.session;
 import telar.gui.config.gui_query;

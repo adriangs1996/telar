@@ -62,7 +62,7 @@ static_assert(true);
 #include "platform/clipboard_image_source.hpp"
 #include "terminal/screen.hpp"
 
-import telar.gui.application.sound_playback;
+import telar.gui.layout.geometry;
 import telar.gui.application.workspace_replica;
 import telar.gui.attachments.marker_input;
 import telar.gui.input.key_encoder;

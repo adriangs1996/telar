@@ -54,7 +54,6 @@ static_assert(true);
 #include "platform/window.hpp"
 #include "terminal/cell_position.hpp"
 
-import telar.gui.application.sound_playback;
 import telar.gui.core.unicode_scalar;
 import telar.gui.core.metrics;
 import telar.gui.fonts.face;

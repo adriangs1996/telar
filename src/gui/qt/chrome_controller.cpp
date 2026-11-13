@@ -37,7 +37,7 @@ static_assert(true);
 #include <utility>
 #include <variant>
 
-import telar.gui.application.sound_playback;
+import telar.gui.layout.geometry;
 import telar.gui.application.workspace_replica;
 import telar.gui.fonts.face;
 import telar.gui.fonts.row_text_layout;

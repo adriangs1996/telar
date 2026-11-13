@@ -154,7 +154,7 @@ import telar.gui.config.plugin_effects;
 import telar.gui.core.unicode_scalar;
 import telar.gui.machines.picker;
 #if (defined(__APPLE__))
-import telar.gui.application.sound_playback;
+import telar.gui.layout.geometry;
 #endif
 import telar.gui.transport.runtime_link;
 

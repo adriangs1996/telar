@@ -52,7 +52,7 @@ static_assert(true);
 #include "input/wheel_accumulator.hpp"
 
 import telar.gui.tests.session_fixture;
-import telar.gui.application.sound_playback;
+import telar.gui.layout.snapshots;
 import telar.gui.application.workspace_replica;
 import telar.gui.application.session;
 import telar.gui.core.metrics;
