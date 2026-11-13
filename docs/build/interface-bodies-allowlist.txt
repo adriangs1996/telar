@@ -32,7 +32,11 @@ telar.cli.window
 telar.cli.worktree
 telar.cli.worktree_git
 telar.client
-telar.config
+telar.config.client
+telar.config.core
+telar.config.gui
+telar.config.runtime
+telar.config.snapshot
 telar.git
 telar.gui.application.host_effects
 telar.gui.application.session

@@ -119,7 +119,7 @@ void valueOrTemporary(std::string_view text) {
 
 // CASE: std.iterator_invalidated
 // PAIR: std.iterator
-// SOURCE: lib/config/config.cppm :: AgentManifests::tryAdd
+// SOURCE: lib/config/runtime/runtime.cppm :: AgentManifests::tryAdd
 // STATUS: implemented
 // CONTRACT: A vector iterator points into the vector's storage, which growth may reallocate.
 // SCENARIO: push_back can invalidate the iterator before it is dereferenced.
@@ -134,7 +134,7 @@ void iteratorInvalidated() {
 
 // CASE: std.iterator_range_for
 // PAIR: std.iterator
-// SOURCE: lib/config/config.cppm :: AgentManifests::tryAdd
+// SOURCE: lib/config/runtime/runtime.cppm :: AgentManifests::tryAdd
 // STATUS: implemented
 // CONTRACT: Dereferencing an iterator designates the element, not the iterator object.
 // SCENARIO: A range-for element and a pointer to it come from the caller's vector; accept.

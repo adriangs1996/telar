@@ -207,43 +207,29 @@
   "lib/clipboard/src/unavailable.cpp": [
     "clipboard.hpp"
   ],
-  "lib/config/config.cppm": [
-    "<algorithm>",
-    "<arpa/inet.h>",
-    "<array>",
-    "<bit>",
-    "<chrono>",
-    "<cinttypes>",
-    "<cmath>",
-    "<concepts>",
-    "<cstddef>",
+  "lib/config/client/client.cppm": [
     "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<exception>",
-    "<format>",
-    "<ghostty/vt/unicode.h>",
-    "<initializer_list>",
-    "<lauxlib.h>",
-    "<limits.h>",
-    "<limits>",
     "<lua.h>",
-    "<lualib.h>",
-    "<memory>",
-    "<mutex>",
-    "<new>",
-    "<optional>",
-    "<span>",
-    "<stdexcept>",
-    "<string>",
-    "<string_view>",
-    "<sys/stat.h>",
-    "<type_traits>",
-    "<utility>",
-    "<variant>",
-    "<vector>",
     "tbc/view.hpp"
+  ],
+  "lib/config/core/core.cppm": [
+    "<cinttypes>",
+    "<cstdio>",
+    "tbc/view.hpp"
+  ],
+  "lib/config/gui/gui.cppm": [
+    "<lua.h>"
+  ],
+  "lib/config/runtime/runtime.cppm": [
+    "<arpa/inet.h>",
+    "<cstdint>",
+    "<ghostty/vt/unicode.h>",
+    "<limits.h>",
+    "<lua.h>",
+    "tbc/view.hpp"
+  ],
+  "lib/config/snapshot/snapshot.cppm": [
+    "<lua.h>"
   ],
   "lib/ebnf/lexer/lexer.cppm": [
     "<cstddef>",
