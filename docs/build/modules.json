@@ -598,6 +598,7 @@
     "lib/telar-base/include/telar_base/memory/sensitive_text.cppm": "lib/telar-base/include/telar_base/memory.cppm",
     "lib/telar-base/include/telar_base/memory/slot_indexes.cppm": "lib/telar-base/include/telar_base/memory.cppm",
     "lib/telar-base/include/telar_base/memory/sensitive_allocation.cppm": "lib/telar-base/include/telar_base/memory.cppm",
+    "lib/telar-base/include/telar_base/memory/byte_storage.cppm": "lib/telar-base/include/telar_base/memory.cppm",
     "lib/telar-base/include/telar_base/memory/erasing_allocator.cppm": "lib/telar-base/include/telar_base/memory.cppm",
     "lib/telar-base/include/telar_base/memory/c_allocation_blocks.cppm": "lib/telar-base/include/telar_base/memory.cppm",
     "lib/telar-base/include/telar_base/memory/sensitive_buffer.cppm": "lib/telar-base/include/telar_base/memory.cppm",

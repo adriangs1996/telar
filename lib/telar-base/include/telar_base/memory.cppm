@@ -703,6 +703,45 @@ SensitiveAllocation(Memory &memory, std::size_t size) -> SensitiveAllocation<Mem
 }
 }
 
+// Interface: telar_base/memory/byte_storage.cppm
+export {
+namespace telar::runtime {
+
+// Bytes from an allocator in region `a`, left as the allocator returns them: for a buffer its
+// owner writes before it reads, where zeroing it first would be wasted work.
+template <Allocator Memory>
+class ByteStorage {
+public:
+  inline explicit ByteStorage(tbc::view<Memory &, tbc::lt::a> memory, std::size_t size) : memory_(memory), size_(size) {
+    if (size != 0) {
+      storage_ = static_cast<std::uint8_t *>(memory.allocate(size, alignof(std::uint8_t)));
+      if (storage_ == nullptr) {
+        throw std::bad_alloc{};
+      }
+    }
+  }
+
+  inline ~ByteStorage() {
+    if (storage_ != nullptr) {
+      memory_.deallocate(storage_, size_, alignof(std::uint8_t));
+    }
+  }
+
+  ByteStorage(const ByteStorage &) = delete;
+  ByteStorage &operator=(const ByteStorage &) = delete;
+
+  inline std::span<std::uint8_t> bytes() noexcept { return {storage_, size_}; }
+  inline std::span<const std::uint8_t> bytes() const noexcept { return {storage_, size_}; }
+
+private:
+  tbc::view<Memory &, tbc::lt::a> memory_;
+  std::uint8_t *storage_ = nullptr;
+  std::size_t size_;
+};
+
+}
+}
+
 // Interface: telar_base/memory/sensitive_buffer.cppm
 export {
 namespace telar::runtime {

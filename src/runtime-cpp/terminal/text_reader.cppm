@@ -1657,9 +1657,7 @@ class TextReader {
 public:
   inline explicit TextReader(Memory &memory, Terminal<Memory> &terminal, std::size_t capacity)
       : terminal_(terminal),
-        bytes_(AllocatorRef<Byte, Memory>{memory}) {
-    bytes_.resize(capacity);
-  }
+        storage_(memory, capacity) {}
 
   inline void read(PaneTextSource source, std::uint16_t wanted_rows) {
     const auto tag = source == PaneTextSource::screen ? GHOSTTY_POINT_TAG_ACTIVE : GHOSTTY_POINT_TAG_SCREEN;
@@ -1707,11 +1705,11 @@ public:
   }
 
   inline std::span<const Byte> bytes() const noexcept {
-    return std::span<const Byte>{bytes_}.first(length_);
+    return std::span<const Byte>{storage_.bytes()}.first(length_);
   }
 
   inline std::string_view text() const noexcept {
-    return {reinterpret_cast<const char *>(bytes_.data()), length_};
+    return {reinterpret_cast<const char *>(storage_.bytes().data()), length_};
   }
 
   inline bool truncated() const noexcept {
@@ -1749,31 +1747,32 @@ private:
       return;
     }
 
-    std::rotate(bytes_.begin(), bytes_.begin() + position_, bytes_.end());
-    const auto newline = std::find(bytes_.begin(), bytes_.end(), '\n');
-    std::size_t start = newline == bytes_.end() ? 0 : static_cast<std::size_t>(newline - bytes_.begin() + 1);
-    if (newline == bytes_.end()) {
+    const auto bytes = storage_.bytes();
+    std::rotate(bytes.begin(), bytes.begin() + position_, bytes.end());
+    const auto newline = std::find(bytes.begin(), bytes.end(), '\n');
+    std::size_t start = newline == bytes.end() ? 0 : static_cast<std::size_t>(newline - bytes.begin() + 1);
+    if (newline == bytes.end()) {
       constexpr Byte continuation_mask = 0xc0;
       constexpr Byte continuation_bits = 0x80;
-      while (start < bytes_.size() && (bytes_[start] & continuation_mask) == continuation_bits) {
+      while (start < bytes.size() && (bytes[start] & continuation_mask) == continuation_bits) {
         ++start;
       }
     }
 
-    std::move(bytes_.begin() + start, bytes_.end(), bytes_.begin());
-    length_ = bytes_.size() - start;
+    std::move(bytes.begin() + start, bytes.end(), bytes.begin());
+    length_ = bytes.size() - start;
   }
 
   inline static bool receive(void *context, const Byte *bytes, std::size_t count) noexcept {
     auto &self = *static_cast<TextReader *>(context);
     while (count != 0) {
-      if (self.position_ == self.bytes_.size()) {
+      if (self.position_ == self.storage_.bytes().size()) {
         self.position_ = 0;
         self.wrapped_ = true;
       }
 
-      const auto copied = std::min(count, self.bytes_.size() - self.position_);
-      std::copy_n(bytes, copied, self.bytes_.begin() + self.position_);
+      const auto copied = std::min(count, self.storage_.bytes().size() - self.position_);
+      std::copy_n(bytes, copied, self.storage_.bytes().begin() + self.position_);
       bytes += copied;
       count -= copied;
       self.position_ += copied;
@@ -1783,7 +1782,8 @@ private:
   }
 
   Terminal<Memory> &terminal_;
-  Vector<Byte, Memory> bytes_;
+  // The text is written before it is read, so the storage is not zeroed first.
+  ByteStorage<Memory> storage_;
   std::size_t position_ = 0;
   std::size_t length_ = 0;
   bool wrapped_ = false;
