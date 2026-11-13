@@ -43,6 +43,7 @@ export import telar.base.memory;
 import telar.cli.worktree_git;
 import telar.base.diagnostics;
 import telar.client.protocol;
+import telar.git.checkout;
 import telar.platform.primitives;
 
 // Interface: hooks/input.cppm

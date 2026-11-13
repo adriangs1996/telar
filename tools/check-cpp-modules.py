@@ -21,7 +21,7 @@ LIBRARY_LAYERS = {
     'render': {'base'},
     'platform': {'base', 'vocabulary'},
     'machines': {'base', 'client'},
-    'git': {'base', 'platform'},
+    'git': {'base', 'platform', 'vocabulary'},
     'tls': {'base', 'platform'},
     'plugins': {'base', 'client', 'platform'},
     'config': {'base', 'client', 'lua', 'platform', 'plugins'},

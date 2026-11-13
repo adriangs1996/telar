@@ -45,6 +45,7 @@ export import telar.cli.server;
 export import telar.base.memory;
 import telar.base.diagnostics;
 import telar.client.protocol;
+import telar.git.checkout;
 import telar.platform.primitives;
 
 // Interface: repository_identity.cppm

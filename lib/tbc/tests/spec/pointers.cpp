@@ -246,7 +246,7 @@ void lambdaCopyCaptureLive(std::string_view text) {
 
 // CASE: lambda.reference_capture_dead
 // PAIR: lambda.reference_capture
-// SOURCE: lib/platform/platform.cppm :: ServerOptions::parse
+// SOURCE: lib/platform/paths/paths.cppm :: ServerOptions::parse
 // STATUS: implemented
 // CONTRACT: A by-reference capture is the caller's own variable when the enclosing function calls the lambda.
 // SCENARIO: The lambda returns a view of a captured owner that dies before the read.
@@ -266,7 +266,7 @@ void lambdaReferenceCaptureDead() {
 
 // CASE: lambda.reference_capture_contents
 // PAIR: lambda.reference_capture
-// SOURCE: lib/platform/platform.cppm :: ServerOptions::parse
+// SOURCE: lib/platform/paths/paths.cppm :: ServerOptions::parse
 // STATUS: implemented
 // CONTRACT: Contents read through a by-reference capture do not borrow the captured variable's storage.
 // SCENARIO: The result views the argument array, not the local span that was captured; accept.
@@ -284,7 +284,7 @@ pointers::options lambdaReferenceCaptureContents(std::span<const char* const> ar
 
 // CASE: lambda.write_capture_dead
 // PAIR: lambda.write_capture
-// SOURCE: lib/platform/platform.cppm :: ServerOptions::parse
+// SOURCE: lib/platform/paths/paths.cppm :: ServerOptions::parse
 // STATUS: implemented
 // CONTRACT: A write to a by-reference capture updates the caller's variable.
 // SCENARIO: The lambda stores a view whose source dies before the caller reads it.
@@ -304,7 +304,7 @@ void lambdaWriteCaptureDead() {
 
 // CASE: lambda.write_capture_live
 // PAIR: lambda.write_capture
-// SOURCE: lib/platform/platform.cppm :: ServerOptions::parse
+// SOURCE: lib/platform/paths/paths.cppm :: ServerOptions::parse
 // STATUS: implemented
 // CONTRACT: A view stored through a by-reference capture may be read while its source is alive.
 // SCENARIO: The source outlives the caller's read; accept.
@@ -606,7 +606,7 @@ std::string_view memberPointerEscape() {
 
 // CASE: pointer.c_function_resource
 // PAIR: pointer.c_function
-// SOURCE: lib/platform/platform.cppm :: DirectoryStream
+// SOURCE: lib/platform/fs/fs.cppm :: DirectoryStream
 // STATUS: implemented
 // CONTRACT: A C function's pointer borrows only arguments of its own pointee type; otherwise, like a raw pointer from Rust's FFI, it names an unchecked resource.
 // SCENARIO: The directory stream does not point into its temporary path; accept.
@@ -621,7 +621,7 @@ void cFunctionResource() {
 
 // CASE: pointer.c_function_argument
 // PAIR: pointer.c_function
-// SOURCE: lib/platform/platform.cppm :: DirectoryStream
+// SOURCE: lib/platform/fs/fs.cppm :: DirectoryStream
 // STATUS: implemented
 // CONTRACT: A C function's pointer borrows only arguments of its own pointee type; otherwise, like a raw pointer from Rust's FFI, it names an unchecked resource.
 // SCENARIO: strchr points into its temporary string, which dies before the result is read through.

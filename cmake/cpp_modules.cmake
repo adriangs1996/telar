@@ -76,9 +76,20 @@ endif()
 
 # Keep the file set visible to CMake so scanning, transitive ordering and
 # installed consumers use the native module graph rather than custom BMI rules.
+# telar_modules(TARGET [EXCLUDE folder...]): EXCLUDE names subfolders that build
+# their modules into a target of their own.
 function(telar_modules target)
+  cmake_parse_arguments(PARSE_ARGV 1 modules "" "" "EXCLUDE")
   file(GLOB_RECURSE interfaces CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cppm")
   list(FILTER interfaces EXCLUDE REGEX "/(tests|tools|vendor|out(-[^/]*)?|CMakeFiles)/")
+  foreach(folder IN LISTS modules_EXCLUDE)
+    foreach(source IN LISTS interfaces)
+      string(FIND "${source}" "${CMAKE_CURRENT_SOURCE_DIR}/${folder}/" position)
+      if(position EQUAL 0)
+        list(REMOVE_ITEM interfaces "${source}")
+      endif()
+    endforeach()
+  endforeach()
   include("${CMAKE_CURRENT_FUNCTION_LIST_DIR}/module_platforms.cmake")
   get_filename_component(repository "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/.." ABSOLUTE)
   if(APPLE)

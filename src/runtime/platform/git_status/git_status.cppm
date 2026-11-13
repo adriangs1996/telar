@@ -24,6 +24,7 @@ import std;
 export import telar.platform;
 import telar.base.diagnostics;
 import telar.client.protocol;
+import telar.git.checkout;
 import telar.platform.primitives;
 
 // Interface: platform/git_repository.cppm

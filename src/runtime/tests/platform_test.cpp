@@ -62,6 +62,7 @@ import std;
 import telar.base.memory;
 import telar.base.text;
 import telar.client.protocol;
+import telar.git.checkout;
 import telar.platform.primitives;
 import telar.runtime.tests.check;
 import telar.runtime.platform.system_certificates;

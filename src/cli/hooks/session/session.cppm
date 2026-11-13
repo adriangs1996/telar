@@ -28,6 +28,7 @@ export import telar.platform;
 export import telar.cli.runtime_observer;
 import telar.base.diagnostics;
 import telar.client.protocol;
+import telar.git.checkout;
 import telar.platform.primitives;
 
 // Interface: hooks/codex_subagents.cppm

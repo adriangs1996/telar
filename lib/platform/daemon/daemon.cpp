@@ -23,7 +23,7 @@ module;
 #include <sys/un.h>
 #include <sys/wait.h>
 
-module telar.platform;
+module telar.platform.daemon;
 
 import std;
 
