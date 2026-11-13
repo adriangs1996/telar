@@ -84,7 +84,11 @@ Configuration read(ConfigurationExample example) {
     telar::runtime::lua::Vm machine{memory};
     machine.execute(config_bootstrap, "@bootstrap.lua", 0);
     machine.execute(example.source, "@test.lua");
-    result = ConfigurationReader::read(telar::runtime::lua::Value{machine.state(), -1, "config"}, example.profile);
+    // As a configuration generation reads it: validated by the library's reader first.
+    const telar::runtime::lua::Value root{machine.state(), -1, "config"};
+    const auto values = telar::makeOwned<telar::runtime::config::RuntimeValues<decltype(memory)>>(memory, memory);
+    telar::runtime::config::SnapshotReader{memory, *values}.read(root, example.profile);
+    result = ConfigurationReader::read(root, example.profile);
   }
 
   if (memory.liveBytes() != 0) {
@@ -104,6 +108,7 @@ void promptPreferences() {
   const auto configuration = read({.source = R"(return {api_version = 2, client = {prompt = {mode = "telar", keymap = "vim", motion = "none", ghost = false, max_lines = 4}}})", .profile = {}});
   const auto &prompt = configuration.prompt;
   require(prompt.mode == PromptMode::telar && prompt.keymap == PromptKeymap::vim && prompt.motion == PromptMotion::none && !prompt.ghost && prompt.max_lines == 4, "every prompt field must be read");
+  require(read({.source = R"(return {api_version = 2, client = {prompt = {mode = "telar", skin = "glass"}}})", .profile = {}}).prompt.mode == PromptMode::telar, "client.prompt.skin is accepted as the documentation describes it");
   require(read({.source = "return {api_version = 2}", .profile = {}}).prompt == PromptConfiguration{}, "the prompt stays classic by default");
   const auto bound = read({.source = R"(return {api_version = 2, client = {prompt = {bindings = {{keys = "ctrl+j", action = "submit"}, {keys = "H", action = "line_start", mode = "normal"}}}}})", .profile = {}});
   require(bound.prompt.bindings.size() == 2 && bound.prompt.bindings[0].character == 'j' && bound.prompt.bindings[1].normal && bound.prompt.bindings[1].action == 8, "prompt bindings must be read with their action and mode");

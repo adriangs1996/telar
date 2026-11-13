@@ -74,6 +74,7 @@ static_assert(true);
 
 
 import telar.gui.core.metrics;
+import telar.config;
 import telar.gui.fonts.face;
 import telar.gui.graphics.texture_cache;
 import telar.gui.terminal.copy_mode;
@@ -136,7 +137,7 @@ Options parseOptions(const QGuiApplication &application) {
   parser.addOption({"letter-spacing", "Letter spacing in points", "points", QString::number(terminal_letter_spacing)});
   parser.addOption({"strength", "Thicken strength, 0 to 255", "value", QString::number(terminal_thicken_strength)});
   parser.addOption({"text", "Render the lines of this file once", "path"});
-  parser.addOption({"hinting", "Grid fitting: native, light or full", "mode", font_hinting_names.at(std::to_underlying(FontConfiguration{}.hinting))});
+  parser.addOption({"hinting", "Grid fitting: native, light or full", "mode", QString::fromLatin1(telar::runtime::config::font_hinting_names.at(std::to_underlying(FontConfiguration{}.hinting)).data())});
   parser.addOption({"foreground", "Text color for --text", "#rrggbb", "#c4c4c0"});
   parser.addOption({"background", "Background color", "#rrggbb", "#000000"});
   parser.process(application);
@@ -175,12 +176,13 @@ Options parseOptions(const QGuiApplication &application) {
   }
 
   const auto hinting = parser.value("hinting").toStdString();
-  const auto *const found = std::ranges::find(font_hinting_names, hinting);
-  if (found == font_hinting_names.end()) {
+  const auto &names = telar::runtime::config::font_hinting_names;
+  const auto found = std::ranges::find(names, hinting);
+  if (found == names.end()) {
     throw std::invalid_argument{"Invalid --hinting"};
   }
 
-  options.hinting = static_cast<FontHinting>(found - font_hinting_names.begin());
+  options.hinting = static_cast<FontHinting>(found - names.begin());
   if (parser.isSet("text")) {
     QFile file{parser.value("text")};
     if (!file.open(QIODevice::ReadOnly)) {

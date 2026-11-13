@@ -206,7 +206,7 @@ private:
       object.member("letter_spacing", font.letter_spacing);
       object.member("thicken", font.thicken);
       object.member("thicken_strength", font.thicken_strength);
-      object.member("hinting", std::string_view{font_hinting_names.at(std::to_underlying(font.hinting))});
+      object.member("hinting", runtime::config::font_hinting_names.at(std::to_underlying(font.hinting)));
     });
   }
 
@@ -224,21 +224,13 @@ private:
     });
   }
 
+  // CursorShape leads with the terminal's default, which a configuration cannot choose.
   inline static std::string_view cursorStyle(CursorShape cursor) {
-    switch (cursor) {
-    case CursorShape::block:
-      return "block";
-    case CursorShape::bar:
-      return "bar";
-    case CursorShape::underline:
-      return "underline";
-    case CursorShape::hollow:
-      return "hollow";
-    case CursorShape::default_shape:
-      break;
+    if (cursor == CursorShape::default_shape) {
+      throw std::invalid_argument{"Unknown cursor shape"};
     }
 
-    throw std::invalid_argument{"Unknown cursor shape"};
+    return runtime::config::cursor_style_names.at(std::to_underlying(cursor) - 1);
   }
 };
 

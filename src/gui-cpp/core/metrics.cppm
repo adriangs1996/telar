@@ -402,8 +402,6 @@ enum class FontHinting : std::uint8_t {
   full,
 };
 
-inline constexpr std::array font_hinting_names{"native", "light", "full"};
-
 struct FontConfiguration {
   static constexpr std::size_t name_capacity = 256;
   static constexpr float default_size = 15;

@@ -541,30 +541,39 @@ private:
 export {
 namespace telar::gui {
 
+// The GUI keeps its own limits for what it clamps at run time; they follow the configuration's.
+namespace configuration_bounds {
+using runtime::config::GuiBounds;
+static_assert(FontConfiguration::minimum_size == GuiBounds::font_size.minimum && FontConfiguration::maximum_size == GuiBounds::font_size.maximum);
+static_assert(FontConfiguration::minimum_line_height == GuiBounds::line_height.minimum && FontConfiguration::maximum_line_height == GuiBounds::line_height.maximum);
+static_assert(FontConfiguration::minimum_letter_spacing == GuiBounds::letter_spacing.minimum && FontConfiguration::maximum_letter_spacing == GuiBounds::letter_spacing.maximum);
+static_assert(FontConfiguration::maximum_thicken_strength == GuiBounds::thicken_strength.maximum);
+static_assert(Configuration::minimum_blink_interval.count() == GuiBounds::blink_interval_ms.minimum && Configuration::maximum_blink_interval.count() == GuiBounds::blink_interval_ms.maximum);
+static_assert(ScrollConfiguration::maximum_wheel_ms == GuiBounds::wheel_ms.maximum && ScrollConfiguration::maximum_overscan == GuiBounds::overscan.maximum);
+static_assert(Configuration::minimum_sidebar_width == GuiBounds::sidebar_width.minimum && Configuration::maximum_sidebar_width == GuiBounds::sidebar_width.maximum);
+static_assert(Configuration::minimum_chrome_scale == GuiBounds::chrome_scale.minimum && Configuration::maximum_chrome_scale == GuiBounds::chrome_scale.maximum);
+static_assert(Configuration::maximum_padding == GuiBounds::padding.maximum && Configuration::maximum_background_blur == GuiBounds::background_blur.maximum);
+static_assert(Configuration::minimum_fps == GuiBounds::max_fps.minimum && Configuration::maximum_fps == GuiBounds::max_fps.maximum);
+static_assert(PromptConfiguration::maximum_max_lines == runtime::config::PromptBounds::max_lines.maximum);
+// The enums follow the configuration's name tables.
+static_assert(std::to_underlying(FontHinting::full) == std::to_underlying(runtime::config::FontHinting::full));
+static_assert(std::to_underlying(PromptMode::telar) == std::to_underlying(runtime::config::PromptMode::telar));
+static_assert(std::to_underlying(PromptMotion::none) == std::to_underlying(runtime::config::PromptMotion::none));
+static_assert(std::to_underlying(PromptKeymap::vim) == std::to_underlying(runtime::config::PromptKeymap::vim));
+static_assert(std::to_underlying(CursorShape::hollow) == std::to_underlying(runtime::config::CursorStyle::hollow) + 1);
+static_assert(BackgroundOpacity::names.size() == runtime::config::surface_names.size());
+}
+
 class ConfigurationReader {
 public:
+  // Maps a configuration runtime::config::SnapshotReader already validated, profile included.
   inline static Configuration read(const runtime::lua::Value &root, std::string_view profile) {
-    root.onlyFields({"api_version", "theme", "client", "gui", "runtime", "plugins", "profiles"});
-    if (root.field("api_version").integer() != 2) {
-      root.fail("requires api_version = 2");
-    }
-
     Configuration result;
     result.themes.base = default_theme_values;
     apply(root, result);
 
     if (!profile.empty()) {
-      const auto profiles = root.field("profiles");
-      if (!profiles.present()) {
-        profiles.fail("does not define the selected profile");
-      }
-
-      const auto selected = profiles.entry(profile);
-      if (!selected.present()) {
-        selected.fail("is not defined");
-      }
-
-      apply(selected.as("config"), result);
+      apply(root.field("profiles").entry(profile).as("config"), result);
     }
 
     result.theme = projectTheme(result.themes.base);
@@ -576,71 +585,51 @@ private:
   using Value = runtime::lua::Value;
 
   inline static void apply(const Value &root, Configuration &configuration) {
-    runtime::config::ThemeValidator::selection(root);
     ThemeReader::apply(root, configuration.themes);
     client(root.field("client"), configuration);
+    gui(runtime::config::GuiReader::read(root.field("gui")), configuration);
+  }
 
-    const auto gui = root.field("gui");
-    runtime::config::GuiValidator::validate(gui);
-    if (!gui.present()) {
-      return;
+  template <typename To, typename From>
+  inline static To mapped(From value) noexcept {
+    return static_cast<To>(std::to_underlying(value));
+  }
+
+  inline static void gui(const runtime::config::GuiSettings &gui, Configuration &configuration) {
+    using Settings = runtime::config::GuiSettings;
+    font(gui.font, configuration.font);
+    const Settings::Cursor &cursor = gui.cursor;
+    if (cursor.style) {
+      configuration.cursor = cursorShape(*cursor.style);
     }
 
-    font(gui.field("font"), configuration.font);
-    const auto cursor = gui.field("cursor");
-    if (cursor.present()) {
-      const auto style = cursor.field("style");
-      if (style.present()) {
-        configuration.cursor = cursorShape(style.string());
-      }
-
-      configuration.cursor_blink = cursor.field("blink").boolean(configuration.cursor_blink);
-      configuration.blink_interval = std::chrono::milliseconds{cursor.field("blink_interval_ms").boundedInteger(configuration.blink_interval.count(), Configuration::minimum_blink_interval.count(), Configuration::maximum_blink_interval.count())};
+    configuration.cursor_blink = cursor.blink.value_or(configuration.cursor_blink);
+    if (cursor.blink_interval_ms) {
+      configuration.blink_interval = std::chrono::milliseconds{*cursor.blink_interval_ms};
     }
 
-    const auto scroll = gui.field("scroll");
-    if (scroll.present()) {
-      auto &settings = configuration.scroll;
-      settings.smooth = scroll.field("smooth").boolean(settings.smooth);
-      settings.wheel_ms = static_cast<std::uint16_t>(scroll.field("wheel_ms").boundedInteger(settings.wheel_ms, 0, ScrollConfiguration::maximum_wheel_ms));
-      settings.overscan = static_cast<float>(scroll.field("overscan").boundedNumber(settings.overscan, 0, ScrollConfiguration::maximum_overscan));
-      settings.sticky_headers = scroll.field("sticky_headers").boolean(settings.sticky_headers);
-    }
+    auto &scroll = configuration.scroll;
+    scroll.smooth = gui.scroll.smooth.value_or(scroll.smooth);
+    scroll.wheel_ms = gui.scroll.wheel_ms.value_or(scroll.wheel_ms);
+    scroll.overscan = static_cast<float>(gui.scroll.overscan.value_or(scroll.overscan));
+    scroll.sticky_headers = gui.scroll.sticky_headers.value_or(scroll.sticky_headers);
 
-    window(gui.field("window"), configuration);
-    const auto opacity = gui.field("opacity");
-    if (opacity.present()) {
-      for (std::size_t index = 0; index < BackgroundOpacity::names.size(); ++index) {
-        const auto value = opacity.field(BackgroundOpacity::names[index]);
-        if (value.present()) {
-          configuration.opacity.overrides[index] = static_cast<float>(value.boundedNumber(1, 0, 1));
-        }
-      }
-    }
-    const auto chrome = gui.field("chrome");
-    if (chrome.present()) {
-      configuration.chrome_scale = static_cast<float>(chrome.field("scale").boundedNumber(configuration.chrome_scale, Configuration::minimum_chrome_scale, Configuration::maximum_chrome_scale));
-    }
-
-    const auto sidebar = gui.field("sidebar");
-    if (sidebar.present()) {
-      const auto width = sidebar.field("width");
-      if (width.is(LUA_TSTRING)) {
-        if (width.string() != "auto") {
-          width.fail("must be a number or \"auto\"");
-        }
-
-        configuration.sidebar_width_auto = true;
-      } else if (width.present()) {
-        configuration.sidebar_width = static_cast<float>(width.boundedNumber(configuration.sidebar_width, Configuration::minimum_sidebar_width, Configuration::maximum_sidebar_width));
-        configuration.sidebar_width_auto = false;
+    window(gui.window, configuration);
+    for (std::size_t index = 0; index < gui.opacity.size(); ++index) {
+      if (gui.opacity[index]) {
+        configuration.opacity.overrides[index] = static_cast<float>(*gui.opacity[index]);
       }
     }
 
-    const auto fps = gui.field("max_fps");
-    if (fps.present()) {
-      configuration.max_fps = static_cast<std::uint16_t>(fps.boundedInteger(configuration.max_fps, Configuration::minimum_fps, Configuration::maximum_fps));
+    configuration.chrome_scale = static_cast<float>(gui.chrome_scale.value_or(configuration.chrome_scale));
+    if (gui.sidebar.automatic) {
+      configuration.sidebar_width_auto = true;
+    } else if (gui.sidebar.width) {
+      configuration.sidebar_width = static_cast<float>(*gui.sidebar.width);
+      configuration.sidebar_width_auto = false;
     }
+
+    configuration.max_fps = gui.max_fps.value_or(configuration.max_fps);
   }
 
   inline static void client(const Value &table, Configuration &configuration) {
@@ -671,9 +660,7 @@ private:
     sound(table.field("sound"), configuration.sound);
     const auto notifications = table.field("notifications");
     if (notifications.present()) {
-      notifications.onlyFields({"delivery"});
       const auto delivery = notifications.field("delivery");
-      runtime::config::optionalChoice(delivery, {"telar", "system", "terminal"});
       if (delivery.present() && delivery.string() != "terminal") {
         configuration.notification_delivery = delivery.string() == "system" ? NotificationDelivery::system : NotificationDelivery::telar;
       }
@@ -685,45 +672,30 @@ private:
       return;
     }
 
-    table.onlyFields({"enabled", "ready", "needs_input"});
     policy.enabled = table.field("enabled").boolean(policy.enabled);
     policy.ready = table.field("ready").boolean(policy.ready);
     policy.needs_input = table.field("needs_input").boolean(policy.needs_input);
   }
 
   inline static void prompt(const Value &table, PromptConfiguration &prompt) {
-    if (!table.present()) {
-      return;
+    std::vector<PromptBinding> bindings;
+    const auto settings = runtime::config::PromptReader::read(table, [&](const runtime::config::PromptBindingSetting &binding) {
+      bindings.push_back({.key = static_cast<std::uint8_t>(binding.chord.key), .character = binding.chord.character, .modifiers = binding.chord.modifiers, .action = binding.action, .normal = binding.normal});
+    });
+    if (settings.bindings) {
+      prompt.bindings = std::move(bindings);
     }
-
-    const auto choose = [&]<typename Choice>(std::string_view name, std::initializer_list<std::string_view> names, Choice &destination) {
-      const auto value = table.field(name.data());
-      runtime::config::optionalChoice(value, names);
-      if (value.present()) {
-        destination = static_cast<Choice>(std::ranges::find(names, value.string()) - names.begin());
-      }
-    };
-    table.onlyFields({"mode", "motion", "ghost", "keymap", "max_lines", "bindings"});
-    const auto bindings = table.field("bindings");
-    if (bindings.present()) {
-      prompt.bindings.clear();
-      for (std::size_t index = 0; index < bindings.listLength() && index < 256; ++index) {
-        const auto entry = bindings.element(static_cast<lua_Integer>(index) + 1);
-        const auto chord = runtime::config::KeyChordValidator::parse(entry.field("keys"));
-        const auto action = std::ranges::find(runtime::config::prompt_action_names, entry.field("action").string());
-        if (action == runtime::config::prompt_action_names.end()) {
-          entry.field("action").fail("names an unknown prompt action");
-        }
-        const auto mode = entry.field("mode");
-        runtime::config::optionalChoice(mode, {"insert", "normal"});
-        prompt.bindings.push_back({.key = static_cast<std::uint8_t>(chord.key), .character = chord.character, .modifiers = chord.modifiers, .action = static_cast<std::uint8_t>(action - runtime::config::prompt_action_names.begin()), .normal = mode.present() && mode.string() == "normal"});
-      }
+    if (settings.mode) {
+      prompt.mode = mapped<PromptMode>(*settings.mode);
     }
-    choose("mode", {"classic", "telar"}, prompt.mode);
-    choose("motion", {"spring", "ease", "none"}, prompt.motion);
-    choose("keymap", {"emacs", "vim"}, prompt.keymap);
-    prompt.ghost = table.field("ghost").boolean(prompt.ghost);
-    prompt.max_lines = static_cast<std::uint8_t>(table.field("max_lines").boundedInteger(prompt.max_lines, 1, PromptConfiguration::maximum_max_lines));
+    if (settings.motion) {
+      prompt.motion = mapped<PromptMotion>(*settings.motion);
+    }
+    if (settings.keymap) {
+      prompt.keymap = mapped<PromptKeymap>(*settings.keymap);
+    }
+    prompt.ghost = settings.ghost.value_or(prompt.ghost);
+    prompt.max_lines = settings.max_lines.value_or(prompt.max_lines);
   }
 
   inline static void history(const Value &table, HistoryConfiguration &history) {
@@ -731,12 +703,9 @@ private:
       return;
     }
 
-    table.onlyFields({"show_agent_commands", "enter", "match"});
     history.show_agent_commands = table.field("show_agent_commands").boolean(history.show_agent_commands);
     const auto enter = table.field("enter");
     const auto match = table.field("match");
-    runtime::config::optionalChoice(enter, {"paste", "run"});
-    runtime::config::optionalChoice(match, {"fuzzy", "fts"});
     if (enter.present()) {
       history.enter_runs = enter.string() == "run";
     }
@@ -746,79 +715,44 @@ private:
     }
   }
 
-  inline static void font(const Value &table, FontConfiguration &font) {
-    if (!table.present()) {
-      return;
+  inline static void font(const runtime::config::GuiSettings::Font &settings, FontConfiguration &font) {
+    if (settings.family) {
+      font.family.assign(*settings.family);
     }
 
-    const auto family = table.field("family");
-    const auto style = table.field("style");
-    if (family.present()) {
-      font.family.assign(family.string());
+    if (settings.style) {
+      font.style.assign(*settings.style);
     }
 
-    if (style.present()) {
-      font.style.assign(style.string());
-    }
-
-    font.size = static_cast<float>(table.field("size").boundedNumber(font.size, FontConfiguration::minimum_size, FontConfiguration::maximum_size));
-    font.line_height = static_cast<float>(table.field("line_height").boundedNumber(font.line_height, FontConfiguration::minimum_line_height, FontConfiguration::maximum_line_height));
-    font.letter_spacing = static_cast<float>(table.field("letter_spacing").boundedNumber(font.letter_spacing, FontConfiguration::minimum_letter_spacing, FontConfiguration::maximum_letter_spacing));
-    font.thicken = table.field("thicken").boolean(font.thicken);
-    font.thicken_strength = static_cast<std::uint8_t>(table.field("thicken_strength").boundedInteger(font.thicken_strength, 0, FontConfiguration::maximum_thicken_strength));
-    const auto hinting = table.field("hinting");
-    if (hinting.present()) {
-      const auto name = hinting.string();
-      const auto *const found = std::ranges::find(font_hinting_names, name);
-      if (found == font_hinting_names.end()) {
-        hinting.fail("must be native, light or full");
-      }
-
-      font.hinting = static_cast<FontHinting>(found - font_hinting_names.begin());
+    font.size = static_cast<float>(settings.size.value_or(font.size));
+    font.line_height = static_cast<float>(settings.line_height.value_or(font.line_height));
+    font.letter_spacing = static_cast<float>(settings.letter_spacing.value_or(font.letter_spacing));
+    font.thicken = settings.thicken.value_or(font.thicken);
+    font.thicken_strength = settings.thicken_strength.value_or(font.thicken_strength);
+    if (settings.hinting) {
+      font.hinting = mapped<FontHinting>(*settings.hinting);
     }
   }
 
-  inline static void window(const Value &table, Configuration &configuration) {
-    if (!table.present()) {
-      return;
+  inline static void window(const runtime::config::GuiSettings::Window &settings, Configuration &configuration) {
+    configuration.background_opacity = static_cast<float>(settings.background_opacity.value_or(configuration.background_opacity));
+    if (settings.titlebar) {
+      configuration.titlebar = settings.titlebar;
     }
 
-    configuration.background_opacity = static_cast<float>(table.field("background_opacity").boundedNumber(configuration.background_opacity, 0, 1));
-    const auto titlebar = table.field("titlebar");
-    if (titlebar.present()) {
-      configuration.titlebar = titlebar.boolean(true);
+    if (settings.blur) {
+      configuration.background_blur = *settings.blur ? Configuration::default_background_blur : 0;
+    } else if (settings.blur_radius) {
+      configuration.background_blur = *settings.blur_radius;
     }
 
-    const auto blur = table.field("background_blur");
-    if (blur.present()) {
-      if (blur.is(LUA_TBOOLEAN)) {
-        configuration.background_blur = blur.boolean(false) ? Configuration::default_background_blur : 0;
-      } else {
-        configuration.background_blur = static_cast<std::uint8_t>(blur.boundedInteger(configuration.background_blur, 0, Configuration::maximum_background_blur));
-      }
-    }
-
-    const auto padding = table.field("padding");
-    if (padding.present()) {
-      configuration.padding_x = static_cast<float>(padding.field("x").boundedNumber(configuration.padding_x, 0, Configuration::maximum_padding));
-      configuration.padding_y = static_cast<float>(padding.field("y").boundedNumber(configuration.padding_y, 0, Configuration::maximum_padding));
-    }
+    configuration.padding_x = static_cast<float>(settings.padding_x.value_or(configuration.padding_x));
+    configuration.padding_y = static_cast<float>(settings.padding_y.value_or(configuration.padding_y));
   }
 
-  inline static CursorShape cursorShape(std::string_view name) noexcept {
-    if (name == "bar") {
-      return CursorShape::bar;
-    }
-
-    if (name == "underline") {
-      return CursorShape::underline;
-    }
-
-    if (name == "hollow") {
-      return CursorShape::hollow;
-    }
-
-    return CursorShape::block;
+  // CursorShape leads with the terminal's default, which a configuration cannot choose.
+  inline static CursorShape cursorShape(runtime::config::CursorStyle style) noexcept {
+    return static_cast<CursorShape>(std::to_underlying(style) + 1);
   }
 };
 

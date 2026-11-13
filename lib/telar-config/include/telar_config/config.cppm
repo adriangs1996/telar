@@ -160,6 +160,41 @@ inline void optionalUtf8Text(const lua::Value &value, std::size_t maximum_bytes)
   }
 }
 
+template <typename Number>
+struct Bounds {
+  Number minimum;
+  Number maximum;
+};
+
+// The value of `name` in `names` as an enum whose values follow the table.
+template <typename Enum, std::size_t Count>
+[[nodiscard]] inline std::optional<Enum> optionalChoice(const lua::Value &value, const std::array<std::string_view, Count> &names) {
+  if (!value.present()) {
+    return std::nullopt;
+  }
+
+  const auto found = std::ranges::find(names, value.string());
+  if (found == names.end()) {
+    value.fail("is not a supported value");
+  }
+
+  return static_cast<Enum>(found - names.begin());
+}
+
+[[nodiscard]] inline std::optional<double> optionalNumber(const lua::Value &value, Bounds<double> bounds) {
+  return value.present() ? std::optional{value.boundedNumber(bounds.minimum, bounds.minimum, bounds.maximum)} : std::nullopt;
+}
+
+template <typename Integer>
+[[nodiscard]] inline std::optional<Integer> optionalWhole(const lua::Value &value, Bounds<double> bounds) {
+  optionalWholeNumber(value, bounds.minimum, bounds.maximum);
+  return value.present() ? std::optional{static_cast<Integer>(value.boundedNumber(bounds.minimum, bounds.minimum, bounds.maximum))} : std::nullopt;
+}
+
+[[nodiscard]] inline std::optional<bool> optionalBoolean(const lua::Value &value) {
+  return value.present() ? std::optional{value.boolean(false)} : std::nullopt;
+}
+
 }
 }
 
@@ -2726,16 +2761,119 @@ using RetainedClientValidationState = BasicClientValidationState<RetainedCommand
 }
 }
 
-// Interface: telar_config/client_validator.cppm
+// Interface: telar_config/prompt_reader.cppm
 export {
 namespace telar::runtime::config {
 
-// Interface pieces a configuration may draw with Lua, under `client.components`.
 // The actions `client.prompt.bindings` may name, in the order of the GUI editor's Action.
 inline constexpr std::array<std::string_view, 27> prompt_action_names{
     "submit", "newline", "cancel", "complete", "accept_suggestion", "history_previous", "history_next", "history_search", "line_start", "line_end", "char_left", "char_right", "word_left", "word_right",
     "delete_char", "backspace", "kill_line", "kill_to_start", "kill_word", "kill_word_back", "yank", "undo", "redo", "transpose", "clear_screen", "normal_mode", "insert_mode"};
 
+enum class PromptMode : std::uint8_t {
+  classic,
+  telar,
+};
+
+enum class PromptSkin : std::uint8_t {
+  halo,
+  glass,
+  ink,
+};
+
+enum class PromptMotion : std::uint8_t {
+  spring,
+  ease,
+  none,
+};
+
+enum class PromptKeymap : std::uint8_t {
+  emacs,
+  vim,
+};
+
+inline constexpr std::array<std::string_view, 2> prompt_mode_names{"classic", "telar"};
+inline constexpr std::array<std::string_view, 3> prompt_skin_names{"halo", "glass", "ink"};
+inline constexpr std::array<std::string_view, 3> prompt_motion_names{"spring", "ease", "none"};
+inline constexpr std::array<std::string_view, 2> prompt_keymap_names{"emacs", "vim"};
+inline constexpr std::array<std::string_view, 2> prompt_binding_mode_names{"insert", "normal"};
+
+struct PromptBounds {
+  static constexpr Bounds<double> max_lines{1, 64};
+  static constexpr std::size_t bindings = 256;
+};
+
+// A key `client.prompt.bindings` binds to one of prompt_action_names; `normal` binds it in
+// vim's normal mode instead of typing.
+struct PromptBindingSetting {
+  KeyChord chord;
+  std::uint8_t action = 0;
+  bool normal = false;
+};
+
+// The `client.prompt` table as read: each field the configuration sets, within its bounds.
+struct PromptSettings {
+  std::optional<PromptMode> mode;
+  std::optional<PromptSkin> skin;
+  std::optional<PromptMotion> motion;
+  std::optional<PromptKeymap> keymap;
+  std::optional<bool> ghost;
+  std::optional<std::uint8_t> max_lines;
+  // Whether it lists bindings, which replace the defaults even when empty.
+  bool bindings = false;
+};
+
+class PromptReader {
+public:
+  // Hands each binding to `binding` in order.
+  template <typename Binding>
+  [[nodiscard]] inline static PromptSettings read(const lua::Value &table, Binding &&binding) {
+    PromptSettings settings;
+    if (!table.present()) {
+      return settings;
+    }
+
+    table.onlyFields({"mode", "skin", "motion", "ghost", "keymap", "max_lines", "bindings"});
+    settings.mode = optionalChoice<PromptMode>(table.field("mode"), prompt_mode_names);
+    const auto bindings = table.field("bindings");
+    if (bindings.present()) {
+      settings.bindings = true;
+      const auto count = bindings.listLength();
+      if (count > PromptBounds::bindings) {
+        bindings.fail("has more than 256 bindings");
+      }
+      for (std::size_t index = 0; index < count; ++index) {
+        const auto entry = bindings.element(static_cast<lua_Integer>(index) + 1);
+        entry.onlyFields({"keys", "action", "mode"});
+        const auto chord = KeyChordValidator::parse(entry.field("keys"));
+        const auto action = entry.field("action");
+        const auto found = std::ranges::find(prompt_action_names, action.string());
+        if (found == prompt_action_names.end()) {
+          action.fail("names an unknown prompt action");
+        }
+        const auto mode = optionalChoice<std::uint8_t>(entry.field("mode"), prompt_binding_mode_names);
+        binding(PromptBindingSetting{.chord = chord, .action = static_cast<std::uint8_t>(found - prompt_action_names.begin()), .normal = mode == 1});
+      }
+    }
+    settings.skin = optionalChoice<PromptSkin>(table.field("skin"), prompt_skin_names);
+    settings.motion = optionalChoice<PromptMotion>(table.field("motion"), prompt_motion_names);
+    settings.keymap = optionalChoice<PromptKeymap>(table.field("keymap"), prompt_keymap_names);
+    settings.ghost = optionalBoolean(table.field("ghost"));
+    if (const auto lines = table.field("max_lines"); lines.present()) {
+      settings.max_lines = static_cast<std::uint8_t>(lines.boundedInteger(PromptBounds::max_lines.minimum, PromptBounds::max_lines.minimum, PromptBounds::max_lines.maximum));
+    }
+    return settings;
+  }
+};
+
+}
+}
+
+// Interface: telar_config/client_validator.cppm
+export {
+namespace telar::runtime::config {
+
+// Interface pieces a configuration may draw with Lua, under `client.components`.
 inline constexpr std::array<std::string_view, 19> component_slots{
     "top_bar", "bottom_bar", "tab", "pane_header", "agent_card",
     "tab_cards", "tab_title", "tab_path", "tab_activity",
@@ -2835,34 +2973,7 @@ private:
   }
 
   inline static void prompt(const lua::Value &table) {
-    if (!table.present()) {
-      return;
-    }
-
-    table.onlyFields({"mode", "skin", "motion", "ghost", "keymap", "max_lines", "bindings"});
-    optionalChoice(table.field("mode"), {"classic", "telar"});
-    const auto bindings = table.field("bindings");
-    if (bindings.present()) {
-      const auto count = bindings.listLength();
-      if (count > 256) {
-        bindings.fail("has more than 256 bindings");
-      }
-      for (std::size_t index = 0; index < count; ++index) {
-        const auto binding = bindings.element(static_cast<lua_Integer>(index) + 1);
-        binding.onlyFields({"keys", "action", "mode"});
-        KeyChordValidator::parse(binding.field("keys"));
-        const auto action = binding.field("action");
-        if (std::ranges::find(prompt_action_names, action.string()) == prompt_action_names.end()) {
-          action.fail("names an unknown prompt action");
-        }
-        optionalChoice(binding.field("mode"), {"insert", "normal"});
-      }
-    }
-    optionalChoice(table.field("skin"), {"halo", "glass", "ink"});
-    optionalChoice(table.field("motion"), {"spring", "ease", "none"});
-    optionalChoice(table.field("keymap"), {"emacs", "vim"});
-    table.field("ghost").boolean(true);
-    table.field("max_lines").boundedInteger(12, 1, 64);
+    static_cast<void>(PromptReader::read(table, [](const PromptBindingSetting &) {}));
   }
 
   inline static void history(const lua::Value &table) {
@@ -2937,107 +3048,203 @@ inline void readControlPolicy(const lua::Value &table, control::Policy &policy) 
 }
 }
 
-// Interface: telar_config/gui_validator.cppm
+// Interface: telar_config/gui_reader.cppm
 export {
 namespace telar::runtime::config {
 
-class GuiValidator {
+// What `gui` admits; the GUI's own limits follow these.
+struct GuiBounds {
+  static constexpr std::size_t font_name_bytes = 256;
+  static constexpr Bounds<double> font_size{6, 96};
+  static constexpr Bounds<double> line_height{0.75, 3};
+  static constexpr Bounds<double> letter_spacing{-5, 20};
+  static constexpr Bounds<double> thicken_strength{0, 255};
+  static constexpr Bounds<double> blink_interval_ms{100, 5000};
+  static constexpr Bounds<double> wheel_ms{0, 400};
+  static constexpr Bounds<double> overscan{0, 4};
+  static constexpr Bounds<double> opacity{0, 1};
+  static constexpr Bounds<double> background_blur{0, 255};
+  static constexpr Bounds<double> padding{0, 256};
+  static constexpr Bounds<double> chrome_scale{0.5, 2};
+  static constexpr Bounds<double> sidebar_width{220, 800};
+  static constexpr Bounds<double> max_fps{30, 240};
+};
+
+enum class CursorStyle : std::uint8_t {
+  block,
+  bar,
+  underline,
+  hollow,
+};
+
+enum class FontHinting : std::uint8_t {
+  native,
+  light,
+  full,
+};
+
+inline constexpr std::array<std::string_view, 4> cursor_style_names{"block", "bar", "underline", "hollow"};
+inline constexpr std::array<std::string_view, 3> font_hinting_names{"native", "light", "full"};
+inline constexpr std::array<std::string_view, 5> surface_names{"sidebar", "topbar", "bottombar", "workspace", "pane"};
+
+// The `gui` table as read: each field the configuration sets, already within its bounds.
+// Strings view the Lua state the table belongs to.
+struct GuiSettings {
+  struct Font {
+    std::optional<std::string_view> family;
+    std::optional<std::string_view> style;
+    std::optional<double> size;
+    std::optional<double> line_height;
+    std::optional<double> letter_spacing;
+    std::optional<bool> thicken;
+    std::optional<std::uint8_t> thicken_strength;
+    std::optional<FontHinting> hinting;
+  };
+
+  struct Cursor {
+    std::optional<CursorStyle> style;
+    std::optional<bool> blink;
+    std::optional<std::uint16_t> blink_interval_ms;
+  };
+
+  struct Scroll {
+    std::optional<bool> smooth;
+    std::optional<std::uint16_t> wheel_ms;
+    std::optional<double> overscan;
+    std::optional<bool> sticky_headers;
+  };
+
+  struct Window {
+    std::optional<double> background_opacity;
+    std::optional<bool> titlebar;
+    // `background_blur = true` or false, or a radius.
+    std::optional<bool> blur;
+    std::optional<std::uint8_t> blur_radius;
+    std::optional<double> padding_x;
+    std::optional<double> padding_y;
+  };
+
+  struct Sidebar {
+    std::optional<double> width;
+    bool automatic = false;
+  };
+
+  Font font;
+  Cursor cursor;
+  Scroll scroll;
+  Window window;
+  Sidebar sidebar;
+  std::optional<double> chrome_scale;
+  std::optional<std::uint16_t> max_fps;
+  std::array<std::optional<double>, surface_names.size()> opacity{};
+};
+
+class GuiReader {
 public:
-  inline static void validate(const lua::Value &gui) {
+  [[nodiscard]] inline static GuiSettings read(const lua::Value &gui) {
+    GuiSettings settings;
     if (!gui.present()) {
-      return;
+      return settings;
     }
 
     gui.onlyFields({"font", "cursor", "window", "chrome", "sidebar", "max_fps", "opacity", "scroll"});
-    font(gui.field("font"));
-    cursor(gui.field("cursor"));
-    scroll(gui.field("scroll"));
-    window(gui.field("window"));
-    chrome(gui.field("chrome"));
-    sidebar(gui.field("sidebar"));
-    opacity(gui.field("opacity"));
-    optionalWholeNumber(gui.field("max_fps"), 30, 240);
+    font(gui.field("font"), settings.font);
+    cursor(gui.field("cursor"), settings.cursor);
+    scroll(gui.field("scroll"), settings.scroll);
+    window(gui.field("window"), settings.window);
+    chrome(gui.field("chrome"), settings);
+    sidebar(gui.field("sidebar"), settings.sidebar);
+    opacity(gui.field("opacity"), settings.opacity);
+    settings.max_fps = optionalWhole<std::uint16_t>(gui.field("max_fps"), GuiBounds::max_fps);
+    return settings;
   }
 
 private:
-  inline static void font(const lua::Value &table) {
+  inline static void font(const lua::Value &table, GuiSettings::Font &font) {
     if (!table.present()) {
       return;
     }
 
     table.onlyFields({"family", "style", "size", "line_height", "letter_spacing", "thicken", "thicken_strength", "hinting"});
-    optionalUtf8Text(table.field("family"), 256);
-    optionalUtf8Text(table.field("style"), 256);
-    table.field("size").boundedNumber(6, 6, 96);
-    table.field("line_height").boundedNumber(1, 0.75, 3);
-    table.field("letter_spacing").boundedNumber(0, -5, 20);
-    table.field("thicken").boolean(true);
-    optionalWholeNumber(table.field("thicken_strength"), 0, 255);
-    optionalChoice(table.field("hinting"), {"native", "light", "full"});
+    font.family = text(table.field("family"));
+    font.style = text(table.field("style"));
+    font.size = optionalNumber(table.field("size"), GuiBounds::font_size);
+    font.line_height = optionalNumber(table.field("line_height"), GuiBounds::line_height);
+    font.letter_spacing = optionalNumber(table.field("letter_spacing"), GuiBounds::letter_spacing);
+    font.thicken = optionalBoolean(table.field("thicken"));
+    font.thicken_strength = optionalWhole<std::uint8_t>(table.field("thicken_strength"), GuiBounds::thicken_strength);
+    font.hinting = optionalChoice<FontHinting>(table.field("hinting"), font_hinting_names);
   }
 
-  inline static void cursor(const lua::Value &table) {
+  inline static std::optional<std::string_view> text(const lua::Value &value) {
+    optionalUtf8Text(value, GuiBounds::font_name_bytes);
+    return value.present() ? std::optional{value.string()} : std::nullopt;
+  }
+
+  inline static void cursor(const lua::Value &table, GuiSettings::Cursor &cursor) {
     if (!table.present()) {
       return;
     }
 
     table.onlyFields({"style", "blink", "blink_interval_ms"});
-    optionalChoice(table.field("style"), {"block", "bar", "underline", "hollow"});
-    table.field("blink").boolean(false);
-    optionalWholeNumber(table.field("blink_interval_ms"), 100, 5000);
+    cursor.style = optionalChoice<CursorStyle>(table.field("style"), cursor_style_names);
+    cursor.blink = optionalBoolean(table.field("blink"));
+    cursor.blink_interval_ms = optionalWhole<std::uint16_t>(table.field("blink_interval_ms"), GuiBounds::blink_interval_ms);
   }
 
-  inline static void scroll(const lua::Value &table) {
+  inline static void scroll(const lua::Value &table, GuiSettings::Scroll &scroll) {
     if (!table.present()) {
       return;
     }
 
     table.onlyFields({"smooth", "wheel_ms", "overscan", "sticky_headers"});
-    table.field("smooth").boolean(true);
-    optionalWholeNumber(table.field("wheel_ms"), 0, 400);
-    table.field("overscan").boundedNumber(1, 0, 4);
-    table.field("sticky_headers").boolean(true);
+    scroll.smooth = optionalBoolean(table.field("smooth"));
+    scroll.wheel_ms = optionalWhole<std::uint16_t>(table.field("wheel_ms"), GuiBounds::wheel_ms);
+    scroll.overscan = optionalNumber(table.field("overscan"), GuiBounds::overscan);
+    scroll.sticky_headers = optionalBoolean(table.field("sticky_headers"));
   }
 
-  inline static void window(const lua::Value &table) {
+  inline static void window(const lua::Value &table, GuiSettings::Window &window) {
     if (!table.present()) {
       return;
     }
 
     table.onlyFields({"background_opacity", "background_blur", "titlebar", "padding"});
-    table.field("background_opacity").boundedNumber(1, 0, 1);
-    table.field("titlebar").boolean(true);
+    window.background_opacity = optionalNumber(table.field("background_opacity"), GuiBounds::opacity);
+    window.titlebar = optionalBoolean(table.field("titlebar"));
     const auto blur = table.field("background_blur");
-    if (!blur.is(LUA_TBOOLEAN)) {
-      optionalWholeNumber(blur, 0, 255);
+    if (blur.is(LUA_TBOOLEAN)) {
+      window.blur = blur.boolean(false);
+    } else {
+      window.blur_radius = optionalWhole<std::uint8_t>(blur, GuiBounds::background_blur);
     }
 
     const auto padding = table.field("padding");
     if (padding.present()) {
       padding.onlyFields({"x", "y"});
-      padding.field("x").boundedNumber(0, 0, 256);
-      padding.field("y").boundedNumber(0, 0, 256);
+      window.padding_x = optionalNumber(padding.field("x"), GuiBounds::padding);
+      window.padding_y = optionalNumber(padding.field("y"), GuiBounds::padding);
     }
   }
 
-  inline static void chrome(const lua::Value &table) {
+  inline static void chrome(const lua::Value &table, GuiSettings &settings) {
     if (table.present()) {
       table.onlyFields({"scale"});
-      table.field("scale").boundedNumber(1, 0.5, 2);
+      settings.chrome_scale = optionalNumber(table.field("scale"), GuiBounds::chrome_scale);
     }
   }
 
-  inline static void opacity(const lua::Value &table) {
+  inline static void opacity(const lua::Value &table, std::array<std::optional<double>, surface_names.size()> &opacity) {
     if (!table.present()) {
       return;
     }
-    table.onlyFields({"sidebar", "topbar", "bottombar", "workspace", "pane"});
-    for (const auto field : {"sidebar", "topbar", "bottombar", "workspace", "pane"}) {
-      table.field(field).boundedNumber(1, 0, 1);
+    table.onlyFields(surface_names);
+    for (std::size_t index = 0; index < surface_names.size(); ++index) {
+      opacity[index] = optionalNumber(table.field(surface_names[index].data()), GuiBounds::opacity);
     }
   }
 
-  inline static void sidebar(const lua::Value &table) {
+  inline static void sidebar(const lua::Value &table, GuiSettings::Sidebar &sidebar) {
     if (table.present()) {
       table.onlyFields({"width"});
       const auto width = table.field("width");
@@ -3045,8 +3252,9 @@ private:
         if (width.string() != "auto") {
           width.fail("must be a number or \"auto\"");
         }
+        sidebar.automatic = true;
       } else {
-        width.boundedNumber(284, 220, 800);
+        sidebar.width = optionalNumber(width, GuiBounds::sidebar_width);
       }
     }
   }
@@ -3830,7 +4038,7 @@ public:
     const auto base_client = root.field("client");
     ThemeValidator::selection(root);
     ClientValidator::validate(base_client, values_.limits, client_state);
-    GuiValidator::validate(root.field("gui"));
+    static_cast<void>(GuiReader::read(root.field("gui")));
     RuntimeReader{values_}.read(root.field("runtime"));
     PluginReader::read(root.field("plugins"), values_.plugins, values_.limits);
     const auto profiles = root.field("profiles");
@@ -3879,7 +4087,7 @@ private:
     profile.onlyFields({"theme", "client", "gui", "runtime", "plugins"});
     ThemeValidator::selection(profile);
     ClientValidator::validate(profile.field("client"), values.limits, client_state, &base_client);
-    GuiValidator::validate(profile.field("gui"));
+    static_cast<void>(GuiReader::read(profile.field("gui")));
     RuntimeReader{values}.read(profile.field("runtime"));
     PluginReader::read(profile.field("plugins"), values.plugins, values.limits);
   }

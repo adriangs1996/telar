@@ -304,7 +304,8 @@ inline QVariantMap fontSettings(const FontConfiguration &font) {
   settings.insert(QStringLiteral("letter_spacing"), font.letter_spacing);
   settings.insert(QStringLiteral("thicken"), font.thicken);
   settings.insert(QStringLiteral("thicken_strength"), font.thicken_strength);
-  settings.insert(QStringLiteral("hinting"), QString::fromLatin1(font_hinting_names.at(std::to_underlying(font.hinting))));
+  const auto hinting = telar::runtime::config::font_hinting_names.at(std::to_underlying(font.hinting));
+  settings.insert(QStringLiteral("hinting"), QString::fromLatin1(hinting.data(), static_cast<qsizetype>(hinting.size())));
 
   return settings;
 }
