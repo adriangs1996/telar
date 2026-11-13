@@ -164,12 +164,6 @@ namespace telar {
     }
   };
 
-  template <>
-  struct MessageSchema<RequestRuntimeState>
-      : Schema<Direction::client, ClientTag::request_runtime_state, Field<&RequestRuntimeState::client_identity, u64, "client_identity">, Field<&RequestRuntimeState::interactive, BoolByte, "interactive">> {
-    static constexpr const char* name = "RequestRuntimeState";
-  };
-
   struct SystemMetrics {
     std::uint64_t revision;
     std::uint8_t cpu_percent;
@@ -188,12 +182,6 @@ namespace telar {
         throw std::runtime_error{"Invalid battery metrics"};
       }
     }
-  };
-
-  template <>
-  struct MessageSchema<SystemMetrics>
-      : Schema<Direction::server, ServerTag::system_metrics, Field<&SystemMetrics::revision, u64, "revision">, Field<&SystemMetrics::cpu_percent, u8, "cpu_percent">, Field<&SystemMetrics::memory_used_decigib, u16, "memory_used_decigib">, Field<&SystemMetrics::has_battery, BoolByte, "has_battery">, Field<&SystemMetrics::battery_percent, u8, "battery_percent">, Field<&SystemMetrics::cpu_count, u16, "cpu_count">, Field<&SystemMetrics::memory_total_decigib, u16, "memory_total_decigib">> {
-    static constexpr const char* name = "SystemMetrics";
   };
 
   template <>
@@ -1290,8 +1278,6 @@ namespace telar {
   static_assert(BodySchema<ImageKey>::payload_size == 12);
   static_assert(BodySchema<ImageDescription>::payload_size == 29);
   static_assert(BodySchema<GraphicsPlacement>::payload_size == 69);
-  static_assert(MessageSchema<RequestRuntimeState>::payload_size == 10);
-  static_assert(MessageSchema<SystemMetrics>::payload_size == 18);
 
   enum class TabMoveDirection : Byte {
     previous = 0,

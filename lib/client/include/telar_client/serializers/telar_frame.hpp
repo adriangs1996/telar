@@ -486,8 +486,4 @@ namespace telar {
 
   struct PaneFrame : FrameBody {};
 
-  template <>
-  struct MessageSchema<PaneFrame>
-      : MessageLayout<Direction::server, ServerTag::pane_frame, BodySchema<FrameBody>> {};
-
 } // namespace telar
