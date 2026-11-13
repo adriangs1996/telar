@@ -219,7 +219,7 @@ graph LR
 - **Hecho cuando:** compila sin cambiar importadores, cada schema vive en un único dominio y cada cabecera de dominio tiene un único módulo dueño.
 - **Resultado:** `b39218792`. 12 cabeceras en `telar_client/protocol/` con su módulo dueño `telar.wire.<dominio>`: `pane_io`, `content`, `layout`, `agents`, `history`, `graphics`, `worktrees`, `execution`, `clipboard`, `runtime`, `clients` y `editor`. Sin dominio de tráfico: su único mensaje, `ProxyStatus`, va a `runtime`. `clipboard.hpp` sustituye a `telar_clipboard_protocol.hpp` y `telar_runtime_clipboard.hpp`. 135 especializaciones, cada una en un solo dominio. Con BMI reducidos, cada dominio exporta `using telar::MessageSchema;` (y `clipboard`, `BodySchema`), o sus schemas no se ven importando solo ese dominio. Compilan los tres procesos y pasan los tests que decodifican mensajes.
 
-### [ ] P3.4a–e · Migrar los importadores de `telar.client.protocol`
+### [x] P3.4a–e · Migrar los importadores de `telar.client.protocol`
 - **Depende de:** P3.3
 - **Toca:** a = runtime, b = gui, c = cli, d = lib, e = tests. Las cinco van en paralelo.
 - **Qué hace:** cada unidad importa solo `telar.wire.vocabulary` y los dominios que usa. Las 33 unidades que no usan ningún nombre del módulo pierden el import. Cada fichero textual (adaptadores Qt en b, tests en e, cabeceras en su árbol) incluye solo las cabeceras de dominio que usa en lugar del paraguas, y lo mismo las tres cabeceras que llegan por fragmento global (`terminal_size.hpp`, `row_cache.hpp`, `clipboard.hpp`).
@@ -229,6 +229,7 @@ graph LR
 - **Resultado de b:** `7d229c3f3`. 52 unidades de módulo (9 pierden el import, 34 solo vocabulario, el resto vocabulario y dominios; `session` importa 11) y 84 ficheros textuales (adaptadores Qt, herramientas, `terminal_size.hpp` y `row_cache.hpp`) incluyen solo sus cabeceras de dominio. `gui.prompt.routing` reexporta `pane_io` y el vocabulario en vez del agregador. Al integrar, las cabeceras de dominio que Qt ya no alcanza pasan a la allowlist de la regla 5 (32 entradas).
 - **Resultado de c:** `f07f17cdd`. 25 unidades de la CLI: 18 importan vocabulario (13 también dominios; `worktree` 7), `command_limit` y `output` pasan a `telar.vocabulary`, 5 pierden el import y `main.cpp` deja de incluir el paraguas. CPU por unidad: `runtime_observer` +33 %, `worktree` y `project_setup` +8 %, `command_limit` −6 %. Pasan los 14 tests de la CLI.
 - **Resultado de d:** `d2f677bf3`. `telar.client` y `telar.plugins` importan solo `telar.wire.vocabulary`; `telar.config`, también `telar.wire.clients` (codifica un `ShowNotification`); `wire` entra en las capas de `plugins` y `config`. Primera bajada medida de la cascada (runtime, builds reales): tocar `pane_io.hpp` recompila 62 unidades en vez de 91, `clients.hpp` 85 en vez de 91; `telar_messages.hpp` sigue en 113. `config` +4 % de CPU.
+- **Resultado de e:** `fb0ed0838`. 122 unidades de test (18 pierden el import, 19 a `telar.vocabulary`, 32 solo vocabulario, 53 vocabulario y dominios), 12 fixtures que reexportaban el agregador reexportan solo sus módulos wire, y 67 ficheros textuales incluyen sus dominios o pierden el paraguas. CPU por unidad −8 % a +7 %, salvo `session_fixture` (+38 %, importa 8 módulos). Con a–e, ningún fichero fuera de `lib/client` importa el agregador ni incluye el paraguas.
 - **De P3.3:** las cabeceras de dominio incluyen el vocabulario como texto, así que un fichero que importe el vocabulario y varios dominios fusiona una copia del vocabulario por dominio (el coste medido en P3.2). `ClientCommand`, `PaneForeground`, `PaneFrame`, `RequestRuntimeState` y `SystemMetrics` los exportan tanto el vocabulario como el dominio de su schema. Medir con `ninja -n` y con el tiempo de compilación de alguna unidad que importe varios dominios antes de cerrar cada subtarea.
 
 ### [ ] P3.5 · Borrar el agregador `telar.client.protocol`
@@ -291,10 +292,11 @@ graph LR
 - **Hecho cuando:** `sound_playback` contiene solo la reproducción de sonido y la geometría vive en su propio módulo, por debajo de presentation.
 - **Resultado:** `01e026c63`. `telar.gui.layout.geometry` (`PaneBottomReservation`, `PaneLayout`, `WorkbenchGeometry`) y `telar.gui.layout.snapshots` (`TabLayoutPreset`, `LayoutToken`, `NavigationHistory`, `SavedLayouts`); el componente `gui/layout` va justo encima de `core` e `history` en `process_layers`. `sound_playback` se queda con `SoundRequestOutcome` y `SoundPlayback`. Al integrar con P3.4b, los tres módulos importan `telar.wire.layout`/`telar.wire.vocabulary` en vez del agregador. Compilan GUI, runtime y CLI sobre la rama integrada.
 
-### [ ] P3.12b · Sacar las notificaciones y los records de `gui.application.workspace_replica`
+### [x] P3.12b · Sacar las notificaciones y los records de `gui.application.workspace_replica`
 - **Depende de:** P1.2
 - **Toca:** `gui.application.workspace_replica`, `gui.presentation.notification_stack`, `gui.presentation.activity_order`.
 - **Cierra:** `presentation → application` (2).
+- **Resultado:** `telar.gui.model.records` y `telar.gui.model.replicas` en un componente nuevo `gui/model`, y `telar.gui.presentation.notification_center`; `workspace_replica` se queda con `Pane` y los records de entrada y reexporta los tres. `StatusAge` baja a `model.records` y `TabActivity::derive` recibe el `PaneProgressState` en vez del `Pane*`, porque `Pane` contiene un `GraphicsStore` de una capa superior.
 
 ### [ ] P3.12c · Sacar el payload de notificación y el estado de vista de `gui.application.host_effects`
 - **Depende de:** P1.2
@@ -383,10 +385,11 @@ Cada hub sigue el patrón agregador: `a` crea los módulos y deja el agregador, 
 - **Qué hace:** `json`, `json_error`, `json_fields` y `json_node` a `telar.base.text.json`. ASCII, `fields`, `hostname` y `schema_version` se quedan en su propio módulo.
 - **Resultado de a:** `450f8127a`. `telar.base.text.json` (`JsonError`, `JsonValue`, `JsonEscapes`, `escapeJson`, `appendJsonText`, `JsonFields`, `JsonKind`, `JsonNode`), con `import std` y dependiendo solo de `base.memory.allocators` y de un módulo nuevo, `telar.base.text.utf8` (dueño de `utf8.hpp`), sin el cual había un ciclo entre el JSON y `SchemaVersion`. `telar.base.text` hace `export import` de los dos. **En b, los importadores que solo usan UTF-8 pasan a `telar.base.text.utf8`.** El `[x]` del título marca solo `a`.
 
-### [ ] P4.4a/b/c · `telar.config` por proceso
+### [x] P4.4a/b/c · `telar.config` por proceso
 - **Depende de:** a: P1.2 · b: P4.4a · c: P4.4b
 - **Decidido:** módulos separados (`telar.config.core`, `.runtime`, `.client`, `.gui`), no particiones: una partición no se puede importar desde fuera de su módulo, así que no corta la cascada entre procesos. La tarea `a` actualiza la regla "un módulo por biblioteca" de `docs/build/cpp-modules.md`.
 - **Contexto:** 86 dependientes, 45 secciones, 4,3% de uso medio y 15 secciones que nadie usa desde fuera. Las 15 se borran o se pasan a internas en `a`.
+- **Resultado de a:** `7c0014718`. Cinco módulos y `telar.config` como agregador: `.core` (lo compartido: avisos de límites, restricciones, proveedores de agentes, `IntegrationProvider`, `LocalModules`, `GraphicsLimits`), `.runtime`, `.client`, `.gui` (secciones `gui` y `theme`) y `.snapshot` (`SnapshotReader`, que valida el config entero y usan los tres procesos; dentro de `.runtime` habría obligado a importar `.client` y `.gui`). `docs/build/cpp-modules.md` actualizado. El `[x]` del título marca solo `a`.
 
 ### [ ] P4.5 · Un solo lector tipado del schema de config
 - **Depende de:** P4.4a
@@ -454,10 +457,11 @@ Cada tarea empieza localizando todas las copias, crea un módulo con una interfa
 - **Toca:** `base.memory`, `base.text`, `base.diagnostics` y `telar.config`, que incluyen entre 7 y 20 cabeceras de C++ en su fragmento global por compartir cabeceras con Objective-C++ y Qt.
 - **Qué hace:** lo que cruza a `.mm` y a Qt se reduce a una cabecera C o de tipos mínima. El resto pasa a código de módulo con `import std`.
 
-### [ ] P6.7 · Cabeceras pesadas que convierten módulos pequeños en sumideros
+### [x] P6.7 · Cabeceras pesadas que convierten módulos pequeños en sumideros
 - **Depende de:** P1.2
 - **Qué hace:** partir `runtime.terminal.control` (118 líneas propias y 13 256 de cabeceras, `control/engine.hpp` y sus 28 headers) por familia de secuencias: graphics, clipboard, glyph y checksum. Revisar `gui.terminal.screen` (6456 líneas de cabeceras) y `gui.attachments.catalog` (7784). Lo de `gui.core.primitives` es P3.16.
 - **Se puede partir:** a = terminal.control, b = gui.terminal.screen, c = attachments.catalog.
+- **Resultado de a:** `07d2de5a4`. `runtime.terminal.control` se queda con parser, estado VT, replies, reports, clasificación y consultas de color y graphics; `control.clipboard`, `control.glyph`, `control.checksum` y `control.engine` pasan a código de módulo. Fragmento global de la base: 12 888 → 7 934 líneas del proyecto. Graphics no se separa: sus consultas leen cabeceras de `graphics.kitty`, que está por encima, y con `<arm_neon.h>` en dos fragmentos globales Clang emite dos veces sus intrínsecos. `VtState::writeAscii` pasa a pública porque el `friend class Engine` no se puede nombrar entre módulos. El `[x]` del título marca solo `a`.
 
 ### [ ] P6.8 · Cierre de includes
 - **Depende de:** P2.3, P6.1–P6.7
