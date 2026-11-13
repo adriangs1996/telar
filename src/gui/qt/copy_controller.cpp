@@ -8,7 +8,6 @@ static_assert(true);
 #include "application.hpp"
 #include "key_adapter.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <QtCore/qbytearrayview.h>
 #include <QtCore/qobject.h>
 #include <QtCore/qstring.h>

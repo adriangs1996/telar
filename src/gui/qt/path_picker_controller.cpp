@@ -11,7 +11,6 @@ static_assert(true);
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include "utf16_encoding.hpp"
 #include <QByteArray>
 #include <QLatin1StringView>

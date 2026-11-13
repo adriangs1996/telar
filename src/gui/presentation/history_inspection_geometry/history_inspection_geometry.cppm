@@ -21,7 +21,6 @@ export import telar.gui.presentation.history_filter_geometry;
 
 export import telar.gui.application.sound_playback;
 import telar.base.diagnostics;
-import telar.client.protocol;
 import telar.gui.core.primitives;
 
 // Interface: presentation/chrome_style.cppm

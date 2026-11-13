@@ -25,7 +25,6 @@ import std;
 import telar.gui.terminal.font_grid;
 import telar.gui.terminal.copy_mode;
 import telar.base.diagnostics;
-import telar.client.protocol;
 
 #include "platform/font.h"
 

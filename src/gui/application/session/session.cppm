@@ -44,9 +44,20 @@ export import telar.gui.prompt.line;
 export import telar.gui.prompt.layout;
 import telar.base.diagnostics;
 import telar.base.text;
-import telar.client.protocol;
 import telar.gui.core.primitives;
 import telar.gui.terminal.screen;
+import telar.wire.agents;
+import telar.wire.clients;
+import telar.wire.clipboard;
+import telar.wire.content;
+import telar.wire.editor;
+import telar.wire.graphics;
+import telar.wire.history;
+import telar.wire.layout;
+import telar.wire.pane_io;
+import telar.wire.runtime;
+import telar.wire.vocabulary;
+import telar.wire.worktrees;
 
 // Interface: application/session.cppm
 export {

@@ -15,8 +15,9 @@ import std;
 import telar.base.diagnostics;
 import telar.base.memory;
 import telar.base.text;
-import telar.client.protocol;
 import telar.gui.core.primitives;
+import telar.wire.history;
+import telar.wire.vocabulary;
 
 // Interface: history/choice.cppm
 export {

@@ -44,8 +44,8 @@ export import telar.gui.config.plugin_effects;
 export import telar.gui.components.configuration;
 export import telar.gui.components.builtin_content;
 import telar.base.diagnostics;
-import telar.client.protocol;
 import telar.gui.core.primitives;
+import telar.wire.vocabulary;
 
 // Interface: config/action_description_reader.cppm
 export {

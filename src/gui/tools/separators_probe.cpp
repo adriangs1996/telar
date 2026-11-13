@@ -16,10 +16,12 @@ static_assert(true);
 #include "../tests/wire_runtime.hpp"
 #include "telar_client/codecs/telar_cells.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
+#include "telar_client/protocol/content.hpp"
+#include "telar_client/protocol/layout.hpp"
+#include "telar_client/protocol/pane_io.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <QCommandLineParser>
 #include <QCryptographicHash>
 #include <QFile>

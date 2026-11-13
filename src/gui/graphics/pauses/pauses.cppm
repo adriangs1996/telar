@@ -12,7 +12,7 @@ import std;
 
 export import telar.gui.application.sound_playback;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
 
 // Interface: graphics/artwork_resize.cppm
 export {

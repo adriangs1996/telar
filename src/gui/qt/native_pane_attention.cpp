@@ -8,7 +8,6 @@ static_assert(true);
 #include "pane_attention_value.hpp"
 #include "rounded_paints_scene.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include "window_animation_clock.hpp"
 #include <QColor>
 #include <QMetaObject>

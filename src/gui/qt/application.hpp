@@ -34,10 +34,10 @@ static_assert(true);
 #include "telar_client/codecs/telar_codec.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
+#include "telar_client/protocol/clients.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include "terminal_preparation.hpp"
 #include "window_frame_pacer.hpp"
 #include <QByteArray>

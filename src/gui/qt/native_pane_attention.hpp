@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "ancestor_geometry.hpp"
 #include "tbc/view.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <QColor>
 #include <QPointer>
 #include <QQuickItem>

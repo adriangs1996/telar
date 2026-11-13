@@ -21,8 +21,8 @@ export import telar.gui.presentation.history_meta_geometry;
 
 export import telar.gui.presentation.frame_pacer;
 import telar.base.diagnostics;
-import telar.client.protocol;
 import telar.gui.core.primitives;
+import telar.wire.vocabulary;
 
 // Interface: input/child_mouse.cppm
 export {

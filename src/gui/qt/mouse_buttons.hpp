@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <QtCore/qnamespace.h>
 #include <algorithm>
 #include <array>

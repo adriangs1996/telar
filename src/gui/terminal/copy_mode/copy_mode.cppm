@@ -26,9 +26,11 @@ export import telar.gui.core.unicode_scalar;
 export import telar.gui.core.metrics;
 export import telar.gui.fonts.face;
 import telar.base.diagnostics;
-import telar.client.protocol;
 import telar.gui.core.primitives;
 import telar.gui.terminal.screen;
+import telar.wire.clipboard;
+import telar.wire.pane_io;
+import telar.wire.vocabulary;
 
 // Interface: terminal/selection.cppm
 export {

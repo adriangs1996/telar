@@ -15,8 +15,8 @@ import std;
 export import telar.base.text;
 import telar.base.diagnostics;
 import telar.base.memory;
-import telar.client.protocol;
 import telar.gui.core.primitives;
+import telar.wire.vocabulary;
 
 // Interface: core/background_opacity.cppm
 export {

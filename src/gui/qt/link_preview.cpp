@@ -8,7 +8,6 @@ static_assert(true);
 #include "projection.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <QFontMetricsF>
 #include <QPointF>
 #include <QTextLayout>

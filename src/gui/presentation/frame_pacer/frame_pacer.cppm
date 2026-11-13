@@ -16,7 +16,7 @@ export import telar.gui.application.sound_playback;
 export import telar.gui.core.metrics;
 import telar.base.diagnostics;
 import telar.base.memory;
-import telar.client.protocol;
+import telar.wire.vocabulary;
 
 // Interface: presentation/attention_fades.cppm
 export {

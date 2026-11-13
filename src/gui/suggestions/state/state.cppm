@@ -13,7 +13,8 @@ import std;
 import telar.base.diagnostics;
 import telar.base.memory;
 import telar.base.text;
-import telar.client.protocol;
+import telar.wire.editor;
+import telar.wire.vocabulary;
 
 // Interface: suggestions/limits.cppm
 export {

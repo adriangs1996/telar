@@ -7,7 +7,6 @@ static_assert(true);
 #include "pane_chrome_style.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QRectF>

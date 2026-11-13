@@ -14,7 +14,7 @@ export import telar.gui.text.json_unsigned_integer;
 
 export import telar.base.history;
 import telar.base.diagnostics;
-import telar.client.protocol;
+import telar.wire.vocabulary;
 
 // Interface: palette/navigation_label.cppm
 export {

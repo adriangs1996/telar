@@ -26,10 +26,10 @@ export module telar.gui.platform.profile_file;
 import std;
 
 import telar.base.diagnostics;
-import telar.client.protocol;
 import telar.gui.attachments.catalog;
 import telar.gui.core.primitives;
 import telar.platform.primitives;
+import telar.wire.vocabulary;
 
 // This class completes the forward declaration in the Objective-C++ ABI.
 

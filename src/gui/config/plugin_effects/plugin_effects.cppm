@@ -34,9 +34,9 @@ export import telar.plugins;
 
 export import telar.gui.core.json_writer;
 import telar.base.diagnostics;
-import telar.client.protocol;
 import telar.gui.core.primitives;
 import telar.platform.primitives;
+import telar.wire.vocabulary;
 
 // Interface: config/callback.cppm
 export {

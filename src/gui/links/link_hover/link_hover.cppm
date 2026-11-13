@@ -20,9 +20,9 @@ export import telar.gui.core.unicode_scalar;
 export import telar.gui.links.path_expansion;
 import telar.base.diagnostics;
 import telar.base.memory;
-import telar.client.protocol;
 import telar.gui.core.primitives;
 import telar.gui.terminal.screen;
+import telar.wire.vocabulary;
 
 // Interface: links/link_hit.cppm
 export {

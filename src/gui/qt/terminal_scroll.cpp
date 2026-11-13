@@ -9,7 +9,7 @@ static_assert(true);
 #include "../platform/scroll_event.hpp"
 #include "../terminal/screen.hpp"
 #include "application.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
 #include "terminal_item.hpp"
 #include "terminal_scene.hpp"
 #include "window_animation_clock.hpp"

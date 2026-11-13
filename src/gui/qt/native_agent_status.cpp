@@ -7,7 +7,6 @@ static_assert(true);
 #include "agent_status_value.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include "window_animation_clock.hpp"
 #include <QAnyStringView>
 #include <QPointer>
