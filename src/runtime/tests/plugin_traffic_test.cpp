@@ -62,7 +62,7 @@ static_assert(true);
 
 import telar.runtime.tests.check;
 import telar.runtime.plugins.run_worker;
-import telar.platform;
+import telar.platform.fs;
 import telar.runtime.traffic.capture;
 import telar.runtime.traffic.capture_analysis;
 import telar.runtime.traffic.control_backend;

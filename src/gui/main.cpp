@@ -32,7 +32,7 @@ import telar.gui.machines.picker;
 import telar.gui.machines.profile_store;
 import telar.gui.platform.login_shell;
 import telar.gui.platform.profile_file;
-import telar.platform;
+import telar.platform.paths;
 
 namespace {
 

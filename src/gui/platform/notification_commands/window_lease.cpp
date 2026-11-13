@@ -17,7 +17,7 @@ module telar.gui.platform.notification_commands;
 
 import std;
 
-import telar.platform;
+import telar.platform.fs;
 
 namespace telar::gui::platform {
 

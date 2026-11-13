@@ -20,7 +20,8 @@ import std;
 import telar.base.memory;
 import telar.platform.primitives;
 import telar.runtime.plugins.tap_configuration;
-import telar.platform;
+import telar.platform.error;
+import telar.platform.fs;
 import telar.plugins;
 
 using namespace telar;

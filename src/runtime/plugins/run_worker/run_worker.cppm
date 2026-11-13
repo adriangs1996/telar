@@ -47,7 +47,8 @@ export import telar.runtime.traffic.control_backend;
 export import telar.base.memory;
 
 export import telar.config;
-export import telar.platform;
+export import telar.platform.error;
+export import telar.platform.fs;
 
 export import telar.runtime.plugins.tap_configuration;
 import telar.base.diagnostics;

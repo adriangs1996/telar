@@ -28,7 +28,9 @@ import std;
 
 import telar.config;
 import telar.lua;
-import telar.platform;
+import telar.platform.error;
+import telar.platform.fs;
+import telar.platform.paths;
 import telar.plugins;
 import telar.base.diagnostics;
 import telar.platform.primitives;

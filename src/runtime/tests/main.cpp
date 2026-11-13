@@ -12,7 +12,7 @@ static_assert(true);
 import std;
 import telar.runtime.terminal.control;
 import telar.runtime.tests.check;
-import telar.platform;
+import telar.platform.error;
 
 int main(int argc, char** argv) {
   if (argc == 2 && std::strcmp(argv[1], "--process-identification-fixture") == 0) {

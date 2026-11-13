@@ -28,7 +28,9 @@ export module telar.cli.integration.settings;
 import std;
 
 export import telar.config;
-export import telar.platform;
+export import telar.platform.error;
+export import telar.platform.fs;
+export import telar.platform.paths;
 
 export import telar.cli.base.command_error;
 export import telar.base.text;

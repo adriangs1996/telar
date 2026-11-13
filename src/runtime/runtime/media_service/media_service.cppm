@@ -13,7 +13,7 @@ export import telar.runtime.worktrees.git_probe;
 
 export import telar.runtime.history.store;
 export import telar.runtime.platform.background_executor;
-export import telar.platform;
+export import telar.platform.error;
 import telar.wire.vocabulary;
 import telar.wire.agents;
 import telar.wire.editor;

@@ -60,7 +60,7 @@ import telar.gui.tests.session_fixture;
 import telar.gui.application.session;
 import telar.gui.graphics.texture_cache;
 import telar.gui.platform.profile_file;
-import telar.platform;
+import telar.platform.graphics;
 
 namespace {
 

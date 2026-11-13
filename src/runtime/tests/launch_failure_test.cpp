@@ -58,7 +58,9 @@ import telar.runtime.tests.check;
 import telar.runtime.platform.request_worker;
 import telar.runtime.runtime.media_service;
 import telar.runtime.runtime.execution_service;
-import telar.platform;
+import telar.platform.error;
+import telar.platform.fs;
+import telar.platform.process;
 import telar.wire.vocabulary;
 
 using namespace telar;

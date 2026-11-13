@@ -19,7 +19,7 @@ export import telar.gui.text.json_unsigned_integer;
 
 export import telar.gui.platform.notification_commands;
 import telar.base.memory;
-import telar.platform;
+import telar.platform.paths;
 
 // Interface: machines/failure.cppm
 // Shared with the CLI: telar.machines defines it.

@@ -35,7 +35,8 @@ export import telar.base.text;
 
 export import telar.config;
 
-export import telar.platform;
+export import telar.platform.error;
+export import telar.platform.fs;
 import telar.base.diagnostics;
 import telar.platform.primitives;
 

@@ -17,7 +17,8 @@ export module telar.runtime.tls.system_root_bundle;
 import std;
 
 export import telar.base.memory;
-export import telar.platform;
+export import telar.platform.error;
+export import telar.platform.fs;
 import telar.base.diagnostics;
 import telar.platform.primitives;
 

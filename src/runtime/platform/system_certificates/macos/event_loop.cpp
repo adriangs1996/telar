@@ -42,7 +42,7 @@ module telar.runtime.platform.system_certificates;
 
 import std;
 
-import telar.platform;
+import telar.platform.error;
 import telar.base.diagnostics;
 import telar.platform.primitives;
 

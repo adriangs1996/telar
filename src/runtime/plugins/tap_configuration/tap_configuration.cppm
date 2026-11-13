@@ -33,7 +33,9 @@ import std;
 export import telar.config;
 export import telar.plugins;
 
-export import telar.platform;
+export import telar.platform.error;
+export import telar.platform.fs;
+export import telar.platform.paths;
 
 export import telar.runtime.platform.stream_read_buffer;
 

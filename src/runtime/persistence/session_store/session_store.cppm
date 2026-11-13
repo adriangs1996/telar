@@ -57,7 +57,9 @@ export module telar.runtime.persistence.session_store;
 
 import std;
 
-export import telar.platform;
+export import telar.platform.error;
+export import telar.platform.fs;
+export import telar.platform.process;
 
 export import telar.runtime.model.client_layouts;
 

@@ -26,7 +26,7 @@ import std;
 export import telar.runtime.platform.background_executor;
 export import telar.runtime.transport.connection;
 export import telar.base.editors;
-export import telar.platform;
+export import telar.platform.process;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.wire.editor;

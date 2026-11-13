@@ -19,7 +19,7 @@ export import telar.base.memory;
 export import telar.platform.primitives;
 export import telar.gui.fonts.face;
 export import telar.gui.fonts.font_requests;
-export import telar.platform;
+export import telar.platform.fs;
 
 export {
   namespace telar::gui::test {

@@ -11,7 +11,8 @@ export module telar.git:objects;
 
 import std;
 import telar.base.memory;
-import telar.platform;
+import telar.base.text;
+import telar.platform.fs;
 import telar.platform.primitives;
 import :format;
 

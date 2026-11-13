@@ -36,6 +36,8 @@ export import telar.runtime.platform.stream_read_buffer;
 export import telar.runtime.plugins.protocol;
 export import telar.base.memory;
 export import telar.platform;
+export import telar.platform.error;
+export import telar.platform.process;
 
 export import telar.runtime.plugins.tap_configuration;
 

@@ -56,7 +56,7 @@ import telar.runtime.graphics.synchronizer;
 import telar.runtime.platform.request_worker;
 import telar.runtime.runtime.execution_service;
 import telar.runtime.runtime.media_service;
-import telar.platform;
+import telar.platform.graphics;
 import telar.runtime.terminal.text_reader;
 import telar.wire.vocabulary;
 

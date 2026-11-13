@@ -32,7 +32,10 @@ export import telar.cli.base.command_error;
 export import telar.cli.output;
 
 export import telar.cli.runtime_observer;
-export import telar.platform;
+export import telar.platform.daemon;
+export import telar.platform.error;
+export import telar.platform.paths;
+export import telar.platform.process;
 import telar.base.diagnostics;
 import telar.platform.primitives;
 

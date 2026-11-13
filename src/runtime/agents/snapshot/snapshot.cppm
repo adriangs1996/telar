@@ -42,7 +42,8 @@ export import telar.client;
 export import telar.runtime.history.store;
 
 export import telar.base.text;
-export import telar.platform;
+export import telar.platform.error;
+export import telar.platform.events;
 
 import telar.wire.vocabulary;
 import telar.wire.agents;

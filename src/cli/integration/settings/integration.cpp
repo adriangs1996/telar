@@ -27,7 +27,8 @@ module telar.cli.integration.settings;
 
 import std;
 
-import telar.platform;
+import telar.platform.paths;
+import telar.platform.process;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.platform.primitives;

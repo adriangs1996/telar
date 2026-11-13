@@ -11,8 +11,9 @@ import std;
 
 export import telar.client;
 
-export import telar.platform;
+export import telar.platform.error;
 import telar.base.diagnostics;
+import telar.base.memory.allocators;
 import telar.wire.vocabulary;
 import telar.wire.runtime;
 import telar.platform.primitives;

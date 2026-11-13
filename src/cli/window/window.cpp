@@ -26,7 +26,9 @@ import std;
 
 import telar.cli.runtime_observer;
 import telar.cli.output;
-import telar.platform;
+import telar.platform.error;
+import telar.platform.paths;
+import telar.platform.process;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.wire.clients;

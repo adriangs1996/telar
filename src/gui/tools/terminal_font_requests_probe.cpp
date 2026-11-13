@@ -23,7 +23,7 @@ static_assert(true);
 #include "core/memory.hpp"
 #include "platform/font.h"
 
-import telar.platform;
+import telar.platform.fs;
 
 using namespace telar;
 using namespace telar::gui;

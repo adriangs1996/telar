@@ -17,7 +17,8 @@ export module telar.runtime.execution.execution;
 import std;
 
 export import telar.base.memory;
-export import telar.platform;
+export import telar.platform.error;
+export import telar.platform.process;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.wire.execution;

@@ -24,7 +24,9 @@ import std;
 export import telar.runtime.terminal.osc_scanner;
 export import telar.base.memory;
 
-export import telar.platform;
+export import telar.platform.error;
+export import telar.platform.events;
+export import telar.platform.process;
 
 export import telar.runtime.platform.process_probe;
 import telar.base.diagnostics;

@@ -40,7 +40,7 @@ export import telar.gui.presentation.display_metrics;
 export import telar.gui.presentation.application_mark;
 export import telar.gui.suggestions.state;
 export import telar.config;
-export import telar.platform;
+export import telar.platform.events;
 export import telar.gui.terminal.font_grid;
 export import telar.gui.input.copy_mode;
 export import telar.gui.prompt.line;

@@ -17,7 +17,9 @@ import std;
 import telar.base.memory;
 import telar.platform.primitives;
 import telar.runtime.tests.check;
-import telar.platform;
+import telar.platform.error;
+import telar.platform.fs;
+import telar.platform.paths;
 import telar.client;
 
 using namespace telar;

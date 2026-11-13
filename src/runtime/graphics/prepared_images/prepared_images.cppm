@@ -21,11 +21,12 @@ export module telar.runtime.graphics.prepared_images;
 
 import std;
 
-export import telar.platform;
+export import telar.platform.graphics;
 
 export import telar.runtime.diagnostics.operation;
 export import telar.runtime.terminal.graphics_storage;
 import telar.base.diagnostics;
+import telar.base.memory.allocators;
 import telar.wire.vocabulary;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;

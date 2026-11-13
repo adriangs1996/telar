@@ -47,7 +47,10 @@ import std;
 
 export import telar.base.memory;
 
-export import telar.platform;
+export import telar.platform.error;
+export import telar.platform.fs;
+export import telar.platform.paths;
+export import telar.platform.process;
 
 export import telar.base.text;
 import telar.base.diagnostics;

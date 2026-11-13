@@ -46,7 +46,7 @@ import std;
 
 export import telar.runtime.history.event;
 
-export import telar.platform;
+export import telar.platform.fs;
 
 export import telar.runtime.platform.request_worker;
 import telar.wire.runtime;

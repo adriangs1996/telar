@@ -29,7 +29,7 @@ import std;
 
 import telar.gui.platform.login_shell;
 import telar.client;
-import telar.platform;
+import telar.platform.process;
 
 #if defined(__APPLE__)
 #include <mach-o/dyld.h>

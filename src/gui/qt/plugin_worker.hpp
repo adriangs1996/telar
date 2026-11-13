@@ -59,7 +59,7 @@ static_assert(true);
 #include "core/memory.hpp"
 
 import telar.gui.config.plugin_effects;
-import telar.platform;
+import telar.platform.fs;
 import telar.plugins;
 
 namespace telar::gui::qt {

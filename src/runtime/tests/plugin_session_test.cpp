@@ -62,7 +62,9 @@ import telar.runtime.platform.request_worker;
 import telar.runtime.plugins.tap_configuration;
 import telar.runtime.plugins.run_worker;
 import telar.runtime.plugins.worker;
-import telar.platform;
+import telar.platform.error;
+import telar.platform.fs;
+import telar.platform.process;
 
 using namespace telar;
 using namespace telar::runtime;

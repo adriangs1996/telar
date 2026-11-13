@@ -20,7 +20,7 @@ export import telar.wire.editor;
 export import telar.runtime.platform.request_worker;
 import telar.base.memory;
 import telar.base.text;
-import telar.platform;
+import telar.platform.fs;
 import telar.platform.primitives;
 import telar.ebnf.matcher;
 

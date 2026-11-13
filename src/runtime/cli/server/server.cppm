@@ -17,7 +17,11 @@ import telar.runtime.graphics.kitty;
 
 export import telar.config;
 export import telar.lua;
-export import telar.platform;
+export import telar.platform.daemon;
+export import telar.platform.error;
+export import telar.platform.fs;
+export import telar.platform.paths;
+export import telar.platform.process;
 export import telar.runtime.config.loader;
 export import telar.runtime.history.event;
 export import telar.runtime.plugins.service;

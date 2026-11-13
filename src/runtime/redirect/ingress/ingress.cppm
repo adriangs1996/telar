@@ -80,6 +80,7 @@ export import telar.runtime.platform.private_tunnel;
 export import telar.runtime.plugins.protocol;
 
 export import telar.platform;
+export import telar.platform.error;
 export import telar.runtime.platform.request_worker;
 export import telar.runtime.platform.launch_program;
 

@@ -13,7 +13,8 @@ module telar.gui.platform.login_shell;
 import std;
 
 import telar.gui.platform.profile_file;
-import telar.platform;
+import telar.platform.error;
+import telar.platform.fs;
 import telar.platform.primitives;
 
 namespace telar::gui::platform {

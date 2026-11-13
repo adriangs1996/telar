@@ -30,7 +30,7 @@ import telar.runtime.tests.check;
 import telar.runtime.agents.snapshot;
 import telar.runtime.agents.screen_inference;
 import telar.runtime.platform.process_probe;
-import telar.platform;
+import telar.platform.process;
 import telar.wire.agents;
 import telar.wire.vocabulary;
 
