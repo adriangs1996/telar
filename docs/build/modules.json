@@ -226,7 +226,8 @@
     "lib/render/terminal/terminal.cppm": "telar.render.terminal",
     "lib/render/markdown/markdown.cppm": "telar.render.markdown",
     "src/cli/render/render.cppm": "telar.cli.render",
-    "src/gui/terminal/fold_map/fold_map.cppm": "telar.gui.terminal.fold_map"
+    "src/gui/terminal/fold_map/fold_map.cppm": "telar.gui.terminal.fold_map",
+    "lib/wire/vocabulary/vocabulary.cppm": "telar.wire.vocabulary"
   },
   "textual_boundaries": {
     "lib/clipboard/includes/clipboard.hpp": "Native clipboard ABI shared with Objective-C++ and platform backends",
@@ -2629,17 +2630,9 @@
       "lib/base/include/telar_base/text/utf8.hpp"
     ],
     "lib/client/protocol/protocol.cppm": [
-      "lib/client/include/telar_client/codecs/telar_cells.hpp",
-      "lib/client/include/telar_client/codecs/telar_codec.hpp",
-      "lib/client/include/telar_client/codecs/telar_value_codec.hpp",
-      "lib/client/include/telar_client/codecs/telar_wire.hpp",
-      "lib/client/include/telar_client/serializers/telar_cells.hpp",
       "lib/client/include/telar_client/serializers/telar_clipboard_protocol.hpp",
-      "lib/client/include/telar_client/serializers/telar_frame.hpp",
-      "lib/client/include/telar_client/serializers/telar_messages.hpp",
       "lib/client/include/telar_client/serializers/telar_protocol.hpp",
-      "lib/client/include/telar_client/serializers/telar_runtime_clipboard.hpp",
-      "lib/client/include/telar_client/serializers/telar_serializer.hpp"
+      "lib/client/include/telar_client/serializers/telar_runtime_clipboard.hpp"
     ],
     "lib/config/config.cppm": [
       "lib/config/include/telar_config/graphics/limits.hpp",
@@ -2730,6 +2723,16 @@
     ],
     "lib/vocabulary/vocabulary.cppm": [
       "lib/vocabulary/include/telar_vocabulary/vocabulary.hpp"
+    ],
+    "lib/wire/vocabulary/vocabulary.cppm": [
+      "lib/client/include/telar_client/codecs/telar_cells.hpp",
+      "lib/client/include/telar_client/codecs/telar_codec.hpp",
+      "lib/client/include/telar_client/codecs/telar_value_codec.hpp",
+      "lib/client/include/telar_client/codecs/telar_wire.hpp",
+      "lib/client/include/telar_client/serializers/telar_cells.hpp",
+      "lib/client/include/telar_client/serializers/telar_frame.hpp",
+      "lib/client/include/telar_client/serializers/telar_messages.hpp",
+      "lib/client/include/telar_client/serializers/telar_serializer.hpp"
     ]
   }
 }

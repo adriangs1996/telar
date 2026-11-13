@@ -6,6 +6,11 @@ export module telar.client.protocol;
 
 // Owned textual headers stay in this global module fragment only; importers
 // reach their names through these declarations instead of including them.
+//
+// It aggregates telar.wire.vocabulary by re-exporting the vocabulary from its
+// own fragment. While the headers stay textual both modules carry a copy of
+// them, and `export import` made every importer merge the two copies: +8% to
+// compile client_control.
 export namespace telar {
   using telar::AcknowledgeAgent;
   using telar::AgentAttachmentMarkers;
