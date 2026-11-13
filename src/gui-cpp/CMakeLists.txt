@@ -99,9 +99,9 @@ file(GENERATE
 
 include(CTest)
 if(BUILD_TESTING)
-  # Shared test and probe fixtures are module interfaces. They import gui-core,
+  # Shared test fixtures are module interfaces. They import gui-core,
   # whose -ffp-contract=off they inherit like every other GUI importer.
-  file(GLOB gui_test_fixtures CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cppm" "${CMAKE_CURRENT_SOURCE_DIR}/tools/*.cppm")
+  file(GLOB gui_test_fixtures CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cppm")
   list(REMOVE_ITEM gui_test_fixtures "${CMAKE_CURRENT_SOURCE_DIR}/tests/font_fixture.cppm")
   add_library(gui-test-fixtures STATIC)
   target_sources(gui-test-fixtures PUBLIC FILE_SET CXX_MODULES BASE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}" FILES ${gui_test_fixtures})
