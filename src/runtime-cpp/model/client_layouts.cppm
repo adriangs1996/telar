@@ -405,7 +405,7 @@ public:
         continue;
       }
 
-      if (count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)) {
+      if (count < 0 && socketWouldBlock(errno)) {
         return observed(true);
       }
 
@@ -498,7 +498,7 @@ public:
       return;
     }
 
-    if (count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)) {
+    if (count < 0 && socketWouldBlock(errno)) {
       return;
     }
 

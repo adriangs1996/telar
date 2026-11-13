@@ -1223,7 +1223,7 @@ private:
       const auto count = ::recv(peer.socket.get(), peer.input.data() + previous, peer.expected - previous, 0);
       if (count <= 0) {
         peer.input.resize(previous);
-        if (count == 0 || (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)) {
+        if (count == 0 || !socketWouldBlock(errno)) {
           peer.failed = true;
         }
         return;
@@ -1435,7 +1435,7 @@ private:
       const auto bytes = delivery.offset < prefix.size() ? prefix.subspan(delivery.offset) : body.subspan(delivery.offset - prefix.size());
       const auto count = ::send(peer.socket.get(), bytes.data(), bytes.size(), 0);
       if (count <= 0) {
-        if (count == 0 || (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)) {
+        if (count == 0 || !socketWouldBlock(errno)) {
           peer.failed = true;
         }
         return;

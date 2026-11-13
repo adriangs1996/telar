@@ -449,7 +449,7 @@ public:
     if constexpr (requires { request_.deadline(); }) {
       const auto request = request_.deadline();
       const auto response = response_.deadline();
-      return request && response ? std::min(*request, *response) : request ? request : response;
+      return earliest(request, response);
     }
     return std::nullopt;
   }
@@ -778,13 +778,13 @@ public:
   inline bool rejected() const noexcept { return outbound_.rejected() || inbound_.rejected(); }
 
   inline std::optional<traffic::FlowControl::Time> deadline() const noexcept {
-    std::optional<traffic::FlowControl::Time> earliest;
+    std::optional<traffic::FlowControl::Time> soonest;
     for (const auto *gate : {&outbound_, &inbound_}) {
       if (const auto due = gate->ticket_ ? control_->deadline(gate->ticket_) : std::nullopt) {
-        earliest = earliest ? std::min(*earliest, *due) : *due;
+        soonest = earliest(soonest, due);
       }
     }
-    return earliest;
+    return soonest;
   }
 
   // A direction fails once; the reason is reported as the opposite direction's when it was reading.
@@ -2101,8 +2101,7 @@ public:
   inline auto deadline() const noexcept {
     const auto session = session_->deadline();
     const auto application = application_.deadline();
-    return session && application ? std::optional{std::min(*session, *application)} : session ? session
-                                                                                              : application;
+    return earliest(session, application);
   }
 
   [[nodiscard]] inline auto established() const noexcept -> bool {
@@ -2224,7 +2223,7 @@ public:
   inline std::optional<traffic::FlowControl::Time> deadline() const noexcept {
     const auto flow = flow_ ? flow_->deadline() : std::nullopt;
     const auto tls = plain_ ? plain_->deadline() : tls_ ? tls_->deadline() : std::nullopt;
-    return flow && tls ? std::min(*flow, *tls) : flow ? flow : tls;
+    return earliest(flow, tls);
   }
   inline void reason(tbc::view<std::string_view, tbc::lt::static_storage> value) noexcept { if (flow_) { flow_->reason(value); } }
   inline void error(tbc::view<std::string_view, tbc::lt::static_storage> value) noexcept { if (flow_) { flow_->error(value); } }
@@ -2386,7 +2385,7 @@ public:
   inline std::optional<Time> deadline() const noexcept {
     const auto handshake = handshake_.deadline();
     const auto transport = transport_.deadline();
-    return handshake && transport ? std::min(*handshake, *transport) : handshake ? handshake : transport;
+    return earliest(handshake, transport);
   }
 
   inline const ProxyConnectionPolicy &policy() const noexcept {
@@ -2519,7 +2518,7 @@ public:
   inline FileDescriptor accept() const {
     FileDescriptor child{::accept(socket_.get(), nullptr, nullptr)};
     if (!child) {
-      if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+      if (socketWouldBlock(errno)) {
         return child;
       }
       throw SystemError{"Accept proxy connection"};

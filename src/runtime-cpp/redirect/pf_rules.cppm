@@ -253,7 +253,7 @@ struct RoutePath {
       if (::poll(&ready, 1, 25) < 0 && errno != EINTR) { throw SystemError{"Wait for original route"}; }
       if (!(ready.revents & POLLIN)) { continue; }
       const auto received = ::read(socket.get(), bytes.data(), bytes.size());
-      if (received < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) { continue; }
+      if (received < 0 && socketWouldBlock(errno)) { continue; }
       if (received < static_cast<ssize_t>(sizeof(message))) { throw SystemError{"Read original route", EIO}; }
       rt_msghdr reply;
       std::memcpy(&reply, bytes.data(), sizeof(reply));

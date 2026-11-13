@@ -47,7 +47,7 @@ public:
     for (unsigned attempt = 0; attempt < 2 && (stage_ == Stage::prefix || stage_ == Stage::hello); ++attempt) {
       const auto remaining = expected_bytes_ - used_bytes_;
       const auto count = ::read(descriptor_.get(), bytes_.data() + used_bytes_, remaining);
-      if (count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)) {
+      if (count < 0 && socketWouldBlock(errno)) {
         return;
       }
       if (count <= 0) {
@@ -77,7 +77,7 @@ public:
     }
 
     const auto count = ::write(descriptor_.get(), bytes_.data() + used_bytes_, expected_bytes_ - used_bytes_);
-    if (count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)) {
+    if (count < 0 && socketWouldBlock(errno)) {
       return;
     }
     if (count <= 0) {
@@ -626,7 +626,7 @@ public:
       return true;
     }
 
-    return count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR);
+    return count < 0 && socketWouldBlock(errno);
   }
 
   // A client's buffered frames and decode storage, which the runtime takes out of the connection while
@@ -693,7 +693,7 @@ public:
       return;
     }
 
-    if (count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)) {
+    if (count < 0 && socketWouldBlock(errno)) {
       return;
     }
 

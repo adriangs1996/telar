@@ -2369,6 +2369,31 @@ private:
 }
 }
 
+// Interface: telar_platform/socket_would_block.cppm
+export {
+namespace telar::runtime {
+
+// Whether a nonblocking socket call that failed with `error` may simply be tried again later.
+inline bool socketWouldBlock(int error) noexcept {
+  return error == EAGAIN || error == EWOULDBLOCK || error == EINTR;
+}
+
+}
+}
+
+// Interface: telar_platform/earliest.cppm
+export {
+namespace telar::runtime {
+
+// The sooner of two optional deadlines; none only when neither is set.
+template <typename Time>
+constexpr std::optional<Time> earliest(const std::optional<Time> &left, const std::optional<Time> &right) noexcept {
+  return left && right ? std::optional{std::min(*left, *right)} : left ? left : right;
+}
+
+}
+}
+
 // Interface: telar_platform/socket_signals.cppm
 export {
 namespace telar::runtime {

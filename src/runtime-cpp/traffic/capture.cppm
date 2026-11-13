@@ -237,7 +237,7 @@ private:
   inline void drainControl() {
     std::array<Byte, Limits::metadata_bytes> bytes;
     const auto count = ::recv(socket_.get(), bytes.data(), bytes.size(), MSG_DONTWAIT);
-    if (count == 0 || (count < 0 && errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK)) {
+    if (count == 0 || (count < 0 && !socketWouldBlock(errno))) {
       throw SystemError{"Traffic runtime disconnected", ECONNRESET};
     }
   }
@@ -256,7 +256,7 @@ private:
     // Only a wholly unsent frame may be dropped under capture backpressure.
     const auto bytes = std::span<const Byte>{output_}.first(prefix.size() + payload.size());
     const auto count = ::send(socket_.get(), bytes.data(), bytes.size(), 0);
-    if (count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+    if (count < 0 && socketWouldBlock(errno)) {
       ++dropped_;
       return;
     }
@@ -276,7 +276,7 @@ private:
       const auto written = ::send(socket_.get(), remaining.data(), remaining.size(), 0);
       if (written > 0) {
         remaining = remaining.subspan(static_cast<std::size_t>(written));
-      } else if (written == 0 || (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK)) {
+      } else if (written == 0 || !socketWouldBlock(errno)) {
         throw SystemError{"Publish partial capture frame"};
       }
       if (std::chrono::steady_clock::now() >= deadline) {

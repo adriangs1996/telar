@@ -202,7 +202,7 @@ private:
           throw Rejected{};
         }
         process_->closeError();
-      } else if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
+      } else if (!socketWouldBlock(errno)) {
         throw SystemError{"Read suggestion engine"};
       }
     }
@@ -219,7 +219,7 @@ private:
       const auto count = ::write(process_->input(), bytes.data(), bytes.size());
       if (count > 0) {
         bytes.remove_prefix(static_cast<std::size_t>(count));
-      } else if (count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)) {
+      } else if (count < 0 && socketWouldBlock(errno)) {
         poll(true);
       } else {
         throw Rejected{};

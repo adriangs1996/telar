@@ -359,10 +359,6 @@ private:
 export {
 namespace telar::runtime {
 
-inline bool socketWouldBlock(int error) noexcept {
-  return error == EAGAIN || error == EWOULDBLOCK || error == EINTR;
-}
-
 inline void configureProxySocket(int socket) {
   setCloseOnExec(socket);
   setNonblocking(socket);

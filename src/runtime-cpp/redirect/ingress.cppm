@@ -211,7 +211,7 @@ public:
 
   inline tbc::view<std::span<Byte>, tbc::lt::a> receive(tbc::view<std::span<Byte>, tbc::lt::a> bytes) {
     const auto size = ::read(tunnel_.descriptor(), bytes.data(), bytes.size());
-    if (size < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)) {
+    if (size < 0 && socketWouldBlock(errno)) {
       return {};
     }
     if (size <= 0) {

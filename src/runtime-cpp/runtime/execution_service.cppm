@@ -1227,7 +1227,7 @@ public:
       return;
     }
 
-    if (count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)) {
+    if (count < 0 && socketWouldBlock(errno)) {
       return;
     }
 
@@ -1396,7 +1396,7 @@ private:
       const auto count = ::write(execution.process->input(), bytes.data(), bytes.size());
       if (count > 0) {
         execution.input.consume(static_cast<std::size_t>(count));
-      } else if (count < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
+      } else if (count < 0 && !socketWouldBlock(errno)) {
         execution.eof = true;
         execution.input.clear();
       }
