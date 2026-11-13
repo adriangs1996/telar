@@ -134,6 +134,8 @@ class Application final : public QObject {
   Q_OBJECT
   QML_NAMED_ELEMENT(GuiController)
   QML_UNCREATABLE("Use the running GUI controller")
+  // QML names every enum value with its enum, so Action::palette and Dialog::palette do not clash.
+  Q_CLASSINFO("RegisterEnumClassesUnscoped", "false")
   Q_PROPERTY(AttachmentShelf *attachments READ attachments CONSTANT)
   Q_PROPERTY(QVariantMap attachmentGeometry READ attachmentGeometry NOTIFY stateChanged)
   Q_PROPERTY(QVariantMap attachmentModalGeometry READ attachmentModalGeometry NOTIFY stateChanged)
