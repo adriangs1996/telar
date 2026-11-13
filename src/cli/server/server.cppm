@@ -28,6 +28,7 @@ export module telar.cli.server;
 
 import std;
 
+export import telar.cli.base.command_error;
 export import telar.cli.output;
 
 export import telar.cli.runtime_observer;
@@ -35,20 +36,6 @@ export import telar.platform;
 import telar.base.diagnostics;
 import telar.client.protocol;
 import telar.platform.primitives;
-
-// Interface: command_error.cppm
-export {
-  namespace telar::runtime::cli {
-
-    // Uncaught execution errors use this prefix; argument errors use the
-    // separate help-bearing diagnostic and machine edits have their own report.
-    class CommandError : public std::runtime_error {
-    public:
-      using std::runtime_error::runtime_error;
-    };
-
-  }
-}
 
 // Interface: help.cppm
 export {
