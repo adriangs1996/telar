@@ -63,6 +63,7 @@ import telar.runtime.terminal.control;
 import telar.runtime.tests.check;
 import telar.runtime.persistence.session_store;
 import telar.runtime.platform.request_worker;
+import telar.runtime.runtime.execution_service;
 
 using namespace telar;
 using namespace telar::runtime;
