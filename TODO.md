@@ -108,10 +108,11 @@ graph LR
 - **Hecho cuando:** está medido en el build real, con el número de unidades que recompila tocar un comentario y un cuerpo no inline en un hub, antes y después. Si no compensa, se descarta con los números.
 - **Resultado: descartado** (`docs/build/bmi-restat.md`). Tocar un comentario o un cuerpo no inline en `telar.base.memory` recompila 257 unidades con y sin launcher; en `telar.client.protocol`, 221. Clang 23 ya emite el BMI reducido, pero guarda offsets en bytes y un valor que depende del cuerpo de cada función, así que el `.pcm` cambia de verdad. El launcher solo ayuda cuando un fichero se reescribe sin cambiar (1 unidad frente a 257), y cuesta unos 35 ms por compilación. Lo que corta la cascada es P9.x.
 
-### [ ] P0.5 · ThinLTO en los builds optimizados
+### [x] P0.5 · ThinLTO en los builds optimizados
 - **Depende de:** —
 - **Toca:** `cmake/` y los presets de release. Hoy no hay `-flto` en ningún sitio.
 - **Hecho cuando:** release y dev-release enlazan con ThinLTO, y están medidos el tiempo de build, el tamaño del binario y los benchmarks de hot path existentes (`tools/bench_*`, probes de latencia). Las regresiones quedan anotadas para P9.
+- **Resultado:** `b1698437c`, medidas en `docs/build/thinlto.md`. Opción `TELAR_THIN_LTO` (activa) en `cmake/cpp_modules.cmake`: Release y RelWithDebInfo compilan con `-flto=thin` vía IPO de CMake, con caché de ThinLTO por build; en macOS enlaza ld64 con el libLTO del toolchain y en Linux `ld.lld` (sin verificar en Linux). Binarios: `telar-runtime` −16,7 %, `telar` −27,2 %, `telar-gui` −17,4 %. Build en frío dentro del ruido. Reenlazar el runtime tras editar un cuerpo pasa de 1–3 s a unos 18 s. Hot paths: escena `full` −5,4 %, PTY `cursor-byte-writes` −16,8 %. **Para P9:** separadores de comandos +1,2 % (pérdida consistente, causa sin establecer), `mode-report` +0,2 % (en el ruido), y repetir la medida del reenlace.
 
 ### [x] P1.1 · Tabla y script de destino de cada fichero
 - **Depende de:** — (se escribe ya; se vuelve a ejecutar sobre `main` después de P0.1)
