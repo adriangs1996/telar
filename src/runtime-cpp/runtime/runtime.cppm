@@ -2417,22 +2417,7 @@ export {
             ++pane->git_revision;
           }
         });
-        words_.collect([&](const WordResult &result) {
-          auto *client = clients_.find(result.client);
-          if (client == nullptr) {
-            return;
-          }
-          if (result.spec) {
-            client->connection.send(CommandSpec{.request_id = result.request, .command = result.command, .state = result.spec_state, .digest = result.digest, .source = result.source, .expansion = result.expansion});
-            return;
-          }
-          std::vector<CompletionWord> words;
-          words.reserve(result.words.size());
-          for (const auto &word : result.words) {
-            words.push_back({word.text, word.description});
-          }
-          client->connection.send(CompletionWords{.request_id = result.request, .truncated = result.truncated, .words = words});
-        });
+        words_.collect([&](const WordResult &result) { deliverWords(result); });
         worktree_detection_.collect(model_);
         agent_files_.collect(agents_);
         descriptions_.collect(agents_);
@@ -2440,56 +2425,84 @@ export {
           limits_.report(LimitReach{.name = "history.command_persistence", .noun = "failed events", .requested = failures, .route = "history"});
         }
         background_.collectWorktrees([&](const WorktreeProbeResult &result) { worktrees_.observed(model_, result); });
-        background_.collect([&](std::uint64_t client_id, ClientTag request_tag, std::span<const Byte> payload) {
-          if (request_tag == ClientTag::import_history) {
-            return;
-          }
+        background_.collect([&](std::uint64_t client_id, ClientTag request_tag, std::span<const Byte> payload) { deliverBackgroundReply(client_id, request_tag, payload); });
+      }
 
-          if (request_tag == ClientTag::report_agent_command) {
-            if (payload.front() == static_cast<Byte>(ServerTag::request_failed)) {
-              limits_.report(LimitReach{.name = "history.command_persistence", .noun = "failed commands", .route = "history"});
-            }
-            return;
-          }
+      // A completion's words, or a command's spec, for the client that asked.
+      inline void deliverWords(const WordResult &result) {
+        auto *client = clients_.find(result.client);
+        if (client == nullptr) {
+          return;
+        }
+        if (result.spec) {
+          client->connection.send(CommandSpec{.request_id = result.request, .command = result.command, .state = result.spec_state, .digest = result.digest, .source = result.source, .expansion = result.expansion});
+          return;
+        }
+        std::vector<CompletionWord> words;
+        words.reserve(result.words.size());
+        for (const auto &word : result.words) {
+          words.push_back({word.text, word.description});
+        }
+        client->connection.send(CompletionWords{.request_id = result.request, .truncated = result.truncated, .words = words});
+      }
 
-          auto *client = clients_.find(client_id);
-          if (client == nullptr || client->connection.closing) {
-            return;
-          }
+      // A background worker's reply to `client_id`'s request: history failures become limits, the
+      // rest goes to the client, which a failed send drops.
+      inline void deliverBackgroundReply(std::uint64_t client_id, ClientTag request_tag, std::span<const Byte> payload) {
+        if (request_tag == ClientTag::import_history) {
+          return;
+        }
 
-          try {
-            if (payload.front() == static_cast<Byte>(ServerTag::editor_opened)) {
-              std::array<Byte, 256> scratch;
-              DecodeStorage storage{scratch};
-              auto reply = Codec::decode<EditorOpened>(payload, storage);
-              const auto *source = livePane(model_.panes, client->editor_source, client->editor_generation);
-              const auto *target = livePane(model_.panes, reply.pane_id, reply.pane_generation);
-              if (source == nullptr ||
-                  (reply.outcome == EditorOutcome::opened && (target == nullptr || target->location.workspace.id != source->location.workspace.id || target->location.tab_id != source->location.tab_id))) {
-                reply.outcome = EditorOutcome::failed;
-              }
-              client->editor_source = 0;
-              client->connection.send(reply);
+        if (request_tag == ClientTag::report_agent_command) {
+          if (payload.front() == static_cast<Byte>(ServerTag::request_failed)) {
+            limits_.report(LimitReach{.name = "history.command_persistence", .noun = "failed commands", .route = "history"});
+          }
+          return;
+        }
+
+        auto *client = clients_.find(client_id);
+        if (client == nullptr || client->connection.closing) {
+          return;
+        }
+
+        try {
+          if (payload.front() == static_cast<Byte>(ServerTag::editor_opened)) {
+            deliverEditorReply(*client, payload);
+          } else {
+            const auto tag = static_cast<ServerTag>(payload.front());
+            if (tag == ServerTag::history_results || tag == ServerTag::history_output || tag == ServerTag::history_stats_result || tag == ServerTag::command_suggestion) {
+              client->connection.trySendPayload(payload);
             } else {
-              const auto tag = static_cast<ServerTag>(payload.front());
-              if (tag == ServerTag::history_results || tag == ServerTag::history_output || tag == ServerTag::history_stats_result || tag == ServerTag::command_suggestion) {
-                client->connection.trySendPayload(payload);
-              } else {
-                client->connection.sendPayload(payload);
-              }
-
-              if (client->role == ClientRole::control && isHistoryRequest(request_tag)) {
-                client->connection.closing = true;
-              }
-              if (request_tag == ClientTag::open_editor) {
-                client->editor_source = 0;
-              }
+              client->connection.sendPayload(payload);
             }
-            updateWriteInterest(poller_, *client);
-          } catch (...) {
-            dropClient(client_id);
+
+            if (client->role == ClientRole::control && isHistoryRequest(request_tag)) {
+              client->connection.closing = true;
+            }
+            if (request_tag == ClientTag::open_editor) {
+              client->editor_source = 0;
+            }
           }
-        });
+          updateWriteInterest(poller_, *client);
+        } catch (...) {
+          dropClient(client_id);
+        }
+      }
+
+      // An opened editor reported to the client that asked, as failed unless it opened beside the
+      // pane it was asked from.
+      inline void deliverEditorReply(ClientSession<Memory> &client, std::span<const Byte> payload) {
+        std::array<Byte, 256> scratch;
+        DecodeStorage storage{scratch};
+        auto reply = Codec::decode<EditorOpened>(payload, storage);
+        const auto *source = livePane(model_.panes, client.editor_source, client.editor_generation);
+        const auto *target = livePane(model_.panes, reply.pane_id, reply.pane_generation);
+        if (source == nullptr ||
+            (reply.outcome == EditorOutcome::opened && (target == nullptr || target->location.workspace.id != source->location.workspace.id || target->location.tab_id != source->location.tab_id))) {
+          reply.outcome = EditorOutcome::failed;
+        }
+        client.editor_source = 0;
+        client.connection.send(reply);
       }
 
       inline std::chrono::nanoseconds publish(Clock::time_point now) {
