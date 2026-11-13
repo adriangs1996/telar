@@ -2551,15 +2551,8 @@ private:
     return socket;
   }
 
-  inline static sockaddr_in address(std::uint16_t port) noexcept {
-    sockaddr_in address{};
-#if defined(__APPLE__)
-    address.sin_len = sizeof(address);
-#endif
-    address.sin_family = AF_INET;
-    address.sin_port = htons(port);
-    address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    return address;
+  inline static NetworkAddress address(std::uint16_t port) noexcept {
+    return NetworkAddress::ipv4(in_addr{.s_addr = htonl(INADDR_LOOPBACK)}, port);
   }
 
   inline static std::optional<ProxyListener> tryPort(std::uint16_t port, bool reclaim) {
@@ -2584,7 +2577,7 @@ private:
     }
 
     const auto loopback = address(port);
-    if (::bind(socket.get(), reinterpret_cast<const sockaddr *>(&loopback), sizeof(loopback)) != 0 || ::listen(socket.get(), backlog) != 0) {
+    if (::bind(socket.get(), loopback.address(), loopback.length) != 0 || ::listen(socket.get(), backlog) != 0) {
       if (errno == EADDRINUSE) {
         return FileDescriptor{};
       }
@@ -2597,7 +2590,7 @@ private:
     try {
       auto socket = openSocket();
       const auto loopback = address(port);
-      if (::connect(socket.get(), reinterpret_cast<const sockaddr *>(&loopback), sizeof(loopback)) == 0) {
+      if (::connect(socket.get(), loopback.address(), loopback.length) == 0) {
         return true;
       }
       if (errno == ECONNREFUSED) {

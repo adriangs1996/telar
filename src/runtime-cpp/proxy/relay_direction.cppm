@@ -41,6 +41,28 @@ struct NetworkAddress {
   sockaddr_storage storage{};
   socklen_t length = 0;
 
+  inline static NetworkAddress ipv4(const in_addr &host, std::uint16_t port = 0) noexcept {
+    sockaddr_in address{};
+#if defined(__APPLE__)
+    address.sin_len = sizeof(address);
+#endif
+    address.sin_family = AF_INET;
+    address.sin_port = htons(port);
+    address.sin_addr = host;
+    return of(address);
+  }
+
+  inline static NetworkAddress ipv6(const in6_addr &host, std::uint16_t port = 0) noexcept {
+    sockaddr_in6 address{};
+#if defined(__APPLE__)
+    address.sin6_len = sizeof(address);
+#endif
+    address.sin6_family = AF_INET6;
+    address.sin6_port = htons(port);
+    address.sin6_addr = host;
+    return of(address);
+  }
+
   inline static std::optional<NetworkAddress> copy(const sockaddr *source, socklen_t size) noexcept {
     if (source == nullptr || (source->sa_family != AF_INET && source->sa_family != AF_INET6)) {
       return std::nullopt;
@@ -67,6 +89,15 @@ struct NetworkAddress {
 
   inline const sockaddr *address() const noexcept {
     return reinterpret_cast<const sockaddr *>(&storage);
+  }
+
+private:
+  template <typename Address>
+  inline static NetworkAddress of(const Address &address) noexcept {
+    NetworkAddress result;
+    std::memcpy(&result.storage, &address, sizeof(address));
+    result.length = sizeof(address);
+    return result;
   }
 };
 
@@ -422,13 +453,9 @@ public:
 
     std::array<char, ProxyHostname::maximum_bytes + 1> terminated{};
     std::copy(hostname.begin(), hostname.end(), terminated.begin());
-    sockaddr_in numeric{};
-#if defined(__APPLE__)
-    numeric.sin_len = sizeof(numeric);
-#endif
-    numeric.sin_family = AF_INET;
-    if (::inet_pton(AF_INET, terminated.data(), &numeric.sin_addr) == 1) {
-      resolved_.addresses.front() = *NetworkAddress::copy(reinterpret_cast<const sockaddr *>(&numeric), sizeof(numeric));
+    in_addr numeric{};
+    if (::inet_pton(AF_INET, terminated.data(), &numeric) == 1) {
+      resolved_.addresses.front() = NetworkAddress::ipv4(numeric);
       resolved_.summary = {.found = 1, .error = 0};
       attemptNext();
       return;

@@ -127,29 +127,21 @@ struct Target {
     std::array<char, INET6_ADDRSTRLEN> terminated{};
     std::ranges::copy(host, terminated.begin());
     Target result;
-    sockaddr_in v4{};
-#if defined(__APPLE__)
-    v4.sin_len = sizeof(v4);
-#endif
-    v4.sin_family = AF_INET;
-    sockaddr_in6 v6{};
-#if defined(__APPLE__)
-    v6.sin6_len = sizeof(v6);
-#endif
-    v6.sin6_family = AF_INET6;
-    if (::inet_pton(AF_INET, terminated.data(), &v4.sin_addr) == 1) {
-      const auto address = ntohl(v4.sin_addr.s_addr);
+    in_addr v4{};
+    in6_addr v6{};
+    if (::inet_pton(AF_INET, terminated.data(), &v4) == 1) {
+      const auto address = ntohl(v4.s_addr);
       if (address == INADDR_ANY || address == INADDR_BROADCAST || IN_MULTICAST(address)) {
         throw std::invalid_argument{"Redirect target must be unicast"};
       }
-      result.endpoint = *NetworkAddress::copy(reinterpret_cast<const sockaddr *>(&v4), sizeof(v4));
-      ::inet_ntop(AF_INET, &v4.sin_addr, terminated.data(), terminated.size());
-    } else if (::inet_pton(AF_INET6, terminated.data(), &v6.sin6_addr) == 1) {
-      if (IN6_IS_ADDR_UNSPECIFIED(&v6.sin6_addr) || IN6_IS_ADDR_MULTICAST(&v6.sin6_addr) || IN6_IS_ADDR_LINKLOCAL(&v6.sin6_addr) || IN6_IS_ADDR_V4MAPPED(&v6.sin6_addr)) {
+      result.endpoint = NetworkAddress::ipv4(v4);
+      ::inet_ntop(AF_INET, &v4, terminated.data(), terminated.size());
+    } else if (::inet_pton(AF_INET6, terminated.data(), &v6) == 1) {
+      if (IN6_IS_ADDR_UNSPECIFIED(&v6) || IN6_IS_ADDR_MULTICAST(&v6) || IN6_IS_ADDR_LINKLOCAL(&v6) || IN6_IS_ADDR_V4MAPPED(&v6)) {
         throw std::invalid_argument{"Redirect IPv6 target must be unicast without a scope"};
       }
-      result.endpoint = *NetworkAddress::copy(reinterpret_cast<const sockaddr *>(&v6), sizeof(v6));
-      ::inet_ntop(AF_INET6, &v6.sin6_addr, terminated.data(), terminated.size());
+      result.endpoint = NetworkAddress::ipv6(v6);
+      ::inet_ntop(AF_INET6, &v6, terminated.data(), terminated.size());
     } else {
       throw std::invalid_argument{"Redirect target must be a numeric IP address"};
     }

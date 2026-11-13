@@ -611,8 +611,7 @@ private:
 
     std::array<char, ProxyHostname::maximum_bytes + 1> terminated{};
     std::copy(hostname_.view().begin(), hostname_.view().end(), terminated.begin());
-    in6_addr numeric;
-    if (::inet_pton(AF_INET, terminated.data(), &numeric) == 1 || ::inet_pton(AF_INET6, terminated.data(), &numeric) == 1) {
+    if (TlsHostname::numeric(hostname_.view())) {
       requireTls(X509_VERIFY_PARAM_set1_ip_asc(SSL_get0_param(origin_.get()), terminated.data()) == 1, "Set TLS origin IP verification");
     } else {
       requireTls(SSL_set1_host(origin_.get(), terminated.data()) == 1, "Set TLS origin hostname verification");
