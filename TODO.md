@@ -259,11 +259,11 @@ graph LR
 - **Resultado:** `e36bfddca`. `CapturedCommand` pasa a `telar.runtime.history.command` (lo importan el tracker y `history.event`), `HistoryQueryOrder` a `request_worker`, su único usuario, y `history` baja por debajo de `command_capture` en `process_layers`; de rebote deja de subir `agents.snapshot → history.store`. Tres módulos de `redirect` usaban `Byte` por una cadena de re-exports cortada y ahora importan `telar.vocabulary`. Camino crítico de 22 a 21.
 - **Hecho cuando:** salen de la allowlist.
 
-### [ ] P3.9 · Romper `terminal.text_reader` → graphics
+### [x] P3.9 · Romper `terminal.text_reader` → graphics
 - **Depende de:** P1.2
 - **Toca:** `runtime.terminal.text_reader`, `runtime.graphics.kitty`, `runtime.graphics.pane_media`, `runtime.graphics.prepared_images`.
 - **Cierra:** `terminal → graphics` (3 aristas).
-- **Estado:** hecha en `refactor-p3-9` (`b1648c7cb`, más el probe `3dd416e1e`) en `Personal`, **sin integrar hasta medir**: `Terminal` deja de conocer `PaneMedia` y la llama por una tabla de punteros a función, así que `feed` hace llamadas indirectas en los paneles con media. Medir en `Personal` sin builds en marcha, desde el worktree `refactor-p3-9`: `python3 src/runtime/tools/bench_terminal_media_feed.py --baseline $SP/A/runtime --candidate $SP/B/runtime --output $SP/media-feed-1`, con `SP` el scratchpad que nombra el agente (builds en `/private/tmp`; si desaparecen, se rehacen en Release con el target `terminal-media-feed-probe`). Se integra si B no empeora fuera del ruido; si empeora, alternativa sin indirección. Al integrar, borrar sus 3 entradas de `upward_imports`.
+- **Resultado:** `b1648c7cb`, `3dd416e1e` y `bf322a45e`. `GraphicsStorage` y lo que lee las imágenes kitty de ghostty pasan a `telar.runtime.terminal.graphics_storage`. `Terminal` ya no guarda `PaneMedia`: `feed`, `resumeControl`, `resize` y `consumeResponses` reciben la media como parámetro de plantilla, así que sus llamadas se inlinean (`feedControl<PaneMedia>` sin llamadas indirectas); `Pane::resumeControl()` pasa la media del panel y en Debug un `assert` detecta una media que falta o no es la suya. Medido con `src/runtime/tools/bench_terminal_media_feed.py` en `Personal` en reposo: la primera versión, con punteros a función, perdía de +1,7 % a +2,7 % en feeds de 1 y 16 bytes y se descartó; la final, con las funciones alineadas igual en A y B, empata o gana (16 bytes −0,2 % a −0,5 %; cursor de 1 byte −0,8 % a −1,0 %, 14–15 de 15). Sin alinear queda +0,4 % en 16 bytes, que es colocación de código. `upward_imports` de 26 a 23.
 
 ### [x] P3.10 · Bajar lo que usan otros de `model.client_layouts` y de `execution_service`
 - **Depende de:** P1.2
@@ -298,10 +298,11 @@ graph LR
 - **Cierra:** `presentation → application` (2).
 - **Resultado:** `telar.gui.model.records` y `telar.gui.model.replicas` en un componente nuevo `gui/model`, y `telar.gui.presentation.notification_center`; `workspace_replica` se queda con `Pane` y los records de entrada y reexporta los tres. `StatusAge` baja a `model.records` y `TabActivity::derive` recibe el `PaneProgressState` en vez del `Pane*`, porque `Pane` contiene un `GraphicsStore` de una capa superior.
 
-### [ ] P3.12c · Sacar el payload de notificación y el estado de vista de `gui.application.host_effects`
+### [x] P3.12c · Sacar el payload de notificación y el estado de vista de `gui.application.host_effects`
 - **Depende de:** P1.2
 - **Toca:** `gui.application.host_effects`, `gui.config.gui_query`, `gui.platform.notification_commands`.
 - **Cierra:** `config → application` y `platform → application`.
+- **Resultado:** `df0f7863f`. `NotificationPayload` pasa a `telar.gui.text.notification_payload` y `ClientViewState` a `telar.gui.presentation.client_view_state`, sin cambiar su código; `host_effects`, `notification_commands` y `gui_query` los reexportan porque sus interfaces los usan. Con el orden de `process_layers` esas dos aristas ya no contaban como hacia arriba, así que `upward_imports` no cambia.
 
 ### [x] P3.13a · `gui.terminal.copy_mode` y el ciclo con `gui.fonts.face`
 - **Depende de:** P1.2
