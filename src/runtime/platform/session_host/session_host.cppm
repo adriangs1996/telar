@@ -7,7 +7,7 @@ module;
 #include <sys/stat.h>
 #include <unistd.h>
 
-export module telar.runtime.agents.session_host;
+export module telar.runtime.platform.session_host;
 
 import std;
 

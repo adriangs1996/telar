@@ -12,7 +12,7 @@ export import telar.runtime.platform.request_worker;
 export import telar.runtime.worktrees.git_probe;
 
 export import telar.runtime.history.store;
-export import telar.runtime.runtime.background_executor;
+export import telar.runtime.platform.background_executor;
 export import telar.platform;
 import telar.client.protocol;
 import telar.platform.primitives;

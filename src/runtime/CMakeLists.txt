@@ -121,7 +121,7 @@ add_library(runtime-core STATIC
   graphics/png_decoder.cpp
   platform/process_probe/process_inspector.cpp
   platform/process_probe/${TELAR_PLATFORM}/process_inspector.cpp
-  platform/stream_read_buffer/${TELAR_PLATFORM}/host_metrics.cpp
+  platform/host_metrics/${TELAR_PLATFORM}/host_metrics.cpp
   platform/launch_program/local_listener.cpp
   history/store/database.cpp
   terminal/text_reader/cell_projection.cpp)

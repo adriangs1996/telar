@@ -25,7 +25,7 @@ export import telar.platform;
 
 export import telar.runtime.diagnostics.operation;
 export import telar.runtime.history.event;
-export import telar.runtime.runtime.background_executor;
+export import telar.runtime.platform.background_executor;
 export import telar.runtime.transport.connection;
 
 export import telar.base.text;

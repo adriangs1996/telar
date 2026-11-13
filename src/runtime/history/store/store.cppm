@@ -21,7 +21,7 @@ import std;
 
 export import telar.client;
 
-export import telar.runtime.runtime.background_executor;
+export import telar.runtime.platform.background_executor;
 
 export import telar.base.diagnostics;
 
