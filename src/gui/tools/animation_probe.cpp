@@ -102,7 +102,8 @@ int main(int argc, char** argv) {
   }
 
   probe::observeAnimationPresentation();
-  ApplicationAllocator memory;
+  ApplicationMemory application_memory;
+  ApplicationAllocator& memory = application_memory.memory();
   std::unique_ptr<Application> client;
   QQuickWindow window;
 

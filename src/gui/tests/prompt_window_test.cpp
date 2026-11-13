@@ -231,7 +231,8 @@ namespace {
     // The prompt line takes the keys of a shell at its prompt, sends the finished command as one
     // paste and Enter, and stands in for the shell's prompt rows.
     Q_SLOT static void lineEditsAndRunsCommands() {
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       Application application{memory};
       QTemporaryDir directory;
 
@@ -448,7 +449,8 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
     // A separator stays as its command's rows move and updates in place, so a command that ends
     // under it is settled as one built afresh would be: its clock forgotten, its end recorded.
     Q_SLOT static void separatorSettlesACommandThatEnds() {
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       Application application{memory};
       QTemporaryDir directory;
 
@@ -507,7 +509,8 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
     }
 
     Q_SLOT static void lineHostsSearches() {
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       Application application{memory};
       QTemporaryDir directory;
 
@@ -705,7 +708,8 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
     // In a narrow pane the line turns compact: the mode's chip gives its columns to the context,
     // which never runs past them.
     Q_SLOT static void lineTurnsCompactWhenNarrow() {
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       Application application{memory};
       QTemporaryDir directory;
 
@@ -840,7 +844,8 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(socket), runtime_wait_ms);
       qputenv("SHELL", "/bin/zsh");
 
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       Application application{memory};
       const auto config = directory.filePath(QStringLiteral("config.lua"));
       QFile file{config};

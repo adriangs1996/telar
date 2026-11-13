@@ -21,6 +21,7 @@
 namespace {
 
   using telar::gui::ApplicationAllocator;
+  using telar::gui::ApplicationMemory;
   using telar::gui::qt::NativePointerEvents;
   using telar::gui::test::require;
 
@@ -162,7 +163,8 @@ namespace {
 
 int main(int argc, char** argv) try {
   const QGuiApplication application{argc, argv};
-  ApplicationAllocator memory;
+  ApplicationMemory application_memory;
+  ApplicationAllocator& memory = application_memory.memory();
 
   rawMotionExcludesQtButtonSplitting(memory);
   observersMayRetireOutOfOrder(memory);

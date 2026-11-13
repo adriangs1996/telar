@@ -130,7 +130,7 @@ namespace telar::runtime::cli {
       return 0;
     }
 
-    int runFamily(BudgetAllocator<SystemAllocator>& memory, Family family, std::span<char* const> words) {
+    int runFamily(Memory& memory, Family family, std::span<char* const> words) {
       const auto options = words.subspan(1);
 
       switch (family) {
@@ -190,8 +190,10 @@ namespace telar::runtime::cli {
         }
 
         SynchronizedAllocator synchronized{memory};
+        MemoryAdapter synchronized_memory{synchronized};
+        ConcurrentMemory& shared = synchronized_memory;
 
-        return runProxyTrust(synchronized, ProxyTrustOptions::parse(options), process_environment);
+        return runProxyTrust(shared, ProxyTrustOptions::parse(options), process_environment);
       }
       case Family::server:
         runServer(memory, words);
@@ -256,7 +258,9 @@ namespace telar::runtime::cli {
 
       if (words.empty()) {
         SystemAllocator system;
-        BudgetAllocator memory{system, memory_budget};
+        BudgetAllocator budget{system, memory_budget};
+        MemoryAdapter budget_memory{budget};
+        Memory& memory = budget_memory;
 
         return runWindowCommand(memory, words, false);
       }
@@ -272,7 +276,9 @@ namespace telar::runtime::cli {
       }
 
       SystemAllocator system;
-      BudgetAllocator memory{system, memory_budget};
+      BudgetAllocator budget{system, memory_budget};
+      MemoryAdapter budget_memory{budget};
+      Memory& memory = budget_memory;
 
       // The GUI runs plugin actions through `telar plugin-worker`; the worker lives in the runtime.
       if (first == "plugin-worker") {

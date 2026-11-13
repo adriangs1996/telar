@@ -8,6 +8,8 @@ namespace telar::gui {
   using ::telar::AllocatorRef;
   using ::telar::BudgetAllocator;
   using ::telar::makeOwned;
+  using ::telar::MemoryAdapter;
+  using ::telar::MemoryInterface;
   using ::telar::Owned;
   using ::telar::String;
   using ::telar::SynchronizedAllocator;

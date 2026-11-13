@@ -187,7 +187,8 @@ namespace {
     Q_OBJECT
 
     Q_SLOT static void successRetainsBusyRunAndReleasesSnapshot() {
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       Fixture fixture{memory};
 
       fixture.invocation.action.assign("snapshot");
@@ -220,7 +221,8 @@ namespace {
     }
 
     Q_SLOT static void environmentDirectoryAndDescriptorsAreIsolated() {
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       Fixture fixture{memory};
       const auto name = std::string{secret_name};
       const auto previous = qgetenv(name.c_str());
@@ -270,7 +272,8 @@ namespace {
     }
 
     Q_SLOT static void failuresAreBoundedAndPermitReuse() {
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       Fixture fixture{memory};
       Observer observer;
       PluginWorker worker{memory, observer};
@@ -294,7 +297,8 @@ namespace {
     }
 
     Q_SLOT static void changedPackageNeverStartsWorker() {
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       const Fixture fixture{memory};
 
       write(fixture.directory.filePath(QStringLiteral("main.lua")), "return {changed=true}");

@@ -126,7 +126,8 @@ namespace {
 
 int main(int argc, char** argv) try {
   const QCoreApplication application{argc, argv};
-  ApplicationAllocator memory;
+  ApplicationMemory application_memory;
+  ApplicationAllocator& memory = application_memory.memory();
 
   unchangedExtentsPreservePremultipliedPixels(memory);
   extremeAspectRatiosRemainBounded(memory);

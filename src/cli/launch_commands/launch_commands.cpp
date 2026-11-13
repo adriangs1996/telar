@@ -57,7 +57,7 @@ namespace telar::runtime::cli {
     constexpr std::size_t memory_budget = std::size_t{2} * 1024 * 1024 * 1024;
   }
 
-  int runMachineCommand(BudgetAllocator<SystemAllocator>& memory, std::span<char* const> words) {
+  int runMachineCommand(Memory& memory, std::span<char* const> words) {
     return runMachine(memory, MachineOptions::parse(words));
   }
 
@@ -65,7 +65,7 @@ namespace telar::runtime::cli {
     return runCliInstall(words);
   }
 
-  int runWindowCommand(BudgetAllocator<SystemAllocator>& memory, std::span<char* const> words, bool gui) {
+  int runWindowCommand(Memory& memory, std::span<char* const> words, bool gui) {
     const auto options = WindowOptions::parse(words, gui);
     if (options.login_shell) {
       relaunchLogin(words);
@@ -98,7 +98,9 @@ namespace telar::runtime::cli {
     }
 
     SystemAllocator system;
-    BudgetAllocator memory{system, memory_budget};
+    BudgetAllocator budget{system, memory_budget};
+    MemoryAdapter budget_memory{budget};
+    Memory& memory = budget_memory;
     const auto family = parseFamily(first);
     // SSH uses no PTY, so the remote CLI cannot see whether this stdout is a terminal.
     if (family == Family::clipboard && ::isatty(STDOUT_FILENO)) {

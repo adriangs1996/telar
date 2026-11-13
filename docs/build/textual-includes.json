@@ -40,8 +40,7 @@
     "<cstddef>",
     "<cstdint>",
     "<memory>",
-    "<span>",
-    "<type_traits>"
+    "<span>"
   ],
   "lib/base/memory/containers/containers.cppm": [
     "<algorithm>",

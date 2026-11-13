@@ -234,14 +234,16 @@ namespace telar::runtime::cli {
     try {
       SystemAllocator system;
       constexpr std::size_t memory_budget = 64 * 1024 * 1024;
-      BudgetAllocator memory{system, memory_budget};
-      String<decltype(memory)> path{AllocatorRef<char, decltype(memory)>{memory}};
+      BudgetAllocator budget{system, memory_budget};
+      MemoryAdapter budget_memory{budget};
+      Memory& memory = budget_memory;
+      String<Memory> path{AllocatorRef<char, Memory>{memory}};
       const ProcessEnvironment environment;
 
       if (options.path != nullptr) {
         path = options.path;
       } else {
-        path = RuntimePaths<decltype(memory)>::configFile(memory, environment);
+        path = RuntimePaths<Memory>::configFile(memory, environment);
         if (path.empty()) {
           diagnostic("cannot resolve config: Home directory unavailable for configuration", "HomeUnavailable");
         }
@@ -261,7 +263,7 @@ namespace telar::runtime::cli {
 
       vm.execute(configuration_bootstrap, "@telar/bootstrap.lua", 0);
       lua_getglobal(vm.state(), "telar");
-      lua::JsonDecoder<decltype(memory)>::install(vm.state(), memory);
+      lua::JsonDecoder<Memory>::install(vm.state(), memory);
       lua_pop(vm.state(), 1);
       config::LocalModules modules{vm.state(), directory};
 

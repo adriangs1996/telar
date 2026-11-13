@@ -324,7 +324,8 @@ namespace {
 
       QCOMPARE(configuration.write(source), source.size());
       configuration.close();
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       Application application{memory};
 
       application.loadConfiguration(configuration.fileName(), {}, {});
@@ -430,7 +431,8 @@ namespace {
     }
 
     Q_SLOT static void workspaceAndMachineStayVisibleInBothSidebarModes() {
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       Application application{memory};
       QQuickWindow window;
       QQmlEngine engine;

@@ -36,7 +36,6 @@ import telar.platform.primitives;
 
 namespace telar::runtime::cli::window {
 
-  using Memory = BudgetAllocator<SystemAllocator>;
   using Text = String<Memory>;
   using Session = ControlSession<Memory>;
   constexpr std::size_t memory_budget = 32 * 1024 * 1024;
@@ -482,7 +481,9 @@ namespace telar::runtime::cli::window {
   int connected(const Options& options, const char* prefix, Execute execute) {
     try {
       SystemAllocator system;
-      Memory memory{system, memory_budget};
+      BudgetAllocator budget{system, memory_budget};
+      MemoryAdapter budget_memory{budget};
+      Memory& memory = budget_memory;
       ServerOptions server;
 
       if (const auto socket = socketOption(options)) {

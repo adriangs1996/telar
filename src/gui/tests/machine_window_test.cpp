@@ -381,7 +381,8 @@ namespace {
   }
 
   struct MachineFixture {
-    ApplicationAllocator memory;
+    ApplicationMemory application_memory;
+    ApplicationAllocator& memory = application_memory.memory();
     Application application{memory};
     MachineClientKey remote;
     std::unique_ptr<WireRuntime> local_runtime;
@@ -490,7 +491,8 @@ namespace {
 #ifdef __APPLE__
     Q_SLOT static void clipboardCaptureFinishesWhileLocalClientIsHidden() {
       PrivateClipboard board;
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       AttachmentShelf shelf{memory};
       const MachineClientKey key{.machine = {.generation = 1}, .generation = 1};
       const AttachmentPrompt prompt{.source = key, .runtime_generation = 1, .target = {.pane_id = pane_id, .pane_generation = 1}, .attachment_generation = 1};
@@ -707,7 +709,8 @@ namespace {
 #endif
 
     Q_SLOT static void attachmentShelfAndModalLoadFromTheRegisteredQmlModule() {
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       Application application{memory};
       QQuickWindow window;
       constexpr QSize size{800, 600};
@@ -1253,7 +1256,8 @@ namespace {
     }
 
     Q_SLOT static void activityButtonsRoutePrimaryAndSecondaryOnPress() {
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       Application application{memory};
       QQuickWindow window;
       QQmlEngine engine;

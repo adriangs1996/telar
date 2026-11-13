@@ -128,7 +128,8 @@ namespace {
 
     require(directory.isValid(), "No temporary directory");
 
-    ApplicationAllocator memory;
+    ApplicationMemory application_memory;
+    ApplicationAllocator& memory = application_memory.memory();
     Application client{memory};
     // Separators belong to Telar's prompt over an integrated shell.
     const auto configuration = directory.filePath(QStringLiteral("config.lua"));

@@ -216,7 +216,8 @@ int main(int argc, char** argv) {
 
     chrome_font.setPixelSize(chrome_font_pixels);
     QGuiApplication::setFont(chrome_font);
-    telar::gui::ApplicationAllocator memory;
+    telar::gui::ApplicationMemory application_memory;
+    telar::gui::ApplicationAllocator& memory = application_memory.memory();
     const auto remote = initialMachine(parser, memory);
     telar::gui::qt::Application client{memory};
 

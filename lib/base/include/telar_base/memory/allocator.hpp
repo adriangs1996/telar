@@ -10,7 +10,9 @@
 #include <memory>
 #include <mutex>
 #include <new>
+#include <optional>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 namespace telar {
@@ -166,6 +168,94 @@ namespace telar {
   template <typename Memory>
   concept ConcurrentAllocator = Allocator<Memory> && Memory::thread_safe;
 
+  // An allocator behind a virtual call, so a service compiles once rather than once per allocator.
+  // allocate returns nullptr, instead of throwing, when it cannot satisfy the request.
+  class TBC_SHARED Memory {
+  public:
+    static constexpr bool thread_safe = false;
+
+    Memory(const Memory&) = delete;
+    Memory& operator=(const Memory&) = delete;
+
+    virtual void* allocate(std::size_t size, std::size_t alignment) noexcept = 0;
+    virtual void deallocate(void* pointer, std::size_t size, std::size_t alignment) noexcept = 0;
+
+#if TELAR_DIAGNOSTICS
+    // What the allocator underneath counts, for the runtime's memory samples; nothing if it does not count.
+    virtual std::optional<AllocationStatistics> statistics() const noexcept {
+      return std::nullopt;
+    }
+#endif
+
+  protected:
+    Memory() noexcept = default;
+    ~Memory() = default;
+  };
+
+  // A Memory that any number of threads may call at once.
+  class TBC_SHARED ConcurrentMemory : public Memory {
+  public:
+    static constexpr bool thread_safe = true;
+
+  protected:
+    ConcurrentMemory() noexcept = default;
+    ~ConcurrentMemory() = default;
+  };
+
+  // A Memory that erases every block before releasing it, for secrets.
+  class TBC_SHARED ErasingMemory : public Memory {
+  public:
+    static constexpr bool erasing = true;
+
+  protected:
+    ErasingMemory() noexcept = default;
+    ~ErasingMemory() = default;
+  };
+
+  // An allocator that erases every block it releases, as ErasingAllocator does.
+  template <typename Upstream>
+  concept SensitiveAllocator = Allocator<Upstream> && Upstream::erasing;
+
+  // The strongest interface an allocator's guarantees let it implement. Erasing wins over
+  // concurrency: a secret must not reach code that would release it without erasing it.
+  template <Allocator Upstream>
+  using MemoryInterface = std::conditional_t<
+      SensitiveAllocator<Upstream>,
+      ErasingMemory,
+      std::conditional_t<ConcurrentAllocator<Upstream>, ConcurrentMemory, Memory>>;
+
+  // Puts any allocator, test fakes included, behind Memory. It keeps the allocator by reference.
+  template <Allocator Upstream>
+  class TBC_SHARED MemoryAdapter final : public MemoryInterface<Upstream> {
+  public:
+    explicit MemoryAdapter(tbc::view<Upstream&, tbc::lt::a> upstream) noexcept
+        : upstream_(upstream) {}
+
+    void* allocate(std::size_t size, std::size_t alignment) noexcept override {
+      return upstream_.allocate(size, alignment);
+    }
+
+    void deallocate(void* pointer, std::size_t size, std::size_t alignment) noexcept override {
+      upstream_.deallocate(pointer, size, alignment);
+    }
+
+#if TELAR_DIAGNOSTICS
+    std::optional<AllocationStatistics> statistics() const noexcept override {
+      if constexpr (requires(const Upstream& upstream) { upstream.statistics(); }) {
+        return upstream_.statistics();
+      } else {
+        return std::nullopt;
+      }
+    }
+#endif
+
+  private:
+    tbc::view<Upstream&, tbc::lt::a> upstream_;
+  };
+
+  template <Allocator Upstream>
+  MemoryAdapter(Upstream& upstream) -> MemoryAdapter<Upstream>;
+
   template <typename Value, Allocator Memory>
   class TBC_SHARED AllocatorRef {
   public:
@@ -255,5 +345,8 @@ namespace telar {
 
   static_assert(Allocator<SystemAllocator>);
   static_assert(Allocator<BudgetAllocator<SystemAllocator>>);
+  static_assert(Allocator<Memory>);
+  static_assert(ConcurrentAllocator<ConcurrentMemory>);
+  static_assert(SensitiveAllocator<ErasingMemory>);
 
 }

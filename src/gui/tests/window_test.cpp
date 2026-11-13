@@ -43,7 +43,8 @@ namespace {
     }
 
     Q_SLOT static void rebindingTheCurrentWindowPreservesConnections() {
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       Application client{memory};
       QQuickWindow window;
 
@@ -58,7 +59,8 @@ namespace {
     }
 
     Q_SLOT static void aPreviousWindowCannotPublishScreenChanges() {
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       Application client{memory};
       QQuickWindow previous;
       QQuickWindow current;
@@ -75,7 +77,8 @@ namespace {
     }
 
     Q_SLOT static void destroyingAPreviousWindowPreservesTheCurrentBinding() {
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       Application client{memory};
       auto previous = std::make_unique<QQuickWindow>();
       QQuickWindow current;
@@ -95,7 +98,8 @@ namespace {
     Q_SLOT static void onlyTheCurrentWindowPublishesDensityChanges() {
       constexpr QSize target_size{320, 240};
       constexpr qreal scale_factor = 1.25;
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       Application client{memory};
       QImage image{target_size, QImage::Format_ARGB32_Premultiplied};
       QQuickWindow previous;
@@ -124,7 +128,8 @@ namespace {
     }
 
     Q_SLOT static void aWindowCanBeDestroyedBeforeItsApplication() {
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       Application client{memory};
 
       {
@@ -143,7 +148,8 @@ namespace {
     }
 
     Q_SLOT static void chromeBandsAndRowsFollowTheRenderTargetDensity() {
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       Application client{memory};
       QQuickWindow window;
       constexpr QSize logical_size{801, 503};
@@ -191,7 +197,8 @@ namespace {
     Q_SLOT static void nativeWindowDimensionsNeedNoQmlObserver() {
       constexpr QSize initial_size{900, 700};
       constexpr QSize replacement_size{1100, 800};
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       Application client{memory};
       QQuickWindow window;
 
@@ -208,7 +215,8 @@ namespace {
     Q_SLOT static void densityChangesRemeasureAnIndependentTerminal() {
       constexpr QSize target_size{320, 240};
       constexpr std::array scales{1.25, 2.0, 1.0};
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       Application client{memory};
       QImage image{target_size, QImage::Format_ARGB32_Premultiplied};
       QQuickWindow window;
@@ -229,7 +237,8 @@ namespace {
     }
 
     Q_SLOT static void anApplicationCanBeDestroyedBeforeItsWindow() {
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       QQuickWindow window;
       auto client = std::make_unique<Application>(memory);
 

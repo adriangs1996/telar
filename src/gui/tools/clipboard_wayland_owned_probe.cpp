@@ -324,7 +324,8 @@ namespace {
 
     QStringList arguments_;
     QByteArray image_;
-    ApplicationAllocator memory_;
+    ApplicationMemory application_memory_;
+    ApplicationAllocator& memory_ = application_memory_.memory();
     ClipboardImages worker_;
     std::optional<ClipboardImages> replacement_;
     InputWindow window_;

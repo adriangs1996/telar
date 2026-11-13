@@ -623,7 +623,9 @@ export {
 
           line.field("rss_bytes", residentBytes());
           if constexpr (requires { memory.statistics(); }) {
-            writeMemorySample(line, memory.statistics());
+            if (const std::optional<AllocationStatistics> statistics = memory.statistics()) {
+              writeMemorySample(line, *statistics);
+            }
           }
         });
 

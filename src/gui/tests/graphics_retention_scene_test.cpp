@@ -343,7 +343,8 @@ namespace {
       require(screen_.apply(frame) == FrameApplication::applied, "the placeholder fixture must apply its screen snapshot");
     }
 
-    ApplicationAllocator memory_;
+    ApplicationMemory application_memory_;
+    ApplicationAllocator& memory_ = application_memory_.memory();
     GraphicsBudget budget_;
     std::optional<GraphicsStore<ApplicationAllocator>> catalog_;
     Screen<ApplicationAllocator> screen_;
@@ -597,7 +598,8 @@ namespace {
         fixture.graphics().placement({.header = header, .placement = {.key = image.key, .virtual_id = index + 1, .columns = 2, .rows = 2}});
       }
 
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       const Screen<ApplicationAllocator> screen{memory};
       QQuickItem group{fixture.window().contentItem()};
 
@@ -726,7 +728,8 @@ namespace {
 
       fixture.finish(image, red);
       fixture.place(image);
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       const Screen<ApplicationAllocator> screen{memory};
       ImageItem other{fixture.catalog(), screen, *fixture.window().contentItem()};
 
@@ -750,7 +753,8 @@ namespace {
 
       fixture.finish(image, red);
       fixture.place(image);
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       constexpr std::size_t colliding_catalog_distance = image_texture_capacity * 2;
 
       for (std::size_t index = 1; index < colliding_catalog_distance; ++index) {

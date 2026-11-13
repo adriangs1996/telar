@@ -84,7 +84,8 @@ namespace {
 
       QVERIFY(directory.isValid());
       const auto path = directory.filePath(QStringLiteral("machines.json"));
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       MachineProfilesSource source{memory};
 
       source.open(path, QStringLiteral("local"));
@@ -113,7 +114,8 @@ namespace {
 
       QVERIFY(directory.isValid());
       const auto path = directory.filePath(QStringLiteral("machines.json"));
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       MachineProfilesSource source{memory};
 
       source.open(path, QStringLiteral("local"));
@@ -156,7 +158,8 @@ namespace {
       const auto path = directory.filePath(QStringLiteral("machines.json"));
 
       replaceFile(path, R"({"version":1,"machines":[{"id":"m-000000000001","label":"build","destination":"dev@build"}]})");
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       MachineProfilesSource source{memory};
 
       source.open(path, QStringLiteral("local"));
@@ -185,7 +188,8 @@ namespace {
       QVERIFY(directory.isValid());
       const auto path = directory.filePath(QStringLiteral("machines.json"));
       const auto native_path = std::filesystem::path{path.toStdString()};
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       MachineProfilesSource source{memory};
 
       source.open(path, QStringLiteral("local"));
@@ -229,7 +233,8 @@ namespace {
 
       QVERIFY(directory.isValid());
       const auto path = directory.filePath(QStringLiteral("machines.json"));
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       auto source = std::make_unique<MachineProfilesSource>(memory);
 
       source->open(path, QStringLiteral("local"));
@@ -257,7 +262,8 @@ namespace {
 
       replaceFile(first, R"({"version":1,"machines":[{"id":"m-000000000001","label":"first","destination":"dev@first"}]})");
       replaceFile(second, R"({"version":1,"machines":[{"id":"m-000000000002","label":"second","destination":"dev@second"}]})");
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       MachineProfilesSource source{memory};
       bool reopened = false;
 

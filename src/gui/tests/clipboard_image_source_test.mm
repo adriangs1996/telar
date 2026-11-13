@@ -167,7 +167,8 @@ int main() {
     int result = 0;
 
     try {
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
 
       [board clearContents];
       const auto empty = ClipboardImageSource::retainPasteboard((__bridge void*)board);

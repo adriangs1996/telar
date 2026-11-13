@@ -94,7 +94,8 @@ namespace {
     }
 
     Q_SLOT static void cardsKeepOriginalPlacementAndOutsideClicksDoNotDismiss() {
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       Application client{memory};
       QQuickWindow window;
       QQmlEngine engine;
@@ -141,7 +142,8 @@ namespace {
     }
 
     Q_SLOT static void newestTwoCardsRetainPainterOrderAndOwnedText() {
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       Application client{memory};
       QQuickWindow window;
       QQmlEngine engine;
@@ -174,7 +176,8 @@ namespace {
     }
 
     Q_SLOT static void anEmptyOverlayParksTheWindowAnimationTimer() {
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       Application client{memory};
       QQuickWindow window;
       QQmlEngine engine;
@@ -195,7 +198,8 @@ namespace {
     }
 
     Q_SLOT static void pointerFocusAndHoverFollowTheTopmostControl() {
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       Application client{memory};
       QQuickWindow window;
       QQmlEngine engine;
@@ -247,7 +251,8 @@ namespace {
     }
 
     Q_SLOT static void keyboardActionsActivateOnPress() {
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       Application client{memory};
       QQuickWindow window;
       QQmlEngine engine;
@@ -301,7 +306,8 @@ namespace {
       QCOMPARE(file.write(source), source.size());
       file.close();
 
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       Application client{memory};
       QQuickWindow window;
       QQmlEngine engine;
