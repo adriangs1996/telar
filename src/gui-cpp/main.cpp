@@ -35,6 +35,7 @@ import telar.gui.machines.picker;
 import telar.gui.machines.profile_store;
 import telar.gui.platform.login_shell;
 import telar.gui.platform.profile_file;
+import telar.platform;
 
 namespace {
 
@@ -72,34 +73,27 @@ void configureParser(QCommandLineParser &parser) {
   parser.setOptionsAfterPositionalArgumentsMode(QCommandLineParser::ParseAsPositionalArguments);
 }
 
-// A file in Telar's configuration directory, found as the runtime and the CLI find it: an empty
-// XDG_CONFIG_HOME counts as unset, and without HOME there is no such file.
+// A file in Telar's configuration directory, found as the runtime and the CLI find it; empty
+// without that directory.
 QString telarConfigFile(const QString &name) {
-  if (const auto base = qEnvironmentVariable("XDG_CONFIG_HOME"); !base.isEmpty()) {
-    return base + QStringLiteral("/telar/") + name;
-  }
-
-  const auto home = qEnvironmentVariable("HOME");
-
-  return home.isEmpty() ? QString{} : home + QStringLiteral("/.config/telar/") + name;
+  telar::SystemAllocator memory;
+  const auto directory = telar::runtime::cli::RuntimePaths<telar::SystemAllocator>::configHome(memory, telar::runtime::process_environment);
+  return directory.empty() ? QString{} : QString::fromUtf8(directory.data(), static_cast<qsizetype>(directory.size())) + QLatin1Char('/') + name;
 }
 
+// The configuration the runtime reads too: --config, else the one it finds itself when it exists.
 QString configurationPath(const QCommandLineParser &parser) {
   if (parser.isSet(QStringLiteral("no-config"))) {
     return {};
   }
 
-  auto path = parser.value(QStringLiteral("config"));
-  if (path.isEmpty()) {
-    path = qEnvironmentVariable("TELAR_DEVELOPMENT_CONFIG");
-  }
-
-  if (!path.isEmpty()) {
+  if (auto path = parser.value(QStringLiteral("config")); !path.isEmpty()) {
     return path;
   }
 
-  path = telarConfigFile(QStringLiteral("config.lua"));
-
+  telar::SystemAllocator memory;
+  const auto file = telar::runtime::cli::RuntimePaths<telar::SystemAllocator>::configFile(memory, telar::runtime::process_environment);
+  const auto path = QString::fromUtf8(file.data(), static_cast<qsizetype>(file.size()));
   return !path.isEmpty() && QFileInfo::exists(path) ? path : QString{};
 }
 

@@ -229,14 +229,11 @@ int checkConfiguration(const window::ConfigCheckOptions &options) {
     const ProcessEnvironment environment;
     if (options.path != nullptr) {
       path = options.path;
-    } else if (const auto development = environment.lookup("TELAR_DEVELOPMENT_CONFIG"); !development.empty()) {
-      path = development;
-    } else if (const auto base = environment.lookup("XDG_CONFIG_HOME"); !base.empty()) {
-      path = base;
-      path += "/telar/config.lua";
     } else {
-      path = environment.lookup("HOME");
-      path += "/.config/telar/config.lua";
+      path = RuntimePaths<decltype(memory)>::configFile(memory, environment);
+      if (path.empty()) {
+        diagnostic("cannot resolve config: Home directory unavailable for configuration", "HomeUnavailable");
+      }
     }
 
     std::array<char, PATH_MAX> canonical;

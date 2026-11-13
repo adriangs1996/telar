@@ -716,7 +716,7 @@ void words() {
   make(".ssh/config", "Host build-01 build-02\n  HostName x\nhost *.internal\nHost=builder\nMatch all\n", 0600);
   make("Makefile", "all: build\nbuild test: deps\n\tcc\n.PHONY: all\nVAR := 1\n%.o: %.c\ninstall::\n", 0600);
 
-  WordReader reader;
+  WordReader reader{base + "/telar"};
   const auto ask = [&](CompletionProvider provider, std::string_view prefix) {
     WordRequest request{.client = 1, .request = 9, .provider = provider, .prefix = {}, .directory = {}, .home = {}, .path = {}};
     request.prefix.assign(prefix);
@@ -784,8 +784,6 @@ void words() {
     request.known_digest = known;
     return reader.observe(request);
   };
-  const auto saved_config = std::getenv("XDG_CONFIG_HOME") == nullptr ? std::optional<std::string>{} : std::optional<std::string>{std::getenv("XDG_CONFIG_HOME")};
-  ::setenv("XDG_CONFIG_HOME", base.c_str(), 1);
   const auto nmap = spec("nmap");
   check(nmap.spec && nmap.command == "nmap" && nmap.spec_state == CommandSpecState::available && nmap.source.find("nmap = ") != std::string::npos && nmap.digest != 0);
   check(spec("nmap", nmap.digest).spec_state == CommandSpecState::unchanged && spec("nmap", nmap.digest).source.empty());
@@ -809,11 +807,6 @@ void words() {
   check(users.spec_state == CommandSpecState::available && users.source.find("--mine") != std::string::npos && users.digest != nmap.digest);
   make("telar/completions/nmap.ebnf", "nmap = { \"--broken\" \n", 0600);
   check(spec("nmap").source == nmap.source);
-  if (saved_config) {
-    ::setenv("XDG_CONFIG_HOME", saved_config->c_str(), 1);
-  } else {
-    ::unsetenv("XDG_CONFIG_HOME");
-  }
 
   // This process is the user's, named; newer ones come first. The prefix also matches
   // longer process identifiers, newer than this one, so it need not be the first.

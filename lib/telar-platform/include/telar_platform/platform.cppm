@@ -1038,6 +1038,102 @@ struct DefaultSocketEnvironment {
   }
 };
 
+// An XDG base directory as the specification reads it: `variable` when it holds an absolute
+// path, else `fallback` under HOME when that is absolute. Empty when neither applies, since a
+// relative path in either is invalid.
+template <Allocator Memory, EnvironmentLookup Environment>
+inline String<Memory> xdgDirectory(Memory &memory, const Environment &environment, const char *variable, std::string_view fallback) {
+  String<Memory> path{AllocatorRef<char, Memory>{memory}};
+  if (const auto base = environment.lookup(variable); base.starts_with('/')) {
+    path = base;
+  } else if (const auto home = environment.lookup("HOME"); home.starts_with('/')) {
+    path = home;
+    path += fallback;
+  }
+
+  return path;
+}
+
+// Where a runtime's socket is, as every telar process finds it: the explicit path, else
+// TELAR_SOCKET, else TELAR_SOCKET_PATH, else the managed `runtime.sock` in XDG_RUNTIME_DIR/telar
+// or, without it, in TMPDIR/telar-<user> (/tmp without TMPDIR). Built in place; it throws unless
+// the result is an absolute path that fits sockaddr_un and names no directory.
+class SocketLocation {
+public:
+  template <EnvironmentLookup Environment>
+  [[nodiscard]] inline static SocketLocation resolve(std::string_view explicit_path, const Environment &environment, std::uint32_t user) {
+    for (const auto candidate : {explicit_path, environment.lookup("TELAR_SOCKET"), environment.lookup("TELAR_SOCKET_PATH")}) {
+      if (!candidate.empty()) {
+        return explicitPath(candidate);
+      }
+    }
+
+    SocketLocation location;
+
+    if (const auto runtime_directory = environment.lookup("XDG_RUNTIME_DIR"); !runtime_directory.empty()) {
+      location.managed(runtime_directory, "telar");
+    } else {
+      const auto temporary_directory = environment.lookup("TMPDIR");
+      std::array<char, 32> name;
+      constexpr std::string_view prefix = "telar-";
+      std::ranges::copy(prefix, name.begin());
+      const auto converted = std::to_chars(name.data() + prefix.size(), name.data() + name.size(), user);
+      location.managed(temporary_directory.empty() ? "/tmp" : temporary_directory, {name.data(), converted.ptr});
+    }
+
+    location.validate();
+    return location;
+  }
+
+  [[nodiscard]] inline static SocketLocation explicitPath(std::string_view path) {
+    SocketLocation location;
+    location.append(path);
+    location.validate();
+    return location;
+  }
+
+  [[nodiscard]] inline std::string_view path() const noexcept {
+    return {bytes_.data(), length_};
+  }
+
+  // The directory a managed socket lives in, which its runtime creates; none for an explicit path.
+  [[nodiscard]] inline std::optional<std::string_view> managedDirectory() const noexcept {
+    return directory_ == 0 ? std::nullopt : std::optional{path().substr(0, directory_)};
+  }
+
+private:
+  inline void managed(std::string_view base, std::string_view name) {
+    append(base);
+    if (!base.ends_with('/')) {
+      append("/");
+    }
+
+    append(name);
+    directory_ = length_;
+    append("/runtime.sock");
+  }
+
+  inline void append(std::string_view text) {
+    if (text.size() >= bytes_.size() - length_) {
+      throw std::invalid_argument{"Invalid absolute runtime socket path"};
+    }
+
+    std::ranges::copy(text, bytes_.data() + length_);
+    length_ += text.size();
+  }
+
+  inline void validate() const {
+    const auto socket = path();
+    if (socket.empty() || socket.front() != '/' || socket.back() == '/' || socket.contains('\0')) {
+      throw std::invalid_argument{"Invalid absolute runtime socket path"};
+    }
+  }
+
+  std::array<char, sizeof(sockaddr_un::sun_path)> bytes_{};
+  std::size_t length_ = 0;
+  std::size_t directory_ = 0;
+};
+
 template <Allocator Memory>
 class RuntimePaths {
 public:
@@ -1091,6 +1187,33 @@ public:
     return socket == expected.socket;
   }
 
+  // telar's configuration directory: XDG_CONFIG_HOME/telar, else ~/.config/telar; empty without either.
+  template <EnvironmentLookup Environment>
+  [[nodiscard]] inline static String<Memory> configHome(Memory &memory, const Environment &environment) {
+    auto path = xdgDirectory(memory, environment, "XDG_CONFIG_HOME", "/.config");
+    if (!path.empty()) {
+      path += "/telar";
+    }
+
+    return path;
+  }
+
+  // The configuration a process started without --config reads: TELAR_DEVELOPMENT_CONFIG, else
+  // config.lua in the configuration directory; empty without either.
+  template <EnvironmentLookup Environment>
+  [[nodiscard]] inline static String<Memory> configFile(Memory &memory, const Environment &environment) {
+    if (const auto development = environment.lookup("TELAR_DEVELOPMENT_CONFIG"); !development.empty()) {
+      return String<Memory>{development, AllocatorRef<char, Memory>{memory}};
+    }
+
+    auto path = configHome(memory, environment);
+    if (!path.empty()) {
+      path += "/config.lua";
+    }
+
+    return path;
+  }
+
   inline void prepareStorage() const {
     if (history_managed) {
       createPrivateDirectory(std::string_view{history}.substr(0, history.rfind('/')));
@@ -1108,44 +1231,9 @@ public:
 private:
   template <EnvironmentLookup Environment>
   inline void resolveSocket(std::string_view override, const Environment &environment) {
-    for (const auto candidate : {override, environment.lookup("TELAR_SOCKET"), environment.lookup("TELAR_SOCKET_PATH")}) {
-      if (!candidate.empty()) {
-        socket = candidate;
-        validateSocket();
-        return;
-      }
-    }
-
-    socket_managed = true;
-    if (const auto runtime_directory = environment.lookup("XDG_RUNTIME_DIR"); !runtime_directory.empty()) {
-      socket = runtime_directory;
-      appendSocketDirectory("telar");
-    } else {
-      const auto temporary_directory = environment.lookup("TMPDIR");
-      socket = temporary_directory.empty() ? "/tmp" : temporary_directory;
-      std::array<char, 32> name;
-      constexpr std::string_view prefix = "telar-";
-      std::copy(prefix.begin(), prefix.end(), name.begin());
-      const auto converted = std::to_chars(name.data() + prefix.size(), name.data() + name.size(), ::getuid());
-      appendSocketDirectory({name.data(), converted.ptr});
-    }
-
-    validateSocket();
-  }
-
-  inline void appendSocketDirectory(std::string_view name) {
-    if (socket.back() != '/') {
-      socket.push_back('/');
-    }
-
-    socket += name;
-    socket += "/runtime.sock";
-  }
-
-  inline void validateSocket() const {
-    if (socket.empty() || socket.front() != '/' || socket.size() >= sizeof(sockaddr_un::sun_path) || socket.back() == '/' || socket.contains('\0')) {
-      throw std::invalid_argument{"Invalid absolute runtime socket path"};
-    }
+    const auto location = SocketLocation::resolve(override, environment, ::getuid());
+    socket = location.path();
+    socket_managed = location.managedDirectory().has_value();
   }
 };
 

@@ -931,14 +931,14 @@ class Paths {
 public:
   template <Allocator Memory, EnvironmentLookup Environment>
   inline static String<Memory> trust(Memory &memory, const Environment &environment) {
-    auto path = base(memory, environment, "XDG_CONFIG_HOME", "/.config");
-    path += "/telar/trust.json";
+    auto path = required(cli::RuntimePaths<Memory>::configHome(memory, environment));
+    path += "/trust.json";
     return path;
   }
 
   template <Allocator Memory, EnvironmentLookup Environment>
   inline static String<Memory> installation(Memory &memory, const Environment &environment, const Package &package) {
-    auto path = base(memory, environment, "XDG_DATA_HOME", "/.local/share");
+    auto path = required(cli::xdgDirectory(memory, environment, "XDG_DATA_HOME", "/.local/share"));
     path += "/telar/plugins/";
     path += package.manifest.id.view();
     path += '/';
@@ -947,15 +947,10 @@ public:
   }
 
 private:
-  template <Allocator Memory, EnvironmentLookup Environment>
-  inline static String<Memory> base(Memory &memory, const Environment &environment, const char *variable, std::string_view fallback) {
-    String<Memory> path{environment.lookup(variable), AllocatorRef<char, Memory>{memory}};
+  template <Allocator Memory>
+  inline static String<Memory> required(String<Memory> path) {
     if (path.empty()) {
-      path = environment.lookup("HOME");
-      if (path.empty()) {
-        throw std::invalid_argument{"Home directory unavailable for plugins"};
-      }
-      path += fallback;
+      throw std::invalid_argument{"Home directory unavailable for plugins"};
     }
     return path;
   }

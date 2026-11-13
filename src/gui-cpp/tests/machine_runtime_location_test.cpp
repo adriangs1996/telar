@@ -70,7 +70,7 @@ void invalidLocationsAndCapacity() {
   const std::string boundary = "/" + std::string(platform::SocketLimits::path_bytes - 1, 'x');
   require(MachineRuntimeLocation::explicitPath(boundary).endpoint() == boundary, "the native Unix socket path boundary must be admitted");
   const auto too_long = boundary + 'x';
-  const std::array<std::string_view, 4> invalid{"", "relative", std::string_view{"/a\0b", 4}, too_long};
+  const std::array<std::string_view, 5> invalid{"", "relative", std::string_view{"/a\0b", 4}, too_long, "/run/user/"};
   for (const auto path : invalid) {
     bool rejected = false;
     try {

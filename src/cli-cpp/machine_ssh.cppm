@@ -628,18 +628,13 @@ namespace telar::runtime::cli::machine {
 using namespace machines;
 
 inline std::string profilesPath() {
-  const ProcessEnvironment environment;
-  const auto config = environment.lookup("XDG_CONFIG_HOME");
-  if (!config.empty()) {
-    return std::string{config} + "/telar/machines.json";
-  }
-
-  const auto home = environment.lookup("HOME");
-  if (home.empty()) {
+  SystemAllocator memory;
+  const auto directory = RuntimePaths<SystemAllocator>::configHome(memory, ProcessEnvironment{});
+  if (directory.empty()) {
     throw CommandError{"HomeUnavailable"};
   }
 
-  return std::string{home} + "/.config/telar/machines.json";
+  return std::string{directory} + "/machines.json";
 }
 
 template <Allocator Memory>

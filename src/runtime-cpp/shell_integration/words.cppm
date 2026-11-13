@@ -79,8 +79,13 @@ public:
   static constexpr std::size_t maximum_file = 1 << 20;
   static constexpr std::size_t maximum_entries = 65536;
 
-  inline WordReader()
-      : git_(memory_) {}
+  // User specs come from `completions` in the configuration directory the runtime resolved.
+  inline explicit WordReader(std::string_view configuration_directory = {})
+      : git_(memory_) {
+    if (!configuration_directory.empty()) {
+      completions_.assign(configuration_directory).append("/completions");
+    }
+  }
 
   inline Result observe(const Request &request) noexcept {
     Result result{.client = request.client, .request = request.request, .words = {}, .truncated = false};
@@ -288,19 +293,13 @@ private:
     return found;
   }
 
-  // The user's spec for `name`, from $XDG_CONFIG_HOME/telar/completions (or
-  // ~/.config/telar/completions); empty when there is none or it does not compile.
+  // The user's spec for `name`, from the completions directory beside the configuration;
+  // empty when there is none or it does not compile.
   inline std::string userSpec(std::string_view name) {
-    std::string directory;
-    if (const char *config = std::getenv("XDG_CONFIG_HOME"); config != nullptr && config[0] == '/') {
-      directory.assign(config);
-    } else if (const char *home = std::getenv("HOME"); home != nullptr && home[0] == '/') {
-      directory.assign(home).append("/.config");
-    } else {
+    if (completions_.empty()) {
       return {};
     }
-    directory.append("/telar/completions");
-    FileDescriptor folder{::open(directory.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
+    FileDescriptor folder{::open(completions_.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
     if (!folder) {
       return {};
     }
@@ -728,6 +727,7 @@ private:
     }
   }
 
+  std::string completions_;
   SystemAllocator memory_;
   git::StatusReader<SystemAllocator> git_;
   // Whether each user spec, by digest, compiled: a spec is compiled once, not per request.
@@ -737,8 +737,8 @@ private:
 // One query at a time; later ones wait in order, at most a few per client.
 class WordService {
 public:
-  inline WordService()
-      : worker_(std::in_place) {}
+  inline explicit WordService(std::string_view configuration_directory = {})
+      : worker_(std::in_place, configuration_directory) {}
 
   inline void request(const WordRequest &request) {
     if (std::ranges::count(waiting_, request.client, &WordRequest::client) >= 4) {

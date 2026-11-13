@@ -71,6 +71,36 @@ static void testPaths() {
   check(custom_paths.history == "/private/history.db" && !custom_paths.history_managed && custom_paths.session.empty());
 }
 
+// Every process finds the configuration directory the same way: an XDG path counts only when
+// absolute, HOME too, and without either there is none.
+static void testConfigHome() {
+  SystemAllocator memory;
+  using Paths = RuntimePaths<SystemAllocator>;
+  TestEnvironment environment{{{{"XDG_CONFIG_HOME", "/config"}, {"HOME", "/home/user"}, {"TELAR_DEVELOPMENT_CONFIG", ""}}}};
+  check(Paths::configHome(memory, environment) == "/config/telar");
+  check(Paths::configFile(memory, environment) == "/config/telar/config.lua");
+  environment.values[0].second = "relative";
+  check(Paths::configHome(memory, environment) == "/home/user/.config/telar");
+  environment.values[0].second = {};
+  check(Paths::configHome(memory, environment) == "/home/user/.config/telar");
+  environment.values[1].second = {};
+  check(Paths::configHome(memory, environment).empty() && Paths::configFile(memory, environment).empty());
+  environment.values[1].second = "home";
+  check(Paths::configHome(memory, environment).empty());
+  environment.values[2].second = "/repository/dev/config.lua";
+  check(Paths::configFile(memory, environment) == "/repository/dev/config.lua");
+
+  ServerOptions options;
+  options.socket = "/run/user/";
+  bool rejected = false;
+  try {
+    RuntimePaths directory{memory, options, environment};
+  } catch (const std::invalid_argument &) {
+    rejected = true;
+  }
+  check(rejected);
+}
+
 static void testArguments() {
   std::array arguments{const_cast<char *>("server"), const_cast<char *>("endpoint"), const_cast<char *>("--socket"), const_cast<char *>("/tmp/runtime.sock"), const_cast<char *>("--no-config")};
   const auto options = ServerOptions::parse(arguments);
@@ -144,6 +174,7 @@ static void testClientSocket() {
 
 void testCli() {
   testPaths();
+  testConfigHome();
   testArguments();
   testPrivateDirectory();
   testClientSocket();

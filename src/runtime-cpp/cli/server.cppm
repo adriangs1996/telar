@@ -364,6 +364,9 @@ export namespace telar::runtime::cli {
     poller.watchSignal(SIGTERM);
     poller.watchSignal(SIGINT);
     poller.watchSignal(SIGCHLD);
+    // Without a configuration file, completion specs still come from the configuration directory.
+    const auto config_home = RuntimePaths<Memory>::configHome(memory, process_environment);
+    const auto configuration_directory = configuration.configuration_directory.view();
     // The runtime keeps views of these options, so they live as long as it does.
     const RuntimeOptions runtime_options{
         .socket = paths.socket,
@@ -377,6 +380,7 @@ export namespace telar::runtime::cli {
         .control_policy = configuration.control_policy,
         .shell_integration = shell_integration,
         .ssh_integration = configuration.ssh_integration,
+        .configuration_directory = configuration_directory.empty() ? std::string_view{config_home} : configuration_directory,
     };
     Runtime runtime{memory, poller, background, runtime_options, proxy.clientConfiguration()};
     runtime.run(proxy, plugin_service);

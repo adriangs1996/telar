@@ -642,6 +642,8 @@ export {
       control::Policy control_policy{};
       std::string_view shell_integration;
       bool ssh_integration = false;
+      // Where the user's completion specs live: the configuration's own directory.
+      std::string_view configuration_directory;
     };
 
   }
@@ -1609,6 +1611,7 @@ export {
             session_(memory),
             metrics_(Clock::now()),
             workspace_git_(limits_, memory),
+            words_(options.configuration_directory),
             agent_files_(memory),
             descriptions_(memory, background_, options.descriptions),
             telemetry_(options.socket, proxy.status()) {

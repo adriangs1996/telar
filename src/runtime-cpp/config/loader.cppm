@@ -30,22 +30,9 @@ export namespace telar::runtime::config {
 
       String<Memory> path{options.config, AllocatorRef<char, Memory>{memory_}};
       if (path.empty()) {
-        const auto development = environment.lookup("TELAR_DEVELOPMENT_CONFIG");
-        const auto config_home = environment.lookup("XDG_CONFIG_HOME");
-        if (!development.empty()) {
-          path = development;
-        } else if (!config_home.empty()) {
-          path = config_home;
-          path += "/telar/config.lua";
-        } else {
-          const auto home = environment.lookup("HOME");
-
-          if (home.empty()) {
-            throw lua::Error{"Home directory unavailable for configuration"};
-          }
-
-          path = home;
-          path += "/.config/telar/config.lua";
+        path = cli::RuntimePaths<Memory>::configFile(memory_, environment);
+        if (path.empty()) {
+          throw lua::Error{"Home directory unavailable for configuration"};
         }
       }
 
