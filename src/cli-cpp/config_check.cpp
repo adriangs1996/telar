@@ -238,8 +238,7 @@ int checkConfiguration(const window::ConfigCheckOptions &options) {
 
     std::array<char, PATH_MAX> canonical;
     if (::realpath(path.c_str(), canonical.data()) == nullptr) {
-      const auto error = errno == ENOENT ? "FileNotFound" : errno == EACCES ? "AccessDenied"
-                                                                            : "Unexpected";
+      const auto error = systemErrorName(errno);
       diagnostic("cannot resolve config '" + std::string{path} + "': " + error, error);
     }
 

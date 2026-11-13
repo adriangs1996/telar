@@ -63,11 +63,8 @@ export {
 namespace telar::runtime::cli {
 
 inline CommandError fileError(int code) {
-  return CommandError{code == ENOENT ? "FileNotFound" : code == EACCES || code == EPERM ? "AccessDenied"
-                                                    : code == ENOTDIR                   ? "NotDir"
-                                                    : code == EINVAL                    ? "NotLink"
-                                                    : code == ENAMETOOLONG              ? "NameTooLong"
-                                                                                        : "Unexpected"};
+  // readlink's EINVAL means the path is no link.
+  return CommandError{code == EINVAL ? "NotLink" : systemErrorName(code)};
 }
 
 struct CliInstallOptions {

@@ -168,6 +168,36 @@ private:
   int code_;
 };
 
+// The name the CLI prints for an errno, a token scripts read after `error: `. Every errno a
+// command can meet on files and sockets has one; anything else is Unexpected.
+inline const char *systemErrorName(int code) noexcept {
+  switch (code) {
+  case ENOENT:
+    return "FileNotFound";
+  case ECONNREFUSED:
+    return "ConnectionRefused";
+  case EACCES:
+  case EPERM:
+    return "AccessDenied";
+  case ENOTDIR:
+    return "NotDir";
+  case ENAMETOOLONG:
+    return "NameTooLong";
+  case ELOOP:
+    return "SymLinkLoop";
+  case EEXIST:
+    return "PathAlreadyExists";
+  case ENOSPC:
+    return "NoSpaceLeft";
+  case EINVAL:
+    return "InvalidArgument";
+  case EIO:
+    return "InputOutput";
+  default:
+    return "Unexpected";
+  }
+}
+
 }
 }
 

@@ -657,23 +657,10 @@ private:
     return options;
   }
 
+  // An errno a connection can meet is named as everywhere; anything else is described.
   inline static const char *connectionFailure(int code) noexcept {
-    switch (code) {
-    case ENOENT:
-      return "FileNotFound";
-    case ECONNREFUSED:
-      return "ConnectionRefused";
-    case EACCES:
-      return "PermissionDenied";
-    case ENOTDIR:
-      return "NotDir";
-    case ELOOP:
-      return "SymLinkLoop";
-    case ENAMETOOLONG:
-      return "NameTooLong";
-    default:
-      return "the local runtime is not reachable";
-    }
+    const auto *name = systemErrorName(code);
+    return std::string_view{name} == "Unexpected" ? "the local runtime is not reachable" : name;
   }
 
   // Rethrows the exception being handled as the failure the command reports.

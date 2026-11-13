@@ -101,6 +101,14 @@ static void testConfigHome() {
   check(rejected);
 }
 
+// The errno names scripts read after `error: `: one for denied access, one for anything unknown.
+static void testErrorNames() {
+  check(std::string_view{systemErrorName(EACCES)} == "AccessDenied" && std::string_view{systemErrorName(EPERM)} == "AccessDenied");
+  check(std::string_view{systemErrorName(EIO)} == "InputOutput" && std::string_view{systemErrorName(EEXIST)} == "PathAlreadyExists");
+  check(std::string_view{systemErrorName(ENOSPC)} == "NoSpaceLeft" && std::string_view{systemErrorName(EINVAL)} == "InvalidArgument");
+  check(std::string_view{systemErrorName(EDOM)} == "Unexpected");
+}
+
 static void testArguments() {
   std::array arguments{const_cast<char *>("server"), const_cast<char *>("endpoint"), const_cast<char *>("--socket"), const_cast<char *>("/tmp/runtime.sock"), const_cast<char *>("--no-config")};
   const auto options = ServerOptions::parse(arguments);
@@ -175,6 +183,7 @@ static void testClientSocket() {
 void testCli() {
   testPaths();
   testConfigHome();
+  testErrorNames();
   testArguments();
   testPrivateDirectory();
   testClientSocket();

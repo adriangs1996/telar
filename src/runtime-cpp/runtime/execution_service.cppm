@@ -450,7 +450,7 @@ inline std::string_view launchFailureCause(const std::exception &error) noexcept
       return "SystemResources";
     case EACCES:
     case EPERM:
-      return "PermissionDenied";
+      return "AccessDenied";
     case EBADF:
       return "InvalidDescriptor";
     default:

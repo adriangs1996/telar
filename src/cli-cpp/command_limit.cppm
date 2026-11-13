@@ -226,26 +226,6 @@ inline const char *jsonBoolean(bool value) {
   return value ? "true" : "false";
 }
 
-inline const char *systemErrorName(int code) {
-  switch (code) {
-  case ENOENT:
-    return "FileNotFound";
-  case ECONNREFUSED:
-    return "ConnectionRefused";
-  case EACCES:
-  case EPERM:
-    return "AccessDenied";
-  case ENOTDIR:
-    return "NotDir";
-  case ENAMETOOLONG:
-    return "NameTooLong";
-  case ELOOP:
-    return "SymLinkLoop";
-  default:
-    return "InputOutput";
-  }
-}
-
 inline std::string_view commandErrorName(const std::exception &error) {
   if (const auto *system = dynamic_cast<const SystemError *>(&error)) {
     return systemErrorName(system->code());

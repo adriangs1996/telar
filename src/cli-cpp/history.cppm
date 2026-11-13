@@ -134,26 +134,8 @@ namespace telar::runtime::cli::file_transfer {
 inline constexpr std::uint64_t max_bytes = 128 * 1024 * 1024;
 inline constexpr std::size_t copy_buffer_bytes = 64 * 1024;
 
-inline const char *fileError(int code) {
-  switch (code) {
-  case ENOENT:
-    return "FileNotFound";
-  case ENOTDIR:
-    return "NotDir";
-  case EACCES:
-  case EPERM:
-    return "AccessDenied";
-  case EEXIST:
-    return "PathAlreadyExists";
-  case ELOOP:
-    return "SymLinkLoop";
-  case ENAMETOOLONG:
-    return "NameTooLong";
-  case ENOSPC:
-    return "NoSpaceLeft";
-  default:
-    return "InputOutput";
-  }
+inline const char *fileError(int code) noexcept {
+  return systemErrorName(code);
 }
 
 struct Options {

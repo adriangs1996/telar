@@ -376,8 +376,7 @@ inline std::vector<char *> pointers(const std::vector<std::string> &arguments) {
 [[noreturn]] inline void replace(const std::vector<std::string> &arguments) {
   const auto argv = pointers(arguments);
   ::execvp(argv.front(), argv.data());
-  throw CommandError{errno == ENOENT ? "FileNotFound" : errno == EACCES ? "AccessDenied"
-                                                                        : "Unexpected"};
+  throw CommandError{systemErrorName(errno)};
 }
 
 // Runs a program on this terminal: it keeps the standard streams and this process group, and

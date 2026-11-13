@@ -486,9 +486,7 @@ int connected(const Options &options, const char *prefix, Execute execute) {
     std::println(stderr, "{}{}", prefix, error.what());
   } catch (const SystemError &error) {
     const bool timeout = error.code() == EAGAIN || error.code() == ETIMEDOUT;
-    const char *description = timeout ? "RuntimeTimeout" : error.code() == ENOENT     ? "FileNotFound"
-                                                       : error.code() == ECONNREFUSED ? "ConnectionRefused"
-                                                                                      : error.what();
+    const char *description = timeout ? "RuntimeTimeout" : error.code() == ENOENT || error.code() == ECONNREFUSED ? systemErrorName(error.code()) : error.what();
     if constexpr (std::is_same_v<Options, NotificationOptions>) {
       if (error.code() == ENOENT || error.code() == ECONNREFUSED) {
         std::println(stderr, "{}runtime is not running\nerror: RuntimeNotRunning", prefix);
