@@ -253,6 +253,7 @@ graph LR
 - **Depende de:** P1.2
 - **Toca:** `runtime.terminal.text_reader`, `runtime.graphics.kitty`, `runtime.graphics.pane_media`, `runtime.graphics.prepared_images`.
 - **Cierra:** `terminal → graphics` (3 aristas).
+- **Estado:** hecha en `refactor-p3-9` (`b1648c7cb`, más el probe `3dd416e1e`) en `Personal`, **sin integrar hasta medir**: `Terminal` deja de conocer `PaneMedia` y la llama por una tabla de punteros a función, así que `feed` hace llamadas indirectas en los paneles con media. Medir en `Personal` sin builds en marcha, desde el worktree `refactor-p3-9`: `python3 src/runtime/tools/bench_terminal_media_feed.py --baseline $SP/A/runtime --candidate $SP/B/runtime --output $SP/media-feed-1`, con `SP` el scratchpad que nombra el agente (builds en `/private/tmp`; si desaparecen, se rehacen en Release con el target `terminal-media-feed-probe`). Se integra si B no empeora fuera del ruido; si empeora, alternativa sin indirección. Al integrar, borrar sus 3 entradas de `upward_imports`.
 
 ### [ ] P3.10 · Bajar lo que usan otros de `model.client_layouts` y de `execution_service`
 - **Depende de:** P1.2
