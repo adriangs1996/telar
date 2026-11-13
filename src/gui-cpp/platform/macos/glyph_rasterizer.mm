@@ -1,3 +1,4 @@
+#include "tbc/view.hpp"
 #include "glyph_rasterizer.h"
 #include "font_smoothing.h"
 #include "cf_reference.hpp"
@@ -59,11 +60,12 @@ static CTFontRef font_from_data(const telar_glyph_rasterizer_options *options) {
   return NULL;
 }
 
-// The font with the variation applied, or none; the font itself is consumed.
-static CTFontRef vary(CTFontRef consumed, const telar_font_variation *variation) {
+// The font with the variation applied, or none; the font itself is consumed. The result is a new
+// reference the caller owns, borrowing none of the arguments.
+static tbc::view<CTFontRef, tbc::lt::static_storage> vary(CTFontRef consumed, const telar_font_variation *variation) {
   NativeReference font{consumed};
   if (!font || variation == NULL || variation->count == 0) {
-    return font.release();
+    return tbc::raw(font.release());
   }
   if (variation->count > telar_font_max_axes) {
     return NULL;
@@ -83,7 +85,7 @@ static CTFontRef vary(CTFontRef consumed, const telar_font_variation *variation)
   const void *values[] = {axes.get()};
   const NativeReference attributes{CFDictionaryCreate(kCFAllocatorDefault, keys, values, 1, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks)};
   const NativeReference descriptor{attributes ? CTFontDescriptorCreateWithAttributes(attributes.get()) : nullptr};
-  return descriptor ? CTFontCreateCopyWithAttributes(font.get(), CTFontGetSize(font.get()), NULL, descriptor.get()) : NULL;
+  return descriptor ? tbc::raw(CTFontCreateCopyWithAttributes(font.get(), CTFontGetSize(font.get()), NULL, descriptor.get())) : NULL;
 }
 
 void telarGlyphRasterizerDestroy(telar_glyph_rasterizer *self) {
