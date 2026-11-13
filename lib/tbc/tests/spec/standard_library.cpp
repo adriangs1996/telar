@@ -344,7 +344,7 @@ std::pair<std::string_view, std::string> convertedOwnerCopied(std::string_view t
 
 // CASE: std.range_copy
 // PAIR: std.range_construction
-// SOURCE: src/gui-cpp/tests/font_fixture.hpp :: fontData
+// SOURCE: src/gui-cpp/tests/font_fixture.cppm :: FontFixture::read
 // STATUS: implemented
 // CONTRACT: A container built from an iterator range copies the designated elements, not the range's storage.
 // SCENARIO: The copied views outlive the local vector they were read from; accept.
@@ -357,7 +357,7 @@ std::vector<std::string_view> rangeCopy(std::string_view text) {
 
 // CASE: std.range_copy_dangling
 // PAIR: std.range_construction
-// SOURCE: src/gui-cpp/tests/font_fixture.hpp :: fontData
+// SOURCE: src/gui-cpp/tests/font_fixture.cppm :: FontFixture::read
 // STATUS: implemented
 // CONTRACT: Copied elements keep the dependencies of the elements they copy.
 // SCENARIO: The copied views point into strings owned by a local vector.

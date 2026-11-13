@@ -309,7 +309,7 @@ void lambdaWriteCaptureLive(std::string_view text) {
 
 // CASE: pointer.by_value_parameter_local
 // PAIR: pointer.parameter_write
-// SOURCE: src/gui-cpp/tests/session_fixture.hpp :: deliverSingleCell
+// SOURCE: src/gui-cpp/tests/session_fixture.cppm :: deliverSingleCell
 // STATUS: implemented
 // CONTRACT: A by-value parameter is the callee's own copy; filling it with local views does not reach the caller.
 // SCENARIO: The parameter is filled with a view of a local array and consumed before returning; accept.
@@ -323,7 +323,7 @@ void pointerByValueParameterLocal(pointers::frame frame) {
 
 // CASE: pointer.reference_parameter_escape
 // PAIR: pointer.parameter_write
-// SOURCE: src/gui-cpp/tests/session_fixture.hpp :: deliverSingleCell
+// SOURCE: src/gui-cpp/tests/session_fixture.cppm :: deliverSingleCell
 // STATUS: implemented
 // CONTRACT: A write through a reference parameter reaches the caller and must outlive the call.
 // SCENARIO: The caller's frame receives a view of a local array.
