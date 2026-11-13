@@ -22,7 +22,7 @@ El coordinador es un agente en el checkout principal que usa la skill `telar-coo
 - **Rama de integración:** `refactor/deep-modules`, creada desde `main` después de P0.1. Contiene esta lista, `docs/code-style.md` y `.clang-format` commiteados, porque a otra máquina solo viajan commits. Cuándo pasa a `main` lo decides tú; los cierres de fase (P3.17, P6.8, P9.11 y P11.1) son puntos estables.
 - **Rama de cada tarea:** `refactor-<id>`, por ejemplo `refactor-p3-6`, creada desde la cabeza de la rama de integración en el momento de despacharla.
 - **Elegir máquina:** el coordinador compara `telar --machine <label> runtime metrics --json` de las máquinas habilitadas (hoy, esta y `Personal`) y despacha a la que tenga más memoria libre. No pasa del máximo de tareas simultáneas por máquina, que sale del pico de memoria de un build en frío medido en P0.2. Cada worktree empieza sin build, así que cada tarea paga un build completo.
-- **Despachar:** la rama se crea en local (`git branch refactor-<id> refactor/deep-modules`) y después se lanza `telar worktree create refactor-<id> [--machine <label>] --setup --title "<id> · <título>" --json -- claude "<brief>"`. El brief cabe en 32 palabras: *"Lee la tarea <id> de TODO.md y docs/code-style.md. Impleméntala, cumple su Hecho cuando y commitea en esta rama. No edites TODO.md."*
+- **Despachar:** la rama se crea en local (`git branch refactor-<id> refactor/deep-modules`) y después se lanza `telar worktree create refactor-<id> [--machine <label>] --setup --title "<id> · <título>" --json -- claude --dangerously-skip-permissions "<brief>"`. El brief cabe en 32 palabras: *"Lee la tarea <id> de TODO.md y docs/code-style.md. Impleméntala, cumple su Hecho cuando y commitea en esta rama. No edites TODO.md."*
 - **Integrar:** cuando el agente termina, el coordinador revisa el diff y ejecuta en el worktree el checker y los tests del área (`telar [--machine <label>] worktree exec`). Si la tarea corrió en otra máquina, la trae con `telar worktree fetch refactor-<id> --machine <label>`. Después hace merge en la rama de integración, resuelve los conflictos de los ficheros calientes, compila y prueba el área sobre el resultado, marca la tarea `[x]` aquí, commitea y borra el worktree con `--delete-branch`.
 - **Barreras:** P1.2 y P1.3 se despachan solas, sin ninguna otra tarea en vuelo. Tocan todo el árbol, y cualquier tarea abierta tendría que rehacerse.
 - **Límite de telar:** sigue como mucho 64 worktrees por máquina, así que los worktrees se borran al integrar.
@@ -75,10 +75,11 @@ graph LR
 
 ## Fase 0 · Preparación (sin dependencias)
 
-### [ ] P0.1 · Integrar `refactor/audit-39`
+### [x] P0.1 · Integrar `refactor/audit-39`
 - **Depende de:** —
 - **Toca:** la rama entera (worktree `telar-worktrees/refactor`).
 - **Hecho cuando:** el worktree del refactor parte de `main` con audit-39 integrada. Anotar en esta lista qué partes de P3.11 (caso 31), P3.14 (caso 34), P6.1 y P10.3 (caso 38) ya cubre la rama, para no repetirlas.
+- **Resultado:** audit-39 entró en `main` por fast-forward (`2890f72b1..d1ab27cb6`). Lo que cubre queda anotado en cada tarea como **audit-39:**. Los dueños únicos que creó viven en `telar.platform` y `telar.base.text`, no en los submódulos del plan: P4.1 y P4.3 los mueven a su familia. Esos dos hubs y `telar.config` crecieron (unas 570, 180 y 600 líneas). Hay módulos nuevos que P1.1 tiene que mapear: `runtime.http.content` y `runtime.platform.private_tunnel`. El commit `d66fa0c16` metió por error `lib/tbc/out` como symlink en bucle; lo borra `5ab196eaa`.
 
 ### [ ] P0.7 · Receta de setup para worktrees nuevos
 - **Depende de:** —. Va antes que cualquier otra tarea y la ejecuta el coordinador en local, porque sin ella ningún worktree puede compilar.
@@ -123,7 +124,7 @@ graph LR
 
 ### [ ] P0.6 · Reglas de líneas en blanco de `docs/code-style.md` en el linter de TBC
 - **Depende de:** —
-- **Toca:** `lib/tbc/linter` y su integración en `cmake/lint_prepare.cmake`. Lo comparte con P2.4: no se ejecutan a la vez.
+- **Toca:** `lib/tbc/linter` y su integración en `cmake/lint_prepare.cmake`. Lo comparte con P2.4: P2.4 se despacha cuando P0.6 está integrada.
 - **Qué comprueba sobre el AST, y cómo lo arregla insertando la línea en blanco:**
   - Una sentencia que acaba en su propia llave de cierre (bucle, `if`, `switch`, lambda o lista con llaves de varias líneas) va seguida de una línea en blanco, salvo que lo siguiente sea `else`, `catch`, el `while` de un `do` o el `}` que cierra el bloque.
   - Un grupo de declaraciones va seguido de una línea en blanco antes de la primera sentencia que no es una declaración. Hay una excepción: un `if` cuya condición usa la variable recién declarada va pegado a ella.
@@ -234,12 +235,14 @@ graph LR
 - **Depende de:** P1.2. Antes, revisar qué dejó hecho el caso 31 de audit-39.
 - **Toca:** `telar.platform` (nueva familia `net`), `runtime.proxy.relay_direction` y sus importadores (tls, traffic, redirect, plugins).
 - **Qué hace:** socket, address y would-block salen de `relay_direction` a `telar.platform.net`.
+- **audit-39:** `socketWouldBlock` y `earliest` ya están en `telar.platform` (`3c491c53c`), y existen `NetworkAddress::ipv4/ipv6` (`bd74f143f`). Queda crear la familia `net` y llevar allí `NetworkAddress` y `SocketStream`, que siguen en `relay_direction`. Las seis aristas siguen abiertas.
 - **Cierra:** `plugins → proxy`, `redirect → proxy` (3), `tls → proxy`, `traffic → proxy` (2). Con eso caen los ciclos proxy ↔ tls, proxy ↔ redirect y proxy ↔ traffic.
 
 ### [ ] P3.11b · `traffic.vocabulary`
 - **Depende de:** P1.2. Comparte `traffic.control_backend` con P3.11a: no se ejecutan a la vez.
 - **Toca:** `runtime.plugins.protocol`, `runtime.plugins.tap_configuration`, `runtime.traffic.control_protocol`, `runtime.traffic.control_backend`, `runtime.http.message`, `runtime.http1.intercepted_relay`, `runtime.redirect.ingress`, `runtime.redirect.socket_owners`.
 - **Qué hace:** lo que comparten proxy, plugins, traffic y http pasa a un módulo de vocabulario por debajo de todos ellos.
+- **audit-39:** no lo cubre. `43f4b712e` añadió `HttpInterceptionSlot` como unidad `http/interception_slot.cppm` del módulo `http1.intercepted_relay`, otra unidad fuera de la carpeta de su módulo para P1.2.
 - **Cierra:** `traffic → plugins` (3), `redirect → plugins`, `redirect → traffic`, `http → plugins`, `http1 → http`, `http1 → traffic`. Con eso caen los ciclos plugins ↔ traffic y http ↔ plugins.
 
 ### [ ] P3.12a · Sacar `PaneLayout` y la geometría de `gui.application.sound_playback`
@@ -283,6 +286,7 @@ graph LR
 - **Depende de:** P1.2
 - **Toca:** sus unidades `background_effect`, `glyph_rasterizer`, `peer_identity`, `process_group` y `secure_random`.
 - **Cierra:** `platform → fonts`.
+- **audit-39:** `secure_random.cpp` ya no existe (`f8cc271a9`). Las otras cuatro unidades y la arista siguen. P3.14a, P3.14c y P3.14d no los cubre.
 
 ### [ ] P3.14c · Módulo cajón `gui.platform.notification_commands`
 - **Depende de:** P1.2. Toca `host_effects`, igual que P3.12c.
@@ -343,6 +347,7 @@ Cada hub sigue el patrón agregador: `a` crea los módulos y deja el agregador, 
 - **Depende de:** P4.4a
 - **Qué hace:** hoy el schema se valida en la lib y la GUI lo vuelve a leer por su cuenta, por eso la GUI rechaza `client.prompt.skin` y la lib lo acepta. Queda un único lector tipado y la GUI consume su resultado.
 - **Hecho cuando:** hay un test que cubre `client.prompt.skin` en los dos procesos y no queda código de lectura del schema en la GUI.
+- **audit-39:** `3529b1fdc` creó `GuiReader` y `PromptReader` en `telar-config`, que ya leen `gui` y `client.prompt` y aceptan `skin`. La GUI sigue leyendo por su cuenta el resto de `client.*`, los temas, los atajos y los componentes (unas 130 llamadas a `field(…)` en `gui.config.generation`), y el test de `skin` solo existe en la GUI.
 
 ---
 
@@ -352,13 +357,22 @@ Cada tarea empieza localizando todas las copias, crea un módulo con una interfa
 
 | ID | Conocimiento | Copias | Destino | Depende de |
 |---|---|---|---|---|
-| [ ] P5.1 | Ruta del config | 6 | `telar.platform.paths` | P4.1a |
-| [ ] P5.2 | Paste framing / paste encoder | 3 | módulo en platform | P1.2 |
-| [ ] P5.3 | Hardening de git | 3 | `telar.platform.git` | P4.1a |
-| [ ] P5.4 | `setup.json` | 2 | módulo dueño único (decidir capa) | P1.2 |
+| [x] P5.1 | Ruta del config | 6 | `telar.platform.paths` | P4.1a |
+| [x] P5.2 | Paste framing / paste encoder | 3 | módulo en platform | P1.2 |
+| [x] P5.3 | Hardening de git | 3 | `telar.platform.git` | P4.1a |
+| [x] P5.4 | `setup.json` | 2 | módulo dueño único (decidir capa) | P1.2 |
 | [ ] P5.5 | Login shell | 4 | `telar.platform.process` o `telar.sys.process` | P4.1a, P3.1 |
 | [ ] P5.6 | Nombres de errno | 8 | `telar.sys.posix` (`lastError()` y el nombre) | P3.1 |
 | [ ] P5.7 | Spawn con higiene de descriptores | — | `telar.platform.process` | P4.1a, P3.1 |
+
+**audit-39** ya dejó un dueño único para casi todo, aunque en el hub y no en el destino de la tabla. Mover cada dueño a su familia es parte de P4.1 y P4.3:
+- P5.1: `RuntimePaths::configHome/configFile` y `SocketLocation` en `telar.platform` (`c96b3e0ee`).
+- P5.2: `BracketedPaste` en `telar.base.text` (`743848d0a`).
+- P5.3: `HardenedGit` en `telar.platform` (`e1d10a384`).
+- P5.4: `cli.project_setup::prepare` (`b12d9a859`).
+- P5.5: `loginShell` y `loginShellScript` en `telar.platform` (`8bfa863cd`). Quedan dos lecturas sueltas de `$SHELL`: en la CLI (`worktree_git`) y en `Command` de `telar.platform`.
+- P5.6: `systemErrorName` en `telar.platform` (`845c69d6d`), sin `lastError()`. Quedan copias en `runtime.runtime.execution_service`, `runtime.execution.execution` y en `worktree_git` e `history` de la CLI.
+- P5.7: todos los spawns usan `SpawnOptions` (`be47a6b84`). Tres sitios repiten a mano "conservar los tres flujos estándar y cerrar el resto": `traffic.control_backend`, `machine_ssh` de la CLI y `tls` del runtime.
 
 ---
 
@@ -367,6 +381,7 @@ Cada tarea empieza localizando todas las copias, crea un módulo con una interfa
 ### [ ] P6.1 · Borrar los includes muertos
 - **Depende de:** P0.1 (audit-39 trae "Drop the remaining unused code, options and includes": revisar antes qué queda). Puede entrar antes o después de P1.2, porque el movimiento va por script.
 - **Toca:** `Security.h` en `proxy/runtime.cppm`, `traffic/control_backend.cppm` y `platform/system_certificates.cppm` (34 mil líneas cada uno). `<print>` textual en `cli/server.cppm` (26 600 líneas) pasa a `import std;`.
+- **audit-39:** `73136591c` lo quitó de `proxy/runtime.cppm`. Queda el de `traffic.control_backend`, que no lo usa; en `system_certificates` está incluido dos veces y sí lo usa, así que solo sobra el duplicado; y el `<print>` sigue en `runtime.cli.server`.
 
 ### [ ] P6.2 · Partir `tbc/view.hpp`
 - **Depende de:** P1.2
@@ -476,6 +491,7 @@ Para cada módulo: `extern template class X<Memory>;` en la interfaz, la instanc
 ### [ ] P10.3 · Módulos sin importadores
 - **Depende de:** P0.1 (el caso 38 cubre `telar.websock`)
 - **Qué hace:** borrar `gui.input.scroll_motion`, `gui.tools.probe_io` y, si sigue vivo, `telar.websock`.
+- **audit-39:** `812601fdd` borró `telar.websock`; queda una entrada `websock` en `src/runtime-cpp/.clang-tidy`. Los otros dos módulos siguen sin importadores, aunque código Qt incluye `scroll_motion.hpp`.
 
 ---
 
