@@ -11,8 +11,6 @@ static_assert(true);
 #include "../graphics/media_budget.hpp"
 #include "../graphics/temporary_path.hpp"
 #include "../terminal/control/classification.hpp"
-#include "../terminal/control/clipboard.hpp"
-#include "../terminal/control/engine.hpp"
 #include "../terminal/control/parser.hpp"
 #include "../terminal/ghostty_allocator.hpp"
 #include "../terminal/ghostty_handle.hpp"

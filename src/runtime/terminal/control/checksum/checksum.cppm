@@ -1,13 +1,16 @@
-#pragma once
-
+module;
 #include "cell_layout.hpp"
-#include "parameters.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "vt_state.hpp"
-#include <limits>
-#include <utility>
+#include "tbc/view.hpp"
+#include <ghostty/vt.h>
 
-namespace telar::runtime::control {
+export module telar.runtime.terminal.control.checksum;
+
+import std;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
+import telar.runtime.terminal.control;
+
+export namespace telar::runtime::control {
 
   enum class ChecksumFlag : unsigned {
     positive = 1,
@@ -295,7 +298,7 @@ namespace telar::runtime::control {
 
     static constexpr unsigned origin_mode = 6;
     static constexpr std::uint16_t escape_value = 0x1b;
-    static constexpr std::size_t maximum_grapheme_points = UINT16_MAX;
+    static constexpr std::size_t maximum_grapheme_points = std::numeric_limits<std::uint16_t>::max();
     static constexpr std::size_t maximum_batch_columns = 256;
     static constexpr std::size_t batch_points = 256;
     Vector<std::uint32_t, Memory> graphemes_;

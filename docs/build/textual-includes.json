@@ -3323,13 +3323,10 @@
     "<span>",
     "<string_view>"
   ],
-  "src/runtime/terminal/control/checksum.hpp": [
-    "<limits>",
-    "<utility>",
+  "src/runtime/terminal/control/checksum/checksum.cppm": [
+    "<ghostty/vt.h>",
     "cell_layout.hpp",
-    "parameters.hpp",
-    "telar_base/memory/allocator.hpp",
-    "vt_state.hpp"
+    "tbc/view.hpp"
   ],
   "src/runtime/terminal/control/classification.hpp": [
     "../../graphics/kitty_control.hpp",
@@ -3339,38 +3336,8 @@
     "sequence.hpp",
     "telar_render/sequence.hpp"
   ],
-  "src/runtime/terminal/control/clipboard.hpp": [
-    "<chrono>",
-    "clipboard_grants.hpp",
-    "clipboard_response.hpp",
-    "tbc/view.hpp",
-    "telar_client/protocol/clipboard.hpp",
-    "telar_config/terminal/control/policy.hpp",
-    "telar_platform/random_bytes.hpp"
-  ],
-  "src/runtime/terminal/control/clipboard_grants.hpp": [
-    "<algorithm>",
-    "<cstdlib>",
-    "clipboard_metadata.hpp",
-    "telar_base/text/constant_time.hpp",
-    "telar_platform/random_bytes.hpp"
-  ],
-  "src/runtime/terminal/control/clipboard_metadata.hpp": [
-    "telar_base/memory/fixed_text.hpp",
-    "telar_base/text/base64.hpp",
-    "telar_client/codecs/telar_value_codec.hpp"
-  ],
-  "src/runtime/terminal/control/clipboard_response.hpp": [
-    "clipboard_metadata.hpp",
-    "clipboard_write.hpp",
-    "reply.hpp",
-    "sequence.hpp"
-  ],
-  "src/runtime/terminal/control/clipboard_write.hpp": [
-    "<optional>",
-    "clipboard_metadata.hpp",
-    "tbc/view.hpp",
-    "telar_base/memory/allocator.hpp"
+  "src/runtime/terminal/control/clipboard/clipboard.cppm": [
+    "tbc/view.hpp"
   ],
   "src/runtime/terminal/control/color_queries.hpp": [
     "<algorithm>",
@@ -3390,7 +3357,20 @@
     "<string_view>"
   ],
   "src/runtime/terminal/control/control.cppm": [
-    "terminal/control/engine.hpp"
+    "tbc/view.hpp",
+    "terminal/control/ascii_ordinary.hpp",
+    "terminal/control/capabilities.hpp",
+    "terminal/control/classification.hpp",
+    "terminal/control/color_queries.hpp",
+    "terminal/control/cursor_report.hpp",
+    "terminal/control/graphics_query.hpp",
+    "terminal/control/parser.hpp",
+    "terminal/control/reply.hpp",
+    "terminal/control/reports.hpp",
+    "terminal/control/size_report.hpp",
+    "terminal/control/styled_ordinary.hpp",
+    "terminal/control/vt_state.hpp",
+    "terminal/ghostty_allocator.hpp"
   ],
   "src/runtime/terminal/control/cursor_report.hpp": [
     "<array>",
@@ -3399,32 +3379,13 @@
     "reply.hpp",
     "vt_state.hpp"
   ],
-  "src/runtime/terminal/control/engine.hpp": [
-    "ascii_ordinary.hpp",
-    "capabilities.hpp",
-    "checksum.hpp",
-    "classification.hpp",
-    "clipboard.hpp",
-    "color_queries.hpp",
-    "cursor_report.hpp",
-    "glyph.hpp",
-    "graphics_query.hpp",
-    "parser.hpp",
-    "reply.hpp",
-    "reports.hpp",
-    "size_report.hpp",
-    "styled_ordinary.hpp",
-    "tbc/view.hpp",
-    "telar_base/program_identity.hpp",
-    "telar_config/terminal/control/policy.hpp",
-    "vt_state.hpp"
+  "src/runtime/terminal/control/engine/engine.cppm": [
+    "<cassert>",
+    "<ghostty/vt.h>",
+    "tbc/view.hpp"
   ],
-  "src/runtime/terminal/control/glyph.hpp": [
-    "<charconv>",
-    "<optional>",
-    "reply.hpp",
-    "tbc/view.hpp",
-    "telar_base/text/decimal.hpp"
+  "src/runtime/terminal/control/glyph/glyph.cppm": [
+    "tbc/view.hpp"
   ],
   "src/runtime/terminal/control/graphics_base64_block.hpp": [
     "<cstdint>",

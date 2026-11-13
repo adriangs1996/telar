@@ -221,17 +221,10 @@ namespace telar::runtime::control {
       return {reinterpret_cast<const char*>(result.ptr), result.len};
     }
 
-    static constexpr unsigned foreground = 256;
-    static constexpr unsigned background = 257;
-    static constexpr unsigned cursor_color = 258;
-
-  private:
-    template <Allocator Memory>
-    friend class Engine;
-
-    // Engine admits the graphics scanner once before entering its ASCII loop.
-    // Only synchronous widening and queue release intervene; no scanner mutation
-    // occurs. The C bridge still validates its input and partial application.
+    // Only after canWriteAscii(): the engine admits the graphics scanner once
+    // before entering its ASCII loop. Only synchronous widening and queue release
+    // intervene; no scanner mutation occurs. The C bridge still validates its
+    // input and partial application.
     void writeAscii(std::span<const std::uint32_t> codepoints) {
       if (codepoints.empty()) {
         return;
@@ -251,6 +244,11 @@ namespace telar::runtime::control {
       }
     }
 
+    static constexpr unsigned foreground = 256;
+    static constexpr unsigned background = 257;
+    static constexpr unsigned cursor_color = 258;
+
+  private:
     template <bool CheckGraphics>
     void writeInput(std::span<const std::uint8_t> bytes) {
       invalidate();
