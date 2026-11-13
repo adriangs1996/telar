@@ -70,7 +70,7 @@ namespace {
     explicit Probe(TerminalSize size)
         : media(std::make_shared<PaneMedia<Memory>>(memory, budget, GraphicsLimits{}, size, queue)),
           terminal(memory, size, TerminalPurpose::separate_media, queue, GraphicsQueryResources{GraphicsLimits{}, budget, &media->queryUsage()}) {
-      terminal.attachMedia(media);
+      terminal.attachMedia(*media);
     }
 
     // What the runtime's media worker and its reply delivery do between two reads of the pty.
@@ -82,7 +82,7 @@ namespace {
 
         media->process();
         media->complete();
-        terminal.resumeControl();
+        terminal.resumeControl(*media);
       }
 
       while (!terminal.responses().empty()) {
@@ -92,7 +92,7 @@ namespace {
           digest = (digest ^ byte) * 0x100000001b3;
         }
 
-        terminal.consumeResponses(replies.size());
+        terminal.consumeResponses(replies.size(), *media);
       }
     }
 
@@ -100,7 +100,7 @@ namespace {
       for (std::size_t offset = 0; offset < bytes.size();) {
         const auto count = std::min(fragment == 0 ? bytes.size() : fragment, bytes.size() - offset);
 
-        terminal.feed(bytes.subspan(offset, count));
+        terminal.feed(bytes.subspan(offset, count), *media);
         settle();
         offset += count;
       }

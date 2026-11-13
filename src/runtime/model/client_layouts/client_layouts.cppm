@@ -339,7 +339,7 @@ export {
 
         foreground.assign(utf8Prefix(executable.substr(executable.rfind('/') + 1), 48));
         process.emplace(command.specification(settings.size));
-        terminal.attachMedia(media);
+        terminal.attachMedia(*media);
         shell_state.pane_id = identity;
         if (settings.shell) {
           shell_zones.emplace(command.cwd(), settings.shell->token);
@@ -407,7 +407,7 @@ export {
 
               for (const auto& mark : completions.marks()) {
                 if (mark.end > fed) {
-                  terminal.feed(bytes.subspan(fed, mark.end - fed));
+                  terminal.feed(bytes.subspan(fed, mark.end - fed), *media);
                   fed = mark.end;
                 }
 
@@ -419,7 +419,7 @@ export {
               }
 
               if (fed < bytes.size()) {
-                terminal.feed(bytes.subspan(fed));
+                terminal.feed(bytes.subspan(fed), *media);
               }
             }
 
@@ -495,7 +495,7 @@ export {
 
         if (response && batch.bytes == 0) {
           pty_responses->consumeBytes(0);
-          terminal.resumeControl();
+          terminal.resumeControl(*media);
           return;
         }
 
@@ -522,7 +522,7 @@ export {
         if (count > 0) {
           if (response) {
             pty_responses->consumeBytes(static_cast<std::size_t>(count));
-            terminal.resumeControl();
+            terminal.resumeControl(*media);
           } else {
             input.consume(static_cast<std::size_t>(count));
             // A remote line editor echoes what it reads: the next output times the link.
@@ -577,12 +577,17 @@ export {
         observer->bytes(ObservationKind::command, text, shellForeground());
       }
 
+      // The terminal feeds the pane's media as it resumes.
+      inline void resumeControl() {
+        terminal.resumeControl(*media);
+      }
+
       inline void resize(TerminalSize size) {
         if (terminal.hasSize(size)) {
           return;
         }
 
-        terminal.resize(size);
+        terminal.resize(size, *media);
         if (blocks) {
           blocks->follow(true);
         }

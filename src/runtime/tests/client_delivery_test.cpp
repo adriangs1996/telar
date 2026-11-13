@@ -287,7 +287,7 @@ namespace {
     }
 
     for (std::size_t batch = 0; batch < 4000 && pane.terminal.scrollbackTrimmed() == 0; ++batch) {
-      pane.terminal.feed({reinterpret_cast<const Byte*>(lines.data()), lines.size()});
+      pane.terminal.feed({reinterpret_cast<const Byte*>(lines.data()), lines.size()}, *pane.media);
       pane.terminal.followScrollback();
     }
 
@@ -344,7 +344,7 @@ namespace {
           });
         }
 
-        pane.terminal.feed({reinterpret_cast<const Byte*>(bytes.data()), take});
+        pane.terminal.feed({reinterpret_cast<const Byte*>(bytes.data()), take}, *pane.media);
         bytes.remove_prefix(take);
       }
 
@@ -414,7 +414,7 @@ namespace {
     check(!deliver());
 
     // A reflow numbers the rows anew: the client hears where the rows went, without the bytes.
-    pane.terminal.resize({30, 5, 0, 0});
+    pane.terminal.resize({30, 5, 0, 0}, *pane.media);
     pane.terminal.refresh();
     check(deliver());
     const auto moved = peer.receive<PaneDocument>();

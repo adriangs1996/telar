@@ -66,14 +66,14 @@ namespace {
     return {reinterpret_cast<const Byte*>(text.data()), text.size()};
   }
 
-  std::string drain(auto& terminal) {
+  std::string drain(auto& terminal, auto&... media) {
     std::string result;
 
     while (!terminal.responses().empty()) {
       const auto pending = terminal.responses();
 
       result.append(reinterpret_cast<const char*>(pending.data()), pending.size());
-      terminal.consumeResponses(pending.size());
+      terminal.consumeResponses(pending.size(), media...);
     }
 
     return result;
@@ -507,7 +507,7 @@ namespace {
     check(::tcgetattr(pane.process->descriptor(), &settings) == 0);
     ::cfmakeraw(&settings);
     check(::tcsetattr(pane.process->descriptor(), TCSANOW, &settings) == 0);
-    pane.terminal.feed(bytes("\x1b[?5522h"));
+    pane.terminal.feed(bytes("\x1b[?5522h"), *pane.media);
     const std::array<std::string_view, 1> available{"text/plain"};
 
     panes.pasteClipboard(model, clients, client.session().id, PastePaneClipboard{.request_id = 4242, .pane_id = pane.id, .pane_generation = pane.generation, .listing_only = true, .text = {}, .available = available});
@@ -543,7 +543,7 @@ namespace {
     panes.configureDesktop(model, clients, first.session().id, desktop);
     desktop.focused = true;
     panes.configureDesktop(model, clients, second.session().id, desktop);
-    pane.terminal.feed(bytes("\x1b]5522;type=read:id=route;dGV4dC9wbGFpbg==\x1b\\"));
+    pane.terminal.feed(bytes("\x1b]5522;type=read:id=route;dGV4dC9wbGFpbg==\x1b\\"), *pane.media);
     ClipboardService<SystemAllocator> service;
 
     service.advance(clients, pane, std::chrono::steady_clock::now());
@@ -558,7 +558,7 @@ namespace {
     check(service.complete(model.panes, second.session(), completion) == nullptr);
     --completion.ticket.pane_generation;
     check(service.complete(model.panes, second.session(), completion) == &pane);
-    check(drain(pane.terminal) == "\x1b]5522;type=read:status=EPERM:id=route\x1b\\");
+    check(drain(pane.terminal, *pane.media) == "\x1b]5522;type=read:status=EPERM:id=route\x1b\\");
     check(service.complete(model.panes, second.session(), completion) == nullptr);
 
     const auto descriptor = pane.process->descriptor();
@@ -571,7 +571,7 @@ namespace {
     const std::array<std::string_view, 2> available{"text/plain", "text/html"};
     PastePaneClipboard paste{.request_id = 41, .pane_id = pane.id, .pane_generation = pane.generation, .listing_only = true, .text = bytes("must-not-be-pasted"), .available = available};
 
-    pane.terminal.feed(bytes("\x1b[?5522h"));
+    pane.terminal.feed(bytes("\x1b[?5522h"), *pane.media);
     panes.pasteClipboard(model, clients, second.session().id, paste);
     check(second.receive<RequestCompleted>().request_id == paste.request_id);
     const auto event = ptyUntil(descriptor, "\x1b\\", "status=DONE:pw=");
@@ -592,7 +592,7 @@ namespace {
       const auto id = std::to_string(step);
       const auto request_bytes = "\x1b]5522;type=read:id=" + id + ":name=QXBw:pw=" + password + ";" + (step == 0 ? "Lg==" : "dGV4dC9wbGFpbg==") + "\x1b\\";
 
-      pane.terminal.feed(bytes(request_bytes));
+      pane.terminal.feed(bytes(request_bytes), *pane.media);
       service.advance(clients, pane, std::chrono::steady_clock::now());
       const OwnedClipboardTask read_task{second.receive<ClipboardDesktopRequest>()};
 
@@ -620,12 +620,12 @@ namespace {
 
     check(provider.reads == 2 && provider.writes == 0);
 
-    pane.terminal.feed(bytes("\x1b[?5522l"));
+    pane.terminal.feed(bytes("\x1b[?5522l"), *pane.media);
     ++paste.request_id;
     panes.pasteClipboard(model, clients, second.session().id, paste);
     check(second.receive<RequestCompleted>().request_id == paste.request_id);
     check(pane.input.empty() && pane.terminal.responses().empty());
-    pane.terminal.feed(bytes("\x1b[?5522h\x1b[?2004h"));
+    pane.terminal.feed(bytes("\x1b[?5522h\x1b[?2004h"), *pane.media);
     ++paste.request_id;
     paste.listing_only = false;
     paste.text = {};
@@ -660,7 +660,7 @@ namespace {
     ConfigurePaneDesktop desktop{.pane_id = pane.id, .pane_generation = pane.generation, .visible = true, .clipboard = true};
 
     panes.configureDesktop(model, clients, client.session().id, desktop);
-    pane.terminal.feed(bytes("\x1b]5522;type=write:id=close\x1b\\\x1b]5522;type=wdata\x1b\\"));
+    pane.terminal.feed(bytes("\x1b]5522;type=write:id=close\x1b\\\x1b]5522;type=wdata\x1b\\"), *pane.media);
     ClipboardService<SystemAllocator> service;
 
     service.advance(clients, pane, std::chrono::steady_clock::now());
@@ -683,7 +683,7 @@ namespace {
 
     check(provider.inspections == 0 && provider.reads == 0 && provider.writes == 0);
     check(std::get<CancelClipboardDesktop>(response).ticket == task.ticket);
-    check(drain(pane.terminal) == "\x1b]5522;type=write:status=EPERM:id=close\x1b\\");
+    check(drain(pane.terminal, *pane.media) == "\x1b]5522;type=write:status=EPERM:id=close\x1b\\");
     check(service.complete(model.panes, client.session(), prepared) == nullptr);
     panes.remove(model, clients, pane.id);
   }
@@ -718,7 +718,7 @@ namespace {
         ClipboardService<SystemAllocator> service;
         const auto password = pasteGrant(model, clients, panes, client, pane);
 
-        pane.terminal.feed(bytes("\x1b]5522;type=write:id=reset\x1b\\\x1b]5522;type=wdata\x1b\\"));
+        pane.terminal.feed(bytes("\x1b]5522;type=write:id=reset\x1b\\\x1b]5522;type=wdata\x1b\\"), *pane.media);
         service.advance(clients, pane, std::chrono::steady_clock::now());
         const OwnedClipboardTask task{client.receive<ClipboardDesktopRequest>()};
         const CompleteClipboardDesktop prepared{.ticket = task.ticket, .status = ClipboardDesktopStatus::success, .prepared = true};
@@ -736,7 +736,7 @@ namespace {
           check(provider.writes == 1);
         }
 
-        pane.terminal.feed(bytes(transition));
+        pane.terminal.feed(bytes(transition), *pane.media);
         const bool full_reset = transition == transitions.front();
 
         service.advance(clients, pane, std::chrono::steady_clock::now());
@@ -745,7 +745,7 @@ namespace {
           check(!pane.terminal.clipboardControl().route() && !pane.terminal.clipboardControl().execution());
           check(service.complete(model.panes, client.session(), prepared) == nullptr);
           check(service.complete(model.panes, client.session(), CompleteClipboardDesktop{.ticket = task.ticket, .status = ClipboardDesktopStatus::success}) == nullptr);
-          check(drain(pane.terminal) == "\x1b]5522;type=write:status=EPERM:id=reset\x1b\\");
+          check(drain(pane.terminal, *pane.media) == "\x1b]5522;type=write:status=EPERM:id=reset\x1b\\");
         } else {
           if (stage == Stage::requested) {
             check(service.complete(model.panes, client.session(), prepared) == &pane);
@@ -758,14 +758,14 @@ namespace {
           }
 
           finishDesktop(model.panes, client, pane, task, *result);
-          check(drain(pane.terminal) == "\x1b]5522;type=write:status=DONE:id=reset\x1b\\");
+          check(drain(pane.terminal, *pane.media) == "\x1b]5522;type=write:status=DONE:id=reset\x1b\\");
         }
 
         const unsigned expected_writes = full_reset && stage != Stage::committed ? 0 : 1;
 
         check(provider.writes == expected_writes && provider.inspections == expected_writes && provider.reads == 0);
         check(!pane.terminal.hasPendingControl());
-        pane.terminal.feed(bytes("\x1b]5522;type=read:id=otp:name=QXBw:pw=" + password + ";dGV4dC9wbGFpbg==\x1b\\"));
+        pane.terminal.feed(bytes("\x1b]5522;type=read:id=otp:name=QXBw:pw=" + password + ";dGV4dC9wbGFpbg==\x1b\\"), *pane.media);
         service.advance(clients, pane, std::chrono::steady_clock::now());
         const OwnedClipboardTask otp{client.receive<ClipboardDesktopRequest>()};
 
@@ -777,13 +777,13 @@ namespace {
           finishDesktop(model.panes, client, pane, otp, executeClipboard(otp, ClipboardConsent::once, provider));
         }
 
-        check(drain(pane.terminal) == (full_reset ? "\x1b]5522;type=read:status=EPERM:id=otp\x1b\\" : "\x1b]5522;type=read:status=OK:id=otp\x1b\\\x1b]5522;type=read:status=DONE:id=otp\x1b\\"));
+        check(drain(pane.terminal, *pane.media) == (full_reset ? "\x1b]5522;type=read:status=EPERM:id=otp\x1b\\" : "\x1b]5522;type=read:status=OK:id=otp\x1b\\\x1b]5522;type=read:status=DONE:id=otp\x1b\\"));
         check(provider.reads == (full_reset ? 0u : 1u));
         if (stage == Stage::requested) {
           pane.terminal.controlPolicy().clipboard_write = control::Access::ask;
           constexpr std::string_view grant_request = "\x1b]5522;type=write:id=grant:name=QXBw:pw=cHc=\x1b\\\x1b]5522;type=wdata\x1b\\";
 
-          pane.terminal.feed(bytes(grant_request));
+          pane.terminal.feed(bytes(grant_request), *pane.media);
           service.advance(clients, pane, std::chrono::steady_clock::now());
           const OwnedClipboardTask grant{client.receive<ClipboardDesktopRequest>()};
 
@@ -792,9 +792,9 @@ namespace {
           service.advance(clients, pane, std::chrono::steady_clock::now());
           check(client.receive<ClipboardDesktopExecute>().ticket == grant.ticket);
           finishDesktop(model.panes, client, pane, grant, executeClipboard(grant, ClipboardConsent::session, provider));
-          check(drain(pane.terminal) == "\x1b]5522;type=write:status=DONE:id=grant\x1b\\");
-          pane.terminal.feed(bytes(transition));
-          pane.terminal.feed(bytes(grant_request));
+          check(drain(pane.terminal, *pane.media) == "\x1b]5522;type=write:status=DONE:id=grant\x1b\\");
+          pane.terminal.feed(bytes(transition), *pane.media);
+          pane.terminal.feed(bytes(grant_request), *pane.media);
           service.advance(clients, pane, std::chrono::steady_clock::now());
           const OwnedClipboardTask repeated{client.receive<ClipboardDesktopRequest>()};
 
@@ -806,7 +806,7 @@ namespace {
             finishDesktop(model.panes, client, pane, repeated, executeClipboard(repeated, ClipboardConsent::once, provider));
           }
 
-          check(drain(pane.terminal) == (full_reset ? "\x1b]5522;type=write:status=EPERM:id=grant\x1b\\" : "\x1b]5522;type=write:status=DONE:id=grant\x1b\\"));
+          check(drain(pane.terminal, *pane.media) == (full_reset ? "\x1b]5522;type=write:status=EPERM:id=grant\x1b\\" : "\x1b]5522;type=write:status=DONE:id=grant\x1b\\"));
           check(provider.writes == expected_writes + 1 + static_cast<unsigned>(!full_reset));
         }
 
@@ -836,7 +836,7 @@ namespace {
       auto& pane = panes.require(model.panes, client.receive<PaneOpened>().pane_id);
 
       panes.configureDesktop(model, clients, client.session().id, ConfigurePaneDesktop{.pane_id = pane.id, .pane_generation = pane.generation, .visible = true, .clipboard = true});
-      pane.terminal.feed(bytes("\x1b]5522;type=write:id=pressure\x1b\\\x1b]5522;type=wdata\x1b\\"));
+      pane.terminal.feed(bytes("\x1b]5522;type=write:id=pressure\x1b\\\x1b]5522;type=wdata\x1b\\"), *pane.media);
       ClipboardService<SystemAllocator> service;
       auto& clipboard = pane.terminal.clipboardControl();
       std::optional<OwnedClipboardTask> task;
@@ -893,10 +893,10 @@ namespace {
         check(service.complete(model.panes, client.session(), CompleteClipboardDesktop{.ticket = task->ticket, .status = ClipboardDesktopStatus::success}) == nullptr);
       }
 
-      check(drain(pane.terminal) == std::string(PtyResponseQueue::message_capacity, 'N') + "\x1b]5522;type=write:status=EPERM:id=pressure\x1b\\");
+      check(drain(pane.terminal, *pane.media) == std::string(PtyResponseQueue::message_capacity, 'N') + "\x1b]5522;type=write:status=EPERM:id=pressure\x1b\\");
       check(!clipboard.hasReply() && !clipboard.cancellation());
       if (cancellation != Cancellation::closing) {
-        pane.terminal.feed(bytes("\x1b]5522;type=write:id=again\x1b\\\x1b]5522;type=wdata\x1b\\"));
+        pane.terminal.feed(bytes("\x1b]5522;type=write:id=again\x1b\\\x1b]5522;type=wdata\x1b\\"), *pane.media);
         service.advance(clients, pane, std::chrono::steady_clock::now());
         const OwnedClipboardTask next{client.receive<ClipboardDesktopRequest>()};
 
@@ -909,7 +909,7 @@ namespace {
         const CompleteClipboardDesktop completed{.ticket = next.ticket, .status = result.status};
 
         check(service.complete(model.panes, client.session(), completed) == &pane);
-        check(drain(pane.terminal) == "\x1b]5522;type=write:status=DONE:id=again\x1b\\");
+        check(drain(pane.terminal, *pane.media) == "\x1b]5522;type=write:status=DONE:id=again\x1b\\");
         check(service.complete(model.panes, client.session(), completed) == nullptr && provider.writes == 1);
       }
 
@@ -957,7 +957,7 @@ namespace {
         ClipboardService<SystemAllocator> service;
         const auto password = pasteGrant(model, clients, panes, client, *pane);
 
-        pane->terminal.feed(bytes("\x1b]5522;type=write:id=old\x1b\\\x1b]5522;type=wdata\x1b\\"));
+        pane->terminal.feed(bytes("\x1b]5522;type=write:id=old\x1b\\\x1b]5522;type=wdata\x1b\\"), *pane->media);
         service.advance(clients, *pane, std::chrono::steady_clock::now());
         const OwnedClipboardTask old{client.receive<ClipboardDesktopRequest>()};
         const CompleteClipboardDesktop prepared{.ticket = old.ticket, .status = ClipboardDesktopStatus::success, .prepared = true};
@@ -1011,7 +1011,7 @@ namespace {
           panes.flushInput(*pane);
           check(ptyUntil(pane->process->descriptor(), "status=EPERM:id=old\x1b\\") == "\x1b]5522;type=write:status=EPERM:id=old\x1b\\");
         } else {
-          check(drain(pane->terminal).empty());
+          check(drain(pane->terminal, *pane->media).empty());
         }
 
         check(provider.writes == previous_writes && previous_writes == (stage == Stage::committed ? 1u : 0u));
@@ -1021,15 +1021,15 @@ namespace {
         desktop.clipboard = true;
         panes.configureDesktop(model, clients, client.session().id, desktop);
         service.configure(clients, *pane);
-        pane->terminal.feed(bytes("\x1b]5522;type=read:id=otp:name=QXBw:pw=" + password + ";dGV4dC9wbGFpbg==\x1b\\"));
+        pane->terminal.feed(bytes("\x1b]5522;type=read:id=otp:name=QXBw:pw=" + password + ";dGV4dC9wbGFpbg==\x1b\\"), *pane->media);
         service.advance(clients, *pane, std::chrono::steady_clock::now());
         const OwnedClipboardTask otp{client.receive<ClipboardDesktopRequest>()};
 
         check(otp.prompt);
         check(service.complete(model.panes, client.session(), CompleteClipboardDesktop{.ticket = otp.ticket, .status = ClipboardDesktopStatus::denied, .prepared = true}) == pane);
-        check(drain(pane->terminal) == "\x1b]5522;type=read:status=EPERM:id=otp\x1b\\");
+        check(drain(pane->terminal, *pane->media) == "\x1b]5522;type=read:status=EPERM:id=otp\x1b\\");
         check(provider.writes == previous_writes && provider.reads == 0);
-        pane->terminal.feed(bytes("\x1b]5522;type=write:id=fresh\x1b\\\x1b]5522;type=wdata\x1b\\"));
+        pane->terminal.feed(bytes("\x1b]5522;type=write:id=fresh\x1b\\\x1b]5522;type=wdata\x1b\\"), *pane->media);
         service.advance(clients, *pane, std::chrono::steady_clock::now());
         const OwnedClipboardTask fresh{client.receive<ClipboardDesktopRequest>()};
 
@@ -1040,7 +1040,7 @@ namespace {
         check(client.receive<ClipboardDesktopExecute>().ticket == fresh.ticket);
         finishDesktop(model.panes, client, *pane, fresh, executeClipboard(fresh, ClipboardConsent::once, provider));
         check(provider.writes == previous_writes + 1 && provider.reads == 0);
-        check(drain(pane->terminal) == "\x1b]5522;type=write:status=DONE:id=fresh\x1b\\");
+        check(drain(pane->terminal, *pane->media) == "\x1b]5522;type=write:status=DONE:id=fresh\x1b\\");
         panes.remove(model, clients, pane->id);
       }
     }
@@ -1072,15 +1072,15 @@ namespace {
       input.append("\x1bP+q");
       input.append(4096, 'A');
       input.append("\x1b\\");
-      failed.terminal.feed(bytes(input));
+      failed.terminal.feed(bytes(input), *failed.media);
       check(failed.terminal.hasPendingControl());
       upstream.fail = true;
       panes.flushInput(failed);
       check(failed.output_closed && failed.close_requested);
       check(!failed.terminal.hasPendingControl() && failed.pty_responses->empty());
       upstream.fail = false;
-      healthy.terminal.feed(bytes("\x1b[5n"));
-      check(drain(healthy.terminal) == "\x1b[0n");
+      healthy.terminal.feed(bytes("\x1b[5n"), *healthy.media);
+      check(drain(healthy.terminal, *healthy.media) == "\x1b[0n");
       check(!healthy.output_closed);
       panes.remove(model, clients, failed_id);
       panes.remove(model, clients, healthy_id);

@@ -87,7 +87,7 @@ int main() {
   for (unsigned row = 0; row < 200; ++row) {
     corpus += std::to_string(row) + " \x1b[32mviewport\x1b[0m \x1b]8;;https://example.test/" + std::to_string(row) + "\x1b\\link\x1b]8;;\x1b\\\r\n";
   }
-  pane.terminal.feed(byteView(corpus));
+  pane.terminal.feed(byteView(corpus), *pane.media);
   std::array<telar::gui::Screen<SystemAllocator>, 2> screens{telar::gui::Screen<SystemAllocator>{memory}, telar::gui::Screen<SystemAllocator>{memory}};
   auto now = std::chrono::steady_clock::now();
   std::uint64_t frames = 0;
@@ -138,7 +138,7 @@ int main() {
   const auto pending = deliver(first, false, false);
   select(first, 62);
   select(first, 59);
-  pane.terminal.feed(byteView("new output during outstanding viewport\r\n"));
+  pane.terminal.feed(byteView("new output during outstanding viewport\r\n"), *pane.media);
   auto timeout = std::chrono::nanoseconds::max();
   AttachmentDelivery blocked{model, first.session()};
   check(!blocked.prepare(model, first.session(), DeliveryLane::cells, now, timeout));
@@ -155,7 +155,7 @@ int main() {
   check(sync.acknowledge(recovery));
   deliver(first, true, true);
   first.session().frame_interval = std::chrono::seconds{1};
-  pane.terminal.feed(byteView("another line\r\n"));
+  pane.terminal.feed(byteView("another line\r\n"), *pane.media);
   now += std::chrono::seconds{1};
   deliver(first, true, false);
   select(first, 53);

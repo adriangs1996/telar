@@ -77,7 +77,7 @@ void testDeferredResponses() {
   panes.readText(reader.session(), read);
   constexpr std::string_view changed = "Current text";
 
-  pane.terminal.feed({reinterpret_cast<const Byte*>(changed.data()), changed.size()});
+  pane.terminal.feed({reinterpret_cast<const Byte*>(changed.data()), changed.size()}, *pane.media);
   check(reader.receive<PaneText>().text == changed);
 
   auto stale = read;

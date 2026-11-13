@@ -645,9 +645,9 @@ namespace {
       auto& media = *shared_media;
       Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, queue};
 
-      terminal.attachMedia(shared_media);
-      terminal.feed(bytes(input).first(split));
-      terminal.feed(bytes(input).subspan(split));
+      terminal.attachMedia(media);
+      terminal.feed(bytes(input).first(split), media);
+      terminal.feed(bytes(input).subspan(split), media);
       std::string actual;
       std::size_t jobs = 0;
 
@@ -659,12 +659,12 @@ namespace {
           ++jobs;
         }
 
-        terminal.resumeControl();
+        terminal.resumeControl(media);
         if (const auto response = queue->readable(); !response.empty()) {
           const auto count = std::min<std::size_t>(3, response.size());
 
           actual.append(reinterpret_cast<const char*>(response.data()), count);
-          terminal.consumeResponses(count);
+          terminal.consumeResponses(count, media);
         }
       }
 
@@ -679,7 +679,7 @@ namespace {
     auto& media = *shared_media;
     Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, queue};
 
-    terminal.attachMedia(shared_media);
+    terminal.attachMedia(media);
     std::string quiet;
     constexpr unsigned commands = 32;
 
@@ -687,7 +687,7 @@ namespace {
       quiet += "\x1b_Ga=q,q=2,i=9,s=1,v=1;AAAAAA==\x1b\\";
     }
 
-    terminal.feed(bytes(quiet));
+    terminal.feed(bytes(quiet), media);
     unsigned jobs = 0;
 
     while (terminal.hasPendingControl() || !media.idle()) {
@@ -695,7 +695,7 @@ namespace {
       media.process();
       media.complete();
       ++jobs;
-      terminal.resumeControl();
+      terminal.resumeControl(media);
       check(queue->empty());
     }
 
@@ -734,7 +734,7 @@ namespace {
       }
 
       check(failed.output_closed && failed.close_requested && !failed.terminal.hasPendingControl());
-      healthy.terminal.feed(bytes("\x1b[5n"));
+      healthy.terminal.feed(bytes("\x1b[5n"), *healthy.media);
       check(!healthy.output_closed && healthy.terminal.responses().size() == 4);
       service.finish(model);
       const auto failed_id = failed.id;
@@ -763,10 +763,10 @@ namespace {
       auto& healthy = panes.launch(model, nullptr, false, launch, location, {80, 24, 9, 18});
 
       for (std::size_t index = 0; index < PtyResponseQueue::message_capacity; ++index) {
-        failed.terminal.feed(bytes("\x1b[5n"));
+        failed.terminal.feed(bytes("\x1b[5n"), *failed.media);
       }
 
-      failed.terminal.feed(bytes("\x1b[5n\x1b]2;unavailable\x1b\\\x1b[5n"));
+      failed.terminal.feed(bytes("\x1b[5n\x1b]2;unavailable\x1b\\\x1b[5n"), *failed.media);
       check(failed.terminal.hasPendingControl() && !failed.pty_responses->hasCapacityFor(1));
 
       upstream.failNext();
@@ -780,7 +780,7 @@ namespace {
       panes.flushInput(failed);
       check(failed.pty_responses->empty() && !failed.terminal.hasPendingControl());
 
-      healthy.terminal.feed(bytes("\x1b[5n"));
+      healthy.terminal.feed(bytes("\x1b[5n"), *healthy.media);
       const auto reply = healthy.terminal.responses();
 
       check(!healthy.output_closed && std::string_view{reinterpret_cast<const char*>(reply.data()), reply.size()} == "\x1b[0n");
@@ -819,7 +819,7 @@ namespace {
     auto& media = *shared_media;
     Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, queue};
 
-    terminal.attachMedia(shared_media);
+    terminal.attachMedia(media);
     std::string input;
 
     for (unsigned index = 0; index < 9; ++index) {
@@ -827,7 +827,7 @@ namespace {
     }
 
     input += "\x1b[5n";
-    terminal.feed(bytes(input));
+    terminal.feed(bytes(input), media);
     check(queue->empty() && terminal.hasPendingControl());
     check(media.seal() && !media.process());
 #if TELAR_DIAGNOSTICS
@@ -837,7 +837,7 @@ namespace {
     check(media.terminal()->graphics.images().size() == 1);
     const auto first = media.terminal()->imageKey(7);
 
-    terminal.resumeControl();
+    terminal.resumeControl(media);
     check(queue->empty() && media.seal() && !media.process());
 #if TELAR_DIAGNOSTICS
     check(media.batchMetrics().direct_frames == 1 && media.batchMetrics().discarded_frames == 0);
@@ -846,7 +846,7 @@ namespace {
     const auto second = media.terminal()->imageKey(7);
 
     check(first.generation != second.generation);
-    terminal.resumeControl();
+    terminal.resumeControl(media);
     check(terminal.responses().size() == 4 && !terminal.hasPendingControl());
     std::filesystem::remove_all(root);
   }
