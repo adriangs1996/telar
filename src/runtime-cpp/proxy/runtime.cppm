@@ -367,7 +367,7 @@ public:
     }
     SocketInterest interest;
     interest.include(request_.sourceInterest());
-    if (!request_.continueBytes().empty()) {
+    if (!request_.continueReply().remaining().empty()) {
       interest.include(continue_waiting_);
     }
     if (response_started_) {
@@ -432,12 +432,11 @@ private:
   template <ByteStream Child>
   inline bool sendContinue(Child &child) noexcept {
     if (request_.state() == State::failed) { return false; }
-    const auto bytes = request_.continueBytes();
-    if (bytes.empty()) { return false; }
-    const auto result = child.write({reinterpret_cast<const std::uint8_t *>(bytes.data()), bytes.size()});
+    auto &reply = request_.continueReply();
+    if (reply.remaining().empty()) { return false; }
+    const auto result = reply.write(child);
     if (result.state == StreamResult::State::blocked) { continue_waiting_ = result.waiting; return false; }
     if (result.state != StreamResult::State::data || result.bytes == 0) { finished_ = true; return false; }
-    request_.continueWritten(result.bytes);
     continue_waiting_ = StreamReadiness::writable;
     return true;
   }
@@ -467,13 +466,12 @@ private:
   // Answers a head too large to relay with the fixed response of its side.
   inline void rejectHead(bool request) noexcept {
     counters_.record(ProxyCounter::http1_head_too_large);
-    rejection_ = request ? request_head_too_large : response_head_too_large;
+    rejection_ = StaticReply{request ? proxy_responses::head_too_large : proxy_responses::bad_gateway_closing};
   }
 
   template <ByteStream Child>
   inline bool sendRejection(Child &child) noexcept {
-    const auto remaining = rejection_.substr(rejection_offset_);
-    const auto sent = child.write({reinterpret_cast<const std::uint8_t *>(remaining.data()), remaining.size()});
+    const auto sent = rejection_.write(child);
     if (sent.state == StreamResult::State::blocked) {
       rejection_waiting_ = sent.waiting;
       return false;
@@ -482,21 +480,17 @@ private:
       finished_ = true;
       return false;
     }
-    rejection_offset_ += sent.bytes;
-    finished_ = rejection_offset_ == rejection_.size();
+    finished_ = rejection_.sent();
     return true;
   }
 
   static constexpr std::size_t maximum_rounds = 8;
-  static constexpr std::string_view request_head_too_large = "HTTP/1.1 431 Request Header Fields Too Large\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-  static constexpr std::string_view response_head_too_large = "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
   ProxyCounters &counters_;
   [[no_unique_address]] Capture capture_;
   Relay request_;
   Relay response_;
   StreamReadiness continue_waiting_ = StreamReadiness::writable;
-  tbc::view<std::string_view, tbc::lt::static_storage> rejection_;
-  std::size_t rejection_offset_ = 0;
+  StaticReply rejection_;
   StreamReadiness rejection_waiting_ = StreamReadiness::writable;
   bool response_started_ = false;
   bool finished_ = false;
@@ -2794,21 +2788,17 @@ public:
       return true;
     }
     SocketStream stream{socket_.get()};
-    if (offset_ < response.size()) {
-      const auto sent = stream.write({reinterpret_cast<const std::uint8_t *>(response.data() + offset_), response.size() - offset_});
+    if (!response_.sent()) {
+      const auto sent = response_.write(stream);
       if (sent.state != StreamResult::State::data) {
         return sent.state != StreamResult::State::blocked;
       }
-      offset_ += sent.bytes;
-      if (offset_ != response.size()) {
+      if (!response_.sent()) {
         return false;
       }
       stream.halfClose();
     }
-
-    std::array<std::uint8_t, 4096> discarded;
-    const auto read = stream.read(discarded);
-    return read.state == StreamResult::State::ended || read.state == StreamResult::State::failed;
+    return drainEnded(stream);
   }
 
   inline int descriptor() const noexcept {
@@ -2816,7 +2806,7 @@ public:
   }
 
   inline SocketInterest interest() const noexcept {
-    return {.readable = offset_ == response.size(), .writable = offset_ != response.size()};
+    return {.readable = response_.sent(), .writable = !response_.sent()};
   }
 
   inline ProxyConnectionPolicy::Time deadline() const noexcept {
@@ -2825,10 +2815,9 @@ public:
 
 private:
   static constexpr auto drain_duration = std::chrono::milliseconds{20};
-  static constexpr std::string_view response = "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
   FileDescriptor socket_;
   ProxyConnectionPolicy::Time deadline_;
-  std::size_t offset_ = 0;
+  StaticReply response_{proxy_responses::service_unavailable_closing};
 };
 
 }

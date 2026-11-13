@@ -594,9 +594,10 @@ public:
     wire_.clear();
     forwarded_head_.reset();
     original_head_.reset();
-    write_offset_ = head_bytes_ = continue_offset_ = 0;
+    write_offset_ = head_bytes_ = 0;
+    continue_ = {};
     mode_ = Mode::undecided;
-    continue_ = regenerate_ = false;
+    regenerate_ = false;
     separator_lf_ = false;
     synthetic_ = head_parsed_ = false;
     destination_head_ = response_to_head;
@@ -641,7 +642,7 @@ public:
     return mode_ == Mode::failed || mode_ == Mode::waiting || (hasPrefix() && mode_ != Mode::buffering) ? StreamReadiness::none : parser_.sourceInterest();
   }
   inline auto destinationInterest() const noexcept -> StreamReadiness {
-    if (!continueBytes().empty()) { return StreamReadiness::completion; }
+    if (!continue_.remaining().empty()) { return StreamReadiness::completion; }
     if (mode_ == Mode::waiting) { return StreamReadiness::completion; }
     if (mode_ == Mode::failed || mode_ == Mode::buffering) { return StreamReadiness::none; }
     return hasPrefix() ? waiting_ : parser_.destinationInterest();
@@ -650,8 +651,9 @@ public:
     if (interception_.waiting()) { return interception_.deadline(control_); }
     return mode_ == Mode::buffering ? std::optional{interception_.collectUntil()} : std::nullopt;
   }
-  inline auto continueBytes() const noexcept -> std::string_view { return continue_ ? continue_response.substr(continue_offset_) : std::string_view{}; }
-  inline void continueWritten(std::size_t bytes) noexcept { continue_offset_ += bytes; }
+  // The 100 Continue the child waits for before it sends a body; empty unless it asked.
+  inline StaticReply &continueReply() noexcept { return continue_; }
+  inline const StaticReply &continueReply() const noexcept { return continue_; }
 
 private:
   inline bool hasPrefix() const noexcept { return write_offset_ != wire_.size(); }
@@ -672,8 +674,8 @@ private:
       if (!message_.response) {
         if (const auto expectation = message_.expectation(); expectation != HttpExpectation::none) {
           if (expectation != HttpExpectation::continue_) { unavailable("http_unsupported_expectation"); return; }
-          continue_ = parsed.framing.hasBody();
-          regenerate_ = continue_;
+          if (parsed.framing.hasBody()) { continue_ = StaticReply{continue_response}; }
+          regenerate_ = parsed.framing.hasBody();
           message_.headers.remove("expect");
         }
       }
@@ -736,7 +738,7 @@ private:
 
   template <ByteStream Destination>
   inline bool flush(Destination &destination) noexcept {
-    if (!continueBytes().empty()) { return false; }
+    if (!continue_.remaining().empty()) { return false; }
     if (!hasPrefix() || (mode_ != Mode::forwarding && mode_ != Mode::streaming)) { return false; }
     const auto written = destination.write(std::span{wire_}.subspan(write_offset_));
     if (written.state == StreamResult::State::blocked) { waiting_ = written.waiting; return false; }
@@ -771,10 +773,11 @@ private:
   Http1MessageRelay parser_;
   std::optional<Http1Head> forwarded_head_;
   std::optional<bool> original_head_;
-  std::size_t write_offset_ = 0, head_bytes_ = 0, continue_offset_ = 0;
+  std::size_t write_offset_ = 0, head_bytes_ = 0;
+  StaticReply continue_;
   StreamReadiness waiting_ = StreamReadiness::writable;
   Mode mode_ = Mode::undecided;
-  bool continue_ = false, regenerate_ = false;
+  bool regenerate_ = false;
   bool separator_lf_ = false;
   bool destination_head_ = false, synthetic_ = false, head_parsed_ = false;
 };

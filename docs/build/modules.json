@@ -797,6 +797,7 @@
     "src/runtime-cpp/proxy/connection_observation.cppm": "src/runtime-cpp/proxy/runtime.cppm",
     "src/runtime-cpp/proxy/connect_handshake.cppm": "src/runtime-cpp/proxy/http2_capture_streams.cppm",
     "src/runtime-cpp/proxy/counters.cppm": "src/runtime-cpp/proxy/http2_capture_streams.cppm",
+    "src/runtime-cpp/proxy/responses.cppm": "src/runtime-cpp/proxy/http2_capture_streams.cppm",
     "src/runtime-cpp/proxy/connect_head.cppm": "src/runtime-cpp/proxy/http2_capture_streams.cppm",
     "src/runtime-cpp/proxy/socket.cppm": "src/runtime-cpp/proxy/relay_direction.cppm",
     "src/runtime-cpp/proxy/stream_prefix.cppm": "src/runtime-cpp/proxy/runtime.cppm",

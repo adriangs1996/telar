@@ -10,6 +10,7 @@ module;
 
 #include <cstddef>
 #include <cassert>
+#include "tbc/view.hpp"
 
 export module telar.runtime.platform.stream_read_buffer;
 
@@ -57,6 +58,39 @@ concept ByteStream = requires(Stream &stream, std::span<std::uint8_t> destinatio
   { stream.write(bytes) } noexcept -> std::same_as<StreamResult>;
   { stream.halfClose() } noexcept -> std::same_as<void>;
 };
+
+// A fixed message written to a peer as the peer accepts it.
+class StaticReply {
+public:
+  constexpr StaticReply() noexcept = default;
+  constexpr explicit StaticReply(tbc::view<std::string_view, tbc::lt::static_storage> text) noexcept : text_(text) {}
+
+  // Whether there is no message to write at all.
+  constexpr bool empty() const noexcept { return text_.empty(); }
+  constexpr bool sent() const noexcept { return offset_ == text_.size(); }
+  constexpr std::string_view remaining() const noexcept { return text_.substr(offset_); }
+
+  // Writes what `stream` accepts now and returns the stream's result.
+  template <ByteStream Stream>
+  inline StreamResult write(Stream &stream) noexcept {
+    const auto rest = remaining();
+    const auto result = stream.write({reinterpret_cast<const std::uint8_t *>(rest.data()), rest.size()});
+    if (result.state == StreamResult::State::data) { offset_ += result.bytes; }
+    return result;
+  }
+
+private:
+  tbc::view<std::string_view, tbc::lt::static_storage> text_;
+  std::size_t offset_ = 0;
+};
+
+// Reads and discards what a refused peer still sends; true once its stream ended or failed.
+template <ByteStream Stream>
+inline bool drainEnded(Stream &stream) noexcept {
+  std::array<std::uint8_t, 4096> discarded;
+  const auto read = stream.read(discarded);
+  return read.state == StreamResult::State::ended || read.state == StreamResult::State::failed;
+}
 
 template <typename Stream>
 concept PeekableByteStream = ByteStream<Stream> && requires(Stream &stream, std::span<std::uint8_t> destination) {

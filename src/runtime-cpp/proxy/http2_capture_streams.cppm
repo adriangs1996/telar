@@ -53,6 +53,22 @@ export import telar.runtime.http2.frame_reader;
 import telar.base.diagnostics;
 import telar.platform.primitives;
 
+// Interface: proxy/responses.cppm
+export {
+namespace telar::runtime::proxy_responses {
+
+// The answers the proxy writes itself, byte for byte as clients have always received them.
+inline constexpr std::string_view connection_established = "HTTP/1.1 200 Connection Established\r\n\r\n";
+inline constexpr std::string_view head_too_large = "HTTP/1.1 431 Request Header Fields Too Large\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+inline constexpr std::string_view bad_gateway = "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n";
+inline constexpr std::string_view bad_gateway_closing = "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+inline constexpr std::string_view service_unavailable = "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\n\r\n";
+inline constexpr std::string_view service_unavailable_closing = "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+inline constexpr std::string_view gateway_timeout = "HTTP/1.1 504 Gateway Timeout\r\nContent-Length: 0\r\n\r\n";
+
+}
+}
+
 // Interface: proxy/connect_head.cppm
 export {
 namespace telar::runtime {
@@ -331,7 +347,7 @@ public:
     } else if (state_ == State::establishing) {
       counters_.record(ProxyCounter::establish_timeout);
       origin_.reset();
-      respond("HTTP/1.1 504 Gateway Timeout\r\nContent-Length: 0\r\n\r\n");
+      respond(proxy_responses::gateway_timeout);
     }
   }
 
@@ -439,7 +455,7 @@ private:
       counters_.record(ProxyCounter::connect_head_too_large);
       head_.reset();
       drain_until_ = now + refusal_drain;
-      respond("HTTP/1.1 431 Request Header Fields Too Large\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+      respond(proxy_responses::head_too_large);
       return;
     case ConnectHead::Read::complete:
       break;
@@ -473,15 +489,15 @@ private:
       return;
     case Origin::State::connected:
       successful_ = true;
-      respond("HTTP/1.1 200 Connection Established\r\n\r\n");
+      respond(proxy_responses::connection_established);
       break;
     case Origin::State::failed:
       counters_.record(ProxyCounter::upstream_connect_failure);
-      respond("HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n");
+      respond(proxy_responses::bad_gateway);
       break;
     case Origin::State::resolution_refused:
       counters_.record(ProxyCounter::resolution_refusal);
-      respond("HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\n\r\n");
+      respond(proxy_responses::service_unavailable);
       break;
     }
 
@@ -491,27 +507,26 @@ private:
   }
 
   inline void respond(tbc::view<std::string_view, tbc::lt::static_storage> response) noexcept {
-    response_ = response;
+    response_ = StaticReply{response};
     state_ = State::replying;
   }
 
   inline void writeResponse(Time now) noexcept {
-    const auto sent = ::send(child_.get(), response_.data(), response_.size(), 0);
-    if (sent <= 0) {
-      if (sent == 0 || !socketWouldBlock(errno)) {
+    SocketStream stream{child_.get()};
+    const auto sent = response_.write(stream);
+    if (sent.state != StreamResult::State::data) {
+      if (sent.state != StreamResult::State::blocked) {
         state_ = State::closed;
       }
       return;
     }
-
-    response_.remove_prefix(static_cast<std::size_t>(sent));
-    if (!response_.empty()) {
+    if (!response_.sent()) {
       return;
     }
     if (successful_) {
       state_ = State::established;
     } else if (drain_until_ > now) {
-      ::shutdown(child_.get(), SHUT_WR);
+      stream.halfClose();
       state_ = State::draining;
     } else {
       state_ = State::closed;
@@ -519,9 +534,8 @@ private:
   }
 
   inline void drain(Time now) noexcept {
-    std::array<std::uint8_t, 4096> discarded;
-    const auto received = ::recv(child_.get(), discarded.data(), discarded.size(), 0);
-    if (received == 0 || (received < 0 && !socketWouldBlock(errno)) || now >= drain_until_) {
+    SocketStream stream{child_.get()};
+    if (drainEnded(stream) || now >= drain_until_) {
       state_ = State::closed;
     }
   }
@@ -542,7 +556,7 @@ private:
   bool inspected_ = false;
   FixedText<ProxyHostname::maximum_bytes> hostname_;
   std::optional<Origin> origin_;
-  tbc::view<std::string_view, tbc::lt::static_storage> response_;
+  StaticReply response_;
   Time drain_until_{};
   State state_ = State::reading;
   bool successful_ = false;
