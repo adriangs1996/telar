@@ -1,3 +1,4 @@
+#include "blank_lines.hpp"
 #include "lifetime_analysis.hpp"
 
 #include <clang/ASTMatchers/ASTMatchFinder.h>
@@ -8,6 +9,7 @@
 #include <clang/Tooling/Tooling.h>
 #include <llvm/ADT/SmallPtrSet.h>
 #include <llvm/Support/CommandLine.h>
+#include <llvm/Support/Regex.h>
 #include <llvm/Support/ThreadPool.h>
 #include <llvm/Support/VirtualFileSystem.h>
 #include <llvm/Support/raw_ostream.h>
@@ -15,6 +17,7 @@
 #include <atomic>
 #include <exception>
 #include <mutex>
+#include <optional>
 #include <string>
 
 namespace {
@@ -48,17 +51,42 @@ namespace {
     llvm::SmallPtrSet<const clang::FunctionDecl *, 32> visited_;
   };
 
+  enum class checker {
+    lifetime,
+    blank_lines,
+  };
+
+  struct settings {
+    bool lifetime;
+    bool blank_lines;
+    bool errors;
+    bool colors;
+    std::string header_filter;
+    tbc_lint::blank_line_fixes &fixes;
+  };
+
   // Checks one translation unit with its own tool and analysis, so units can run on separate threads.
   // Its diagnostics are buffered, so that the output of parallel units never interleaves.
-  int checkUnit(const clang::tooling::CompilationDatabase &compilations, const std::string &source, bool errors, bool colors, std::string &output) {
-    borrow_check check(errors);
+  int checkUnit(const clang::tooling::CompilationDatabase &compilations, const std::string &source, const settings &settings, std::string &output) {
     clang::ast_matchers::MatchFinder finder;
-    finder.addMatcher(clang::ast_matchers::translationUnitDecl().bind("unit"), &check);
-    finder.addMatcher(clang::ast_matchers::functionDecl(clang::ast_matchers::isDefinition(), clang::ast_matchers::unless(clang::ast_matchers::isExpansionInSystemHeader())).bind("function"), &check);
+    std::optional<borrow_check> borrows;
+
+    if (settings.lifetime) {
+      borrows.emplace(settings.errors);
+      finder.addMatcher(clang::ast_matchers::translationUnitDecl().bind("unit"), &*borrows);
+      finder.addMatcher(clang::ast_matchers::functionDecl(clang::ast_matchers::isDefinition(), clang::ast_matchers::unless(clang::ast_matchers::isExpansionInSystemHeader())).bind("function"), &*borrows);
+    }
+
+    std::optional<tbc_lint::blank_line_check> blank_lines;
+
+    if (settings.blank_lines) {
+      blank_lines.emplace(settings.fixes, settings.errors, settings.header_filter);
+      blank_lines->registerMatchers(finder);
+    }
 
     llvm::raw_string_ostream stream(output);
     clang::DiagnosticOptions options;
-    options.setShowColors(colors ? clang::ShowColorsKind::On : clang::ShowColorsKind::Off);
+    options.setShowColors(settings.colors ? clang::ShowColorsKind::On : clang::ShowColorsKind::Off);
     clang::TextDiagnosticPrinter printer(stream, options);
     // The process-wide file system changes the process's working directory for each compile command;
     // a physical one keeps its own, which concurrent units need.
@@ -71,8 +99,18 @@ namespace {
 
 int main(int argc, const char **argv) try {
   llvm::cl::OptionCategory category("tbc-lint options");
-  const llvm::cl::opt<bool> warnings_as_errors("warnings-as-errors", llvm::cl::desc("Report lifetime warnings as errors"), llvm::cl::cat(category));
+  const llvm::cl::opt<bool> warnings_as_errors("warnings-as-errors", llvm::cl::desc("Report warnings as errors"), llvm::cl::cat(category));
   const llvm::cl::opt<unsigned> jobs("j", llvm::cl::desc("Translation units checked in parallel; 0 uses one per physical core"), llvm::cl::init(0), llvm::cl::cat(category));
+  llvm::cl::bits<checker> checks(
+      "checks",
+      llvm::cl::desc("Comma-separated checks to run; lifetime when none is given"),
+      llvm::cl::values(
+          clEnumValN(checker::lifetime, "lifetime", "Borrow checking"),
+          clEnumValN(checker::blank_lines, "blank-lines", "Blank lines between the statements of a block")),
+      llvm::cl::CommaSeparated,
+      llvm::cl::cat(category));
+  const llvm::cl::opt<bool> fix("fix", llvm::cl::desc("Insert the blank lines that blank-lines asks for"), llvm::cl::cat(category));
+  const llvm::cl::opt<std::string> header_filter("header-filter", llvm::cl::desc("Regular expression for the headers blank-lines checks besides each main file"), llvm::cl::cat(category));
 
   auto options = clang::tooling::CommonOptionsParser::create(argc, argv, category);
   if (!options) {
@@ -80,14 +118,34 @@ int main(int argc, const char **argv) try {
     return 2;
   }
 
+  const bool blank_lines = checks.isSet(checker::blank_lines);
+  if (fix && !blank_lines) {
+    llvm::errs() << "tbc-lint: --fix needs --checks=blank-lines\n";
+    return 2;
+  }
+
+  if (std::string error; !header_filter.empty() && !llvm::Regex(header_filter).isValid(error)) {
+    llvm::errs() << "tbc-lint: invalid --header-filter: " << error << '\n';
+    return 2;
+  }
+
+  tbc_lint::blank_line_fixes fixes;
+  const settings configuration{
+      .lifetime = checks.getBits() == 0 || checks.isSet(checker::lifetime),
+      .blank_lines = blank_lines,
+      .errors = warnings_as_errors,
+      .colors = llvm::errs().has_colors(),
+      .header_filter = header_filter,
+      .fixes = fixes,
+  };
+
   const auto &compilations = options->getCompilations();
   const auto &sources = options->getSourcePathList();
-  const bool colors = llvm::errs().has_colors();
   std::mutex print;
   std::atomic<bool> failed = false;
   const auto check = [&](const std::string &source) {
     std::string output;
-    const bool unit_failed = checkUnit(compilations, source, warnings_as_errors, colors, output) != 0;
+    const bool unit_failed = checkUnit(compilations, source, configuration, output) != 0;
     const std::scoped_lock lock(print);
     llvm::errs() << output;
     if (unit_failed) {
@@ -107,6 +165,11 @@ int main(int argc, const char **argv) try {
     }
     pool.wait();
   }
+
+  if (fix && !fixes.apply(llvm::errs())) {
+    return 1;
+  }
+
   return failed ? 1 : 0;
 } catch (const std::exception &error) {
   llvm::errs() << "tbc-lint: " << error.what() << '\n';

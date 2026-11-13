@@ -53,3 +53,29 @@ function(telar_lint_prepare build_directory include_regex exclude_regex jobs pat
     set(${ARGV5} "${paths}" PARENT_SCOPE)
   endif()
 endfunction()
+
+include("${CMAKE_CURRENT_LIST_DIR}/../lib/tbc/cmake/tbcLifetimeCheck.cmake")
+
+# Checks the blank lines that docs/code-style.md asks for between the statements of
+# the selected translation units, and of the headers whose path matches HEADERS (a
+# POSIX extended regular expression). Fails on the first one missing unless FIX is
+# given, which inserts them instead. Existing blank lines are never removed.
+function(telar_blank_line_check project_directory build_directory include_regex exclude_regex jobs)
+  cmake_parse_arguments(PARSE_ARGV 5 arg "FIX" "HEADERS" "")
+  tbc_find_linter("${project_directory}" linter)
+  if(NOT EXISTS "${linter}")
+    message(FATAL_ERROR "tbc-lint was not found at '${linter}'. Build lib/tbc with its release preset or set TBC_LINTER.")
+  endif()
+  telar_lint_prepare("${build_directory}" "${include_regex}" "${exclude_regex}" "${jobs}" patterns sources)
+  if(arg_FIX)
+    set(mode --fix)
+  else()
+    set(mode --warnings-as-errors)
+  endif()
+  if(arg_HEADERS)
+    list(APPEND mode "--header-filter=${arg_HEADERS}")
+  endif()
+  execute_process(COMMAND "${linter}" --checks=blank-lines ${mode} "-p=${build_directory}" "-j=${jobs}" ${sources}
+    WORKING_DIRECTORY "${project_directory}"
+    COMMAND_ERROR_IS_FATAL ANY)
+endfunction()
