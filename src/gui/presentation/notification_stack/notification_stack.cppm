@@ -17,7 +17,7 @@ import std;
 
 export import telar.gui.text.json_unsigned_integer;
 
-export import telar.gui.application.workspace_replica;
+export import telar.gui.presentation.notification_center;
 
 export import telar.gui.core.metrics;
 import telar.base.diagnostics;

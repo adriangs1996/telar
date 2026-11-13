@@ -1628,6 +1628,12 @@
     "<cstring>",
     "<new>"
   ],
+  "src/gui/model/records/records.cppm": [
+    "tbc/view.hpp"
+  ],
+  "src/gui/model/replicas/replicas.cppm": [
+    "tbc/view.hpp"
+  ],
   "src/gui/palette/navigation_label/navigation_label.cppm": [
     "<cstddef>",
     "<cstdint>",
@@ -1881,6 +1887,9 @@
     "<cstring>",
     "<ghostty/vt/unicode.h>",
     "<stdlib.h>",
+    "tbc/view.hpp"
+  ],
+  "src/gui/presentation/notification_center/notification_center.cppm": [
     "tbc/view.hpp"
   ],
   "src/gui/presentation/notification_stack/notification_stack.cppm": [
