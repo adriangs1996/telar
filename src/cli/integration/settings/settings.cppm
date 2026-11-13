@@ -30,14 +30,76 @@ import std;
 export import telar.config;
 export import telar.platform;
 
-export import telar.cli.server;
-
-export import telar.cli.tab;
-
+export import telar.cli.base.command_error;
 export import telar.base.text;
 import telar.base.diagnostics;
 import telar.client.protocol;
 import telar.platform.primitives;
+
+// Interface: integration_options.cppm
+export {
+  namespace telar::runtime::cli {
+
+    enum class IntegrationAction {
+      install,
+      uninstall,
+      status,
+    };
+
+    struct IntegrationOptions {
+      IntegrationAction action = IntegrationAction::status;
+      AgentProvider provider = AgentProvider::unknown;
+      std::string_view settings;
+      bool legacy = false;
+
+      // The integration command's options, with their error names.
+      inline static IntegrationOptions parse(std::span<char* const> arguments) {
+        if (arguments.size() < 2) {
+          throw std::invalid_argument{"MissingIntegrationArguments"};
+        }
+
+        IntegrationOptions options;
+        const std::string_view action = arguments[0];
+        if (action == "install") {
+          options.action = IntegrationAction::install;
+        } else if (action == "uninstall") {
+          options.action = IntegrationAction::uninstall;
+        } else if (action != "status") {
+          throw std::invalid_argument{"UnknownIntegrationAction"};
+        }
+
+        options.provider = providerNamed(arguments[1]);
+        if (options.provider == AgentProvider::unknown) {
+          throw std::invalid_argument{"UnknownHookAgent"};
+        }
+
+        for (std::size_t index = 2; index < arguments.size(); ++index) {
+          const std::string_view option = arguments[index];
+          if (option == "--legacy" && options.action == IntegrationAction::uninstall) {
+            options.legacy = true;
+            continue;
+          }
+
+          if (option != "--settings" || index + 1 >= arguments.size()) {
+            throw std::invalid_argument{"UnknownIntegrationOption"};
+          }
+
+          options.settings = arguments[++index];
+          if (!options.settings.starts_with('/')) {
+            throw std::invalid_argument{"RelativeSettingsPath"};
+          }
+        }
+
+        if (options.legacy && !options.settings.empty()) {
+          throw std::invalid_argument{"UnknownIntegrationOption"};
+        }
+
+        return options;
+      }
+    };
+
+  }
+}
 
 // Interface: integration/provider.cppm
 export {
@@ -701,6 +763,15 @@ export {
 
       return 0;
     }
+
+  }
+}
+
+// Interface: integration.cppm
+export {
+  namespace telar::runtime::cli {
+
+    int runIntegration(BudgetAllocator<SystemAllocator>& memory, const IntegrationOptions& options);
 
   }
 }

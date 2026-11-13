@@ -23,11 +23,10 @@ module;
 #include <mach-o/dyld.h>
 #endif
 
-module telar.cli.tab;
+module telar.cli.integration.settings;
 
 import std;
 
-import telar.cli.integration.settings;
 import telar.platform;
 import telar.base.diagnostics;
 import telar.client.protocol;

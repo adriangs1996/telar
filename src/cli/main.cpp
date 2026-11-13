@@ -100,6 +100,7 @@ import telar.cli.history;
 import telar.cli.server;
 import telar.cli.hook;
 import telar.cli.tab;
+import telar.cli.integration.settings;
 import telar.cli.window;
 import telar.cli.launch_commands;
 import telar.cli.plugin;
