@@ -38,7 +38,7 @@ static_assert(true);
 #include <system_error>
 #include <utility>
 
-import telar.gui.input.child_mouse;
+import telar.gui.presentation.history_pointer;
 import telar.gui.history.browser;
 import telar.gui.core.metrics;
 import telar.gui.presentation.history_filter_geometry;

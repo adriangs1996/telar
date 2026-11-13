@@ -53,7 +53,7 @@ static_assert(true);
 #include <variant>
 
 import telar.gui.core.metrics;
-import telar.gui.input.child_mouse;
+import telar.gui.presentation.tab_drop;
 import telar.gui.presentation.activity_order;
 import telar.gui.presentation.frame_pacer;
 

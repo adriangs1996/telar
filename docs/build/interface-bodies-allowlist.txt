@@ -91,10 +91,12 @@ telar.gui.presentation.history_filter_geometry
 telar.gui.presentation.history_inspection
 telar.gui.presentation.history_inspection_geometry
 telar.gui.presentation.history_meta_geometry
+telar.gui.presentation.history_pointer
 telar.gui.presentation.notification_center
 telar.gui.presentation.notification_stack
 telar.gui.presentation.suggestion_geometry
 telar.gui.presentation.suggestion_labels
+telar.gui.presentation.tab_drop
 telar.gui.prompt.completion
 telar.gui.prompt.editor
 telar.gui.prompt.layout

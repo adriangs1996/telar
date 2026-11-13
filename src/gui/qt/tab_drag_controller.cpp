@@ -26,7 +26,7 @@ static_assert(true);
 #include <span>
 
 import telar.gui.core.metrics;
-import telar.gui.input.child_mouse;
+import telar.gui.presentation.tab_drop;
 
 namespace telar::gui::qt {
 
