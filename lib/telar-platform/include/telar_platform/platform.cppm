@@ -243,6 +243,19 @@ private:
 }
 }
 
+// Interface: telar_platform/shell_exit_code.cppm
+export {
+namespace telar::runtime {
+
+// A wait status as a shell reports it in $?: the exit status, or 128 plus the killing signal.
+constexpr int shellExitCode(int status) noexcept {
+  constexpr int signal_exit_offset = 128;
+  return WIFEXITED(status) ? WEXITSTATUS(status) : signal_exit_offset + WTERMSIG(status);
+}
+
+}
+}
+
 // Interface: telar_platform/command.cppm
 export {
 
@@ -675,7 +688,7 @@ private:
     while (Clock::now() < deadline) {
       checkCancellation(options.cancelled);
       if (const auto status = process.reap()) {
-        return WIFEXITED(*status) ? WEXITSTATUS(*status) : 128 + WTERMSIG(*status);
+        return shellExitCode(*status);
       }
       ::poll(nullptr, 0, 1);
     }

@@ -1536,8 +1536,7 @@ export {
           if (entry->command_pane) {
             const auto *pane = model.panes.find(*entry->command_pane);
             if (pane != nullptr && pane->exit_status) {
-              const auto status = *pane->exit_status;
-              entry->command_exit = WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
+              entry->command_exit = *pane->exitCode();
               entry->command_state = CommandState::exited;
               entry->command_pane.reset();
               ++model.workspace_revision;

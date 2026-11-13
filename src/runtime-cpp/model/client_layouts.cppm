@@ -564,16 +564,7 @@ public:
   }
 
   inline std::optional<std::int32_t> exitCode() const noexcept {
-    if (!exit_status) {
-      return std::nullopt;
-    }
-
-    if (WIFEXITED(*exit_status)) {
-      return WEXITSTATUS(*exit_status);
-    }
-
-    constexpr int signal_exit_offset = 128;
-    return signal_exit_offset + WTERMSIG(*exit_status);
+    return exit_status ? std::optional{shellExitCode(*exit_status)} : std::nullopt;
   }
 
   static constexpr std::size_t input_limit = 128 * 1024;

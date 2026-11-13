@@ -1258,7 +1258,7 @@ public:
         continue;
       }
 
-      execution->exit_code = WIFEXITED(*status) ? WEXITSTATUS(*status) : 128 + WTERMSIG(*status);
+      execution->exit_code = shellExitCode(*status);
       execution->state = ExecutionState::exited;
       execution->eof = true;
       execution->input_owner.reset();

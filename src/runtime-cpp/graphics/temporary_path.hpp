@@ -3,6 +3,7 @@
 #include "tbc/view.hpp"
 
 #include "child_file.hpp"
+#include "telar_platform/descriptor_path.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <unistd.h>
@@ -30,24 +31,12 @@ public:
 
   // The refusal, if any, is a literal.
   tbc::view<std::string_view, tbc::lt::static_storage> authorize() noexcept {
-#if defined(__APPLE__)
-    if (::fcntl(file_.descriptor.get(), F_GETPATH, path_.data()) != 0) {
-      return "EINVAL: invalid data";
-    }
-#elif defined(__linux__)
-    std::array<char, 64> link;
-    const auto count = std::snprintf(link.data(), link.size(), "/proc/self/fd/%d", file_.descriptor.get());
-    if (count <= 0 || static_cast<std::size_t>(count) >= link.size()) {
-      return "EINVAL: invalid data";
-    }
-    const auto length = ::readlink(link.data(), path_.data(), path_.size() - 1);
-    if (length <= 0 || static_cast<std::size_t>(length) == path_.size() - 1) {
-      return "EINVAL: invalid data";
-    }
-    path_[length] = 0;
-#else
+#if !defined(__APPLE__) && !defined(__linux__)
     return "EINVAL: unsupported medium";
 #endif
+    if (!descriptorPath(file_.descriptor.get(), path_)) {
+      return "EINVAL: invalid data";
+    }
     const std::string_view path{path_.data()};
     bool temporary = inside("/tmp", path) || inside("/dev/shm", path);
 #if defined(__APPLE__)
@@ -81,7 +70,7 @@ private:
   }
 
   const GraphicsChildFile &file_;
-  std::array<char, PATH_MAX + 1> path_{};
+  std::array<char, PATH_MAX> path_{};
   bool armed_ = false;
 };
 
