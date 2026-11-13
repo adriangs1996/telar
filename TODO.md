@@ -496,10 +496,11 @@ Cada tarea empieza localizando todas las copias, crea un módulo con una interfa
 - **De P0.3:** `TBC_SHARED` no se hereda. `Memory`, `ConcurrentMemory`, `ErasingMemory`, `MemoryAdapter<A>` y cada implementación llevan su propia marca.
 - **Resultado:** `812d232a1`, en `telar.base.memory.allocators`. `Memory` tiene destructor protegido no virtual y prohíbe la copia, y cumple el concept `Allocator`, así que `Vector<T, Memory>` funciona sin cambios. `ConcurrentMemory` lleva `thread_safe = true`. `ErasingMemory` se detecta con un concept nuevo, `SensitiveAllocator` (`erasing = true` en `ErasingAllocator` y `RecyclingAllocator`). `MemoryAdapter<A>` es `final`, guarda el allocator por referencia y toma el tipo más fuerte que `A` permite, con el borrado por delante de la concurrencia. `testMemoryInterface` cubre un fake que rechaza todo, un presupuesto que se agota y el borrado. Sin avisos del lifetime checker en `lib/base`. Compilan runtime, CLI y GUI, y pasan los tests de base y de render.
 
-### [ ] P8.2 · Medir el coste de la llamada virtual
+### [x] P8.2 · Medir el coste de la llamada virtual
 - **Depende de:** P8.1, P0.5
 - **Qué mide:** alloc+free con `Memory` frente al concept, con ThinLTO y con `-fwhole-program-vtables` (lo medido sin LTO es de +0,50 a +1,08 ns sobre 13 a 26 ns de `malloc`). También los hot paths del proxy y del render.
 - **Hecho cuando:** los números están en `docs/build/` y queda decidido si `-fwhole-program-vtables` entra en release.
+- **Resultado:** `b7a71f7b1`, en `docs/build/memory-call.md`, medido en `Personal` en reposo. Con ThinLTO, alloc+free por `Memory&` frente al concept: +0,75 ns sobre ~27 ns (3 %) con un bloque, +1,1 a +2,1 ns (hasta 9 %) con 32 bloques, `Vector` que crece +1,3 %. Sin LTO, el `Vector` cuesta +17,8 ns porque deja de inlinearse el camino lento de `push_back` (solo afecta a Debug). **`-fwhole-program-vtables` no entra en release:** solo no cambia nada; necesita `-fvisibility=hidden`, que hoy es inseguro con el Objective-C++ y las dependencias sin LTO; con varias implementaciones de `Memory` (P8.3) no devirtualiza; y en los hot paths queda en el ruido salvo la escena de texto, que pierde (`create/128`, 0 de 7). Probes `memory-call-probe` en `lib/base/tests` y drivers `tools/bench_memory_call.py` y `src/runtime/tools/bench_proxy.py`.
 
 ### [ ] P8.3 · Allocators de producción detrás de `Memory`
 - **Depende de:** P8.1
