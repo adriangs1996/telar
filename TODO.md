@@ -264,10 +264,11 @@ graph LR
 - **Cierra:** `terminal → graphics` (3 aristas).
 - **Estado:** hecha en `refactor-p3-9` (`b1648c7cb`, más el probe `3dd416e1e`) en `Personal`, **sin integrar hasta medir**: `Terminal` deja de conocer `PaneMedia` y la llama por una tabla de punteros a función, así que `feed` hace llamadas indirectas en los paneles con media. Medir en `Personal` sin builds en marcha, desde el worktree `refactor-p3-9`: `python3 src/runtime/tools/bench_terminal_media_feed.py --baseline $SP/A/runtime --candidate $SP/B/runtime --output $SP/media-feed-1`, con `SP` el scratchpad que nombra el agente (builds en `/private/tmp`; si desaparecen, se rehacen en Release con el target `terminal-media-feed-probe`). Se integra si B no empeora fuera del ruido; si empeora, alternativa sin indirección. Al integrar, borrar sus 3 entradas de `upward_imports`.
 
-### [ ] P3.10 · Bajar lo que usan otros de `model.client_layouts` y de `execution_service`
+### [x] P3.10 · Bajar lo que usan otros de `model.client_layouts` y de `execution_service`
 - **Depende de:** P1.2
 - **Toca:** `runtime.model.client_layouts`, `runtime.agents.snapshot`, `runtime.persistence.session_store`, `runtime.runtime.execution_service`.
 - **Cierra:** `agents → model`, `persistence → model` y `persistence → runtime`. La arista `diagnostics → model` la cierra P3.7.
+- **Resultado:** `6533c068a`. `AgentSnapshotBuilder` lee el modelo entero, así que sube a `runtime.runtime`, su único usuario, en vez de bajar el modelo (como `BackgroundExecutor` en P3.6). `Restore` recibe el servicio de paneles como parámetro de plantilla acotado por un concept nuevo, `PaneLauncher` (`launch` y `flushInput`), y `SessionStore` pierde `Poller` y `History`. `persistence → model` ya no subía con el orden actual. `upward_imports` de 36 a 34. El módulo sigue llamándose `agents.snapshot` aunque el builder ya no está ahí.
 
 ### [ ] P3.11a · `telar.platform.net`
 - **Depende de:** P1.2. Antes, revisar qué dejó hecho el caso 31 de audit-39.
