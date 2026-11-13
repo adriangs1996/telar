@@ -700,8 +700,8 @@ private:
         break;
       }
       const std::string_view name{entry->d_name};
-      int pid = 0;
-      if (std::from_chars(name.data(), name.data() + name.size(), pid).ptr != name.data() + name.size() || pid <= 0) {
+      const auto pid = parseExact<int>(name).value_or(0);
+      if (pid <= 0) {
         continue;
       }
       struct stat state{};

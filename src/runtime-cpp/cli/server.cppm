@@ -84,32 +84,14 @@ export namespace telar::runtime::cli {
     }
 
   private:
-    template <typename Integer>
+    template <std::unsigned_integral Integer>
     static Integer number(std::string_view text) {
-      if (text.empty() || text.front() == '_' || text.back() == '_') {
-        throw std::invalid_argument{"Invalid plugin worker integer"};
+      const auto value = unsignedNumber<Integer>(text);
+      if (!value) {
+        throw std::invalid_argument{value.error() == NumberError::overflow ? "Plugin worker integer exceeds its bounds" : "Invalid plugin worker integer"};
       }
 
-      Integer result = 0;
-      constexpr unsigned radix = 10;
-      for (const char byte : text) {
-        if (byte == '_') {
-          continue;
-        }
-
-        if (byte < '0' || byte > '9') {
-          throw std::invalid_argument{"Invalid plugin worker integer"};
-        }
-
-        const auto digit = static_cast<unsigned>(byte - '0');
-        if (result > (std::numeric_limits<Integer>::max() - digit) / radix) {
-          throw std::invalid_argument{"Plugin worker integer exceeds its bounds"};
-        }
-
-        result = static_cast<Integer>((result * radix) + digit);
-      }
-
-      return result;
+      return *value;
     }
   };
 

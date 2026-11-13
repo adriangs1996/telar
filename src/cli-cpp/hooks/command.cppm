@@ -134,13 +134,12 @@ public:
     }
 
     const auto input = field->encoded().starts_with('"') ? text(name) : field->encoded();
-    Integer result{};
-    const auto parsed = std::from_chars(input.data(), input.data() + input.size(), result);
-    if (parsed.ec != std::errc{} || parsed.ptr != input.data() + input.size()) {
+    const auto parsed = parseExact<Integer>(input);
+    if (!parsed) {
       throw std::invalid_argument{"Expected hook integer"};
     }
 
-    return result;
+    return *parsed;
   }
 
   inline void requireUnique() const {

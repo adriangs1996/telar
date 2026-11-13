@@ -2749,29 +2749,13 @@ private:
     if (number.starts_with('+')) {
       number.remove_prefix(1);
     }
-    if (number.empty() || number.front() == '_' || number.back() == '_') {
-      return std::nullopt;
-    }
-
-    std::uint32_t port = 0;
-    for (const char character : number) {
-      if (character == '_') {
-        continue;
-      }
-      if (character < '0' || character > '9') {
-        return std::nullopt;
-      }
-      port = port * 10 + static_cast<unsigned>(character - '0');
-      if (port > UINT16_MAX) {
-        return std::nullopt;
-      }
-    }
-    if (!ProxyPortRange::contains(static_cast<std::uint16_t>(port))) {
+    const auto port = unsignedDecimal<std::uint16_t>(number);
+    if (!port || !ProxyPortRange::contains(*port)) {
       return std::nullopt;
     }
 
     const auto tail = newline == std::string_view::npos ? std::string_view{} : text.substr(newline + 1);
-    return Record{static_cast<std::uint16_t>(port), trimCarriageReturns(tail.substr(0, tail.find('\n')))};
+    return Record{*port, trimCarriageReturns(tail.substr(0, tail.find('\n')))};
   }
 
   template <typename Visitor>

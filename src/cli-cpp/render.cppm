@@ -13,6 +13,7 @@ export module telar.cli.render;
 
 import std;
 import telar.base.memory;
+import telar.base.text;
 import telar.render.document;
 import telar.render.markdown;
 import telar.render.terminal;
@@ -81,9 +82,8 @@ namespace telar::runtime::cli::render_command {
         self.pager = true;
       } else if (word == "--width") {
         const auto text = value("MissingRenderWidth");
-        std::uint16_t width = 0;
-        const auto parsed = std::from_chars(text.data(), text.data() + text.size(), width);
-        if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size() || width < render::terminal::min_width) {
+        const auto width = parseExact<std::uint16_t>(text).value_or(0);
+        if (width < render::terminal::min_width) {
           throw std::invalid_argument{"InvalidRenderWidth"};
         }
         self.width = width;

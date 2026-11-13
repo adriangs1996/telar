@@ -724,24 +724,7 @@ private:
   }
 
   inline static bool validIndex(std::string_view number) noexcept {
-    if (number.empty() || number.front() == '_' || number.back() == '_') {
-      return false;
-    }
-
-    unsigned index = 0;
-    for (const auto byte : number) {
-      if (byte == '_') {
-        continue;
-      }
-      if (byte < '0' || byte > '9') {
-        return false;
-      }
-      index = index * 10 + static_cast<unsigned>(byte - '0');
-      if (index > UINT8_MAX) {
-        return false;
-      }
-    }
-    return index != 0;
+    return unsignedNumber<unsigned>(number, UINT8_MAX).value_or(0) != 0;
   }
 
   inline static void requiredInteger(const lua::Value &value, lua_Integer minimum, lua_Integer maximum) {
@@ -1649,25 +1632,9 @@ private:
     if (negative || digits.front() == '+') {
       digits.remove_prefix(1);
     }
-    if (digits.empty() || digits.front() == '_' || digits.back() == '_') {
-      return false;
-    }
-
-    unsigned value = 0;
-    for (const auto byte : digits) {
-      if (byte == '_') {
-        continue;
-      }
-      const auto lower = asciiLower(byte);
-      if (byte >= '0' && byte <= '9') {
-        value = value * 16 + static_cast<unsigned>(byte - '0');
-      } else if (lower >= 'a' && lower <= 'f') {
-        value = value * 16 + static_cast<unsigned>(lower - 'a' + 10);
-      } else {
-        return false;
-      }
-    }
-    return !negative || value == 0;
+    // At most six digits follow '#', so the value never reaches the limit.
+    const auto value = unsignedNumber<unsigned>(digits, std::numeric_limits<unsigned>::max(), 16);
+    return value && (!negative || *value == 0);
   }
 };
 

@@ -60,24 +60,11 @@ Integer parseDecimal(std::string_view text, Sign sign) {
   constexpr auto positive_limit = static_cast<Unsigned>(std::numeric_limits<Integer>::max());
   constexpr auto negative_limit = std::is_signed_v<Integer> ? static_cast<Unsigned>(positive_limit + 1) : Unsigned{0};
   const auto limit = negative ? negative_limit : positive_limit;
-  constexpr Unsigned decimal_base = 10;
-  Unsigned value = 0;
-  for (const char byte : text) {
-    if (byte == '_') {
-      continue;
-    }
-
-    if (byte < '0' || byte > '9') {
-      usage("InvalidCharacter");
-    }
-
-    const auto digit = static_cast<Unsigned>(byte - '0');
-    if (digit > limit || value > (limit - digit) / decimal_base) {
-      usage("Overflow");
-    }
-
-    value = static_cast<Unsigned>(value * decimal_base + digit);
+  const auto parsed = unsignedNumber<Unsigned>(text, limit);
+  if (!parsed) {
+    usage(parsed.error() == NumberError::overflow ? "Overflow" : "InvalidCharacter");
   }
+  const auto value = *parsed;
 
   if constexpr (std::is_signed_v<Integer>) {
     if (negative) {

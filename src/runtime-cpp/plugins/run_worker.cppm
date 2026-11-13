@@ -589,10 +589,9 @@ private:
   inline static std::uint64_t identity(const lua::Value &value) {
     if (!value.present()) { return 0; }
     const auto text = value.string();
-    std::uint64_t result;
-    const auto parsed = std::from_chars(text.data(), text.data() + text.size(), result);
-    if (text.empty() || parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size()) { throw lua::Error{"Invalid recording identity or cursor"}; }
-    return result;
+    const auto result = parseExact<std::uint64_t>(text);
+    if (!result) { throw lua::Error{"Invalid recording identity or cursor"}; }
+    return *result;
   }
 
   inline static void metadata(lua_State *state, const traffic::recording::Page &page) {
@@ -881,9 +880,8 @@ private:
     if (!binding || (binding->registration.stage != TrafficStage::stream && binding->registration.stage != TrafficStage::http)) { return false; }
     const lua::Value ticket_value{state, 2, "Interception ticket"};
     const auto text = ticket_value.string();
-    std::uint64_t ticket;
-    const auto parsed = std::from_chars(text.data(), text.data() + text.size(), ticket);
-    if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size() || ticket == 0) { throw lua::Error{"Invalid interception ticket"}; }
+    const auto ticket = parseExact<std::uint64_t>(text).value_or(0);
+    if (ticket == 0) { throw lua::Error{"Invalid interception ticket"}; }
     const lua::Value decision{state, 3, "Interception decision"};
     const auto action = decision.field("action").string();
     const auto verdict = action == "allow" ? traffic::Verdict::allow : action == "replace" ? traffic::Verdict::replace : action == "reject" ? traffic::Verdict::reject : traffic::Verdict::pending;

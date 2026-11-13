@@ -64,10 +64,11 @@ public:
     range += "..HEAD";
     const auto count = line<32>(root, deadline, {"rev-list", "--count", range, "--"});
     const auto text = count.view();
-    const auto parsed = std::from_chars(text.data(), text.data() + text.size(), result.ahead);
-    if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size()) {
+    const auto ahead = parseExact<decltype(result.ahead)>(text);
+    if (!ahead) {
       reject();
     }
+    result.ahead = *ahead;
 
     return result;
   }

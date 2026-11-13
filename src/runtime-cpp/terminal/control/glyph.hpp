@@ -3,6 +3,7 @@
 #include "tbc/view.hpp"
 
 #include "reply.hpp"
+#include "telar_base/text/decimal.hpp"
 #include <charconv>
 #include <optional>
 
@@ -13,23 +14,9 @@ inline std::optional<std::uint32_t> glyphCodepoint(std::string_view value) noexc
     value.remove_prefix(1);
   }
 
-  if (value.empty() || value.front() == '_' || value.back() == '_') {
-    return std::nullopt;
-  }
-
   constexpr std::uint32_t maximum_codepoint = (1u << 21) - 1;
-  std::uint32_t result = 0;
-  for (const auto byte : value) {
-    if (byte == '_') {
-      continue;
-    }
-    const auto digit = byte >= '0' && byte <= '9' ? byte - '0' : byte >= 'a' && byte <= 'f' ? byte - 'a' + 10 : byte >= 'A' && byte <= 'F' ? byte - 'A' + 10 : -1;
-    if (digit < 0 || result > (maximum_codepoint - digit) / 16) {
-      return std::nullopt;
-    }
-    result = result * 16 + digit;
-  }
-  return result;
+  const auto result = unsignedNumber<std::uint32_t>(value, maximum_codepoint, 16);
+  return result ? std::optional{*result} : std::nullopt;
 }
 
 inline tbc::view<std::optional<std::string_view>, tbc::lt::a> glyphOption(tbc::view<std::string_view, tbc::lt::a> options, std::string_view key) noexcept {

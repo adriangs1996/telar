@@ -128,11 +128,11 @@ struct ProcStat {
       const auto word = input.substr(0, separator);
       const auto selected = static_cast<Field>(field);
       if (selected == Field::parent || selected == Field::group || selected == Field::foreground || selected == Field::started) {
-        std::int64_t value = 0;
-        const auto parsed = std::from_chars(word.data(), word.data() + word.size(), value);
-        if (parsed.ec != std::errc{} || parsed.ptr != word.data() + word.size()) {
+        const auto parsed = parseExact<std::int64_t>(word);
+        if (!parsed) {
           return std::nullopt;
         }
+        const auto value = *parsed;
         switch (selected) {
         case Field::parent: result.parent = static_cast<pid_t>(value); break;
         case Field::group: result.group = static_cast<pid_t>(value); break;

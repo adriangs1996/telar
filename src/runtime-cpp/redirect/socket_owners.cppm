@@ -359,9 +359,8 @@ public:
           if (first != std::string_view::npos) {
             line.remove_prefix(first);
             line = line.substr(0, line.find_last_not_of(" \t\r") + 1);
-            std::uint64_t token = 0;
-            const auto result = std::from_chars(line.data(), line.data() + line.size(), token);
-            if (result.ec == std::errc{} && result.ptr == line.data() + line.size() && token != 0) {
+            const auto token = parseExact<std::uint64_t>(line).value_or(0);
+            if (token != 0) {
               return token;
             }
           }
@@ -434,10 +433,9 @@ public:
 
 private:
   inline static std::uint64_t number(std::string_view value) {
-    std::uint64_t result;
-    const auto parsed = std::from_chars(value.data(), value.data() + value.size(), result);
-    if (value.empty() || parsed.ec != std::errc{} || parsed.ptr != value.data() + value.size()) { throw std::invalid_argument{"Invalid selected process identity"}; }
-    return result;
+    const auto result = parseExact<std::uint64_t>(value);
+    if (!result) { throw std::invalid_argument{"Invalid selected process identity"}; }
+    return *result;
   }
 };
 
@@ -584,8 +582,11 @@ struct LinuxTcpSocket {
 private:
   template <typename Integer>
   inline static bool number(std::string_view input, Integer &output, int base) noexcept {
-    const auto parsed = std::from_chars(input.data(), input.data() + input.size(), output, base);
-    return parsed.ec == std::errc{} && parsed.ptr == input.data() + input.size();
+    const auto parsed = parseExact<Integer>(input, base);
+    if (parsed) {
+      output = *parsed;
+    }
+    return parsed.has_value();
   }
 
   inline static bool endpoint(std::string_view input, int family, sockaddr_storage &output) noexcept {
@@ -840,9 +841,7 @@ inline SocketOwners::Result SocketOwners::find(const FlowKey &flow) noexcept {
           continue;
         }
         name = name.substr(sizeof("socket:[") - 1, name.size() - sizeof("socket:["));
-        std::uint64_t descriptor_inode = 0;
-        const auto parsed = std::from_chars(name.data(), name.data() + name.size(), descriptor_inode);
-        if (parsed.ec != std::errc{} || parsed.ptr != name.data() + name.size() || descriptor_inode != *inode) {
+        if (parseExact<std::uint64_t>(name) != *inode) {
           continue;
         }
         const auto verified = inspector_.identity(selected.pid);

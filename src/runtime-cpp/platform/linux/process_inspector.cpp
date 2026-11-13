@@ -205,9 +205,8 @@ std::size_t ProcessInspector::groupMembers(pid_t group, std::span<pid_t> members
   std::size_t count = 0;
   while (const auto *entry = ::readdir(directory)) {
     const std::string_view name{entry->d_name};
-    pid_t process = 0;
-    const auto parsed = std::from_chars(name.data(), name.data() + name.size(), process);
-    if (parsed.ec != std::errc{} || parsed.ptr != name.data() + name.size() || process <= 0) {
+    const auto process = parseExact<pid_t>(name).value_or(0);
+    if (process <= 0) {
       continue;
     }
 

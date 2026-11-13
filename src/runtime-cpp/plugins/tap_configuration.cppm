@@ -179,12 +179,10 @@ private:
 
     for (const auto &[prefix, kind] : {std::pair{std::string_view{"select-tab-"}, ActionTag::select_tab}, std::pair{std::string_view{"select-workspace-"}, ActionTag::select_workspace}}) {
       if (name.starts_with(prefix)) {
-        unsigned index = 0;
-        constexpr unsigned radix = 10;
-        for (const char byte : name.substr(prefix.size())) {
-          if (byte != '_') {
-            index = (index * radix) + static_cast<unsigned>(byte - '0');
-          }
+        // The configuration admitted 1..255; the encoder still refuses anything else.
+        const auto index = unsignedNumber<unsigned>(name.substr(prefix.size()), std::numeric_limits<Byte>::max()).value_or(0);
+        if (index == 0) {
+          throw std::invalid_argument{"Invalid tab or workspace index"};
         }
 
         tag(kind, output);

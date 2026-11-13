@@ -36,6 +36,7 @@ module;
 #include <netinet/in.h>
 
 #include "telar_base/text/utf8.hpp"
+#include "telar_base/text/decimal.hpp"
 
 export module telar.base.text;
 
@@ -52,6 +53,10 @@ using telar::validateUtf8;
 }
 export namespace telar::runtime {
 using telar::runtime::utf8Prefix;
+using telar::runtime::NumberError;
+using telar::runtime::unsignedNumber;
+using telar::runtime::unsignedDecimal;
+using telar::runtime::parseExact;
 }
 export namespace telar::runtime::base64 {
 using telar::runtime::base64::Padding;
@@ -86,40 +91,6 @@ inline constexpr bool asciiEqualIgnoreCase(std::string_view left, std::string_vi
     }
   }
   return true;
-}
-
-}
-}
-
-// Interface: telar_base/text/decimal.cppm
-export {
-namespace telar::runtime {
-
-template <std::unsigned_integral Integer>
-std::optional<Integer> unsignedDecimal(std::string_view text) noexcept {
-  if (text.empty() || text.front() == '_' || text.back() == '_') {
-    return std::nullopt;
-  }
-
-  constexpr Integer base = 10;
-  Integer value = 0;
-  for (const auto character : text) {
-    if (character == '_') {
-      continue;
-    }
-    if (character < '0' || character > '9') {
-      return std::nullopt;
-    }
-
-    const auto digit = static_cast<Integer>(character - '0');
-    if (value > (std::numeric_limits<Integer>::max() - digit) / base) {
-      return std::nullopt;
-    }
-
-    value = value * base + digit;
-  }
-
-  return value;
 }
 
 }

@@ -516,21 +516,19 @@ public:
     const auto log = value.find('\n');
     if (log != std::string_view::npos) {
       const auto name = value.substr(log + 1);
-      unsigned index = LogInterface::maximum;
-      const auto parsed = std::from_chars(name.data(), name.data() + name.size(), index);
-      if (parsed.ec != std::errc{} || parsed.ptr != name.data() + name.size() || index >= LogInterface::maximum) {
+      const auto index = parseExact<unsigned>(name).value_or(LogInterface::maximum);
+      if (index >= LogInterface::maximum) {
         throw std::runtime_error{"Invalid redirect log recovery record"};
       }
       log_index_ = index;
       value = value.substr(0, log);
     }
-    std::uint64_t token = 0;
-    const auto result = std::from_chars(value.data(), value.data() + value.size(), token);
-    if (result.ec != std::errc{} || result.ptr != value.data() + value.size()) {
+    const auto token = parseExact<std::uint64_t>(value);
+    if (!token) {
       throw std::runtime_error{"Invalid redirect recovery token"};
     }
-    last_token_ = token;
-    return token;
+    last_token_ = *token;
+    return *token;
   }
 
   inline void save(std::uint64_t token) {

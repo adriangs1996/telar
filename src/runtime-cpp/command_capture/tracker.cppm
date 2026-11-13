@@ -531,26 +531,12 @@ private:
     if (negative || value.starts_with('+')) {
       value.remove_prefix(1);
     }
-    if (value.empty() || value.front() == '_' || value.back() == '_') {
+    const auto limit = static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max()) + negative;
+    const auto parsed = unsignedNumber<std::uint32_t>(value, limit);
+    if (!parsed) {
       return std::nullopt;
     }
-
-    constexpr std::uint32_t decimal_base = 10;
-    const auto limit = static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max()) + negative;
-    std::uint32_t magnitude = 0;
-    for (const auto byte : value) {
-      if (byte == '_') {
-        continue;
-      }
-      if (byte < '0' || byte > '9') {
-        return std::nullopt;
-      }
-      const auto digit = static_cast<std::uint32_t>(byte - '0');
-      if (magnitude > (limit - digit) / decimal_base) {
-        return std::nullopt;
-      }
-      magnitude = magnitude * decimal_base + digit;
-    }
+    const auto magnitude = *parsed;
     const auto signed_value = negative ? -static_cast<std::int64_t>(magnitude) : magnitude;
     return static_cast<int>(signed_value);
   }

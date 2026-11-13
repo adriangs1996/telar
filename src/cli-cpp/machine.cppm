@@ -1280,13 +1280,12 @@ class Logins {
 
   inline static std::uint64_t number(JsonValue value) {
     const auto text = value.encoded();
-    std::uint64_t result = 0;
-    const auto parsed = std::from_chars(text.data(), text.data() + text.size(), result);
-    if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size()) {
+    const auto result = parseExact<std::uint64_t>(text);
+    if (!result) {
       throw CommandError{"LoginPaneUnreadable"};
     }
 
-    return result;
+    return *result;
   }
 
   inline std::string string(JsonValue value) {
@@ -1547,9 +1546,8 @@ class Logins {
       const auto exit = required(value, "exit_code").encoded();
       std::optional<int> code;
       if (exit != "null") {
-        int parsed = 0;
-        const auto result = std::from_chars(exit.data(), exit.data() + exit.size(), parsed);
-        if (result.ec != std::errc{} || result.ptr != exit.data() + exit.size()) {
+        const auto parsed = parseExact<int>(exit);
+        if (!parsed) {
           throw CommandError{"LoginPaneUnreadable"};
         }
 

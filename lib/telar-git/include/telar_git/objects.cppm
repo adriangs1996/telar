@@ -880,11 +880,11 @@ private:
       return Lookup::invalid;
     }
     const auto size_text = text.substr(space + 1, terminator - space - 1);
-    std::uint64_t size = 0;
-    const auto parsed = std::from_chars(size_text.data(), size_text.data() + size_text.size(), size);
-    if (size_text.empty() || parsed.ec != std::errc{} || parsed.ptr != size_text.data() + size_text.size()) {
+    const auto parsed = telar::runtime::parseExact<std::uint64_t>(size_text);
+    if (!parsed) {
       return Lookup::invalid;
     }
+    const auto size = *parsed;
     if (prefix == 0 && size > limits_->object_size) {
       return Lookup::invalid;
     }

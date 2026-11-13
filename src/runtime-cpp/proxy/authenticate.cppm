@@ -244,9 +244,8 @@ struct ProxyTarget {
     }
 
     const auto port_text = authority.substr(colon + 1);
-    std::uint16_t port = 0;
-    const auto parsed = std::from_chars(port_text.data(), port_text.data() + port_text.size(), port);
-    if (parsed.ec != std::errc{} || parsed.ptr != port_text.data() + port_text.size() || port == 0) {
+    const auto port = parseExact<std::uint16_t>(port_text).value_or(0);
+    if (port == 0) {
       return std::nullopt;
     }
     return ProxyTarget{hostname, port};

@@ -113,10 +113,8 @@ struct Target {
     } else if (host.contains(':')) {
       throw std::invalid_argument{"IPv6 redirect targets require brackets"};
     }
-    unsigned port = 0;
-    const auto value = text.substr(colon + 1);
-    const auto parsed = std::from_chars(value.data(), value.data() + value.size(), port);
-    if (parsed.ec != std::errc{} || parsed.ptr != value.data() + value.size() || port == 0 || port > UINT16_MAX || !ProxyHostname::validTarget(host)) {
+    const auto port = parseExact<std::uint16_t>(text.substr(colon + 1)).value_or(0);
+    if (port == 0 || !ProxyHostname::validTarget(host)) {
       throw std::invalid_argument{"Invalid redirect target"};
     }
     return {host, static_cast<std::uint16_t>(port)};

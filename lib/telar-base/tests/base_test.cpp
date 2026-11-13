@@ -130,6 +130,20 @@ namespace {
     return encoded;
   }
 
+  void testNumbers() {
+    using telar::runtime::NumberError;
+    using telar::runtime::parseExact;
+    using telar::runtime::unsignedDecimal;
+    using telar::runtime::unsignedNumber;
+    require(unsignedDecimal<std::uint16_t>("65_535") == 65535 && !unsignedDecimal<std::uint16_t>("65536"));
+    require(!unsignedDecimal<std::uint8_t>("_1") && !unsignedDecimal<std::uint8_t>("1_") && !unsignedDecimal<std::uint8_t>("") && !unsignedDecimal<std::uint8_t>("0x1"));
+    require(unsignedNumber<std::uint32_t>("1F_ff", 0x1fffff, 16) == 0x1fff && unsignedNumber<std::uint32_t>("200000", 0x1fffff, 16).error() == NumberError::overflow);
+    require(unsignedNumber<std::uint8_t>("9x").error() == NumberError::invalid_character && unsignedNumber<std::uint8_t>("999x").error() == NumberError::overflow);
+    require(unsignedNumber<std::uint8_t>("a", 255, 10).error() == NumberError::invalid_character);
+    require(parseExact<std::uint16_t>("8080") == 8080 && !parseExact<std::uint16_t>("8080 ") && !parseExact<std::uint16_t>("") && !parseExact<std::uint16_t>("70000"));
+    require(parseExact<int>("-7") == -7 && parseExact<unsigned>("ff", 16) == 255u);
+  }
+
   void testBracketedPaste() {
     require(paste("ls\n", false) == "ls\n");
     require(paste("ls\n", true) == "\x1b[200~ls\n\x1b[201~");
@@ -145,6 +159,7 @@ namespace {
 int main() {
   testMemory();
   testBracketedPaste();
+  testNumbers();
   testRetainedStream();
   testLimits();
   testJson();

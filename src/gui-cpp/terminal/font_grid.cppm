@@ -213,28 +213,12 @@ private:
       throw EncodingError{"Invalid copy range coordinate"};
     }
 
-    constexpr std::uint64_t decimal_base = 10;
-    constexpr std::uint64_t maximum = std::numeric_limits<Coordinate>::max();
-    std::uint64_t result = 0;
-
-    for (const char character : text) {
-      if (character == '_') {
-        continue;
-      }
-
-      if (character < '0' || character > '9') {
-        throw EncodingError{"Invalid copy range digit"};
-      }
-
-      const auto digit = static_cast<std::uint64_t>(character - '0');
-      if (result > (maximum - digit) / decimal_base) {
-        throw EncodingError{"Copy range coordinate exceeds capacity"};
-      }
-
-      result = (result * decimal_base) + digit;
+    const auto result = runtime::unsignedNumber<Coordinate>(text);
+    if (!result) {
+      throw EncodingError{result.error() == runtime::NumberError::overflow ? "Copy range coordinate exceeds capacity" : "Invalid copy range digit"};
     }
 
-    return static_cast<Coordinate>(result);
+    return *result;
   }
 };
 

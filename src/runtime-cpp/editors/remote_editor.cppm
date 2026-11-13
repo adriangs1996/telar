@@ -345,11 +345,11 @@ private:
     } catch (...) {
       return;
     }
-    pid_t pid = 0;
-    const auto parsed = std::from_chars(identity.data(), identity.data() + identity.size(), pid);
-    if (parsed.ec != std::errc{} || parsed.ptr != identity.data() + identity.size()) {
+    const auto parsed = parseExact<pid_t>(identity);
+    if (!parsed) {
       return;
     }
+    const auto pid = *parsed;
     std::array<char, 256> host{};
     if (::gethostname(host.data(), host.size() - 1) != 0) {
       return;

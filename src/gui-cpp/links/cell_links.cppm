@@ -84,31 +84,8 @@ private:
       text.remove_prefix(1);
     }
 
-    if (text.empty() || text.front() == '_' || text.back() == '_') {
-      return {};
-    }
-
-    constexpr unsigned base = 10;
-    constexpr auto maximum = std::numeric_limits<std::uint16_t>::max();
-    unsigned value = 0;
-    for (const auto byte : text) {
-      if (byte == '_') {
-        continue;
-      }
-
-      if (!LinkText::digit(byte)) {
-        return {};
-      }
-
-      const auto digit = static_cast<unsigned>(byte - '0');
-      if (value > (maximum - digit) / base) {
-        return {};
-      }
-
-      value = (value * base) + digit;
-    }
-
-    return negative && value != 0 ? std::nullopt : std::optional{static_cast<std::uint16_t>(value)};
+    const auto value = runtime::unsignedDecimal<std::uint16_t>(text);
+    return !value || (negative && *value != 0) ? std::nullopt : value;
   }
 
   inline bool authority(tbc::view<std::string_view, tbc::lt::a> text, bool empty_authority_has_path) {

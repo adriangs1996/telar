@@ -152,29 +152,9 @@ inline std::optional<BindingAction> builtinBindingAction(std::string_view name) 
 
     auto digits = name;
     digits.remove_prefix(prefix.size());
-    if (digits.empty() || digits.front() == '_' || digits.back() == '_') {
-      return {};
-    }
-
-    std::int32_t index = 0;
-    constexpr std::int32_t decimal_base = 10;
-    constexpr std::int32_t maximum_index = 255;
-    for (const char digit : digits) {
-      if (digit == '_') {
-        continue;
-      }
-
-      if (digit < '0' || digit > '9') {
-        return {};
-      }
-
-      index = (index * decimal_base) + (digit - '0');
-      if (index > maximum_index) {
-        return {};
-      }
-    }
-
-    return index == 0 ? std::nullopt : std::optional{BindingAction{.kind = kind, .parameter = index - 1}};
+    constexpr unsigned maximum_index = 255;
+    const auto index = runtime::unsignedNumber<unsigned>(digits, maximum_index).value_or(0);
+    return index == 0 ? std::nullopt : std::optional{BindingAction{.kind = kind, .parameter = static_cast<std::int32_t>(index) - 1}};
   }
 
   return {};

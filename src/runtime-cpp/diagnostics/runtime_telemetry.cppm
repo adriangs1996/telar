@@ -143,29 +143,7 @@ struct LogName {
       return std::nullopt;
     }
 
-    const auto digits = name.substr(dash + 1);
-    if (digits.empty() || digits.front() == '_' || digits.back() == '_') {
-      return std::nullopt;
-    }
-
-    std::uint32_t process = 0;
-    for (const auto character : digits) {
-      if (character == '_') {
-        continue;
-      }
-
-      if (character < '0' || character > '9') {
-        return std::nullopt;
-      }
-
-      const auto digit = static_cast<std::uint32_t>(character - '0');
-      if (process > (std::numeric_limits<std::uint32_t>::max() - digit) / 10) {
-        return std::nullopt;
-      }
-
-      process = process * 10 + digit;
-    }
-
+    const auto process = unsignedDecimal<std::uint32_t>(name.substr(dash + 1)).value_or(0);
     if (process == 0) {
       return std::nullopt;
     }

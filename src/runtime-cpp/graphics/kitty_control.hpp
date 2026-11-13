@@ -1,5 +1,6 @@
 #pragma once
 
+#include "telar_base/text/decimal.hpp"
 #include <concepts>
 #include <limits>
 #include <optional>
@@ -45,27 +46,7 @@ private:
 
 template <std::unsigned_integral Number>
 std::optional<Number> kittyUnsigned(std::string_view text) noexcept {
-  if (text.empty() || text.front() == '_' || text.back() == '_') {
-    return std::nullopt;
-  }
-
-  Number value = 0;
-  for (const auto character : text) {
-    if (character == '_') {
-      continue;
-    }
-
-    if (character < '0' || character > '9') {
-      return std::nullopt;
-    }
-
-    const auto digit = static_cast<Number>(character - '0');
-    if (value > (std::numeric_limits<Number>::max() - digit) / 10) {
-      return std::nullopt;
-    }
-    value = value * 10 + digit;
-  }
-  return value;
+  return unsignedDecimal<Number>(text);
 }
 
 }
