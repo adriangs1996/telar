@@ -1215,8 +1215,7 @@ export {
         try {
           TextReader reader{memory_, pane.terminal, ExitedPanes::maximum_bytes};
           reader.read(PaneTextSource::recent, ExitedPanes::kept_rows);
-          std::size_t rows = 0;
-          checkGhostty(ghostty_terminal_get(pane.terminal.handle(), GHOSTTY_TERMINAL_DATA_TOTAL_ROWS, &rows));
+          const auto rows = pane.terminal.totalRows();
           exited.record(pane.id, pane.generation, PaneText{
                                                       .truncated = reader.truncated() || rows > ExitedPanes::kept_rows,
                                                       .text = reader.text(),

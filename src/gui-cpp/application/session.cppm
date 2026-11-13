@@ -1564,7 +1564,7 @@ public:
 
   inline void resize(std::uint64_t pane_id, TerminalSize size) {
     auto *pane = findPane(pane_id);
-    if (pane == nullptr || equalSize(pane->size, size)) {
+    if (pane == nullptr || pane->size == size) {
       return;
     }
 
@@ -2666,10 +2666,6 @@ private:
         request.scope_value = std::string_view{workspace->path};
       }
     }
-  }
-
-  static bool equalSize(TerminalSize left, TerminalSize right) noexcept {
-    return left.cols == right.cols && left.rows == right.rows && left.cell_width_px == right.cell_width_px && left.cell_height_px == right.cell_height_px;
   }
 
   std::uint64_t nextRequest() noexcept {

@@ -12,6 +12,7 @@ module;
 
 
 #include "cell_layout.hpp"
+#include "ghostty_grid.hpp"
 
 export module telar.runtime.terminal.osc_scanner;
 
@@ -431,7 +432,7 @@ public:
     }
 
     if (!started_) {
-      checkGhostty(ghostty_terminal_get(terminal, GHOSTTY_TERMINAL_DATA_TOTAL_ROWS, &next_row_));
+      next_row_ = totalRows(terminal);
       checkGhostty(ghostty_terminal_get(terminal, GHOSTTY_TERMINAL_DATA_COLS, &columns_));
       next_row_ = std::min<std::size_t>(next_row_, static_cast<std::size_t>(rows_.last) + 1);
       first_row_ = std::max<std::size_t>(rows_.first, next_row_ > maximum_rows ? next_row_ - maximum_rows : 0);
@@ -520,8 +521,7 @@ private:
   }
 
   inline bool searchRow(GhosttyTerminal terminal, std::uint32_t row) {
-    auto reference = ghosttySized<GhosttyGridRef>();
-    checkGhostty(ghostty_terminal_grid_ref(terminal, GhosttyPoint{.tag = GHOSTTY_POINT_TAG_SCREEN, .value = {.coordinate = {0, row}}}, &reference));
+    auto reference = gridReference(terminal, GHOSTTY_POINT_TAG_SCREEN, {0, row});
     std::array<std::uint16_t, maximum_columns> positions;
     std::array<PaneMatch, maximum_columns> found;
     std::size_t found_count = 0;

@@ -1,5 +1,6 @@
 module;
 #include "cell_layout.hpp"
+#include "terminal/ghostty_grid.hpp"
 #include "telar_base/diagnostics/config.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <ghostty/vt.h>
@@ -780,9 +781,7 @@ private:
   }
 
   inline GhosttyGridRef reference(GhosttyPointTag tag, GhosttyPointCoordinate coordinate) const {
-    auto result = ghosttySized<GhosttyGridRef>();
-    checkGhostty(ghostty_terminal_grid_ref(terminal_.handle(), point(tag, coordinate), &result));
-    return result;
+    return gridReference(terminal_.handle(), tag, coordinate);
   }
 
   inline static std::optional<GhosttyGridRef> snapshot(const TrackedReference &tracked) {
@@ -817,15 +816,10 @@ private:
     return result;
   }
 
-  inline static bool hasText(GhosttyCell cell) noexcept {
-    const auto content = cell_layout::content_tag(cell);
-    return (content == GHOSTTY_CELL_CONTENT_CODEPOINT || content == GHOSTTY_CELL_CONTENT_CODEPOINT_GRAPHEME) && cell_layout::codepoint(cell) != 0;
-  }
-
   inline static bool blank(GhosttyGridRef row, std::uint16_t start, std::uint16_t finish) {
     for (auto column = start; column < finish; ++column) {
       const auto value = cell(row, column);
-      if (hasText(value) && cell_layout::codepoint(value) != ' ') {
+      if (cellHasText(value) && cell_layout::codepoint(value) != ' ') {
         return false;
       }
     }
@@ -837,7 +831,7 @@ private:
     const auto start = cursor.x - typed.size();
     for (std::size_t index = 0; index < typed.size(); ++index) {
       const auto value = cell(cursor, start + index);
-      const auto codepoint = hasText(value) ? cell_layout::codepoint(value) : ' ';
+      const auto codepoint = cellHasText(value) ? cell_layout::codepoint(value) : ' ';
       if (codepoint != static_cast<unsigned char>(typed[index])) {
         return false;
       }
@@ -860,7 +854,7 @@ private:
     auto anchor = *snapshot(anchor_);
     unsigned blank_columns = 0;
     for (auto column = anchor.x; column < columns(); ++column) {
-      if (!hasText(cell(anchor, column))) {
+      if (!cellHasText(cell(anchor, column))) {
         ++blank_columns;
         continue;
       }

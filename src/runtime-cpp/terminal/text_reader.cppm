@@ -11,6 +11,7 @@ module;
 #include <zlib.h>
 
 #include "cell_layout.hpp"
+#include "ghostty_grid.hpp"
 #include "terminal/tracked_row.hpp"
 #include "telar_render/sequence.hpp"
 
@@ -991,7 +992,7 @@ public:
   }
 
   inline bool hasSize(TerminalSize size) const noexcept {
-    return size_.cols == size.cols && size_.rows == size.rows && size_.cell_width_px == size.cell_width_px && size_.cell_height_px == size.cell_height_px;
+    return size_ == size;
   }
 
   inline void configureColors(const ConfigureTerminalColors &colors) {
@@ -1125,9 +1126,7 @@ public:
     const auto row = scrollbackOriginRow();
     if (row && *row == scrollback_origin_row_) {
       // Kept near the bottom, so the scrollback never drops it with its oldest rows.
-      std::size_t total = 0;
-      checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_TOTAL_ROWS, &total));
-      if (total > static_cast<std::size_t>(scrollback_origin_row_) + origin_distance) {
+      if (telar::runtime::totalRows(terminal_.get()) > static_cast<std::size_t>(scrollback_origin_row_) + origin_distance) {
         trackScrollbackOrigin();
       }
       return 0;
@@ -1171,6 +1170,11 @@ public:
 
   inline std::uint64_t contentRevision() const noexcept {
     return content_revision_;
+  }
+
+  // The rows it holds, its scrollback included.
+  inline std::size_t totalRows() const {
+    return telar::runtime::totalRows(handle());
   }
 
   inline GhosttyTerminal handle() const noexcept {
@@ -1716,15 +1720,11 @@ public:
 
 private:
   inline std::uint32_t totalRows() const {
-    std::size_t count = 0;
-    checkGhostty(ghostty_terminal_get(terminal_.handle(), GHOSTTY_TERMINAL_DATA_TOTAL_ROWS, &count));
-    return static_cast<std::uint32_t>(std::min<std::size_t>(count, UINT32_MAX));
+    return static_cast<std::uint32_t>(std::min<std::size_t>(terminal_.totalRows(), UINT32_MAX));
   }
 
   inline GhosttyGridRef reference(GhosttyPointTag tag, GhosttyPointCoordinate coordinate) const {
-    auto result = ghosttySized<GhosttyGridRef>();
-    checkGhostty(ghostty_terminal_grid_ref(terminal_.handle(), GhosttyPoint{.tag = tag, .value = {.coordinate = coordinate}}, &result));
-    return result;
+    return gridReference(terminal_.handle(), tag, coordinate);
   }
 
   inline bool rowIsBlank(GhosttyPointTag tag, std::uint32_t row) const {
@@ -1733,10 +1733,7 @@ private:
       cell_ref.x = column;
       GhosttyCell raw = 0;
       checkGhostty(ghostty_grid_ref_cell(&cell_ref, &raw));
-      const auto content = cell_layout::content_tag(raw);
-      const auto codepoint = cell_layout::codepoint(raw);
-      const bool text = content == GHOSTTY_CELL_CONTENT_CODEPOINT || content == GHOSTTY_CELL_CONTENT_CODEPOINT_GRAPHEME;
-      if (text && codepoint != 0 && codepoint != ' ') {
+      if (cellHasText(raw) && cell_layout::codepoint(raw) != ' ') {
         return false;
       }
     }

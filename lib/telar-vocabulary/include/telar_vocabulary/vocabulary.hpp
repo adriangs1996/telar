@@ -19,6 +19,8 @@ namespace telar {
     std::uint16_t rows;
     std::uint16_t cell_width_px;
     std::uint16_t cell_height_px;
+
+    bool operator==(const TerminalSize &) const noexcept = default;
   };
 
   enum class EnvironmentMode : Byte {
