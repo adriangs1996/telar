@@ -648,9 +648,7 @@ public:
     const auto stage = binding->registration.stage;
     lua_rawgeti(state, LUA_REGISTRYINDEX, binding->callback);
     if (stage == TrafficStage::control) {
-      luaL_unref(state, LUA_REGISTRYINDEX, binding->callback);
-      binding->callback = LUA_NOREF;
-      changed_ = true;
+      unbind(state, *binding);
       if (!event.error.empty()) { lua_pushlstring(state, event.error.data(), event.error.size()); lua_pushnil(state); }
       else { lua_pushnil(state); LuaTrafficControl::push(state, traffic::control::Protocol::reply(event.control)); }
       lua_call(state, 2, 1);
@@ -709,9 +707,7 @@ private:
       case Operation::cancel: {
         const auto id = identifier(state, 1);
         if (auto *binding = self.find(id)) {
-          luaL_unref(state, LUA_REGISTRYINDEX, binding->callback);
-          binding->callback = LUA_NOREF;
-          self.changed_ = true;
+          self.unbind(state, *binding);
         }
         return 0;
       }
@@ -742,20 +738,10 @@ private:
     const auto active = std::ranges::count_if(bindings_, [](const auto &binding) { return binding.callback != LUA_NOREF && binding.registration.stage == TrafficStage::control; });
     if (static_cast<std::size_t>(active) >= TrafficLimits::controls) { throw lua::Error{"Traffic control request limit reached"}; }
     const auto encoded = traffic::control::Protocol::encode(scratch_.bytes(), request);
-    for (auto &binding : bindings_) {
-      if (binding.callback != LUA_NOREF) { continue; }
-      TrafficRegistration registration;
-      registration.stage = TrafficStage::control;
-      registration.request.assign({reinterpret_cast<const char *>(encoded.data()), encoded.size()});
-      registration.id = ++next_identifier_;
-      lua_pushvalue(state, 2);
-      const auto reference = luaL_ref(state, LUA_REGISTRYINDEX);
-      binding.registration = registration;
-      binding.callback = reference;
-      changed_ = true;
-      return registration.id;
-    }
-    throw lua::Error{"Traffic registration limit reached"};
+    TrafficRegistration registration;
+    registration.stage = TrafficStage::control;
+    registration.request.assign({reinterpret_cast<const char *>(encoded.data()), encoded.size()});
+    return bind(state, registration);
   }
 
   inline std::uint32_t registerCallback(lua_State *state, bool intercept) {
@@ -766,17 +752,27 @@ private:
     const lua::Value options{state, 1, "Traffic options"};
     if (intercept) { interception(options, registration); }
     else { subscription(options, registration); }
+    return bind(state, registration);
+  }
+
+  // Binds the function at stack index 2 to `registration` in a free slot, under a new id.
+  inline std::uint32_t bind(lua_State *state, TrafficRegistration registration) {
     for (auto &binding : bindings_) {
       if (binding.callback != LUA_NOREF) { continue; }
       lua_pushvalue(state, 2);
-      const auto reference = luaL_ref(state, LUA_REGISTRYINDEX);
+      binding.callback = luaL_ref(state, LUA_REGISTRYINDEX);
       registration.id = ++next_identifier_;
       binding.registration = registration;
-      binding.callback = reference;
       changed_ = true;
       return registration.id;
     }
     throw lua::Error{"Traffic registration limit reached"};
+  }
+
+  inline void unbind(lua_State *state, Binding &binding) noexcept {
+    luaL_unref(state, LUA_REGISTRYINDEX, binding.callback);
+    binding.callback = LUA_NOREF;
+    changed_ = true;
   }
 
   inline static void subscription(const lua::Value &options, TrafficRegistration &registration) {

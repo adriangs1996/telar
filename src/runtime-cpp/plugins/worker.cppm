@@ -1132,8 +1132,7 @@ private:
       }
       try {
         if (!session_) {
-          prepareTrace();
-          session_.emplace(memory_, SessionOptions{.executable = launch_.executable, .entry = entry_.c_str(), .cancellation = cancellation_, .timeout = launch_.timeout, .trace_path = trace_path_.empty() ? nullptr : trace_path_.c_str(), .traffic = true});
+          ensureSession(true);
           if (!bridge_) { bridge_ = makeOwned<TrafficBridge<Memory>>(memory_, memory_, specification_, *launch_.traffic); }
           bridge_->attach(*session_);
         }
@@ -1145,9 +1144,7 @@ private:
         }, requests_.metrics().queued != 0);
         callback_errors_.store(callback_errors_base_ + bridge_->errors(), std::memory_order_relaxed);
       } catch (const SystemError &error) {
-        if (error.code() == ECANCELED) { return; }
-        if (error.code() == ETIMEDOUT) { timeouts_.fetch_add(1, std::memory_order_relaxed); }
-        restart();
+        if (!recover(error)) { return; }
       } catch (...) { restart(); }
     }
   }
@@ -1155,10 +1152,7 @@ private:
   inline void process(const SharedExchange<Memory> &shared) noexcept {
     TELAR_TRACE("plugins.processExchange");
     try {
-      if (!session_) {
-        prepareTrace();
-        session_.emplace(memory_, SessionOptions{.executable = launch_.executable, .entry = entry_.c_str(), .cancellation = cancellation_, .timeout = launch_.timeout, .trace_path = trace_path_.empty() ? nullptr : trace_path_.c_str()});
-      }
+      ensureSession(false);
     } catch (...) {
       restart();
       return;
@@ -1188,16 +1182,32 @@ private:
         results_.publish(std::move(result));
       }
     } catch (const SystemError &error) {
-      if (error.code() == ECANCELED) {
-        return;
-      }
-      if (error.code() == ETIMEDOUT) {
-        timeouts_.fetch_add(1, std::memory_order_relaxed);
-      }
-      restart();
+      static_cast<void>(recover(error));
     } catch (...) {
       restart();
     }
+  }
+
+  // Starts the plugin's session unless one runs; `traffic` gives it the traffic bridge's channel.
+  inline void ensureSession(bool traffic) {
+    if (session_) {
+      return;
+    }
+    prepareTrace();
+    session_.emplace(memory_, SessionOptions{.executable = launch_.executable, .entry = entry_.c_str(), .cancellation = cancellation_, .timeout = launch_.timeout, .trace_path = trace_path_.empty() ? nullptr : trace_path_.c_str(), .traffic = traffic});
+  }
+
+  // Restarts a failed session, counting a timeout; false when the session was cancelled, which
+  // ends it rather than restarting it.
+  inline bool recover(const SystemError &error) noexcept {
+    if (error.code() == ECANCELED) {
+      return false;
+    }
+    if (error.code() == ETIMEDOUT) {
+      timeouts_.fetch_add(1, std::memory_order_relaxed);
+    }
+    restart();
+    return true;
   }
 
   inline void restart() noexcept {

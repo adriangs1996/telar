@@ -420,7 +420,12 @@ struct ServiceSpec {
 
   inline bool authorized() const noexcept { return !permission || permission->load(std::memory_order_acquire); }
 
-  inline bool traffic() const noexcept { return allows(Capability::traffic_observe) || allows(Capability::traffic_intercept) || allows(Capability::traffic_control) || allows(Capability::traffic_record); }
+  // The capabilities that give a plugin the traffic bridge.
+  static constexpr std::array traffic_capabilities{Capability::traffic_observe, Capability::traffic_intercept, Capability::traffic_control, Capability::traffic_record};
+
+  inline bool traffic() const noexcept {
+    return std::ranges::any_of(traffic_capabilities, [&](Capability capability) { return allows(capability); });
+  }
 
   inline bool stillAuthorized(Capabilities current) const noexcept { return current.containsAll(declared.intersection(granted)); }
 };
@@ -509,7 +514,7 @@ public:
     for (const auto &package : registry.packages()) {
       const auto granted = trust.granted(package.manifest.id.view(), package.digest);
       const auto allowed = [&](Capability capability) { return package.manifest.capabilities.contains(capability) && granted.contains(capability); };
-      if (!allowed(Capability::proxy_tap) && !allowed(Capability::traffic_observe) && !allowed(Capability::traffic_intercept) && !allowed(Capability::traffic_control) && !allowed(Capability::traffic_record)) {
+      if (!allowed(Capability::proxy_tap) && std::ranges::none_of(ServiceSpec::traffic_capabilities, allowed)) {
         continue;
       }
       if (count_ == specifications_.size()) {
