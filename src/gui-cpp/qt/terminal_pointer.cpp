@@ -52,6 +52,7 @@ import telar.gui.application.workspace_replica;
 import telar.gui.input.child_mouse;
 import telar.gui.input.copy_pointer;
 import telar.gui.input.configuration;
+import telar.gui.input.key_encoder;
 import telar.gui.terminal.font_grid;
 
 namespace telar::gui::qt {
@@ -296,17 +297,25 @@ void TerminalItem::dispatchWheel(const QWheelEvent &event, std::int32_t lines) {
   }
 
   const auto rows = lines * WheelAccumulator::rows_per_line;
-  if (current->screen.mouse().sgr && (current->screen.mouse().tracking == MouseTracking::normal || current->screen.mouse().tracking == MouseTracking::button || current->screen.mouse().tracking == MouseTracking::any)) {
+  switch (wheelRoute(current->screen)) {
+  case WheelRoute::report: {
     const auto modifiers = mouseModifiers(event.modifiers());
     for (int step = 0; step < std::abs(lines); ++step) {
       mousePacket((lines < 0 ? MouseEncoder::wheel_up : MouseEncoder::wheel_down) | modifiers, event.position(), false);
     }
-  } else if (current->screen.modes().alternate_screen && current->screen.modes().alternate_scroll && current->screen.scroll().offset == copyGrid(current->screen).maximumOffset()) {
+    return;
+  }
+  case WheelRoute::keys: {
+    KeyEncoder encoder;
+    const auto bytes = encoder.alternateScroll(rows < 0, current->screen.modes());
     for (int step = 0; step < std::abs(rows); ++step) {
-      send(rows < 0 ? "\x1b[A" : "\x1b[B");
+      send(QByteArray{bytes.data(), static_cast<qsizetype>(bytes.size())});
     }
-  } else {
+    return;
+  }
+  case WheelRoute::scroll:
     application_->scroll({.pane_id = pane_id_, .rows = -rows});
+    return;
   }
 }
 

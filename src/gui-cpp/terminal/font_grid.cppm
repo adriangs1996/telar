@@ -169,6 +169,22 @@ CopyGrid copyGrid(const Screen<Memory> &screen) noexcept {
   return {screen.cells(), screen.columns(), screen.rows(), screen.scroll()};
 }
 
+// Where a wheel step over a screen goes: to its application as a mouse report, to its
+// application as cursor keys (alternate scroll, on the alternate screen scrolled to its end), or
+// to the scrollback.
+enum class WheelRoute : std::uint8_t { report, keys, scroll };
+
+template <Allocator Memory>
+WheelRoute wheelRoute(const Screen<Memory> &screen) noexcept {
+  const auto &mouse = screen.mouse();
+  if (mouse.sgr && (mouse.tracking == MouseTracking::normal || mouse.tracking == MouseTracking::button || mouse.tracking == MouseTracking::any)) {
+    return WheelRoute::report;
+  }
+
+  const auto &modes = screen.modes();
+  return modes.alternate_screen && modes.alternate_scroll && screen.scroll().offset == copyGrid(screen).maximumOffset() ? WheelRoute::keys : WheelRoute::scroll;
+}
+
 }
 }
 

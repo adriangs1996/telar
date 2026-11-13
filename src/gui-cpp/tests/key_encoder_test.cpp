@@ -114,6 +114,15 @@ std::uint64_t sweepDigest() {
   return digest;
 }
 
+// Alternate scroll sends Up or Down as the cursor key mode encodes them, and never in a keyboard
+// protocol the application asked for typed keys.
+void alternateScroll() {
+  KeyEncoder encoder;
+  require(encoder.alternateScroll(true, {}) == "\x1b[A" && encoder.alternateScroll(false, {}) == "\x1b[B", "alternate scroll must send normal cursor keys");
+  require(encoder.alternateScroll(true, {.cursor_keys = true}) == "\x1bOA" && encoder.alternateScroll(false, {.cursor_keys = true}) == "\x1bOB", "alternate scroll must honor application cursor keys");
+  require(encoder.alternateScroll(true, {.kitty_keyboard_flags = 31, .modify_other_keys_2 = true}) == "\x1b[A", "alternate scroll must ignore keyboard protocols");
+}
+
 void golden() {
   const auto digest = sweepDigest();
   constexpr std::uint64_t expected = 10501462004054449213ULL;
@@ -131,6 +140,7 @@ int main() {
     legacyControls();
     kittyEvents();
     kittyMetadata();
+    alternateScroll();
     golden();
     std::puts("gui-key-encoder: passed");
   } catch (const std::exception &error) {

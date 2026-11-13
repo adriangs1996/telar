@@ -242,6 +242,12 @@ public:
   static constexpr std::size_t scalar_digits = 7;
   static constexpr std::size_t capacity = std::string_view{"\x1b[::;:;u"}.size() + (maximum_codepoint_fields * codepoint_digits) + modifier_digits + event_digits + scalar_digits;
 
+  // The key one alternate-scroll step sends: Up or Down as the cursor key mode encodes them, as
+  // Ghostty sends it (Surface.zig), whatever keyboard protocol the application asked for.
+  [[nodiscard]] inline std::string_view alternateScroll(bool up, const InputModes &modes) {
+    return encode({.code = up ? KeyChord::Key::up : KeyChord::Key::down}, {.cursor_keys = modes.cursor_keys});
+  }
+
   [[nodiscard]] inline std::string_view encode(const TerminalKey &key, const InputModes &modes) {
     used_ = 0;
 

@@ -1591,23 +1591,23 @@ public:
       return;
     }
 
-    const auto &mouse = pane->screen.mouse();
-    if (mouse.sgr && mouse.tracking != MouseTracking::none && mouse.tracking != MouseTracking::x10) {
+    switch (wheelRoute(pane->screen)) {
+    case WheelRoute::report: {
       MouseEncoder encoder;
       input(pane->id, encoder.encode(direction == ScrollDirection::up ? MouseEncoder::wheel_up : MouseEncoder::wheel_down, 1, 1, false, true), PaneInputSource::mouse);
-
       return;
     }
-
-    const auto delta = direction == ScrollDirection::up ? WheelAccumulator::rows_per_line : -WheelAccumulator::rows_per_line;
-    const auto &modes = pane->screen.modes();
-    if (modes.alternate_scroll && modes.alternate_screen && pane->screen.scroll().offset == copyGrid(pane->screen).maximumOffset()) {
-      const std::string_view bytes = direction == ScrollDirection::up ? "\x1b[A" : "\x1b[B";
+    case WheelRoute::keys: {
+      KeyEncoder encoder;
+      const auto bytes = encoder.alternateScroll(direction == ScrollDirection::up, pane->screen.modes());
       for (std::int32_t step = 0; step < WheelAccumulator::rows_per_line; ++step) {
         input(pane->id, bytes, PaneInputSource::mouse);
       }
-    } else {
-      scroll({.pane_id = pane->id, .rows = delta});
+      return;
+    }
+    case WheelRoute::scroll:
+      scroll({.pane_id = pane->id, .rows = direction == ScrollDirection::up ? WheelAccumulator::rows_per_line : -WheelAccumulator::rows_per_line});
+      return;
     }
   }
 
