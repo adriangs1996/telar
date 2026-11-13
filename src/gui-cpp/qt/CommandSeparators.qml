@@ -116,7 +116,7 @@ Item {
         property real line: 0
         width: keyLabel.implicitWidth + root.view.cell.width
         height: key.line * 0.8
-        radius: 4 * root.ratio
+        radius: ChromeStyle.smallRadius * root.ratio
         color: "transparent"
         border.width: Math.max(1, root.ratio)
         border.color: Qt.alpha(root.colors.overlay1, 0.5)
@@ -536,7 +536,7 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         width: failureLabel.implicitWidth + separator.cell * 2
                         height: separator.line * 0.8
-                        radius: 4 * root.ratio
+                        radius: ChromeStyle.smallRadius * root.ratio
                         color: failureArea.containsMouse ? Qt.alpha(root.colors.red, 0.15) : "transparent"
                         border.width: Math.max(1, root.ratio)
                         border.color: Qt.alpha(root.colors.red, 0.5)

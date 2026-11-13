@@ -21,7 +21,7 @@ ActivityFrame {
         y: root.geometry.padding + (root.geometry.agentTitleRow - height) / 2
         width: root.geometry.tileWidth
         height: root.geometry.tileHeight
-        radius: 4 * root.ratio
+        radius: ChromeStyle.smallRadius * root.ratio
         visible: !root.drawn && root.elements.agent_mark === undefined
         mark: root.record
         colors: root.colors
@@ -143,7 +143,7 @@ ActivityFrame {
         ApplicationTile {
             implicitWidth: root.geometry.tileWidth
             implicitHeight: root.geometry.tileHeight
-            radius: 4 * root.ratio
+            radius: ChromeStyle.smallRadius * root.ratio
             mark: root.record
             colors: root.colors
             typography: root.typography

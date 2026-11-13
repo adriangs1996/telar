@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls
+import Telar.Gui
 
 Item {
     id: root
@@ -53,7 +54,7 @@ Item {
         }
         background: NativeRoundedRectangle {
             color: chip.hovered || chip.activeFocus || overflowPopup.visible ? root.colors.surface1 : root.colors.surface0
-            radius: 4 * root.ratio
+            radius: ChromeStyle.smallRadius * root.ratio
         }
         Keys.onEscapePressed: event => {
             chip.focus = false;

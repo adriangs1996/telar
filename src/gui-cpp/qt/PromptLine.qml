@@ -172,7 +172,7 @@ Item {
         implicitHeight: root.line * 0.8
         width: implicitWidth
         height: implicitHeight
-        radius: 4 * root.ratio
+        radius: ChromeStyle.smallRadius * root.ratio
         color: "transparent"
         border.width: Math.max(1, root.ratio)
         border.color: Qt.alpha(root.colors.overlay1, 0.5)
@@ -380,7 +380,7 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         width: parent.width
                         height: root.line * 0.8
-                        radius: 4 * root.ratio
+                        radius: ChromeStyle.smallRadius * root.ratio
                         color: Qt.alpha(root.colors.mauve, 0.18)
                         border.width: Math.max(1, root.ratio)
                         border.color: Qt.alpha(root.colors.mauve, 0.45)
@@ -437,7 +437,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     width: modeLabel.implicitWidth + root.cell
                     height: root.line * 0.8
-                    radius: 4 * root.ratio
+                    radius: ChromeStyle.smallRadius * root.ratio
                     color: modeChip.tint
                     Behavior on color {
                         enabled: root.moving
@@ -625,7 +625,7 @@ Item {
                 width: parent.width
                 height: root.line
                 y: offset + Math.max(0, editor.choice) * root.line
-                radius: 4 * root.ratio
+                radius: ChromeStyle.smallRadius * root.ratio
                 color: Qt.alpha(root.colors.accent, 0.16)
                 Behavior on y {
                     enabled: root.moving
@@ -740,7 +740,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     width: Math.max(2 * root.cell, dots.implicitWidth + root.cell)
                     height: root.line * 0.8
-                    radius: 6 * root.ratio
+                    radius: ChromeStyle.controlRadius * root.ratio
                     color: Qt.alpha(root.colors.overlay1, 0.18)
 
                     Row {
@@ -925,7 +925,7 @@ Item {
                 y: root.line + (root.line - height) / 2
                 width: slashLabel.implicitWidth + root.cell
                 height: root.line * 0.8
-                radius: 4 * root.ratio
+                radius: ChromeStyle.smallRadius * root.ratio
                 color: root.colors.accent
 
                 CellText {
@@ -1139,7 +1139,7 @@ Item {
                 y: root.line + (root.line - height) / 2
                 width: chipLabel.implicitWidth + root.cell
                 height: root.line * 0.8
-                radius: 4 * root.ratio
+                radius: ChromeStyle.smallRadius * root.ratio
                 color: root.colors.accent
 
                 CellText {
@@ -1252,7 +1252,7 @@ Item {
                 onCurrentIndexChanged: Qt.callLater(view.reveal)
                 highlight: Rectangle {
                     width: commands.width
-                    radius: 4 * root.ratio
+                    radius: ChromeStyle.smallRadius * root.ratio
                     color: Qt.alpha(root.colors.accent, 0.16)
 
                     Rectangle {
@@ -1349,7 +1349,7 @@ Item {
                         Rectangle {
                             visible: pathRow.modelData.selected
                             anchors.fill: parent
-                            radius: 4 * root.ratio
+                            radius: ChromeStyle.smallRadius * root.ratio
                             color: Qt.alpha(root.colors.accent, 0.16)
 
                             Rectangle {

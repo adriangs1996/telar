@@ -37,7 +37,7 @@ PaneHeaderLayout {
         y: root.indexBounds.y + (root.indexBounds.height - height) / 2
         width: Math.min(root.tileWidth, root.indexBounds.width)
         height: 14 * root.ratio
-        radius: 4 * root.ratio
+        radius: ChromeStyle.smallRadius * root.ratio
         visible: root.tileWidth > 0 && !root.elements.pane_mark
         mark: root.record
         colors: root.colors
@@ -182,7 +182,7 @@ PaneHeaderLayout {
         ApplicationTile {
             implicitWidth: 18 * root.ratio
             implicitHeight: 14 * root.ratio
-            radius: 4 * root.ratio
+            radius: ChromeStyle.smallRadius * root.ratio
             mark: root.record
             colors: root.colors
             typography: root.typography

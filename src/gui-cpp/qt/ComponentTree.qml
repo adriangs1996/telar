@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls
+import Telar.Gui
 import "ComponentFit.js" as ComponentFit
 
 Item {
@@ -147,7 +148,7 @@ Item {
             }
             background: Rectangle {
                 color: overflow.hovered || overflow.activeFocus ? root.colors.surface1 : "transparent"
-                radius: 4 * root.ratio
+                radius: ChromeStyle.smallRadius * root.ratio
             }
             Keys.onEscapePressed: event => {
                 overflow.focus = false;
