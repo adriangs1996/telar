@@ -3,18 +3,17 @@
 static_assert(true);
 #endif
 
-
-#include <cstdint>
+#include "cell_layout.hpp"
 #include "telar_base/diagnostics/config.hpp"
-#include <cstring>
+#include <cassert>
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fcntl.h>
-#include <sys/mman.h>
-#include "cell_layout.hpp"
-#include <cassert>
 #include <ghostty/vt.h>
+#include <sys/mman.h>
 
 import std;
 import telar.base.memory;
@@ -32,7 +31,7 @@ using namespace telar;
 using namespace telar::runtime;
 
 static std::span<const Byte> byteSpan(std::string_view text) {
-  return {reinterpret_cast<const Byte *>(text.data()), text.size()};
+  return {reinterpret_cast<const Byte*>(text.data()), text.size()};
 }
 
 struct CommandRecord {
@@ -48,13 +47,13 @@ struct CaptureFixture {
   CommandTracker<SystemAllocator> tracker{memory, terminal, "/initial", true};
   std::vector<CommandRecord> commands;
 
-  void emit(const CapturedCommand &command) {
+  void emit(const CapturedCommand& command) {
     auto metadata = command;
 
     metadata.command = {};
     metadata.directory = {};
     metadata.output = {};
-    commands.push_back({std::string{command.command}, std::string{command.directory}, std::string{reinterpret_cast<const char *>(command.output.data()), command.output.size()}, metadata});
+    commands.push_back({std::string{command.command}, std::string{command.directory}, std::string{reinterpret_cast<const char*>(command.output.data()), command.output.size()}, metadata});
   }
 
   void input(std::string_view text, std::int64_t time = 100, std::optional<bool> foreground = true) {
@@ -247,7 +246,9 @@ static void testOutputTailBounds() {
   check(tail.bytes().front() == 'a' && tail.bytes().back() == 'b');
   tail.append(byteSpan(std::string(80'000, 'c')));
   check(tail.bytes().size() == tail.capacity && tail.observed() == 180'000);
-  check(std::ranges::all_of(tail.bytes(), [](Byte byte) { return byte == 'c'; }));
+  check(std::ranges::all_of(tail.bytes(), [](Byte byte) {
+    return byte == 'c';
+  }));
 }
 
 static void testCaptureBoundsAndResize() {

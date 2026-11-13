@@ -7,66 +7,66 @@
 
 namespace telar {
 
-enum class AllocationPath {
-  interactive,
-  media,
-  observation,
-  other
-};
+  enum class AllocationPath {
+    interactive,
+    media,
+    observation,
+    other,
+  };
 
-struct AllocationTotals {
-  std::uint64_t count = 0;
-  std::uint64_t bytes = 0;
+  struct AllocationTotals {
+    std::uint64_t count = 0;
+    std::uint64_t bytes = 0;
 
-  void record(std::size_t size) noexcept {
-    accumulate(count);
-    accumulate(bytes, size);
-  }
-};
+    void record(std::size_t size) noexcept {
+      accumulate(count);
+      accumulate(bytes, size);
+    }
+  };
 
-struct AllocationStatistics {
-  std::uint64_t live_bytes = 0;
-  std::uint64_t live_allocations = 0;
-  AllocationTotals total;
-  std::array<AllocationTotals, 4> paths{};
-  AllocationTotals interactive_terminal;
-};
+  struct AllocationStatistics {
+    std::uint64_t live_bytes = 0;
+    std::uint64_t live_allocations = 0;
+    AllocationTotals total;
+    std::array<AllocationTotals, 4> paths{};
+    AllocationTotals interactive_terminal;
+  };
 
 #if TELAR_DIAGNOSTICS
-inline thread_local AllocationPath current_allocation_path = AllocationPath::other;
-inline thread_local bool terminal_allocation = false;
+  inline thread_local AllocationPath current_allocation_path = AllocationPath::other;
+  inline thread_local bool terminal_allocation = false;
 
-class AllocationScope {
-public:
-  explicit AllocationScope(AllocationPath path) noexcept
-      : previous_(std::exchange(current_allocation_path, path)) {}
+  class AllocationScope {
+  public:
+    explicit AllocationScope(AllocationPath path) noexcept
+        : previous_(std::exchange(current_allocation_path, path)) {}
 
-  ~AllocationScope() {
-    current_allocation_path = previous_;
-  }
+    ~AllocationScope() {
+      current_allocation_path = previous_;
+    }
 
-  AllocationScope(const AllocationScope &) = delete;
-  AllocationScope &operator=(const AllocationScope &) = delete;
+    AllocationScope(const AllocationScope&) = delete;
+    AllocationScope& operator=(const AllocationScope&) = delete;
 
-private:
-  AllocationPath previous_;
-};
+  private:
+    AllocationPath previous_;
+  };
 
-class TerminalAllocationScope {
-public:
-  TerminalAllocationScope() noexcept
-      : previous_(std::exchange(terminal_allocation, true)) {}
+  class TerminalAllocationScope {
+  public:
+    TerminalAllocationScope() noexcept
+        : previous_(std::exchange(terminal_allocation, true)) {}
 
-  ~TerminalAllocationScope() {
-    terminal_allocation = previous_;
-  }
+    ~TerminalAllocationScope() {
+      terminal_allocation = previous_;
+    }
 
-  TerminalAllocationScope(const TerminalAllocationScope &) = delete;
-  TerminalAllocationScope &operator=(const TerminalAllocationScope &) = delete;
+    TerminalAllocationScope(const TerminalAllocationScope&) = delete;
+    TerminalAllocationScope& operator=(const TerminalAllocationScope&) = delete;
 
-private:
-  bool previous_;
-};
+  private:
+    bool previous_;
+  };
 #endif
 
 }

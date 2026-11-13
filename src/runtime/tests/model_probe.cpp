@@ -6,13 +6,13 @@ import telar.runtime.tests.protocol_peer;
 
 using namespace telar;
 
-static void verifyResync(ProtocolPeer &peer, std::uint64_t workspace, bool closed) {
+static void verifyResync(ProtocolPeer& peer, std::uint64_t workspace, bool closed) {
   const auto change = peer.receive<ResyncRequired>();
 
   check(change.workspace.id == workspace && change.workspace_closed == closed);
 }
 
-static void verifyGeometry(ProtocolPeer &owner, ProtocolPeer &observer, const PaneOpened &pane, Launch launch) {
+static void verifyGeometry(ProtocolPeer& owner, ProtocolPeer& observer, const PaneOpened& pane, Launch launch) {
   const TerminalSize size{90, 30, 0, 0};
 
   observer.exchange<PaneOpened>(OpenPane{.request_id = 2, .target = {.kind = PaneTarget::Kind::pane, .id = pane.pane_id}, .size = size});
@@ -20,7 +20,7 @@ static void verifyGeometry(ProtocolPeer &owner, ProtocolPeer &observer, const Pa
 
   try {
     observer.exchange<PaneOpened>(CreatePane{.request_id = 3, .location = pane.location, .size = size, .launch = launch});
-  } catch (const ProtocolFailure &failure) {
+  } catch (const ProtocolFailure& failure) {
     denied = failure.code == FailureCode::resource_limit;
   }
 
@@ -31,7 +31,7 @@ static void verifyGeometry(ProtocolPeer &owner, ProtocolPeer &observer, const Pa
   observer.send(DetachPane{pane.pane_id});
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   if (argc != 5 || std::string_view{argv[2]} != "model") {
     return 2;
   }
@@ -82,7 +82,7 @@ int main(int argc, char **argv) {
     owner.record(dump, resync);
     std::printf("{\"ns_per_iteration\":%.2f}\n", static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count()) / iterations);
     return 0;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     std::fprintf(stderr, "%s\n", error.what());
     return 1;
   }

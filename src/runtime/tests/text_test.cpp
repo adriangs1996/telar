@@ -3,18 +3,17 @@
 static_assert(true);
 #endif
 
-
-#include <cstddef>
-#include <cstring>
-#include <cstdint>
+#include "cell_layout.hpp"
 #include "telar_base/diagnostics/config.hpp"
+#include <cassert>
+#include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fcntl.h>
-#include <sys/mman.h>
-#include "cell_layout.hpp"
-#include <cassert>
 #include <ghostty/vt.h>
+#include <sys/mman.h>
 
 import std;
 import telar.base.memory;
@@ -32,7 +31,7 @@ using namespace telar;
 using namespace telar::runtime;
 
 static std::span<const Byte> bytes(std::string_view text) {
-  return {reinterpret_cast<const Byte *>(text.data()), text.size()};
+  return {reinterpret_cast<const Byte*>(text.data()), text.size()};
 }
 
 static void testInputScanning() {
@@ -86,10 +85,7 @@ void testText() {
   testInputScanning();
   SystemAllocator system;
   BudgetAllocator memory{system, 32 * 1024 * 1024};
-  Terminal terminal{memory, TerminalSize{.cols = 20,
-                                         .rows = 4,
-                                         .cell_width_px = 0,
-                                         .cell_height_px = 0}};
+  Terminal terminal{memory, TerminalSize{.cols = 20, .rows = 4, .cell_width_px = 0, .cell_height_px = 0}};
 
   check(terminal.outputSettled());
   terminal.feed(bytes("\x1b["));
@@ -112,24 +108,15 @@ void testText() {
 
   TextReader selection{memory, terminal, 1024};
 
-  selection.copy(CopySelection{.start_x = 1,
-                               .start_y = 0,
-                               .end_x = 2,
-                               .end_y = 1});
+  selection.copy(CopySelection{.start_x = 1, .start_y = 0, .end_x = 2, .end_y = 1});
   check(selection.text() == "irst\nsec");
 
-  TextSearch search{SearchPane{.request_id = 1,
-                               .pane_id = 1,
-                               .needle = "TH"},
-                    terminal.contentRevision()};
+  TextSearch search{SearchPane{.request_id = 1, .pane_id = 1, .needle = "TH"}, terminal.contentRevision()};
 
   check(search.advance(terminal.handle(), terminal.contentRevision()));
   check(search.result().matches.empty());
 
-  TextSearch folded{SearchPane{.request_id = 2,
-                               .pane_id = 1,
-                               .needle = "th"},
-                    terminal.contentRevision()};
+  TextSearch folded{SearchPane{.request_id = 2, .pane_id = 1, .needle = "th"}, terminal.contentRevision()};
 
   check(folded.advance(terminal.handle(), terminal.contentRevision()));
   const auto matches = folded.result().matches;
@@ -138,17 +125,14 @@ void testText() {
   check(matches[0].x == 0 && matches[0].y == 2);
   check(matches[1].x == 4 && matches[1].y == 3);
 
-  TextSearch invalidated{SearchPane{.request_id = 3,
-                                    .pane_id = 1,
-                                    .needle = "x"},
-                         terminal.contentRevision()};
+  TextSearch invalidated{SearchPane{.request_id = 3, .pane_id = 1, .needle = "x"}, terminal.contentRevision()};
 
   terminal.feed(bytes("x"));
   bool rejected = false;
 
   try {
     invalidated.advance(terminal.handle(), terminal.contentRevision());
-  } catch (const EncodingError &) {
+  } catch (const EncodingError&) {
     rejected = true;
   }
 

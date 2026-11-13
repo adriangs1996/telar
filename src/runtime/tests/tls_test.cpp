@@ -3,15 +3,14 @@
 static_assert(true);
 #endif
 
-
 #include <cerrno>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
 #include <fcntl.h>
 #include <limits.h>
 #include <sys/stat.h>
-#include <cstddef>
-#include <cstring>
-#include <cstdint>
-#include <cstdio>
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <linux/fs.h>
 #endif
@@ -21,15 +20,15 @@ static_assert(true);
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <unistd.h>
 #endif
-#include <unistd.h>
+#include <arpa/inet.h>
 #include <cstdlib>
+#include <ctime>
+#include <openssl/crypto.h>
 #include <openssl/err.h>
 #include <openssl/pem.h>
 #include <openssl/ssl.h>
 #include <openssl/x509v3.h>
-#include <arpa/inet.h>
-#include <ctime>
-#include <openssl/crypto.h>
+#include <unistd.h>
 
 import std;
 import telar.base.memory;
@@ -45,21 +44,21 @@ using namespace telar;
 using namespace telar::runtime;
 
 void testTlsAlpn();
-void testProxyService(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> &library);
-void testTlsSession(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> &library);
-void testTlsTrust(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> &library);
-void testProxyTrust(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> &library);
-void createProxyTrustFixture(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> &library, std::string_view directory);
+void testProxyService(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory>& library);
+void testTlsSession(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory>& library);
+void testTlsTrust(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory>& library);
+void testProxyTrust(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory>& library);
+void createProxyTrustFixture(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory>& library, std::string_view directory);
 
 template <typename Operation>
-static void rejected(Operation &&operation) {
+static void rejected(Operation&& operation) {
   bool failed = false;
 
   try {
     operation();
-  } catch (const TlsError &) {
+  } catch (const TlsError&) {
     failed = true;
-  } catch (const SystemError &) {
+  } catch (const SystemError&) {
     failed = true;
   }
 
@@ -67,24 +66,30 @@ static void rejected(Operation &&operation) {
 }
 
 static void testTlsMemory() {
-  auto *bytes = static_cast<unsigned char *>(OPENSSL_malloc(16));
+  auto* bytes = static_cast<unsigned char*>(OPENSSL_malloc(16));
 
   check(bytes != nullptr && reinterpret_cast<std::uintptr_t>(bytes) % alignof(std::max_align_t) == 0);
   std::fill_n(bytes, 16, 42);
-  auto *expanded = static_cast<unsigned char *>(OPENSSL_realloc(bytes, 256));
+  auto* expanded = static_cast<unsigned char*>(OPENSSL_realloc(bytes, 256));
 
-  check(expanded != nullptr && std::all_of(expanded, expanded + 16, [](auto byte) { return byte == 42; }));
+  check(expanded != nullptr && std::all_of(expanded, expanded + 16, [](auto byte) {
+    return byte == 42;
+  }));
+
   check(OPENSSL_realloc(expanded, std::numeric_limits<std::size_t>::max()) == nullptr);
-  check(std::all_of(expanded, expanded + 16, [](auto byte) { return byte == 42; }));
+  check(std::all_of(expanded, expanded + 16, [](auto byte) {
+    return byte == 42;
+  }));
+
   OPENSSL_free(expanded);
   check(OPENSSL_malloc(std::numeric_limits<std::size_t>::max()) == nullptr);
 
   std::array<std::thread, 4> workers;
 
-  for (auto &worker : workers) {
+  for (auto& worker : workers) {
     worker = std::thread{[] {
       for (unsigned index = 0; index < 256; ++index) {
-        void *allocation = OPENSSL_malloc(index + 1);
+        void* allocation = OPENSSL_malloc(index + 1);
 
         check(allocation != nullptr);
         OPENSSL_free(allocation);
@@ -94,13 +99,13 @@ static void testTlsMemory() {
     }};
   }
 
-  for (auto &worker : workers) {
+  for (auto& worker : workers) {
     worker.join();
   }
 }
 
 template <ConcurrentAllocator Memory>
-static void testAuthorities(Memory &memory, const TlsLibrary<Memory> &library) {
+static void testAuthorities(Memory& memory, const TlsLibrary<Memory>& library) {
   AuthorityDirectory directory;
   const int descriptor = directory.descriptor.get();
   auto authority = CertificateAuthority<Memory>::loadOrCreate(memory, library, descriptor, AuthorityKind::private_local);
@@ -125,7 +130,7 @@ static void testAuthorities(Memory &memory, const TlsLibrary<Memory> &library) {
 
   const auto longest = std::string(63, 'a') + "." + std::string(63, 'b') + "." + std::string(63, 'c') + "." + std::string(61, 'd');
 
-  for (const auto &hostname : {std::string{"api.example.com"}, longest}) {
+  for (const auto& hostname : {std::string{"api.example.com"}, longest}) {
     auto leaf = authority.mint(hostname);
     TlsKey issuer{X509_get_pubkey(authority.certificate())};
 
@@ -137,7 +142,9 @@ static void testAuthorities(Memory &memory, const TlsLibrary<Memory> &library) {
   }
 
   for (const auto hostname : {"", "*.example.com", "bad,name", "a..b", "https://example.com"}) {
-    rejected([&] { authority.mint(hostname); });
+    rejected([&] {
+      authority.mint(hostname);
+    });
   }
 
   const PemDocument root{system.certificate()};
@@ -153,17 +160,26 @@ static void testAuthorities(Memory &memory, const TlsLibrary<Memory> &library) {
   check(std::equal(own.bytes().begin(), own.bytes().end(), bundle.begin() + root.bytes().size()));
 
   check(::unlinkat(descriptor, "ca-cert.pem", 0) == 0);
-  rejected([&] { CertificateAuthority<Memory>::loadOrCreate(memory, library, descriptor, AuthorityKind::private_local); });
+  rejected([&] {
+    CertificateAuthority<Memory>::loadOrCreate(memory, library, descriptor, AuthorityKind::private_local);
+  });
+
   check(writePrivateFile(descriptor, "ca-cert.pem", own.bytes(), PrivateFileMode::create_only) == 0);
   check(::fchmodat(descriptor, "ca-key.pem", 0644, 0) == 0);
-  rejected([&] { CertificateAuthority<Memory>::loadOrCreate(memory, library, descriptor, AuthorityKind::private_local); });
+  rejected([&] {
+    CertificateAuthority<Memory>::loadOrCreate(memory, library, descriptor, AuthorityKind::private_local);
+  });
+
   check(::fchmodat(descriptor, "ca-key.pem", 0600, 0) == 0);
 
   const auto replacement = CertificatePair::authority("telar local CA", CertificatePair::private_lifetime);
   const PemDocument other_key{replacement.key.get()};
 
   check(writePrivateFile(descriptor, "ca-key.pem", other_key.bytes(), PrivateFileMode::replace) == 0);
-  rejected([&] { CertificateAuthority<Memory>::loadOrCreate(memory, library, descriptor, AuthorityKind::private_local); });
+  rejected([&] {
+    CertificateAuthority<Memory>::loadOrCreate(memory, library, descriptor, AuthorityKind::private_local);
+  });
+
   Vector<unsigned char, Memory> retained{AllocatorRef<unsigned char, Memory>{memory}};
 
   check(readPrivateFile(descriptor, "ca-key.pem", retained, PemDocument::maximum_bytes) && std::ranges::equal(retained, other_key.bytes()));
@@ -174,8 +190,14 @@ static void testAuthorityValidation() {
   auto pair = CertificatePair::authority("telar local CA", CertificatePair::private_lifetime);
 
   pair.validateAuthority("telar local CA", false);
-  rejected([&] { pair.validateAuthority("another issuer", false); });
-  rejected([&] { pair.validateAuthority("telar local CA", true); });
+  rejected([&] {
+    pair.validateAuthority("another issuer", false);
+  });
+
+  rejected([&] {
+    pair.validateAuthority("telar local CA", true);
+  });
+
   const PemDocument key{pair.key.get()};
   const PemDocument certificate{pair.certificate.get()};
   auto decoded = CertificatePair::parse(key.bytes(), certificate.bytes());
@@ -186,13 +208,17 @@ static void testAuthorityValidation() {
   constexpr unsigned char password[] = "fixture";
 
   check(PEM_write_bio_PrivateKey(encrypted.get(), pair.key.get(), EVP_aes_256_cbc(), password, sizeof(password) - 1, nullptr, nullptr) == 1);
-  char *data = nullptr;
+  char* data = nullptr;
   const auto length = BIO_get_mem_data(encrypted.get(), &data);
 
-  rejected([&] { CertificatePair::parse({reinterpret_cast<const unsigned char *>(data), static_cast<std::size_t>(length)}, certificate.bytes()); });
+  rejected([&] {
+    CertificatePair::parse({reinterpret_cast<const unsigned char*>(data), static_cast<std::size_t>(length)}, certificate.bytes());
+  });
 
   check(X509_gmtime_adj(X509_getm_notAfter(pair.certificate.get()), -1) != nullptr && X509_sign(pair.certificate.get(), pair.key.get(), EVP_sha256()) > 0);
-  rejected([&] { pair.validateAuthority("telar local CA", false); });
+  rejected([&] {
+    pair.validateAuthority("telar local CA", false);
+  });
 }
 
 static void numericCertificates() {
@@ -206,7 +232,7 @@ static void numericCertificates() {
   }
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   try {
     SystemAllocator system;
     BudgetAllocator budget{system, 64 * 1024 * 1024};
@@ -268,7 +294,7 @@ int main(int argc, char **argv) {
 
     check(budget.liveBytes() == 0);
     std::puts("TLS tests passed");
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     std::fprintf(stderr, "%s\n", error.what());
     return 1;
   }

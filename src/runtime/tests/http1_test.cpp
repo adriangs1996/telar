@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -22,10 +21,21 @@ using namespace telar::runtime;
 
 class MessageObserver {
 public:
-  void headStarted() noexcept { ++starts; }
-  void head(std::string_view bytes) noexcept { captured_head.assign(bytes); }
-  void payload(std::span<const std::uint8_t> bytes) noexcept { captured_body.append(reinterpret_cast<const char *>(bytes.data()), bytes.size()); }
-  void lineTooLong(Http1Line kind) noexcept { ++(kind == Http1Line::chunk_size ? chunk_limits : trailer_limits); }
+  void headStarted() noexcept {
+    ++starts;
+  }
+
+  void head(std::string_view bytes) noexcept {
+    captured_head.assign(bytes);
+  }
+
+  void payload(std::span<const std::uint8_t> bytes) noexcept {
+    captured_body.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+  }
+
+  void lineTooLong(Http1Line kind) noexcept {
+    ++(kind == Http1Line::chunk_size ? chunk_limits : trailer_limits);
+  }
 
   std::string captured_head;
   std::string captured_body;
@@ -81,7 +91,7 @@ static void checkHeadAnalysis() {
   check(!Http1Head::analyze("head / HTTP/1.1\r\n\r\n", false)->head_request);
 }
 
-static void driveMessage(Http1MessageRelay &relay, TestByteStream &source, TestByteStream &destination, MessageObserver &observer) {
+static void driveMessage(Http1MessageRelay& relay, TestByteStream& source, TestByteStream& destination, MessageObserver& observer) {
   for (std::size_t iteration = 0; iteration < 100000; ++iteration) {
     relay.advance(source, destination, observer);
     if (relay.state() >= Http1MessageRelay::State::complete) {
@@ -132,6 +142,7 @@ static void checkMessageFragments() {
 static void checkMessageFailures() {
   using State = Http1MessageRelay::State;
   const std::string head = "POST / HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n";
+
   struct Fixture {
     std::string bytes;
     std::size_t forwarded;
@@ -139,7 +150,7 @@ static void checkMessageFailures() {
     std::size_t trailers = 0;
   };
 
-  for (const auto &fixture : {
+  for (const auto& fixture : {
            Fixture{head + "wrong\r\n", head.size() + 7},
            Fixture{head + "+2\r\nab\r\n", head.size() + 4},
            Fixture{head + "1_0\r\n", head.size() + 5},
@@ -221,7 +232,7 @@ static void checkConnectionEndings() {
        }) {
     ProxyCounters counters;
     SystemAllocator connection_memory;
-  Http1Connection connection{connection_memory, counters};
+    Http1Connection connection{connection_memory, counters};
     TestByteStream child;
     TestByteStream origin;
     const bool early = std::string_view{response}.find("413") != std::string_view::npos;
@@ -237,7 +248,7 @@ static void checkConnectionEndings() {
   for (const bool response : {false, true}) {
     ProxyCounters counters;
     SystemAllocator connection_memory;
-  Http1Connection connection{connection_memory, counters};
+    Http1Connection connection{connection_memory, counters};
     TestByteStream child;
     TestByteStream origin;
     const std::string large(Http1Head::capacity, 'a');

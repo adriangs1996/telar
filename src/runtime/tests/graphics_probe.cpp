@@ -1,10 +1,10 @@
+#include <cerrno>
+#include <cstdio>
+#include <cstdlib>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <termios.h>
-#include <cstdlib>
-#include <cerrno>
-#include <cstdio>
 #include <unistd.h>
 
 import std;
@@ -80,16 +80,16 @@ public:
       throw SocketError{"Cannot size graphics fixture resource"};
     }
 
-    void *mapping = ::mmap(nullptr, length, PROT_READ | PROT_WRITE, MAP_SHARED, descriptor, 0);
+    void* mapping = ::mmap(nullptr, length, PROT_READ | PROT_WRITE, MAP_SHARED, descriptor, 0);
 
     ::close(descriptor);
     if (mapping == MAP_FAILED) {
       throw SocketError{"Cannot map graphics fixture resource"};
     }
 
-    std::memcpy(static_cast<Byte *>(mapping) + offset, pixels.data(), pixels.size());
+    std::memcpy(static_cast<Byte*>(mapping) + offset, pixels.data(), pixels.size());
     ::munmap(mapping, length);
-    const auto encoded = encodeBase64({reinterpret_cast<const Byte *>(name_.data()), name_.size()});
+    const auto encoded = encodeBase64({reinterpret_cast<const Byte*>(name_.data()), name_.size()});
     const std::string medium = shared_ ? "s" : "f";
 
     if (atomic) {
@@ -180,7 +180,7 @@ static int graphicsChild(std::string_view workload) {
   return 0;
 }
 
-static ImageDescription image(ProtocolPeer &peer, bool shared, std::vector<Byte> &pixels) {
+static ImageDescription image(ProtocolPeer& peer, bool shared, std::vector<Byte>& pixels) {
   if (shared) {
     const auto message = peer.receive<GraphicsSharedImage>();
     const std::string name{message.name};
@@ -195,15 +195,15 @@ static ImageDescription image(ProtocolPeer &peer, bool shared, std::vector<Byte>
       throw SocketError{"Shared image size mismatch"};
     }
 
-    const void *mapping = ::mmap(nullptr, description.byte_len, PROT_READ, MAP_SHARED, descriptor, 0);
+    const void* mapping = ::mmap(nullptr, description.byte_len, PROT_READ, MAP_SHARED, descriptor, 0);
 
     ::close(descriptor);
     if (mapping == MAP_FAILED) {
       throw SocketError{"Shared image mapping failed"};
     }
 
-    pixels.assign(static_cast<const Byte *>(mapping), static_cast<const Byte *>(mapping) + description.byte_len);
-    ::munmap(const_cast<void *>(mapping), description.byte_len);
+    pixels.assign(static_cast<const Byte*>(mapping), static_cast<const Byte*>(mapping) + description.byte_len);
+    ::munmap(const_cast<void*>(mapping), description.byte_len);
     ::shm_unlink(name.c_str());
     return description;
   }
@@ -223,7 +223,7 @@ static ImageDescription image(ProtocolPeer &peer, bool shared, std::vector<Byte>
   return description;
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   try {
     if (argc == 3 && std::string_view{argv[1]} == "--child") {
       return graphicsChild(argv[2]);
@@ -237,10 +237,7 @@ int main(int argc, char **argv) {
     const bool shared = std::string_view{argv[2]}.ends_with("-shared");
     const auto iterations = static_cast<unsigned>(std::stoul(argv[3]));
     const std::array<std::string_view, 3> arguments{argv[0], "--child", argv[2]};
-    const auto pane = peer.exchange<PaneOpened>(OpenPane{.request_id = 1,
-                                                         .size = {80, 24, 8, 16},
-                                                         .launch = Launch{.cwd = "/tmp",
-                                                                          .arguments = arguments}});
+    const auto pane = peer.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = {80, 24, 8, 16}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
 
     for (;;) {
       const auto frame = peer.receive<PaneFrame>();
@@ -248,7 +245,7 @@ int main(int argc, char **argv) {
       peer.send(FrameAck{frame.pane_id, frame.frame_id});
       bool ready = false;
 
-      for (const auto &span : frame.spans) {
+      for (const auto& span : frame.spans) {
         auto reader = span.reader();
 
         for (std::size_t index = 0; index < span.count; ++index) {
@@ -284,9 +281,8 @@ int main(int argc, char **argv) {
       description.key.generation = index + 1;
       placed.header = {1, index + 1};
       placed.placement.key.generation = index + 1;
-      peer.record(dump, GraphicsImage{.header = placed.header,
-                                      .image = description});
-      dump.write(reinterpret_cast<const char *>(pixels.data()), static_cast<std::streamsize>(pixels.size()));
+      peer.record(dump, GraphicsImage{.header = placed.header, .image = description});
+      dump.write(reinterpret_cast<const char*>(pixels.data()), static_cast<std::streamsize>(pixels.size()));
       peer.record(dump, placed);
     }
 
@@ -316,7 +312,7 @@ int main(int argc, char **argv) {
     peer.send(PaneInput{pane.pane_id, quit});
     std::printf("{\"iterations\":%u,\"elapsed_ns\":%lld,\"ns_per_iteration\":%lld}\n", iterations, static_cast<long long>(elapsed), static_cast<long long>(elapsed / iterations));
     return 0;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     std::fprintf(stderr, "graphics-probe: %s\n", error.what());
     return 1;
   }

@@ -3,25 +3,24 @@
 static_assert(true);
 #endif
 
-
-#include <cstdint>
-#include <cstring>
-#include <cstddef>
+#include "cell_layout.hpp"
 #include "telar_base/diagnostics/config.hpp"
+#include <cassert>
+#include <cerrno>
+#include <csignal>
+#include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fcntl.h>
-#include <sys/mman.h>
-#include "cell_layout.hpp"
-#include <cassert>
-#include <sys/types.h>
-#include <cerrno>
-#include <unistd.h>
 #include <limits.h>
-#include <csignal>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <sys/uio.h>
 #include <sys/wait.h>
-#include <sys/stat.h>
+#include <unistd.h>
 #if (defined(__APPLE__))
 #include <sys/event.h>
 #endif
@@ -37,10 +36,10 @@ static_assert(true);
 #if (defined(__linux__))
 #include <sys/syscall.h>
 #endif
-#include <new>
-#include <termios.h>
-#include <pthread.h>
 #include <ghostty/vt.h>
+#include <new>
+#include <pthread.h>
+#include <termios.h>
 
 import std;
 import telar.base.diagnostics;
@@ -65,14 +64,14 @@ struct TestProcessInspector {
   bool descendant = true;
   mutable unsigned descent_checks = 0;
 
-  ProcessLineage lineage(const ProcessIdentity &, pid_t root) const noexcept {
+  ProcessLineage lineage(const ProcessIdentity&, pid_t root) const noexcept {
     ++descent_checks;
     return {.processes = {root}, .count = 1, .descends = descendant};
   }
 };
 
 template <typename Verification>
-static void verifyAndWait(Verification &verification, RuntimeModel<SystemAllocator> &model, ClientStore<SystemAllocator> &clients, ClientPeer &reporter, const VerifyPaneDescent &request) {
+static void verifyAndWait(Verification& verification, RuntimeModel<SystemAllocator>& model, ClientStore<SystemAllocator>& clients, ClientPeer& reporter, const VerifyPaneDescent& request) {
   verification.verify(model.panes, reporter.session(), request);
   verification.schedule(clients);
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
@@ -84,12 +83,12 @@ static void verifyAndWait(Verification &verification, RuntimeModel<SystemAllocat
   }
 }
 
-static void feedAgent(Terminal<SystemAllocator> &terminal, std::string_view text) {
-  terminal.feed({reinterpret_cast<const Byte *>(text.data()), text.size()});
+static void feedAgent(Terminal<SystemAllocator>& terminal, std::string_view text) {
+  terminal.feed({reinterpret_cast<const Byte*>(text.data()), text.size()});
   terminal.refresh();
 }
 
-static void testScreenEvidence(SystemAllocator &memory) {
+static void testScreenEvidence(SystemAllocator& memory) {
   Terminal terminal{memory, TerminalSize{80, 24, 8, 16}};
 
   feedAgent(terminal, "\x1b]0;◐ Working\x1b\\\x1b[22;1H❯ ");
@@ -132,7 +131,7 @@ static void testScreenEvidence(SystemAllocator &memory) {
   check(AgentScreenReader{wide}.observe(AgentProvider::codex).status == AgentStatus::ready);
 }
 
-static void testReportsAndIdentity(SystemAllocator &memory) {
+static void testReportsAndIdentity(SystemAllocator& memory) {
   RuntimeModel model{memory};
   ClientStore<SystemAllocator> clients{memory};
   LimitService<SystemAllocator> limits;
@@ -146,12 +145,9 @@ static void testReportsAndIdentity(SystemAllocator &memory) {
   ClientPeer reporter{memory, model, clients, ClientRole::control};
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
 
-  workspaces.open(model, panes, clients, reporter.session().id, OpenPane{.request_id = 1,
-                                               .size = {80, 24, 8, 16},
-                                               .launch = Launch{.cwd = "/tmp",
-                                                                .arguments = arguments}});
+  workspaces.open(model, panes, clients, reporter.session().id, OpenPane{.request_id = 1, .size = {80, 24, 8, 16}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
   const auto opened = reporter.receive<PaneOpened>();
-  auto &pane = panes.require(model.panes, opened.pane_id);
+  auto& pane = panes.require(model.panes, opened.pane_id);
 
   reporter.session().peer_identity = inspector.current;
   inspector.descendant = false;
@@ -160,12 +156,7 @@ static void testReportsAndIdentity(SystemAllocator &memory) {
   inspector.descendant = true;
   verifyAndWait(verification, model, clients, reporter, VerifyPaneDescent{2, pane.id, pane.generation});
   check(reporter.receive<RequestCompleted>().request_id == 2);
-  agents.report(model, reporter.session(), ReportAgent{.request_id = 3,
-                                                .pane_id = pane.id,
-                                                .pane_generation = pane.generation,
-                                                .provider = AgentProvider::claude,
-                                                .state = AgentReportState::working,
-                                                .session = "session-one"});
+  agents.report(model, reporter.session(), ReportAgent{.request_id = 3, .pane_id = pane.id, .pane_generation = pane.generation, .provider = AgentProvider::claude, .state = AgentReportState::working, .session = "session-one"});
   reporter.receive<RequestCompleted>();
   const auto now = std::chrono::steady_clock::now();
 
@@ -250,21 +241,12 @@ static void testReportsAndIdentity(SystemAllocator &memory) {
 static void testProgressAndPromptBudget() {
   AgentProgress progress;
 
-  check(progress.apply(ReportAgentProgress{.plan_op = AgentPlanOp::add,
-                                           .plan_text = "First"}));
-  check(progress.apply(ReportAgentProgress{.plan_op = AgentPlanOp::add,
-                                           .plan_text = "Second"}));
-  check(progress.apply(ReportAgentProgress{.plan_op = AgentPlanOp::mark,
-                                           .plan_index = 1,
-                                           .plan_status = AgentPlanStatus::in_progress}));
+  check(progress.apply(ReportAgentProgress{.plan_op = AgentPlanOp::add, .plan_text = "First"}));
+  check(progress.apply(ReportAgentProgress{.plan_op = AgentPlanOp::add, .plan_text = "Second"}));
+  check(progress.apply(ReportAgentProgress{.plan_op = AgentPlanOp::mark, .plan_index = 1, .plan_status = AgentPlanStatus::in_progress}));
   check(progress.step() == "Second" && progress.total() == 2 && progress.done() == 0);
-  progress.apply(ReportAgentProgress{.plan_op = AgentPlanOp::mark,
-                                     .plan_index = 0,
-                                     .plan_status = AgentPlanStatus::deleted});
-  progress.apply(ReportAgentProgress{.final_message = "Finished",
-                                     .plan_op = AgentPlanOp::mark,
-                                     .plan_index = 1,
-                                     .plan_status = AgentPlanStatus::completed});
+  progress.apply(ReportAgentProgress{.plan_op = AgentPlanOp::mark, .plan_index = 0, .plan_status = AgentPlanStatus::deleted});
+  progress.apply(ReportAgentProgress{.final_message = "Finished", .plan_op = AgentPlanOp::mark, .plan_index = 1, .plan_status = AgentPlanStatus::completed});
   check(progress.total() == 1 && progress.done() == 1 && progress.step().empty());
   progress.apply(ReportAgentProgress{});
   check(progress.final_message.view() == "Finished");
@@ -286,7 +268,7 @@ static void testProgressAndPromptBudget() {
   check(budget.spend(1, 2, now + std::chrono::seconds{60}));
 }
 
-static void testReporterCredentials(SystemAllocator &memory) {
+static void testReporterCredentials(SystemAllocator& memory) {
   RuntimeModel model{memory};
   ClientStore<SystemAllocator> clients{memory};
   LimitService<SystemAllocator> limits;
@@ -302,25 +284,28 @@ static void testReporterCredentials(SystemAllocator &memory) {
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
   std::array<std::uint64_t, 2> identities;
 
-  for (auto &identity : identities) {
+  for (auto& identity : identities) {
     workspaces.createWorkspace(model, panes, clients, reporter.session().id, CreateWorkspace{.request_id = 1, .size = {80, 24, 8, 16}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
     identity = reporter.receive<PaneOpened>().pane_id;
   }
 
-  auto &pane = panes.require(model.panes, identities[0]);
-  auto &other_pane = panes.require(model.panes, identities[1]);
+  auto& pane = panes.require(model.panes, identities[0]);
+  auto& other_pane = panes.require(model.panes, identities[1]);
   ReportAgent report{.request_id = 2, .pane_id = pane.id, .pane_generation = pane.generation, .provider = AgentProvider::claude, .state = AgentReportState::working};
-  const auto rejected = [&](auto &&action, FailureCode expected) {
+  const auto rejected = [&](auto&& action, FailureCode expected) {
     try {
       action();
-    } catch (const RequestError &error) {
+    } catch (const RequestError& error) {
       return error.code() == expected;
     }
 
     return false;
   };
 
-  check(rejected([&] { agents.report(model, reporter.session(), report); }, FailureCode::foreign_process));
+  check(rejected([&] {
+    agents.report(model, reporter.session(), report);
+  },
+      FailureCode::foreign_process));
   reporter.session().peer_identity = inspector.current;
   verifyAndWait(verification, model, clients, reporter, VerifyPaneDescent{3, pane.id, pane.generation});
   reporter.receive<RequestCompleted>();
@@ -329,13 +314,22 @@ static void testReporterCredentials(SystemAllocator &memory) {
   // A reporter's pane must still run the generation it names and be the one it was verified in.
   check(&requireReporterPane(model.panes, reporter.session(), pane.id, pane.generation) == &pane);
   check(findPane(model.panes, pane.id, 0) == nullptr && livePane(model.panes, pane.id, pane.generation) == &pane);
-  check(rejected([&] { static_cast<void>(requireReporterPane(model.panes, other_client.session(), pane.id, pane.generation)); }, FailureCode::foreign_process));
+  check(rejected([&] {
+    static_cast<void>(requireReporterPane(model.panes, other_client.session(), pane.id, pane.generation));
+  },
+      FailureCode::foreign_process));
   pane.exit_status = 0;
   check(livePane(model.panes, pane.id, pane.generation) == nullptr);
-  check(rejected([&] { static_cast<void>(requireReporterPane(model.panes, reporter.session(), pane.id, pane.generation)); }, FailureCode::pane_not_found));
+  check(rejected([&] {
+    static_cast<void>(requireReporterPane(model.panes, reporter.session(), pane.id, pane.generation));
+  },
+      FailureCode::pane_not_found));
   const RegisterWorktree from_exited{.request_id = 9, .source = pane.location.workspace.id, .created_by = pane.id, .path = "/tmp", .branch = "exited"};
 
-  check(rejected([&] { WorktreeService<SystemAllocator, decltype(poller)>::registerEntry(model, reporter.session(), from_exited); }, FailureCode::foreign_process));
+  check(rejected([&] {
+    WorktreeService<SystemAllocator, decltype(poller)>::registerEntry(model, reporter.session(), from_exited);
+  },
+      FailureCode::foreign_process));
   pane.exit_status.reset();
 
   inspector.descendant = false;
@@ -345,26 +339,41 @@ static void testReporterCredentials(SystemAllocator &memory) {
   }
 
   check(inspector.descent_checks == 1);
-  check(rejected([&] { agents.report(model, other_client.session(), report); }, FailureCode::foreign_process));
+  check(rejected([&] {
+    agents.report(model, other_client.session(), report);
+  },
+      FailureCode::foreign_process));
 
   auto wrong_generation = report;
 
   ++wrong_generation.pane_generation;
-  check(rejected([&] { agents.report(model, reporter.session(), wrong_generation); }, FailureCode::pane_not_found));
+  check(rejected([&] {
+    agents.report(model, reporter.session(), wrong_generation);
+  },
+      FailureCode::pane_not_found));
   auto wrong_pane = report;
 
   wrong_pane.pane_id = other_pane.id;
   wrong_pane.pane_generation = other_pane.generation;
-  check(rejected([&] { agents.report(model, reporter.session(), wrong_pane); }, FailureCode::foreign_process));
+  check(rejected([&] {
+    agents.report(model, reporter.session(), wrong_pane);
+  },
+      FailureCode::foreign_process));
   auto wrong_provider = report;
 
   wrong_provider.provider = AgentProvider::codex;
-  check(rejected([&] { agents.report(model, reporter.session(), wrong_provider); }, FailureCode::foreign_process));
+  check(rejected([&] {
+    agents.report(model, reporter.session(), wrong_provider);
+  },
+      FailureCode::foreign_process));
 
   verifyAndWait(verification, model, clients, reporter, VerifyPaneDescent{4, other_pane.id, other_pane.generation});
   check(reporter.receive<RequestFailed>().code == FailureCode::foreign_process);
   check(reporter.session().verified_pane == 0 && reporter.session().verified_generation == 0);
-  check(rejected([&] { agents.report(model, reporter.session(), report); }, FailureCode::foreign_process));
+  check(rejected([&] {
+    agents.report(model, reporter.session(), report);
+  },
+      FailureCode::foreign_process));
   report.provider = AgentProvider::unknown;
   agents.report(model, other_client.session(), report);
   other_client.receive<RequestCompleted>();
@@ -429,7 +438,7 @@ static void testEvidencePrecedence() {
   check(claude.description_phase == DescriptionPhase::waiting_query);
 }
 
-static void testDescriptionQueue(SystemAllocator &memory) {
+static void testDescriptionQueue(SystemAllocator& memory) {
   RuntimeModel model{memory};
   ClientStore<SystemAllocator> clients{memory};
   LimitService<SystemAllocator> limits;
@@ -445,14 +454,14 @@ static void testDescriptionQueue(SystemAllocator &memory) {
   const std::string_view prompt = "Fix parser\r";
   std::array<std::uint64_t, 9> identities;
 
-  for (auto &identity : identities) {
+  for (auto& identity : identities) {
     workspaces.createWorkspace(model, panes, clients, reporter.session().id, CreateWorkspace{.request_id = 1, .size = {80, 24, 8, 16}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
     identity = reporter.receive<PaneOpened>().pane_id;
-    auto &pane = panes.require(model.panes, identity);
+    auto& pane = panes.require(model.panes, identity);
 
     agents.report(model, reporter.session(), ReportAgent{.request_id = 1, .pane_id = pane.id, .pane_generation = pane.generation, .state = AgentReportState::ready});
     reporter.receive<RequestCompleted>();
-    agents.observeInput(pane, {reinterpret_cast<const Byte *>(prompt.data()), prompt.size()});
+    agents.observeInput(pane, {reinterpret_cast<const Byte*>(prompt.data()), prompt.size()});
     check(agents.find(pane.id, pane.generation)->description_phase == DescriptionPhase::waiting_work);
     agents.report(model, reporter.session(), ReportAgent{.request_id = 1, .pane_id = pane.id, .pane_generation = pane.generation, .state = AgentReportState::working});
     reporter.receive<RequestCompleted>();

@@ -14,7 +14,8 @@ namespace telar {
 #ifdef TELAR_DEBUG
   namespace debug {
 
-    template <typename Value> std::string inspectValue(const Value &value) {
+    template <typename Value>
+    std::string inspectValue(const Value& value) {
       using T = std::remove_cvref_t<Value>;
 
       if constexpr (std::is_same_v<T, bool>) {
@@ -46,10 +47,11 @@ namespace telar {
         return value ? inspectValue(*value) : "null";
       } else if constexpr (requires { std::variant_size<T>::value; }) {
         return std::visit(
-            [](const auto &entry) {
+            [](const auto& entry) {
               return inspectValue(entry);
             },
-            value);
+            value
+        );
       } else if constexpr (std::is_same_v<T, std::monostate>) {
         return "none";
       } else if constexpr (requires {
@@ -58,7 +60,7 @@ namespace telar {
                            }) {
         std::string text = "[";
 
-        for (const auto &entry : value) {
+        for (const auto& entry : value) {
           if (text.size() > 1) {
             text += ", ";
           }
@@ -84,12 +86,9 @@ namespace telar {
     };
 
     template <typename Value>
-    void appendColumns(std::vector<Column> &columns,
-                       std::string name,
-                       std::span<const Byte> bytes,
-                       const Value &value) {
+    void appendColumns(std::vector<Column>& columns, std::string name, std::span<const Byte> bytes, const Value& value) {
       using T = std::remove_cvref_t<Value>;
-      const auto visitor = [&](const char *field, std::span<const Byte> raw, const auto &entry) {
+      const auto visitor = [&](const char* field, std::span<const Byte> raw, const auto& entry) {
         appendColumns(columns, name + "." + field, raw, entry);
       };
 
@@ -122,10 +121,10 @@ namespace telar {
                            }) {
         using Element = std::remove_cv_t<typename T::element_type>;
 
-        if constexpr (requires(const Element &entry) { BodySchema<Element>::encodedSize(entry); }) {
+        if constexpr (requires(const Element& entry) { BodySchema<Element>::encodedSize(entry); }) {
           std::size_t size = 0;
 
-          for (const auto &entry : value) {
+          for (const auto& entry : value) {
             size += BodySchema<Element>::encodedSize(entry);
           }
 
@@ -138,10 +137,7 @@ namespace telar {
           for (std::size_t i = 0; i < value.size(); ++i) {
             const auto width = BodySchema<Element>::encodedSize(value[i]);
 
-            appendColumns(columns,
-                          name + "[" + std::to_string(i) + "]",
-                          bytes.first(width),
-                          value[i]);
+            appendColumns(columns, name + "[" + std::to_string(i) + "]", bytes.first(width), value[i]);
             bytes = bytes.subspan(width);
           }
 
@@ -159,15 +155,11 @@ namespace telar {
     enum class FrameRow {
       bytes,
       labels,
-      values
+      values,
     };
 
     template <FrameRow Row>
-    void printColumn(std::span<const Byte> bytes,
-                     const char *name,
-                     const char *value,
-                     std::FILE *output,
-                     bool more) {
+    void printColumn(std::span<const Byte> bytes, const char* name, const char* value, std::FILE* output, bool more) {
       if constexpr (Row == FrameRow::bytes) {
         printBytes(bytes, name, value, output, more);
       } else if constexpr (Row == FrameRow::labels) {
@@ -178,7 +170,7 @@ namespace telar {
     }
 
     template <typename Sch, FrameRow Row>
-    void printPayload(std::span<const Byte> input, std::FILE *output) {
+    void printPayload(std::span<const Byte> input, std::FILE* output) {
       if constexpr (requires { Sch::magic; }) {
         const auto bytes = input.first(Sch::magic.size());
         const auto value = valueText(FixedBytes<Sch::magic.size()>::decode(input));
@@ -189,10 +181,7 @@ namespace telar {
       const auto tag_bytes = input.first(u8::width);
       std::array<char, sizeof("0x00")> tag_value{};
 
-      std::snprintf(tag_value.data(),
-                    tag_value.size(),
-                    "0x%02x",
-                    static_cast<unsigned>(u8::decode(input)));
+      std::snprintf(tag_value.data(), tag_value.size(), "0x%02x", static_cast<unsigned>(u8::decode(input)));
       printColumn<Row>(tag_bytes, "tag", tag_value.data(), output, !input.empty());
 
       if constexpr (Row == FrameRow::bytes) {
@@ -206,7 +195,7 @@ namespace telar {
 
     template <typename Sch, FrameRow Row>
     void
-    printFrameRow(std::span<const Byte> prefix, std::span<const Byte> payload, std::FILE *output) {
+    printFrameRow(std::span<const Byte> prefix, std::span<const Byte> payload, std::FILE* output) {
       auto input = prefix;
       const auto length_value = valueText(u32::decode(input));
 
@@ -215,7 +204,8 @@ namespace telar {
       std::fputc('\n', output);
     }
 
-    template <typename Sch> void printFrame(std::span<const Byte> payload, std::FILE *output) {
+    template <typename Sch>
+    void printFrame(std::span<const Byte> payload, std::FILE* output) {
       std::array<Byte, frame_prefix_size> prefix{};
       std::span<Byte> prefix_output = prefix;
 
@@ -231,7 +221,8 @@ namespace telar {
 #endif
 
   struct Codec {
-    template <typename Message> static void validate(const Message &message) {
+    template <typename Message>
+    static void validate(const Message& message) {
       if constexpr (requires { message.validate(); }) {
         message.validate();
       }
@@ -241,14 +232,15 @@ namespace telar {
       }
     }
 
-    template <typename Message> static std::size_t encodedSize(const Message &message) {
+    template <typename Message>
+    static std::size_t encodedSize(const Message& message) {
       validate(message);
       return checkedWireSize(u8::width, MessageSchema<Message>::encodedSize(message));
     }
 
     // The encoded bytes, written into the caller's buffer.
     template <typename Message>
-    static tbc::view<std::span<Byte>, tbc::lt::a> encode(const Message &message, tbc::view<std::span<Byte>, tbc::lt::a> buffer) {
+    static tbc::view<std::span<Byte>, tbc::lt::a> encode(const Message& message, tbc::view<std::span<Byte>, tbc::lt::a> buffer) {
       const auto size = encodedSize(message);
       if (buffer.size() < size) {
         throw EncodingError{"Output buffer too small"};
@@ -268,7 +260,7 @@ namespace telar {
 
 #ifdef TELAR_DEBUG
     template <typename Message>
-    static void pretty_print(const Message &message, std::FILE *output = stderr) {
+    static void pretty_print(const Message& message, std::FILE* output = stderr) {
       std::vector<Byte> buffer(encodedSize(message));
       const auto payload = encode(message, buffer);
       std::array<Byte, frame_prefix_size> prefix{};
@@ -280,43 +272,26 @@ namespace telar {
       columns.push_back({"length", prefix, debug::inspectValue(payload.size())});
       char tag_text[5]{};
 
-      std::snprintf(tag_text,
-                    sizeof(tag_text),
-                    "0x%02x",
-                    static_cast<unsigned>(MessageSchema<Message>::tag));
+      std::snprintf(tag_text, sizeof(tag_text), "0x%02x", static_cast<unsigned>(MessageSchema<Message>::tag));
       columns.push_back({"tag", payload.first(1), tag_text});
       auto body = std::span<const Byte>{payload.subspan(1)};
 
-      MessageSchema<Message>::visitFields(message,
-                                          body,
-                                          [&](const char *name, auto bytes, const auto &value) {
-                                            debug::appendColumns(columns, name, bytes, value);
-                                          });
+      MessageSchema<Message>::visitFields(message, body, [&](const char* name, auto bytes, const auto& value) {
+        debug::appendColumns(columns, name, bytes, value);
+      });
 
       std::fputs("Frame:\n", output);
       for (int row = 0; row < 3; ++row) {
         for (std::size_t i = 0; i < columns.size(); ++i) {
-          const auto &column = columns[i];
+          const auto& column = columns[i];
           const auto more = i + 1 < columns.size();
 
           if (row == 0) {
-            debug::printBytes(column.bytes,
-                              column.name.c_str(),
-                              column.value.c_str(),
-                              output,
-                              more);
+            debug::printBytes(column.bytes, column.name.c_str(), column.value.c_str(), output, more);
           } else if (row == 1) {
-            debug::printLabel(column.bytes.size(),
-                              column.name.c_str(),
-                              column.value.c_str(),
-                              output,
-                              more);
+            debug::printLabel(column.bytes.size(), column.name.c_str(), column.value.c_str(), output, more);
           } else {
-            debug::printValue(column.bytes.size(),
-                              column.name.c_str(),
-                              column.value.c_str(),
-                              output,
-                              more);
+            debug::printValue(column.bytes.size(), column.name.c_str(), column.value.c_str(), output, more);
           }
         }
 
@@ -325,7 +300,8 @@ namespace telar {
     }
 #endif
 
-    template <typename Message> static auto encode(const Message &message) _throw(EncodingError) {
+    template <typename Message>
+    static auto encode(const Message& message) _throw(EncodingError) {
       using Sch = MessageSchema<Message>;
       static_assert(Sch::fixed_size, "Variable messages require Codec::encode(message, buffer)");
       static_assert(Sch::payload_size <= max_payload_size);
@@ -345,7 +321,7 @@ namespace telar {
     }
 
     template <typename Message>
-    static Decoded<Message> decode(DecodeFrame input, DecodeStorage &storage) {
+    static Decoded<Message> decode(DecodeFrame input, DecodeStorage& storage) {
       using Sch = MessageSchema<Message>;
 
       if (input.empty() || input.size() > max_payload_size) {
@@ -372,7 +348,7 @@ namespace telar {
 #ifdef TELAR_DEBUG
   template <Direction Side, auto Tag, typename Body>
   template <typename Message>
-  void MessageLayout<Side, Tag, Body>::pretty_print(const Message &message, std::FILE *output) {
+  void MessageLayout<Side, Tag, Body>::pretty_print(const Message& message, std::FILE* output) {
     Codec::pretty_print(message, output);
   }
 #endif

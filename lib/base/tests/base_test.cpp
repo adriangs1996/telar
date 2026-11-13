@@ -3,27 +3,24 @@
 static_assert(true);
 #endif
 
-
 #include "telar_base/diagnostics/limit_reach.hpp"
+#include "telar_base/memory/allocator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/text/utf8.hpp"
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <chrono>
-#include <limits>
-#include <span>
-#include "telar_base/memory/allocator.hpp"
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <cstddef>
 #include <exception>
-#include <charconv>
+#include <limits>
 #include <optional>
+#include <span>
+#include <stdexcept>
 #include <string>
 #include <string_view>
-#include <stdexcept>
-#include "telar_base/text/utf8.hpp"
-
-
 
 import telar.base.diagnostics;
 import telar.base.memory;
@@ -62,16 +59,16 @@ namespace {
 
     std::array<std::byte, 32> buffer{};
     telar::BufferAllocator local{budget, buffer};
-    auto *pointer = local.allocate(8, 1);
+    auto* pointer = local.allocate(8, 1);
 
     require(pointer == buffer.data());
     local.deallocate(pointer, 8, 1);
     require(budget.liveBytes() == 0);
 
     telar::CAllocationBlocks blocks{budget};
-    auto *block = blocks.allocateZeroed(4, 1);
+    auto* block = blocks.allocateZeroed(4, 1);
 
-    require(block != nullptr && static_cast<unsigned char *>(block)[0] == 0);
+    require(block != nullptr && static_cast<unsigned char*>(block)[0] == 0);
     blocks.release(block);
     require(budget.liveBytes() == 0);
   }
@@ -117,7 +114,7 @@ namespace {
 
     try {
       telar::runtime::JsonNode<telar::SystemAllocator>::parse(memory, std::string_view{"\"\xff\"", 3});
-    } catch (const telar::JsonError &) {
+    } catch (const telar::JsonError&) {
       invalid_utf8 = true;
     }
 
@@ -128,7 +125,7 @@ namespace {
 
       try {
         telar::runtime::JsonValue::parse(invalid);
-      } catch (const telar::JsonError &error) {
+      } catch (const telar::JsonError& error) {
         rejected = true;
         require(std::string_view{error.what()} == "Invalid JSON record");
       }
@@ -140,7 +137,10 @@ namespace {
   std::string paste(std::string_view text, bool bracketed) {
     std::string encoded;
 
-    telar::BracketedPaste::encode(text, bracketed, [&](std::string_view piece) { encoded.append(piece); });
+    telar::BracketedPaste::encode(text, bracketed, [&](std::string_view piece) {
+      encoded.append(piece);
+    });
+
     require(encoded.size() == telar::BracketedPaste::size(text.size(), bracketed));
     return encoded;
   }

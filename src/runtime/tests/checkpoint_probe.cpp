@@ -18,7 +18,7 @@ static constexpr std::uint64_t client_identity = 481;
 static constexpr std::string_view workspace_name = "Persistent workspace";
 static constexpr std::string_view tab_name = "Persistent tab";
 
-static void saveExpected(const char *path, const ExpectedSession &expected) {
+static void saveExpected(const char* path, const ExpectedSession& expected) {
   std::ofstream file{path};
 
   file << expected.workspace << ' ' << expected.first_tab << ' ' << expected.second_tab;
@@ -34,16 +34,16 @@ static void saveExpected(const char *path, const ExpectedSession &expected) {
   check(file.good());
 }
 
-static ExpectedSession loadExpected(const char *path) {
+static ExpectedSession loadExpected(const char* path) {
   ExpectedSession expected{};
   std::ifstream file{path};
 
   file >> expected.workspace >> expected.first_tab >> expected.second_tab;
-  for (auto &identity : expected.panes) {
+  for (auto& identity : expected.panes) {
     file >> identity;
   }
 
-  for (auto &generation : expected.generations) {
+  for (auto& generation : expected.generations) {
     file >> generation;
   }
 
@@ -51,7 +51,7 @@ static ExpectedSession loadExpected(const char *path) {
   return expected;
 }
 
-static void seed(ProtocolPeer &peer, const char *path) {
+static void seed(ProtocolPeer& peer, const char* path) {
   peer.send(RequestRuntimeState{.client_identity = client_identity, .interactive = false});
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
   const Launch launch{.cwd = "/tmp", .arguments = arguments};
@@ -68,7 +68,7 @@ static void seed(ProtocolPeer &peer, const char *path) {
   saveExpected(path, ExpectedSession{first.location.workspace.id, first.location.tab_id, tab.location.tab_id, {first.pane_id, second.pane_id, tab.root_pane_id}, {first.pane_generation, second.pane_generation, tab.pane_generation}});
 }
 
-static void verify(ProtocolPeer &peer, const char *path, bool retained_layout = true) {
+static void verify(ProtocolPeer& peer, const char* path, bool retained_layout = true) {
   const auto expected = loadExpected(path);
 
   peer.send(RequestRuntimeState{.client_identity = client_identity, .interactive = false});
@@ -123,17 +123,17 @@ static void verify(ProtocolPeer &peer, const char *path, bool retained_layout = 
   }
 }
 
-static void inspectIdentityBoundaries(ProtocolPeer &peer, const char *path) {
+static void inspectIdentityBoundaries(ProtocolPeer& peer, const char* path) {
   std::ofstream output{path};
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
 
   for (std::uint64_t request = 1; request <= 3; ++request) {
     peer.send(CreateWorkspace{.request_id = request, .size = {80, 24, 8, 16}, .name = "Identity boundary", .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
     const auto reply = peer.receiveAny<PaneOpened, RequestFailed>();
-    if (const auto *opened = std::get_if<PaneOpened>(&reply)) {
+    if (const auto* opened = std::get_if<PaneOpened>(&reply)) {
       output << "opened " << opened->location.workspace.id << ' ' << opened->location.tab_id << ' ' << opened->pane_id << ' ' << opened->pane_generation << '\n';
     } else {
-      const auto &failure = std::get<RequestFailed>(reply);
+      const auto& failure = std::get<RequestFailed>(reply);
 
       output << "failed " << static_cast<unsigned>(failure.code) << ' ' << failure.message << '\n';
     }
@@ -146,7 +146,7 @@ static void inspectIdentityBoundaries(ProtocolPeer &peer, const char *path) {
   check(output.good());
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   if (argc != 4) {
     std::fputs("Usage: checkpoint-probe SOCKET seed|verify EXPECTED\n", stderr);
     return 2;
@@ -172,7 +172,7 @@ int main(int argc, char **argv) {
 
     peer.exchange<RuntimeStopping>(RuntimeStop{});
     return 0;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     std::fprintf(stderr, "%s\n", error.what());
     return 1;
   }

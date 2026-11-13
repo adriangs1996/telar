@@ -1,14 +1,14 @@
 #ifdef __clangd__
 static_assert(true);
 #endif
-#include <tbc/view.hpp>
 #include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <stdexcept>
 #include <string_view>
-#include <optional>
+#include <tbc/view.hpp>
 #include <utility>
 #include <vector>
 
@@ -17,6 +17,7 @@ static_assert(true);
 #include <gtest/gtest.h>
 
 import telar.ebnf.parser;
+
 namespace {
   TEST(AST, IdentifierRuleProducesExpectedShape) {
     auto tokenizer = ebnf::Lexer{};
@@ -133,7 +134,8 @@ namespace {
         "| term , \"*\" "
         "| term , \"+\" "
         "| term , \"-\" , term "
-        "| term ;");
+        "| term ;"
+    );
     const auto root = tree.getRoot();
 
     ASSERT_EQ(parser_testing::childCount(tree, root), 1u);
@@ -239,7 +241,8 @@ namespace {
     ebnf::parser parser{tokenizer};
     auto tree = parser.parse(
         "lhs = identifier ;\n"
-        "rhs = alternation ;");
+        "rhs = alternation ;"
+    );
     const auto root = tree.getRoot();
 
     ASSERT_EQ(parser_testing::childCount(tree, root), 2u);
@@ -277,7 +280,8 @@ namespace {
         "| \"[\" , rhs , \"]\" "
         "| \"{\" , rhs , \"}\" "
         "| terminal "
-        "| identifier ;");
+        "| identifier ;"
+    );
     const auto root = tree.getRoot();
 
     ASSERT_EQ(parser_testing::childCount(tree, root), 1u);
@@ -395,7 +399,8 @@ namespace {
         "\n"
         R"(terminal = "'" , character - "'" , { character - "'" } , "'" ;)"
         "\n"
-        R"(grammar = ( rule ) * ;)");
+        R"(grammar = ( rule ) * ;)"
+    );
     const auto root = tree.getRoot();
 
     ASSERT_EQ(parser_testing::childCount(tree, root), 4u);

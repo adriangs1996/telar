@@ -7,51 +7,53 @@ import telar.base.text;
 
 export namespace telar::runtime {
 
-// The secret telar's shell integration signs its OSC 133 marks with. Each pane gets its own,
-// in its shell's environment only, so a program that prints a mark cannot sign it.
-class ShellToken {
-public:
-  static constexpr std::size_t length = 32;
+  // The secret telar's shell integration signs its OSC 133 marks with. Each pane gets its own,
+  // in its shell's environment only, so a program that prints a mark cannot sign it.
+  class ShellToken {
+  public:
+    static constexpr std::size_t length = 32;
 
-  inline static ShellToken generate() noexcept {
-    std::array<unsigned char, length / 2> random;
+    inline static ShellToken generate() noexcept {
+      std::array<unsigned char, length / 2> random;
 
-    randomBytes(random.data(), random.size());
-    ShellToken token;
+      randomBytes(random.data(), random.size());
+      ShellToken token;
 
-    static_cast<void>(encodeLowerHex(random, token.text_));
-    return token;
-  }
-
-  // A token another shell chose, as 32 lowercase hexadecimal digits.
-  inline static std::optional<ShellToken> parse(std::string_view text) noexcept {
-    if (text.size() != length || !std::ranges::all_of(text, [](char digit) { return (digit >= '0' && digit <= '9') || (digit >= 'a' && digit <= 'f'); })) {
-      return std::nullopt;
+      static_cast<void>(encodeLowerHex(random, token.text_));
+      return token;
     }
 
+    // A token another shell chose, as 32 lowercase hexadecimal digits.
+    inline static std::optional<ShellToken> parse(std::string_view text) noexcept {
+      if (text.size() != length || !std::ranges::all_of(text, [](char digit) {
+            return (digit >= '0' && digit <= '9') || (digit >= 'a' && digit <= 'f');
+          })) {
+        return std::nullopt;
+      }
+
+      ShellToken token;
+
+      std::ranges::copy(text, token.text_.begin());
+      return token;
+    }
+
+    inline std::string_view text() const noexcept {
+      return {text_.data(), text_.size()};
+    }
+
+    // Compares in constant time, so the time a forged mark takes does not reveal the token.
+    inline bool signs(std::string_view candidate) const noexcept {
+      return constantTimeEqual({text_.data(), text_.size()}, candidate);
+    }
+
+  private:
+    std::array<char, length> text_{};
+  };
+
+  // A shell telar integrated with, and the token its marks carry.
+  struct ShellLaunch {
+    IntegratedShell shell;
     ShellToken token;
-
-    std::ranges::copy(text, token.text_.begin());
-    return token;
-  }
-
-  inline std::string_view text() const noexcept {
-    return {text_.data(), text_.size()};
-  }
-
-  // Compares in constant time, so the time a forged mark takes does not reveal the token.
-  inline bool signs(std::string_view candidate) const noexcept {
-    return constantTimeEqual({text_.data(), text_.size()}, candidate);
-  }
-
-private:
-  std::array<char, length> text_{};
-};
-
-// A shell telar integrated with, and the token its marks carry.
-struct ShellLaunch {
-  IntegratedShell shell;
-  ShellToken token;
-};
+  };
 
 }

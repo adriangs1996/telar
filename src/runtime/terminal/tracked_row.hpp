@@ -25,13 +25,13 @@ namespace telar::runtime {
       return tracked;
     }
 
-    TrackedRow(const TrackedRow &) = delete;
-    TrackedRow &operator=(const TrackedRow &) = delete;
+    TrackedRow(const TrackedRow&) = delete;
+    TrackedRow& operator=(const TrackedRow&) = delete;
 
-    TrackedRow(TrackedRow &&other) noexcept
+    TrackedRow(TrackedRow&& other) noexcept
         : ref_(std::exchange(other.ref_, nullptr)) {}
 
-    TrackedRow &operator=(TrackedRow &&other) noexcept {
+    TrackedRow& operator=(TrackedRow&& other) noexcept {
       if (this != &other) {
         release();
         ref_ = std::exchange(other.ref_, nullptr);

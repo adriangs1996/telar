@@ -3,56 +3,49 @@
 static_assert(true);
 #endif
 
-
 #include "configuration_loader.hpp"
 #include "../application/dependencies.hpp"
 #include "../core/memory.hpp"
-#include <cstdint>
+#include "telar_base/memory/allocator.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_base/text/utf8.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
 #include <algorithm>
 #include <array>
-#include <cstddef>
-#include <span>
-#include <stdexcept>
-#include <tuple>
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include <variant>
-#include "telar_base/text/utf8.hpp"
-#include <string_view>
-#include "telar_client/serializers/telar_protocol.hpp"
+#include <bit>
+#include <chrono>
 #include <cinttypes>
+#include <cmath>
+#include <concepts>
+#include <cstddef>
+#include <cstdint>
 #include <cstdio>
-#include "telar_base/memory/allocator.hpp"
+#include <cstring>
+#include <initializer_list>
 #include <lauxlib.h>
+#include <limits>
 #include <lua.h>
 #include <lualib.h>
-#include <chrono>
-#include <cstring>
-#include <cmath>
-#include <initializer_list>
 #include <optional>
+#include <span>
+#include <stdexcept>
 #include <string>
-#include <limits>
+#include <string_view>
+#include <tuple>
 #include <utility>
-#include <bit>
-#include <concepts>
+#include <variant>
 
+#include "gui_config_bootstrap.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
 #include <charconv>
 #include <system_error>
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include "gui_config_bootstrap.hpp"
 
-#include <limits.h>
-#include <sys/stat.h>
-#include "telar_config/graphics/limits.hpp"
-#include <arpa/inet.h>
-#include "telar_config/terminal/control/policy.hpp"
-#include <format>
-#include <ghostty/vt/unicode.h>
-#include <exception>
 #include "projection.hpp"
+#include "telar_config/graphics/limits.hpp"
+#include "telar_config/terminal/control/policy.hpp"
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -61,10 +54,15 @@ static_assert(true);
 #include <QtCore/qchar.h>
 #include <QtCore/qstring.h>
 #include <QtCore/qtypes.h>
+#include <arpa/inet.h>
+#include <exception>
+#include <format>
+#include <ghostty/vt/unicode.h>
+#include <limits.h>
+#include <sys/stat.h>
 
 #include "application/dependencies.hpp"
 #include "core/memory.hpp"
-
 
 import telar.gui.config.plugin_query;
 import telar.gui.config.generation;
@@ -75,189 +73,188 @@ import telar.gui.presentation.suggestion_geometry;
 
 import telar.gui.config.gui_query;
 
-
 namespace telar::gui::qt {
 
-namespace {
+  namespace {
 
-std::optional<platform::FileStamp> fileStamp(const QString &path) {
-  const auto encoded = QFile::encodeName(path);
+    std::optional<platform::FileStamp> fileStamp(const QString& path) {
+      const auto encoded = QFile::encodeName(path);
 
-  return platform::FileStamp::read(encoded.constData());
-}
+      return platform::FileStamp::read(encoded.constData());
+    }
 
-}
+  }
 
-ConfigurationPreparation::ConfigurationPreparation(ApplicationAllocator &memory)
-    : generation(nullptr, AllocationDeleter<ConfigurationGeneration<ApplicationAllocator>, ApplicationAllocator>{memory}),
-      snapshot(memory) {
-}
+  ConfigurationPreparation::ConfigurationPreparation(ApplicationAllocator& memory)
+      : generation(nullptr, AllocationDeleter<ConfigurationGeneration<ApplicationAllocator>, ApplicationAllocator>{memory}),
+        snapshot(memory) {
+  }
 
-ConfigurationPreparation::~ConfigurationPreparation() = default;
+  ConfigurationPreparation::~ConfigurationPreparation() = default;
 
-PreparedConfiguration ConfigurationLoader::prepare(ApplicationAllocator &memory, const ConfigurationReloadRequest &request) {
-  auto observed = request.watch;
+  PreparedConfiguration ConfigurationLoader::prepare(ApplicationAllocator& memory, const ConfigurationReloadRequest& request) {
+    auto observed = request.watch;
 
-  observed.root = request.selection.path.isEmpty() ? std::nullopt : fileStamp(request.selection.path);
-  const auto trust_path = QFile::encodeName(request.selection.trust_path);
+    observed.root = request.selection.path.isEmpty() ? std::nullopt : fileStamp(request.selection.path);
+    const auto trust_path = QFile::encodeName(request.selection.trust_path);
 
-  observed.trust = trust_path.isEmpty() ? std::nullopt : platform::PrivateFileStamp::read(trust_path.constData());
-  for (auto iterator = request.watch.modules.cbegin(); iterator != request.watch.modules.cend(); ++iterator) {
-    const auto stamp = fileStamp(iterator->path);
-    if (stamp != iterator->stamp) {
-      observed.modules[iterator.key()].stamp = stamp;
+    observed.trust = trust_path.isEmpty() ? std::nullopt : platform::PrivateFileStamp::read(trust_path.constData());
+    for (auto iterator = request.watch.modules.cbegin(); iterator != request.watch.modules.cend(); ++iterator) {
+      const auto stamp = fileStamp(iterator->path);
+      if (stamp != iterator->stamp) {
+        observed.modules[iterator.key()].stamp = stamp;
+      }
+    }
+
+    if (!request.force && observed == request.watch) {
+      return PreparedConfiguration{nullptr, AllocationDeleter<ConfigurationPreparation, ApplicationAllocator>{memory}};
+    }
+
+    auto result = makeOwned<ConfigurationPreparation>(memory, memory);
+
+    result->revision = request.revision;
+    result->observed = std::move(observed);
+
+    try {
+      load(memory, request, *result);
+      result->state = ConfigurationPreparation::State::ready;
+    } catch (const std::exception& error) {
+      result->state = ConfigurationPreparation::State::failed;
+      result->error = QString::fromUtf8(error.what());
+    }
+
+    return result;
+  }
+
+  void ConfigurationLoader::load(tbc::view<ApplicationAllocator&, tbc::lt::a> memory, const ConfigurationReloadRequest& request, tbc::view<ConfigurationPreparation&, tbc::lt::a> result) {
+    result.configuration.themes.base = default_theme_values;
+    result.configuration.theme = projectTheme(result.configuration.themes.base);
+    if (!request.selection.trust_path.isEmpty()) {
+      const auto path = QFile::encodeName(request.selection.trust_path);
+
+      result.trust = runtime::plugins::TrustStore::load(memory, {path.constData(), static_cast<std::size_t>(path.size())});
+    }
+
+    if (!request.selection.path.isEmpty()) {
+      const QFileInfo information{request.selection.path};
+      constexpr qint64 maximum_source_bytes = qint64{1024} * 1024;
+      if (!information.isFile() || information.size() > maximum_source_bytes) {
+        throw std::runtime_error{"Configuration must be a regular file of at most 1 MiB"};
+      }
+
+      QFile file{information.canonicalFilePath()};
+      if (!file.open(QIODevice::ReadOnly)) {
+        throw std::runtime_error{"Cannot open GUI configuration"};
+      }
+
+      const auto source = file.read(maximum_source_bytes + 1);
+      if (source.size() > maximum_source_bytes || !file.atEnd()) {
+        throw std::runtime_error{"GUI configuration exceeds its byte capacity"};
+      }
+
+      result.directory = information.canonicalPath();
+      const auto directory = result.directory.toUtf8();
+      const auto profile = request.selection.profile.toUtf8();
+      const ConfigurationSourceText generation_source{
+          .source = {source.constData(), static_cast<std::size_t>(source.size())},
+          .directory = {directory.constData(), static_cast<std::size_t>(directory.size())},
+          .profile = {profile.constData(), static_cast<std::size_t>(profile.size())},
+          .generation = request.generation,
+          .plugin_overrides = &request.plugin_overrides,
+      };
+
+      result.generation = makeOwned<ConfigurationGeneration<ApplicationAllocator>>(memory, memory, generation_source);
+      const auto& generation = *result.generation;
+      const auto& configured = generation.runtimeValues().plugins.configured();
+
+      result.plugins.emplace(memory, generation_source.directory, configured);
+      const PluginCatalog catalog{generation.number(), configured, result.plugins->packages()};
+
+      generation.visitPluginActions([&](const PluginActionDescription& action) {
+        if (!request.plugin_overrides.disabled(action.plugin, configured)) {
+          static_cast<void>(catalog.resolve(action));
+        }
+      });
+
+      result.configuration = generation.configuration();
+      trackModules(generation, result.directory, result.modules);
+      snapshot(memory, generation, result.snapshot);
+    }
+
+    if (!request.selection.theme.isEmpty()) {
+      const auto name = request.selection.theme.toLower().toUtf8();
+
+      result.locked_theme = themeValuesByName({name.constData(), static_cast<std::size_t>(name.size())});
+      result.configuration.theme = projectTheme(*result.locked_theme);
     }
   }
 
-  if (!request.force && observed == request.watch) {
-    return PreparedConfiguration{nullptr, AllocationDeleter<ConfigurationPreparation, ApplicationAllocator>{memory}};
-  }
+  void ConfigurationLoader::snapshot(tbc::view<ApplicationAllocator&, tbc::lt::a> memory, const ConfigurationGeneration<ApplicationAllocator>& generation, tbc::view<ConfigurationSnapshot&, tbc::lt::a> result) {
+    result.commands = makeOwned<runtime::config::RetainedCommandTabRegistry>(memory, generation.commandTabs());
+    const auto store = [&](int reference, const char* field) {
+      QList<QByteArray> arguments;
 
-  auto result = makeOwned<ConfigurationPreparation>(memory, memory);
+      generation.visitArguments(reference, field, [&](std::string_view argument) {
+        arguments.append(QByteArray{argument.data(), static_cast<qsizetype>(argument.size())});
+      });
 
-  result->revision = request.revision;
-  result->observed = std::move(observed);
-
-  try {
-    load(memory, request, *result);
-    result->state = ConfigurationPreparation::State::ready;
-  } catch (const std::exception &error) {
-    result->state = ConfigurationPreparation::State::failed;
-    result->error = QString::fromUtf8(error.what());
-  }
-
-  return result;
-}
-
-void ConfigurationLoader::load(tbc::view<ApplicationAllocator &, tbc::lt::a> memory, const ConfigurationReloadRequest &request, tbc::view<ConfigurationPreparation &, tbc::lt::a> result) {
-  result.configuration.themes.base = default_theme_values;
-  result.configuration.theme = projectTheme(result.configuration.themes.base);
-  if (!request.selection.trust_path.isEmpty()) {
-    const auto path = QFile::encodeName(request.selection.trust_path);
-
-    result.trust = runtime::plugins::TrustStore::load(memory, {path.constData(), static_cast<std::size_t>(path.size())});
-  }
-
-  if (!request.selection.path.isEmpty()) {
-    const QFileInfo information{request.selection.path};
-    constexpr qint64 maximum_source_bytes = qint64{1024} * 1024;
-    if (!information.isFile() || information.size() > maximum_source_bytes) {
-      throw std::runtime_error{"Configuration must be a regular file of at most 1 MiB"};
-    }
-
-    QFile file{information.canonicalFilePath()};
-    if (!file.open(QIODevice::ReadOnly)) {
-      throw std::runtime_error{"Cannot open GUI configuration"};
-    }
-
-    const auto source = file.read(maximum_source_bytes + 1);
-    if (source.size() > maximum_source_bytes || !file.atEnd()) {
-      throw std::runtime_error{"GUI configuration exceeds its byte capacity"};
-    }
-
-    result.directory = information.canonicalPath();
-    const auto directory = result.directory.toUtf8();
-    const auto profile = request.selection.profile.toUtf8();
-    const ConfigurationSourceText generation_source{
-        .source = {source.constData(), static_cast<std::size_t>(source.size())},
-        .directory = {directory.constData(), static_cast<std::size_t>(directory.size())},
-        .profile = {profile.constData(), static_cast<std::size_t>(profile.size())},
-        .generation = request.generation,
-        .plugin_overrides = &request.plugin_overrides,
+      result.arguments.insert({reference, QByteArray{field}}, std::move(arguments));
     };
 
-    result.generation = makeOwned<ConfigurationGeneration<ApplicationAllocator>>(memory, memory, generation_source);
-    const auto &generation = *result.generation;
-    const auto &configured = generation.runtimeValues().plugins.configured();
+    const auto& definitions = generation.components().definitions();
 
-    result.plugins.emplace(memory, generation_source.directory, configured);
-    const PluginCatalog catalog{generation.number(), configured, result.plugins->packages()};
-
-    generation.visitPluginActions([&](const PluginActionDescription &action) {
-      if (!request.plugin_overrides.disabled(action.plugin, configured)) {
-        static_cast<void>(catalog.resolve(action));
+    for (std::size_t index = 0; index < components::Definitions::positions; ++index) {
+      const auto position = static_cast<components::Position>(index);
+      const auto& source = definitions.source(position);
+      if (source.kind == components::SourceKind::fixed) {
+        result.fixed_bars.at(index).emplace(generation.copied(memory, generation.components().bar(position)));
+      } else if (source.kind == components::SourceKind::command) {
+        store(source.reference, "command");
       }
+    }
+
+    for (const auto& panel : definitions.panels()) {
+      if (panel.source.kind == components::SourceKind::command) {
+        store(panel.source.reference, "command");
+      }
+    }
+
+    for (const auto& pick : definitions.picks()) {
+      store(pick.reference, "on_select");
+      if (pick.command) {
+        store(pick.reference, "command");
+      }
+    }
+  }
+
+  void ConfigurationLoader::trackModules(const ConfigurationGeneration<ApplicationAllocator>& generation, const QString& root, ConfigurationWatch::Modules& modules) {
+    QStringList names;
+
+    generation.visitLocalModules([&](std::string_view name) {
+      names.append(toQString(name));
     });
 
-    result.configuration = generation.configuration();
-    trackModules(generation, result.directory, result.modules);
-    snapshot(memory, generation, result.snapshot);
+    trackModuleNames(names, root, modules);
   }
 
-  if (!request.selection.theme.isEmpty()) {
-    const auto name = request.selection.theme.toLower().toUtf8();
+  void ConfigurationLoader::trackModuleNames(const QStringList& names, const QString& root, ConfigurationWatch::Modules& modules) {
+    const QDir directory{root};
 
-    result.locked_theme = themeValuesByName({name.constData(), static_cast<std::size_t>(name.size())});
-    result.configuration.theme = projectTheme(*result.locked_theme);
-  }
-}
+    for (const auto& key : names) {
+      if (modules.contains(key)) {
+        continue;
+      }
 
-void ConfigurationLoader::snapshot(tbc::view<ApplicationAllocator &, tbc::lt::a> memory, const ConfigurationGeneration<ApplicationAllocator> &generation, tbc::view<ConfigurationSnapshot &, tbc::lt::a> result) {
-  result.commands = makeOwned<runtime::config::RetainedCommandTabRegistry>(memory, generation.commandTabs());
-  const auto store = [&](int reference, const char *field) {
-    QList<QByteArray> arguments;
+      auto relative = key;
 
-    generation.visitArguments(reference, field, [&](std::string_view argument) {
-      arguments.append(QByteArray{argument.data(), static_cast<qsizetype>(argument.size())});
-    });
+      relative.replace(QLatin1Char('.'), QLatin1Char('/'));
+      auto path = QFileInfo{directory.filePath(relative + QLatin1StringView{".lua"})}.canonicalFilePath();
+      if (path.isEmpty()) {
+        path = QFileInfo{directory.filePath(relative + QLatin1StringView{"/init.lua"})}.canonicalFilePath();
+      }
 
-    result.arguments.insert({reference, QByteArray{field}}, std::move(arguments));
-  };
-
-  const auto &definitions = generation.components().definitions();
-
-  for (std::size_t index = 0; index < components::Definitions::positions; ++index) {
-    const auto position = static_cast<components::Position>(index);
-    const auto &source = definitions.source(position);
-    if (source.kind == components::SourceKind::fixed) {
-      result.fixed_bars.at(index).emplace(generation.copied(memory, generation.components().bar(position)));
-    } else if (source.kind == components::SourceKind::command) {
-      store(source.reference, "command");
+      modules.insert(key, {.path = path, .stamp = fileStamp(path)});
     }
   }
-
-  for (const auto &panel : definitions.panels()) {
-    if (panel.source.kind == components::SourceKind::command) {
-      store(panel.source.reference, "command");
-    }
-  }
-
-  for (const auto &pick : definitions.picks()) {
-    store(pick.reference, "on_select");
-    if (pick.command) {
-      store(pick.reference, "command");
-    }
-  }
-}
-
-void ConfigurationLoader::trackModules(const ConfigurationGeneration<ApplicationAllocator> &generation, const QString &root, ConfigurationWatch::Modules &modules) {
-  QStringList names;
-
-  generation.visitLocalModules([&](std::string_view name) {
-    names.append(toQString(name));
-  });
-
-  trackModuleNames(names, root, modules);
-}
-
-void ConfigurationLoader::trackModuleNames(const QStringList &names, const QString &root, ConfigurationWatch::Modules &modules) {
-  const QDir directory{root};
-
-  for (const auto &key : names) {
-    if (modules.contains(key)) {
-      continue;
-    }
-
-    auto relative = key;
-
-    relative.replace(QLatin1Char('.'), QLatin1Char('/'));
-    auto path = QFileInfo{directory.filePath(relative + QLatin1StringView{".lua"})}.canonicalFilePath();
-    if (path.isEmpty()) {
-      path = QFileInfo{directory.filePath(relative + QLatin1StringView{"/init.lua"})}.canonicalFilePath();
-    }
-
-    modules.insert(key, {.path = path, .stamp = fileStamp(path)});
-  }
-}
 
 }

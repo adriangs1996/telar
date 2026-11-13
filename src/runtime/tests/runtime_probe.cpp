@@ -3,19 +3,18 @@
 static_assert(true);
 #endif
 
-
+#include "cell_layout.hpp"
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
+#include <ghostty/vt.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/un.h>
-#include <unistd.h>
-#include "cell_layout.hpp"
-#include <cstdio>
 #include <termios.h>
-#include <ghostty/vt.h>
+#include <unistd.h>
 
 import std;
 import telar.base.memory;
@@ -150,15 +149,14 @@ static int child(std::string_view workload) {
 
 class Probe {
 public:
-  explicit Probe(const char *socket_path)
+  explicit Probe(const char* socket_path)
       : socket_path_(socket_path),
         client_(Client::init(socket_path)),
         incoming_(max_payload_size),
         outgoing_(max_payload_size),
         scratch_(512 * 1024) {
     client_.handshake();
-    const timeval timeout{.tv_sec = 5,
-                          .tv_usec = 0};
+    const timeval timeout{.tv_sec = 5, .tv_usec = 0};
 
     ::setsockopt(client_.descriptor(), SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
     client_.send(ConfigureFrameInterval{.interval_ns = 1'000'000'000 / 240});
@@ -168,7 +166,7 @@ public:
     client_.deinit();
   }
 
-  void open(const char *executable, std::string_view workload, bool fresh_workspace = false) {
+  void open(const char* executable, std::string_view workload, bool fresh_workspace = false) {
     const std::array<std::string_view, 3> arguments{executable, "--child", workload};
     const TerminalSize size{80, 24, 8, 16};
     const Launch launch{.cwd = "/tmp", .arguments = arguments};
@@ -189,17 +187,12 @@ public:
   void next(unsigned sequence) {
     const std::array<Byte, 1> input{'n'};
 
-    send(PaneInput{.pane_id = pane_id_,
-                   .bytes = input});
+    send(PaneInput{.pane_id = pane_id_, .bytes = input});
     waitForMarker(sequence);
   }
 
   void resize(std::uint16_t columns, std::uint16_t rows) {
-    send(PaneResize{.pane_id = pane_id_,
-                    .size = {.cols = columns,
-                             .rows = rows,
-                             .cell_width_px = 8,
-                             .cell_height_px = 16}});
+    send(PaneResize{.pane_id = pane_id_, .size = {.cols = columns, .rows = rows, .cell_width_px = 8, .cell_height_px = 16}});
     while (header_.cols != columns || header_.rows != rows) {
       receive();
     }
@@ -209,75 +202,57 @@ public:
     client_.deinit();
     client_ = Client::init(socket_path_.c_str());
     client_.handshake();
-    const timeval timeout{.tv_sec = 5,
-                          .tv_usec = 0};
+    const timeval timeout{.tv_sec = 5, .tv_usec = 0};
 
     ::setsockopt(client_.descriptor(), SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
-    send(OpenPane{.request_id = 9,
-                  .target = {.kind = PaneTarget::Kind::pane,
-                             .id = pane_id_},
-                  .size = {.cols = 80,
-                           .rows = 24,
-                           .cell_width_px = 8,
-                           .cell_height_px = 16}});
+    send(OpenPane{.request_id = 9, .target = {.kind = PaneTarget::Kind::pane, .id = pane_id_}, .size = {.cols = 80, .rows = 24, .cell_width_px = 8, .cell_height_px = 16}});
     cells_.clear();
     header_ = {};
     waitForMarker(sequence);
   }
 
-  void dumpMatches(std::ostream &output) {
+  void dumpMatches(std::ostream& output) {
     for (const auto needle : {"log", "café", "LINK", "AAA"}) {
       matches_received_ = false;
-      send(SearchPane{.request_id = 4,
-                      .pane_id = pane_id_,
-                      .needle = needle});
+      send(SearchPane{.request_id = 4, .pane_id = pane_id_, .needle = needle});
       while (!matches_received_) {
         receive();
       }
 
-      output.write(reinterpret_cast<const char *>(matches_.data()), matches_.size());
+      output.write(reinterpret_cast<const char*>(matches_.data()), matches_.size());
     }
   }
 
-  void dumpText(std::ostream &output) {
+  void dumpText(std::ostream& output) {
     for (auto source : {PaneTextSource::screen, PaneTextSource::recent}) {
       text_received_ = false;
-      send(ReadPane{.request_id = 2,
-                    .pane_id = pane_id_,
-                    .pane_generation = pane_generation_,
-                    .rows = 100,
-                    .source = source});
+      send(ReadPane{.request_id = 2, .pane_id = pane_id_, .pane_generation = pane_generation_, .rows = 100, .source = source});
       while (!text_received_) {
         receive();
       }
 
       const auto size = static_cast<std::uint32_t>(text_.size());
 
-      output.write(reinterpret_cast<const char *>(&size), sizeof(size));
+      output.write(reinterpret_cast<const char*>(&size), sizeof(size));
       output.write(text_.data(), text_.size());
     }
 
     text_received_ = false;
-    send(CopySelection{.pane_id = pane_id_,
-                       .start_x = 2,
-                       .start_y = 0,
-                       .end_x = 10,
-                       .end_y = 2});
+    send(CopySelection{.pane_id = pane_id_, .start_x = 2, .start_y = 0, .end_x = 10, .end_y = 2});
     while (!text_received_) {
       receive();
     }
 
     const auto size = static_cast<std::uint32_t>(text_.size());
 
-    output.write(reinterpret_cast<const char *>(&size), sizeof(size));
+    output.write(reinterpret_cast<const char*>(&size), sizeof(size));
     output.write(text_.data(), text_.size());
   }
 
   void finish() {
     const std::array<Byte, 1> input{'q'};
 
-    send(PaneInput{.pane_id = pane_id_,
-                   .bytes = input});
+    send(PaneInput{.pane_id = pane_id_, .bytes = input});
     while (!exited_) {
       receive();
     }
@@ -291,7 +266,7 @@ public:
     }
   }
 
-  void dump(std::ostream &output) {
+  void dump(std::ostream& output) {
     auto remaining = std::span<Byte>{outgoing_};
     auto header = header_;
 
@@ -300,7 +275,7 @@ public:
     header.base_frame_id = 1;
     FrameSerializer::encodeBody(header, remaining);
 
-    for (const auto &cell : cells_) {
+    for (const auto& cell : cells_) {
       u8::encode(cell.length, remaining);
       u8::encode(static_cast<Byte>(cell.width), remaining);
       ValueCodec<CellStyle>::encode(cell.style, remaining);
@@ -308,13 +283,13 @@ public:
       remaining = remaining.subspan(cell.length);
     }
 
-    output.write(reinterpret_cast<const char *>(outgoing_.data()), outgoing_.size() - remaining.size());
-    output.write(reinterpret_cast<const char *>(metadata_.data()), metadata_.size());
+    output.write(reinterpret_cast<const char*>(outgoing_.data()), outgoing_.size() - remaining.size());
+    output.write(reinterpret_cast<const char*>(metadata_.data()), metadata_.size());
   }
 
 private:
   template <typename Message>
-  void send(const Message &message) {
+  void send(const Message& message) {
     client_.send(message, outgoing_);
   }
 
@@ -371,7 +346,7 @@ private:
     case ServerTag::pane_clipboard: {
       const auto clipboard = Codec::decode<PaneClipboard>(payload, storage);
 
-      text_.assign(reinterpret_cast<const char *>(clipboard.bytes.data()), clipboard.bytes.size());
+      text_.assign(reinterpret_cast<const char*>(clipboard.bytes.data()), clipboard.bytes.size());
       text_received_ = true;
       break;
     }
@@ -398,18 +373,18 @@ private:
     }
   }
 
-  void apply(const PaneFrame &frame) {
+  void apply(const PaneFrame& frame) {
     if (frame.base_frame_id != 0 && frame.base_frame_id != header_.frame_id) {
       throw SocketError{"Frame refers to an unacknowledged baseline"};
     }
 
     cells_.resize(static_cast<std::size_t>(frame.cols) * frame.rows);
-    for (const auto &span : frame.spans) {
+    for (const auto& span : frame.spans) {
       auto reader = span.reader();
 
       for (std::size_t offset = 0; offset < span.count; ++offset) {
         const auto cell = *reader.next();
-        auto &destination = cells_.at(span.start + offset);
+        auto& destination = cells_.at(span.start + offset);
 
         destination = {};
         destination.length = static_cast<Byte>(cell.text.size());
@@ -429,8 +404,7 @@ private:
     header_ = frame;
     header_.spans = {};
     header_.text_metadata.reset();
-    client_.send(FrameAck{.pane_id = frame.pane_id,
-                          .frame_id = frame.frame_id});
+    client_.send(FrameAck{.pane_id = frame.pane_id, .frame_id = frame.frame_id});
   }
 
   std::string socket_path_;
@@ -450,7 +424,7 @@ private:
   std::vector<Byte> matches_;
 };
 
-static void measureConcurrent(Probe &foreground, char **arguments, unsigned iterations) {
+static void measureConcurrent(Probe& foreground, char** arguments, unsigned iterations) {
   std::atomic<bool> ready{false};
   std::exception_ptr failure;
   unsigned background_iterations = 0;
@@ -503,7 +477,7 @@ static void measureConcurrent(Probe &foreground, char **arguments, unsigned iter
   std::printf("{\"iterations\":%u,\"background_iterations\":%u,\"elapsed_ns\":%lld,\"ns_per_iteration\":%.3f,\"p50_ns\":%lld,\"p95_ns\":%lld,\"p99_ns\":%lld,\"max_ns\":%lld}\n", iterations, background_iterations, static_cast<long long>(elapsed), static_cast<double>(elapsed) / iterations, static_cast<long long>(latencies[(iterations - 1) * 50 / 100]), static_cast<long long>(latencies[(iterations - 1) * 95 / 100]), static_cast<long long>(latencies[(iterations - 1) * 99 / 100]), static_cast<long long>(latencies.back()));
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   try {
     if (argc == 3 && std::string_view{argv[1]} == "--child") {
       return child(argv[2]);
@@ -547,7 +521,7 @@ int main(int argc, char **argv) {
     probe.finish();
     std::printf("{\"iterations\":%u,\"elapsed_ns\":%lld,\"ns_per_iteration\":%.3f}\n", iterations, static_cast<long long>(elapsed), static_cast<double>(elapsed) / iterations);
     return 0;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     std::fprintf(stderr, "runtime-probe: %s\n", error.what());
     return 1;
   }

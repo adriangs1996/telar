@@ -3,34 +3,17 @@
 static_assert(true);
 #endif
 
-
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <span>
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include <optional>
-#include <string_view>
-#include <algorithm>
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include <chrono>
-#include <cmath>
 #include "../core/terminal_size.hpp"
-#include <charconv>
-#include <concepts>
-#include <cstring>
-#include <stdexcept>
-#include <system_error>
-#include <utility>
-#include <tuple>
-#include "qml_fixture.hpp"
+#include "../qt/bundled_fonts.hpp"
 #include "../qt/component_projection.hpp"
 #include "../qt/metrics_projection.hpp"
 #include "../qt/mode_projection.hpp"
 #include "../qt/projection.hpp"
-#include "../qt/bundled_fonts.hpp"
+#include "qml_fixture.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
 #include <QColor>
 #include <QFont>
 #include <QGuiApplication>
@@ -48,12 +31,28 @@ static_assert(true);
 #include <QtCore/qvariant.h>
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
+#include <algorithm>
+#include <array>
+#include <charconv>
+#include <chrono>
+#include <cmath>
+#include <concepts>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <optional>
+#include <span>
+#include <stdexcept>
+#include <string_view>
+#include <system_error>
+#include <tuple>
+#include <utility>
 
+#include "qt/bundled_fonts.hpp"
 #include "qt/component_projection.hpp"
 #include "qt/metrics_projection.hpp"
 #include "qt/mode_projection.hpp"
 #include "qt/projection.hpp"
-#include "qt/bundled_fonts.hpp"
 
 import telar.gui.tests.metrics_fixture;
 import telar.gui.application.host_effects;
@@ -63,341 +62,343 @@ import telar.gui.presentation.history_inspection;
 
 namespace {
 
-using namespace telar::gui;
-using namespace telar::gui::qt;
-using namespace telar::gui::test;
+  using namespace telar::gui;
+  using namespace telar::gui::qt;
+  using namespace telar::gui::test;
 
-constexpr int wait_ms = 5000;
-constexpr int bar_width = 640;
-constexpr int bar_height = 26;
-constexpr std::uint8_t initial_cpu = 42;
-constexpr std::uint16_t initial_memory = 128;
-constexpr std::uint16_t updated_memory = 129;
-constexpr std::uint8_t low_battery = 7;
-constexpr std::uint8_t full_battery = 100;
+  constexpr int wait_ms = 5000;
+  constexpr int bar_width = 640;
+  constexpr int bar_height = 26;
+  constexpr std::uint8_t initial_cpu = 42;
+  constexpr std::uint16_t initial_memory = 128;
+  constexpr std::uint16_t updated_memory = 129;
+  constexpr std::uint8_t low_battery = 7;
+  constexpr std::uint8_t full_battery = 100;
 
-QVariantMap barProperties(const HostMetrics &metrics) {
-  return {
-      {QStringLiteral("width"), bar_width},
-      {QStringLiteral("height"), bar_height},
-      {QStringLiteral("metrics"), metricsRecord(metrics)},
-      {QStringLiteral("colors"), themeColors(Configuration{})},
-      {QStringLiteral("typography"), QVariantMap{{QStringLiteral("small"), ChromeMetrics{}.small}}},
-  };
-}
-
-using BarContent = components::Content<components::Capacity{.nodes = 8, .text = 256, .samples = 64, .actions = 0}>;
-
-void appendNode(BarContent &content, components::Node node, std::string_view text = {}, std::string_view detail = {}, std::string_view url = {}) {
-  components::Input input{};
-
-  input.node = node;
-  input.text = text;
-  input.detail = detail;
-  input.url = url;
-  content.append(input);
-}
-
-QVariantMap treeProperties(const BarContent &content) {
-  const auto nodes = componentRecords(content, Configuration{}.theme, {}, [](BindingAction) -> std::optional<NamedActionDescription> { return std::nullopt; });
-
-  return {
-      {QStringLiteral("width"), 1000},
-      {QStringLiteral("height"), bar_height},
-      {QStringLiteral("controller"), QVariant::fromValue(static_cast<QObject *>(nullptr))},
-      {QStringLiteral("surface"), QVariantMap{{QStringLiteral("kind"), QStringLiteral("static")}, {QStringLiteral("identity"), QStringLiteral("fixture")}, {QStringLiteral("generation"), QStringLiteral("1")}, {QStringLiteral("source"), 0}, {QStringLiteral("nodes"), nodes}}},
-      {QStringLiteral("colors"), themeColors(Configuration{})},
-      {QStringLiteral("typography"), QVariantMap{{QStringLiteral("small"), ChromeMetrics{}.small}, {QStringLiteral("body"), ChromeMetrics{}.body}}},
-  };
-}
-
-class StatusBarTest final : public QObject {
-  Q_OBJECT
-
-private:
-  Q_SLOT static void initTestCase() {
-    bundledFonts();
-    QGuiApplication::setFont(QFont{QStringLiteral("IBM Plex Sans")});
-  }
-
-  Q_SLOT static void init() {
-    QTest::failOnWarning(QRegularExpression{QStringLiteral(".*")});
-  }
-
-  Q_SLOT static void missingMetricsStayHiddenWithoutAController() {
-    QQmlEngine engine;
-    const auto bar = createChrome(engine, QStringLiteral("StatusBar"), barProperties(HostMetrics{}));
-
-    QVERIFY(!engine.rootContext()->contextProperty(QStringLiteral("telar")).isValid());
-    for (const auto *name : {"cpuMetric", "memoryMetric", "batteryMetric"}) {
-      const auto *metric = bar->findChild<QQuickItem *>(QString::fromLatin1(name));
-
-      QVERIFY(metric != nullptr);
-      QVERIFY(!metric->isVisible());
-    }
-  }
-
-  Q_SLOT static void metricsUseTheRuntimeValuesAndHideAnAbsentBattery() {
-    QQmlEngine engine;
-    HostMetrics metrics;
-
-    QVERIFY(metrics.update(hostSample(1, initial_cpu, initial_memory, low_battery)));
-    auto bar = createChrome(engine, QStringLiteral("StatusBar"), barProperties(metrics));
-    const auto *cpu = bar->findChild<QQuickItem *>(QStringLiteral("cpuMetric"));
-    const auto *memory = bar->findChild<QQuickItem *>(QStringLiteral("memoryMetric"));
-    const auto *battery = bar->findChild<QQuickItem *>(QStringLiteral("batteryMetric"));
-
-    QVERIFY(cpu != nullptr && memory != nullptr && battery != nullptr);
-    QTRY_VERIFY_WITH_TIMEOUT(cpu->isVisible() && memory->isVisible() && battery->isVisible(), wait_ms);
-    QCOMPARE(cpu->property("record").toMap().value(QStringLiteral("text")).toString(), QStringLiteral("42%"));
-    QCOMPARE(memory->property("record").toMap().value(QStringLiteral("text")).toString(), QStringLiteral("12.8 GB"));
-    QCOMPARE(battery->property("record").toMap().value(QStringLiteral("ink")).toString(), QStringLiteral("red"));
-    QVERIFY(metrics.update(hostSample(2, 0, updated_memory)));
-    QVERIFY(bar->setProperty("metrics", metricsRecord(metrics)));
-    QVERIFY(!battery->isVisible());
-    QVERIFY(cpu->isVisible() && memory->isVisible());
-  }
-
-  Q_SLOT static void modesReplaceMetricsAndDiagnosticsReserveSpace() {
-    QQmlEngine engine;
-    HostMetrics metrics;
-
-    QVERIFY(metrics.update(hostSample(1, initial_cpu, initial_memory)));
-    auto bar = createChrome(engine, QStringLiteral("StatusBar"), barProperties(metrics));
-    const auto *cpu = bar->findChild<QQuickItem *>(QStringLiteral("cpuMetric"));
-
-    QVERIFY(cpu != nullptr);
-    QTRY_VERIFY_WITH_TIMEOUT(cpu->isVisible(), wait_ms);
-    QVERIFY(bar->setProperty("mode", statusModeRecord(StatusMode::copy)));
-    QVERIFY(!cpu->isVisible());
-    QVERIFY(bar->setProperty("diagnostic", QStringLiteral("The configuration could not be loaded")));
-    QVERIFY(bar->setProperty("mode", statusModeRecord(StatusMode::normal)));
-    QTRY_VERIFY_WITH_TIMEOUT(cpu->isVisible(), wait_ms);
-  }
-
-  Q_SLOT static void diagnosticShowsThePointingCursor() {
-    QQuickWindow window;
-    QQmlEngine engine;
-    HostMetrics metrics;
-
-    QVERIFY(metrics.update(hostSample(1, initial_cpu, initial_memory)));
-    auto bar = createChrome(engine, QStringLiteral("StatusBar"), barProperties(metrics));
-
-    bar->setParentItem(window.contentItem());
-    window.resize(bar_width, bar_height);
-    QVERIFY(bar->setProperty("diagnostic", QStringLiteral("The configuration could not be loaded")));
-    window.show();
-    QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
-    const auto findArea = [&]() -> QQuickItem * {
-      for (auto *item : visualItems(*bar, QString{})) {
-        if (item->inherits("QQuickMouseArea") && item->isVisible() && item->width() > 0) {
-          return item;
-        }
-      }
-
-      return nullptr;
+  QVariantMap barProperties(const HostMetrics& metrics) {
+    return {
+        {QStringLiteral("width"), bar_width},
+        {QStringLiteral("height"), bar_height},
+        {QStringLiteral("metrics"), metricsRecord(metrics)},
+        {QStringLiteral("colors"), themeColors(Configuration{})},
+        {QStringLiteral("typography"), QVariantMap{{QStringLiteral("small"), ChromeMetrics{}.small}}},
     };
-
-    QTRY_VERIFY_WITH_TIMEOUT(findArea() != nullptr, wait_ms);
-    const auto *area = findArea();
-
-    QTest::mouseMove(&window, area->mapRectToScene(area->boundingRect()).center().toPoint());
-    QTRY_COMPARE_WITH_TIMEOUT(window.cursor().shape(), Qt::PointingHandCursor, wait_ms);
   }
 
-  Q_SLOT static void inlineMetersLeadWithARing_data() {
-    QTest::addColumn<bool>("compact");
-    QTest::addColumn<bool>("labelled");
-    QTest::addColumn<QString>("detail");
-    QTest::addColumn<qreal>("ratio");
-    QTest::newRow("full") << false << true << QString{} << qreal{1};
-    QTest::newRow("compact") << true << true << QString{} << qreal{1};
-    QTest::newRow("unlabelled") << false << false << QString{} << qreal{1};
-    QTest::newRow("unlabelled-compact") << true << false << QString{} << qreal{1};
-    QTest::newRow("custom-value") << false << true << QStringLiteral("20 / 100") << qreal{1};
-    QTest::newRow("scaled") << false << true << QString{} << qreal{1.5};
-  }
+  using BarContent = components::Content<components::Capacity{.nodes = 8, .text = 256, .samples = 64, .actions = 0}>;
 
-  Q_SLOT static void inlineMetersLeadWithARing() {
-    QFETCH(bool, compact);
-    QFETCH(bool, labelled);
-    QFETCH(QString, detail);
-    QFETCH(qreal, ratio);
-    QQuickWindow window;
-    QQmlEngine engine;
-    BarContent content;
-    const auto detail_bytes = detail.toUtf8();
-    const std::string_view value_text{detail_bytes.constData(), static_cast<std::size_t>(detail_bytes.size())};
-
-    appendNode(content, {.kind = components::Kind::group});
-    appendNode(content, {.kind = components::Kind::meter, .parent = 0, .value = components::Node::full_scale}, labelled ? "5h" : "", value_text);
-    appendNode(content, {.kind = components::Kind::meter, .parent = 0}, labelled ? "7d" : "", value_text);
-    auto properties = treeProperties(content);
-
-    properties.insert(QStringLiteral("ratio"), ratio);
-    if (compact) {
-      properties.insert(QStringLiteral("fittedLevels"), QVariantMap{{QStringLiteral("1"), 1}, {QStringLiteral("2"), 1}});
-    }
-
-    auto tree = createChrome(engine, QStringLiteral("ComponentTree"), properties);
-
-    tree->setParentItem(window.contentItem());
-    window.resize(1000, bar_height);
-    window.show();
-    QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
-    QTRY_COMPARE_WITH_TIMEOUT(visualItems(*tree, QStringLiteral("componentMeterRing")).size(), 2, wait_ms);
-    QVERIFY(!window.grabWindow().isNull());
-    for (const auto *ring : visualItems(*tree, QStringLiteral("componentMeterRing"))) {
-      const auto *meter = ring->parentItem();
-      const auto *label = meter->findChild<QQuickItem *>(QStringLiteral("componentMeterLabel"));
-      const auto *value = meter->findChild<QQuickItem *>(QStringLiteral("componentMeterValue"));
-
-      QVERIFY(label != nullptr && value != nullptr);
-      QVERIFY(value->isVisible());
-      QTRY_VERIFY_WITH_TIMEOUT(value->implicitWidth() > 0, wait_ms);
-      QCOMPARE(label->property("text").toString().contains(QLatin1Char{'%'}), false);
-      const auto expected_value = detail.isEmpty() ? (label->property("text").toString() == QStringLiteral("7d") ? QStringLiteral("0%") : QStringLiteral("100%")) : detail;
-
-      if (labelled || !detail.isEmpty()) {
-        QCOMPARE(value->property("text").toString(), expected_value);
-      }
-
-      QVERIFY(!label->property("emphasized").toBool());
-      QCOMPARE(label->property("color").value<QColor>(), themeColors(Configuration{}).value(QStringLiteral("subtext0")).value<QColor>());
-      constexpr qreal ring_side = 16;
-      constexpr qreal part_gap = 5;
-      const auto label_gap = labelled ? part_gap * ratio : 0;
-      const auto ring_width = compact ? qreal{0} : (ring_side + part_gap) * ratio;
-
-      QCOMPARE(ring->isVisible(), !compact);
-      QCOMPARE(ring->width(), ring_side * ratio);
-      QCOMPARE(ring->height(), ring_side * ratio);
-      QTRY_COMPARE_WITH_TIMEOUT(label->x(), ring_width, wait_ms);
-      QTRY_COMPARE_WITH_TIMEOUT(value->x(), ring_width + label->width() + label_gap, wait_ms);
-      QTRY_COMPARE_WITH_TIMEOUT(meter->width(), value->x() + value->width(), wait_ms);
-      QVERIFY(meter->boundingRect().contains(value->mapRectToItem(meter, value->boundingRect())));
-      if (!compact) {
-        QVERIFY(meter->boundingRect().contains(ring->mapRectToItem(meter, ring->boundingRect())));
-      }
-    }
-  }
-
-  Q_SLOT static void sparklinesOnlyShowTheLatestNineSamples() {
-    QQuickWindow window;
-    QQmlEngine engine;
-    BarContent content;
-    std::array<std::uint8_t, 60> samples{};
-
-    samples.back() = 100;
+  void appendNode(BarContent& content, components::Node node, std::string_view text = {}, std::string_view detail = {}, std::string_view url = {}) {
     components::Input input{};
 
-    input.node.kind = components::Kind::sparkline;
-    input.samples = samples;
+    input.node = node;
+    input.text = text;
+    input.detail = detail;
+    input.url = url;
     content.append(input);
-    const auto tree = createChrome(engine, QStringLiteral("ComponentTree"), treeProperties(content));
+  }
 
-    tree->setParentItem(window.contentItem());
-    window.resize(1000, bar_height);
-    window.show();
-    QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
-    QTRY_COMPARE_WITH_TIMEOUT(tree->implicitWidth(), qreal{26}, wait_ms);
-    const auto columns = visualItems(*tree, QStringLiteral("componentSparklineSample"));
+  QVariantMap treeProperties(const BarContent& content) {
+    const auto nodes = componentRecords(content, Configuration{}.theme, {}, [](BindingAction) -> std::optional<NamedActionDescription> {
+      return std::nullopt;
+    });
 
-    QCOMPARE(columns.size(), 9);
-    int full_samples = 0;
+    return {
+        {QStringLiteral("width"), 1000},
+        {QStringLiteral("height"), bar_height},
+        {QStringLiteral("controller"), QVariant::fromValue(static_cast<QObject*>(nullptr))},
+        {QStringLiteral("surface"), QVariantMap{{QStringLiteral("kind"), QStringLiteral("static")}, {QStringLiteral("identity"), QStringLiteral("fixture")}, {QStringLiteral("generation"), QStringLiteral("1")}, {QStringLiteral("source"), 0}, {QStringLiteral("nodes"), nodes}}},
+        {QStringLiteral("colors"), themeColors(Configuration{})},
+        {QStringLiteral("typography"), QVariantMap{{QStringLiteral("small"), ChromeMetrics{}.small}, {QStringLiteral("body"), ChromeMetrics{}.body}}},
+    };
+  }
 
-    for (const auto *column : columns) {
-      full_samples += column->property("modelData").toInt() == 100;
+  class StatusBarTest final : public QObject {
+    Q_OBJECT
+
+  private:
+    Q_SLOT static void initTestCase() {
+      bundledFonts();
+      QGuiApplication::setFont(QFont{QStringLiteral("IBM Plex Sans")});
     }
 
-    QCOMPARE(full_samples, 1);
-  }
+    Q_SLOT static void init() {
+      QTest::failOnWarning(QRegularExpression{QStringLiteral(".*")});
+    }
 
-  Q_SLOT static void onlyClickableGroupsGetAPillTintedByTheirAlert() {
-    QQuickWindow window;
-    QQmlEngine engine;
-    BarContent content;
+    Q_SLOT static void missingMetricsStayHiddenWithoutAController() {
+      QQmlEngine engine;
+      const auto bar = createChrome(engine, QStringLiteral("StatusBar"), barProperties(HostMetrics{}));
 
-    appendNode(content, {.kind = components::Kind::group});
-    appendNode(content, {.kind = components::Kind::label, .parent = 0}, "Clock");
-    appendNode(content, {.kind = components::Kind::group}, {}, {}, "https://example.com");
-    appendNode(content, {.kind = components::Kind::meter, .parent = 2, .tone = components::Tone::warning, .value = 600}, "7d");
-    const auto tree = createChrome(engine, QStringLiteral("ComponentTree"), treeProperties(content));
+      QVERIFY(!engine.rootContext()->contextProperty(QStringLiteral("telar")).isValid());
+      for (const auto* name : {"cpuMetric", "memoryMetric", "batteryMetric"}) {
+        const auto* metric = bar->findChild<QQuickItem*>(QString::fromLatin1(name));
 
-    tree->setParentItem(window.contentItem());
-    window.resize(1000, bar_height);
-    window.show();
-    QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
-    QTRY_COMPARE_WITH_TIMEOUT(visualItems(*tree, QStringLiteral("barPill")).size(), 1, wait_ms);
-    QCOMPARE(visualItems(*tree, QStringLiteral("componentGroupSeparator")).size(), 0);
-    const auto *pill = visualItems(*tree, QStringLiteral("barPill")).front();
+        QVERIFY(metric != nullptr);
+        QVERIFY(!metric->isVisible());
+      }
+    }
 
-    QCOMPARE(pill->property("severity").toInt(), 1);
-    QCOMPARE(pill->height(), qreal{22});
-  }
+    Q_SLOT static void metricsUseTheRuntimeValuesAndHideAnAbsentBattery() {
+      QQmlEngine engine;
+      HostMetrics metrics;
 
-  Q_SLOT static void summariesNameTheWorstEntryAndCountTheRest() {
-    QQuickWindow window;
-    QQmlEngine engine;
-    BarContent content;
+      QVERIFY(metrics.update(hostSample(1, initial_cpu, initial_memory, low_battery)));
+      auto bar = createChrome(engine, QStringLiteral("StatusBar"), barProperties(metrics));
+      const auto* cpu = bar->findChild<QQuickItem*>(QStringLiteral("cpuMetric"));
+      const auto* memory = bar->findChild<QQuickItem*>(QStringLiteral("memoryMetric"));
+      const auto* battery = bar->findChild<QQuickItem*>(QStringLiteral("batteryMetric"));
 
-    appendNode(content, {.kind = components::Kind::group}, "system");
-    appendNode(content, {.kind = components::Kind::meter, .parent = 0, .value = 300}, "disk");
-    appendNode(content, {.kind = components::Kind::meter, .parent = 0, .tone = components::Tone::warning, .value = 920}, "net");
-    appendNode(content, {.kind = components::Kind::meter, .parent = 0, .tone = components::Tone::danger, .value = 990}, "gpu");
-    const auto tree = createChrome(engine, QStringLiteral("ComponentTree"), treeProperties(content));
+      QVERIFY(cpu != nullptr && memory != nullptr && battery != nullptr);
+      QTRY_VERIFY_WITH_TIMEOUT(cpu->isVisible() && memory->isVisible() && battery->isVisible(), wait_ms);
+      QCOMPARE(cpu->property("record").toMap().value(QStringLiteral("text")).toString(), QStringLiteral("42%"));
+      QCOMPARE(memory->property("record").toMap().value(QStringLiteral("text")).toString(), QStringLiteral("12.8 GB"));
+      QCOMPARE(battery->property("record").toMap().value(QStringLiteral("ink")).toString(), QStringLiteral("red"));
+      QVERIFY(metrics.update(hostSample(2, 0, updated_memory)));
+      QVERIFY(bar->setProperty("metrics", metricsRecord(metrics)));
+      QVERIFY(!battery->isVisible());
+      QVERIFY(cpu->isVisible() && memory->isVisible());
+    }
 
-    tree->setParentItem(window.contentItem());
-    window.resize(1000, bar_height);
-    window.show();
-    QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
-    QTRY_COMPARE_WITH_TIMEOUT(visualItems(*tree, QStringLiteral("barRingArc")).size(), 3, wait_ms);
-    const auto labels = visualItems(*tree, QStringLiteral("systemSummaryLabel"));
-    const auto extras = visualItems(*tree, QStringLiteral("systemSummaryExtra"));
+    Q_SLOT static void modesReplaceMetricsAndDiagnosticsReserveSpace() {
+      QQmlEngine engine;
+      HostMetrics metrics;
 
-    QCOMPARE(labels.size(), 1);
-    QCOMPARE(extras.size(), 1);
-    const auto *label = labels.front();
-    const auto *extra = extras.front();
+      QVERIFY(metrics.update(hostSample(1, initial_cpu, initial_memory)));
+      auto bar = createChrome(engine, QStringLiteral("StatusBar"), barProperties(metrics));
+      const auto* cpu = bar->findChild<QQuickItem*>(QStringLiteral("cpuMetric"));
 
-    QCOMPARE(label->property("text").toString(), QStringLiteral("gpu 99%"));
-    QCOMPARE(label->property("color").value<QColor>(), themeColors(Configuration{}).value(QStringLiteral("red")).value<QColor>());
-    QVERIFY(extra->isVisible());
-    QCOMPARE(extra->property("text").toString(), QStringLiteral("+1"));
-    QCOMPARE(visualItems(*tree, QStringLiteral("componentMeterRing")).size(), 0);
-    const auto *pill = visualItems(*tree, QStringLiteral("barPill")).front();
+      QVERIFY(cpu != nullptr);
+      QTRY_VERIFY_WITH_TIMEOUT(cpu->isVisible(), wait_ms);
+      QVERIFY(bar->setProperty("mode", statusModeRecord(StatusMode::copy)));
+      QVERIFY(!cpu->isVisible());
+      QVERIFY(bar->setProperty("diagnostic", QStringLiteral("The configuration could not be loaded")));
+      QVERIFY(bar->setProperty("mode", statusModeRecord(StatusMode::normal)));
+      QTRY_VERIFY_WITH_TIMEOUT(cpu->isVisible(), wait_ms);
+    }
 
-    QCOMPARE(pill->property("severity").toInt(), 2);
-    QVERIFY(!window.grabWindow().isNull());
-  }
+    Q_SLOT static void diagnosticShowsThePointingCursor() {
+      QQuickWindow window;
+      QQmlEngine engine;
+      HostMetrics metrics;
 
-  Q_SLOT static void liveMetricsAndResizesRenderWithoutQmlErrors() {
-    QQuickWindow window;
-    QQmlEngine engine;
-    HostMetrics metrics;
+      QVERIFY(metrics.update(hostSample(1, initial_cpu, initial_memory)));
+      auto bar = createChrome(engine, QStringLiteral("StatusBar"), barProperties(metrics));
 
-    QVERIFY(metrics.update(hostSample(1, BarMetrics::cpu_danger, updated_memory, full_battery)));
-    auto bar = createChrome(engine, QStringLiteral("StatusBar"), barProperties(metrics));
+      bar->setParentItem(window.contentItem());
+      window.resize(bar_width, bar_height);
+      QVERIFY(bar->setProperty("diagnostic", QStringLiteral("The configuration could not be loaded")));
+      window.show();
+      QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
+      const auto findArea = [&]() -> QQuickItem* {
+        for (auto* item : visualItems(*bar, QString{})) {
+          if (item->inherits("QQuickMouseArea") && item->isVisible() && item->width() > 0) {
+            return item;
+          }
+        }
 
-    bar->setParentItem(window.contentItem());
-    window.resize(bar_width, bar_height);
-    window.show();
-    QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
-    QVERIFY(!window.grabWindow().isNull());
-    constexpr int narrow_width = 90;
+        return nullptr;
+      };
 
-    bar->setWidth(narrow_width);
-    const auto *memory = bar->findChild<QQuickItem *>(QStringLiteral("memoryMetric"));
+      QTRY_VERIFY_WITH_TIMEOUT(findArea() != nullptr, wait_ms);
+      const auto* area = findArea();
 
-    QVERIFY(memory != nullptr);
-    QTRY_VERIFY_WITH_TIMEOUT(!memory->isVisible(), wait_ms);
-    bar->setWidth(bar_width);
-    QTRY_VERIFY_WITH_TIMEOUT(memory->isVisible(), wait_ms);
-    QVERIFY(metrics.update(hostSample(2, 0, initial_memory, 0)));
-    QVERIFY(bar->setProperty("metrics", metricsRecord(metrics)));
-    QVERIFY(!window.grabWindow().isNull());
-  }
-};
+      QTest::mouseMove(&window, area->mapRectToScene(area->boundingRect()).center().toPoint());
+      QTRY_COMPARE_WITH_TIMEOUT(window.cursor().shape(), Qt::PointingHandCursor, wait_ms);
+    }
+
+    Q_SLOT static void inlineMetersLeadWithARing_data() {
+      QTest::addColumn<bool>("compact");
+      QTest::addColumn<bool>("labelled");
+      QTest::addColumn<QString>("detail");
+      QTest::addColumn<qreal>("ratio");
+      QTest::newRow("full") << false << true << QString{} << qreal{1};
+      QTest::newRow("compact") << true << true << QString{} << qreal{1};
+      QTest::newRow("unlabelled") << false << false << QString{} << qreal{1};
+      QTest::newRow("unlabelled-compact") << true << false << QString{} << qreal{1};
+      QTest::newRow("custom-value") << false << true << QStringLiteral("20 / 100") << qreal{1};
+      QTest::newRow("scaled") << false << true << QString{} << qreal{1.5};
+    }
+
+    Q_SLOT static void inlineMetersLeadWithARing() {
+      QFETCH(bool, compact);
+      QFETCH(bool, labelled);
+      QFETCH(QString, detail);
+      QFETCH(qreal, ratio);
+      QQuickWindow window;
+      QQmlEngine engine;
+      BarContent content;
+      const auto detail_bytes = detail.toUtf8();
+      const std::string_view value_text{detail_bytes.constData(), static_cast<std::size_t>(detail_bytes.size())};
+
+      appendNode(content, {.kind = components::Kind::group});
+      appendNode(content, {.kind = components::Kind::meter, .parent = 0, .value = components::Node::full_scale}, labelled ? "5h" : "", value_text);
+      appendNode(content, {.kind = components::Kind::meter, .parent = 0}, labelled ? "7d" : "", value_text);
+      auto properties = treeProperties(content);
+
+      properties.insert(QStringLiteral("ratio"), ratio);
+      if (compact) {
+        properties.insert(QStringLiteral("fittedLevels"), QVariantMap{{QStringLiteral("1"), 1}, {QStringLiteral("2"), 1}});
+      }
+
+      auto tree = createChrome(engine, QStringLiteral("ComponentTree"), properties);
+
+      tree->setParentItem(window.contentItem());
+      window.resize(1000, bar_height);
+      window.show();
+      QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(visualItems(*tree, QStringLiteral("componentMeterRing")).size(), 2, wait_ms);
+      QVERIFY(!window.grabWindow().isNull());
+      for (const auto* ring : visualItems(*tree, QStringLiteral("componentMeterRing"))) {
+        const auto* meter = ring->parentItem();
+        const auto* label = meter->findChild<QQuickItem*>(QStringLiteral("componentMeterLabel"));
+        const auto* value = meter->findChild<QQuickItem*>(QStringLiteral("componentMeterValue"));
+
+        QVERIFY(label != nullptr && value != nullptr);
+        QVERIFY(value->isVisible());
+        QTRY_VERIFY_WITH_TIMEOUT(value->implicitWidth() > 0, wait_ms);
+        QCOMPARE(label->property("text").toString().contains(QLatin1Char{'%'}), false);
+        const auto expected_value = detail.isEmpty() ? (label->property("text").toString() == QStringLiteral("7d") ? QStringLiteral("0%") : QStringLiteral("100%")) : detail;
+
+        if (labelled || !detail.isEmpty()) {
+          QCOMPARE(value->property("text").toString(), expected_value);
+        }
+
+        QVERIFY(!label->property("emphasized").toBool());
+        QCOMPARE(label->property("color").value<QColor>(), themeColors(Configuration{}).value(QStringLiteral("subtext0")).value<QColor>());
+        constexpr qreal ring_side = 16;
+        constexpr qreal part_gap = 5;
+        const auto label_gap = labelled ? part_gap * ratio : 0;
+        const auto ring_width = compact ? qreal{0} : (ring_side + part_gap) * ratio;
+
+        QCOMPARE(ring->isVisible(), !compact);
+        QCOMPARE(ring->width(), ring_side * ratio);
+        QCOMPARE(ring->height(), ring_side * ratio);
+        QTRY_COMPARE_WITH_TIMEOUT(label->x(), ring_width, wait_ms);
+        QTRY_COMPARE_WITH_TIMEOUT(value->x(), ring_width + label->width() + label_gap, wait_ms);
+        QTRY_COMPARE_WITH_TIMEOUT(meter->width(), value->x() + value->width(), wait_ms);
+        QVERIFY(meter->boundingRect().contains(value->mapRectToItem(meter, value->boundingRect())));
+        if (!compact) {
+          QVERIFY(meter->boundingRect().contains(ring->mapRectToItem(meter, ring->boundingRect())));
+        }
+      }
+    }
+
+    Q_SLOT static void sparklinesOnlyShowTheLatestNineSamples() {
+      QQuickWindow window;
+      QQmlEngine engine;
+      BarContent content;
+      std::array<std::uint8_t, 60> samples{};
+
+      samples.back() = 100;
+      components::Input input{};
+
+      input.node.kind = components::Kind::sparkline;
+      input.samples = samples;
+      content.append(input);
+      const auto tree = createChrome(engine, QStringLiteral("ComponentTree"), treeProperties(content));
+
+      tree->setParentItem(window.contentItem());
+      window.resize(1000, bar_height);
+      window.show();
+      QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(tree->implicitWidth(), qreal{26}, wait_ms);
+      const auto columns = visualItems(*tree, QStringLiteral("componentSparklineSample"));
+
+      QCOMPARE(columns.size(), 9);
+      int full_samples = 0;
+
+      for (const auto* column : columns) {
+        full_samples += column->property("modelData").toInt() == 100;
+      }
+
+      QCOMPARE(full_samples, 1);
+    }
+
+    Q_SLOT static void onlyClickableGroupsGetAPillTintedByTheirAlert() {
+      QQuickWindow window;
+      QQmlEngine engine;
+      BarContent content;
+
+      appendNode(content, {.kind = components::Kind::group});
+      appendNode(content, {.kind = components::Kind::label, .parent = 0}, "Clock");
+      appendNode(content, {.kind = components::Kind::group}, {}, {}, "https://example.com");
+      appendNode(content, {.kind = components::Kind::meter, .parent = 2, .tone = components::Tone::warning, .value = 600}, "7d");
+      const auto tree = createChrome(engine, QStringLiteral("ComponentTree"), treeProperties(content));
+
+      tree->setParentItem(window.contentItem());
+      window.resize(1000, bar_height);
+      window.show();
+      QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(visualItems(*tree, QStringLiteral("barPill")).size(), 1, wait_ms);
+      QCOMPARE(visualItems(*tree, QStringLiteral("componentGroupSeparator")).size(), 0);
+      const auto* pill = visualItems(*tree, QStringLiteral("barPill")).front();
+
+      QCOMPARE(pill->property("severity").toInt(), 1);
+      QCOMPARE(pill->height(), qreal{22});
+    }
+
+    Q_SLOT static void summariesNameTheWorstEntryAndCountTheRest() {
+      QQuickWindow window;
+      QQmlEngine engine;
+      BarContent content;
+
+      appendNode(content, {.kind = components::Kind::group}, "system");
+      appendNode(content, {.kind = components::Kind::meter, .parent = 0, .value = 300}, "disk");
+      appendNode(content, {.kind = components::Kind::meter, .parent = 0, .tone = components::Tone::warning, .value = 920}, "net");
+      appendNode(content, {.kind = components::Kind::meter, .parent = 0, .tone = components::Tone::danger, .value = 990}, "gpu");
+      const auto tree = createChrome(engine, QStringLiteral("ComponentTree"), treeProperties(content));
+
+      tree->setParentItem(window.contentItem());
+      window.resize(1000, bar_height);
+      window.show();
+      QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(visualItems(*tree, QStringLiteral("barRingArc")).size(), 3, wait_ms);
+      const auto labels = visualItems(*tree, QStringLiteral("systemSummaryLabel"));
+      const auto extras = visualItems(*tree, QStringLiteral("systemSummaryExtra"));
+
+      QCOMPARE(labels.size(), 1);
+      QCOMPARE(extras.size(), 1);
+      const auto* label = labels.front();
+      const auto* extra = extras.front();
+
+      QCOMPARE(label->property("text").toString(), QStringLiteral("gpu 99%"));
+      QCOMPARE(label->property("color").value<QColor>(), themeColors(Configuration{}).value(QStringLiteral("red")).value<QColor>());
+      QVERIFY(extra->isVisible());
+      QCOMPARE(extra->property("text").toString(), QStringLiteral("+1"));
+      QCOMPARE(visualItems(*tree, QStringLiteral("componentMeterRing")).size(), 0);
+      const auto* pill = visualItems(*tree, QStringLiteral("barPill")).front();
+
+      QCOMPARE(pill->property("severity").toInt(), 2);
+      QVERIFY(!window.grabWindow().isNull());
+    }
+
+    Q_SLOT static void liveMetricsAndResizesRenderWithoutQmlErrors() {
+      QQuickWindow window;
+      QQmlEngine engine;
+      HostMetrics metrics;
+
+      QVERIFY(metrics.update(hostSample(1, BarMetrics::cpu_danger, updated_memory, full_battery)));
+      auto bar = createChrome(engine, QStringLiteral("StatusBar"), barProperties(metrics));
+
+      bar->setParentItem(window.contentItem());
+      window.resize(bar_width, bar_height);
+      window.show();
+      QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
+      QVERIFY(!window.grabWindow().isNull());
+      constexpr int narrow_width = 90;
+
+      bar->setWidth(narrow_width);
+      const auto* memory = bar->findChild<QQuickItem*>(QStringLiteral("memoryMetric"));
+
+      QVERIFY(memory != nullptr);
+      QTRY_VERIFY_WITH_TIMEOUT(!memory->isVisible(), wait_ms);
+      bar->setWidth(bar_width);
+      QTRY_VERIFY_WITH_TIMEOUT(memory->isVisible(), wait_ms);
+      QVERIFY(metrics.update(hostSample(2, 0, initial_memory, 0)));
+      QVERIFY(bar->setProperty("metrics", metricsRecord(metrics)));
+      QVERIFY(!window.grabWindow().isNull());
+    }
+  };
 
 }
 

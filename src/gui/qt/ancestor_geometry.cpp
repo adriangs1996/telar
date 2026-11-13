@@ -4,36 +4,36 @@
 
 namespace telar::gui::qt {
 
-AncestorGeometry::AncestorGeometry(QQuickItem &item)
-    : item_(item) {
-  observe();
-}
-
-AncestorGeometry::~AncestorGeometry() {
-  disconnect();
-}
-
-void AncestorGeometry::disconnect() {
-  for (const auto &connection : connections_) {
-    QObject::disconnect(connection);
+  AncestorGeometry::AncestorGeometry(QQuickItem& item)
+      : item_(item) {
+    observe();
   }
 
-  connections_.clear();
-}
+  AncestorGeometry::~AncestorGeometry() {
+    disconnect();
+  }
 
-void AncestorGeometry::observe() {
-  disconnect();
-  for (const auto *ancestor = item_.parentItem(); ancestor != nullptr; ancestor = ancestor->parentItem()) {
-    for (const auto changed : {&QQuickItem::xChanged, &QQuickItem::yChanged, &QQuickItem::widthChanged, &QQuickItem::heightChanged, &QQuickItem::rotationChanged, &QQuickItem::scaleChanged}) {
-      connections_.append(QObject::connect(ancestor, changed, &item_, &QQuickItem::update));
+  void AncestorGeometry::disconnect() {
+    for (const auto& connection : connections_) {
+      QObject::disconnect(connection);
     }
 
-    connections_.append(QObject::connect(ancestor, &QQuickItem::transformOriginChanged, &item_, &QQuickItem::update));
-    connections_.append(QObject::connect(ancestor, &QQuickItem::parentChanged, &item_, [this] {
-      observe();
-      item_.update();
-    }));
+    connections_.clear();
   }
-}
+
+  void AncestorGeometry::observe() {
+    disconnect();
+    for (const auto* ancestor = item_.parentItem(); ancestor != nullptr; ancestor = ancestor->parentItem()) {
+      for (const auto changed : {&QQuickItem::xChanged, &QQuickItem::yChanged, &QQuickItem::widthChanged, &QQuickItem::heightChanged, &QQuickItem::rotationChanged, &QQuickItem::scaleChanged}) {
+        connections_.append(QObject::connect(ancestor, changed, &item_, &QQuickItem::update));
+      }
+
+      connections_.append(QObject::connect(ancestor, &QQuickItem::transformOriginChanged, &item_, &QQuickItem::update));
+      connections_.append(QObject::connect(ancestor, &QQuickItem::parentChanged, &item_, [this] {
+        observe();
+        item_.update();
+      }));
+    }
+  }
 
 }

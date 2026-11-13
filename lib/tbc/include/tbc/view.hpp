@@ -65,7 +65,7 @@ namespace tbc {
 #endif
 
   template <typename type>
-  TBC_RAW constexpr type *raw(type *pointer) noexcept {
+  TBC_RAW constexpr type* raw(type* pointer) noexcept {
     return pointer;
   }
 

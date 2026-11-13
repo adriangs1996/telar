@@ -23,7 +23,7 @@ namespace telar::gui::qt {
   class DocumentView : public QObject {
     Q_OBJECT
     QML_NAMED_ELEMENT(NativeDocument)
-    Q_PROPERTY(QObject *application READ application WRITE setApplication NOTIFY applicationChanged)
+    Q_PROPERTY(QObject* application READ application WRITE setApplication NOTIFY applicationChanged)
     Q_PROPERTY(QString paneId READ paneId WRITE setPaneId NOTIFY paneIdChanged)
     // 0 for the document that covers the pane; else one drawn in place of rows it stands for.
     Q_PROPERTY(qulonglong documentId READ documentId WRITE setDocumentId NOTIFY documentIdChanged)
@@ -36,12 +36,12 @@ namespace telar::gui::qt {
     Q_PROPERTY(QVariantList blocks READ blocks NOTIFY documentChanged)
 
   public:
-    explicit DocumentView(QObject *parent = nullptr);
+    explicit DocumentView(QObject* parent = nullptr);
 
-    [[nodiscard]] QObject *application() const noexcept;
-    void setApplication(QObject *application);
+    [[nodiscard]] QObject* application() const noexcept;
+    void setApplication(QObject* application);
     [[nodiscard]] QString paneId() const;
-    void setPaneId(const QString &identity);
+    void setPaneId(const QString& identity);
 
     [[nodiscard]] qulonglong documentId() const noexcept {
       return document_id_;
@@ -49,15 +49,15 @@ namespace telar::gui::qt {
 
     void setDocumentId(qulonglong id);
     [[nodiscard]] QVariantMap colors() const;
-    void setColors(const QVariantMap &colors);
+    void setColors(const QVariantMap& colors);
     [[nodiscard]] QString monoFamily() const;
-    void setMonoFamily(const QString &family);
+    void setMonoFamily(const QString& family);
     [[nodiscard]] bool shown() const noexcept;
     [[nodiscard]] QVariantList blocks() const;
 
     // Opens a link the document shows, when it is a web or mail address; other schemes, such as
     // file: or a custom handler, stay text.
-    [[nodiscard]] Q_INVOKABLE bool openLink(const QString &target) const;
+    [[nodiscard]] Q_INVOKABLE bool openLink(const QString& target) const;
 
   signals:
     void applicationChanged();
@@ -68,7 +68,7 @@ namespace telar::gui::qt {
     void documentChanged();
     // A key asked the view to move: line_up, line_down, half_up, half_down, page_up, page_down,
     // top or bottom.
-    void scrollRequested(const QString &action);
+    void scrollRequested(const QString& action);
 
   private:
     void refresh();

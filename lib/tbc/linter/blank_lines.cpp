@@ -18,13 +18,13 @@
 namespace tbc_lint {
   namespace {
     // Case and goto labels wrap the statement that follows them.
-    const clang::Stmt &unlabeled(const clang::Stmt &statement) {
-      const auto *current = &statement;
+    const clang::Stmt& unlabeled(const clang::Stmt& statement) {
+      const auto* current = &statement;
 
       while (true) {
-        if (const auto *branch = llvm::dyn_cast<clang::SwitchCase>(current)) {
+        if (const auto* branch = llvm::dyn_cast<clang::SwitchCase>(current)) {
           current = branch->getSubStmt();
-        } else if (const auto *label = llvm::dyn_cast<clang::LabelStmt>(current)) {
+        } else if (const auto* label = llvm::dyn_cast<clang::LabelStmt>(current)) {
           current = label->getSubStmt();
         } else {
           return *current;
@@ -34,8 +34,8 @@ namespace tbc_lint {
 
     // A declaration the author wrote. A statement macro that expands to a declaration, such as a trace
     // scope, reads as a statement where it is used, so it starts no run of declarations.
-    const clang::DeclStmt *declaration(const clang::Stmt &statement) {
-      const auto *declarations = llvm::dyn_cast<clang::DeclStmt>(&unlabeled(statement));
+    const clang::DeclStmt* declaration(const clang::Stmt& statement) {
+      const auto* declarations = llvm::dyn_cast<clang::DeclStmt>(&unlabeled(statement));
       if (declarations == nullptr || declarations->decl_begin() == declarations->decl_end()) {
         return nullptr;
       }
@@ -47,35 +47,35 @@ namespace tbc_lint {
       return declarations;
     }
 
-    bool refersTo(const clang::Stmt *statement, const llvm::SmallPtrSetImpl<const clang::Decl *> &declared) {
+    bool refersTo(const clang::Stmt* statement, const llvm::SmallPtrSetImpl<const clang::Decl*>& declared) {
       if (statement == nullptr) {
         return false;
       }
 
-      if (const auto *reference = llvm::dyn_cast<clang::DeclRefExpr>(statement)) {
+      if (const auto* reference = llvm::dyn_cast<clang::DeclRefExpr>(statement)) {
         if (declared.contains(reference->getDecl())) {
           return true;
         }
       }
 
-      return std::ranges::any_of(statement->children(), [&](const clang::Stmt *child) {
+      return std::ranges::any_of(statement->children(), [&](const clang::Stmt* child) {
         return refersTo(child, declared);
       });
     }
 
     // An if that checks a variable the declaration right above it introduces stays attached to it.
-    bool checksDeclared(const clang::DeclStmt &declarations, const clang::Stmt &next) {
-      const auto *branch = llvm::dyn_cast<clang::IfStmt>(&next);
+    bool checksDeclared(const clang::DeclStmt& declarations, const clang::Stmt& next) {
+      const auto* branch = llvm::dyn_cast<clang::IfStmt>(&next);
       if (branch == nullptr) {
         return false;
       }
 
-      llvm::SmallPtrSet<const clang::Decl *, 4> declared;
+      llvm::SmallPtrSet<const clang::Decl*, 4> declared;
 
-      for (const auto *declaration : declarations.decls()) {
+      for (const auto* declaration : declarations.decls()) {
         declared.insert(declaration);
-        if (const auto *bindings = llvm::dyn_cast<clang::DecompositionDecl>(declaration)) {
-          for (const auto *binding : bindings->bindings()) {
+        if (const auto* bindings = llvm::dyn_cast<clang::DecompositionDecl>(declaration)) {
+          for (const auto* binding : bindings->bindings()) {
             declared.insert(binding);
           }
         }
@@ -101,11 +101,11 @@ namespace tbc_lint {
     return insertions_[path].insert(offset).second;
   }
 
-  bool blank_line_fixes::apply(llvm::raw_ostream &errors) const {
+  bool blank_line_fixes::apply(llvm::raw_ostream& errors) const {
     const std::scoped_lock lock(mutex_);
     bool applied = true;
 
-    for (const auto &file : insertions_) {
+    for (const auto& file : insertions_) {
       auto buffer = llvm::MemoryBuffer::getFile(file.getKey(), /*IsText=*/false, /*RequiresNullTerminator=*/false);
       if (!buffer) {
         errors << "tbc-lint: cannot read " << file.getKey() << ": " << buffer.getError().message() << '\n';
@@ -142,7 +142,7 @@ namespace tbc_lint {
 
       fixed.append(text.substr(copied));
 
-      auto written = llvm::writeToOutput(file.getKey(), [&](llvm::raw_ostream &output) {
+      auto written = llvm::writeToOutput(file.getKey(), [&](llvm::raw_ostream& output) {
         output << fixed;
         return llvm::Error::success();
       });
@@ -156,40 +156,42 @@ namespace tbc_lint {
     return applied;
   }
 
-  blank_line_check::blank_line_check(blank_line_fixes &fixes, bool errors, const std::string &header_filter)
+  blank_line_check::blank_line_check(blank_line_fixes& fixes, bool errors, const std::string& header_filter)
       : fixes_(fixes),
         errors_(errors),
         header_filter_(header_filter),
         filter_headers_(!header_filter.empty()) {}
 
-  void blank_line_check::registerMatchers(clang::ast_matchers::MatchFinder &finder) {
+  void blank_line_check::registerMatchers(clang::ast_matchers::MatchFinder& finder) {
     using namespace clang::ast_matchers;
 
     // Templates are checked once, as written, not once per instantiation.
     finder.addMatcher(
         compoundStmt(
             unless(isExpansionInSystemHeader()),
-            unless(isInTemplateInstantiation()))
+            unless(isInTemplateInstantiation())
+        )
             .bind("block"),
-        this);
+        this
+    );
   }
 
-  void blank_line_check::run(const clang::ast_matchers::MatchFinder::MatchResult &result) {
-    const auto *block = result.Nodes.getNodeAs<clang::CompoundStmt>("block");
+  void blank_line_check::run(const clang::ast_matchers::MatchFinder::MatchResult& result) {
+    const auto* block = result.Nodes.getNodeAs<clang::CompoundStmt>("block");
     if (block == nullptr || block->size() < 2) {
       return;
     }
 
-    const auto &sources = *result.SourceManager;
+    const auto& sources = *result.SourceManager;
     const auto open = block->getLBracLoc();
     if (open.isInvalid() || open.isMacroID() || !selected(sources.getFileID(open), sources)) {
       return;
     }
 
     context_ = result.Context;
-    const clang::Stmt *previous = nullptr;
+    const clang::Stmt* previous = nullptr;
 
-    for (const auto *statement : block->body()) {
+    for (const auto* statement : block->body()) {
       if (previous != nullptr) {
         inspect(*previous, *statement, sources);
       }
@@ -204,19 +206,19 @@ namespace tbc_lint {
     }
 
     // An invalid unit has an incomplete AST, so its statements are not what the author wrote.
-    auto &diagnostics = context_->getDiagnostics();
+    auto& diagnostics = context_->getDiagnostics();
     if (diagnostics.hasErrorOccurred()) {
       gaps_.clear();
     }
 
-    const auto &sources = context_->getSourceManager();
+    const auto& sources = context_->getSourceManager();
     const auto severity = errors_ ? clang::DiagnosticsEngine::Error : clang::DiagnosticsEngine::Warning;
     const auto after_block = diagnostics.getCustomDiagID(severity, "missing blank line after a statement that ends on its own closing brace [tbc-blank-line-after-block]");
     const auto after_declarations = diagnostics.getCustomDiagID(severity, "missing blank line between the declarations above and this statement [tbc-blank-line-after-declarations]");
     llvm::DenseMap<clang::FileID, std::string> paths;
 
-    for (const auto &gap : gaps_) {
-      auto &path = paths[gap.file];
+    for (const auto& gap : gaps_) {
+      auto& path = paths[gap.file];
       if (path.empty()) {
         const auto entry = sources.getFileEntryRefForID(gap.file);
         if (!entry) {
@@ -243,7 +245,7 @@ namespace tbc_lint {
     context_ = nullptr;
   }
 
-  bool blank_line_check::selected(clang::FileID file, const clang::SourceManager &sources) {
+  bool blank_line_check::selected(clang::FileID file, const clang::SourceManager& sources) {
     const auto [cached, inserted] = selected_.try_emplace(file, false);
     if (!inserted) {
       return cached->second;
@@ -260,7 +262,7 @@ namespace tbc_lint {
     return cached->second;
   }
 
-  void blank_line_check::inspect(const clang::Stmt &previous, const clang::Stmt &next, const clang::SourceManager &sources) {
+  void blank_line_check::inspect(const clang::Stmt& previous, const clang::Stmt& next, const clang::SourceManager& sources) {
     // A case label already separates what comes before it.
     if (llvm::isa<clang::SwitchCase>(next)) {
       return;
@@ -279,7 +281,7 @@ namespace tbc_lint {
       return;
     }
 
-    const auto *declarations = declaration(previous);
+    const auto* declarations = declaration(previous);
     if (declarations != nullptr && checksDeclared(*declarations, unlabeled(next))) {
       return;
     }

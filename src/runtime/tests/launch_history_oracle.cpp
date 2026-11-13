@@ -3,13 +3,12 @@
 static_assert(true);
 #endif
 
-
+#include <cassert>
 #include <cstdint>
 #include <cstring>
+#include <sqlite3.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <sqlite3.h>
-#include <cassert>
 
 import std;
 import telar.base.diagnostics;
@@ -23,7 +22,7 @@ using namespace telar;
 using namespace telar::runtime;
 using namespace std::string_view_literals;
 
-extern "C" int record_launch_failure(const char *path, std::uint32_t seed) {
+extern "C" int record_launch_failure(const char* path, std::uint32_t seed) {
   try {
     SystemAllocator memory;
     HistoryStore store{memory, path};

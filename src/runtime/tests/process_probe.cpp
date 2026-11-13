@@ -3,12 +3,11 @@
 static_assert(true);
 #endif
 
-
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <sys/types.h>
 #include <unistd.h>
-#include <cstdio>
 
 import std;
 import telar.base.memory;
@@ -21,7 +20,7 @@ using namespace telar;
 
 static constexpr std::string_view missing_hooks_event = "no hooks from this pane: if it runs on a shared server, start it with --no-daemon";
 
-static int checkProcessName(ProtocolPeer &peer, char **arguments) {
+static int checkProcessName(ProtocolPeer& peer, char** arguments) {
   const auto process_name = telar::runtime::ProcessInspector{}.name(::getpid());
   const auto expected = process_name.view();
   const auto started = std::chrono::steady_clock::now();
@@ -55,13 +54,13 @@ static void paint(std::string_view text) {
   }
 }
 
-static AgentSnapshotEntry waitState(ProtocolPeer &peer, AgentStatus status, AgentSource source, std::string_view event = {}) {
+static AgentSnapshotEntry waitState(ProtocolPeer& peer, AgentStatus status, AgentSource source, std::string_view event = {}) {
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{7};
 
   while (std::chrono::steady_clock::now() < deadline) {
     const auto snapshot = peer.exchange<AgentSnapshot>(QueryAgents{1});
     if (snapshot.entries.size() == 1) {
-      const auto &agent = snapshot.entries[0];
+      const auto& agent = snapshot.entries[0];
       if (agent.provider == AgentProvider::codex && agent.status == status && agent.source == source && agent.last_event == event) {
         if (agent.process_id != static_cast<std::uint32_t>(::getpgrp())) {
           throw std::runtime_error{"Agent projection lost its foreground process group"};
@@ -77,7 +76,7 @@ static AgentSnapshotEntry waitState(ProtocolPeer &peer, AgentStatus status, Agen
   throw std::runtime_error{"Process fixture did not reach its expected agent state"};
 }
 
-static int child(char **arguments) {
+static int child(char** arguments) {
   const auto pane = std::stoull(std::getenv("TELAR_PANE_ID"));
   const auto generation = std::stoull(std::getenv("TELAR_PANE_GENERATION"));
   const auto iterations = static_cast<unsigned>(std::stoul(arguments[2]));
@@ -126,8 +125,8 @@ static int child(char **arguments) {
   return 0;
 }
 
-int main(int argc, char **argv) {
-  char **child_arguments = nullptr;
+int main(int argc, char** argv) {
+  char** child_arguments = nullptr;
 
   try {
     for (int index = 1; index + 6 <= argc; ++index) {
@@ -151,7 +150,7 @@ int main(int argc, char **argv) {
     const auto result_path = (root / "process-result.json").string();
 
     std::filesystem::copy_file(argv[0], executable);
-    const char *configured_home = std::getenv("CODEX_HOME");
+    const char* configured_home = std::getenv("CODEX_HOME");
     if (configured_home == nullptr || std::filesystem::weakly_canonical(std::filesystem::path{configured_home}.parent_path()) != std::filesystem::canonical(root)) {
       throw std::runtime_error{"Process fixture requires an isolated CODEX_HOME"};
     }
@@ -191,7 +190,7 @@ int main(int argc, char **argv) {
 
     std::cout << result.rdbuf();
     return 0;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     if (child_arguments != nullptr) {
       std::ofstream{child_arguments[4]} << error.what() << '\n';
     }

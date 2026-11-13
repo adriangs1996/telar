@@ -3,46 +3,44 @@
 static_assert(true);
 #endif
 
-
+#include "machine_client_key.hpp"
 #include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
+#include "telar_client/serializers/telar_protocol.hpp"
+#include <algorithm>
 #include <array>
 #include <charconv>
+#include <chrono>
 #include <concepts>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
+#include <limits>
+#include <optional>
+#include <span>
 #include <stdexcept>
 #include <string_view>
 #include <system_error>
-#include "machine_client_key.hpp"
-#include <algorithm>
-#include <cstdint>
-#include <limits>
-#include "telar_client/serializers/telar_protocol.hpp"
-#include <optional>
-#include <span>
 #include <variant>
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include <chrono>
 
 #pragma once
-
 
 import telar.gui.application.host_effects;
 import telar.gui.presentation.frame_pacer;
 
 namespace telar::gui::qt {
 
-class Application;
+  class Application;
 
-struct ApplicationEffects {
-  Application &application;
-  MachineClientKey source;
+  struct ApplicationEffects {
+    Application& application;
+    MachineClientKey source;
 
-  bool postNotification(const NotificationPayload &payload);
-  bool playSound(AgentSound sound);
-  void notePaneInput(FramePacer::Pane pane, std::uint64_t now_ns) noexcept;
-};
+    bool postNotification(const NotificationPayload& payload);
+    bool playSound(AgentSound sound);
+    void notePaneInput(FramePacer::Pane pane, std::uint64_t now_ns) noexcept;
+  };
 
 }

@@ -3,28 +3,27 @@
 static_assert(true);
 #endif
 
-
+#include "cell_layout.hpp"
 #include "telar_base/diagnostics/config.hpp"
-#include <sys/types.h>
-#include <cstdint>
 #include <cassert>
-#include <cstring>
-#include <cstddef>
 #include <cerrno>
+#include <csignal>
+#include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fcntl.h>
-#include <sys/mman.h>
-#include <unistd.h>
-#include "cell_layout.hpp"
+#include <ghostty/vt.h>
 #include <limits.h>
-#include <csignal>
+#include <poll.h>
+#include <pthread.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <sys/uio.h>
 #include <sys/wait.h>
-#include <pthread.h>
-#include <sys/stat.h>
-#include <poll.h>
-#include <ghostty/vt.h>
+#include <unistd.h>
 
 import std;
 import telar.base.diagnostics;
@@ -97,7 +96,7 @@ public:
   using Request = WorktreeDetectionRequest;
   using Result = WorktreeDetectionResult;
 
-  Result observe(const Request &request) noexcept {
+  Result observe(const Request& request) noexcept {
     released.wait(false, std::memory_order_acquire);
     Result result{.pane = request.pane, .generation = request.generation, .cwd_revision = request.cwd_revision, .root_length = request.cwd.view().size()};
 
@@ -117,7 +116,7 @@ public:
   std::atomic<bool> released{false};
 };
 
-static void collect(RuntimeModel<SystemAllocator> &model, WorktreeDetectionService<SystemAllocator, GatedWorktreeDetector &> &service) {
+static void collect(RuntimeModel<SystemAllocator>& model, WorktreeDetectionService<SystemAllocator, GatedWorktreeDetector&>& service) {
   pollfd completion{.fd = service.descriptor(), .events = POLLIN, .revents = 0};
 
   check(::poll(&completion, 1, 1000) == 1);
@@ -141,9 +140,9 @@ static void testDetectionLifecycle() {
   Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
 
   model.panes.insert(1, makeOwned<Pane<SystemAllocator>>(memory, memory, 1, TabLocation{.workspace = {.id = 7}, .tab_id = 1}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits}));
-  auto &pane = *model.panes.find(1);
+  auto& pane = *model.panes.find(1);
   GatedWorktreeDetector probe;
-  WorktreeDetectionService<SystemAllocator, GatedWorktreeDetector &> service{probe};
+  WorktreeDetectionService<SystemAllocator, GatedWorktreeDetector&> service{probe};
 
   service.tick(model);
   pane.cwd = "/tmp/changed";
@@ -161,7 +160,7 @@ static void testDetectionLifecycle() {
   ++pane.cwd_revision;
   service.tick(model);
   collect(model, service);
-  const auto *entry = model.worktrees.containing(pane.cwd);
+  const auto* entry = model.worktrees.containing(pane.cwd);
 
   check(entry != nullptr && entry->source == 7 && entry->branch.view() == "external" && entry->origin == WorktreeOrigin::external);
   const auto revision = model.workspace_revision;

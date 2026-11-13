@@ -43,10 +43,12 @@ enum RenderWorkCounter {
   render_work_tab_layout,
   render_work_tab_reconcile,
   render_work_tab_update,
-  render_work_count
+  render_work_count,
 };
 
-enum { render_work_sequence_capacity = 513 };
+enum {
+  render_work_sequence_capacity = 513,
+};
 
 typedef struct {
   uint64_t counts[render_work_count];

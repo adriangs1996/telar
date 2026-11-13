@@ -3,27 +3,26 @@
 static_assert(true);
 #endif
 
-
-#include <cstdint>
-#include <cstddef>
-#include <cstring>
+#include <arpa/inet.h>
 #include <cassert>
 #include <cerrno>
 #include <csignal>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <arpa/inet.h>
-#include <openssl/ssl.h>
-#include <openssl/err.h>
-#include <openssl/pem.h>
-#include <openssl/x509v3.h>
-#include <openssl/crypto.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
 #include <ctime>
 #include <fcntl.h>
 #include <limits.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <openssl/crypto.h>
+#include <openssl/err.h>
+#include <openssl/pem.h>
+#include <openssl/ssl.h>
+#include <openssl/x509v3.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
-#include <cstdio>
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <linux/fs.h>
 #endif
@@ -33,8 +32,8 @@ static_assert(true);
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <unistd.h>
 #endif
-#include <unistd.h>
 #include <cstdlib>
+#include <unistd.h>
 
 import std;
 import telar.base.memory;
@@ -58,10 +57,10 @@ enum class SessionCase {
   expired_origin,
   untrusted_child,
   pinned_child,
-  closed_before_hello
+  closed_before_hello,
 };
 
-static void transferThrough(TlsSession<TlsTestMemory> &session, SSL *source, SSL *destination, TlsSide incoming) {
+static void transferThrough(TlsSession<TlsTestMemory>& session, SSL* source, SSL* destination, TlsSide incoming) {
   constexpr std::string_view payload = "HTTP plaintext through authenticated TLS\r\n";
 
   ERR_clear_error();
@@ -81,7 +80,7 @@ static void transferThrough(TlsSession<TlsTestMemory> &session, SSL *source, SSL
   const auto consumed = session.read(incoming, buffer);
 
   check(consumed.state == StreamResult::State::data && consumed.bytes == read.bytes);
-  check(std::string_view{reinterpret_cast<const char *>(buffer.data()), read.bytes} == payload);
+  check(std::string_view{reinterpret_cast<const char*>(buffer.data()), read.bytes} == payload);
   const auto outgoing = incoming == TlsSide::child ? TlsSide::origin : TlsSide::child;
   StreamResult sent{StreamResult::State::blocked};
 
@@ -106,10 +105,10 @@ static void transferThrough(TlsSession<TlsTestMemory> &session, SSL *source, SSL
     check(error == SSL_ERROR_WANT_READ || error == SSL_ERROR_WANT_WRITE);
   }
 
-  check(std::string_view{reinterpret_cast<const char *>(buffer.data()), received} == payload);
+  check(std::string_view{reinterpret_cast<const char*>(buffer.data()), received} == payload);
 }
 
-static void checkSession(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> &library, SessionCase scenario) {
+static void checkSession(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory>& library, SessionCase scenario) {
   AuthorityDirectory directory;
   const auto authority = std::make_shared<const CertificateAuthority<TlsTestMemory>>(CertificateAuthority<TlsTestMemory>::loadOrCreate(memory, library, directory.descriptor.get(), AuthorityKind::private_local));
   auto issuer = CertificatePair::authority("Origin fixture CA", CertificatePair::private_lifetime);
@@ -143,7 +142,7 @@ static void checkSession(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> 
   if (scenario == SessionCase::tls12 || scenario == SessionCase::tls13) {
     const auto version = scenario == SessionCase::tls12 ? TLS1_2_VERSION : TLS1_3_VERSION;
 
-    for (auto *context : {client_context.get(), server_context.get()}) {
+    for (auto* context : {client_context.get(), server_context.get()}) {
       check(SSL_CTX_set_min_proto_version(context, version) == 1);
       check(SSL_CTX_set_max_proto_version(context, version) == 1);
     }
@@ -156,7 +155,8 @@ static void checkSession(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> 
   constexpr std::array<unsigned char, 3> other{'f', 'o', 'o'};
   AlpnSelection server_selection;
 
-  check(server_selection.assign(scenario == SessionCase::http2 ? std::span<const unsigned char>{http2} : scenario == SessionCase::other_alpn ? std::span<const unsigned char>{other} : std::span<const unsigned char>{http11}));
+  check(server_selection.assign(scenario == SessionCase::http2 ? std::span<const unsigned char>{http2} : scenario == SessionCase::other_alpn ? std::span<const unsigned char>{other}
+                                                                                                                                             : std::span<const unsigned char>{http11}));
   if (scenario != SessionCase::no_alpn) {
     SSL_CTX_set_alpn_select_cb(server_context.get(), &AlpnSelection::select, nullptr);
   }
@@ -236,9 +236,10 @@ static void checkSession(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> 
     check(SSL_version(client.get()) == version && SSL_version(server.get()) == version);
   }
 
-  check(session.protocol() == (scenario == SessionCase::http2 ? HttpProtocol::http2 : (scenario == SessionCase::no_alpn || scenario == SessionCase::other_alpn) ? HttpProtocol::other : HttpProtocol::http11));
-  const unsigned char *client_protocol = nullptr;
-  const unsigned char *server_protocol = nullptr;
+  check(session.protocol() == (scenario == SessionCase::http2 ? HttpProtocol::http2 : (scenario == SessionCase::no_alpn || scenario == SessionCase::other_alpn) ? HttpProtocol::other
+                                                                                                                                                                : HttpProtocol::http11));
+  const unsigned char* client_protocol = nullptr;
+  const unsigned char* server_protocol = nullptr;
   unsigned client_length = 0;
   unsigned server_length = 0;
 
@@ -263,7 +264,7 @@ static void checkSession(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> 
   transferThrough(session, server.get(), client.get(), TlsSide::origin);
 }
 
-static void checkAuthorityRotation(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> &library) {
+static void checkAuthorityRotation(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory>& library) {
   AuthorityDirectory first_directory;
   AuthorityDirectory second_directory;
   auto first = std::allocate_shared<CertificateAuthority<TlsTestMemory>>(AllocatorRef<CertificateAuthority<TlsTestMemory>, TlsTestMemory>{memory}, CertificateAuthority<TlsTestMemory>::loadOrCreate(memory, library, first_directory.descriptor.get(), AuthorityKind::private_local));
@@ -290,12 +291,16 @@ static void checkAuthorityRotation(TlsTestMemory &memory, const TlsLibrary<TlsTe
   interception.suspend(true);
   bool rejected = false;
 
-  try { interception.open(memory, {new_downstream.local.get(), new_upstream.local.get()}, "origin.test"); }
-  catch (const TlsError &) { rejected = true; }
+  try {
+    interception.open(memory, {new_downstream.local.get(), new_upstream.local.get()}, "origin.test");
+  } catch (const TlsError&) {
+    rejected = true;
+  }
+
   check(rejected);
   interception.suspend(false);
 
-  auto handshake = [&](TlsSession<TlsTestMemory> &session, X509 *root, SocketPair &downstream, SocketPair &upstream) {
+  auto handshake = [&](TlsSession<TlsTestMemory>& session, X509* root, SocketPair& downstream, SocketPair& upstream) {
     TlsContext server_context{SSL_CTX_new(TLS_server_method())};
     TlsContext client_context{SSL_CTX_new(TLS_client_method())};
 
@@ -313,8 +318,14 @@ static void checkAuthorityRotation(TlsTestMemory &memory, const TlsLibrary<TlsTe
 
     while (!client_ready || !server_ready || session.state() != TlsSession<TlsTestMemory>::State::established) {
       check(std::chrono::steady_clock::now() < deadline);
-      if (!client_ready) { client_ready = advanceTlsPeer(client.get(), client_failed); }
-      if (!server_ready) { server_ready = advanceTlsPeer(server.get(), server_failed); }
+      if (!client_ready) {
+        client_ready = advanceTlsPeer(client.get(), client_failed);
+      }
+
+      if (!server_ready) {
+        server_ready = advanceTlsPeer(server.get(), server_failed);
+      }
+
       session.advance();
       check(!client_failed && !server_failed && session.state() != TlsSession<TlsTestMemory>::State::failed);
     }
@@ -331,7 +342,7 @@ static void checkAuthorityRotation(TlsTestMemory &memory, const TlsLibrary<TlsTe
   check(retained.expired());
 }
 
-void testTlsSession(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> &library) {
+void testTlsSession(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory>& library) {
   for (const auto scenario : {SessionCase::http11, SessionCase::http2, SessionCase::no_alpn, SessionCase::other_alpn, SessionCase::tls12, SessionCase::tls13, SessionCase::untrusted_origin, SessionCase::wrong_hostname, SessionCase::expired_origin, SessionCase::untrusted_child, SessionCase::pinned_child, SessionCase::closed_before_hello}) {
     checkSession(memory, library, scenario);
   }

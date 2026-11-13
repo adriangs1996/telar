@@ -3,19 +3,18 @@
 static_assert(true);
 #endif
 
-
-#include <cstdint>
-#include <cstring>
-#include <sys/types.h>
-#include <unistd.h>
-#include <cstddef>
 #include <cassert>
 #include <cerrno>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
 #include <limits.h>
 #include <poll.h>
-#include <sys/wait.h>
-#include <sqlite3.h>
 #include <pthread.h>
+#include <sqlite3.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 import std;
 import telar.base.memory;
@@ -32,7 +31,7 @@ using namespace telar;
 using namespace telar::runtime;
 
 static std::span<const Byte> inputBytes(std::string_view text) {
-  return {reinterpret_cast<const Byte *>(text.data()), text.size()};
+  return {reinterpret_cast<const Byte*>(text.data()), text.size()};
 }
 
 static void testQueryEditing() {
@@ -46,7 +45,7 @@ static void testQueryEditing() {
       std::pair{"a\x1b[1;5Db\x1bxz\r", "abz"},
   };
 
-  for (const auto &[raw, expected] : cases) {
+  for (const auto& [raw, expected] : cases) {
     DescriptionCapture capture;
     bool submitted = false;
 
@@ -70,7 +69,7 @@ static void testQueryEditing() {
 
     try {
       capture.normalized();
-    } catch (const EncodingError &) {
+    } catch (const EncodingError&) {
       rejected = true;
     }
 
@@ -91,14 +90,19 @@ static void testQueryEditing() {
   auto transferred = std::move(query);
 
   check(query.view().empty());
-  check(std::ranges::all_of(original, [](char byte) { return byte == 0; }));
+  check(std::ranges::all_of(original, [](char byte) {
+    return byte == 0;
+  }));
+
   const auto retained = transferred.view();
 
   transferred.clear();
-  check(std::ranges::all_of(retained, [](char byte) { return byte == 0; }));
+  check(std::ranges::all_of(retained, [](char byte) {
+    return byte == 0;
+  }));
 }
 
-static void testGenerator(SystemAllocator &memory) {
+static void testGenerator(SystemAllocator& memory) {
   const std::array cases{
       std::pair{"cat >/dev/null; printf '  \"Fix café\"  \\n'", DescriptionStatus::success},
       std::pair{"cat >/dev/null; printf 'one\\ntwo'", DescriptionStatus::invalid_output},
@@ -114,7 +118,7 @@ static void testGenerator(SystemAllocator &memory) {
   DescriptionRequest request{.identity = {.pane = 2, .generation = 3, .revision = 4}};
 
   request.query.append("A private request");
-  for (const auto &[script, expected] : cases) {
+  for (const auto& [script, expected] : cases) {
     const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", script};
     DescriptionGenerator generator{memory, DescriptionOptions{arguments, std::chrono::milliseconds{100}}};
     const auto result = generator.observe(request);
@@ -136,7 +140,7 @@ static void testGenerator(SystemAllocator &memory) {
   const auto started = std::chrono::steady_clock::now();
 
   {
-    ObservationWorker<decltype(generator) &> worker{std::in_place, generator};
+    ObservationWorker<decltype(generator)&> worker{std::in_place, generator};
 
     check(worker.submit(request));
     std::this_thread::sleep_for(std::chrono::milliseconds{30});
@@ -145,7 +149,7 @@ static void testGenerator(SystemAllocator &memory) {
   check(std::chrono::steady_clock::now() - started < std::chrono::seconds{1});
 }
 
-static void testProcessInput(SystemAllocator &memory) {
+static void testProcessInput(SystemAllocator& memory) {
   const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", "head -c 100000 /dev/zero >&2; wc -c"};
   Command command{memory, Launch{.cwd = "/", .arguments = arguments}, CommandPurpose::administration};
   CommandOutput output{memory, 64};
@@ -156,7 +160,7 @@ static void testProcessInput(SystemAllocator &memory) {
   check(output.text().find("200000") != std::string_view::npos);
 }
 
-static void testTitlePersistence(SystemAllocator &memory) {
+static void testTitlePersistence(SystemAllocator& memory) {
   Database database{":memory:"};
 
   migrateHistory(database);

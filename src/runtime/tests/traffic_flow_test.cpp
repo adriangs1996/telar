@@ -3,26 +3,25 @@
 static_assert(true);
 #endif
 
-
-#include <cerrno>
-#include <cstdint>
-#include <cstddef>
-#include <cstring>
 #include <arpa/inet.h>
-#include <pcap/pcap.h>
-#include <cstdio>
-#include <netdb.h>
-#include <sys/socket.h>
 #include <brotli/decode.h>
 #include <brotli/encode.h>
-#include <zlib.h>
-#include <zstd.h>
+#include <cassert>
+#include <cerrno>
 #include <csignal>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <netdb.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
-#include <cassert>
-#include <unistd.h>
 #include <nghttp2/nghttp2.h>
+#include <pcap/pcap.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <zlib.h>
+#include <zstd.h>
 
 import std;
 import telar.base.memory;
@@ -44,37 +43,72 @@ using traffic_test::tcp;
 void testProxyTransport();
 
 struct Control : FlowControl {
-  explicit Control(SystemAllocator &memory) : broker(memory) { broker.configure({.host = "fixture.test", .visibility = 3}); }
+  explicit Control(SystemAllocator& memory)
+      : broker(memory) {
+    broker.configure({.host = "fixture.test", .visibility = 3});
+  }
+
   Interception<SystemAllocator> broker;
   std::uint64_t ticket = 0;
   std::size_t requests = 0;
   std::string forwarded;
-  void observeFlow(Kind kind, const FlowEvent &event) noexcept override {
-    if (kind == Kind::stream_data) { forwarded.append(reinterpret_cast<const char *>(event.bytes.data()), event.bytes.size()); }
+
+  void observeFlow(Kind kind, const FlowEvent& event) noexcept override {
+    if (kind == Kind::stream_data) {
+      forwarded.append(reinterpret_cast<const char*>(event.bytes.data()), event.bytes.size());
+    }
   }
-  std::uint64_t intercept(const FlowEvent &event) noexcept override { ++requests; return ticket = broker.begin(event); }
-  Decision poll(std::uint64_t id, std::span<Byte> bytes) noexcept override { return broker.poll(id, bytes); }
-  void cancel(std::uint64_t id) noexcept override { broker.cancel(id); }
-  std::optional<Time> deadline(std::uint64_t id) noexcept override { return broker.deadline(id); }
-  int descriptor() const noexcept override { return broker.descriptor(); }
-  void drain() noexcept override { broker.drain(); }
+
+  std::uint64_t intercept(const FlowEvent& event) noexcept override {
+    ++requests;
+    return ticket = broker.begin(event);
+  }
+
+  Decision poll(std::uint64_t id, std::span<Byte> bytes) noexcept override {
+    return broker.poll(id, bytes);
+  }
+
+  void cancel(std::uint64_t id) noexcept override {
+    broker.cancel(id);
+  }
+
+  std::optional<Time> deadline(std::uint64_t id) noexcept override {
+    return broker.deadline(id);
+  }
+
+  int descriptor() const noexcept override {
+    return broker.descriptor();
+  }
+
+  void drain() noexcept override {
+    broker.drain();
+  }
 };
 
 struct PartialStream {
   std::string output;
   bool block = true;
-  StreamResult read(std::span<Byte>) noexcept { return {StreamResult::State::blocked}; }
+
+  StreamResult read(std::span<Byte>) noexcept {
+    return {StreamResult::State::blocked};
+  }
+
   StreamResult write(std::span<const Byte> bytes) noexcept {
-    if (block) { block = false; return {StreamResult::State::blocked, 0, StreamReadiness::writable}; }
+    if (block) {
+      block = false;
+      return {StreamResult::State::blocked, 0, StreamReadiness::writable};
+    }
+
     const auto count = std::min(bytes.size(), std::size_t{3});
 
-    output.append(reinterpret_cast<const char *>(bytes.data()), count);
+    output.append(reinterpret_cast<const char*>(bytes.data()), count);
     return {StreamResult::State::data, count};
   }
+
   void halfClose() noexcept {}
 };
 
-static void gates(SystemAllocator &memory) {
+static void gates(SystemAllocator& memory) {
   for (const auto verdict : {Verdict::allow, Verdict::replace, Verdict::reject}) {
     Control control{memory};
     FlowState gate;
@@ -89,10 +123,14 @@ static void gates(SystemAllocator &memory) {
     control.broker.decide(control.ticket, verdict, verdict == Verdict::replace ? std::span<const Byte>{replacement} : std::span<const Byte>{});
     StreamResult result{StreamResult::State::blocked};
 
-    for (unsigned attempt = 0; attempt < 10 && result.state == StreamResult::State::blocked; ++attempt) { result = gate.write(traffic::Direction::outbound, stream, original); }
+    for (unsigned attempt = 0; attempt < 10 && result.state == StreamResult::State::blocked; ++attempt) {
+      result = gate.write(traffic::Direction::outbound, stream, original);
+    }
+
     check(control.requests == 1);
-    if (verdict == Verdict::reject) { check(gate.rejected() && stream.output.empty()); }
-    else {
+    if (verdict == Verdict::reject) {
+      check(gate.rejected() && stream.output.empty());
+    } else {
       check(result.state == StreamResult::State::data && result.bytes == original.size());
       const auto expected = verdict == Verdict::replace ? std::span<const Byte>{replacement} : std::span<const Byte>{original};
 
@@ -140,7 +178,7 @@ static void gates(SystemAllocator &memory) {
   check(broker.poll(disconnected, bytes).verdict == Verdict::allow);
 }
 
-static void composition(SystemAllocator &memory) {
+static void composition(SystemAllocator& memory) {
   Interception broker{memory};
   const InterceptionRule rule{.host = "fixture.test", .visibility = 3, .timeout_ms = 5000};
 
@@ -152,7 +190,7 @@ static void composition(SystemAllocator &memory) {
   auto take = [&](std::uint64_t owner, std::span<const Byte> expected) {
     std::uint64_t ticket = 0;
 
-    broker.deliver(owner, [&](const FlowEvent &event) {
+    broker.deliver(owner, [&](const FlowEvent& event) {
       check(ticket == 0 && std::ranges::equal(event.bytes, expected));
       ticket = event.ticket;
       return true;
@@ -219,13 +257,19 @@ static void composition(SystemAllocator &memory) {
 
   const auto overloaded = broker.begin({.host = "fixture.test", .bytes = original});
 
-  broker.deliver(44, [](const FlowEvent &) { return false; });
+  broker.deliver(44, [](const FlowEvent&) {
+    return false;
+  });
+
   check(broker.poll(overloaded, output).verdict == Verdict::allow);
   broker.disconnect(44);
   broker.configure(66, {.host = "*", .visibility = 3, .fail_closed = true});
   const auto undeliverable = broker.begin({.host = "fixture.test", .bytes = original});
 
-  broker.deliver(66, [](const FlowEvent &) -> bool { throw std::bad_alloc{}; });
+  broker.deliver(66, [](const FlowEvent&) -> bool {
+    throw std::bad_alloc{};
+  });
+
   check(broker.poll(undeliverable, output).verdict == Verdict::reject);
   const auto canceled = broker.begin({.host = "fixture.test", .bytes = original});
 
@@ -240,21 +284,21 @@ static void composition(SystemAllocator &memory) {
   check(broker.begin({.host = "fixture.test", .bytes = original}) == Interception<SystemAllocator>::rejected_ticket);
 }
 
-static void reconstruction(SystemAllocator &memory) {
+static void reconstruction(SystemAllocator& memory) {
   for (bool ipv6 : {false, true}) {
     TcpFlows flows{memory};
     std::string outbound, inbound;
     std::vector<Kind> kinds;
-    auto consume = [&](const traffic::Event &event) {
+    auto consume = [&](const traffic::Event& event) {
       check(event.offline == ipv6);
       const auto flow = FlowCodec::decode(event.bytes);
 
       check(flow.id >> 63 && flow.source == FlowSource::capture);
       if (event.kind == Kind::stream_data) {
-        auto &output = flow.direction == traffic::Direction::outbound ? outbound : inbound;
+        auto& output = flow.direction == traffic::Direction::outbound ? outbound : inbound;
 
         check(flow.offset == output.size());
-        output.append(reinterpret_cast<const char *>(flow.bytes.data()), flow.bytes.size());
+        output.append(reinterpret_cast<const char*>(flow.bytes.data()), flow.bytes.size());
       }
 
       kinds.push_back(event.kind);
@@ -268,7 +312,9 @@ static void reconstruction(SystemAllocator &memory) {
       for (std::size_t prefix = 0; prefix < packet.size(); ++prefix) {
         event.bytes = std::span{packet}.first(prefix);
         const auto decoded = TcpPacketDecoder::decode(event);
-        if (decoded) { check(decoded->truncated); }
+        if (decoded) {
+          check(decoded->truncated);
+        }
       }
     };
 
@@ -288,16 +334,22 @@ static void reconstruction(SystemAllocator &memory) {
   }
 }
 
-static void passiveGaps(SystemAllocator &memory) {
+static void passiveGaps(SystemAllocator& memory) {
   TcpFlows flows{memory};
   std::string output;
   std::size_t gaps = 0;
   traffic::Direction gap_direction = traffic::Direction::outbound;
-  auto emit = [&](const traffic::Event &event) {
+  auto emit = [&](const traffic::Event& event) {
     const auto flow = FlowCodec::decode(event.bytes);
 
-    if (event.kind == Kind::flow_gap) { ++gaps; gap_direction = flow.direction; }
-    if (event.kind == Kind::stream_data) { output.append(reinterpret_cast<const char *>(flow.bytes.data()), flow.bytes.size()); }
+    if (event.kind == Kind::flow_gap) {
+      ++gaps;
+      gap_direction = flow.direction;
+    }
+
+    if (event.kind == Kind::stream_data) {
+      output.append(reinterpret_cast<const char*>(flow.bytes.data()), flow.bytes.size());
+    }
   };
 
   auto send = [&](bool incoming, std::uint32_t sequence, Byte flags, std::string_view bytes = {}) {
@@ -326,7 +378,7 @@ static void passiveGaps(SystemAllocator &memory) {
   check(gaps == 3 && output == "abcdef");
 }
 
-static void applicationDetection(SystemAllocator &memory) {
+static void applicationDetection(SystemAllocator& memory) {
   for (const bool fragmented : {false, true}) {
     ProxyCaptureLimits limits;
 
@@ -339,12 +391,18 @@ static void applicationDetection(SystemAllocator &memory) {
     child.input = "GET /plain HTTP/1.1\r\nHost: fixture.test\r\n\r\n";
     child.read_limit = fragmented ? 1 : 65536;
     origin.visible = 0;
-    for (std::size_t round = 0; round < 1024 && origin.output != child.input; ++round) { relay.advance(child, origin, TunnelReadiness::available(), nullptr); }
+    for (std::size_t round = 0; round < 1024 && origin.output != child.input; ++round) {
+      relay.advance(child, origin, TunnelReadiness::available(), nullptr);
+    }
+
     check(origin.output == child.input);
     origin.input = "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\n" + std::string("x\0y", 3);
     origin.visible = origin.input.size();
     origin.read_limit = fragmented ? 1 : 65536;
-    for (std::size_t round = 0; round < 1024 && child.output != origin.input; ++round) { relay.advance(child, origin, TunnelReadiness::available(), nullptr); }
+    for (std::size_t round = 0; round < 1024 && child.output != origin.input; ++round) {
+      relay.advance(child, origin, TunnelReadiness::available(), nullptr);
+    }
+
     check(child.output == origin.input);
     auto request = captures.tryReceive();
     auto response = captures.tryReceive();

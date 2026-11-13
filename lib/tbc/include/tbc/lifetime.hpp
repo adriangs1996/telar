@@ -17,17 +17,17 @@ namespace tbc {
     using value_type = type;
     using lifetime_type = scope;
 
-    explicit constexpr borrow(type &value TBC_DETAIL_LIFETIME_BOUND) noexcept
+    explicit constexpr borrow(type& value TBC_DETAIL_LIFETIME_BOUND) noexcept
         : value_(std::addressof(value)) {}
 
-    borrow(type &&) = delete;
+    borrow(type&&) = delete;
 
-    [[nodiscard]] constexpr type &get() const noexcept {
+    [[nodiscard]] constexpr type& get() const noexcept {
       return *value_;
     }
 
   private:
-    type *value_;
+    type* value_;
   };
 }
 

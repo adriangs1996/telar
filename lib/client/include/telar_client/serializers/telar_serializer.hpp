@@ -6,7 +6,8 @@
 
 namespace telar {
 
-  template <auto Member, typename Message> decltype(auto) memberValue(Message &message) {
+  template <auto Member, typename Message>
+  decltype(auto) memberValue(Message& message) {
     if constexpr (std::is_member_object_pointer_v<decltype(Member)>) {
       return (message.*Member);
     } else {
@@ -18,27 +19,28 @@ namespace telar {
   struct Field : CodecWidth<WireCodec> {
     static constexpr std::size_t min_width = minimumWidth<WireCodec>();
 
-    template <typename Message> static std::size_t encodedSize(const Message &message) {
+    template <typename Message>
+    static std::size_t encodedSize(const Message& message) {
       return wireSize<WireCodec>(memberValue<Member>(message));
     }
 
     template <typename Message>
-    static void encode(const Message &message, std::span<Byte> &output) _throw(EncodingError) {
+    static void encode(const Message& message, std::span<Byte>& output) _throw(EncodingError) {
       WireCodec::encode(memberValue<Member>(message), output);
     }
 
     template <typename Message>
-    static void decode(std::span<const Byte> &input, Message &message) _throw(EncodingError) {
+    static void decode(std::span<const Byte>& input, Message& message) _throw(EncodingError) {
       memberValue<Member>(message) = WireCodec::decode(input);
     }
 
     template <typename Message, typename Storage>
-    static void decode(DecodeInput input, tbc::view<Message &, tbc::lt::a> message, Storage &storage) {
+    static void decode(DecodeInput input, tbc::view<Message&, tbc::lt::a> message, Storage& storage) {
       memberValue<Member>(message) = decodeValue<WireCodec>(input, storage);
     }
 
     template <typename Message, typename Visitor>
-    static void visit(const Message &message, std::span<const Byte> &input, Visitor visitor) {
+    static void visit(const Message& message, std::span<const Byte>& input, Visitor visitor) {
       const auto size = encodedSize(message);
 
       visitor(Name.value, input.first(size), memberValue<Member>(message));
@@ -46,7 +48,7 @@ namespace telar {
     }
 
 #ifdef TELAR_DEBUG
-    static void prettyPrint(std::span<const Byte> &input, std::FILE *output) {
+    static void prettyPrint(std::span<const Byte>& input, std::FILE* output) {
       constexpr auto width = WireCodec::width;
       const auto bytes = input.first(width);
       const auto value = debug::valueText(WireCodec::decode(input));
@@ -54,14 +56,14 @@ namespace telar {
       debug::printBytes(bytes, Name.value, value.data(), output, !input.empty());
     }
 
-    static void prettyPrintLabel(std::span<const Byte> &input, std::FILE *output) {
+    static void prettyPrintLabel(std::span<const Byte>& input, std::FILE* output) {
       constexpr auto width = WireCodec::width;
       const auto value = debug::valueText(WireCodec::decode(input));
 
       debug::printLabel(width, Name.value, value.data(), output, !input.empty());
     }
 
-    static void prettyPrintValue(std::span<const Byte> &input, std::FILE *output) {
+    static void prettyPrintValue(std::span<const Byte>& input, std::FILE* output) {
       constexpr auto width = WireCodec::width;
       const auto value = debug::valueText(WireCodec::decode(input));
 
@@ -74,24 +76,24 @@ namespace telar {
   struct ContextField {
     static constexpr std::size_t min_width = WireCodec::min_width;
 
-    template <typename Message> static std::size_t encodedSize(const Message &message) {
-      return WireCodec::encodedSize(memberValue<Member>(message),
-                                    memberValue<ContextMember>(message));
+    template <typename Message>
+    static std::size_t encodedSize(const Message& message) {
+      return WireCodec::encodedSize(memberValue<Member>(message), memberValue<ContextMember>(message));
     }
 
     template <typename Message>
-    static void encode(const Message &message, std::span<Byte> &output) {
+    static void encode(const Message& message, std::span<Byte>& output) {
       WireCodec::encode(memberValue<Member>(message), output, memberValue<ContextMember>(message));
     }
 
     template <typename Message>
-    static void decode(DecodeInput input, tbc::view<Message &, tbc::lt::a> message, DecodeStorage &storage) {
+    static void decode(DecodeInput input, tbc::view<Message&, tbc::lt::a> message, DecodeStorage& storage) {
       memberValue<Member>(message) =
           WireCodec::decode(input, storage, memberValue<ContextMember>(message));
     }
 
     template <typename Message, typename Visitor>
-    static void visit(const Message &message, std::span<const Byte> &input, Visitor visitor) {
+    static void visit(const Message& message, std::span<const Byte>& input, Visitor visitor) {
       const auto size = encodedSize(message);
 
       visitor(Name.value, input.first(size), memberValue<Member>(message));
@@ -101,12 +103,7 @@ namespace telar {
 
   // Some messages put the count before other headers and the items afterwards.
   // This pair keeps that order without storing a redundant count in the DTO.
-  template <auto Member,
-            typename CountCodec,
-            typename ElementCodec,
-            std::size_t Maximum,
-            FixedString Name,
-            std::size_t Minimum = 0>
+  template <auto Member, typename CountCodec, typename ElementCodec, std::size_t Maximum, FixedString Name, std::size_t Minimum = 0>
   struct SpanCountField {
     static constexpr std::size_t width = CountCodec::width;
     static constexpr std::size_t min_width = width;
@@ -118,21 +115,23 @@ namespace telar {
       }
     }
 
-    template <typename Message> static std::size_t encodedSize(const Message &message) {
+    template <typename Message>
+    static std::size_t encodedSize(const Message& message) {
       validate(memberValue<Member>(message).size());
       return width;
     }
 
     template <typename Message>
-    static void encode(const Message &message, std::span<Byte> &output) {
+    static void encode(const Message& message, std::span<Byte>& output) {
       (void)encodedSize(message);
       CountCodec::encode(
           static_cast<typename CountCodec::value_type>(memberValue<Member>(message).size()),
-          output);
+          output
+      );
     }
 
     template <typename Message>
-    static void decode(DecodeInput input, tbc::view<Message &, tbc::lt::a> message, DecodeStorage &storage) {
+    static void decode(DecodeInput input, tbc::view<Message&, tbc::lt::a> message, DecodeStorage& storage) {
       const auto count = CountCodec::decode(input);
 
       validate(count);
@@ -144,19 +143,21 @@ namespace telar {
     }
 
     template <typename Message, typename Visitor>
-    static void visit(const Message &message, std::span<const Byte> &input, Visitor visitor) {
+    static void visit(const Message& message, std::span<const Byte>& input, Visitor visitor) {
       visitor(Name.value, input.first(width), memberValue<Member>(message).size());
       input = input.subspan(width);
     }
   };
 
-  template <auto Member, typename ElementCodec, FixedString Name> struct SpanItemsField {
+  template <auto Member, typename ElementCodec, FixedString Name>
+  struct SpanItemsField {
     static constexpr std::size_t min_width = 0;
 
-    template <typename Message> static std::size_t encodedSize(const Message &message) {
+    template <typename Message>
+    static std::size_t encodedSize(const Message& message) {
       std::size_t size = 0;
 
-      for (const auto &value : memberValue<Member>(message)) {
+      for (const auto& value : memberValue<Member>(message)) {
         size = checkedWireSize(size, wireSize<ElementCodec>(value));
       }
 
@@ -164,21 +165,21 @@ namespace telar {
     }
 
     template <typename Message>
-    static void encode(const Message &message, std::span<Byte> &output) {
-      for (const auto &value : memberValue<Member>(message)) {
+    static void encode(const Message& message, std::span<Byte>& output) {
+      for (const auto& value : memberValue<Member>(message)) {
         ElementCodec::encode(value, output);
       }
     }
 
     template <typename Message>
-    static void decode(DecodeInput input, tbc::view<Message &, tbc::lt::a> message, DecodeStorage &storage) {
+    static void decode(DecodeInput input, tbc::view<Message&, tbc::lt::a> message, DecodeStorage& storage) {
       auto values = memberValue<Member>(message);
       if (values.size() > input.size() / minimumWidth<ElementCodec>()) {
         throw EncodingError{"Truncated separated list items"};
       }
 
       // SpanCountField created these mutable objects in the caller's storage.
-      auto *output = const_cast<typename ElementCodec::value_type *>(values.data());
+      auto* output = const_cast<typename ElementCodec::value_type*>(values.data());
 
       for (std::size_t i = 0; i < values.size(); ++i) {
         output[i] = decodeValue<ElementCodec>(input, storage);
@@ -186,7 +187,7 @@ namespace telar {
     }
 
     template <typename Message, typename Visitor>
-    static void visit(const Message &message, std::span<const Byte> &input, Visitor visitor) {
+    static void visit(const Message& message, std::span<const Byte>& input, Visitor visitor) {
       const auto size = encodedSize(message);
 
       visitor(Name.value, input.first(size), memberValue<Member>(message));
@@ -194,10 +195,13 @@ namespace telar {
     }
   };
 
-  template <typename Message> struct MessageSchema;
-  template <typename Value> struct BodySchema;
+  template <typename Message>
+  struct MessageSchema;
+  template <typename Value>
+  struct BodySchema;
 
-  template <typename... Fields> struct SerializerSize {};
+  template <typename... Fields>
+  struct SerializerSize {};
 
   template <typename... Fields>
     requires((requires { Fields::width; }) && ...)
@@ -206,11 +210,13 @@ namespace telar {
     static constexpr std::size_t width = payload_size;
   };
 
-  template <typename... Fields> struct Serializer : SerializerSize<Fields...> {
+  template <typename... Fields>
+  struct Serializer : SerializerSize<Fields...> {
     static constexpr std::size_t min_width = (std::size_t{0} + ... + Fields::min_width);
     static constexpr bool fixed_size = requires { SerializerSize<Fields...>::payload_size; };
 
-    template <typename Message> static std::size_t encodedSize(const Message &message) {
+    template <typename Message>
+    static std::size_t encodedSize(const Message& message) {
       std::size_t size = 0;
 
       ((size = checkedWireSize(size, Fields::encodedSize(message))), ...);
@@ -219,55 +225,56 @@ namespace telar {
     }
 
     template <typename Message>
-    static void encodeBody(const Message &message, _changes std::span<Byte> &output)
-        _throw(EncodingError) {
+    static void encodeBody(const Message& message, _changes std::span<Byte>& output) _throw(EncodingError) {
       (Fields::encode(message, output), ...);
     }
 
     template <typename Message>
-    static void decodeBody(std::span<const Byte> &input, _changes Message &message)
-        _throw(EncodingError) {
+    static void decodeBody(std::span<const Byte>& input, _changes Message& message) _throw(EncodingError) {
       (Fields::decode(input, message), ...);
     }
 
     template <typename Message, typename Storage>
-    static void decodeBody(std::span<const Byte> &input, Message &message, Storage &storage) {
+    static void decodeBody(std::span<const Byte>& input, Message& message, Storage& storage) {
       (Fields::decode(input, message, storage), ...);
     }
 
     template <typename Message, typename Visitor>
-    static void visitFields(const Message &message, std::span<const Byte> &input, Visitor visitor) {
+    static void visitFields(const Message& message, std::span<const Byte>& input, Visitor visitor) {
       (Fields::visit(message, input, visitor), ...);
     }
 
 #ifdef TELAR_DEBUG
-    static void pretty_print_fields(std::span<const Byte> input, std::FILE *output) {
+    static void pretty_print_fields(std::span<const Byte> input, std::FILE* output) {
       (Fields::prettyPrint(input, output), ...);
     }
 
-    static void pretty_print_labels(std::span<const Byte> input, std::FILE *output) {
+    static void pretty_print_labels(std::span<const Byte> input, std::FILE* output) {
       (Fields::prettyPrintLabel(input, output), ...);
     }
 
-    static void pretty_print_values(std::span<const Byte> input, std::FILE *output) {
+    static void pretty_print_values(std::span<const Byte> input, std::FILE* output) {
       (Fields::prettyPrintValue(input, output), ...);
     }
 #endif
   };
 
-  template <typename Body, bool Fixed = Body::fixed_size> struct MessageSize : Body {};
+  template <typename Body, bool Fixed = Body::fixed_size>
+  struct MessageSize : Body {};
 
-  template <typename Body> struct MessageSize<Body, true> : Body {
+  template <typename Body>
+  struct MessageSize<Body, true> : Body {
     static constexpr std::size_t payload_size = u8::width + Body::payload_size;
   };
 
-  template <Direction Side, auto Tag, typename Body> struct MessageLayout : MessageSize<Body> {
+  template <Direction Side, auto Tag, typename Body>
+  struct MessageLayout : MessageSize<Body> {
     static constexpr Direction direction = Side;
     static constexpr auto tag = Tag;
 
 #ifdef TELAR_DEBUG
     template <typename Message>
-    static void pretty_print(const Message &message, std::FILE *output = stderr);
+    static void pretty_print(const Message& message, std::FILE* output = stderr);
 #endif
   };
 

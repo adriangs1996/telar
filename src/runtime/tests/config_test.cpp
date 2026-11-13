@@ -3,50 +3,49 @@
 static_assert(true);
 #endif
 
-
 #include "config_bootstrap.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include <algorithm>
-#include <string_view>
 #include "telar_base/memory/allocator.hpp"
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-#include <array>
-#include <chrono>
-#include <cstring>
-#include <stdexcept>
-#include <cstdio>
-#include <limits.h>
-#include <sys/stat.h>
+#include "telar_base/memory/fixed_text.hpp"
 #include "telar_base/text/utf8.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
+#include "telar_config/graphics/limits.hpp"
+#include "telar_config/terminal/control/policy.hpp"
+#include "telar_platform/file_descriptor.hpp"
+#include <algorithm>
+#include <arpa/inet.h>
+#include <array>
+#include <cerrno>
+#include <charconv>
+#include <chrono>
 #include <cinttypes>
 #include <cmath>
-#include <initializer_list>
-#include <optional>
-#include <string>
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
-#include <limits>
-#include <span>
-#include <concepts>
-#include <format>
-#include <utility>
-#include <ghostty/vt/unicode.h>
-#include "telar_config/terminal/control/policy.hpp"
-#include <arpa/inet.h>
-#include "telar_config/graphics/limits.hpp"
-#include <exception>
-#include <charconv>
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include <cerrno>
-#include "telar_platform/file_descriptor.hpp"
+#include <cstdio>
 #include <cstdlib>
+#include <cstring>
+#include <exception>
 #include <fcntl.h>
-#include <unistd.h>
 #include <filesystem>
+#include <format>
 #include <fstream>
+#include <ghostty/vt/unicode.h>
+#include <initializer_list>
+#include <lauxlib.h>
+#include <limits.h>
+#include <limits>
+#include <lua.h>
+#include <lualib.h>
+#include <optional>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <utility>
 
 import telar.runtime.tests.check;
 import telar.runtime.config.loader;
@@ -54,7 +53,7 @@ import telar.runtime.config.loader;
 using namespace telar::runtime;
 using namespace telar;
 
-static void writeConfig(const std::string &path, std::string_view source) {
+static void writeConfig(const std::string& path, std::string_view source) {
   std::ofstream file{path};
 
   file << source;
@@ -165,7 +164,7 @@ return telar.config {
     const auto provider = values.manifests.fromExecutable("Custom.js");
 
     check(static_cast<unsigned>(provider) == 6);
-    const auto *manifest = values.manifests.find(provider);
+    const auto* manifest = values.manifests.find(provider);
 
     check(manifest != nullptr && manifest->displayName() == "Custom Agent" && manifest->icon.view() == "é");
     check(manifest->attachments == AgentAttachmentMarkers::ordered && manifest->commandField("Shell") == "cmd");
@@ -200,7 +199,7 @@ return telar.config {
       config::RuntimeValues values{memory};
 
       config::Loader{memory, values}.load(options, ProcessEnvironment{});
-    } catch (const std::exception &) {
+    } catch (const std::exception&) {
       rejected = true;
     }
 
@@ -221,12 +220,14 @@ return {api_version=2, runtime={agents=agents}}
 
     config::Loader{memory, values}.load(options, ProcessEnvironment{});
     check(values.manifests.entries().size() == 32 && values.limits.entries().size() == 5);
-    const auto *manifest = values.manifests.find(values.manifests.named("custom1"));
+    const auto* manifest = values.manifests.find(values.manifests.named("custom1"));
 
     check(manifest->process_names.entries().size() == 8 && manifest->working.entries().size() == 1);
     check(manifest->commandField("Shell") == "command");
     const auto reaches = values.limits.entries();
-    const auto overflow = std::find_if(reaches.begin(), reaches.end(), [](const auto &reach) { return reach.name == "agent_manifest.max_paths"; });
+    const auto overflow = std::find_if(reaches.begin(), reaches.end(), [](const auto& reach) {
+      return reach.name == "agent_manifest.max_paths";
+    });
 
     check(overflow != reaches.end() && overflow->requested == 10);
   }
@@ -268,7 +269,7 @@ return {api_version=2,plugins=plugins,profiles={selected={plugins={{path='replac
     config::RuntimeValues values{memory};
 
     config::Loader{memory, values}.load(options, ProcessEnvironment{});
-  } catch (const lua::Error &error) {
+  } catch (const lua::Error& error) {
     rejected = std::string_view{error.what()}.contains("escapes");
   }
 

@@ -3,18 +3,17 @@
 static_assert(true);
 #endif
 
-
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <unistd.h>
 #include <cerrno>
 #include <csignal>
 #include <cstddef>
-#include <cstring>
 #include <cstdint>
+#include <cstring>
 #include <poll.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <sys/un.h>
+#include <unistd.h>
 #if (defined(__APPLE__))
 #include <net/if.h>
 #endif
@@ -55,14 +54,14 @@ static_assert(true);
 #include <sys/uio.h>
 #endif
 #include <arpa/inet.h>
+#include <cstdio>
+#include <fcntl.h>
+#include <ifaddrs.h>
+#include <limits.h>
+#include <net/if.h>
+#include <netinet/in.h>
 #include <pcap/pcap.h>
 #include <sys/ioctl.h>
-#include <netinet/in.h>
-#include <ifaddrs.h>
-#include <net/if.h>
-#include <fcntl.h>
-#include <limits.h>
-#include <cstdio>
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <linux/fs.h>
 #endif
@@ -70,37 +69,37 @@ static_assert(true);
 #include <sys/syscall.h>
 #endif
 #include <cstdlib>
-#include <sys/file.h>
-#include <sys/sockio.h>
-#include <netinet/tcp.h>
 #include <net/if_dl.h>
 #include <net/route.h>
-#include <sys/uio.h>
 #include <netinet/in_pcb.h>
+#include <netinet/tcp.h>
 #include <netinet/tcp_fsm.h>
 #include <netinet/tcp_var.h>
+#include <sys/file.h>
 #include <sys/socketvar.h>
+#include <sys/sockio.h>
 #include <sys/sysctl.h>
+#include <sys/uio.h>
 #if (defined(__APPLE__))
 #include <libproc.h>
 #endif
 #if (!(defined(__APPLE__)))
 #include <dirent.h>
 #endif
-#include <pthread.h>
-#include <netdb.h>
 #include <brotli/decode.h>
 #include <brotli/encode.h>
-#include <zlib.h>
-#include <zstd.h>
 #include <cassert>
+#include <ctime>
+#include <netdb.h>
 #include <nghttp2/nghttp2.h>
-#include <openssl/ssl.h>
+#include <openssl/crypto.h>
 #include <openssl/err.h>
 #include <openssl/pem.h>
+#include <openssl/ssl.h>
 #include <openssl/x509v3.h>
-#include <openssl/crypto.h>
-#include <ctime>
+#include <pthread.h>
+#include <zlib.h>
+#include <zstd.h>
 #if (defined(__APPLE__))
 #include <sys/event.h>
 #endif
@@ -139,7 +138,12 @@ template <typename Operation>
 static void rejects(Operation operation) {
   bool rejected = false;
 
-  try { operation(); } catch (const std::exception &) { rejected = true; }
+  try {
+    operation();
+  } catch (const std::exception&) {
+    rejected = true;
+  }
+
   check(rejected);
 }
 
@@ -177,7 +181,11 @@ struct TcpPair {
     target.endpoint.setPort(target.port);
     client = openOriginSocket(target.endpoint.storage.ss_family);
     check(::connect(client.get(), target.endpoint.address(), target.endpoint.length) == 0 || errno == EINPROGRESS);
-    await([&] { server = listener.accept(); return static_cast<bool>(server); });
+    await([&] {
+      server = listener.accept();
+      return static_cast<bool>(server);
+    });
+
     int failure = -1;
     socklen_t size = sizeof(failure);
 
@@ -186,7 +194,9 @@ struct TcpPair {
 };
 
 struct SameUser {
-  static bool allows(uid_t uid) noexcept { return uid == ::geteuid(); }
+  static bool allows(uid_t uid) noexcept {
+    return uid == ::geteuid();
+  }
 };
 
 static void transfer(int source, int destination, std::string_view text) {
@@ -198,23 +208,30 @@ static void transfer(int source, int destination, std::string_view text) {
       const auto count = ::send(source, text.data() + sent, text.size() - sent, 0);
 
       check(count >= 0 || socketWouldBlock(errno));
-      if (count > 0) { sent += static_cast<std::size_t>(count); }
+      if (count > 0) {
+        sent += static_cast<std::size_t>(count);
+      }
     }
 
     std::array<char, 16384> bytes;
     const auto count = ::recv(destination, bytes.data(), bytes.size(), 0);
 
     check(count >= 0 || socketWouldBlock(errno));
-    if (count > 0) { result.append(bytes.data(), static_cast<std::size_t>(count)); }
+    if (count > 0) {
+      result.append(bytes.data(), static_cast<std::size_t>(count));
+    }
+
     return result.size() == text.size();
   });
 
   check(result == text);
 }
 
-static void targetsAndRules(SystemAllocator &memory) {
+static void targetsAndRules(SystemAllocator& memory) {
   for (const auto value : {"example.com:443", "127.0.0.1:0", "127.0.0.1:65536", "::1:443", "[fe80::1]:443", "224.0.0.1:443", "[::]:443", "127.0.0.1:44\n3", "127.0.0.1;bad:443"}) {
-    rejects([&] { redir::Target::parse(value); });
+    rejects([&] {
+      redir::Target::parse(value);
+    });
   }
 
   const std::array<redir::Mapping, 2> mappings{{{redir::Target::parse("192.0.2.1:443"), 53001}, {redir::Target::parse("[::1]:80"), 53002}}};
@@ -246,7 +263,10 @@ static void targetsAndRules(SystemAllocator &memory) {
   command.run(arguments, rules);
   command.run(arguments, scoped_rules);
   bypass.route.interface.assign("en0;pass");
-  rejects([&] { redir::pfRules(memory, mappings, scope); });
+  rejects([&] {
+    redir::pfRules(memory, mappings, scope);
+  });
+
   scope.bypasses = {};
   auto incoming_mappings = mappings;
 
@@ -283,28 +303,45 @@ static void targetsAndRules(SystemAllocator &memory) {
 
   check(std::string_view{both_rules}.contains("pass out") && std::string_view{both_rules}.contains("pass in log"));
   command.run(arguments, both_rules);
-  rejects([&] { redir::pfRules(memory, mappings, incoming_scope); });
+  rejects([&] {
+    redir::pfRules(memory, mappings, incoming_scope);
+  });
+
   incoming_scope.direction = redir::Direction::outbound;
-  rejects([&] { redir::pfRules(memory, incoming_mappings, incoming_scope); });
+  rejects([&] {
+    redir::pfRules(memory, incoming_mappings, incoming_scope);
+  });
+
   scope.uid = 0;
-  rejects([&] { redir::pfRules(memory, mappings, scope); });
+  rejects([&] {
+    redir::pfRules(memory, mappings, scope);
+  });
+
   scope.uid = 501;
   scope.discovery_interface = "utun0\npass all";
-  rejects([&] { redir::pfRules(memory, mappings, scope); });
+  rejects([&] {
+    redir::pfRules(memory, mappings, scope);
+  });
 }
 
 static void incomingListeners() {
   auto target = redir::Target::parse("127.0.0.1:1");
-  ifaddrs *raw = nullptr;
+  ifaddrs* raw = nullptr;
 
   check(::getifaddrs(&raw) == 0);
   const std::unique_ptr<ifaddrs, decltype(&freeifaddrs)> interfaces{raw, &freeifaddrs};
 
-  for (const auto *entry = raw; entry; entry = entry->ifa_next) {
-    if (!entry->ifa_addr || entry->ifa_addr->sa_family != AF_INET || !(entry->ifa_flags & IFF_UP) || (entry->ifa_flags & IFF_LOOPBACK)) { continue; }
-    const auto &address = reinterpret_cast<const sockaddr_in &>(*entry->ifa_addr);
+  for (const auto* entry = raw; entry; entry = entry->ifa_next) {
+    if (!entry->ifa_addr || entry->ifa_addr->sa_family != AF_INET || !(entry->ifa_flags & IFF_UP) || (entry->ifa_flags & IFF_LOOPBACK)) {
+      continue;
+    }
+
+    const auto& address = reinterpret_cast<const sockaddr_in&>(*entry->ifa_addr);
     const auto host = ntohl(address.sin_addr.s_addr);
-    if (host == INADDR_ANY || host == INADDR_BROADCAST || IN_MULTICAST(host)) { continue; }
+    if (host == INADDR_ANY || host == INADDR_BROADCAST || IN_MULTICAST(host)) {
+      continue;
+    }
+
     std::array<char, INET_ADDRSTRLEN> text{};
 
     check(::inet_ntop(AF_INET, &address.sin_addr, text.data(), text.size()) != nullptr);
@@ -317,9 +354,9 @@ static void incomingListeners() {
     NetworkAddress bound = target.endpoint;
     socklen_t size = bound.length;
 
-    check(::getsockname(listener.descriptor(), reinterpret_cast<sockaddr *>(&bound.storage), &size) == 0);
+    check(::getsockname(listener.descriptor(), reinterpret_cast<sockaddr*>(&bound.storage), &size) == 0);
     std::array<char, INET_ADDRSTRLEN> host{};
-    const auto &address = reinterpret_cast<const sockaddr_in &>(bound.storage);
+    const auto& address = reinterpret_cast<const sockaddr_in&>(bound.storage);
 
     check(::inet_ntop(AF_INET, &address.sin_addr, host.data(), host.size()) != nullptr);
     const auto mapping = listener.mapping();
@@ -332,7 +369,11 @@ static void incomingListeners() {
     check(::connect(client.get(), bound.address(), bound.length) == 0 || errno == EINPROGRESS);
     FileDescriptor server;
 
-    await([&] { server = listener.accept(); return static_cast<bool>(server); });
+    await([&] {
+      server = listener.accept();
+      return static_cast<bool>(server);
+    });
+
     constexpr char payload[] = "incoming listener\0binary";
 
     transfer(client.get(), server.get(), {payload, sizeof(payload) - 1});
@@ -347,7 +388,7 @@ static void discoveredPackets() {
     const auto encoded = htonl(family);
 
     std::memcpy(frame.data(), &encoded, sizeof(encoded));
-    auto *ip = frame.data() + sizeof(family);
+    auto* ip = frame.data() + sizeof(family);
 
     if (ipv6) {
       ip[0] = 0x60;
@@ -363,7 +404,7 @@ static void discoveredPackets() {
       ip[15] = ip[19] = 1;
     }
 
-    auto *tcp = ip + ip_size;
+    auto* tcp = ip + ip_size;
 
     tcp[0] = 0xd6;
     tcp[1] = 0xd9;
@@ -432,10 +473,20 @@ static void discoveredPackets() {
 struct FakeState {
   std::optional<std::uint64_t> token;
   bool fail_clear = false;
-  std::optional<std::uint64_t> load() { return token; }
-  void save(std::uint64_t value) { token = value; }
+
+  std::optional<std::uint64_t> load() {
+    return token;
+  }
+
+  void save(std::uint64_t value) {
+    token = value;
+  }
+
   void clear() {
-    if (fail_clear) { throw std::runtime_error{"injected record removal failure"}; }
+    if (fail_clear) {
+      throw std::runtime_error{"injected record removal failure"};
+    }
+
     token.reset();
   }
 };
@@ -448,12 +499,27 @@ struct FakeCommand {
   std::string run(std::span<const std::string_view> arguments, std::string_view = {}) {
     std::vector<std::string> owned;
 
-    for (const auto argument : arguments) { owned.emplace_back(argument); }
+    for (const auto argument : arguments) {
+      owned.emplace_back(argument);
+    }
+
     calls.push_back(owned);
-    if (calls.size() == fail_at) { throw std::runtime_error{"injected PF failure"}; }
-    if (arguments.front() == "-sr") { return hooks ? "anchor \"com.apple/*\" all\n" : ""; }
-    if (arguments.front() == "-sn") { return "rdr-anchor \"com.apple/*\" all\n"; }
-    if (arguments.front() == "-E") { return "pf enabled\nToken : 12345\n"; }
+    if (calls.size() == fail_at) {
+      throw std::runtime_error{"injected PF failure"};
+    }
+
+    if (arguments.front() == "-sr") {
+      return hooks ? "anchor \"com.apple/*\" all\n" : "";
+    }
+
+    if (arguments.front() == "-sn") {
+      return "rdr-anchor \"com.apple/*\" all\n";
+    }
+
+    if (arguments.front() == "-E") {
+      return "pf enabled\nToken : 12345\n";
+    }
+
     const bool syntax = arguments.size() == 5 && arguments[0] == "-n" && arguments[1] == "-a" && arguments[3] == "-f" && arguments[4] == "-";
     const bool load = arguments.size() == 4 && arguments[0] == "-a" && arguments[2] == "-f" && arguments[3] == "-";
     const bool flush = arguments.size() == 4 && arguments[0] == "-a" && arguments[2] == "-F" && (arguments[3] == "rules" || arguments[3] == "nat");
@@ -468,17 +534,24 @@ struct FakeLoopback {
   std::size_t owners = 0;
   bool fail_acquire = false;
   bool fail_release = false;
+
   void acquire() {
     ++owners;
-    if (fail_acquire) { throw std::runtime_error{"injected loopback activation failure"}; }
+    if (fail_acquire) {
+      throw std::runtime_error{"injected loopback activation failure"};
+    }
   }
+
   void release() {
-    if (fail_release) { throw std::runtime_error{"injected loopback cleanup failure"}; }
+    if (fail_release) {
+      throw std::runtime_error{"injected loopback cleanup failure"};
+    }
+
     owners = 0;
   }
 };
 
-static void lifecycle(SystemAllocator &memory) {
+static void lifecycle(SystemAllocator& memory) {
   redir::PfIdentity identity{memory, "/tmp/fixture.sock.redirect"};
   FakeLoopback loopback;
 
@@ -491,11 +564,13 @@ static void lifecycle(SystemAllocator &memory) {
     {
       redir::PfSession session{command, state, identity, loopback};
 
-      rejects([&] { session.start("fixture rules"); });
+      rejects([&] {
+        session.start("fixture rules");
+      });
     }
 
     check(!state.token);
-    for (const auto &call : command.calls) {
+    for (const auto& call : command.calls) {
       check(std::ranges::find(call, "all") == call.end() && std::ranges::find(call, "states") == call.end());
     }
   }
@@ -519,10 +594,15 @@ static void lifecycle(SystemAllocator &memory) {
   command.hooks = false;
   redir::PfSession session{command, state, identity, loopback};
 
-  rejects([&] { session.start("fixture rules"); });
+  rejects([&] {
+    session.start("fixture rules");
+  });
+
   check(!state.token);
   for (const auto output : {"", "Token : 0\n", "Token : -1\n", "Token : 12garbage\n"}) {
-    rejects([&] { decltype(session)::parseToken(output); });
+    rejects([&] {
+      decltype(session)::parseToken(output);
+    });
   }
 
   for (std::size_t failure = 1; failure <= 3; ++failure) {
@@ -532,7 +612,10 @@ static void lifecycle(SystemAllocator &memory) {
     FakeState recorded{12345};
     redir::PfSession recovery{cleanup, recorded, identity, loopback};
 
-    rejects([&] { recovery.recover(); });
+    rejects([&] {
+      recovery.recover();
+    });
+
     check(recorded.token == 12345);
     check(cleanup.calls[0] == std::vector<std::string>{"-a", std::string{identity.anchor}, "-F", "rules"});
     check(cleanup.calls[1] == std::vector<std::string>{"-a", std::string{identity.anchor}, "-F", "nat"});
@@ -553,7 +636,9 @@ static void lifecycle(SystemAllocator &memory) {
   {
     redir::PfSession rollback{activation, recorded, identity, loopback};
 
-    rejects([&] { rollback.start("fixture rules"); });
+    rejects([&] {
+      rollback.start("fixture rules");
+    });
   }
 
   check(!recorded.token && loopback.owners == 0);
@@ -563,7 +648,10 @@ static void lifecycle(SystemAllocator &memory) {
   redir::PfSession recovery{activation, recorded, identity, loopback};
   const auto before = activation.calls.size();
 
-  rejects([&] { recovery.recover(); });
+  rejects([&] {
+    recovery.recover();
+  });
+
   check(recorded.token == 12345 && activation.calls.size() == before + 2);
   loopback.fail_release = false;
   recovery.stop();
@@ -574,26 +662,42 @@ static void lifecycle(SystemAllocator &memory) {
   {
     redir::PfSession closing{finalization, removed_reference, identity, loopback};
 
-    rejects([&] { closing.recover(); });
+    rejects([&] {
+      closing.recover();
+    });
+
     check(removed_reference.token == 0);
     removed_reference.fail_clear = false;
   }
 
   check(!removed_reference.token);
-  check(std::ranges::count_if(finalization.calls, [](const auto &call) { return call.front() == "-X"; }) == 1);
+  check(std::ranges::count_if(finalization.calls, [](const auto& call) {
+    return call.front() == "-X";
+  }) == 1);
 }
 
 struct LeaseStore {
   std::optional<std::string> content;
   bool fail_save = false;
   bool fail_clear = false;
-  std::optional<std::string> load() { return content; }
+
+  std::optional<std::string> load() {
+    return content;
+  }
+
   void save(std::string_view value) {
-    if (fail_save) { throw std::runtime_error{"injected lease write failure"}; }
+    if (fail_save) {
+      throw std::runtime_error{"injected lease write failure"};
+    }
+
     content = value;
   }
+
   void clear() {
-    if (fail_clear) { throw std::runtime_error{"injected lease removal failure"}; }
+    if (fail_clear) {
+      throw std::runtime_error{"injected lease removal failure"};
+    }
+
     content.reset();
   }
 };
@@ -602,21 +706,34 @@ struct FakeInterface {
   bool skip = true;
   bool fail = false;
   std::vector<bool> changes;
-  bool skipped() const noexcept { return skip; }
+
+  bool skipped() const noexcept {
+    return skip;
+  }
+
   void setSkipped(bool value) {
-    if (fail) { throw std::runtime_error{"injected loopback ioctl failure"}; }
+    if (fail) {
+      throw std::runtime_error{"injected loopback ioctl failure"};
+    }
+
     skip = value;
     changes.push_back(value);
   }
 };
 
-static void loopbackLeases(SystemAllocator &memory) {
+static void loopbackLeases(SystemAllocator& memory) {
   using Parser = redir::PfLoopback<FakeCommand>;
 
   check(Parser::parse("No ALTQ support in kernel\nlo0 (skip)\n"));
   check(!Parser::parse("lo0\nALTQ related functions disabled\n"));
-  rejects([] { Parser::parse("lo01 (skip)\n"); });
-  rejects([] { Parser::parse("lo0 (unknown)\n"); });
+  rejects([] {
+    Parser::parse("lo01 (skip)\n");
+  });
+
+  rejects([] {
+    Parser::parse("lo0 (unknown)\n");
+  });
+
   constexpr std::string_view first = "tlr_0000000000000001";
   constexpr std::string_view second = "tlr_0000000000000002";
 
@@ -647,7 +764,10 @@ static void loopbackLeases(SystemAllocator &memory) {
     FakeInterface interface;
     redir::LoopbackLeases leases{memory};
 
-    rejects([&] { leases.acquire(store, interface, first); });
+    rejects([&] {
+      leases.acquire(store, interface, first);
+    });
+
     check(interface.skip && interface.changes.empty());
   }
 
@@ -656,29 +776,41 @@ static void loopbackLeases(SystemAllocator &memory) {
   redir::LoopbackLeases leases{memory};
 
   store.fail_save = true;
-  rejects([&] { leases.acquire(store, interface, first); });
+  rejects([&] {
+    leases.acquire(store, interface, first);
+  });
+
   check(!store.content && interface.skip);
   store.fail_save = false;
   interface.fail = true;
-  rejects([&] { leases.acquire(store, interface, first); });
+  rejects([&] {
+    leases.acquire(store, interface, first);
+  });
+
   check(store.content && interface.skip);
   interface.fail = false;
   leases.release(store, interface, first);
   check(!store.content && interface.skip);
   leases.acquire(store, interface, first);
   interface.fail = true;
-  rejects([&] { leases.release(store, interface, first); });
+  rejects([&] {
+    leases.release(store, interface, first);
+  });
+
   check(store.content && !interface.skip);
   interface.fail = false;
   store.fail_clear = true;
-  rejects([&] { leases.release(store, interface, first); });
+  rejects([&] {
+    leases.release(store, interface, first);
+  });
+
   check(store.content && interface.skip);
   store.fail_clear = false;
   leases.release(store, interface, first);
   check(!store.content && interface.skip);
 }
 
-static void relay(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> &library, const std::string &path) {
+static void relay(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory>& library, const std::string& path) {
   AuthorityDirectory directory;
   const auto authority = std::make_shared<const CertificateAuthority<TlsTestMemory>>(CertificateAuthority<TlsTestMemory>::loadOrCreate(memory, library, directory.descriptor.get(), AuthorityKind::private_local));
   TlsTrustStore trust{memory, library};
@@ -724,14 +856,28 @@ static void relay(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> &librar
       transfer(upstream.server.get(), downstream.client.get(), "server-first banner\r\n");
       std::string payload(256 * 1024, '\0');
 
-      for (std::size_t index = 0; index < payload.size(); ++index) { payload[index] = static_cast<char>(index * 37); }
+      for (std::size_t index = 0; index < payload.size(); ++index) {
+        payload[index] = static_cast<char>(index * 37);
+      }
+
       transfer(downstream.client.get(), upstream.server.get(), payload);
       check(::shutdown(downstream.client.get(), SHUT_WR) == 0);
-      await([&] { Byte byte; const auto n = ::recv(upstream.server.get(), &byte, 1, 0); return n == 0; });
+      await([&] {
+        Byte byte;
+        const auto n = ::recv(upstream.server.get(), &byte, 1, 0);
+
+        return n == 0;
+      });
+
       transfer(upstream.server.get(), downstream.client.get(), "response after half-close");
       check(::shutdown(upstream.server.get(), SHUT_WR) == 0);
-      await([&] { return service.active() == 0; });
-      await([&] { return ::recv(channel.get(), &lifetime_probe, 1, MSG_PEEK | MSG_DONTWAIT) == 0; });
+      await([&] {
+        return service.active() == 0;
+      });
+
+      await([&] {
+        return ::recv(channel.get(), &lifetime_probe, 1, MSG_PEEK | MSG_DONTWAIT) == 0;
+      });
     }
 
     TcpPair downstream;
@@ -766,7 +912,7 @@ static void relay(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> &librar
   }
 }
 
-static void opaqueTls(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> &library) {
+static void opaqueTls(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory>& library) {
   AuthorityDirectory directory;
   const auto authority = std::make_shared<const CertificateAuthority<TlsTestMemory>>(CertificateAuthority<TlsTestMemory>::loadOrCreate(memory, library, directory.descriptor.get(), AuthorityKind::private_local));
   TlsTrustStore trust{memory, library};
@@ -802,8 +948,16 @@ static void opaqueTls(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> &li
   bool failed = false;
 
   await([&] {
-    if (!client_ready) { client_ready = advanceTlsPeer(client.get(), failed); check(!failed); }
-    if (!server_ready) { server_ready = advanceTlsPeer(server.get(), failed); check(!failed); }
+    if (!client_ready) {
+      client_ready = advanceTlsPeer(client.get(), failed);
+      check(!failed);
+    }
+
+    if (!server_ready) {
+      server_ready = advanceTlsPeer(server.get(), failed);
+      check(!failed);
+    }
+
     return client_ready && server_ready;
   });
 
@@ -821,7 +975,7 @@ public:
     std::string closed;
   };
 
-  void observeFlow(traffic::Kind kind, const traffic::FlowEvent &event) noexcept override {
+  void observeFlow(traffic::Kind kind, const traffic::FlowEvent& event) noexcept override {
     std::lock_guard lock{mutex_};
 
     if (kind == traffic::Kind::stream_data) {
@@ -829,7 +983,9 @@ public:
     } else if (kind == traffic::Kind::flow_error) {
       ++seen_.errors;
       seen_.error = event.reason;
-    } else if (kind == traffic::Kind::flow_close) { seen_.closed = event.reason; }
+    } else if (kind == traffic::Kind::flow_close) {
+      seen_.closed = event.reason;
+    }
   }
 
   Snapshot snapshot() {
@@ -838,12 +994,27 @@ public:
     return seen_;
   }
 
-  std::uint64_t intercept(const traffic::FlowEvent &) noexcept override { return 0; }
-  Decision poll(std::uint64_t, std::span<Byte>) noexcept override { return {traffic::Verdict::reject}; }
+  std::uint64_t intercept(const traffic::FlowEvent&) noexcept override {
+    return 0;
+  }
+
+  Decision poll(std::uint64_t, std::span<Byte>) noexcept override {
+    return {traffic::Verdict::reject};
+  }
+
   void cancel(std::uint64_t) noexcept override {}
-  std::optional<Time> deadline(std::uint64_t) noexcept override { return std::nullopt; }
-  int descriptor() const noexcept override { return signal_.descriptor(); }
-  void drain() noexcept override { signal_.drain(); }
+
+  std::optional<Time> deadline(std::uint64_t) noexcept override {
+    return std::nullopt;
+  }
+
+  int descriptor() const noexcept override {
+    return signal_.descriptor();
+  }
+
+  void drain() noexcept override {
+    signal_.drain();
+  }
 
 private:
   CompletionSignal signal_;
@@ -853,10 +1024,18 @@ private:
 
 class TlsHttpOwner final : public TlsFlowObserver, public traffic::HttpControl {
 public:
-  explicit TlsHttpOwner(TlsTestMemory &memory) : reply_(memory, HttpMessageLimits::message_bytes) {}
-  traffic::HttpControl *http() noexcept override { return this; }
-  traffic::HttpPolicy policy(const traffic::FlowEvent &) noexcept override { return {true, true}; }
-  std::uint64_t interceptHttp(const traffic::FlowEvent &event) noexcept override {
+  explicit TlsHttpOwner(TlsTestMemory& memory)
+      : reply_(memory, HttpMessageLimits::message_bytes) {}
+
+  traffic::HttpControl* http() noexcept override {
+    return this;
+  }
+
+  traffic::HttpPolicy policy(const traffic::FlowEvent&) noexcept override {
+    return {true, true};
+  }
+
+  std::uint64_t interceptHttp(const traffic::FlowEvent& event) noexcept override {
     check(event.visibility == traffic::Visibility::plaintext);
     auto message = HttpMessageCodec::decode(event.bytes);
     if (message.response) {
@@ -865,19 +1044,30 @@ public:
       message.body = body;
       message.status = 202;
       message.reason = "Edited";
-    } else { message.target = "/edited-tls"; }
+    } else {
+      message.target = "/edited-tls";
+    }
 
     size_ = HttpMessageCodec::encode(reply_.bytes(), message).size();
     return calls.fetch_add(1, std::memory_order_relaxed) + 1;
   }
+
   Decision pollHttp(std::uint64_t, std::span<Byte> output) noexcept override {
     check(size_ <= output.size());
     std::ranges::copy(reply_.bytes().first(size_), output.begin());
     return {traffic::Verdict::replace, size_};
   }
+
   void cancelHttp(std::uint64_t) noexcept override {}
-  std::optional<Time> httpDeadline(std::uint64_t) noexcept override { return std::chrono::steady_clock::now() + std::chrono::seconds{5}; }
-  void httpUnavailable(const traffic::FlowEvent &) noexcept override { check(false); }
+
+  std::optional<Time> httpDeadline(std::uint64_t) noexcept override {
+    return std::chrono::steady_clock::now() + std::chrono::seconds{5};
+  }
+
+  void httpUnavailable(const traffic::FlowEvent&) noexcept override {
+    check(false);
+  }
+
   std::atomic<unsigned> calls{0};
 
 private:
@@ -885,7 +1075,12 @@ private:
   std::size_t size_ = 0;
 };
 
-enum class TransparentTlsMode { intercept, pinned, excluded_pinned, suspended };
+enum class TransparentTlsMode {
+  intercept,
+  pinned,
+  excluded_pinned,
+  suspended,
+};
 
 struct TransparentTlsCase {
   bool trusted_origin = true;
@@ -896,7 +1091,7 @@ struct TransparentTlsCase {
   TransparentTlsMode mode = TransparentTlsMode::intercept;
 };
 
-static void exchangeHttp2Tls(TlsTestMemory &memory, SSL *client, SSL *server) {
+static void exchangeHttp2Tls(TlsTestMemory& memory, SSL* client, SSL* server) {
   const std::array<std::pair<std::string_view, std::string_view>, 4> headers{{{":method", "GET"}, {":scheme", "https"}, {":authority", "origin.test"}, {":path", "/transparent"}}};
   constexpr auto end = static_cast<std::uint8_t>(Http2Flag::end_stream);
   constexpr auto complete_headers = end | static_cast<std::uint8_t>(Http2Flag::end_headers);
@@ -904,15 +1099,31 @@ static void exchangeHttp2Tls(TlsTestMemory &memory, SSL *client, SSL *server) {
   const auto settings = http2Frame(Http2FrameKind::settings, 0, 0, {});
   std::size_t sent = 0;
 
-  await([&] { return SSL_write_ex(server, settings.data(), settings.size(), &sent) == 1; });
-  await([&] { return SSL_write_ex(client, request.data(), request.size(), &sent) == 1; });
+  await([&] {
+    return SSL_write_ex(server, settings.data(), settings.size(), &sent) == 1;
+  });
+
+  await([&] {
+    return SSL_write_ex(client, request.data(), request.size(), &sent) == 1;
+  });
+
   struct Sink {
     std::string path, status, body;
     bool ended = false;
-    void emit(const Http2Event &event) noexcept {
-      if (event.name == ":path") { path = event.value; }
-      if (event.name == ":status") { status = event.value; }
-      if (!event.bytes.empty()) { body.append(reinterpret_cast<const char *>(event.bytes.data()), event.bytes.size()); }
+
+    void emit(const Http2Event& event) noexcept {
+      if (event.name == ":path") {
+        path = event.value;
+      }
+
+      if (event.name == ":status") {
+        status = event.value;
+      }
+
+      if (!event.bytes.empty()) {
+        body.append(reinterpret_cast<const char*>(event.bytes.data()), event.bytes.size());
+      }
+
       ended |= event.kind == Http2Event::Kind::request_finished || event.kind == Http2Event::Kind::response_ended;
     }
   } request_sink, response_sink;
@@ -923,7 +1134,10 @@ static void exchangeHttp2Tls(TlsTestMemory &memory, SSL *client, SSL *server) {
   std::size_t received = 0;
 
   await([&] {
-    if (SSL_read_ex(server, bytes.data(), bytes.size(), &received) == 1) { request_observer.observe(std::span{bytes}.first(received), request_sink); }
+    if (SSL_read_ex(server, bytes.data(), bytes.size(), &received) == 1) {
+      request_observer.observe(std::span{bytes}.first(received), request_sink);
+    }
+
     return request_sink.ended;
   });
 
@@ -931,16 +1145,22 @@ static void exchangeHttp2Tls(TlsTestMemory &memory, SSL *client, SSL *server) {
   const std::array<std::pair<std::string_view, std::string_view>, 1> response_headers{{{":status", "200"}}};
   const auto response = http2Frame(Http2FrameKind::headers, static_cast<std::uint8_t>(Http2Flag::end_headers), 1, hpackFields(response_headers)) + http2Frame(Http2FrameKind::data, end, 1, "yes");
 
-  await([&] { return SSL_write_ex(server, response.data(), response.size(), &sent) == 1; });
   await([&] {
-    if (SSL_read_ex(client, bytes.data(), bytes.size(), &received) == 1) { response_observer.observe(std::span{bytes}.first(received), response_sink); }
+    return SSL_write_ex(server, response.data(), response.size(), &sent) == 1;
+  });
+
+  await([&] {
+    if (SSL_read_ex(client, bytes.data(), bytes.size(), &received) == 1) {
+      response_observer.observe(std::span{bytes}.first(received), response_sink);
+    }
+
     return response_sink.ended;
   });
 
   check(response_sink.status == "202" && response_sink.body == std::string("tls\0edited", 10));
 }
 
-static void transparentTls(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> &library, TransparentTlsCase scenario = {}) {
+static void transparentTls(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory>& library, TransparentTlsCase scenario = {}) {
   const auto [trusted_origin, http, numeric_ipv6, edit, http2, mode] = scenario;
   const bool excluded = mode == TransparentTlsMode::excluded_pinned;
   AuthorityDirectory directory;
@@ -950,11 +1170,17 @@ static void transparentTls(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory
   auto leaf = issuer.mint(hostname);
   TlsTrustStore trust{memory, library};
 
-  if (trusted_origin) { trust.add(issuer.certificate.get()); }
+  if (trusted_origin) {
+    trust.add(issuer.certificate.get());
+  }
+
   TlsContexts contexts{memory, library, trust};
   TlsInterception interception{contexts, authority};
 
-  if (mode == TransparentTlsMode::suspended) { interception.suspend(true); }
+  if (mode == TransparentTlsMode::suspended) {
+    interception.suspend(true);
+  }
+
   ProxyOptions options{memory};
 
   options.transparent_tls = true;
@@ -964,8 +1190,11 @@ static void transparentTls(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory
   std::optional<TlsHttpOwner> owner;
   TlsFlowObserver observer;
 
-  if (edit) { owner.emplace(memory); }
-  auto &flows = owner ? static_cast<TlsFlowObserver &>(*owner) : observer;
+  if (edit) {
+    owner.emplace(memory);
+  }
+
+  auto& flows = owner ? static_cast<TlsFlowObserver&>(*owner) : observer;
   ProxyService<TlsTestMemory, NativeEventLoop<TlsTestMemory>, SystemNameResolver> service{memory, options, secret, interception, ProxyListener::bind(std::nullopt, {}), &flows};
   TcpPair downstream{numeric_ipv6};
   TcpPair upstream{numeric_ipv6};
@@ -1015,16 +1244,26 @@ static void transparentTls(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory
   const bool rejected = !trusted_origin || mode == TransparentTlsMode::pinned || mode == TransparentTlsMode::suspended;
 
   await([&] {
-    if (!client_ready && !failed) { client_ready = advanceTlsPeer(client.get(), failed); }
-    if (!server_ready) { bool upstream_failed = false; server_ready = advanceTlsPeer(server.get(), upstream_failed); }
+    if (!client_ready && !failed) {
+      client_ready = advanceTlsPeer(client.get(), failed);
+    }
+
+    if (!server_ready) {
+      bool upstream_failed = false;
+
+      server_ready = advanceTlsPeer(server.get(), upstream_failed);
+    }
+
     return rejected ? service.active() == 0 && flows.snapshot().errors != 0 : client_ready && server_ready;
   });
 
   if (rejected) {
     check(!client_ready);
     const auto seen = flows.snapshot();
-    const auto counter = !trusted_origin ? ProxyCounter::tls_upstream_handshake_failure : mode == TransparentTlsMode::pinned ? ProxyCounter::tls_downstream_handshake_failure : ProxyCounter::tls_context_failure;
-    const auto reason = !trusted_origin ? "tls_origin_handshake_failed" : mode == TransparentTlsMode::pinned ? "tls_client_handshake_failed" : "tls_context_failed";
+    const auto counter = !trusted_origin ? ProxyCounter::tls_upstream_handshake_failure : mode == TransparentTlsMode::pinned ? ProxyCounter::tls_downstream_handshake_failure
+                                                                                                                             : ProxyCounter::tls_context_failure;
+    const auto reason = !trusted_origin ? "tls_origin_handshake_failed" : mode == TransparentTlsMode::pinned ? "tls_client_handshake_failed"
+                                                                                                             : "tls_context_failed";
 
     check(service.counters().read(counter) == 1);
     check(service.counters().read(ProxyCounter::passthrough_connection) == 0);
@@ -1054,30 +1293,52 @@ static void transparentTls(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory
   const std::string_view request = http ? "GET /transparent HTTP/1.1\r\nHost: origin.test\r\n\r\n" : std::string_view{"custom\0protocol", 15};
   std::size_t sent = 0;
 
-  await([&] { return SSL_write_ex(client.get(), request.data(), request.size(), &sent) == 1; });
+  await([&] {
+    return SSL_write_ex(client.get(), request.data(), request.size(), &sent) == 1;
+  });
+
   std::array<char, 1024> bytes;
   std::size_t received = 0;
 
-  await([&] { return SSL_read_ex(server.get(), bytes.data(), bytes.size(), &received) == 1; });
-  if (edit) { check(std::string_view{bytes.data(), received}.starts_with("GET /edited-tls HTTP/1.1\r\n")); }
-  else { check(std::string_view{bytes.data(), received} == request); }
+  await([&] {
+    return SSL_read_ex(server.get(), bytes.data(), bytes.size(), &received) == 1;
+  });
+
+  if (edit) {
+    check(std::string_view{bytes.data(), received}.starts_with("GET /edited-tls HTTP/1.1\r\n"));
+  } else {
+    check(std::string_view{bytes.data(), received} == request);
+  }
+
   const std::string_view response = http ? "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nyes" : std::string_view{"binary\0response", 15};
 
-  await([&] { return SSL_write_ex(server.get(), response.data(), response.size(), &sent) == 1; });
+  await([&] {
+    return SSL_write_ex(server.get(), response.data(), response.size(), &sent) == 1;
+  });
+
   std::string result;
   const auto expected = edit ? std::string{"HTTP/1.1 202 Edited\r\nContent-Length: 10\r\n\r\n"} + std::string{"tls\0edited", 10} : std::string{response};
 
   await([&] {
-    if (SSL_read_ex(client.get(), bytes.data(), bytes.size(), &received) == 1) { result.append(bytes.data(), received); }
+    if (SSL_read_ex(client.get(), bytes.data(), bytes.size(), &received) == 1) {
+      result.append(bytes.data(), received);
+    }
+
     return result.size() == expected.size();
   });
 
   check(result == expected);
   const auto seen = flows.snapshot();
 
-  if (excluded) { check(seen.wire != 0 && seen.plaintext == 0 && seen.errors == 0); }
-  else { check(seen.plaintext != 0 && seen.wire == 0 && seen.errors == 0); }
-  if (owner) { check(owner->calls.load() == 2); }
+  if (excluded) {
+    check(seen.wire != 0 && seen.plaintext == 0 && seen.errors == 0);
+  } else {
+    check(seen.plaintext != 0 && seen.wire == 0 && seen.errors == 0);
+  }
+
+  if (owner) {
+    check(owner->calls.load() == 2);
+  }
 }
 
 int main() {

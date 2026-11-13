@@ -3,63 +3,62 @@
 static_assert(true);
 #endif
 
-
-#include "telar_client/serializers/telar_messages.hpp"
-#include <chrono>
-#include <cstddef>
-#include <cstdint>
+#include "plugin_bootstrap.hpp"
 #include "telar_base/memory/allocator.hpp"
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-#include <array>
-#include <cstring>
-#include <stdexcept>
-#include <string_view>
-#include <optional>
-#include <span>
-#include <bit>
-#include <charconv>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
-#include <utility>
-#include <pcap/pcap.h>
+#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_platform/file_descriptor.hpp"
+#include "telar_platform/random_bytes.hpp"
+#include "telar_platform/trace.hpp"
+#include "traffic_api.hpp"
 #include <algorithm>
 #include <arpa/inet.h>
-#include <cmath>
-#include <cstdio>
-#include <initializer_list>
-#include <string>
+#include <array>
 #include <atomic>
+#include <bit>
 #include <cassert>
-#include "telar_base/memory/fixed_text.hpp"
-#include <exception>
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include <limits.h>
-#include <memory>
-#include "telar_platform/random_bytes.hpp"
 #include <cerrno>
-#include "telar_platform/file_descriptor.hpp"
-#include <mutex>
-#include "traffic_api.hpp"
-#include "plugin_bootstrap.hpp"
-#include <sys/stat.h>
-#include <fcntl.h>
-#include "telar_platform/trace.hpp"
-#include <dirent.h>
-#include <cstdlib>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <unistd.h>
+#include <charconv>
+#include <chrono>
+#include <cmath>
+#include <condition_variable>
 #include <csignal>
-#include <poll.h>
-#include <sys/un.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <dirent.h>
+#include <exception>
+#include <fcntl.h>
+#include <fstream>
+#include <initializer_list>
+#include <lauxlib.h>
+#include <limits.h>
+#include <lua.h>
+#include <lualib.h>
+#include <memory>
+#include <mutex>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
-#include <unordered_map>
-#include <condition_variable>
-#include <type_traits>
+#include <optional>
+#include <pcap/pcap.h>
+#include <poll.h>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/un.h>
 #include <thread>
-#include <fstream>
+#include <type_traits>
+#include <unistd.h>
+#include <unordered_map>
+#include <utility>
 
 import telar.runtime.tests.check;
 import telar.runtime.plugins.run_worker;
@@ -90,7 +89,7 @@ static app::ServiceSpec specification(bool intercept) {
   return specification;
 }
 
-static void write(const std::string &path, std::string_view source) {
+static void write(const std::string& path, std::string_view source) {
   std::ofstream file{path};
 
   file << source;
@@ -138,7 +137,7 @@ return {}
     check(setup->changed && setup->registration_count == 2);
     check(setup->registrations[0].filter.view() == "udp port 53535" && setup->registrations[1].stage == app::TrafficStage::http);
     constexpr std::string_view bytes{"a\0b", 3};
-    app::TrafficEvent packet{.event_id = 1, .registration = setup->registrations[0].id, .dropped = 0, .event = {.kind = traffic::Kind::packet, .original_bytes = 3, .bytes = {reinterpret_cast<const Byte *>(bytes.data()), bytes.size()}}};
+    app::TrafficEvent packet{.event_id = 1, .registration = setup->registrations[0].id, .dropped = 0, .event = {.kind = traffic::Kind::packet, .original_bytes = 3, .bytes = {reinterpret_cast<const Byte*>(bytes.data()), bytes.size()}}};
     const auto response = host.invokeTraffic(packet, output.bytes());
     const auto observed = app::TrafficProtocol::readReply(response, *setup);
 
@@ -146,7 +145,7 @@ return {}
     check(app::Protocol::decodeEffects(observed.effects).batch.notifications[0].title == "packet verified");
 
     constexpr std::string_view body{"original\0body", 13};
-    HttpMessageView message{.method = "POST", .target = "/", .body = {reinterpret_cast<const Byte *>(body.data()), body.size()}};
+    HttpMessageView message{.method = "POST", .target = "/", .body = {reinterpret_cast<const Byte*>(body.data()), body.size()}};
     SensitiveAllocation encoded_message{memory, HttpMessageLimits::message_bytes};
     SensitiveAllocation encoded_flow{memory, HttpMessageLimits::message_bytes + traffic::Limits::metadata_bytes};
     const auto payload = HttpMessageCodec::encode(encoded_message.bytes(), message);
@@ -163,7 +162,7 @@ return {}
 
     decision.finish();
     check(edited.target == "/edited" && edited.header_count == 2 && edited.headers[1].value == "two");
-    check(std::string_view{reinterpret_cast<const char *>(edited.body.data()), edited.body.size()} == std::string_view{"original\0body\0suffix", 20});
+    check(std::string_view{reinterpret_cast<const char*>(edited.body.data()), edited.body.size()} == std::string_view{"original\0body\0suffix", 20});
     message.version = HttpVersion::http2;
     message.stream = 7;
     message.scheme = "https";
@@ -207,7 +206,10 @@ return {}
 
 static bool closed(int descriptor) {
   pollfd ready{descriptor, POLLIN, 0};
-  if (::poll(&ready, 1, 5000) <= 0) { return false; }
+  if (::poll(&ready, 1, 5000) <= 0) {
+    return false;
+  }
+
   Byte value;
 
   return ::recv(descriptor, &value, 1, 0) == 0;
@@ -294,7 +296,11 @@ static void unavailablePolicies() {
     check(std::ranges::equal(std::span{output}.first(result.bytes), replacement));
     bool inherited = false;
 
-    broker.deliver(2, [&](const auto &) { inherited = true; return true; });
+    broker.deliver(2, [&](const auto&) {
+      inherited = true;
+      return true;
+    });
+
     check(!inherited);
   }
 
@@ -349,7 +355,7 @@ return {}
 
     event.event_id = 2;
     event.registration = setup->registrations[0].id;
-    event.control = traffic::control::Protocol::encode(incoming.bytes(), traffic::control::Reply{.certificate = {reinterpret_cast<const Byte *>(bytes.data()), bytes.size()}});
+    event.control = traffic::control::Protocol::encode(incoming.bytes(), traffic::control::Reply{.certificate = {reinterpret_cast<const Byte*>(bytes.data()), bytes.size()}});
     app::TrafficProtocol::readReply(host.invokeTraffic(event, output.bytes()), *setup);
     check(setup->changed && setup->registration_count == 0);
   }

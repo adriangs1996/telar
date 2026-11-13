@@ -1,18 +1,18 @@
 module;
-#include <cstdlib>
-#include <stdlib.h>
-#include <new>
 #include <cstdio>
+#include <cstdlib>
+#include <new>
+#include <stdlib.h>
 
-#include <sys/types.h>
-#include <unistd.h>
-#include <cerrno>
-#include <cstdint>
-#include <sys/stat.h>
 #include <cassert>
+#include <cerrno>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <limits.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 export module telar.runtime.traffic.tap;
 
@@ -25,29 +25,35 @@ import telar.platform.primitives;
 
 // Interface: traffic/tap.cppm
 export {
-namespace telar::runtime::traffic {
+  namespace telar::runtime::traffic {
 
-template <ConcurrentAllocator Memory, typename Plugins>
-class Tap {
-public:
-  inline explicit Tap(Plugins &plugins, Service<Memory> *traffic) noexcept : plugins_(plugins), traffic_(traffic) {}
+    template <ConcurrentAllocator Memory, typename Plugins>
+    class Tap {
+    public:
+      inline explicit Tap(Plugins& plugins, Service<Memory>* traffic) noexcept
+          : plugins_(plugins),
+            traffic_(traffic) {}
 
-  inline FlowControl *flowControl() noexcept { return traffic_; }
+      inline FlowControl* flowControl() noexcept {
+        return traffic_;
+      }
 
-  inline bool listening() const noexcept { return plugins_.listening() || (traffic_ && traffic_->listening()); }
+      inline bool listening() const noexcept {
+        return plugins_.listening() || (traffic_ && traffic_->listening());
+      }
 
-  inline void submit(CapturedExchange<Memory> &exchange) noexcept {
-    if (traffic_) {
-      traffic_->submit(exchange);
-    }
+      inline void submit(CapturedExchange<Memory>& exchange) noexcept {
+        if (traffic_) {
+          traffic_->submit(exchange);
+        }
 
-    plugins_.submit(exchange);
+        plugins_.submit(exchange);
+      }
+
+    private:
+      Plugins& plugins_;
+      Service<Memory>* traffic_;
+    };
+
   }
-
-private:
-  Plugins &plugins_;
-  Service<Memory> *traffic_;
-};
-
-}
 }

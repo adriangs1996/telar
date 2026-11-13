@@ -3,17 +3,16 @@
 static_assert(true);
 #endif
 
-
-#include <pthread.h>
+#include <arpa/inet.h>
 #include <cerrno>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <netinet/in.h>
-#include <sys/socket.h>
 #include <netdb.h>
-#include <arpa/inet.h>
-#include <cstddef>
+#include <netinet/in.h>
 #include <poll.h>
+#include <pthread.h>
+#include <sys/socket.h>
 
 import std;
 import telar.platform.primitives;
@@ -27,7 +26,7 @@ struct BlockingNameResolver {
   inline static std::counting_semaphore<64> permits{0};
   inline static std::atomic<unsigned> calls{0};
 
-  static ResolutionSummary resolve(const char *, std::span<NetworkAddress> addresses) noexcept {
+  static ResolutionSummary resolve(const char*, std::span<NetworkAddress> addresses) noexcept {
     calls.fetch_add(1);
     permits.acquire();
     sockaddr_in address{};
@@ -38,8 +37,8 @@ struct BlockingNameResolver {
     address.sin_family = AF_INET;
     address.sin_port = htons(443);
     address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    for (auto &destination : addresses) {
-      destination = *NetworkAddress::copy(reinterpret_cast<const sockaddr *>(&address), sizeof(address));
+    for (auto& destination : addresses) {
+      destination = *NetworkAddress::copy(reinterpret_cast<const sockaddr*>(&address), sizeof(address));
     }
 
     return {.found = 40};
@@ -47,7 +46,7 @@ struct BlockingNameResolver {
 };
 
 template <typename Condition>
-static void waitFor(const Condition &ready) {
+static void waitFor(const Condition& ready) {
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
 
   while (!ready()) {
@@ -56,7 +55,7 @@ static void waitFor(const Condition &ready) {
   }
 }
 
-static void waitSignal(CompletionSignal &signal) {
+static void waitSignal(CompletionSignal& signal) {
   pollfd pending{.fd = signal.descriptor(), .events = POLLIN, .revents = 0};
 
   check(::poll(&pending, 1, 5000) == 1);
@@ -74,7 +73,10 @@ static void testSharedResolution() {
 
   check(first && second && Resolutions::pending() == 1);
   check(!Resolutions::request("invalid..example"));
-  waitFor([] { return BlockingNameResolver::calls.load() == 1; });
+  waitFor([] {
+    return BlockingNameResolver::calls.load() == 1;
+  });
+
   Resolutions::Result result;
 
   check(!first->collect(result));
@@ -83,9 +85,9 @@ static void testSharedResolution() {
   waitSignal(first_signal);
   waitSignal(second_signal);
   check(second->collect(result) && result.summary.found == 40 && result.summary.error == 0);
-  for (const auto &address : result.addresses) {
+  for (const auto& address : result.addresses) {
     check(address.storage.ss_family == AF_INET && address.length == sizeof(sockaddr_in));
-    check(reinterpret_cast<const sockaddr_in *>(&address.storage)->sin_port == 0);
+    check(reinterpret_cast<const sockaddr_in*>(&address.storage)->sin_port == 0);
   }
 
   auto moved = std::move(*second);
@@ -117,7 +119,9 @@ static void testResolutionSaturation() {
 
   check(Resolutions::pending() == Resolutions::capacity);
   BlockingNameResolver::permits.release(Resolutions::capacity);
-  waitFor([] { return Resolutions::pending() == 0; });
+  waitFor([] {
+    return Resolutions::pending() == 0;
+  });
 
   CompletionSignal signal;
   Resolutions::Notifications notifications{signal};

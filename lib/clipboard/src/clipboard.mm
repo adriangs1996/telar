@@ -5,7 +5,7 @@
 
 namespace telar::clipboard {
   namespace {
-    std::expected<content, read_error> copyData(NSData *data, std::string_view mime_type, std::size_t maximum_bytes) {
+    std::expected<content, read_error> copyData(NSData* data, std::string_view mime_type, std::size_t maximum_bytes) {
       if (data.length > maximum_bytes) {
         return std::unexpected(read_error::content_too_large);
       }
@@ -13,7 +13,7 @@ namespace telar::clipboard {
       content result{.mime_type = mime_type, .bytes = {}};
 
       if (data.length != 0) {
-        const auto *bytes = static_cast<const byte *>(data.bytes);
+        const auto* bytes = static_cast<const byte*>(data.bytes);
 
         result.bytes.assign(bytes, bytes + data.length);
       }
@@ -21,7 +21,7 @@ namespace telar::clipboard {
       return result;
     }
 
-    std::expected<content, read_error> capture(NSPasteboard *board, std::size_t maximum_bytes) {
+    std::expected<content, read_error> capture(NSPasteboard* board, std::size_t maximum_bytes) {
       struct image_format {
         NSPasteboardType type;
         std::string_view mime_type;
@@ -34,14 +34,14 @@ namespace telar::clipboard {
       };
 
       // Prefer PNG/JPEG over TIFF, which AppKit can synthesize for legacy consumers.
-      NSArray<NSPasteboardType> *types = board.types;
+      NSArray<NSPasteboardType>* types = board.types;
 
-      for (const auto &format : formats) {
+      for (const auto& format : formats) {
         if (![types containsObject:format.type]) {
           continue;
         }
 
-        NSData *data = [board dataForType:format.type];
+        NSData* data = [board dataForType:format.type];
         if (data == nil || data.length == 0) {
           continue;
         }
@@ -49,12 +49,12 @@ namespace telar::clipboard {
         return copyData(data, format.mime_type, maximum_bytes);
       }
 
-      NSString *text = [board stringForType:NSPasteboardTypeString];
+      NSString* text = [board stringForType:NSPasteboardTypeString];
       if (text == nil) {
         return std::unexpected(read_error::no_supported_content);
       }
 
-      NSData *data = [text dataUsingEncoding:NSUTF8StringEncoding];
+      NSData* data = [text dataUsingEncoding:NSUTF8StringEncoding];
       if (data == nil) {
         return std::unexpected(read_error::encoding_failed);
       }
@@ -65,7 +65,7 @@ namespace telar::clipboard {
 
   std::expected<content, read_error> read(std::size_t maximum_bytes) {
     @autoreleasepool {
-      NSPasteboard *board = [NSPasteboard generalPasteboard];
+      NSPasteboard* board = [NSPasteboard generalPasteboard];
       const auto revision = board.changeCount;
 
       try {
@@ -76,9 +76,9 @@ namespace telar::clipboard {
         }
 
         return result;
-      } catch (const std::bad_alloc &) {
+      } catch (const std::bad_alloc&) {
         return std::unexpected(read_error::allocation_failed);
-      } catch (const std::length_error &) {
+      } catch (const std::length_error&) {
         return std::unexpected(read_error::allocation_failed);
       }
     }

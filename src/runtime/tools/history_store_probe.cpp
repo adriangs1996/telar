@@ -3,13 +3,12 @@
 static_assert(true);
 #endif
 
-
+#include <cassert>
+#include <cstdint>
 #include <cstring>
 #include <sqlite3.h>
-#include <cstdint>
 #include <sys/types.h>
 #include <unistd.h>
-#include <cassert>
 
 import std;
 import telar.base.diagnostics;
@@ -44,7 +43,7 @@ public:
     fail_size.reset();
   }
 
-  void *allocate(std::size_t size, std::size_t alignment) noexcept {
+  void* allocate(std::size_t size, std::size_t alignment) noexcept {
     const auto call = calls++;
     if (call < sizes.size()) {
       sizes[call] = size;
@@ -55,7 +54,7 @@ public:
       ++failures;
       return nullptr;
     }
-    auto *pointer = system_.allocate(size, alignment);
+    auto* pointer = system_.allocate(size, alignment);
     if (pointer != nullptr) {
       live += size;
       bytes += size;
@@ -64,7 +63,7 @@ public:
     return pointer;
   }
 
-  void deallocate(void *pointer, std::size_t size, std::size_t alignment) noexcept {
+  void deallocate(void* pointer, std::size_t size, std::size_t alignment) noexcept {
     if (pointer != nullptr) {
       check(live >= size);
       live -= size;
@@ -77,14 +76,14 @@ private:
 };
 
 template <typename Reply>
-void record(std::ostream &output, const Reply &reply) {
+void record(std::ostream& output, const Reply& reply) {
   const std::uint64_t size = reply.payload().size();
-  output.write(reinterpret_cast<const char *>(&size), sizeof(size));
-  output.write(reinterpret_cast<const char *>(reply.payload().data()), size);
+  output.write(reinterpret_cast<const char*>(&size), sizeof(size));
+  output.write(reinterpret_cast<const char*>(reply.payload().data()), size);
   check(output.good());
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   try {
     check(argc == 2 || argc == 3);
     const std::uint64_t batches = argc == 3 ? std::stoull(argv[2]) : 8;
@@ -116,10 +115,7 @@ int main(int argc, char **argv) {
         const auto workspace = index % 3 == 0 ? "/workspace/a" : "/workspace/b";
         RequestContext context{.location = {.workspace = {.id = 1}, .tab_id = 2}, .workspace_path = workspace, .received_at_ms = 1 + (index * 37 % 301)};
         context.history_session[0] = 1;
-        ReportAgentCommand command_report{.request_id = 2, .pane_id = 3 + index % 2, .pane_generation = 1,
-                                           .phase = index % 4 == 0 ? AgentCommandPhase::started : AgentCommandPhase::finished,
-                                           .provider = "codex", .tool_call_id = tool, .command = command, .cwd = cwd,
-                                           .exit_code = index % 3 == 0 ? std::optional<std::int32_t>{} : std::optional<std::int32_t>{static_cast<std::int32_t>(index % 5)}};
+        ReportAgentCommand command_report{.request_id = 2, .pane_id = 3 + index % 2, .pane_generation = 1, .phase = index % 4 == 0 ? AgentCommandPhase::started : AgentCommandPhase::finished, .provider = "codex", .tool_call_id = tool, .command = command, .cwd = cwd, .exit_code = index % 3 == 0 ? std::optional<std::int32_t>{} : std::optional<std::int32_t>{static_cast<std::int32_t>(index % 5)}};
         store.reportAgentCommand(command_report, context, reply);
       }
 
@@ -131,9 +127,7 @@ int main(int argc, char **argv) {
             for (const auto distinct : {false, true}) {
               for (const auto snapshot : {std::uint64_t{0}, std::uint64_t{700}}) {
                 for (const std::uint32_t offset : {0, 10}) {
-                  QueryHistory request{.request_id = request_id++, .query = "gb", .scope = scope,
-                                       .failed_only = failed, .author = author, .match = HistoryMatch::fuzzy,
-                                       .distinct = distinct, .limit = 50, .offset = offset, .snapshot_id = snapshot};
+                  QueryHistory request{.request_id = request_id++, .query = "gb", .scope = scope, .failed_only = failed, .author = author, .match = HistoryMatch::fuzzy, .distinct = distinct, .limit = 50, .offset = offset, .snapshot_id = snapshot};
                   if (scope == HistoryScope::pane) {
                     request.scope_value = std::uint64_t{3};
                   } else if (scope != HistoryScope::global) {
@@ -142,7 +136,7 @@ int main(int argc, char **argv) {
                   store.query(request, reply);
                   DecodeStorage storage{scratch};
                   const auto result = Codec::decode<HistoryResults>(reply.payload(), storage);
-                  for (const auto &entry : result.entries) {
+                  for (const auto& entry : result.entries) {
                     check(entry.id <= (snapshot == 0 ? batches * 64 + 512 : snapshot));
                     check(!failed || (entry.exit_code && *entry.exit_code != 0));
                     check(author == HistoryAuthorFilter::all || entry.author == (author == HistoryAuthorFilter::agent ? HistoryAuthor::agent : HistoryAuthor::human));
@@ -190,7 +184,7 @@ int main(int argc, char **argv) {
         try {
           store.query(query, reply);
           check(std::ranges::equal(reply.payload(), expected));
-        } catch (const std::bad_alloc &) {
+        } catch (const std::bad_alloc&) {
           ++thrown_count;
         }
         check(audit.failures == 1);
@@ -218,7 +212,7 @@ int main(int argc, char **argv) {
     std::cout << "\"filter_queries\":" << query_count << ",\"seeded_entries\":" << batches * 64 + 512 << ",\"failures\":" << failure_count
               << ",\"thrown\":" << thrown_count << ",\"live_bytes_after_teardown\":" << audit.live << "}\n";
     return 0;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     std::cerr << error.what() << '\n';
     return 1;
   }

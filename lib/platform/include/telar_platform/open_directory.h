@@ -5,7 +5,7 @@
 extern "C" {
 #endif
 
-int telarOpenDirectoryNoFollow(const char *path);
+int telarOpenDirectoryNoFollow(const char* path);
 
 #ifdef __cplusplus
 }

@@ -23,7 +23,7 @@ namespace telar::clipboard {
     backend_unavailable,
   };
 
-  constexpr const char *error_message(read_error error) noexcept {
+  constexpr const char* error_message(read_error error) noexcept {
     switch (error) {
     case read_error::no_supported_content:
       return "Clipboard contains no supported text or image.";

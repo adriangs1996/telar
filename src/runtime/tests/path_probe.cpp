@@ -8,7 +8,7 @@ import telar.runtime.tests.protocol_peer;
 
 using namespace telar;
 
-static PathResults awaitFinal(ProtocolPeer &peer, std::uint64_t request) {
+static PathResults awaitFinal(ProtocolPeer& peer, std::uint64_t request) {
   for (;;) {
     const auto result = peer.receive<PathResults>();
     if (result.request_id == request && result.complete) {
@@ -17,12 +17,12 @@ static PathResults awaitFinal(ProtocolPeer &peer, std::uint64_t request) {
   }
 }
 
-static void record(ProtocolPeer &peer, std::ostream &dump, PathResults result) {
+static void record(ProtocolPeer& peer, std::ostream& dump, PathResults result) {
   result.root = "/fixture";
   peer.record(dump, result);
 }
 
-static void controlled(const char *socket, const std::filesystem::path &root, const char *output) {
+static void controlled(const char* socket, const std::filesystem::path& root, const char* output) {
   ProtocolPeer peer{socket};
   std::ofstream dump{output, std::ios::binary};
   const auto directory = root.string();
@@ -65,7 +65,7 @@ static void controlled(const char *socket, const std::filesystem::path &root, co
   try {
     peer.exchange<PathResults>(FindPaths{.request_id = ++request, .root = "/nonexistent-telar-path-probe", .limit = 10});
     awaitFinal(peer, request);
-  } catch (const ProtocolFailure &error) {
+  } catch (const ProtocolFailure& error) {
     refused = error.code == FailureCode::permission_denied;
   }
 
@@ -74,7 +74,7 @@ static void controlled(const char *socket, const std::filesystem::path &root, co
   std::puts("{\"partial_before_completion\":true,\"latest_query_completed\":true,\"rebuild_cancelled\":true,\"unreadable_refused\":true}");
 }
 
-static void populate(const std::filesystem::path &root, unsigned files) {
+static void populate(const std::filesystem::path& root, unsigned files) {
   for (unsigned directory = 0; directory < 32; ++directory) {
     const auto path = root / ("module_" + std::to_string(directory));
 
@@ -90,7 +90,7 @@ static void populate(const std::filesystem::path &root, unsigned files) {
   std::filesystem::create_directory_symlink(root, root / "cycle");
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   if (argc != 5) {
     return 2;
   }
@@ -127,7 +127,7 @@ int main(int argc, char **argv) {
     std::filesystem::remove_all(root);
     std::printf("{\"iterations\":%u,\"elapsed_ns\":%lld,\"ns_per_iteration\":%lld}\n", iterations, static_cast<long long>(elapsed), static_cast<long long>(elapsed / iterations));
     return 0;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     std::fprintf(stderr, "path-probe: %s\n", error.what());
     return 1;
   }

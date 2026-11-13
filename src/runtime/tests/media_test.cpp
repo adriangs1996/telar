@@ -3,22 +3,21 @@
 static_assert(true);
 #endif
 
-
-#include <cstring>
+#include "cell_layout.hpp"
+#include "telar_base/diagnostics/config.hpp"
+#include <cassert>
+#include <cerrno>
 #include <cstddef>
 #include <cstdint>
-#include "telar_base/diagnostics/config.hpp"
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fcntl.h>
-#include <sys/mman.h>
-#include <cerrno>
+#include <ghostty/vt.h>
 #include <pthread.h>
-#include "cell_layout.hpp"
-#include <cassert>
+#include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <ghostty/vt.h>
 
 import std;
 import telar.base.memory;
@@ -37,7 +36,7 @@ using namespace telar;
 using namespace telar::runtime;
 
 static std::span<const Byte> mediaBytes(std::string_view text) {
-  return {reinterpret_cast<const Byte *>(text.data()), text.size()};
+  return {reinterpret_cast<const Byte*>(text.data()), text.size()};
 }
 
 static void testCursorCommands() {
@@ -70,7 +69,7 @@ static void testCursorCommands() {
   check(observe("a=T,c=4294967295,r=4294967295") == DisplayCells{UINT32_MAX, UINT32_MAX});
 }
 
-static void testMediaCursor(SystemAllocator &memory) {
+static void testMediaCursor(SystemAllocator& memory) {
   Terminal terminal{memory, TerminalSize{10, 4, 8, 16}, TerminalPurpose::separate_media};
 
   terminal.feed(mediaBytes("x\x1b_Ga=T,s=16,v=32,i=1,q=2;invalid\x1b\\z"));
@@ -85,13 +84,13 @@ static void testMediaCursor(SystemAllocator &memory) {
   check(terminal.screen.cells[20].text[0] == 'z');
 }
 
-static void testMediaBatches(SystemAllocator &memory) {
+static void testMediaBatches(SystemAllocator& memory) {
   MediaBudget budget{GraphicsLimits::maximum_global_bytes};
 
   {
     auto media = std::make_shared<PaneMedia<SystemAllocator>>(memory, budget, GraphicsLimits{}, TerminalSize{10, 4, 8, 16});
     MediaProcessor<SystemAllocator> processor;
-    ObservationWorker<decltype(processor) &> worker{std::in_place, processor};
+    ObservationWorker<decltype(processor)&> worker{std::in_place, processor};
 
     media->output(mediaBytes("\x1b_Ga=T,s=1,v=1,i=7,q=2,m=1;/wAA"));
     check(media->seal());
@@ -111,10 +110,10 @@ static void testMediaBatches(SystemAllocator &memory) {
     check(queued.bytes == continuation.size() + std::string_view{"\x1b_Ga=T,s=1,v=1,i=7,q=2,m=1;/wAA"}.size());
     check(queued.byte_high_water == queued.bytes && queued.dropped_bytes == 0);
 #endif
-    worker.wait([&](const auto &result) {
+    worker.wait([&](const auto& result) {
       check(result.count == 1 && !result.entries[0].reset);
 #if TELAR_DIAGNOSTICS
-      const auto &metrics = result.entries[0].metrics;
+      const auto& metrics = result.entries[0].metrics;
 
       check(metrics.bytes == std::string_view{"\x1b_Ga=T,s=1,v=1,i=7,q=2,m=1;/wAA"}.size());
       check(metrics.ingest.count == 1 && metrics.resets == 0 && metrics.failures == 0);
@@ -224,7 +223,7 @@ static std::string encodedPath(std::string_view path) {
   return encoded;
 }
 
-static void testFileInput(SystemAllocator &memory) {
+static void testFileInput(SystemAllocator& memory) {
   std::array<char, 64> directory;
 
   std::strcpy(directory.data(), "/tmp/telar-media-test-XXXXXX");
@@ -236,7 +235,7 @@ static void testFileInput(SystemAllocator &memory) {
     std::ofstream file{file_path, std::ios::binary};
     const std::array<Byte, 8> pixels{1, 2, 3, 4, 255, 0, 0, 255};
 
-    file.write(reinterpret_cast<const char *>(pixels.data()), pixels.size());
+    file.write(reinterpret_cast<const char*>(pixels.data()), pixels.size());
     check(file.good());
   }
 
@@ -264,14 +263,14 @@ static void testFileInput(SystemAllocator &memory) {
     check(responses->empty());
     queries.feed(mediaBytes(request));
     const auto response = queries.responses();
-    const std::string text{reinterpret_cast<const char *>(response.data()), response.size()};
+    const std::string text{reinterpret_cast<const char*>(response.data()), response.size()};
 
     queries.consumeResponses(response.size());
     return text;
   };
 
   check(query(file_path) == "\x1b_Gi=9;OK\x1b\\");
-  for (const auto &path : {(root / "symlink").string(), (root / "pipe").string(), (root / "missing").string(), root.string(), std::string{"relative"}, std::string{"/tmp/a\0b", 8}}) {
+  for (const auto& path : {(root / "symlink").string(), (root / "pipe").string(), (root / "missing").string(), root.string(), std::string{"relative"}, std::string{"/tmp/a\0b", 8}}) {
     check(query(path) == "\x1b_Gi=9;EINVAL: invalid data\x1b\\");
   }
 
@@ -279,7 +278,7 @@ static void testFileInput(SystemAllocator &memory) {
   std::filesystem::remove_all(root);
 }
 
-static void testFrozenImages(SystemAllocator &memory) {
+static void testFrozenImages(SystemAllocator& memory) {
   MediaBudget budget{1024};
   MediaAllocator allocator{memory, budget, 768};
   const std::array<Byte, 4> pixels{255, 0, 0, 255};
@@ -329,14 +328,14 @@ static void testFrozenImages(SystemAllocator &memory) {
 
   try {
     FrozenImage rejected{failing_memory, failing_budget, pixels, false};
-  } catch (const std::bad_alloc &) {
+  } catch (const std::bad_alloc&) {
     failed = true;
   }
 
   check(failed && budget.used() == 0 && failing_memory.liveBytes() == 0);
 }
 
-static void testTransferPreparation(SystemAllocator &memory) {
+static void testTransferPreparation(SystemAllocator& memory) {
   MediaBudget budget{1024};
   MediaAllocator allocator{memory, budget, 768};
   const std::array<Byte, 4> pixels{255, 0, 0, 255};
@@ -361,7 +360,10 @@ static void testTransferPreparation(SystemAllocator &memory) {
     TELAR_DIAGNOSTIC(check(prepared.takePreparedCount() == 1));
     check(!prepared.take(images[0].description.key));
     check(budget.used() == 4 * pixels.size());
-    prepared.discardUnwanted([](ImageKey key, bool shared) { return shared && key.image_id == 2; });
+    prepared.discardUnwanted([](ImageKey key, bool shared) {
+      return shared && key.image_id == 2;
+    });
+
     check(budget.used() == pixels.size());
     prepared.clear();
     check(budget.used() == 0);
@@ -381,7 +383,10 @@ static void testTransferPreparation(SystemAllocator &memory) {
     check(requests.request(images[0].description.key, true));
     requests.process(images);
     check(budget.used() == 2 * pixels.size());
-    requests.discardUnwanted([](ImageKey, bool) { return false; });
+    requests.discardUnwanted([](ImageKey, bool) {
+      return false;
+    });
+
     check(budget.used() == pixels.size());
     frozen.reset();
     check(budget.used() == 0);
@@ -398,7 +403,7 @@ static void testTransferPreparation(SystemAllocator &memory) {
 }
 
 #if TELAR_DIAGNOSTICS
-static void testGraphicsStorageMetrics(SystemAllocator &memory) {
+static void testGraphicsStorageMetrics(SystemAllocator& memory) {
   MediaBudget budget{GraphicsLimits::maximum_global_bytes};
   PaneMedia media{memory, budget, GraphicsLimits{}, TerminalSize{10, 4, 8, 16}};
 

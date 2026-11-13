@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-
 #if (defined(__APPLE__))
 #include <cerrno>
 #endif
@@ -35,12 +34,12 @@ static_assert(true);
 #include <unistd.h>
 #endif
 #include <cstddef>
-#include <cstring>
 #include <cstdint>
+#include <cstdio>
+#include <cstring>
 #include <fcntl.h>
 #include <limits.h>
 #include <sys/stat.h>
-#include <cstdio>
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <linux/fs.h>
 #endif
@@ -50,17 +49,17 @@ static_assert(true);
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <unistd.h>
 #endif
+#include <arpa/inet.h>
+#include <cassert>
 #include <cerrno>
-#include <unistd.h>
 #include <cstdlib>
+#include <ctime>
+#include <openssl/crypto.h>
 #include <openssl/err.h>
 #include <openssl/pem.h>
 #include <openssl/ssl.h>
 #include <openssl/x509v3.h>
-#include <arpa/inet.h>
-#include <ctime>
-#include <openssl/crypto.h>
-#include <cassert>
+#include <unistd.h>
 
 import std;
 import telar.base.memory;
@@ -79,12 +78,12 @@ using namespace telar::runtime;
 template <typename Reference>
 using NativeResource = TlsHandle<std::remove_pointer_t<Reference>, CFRelease>;
 
-static NativeResource<SecCertificateRef> nativeCertificate(X509 *certificate) {
+static NativeResource<SecCertificateRef> nativeCertificate(X509* certificate) {
   std::array<unsigned char, CertificatePair::maximum_der_bytes> encoded;
   const auto length = i2d_X509(certificate, nullptr);
 
   check(length > 0 && static_cast<std::size_t>(length) <= encoded.size());
-  auto *destination = encoded.data();
+  auto* destination = encoded.data();
 
   check(i2d_X509(certificate, &destination) == length);
   NativeResource<CFDataRef> data{CFDataCreate(kCFAllocatorDefault, encoded.data(), length)};
@@ -97,12 +96,12 @@ static NativeResource<SecCertificateRef> nativeCertificate(X509 *certificate) {
   return result;
 }
 
-static bool nativeTrusted(const CertificatePair &issuer, const CertificatePair &leaf, const char *hostname, bool anchored = true) {
+static bool nativeTrusted(const CertificatePair& issuer, const CertificatePair& leaf, const char* hostname, bool anchored = true) {
   const auto root = nativeCertificate(issuer.certificate.get());
   const auto certificate = nativeCertificate(leaf.certificate.get());
-  const void *certificates[]{certificate.get(), root.get()};
+  const void* certificates[]{certificate.get(), root.get()};
   NativeResource<CFArrayRef> chain{CFArrayCreate(kCFAllocatorDefault, certificates, std::size(certificates), &kCFTypeArrayCallBacks)};
-  const void *roots[]{root.get()};
+  const void* roots[]{root.get()};
   NativeResource<CFArrayRef> anchors{CFArrayCreate(kCFAllocatorDefault, roots, anchored ? 1 : 0, &kCFTypeArrayCallBacks)};
   NativeResource<CFStringRef> name{CFStringCreateWithCString(kCFAllocatorDefault, hostname, kCFStringEncodingASCII)};
 
@@ -124,7 +123,7 @@ static bool nativeTrusted(const CertificatePair &issuer, const CertificatePair &
   return SecTrustEvaluateWithError(evaluation.get(), nullptr);
 }
 #else
-static bool nativeTrusted(const CertificatePair &issuer, const CertificatePair &leaf, const char *hostname, bool anchored = true) {
+static bool nativeTrusted(const CertificatePair& issuer, const CertificatePair& leaf, const char* hostname, bool anchored = true) {
   TlsHandle<X509_STORE, X509_STORE_free> store{X509_STORE_new()};
   check(store != nullptr);
   if (anchored) {
@@ -134,7 +133,7 @@ static bool nativeTrusted(const CertificatePair &issuer, const CertificatePair &
   TlsHandle<X509_STORE_CTX, X509_STORE_CTX_free> verification{X509_STORE_CTX_new()};
   check(verification != nullptr && X509_STORE_CTX_init(verification.get(), store.get(), leaf.certificate.get(), nullptr) == 1);
   check(X509_STORE_CTX_set_purpose(verification.get(), X509_PURPOSE_SSL_SERVER) == 1);
-  auto *parameters = X509_STORE_CTX_get0_param(verification.get());
+  auto* parameters = X509_STORE_CTX_get0_param(verification.get());
   std::array<unsigned char, sizeof(in6_addr)> address{};
   const bool numeric = ::inet_pton(AF_INET, hostname, address.data()) == 1 || ::inet_pton(AF_INET6, hostname, address.data()) == 1;
   check((numeric ? X509_VERIFY_PARAM_set1_ip_asc(parameters, hostname) : X509_VERIFY_PARAM_set1_host(parameters, hostname, 0)) == 1);
@@ -159,7 +158,7 @@ static void nativeTrustChains() {
   check(!nativeTrusted(issuer, expired, "origin.test"));
 }
 
-static bool trusted(TlsTrustStore<TlsTestMemory> &store, const CertificatePair &issuer) {
+static bool trusted(TlsTrustStore<TlsTestMemory>& store, const CertificatePair& issuer) {
   const auto leaf = issuer.mint("origin.test");
   TlsHandle<X509_STORE_CTX, X509_STORE_CTX_free> verification{X509_STORE_CTX_new()};
 
@@ -170,7 +169,7 @@ static bool trusted(TlsTrustStore<TlsTestMemory> &store, const CertificatePair &
   return X509_verify_cert(verification.get()) == 1;
 }
 
-void testTlsTrust(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> &library) {
+void testTlsTrust(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory>& library) {
   TlsTrustStore store{memory, library};
 
   check(store.count() == 0);
@@ -206,7 +205,7 @@ void testTlsTrust(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> &librar
   check(store.count() == 4);
 
   std::array<unsigned char, CertificatePair::maximum_der_bytes> encoded;
-  auto *destination = encoded.data();
+  auto* destination = encoded.data();
   const auto length = i2d_X509(first.certificate.get(), &destination);
 
   check(length > 0);
@@ -216,7 +215,7 @@ void testTlsTrust(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> &librar
 
   try {
     store.addDer(std::span{encoded}.first(1));
-  } catch (const TlsError &) {
+  } catch (const TlsError&) {
     refused = true;
   }
 

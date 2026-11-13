@@ -3,11 +3,10 @@
 static_assert(true);
 #endif
 
-
-#include <cstdint>
 #include <cassert>
-#include <cstring>
 #include <cstddef>
+#include <cstdint>
+#include <cstring>
 #include <ghostty/vt.h>
 
 import std;
@@ -24,17 +23,19 @@ static void testBufferAllocations() {
   alignas(64) std::array<std::byte, 64> storage;
   BufferAllocator buffered{memory, std::span{storage}.subspan(1)};
   ErasingAllocator sensitive{buffered};
-  auto *first = static_cast<unsigned char *>(sensitive.allocate(5, 32));
-  auto *second = static_cast<unsigned char *>(sensitive.allocate(27, 1));
+  auto* first = static_cast<unsigned char*>(sensitive.allocate(5, 32));
+  auto* second = static_cast<unsigned char*>(sensitive.allocate(27, 1));
 
   check(first != nullptr && reinterpret_cast<std::uintptr_t>(first) % 32 == 0);
   check(second == first + 5 && memory.liveBytes() == 0);
   std::memset(first, 73, 32);
   sensitive.deallocate(first, 5, 32);
   sensitive.deallocate(second, 27, 1);
-  check(std::ranges::all_of(std::span{first, 32}, [](auto byte) { return byte == 0; }));
+  check(std::ranges::all_of(std::span{first, 32}, [](auto byte) {
+    return byte == 0;
+  }));
 
-  auto *fallback = sensitive.allocate(128, 16);
+  auto* fallback = sensitive.allocate(128, 16);
 
   check(fallback != nullptr && memory.liveBytes() == 128);
   check(sensitive.allocate(257, 1) == nullptr);
@@ -43,7 +44,7 @@ static void testBufferAllocations() {
   check(memory.liveBytes() == 0);
 
   BufferAllocator empty{memory, {}};
-  auto *allocation = empty.allocate(16, 8);
+  auto* allocation = empty.allocate(16, 8);
 
   check(allocation != nullptr && memory.liveBytes() == 16);
   empty.deallocate(allocation, 16, 8);
@@ -74,7 +75,10 @@ static void testSlotIndexes() {
   const std::array<std::size_t, 4> expected{0, 63, 64, 69};
 
   visited = 0;
-  indexes.forEach([&](std::size_t index) { check(index == expected[visited++]); });
+  indexes.forEach([&](std::size_t index) {
+    check(index == expected[visited++]);
+  });
+
   check(visited == expected.size() && indexes.firstUnused() == 1);
 }
 
@@ -97,7 +101,7 @@ static void testFixedText() {
 
   try {
     text.assign("too large");
-  } catch (const std::length_error &) {
+  } catch (const std::length_error&) {
     rejected = true;
   }
 
@@ -127,7 +131,9 @@ static void testSensitiveErasure() {
     bytes.fill(73);
     eraseSensitive(bytes.data() + 1, length);
     check(bytes.front() == 73 && bytes[length + 1] == 73);
-    check(std::all_of(bytes.begin() + 1, bytes.begin() + 1 + length, [](auto value) { return value == 0; }));
+    check(std::all_of(bytes.begin() + 1, bytes.begin() + 1 + length, [](auto value) {
+      return value == 0;
+    }));
   }
 
   eraseSensitive(nullptr, 0);
@@ -164,7 +170,7 @@ void testMemory() {
 
     try {
       queue.appendUninitialized(7);
-    } catch (const std::bad_alloc &) {
+    } catch (const std::bad_alloc&) {
       rejected = true;
     }
 
@@ -174,14 +180,14 @@ void testMemory() {
     check(limited.liveBytes() == 8);
   }
 
-  auto *aligned = memory.allocate(128, 128);
+  auto* aligned = memory.allocate(128, 128);
 
   check(aligned != nullptr);
   check(reinterpret_cast<std::uintptr_t>(aligned) % 128 == 0);
   memory.deallocate(aligned, 128, 128);
 
   GhosttyAllocatorBridge bridge{memory};
-  auto *ghostty_bytes = ghostty_alloc(bridge.get(), 100);
+  auto* ghostty_bytes = ghostty_alloc(bridge.get(), 100);
 
   check(ghostty_bytes != nullptr);
   check(memory.liveBytes() == 100);
@@ -205,7 +211,7 @@ void testMemory() {
 
     try {
       queue.appendUninitialized(65);
-    } catch (const std::bad_alloc &) {
+    } catch (const std::bad_alloc&) {
       rejected = true;
     }
 

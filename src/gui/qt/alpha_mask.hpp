@@ -9,16 +9,16 @@
 
 namespace telar::gui::qt {
 
-class AlphaMask final : public QSharedData {
-public:
-  AlphaMask(QImage alpha, std::unique_ptr<QSGTexture> texture)
-      : alpha(std::move(alpha)),
-        texture(std::move(texture)) {}
+  class AlphaMask final : public QSharedData {
+  public:
+    AlphaMask(QImage alpha, std::unique_ptr<QSGTexture> texture)
+        : alpha(std::move(alpha)),
+          texture(std::move(texture)) {}
 
-  const QImage alpha;
-  const std::unique_ptr<QSGTexture> texture;
-};
+    const QImage alpha;
+    const std::unique_ptr<QSGTexture> texture;
+  };
 
-using AlphaMaskRef = QExplicitlySharedDataPointer<AlphaMask>;
+  using AlphaMaskRef = QExplicitlySharedDataPointer<AlphaMask>;
 
 }

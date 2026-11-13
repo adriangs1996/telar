@@ -18,7 +18,7 @@ namespace standard {
     static_cast<void>(text.size());
   }
 
-  void observeChars(const char *text) {
+  void observeChars(const char* text) {
     static_cast<void>(text);
   }
 
@@ -41,7 +41,7 @@ namespace standard {
 // STATUS: implemented
 // CONTRACT: std::optional::operator-> points into the optional's own storage, like operator*.
 // SCENARIO: The pointer into a local optional is returned.
-const std::string_view *optionalArrowEscape() {
+const std::string_view* optionalArrowEscape() {
   const std::optional<std::string_view> maybe{"x"};
   return maybe.operator->(); // expected-error [tbc-dangling-borrow]
 }
@@ -66,7 +66,7 @@ void optionalArrowRead(std::string_view text) {
 // STATUS: implemented
 // CONTRACT: unique_ptr::get points into storage that the owner releases when it dies.
 // SCENARIO: The pointer from a local owner is returned.
-const standard::record *uniqueGetEscape(std::string_view text) {
+const standard::record* uniqueGetEscape(std::string_view text) {
   const auto owner = std::make_unique<standard::record>(standard::record{text});
   return owner.get(); // expected-error [tbc-dangling-borrow]
 }
@@ -138,8 +138,8 @@ void iteratorInvalidated() {
 // STATUS: implemented
 // CONTRACT: Dereferencing an iterator designates the element, not the iterator object.
 // SCENARIO: A range-for element and a pointer to it come from the caller's vector; accept.
-const std::string_view *iteratorRangeFor(const std::vector<std::string_view> &values) {
-  for (const auto &item : values) {
+const std::string_view* iteratorRangeFor(const std::vector<std::string_view>& values) {
+  for (const auto& item : values) {
     standard::observe(item);
     return &item;
   }
@@ -154,9 +154,9 @@ const std::string_view *iteratorRangeFor(const std::vector<std::string_view> &va
 // STATUS: implemented
 // CONTRACT: An element reference from a range-for borrows the iterated container.
 // SCENARIO: A pointer to an element of a local vector is returned.
-const std::string_view *elementEscape() {
+const std::string_view* elementEscape() {
   const std::vector<std::string_view> values{"a"};
-  for (const auto &item : values) {
+  for (const auto& item : values) {
     return &item; // expected-error [tbc-dangling-borrow]
   }
   return nullptr;
@@ -197,7 +197,7 @@ std::string_view findEscape() {
 // STATUS: implemented
 // CONTRACT: A needle argument does not become part of the found iterator's dependency.
 // SCENARIO: The found element comes from the caller's vector and a temporary needle; accept.
-std::string_view findParameter(const std::vector<std::string> &owners) {
+std::string_view findParameter(const std::vector<std::string>& owners) {
   const auto found = std::find(owners.begin(), owners.end(), std::string{"b"});
   return found == owners.end() ? std::string_view{} : std::string_view{*found};
 }
@@ -241,7 +241,7 @@ void exchangeLive(std::string_view text) {
 // STATUS: implemented
 // CONTRACT: std::get_if points into the variant passed by address.
 // SCENARIO: A pointer into a local variant is returned.
-const std::string_view *getIfEscape() {
+const std::string_view* getIfEscape() {
   const std::variant<std::string_view, int> value{"x"};
   return std::get_if<std::string_view>(&value); // expected-error [tbc-dangling-borrow]
 }
@@ -254,7 +254,7 @@ const std::string_view *getIfEscape() {
 // STATUS: implemented
 // CONTRACT: A pointer into a caller's variant may outlive the call.
 // SCENARIO: The variant belongs to the caller; accept.
-const std::string_view *getIfParameter(const std::variant<std::string_view, int> &value) {
+const std::string_view* getIfParameter(const std::variant<std::string_view, int>& value) {
   return std::get_if<std::string_view>(&value);
 }
 
@@ -296,7 +296,9 @@ void functionDangling() {
   std::function<void()> callback;
   {
     const std::string owner = "abc";
-    callback = [&owner] { standard::observe(owner); };
+    callback = [&owner] {
+      standard::observe(owner);
+    };
   } // expected-error [tbc-invalidated-borrow]
   callback();
 }
@@ -311,7 +313,9 @@ void functionDangling() {
 // SCENARIO: The owner outlives the invocation; accept.
 void functionLive() {
   const std::string owner = "abc";
-  const std::function<void()> callback = [&owner] { standard::observe(owner); };
+  const std::function<void()> callback = [&owner] {
+    standard::observe(owner);
+  };
   callback();
 }
 
@@ -377,7 +381,7 @@ std::vector<std::string_view> rangeCopyDangling() {
 // CONTRACT: Elements copied out of an initializer list keep their own dependencies, not the backing array's.
 // SCENARIO: Literal pointers copied by a range-for are used after the loop; accept.
 void initializerListRange() {
-  std::array<const char *, 2> complete{};
+  std::array<const char*, 2> complete{};
   std::size_t count = 0;
   for (const auto prefix : {"git", "-c"}) {
     complete[count++] = prefix;
@@ -412,9 +416,9 @@ void initializerListRangeDangling() {
 // STATUS: implemented
 // CONTRACT: Moving a unique_ptr hands its object to the destination, so a raw pointer follows the new owner.
 // SCENARIO: The replacement moves into the caller's owner before the raw pointer is returned; accept.
-standard::node *movedIntoCallerOwner(std::unique_ptr<standard::node> &owner) {
+standard::node* movedIntoCallerOwner(std::unique_ptr<standard::node>& owner) {
   auto replacement = std::make_unique<standard::node>();
-  auto *raw = replacement.get();
+  auto* raw = replacement.get();
   owner = std::move(replacement);
   return raw;
 }
@@ -427,9 +431,9 @@ standard::node *movedIntoCallerOwner(std::unique_ptr<standard::node> &owner) {
 // STATUS: implemented
 // CONTRACT: A unique_ptr moved into a container keeps its object alive for as long as the container.
 // SCENARIO: A reference to the created object outlives the moved-from local; accept.
-standard::node &movedIntoContainer(std::vector<std::unique_ptr<standard::node>> &owners) {
+standard::node& movedIntoContainer(std::vector<std::unique_ptr<standard::node>>& owners) {
   auto created = std::make_unique<standard::node>();
-  auto &result = *created;
+  auto& result = *created;
   owners.push_back(std::move(created));
   return result;
 }
@@ -442,9 +446,9 @@ standard::node &movedIntoContainer(std::vector<std::unique_ptr<standard::node>> 
 // STATUS: implemented
 // CONTRACT: An object moved into a local owner dies with that owner.
 // SCENARIO: The raw pointer is returned after its new local owner goes out of scope.
-standard::node *movedIntoLocalOwner() {
+standard::node* movedIntoLocalOwner() {
   auto replacement = std::make_unique<standard::node>();
-  auto *raw = replacement.get();
+  auto* raw = replacement.get();
   std::unique_ptr<standard::node> owner;
   owner = std::move(replacement);
   return raw; // expected-error [tbc-dangling-borrow]
@@ -473,7 +477,7 @@ std::vector<std::string_view> emplacedViewEscape() {
 // STATUS: implemented
 // CONTRACT: A view element emplaced from a pointer and a size designates what the pointer designates.
 // SCENARIO: The emplaced view points into the caller's string; accept.
-std::vector<std::string_view> emplacedViewParameter(const std::string &text) {
+std::vector<std::string_view> emplacedViewParameter(const std::string& text) {
   std::vector<std::string_view> views;
   views.emplace_back(text.data(), text.size());
   return views;
@@ -487,9 +491,9 @@ std::vector<std::string_view> emplacedViewParameter(const std::string &text) {
 // STATUS: implemented
 // CONTRACT: A pointer element, pushed or emplaced, designates the object it points to.
 // SCENARIO: The stored pointers designate a local that dies before the returned vector.
-std::vector<const int *> pointerElementEscape() {
+std::vector<const int*> pointerElementEscape() {
   const int value = 1;
-  std::vector<const int *> pointers;
+  std::vector<const int*> pointers;
   pointers.push_back(&value);
   pointers.emplace_back(&value);
   return pointers; // expected-error [tbc-dangling-borrow]
@@ -503,8 +507,8 @@ std::vector<const int *> pointerElementEscape() {
 // STATUS: implemented
 // CONTRACT: The position an insertion or an emplacement takes is not stored as an element.
 // SCENARIO: The stored pointers designate the caller's object, inserted at a position of the local vector; accept.
-std::vector<const int *> pointerElementPosition(const int &value) {
-  std::vector<const int *> pointers;
+std::vector<const int*> pointerElementPosition(const int& value) {
+  std::vector<const int*> pointers;
   pointers.insert(pointers.begin(), &value);
   pointers.emplace(pointers.begin(), &value);
   return pointers;
@@ -534,7 +538,7 @@ std::vector<std::string_view> insertedRangeEscape() {
 // STATUS: implemented
 // CONTRACT: An inserted iterator range copies the elements it designates, not the source container's storage.
 // SCENARIO: The copied views point into the caller's string, while the local source vector dies; accept.
-std::vector<std::string_view> insertedRangeParameter(const std::string &text) {
+std::vector<std::string_view> insertedRangeParameter(const std::string& text) {
   const std::vector<std::string_view> source{text};
   std::vector<std::string_view> views;
   views.insert(views.end(), source.begin(), source.end());
@@ -549,7 +553,7 @@ std::vector<std::string_view> insertedRangeParameter(const std::string &text) {
 // STATUS: implemented
 // CONTRACT: std::ranges::find returns an iterator into its range, not into the value it searches for.
 // SCENARIO: The searched character is a temporary of the call; the iterator into the live local array stays valid.
-std::size_t rangesFindLocal(const std::array<char, 16> &input) {
+std::size_t rangesFindLocal(const std::array<char, 16>& input) {
   std::array<char, 16> name = input;
   const auto end = std::ranges::find(name, '\0');
   return std::string_view{name.data(), end}.size();
@@ -563,7 +567,7 @@ std::size_t rangesFindLocal(const std::array<char, 16> &input) {
 // STATUS: implemented
 // CONTRACT: std::ranges::find returns an iterator into its range, not into the value it searches for.
 // SCENARIO: The iterator points into a local array that dies when the function returns.
-const char *rangesFindEscape() {
+const char* rangesFindEscape() {
   std::array<char, 16> name{};
   return std::ranges::find(name, '\0'); // expected-error [tbc-dangling-borrow]
 }
@@ -582,12 +586,12 @@ namespace standard {
   };
 
   struct scene_parent {
-    void adopt(scene_node *child);
+    void adopt(scene_node* child);
   };
 }
 
-standard::scene_node &stdReleaseHandoff(standard::scene_parent &parent, std::unique_ptr<standard::scene_node> child) {
-  auto &result = *child;
+standard::scene_node& stdReleaseHandoff(standard::scene_parent& parent, std::unique_ptr<standard::scene_node> child) {
+  auto& result = *child;
   parent.adopt(child.release());
   return result;
 }
@@ -600,8 +604,8 @@ standard::scene_node &stdReleaseHandoff(standard::scene_parent &parent, std::uni
 // STATUS: implemented
 // CONTRACT: Releasing a unique owner hands its object to an owner the analysis does not see, as Rust's Box::into_raw does; borrows of it become unchecked.
 // SCENARIO: Without the release, the local owner destroys the node the returned reference designates.
-standard::scene_node &stdReleaseKept(std::unique_ptr<standard::scene_node> child) {
-  auto &result = *child;
+standard::scene_node& stdReleaseKept(std::unique_ptr<standard::scene_node> child) {
+  auto& result = *child;
   return result; // expected-error [tbc-dangling-borrow]
 }
 
@@ -617,9 +621,9 @@ namespace standard {
   struct client_slots {
     std::array<std::optional<std::unique_ptr<scene_node>>, 4> slots_;
 
-    scene_node &install(std::size_t slot) {
+    scene_node& install(std::size_t slot) {
       auto owned = std::make_unique<scene_node>();
-      auto *raw = owned.get();
+      auto* raw = owned.get();
       slots_[slot] = std::move(owned);
       return *raw;
     }
@@ -634,10 +638,10 @@ namespace standard {
 // STATUS: implemented
 // CONTRACT: Moving an owner into an optional slot hands its object to the slot.
 // SCENARIO: The client stays with the local owner, which destroys it on return.
-standard::scene_node &stdOptionalOwnerKept(standard::client_slots &slots) {
+standard::scene_node& stdOptionalOwnerKept(standard::client_slots& slots) {
   static_cast<void>(slots);
   auto owned = std::make_unique<standard::scene_node>();
-  auto *raw = owned.get();
+  auto* raw = owned.get();
   return *raw; // expected-error [tbc-dangling-borrow]
 }
 
@@ -654,8 +658,8 @@ namespace standard {
     std::array<int, 4> targets{};
     std::size_t count = 0;
 
-    const int *last(int value) const {
-      for (const auto &target : std::span{targets}.first(count) | std::views::reverse) {
+    const int* last(int value) const {
+      for (const auto& target : std::span{targets}.first(count) | std::views::reverse) {
         if (target == value) {
           return &target;
         }
@@ -673,8 +677,8 @@ namespace standard {
 // STATUS: implemented
 // CONTRACT: A standard range adaptor over a view views the range it adapts; one that owns its range does not.
 // SCENARIO: A reversed temporary vector is owned by the adaptor, which dies with the loop.
-const int *stdRangeAdaptorOwning(int value) {
-  for (const auto &target : std::vector<int>{1, 2, 3} | std::views::reverse) {
+const int* stdRangeAdaptorOwning(int value) {
+  for (const auto& target : std::vector<int>{1, 2, 3} | std::views::reverse) {
     if (target == value) {
       return &target; // expected-error [tbc-dangling-borrow]
     }

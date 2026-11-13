@@ -3,21 +3,20 @@
 static_assert(true);
 #endif
 
-
-#include <cstring>
-#include <cstddef>
-#include <cstdint>
-#include "telar_base/diagnostics/config.hpp"
-#include <cstdio>
-#include <cstdlib>
-#include <fcntl.h>
-#include <sys/mman.h>
 #include "cell_layout.hpp"
+#include "telar_base/diagnostics/config.hpp"
 #include <cassert>
 #include <cerrno>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <fcntl.h>
+#include <ghostty/vt.h>
+#include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <ghostty/vt.h>
 
 import std;
 import telar.base.memory;
@@ -35,7 +34,7 @@ using namespace telar;
 using namespace telar::runtime;
 
 static std::span<const Byte> inputBytes(std::string_view bytes) {
-  return {reinterpret_cast<const Byte *>(bytes.data()), bytes.size()};
+  return {reinterpret_cast<const Byte*>(bytes.data()), bytes.size()};
 }
 
 class AtomicImageFixture {
@@ -100,14 +99,14 @@ private:
   std::string encoded_;
 };
 
-static void process(PaneMedia<SystemAllocator> &media, std::string_view bytes) {
+static void process(PaneMedia<SystemAllocator>& media, std::string_view bytes) {
   media.output(inputBytes(bytes));
   check(media.seal());
   check(!media.process());
   media.complete();
 }
 
-static void testAtomicPipeline(SystemAllocator &memory, GraphicsInputMedium medium, bool shared_transport) {
+static void testAtomicPipeline(SystemAllocator& memory, GraphicsInputMedium medium, bool shared_transport) {
   MediaBudget budget{GraphicsLimits::maximum_global_bytes};
 
   {
@@ -128,7 +127,7 @@ static void testAtomicPipeline(SystemAllocator &memory, GraphicsInputMedium medi
     first.checkConsumed();
     newest.checkConsumed();
 #if TELAR_DIAGNOSTICS
-    const auto &metrics = media.batchMetrics();
+    const auto& metrics = media.batchMetrics();
     constexpr std::uint64_t input_frame_count = 2;
     const std::uint64_t discarded_frames = query.empty() ? 1 : 0;
     const auto forwarded_frames = input_frame_count - discarded_frames;
@@ -142,14 +141,14 @@ static void testAtomicPipeline(SystemAllocator &memory, GraphicsInputMedium medi
     check(storage.prepared_bytes == (shared_transport ? newest.pixels.size() : 0));
 #endif
 
-    auto &terminal = *media.terminal();
+    auto& terminal = *media.terminal();
 
     check(terminal.graphics.images().size() == 1);
     const auto image = terminal.graphics.images().front();
 
     check(image.description.byte_len == newest.pixels.size() && std::ranges::equal(image.pixels, newest.pixels));
     check(terminal.graphics.placements().size() == 2);
-    for (const auto &placement : terminal.graphics.placements()) {
+    for (const auto& placement : terminal.graphics.placements()) {
       check(placement.x == (placement.placement_id == 9 ? 5 : 0));
       check(placement.y == (placement.placement_id == 9 ? 3 : 0));
     }
@@ -191,7 +190,7 @@ static void testAtomicPipeline(SystemAllocator &memory, GraphicsInputMedium medi
   check(budget.used() == 0);
 }
 
-static void testMappingOwnership(SystemAllocator &memory) {
+static void testMappingOwnership(SystemAllocator& memory) {
   MediaBudget budget{8192};
   MediaAllocator allocator{memory, budget, 8192};
 
@@ -206,9 +205,9 @@ static void testMappingOwnership(SystemAllocator &memory) {
 
   check(budget.used() == 0);
 
-  std::array<const Byte *, 64> placeholders;
+  std::array<const Byte*, 64> placeholders;
 
-  for (auto &placeholder : placeholders) {
+  for (auto& placeholder : placeholders) {
     ImageAllocation allocation{allocator, 24};
     auto storage = SharedImageStorage::create(24);
 
@@ -232,8 +231,8 @@ static void testMappingOwnership(SystemAllocator &memory) {
 
   check(budget.used() == placeholders.size() * 25);
 
-  for (const auto *placeholder : placeholders) {
-    allocator.deallocate(const_cast<Byte *>(placeholder), 1, alignof(Byte));
+  for (const auto* placeholder : placeholders) {
+    allocator.deallocate(const_cast<Byte*>(placeholder), 1, alignof(Byte));
   }
 
   check(budget.used() == 0);

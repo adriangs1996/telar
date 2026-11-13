@@ -1,14 +1,14 @@
 #ifdef __clangd__
 static_assert(true);
 #endif
-#include <tbc/view.hpp>
 #include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <stdexcept>
 #include <string_view>
-#include <optional>
+#include <tbc/view.hpp>
 #include <utility>
 #include <vector>
 
@@ -19,6 +19,7 @@ static_assert(true);
 #include <string>
 
 import telar.ebnf.parser;
+
 namespace {
   auto parseWithLocalParser(std::string_view source) -> ebnf::syntax_tree {
     auto tokenizer = ebnf::Lexer{};

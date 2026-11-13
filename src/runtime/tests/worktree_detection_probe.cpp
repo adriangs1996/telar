@@ -6,7 +6,7 @@ import telar.runtime.tests.protocol_peer;
 
 using namespace telar;
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   if (argc != 4) {
     return 2;
   }
@@ -40,7 +40,7 @@ int main(int argc, char **argv) {
       if (list.worktrees.size() != 1) {
         std::string paths;
 
-        for (const auto &entry : list.worktrees) {
+        for (const auto& entry : list.worktrees) {
           paths += std::string{entry.path} + "\n";
         }
 
@@ -71,7 +71,7 @@ int main(int argc, char **argv) {
     if (stable.worktrees.size() != 1) {
       std::string paths;
 
-      for (const auto &entry : stable.worktrees) {
+      for (const auto& entry : stable.worktrees) {
         paths += std::string{entry.path} + "\n";
       }
 
@@ -81,7 +81,7 @@ int main(int argc, char **argv) {
     peer.exchange<RuntimeStopping>(RuntimeStop{});
     std::puts("{\"cwd_change_detected\":true,\"ancestor_root\":true,\"source_workspace\":true,\"external_origin\":true,\"main_base_discovered\":true}");
     return 0;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     std::fprintf(stderr, "worktree-detection-probe: %s\n", error.what());
     return 1;
   }

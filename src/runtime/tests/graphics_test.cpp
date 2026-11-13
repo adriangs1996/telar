@@ -3,20 +3,19 @@
 static_assert(true);
 #endif
 
-
-#include <cassert>
-#include <cstdint>
-#include <cstring>
-#include <cstddef>
-#include <cerrno>
+#include "cell_layout.hpp"
 #include "telar_base/diagnostics/config.hpp"
+#include <cassert>
+#include <cerrno>
+#include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fcntl.h>
-#include <sys/mman.h>
-#include "cell_layout.hpp"
-#include <sys/stat.h>
 #include <ghostty/vt.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 
 import std;
 import telar.base.memory;
@@ -33,19 +32,19 @@ import telar.runtime.terminal.text_reader;
 using namespace telar;
 using namespace telar::runtime;
 
-static void feedGraphics(Terminal<SystemAllocator> &terminal, std::string_view bytes) {
-  terminal.feed({reinterpret_cast<const Byte *>(bytes.data()), bytes.size()});
+static void feedGraphics(Terminal<SystemAllocator>& terminal, std::string_view bytes) {
+  terminal.feed({reinterpret_cast<const Byte*>(bytes.data()), bytes.size()});
 }
 
-static void testMediaBudget(SystemAllocator &system) {
+static void testMediaBudget(SystemAllocator& system) {
   MediaBudget budget{1024};
   MediaAllocator first{system, budget, 768};
   MediaAllocator second{system, budget, 768};
-  void *allocation = first.allocate(640, 16);
+  void* allocation = first.allocate(640, 16);
 
   check(allocation != nullptr && first.used() == 640 && budget.used() == 640);
   check(first.allocate(129, 16) == nullptr && second.allocate(385, 16) == nullptr);
-  void *other = second.allocate(384, 16);
+  void* other = second.allocate(384, 16);
 
   check(other != nullptr && budget.used() == 1024);
   first.deallocate(allocation, 640, 16);
@@ -61,10 +60,10 @@ static void testMediaBudget(SystemAllocator &system) {
 
   std::array<std::thread, 4> workers;
 
-  for (auto &worker : workers) {
+  for (auto& worker : workers) {
     worker = std::thread{[&] {
       for (unsigned iteration = 0; iteration < 1000; ++iteration) {
-        if (void *bytes = first.allocate(128, 16)) {
+        if (void* bytes = first.allocate(128, 16)) {
           std::memset(bytes, 0xa5, 128);
           first.deallocate(bytes, 128, 16);
         }
@@ -72,7 +71,7 @@ static void testMediaBudget(SystemAllocator &system) {
     }};
   }
 
-  for (auto &worker : workers) {
+  for (auto& worker : workers) {
     worker.join();
   }
 
@@ -80,7 +79,10 @@ static void testMediaBudget(SystemAllocator &system) {
 }
 
 static void testKittyFraming() {
-  const auto bytes = [](std::string_view text) { return std::span{reinterpret_cast<const Byte *>(text.data()), text.size()}; };
+  const auto bytes = [](std::string_view text) {
+    return std::span{reinterpret_cast<const Byte*>(text.data()), text.size()};
+  };
+
   const std::string payload = "YWJj" + std::string(124, 'A');
   const std::string command = "before\x1b_Ga=T,i=17;" + payload + "\x1b\\after";
 
@@ -128,15 +130,12 @@ static void testKittyFraming() {
   check(!framing.touches(bytes("plain")));
 }
 
-static void testGraphicsProjection(SystemAllocator &memory) {
-  Terminal terminal{memory, TerminalSize{.cols = 80,
-                                         .rows = 24,
-                                         .cell_width_px = 8,
-                                         .cell_height_px = 16}};
+static void testGraphicsProjection(SystemAllocator& memory) {
+  Terminal terminal{memory, TerminalSize{.cols = 80, .rows = 24, .cell_width_px = 8, .cell_height_px = 16}};
 
   feedGraphics(terminal, "\x1b_Ga=T,f=32,s=1,v=1,i=17,p=5,q=2;/wAA/w==\x1b\\");
   check(terminal.graphics.images().size() == 1);
-  const auto &image = terminal.graphics.images().front();
+  const auto& image = terminal.graphics.images().front();
 
   check(image.description.key.image_id == 17 && image.description.format == ImageFormat::rgba);
   check(image.pixels.size() == 4 && image.pixels[0] == 255 && image.pixels[3] == 255);
@@ -151,7 +150,10 @@ static void testGraphicsProjection(SystemAllocator &memory) {
   check(terminal.graphics.revision() == revision);
   feedGraphics(terminal, "\x1b_Ga=p,i=17,p=6,U=1,c=2,r=3,q=2;\x1b\\");
   check(terminal.graphics.placements().size() == 2);
-  check(std::ranges::any_of(terminal.graphics.placements(), [](const auto &value) { return value.placement_id == 6 && value.location == PlacementLocation::placeholders && value.columns == 2 && value.rows == 3; }));
+  check(std::ranges::any_of(terminal.graphics.placements(), [](const auto& value) {
+    return value.placement_id == 6 && value.location == PlacementLocation::placeholders && value.columns == 2 && value.rows == 3;
+  }));
+
   feedGraphics(terminal, "\x1b_Ga=d,d=I,i=17,q=2;\x1b\\");
   check(terminal.graphics.images().empty() && terminal.graphics.placements().empty());
 
@@ -163,18 +165,20 @@ static void testGraphicsProjection(SystemAllocator &memory) {
   }
 
   check(terminal.graphics.images().size() == graphics_image_count);
-  check(std::ranges::none_of(terminal.graphics.images(), [](const auto &value) { return value.description.key.image_id <= 8; }));
+  check(std::ranges::none_of(terminal.graphics.images(), [](const auto& value) {
+    return value.description.key.image_id <= 8;
+  }));
 }
 
-static void testGraphicsTransfer(SystemAllocator &memory, bool shared) {
+static void testGraphicsTransfer(SystemAllocator& memory, bool shared) {
   RuntimeModel model{memory};
   ClientStore<SystemAllocator> clients{memory};
   ClientPeer peer{memory, model, clients, ClientRole::control};
   auto media = std::allocate_shared<PaneMedia<SystemAllocator>>(AllocatorRef<PaneMedia<SystemAllocator>, SystemAllocator>{memory}, memory, model.media_budget, model.graphics_limits, TerminalSize{80, 24, 8, 16});
-  auto &terminal = *media->terminal();
+  auto& terminal = *media->terminal();
   GraphicsSynchronizer sync{peer.session().graphics_credit, 42, media};
   const auto feed = [&](std::string_view text) {
-    media->output({reinterpret_cast<const Byte *>(text.data()), text.size()});
+    media->output({reinterpret_cast<const Byte*>(text.data()), text.size()});
     check(media->seal() && !media->process());
     media->complete();
   };
@@ -208,10 +212,10 @@ static void testGraphicsTransfer(SystemAllocator &memory, bool shared) {
     struct stat status{};
 
     check(::fstat(descriptor.get(), &status) == 0 && status.st_size >= 4);
-    const auto *mapping = static_cast<const Byte *>(::mmap(nullptr, 4, PROT_READ, MAP_SHARED, descriptor.get(), 0));
+    const auto* mapping = static_cast<const Byte*>(::mmap(nullptr, 4, PROT_READ, MAP_SHARED, descriptor.get(), 0));
 
     check(mapping != MAP_FAILED && mapping[0] == 255 && mapping[3] == 255);
-    ::munmap(const_cast<Byte *>(mapping), 4);
+    ::munmap(const_cast<Byte*>(mapping), 4);
     check(::shm_unlink(name.data()) == 0);
     sync.returnCredit(5);
     check(peer.session().graphics_credit.used() == 4);
@@ -253,7 +257,7 @@ static void testGraphicsTransfer(SystemAllocator &memory, bool shared) {
 #endif
 }
 
-static void testIdleBoundaryTransfer(SystemAllocator &memory, bool shared, std::size_t placement_count) {
+static void testIdleBoundaryTransfer(SystemAllocator& memory, bool shared, std::size_t placement_count) {
   RuntimeModel model{memory};
   ClientStore<SystemAllocator> clients{memory};
   ClientPeer peer{memory, model, clients, ClientRole::control};
@@ -263,7 +267,7 @@ static void testIdleBoundaryTransfer(SystemAllocator &memory, bool shared, std::
 
   sync.configure(shared);
 
-  auto &storage = media->terminal()->graphics;
+  auto& storage = media->terminal()->graphics;
 
   if (shared) {
     check(sync.publish(peer.session().connection, storage));
@@ -275,7 +279,7 @@ static void testIdleBoundaryTransfer(SystemAllocator &memory, bool shared, std::
   }
 
   const auto feed = [&](std::string_view bytes) {
-    media->output({reinterpret_cast<const Byte *>(bytes.data()), bytes.size()});
+    media->output({reinterpret_cast<const Byte*>(bytes.data()), bytes.size()});
     check(media->seal() && !media->process());
     media->complete();
   };
@@ -290,7 +294,7 @@ static void testIdleBoundaryTransfer(SystemAllocator &memory, bool shared, std::
   const auto key = storage.images().front().description.key;
   const std::vector<GraphicsPlacement> placements{storage.placements().begin(), storage.placements().end()};
   const auto revision = storage.revision();
-  auto &credit = peer.session().graphics_credit;
+  auto& credit = peer.session().graphics_credit;
 
   check(credit.acquire(GraphicsCreditBudget::limit));
   check(sync.stage(storage) == StageResult::blocked);
@@ -316,9 +320,11 @@ static void testIdleBoundaryTransfer(SystemAllocator &memory, bool shared, std::
 
   const std::string_view replacement = "\x1b_Ga=T,f=32,s=1,v=1,i=1,p=8,C=1,q=2;AAD//w==\x1b\\";
 
-  media->output({reinterpret_cast<const Byte *>(replacement.data()), replacement.size()});
+  media->output({reinterpret_cast<const Byte*>(replacement.data()), replacement.size()});
   check(media->seal());
-  std::thread next_batch{[&] { check(!media->process()); }};
+  std::thread next_batch{[&] {
+    check(!media->process());
+  }};
 
   check(media->busy());
   check(sync.advanceTransfer(peer.session().connection));
@@ -344,7 +350,7 @@ static void testIdleBoundaryTransfer(SystemAllocator &memory, bool shared, std::
     check(chunk.bytes.size() == 4 && chunk.bytes[0] == 255 && chunk.bytes[2] == 0);
   }
 
-  for (const auto &expected : placements) {
+  for (const auto& expected : placements) {
     check(sync.advanceTransfer(peer.session().connection));
     const auto placement = peer.receive<GraphicsPlacementMessage>();
 
@@ -364,11 +370,8 @@ static void testIdleBoundaryTransfer(SystemAllocator &memory, bool shared, std::
   check(!sameImage(storage.images().front().description.key, key));
 }
 
-static void testPng(SystemAllocator &memory) {
-  Terminal terminal{memory, TerminalSize{.cols = 80,
-                                         .rows = 24,
-                                         .cell_width_px = 8,
-                                         .cell_height_px = 16}};
+static void testPng(SystemAllocator& memory) {
+  Terminal terminal{memory, TerminalSize{.cols = 80, .rows = 24, .cell_width_px = 8, .cell_height_px = 16}};
 
   feedGraphics(terminal, "\x1b_Ga=t,f=100,i=42,q=2;iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==\x1b\\");
   check(terminal.graphics.images().size() == 1);

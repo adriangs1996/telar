@@ -40,7 +40,7 @@ export namespace telar::runtime::cli {
 
   // Keep the reference worker lexical scope and its mutable Lua binding factory.
   template <Allocator Memory>
-  String<Memory> pluginCallbackSource(Memory &memory, std::string_view source, std::string_view action) {
+  String<Memory> pluginCallbackSource(Memory& memory, std::string_view source, std::string_view action) {
     constexpr std::string_view prefix = "local telar = require(\"telar\")\nlocal plugin = (function()\n";
     constexpr std::string_view middle = "\nend)()\nif type(plugin) ~= \"table\" or type(plugin.actions) ~= \"table\" then error(\"plugin must return a table with an actions table\") end\nlocal callback = plugin.actions[\"";
     constexpr std::string_view suffix = "\"]\nif type(callback) ~= \"function\" then error(\"plugin action is not a function\") end\nreturn {telar.bind_global({\"escape\"}, callback)}";
@@ -53,7 +53,7 @@ export namespace telar::runtime::cli {
     return wrapped;
   }
 
-  inline int retainPluginCallback(lua_State *state, const config::RetainedActionValidator &validator, config::LimitNotices &limits) {
+  inline int retainPluginCallback(lua_State* state, const config::RetainedActionValidator& validator, config::LimitNotices& limits) {
     const auto bindings = lua::Value{state, -1, "plugin binding"};
     config::BindingKeymap keymap;
 
@@ -70,7 +70,7 @@ export namespace telar::runtime::cli {
   }
 
   template <Allocator Memory>
-  void runPluginWorker(Memory &memory, const PluginWorkerOptions &options) {
+  void runPluginWorker(Memory& memory, const PluginWorkerOptions& options) {
     constexpr std::size_t maximum_source_bytes = std::size_t{1024} * 1024;
     const auto source = readFile(memory, options.entry, maximum_source_bytes);
     const auto directory = std::filesystem::canonical(std::filesystem::absolute(options.entry).parent_path()).string();
@@ -116,8 +116,8 @@ export namespace telar::runtime::cli {
 #ifdef __APPLE__
 
   template <Allocator Memory>
-  void runRedirect(Memory &memory, std::span<char *const> arguments, bool cleanup) {
-    const char *socket = nullptr;
+  void runRedirect(Memory& memory, std::span<char* const> arguments, bool cleanup) {
+    const char* socket = nullptr;
     std::array<redirect::Target, redirect::Target::maximum_targets> targets;
     std::size_t count = 0;
     std::array<ProcessIdentity, redirect::SocketOwners::maximum_processes> processes;
@@ -145,7 +145,9 @@ export namespace telar::runtime::cli {
       } else if (argument == "--target" && !cleanup && count < targets.size()) {
         const auto target = redirect::Target::parse(value);
 
-        if (std::ranges::any_of(std::span{targets}.first(count), [&](const auto &previous) { return previous.host.view() == target.host.view() && previous.port == target.port; })) {
+        if (std::ranges::any_of(std::span{targets}.first(count), [&](const auto& previous) {
+              return previous.host.view() == target.host.view() && previous.port == target.port;
+            })) {
           throw std::invalid_argument{"Duplicate redirect destination"};
         }
 
@@ -156,7 +158,9 @@ export namespace telar::runtime::cli {
       } else if (argument == "--process" && !cleanup && process_count < processes.size()) {
         const auto process = redirect::ProcessToken::parse(value);
 
-        if (std::ranges::any_of(std::span{processes}.first(process_count), [&](const auto &other) { return other.pid == process.pid; })) {
+        if (std::ranges::any_of(std::span{processes}.first(process_count), [&](const auto& other) {
+              return other.pid == process.pid;
+            })) {
           throw std::invalid_argument{"Duplicate selected process"};
         }
 
@@ -228,14 +232,14 @@ export namespace telar::runtime::cli {
 #else
 
   template <Allocator Memory>
-  void runRedirect(Memory &, std::span<char *const>, bool) {
+  void runRedirect(Memory&, std::span<char* const>, bool) {
     throw SystemError{"Transparent redirect requires a native Linux firewall adapter", ENOTSUP};
   }
 
 #endif
 
   template <ConcurrentAllocator Memory>
-  void runRuntime(Memory &memory, const ServerOptions &options, const RuntimePaths<Memory> &paths, const config::RuntimeValues<Memory> &configuration) {
+  void runRuntime(Memory& memory, const ServerOptions& options, const RuntimePaths<Memory>& paths, const config::RuntimeValues<Memory>& configuration) {
 #if TELAR_DEBUG
     trace::Session tracing{memory, options.trace.empty() ? nullptr : options.trace.data()};
 #endif
@@ -251,7 +255,7 @@ export namespace telar::runtime::cli {
     if (configuration.shell_integration && !paths.data_home.empty()) {
       try {
         shell_integration = ShellIntegration<Memory>::install(memory, paths.data_home);
-      } catch (const SystemError &error) {
+      } catch (const SystemError& error) {
         std::fprintf(stderr, "telar runtime: shell integration disabled: %s\n", error.what());
       }
     }
@@ -334,7 +338,7 @@ export namespace telar::runtime::cli {
   }
 
   template <ConcurrentAllocator Memory>
-  void runServer(Memory &memory, const ServerOptions &options) {
+  void runServer(Memory& memory, const ServerOptions& options) {
     if (options.action == ServerAction::help) {
       std::puts("Usage: telar-runtime server [--socket PATH] [--no-config] [--fresh]\n       telar-runtime --socket PATH [--history PATH] [--session PATH | --no-session] [--no-resume]\n\n`telar server stop|endpoint|bridge` talks to a running runtime.");
       return;
@@ -377,7 +381,7 @@ export namespace telar::runtime::cli {
   }
 
   template <Allocator Memory>
-  void runTraffic(Memory &memory, std::span<char *const> arguments) {
+  void runTraffic(Memory& memory, std::span<char* const> arguments) {
     if (arguments.size() == 1 && std::string_view{arguments[0]} == "--help") {
       std::puts("Usage: telar-runtime traffic capture --socket RUNTIME_SOCKET\n       telar-runtime traffic import --socket RUNTIME_SOCKET --file CAPTURE.pcap\n       telar-runtime traffic redirect --socket RUNTIME_SOCKET --target IP:PORT [--target [IPv6]:PORT] [--direction outbound|inbound|both] [--process PID] [--dry-run]\n       telar-runtime traffic redirect-cleanup --socket RUNTIME_SOCKET\n\nCapture/import require runtime.proxy.network_capture. Capture needs root; import is unprivileged.\nRedirect requires runtime.proxy.enabled and transparent_redirect. It selects local TCP connections\nfrom the runtime's user to numeric destinations, using a private PF anchor. Repeat --process to\nselect explicit account-owned PIDs; descendants are not implicit. --dry-run validates rules\nwithout applying them. Only capture/redirect/redirect-cleanup need root. TLS inspection is opt-in.");
       return;
@@ -393,8 +397,8 @@ export namespace telar::runtime::cli {
       return;
     }
 
-    const char *socket = nullptr;
-    const char *file = nullptr;
+    const char* socket = nullptr;
+    const char* file = nullptr;
 
     for (std::size_t index = 1; index < arguments.size(); index += 2) {
       if (index + 1 == arguments.size()) {

@@ -3,21 +3,8 @@
 static_assert(true);
 #endif
 
-
-#include "animation_presentation.hpp"
 #include "../application/dependencies.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <optional>
-#include <string_view>
-#include <algorithm>
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include <chrono>
 #include "../platform/window.hpp"
-#include "../tests/platform/window_activation.hpp"
 #include "../qt/application.hpp"
 #include "../qt/bundled_fonts.hpp"
 #include "../qt/list_model.hpp"
@@ -25,6 +12,11 @@ static_assert(true);
 #include "../qt/native_rounded_rectangle.hpp"
 #include "../qt/tab_strip_layout.hpp"
 #include "../qt/window_animation_clock.hpp"
+#include "../tests/platform/window_activation.hpp"
+#include "animation_presentation.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
 #include <QCommandLineParser>
 #include <QGuiApplication>
 #include <QJsonDocument>
@@ -33,8 +25,15 @@ static_assert(true);
 #include <QScreen>
 #include <QTimer>
 #include <QVariantMap>
+#include <algorithm>
+#include <array>
+#include <chrono>
+#include <cstddef>
+#include <cstdint>
 #include <iostream>
 #include <memory>
+#include <optional>
+#include <string_view>
 
 #include "application/dependencies.hpp"
 #include "platform/window.hpp"
@@ -47,44 +46,43 @@ static_assert(true);
 #include "qt/tab_strip_layout.hpp"
 #include "qt/window_animation_clock.hpp"
 
-
 import telar.gui.core.metrics;
 import telar.gui.platform.profile_file;
 
 namespace {
 
-using namespace telar::gui;
-using namespace telar::gui::qt;
+  using namespace telar::gui;
+  using namespace telar::gui::qt;
 
-constexpr int window_width = 800;
-constexpr int window_height = 240;
-constexpr int cycle_ms = 400;
-constexpr int cycle_count = 12;
-constexpr int warmup_cycles = 2;
-constexpr int settle_ms = 150;
-constexpr int warmup_ms = 1000;
-constexpr qreal travel = 400;
+  constexpr int window_width = 800;
+  constexpr int window_height = 240;
+  constexpr int cycle_ms = 400;
+  constexpr int cycle_count = 12;
+  constexpr int warmup_cycles = 2;
+  constexpr int settle_ms = 150;
+  constexpr int warmup_ms = 1000;
+  constexpr qreal travel = 400;
 
-QList<QVariantMap> tabRows(bool reversed) {
-  QList<QVariantMap> rows;
-  constexpr int tabs = 4;
+  QList<QVariantMap> tabRows(bool reversed) {
+    QList<QVariantMap> rows;
+    constexpr int tabs = 4;
 
-  for (int index = 0; index < tabs; ++index) {
-    const auto id = reversed ? tabs - index : index + 1;
+    for (int index = 0; index < tabs; ++index) {
+      const auto id = reversed ? tabs - index : index + 1;
 
-    rows.append({
-        {QStringLiteral("key"), QString::number(id)},
-        {QStringLiteral("label"), QStringLiteral("Terminal %1").arg(id)},
-        {QStringLiteral("selected"), id == 1},
-    });
+      rows.append({
+          {QStringLiteral("key"), QString::number(id)},
+          {QStringLiteral("label"), QStringLiteral("Terminal %1").arg(id)},
+          {QStringLiteral("selected"), id == 1},
+      });
+    }
+
+    return rows;
   }
 
-  return rows;
 }
 
-}
-
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   QGuiApplication application{argc, argv};
 
   platform::configureGraphics();
@@ -109,7 +107,7 @@ int main(int argc, char **argv) {
   QQuickWindow window;
 
   window.resize(window_width, window_height);
-  auto *screen = QGuiApplication::screens()[screen_index];
+  auto* screen = QGuiApplication::screens()[screen_index];
 
   window.setScreen(screen);
   window.setPosition(screen->availableGeometry().center() - QPoint{window_width / 2, window_height / 2});
@@ -138,7 +136,7 @@ int main(int argc, char **argv) {
   strip.setVisible(mode == QStringLiteral("tabs"));
   std::array<std::unique_ptr<NativeRoundedRectangle>, 4> boxes;
 
-  for (auto &box : boxes) {
+  for (auto& box : boxes) {
     box = std::make_unique<NativeRoundedRectangle>(window.contentItem());
     box->setSize(QSizeF{60, 30});
     box->setColor(QColor{QStringLiteral("#aa87f5")});
@@ -171,6 +169,7 @@ int main(int argc, char **argv) {
   });
 
   std::uint64_t cycle = 0;
+
   struct Prepared {
     std::uint64_t cycle = 0;
     double value = 0;
@@ -178,11 +177,13 @@ int main(int argc, char **argv) {
 
   QObject::connect(&window, &QQuickWindow::afterSynchronizing, &window, [&] {
     prepared = {.cycle = cycle > warmup_cycles ? cycle - warmup_cycles : 0, .value = boxes[0]->x()};
-  }, Qt::DirectConnection);
+  },
+      Qt::DirectConnection);
 
   QObject::connect(&window, &QQuickWindow::afterRendering, &window, [&] {
     probe::recordAnimationPresentation(prepared.cycle, prepared.value);
-  }, Qt::DirectConnection);
+  },
+      Qt::DirectConnection);
 
   QTimer cycles;
 

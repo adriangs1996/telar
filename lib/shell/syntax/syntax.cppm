@@ -103,8 +103,7 @@ export namespace telar::shell {
   };
 
   // tokens.size() >= line.size() guarantees no overflow.
-  [[nodiscard]] Lexed lex(std::string_view line, Syntax syntax, std::span<Token> tokens,
-                          std::size_t cursor = no_cursor) noexcept;
+  [[nodiscard]] Lexed lex(std::string_view line, Syntax syntax, std::span<Token> tokens, std::size_t cursor = no_cursor) noexcept;
 
   struct Range {
     std::uint32_t begin = 0;
@@ -149,7 +148,6 @@ export namespace telar::shell {
   // The words of the simple command at lexed.cursor. tokens must be the ones
   // lex() produced for line. words.size() >= line.size() and
   // text.size() >= 2 * line.size() guarantee no overflow.
-  [[nodiscard]] CommandAt commandAt(std::string_view line, Syntax syntax, std::span<const Token> tokens,
-                                    const Lexed &lexed, std::span<Word> words, std::span<char> text) noexcept;
+  [[nodiscard]] CommandAt commandAt(std::string_view line, Syntax syntax, std::span<const Token> tokens, const Lexed& lexed, std::span<Word> words, std::span<char> text) noexcept;
 
 }

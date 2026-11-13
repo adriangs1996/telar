@@ -1,6 +1,6 @@
-#include <termios.h>
 #include <cstdio>
 #include <sys/types.h>
+#include <termios.h>
 #include <unistd.h>
 
 import std;
@@ -32,7 +32,7 @@ static int child() {
   }
 }
 
-static void exercise(const char *socket, const char *executable, std::string_view workload, const char *dump_path) {
+static void exercise(const char* socket, const char* executable, std::string_view workload, const char* dump_path) {
   ProtocolPeer owner{socket};
 
   owner.send(RequestRuntimeState{.client_identity = 101, .interactive = true});
@@ -86,7 +86,7 @@ static void exercise(const char *socket, const char *executable, std::string_vie
     check(listed.entries.size() == 1 && listed.entries.front().hits == 4);
     std::vector<LimitListEntry> entries(listed.entries.begin(), listed.entries.end());
 
-    for (auto &entry : entries) {
+    for (auto& entry : entries) {
       entry.last_ms = 0;
     }
 
@@ -123,7 +123,7 @@ static void exercise(const char *socket, const char *executable, std::string_vie
   check(output.good());
 }
 
-static void roundtrips(const char *socket, const char *executable, unsigned iterations, const char *dump_path) {
+static void roundtrips(const char* socket, const char* executable, unsigned iterations, const char* dump_path) {
   ProtocolPeer owner{socket};
   const std::array<std::string_view, 2> arguments{executable, "--child"};
   const auto opened = owner.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = {80, 24, 0, 0}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
@@ -142,7 +142,7 @@ static void roundtrips(const char *socket, const char *executable, unsigned iter
   check(output.good());
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   if (argc == 2 && std::string_view{argv[1]} == "--child") {
     return child();
   }
@@ -168,7 +168,7 @@ int main(int argc, char **argv) {
 
     std::printf("{\"ns_per_iteration\":%lld}\n", static_cast<long long>(elapsed / iterations));
     return 0;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     std::fprintf(stderr, "%s\n", error.what());
     return 1;
   }

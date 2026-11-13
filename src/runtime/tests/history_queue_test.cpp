@@ -3,17 +3,16 @@
 static_assert(true);
 #endif
 
-
+#include "telar_base/diagnostics/config.hpp"
+#include <cassert>
+#include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <poll.h>
+#include <pthread.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <cerrno>
-#include <cassert>
-#include "telar_base/diagnostics/config.hpp"
-#include <pthread.h>
-#include <poll.h>
 
 import std;
 import telar.base.memory;
@@ -28,10 +27,11 @@ using namespace telar::runtime;
 
 class HistoryQueueGate {
 public:
-  explicit HistoryQueueGate(std::uint64_t blocked_request) : blocked_request_(blocked_request) {}
+  explicit HistoryQueueGate(std::uint64_t blocked_request)
+      : blocked_request_(blocked_request) {}
 
   template <Allocator Memory>
-  void process(std::span<const Byte> payload, EncodedReply<Memory> &reply) {
+  void process(std::span<const Byte> payload, EncodedReply<Memory>& reply) {
     std::array<Byte, 256> bytes;
     DecodeStorage storage{bytes};
     const auto request = payload.front() == static_cast<Byte>(ClientTag::query_history)
@@ -42,7 +42,9 @@ public:
 
       entered_ = true;
       ready_.notify_one();
-      ready_.wait(lock, [&] { return released_; });
+      ready_.wait(lock, [&] {
+        return released_;
+      });
     }
 
     reply.send(RequestCompleted{.request_id = request});
@@ -51,7 +53,9 @@ public:
   void wait() {
     std::unique_lock lock{mutex_};
 
-    check(ready_.wait_for(lock, std::chrono::seconds{2}, [&] { return entered_; }));
+    check(ready_.wait_for(lock, std::chrono::seconds{2}, [&] {
+      return entered_;
+    }));
   }
 
   void release() {
@@ -80,7 +84,7 @@ struct HistoryQueueCase {
 };
 
 template <typename Worker>
-static void collectHistoryQueue(Worker &worker, std::size_t expected, bool superseded) {
+static void collectHistoryQueue(Worker& worker, std::size_t expected, bool superseded) {
   std::size_t completed = 0;
   std::size_t failures = 0;
 
@@ -107,7 +111,7 @@ static void collectHistoryQueue(Worker &worker, std::size_t expected, bool super
   check(!worker.pending());
 }
 
-static void checkHistoryQueue(SystemAllocator &memory, const HistoryQueueCase &scenario) {
+static void checkHistoryQueue(SystemAllocator& memory, const HistoryQueueCase& scenario) {
   HistoryQueueGate service{100};
   RequestWorker worker{memory, service};
 
@@ -136,15 +140,17 @@ void testHistoryQueue() {
   same_request.second.request_id = same_request.first.request_id;
   checkHistoryQueue(memory, same_request);
 
-  enum class QueryField { offset,
-                          snapshot,
-                          entry,
-                          distinct };
+  enum class QueryField {
+    offset,
+    snapshot,
+    entry,
+    distinct,
+  };
 
   for (const auto field : {QueryField::offset, QueryField::snapshot, QueryField::entry, QueryField::distinct}) {
     for (bool first : {false, true}) {
       HistoryQueueCase scenario;
-      auto &query = first ? scenario.first : scenario.second;
+      auto& query = first ? scenario.first : scenario.second;
 
       switch (field) {
       case QueryField::offset:

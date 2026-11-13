@@ -16,11 +16,11 @@ import telar.runtime.terminal.control;
 import telar.runtime.cli.server;
 import telar.runtime.plugins.run_worker;
 
-auto main(int argc, char **argv) -> int {
+auto main(int argc, char** argv) -> int {
   using namespace telar;
   using namespace telar::runtime;
 
-  const std::span<char *> args(argv, argc);
+  const std::span<char*> args(argv, argc);
   const std::string_view command = argc >= 2 ? args[1] : "";
 
   try {
@@ -54,11 +54,11 @@ auto main(int argc, char **argv) -> int {
 
     cli::runServer(memory, cli::ServerOptions::parse(args.subspan<1>()));
     return 0;
-  } catch (const SystemError &error) {
+  } catch (const SystemError& error) {
     std::fprintf(stderr, "telar runtime: %s: %s\n", error.what(), std::strerror(error.code()));
-  } catch (const TerminalError &error) {
+  } catch (const TerminalError& error) {
     std::fprintf(stderr, "%s:%u: %s (%d)\n", error.location().file_name(), error.location().line(), error.what(), static_cast<int>(error.result()));
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     std::fprintf(stderr, "telar runtime: %s\n", error.what());
   }
 

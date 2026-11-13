@@ -10,7 +10,7 @@ using namespace telar;
 using namespace telar::runtime;
 using namespace hook_fixture;
 
-static int child(char **arguments) {
+static int child(char** arguments) {
   const auto provider = providerNamed(arguments[3]);
   ProtocolPeer peer{arguments[2]};
   constexpr std::string_view output = "\x1b[2J\x1b[H";
@@ -76,7 +76,7 @@ static int child(char **arguments) {
   return 0;
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   try {
     if (argc == 8 && std::string_view{argv[1]} == "--hook-child") {
       return child(argv);
@@ -112,7 +112,7 @@ int main(int argc, char **argv) {
 
     std::cout << result.rdbuf();
     return 0;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     if (argc >= 6) {
       std::ofstream{argv[5]} << error.what() << '\n';
     }

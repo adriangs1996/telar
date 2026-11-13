@@ -3,19 +3,18 @@
 static_assert(true);
 #endif
 
-
-#include <cstdint>
 #include <cerrno>
 #include <csignal>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <poll.h>
+#include <cstdint>
+#include <cstdio>
 #include <fcntl.h>
 #include <limits.h>
-#include <sys/stat.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <openssl/sha.h>
-#include <cstdio>
+#include <poll.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <linux/fs.h>
 #endif
@@ -25,10 +24,10 @@ static_assert(true);
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <unistd.h>
 #endif
-#include <unistd.h>
 #include <cstdlib>
-#include <dirent.h>
 #include <cstring>
+#include <dirent.h>
+#include <unistd.h>
 
 import std;
 import telar.base.memory;
@@ -43,10 +42,10 @@ void testProxyResolution();
 void testProxyTransport();
 
 static void privateRecord(int directory, std::string_view name, std::string_view text) {
-  check(writePrivateFile(directory, name, {reinterpret_cast<const std::uint8_t *>(text.data()), text.size()}, PrivateFileMode::replace) == 0);
+  check(writePrivateFile(directory, name, {reinterpret_cast<const std::uint8_t*>(text.data()), text.size()}, PrivateFileMode::replace) == 0);
 }
 
-static void testPortMemory(SystemAllocator &memory) {
+static void testPortMemory(SystemAllocator& memory) {
   std::array<char, 64> path;
 
   std::strcpy(path.data(), "/tmp/telar-proxy-ports-XXXXXX");
@@ -106,7 +105,7 @@ static void testPortMemory(SystemAllocator &memory) {
   const std::array<std::uint8_t, 3> contents{'n', 'e', 'w'};
 
   check(writePrivateFile(directory.get(), moved.filename(), contents, PrivateFileMode::create_only) == EEXIST);
-  for (const auto &entry : std::filesystem::directory_iterator{root}) {
+  for (const auto& entry : std::filesystem::directory_iterator{root}) {
     check(!entry.path().filename().string().starts_with(".telar-write-"));
   }
 
@@ -121,7 +120,7 @@ static void testProxyListener() {
   sockaddr_in address{};
   socklen_t length = sizeof(address);
 
-  check(::getsockname(first.descriptor(), reinterpret_cast<sockaddr *>(&address), &length) == 0);
+  check(::getsockname(first.descriptor(), reinterpret_cast<sockaddr*>(&address), &length) == 0);
   check(address.sin_addr.s_addr == htonl(INADDR_LOOPBACK) && ntohs(address.sin_port) == first.port());
   check((::fcntl(first.descriptor(), F_GETFD) & FD_CLOEXEC) != 0);
   check((::fcntl(first.descriptor(), F_GETFL) & O_NONBLOCK) != 0);
@@ -139,7 +138,7 @@ static void testProxyListener() {
   FileDescriptor client{::socket(AF_INET, SOCK_STREAM, 0)};
 
   address.sin_port = htons(restarted.port());
-  check(client && ::connect(client.get(), reinterpret_cast<const sockaddr *>(&address), sizeof(address)) == 0);
+  check(client && ::connect(client.get(), reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0);
   pollfd pending{.fd = restarted.descriptor(), .events = POLLIN, .revents = 0};
 
   check(::poll(&pending, 1, 1000) == 1);
@@ -155,7 +154,7 @@ static void testProxyListener() {
 
   address.sin_port = htons(wildcard_port);
   address.sin_addr.s_addr = htonl(INADDR_ANY);
-  check(wildcard && ::bind(wildcard.get(), reinterpret_cast<const sockaddr *>(&address), sizeof(address)) == 0 && ::listen(wildcard.get(), 8) == 0);
+  check(wildcard && ::bind(wildcard.get(), reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0 && ::listen(wildcard.get(), 8) == 0);
   auto safe = ProxyListener::bind(wildcard_port, reserved);
 
   check(safe.port() != wildcard_port);

@@ -12,7 +12,7 @@ using namespace telar;
 static constexpr TerminalSize size{80, 24, 0, 0};
 static constexpr std::array<std::string_view, 1> arguments{"/bin/cat"};
 
-static void awaitText(ProtocolPeer &peer, const PaneOpened &pane, std::string_view expected) {
+static void awaitText(ProtocolPeer& peer, const PaneOpened& pane, std::string_view expected) {
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
 
   for (;;) {
@@ -26,7 +26,7 @@ static void awaitText(ProtocolPeer &peer, const PaneOpened &pane, std::string_vi
   }
 }
 
-static void recordClosed(ProtocolPeer &peer, std::ostream &dump, const PaneOpened &pane, bool last) {
+static void recordClosed(ProtocolPeer& peer, std::ostream& dump, const PaneOpened& pane, bool last) {
   auto closed = peer.receive<TabClosed>();
 
   check(closed.request_id == 0 && closed.location.workspace.id == pane.location.workspace.id && closed.location.tab_id == pane.location.tab_id);
@@ -40,7 +40,7 @@ static void recordClosed(ProtocolPeer &peer, std::ostream &dump, const PaneOpene
   peer.record(dump, closed);
 }
 
-static void checkForget(const char *socket, std::ostream &dump) {
+static void checkForget(const char* socket, std::ostream& dump) {
   ProtocolPeer control{socket};
   ProtocolPeer observer{socket};
   const auto root = control.exchange<PaneOpened>(CreateWorkspace{.request_id = 1, .size = size, .name = "Root", .launch = Launch{.cwd = "/", .arguments = arguments}});
@@ -84,7 +84,7 @@ static void checkForget(const char *socket, std::ostream &dump) {
   control.record(dump, missing);
 }
 
-static void recordLabel(const char *socket, std::ostream &dump, std::uint64_t identity, std::string_view expected) {
+static void recordLabel(const char* socket, std::ostream& dump, std::uint64_t identity, std::string_view expected) {
   ProtocolPeer reader{socket};
 
   reader.send(RequestRuntimeState{.client_identity = 91, .interactive = false});
@@ -95,7 +95,7 @@ static void recordLabel(const char *socket, std::ostream &dump, std::uint64_t id
   dump << found->command_label << '\n';
 }
 
-static void checkLabels(const char *socket, std::ostream &dump) {
+static void checkLabels(const char* socket, std::ostream& dump) {
   ProtocolPeer control{socket};
   const auto root = control.exchange<PaneOpened>(CreateWorkspace{.request_id = 1, .size = size, .name = "Root", .launch = Launch{.cwd = "/", .arguments = arguments}});
   std::array<char, 64> pattern{};
@@ -123,7 +123,7 @@ static void checkLabels(const char *socket, std::ostream &dump) {
   std::filesystem::remove_all(directory);
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   if (argc != 5) {
     return 2;
   }
@@ -144,7 +144,7 @@ int main(int argc, char **argv) {
 
     std::printf("{\"ns_per_iteration\":%lld}\n", elapsed);
     return 0;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     std::fprintf(stderr, "worktree-lifecycle-probe: %s\n", error.what());
     return 1;
   }

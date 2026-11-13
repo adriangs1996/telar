@@ -3,15 +3,14 @@
 static_assert(true);
 #endif
 
-
 #include <cerrno>
+#include <cstdlib>
+#include <cstring>
 #include <fcntl.h>
 #include <limits.h>
-#include <sys/stat.h>
-#include <cstdlib>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/un.h>
-#include <cstring>
 #include <unistd.h>
 
 import std;
@@ -28,8 +27,8 @@ using namespace telar::runtime::cli;
 struct TestEnvironment {
   std::array<std::pair<std::string_view, std::string_view>, 8> values{};
 
-  std::string_view lookup(const char *name) const noexcept {
-    for (const auto &[key, value] : values) {
+  std::string_view lookup(const char* name) const noexcept {
+    for (const auto& [key, value] : values) {
       if (key == name) {
         return value;
       }
@@ -105,7 +104,7 @@ static void testConfigHome() {
 
   try {
     RuntimePaths directory{memory, options, environment};
-  } catch (const std::invalid_argument &) {
+  } catch (const std::invalid_argument&) {
     rejected = true;
   }
 
@@ -121,16 +120,16 @@ static void testErrorNames() {
 }
 
 static void testArguments() {
-  std::array arguments{const_cast<char *>("server"), const_cast<char *>("endpoint"), const_cast<char *>("--socket"), const_cast<char *>("/tmp/runtime.sock"), const_cast<char *>("--no-config")};
+  std::array arguments{const_cast<char*>("server"), const_cast<char*>("endpoint"), const_cast<char*>("--socket"), const_cast<char*>("/tmp/runtime.sock"), const_cast<char*>("--no-config")};
   const auto options = ServerOptions::parse(arguments);
 
   check(options.action == ServerAction::endpoint && options.socket == "/tmp/runtime.sock" && options.no_config);
-  arguments.back() = const_cast<char *>("--fresh");
+  arguments.back() = const_cast<char*>("--fresh");
   bool rejected = false;
 
   try {
     ServerOptions::parse(arguments);
-  } catch (const std::invalid_argument &) {
+  } catch (const std::invalid_argument&) {
     rejected = true;
   }
 
@@ -160,7 +159,7 @@ static void testPrivateDirectory() {
 
   try {
     createPrivateDirectory(link);
-  } catch (const SystemError &) {
+  } catch (const SystemError&) {
     rejected = true;
   }
 
@@ -182,7 +181,7 @@ static void testClientSocket() {
 
   address.sun_family = AF_UNIX;
   std::strcpy(address.sun_path, path.c_str());
-  check(listener >= 0 && ::bind(listener, reinterpret_cast<const sockaddr *>(&address), sizeof(address)) == 0 && ::listen(listener, 4) == 0);
+  check(listener >= 0 && ::bind(listener, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0 && ::listen(listener, 4) == 0);
 
   int descriptor = -1;
 

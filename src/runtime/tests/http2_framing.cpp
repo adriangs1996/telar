@@ -3,16 +3,15 @@
 static_assert(true);
 #endif
 
-
-#include <cstdint>
-#include <cstring>
-#include <cstddef>
-#include <nghttp2/nghttp2.h>
 #include <cerrno>
 #include <csignal>
-#include <sys/socket.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <nghttp2/nghttp2.h>
+#include <sys/socket.h>
 #include <unistd.h>
 
 import std;
@@ -25,7 +24,7 @@ import telar.runtime.proxy.relay_direction;
 using namespace telar;
 using namespace telar::runtime;
 
-extern "C" void relay(const Http2OracleInput *input, Http2OracleResult *result) {
+extern "C" void relay(const Http2OracleInput* input, Http2OracleResult* result) {
   *result = {};
   SystemAllocator memory;
   Http2DirectionObserver observer{memory, input->response ? Http2Direction::response : Http2Direction::request};
@@ -45,7 +44,7 @@ extern "C" void relay(const Http2OracleInput *input, Http2OracleResult *result) 
   result->untracked = statistics.untracked_streams;
 }
 
-extern "C" std::uint64_t batch(const Http2OracleInput *input, std::size_t iterations) {
+extern "C" std::uint64_t batch(const Http2OracleInput* input, std::size_t iterations) {
   std::uint64_t checksum = 0;
   for (std::size_t index = 0; index < iterations; ++index) {
     Http2OracleResult result;

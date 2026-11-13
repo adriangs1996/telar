@@ -3,11 +3,10 @@
 static_assert(true);
 #endif
 
-
-#include <sqlite3.h>
-#include <termios.h>
 #include <cstdio>
+#include <sqlite3.h>
 #include <sys/types.h>
+#include <termios.h>
 #include <unistd.h>
 
 import std;
@@ -63,7 +62,7 @@ static std::string_view promptFor(std::string_view workload) {
   return "Fix café\r";
 }
 
-static AgentSnapshotEntry waitTitle(ProtocolPeer &notices, AgentTitleState state, std::string_view title = {}) {
+static AgentSnapshotEntry waitTitle(ProtocolPeer& notices, AgentTitleState state, std::string_view title = {}) {
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
 
   while (std::chrono::steady_clock::now() < deadline) {
@@ -76,7 +75,7 @@ static AgentSnapshotEntry waitTitle(ProtocolPeer &notices, AgentTitleState state
   throw std::runtime_error{"Description did not reach the expected title state"};
 }
 
-static void recordStoredTitle(const std::filesystem::path &path, const AgentSnapshotEntry &agent, std::ostream &dump) {
+static void recordStoredTitle(const std::filesystem::path& path, const AgentSnapshotEntry& agent, std::ostream& dump) {
   Database database{path.c_str(), DatabaseAccess::read_only};
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{3};
 
@@ -95,7 +94,7 @@ static void recordStoredTitle(const std::filesystem::path &path, const AgentSnap
   throw std::runtime_error{"Description was not persisted in history"};
 }
 
-static int child(char **arguments) {
+static int child(char** arguments) {
   const auto pane = std::stoull(std::getenv("TELAR_PANE_ID"));
   const auto generation = std::stoull(std::getenv("TELAR_PANE_GENERATION"));
   const std::string_view workload{arguments[6]};
@@ -172,7 +171,7 @@ static int child(char **arguments) {
   return 0;
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   try {
     if (argc == 7 && std::string_view{argv[1]} == "--child") {
       return child(argv);
@@ -224,7 +223,7 @@ int main(int argc, char **argv) {
 
     std::cout << "{\"iterations\":" << iterations << ",\"elapsed_ns\":" << elapsed << ",\"ns_per_iteration\":" << elapsed / iterations << "}\n";
     return 0;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     if (argc == 7) {
       std::ofstream{argv[5]} << active_phase << ": " << error.what() << '\n';
     }

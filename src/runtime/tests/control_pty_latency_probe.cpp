@@ -1,9 +1,9 @@
+#include <cerrno>
+#include <cstdio>
 #include <fcntl.h>
 #include <poll.h>
 #include <termios.h>
-#include <cerrno>
 #include <unistd.h>
-#include <cstdio>
 
 import std;
 import telar.runtime.tests.check;
@@ -92,14 +92,15 @@ static void readExactReply(std::string_view expected) {
   }
 }
 
-static void measure(std::ostream &output, const Workload &workload) {
-  writeAll("\x1b" "c");
+static void measure(std::ostream& output, const Workload& workload) {
+  writeAll("\x1b"
+           "c");
   std::this_thread::sleep_for(std::chrono::milliseconds{10});
   const auto roundtrip = [&] {
     const auto started = Clock::now();
 
     if (workload.fragment) {
-      for (const char &byte : workload.input) {
+      for (const char& byte : workload.input) {
         writeAll({&byte, 1});
       }
     } else {
@@ -126,7 +127,7 @@ static void measure(std::ostream &output, const Workload &workload) {
   const auto warmup_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - warmup_started).count();
   std::array<std::uint64_t, measured_samples> samples;
 
-  for (auto &sample : samples) {
+  for (auto& sample : samples) {
     sample = roundtrip();
   }
 
@@ -155,7 +156,7 @@ static std::string hexBytes(std::string_view bytes) {
   return encoded;
 }
 
-static void measureOrder(std::ostream &output) {
+static void measureOrder(std::ostream& output) {
   constexpr std::string_view image = "\x1b_Ga=t,f=24,s=1,v=1,i=7;/wAA\x1b\\";
   constexpr std::string_view dsr = "\x1b[5n";
   constexpr std::string_view ack = "\x1b_Gi=7;OK\x1b\\";
@@ -198,7 +199,7 @@ static void measureOrder(std::ostream &output) {
 // Stop reading responses for 100 ms while submitting 5000 DSRs. Both PTY
 // directions remain nonblocking; resumption pumps them together to avoid a
 // fixture deadlock when the runtime correctly applies read backpressure.
-static void saturate(std::ostream &output) {
+static void saturate(std::ostream& output) {
   constexpr std::size_t queries = 5000;
   std::string requests;
 
@@ -289,7 +290,7 @@ static void saturate(std::ostream &output) {
          << ",\"child_write_eagain\":" << child_write_eagain << ",\"recovery_replies\":1}";
 }
 
-static int child(const char *report_path) {
+static int child(const char* report_path) {
   termios settings;
 
   check(::tcgetattr(STDIN_FILENO, &settings) == 0);
@@ -348,7 +349,7 @@ static int child(const char *report_path) {
   }
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   if (argc == 3 && std::string_view{argv[1]} == "--latency-child") {
     return child(argv[2]);
   }
@@ -384,7 +385,7 @@ int main(int argc, char **argv) {
 
     peer.send(ClosePane{.request_id = 3, .pane_id = opened.pane_id});
     return 0;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     std::fprintf(stderr, "%s\n", error.what());
     return 1;
   }

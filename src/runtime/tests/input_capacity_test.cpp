@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-
 #if (TELAR_DIAGNOSTICS)
 #include "telar_base/diagnostics/config.hpp"
 #endif
@@ -83,14 +82,12 @@ static_assert(true);
 #if (defined(__linux__))
 #include <unistd.h>
 #endif
+#include <csignal>
+#include <cstdio>
 #include <cstdlib>
 #include <new>
-#include <cstdio>
-#include <sys/wait.h>
-#include <csignal>
 #include <sys/stat.h>
-
-
+#include <sys/wait.h>
 
 #if (TELAR_DIAGNOSTICS)
 #include <ghostty/vt.h>
@@ -126,13 +123,16 @@ void testInputCapacity() {
 
   workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 1, .size = {80, 24, 0, 0}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
   const auto opened = owner.receive<PaneOpened>();
-  auto &pane = panes.require(model.panes, opened.pane_id);
+  auto& pane = panes.require(model.panes, opened.pane_id);
   const std::vector<Byte> retained(Pane<SystemAllocator>::input_limit, 'a');
 
   pane.input.append(retained);
   const auto revision = pane.input_revision;
   unsigned observations = 0;
-  const auto observe = [&](const auto &, std::span<const Byte>) { ++observations; };
+  const auto observe = [&](const auto&, std::span<const Byte>) {
+    ++observations;
+  };
+
   const std::array<Byte, 3> rejected{'b', 'a', 'd'};
 
   panes.input(model, clients, owner.session().id, PaneInput{pane.id, rejected}, observe);
@@ -144,7 +144,7 @@ void testInputCapacity() {
 
   constexpr std::string_view paste_mode = "\x1b[?2004h";
 
-  pane.terminal.feed({reinterpret_cast<const Byte *>(paste_mode.data()), paste_mode.size()});
+  pane.terminal.feed({reinterpret_cast<const Byte*>(paste_mode.data()), paste_mode.size()});
   panes.sendText(model.panes, control.session(), SendPaneText{.request_id = 2, .pane_id = pane.id, .mode = PaneTextMode::prompt, .text = "new"}, {}, observe);
   const auto failure = control.receive<RequestFailed>();
 
@@ -186,7 +186,9 @@ void testInputCapacity() {
   // A terminator in typed text cannot close the paste frame and run its tail.
   pane.input.truncate(0);
   std::string observed;
-  const auto record = [&](const auto &, std::span<const Byte> bytes) { observed.append(reinterpret_cast<const char *>(bytes.data()), bytes.size()); };
+  const auto record = [&](const auto&, std::span<const Byte> bytes) {
+    observed.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+  };
 
   panes.sendText(model.panes, control.session(), SendPaneText{.request_id = 4, .pane_id = pane.id, .mode = PaneTextMode::prompt, .text = "a\x1b[201~b"}, {}, record);
   check(control.receive<RequestCompleted>().request_id == 4);

@@ -60,7 +60,7 @@ static void testConcurrentResponses() {
   const auto produce = [&](std::uint32_t producer) {
     for (std::uint32_t sequence = 0; sequence < responses_per_producer; ++sequence) {
       const std::array<std::uint32_t, 2> payload{producer, sequence};
-      const auto bytes = std::span{reinterpret_cast<const std::uint8_t *>(payload.data()), sizeof(payload)};
+      const auto bytes = std::span{reinterpret_cast<const std::uint8_t*>(payload.data()), sizeof(payload)};
 
       while (!queue.tryPush(bytes)) {
         std::this_thread::yield();
@@ -185,7 +185,7 @@ static void testResponseOutbox() {
   SystemAllocator system;
   BudgetAllocator memory{system, 4096};
   const auto shared_queue = std::make_shared<PtyResponseQueue>();
-  auto &queue = *shared_queue;
+  auto& queue = *shared_queue;
   const std::array<std::uint8_t, 3> ack{'A', 'C', 'K'};
 
   {
@@ -235,7 +235,7 @@ static void testResponseOutbox() {
 
     try {
       outbox.append(message);
-    } catch (const std::bad_alloc &) {
+    } catch (const std::bad_alloc&) {
       failed = true;
     }
 
@@ -261,7 +261,9 @@ static void testWorkerPublicationFailure() {
   check(queue.tryPushOwned(*storage, storage));
   storage.reset();
   const auto borrowed = queue.peekBatch();
-  std::jthread worker{[&] { queue.stopProducing(); }};
+  std::jthread worker{[&] {
+    queue.stopProducing();
+  }};
 
   worker.join();
   check(queue.closed() && !lifetime.expired());
@@ -274,9 +276,9 @@ static void testWorkerPublicationFailure() {
 template <bool Fixed = false>
 static void testWorkerPriority() {
   const auto shared_queue = std::make_shared<PtyResponseQueue>();
-  auto &queue = *shared_queue;
+  auto& queue = *shared_queue;
   const std::array<std::uint8_t, Fixed ? 4 : 1> native_bytes{'N'};
-  const auto publish = [](PtyResponseQueue::Producer &producer, const auto &bytes) {
+  const auto publish = [](PtyResponseQueue::Producer& producer, const auto& bytes) {
     if constexpr (Fixed) {
       return producer.tryPushFixed(bytes);
     } else {

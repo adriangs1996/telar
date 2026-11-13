@@ -31,7 +31,7 @@ tbc::view<spec::font_face, tbc::lt::a> fontCallerBytes(spec::bytes_a bytes) {
 // STATUS: pending
 // CONTRACT: A shaped run borrows the face's shaping buffer until the next shape call.
 // SCENARIO: The face remains alive but a second shape invalidates the first run.
-void shapeReusesScratch(tbc::view<spec::font_face &> face) {
+void shapeReusesScratch(tbc::view<spec::font_face&> face) {
   const auto first = face.shape("first");
   const auto second = face.shape("second"); // expected-error [tbc-invalidated-borrow]
   spec::observe(first);
@@ -46,7 +46,7 @@ void shapeReusesScratch(tbc::view<spec::font_face &> face) {
 // STATUS: pending
 // CONTRACT: Copying shaped glyph values produces owned data; input text is consumed, not retained.
 // SCENARIO: A temporary text input and a subsequent shape are safe for the copied glyphs.
-void shapeCopiedScratch(tbc::view<spec::font_face &> face) {
+void shapeCopiedScratch(tbc::view<spec::font_face&> face) {
   const auto first = face.shape(std::string{"temporary input"});
   const std::vector<int> copied{first.begin(), first.end()};
   const auto second = face.shape("second");
@@ -79,7 +79,7 @@ void shapeIndependentFaces(spec::bytes_a bytes) {
 // STATUS: pending
 // CONTRACT: Glyph bitmap coverage borrows the foreign face's reusable glyph slot.
 // SCENARIO: Reject loading another glyph before the previous coverage's final read.
-void bitmapReusesSlot(tbc::view<spec::font_face &> face) {
+void bitmapReusesSlot(tbc::view<spec::font_face&> face) {
   const auto bitmap = face.rasterize();
   const auto next = face.rasterize(); // expected-error [tbc-invalidated-borrow]
   spec::observe(bitmap);
@@ -94,7 +94,7 @@ void bitmapReusesSlot(tbc::view<spec::font_face &> face) {
 // STATUS: pending
 // CONTRACT: Copying coverage bytes into owned storage ends the scratch dependency.
 // SCENARIO: Upload/copy the old bytes before rasterizing again; accept the owned result.
-void bitmapOwnedCopy(tbc::view<spec::font_face &> face) {
+void bitmapOwnedCopy(tbc::view<spec::font_face&> face) {
   const auto bitmap = face.rasterize();
   const std::vector<std::byte> copied{bitmap.begin(), bitmap.end()};
   const auto next = face.rasterize();

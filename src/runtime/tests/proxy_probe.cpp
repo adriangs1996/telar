@@ -3,16 +3,15 @@
 static_assert(true);
 #endif
 
-
-#include <cstddef>
-#include <cstring>
-#include <cstdint>
-#include <cstdlib>
 #include <cerrno>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <fcntl.h>
 #include <limits.h>
 #include <sys/stat.h>
-#include <cstdio>
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <linux/fs.h>
 #endif
@@ -22,11 +21,11 @@ static_assert(true);
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <unistd.h>
 #endif
-#include <unistd.h>
-#include <csignal>
-#include <sys/socket.h>
 #include <arpa/inet.h>
+#include <csignal>
 #include <poll.h>
+#include <sys/socket.h>
+#include <unistd.h>
 
 import std;
 import telar.base.memory;
@@ -58,12 +57,13 @@ static void sendAll(int descriptor, std::span<const std::uint8_t> bytes) {
 }
 
 static void sendText(int descriptor, std::string_view text) {
-  sendAll(descriptor, {reinterpret_cast<const std::uint8_t *>(text.data()), text.size()});
+  sendAll(descriptor, {reinterpret_cast<const std::uint8_t*>(text.data()), text.size()});
 }
 
 class EchoOrigin {
 public:
-  EchoOrigin() : listener_(::socket(AF_INET, SOCK_STREAM, 0)) {
+  EchoOrigin()
+      : listener_(::socket(AF_INET, SOCK_STREAM, 0)) {
     require(static_cast<bool>(listener_));
     sockaddr_in address{};
 
@@ -72,13 +72,15 @@ public:
 #endif
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    require(::bind(listener_.get(), reinterpret_cast<const sockaddr *>(&address), sizeof(address)) == 0);
+    require(::bind(listener_.get(), reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0);
     require(::listen(listener_.get(), 128) == 0);
     socklen_t length = sizeof(address);
 
-    require(::getsockname(listener_.get(), reinterpret_cast<sockaddr *>(&address), &length) == 0);
+    require(::getsockname(listener_.get(), reinterpret_cast<sockaddr*>(&address), &length) == 0);
     port_ = ntohs(address.sin_port);
-    thread_ = std::jthread{[this](std::stop_token stop) { run(stop); }};
+    thread_ = std::jthread{[this](std::stop_token stop) {
+      run(stop);
+    }};
   }
 
   ~EchoOrigin() {
@@ -87,7 +89,9 @@ public:
     require(!failed_.load());
   }
 
-  std::uint16_t port() const noexcept { return port_; }
+  std::uint16_t port() const noexcept {
+    return port_;
+  }
 
 private:
   void run(std::stop_token stop) noexcept {
@@ -146,7 +150,7 @@ static FileDescriptor connectProxy(std::uint16_t port) {
   address.sin_family = AF_INET;
   address.sin_port = htons(port);
   address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-  require(::connect(socket.get(), reinterpret_cast<const sockaddr *>(&address), sizeof(address)) == 0);
+  require(::connect(socket.get(), reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0);
   return socket;
 }
 
@@ -167,7 +171,7 @@ static std::string readHead(int descriptor) {
   return text;
 }
 
-static std::string credential(const char *socket_path) {
+static std::string credential(const char* socket_path) {
   SystemAllocator memory;
   const auto path = std::filesystem::path{socket_path}.parent_path() / "proxy";
   FileDescriptor directory{::open(path.c_str(), O_DIRECTORY | O_RDONLY | O_NOFOLLOW | O_CLOEXEC)};
@@ -179,7 +183,7 @@ static std::string credential(const char *socket_path) {
   std::array<char, ProxySecret::hexadecimal_bytes> hexadecimal;
   const auto user = "telar:" + std::string{*secret->formatHexadecimal(hexadecimal)};
   std::array<char, 128> encoded;
-  const auto count = base64::encode({reinterpret_cast<const std::uint8_t *>(user.data()), user.size()}, encoded);
+  const auto count = base64::encode({reinterpret_cast<const std::uint8_t*>(user.data()), user.size()}, encoded);
 
   require(count.has_value());
   return "Proxy-Authorization: Basic " + std::string{encoded.data(), *count} + "\r\n";
@@ -211,7 +215,7 @@ static void roundTrip(int descriptor, std::span<const std::uint8_t> payload) {
   require(std::equal(payload.begin(), payload.end(), received.begin()));
 }
 
-static void inspectEnvironment(ProtocolPeer &peer, std::ostream &dump, bool system_trusted) {
+static void inspectEnvironment(ProtocolPeer& peer, std::ostream& dump, bool system_trusted) {
   constexpr std::string_view script = R"sh(
 test "$HTTPS_PROXY" = "$https_proxy" || exit 11
 case "$HTTPS_PROXY" in http://telar:*@127.0.0.1:*) ;; *) exit 12;; esac
@@ -246,7 +250,7 @@ exec /bin/cat
   peer.send(ClosePane{.request_id = 3, .pane_id = pane.pane_id});
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   if (argc != 5) {
     return 2;
   }
@@ -308,12 +312,12 @@ int main(int argc, char **argv) {
     const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - started).count();
 
     if (workload != "proxy-status" && !system_trusted) {
-      dump.write(reinterpret_cast<const char *>(payload.data()), static_cast<std::streamsize>(payload.size()));
+      dump.write(reinterpret_cast<const char*>(payload.data()), static_cast<std::streamsize>(payload.size()));
     }
 
     std::printf("{\"ns_per_iteration\":%.2f}\n", static_cast<double>(elapsed) / iterations);
     return 0;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     std::fprintf(stderr, "%s\n", error.what());
     return 1;
   }

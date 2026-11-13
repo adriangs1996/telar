@@ -3,19 +3,18 @@
 static_assert(true);
 #endif
 
-
 #include <cerrno>
-#include <cstring>
-#include <unistd.h>
 #include <cstdio>
+#include <cstring>
 #include <ghostty/vt.h>
+#include <unistd.h>
 
 import std;
 import telar.runtime.terminal.control;
 import telar.runtime.tests.check;
 import telar.platform;
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   if (argc == 2 && std::strcmp(argv[1], "--process-identification-fixture") == 0) {
     for (;;) {
       ::pause();
@@ -76,13 +75,13 @@ int main(int argc, char **argv) {
     testAdmission();
     std::puts("All runtime tests passed");
     return 0;
-  } catch (const telar::runtime::TerminalError &error) {
+  } catch (const telar::runtime::TerminalError& error) {
     std::fprintf(stderr, "%s:%u: Ghostty result %d\n", error.location().file_name(), error.location().line(), static_cast<int>(error.result()));
     return 1;
-  } catch (const telar::runtime::SystemError &error) {
+  } catch (const telar::runtime::SystemError& error) {
     std::fprintf(stderr, "%s: %s (%d)\n", error.what(), std::strerror(error.code()), error.code());
     return 1;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     std::fprintf(stderr, "Unexpected exception: %s\n", error.what());
     return 1;
   }

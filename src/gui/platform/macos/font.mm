@@ -9,10 +9,10 @@
 using telar::gui::platform::NativeReference;
 
 static CTFontRef default_instance(CTFontRef font) {
-  NSArray *axes = CFBridgingRelease(CTFontCopyVariationAxes(font));
-  NSMutableDictionary *defaults = [NSMutableDictionary dictionaryWithCapacity:axes.count];
+  NSArray* axes = CFBridgingRelease(CTFontCopyVariationAxes(font));
+  NSMutableDictionary* defaults = [NSMutableDictionary dictionaryWithCapacity:axes.count];
 
-  for (NSDictionary *axis in axes) {
+  for (NSDictionary* axis in axes) {
     id tag = axis[(id)kCTFontVariationAxisIdentifierKey];
     id value = axis[(id)kCTFontVariationAxisDefaultValueKey];
     if (tag != nil && value != nil) {
@@ -20,7 +20,9 @@ static CTFontRef default_instance(CTFontRef font) {
     }
   }
 
-  const NativeReference reset{CTFontDescriptorCreateWithAttributes((__bridge CFDictionaryRef) @{(id)kCTFontVariationAttribute : defaults})};
+  const NativeReference reset {
+    CTFontDescriptorCreateWithAttributes((__bridge CFDictionaryRef) @{(id)kCTFontVariationAttribute : defaults})
+  };
   if (!reset) {
     return NULL;
   }
@@ -28,15 +30,15 @@ static CTFontRef default_instance(CTFontRef font) {
   return CTFontCreateCopyWithAttributes(font, CTFontGetSize(font), NULL, reset.get());
 }
 
-static int fill_variation(NSDictionary *variation, telar_font_variation *out) {
+static int fill_variation(NSDictionary* variation, telar_font_variation* out) {
   if (variation.count > telar_font_max_axes) {
     return -1;
   }
 
   uint32_t count = 0;
 
-  for (NSNumber *tag in variation) {
-    NSNumber *value = variation[tag];
+  for (NSNumber* tag in variation) {
+    NSNumber* value = variation[tag];
     if (![tag isKindOfClass:[NSNumber class]] || ![value isKindOfClass:[NSNumber class]] || !isfinite(value.doubleValue)) {
       return -1;
     }
@@ -50,17 +52,17 @@ static int fill_variation(NSDictionary *variation, telar_font_variation *out) {
   return 0;
 }
 
-static int fill(CTFontRef font, telar_font_match *match) {
-  NSDictionary *variation = CFBridgingRelease(CTFontCopyVariation(font));
+static int fill(CTFontRef font, telar_font_match* match) {
+  NSDictionary* variation = CFBridgingRelease(CTFontCopyVariation(font));
   const NativeReference face{variation.count > 0 ? default_instance(font) : (CTFontRef)CFRetain(font)};
   if (!face) {
     return -1;
   }
 
-  NSString *postscript = CFBridgingRelease(CTFontCopyPostScriptName(face.get()));
-  NSURL *url = CFBridgingRelease(CTFontCopyAttribute(font, kCTFontURLAttribute));
-  const char *path = url.fileSystemRepresentation;
-  const char *name = postscript.UTF8String;
+  NSString* postscript = CFBridgingRelease(CTFontCopyPostScriptName(face.get()));
+  NSURL* url = CFBridgingRelease(CTFontCopyAttribute(font, kCTFontURLAttribute));
+  const char* path = url.fileSystemRepresentation;
+  const char* name = postscript.UTF8String;
   if (path == NULL || name == NULL || strlen(path) >= sizeof match->path ||
       strlen(name) >= sizeof match->postscript) {
     return -1;
@@ -77,15 +79,17 @@ static int fill(CTFontRef font, telar_font_match *match) {
   return 0;
 }
 
-static CTFontRef create_font(NSString *family, NSString *style) {
+static CTFontRef create_font(NSString* family, NSString* style) {
   if (style.length == 0) {
     return CTFontCreateWithName((__bridge CFStringRef)family, 15, NULL);
   }
 
-  const NativeReference query{CTFontDescriptorCreateWithAttributes((__bridge CFDictionaryRef) @{
-    (id)kCTFontFamilyNameAttribute : family,
-    (id)kCTFontStyleNameAttribute : style,
-  })};
+  const NativeReference query {
+    CTFontDescriptorCreateWithAttributes((__bridge CFDictionaryRef) @{
+      (id)kCTFontFamilyNameAttribute : family,
+      (id)kCTFontStyleNameAttribute : style,
+    })
+  };
   if (!query) {
     return NULL;
   }
@@ -93,15 +97,15 @@ static CTFontRef create_font(NSString *family, NSString *style) {
   return CTFontCreateWithFontDescriptor(query.get(), 15, NULL);
 }
 
-static int verify(CTFontRef font, NSString *family, NSString *style) {
-  NSString *resolved = CFBridgingRelease(CTFontCopyFamilyName(font));
+static int verify(CTFontRef font, NSString* family, NSString* style) {
+  NSString* resolved = CFBridgingRelease(CTFontCopyFamilyName(font));
   if ([family caseInsensitiveCompare:resolved] != NSOrderedSame) {
     if (style.length != 0) {
       return telar_font_family_not_found;
     }
 
-    NSString *full = CFBridgingRelease(CTFontCopyFullName(font));
-    NSString *postscript = CFBridgingRelease(CTFontCopyPostScriptName(font));
+    NSString* full = CFBridgingRelease(CTFontCopyFullName(font));
+    NSString* postscript = CFBridgingRelease(CTFontCopyPostScriptName(font));
     if ([family caseInsensitiveCompare:full] != NSOrderedSame &&
         [family caseInsensitiveCompare:postscript] != NSOrderedSame) {
       return telar_font_family_not_found;
@@ -112,15 +116,15 @@ static int verify(CTFontRef font, NSString *family, NSString *style) {
     return telar_font_found;
   }
 
-  NSString *face = CFBridgingRelease(CTFontCopyName(font, kCTFontStyleNameKey));
+  NSString* face = CFBridgingRelease(CTFontCopyName(font, kCTFontStyleNameKey));
 
   return [style caseInsensitiveCompare:face] == NSOrderedSame ? telar_font_found : telar_font_style_not_found;
 }
 
-int telarGuiFindFont(const char *family, const char *style, telar_font_match *match) {
+int telarGuiFindFont(const char* family, const char* style, telar_font_match* match) {
   @autoreleasepool {
-    NSString *requested = [NSString stringWithUTF8String:family];
-    NSString *face = [NSString stringWithUTF8String:style];
+    NSString* requested = [NSString stringWithUTF8String:family];
+    NSString* face = [NSString stringWithUTF8String:style];
     if (requested == nil || requested.length == 0 || face == nil) {
       return telar_font_family_not_found;
     }
@@ -141,10 +145,10 @@ int telarGuiFindFont(const char *family, const char *style, telar_font_match *ma
 
 enum {
   max_query_units = 32,
-  max_candidates = 512
+  max_candidates = 512,
 };
 
-static bool covers(CTFontRef font, NSString *text) {
+static bool covers(CTFontRef font, NSString* text) {
   unichar units[max_query_units];
   CGGlyph glyphs[max_query_units];
 
@@ -167,12 +171,12 @@ static bool monochrome(CTFontRef font) {
     }
   }
 
-  NSString *postscript = CFBridgingRelease(CTFontCopyPostScriptName(font));
+  NSString* postscript = CFBridgingRelease(CTFontCopyPostScriptName(font));
 
   return ![postscript isEqualToString:@"LastResort"] && ![postscript hasPrefix:@"."];
 }
 
-static int accept(CTFontRef font, NSString *text, telar_font_match *match, telar_font_validator validator, void *context) {
+static int accept(CTFontRef font, NSString* text, telar_font_match* match, telar_font_validator validator, void* context) {
   if (!covers(font, text) || !monochrome(font) || fill(font, match) != 0) {
     return -1;
   }
@@ -185,9 +189,9 @@ static int accept(CTFontRef font, NSString *text, telar_font_match *match, telar
   return validator == NULL ? 0 : validator(match, context);
 }
 
-int telarGuiFindValidatedFallbackFont(const char *text, telar_font_match *match, telar_font_validator validator, void *context) {
+int telarGuiFindValidatedFallbackFont(const char* text, telar_font_match* match, telar_font_validator validator, void* context) {
   @autoreleasepool {
-    NSString *requested = [NSString stringWithUTF8String:text];
+    NSString* requested = [NSString stringWithUTF8String:text];
     if (requested == nil || requested.length == 0 || requested.length > (NSUInteger)max_query_units) {
       return -1;
     }
@@ -200,8 +204,10 @@ int telarGuiFindValidatedFallbackFont(const char *text, telar_font_match *match,
       }
     }
 
-    NSCharacterSet *set = [NSCharacterSet characterSetWithCharactersInString:requested];
-    const NativeReference query{CTFontDescriptorCreateWithAttributes((__bridge CFDictionaryRef) @{(id)kCTFontCharacterSetAttribute : set})};
+    NSCharacterSet* set = [NSCharacterSet characterSetWithCharactersInString:requested];
+    const NativeReference query {
+      CTFontDescriptorCreateWithAttributes((__bridge CFDictionaryRef) @{(id)kCTFontCharacterSetAttribute : set})
+    };
     if (!query) {
       return -1;
     }
@@ -235,6 +241,6 @@ int telarGuiFindValidatedFallbackFont(const char *text, telar_font_match *match,
   }
 }
 
-int telarGuiFindFallbackFont(const char *text, telar_font_match *match) {
+int telarGuiFindFallbackFont(const char* text, telar_font_match* match) {
   return telarGuiFindValidatedFallbackFont(text, match, NULL, NULL);
 }

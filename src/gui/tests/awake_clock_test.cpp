@@ -3,9 +3,8 @@
 static_assert(true);
 #endif
 
-
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 #include <ctime>
 
 import std;
@@ -13,21 +12,21 @@ import telar.gui.platform.profile_file;
 
 namespace {
 
-std::uint64_t nativeAwakeNanoseconds() {
+  std::uint64_t nativeAwakeNanoseconds() {
 #ifdef __APPLE__
-  constexpr clockid_t identity = CLOCK_UPTIME_RAW;
+    constexpr clockid_t identity = CLOCK_UPTIME_RAW;
 #elifdef __linux__
-  constexpr clockid_t identity = CLOCK_MONOTONIC;
+    constexpr clockid_t identity = CLOCK_MONOTONIC;
 #endif
-  timespec timestamp{};
-  if (clock_gettime(identity, &timestamp) != 0) {
-    throw std::runtime_error{"Native awake clock is unavailable"};
+    timespec timestamp{};
+    if (clock_gettime(identity, &timestamp) != 0) {
+      throw std::runtime_error{"Native awake clock is unavailable"};
+    }
+
+    constexpr std::uint64_t nanoseconds_per_second = 1'000'000'000;
+
+    return (static_cast<std::uint64_t>(timestamp.tv_sec) * nanoseconds_per_second) + static_cast<std::uint64_t>(timestamp.tv_nsec);
   }
-
-  constexpr std::uint64_t nanoseconds_per_second = 1'000'000'000;
-
-  return (static_cast<std::uint64_t>(timestamp.tv_sec) * nanoseconds_per_second) + static_cast<std::uint64_t>(timestamp.tv_nsec);
-}
 
 }
 
@@ -44,7 +43,7 @@ int main() try {
   }
 
   return 0;
-} catch (const std::exception &error) {
+} catch (const std::exception& error) {
   std::cerr << error.what() << '\n';
 
   return 1;

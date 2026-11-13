@@ -3,13 +3,12 @@
 static_assert(true);
 #endif
 
-
+#include <arpa/inet.h>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <netinet/in.h>
 #include <sys/socket.h>
-#include <arpa/inet.h>
-#include <cstddef>
 #include <sys/types.h>
 #include <unistd.h>
 #if (defined(__APPLE__))
@@ -64,13 +63,13 @@ static_assert(true);
 #if (!(defined(__APPLE__)))
 #include <sys/uio.h>
 #endif
+#include <cstdio>
+#include <fcntl.h>
+#include <ifaddrs.h>
+#include <limits.h>
+#include <net/if.h>
 #include <pcap/pcap.h>
 #include <sys/ioctl.h>
-#include <ifaddrs.h>
-#include <net/if.h>
-#include <fcntl.h>
-#include <limits.h>
-#include <cstdio>
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <linux/fs.h>
 #endif
@@ -79,17 +78,17 @@ static_assert(true);
 #endif
 #include <cerrno>
 #include <cstdlib>
-#include <sys/file.h>
-#include <sys/sockio.h>
-#include <netinet/tcp.h>
 #include <net/if_dl.h>
 #include <net/route.h>
-#include <sys/uio.h>
 #include <netinet/in_pcb.h>
+#include <netinet/tcp.h>
 #include <netinet/tcp_fsm.h>
 #include <netinet/tcp_var.h>
+#include <sys/file.h>
 #include <sys/socketvar.h>
+#include <sys/sockio.h>
 #include <sys/sysctl.h>
+#include <sys/uio.h>
 #include <sys/wait.h>
 
 import std;
@@ -135,12 +134,21 @@ static void socketOwner(bool ipv6) {
     ::close(stop_write.get());
     ::close(result_read.get());
     const auto socket = ::socket(target.endpoint.storage.ss_family, SOCK_STREAM, IPPROTO_TCP);
-    if (socket < 0 || ::connect(socket, target.endpoint.address(), target.endpoint.length) != 0) { ::_exit(2); }
+    if (socket < 0 || ::connect(socket, target.endpoint.address(), target.endpoint.length) != 0) {
+      ::_exit(2);
+    }
+
     sockaddr_storage local{};
     socklen_t size = sizeof(local);
-    if (::getsockname(socket, reinterpret_cast<sockaddr *>(&local), &size) != 0) { ::_exit(3); }
-    const auto port = ntohs(ipv6 ? reinterpret_cast<sockaddr_in6 *>(&local)->sin6_port : reinterpret_cast<sockaddr_in *>(&local)->sin_port);
-    if (::write(result_write.get(), &port, sizeof(port)) != sizeof(port)) { ::_exit(4); }
+    if (::getsockname(socket, reinterpret_cast<sockaddr*>(&local), &size) != 0) {
+      ::_exit(3);
+    }
+
+    const auto port = ntohs(ipv6 ? reinterpret_cast<sockaddr_in6*>(&local)->sin6_port : reinterpret_cast<sockaddr_in*>(&local)->sin_port);
+    if (::write(result_write.get(), &port, sizeof(port)) != sizeof(port)) {
+      ::_exit(4);
+    }
+
     std::uint8_t byte;
 
     ::read(stop_read.get(), &byte, sizeof(byte));
@@ -151,7 +159,7 @@ static void socketOwner(bool ipv6) {
   result_write = FileDescriptor{};
   std::uint16_t port;
 
-  receive(result_read.get(), {reinterpret_cast<std::uint8_t *>(&port), sizeof(port)});
+  receive(result_read.get(), {reinterpret_cast<std::uint8_t*>(&port), sizeof(port)});
   pollfd ready{listener.descriptor(), POLLIN, 0};
 
   check(::poll(&ready, 1, 5000) > 0);
@@ -193,13 +201,22 @@ static void socketOwner(bool ipv6) {
   ++stale.started_seconds;
   bool replaced = false;
 
-  try { const std::array requested{stale}; redirect::SocketOwners invalid{::geteuid(), requested}; }
-  catch (const std::invalid_argument &) { replaced = true; }
+  try {
+    const std::array requested{stale};
+    redirect::SocketOwners invalid{::geteuid(), requested};
+  } catch (const std::invalid_argument&) {
+    replaced = true;
+  }
+
   check(replaced);
   bool other_account = false;
 
-  try { redirect::SocketOwners invalid{static_cast<uid_t>(::geteuid() == 0 ? 1 : 0), selected}; }
-  catch (const std::invalid_argument &) { other_account = true; }
+  try {
+    redirect::SocketOwners invalid{static_cast<uid_t>(::geteuid() == 0 ? 1 : 0), selected};
+  } catch (const std::invalid_argument&) {
+    other_account = true;
+  }
+
   check(other_account);
   stop_write = FileDescriptor{};
   int status = 0;
@@ -219,18 +236,18 @@ static void accountSnapshot(bool ipv6) {
 
   peer.xt_len = sizeof(peer);
   peer.t_state = TCPS_SYN_RECEIVED;
-  auto &pcb = peer.xt_inpcb;
+  auto& pcb = peer.xt_inpcb;
 
   pcb.xi_len = 0;
   pcb.inp_vflag = ipv6 ? INP_IPV6 : INP_IPV4;
   pcb.inp_lport = htons(server.port);
   pcb.inp_fport = htons(origin.port);
   if (ipv6) {
-    pcb.inp_dependladdr.inp6_local = reinterpret_cast<const sockaddr_in6 &>(server.endpoint.storage).sin6_addr;
-    pcb.inp_dependfaddr.inp6_foreign = reinterpret_cast<const sockaddr_in6 &>(origin.endpoint.storage).sin6_addr;
+    pcb.inp_dependladdr.inp6_local = reinterpret_cast<const sockaddr_in6&>(server.endpoint.storage).sin6_addr;
+    pcb.inp_dependfaddr.inp6_foreign = reinterpret_cast<const sockaddr_in6&>(origin.endpoint.storage).sin6_addr;
   } else {
-    pcb.inp_laddr = reinterpret_cast<const sockaddr_in &>(server.endpoint.storage).sin_addr;
-    pcb.inp_faddr = reinterpret_cast<const sockaddr_in &>(origin.endpoint.storage).sin_addr;
+    pcb.inp_laddr = reinterpret_cast<const sockaddr_in&>(server.endpoint.storage).sin_addr;
+    pcb.inp_faddr = reinterpret_cast<const sockaddr_in&>(origin.endpoint.storage).sin_addr;
   }
 
   pcb.xi_socket.xso_len = sizeof(xsocket64);
@@ -240,8 +257,12 @@ static void accountSnapshot(bool ipv6) {
   auto client = peer;
 
   std::swap(client.xt_inpcb.inp_lport, client.xt_inpcb.inp_fport);
-  if (ipv6) { std::swap(client.xt_inpcb.inp_dependladdr.inp6_local, client.xt_inpcb.inp_dependfaddr.inp6_foreign); }
-  else { std::swap(client.xt_inpcb.inp_laddr, client.xt_inpcb.inp_faddr); }
+  if (ipv6) {
+    std::swap(client.xt_inpcb.inp_dependladdr.inp6_local, client.xt_inpcb.inp_dependfaddr.inp6_foreign);
+  } else {
+    std::swap(client.xt_inpcb.inp_laddr, client.xt_inpcb.inp_faddr);
+  }
+
   client.xt_inpcb.xi_socket.so_uid = 0;
   std::vector<std::uint8_t> bytes(2 * sizeof(header) + 2 * sizeof(peer));
 
@@ -259,8 +280,12 @@ static void accountSnapshot(bool ipv6) {
   check(!Accounts::decode(bytes, origin.endpoint.storage, other.endpoint.storage));
   bool truncated = false;
 
-  try { Accounts::decode(std::span{bytes}.first(bytes.size() - 1), origin.endpoint.storage, server.endpoint.storage); }
-  catch (const telar::EncodingError &) { truncated = true; }
+  try {
+    Accounts::decode(std::span{bytes}.first(bytes.size() - 1), origin.endpoint.storage, server.endpoint.storage);
+  } catch (const telar::EncodingError&) {
+    truncated = true;
+  }
+
   check(truncated);
 }
 
@@ -274,8 +299,14 @@ int main() {
   check(!addresses.contains(redirect::Target::parse("127.0.0.1:443")) && !addresses.contains(redirect::Target::parse("[::1]:443")));
   bool rejected_local = false;
 
-  try { const std::array targets{redirect::Target::parse("127.0.0.1:443")}; redirect::LocalAddresses::selection(targets, redirect::Direction::inbound); }
-  catch (const std::invalid_argument &) { rejected_local = true; }
+  try {
+    const std::array targets{redirect::Target::parse("127.0.0.1:443")};
+
+    redirect::LocalAddresses::selection(targets, redirect::Direction::inbound);
+  } catch (const std::invalid_argument&) {
+    rejected_local = true;
+  }
+
   check(rejected_local);
   for (const auto name : {"127.0.0.1:443", "[::1]:443"}) {
     const auto route = redirect::RoutePath::lookup(redirect::Target::parse(name));

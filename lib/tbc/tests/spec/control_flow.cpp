@@ -65,7 +65,7 @@ namespace flow {
 // STATUS: pending
 // CONTRACT: A borrow needed after a join must survive every incoming reachable path.
 // SCENARIO: Only one branch reallocates, but that path still reaches the old view's read.
-void branchInvalidates(tbc::view<spec::byte_queue &> queue, bool grow) {
+void branchInvalidates(tbc::view<spec::byte_queue&> queue, bool grow) {
   const auto view = queue.readable();
   if (grow) {
     queue.reserve(1024); // expected-error [tbc-invalidated-borrow]
@@ -81,7 +81,7 @@ void branchInvalidates(tbc::view<spec::byte_queue &> queue, bool grow) {
 // STATUS: pending
 // CONTRACT: A view need not stay live on a path which cannot reach a later use.
 // SCENARIO: The invalidating branch returns; the read is reachable only without growth.
-void invalidatingBranchReturns(tbc::view<spec::byte_queue &> queue, bool grow) {
+void invalidatingBranchReturns(tbc::view<spec::byte_queue&> queue, bool grow) {
   const auto view = queue.readable();
   if (grow) {
     queue.reserve(1024);

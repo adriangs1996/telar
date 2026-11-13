@@ -11,7 +11,7 @@
 #include <iostream>
 #include <span>
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   const QCoreApplication application{argc, argv};
   const auto arguments = QCoreApplication::arguments();
   if (arguments.size() != 2) {

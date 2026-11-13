@@ -9,9 +9,9 @@ namespace elision {
   // Declared without contracts, as a project header shares methods whose bodies live in one source.
   class registry {
   public:
-    [[nodiscard]] const std::string &label() const;
-    [[nodiscard]] const std::string &name() const;
-    [[nodiscard]] const std::string &pick(const std::string &fallback) const;
+    [[nodiscard]] const std::string& label() const;
+    [[nodiscard]] const std::string& name() const;
+    [[nodiscard]] const std::string& pick(const std::string& fallback) const;
 
   private:
     std::string name_;
@@ -19,7 +19,7 @@ namespace elision {
 
   class painted_item : public library::item {
   public:
-    library::node *update(library::node *previous) override;
+    library::node* update(library::node* previous) override;
   };
 }
 

@@ -3,13 +3,12 @@
 static_assert(true);
 #endif
 
-
 #include <cerrno>
+#include <cstdint>
+#include <cstdio>
 #include <fcntl.h>
 #include <limits.h>
 #include <sys/stat.h>
-#include <cstdint>
-#include <cstdio>
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <linux/fs.h>
 #endif
@@ -19,19 +18,19 @@ static_assert(true);
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <unistd.h>
 #endif
-#include <unistd.h>
-#include <cstdlib>
-#include <sys/file.h>
-#include "telar_base/diagnostics/config.hpp"
-#include <sys/types.h>
-#include <cassert>
-#include <cstring>
-#include <cstddef>
-#include <sys/mman.h>
 #include "cell_layout.hpp"
+#include "telar_base/diagnostics/config.hpp"
+#include <cassert>
 #include <csignal>
+#include <cstddef>
+#include <cstdlib>
+#include <cstring>
+#include <sys/file.h>
+#include <sys/mman.h>
+#include <sys/types.h>
 #include <sys/uio.h>
 #include <sys/wait.h>
+#include <unistd.h>
 #if (defined(__APPLE__))
 #include <sys/event.h>
 #endif
@@ -47,9 +46,9 @@ static_assert(true);
 #if (defined(__linux__))
 #include <sys/syscall.h>
 #endif
+#include <ghostty/vt.h>
 #include <new>
 #include <pthread.h>
-#include <ghostty/vt.h>
 
 import std;
 import telar.base.diagnostics;
@@ -68,7 +67,7 @@ import telar.runtime.platform.request_worker;
 using namespace telar;
 using namespace telar::runtime;
 
-static void testMonotonicIdentities(SystemAllocator &memory) {
+static void testMonotonicIdentities(SystemAllocator& memory) {
   SlotStore<std::uint64_t, 32, SystemAllocator> store{memory};
   std::array<std::uint64_t, 32> identities{};
   std::uint64_t counter = 63;
@@ -96,14 +95,14 @@ static void testMonotonicIdentities(SystemAllocator &memory) {
 
   try {
     store.insert(UINT64_MAX, makeOwned<std::uint64_t>(memory, UINT64_MAX));
-  } catch (const std::bad_alloc &) {
+  } catch (const std::bad_alloc&) {
     exhausted = true;
   }
 
   check(exhausted);
 }
 
-static void testIndependentHandles(SystemAllocator &memory) {
+static void testIndependentHandles(SystemAllocator& memory) {
   SlotStore<std::uint64_t, 3, SystemAllocator> store{memory};
   constexpr std::uint64_t high_identity = UINT64_MAX - 1;
   const auto first = store.insert(high_identity, makeOwned<std::uint64_t>(memory, high_identity));
@@ -121,7 +120,7 @@ static void testIndependentHandles(SystemAllocator &memory) {
   check(store.findHandle(UINT64_MAX) == nullptr);
 }
 
-static void testExhaustedIdentities(SystemAllocator &memory) {
+static void testExhaustedIdentities(SystemAllocator& memory) {
   SlotStore<std::uint64_t, 3, SystemAllocator> store{memory};
 
   store.advanceCounter(UINT64_MAX);
@@ -136,7 +135,7 @@ static void testExhaustedIdentities(SystemAllocator &memory) {
 
   try {
     store.nextId();
-  } catch (const std::bad_alloc &) {
+  } catch (const std::bad_alloc&) {
     exhausted = true;
   }
 
@@ -162,7 +161,10 @@ static void testCheckpointValidation() {
   std::size_t count = 0;
   checkpoint::Reader reader{fixture};
 
-  reader.read([&](const auto &) { ++count; });
+  reader.read([&](const auto&) {
+    ++count;
+  });
+
   check(count == 5 && reader.counters.generation == 900);
 
   for (std::size_t length = 0; length < fixture.size(); ++length) {
@@ -171,8 +173,8 @@ static void testCheckpointValidation() {
     try {
       checkpoint::Reader truncated{fixture.first(length)};
 
-      truncated.read([](const auto &) {});
-    } catch (const EncodingError &) {
+      truncated.read([](const auto&) {});
+    } catch (const EncodingError&) {
       rejected = true;
     }
 
@@ -185,8 +187,8 @@ static void testCheckpointValidation() {
   try {
     checkpoint::Reader trailing{std::span{buffer}.first(fixture.size() + 1)};
 
-    trailing.read([](const auto &) {});
-  } catch (const EncodingError &) {
+    trailing.read([](const auto&) {});
+  } catch (const EncodingError&) {
     trailing_rejected = true;
   }
 
@@ -199,7 +201,7 @@ static void testCheckpointValidation() {
     const auto encoded = bounded.finish();
     checkpoint::Reader valid{encoded};
 
-    valid.read([](const auto &) {});
+    valid.read([](const auto&) {});
     check(encoded.size() <= capacity);
   }
 
@@ -208,7 +210,7 @@ static void testCheckpointValidation() {
 
     try {
       checkpoint::Writer tiny{std::span{buffer}.first(capacity), {}};
-    } catch (const EncodingError &) {
+    } catch (const EncodingError&) {
       rejected = true;
     }
 
@@ -216,7 +218,7 @@ static void testCheckpointValidation() {
   }
 }
 
-static void testRestore(SystemAllocator &memory) {
+static void testRestore(SystemAllocator& memory) {
   std::array<Byte, 4096> buffer;
   const auto fixture = checkpointFixture(buffer);
   RuntimeModel model{memory};
@@ -236,14 +238,14 @@ static void testRestore(SystemAllocator &memory) {
   check(model.panes.nextId() == 300);
   check(model.workspaces.nextId() == 70);
   check(model.next_tab_id == 80);
-  const auto *workspace = model.workspaces.find(5);
+  const auto* workspace = model.workspaces.find(5);
 
   check(workspace != nullptr && workspace->tabs.size() == 1);
   check(workspace->tabs.front().panes.size() == 2);
   check(workspace->tabs.front().panes[0] == 1);
 }
 
-static void testAtomicFile(SystemAllocator &memory) {
+static void testAtomicFile(SystemAllocator& memory) {
   std::array<char, 64> directory{};
 
   std::strcpy(directory.data(), "/tmp/telar-checkpoint-test-XXXXXX");
@@ -257,10 +259,12 @@ static void testAtomicFile(SystemAllocator &memory) {
   const auto fixture = checkpointFixture(buffer);
 
   {
-    ObservationWorker<decltype(file) &> worker{std::in_place, file};
+    ObservationWorker<decltype(file)&> worker{std::in_place, file};
 
     check(worker.submit(fixture));
-    worker.wait([](int error) { check(error == 0); });
+    worker.wait([](int error) {
+      check(error == 0);
+    });
   }
 
   check(file.load(loaded));
@@ -281,7 +285,7 @@ static void testAtomicFile(SystemAllocator &memory) {
 
   try {
     file.load(loaded);
-  } catch (const SystemError &) {
+  } catch (const SystemError&) {
     rejected = true;
   }
 
@@ -292,7 +296,7 @@ static void testAtomicFile(SystemAllocator &memory) {
 }
 
 struct SnapshotAgents {
-  const Agent *find(std::uint64_t, std::uint64_t) const noexcept {
+  const Agent* find(std::uint64_t, std::uint64_t) const noexcept {
     return nullptr;
   }
 
@@ -303,7 +307,7 @@ struct SnapshotAgents {
   std::uint64_t version = 0;
 };
 
-static void testSnapshotChanges(SystemAllocator &memory) {
+static void testSnapshotChanges(SystemAllocator& memory) {
   RuntimeModel model{memory};
   ClientStore<SystemAllocator> clients{memory};
   LimitService<SystemAllocator> limits;
@@ -324,7 +328,7 @@ static void testSnapshotChanges(SystemAllocator &memory) {
 
   restore.apply(checkpointFixture(buffer));
   expect(true);
-  auto *pane = model.panes.find(257);
+  auto* pane = model.panes.find(257);
 
   check(pane != nullptr);
   ++pane->cwd_revision;
@@ -378,7 +382,7 @@ static void testSnapshotChanges(SystemAllocator &memory) {
   expect(true);
 }
 
-static void testLargePaneIdentity(SystemAllocator &memory) {
+static void testLargePaneIdentity(SystemAllocator& memory) {
   constexpr std::uint64_t identity = UINT64_MAX - 2;
   std::array<Byte, 4096> buffer;
   checkpoint::Writer writer{buffer, checkpoint::Counters{2, 2, identity + 1, 10}};
@@ -396,7 +400,7 @@ static void testLargePaneIdentity(SystemAllocator &memory) {
   checkpoint::Restore restore{memory, model, panes, layouts, false};
 
   restore.apply(writer.finish());
-  auto *pane = model.panes.find(identity);
+  auto* pane = model.panes.find(identity);
 
   check(pane != nullptr && pane->id == identity);
   check(model.panes.nextId() == identity + 1);

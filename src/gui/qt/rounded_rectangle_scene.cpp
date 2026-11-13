@@ -54,8 +54,8 @@ namespace telar::gui::qt {
         setFlag(UpdatesGraphicsPipelineState);
       }
 
-      bool updateUniformData(RenderState &state, [[maybe_unused]] QSGMaterial *material, QSGMaterial *last) override {
-        auto &buffer = *state.uniformData();
+      bool updateUniformData(RenderState& state, [[maybe_unused]] QSGMaterial* material, QSGMaterial* last) override {
+        auto& buffer = *state.uniformData();
         if (buffer.size() < static_cast<qsizetype>(sizeof(ShapeUniforms))) {
           qFatal("Rounded rectangle uniform buffer is too small");
         }
@@ -92,7 +92,7 @@ namespace telar::gui::qt {
         return changed;
       }
 
-      bool updateGraphicsPipelineState([[maybe_unused]] RenderState &state, GraphicsPipelineState *pipeline, [[maybe_unused]] QSGMaterial *material, [[maybe_unused]] QSGMaterial *last) override {
+      bool updateGraphicsPipelineState([[maybe_unused]] RenderState& state, GraphicsPipelineState* pipeline, [[maybe_unused]] QSGMaterial* material, [[maybe_unused]] QSGMaterial* last) override {
         pipeline->blendEnable = true;
         pipeline->srcColor = replace_background_ ? GraphicsPipelineState::One : GraphicsPipelineState::SrcAlpha;
         pipeline->dstColor = replace_background_ ? GraphicsPipelineState::Zero : GraphicsPipelineState::OneMinusSrcAlpha;
@@ -116,17 +116,17 @@ namespace telar::gui::qt {
         setFlag(RequiresFullMatrix, physical_coordinates);
       }
 
-      [[nodiscard]] QSGMaterialType *type() const override {
+      [[nodiscard]] QSGMaterialType* type() const override {
         static std::array<QSGMaterialType, 4> types;
 
         return &types[static_cast<std::size_t>(physical_coordinates_) + 2 * static_cast<std::size_t>(replace_background_)];
       }
 
-      [[nodiscard]] QSGMaterialShader *createShader([[maybe_unused]] QSGRendererInterface::RenderMode render_mode) const override {
+      [[nodiscard]] QSGMaterialShader* createShader([[maybe_unused]] QSGRendererInterface::RenderMode render_mode) const override {
         return std::make_unique<ShapeShader>(physical_coordinates_, replace_background_).release();
       }
 
-      int compare([[maybe_unused]] const QSGMaterial *other) const override {
+      int compare([[maybe_unused]] const QSGMaterial* other) const override {
         return 0;
       }
 
@@ -148,7 +148,7 @@ namespace telar::gui::qt {
       Color border;
       Color backdrop;
 
-      bool operator==(const ShapeVertex &) const = default;
+      bool operator==(const ShapeVertex&) const = default;
     };
 
     constexpr std::size_t triangle_vertices = 6;
@@ -161,7 +161,7 @@ namespace telar::gui::qt {
       return {.position = {.x = static_cast<float>((paint.origin.x + local.x) / density), .y = static_cast<float>((paint.origin.y + local.y) / density)}, .local = local, .size = shape.size, .outline = {.x = shape.style.radius, .y = shape.style.border_width}, .fill = shape.style.fill, .border = shape.style.border, .backdrop = shape.style.backdrop};
     }
 
-    const QSGGeometry::AttributeSet &shapeAttributes() {
+    const QSGGeometry::AttributeSet& shapeAttributes() {
       static const std::array attributes{
           QSGGeometry::Attribute::create(0, 2, QSGGeometry::FloatType, true),
           QSGGeometry::Attribute::create(1, 2, QSGGeometry::FloatType),
@@ -200,7 +200,7 @@ namespace telar::gui::qt {
         shape_ = shape;
         origin_ = paint.origin;
         density_ = density;
-        const auto vertices = std::span{static_cast<ShapeVertex *>(geometry_.vertexData()), corners.size()};
+        const auto vertices = std::span{static_cast<ShapeVertex*>(geometry_.vertexData()), corners.size()};
 
         for (std::size_t index = 0; index < corners.size(); ++index) {
           vertices[index] = shapeVertex(paint, corners[index], density);
@@ -241,7 +241,7 @@ namespace telar::gui::qt {
         }
 
         bool changed = resized;
-        const auto vertices = std::span{static_cast<ShapeVertex *>(geometry_.vertexData()), static_cast<std::size_t>(vertex_count)};
+        const auto vertices = std::span{static_cast<ShapeVertex*>(geometry_.vertexData()), static_cast<std::size_t>(vertex_count)};
 
         for (std::size_t index = 0; index < paints.size(); ++index) {
           if (paints[index].shape.style.replace_background != replace) {
@@ -270,14 +270,14 @@ namespace telar::gui::qt {
     };
 
     // The result is the first of the root's children left unpainted.
-    tbc::view<QSGNode *, tbc::lt::a> paintSoftwareBatch(QQuickWindow &window, tbc::view<QSGNode &, tbc::lt::a> root, std::span<const RoundedRectanglePaint> paints, qreal density) {
-      auto *next = root.firstChild();
+    tbc::view<QSGNode*, tbc::lt::a> paintSoftwareBatch(QQuickWindow& window, tbc::view<QSGNode&, tbc::lt::a> root, std::span<const RoundedRectanglePaint> paints, qreal density) {
+      auto* next = root.firstChild();
 
-      for (const auto &paint : paints) {
-        auto *current = next;
+      for (const auto& paint : paints) {
+        auto* current = next;
 
         next = current == nullptr ? nullptr : current->nextSibling();
-        auto *painted = paintSoftwareRoundedRectangleAt(window, current, paint, density);
+        auto* painted = paintSoftwareRoundedRectangleAt(window, current, paint, density);
         if (painted == current) {
           continue;
         }
@@ -293,13 +293,13 @@ namespace telar::gui::qt {
     }
   }
 
-  QSGNode *paintRoundedRectangleAt(QQuickWindow &window, QSGNode *previous, RoundedRectanglePaint paint, qreal density) {
+  QSGNode* paintRoundedRectangleAt(QQuickWindow& window, QSGNode* previous, RoundedRectanglePaint paint, qreal density) {
     if (window.rendererInterface()->graphicsApi() == QSGRendererInterface::Software) {
       return paintSoftwareRoundedRectangleAt(window, previous, paint, density);
     }
 
     auto owner = std::unique_ptr<QSGNode>{previous};
-    auto *node = dynamic_cast<RoundedRectangleNode *>(previous);
+    auto* node = dynamic_cast<RoundedRectangleNode*>(previous);
     if (node == nullptr) {
       auto replacement = std::make_unique<RoundedRectangleNode>();
 
@@ -312,13 +312,13 @@ namespace telar::gui::qt {
     return owner.release();
   }
 
-  void paintRoundedRectangles(QQuickWindow &window, QSGNode &root, std::span<const RoundedRectanglePaint> paints, qreal density) {
-    auto *next = root.firstChild();
+  void paintRoundedRectangles(QQuickWindow& window, QSGNode& root, std::span<const RoundedRectanglePaint> paints, qreal density) {
+    auto* next = root.firstChild();
 
     if (window.rendererInterface()->graphicsApi() == QSGRendererInterface::Software) {
       next = paintSoftwareBatch(window, root, paints, density);
     } else {
-      auto *batch = dynamic_cast<RoundedRectangleBatchNode *>(next);
+      auto* batch = dynamic_cast<RoundedRectangleBatchNode*>(next);
       if (batch == nullptr) {
         batch = std::make_unique<RoundedRectangleBatchNode>().release();
         root.prependChildNode(batch);
@@ -330,7 +330,7 @@ namespace telar::gui::qt {
     }
 
     while (next != nullptr) {
-      auto *retired = next;
+      auto* retired = next;
 
       next = next->nextSibling();
       root.removeChildNode(retired);

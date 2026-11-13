@@ -3,25 +3,24 @@
 static_assert(true);
 #endif
 
-
+#include <brotli/decode.h>
+#include <cassert>
 #include <cerrno>
-#include <dirent.h>
-#include <fcntl.h>
-#include <cstdlib>
-#include <limits.h>
-#include <sys/stat.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <unistd.h>
 #include <csignal>
 #include <cstddef>
-#include <cstring>
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
+#include <dirent.h>
+#include <fcntl.h>
+#include <limits.h>
 #include <poll.h>
-#include <sys/un.h>
 #include <pthread.h>
-#include <cassert>
-#include <brotli/decode.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/un.h>
+#include <unistd.h>
 #include <zlib.h>
 #include <zstd.h>
 #if (defined(__APPLE__))
@@ -39,27 +38,27 @@ static_assert(true);
 #if (!(defined(__APPLE__)))
 #include <openssl/x509.h>
 #endif
+#include <arpa/inet.h>
+#include <cstdio>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
-#include <arpa/inet.h>
-#include <sys/uio.h>
 #include <openssl/sha.h>
-#include <cstdio>
+#include <sys/uio.h>
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <linux/fs.h>
 #endif
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <sys/syscall.h>
 #endif
-#include <netdb.h>
 #include <brotli/encode.h>
+#include <ctime>
+#include <netdb.h>
 #include <nghttp2/nghttp2.h>
-#include <openssl/ssl.h>
+#include <openssl/crypto.h>
 #include <openssl/err.h>
 #include <openssl/pem.h>
+#include <openssl/ssl.h>
 #include <openssl/x509v3.h>
-#include <openssl/crypto.h>
-#include <ctime>
 #if (defined(__APPLE__))
 #include <sys/event.h>
 #endif
@@ -75,11 +74,11 @@ static_assert(true);
 #if (defined(__linux__))
 #include <sys/syscall.h>
 #endif
-#include <spawn.h>
-#include <sys/wait.h>
-#include <sys/resource.h>
 #include <ifaddrs.h>
 #include <net/if.h>
+#include <spawn.h>
+#include <sys/resource.h>
+#include <sys/wait.h>
 #if (defined(__APPLE__))
 #include <libproc.h>
 #endif
@@ -116,7 +115,12 @@ template <typename Operation>
 static void rejects(Operation operation) {
   bool rejected = false;
 
-  try { operation(); } catch (const std::exception &) { rejected = true; }
+  try {
+    operation();
+  } catch (const std::exception&) {
+    rejected = true;
+  }
+
   check(rejected);
 }
 
@@ -137,8 +141,14 @@ static std::vector<Byte> request(int socket, traffic_control::Request request) {
   const auto body = traffic_control::Protocol::encode(output, request);
   const auto prefix = traffic_control::Protocol::prefix(body.size());
 
-  for (const auto byte : prefix) { traffic::sendAll(socket, {&byte, 1}); }
-  for (const auto byte : body) { traffic::sendAll(socket, {&byte, 1}); }
+  for (const auto byte : prefix) {
+    traffic::sendAll(socket, {&byte, 1});
+  }
+
+  for (const auto byte : body) {
+    traffic::sendAll(socket, {&byte, 1});
+  }
+
   std::array<Byte, traffic_control::Protocol::prefix_bytes> header;
 
   receiveAll(socket, header);
@@ -152,7 +162,7 @@ static std::vector<Byte> request(int socket, traffic_control::Request request) {
   return reply;
 }
 
-static std::vector<Byte> request(const std::string &path, traffic_control::Request message) {
+static std::vector<Byte> request(const std::string& path, traffic_control::Request message) {
   const auto socket = traffic::connect(path);
 
   return request(socket.get(), message);
@@ -173,27 +183,47 @@ static void codec() {
   check(process_selection.process_count == 1 && process_selection.processes[0] == static_cast<std::uint32_t>(::getpid()));
   redirect.processes[1] = redirect.processes[0];
   redirect.process_count = 2;
-  rejects([&] { traffic_control::Protocol::encode(output, redirect); });
+  rejects([&] {
+    traffic_control::Protocol::encode(output, redirect);
+  });
+
   redirect.process_count = 0;
   redirect.direction = telar::runtime::redirect::Direction::inbound;
   check(traffic_control::Protocol::request(traffic_control::Protocol::encode(output, redirect)).direction == telar::runtime::redirect::Direction::inbound);
   redirect.direction = telar::runtime::redirect::Direction::both;
   check(traffic_control::Protocol::request(traffic_control::Protocol::encode(output, redirect)).direction == telar::runtime::redirect::Direction::both);
   redirect.process_count = 1;
-  rejects([&] { traffic_control::Protocol::encode(output, redirect); });
+  rejects([&] {
+    traffic_control::Protocol::encode(output, redirect);
+  });
+
   redirect.process_count = 0;
   redirect.direction = telar::runtime::redirect::Direction::outbound;
   auto invalid = std::vector<Byte>{bytes.begin(), bytes.end()};
 
   invalid.push_back(0);
-  rejects([&] { traffic_control::Protocol::request(invalid); });
+  rejects([&] {
+    traffic_control::Protocol::request(invalid);
+  });
+
   invalid.assign(bytes.begin(), bytes.end());
   invalid[sizeof(traffic_control::Protocol::magic)] = UINT8_MAX;
-  rejects([&] { traffic_control::Protocol::request(invalid); });
-  rejects([&] { traffic_control::Protocol::encode(output, traffic_control::Request{.operation = traffic_control::Operation::redirect_start}); });
-  rejects([&] { traffic_control::Protocol::encode(output, traffic_control::Request{.targets = {"127.0.0.1:80"}, .target_count = 1}); });
+  rejects([&] {
+    traffic_control::Protocol::request(invalid);
+  });
+
+  rejects([&] {
+    traffic_control::Protocol::encode(output, traffic_control::Request{.operation = traffic_control::Operation::redirect_start});
+  });
+
+  rejects([&] {
+    traffic_control::Protocol::encode(output, traffic_control::Request{.targets = {"127.0.0.1:80"}, .target_count = 1});
+  });
+
   redirect.targets[0] = std::string_view{"127.0.0.1:8\0bad", 14};
-  rejects([&] { traffic_control::Protocol::encode(output, redirect); });
+  rejects([&] {
+    traffic_control::Protocol::encode(output, redirect);
+  });
 
   traffic_control::Reply response{.result = traffic_control::Result::authorization_required, .status = {.capture = traffic_control::CaptureState::live, .redirect = traffic_control::RedirectState::active, .interfaces = 2}, .message = "fixture", .authorization = {"/usr/bin/sudo", "--", "/fixture/runtime"}, .argument_count = 3};
   const auto reply = traffic_control::Protocol::reply(traffic_control::Protocol::encode(output, response));
@@ -201,7 +231,7 @@ static void codec() {
   check(reply.result == response.result && reply.status.interfaces == 2 && reply.authorization[2] == "/fixture/runtime");
 }
 
-static void captureControl(TlsTestMemory &memory) {
+static void captureControl(TlsTestMemory& memory) {
   TemporaryDirectory directory{"/tmp/tlr-control.XXXXXX"};
   const auto base = std::string{directory.path()} + "/runtime.sock";
   traffic::Service capture{memory, base + ".traffic"};
@@ -220,7 +250,10 @@ static void captureControl(TlsTestMemory &memory) {
   std::array<Byte, traffic::Protocol::greeting_bytes> greeting;
 
   traffic::sendAll(producer.get(), traffic::Protocol::greeting(greeting, traffic::Role::offline_capture));
-  await([&] { return capture.captureStatus().state == decltype(capture)::CaptureState::offline; });
+  await([&] {
+    return capture.captureStatus().state == decltype(capture)::CaptureState::offline;
+  });
+
   auto active = request(base + ".network", {});
 
   check(traffic_control::Protocol::reply(active).status.capture == traffic_control::CaptureState::offline);
@@ -237,18 +270,25 @@ static void captureControl(TlsTestMemory &memory) {
   check(traffic_control::Protocol::reply(stopped).status.capture == traffic_control::CaptureState::idle);
   std::array<Byte, 1024> incoming;
 
-  await([&] { return ::recv(producer.get(), incoming.data(), incoming.size(), MSG_DONTWAIT) == 0; });
+  await([&] {
+    return ::recv(producer.get(), incoming.data(), incoming.size(), MSG_DONTWAIT) == 0;
+  });
 
   auto malformed = traffic::connect(base + ".network");
   std::array<Byte, traffic_control::Protocol::prefix_bytes> excessive{0xff, 0xff, 0xff, 0x7f};
 
   traffic::sendAll(malformed.get(), excessive);
-  await([&] { Byte byte; return ::recv(malformed.get(), &byte, 1, MSG_DONTWAIT) == 0; });
+  await([&] {
+    Byte byte;
+
+    return ::recv(malformed.get(), &byte, 1, MSG_DONTWAIT) == 0;
+  });
+
   status = request(base + ".network", {});
   check(traffic_control::Protocol::reply(status).result == traffic_control::Result::ok);
 }
 
-static void destinationAuthorization(TlsTestMemory &memory) {
+static void destinationAuthorization(TlsTestMemory& memory) {
   TemporaryDirectory directory{"/tmp/tlr-selection-control.XXXXXX"};
   const auto base = std::string{directory.path()} + "/runtime.sock";
   const auto missing_executable = std::string{directory.path()} + "/missing-runtime";
@@ -281,7 +321,7 @@ static void destinationAuthorization(TlsTestMemory &memory) {
   check(targets != 0 && reply.status.redirect == traffic_control::RedirectState::idle);
 }
 
-static void packageControl(TlsTestMemory &memory) {
+static void packageControl(TlsTestMemory& memory) {
   namespace app = telar::runtime::plugins;
   namespace recording = traffic::recording;
   TemporaryDirectory directory{"/tmp/tlr-package-control.XXXXXX"};
@@ -306,7 +346,7 @@ static void packageControl(TlsTestMemory &memory) {
   const auto observer = package(app::Capability::traffic_observe, 0x5a);
   const auto recorder = package(app::Capability::traffic_record, 0x5b);
   const auto other = package(app::Capability::traffic_record, 0x5c);
-  const auto send = [&](const app::ServiceSpec &specification, const traffic_control::Request &message) {
+  const auto send = [&](const app::ServiceSpec& specification, const traffic_control::Request& message) {
     const auto channel = service.openPackage(specification);
 
     return request(channel.get(), message);
@@ -344,20 +384,28 @@ static void packageControl(TlsTestMemory &memory) {
   const auto revoked = request(revoked_channel.get(), {});
 
   check(traffic_control::Protocol::reply(revoked).result == traffic_control::Result::disabled);
-  rejects([&] { service.openPackage(recorder); });
+  rejects([&] {
+    service.openPackage(recorder);
+  });
+
   const auto visible = request(base + ".network", {.operation = traffic_control::Operation::recording, .recording = recording::Request{.id = id}});
 
   check(!recording::Protocol::page(traffic_control::Protocol::reply(visible).recording).active);
 }
 
 struct SameUser {
-  static bool allows(uid_t uid) noexcept { return uid == ::geteuid(); }
-};
-struct IgnoreConnections {
-  bool adopt(redirect::Connection) noexcept { return false; }
+  static bool allows(uid_t uid) noexcept {
+    return uid == ::geteuid();
+  }
 };
 
-static FileDescriptor monitor(const std::string &path) {
+struct IgnoreConnections {
+  bool adopt(redirect::Connection) noexcept {
+    return false;
+  }
+};
+
+static FileDescriptor monitor(const std::string& path) {
   auto channel = traffic::connect(path);
   std::array<Byte, redirect::Protocol::frame_bytes> output;
 
@@ -375,11 +423,17 @@ static void redirectControl() {
   redirect::Ingress<IgnoreConnections, SameUser> ingress{path, sink};
   auto helper = monitor(path);
 
-  await([&] { return ingress.status() == redirect::MonitorState::starting; });
+  await([&] {
+    return ingress.status() == redirect::MonitorState::starting;
+  });
+
   const auto active = static_cast<Byte>(redirect::MonitorUpdate::active);
 
   traffic::sendAll(helper.get(), {&active, 1});
-  await([&] { return ingress.status() == redirect::MonitorState::active; });
+  await([&] {
+    return ingress.status() == redirect::MonitorState::active;
+  });
+
   ingress.stop();
   Byte stop;
 
@@ -389,10 +443,15 @@ static void redirectControl() {
 
   traffic::sendAll(helper.get(), {&stopped, 1});
   helper.reset();
-  await([&] { return ingress.status() == redirect::MonitorState::idle; });
+  await([&] {
+    return ingress.status() == redirect::MonitorState::idle;
+  });
+
   helper = monitor(path);
   helper.reset();
-  await([&] { return ingress.status() == redirect::MonitorState::cleanup_required; });
+  await([&] {
+    return ingress.status() == redirect::MonitorState::cleanup_required;
+  });
 
   helper = monitor(path);
   ingress.stop();
@@ -401,22 +460,31 @@ static void redirectControl() {
 
   traffic::sendAll(helper.get(), updates);
   helper.reset();
-  await([&] { return ingress.status() == redirect::MonitorState::idle; });
+  await([&] {
+    return ingress.status() == redirect::MonitorState::idle;
+  });
 }
 
 struct TrustCommands {
   std::vector<std::vector<std::string>> calls;
   bool fail = false;
+
   void run(std::span<const std::string_view> arguments) {
-    if (fail) { throw SystemError{"Fixture certificate-store rejection", EACCES}; }
+    if (fail) {
+      throw SystemError{"Fixture certificate-store rejection", EACCES};
+    }
+
     std::vector<std::string> call;
 
-    for (const auto argument : arguments) { call.emplace_back(argument); }
+    for (const auto argument : arguments) {
+      call.emplace_back(argument);
+    }
+
     calls.push_back(std::move(call));
   }
 };
 
-static void authorityControl(TlsTestMemory &memory) {
+static void authorityControl(TlsTestMemory& memory) {
   TemporaryDirectory directory{"/tmp/tlr-authority.XXXXXX"};
   ProxyOptions options{memory};
 
@@ -427,7 +495,7 @@ static void authorityControl(TlsTestMemory &memory) {
   const auto original = proxy.authorityStatus(true);
 
   check(original.active && original.accepting && original.trust == proxy_trust::Status::absent);
-  const std::string certificate{reinterpret_cast<const char *>(original.certificate.data()), original.certificate_bytes};
+  const std::string certificate{reinterpret_cast<const char*>(original.certificate.data()), original.certificate_bytes};
 
   check(certificate.starts_with("-----BEGIN CERTIFICATE-----") && !certificate.contains("PRIVATE KEY"));
 
@@ -469,7 +537,10 @@ static void authorityControl(TlsTestMemory &memory) {
   check(readPrivateFile(handle.get(), "ca-active-cert.pem", published, PemDocument::maximum_bytes));
   check(std::ranges::equal(published, std::span{rotated.certificate}.first(rotated.certificate_bytes)));
   commands.fail = true;
-  rejects([&] { proxy.manageAuthority(proxy_trust::Action::install, commands); });
+  rejects([&] {
+    proxy.manageAuthority(proxy_trust::Action::install, commands);
+  });
+
   check(!proxy.authorityStatus().accepting);
   commands.fail = false;
   proxy.manageAuthority(proxy_trust::Action::uninstall, commands);

@@ -26,7 +26,7 @@ namespace tbc_lint {
 
     // Reports each allowed module that every one of its checked interface units keeps free of bodies,
     // so that its entry can be removed. Returns whether there was one.
-    bool reportStale(llvm::raw_ostream &output, bool errors, llvm::StringRef allowlist) const;
+    bool reportStale(llvm::raw_ostream& output, bool errors, llvm::StringRef allowlist) const;
 
   private:
     llvm::StringSet<> allowed_;
@@ -40,12 +40,12 @@ namespace tbc_lint {
   // marked TBC_HOT_PATH may stay.
   class interface_body_check final : public clang::ASTConsumer {
   public:
-    interface_body_check(interface_modules &modules, bool errors);
+    interface_body_check(interface_modules& modules, bool errors);
 
-    void HandleTranslationUnit(clang::ASTContext &context) override;
+    void HandleTranslationUnit(clang::ASTContext& context) override;
 
   private:
-    interface_modules &modules_;
+    interface_modules& modules_;
     bool errors_;
   };
 }

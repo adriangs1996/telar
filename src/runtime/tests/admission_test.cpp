@@ -3,9 +3,8 @@
 static_assert(true);
 #endif
 
-
-#include <cstddef>
 #include <cerrno>
+#include <cstddef>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -109,7 +108,7 @@ static void testMalformedHello() {
 
     try {
       pending.read();
-    } catch (const EncodingError &) {
+    } catch (const EncodingError&) {
       rejected = true;
     }
 

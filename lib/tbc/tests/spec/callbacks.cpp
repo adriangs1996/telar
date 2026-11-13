@@ -9,7 +9,9 @@
 void deferredBorrowedCapture() {
   const std::string input{"local request"};
   const spec::text view = input;
-  spec::enqueue([view] { spec::observe(view); }); // expected-error [tbc-escaping-capture]
+  spec::enqueue([view] {
+    spec::observe(view);
+  }); // expected-error [tbc-escaping-capture]
 }
 
 // END CASE
@@ -23,7 +25,9 @@ void deferredBorrowedCapture() {
 void deferredOwnedCapture() {
   const std::string input{"local request"};
   auto owned = spec::copyText(input);
-  spec::enqueue([owned = std::move(owned)] { spec::observe(owned); });
+  spec::enqueue([owned = std::move(owned)] {
+    spec::observe(owned);
+  });
 }
 
 // END CASE
@@ -37,7 +41,9 @@ void deferredOwnedCapture() {
 void inlineBorrowedCapture() {
   const std::string input{"local request"};
   const spec::text view = input;
-  spec::invokeNow([view] { spec::observe(view); });
+  spec::invokeNow([view] {
+    spec::observe(view);
+  });
 }
 
 // END CASE
@@ -57,7 +63,9 @@ void publishedBorrowedRequest() {
   const std::string root{"/project"};
   const std::string query{"file"};
   const request_view request{root, query};
-  spec::enqueue([request] { spec::observe(request); }); // expected-error [tbc-escaping-capture]
+  spec::enqueue([request] {
+    spec::observe(request);
+  }); // expected-error [tbc-escaping-capture]
 }
 
 // END CASE
@@ -77,7 +85,9 @@ void publishedOwnedRequest() {
   const std::string root{"/project"};
   const std::string query{"file"};
   owned_request request{spec::copyText(root), spec::copyText(query)};
-  spec::enqueue([request = std::move(request)] { spec::observe(request); });
+  spec::enqueue([request = std::move(request)] {
+    spec::observe(request);
+  });
 }
 
 // END CASE
@@ -90,7 +100,9 @@ void publishedOwnedRequest() {
 // SCENARIO: A deferred borrow is legal when execution is bounded by that same referent's lifetime.
 void contextBoundCapture() {
   const spec::callback_context context;
-  spec::enqueueBound(context, [&context] { spec::observe(context); });
+  spec::enqueueBound(context, [&context] {
+    spec::observe(context);
+  });
 }
 
 // END CASE
@@ -101,9 +113,11 @@ void contextBoundCapture() {
 // STATUS: pending
 // CONTRACT: Binding callback lifetime to one context does not protect unrelated captured storage.
 // SCENARIO: The caller's context can survive the local source; reject this retained capture.
-void unrelatedContextCapture(tbc::view<const spec::callback_context &> context) {
+void unrelatedContextCapture(tbc::view<const spec::callback_context&> context) {
   const std::string local{"unrelated local"};
-  spec::enqueueBound(context, [&local] { spec::observe(local); }); // expected-error [tbc-escaping-capture]
+  spec::enqueueBound(context, [&local] {
+    spec::observe(local);
+  }); // expected-error [tbc-escaping-capture]
 }
 
 // END CASE

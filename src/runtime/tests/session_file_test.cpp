@@ -3,17 +3,16 @@
 static_assert(true);
 #endif
 
-
+#include <cerrno>
+#include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
+#include <fcntl.h>
+#include <sqlite3.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <cstddef>
-#include <sqlite3.h>
-#include <cerrno>
-#include <cstdlib>
-#include <fcntl.h>
-#include <sys/stat.h>
 
 import std;
 import telar.base.memory;
@@ -26,14 +25,14 @@ import telar.runtime.agents.snapshot;
 using namespace telar;
 using namespace telar::runtime;
 
-static void writeSessionFile(const std::string &path, std::string_view contents, bool append = false) {
+static void writeSessionFile(const std::string& path, std::string_view contents, bool append = false) {
   std::ofstream file{path, std::ios::binary | (append ? std::ios::app : std::ios::trunc)};
 
   file << contents;
   check(file.good());
 }
 
-static void testTranscript(SessionFileReader<SystemAllocator> &reader, const std::string &root) {
+static void testTranscript(SessionFileReader<SystemAllocator>& reader, const std::string& root) {
   const auto path = root + "/claude.jsonl";
 
   writeSessionFile(path, "{\"type\":\"custom-title\",\"sessionId\":\"session\",\"customTitle\":\"old title\"}\n");
@@ -73,7 +72,7 @@ static void testTranscript(SessionFileReader<SystemAllocator> &reader, const std
   check(result.title && result.title->view() == "after long line");
 }
 
-static void testCursorMetadata(SessionFileReader<SystemAllocator> &reader, const std::string &root) {
+static void testCursorMetadata(SessionFileReader<SystemAllocator>& reader, const std::string& root) {
   const auto directory = root + "/0192-abcd";
 
   std::filesystem::create_directory(directory);
@@ -106,7 +105,7 @@ static void testCursorMetadata(SessionFileReader<SystemAllocator> &reader, const
   check(!reader.observe(request).title);
 }
 
-static void testCodexDatabase(SessionFileReader<SystemAllocator> &reader, const std::string &root) {
+static void testCodexDatabase(SessionFileReader<SystemAllocator>& reader, const std::string& root) {
   const auto path = root + "/codex.sqlite";
   SessionFileRequest request;
 

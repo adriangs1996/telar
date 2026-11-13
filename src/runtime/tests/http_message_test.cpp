@@ -3,12 +3,11 @@
 static_assert(true);
 #endif
 
-
-#include <cstddef>
-#include <cstring>
-#include <cstdint>
 #include <brotli/decode.h>
 #include <brotli/encode.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
 #include <zlib.h>
 #include <zstd.h>
 
@@ -25,14 +24,19 @@ using namespace telar::runtime;
 void testHttpInterception();
 
 template <typename Function>
-static void fails(Function &&function) {
+static void fails(Function&& function) {
   bool failed = false;
 
-  try { function(); } catch (const std::exception &) { failed = true; }
+  try {
+    function();
+  } catch (const std::exception&) {
+    failed = true;
+  }
+
   check(failed);
 }
 
-static void content(SystemAllocator &memory) {
+static void content(SystemAllocator& memory) {
   HttpContentCodec codec{memory};
   const std::array<std::uint8_t, 11> payload{'b', 'i', 0, 'n', 'a', 'r', 'y', '\r', '\n', 255, 1};
   constexpr std::size_t limit = 1024;
@@ -42,19 +46,30 @@ static void content(SystemAllocator &memory) {
     const auto decoded = codec.decode(encoded.bytes(), coding, limit);
 
     check(decoded.decoded && !decoded.failed && !decoded.truncated && std::ranges::equal(decoded.bytes(), payload));
-    fails([&] { codec.decode(encoded.bytes(), coding, payload.size() - 1); });
+    fails([&] {
+      codec.decode(encoded.bytes(), coding, payload.size() - 1);
+    });
+
     const auto exact = codec.decode(encoded.bytes(), coding, payload.size());
 
     check(std::ranges::equal(exact.bytes(), payload));
     const auto empty = codec.encode({}, coding, limit);
 
     check(codec.decode(empty.bytes(), coding, limit).size == 0);
-    if (coding.empty() || coding == "identity") { continue; }
-    fails([&] { codec.decode(encoded.bytes().first(encoded.size - 1), coding, limit); });
+    if (coding.empty() || coding == "identity") {
+      continue;
+    }
+
+    fails([&] {
+      codec.decode(encoded.bytes().first(encoded.size - 1), coding, limit);
+    });
+
     std::vector<std::uint8_t> trailing(encoded.bytes().begin(), encoded.bytes().end());
 
     trailing.push_back(0);
-    fails([&] { codec.decode(trailing, coding, limit); });
+    fails([&] {
+      codec.decode(trailing, coding, limit);
+    });
   }
 
   for (const std::string_view coding : {"gzip", "deflate", "zstd"}) {
@@ -62,7 +77,9 @@ static void content(SystemAllocator &memory) {
     std::vector<std::uint8_t> corrupt(encoded.bytes().begin(), encoded.bytes().end());
 
     corrupt.back() ^= 1;
-    fails([&] { codec.decode(corrupt, coding, limit); });
+    fails([&] {
+      codec.decode(corrupt, coding, limit);
+    });
   }
 
   for (const std::string_view coding : {"gzip", "zstd"}) {
@@ -76,36 +93,61 @@ static void content(SystemAllocator &memory) {
   }
 
   for (const std::string_view coding : {"unknown", "gzip,", ",gzip", "gzip, br, gzip"}) {
-    fails([&] { codec.decode(payload, coding, limit); });
-    fails([&] { codec.encode(payload, coding, limit); });
+    fails([&] {
+      codec.decode(payload, coding, limit);
+    });
+
+    fails([&] {
+      codec.encode(payload, coding, limit);
+    });
   }
 
-  fails([&] { codec.decode(payload, "", 0); });
-  fails([&] { codec.encode(payload, "gzip", 1); });
+  fails([&] {
+    codec.decode(payload, "", 0);
+  });
+
+  fails([&] {
+    codec.encode(payload, "gzip", 1);
+  });
 
   BudgetAllocator budget{memory, 4096};
 
   {
     HttpContentCodec bounded{budget};
 
-    fails([&] { bounded.encode(payload, "gzip", limit); });
-    fails([&] { bounded.decode(payload, "gzip", limit); });
+    fails([&] {
+      bounded.encode(payload, "gzip", limit);
+    });
+
+    fails([&] {
+      bounded.decode(payload, "gzip", limit);
+    });
   }
 
   check(budget.liveBytes() == 0);
 }
 
 static auto text(std::span<const std::uint8_t> bytes) -> std::string_view {
-  return {reinterpret_cast<const char *>(bytes.data()), bytes.size()};
+  return {reinterpret_cast<const char*>(bytes.data()), bytes.size()};
 }
 
 struct MessageObserver {
   std::string head_bytes;
   std::vector<std::uint8_t> body;
+
   void headStarted() noexcept {}
-  void head(std::string_view bytes) noexcept { head_bytes = bytes; }
-  void payload(std::span<const std::uint8_t> bytes) noexcept { body.insert(body.end(), bytes.begin(), bytes.end()); }
-  void lineTooLong(Http1Line) noexcept { check(false); }
+
+  void head(std::string_view bytes) noexcept {
+    head_bytes = bytes;
+  }
+
+  void payload(std::span<const std::uint8_t> bytes) noexcept {
+    body.insert(body.end(), bytes.begin(), bytes.end());
+  }
+
+  void lineTooLong(Http1Line) noexcept {
+    check(false);
+  }
 };
 
 // One parser serves the strict codec and the lenient capture: it keeps unknown codings, and stops
@@ -124,7 +166,7 @@ static void contentCodings() {
   check(ContentCodings::onlyIdentity("identity, Identity, identity") && !ContentCodings::onlyIdentity("identity, gzip") && !ContentCodings::onlyIdentity(""));
 }
 
-static void messages(SystemAllocator &memory) {
+static void messages(SystemAllocator& memory) {
   HttpMessage request{memory};
   const auto framing = request.readHttp1Head("POST /original HTTP/1.1\r\nHost: fixture.test\r\nContent-Length: 999\r\n\r\n");
 
@@ -172,7 +214,10 @@ static void messages(SystemAllocator &memory) {
   request.decodeBody(std::span{request.body}.subspan(2, 3));
   check(std::ranges::equal(request.body, std::span{body}.subspan(2, 3)));
   check(HttpContentCodec{memory}.decode(body, "", 1024).size == body.size());
-  fails([&] { static_cast<void>(HttpContentCodec{memory}.decodeView(body, "identity", body.size() - 1)); });
+  fails([&] {
+    static_cast<void>(HttpContentCodec{memory}.decodeView(body, "identity", body.size() - 1));
+  });
+
   request.body.assign(body.begin(), body.end());
   request.headers.set("Content-Encoding", "gzip");
   request.headers.set("X-Order", "merged");
@@ -190,9 +235,13 @@ static void messages(SystemAllocator &memory) {
     const auto output = response.serializeHttp1();
 
     check(text(output).ends_with("\r\n\r\n"));
-    if (status == 304) { check(text(output).contains("Content-Length: 123\r\n")); }
-    else if (status == 205) { check(text(output).contains("Content-Length: 0\r\n")); }
-    else { check(!text(output).contains("Content-Length:")); }
+    if (status == 304) {
+      check(text(output).contains("Content-Length: 123\r\n"));
+    } else if (status == 205) {
+      check(text(output).contains("Content-Length: 0\r\n"));
+    } else {
+      check(!text(output).contains("Content-Length:"));
+    }
   }
 
   HttpMessage head{memory, true};
@@ -213,27 +262,44 @@ static void messages(SystemAllocator &memory) {
   check(fields.fields().size() == 1 && *fields.get("x-keep") == "safe");
 
   for (const std::string_view malformed : {
-      "GET / HTTP/1.1\r\n\r\n",
-      "GET / HTTP/1.1\r\nHost: a\r\nHost: b\r\n\r\n",
-      "GET / HTTP/1.1\r\nHost : a\r\n\r\n",
-      "GET / HTTP/1.1\r\nHost: a b\r\n\r\n",
-      "GET / HTTP/1.1\r\nHost: a\r\n folded: no\r\n\r\n",
-      "GET / HTTP/1.1\r\nHost: a\r\nContent-Length: 1\r\nTransfer-Encoding: chunked\r\n\r\n",
-      "GET / HTTP/1.1\r\nHost: a\r\nContent-Length: +0\r\n\r\n",
-      "GET / HTTP/1.1\r\nHost: a\r\nContent-Length: 1_0\r\n\r\n",
-      "GET / HTTP/1.1\r\nHost: a\r\n\r\nsmuggled\r\n\r\n",
-      "GET / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: gzip, chunked\r\n\r\n"}) {
-    fails([&] { HttpMessage invalid{memory}; invalid.readHttp1Head(malformed); });
+           "GET / HTTP/1.1\r\n\r\n",
+           "GET / HTTP/1.1\r\nHost: a\r\nHost: b\r\n\r\n",
+           "GET / HTTP/1.1\r\nHost : a\r\n\r\n",
+           "GET / HTTP/1.1\r\nHost: a b\r\n\r\n",
+           "GET / HTTP/1.1\r\nHost: a\r\n folded: no\r\n\r\n",
+           "GET / HTTP/1.1\r\nHost: a\r\nContent-Length: 1\r\nTransfer-Encoding: chunked\r\n\r\n",
+           "GET / HTTP/1.1\r\nHost: a\r\nContent-Length: +0\r\n\r\n",
+           "GET / HTTP/1.1\r\nHost: a\r\nContent-Length: 1_0\r\n\r\n",
+           "GET / HTTP/1.1\r\nHost: a\r\n\r\nsmuggled\r\n\r\n",
+           "GET / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: gzip, chunked\r\n\r\n"
+       }) {
+    fails([&] {
+      HttpMessage invalid{memory};
+
+      invalid.readHttp1Head(malformed);
+    });
   }
 
-  fails([&] { request.headers.append("X-Bad", "value\r\nInjected: yes"); });
-  fails([&] { request.trailers.append("Content-Length", "1"); request.serializeHttp1(); });
+  fails([&] {
+    request.headers.append("X-Bad", "value\r\nInjected: yes");
+  });
+
+  fails([&] {
+    request.trailers.append("Content-Length", "1");
+    request.serializeHttp1();
+  });
+
   request.trailers.clear();
   request.method = "BAD METHOD";
-  fails([&] { request.serializeHttp1(); });
+  fails([&] {
+    request.serializeHttp1();
+  });
+
   request.method = "POST";
   request.version = HttpVersion::http2;
-  fails([&] { request.serializeHttp1(); });
+  fails([&] {
+    request.serializeHttp1();
+  });
 }
 
 int main() {

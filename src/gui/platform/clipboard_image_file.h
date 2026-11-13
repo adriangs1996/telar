@@ -9,8 +9,8 @@ typedef struct TelarGuiClipboardImagePipe {
   int write_descriptor;
 } TelarGuiClipboardImagePipe;
 
-int telarGuiOpenClipboardImagePipe(TelarGuiClipboardImagePipe *pipe);
-int telarGuiOpenClipboardImageFile(const char *path);
+int telarGuiOpenClipboardImagePipe(TelarGuiClipboardImagePipe* pipe);
+int telarGuiOpenClipboardImageFile(const char* path);
 
 #ifdef __cplusplus
 }

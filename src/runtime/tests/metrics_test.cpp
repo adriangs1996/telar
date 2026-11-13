@@ -3,23 +3,22 @@
 static_assert(true);
 #endif
 
-
-#include <cstdint>
+#include "cell_layout.hpp"
 #include "telar_base/diagnostics/config.hpp"
-#include <sys/types.h>
 #include <cassert>
-#include <cstring>
-#include <cstddef>
 #include <cerrno>
+#include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fcntl.h>
-#include <sys/mman.h>
-#include <unistd.h>
-#include "cell_layout.hpp"
-#include <pthread.h>
-#include <poll.h>
 #include <ghostty/vt.h>
+#include <poll.h>
+#include <pthread.h>
+#include <sys/mman.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 import std;
 import telar.base.memory;
@@ -83,7 +82,7 @@ static void testProjection() {
   check(sampler.latest()->cpu_percent == 100 && sampler.latest()->memory_used_decigib == 65535);
 
   FakeHostMetrics probe;
-  HostMetricsReader<FakeHostMetrics &> reader{probe};
+  HostMetricsReader<FakeHostMetrics&> reader{probe};
   const auto retained = reader.observe(sampler);
 
   check(retained.latest() == sampler.latest() && retained.revision() == sampler.revision());
@@ -102,7 +101,7 @@ static void testDelivery() {
 
   probe.next = HostCounters{.busy_ticks = 2, .total_ticks = 10, .memory_used_bytes = 4 * gib, .memory_total_bytes = 16 * gib, .cpu_count = 8, .battery_percent = 81};
   const HostMetricsService<FakeHostMetrics>::Clock::time_point started{};
-  HostMetricsService<FakeHostMetrics &> metrics{started, probe};
+  HostMetricsService<FakeHostMetrics&> metrics{started, probe};
 
   metrics.publish(client.session());
   check(client.session().metrics_revision == 0);

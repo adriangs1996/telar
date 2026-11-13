@@ -1,6 +1,6 @@
 #include "tbc/view.hpp"
 
-using int_view = tbc::view<const int &, tbc::lt::a>;
+using int_view = tbc::view<const int&, tbc::lt::a>;
 
 int_view fromLocal() {
   int value = 1;

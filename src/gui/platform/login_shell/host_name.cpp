@@ -8,14 +8,12 @@ module telar.gui.platform.login_shell;
 
 import std;
 
-
-
 namespace telar::gui::platform {
 
-QByteArray hostName() {
-  const auto name = QSysInfo::machineHostName().toUtf8();
+  QByteArray hostName() {
+    const auto name = QSysInfo::machineHostName().toUtf8();
 
-  return name.isEmpty() ? QByteArrayLiteral("localhost") : name;
-}
+    return name.isEmpty() ? QByteArrayLiteral("localhost") : name;
+  }
 
 }

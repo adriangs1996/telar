@@ -57,9 +57,9 @@ namespace telar {
   struct CellRunCodec {
     static std::size_t encodedSize(std::span<const Cell> cells) {
       std::size_t size = 0;
-      const CellStyle *previous = nullptr;
+      const CellStyle* previous = nullptr;
 
-      for (const auto &cell : cells) {
+      for (const auto& cell : cells) {
         cell.validate();
         size = checkedWireSize(size, 1 + cell.text.size());
         if (!previous || !(*previous == cell.style)) {
@@ -80,14 +80,12 @@ namespace telar {
       }
 
       auto output = buffer.first(size);
-      const CellStyle *previous = nullptr;
+      const CellStyle* previous = nullptr;
 
-      for (const auto &cell : cells) {
+      for (const auto& cell : cells) {
         const auto changed = !previous || !(*previous == cell.style);
 
-        u8::encode(static_cast<Byte>(cell.text.size() | (static_cast<Byte>(cell.width) << 5) |
-                                     (changed ? 0x80 : 0)),
-                   output);
+        u8::encode(static_cast<Byte>(cell.text.size() | (static_cast<Byte>(cell.width) << 5) | (changed ? 0x80 : 0)), output);
         if (changed) {
           ValueCodec<CellStyle>::encode(cell.style, output);
         }

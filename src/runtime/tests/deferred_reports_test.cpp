@@ -3,25 +3,24 @@
 static_assert(true);
 #endif
 
-
-#include <cstdint>
-#include <cstring>
-#include <sys/types.h>
-#include <unistd.h>
-#include <cstddef>
+#include "cell_layout.hpp"
 #include "telar_base/diagnostics/config.hpp"
 #include <cassert>
 #include <cerrno>
+#include <csignal>
+#include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fcntl.h>
-#include <sys/mman.h>
-#include "cell_layout.hpp"
+#include <ghostty/vt.h>
 #include <limits.h>
-#include <csignal>
+#include <sys/mman.h>
+#include <sys/types.h>
 #include <sys/uio.h>
 #include <sys/wait.h>
-#include <ghostty/vt.h>
+#include <unistd.h>
 
 import std;
 import telar.base.diagnostics;
@@ -42,7 +41,7 @@ using namespace telar::runtime;
 struct RecordedAgents {
   Agent current{1, 1};
 
-  const Agent *find(std::uint64_t pane, std::uint64_t generation) const noexcept {
+  const Agent* find(std::uint64_t pane, std::uint64_t generation) const noexcept {
     return pane == current.pane && generation == current.generation ? &current : nullptr;
   }
 };
@@ -64,24 +63,24 @@ struct ReporterFixture {
     model.panes.insert(1, makeOwned<Pane<SystemAllocator>>(memory, memory, 1, TabLocation{}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits}));
     agents.current.observeProcess(ProcessIdentity{42, 1, 1, 0, 42}, AgentProvider::claude);
     agents.current.setProcessContext(SessionHost::pane, false, agents.current.process_identity);
-    for (auto *client : {&first.session(), &second.session()}) {
+    for (auto* client : {&first.session(), &second.session()}) {
       client->verified_pane = 1;
       client->verified_generation = 1;
       client->verified_lineage = {.processes = {81, 70, 42}, .count = 3, .descends = true};
     }
   }
 
-  Pane<SystemAllocator> &pane() const {
+  Pane<SystemAllocator>& pane() const {
     return *model.panes.find(1);
   }
 
   // Answers the due reports as the runtime does: each payload leaves its client while it runs.
   template <typename Consumer>
-  void answerDue(ObservationTime now, Consumer &&consume) {
+  void answerDue(ObservationTime now, Consumer&& consume) {
     const auto due = reports.due(clients, model.panes, agents, now);
 
     for (const auto identity : due.ids()) {
-      auto &client = *clients.find(identity);
+      auto& client = *clients.find(identity);
       Vector<Byte, SystemAllocator> payload{AllocatorRef<Byte, SystemAllocator>{memory}};
 
       reports.open(client, payload);
@@ -93,20 +92,20 @@ struct ReporterFixture {
     }
   }
 
-  ReportDecision evaluate(ClientSession<SystemAllocator> &client, std::span<const Byte> payload) {
+  ReportDecision evaluate(ClientSession<SystemAllocator>& client, std::span<const Byte> payload) {
     return reports.evaluate(model.panes, agents, client, reporter, payload);
   }
 };
 
 static void testRecheckAndRejection() {
   ReporterFixture fixture;
-  auto &client = fixture.first.session();
+  auto& client = fixture.first.session();
   const std::array<Byte, 2> payload{1, 2};
 
   check(fixture.evaluate(client, payload) == ReportDecision::deferred);
   check(client.connection.read_paused && fixture.pane().process_recheck_requested);
   unsigned answered = 0;
-  const auto receive = [&](auto &session, auto bytes) {
+  const auto receive = [&](auto& session, auto bytes) {
     ++answered;
     check(std::ranges::equal(bytes, payload));
     check(fixture.evaluate(session, bytes) == ReportDecision::rejected);
@@ -127,8 +126,8 @@ static void testRecheckAndRejection() {
 
 static void testRecheckOrderingAndOwnedPayload() {
   ReporterFixture fixture;
-  auto &first = fixture.first.session();
-  auto &second = fixture.second.session();
+  auto& first = fixture.first.session();
+  auto& second = fixture.second.session();
   std::array<Byte, 2> payload{3, 4};
 
   fixture.pane().process_recheck_running = true;
@@ -138,7 +137,7 @@ static void testRecheckOrderingAndOwnedPayload() {
   payload.fill(0);
   const auto first_time = first.deferred_report.observed;
   std::vector<std::uint64_t> order;
-  const auto receive = [&](auto &client, auto bytes) {
+  const auto receive = [&](auto& client, auto bytes) {
     order.push_back(client.id);
     check(bytes.size() == 2 && bytes[0] == 3 && bytes[1] == 4);
     check(client.deferred_report.reportTime().nanoseconds == client.deferred_report.observed.nanoseconds);
@@ -158,7 +157,7 @@ static void testRecheckOrderingAndOwnedPayload() {
 
 static void testTimeoutAndClosedPane() {
   ReporterFixture fixture;
-  auto &client = fixture.first.session();
+  auto& client = fixture.first.session();
   const std::array<Byte, 1> payload{7};
 
   check(fixture.evaluate(client, payload) == ReportDecision::deferred);
@@ -167,7 +166,7 @@ static void testTimeoutAndClosedPane() {
   now.nanoseconds += 2'000'000'000;
   unsigned answered = 0;
 
-  fixture.answerDue(now, [&](auto &session, auto bytes) {
+  fixture.answerDue(now, [&](auto& session, auto bytes) {
     ++answered;
     check(!session.deferred_report.answer_rechecked);
     check(fixture.evaluate(session, bytes) == ReportDecision::rejected);
@@ -176,14 +175,20 @@ static void testTimeoutAndClosedPane() {
   check(answered == 1 && !fixture.pane().rejected_reporter);
   check(fixture.evaluate(client, payload) == ReportDecision::deferred);
   fixture.pane().exit_status = 0;
-  fixture.answerDue(ObservationTime::now(), [&](auto &, auto) { ++answered; });
+  fixture.answerDue(ObservationTime::now(), [&](auto&, auto) {
+    ++answered;
+  });
+
   check(answered == 2);
 
   fixture.pane().exit_status.reset();
   check(fixture.evaluate(client, payload) == ReportDecision::deferred);
   fixture.reports.cancel(client);
   ++fixture.pane().process_rechecks;
-  fixture.answerDue(ObservationTime::now(), [&](auto &, auto) { check(false); });
+  fixture.answerDue(ObservationTime::now(), [&](auto&, auto) {
+    check(false);
+  });
+
   DeferredReport<SystemAllocator> wrapping{fixture.memory};
 
   wrapping.required_recheck = UINT32_MAX;

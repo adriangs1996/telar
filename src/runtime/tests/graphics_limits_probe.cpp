@@ -1,6 +1,6 @@
-#include <termios.h>
 #include <cerrno>
 #include <cstdio>
+#include <termios.h>
 #include <unistd.h>
 
 import std;
@@ -123,15 +123,15 @@ static int child() {
   return 0;
 }
 
-static void waitMarker(ProtocolPeer &peer, char marker) {
+static void waitMarker(ProtocolPeer& peer, char marker) {
   for (;;) {
     const auto message = peer.receiveAny<PaneFrame, PaneExited>();
 
     require(std::holds_alternative<PaneFrame>(message), "Graphics child exited before its completion marker");
-    const auto &frame = std::get<PaneFrame>(message);
+    const auto& frame = std::get<PaneFrame>(message);
 
     peer.send(FrameAck{frame.pane_id, frame.frame_id});
-    for (const auto &span : frame.spans) {
+    for (const auto& span : frame.spans) {
       auto reader = span.reader();
 
       for (std::size_t index = 0; index < span.count; ++index) {
@@ -144,7 +144,7 @@ static void waitMarker(ProtocolPeer &peer, char marker) {
   }
 }
 
-static void snapshot(ProtocolPeer &peer, std::uint64_t pane, char scenario, std::ostream &dump) {
+static void snapshot(ProtocolPeer& peer, std::uint64_t pane, char scenario, std::ostream& dump) {
   peer.send(RequestGraphicsSnapshot{pane});
   while (peer.receive<GraphicsSnapshot>().phase != SnapshotPhase::begin) {
   }
@@ -155,22 +155,22 @@ static void snapshot(ProtocolPeer &peer, std::uint64_t pane, char scenario, std:
 
   for (;;) {
     auto message = peer.receiveAny<GraphicsSnapshot, GraphicsImage, GraphicsImageChunk, GraphicsPlacementMessage>();
-    if (const auto *phase = std::get_if<GraphicsSnapshot>(&message)) {
+    if (const auto* phase = std::get_if<GraphicsSnapshot>(&message)) {
       require(phase->phase == SnapshotPhase::end, "Unexpected nested graphics snapshot");
       break;
     }
 
-    if (const auto *image = std::get_if<GraphicsImage>(&message)) {
+    if (const auto* image = std::get_if<GraphicsImage>(&message)) {
       images[image->image.key.image_id] = image->image;
-    } else if (const auto *chunk = std::get_if<GraphicsImageChunk>(&message)) {
-      auto &bytes = pixels[chunk->key.image_id];
+    } else if (const auto* chunk = std::get_if<GraphicsImageChunk>(&message)) {
+      auto& bytes = pixels[chunk->key.image_id];
 
       require(chunk->offset == bytes.size(), "Invalid snapshot chunk offset");
       bytes.insert(bytes.end(), chunk->bytes.begin(), chunk->bytes.end());
       if (bytes.size() == images.at(chunk->key.image_id).byte_len) {
         peer.send(GraphicsCredit{pane, bytes.size()});
       }
-    } else if (const auto *placement = std::get_if<GraphicsPlacementMessage>(&message)) {
+    } else if (const auto* placement = std::get_if<GraphicsPlacementMessage>(&message)) {
       placements[placement->placement.virtual_id] = placement->placement;
     }
   }
@@ -180,7 +180,7 @@ static void snapshot(ProtocolPeer &peer, std::uint64_t pane, char scenario, std:
 
   require(images.size() == expected_images, "Wrong retained image count");
   require(placements.size() == ((scenario == 'B' || scenario == 'C') ? 128 : 0), "Wrong retained placement count");
-  for (auto &[identity, image] : images) {
+  for (auto& [identity, image] : images) {
     require(pixels.at(identity) == std::vector<Byte>{255, 0, 0, 255}, "Wrong retained image bytes");
     if (scenario == 'A' || scenario == 'E') {
       require(identity >= 49 && identity <= 80, "Old images survived eviction");
@@ -192,13 +192,13 @@ static void snapshot(ProtocolPeer &peer, std::uint64_t pane, char scenario, std:
     peer.record(dump, GraphicsImage{.header = {1, 1}, .image = image});
   }
 
-  for (auto &[identity, placement] : placements) {
+  for (auto& [identity, placement] : placements) {
     placement.key.generation = 1;
     peer.record(dump, GraphicsPlacementMessage{.header = {1, 1}, .placement = placement});
   }
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   try {
     if (argc == 2 && std::string_view{argv[1]} == "--child") {
       return child();
@@ -231,7 +231,7 @@ int main(int argc, char **argv) {
 
     auto limits = peer.exchange<LimitList>(QueryLimits{1});
 
-    for (const auto &entry : limits.entries) {
+    for (const auto& entry : limits.entries) {
       dump << entry.reach.name << ':' << entry.reach.value << '\n';
     }
 
@@ -241,7 +241,7 @@ int main(int argc, char **argv) {
     peer.send(PaneInput{pane, quit});
     std::printf("{\"iterations\":%u,\"elapsed_ns\":%lld,\"ns_per_iteration\":%lld}\n", iterations, static_cast<long long>(elapsed), static_cast<long long>(elapsed / iterations));
     return 0;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     std::fprintf(stderr, "graphics-limits-probe: %s\n", error.what());
     return 1;
   }

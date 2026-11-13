@@ -11,14 +11,14 @@
 #include <string>
 
 namespace {
-  void check(bool condition, const char *message) {
+  void check(bool condition, const char* message) {
     if (!condition) {
       std::fprintf(stderr, "FAIL: %s\n", message);
       std::exit(1);
     }
   }
 
-  void checkFile(const telar::clipboard::content &expected) {
+  void checkFile(const telar::clipboard::content& expected) {
     std::string path = (std::filesystem::temp_directory_path() / "clipboard-test-XXXXXX").string();
     const int descriptor = mkstemp(path.data());
 
@@ -27,11 +27,11 @@ namespace {
 
     char program[] = "clipboard";
     char option[] = "--output";
-    char *arguments[] = {program, option, path.data()};
+    char* arguments[] = {program, option, path.data()};
 
     check(clipboard_cli_main(3, arguments) == 0, "CLI saves content");
 
-    FILE *file = std::fopen(path.c_str(), "rb");
+    FILE* file = std::fopen(path.c_str(), "rb");
 
     check(file != nullptr, "open saved content");
     std::vector<telar::clipboard::byte> actual(expected.bytes.size());
@@ -47,22 +47,22 @@ namespace {
 int main() {
   @autoreleasepool {
     telar::gui::test::PrivateClipboard isolated;
-    NSPasteboard *board = [NSPasteboard generalPasteboard];
+    NSPasteboard* board = [NSPasteboard generalPasteboard];
 
     isolated.clear();
     auto result = telar::clipboard::read();
 
     check(!result && result.error() == telar::clipboard::read_error::no_supported_content, "empty clipboard");
     char program[] = "clipboard";
-    char *arguments[] = {program};
+    char* arguments[] = {program};
 
     check(clipboard_cli_main(1, arguments) == 1, "CLI reports missing content");
 
-    NSMutableString *text = [NSMutableString stringWithString:@"UTF-8: áéíóú 🧵\n"];
+    NSMutableString* text = [NSMutableString stringWithString:@"UTF-8: áéíóú 🧵\n"];
 
     [text appendString:[@"" stringByPaddingToLength:128 * 1024 withString:@"x" startingAtIndex:0]];
     check([board setString:text forType:NSPasteboardTypeString], "set large UTF-8 text");
-    NSData *text_data = [text dataUsingEncoding:NSUTF8StringEncoding];
+    NSData* text_data = [text dataUsingEncoding:NSUTF8StringEncoding];
 
     result = telar::clipboard::read();
     check(result.has_value(), "read text larger than 2048 bytes");
@@ -80,7 +80,7 @@ int main() {
     check(result && result->bytes.empty(), "empty text remains valid");
     checkFile(*result);
 
-    NSBitmapImageRep *image = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:nullptr pixelsWide:128 pixelsHigh:128 bitsPerSample:8 samplesPerPixel:3 hasAlpha:NO isPlanar:NO colorSpaceName:NSDeviceRGBColorSpace bytesPerRow:0 bitsPerPixel:0];
+    NSBitmapImageRep* image = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:nullptr pixelsWide:128 pixelsHigh:128 bitsPerSample:8 samplesPerPixel:3 hasAlpha:NO isPlanar:NO colorSpaceName:NSDeviceRGBColorSpace bytesPerRow:0 bitsPerPixel:0];
 
     check(image != nil && image.bitmapData != nullptr, "create test image");
     std::mt19937 random(0);
@@ -101,8 +101,8 @@ int main() {
         {@"public.jpeg", NSBitmapImageFileTypeJPEG, "image/jpeg"},
     };
 
-    for (const auto &format : formats) {
-      NSData *data = [image representationUsingType:format.encoding properties:@{}];
+    for (const auto& format : formats) {
+      NSData* data = [image representationUsingType:format.encoding properties:@{}];
 
       check(data != nil && data.length > 2048, "encode image larger than old buffer");
       isolated.clear();

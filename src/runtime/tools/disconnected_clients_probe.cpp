@@ -6,7 +6,7 @@ import telar.runtime.tests.protocol_peer;
 using namespace telar;
 using Clock = std::chrono::steady_clock;
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   try {
     if (argc != 4) {
       throw std::runtime_error{"Expected socket, output directory and rounds"};
@@ -18,14 +18,14 @@ int main(int argc, char **argv) {
     while (!connection) {
       try {
         connection.emplace(argv[1]);
-      } catch (const SocketError &error) {
+      } catch (const SocketError& error) {
         if (std::string_view{error.what()} != "Error connecting" || Clock::now() >= deadline) {
           throw;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds{10});
       }
     }
-    auto &peer = *connection;
+    auto& peer = *connection;
     peer.send(RequestRuntimeState{.client_identity = 854, .interactive = true});
     peer.receive<WorkspaceList>();
     pid_t pid = 0;
@@ -54,7 +54,7 @@ int main(int argc, char **argv) {
     }
     std::cout << "{\"healthy_rounds\":" << rounds << "}\n";
     return 0;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     std::cerr << error.what() << '\n';
     return 1;
   }

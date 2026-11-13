@@ -3,12 +3,11 @@
 static_assert(true);
 #endif
 
-
-#include <cstddef>
-#include <cstring>
-#include <cstdint>
-#include <pcap/pcap.h>
 #include <arpa/inet.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <pcap/pcap.h>
 
 import std;
 import telar.base.memory;
@@ -55,7 +54,7 @@ static Event packet(std::span<const Byte> bytes) {
   return {.session = 42, .interface_index = 7, .link_type = DLT_RAW, .original_bytes = static_cast<std::uint32_t>(bytes.size()), .interface = "fragment-fixture", .bytes = bytes};
 }
 
-static void reconstructed(TlsTestMemory &memory) {
+static void reconstructed(TlsTestMemory& memory) {
   for (const bool ipv6 : {false, true}) {
     IpFragments fragments{memory};
     const std::string body{"binary\0fragmented-content", 25};
@@ -65,8 +64,14 @@ static void reconstructed(TlsTestMemory &memory) {
     const auto last = fragment(original, 24, original.size() - head - 24, false);
     std::vector<Byte> completed;
     std::size_t calls = 0;
-    const auto consume = [&](std::span<const Byte> bytes) { ++calls; completed.assign(bytes.begin(), bytes.end()); };
-    const auto report = [](const Event &, std::string_view) { check(false); };
+    const auto consume = [&](std::span<const Byte> bytes) {
+      ++calls;
+      completed.assign(bytes.begin(), bytes.end());
+    };
+
+    const auto report = [](const Event&, std::string_view) {
+      check(false);
+    };
 
     fragments.packet(packet(last), consume, report);
     fragments.packet(packet(last), consume, report);
@@ -80,8 +85,14 @@ static void reconstructed(TlsTestMemory &memory) {
     if (!ipv6) {
       std::uint32_t sum = 0;
 
-      for (std::size_t index = 0; index < 20; index += 2) { sum += NetworkPacket::word(completed, index); }
-      while (sum >> 16) { sum = (sum & UINT16_MAX) + (sum >> 16); }
+      for (std::size_t index = 0; index < 20; index += 2) {
+        sum += NetworkPacket::word(completed, index);
+      }
+
+      while (sum >> 16) {
+        sum = (sum & UINT16_MAX) + (sum >> 16);
+      }
+
       check(sum == UINT16_MAX);
     }
 
@@ -89,7 +100,7 @@ static void reconstructed(TlsTestMemory &memory) {
   }
 }
 
-static void rejectedAndIsolated(TlsTestMemory &memory) {
+static void rejectedAndIsolated(TlsTestMemory& memory) {
   for (const bool ipv6 : {false, true}) {
     IpFragments fragments{memory};
     const auto original = traffic_test::tcp(ipv6, false, 1, 16, "0123456789abcdef");
@@ -98,8 +109,14 @@ static void rejectedAndIsolated(TlsTestMemory &memory) {
     const auto last = fragment(original, 24, 12, false);
     std::vector<std::string> errors;
     std::size_t completed = 0;
-    const auto consume = [&](std::span<const Byte>) { ++completed; };
-    const auto report = [&](const Event &event, std::string_view reason) { check(event.interface == "fragment-fixture" && event.session == 42); errors.emplace_back(reason); };
+    const auto consume = [&](std::span<const Byte>) {
+      ++completed;
+    };
+
+    const auto report = [&](const Event& event, std::string_view reason) {
+      check(event.interface == "fragment-fixture" && event.session == 42);
+      errors.emplace_back(reason);
+    };
 
     fragments.packet(packet(first), consume, report);
     fragments.packet(packet(overlap), consume, report);
@@ -115,13 +132,21 @@ static void rejectedAndIsolated(TlsTestMemory &memory) {
     fragments.packet(separate, consume, report);
     separate.interface_index = 7;
     separate.session = 43;
-    fragments.packet(separate, consume, [](const Event &, std::string_view) { check(false); });
+    fragments.packet(separate, consume, [](const Event&, std::string_view) {
+      check(false);
+    });
+
     check(completed == 0);
     fragments.packet(packet(last), consume, report);
     check(completed == 1);
     std::size_t expired = 0;
 
-    fragments.expire([&](const Event &, std::string_view reason) { check(reason == "ip_fragment_timeout"); ++expired; }, false, std::chrono::steady_clock::now() + std::chrono::seconds{61});
+    fragments.expire([&](const Event&, std::string_view reason) {
+      check(reason == "ip_fragment_timeout");
+      ++expired;
+    },
+        false,
+        std::chrono::steady_clock::now() + std::chrono::seconds{61});
     check(expired == 2);
 
     auto truncated = first;
@@ -133,22 +158,28 @@ static void rejectedAndIsolated(TlsTestMemory &memory) {
   }
 }
 
-static void atomicAndExtension(TlsTestMemory &memory) {
+static void atomicAndExtension(TlsTestMemory& memory) {
   IpFragments fragments{memory};
   const auto original = traffic_test::tcp(true, false, 1, 16, "0123456789abcdef");
   auto first = fragment(original, 0, 24, true);
   auto last = fragment(original, 24, 12, false);
   const auto atomic = fragment(original, 0, 36, false);
   std::size_t completed = 0;
-  const auto consume = [&](std::span<const Byte> bytes) { check(TcpPacketDecoder::decodeNetwork(bytes).has_value()); ++completed; };
-  const auto report = [](const Event &, std::string_view) { check(false); };
+  const auto consume = [&](std::span<const Byte> bytes) {
+    check(TcpPacketDecoder::decodeNetwork(bytes).has_value());
+    ++completed;
+  };
+
+  const auto report = [](const Event&, std::string_view) {
+    check(false);
+  };
 
   fragments.packet(packet(first), consume, report);
   fragments.packet(packet(atomic), consume, report);
   check(completed == 1);
   fragments.packet(packet(last), consume, report);
   check(completed == 2);
-  for (auto *part : {&first, &last}) {
+  for (auto* part : {&first, &last}) {
     part->insert(part->begin() + 40, 8, 0);
     (*part)[6] = 0;
     (*part)[40] = 44;
@@ -161,27 +192,35 @@ static void atomicAndExtension(TlsTestMemory &memory) {
   fragments.expire(report, true);
 }
 
-static void capacityAndFlow(TlsTestMemory &memory) {
+static void capacityAndFlow(TlsTestMemory& memory) {
   IpFragments fragments{memory};
   const auto original = traffic_test::tcp(false, false, 10, 16, std::string_view{"a\0b-content-1234", 16});
   std::size_t capacity = 0;
-  const auto report = [&](const Event &, std::string_view reason) { check(reason == "ip_fragment_capacity" || reason == "ip_fragment_capture_stopped"); capacity += reason == "ip_fragment_capacity"; };
+  const auto report = [&](const Event&, std::string_view reason) {
+    check(reason == "ip_fragment_capacity" || reason == "ip_fragment_capture_stopped");
+    capacity += reason == "ip_fragment_capacity";
+  };
 
   for (unsigned index = 0; index < 33; ++index) {
     const auto first = fragment(original, 0, 24, true, index);
 
-    fragments.packet(packet(first), [](std::span<const Byte>) { check(false); }, report);
+    fragments.packet(packet(first), [](std::span<const Byte>) {
+      check(false);
+    },
+        report);
   }
 
   check(capacity == 1);
   fragments.expire(report, true);
   CaptureAnalysis flows{memory};
   std::string content;
-  const auto emit = [&](const Event &event) {
+  const auto emit = [&](const Event& event) {
     check(event.session == 42 && event.interface_index == 7 && event.interface == "fragment-fixture");
     const auto flow = FlowCodec::decode(event.bytes);
 
-    if (event.kind == Kind::stream_data) { content.append(reinterpret_cast<const char *>(flow.bytes.data()), flow.bytes.size()); }
+    if (event.kind == Kind::stream_data) {
+      content.append(reinterpret_cast<const char*>(flow.bytes.data()), flow.bytes.size());
+    }
   };
 
   const auto last = fragment(original, 24, 12, false);
@@ -193,13 +232,18 @@ static void capacityAndFlow(TlsTestMemory &memory) {
   flows.expire(emit, true);
 }
 
-static void malformedAndPieceLimits(TlsTestMemory &memory) {
+static void malformedAndPieceLimits(TlsTestMemory& memory) {
   for (const bool ipv6 : {false, true}) {
     IpFragments fragments{memory};
     const auto original = traffic_test::tcp(ipv6, false, 1, 16, std::string(1100, 'x'));
     std::vector<std::string> errors;
-    const auto report = [&](const Event &, std::string_view reason) { errors.emplace_back(reason); };
-    const auto consume = [](std::span<const Byte>) { check(false); };
+    const auto report = [&](const Event&, std::string_view reason) {
+      errors.emplace_back(reason);
+    };
+
+    const auto consume = [](std::span<const Byte>) {
+      check(false);
+    };
 
     for (std::size_t index = 0; index < 129; ++index) {
       const auto piece = fragment(original, index * 8, 8, true);
@@ -244,7 +288,10 @@ static void malformedAndPieceLimits(TlsTestMemory &memory) {
 
   for (unsigned iteration = 0; iteration < 5000; ++iteration) {
     bytes.resize(random() % 512);
-    for (auto &byte : bytes) { byte = static_cast<Byte>(random()); }
+    for (auto& byte : bytes) {
+      byte = static_cast<Byte>(random());
+    }
+
     if (bytes.size() >= 48) {
       bytes[0] = iteration % 2 == 0 ? 0x45 : 0x60;
       if (iteration % 2 == 0) {
@@ -256,10 +303,13 @@ static void malformedAndPieceLimits(TlsTestMemory &memory) {
       }
     }
 
-    fragments.packet(packet(bytes), [](std::span<const Byte> completed) { check(completed.size() <= 65575); }, [](const Event &, std::string_view) {});
+    fragments.packet(packet(bytes), [](std::span<const Byte> completed) {
+      check(completed.size() <= 65575);
+    },
+        [](const Event&, std::string_view) {});
   }
 
-  fragments.expire([](const Event &, std::string_view) {}, true);
+  fragments.expire([](const Event&, std::string_view) {}, true);
 }
 
 int main() {

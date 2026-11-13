@@ -6,7 +6,7 @@
 #include <vector>
 
 namespace third_party {
-  void observe(const char *text) {
+  void observe(const char* text) {
     static_cast<void>(text);
   }
 
@@ -34,7 +34,7 @@ library::string_view libraryViewOfLocal() {
 // STATUS: implemented
 // CONTRACT: A library view of a caller's object may outlive the call.
 // SCENARIO: The viewed string belongs to the caller; accept.
-library::string_view libraryViewOfParameter(const library::string &owner) {
+library::string_view libraryViewOfParameter(const library::string& owner) {
   return library::string_view{owner};
 }
 
@@ -46,7 +46,7 @@ library::string_view libraryViewOfParameter(const library::string &owner) {
 // STATUS: implemented
 // CONTRACT: A reference returned by a library container points into its storage.
 // SCENARIO: A reference into a local library container is returned.
-const int &libraryElementReferenceEscape() {
+const int& libraryElementReferenceEscape() {
   const library::list<int> items;
   return items.at(0); // expected-error [tbc-dangling-borrow]
 }
@@ -59,8 +59,8 @@ const int &libraryElementReferenceEscape() {
 // STATUS: implemented
 // CONTRACT: An element returned by value is a copy, not a view of the container.
 // SCENARIO: A pointer element copied out of a local container outlives it; accept.
-int *libraryElementCopy() {
-  const library::list<int *> items;
+int* libraryElementCopy() {
+  const library::list<int*> items;
   return items.value(0);
 }
 
@@ -72,7 +72,7 @@ int *libraryElementCopy() {
 // STATUS: implemented
 // CONTRACT: A pointer returned by a library container designates its storage.
 // SCENARIO: The data of a local library container is returned.
-const int *libraryContainerStorageEscape() {
+const int* libraryContainerStorageEscape() {
   const library::list<int> items;
   return items.data(); // expected-error [tbc-dangling-borrow]
 }
@@ -85,7 +85,7 @@ const int *libraryContainerStorageEscape() {
 // STATUS: implemented
 // CONTRACT: A pointer from a library owner that is not a container has no inferable relation to it and is not reported.
 // SCENARIO: A created object outlives the local component that created it; accept.
-int *libraryNonContainerPointer() {
+int* libraryNonContainerPointer() {
   library::component factory;
   return factory.create();
 }
@@ -115,7 +115,7 @@ void libraryViewsInOwnerDead() {
 // STATUS: implemented
 // CONTRACT: Views stored in a library container may be read while their source is alive.
 // SCENARIO: The string outlives the read; accept.
-void libraryViewsInOwnerLive(const library::string &owner) {
+void libraryViewsInOwnerLive(const library::string& owner) {
   library::list<library::string_view> views;
   views.append(library::string_view{owner});
   third_party::observe(views.at(0).data());
@@ -141,7 +141,7 @@ void libraryCompiledFunction() {
 // STATUS: implemented
 // CONTRACT: A library function with a visible body is inferred from the shape of its arguments.
 // SCENARIO: The pointer passed through the library function views a local buffer and is returned.
-const char *libraryInlineFunction() {
+const char* libraryInlineFunction() {
   const std::string buffer = "abc";
   return library::pass(buffer.data()); // expected-error [tbc-dangling-borrow]
 }
@@ -183,9 +183,10 @@ namespace third_party {
   class decoder {
   public:
     decoder() = default;
-    decoder(const decoder &) = delete;
+    decoder(const decoder&) = delete;
+
     int decode(std::string_view input, std::span<unsigned char> output) {
-      stream_.next_in = reinterpret_cast<const unsigned char *>(input.data());
+      stream_.next_in = reinterpret_cast<const unsigned char*>(input.data());
       stream_.avail_in = static_cast<unsigned>(input.size());
       stream_.next_out = output.data();
       stream_.avail_out = static_cast<unsigned>(output.size());
@@ -197,7 +198,7 @@ namespace third_party {
   };
 }
 
-int libraryRawStreamPointer(third_party::decoder &decoder, std::string_view input, std::span<unsigned char> output) {
+int libraryRawStreamPointer(third_party::decoder& decoder, std::string_view input, std::span<unsigned char> output) {
   return decoder.decode(input, output);
 }
 
@@ -211,13 +212,13 @@ int libraryRawStreamPointer(third_party::decoder &decoder, std::string_view inpu
 // SCENARIO: The same stream declared by the project keeps the borrow its declaration does not allow; reject the store.
 namespace third_party {
   struct project_stream {
-    const unsigned char *next_in;
+    const unsigned char* next_in;
   };
 
   class project_decoder {
   public:
     void decode(std::string_view input) {
-      stream_.next_in = reinterpret_cast<const unsigned char *>(input.data()); // expected-error [tbc-contract-violation]
+      stream_.next_in = reinterpret_cast<const unsigned char*>(input.data()); // expected-error [tbc-contract-violation]
     }
 
   private:
@@ -225,7 +226,7 @@ namespace third_party {
   };
 }
 
-void libraryProjectStreamPointer(third_party::project_decoder &decoder, std::string_view input) {
+void libraryProjectStreamPointer(third_party::project_decoder& decoder, std::string_view input) {
   decoder.decode(input);
 }
 
@@ -240,10 +241,10 @@ void libraryProjectStreamPointer(third_party::project_decoder &decoder, std::str
 namespace third_party {
   class field_list {
   public:
-    void add(const std::string &name, std::string_view value) {
+    void add(const std::string& name, std::string_view value) {
       names_.push_back(name);
-      const auto &stored = names_.back();
-      fields_.push_back({reinterpret_cast<const unsigned char *>(stored.data()), reinterpret_cast<const unsigned char *>(value.data()), stored.size(), value.size()});
+      const auto& stored = names_.back();
+      fields_.push_back({reinterpret_cast<const unsigned char*>(stored.data()), reinterpret_cast<const unsigned char*>(value.data()), stored.size(), value.size()});
     }
 
   private:
@@ -252,7 +253,7 @@ namespace third_party {
   };
 }
 
-void libraryRawStructValue(third_party::field_list &list, std::string_view value) {
+void libraryRawStructValue(third_party::field_list& list, std::string_view value) {
   list.add("content-type", value);
 }
 
@@ -280,7 +281,7 @@ namespace third_party {
   };
 }
 
-void libraryProjectStructValue(third_party::project_list &list, std::string_view value) {
+void libraryProjectStructValue(third_party::project_list& list, std::string_view value) {
   list.add(value);
 }
 

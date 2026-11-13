@@ -1,7 +1,7 @@
-#include <poll.h>
-#include <termios.h>
 #include <cstdio>
+#include <poll.h>
 #include <sys/types.h>
+#include <termios.h>
 #include <unistd.h>
 
 import std;
@@ -30,7 +30,7 @@ static int child() {
   }
 }
 
-static void settle(ProtocolPeer &peer) {
+static void settle(ProtocolPeer& peer) {
   pollfd ready{.fd = peer.descriptor(), .events = POLLIN, .revents = 0};
 
   while (::poll(&ready, 1, 100) > 0) {
@@ -38,7 +38,7 @@ static void settle(ProtocolPeer &peer) {
   }
 }
 
-static void current(const char *socket, const char *executable, const char *dump_path) {
+static void current(const char* socket, const char* executable, const char* dump_path) {
   ProtocolPeer owner{socket};
 
   owner.send(RequestRuntimeState{101, true});
@@ -82,7 +82,7 @@ static void current(const char *socket, const char *executable, const char *dump
     case ServerTag::pane_clipboard: {
       const auto message = Codec::decode<PaneClipboard>(payload, decoded);
 
-      check(std::string_view{reinterpret_cast<const char *>(message.bytes.data()), message.bytes.size()} == "Value4");
+      check(std::string_view{reinterpret_cast<const char*>(message.bytes.data()), message.bytes.size()} == "Value4");
       slow.record(output, message);
       check((received & 1) == 0);
       received |= 1;
@@ -134,7 +134,7 @@ static void current(const char *socket, const char *executable, const char *dump
   check(output.good());
 }
 
-static void rotation(const char *socket, const char *executable, const char *dump_path) {
+static void rotation(const char* socket, const char* executable, const char* dump_path) {
   ProtocolPeer owner{socket};
 
   owner.send(RequestRuntimeState{101, true});
@@ -194,7 +194,7 @@ static void rotation(const char *socket, const char *executable, const char *dum
   check(output.good());
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   if (argc == 2 && std::string_view{argv[1]} == "--child") {
     return child();
   }
@@ -218,7 +218,7 @@ int main(int argc, char **argv) {
 
     std::printf("{\"ns_per_iteration\":%lld}\n", static_cast<long long>(elapsed));
     return 0;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     std::fprintf(stderr, "%s\n", error.what());
     return 1;
   }

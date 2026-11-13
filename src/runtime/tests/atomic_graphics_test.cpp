@@ -3,11 +3,10 @@
 static_assert(true);
 #endif
 
-
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <cstdlib>
+#include <cstring>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -23,7 +22,7 @@ using namespace telar;
 using namespace telar::runtime;
 
 static std::span<const std::uint8_t> atomicBytes(std::string_view text) {
-  return {reinterpret_cast<const std::uint8_t *>(text.data()), text.size()};
+  return {reinterpret_cast<const std::uint8_t*>(text.data()), text.size()};
 }
 
 static std::string atomicFrame(std::string_view name, unsigned image = 1, unsigned placement = 2, bool wrapped = false) {
@@ -37,12 +36,12 @@ struct AtomicSourceFixture {
   std::vector<std::string> probes{};
   std::vector<std::string> released{};
 
-  bool available(const AtomicFrameResource &resource) {
+  bool available(const AtomicFrameResource& resource) {
     probes.emplace_back(resource.encoded_name);
     return resource.byte_count <= resource.limit && names.contains(std::string{resource.encoded_name});
   }
 
-  void release(const AtomicFrameResource &resource) {
+  void release(const AtomicFrameResource& resource) {
     released.emplace_back(resource.encoded_name);
   }
 };
@@ -53,10 +52,10 @@ struct AtomicSinkFixture {
   bool accept = false;
 
   void output(std::span<const std::uint8_t> bytes) {
-    output_bytes.append(reinterpret_cast<const char *>(bytes.data()), bytes.size());
+    output_bytes.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
   }
 
-  bool atomicFrame(const AtomicFrameView &frame) {
+  bool atomicFrame(const AtomicFrameView& frame) {
     check(frame.command_start < frame.command_end && frame.command_end <= frame.bytes.size());
     frames.emplace_back(frame.encoded_name);
     return accept;
@@ -204,7 +203,7 @@ static void testAtomicResources() {
 
   std::filesystem::create_symlink(path.data(), symlink);
   check(::mkfifo(pipe.c_str(), 0600) == 0);
-  for (const auto &name : {symlink, pipe, std::string{"relative-file"}}) {
+  for (const auto& name : {symlink, pipe, std::string{"relative-file"}}) {
     const auto encoded = encodedName(name);
 
     check(!GraphicsFrameSource::available({encoded, 1, 8, GraphicsInputMedium::file}));
@@ -229,7 +228,7 @@ static void testAtomicResources() {
 
   std::array<std::uint8_t, 4> decoded;
 
-  check(decodeGraphicsName("YWJj", decoded) != nullptr && std::strcmp(reinterpret_cast<const char *>(decoded.data()), "abc") == 0);
+  check(decodeGraphicsName("YWJj", decoded) != nullptr && std::strcmp(reinterpret_cast<const char*>(decoded.data()), "abc") == 0);
   for (const auto invalid : {"", "AAAA", "YWJjZA==", "YWJj!"}) {
     check(decodeGraphicsName(invalid, decoded) == nullptr);
   }

@@ -31,7 +31,7 @@ namespace telar::gui {
         return static_cast<std::uint64_t>(first) + count;
       }
 
-      bool operator==(const Span &) const = default;
+      bool operator==(const Span&) const = default;
     };
 
     using SpanAllocator = std::allocator_traits<Allocator>::template rebind_alloc<Span>;
@@ -39,7 +39,7 @@ namespace telar::gui {
 
     FoldMap() = default;
 
-    explicit FoldMap(const Allocator &allocator)
+    explicit FoldMap(const Allocator& allocator)
         : spans_(SpanAllocator{allocator}),
           hidden_before_(CountAllocator{allocator}) {}
 
@@ -47,16 +47,16 @@ namespace telar::gui {
     // overlapping folds joined, and a fold over a span that shows rows hides it all.
     void assign(std::span<const Span> spans) {
       spans_.assign(spans.begin(), spans.end());
-      std::erase_if(spans_, [](const Span &span) {
+      std::erase_if(spans_, [](const Span& span) {
         return span.count == 0;
       });
 
       std::ranges::sort(spans_, {}, &Span::first);
       std::size_t kept = 0;
 
-      for (const auto &span : spans_) {
+      for (const auto& span : spans_) {
         if (kept != 0) {
-          auto &previous = spans_[kept - 1];
+          auto& previous = spans_[kept - 1];
           const bool folds = previous.shown == 0 && span.shown == 0;
           if (span.first < previous.end() || (folds && span.first == previous.end())) {
             if (previous.shown == 0 || span.shown == 0) {
@@ -107,7 +107,7 @@ namespace telar::gui {
         return total;
       }
 
-      const auto &span = spans_[index];
+      const auto& span = spans_[index];
       if (total < span.end()) {
         return start(index) + std::min<std::uint64_t>(total - span.first, span.shown);
       }
@@ -123,7 +123,7 @@ namespace telar::gui {
         return row;
       }
 
-      const auto &span = spans_[index];
+      const auto& span = spans_[index];
       if (row < span.end()) {
         return start(index) + (span.shown == 0 ? 0 : std::min<std::uint64_t>(row - span.first, span.shown - 1));
       }
@@ -150,7 +150,7 @@ namespace telar::gui {
         return index;
       }
 
-      const auto &span = spans_[low - 1];
+      const auto& span = spans_[low - 1];
       const auto offset = index - start(low - 1);
       if (offset < span.shown) {
         return span.first + std::min<std::uint64_t>(offset, span.count - 1);
@@ -160,7 +160,7 @@ namespace telar::gui {
     }
 
     // The span that shows rows at display index `index`, if one does.
-    [[nodiscard]] const Span *showing(std::uint64_t index) const noexcept {
+    [[nodiscard]] const Span* showing(std::uint64_t index) const noexcept {
       for (std::size_t span = 0; span < spans_.size() && start(span) <= index; ++span) {
         if (spans_[span].shown != 0 && index - start(span) < spans_[span].shown) {
           return &spans_[span];
@@ -173,7 +173,7 @@ namespace telar::gui {
   private:
     // The fold that hides `row`, or the number of folds.
     [[nodiscard]] std::size_t containing(std::uint64_t row) const noexcept {
-      const auto after = std::ranges::upper_bound(spans_, row, {}, [](const Span &span) {
+      const auto after = std::ranges::upper_bound(spans_, row, {}, [](const Span& span) {
         return static_cast<std::uint64_t>(span.first);
       });
       if (after == spans_.begin()) {
@@ -194,7 +194,7 @@ namespace telar::gui {
 
     // The last span that starts before `row`, or the number of spans.
     [[nodiscard]] std::size_t lastStartingBefore(std::uint64_t row) const noexcept {
-      const auto after = std::ranges::lower_bound(spans_, row, {}, [](const Span &span) {
+      const auto after = std::ranges::lower_bound(spans_, row, {}, [](const Span& span) {
         return static_cast<std::uint64_t>(span.first);
       });
 

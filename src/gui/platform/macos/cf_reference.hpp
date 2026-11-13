@@ -5,57 +5,57 @@
 
 namespace telar::gui::platform {
 
-// Owns one Core Foundation reference: the CFRelease that balances the Create or Copy call that
-// returned it. Empty when that call returned null.
-template <typename Value>
-class NativeReference {
-public:
-  NativeReference() noexcept = default;
+  // Owns one Core Foundation reference: the CFRelease that balances the Create or Copy call that
+  // returned it. Empty when that call returned null.
+  template <typename Value>
+  class NativeReference {
+  public:
+    NativeReference() noexcept = default;
 
-  explicit NativeReference(Value value) noexcept
-      : value_(value) {}
+    explicit NativeReference(Value value) noexcept
+        : value_(value) {}
 
-  ~NativeReference() {
-    reset();
-  }
-
-  NativeReference(const NativeReference &) = delete;
-  NativeReference &operator=(const NativeReference &) = delete;
-
-  NativeReference(NativeReference &&other) noexcept
-      : value_(std::exchange(other.value_, nullptr)) {}
-
-  NativeReference &operator=(NativeReference &&other) noexcept {
-    if (this != &other) {
-      reset(std::exchange(other.value_, nullptr));
+    ~NativeReference() {
+      reset();
     }
 
-    return *this;
-  }
+    NativeReference(const NativeReference&) = delete;
+    NativeReference& operator=(const NativeReference&) = delete;
 
-  [[nodiscard]] Value get() const noexcept {
-    return value_;
-  }
+    NativeReference(NativeReference&& other) noexcept
+        : value_(std::exchange(other.value_, nullptr)) {}
 
-  explicit operator bool() const noexcept {
-    return value_ != nullptr;
-  }
+    NativeReference& operator=(NativeReference&& other) noexcept {
+      if (this != &other) {
+        reset(std::exchange(other.value_, nullptr));
+      }
 
-  void reset(Value value = nullptr) noexcept {
-    if (value_ != nullptr) {
-      CFRelease(value_);
+      return *this;
     }
 
-    value_ = value;
-  }
+    [[nodiscard]] Value get() const noexcept {
+      return value_;
+    }
 
-  // Hands the reference to a caller that releases it.
-  [[nodiscard]] Value release() noexcept {
-    return std::exchange(value_, nullptr);
-  }
+    explicit operator bool() const noexcept {
+      return value_ != nullptr;
+    }
 
-private:
-  Value value_ = nullptr;
-};
+    void reset(Value value = nullptr) noexcept {
+      if (value_ != nullptr) {
+        CFRelease(value_);
+      }
+
+      value_ = value;
+    }
+
+    // Hands the reference to a caller that releases it.
+    [[nodiscard]] Value release() noexcept {
+      return std::exchange(value_, nullptr);
+    }
+
+  private:
+    Value value_ = nullptr;
+  };
 
 }

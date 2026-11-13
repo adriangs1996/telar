@@ -71,7 +71,7 @@ namespace telar::shell {
       return kind <= TokenKind::substitution;
     }
 
-    constexpr bool hexValue(char c, u32 &value) noexcept {
+    constexpr bool hexValue(char c, u32& value) noexcept {
       if (c >= '0' && c <= '9') {
         value = static_cast<u32>(c - '0');
       } else if (c >= 'a' && c <= 'f') {
@@ -495,7 +495,7 @@ namespace telar::shell {
     Keyword findKeyword(std::span<const KeywordName> names, std::string_view word) noexcept {
       const std::uint64_t key = pack(word);
 
-      for (const KeywordName &entry : names) {
+      for (const KeywordName& entry : names) {
         if (entry.key == key) {
           return entry.keyword;
         }
@@ -573,7 +573,7 @@ namespace telar::shell {
 
         while (p_ < n_) {
           const std::size_t before = p_;
-          Frame &f = frames_[depth_ - 1];
+          Frame& f = frames_[depth_ - 1];
 
           switch (f.kind) {
           case FrameKind::double_quote:
@@ -620,7 +620,7 @@ namespace telar::shell {
         return depth_ - 1;
       }
 
-      Frame &top() noexcept {
+      Frame& top() noexcept {
         return frames_[depth_ - 1];
       }
 
@@ -638,7 +638,7 @@ namespace telar::shell {
         }
 
         if (count_ > 0 && isPiece(kind) && (flags & Token::word_start) == 0) {
-          Token &last = tokens_[count_ - 1];
+          Token& last = tokens_[count_ - 1];
           if (last.end == begin && last.kind == kind && last.role == role && last.command == command &&
               last.quote == quote && (last.flags & ~Token::word_start) == flags) {
             last.end = static_cast<u32>(end);
@@ -660,7 +660,7 @@ namespace telar::shell {
       }
 
       // A part of the word the frame is building.
-      void out(Frame &f, TokenKind kind, Quote quote, std::size_t begin, std::size_t end, u8 extra = 0) noexcept {
+      void out(Frame& f, TokenKind kind, Quote quote, std::size_t begin, std::size_t end, u8 extra = 0) noexcept {
         u8 flags = static_cast<u8>(f.word_flags | extra);
 
         if (f.fresh) {
@@ -690,8 +690,8 @@ namespace telar::shell {
         return false;
       }
 
-      Frame &push(FrameKind kind, u32 command, TokenKind role) noexcept {
-        Frame &f = frames_[depth_++];
+      Frame& push(FrameKind kind, u32 command, TokenKind role) noexcept {
+        Frame& f = frames_[depth_++];
 
         f = blank_frame;
         f.kind = kind;
@@ -711,7 +711,7 @@ namespace telar::shell {
       // ---- commands and cursor
 
       void ensureCommand(std::size_t at_level) noexcept {
-        Frame &f = frames_[at_level];
+        Frame& f = frames_[at_level];
         if (f.command != no_command) {
           return;
         }
@@ -723,7 +723,7 @@ namespace telar::shell {
         }
       }
 
-      void endCommand(Frame &f, std::size_t at_level, Position position) noexcept {
+      void endCommand(Frame& f, std::size_t at_level, Position position) noexcept {
         f.command = no_command;
         f.position = position;
         f.header = Header::none;
@@ -745,7 +745,7 @@ namespace telar::shell {
 
         cursor_done_ = true;
         cursor_completable_ = true;
-        const Frame &f = top();
+        const Frame& f = top();
         if (f.command != no_command) {
           cursor_command_ = f.command;
         } else {
@@ -769,7 +769,7 @@ namespace telar::shell {
 
       // ---- command lists
 
-      void stepList(Frame &f) noexcept {
+      void stepList(Frame& f) noexcept {
         if (f.in_word) {
           stepWord(f);
           return;
@@ -900,14 +900,14 @@ namespace telar::shell {
         beginWord(f);
       }
 
-      void operatorEnd(Frame &f, std::size_t length, bool pending, Position position = Position::start) noexcept {
+      void operatorEnd(Frame& f, std::size_t length, bool pending, Position position = Position::start) noexcept {
         control(length);
         endCommand(f, level(), position);
         f.pending_operator = pending;
         f.pending_body = false;
       }
 
-      void newline(Frame &f) noexcept {
+      void newline(Frame& f) noexcept {
         control(1);
         if (f.position != Position::pattern && (f.command != no_command || f.position != Position::start)) {
           endCommand(f, level(), Position::start);
@@ -918,7 +918,7 @@ namespace telar::shell {
         }
       }
 
-      void semicolon(Frame &f) noexcept {
+      void semicolon(Frame& f) noexcept {
         if (!fish_) {
           std::size_t length = 0;
 
@@ -943,7 +943,7 @@ namespace telar::shell {
         operatorEnd(f, 1, false);
       }
 
-      void ampersand(Frame &f) noexcept {
+      void ampersand(Frame& f) noexcept {
         if (next(p_ + 1, '&')) {
           operatorEnd(f, 2, true);
         } else if (next(p_ + 1, '>')) {
@@ -957,7 +957,7 @@ namespace telar::shell {
         }
       }
 
-      void pipe(Frame &f) noexcept {
+      void pipe(Frame& f) noexcept {
         const std::size_t length = next(p_ + 1, '|') || (!fish_ && next(p_ + 1, '&')) ? 2 : 1;
 
         if (f.position == Position::pattern) {
@@ -969,7 +969,7 @@ namespace telar::shell {
       }
 
       // p_ starts the redirection (at its file descriptor, if any); op is its first < > or &.
-      void redirection(Frame &f, std::size_t op) noexcept {
+      void redirection(Frame& f, std::size_t op) noexcept {
         std::size_t e = op + 1;
         bool target = true;
         bool heredoc = false;
@@ -1048,7 +1048,7 @@ namespace telar::shell {
         control(q - p_, TokenKind::comment);
       }
 
-      void subshell(Frame &f) noexcept {
+      void subshell(Frame& f) noexcept {
         if (!room()) {
           return;
         }
@@ -1063,7 +1063,7 @@ namespace telar::shell {
         push(FrameKind::subshell, no_command, TokenKind::argument);
       }
 
-      void arithmeticCommand(Frame &f) noexcept {
+      void arithmeticCommand(Frame& f) noexcept {
         if (!room()) {
           return;
         }
@@ -1073,19 +1073,19 @@ namespace telar::shell {
         f.pending_body = false;
         emit(TokenKind::keyword, TokenKind::keyword, f.command, Quote::none, Token::word_start, p_, p_ + 2);
         p_ += 2;
-        Frame &g = push(FrameKind::arithmetic, f.command, TokenKind::keyword);
+        Frame& g = push(FrameKind::arithmetic, f.command, TokenKind::keyword);
 
         g.arithmetic_command = true;
       }
 
       // A substitution or backtick frame ends at the boundary of its list.
-      void closeList(Frame &f) noexcept {
+      void closeList(Frame& f) noexcept {
         emit(TokenKind::substitution, f.owner_role, f.owner, Quote::none, f.owner_flags, p_, p_ + 1);
         ++p_;
         pop();
       }
 
-      void closeParen(Frame &f) noexcept {
+      void closeParen(Frame& f) noexcept {
         if (f.kind == FrameKind::substitution) {
           closeList(f);
         } else if (f.kind == FrameKind::subshell) {
@@ -1100,7 +1100,7 @@ namespace telar::shell {
         }
       }
 
-      void testElement(Frame &f) noexcept {
+      void testElement(Frame& f) noexcept {
         const char c = s_[p_];
         if (c == '\n') {
           ++p_;
@@ -1138,7 +1138,7 @@ namespace telar::shell {
         startWord(f, optionOrArgument());
       }
 
-      void arrayElement(Frame &f) noexcept {
+      void arrayElement(Frame& f) noexcept {
         const char c = s_[p_];
         if (c == '\n') {
           ++p_;
@@ -1174,7 +1174,7 @@ namespace telar::shell {
         return s_[p_] == '-' && !(p_ + 1 < n_ && (bits(p_ + 1) & k_end)) ? TokenKind::option : TokenKind::argument;
       }
 
-      void startWord(Frame &f, TokenKind role) noexcept {
+      void startWord(Frame& f, TokenKind role) noexcept {
         f.in_word = true;
         f.fresh = true;
         f.word_begin = static_cast<u32>(p_);
@@ -1218,7 +1218,7 @@ namespace telar::shell {
         return false;
       }
 
-      void beginWord(Frame &f) noexcept {
+      void beginWord(Frame& f) noexcept {
         std::size_t q = p_;
 
         while (q < n_ && !(bits(q) & k_stop)) {
@@ -1277,7 +1277,7 @@ namespace telar::shell {
             if (room()) {
               out(f, TokenKind::assignment, Quote::none, q, q + 1);
               ++p_;
-              Frame &g = push(FrameKind::array, f.command, TokenKind::assignment);
+              Frame& g = push(FrameKind::array, f.command, TokenKind::assignment);
 
               g.word_flags = f.word_flags;
             }
@@ -1287,7 +1287,7 @@ namespace telar::shell {
 
       // Emits the keyword at [p_, q) and updates the lists; false if the word
       // is not a keyword where it stands.
-      bool keyword(Frame &f, std::size_t q) noexcept {
+      bool keyword(Frame& f, std::size_t q) noexcept {
         const std::string_view word = s_.substr(p_, q - p_);
         const Keyword k = findKeyword(fish_ ? std::span<const KeywordName>{fish_keywords} : std::span<const KeywordName>{posix_keywords}, word);
         if (k == Keyword::none) {
@@ -1392,7 +1392,7 @@ namespace telar::shell {
         }
       }
 
-      bool fishKeywordAt(Frame &f, Keyword k, std::size_t q) noexcept {
+      bool fishKeywordAt(Frame& f, Keyword k, std::size_t q) noexcept {
         switch (k) {
         case Keyword::begin:
           open(FrameKind::fish_block, Position::start, Header::none, q);
@@ -1444,7 +1444,7 @@ namespace telar::shell {
       }
 
       // A keyword word joins the command that follows it.
-      void word_keyword(Frame &f, std::size_t q) noexcept {
+      void word_keyword(Frame& f, std::size_t q) noexcept {
         ensureCommand(level());
         emit(TokenKind::keyword, TokenKind::keyword, f.command, Quote::none, Token::word_start, p_, q);
         touch(f.command, p_, q);
@@ -1458,7 +1458,7 @@ namespace telar::shell {
 
         // A cursor waiting for the next command of this list gets the block's first.
         const bool pending = cursor_pending_ == level();
-        Frame &g = push(kind, no_command, TokenKind::argument);
+        Frame& g = push(kind, no_command, TokenKind::argument);
 
         if (pending) {
           cursor_pending_ = level();
@@ -1469,14 +1469,14 @@ namespace telar::shell {
         g.header = header;
       }
 
-      void close(Frame &f, FrameKind kind, std::size_t q) noexcept {
+      void close(Frame& f, FrameKind kind, std::size_t q) noexcept {
         if (f.kind != kind) {
           control(q - p_, TokenKind::error);
           return;
         }
 
         pop();
-        Frame &parent = top();
+        Frame& parent = top();
 
         parent.command = no_command;
         word_keyword(parent, q);
@@ -1485,7 +1485,7 @@ namespace telar::shell {
 
       // ---- words
 
-      void stepWord(Frame &f) noexcept {
+      void stepWord(Frame& f) noexcept {
         const char c = s_[p_];
 
         if (!fish_ && f.glob > 0) {
@@ -1562,7 +1562,7 @@ namespace telar::shell {
         p_ = q;
       }
 
-      void endWord(Frame &f, std::size_t at_level) noexcept {
+      void endWord(Frame& f, std::size_t at_level) noexcept {
         f.in_word = false;
         f.glob = 0;
         touch(f.command, f.word_begin, p_);
@@ -1600,14 +1600,14 @@ namespace telar::shell {
           return;
         }
 
-        Heredoc &h = heredocs_[heredoc_count_++];
+        Heredoc& h = heredocs_[heredoc_count_++];
 
         h.size = capture_.size();
         h.strip_tabs = strip_tabs;
       }
 
       // A backslash and the character it escapes, whole even when multibyte.
-      void escape(Frame &f, TokenKind kind, Quote quote) noexcept {
+      void escape(Frame& f, TokenKind kind, Quote quote) noexcept {
         std::size_t e = p_ + 1;
         if (e < n_) {
           ++e;
@@ -1620,7 +1620,7 @@ namespace telar::shell {
         p_ = e;
       }
 
-      void singleQuote(Frame &f) noexcept {
+      void singleQuote(Frame& f) noexcept {
         std::size_t i = p_ + 1;
 
         for (;;) {
@@ -1643,7 +1643,7 @@ namespace telar::shell {
         p_ = i + 1;
       }
 
-      void ansiString(Frame &f) noexcept {
+      void ansiString(Frame& f) noexcept {
         std::size_t i = p_ + 2;
 
         for (;;) {
@@ -1667,7 +1667,7 @@ namespace telar::shell {
       }
 
       // Emits the opener as part of f's word, then enters a frame inside the word.
-      void openWord(Frame &f, FrameKind kind, std::size_t end, TokenKind opener, Quote quote) noexcept {
+      void openWord(Frame& f, FrameKind kind, std::size_t end, TokenKind opener, Quote quote) noexcept {
         if (!room()) {
           return;
         }
@@ -1682,7 +1682,7 @@ namespace telar::shell {
       }
 
       // Emits the opener as part of f's word, then enters a nested command list.
-      void openList(Frame &f, FrameKind kind, std::size_t end) noexcept {
+      void openList(Frame& f, FrameKind kind, std::size_t end) noexcept {
         if (!room()) {
           return;
         }
@@ -1692,7 +1692,7 @@ namespace telar::shell {
         const u32 command = f.command;
         const TokenKind role = f.role;
         const u8 flags = f.word_flags;
-        Frame &g = push(kind, no_command, TokenKind::argument);
+        Frame& g = push(kind, no_command, TokenKind::argument);
 
         g.owner = command;
         g.owner_role = role;
@@ -1700,7 +1700,7 @@ namespace telar::shell {
       }
 
       // $ in posix: literal is how a lone $ reads in the current context.
-      void dollar(Frame &f, TokenKind literal, Quote quote, bool unquoted) noexcept {
+      void dollar(Frame& f, TokenKind literal, Quote quote, bool unquoted) noexcept {
         const std::size_t b = p_;
         if (b + 1 == n_) {
           out(f, TokenKind::variable, Quote::none, b, n_);
@@ -1741,7 +1741,7 @@ namespace telar::shell {
         }
       }
 
-      void fishDollar(Frame &f, TokenKind literal, Quote quote) noexcept {
+      void fishDollar(Frame& f, TokenKind literal, Quote quote) noexcept {
         const std::size_t b = p_;
         if (b + 1 == n_) {
           out(f, TokenKind::variable, Quote::none, b, n_);
@@ -1789,7 +1789,7 @@ namespace telar::shell {
 
       // ---- frames inside a word
 
-      void stepDouble(Frame &f) noexcept {
+      void stepDouble(Frame& f) noexcept {
         const char c = s_[p_];
         if (c == '"') {
           out(f, TokenKind::string, Quote::double_quoted, p_, p_ + 1);
@@ -1829,7 +1829,7 @@ namespace telar::shell {
       }
 
       // Shared by ${...} and $((...)): quotes, escapes and expansions nest.
-      bool stepNested(Frame &f, TokenKind kind) noexcept {
+      bool stepNested(Frame& f, TokenKind kind) noexcept {
         switch (s_[p_]) {
         case '\\':
           escape(f, kind, Quote::none);
@@ -1851,7 +1851,7 @@ namespace telar::shell {
         }
       }
 
-      void stepParameter(Frame &f) noexcept {
+      void stepParameter(Frame& f) noexcept {
         if (s_[p_] == '}') {
           out(f, TokenKind::variable, Quote::none, p_, p_ + 1);
           ++p_;
@@ -1878,7 +1878,7 @@ namespace telar::shell {
         p_ = q;
       }
 
-      void stepArithmetic(Frame &f) noexcept {
+      void stepArithmetic(Frame& f) noexcept {
         const char c = s_[p_];
         if (c == '(') {
           ++f.parens;
@@ -1928,7 +1928,7 @@ namespace telar::shell {
 
       void readHeredocs() noexcept {
         for (std::size_t i = 0; i < heredoc_count_; ++i) {
-          const Heredoc &h = heredocs_[i];
+          const Heredoc& h = heredocs_[i];
           const std::string_view delimiter{h.text.data(), h.size};
           const std::size_t begin = p_;
           bool closed = false;
@@ -1960,8 +1960,7 @@ namespace telar::shell {
 
           opaque(begin <= cursor_ && (cursor_ < p_ || (cursor_ == p_ && (!closed || s_[p_ - 1] != '\n'))));
           if (p_ > begin) {
-            emit(TokenKind::heredoc_body, TokenKind::heredoc_body, no_command, Quote::none,
-                 closed ? 0 : Token::unterminated, begin, p_);
+            emit(TokenKind::heredoc_body, TokenKind::heredoc_body, no_command, Quote::none, closed ? 0 : Token::unterminated, begin, p_);
           }
         }
 
@@ -1972,7 +1971,7 @@ namespace telar::shell {
 
       void finish() noexcept {
         for (std::size_t i = depth_; i-- > 0;) {
-          Frame &f = frames_[i];
+          Frame& f = frames_[i];
           if (isList(f.kind) && f.in_word) {
             endWord(f, i);
           }
@@ -1991,7 +1990,7 @@ namespace telar::shell {
         }
 
         if (top().kind == FrameKind::double_quote && count_ > 0 && !overflow_) {
-          Token &last = tokens_[count_ - 1];
+          Token& last = tokens_[count_ - 1];
           if (last.kind == TokenKind::string && last.quote == Quote::double_quoted) {
             last.flags |= Token::unterminated;
           }
@@ -2015,7 +2014,7 @@ namespace telar::shell {
           return Completeness::pending_heredoc;
         }
 
-        const Frame &f = frames_[depth_ - 1];
+        const Frame& f = frames_[depth_ - 1];
 
         switch (f.kind) {
         case FrameKind::double_quote:
@@ -2071,7 +2070,7 @@ namespace telar::shell {
       std::string_view s_;
       std::size_t n_;
       std::size_t p_ = 0;
-      const Table &table_;
+      const Table& table_;
       Syntax syntax_;
       bool fish_;
       std::span<Token> tokens_;
@@ -2110,7 +2109,7 @@ namespace telar::shell {
     std::size_t count = 0;
 
     for (std::size_t i = 0; i < tokens.size(); ++i) {
-      const Token &t = tokens[i];
+      const Token& t = tokens[i];
       if (t.command == no_command) {
         continue;
       }
@@ -2127,7 +2126,7 @@ namespace telar::shell {
       }
 
       if (id < segments.size()) {
-        Segment &s = segments[id];
+        Segment& s = segments[id];
 
         s.source.end = std::max(s.source.end, t.end);
         s.end_token = static_cast<u32>(i + 1);
@@ -2137,8 +2136,7 @@ namespace telar::shell {
     return count;
   }
 
-  CommandAt commandAt(std::string_view line, Syntax syntax, std::span<const Token> tokens, const Lexed &lexed,
-                      std::span<Word> words, std::span<char> text) noexcept {
+  CommandAt commandAt(std::string_view line, Syntax syntax, std::span<const Token> tokens, const Lexed& lexed, std::span<Word> words, std::span<char> text) noexcept {
     CommandAt at;
 
     if (!lexed.cursor_completable || lexed.cursor > line.size()) {
@@ -2199,7 +2197,7 @@ namespace telar::shell {
     std::size_t last_end = 0;
 
     for (std::size_t i = 0; i < tokens.size(); ++i) {
-      const Token &t = tokens[i];
+      const Token& t = tokens[i];
       if (t.begin < last_end || t.begin > t.end || t.end > line.size()) {
         at = CommandAt{};
         at.overflow = true;
@@ -2260,7 +2258,7 @@ namespace telar::shell {
 
     gap = at.replace.begin;
     for (std::size_t i = current_first; i < current_end && gap < cursor; ++i) {
-      const Token &t = tokens[i];
+      const Token& t = tokens[i];
       if (t.command != command || !isPiece(t.kind)) {
         continue;
       }

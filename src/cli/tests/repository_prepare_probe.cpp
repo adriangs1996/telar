@@ -3,27 +3,26 @@
 static_assert(true);
 #endif
 
-
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
+#include <limits.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/un.h>
 #include <unistd.h>
-#include <cstdlib>
-#include <limits.h>
 #if (defined(__APPLE__))
 #include <mach-o/dyld.h>
 #endif
-#include <fcntl.h>
-#include <sys/stat.h>
 #include <csignal>
-#include <dirent.h>
-#include <spawn.h>
-#include <sys/wait.h>
 #include <cstdio>
+#include <dirent.h>
+#include <fcntl.h>
+#include <spawn.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <linux/fs.h>
 #endif
@@ -34,15 +33,15 @@ static_assert(true);
 #include <sys/syscall.h>
 #endif
 #include <cassert>
-#include <sys/types.h>
-#include <poll.h>
 #include <climits>
 #include <dlfcn.h>
-#include <openssl/sha.h>
-#include <sys/file.h>
-#include <signal.h>
 #include <new>
+#include <openssl/sha.h>
+#include <poll.h>
+#include <signal.h>
+#include <sys/file.h>
 #include <sys/mman.h>
+#include <sys/types.h>
 
 import std;
 import telar.base.memory;
@@ -53,41 +52,41 @@ import telar.cli.worktree;
 
 namespace {
 
-// The bundle as one read-only mapping, written to the receiving telar's stdin.
-class MappedBundle {
-public:
-  explicit MappedBundle(int descriptor) {
-    struct stat state{};
-    if (::fstat(descriptor, &state) != 0 || state.st_size <= 0) {
-      throw std::runtime_error{"InvalidRepositoryTransfer"};
+  // The bundle as one read-only mapping, written to the receiving telar's stdin.
+  class MappedBundle {
+  public:
+    explicit MappedBundle(int descriptor) {
+      struct stat state{};
+      if (::fstat(descriptor, &state) != 0 || state.st_size <= 0) {
+        throw std::runtime_error{"InvalidRepositoryTransfer"};
+      }
+
+      size_ = static_cast<std::size_t>(state.st_size);
+      bytes_ = ::mmap(nullptr, size_, PROT_READ, MAP_PRIVATE, descriptor, 0);
+      if (bytes_ == MAP_FAILED) {
+        throw std::runtime_error{"RepositoryTransferFailed"};
+      }
     }
 
-    size_ = static_cast<std::size_t>(state.st_size);
-    bytes_ = ::mmap(nullptr, size_, PROT_READ, MAP_PRIVATE, descriptor, 0);
-    if (bytes_ == MAP_FAILED) {
-      throw std::runtime_error{"RepositoryTransferFailed"};
+    ~MappedBundle() {
+      ::munmap(bytes_, size_);
     }
-  }
 
-  ~MappedBundle() {
-    ::munmap(bytes_, size_);
-  }
+    MappedBundle(const MappedBundle&) = delete;
+    MappedBundle& operator=(const MappedBundle&) = delete;
 
-  MappedBundle(const MappedBundle &) = delete;
-  MappedBundle &operator=(const MappedBundle &) = delete;
+    std::string_view text() const {
+      return {static_cast<const char*>(bytes_), size_};
+    }
 
-  std::string_view text() const {
-    return {static_cast<const char *>(bytes_), size_};
-  }
-
-private:
-  void *bytes_;
-  std::size_t size_;
-};
+  private:
+    void* bytes_;
+    std::size_t size_;
+  };
 
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   using namespace telar;
   using namespace telar::runtime;
   using namespace telar::runtime::cli;
@@ -136,7 +135,7 @@ int main(int argc, char **argv) {
 
     writeText(prepared.json());
     return 0;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     writeText("telar repository: " + std::string{error.what()} + "\n", STDERR_FILENO);
     return 1;
   }

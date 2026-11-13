@@ -3,57 +3,56 @@
 static_assert(true);
 #endif
 
-
-#include <cerrno>
-#include <exception>
-#include "telar_platform/file_descriptor.hpp"
-#include <array>
-#include <cstdint>
-#include <chrono>
-#include <cstddef>
-#include <algorithm>
-#include <concepts>
-#include <span>
-#include <cstring>
-#include <cassert>
-#include <atomic>
+#include "plugin_bootstrap.hpp"
 #include "telar_base/memory/allocator.hpp"
-#include <stdexcept>
-#include <string_view>
-#include <optional>
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/codecs/telar_wire.hpp"
-#include <bit>
-#include <utility>
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-#include <charconv>
-#include <pcap/pcap.h>
-#include <arpa/inet.h>
-#include <cmath>
-#include <cstdio>
-#include <initializer_list>
-#include <string>
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
-#include <limits.h>
-#include <memory>
+#include "telar_client/codecs/telar_wire.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_platform/file_descriptor.hpp"
 #include "telar_platform/random_bytes.hpp"
-#include <mutex>
-#include "traffic_api.hpp"
-#include "plugin_bootstrap.hpp"
-#include <sys/stat.h>
-#include <fcntl.h>
 #include "telar_platform/trace.hpp"
-#include <poll.h>
-#include <sys/uio.h>
-#include <unistd.h>
-#include <sys/types.h>
+#include "traffic_api.hpp"
+#include <algorithm>
+#include <arpa/inet.h>
+#include <array>
+#include <atomic>
+#include <bit>
+#include <cassert>
+#include <cerrno>
+#include <charconv>
+#include <chrono>
 #include <climits>
+#include <cmath>
+#include <concepts>
 #include <csignal>
-#include <thread>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
 #include <cstdlib>
+#include <cstring>
+#include <exception>
+#include <fcntl.h>
+#include <initializer_list>
+#include <lauxlib.h>
+#include <limits.h>
+#include <lua.h>
+#include <lualib.h>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <pcap/pcap.h>
+#include <poll.h>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/uio.h>
+#include <thread>
+#include <unistd.h>
+#include <utility>
 #if (defined(__APPLE__))
 #include <mach-o/dyld.h>
 #endif
@@ -186,7 +185,7 @@ void testPluginSessions() {
   specification.declared.insert(tap::Capability::notifications);
   specification.granted = specification.declared;
 
-  for (const auto *mode : {"echo", "callback-error", "stderr"}) {
+  for (const auto* mode : {"echo", "callback-error", "stderr"}) {
     tap::Session session{memory, tap::SessionOptions{.executable = executable_path.c_str(), .entry = mode, .cancellation = cancellation}};
     const auto process = session.processId();
     auto first = session.exchange(specification, 73, frame);
@@ -214,7 +213,7 @@ void testPluginSessions() {
     check(second && second->batch().notifications[0].title == "next" && session.processId() == process);
   }
 
-  for (const auto *mode : {"closed", "oversized", "invalid", "stale", "timeout", "blocked-write"}) {
+  for (const auto* mode : {"closed", "oversized", "invalid", "stale", "timeout", "blocked-write"}) {
     tap::Session session{memory, tap::SessionOptions{.executable = executable_path.c_str(), .entry = mode, .cancellation = cancellation, .timeout = std::chrono::milliseconds{100}}};
     const bool timed = std::string_view{mode} == "timeout" || std::string_view{mode} == "blocked-write";
     bool rejected = false;
@@ -228,9 +227,9 @@ void testPluginSessions() {
       } else {
         session.exchange(specification, 73, frame);
       }
-    } catch (const SystemError &error) {
+    } catch (const SystemError& error) {
       rejected = !timed || error.code() == ETIMEDOUT;
-    } catch (const EncodingError &) {
+    } catch (const EncodingError&) {
       rejected = !timed;
     }
 
@@ -248,7 +247,7 @@ void testPluginSessions() {
 
     try {
       session.exchange(specification, 73, frame);
-    } catch (const SystemError &error) {
+    } catch (const SystemError& error) {
       cancelled = error.code() == ECANCELED;
     }
 

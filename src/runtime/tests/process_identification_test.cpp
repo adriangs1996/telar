@@ -3,23 +3,22 @@
 static_assert(true);
 #endif
 
-
-#include <cstdint>
-#include <cstring>
-#include <sys/types.h>
-#include <unistd.h>
+#include <cerrno>
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fcntl.h>
 #include <limits.h>
 #include <sys/stat.h>
-#include <cerrno>
+#include <sys/types.h>
+#include <unistd.h>
 #if (defined(__APPLE__))
 #include <mach-o/dyld.h>
 #endif
-#include <csignal>
 #include <arpa/inet.h>
+#include <csignal>
 #include <netinet/in.h>
 #include <sys/socket.h>
 
@@ -101,7 +100,7 @@ static void testArgumentIdentification() {
   check(ProcessArguments::fromMacos(kernel).sessionHost(AgentProvider::codex) == SessionHost::unknown);
 }
 
-static void testHookSettings(const std::filesystem::path &root) {
+static void testHookSettings(const std::filesystem::path& root) {
   const auto override_directory = root / "override";
 
   std::filesystem::create_directory(override_directory);
@@ -168,7 +167,7 @@ static void testProcessCache() {
   check(cache.preferred(43) == AgentProvider::unknown);
 }
 
-static void testGroupMembers(SystemAllocator &memory, const std::filesystem::path &root) {
+static void testGroupMembers(SystemAllocator& memory, const std::filesystem::path& root) {
   const auto codex = (root / "codex").string();
   const auto claude = (root / "claude").string();
   const ExecutablePath executable;
@@ -293,10 +292,10 @@ static void testListeningPorts() {
 
   address.sin_family = AF_INET;
   address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-  check(::bind(listener.get(), reinterpret_cast<const sockaddr *>(&address), sizeof(address)) == 0);
+  check(::bind(listener.get(), reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0);
   socklen_t length = sizeof(address);
 
-  check(::getsockname(listener.get(), reinterpret_cast<sockaddr *>(&address), &length) == 0);
+  check(::getsockname(listener.get(), reinterpret_cast<sockaddr*>(&address), &length) == 0);
   const auto port = ntohs(address.sin_port);
   const ProcessInspector inspector;
   const auto unlistened = inspector.listeningPorts(::getpgrp());
@@ -308,7 +307,7 @@ static void testListeningPorts() {
   check(std::ranges::find(listened.view(), port) != listened.view().end() || listened.count == max_listed_ports);
 }
 
-static void testTerminalForegroundSnapshot(SystemAllocator &memory) {
+static void testTerminalForegroundSnapshot(SystemAllocator& memory) {
   const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", "PS1='READY> '; export PS1; ENV=/dev/null; export ENV; exec /bin/sh -i"};
   Command command{memory, Launch{.cwd = "/", .arguments = arguments}};
   PtyProcess process{command.specification({80, 24, 0, 0})};

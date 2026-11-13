@@ -3,14 +3,13 @@
 static_assert(true);
 #endif
 
-
-#include <cstddef>
-#include <cstring>
-#include <cstdint>
-#include <pcap/pcap.h>
 #include <arpa/inet.h>
 #include <cassert>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
 #include <limits.h>
+#include <pcap/pcap.h>
 
 import std;
 import telar.base.memory;
@@ -37,8 +36,14 @@ static std::vector<Byte> packet(bool ipv6, bool icmp, std::string_view body) {
   auto bytes = traffic_test::tcp(ipv6, false, 0, 0);
 
   bytes.resize(prefix + 8 + body.size());
-  if (ipv6) { bytes[6] = icmp ? 58 : 17; word(bytes, 4, bytes.size() - 40); }
-  else { bytes[9] = icmp ? 1 : 17; word(bytes, 2, bytes.size()); }
+  if (ipv6) {
+    bytes[6] = icmp ? 58 : 17;
+    word(bytes, 4, bytes.size() - 40);
+  } else {
+    bytes[9] = icmp ? 1 : 17;
+    word(bytes, 2, bytes.size());
+  }
+
   if (icmp) {
     bytes[prefix] = ipv6 ? 128 : 8;
     bytes[prefix + 1] = 0;
@@ -60,14 +65,14 @@ static traffic::Event event(std::span<const Byte> bytes) {
   return {.session = 9, .sequence = 17, .timestamp_us = 234, .interface_index = 7, .link_type = DLT_RAW, .original_bytes = static_cast<std::uint32_t>(bytes.size()), .offline = true, .interface = "datagram-fixture", .bytes = bytes};
 }
 
-static void analysisAndCodec(TlsTestMemory &memory) {
+static void analysisAndCodec(TlsTestMemory& memory) {
   for (const bool ipv6 : {false, true}) {
     for (const bool icmp : {false, true}) {
       CaptureAnalysis analysis{memory};
       const std::string body{"a\0b-datagram", 12};
       auto bytes = packet(ipv6, icmp, body);
       std::size_t received = 0;
-      const auto emit = [&](const traffic::Event &item) {
+      const auto emit = [&](const traffic::Event& item) {
         check(item.kind == Kind::datagram && item.session == 9 && item.sequence == 17 && item.interface_index == 7 && item.interface == "datagram-fixture" && item.offline);
         const auto parsed = DatagramCodec::decode(item.bytes);
 
@@ -89,7 +94,7 @@ static void analysisAndCodec(TlsTestMemory &memory) {
       analysis.packet(event(bytes), Selection::datagrams, emit);
       check(received == 1);
       bytes.pop_back();
-      analysis.packet(event(bytes), Selection::datagrams, [&](const traffic::Event &item) {
+      analysis.packet(event(bytes), Selection::datagrams, [&](const traffic::Event& item) {
         const auto parsed = DatagramCodec::decode(item.bytes);
 
         check(parsed.truncated && parsed.original_bytes == parsed.bytes.size() + 1);
@@ -101,16 +106,21 @@ static void analysisAndCodec(TlsTestMemory &memory) {
         const auto ip = IpPayload::decode(std::span{bytes}.first(prefix));
         if (ip) {
           const auto parsed = DatagramCodec::parse(*ip);
-          if (parsed) { check(parsed->truncated); }
+          if (parsed) {
+            check(parsed->truncated);
+          }
         }
       }
 
-      analysis.expire([](const traffic::Event &) { check(false); }, true);
+      analysis.expire([](const traffic::Event&) {
+        check(false);
+      },
+          true);
     }
   }
 }
 
-static void fragmentedAndSelected(TlsTestMemory &memory) {
+static void fragmentedAndSelected(TlsTestMemory& memory) {
   const std::string body{"binary\0datagram-fragment", 24};
 
   for (const bool ipv6 : {false, true}) {
@@ -120,7 +130,7 @@ static void fragmentedAndSelected(TlsTestMemory &memory) {
     std::vector<Byte> last = first;
 
     if (ipv6) {
-      for (auto *piece : {&first, &last}) {
+      for (auto* piece : {&first, &last}) {
         piece->resize(48);
         (*piece)[6] = 44;
         (*piece)[40] = 17;
@@ -132,8 +142,10 @@ static void fragmentedAndSelected(TlsTestMemory &memory) {
       word(first, 4, 24);
       word(last, 4, 8 + original.size() - prefix - 16);
     } else {
-      word(first, 4, 55); word(last, 4, 55);
-      word(first, 6, 0x2000); word(last, 6, 2);
+      word(first, 4, 55);
+      word(last, 4, 55);
+      word(first, 6, 0x2000);
+      word(last, 6, 2);
       word(first, 2, prefix + 16);
       word(last, 2, prefix + original.size() - prefix - 16);
     }
@@ -142,7 +154,7 @@ static void fragmentedAndSelected(TlsTestMemory &memory) {
     last.insert(last.end(), original.begin() + prefix + 16, original.end());
     CaptureAnalysis analysis{memory};
     std::size_t count = 0;
-    const auto emit = [&](const traffic::Event &item) {
+    const auto emit = [&](const traffic::Event& item) {
       check(item.kind == Kind::datagram);
       check(std::ranges::equal(DatagramCodec::decode(item.bytes).bytes, body));
       ++count;
@@ -152,12 +164,18 @@ static void fragmentedAndSelected(TlsTestMemory &memory) {
     check(count == 0);
     analysis.packet(event(first), Selection::datagrams, emit);
     check(count == 1);
-    analysis.packet(event(original), Selection::flows, [](const traffic::Event &) { check(false); });
-    analysis.expire([](const traffic::Event &) { check(false); }, true);
+    analysis.packet(event(original), Selection::flows, [](const traffic::Event&) {
+      check(false);
+    });
+
+    analysis.expire([](const traffic::Event&) {
+      check(false);
+    },
+        true);
   }
 }
 
-static void recordedDatagrams(TlsTestMemory &memory) {
+static void recordedDatagrams(TlsTestMemory& memory) {
   Recordings recordings{memory};
   SensitiveAllocation output{memory, recording::Limits::page_bytes};
   const auto started = recording::Protocol::page(recordings.handle({.operation = recording::Operation::start, .max_bytes = 16384, .max_events = 4, .selection = Selection::datagrams}, output.bytes()));
@@ -166,7 +184,10 @@ static void recordedDatagrams(TlsTestMemory &memory) {
   CaptureAnalysis analysis{memory};
   const auto bytes = packet(false, false, "recorded");
 
-  analysis.packet(event(bytes), Selection::datagrams, [&](const traffic::Event &item) { recordings.record(item, {}); });
+  analysis.packet(event(bytes), Selection::datagrams, [&](const traffic::Event& item) {
+    recordings.record(item, {});
+  });
+
   const auto page = recording::Protocol::page(recordings.handle({.id = started.id}, output.bytes()));
 
   check(page.count == 1);
@@ -183,11 +204,16 @@ template <typename Operation>
 static void rejects(Operation operation) {
   bool rejected = false;
 
-  try { operation(); } catch (const std::exception &) { rejected = true; }
+  try {
+    operation();
+  } catch (const std::exception&) {
+    rejected = true;
+  }
+
   check(rejected);
 }
 
-static void malformedAndExtensions(TlsTestMemory &memory) {
+static void malformedAndExtensions(TlsTestMemory& memory) {
   for (const bool ipv6 : {false, true}) {
     CaptureAnalysis analysis{memory};
     auto bytes = packet(ipv6, false, "body");
@@ -195,18 +221,23 @@ static void malformedAndExtensions(TlsTestMemory &memory) {
 
     for (const auto length : {0, 7, 13, 65535}) {
       word(bytes, prefix + 4, static_cast<std::uint16_t>(length));
-      analysis.packet(event(bytes), Selection::datagrams, [](const traffic::Event &) { check(false); });
+      analysis.packet(event(bytes), Selection::datagrams, [](const traffic::Event&) {
+        check(false);
+      });
     }
 
     bytes = packet(ipv6, false, {});
-    analysis.packet(event(bytes), Selection::datagrams, [](const traffic::Event &item) { check(DatagramCodec::decode(item.bytes).bytes.empty()); });
+    analysis.packet(event(bytes), Selection::datagrams, [](const traffic::Event& item) {
+      check(DatagramCodec::decode(item.bytes).bytes.empty());
+    });
+
     if (ipv6) {
       bytes = packet(true, false, "options");
       bytes.insert(bytes.begin() + 40, 8, 0);
       bytes[6] = 0;
       bytes[40] = 17;
       word(bytes, 4, bytes.size() - 40);
-      analysis.packet(event(bytes), Selection::datagrams, [](const traffic::Event &item) {
+      analysis.packet(event(bytes), Selection::datagrams, [](const traffic::Event& item) {
         const auto parsed = DatagramCodec::decode(item.bytes);
 
         check(parsed.transport == DatagramTransport::udp && parsed.original_bytes == 7 && !parsed.truncated);
@@ -222,17 +253,30 @@ static void malformedAndExtensions(TlsTestMemory &memory) {
   std::array<Byte, 256> output;
   const auto encoded = DatagramCodec::encode(output, message);
 
-  for (std::size_t size = 0; size < encoded.size(); ++size) { rejects([&] { DatagramCodec::decode(encoded.first(size)); }); }
+  for (std::size_t size = 0; size < encoded.size(); ++size) {
+    rejects([&] {
+      DatagramCodec::decode(encoded.first(size));
+    });
+  }
+
   message.source_address[15] = 1;
-  rejects([&] { DatagramCodec::encode(output, message); });
+  rejects([&] {
+    DatagramCodec::encode(output, message);
+  });
+
   message.source_address[15] = 0;
   message.truncated = true;
-  rejects([&] { DatagramCodec::encode(output, message); });
+  rejects([&] {
+    DatagramCodec::encode(output, message);
+  });
+
   const auto icmp = packet(false, true, "body");
 
   message = *DatagramCodec::parse(*IpPayload::decode(icmp));
   ++message.icmp_type;
-  rejects([&] { DatagramCodec::encode(output, message); });
+  rejects([&] {
+    DatagramCodec::encode(output, message);
+  });
 }
 
 int main() {

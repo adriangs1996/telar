@@ -3,36 +3,35 @@
 static_assert(true);
 #endif
 
-
-#include <pthread.h>
-#include <cstdint>
-#include <cstring>
-#include <netinet/in.h>
-#include <sys/socket.h>
 #include <arpa/inet.h>
-#include <cstddef>
-#include <cerrno>
-#include <csignal>
-#include <netinet/tcp.h>
-#include <cstdlib>
-#include <unistd.h>
-#include <netdb.h>
 #include <brotli/decode.h>
 #include <brotli/encode.h>
-#include <zlib.h>
-#include <zstd.h>
 #include <cassert>
+#include <cerrno>
+#include <csignal>
+#include <cstddef>
+#include <cstdint>
 #include <cstdio>
-#include <nghttp2/nghttp2.h>
-#include <openssl/ssl.h>
-#include <openssl/err.h>
-#include <openssl/pem.h>
-#include <openssl/x509v3.h>
-#include <openssl/crypto.h>
+#include <cstdlib>
+#include <cstring>
 #include <ctime>
 #include <fcntl.h>
 #include <limits.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <nghttp2/nghttp2.h>
+#include <openssl/crypto.h>
+#include <openssl/err.h>
+#include <openssl/pem.h>
+#include <openssl/ssl.h>
+#include <openssl/x509v3.h>
+#include <pthread.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
+#include <unistd.h>
+#include <zlib.h>
+#include <zstd.h>
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <linux/fs.h>
 #endif
@@ -68,14 +67,16 @@ import telar.runtime.proxy.runtime;
 using namespace telar;
 using namespace telar::runtime;
 
-enum class ProxyServiceScenario { opaque,
-                                  http1,
-                                  http2,
-                                  http2_decode_failure };
+enum class ProxyServiceScenario {
+  opaque,
+  http1,
+  http2,
+  http2_decode_failure,
+};
 
 class ServiceResolver {
 public:
-  static ResolutionSummary resolve(const char *hostname, std::span<NetworkAddress> addresses) noexcept {
+  static ResolutionSummary resolve(const char* hostname, std::span<NetworkAddress> addresses) noexcept {
     if (std::string_view{hostname} == "delayed.test") {
       resolving.store(true);
       while (!released.load()) {
@@ -90,7 +91,7 @@ public:
 #endif
     loopback.sin_family = AF_INET;
     loopback.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    addresses[0] = *NetworkAddress::copy(reinterpret_cast<const sockaddr *>(&loopback), sizeof(loopback));
+    addresses[0] = *NetworkAddress::copy(reinterpret_cast<const sockaddr*>(&loopback), sizeof(loopback));
     return {.found = 1};
   }
 
@@ -120,16 +121,16 @@ static FileDescriptor connectLocal(std::uint16_t port) {
   address.sin_family = AF_INET;
   address.sin_port = htons(port);
   address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-  check(::connect(socket.get(), reinterpret_cast<sockaddr *>(&address), sizeof(address)) == 0);
+  check(::connect(socket.get(), reinterpret_cast<sockaddr*>(&address), sizeof(address)) == 0);
   configureProxySocket(socket.get());
   return socket;
 }
 
-static std::string request(const ProxySecret &secret, std::uint16_t port, std::string_view hostname) {
+static std::string request(const ProxySecret& secret, std::uint16_t port, std::string_view hostname) {
   std::array<char, ProxySecret::hexadecimal_bytes> hexadecimal;
   const auto user = "telar:" + std::string{*secret.formatHexadecimal(hexadecimal)};
   std::array<char, 128> encoded;
-  const auto count = base64::encode({reinterpret_cast<const std::uint8_t *>(user.data()), user.size()}, encoded);
+  const auto count = base64::encode({reinterpret_cast<const std::uint8_t*>(user.data()), user.size()}, encoded);
 
   check(count.has_value());
   return "CONNECT " + std::string{hostname} + ":" + std::to_string(port) + " HTTP/1.1\r\nProxy-Authorization: Basic " + std::string{encoded.data(), *count} + "\r\n\r\n";
@@ -191,7 +192,7 @@ static void transferOpaque(int source, int destination) {
   check(received == payload);
 }
 
-static void transferTls(SSL *source, SSL *destination, std::string_view payload) {
+static void transferTls(SSL* source, SSL* destination, std::string_view payload) {
   std::size_t offset = 0;
   std::string received;
   bool backpressure = false;
@@ -263,7 +264,7 @@ static std::string servicePayload(ProxyServiceScenario scenario, bool response) 
 }
 
 template <EventLoop Poller>
-static void checkService(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> &library, ProxyServiceScenario scenario, bool capture) {
+static void checkService(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory>& library, ProxyServiceScenario scenario, bool capture) {
   const bool intercepted = scenario != ProxyServiceScenario::opaque;
   const bool http2 = scenario == ProxyServiceScenario::http2 || scenario == ProxyServiceScenario::http2_decode_failure;
   AuthorityDirectory directory;
@@ -292,16 +293,32 @@ static void checkService(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> 
   check(readHead(child.get()) == "HTTP/1.1 200 Connection Established\r\n\r\n");
   FileDescriptor origin;
 
-  await([&] { origin = origin_listener.accept(); return static_cast<bool>(origin); });
+  await([&] {
+    origin = origin_listener.accept();
+    return static_cast<bool>(origin);
+  });
 
   if (!intercepted) {
     transferOpaque(child.get(), origin.get());
     check(::shutdown(child.get(), SHUT_WR) == 0);
-    await([&] { char byte; return ::recv(origin.get(), &byte, 1, 0) == 0; });
+    await([&] {
+      char byte;
+
+      return ::recv(origin.get(), &byte, 1, 0) == 0;
+    });
+
     transferOpaque(origin.get(), child.get());
     check(::shutdown(origin.get(), SHUT_WR) == 0);
-    await([&] { char byte; return ::recv(child.get(), &byte, 1, 0) == 0; });
-    await([&] { return service.active() == 0; });
+    await([&] {
+      char byte;
+
+      return ::recv(child.get(), &byte, 1, 0) == 0;
+    });
+
+    await([&] {
+      return service.active() == 0;
+    });
+
     check(service.counters().read(ProxyCounter::passthrough_connection) == 1);
     check(service.captures().metrics().started == 0 && service.captures().metrics().queued == 0);
     return;
@@ -365,14 +382,20 @@ static void checkService(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> 
   if (http2) {
     server.reset();
     origin.reset();
-    await([&] { return service.active() == 0; });
+    await([&] {
+      return service.active() == 0;
+    });
+
     check(service.counters().read(ProxyCounter::h2_decode_failure) == (scenario == ProxyServiceScenario::http2_decode_failure ? 2 : 0));
   }
 
   const std::size_t expected = !capture || scenario == ProxyServiceScenario::http2_decode_failure ? 0 : http2 ? 4
                                                                                                               : 2;
 
-  await([&] { return service.captures().metrics().queued == expected; });
+  await([&] {
+    return service.captures().metrics().queued == expected;
+  });
+
   for (std::size_t index = 0; index < expected; ++index) {
     auto half = service.captures().tryReceive();
 
@@ -401,13 +424,15 @@ static void checkService(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> 
     client.reset();
     origin.reset();
     child.reset();
-    await([&] { return service.active() == 0; });
+    await([&] {
+      return service.active() == 0;
+    });
   }
 
   check(service.captures().reservedBytes() == 0);
 }
 
-static void checkAdmissionAndStop(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> &library) {
+static void checkAdmissionAndStop(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory>& library) {
   AuthorityDirectory directory;
   const auto authority = std::make_shared<const CertificateAuthority<TlsTestMemory>>(CertificateAuthority<TlsTestMemory>::loadOrCreate(memory, library, directory.descriptor.get(), AuthorityKind::private_local));
   TlsTrustStore trust{memory, library};
@@ -420,35 +445,45 @@ static void checkAdmissionAndStop(TlsTestMemory &memory, const TlsLibrary<TlsTes
   service.emplace(memory, options, secret, interception, ProxyListener::bind(std::nullopt, {}));
   std::array<FileDescriptor, ProxyConnectionPolicy::maximum_unauthenticated> silent;
 
-  for (auto &socket : silent) {
+  for (auto& socket : silent) {
     socket = connectLocal(service->port());
   }
 
-  await([&] { return service->active() == silent.size(); });
+  await([&] {
+    return service->active() == silent.size();
+  });
+
   auto refused = connectLocal(service->port());
 
   writeText(refused.get(), "CONNECT origin.test:443 HTTP/1.1\r\n");
   check(readHead(refused.get()) == "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
   check(service->counters().read(ProxyCounter::unauthenticated_refusal) == 1);
-  for (auto &socket : silent) {
+  for (auto& socket : silent) {
     socket.reset();
   }
 
-  await([&] { return service->active() == 0; });
+  await([&] {
+    return service->active() == 0;
+  });
 
   auto delayed = connectLocal(service->port());
 
   writeText(delayed.get(), request(secret, 443, "delayed.test"));
-  await([] { return ServiceResolver::resolving.load(); });
+  await([] {
+    return ServiceResolver::resolving.load();
+  });
+
   const auto started = std::chrono::steady_clock::now();
 
   service.reset();
   check(std::chrono::steady_clock::now() - started < std::chrono::seconds{2});
   ServiceResolver::released.store(true);
-  await([] { return NameResolutions<ServiceResolver>::pending() == 0; });
+  await([] {
+    return NameResolutions<ServiceResolver>::pending() == 0;
+  });
 }
 
-void testProxyService(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> &library) {
+void testProxyService(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory>& library) {
   for (const auto scenario : {ProxyServiceScenario::opaque, ProxyServiceScenario::http1, ProxyServiceScenario::http2, ProxyServiceScenario::http2_decode_failure}) {
     for (const bool capture : {false, true}) {
       checkService<NativeEventLoop<TlsTestMemory>>(memory, library, scenario, capture);

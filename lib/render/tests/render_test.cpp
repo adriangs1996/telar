@@ -31,18 +31,18 @@ namespace {
     return document;
   }
 
-  std::string text(const Doc &document, std::span<const Run> runs) {
+  std::string text(const Doc& document, std::span<const Run> runs) {
     std::string joined;
 
-    for (const auto &run : runs) {
+    for (const auto& run : runs) {
       joined += document.view(run.text);
     }
 
     return joined;
   }
 
-  const Block *find(const Doc &document, BlockKind kind, std::size_t nth = 0) {
-    for (const auto &block : document.blocks) {
+  const Block* find(const Doc& document, BlockKind kind, std::size_t nth = 0) {
+    for (const auto& block : document.blocks) {
       if (block.kind == kind && nth-- == 0) {
         return &block;
       }
@@ -51,7 +51,7 @@ namespace {
     return nullptr;
   }
 
-  std::vector<std::uint8_t> encoded(const Doc &document) {
+  std::vector<std::uint8_t> encoded(const Doc& document) {
     std::vector<std::uint8_t> bytes(*encodedSize(document));
 
     encode(document, bytes);
@@ -103,12 +103,12 @@ Footnote[^1].
   void structure() {
     const auto document = parse(sample);
 
-    const auto *title = find(document, BlockKind::heading);
+    const auto* title = find(document, BlockKind::heading);
 
     check(title != nullptr && title->level == 1, "heading level");
     check(title && text(document, document.runsOf(*title)) == "Title & more", "entity decoded in heading");
 
-    const auto *paragraph = find(document, BlockKind::paragraph);
+    const auto* paragraph = find(document, BlockKind::paragraph);
 
     check(paragraph != nullptr, "paragraph");
     if (paragraph) {
@@ -116,50 +116,54 @@ Footnote[^1].
 
       check(text(document, runs) == "Some emphasis, strong, code, gone and a link. Second line.\nHard break.", std::format("paragraph text {:?}", text(document, runs)));
       const auto styled = [&](std::uint16_t style) {
-        return std::ranges::any_of(runs, [&](const Run &run) { return (run.style & style) != 0; });
+        return std::ranges::any_of(runs, [&](const Run& run) {
+          return (run.style & style) != 0;
+        });
       };
 
       check(styled(style::emphasis) && styled(style::strong) && styled(style::code) && styled(style::strike), "inline styles");
-      const auto link = std::ranges::find_if(runs, [](const Run &run) { return (run.style & style::link) != 0; });
+      const auto link = std::ranges::find_if(runs, [](const Run& run) {
+        return (run.style & style::link) != 0;
+      });
 
       check(link != runs.end() && document.view(link->text) == "link" && document.view(link->target) == "https://example.com", "link target");
     }
 
     // Tight list items get implicit paragraphs with markers.
-    const auto *one = find(document, BlockKind::paragraph, 1);
+    const auto* one = find(document, BlockKind::paragraph, 1);
 
     check(one && one->marker == Marker::bullet && one->list == 1 && (one->flags & Block::tight) != 0, "bullet item");
-    const auto *nested = find(document, BlockKind::paragraph, 3);
+    const auto* nested = find(document, BlockKind::paragraph, 3);
 
     check(nested && nested->list == 2 && text(document, document.runsOf(*nested)) == "nested", "nested item");
-    const auto *done = find(document, BlockKind::paragraph, 4);
+    const auto* done = find(document, BlockKind::paragraph, 4);
 
     check(done && done->marker == Marker::task_done, "done task");
-    const auto *open = find(document, BlockKind::paragraph, 5);
+    const auto* open = find(document, BlockKind::paragraph, 5);
 
     check(open && open->marker == Marker::task_open, "open task");
-    const auto *three = find(document, BlockKind::paragraph, 6);
+    const auto* three = find(document, BlockKind::paragraph, 6);
 
     check(three && three->marker == Marker::ordered && three->number == 3, "ordered start");
-    const auto *four = find(document, BlockKind::paragraph, 7);
+    const auto* four = find(document, BlockKind::paragraph, 7);
 
     check(four && four->number == 4, "ordered next");
 
-    const auto *quoted = find(document, BlockKind::paragraph, 8);
+    const auto* quoted = find(document, BlockKind::paragraph, 8);
 
     check(quoted && quoted->quote == 1 && quoted->list == 0, "quote depth");
-    const auto *deeper = find(document, BlockKind::paragraph, 9);
+    const auto* deeper = find(document, BlockKind::paragraph, 9);
 
     check(deeper && deeper->quote == 2, "nested quote");
-    const auto *careful = find(document, BlockKind::paragraph, 10);
+    const auto* careful = find(document, BlockKind::paragraph, 10);
 
     check(careful && careful->callout == Callout::warning && (careful->flags & Block::opens_callout) != 0 && careful->quote == 1, "callout");
 
-    const auto *code = find(document, BlockKind::code);
+    const auto* code = find(document, BlockKind::code);
 
     check(code && document.view(code->info) == "zig" && document.view(Span{code->first, code->count}) == "const x = 1;", "code block");
 
-    const auto *table = find(document, BlockKind::table);
+    const auto* table = find(document, BlockKind::table);
 
     check(table && table->columns == 3 && table->count == 9, "table shape pads short rows");
     if (table) {
@@ -170,17 +174,17 @@ Footnote[^1].
       check(cells[8].count == 0, "padded cell is empty");
     }
 
-    const auto *image = find(document, BlockKind::paragraph, 11);
+    const auto* image = find(document, BlockKind::paragraph, 11);
 
     check(image && document.runsOf(*image).size() == 1 && (document.runsOf(*image)[0].style & style::image) != 0 && document.view(document.runsOf(*image)[0].target) == "image.png", "image keeps alt text and source");
 
-    const auto *footnote_ref = find(document, BlockKind::paragraph, 12);
+    const auto* footnote_ref = find(document, BlockKind::paragraph, 12);
 
     check(footnote_ref && text(document, document.runsOf(*footnote_ref)) == "Footnote1.", "footnote reference");
-    const auto *html = find(document, BlockKind::html);
+    const auto* html = find(document, BlockKind::html);
 
     check(html && document.view(Span{html->first, html->count}) == "<div>raw</div>", "html block");
-    const auto *note = find(document, BlockKind::paragraph, 13);
+    const auto* note = find(document, BlockKind::paragraph, 13);
 
     check(note && note->marker == Marker::footnote && note->number == 1, "footnote definition");
     check(find(document, BlockKind::rule, 1) != nullptr, "rules: footnote section and thematic break");
@@ -264,7 +268,7 @@ Footnote[^1].
       }
 
       if (decode(mutated, decoded) == DecodeError::none) {
-        for (const auto &block : decoded.blocks) {
+        for (const auto& block : decoded.blocks) {
           if (block.kind == BlockKind::paragraph || block.kind == BlockKind::heading) {
             check(block.first + block.count <= decoded.runs.size(), "accepted runs in range");
           }

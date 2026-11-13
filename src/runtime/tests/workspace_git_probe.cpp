@@ -1,5 +1,5 @@
-#include <sys/stat.h>
 #include <cstdio>
+#include <sys/stat.h>
 
 import std;
 import telar.runtime.tests.check;
@@ -7,7 +7,7 @@ import telar.runtime.tests.protocol_peer;
 
 using namespace telar;
 
-static void awaitState(ProtocolPeer &peer, std::string_view branch, bool dirty, std::ostream &dump) {
+static void awaitState(ProtocolPeer& peer, std::string_view branch, bool dirty, std::ostream& dump) {
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{20};
 
   for (;;) {
@@ -15,7 +15,7 @@ static void awaitState(ProtocolPeer &peer, std::string_view branch, bool dirty, 
 
     check(std::chrono::steady_clock::now() < deadline);
     check(list.entries.size() == 1);
-    const auto &entry = list.entries[0];
+    const auto& entry = list.entries[0];
     if (entry.branch != branch || entry.dirty != dirty) {
       continue;
     }
@@ -27,7 +27,7 @@ static void awaitState(ProtocolPeer &peer, std::string_view branch, bool dirty, 
   }
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   if (argc != 4) {
     return 2;
   }
@@ -70,7 +70,7 @@ int main(int argc, char **argv) {
     peer.exchange<RuntimeStopping>(RuntimeStop{});
     std::puts("{\"clean\":true,\"dirty\":true,\"failure_retains_dirty\":true,\"recovery\":true,\"detached\":true,\"relative_gitdir\":true,\"fifo_refused\":true}");
     return 0;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     std::fprintf(stderr, "workspace-git-probe: %s\n", error.what());
     return 1;
   }

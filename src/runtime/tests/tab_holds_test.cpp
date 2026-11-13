@@ -3,24 +3,23 @@
 static_assert(true);
 #endif
 
-
+#include "cell_layout.hpp"
 #include "telar_base/diagnostics/config.hpp"
-#include <sys/types.h>
-#include <cstdint>
 #include <cassert>
-#include <cstring>
-#include <cstddef>
 #include <cerrno>
+#include <csignal>
+#include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fcntl.h>
-#include <sys/mman.h>
-#include <unistd.h>
-#include "cell_layout.hpp"
 #include <limits.h>
-#include <csignal>
+#include <sys/mman.h>
+#include <sys/types.h>
 #include <sys/uio.h>
 #include <sys/wait.h>
+#include <unistd.h>
 #if (defined(__APPLE__))
 #include <sys/event.h>
 #endif
@@ -36,9 +35,9 @@ static_assert(true);
 #if (defined(__linux__))
 #include <sys/syscall.h>
 #endif
+#include <ghostty/vt.h>
 #include <new>
 #include <sys/stat.h>
-#include <ghostty/vt.h>
 
 import std;
 import telar.base.diagnostics;
@@ -99,12 +98,12 @@ static void testHeldTabLifecycle() {
   const auto opened = owner.receive<PaneOpened>();
   const auto location = opened.location;
 
-  for (auto *peer : {&owner, &holder}) {
+  for (auto* peer : {&owner, &holder}) {
     workspaces.holdTab(model, panes, clients, peer->session().id, HoldTab{.request_id = 2, .location = location, .held = true});
     check(peer->receive<RequestCompleted>().request_id == 2);
   }
 
-  auto &pane = panes.require(model.panes, opened.pane_id);
+  auto& pane = panes.require(model.panes, opened.pane_id);
 
   pane.output_closed = true;
   pane.exit_status = 0;
@@ -181,7 +180,7 @@ static void testHeldTabRelease() {
 
   try {
     workspaces.holdTab(model, panes, clients, owner.session().id, HoldTab{.request_id = 100, .location = overflow, .held = true});
-  } catch (const RequestError &error) {
+  } catch (const RequestError& error) {
     refused = error.code() == FailureCode::resource_limit && std::string_view{error.what()} == "this client holds too many tabs";
   }
 
@@ -208,7 +207,7 @@ static void testHeldTabRelease() {
 
   try {
     workspaces.holdTab(model, panes, clients, holder.session().id, HoldTab{.request_id = 103, .location = first, .held = false});
-  } catch (const RequestError &error) {
+  } catch (const RequestError& error) {
     missing = error.code() == FailureCode::tab_not_found && std::string_view{error.what()} == "tab not found";
   }
 

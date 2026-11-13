@@ -1,14 +1,14 @@
 #ifdef __clangd__
 static_assert(true);
 #endif
-#include <tbc/view.hpp>
 #include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <stdexcept>
 #include <string_view>
-#include <optional>
+#include <tbc/view.hpp>
 #include <utility>
 #include <vector>
 
@@ -16,8 +16,8 @@ static_assert(true);
 
 #include <gtest/gtest.h>
 
-
 import telar.ebnf.parser;
+
 namespace {
   TEST(Grammar, SingleRuleisAValidSentence) {
     const auto sentence = std::string_view{"letters = \"abcdefghi\";"};
@@ -118,7 +118,7 @@ namespace {
   struct InvalidTokenizer {
     std::size_t count;
 
-    auto tokenizeSourceIntoBuffer(tbc::view<std::string_view, tbc::lt::a>, tbc::view<ebnf::parsing_ring_buffer &, tbc::lt::a> buffer, std::size_t) const -> std::size_t {
+    auto tokenizeSourceIntoBuffer(tbc::view<std::string_view, tbc::lt::a>, tbc::view<ebnf::parsing_ring_buffer&, tbc::lt::a> buffer, std::size_t) const -> std::size_t {
       buffer[0] = ebnf::token{
           .kind = ebnf::token_kind::Identifier,
           .text = {},

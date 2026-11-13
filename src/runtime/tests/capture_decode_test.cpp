@@ -3,14 +3,13 @@
 static_assert(true);
 #endif
 
-
-#include <cstring>
+#include <brotli/decode.h>
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include <brotli/decode.h>
+#include <cstring>
 #include <zlib.h>
 #include <zstd.h>
-#include <cassert>
 
 import std;
 import telar.base.memory;
@@ -52,7 +51,7 @@ void testCaptureDecoding() {
   constexpr std::string_view plaintext = "capture body";
   ErasureCheckingAllocator system;
 
-  for (const auto &fixture : fixtures) {
+  for (const auto& fixture : fixtures) {
     const auto input = decodeHexadecimal(fixture.hexadecimal);
 
     for (const std::size_t limit : {1, 11, 12, 13, 1024}) {
@@ -63,7 +62,7 @@ void testCaptureDecoding() {
         const auto body = decoder.decode(input, fixture.coding, limit);
 
         check(body.decoded && !body.failed && body.truncated == (limit < plaintext.size()));
-        check(std::string_view{reinterpret_cast<const char *>(body.bytes().data()), body.size} == plaintext.substr(0, limit));
+        check(std::string_view{reinterpret_cast<const char*>(body.bytes().data()), body.size} == plaintext.substr(0, limit));
       }
 
       check(memory.liveBytes() == 0);
@@ -79,7 +78,7 @@ void testCaptureDecoding() {
         const auto body = decoder.decode(input, fixture.coding, 1024);
 
         check(body.decoded && !body.failed && !body.truncated);
-        check(std::string_view{reinterpret_cast<const char *>(body.bytes().data()), body.size} == plaintext);
+        check(std::string_view{reinterpret_cast<const char*>(body.bytes().data()), body.size} == plaintext);
       }
 
       check(memory.liveBytes() == 0);
@@ -95,7 +94,7 @@ void testCaptureDecoding() {
           const auto body = decoder.decode(input, fixture.coding, 1024);
 
           check(body.decoded || body.failed);
-        } catch (const std::bad_alloc &) {
+        } catch (const std::bad_alloc&) {
         }
       }
 
@@ -195,7 +194,7 @@ static void testConcurrentCaptureDelivery() {
 
   std::array<std::jthread, 4> producers;
 
-  for (auto &thread : producers) {
+  for (auto& thread : producers) {
     thread = std::jthread{[&] {
       for (std::uint64_t iteration = 1; iteration <= 1000; ++iteration) {
         if (channel.publish(iteration)) {
@@ -205,7 +204,7 @@ static void testConcurrentCaptureDelivery() {
     }};
   }
 
-  for (auto &thread : producers) {
+  for (auto& thread : producers) {
     thread.join();
   }
 

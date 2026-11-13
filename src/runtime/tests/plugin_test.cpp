@@ -3,11 +3,10 @@
 static_assert(true);
 #endif
 
-
 #include <cassert>
 #include <cstddef>
-#include <cstring>
 #include <cstdint>
+#include <cstring>
 
 import std;
 import telar.base.memory;
@@ -20,12 +19,12 @@ using namespace telar::runtime;
 namespace tap = telar::runtime::plugins;
 
 template <typename Operation>
-static void rejects(Operation &&operation) {
+static void rejects(Operation&& operation) {
   bool rejected = false;
 
   try {
     operation();
-  } catch (const EncodingError &) {
+  } catch (const EncodingError&) {
     rejected = true;
   }
 
@@ -74,25 +73,38 @@ static void testExchangeProtocol() {
       check(decoded.method == "POST" && decoded.target == "/resource" && decoded.started_at_ms == INT64_MIN);
       check(decoded.protocol == static_cast<tap::ExchangeProtocol>(protocol));
       check(decoded.request.has_value() == ((present & 1) != 0) && decoded.response.has_value() == ((present & 2) != 0));
-      const auto &half = decoded.request ? *decoded.request : *decoded.response;
+      const auto& half = decoded.request ? *decoded.request : *decoded.response;
 
       check(half.body.size() == 3 && half.body[1] == 0 && half.encoding == "gzip");
       check(half.decoded && half.body_truncated && half.status_code == 503 && half.outcome == CaptureOutcome::failed && half.finished_at_ms == INT64_MAX);
 
       for (std::size_t count = 0; count < encoded.size(); ++count) {
-        rejects([&] { tap::Protocol::decodeExchange(encoded.first(count)); });
-        rejects([&] { tap::Protocol::encodeExchange(std::span{buffer}.first(count), {UINT64_MAX, 7}, exchange); });
+        rejects([&] {
+          tap::Protocol::decodeExchange(encoded.first(count));
+        });
+
+        rejects([&] {
+          tap::Protocol::encodeExchange(std::span{buffer}.first(count), {UINT64_MAX, 7}, exchange);
+        });
       }
 
       tap::Protocol::encodeExchange(buffer, {UINT64_MAX, 7}, exchange);
-      rejects([&] { tap::Protocol::decodeExchange(std::span{buffer}.first(encoded.size() + 1)); });
+      rejects([&] {
+        tap::Protocol::decodeExchange(std::span{buffer}.first(encoded.size() + 1));
+      });
     }
   }
 
   CapturedExchange empty{memory};
 
-  rejects([&] { tap::Protocol::encodeExchange(buffer, {}, empty); });
-  rejects([&] { tap::Protocol::exchangeBytes(empty); });
+  rejects([&] {
+    tap::Protocol::encodeExchange(buffer, {}, empty);
+  });
+
+  rejects([&] {
+    tap::Protocol::exchangeBytes(empty);
+  });
+
   check(memory.liveBytes() == 0 && quota.used() == 0);
 }
 
@@ -104,7 +116,7 @@ static void testEffectProtocol() {
       tap::EffectBatch effects;
 
       effects.count = count;
-      for (auto &notification : effects.notifications) {
+      for (auto& notification : effects.notifications) {
         notification = {.level = level, .duration_ms = UINT32_MAX, .title = std::string_view{"a\0b", 3}, .message = "message"};
       }
 
@@ -112,29 +124,38 @@ static void testEffectProtocol() {
       const auto decoded = tap::Protocol::decodeEffects(encoded);
 
       check(decoded.event_id == UINT64_MAX && decoded.batch.count == count);
-      for (const auto &notification : std::span{decoded.batch.notifications}.first(count)) {
+      for (const auto& notification : std::span{decoded.batch.notifications}.first(count)) {
         check(notification.level == level && notification.duration_ms == UINT32_MAX && notification.title.size() == 3 && notification.title[1] == 0);
       }
 
       for (std::size_t length = 0; length < encoded.size(); ++length) {
-        rejects([&] { tap::Protocol::decodeEffects(encoded.first(length)); });
+        rejects([&] {
+          tap::Protocol::decodeEffects(encoded.first(length));
+        });
       }
 
-      rejects([&] { tap::Protocol::decodeEffects(std::span{buffer}.first(encoded.size() + 1)); });
+      rejects([&] {
+        tap::Protocol::decodeEffects(std::span{buffer}.first(encoded.size() + 1));
+      });
     }
   }
 
   tap::EffectBatch oversized;
 
   oversized.count = tap::Limits::effects + 1;
-  rejects([&] { tap::Protocol::encodeEffects(buffer, 1, oversized); });
+  rejects([&] {
+    tap::Protocol::encodeEffects(buffer, 1, oversized);
+  });
+
   for (const Byte count : {17, 255}) {
     tap::FrameWriter writer{buffer};
 
     writer.tag(tap::FrameKind::effects);
     writer.integer(std::uint64_t{1});
     writer.integer(count);
-    rejects([&] { tap::Protocol::decodeEffects(writer.finish()); });
+    rejects([&] {
+      tap::Protocol::decodeEffects(writer.finish());
+    });
   }
 
   for (const Byte level : {4, 255}) {
@@ -148,7 +169,9 @@ static void testEffectProtocol() {
     writer.integer(std::uint32_t{0});
     writer.text("");
     writer.text("");
-    rejects([&] { tap::Protocol::decodeEffects(writer.finish()); });
+    rejects([&] {
+      tap::Protocol::decodeEffects(writer.finish());
+    });
   }
 }
 
@@ -160,10 +183,14 @@ static void testErrorProtocol() {
 
   check(decoded.event_id == 73 && decoded.message == std::string_view{long_message}.substr(0, tap::Limits::error_bytes));
   for (std::size_t length = 0; length < encoded.size(); ++length) {
-    rejects([&] { tap::Protocol::decodeError(encoded.first(length)); });
+    rejects([&] {
+      tap::Protocol::decodeError(encoded.first(length));
+    });
   }
 
-  rejects([&] { tap::Protocol::decodeError(std::span{buffer}.first(encoded.size() + 1)); });
+  rejects([&] {
+    tap::Protocol::decodeError(std::span{buffer}.first(encoded.size() + 1));
+  });
 }
 
 void testPluginHost();
@@ -174,7 +201,7 @@ void testPluginService();
 int runPluginSessionFixture(std::string_view mode);
 void testRecyclingAllocator();
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   if (argc == 3 && std::string_view{argv[1]} == "tap-worker") {
     return runPluginSessionFixture(argv[2]);
   }

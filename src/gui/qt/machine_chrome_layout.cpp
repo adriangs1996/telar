@@ -3,42 +3,18 @@
 static_assert(true);
 #endif
 
-
 #include "machine_chrome_layout.hpp"
+#include "../core/memory.hpp"
+#include "../core/terminal_size.hpp"
+#include "../platform/font.h"
 #include "agent_projection.hpp"
 #include "application.hpp"
 #include "machine_client.hpp"
-#include <string_view>
-#include "telar_client/serializers/telar_cells.hpp"
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <optional>
-#include <variant>
-#include <algorithm>
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include <chrono>
-#include "../core/memory.hpp"
-#include <concepts>
-#include <utility>
-#include <bit>
-#include <stdexcept>
-#include <span>
-#include <freetype/freetype.h>
-#include <hb.h>
-#include <memory>
-#include "../platform/font.h"
-#include <cstring>
-#include <cmath>
-#include <limits>
-#include <type_traits>
-#include <ghostty/vt/unicode.h>
-#include <charconv>
-#include <system_error>
-#include "../core/terminal_size.hpp"
 #include "projection.hpp"
 #include "resident_fonts.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_cells.hpp"
+#include "telar_client/serializers/telar_frame.hpp"
 #include "window_font_catalog.hpp"
 #include <QAbstractItemModel>
 #include <QColor>
@@ -57,10 +33,32 @@ static_assert(true);
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
+#include <algorithm>
+#include <array>
+#include <bit>
+#include <charconv>
+#include <chrono>
+#include <cmath>
+#include <concepts>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
 #include <exception>
+#include <freetype/freetype.h>
+#include <ghostty/vt/unicode.h>
+#include <hb.h>
+#include <limits>
+#include <memory>
+#include <optional>
+#include <span>
+#include <stdexcept>
+#include <string_view>
+#include <system_error>
+#include <type_traits>
+#include <utility>
+#include <variant>
 
 #include "core/memory.hpp"
-
 
 import telar.gui.application.workspace_replica;
 import telar.gui.core.metrics;
@@ -78,480 +76,480 @@ import telar.gui.presentation.history_filter_geometry;
 import telar.gui.text.json_unsigned_integer;
 
 namespace telar::gui::qt {
-namespace {
+  namespace {
 
-constexpr std::string_view segment_suffix = " ▾";
+    constexpr std::string_view segment_suffix = " ▾";
 
-QString machineKey(MachineToken token) {
-  return QStringLiteral("machine:") + QString::number(token.slot) + QLatin1Char(':') + QString::number(token.generation);
-}
+    QString machineKey(MachineToken token) {
+      return QStringLiteral("machine:") + QString::number(token.slot) + QLatin1Char(':') + QString::number(token.generation);
+    }
 
-}
-
-MachineChromeLayout::MachineChromeLayout(QQuickItem *parent)
-    : QQuickItem(parent) {}
-
-Application *MachineChromeLayout::controller() const noexcept {
-  return controller_;
-}
-
-bool MachineChromeLayout::segment() const noexcept {
-  return mode_ == Mode::segment;
-}
-
-bool MachineChromeLayout::shown() const noexcept {
-  return shown_;
-}
-
-qreal MachineChromeLayout::preferredWidth() const noexcept {
-  return preferred_width_;
-}
-
-QAbstractItemModel *MachineChromeLayout::items() noexcept {
-  return &items_;
-}
-
-QVariantMap MachineChromeLayout::style() const {
-  return style_;
-}
-
-void MachineChromeLayout::setController(Application *controller) {
-  if (controller_ == controller) {
-    return;
   }
 
-  if (controller_ != nullptr) {
-    disconnect(controller_, nullptr, this, nullptr);
+  MachineChromeLayout::MachineChromeLayout(QQuickItem* parent)
+      : QQuickItem(parent) {}
+
+  Application* MachineChromeLayout::controller() const noexcept {
+    return controller_;
   }
 
-  controller_ = controller;
-  if (controller_ != nullptr) {
-    connect(controller_, &Application::machinesChanged, this, &MachineChromeLayout::observeSources);
-    connect(controller_, &Application::configurationChanged, this, &MachineChromeLayout::invalidate);
-    connect(controller_, &Application::windowGeometryChanged, this, &MachineChromeLayout::invalidate);
-    connect(controller_, &QObject::destroyed, this, [this] {
-      controller_ = nullptr;
-      observeSources();
-      emit controllerChanged();
-    });
+  bool MachineChromeLayout::segment() const noexcept {
+    return mode_ == Mode::segment;
   }
 
-  observeSources();
-  invalidate();
-  emit controllerChanged();
-}
-
-void MachineChromeLayout::setSegment(bool segment) {
-  setMode(segment ? Mode::segment : Mode::list);
-}
-
-bool MachineChromeLayout::inlineFacts() const noexcept {
-  return mode_ == Mode::facts;
-}
-
-void MachineChromeLayout::setInlineFacts(bool enabled) {
-  setMode(enabled ? Mode::facts : Mode::list);
-}
-
-void MachineChromeLayout::setMode(Mode mode) {
-  if (mode_ == mode) {
-    return;
+  bool MachineChromeLayout::shown() const noexcept {
+    return shown_;
   }
 
-  const auto previous = mode_;
-
-  mode_ = mode;
-  items_.reconcile({});
-  observeSources();
-  invalidate();
-  if ((previous == Mode::segment) != (mode_ == Mode::segment)) {
-    emit segmentChanged();
+  qreal MachineChromeLayout::preferredWidth() const noexcept {
+    return preferred_width_;
   }
 
-  if ((previous == Mode::facts) != (mode_ == Mode::facts)) {
-    emit inlineFactsChanged();
+  QAbstractItemModel* MachineChromeLayout::items() noexcept {
+    return &items_;
   }
-}
 
-void MachineChromeLayout::observeSources() {
-  std::array<std::optional<Source>, MachineLimits::window_slots> incoming;
-  const bool shown = controller_ != nullptr && controller_->machines_.count() > 1;
-  const bool attention = controller_ != nullptr && controller_->machines_.attentionElsewhere();
+  QVariantMap MachineChromeLayout::style() const {
+    return style_;
+  }
 
-  if (controller_ != nullptr) {
-    for (std::size_t index = 0; index < incoming.size(); ++index) {
-      const auto slot = static_cast<Machines::Slot>(index);
-      if (controller_->machines_.shown(slot)) {
-        const auto &row = controller_->machines_.row(slot);
+  void MachineChromeLayout::setController(Application* controller) {
+    if (controller_ == controller) {
+      return;
+    }
 
-        incoming[index] = Source{.token = controller_->machines_.token(slot), .label = row.label, .color = row.color, .active = slot == controller_->machines_.active(), .attention = row.attention, .live = row.live, .phase = inlineFacts() ? row.phase : MachinePhase::connecting, .cpu_percent = inlineFacts() ? row.cpu_percent : std::nullopt};
-        if (mode_ == Mode::list && !incoming[index]->active) {
-          collectCards(slot, *incoming[index]);
+    if (controller_ != nullptr) {
+      disconnect(controller_, nullptr, this, nullptr);
+    }
+
+    controller_ = controller;
+    if (controller_ != nullptr) {
+      connect(controller_, &Application::machinesChanged, this, &MachineChromeLayout::observeSources);
+      connect(controller_, &Application::configurationChanged, this, &MachineChromeLayout::invalidate);
+      connect(controller_, &Application::windowGeometryChanged, this, &MachineChromeLayout::invalidate);
+      connect(controller_, &QObject::destroyed, this, [this] {
+        controller_ = nullptr;
+        observeSources();
+        emit controllerChanged();
+      });
+    }
+
+    observeSources();
+    invalidate();
+    emit controllerChanged();
+  }
+
+  void MachineChromeLayout::setSegment(bool segment) {
+    setMode(segment ? Mode::segment : Mode::list);
+  }
+
+  bool MachineChromeLayout::inlineFacts() const noexcept {
+    return mode_ == Mode::facts;
+  }
+
+  void MachineChromeLayout::setInlineFacts(bool enabled) {
+    setMode(enabled ? Mode::facts : Mode::list);
+  }
+
+  void MachineChromeLayout::setMode(Mode mode) {
+    if (mode_ == mode) {
+      return;
+    }
+
+    const auto previous = mode_;
+
+    mode_ = mode;
+    items_.reconcile({});
+    observeSources();
+    invalidate();
+    if ((previous == Mode::segment) != (mode_ == Mode::segment)) {
+      emit segmentChanged();
+    }
+
+    if ((previous == Mode::facts) != (mode_ == Mode::facts)) {
+      emit inlineFactsChanged();
+    }
+  }
+
+  void MachineChromeLayout::observeSources() {
+    std::array<std::optional<Source>, MachineLimits::window_slots> incoming;
+    const bool shown = controller_ != nullptr && controller_->machines_.count() > 1;
+    const bool attention = controller_ != nullptr && controller_->machines_.attentionElsewhere();
+
+    if (controller_ != nullptr) {
+      for (std::size_t index = 0; index < incoming.size(); ++index) {
+        const auto slot = static_cast<Machines::Slot>(index);
+        if (controller_->machines_.shown(slot)) {
+          const auto& row = controller_->machines_.row(slot);
+
+          incoming[index] = Source{.token = controller_->machines_.token(slot), .label = row.label, .color = row.color, .active = slot == controller_->machines_.active(), .attention = row.attention, .live = row.live, .phase = inlineFacts() ? row.phase : MachinePhase::connecting, .cpu_percent = inlineFacts() ? row.cpu_percent : std::nullopt};
+          if (mode_ == Mode::list && !incoming[index]->active) {
+            collectCards(slot, *incoming[index]);
+          }
         }
+      }
+    }
+
+    if (incoming != sources_ || attention != attention_elsewhere_) {
+      sources_ = std::move(incoming);
+      attention_elsewhere_ = attention;
+      invalidate();
+    }
+
+    if (shown_ != shown) {
+      shown_ = shown;
+      invalidate();
+      emit shownChanged();
+    }
+  }
+
+  void MachineChromeLayout::invalidate() {
+    polish();
+  }
+
+  void MachineChromeLayout::bindWindow() {
+    disconnect(font_connection_);
+    catalog_ = nullptr;
+    fonts_.reset();
+    if (window() != nullptr) {
+      catalog_ = &WindowFontCatalog::forWindow(*window());
+      font_connection_ = connect(catalog_, &WindowFontCatalog::fontsChanged, this, &MachineChromeLayout::invalidate);
+    }
+
+    invalidate();
+  }
+
+  float MachineChromeLayout::measure(std::string_view text, bool emphasized) const {
+    const auto role = emphasized ? fonts::FontRole::emphasized : fonts::FontRole::regular;
+
+    // The window owns its catalog; this layout only observes it.
+    tbc::raw(catalog_.data())->request(text, role);
+    const auto size = mode_ == Mode::facts ? chrome_.small : chrome_.body;
+
+    return static_cast<float>(fonts::TextLayout<SystemAllocator>::measure(*fonts_, text, {.pixel_height = size, .preferred = role}));
+  }
+
+  QColor MachineChromeLayout::ink(std::string_view written) const {
+    const auto& theme = controller_->configuration().theme;
+    const auto parsed = ColorName::parse(written).value_or(ColorName::Value{PaletteRole::accent});
+    const auto* role = std::get_if<PaletteRole>(&parsed);
+    const auto value = role != nullptr ? theme.chrome[static_cast<std::size_t>(*role)] : std::get<CellColor>(parsed);
+
+    return fill(value);
+  }
+
+  QColor MachineChromeLayout::fill(CellColor value) const {
+    const auto& theme = controller_->configuration().theme;
+
+    return value.kind == CellColor::Kind::default_color ? QColor{Qt::transparent} : toQColor(theme.resolve(value, theme.background));
+  }
+
+  QVariantMap MachineChromeLayout::geometryRecord(const MachineChromeGeometry::Control& geometry) const {
+    return {
+        {QStringLiteral("bounds"), toQRectF(geometry.bounds, density_)},
+        {QStringLiteral("labelBounds"), toQRectF(geometry.label, density_)},
+        {QStringLiteral("discBounds"), toQRectF(geometry.disc, density_)},
+        {QStringLiteral("attentionBounds"), toQRectF(geometry.attention, density_)},
+        {QStringLiteral("radius"), geometry.radius / density_},
+    };
+  }
+
+  QVariantMap MachineChromeLayout::controlRecord(const Source& source, Rect bounds, float advance) const {
+    using Geometry = MachineChromeGeometry;
+    const bool segment = mode_ == Mode::segment;
+    const bool attention = segment ? attention_elsewhere_ : source.attention && !source.active;
+    const auto geometry = Geometry::control(bounds, chrome_, segment ? Geometry::Kind::segment : Geometry::Kind::switcher, advance, attention);
+    auto record = geometryRecord(geometry);
+
+    record.insert(QStringLiteral("key"), segment ? QStringLiteral("machine:picker") : machineKey(source.token));
+    record.insert(QStringLiteral("text"), toQString(source.label.view()) + (segment ? QStringLiteral(" ▾") : QString{}));
+    record.insert(QStringLiteral("accessible"), segment ? QStringLiteral("Switch machine") : toQString(source.label.view()));
+    record.insert(QStringLiteral("active"), !segment && source.active);
+    record.insert(QStringLiteral("bold"), segment || source.active);
+    record.insert(QStringLiteral("ink"), ink(source.color.view()));
+    record.insert(QStringLiteral("enabled"), segment || source.live);
+
+    return record;
+  }
+
+  void MachineChromeLayout::rebuild() {
+    if (controller_ == nullptr || window() == nullptr || !shown_ || height() <= 0) {
+      items_.reconcile({});
+      if (preferred_width_ != 0) {
+        preferred_width_ = 0;
+        emit layoutChanged();
+      }
+
+      return;
+    }
+
+    if (catalog_ == nullptr) {
+      bindWindow();
+    }
+
+    density_ = window()->effectiveDevicePixelRatio();
+    chrome_ = controller_->displayMetrics(density_).chrome;
+    fonts_ = ResidentFonts::shared(catalog_->collection());
+    const auto& theme = controller_->configuration().theme;
+    auto active_background = toQColor(theme.chromeColor(PaletteRole::text));
+    auto hover_background = active_background;
+
+    active_background.setAlphaF(gui::ChromeStyle::selection_alpha);
+    hover_background.setAlphaF(gui::ChromeStyle::hover_alpha);
+    QVariantMap style{
+        {QStringLiteral("activeBackground"), active_background},
+        {QStringLiteral("hoverBackground"), hover_background},
+        {QStringLiteral("activeText"), toQColor(theme.chromeColor(PaletteRole::text))},
+        {QStringLiteral("attention"), fill(theme.chrome[static_cast<std::size_t>(PaletteRole::yellow)])},
+        {QStringLiteral("pixelSize"), (mode_ == Mode::facts ? chrome_.small : chrome_.body) / density_},
+        {QStringLiteral("rowRadius"), chrome_.px(gui::ChromeStyle::control_radius) / density_},
+        {QStringLiteral("tileWidth"), chrome_.px(TabStripGeometry::tile_width) / density_},
+        {QStringLiteral("tileHeight"), chrome_.px(TabStripGeometry::tile_height) / density_},
+        {QStringLiteral("tileRadius"), chrome_.px(TabStripGeometry::tile_radius) / density_},
+    };
+
+    QList<QVariantMap> records;
+    const Rect area = isVisible() ? Rect{.width = static_cast<float>(width() * density_), .height = static_cast<float>(height() * density_)} : Rect{};
+    qreal preferred = 0;
+
+    switch (mode_) {
+    case Mode::facts:
+      preferred = factsRecords(area, records);
+      break;
+    case Mode::segment:
+      preferred = segmentRecords(area, records);
+      break;
+    case Mode::list:
+      preferred = listRecords(area, records);
+      break;
+    }
+
+    if (style != style_ || preferred != preferred_width_) {
+      style_ = std::move(style);
+      preferred_width_ = preferred;
+      emit layoutChanged();
+    }
+
+    items_.reconcile(std::move(records));
+  }
+
+  qreal MachineChromeLayout::segmentRecords(Rect area, QList<QVariantMap>& records) {
+    for (const auto& source : sources_) {
+      if (!source || !source->active) {
+        continue;
+      }
+
+      BoundedText<MachineLimits::label_bytes + segment_suffix.size()> text;
+
+      text.append(source->label.view());
+      text.append(segment_suffix);
+      const auto advance = measure(text.view(), true);
+
+      if (!area.empty()) {
+        records.append(controlRecord(*source, area, advance));
+      }
+
+      return MachineChromeGeometry::preferredSegment(chrome_, advance) / density_;
+    }
+
+    return 0;
+  }
+
+  void MachineChromeLayout::collectCards(Machines::Slot slot, Source& source) const {
+    const auto& client = controller_->clients_[slot];
+    if (!client || (*client)->phase != MachinePhase::connected || !(*client)->session.ready()) {
+      return;
+    }
+
+    const auto agents = std::span{(*client)->session.agents()};
+    std::array<std::size_t, AgentOrder::maximum_agents> chosen{};
+    std::size_t count = 0;
+
+    for (std::size_t index = 0; index < agents.size() && count < chosen.size(); ++index) {
+      if (AgentOrder::stacked(agents[index].status)) {
+        chosen[count++] = index;
+      }
+    }
+
+    const auto shown = std::min(count, stack_cards);
+
+    std::partial_sort(chosen.begin(), chosen.begin() + static_cast<std::ptrdiff_t>(shown), chosen.begin() + static_cast<std::ptrdiff_t>(count), [&](std::size_t left, std::size_t right) {
+      return AgentOrder::priority(agents[left]) < AgentOrder::priority(agents[right]);
+    });
+
+    for (std::size_t rank = 0; rank < shown; ++rank) {
+      const auto& agent = agents[chosen[rank]];
+
+      source.cards[rank] = {.provider = static_cast<std::uint8_t>(agent.provider_kind), .status = static_cast<std::uint8_t>(agent.status)};
+    }
+
+    source.card_count = shown;
+  }
+
+  QVariantMap MachineChromeLayout::listRecord(const Source& source, const MachineChromeGeometry::ListRow& row) const {
+    QVariantList cards;
+
+    for (std::size_t rank = 0; rank < source.card_count; ++rank) {
+      const auto card = source.cards[rank];
+      const auto status = static_cast<AgentStatus>(card.status);
+      const auto& pose = TabCardMotion::rest[rank];
+      auto record = applicationMarkRecord(runtime::describeProvider(static_cast<AgentProvider>(card.provider)).display_name);
+
+      record.insert(QStringLiteral("x"), chrome_.px(pose.x) / density_);
+      record.insert(QStringLiteral("y"), chrome_.px(pose.y) / density_);
+      record.insert(QStringLiteral("rotation"), pose.rotation);
+      record.insert(QStringLiteral("scale"), pose.scale);
+      record.insert(QStringLiteral("layer"), static_cast<int>(stack_cards - 1 - rank));
+      // The row has no focused pane, so whichever card waits on the person is tinted, front one included.
+      record.insert(QStringLiteral("attentionColor"), AgentOrder::attention(status) == AgentOrder::Attention::needs_input ? QString::fromLatin1(palette_names[static_cast<std::size_t>(AgentStatusPresentation::color(status))]) : QString{});
+      cards.append(std::move(record));
+    }
+
+    const auto label = toQString(source.label.view());
+
+    return {
+        {QStringLiteral("key"), machineKey(source.token)},
+        {QStringLiteral("bounds"), toQRectF(row.bounds, density_)},
+        {QStringLiteral("discBounds"), toQRectF(row.disc, density_)},
+        {QStringLiteral("labelBounds"), toQRectF(row.label, density_)},
+        {QStringLiteral("stackBounds"), toQRectF(row.stack, density_)},
+        {QStringLiteral("text"), label},
+        {QStringLiteral("ink"), ink(source.color.view())},
+        {QStringLiteral("enabled"), source.live},
+        {QStringLiteral("attention"), source.attention},
+        {QStringLiteral("cards"), cards},
+        {QStringLiteral("accessible"), label + (source.attention ? QStringLiteral(", needs attention") : QString{}) + (source.card_count == 0 ? QString{} : QStringLiteral(", ") + QString::number(source.card_count) + QStringLiteral(" agents active"))},
+    };
+  }
+
+  qreal MachineChromeLayout::listRecords(Rect area, QList<QVariantMap>& records) {
+    using Geometry = MachineChromeGeometry;
+    float widest = 0;
+    std::size_t index = 0;
+
+    for (const auto& source : sources_) {
+      if (!source || source->active) {
+        continue;
+      }
+
+      const bool stacked = source->card_count != 0;
+
+      widest = std::max(widest, Geometry::listNaturalWidth(chrome_, measure(source->label.view(), false), stacked));
+      // The sidebar sizes the area to the rows that fit; the item clips the rest.
+      if (!area.empty()) {
+        records.append(listRecord(*source, Geometry::listRow(area, chrome_, index, stacked)));
+      }
+
+      ++index;
+    }
+
+    return std::ceil(widest) / density_;
+  }
+
+  QVariantMap MachineChromeLayout::factRecord(const Source& source, const MachineFacts::Geometry& geometry) const {
+    const auto glyph = MachineFacts::glyph(source.phase, source.attention);
+    const auto cpu = MachineFacts::cpu(source.phase, source.cpu_percent);
+    const auto role = MachineFacts::glyphInk(source.phase, source.attention);
+
+    return {
+        {QStringLiteral("key"), machineKey(source.token)},
+        {QStringLiteral("bounds"), toQRectF(geometry.bounds, density_)},
+        {QStringLiteral("glyphBounds"), toQRectF(geometry.glyph, density_)},
+        {QStringLiteral("labelBounds"), toQRectF(geometry.label, density_)},
+        {QStringLiteral("cpuBounds"), toQRectF(geometry.cpu, density_)},
+        {QStringLiteral("text"), toQString(source.label.view())},
+        {QStringLiteral("glyph"), toQString(glyph)},
+        {QStringLiteral("cpu"), toQString(cpu.view())},
+        {QStringLiteral("bold"), source.active},
+        {QStringLiteral("ink"), toQColor(controller_->configuration().theme.chromeColor(role))},
+        {QStringLiteral("accessible"), toQString(source.label.view()) + QStringLiteral(" ") + toQString(MachineFacts::phaseName(source.phase)) + (source.attention ? QStringLiteral(" attention") : QString{}) + (cpu.view().empty() ? QString{} : QStringLiteral(" ") + toQString(cpu.view()))},
+    };
+  }
+
+  qreal MachineChromeLayout::factsRecords(Rect area, QList<QVariantMap>& records) {
+    auto left = area.x;
+    bool any = false;
+
+    for (const auto& source : sources_) {
+      if (!source) {
+        continue;
+      }
+
+      if (any) {
+        left += chrome_.px(MachineFacts::machine_gap);
+      }
+
+      const auto cpu = MachineFacts::cpu(source->phase, source->cpu_percent);
+      const MachineFacts::Widths parts{.glyph = measure(MachineFacts::glyph(source->phase, source->attention), false), .label = measure(source->label.view(), source->active), .cpu = cpu.view().empty() ? 0 : measure(cpu.view(), false)};
+      const auto geometry = MachineFacts::geometry({.x = left, .y = area.y, .height = area.height}, chrome_, parts);
+
+      left = geometry.bounds.right();
+      if (!area.empty()) {
+        records.append(factRecord(*source, geometry));
+      }
+
+      any = true;
+    }
+
+    return (left - area.x) / density_;
+  }
+
+  void MachineChromeLayout::activate(const QString& identity) {
+    if (inlineFacts() || controller_ == nullptr || window() == nullptr || window() != controller_->window_) {
+      return;
+    }
+
+    bool delivered = false;
+
+    for (int index = 0; index < items_.rowCount(); ++index) {
+      if (items_.data(items_.index(index), ListModel::record_role).toMap().value(QStringLiteral("key")).toString() == identity) {
+        delivered = true;
+        break;
+      }
+    }
+
+    if (!delivered) {
+      return;
+    }
+
+    if (identity == QLatin1StringView("machine:picker")) {
+      controller_->execute(Application::Action::machine_picker);
+      return;
+    }
+
+    for (const auto& source : sources_) {
+      if (source && machineKey(source->token) == identity) {
+        const auto token = source->token;
+
+        controller_->applyInteraction([this, token] {
+          controller_->selectMachine(token);
+        });
+
+        return;
       }
     }
   }
 
-  if (incoming != sources_ || attention != attention_elsewhere_) {
-    sources_ = std::move(incoming);
-    attention_elsewhere_ = attention;
+  void MachineChromeLayout::updatePolish() {
+    try {
+      rebuild();
+    } catch (const std::exception&) {
+      items_.reconcile({});
+    }
+  }
+
+  void MachineChromeLayout::geometryChange(const QRectF& current, const QRectF& previous) {
+    QQuickItem::geometryChange(current, previous);
     invalidate();
   }
 
-  if (shown_ != shown) {
-    shown_ = shown;
-    invalidate();
-    emit shownChanged();
-  }
-}
-
-void MachineChromeLayout::invalidate() {
-  polish();
-}
-
-void MachineChromeLayout::bindWindow() {
-  disconnect(font_connection_);
-  catalog_ = nullptr;
-  fonts_.reset();
-  if (window() != nullptr) {
-    catalog_ = &WindowFontCatalog::forWindow(*window());
-    font_connection_ = connect(catalog_, &WindowFontCatalog::fontsChanged, this, &MachineChromeLayout::invalidate);
-  }
-
-  invalidate();
-}
-
-float MachineChromeLayout::measure(std::string_view text, bool emphasized) const {
-  const auto role = emphasized ? fonts::FontRole::emphasized : fonts::FontRole::regular;
-
-  // The window owns its catalog; this layout only observes it.
-  tbc::raw(catalog_.data())->request(text, role);
-  const auto size = mode_ == Mode::facts ? chrome_.small : chrome_.body;
-
-  return static_cast<float>(fonts::TextLayout<SystemAllocator>::measure(*fonts_, text, {.pixel_height = size, .preferred = role}));
-}
-
-QColor MachineChromeLayout::ink(std::string_view written) const {
-  const auto &theme = controller_->configuration().theme;
-  const auto parsed = ColorName::parse(written).value_or(ColorName::Value{PaletteRole::accent});
-  const auto *role = std::get_if<PaletteRole>(&parsed);
-  const auto value = role != nullptr ? theme.chrome[static_cast<std::size_t>(*role)] : std::get<CellColor>(parsed);
-
-  return fill(value);
-}
-
-QColor MachineChromeLayout::fill(CellColor value) const {
-  const auto &theme = controller_->configuration().theme;
-
-  return value.kind == CellColor::Kind::default_color ? QColor{Qt::transparent} : toQColor(theme.resolve(value, theme.background));
-}
-
-QVariantMap MachineChromeLayout::geometryRecord(const MachineChromeGeometry::Control &geometry) const {
-  return {
-      {QStringLiteral("bounds"), toQRectF(geometry.bounds, density_)},
-      {QStringLiteral("labelBounds"), toQRectF(geometry.label, density_)},
-      {QStringLiteral("discBounds"), toQRectF(geometry.disc, density_)},
-      {QStringLiteral("attentionBounds"), toQRectF(geometry.attention, density_)},
-      {QStringLiteral("radius"), geometry.radius / density_},
-  };
-}
-
-QVariantMap MachineChromeLayout::controlRecord(const Source &source, Rect bounds, float advance) const {
-  using Geometry = MachineChromeGeometry;
-  const bool segment = mode_ == Mode::segment;
-  const bool attention = segment ? attention_elsewhere_ : source.attention && !source.active;
-  const auto geometry = Geometry::control(bounds, chrome_, segment ? Geometry::Kind::segment : Geometry::Kind::switcher, advance, attention);
-  auto record = geometryRecord(geometry);
-
-  record.insert(QStringLiteral("key"), segment ? QStringLiteral("machine:picker") : machineKey(source.token));
-  record.insert(QStringLiteral("text"), toQString(source.label.view()) + (segment ? QStringLiteral(" ▾") : QString{}));
-  record.insert(QStringLiteral("accessible"), segment ? QStringLiteral("Switch machine") : toQString(source.label.view()));
-  record.insert(QStringLiteral("active"), !segment && source.active);
-  record.insert(QStringLiteral("bold"), segment || source.active);
-  record.insert(QStringLiteral("ink"), ink(source.color.view()));
-  record.insert(QStringLiteral("enabled"), segment || source.live);
-
-  return record;
-}
-
-void MachineChromeLayout::rebuild() {
-  if (controller_ == nullptr || window() == nullptr || !shown_ || height() <= 0) {
-    items_.reconcile({});
-    if (preferred_width_ != 0) {
-      preferred_width_ = 0;
-      emit layoutChanged();
-    }
-
-    return;
-  }
-
-  if (catalog_ == nullptr) {
-    bindWindow();
-  }
-
-  density_ = window()->effectiveDevicePixelRatio();
-  chrome_ = controller_->displayMetrics(density_).chrome;
-  fonts_ = ResidentFonts::shared(catalog_->collection());
-  const auto &theme = controller_->configuration().theme;
-  auto active_background = toQColor(theme.chromeColor(PaletteRole::text));
-  auto hover_background = active_background;
-
-  active_background.setAlphaF(gui::ChromeStyle::selection_alpha);
-  hover_background.setAlphaF(gui::ChromeStyle::hover_alpha);
-  QVariantMap style{
-      {QStringLiteral("activeBackground"), active_background},
-      {QStringLiteral("hoverBackground"), hover_background},
-      {QStringLiteral("activeText"), toQColor(theme.chromeColor(PaletteRole::text))},
-      {QStringLiteral("attention"), fill(theme.chrome[static_cast<std::size_t>(PaletteRole::yellow)])},
-      {QStringLiteral("pixelSize"), (mode_ == Mode::facts ? chrome_.small : chrome_.body) / density_},
-      {QStringLiteral("rowRadius"), chrome_.px(gui::ChromeStyle::control_radius) / density_},
-      {QStringLiteral("tileWidth"), chrome_.px(TabStripGeometry::tile_width) / density_},
-      {QStringLiteral("tileHeight"), chrome_.px(TabStripGeometry::tile_height) / density_},
-      {QStringLiteral("tileRadius"), chrome_.px(TabStripGeometry::tile_radius) / density_},
-  };
-
-  QList<QVariantMap> records;
-  const Rect area = isVisible() ? Rect{.width = static_cast<float>(width() * density_), .height = static_cast<float>(height() * density_)} : Rect{};
-  qreal preferred = 0;
-
-  switch (mode_) {
-  case Mode::facts:
-    preferred = factsRecords(area, records);
-    break;
-  case Mode::segment:
-    preferred = segmentRecords(area, records);
-    break;
-  case Mode::list:
-    preferred = listRecords(area, records);
-    break;
-  }
-
-  if (style != style_ || preferred != preferred_width_) {
-    style_ = std::move(style);
-    preferred_width_ = preferred;
-    emit layoutChanged();
-  }
-
-  items_.reconcile(std::move(records));
-}
-
-qreal MachineChromeLayout::segmentRecords(Rect area, QList<QVariantMap> &records) {
-  for (const auto &source : sources_) {
-    if (!source || !source->active) {
-      continue;
-    }
-
-    BoundedText<MachineLimits::label_bytes + segment_suffix.size()> text;
-
-    text.append(source->label.view());
-    text.append(segment_suffix);
-    const auto advance = measure(text.view(), true);
-
-    if (!area.empty()) {
-      records.append(controlRecord(*source, area, advance));
-    }
-
-    return MachineChromeGeometry::preferredSegment(chrome_, advance) / density_;
-  }
-
-  return 0;
-}
-
-void MachineChromeLayout::collectCards(Machines::Slot slot, Source &source) const {
-  const auto &client = controller_->clients_[slot];
-  if (!client || (*client)->phase != MachinePhase::connected || !(*client)->session.ready()) {
-    return;
-  }
-
-  const auto agents = std::span{(*client)->session.agents()};
-  std::array<std::size_t, AgentOrder::maximum_agents> chosen{};
-  std::size_t count = 0;
-
-  for (std::size_t index = 0; index < agents.size() && count < chosen.size(); ++index) {
-    if (AgentOrder::stacked(agents[index].status)) {
-      chosen[count++] = index;
+  void MachineChromeLayout::itemChange(ItemChange change, const ItemChangeData& data) {
+    QQuickItem::itemChange(change, data);
+    if (change == ItemSceneChange) {
+      bindWindow();
+    } else if (change == ItemDevicePixelRatioHasChanged || change == ItemVisibleHasChanged) {
+      invalidate();
     }
   }
-
-  const auto shown = std::min(count, stack_cards);
-
-  std::partial_sort(chosen.begin(), chosen.begin() + static_cast<std::ptrdiff_t>(shown), chosen.begin() + static_cast<std::ptrdiff_t>(count), [&](std::size_t left, std::size_t right) {
-    return AgentOrder::priority(agents[left]) < AgentOrder::priority(agents[right]);
-  });
-
-  for (std::size_t rank = 0; rank < shown; ++rank) {
-    const auto &agent = agents[chosen[rank]];
-
-    source.cards[rank] = {.provider = static_cast<std::uint8_t>(agent.provider_kind), .status = static_cast<std::uint8_t>(agent.status)};
-  }
-
-  source.card_count = shown;
-}
-
-QVariantMap MachineChromeLayout::listRecord(const Source &source, const MachineChromeGeometry::ListRow &row) const {
-  QVariantList cards;
-
-  for (std::size_t rank = 0; rank < source.card_count; ++rank) {
-    const auto card = source.cards[rank];
-    const auto status = static_cast<AgentStatus>(card.status);
-    const auto &pose = TabCardMotion::rest[rank];
-    auto record = applicationMarkRecord(runtime::describeProvider(static_cast<AgentProvider>(card.provider)).display_name);
-
-    record.insert(QStringLiteral("x"), chrome_.px(pose.x) / density_);
-    record.insert(QStringLiteral("y"), chrome_.px(pose.y) / density_);
-    record.insert(QStringLiteral("rotation"), pose.rotation);
-    record.insert(QStringLiteral("scale"), pose.scale);
-    record.insert(QStringLiteral("layer"), static_cast<int>(stack_cards - 1 - rank));
-    // The row has no focused pane, so whichever card waits on the person is tinted, front one included.
-    record.insert(QStringLiteral("attentionColor"), AgentOrder::attention(status) == AgentOrder::Attention::needs_input ? QString::fromLatin1(palette_names[static_cast<std::size_t>(AgentStatusPresentation::color(status))]) : QString{});
-    cards.append(std::move(record));
-  }
-
-  const auto label = toQString(source.label.view());
-
-  return {
-      {QStringLiteral("key"), machineKey(source.token)},
-      {QStringLiteral("bounds"), toQRectF(row.bounds, density_)},
-      {QStringLiteral("discBounds"), toQRectF(row.disc, density_)},
-      {QStringLiteral("labelBounds"), toQRectF(row.label, density_)},
-      {QStringLiteral("stackBounds"), toQRectF(row.stack, density_)},
-      {QStringLiteral("text"), label},
-      {QStringLiteral("ink"), ink(source.color.view())},
-      {QStringLiteral("enabled"), source.live},
-      {QStringLiteral("attention"), source.attention},
-      {QStringLiteral("cards"), cards},
-      {QStringLiteral("accessible"), label + (source.attention ? QStringLiteral(", needs attention") : QString{}) + (source.card_count == 0 ? QString{} : QStringLiteral(", ") + QString::number(source.card_count) + QStringLiteral(" agents active"))},
-  };
-}
-
-qreal MachineChromeLayout::listRecords(Rect area, QList<QVariantMap> &records) {
-  using Geometry = MachineChromeGeometry;
-  float widest = 0;
-  std::size_t index = 0;
-
-  for (const auto &source : sources_) {
-    if (!source || source->active) {
-      continue;
-    }
-
-    const bool stacked = source->card_count != 0;
-
-    widest = std::max(widest, Geometry::listNaturalWidth(chrome_, measure(source->label.view(), false), stacked));
-    // The sidebar sizes the area to the rows that fit; the item clips the rest.
-    if (!area.empty()) {
-      records.append(listRecord(*source, Geometry::listRow(area, chrome_, index, stacked)));
-    }
-
-    ++index;
-  }
-
-  return std::ceil(widest) / density_;
-}
-
-QVariantMap MachineChromeLayout::factRecord(const Source &source, const MachineFacts::Geometry &geometry) const {
-  const auto glyph = MachineFacts::glyph(source.phase, source.attention);
-  const auto cpu = MachineFacts::cpu(source.phase, source.cpu_percent);
-  const auto role = MachineFacts::glyphInk(source.phase, source.attention);
-
-  return {
-      {QStringLiteral("key"), machineKey(source.token)},
-      {QStringLiteral("bounds"), toQRectF(geometry.bounds, density_)},
-      {QStringLiteral("glyphBounds"), toQRectF(geometry.glyph, density_)},
-      {QStringLiteral("labelBounds"), toQRectF(geometry.label, density_)},
-      {QStringLiteral("cpuBounds"), toQRectF(geometry.cpu, density_)},
-      {QStringLiteral("text"), toQString(source.label.view())},
-      {QStringLiteral("glyph"), toQString(glyph)},
-      {QStringLiteral("cpu"), toQString(cpu.view())},
-      {QStringLiteral("bold"), source.active},
-      {QStringLiteral("ink"), toQColor(controller_->configuration().theme.chromeColor(role))},
-      {QStringLiteral("accessible"), toQString(source.label.view()) + QStringLiteral(" ") + toQString(MachineFacts::phaseName(source.phase)) + (source.attention ? QStringLiteral(" attention") : QString{}) + (cpu.view().empty() ? QString{} : QStringLiteral(" ") + toQString(cpu.view()))},
-  };
-}
-
-qreal MachineChromeLayout::factsRecords(Rect area, QList<QVariantMap> &records) {
-  auto left = area.x;
-  bool any = false;
-
-  for (const auto &source : sources_) {
-    if (!source) {
-      continue;
-    }
-
-    if (any) {
-      left += chrome_.px(MachineFacts::machine_gap);
-    }
-
-    const auto cpu = MachineFacts::cpu(source->phase, source->cpu_percent);
-    const MachineFacts::Widths parts{.glyph = measure(MachineFacts::glyph(source->phase, source->attention), false), .label = measure(source->label.view(), source->active), .cpu = cpu.view().empty() ? 0 : measure(cpu.view(), false)};
-    const auto geometry = MachineFacts::geometry({.x = left, .y = area.y, .height = area.height}, chrome_, parts);
-
-    left = geometry.bounds.right();
-    if (!area.empty()) {
-      records.append(factRecord(*source, geometry));
-    }
-
-    any = true;
-  }
-
-  return (left - area.x) / density_;
-}
-
-void MachineChromeLayout::activate(const QString &identity) {
-  if (inlineFacts() || controller_ == nullptr || window() == nullptr || window() != controller_->window_) {
-    return;
-  }
-
-  bool delivered = false;
-
-  for (int index = 0; index < items_.rowCount(); ++index) {
-    if (items_.data(items_.index(index), ListModel::record_role).toMap().value(QStringLiteral("key")).toString() == identity) {
-      delivered = true;
-      break;
-    }
-  }
-
-  if (!delivered) {
-    return;
-  }
-
-  if (identity == QLatin1StringView("machine:picker")) {
-    controller_->execute(Application::Action::machine_picker);
-    return;
-  }
-
-  for (const auto &source : sources_) {
-    if (source && machineKey(source->token) == identity) {
-      const auto token = source->token;
-
-      controller_->applyInteraction([this, token] {
-        controller_->selectMachine(token);
-      });
-
-      return;
-    }
-  }
-}
-
-void MachineChromeLayout::updatePolish() {
-  try {
-    rebuild();
-  } catch (const std::exception &) {
-    items_.reconcile({});
-  }
-}
-
-void MachineChromeLayout::geometryChange(const QRectF &current, const QRectF &previous) {
-  QQuickItem::geometryChange(current, previous);
-  invalidate();
-}
-
-void MachineChromeLayout::itemChange(ItemChange change, const ItemChangeData &data) {
-  QQuickItem::itemChange(change, data);
-  if (change == ItemSceneChange) {
-    bindWindow();
-  } else if (change == ItemDevicePixelRatioHasChanged || change == ItemVisibleHasChanged) {
-    invalidate();
-  }
-}
 
 }

@@ -3,18 +3,17 @@
 static_assert(true);
 #endif
 
-
-#include <cstring>
+#include "cell_layout.hpp"
+#include "telar_base/diagnostics/config.hpp"
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include "telar_base/diagnostics/config.hpp"
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fcntl.h>
-#include <sys/mman.h>
-#include "cell_layout.hpp"
-#include <cassert>
 #include <ghostty/vt.h>
+#include <sys/mman.h>
 
 import std;
 import telar.base.memory;
@@ -29,19 +28,19 @@ import telar.runtime.agents.screen_inference;
 
 namespace {
 
-struct Input {
-  const telar::Byte *bytes;
-  std::size_t length;
-  std::uint16_t columns;
-  std::uint16_t rows;
-  std::uint16_t chunk;
-  std::uint8_t provider;
-  std::uint8_t manifests;
-};
+  struct Input {
+    const telar::Byte* bytes;
+    std::size_t length;
+    std::uint16_t columns;
+    std::uint16_t rows;
+    std::uint16_t chunk;
+    std::uint8_t provider;
+    std::uint8_t manifests;
+  };
 
 }
 
-extern "C" std::uint32_t scan_screen(const Input *input) {
+extern "C" std::uint32_t scan_screen(const Input* input) {
   using namespace telar;
   using namespace telar::runtime;
   try {

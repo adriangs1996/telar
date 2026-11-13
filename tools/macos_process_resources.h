@@ -39,13 +39,13 @@ static inline ProcessResources process_resources(pid_t pid) {
   result.before_ns = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
   errno = 0;
   result.result =
-      proc_pid_rusage(pid, RUSAGE_INFO_V4, (rusage_info_t *)&result.usage);
+      proc_pid_rusage(pid, RUSAGE_INFO_V4, (rusage_info_t*)&result.usage);
   result.error = result.result == 0 ? 0 : errno;
   result.after_ns = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
   return result;
 }
 
-static inline bool process_resources_match(const ProcessResources *before, const ProcessResources *after) {
+static inline bool process_resources_match(const ProcessResources* before, const ProcessResources* after) {
   return before->timebase_result == KERN_SUCCESS &&
          after->timebase_result == KERN_SUCCESS && before->timebase.numer > 0 &&
          before->timebase.denom > 0 &&
@@ -60,8 +60,7 @@ static inline bool process_resources_match(const ProcessResources *before, const
              after->usage.ri_proc_start_abstime &&
          before->usage.ri_proc_exit_abstime == 0 &&
          after->usage.ri_proc_exit_abstime == 0 &&
-         memcmp(before->usage.ri_uuid, after->usage.ri_uuid,
-                sizeof(before->usage.ri_uuid)) == 0 &&
+         memcmp(before->usage.ri_uuid, after->usage.ri_uuid, sizeof(before->usage.ri_uuid)) == 0 &&
          before->usage.ri_user_time <= after->usage.ri_user_time &&
          before->usage.ri_system_time <= after->usage.ri_system_time &&
          before->usage.ri_pkg_idle_wkups <= after->usage.ri_pkg_idle_wkups &&

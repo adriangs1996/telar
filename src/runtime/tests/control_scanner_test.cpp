@@ -13,7 +13,7 @@ static void require(bool condition) {
 }
 
 static std::span<const std::uint8_t> bytes(std::string_view input) {
-  return {reinterpret_cast<const std::uint8_t *>(input.data()), input.size()};
+  return {reinterpret_cast<const std::uint8_t*>(input.data()), input.size()};
 }
 
 static void retainedControlBoundaries() {

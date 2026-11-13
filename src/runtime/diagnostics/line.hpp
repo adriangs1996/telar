@@ -42,7 +42,7 @@ namespace telar::runtime::diagnostics {
       append(value);
     }
 
-    void timing(std::string_view average_name, std::string_view maximum_name, const Timing &value) {
+    void timing(std::string_view average_name, std::string_view maximum_name, const Timing& value) {
       field(average_name, value.average() / 1000);
       field(maximum_name, value.maximum_ns / 1000);
     }

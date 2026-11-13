@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-
 #include <cstdint>
 
 import std;
@@ -17,12 +16,12 @@ using namespace telar::runtime;
 
 namespace {
 
-String<SystemAllocator> escaped(SystemAllocator &memory, std::string_view text, JsonEscapes escapes) {
-  String<SystemAllocator> output{AllocatorRef<char, SystemAllocator>{memory}};
+  String<SystemAllocator> escaped(SystemAllocator& memory, std::string_view text, JsonEscapes escapes) {
+    String<SystemAllocator> output{AllocatorRef<char, SystemAllocator>{memory}};
 
-  appendJsonText(output, text, escapes);
-  return output;
-}
+    appendJsonText(output, text, escapes);
+    return output;
+  }
 
 }
 

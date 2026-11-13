@@ -3,20 +3,11 @@
 static_assert(true);
 #endif
 
-
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include <array>
-#include <charconv>
-#include <concepts>
-#include <cstddef>
-#include <cstring>
-#include <stdexcept>
-#include <string_view>
-#include <system_error>
 #include "../qt/command_process.hpp"
 #include "../qt/sound_player.hpp"
 #include "../qt/system_notifier.hpp"
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
@@ -26,90 +17,97 @@ static_assert(true);
 #include <QString>
 #include <QStringList>
 #include <QtCore/qtypes.h>
+#include <array>
+#include <charconv>
+#include <concepts>
+#include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <exception>
 #include <iostream>
 #include <optional>
+#include <stdexcept>
+#include <string_view>
+#include <system_error>
 #include <utility>
 
 #include "qt/command_process.hpp"
 #include "qt/sound_player.hpp"
 #include "qt/system_notifier.hpp"
 
-
 import telar.gui.application.host_effects;
 
 namespace {
 
-using namespace telar::gui;
-using namespace telar::gui::qt;
-using telar::AgentSound;
+  using namespace telar::gui;
+  using namespace telar::gui::qt;
+  using telar::AgentSound;
 
-enum class ExitStatus : std::uint8_t {
-  success,
-  failed,
-  usage,
-};
-enum class Argument : std::uint8_t {
-  executable,
-  mode,
-  title,
-  message,
-  count,
-};
+  enum class ExitStatus : std::uint8_t {
+    success,
+    failed,
+    usage,
+  };
+  enum class Argument : std::uint8_t {
+    executable,
+    mode,
+    title,
+    message,
+    count,
+  };
 
-QString failureText(std::optional<CommandFailure> failure) {
-  if (!failure) {
-    return QStringLiteral("none");
+  QString failureText(std::optional<CommandFailure> failure) {
+    if (!failure) {
+      return QStringLiteral("none");
+    }
+
+    switch (*failure) {
+    case CommandFailure::launch:
+      return QStringLiteral("launch");
+    case CommandFailure::process:
+      return QStringLiteral("process");
+    case CommandFailure::timeout:
+      return QStringLiteral("timeout");
+    case CommandFailure::output_limit:
+      return QStringLiteral("output-limit");
+    }
+
+    return QStringLiteral("unknown");
   }
 
-  switch (*failure) {
-  case CommandFailure::launch:
-    return QStringLiteral("launch");
-  case CommandFailure::process:
-    return QStringLiteral("process");
-  case CommandFailure::timeout:
-    return QStringLiteral("timeout");
-  case CommandFailure::output_limit:
-    return QStringLiteral("output-limit");
-  }
+  class Observer {
+  public:
+    explicit Observer(QString mode)
+        : mode_(std::move(mode)) {
+      elapsed_.start();
+    }
 
-  return QStringLiteral("unknown");
+    void commandFinished(std::optional<CommandFailure> failure) const {
+      const QJsonObject result{
+          {QStringLiteral("mode"), mode_},
+          {QStringLiteral("succeeded"), !failure},
+          {QStringLiteral("failure"), failureText(failure)},
+          {QStringLiteral("elapsed_ms"), elapsed_.elapsed()},
+      };
+
+      const auto output = QJsonDocument{result}.toJson(QJsonDocument::Compact);
+
+      std::cout << output.constData() << '\n';
+      QCoreApplication::exit(static_cast<int>(failure ? ExitStatus::failed : ExitStatus::success));
+    }
+
+    void soundPlaybackFinished(std::optional<CommandFailure> failure) const {
+      commandFinished(failure);
+    }
+
+  private:
+    QString mode_;
+    QElapsedTimer elapsed_;
+  };
+
 }
 
-class Observer {
-public:
-  explicit Observer(QString mode)
-      : mode_(std::move(mode)) {
-    elapsed_.start();
-  }
-
-  void commandFinished(std::optional<CommandFailure> failure) const {
-    const QJsonObject result{
-        {QStringLiteral("mode"), mode_},
-        {QStringLiteral("succeeded"), !failure},
-        {QStringLiteral("failure"), failureText(failure)},
-        {QStringLiteral("elapsed_ms"), elapsed_.elapsed()},
-    };
-
-    const auto output = QJsonDocument{result}.toJson(QJsonDocument::Compact);
-
-    std::cout << output.constData() << '\n';
-    QCoreApplication::exit(static_cast<int>(failure ? ExitStatus::failed : ExitStatus::success));
-  }
-
-  void soundPlaybackFinished(std::optional<CommandFailure> failure) const {
-    commandFinished(failure);
-  }
-
-private:
-  QString mode_;
-  QElapsedTimer elapsed_;
-};
-
-}
-
-int main(int argc, char **argv) try {
+int main(int argc, char** argv) try {
   const QCoreApplication application{argc, argv};
   const auto arguments = QCoreApplication::arguments();
   const auto mode = arguments.value(static_cast<qsizetype>(Argument::mode));
@@ -132,7 +130,7 @@ int main(int argc, char **argv) try {
   }
 
   return QCoreApplication::exec();
-} catch (const std::exception &error) {
+} catch (const std::exception& error) {
   std::cerr << error.what() << '\n';
 
   return static_cast<int>(ExitStatus::failed);

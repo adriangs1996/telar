@@ -3,9 +3,8 @@
 static_assert(true);
 #endif
 
-
-#include <sqlite3.h>
 #include <cstdio>
+#include <sqlite3.h>
 
 import std;
 import telar.base.text;
@@ -40,7 +39,7 @@ static AgentSessionFileKind fileKind(AgentProvider provider) {
                                                                                                                         : AgentSessionFileKind::cursor_meta;
 }
 
-static void writeTitle(const std::string &path, AgentProvider provider, std::string_view title) {
+static void writeTitle(const std::string& path, AgentProvider provider, std::string_view title) {
   if (provider == AgentProvider::codex) {
     Database database{path.c_str()};
 
@@ -71,7 +70,7 @@ static void writeTitle(const std::string &path, AgentProvider provider, std::str
   }
 }
 
-static void waitTitle(ProtocolPeer &peer, std::string_view title, AgentTitleSource source) {
+static void waitTitle(ProtocolPeer& peer, std::string_view title, AgentTitleSource source) {
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
 
   while (std::chrono::steady_clock::now() < deadline) {
@@ -86,7 +85,7 @@ static void waitTitle(ProtocolPeer &peer, std::string_view title, AgentTitleSour
   throw std::runtime_error{"Session title did not become " + std::string{title}};
 }
 
-static int child(char **arguments) {
+static int child(char** arguments) {
   const auto provider = providerFor(arguments[6]);
   const auto pane = std::stoull(std::getenv("TELAR_PANE_ID"));
   const auto generation = std::stoull(std::getenv("TELAR_PANE_GENERATION"));
@@ -148,7 +147,7 @@ static int child(char **arguments) {
   return 0;
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   try {
     if (argc == 7 && std::string_view{argv[1]} == "--child") {
       return child(argv);
@@ -178,7 +177,7 @@ int main(int argc, char **argv) {
 
     std::cout << result.rdbuf();
     return 0;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     if (argc == 7) {
       std::ofstream{argv[5]} << error.what() << '\n';
     }

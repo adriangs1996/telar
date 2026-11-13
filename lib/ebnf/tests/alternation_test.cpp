@@ -1,14 +1,14 @@
 #ifdef __clangd__
 static_assert(true);
 #endif
-#include <tbc/view.hpp>
 #include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <stdexcept>
 #include <string_view>
-#include <optional>
+#include <tbc/view.hpp>
 #include <utility>
 #include <vector>
 
@@ -17,6 +17,7 @@ static_assert(true);
 #include <gtest/gtest.h>
 
 import telar.ebnf.parser;
+
 namespace {
   TEST(Alternation, SingleConcatenationUnwraps) {
     auto tokenizer = ebnf::Lexer{};

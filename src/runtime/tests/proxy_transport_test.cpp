@@ -3,21 +3,20 @@
 static_assert(true);
 #endif
 
-
-#include <cstdint>
-#include <cstring>
-#include <netinet/in.h>
-#include <sys/socket.h>
 #include <arpa/inet.h>
-#include <cstddef>
 #include <cerrno>
 #include <csignal>
-#include <netinet/tcp.h>
+#include <cstddef>
+#include <cstdint>
 #include <cstdlib>
-#include <unistd.h>
-#include <pthread.h>
+#include <cstring>
 #include <netdb.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <poll.h>
+#include <pthread.h>
+#include <sys/socket.h>
+#include <unistd.h>
 #if (defined(__APPLE__))
 #include <sys/event.h>
 #endif
@@ -111,7 +110,7 @@ static void testConnectHead() {
 
 // Moves what one socket holds to another through a relay direction.
 template <typename Direction>
-static void relaySockets(Direction &direction, int source, int destination) {
+static void relaySockets(Direction& direction, int source, int destination) {
   SocketStream incoming{source};
   SocketStream outgoing{destination};
 
@@ -187,7 +186,7 @@ static void testRelay() {
 
 class LoopbackResolver {
 public:
-  static ResolutionSummary resolve(const char *, std::span<NetworkAddress> addresses) noexcept {
+  static ResolutionSummary resolve(const char*, std::span<NetworkAddress> addresses) noexcept {
     sockaddr_in6 unavailable{};
 
 #if defined(__APPLE__)
@@ -195,7 +194,7 @@ public:
 #endif
     unavailable.sin6_family = AF_INET6;
     unavailable.sin6_addr = in6addr_loopback;
-    addresses[0] = *NetworkAddress::copy(reinterpret_cast<const sockaddr *>(&unavailable), sizeof(unavailable));
+    addresses[0] = *NetworkAddress::copy(reinterpret_cast<const sockaddr*>(&unavailable), sizeof(unavailable));
 
     sockaddr_in loopback{};
 
@@ -204,7 +203,7 @@ public:
 #endif
     loopback.sin_family = AF_INET;
     loopback.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    addresses[1] = *NetworkAddress::copy(reinterpret_cast<const sockaddr *>(&loopback), sizeof(loopback));
+    addresses[1] = *NetworkAddress::copy(reinterpret_cast<const sockaddr*>(&loopback), sizeof(loopback));
     return {.found = 2};
   }
 };
@@ -232,13 +231,13 @@ static void testDuplexWorkBound() {
 
 class FailedResolver {
 public:
-  static ResolutionSummary resolve(const char *, std::span<NetworkAddress>) noexcept {
+  static ResolutionSummary resolve(const char*, std::span<NetworkAddress>) noexcept {
     return {.error = EAI_NONAME};
   }
 };
 
 template <typename Handshake>
-static void finishHandshake(Handshake &handshake) {
+static void finishHandshake(Handshake& handshake) {
   const auto deadline = ProxyConnectionPolicy::Clock::now() + std::chrono::seconds{5};
 
   while (handshake.state() != Handshake::State::closed && handshake.state() != Handshake::State::established) {
@@ -250,11 +249,11 @@ static void finishHandshake(Handshake &handshake) {
   }
 }
 
-static std::string authorization(const ProxySecret &secret) {
+static std::string authorization(const ProxySecret& secret) {
   std::array<char, ProxySecret::hexadecimal_bytes> hexadecimal;
   const auto user = "telar:" + std::string{*secret.formatHexadecimal(hexadecimal)};
   std::array<char, 128> encoded;
-  const auto count = base64::encode({reinterpret_cast<const std::uint8_t *>(user.data()), user.size()}, encoded);
+  const auto count = base64::encode({reinterpret_cast<const std::uint8_t*>(user.data()), user.size()}, encoded);
 
   check(count.has_value());
   return "Proxy-Authorization: Basic " + std::string{encoded.data(), *count} + "\r\n";
@@ -437,7 +436,7 @@ static void testSocketWatch() {
 
   try {
     watch.update(poller, reused_descriptor, 8192, {.readable = true, .writable = true});
-  } catch (const SystemError &error) {
+  } catch (const SystemError& error) {
     rejected = error.code() == EBADF;
   }
 

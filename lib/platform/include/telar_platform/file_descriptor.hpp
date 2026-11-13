@@ -5,55 +5,55 @@
 
 namespace telar::runtime {
 
-class FileDescriptor {
-public:
-  explicit FileDescriptor(int descriptor = -1) noexcept
-      : descriptor_(descriptor) {}
+  class FileDescriptor {
+  public:
+    explicit FileDescriptor(int descriptor = -1) noexcept
+        : descriptor_(descriptor) {}
 
-  ~FileDescriptor() {
-    reset();
-  }
-
-  FileDescriptor(const FileDescriptor &) = delete;
-  FileDescriptor &operator=(const FileDescriptor &) = delete;
-
-  FileDescriptor(FileDescriptor &&other) noexcept
-      : descriptor_(other.release()) {}
-
-  FileDescriptor &operator=(FileDescriptor &&other) noexcept {
-    if (this != &other) {
-      reset(other.release());
+    ~FileDescriptor() {
+      reset();
     }
 
-    return *this;
-  }
+    FileDescriptor(const FileDescriptor&) = delete;
+    FileDescriptor& operator=(const FileDescriptor&) = delete;
 
-  int get() const noexcept {
-    return descriptor_;
-  }
+    FileDescriptor(FileDescriptor&& other) noexcept
+        : descriptor_(other.release()) {}
 
-  explicit operator bool() const noexcept {
-    return descriptor_ >= 0;
-  }
+    FileDescriptor& operator=(FileDescriptor&& other) noexcept {
+      if (this != &other) {
+        reset(other.release());
+      }
 
-  int release() noexcept {
-    return std::exchange(descriptor_, -1);
-  }
-
-  void reset(int descriptor = -1) noexcept {
-    if (descriptor_ >= 0) {
-      ::close(descriptor_);
+      return *this;
     }
 
-    descriptor_ = descriptor;
-  }
+    int get() const noexcept {
+      return descriptor_;
+    }
 
-private:
-  int descriptor_;
-};
+    explicit operator bool() const noexcept {
+      return descriptor_ >= 0;
+    }
 
-void setNonblocking(int descriptor);
-void setCloseOnExec(int descriptor);
-[[nodiscard]] FileDescriptor duplicateCloseOnExec(int descriptor, int minimum);
+    int release() noexcept {
+      return std::exchange(descriptor_, -1);
+    }
+
+    void reset(int descriptor = -1) noexcept {
+      if (descriptor_ >= 0) {
+        ::close(descriptor_);
+      }
+
+      descriptor_ = descriptor;
+    }
+
+  private:
+    int descriptor_;
+  };
+
+  void setNonblocking(int descriptor);
+  void setCloseOnExec(int descriptor);
+  [[nodiscard]] FileDescriptor duplicateCloseOnExec(int descriptor, int minimum);
 
 }

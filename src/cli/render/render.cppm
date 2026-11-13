@@ -40,17 +40,17 @@ export namespace telar::runtime::cli::render_command {
     std::optional<std::uint16_t> width;
     bool pager = false;
 
-    static RenderOptions parse(std::span<char *const> words);
+    static RenderOptions parse(std::span<char* const> words);
   };
 
   template <Allocator Memory>
-  int run(Memory &memory, const RenderOptions &options);
+  int run(Memory& memory, const RenderOptions& options);
 
 }
 
 namespace telar::runtime::cli::render_command {
 
-  inline RenderOptions RenderOptions::parse(std::span<char *const> words) {
+  inline RenderOptions RenderOptions::parse(std::span<char* const> words) {
     if (words.empty()) {
       throw std::invalid_argument{"MissingRenderKind"};
     }
@@ -125,7 +125,7 @@ namespace telar::runtime::cli::render_command {
   // Reads all of descriptor, up to one byte past the limit so an oversized
   // source is detected without reading the rest of it.
   template <Allocator Memory>
-  bool readSource(int descriptor, String<Memory> &source) {
+  bool readSource(int descriptor, String<Memory>& source) {
     constexpr std::size_t chunk = 64 * 1024;
     const auto limit = render::markdown::max_source_bytes + 1;
 
@@ -174,8 +174,8 @@ namespace telar::runtime::cli::render_command {
     explicit Viewer(int descriptor) noexcept
         : descriptor_(descriptor) {}
 
-    Viewer(const Viewer &) = delete;
-    Viewer &operator=(const Viewer &) = delete;
+    Viewer(const Viewer&) = delete;
+    Viewer& operator=(const Viewer&) = delete;
 
     ~Viewer() {
       if (entered_) {
@@ -241,13 +241,13 @@ namespace telar::runtime::cli::render_command {
   }
 
   inline bool insidePane() noexcept {
-    const char *pane = std::getenv("TELAR_PANE_ID");
+    const char* pane = std::getenv("TELAR_PANE_ID");
 
     return pane != nullptr && *pane != '\0';
   }
 
   template <Allocator Memory>
-  int showPager(Memory &memory, const render::Document<Memory> &document, std::string_view name) {
+  int showPager(Memory& memory, const render::Document<Memory>& document, std::string_view name) {
     const auto descriptor = ::open("/dev/tty", O_RDWR | O_CLOEXEC | O_NOCTTY);
     if (descriptor < 0) {
       report("native rendering needs a controlling terminal; use --format ansi");
@@ -290,7 +290,7 @@ namespace telar::runtime::cli::render_command {
   }
 
   template <Allocator Memory>
-  int run(Memory &memory, const RenderOptions &options) {
+  int run(Memory& memory, const RenderOptions& options) {
     const bool from_stdin = options.path.empty() || options.path == "-";
     if (from_stdin && ::isatty(STDIN_FILENO) == 1) {
       report("give a FILE or pipe the content to standard input");

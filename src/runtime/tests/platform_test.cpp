@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-
 #include <cstdint>
 #if (defined(__APPLE__))
 #include <sys/event.h>
@@ -32,14 +31,14 @@ static_assert(true);
 #if (defined(__linux__))
 #include <unistd.h>
 #endif
-#include <sys/stat.h>
-#include <sys/un.h>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fcntl.h>
 #include <limits.h>
-#include <cstring>
+#include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/un.h>
 #include <unistd.h>
 #if (defined(__APPLE__))
 #include <libproc.h>
@@ -50,14 +49,14 @@ static_assert(true);
 #if (!(defined(__APPLE__)))
 #include <sys/syscall.h>
 #endif
-#include <cstddef>
 #include <cassert>
+#include <cerrno>
 #include <csignal>
+#include <cstddef>
 #include <poll.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
 #include <termios.h>
-#include <cerrno>
 
 import std;
 import telar.base.memory;
@@ -74,14 +73,11 @@ import telar.runtime.transport.connection;
 using namespace telar;
 using namespace telar::runtime;
 
-static void testSpawn(SystemAllocator &memory) {
+static void testSpawn(SystemAllocator& memory) {
   const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", "printf 'spawn-ok'"};
-  Command command{memory, Launch{.cwd = "/tmp",
-                                 .arguments = arguments}};
+  Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
   PtyProcess process{command.specification(TerminalSize{80, 24, 0, 0})};
-  pollfd ready{.fd = process.descriptor(),
-               .events = POLLIN,
-               .revents = 0};
+  pollfd ready{.fd = process.descriptor(), .events = POLLIN, .revents = 0};
 
   check(::poll(&ready, 1, 2000) == 1);
   std::array<char, 64> output{};
@@ -92,19 +88,18 @@ static void testSpawn(SystemAllocator &memory) {
 
   bool rejected = false;
   const std::array<std::string_view, 1> missing{"/does/not/exist"};
-  Command missing_command{memory, Launch{.cwd = "/tmp",
-                                         .arguments = missing}};
+  Command missing_command{memory, Launch{.cwd = "/tmp", .arguments = missing}};
 
   try {
     PtyProcess invalid{missing_command.specification(TerminalSize{80, 24, 0, 0})};
-  } catch (const SystemError &error) {
+  } catch (const SystemError& error) {
     rejected = error.code() == ENOENT;
   }
 
   check(rejected);
 }
 
-static void testForegroundProcessGroup(SystemAllocator &memory) {
+static void testForegroundProcessGroup(SystemAllocator& memory) {
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
   Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
   PtyProcess process{command.specification(TerminalSize{80, 24, 0, 0})};
@@ -146,17 +141,20 @@ static void testUnreadOutputShutdown() {
 
 // Dispatches a connection's frames as the runtime does: lent out of it while the visitor runs.
 template <typename Link, typename Visitor>
-static bool dispatchFrames(SystemAllocator &memory, Link &connection, Visitor &&visit) {
+static bool dispatchFrames(SystemAllocator& memory, Link& connection, Visitor&& visit) {
   typename Link::Frames frames{memory};
 
   connection.exchange(frames);
-  const bool remaining = Link::dispatch(frames, [&] { return !connection.read_paused; }, visit);
+  const bool remaining = Link::dispatch(frames, [&] {
+    return !connection.read_paused;
+  },
+      visit);
 
   connection.exchange(frames);
   return remaining;
 }
 
-static void testFraming(SystemAllocator &memory) {
+static void testFraming(SystemAllocator& memory) {
   int sockets[2];
 
   check(::socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) == 0);
@@ -173,7 +171,7 @@ static void testFraming(SystemAllocator &memory) {
   check(::write(peer.get(), prefix.data(), 2) == 2);
   check(connection.read());
   bool received = false;
-  const auto dispatch = [&](std::span<const Byte> payload, DecodeStorage &) {
+  const auto dispatch = [&](std::span<const Byte> payload, DecodeStorage&) {
     received = true;
     check(HandshakeCodec::decode<ClientHello>(payload).schema == handshake::schema_id);
     connection.send(RequestCompleted{.request_id = 17});
@@ -204,7 +202,7 @@ static void testFraming(SystemAllocator &memory) {
 
   check(connection.read());
   unsigned requests = 0;
-  const auto pause_after_request = [&](std::span<const Byte> payload, DecodeStorage &) {
+  const auto pause_after_request = [&](std::span<const Byte> payload, DecodeStorage&) {
     check(std::ranges::equal(payload, hello));
     ++requests;
     connection.read_paused = true;
@@ -287,7 +285,7 @@ static void testSocketOwnership() {
 
     try {
       LocalListener duplicate{path};
-    } catch (const SystemError &) {
+    } catch (const SystemError&) {
       rejected = true;
     }
 
@@ -309,7 +307,7 @@ static void testSocketOwnership() {
 
   try {
     LocalListener listener{path};
-  } catch (const SystemError &) {
+  } catch (const SystemError&) {
     rejected = true;
   }
 
@@ -340,7 +338,7 @@ static void testDisconnectedSocketClients() {
       FileDescriptor abandoned{::socket(AF_UNIX, SOCK_STREAM, 0)};
 
       check(static_cast<bool>(abandoned));
-      check(::connect(abandoned.get(), reinterpret_cast<const sockaddr *>(&address), sizeof(address)) == 0);
+      check(::connect(abandoned.get(), reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0);
       abandoned.reset();
 
       try {
@@ -350,14 +348,14 @@ static void testDisconnectedSocketClients() {
 
           check(::recv(closed.get(), &byte, sizeof(byte), 0) == 0);
         }
-      } catch (const SystemError &) {
+      } catch (const SystemError&) {
         setup_failed = true;
       }
 
       FileDescriptor client{::socket(AF_UNIX, SOCK_STREAM, 0)};
 
       check(static_cast<bool>(client));
-      check(::connect(client.get(), reinterpret_cast<const sockaddr *>(&address), sizeof(address)) == 0);
+      check(::connect(client.get(), reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0);
       auto connected = listener.accept();
 
       check(static_cast<bool>(connected));
@@ -408,7 +406,7 @@ static void testChildExitNotification() {
     bool observed = false;
 
     while (!observed && std::chrono::steady_clock::now() < deadline) {
-      for (const auto &event : poller.wait(std::chrono::milliseconds{100}, ready)) {
+      for (const auto& event : poller.wait(std::chrono::milliseconds{100}, ready)) {
         observed |= event.kind == EventKind::signal && event.descriptor == SIGCHLD;
       }
     }
@@ -423,7 +421,7 @@ static void testChildExitNotification() {
   check(::sigaction(SIGCHLD, &previous, nullptr) == 0);
 }
 
-static void testCommandHelpers(SystemAllocator &memory) {
+static void testCommandHelpers(SystemAllocator& memory) {
   std::array<char, PATH_MAX> found;
 
   check(findExecutable("/nonexistent-telar:/bin", "sh", found) && std::string_view{found.data()} == "/bin/sh");
@@ -442,17 +440,22 @@ static void testCommandHelpers(SystemAllocator &memory) {
   std::string error;
   const std::array<std::string_view, 2> input{"in", "put"};
   const auto status = process.streamWithInput(
-      command, std::chrono::steady_clock::now() + std::chrono::seconds{5}, input,
+      command,
+      std::chrono::steady_clock::now() + std::chrono::seconds{5},
+      input,
       [&](std::span<const Byte> bytes) {
-        output.append(reinterpret_cast<const char *>(bytes.data()), bytes.size());
+        output.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
         return true;
       },
-      [&](std::span<const Byte> bytes) { error.append(reinterpret_cast<const char *>(bytes.data()), bytes.size()); });
+      [&](std::span<const Byte> bytes) {
+        error.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+      }
+  );
 
   check(status == 0 && output == "input" && error == "error\n");
 }
 
-static void testHardenedGit(SystemAllocator &memory) {
+static void testHardenedGit(SystemAllocator& memory) {
   using Git = HardenedGit<SystemAllocator>;
 
   check(Git::honorsLazyFetchControl("git version 2.45.0\n") && Git::honorsLazyFetchControl("git version 3.0") && Git::honorsLazyFetchControl("git version 2.50.1 (Apple Git-155)"));

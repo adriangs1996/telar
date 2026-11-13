@@ -1,12 +1,12 @@
 
-#include <unistd.h>
 #include <cstdio>
+#include <unistd.h>
 import std;
 import telar.runtime.tests.agent_oracle;
 
 using namespace telar;
 
-static ProtocolPeer *notifications = nullptr;
+static ProtocolPeer* notifications = nullptr;
 
 static void paint(std::string_view text) {
   while (!text.empty()) {
@@ -19,7 +19,7 @@ static void paint(std::string_view text) {
   }
 }
 
-static void waitState(ProtocolPeer &peer, AgentStatus status, AgentSource source, bool use_notifications = true) {
+static void waitState(ProtocolPeer& peer, AgentStatus status, AgentSource source, bool use_notifications = true) {
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
 
   for (;;) {
@@ -38,7 +38,7 @@ static void waitState(ProtocolPeer &peer, AgentStatus status, AgentSource source
   }
 }
 
-static int child(char **arguments) {
+static int child(char** arguments) {
   ProtocolPeer peer{arguments[2]};
   const auto pane = std::stoull(std::getenv("TELAR_PANE_ID"));
   const auto generation = std::stoull(std::getenv("TELAR_PANE_GENERATION"));
@@ -105,7 +105,7 @@ static int child(char **arguments) {
   return 0;
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   try {
     if (argc == 7 && std::string_view{argv[1]} == "--child") {
       return child(argv);
@@ -138,7 +138,7 @@ int main(int argc, char **argv) {
 
     std::cout << result.rdbuf();
     return 0;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     if (argc == 7) {
       std::ofstream{argv[5]} << error.what() << '\n';
     }

@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-
 #include <cstdint>
 #include <ctime>
 
@@ -12,13 +11,13 @@ import telar.gui.platform.notification_commands;
 
 namespace {
 
-std::int64_t epochMilliseconds() {
-  return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-}
+  std::int64_t epochMilliseconds() {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+  }
 
 }
 
-int main(int count, char *const *arguments) try {
+int main(int count, char* const* arguments) try {
   if (count != 2) {
     throw std::invalid_argument{"Expected a UTC offset in minutes"};
   }
@@ -39,7 +38,7 @@ int main(int count, char *const *arguments) try {
   }
 
   return 0;
-} catch (const std::exception &error) {
+} catch (const std::exception& error) {
   std::cerr << error.what() << '\n';
 
   return 1;

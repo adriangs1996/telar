@@ -9,15 +9,15 @@ using namespace telar;
 static constexpr TerminalSize size{80, 24, 0, 0};
 static constexpr std::array<std::string_view, 1> arguments{"/bin/cat"};
 
-static PaneOpened openTab(ProtocolPeer &peer) {
+static PaneOpened openTab(ProtocolPeer& peer) {
   return peer.exchange<PaneOpened>(CreateWorkspace{.request_id = 1, .size = size, .name = "Held", .launch = {.cwd = "/tmp", .arguments = arguments}});
 }
 
-static void setHold(ProtocolPeer &peer, TabLocation location, bool held, std::ostream &dump) {
+static void setHold(ProtocolPeer& peer, TabLocation location, bool held, std::ostream& dump) {
   peer.record(dump, peer.exchange<RequestCompleted>(HoldTab{.request_id = 2, .location = location, .held = held}));
 }
 
-static void expectEmpty(ProtocolPeer &peer, TabLocation location, std::ostream &dump) {
+static void expectEmpty(ProtocolPeer& peer, TabLocation location, std::ostream& dump) {
   auto snapshot = peer.exchange<TabSnapshot>(RequestTabSnapshot{3, location});
 
   check(snapshot.panes.empty());
@@ -25,18 +25,18 @@ static void expectEmpty(ProtocolPeer &peer, TabLocation location, std::ostream &
   peer.record(dump, snapshot);
 }
 
-static void closePane(ProtocolPeer &peer, std::uint64_t pane) {
+static void closePane(ProtocolPeer& peer, std::uint64_t pane) {
   peer.send(ClosePane{.request_id = 9, .pane_id = pane});
   check(peer.receive<PaneExited>().pane_id == pane);
 }
 
-static void expectRemoved(ProtocolPeer &peer, TabLocation location, std::ostream &dump) {
+static void expectRemoved(ProtocolPeer& peer, TabLocation location, std::ostream& dump) {
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
 
   for (;;) {
     peer.send(RequestTabSnapshot{4, location});
     const auto reply = peer.receiveAny<TabSnapshot, RequestFailed>();
-    if (const auto *failure = std::get_if<RequestFailed>(&reply)) {
+    if (const auto* failure = std::get_if<RequestFailed>(&reply)) {
       check(failure->code == FailureCode::tab_not_found && failure->message == "tab not found");
       peer.record(dump, *failure);
       return;
@@ -47,7 +47,7 @@ static void expectRemoved(ProtocolPeer &peer, TabLocation location, std::ostream
   }
 }
 
-static void checkRelease(const char *socket, std::ostream &dump) {
+static void checkRelease(const char* socket, std::ostream& dump) {
   ProtocolPeer owner{socket};
   ProtocolPeer holder{socket};
   const auto opened = openTab(owner);
@@ -76,7 +76,7 @@ static void checkRelease(const char *socket, std::ostream &dump) {
   holder.record(dump, missing);
 }
 
-static void checkDisconnect(const char *socket, std::ostream &dump) {
+static void checkDisconnect(const char* socket, std::ostream& dump) {
   ProtocolPeer owner{socket};
   auto first = std::make_unique<ProtocolPeer>(socket);
   auto second = std::make_unique<ProtocolPeer>(socket);
@@ -91,7 +91,7 @@ static void checkDisconnect(const char *socket, std::ostream &dump) {
   expectRemoved(owner, opened.location, dump);
 }
 
-static void checkExplicitClose(const char *socket, std::ostream &dump) {
+static void checkExplicitClose(const char* socket, std::ostream& dump) {
   ProtocolPeer owner{socket};
   const auto opened = openTab(owner);
 
@@ -104,7 +104,7 @@ static void checkExplicitClose(const char *socket, std::ostream &dump) {
   expectRemoved(owner, opened.location, dump);
 }
 
-static std::int64_t checkRoundtrip(const char *socket, unsigned iterations, std::ostream &dump) {
+static std::int64_t checkRoundtrip(const char* socket, unsigned iterations, std::ostream& dump) {
   ProtocolPeer owner{socket};
   const auto opened = openTab(owner);
   const auto started = std::chrono::steady_clock::now();
@@ -117,7 +117,7 @@ static std::int64_t checkRoundtrip(const char *socket, unsigned iterations, std:
   return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - started).count() / iterations;
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   if (argc != 5) {
     return 2;
   }
@@ -145,7 +145,7 @@ int main(int argc, char **argv) {
 
     std::printf("{\"ns_per_iteration\":%lld}\n", static_cast<long long>(elapsed));
     return 0;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     std::fprintf(stderr, "%s\n", error.what());
     return 1;
   }

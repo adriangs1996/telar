@@ -3,24 +3,23 @@
 static_assert(true);
 #endif
 
-
+#include "cell_layout.hpp"
 #include "telar_base/diagnostics/config.hpp"
-#include <sys/types.h>
-#include <cstdint>
 #include <cassert>
-#include <cstring>
-#include <cstddef>
 #include <cerrno>
+#include <csignal>
+#include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fcntl.h>
-#include <sys/mman.h>
-#include <unistd.h>
-#include "cell_layout.hpp"
 #include <limits.h>
-#include <csignal>
+#include <sys/mman.h>
+#include <sys/types.h>
 #include <sys/uio.h>
 #include <sys/wait.h>
+#include <unistd.h>
 #if (defined(__APPLE__))
 #include <sys/event.h>
 #endif
@@ -36,9 +35,9 @@ static_assert(true);
 #if (defined(__linux__))
 #include <sys/syscall.h>
 #endif
+#include <ghostty/vt.h>
 #include <new>
 #include <sys/stat.h>
-#include <ghostty/vt.h>
 
 import std;
 import telar.base.diagnostics;
@@ -70,15 +69,15 @@ void testDeferredResponses() {
 
   workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 1, .size = {80, 24, 0, 0}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
   const auto opened = owner.receive<PaneOpened>();
-  auto &pane = panes.require(model.panes, opened.pane_id);
+  auto& pane = panes.require(model.panes, opened.pane_id);
   const auto location = pane.location;
-  auto &workspace = workspaces.require(model.workspaces, location.workspace);
+  auto& workspace = workspaces.require(model.workspaces, location.workspace);
   const ReadPane read{.request_id = 2, .pane_id = pane.id, .pane_generation = pane.generation, .rows = 24, .source = PaneTextSource::screen};
 
   panes.readText(reader.session(), read);
   constexpr std::string_view changed = "Current text";
 
-  pane.terminal.feed({reinterpret_cast<const Byte *>(changed.data()), changed.size()});
+  pane.terminal.feed({reinterpret_cast<const Byte*>(changed.data()), changed.size()});
   check(reader.receive<PaneText>().text == changed);
 
   auto stale = read;

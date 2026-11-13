@@ -3,18 +3,17 @@
 static_assert(true);
 #endif
 
-
 #include <cerrno>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <dirent.h>
 #include <fcntl.h>
 #include <limits.h>
-#include <sys/stat.h>
-#include <cstdint>
-#include <cstring>
-#include <unistd.h>
-#include <dirent.h>
-#include <cstdlib>
 #include <openssl/md5.h>
-#include <cstdio>
+#include <sys/stat.h>
+#include <unistd.h>
 
 import std;
 import telar.base.memory;
@@ -28,7 +27,9 @@ using namespace telar::runtime;
 using namespace telar::runtime::cli::hooks;
 
 struct EmptyEnvironment {
-  std::string_view lookup(const char *) const noexcept { return {}; }
+  std::string_view lookup(const char*) const noexcept {
+    return {};
+  }
 };
 
 int main() {

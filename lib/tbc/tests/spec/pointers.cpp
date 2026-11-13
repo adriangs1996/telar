@@ -12,7 +12,7 @@ namespace pointers {
     static_cast<void>(text.size());
   }
 
-  void observeChars(const char *text) {
+  void observeChars(const char* text) {
     static_cast<void>(text);
   }
 
@@ -32,7 +32,7 @@ namespace pointers {
   };
 
   // The text the pointee holds, not the pointee.
-  text_a pointeeText(const record *pointer) {
+  text_a pointeeText(const record* pointer) {
     return pointer->text;
   }
 
@@ -56,7 +56,7 @@ namespace pointers {
 // CONTRACT: Reading through a pointer requires its pointee to be alive.
 // SCENARIO: The pointee dies at the end of its block before the pointer is dereferenced.
 void pointerDereferenceDead() {
-  const std::string_view *pointer = nullptr;
+  const std::string_view* pointer = nullptr;
   {
     const std::string_view local = "x";
     pointer = &local;
@@ -73,7 +73,7 @@ void pointerDereferenceDead() {
 // CONTRACT: A pointer to a live view lends that view's referent.
 // SCENARIO: The pointee and its referent outlive every read; accept.
 void pointerDereferenceLive(std::string_view text) {
-  const auto *pointer = &text;
+  const auto* pointer = &text;
   pointers::observe(*pointer);
   pointers::observeChars(pointer->data());
 }
@@ -89,7 +89,7 @@ void pointerDereferenceLive(std::string_view text) {
 void pointerReferentInvalidated() {
   std::string owner = "abc";
   const std::string_view view = owner;
-  const auto *pointer = &view;
+  const auto* pointer = &view;
   owner.clear(); // expected-error [tbc-invalidated-borrow]
   pointers::observeChars(pointer->data());
 }
@@ -105,7 +105,7 @@ void pointerReferentInvalidated() {
 void pointerReferentLive() {
   const std::string owner = "abc";
   const std::string_view view = owner;
-  const auto *pointer = &view;
+  const auto* pointer = &view;
   pointers::observeChars(pointer->data());
 }
 
@@ -119,7 +119,7 @@ void pointerReferentLive() {
 // SCENARIO: A view stored through the pointer outlives its source.
 void pointerWriteThroughDead() {
   std::string_view slot;
-  auto *pointer = &slot;
+  auto* pointer = &slot;
   {
     const std::string owner = "abc";
     *pointer = owner;
@@ -137,7 +137,7 @@ void pointerWriteThroughDead() {
 // SCENARIO: The source outlives the read of the designated variable; accept.
 void pointerWriteThroughLive(std::string_view text) {
   std::string_view slot;
-  auto *pointer = &slot;
+  auto* pointer = &slot;
   *pointer = text;
   pointers::observe(slot);
 }
@@ -152,7 +152,7 @@ void pointerWriteThroughLive(std::string_view text) {
 // SCENARIO: The pointee keeps a view of a source that dies before the read.
 void pointerArrowCallDead() {
   pointers::keeper value;
-  auto *pointer = &value;
+  auto* pointer = &value;
   {
     const std::string owner = "abc";
     pointer->keep(owner);
@@ -170,7 +170,7 @@ void pointerArrowCallDead() {
 // SCENARIO: The kept source outlives the read; accept.
 void pointerArrowCallLive(std::string_view text) {
   pointers::keeper value;
-  auto *pointer = &value;
+  auto* pointer = &value;
   pointer->keep(text);
   pointers::observe(value.kept);
 }
@@ -219,7 +219,9 @@ void lambdaCopyCaptureDead() {
   {
     const std::string owner = "abc";
     const std::string_view view = owner;
-    const auto read = [view] { return view; };
+    const auto read = [view] {
+      return view;
+    };
     result = read();
   } // expected-error [tbc-invalidated-borrow]
   pointers::observe(result);
@@ -234,7 +236,9 @@ void lambdaCopyCaptureDead() {
 // CONTRACT: A closure's result may be read while its captured view's source is alive.
 // SCENARIO: The source outlives the read; accept.
 void lambdaCopyCaptureLive(std::string_view text) {
-  const auto read = [text] { return text; };
+  const auto read = [text] {
+    return text;
+  };
   pointers::observe(read());
 }
 
@@ -250,7 +254,9 @@ void lambdaReferenceCaptureDead() {
   std::string_view result;
   {
     const std::string owner = "abc";
-    const auto read = [&owner] { return std::string_view{owner}; };
+    const auto read = [&owner] {
+      return std::string_view{owner};
+    };
     result = read();
   } // expected-error [tbc-invalidated-borrow]
   pointers::observe(result);
@@ -264,10 +270,12 @@ void lambdaReferenceCaptureDead() {
 // STATUS: implemented
 // CONTRACT: Contents read through a by-reference capture do not borrow the captured variable's storage.
 // SCENARIO: The result views the argument array, not the local span that was captured; accept.
-pointers::options lambdaReferenceCaptureContents(std::span<const char *const> arguments) {
+pointers::options lambdaReferenceCaptureContents(std::span<const char* const> arguments) {
   pointers::options result;
   std::size_t index = 0;
-  const auto next = [&]() -> std::string_view { return arguments[index++]; };
+  const auto next = [&]() -> std::string_view {
+    return arguments[index++];
+  };
   result.value = next();
   return result;
 }
@@ -284,7 +292,9 @@ void lambdaWriteCaptureDead() {
   std::string_view slot;
   {
     const std::string owner = "abc";
-    const auto store = [&slot](std::string_view text) { slot = text; };
+    const auto store = [&slot](std::string_view text) {
+      slot = text;
+    };
     store(owner);
   } // expected-error [tbc-invalidated-borrow]
   pointers::observe(slot);
@@ -300,7 +310,9 @@ void lambdaWriteCaptureDead() {
 // SCENARIO: The source outlives the caller's read; accept.
 void lambdaWriteCaptureLive(std::string_view text) {
   std::string_view slot;
-  const auto store = [&slot](std::string_view value) { slot = value; };
+  const auto store = [&slot](std::string_view value) {
+    slot = value;
+  };
   store(text);
   pointers::observe(slot);
 }
@@ -327,7 +339,7 @@ void pointerByValueParameterLocal(pointers::frame frame) {
 // STATUS: implemented
 // CONTRACT: A write through a reference parameter reaches the caller and must outlive the call.
 // SCENARIO: The caller's frame receives a view of a local array.
-void pointerReferenceParameterEscape(pointers::frame &frame) {
+void pointerReferenceParameterEscape(pointers::frame& frame) {
   const std::array<int, 1> values{1};
   frame.values = values; // expected-error [tbc-dangling-borrow]
 }
@@ -337,7 +349,7 @@ void pointerReferenceParameterEscape(pointers::frame &frame) {
 namespace pointers {
   class view_reader {
   public:
-    explicit view_reader(tbc::view<std::string_view &, tbc::lt::a> view)
+    explicit view_reader(tbc::view<std::string_view&, tbc::lt::a> view)
         : view_(view) {}
 
     [[nodiscard]] text_a read() const {
@@ -345,7 +357,7 @@ namespace pointers {
     }
 
   private:
-    tbc::view<std::string_view &, tbc::lt::a> view_;
+    tbc::view<std::string_view&, tbc::lt::a> view_;
   };
 
   struct buffer {
@@ -358,7 +370,7 @@ namespace pointers {
 
   class buffer_stream {
   public:
-    explicit buffer_stream(buffer &source)
+    explicit buffer_stream(buffer& source)
         : source_(source) {}
 
     std::span<const char> peek() const {
@@ -366,13 +378,13 @@ namespace pointers {
     }
 
   private:
-    buffer &source_;
+    buffer& source_;
   };
 
   template <typename Stream>
   class gated_stream {
   public:
-    explicit gated_stream(Stream &stream)
+    explicit gated_stream(Stream& stream)
         : stream_(stream) {}
 
     std::span<const char> peek() const {
@@ -380,27 +392,27 @@ namespace pointers {
     }
 
   private:
-    Stream &stream_;
+    Stream& stream_;
   };
 
   struct relay {
-    tbc::view<const char *, tbc::lt::a> pending = nullptr;
+    tbc::view<const char*, tbc::lt::a> pending = nullptr;
 
     template <typename Source>
-    void advance(tbc::view<const Source &, tbc::lt::a> source) {
+    void advance(tbc::view<const Source&, tbc::lt::a> source) {
       pending = source.peek().data();
     }
   };
 
   struct sink {
-    std::string &target;
+    std::string& target;
   };
 
-  void attach(tbc::view<record *, tbc::lt::a> target, text_a text) {
+  void attach(tbc::view<record*, tbc::lt::a> target, text_a text) {
     target->text = text;
   }
 
-  void show(const record *target) {
+  void show(const record* target) {
     observe(target->text);
   }
 }
@@ -411,7 +423,7 @@ namespace pointers {
 // STATUS: pending
 // CONTRACT: Reading a reference field yields what its referent holds, not the referent itself; a result that names the referent's region rather than the reference's, as `&'s &'b str` does, needs one region per level.
 // SCENARIO: The local view refers to the caller's string, so the view read back may be returned; accept.
-std::string_view pointerReferenceFieldRead(const std::string &text) {
+std::string_view pointerReferenceFieldRead(const std::string& text) {
   std::string_view local = text;
   const pointers::view_reader reader{local};
   return reader.read();
@@ -440,7 +452,7 @@ std::string_view pointerReferenceFieldDead() {
 // STATUS: pending
 // CONTRACT: A wrapper's view of the stream it wraps can name the stream's own region rather than the wrapper's, as `&'s Stream<'b>` does; one label per field cannot yet tell the two apart.
 // SCENARIO: The relay keeps a pointer into the caller's buffer through two local wrappers; accept.
-void pointerNestedReferenceWrapper(pointers::buffer &source, pointers::relay &out) {
+void pointerNestedReferenceWrapper(pointers::buffer& source, pointers::relay& out) {
   pointers::buffer_stream stream{source};
   pointers::gated_stream gated{stream};
   out.advance(gated);
@@ -454,7 +466,7 @@ void pointerNestedReferenceWrapper(pointers::buffer &source, pointers::relay &ou
 // STATUS: implemented
 // CONTRACT: Wrappers that hold references to streams reach the buffer the innermost one designates.
 // SCENARIO: The relay keeps a pointer into a local buffer past its lifetime.
-void pointerNestedReferenceDead(pointers::relay &out) {
+void pointerNestedReferenceDead(pointers::relay& out) {
   pointers::buffer source;
   pointers::buffer_stream stream{source};
   pointers::gated_stream gated{stream};
@@ -469,7 +481,7 @@ void pointerNestedReferenceDead(pointers::relay &out) {
 // STATUS: implemented
 // CONTRACT: An aggregate's reference member is bound to its initializer, so operations through it reach the referent.
 // SCENARIO: Clearing the string through the member invalidates an earlier view of it.
-void pointerAggregateReferenceMember(std::string &text) {
+void pointerAggregateReferenceMember(std::string& text) {
   const std::string_view view = text;
   pointers::sink target{text};
   target.target.clear(); // expected-error [tbc-invalidated-borrow]
@@ -484,7 +496,7 @@ void pointerAggregateReferenceMember(std::string &text) {
 // STATUS: implemented
 // CONTRACT: An aggregate's reference member is bound to its initializer, so operations through it reach the referent.
 // SCENARIO: The view is read before the string is cleared through the member; accept.
-void pointerAggregateReferenceRead(std::string &text) {
+void pointerAggregateReferenceRead(std::string& text) {
   const std::string_view view = text;
   pointers::sink target{text};
   pointers::observe(view);
@@ -501,7 +513,7 @@ void pointerAggregateReferenceRead(std::string &text) {
 // SCENARIO: The record behind the pointer keeps a view of a string that dies before it is read.
 void pointerParameterWriteDead() {
   pointers::record local;
-  pointers::record *target = &local;
+  pointers::record* target = &local;
   {
     const std::string text = "temporary";
     pointers::attach(target, text);
@@ -519,7 +531,7 @@ void pointerParameterWriteDead() {
 // SCENARIO: The record behind the pointer is read while the string lives; accept.
 void pointerParameterWriteLive() {
   pointers::record local;
-  pointers::record *target = &local;
+  pointers::record* target = &local;
   const std::string text = "temporary";
   pointers::attach(target, text);
   pointers::observe(local.text);
@@ -533,7 +545,7 @@ void pointerParameterWriteLive() {
 // STATUS: implemented
 // CONTRACT: A callee that reads through a pointer parameter uses what the argument's pointee holds.
 // SCENARIO: The record's view is invalidated before the callee reads it through the pointer.
-void pointerParameterReadInvalidated(std::string &text) {
+void pointerParameterReadInvalidated(std::string& text) {
   const pointers::record local{text};
   text.clear(); // expected-error [tbc-invalidated-borrow]
   pointers::show(&local);
@@ -547,7 +559,7 @@ void pointerParameterReadInvalidated(std::string &text) {
 // STATUS: implemented
 // CONTRACT: A callee that reads through a pointer parameter uses what the argument's pointee holds.
 // SCENARIO: The callee reads the record before the string is cleared; accept.
-void pointerParameterReadLive(std::string &text) {
+void pointerParameterReadLive(std::string& text) {
   const pointers::record local{text};
   pointers::show(&local);
   text.clear();
@@ -561,7 +573,7 @@ namespace pointers {
   };
 
   template <auto Member, typename Message>
-  decltype(auto) memberValue(Message &message) {
+  decltype(auto) memberValue(Message& message) {
     return (message.*Member);
   }
 }
@@ -572,8 +584,8 @@ namespace pointers {
 // STATUS: implemented
 // CONTRACT: A member pointer selects a field of its object, so the result lies in that object's storage.
 // SCENARIO: The selected field of a live caller object is observed in place; accept.
-void memberPointerField(pointers::labeled &record) {
-  const auto &text = pointers::memberValue<&pointers::labeled::text>(record);
+void memberPointerField(pointers::labeled& record) {
+  const auto& text = pointers::memberValue<&pointers::labeled::text>(record);
   pointers::observe(text);
 }
 
@@ -599,7 +611,7 @@ std::string_view memberPointerEscape() {
 // CONTRACT: A C function's pointer borrows only arguments of its own pointee type; otherwise, like a raw pointer from Rust's FFI, it names an unchecked resource.
 // SCENARIO: The directory stream does not point into its temporary path; accept.
 void cFunctionResource() {
-  DIR *directory = ::opendir(std::string{"/tmp"}.c_str());
+  DIR* directory = ::opendir(std::string{"/tmp"}.c_str());
   if (directory != nullptr) {
     ::closedir(directory);
   }
@@ -614,7 +626,7 @@ void cFunctionResource() {
 // CONTRACT: A C function's pointer borrows only arguments of its own pointee type; otherwise, like a raw pointer from Rust's FFI, it names an unchecked resource.
 // SCENARIO: strchr points into its temporary string, which dies before the result is read through.
 bool cFunctionArgument() {
-  const char *found = ::strchr(std::string{"abc"}.c_str(), 'b'); // expected-error [tbc-dangling-borrow]
+  const char* found = ::strchr(std::string{"abc"}.c_str(), 'b'); // expected-error [tbc-dangling-borrow]
   return found != nullptr && *found == 'b';
 }
 
@@ -626,10 +638,10 @@ bool cFunctionArgument() {
 // STATUS: implemented
 // CONTRACT: A C function's pointer borrows only arguments of its own pointee type; otherwise, like a raw pointer from Rust's FFI, it names an unchecked resource.
 // SCENARIO: A column read through a function pointer is a library row, not a view of the statement handle; accept.
-using column_text = const unsigned char *(*)(void *statement, int column);
+using column_text = const unsigned char* (*)(void* statement, int column);
 
-bool functionPointerResource(column_text text, void *statement) {
-  const auto *bytes = text(statement, 0);
+bool functionPointerResource(column_text text, void* statement) {
+  const auto* bytes = text(statement, 0);
   return bytes != nullptr && bytes[0] != 0;
 }
 
@@ -641,8 +653,8 @@ bool functionPointerResource(column_text text, void *statement) {
 // STATUS: implemented
 // CONTRACT: Reading through a pointer needs a live pointee wherever the read appears, as any use of a borrow does in Rust.
 // SCENARIO: The caller's string outlives the read in the condition; accept.
-bool readLivePointee(const std::string &source) {
-  const char *text = source.c_str();
+bool readLivePointee(const std::string& source) {
+  const char* text = source.c_str();
   if (*text == 'a') {
     return true;
   }
@@ -658,7 +670,7 @@ bool readLivePointee(const std::string &source) {
 // CONTRACT: Reading through a pointer needs a live pointee wherever the read appears, as any use of a borrow does in Rust.
 // SCENARIO: The temporary string dies with its declaration, before the condition reads through the pointer.
 bool readDeadPointee() {
-  const char *text = std::string{"abc"}.c_str(); // expected-error [tbc-dangling-borrow]
+  const char* text = std::string{"abc"}.c_str(); // expected-error [tbc-dangling-borrow]
   if (*text == 'a') {
     return true;
   }

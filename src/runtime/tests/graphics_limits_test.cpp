@@ -3,10 +3,9 @@
 static_assert(true);
 #endif
 
-
+#include "telar_base/diagnostics/config.hpp"
 #include <cstddef>
 #include <cstdint>
-#include "telar_base/diagnostics/config.hpp"
 #include <ghostty/vt.h>
 
 import std;
@@ -24,12 +23,12 @@ using namespace telar;
 using namespace telar::runtime;
 
 static std::span<const Byte> graphicsBytes(std::string_view text) {
-  return {reinterpret_cast<const Byte *>(text.data()), text.size()};
+  return {reinterpret_cast<const Byte*>(text.data()), text.size()};
 }
 
 class GraphicsLimitFixture {
 public:
-  explicit GraphicsLimitFixture(SystemAllocator &memory)
+  explicit GraphicsLimitFixture(SystemAllocator& memory)
       : graphics(memory),
         allocator_(memory) {
     checkGhostty(ghostty_terminal_new(allocator_.get(), terminal_.output(), 20, 8));
@@ -40,7 +39,7 @@ public:
   }
 
   void feed(std::string_view text) {
-    ghostty_terminal_vt_write(terminal_.get(), reinterpret_cast<const Byte *>(text.data()), text.size());
+    ghostty_terminal_vt_write(terminal_.get(), reinterpret_cast<const Byte*>(text.data()), text.size());
   }
 
   void refresh() {
@@ -52,7 +51,9 @@ public:
   }
 
   bool contains(std::uint32_t identity) const noexcept {
-    return std::ranges::any_of(graphics.images(), [&](const auto &image) { return image.description.key.image_id == identity; });
+    return std::ranges::any_of(graphics.images(), [&](const auto& image) {
+      return image.description.key.image_id == identity;
+    });
   }
 
   GraphicsStorage<SystemAllocator> graphics;
@@ -70,7 +71,7 @@ static std::string place(std::uint32_t image, std::uint32_t placement, bool plac
   return "\x1b_Ga=p,i=" + std::to_string(image) + ",p=" + std::to_string(placement) + ",C=1,c=1,r=1,q=2" + (placeholders ? ",U=1;" : ";") + "\x1b\\";
 }
 
-static void testImageEviction(SystemAllocator &memory) {
+static void testImageEviction(SystemAllocator& memory) {
   GraphicsLimitFixture fixture{memory};
 
   for (unsigned identity = 1; identity <= 80; ++identity) {
@@ -111,7 +112,7 @@ static void testImageEviction(SystemAllocator &memory) {
   check(restored == GHOSTTY_TERMINAL_SCREEN_ALTERNATE);
 }
 
-static void testPlacementEviction(SystemAllocator &memory) {
+static void testPlacementEviction(SystemAllocator& memory) {
   GraphicsLimitFixture fixture{memory};
 
   fixture.feed(transmit(1) + transmit(2));
@@ -122,12 +123,16 @@ static void testPlacementEviction(SystemAllocator &memory) {
   fixture.feed(place(2, 129) + "\x1b[8;1H\n\n\n\n\n\n\n\n");
   fixture.refresh();
   check(fixture.graphics.placements().size() == graphics_placement_count && fixture.graphics.takeTrimmedPlacements() == 129);
-  check(std::ranges::all_of(fixture.graphics.placements(), [](const auto &placement) { return placement.key.image_id == 1 && placement.location == PlacementLocation::placeholders; }));
+  check(std::ranges::all_of(fixture.graphics.placements(), [](const auto& placement) {
+    return placement.key.image_id == 1 && placement.location == PlacementLocation::placeholders;
+  }));
 
   fixture.feed(place(2, 130));
   fixture.refresh();
   check(fixture.graphics.placements().size() == graphics_placement_count);
-  check(std::ranges::count_if(fixture.graphics.placements(), [](const auto &placement) { return placement.key.image_id == 2; }) == 1);
+  check(std::ranges::count_if(fixture.graphics.placements(), [](const auto& placement) {
+    return placement.key.image_id == 2;
+  }) == 1);
 
   GraphicsLimitFixture overlap{memory};
 
@@ -139,10 +144,12 @@ static void testPlacementEviction(SystemAllocator &memory) {
 
   overlap.refresh();
   check(overlap.graphics.placements().size() == graphics_placement_count);
-  check(std::ranges::count_if(overlap.graphics.placements(), [](const auto &placement) { return placement.key.image_id == 2 && placement.y == -2; }) == 1);
+  check(std::ranges::count_if(overlap.graphics.placements(), [](const auto& placement) {
+    return placement.key.image_id == 2 && placement.y == -2;
+  }) == 1);
 }
 
-static void testIncompleteUploads(SystemAllocator &memory) {
+static void testIncompleteUploads(SystemAllocator& memory) {
   GraphicsLimitFixture fixture{memory};
   GraphicsUploadLimits limits{6, 2};
   const auto feed = [&](std::string_view bytes) {
@@ -176,17 +183,17 @@ static void testIncompleteUploads(SystemAllocator &memory) {
   check(fixture.contains(10));
 }
 
-static void testUploadResponse(SystemAllocator &memory) {
+static void testUploadResponse(SystemAllocator& memory) {
   MediaTerminal terminal{memory, TerminalSize{20, 8, 8, 16}, GraphicsLimits{.pane_bytes = 12}};
 
   terminal.feed(graphicsBytes("\x1b_Ga=t,f=32,s=3,v=1,i=81,m=1,q=2;AAAAAAAAAAAA\x1b\\"));
   const auto response = terminal.responses();
 
-  check(std::string_view{reinterpret_cast<const char *>(response.data()), response.size()} == "\x1b_Gi=81;ENOMEM: graphics upload limit exceeded\x1b\\");
+  check(std::string_view{reinterpret_cast<const char*>(response.data()), response.size()} == "\x1b_Gi=81;ENOMEM: graphics upload limit exceeded\x1b\\");
   check(terminal.takeUploadLimits().bytes);
 }
 
-static void testGeneratedChunkFraming(SystemAllocator &memory) {
+static void testGeneratedChunkFraming(SystemAllocator& memory) {
   GraphicsLimitFixture fixture{memory};
   const auto generated = std::string{"\x1b_Ga=t,f=32,s=64,v=64,i=7,m=1,q=2;"} + std::string(4096, 'A') + "\x1b\\";
 

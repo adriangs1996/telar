@@ -1,6 +1,6 @@
 #include "support.hpp"
 
-using int_view = tbc::view<const int &, tbc::lt::a>;
+using int_view = tbc::view<const int&, tbc::lt::a>;
 
 // CASE: core.local_escape
 // PAIR: core.direct_return
@@ -36,7 +36,7 @@ int_view argumentReturn(int_view input) {
 int_view aliasEscape() {
   const int local = 1;
   const int_view original = local;
-  const auto &alias = original;
+  const auto& alias = original;
   return alias; // expected-error [tbc-dangling-borrow]
 }
 
@@ -48,8 +48,8 @@ int_view aliasEscape() {
 // STATUS: implemented
 // CONTRACT: With one borrowed input, elision binds the returned reference to that input.
 // SCENARIO: A local alias of the argument preserves its origin without an explicit region label.
-tbc::view<const int &> aliasArgument(tbc::view<const int &> input) {
-  const auto &alias = input;
+tbc::view<const int&> aliasArgument(tbc::view<const int&> input) {
+  const auto& alias = input;
   return alias;
 }
 

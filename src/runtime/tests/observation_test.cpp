@@ -3,28 +3,27 @@
 static_assert(true);
 #endif
 
-
-#include <cstring>
-#include <cstddef>
-#include <cstdint>
-#include "telar_base/diagnostics/config.hpp"
-#include <cstdio>
-#include <cstdlib>
-#include <fcntl.h>
-#include <sys/mman.h>
 #include "cell_layout.hpp"
+#include "telar_base/diagnostics/config.hpp"
 #include <cassert>
 #include <cerrno>
-#include <pthread.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <limits.h>
 #include <csignal>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <fcntl.h>
+#include <ghostty/vt.h>
+#include <limits.h>
+#include <poll.h>
+#include <pthread.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <sys/uio.h>
 #include <sys/wait.h>
-#include <sys/stat.h>
-#include <poll.h>
-#include <ghostty/vt.h>
+#include <unistd.h>
 
 import std;
 import telar.base.diagnostics;
@@ -44,11 +43,11 @@ import telar.runtime.runtime.client_control;
 using namespace telar;
 using namespace telar::runtime;
 
-static void feedObserver(PaneObserver<SystemAllocator> &observer, std::string_view bytes) {
-  observer.bytes(ObservationKind::output, {reinterpret_cast<const Byte *>(bytes.data()), bytes.size()}, false);
+static void feedObserver(PaneObserver<SystemAllocator>& observer, std::string_view bytes) {
+  observer.bytes(ObservationKind::output, {reinterpret_cast<const Byte*>(bytes.data()), bytes.size()}, false);
 }
 
-static ScreenObservationResult observe(PaneObserver<SystemAllocator> &observer, AgentProvider provider) {
+static ScreenObservationResult observe(PaneObserver<SystemAllocator>& observer, AgentProvider provider) {
   check(observer.seal());
   const auto result = observer.observe(builtin_manifests, provider);
 
@@ -57,7 +56,7 @@ static ScreenObservationResult observe(PaneObserver<SystemAllocator> &observer, 
   return result;
 }
 
-static void testScreenOrdering(SystemAllocator &memory) {
+static void testScreenOrdering(SystemAllocator& memory) {
   PaneObserver observer{memory, TerminalSize{80, 24, 8, 16}};
 
   feedObserver(observer, "\x1b[2J\x1b[20;1HWorking (12s)\x1b[22;1H› Ask Codex to do anything\x1b[22;3H");
@@ -88,7 +87,7 @@ static void testScreenOrdering(SystemAllocator &memory) {
   check(!observe(observer, AgentProvider::claude).signal);
 }
 
-static void testDroppedObservation(SystemAllocator &memory) {
+static void testDroppedObservation(SystemAllocator& memory) {
   PaneObserver observer{memory, TerminalSize{80, 24, 8, 16}};
 
   feedObserver(observer, "\x1b[22;1H› ");
@@ -126,7 +125,7 @@ static void testManifests() {
   check(manifests.fromPath("C:\\node_modules\\@openai\\codex\\cli.js") == AgentProvider::codex);
   check(!manifests.detect("api pipe cursor opencode"));
   check(manifests.find(AgentProvider::codex)->commandField("exec_command") == "cmd");
-  auto &custom = manifests.add("fixture-agent");
+  auto& custom = manifests.add("fixture-agent");
 
   custom.process_names.append("fixture");
   custom.brand.append("fixture");
@@ -140,7 +139,7 @@ static void testManifests() {
 
   try {
     manifests.add("fixture-agent");
-  } catch (const EncodingError &) {
+  } catch (const EncodingError&) {
     rejected = true;
   }
 
@@ -151,7 +150,7 @@ struct CompletionProbe {
   using Request = std::uint64_t;
   using Result = std::uint64_t;
 
-  Result observe(const Request &request) noexcept {
+  Result observe(const Request& request) noexcept {
     return request;
   }
 
@@ -160,7 +159,7 @@ struct CompletionProbe {
 
 static void testCompletionWakeups() {
   CompletionProbe probe;
-  ObservationWorker<decltype(probe) &> worker{std::in_place, probe};
+  ObservationWorker<decltype(probe)&> worker{std::in_place, probe};
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
 
   for (std::uint64_t request = 1; request <= 1000; ++request) {
@@ -187,7 +186,7 @@ struct CaptureHistory {
   std::vector<std::string> commands;
   unsigned finished_sessions = 0;
 
-  bool recordHistory(const HistoryEventView &event) noexcept {
+  bool recordHistory(const HistoryEventView& event) noexcept {
     if (event.kind == HistoryEventKind::command_finished) {
       check(event.command.status == HistoryStatus::interrupted);
       commands.emplace_back(event.command.command);
@@ -200,17 +199,17 @@ struct CaptureHistory {
 };
 
 struct UnusedAgents {
-  const Agent *find(std::uint64_t, std::uint64_t) const noexcept {
+  const Agent* find(std::uint64_t, std::uint64_t) const noexcept {
     return nullptr;
   }
 
-  void observeScreen(Pane<SystemAllocator> &, AgentSignal, ObservationTime) noexcept {}
+  void observeScreen(Pane<SystemAllocator>&, AgentSignal, ObservationTime) noexcept {}
 
-  void observeProcess(Pane<SystemAllocator> &, const ProcessProbeResult &) noexcept {}
+  void observeProcess(Pane<SystemAllocator>&, const ProcessProbeResult&) noexcept {}
 };
 
 struct NoObservationFailures {
-  void report(const LimitReach &) noexcept {
+  void report(const LimitReach&) noexcept {
     check(false);
   }
 };
@@ -221,7 +220,7 @@ struct DirectoryOnlyProbe {
 
   std::atomic<unsigned> calls{0};
 
-  Result observe(const Request &) noexcept {
+  Result observe(const Request&) noexcept {
     ++calls;
     return {};
   }
@@ -240,7 +239,7 @@ struct DirectoryHistory {
   std::vector<std::pair<std::string, std::string>> commands;
   bool accept_commands = true;
 
-  bool recordHistory(const HistoryEventView &event) noexcept {
+  bool recordHistory(const HistoryEventView& event) noexcept {
     if (event.kind == HistoryEventKind::command_finished) {
       if (!accept_commands) {
         return false;
@@ -254,11 +253,11 @@ struct DirectoryHistory {
 };
 
 struct ChangedDirectoryProbe : DirectoryOnlyProbe {
-  Result observe(const Request &request) noexcept {
+  Result observe(const Request& request) noexcept {
     Result result;
 
-    for (const auto &entry : std::span{request.panes}.first(request.count)) {
-      auto &observed = result.panes[result.count++];
+    for (const auto& entry : std::span{request.panes}.first(request.count)) {
+      auto& observed = result.panes[result.count++];
 
       observed.request = entry;
       observed.cwd.assign("/observed");
@@ -268,7 +267,7 @@ struct ChangedDirectoryProbe : DirectoryOnlyProbe {
   }
 };
 
-static void testDirectoryChangesFollowQueuedCommands(SystemAllocator &memory) {
+static void testDirectoryChangesFollowQueuedCommands(SystemAllocator& memory) {
   for (const bool probe_process : {false, true}) {
     ChangedDirectoryProbe probe;
     DirectoryHistory history;
@@ -286,7 +285,7 @@ static void testDirectoryChangesFollowQueuedCommands(SystemAllocator &memory) {
 
     const auto command = [&](std::string_view text) {
       feedObserver(*observer, "$ ");
-      observer->bytes(ObservationKind::input, {reinterpret_cast<const Byte *>(text.data()), text.size()}, true);
+      observer->bytes(ObservationKind::input, {reinterpret_cast<const Byte*>(text.data()), text.size()}, true);
       feedObserver(*observer, text);
       feedObserver(*observer, "\n");
       observer->shellExit(0);
@@ -295,7 +294,7 @@ static void testDirectoryChangesFollowQueuedCommands(SystemAllocator &memory) {
 
       check(result.count == 1 && !result.entries[0].screen.failed);
 #if TELAR_DIAGNOSTICS
-      const auto &metrics = result.entries[0].screen.metrics;
+      const auto& metrics = result.entries[0].screen.metrics;
 
       check(metrics.candidate_input_bytes == text.size());
       check(metrics.captured == history.accept_commands && metrics.dropped == !history.accept_commands);
@@ -316,13 +315,13 @@ static void testDirectoryChangesFollowQueuedCommands(SystemAllocator &memory) {
   }
 }
 
-static void testPendingInputPreservesForegroundObservation(SystemAllocator &memory) {
+static void testPendingInputPreservesForegroundObservation(SystemAllocator& memory) {
   RuntimeModel model{memory};
   ClientStore<SystemAllocator> clients{memory};
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
   Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
   auto owned = makeOwned<Pane<SystemAllocator>>(memory, memory, 1, TabLocation{}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits});
-  auto &pane = *owned;
+  auto& pane = *owned;
 
   model.panes.insert(1, std::move(owned));
   UnusedAgents agents;
@@ -348,13 +347,13 @@ static void testPendingInputPreservesForegroundObservation(SystemAllocator &memo
   check(pane.cwd == "/observed" && pane.needs_foreground_observation);
 }
 
-static void testEmptyObservationRequiresExplicitRecheck(SystemAllocator &memory) {
+static void testEmptyObservationRequiresExplicitRecheck(SystemAllocator& memory) {
   RuntimeModel model{memory};
   ClientStore<SystemAllocator> clients{memory};
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
   Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
   auto owned = makeOwned<Pane<SystemAllocator>>(memory, memory, 1, TabLocation{}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits});
-  auto &pane = *owned;
+  auto& pane = *owned;
 
   model.panes.insert(1, std::move(owned));
   UnusedAgents agents;
@@ -382,7 +381,7 @@ static void testEmptyObservationRequiresExplicitRecheck(SystemAllocator &memory)
   check(probe.calls == 1 && pane.process_rechecks == 1 && pane.cwd == "/observed");
 }
 
-static void testRetiredCapture(SystemAllocator &memory) {
+static void testRetiredCapture(SystemAllocator& memory) {
   RuntimeModel model{memory};
   ClientStore<SystemAllocator> clients{memory};
   UnusedAgents agents;
@@ -399,7 +398,7 @@ static void testRetiredCapture(SystemAllocator &memory) {
     feedObserver(*observer, "$ ");
     constexpr std::string_view input{"echo\r"};
 
-    observer->bytes(ObservationKind::input, {reinterpret_cast<const Byte *>(input.data()), input.size()}, true);
+    observer->bytes(ObservationKind::input, {reinterpret_cast<const Byte*>(input.data()), input.size()}, true);
     feedObserver(*observer, "echo\r\nresult");
     observer->retired_next = std::move(model.retired_observers);
     model.retired_observers = observer;
@@ -416,7 +415,7 @@ static void testRetiredCapture(SystemAllocator &memory) {
 
 // A command a client ran keeps the text it sent. Read back from the screen at the first line
 // the shell echoes, a multi-line command would keep only its first line.
-static void testSubmittedCommand(SystemAllocator &memory) {
+static void testSubmittedCommand(SystemAllocator& memory) {
   RuntimeModel model{memory};
   UnusedAgents agents;
   NoObservationFailures limits;
@@ -431,8 +430,8 @@ static void testSubmittedCommand(SystemAllocator &memory) {
   constexpr std::string_view command{"echo 'a\nb'"};
   constexpr std::string_view typed{"\x1b[200~echo 'a\nb'\x1b[201~\r"};
 
-  observer->bytes(ObservationKind::command, {reinterpret_cast<const Byte *>(command.data()), command.size()}, true);
-  observer->bytes(ObservationKind::input, {reinterpret_cast<const Byte *>(typed.data()), typed.size()}, true);
+  observer->bytes(ObservationKind::command, {reinterpret_cast<const Byte*>(command.data()), command.size()}, true);
+  observer->bytes(ObservationKind::input, {reinterpret_cast<const Byte*>(typed.data()), typed.size()}, true);
   feedObserver(*observer, "echo 'a\r\nb'\r\na\r\nb");
   observer->retired_next = std::move(model.retired_observers);
   model.retired_observers = observer;
@@ -444,13 +443,13 @@ static void testSubmittedCommand(SystemAllocator &memory) {
 }
 
 #if TELAR_DIAGNOSTICS
-static void testCommandMetrics(SystemAllocator &memory) {
+static void testCommandMetrics(SystemAllocator& memory) {
   PaneObserver observer{memory, TerminalSize{80, 24, 8, 16}};
 
   feedObserver(observer, "\x1b]133;A\x07$ \x1b]133;B\x07");
   const std::string_view command = "echo value\r";
 
-  observer.bytes(ObservationKind::input, {reinterpret_cast<const Byte *>(command.data()), command.size()}, std::nullopt);
+  observer.bytes(ObservationKind::input, {reinterpret_cast<const Byte*>(command.data()), command.size()}, std::nullopt);
   feedObserver(observer, "echo value\r\n\x1b]133;C\x07value\r\n\x1b]133;D;0\x07");
   const auto first = observe(observer, AgentProvider::unknown);
 

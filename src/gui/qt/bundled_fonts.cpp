@@ -8,41 +8,41 @@
 #include <array>
 
 namespace telar::gui::qt {
-namespace {
-constexpr std::array resources{
-    ":/telar/fonts/TelarForma-Regular.ttf",
-    ":/telar/fonts/JetBrainsMono-Regular.ttf",
-    ":/telar/fonts/SymbolsNerdFontMono-Regular.ttf",
-};
+  namespace {
+    constexpr std::array resources{
+        ":/telar/fonts/TelarForma-Regular.ttf",
+        ":/telar/fonts/JetBrainsMono-Regular.ttf",
+        ":/telar/fonts/SymbolsNerdFontMono-Regular.ttf",
+    };
 
-QStringList registerFonts() {
-  QStringList families;
+    QStringList registerFonts() {
+      QStringList families;
 
-  for (const auto *resource :
-       {":/telar/fonts/IBMPlexSans-Regular.ttf", ":/telar/fonts/IBMPlexSans-SemiBold.ttf"}) {
-    if (QFontDatabase::addApplicationFont(QString::fromLatin1(resource)) < 0) {
-      qWarning() << "Could not register the bundled font" << resource;
+      for (const auto* resource :
+          {":/telar/fonts/IBMPlexSans-Regular.ttf", ":/telar/fonts/IBMPlexSans-SemiBold.ttf"}) {
+        if (QFontDatabase::addApplicationFont(QString::fromLatin1(resource)) < 0) {
+          qWarning() << "Could not register the bundled font" << resource;
+        }
+      }
+
+      for (const auto* resource : resources) {
+        const auto id = QFontDatabase::addApplicationFont(QString::fromLatin1(resource));
+
+        if (id < 0) {
+          qWarning() << "Could not register the bundled font" << resource;
+          continue;
+        }
+
+        families.append(QFontDatabase::applicationFontFamilies(id));
+      }
+
+      return families;
     }
   }
 
-  for (const auto *resource : resources) {
-    const auto id = QFontDatabase::addApplicationFont(QString::fromLatin1(resource));
+  const QStringList& bundledFonts() {
+    static const QStringList families = registerFonts();
 
-    if (id < 0) {
-      qWarning() << "Could not register the bundled font" << resource;
-      continue;
-    }
-
-    families.append(QFontDatabase::applicationFontFamilies(id));
+    return families;
   }
-
-  return families;
-}
-}
-
-const QStringList &bundledFonts() {
-  static const QStringList families = registerFonts();
-
-  return families;
-}
 }

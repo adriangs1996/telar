@@ -2,7 +2,7 @@
 // The linter's objective is invalid memory use; these cases are kept as reference only.
 #include "../support.hpp"
 
-using int_view = tbc::view<const int &, tbc::lt::a>;
+using int_view = tbc::view<const int&, tbc::lt::a>;
 
 // CASE: core.shared_write
 // PAIR: core.shared_liveness
@@ -12,7 +12,7 @@ using int_view = tbc::view<const int &, tbc::lt::a>;
 // SCENARIO: The later read keeps the loan live; diagnose the intervening write.
 void sharedWrite() {
   int value = 1;
-  tbc::view<const int &> view = value;
+  tbc::view<const int&> view = value;
   value = 2; // expected-error [tbc-conflicting-access]
   spec::observe(view);
 }
@@ -27,7 +27,7 @@ void sharedWrite() {
 // SCENARIO: The view is consumed before the write; accept the later mutation.
 void endedShared() {
   int value = 1;
-  tbc::view<const int &> view = value;
+  tbc::view<const int&> view = value;
   spec::observe(view);
   value = 2;
   spec::observe(value);
@@ -43,8 +43,8 @@ void endedShared() {
 // SCENARIO: Both references remain used; report creation of the second loan.
 void overlappingMutable() {
   int value = 1;
-  tbc::view<int &> first = value;
-  tbc::view<int &> second = value; // expected-error [tbc-conflicting-borrow]
+  tbc::view<int&> first = value;
+  tbc::view<int&> second = value; // expected-error [tbc-conflicting-borrow]
   first += 1;
   second += 1;
   spec::observe(value);
@@ -60,9 +60,9 @@ void overlappingMutable() {
 // SCENARIO: Use the child, end its scope, then resume the parent; accept.
 void derivedReborrow() {
   int value = 1;
-  tbc::view<int &> parent = value;
+  tbc::view<int&> parent = value;
   {
-    tbc::view<int &> child = parent;
+    tbc::view<int&> child = parent;
     child += 1;
   }
   parent += 1;

@@ -3,15 +3,14 @@
 static_assert(true);
 #endif
 
-
-#include <cstddef>
 #include <arpa/inet.h>
+#include <cmath>
+#include <cstddef>
+#include <cstdio>
+#include <cstring>
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
-#include <cstring>
-#include <cmath>
-#include <cstdio>
 
 import std;
 import telar.base.memory;
@@ -28,14 +27,14 @@ using namespace telar::runtime;
 void testProxyAuthentication();
 
 template <Allocator Memory>
-static void readProxy(Memory &memory, ProxyOptions<Memory> &options, std::string_view source) {
+static void readProxy(Memory& memory, ProxyOptions<Memory>& options, std::string_view source) {
   lua::Vm vm{memory};
 
   vm.execute(source, "@proxy-test");
   config::ProxyReader<Memory>::read(lua::Value{vm.state(), -1, "config.runtime.proxy"}, options);
 }
 
-static void testHosts(SystemAllocator &memory) {
+static void testHosts(SystemAllocator& memory) {
   ProxyHostPolicy policy{memory};
 
   check(!policy.contains("example.com"));
@@ -75,7 +74,7 @@ static void testHosts(SystemAllocator &memory) {
   check(policy.contains("HOST255.EXAMPLE"));
 }
 
-static void testPaneEnvironment(SystemAllocator &memory) {
+static void testPaneEnvironment(SystemAllocator& memory) {
   for (const bool https_proxy : {true, false}) {
     using Identity = ProxyClientConfiguration::Identity;
     auto identity = std::make_shared<Identity>(Identity{.status = {.active = true, .port = 45100}, .secret = ProxySecret::generate(), .https_proxy = https_proxy, .certificate = {}, .bundle = {}});
@@ -134,7 +133,7 @@ void testProxyPolicy() {
       ProxyOptions options{memory};
 
       readProxy(memory, options, std::string{"return "} + expression);
-    } catch (const lua::Error &) {
+    } catch (const lua::Error&) {
       rejected = true;
     }
 

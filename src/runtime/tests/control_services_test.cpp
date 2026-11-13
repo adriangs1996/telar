@@ -3,24 +3,23 @@
 static_assert(true);
 #endif
 
-
-#include <cassert>
-#include <cstdint>
-#include <cstring>
-#include <cstddef>
-#include <cerrno>
-#include <sys/types.h>
-#include <limits.h>
+#include "cell_layout.hpp"
 #include "telar_base/diagnostics/config.hpp"
+#include <cassert>
+#include <cerrno>
+#include <csignal>
+#include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fcntl.h>
+#include <limits.h>
 #include <sys/mman.h>
-#include <unistd.h>
-#include "cell_layout.hpp"
-#include <csignal>
+#include <sys/types.h>
 #include <sys/uio.h>
 #include <sys/wait.h>
+#include <unistd.h>
 #if (defined(__APPLE__))
 #include <sys/event.h>
 #endif
@@ -36,10 +35,10 @@ static_assert(true);
 #if (defined(__linux__))
 #include <sys/syscall.h>
 #endif
+#include <ghostty/vt.h>
 #include <new>
 #include <poll.h>
 #include <sys/stat.h>
-#include <ghostty/vt.h>
 
 import std;
 import telar.base.diagnostics;
@@ -58,18 +57,13 @@ import telar.runtime.runtime.runtime;
 using namespace telar;
 using namespace telar::runtime;
 
-static void testLimits(SystemAllocator &memory) {
+static void testLimits(SystemAllocator& memory) {
   RuntimeModel model{memory};
   ClientStore<SystemAllocator> clients{memory};
   LimitService<SystemAllocator> limits;
   ClientPeer reporter{memory, model, clients, ClientRole::control};
   ClientPeer observer{memory, model, clients, ClientRole::interactive};
-  const ReportLimit report{.reach = {.name = "test.capacity",
-                                     .noun = "items",
-                                     .value = 10,
-                                     .requested = 11,
-                                     .route = "testing"},
-                           .hits = 3};
+  const ReportLimit report{.reach = {.name = "test.capacity", .noun = "items", .value = 10, .requested = 11, .route = "testing"}, .hits = 3};
 
   limits.receive(model.limits, reporter.session(), report);
   limits.deliver(model, clients);
@@ -98,13 +92,9 @@ static void testLimits(SystemAllocator &memory) {
   check(ledger.rows().size() == LimitLedger::capacity && ledger.evicted() == 1);
 }
 
-static void testWorktreeOwnership(SystemAllocator &memory) {
+static void testWorktreeOwnership(SystemAllocator& memory) {
   Worktrees worktrees{memory};
-  RegisterWorktree request{.request_id = 1,
-                           .source = 5,
-                           .path = "/tmp/worktree",
-                           .branch = "feature",
-                           .title = "Initial"};
+  RegisterWorktree request{.request_id = 1, .source = 5, .path = "/tmp/worktree", .branch = "feature", .title = "Initial"};
   const auto added = worktrees.registerEntry(request);
 
   check(added.created);
@@ -120,7 +110,7 @@ static void testWorktreeOwnership(SystemAllocator &memory) {
   check(worktrees.registerEntry(request).worktree != added.worktree);
 }
 
-static void testExecutions(SystemAllocator &memory) {
+static void testExecutions(SystemAllocator& memory) {
   RuntimeModel model{memory};
   ClientStore<SystemAllocator> clients{memory};
   LimitService<SystemAllocator> limits;
@@ -129,12 +119,7 @@ static void testExecutions(SystemAllocator &memory) {
   ClientPeer owner{memory, model, clients, ClientRole::control};
   ClientPeer outsider{memory, model, clients, ClientRole::control};
   const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", "cat; printf error >&2; exit 17"};
-  ExecutionRequest request{.request_id = 1,
-                           .action = ExecutionAction::start,
-                           .execution_id = 73,
-                           .stdin_open = true,
-                           .cwd = "/tmp",
-                           .arguments = arguments};
+  ExecutionRequest request{.request_id = 1, .action = ExecutionAction::start, .execution_id = 73, .stdin_open = true, .cwd = "/tmp", .arguments = arguments};
 
   executions.request(model, owner.session(), request);
   check(owner.receive<ExecutionReply>().state == ExecutionState::starting);
@@ -146,15 +131,13 @@ static void testExecutions(SystemAllocator &memory) {
 
   try {
     executions.request(model, owner.session(), request);
-  } catch (const RequestError &error) {
+  } catch (const RequestError& error) {
     conflict = error.code() == FailureCode::invalid_request;
   }
 
   check(conflict);
 
-  request = {.request_id = 3,
-             .action = ExecutionAction::input,
-             .execution_id = 73};
+  request = {.request_id = 3, .action = ExecutionAction::input, .execution_id = 73};
   const std::array<Byte, 6> bytes{'h', 'e', 'l', 'l', 'o', '\n'};
 
   request.bytes = bytes;
@@ -162,7 +145,7 @@ static void testExecutions(SystemAllocator &memory) {
 
   try {
     executions.request(model, outsider.session(), request);
-  } catch (const RequestError &) {
+  } catch (const RequestError&) {
     refused = true;
   }
 
@@ -178,20 +161,18 @@ static void testExecutions(SystemAllocator &memory) {
 
   while (executions.refresh(model)) {
     check(std::chrono::steady_clock::now() < deadline);
-    for (const auto &event : poller.wait(std::chrono::milliseconds{10}, ready)) {
+    for (const auto& event : poller.wait(std::chrono::milliseconds{10}, ready)) {
       executions.event(event);
     }
   }
 
-  request = {.request_id = 4,
-             .action = ExecutionAction::status,
-             .execution_id = 73};
+  request = {.request_id = 4, .action = ExecutionAction::status, .execution_id = 73};
   executions.request(model, outsider.session(), request);
   const auto result = outsider.receive<ExecutionReply>();
 
   check(result.state == ExecutionState::exited && result.exit_code == 17);
-  check(std::string_view{reinterpret_cast<const char *>(result.stdout_bytes.data()), result.stdout_bytes.size()} == "hello\n");
-  check(std::string_view{reinterpret_cast<const char *>(result.stderr_bytes.data()), result.stderr_bytes.size()} == "error");
+  check(std::string_view{reinterpret_cast<const char*>(result.stdout_bytes.data()), result.stdout_bytes.size()} == "hello\n");
+  check(std::string_view{reinterpret_cast<const char*>(result.stderr_bytes.data()), result.stderr_bytes.size()} == "error");
   check(!result.stdin_open);
   request.action = ExecutionAction::forget;
   executions.request(model, outsider.session(), request);

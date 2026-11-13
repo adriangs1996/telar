@@ -4,36 +4,36 @@
 
 namespace telar::gui::test {
 
-class TerminalCursor final {
-public:
-  explicit TerminalCursor(qt::TerminalItem &terminal)
-      : terminal_(terminal),
-        visible_(terminal.cursor_on_),
-        blinking_(terminal.blink_.isActive()) {
-    terminal_.blink_.stop();
-  }
-
-  ~TerminalCursor() {
-    setVisible(visible_);
-    if (blinking_) {
-      terminal_.blink_.start();
+  class TerminalCursor final {
+  public:
+    explicit TerminalCursor(qt::TerminalItem& terminal)
+        : terminal_(terminal),
+          visible_(terminal.cursor_on_),
+          blinking_(terminal.blink_.isActive()) {
+      terminal_.blink_.stop();
     }
-  }
 
-  TerminalCursor(const TerminalCursor &) = delete;
-  TerminalCursor &operator=(const TerminalCursor &) = delete;
-  TerminalCursor(TerminalCursor &&) = delete;
-  TerminalCursor &operator=(TerminalCursor &&) = delete;
+    ~TerminalCursor() {
+      setVisible(visible_);
+      if (blinking_) {
+        terminal_.blink_.start();
+      }
+    }
 
-  void setVisible(bool visible) {
-    terminal_.cursor_on_ = visible;
-    terminal_.update();
-  }
+    TerminalCursor(const TerminalCursor&) = delete;
+    TerminalCursor& operator=(const TerminalCursor&) = delete;
+    TerminalCursor(TerminalCursor&&) = delete;
+    TerminalCursor& operator=(TerminalCursor&&) = delete;
 
-private:
-  qt::TerminalItem &terminal_;
-  bool visible_;
-  bool blinking_;
-};
+    void setVisible(bool visible) {
+      terminal_.cursor_on_ = visible;
+      terminal_.update();
+    }
+
+  private:
+    qt::TerminalItem& terminal_;
+    bool visible_;
+    bool blinking_;
+  };
 
 }

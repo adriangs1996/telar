@@ -3,24 +3,23 @@
 static_assert(true);
 #endif
 
-
+#include "cell_layout.hpp"
 #include "telar_base/diagnostics/config.hpp"
-#include <sys/types.h>
-#include <cstdint>
 #include <cassert>
-#include <cstring>
-#include <cstddef>
 #include <cerrno>
+#include <csignal>
+#include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fcntl.h>
-#include <sys/mman.h>
-#include <unistd.h>
-#include "cell_layout.hpp"
 #include <limits.h>
-#include <csignal>
+#include <sys/mman.h>
+#include <sys/types.h>
 #include <sys/uio.h>
 #include <sys/wait.h>
+#include <unistd.h>
 #if (defined(__APPLE__))
 #include <sys/event.h>
 #endif
@@ -36,9 +35,9 @@ static_assert(true);
 #if (defined(__linux__))
 #include <sys/syscall.h>
 #endif
+#include <ghostty/vt.h>
 #include <new>
 #include <sys/stat.h>
-#include <ghostty/vt.h>
 
 import std;
 import telar.base.diagnostics;
@@ -61,7 +60,7 @@ import telar.runtime.diagnostics.runtime_telemetry;
 using namespace telar;
 using namespace telar::runtime;
 
-static void testNotificationCapacity(SystemAllocator &memory) {
+static void testNotificationCapacity(SystemAllocator& memory) {
   RuntimeModel model{memory};
   ClientStore<SystemAllocator> clients{memory};
   LimitService<SystemAllocator> limits;
@@ -90,7 +89,7 @@ static void testNotificationCapacity(SystemAllocator &memory) {
 
   try {
     ClientControl<SystemAllocator>::notify(clients, requester.session().id, ShowNotification{.request_id = 129, .notification = NotificationBody{.title = "Capacity", .message = "Refused"}});
-  } catch (const ResponseQueueFull &) {
+  } catch (const ResponseQueueFull&) {
     refused = true;
   }
 
@@ -99,7 +98,7 @@ static void testNotificationCapacity(SystemAllocator &memory) {
   check(!observer.session().connection.hasOutput());
 }
 
-static void testSaturatedCommandTarget(SystemAllocator &memory) {
+static void testSaturatedCommandTarget(SystemAllocator& memory) {
   RuntimeModel model{memory};
   ClientStore<SystemAllocator> clients{memory};
   LimitService<SystemAllocator> limits;
@@ -121,7 +120,7 @@ static void testSaturatedCommandTarget(SystemAllocator &memory) {
 
   try {
     ClientControl<SystemAllocator>::requestCommand(clients, requester.session().id, request);
-  } catch (const RequestError &error) {
+  } catch (const RequestError& error) {
     refused = error.code() == FailureCode::invalid_request && std::string_view{error.what()} == "ResponseQueueFull";
   }
 
@@ -133,7 +132,7 @@ static void testSaturatedCommandTarget(SystemAllocator &memory) {
   check(!target.session().connection.closing && target.session().connection.droppedResponses() == 1);
 }
 
-static void testClosureResync(SystemAllocator &memory) {
+static void testClosureResync(SystemAllocator& memory) {
   RuntimeModel model{memory};
   ClientStore<SystemAllocator> clients{memory};
   LimitService<SystemAllocator> limits;
@@ -171,7 +170,7 @@ static void testClosureResync(SystemAllocator &memory) {
   panes.remove(model, clients, opened.pane_id);
 }
 
-static void testCommandRouting(SystemAllocator &memory) {
+static void testCommandRouting(SystemAllocator& memory) {
   RuntimeModel model{memory};
   ClientStore<SystemAllocator> clients{memory};
   LimitService<SystemAllocator> limits;
@@ -203,7 +202,7 @@ static void testCommandRouting(SystemAllocator &memory) {
 
   CompleteClientCommand completion;
 
-  static_cast<ClientCommand &>(completion) = forwarded;
+  static_cast<ClientCommand&>(completion) = forwarded;
   completion.status = ClientCommandStatus::applied;
   ClientControl<SystemAllocator>::completeCommand(clients, impostor.session().id, completion);
   check(requester.session().pending_command.has_value());
@@ -236,27 +235,23 @@ static void testCommandRouting(SystemAllocator &memory) {
 
   try {
     ClientControl<SystemAllocator>::requestCommand(clients, requester.session().id, request);
-  } catch (const RequestError &) {
+  } catch (const RequestError&) {
     rejected = true;
   }
 
   check(rejected);
 
-  ClientControl<SystemAllocator>::notify(clients, requester.session().id, ShowNotification{.request_id = 4,
-                                                       .notification = NotificationBody{.title = "Build",
-                                                                                        .message = "Finished"}});
+  ClientControl<SystemAllocator>::notify(clients, requester.session().id, ShowNotification{.request_id = 4, .notification = NotificationBody{.title = "Build", .message = "Finished"}});
   check(requester.receive<NotificationShown>().delivered_clients == 2);
   check(replacement.receive<Notification>().message == "Finished");
   check(impostor.receive<Notification>().title == "Build");
 
-  ClientControl<SystemAllocator>::detach(clients, requester.session().id, DetachClient{.request_id = 5,
-                                                   .client_id = replacement.session().id,
-                                                   .client_generation = replacement.session().generation});
+  ClientControl<SystemAllocator>::detach(clients, requester.session().id, DetachClient{.request_id = 5, .client_id = replacement.session().id, .client_generation = replacement.session().generation});
   check(requester.receive<RequestCompleted>().request_id == 5);
   check(replacement.session().connection.closing);
 }
 
-static void testFocusAndLayouts(SystemAllocator &memory) {
+static void testFocusAndLayouts(SystemAllocator& memory) {
   RuntimeModel model{memory};
   ClientStore<SystemAllocator> clients{memory};
   LimitService<SystemAllocator> limits;
@@ -273,8 +268,7 @@ static void testFocusAndLayouts(SystemAllocator &memory) {
   workspace->tabs.emplace_back(memory, 1, "Shell");
   const TabLocation location{WorkspaceLocation{.id = workspace_id}, 1};
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
-  Command command{memory, Launch{.cwd = "/tmp",
-                                 .arguments = arguments}};
+  Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
   const auto pane_id = model.panes.nextId();
   auto pane = makeOwned<Pane<SystemAllocator>>(memory, memory, pane_id, location, command, PaneLaunch{TerminalSize{80, 24, 0, 0}, model.media_budget, model.graphics_limits});
   constexpr std::uint64_t pane_generation = 34;
@@ -287,19 +281,11 @@ static void testFocusAndLayouts(SystemAllocator &memory) {
   target.session().last_input_pane = pane_id;
   target.session().last_input_sequence = 7;
 
-  ClientControl<SystemAllocator>::requestFocus(model.panes, clients, requester.session().id, RequestPaneFocus{.request_id = 1,
-                                                             .pane_id = pane_id,
-                                                             .pane_generation = pane_generation,
-                                                             .direction = PaneDirection::right});
+  ClientControl<SystemAllocator>::requestFocus(model.panes, clients, requester.session().id, RequestPaneFocus{.request_id = 1, .pane_id = pane_id, .pane_generation = pane_generation, .direction = PaneDirection::right});
   const auto forwarded = target.receive<PaneFocusCommand>();
 
   check(forwarded.requester.id == requester.session().id && forwarded.pane_id == pane_id);
-  CompletePaneFocus completion{.requester = forwarded.requester,
-                               .request_id = 1,
-                               .pane_id = pane_id,
-                               .pane_generation = pane_generation + 1,
-                               .outcome = PaneFocusOutcome::focused,
-                               .focused_pane_id = pane_id};
+  CompletePaneFocus completion{.requester = forwarded.requester, .request_id = 1, .pane_id = pane_id, .pane_generation = pane_generation + 1, .outcome = PaneFocusOutcome::focused, .focused_pane_id = pane_id};
 
   ClientControl<SystemAllocator>::completeFocus(clients, target.session().id, completion);
   check(requester.session().pending_focus.has_value());
@@ -309,14 +295,8 @@ static void testFocusAndLayouts(SystemAllocator &memory) {
   check(requester.session().connection.closing);
 
   std::array<ClientLayoutNode, 1> nodes{ClientLayoutPane{pane_id}};
-  std::array<ClientTabLayout, 1> tabs{ClientTabLayout{.location = location,
-                                                      .focused_pane = pane_id,
-                                                      .workspace_active = true,
-                                                      .nodes = nodes}};
-  UpdateClientLayout update{.sidebar_visible = true,
-                            .sidebar_width = 35,
-                            .active_tab = location,
-                            .tabs = tabs};
+  std::array<ClientTabLayout, 1> tabs{ClientTabLayout{.location = location, .focused_pane = pane_id, .workspace_active = true, .nodes = nodes}};
+  UpdateClientLayout update{.sidebar_visible = true, .sidebar_width = 35, .active_tab = location, .tabs = tabs};
 
   update.validate();
   layouts.retain(model, target.session().identity, update);
@@ -343,17 +323,22 @@ struct PluginEventsFixture {
   plugins::EffectBatch batch;
   plugins::TapMetrics counters;
 
-  int descriptor() const noexcept { return -1; }
-  plugins::TapMetrics metrics() const noexcept { return counters; }
+  int descriptor() const noexcept {
+    return -1;
+  }
+
+  plugins::TapMetrics metrics() const noexcept {
+    return counters;
+  }
 
   template <typename Consumer>
-  void collect(Consumer &&consumer) {
+  void collect(Consumer&& consumer) {
     consumer(batch);
     batch.count = 0;
   }
 };
 
-static void testPluginDelivery(SystemAllocator &memory) {
+static void testPluginDelivery(SystemAllocator& memory) {
   RuntimeModel model{memory};
   ClientStore<SystemAllocator> clients{memory};
   LimitService<SystemAllocator> limits;
@@ -365,11 +350,7 @@ static void testPluginDelivery(SystemAllocator &memory) {
   closing.session().connection.closing = true;
   PluginEventsFixture events;
 
-  for (const auto invalid : {NotificationBody{.duration_ms = 499, .title = "invalid"},
-                             NotificationBody{.duration_ms = 60001, .title = "invalid"},
-                             NotificationBody{.title = ""},
-                             NotificationBody{.title = "line\nbreak"},
-                             NotificationBody{.title = "\xff"}}) {
+  for (const auto invalid : {NotificationBody{.duration_ms = 499, .title = "invalid"}, NotificationBody{.duration_ms = 60001, .title = "invalid"}, NotificationBody{.title = ""}, NotificationBody{.title = "line\nbreak"}, NotificationBody{.title = "\xff"}}) {
     events.batch.count = 1;
     events.batch.notifications[0] = invalid;
     delivery.collect(clients, events);

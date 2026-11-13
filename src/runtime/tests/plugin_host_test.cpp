@@ -3,50 +3,49 @@
 static_assert(true);
 #endif
 
-
-#include "telar_client/serializers/telar_messages.hpp"
-#include <chrono>
-#include <cstddef>
-#include <cstdint>
+#include "plugin_bootstrap.hpp"
 #include "telar_base/memory/allocator.hpp"
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-#include <array>
-#include <cstring>
-#include <stdexcept>
-#include <string_view>
-#include <optional>
-#include <span>
-#include <bit>
-#include <charconv>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
-#include <utility>
-#include <pcap/pcap.h>
+#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_platform/file_descriptor.hpp"
+#include "telar_platform/random_bytes.hpp"
+#include "telar_platform/trace.hpp"
+#include "traffic_api.hpp"
 #include <algorithm>
 #include <arpa/inet.h>
-#include <cmath>
-#include <cstdio>
-#include <initializer_list>
-#include <string>
+#include <array>
 #include <atomic>
+#include <bit>
 #include <cassert>
-#include "telar_base/memory/fixed_text.hpp"
-#include <exception>
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include <limits.h>
-#include <memory>
-#include "telar_platform/random_bytes.hpp"
 #include <cerrno>
-#include "telar_platform/file_descriptor.hpp"
-#include <mutex>
-#include "traffic_api.hpp"
-#include "plugin_bootstrap.hpp"
-#include <sys/stat.h>
+#include <charconv>
+#include <chrono>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <exception>
 #include <fcntl.h>
-#include "telar_platform/trace.hpp"
 #include <filesystem>
 #include <fstream>
+#include <initializer_list>
+#include <lauxlib.h>
+#include <limits.h>
+#include <lua.h>
+#include <lualib.h>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <pcap/pcap.h>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <sys/stat.h>
+#include <utility>
 
 import telar.runtime.tests.check;
 import telar.runtime.plugins.run_worker;
@@ -55,7 +54,7 @@ using namespace telar;
 using namespace telar::runtime;
 namespace tap = telar::runtime::plugins;
 
-static void writePlugin(const std::string &path, std::string_view source) {
+static void writePlugin(const std::string& path, std::string_view source) {
   std::ofstream file{path};
 
   file << source;
@@ -66,8 +65,8 @@ static tap::ExchangeView sampleExchange() {
   static constexpr std::string_view head = ":method: POST\r\n: path \t:  /resource \t\r\nignored\r\nx-key: one\r\nx-key: two\r\n";
   static constexpr std::string_view body = "{\"value\":4}";
   const tap::HalfView request{
-      .head = {reinterpret_cast<const Byte *>(head.data()), head.size()},
-      .body = {reinterpret_cast<const Byte *>(body.data()), body.size()},
+      .head = {reinterpret_cast<const Byte*>(head.data()), head.size()},
+      .body = {reinterpret_cast<const Byte*>(body.data()), body.size()},
       .encoding = "gzip",
       .decoded = true,
       .body_truncated = true,
@@ -153,7 +152,7 @@ end}
       const auto reply = tap::Protocol::decodeEffects(host.invoke(exchange, output));
 
       check(reply.event_id == 21 && reply.batch.count == 1);
-      const auto &notification = reply.batch.notifications[0];
+      const auto& notification = reply.batch.notifications[0];
 
       check(notification.title == std::to_string(index) && notification.message == std::string_view{"binary\0text", 11});
       check(notification.level == NotificationLevel::warning && notification.duration_ms == 123);
@@ -201,7 +200,7 @@ end}
 
     try {
       host.invoke(exchange, output);
-    } catch (const EncodingError &) {
+    } catch (const EncodingError&) {
       rejected = true;
     }
 

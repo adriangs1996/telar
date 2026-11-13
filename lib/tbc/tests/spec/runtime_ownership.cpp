@@ -19,7 +19,7 @@ tbc::view<spec::allocated_int, tbc::lt::a> allocatorEscape() {
 // STATUS: pending
 // CONTRACT: A returned owner's allocator dependency is propagated to its caller.
 // SCENARIO: The allocator is borrowed from a reference parameter, not created locally.
-tbc::view<spec::allocated_int, tbc::lt::a> allocatorCallerOwned(tbc::view<spec::arena &, tbc::lt::a> memory) {
+tbc::view<spec::allocated_int, tbc::lt::a> allocatorCallerOwned(tbc::view<spec::arena&, tbc::lt::a> memory) {
   return spec::makeOwned(memory);
 }
 
@@ -33,7 +33,7 @@ tbc::view<spec::allocated_int, tbc::lt::a> allocatorCallerOwned(tbc::view<spec::
 // SCENARIO: Follow the allocation to destination and diagnose reset, not the prior move.
 void movedOwnerReleasesView() {
   auto source = std::make_unique<int>(1);
-  tbc::view<const int &> view = *source;
+  tbc::view<const int&> view = *source;
   auto destination = std::move(source);
   destination.reset(); // expected-error [tbc-invalidated-borrow]
   spec::observe(view);
@@ -49,7 +49,7 @@ void movedOwnerReleasesView() {
 // SCENARIO: Accept a pointee read while the transferred allocation remains owned.
 void movedOwnerPreservesView() {
   auto source = std::make_unique<int>(1);
-  tbc::view<const int &> view = *source;
+  tbc::view<const int&> view = *source;
   auto destination = std::move(source);
   spec::observe(view);
   spec::observe(destination);
@@ -63,8 +63,8 @@ void movedOwnerPreservesView() {
 // STATUS: pending
 // CONTRACT: take destroys the old optional slot object after transferring its value.
 // SCENARIO: A reference to that slot is invalid even if its value was moved elsewhere.
-void queueSlotRemoved(tbc::view<spec::request_queue &> queue) {
-  const auto &view = queue.front();
+void queueSlotRemoved(tbc::view<spec::request_queue&> queue) {
+  const auto& view = queue.front();
   const auto taken = queue.take(); // expected-error [tbc-invalidated-borrow]
   spec::observe(view);
   spec::observe(taken);
@@ -78,7 +78,7 @@ void queueSlotRemoved(tbc::view<spec::request_queue &> queue) {
 // STATUS: pending
 // CONTRACT: The returned string owns its transferred value independently of the old slot.
 // SCENARIO: A view acquired from the taken string remains valid after more queue removals.
-void queueTakenOwner(tbc::view<spec::request_queue &> queue) {
+void queueTakenOwner(tbc::view<spec::request_queue&> queue) {
   const auto taken = queue.take();
   spec::text view = taken;
   const auto other = queue.take();

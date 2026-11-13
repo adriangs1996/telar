@@ -1,21 +1,19 @@
 module;
+#include <cstdio>
 #include <cstdlib>
 #include <new>
-#include <cstdio>
 
 #include <cerrno>
 #include <cstdint>
 
-
-
 #include <cassert>
 
+#include "tbc/view.hpp"
+#include "telar_base/diagnostics/config.hpp"
 #include <cstddef>
 #include <cstring>
 #include <sys/types.h>
 #include <unistd.h>
-#include "telar_base/diagnostics/config.hpp"
-#include "tbc/view.hpp"
 
 export module telar.runtime.platform.request_worker;
 
@@ -25,12 +23,10 @@ export import telar.runtime.platform.signals;
 
 export import telar.platform;
 
-
 export import telar.runtime.diagnostics.operation;
 export import telar.runtime.history.event;
 export import telar.runtime.runtime.background_executor;
 export import telar.runtime.transport.connection;
-
 
 export import telar.base.text;
 export import telar.client;
@@ -40,726 +36,738 @@ import telar.platform.primitives;
 
 // Interface: platform/observation_worker.cppm
 export {
-namespace telar::runtime {
+  namespace telar::runtime {
 
-template <typename Service>
-concept ObservationService = requires(Service &service, const typename Service::Request &request) {
-  { service.observe(request) } noexcept -> std::same_as<typename Service::Result>;
-  { service.stop() } noexcept -> std::same_as<void>;
-};
+    template <typename Service>
+    concept ObservationService = requires(Service& service, const typename Service::Request& request) {
+      { service.observe(request) } noexcept -> std::same_as<typename Service::Result>;
+      { service.stop() } noexcept -> std::same_as<void>;
+    };
 
-// Runs a service on its own thread. The worker owns the service, built in place from the arguments,
-// as a Rust thread owns what its closure moves in: the caller's thread never reaches it again. A
-// reference type as `Service` lends the worker a service its caller keeps instead.
-//
-// The request, the service and the result cross threads only under the mutex: a request is taken
-// when the worker is idle, and its result, which may view the service, is consumed before the next
-// request is accepted. That protocol is audited here, as the unsafe code behind a Rust channel is, so
-// the worker is TBC_SHARED; callers still see that it keeps what they submit.
-template <typename Service>
-  requires ObservationService<std::remove_reference_t<Service>>
-class TBC_SHARED ObservationWorker {
-  using Request = typename std::remove_reference_t<Service>::Request;
-  using Result = typename std::remove_reference_t<Service>::Result;
+    // Runs a service on its own thread. The worker owns the service, built in place from the arguments,
+    // as a Rust thread owns what its closure moves in: the caller's thread never reaches it again. A
+    // reference type as `Service` lends the worker a service its caller keeps instead.
+    //
+    // The request, the service and the result cross threads only under the mutex: a request is taken
+    // when the worker is idle, and its result, which may view the service, is consumed before the next
+    // request is accepted. That protocol is audited here, as the unsafe code behind a Rust channel is, so
+    // the worker is TBC_SHARED; callers still see that it keeps what they submit.
+    template <typename Service>
+      requires ObservationService<std::remove_reference_t<Service>>
+    class TBC_SHARED ObservationWorker {
+      using Request = typename std::remove_reference_t<Service>::Request;
+      using Result = typename std::remove_reference_t<Service>::Result;
 
-public:
-  template <typename... Arguments>
-  inline explicit ObservationWorker(std::in_place_t, Arguments &&...arguments)
-      : ObservationWorker(nullptr, std::in_place, std::forward<Arguments>(arguments)...) {}
+    public:
+      template <typename... Arguments>
+      inline explicit ObservationWorker(std::in_place_t, Arguments&&... arguments)
+          : ObservationWorker(nullptr, std::in_place, std::forward<Arguments>(arguments)...) {}
 
-  // The completion is signaled after every result, besides the worker's own descriptor.
-  template <typename... Arguments>
-  inline ObservationWorker(CompletionSignal *completion, std::in_place_t, Arguments &&...arguments)
-      : service_(std::forward<Arguments>(arguments)...),
-        completion_(completion) {
-    thread_ = startThread("Start observation worker", [this] { run(); });
-  }
-
-  inline ~ObservationWorker() {
-    {
-      const std::lock_guard lock{mutex_};
-
-      stopping_ = true;
-    }
-
-    service_.stop();
-    ready_.notify_one();
-    thread_.join();
-  }
-
-  ObservationWorker(const ObservationWorker &) = delete;
-  ObservationWorker &operator=(const ObservationWorker &) = delete;
-
-  // The worker keeps the request, region `a`, until its result is collected.
-  inline bool submit(tbc::view<Request, tbc::lt::a> request) {
-    const std::lock_guard lock{mutex_};
-
-    if (busy_ || stopping_) {
-      return false;
-    }
-
-    request_ = std::move(request);
-    busy_ = true;
-    ready_.notify_one();
-    return true;
-  }
-
-  template <typename Consumer>
-  inline void collect(Consumer &&consume) {
-    if (!result_ready_.load(std::memory_order_acquire)) {
-      return;
-    }
-
-    std::optional<Result> result;
-
-    {
-      const std::unique_lock lock{mutex_, std::try_to_lock};
-      if (!lock.owns_lock()) {
-        return;
+      // The completion is signaled after every result, besides the worker's own descriptor.
+      template <typename... Arguments>
+      inline ObservationWorker(CompletionSignal* completion, std::in_place_t, Arguments&&... arguments)
+          : service_(std::forward<Arguments>(arguments)...),
+            completion_(completion) {
+        thread_ = startThread("Start observation worker", [this] {
+          run();
+        });
       }
 
-      result = std::move(result_);
-      result_.reset();
-      busy_ = false;
-      result_ready_.store(false, std::memory_order_relaxed);
-    }
+      inline ~ObservationWorker() {
+        {
+          const std::lock_guard lock{mutex_};
 
-    signal_.drain();
-    consume(*result);
-  }
+          stopping_ = true;
+        }
 
-  inline int descriptor() const noexcept {
-    return signal_.descriptor();
-  }
-
-  template <typename Consumer>
-  inline void wait(Consumer &&consume) {
-    std::optional<Result> result;
-
-    {
-      std::unique_lock lock{mutex_};
-
-      if (!busy_) {
-        return;
+        service_.stop();
+        ready_.notify_one();
+        thread_.join();
       }
 
-      completed_.wait(lock, [&] { return result_.has_value(); });
-      result = std::move(result_);
-      result_.reset();
-      busy_ = false;
-      result_ready_.store(false, std::memory_order_relaxed);
-    }
+      ObservationWorker(const ObservationWorker&) = delete;
+      ObservationWorker& operator=(const ObservationWorker&) = delete;
 
-    signal_.drain();
-    consume(*result);
-  }
+      // The worker keeps the request, region `a`, until its result is collected.
+      inline bool submit(tbc::view<Request, tbc::lt::a> request) {
+        const std::lock_guard lock{mutex_};
 
-private:
-  inline void run() noexcept {
-    for (;;) {
-      {
-        std::unique_lock lock{mutex_};
+        if (busy_ || stopping_) {
+          return false;
+        }
 
-        ready_.wait(lock, [&] { return stopping_ || request_.has_value(); });
-        if (stopping_) {
+        request_ = std::move(request);
+        busy_ = true;
+        ready_.notify_one();
+        return true;
+      }
+
+      template <typename Consumer>
+      inline void collect(Consumer&& consume) {
+        if (!result_ready_.load(std::memory_order_acquire)) {
           return;
         }
 
-        processing_ = std::move(request_);
-        request_.reset();
+        std::optional<Result> result;
+
+        {
+          const std::unique_lock lock{mutex_, std::try_to_lock};
+          if (!lock.owns_lock()) {
+            return;
+          }
+
+          result = std::move(result_);
+          result_.reset();
+          busy_ = false;
+          result_ready_.store(false, std::memory_order_relaxed);
+        }
+
+        signal_.drain();
+        consume(*result);
       }
 
-      // A result may view the request it answers, which stays here until the next one is accepted.
-      auto result = service_.observe(*processing_);
-
-      {
-        const std::lock_guard lock{mutex_};
-
-        result_ = std::move(result);
-        signal_.notify();
-        result_ready_.store(true, std::memory_order_release);
+      inline int descriptor() const noexcept {
+        return signal_.descriptor();
       }
 
-      if (completion_ != nullptr) {
-        completion_->notify();
+      template <typename Consumer>
+      inline void wait(Consumer&& consume) {
+        std::optional<Result> result;
+
+        {
+          std::unique_lock lock{mutex_};
+
+          if (!busy_) {
+            return;
+          }
+
+          completed_.wait(lock, [&] {
+            return result_.has_value();
+          });
+
+          result = std::move(result_);
+          result_.reset();
+          busy_ = false;
+          result_ready_.store(false, std::memory_order_relaxed);
+        }
+
+        signal_.drain();
+        consume(*result);
       }
 
-      completed_.notify_one();
-    }
+    private:
+      inline void run() noexcept {
+        for (;;) {
+          {
+            std::unique_lock lock{mutex_};
+
+            ready_.wait(lock, [&] {
+              return stopping_ || request_.has_value();
+            });
+
+            if (stopping_) {
+              return;
+            }
+
+            processing_ = std::move(request_);
+            request_.reset();
+          }
+
+          // A result may view the request it answers, which stays here until the next one is accepted.
+          auto result = service_.observe(*processing_);
+
+          {
+            const std::lock_guard lock{mutex_};
+
+            result_ = std::move(result);
+            signal_.notify();
+            result_ready_.store(true, std::memory_order_release);
+          }
+
+          if (completion_ != nullptr) {
+            completion_->notify();
+          }
+
+          completed_.notify_one();
+        }
+      }
+
+      Service service_;
+      CompletionSignal* completion_;
+      CompletionSignal signal_;
+      std::jthread thread_;
+      std::mutex mutex_;
+      std::condition_variable ready_;
+      std::condition_variable completed_;
+      tbc::view<std::optional<Request>, tbc::lt::a> request_;
+      // Only the worker's thread touches the request it is answering.
+      tbc::view<std::optional<Request>, tbc::lt::a> processing_;
+      std::optional<Result> result_;
+      bool busy_ = false;
+      std::atomic<bool> result_ready_{false};
+      bool stopping_ = false;
+    };
+
   }
-
-  Service service_;
-  CompletionSignal *completion_;
-  CompletionSignal signal_;
-  std::jthread thread_;
-  std::mutex mutex_;
-  std::condition_variable ready_;
-  std::condition_variable completed_;
-  tbc::view<std::optional<Request>, tbc::lt::a> request_;
-  // Only the worker's thread touches the request it is answering.
-  tbc::view<std::optional<Request>, tbc::lt::a> processing_;
-  std::optional<Result> result_;
-  bool busy_ = false;
-  std::atomic<bool> result_ready_{false};
-  bool stopping_ = false;
-};
-
-}
 }
 
 // Interface: platform/serial_queue.cppm
 export {
-namespace telar::runtime {
+  namespace telar::runtime {
 
-// One observation at a time on a worker its owner keeps. Requests that arrive while one runs wait
-// in order, without a bound, and the next one goes in as each result is collected.
-template <typename Request>
-class SerialQueue {
-public:
-  // Starts `request` on `worker` when it is idle, else queues it behind the waiting ones.
-  template <typename Worker>
-  inline void request(Worker &worker, const Request &request) {
-    if (!busy_ && worker.submit(request)) {
-      busy_ = true;
-      return;
-    }
+    // One observation at a time on a worker its owner keeps. Requests that arrive while one runs wait
+    // in order, without a bound, and the next one goes in as each result is collected.
+    template <typename Request>
+    class SerialQueue {
+    public:
+      // Starts `request` on `worker` when it is idle, else queues it behind the waiting ones.
+      template <typename Worker>
+      inline void request(Worker& worker, const Request& request) {
+        if (!busy_ && worker.submit(request)) {
+          busy_ = true;
+          return;
+        }
 
-    waiting_.push_back(request);
+        waiting_.push_back(request);
+      }
+
+      inline std::span<const Request> waiting() const noexcept {
+        return waiting_;
+      }
+
+      template <typename Predicate>
+      inline void dropWaiting(Predicate&& matches) {
+        std::erase_if(waiting_, std::forward<Predicate>(matches));
+      }
+
+      template <typename Worker, typename Consumer>
+      inline void collect(Worker& worker, Consumer&& consume) {
+        worker.collect([&](const auto& result) {
+          busy_ = false;
+          consume(result);
+        });
+
+        while (!busy_ && !waiting_.empty()) {
+          const auto next = waiting_.front();
+
+          waiting_.erase(waiting_.begin());
+          busy_ = worker.submit(next);
+        }
+      }
+
+    private:
+      std::vector<Request> waiting_;
+      bool busy_ = false;
+    };
+
   }
-
-  inline std::span<const Request> waiting() const noexcept {
-    return waiting_;
-  }
-
-  template <typename Predicate>
-  inline void dropWaiting(Predicate &&matches) {
-    std::erase_if(waiting_, std::forward<Predicate>(matches));
-  }
-
-  template <typename Worker, typename Consumer>
-  inline void collect(Worker &worker, Consumer &&consume) {
-    worker.collect([&](const auto &result) {
-      busy_ = false;
-      consume(result);
-    });
-
-    while (!busy_ && !waiting_.empty()) {
-      const auto next = waiting_.front();
-
-      waiting_.erase(waiting_.begin());
-      busy_ = worker.submit(next);
-    }
-  }
-
-private:
-  std::vector<Request> waiting_;
-  bool busy_ = false;
-};
-
-}
 }
 
 // Interface: platform/request_queue.cppm
 export {
-namespace telar::runtime {
+  namespace telar::runtime {
 
-template <typename Value, std::size_t Capacity, ConcurrentAllocator Memory>
-class RequestQueue {
-  static_assert(Capacity != 0 && std::is_nothrow_move_constructible_v<Value>);
+    template <typename Value, std::size_t Capacity, ConcurrentAllocator Memory>
+    class RequestQueue {
+      static_assert(Capacity != 0 && std::is_nothrow_move_constructible_v<Value>);
 
-public:
-  inline explicit RequestQueue(Memory &memory)
-      : slots_(Capacity, AllocatorRef<std::optional<Value>, Memory>{memory}) {}
+    public:
+      inline explicit RequestQueue(Memory& memory)
+          : slots_(Capacity, AllocatorRef<std::optional<Value>, Memory>{memory}) {}
 
-  inline bool empty() const noexcept {
-    return count_ == 0;
+      inline bool empty() const noexcept {
+        return count_ == 0;
+      }
+
+      inline bool full() const noexcept {
+        return count_ == Capacity;
+      }
+
+      inline std::size_t size() const noexcept {
+        return count_;
+      }
+
+      inline Value& operator[](std::size_t offset) noexcept {
+        assert(offset < count_);
+        return *slots_[(head_ + offset) % Capacity];
+      }
+
+      inline const Value& operator[](std::size_t offset) const noexcept {
+        assert(offset < count_);
+        return *slots_[(head_ + offset) % Capacity];
+      }
+
+      template <typename... Arguments>
+      inline Value& emplace(Arguments&&... arguments) {
+        assert(!full());
+        auto& value = slots_[(head_ + count_) % Capacity].emplace(std::forward<Arguments>(arguments)...);
+
+        ++count_;
+        return value;
+      }
+
+      inline void removeLast() noexcept {
+        assert(!empty());
+        --count_;
+        slots_[(head_ + count_) % Capacity].reset();
+      }
+
+      inline Value take() noexcept {
+        assert(!empty());
+        auto value = std::move(*slots_[head_]);
+
+        slots_[head_].reset();
+        head_ = (head_ + 1) % Capacity;
+        --count_;
+        return value;
+      }
+
+      inline void swap(RequestQueue& other) noexcept {
+        assert(slots_.get_allocator() == other.slots_.get_allocator());
+        slots_.swap(other.slots_);
+        std::swap(head_, other.head_);
+        std::swap(count_, other.count_);
+      }
+
+    private:
+      Vector<std::optional<Value>, Memory> slots_;
+      std::size_t head_ = 0;
+      std::size_t count_ = 0;
+    };
+
   }
-
-  inline bool full() const noexcept {
-    return count_ == Capacity;
-  }
-
-  inline std::size_t size() const noexcept {
-    return count_;
-  }
-
-  inline Value &operator[](std::size_t offset) noexcept {
-    assert(offset < count_);
-    return *slots_[(head_ + offset) % Capacity];
-  }
-
-  inline const Value &operator[](std::size_t offset) const noexcept {
-    assert(offset < count_);
-    return *slots_[(head_ + offset) % Capacity];
-  }
-
-  template <typename... Arguments>
-  inline Value &emplace(Arguments &&...arguments) {
-    assert(!full());
-    auto &value = slots_[(head_ + count_) % Capacity].emplace(std::forward<Arguments>(arguments)...);
-
-    ++count_;
-    return value;
-  }
-
-  inline void removeLast() noexcept {
-    assert(!empty());
-    --count_;
-    slots_[(head_ + count_) % Capacity].reset();
-  }
-
-  inline Value take() noexcept {
-    assert(!empty());
-    auto value = std::move(*slots_[head_]);
-
-    slots_[head_].reset();
-    head_ = (head_ + 1) % Capacity;
-    --count_;
-    return value;
-  }
-
-  inline void swap(RequestQueue &other) noexcept {
-    assert(slots_.get_allocator() == other.slots_.get_allocator());
-    slots_.swap(other.slots_);
-    std::swap(head_, other.head_);
-    std::swap(count_, other.count_);
-  }
-
-private:
-  Vector<std::optional<Value>, Memory> slots_;
-  std::size_t head_ = 0;
-  std::size_t count_ = 0;
-};
-
-}
 }
 
 // Interface: platform/request_worker.cppm
 export {
-namespace telar::runtime {
+  namespace telar::runtime {
 
-template <typename Service, typename = void>
-struct InternalRequestType {
-  using Type = std::monostate;
-};
+    template <typename Service, typename = void>
+    struct InternalRequestType {
+      using Type = std::monostate;
+    };
 
-template <typename Service>
-struct InternalRequestType<Service, std::void_t<typename Service::InternalRequest>> {
-  using Type = typename Service::InternalRequest;
-};
+    template <typename Service>
+    struct InternalRequestType<Service, std::void_t<typename Service::InternalRequest>> {
+      using Type = typename Service::InternalRequest;
+    };
 
-template <typename Service, typename Memory>
-concept RequestService = ConcurrentAllocator<Memory> && requires(Service &service, std::span<const Byte> request, EncodedReply<Memory> &reply) {
-  { service.process(request, reply) } -> std::same_as<void>;
-};
+    template <typename Service, typename Memory>
+    concept RequestService = ConcurrentAllocator<Memory> && requires(Service& service, std::span<const Byte> request, EncodedReply<Memory>& reply) {
+      { service.process(request, reply) } -> std::same_as<void>;
+    };
 
-template <ConcurrentAllocator Memory, typename Service>
-  requires RequestService<Service, Memory>
-class RequestWorker {
-public:
-  inline explicit RequestWorker(Memory &memory, Service &service)
-      : memory_(memory),
-        service_(service),
-        requests_(memory),
-        batch_(memory),
-        completions_(memory) {
-    thread_ = startThread("start request worker", [this] { run(); });
-  }
+    template <ConcurrentAllocator Memory, typename Service>
+      requires RequestService<Service, Memory>
+    class RequestWorker {
+    public:
+      inline explicit RequestWorker(Memory& memory, Service& service)
+          : memory_(memory),
+            service_(service),
+            requests_(memory),
+            batch_(memory),
+            completions_(memory) {
+        thread_ = startThread("start request worker", [this] {
+          run();
+        });
+      }
 
-  inline ~RequestWorker() {
-    {
-      const std::lock_guard lock{mutex_};
+      inline ~RequestWorker() {
+        {
+          const std::lock_guard lock{mutex_};
 
-      stopping_ = true;
-      active_cancelled_ = true;
-      cancelQueued([](const Job &) { return true; });
-    }
+          stopping_ = true;
+          active_cancelled_ = true;
+          cancelQueued([](const Job&) {
+            return true;
+          });
+        }
 
-    if constexpr (requires { service_.stop(); }) {
-      service_.stop();
-    }
+        if constexpr (requires { service_.stop(); }) {
+          service_.stop();
+        }
 
-    ready_.notify_one();
-    completion_available_.notify_one();
-    thread_.join();
-  }
+        ready_.notify_one();
+        completion_available_.notify_one();
+        thread_.join();
+      }
 
-  RequestWorker(const RequestWorker &) = delete;
-  RequestWorker &operator=(const RequestWorker &) = delete;
+      RequestWorker(const RequestWorker&) = delete;
+      RequestWorker& operator=(const RequestWorker&) = delete;
 
-  template <typename Message>
-  inline void submit(std::uint64_t client, const Message &message, RequestContext context = {}) {
-    static_assert(MessageSchema<Message>::direction == Direction::client);
-    const std::lock_guard lock{mutex_};
+      template <typename Message>
+      inline void submit(std::uint64_t client, const Message& message, RequestContext context = {}) {
+        static_assert(MessageSchema<Message>::direction == Direction::client);
+        const std::lock_guard lock{mutex_};
 
-    if constexpr (std::same_as<Message, FindPaths>) {
-      for (auto *queue : {&batch_, &requests_}) {
-        for (std::size_t index = 0; index < queue->size(); ++index) {
-          auto &queued = (*queue)[index];
-          if (!queued.cancelled && queued.client == client) {
-            queued.request.resize(Codec::encodedSize(message));
-            Codec::encode(message, queued.request);
-            queued.request_id = message.request_id;
+        if constexpr (std::same_as<Message, FindPaths>) {
+          for (auto* queue : {&batch_, &requests_}) {
+            for (std::size_t index = 0; index < queue->size(); ++index) {
+              auto& queued = (*queue)[index];
+              if (!queued.cancelled && queued.client == client) {
+                queued.request.resize(Codec::encodedSize(message));
+                Codec::encode(message, queued.request);
+                queued.request_id = message.request_id;
+                return;
+              }
+            }
+          }
+        }
+
+        if (admissionFull() || stopping_) {
+          TELAR_DIAGNOSTIC(++queue_metrics_.dropped);
+          if constexpr (history_queue && std::same_as<Message, ImportHistory>) {
+            throw RequestError{FailureCode::resource_limit, "history import was not accepted"};
+          } else {
+            throw RequestError{FailureCode::resource_limit, queue_full_message};
+          }
+        }
+
+        auto& job = requests_.emplace(memory_, client, message.request_id);
+
+        try {
+          // The job owns its texts; the views the caller's context carries are rebuilt from them when it runs.
+          job.context = RequestContext{
+              .location = context.location,
+              .history_session = context.history_session,
+              .received_at_ms = context.received_at_ms,
+              .editor_candidates = context.editor_candidates,
+              .editor_candidate_count = context.editor_candidate_count,
+              .persistent_client = context.persistent_client,
+          };
+
+          if constexpr (std::same_as<Message, QueryHistory>) {
+            job.history_query.emplace(message, context.persistent_client);
+          }
+
+          job.workspace_path.assign(context.workspace_path);
+          job.prompt.assign(context.prompt);
+          job.request.resize(Codec::encodedSize(message));
+          Codec::encode(message, job.request);
+        } catch (...) {
+          requests_.removeLast();
+          TELAR_DIAGNOSTIC(++queue_metrics_.dropped);
+          throw;
+        }
+
+        TELAR_DIAGNOSTIC(queue_metrics_.high_water = std::max(queue_metrics_.high_water, queuedCount()));
+        ++outstanding_;
+        ready_.notify_one();
+      }
+
+      template <typename Consumer>
+      inline void collect(Consumer&& consume) {
+        signal_.drain();
+
+        for (;;) {
+          std::optional<Completion> completed;
+
+          {
+            const std::lock_guard lock{mutex_};
+
+            if (completions_.empty()) {
+              return;
+            }
+
+            completed.emplace(completions_.take());
+            --outstanding_;
+          }
+
+          completion_available_.notify_one();
+          consume(completed->client, completed->tag, completed->reply.payload());
+        }
+      }
+
+      template <typename Event>
+        requires requires { typename Service::InternalRequest; }
+      inline void submitInternal(const Event& event) {
+        if constexpr (requires { { service_.acceptsInternal(event) } noexcept -> std::same_as<bool>; }) {
+          if (!service_.acceptsInternal(event)) {
             return;
           }
         }
-      }
-    }
 
-    if (admissionFull() || stopping_) {
-      TELAR_DIAGNOSTIC(++queue_metrics_.dropped);
-      if constexpr (history_queue && std::same_as<Message, ImportHistory>) {
-        throw RequestError{FailureCode::resource_limit, "history import was not accepted"};
-      } else {
-        throw RequestError{FailureCode::resource_limit, queue_full_message};
-      }
-    }
-
-    auto &job = requests_.emplace(memory_, client, message.request_id);
-
-    try {
-      // The job owns its texts; the views the caller's context carries are rebuilt from them when it runs.
-      job.context = RequestContext{
-          .location = context.location,
-          .history_session = context.history_session,
-          .received_at_ms = context.received_at_ms,
-          .editor_candidates = context.editor_candidates,
-          .editor_candidate_count = context.editor_candidate_count,
-          .persistent_client = context.persistent_client,
-      };
-
-      if constexpr (std::same_as<Message, QueryHistory>) {
-        job.history_query.emplace(message, context.persistent_client);
-      }
-
-      job.workspace_path.assign(context.workspace_path);
-      job.prompt.assign(context.prompt);
-      job.request.resize(Codec::encodedSize(message));
-      Codec::encode(message, job.request);
-    } catch (...) {
-      requests_.removeLast();
-      TELAR_DIAGNOSTIC(++queue_metrics_.dropped);
-      throw;
-    }
-
-    TELAR_DIAGNOSTIC(queue_metrics_.high_water = std::max(queue_metrics_.high_water, queuedCount()));
-    ++outstanding_;
-    ready_.notify_one();
-  }
-
-  template <typename Consumer>
-  inline void collect(Consumer &&consume) {
-    signal_.drain();
-
-    for (;;) {
-      std::optional<Completion> completed;
-
-      {
         const std::lock_guard lock{mutex_};
 
-        if (completions_.empty()) {
+        if (admissionFull() || stopping_) {
+          TELAR_DIAGNOSTIC(++queue_metrics_.dropped);
+          throw RequestError{FailureCode::resource_limit, queue_full_message};
+        }
+
+        auto& job = requests_.emplace(memory_, 0, 0);
+
+        try {
+          job.internal.emplace(memory_, event);
+        } catch (...) {
+          requests_.removeLast();
+          TELAR_DIAGNOSTIC(++queue_metrics_.dropped);
+          throw;
+        }
+
+        TELAR_DIAGNOSTIC(queue_metrics_.high_water = std::max(queue_metrics_.high_water, queuedCount()));
+        ++outstanding_;
+        ready_.notify_one();
+      }
+
+      inline std::uint64_t takeInternalFailures() noexcept {
+        return internal_failures_.exchange(0, std::memory_order_relaxed);
+      }
+
+      inline void cancel(std::uint64_t client) noexcept {
+        const std::lock_guard lock{mutex_};
+
+        if (active_client_ == client) {
+          active_cancelled_ = true;
+        }
+
+        cancelQueued([&](const Job& job) {
+          return job.client == client;
+        });
+      }
+
+      inline bool pending() noexcept {
+        const std::lock_guard lock{mutex_};
+
+        return outstanding_ != 0;
+      }
+
+      inline int descriptor() const noexcept {
+        return signal_.descriptor();
+      }
+
+#if TELAR_DIAGNOSTICS
+      inline diagnostics::RequestQueueSnapshot queueMetrics() const noexcept {
+        const std::lock_guard lock{mutex_};
+        auto snapshot = queue_metrics_;
+
+        snapshot.depth = queuedCount();
+        return snapshot;
+      }
+#endif
+
+    private:
+      static constexpr bool history_queue = !std::same_as<typename InternalRequestType<Service>::Type, std::monostate>;
+      static constexpr std::size_t request_capacity = history_queue ? 64 : 32;
+      static constexpr std::size_t completion_capacity = history_queue ? 4 : 32;
+      static constexpr const char* queue_full_message = history_queue ? "history queue is full" : "Background request queue is full";
+
+      struct Job {
+        inline explicit Job(Memory& memory, std::uint64_t client_id, std::uint64_t request_identity)
+            : client(client_id),
+              request_id(request_identity),
+              request(AllocatorRef<Byte, Memory>{memory}),
+              reply(memory),
+              workspace_path(AllocatorRef<char, Memory>{memory}),
+              prompt(AllocatorRef<char, Memory>{memory}) {}
+
+        bool cancelled = false;
+        bool superseded = false;
+        std::optional<HistoryQueryOrder> history_query;
+
+        inline bool durable() const noexcept {
+          if (internal) {
+            return true;
+          }
+
+          if (request.empty()) {
+            return false;
+          }
+
+          const auto tag = static_cast<ClientTag>(request.front());
+
+          return tag == ClientTag::report_agent_command || tag == ClientTag::import_history;
+        }
+
+        std::uint64_t client;
+        std::uint64_t request_id;
+        Vector<Byte, Memory> request;
+        EncodedReply<Memory> reply;
+        RequestContext context;
+        String<Memory> workspace_path;
+        String<Memory> prompt;
+        std::optional<typename InternalRequestType<Service>::Type> internal;
+      };
+
+      struct Completion {
+        inline explicit Completion(Job&& job) noexcept
+            : client(job.client),
+              tag(static_cast<ClientTag>(job.request.front())),
+              reply(std::move(job.reply)) {}
+
+        std::uint64_t client;
+        ClientTag tag;
+        EncodedReply<Memory> reply;
+      };
+
+      inline bool admissionFull() const noexcept {
+        return history_queue ? requests_.full() : outstanding_ == request_capacity;
+      }
+
+      inline std::size_t queuedCount() const noexcept {
+        return requests_.size() + (history_queue ? 0 : batch_.size());
+      }
+
+      template <typename Predicate>
+      inline void cancelQueued(Predicate&& matches) noexcept {
+        for (auto* queue : {&batch_, &requests_}) {
+          for (std::size_t index = 0; index < queue->size(); ++index) {
+            auto& job = (*queue)[index];
+            if (matches(job) && !job.durable()) {
+              job.cancelled = true;
+            }
+          }
+        }
+      }
+
+      inline void run() noexcept {
+        for (;;) {
+          std::optional<Job> job;
+
+          {
+            std::unique_lock lock{mutex_};
+
+            ready_.wait_for(lock, std::chrono::seconds{1}, [&] {
+              return stopping_ || !batch_.empty() || !requests_.empty();
+            });
+
+            if (stopping_ && batch_.empty() && requests_.empty()) {
+              return;
+            }
+
+            if (batch_.empty() && requests_.empty()) {
+              lock.unlock();
+              if constexpr (requires { service_.idle(); }) {
+                service_.idle();
+              }
+
+              continue;
+            }
+
+            if (batch_.empty()) {
+              batch_.swap(requests_);
+            }
+
+            job.emplace(batch_.take());
+            if (job->cancelled) {
+              --outstanding_;
+              continue;
+            }
+
+            job->superseded = historySuperseded(*job);
+            active_client_ = job->client;
+            active_cancelled_ = false;
+          }
+
+          execute(*job);
+          complete(*job);
+        }
+      }
+
+      inline void complete(Job& job) noexcept {
+        std::unique_lock lock{mutex_};
+
+        active_client_ = 0;
+        const bool acknowledged_import = history_queue && !job.request.empty() && job.request.front() == static_cast<Byte>(ClientTag::import_history);
+        if (job.internal || acknowledged_import) {
+          --outstanding_;
           return;
         }
 
-        completed.emplace(completions_.take());
-        --outstanding_;
+        completion_available_.wait(lock, [&] {
+          return stopping_ || !completions_.full();
+        });
+
+        if (stopping_) {
+          --outstanding_;
+          return;
+        }
+
+        completions_.emplace(std::move(job));
+        lock.unlock();
+        signal_.notify();
       }
 
-      completion_available_.notify_one();
-      consume(completed->client, completed->tag, completed->reply.payload());
-    }
-  }
+      inline bool historySuperseded(const Job& job) const noexcept {
+        if (!job.history_query || !job.history_query->replaceable) {
+          return false;
+        }
 
-  template <typename Event>
-    requires requires { typename Service::InternalRequest; }
-  inline void submitInternal(const Event &event) {
-    if constexpr (requires { { service_.acceptsInternal(event) } noexcept -> std::same_as<bool>; }) {
-      if (!service_.acceptsInternal(event)) {
-        return;
-      }
-    }
+        // Only the current batch participates; writes and other requests preserve ordering.
+        for (std::size_t offset = 0; offset < batch_.size(); ++offset) {
+          const auto& newer = batch_[offset];
+          if (!newer.history_query) {
+            break;
+          }
 
-    const std::lock_guard lock{mutex_};
+          if (job.client == newer.client && job.request_id != newer.request_id && job.history_query->supersededBy(*newer.history_query)) {
+            return true;
+          }
+        }
 
-    if (admissionFull() || stopping_) {
-      TELAR_DIAGNOSTIC(++queue_metrics_.dropped);
-      throw RequestError{FailureCode::resource_limit, queue_full_message};
-    }
-
-    auto &job = requests_.emplace(memory_, 0, 0);
-
-    try {
-      job.internal.emplace(memory_, event);
-    } catch (...) {
-      requests_.removeLast();
-      TELAR_DIAGNOSTIC(++queue_metrics_.dropped);
-      throw;
-    }
-
-    TELAR_DIAGNOSTIC(queue_metrics_.high_water = std::max(queue_metrics_.high_water, queuedCount()));
-    ++outstanding_;
-    ready_.notify_one();
-  }
-
-  inline std::uint64_t takeInternalFailures() noexcept {
-    return internal_failures_.exchange(0, std::memory_order_relaxed);
-  }
-
-  inline void cancel(std::uint64_t client) noexcept {
-    const std::lock_guard lock{mutex_};
-
-    if (active_client_ == client) {
-      active_cancelled_ = true;
-    }
-
-    cancelQueued([&](const Job &job) { return job.client == client; });
-  }
-
-  inline bool pending() noexcept {
-    const std::lock_guard lock{mutex_};
-
-    return outstanding_ != 0;
-  }
-
-  inline int descriptor() const noexcept {
-    return signal_.descriptor();
-  }
-
-#if TELAR_DIAGNOSTICS
-  inline diagnostics::RequestQueueSnapshot queueMetrics() const noexcept {
-    const std::lock_guard lock{mutex_};
-    auto snapshot = queue_metrics_;
-
-    snapshot.depth = queuedCount();
-    return snapshot;
-  }
-#endif
-
-private:
-  static constexpr bool history_queue = !std::same_as<typename InternalRequestType<Service>::Type, std::monostate>;
-  static constexpr std::size_t request_capacity = history_queue ? 64 : 32;
-  static constexpr std::size_t completion_capacity = history_queue ? 4 : 32;
-  static constexpr const char *queue_full_message = history_queue ? "history queue is full" : "Background request queue is full";
-
-  struct Job {
-    inline explicit Job(Memory &memory, std::uint64_t client_id, std::uint64_t request_identity)
-        : client(client_id),
-          request_id(request_identity),
-          request(AllocatorRef<Byte, Memory>{memory}),
-          reply(memory),
-          workspace_path(AllocatorRef<char, Memory>{memory}),
-          prompt(AllocatorRef<char, Memory>{memory}) {}
-
-    bool cancelled = false;
-    bool superseded = false;
-    std::optional<HistoryQueryOrder> history_query;
-
-    inline bool durable() const noexcept {
-      if (internal) {
-        return true;
-      }
-
-      if (request.empty()) {
         return false;
       }
 
-      const auto tag = static_cast<ClientTag>(request.front());
+      inline void execute(Job& job) noexcept {
+        if constexpr (requires { service_.processInternal(*job.internal); }) {
+          if (job.internal) {
+            try {
+              service_.processInternal(*job.internal);
+            } catch (...) {
+              internal_failures_.fetch_add(1, std::memory_order_relaxed);
+              signal_.notify();
+            }
 
-      return tag == ClientTag::report_agent_command || tag == ClientTag::import_history;
-    }
-
-    std::uint64_t client;
-    std::uint64_t request_id;
-    Vector<Byte, Memory> request;
-    EncodedReply<Memory> reply;
-    RequestContext context;
-    String<Memory> workspace_path;
-    String<Memory> prompt;
-    std::optional<typename InternalRequestType<Service>::Type> internal;
-  };
-
-  struct Completion {
-    inline explicit Completion(Job &&job) noexcept
-        : client(job.client),
-          tag(static_cast<ClientTag>(job.request.front())),
-          reply(std::move(job.reply)) {}
-
-    std::uint64_t client;
-    ClientTag tag;
-    EncodedReply<Memory> reply;
-  };
-
-  inline bool admissionFull() const noexcept {
-    return history_queue ? requests_.full() : outstanding_ == request_capacity;
-  }
-
-  inline std::size_t queuedCount() const noexcept {
-    return requests_.size() + (history_queue ? 0 : batch_.size());
-  }
-
-  template <typename Predicate>
-  inline void cancelQueued(Predicate &&matches) noexcept {
-    for (auto *queue : {&batch_, &requests_}) {
-      for (std::size_t index = 0; index < queue->size(); ++index) {
-        auto &job = (*queue)[index];
-        if (matches(job) && !job.durable()) {
-          job.cancelled = true;
-        }
-      }
-    }
-  }
-
-  inline void run() noexcept {
-    for (;;) {
-      std::optional<Job> job;
-
-      {
-        std::unique_lock lock{mutex_};
-
-        ready_.wait_for(lock, std::chrono::seconds{1}, [&] { return stopping_ || !batch_.empty() || !requests_.empty(); });
-        if (stopping_ && batch_.empty() && requests_.empty()) {
-          return;
+            return;
+          }
         }
 
-        if (batch_.empty() && requests_.empty()) {
-          lock.unlock();
-          if constexpr (requires { service_.idle(); }) {
-            service_.idle();
+        try {
+          if (job.superseded) {
+            job.reply.send(RequestFailed{.request_id = job.request_id, .code = FailureCode::internal, .message = "History query superseded"});
+            return;
           }
 
-          continue;
-        }
+          if constexpr (requires { service_.process(job.request, job.reply, job.context); }) {
+            auto context = job.context;
 
-        if (batch_.empty()) {
-          batch_.swap(requests_);
-        }
-
-        job.emplace(batch_.take());
-        if (job->cancelled) {
-          --outstanding_;
-          continue;
-        }
-
-        job->superseded = historySuperseded(*job);
-        active_client_ = job->client;
-        active_cancelled_ = false;
-      }
-
-      execute(*job);
-      complete(*job);
-    }
-  }
-
-  inline void complete(Job &job) noexcept {
-    std::unique_lock lock{mutex_};
-
-    active_client_ = 0;
-    const bool acknowledged_import = history_queue && !job.request.empty() && job.request.front() == static_cast<Byte>(ClientTag::import_history);
-    if (job.internal || acknowledged_import) {
-      --outstanding_;
-      return;
-    }
-
-    completion_available_.wait(lock, [&] { return stopping_ || !completions_.full(); });
-    if (stopping_) {
-      --outstanding_;
-      return;
-    }
-
-    completions_.emplace(std::move(job));
-    lock.unlock();
-    signal_.notify();
-  }
-
-  inline bool historySuperseded(const Job &job) const noexcept {
-    if (!job.history_query || !job.history_query->replaceable) {
-      return false;
-    }
-
-    // Only the current batch participates; writes and other requests preserve ordering.
-    for (std::size_t offset = 0; offset < batch_.size(); ++offset) {
-      const auto &newer = batch_[offset];
-      if (!newer.history_query) {
-        break;
-      }
-
-      if (job.client == newer.client && job.request_id != newer.request_id && job.history_query->supersededBy(*newer.history_query)) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  inline void execute(Job &job) noexcept {
-    if constexpr (requires { service_.processInternal(*job.internal); }) {
-      if (job.internal) {
-        try {
-          service_.processInternal(*job.internal);
+            context.workspace_path = job.workspace_path;
+            context.prompt = job.prompt;
+            context.cancelled = &active_cancelled_;
+            service_.process(job.request, job.reply, context);
+          } else {
+            service_.process(job.request, job.reply);
+          }
+        } catch (const RequestError& error) {
+          job.reply.send(RequestFailed{.request_id = job.request_id, .code = error.code(), .message = std::string_view{error.what()}.substr(0, maximum_failure_message)});
+        } catch (const JsonError& error) {
+          job.reply.send(RequestFailed{.request_id = job.request_id, .code = FailureCode::invalid_request, .message = error.what()});
+        } catch (const std::bad_alloc&) {
+          job.reply.send(RequestFailed{.request_id = job.request_id, .code = FailureCode::resource_limit, .message = "Background request exceeded its memory budget"});
         } catch (...) {
-          internal_failures_.fetch_add(1, std::memory_order_relaxed);
-          signal_.notify();
+          job.reply.send(RequestFailed{.request_id = job.request_id, .code = FailureCode::invalid_request, .message = "Background request failed"});
         }
-
-        return;
-      }
-    }
-
-    try {
-      if (job.superseded) {
-        job.reply.send(RequestFailed{.request_id = job.request_id, .code = FailureCode::internal, .message = "History query superseded"});
-        return;
       }
 
-      if constexpr (requires { service_.process(job.request, job.reply, job.context); }) {
-        auto context = job.context;
-
-        context.workspace_path = job.workspace_path;
-        context.prompt = job.prompt;
-        context.cancelled = &active_cancelled_;
-        service_.process(job.request, job.reply, context);
-      } else {
-        service_.process(job.request, job.reply);
-      }
-    } catch (const RequestError &error) {
-      job.reply.send(RequestFailed{.request_id = job.request_id,
-                                   .code = error.code(),
-                                   .message = std::string_view{error.what()}.substr(0, maximum_failure_message)});
-    } catch (const JsonError &error) {
-      job.reply.send(RequestFailed{.request_id = job.request_id,
-                                   .code = FailureCode::invalid_request,
-                                   .message = error.what()});
-    } catch (const std::bad_alloc &) {
-      job.reply.send(RequestFailed{.request_id = job.request_id,
-                                   .code = FailureCode::resource_limit,
-                                   .message = "Background request exceeded its memory budget"});
-    } catch (...) {
-      job.reply.send(RequestFailed{.request_id = job.request_id,
-                                   .code = FailureCode::invalid_request,
-                                   .message = "Background request failed"});
-    }
-  }
-
-  Memory &memory_;
-  static constexpr std::size_t maximum_failure_message = 192;
-  Service &service_;
-  CompletionSignal signal_;
-  std::jthread thread_;
-  mutable std::mutex mutex_;
-  std::condition_variable ready_;
-  std::condition_variable completion_available_;
-  RequestQueue<Job, request_capacity, Memory> requests_;
-  RequestQueue<Job, request_capacity, Memory> batch_;
-  RequestQueue<Completion, completion_capacity, Memory> completions_;
-  std::size_t outstanding_ = 0;
-  bool stopping_ = false;
-  std::uint64_t active_client_ = 0;
-  std::atomic<bool> active_cancelled_{false};
-  std::atomic<std::uint64_t> internal_failures_{0};
+      Memory& memory_;
+      static constexpr std::size_t maximum_failure_message = 192;
+      Service& service_;
+      CompletionSignal signal_;
+      std::jthread thread_;
+      mutable std::mutex mutex_;
+      std::condition_variable ready_;
+      std::condition_variable completion_available_;
+      RequestQueue<Job, request_capacity, Memory> requests_;
+      RequestQueue<Job, request_capacity, Memory> batch_;
+      RequestQueue<Completion, completion_capacity, Memory> completions_;
+      std::size_t outstanding_ = 0;
+      bool stopping_ = false;
+      std::uint64_t active_client_ = 0;
+      std::atomic<bool> active_cancelled_{false};
+      std::atomic<std::uint64_t> internal_failures_{0};
 #if TELAR_DIAGNOSTICS
-  diagnostics::RequestQueueSnapshot queue_metrics_;
+      diagnostics::RequestQueueSnapshot queue_metrics_;
 #endif
-};
+    };
 
-}
+  }
 }

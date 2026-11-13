@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-
 #include <cassert>
 #include <cstdint>
 #include <cstring>
@@ -21,7 +20,7 @@ struct Operation {
   std::uint64_t value;
 };
 
-extern "C" std::size_t evaluate(const Operation *operations, std::size_t count, Byte *output) {
+extern "C" std::size_t evaluate(const Operation* operations, std::size_t count, Byte* output) {
   SystemAllocator memory;
   OutgoingFrames queue{memory};
   Notification notification;
@@ -34,13 +33,13 @@ extern "C" std::size_t evaluate(const Operation *operations, std::size_t count, 
     try {
       queue.append(notification);
       return true;
-    } catch (const ResponseQueueFull &) {
+    } catch (const ResponseQueueFull&) {
       queue.recordDrop();
       return false;
     }
   };
 
-  for (const auto &operation : std::span{operations, count}) {
+  for (const auto& operation : std::span{operations, count}) {
     bool accepted = true;
     Byte selected = 0;
     Byte delivered = 0;
@@ -92,18 +91,16 @@ extern "C" std::size_t evaluate(const Operation *operations, std::size_t count, 
       case 4:
         accepted = notify();
         break;
-      case 5:
-      {
+      case 5: {
         NotificationShown reply{.request_id = operation.value};
         const auto offset = queue.reserve(reply);
         reply.delivered_clients = notify();
         queue.complete(offset, reply);
-      }
-        break;
+      } break;
       default:
         std::abort();
       }
-    } catch (const ResponseQueueFull &) {
+    } catch (const ResponseQueueFull&) {
       accepted = false;
     }
 

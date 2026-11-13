@@ -1,7 +1,7 @@
-#include <sys/wait.h>
 #include <cerrno>
 #include <cstdio>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 import std;
@@ -10,22 +10,22 @@ import telar.runtime.tests.agent_oracle;
 using namespace telar;
 
 struct ReporterCase {
-  const char *socket;
-  const char *dump_path;
-  const char *result_path;
+  const char* socket;
+  const char* dump_path;
+  const char* result_path;
   std::string_view workload;
   unsigned iterations;
   std::uint64_t pane;
   std::uint64_t generation;
 };
 
-static void require(bool valid, const char *message) {
+static void require(bool valid, const char* message) {
   if (!valid) {
     throw std::runtime_error{message};
   }
 }
 
-static void waitProvider(ProtocolPeer &peer, AgentProvider provider) {
+static void waitProvider(ProtocolPeer& peer, AgentProvider provider) {
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
 
   while (std::chrono::steady_clock::now() < deadline) {
@@ -40,13 +40,13 @@ static void waitProvider(ProtocolPeer &peer, AgentProvider provider) {
   throw std::runtime_error{"Reporter fixture provider was not identified"};
 }
 
-static void writeDuration(const ReporterCase &fixture, std::chrono::steady_clock::time_point started) {
+static void writeDuration(const ReporterCase& fixture, std::chrono::steady_clock::time_point started) {
   const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - started).count();
 
   std::ofstream{fixture.result_path} << "{\"iterations\":" << fixture.iterations << ",\"elapsed_ns\":" << elapsed << ",\"ns_per_iteration\":" << elapsed / fixture.iterations << "}\n";
 }
 
-static void sendReport(ProtocolPeer &peer, const ReporterCase &fixture, std::uint64_t request) {
+static void sendReport(ProtocolPeer& peer, const ReporterCase& fixture, std::uint64_t request) {
   if (fixture.workload == "reporter-replace-title") {
     peer.send(ReportAgentTitle{.request_id = request, .pane_id = fixture.pane, .pane_generation = fixture.generation, .provider = AgentProvider::claude, .title = "Replacement title"});
   } else if (fixture.workload == "reporter-replace-progress") {
@@ -58,7 +58,7 @@ static void sendReport(ProtocolPeer &peer, const ReporterCase &fixture, std::uin
   }
 }
 
-static int replacement(const ReporterCase &fixture) {
+static int replacement(const ReporterCase& fixture) {
   ProtocolPeer peer{fixture.socket};
   std::ofstream dump{fixture.dump_path, std::ios::binary | std::ios::app};
   const auto started = std::chrono::steady_clock::now();
@@ -82,7 +82,7 @@ static int replacement(const ReporterCase &fixture) {
   return 0;
 }
 
-static int nested(const ReporterCase &fixture) {
+static int nested(const ReporterCase& fixture) {
   ProtocolPeer peer{fixture.socket};
   std::ofstream dump{fixture.dump_path, std::ios::binary | std::ios::app};
   const auto started = std::chrono::steady_clock::now();
@@ -101,7 +101,7 @@ static int nested(const ReporterCase &fixture) {
   return 0;
 }
 
-static int child(int argc, char **argv) {
+static int child(int argc, char** argv) {
   require(argc == 7, "Invalid reporter child arguments");
   const ReporterCase fixture{argv[2], argv[3], argv[4], argv[5], static_cast<unsigned>(std::stoul(argv[6])), std::stoull(std::getenv("TELAR_PANE_ID")), std::stoull(std::getenv("TELAR_PANE_GENERATION"))};
   const auto executable = std::filesystem::path{argv[0]};
@@ -122,7 +122,7 @@ static int child(int argc, char **argv) {
 
   const auto claude = (executable.parent_path() / "claude").string();
 
-  argv[0] = const_cast<char *>(claude.c_str());
+  argv[0] = const_cast<char*>(claude.c_str());
   if (fixture.workload != "reporter-nested") {
     ::execv(claude.c_str(), argv);
     throw std::runtime_error{"Cannot replace the fixture agent"};
@@ -132,7 +132,7 @@ static int child(int argc, char **argv) {
 
   require(process >= 0, "Cannot fork nested fixture");
   if (process == 0) {
-    std::array<char *, 12> shell_arguments{const_cast<char *>("/bin/sh"), const_cast<char *>("-c"), const_cast<char *>("\"$@\" & wait"), const_cast<char *>("fixture")};
+    std::array<char*, 12> shell_arguments{const_cast<char*>("/bin/sh"), const_cast<char*>("-c"), const_cast<char*>("\"$@\" & wait"), const_cast<char*>("fixture")};
 
     std::copy(argv, argv + argc, shell_arguments.begin() + 4);
     ::execv(shell_arguments[0], shell_arguments.data());
@@ -153,7 +153,7 @@ static int child(int argc, char **argv) {
   return 0;
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   const bool is_child = argc >= 2 && std::string_view{argv[1]} == "--reporter-child";
 
   try {
@@ -185,7 +185,7 @@ int main(int argc, char **argv) {
 
     std::cout << result.rdbuf();
     return 0;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     if (is_child && argc == 7) {
       std::ofstream{argv[4]} << error.what() << '\n';
     }

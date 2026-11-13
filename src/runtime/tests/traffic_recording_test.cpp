@@ -3,19 +3,18 @@
 static_assert(true);
 #endif
 
-
+#include <arpa/inet.h>
+#include <cassert>
 #include <cerrno>
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <dirent.h>
 #include <fcntl.h>
-#include <cstdlib>
 #include <limits.h>
-#include <sys/stat.h>
-#include <cassert>
-#include <cstddef>
-#include <cstring>
-#include <cstdint>
 #include <pcap/pcap.h>
-#include <arpa/inet.h>
+#include <sys/stat.h>
 
 import std;
 import telar.base.memory;
@@ -35,7 +34,10 @@ namespace rec = telar::runtime::traffic::recording;
 struct Clock {
   using time_point = std::chrono::steady_clock::time_point;
   static inline time_point instant{};
-  static time_point now() noexcept { return instant; }
+
+  static time_point now() noexcept {
+    return instant;
+  }
 };
 
 static tr::Event packet(std::uint64_t sequence, std::span<const Byte> bytes) {
@@ -56,7 +58,10 @@ static void retained() {
     check(!recordings.selects(tr::Selection::flows));
     constexpr std::array<Byte, 3> bytes{'a', 0, 'b'};
 
-    for (std::uint64_t index = 1; index <= 6; ++index) { recordings.record(packet(index, bytes)); }
+    for (std::uint64_t index = 1; index <= 6; ++index) {
+      recordings.record(packet(index, bytes));
+    }
+
     auto page = rec::Protocol::page(recordings.handle({.id = start.id, .cursor = 1, .limit = 2}, output.bytes()));
 
     check(page.gap && page.oldest == 4 && page.next == 6 && page.end == 7 && page.evicted == 3 && page.count == 2 && page.dropped == 0);
@@ -84,7 +89,12 @@ static void retained() {
     recordings.handle({.operation = rec::Operation::erase, .id = start.id}, output.bytes());
     bool stale = false;
 
-    try { recordings.handle({.id = start.id}, output.bytes()); } catch (const EncodingError &) { stale = true; }
+    try {
+      recordings.handle({.id = start.id}, output.bytes());
+    } catch (const EncodingError&) {
+      stale = true;
+    }
+
     check(stale);
   }
 
@@ -117,7 +127,7 @@ static void pagesAndExport() {
     {
       std::ofstream file{path, std::ios::binary};
 
-      file.write(reinterpret_cast<const char *>(page.rows.data()), page.rows.size());
+      file.write(reinterpret_cast<const char*>(page.rows.data()), page.rows.size());
       check(file.good());
     }
 
@@ -125,8 +135,8 @@ static void pagesAndExport() {
     const std::unique_ptr<pcap_t, decltype(&pcap_close)> capture{pcap_open_offline(path.c_str(), error.data()), &pcap_close};
 
     check(capture != nullptr && pcap_datalink(capture.get()) == DLT_EN10MB);
-    pcap_pkthdr *header = nullptr;
-    const unsigned char *data = nullptr;
+    pcap_pkthdr* header = nullptr;
+    const unsigned char* data = nullptr;
 
     check(pcap_next_ex(capture.get(), &header, &data) == 1);
     check(header->caplen == bytes.size() && header->len == bytes.size() + 5 && header->ts.tv_sec == 123 && header->ts.tv_usec == 456789);
@@ -148,7 +158,10 @@ static void budgetsAndScopes() {
     const auto start = rec::Protocol::page(recordings.handle({.operation = rec::Operation::start, .max_bytes = 512, .max_events = 2, .selection = tr::Selection::packets}, output.bytes()));
     std::array<Byte, 220> body{};
 
-    for (std::uint64_t index = 1; index <= 3; ++index) { recordings.record(packet(index, body)); }
+    for (std::uint64_t index = 1; index <= 3; ++index) {
+      recordings.record(packet(index, body));
+    }
+
     const auto page = rec::Protocol::page(recordings.handle({.id = start.id}, output.bytes()));
 
     check(page.count == 1 && page.bytes <= 512 && page.evicted == 2);
@@ -177,9 +190,13 @@ static void runtimeLimits() {
   {
     tr::Recordings recordings{memory};
     SensitiveAllocation output{memory, rec::Limits::page_bytes};
-    const auto rejected = [&](const rec::Request &request) {
-      try { recordings.handle(request, output.bytes()); }
-      catch (const std::exception &) { return true; }
+    const auto rejected = [&](const rec::Request& request) {
+      try {
+        recordings.handle(request, output.bytes());
+      } catch (const std::exception&) {
+        return true;
+      }
+
       return false;
     };
 

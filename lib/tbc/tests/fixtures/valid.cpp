@@ -1,6 +1,6 @@
 #include "tbc/view.hpp"
 
-using int_view = tbc::view<int &, tbc::lt::a>;
+using int_view = tbc::view<int&, tbc::lt::a>;
 
 int global_value = 1;
 

@@ -11,7 +11,7 @@ export namespace telar::render::terminal {
   inline constexpr std::uint16_t min_width = 20;
 
   template <Allocator Memory, Allocator Output>
-  void render(const Document<Memory> &document, std::uint16_t width, String<Output> &output);
+  void render(const Document<Memory>& document, std::uint16_t width, String<Output>& output);
 
 }
 
@@ -36,7 +36,7 @@ namespace telar::render::terminal {
   }
 
   // Decodes the character at index of valid UTF-8 and advances index.
-  inline char32_t next(std::string_view text, std::size_t &index) noexcept {
+  inline char32_t next(std::string_view text, std::size_t& index) noexcept {
     const auto lead = static_cast<std::uint8_t>(text[index]);
     const std::size_t length = lead < 0x80 ? 1 : lead < 0xe0 ? 2
                                              : lead < 0xf0   ? 3
@@ -102,16 +102,16 @@ namespace telar::render::terminal {
   template <Allocator Memory, Allocator Output>
   class Painter {
   public:
-    Painter(const Document<Memory> &document, std::size_t width, String<Output> &output)
+    Painter(const Document<Memory>& document, std::size_t width, String<Output>& output)
         : document_(document),
           width_(width),
           output_(output),
           destination_(output.get_allocator()) {}
 
     void paint() {
-      const Block *previous = nullptr;
+      const Block* previous = nullptr;
 
-      for (const auto &block : document_.blocks) {
+      for (const auto& block : document_.blocks) {
         if (previous != nullptr && (block.flags & Block::tight) == 0) {
           blankLine(*previous, block);
         }
@@ -156,7 +156,7 @@ namespace telar::render::terminal {
 
     // Writes the quote bars and list indentation of a line; the marker only on
     // the first line of a block that carries one. Returns the columns used.
-    std::size_t prefix(const Block &block, bool marker) {
+    std::size_t prefix(const Block& block, bool marker) {
       std::size_t used = 0;
 
       for (std::uint8_t level = 0; level < block.quote; ++level) {
@@ -220,7 +220,7 @@ namespace telar::render::terminal {
       return used + shown + pad;
     }
 
-    void blankLine(const Block &previous, const Block &block) {
+    void blankLine(const Block& previous, const Block& block) {
       // Keep the quote bars both blocks share across the gap between them.
       Block bars{};
 
@@ -243,7 +243,7 @@ namespace telar::render::terminal {
 
     // Moves the terminal from style current to style; 0 is the reset state
     // every line starts and ends in.
-    void setStyle(std::uint32_t &current, std::uint32_t style) {
+    void setStyle(std::uint32_t& current, std::uint32_t style) {
       if (style == current) {
         return;
       }
@@ -285,7 +285,7 @@ namespace telar::render::terminal {
     }
 
     // Lays out runs as words wrapped to the width, keeping the prefix on every line.
-    void flow(const Block &block, std::span<const Run> runs, std::uint32_t base) {
+    void flow(const Block& block, std::span<const Run> runs, std::uint32_t base) {
       auto used = prefix(block, true);
       std::size_t column = 0;
       const auto limit = available(used);
@@ -359,7 +359,7 @@ namespace telar::render::terminal {
       };
 
       for (std::size_t index = 0; index < runs.size(); ++index) {
-        const auto &run = runs[index];
+        const auto& run = runs[index];
         const auto style = base | run.style;
         const auto text = document_.view(run.text);
 
@@ -387,7 +387,7 @@ namespace telar::render::terminal {
       output_.push_back('\n');
     }
 
-    void verbatim(const Block &block) {
+    void verbatim(const Block& block) {
       const auto text = document_.view(Span{block.first, block.count});
       const auto info = document_.view(block.info);
       if (!info.empty()) {
@@ -430,7 +430,7 @@ namespace telar::render::terminal {
       }
     }
 
-    void rule(const Block &block) {
+    void rule(const Block& block) {
       const auto used = prefix(block, true);
 
       output_.append("\x1b[2m");
@@ -442,17 +442,17 @@ namespace telar::render::terminal {
       output_.push_back('\n');
     }
 
-    std::size_t cellWidth(const Cell &cell) const noexcept {
+    std::size_t cellWidth(const Cell& cell) const noexcept {
       std::size_t width = 0;
 
-      for (const auto &run : document_.runsOf(cell)) {
+      for (const auto& run : document_.runsOf(cell)) {
         width += displayWidth(document_.view(run.text));
       }
 
       return width;
     }
 
-    void table(const Block &block) {
+    void table(const Block& block) {
       const auto cells = document_.cellsOf(block);
       const std::size_t columns_count = block.columns;
       std::array<std::size_t, 64> widths{};
@@ -509,7 +509,7 @@ namespace telar::render::terminal {
         prefix(plain, false);
         for (std::size_t column = 0; column < shown; ++column) {
           output_.append("\x1b[2m│\x1b[0m ");
-          const auto &cell = cells[row * columns_count + column];
+          const auto& cell = cells[row * columns_count + column];
 
           cellText(cell, widths[column], row == 0 ? style::strong : 0);
           output_.push_back(' ');
@@ -525,7 +525,7 @@ namespace telar::render::terminal {
     }
 
     // One cell on one line, aligned and cut to width with an ellipsis.
-    void cellText(const Cell &cell, std::size_t width, std::uint32_t base) {
+    void cellText(const Cell& cell, std::size_t width, std::uint32_t base) {
       const auto natural = cellWidth(cell);
       const auto shown = std::min(natural, width);
       const auto gap = width - shown;
@@ -538,7 +538,7 @@ namespace telar::render::terminal {
       const auto budget = cut ? width - 1 : width;
       std::uint32_t current = 0;
 
-      for (const auto &run : document_.runsOf(cell)) {
+      for (const auto& run : document_.runsOf(cell)) {
         setStyle(current, base | run.style);
         const auto text = document_.view(run.text);
 
@@ -569,14 +569,14 @@ namespace telar::render::terminal {
       output_.append(width > column + before ? width - column - before : 0, ' ');
     }
 
-    const Document<Memory> &document_;
+    const Document<Memory>& document_;
     std::size_t width_;
-    String<Output> &output_;
+    String<Output>& output_;
     String<Output> destination_;
   };
 
   template <Allocator Memory, Allocator Output>
-  void render(const Document<Memory> &document, std::uint16_t width, String<Output> &output) {
+  void render(const Document<Memory>& document, std::uint16_t width, String<Output>& output) {
     Painter<Memory, Output>{document, std::max(width, min_width), output}.paint();
   }
 

@@ -11,7 +11,7 @@ namespace telar {
     valid,
     invalid_leading,
     invalid_continuation,
-    invalid_scalar
+    invalid_scalar,
   };
 
   inline Utf8Validation inspectUtf8(std::string_view value) noexcept {
@@ -53,15 +53,15 @@ namespace telar {
 
   // Bytes that break a format's rules: the wire protocol, a configuration or a record on disk.
   struct EncodingError final : std::exception {
-    EncodingError(const char *message)
+    EncodingError(const char* message)
         : message{message} {}
 
-    const char *what() const noexcept override {
+    const char* what() const noexcept override {
       return message;
     }
 
   private:
-    const char *message;
+    const char* message;
   };
 
   inline void validateUtf8(std::string_view value) {

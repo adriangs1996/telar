@@ -3,17 +3,16 @@
 static_assert(true);
 #endif
 
-
-#include <cstddef>
-#include <cstring>
-#include <cstdint>
-#include <cstdlib>
 #include <arpa/inet.h>
 #include <cerrno>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <fcntl.h>
 #include <limits.h>
 #include <sys/stat.h>
-#include <cstdio>
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <linux/fs.h>
 #endif
@@ -40,11 +39,11 @@ void testProxyNetwork();
 static std::string authorization(std::string_view userinfo) {
   std::string encoded((userinfo.size() + 2) / 3 * 4, '\0');
 
-  check(base64::encode({reinterpret_cast<const std::uint8_t *>(userinfo.data()), userinfo.size()}, encoded) == encoded.size());
+  check(base64::encode({reinterpret_cast<const std::uint8_t*>(userinfo.data()), userinfo.size()}, encoded) == encoded.size());
   return "Proxy-Authorization: Basic " + encoded + "\r\n";
 }
 
-static void testAuthorization(SystemAllocator &memory) {
+static void testAuthorization(SystemAllocator& memory) {
   const std::string hexadecimal(64, 'a');
   const auto secret = ProxySecret::fromHexadecimal(hexadecimal);
 
@@ -69,7 +68,7 @@ static void testAuthorization(SystemAllocator &memory) {
   check(ProxyAuthorization::present(header));
   check(ProxyAuthorization::parse(header)->matches(*secret));
   check(!ProxyAuthorization::present(request + "\r\n"));
-  for (const auto &invalid : {request + credential + credential + "\r\n", request + authorization("Telar:" + hexadecimal), request + "Proxy-Authorization: Bearer ignored\r\n", request + authorization(std::string(193, 'a')), request + "Proxy-Authorization: Basic !!!!!!!!\r\n", request + "Proxy-Authorization: Basic\tYWJj\r\n"}) {
+  for (const auto& invalid : {request + credential + credential + "\r\n", request + authorization("Telar:" + hexadecimal), request + "Proxy-Authorization: Bearer ignored\r\n", request + authorization(std::string(193, 'a')), request + "Proxy-Authorization: Basic !!!!!!!!\r\n", request + "Proxy-Authorization: Basic\tYWJj\r\n"}) {
     check(ProxyAuthorization::present(invalid) && !ProxyAuthorization::parse(invalid));
   }
 
@@ -111,7 +110,7 @@ static void testAuthorization(SystemAllocator &memory) {
   }
 }
 
-static void testSecretFile(SystemAllocator &memory) {
+static void testSecretFile(SystemAllocator& memory) {
   std::array<char, 64> path;
 
   std::strcpy(path.data(), "/tmp/telar-proxy-secret-XXXXXX");
@@ -129,7 +128,7 @@ static void testSecretFile(SystemAllocator &memory) {
 
   const auto filename = std::filesystem::path{path.data()} / "proxy-secret";
 
-  for (const auto &contents : {std::string{}, std::string(64, 'x'), std::string(63, 'a'), std::string(73, 'a')}) {
+  for (const auto& contents : {std::string{}, std::string(64, 'x'), std::string(63, 'a'), std::string(73, 'a')}) {
     {
       std::ofstream file{filename};
 
@@ -140,7 +139,7 @@ static void testSecretFile(SystemAllocator &memory) {
 
     try {
       ProxySecretFile::ensure(memory, directory.get());
-    } catch (const SystemError &) {
+    } catch (const SystemError&) {
       rejected = true;
     }
 

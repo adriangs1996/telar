@@ -11,10 +11,10 @@ using namespace telar::gui;
 static std::uint64_t checks, errors, digest = 1469598103934665603ULL;
 
 template <typename ScreenType>
-std::vector<Byte> state(const ScreenType &screen) {
+std::vector<Byte> state(const ScreenType& screen) {
   std::vector<Byte> bytes;
   auto scalar = [&](auto value) {
-    const auto *begin = reinterpret_cast<const Byte *>(&value);
+    const auto* begin = reinterpret_cast<const Byte*>(&value);
     bytes.insert(bytes.end(), begin, begin + sizeof(value));
   };
   auto text = [&](std::string_view value) {
@@ -28,17 +28,17 @@ std::vector<Byte> state(const ScreenType &screen) {
   scalar(screen.rows());
   scalar(screen.pointerShape());
   scalar(screen.metadataStatus());
-  const auto &cursor = screen.cursor();
+  const auto& cursor = screen.cursor();
   scalar(cursor.visible);
   scalar(cursor.x);
   scalar(cursor.y);
   scalar(cursor.shape);
   scalar(cursor.blink);
-  const auto &mouse = screen.mouse();
+  const auto& mouse = screen.mouse();
   scalar(mouse.tracking);
   scalar(mouse.sgr);
   scalar(mouse.pixels);
-  const auto &modes = screen.modes();
+  const auto& modes = screen.modes();
   scalar(modes.cursor_keys);
   scalar(modes.keypad_keys);
   scalar(modes.bracketed_paste);
@@ -56,11 +56,11 @@ std::vector<Byte> state(const ScreenType &screen) {
     scalar(screen.row(row).size());
   }
   scalar(screen.cells().size());
-  for (const auto &cell : screen.cells()) {
+  for (const auto& cell : screen.cells()) {
     scalar(cell.width);
     scalar(cell.length);
     scalar(cell.style.flags);
-    for (const auto &color : {cell.style.foreground, cell.style.background, cell.style.underline_color}) {
+    for (const auto& color : {cell.style.foreground, cell.style.background, cell.style.underline_color}) {
       scalar(color.kind);
       for (const auto channel : color.channels) {
         scalar(channel);
@@ -73,7 +73,7 @@ std::vector<Byte> state(const ScreenType &screen) {
   for (std::size_t position = 0; position <= screen.cells().size(); ++position) {
     text(screen.linkAt(position));
   }
-  for (const auto &run : screen.linkRuns()) {
+  for (const auto& run : screen.linkRuns()) {
     scalar(run.start);
     scalar(run.len);
     scalar(run.link_index);
@@ -113,7 +113,7 @@ struct Fixture {
     static constexpr std::array<std::string_view, 5> texts{"x", "é", "界", "é", "1234567890123456"};
     std::vector<Cell> cells(count);
     for (std::size_t index = 0; index < count; ++index) {
-      auto &cell = cells[index];
+      auto& cell = cells[index];
       const auto choice = (index + seed) % 7;
       cell.width = choice == 0 ? CellWidth::continuation : choice == 1 ? CellWidth::wide
                                                                        : CellWidth::single;
@@ -135,10 +135,10 @@ struct Fixture {
 };
 
 template <typename ScreenType>
-std::string apply(ScreenType &screen, const PaneFrame &frame) {
+std::string apply(ScreenType& screen, const PaneFrame& frame) {
   try {
     return std::to_string(static_cast<unsigned>(screen.apply(frame)));
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     return std::string{"error:"} + typeid(error).name() + ':' + error.what();
   }
 }
@@ -161,7 +161,7 @@ std::string validateReader(std::span<const Byte> bytes, unsigned count, unsigned
       }
     }
     return reader.next() ? "unexpected remaining cell" : "complete";
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     return std::string{"error:"} + typeid(error).name() + ':' + error.what();
   }
 }
@@ -183,7 +183,7 @@ void readerEquivalence() {
       changed[offset] ^= 0xff;
       variants.push_back(std::move(changed));
     }
-    for (const auto &bytes : variants) {
+    for (const auto& bytes : variants) {
       for (unsigned prefix : {0u, count / 2, count}) {
         const auto a = validateReader<BaselineCellReader>(bytes, count, prefix);
         const auto b = validateReader<CellReader>(bytes, count, prefix);
@@ -201,7 +201,7 @@ struct FaultAllocator {
   std::optional<unsigned> remaining;
   unsigned attempts = 0;
 
-  void *allocate(std::size_t size, std::size_t alignment) noexcept {
+  void* allocate(std::size_t size, std::size_t alignment) noexcept {
     ++attempts;
     if (remaining) {
       if (*remaining == 0) {
@@ -214,7 +214,7 @@ struct FaultAllocator {
     return upstream.allocate(size, alignment);
   }
 
-  void deallocate(void *pointer, std::size_t size, std::size_t alignment) noexcept {
+  void deallocate(void* pointer, std::size_t size, std::size_t alignment) noexcept {
     upstream.deallocate(pointer, size, alignment);
   }
 
@@ -224,7 +224,11 @@ struct FaultAllocator {
   }
 };
 
-enum class AllocationCase { initial, resize, metadata };
+enum class AllocationCase {
+  initial,
+  resize,
+  metadata,
+};
 static unsigned allocation_cases, allocation_failures, allocation_free_recoveries;
 
 void allocationEquivalence() {
@@ -238,7 +242,7 @@ void allocationEquivalence() {
       BudgetAllocator memoryA{upstreamA, budget}, memoryB{upstreamB, budget};
       Screen a{memoryA};
       candidate::Screen b{memoryB};
-      auto compare = [&](Fixture &fixture) {
+      auto compare = [&](Fixture& fixture) {
         fixture.ready();
         const auto beforeA = state(a), beforeB = state(b);
         const auto resultA = apply(a, fixture.frame), resultB = apply(b, fixture.frame);
@@ -274,7 +278,8 @@ void allocationEquivalence() {
       }
 
       metadata.frame.text_metadata = TextMetadata{.row_flags = metadata.flags, .links = links, .runs = runs, .uris = uris};
-      auto &target = mode == AllocationCase::initial ? initial : mode == AllocationCase::resize ? resized : metadata;
+      auto& target = mode == AllocationCase::initial ? initial : mode == AllocationCase::resize ? resized
+                                                                                                : metadata;
       upstreamA.failAfter(boundary);
       upstreamB.failAfter(boundary);
       const bool failed = compare(target);
@@ -317,7 +322,7 @@ int exercise() {
   BudgetAllocator memoryA{upstream, budget}, memoryB{upstream, budget};
   Screen a{memoryA};
   candidate::Screen b{memoryB};
-  auto compare = [&](Fixture &fixture) {
+  auto compare = [&](Fixture& fixture) {
     fixture.ready();
     const auto beforeA = state(a), beforeB = state(b);
     const auto resultA = apply(a, fixture.frame), resultB = apply(b, fixture.frame);
@@ -404,7 +409,7 @@ int exercise() {
 int main() {
   try {
     return exercise();
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     std::cerr << error.what() << "\n";
     return 1;
   }

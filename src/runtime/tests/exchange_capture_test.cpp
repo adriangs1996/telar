@@ -3,11 +3,10 @@
 static_assert(true);
 #endif
 
-
 #include <cassert>
 #include <cstddef>
-#include <cstring>
 #include <cstdint>
+#include <cstring>
 
 import std;
 import telar.base.memory;
@@ -20,12 +19,17 @@ using namespace telar::runtime;
 static void testCaptureGrowthAndErasure() {
   class InspectMemory {
   public:
-    void *allocate(std::size_t bytes, std::size_t alignment) noexcept { return upstream.allocate(bytes, alignment); }
+    void* allocate(std::size_t bytes, std::size_t alignment) noexcept {
+      return upstream.allocate(bytes, alignment);
+    }
 
-    void deallocate(void *pointer, std::size_t bytes, std::size_t alignment) noexcept {
-      const auto *storage = static_cast<const std::uint8_t *>(pointer);
+    void deallocate(void* pointer, std::size_t bytes, std::size_t alignment) noexcept {
+      const auto* storage = static_cast<const std::uint8_t*>(pointer);
 
-      check(std::all_of(storage, storage + bytes, [](auto byte) { return byte == 0; }));
+      check(std::all_of(storage, storage + bytes, [](auto byte) {
+        return byte == 0;
+      }));
+
       upstream.deallocate(pointer, bytes, alignment);
     }
 
@@ -133,7 +137,7 @@ static void testConcurrentCaptureQuota() {
   CaptureQuota quota{1024};
   std::array<std::jthread, 4> threads;
 
-  for (auto &thread : threads) {
+  for (auto& thread : threads) {
     thread = std::jthread{[&] {
       for (std::size_t iteration = 0; iteration < 10000; ++iteration) {
         const auto reserved = quota.reserveAtMost(300);
@@ -144,7 +148,7 @@ static void testConcurrentCaptureQuota() {
     }};
   }
 
-  for (auto &thread : threads) {
+  for (auto& thread : threads) {
     thread.join();
   }
 

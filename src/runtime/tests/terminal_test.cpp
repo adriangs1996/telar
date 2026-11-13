@@ -3,18 +3,17 @@
 static_assert(true);
 #endif
 
-
 #include "cell_layout.hpp"
-#include <cstring>
+#include "telar_base/diagnostics/config.hpp"
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include "telar_base/diagnostics/config.hpp"
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fcntl.h>
-#include <sys/mman.h>
-#include <cassert>
 #include <ghostty/vt.h>
+#include <sys/mman.h>
 
 import std;
 import telar.base.memory;
@@ -31,7 +30,7 @@ using namespace telar;
 using namespace telar::runtime;
 
 static std::span<const Byte> bytes(std::string_view text) {
-  return {reinterpret_cast<const Byte *>(text.data()), text.size()};
+  return {reinterpret_cast<const Byte*>(text.data()), text.size()};
 }
 
 static void testTerminalStorage() {
@@ -114,14 +113,14 @@ static void testClearAtPrompt() {
 }
 
 // The text a `PaneRows` reply holds on its row `index`, trailing spaces trimmed.
-static std::string replyRow(const PaneRows &reply, std::size_t index) {
+static std::string replyRow(const PaneRows& reply, std::size_t index) {
   std::string text;
   auto reader = reply.reader();
   std::size_t cell = 0;
 
   while (const auto next = reader.next()) {
     if (cell / reply.cols == index) {
-      text.append(reinterpret_cast<const char *>(next->text.data()), next->text.size());
+      text.append(reinterpret_cast<const char*>(next->text.data()), next->text.size());
     }
 
     ++cell;
@@ -200,7 +199,8 @@ void testTerminal() {
     SystemAllocator memory;
     Terminal terminal{memory, TerminalSize{80, 24, 9, 18}};
 
-    for (const auto input : {"\x1b[?5522h", "\x1b[?5522l", "\x1b[?5522h", "\x1b" "c"}) {
+    for (const auto input : {"\x1b[?5522h", "\x1b[?5522l", "\x1b[?5522h", "\x1b"
+                                                                          "c"}) {
       terminal.feed(bytes(input));
       terminal.refresh();
       check(terminal.screen.input_modes.paste_events == terminal.pasteEvents());
@@ -212,14 +212,11 @@ void testTerminal() {
   BudgetAllocator memory{system, 64 * 1024 * 1024};
 
   {
-    Terminal terminal{memory, TerminalSize{.cols = 40,
-                                           .rows = 5,
-                                           .cell_width_px = 0,
-                                           .cell_height_px = 0}};
+    Terminal terminal{memory, TerminalSize{.cols = 40, .rows = 5, .cell_width_px = 0, .cell_height_px = 0}};
 
     terminal.feed(bytes("Hello \x1b[1;31mred\x1b[0m\r\n\xe7\x95\x8c e\xcc\x81"));
     terminal.refresh();
-    const auto &screen = terminal.screen;
+    const auto& screen = terminal.screen;
 
     check(screen.cells[0].text[0] == 'H');
     check(screen.cells[6].style.foreground.kind == CellColor::Kind::indexed);
@@ -263,10 +260,7 @@ void testTerminal() {
     check(terminal.effects.progress_state == PaneProgressState::error && terminal.effects.progress_percent == 75);
     terminal.feed(bytes("\x1b]9;4;0\x07"));
     check(terminal.effects.progress_state == PaneProgressState::remove && !terminal.effects.progress_percent);
-    terminal.resize(TerminalSize{.cols = 80,
-                                 .rows = 24,
-                                 .cell_width_px = 0,
-                                 .cell_height_px = 0});
+    terminal.resize(TerminalSize{.cols = 80, .rows = 24, .cell_width_px = 0, .cell_height_px = 0});
     terminal.refresh();
     check(terminal.screen.cells.size() == 80 * 24);
     const auto revision = terminal.screen.revision;

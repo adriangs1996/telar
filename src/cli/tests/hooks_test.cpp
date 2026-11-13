@@ -3,21 +3,20 @@
 static_assert(true);
 #endif
 
-
-#include <cstdint>
 #include <cerrno>
-#include <unistd.h>
-#include <fcntl.h>
-#include <limits.h>
-#include <sys/stat.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <dirent.h>
-#include <cstdlib>
+#include <fcntl.h>
+#include <limits.h>
 #include <openssl/md5.h>
-#include <cstddef>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/un.h>
+#include <unistd.h>
 
 import std;
 import telar.base.memory;
@@ -33,7 +32,9 @@ using namespace telar::runtime;
 using namespace telar::runtime::cli::hooks;
 
 struct EmptyEnvironment {
-  std::string_view lookup(const char *) const noexcept { return {}; }
+  std::string_view lookup(const char*) const noexcept {
+    return {};
+  }
 };
 
 static void allocationFailures() {
@@ -53,7 +54,7 @@ static void allocationFailures() {
       check(reports.progress && reports.progress->plan_total == 1);
       check(reports.progress->plan_text == "Step with enough text to require allocated storage");
       completed = true;
-    } catch (const std::bad_alloc &) {
+    } catch (const std::bad_alloc&) {
     }
 
     check(memory.liveBytes() == 0);

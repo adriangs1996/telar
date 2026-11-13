@@ -1,10 +1,10 @@
+#include <cerrno>
 #include <csignal>
+#include <cstdio>
 #include <poll.h>
 #include <sys/socket.h>
-#include <sys/un.h>
-#include <cerrno>
-#include <cstdio>
 #include <sys/time.h>
+#include <sys/un.h>
 #include <unistd.h>
 
 import std;
@@ -17,7 +17,7 @@ using namespace telar::runtime;
 
 class NegotiatingPeer {
 public:
-  explicit NegotiatingPeer(const char *path)
+  explicit NegotiatingPeer(const char* path)
       : descriptor_(::socket(AF_UNIX, SOCK_STREAM, 0)) {
     check(static_cast<bool>(descriptor_));
     sockaddr_un address{};
@@ -25,7 +25,7 @@ public:
     address.sun_family = AF_UNIX;
     check(std::strlen(path) < sizeof(address.sun_path));
     std::strcpy(address.sun_path, path);
-    check(::connect(descriptor_.get(), reinterpret_cast<const sockaddr *>(&address), sizeof(address)) == 0);
+    check(::connect(descriptor_.get(), reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0);
     const timeval timeout{.tv_sec = 5, .tv_usec = 0};
 
     check(::setsockopt(descriptor_.get(), SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) == 0);
@@ -136,7 +136,7 @@ private:
   FileDescriptor descriptor_;
 };
 
-static void checkIdentities(const char *socket, unsigned iterations, std::ostream &dump) {
+static void checkIdentities(const char* socket, unsigned iterations, std::ostream& dump) {
   ProtocolPeer control{socket};
   NegotiatingPeer original{socket};
 
@@ -173,7 +173,7 @@ static void checkIdentities(const char *socket, unsigned iterations, std::ostrea
   const auto clients = control.exchange<ClientList>(QueryClients{.request_id = 2});
 
   check(clients.entries.size() == 3);
-  for (const auto &entry : clients.entries) {
+  for (const auto& entry : clients.entries) {
     const auto offset = entry.identity == 101 ? 0 : entry.identity == 202 ? 1
                                                                           : 2;
 
@@ -183,7 +183,7 @@ static void checkIdentities(const char *socket, unsigned iterations, std::ostrea
   control.record(dump, clients);
 }
 
-static void checkPendingCapacity(const char *socket, std::ostream &dump) {
+static void checkPendingCapacity(const char* socket, std::ostream& dump) {
   ProtocolPeer control{socket};
   std::vector<std::unique_ptr<NegotiatingPeer>> pending;
 
@@ -195,10 +195,12 @@ static void checkPendingCapacity(const char *socket, std::ostream &dump) {
 
   excess.expectClosed();
   const auto limits = control.exchange<LimitList>(QueryLimits{.request_id = 1});
-  const auto entry = std::ranges::find(limits.entries, std::string_view{"clients.max_pending_handshakes"}, [](const auto &entry) { return entry.reach.name; });
+  const auto entry = std::ranges::find(limits.entries, std::string_view{"clients.max_pending_handshakes"}, [](const auto& entry) {
+    return entry.reach.name;
+  });
 
   check(entry != limits.entries.end() && entry->reach.value == 16 && entry->hits == 1);
-  for (const auto &peer : pending) {
+  for (const auto& peer : pending) {
     peer->expectClosed();
   }
 
@@ -213,7 +215,7 @@ static void checkPendingCapacity(const char *socket, std::ostream &dump) {
   control.record(dump, clients);
 }
 
-static void checkClientCapacity(const char *socket, std::ostream &dump) {
+static void checkClientCapacity(const char* socket, std::ostream& dump) {
   ProtocolPeer control{socket};
   std::vector<std::unique_ptr<NegotiatingPeer>> clients;
 
@@ -236,7 +238,9 @@ static void checkClientCapacity(const char *socket, std::ostream &dump) {
   malformed.hello(false, true);
   malformed.expectClosed();
   const auto limits = control.exchange<LimitList>(QueryLimits{.request_id = 1});
-  const auto entry = std::ranges::find(limits.entries, std::string_view{"clients.max_clients"}, [](const auto &entry) { return entry.reach.name; });
+  const auto entry = std::ranges::find(limits.entries, std::string_view{"clients.max_clients"}, [](const auto& entry) {
+    return entry.reach.name;
+  });
 
   check(entry != limits.entries.end() && entry->reach.value == 32 && entry->reach.requested == 33 && entry->hits == 2);
   auto recorded = *entry;
@@ -245,7 +249,7 @@ static void checkClientCapacity(const char *socket, std::ostream &dump) {
   control.record(dump, LimitList{.request_id = 1, .entries = std::span{&recorded, 1}});
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   if (argc != 5) {
     return 2;
   }
@@ -269,7 +273,7 @@ int main(int argc, char **argv) {
 
     std::printf("{\"ns_per_iteration\":%lld}\n", elapsed);
     return 0;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     std::fprintf(stderr, "admission-probe: %s\n", error.what());
     return 1;
   }

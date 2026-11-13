@@ -3,26 +3,25 @@
 static_assert(true);
 #endif
 
-
-#include <cassert>
-#include <cstdint>
-#include <cstring>
-#include <cstddef>
-#include <cerrno>
-#include <sys/types.h>
-#include <limits.h>
-#include <poll.h>
-#include <sys/wait.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <unistd.h>
+#include "cell_layout.hpp"
 #include "telar_base/diagnostics/config.hpp"
+#include <cassert>
+#include <cerrno>
+#include <csignal>
+#include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
+#include <fcntl.h>
+#include <limits.h>
+#include <poll.h>
 #include <sys/mman.h>
-#include "cell_layout.hpp"
-#include <csignal>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <sys/uio.h>
+#include <sys/wait.h>
+#include <unistd.h>
 #if (defined(__APPLE__))
 #include <sys/event.h>
 #endif
@@ -38,8 +37,8 @@ static_assert(true);
 #if (defined(__linux__))
 #include <sys/syscall.h>
 #endif
-#include <new>
 #include <ghostty/vt.h>
+#include <new>
 
 import std;
 import telar.base.diagnostics;
@@ -92,12 +91,12 @@ static void testDeferredClosure(bool worktree) {
 
   workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/", .arguments = arguments}});
   const auto opened = owner.receive<PaneOpened>();
-  auto &pane = panes.require(model.panes, opened.pane_id);
+  auto& pane = panes.require(model.panes, opened.pane_id);
 
   panes.attach(model, observer.session(), pane.id, size);
   constexpr std::string_view final_output = "retained final output";
 
-  pane.terminal.feed({reinterpret_cast<const Byte *>(final_output.data()), final_output.size()});
+  pane.terminal.feed({reinterpret_cast<const Byte*>(final_output.data()), final_output.size()});
 
   if (worktree) {
     workspaces.closeWorkspace(model, clients, opened.location.workspace.id);
@@ -127,7 +126,7 @@ static void testDeferredClosure(bool worktree) {
   workspaces.collectExited(model, panes, clients);
   check(model.panes.find(opened.pane_id) == nullptr);
   check(!owner.session().workspace && !observer.session().workspace);
-  const auto *retained = model.exited_panes.find(opened.pane_id, opened.pane_generation);
+  const auto* retained = model.exited_panes.find(opened.pane_id, opened.pane_generation);
 
   check(retained != nullptr && retained->exit_code == 128 + SIGKILL);
   check(retained->response(ReadPane{.rows = 24}).text == final_output);

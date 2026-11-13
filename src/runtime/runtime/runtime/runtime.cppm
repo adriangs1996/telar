@@ -58,16 +58,16 @@ export {
     public:
       using Panes = PaneService<Memory, Poller, History>;
 
-      inline explicit AgentService(Memory &memory)
+      inline explicit AgentService(Memory& memory)
           : agents_(memory) {}
 
       inline void enableDescriptions(bool enabled) noexcept {
         descriptions_.enable(enabled);
       }
 
-      inline void observeInput(const Pane<Memory> &pane, std::span<const Byte> bytes) {
+      inline void observeInput(const Pane<Memory>& pane, std::span<const Byte> bytes) {
         if (descriptions_.enabled()) {
-          if (auto *agent = agents_.find(pane.id, pane.generation)) {
+          if (auto* agent = agents_.find(pane.id, pane.generation)) {
             agent->observeInput(bytes);
           }
         }
@@ -77,13 +77,13 @@ export {
         return descriptions_.nextDescription(agents_);
       }
 
-      inline std::optional<HistorySessionTitle> completeDescription(const DescriptionResult &result) {
+      inline std::optional<HistorySessionTitle> completeDescription(const DescriptionResult& result) {
         return descriptions_.completeDescription(agents_, result);
       }
 
-      inline void report(RuntimeModel<Memory> &model, ClientSession<Memory> &client, const ReportAgent &request) {
-        auto &pane = authorize(model.panes, client, request.pane_id, request.pane_generation, request.provider);
-        auto *existing = agents_.find(pane.id, pane.generation);
+      inline void report(RuntimeModel<Memory>& model, ClientSession<Memory>& client, const ReportAgent& request) {
+        auto& pane = authorize(model.panes, client, request.pane_id, request.pane_generation, request.provider);
+        auto* existing = agents_.find(pane.id, pane.generation);
         if (existing == nullptr && request.state == AgentReportState::continuing) {
           client.connection.send(RequestCompleted{.request_id = request.request_id});
           return;
@@ -93,7 +93,7 @@ export {
           existing = &ensure(pane);
         }
 
-        auto &agent = *existing;
+        auto& agent = *existing;
         const auto previous = agent.status;
         const auto previous_watch = agent.file_watch.revision;
         const bool changed = agent.report(request, client.deferred_report.reportTime());
@@ -114,17 +114,17 @@ export {
         client.connection.send(RequestCompleted{.request_id = request.request_id});
       }
 
-      inline void reportSession(RuntimeModel<Memory> &model, ClientSession<Memory> &client, const ReportAgentSession &request) {
-        auto &pane = require(model.panes, request.pane_id, request.pane_generation);
+      inline void reportSession(RuntimeModel<Memory>& model, ClientSession<Memory>& client, const ReportAgentSession& request) {
+        auto& pane = require(model.panes, request.pane_id, request.pane_generation);
 
         ensure(pane).setSession(request.session);
         agents_.changed();
         client.connection.send(RequestCompleted{.request_id = request.request_id});
       }
 
-      inline void reportTitle(RuntimeModel<Memory> &model, ClientSession<Memory> &client, const ReportAgentTitle &request) {
-        auto &pane = authorize(model.panes, client, request.pane_id, request.pane_generation, request.provider);
-        auto &agent = ensure(pane);
+      inline void reportTitle(RuntimeModel<Memory>& model, ClientSession<Memory>& client, const ReportAgentTitle& request) {
+        auto& pane = authorize(model.panes, client, request.pane_id, request.pane_generation, request.provider);
+        auto& agent = ensure(pane);
 
         agent.evidence.claim(request.provider);
         if (agent.reportTitle(request.title)) {
@@ -139,10 +139,10 @@ export {
           return std::nullopt;
         }
 
-        const Agent *selected = nullptr;
+        const Agent* selected = nullptr;
 
-        for (const auto &agent : agents_.records()) {
-          const auto &watch = agent->file_watch;
+        for (const auto& agent : agents_.records()) {
+          const auto& watch = agent->file_watch;
           if (watch.path.view().empty() || now - watch.checked_at < std::chrono::seconds{1}) {
             continue;
           }
@@ -155,14 +155,14 @@ export {
         return selected == nullptr ? std::nullopt : std::optional{SessionFileRequest{selected->pane, selected->generation, selected->file_watch}};
       }
 
-      inline void completeSessionFile(const SessionFileResult &result, std::chrono::steady_clock::time_point now) {
-        auto *agent = agents_.find(result.request.pane, result.request.generation);
+      inline void completeSessionFile(const SessionFileResult& result, std::chrono::steady_clock::time_point now) {
+        auto* agent = agents_.find(result.request.pane, result.request.generation);
         if (agent == nullptr) {
           return;
         }
 
-        auto &watch = agent->file_watch;
-        const auto &requested = result.request.watch;
+        auto& watch = agent->file_watch;
+        const auto& requested = result.request.watch;
         if (watch.revision != requested.revision || watch.path.view() != requested.path.view() || watch.session.view() != requested.session.view()) {
           return;
         }
@@ -174,29 +174,25 @@ export {
             if (agent->reportTitle(result.title->view())) {
               agents_.changed();
             }
-          } catch (const std::exception &) {
+          } catch (const std::exception&) {
           }
         }
       }
 
-      inline bool reportProgress(RuntimeModel<Memory> &model, ClientSession<Memory> &client, const ReportAgentProgress &request) {
-        auto &pane = authorize(model.panes, client, request.pane_id, request.pane_generation, request.provider);
-        auto &agent = ensure(pane);
+      inline bool reportProgress(RuntimeModel<Memory>& model, ClientSession<Memory>& client, const ReportAgentProgress& request) {
+        auto& pane = authorize(model.panes, client, request.pane_id, request.pane_generation, request.provider);
+        auto& agent = ensure(pane);
 
         agent.evidence.claim(request.provider);
         const bool applied = agent.progress.apply(request);
 
         if (!request.cwd.empty()) {
-          const auto *worktree = model.worktrees.containing(request.cwd);
+          const auto* worktree = model.worktrees.containing(request.cwd);
           if (worktree != nullptr) {
             agent.worktree = worktree->id;
           } else if (!request.work_tree_path.empty()) {
             const auto branch = request.work_tree_branch.empty() ? request.work_tree_path.substr(request.work_tree_path.rfind('/') + 1) : request.work_tree_branch;
-            const auto result = model.worktrees.registerEntry(RegisterWorktree{.source = model.worktrees.sourceFor(pane.location.workspace.id),
-                                                                               .created_by = pane.id,
-                                                                               .origin = WorktreeOrigin::external,
-                                                                               .path = request.work_tree_path,
-                                                                               .branch = branch});
+            const auto result = model.worktrees.registerEntry(RegisterWorktree{.source = model.worktrees.sourceFor(pane.location.workspace.id), .created_by = pane.id, .origin = WorktreeOrigin::external, .path = request.work_tree_path, .branch = branch});
 
             agent.worktree = result.worktree;
             ++model.workspace_revision;
@@ -210,13 +206,13 @@ export {
         return applied;
       }
 
-      inline tbc::view<Pane<Memory> &, tbc::lt::a> validateCommand(tbc::view<RuntimeModel<Memory> &, tbc::lt::a> model, ClientSession<Memory> &client, const ReportAgentCommand &request) {
+      inline tbc::view<Pane<Memory>&, tbc::lt::a> validateCommand(tbc::view<RuntimeModel<Memory>&, tbc::lt::a> model, ClientSession<Memory>& client, const ReportAgentCommand& request) {
         return authorize(model.panes, client, request.pane_id, request.pane_generation, model.manifests.named(request.provider));
       }
 
       // Sends text to a pane, which its caller says no attached window focuses.
-      inline void sendText(RuntimeModel<Memory> &model, Panes &panes, ClientSession<Memory> &client, const SendPaneText &request, bool focused) {
-        auto &pane = Panes::requireGeneration(model.panes, request.pane_id, request.pane_generation);
+      inline void sendText(RuntimeModel<Memory>& model, Panes& panes, ClientSession<Memory>& client, const SendPaneText& request, bool focused) {
+        auto& pane = Panes::requireGeneration(model.panes, request.pane_id, request.pane_generation);
         if (pane.exit_status || pane.output_closed) {
           throw RequestError{FailureCode::pane_exited, "Pane already exited"};
         }
@@ -231,7 +227,7 @@ export {
 
         std::array<char, 192> prefix{};
         std::size_t length = 0;
-        const auto *sender = request.sender ? model.panes.find(*request.sender) : nullptr;
+        const auto* sender = request.sender ? model.panes.find(*request.sender) : nullptr;
         if (request.mode == PaneTextMode::prompt && sender != nullptr) {
           if (!prompt_budget_.spend(sender->id, pane.id, std::chrono::steady_clock::now())) {
             throw RequestError{FailureCode::prompt_rate_limited, "Prompt budget for this pane is spent; wait for its answer"};
@@ -239,11 +235,11 @@ export {
 
           std::string_view name = "a telar pane";
 
-          if (const auto *workspace = model.workspaces.find(sender->location.workspace.id)) {
+          if (const auto* workspace = model.workspaces.find(sender->location.workspace.id)) {
             name = workspace->displayName();
           }
 
-          for (const auto *worktree : model.worktrees.items()) {
+          for (const auto* worktree : model.worktrees.items()) {
             if (worktree != nullptr && worktree->workspace == sender->location.workspace.id) {
               name = worktree->branch.view();
               break;
@@ -254,11 +250,13 @@ export {
           length = static_cast<std::size_t>(std::snprintf(prefix.data(), prefix.size(), "[telar: from %.*s, pane %llu] ", static_cast<int>(name.size()), name.data(), static_cast<unsigned long long>(sender->id)));
         }
 
-        panes.sendText(model.panes, client, request, {prefix.data(), length}, [this](const Pane<Memory> &target, std::span<const Byte> bytes) { observeInput(target, bytes); });
+        panes.sendText(model.panes, client, request, {prefix.data(), length}, [this](const Pane<Memory>& target, std::span<const Byte> bytes) {
+          observeInput(target, bytes);
+        });
       }
 
-      inline void acknowledge(const AcknowledgeAgent &request) noexcept {
-        if (auto *agent = agents_.find(request.pane_id, request.pane_generation); agent != nullptr && agent->status == AgentStatus::done) {
+      inline void acknowledge(const AcknowledgeAgent& request) noexcept {
+        if (auto* agent = agents_.find(request.pane_id, request.pane_generation); agent != nullptr && agent->status == AgentStatus::done) {
           agent->acknowledged = true;
           if (agent->project(wallMilliseconds())) {
             projected(agent->pane, agent->generation);
@@ -267,8 +265,8 @@ export {
       }
 
       // Interrupts a pane's agent, which its caller says no attached window focuses.
-      inline void interrupt(RuntimeModel<Memory> &model, Panes &panes, ClientSession<Memory> &client, const InterruptAgent &request, bool focused) {
-        auto &pane = Panes::requireGeneration(model.panes, request.pane_id, request.pane_generation);
+      inline void interrupt(RuntimeModel<Memory>& model, Panes& panes, ClientSession<Memory>& client, const InterruptAgent& request, bool focused) {
+        auto& pane = Panes::requireGeneration(model.panes, request.pane_id, request.pane_generation);
         if (pane.exit_status) {
           throw RequestError{FailureCode::pane_exited, "Pane already exited"};
         }
@@ -277,7 +275,7 @@ export {
           throw RequestError{FailureCode::pane_focused, "The pane has focus in an attached window"};
         }
 
-        auto *agent = agents_.find(pane.id, pane.generation);
+        auto* agent = agents_.find(pane.id, pane.generation);
         const auto now = std::chrono::steady_clock::now();
         if (agent != nullptr && agent->interrupt_at && now - *agent->interrupt_at < std::chrono::seconds{2}) {
           client.connection.send(RequestCompleted{.request_id = request.request_id});
@@ -288,7 +286,7 @@ export {
           throw RequestError{FailureCode::agent_not_working, "Agent is not working"};
         }
 
-        const auto *manifest = model.manifests.find(agent->provider);
+        const auto* manifest = model.manifests.find(agent->provider);
         if (manifest == nullptr || manifest->interrupt == AgentInterruptKey::none) {
           throw RequestError{FailureCode::interrupt_unsupported, "Agent declares no interrupt key"};
         }
@@ -305,8 +303,7 @@ export {
           panes.flushInput(pane);
         }
 
-        agent->report(ReportAgent{.state = AgentReportState::settling,
-                                  .event = "Interrupted by telar"});
+        agent->report(ReportAgent{.state = AgentReportState::settling, .event = "Interrupted by telar"});
         agent->interrupt_at = now;
         agent->interrupt_revision = pane.terminal.contentRevision();
         projected(agent->pane, agent->generation);
@@ -314,8 +311,8 @@ export {
       }
 
       // Whether an attached window focuses a pane.
-      inline static bool focused(const ClientStore<Memory> &clients, const ClientLayouts<Memory> &layouts, std::uint64_t pane) noexcept {
-        for (const auto *client : clients.items()) {
+      inline static bool focused(const ClientStore<Memory>& clients, const ClientLayouts<Memory>& layouts, std::uint64_t pane) noexcept {
+        for (const auto* client : clients.items()) {
           if (client != nullptr && client->role == ClientRole::interactive && !client->connection.closing && layouts.focusedPane(client->identity) == pane) {
             return true;
           }
@@ -324,13 +321,13 @@ export {
         return false;
       }
 
-      inline bool blocked(const Pane<Memory> &pane) const noexcept {
-        const auto *agent = agents_.find(pane.id, pane.generation);
+      inline bool blocked(const Pane<Memory>& pane) const noexcept {
+        const auto* agent = agents_.find(pane.id, pane.generation);
 
         return agent != nullptr && agent->status == AgentStatus::blocked;
       }
 
-      inline void query(const RuntimeModel<Memory> &model, ClientSession<Memory> &client) {
+      inline void query(const RuntimeModel<Memory>& model, ClientSession<Memory>& client) {
         snapshots_.publish(client, model, agents_);
       }
 
@@ -338,14 +335,17 @@ export {
         return agents_.revision();
       }
 
-      inline const Agent *find(std::uint64_t pane, std::uint64_t generation) const noexcept {
+      inline const Agent* find(std::uint64_t pane, std::uint64_t generation) const noexcept {
         return agents_.find(pane, generation);
       }
 
-      inline void observeProcess(Pane<Memory> &pane, std::optional<ProcessIdentity> identity, AgentProvider provider) {
-        auto *agent = agents_.find(pane.id, pane.generation);
+      inline void observeProcess(Pane<Memory>& pane, std::optional<ProcessIdentity> identity, AgentProvider provider) {
+        auto* agent = agents_.find(pane.id, pane.generation);
         if (agent != nullptr && agent->process_identity && provider == AgentProvider::unknown) {
-          agents_.removeIf([&](const Agent &record) { return record.pane == pane.id && record.generation == pane.generation; });
+          agents_.removeIf([&](const Agent& record) {
+            return record.pane == pane.id && record.generation == pane.generation;
+          });
+
           return;
         }
 
@@ -364,7 +364,7 @@ export {
         const bool changed = agent->observeProcess(*identity, provider);
 
         if (pane.restored_agent) {
-          const auto &restored = *pane.restored_agent;
+          const auto& restored = *pane.restored_agent;
           if (restored.provider == provider) {
             agent->setSession(restored.session.view());
             agent->title.assign(restored.title.view());
@@ -386,15 +386,18 @@ export {
         }
       }
 
-      inline void observeProcess(Pane<Memory> &pane, const ProcessProbeResult &observation) {
+      inline void observeProcess(Pane<Memory>& pane, const ProcessProbeResult& observation) {
         observeProcess(pane, observation.identity, observation.provider);
-        auto *agent = agents_.find(pane.id, pane.generation);
+        auto* agent = agents_.find(pane.id, pane.generation);
         if (agent == nullptr) {
           return;
         }
 
         if (observation.shell_foreground) {
-          agents_.removeIf([&](const Agent &record) { return record.pane == pane.id && record.generation == pane.generation; });
+          agents_.removeIf([&](const Agent& record) {
+            return record.pane == pane.id && record.generation == pane.generation;
+          });
+
           return;
         }
 
@@ -407,8 +410,8 @@ export {
         }
       }
 
-      inline void observeScreen(Pane<Memory> &pane, const AgentSignal &signal, ObservationTime time) {
-        auto *agent = agents_.find(pane.id, pane.generation);
+      inline void observeScreen(Pane<Memory>& pane, const AgentSignal& signal, ObservationTime time) {
+        auto* agent = agents_.find(pane.id, pane.generation);
         if (agent == nullptr) {
           return;
         }
@@ -424,14 +427,17 @@ export {
         }
       }
 
-      inline void refresh(RuntimeModel<Memory> &model, Panes &panes, const ClientStore<Memory> &clients, const ClientLayouts<Memory> &layouts, std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now()) {
-        agents_.removeIf([&](const Agent &agent) { return findPane(model.panes, agent.pane, agent.generation) == nullptr || (!agent.evidence.choose(wallMilliseconds()) && agent.observed_at != 0); });
-        for (auto *pane : model.panes.items()) {
+      inline void refresh(RuntimeModel<Memory>& model, Panes& panes, const ClientStore<Memory>& clients, const ClientLayouts<Memory>& layouts, std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now()) {
+        agents_.removeIf([&](const Agent& agent) {
+          return findPane(model.panes, agent.pane, agent.generation) == nullptr || (!agent.evidence.choose(wallMilliseconds()) && agent.observed_at != 0);
+        });
+
+        for (auto* pane : model.panes.items()) {
           if (pane == nullptr || pane->exit_status) {
             continue;
           }
 
-          auto *agent = agents_.find(pane->id, pane->generation);
+          auto* agent = agents_.find(pane->id, pane->generation);
           if (agent == nullptr) {
             continue;
           }
@@ -457,17 +463,20 @@ export {
         }
       }
 
-      inline Agent &ensure(Pane<Memory> &pane) {
-        auto &agent = agents_.ensure(pane.id, pane.generation);
+      inline Agent& ensure(Pane<Memory>& pane) {
+        auto& agent = agents_.ensure(pane.id, pane.generation);
 
         agent.session_id = pane.history_session;
         return agent;
       }
 
       // Sends the agent sounds reported since the last delivery to subscribed clients.
-      inline void deliverSounds(ClientStore<Memory> &clients) noexcept {
-        for (const auto &notification : sounds_.queued()) {
-          broadcast(clients, [](const ClientSession<Memory> &client) { return client.subscribed; }, notification);
+      inline void deliverSounds(ClientStore<Memory>& clients) noexcept {
+        for (const auto& notification : sounds_.queued()) {
+          broadcast(clients, [](const ClientSession<Memory>& client) {
+            return client.subscribed;
+          },
+              notification);
         }
 
         sounds_.clear();
@@ -479,7 +488,7 @@ export {
       inline void projected(std::uint64_t pane, std::uint64_t generation) noexcept {
         const auto pending = DescriptionQueue<Memory>::pending(agents_);
 
-        if (auto *agent = agents_.find(pane, generation)) {
+        if (auto* agent = agents_.find(pane, generation)) {
           descriptions_.project(pending, *agent);
           agent->sequence = ++sequence_;
         }
@@ -488,12 +497,12 @@ export {
       }
 
       // Whether a change of status calls for a sound.
-      inline static bool alerts(const Agent &agent, AgentStatus previous) noexcept {
+      inline static bool alerts(const Agent& agent, AgentStatus previous) noexcept {
         return (agent.status == AgentStatus::done && previous == AgentStatus::working) || (agent.status == AgentStatus::blocked && previous != AgentStatus::blocked);
       }
 
       // Ends an interrupt once its pane settles; whether the agent's projection changed.
-      inline static bool settleInterrupt(Panes &panes, bool focused, Pane<Memory> &pane, Agent &agent, std::chrono::steady_clock::time_point now) {
+      inline static bool settleInterrupt(Panes& panes, bool focused, Pane<Memory>& pane, Agent& agent, std::chrono::steady_clock::time_point now) {
         bool settled = false;
 
         if (hasIdleScreen(agent.provider)) {
@@ -546,8 +555,8 @@ export {
         return false;
       }
 
-      inline static Pane<Memory> &require(PaneStore<Memory> &panes, std::uint64_t identity, std::uint64_t generation) {
-        auto &pane = Panes::requireGeneration(panes, identity, generation);
+      inline static Pane<Memory>& require(PaneStore<Memory>& panes, std::uint64_t identity, std::uint64_t generation) {
+        auto& pane = Panes::requireGeneration(panes, identity, generation);
         if (generation == 0 || pane.exit_status) {
           throw RequestError{FailureCode::pane_not_found, "Pane not found"};
         }
@@ -555,9 +564,9 @@ export {
         return pane;
       }
 
-      inline tbc::view<Pane<Memory> &, tbc::lt::a> authorize(tbc::view<PaneStore<Memory> &, tbc::lt::a> panes, const ClientSession<Memory> &client, std::uint64_t pane_id, std::uint64_t generation, AgentProvider provider) {
+      inline tbc::view<Pane<Memory>&, tbc::lt::a> authorize(tbc::view<PaneStore<Memory>&, tbc::lt::a> panes, const ClientSession<Memory>& client, std::uint64_t pane_id, std::uint64_t generation, AgentProvider provider) {
         TELAR_TRACE("agents.authorize");
-        auto &pane = require(panes, pane_id, generation);
+        auto& pane = require(panes, pane_id, generation);
 
         if (provider == AgentProvider::unknown) {
           return pane;
@@ -567,7 +576,7 @@ export {
           throw RequestError{FailureCode::foreign_process, "The report does not come from this pane's agent"};
         }
 
-        if (const auto *agent = agents_.find(pane.id, pane.generation); agent != nullptr && !agent->evidence.accepts(provider)) {
+        if (const auto* agent = agents_.find(pane.id, pane.generation); agent != nullptr && !agent->evidence.accepts(provider)) {
           throw RequestError{FailureCode::foreign_process, "The report belongs to another agent"};
         }
 
@@ -578,7 +587,7 @@ export {
       // Agent sounds queued while a client is borrowed, delivered to the subscribed clients afterwards.
       class SoundQueue {
       public:
-        inline void push(const Agent &agent) noexcept {
+        inline void push(const Agent& agent) noexcept {
           if (count_ < entries_.size()) {
             entries_[count_++] = AgentSoundNotification{
                 .pane_id = agent.pane,
@@ -625,7 +634,7 @@ export {
     using LaunchDirectory = FixedText<4096>;
 
     // Points a launch at a copy of a directory.
-    inline void ownDirectory(tbc::view<Launch &, tbc::lt::a> launch, tbc::view<LaunchDirectory &, tbc::lt::a> storage, std::string_view directory) {
+    inline void ownDirectory(tbc::view<Launch&, tbc::lt::a> launch, tbc::view<LaunchDirectory&, tbc::lt::a> storage, std::string_view directory) {
       if (directory.size() > 4096) {
         throw RequestError{FailureCode::invalid_request, "working directory is too long"};
       }
@@ -636,18 +645,18 @@ export {
 
     // The launch with the directory of the pane it names as its source, copied into `directory`.
     template <Allocator Memory>
-    tbc::view<Launch, tbc::lt::a> resolveLaunchDirectory(const RuntimeModel<Memory> &model, const ClientSession<Memory> &client, tbc::view<Launch, tbc::lt::a> launch, tbc::view<LaunchDirectory &, tbc::lt::a> directory, LaunchDirectoryScope scope = {}) {
+    tbc::view<Launch, tbc::lt::a> resolveLaunchDirectory(const RuntimeModel<Memory>& model, const ClientSession<Memory>& client, tbc::view<Launch, tbc::lt::a> launch, tbc::view<LaunchDirectory&, tbc::lt::a> directory, LaunchDirectoryScope scope = {}) {
       if (launch.cwd_source == 0) {
         return launch;
       }
 
-      const auto *pane = model.panes.find(launch.cwd_source);
+      const auto* pane = model.panes.find(launch.cwd_source);
       if (client.attachment(launch.cwd_source) == nullptr || pane == nullptr || pane->close_requested || pane->exit_status) {
         throw RequestError{FailureCode::invalid_request, "cwd source pane is unavailable"};
       }
 
-      const auto *workspace = std::get_if<WorkspaceLocation>(&scope);
-      const auto *tab = std::get_if<TabLocation>(&scope);
+      const auto* workspace = std::get_if<WorkspaceLocation>(&scope);
+      const auto* tab = std::get_if<TabLocation>(&scope);
       if (tab != nullptr) {
         workspace = &tab->workspace;
       }
@@ -678,7 +687,7 @@ export {
       checkpoint::Options session;
       bool fresh = false;
       bool capture_output = false;
-      const AgentManifests *manifests = &builtin_manifests;
+      const AgentManifests* manifests = &builtin_manifests;
       DescriptionOptions descriptions;
       GraphicsLimits graphics;
       control::Policy control_policy{};
@@ -699,13 +708,13 @@ export {
     template <Allocator Memory>
     class PluginDelivery {
     public:
-      inline explicit PluginDelivery(LimitService<Memory> &limits) noexcept
+      inline explicit PluginDelivery(LimitService<Memory>& limits) noexcept
           : limits_(limits) {}
 
       template <plugins::EventSource Source>
-      inline void collect(ClientStore<Memory> &clients, Source &source) {
-        source.collect([&](const plugins::EffectBatch &batch) {
-          for (const auto &notification : std::span{batch.notifications}.first(batch.count)) {
+      inline void collect(ClientStore<Memory>& clients, Source& source) {
+        source.collect([&](const plugins::EffectBatch& batch) {
+          for (const auto& notification : std::span{batch.notifications}.first(batch.count)) {
             publish(clients, notification);
           }
         });
@@ -720,33 +729,33 @@ export {
       }
 
     private:
-      inline static void publish(ClientStore<Memory> &clients, const NotificationBody &body) {
+      inline static void publish(ClientStore<Memory>& clients, const NotificationBody& body) {
         const Notification notification{body};
         std::array<Byte, validation_bytes> validation;
         std::span<Byte> remaining{validation};
 
         try {
           Codec::encode(notification, remaining);
-        } catch (const EncodingError &) {
+        } catch (const EncodingError&) {
           return;
         }
 
         ClientControl<Memory>::publish(clients, notification);
       }
 
-      inline void reportGrowth(std::uint64_t current, std::uint64_t previous, const LimitReach &reach) {
+      inline void reportGrowth(std::uint64_t current, std::uint64_t previous, const LimitReach& reach) {
         if (current > previous) {
           limits_.report(reach);
         }
       }
 
       static constexpr std::size_t validation_bytes = 512;
-      LimitService<Memory> &limits_;
+      LimitService<Memory>& limits_;
       plugins::TapMetrics previous_;
     };
 
     template <Allocator Memory>
-    PluginDelivery(LimitService<Memory> &limits) -> PluginDelivery<Memory>;
+    PluginDelivery(LimitService<Memory>& limits) -> PluginDelivery<Memory>;
 
   }
 }
@@ -760,11 +769,11 @@ export {
     public:
       using Panes = PaneService<Memory, Poller, History>;
 
-      inline explicit WorkspaceService(Memory &memory)
+      inline explicit WorkspaceService(Memory& memory)
           : memory_(memory) {}
 
-      inline static Workspace<Memory> &require(WorkspaceStore<Memory> &workspaces, WorkspaceLocation location) {
-        auto *workspace = workspaces.find(location.id);
+      inline static Workspace<Memory>& require(WorkspaceStore<Memory>& workspaces, WorkspaceLocation location) {
+        auto* workspace = workspaces.find(location.id);
         if (location.kind != WorkspaceLocation::Kind::workspace || workspace == nullptr) {
           throw RequestError{FailureCode::workspace_not_found, "Workspace does not exist"};
         }
@@ -772,8 +781,8 @@ export {
         return *workspace;
       }
 
-      inline static Tab<Memory> &requireTab(WorkspaceStore<Memory> &workspaces, TabLocation location) {
-        auto *tab = require(workspaces, location.workspace).tab(location.tab_id);
+      inline static Tab<Memory>& requireTab(WorkspaceStore<Memory>& workspaces, TabLocation location) {
+        auto* tab = require(workspaces, location.workspace).tab(location.tab_id);
         if (tab == nullptr) {
           throw RequestError{FailureCode::tab_not_found, "Tab does not exist"};
         }
@@ -782,27 +791,27 @@ export {
       }
 
       // The colors of a workspace's geometry owner, which its new panes take.
-      inline static tbc::view<const ConfigureTerminalColors *, tbc::lt::a> ownerColors(const WorkspaceStore<Memory> &workspaces, tbc::view<const ClientStore<Memory> &, tbc::lt::a> clients, std::uint64_t workspace) noexcept {
-        const auto *found = workspaces.find(workspace);
-        const auto *owner = found != nullptr && found->geometry_client ? clients.find(*found->geometry_client) : nullptr;
+      inline static tbc::view<const ConfigureTerminalColors*, tbc::lt::a> ownerColors(const WorkspaceStore<Memory>& workspaces, tbc::view<const ClientStore<Memory>&, tbc::lt::a> clients, std::uint64_t workspace) noexcept {
+        const auto* found = workspaces.find(workspace);
+        const auto* owner = found != nullptr && found->geometry_client ? clients.find(*found->geometry_client) : nullptr;
 
         return owner == nullptr ? nullptr : &owner->colors;
       }
 
       // Whether a workspace's geometry owner draws telar's editor, so its new panes' shells print no prompt.
-      inline static bool ownerBarePrompt(const WorkspaceStore<Memory> &workspaces, const ClientStore<Memory> &clients, std::uint64_t workspace) noexcept {
-        const auto *found = workspaces.find(workspace);
-        const auto *owner = found != nullptr && found->geometry_client ? clients.find(*found->geometry_client) : nullptr;
+      inline static bool ownerBarePrompt(const WorkspaceStore<Memory>& workspaces, const ClientStore<Memory>& clients, std::uint64_t workspace) noexcept {
+        const auto* found = workspaces.find(workspace);
+        const auto* owner = found != nullptr && found->geometry_client ? clients.find(*found->geometry_client) : nullptr;
 
         return owner != nullptr && owner->bare_prompt;
       }
 
-      inline void open(RuntimeModel<Memory> &model, Panes &panes, ClientStore<Memory> &clients, std::uint64_t client_id, const OpenPane &request) {
+      inline void open(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients, std::uint64_t client_id, const OpenPane& request) {
         std::optional<std::uint64_t> pane;
         bool created = false;
 
         if (request.target.kind == PaneTarget::Kind::pane) {
-          const auto &target = Panes::require(model.panes, request.target.id);
+          const auto& target = Panes::require(model.panes, request.target.id);
           if (target.close_requested || target.exit_status) {
             throw RequestError{FailureCode::pane_not_found, "pane not found"};
           }
@@ -817,9 +826,9 @@ export {
 
           LaunchDirectory directory;
           auto launch = resolveLaunchDirectory(model, requireClient(clients, client_id), *request.launch, directory);
-          const Workspace<Memory> *workspace = nullptr;
+          const Workspace<Memory>* workspace = nullptr;
 
-          for (const auto *candidate : model.workspaces.items()) {
+          for (const auto* candidate : model.workspaces.items()) {
             if (candidate != nullptr && candidate->path == launch.cwd) {
               workspace = candidate;
               break;
@@ -842,13 +851,13 @@ export {
           throw RequestError{FailureCode::pane_not_found, "workspace has no running pane"};
         }
 
-        auto &client = requireClient(clients, client_id);
+        auto& client = requireClient(clients, client_id);
 
         panes.attach(model, client, *pane, request.size);
         sendOpened(client, request.request_id, Panes::require(model.panes, *pane), created);
       }
 
-      inline void createWorkspace(RuntimeModel<Memory> &model, Panes &panes, ClientStore<Memory> &clients, std::uint64_t client_id, const CreateWorkspace &request) {
+      inline void createWorkspace(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients, std::uint64_t client_id, const CreateWorkspace& request) {
         LaunchDirectory directory;
         auto launch = resolveLaunchDirectory(model, requireClient(clients, client_id), request.launch, directory);
 
@@ -861,14 +870,14 @@ export {
         sendOpened(requireClient(clients, client_id), request.request_id, Panes::require(model.panes, pane), true, GenerationField::omitted);
       }
 
-      inline void createTab(RuntimeModel<Memory> &model, Panes &panes, ClientStore<Memory> &clients, std::uint64_t client_id, const CreateTab &request) {
+      inline void createTab(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients, std::uint64_t client_id, const CreateTab& request) {
         if (!acquireGeometry(model.panes, model.metrics, requireClient(clients, client_id), require(model.workspaces, request.workspace))) {
           throw RequestError{FailureCode::resource_limit, "workspace geometry is leased by another client"};
         }
 
         LaunchDirectory directory;
         const auto launch = resolveLaunchDirectory(model, requireClient(clients, client_id), request.launch, directory, request.workspace);
-        auto &workspace = require(model.workspaces, request.workspace);
+        auto& workspace = require(model.workspaces, request.workspace);
         if (workspace.tabs.size() == maximum_tabs) {
           throw RequestError{FailureCode::resource_limit, "Workspace tab limit reached"};
         }
@@ -881,8 +890,8 @@ export {
           const auto pane = createAt(model, panes, clients, client_id, TabLocation{request.workspace, tab_id}, launch, request.size);
 
           ++model.next_tab_id;
-          const auto &opened = Panes::require(model.panes, pane);
-          const auto &tabs = require(model.workspaces, request.workspace).tabs;
+          const auto& opened = Panes::require(model.panes, pane);
+          const auto& tabs = require(model.workspaces, request.workspace).tabs;
 
           requireClient(clients, client_id).connection.send(TabCreated{
               .request_id = request.request_id,
@@ -893,7 +902,7 @@ export {
               .pane_generation = opened.generation,
           });
         } catch (...) {
-          if (auto *current = model.workspaces.find(request.workspace.id); current != nullptr && current->tabs.back().panes.empty()) {
+          if (auto* current = model.workspaces.find(request.workspace.id); current != nullptr && current->tabs.back().panes.empty()) {
             current->tabs.pop_back();
           }
 
@@ -902,12 +911,12 @@ export {
       }
 
       // A tab launched without a client, in the colors of its workspace's geometry owner.
-      inline std::uint64_t launchBackground(RuntimeModel<Memory> &model, Panes &panes, const ConfigureTerminalColors *owner_colors, bool bare_prompt, const LaunchTab &request) {
+      inline std::uint64_t launchBackground(RuntimeModel<Memory>& model, Panes& panes, const ConfigureTerminalColors* owner_colors, bool bare_prompt, const LaunchTab& request) {
         if (request.launch.cwd_source != 0) {
           throw RequestError{FailureCode::invalid_request, "A background tab requires an explicit working directory"};
         }
 
-        auto &workspace = require(model.workspaces, WorkspaceLocation{.id = request.workspace});
+        auto& workspace = require(model.workspaces, WorkspaceLocation{.id = request.workspace});
         if (workspace.tabs.size() == maximum_tabs) {
           throw RequestError{FailureCode::resource_limit, "Workspace tab limit reached"};
         }
@@ -930,7 +939,7 @@ export {
           ++model.workspace_revision;
           return pane;
         } catch (...) {
-          if (auto *current = model.workspaces.find(request.workspace)) {
+          if (auto* current = model.workspaces.find(request.workspace)) {
             current->tabs.pop_back();
           }
 
@@ -938,17 +947,17 @@ export {
         }
       }
 
-      inline void launchTab(RuntimeModel<Memory> &model, Panes &panes, ClientStore<Memory> &clients, std::uint64_t client_id, const LaunchTab &request) {
+      inline void launchTab(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients, std::uint64_t client_id, const LaunchTab& request) {
         const auto pane = launchBackground(model, panes, ownerColors(model.workspaces, clients, request.workspace), ownerBarePrompt(model.workspaces, clients, request.workspace), request);
-        const auto &launched = Panes::require(model.panes, pane);
+        const auto& launched = Panes::require(model.panes, pane);
 
         notify(launched.location.workspace.id, client_id);
         sendOpened(requireClient(clients, client_id), request.request_id, launched, false);
       }
 
-      inline void createPane(RuntimeModel<Memory> &model, Panes &panes, ClientStore<Memory> &clients, std::uint64_t client_id, const CreatePane &request) {
-        const auto *workspace = model.workspaces.find(request.location.workspace.id);
-        const auto *tab = workspace == nullptr ? nullptr : workspace->tab(request.location.tab_id);
+      inline void createPane(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients, std::uint64_t client_id, const CreatePane& request) {
+        const auto* workspace = model.workspaces.find(request.location.workspace.id);
+        const auto* tab = workspace == nullptr ? nullptr : workspace->tab(request.location.tab_id);
         if (request.location.workspace.kind != WorkspaceLocation::Kind::workspace || tab == nullptr || (!firstPane(model.panes, *tab) && !tabHeld(clients, request.location))) {
           throw RequestError{FailureCode::pane_not_found, "tab not found"};
         }
@@ -958,27 +967,25 @@ export {
         sendOpened(requireClient(clients, client_id), request.request_id, Panes::require(model.panes, pane), true, GenerationField::omitted);
       }
 
-      inline void renameWorkspace(RuntimeModel<Memory> &model, ClientSession<Memory> &client, const RenameWorkspace &request) {
+      inline void renameWorkspace(RuntimeModel<Memory>& model, ClientSession<Memory>& client, const RenameWorkspace& request) {
         require(model.workspaces, request.workspace).name.assign(request.name);
         ++model.workspace_revision;
         notify(request.workspace.id, client.id);
         workspaceSnapshot(model, client, RequestWorkspaceSnapshot{request.request_id, request.workspace});
       }
 
-      inline void renameTab(RuntimeModel<Memory> &model, ClientSession<Memory> &client, const RenameTab &request) {
-        auto &tab = requireTab(model.workspaces, request.location);
+      inline void renameTab(RuntimeModel<Memory>& model, ClientSession<Memory>& client, const RenameTab& request) {
+        auto& tab = requireTab(model.workspaces, request.location);
 
         tab.label.assign(request.label);
         ++model.workspace_revision;
         notify(request.location.workspace.id, client.id);
-        client.connection.send(TabRenamed{.request_id = request.request_id,
-                                          .location = request.location,
-                                          .label = tab.label});
+        client.connection.send(TabRenamed{.request_id = request.request_id, .location = request.location, .label = tab.label});
       }
 
-      inline void moveTab(RuntimeModel<Memory> &model, ClientSession<Memory> &client, const MoveTab &request) {
-        auto &workspace = require(model.workspaces, request.location.workspace);
-        auto *tab = workspace.tab(request.location.tab_id);
+      inline void moveTab(RuntimeModel<Memory>& model, ClientSession<Memory>& client, const MoveTab& request) {
+        auto& workspace = require(model.workspaces, request.location.workspace);
+        auto* tab = workspace.tab(request.location.tab_id);
         if (tab == nullptr) {
           throw RequestError{FailureCode::tab_not_found, "Tab does not exist"};
         }
@@ -987,7 +994,7 @@ export {
         auto to = from;
 
         if (request.relative_to) {
-          auto *relative = workspace.tab(*request.relative_to);
+          auto* relative = workspace.tab(*request.relative_to);
           if (relative == nullptr) {
             throw RequestError{FailureCode::tab_not_found, "Relative tab does not exist"};
           }
@@ -1014,12 +1021,10 @@ export {
 
         ++model.workspace_revision;
         notify(request.location.workspace.id, client.id);
-        client.connection.send(TabMoved{.request_id = request.request_id,
-                                        .location = request.location,
-                                        .position = static_cast<std::uint16_t>(to)});
+        client.connection.send(TabMoved{.request_id = request.request_id, .location = request.location, .position = static_cast<std::uint16_t>(to)});
       }
 
-      inline static void closePane(RuntimeModel<Memory> &model, const ClientSession<Memory> &client, const ClosePane &request) {
+      inline static void closePane(RuntimeModel<Memory>& model, const ClientSession<Memory>& client, const ClosePane& request) {
         if (client.attachment(request.pane_id) == nullptr) {
           throw RequestError{FailureCode::pane_not_found, "pane not attached"};
         }
@@ -1027,9 +1032,9 @@ export {
         Panes::require(model.panes, request.pane_id).requestClose();
       }
 
-      inline void collectExited(RuntimeModel<Memory> &model, Panes &panes, ClientStore<Memory> &clients) {
+      inline void collectExited(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients) {
         for (std::size_t slot = 0; slot < model.panes.items().size(); ++slot) {
-          auto *pane = model.panes.items()[slot];
+          auto* pane = model.panes.items()[slot];
           if (pane == nullptr || !pane->output_closed || !pane->exit_status || pane->observers != 0) {
             continue;
           }
@@ -1040,8 +1045,8 @@ export {
           const auto identity = pane->id;
 
           panes.remove(model, clients, identity);
-          auto *workspace = model.workspaces.find(location.workspace.id);
-          auto *tab = workspace == nullptr ? nullptr : workspace->tab(location.tab_id);
+          auto* workspace = model.workspaces.find(location.workspace.id);
+          auto* tab = workspace == nullptr ? nullptr : workspace->tab(location.tab_id);
           if (tab == nullptr) {
             leaveEmptyViews(model, panes, clients, location.workspace.id);
             continue;
@@ -1053,14 +1058,14 @@ export {
         }
       }
 
-      inline void holdTab(RuntimeModel<Memory> &model, Panes &panes, ClientStore<Memory> &clients, std::uint64_t client_id, const HoldTab &request) {
+      inline void holdTab(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients, std::uint64_t client_id, const HoldTab& request) {
         TELAR_TRACE("runtime.holdTab");
-        const auto *workspace = model.workspaces.find(request.location.workspace.id);
+        const auto* workspace = model.workspaces.find(request.location.workspace.id);
         if (request.location.workspace.kind != WorkspaceLocation::Kind::workspace || workspace == nullptr || workspace->tab(request.location.tab_id) == nullptr) {
           throw RequestError{FailureCode::tab_not_found, "tab not found"};
         }
 
-        auto &client = requireClient(clients, client_id);
+        auto& client = requireClient(clients, client_id);
         if (request.held && !client.held_tabs.insert(request.location)) {
           throw RequestError{FailureCode::resource_limit, "this client holds too many tabs"};
         }
@@ -1069,13 +1074,13 @@ export {
           releaseEmptyTab(model, panes, clients, request.location);
         }
 
-        if (auto *current = clients.find(client_id)) {
+        if (auto* current = clients.find(client_id)) {
           current->connection.send(RequestCompleted{.request_id = request.request_id});
         }
       }
 
-      inline void releaseHeldTabs(RuntimeModel<Memory> &model, Panes &panes, ClientStore<Memory> &clients, std::uint64_t client_id) {
-        while (auto *client = clients.find(client_id)) {
+      inline void releaseHeldTabs(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients, std::uint64_t client_id) {
+        while (auto* client = clients.find(client_id)) {
           const auto location = client->held_tabs.pop();
           if (!location) {
             return;
@@ -1085,7 +1090,7 @@ export {
         }
       }
 
-      inline void closeTab(RuntimeModel<Memory> &model, ClientSession<Memory> &client, const CloseTab &request) {
+      inline void closeTab(RuntimeModel<Memory>& model, ClientSession<Memory>& client, const CloseTab& request) {
         auto closed = removeTab(model, request.location);
 
         notify(request.location.workspace.id, client.id, closed.previous_workspace);
@@ -1093,21 +1098,21 @@ export {
         client.connection.send(closed);
       }
 
-      inline void closeWorkspace(RuntimeModel<Memory> &model, ClientStore<Memory> &clients, std::uint64_t identity) {
-        auto *workspace = model.workspaces.find(identity);
+      inline void closeWorkspace(RuntimeModel<Memory>& model, ClientStore<Memory>& clients, std::uint64_t identity) {
+        auto* workspace = model.workspaces.find(identity);
 
         while (workspace != nullptr && !workspace->tabs.empty()) {
           const auto closed = removeTab(model, TabLocation{WorkspaceLocation{.id = identity}, workspace->tabs.front().id});
 
-          broadcastTabClosed(clients, closed, [](const ClientSession<Memory> &) {});
+          broadcastTabClosed(clients, closed, [](const ClientSession<Memory>&) {});
 
           workspace = model.workspaces.find(identity);
         }
       }
 
-      inline static void tabSnapshot(RuntimeModel<Memory> &model, ClientStore<Memory> &clients, std::uint64_t client_id, const RequestTabSnapshot &request) {
-        const auto *workspace = model.workspaces.find(request.location.workspace.id);
-        const auto *tab = workspace == nullptr ? nullptr : workspace->tab(request.location.tab_id);
+      inline static void tabSnapshot(RuntimeModel<Memory>& model, ClientStore<Memory>& clients, std::uint64_t client_id, const RequestTabSnapshot& request) {
+        const auto* workspace = model.workspaces.find(request.location.workspace.id);
+        const auto* tab = workspace == nullptr ? nullptr : workspace->tab(request.location.tab_id);
         if (request.location.workspace.kind != WorkspaceLocation::Kind::workspace || tab == nullptr || (!firstPane(model.panes, *tab) && !tabHeld(clients, request.location))) {
           throw RequestError{FailureCode::tab_not_found, "tab not found"};
         }
@@ -1115,8 +1120,8 @@ export {
         requireClient(clients, client_id).connection.defer(request);
       }
 
-      inline static void workspaceSnapshot(RuntimeModel<Memory> &model, ClientSession<Memory> &client, const RequestWorkspaceSnapshot &request) {
-        const auto *workspace = model.workspaces.find(request.workspace.id);
+      inline static void workspaceSnapshot(RuntimeModel<Memory>& model, ClientSession<Memory>& client, const RequestWorkspaceSnapshot& request) {
+        const auto* workspace = model.workspaces.find(request.workspace.id);
         if (request.workspace.kind != WorkspaceLocation::Kind::workspace || workspace == nullptr) {
           throw RequestError{FailureCode::workspace_not_found, "workspace not found"};
         }
@@ -1127,11 +1132,11 @@ export {
         }
       }
 
-      inline static void publishList(const RuntimeModel<Memory> &model, ClientSession<Memory> &client) {
+      inline static void publishList(const RuntimeModel<Memory>& model, ClientSession<Memory>& client) {
         std::array<WorkspaceListEntry, 64> entries{};
         std::size_t count = 0;
 
-        for (const auto *workspace : model.workspaces.items()) {
+        for (const auto* workspace : model.workspaces.items()) {
           if (workspace != nullptr) {
             entries[count++] = WorkspaceListEntry{
                 .workspace = workspace->id,
@@ -1147,29 +1152,27 @@ export {
         std::array<WorktreeListEntry, Worktrees<Memory>::capacity> worktrees;
         std::size_t worktree_count = 0;
 
-        for (const auto *entry : model.worktrees.items()) {
+        for (const auto* entry : model.worktrees.items()) {
           if (entry != nullptr) {
             worktrees[worktree_count++] = entry->entry();
           }
         }
 
-        client.connection.send(WorkspaceList{.revision = model.workspace_revision,
-                                             .entries = std::span<const WorkspaceListEntry>{entries}.first(count),
-                                             .worktrees = std::span{worktrees}.first(worktree_count)});
+        client.connection.send(WorkspaceList{.revision = model.workspace_revision, .entries = std::span<const WorkspaceListEntry>{entries}.first(count), .worktrees = std::span{worktrees}.first(worktree_count)});
         client.workspace_revision = model.workspace_revision;
       }
 
       // Marks the clients viewing the workspaces changed since the last delivery for a resync.
-      inline void deliverNotices(ClientStore<Memory> &clients) noexcept {
+      inline void deliverNotices(ClientStore<Memory>& clients) noexcept {
         if (overflowed_) {
-          for (auto *client : clients.items()) {
+          for (auto* client : clients.items()) {
             if (client != nullptr && client->workspace && client->connection.negotiated && !client->connection.closing) {
               client->workspace_resync = ResyncRequired{.workspace = {.id = *client->workspace}};
             }
           }
         }
 
-        for (const auto &notice : std::span{notices_}.first(notice_count_)) {
+        for (const auto& notice : std::span{notices_}.first(notice_count_)) {
           notifyWorkspaceObservers(clients, notice.workspace, notice.origin, notice.previous);
         }
 
@@ -1194,9 +1197,9 @@ export {
         notices_[notice_count_++] = {workspace, origin, previous};
       }
 
-      inline void releaseEmptyTab(RuntimeModel<Memory> &model, Panes &panes, ClientStore<Memory> &clients, TabLocation location) {
-        auto *workspace = model.workspaces.find(location.workspace.id);
-        auto *tab = workspace == nullptr ? nullptr : workspace->tab(location.tab_id);
+      inline void releaseEmptyTab(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients, TabLocation location) {
+        auto* workspace = model.workspaces.find(location.workspace.id);
+        auto* tab = workspace == nullptr ? nullptr : workspace->tab(location.tab_id);
         if (tab == nullptr || !tab->panes.empty() || tabHeld(clients, location)) {
           return;
         }
@@ -1205,7 +1208,9 @@ export {
         std::array<std::uint64_t, client_capacity> viewers{};
         std::size_t count = 0;
 
-        broadcastTabClosed(clients, closed, [&](const ClientSession<Memory> &client) { viewers[count++] = client.id; });
+        broadcastTabClosed(clients, closed, [&](const ClientSession<Memory>& client) {
+          viewers[count++] = client.id;
+        });
 
         if (closed.workspace_closed) {
           for (const auto viewer : std::span{viewers}.first(count)) {
@@ -1217,20 +1222,21 @@ export {
       // Tells each client viewing the closed tab's workspace, after `seen` notes it; one whose queue
       // is full resynchronizes the workspace instead.
       template <typename Seen>
-      inline static void broadcastTabClosed(ClientStore<Memory> &clients, const TabClosed &closed, Seen &&seen) noexcept {
-        deliver(clients, [&](const ClientSession<Memory> &client) { return client.connection.negotiated && client.workspace == closed.location.workspace.id; }, [&](ClientSession<Memory> &client) {
-          seen(client);
-          if (!client.connection.trySend(closed)) {
-            client.workspace_resync = ResyncRequired{.workspace = closed.location.workspace,
-                                                     .workspace_closed = closed.workspace_closed,
-                                                     .previous_workspace = closed.previous_workspace};
-          }
-        });
+      inline static void broadcastTabClosed(ClientStore<Memory>& clients, const TabClosed& closed, Seen&& seen) noexcept {
+        deliver(clients, [&](const ClientSession<Memory>& client) {
+          return client.connection.negotiated && client.workspace == closed.location.workspace.id;
+        },
+            [&](ClientSession<Memory>& client) {
+              seen(client);
+              if (!client.connection.trySend(closed)) {
+                client.workspace_resync = ResyncRequired{.workspace = closed.location.workspace, .workspace_closed = closed.workspace_closed, .previous_workspace = closed.previous_workspace};
+              }
+            });
       }
 
-      inline static TabClosed removeTab(RuntimeModel<Memory> &model, TabLocation location) {
-        auto *workspace = model.workspaces.find(location.workspace.id);
-        auto *tab = workspace == nullptr ? nullptr : workspace->tab(location.tab_id);
+      inline static TabClosed removeTab(RuntimeModel<Memory>& model, TabLocation location) {
+        auto* workspace = model.workspaces.find(location.workspace.id);
+        auto* tab = workspace == nullptr ? nullptr : workspace->tab(location.tab_id);
         if (location.workspace.kind != WorkspaceLocation::Kind::workspace || tab == nullptr) {
           throw RequestError{FailureCode::tab_not_found, "tab not found"};
         }
@@ -1238,12 +1244,15 @@ export {
         const auto previous = workspace->tabs.size() == 1 ? previousWorkspace(model.workspaces, workspace->id) : std::nullopt;
 
         for (const auto identity : tab->panes) {
-          if (auto *pane = model.panes.find(identity)) {
+          if (auto* pane = model.panes.find(identity)) {
             pane->requestClose();
           }
         }
 
-        std::erase_if(workspace->tabs, [&](const auto &candidate) { return candidate.id == location.tab_id; });
+        std::erase_if(workspace->tabs, [&](const auto& candidate) {
+          return candidate.id == location.tab_id;
+        });
+
         const bool workspace_closed = workspace->tabs.empty();
         if (workspace_closed) {
           model.workspaces.erase(location.workspace.id);
@@ -1253,8 +1262,8 @@ export {
         return TabClosed{.location = location, .workspace_closed = workspace_closed, .previous_workspace = previous};
       }
 
-      inline void leaveEmptyViews(RuntimeModel<Memory> &model, Panes &panes, ClientStore<Memory> &clients, std::uint64_t workspace) noexcept {
-        for (const auto *pane : model.panes.items()) {
+      inline void leaveEmptyViews(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients, std::uint64_t workspace) noexcept {
+        for (const auto* pane : model.panes.items()) {
           if (pane != nullptr && pane->location.workspace.id == workspace && pane->exit_status) {
             return;
           }
@@ -1263,7 +1272,7 @@ export {
         std::array<std::uint64_t, client_capacity> viewers{};
         std::size_t count = 0;
 
-        for (const auto *client : clients.items()) {
+        for (const auto* client : clients.items()) {
           if (client != nullptr && client->workspace == workspace && client->attachments.empty()) {
             viewers[count++] = client->id;
           }
@@ -1274,7 +1283,7 @@ export {
         }
       }
 
-      inline void retainFinalText(ExitedPanes &exited, Pane<Memory> &pane) noexcept {
+      inline void retainFinalText(ExitedPanes& exited, Pane<Memory>& pane) noexcept {
         const auto exit_code = pane.exitCode();
 
         try {
@@ -1293,7 +1302,7 @@ export {
         }
       }
 
-      inline std::uint64_t createRoot(RuntimeModel<Memory> &model, Panes &panes, ClientStore<Memory> &clients, std::uint64_t client_id, const Launch &launch, TerminalSize size, std::string_view name, bool replace_view = false) {
+      inline std::uint64_t createRoot(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients, std::uint64_t client_id, const Launch& launch, TerminalSize size, std::string_view name, bool replace_view = false) {
         if (model.next_tab_id == 0 || model.workspaces.nextCounter() == 0) {
           throw RequestError{FailureCode::resource_limit, "could not create workspace"};
         }
@@ -1307,9 +1316,8 @@ export {
         std::optional<std::uint64_t> pane;
 
         try {
-          const TabLocation location{.workspace = {.id = workspace_id},
-                                     .tab_id = tab_id};
-          const auto *requester = clients.find(client_id);
+          const TabLocation location{.workspace = {.id = workspace_id}, .tab_id = tab_id};
+          const auto* requester = clients.find(client_id);
 
           pane = panes.launch(model, nullptr, requester != nullptr && requester->bare_prompt, launch, location, size).id;
           model.workspaces.find(workspace_id)->tabs.front().panes.push_back(*pane);
@@ -1334,7 +1342,7 @@ export {
         return *pane;
       }
 
-      inline static std::uint64_t nextTabIdentity(const RuntimeModel<Memory> &model) {
+      inline static std::uint64_t nextTabIdentity(const RuntimeModel<Memory>& model) {
         if (model.next_tab_id == 0) {
           throw RequestError{FailureCode::spawn_failed, "could not start the command"};
         }
@@ -1343,9 +1351,9 @@ export {
       }
 
       // A pane launched into a tab whose workspace the client takes the geometry of.
-      inline std::uint64_t createAt(RuntimeModel<Memory> &model, Panes &panes, ClientStore<Memory> &clients, std::uint64_t client_id, TabLocation location, Launch launch, TerminalSize size) {
+      inline std::uint64_t createAt(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients, std::uint64_t client_id, TabLocation location, Launch launch, TerminalSize size) {
         requireTab(model.workspaces, location);
-        auto &client = requireClient(clients, client_id);
+        auto& client = requireClient(clients, client_id);
         if (!acquireGeometry(model.panes, model.metrics, client, require(model.workspaces, location.workspace))) {
           throw RequestError{FailureCode::resource_limit, "workspace geometry is leased by another client"};
         }
@@ -1376,13 +1384,13 @@ export {
         return pane;
       }
 
-      inline static std::optional<std::uint64_t> firstPane(const PaneStore<Memory> &panes, const Workspace<Memory> &workspace) noexcept {
+      inline static std::optional<std::uint64_t> firstPane(const PaneStore<Memory>& panes, const Workspace<Memory>& workspace) noexcept {
         return workspace.tabs.empty() ? std::nullopt : firstPane(panes, workspace.tabs.front());
       }
 
-      inline static std::optional<std::uint64_t> firstPane(const PaneStore<Memory> &panes, const Tab<Memory> &tab) noexcept {
+      inline static std::optional<std::uint64_t> firstPane(const PaneStore<Memory>& panes, const Tab<Memory>& tab) noexcept {
         for (const auto identity : tab.panes) {
-          if (const auto *pane = panes.find(identity); pane != nullptr && !pane->close_requested && !pane->exit_status) {
+          if (const auto* pane = panes.find(identity); pane != nullptr && !pane->close_requested && !pane->exit_status) {
             return identity;
           }
         }
@@ -1416,10 +1424,10 @@ export {
 
       enum class GenerationField {
         included,
-        omitted
+        omitted,
       };
 
-      inline static void sendOpened(ClientSession<Memory> &client, std::uint64_t request, const Pane<Memory> &pane, bool created, GenerationField generation = GenerationField::included) {
+      inline static void sendOpened(ClientSession<Memory>& client, std::uint64_t request, const Pane<Memory>& pane, bool created, GenerationField generation = GenerationField::included) {
         client.connection.send(PaneOpened{
             .request_id = request,
             .pane_id = pane.id,
@@ -1431,7 +1439,7 @@ export {
 
       static constexpr std::size_t maximum_tabs = 64;
       static constexpr std::size_t maximum_panes_per_tab = 64;
-      Memory &memory_;
+      Memory& memory_;
       std::array<Notice, 64> notices_{};
       std::size_t notice_count_ = 0;
       bool overflowed_ = false;
@@ -1450,14 +1458,14 @@ export {
       using Workspaces = WorkspaceService<Memory, Poller, History>;
       using Panes = PaneService<Memory, Poller, History>;
 
-      inline explicit WorktreeService(Memory &memory, LimitService<Memory> &limits)
+      inline explicit WorktreeService(Memory& memory, LimitService<Memory>& limits)
           : memory_(memory),
             limits_(limits) {}
 
-      inline static void registerEntry(RuntimeModel<Memory> &model, ClientSession<Memory> &client, const RegisterWorktree &request) {
+      inline static void registerEntry(RuntimeModel<Memory>& model, ClientSession<Memory>& client, const RegisterWorktree& request) {
         Workspaces::require(model.workspaces, WorkspaceLocation{.id = request.source});
         if (request.created_by) {
-          const auto *pane = findPane(model.panes, *request.created_by, client.verified_generation);
+          const auto* pane = findPane(model.panes, *request.created_by, client.verified_generation);
           if (pane == nullptr || pane->exit_status || !client.verifiedFor(*pane)) {
             throw RequestError{FailureCode::foreign_process, "Only a process inside the pane may register for it"};
           }
@@ -1469,9 +1477,9 @@ export {
         client.connection.send(result);
       }
 
-      inline void launch(RuntimeModel<Memory> &model, Workspaces &workspaces, Panes &panes, ClientStore<Memory> &clients, std::uint64_t client_id, const LaunchWorktree &request) {
-        const auto &entry = require(model.worktrees, request.worktree);
-        auto *found = entry.workspace ? model.workspaces.find(*entry.workspace) : nullptr;
+      inline void launch(RuntimeModel<Memory>& model, Workspaces& workspaces, Panes& panes, ClientStore<Memory>& clients, std::uint64_t client_id, const LaunchWorktree& request) {
+        const auto& entry = require(model.worktrees, request.worktree);
+        auto* found = entry.workspace ? model.workspaces.find(*entry.workspace) : nullptr;
         const bool created = found == nullptr;
         auto workspace = found == nullptr ? std::uint64_t{0} : found->id;
 
@@ -1501,7 +1509,7 @@ export {
         }
 
         model.workspaces.advanceCounter(workspace + 1);
-        auto &current = require(model.worktrees, request.worktree);
+        auto& current = require(model.worktrees, request.worktree);
 
         current.workspace = workspace;
         current.command_pane = pane;
@@ -1511,35 +1519,35 @@ export {
 
         current.command_label.assign(utf8Prefix(program.substr(program.rfind('/') + 1), 48));
         ++model.workspace_revision;
-        const auto &launched = Panes::require(model.panes, pane);
+        const auto& launched = Panes::require(model.panes, pane);
 
-        if (auto *client = clients.find(client_id)) {
+        if (auto* client = clients.find(client_id)) {
           client->connection.send(PaneOpened{request.request_id, launched.id, launched.location, created, launched.generation});
         }
       }
 
-      inline static void forget(RuntimeModel<Memory> &model, Workspaces &workspaces, ClientStore<Memory> &clients, std::uint64_t client_id, const ForgetWorktree &request) {
+      inline static void forget(RuntimeModel<Memory>& model, Workspaces& workspaces, ClientStore<Memory>& clients, std::uint64_t client_id, const ForgetWorktree& request) {
         if (const auto workspace = require(model.worktrees, request.worktree).workspace) {
           workspaces.closeWorkspace(model, clients, *workspace);
         }
 
         model.worktrees.remove(request.worktree);
         ++model.workspace_revision;
-        if (auto *client = clients.find(client_id)) {
+        if (auto* client = clients.find(client_id)) {
           client->connection.send(RequestCompleted{.request_id = request.request_id});
         }
       }
 
       template <typename Background>
-      inline void observe(const RuntimeModel<Memory> &model, Background &background) {
+      inline void observe(const RuntimeModel<Memory>& model, Background& background) {
         if (observing_) {
           return;
         }
 
         const auto now = std::chrono::steady_clock::now();
-        const Worktree<Memory> *selected = nullptr;
+        const Worktree<Memory>* selected = nullptr;
 
-        for (const auto *entry : model.worktrees.items()) {
+        for (const auto* entry : model.worktrees.items()) {
           if (entry == nullptr || entry->state == WorktreeState::gone) {
             continue;
           }
@@ -1568,13 +1576,13 @@ export {
         }
       }
 
-      inline void observed(RuntimeModel<Memory> &model, const WorktreeProbeResult &result) {
+      inline void observed(RuntimeModel<Memory>& model, const WorktreeProbeResult& result) {
         if (observing_ != result.identity) {
           return;
         }
 
         observing_.reset();
-        auto *entry = model.worktrees.find(result.identity);
+        auto* entry = model.worktrees.find(result.identity);
         if (result.timeout != GitProbeTimeout::none && (entry == nullptr || entry->probe_failures == 0)) {
           const auto timeout = result.timeout == GitProbeTimeout::status ? git_status_timeout : git_distance_timeout;
           const auto name = result.timeout == GitProbeTimeout::status ? "gitstatus.status_timeout" : "gitstatus.base_distance_timeout";
@@ -1624,14 +1632,14 @@ export {
         model.workspace_revision += changed;
       }
 
-      inline static void refresh(RuntimeModel<Memory> &model) noexcept {
-        for (auto *entry : model.worktrees.items()) {
+      inline static void refresh(RuntimeModel<Memory>& model) noexcept {
+        for (auto* entry : model.worktrees.items()) {
           if (entry == nullptr) {
             continue;
           }
 
           if (entry->command_pane) {
-            const auto *pane = model.panes.find(*entry->command_pane);
+            const auto* pane = model.panes.find(*entry->command_pane);
             if (pane != nullptr && pane->exit_status) {
               entry->command_exit = *pane->exitCode();
               entry->command_state = CommandState::exited;
@@ -1648,8 +1656,8 @@ export {
       }
 
     private:
-      inline static Worktree<Memory> &require(Worktrees<Memory> &worktrees, std::uint64_t identity) {
-        auto *entry = worktrees.find(identity);
+      inline static Worktree<Memory>& require(Worktrees<Memory>& worktrees, std::uint64_t identity) {
+        auto* entry = worktrees.find(identity);
         if (entry == nullptr) {
           throw RequestError{FailureCode::worktree_not_found, "worktree not found"};
         }
@@ -1658,8 +1666,8 @@ export {
       }
 
       std::optional<std::uint64_t> observing_;
-      Memory &memory_;
-      LimitService<Memory> &limits_;
+      Memory& memory_;
+      LimitService<Memory>& limits_;
     };
 
   }
@@ -1684,7 +1692,7 @@ export {
       using Frames = typename Connection<Memory>::Frames;
 
     public:
-      inline explicit Runtime(Memory &memory, Poller &poller, Background &background, const RuntimeOptions &options, ProxyClientConfiguration proxy = {})
+      inline explicit Runtime(Memory& memory, Poller& poller, Background& background, const RuntimeOptions& options, ProxyClientConfiguration proxy = {})
           : memory_(memory),
             poller_(poller),
             background_(background),
@@ -1751,14 +1759,14 @@ export {
       }
 
       template <CaptureEventSource Captures>
-      inline void run(Captures &captures) {
+      inline void run(Captures& captures) {
         plugins::IgnoreEvents plugins;
 
         run(captures, plugins);
       }
 
       template <CaptureEventSource Captures, plugins::EventSource Plugins>
-      inline void run(Captures &captures, Plugins &plugins) {
+      inline void run(Captures& captures, Plugins& plugins) {
         TELAR_TRACE("runtime.run");
         TELAR_DIAGNOSTIC(AllocationScope allocation_scope{AllocationPath::interactive});
         std::array<Event, Poller::event_capacity> ready{};
@@ -1785,7 +1793,7 @@ export {
           TELAR_DIAGNOSTIC(model_.metrics.system = metrics_.diagnostics());
           TELAR_DIAGNOSTIC(timeout = std::min(timeout, telemetry_.tick(model_, clients_, memory_, captures, background_, Clock::now())));
 
-          for (const auto &event : poller_.wait(timeout, ready)) {
+          for (const auto& event : poller_.wait(timeout, ready)) {
             if (event.kind == EventKind::signal) {
               if (event.descriptor == SIGCHLD) {
                 children_exited_ = true;
@@ -1804,7 +1812,10 @@ export {
               clientEvent(event);
               break;
             case EventSource::handshake:
-              admissions_.event(event, [this](FileDescriptor descriptor) { admitClient(std::move(descriptor)); });
+              admissions_.event(event, [this](FileDescriptor descriptor) {
+                admitClient(std::move(descriptor));
+              });
+
               break;
             case EventSource::pane:
               paneEvent(event);
@@ -1846,7 +1857,7 @@ export {
 
           try {
             admissions_.begin(clients_.size(), std::move(descriptor));
-          } catch (const std::exception &) {
+          } catch (const std::exception&) {
             return;
           }
         }
@@ -1859,7 +1870,7 @@ export {
         client->connection.negotiated = true;
         client->peer_identity = process_inspector_.peer(client->connection.descriptor());
         const auto handle = clients_.insert(identity, std::move(client));
-        auto &admitted = requireClient(clients_, identity);
+        auto& admitted = requireClient(clients_, identity);
 
         admitted.event_identity = handle;
         try {
@@ -1875,7 +1886,7 @@ export {
       }
 
       inline void dropClient(std::uint64_t identity) noexcept {
-        auto *client = clients_.find(identity);
+        auto* client = clients_.find(identity);
         if (client == nullptr) {
           return;
         }
@@ -1906,8 +1917,8 @@ export {
         workspaces_.deliverNotices(clients_);
       }
 
-      inline void clientEvent(const Event &event) {
-        auto *client = clients_.findHandle(eventIdentity(event.token));
+      inline void clientEvent(const Event& event) {
+        auto* client = clients_.findHandle(eventIdentity(event.token));
         if (client == nullptr || client->connection.descriptor() != event.descriptor) {
           TELAR_DIAGNOSTIC(diagnostics::accumulate(model_.metrics.stale_client_messages));
           return;
@@ -1931,17 +1942,17 @@ export {
             writeClient(identity, Clock::now());
           }
 
-          if (auto *current = clients_.find(identity)) {
+          if (auto* current = clients_.find(identity)) {
             updateWriteInterest(poller_, *current);
           }
-        } catch (const std::exception &) {
+        } catch (const std::exception&) {
           dropClient(identity);
         }
       }
 
-      inline void paneEvent(const Event &event) {
+      inline void paneEvent(const Event& event) {
         TELAR_TRACE("runtime.paneEvent");
-        auto *pane = model_.panes.findHandle(eventIdentity(event.token));
+        auto* pane = model_.panes.findHandle(eventIdentity(event.token));
         if (pane == nullptr || pane->process->descriptor() != event.descriptor) {
           TELAR_DIAGNOSTIC(diagnostics::accumulate(model_.metrics.stale_pane_events));
           return;
@@ -1959,11 +1970,11 @@ export {
 
           panes_.flushInput(*pane);
           observations_.observe(model_, agents_, identity);
-          if (auto *observed = model_.panes.find(identity)) {
+          if (auto* observed = model_.panes.find(identity)) {
             media_.updateReadInterest(*observed);
           }
-        } catch (const std::exception &) {
-          if (auto *failed = model_.panes.find(identity)) {
+        } catch (const std::exception&) {
+          if (auto* failed = model_.panes.find(identity)) {
             panes_.failOutput(*failed);
           }
         }
@@ -1981,37 +1992,38 @@ export {
           remaining = Connection<Memory>::dispatch(
               frames,
               [&] {
-                const auto *client = clients_.find(identity);
+                const auto* client = clients_.find(identity);
 
                 return client != nullptr && !client->connection.read_paused;
               },
-              [&](std::span<const Byte> payload, DecodeStorage &storage) {
+              [&](std::span<const Byte> payload, DecodeStorage& storage) {
                 if (!requireClient(clients_, identity).connection.closing) {
                   dispatch(identity, payload, storage);
                 }
-              });
+              }
+          );
         } catch (...) {
-          if (auto *client = clients_.find(identity)) {
+          if (auto* client = clients_.find(identity)) {
             client->connection.exchange(frames);
           }
 
           throw;
         }
 
-        if (auto *client = clients_.find(identity)) {
+        if (auto* client = clients_.find(identity)) {
           client->connection.exchange(frames);
           client->connection.buffered_requests = remaining;
         }
       }
 
       template <typename Message>
-      inline void request(std::uint64_t identity, std::span<const Byte> payload, DecodeStorage &storage) {
+      inline void request(std::uint64_t identity, std::span<const Byte> payload, DecodeStorage& storage) {
         const auto message = [&] {
           TELAR_DIAGNOSTIC(diagnostics::TimedScope timing{model_.metrics.decode});
           return Codec::decode<Message>(payload, storage);
         }();
 
-        auto &client = requireClient(clients_, identity);
+        auto& client = requireClient(clients_, identity);
         if (client.role == ClientRole::undecided) {
           if constexpr (std::same_as<Message, RequestRuntimeState>) {
             client.role = message.interactive ? ClientRole::interactive : ClientRole::control;
@@ -2038,7 +2050,7 @@ export {
               try {
                 observations_.observe(model_, agents_, reporter->pane);
               } catch (...) {
-                auto &deferred = requireClient(clients_, identity);
+                auto& deferred = requireClient(clients_, identity);
 
                 deferred_reports_.cancel(deferred);
                 deferred.deferred_report.payload.clear();
@@ -2050,40 +2062,30 @@ export {
           }
 
           handle(identity, message);
-        } catch (const RequestError &error) {
+        } catch (const RequestError& error) {
           if (error.code() == FailureCode::resource_limit) {
-            limits_.report(LimitReach{.name = "runtime.request_capacity",
-                                      .route = "request"});
+            limits_.report(LimitReach{.name = "runtime.request_capacity", .route = "request"});
           }
 
-          fail(identity, RequestFailed{.request_id = request_id,
-                                       .code = error.code(),
-                                       .message = error.what()});
-        } catch (const JsonError &error) {
-          fail(identity, RequestFailed{.request_id = request_id,
-                                       .code = FailureCode::invalid_request,
-                                       .message = error.what()});
-        } catch (const SystemError &error) {
-          fail(identity, RequestFailed{.request_id = request_id,
-                                       .code = FailureCode::spawn_failed,
-                                       .message = error.what()});
-        } catch (const std::bad_alloc &) {
-          limits_.report(LimitReach{.name = "runtime.memory",
-                                    .route = "request"});
-          fail(identity, RequestFailed{.request_id = request_id,
-                                       .code = FailureCode::resource_limit,
-                                       .message = "Runtime memory or capacity limit reached"});
+          fail(identity, RequestFailed{.request_id = request_id, .code = error.code(), .message = error.what()});
+        } catch (const JsonError& error) {
+          fail(identity, RequestFailed{.request_id = request_id, .code = FailureCode::invalid_request, .message = error.what()});
+        } catch (const SystemError& error) {
+          fail(identity, RequestFailed{.request_id = request_id, .code = FailureCode::spawn_failed, .message = error.what()});
+        } catch (const std::bad_alloc&) {
+          limits_.report(LimitReach{.name = "runtime.memory", .route = "request"});
+          fail(identity, RequestFailed{.request_id = request_id, .code = FailureCode::resource_limit, .message = "Runtime memory or capacity limit reached"});
         }
       }
 
       // A failed request answers its client unless the request dropped it.
-      inline void fail(std::uint64_t identity, const RequestFailed &failure) {
-        if (auto *client = clients_.find(identity)) {
+      inline void fail(std::uint64_t identity, const RequestFailed& failure) {
+        if (auto* client = clients_.find(identity)) {
           client->connection.send(failure);
         }
       }
 
-      inline void dispatch(std::uint64_t identity, std::span<const Byte> payload, DecodeStorage &storage) {
+      inline void dispatch(std::uint64_t identity, std::span<const Byte> payload, DecodeStorage& storage) {
         TELAR_TRACE("runtime.dispatch");
         TELAR_DIAGNOSTIC(diagnostics::accumulate(model_.metrics.client_messages));
         const bool recognized = dispatchRequest(static_cast<ClientTag>(payload.front()), [&]<typename Message> {
@@ -2095,77 +2097,77 @@ export {
         }
       }
 
-      inline void handle(std::uint64_t identity, const ReportLimit &message) {
+      inline void handle(std::uint64_t identity, const ReportLimit& message) {
         limits_.receive(model_.limits, requireClient(clients_, identity), message);
       }
 
-      inline void handle(std::uint64_t identity, const QueryLimits &message) {
+      inline void handle(std::uint64_t identity, const QueryLimits& message) {
         LimitService<Memory>::query(requireClient(clients_, identity), message);
       }
 
-      inline void handle(std::uint64_t identity, const LaunchTab &message) {
+      inline void handle(std::uint64_t identity, const LaunchTab& message) {
         workspaces_.launchTab(model_, panes_, clients_, identity, message);
       }
 
-      inline void handle(std::uint64_t identity, const RegisterWorktree &message) {
+      inline void handle(std::uint64_t identity, const RegisterWorktree& message) {
         Worktrees::registerEntry(model_, requireClient(clients_, identity), message);
       }
 
-      inline void handle(std::uint64_t identity, const LaunchWorktree &message) {
+      inline void handle(std::uint64_t identity, const LaunchWorktree& message) {
         worktrees_.launch(model_, workspaces_, panes_, clients_, identity, message);
       }
 
-      inline void handle(std::uint64_t identity, const ForgetWorktree &message) {
+      inline void handle(std::uint64_t identity, const ForgetWorktree& message) {
         Worktrees::forget(model_, workspaces_, clients_, identity, message);
       }
 
-      inline void handle(std::uint64_t identity, const ExecutionRequest &message) {
+      inline void handle(std::uint64_t identity, const ExecutionRequest& message) {
         executions_.request(model_, requireClient(clients_, identity), message);
       }
 
-      inline void handle(std::uint64_t identity, const VerifyPaneDescent &message) {
+      inline void handle(std::uint64_t identity, const VerifyPaneDescent& message) {
         Descents::verify(model_.panes, requireClient(clients_, identity), message);
         descents_.schedule(clients_);
       }
 
-      inline void handle(std::uint64_t identity, const ReportAgent &message) {
+      inline void handle(std::uint64_t identity, const ReportAgent& message) {
         agents_.report(model_, requireClient(clients_, identity), message);
       }
 
-      inline void handle(std::uint64_t identity, const ReportAgentTitle &message) {
+      inline void handle(std::uint64_t identity, const ReportAgentTitle& message) {
         agents_.reportTitle(model_, requireClient(clients_, identity), message);
       }
 
-      inline void handle(std::uint64_t identity, const ReportAgentSession &message) {
+      inline void handle(std::uint64_t identity, const ReportAgentSession& message) {
         agents_.reportSession(model_, requireClient(clients_, identity), message);
       }
 
-      inline void handle(std::uint64_t identity, const ReportAgentProgress &message) {
+      inline void handle(std::uint64_t identity, const ReportAgentProgress& message) {
         if (!agents_.reportProgress(model_, requireClient(clients_, identity), message)) {
           limits_.report(LimitReach{.name = "agents.max_tasks", .noun = "tasks", .value = AgentProgress::task_capacity, .requested = AgentProgress::task_capacity + 1, .route = "agents"});
         }
       }
 
-      inline void handle(std::uint64_t identity, const InterruptAgent &message) {
+      inline void handle(std::uint64_t identity, const InterruptAgent& message) {
         const bool focused = Agents::focused(clients_, client_layouts_, message.pane_id);
 
         agents_.interrupt(model_, panes_, requireClient(clients_, identity), message, focused);
       }
 
-      inline void handle(std::uint64_t, const AcknowledgeAgent &message) {
+      inline void handle(std::uint64_t, const AcknowledgeAgent& message) {
         agents_.acknowledge(message);
       }
 
-      inline void handle(std::uint64_t identity, const QueryAgents &) {
+      inline void handle(std::uint64_t identity, const QueryAgents&) {
         requireClient(clients_, identity).agent_snapshot_requested = true;
       }
 
-      inline void handle(std::uint64_t identity, const ReportAgentCommand &message) {
-        auto &client = requireClient(clients_, identity);
-        const auto &pane = agents_.validateCommand(model_, client, message);
+      inline void handle(std::uint64_t identity, const ReportAgentCommand& message) {
+        auto& client = requireClient(clients_, identity);
+        const auto& pane = agents_.validateCommand(model_, client, message);
         const auto location = pane.location;
         const auto history_session = pane.history_session;
-        const auto *workspace = model_.workspaces.find(location.workspace.id);
+        const auto* workspace = model_.workspaces.find(location.workspace.id);
 
         background_.submit(client.id, message, RequestContext{.location = location, .history_session = history_session, .workspace_path = workspace == nullptr ? std::string_view{} : std::string_view{workspace->path}, .received_at_ms = client.deferred_report.reportTime().milliseconds});
         client.connection.send(RequestCompleted{.request_id = message.request_id});
@@ -2173,9 +2175,9 @@ export {
 
       // Values for a completion: found where the pane's shell runs, from its own PATH and
       // directory when its integration reported them.
-      inline void handle(std::uint64_t identity, const CompleteWords &message) {
-        auto &client = requireClient(clients_, identity);
-        const auto *pane = model_.panes.find(message.pane_id);
+      inline void handle(std::uint64_t identity, const CompleteWords& message) {
+        auto& client = requireClient(clients_, identity);
+        const auto* pane = model_.panes.find(message.pane_id);
         if (pane == nullptr) {
           throw RequestError{FailureCode::pane_not_found, "Could not complete words"};
         }
@@ -2195,9 +2197,9 @@ export {
 
       // A command's completion spec, for a command the pane's shell runs. A remote shell's
       // commands are its host's, which this runtime cannot tell.
-      inline void handle(std::uint64_t identity, const RequestCommandSpec &message) {
-        auto &client = requireClient(clients_, identity);
-        const auto *pane = model_.panes.find(message.pane_id);
+      inline void handle(std::uint64_t identity, const RequestCommandSpec& message) {
+        auto& client = requireClient(clients_, identity);
+        const auto* pane = model_.panes.find(message.pane_id);
         if (pane == nullptr) {
           throw RequestError{FailureCode::pane_not_found, "Could not find a command spec"};
         }
@@ -2216,7 +2218,7 @@ export {
 
       // What a completion asks for, from the PATH and shell of the pane's shell where its
       // integration reported them, this runtime's PATH otherwise.
-      inline WordRequest makeWordRequest(const ClientSession<Memory> &client, std::uint64_t request_id, CompletionProvider provider, std::string_view prefix, const Pane<Memory> &pane) const {
+      inline WordRequest makeWordRequest(const ClientSession<Memory>& client, std::uint64_t request_id, CompletionProvider provider, std::string_view prefix, const Pane<Memory>& pane) const {
         WordRequest request{.client = client.id, .request = request_id, .provider = provider, .prefix = {}, .directory = {}, .home = {}, .path = {}};
 
         request.prefix.assign(prefix);
@@ -2229,17 +2231,17 @@ export {
         return request;
       }
 
-      inline void handle(std::uint64_t identity, const FindPaths &message) {
-        auto &client = requireClient(clients_, identity);
+      inline void handle(std::uint64_t identity, const FindPaths& message) {
+        auto& client = requireClient(clients_, identity);
         if (!background_.tryPaths(client.id, message, client.connection)) {
           submitBackground(background_, client, message);
         }
       }
 
-      inline void handle(std::uint64_t identity, const OpenEditor &message) {
+      inline void handle(std::uint64_t identity, const OpenEditor& message) {
         // Generation 0 names whatever generation the pane has, as an editor asked from a client
         // that predates generations does.
-        const auto *source = message.pane_generation == 0 ? model_.panes.find(message.pane_id) : findPane(model_.panes, message.pane_id, message.pane_generation);
+        const auto* source = message.pane_generation == 0 ? model_.panes.find(message.pane_id) : findPane(model_.panes, message.pane_id, message.pane_generation);
         if (source == nullptr) {
           throw RequestError{FailureCode::pane_not_found, "Could not request editor reuse"};
         }
@@ -2255,7 +2257,7 @@ export {
         RequestContext context;
         const auto editor = identifyEditor(message.editor);
         if (editor != EditorKind::unsupported) {
-          for (const auto *pane : model_.panes.items()) {
+          for (const auto* pane : model_.panes.items()) {
             if (pane == nullptr || pane->exit_status || pane->close_requested || pane->location.workspace.id != source->location.workspace.id || pane->location.tab_id != source->location.tab_id || identifyEditor(pane->process_cache.identified.name.view()) != editor) {
               continue;
             }
@@ -2268,22 +2270,22 @@ export {
           }
         }
 
-        auto &client = requireClient(clients_, identity);
+        auto& client = requireClient(clients_, identity);
 
         submitBackground(background_, client, message, context);
         client.editor_source = source->id;
         client.editor_generation = source->generation;
       }
 
-      inline void handle(std::uint64_t identity, const SuggestCommand &message) {
-        auto &client = requireClient(clients_, identity);
+      inline void handle(std::uint64_t identity, const SuggestCommand& message) {
+        auto& client = requireClient(clients_, identity);
 
         if (!background_.suggestionsAvailable()) {
           client.connection.send(CommandSuggestion{message.request_id, SuggestionStatus::unavailable});
           return;
         }
 
-        auto *pane = model_.panes.find(message.pane_id);
+        auto* pane = model_.panes.find(message.pane_id);
         if (pane == nullptr) {
           client.connection.send(CommandSuggestion{message.request_id, SuggestionStatus::failed});
           return;
@@ -2296,151 +2298,155 @@ export {
           const auto prompt = suggestionPrompt(memory_, pane->cwd, reader.text(), message.text);
 
           submitBackground(background_, client, message, RequestContext{.prompt = prompt});
-        } catch (const RequestError &) {
+        } catch (const RequestError&) {
           client.connection.send(CommandSuggestion{message.request_id, SuggestionStatus::failed});
-        } catch (const std::bad_alloc &) {
+        } catch (const std::bad_alloc&) {
           client.connection.send(CommandSuggestion{message.request_id, SuggestionStatus::failed});
         }
       }
 
-      inline void handle(std::uint64_t identity, const OpenPane &message) {
+      inline void handle(std::uint64_t identity, const OpenPane& message) {
         workspaces_.open(model_, panes_, clients_, identity, message);
       }
 
-      inline void handle(std::uint64_t identity, const CreatePane &message) {
+      inline void handle(std::uint64_t identity, const CreatePane& message) {
         workspaces_.createPane(model_, panes_, clients_, identity, message);
       }
 
-      inline void handle(std::uint64_t identity, const ClosePane &message) {
+      inline void handle(std::uint64_t identity, const ClosePane& message) {
         Workspaces::closePane(model_, requireClient(clients_, identity), message);
       }
 
-      inline void handle(std::uint64_t identity, const CreateWorkspace &message) {
+      inline void handle(std::uint64_t identity, const CreateWorkspace& message) {
         workspaces_.createWorkspace(model_, panes_, clients_, identity, message);
       }
 
-      inline void handle(std::uint64_t identity, const RenameWorkspace &message) {
+      inline void handle(std::uint64_t identity, const RenameWorkspace& message) {
         workspaces_.renameWorkspace(model_, requireClient(clients_, identity), message);
       }
 
-      inline void handle(std::uint64_t identity, const CreateTab &message) {
+      inline void handle(std::uint64_t identity, const CreateTab& message) {
         workspaces_.createTab(model_, panes_, clients_, identity, message);
       }
 
-      inline void handle(std::uint64_t identity, const RenameTab &message) {
+      inline void handle(std::uint64_t identity, const RenameTab& message) {
         workspaces_.renameTab(model_, requireClient(clients_, identity), message);
       }
 
-      inline void handle(std::uint64_t identity, const CloseTab &message) {
+      inline void handle(std::uint64_t identity, const CloseTab& message) {
         workspaces_.closeTab(model_, requireClient(clients_, identity), message);
       }
 
-      inline void handle(std::uint64_t identity, const HoldTab &message) {
+      inline void handle(std::uint64_t identity, const HoldTab& message) {
         workspaces_.holdTab(model_, panes_, clients_, identity, message);
       }
 
-      inline void handle(std::uint64_t identity, const MoveTab &message) {
+      inline void handle(std::uint64_t identity, const MoveTab& message) {
         workspaces_.moveTab(model_, requireClient(clients_, identity), message);
       }
 
-      inline void handle(std::uint64_t identity, const RequestTabSnapshot &message) {
+      inline void handle(std::uint64_t identity, const RequestTabSnapshot& message) {
         Workspaces::tabSnapshot(model_, clients_, identity, message);
       }
 
-      inline void handle(std::uint64_t identity, const RequestWorkspaceSnapshot &message) {
+      inline void handle(std::uint64_t identity, const RequestWorkspaceSnapshot& message) {
         Workspaces::workspaceSnapshot(model_, requireClient(clients_, identity), message);
       }
 
-      inline void handle(std::uint64_t identity, const PaneInput &message) {
-        panes_.input(model_, clients_, identity, message, [&agents = agents_](const Pane<Memory> &pane, std::span<const Byte> bytes) { agents.observeInput(pane, bytes); });
+      inline void handle(std::uint64_t identity, const PaneInput& message) {
+        panes_.input(model_, clients_, identity, message, [&agents = agents_](const Pane<Memory>& pane, std::span<const Byte> bytes) {
+          agents.observeInput(pane, bytes);
+        });
       }
 
-      inline void handle(std::uint64_t identity, const PaneCommand &message) {
-        panes_.command(model_, clients_, identity, message, [&agents = agents_](const Pane<Memory> &pane, std::span<const Byte> bytes) { agents.observeInput(pane, bytes); });
+      inline void handle(std::uint64_t identity, const PaneCommand& message) {
+        panes_.command(model_, clients_, identity, message, [&agents = agents_](const Pane<Memory>& pane, std::span<const Byte> bytes) {
+          agents.observeInput(pane, bytes);
+        });
       }
 
-      inline void handle(std::uint64_t identity, const ConfigureShellPrompt &message) {
+      inline void handle(std::uint64_t identity, const ConfigureShellPrompt& message) {
         requireClient(clients_, identity).bare_prompt = message.bare;
       }
 
-      inline void handle(std::uint64_t identity, const PaneResize &message) {
+      inline void handle(std::uint64_t identity, const PaneResize& message) {
         panes_.resize(model_, requireClient(clients_, identity), message);
       }
 
-      inline void handle(std::uint64_t identity, const ReadRuntimeClipboard &message) {
+      inline void handle(std::uint64_t identity, const ReadRuntimeClipboard& message) {
         runtime_clipboard_.read(clients_, identity, message);
       }
 
-      inline void handle(std::uint64_t identity, const CompleteClipboardDesktop &message) {
-        if (auto *pane = ClipboardService<Memory>::complete(model_.panes, requireClient(clients_, identity), message)) {
+      inline void handle(std::uint64_t identity, const CompleteClipboardDesktop& message) {
+        if (auto* pane = ClipboardService<Memory>::complete(model_.panes, requireClient(clients_, identity), message)) {
           panes_.flushInput(*pane);
           media_.updateReadInterest(*pane);
         }
       }
 
-      inline void handle(std::uint64_t identity, const PastePaneClipboard &message) {
+      inline void handle(std::uint64_t identity, const PastePaneClipboard& message) {
         panes_.pasteClipboard(model_, clients_, identity, message);
       }
 
-      inline void handle(std::uint64_t identity, const ConfigurePaneDesktop &message) {
+      inline void handle(std::uint64_t identity, const ConfigurePaneDesktop& message) {
         panes_.configureDesktop(model_, clients_, identity, message);
       }
 
-      inline void handle(std::uint64_t identity, const ConfigureTerminalColors &message) {
+      inline void handle(std::uint64_t identity, const ConfigureTerminalColors& message) {
         panes_.configureColors(model_, requireClient(clients_, identity), message);
       }
 
-      inline void handle(std::uint64_t identity, const SearchPane &message) {
+      inline void handle(std::uint64_t identity, const SearchPane& message) {
         Panes::search(model_.panes, requireClient(clients_, identity), message);
       }
 
-      inline void handle(std::uint64_t identity, const SearchPaneRows &message) {
+      inline void handle(std::uint64_t identity, const SearchPaneRows& message) {
         Panes::search(model_.panes, requireClient(clients_, identity), message);
       }
 
-      inline void handle(std::uint64_t identity, const ReadPaneRows &message) {
+      inline void handle(std::uint64_t identity, const ReadPaneRows& message) {
         Panes::readRows(model_.panes, requireClient(clients_, identity), message);
       }
 
-      inline void handle(std::uint64_t identity, const CopySelection &message) {
+      inline void handle(std::uint64_t identity, const CopySelection& message) {
         panes_.copySelection(model_.panes, requireClient(clients_, identity), message);
       }
 
-      inline void handle(std::uint64_t identity, const ReadPane &message) {
+      inline void handle(std::uint64_t identity, const ReadPane& message) {
         Panes::readText(requireClient(clients_, identity), message);
       }
 
-      inline void handle(std::uint64_t identity, const SendPaneText &message) {
+      inline void handle(std::uint64_t identity, const SendPaneText& message) {
         const bool focused = Agents::focused(clients_, client_layouts_, message.pane_id);
 
         agents_.sendText(model_, panes_, requireClient(clients_, identity), message, focused);
       }
 
-      inline void handle(std::uint64_t identity, const DetachPane &message) {
+      inline void handle(std::uint64_t identity, const DetachPane& message) {
         panes_.detach(model_, clients_, identity, message.pane_id);
       }
 
-      inline void handle(std::uint64_t identity, const FrameAck &message) {
-        if (auto *attachment = requireClient(clients_, identity).attachment(message.pane_id)) {
+      inline void handle(std::uint64_t identity, const FrameAck& message) {
+        if (auto* attachment = requireClient(clients_, identity).attachment(message.pane_id)) {
           attachment->frames.acknowledge(message.frame_id);
           TELAR_DIAGNOSTIC(model_.metrics.frames.merge(attachment->frames.takeCounters()));
         }
       }
 
-      inline void handle(std::uint64_t identity, const RequestSnapshot &message) {
-        if (auto *attachment = requireClient(clients_, identity).attachment(message.pane_id)) {
+      inline void handle(std::uint64_t identity, const RequestSnapshot& message) {
+        if (auto* attachment = requireClient(clients_, identity).attachment(message.pane_id)) {
           attachment->frames.requestSnapshot();
         }
       }
 
-      inline void handle(std::uint64_t identity, const SetPaneViewport &message) {
-        if (auto *attachment = requireClient(clients_, identity).attachment(message.pane_id)) {
+      inline void handle(std::uint64_t identity, const SetPaneViewport& message) {
+        if (auto* attachment = requireClient(clients_, identity).attachment(message.pane_id)) {
           // At or past the bottom the view follows the output, as before any scroll; a row
           // above it stays put while output grows.
           std::uint32_t bottom = 0;
 
-          if (const auto *pane = model_.panes.find(message.pane_id)) {
-            const auto &screen = pane->terminal.screen;
+          if (const auto* pane = model_.panes.find(message.pane_id)) {
+            const auto& screen = pane->terminal.screen;
 
             bottom = screen.scroll.total_rows - std::min<std::uint32_t>(screen.scroll.total_rows, screen.rows);
           }
@@ -2450,12 +2456,12 @@ export {
         }
       }
 
-      inline void handle(std::uint64_t identity, const ConfigureFrameInterval &message) {
+      inline void handle(std::uint64_t identity, const ConfigureFrameInterval& message) {
         requireClient(clients_, identity).frame_interval = std::chrono::nanoseconds{message.interval_ns};
       }
 
-      inline void handle(std::uint64_t identity, const RequestRuntimeState &message) {
-        auto &client = requireClient(clients_, identity);
+      inline void handle(std::uint64_t identity, const RequestRuntimeState& message) {
+        auto& client = requireClient(clients_, identity);
         if (client.identity != 0 && client.identity != message.client_identity) {
           throw EncodingError{"Subscribed client identity cannot change"};
         }
@@ -2470,94 +2476,94 @@ export {
         client.agent_snapshot_requested = true;
       }
 
-      inline void handle(std::uint64_t identity, const QueryClients &message) {
+      inline void handle(std::uint64_t identity, const QueryClients& message) {
         Control::list(clients_, identity, message);
       }
 
-      inline void handle(std::uint64_t identity, const DetachClient &message) {
+      inline void handle(std::uint64_t identity, const DetachClient& message) {
         Control::detach(clients_, identity, message);
       }
 
-      inline void handle(std::uint64_t identity, const RequestClientCommand &message) {
+      inline void handle(std::uint64_t identity, const RequestClientCommand& message) {
         Control::requestCommand(clients_, identity, message);
       }
 
-      inline void handle(std::uint64_t identity, const CompleteClientCommand &message) {
+      inline void handle(std::uint64_t identity, const CompleteClientCommand& message) {
         Control::completeCommand(clients_, identity, message);
       }
 
-      inline void handle(std::uint64_t identity, const RequestPaneFocus &message) {
+      inline void handle(std::uint64_t identity, const RequestPaneFocus& message) {
         Control::requestFocus(model_.panes, clients_, identity, message);
       }
 
-      inline void handle(std::uint64_t identity, const CompletePaneFocus &message) {
+      inline void handle(std::uint64_t identity, const CompletePaneFocus& message) {
         Control::completeFocus(clients_, identity, message);
       }
 
-      inline void handle(std::uint64_t identity, const ShowNotification &message) {
+      inline void handle(std::uint64_t identity, const ShowNotification& message) {
         Control::notify(clients_, identity, message);
       }
 
-      inline void handle(std::uint64_t identity, const UpdateClientLayout &message) {
+      inline void handle(std::uint64_t identity, const UpdateClientLayout& message) {
         client_layouts_.retain(model_, requireClient(clients_, identity).identity, message);
       }
 
-      inline void handle(std::uint64_t identity, const QueryHistory &message) {
-        auto &client = requireClient(clients_, identity);
+      inline void handle(std::uint64_t identity, const QueryHistory& message) {
+        auto& client = requireClient(clients_, identity);
 
         submitBackground(background_, client, message, RequestContext{.persistent_client = client.role == ClientRole::interactive});
       }
 
-      inline void handle(std::uint64_t identity, const ImportHistory &message) {
-        auto &client = requireClient(clients_, identity);
+      inline void handle(std::uint64_t identity, const ImportHistory& message) {
+        auto& client = requireClient(clients_, identity);
 
         submitBackground(background_, client, message);
         client.connection.send(RequestCompleted{.request_id = message.request_id});
       }
 
-      inline void handle(std::uint64_t identity, const DeleteHistory &message) {
+      inline void handle(std::uint64_t identity, const DeleteHistory& message) {
         submitBackground(background_, requireClient(clients_, identity), message);
       }
 
-      inline void handle(std::uint64_t identity, const PruneHistory &message) {
+      inline void handle(std::uint64_t identity, const PruneHistory& message) {
         submitBackground(background_, requireClient(clients_, identity), message);
       }
 
-      inline void handle(std::uint64_t identity, const ReadHistoryOutput &message) {
+      inline void handle(std::uint64_t identity, const ReadHistoryOutput& message) {
         submitBackground(background_, requireClient(clients_, identity), message);
       }
 
-      inline void handle(std::uint64_t identity, const HistoryStatsQuery &message) {
+      inline void handle(std::uint64_t identity, const HistoryStatsQuery& message) {
         submitBackground(background_, requireClient(clients_, identity), message);
       }
 
-      inline void handle(std::uint64_t identity, const ConfigureGraphics &message) {
-        auto &client = requireClient(clients_, identity);
+      inline void handle(std::uint64_t identity, const ConfigureGraphics& message) {
+        auto& client = requireClient(clients_, identity);
 
         client.shared_graphics = message.shared;
-        for (auto &attachment : client.attachments) {
+        for (auto& attachment : client.attachments) {
           attachment->graphics.configure(message.shared);
         }
       }
 
-      inline void handle(std::uint64_t identity, const GraphicsCredit &message) {
-        if (auto *attachment = requireClient(clients_, identity).attachment(message.pane_id)) {
+      inline void handle(std::uint64_t identity, const GraphicsCredit& message) {
+        if (auto* attachment = requireClient(clients_, identity).attachment(message.pane_id)) {
           attachment->graphics.returnCredit(message.bytes);
         }
       }
 
-      inline void handle(std::uint64_t identity, const RequestGraphicsSnapshot &message) {
-        if (auto *attachment = requireClient(clients_, identity).attachment(message.pane_id)) {
+      inline void handle(std::uint64_t identity, const RequestGraphicsSnapshot& message) {
+        if (auto* attachment = requireClient(clients_, identity).attachment(message.pane_id)) {
           attachment->graphics.requestSnapshot();
         }
       }
 
-      inline void handle(std::uint64_t, const RuntimeStop &) {
+      inline void handle(std::uint64_t, const RuntimeStop&) {
         model_.stopping = true;
       }
 
       template <typename Message>
-      inline static void submitBackground(Background &background, const ClientSession<Memory> &client, const Message &message, RequestContext context = {}) {
+      inline static void submitBackground(Background& background, const ClientSession<Memory>& client, const Message& message, RequestContext context = {}) {
         if constexpr (std::same_as<Message, OpenEditor>) {
           if (client.editor_source != 0) {
             throw RequestError{FailureCode::resource_limit, "An editor request is already pending"};
@@ -2581,15 +2587,18 @@ export {
         metrics_.collect();
         runtime_clipboard_.collect(clients_);
         workspace_git_.collect(model_, Clock::now());
-        shell_git_.collect([&](const ShellGitResult &result) {
-          auto *pane = findPane(model_.panes, result.pane, result.generation);
+        shell_git_.collect([&](const ShellGitResult& result) {
+          auto* pane = findPane(model_.panes, result.pane, result.generation);
           if (pane != nullptr && !pane->shell_state.remote && !(pane->git == result.summary)) {
             pane->git = result.summary;
             ++pane->git_revision;
           }
         });
 
-        words_.collect([&](const WordResult &result) { deliverWords(result); });
+        words_.collect([&](const WordResult& result) {
+          deliverWords(result);
+        });
+
         worktree_detection_.collect(model_);
         agent_files_.collect(agents_);
         descriptions_.collect(agents_);
@@ -2597,13 +2606,18 @@ export {
           limits_.report(LimitReach{.name = "history.command_persistence", .noun = "failed events", .requested = failures, .route = "history"});
         }
 
-        background_.collectWorktrees([&](const WorktreeProbeResult &result) { worktrees_.observed(model_, result); });
-        background_.collect([&](std::uint64_t client_id, ClientTag request_tag, std::span<const Byte> payload) { deliverBackgroundReply(client_id, request_tag, payload); });
+        background_.collectWorktrees([&](const WorktreeProbeResult& result) {
+          worktrees_.observed(model_, result);
+        });
+
+        background_.collect([&](std::uint64_t client_id, ClientTag request_tag, std::span<const Byte> payload) {
+          deliverBackgroundReply(client_id, request_tag, payload);
+        });
       }
 
       // A completion's words, or a command's spec, for the client that asked.
-      inline void deliverWords(const WordResult &result) {
-        auto *client = clients_.find(result.client);
+      inline void deliverWords(const WordResult& result) {
+        auto* client = clients_.find(result.client);
         if (client == nullptr) {
           return;
         }
@@ -2616,7 +2630,7 @@ export {
         std::vector<CompletionWord> words;
 
         words.reserve(result.words.size());
-        for (const auto &word : result.words) {
+        for (const auto& word : result.words) {
           words.push_back({word.text, word.description});
         }
 
@@ -2638,7 +2652,7 @@ export {
           return;
         }
 
-        auto *client = clients_.find(client_id);
+        auto* client = clients_.find(client_id);
         if (client == nullptr || client->connection.closing) {
           return;
         }
@@ -2671,12 +2685,12 @@ export {
 
       // An opened editor reported to the client that asked, as failed unless it opened beside the
       // pane it was asked from.
-      inline static void deliverEditorReply(const PaneStore<Memory> &panes, ClientSession<Memory> &client, std::span<const Byte> payload) {
+      inline static void deliverEditorReply(const PaneStore<Memory>& panes, ClientSession<Memory>& client, std::span<const Byte> payload) {
         std::array<Byte, 256> scratch;
         DecodeStorage storage{scratch};
         auto reply = Codec::decode<EditorOpened>(payload, storage);
-        const auto *source = livePane(panes, client.editor_source, client.editor_generation);
-        const auto *target = livePane(panes, reply.pane_id, reply.pane_generation);
+        const auto* source = livePane(panes, client.editor_source, client.editor_generation);
+        const auto* target = livePane(panes, reply.pane_id, reply.pane_generation);
         if (source == nullptr ||
             (reply.outcome == EditorOutcome::opened && (target == nullptr || target->location.workspace.id != source->location.workspace.id || target->location.tab_id != source->location.tab_id))) {
           reply.outcome = EditorOutcome::failed;
@@ -2702,14 +2716,14 @@ export {
         timeout = std::min(timeout, std::chrono::duration_cast<std::chrono::nanoseconds>(next_pane_poll_ - now));
         const bool reap = std::exchange(children_exited_, false) || poll_panes;
 
-        for (auto *pane : model_.panes.items()) {
+        for (auto* pane : model_.panes.items()) {
           if (pane != nullptr) {
             try {
               if (ClipboardService<Memory>::advance(clients_, *pane, now) && !pane->output_closed) {
                 panes_.flushInput(*pane);
                 media_.updateReadInterest(*pane);
               }
-            } catch (const std::exception &) {
+            } catch (const std::exception&) {
               panes_.failOutput(*pane);
             }
           }
@@ -2761,8 +2775,8 @@ export {
           agent_files_.tick(agents_, now);
           descriptions_.tick(agents_);
           worktree_detection_.tick(model_);
-        } catch (const std::bad_alloc &) {
-        } catch (const RequestError &) {
+        } catch (const std::bad_alloc&) {
+        } catch (const RequestError&) {
         }
 
         Worktrees::refresh(model_);
@@ -2774,7 +2788,7 @@ export {
         deliverQueued();
 
         for (std::size_t slot = 0; slot < clients_.items().size(); ++slot) {
-          const auto *listed = clients_.items()[slot];
+          const auto* listed = clients_.items()[slot];
           if (listed == nullptr) {
             continue;
           }
@@ -2788,7 +2802,7 @@ export {
 
           try {
             if (listed->connection.closing) {
-              auto &closing = requireClient(clients_, identity);
+              auto& closing = requireClient(clients_, identity);
 
               closing.connection.write(ResponseProjection{memory_, model_});
               updateWriteInterest(poller_, closing);
@@ -2806,7 +2820,7 @@ export {
 
             timeout = std::min(timeout, writeClient(identity, now));
             updateWriteInterest(poller_, requireClient(clients_, identity));
-          } catch (const std::exception &) {
+          } catch (const std::exception&) {
             dropClient(identity);
           }
         }
@@ -2825,7 +2839,7 @@ export {
         return result.timeout;
       }
 
-      inline static void updateWriteInterest(Poller &poller, ClientSession<Memory> &client) {
+      inline static void updateWriteInterest(Poller& poller, ClientSession<Memory>& client) {
         const bool enabled = client.connection.hasOutput();
         if (enabled != client.connection.write_interest) {
           poller.writeInterest(client.connection.descriptor(), eventToken(EventSource::client, client.event_identity), enabled);
@@ -2845,7 +2859,7 @@ export {
         const auto due = deferred_reports_.due(clients_, model_.panes, agents_, ObservationTime::now());
 
         for (const auto identity : due.ids()) {
-          auto *client = clients_.find(identity);
+          auto* client = clients_.find(identity);
           if (client == nullptr) {
             continue;
           }
@@ -2866,12 +2880,12 @@ export {
               answered = true;
             }
           } catch (...) {
-            if (auto *failed = clients_.find(identity)) {
+            if (auto* failed = clients_.find(identity)) {
               failed->connection.closeImmediately();
             }
           }
 
-          if (auto *current = clients_.find(identity)) {
+          if (auto* current = clients_.find(identity)) {
             current->connection.exchange(frames);
             DeferredReports<Memory, Agents>::close(*current, payload);
             if (answered) {
@@ -2885,7 +2899,7 @@ export {
         admissions_.clear();
         session_.finish(model_, client_layouts_, agents_);
         for (std::size_t slot = 0; slot < clients_.items().size(); ++slot) {
-          auto *client = clients_.items()[slot];
+          auto* client = clients_.items()[slot];
           if (client == nullptr) {
             continue;
           }
@@ -2901,7 +2915,7 @@ export {
           dropClient(identity);
         }
 
-        for (auto *pane : model_.panes.items()) {
+        for (auto* pane : model_.panes.items()) {
           if (pane != nullptr) {
             pane->process->signal(SIGTERM);
             pane->observer->finishSession();
@@ -2912,9 +2926,9 @@ export {
         media_.finish(model_);
       }
 
-      Memory &memory_;
-      Poller &poller_;
-      Background &background_;
+      Memory& memory_;
+      Poller& poller_;
+      Background& background_;
       ProxyClientConfiguration proxy_;
       LocalListener listener_;
       RuntimeModel<Memory> model_;
@@ -2941,7 +2955,7 @@ export {
       WordService words_;
       // This runtime's PATH, read once: nothing in the runtime changes it.
       std::string_view runtime_path_ = [] {
-        const char *path = std::getenv("PATH");
+        const char* path = std::getenv("PATH");
 
         return path == nullptr ? std::string_view{"/usr/bin:/bin"} : std::string_view{path};
       }();
@@ -2957,7 +2971,7 @@ export {
 
     template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
       requires BackgroundExecutor<Background, Memory>
-    Runtime(Memory &memory, Poller &poller, Background &background, const RuntimeOptions &options, ProxyClientConfiguration proxy = {}) -> Runtime<Memory, Poller, Background>;
+    Runtime(Memory& memory, Poller& poller, Background& background, const RuntimeOptions& options, ProxyClientConfiguration proxy = {}) -> Runtime<Memory, Poller, Background>;
 
   }
 }

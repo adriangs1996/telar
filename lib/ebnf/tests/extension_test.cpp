@@ -1,17 +1,18 @@
 #ifdef __clangd__
 static_assert(true);
 #endif
-#include <tbc/view.hpp>
 #include <cstddef>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <tbc/view.hpp>
 
 #include "tests/parser_assertions.hpp"
 
 #include <gtest/gtest.h>
 
 import telar.ebnf.parser;
+
 namespace {
   auto parse(std::string_view source) -> ebnf::syntax_tree {
     auto tokenizer = ebnf::Lexer{};
@@ -20,7 +21,7 @@ namespace {
     return parser->parse(source);
   }
 
-  auto ruleBody(ebnf::syntax_tree &tree, std::size_t rule) -> ebnf::node_handle {
+  auto ruleBody(ebnf::syntax_tree& tree, std::size_t rule) -> ebnf::node_handle {
     return tree.getFirstChild(parser_testing::nthChild(tree, tree.getRoot(), rule));
   }
 

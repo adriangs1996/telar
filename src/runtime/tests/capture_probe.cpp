@@ -72,7 +72,7 @@ static int shellFixture(unsigned iterations, CaptureScenario scenario) {
   return 0;
 }
 
-static void waitPrompt(ProtocolPeer &peer, std::uint64_t pane, unsigned index) {
+static void waitPrompt(ProtocolPeer& peer, std::uint64_t pane, unsigned index) {
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
   const auto marker = "READY " + std::to_string(index);
 
@@ -86,7 +86,7 @@ static void waitPrompt(ProtocolPeer &peer, std::uint64_t pane, unsigned index) {
   throw std::runtime_error{"Shell prompt did not appear"};
 }
 
-static void waitHistory(const char *socket, unsigned count, unsigned total, std::ostream *dump, CaptureScenario scenario) {
+static void waitHistory(const char* socket, unsigned count, unsigned total, std::ostream* dump, CaptureScenario scenario) {
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
 
   do {
@@ -99,7 +99,7 @@ static void waitHistory(const char *socket, unsigned count, unsigned total, std:
     std::vector<HistoryEntry> entries{result.entries.begin(), result.entries.end()};
 
     for (std::size_t index = 0; index < entries.size(); ++index) {
-      auto &entry = entries[index];
+      auto& entry = entries[index];
       const auto sequence = count - index - 1;
       const auto expected = "printf 'rendered café 好 " + std::to_string(sequence) + "'";
       const auto expected_author = sequence % 2 == 0 ? HistoryAuthor::human : HistoryAuthor::agent;
@@ -122,7 +122,7 @@ static void waitHistory(const char *socket, unsigned count, unsigned total, std:
           expected_output += "\x1b]133;D;" + std::to_string(sequence % 3) + "\x07";
         }
 
-        const std::string_view captured{reinterpret_cast<const char *>(output.content.data()), output.content.size()};
+        const std::string_view captured{reinterpret_cast<const char*>(output.content.data()), output.content.size()};
         if (output.truncated || output.observed_bytes != expected_output.size() || captured != expected_output) {
           throw std::runtime_error{"Captured output differs at " + std::to_string(sequence) + ": expected " + std::to_string(expected_output.size()) + " bytes, received " + std::to_string(output.content.size())};
         }
@@ -149,7 +149,7 @@ static void waitHistory(const char *socket, unsigned count, unsigned total, std:
   throw std::runtime_error{"Automatic history did not persist all commands"};
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   try {
     if (argc == 4 && std::string_view{argv[1]} == "--shell") {
       const std::string_view scenario = argv[3];
@@ -180,7 +180,7 @@ int main(int argc, char **argv) {
       const auto text = "typed " + std::to_string(index) + "\r";
 
       if (index % 2 == 0) {
-        peer.send(PaneInput{.pane_id = pane.pane_id, .bytes = {reinterpret_cast<const Byte *>(text.data()), text.size()}});
+        peer.send(PaneInput{.pane_id = pane.pane_id, .bytes = {reinterpret_cast<const Byte*>(text.data()), text.size()}});
       } else {
         peer.exchange<RequestCompleted>(SendPaneText{.request_id = 2, .pane_id = pane.pane_id, .mode = PaneTextMode::raw, .text = text});
       }
@@ -214,7 +214,7 @@ int main(int argc, char **argv) {
 
     std::cout << "{\"iterations\":" << iterations << ",\"elapsed_ns\":" << elapsed << ",\"ns_per_iteration\":" << elapsed / iterations << ",\"submission_ns\":" << submission_ns << ",\"exit_wait_ns\":" << exit_wait_ns << ",\"persistence_wait_ns\":" << elapsed - submission_ns - exit_wait_ns << "}\n";
     return 0;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     std::cerr << "capture-probe: " << error.what() << '\n';
     return 1;
   }

@@ -26,7 +26,7 @@ namespace declarations {
   // An allocator: its blocks stay valid whatever is allocated after them.
   class TBC_SHARED arena {
   public:
-    char *allocate(std::size_t size) {
+    char* allocate(std::size_t size) {
       blocks_.push_back(std::make_unique<char[]>(size));
       return blocks_.back().get();
     }
@@ -38,7 +38,7 @@ namespace declarations {
   // The same pool without the promise: allocating may move what it handed out.
   class pool {
   public:
-    char *allocate(std::size_t size) {
+    char* allocate(std::size_t size) {
       bytes_.resize(bytes_.size() + size);
       return bytes_.data() + bytes_.size() - size;
     }
@@ -59,7 +59,7 @@ namespace declarations {
 
   // Builds its first template argument from the trailing arguments, as `Box::new(Value::new(..))`.
   template <typename Value, typename... Arguments>
-  TBC_CONSTRUCTS std::unique_ptr<Value> make(arena &memory, Arguments &&...arguments) {
+  TBC_CONSTRUCTS std::unique_ptr<Value> make(arena& memory, Arguments&&... arguments) {
     static_cast<void>(memory);
     return std::make_unique<Value>(std::forward<Arguments>(arguments)...);
   }
@@ -73,8 +73,8 @@ namespace declarations {
     }
 
     template <typename Visitor>
-    void visit(Visitor &&visitor) const {
-      for (const auto &value : values_) {
+    void visit(Visitor&& visitor) const {
+      for (const auto& value : values_) {
         visitor(value);
       }
     }
@@ -86,7 +86,7 @@ namespace declarations {
   // Keeps copies of the limits it is told about.
   class notices {
   public:
-    void add(tbc::view<const limit &, tbc::lt::a> reached) {
+    void add(tbc::view<const limit&, tbc::lt::a> reached) {
       reached_ = reached;
     }
 
@@ -97,7 +97,7 @@ namespace declarations {
   // Keeps a view of the text it is given.
   class holder {
   public:
-    void hold(tbc::view<const std::string &, tbc::lt::a> text) {
+    void hold(tbc::view<const std::string&, tbc::lt::a> text) {
       text_ = text;
     }
 
@@ -108,18 +108,19 @@ namespace declarations {
   private:
     text_a text_;
   };
+
   // Hands out blocks of an arena it shares with the object that holds both.
   class lender {
   public:
-    explicit lender(arena &memory)
+    explicit lender(arena& memory)
         : memory_(memory) {}
 
-    char *take() {
+    char* take() {
       return memory_.allocate(8);
     }
 
   private:
-    arena &memory_;
+    arena& memory_;
   };
 } // namespace declarations
 
@@ -154,8 +155,8 @@ declarations::limit declarationStaticLocal() {
 // STATUS: implemented
 // CONTRACT: A call through a TBC_SHARED type invalidates nothing, as a Rust type with interior mutability through `&self`.
 // SCENARIO: A block is read after the allocator hands out another one; accept.
-char declarationSharedAllocator(declarations::arena &memory) {
-  char *first = memory.allocate(8);
+char declarationSharedAllocator(declarations::arena& memory) {
+  char* first = memory.allocate(8);
   memory.allocate(8);
   return *first;
 }
@@ -168,8 +169,8 @@ char declarationSharedAllocator(declarations::arena &memory) {
 // STATUS: implemented
 // CONTRACT: A call through a TBC_SHARED type invalidates nothing, as a Rust type with interior mutability through `&self`.
 // SCENARIO: Without the mark, a second allocation may move the first block; reject at the call.
-char declarationUnsharedPool(declarations::pool &memory) {
-  char *first = memory.allocate(8);
+char declarationUnsharedPool(declarations::pool& memory) {
+  char* first = memory.allocate(8);
   memory.allocate(8); // expected-error [tbc-invalidated-borrow]
   return *first;
 }
@@ -182,7 +183,7 @@ char declarationUnsharedPool(declarations::pool &memory) {
 // STATUS: implemented
 // CONTRACT: A TBC_CONSTRUCTS factory keeps what the constructor it forwards to keeps.
 // SCENARIO: The entry copies a local number and keeps a view of a live string; accept.
-std::size_t declarationConstructedCopy(declarations::arena &memory, const std::string &text) {
+std::size_t declarationConstructedCopy(declarations::arena& memory, const std::string& text) {
   std::unique_ptr<declarations::entry> made;
   {
     const int number = 7;
@@ -199,7 +200,7 @@ std::size_t declarationConstructedCopy(declarations::arena &memory, const std::s
 // STATUS: implemented
 // CONTRACT: A TBC_CONSTRUCTS factory keeps what the constructor it forwards to keeps.
 // SCENARIO: The entry keeps a view of a local string that dies before it is read.
-std::size_t declarationConstructedView(declarations::arena &memory) {
+std::size_t declarationConstructedView(declarations::arena& memory) {
   std::unique_ptr<declarations::entry> made;
   {
     const std::string text = "local";
@@ -216,10 +217,12 @@ std::size_t declarationConstructedView(declarations::arena &memory) {
 // STATUS: implemented
 // CONTRACT: An object keeps only arguments its class template's own parameters spell, as a Rust struct keeps a `T` only in a field of type `T`.
 // SCENARIO: A callback capturing a local is only called, so the box is read after the local dies; accept.
-std::size_t declarationClassParameterCallback(declarations::box<int> &values) {
+std::size_t declarationClassParameterCallback(declarations::box<int>& values) {
   {
     std::size_t total = 0;
-    values.visit([&total](int value) { total += static_cast<std::size_t>(value); });
+    values.visit([&total](int value) {
+      total += static_cast<std::size_t>(value);
+    });
   }
   values.push(1);
   return 1;
@@ -239,7 +242,9 @@ void declarationClassParameterKept() {
     const std::string text = "local";
     values.push(text);
   } // expected-error [tbc-invalidated-borrow]
-  values.visit([](std::string_view value) { declarations::observe(value); });
+  values.visit([](std::string_view value) {
+    declarations::observe(value);
+  });
 }
 
 // END CASE
@@ -250,7 +255,7 @@ void declarationClassParameterKept() {
 // STATUS: implemented
 // CONTRACT: A labeled reference parameter retained into fields that hold values keeps what the argument holds, not the argument.
 // SCENARIO: A temporary limit is copied into the notices, which are used after it dies; accept.
-void declarationRetainedCopy(declarations::notices &kept) {
+void declarationRetainedCopy(declarations::notices& kept) {
   kept.add({.name = "terminal.max_bytes", .value = 1});
   kept.add({.name = "terminal.max_rows", .value = 2});
 }
@@ -263,7 +268,7 @@ void declarationRetainedCopy(declarations::notices &kept) {
 // STATUS: implemented
 // CONTRACT: A labeled reference parameter retained into fields that hold values keeps what the argument holds, not the argument.
 // SCENARIO: A holder whose region keeps a view retains the temporary string itself; reject where it dies.
-std::size_t declarationRetainedReference(declarations::holder &kept) {
+std::size_t declarationRetainedReference(declarations::holder& kept) {
   kept.hold(std::string{"temporary"}); // expected-error [tbc-dangling-borrow]
   return kept.size();
 }
@@ -284,7 +289,7 @@ namespace declarations {
     }
 
   private:
-    [[nodiscard]] std::size_t measure(const std::vector<int> &items) const {
+    [[nodiscard]] std::size_t measure(const std::vector<int>& items) const {
       return items.size();
     }
 
@@ -292,7 +297,7 @@ namespace declarations {
   };
 }
 
-std::size_t declarationReceiverShared(const declarations::reader &counted) {
+std::size_t declarationReceiverShared(const declarations::reader& counted) {
   return counted.total();
 }
 
@@ -312,7 +317,7 @@ namespace declarations {
     }
 
   private:
-    void append(std::vector<int> &items) {
+    void append(std::vector<int>& items) {
       items.push_back(static_cast<int>(items.size()));
     }
 
@@ -320,7 +325,7 @@ namespace declarations {
   };
 }
 
-void declarationReceiverExclusive(declarations::writer &counted) {
+void declarationReceiverExclusive(declarations::writer& counted) {
   counted.grow();
 }
 
@@ -338,8 +343,8 @@ namespace declarations {
     pinned_pool()
         : lender_(memory_) {}
 
-    pinned_pool(const pinned_pool &) = delete;
-    pinned_pool &operator=(const pinned_pool &) = delete;
+    pinned_pool(const pinned_pool&) = delete;
+    pinned_pool& operator=(const pinned_pool&) = delete;
 
   private:
     arena memory_;
@@ -386,11 +391,11 @@ void declarationSharedSiblingCopied() {
 // CONTRACT: A labeled reference to a table that holds borrows lends to a result of its region, as `fn f<'a>(store: &'a mut Store) -> &'a Entry` lends the store.
 // SCENARIO: The entry found in a live table is read; accept.
 namespace declarations {
-  tbc::view<entry &, tbc::lt::a> firstEntry(tbc::view<std::vector<entry> &, tbc::lt::a> entries);
+  tbc::view<entry&, tbc::lt::a> firstEntry(tbc::view<std::vector<entry>&, tbc::lt::a> entries);
 }
 
-std::size_t declarationLendingOutputLive(std::vector<declarations::entry> &entries) {
-  const auto &found = declarations::firstEntry(entries);
+std::size_t declarationLendingOutputLive(std::vector<declarations::entry>& entries) {
+  const auto& found = declarations::firstEntry(entries);
   return found.text.size();
 }
 
@@ -402,8 +407,8 @@ std::size_t declarationLendingOutputLive(std::vector<declarations::entry> &entri
 // STATUS: implemented
 // CONTRACT: A labeled reference to a table that holds borrows lends to a result of its region, as `fn f<'a>(store: &'a mut Store) -> &'a Entry` lends the store.
 // SCENARIO: The table dies while the entry found in it is still read; reject where it dies.
-std::size_t declarationLendingOutputDead(const std::string &text) {
-  const declarations::entry *found = nullptr;
+std::size_t declarationLendingOutputDead(const std::string& text) {
+  const declarations::entry* found = nullptr;
   {
     std::vector<declarations::entry> entries;
     entries.emplace_back(text, 1);
@@ -420,7 +425,7 @@ std::size_t declarationLendingOutputDead(const std::string &text) {
 // STATUS: implemented
 // CONTRACT: Only a parameter that designates the caller's object hands a write back to the caller; a parameter passed by value is the callee's own copy.
 // SCENARIO: A view passed by value is pointed at another argument and read before the function returns; accept.
-std::size_t declarationValueParameterCopy(std::string_view text, const std::string &other) {
+std::size_t declarationValueParameterCopy(std::string_view text, const std::string& other) {
   text = other;
   return text.size();
 }
@@ -433,7 +438,7 @@ std::size_t declarationValueParameterCopy(std::string_view text, const std::stri
 // STATUS: implemented
 // CONTRACT: Only a parameter that designates the caller's object hands a write back to the caller; a parameter passed by value is the callee's own copy.
 // SCENARIO: A view passed by reference is pointed at another argument the declaration does not let it keep; reject the write.
-void declarationReferenceParameterKept(std::string_view &text, const std::string &other) {
+void declarationReferenceParameterKept(std::string_view& text, const std::string& other) {
   text = other; // expected-error [tbc-contract-violation]
 }
 
@@ -447,40 +452,52 @@ void declarationReferenceParameterKept(std::string_view &text, const std::string
 // SCENARIO: A store builds a pass over a model that keeps the shared arena and mutates the model; the model, keeping the arena too, stays valid; accept.
 namespace declarations {
   struct shared_model {
-    explicit shared_model(arena &memory) : memory(memory) {}
-    arena &memory;
+    explicit shared_model(arena& memory)
+        : memory(memory) {}
+
+    arena& memory;
     std::vector<int> items;
   };
 
   class shared_pass {
   public:
-    shared_pass(arena &memory, shared_model &target) : memory_(memory), target_(target) {}
-    void apply() { target_.items.push_back(1); }
+    shared_pass(arena& memory, shared_model& target)
+        : memory_(memory),
+          target_(target) {}
+
+    void apply() {
+      target_.items.push_back(1);
+    }
 
   private:
-    arena &memory_;
-    shared_model &target_;
+    arena& memory_;
+    shared_model& target_;
   };
 
   class shared_store {
   public:
-    explicit shared_store(arena &memory) : memory_(memory) {}
+    explicit shared_store(arena& memory)
+        : memory_(memory) {}
+
     template <typename Model>
-    void configure(Model &target) {
+    void configure(Model& target) {
       shared_pass pass{memory_, target};
       pass.apply();
     }
 
   private:
-    arena &memory_;
+    arena& memory_;
   };
 
   class shared_owner {
   public:
-    explicit shared_owner(arena &memory) : model_(memory), store_(memory) {
+    explicit shared_owner(arena& memory)
+        : model_(memory),
+          store_(memory) {
       store_.configure(model_);
     }
-    shared_owner(const shared_owner &) = delete;
+
+    shared_owner(const shared_owner&) = delete;
 
   private:
     shared_model model_;
@@ -488,7 +505,7 @@ namespace declarations {
   };
 }
 
-void declarationSharedReached(declarations::arena &memory) {
+void declarationSharedReached(declarations::arena& memory) {
   const declarations::shared_owner made{memory};
   static_cast<void>(&made);
 }
@@ -503,40 +520,52 @@ void declarationSharedReached(declarations::arena &memory) {
 // SCENARIO: The same store over a pool without the mark may invalidate the pool its argument keeps; reject at the argument.
 namespace declarations {
   struct pooled_model {
-    explicit pooled_model(pool &memory) : memory(memory) {}
-    pool &memory;
+    explicit pooled_model(pool& memory)
+        : memory(memory) {}
+
+    pool& memory;
     std::vector<int> items;
   };
 
   class pooled_pass {
   public:
-    pooled_pass(pool &memory, pooled_model &target) : memory_(memory), target_(target) {}
-    void apply() { target_.items.push_back(1); }
+    pooled_pass(pool& memory, pooled_model& target)
+        : memory_(memory),
+          target_(target) {}
+
+    void apply() {
+      target_.items.push_back(1);
+    }
 
   private:
-    pool &memory_;
-    pooled_model &target_;
+    pool& memory_;
+    pooled_model& target_;
   };
 
   class pooled_store {
   public:
-    explicit pooled_store(pool &memory) : memory_(memory) {}
+    explicit pooled_store(pool& memory)
+        : memory_(memory) {}
+
     template <typename Model>
-    void configure(Model &target) {
+    void configure(Model& target) {
       pooled_pass pass{memory_, target};
       pass.apply();
     }
 
   private:
-    pool &memory_;
+    pool& memory_;
   };
 
   class pooled_owner {
   public:
-    explicit pooled_owner(pool &memory) : model_(memory), store_(memory) {
+    explicit pooled_owner(pool& memory)
+        : model_(memory),
+          store_(memory) {
       store_.configure(model_); // expected-error [tbc-invalidated-borrow]
     }
-    pooled_owner(const pooled_owner &) = delete;
+
+    pooled_owner(const pooled_owner&) = delete;
 
   private:
     pooled_model model_;
@@ -544,7 +573,7 @@ namespace declarations {
   };
 }
 
-void declarationUnsharedReached(declarations::pool &memory) {
+void declarationUnsharedReached(declarations::pool& memory) {
   const declarations::pooled_owner made{memory};
   static_cast<void>(&made);
 }
@@ -564,8 +593,8 @@ namespace declarations {
         : name_(name),
           cursor_(buffer_.data()) {}
 
-    recorder(const recorder &) = delete;
-    recorder &operator=(const recorder &) = delete;
+    recorder(const recorder&) = delete;
+    recorder& operator=(const recorder&) = delete;
 
     [[nodiscard]] std::size_t size() const {
       return name_.size();
@@ -574,11 +603,11 @@ namespace declarations {
   private:
     std::string_view name_;
     std::string buffer_{"buffer"};
-    tbc::view<const char *, tbc::lt::self> cursor_;
+    tbc::view<const char*, tbc::lt::self> cursor_;
   };
 }
 
-std::size_t declarationSelfFieldElided(const std::string &name) {
+std::size_t declarationSelfFieldElided(const std::string& name) {
   const declarations::recorder kept{name};
   return kept.size();
 }
@@ -591,7 +620,7 @@ std::size_t declarationSelfFieldElided(const std::string &name) {
 // STATUS: implemented
 // CONTRACT: A field labeled lt::self or lt::static_storage declares no lifetime of its class, so a constructor of a class whose other fields carry no label still keeps every argument that lends.
 // SCENARIO: The recorder outlives the name it was built from; reject where the name dies.
-std::size_t declarationSelfFieldElidedDangling(declarations::arena &memory) {
+std::size_t declarationSelfFieldElidedDangling(declarations::arena& memory) {
   std::unique_ptr<declarations::recorder> kept;
   {
     const std::string name = "local";
@@ -612,21 +641,23 @@ namespace declarations {
   template <typename Memory>
   class machine {
   public:
-    explicit machine(Memory &memory) : memory_(memory) {}
-    machine(const machine &) = delete;
-    machine &operator=(const machine &) = delete;
+    explicit machine(Memory& memory)
+        : memory_(memory) {}
 
-    [[nodiscard]] int *slot() const {
+    machine(const machine&) = delete;
+    machine& operator=(const machine&) = delete;
+
+    [[nodiscard]] int* slot() const {
       return slot_;
     }
 
   private:
-    Memory &memory_;
-    int *slot_ = nullptr;
+    Memory& memory_;
+    int* slot_ = nullptr;
   };
 
   template <typename Memory>
-  void install(int *slot, Memory &memory) {
+  void install(int* slot, Memory& memory) {
     static_cast<void>(memory);
     static_cast<void>(slot);
   }
@@ -634,7 +665,8 @@ namespace declarations {
   template <typename Memory>
   class machine_loader {
   public:
-    explicit machine_loader(Memory &memory) : memory_(memory) {}
+    explicit machine_loader(Memory& memory)
+        : memory_(memory) {}
 
     void load() {
       const machine<Memory> running{memory_};
@@ -643,11 +675,11 @@ namespace declarations {
     }
 
   private:
-    Memory &memory_;
+    Memory& memory_;
   };
 }
 
-void declarationSharedKept(declarations::arena &memory) {
+void declarationSharedKept(declarations::arena& memory) {
   declarations::machine_loader<declarations::arena>{memory}.load();
 }
 
@@ -662,7 +694,8 @@ void declarationSharedKept(declarations::arena &memory) {
 namespace declarations {
   class pooled_loader {
   public:
-    explicit pooled_loader(pool &memory) : memory_(memory) {}
+    explicit pooled_loader(pool& memory)
+        : memory_(memory) {}
 
     void load() {
       const machine<pool> running{memory_};
@@ -671,11 +704,11 @@ namespace declarations {
     }
 
   private:
-    pool &memory_;
+    pool& memory_;
   };
 }
 
-void declarationUnsharedKept(declarations::pool &memory) {
+void declarationUnsharedKept(declarations::pool& memory) {
   declarations::pooled_loader{memory}.load();
 }
 
@@ -690,20 +723,27 @@ void declarationUnsharedKept(declarations::pool &memory) {
 namespace declarations {
   struct screen {
     std::vector<int> cells;
-    void resize(std::size_t size) { cells.resize(size); }
+
+    void resize(std::size_t size) {
+      cells.resize(size);
+    }
   };
 
   class feeder {
   public:
-    explicit feeder(screen &target) : target_(target) {}
-    void feed(int value) { target_.cells.push_back(value); }
+    explicit feeder(screen& target)
+        : target_(target) {}
+
+    void feed(int value) {
+      target_.cells.push_back(value);
+    }
 
   private:
-    screen &target_;
+    screen& target_;
   };
 }
 
-void declarationExclusiveFieldCall(const std::vector<int> &values) {
+void declarationExclusiveFieldCall(const std::vector<int>& values) {
   declarations::screen shown;
   declarations::feeder input{shown};
   for (const int value : values) {
@@ -719,7 +759,7 @@ void declarationExclusiveFieldCall(const std::vector<int> &values) {
 // STATUS: implemented
 // CONTRACT: What a receiver designates through its own reference fields it borrows exclusively, as a Rust `&mut` field is: a call through it invalidates other borrows of those objects, not the receiver's own.
 // SCENARIO: The screen is resized directly while the feeder that keeps it is fed again; reject at the resize.
-void declarationExclusiveFieldAlias(const std::vector<int> &values) {
+void declarationExclusiveFieldAlias(const std::vector<int>& values) {
   declarations::screen shown;
   declarations::feeder input{shown};
   for (const int value : values) {
@@ -742,16 +782,24 @@ void declarationExclusiveFieldAlias(const std::vector<int> &values) {
 namespace declarations {
   class reply {
   public:
-    void respond(static_text text) { text_ = text; }
-    static static_text forward(static_text text) { return text; }
-    [[nodiscard]] std::size_t size() const { return text_.size(); }
+    void respond(static_text text) {
+      text_ = text;
+    }
+
+    static static_text forward(static_text text) {
+      return text;
+    }
+
+    [[nodiscard]] std::size_t size() const {
+      return text_.size();
+    }
 
   private:
     static_text text_;
   };
 }
 
-std::size_t declarationStaticInput(declarations::reply &out) {
+std::size_t declarationStaticInput(declarations::reply& out) {
   out.respond("HTTP/1.1 200 OK\r\n\r\n");
   return out.size() + declarations::reply::forward("ok").size();
 }
@@ -788,22 +836,26 @@ namespace declarations {
 
   class launcher {
   public:
-    explicit launcher(const settings &values) : values_(values) {}
-    void run() { count_ += values_.history.size(); }
+    explicit launcher(const settings& values)
+        : values_(values) {}
+
+    void run() {
+      count_ += values_.history.size();
+    }
 
   private:
-    const settings &values_;
+    const settings& values_;
     std::size_t count_ = 0;
   };
 
-  void launch(const launch_options &options, const settings &values) {
+  void launch(const launch_options& options, const settings& values) {
     launcher running{values};
     running.run();
     static_cast<void>(options.history.size());
   }
 }
 
-std::size_t declarationConstantReferent(const declarations::settings &values) {
+std::size_t declarationConstantReferent(const declarations::settings& values) {
   const declarations::launch_options options{.history = values.history};
   declarations::launch(options, values);
   return options.history.size();
@@ -818,12 +870,12 @@ std::size_t declarationConstantReferent(const declarations::settings &values) {
 // CONTRACT: What a reference to const designates cannot change through it, as a Rust `&T` parameter cannot, so a call that receives it invalidates no borrow of it.
 // SCENARIO: The same settings passed by mutable reference to a call that replaces them while a view of them is used later; reject at the call.
 namespace declarations {
-  void reset(settings &values) {
+  void reset(settings& values) {
     values.history = std::string(64, 'x');
   }
 }
 
-std::size_t declarationMutableReferent(declarations::settings &values) {
+std::size_t declarationMutableReferent(declarations::settings& values) {
   const declarations::launch_options options{.history = values.history};
   declarations::reset(values); // expected-error [tbc-invalidated-borrow]
   return options.history.size();
@@ -849,15 +901,15 @@ namespace declarations {
   class raw_connection {
   public:
     void advance() {
-      for (auto &slot : streams_) {
-        if (auto *current = tbc::raw(slot.get())) {
+      for (auto& slot : streams_) {
+        if (auto* current = tbc::raw(slot.get())) {
           resolve(current->request);
         }
       }
     }
 
   private:
-    void resolve(raw_half &value) {
+    void resolve(raw_half& value) {
       value.ticket = 0;
     }
 
@@ -865,7 +917,7 @@ namespace declarations {
   };
 }
 
-void declarationRawPointer(declarations::raw_connection &connection) {
+void declarationRawPointer(declarations::raw_connection& connection) {
   connection.advance();
 }
 
@@ -881,7 +933,7 @@ namespace declarations {
   class checked_connection {
   public:
     void advance() {
-      for (auto &slot : streams_) {
+      for (auto& slot : streams_) {
         if (slot) {
           resolve(slot->request); // expected-error [tbc-invalidated-borrow]
         }
@@ -889,7 +941,7 @@ namespace declarations {
     }
 
   private:
-    void resolve(raw_half &value) {
+    void resolve(raw_half& value) {
       value.ticket = 0;
     }
 
@@ -897,7 +949,7 @@ namespace declarations {
   };
 }
 
-void declarationCheckedPointer(declarations::checked_connection &connection) {
+void declarationCheckedPointer(declarations::checked_connection& connection) {
   connection.advance();
 }
 
@@ -915,25 +967,34 @@ namespace declarations {
   };
 
   struct observer {
-    tally *target;
+    tally* target;
   };
 
   class template_relay {
   public:
     template <typename Context>
-    template_relay(tally &total, observer observed, Context context) : total_(total), observed_(observed), context_(static_cast<int>(context)) {}
-    void advance() { ++total_.value; }
+    template_relay(tally& total, observer observed, Context context)
+        : total_(total),
+          observed_(observed),
+          context_(static_cast<int>(context)) {}
+
+    void advance() {
+      ++total_.value;
+    }
 
   private:
-    tally &total_;
+    tally& total_;
     observer observed_;
     int context_;
   };
 
   class template_owner {
   public:
-    template_owner(arena &memory, tally &total) : memory_(memory), total_(total) {}
-    template_owner(const template_owner &) = delete;
+    template_owner(arena& memory, tally& total)
+        : memory_(memory),
+          total_(total) {}
+
+    template_owner(const template_owner&) = delete;
 
     void advance() {
       if (!relay_) {
@@ -944,13 +1005,13 @@ namespace declarations {
     }
 
   private:
-    arena &memory_;
-    tally &total_;
+    arena& memory_;
+    tally& total_;
     std::unique_ptr<template_relay> relay_;
   };
 }
 
-void declarationTemplateConstructorCopy(declarations::arena &memory, declarations::tally &total) {
+void declarationTemplateConstructorCopy(declarations::arena& memory, declarations::tally& total) {
   declarations::template_owner owner{memory, total};
   owner.advance();
 }
@@ -967,16 +1028,21 @@ namespace declarations {
   class reference_relay {
   public:
     template <typename Context>
-    reference_relay(const observer &observed, Context context) : observed_(observed), context_(static_cast<int>(context)) {}
-    [[nodiscard]] int advance() const { return observed_.target->value + context_; }
+    reference_relay(const observer& observed, Context context)
+        : observed_(observed),
+          context_(static_cast<int>(context)) {}
+
+    [[nodiscard]] int advance() const {
+      return observed_.target->value + context_;
+    }
 
   private:
-    const observer &observed_;
+    const observer& observed_;
     int context_;
   };
 }
 
-int declarationTemplateConstructorReference(declarations::arena &memory, declarations::tally &total) {
+int declarationTemplateConstructorReference(declarations::arena& memory, declarations::tally& total) {
   std::unique_ptr<declarations::reference_relay> relay;
   {
     const declarations::observer observed{&total};
@@ -996,8 +1062,13 @@ int declarationTemplateConstructorReference(declarations::arena &memory, declara
 namespace declarations {
   class failure_gate {
   public:
-    void fail(static_text reason) { failure_ = reason; }
-    [[nodiscard]] static_text failure() const { return failure_; }
+    void fail(static_text reason) {
+      failure_ = reason;
+    }
+
+    [[nodiscard]] static_text failure() const {
+      return failure_;
+    }
 
   private:
     static_text failure_;
@@ -1016,7 +1087,7 @@ namespace declarations {
   };
 }
 
-std::size_t declarationStaticFieldResult(declarations::failure_transport &transport, const declarations::failure_gate &gate) {
+std::size_t declarationStaticFieldResult(declarations::failure_transport& transport, const declarations::failure_gate& gate) {
   transport.error("closed");
   return gate.failure().size();
 }
@@ -1032,15 +1103,19 @@ std::size_t declarationStaticFieldResult(declarations::failure_transport &transp
 namespace declarations {
   class dynamic_gate {
   public:
-    explicit dynamic_gate(std::string_view reason) : failure_(reason) {}
-    [[nodiscard]] static_text failure() const { return failure_; } // expected-error [tbc-contract-violation]
+    explicit dynamic_gate(std::string_view reason)
+        : failure_(reason) {}
+
+    [[nodiscard]] static_text failure() const {
+      return failure_;
+    } // expected-error [tbc-contract-violation]
 
   private:
     std::string_view failure_;
   };
 }
 
-std::size_t declarationDynamicFieldResult(const declarations::dynamic_gate &gate) {
+std::size_t declarationDynamicFieldResult(const declarations::dynamic_gate& gate) {
   return gate.failure().size();
 }
 
@@ -1055,7 +1130,8 @@ std::size_t declarationDynamicFieldResult(const declarations::dynamic_gate &gate
 namespace declarations {
   class feeding_owner {
   public:
-    explicit feeding_owner(screen &shown) : feeder_(std::make_unique<feeder>(shown)) {}
+    explicit feeding_owner(screen& shown)
+        : feeder_(std::make_unique<feeder>(shown)) {}
 
     void feed(int value) {
       feeder_->feed(value);
@@ -1067,7 +1143,7 @@ namespace declarations {
   };
 }
 
-void declarationOwnedReceiverCall(declarations::screen &shown) {
+void declarationOwnedReceiverCall(declarations::screen& shown) {
   declarations::feeding_owner owner{shown};
   owner.feed(1);
 }
@@ -1084,7 +1160,7 @@ std::size_t declarationOwnedReceiverAlias() {
   declarations::screen shown;
   shown.cells.push_back(0);
   auto input = std::make_unique<declarations::feeder>(shown);
-  const auto *first = shown.cells.data();
+  const auto* first = shown.cells.data();
   input->feed(1); // expected-error [tbc-invalidated-borrow]
   return static_cast<std::size_t>(*first);
 }
@@ -1111,7 +1187,9 @@ namespace declarations {
 
   class TBC_SHARED shared_fonts {
   public:
-    font_face &face() { return face_; }
+    font_face& face() {
+      return face_;
+    }
 
   private:
     font_face face_;
@@ -1119,7 +1197,8 @@ namespace declarations {
 
   class text_item {
   public:
-    explicit text_item(shared_fonts &fonts) : fonts_(&fonts) {}
+    explicit text_item(shared_fonts& fonts)
+        : fonts_(&fonts) {}
 
     std::size_t layout() {
       const std::string_view text{utf8_};
@@ -1128,13 +1207,13 @@ namespace declarations {
     }
 
   private:
-    shared_fonts *fonts_;
+    shared_fonts* fonts_;
     std::string utf8_ = "text";
     int height_ = 0;
   };
 }
 
-std::size_t declarationSharedReferenceResult(declarations::shared_fonts &fonts) {
+std::size_t declarationSharedReferenceResult(declarations::shared_fonts& fonts) {
   declarations::text_item item{fonts};
   return item.layout();
 }
@@ -1150,14 +1229,16 @@ std::size_t declarationSharedReferenceResult(declarations::shared_fonts &fonts) 
 namespace declarations {
   class buffered_face {
   public:
-    std::string &buffer() { return buffer_; }
+    std::string& buffer() {
+      return buffer_;
+    }
 
   private:
     std::string buffer_ = "glyphs";
   };
 }
 
-std::size_t declarationUnsharedReferenceResult(declarations::buffered_face &face) {
+std::size_t declarationUnsharedReferenceResult(declarations::buffered_face& face) {
   const std::string_view glyphs{face.buffer()};
   face.buffer().append(64, 'x'); // expected-error [tbc-invalidated-borrow]
   return glyphs.size();
@@ -1175,16 +1256,16 @@ namespace declarations {
   class TBC_SHARED pinned_machine {
   public:
     pinned_machine() = default;
-    pinned_machine(const pinned_machine &) = delete;
-    pinned_machine &operator=(const pinned_machine &) = delete;
+    pinned_machine(const pinned_machine&) = delete;
+    pinned_machine& operator=(const pinned_machine&) = delete;
 
-    [[nodiscard]] int *slot() const;
+    [[nodiscard]] int* slot() const;
   };
 
   class pinned_reader {
   public:
     int read() {
-      const int *slot = machine_.slot();
+      const int* slot = machine_.slot();
       record(*slot);
       return *slot;
     }
@@ -1213,13 +1294,13 @@ int declarationPinnedSharedField() {
 namespace declarations {
   class TBC_SHARED movable_machine {
   public:
-    [[nodiscard]] int *slot() const;
+    [[nodiscard]] int* slot() const;
   };
 
   class movable_reader {
   public:
     int read() {
-      const int *slot = machine_.slot();
+      const int* slot = machine_.slot();
       record(*slot); // expected-error [tbc-invalidated-borrow]
       return *slot;
     }
@@ -1250,65 +1331,65 @@ namespace declarations {
   class TBC_SHARED memory {
   public:
     virtual ~memory() = default;
-    virtual void *allocate(std::size_t size, std::size_t alignment) noexcept = 0;
-    virtual void deallocate(void *block, std::size_t size, std::size_t alignment) noexcept = 0;
+    virtual void* allocate(std::size_t size, std::size_t alignment) noexcept = 0;
+    virtual void deallocate(void* block, std::size_t size, std::size_t alignment) noexcept = 0;
   };
 
   // Each implementation carries its own mark: a derived type is audited apart from its base.
   template <typename allocator>
   class TBC_SHARED memory_adapter final : public memory {
   public:
-    explicit memory_adapter(tbc::view<allocator &, tbc::lt::a> wrapped) noexcept
+    explicit memory_adapter(tbc::view<allocator&, tbc::lt::a> wrapped) noexcept
         : allocator_(wrapped) {}
 
-    void *allocate(std::size_t size, std::size_t alignment) noexcept override {
+    void* allocate(std::size_t size, std::size_t alignment) noexcept override {
       static_cast<void>(alignment);
       return allocator_.allocate(size);
     }
 
-    void deallocate(void *block, std::size_t size, std::size_t alignment) noexcept override {
+    void deallocate(void* block, std::size_t size, std::size_t alignment) noexcept override {
       static_cast<void>(block);
       static_cast<void>(size);
       static_cast<void>(alignment);
     }
 
   private:
-    tbc::view<allocator &, tbc::lt::a> allocator_;
+    tbc::view<allocator&, tbc::lt::a> allocator_;
   };
 
   // The same adapter without the mark.
   template <typename allocator>
   class unmarked_adapter final : public memory {
   public:
-    explicit unmarked_adapter(tbc::view<allocator &, tbc::lt::a> wrapped) noexcept
+    explicit unmarked_adapter(tbc::view<allocator&, tbc::lt::a> wrapped) noexcept
         : allocator_(wrapped) {}
 
-    void *allocate(std::size_t size, std::size_t alignment) noexcept override {
+    void* allocate(std::size_t size, std::size_t alignment) noexcept override {
       static_cast<void>(alignment);
       return allocator_.allocate(size);
     }
 
-    void deallocate(void *block, std::size_t size, std::size_t alignment) noexcept override {
+    void deallocate(void* block, std::size_t size, std::size_t alignment) noexcept override {
       static_cast<void>(block);
       static_cast<void>(size);
       static_cast<void>(alignment);
     }
 
   private:
-    tbc::view<allocator &, tbc::lt::a> allocator_;
+    tbc::view<allocator&, tbc::lt::a> allocator_;
   };
 
   // A buffer that keeps the memory it was given, as services keep their allocator.
   class erased_bytes {
   public:
-    explicit erased_bytes(tbc::view<memory &, tbc::lt::a> memory) noexcept
+    explicit erased_bytes(tbc::view<memory&, tbc::lt::a> memory) noexcept
         : memory_(memory) {}
 
-    erased_bytes(const erased_bytes &) = delete;
-    erased_bytes &operator=(const erased_bytes &) = delete;
+    erased_bytes(const erased_bytes&) = delete;
+    erased_bytes& operator=(const erased_bytes&) = delete;
 
     bool resize(std::size_t size) noexcept {
-      auto *block = static_cast<char *>(memory_.allocate(size, alignof(char)));
+      auto* block = static_cast<char*>(memory_.allocate(size, alignof(char)));
       if (block == nullptr) {
         return false;
       }
@@ -1319,25 +1400,25 @@ namespace declarations {
       return true;
     }
 
-    char *data() noexcept {
+    char* data() noexcept {
       return data_;
     }
 
   private:
-    tbc::view<memory &, tbc::lt::a> memory_;
-    char *data_ = nullptr;
+    tbc::view<memory&, tbc::lt::a> memory_;
+    char* data_ = nullptr;
     std::size_t size_ = 0;
   };
 }
 
-char declarationAbstractSharedMemory(tbc::view<declarations::memory &, tbc::lt::a> memory) {
+char declarationAbstractSharedMemory(tbc::view<declarations::memory&, tbc::lt::a> memory) {
   declarations::erased_bytes first(memory);
   declarations::erased_bytes second(memory);
 
   first.resize(8);
 
-  const char *data = first.data();
-  void *block = memory.allocate(16, 8);
+  const char* data = first.data();
+  void* block = memory.allocate(16, 8);
 
   second.resize(4);
   memory.deallocate(block, 16, 8);
@@ -1352,7 +1433,7 @@ char declarationAbstractSharedMemory(tbc::view<declarations::memory &, tbc::lt::
 // STATUS: implemented
 // CONTRACT: An abstract TBC_SHARED type is shared through a reference to it, as a Rust `&dyn Trait` of a type with interior mutability: its virtual calls invalidate nothing.
 // SCENARIO: Sharing does not extend the referent: a buffer keeps a local adapter through `Memory &` and outlives it; reject at the return.
-declarations::erased_bytes declarationAbstractSharedEscapes(declarations::arena &system) {
+declarations::erased_bytes declarationAbstractSharedEscapes(declarations::arena& system) {
   declarations::memory_adapter<declarations::arena> local(system);
 
   return declarations::erased_bytes(local); // expected-error [tbc-dangling-borrow]
@@ -1369,12 +1450,12 @@ declarations::erased_bytes declarationAbstractSharedEscapes(declarations::arena 
 namespace declarations {
   class marked_service {
   public:
-    explicit marked_service(tbc::view<arena &, tbc::lt::a> system) noexcept
+    explicit marked_service(tbc::view<arena&, tbc::lt::a> system) noexcept
         : memory_(system),
           bytes_(memory_) {}
 
-    marked_service(const marked_service &) = delete;
-    marked_service &operator=(const marked_service &) = delete;
+    marked_service(const marked_service&) = delete;
+    marked_service& operator=(const marked_service&) = delete;
 
     bool grow() noexcept {
       return bytes_.resize(32);
@@ -1386,7 +1467,7 @@ namespace declarations {
   };
 }
 
-bool declarationAbstractSharedSiblingMarked(declarations::arena &system) {
+bool declarationAbstractSharedSiblingMarked(declarations::arena& system) {
   declarations::marked_service service(system);
 
   return service.grow();
@@ -1403,12 +1484,12 @@ bool declarationAbstractSharedSiblingMarked(declarations::arena &system) {
 namespace declarations {
   class unmarked_service {
   public:
-    explicit unmarked_service(tbc::view<arena &, tbc::lt::a> system) noexcept
+    explicit unmarked_service(tbc::view<arena&, tbc::lt::a> system) noexcept
         : memory_(system),
           bytes_(memory_) {} // expected-error [tbc-dangling-borrow]
 
-    unmarked_service(const unmarked_service &) = delete;
-    unmarked_service &operator=(const unmarked_service &) = delete;
+    unmarked_service(const unmarked_service&) = delete;
+    unmarked_service& operator=(const unmarked_service&) = delete;
 
     bool grow() noexcept {
       return bytes_.resize(32);
@@ -1420,7 +1501,7 @@ namespace declarations {
   };
 }
 
-bool declarationAbstractSharedSiblingUnmarked(declarations::arena &system) {
+bool declarationAbstractSharedSiblingUnmarked(declarations::arena& system) {
   declarations::unmarked_service service(system);
 
   return service.grow();

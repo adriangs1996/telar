@@ -3,12 +3,11 @@
 static_assert(true);
 #endif
 
-
-#include <cstdint>
-#include <cstddef>
-#include <cstring>
 #include <cassert>
 #include <cerrno>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
 
 import std;
 import telar.base.memory;
@@ -23,7 +22,8 @@ namespace tap = telar::runtime::plugins;
 class FragmentedPipe {
 public:
   explicit FragmentedPipe(std::span<const Byte> input, std::size_t fragment) noexcept
-      : input_(input), fragment_(fragment) {}
+      : input_(input),
+        fragment_(fragment) {}
 
   StreamResult read(std::span<Byte> destination) noexcept {
     if (input_.empty()) {
@@ -93,7 +93,7 @@ void testPluginChannel() {
 
     try {
       reader.receive(memory, tap::Limits::frame_bytes);
-    } catch (const EncodingError &) {
+    } catch (const EncodingError&) {
       rejected = true;
     }
 
@@ -107,7 +107,7 @@ void testPluginChannel() {
 
   try {
     reader.receive(memory, tap::Limits::frame_bytes);
-  } catch (const SystemError &error) {
+  } catch (const SystemError& error) {
     rejected = error.code() == EPIPE;
   }
 

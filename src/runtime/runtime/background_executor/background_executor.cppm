@@ -9,8 +9,8 @@ module;
 #include <unistd.h>
 
 #include <cassert>
-#include <cstddef>
 #include <cerrno>
+#include <cstddef>
 
 #include <limits.h>
 #include <poll.h>
@@ -23,11 +23,9 @@ import std;
 export import telar.runtime.platform.process_probe;
 export import telar.runtime.worktrees.git_probe;
 
-
 export import telar.runtime.history.event;
 export import telar.runtime.transport.connection;
 export import telar.runtime.model.slot_store;
-
 
 export import telar.runtime.suggestions.engine;
 import telar.base.diagnostics;
@@ -36,99 +34,98 @@ import telar.platform.primitives;
 
 // Interface: runtime/request_context.cppm
 export {
-namespace telar::runtime {
+  namespace telar::runtime {
 
-struct EditorCandidate {
-  std::uint64_t pane = 0;
-  std::uint64_t generation = 0;
-  ProcessIdentity process;
-};
+    struct EditorCandidate {
+      std::uint64_t pane = 0;
+      std::uint64_t generation = 0;
+      ProcessIdentity process;
+    };
 
-struct RequestContext {
-  TabLocation location{};
-  std::array<Byte, 16> history_session{};
-  std::string_view workspace_path{};
-  std::string_view prompt{};
-  std::int64_t received_at_ms = 0;
-  std::array<EditorCandidate, 64> editor_candidates{};
-  std::size_t editor_candidate_count = 0;
-  const std::atomic<bool> *cancelled = nullptr;
-  bool persistent_client = false;
-};
+    struct RequestContext {
+      TabLocation location{};
+      std::array<Byte, 16> history_session{};
+      std::string_view workspace_path{};
+      std::string_view prompt{};
+      std::int64_t received_at_ms = 0;
+      std::array<EditorCandidate, 64> editor_candidates{};
+      std::size_t editor_candidate_count = 0;
+      const std::atomic<bool>* cancelled = nullptr;
+      bool persistent_client = false;
+    };
 
-}
+  }
 }
 
 // Interface: runtime/background_executor.cppm
 export {
-namespace telar::runtime {
+  namespace telar::runtime {
 
+    template <typename Executor, typename Message>
+    concept SubmitsRequest = requires(Executor& executor, std::uint64_t client, const RequestContext& context) {
+      { executor.submit(client, Message{}, context) } -> std::same_as<void>;
+    };
 
-template <typename Executor, typename Message>
-concept SubmitsRequest = requires(Executor &executor, std::uint64_t client, const RequestContext &context) {
-  { executor.submit(client, Message{}, context) } -> std::same_as<void>;
-};
+    // Whether `Executor` takes every request of the list that runs off the runtime's thread.
+    template <typename Executor, typename List>
+    inline constexpr bool submits_worker_requests = false;
 
-// Whether `Executor` takes every request of the list that runs off the runtime's thread.
-template <typename Executor, typename List>
-inline constexpr bool submits_worker_requests = false;
+    template <typename Executor, typename... Requests>
+    inline constexpr bool submits_worker_requests<Executor, ClientRequestList<Requests...>> = ((Requests::lane < RequestLane::worker || SubmitsRequest<Executor, typename Requests::Type>) && ...);
 
-template <typename Executor, typename... Requests>
-inline constexpr bool submits_worker_requests<Executor, ClientRequestList<Requests...>> = ((Requests::lane < RequestLane::worker || SubmitsRequest<Executor, typename Requests::Type>) && ...);
+    template <typename Executor, typename Memory>
+    concept BackgroundExecutor = Allocator<Memory> && HistoryEventSink<Executor> && requires(Executor& executor, std::uint64_t client, const RequestContext& context, void (*consume)(std::uint64_t, ClientTag, std::span<const Byte>)) {
+      { executor.descriptors() } noexcept -> std::same_as<std::array<int, 5>>;
+      { executor.collect(consume) } -> std::same_as<void>;
+      { executor.cancel(client) } noexcept -> std::same_as<void>;
+      { executor.suggestionsAvailable() } noexcept -> std::same_as<bool>;
+      { executor.editorBusy() } noexcept -> std::same_as<bool>;
+      { executor.takeHistoryFailures() } noexcept -> std::same_as<std::uint64_t>;
+    } && submits_worker_requests<Executor, ClientRequests> && requires(Executor& executor, Connection<Memory>& reply, const WorktreeProbeRequest& request, void (*consume)(const WorktreeProbeResult&)) {
+      { executor.tryPaths(std::uint64_t{}, FindPaths{}, reply) } -> std::same_as<bool>;
+      { executor.observeWorktree(request) } -> std::same_as<bool>;
+      { executor.collectWorktrees(consume) } -> std::same_as<void>;
+    };
 
-template <typename Executor, typename Memory>
-concept BackgroundExecutor = Allocator<Memory> && HistoryEventSink<Executor> && requires(Executor &executor, std::uint64_t client, const RequestContext &context, void (*consume)(std::uint64_t, ClientTag, std::span<const Byte>)) {
-  { executor.descriptors() } noexcept -> std::same_as<std::array<int, 5>>;
-  { executor.collect(consume) } -> std::same_as<void>;
-  { executor.cancel(client) } noexcept -> std::same_as<void>;
-  { executor.suggestionsAvailable() } noexcept -> std::same_as<bool>;
-  { executor.editorBusy() } noexcept -> std::same_as<bool>;
-  { executor.takeHistoryFailures() } noexcept -> std::same_as<std::uint64_t>;
-} && submits_worker_requests<Executor, ClientRequests> && requires(Executor &executor, Connection<Memory> &reply, const WorktreeProbeRequest &request, void (*consume)(const WorktreeProbeResult &)) {
-  { executor.tryPaths(std::uint64_t{}, FindPaths{}, reply) } -> std::same_as<bool>;
-  { executor.observeWorktree(request) } -> std::same_as<bool>;
-  { executor.collectWorktrees(consume) } -> std::same_as<void>;
-};
-
-}
+  }
 }
 
 // Interface: runtime/suggestion_service.cppm
 export {
-namespace telar::runtime {
+  namespace telar::runtime {
 
-template <ConcurrentAllocator Memory>
-class SuggestionService {
-public:
-  inline explicit SuggestionService(Memory &memory, SuggestionOptions options)
-      : engine_(memory, options) {}
+    template <ConcurrentAllocator Memory>
+    class SuggestionService {
+    public:
+      inline explicit SuggestionService(Memory& memory, SuggestionOptions options)
+          : engine_(memory, options) {}
 
-  inline bool available() const noexcept {
-    return engine_.available();
+      inline bool available() const noexcept {
+        return engine_.available();
+      }
+
+      inline void process(std::span<const Byte> payload, EncodedReply<Memory>& reply, const RequestContext& context = {}) {
+        std::array<Byte, 1024> scratch;
+        DecodeStorage storage{scratch};
+        const auto request = Codec::decode<SuggestCommand>(payload, storage);
+
+        engine_.suggest(request, context.prompt, reply);
+      }
+
+      inline void idle() noexcept {
+        engine_.idle();
+      }
+
+      inline void stop() noexcept {
+        engine_.stop();
+      }
+
+    private:
+      SuggestionEngine<Memory> engine_;
+    };
+
+    template <ConcurrentAllocator Memory>
+    SuggestionService(Memory& memory, SuggestionOptions options) -> SuggestionService<Memory>;
+
   }
-
-  inline void process(std::span<const Byte> payload, EncodedReply<Memory> &reply, const RequestContext &context = {}) {
-    std::array<Byte, 1024> scratch;
-    DecodeStorage storage{scratch};
-    const auto request = Codec::decode<SuggestCommand>(payload, storage);
-
-    engine_.suggest(request, context.prompt, reply);
-  }
-
-  inline void idle() noexcept {
-    engine_.idle();
-  }
-
-  inline void stop() noexcept {
-    engine_.stop();
-  }
-
-private:
-  SuggestionEngine<Memory> engine_;
-};
-
-template <ConcurrentAllocator Memory>
-SuggestionService(Memory &memory, SuggestionOptions options) -> SuggestionService<Memory>;
-
-}
 }

@@ -3,17 +3,16 @@
 static_assert(true);
 #endif
 
-
+#include "telar_base/diagnostics/config.hpp"
+#include <cassert>
+#include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <poll.h>
+#include <pthread.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <cerrno>
-#include <cassert>
-#include "telar_base/diagnostics/config.hpp"
-#include <pthread.h>
-#include <poll.h>
 
 import std;
 import telar.base.memory;
@@ -32,13 +31,14 @@ class ControlledHistoryService {
 public:
   struct InternalRequest {
     template <Allocator Memory>
-    explicit InternalRequest(Memory &, std::uint64_t value) : identity(value) {}
+    explicit InternalRequest(Memory&, std::uint64_t value)
+        : identity(value) {}
 
     std::uint64_t identity;
   };
 
   template <Allocator Memory>
-  void process(std::span<const Byte> payload, EncodedReply<Memory> &reply, const RequestContext &context = {}) {
+  void process(std::span<const Byte> payload, EncodedReply<Memory>& reply, const RequestContext& context = {}) {
     std::array<Byte, 256> bytes;
     DecodeStorage storage{bytes};
     const auto identity = payload.front() == static_cast<Byte>(ClientTag::import_history)
@@ -49,14 +49,16 @@ public:
     reply.send(RequestCompleted{.request_id = identity});
   }
 
-  void processInternal(const InternalRequest &event) {
+  void processInternal(const InternalRequest& event) {
     observe(event.identity, nullptr);
   }
 
   bool waitStarted(std::size_t count, std::chrono::milliseconds timeout = std::chrono::seconds{2}) {
     std::unique_lock lock{mutex_};
 
-    return changed_.wait_for(lock, timeout, [&] { return started_.size() >= count; });
+    return changed_.wait_for(lock, timeout, [&] {
+      return started_.size() >= count;
+    });
   }
 
   void allow(std::size_t count) {
@@ -83,14 +85,17 @@ public:
   }
 
 private:
-  void observe(std::uint64_t identity, const std::atomic<bool> *cancelled) {
+  void observe(std::uint64_t identity, const std::atomic<bool>* cancelled) {
     std::unique_lock lock{mutex_};
 
     started_.push_back(identity);
     const auto position = started_.size();
 
     changed_.notify_all();
-    changed_.wait(lock, [&] { return allowed_ >= position; });
+    changed_.wait(lock, [&] {
+      return allowed_ >= position;
+    });
+
     finished_.push_back(identity);
     if (cancelled != nullptr && cancelled->load(std::memory_order_relaxed)) {
       cancelled_.push_back(identity);
@@ -106,12 +111,12 @@ private:
 };
 
 template <typename Worker, typename Message>
-static void expectHistoryRefusal(Worker &worker, const Message &message, std::string_view explanation) {
+static void expectHistoryRefusal(Worker& worker, const Message& message, std::string_view explanation) {
   bool refused = false;
 
   try {
     worker.submit(1, message);
-  } catch (const RequestError &error) {
+  } catch (const RequestError& error) {
     refused = error.code() == FailureCode::resource_limit && error.what() == explanation;
   }
 
@@ -119,7 +124,7 @@ static void expectHistoryRefusal(Worker &worker, const Message &message, std::st
 }
 
 template <typename Worker>
-static void drainHistoryResponses(Worker &worker, std::vector<std::uint64_t> &identities, std::size_t expected) {
+static void drainHistoryResponses(Worker& worker, std::vector<std::uint64_t>& identities, std::size_t expected) {
   while (identities.size() < expected) {
     pollfd ready{.fd = worker.descriptor(), .events = POLLIN, .revents = 0};
 
@@ -133,7 +138,7 @@ static void drainHistoryResponses(Worker &worker, std::vector<std::uint64_t> &id
   }
 }
 
-static void checkHistoryCapacity(SystemAllocator &memory) {
+static void checkHistoryCapacity(SystemAllocator& memory) {
   ControlledHistoryService service;
   RequestWorker worker{memory, service};
 
@@ -175,7 +180,7 @@ static void checkHistoryCapacity(SystemAllocator &memory) {
   check(!worker.pending());
 }
 
-static void checkHistoryBatchCancellation(SystemAllocator &memory) {
+static void checkHistoryBatchCancellation(SystemAllocator& memory) {
   ControlledHistoryService service;
   RequestWorker worker{memory, service};
 
@@ -201,7 +206,7 @@ static void checkHistoryBatchCancellation(SystemAllocator &memory) {
   check(service.cancelled(2));
 }
 
-static void checkHistoryShutdown(SystemAllocator &memory) {
+static void checkHistoryShutdown(SystemAllocator& memory) {
   ControlledHistoryService service;
   auto worker = makeOwned<RequestWorker<SystemAllocator, ControlledHistoryService>>(memory, memory, service);
 
@@ -218,7 +223,9 @@ static void checkHistoryShutdown(SystemAllocator &memory) {
     worker->submit(1, ImportHistory{.request_id = identity, .source = "fixture", .entries = history_entries});
   }
 
-  auto shutdown = std::async(std::launch::async, [owned = std::move(worker)]() mutable { owned.reset(); });
+  auto shutdown = std::async(std::launch::async, [owned = std::move(worker)]() mutable {
+    owned.reset();
+  });
 
   check(shutdown.wait_for(std::chrono::seconds{2}) == std::future_status::ready);
   shutdown.get();

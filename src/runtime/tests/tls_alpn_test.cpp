@@ -3,19 +3,18 @@
 static_assert(true);
 #endif
 
-
+#include <arpa/inet.h>
+#include <cerrno>
+#include <csignal>
+#include <cstddef>
+#include <cstdint>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <openssl/err.h>
 #include <openssl/pem.h>
 #include <openssl/ssl.h>
 #include <openssl/x509v3.h>
-#include <cerrno>
-#include <csignal>
 #include <sys/socket.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <arpa/inet.h>
-#include <cstddef>
-#include <cstdint>
 
 import std;
 import telar.base.memory;
@@ -50,11 +49,11 @@ static std::vector<std::uint8_t> clientHello(std::span<const std::uint8_t> proto
 
   check(result != 1 && SSL_get_error(client.get(), result) == SSL_ERROR_WANT_READ);
 
-  char *bytes = nullptr;
+  char* bytes = nullptr;
   const auto length = BIO_get_mem_data(SSL_get_wbio(client.get()), &bytes);
 
   check(length > 5);
-  return {reinterpret_cast<std::uint8_t *>(bytes), reinterpret_cast<std::uint8_t *>(bytes) + length};
+  return {reinterpret_cast<std::uint8_t*>(bytes), reinterpret_cast<std::uint8_t*>(bytes) + length};
 }
 
 static void checkOffer(std::span<const std::uint8_t> names, std::span<const std::uint8_t> expected) {

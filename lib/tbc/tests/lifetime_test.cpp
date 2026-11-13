@@ -12,10 +12,10 @@ namespace {
 
   static_assert(__cplusplus > 202002L);
   static_assert(std::is_trivially_copyable_v<borrow_type>);
-  static_assert(sizeof(borrow_type) == sizeof(int *));
+  static_assert(sizeof(borrow_type) == sizeof(int*));
   static_assert(!std::is_default_constructible_v<borrow_type>);
-  static_assert(!std::is_constructible_v<borrow_type, int &&>);
-  static_assert(!std::is_constructible_v<tbc::borrow<const int, scope>, int &&>);
+  static_assert(!std::is_constructible_v<borrow_type, int&&>);
+  static_assert(!std::is_constructible_v<tbc::borrow<const int, scope>, int&&>);
   static_assert(!std::is_constructible_v<borrow_type, tbc::borrow<int, other_scope>>);
   static_assert(std::is_same_v<borrow_type::lifetime_type, scope>);
 
@@ -31,14 +31,14 @@ namespace {
   TEST(lifetime, canBorrowAConstObject) {
     const int value = 7;
     const tbc::borrow<const int, scope> borrowed(value);
-    static_assert(std::is_same_v<decltype(borrowed.get()), const int &>);
+    static_assert(std::is_same_v<decltype(borrowed.get()), const int&>);
 
     EXPECT_EQ(borrowed.get(), 7);
   }
 
   TEST(lifetime, doesNotInvokeAnOverloadedAddressOperator) {
     struct value_type {
-      value_type *operator&() {
+      value_type* operator&() {
         return nullptr;
       }
     } value;

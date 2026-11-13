@@ -65,11 +65,11 @@ export namespace telar::gui::prompt {
     explicit Line(Keymap keymap = Keymap::emacs)
         : editor_(keymap) {}
 
-    Editor &editor() noexcept {
+    Editor& editor() noexcept {
       return editor_;
     }
 
-    [[nodiscard]] const Editor &editor() const noexcept {
+    [[nodiscard]] const Editor& editor() const noexcept {
       return editor_;
     }
 
@@ -96,7 +96,7 @@ export namespace telar::gui::prompt {
       return secret_keys_;
     }
 
-    [[nodiscard]] const std::vector<std::string> &recent() const noexcept {
+    [[nodiscard]] const std::vector<std::string>& recent() const noexcept {
       return recent_;
     }
 
@@ -112,7 +112,7 @@ export namespace telar::gui::prompt {
     // The rest of a command this one starts, from what this line sent (newest first) and then
     // `history`, newest first. Only while typing at the end of a non-empty line.
     [[nodiscard]] std::string_view suggestion(std::span<const std::string> history) const noexcept {
-      const auto &text = editor_.text();
+      const auto& text = editor_.text();
 
       if (textIsSmallAndInVimMode(text)) {
         return {};
@@ -120,13 +120,13 @@ export namespace telar::gui::prompt {
 
       const auto view = text.view();
 
-      for (const auto &entry : std::views::reverse(recent_)) {
+      for (const auto& entry : std::views::reverse(recent_)) {
         if (isCommandExtendedBy(entry, view)) {
           return std::string_view{entry}.substr(view.size());
         }
       }
 
-      for (const auto &command : history) {
+      for (const auto& command : history) {
         if (isCommandExtendedBy(command, view)) {
           return std::string_view{command}.substr(view.size());
         }
@@ -136,7 +136,7 @@ export namespace telar::gui::prompt {
     }
 
     template <typename Incomplete>
-    Outcome press(Surface surface, const KeyPress &key, Incomplete &&incomplete, std::span<const std::string> history = {}) {
+    Outcome press(Surface surface, const KeyPress& key, Incomplete&& incomplete, std::span<const std::string> history = {}) {
       delivery_.clear();
       const auto rest = suggestion(history);
       // → and Ctrl-E at the end take the whole suggestion, Alt-F its next word, as fish does.
@@ -184,7 +184,7 @@ export namespace telar::gui::prompt {
 
     // A key the user bound to an action; the rest of the line answers it as for any key.
     template <typename Incomplete>
-    Outcome perform(Surface surface, Action action, Incomplete &&incomplete, std::span<const std::string> history = {}) {
+    Outcome perform(Surface surface, Action action, Incomplete&& incomplete, std::span<const std::string> history = {}) {
       delivery_.clear();
       closeMenu();
       if (action == Action::accept_suggestion) {
@@ -211,7 +211,7 @@ export namespace telar::gui::prompt {
       editor_.text().replace(begin, end, text);
     }
 
-    const std::optional<Menu> &menu() const noexcept {
+    const std::optional<Menu>& menu() const noexcept {
       return menu_;
     }
 
@@ -240,8 +240,8 @@ export namespace telar::gui::prompt {
       // Answers to an older word join, narrowed to the word as it is now.
       const auto word = typedWord();
 
-      for (const auto &path : paths) {
-        if (menu_->all.size() < Menu::capacity && std::ranges::none_of(menu_->all, [&](const Choice &choice) {
+      for (const auto& path : paths) {
+        if (menu_->all.size() < Menu::capacity && std::ranges::none_of(menu_->all, [&](const Choice& choice) {
               return choice.text == path.text;
             })) {
           menu_->all.push_back(path);
@@ -307,7 +307,7 @@ export namespace telar::gui::prompt {
     }
 
   private:
-    [[nodiscard]] bool textIsSmallAndInVimMode(const Text &text) const {
+    [[nodiscard]] bool textIsSmallAndInVimMode(const Text& text) const {
       return text.size() < 2 || text.cursor() != text.size() || menu_ || (editor_.keymap() == Keymap::vim && editor_.mode() != Mode::insert);
     }
 
@@ -316,7 +316,7 @@ export namespace telar::gui::prompt {
     }
 
     template <typename Incomplete>
-    Outcome handle(Request request, Surface surface, Incomplete &&incomplete) {
+    Outcome handle(Request request, Surface surface, Incomplete&& incomplete) {
       switch (request) {
       case Request::none:
         history_index_.reset();
@@ -379,8 +379,8 @@ export namespace telar::gui::prompt {
     }
 
     void accept() {
-      const auto &menu = *menu_;
-      const auto &choice = menu.choices[menu.selected];
+      const auto& menu = *menu_;
+      const auto& choice = menu.choices[menu.selected];
       auto word = quoteWord(choice.text, menu.dialect);
 
       if (!choice.directory) {
@@ -397,8 +397,8 @@ export namespace telar::gui::prompt {
 
     // While the menu is open, Tab and the arrows move through it, Enter takes the choice and
     // Escape closes it; any other key closes it and edits as usual.
-    std::optional<Outcome> menuKey(const KeyPress &key, bool &refining) {
-      auto &menu = *menu_;
+    std::optional<Outcome> menuKey(const KeyPress& key, bool& refining) {
+      auto& menu = *menu_;
       const auto count = menu.choices.size();
       const bool forward = (key.key == Key::tab && !key.modifiers.shift) || key.key == Key::down || (key.key == Key::character && key.modifiers.control && key.character == 'n');
       const bool backward = key.key == Key::backtab || (key.key == Key::tab && key.modifiers.shift) || key.key == Key::up || (key.key == Key::character && key.modifiers.control && key.character == 'p');
@@ -444,8 +444,8 @@ export namespace telar::gui::prompt {
     // After a key typed or erased in the word: the choices that still start with it. Erasing
     // past where they were offered asks for them again; leaving the word closes the menu.
     Outcome refine(Outcome outcome) {
-      auto &menu = *menu_;
-      const auto &text = editor_.text();
+      auto& menu = *menu_;
+      const auto& text = editor_.text();
       const auto cursor = text.cursor();
       if (cursor < menu.begin || text.view().substr(menu.begin, cursor - menu.begin).find_first_of(" \t\n") != std::string_view::npos) {
         closeMenu();
@@ -463,7 +463,7 @@ export namespace telar::gui::prompt {
       const auto word = typedWord();
 
       menu.choices.clear();
-      for (const auto &choice : menu.all) {
+      for (const auto& choice : menu.all) {
         if (choice.text.starts_with(word)) {
           menu.choices.push_back(choice);
         }

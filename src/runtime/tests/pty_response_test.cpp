@@ -3,18 +3,17 @@
 static_assert(true);
 #endif
 
-
+#include "cell_layout.hpp"
+#include "telar_base/diagnostics/config.hpp"
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include "telar_base/diagnostics/config.hpp"
-#include <cstring>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fcntl.h>
-#include <sys/mman.h>
-#include "cell_layout.hpp"
-#include <cassert>
 #include <ghostty/vt.h>
+#include <sys/mman.h>
 
 import std;
 import telar.base.memory;
@@ -32,7 +31,7 @@ using namespace telar;
 using namespace telar::runtime;
 
 static std::span<const Byte> responseBytes(std::string_view text) {
-  return {reinterpret_cast<const Byte *>(text.data()), text.size()};
+  return {reinterpret_cast<const Byte*>(text.data()), text.size()};
 }
 
 static void testSharedTerminalResponses() {
@@ -65,7 +64,7 @@ static void testSharedTerminalResponses() {
 
   try {
     media.reply(responseBytes(std::string(PtyResponseQueue::message_byte_capacity + 1, 'x')));
-  } catch (const std::length_error &) {
+  } catch (const std::length_error&) {
     rejected = true;
   }
 

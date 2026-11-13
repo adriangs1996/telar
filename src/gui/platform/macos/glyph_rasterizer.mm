@@ -1,14 +1,14 @@
-#include "tbc/view.hpp"
 #include "glyph_rasterizer.h"
-#include "font_smoothing.h"
 #include "cf_reference.hpp"
+#include "font_smoothing.h"
+#include "tbc/view.hpp"
 #import <CoreGraphics/CoreGraphics.h>
 #import <CoreText/CoreText.h>
 #include <math.h>
-#include <stdbool.h>
-#include <stdlib.h>
 #include <memory>
 #include <new>
+#include <stdbool.h>
+#include <stdlib.h>
 
 using telar::gui::platform::NativeReference;
 
@@ -30,7 +30,7 @@ struct telar_glyph_rasterizer {
   bool thicken = false;
 };
 
-static CTFontRef font_from_data(const telar_glyph_rasterizer_options *options) {
+static CTFontRef font_from_data(const telar_glyph_rasterizer_options* options) {
   const NativeReference data{CFDataCreateWithBytesNoCopy(kCFAllocatorDefault, options->font, (CFIndex)options->font_len, kCFAllocatorNull)};
   if (!data) {
     return NULL;
@@ -41,9 +41,7 @@ static CTFontRef font_from_data(const telar_glyph_rasterizer_options *options) {
     return NULL;
   }
 
-  const NativeReference name{options->postscript != NULL
-                                 ? CFStringCreateWithCString(kCFAllocatorDefault, options->postscript, kCFStringEncodingUTF8)
-                                 : nullptr};
+  const NativeReference name{options->postscript != NULL ? CFStringCreateWithCString(kCFAllocatorDefault, options->postscript, kCFStringEncodingUTF8) : nullptr};
   if (options->postscript != NULL && !name) {
     return NULL;
   }
@@ -65,7 +63,7 @@ static CTFontRef font_from_data(const telar_glyph_rasterizer_options *options) {
 
 // The font with the variation applied, or none; the font itself is consumed. The result is a new
 // reference the caller owns, borrowing none of the arguments.
-static tbc::view<CTFontRef, tbc::lt::static_storage> vary(CTFontRef consumed, const telar_font_variation *variation) {
+static tbc::view<CTFontRef, tbc::lt::static_storage> vary(CTFontRef consumed, const telar_font_variation* variation) {
   NativeReference font{consumed};
   if (!font || variation == NULL || variation->count == 0) {
     return tbc::raw(font.release());
@@ -89,19 +87,19 @@ static tbc::view<CTFontRef, tbc::lt::static_storage> vary(CTFontRef consumed, co
     return NULL;
   }
 
-  const void *keys[] = {kCTFontVariationAttribute};
-  const void *values[] = {axes.get()};
+  const void* keys[] = {kCTFontVariationAttribute};
+  const void* values[] = {axes.get()};
   const NativeReference attributes{CFDictionaryCreate(kCFAllocatorDefault, keys, values, 1, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks)};
   const NativeReference descriptor{attributes ? CTFontDescriptorCreateWithAttributes(attributes.get()) : nullptr};
 
   return descriptor ? tbc::raw(CTFontCreateCopyWithAttributes(font.get(), CTFontGetSize(font.get()), NULL, descriptor.get())) : NULL;
 }
 
-void telarGlyphRasterizerDestroy(telar_glyph_rasterizer *self) {
+void telarGlyphRasterizerDestroy(telar_glyph_rasterizer* self) {
   delete self;
 }
 
-telar_glyph_rasterizer *telarGlyphRasterizerCreate(const telar_glyph_rasterizer_options *options) {
+telar_glyph_rasterizer* telarGlyphRasterizerCreate(const telar_glyph_rasterizer_options* options) {
   if (options->font_len == 0 || options->font_len > telar_font_max_bytes ||
       options->side < 2 || options->side > telar_glyph_atlas_max_side || options->strength > UINT8_MAX) {
     return NULL;
@@ -128,7 +126,7 @@ telar_glyph_rasterizer *telarGlyphRasterizerCreate(const telar_glyph_rasterizer_
   return self.release();
 }
 
-int telarGlyphRasterizerSelect(telar_glyph_rasterizer *self, uint32_t pixel_height) {
+int telarGlyphRasterizerSelect(telar_glyph_rasterizer* self, uint32_t pixel_height) {
   if (pixel_height == 0 || pixel_height > UINT16_MAX) {
     return -1;
   }
@@ -150,7 +148,7 @@ int telarGlyphRasterizerSelect(telar_glyph_rasterizer *self, uint32_t pixel_heig
   return 0;
 }
 
-int telarGlyphRasterizerMeasure(telar_glyph_rasterizer *self, telar_glyph_raster *glyph) {
+int telarGlyphRasterizerMeasure(telar_glyph_rasterizer* self, telar_glyph_raster* glyph) {
   if (!self->regular || glyph->index > UINT16_MAX || glyph->style > maximum_glyph_style) {
     return -1;
   }
@@ -182,7 +180,7 @@ int telarGlyphRasterizerMeasure(telar_glyph_rasterizer *self, telar_glyph_raster
   return 0;
 }
 
-void telarGlyphRasterizerDraw(telar_glyph_rasterizer *self, const telar_glyph_raster *glyph) {
+void telarGlyphRasterizerDraw(telar_glyph_rasterizer* self, const telar_glyph_raster* glyph) {
   if (glyph->x > self->side || glyph->y > self->side ||
       glyph->width > self->side - glyph->x || glyph->height > self->side - glyph->y ||
       glyph->width == 0 || glyph->height == 0) {

@@ -3,19 +3,18 @@
 static_assert(true);
 #endif
 
-
 #include <cassert>
-#include <cstdint>
-#include <cstring>
-#include <cstddef>
 #include <cerrno>
+#include <cstddef>
+#include <cstdint>
 #include <cstdlib>
-#include <sys/types.h>
+#include <cstring>
+#include <fcntl.h>
 #include <limits.h>
 #include <poll.h>
-#include <sys/wait.h>
-#include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 import std;
@@ -30,7 +29,7 @@ import telar.runtime.worktrees.git_probe;
 using namespace telar;
 using namespace telar::runtime;
 
-static void runGit(SystemAllocator &memory, const std::string &root, std::initializer_list<std::string_view> arguments) {
+static void runGit(SystemAllocator& memory, const std::string& root, std::initializer_list<std::string_view> arguments) {
   std::array<std::string_view, 32> complete;
   std::size_t count = 0;
 
@@ -50,7 +49,7 @@ static void runGit(SystemAllocator &memory, const std::string &root, std::initia
 
 // A workspace counts untracked files as uncommitted work, as git status --porcelain lists them,
 // and ignored ones as nothing.
-static void untrackedFiles(SystemAllocator &memory) {
+static void untrackedFiles(SystemAllocator& memory) {
   std::array<char, 64> directory{};
 
   std::strcpy(directory.data(), "/tmp/telar-git-test.XXXXXX");

@@ -26,9 +26,9 @@ namespace {
   }
 
   TEST(public_signature, supportsNativeReferences) {
-    static_assert(std::is_same_v<tbc::view<int &, tbc::lt::a>, int &>);
+    static_assert(std::is_same_v<tbc::view<int&, tbc::lt::a>, int&>);
     int value = 1;
-    tbc::view<int &> reference = value;
+    tbc::view<int&> reference = value;
 
     reference = 2;
     EXPECT_EQ(value, 2);

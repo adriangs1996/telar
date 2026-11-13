@@ -3,11 +3,10 @@
 static_assert(true);
 #endif
 
-
-#include <cstring>
+#include <brotli/decode.h>
 #include <cstddef>
 #include <cstdint>
-#include <brotli/decode.h>
+#include <cstring>
 #include <zlib.h>
 #include <zstd.h>
 
@@ -20,12 +19,12 @@ using namespace telar;
 using namespace telar::runtime;
 
 struct Input {
-  const std::uint8_t *bytes;
+  const std::uint8_t* bytes;
   std::size_t length;
-  const char *encoding;
+  const char* encoding;
   std::size_t encoding_length;
   std::size_t limit;
-  std::uint8_t *output;
+  std::uint8_t* output;
 };
 
 struct Result {
@@ -36,7 +35,7 @@ struct Result {
   std::uint8_t error;
 };
 
-extern "C" void decode(const Input *input, Result *result) {
+extern "C" void decode(const Input* input, Result* result) {
   *result = {};
   SystemAllocator memory;
   CaptureContentDecoder decoder{memory};
@@ -52,7 +51,7 @@ extern "C" void decode(const Input *input, Result *result) {
   }
 }
 
-extern "C" std::uint64_t batch(const Input *input, std::size_t iterations) {
+extern "C" std::uint64_t batch(const Input* input, std::size_t iterations) {
   std::uint64_t checksum = 0;
   for (std::size_t iteration = 0; iteration < iterations; ++iteration) {
     Result result;

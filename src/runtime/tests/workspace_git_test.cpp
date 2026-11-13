@@ -3,28 +3,27 @@
 static_assert(true);
 #endif
 
-
-#include <cerrno>
-#include <cstdint>
-#include <pthread.h>
-#include <cassert>
-#include <cstring>
-#include <cstddef>
-#include <sys/types.h>
-#include <limits.h>
-#include <poll.h>
-#include <sys/wait.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <unistd.h>
+#include "cell_layout.hpp"
 #include "telar_base/diagnostics/config.hpp"
+#include <cassert>
+#include <cerrno>
+#include <csignal>
+#include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
-#include <sys/mman.h>
-#include "cell_layout.hpp"
-#include <csignal>
-#include <sys/uio.h>
+#include <cstring>
+#include <fcntl.h>
 #include <ghostty/vt.h>
+#include <limits.h>
+#include <poll.h>
+#include <pthread.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/uio.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 import std;
 import telar.base.diagnostics;
@@ -107,11 +106,14 @@ public:
   using Request = WorkspaceGitRequest;
   using Result = WorkspaceGitResult;
 
-  Result observe(const Request &request) noexcept {
+  Result observe(const Request& request) noexcept {
     std::unique_lock lock{mutex};
 
     started = request.identity;
-    ready.wait(lock, [&] { return released || stopped; });
+    ready.wait(lock, [&] {
+      return released || stopped;
+    });
+
     auto result = next;
 
     result.identity = request.identity;
@@ -140,9 +142,9 @@ public:
   Result next;
 };
 
-using GitService = WorkspaceGitService<SystemAllocator, ControlledGitProbe &>;
+using GitService = WorkspaceGitService<SystemAllocator, ControlledGitProbe&>;
 
-static void collect(RuntimeModel<SystemAllocator> &model, GitService &service, GitService::Clock::time_point now) {
+static void collect(RuntimeModel<SystemAllocator>& model, GitService& service, GitService::Clock::time_point now) {
   pollfd completion{.fd = service.descriptor(), .events = POLLIN, .revents = 0};
 
   check(::poll(&completion, 1, 1000) == 1);
@@ -167,7 +169,7 @@ static void testObservationLifecycle() {
   GitService service{limits, probe};
   auto first = makeOwned<Workspace<SystemAllocator>>(memory, memory, 7, "/first", "first");
   auto second = makeOwned<Workspace<SystemAllocator>>(memory, memory, 9, "/second", "second");
-  auto &workspace = *first;
+  auto& workspace = *first;
 
   model.workspaces.insert(7, std::move(first));
   model.workspaces.insert(9, std::move(second));

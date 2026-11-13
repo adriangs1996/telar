@@ -3,9 +3,8 @@
 static_assert(true);
 #endif
 
-
-#include <cstring>
 #include <cstdio>
+#include <cstring>
 #include <unistd.h>
 
 import std;
@@ -17,15 +16,15 @@ import telar.config;
 using namespace telar;
 using namespace telar::runtime;
 
-static void require(bool condition, const char *message) {
+static void require(bool condition, const char* message) {
   if (!condition) {
     throw std::runtime_error{message};
   }
 }
 
-static void runProvider(int count, char **arguments) {
-  const auto *directory = std::getenv("RESUME_FIXTURE_OUTPUT");
-  const auto *pane = std::getenv("TELAR_PANE_ID");
+static void runProvider(int count, char** arguments) {
+  const auto* directory = std::getenv("RESUME_FIXTURE_OUTPUT");
+  const auto* pane = std::getenv("TELAR_PANE_ID");
 
   require(directory != nullptr && pane != nullptr, "Missing resume fixture environment");
   const auto path = std::filesystem::path{directory} / pane;
@@ -46,7 +45,7 @@ static void runProvider(int count, char **arguments) {
   }
 }
 
-static void waitText(ProtocolPeer &peer, std::uint64_t pane, std::string_view marker) {
+static void waitText(ProtocolPeer& peer, std::uint64_t pane, std::string_view marker) {
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
 
   do {
@@ -61,7 +60,7 @@ static void waitText(ProtocolPeer &peer, std::uint64_t pane, std::string_view ma
   throw std::runtime_error{"Restored pane did not produce its marker"};
 }
 
-static std::size_t waitPanes(ProtocolPeer &peer, const char *path) {
+static std::size_t waitPanes(ProtocolPeer& peer, const char* path) {
   std::ifstream input{path};
 
   require(input.good(), "Cannot read expected restored panes");
@@ -82,7 +81,7 @@ static std::size_t waitPanes(ProtocolPeer &peer, const char *path) {
   return providers;
 }
 
-static void snapshot(ProtocolPeer &peer, std::size_t providers, const char *path) {
+static void snapshot(ProtocolPeer& peer, std::size_t providers, const char* path) {
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
 
   do {
@@ -90,7 +89,7 @@ static void snapshot(ProtocolPeer &peer, std::size_t providers, const char *path
     if (snapshot.entries.size() == providers) {
       std::vector<AgentSnapshotEntry> entries{snapshot.entries.begin(), snapshot.entries.end()};
 
-      for (auto &entry : entries) {
+      for (auto& entry : entries) {
         entry.pane_generation = 1;
         entry.process_id = 1;
         entry.session_id = {};
@@ -116,7 +115,7 @@ static void snapshot(ProtocolPeer &peer, std::size_t providers, const char *path
   throw std::runtime_error{"Restored providers were not identified"};
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   try {
     const auto name = std::filesystem::path{argv[0]}.filename().string();
     if (providerNamed(name == "cursor-agent" ? "cursor" : name) != AgentProvider::unknown) {
@@ -133,7 +132,7 @@ int main(int argc, char **argv) {
     snapshot(peer, providers, argv[3]);
     peer.exchange<RuntimeStopping>(RuntimeStop{});
     return 0;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     std::fprintf(stderr, "resume-probe: %s\n", error.what());
     return 1;
   }
