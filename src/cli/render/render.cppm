@@ -40,33 +40,39 @@ export namespace telar::runtime::cli::render_command {
     std::optional<std::uint16_t> width;
     bool pager = false;
 
-    static RenderOptions parse(std::span<char *const> words);
+    static RenderOptions parse(std::span<char* const> words);
   };
 
   template <Allocator Memory>
-  int run(Memory &memory, const RenderOptions &options);
+  int run(Memory& memory, const RenderOptions& options);
 
 }
 
 namespace telar::runtime::cli::render_command {
 
-  inline RenderOptions RenderOptions::parse(std::span<char *const> words) {
+  inline RenderOptions RenderOptions::parse(std::span<char* const> words) {
     if (words.empty()) {
       throw std::invalid_argument{"MissingRenderKind"};
     }
+
     RenderOptions self;
+
     if (std::string_view{words.front()} != "markdown") {
       throw std::invalid_argument{"UnknownRenderKind"};
     }
+
     bool path_given = false;
+
     for (std::size_t index = 1; index < words.size(); ++index) {
       const std::string_view word = words[index];
       const auto value = [&](std::string_view missing) -> std::string_view {
         if (index + 1 >= words.size()) {
           throw std::invalid_argument{std::string{missing}};
         }
+
         return words[++index];
       };
+
       if (word == "--format") {
         const auto format = value("MissingRenderFormat");
         if (format == "auto") {
@@ -86,6 +92,7 @@ namespace telar::runtime::cli::render_command {
         if (width < render::terminal::min_width) {
           throw std::invalid_argument{"InvalidRenderWidth"};
         }
+
         self.width = width;
       } else if ((word.starts_with('-') && word != "-") || path_given) {
         throw std::invalid_argument{"UnknownRenderOption"};
@@ -94,6 +101,7 @@ namespace telar::runtime::cli::render_command {
         path_given = true;
       }
     }
+
     return self;
   }
 
@@ -104,21 +112,26 @@ namespace telar::runtime::cli::render_command {
         if (errno == EINTR) {
           continue;
         }
+
         return false;
       }
+
       bytes.remove_prefix(static_cast<std::size_t>(written));
     }
+
     return true;
   }
 
   // Reads all of descriptor, up to one byte past the limit so an oversized
   // source is detected without reading the rest of it.
   template <Allocator Memory>
-  bool readSource(int descriptor, String<Memory> &source) {
+  bool readSource(int descriptor, String<Memory>& source) {
     constexpr std::size_t chunk = 64 * 1024;
     const auto limit = render::markdown::max_source_bytes + 1;
+
     while (source.size() < limit) {
       const auto at = source.size();
+
       source.resize(std::min(at + chunk, limit));
       const auto got = ::read(descriptor, source.data() + at, source.size() - at);
       if (got < 0) {
@@ -126,13 +139,16 @@ namespace telar::runtime::cli::render_command {
         if (errno == EINTR) {
           continue;
         }
+
         return false;
       }
+
       source.resize(at + static_cast<std::size_t>(got));
       if (got == 0) {
         break;
       }
     }
+
     return true;
   }
 
@@ -141,6 +157,7 @@ namespace telar::runtime::cli::render_command {
     if (::ioctl(descriptor, TIOCGWINSZ, &size) == 0 && size.ws_col != 0) {
       return size.ws_col;
     }
+
     return 80;
   }
 
@@ -157,14 +174,15 @@ namespace telar::runtime::cli::render_command {
     explicit Viewer(int descriptor) noexcept
         : descriptor_(descriptor) {}
 
-    Viewer(const Viewer &) = delete;
-    Viewer &operator=(const Viewer &) = delete;
+    Viewer(const Viewer&) = delete;
+    Viewer& operator=(const Viewer&) = delete;
 
     ~Viewer() {
       if (entered_) {
         static_cast<void>(writeAll(descriptor_, "\x1b[?25h\x1b[?1049l"));
         ::tcsetattr(descriptor_, TCSAFLUSH, &saved_);
       }
+
       ::close(descriptor_);
     }
 
@@ -172,11 +190,14 @@ namespace telar::runtime::cli::render_command {
       if (::tcgetattr(descriptor_, &saved_) != 0) {
         return false;
       }
+
       termios raw = saved_;
+
       ::cfmakeraw(&raw);
       if (::tcsetattr(descriptor_, TCSAFLUSH, &raw) != 0) {
         return false;
       }
+
       entered_ = true;
       return writeAll(descriptor_, "\x1b[?1049h\x1b[?25l\x1b[H\x1b[2J");
     }
@@ -186,14 +207,17 @@ namespace telar::runtime::cli::render_command {
     // without SA_RESTART, so a signal interrupts the read.
     void wait() noexcept {
       std::array<char, 64> keys;
+
       while (stop_signal == 0) {
         const auto got = ::read(descriptor_, keys.data(), keys.size());
         if (got < 0 && (errno == EINTR || errno == EAGAIN)) {
           continue;
         }
+
         if (got <= 0) {
           return;
         }
+
         const std::string_view typed{keys.data(), static_cast<std::size_t>(got)};
         // A lone Escape quits; an escape sequence (an arrow key) does not.
         if (typed == "\x1b" || typed.find_first_of("qQ\x03\x04") != std::string_view::npos) {
@@ -217,18 +241,21 @@ namespace telar::runtime::cli::render_command {
   }
 
   inline bool insidePane() noexcept {
-    const char *pane = std::getenv("TELAR_PANE_ID");
+    const char* pane = std::getenv("TELAR_PANE_ID");
+
     return pane != nullptr && *pane != '\0';
   }
 
   template <Allocator Memory>
-  int showPager(Memory &memory, const render::Document<Memory> &document, std::string_view name) {
+  int showPager(Memory& memory, const render::Document<Memory>& document, std::string_view name) {
     const auto descriptor = ::open("/dev/tty", O_RDWR | O_CLOEXEC | O_NOCTTY);
     if (descriptor < 0) {
       report("native rendering needs a controlling terminal; use --format ansi");
       return 1;
     }
+
     String<Memory> output{AllocatorRef<char, Memory>{memory}};
+
     // Clients that cannot show documents still show what is running.
     output.append("\x1b[2mtelar render \xc2\xb7 ");
     for (const char byte : name) {
@@ -236,6 +263,7 @@ namespace telar::runtime::cli::render_command {
         output.push_back(byte);
       }
     }
+
     output.append(" \xc2\xb7 q to quit\x1b[0m");
     if (!render::appendSequence(document, output)) {
       ::close(descriptor);
@@ -245,21 +273,24 @@ namespace telar::runtime::cli::render_command {
 
     Viewer viewer{descriptor};
     struct sigaction action{};
+
     action.sa_handler = onStopSignal;
     sigemptyset(&action.sa_mask);
     for (const int signal : {SIGTERM, SIGHUP, SIGINT, SIGQUIT}) {
       ::sigaction(signal, &action, nullptr);
     }
+
     if (!viewer.enter() || !writeAll(descriptor, output)) {
       report("could not write to the terminal");
       return 1;
     }
+
     viewer.wait();
     return 0;
   }
 
   template <Allocator Memory>
-  int run(Memory &memory, const RenderOptions &options) {
+  int run(Memory& memory, const RenderOptions& options) {
     const bool from_stdin = options.path.empty() || options.path == "-";
     if (from_stdin && ::isatty(STDIN_FILENO) == 1) {
       report("give a FILE or pipe the content to standard input");
@@ -267,17 +298,21 @@ namespace telar::runtime::cli::render_command {
     }
 
     String<Memory> source{AllocatorRef<char, Memory>{memory}};
+
     {
       const auto descriptor = from_stdin ? STDIN_FILENO : ::open(std::string{options.path}.c_str(), O_RDONLY | O_CLOEXEC);
       if (descriptor < 0) {
         std::fprintf(stderr, "telar render: %.*s: %s\n", static_cast<int>(options.path.size()), options.path.data(), std::strerror(errno));
         return 1;
       }
+
       const bool read = readSource(descriptor, source);
       const auto error = errno;
+
       if (!from_stdin) {
         ::close(descriptor);
       }
+
       if (!read) {
         std::fprintf(stderr, "telar render: could not read the source: %s\n", std::strerror(error));
         return 1;
@@ -285,6 +320,7 @@ namespace telar::runtime::cli::render_command {
     }
 
     render::Document<Memory> document{memory};
+
     switch (render::markdown::render(source, document)) {
     case render::markdown::Error::none:
       break;
@@ -312,14 +348,17 @@ namespace telar::runtime::cli::render_command {
       reportDocumentLimit();
       return 1;
     }
+
     render::terminal::render(document, options.width.value_or(terminalWidth(STDOUT_FILENO)), output);
     if (native) {
       render::appendEnd(output);
     }
+
     if (!writeAll(STDOUT_FILENO, output)) {
       std::fprintf(stderr, "telar render: could not write the output: %s\n", std::strerror(errno));
       return 1;
     }
+
     return 0;
   }
 

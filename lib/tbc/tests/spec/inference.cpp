@@ -40,16 +40,16 @@ namespace inferred {
   }
 
   // A copied record holds what its input's region `a` holds, not the input itself.
-  tbc::view<record, tbc::lt::a> copyRecord(const record &input) {
-    const auto &alias = input;
+  tbc::view<record, tbc::lt::a> copyRecord(const record& input) {
+    const auto& alias = input;
     return alias;
   }
 
-  const record &borrowRecord(const record &input) {
+  const record& borrowRecord(const record& input) {
     return input;
   }
 
-  std::string_view fromOwner(const std::string &input) {
+  std::string_view fromOwner(const std::string& input) {
     return input;
   }
 
@@ -106,22 +106,22 @@ namespace inferred {
     return parser.parse(source);
   }
 
-  void write(tbc::view<record &, tbc::lt::a> destination, source_a source) {
-    auto &alias = destination;
+  void write(tbc::view<record&, tbc::lt::a> destination, source_a source) {
+    auto& alias = destination;
     alias = branch(source);
   }
 
   struct constructed_view {
     std::string_view text;
 
-    explicit constructed_view(const std::string &source)
+    explicit constructed_view(const std::string& source)
         : text(source) {}
   };
 
   struct constructed_reference {
-    tbc::view<const std::string &, tbc::lt::a> source;
+    tbc::view<const std::string&, tbc::lt::a> source;
 
-    explicit constructed_reference(tbc::view<const std::string &, tbc::lt::a> input)
+    explicit constructed_reference(tbc::view<const std::string&, tbc::lt::a> input)
         : source(input) {}
 
     source_a read() const {
@@ -130,12 +130,12 @@ namespace inferred {
   };
 
   struct self_reference {
-    const self_reference *get() const {
+    const self_reference* get() const {
       return this;
     }
   };
 
-  void clearOwner(std::string &source) {
+  void clearOwner(std::string& source) {
     source.clear();
   }
 
@@ -270,7 +270,7 @@ std::string_view inferredLocalOwnerEscape() {
 // STATUS: implemented
 // CONTRACT: A reference input can supply the storage borrowed by a native value result.
 // SCENARIO: A view borrows caller-owned string bytes through an inferred helper.
-std::string_view inferredCallerOwner(const std::string &source) {
+std::string_view inferredCallerOwner(const std::string& source) {
   return inferred::fromOwner(source);
 }
 
@@ -283,7 +283,7 @@ std::string_view inferredCallerOwner(const std::string &source) {
 // CONTRACT: A returned reference borrows its descriptor object, not just its text.
 // SCENARIO: A reference to a temporary record is read after the record dies.
 void inferredTemporaryReference() {
-  const auto &reference = inferred::borrowRecord(inferred::record{.text = "abc", .children = {}}); // expected-error [tbc-dangling-borrow]
+  const auto& reference = inferred::borrowRecord(inferred::record{.text = "abc", .children = {}}); // expected-error [tbc-dangling-borrow]
   inferred::observe(reference.text);
 }
 
@@ -297,7 +297,7 @@ void inferredTemporaryReference() {
 // SCENARIO: A copied record can outlive a local record when the text source stays alive.
 inferred::record inferredDescriptorCopy(std::string_view source) {
   const auto local = inferred::leaf(source);
-  const auto &alias = local;
+  const auto& alias = local;
   return inferred::copyRecord(alias);
 }
 
@@ -563,7 +563,7 @@ std::initializer_list<int> inferredInitializerListEscape() {
 // CONTRACT: A range-for initializer list remains valid throughout the loop.
 // SCENARIO: Literal-backed strings are observed through a live initializer-list range.
 void inferredInitializerListRetained() {
-  for (const auto *text : {"a", "b"}) {
+  for (const auto* text : {"a", "b"}) {
     inferred::observe(text);
   }
 }
@@ -577,7 +577,7 @@ void inferredInitializerListRetained() {
 // CONTRACT: Requerying the environment may overwrite a previously returned string.
 // SCENARIO: An inferred getenv borrow is used after another environment query.
 void inferredEnvironmentRequery() {
-  const auto *text = std::getenv("TERM");
+  const auto* text = std::getenv("TERM");
   if (text == nullptr) {
     return;
   }
@@ -594,7 +594,7 @@ void inferredEnvironmentRequery() {
 // CONTRACT: The standard environment query yields borrowed process-managed bytes.
 // SCENARIO: A non-null environment value is read before another environment operation.
 void inferredEnvironmentImmediateRead() {
-  const auto *text = std::getenv("TERM");
+  const auto* text = std::getenv("TERM");
   if (text != nullptr) {
     inferred::observe(text);
   }
@@ -694,7 +694,7 @@ void inferredIndependentCallsGood() {
 // STATUS: implemented
 // CONTRACT: A reachable local-reference return is rejected without an annotation.
 // SCENARIO: One branch returns a local reference instead of the input.
-const int &inferredReachableLocalReturn(const int &input, bool bad) {
+const int& inferredReachableLocalReturn(const int& input, bool bad) {
   if (bad) {
     const int local = 1;
     return local; // expected-error [tbc-dangling-borrow]
@@ -710,7 +710,7 @@ const int &inferredReachableLocalReturn(const int &input, bool bad) {
 // STATUS: implemented
 // CONTRACT: Inference uses reachable CFG paths rather than every syntactic return.
 // SCENARIO: A statically unreachable local return must not contaminate the input dependency.
-const int &inferredUnreachableLocalReturn(const int &input) {
+const int& inferredUnreachableLocalReturn(const int& input) {
   if (false) {
     const int local = 1;
     return local;
@@ -764,7 +764,7 @@ inferred::constructed_view inferredConstructorEscape() {
 // STATUS: implemented
 // CONTRACT: An inferred constructor may retain bytes owned by its caller.
 // SCENARIO: A constructed view borrows an external source rather than a local descriptor.
-inferred::constructed_view inferredConstructorRetained(const std::string &source) {
+inferred::constructed_view inferredConstructorRetained(const std::string& source) {
   return inferred::constructed_view{source};
 }
 
@@ -790,7 +790,7 @@ std::string_view inferredReferenceMemberEscape() {
 // STATUS: implemented
 // CONTRACT: A local descriptor with a reference member does not own the referenced string.
 // SCENARIO: A getter can return caller-owned bytes independently of the local descriptor.
-std::string_view inferredReferenceMemberRetained(const std::string &source) {
+std::string_view inferredReferenceMemberRetained(const std::string& source) {
   const auto holder = inferred::constructed_reference{source};
   return holder.read();
 }
@@ -803,7 +803,7 @@ std::string_view inferredReferenceMemberRetained(const std::string &source) {
 // STATUS: implemented
 // CONTRACT: Returning this borrows the receiver object rather than its borrowed fields.
 // SCENARIO: An inferred self pointer escapes a local receiver that has no borrowed fields.
-const inferred::self_reference *inferredSelfPointerEscape() {
+const inferred::self_reference* inferredSelfPointerEscape() {
   const auto local = inferred::self_reference{};
   return local.get(); // expected-error [tbc-dangling-borrow]
 }
@@ -816,7 +816,7 @@ const inferred::self_reference *inferredSelfPointerEscape() {
 // STATUS: implemented
 // CONTRACT: A self pointer may borrow a caller-owned receiver.
 // SCENARIO: A method's inferred object dependency propagates through a reference input.
-const inferred::self_reference *inferredSelfPointerRetained(const inferred::self_reference &input) {
+const inferred::self_reference* inferredSelfPointerRetained(const inferred::self_reference& input) {
   return input.get();
 }
 
@@ -902,7 +902,7 @@ inferred::record inferredMovedAggregateEscape() {
 // STATUS: implemented
 // CONTRACT: Moving an aggregate preserves the source dependency rather than the local descriptor's address.
 // SCENARIO: A moved result may borrow caller-owned text after the local descriptor dies.
-inferred::record inferredMovedAggregateRetained(const std::string &source) {
+inferred::record inferredMovedAggregateRetained(const std::string& source) {
   auto value = inferred::branch(source);
   return std::move(value);
 }
@@ -1083,8 +1083,8 @@ namespace inferred {
     pinned_buffer()
         : cursor_(storage_.data()) {}
 
-    pinned_buffer(const pinned_buffer &) = delete;
-    pinned_buffer &operator=(const pinned_buffer &) = delete;
+    pinned_buffer(const pinned_buffer&) = delete;
+    pinned_buffer& operator=(const pinned_buffer&) = delete;
 
     [[nodiscard]] char front() const {
       return *cursor_;
@@ -1092,7 +1092,7 @@ namespace inferred {
 
   private:
     std::string storage_{"abc"};
-    tbc::view<const char *, tbc::lt::self> cursor_;
+    tbc::view<const char*, tbc::lt::self> cursor_;
   };
 }
 
@@ -1121,7 +1121,7 @@ namespace inferred {
 
   private:
     std::string storage_{"abc"};
-    const char *cursor_;
+    const char* cursor_;
   };
 }
 
@@ -1141,15 +1141,15 @@ char inferredSelfBorrowRelocatable() {
 namespace inferred {
   class directory_stream {
   public:
-    explicit directory_stream(const char *path) {
+    explicit directory_stream(const char* path) {
       if (path == nullptr) {
         throw std::invalid_argument{"path"};
       }
       stream_ = ::opendir(path);
     }
 
-    directory_stream(const directory_stream &) = delete;
-    directory_stream &operator=(const directory_stream &) = delete;
+    directory_stream(const directory_stream&) = delete;
+    directory_stream& operator=(const directory_stream&) = delete;
 
     ~directory_stream() {
       if (stream_ != nullptr) {
@@ -1157,12 +1157,12 @@ namespace inferred {
       }
     }
 
-    [[nodiscard]] const dirent *next() {
+    [[nodiscard]] const dirent* next() {
       return ::readdir(stream_);
     }
 
   private:
-    DIR *stream_ = nullptr;
+    DIR* stream_ = nullptr;
   };
 }
 
@@ -1208,7 +1208,7 @@ inferred::checked_view inferredConstructorUnwindingEscape() {
 // CONTRACT: A function's address is static storage, not a borrow of the object that keeps it.
 // SCENARIO: A copyable owner keeps a deleter function pointer; accept.
 namespace inferred {
-  void releaseText(char *text) {
+  void releaseText(char* text) {
     std::free(text);
   }
 
@@ -1243,7 +1243,7 @@ namespace inferred {
 
   private:
     int storage_ = 0;
-    int *count_;
+    int* count_;
   };
 }
 
@@ -1262,7 +1262,7 @@ void inferredFunctionAddressObject() {
 // SCENARIO: A view of a binding into a local pair is returned; reject.
 std::string_view inferredBindingEscape() {
   const auto row = std::pair<std::string, int>{"abc", 1};
-  const auto &[text, count] = row;
+  const auto& [text, count] = row;
   static_cast<void>(count);
   return text; // expected-error [tbc-dangling-borrow]
 }
@@ -1275,8 +1275,8 @@ std::string_view inferredBindingEscape() {
 // STATUS: implemented
 // CONTRACT: A structured binding names the part of the object its declaration decomposes.
 // SCENARIO: A view of a binding into the caller's pair is returned; accept.
-std::string_view inferredBindingRetained(const std::pair<std::string, int> &row) {
-  const auto &[text, count] = row;
+std::string_view inferredBindingRetained(const std::pair<std::string, int>& row) {
+  const auto& [text, count] = row;
   static_cast<void>(count);
   return text;
 }
@@ -1293,15 +1293,15 @@ namespace inferred {
   template <typename Memory>
   class allocating_storage {
   public:
-    explicit allocating_storage(Memory &memory) noexcept
+    explicit allocating_storage(Memory& memory) noexcept
         : memory_(&memory) {}
 
-    [[nodiscard]] Memory &memory() const {
+    [[nodiscard]] Memory& memory() const {
       return *memory_;
     }
 
   private:
-    Memory *memory_;
+    Memory* memory_;
   };
 
   template <typename Memory>
@@ -1312,12 +1312,12 @@ namespace inferred {
 
   class named_view : public allocating_storage<const std::string> {
   public:
-    explicit named_view(const std::string &name)
+    explicit named_view(const std::string& name)
         : allocating_storage(name) {}
   };
 }
 
-inferred::allocating_copy<std::string> inferredInheritedConstructorRetained(std::string &memory) {
+inferred::allocating_copy<std::string> inferredInheritedConstructorRetained(std::string& memory) {
   return inferred::allocating_copy<std::string>{memory};
 }
 
@@ -1355,7 +1355,7 @@ inferred::named_view inferredBaseInitializerEscape() {
 // STATUS: implemented
 // CONTRACT: An inheriting constructor and a base initializer write the base's fields as the base constructor does.
 // SCENARIO: A derived constructor passes the caller's string through its base initializer; accept.
-inferred::named_view inferredBaseInitializerRetained(const std::string &name) {
+inferred::named_view inferredBaseInitializerRetained(const std::string& name) {
   return inferred::named_view{name};
 }
 

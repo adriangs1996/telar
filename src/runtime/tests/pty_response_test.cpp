@@ -3,18 +3,17 @@
 static_assert(true);
 #endif
 
-
+#include "cell_layout.hpp"
+#include "telar_base/diagnostics/config.hpp"
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include "telar_base/diagnostics/config.hpp"
-#include <cstring>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fcntl.h>
-#include <sys/mman.h>
-#include "cell_layout.hpp"
-#include <cassert>
 #include <ghostty/vt.h>
+#include <sys/mman.h>
 
 import std;
 import telar.base.memory;
@@ -32,7 +31,7 @@ using namespace telar;
 using namespace telar::runtime;
 
 static std::span<const Byte> responseBytes(std::string_view text) {
-  return {reinterpret_cast<const Byte *>(text.data()), text.size()};
+  return {reinterpret_cast<const Byte*>(text.data()), text.size()};
 }
 
 static void testSharedTerminalResponses() {
@@ -41,6 +40,7 @@ static void testSharedTerminalResponses() {
   const auto queue = std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, decltype(memory)>{memory});
   Terminal terminal{memory, TerminalSize{80, 24, 0, 0}, TerminalPurpose::separate_media, queue};
   MediaTerminal media{memory, TerminalSize{80, 24, 0, 0}, GraphicsLimits{}, queue};
+
   for (std::size_t index = 0; index < PtyResponseQueue::message_capacity; ++index) {
     media.reply(responseBytes("graphics reply"));
   }
@@ -54,17 +54,20 @@ static void testSharedTerminalResponses() {
     check(std::ranges::equal(media.responses(), responseBytes("graphics reply")));
     terminal.consumeResponses(media.responses().size());
   }
+
   check(std::ranges::equal(media.responses(), responseBytes("\x1b[1;1R")));
   terminal.consumeResponses(media.responses().size());
   check(std::ranges::equal(terminal.responses(), responseBytes("\x1b[1;1R")));
   terminal.consumeResponses(terminal.responses().size());
 
   bool rejected = false;
+
   try {
     media.reply(responseBytes(std::string(PtyResponseQueue::message_byte_capacity + 1, 'x')));
-  } catch (const std::length_error &) {
+  } catch (const std::length_error&) {
     rejected = true;
   }
+
   check(rejected && queue->empty() && queue->snapshot().dropped == 0);
   terminal.feed(responseBytes("still usable"));
   terminal.refresh();

@@ -4,6 +4,6 @@
 #include <QKeyEvent>
 
 namespace telar::gui::qt {
-QByteArray terminalKey(const QKeyEvent &event, const telar::InputModes &modes);
-bool controlModifier(Qt::KeyboardModifiers modifiers);
+  QByteArray terminalKey(const QKeyEvent& event, const telar::InputModes& modes);
+  bool controlModifier(Qt::KeyboardModifiers modifiers);
 }

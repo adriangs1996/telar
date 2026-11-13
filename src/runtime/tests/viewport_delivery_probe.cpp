@@ -3,24 +3,23 @@
 static_assert(true);
 #endif
 
-
+#include "cell_layout.hpp"
 #include "telar_base/diagnostics/config.hpp"
-#include <sys/types.h>
-#include <cstdint>
 #include <cassert>
-#include <cstring>
-#include <cstddef>
 #include <cerrno>
+#include <csignal>
+#include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fcntl.h>
-#include <sys/mman.h>
-#include <unistd.h>
-#include "cell_layout.hpp"
 #include <limits.h>
-#include <csignal>
+#include <sys/mman.h>
+#include <sys/types.h>
 #include <sys/uio.h>
 #include <sys/wait.h>
+#include <unistd.h>
 #if (defined(__APPLE__))
 #include <sys/event.h>
 #endif
@@ -36,9 +35,9 @@ static_assert(true);
 #if (defined(__linux__))
 #include <sys/syscall.h>
 #endif
+#include <ghostty/vt.h>
 #include <new>
 #include <sys/stat.h>
-#include <ghostty/vt.h>
 
 import std;
 import telar.base.diagnostics;
@@ -60,7 +59,7 @@ using namespace telar;
 using namespace telar::runtime;
 
 template <typename Sync>
-void requestViewport(Sync &sync) {
+void requestViewport(Sync& sync) {
   if constexpr (requires { sync.requestViewport(); }) {
     sync.requestViewport();
   } else {
@@ -82,7 +81,7 @@ int main() {
   const Launch launch{.cwd = "/tmp", .arguments = arguments};
   workspaces.open(model, panes, clients, first.session().id, OpenPane{.request_id = 1, .size = {82, 21, 0, 0}, .launch = launch});
   const auto opened = first.receive<PaneOpened>();
-  auto &pane = panes.require(model.panes, opened.pane_id);
+  auto& pane = panes.require(model.panes, opened.pane_id);
   panes.attach(model, second.session(), pane.id, {82, 21, 0, 0});
   std::string corpus;
   for (unsigned row = 0; row < 200; ++row) {
@@ -93,24 +92,24 @@ int main() {
   auto now = std::chrono::steady_clock::now();
   std::uint64_t frames = 0;
   std::uint64_t snapshots = 0;
-  const auto select = [&](ClientPeer &peer, std::uint32_t offset) {
-    auto &attachment = *peer.session().attachment(pane.id);
+  const auto select = [&](ClientPeer& peer, std::uint32_t offset) {
+    auto& attachment = *peer.session().attachment(pane.id);
     attachment.viewport = offset;
     requestViewport(attachment.frames);
     screens[&peer == &first ? 0 : 1].setViewport(offset);
   };
-  const auto deliver = [&](ClientPeer &peer, bool acknowledge, bool snapshot) {
+  const auto deliver = [&](ClientPeer& peer, bool acknowledge, bool snapshot) {
     auto timeout = std::chrono::nanoseconds::max();
     AttachmentDelivery delivery{model, peer.session()};
     check(delivery.prepare(model, peer.session(), DeliveryLane::cells, now, timeout));
     const auto frame = peer.receive<PaneFrame>();
-    auto &screen = screens[&peer == &first ? 0 : 1];
+    auto& screen = screens[&peer == &first ? 0 : 1];
     check(screen.apply(frame) == telar::gui::FrameApplication::applied);
     check(screen.scroll().offset == pane.terminal.screen.scroll.offset);
     check(screen.cells().size() == pane.terminal.screen.cells.size());
     for (std::size_t index = 0; index < screen.cells().size(); ++index) {
-      const auto &actual = screen.cells()[index];
-      const auto &expected = pane.terminal.screen.cells[index];
+      const auto& actual = screen.cells()[index];
+      const auto& expected = pane.terminal.screen.cells[index];
       check(actual.length == expected.length && actual.width == expected.width && actual.style == expected.style);
       check(std::equal(actual.text.begin(), actual.text.begin() + actual.length, expected.text.begin()));
     }
@@ -145,7 +144,7 @@ int main() {
   check(!blocked.prepare(model, first.session(), DeliveryLane::cells, now, timeout));
   select(second, 9);
   deliver(second, true, false);
-  auto &sync = first.session().attachment(pane.id)->frames;
+  auto& sync = first.session().attachment(pane.id)->frames;
   check(!sync.acknowledge(pending + 1));
   check(sync.acknowledge(pending));
   deliver(first, true, false);

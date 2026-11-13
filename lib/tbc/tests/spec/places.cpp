@@ -30,7 +30,7 @@ namespace places {
   struct tree {
     std::vector<tree> children;
 
-    tree &add() {
+    tree& add() {
       children.emplace_back();
       return children.back();
     }
@@ -60,11 +60,11 @@ namespace places {
     message response;
   };
 
-  message &half(stream &target, bool child) {
+  message& half(stream& target, bool child) {
     return child ? target.request : target.response;
   }
 
-  void clearResponse(stream &target) {
+  void clearResponse(stream& target) {
     target.response.headers.clear();
   }
 
@@ -78,7 +78,7 @@ namespace places {
     std::string_view metadata;
   };
 
-  void observeHeader(const frame_header &header) {
+  void observeHeader(const frame_header& header) {
     static_cast<void>(header.spans.size() + header.metadata.size());
   }
 
@@ -99,9 +99,9 @@ namespace places {
     scope_value scope;
   };
 
-  void observeQuery(const scoped_query &query) {
+  void observeQuery(const scoped_query& query) {
     observeText(query.text);
-    if (const auto *text = std::get_if<std::string_view>(&query.scope)) {
+    if (const auto* text = std::get_if<std::string_view>(&query.scope)) {
       observeText(*text);
     }
   }
@@ -110,7 +110,7 @@ namespace places {
   struct frame_sync {
     tbc::view<std::string_view, tbc::lt::a> span;
 
-    void prepare(tbc::view<const std::vector<char> &, tbc::lt::a> cells) {
+    void prepare(tbc::view<const std::vector<char>&, tbc::lt::a> cells) {
       span = std::string_view{cells.data(), cells.size()};
     }
 
@@ -123,7 +123,7 @@ namespace places {
     std::vector<int> occupied;
 
     template <typename Visitor>
-    void forEach(Visitor &&visit) const {
+    void forEach(Visitor&& visit) const {
       for (const auto index : occupied) {
         visit(index);
       }
@@ -136,7 +136,9 @@ namespace places {
     std::vector<int> released;
 
     void releaseAll() {
-      indexes.forEach([this](int index) { released.push_back(index); });
+      indexes.forEach([this](int index) {
+        released.push_back(index);
+      });
     }
   };
 }
@@ -147,8 +149,8 @@ namespace places {
 // STATUS: implemented
 // CONTRACT: Mutating an object owned through a container element does not invalidate the container's elements.
 // SCENARIO: Each owned pane is detached while the range loop keeps iterating the vector; accept.
-void placeOwnedObjectMutation(std::vector<std::unique_ptr<places::pane>> &panes) {
-  for (const auto &pane : panes) {
+void placeOwnedObjectMutation(std::vector<std::unique_ptr<places::pane>>& panes) {
+  for (const auto& pane : panes) {
     pane->detach();
   }
 }
@@ -161,8 +163,8 @@ void placeOwnedObjectMutation(std::vector<std::unique_ptr<places::pane>> &panes)
 // STATUS: implemented
 // CONTRACT: Clearing a container of owners destroys the objects they own.
 // SCENARIO: A pointer to an owned pane is read after the vector is cleared.
-void placeOwnedObjectDestroyed(std::vector<std::unique_ptr<places::pane>> &panes) {
-  const auto *raw = panes.front().get();
+void placeOwnedObjectDestroyed(std::vector<std::unique_ptr<places::pane>>& panes) {
+  const auto* raw = panes.front().get();
   panes.clear(); // expected-error [tbc-invalidated-borrow]
   places::observe(raw->cells.front());
 }
@@ -175,8 +177,8 @@ void placeOwnedObjectDestroyed(std::vector<std::unique_ptr<places::pane>> &panes
 // STATUS: implemented
 // CONTRACT: Growing a container of owners moves the owners, not the objects they own.
 // SCENARIO: A pointer to an owned pane is read after another pane is appended; accept.
-void placeOwnedObjectSurvivesGrowth(std::vector<std::unique_ptr<places::pane>> &panes) {
-  const auto *raw = panes.front().get();
+void placeOwnedObjectSurvivesGrowth(std::vector<std::unique_ptr<places::pane>>& panes) {
+  const auto* raw = panes.front().get();
   panes.push_back(std::make_unique<places::pane>());
   places::observe(raw->cells.front());
 }
@@ -189,8 +191,8 @@ void placeOwnedObjectSurvivesGrowth(std::vector<std::unique_ptr<places::pane>> &
 // STATUS: implemented
 // CONTRACT: Growing a container can move its elements, so a pointer to an element slot is invalidated.
 // SCENARIO: A pointer to the owner stored in the vector is read after growth.
-void placeElementSlotGrowth(std::vector<std::unique_ptr<places::pane>> &panes) {
-  const auto *slot = &panes.front();
+void placeElementSlotGrowth(std::vector<std::unique_ptr<places::pane>>& panes) {
+  const auto* slot = &panes.front();
   panes.push_back(std::make_unique<places::pane>()); // expected-error [tbc-invalidated-borrow]
   places::observe((*slot)->cells.front());
 }
@@ -203,8 +205,8 @@ void placeElementSlotGrowth(std::vector<std::unique_ptr<places::pane>> &panes) {
 // STATUS: implemented
 // CONTRACT: Growing a child's own children leaves the child where it is inside its parent.
 // SCENARIO: A child node is extended twice through the same reference; accept.
-void placeNestedChildMutation(places::tree &root) {
-  auto &child = root.add();
+void placeNestedChildMutation(places::tree& root) {
+  auto& child = root.add();
   child.add();
   child.add();
 }
@@ -217,8 +219,8 @@ void placeNestedChildMutation(places::tree &root) {
 // STATUS: implemented
 // CONTRACT: Growing one node's children leaves its siblings, and the iteration over them, in place.
 // SCENARIO: Every child of a node gains a child while the range loop iterates the children; accept.
-void placeSiblingIterationMutation(places::tree &root) {
-  for (auto &child : root.children) {
+void placeSiblingIterationMutation(places::tree& root) {
+  for (auto& child : root.children) {
     child.add();
   }
 }
@@ -231,9 +233,9 @@ void placeSiblingIterationMutation(places::tree &root) {
 // STATUS: implemented
 // CONTRACT: Growing a child's children can move them, so a reference to a grandchild is invalidated.
 // SCENARIO: A grandchild reference is used after another grandchild is added.
-void placeNestedGrandchildGrowth(places::tree &root) {
-  auto &child = root.add();
-  auto &grandchild = child.add();
+void placeNestedGrandchildGrowth(places::tree& root) {
+  auto& child = root.add();
+  auto& grandchild = child.add();
   child.add(); // expected-error [tbc-invalidated-borrow]
   grandchild.add();
 }
@@ -246,7 +248,7 @@ void placeNestedGrandchildGrowth(places::tree &root) {
 // STATUS: implemented
 // CONTRACT: An element that keeps its contents inline, like a short string, moves them when the container grows.
 // SCENARIO: A view of a string element is read after the vector grows.
-void placeInlineElementGrowth(std::vector<std::string> &names) {
+void placeInlineElementGrowth(std::vector<std::string>& names) {
   const std::string_view first = names.front();
   names.emplace_back("next"); // expected-error [tbc-invalidated-borrow]
   places::observeText(first);
@@ -260,7 +262,7 @@ void placeInlineElementGrowth(std::vector<std::string> &names) {
 // STATUS: implemented
 // CONTRACT: An element that owns its contents through an allocation leaves them in place when the container grows.
 // SCENARIO: A view of a uniquely owned string is read after the vector grows; accept.
-void placeDetachedElementGrowth(std::vector<std::unique_ptr<std::string>> &names) {
+void placeDetachedElementGrowth(std::vector<std::unique_ptr<std::string>>& names) {
   const std::string_view first = *names.front();
   names.push_back(std::make_unique<std::string>("next"));
   places::observeText(first);
@@ -274,9 +276,9 @@ void placeDetachedElementGrowth(std::vector<std::unique_ptr<std::string>> &names
 // STATUS: implemented
 // CONTRACT: An object moved into a container's element is destroyed when the container is cleared.
 // SCENARIO: A pointer to the moved object is read after the vector is cleared.
-void placeMovedOwnerCleared(std::vector<std::unique_ptr<places::pane>> &panes) {
+void placeMovedOwnerCleared(std::vector<std::unique_ptr<places::pane>>& panes) {
   auto created = std::make_unique<places::pane>();
-  const auto *raw = created.get();
+  const auto* raw = created.get();
   panes.push_back(std::move(created));
   panes.clear(); // expected-error [tbc-invalidated-borrow]
   places::observe(raw->cells.front());
@@ -290,9 +292,9 @@ void placeMovedOwnerCleared(std::vector<std::unique_ptr<places::pane>> &panes) {
 // STATUS: implemented
 // CONTRACT: An object moved into a container's element survives the container's reallocation.
 // SCENARIO: A pointer to the moved object is read after another element is appended; accept.
-void placeMovedOwnerSurvivesGrowth(std::vector<std::unique_ptr<places::pane>> &panes) {
+void placeMovedOwnerSurvivesGrowth(std::vector<std::unique_ptr<places::pane>>& panes) {
   auto created = std::make_unique<places::pane>();
-  const auto *raw = created.get();
+  const auto* raw = created.get();
   panes.push_back(std::move(created));
   panes.push_back(std::make_unique<places::pane>());
   places::observe(raw->cells.front());
@@ -310,7 +312,9 @@ void placeSiblingFieldMutation() {
   places::launcher client;
   client.keep("shell");
   const std::vector<std::string_view> arguments(client.storage.begin(), client.storage.end());
-  const auto observe = [&] { places::observeText(arguments.front()); };
+  const auto observe = [&] {
+    places::observeText(arguments.front());
+  };
   client.history.emplace_back("echo");
   observe();
 }
@@ -355,8 +359,8 @@ void placeRebuiltViews() {
 // STATUS: implemented
 // CONTRACT: Mutating one field of an object owned through a pointer leaves borrows of its other fields valid.
 // SCENARIO: The request method is read after the response headers of the same stream are cleared; accept.
-void placeOwnedSiblingMutation(std::vector<std::unique_ptr<places::stream>> &streams) {
-  auto *active = streams.front().get();
+void placeOwnedSiblingMutation(std::vector<std::unique_ptr<places::stream>>& streams) {
+  auto* active = streams.front().get();
   const std::string_view method = active->request.method;
   active->response.headers.clear();
   places::observeText(method);
@@ -370,8 +374,8 @@ void placeOwnedSiblingMutation(std::vector<std::unique_ptr<places::stream>> &str
 // STATUS: implemented
 // CONTRACT: Reassigning the field a view borrows invalidates the view.
 // SCENARIO: The request method is read after it is reassigned.
-void placeOwnedFieldMutation(std::vector<std::unique_ptr<places::stream>> &streams) {
-  auto *active = streams.front().get();
+void placeOwnedFieldMutation(std::vector<std::unique_ptr<places::stream>>& streams) {
+  auto* active = streams.front().get();
   const std::string_view method = active->request.method;
   active->request.method.assign("OPTIONS"); // expected-error [tbc-invalidated-borrow]
   places::observeText(method);
@@ -385,8 +389,8 @@ void placeOwnedFieldMutation(std::vector<std::unique_ptr<places::stream>> &strea
 // STATUS: implemented
 // CONTRACT: A borrow last used before a mutation through a returned reference is not affected by it.
 // SCENARIO: The request method is read before the headers of whichever half is selected are cleared; accept.
-void placeReturnedHalfMutation(std::vector<std::unique_ptr<places::stream>> &streams, bool child) {
-  auto *active = streams.front().get();
+void placeReturnedHalfMutation(std::vector<std::unique_ptr<places::stream>>& streams, bool child) {
+  auto* active = streams.front().get();
   const std::string_view method = active->request.method;
   places::observeText(method);
   places::half(*active, child).headers.clear();
@@ -400,8 +404,8 @@ void placeReturnedHalfMutation(std::vector<std::unique_ptr<places::stream>> &str
 // STATUS: implemented
 // CONTRACT: A returned reference designates some part of its argument the declaration does not name, so mutating through it may invalidate any borrow of that argument, as Rust's `&mut` result does.
 // SCENARIO: A request header is read after the headers of whichever half is selected are cleared.
-void placeReturnedHalfHeaders(std::vector<std::unique_ptr<places::stream>> &streams, bool child) {
-  auto *active = streams.front().get();
+void placeReturnedHalfHeaders(std::vector<std::unique_ptr<places::stream>>& streams, bool child) {
+  auto* active = streams.front().get();
   const std::string_view header = active->request.headers.front();
   places::half(*active, child).headers.clear(); // expected-error [tbc-invalidated-borrow]
   places::observeText(header);
@@ -415,8 +419,8 @@ void placeReturnedHalfHeaders(std::vector<std::unique_ptr<places::stream>> &stre
 // STATUS: implemented
 // CONTRACT: A callee known by its declaration borrows its whole argument, as a Rust `&mut` does, so it may mutate any field.
 // SCENARIO: The request method is read after a helper clears only the response headers; reject at the call.
-void placeCalleeSiblingMutation(std::vector<std::unique_ptr<places::stream>> &streams) {
-  auto *active = streams.front().get();
+void placeCalleeSiblingMutation(std::vector<std::unique_ptr<places::stream>>& streams) {
+  auto* active = streams.front().get();
   const std::string_view method = active->request.method;
   places::clearResponse(*active); // expected-error [tbc-invalidated-borrow]
   places::observeText(method);
@@ -430,8 +434,8 @@ void placeCalleeSiblingMutation(std::vector<std::unique_ptr<places::stream>> &st
 // STATUS: implemented
 // CONTRACT: Mutating one field directly leaves borrows of the object's other fields valid.
 // SCENARIO: The request method is read after the response headers are cleared in place; accept.
-void placeDirectSiblingMutation(std::vector<std::unique_ptr<places::stream>> &streams) {
-  auto *active = streams.front().get();
+void placeDirectSiblingMutation(std::vector<std::unique_ptr<places::stream>>& streams) {
+  auto* active = streams.front().get();
   const std::string_view method = active->request.method;
   active->response.headers.clear();
   places::observeText(method);
@@ -445,8 +449,8 @@ void placeDirectSiblingMutation(std::vector<std::unique_ptr<places::stream>> &st
 // STATUS: implemented
 // CONTRACT: A callee that mutates a field of its argument invalidates borrows of that field.
 // SCENARIO: A response header is read after a helper clears the response headers.
-void placeCalleeFieldMutation(std::vector<std::unique_ptr<places::stream>> &streams) {
-  auto *active = streams.front().get();
+void placeCalleeFieldMutation(std::vector<std::unique_ptr<places::stream>>& streams) {
+  auto* active = streams.front().get();
   const std::string_view header = active->response.headers.front();
   places::clearResponse(*active); // expected-error [tbc-invalidated-borrow]
   places::observeText(header);
@@ -460,7 +464,7 @@ void placeCalleeFieldMutation(std::vector<std::unique_ptr<places::stream>> &stre
 // STATUS: implemented
 // CONTRACT: Mutating one field of a container element leaves borrows of the element's other fields valid.
 // SCENARIO: The last tab's title is read after a pane is added to the same tab; accept.
-void placeElementSiblingMutation(std::vector<places::tab> &tabs) {
+void placeElementSiblingMutation(std::vector<places::tab>& tabs) {
   const std::string_view title = tabs.back().title;
   tabs.back().panes.push_back(1);
   places::observeText(title);
@@ -474,7 +478,7 @@ void placeElementSiblingMutation(std::vector<places::tab> &tabs) {
 // STATUS: implemented
 // CONTRACT: Mutating a field of a container element invalidates borrows of that field.
 // SCENARIO: The last tab's title is read after it is reassigned.
-void placeElementFieldMutation(std::vector<places::tab> &tabs) {
+void placeElementFieldMutation(std::vector<places::tab>& tabs) {
   const std::string_view title = tabs.back().title;
   tabs.back().title.assign("renamed"); // expected-error [tbc-invalidated-borrow]
   places::observeText(title);
@@ -488,8 +492,8 @@ void placeElementFieldMutation(std::vector<places::tab> &tabs) {
 // STATUS: implemented
 // CONTRACT: A pointer to a field of a container element is invalidated when the container moves its elements.
 // SCENARIO: A pointer to the last tab's title is read after another tab is appended.
-void placeElementMemberGrowth(std::vector<places::tab> &tabs) {
-  const auto *title = &tabs.back().title;
+void placeElementMemberGrowth(std::vector<places::tab>& tabs) {
+  const auto* title = &tabs.back().title;
   tabs.emplace_back(); // expected-error [tbc-invalidated-borrow]
   places::observeText(*title);
 }
@@ -502,8 +506,8 @@ void placeElementMemberGrowth(std::vector<places::tab> &tabs) {
 // STATUS: implemented
 // CONTRACT: A pointer to a field of an object owned by a container element survives the container's growth.
 // SCENARIO: A pointer to the last owned tab's title is read after another tab is appended; accept.
-void placeOwnedMemberGrowth(std::vector<std::unique_ptr<places::tab>> &tabs) {
-  const auto *title = &tabs.back()->title;
+void placeOwnedMemberGrowth(std::vector<std::unique_ptr<places::tab>>& tabs) {
+  const auto* title = &tabs.back()->title;
   tabs.push_back(std::make_unique<places::tab>());
   places::observeText(*title);
 }
@@ -516,7 +520,7 @@ void placeOwnedMemberGrowth(std::vector<std::unique_ptr<places::tab>> &tabs) {
 // STATUS: implemented
 // CONTRACT: Assigning one field of a local aggregate replaces what that field borrowed.
 // SCENARIO: The spans field is pointed at the new storage after the old storage is cleared; accept.
-void placeFieldOverwrite(std::vector<int> &spans, std::string_view metadata) {
+void placeFieldOverwrite(std::vector<int>& spans, std::string_view metadata) {
   places::frame_header header{.spans = spans, .metadata = metadata};
   spans.clear();
   spans.push_back(1);
@@ -532,7 +536,7 @@ void placeFieldOverwrite(std::vector<int> &spans, std::string_view metadata) {
 // STATUS: implemented
 // CONTRACT: Assigning one field of an aggregate leaves what its other fields borrow.
 // SCENARIO: Only the metadata field is reassigned, so the header still views the cleared spans.
-void placeSiblingOverwrite(std::vector<int> &spans, std::string_view metadata) {
+void placeSiblingOverwrite(std::vector<int>& spans, std::string_view metadata) {
   places::frame_header header{.spans = spans, .metadata = metadata};
   spans.clear(); // expected-error [tbc-invalidated-borrow]
   header.metadata = metadata;
@@ -617,7 +621,7 @@ void placeClearedSibling(std::string_view fallback) {
 // STATUS: implemented
 // CONTRACT: Assigning an object replaces what it borrowed without reading it.
 // SCENARIO: An optional view of an invalidated element is reassigned before it is read; accept.
-void placeReassignedResult(std::vector<std::string> &names) {
+void placeReassignedResult(std::vector<std::string>& names) {
   std::optional<std::string_view> result = names.front();
   names.emplace_back("next");
   result = names.back();
@@ -632,8 +636,8 @@ void placeReassignedResult(std::vector<std::string> &names) {
 // STATUS: implemented
 // CONTRACT: Writing through a pointer needs the object it designates to be live.
 // SCENARIO: A string is assigned through a pointer to an element the vector has moved.
-void placeAssignedThroughDangling(std::vector<std::string> &names) {
-  auto *slot = &names.front();
+void placeAssignedThroughDangling(std::vector<std::string>& names) {
+  auto* slot = &names.front();
   names.emplace_back("next"); // expected-error [tbc-invalidated-borrow]
   *slot = "renamed";
 }
@@ -652,7 +656,9 @@ namespace places {
     std::vector<int> released;
 
     void releaseFirst() {
-      const auto release = [this](int index) { released.push_back(index); };
+      const auto release = [this](int index) {
+        released.push_back(index);
+      };
       const std::string_view name = names.front();
       release(0);
       observeText(name);
@@ -668,8 +674,8 @@ namespace places {
 // STATUS: implemented
 // CONTRACT: A field a lambda mutates through its captured `this` is invalidated in the captured object.
 // SCENARIO: A pointer to a released slot is read after the callback grows the released slots.
-void placeCapturedReceiverField(places::service &service) {
-  const auto *first = &service.released.front();
+void placeCapturedReceiverField(places::service& service) {
+  const auto* first = &service.released.front();
   service.releaseAll(); // expected-error [tbc-invalidated-borrow]
   places::observe(*first);
 }
@@ -716,7 +722,7 @@ void placeReadBeforeRebuild() {
 // STATUS: implemented
 // CONTRACT: Counting, clearing, or growing a sequence container does not read what its elements borrow.
 // SCENARIO: The number of views is read after the strings they view are reallocated; accept.
-void placeCountedStaleViews(std::vector<std::string> &names) {
+void placeCountedStaleViews(std::vector<std::string>& names) {
   std::vector<std::string_view> views{names.front()};
   names.emplace_back("next");
   places::observe(static_cast<int>(views.size()));
@@ -730,7 +736,7 @@ void placeCountedStaleViews(std::vector<std::string> &names) {
 // STATUS: implemented
 // CONTRACT: Reading an element of a container reads what it borrows.
 // SCENARIO: The first view is read after the strings it views are reallocated.
-void placeReadStaleViews(std::vector<std::string> &names) {
+void placeReadStaleViews(std::vector<std::string>& names) {
   std::vector<std::string_view> views{names.front()};
   names.emplace_back("next"); // expected-error [tbc-invalidated-borrow]
   places::observeText(views.front());
@@ -748,7 +754,7 @@ void placeVariantRebound() {
   std::string directory = "/work/project";
   std::string scope_path;
   places::scoped_query criteria{.text = "query", .scope = std::string_view{directory}};
-  if (const auto *path = std::get_if<std::string_view>(&criteria.scope)) {
+  if (const auto* path = std::get_if<std::string_view>(&criteria.scope)) {
     scope_path = *path;
   }
   if (std::holds_alternative<std::string_view>(criteria.scope)) {
@@ -811,7 +817,7 @@ void placeVariantBoundView() {
   std::string directory = "/work/project";
   std::string scope_path;
   places::scoped_query criteria{.text = "query", .scope = std::string_view{directory}};
-  if (const auto *path = std::get_if<std::string_view>(&criteria.scope)) {
+  if (const auto* path = std::get_if<std::string_view>(&criteria.scope)) {
     scope_path = *path;
     criteria.scope = std::string_view{scope_path};
   }
@@ -827,7 +833,7 @@ void placeVariantBoundView() {
 // STATUS: implemented
 // CONTRACT: A branch on any other standard call, such as an operator, is not an alternative test.
 // SCENARIO: The query is read when an optional flag it comes with is set; accept.
-void placeVariantOtherCondition(const places::scoped_query &query, const std::optional<bool> &enabled) {
+void placeVariantOtherCondition(const places::scoped_query& query, const std::optional<bool>& enabled) {
   if (*enabled) {
     places::observeQuery(query);
   }

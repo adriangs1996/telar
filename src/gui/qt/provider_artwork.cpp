@@ -3,18 +3,9 @@
 static_assert(true);
 #endif
 
-
 #include "provider_artwork.hpp"
-#include <algorithm>
-#include <array>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <limits>
-#include <span>
-#include "telar_client/serializers/telar_messages.hpp"
-#include <string_view>
 #include "telar_base/text/utf8.hpp"
+#include "telar_client/serializers/telar_messages.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 #include <QByteArray>
 #include <QFile>
@@ -26,9 +17,15 @@ static_assert(true);
 #include <QtCore/qstring.h>
 #include <QtCore/qstringliteral.h>
 #include <QtCore/qtypes.h>
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <iterator>
-
-
+#include <limits>
+#include <span>
+#include <string_view>
 
 import telar.gui.core.metrics;
 import telar.gui.graphics.pauses;
@@ -36,110 +33,113 @@ import telar.gui.presentation.application_mark;
 
 namespace telar::gui::qt {
 
-namespace {
+  namespace {
 
-constexpr int source_side = 64;
-constexpr std::array providers{AgentProvider::claude, AgentProvider::codex, AgentProvider::pi, AgentProvider::cursor, AgentProvider::opencode};
-constexpr auto source_stride = providers.size() * source_side * RgbaImageView::channels;
-constexpr auto sheet_bytes = source_stride * source_side;
+    constexpr int source_side = 64;
+    constexpr std::array providers{AgentProvider::claude, AgentProvider::codex, AgentProvider::pi, AgentProvider::cursor, AgentProvider::opencode};
+    constexpr auto source_stride = providers.size() * source_side * RgbaImageView::channels;
+    constexpr auto sheet_bytes = source_stride * source_side;
 
-const QByteArray &providerSheet() {
-  static const auto pixels = [] {
-    QFile source{QStringLiteral(":/telar/fonts/provider-symbols-320x64.rgba")};
-    if (!source.open(QIODevice::ReadOnly)) {
-      return QByteArray{};
+    const QByteArray& providerSheet() {
+      static const auto pixels = [] {
+        QFile source{QStringLiteral(":/telar/fonts/provider-symbols-320x64.rgba")};
+        if (!source.open(QIODevice::ReadOnly)) {
+          return QByteArray{};
+        }
+
+        const auto bytes = source.read(static_cast<qint64>(sheet_bytes) + 1);
+
+        return bytes.size() == static_cast<qsizetype>(sheet_bytes) ? bytes : QByteArray{};
+      }();
+
+      return pixels;
     }
 
-    const auto bytes = source.read(static_cast<qint64>(sheet_bytes) + 1);
-    return bytes.size() == static_cast<qsizetype>(sheet_bytes) ? bytes : QByteArray{};
-  }();
+    // The default mark wears Shade, Telar's default theme and brand colors; every other preset has its own.
+    QString telarSource(bool monochrome, int theme) {
+      if (monochrome) {
+        return QStringLiteral(":/telar/fonts/telar-mark-mono.svg");
+      }
 
-  return pixels;
-}
+      struct ThemedMark {
+        ThemeName theme;
+        QStringView source;
+      };
 
-// The default mark wears Shade, Telar's default theme and brand colors; every other preset has its own.
-QString telarSource(bool monochrome, int theme) {
-  if (monochrome) {
-    return QStringLiteral(":/telar/fonts/telar-mark-mono.svg");
+      static constexpr std::array marks{
+          ThemedMark{.theme = ThemeName::shade, .source = u":/telar/fonts/telar-mark-shade.svg"},
+          ThemedMark{.theme = ThemeName::vesper, .source = u":/telar/fonts/telar-mark-vesper.svg"},
+          ThemedMark{.theme = ThemeName::catppuccin, .source = u":/telar/fonts/telar-mark-catppuccin.svg"},
+          ThemedMark{.theme = ThemeName::tokyo_night, .source = u":/telar/fonts/telar-mark-tokyo-night.svg"},
+          ThemedMark{.theme = ThemeName::pierre_dark, .source = u":/telar/fonts/telar-mark-pierre-dark.svg"},
+          ThemedMark{.theme = ThemeName::pierre_dark_soft, .source = u":/telar/fonts/telar-mark-pierre-dark-soft.svg"},
+          ThemedMark{.theme = ThemeName::kanagawa, .source = u":/telar/fonts/telar-mark-kanagawa.svg"},
+          ThemedMark{.theme = ThemeName::kanagawa_dragon, .source = u":/telar/fonts/telar-mark-kanagawa-dragon.svg"},
+          ThemedMark{.theme = ThemeName::terminal, .source = u":/telar/fonts/telar-mark-terminal.svg"},
+          ThemedMark{.theme = ThemeName::cybervenom, .source = u":/telar/fonts/telar-mark-cybervenom.svg"},
+      };
+
+      const auto* const found = std::ranges::find_if(marks, [theme](const ThemedMark& mark) {
+        return static_cast<int>(mark.theme) == theme;
+      });
+
+      return found == marks.end() ? QStringLiteral(":/telar/fonts/telar-mark.svg") : found->source.toString();
+    }
+
   }
 
-  struct ThemedMark {
-    ThemeName theme;
-    QStringView source;
-  };
+  QImage ProviderArtwork::image(AgentProvider provider, int side) {
+    const auto* const found = std::ranges::find(providers, provider);
+    if (found == providers.end() || side < ApplicationMark::minimum_cell || side > ApplicationMark::maximum_cell) {
+      return {};
+    }
 
-  static constexpr std::array marks{
-      ThemedMark{.theme = ThemeName::shade, .source = u":/telar/fonts/telar-mark-shade.svg"},
-      ThemedMark{.theme = ThemeName::vesper, .source = u":/telar/fonts/telar-mark-vesper.svg"},
-      ThemedMark{.theme = ThemeName::catppuccin, .source = u":/telar/fonts/telar-mark-catppuccin.svg"},
-      ThemedMark{.theme = ThemeName::tokyo_night, .source = u":/telar/fonts/telar-mark-tokyo-night.svg"},
-      ThemedMark{.theme = ThemeName::pierre_dark, .source = u":/telar/fonts/telar-mark-pierre-dark.svg"},
-      ThemedMark{.theme = ThemeName::pierre_dark_soft, .source = u":/telar/fonts/telar-mark-pierre-dark-soft.svg"},
-      ThemedMark{.theme = ThemeName::kanagawa, .source = u":/telar/fonts/telar-mark-kanagawa.svg"},
-      ThemedMark{.theme = ThemeName::kanagawa_dragon, .source = u":/telar/fonts/telar-mark-kanagawa-dragon.svg"},
-      ThemedMark{.theme = ThemeName::terminal, .source = u":/telar/fonts/telar-mark-terminal.svg"},
-      ThemedMark{.theme = ThemeName::cybervenom, .source = u":/telar/fonts/telar-mark-cybervenom.svg"},
-  };
-  const auto *const found = std::ranges::find_if(marks, [theme](const ThemedMark &mark) {
-    return static_cast<int>(mark.theme) == theme;
-  });
+    const auto& sheet = providerSheet();
+    if (sheet.isEmpty()) {
+      return {};
+    }
 
-  return found == marks.end() ? QStringLiteral(":/telar/fonts/telar-mark.svg") : found->source.toString();
-}
+    const auto offset = static_cast<std::size_t>(std::distance(providers.begin(), found)) * source_side * RgbaImageView::channels;
+    const RgbaImageView source{.pixels = std::as_bytes(std::span{sheet.constData(), static_cast<std::size_t>(sheet.size())}).subspan(offset), .stride = source_stride, .width = source_side, .height = source_side};
+    QImage output{side, side, QImage::Format_RGBA8888_Premultiplied};
+    if (output.isNull()) {
+      return {};
+    }
 
-}
+    const auto destination = std::span{output.bits(), static_cast<std::size_t>(output.sizeInBytes())};
+    if (!ArtworkResize::square(source, destination, static_cast<std::size_t>(side))) {
+      return {};
+    }
 
-QImage ProviderArtwork::image(AgentProvider provider, int side) {
-  const auto *const found = std::ranges::find(providers, provider);
-  if (found == providers.end() || side < ApplicationMark::minimum_cell || side > ApplicationMark::maximum_cell) {
-    return {};
+    ArtworkResize::premultiply(destination);
+
+    return output;
   }
 
-  const auto &sheet = providerSheet();
-  if (sheet.isEmpty()) {
-    return {};
+  QImage ProviderArtwork::telar(int side, bool monochrome, int theme) {
+    if (side < ApplicationMark::minimum_cell || side > ApplicationMark::maximum_cell) {
+      return {};
+    }
+
+    QSvgRenderer renderer{telarSource(monochrome, theme)};
+    if (!renderer.isValid()) {
+      return {};
+    }
+
+    QImage output{side, side, QImage::Format_ARGB32_Premultiplied};
+    if (output.isNull()) {
+      return {};
+    }
+
+    output.fill(Qt::transparent);
+    {
+      QPainter painter{&output};
+
+      painter.setRenderHint(QPainter::Antialiasing);
+      renderer.render(&painter);
+    }
+
+    return output;
   }
-
-  const auto offset = static_cast<std::size_t>(std::distance(providers.begin(), found)) * source_side * RgbaImageView::channels;
-  const RgbaImageView source{.pixels = std::as_bytes(std::span{sheet.constData(), static_cast<std::size_t>(sheet.size())}).subspan(offset), .stride = source_stride, .width = source_side, .height = source_side};
-  QImage output{side, side, QImage::Format_RGBA8888_Premultiplied};
-  if (output.isNull()) {
-    return {};
-  }
-
-  const auto destination = std::span{output.bits(), static_cast<std::size_t>(output.sizeInBytes())};
-  if (!ArtworkResize::square(source, destination, static_cast<std::size_t>(side))) {
-    return {};
-  }
-
-  ArtworkResize::premultiply(destination);
-
-  return output;
-}
-
-QImage ProviderArtwork::telar(int side, bool monochrome, int theme) {
-  if (side < ApplicationMark::minimum_cell || side > ApplicationMark::maximum_cell) {
-    return {};
-  }
-
-  QSvgRenderer renderer{telarSource(monochrome, theme)};
-  if (!renderer.isValid()) {
-    return {};
-  }
-
-  QImage output{side, side, QImage::Format_ARGB32_Premultiplied};
-  if (output.isNull()) {
-    return {};
-  }
-
-  output.fill(Qt::transparent);
-  {
-    QPainter painter{&output};
-    painter.setRenderHint(QPainter::Antialiasing);
-    renderer.render(&painter);
-  }
-
-  return output;
-}
 
 }

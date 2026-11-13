@@ -1,20 +1,20 @@
 module;
 #include "telar_platform/trace_macro.hpp"
+#include <cstdio>
 #include <cstdlib>
 #include <new>
-#include <cstdio>
 
 #include <cassert>
+#include <cerrno>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <cstddef>
-#include <cerrno>
-#include <sys/types.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <poll.h>
-#include <sys/wait.h>
-#include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 export module telar.runtime.workspaces.git_probe;
@@ -28,55 +28,56 @@ import telar.platform.primitives;
 
 // Interface: workspaces/git_probe.cppm
 export {
-namespace telar::runtime {
+  namespace telar::runtime {
 
-struct WorkspaceGitRequest {
-  std::uint64_t identity = 0;
-  FixedText<4096> path{};
-};
+    struct WorkspaceGitRequest {
+      std::uint64_t identity = 0;
+      FixedText<4096> path{};
+    };
 
-struct WorkspaceGitResult {
-  std::uint64_t identity = 0;
-  FixedText<200> branch{};
-  std::optional<bool> dirty{};
-  bool present = false;
-  bool timed_out = false;
-};
+    struct WorkspaceGitResult {
+      std::uint64_t identity = 0;
+      FixedText<200> branch{};
+      std::optional<bool> dirty{};
+      bool present = false;
+      bool timed_out = false;
+    };
 
-template <typename Probe>
-concept WorkspaceGitObserver = requires(Probe &probe, const WorkspaceGitRequest &request) {
-  { probe.observe(request) } noexcept -> std::same_as<WorkspaceGitResult>;
-  { probe.stop() } noexcept -> std::same_as<void>;
-};
+    template <typename Probe>
+    concept WorkspaceGitObserver = requires(Probe& probe, const WorkspaceGitRequest& request) {
+      { probe.observe(request) } noexcept -> std::same_as<WorkspaceGitResult>;
+      { probe.stop() } noexcept -> std::same_as<void>;
+    };
 
-template <ConcurrentAllocator Memory>
-class WorkspaceGitProbe {
-public:
-  using Request = WorkspaceGitRequest;
-  using Result = WorkspaceGitResult;
-  using Clock = std::chrono::steady_clock;
+    template <ConcurrentAllocator Memory>
+    class WorkspaceGitProbe {
+    public:
+      using Request = WorkspaceGitRequest;
+      using Result = WorkspaceGitResult;
+      using Clock = std::chrono::steady_clock;
 
-  inline explicit WorkspaceGitProbe(Memory &memory) noexcept
-      : reader_(memory) {}
+      inline explicit WorkspaceGitProbe(Memory& memory) noexcept
+          : reader_(memory) {}
 
-  inline Result observe(const Request &request) noexcept {
-    TELAR_TRACE("workspaces.gitProbe");
-    const auto observed = reader_.read(request.path.view());
-    Result result{.identity = request.identity};
-    result.branch.assign(observed.branch.view().substr(0, 200));
-    result.dirty = observed.dirty;
-    result.present = observed.present;
-    result.timed_out = observed.timed_out;
-    return result;
+      inline Result observe(const Request& request) noexcept {
+        TELAR_TRACE("workspaces.gitProbe");
+        const auto observed = reader_.read(request.path.view());
+        Result result{.identity = request.identity};
+
+        result.branch.assign(observed.branch.view().substr(0, 200));
+        result.dirty = observed.dirty;
+        result.present = observed.present;
+        result.timed_out = observed.timed_out;
+        return result;
+      }
+
+      inline void stop() noexcept {
+        reader_.stop();
+      }
+
+    private:
+      GitStatusReader<Memory> reader_;
+    };
+
   }
-
-  inline void stop() noexcept {
-    reader_.stop();
-  }
-
-private:
-  GitStatusReader<Memory> reader_;
-};
-
-}
 }

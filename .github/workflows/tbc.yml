@@ -2,9 +2,9 @@ name: tbc
 
 on:
   push:
-    paths: ["lib/tbc/**", "lib/ebnf/**", "src/**/*.cppm", "tools/cpp", "tools/bootstrap-cpp.py", "tools/toolchain/**", "cmake/**", ".github/actions/cpp-toolchain/**", ".github/workflows/tbc.yml"]
+    paths: [".clang-format", "lib/tbc/**", "lib/ebnf/**", "src/**/*.cppm", "tools/cpp", "tools/bootstrap-cpp.py", "tools/toolchain/**", "cmake/**", ".github/actions/cpp-toolchain/**", ".github/workflows/tbc.yml"]
   pull_request:
-    paths: ["lib/tbc/**", "lib/ebnf/**", "src/**/*.cppm", "tools/cpp", "tools/bootstrap-cpp.py", "tools/toolchain/**", "cmake/**", ".github/actions/cpp-toolchain/**", ".github/workflows/tbc.yml"]
+    paths: [".clang-format", "lib/tbc/**", "lib/ebnf/**", "src/**/*.cppm", "tools/cpp", "tools/bootstrap-cpp.py", "tools/toolchain/**", "cmake/**", ".github/actions/cpp-toolchain/**", ".github/workflows/tbc.yml"]
   workflow_dispatch:
 
 permissions:
@@ -56,6 +56,7 @@ jobs:
         run: |
           cmake --build --preset debug --target format-check
           cmake --build --preset debug --target lint
+          cmake --build --preset debug --target blank-lines
 
       - name: Check EBNF module consumers
         working-directory: lib/ebnf

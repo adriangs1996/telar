@@ -2,18 +2,16 @@
 #ifdef __clangd__
 static_assert(true);
 #endif
-#include <tbc/view.hpp>
 #include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <stdexcept>
 #include <string_view>
-#include <optional>
+#include <tbc/view.hpp>
 #include <utility>
 #include <vector>
-
-
 
 #include <gtest/gtest.h>
 
@@ -24,6 +22,7 @@ static_assert(true);
 #include <string>
 
 import telar.ebnf.parser;
+
 namespace ebnf {
   constexpr auto tokenKindName(token_kind kind) -> std::string_view {
     switch (kind) {
@@ -109,15 +108,15 @@ namespace ebnf {
     return "Unknown";
   }
 
-  inline void PrintTo(token_kind kind, std::ostream *out) {
+  inline void PrintTo(token_kind kind, std::ostream* out) {
     *out << "TokenKind::" << tokenKindName(kind);
   }
 
-  inline void PrintTo(node_kind kind, std::ostream *out) {
+  inline void PrintTo(node_kind kind, std::ostream* out) {
     *out << "NodeKind::" << nodeKindName(kind);
   }
 
-  inline void PrintTo(const token &token, std::ostream *out) {
+  inline void PrintTo(const token& token, std::ostream* out) {
     PrintTo(token.kind, out);
     *out << " with text " << testing::PrintToString(token.text);
   }
@@ -144,7 +143,7 @@ namespace parser_testing {
       return false;
     }
 
-    const auto *term = std::getenv("TERM");
+    const auto* term = std::getenv("TERM");
 
     return term != nullptr && std::string_view(term) != "dumb" && testing::internal::posix::IsATTY(testing::internal::posix::FileNo(stdout)) != 0;
   }
@@ -159,7 +158,7 @@ namespace parser_testing {
     return std::string(prefix) + std::string(text) + "\x1b[0m";
   }
 
-  inline auto tokenIs(const ebnf::token &actual, ebnf::token_kind expected) -> testing::AssertionResult {
+  inline auto tokenIs(const ebnf::token& actual, ebnf::token_kind expected) -> testing::AssertionResult {
     if (actual.kind == expected) {
       return testing::AssertionSuccess();
     }
@@ -170,7 +169,7 @@ namespace parser_testing {
            << diagnosticLine("Actual next token: " + testing::PrintToString(actual), DiagnosticColor::Actual);
   }
 
-  inline auto childCount(ebnf::syntax_tree &tree, ebnf::node_handle parent) -> std::size_t {
+  inline auto childCount(ebnf::syntax_tree& tree, ebnf::node_handle parent) -> std::size_t {
     std::size_t count = 0;
     auto child = tree.getFirstChild(parent);
 
@@ -182,7 +181,7 @@ namespace parser_testing {
     return count;
   }
 
-  inline auto nthChild(ebnf::syntax_tree &tree, ebnf::node_handle parent, std::size_t n) -> ebnf::node_handle {
+  inline auto nthChild(ebnf::syntax_tree& tree, ebnf::node_handle parent, std::size_t n) -> ebnf::node_handle {
     auto child = tree.getFirstChild(parent);
 
     for (std::size_t i = 0; i < n && child != ebnf::none_handle; i++) {
@@ -193,10 +192,10 @@ namespace parser_testing {
   }
 
   template <typename T>
-  inline auto nextTokenIs(ebnf::parser<T> &parser, ebnf::token_kind expected) -> testing::AssertionResult {
+  inline auto nextTokenIs(ebnf::parser<T>& parser, ebnf::token_kind expected) -> testing::AssertionResult {
     try {
       return tokenIs(parser.peek(), expected);
-    } catch (const std::exception &error) {
+    } catch (const std::exception& error) {
       return testing::AssertionFailure()
              << diagnosticLine("Expected next token: " + testing::PrintToString(expected), DiagnosticColor::Expected)
              << '\n'

@@ -24,10 +24,10 @@ namespace spec {
   using writable_bytes_a = tbc::view<std::span<std::byte>, tbc::lt::a>;
 
   // A reader the checker cannot see, so it may read everything the object it is given borrows.
-  void read(const void *object);
+  void read(const void* object);
 
   template <typename type>
-  void observe(tbc::view<const type &> value) {
+  void observe(tbc::view<const type&> value) {
     read(&value);
   }
 
@@ -60,15 +60,15 @@ namespace spec {
   struct arena {};
 
   struct allocation_deleter {
-    tbc::view<arena *, tbc::lt::a> memory;
-    void operator()(int *value) const noexcept;
+    tbc::view<arena*, tbc::lt::a> memory;
+    void operator()(int* value) const noexcept;
   };
 
   using allocated_int = std::unique_ptr<int, allocation_deleter>;
-  tbc::view<allocated_int, tbc::lt::a> makeOwned(tbc::view<arena &, tbc::lt::a> memory);
+  tbc::view<allocated_int, tbc::lt::a> makeOwned(tbc::view<arena&, tbc::lt::a> memory);
 
   struct request_queue {
-    tbc::view<const std::string &> front() const;
+    tbc::view<const std::string&> front() const;
     std::string take();
   };
 
@@ -85,16 +85,16 @@ namespace spec {
   struct history_page {
     explicit history_page(tbc::view<std::span<const std::string_view>> rows);
     tbc::view<std::span<const std::string>> rows() const;
-    void exchangeWith(history_page &other);
+    void exchangeWith(history_page& other);
   };
 
   struct callback_context {};
 
-  void enqueueBound(tbc::view<const callback_context &> context, std::function<void()> callback);
+  void enqueueBound(tbc::view<const callback_context&> context, std::function<void()> callback);
   void invokeNow(std::function<void()> callback);
   void enqueue(std::function<void()> callback);
   void initialize(writable_bytes output);
-  tbc::view<const int &, tbc::lt::a> checkedAt(tbc::view<std::span<const int>, tbc::lt::a> values, std::size_t index);
+  tbc::view<const int&, tbc::lt::a> checkedAt(tbc::view<std::span<const int>, tbc::lt::a> values, std::size_t index);
 }
 
 #endif

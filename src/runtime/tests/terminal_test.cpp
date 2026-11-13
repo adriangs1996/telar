@@ -3,18 +3,17 @@
 static_assert(true);
 #endif
 
-
 #include "cell_layout.hpp"
-#include <cstring>
+#include "telar_base/diagnostics/config.hpp"
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include "telar_base/diagnostics/config.hpp"
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fcntl.h>
-#include <sys/mman.h>
-#include <cassert>
 #include <ghostty/vt.h>
+#include <sys/mman.h>
 
 import std;
 import telar.base.memory;
@@ -31,7 +30,7 @@ using namespace telar;
 using namespace telar::runtime;
 
 static std::span<const Byte> bytes(std::string_view text) {
-  return {reinterpret_cast<const Byte *>(text.data()), text.size()};
+  return {reinterpret_cast<const Byte*>(text.data()), text.size()};
 }
 
 static void testTerminalStorage() {
@@ -39,32 +38,39 @@ static void testTerminalStorage() {
   BudgetAllocator memory{system, 64 * 1024 * 1024};
   Terminal terminal{memory, TerminalSize{80, 24, 0, 0}};
   std::size_t initial_bytes = 0;
+
   check(ghostty_terminal_page_bytes(nullptr, &initial_bytes) == GHOSTTY_INVALID_VALUE);
   check(ghostty_terminal_page_bytes(terminal.handle(), nullptr) == GHOSTTY_INVALID_VALUE);
   checkGhostty(ghostty_terminal_page_bytes(terminal.handle(), &initial_bytes));
   check(initial_bytes > 0);
 
   std::string history;
+
   for (std::size_t row = 0; row < 4096; ++row) {
     history += "retained terminal output\r\n";
   }
+
   terminal.feed(bytes(history));
   terminal.refresh();
   check(terminal.screen.scroll.total_rows > terminal.screen.rows);
   std::size_t retained_bytes = 0;
+
   checkGhostty(ghostty_terminal_page_bytes(terminal.handle(), &retained_bytes));
   check(retained_bytes > initial_bytes);
 
   terminal.feed(bytes("\x1b[?1049h"));
   std::size_t both_screen_bytes = 0;
   const auto allocations = memory.allocations();
+
   checkGhostty(ghostty_terminal_page_bytes(terminal.handle(), &both_screen_bytes));
   check(both_screen_bytes > retained_bytes && memory.allocations() == allocations);
   GhosttyTerminalScreen active{};
+
   checkGhostty(ghostty_terminal_get(terminal.handle(), GHOSTTY_TERMINAL_DATA_ACTIVE_SCREEN, &active));
   check(active == GHOSTTY_TERMINAL_SCREEN_ALTERNATE);
 #if TELAR_DIAGNOSTICS
   const auto snapshot = terminal.storageMetrics();
+
   check(snapshot.page_bytes == both_screen_bytes && snapshot.screen_bytes == 80 * 24 * sizeof(ScreenCell));
 #endif
 
@@ -72,6 +78,7 @@ static void testTerminalStorage() {
   terminal.refresh();
   check(terminal.screen.scroll.total_rows == terminal.screen.rows);
   std::size_t cleared_bytes = 0;
+
   checkGhostty(ghostty_terminal_page_bytes(terminal.handle(), &cleared_bytes));
   check(cleared_bytes < both_screen_bytes && cleared_bytes > 0);
   terminal.resize(TerminalSize{120, 40, 0, 0});
@@ -86,9 +93,11 @@ static void testClearAtPrompt() {
   SystemAllocator memory;
   Terminal terminal{memory, TerminalSize{40, 5, 0, 0}};
   std::string history;
+
   for (std::size_t row = 0; row < 20; ++row) {
     history += "output\r\n";
   }
+
   terminal.feed(bytes(history + "\x1b]133;A\x07$ \x1b]133;B\x07clear\r\n\x1b]133;C\x07"));
   terminal.feed(bytes("\x1b[3J\x1b[H\x1b[2J"));
   terminal.refresh();
@@ -104,19 +113,23 @@ static void testClearAtPrompt() {
 }
 
 // The text a `PaneRows` reply holds on its row `index`, trailing spaces trimmed.
-static std::string replyRow(const PaneRows &reply, std::size_t index) {
+static std::string replyRow(const PaneRows& reply, std::size_t index) {
   std::string text;
   auto reader = reply.reader();
   std::size_t cell = 0;
+
   while (const auto next = reader.next()) {
     if (cell / reply.cols == index) {
-      text.append(reinterpret_cast<const char *>(next->text.data()), next->text.size());
+      text.append(reinterpret_cast<const char*>(next->text.data()), next->text.size());
     }
+
     ++cell;
   }
+
   while (!text.empty() && text.back() == ' ') {
     text.pop_back();
   }
+
   return text;
 }
 
@@ -126,20 +139,26 @@ static void testScrollbackOrigin() {
   SystemAllocator memory;
   Terminal terminal{memory, TerminalSize{40, 5, 0, 0}};
   const std::size_t limit = 1;
+
   checkGhostty(ghostty_terminal_set(terminal.handle(), GHOSTTY_TERMINAL_OPT_SCROLLBACK_MAX_BYTES, &limit));
   const auto generation = terminal.scrollbackGeneration();
+
   check(terminal.followScrollback() == 0 && terminal.scrollbackTrimmed() == 0);
 
   std::size_t printed = 0;
   std::uint64_t dropped = 0;
+
   for (std::size_t batch = 0; batch < 4000 && terminal.scrollbackTrimmed() < 600; ++batch) {
     std::string lines;
+
     for (std::size_t line = 0; line < 8; ++line) {
       lines += "line " + std::to_string(printed++) + "\r\n";
     }
+
     terminal.feed(bytes(lines));
     dropped += terminal.followScrollback();
   }
+
   check(terminal.scrollbackTrimmed() > 0 && dropped == terminal.scrollbackTrimmed() && terminal.scrollbackGeneration() == generation);
 
   // Stable row N holds the line printed N-th.
@@ -147,14 +166,17 @@ static void testScrollbackOrigin() {
   const auto trimmed = terminal.scrollbackTrimmed();
   const auto stable = trimmed + 3;
   const auto reply = rows.read(terminal, ReadPaneRows{.request_id = 1, .pane_id = 1, .from = stable, .count = 2});
+
   check(reply.from == stable && reply.rows == 2 && reply.cols == 40 && reply.trimmed == trimmed);
   check(replyRow(reply, 0) == "line " + std::to_string(stable) && replyRow(reply, 1) == "line " + std::to_string(stable + 1));
   Codec::validate(reply);
 
   // Rows already dropped are skipped; rows past the end are none.
   const auto clipped = rows.read(terminal, ReadPaneRows{.request_id = 2, .pane_id = 1, .from = trimmed - 1, .count = 3});
+
   check(clipped.from == trimmed && clipped.rows == 2 && replyRow(clipped, 0) == "line " + std::to_string(trimmed));
   const auto beyond = rows.read(terminal, ReadPaneRows{.request_id = 3, .pane_id = 1, .from = trimmed + 1'000'000, .count = 4});
+
   check(beyond.rows == 0 && !beyond.text_metadata && beyond.cells.empty());
   Codec::validate(beyond);
 
@@ -162,6 +184,7 @@ static void testScrollbackOrigin() {
   terminal.refresh();
   const auto last = trimmed + terminal.screen.scroll.total_rows - 2;
   const auto tail = rows.read(terminal, ReadPaneRows{.request_id = 4, .pane_id = 1, .from = last, .count = 5});
+
   check(tail.from == last && tail.rows == 2 && replyRow(tail, 0) == "line " + std::to_string(printed - 1));
 
   terminal.resize(TerminalSize{30, 5, 0, 0});
@@ -175,24 +198,26 @@ void testTerminal() {
   {
     SystemAllocator memory;
     Terminal terminal{memory, TerminalSize{80, 24, 9, 18}};
-    for (const auto input : {"\x1b[?5522h", "\x1b[?5522l", "\x1b[?5522h", "\x1b" "c"}) {
+
+    for (const auto input : {"\x1b[?5522h", "\x1b[?5522l", "\x1b[?5522h", "\x1b"
+                                                                          "c"}) {
       terminal.feed(bytes(input));
       terminal.refresh();
       check(terminal.screen.input_modes.paste_events == terminal.pasteEvents());
       check(terminal.pasteEvents() == std::string_view{input}.ends_with('h'));
     }
   }
+
   SystemAllocator system;
   BudgetAllocator memory{system, 64 * 1024 * 1024};
 
   {
-    Terminal terminal{memory, TerminalSize{.cols = 40,
-                                           .rows = 5,
-                                           .cell_width_px = 0,
-                                           .cell_height_px = 0}};
+    Terminal terminal{memory, TerminalSize{.cols = 40, .rows = 5, .cell_width_px = 0, .cell_height_px = 0}};
+
     terminal.feed(bytes("Hello \x1b[1;31mred\x1b[0m\r\n\xe7\x95\x8c e\xcc\x81"));
     terminal.refresh();
-    const auto &screen = terminal.screen;
+    const auto& screen = terminal.screen;
+
     check(screen.cells[0].text[0] == 'H');
     check(screen.cells[6].style.foreground.kind == CellColor::Kind::indexed);
     check(screen.cells[6].style.foreground.channels[0] == 1);
@@ -211,6 +236,7 @@ void testTerminal() {
     terminal.refresh();
 
     const auto allocations = memory.allocations();
+
     for (int iteration = 0; iteration < 100; ++iteration) {
       terminal.feed(bytes("\x1b[1;1HX"));
       terminal.refresh();
@@ -225,6 +251,7 @@ void testTerminal() {
     terminal.feed(bytes("\x1b]9;4;1;42\x07"));
     check(terminal.effects.progress_state == PaneProgressState::set && terminal.effects.progress_percent == 42);
     const auto progress_revision = terminal.effects.progress_revision;
+
     terminal.feed(bytes("\x1b]9;4;1;42\x07"));
     check(terminal.effects.progress_revision == progress_revision);
     terminal.feed(bytes("\x1b]9;4;3\x07"));
@@ -233,13 +260,11 @@ void testTerminal() {
     check(terminal.effects.progress_state == PaneProgressState::error && terminal.effects.progress_percent == 75);
     terminal.feed(bytes("\x1b]9;4;0\x07"));
     check(terminal.effects.progress_state == PaneProgressState::remove && !terminal.effects.progress_percent);
-    terminal.resize(TerminalSize{.cols = 80,
-                                 .rows = 24,
-                                 .cell_width_px = 0,
-                                 .cell_height_px = 0});
+    terminal.resize(TerminalSize{.cols = 80, .rows = 24, .cell_width_px = 0, .cell_height_px = 0});
     terminal.refresh();
     check(terminal.screen.cells.size() == 80 * 24);
     const auto revision = terminal.screen.revision;
+
     terminal.resize(TerminalSize{80, 24, 0, 0});
     terminal.refresh();
     check(terminal.screen.revision == revision);
@@ -252,10 +277,12 @@ void testTerminal() {
   check(memory.liveBytes() == 0);
 
   std::uint64_t seed = 1;
+
   for (int iteration = 0; iteration < 10000; ++iteration) {
     seed = seed * 6364136223846793005ULL + 1;
     GhosttyStyleId style_id{};
     GhosttyCellWide width{};
+
     checkGhostty(ghostty_cell_get(seed, GHOSTTY_CELL_DATA_STYLE_ID, &style_id));
     checkGhostty(ghostty_cell_get(seed, GHOSTTY_CELL_DATA_WIDE, &width));
     check(style_id == cell_layout::style_id(seed));

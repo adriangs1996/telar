@@ -58,8 +58,8 @@ void explicitNoescape(spec::bytes input) {
 namespace contracts {
   class session {
   public:
-    tbc::view<const std::string &> title() const;
-    tbc::view<const std::string &> pick(const std::string &other) const;
+    tbc::view<const std::string&> title() const;
+    tbc::view<const std::string&> pick(const std::string& other) const;
 
   private:
     std::string title_;
@@ -72,7 +72,7 @@ namespace contracts {
 // STATUS: implemented
 // CONTRACT: A method's elided result follows its receiver, which callers in other translation units rely on.
 // SCENARIO: The out-of-line definition returns the receiver's own field; accept.
-tbc::view<const std::string &> contracts::session::title() const {
+tbc::view<const std::string&> contracts::session::title() const {
   return title_;
 }
 
@@ -84,7 +84,7 @@ tbc::view<const std::string &> contracts::session::title() const {
 // STATUS: implemented
 // CONTRACT: A method's elided result follows its receiver, which callers in other translation units rely on.
 // SCENARIO: The out-of-line definition returns its parameter instead, which those callers would not track.
-tbc::view<const std::string &> contracts::session::pick(const std::string &other) const {
+tbc::view<const std::string&> contracts::session::pick(const std::string& other) const {
   return other; // expected-error [tbc-contract-violation]
 }
 
@@ -150,17 +150,17 @@ namespace contracts {
   class database {
   public:
     database();
-    database(const database &) = delete;
-    database &operator=(const database &) = delete;
+    database(const database&) = delete;
+    database& operator=(const database&) = delete;
   };
 
   class statement {
   public:
-    statement(tbc::view<database &, tbc::lt::a> owner, std::string_view sql);
-    statement(statement &&) noexcept;
+    statement(tbc::view<database&, tbc::lt::a> owner, std::string_view sql);
+    statement(statement&&) noexcept;
 
   private:
-    tbc::view<handle *, tbc::lt::a> handle_ = nullptr;
+    tbc::view<handle*, tbc::lt::a> handle_ = nullptr;
   };
 }
 
@@ -177,7 +177,7 @@ contracts::statement opaqueConstructorEscape() {
 // STATUS: implemented
 // CONTRACT: A constructor without a visible body retains every argument whose parameter shares a region with a field of its class.
 // SCENARIO: The statement borrows the caller's database and its temporary query text is not retained; accept.
-contracts::statement opaqueConstructorRetained(contracts::database &owner) {
+contracts::statement opaqueConstructorRetained(contracts::database& owner) {
   return contracts::statement{owner, std::string{"SELECT 1"}};
 }
 
@@ -190,7 +190,7 @@ contracts::statement opaqueConstructorRetained(contracts::database &owner) {
 // CONTRACT: A method declared without a contract and without a visible body returns a borrow of its receiver, as Rust's lifetime elision gives it.
 // SCENARIO: The receiver is a temporary that dies before the result is read.
 void elidedCallTemporary() {
-  const auto &label = elision::registry{}.label(); // expected-error [tbc-dangling-borrow]
+  const auto& label = elision::registry{}.label(); // expected-error [tbc-dangling-borrow]
   spec::observe(std::string_view{label});
 }
 
@@ -202,7 +202,7 @@ void elidedCallTemporary() {
 // STATUS: implemented
 // CONTRACT: A method declared without a contract and without a visible body returns a borrow of its receiver, as Rust's lifetime elision gives it.
 // SCENARIO: The receiver outlives the result; accept.
-void elidedCallReceiver(const elision::registry &registry) {
+void elidedCallReceiver(const elision::registry& registry) {
   spec::observe(std::string_view{registry.label()});
 }
 
@@ -214,7 +214,7 @@ void elidedCallReceiver(const elision::registry &registry) {
 // STATUS: implemented
 // CONTRACT: An out-of-line definition keeps the elided contract its callers assume without the body.
 // SCENARIO: A method returns its parameter, which callers that only see the declaration take for a borrow of the receiver.
-const std::string &elision::registry::pick(const std::string &fallback) const {
+const std::string& elision::registry::pick(const std::string& fallback) const {
   return fallback; // expected-error [tbc-contract-violation]
 }
 
@@ -226,7 +226,7 @@ const std::string &elision::registry::pick(const std::string &fallback) const {
 // STATUS: implemented
 // CONTRACT: An out-of-line definition keeps the elided contract its callers assume without the body.
 // SCENARIO: A method returns its receiver's field; accept.
-const std::string &elision::registry::name() const {
+const std::string& elision::registry::name() const {
   return name_;
 }
 
@@ -244,19 +244,19 @@ namespace contracts {
     self_text()
         : cursor_(storage_.data()) {}
 
-    self_text(const self_text &) = delete;
-    self_text &operator=(const self_text &) = delete;
+    self_text(const self_text&) = delete;
+    self_text& operator=(const self_text&) = delete;
 
   private:
     std::string storage_{"abc"};
-    tbc::view<const char *, tbc::lt::self> cursor_;
+    tbc::view<const char*, tbc::lt::self> cursor_;
   };
 
-  std::shared_ptr<const self_text> chooseSelf(const std::shared_ptr<const self_text> &first, const std::shared_ptr<const self_text> &second);
-  void keep(const std::shared_ptr<const self_text> &text);
+  std::shared_ptr<const self_text> chooseSelf(const std::shared_ptr<const self_text>& first, const std::shared_ptr<const self_text>& second);
+  void keep(const std::shared_ptr<const self_text>& text);
 }
 
-void selfFieldInternal(const std::shared_ptr<const contracts::self_text> &first, const std::shared_ptr<const contracts::self_text> &second) {
+void selfFieldInternal(const std::shared_ptr<const contracts::self_text>& first, const std::shared_ptr<const contracts::self_text>& second) {
   contracts::keep(contracts::chooseSelf(first, second));
 }
 
@@ -274,19 +274,19 @@ namespace contracts {
     borrowed_text()
         : cursor_(storage_.data()) {} // expected-error [tbc-dangling-borrow]
 
-    borrowed_text(const borrowed_text &) = delete;
-    borrowed_text &operator=(const borrowed_text &) = delete;
+    borrowed_text(const borrowed_text&) = delete;
+    borrowed_text& operator=(const borrowed_text&) = delete;
 
   private:
     std::string storage_{"abc"};
-    const char *cursor_;
+    const char* cursor_;
   };
 
-  std::shared_ptr<const borrowed_text> chooseBorrowed(const std::shared_ptr<const borrowed_text> &first, const std::shared_ptr<const borrowed_text> &second);
-  void keep(const std::shared_ptr<const borrowed_text> &text);
+  std::shared_ptr<const borrowed_text> chooseBorrowed(const std::shared_ptr<const borrowed_text>& first, const std::shared_ptr<const borrowed_text>& second);
+  void keep(const std::shared_ptr<const borrowed_text>& text);
 }
 
-void selfFieldUnlabeled(const std::shared_ptr<const contracts::borrowed_text> &first, const std::shared_ptr<const contracts::borrowed_text> &second) {
+void selfFieldUnlabeled(const std::shared_ptr<const contracts::borrowed_text>& first, const std::shared_ptr<const contracts::borrowed_text>& second) {
   contracts::keep(contracts::chooseBorrowed(first, second)); // expected-error [tbc-missing-contract]
 }
 
@@ -306,7 +306,7 @@ namespace contracts {
 
   private:
     std::string storage_{"abc"};
-    tbc::view<const char *, tbc::lt::self> cursor_;
+    tbc::view<const char*, tbc::lt::self> cursor_;
   };
 }
 
@@ -327,13 +327,13 @@ namespace contracts {
   template <typename Host>
   class text_watcher {
   public:
-    text_watcher(Host &host, std::string &text)
+    text_watcher(Host& host, std::string& text)
         : host_(host),
           text_(text) {}
 
   private:
-    Host &host_;
-    std::string &text_;
+    Host& host_;
+    std::string& text_;
   };
 
   class watched_text {
@@ -344,8 +344,8 @@ namespace contracts {
       grow();
     }
 
-    watched_text(const watched_text &) = delete;
-    watched_text &operator=(const watched_text &) = delete;
+    watched_text(const watched_text&) = delete;
+    watched_text& operator=(const watched_text&) = delete;
 
     void grow();
 
@@ -375,13 +375,13 @@ namespace contracts {
   template <typename Memory>
   class pooled_bytes {
   public:
-    explicit pooled_bytes(tbc::view<Memory &, tbc::lt::a> memory)
+    explicit pooled_bytes(tbc::view<Memory&, tbc::lt::a> memory)
         : memory_(memory) {}
 
     [[nodiscard]] std::span<const char> bytes() const;
 
   private:
-    tbc::view<Memory &, tbc::lt::a> memory_;
+    tbc::view<Memory&, tbc::lt::a> memory_;
   };
 
   class byte_reader {
@@ -396,12 +396,12 @@ namespace contracts {
   template <typename Memory>
   class pooled_face {
   public:
-    explicit pooled_face(tbc::view<Memory &, tbc::lt::a> memory)
+    explicit pooled_face(tbc::view<Memory&, tbc::lt::a> memory)
         : source_(memory),
           reader_(source_.bytes()) {}
 
-    pooled_face(const pooled_face &) = delete;
-    pooled_face &operator=(const pooled_face &) = delete;
+    pooled_face(const pooled_face&) = delete;
+    pooled_face& operator=(const pooled_face&) = delete;
 
   private:
     tbc::view<pooled_bytes<Memory>, tbc::lt::a> source_;
@@ -409,7 +409,7 @@ namespace contracts {
   };
 }
 
-void selfFieldRegion(contracts::byte_pool &memory) {
+void selfFieldRegion(contracts::byte_pool& memory) {
   const contracts::pooled_face<contracts::byte_pool> face{memory};
   static_cast<void>(face);
 }
@@ -459,7 +459,7 @@ std::size_t elidedConstructorRetained(std::string_view source) {
 // STATUS: implemented
 // CONTRACT: An out-of-line definition keeps the elided contract its callers assume without the body.
 // SCENARIO: An override of a library virtual takes its contract from the library, whose callers are not checked; it returns the node it was given; accept.
-library::node *elision::painted_item::update(library::node *previous) {
+library::node* elision::painted_item::update(library::node* previous) {
   return previous;
 }
 
@@ -518,7 +518,9 @@ namespace contracts {
 }
 
 std::size_t deducedResult(std::string_view source) {
-  const auto read = [&source] { return contracts::firstLetter(source); };
+  const auto read = [&source] {
+    return contracts::firstLetter(source);
+  };
   return read().size();
 }
 
@@ -534,7 +536,9 @@ std::size_t deducedResultEscape() {
   std::string_view kept;
   {
     const std::string source{"abc"};
-    const auto read = [&source] { return contracts::firstLetter(source); };
+    const auto read = [&source] {
+      return contracts::firstLetter(source);
+    };
     kept = read();
   } // expected-error [tbc-invalidated-borrow]
   return kept.size();

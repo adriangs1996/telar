@@ -3,63 +3,62 @@
 static_assert(true);
 #endif
 
-
-#include "telar_client/serializers/telar_messages.hpp"
-#include <chrono>
-#include <cstddef>
-#include <cstdint>
+#include "plugin_bootstrap.hpp"
 #include "telar_base/memory/allocator.hpp"
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-#include <array>
-#include <cstring>
-#include <stdexcept>
-#include <string_view>
-#include <optional>
-#include <span>
-#include <bit>
-#include <charconv>
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
-#include <utility>
-#include <pcap/pcap.h>
+#include "telar_client/serializers/telar_messages.hpp"
+#include "telar_platform/file_descriptor.hpp"
+#include "telar_platform/random_bytes.hpp"
+#include "telar_platform/trace.hpp"
+#include "traffic_api.hpp"
 #include <algorithm>
 #include <arpa/inet.h>
-#include <cmath>
-#include <cstdio>
-#include <initializer_list>
-#include <string>
+#include <array>
 #include <atomic>
+#include <bit>
 #include <cassert>
-#include "telar_base/memory/fixed_text.hpp"
-#include <exception>
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include <limits.h>
-#include <memory>
-#include "telar_platform/random_bytes.hpp"
 #include <cerrno>
-#include "telar_platform/file_descriptor.hpp"
-#include <mutex>
-#include "traffic_api.hpp"
-#include "plugin_bootstrap.hpp"
-#include <sys/stat.h>
-#include <fcntl.h>
-#include "telar_platform/trace.hpp"
-#include <dirent.h>
-#include <cstdlib>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <unistd.h>
+#include <charconv>
+#include <chrono>
+#include <cmath>
+#include <condition_variable>
 #include <csignal>
-#include <poll.h>
-#include <sys/un.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <dirent.h>
+#include <exception>
+#include <fcntl.h>
+#include <fstream>
+#include <initializer_list>
+#include <lauxlib.h>
+#include <limits.h>
+#include <lua.h>
+#include <lualib.h>
+#include <memory>
+#include <mutex>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
-#include <unordered_map>
-#include <condition_variable>
-#include <type_traits>
+#include <optional>
+#include <pcap/pcap.h>
+#include <poll.h>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/un.h>
 #include <thread>
-#include <fstream>
+#include <type_traits>
+#include <unistd.h>
+#include <unordered_map>
+#include <utility>
 
 import telar.runtime.tests.check;
 import telar.runtime.plugins.run_worker;
@@ -75,6 +74,7 @@ namespace app = telar::runtime::plugins;
 
 static app::ServiceSpec specification(bool intercept) {
   app::ServiceSpec specification;
+
   specification.plugin_id = 11;
   specification.generation = 7;
   specification.name.assign("traffic-fixture");
@@ -84,12 +84,14 @@ static app::ServiceSpec specification(bool intercept) {
     specification.declared.insert(app::Capability::traffic_intercept);
     specification.granted.insert(app::Capability::traffic_intercept);
   }
+
   specification.digest.fill(0x5a);
   return specification;
 }
 
-static void write(const std::string &path, std::string_view source) {
+static void write(const std::string& path, std::string_view source) {
   std::ofstream file{path};
+
   file << source;
   check(file.good());
 }
@@ -99,6 +101,7 @@ static void host() {
   BudgetAllocator memory{system, 80 * 1024 * 1024};
   TemporaryDirectory directory{"/tmp/tlr-app-host.XXXXXX"};
   const auto entry = std::string{directory.path()} + "/main.lua";
+
   write(entry, R"lua(
 local traffic = require('telar.traffic')
 assert(io == nil and debug == nil)
@@ -129,48 +132,58 @@ return {}
     app::Host host{memory, entry.c_str(), &identity};
     SensitiveAllocation output{memory, app::TrafficLimits::reply_bytes};
     auto setup = makeOwned<app::TrafficReply>(memory);
+
     app::TrafficProtocol::readReply(host.trafficSetup(output.bytes()), *setup);
     check(setup->changed && setup->registration_count == 2);
     check(setup->registrations[0].filter.view() == "udp port 53535" && setup->registrations[1].stage == app::TrafficStage::http);
     constexpr std::string_view bytes{"a\0b", 3};
-    app::TrafficEvent packet{.event_id = 1, .registration = setup->registrations[0].id, .dropped = 0, .event = {.kind = traffic::Kind::packet, .original_bytes = 3, .bytes = {reinterpret_cast<const Byte *>(bytes.data()), bytes.size()}}};
+    app::TrafficEvent packet{.event_id = 1, .registration = setup->registrations[0].id, .dropped = 0, .event = {.kind = traffic::Kind::packet, .original_bytes = 3, .bytes = {reinterpret_cast<const Byte*>(bytes.data()), bytes.size()}}};
     const auto response = host.invokeTraffic(packet, output.bytes());
     const auto observed = app::TrafficProtocol::readReply(response, *setup);
+
     check(setup->changed && setup->registration_count == 1 && observed.decision_count == 0);
     check(app::Protocol::decodeEffects(observed.effects).batch.notifications[0].title == "packet verified");
 
     constexpr std::string_view body{"original\0body", 13};
-    HttpMessageView message{.method = "POST", .target = "/", .body = {reinterpret_cast<const Byte *>(body.data()), body.size()}};
+    HttpMessageView message{.method = "POST", .target = "/", .body = {reinterpret_cast<const Byte*>(body.data()), body.size()}};
     SensitiveAllocation encoded_message{memory, HttpMessageLimits::message_bytes};
     SensitiveAllocation encoded_flow{memory, HttpMessageLimits::message_bytes + traffic::Limits::metadata_bytes};
     const auto payload = HttpMessageCodec::encode(encoded_message.bytes(), message);
     const auto flow = traffic::FlowCodec::encode(encoded_flow.bytes(), {.id = 31, .ticket = 123, .host = "example.test", .bytes = payload});
     app::TrafficEvent request{.event_id = 2, .registration = setup->registrations[0].id, .dropped = 0, .event = {.kind = traffic::Kind::http_intercept_request, .bytes = flow}};
     const auto decided = app::TrafficProtocol::readReply(host.invokeTraffic(request, output.bytes()), *setup);
+
     check(!setup->changed && decided.decision_count == 1);
     app::FrameReader decision{decided.decisions[0].payload};
+
     decision.require(traffic::InterceptionCodec::Command::decision);
     check(decision.integer<std::uint64_t>() == 123 && decision.tag(traffic::Verdict::reject) == traffic::Verdict::replace);
     const auto edited = HttpMessageCodec::decode(decision.bytes());
+
     decision.finish();
     check(edited.target == "/edited" && edited.header_count == 2 && edited.headers[1].value == "two");
-    check(std::string_view{reinterpret_cast<const char *>(edited.body.data()), edited.body.size()} == std::string_view{"original\0body\0suffix", 20});
+    check(std::string_view{reinterpret_cast<const char*>(edited.body.data()), edited.body.size()} == std::string_view{"original\0body\0suffix", 20});
     message.version = HttpVersion::http2;
     message.stream = 7;
     message.scheme = "https";
     message.authority = "example.test";
     const auto h2_payload = HttpMessageCodec::encode(encoded_message.bytes(), message);
+
     request.event_id = 3;
     request.event.bytes = traffic::FlowCodec::encode(encoded_flow.bytes(), {.id = 31, .ticket = 123, .host = "example.test", .bytes = h2_payload});
     const auto h2_decided = app::TrafficProtocol::readReply(host.invokeTraffic(request, output.bytes()), *setup);
+
     check(h2_decided.decision_count == 1);
     app::FrameReader h2_decision{h2_decided.decisions[0].payload};
+
     h2_decision.require(traffic::InterceptionCodec::Command::decision);
     h2_decision.integer<std::uint64_t>();
     check(h2_decision.tag(traffic::Verdict::reject) == traffic::Verdict::replace);
     const auto h2_edited = HttpMessageCodec::decode(h2_decision.bytes());
+
     check(h2_edited.version == HttpVersion::http2 && h2_edited.stream == 7 && h2_edited.authority == "example.test" && h2_edited.target == "/edited");
   }
+
   check(memory.liveBytes() == 0);
   write(entry, R"lua(
 local traffic = require('telar.traffic')
@@ -184,15 +197,21 @@ return {}
     app::Host host{memory, entry.c_str(), &identity};
     SensitiveAllocation output{memory, app::TrafficLimits::reply_bytes};
     const auto setup = app::TrafficProtocol::reply(host.trafficSetup(output.bytes()));
+
     check(setup.registration_count == 1 && setup.registrations[0].stage == app::TrafficStage::observe);
   }
+
   check(memory.liveBytes() == 0);
 }
 
 static bool closed(int descriptor) {
   pollfd ready{descriptor, POLLIN, 0};
-  if (::poll(&ready, 1, 5000) <= 0) { return false; }
+  if (::poll(&ready, 1, 5000) <= 0) {
+    return false;
+  }
+
   Byte value;
+
   return ::recv(descriptor, &value, 1, 0) == 0;
 }
 
@@ -202,27 +221,36 @@ static void packageChannels() {
   SynchronizedAllocator memory{budget};
   TemporaryDirectory directory{"/tmp/tlr-app-port.XXXXXX"};
   const auto path = std::string{directory.path()} + "/traffic";
+
   {
     traffic::Service service{memory, path, true};
     const auto observe = specification(false);
     std::array<Byte, traffic::Protocol::greeting_bytes> greeting;
+
     for (const auto role : {traffic::Role::intercept, traffic::Role::offline_capture}) {
       auto unauthorized = service.openPackage(observe);
+
       traffic::sendAll(unauthorized.get(), traffic::Protocol::greeting(greeting, role));
       check(closed(unauthorized.get()));
     }
+
     auto approved = service.openPackage(observe);
+
     traffic::sendAll(approved.get(), traffic::Protocol::greeting(greeting, traffic::Role::subscribe));
     pollfd ready{approved.get(), POLLIN, 0};
+
     check(::poll(&ready, 1, 5000) > 0);
     std::array<Byte, traffic::Protocol::prefix_bytes> prefix;
+
     check(::recv(approved.get(), prefix.data(), prefix.size(), MSG_WAITALL) == static_cast<ssize_t>(prefix.size()));
     app::FrameReader reader{prefix};
     const auto length = reader.integer<std::uint32_t>();
     std::vector<Byte> reply(length);
+
     check(::recv(approved.get(), reply.data(), reply.size(), MSG_WAITALL) == static_cast<ssize_t>(reply.size()));
     check(traffic::Protocol::decode(reply).kind == traffic::Kind::ready);
   }
+
   check(budget.liveBytes() == 0);
 }
 
@@ -230,12 +258,15 @@ static void unavailablePolicies() {
   SystemAllocator system;
   BudgetAllocator budget{system, 8 * 1024 * 1024};
   SynchronizedAllocator memory{budget};
+
   {
     traffic::Interception broker{memory};
+
     broker.configure(1, {.host = "example.test", .visibility = 3, .fail_closed = true});
     const traffic::FlowEvent event{.id = 31, .host = "example.test"};
     const auto original = broker.begin(event);
     std::array<Byte, 64> output;
+
     check(broker.pending(1, original));
     broker.setAvailable(1, false);
     check(!broker.pending(1, original));
@@ -243,6 +274,7 @@ static void unavailablePolicies() {
     check(broker.begin(event) == decltype(broker)::rejected_ticket);
     broker.setAvailable(1, true);
     const auto fresh = broker.begin(event);
+
     check(fresh != original && broker.pending(1, fresh));
     broker.decide(1, original, traffic::Verdict::allow, {});
     check(broker.poll(fresh, output).verdict == traffic::Verdict::pending);
@@ -252,17 +284,26 @@ static void unavailablePolicies() {
     broker.configure(1, {.host = "example.test", .visibility = 3}, 1);
     broker.configure(2, {.host = "example.test", .visibility = 3}, 2);
     const auto chain = broker.begin(event);
+
     broker.setAvailable(2, false);
     broker.setAvailable(2, true);
     constexpr std::array<Byte, 3> replacement{'a', 0, 'b'};
+
     broker.decide(1, chain, traffic::Verdict::replace, replacement);
     const auto result = broker.poll(chain, output);
+
     check(result.verdict == traffic::Verdict::replace && result.bytes == replacement.size());
     check(std::ranges::equal(std::span{output}.first(result.bytes), replacement));
     bool inherited = false;
-    broker.deliver(2, [&](const auto &) { inherited = true; return true; });
+
+    broker.deliver(2, [&](const auto&) {
+      inherited = true;
+      return true;
+    });
+
     check(!inherited);
   }
+
   check(budget.liveBytes() == 0);
 }
 
@@ -271,6 +312,7 @@ static void controlHost() {
   BudgetAllocator memory{system, 80 * 1024 * 1024};
   TemporaryDirectory directory{"/tmp/tlr-app-control-host.XXXXXX"};
   const auto entry = std::string{directory.path()} + "/main.lua";
+
   write(entry, R"lua(
 local traffic=require('telar.traffic')
 local allowed,message=pcall(function() traffic.recordings.list(function() end) end)
@@ -288,6 +330,7 @@ return {}
 )lua");
   {
     auto identity = specification(false);
+
     identity.declared = {};
     identity.granted = {};
     identity.declared.insert(app::Capability::traffic_control);
@@ -296,22 +339,27 @@ return {}
     SensitiveAllocation output{memory, app::TrafficLimits::reply_bytes};
     SensitiveAllocation incoming{memory, traffic::control::Limits::reply_bytes};
     auto setup = makeOwned<app::TrafficReply>(memory);
+
     app::TrafficProtocol::readReply(host.trafficSetup(output.bytes()), *setup);
     check(setup->registration_count == 1 && setup->registrations[0].stage == app::TrafficStage::control);
     const auto original = setup->registrations[0].id;
+
     check(traffic::control::Protocol::request(setup->registrations[0].requestBytes()).operation == traffic::control::Operation::status);
     auto reply = traffic::control::Protocol::encode(incoming.bytes(), traffic::control::Reply{.status = {.proxy = true, .administration = true, .port = 41234}});
     app::TrafficEvent event{.event_id = 1, .registration = original, .dropped = 0, .event = {}, .control = reply};
+
     app::TrafficProtocol::readReply(host.invokeTraffic(event, output.bytes()), *setup);
     check(setup->changed && setup->registration_count == 1 && setup->registrations[0].id != original);
     check(traffic::control::Protocol::request(setup->registrations[0].requestBytes()).operation == traffic::control::Operation::ca_certificate);
     constexpr std::string_view bytes{"pem\0blob", 8};
+
     event.event_id = 2;
     event.registration = setup->registrations[0].id;
-    event.control = traffic::control::Protocol::encode(incoming.bytes(), traffic::control::Reply{.certificate = {reinterpret_cast<const Byte *>(bytes.data()), bytes.size()}});
+    event.control = traffic::control::Protocol::encode(incoming.bytes(), traffic::control::Reply{.certificate = {reinterpret_cast<const Byte*>(bytes.data()), bytes.size()}});
     app::TrafficProtocol::readReply(host.invokeTraffic(event, output.bytes()), *setup);
     check(setup->changed && setup->registration_count == 0);
   }
+
   check(memory.liveBytes() == 0);
 }
 
@@ -320,6 +368,7 @@ static void datagramHost() {
   BudgetAllocator memory{system, 80 * 1024 * 1024};
   TemporaryDirectory directory{"/tmp/tlr-datagram-host.XXXXXX"};
   const auto entry = std::string{directory.path()} + "/main.lua";
+
   write(entry, R"lua(
 local traffic = require('telar.traffic')
 local received = 0
@@ -352,18 +401,22 @@ return {}
     SensitiveAllocation output{memory, app::TrafficLimits::reply_bytes};
     std::array<Byte, 256> payload;
     auto setup = makeOwned<app::TrafficReply>(memory);
+
     app::TrafficProtocol::readReply(host.trafficSetup(output.bytes()), *setup);
     check(setup->registration_count == 1 && setup->registrations[0].selection == traffic::Selection::datagrams);
     const auto registration = setup->registrations[0].id;
     constexpr std::array<Byte, 3> body{'a', 0, 'b'};
     traffic::DatagramEvent item{.source_port = 1234, .destination_port = 53, .original_bytes = body.size(), .bytes = body};
+
     item.source_address[0] = item.destination_address[0] = 127;
     item.source_address[3] = 1;
     item.destination_address[3] = 2;
     app::TrafficEvent incoming{.event_id = 1, .registration = registration, .event = {.kind = traffic::Kind::datagram, .offline = true, .interface = "fixture", .bytes = traffic::DatagramCodec::encode(payload, item)}};
+
     app::TrafficProtocol::readReply(host.invokeTraffic(incoming, output.bytes()), *setup);
     check(setup->registration_count == 0 && !setup->changed);
     constexpr std::array<Byte, 8> echo{128, 0, 0, 0, 0, 22, 0, 33};
+
     item = {.transport = traffic::DatagramTransport::icmpv6, .ipv6 = true, .icmp_type = 128, .original_bytes = echo.size(), .bytes = echo};
     item.source_address[15] = 1;
     item.destination_address[15] = 2;
@@ -372,6 +425,7 @@ return {}
     app::TrafficProtocol::readReply(host.invokeTraffic(incoming, output.bytes()), *setup);
     check(setup->changed && setup->registration_count == 0);
   }
+
   check(memory.liveBytes() == 0);
 }
 

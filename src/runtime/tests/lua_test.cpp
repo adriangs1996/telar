@@ -3,12 +3,11 @@
 static_assert(true);
 #endif
 
-
 #include <cstdint>
+#include <cstring>
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
-#include <cstring>
 
 import std;
 import telar.base.memory;
@@ -19,29 +18,32 @@ import telar.lua;
 using namespace telar;
 using namespace telar::runtime;
 
-static int failWithResource(lua_State *state) {
+static int failWithResource(lua_State* state) {
   struct Resource {
-    bool *destroyed;
+    bool* destroyed;
 
     ~Resource() {
       *destroyed = true;
     }
-  } resource{static_cast<bool *>(lua_touserdata(state, 1))};
+  } resource{static_cast<bool*>(lua_touserdata(state, 1))};
 
   return luaL_error(state, "Intentional callback failure");
 }
 
-static void testLuaFailures(SystemAllocator &system) {
+static void testLuaFailures(SystemAllocator& system) {
   BudgetAllocator memory{system, 32 * 1024 * 1024};
+
   {
     lua::Vm vm{memory};
     bool destroyed = false;
     bool failed = false;
+
     try {
       vm.invoke(&failWithResource, &destroyed, 0);
-    } catch (const lua::Error &error) {
+    } catch (const lua::Error& error) {
       failed = std::string_view{error.what()}.contains("Intentional callback failure");
     }
+
     check(failed && destroyed);
     lua_settop(vm.state(), 0);
 
@@ -49,9 +51,10 @@ static void testLuaFailures(SystemAllocator &system) {
     vm.resetBudget();
     try {
       vm.execute("while true do end", "@loop");
-    } catch (const lua::Error &error) {
+    } catch (const lua::Error& error) {
       failed = std::string_view{error.what()}.contains("budget exceeded");
     }
+
     check(failed);
     lua_settop(vm.state(), 0);
 
@@ -59,27 +62,33 @@ static void testLuaFailures(SystemAllocator &system) {
     vm.resetBudget();
     try {
       vm.execute("return string.rep('x', 32 * 1024 * 1024)", "@memory");
-    } catch (const std::bad_alloc &) {
+    } catch (const std::bad_alloc&) {
       failed = true;
     }
+
     check(failed);
   }
+
   check(memory.liveBytes() == 0);
 
   BudgetAllocator insufficient{system, 32};
   bool failed = false;
+
   try {
     lua::Vm vm{insufficient};
-  } catch (const std::bad_alloc &) {
+  } catch (const std::bad_alloc&) {
     failed = true;
   }
+
   check(failed && insufficient.liveBytes() == 0);
 }
 
-static void testLuaJson(SystemAllocator &system) {
+static void testLuaJson(SystemAllocator& system) {
   BudgetAllocator memory{system, 32 * 1024 * 1024};
+
   {
     lua::Vm vm{memory};
+
     lua_newtable(vm.state());
     lua::JsonDecoder<decltype(memory)>::install(vm.state(), memory);
     lua_setglobal(vm.state(), "telar");
@@ -101,16 +110,19 @@ assert(decode(string.rep('[',63)..'0'..string.rep(']',63)))
 assert(not pcall(decode, string.rep('[',64)..'0'..string.rep(']',64)))
 return true
 )lua",
-               "@json");
+        "@json");
     check(lua_toboolean(vm.state(), -1));
   }
+
   check(memory.liveBytes() == 0);
 }
 
 void testLua() {
   SystemAllocator system;
+
   {
     lua::Vm vm{system};
+
     // The sandbox keeps only the clock of the os library.
     vm.execute(R"lua(
 local os_names = {}
@@ -118,9 +130,10 @@ for name in pairs(os) do os_names[#os_names + 1] = name end
 table.sort(os_names)
 return _VERSION == 'Lua 5.5' and utf8.len('café 好') == 6 and io == nil and table.concat(os_names, ',') == 'clock,date,time' and debug == nil and load == nil and setmetatable == nil
 )lua",
-               "@sandbox");
+        "@sandbox");
     check(lua_toboolean(vm.state(), -1));
   }
+
   testLuaFailures(system);
   testLuaJson(system);
 }

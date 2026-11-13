@@ -158,6 +158,24 @@ runtime-interface-bodies directory="out": lifetime-checker (runtime-configure di
 gui-interface-bodies: lifetime-checker (gui-configure "out" "Debug")
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out --target gui-interface-bodies
 
+# Check the blank lines of docs/code-style.md in the runtime, CLI and telar library units; FIX=ON inserts them.
+[working-directory: "src/runtime"]
+runtime-blank-lines directory="out" fix="OFF": lifetime-checker (runtime-configure directory "Debug")
+    "{{ justfile_directory() }}/tools/cpp" exec -- cmake "-DRUNTIME_BUILD_DIRECTORY={{ directory }}" "-DFIX={{ fix }}" -P cmake/blank_lines.cmake
+
+# Check the blank lines of docs/code-style.md in the GUI units.
+[working-directory: "src/gui"]
+gui-blank-lines: lifetime-checker (gui-configure "out" "Debug")
+    "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out --target gui-blank-lines
+
+# Format every C++, Objective-C++ and module file in the repository with the root .clang-format.
+format:
+    "{{ justfile_directory() }}/tools/cpp" exec -- cmake -P cmake/format.cmake
+
+# Check the formatting of every C++, Objective-C++ and module file without changing it.
+format-check:
+    "{{ justfile_directory() }}/tools/cpp" exec -- cmake -DMODE=format-check -P cmake/format.cmake
+
 # Package the Release Telar.app, install it under APPS and link its `telar` into BIN.
 [macos]
 install-gui apps=(home_directory() / "Applications") bin=(home_directory() / ".local/bin"): renderer (runtime-configure "out-release" "Release" no_tests) (gui-configure "out-release" "Release" no_tests)

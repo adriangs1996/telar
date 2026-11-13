@@ -11,17 +11,16 @@ import std;
 
 import telar.platform;
 
-
 namespace telar::gui::platform {
 
-std::uint32_t currentUserId() noexcept {
-  return ::getuid();
-}
+  std::uint32_t currentUserId() noexcept {
+    return ::getuid();
+  }
 
-bool isCurrentUser(std::intptr_t descriptor) noexcept {
-  const auto peer = runtime::peerCredentials(static_cast<int>(descriptor));
+  bool isCurrentUser(std::intptr_t descriptor) noexcept {
+    const auto peer = runtime::peerCredentials(static_cast<int>(descriptor));
 
-  return peer && peer->user == ::geteuid();
-}
+    return peer && peer->user == ::geteuid();
+  }
 
 }

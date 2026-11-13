@@ -3,11 +3,10 @@
 static_assert(true);
 #endif
 
-
 #include <cassert>
 #include <cstddef>
-#include <cstring>
 #include <cstdint>
+#include <cstring>
 
 import std;
 import telar.base.memory;
@@ -19,18 +18,19 @@ using namespace telar::runtime;
 
 class CaptureOracleMemory {
 public:
-  explicit CaptureOracleMemory(std::size_t fail) noexcept : fail_(fail) {}
+  explicit CaptureOracleMemory(std::size_t fail) noexcept
+      : fail_(fail) {}
 
-  void *allocate(std::size_t bytes, std::size_t alignment) noexcept {
+  void* allocate(std::size_t bytes, std::size_t alignment) noexcept {
     if (calls++ == fail_) {
       return nullptr;
     }
-    auto *pointer = upstream_.allocate(bytes, alignment);
+    auto* pointer = upstream_.allocate(bytes, alignment);
     live += pointer != nullptr;
     return pointer;
   }
 
-  void deallocate(void *pointer, std::size_t bytes, std::size_t alignment) noexcept {
+  void deallocate(void* pointer, std::size_t bytes, std::size_t alignment) noexcept {
     if (pointer != nullptr) {
       --live;
       upstream_.deallocate(pointer, bytes, alignment);
@@ -48,12 +48,12 @@ private:
 using Half = CaptureHalf<CaptureOracleMemory>;
 using HalfSlot = std::optional<Owned<Half, CaptureOracleMemory>>;
 
-static void record(CaptureOracleOutput &output, const HalfSlot &slot) noexcept {
+static void record(CaptureOracleOutput& output, const HalfSlot& slot) noexcept {
   output.integer(slot.has_value());
   if (!slot) {
     return;
   }
-  const auto &half = **slot;
+  const auto& half = **slot;
   output.integer(half.head.size());
   output.integer(half.body.size());
   output.integer(half.head.capacity());
@@ -68,7 +68,7 @@ static void record(CaptureOracleOutput &output, const HalfSlot &slot) noexcept {
   output.integer(half.finished_at_ms);
 }
 
-static bool apply(Half &half, const CaptureOperation &operation) noexcept {
+static bool apply(Half& half, const CaptureOperation& operation) noexcept {
   const std::string_view bytes{operation.bytes, operation.length};
   if (operation.kind >= 2 && operation.kind <= 5) {
     return half.append(static_cast<CapturePart>(operation.kind - 2), bytes);
@@ -99,7 +99,7 @@ static bool apply(Half &half, const CaptureOperation &operation) noexcept {
   return false;
 }
 
-extern "C" void capture(const CaptureOracleInput *input, CaptureOracleResult *result) {
+extern "C" void capture(const CaptureOracleInput* input, CaptureOracleResult* result) {
   *result = {};
   CaptureOracleMemory memory{input->fail_allocation};
   CaptureQuota quota{input->total_limit};
@@ -107,15 +107,15 @@ extern "C" void capture(const CaptureOracleInput *input, CaptureOracleResult *re
   std::array<HalfSlot, 4> halves;
   CaptureOracleOutput output{*input, *result};
 
-  for (const auto &operation : std::span{input->operations, input->count}) {
-    auto &slot = halves[operation.slot % halves.size()];
+  for (const auto& operation : std::span{input->operations, input->count}) {
+    auto& slot = halves[operation.slot % halves.size()];
     bool accepted = false;
     if (operation.kind <= 1) {
       slot.reset();
       if (limits.enabled && operation.length <= Half::maximum_host_bytes) {
         try {
           slot.emplace(makeOwned<Half>(memory, memory, quota, limits, CaptureStart{.side = static_cast<CaptureSide>(operation.kind), .host = {operation.bytes, operation.length}}));
-        } catch (const std::bad_alloc &) {
+        } catch (const std::bad_alloc&) {
         }
       }
     } else if (operation.kind == 13) {
@@ -128,9 +128,9 @@ extern "C" void capture(const CaptureOracleInput *input, CaptureOracleResult *re
     record(output, slot);
   }
 
-  for (auto &slot : halves) {
+  for (auto& slot : halves) {
     if (slot) {
-      const auto &half = **slot;
+      const auto& half = **slot;
       output.text(half.host());
       output.text(half.method());
       output.text(half.target());
@@ -145,7 +145,7 @@ extern "C" void capture(const CaptureOracleInput *input, CaptureOracleResult *re
   result->retained_quota = quota.used();
 }
 
-extern "C" std::uint64_t batch(const CaptureOracleInput *input, std::size_t iterations) {
+extern "C" std::uint64_t batch(const CaptureOracleInput* input, std::size_t iterations) {
   std::uint64_t checksum = 0;
   for (std::size_t iteration = 0; iteration < iterations; ++iteration) {
     CaptureOracleResult result;

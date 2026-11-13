@@ -6,7 +6,7 @@
 // STATUS: pending
 // CONTRACT: reserve may free the storage used by readable views.
 // SCENARIO: Diagnose the invalidating call because an old view is read afterward.
-void queueReallocation(tbc::view<spec::byte_queue &> queue) {
+void queueReallocation(tbc::view<spec::byte_queue&> queue) {
   const auto view = queue.readable();
   queue.reserve(1024); // expected-error [tbc-invalidated-borrow]
   spec::observe(view);
@@ -20,7 +20,7 @@ void queueReallocation(tbc::view<spec::byte_queue &> queue) {
 // STATUS: pending
 // CONTRACT: Invalidating storage is legal after its borrowed view is no longer required.
 // SCENARIO: Read the old view before reserve and obtain a fresh view afterward.
-void queueGrowthAfterRead(tbc::view<spec::byte_queue &> queue) {
+void queueGrowthAfterRead(tbc::view<spec::byte_queue&> queue) {
   spec::observe(queue.readable());
   queue.reserve(1024);
   spec::observe(queue.readable());
@@ -34,7 +34,7 @@ void queueGrowthAfterRead(tbc::view<spec::byte_queue &> queue) {
 // STATUS: pending
 // CONTRACT: Compaction changes the logical elements denoted by old views even without allocation.
 // SCENARIO: Address stability alone cannot preserve an old logical view.
-void queueCompaction(tbc::view<spec::byte_queue &> queue) {
+void queueCompaction(tbc::view<spec::byte_queue&> queue) {
   const auto view = queue.readable();
   queue.compact(); // expected-error [tbc-invalidated-borrow]
   spec::observe(view);
@@ -48,7 +48,7 @@ void queueCompaction(tbc::view<spec::byte_queue &> queue) {
 // STATUS: pending
 // CONTRACT: A vector copied from the readable range owns independent elements.
 // SCENARIO: Compaction cannot invalidate the copied bytes; accept.
-void queueCopiedBeforeCompaction(tbc::view<spec::byte_queue &> queue) {
+void queueCopiedBeforeCompaction(tbc::view<spec::byte_queue&> queue) {
   const auto view = queue.readable();
   const std::vector<std::byte> copied{view.begin(), view.end()};
   queue.compact();
@@ -63,7 +63,7 @@ void queueCopiedBeforeCompaction(tbc::view<spec::byte_queue &> queue) {
 // STATUS: pending
 // CONTRACT: read returns a view of destination, not of the stream receiver.
 // SCENARIO: A long-lived stream cannot make a local destination escape safely.
-spec::bytes_a readLocalDestination(tbc::view<const spec::retained_stream &, tbc::lt::b> stream) {
+spec::bytes_a readLocalDestination(tbc::view<const spec::retained_stream&, tbc::lt::b> stream) {
   std::array<std::byte, 8> destination{};
   return stream.read(destination); // expected-error [tbc-dangling-borrow]
 }
@@ -89,7 +89,7 @@ spec::bytes_a readCallerDestination(spec::writable_bytes_a destination) {
 // STATUS: pending
 // CONTRACT: appendUninitialized grants writable storage, not initialized values.
 // SCENARIO: Reject a read of the appended range before any initializing write.
-void readUninitializedAppend(tbc::view<spec::byte_queue &> queue) {
+void readUninitializedAppend(tbc::view<spec::byte_queue&> queue) {
   const auto writable = queue.appendUninitialized(8);
   spec::observe(writable); // expected-error [tbc-uninitialized-read]
 }
@@ -102,7 +102,7 @@ void readUninitializedAppend(tbc::view<spec::byte_queue &> queue) {
 // STATUS: pending
 // CONTRACT: The initializer must establish initialization for every output element; this effect remains a pending model.
 // SCENARIO: The read follows initialize, so the writable span now contains values.
-void initializeAppend(tbc::view<spec::byte_queue &> queue) {
+void initializeAppend(tbc::view<spec::byte_queue&> queue) {
   const auto writable = queue.appendUninitialized(8);
   spec::initialize(writable);
   spec::observe(writable);

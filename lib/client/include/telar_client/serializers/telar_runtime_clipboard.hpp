@@ -21,11 +21,7 @@ namespace telar {
 
   template <>
   struct MessageSchema<ReadRuntimeClipboard>
-      : Schema<Direction::client,
-               ClientTag::read_runtime_clipboard,
-               Field<&ReadRuntimeClipboard::request_id, NonzeroU64, "request_id">,
-               Field<&ReadRuntimeClipboard::transfer_id, u64, "transfer_id">,
-               Field<&ReadRuntimeClipboard::offset, u64, "offset">> {};
+      : Schema<Direction::client, ClientTag::read_runtime_clipboard, Field<&ReadRuntimeClipboard::request_id, NonzeroU64, "request_id">, Field<&ReadRuntimeClipboard::transfer_id, u64, "transfer_id">, Field<&ReadRuntimeClipboard::offset, u64, "offset">> {};
 
   struct RuntimeClipboardChunk {
     std::uint64_t request_id = 0;
@@ -45,15 +41,6 @@ namespace telar {
 
   template <>
   struct MessageSchema<RuntimeClipboardChunk>
-      : Schema<Direction::server,
-               ServerTag::runtime_clipboard_chunk,
-               Field<&RuntimeClipboardChunk::request_id, NonzeroU64, "request_id">,
-               Field<&RuntimeClipboardChunk::transfer_id, NonzeroU64, "transfer_id">,
-               Field<&RuntimeClipboardChunk::offset, u64, "offset">,
-               Field<&RuntimeClipboardChunk::total_bytes, u64, "total_bytes">,
-               Field<&RuntimeClipboardChunk::mime, Utf8Text16<256>, "mime">,
-               Field<&RuntimeClipboardChunk::bytes,
-                     SizedBytes<u32, runtime_clipboard_chunk_bytes>,
-                     "bytes">> {};
+      : Schema<Direction::server, ServerTag::runtime_clipboard_chunk, Field<&RuntimeClipboardChunk::request_id, NonzeroU64, "request_id">, Field<&RuntimeClipboardChunk::transfer_id, NonzeroU64, "transfer_id">, Field<&RuntimeClipboardChunk::offset, u64, "offset">, Field<&RuntimeClipboardChunk::total_bytes, u64, "total_bytes">, Field<&RuntimeClipboardChunk::mime, Utf8Text16<256>, "mime">, Field<&RuntimeClipboardChunk::bytes, SizedBytes<u32, runtime_clipboard_chunk_bytes>, "bytes">> {};
 
 } // namespace telar

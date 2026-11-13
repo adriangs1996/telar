@@ -8,11 +8,11 @@ extern "C" {
 #endif
 
 #ifdef __cplusplus
-using TelarGuiBlurConnection = void *(*)();
+using TelarGuiBlurConnection = void* (*)();
 #else
-typedef void *(*TelarGuiBlurConnection)(void);
+typedef void* (*TelarGuiBlurConnection)(void);
 #endif
-typedef int32_t (*TelarGuiBlurSetRadius)(void *, size_t, int);
+typedef int32_t (*TelarGuiBlurSetRadius)(void*, size_t, int);
 
 typedef struct {
   TelarGuiBlurConnection connection;

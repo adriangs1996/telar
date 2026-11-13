@@ -1,14 +1,14 @@
 #ifdef __clangd__
 static_assert(true);
 #endif
-#include <tbc/view.hpp>
 #include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <stdexcept>
 #include <string_view>
-#include <optional>
+#include <tbc/view.hpp>
 #include <utility>
 #include <vector>
 
@@ -17,6 +17,7 @@ static_assert(true);
 #include <gtest/gtest.h>
 
 import telar.ebnf.parser;
+
 namespace {
   TEST(Term, IdentifierProducesReference) {
     auto tokenizer = ebnf::Lexer{};
@@ -27,10 +28,12 @@ namespace {
     ASSERT_EQ(parser_testing::childCount(tree, root), 1u);
 
     const auto rule = parser_testing::nthChild(tree, root, 0);
+
     ASSERT_NE(rule, ebnf::none_handle);
     ASSERT_EQ(parser_testing::childCount(tree, rule), 1u);
 
     const auto rhs = parser_testing::nthChild(tree, rule, 0);
+
     ASSERT_NE(rhs, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(rhs), ebnf::node_kind::Reference);
     EXPECT_EQ(tree.getText(rhs), "foo");
@@ -45,10 +48,12 @@ namespace {
     ASSERT_EQ(parser_testing::childCount(tree, root), 1u);
 
     const auto rule = parser_testing::nthChild(tree, root, 0);
+
     ASSERT_NE(rule, ebnf::none_handle);
     ASSERT_EQ(parser_testing::childCount(tree, rule), 1u);
 
     const auto rhs = parser_testing::nthChild(tree, rule, 0);
+
     ASSERT_NE(rhs, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(rhs), ebnf::node_kind::Literal);
     EXPECT_EQ(tree.getText(rhs), "hello");
@@ -63,10 +68,12 @@ namespace {
     ASSERT_EQ(parser_testing::childCount(tree, root), 1u);
 
     const auto rule = parser_testing::nthChild(tree, root, 0);
+
     ASSERT_NE(rule, ebnf::none_handle);
     ASSERT_EQ(parser_testing::childCount(tree, rule), 1u);
 
     const auto rhs = parser_testing::nthChild(tree, rule, 0);
+
     ASSERT_NE(rhs, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(rhs), ebnf::node_kind::Literal);
     EXPECT_EQ(tree.getText(rhs), "world");
@@ -81,10 +88,12 @@ namespace {
     ASSERT_EQ(parser_testing::childCount(tree, root), 1u);
 
     const auto rule = parser_testing::nthChild(tree, root, 0);
+
     ASSERT_NE(rule, ebnf::none_handle);
     ASSERT_EQ(parser_testing::childCount(tree, rule), 1u);
 
     const auto rhs = parser_testing::nthChild(tree, rule, 0);
+
     ASSERT_NE(rhs, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(rhs), ebnf::node_kind::Reference);
     EXPECT_EQ(tree.getText(rhs), "foo");
@@ -99,15 +108,18 @@ namespace {
     ASSERT_EQ(parser_testing::childCount(tree, root), 1u);
 
     const auto rule = parser_testing::nthChild(tree, root, 0);
+
     ASSERT_NE(rule, ebnf::none_handle);
     ASSERT_EQ(parser_testing::childCount(tree, rule), 1u);
 
     const auto rhs = parser_testing::nthChild(tree, rule, 0);
+
     ASSERT_NE(rhs, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(rhs), ebnf::node_kind::Optional);
     ASSERT_EQ(parser_testing::childCount(tree, rhs), 1u);
 
     const auto inner = parser_testing::nthChild(tree, rhs, 0);
+
     ASSERT_NE(inner, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(inner), ebnf::node_kind::Reference);
     EXPECT_EQ(tree.getText(inner), "foo");
@@ -122,15 +134,18 @@ namespace {
     ASSERT_EQ(parser_testing::childCount(tree, root), 1u);
 
     const auto rule = parser_testing::nthChild(tree, root, 0);
+
     ASSERT_NE(rule, ebnf::none_handle);
     ASSERT_EQ(parser_testing::childCount(tree, rule), 1u);
 
     const auto rhs = parser_testing::nthChild(tree, rule, 0);
+
     ASSERT_NE(rhs, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(rhs), ebnf::node_kind::ZeroOrMore);
     ASSERT_EQ(parser_testing::childCount(tree, rhs), 1u);
 
     const auto inner = parser_testing::nthChild(tree, rhs, 0);
+
     ASSERT_NE(inner, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(inner), ebnf::node_kind::Reference);
     EXPECT_EQ(tree.getText(inner), "foo");
@@ -166,15 +181,18 @@ namespace {
     ASSERT_EQ(parser_testing::childCount(tree, root), 1u);
 
     const auto rule = parser_testing::nthChild(tree, root, 0);
+
     ASSERT_NE(rule, ebnf::none_handle);
     ASSERT_EQ(parser_testing::childCount(tree, rule), 1u);
 
     const auto rhs = parser_testing::nthChild(tree, rule, 0);
+
     ASSERT_NE(rhs, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(rhs), ebnf::node_kind::Optional);
     ASSERT_EQ(parser_testing::childCount(tree, rhs), 1u);
 
     const auto inner = parser_testing::nthChild(tree, rhs, 0);
+
     ASSERT_NE(inner, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(inner), ebnf::node_kind::Reference);
     EXPECT_EQ(tree.getText(inner), "foo");
@@ -189,20 +207,24 @@ namespace {
     ASSERT_EQ(parser_testing::childCount(tree, root), 1u);
 
     const auto rule = parser_testing::nthChild(tree, root, 0);
+
     ASSERT_NE(rule, ebnf::none_handle);
     ASSERT_EQ(parser_testing::childCount(tree, rule), 1u);
 
     const auto rhs = parser_testing::nthChild(tree, rule, 0);
+
     ASSERT_NE(rhs, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(rhs), ebnf::node_kind::Optional);
     ASSERT_EQ(parser_testing::childCount(tree, rhs), 1u);
 
     const auto zom = parser_testing::nthChild(tree, rhs, 0);
+
     ASSERT_NE(zom, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(zom), ebnf::node_kind::ZeroOrMore);
     ASSERT_EQ(parser_testing::childCount(tree, zom), 1u);
 
     const auto leaf = parser_testing::nthChild(tree, zom, 0);
+
     ASSERT_NE(leaf, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(leaf), ebnf::node_kind::Reference);
   }
@@ -216,15 +238,18 @@ namespace {
     ASSERT_EQ(parser_testing::childCount(tree, root), 1u);
 
     const auto rule = parser_testing::nthChild(tree, root, 0);
+
     ASSERT_NE(rule, ebnf::none_handle);
     ASSERT_EQ(parser_testing::childCount(tree, rule), 1u);
 
     const auto rhs = parser_testing::nthChild(tree, rule, 0);
+
     ASSERT_NE(rhs, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(rhs), ebnf::node_kind::ZeroOrMore);
     ASSERT_EQ(parser_testing::childCount(tree, rhs), 1u);
 
     const auto inner = parser_testing::nthChild(tree, rhs, 0);
+
     ASSERT_NE(inner, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(inner), ebnf::node_kind::Literal);
     EXPECT_EQ(tree.getText(inner), "x");

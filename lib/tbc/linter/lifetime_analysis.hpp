@@ -14,8 +14,8 @@ namespace tbc_lint {
     explicit lifetime_analysis(bool errors);
     ~lifetime_analysis();
     void beginTranslationUnit();
-    void analyze(const clang::FunctionDecl &function, clang::ASTContext &context);
-    void finishTranslationUnit(clang::ASTContext &context);
+    void analyze(const clang::FunctionDecl& function, clang::ASTContext& context);
+    void finishTranslationUnit(clang::ASTContext& context);
 
   private:
     struct implementation;

@@ -15,108 +15,118 @@ import telar.base.text;
 // directory is in, read natively on a worker so a large work tree never stalls the runtime.
 export namespace telar::runtime {
 
-struct ShellGitRequest {
-  std::uint64_t pane = 0;
-  std::uint64_t generation = 0;
-  FixedText<PATH_MAX> directory;
-};
+  struct ShellGitRequest {
+    std::uint64_t pane = 0;
+    std::uint64_t generation = 0;
+    FixedText<PATH_MAX> directory;
+  };
 
-struct ShellGitSummary {
-  bool repository = false;
-  bool detached = false;
-  FixedText<256> branch;
-  bool divergence_known = false;
-  std::uint32_t ahead = 0;
-  std::uint32_t behind = 0;
-  bool changes_known = false;
-  std::uint32_t staged = 0;
-  std::uint32_t unstaged = 0;
-  std::uint32_t conflicted = 0;
+  struct ShellGitSummary {
+    bool repository = false;
+    bool detached = false;
+    FixedText<256> branch;
+    bool divergence_known = false;
+    std::uint32_t ahead = 0;
+    std::uint32_t behind = 0;
+    bool changes_known = false;
+    std::uint32_t staged = 0;
+    std::uint32_t unstaged = 0;
+    std::uint32_t conflicted = 0;
 
-  bool operator==(const ShellGitSummary &) const noexcept = default;
+    bool operator==(const ShellGitSummary&) const noexcept = default;
 
-  inline PaneGit message(std::uint64_t pane) const noexcept {
-    return PaneGit{.pane_id = pane, .repository = repository, .detached = detached, .branch = branch.view(), .divergence_known = divergence_known, .ahead = ahead, .behind = behind, .changes_known = changes_known, .staged = staged, .unstaged = unstaged, .conflicted = conflicted};
-  }
-};
+    inline PaneGit message(std::uint64_t pane) const noexcept {
+      return PaneGit{.pane_id = pane, .repository = repository, .detached = detached, .branch = branch.view(), .divergence_known = divergence_known, .ahead = ahead, .behind = behind, .changes_known = changes_known, .staged = staged, .unstaged = unstaged, .conflicted = conflicted};
+    }
+  };
 
-struct ShellGitResult {
-  std::uint64_t pane = 0;
-  std::uint64_t generation = 0;
-  ShellGitSummary summary;
-};
+  struct ShellGitResult {
+    std::uint64_t pane = 0;
+    std::uint64_t generation = 0;
+    ShellGitSummary summary;
+  };
 
-// Runs on the worker. The reader keeps its caches between reads, so a prompt in the same
-// repository rechecks the work tree without parsing the index or the history again.
-class ShellGitReader {
-public:
-  using Request = ShellGitRequest;
-  using Result = ShellGitResult;
+  // Runs on the worker. The reader keeps its caches between reads, so a prompt in the same
+  // repository rechecks the work tree without parsing the index or the history again.
+  class ShellGitReader {
+  public:
+    using Request = ShellGitRequest;
+    using Result = ShellGitResult;
 
-  inline ShellGitReader()
-      : reader_(memory_) {}
+    inline ShellGitReader()
+        : reader_(memory_) {}
 
-  inline Result observe(const Request &request) noexcept {
-    Result result{.pane = request.pane, .generation = request.generation, .summary = {}};
-    const auto &status = reader_.read(request.directory.view());
-    auto &summary = result.summary;
-    summary.repository = status.repository == git::RepositoryState::ready;
-    if (!summary.repository) {
+    inline Result observe(const Request& request) noexcept {
+      Result result{.pane = request.pane, .generation = request.generation, .summary = {}};
+      const auto& status = reader_.read(request.directory.view());
+      auto& summary = result.summary;
+
+      summary.repository = status.repository == git::RepositoryState::ready;
+      if (!summary.repository) {
+        return result;
+      }
+
+      summary.detached = status.head == git::HeadState::detached;
+      if (summary.detached) {
+        std::array<char, 2 * git::maximum_hash_size> digits{};
+
+        summary.branch.assign(status.head_id.hex(digits, 7));
+      } else {
+        summary.branch.assign(std::string_view{status.branch}.substr(0, 255));
+      }
+
+      summary.divergence_known = status.divergence == git::Accuracy::exact;
+      summary.ahead = status.ahead;
+      summary.behind = status.behind;
+      summary.changes_known = status.staged == git::Accuracy::exact && status.unstaged == git::Accuracy::exact;
+      const auto& changes = status.changes;
+
+      summary.staged = changes.staged_added + changes.staged_modified + changes.staged_deleted;
+      summary.unstaged = changes.unstaged_modified + changes.unstaged_deleted + changes.intent_to_add;
+      summary.conflicted = changes.conflicted;
       return result;
     }
-    summary.detached = status.head == git::HeadState::detached;
-    if (summary.detached) {
-      std::array<char, 2 * git::maximum_hash_size> digits{};
-      summary.branch.assign(status.head_id.hex(digits, 7));
-    } else {
-      summary.branch.assign(std::string_view{status.branch}.substr(0, 255));
+
+    inline void stop() noexcept {}
+
+  private:
+    SystemAllocator memory_;
+    git::StatusReader<SystemAllocator> reader_;
+  };
+
+  // One read at a time: while one runs, the latest request of each other pane waits.
+  class ShellGitService {
+  public:
+    inline ShellGitService()
+        : worker_(std::in_place) {}
+
+    inline void request(std::uint64_t pane, std::uint64_t generation, std::string_view directory) {
+      if (directory.empty() || directory.front() != '/' || directory.size() >= PATH_MAX) {
+        return;
+      }
+
+      ShellGitRequest next{.pane = pane, .generation = generation, .directory = {}};
+
+      next.directory.assign(directory);
+      queue_.dropWaiting([&](const ShellGitRequest& entry) {
+        return entry.pane == pane;
+      });
+
+      queue_.request(worker_, next);
     }
-    summary.divergence_known = status.divergence == git::Accuracy::exact;
-    summary.ahead = status.ahead;
-    summary.behind = status.behind;
-    summary.changes_known = status.staged == git::Accuracy::exact && status.unstaged == git::Accuracy::exact;
-    const auto &changes = status.changes;
-    summary.staged = changes.staged_added + changes.staged_modified + changes.staged_deleted;
-    summary.unstaged = changes.unstaged_modified + changes.unstaged_deleted + changes.intent_to_add;
-    summary.conflicted = changes.conflicted;
-    return result;
-  }
 
-  inline void stop() noexcept {}
-
-private:
-  SystemAllocator memory_;
-  git::StatusReader<SystemAllocator> reader_;
-};
-
-// One read at a time: while one runs, the latest request of each other pane waits.
-class ShellGitService {
-public:
-  inline ShellGitService()
-      : worker_(std::in_place) {}
-
-  inline void request(std::uint64_t pane, std::uint64_t generation, std::string_view directory) {
-    if (directory.empty() || directory.front() != '/' || directory.size() >= PATH_MAX) {
-      return;
+    template <typename Consumer>
+    inline void collect(Consumer&& consume) {
+      queue_.collect(worker_, std::forward<Consumer>(consume));
     }
-    ShellGitRequest next{.pane = pane, .generation = generation, .directory = {}};
-    next.directory.assign(directory);
-    queue_.dropWaiting([&](const ShellGitRequest &entry) { return entry.pane == pane; });
-    queue_.request(worker_, next);
-  }
 
-  template <typename Consumer>
-  inline void collect(Consumer &&consume) {
-    queue_.collect(worker_, std::forward<Consumer>(consume));
-  }
+    inline int descriptor() const noexcept {
+      return worker_.descriptor();
+    }
 
-  inline int descriptor() const noexcept {
-    return worker_.descriptor();
-  }
-
-private:
-  ObservationWorker<ShellGitReader> worker_;
-  SerialQueue<ShellGitRequest> queue_;
-};
+  private:
+    ObservationWorker<ShellGitReader> worker_;
+    SerialQueue<ShellGitRequest> queue_;
+  };
 
 }

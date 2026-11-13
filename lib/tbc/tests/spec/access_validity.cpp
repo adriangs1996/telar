@@ -33,7 +33,7 @@ void guardedIndex(tbc::view<std::span<const int>> values, std::size_t index) {
 // STATUS: pending
 // CONTRACT: A nullable borrowed parameter must be proven non-null before dereference.
 // SCENARIO: A borrowed pointer may be null; view does not promise that allocation succeeded.
-void nullableDereference(tbc::view<const int *> input) {
+void nullableDereference(tbc::view<const int*> input) {
   spec::observe(*input); // expected-error [tbc-nullable-dereference]
 }
 
@@ -45,7 +45,7 @@ void nullableDereference(tbc::view<const int *> input) {
 // STATUS: pending
 // CONTRACT: The null guard establishes dereferenceability only with respect to nullness.
 // SCENARIO: Caller-provided storage validity is a precondition; the guarded access is accepted.
-void guardedPointer(tbc::view<const int *> input) {
+void guardedPointer(tbc::view<const int*> input) {
   if (input == nullptr) {
     return;
   }

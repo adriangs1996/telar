@@ -7,17 +7,18 @@
 // A C codec's stream, as zlib's z_stream: the buffers of one call are raw pointers in it.
 extern "C" {
 typedef struct codec_stream {
-  const unsigned char *next_in;
+  const unsigned char* next_in;
   unsigned avail_in;
-  unsigned char *next_out;
+  unsigned char* next_out;
   unsigned avail_out;
 } codec_stream;
-int codec_pump(codec_stream *stream);
+
+int codec_pump(codec_stream* stream);
 
 // A header list entry, as nghttp2's nghttp2_nv: raw pointers to a name and a value.
 typedef struct codec_field {
-  const unsigned char *name;
-  const unsigned char *value;
+  const unsigned char* name;
+  const unsigned char* value;
   unsigned long name_size;
   unsigned long value_size;
 } codec_field;
@@ -33,27 +34,27 @@ namespace library {
   class item {
   public:
     virtual ~item();
-    virtual node *update(node *previous);
+    virtual node* update(node* previous);
   };
 
   class string {
   public:
-    explicit string(const char *text);
+    explicit string(const char* text);
     ~string();
-    [[nodiscard]] const char *data() const;
+    [[nodiscard]] const char* data() const;
 
   private:
-    char *buffer_;
+    char* buffer_;
   };
 
   // A trivial destructor cannot release memory, so this type only views a string.
   class string_view {
   public:
-    explicit string_view(const string &text);
-    [[nodiscard]] const char *data() const;
+    explicit string_view(const string& text);
+    [[nodiscard]] const char* data() const;
 
   private:
-    const char *data_;
+    const char* data_;
   };
 
   template <typename type>
@@ -63,13 +64,13 @@ namespace library {
 
     list();
     ~list();
-    void append(const type &item);
-    [[nodiscard]] const type &at(int index) const;
+    void append(const type& item);
+    [[nodiscard]] const type& at(int index) const;
     [[nodiscard]] type value(int index) const;
-    [[nodiscard]] const type *data() const;
+    [[nodiscard]] const type* data() const;
 
   private:
-    type *items_;
+    type* items_;
   };
 
   // Releases resources without being a container: its pointer results have no known relation to it.
@@ -77,15 +78,15 @@ namespace library {
   public:
     component();
     ~component();
-    [[nodiscard]] int *create();
+    [[nodiscard]] int* create();
 
   private:
-    void *state_;
+    void* state_;
   };
 
-  [[nodiscard]] const char *describe(int code);
+  [[nodiscard]] const char* describe(int code);
 
-  [[nodiscard]] inline const char *pass(const char *text) {
+  [[nodiscard]] inline const char* pass(const char* text) {
     return text;
   }
 }

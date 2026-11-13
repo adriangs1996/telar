@@ -3,27 +3,25 @@
 static_assert(true);
 #endif
 
-
 #include "../core/memory.hpp"
 #include "../platform/font.h"
 #include "telar_base/memory/allocator.hpp"
-#include <cerrno>
-#include <exception>
 #include "telar_platform/file_descriptor.hpp"
-#include <fcntl.h>
-#include <sys/stat.h>
 #include "terminal_font_requests_variant.hpp"
 #include <array>
+#include <cerrno>
 #include <cstdint>
 #include <cstdio>
+#include <exception>
+#include <fcntl.h>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
+#include <sys/stat.h>
 #include <vector>
 
 #include "core/memory.hpp"
 #include "platform/font.h"
-
 
 import telar.platform;
 
@@ -32,11 +30,11 @@ using namespace telar::gui;
 
 constexpr std::size_t maximum_row_cells = 4096;
 
-bool readBytes(void *data, std::size_t size) {
+bool readBytes(void* data, std::size_t size) {
   return std::fread(data, 1, size, stdin) == size;
 }
 
-bool readHeader(std::array<std::uint32_t, 2> &header) {
+bool readHeader(std::array<std::uint32_t, 2>& header) {
   const auto size = sizeof(header);
   const auto count = std::fread(header.data(), 1, size, stdin);
   if (count == 0 && std::feof(stdin)) {
@@ -56,7 +54,7 @@ void writeValue(std::uint32_t value) {
   }
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   try {
     if (argc < 2) {
       throw std::runtime_error{"ExpectedFontFiles"};
@@ -83,7 +81,7 @@ int main(int argc, char **argv) {
       catalog.current = sets[header[0]];
       item.install(&catalog);
       std::vector<CellValue> cells(header[1]);
-      for (auto &cell : cells) {
+      for (auto& cell : cells) {
         std::array<std::uint8_t, 4> metadata{};
         if (!readBytes(metadata.data(), metadata.size()) || metadata[1] > cell.text.size() || metadata[0] > static_cast<Byte>(CellWidth::wide) || !readBytes(cell.text.data(), metadata[1])) {
           throw std::runtime_error{"InvalidCell"};
@@ -97,7 +95,7 @@ int main(int argc, char **argv) {
       catalog.requests.clear();
       item.requestRowFonts(cells);
       writeValue(static_cast<std::uint32_t>(catalog.requests.size()));
-      for (const auto &text : catalog.requests) {
+      for (const auto& text : catalog.requests) {
         writeValue(static_cast<std::uint32_t>(text.role));
         writeValue(static_cast<std::uint32_t>(text.text.size()));
         if (std::fwrite(text.text.data(), 1, text.text.size(), stdout) != text.text.size()) {
@@ -107,7 +105,7 @@ int main(int argc, char **argv) {
     }
 
     return std::fflush(stdout) == 0 ? 0 : 1;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     std::cerr << error.what() << '\n';
     return 1;
   }

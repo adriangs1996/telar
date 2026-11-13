@@ -14,7 +14,7 @@ namespace telar::clipboard::linux_backend {
   inline constexpr auto read_timeout = std::chrono::seconds(5);
 
   struct format {
-    const char *target;
+    const char* target;
     std::string_view mime_type;
   };
 
@@ -38,8 +38,8 @@ namespace telar::clipboard::linux_backend {
       }
     }
 
-    descriptor(const descriptor &) = delete;
-    descriptor &operator=(const descriptor &) = delete;
+    descriptor(const descriptor&) = delete;
+    descriptor& operator=(const descriptor&) = delete;
 
     int get() const {
       return value_;

@@ -48,19 +48,23 @@ namespace {
     case TokenKind::error:
       return "error";
     }
+
     return "?";
   }
 
   std::string render(std::string_view line, std::span<const Token> tokens) {
     std::string out;
-    for (const Token &t : tokens) {
+
+    for (const Token& t : tokens) {
       if (!out.empty()) {
         out += ' ';
       }
+
       out += name(t.kind);
       out += ':';
       out += line.substr(t.begin, t.end - t.begin);
     }
+
     return out;
   }
 
@@ -88,13 +92,11 @@ namespace {
         {posix, "a | b |& c || d && e ; f & g", "cmd:a ctl:| cmd:b ctl:|& cmd:c ctl:|| cmd:d ctl:&& cmd:e ctl:; cmd:f ctl:& cmd:g"},
         {posix, "a &! b &| c", "cmd:a ctl:&! cmd:b ctl:&| cmd:c"},
         {posix, "a\nb", "cmd:a ctl:\n cmd:b"},
-        {posix, "cmd >out 2>&1 &>log >>app <in <<<str 3<>rw >|clob 2>&- >!z &>>both",
-         "cmd:cmd redir:> arg:out redir:2>&1 redir:&> arg:log redir:>> arg:app redir:< arg:in redir:<<< arg:str "
-         "redir:3<> arg:rw redir:>| arg:clob redir:2>&- redir:>! arg:z redir:&>> arg:both"},
+        {posix, "cmd >out 2>&1 &>log >>app <in <<<str 3<>rw >|clob 2>&- >!z &>>both", "cmd:cmd redir:> arg:out redir:2>&1 redir:&> arg:log redir:>> arg:app redir:< arg:in redir:<<< arg:str "
+                                                                                      "redir:3<> arg:rw redir:>| arg:clob redir:2>&- redir:>! arg:z redir:&>> arg:both"},
         {posix, ">out cmd arg", "redir:> arg:out cmd:cmd arg:arg"},
         {posix, "a>b", "cmd:a redir:> arg:b"},
-        {posix, "if true; then echo; elif false; then :; else x; fi",
-         "kw:if cmd:true ctl:; kw:then cmd:echo ctl:; kw:elif cmd:false ctl:; kw:then cmd:: ctl:; kw:else cmd:x ctl:; kw:fi"},
+        {posix, "if true; then echo; elif false; then :; else x; fi", "kw:if cmd:true ctl:; kw:then cmd:echo ctl:; kw:elif cmd:false ctl:; kw:then cmd:: ctl:; kw:else cmd:x ctl:; kw:fi"},
         {posix, "for i in a b; do echo $i; done", "kw:for arg:i kw:in arg:a arg:b ctl:; kw:do cmd:echo var:$i ctl:; kw:done"},
         {posix, "for i do :; done", "kw:for arg:i kw:do cmd:: ctl:; kw:done"},
         {posix, "for ((i=0; i<3; i++)); do :; done", "kw:for kw:(( sub:i=0; i<3; i++ kw:)) ctl:; kw:do cmd:: ctl:; kw:done"},
@@ -104,15 +106,13 @@ namespace {
         {posix, "echo for if then done", "cmd:echo arg:for arg:if arg:then arg:done"},
         {posix, "X=1 if", "assign:X=1 cmd:if"},
         {posix, "echo 'do' \"if\"", "cmd:echo str:'do' str:\"if\""},
-        {posix, "case $x in a|b) echo;; (*) :;& c) ;;& esac",
-         "kw:case var:$x kw:in arg:a ctl:| arg:b ctl:) cmd:echo ctl:;; ctl:( arg:* ctl:) cmd:: ctl:;& arg:c ctl:) "
-         "ctl:;;& kw:esac"},
+        {posix, "case $x in a|b) echo;; (*) :;& c) ;;& esac", "kw:case var:$x kw:in arg:a ctl:| arg:b ctl:) cmd:echo ctl:;; ctl:( arg:* ctl:) cmd:: ctl:;& arg:c ctl:) "
+                                                              "ctl:;;& kw:esac"},
         {posix, "case $x in @(a|b)) x; esac", "kw:case var:$x kw:in arg:@(a|b) ctl:) cmd:x ctl:; kw:esac"},
         {posix, "{ echo; } > f", "kw:{ cmd:echo ctl:; kw:} redir:> arg:f"},
         {posix, "{echo}", "cmd:{echo}"},
         {posix, "(cd x; ls) | wc", "ctl:( cmd:cd arg:x ctl:; cmd:ls ctl:) ctl:| cmd:wc"},
-        {posix, "[[ -f a && $b == c || ( d < e ) ]]",
-         "kw:[[ opt:-f arg:a ctl:&& var:$b arg:== arg:c ctl:|| ctl:( arg:d ctl:< arg:e ctl:) kw:]]"},
+        {posix, "[[ -f a && $b == c || ( d < e ) ]]", "kw:[[ opt:-f arg:a ctl:&& var:$b arg:== arg:c ctl:|| ctl:( arg:d ctl:< arg:e ctl:) kw:]]"},
         {posix, "! time coproc x", "kw:! kw:time kw:coproc cmd:x"},
         {posix, "foo() { echo; }", "cmd:foo ctl:() kw:{ cmd:echo ctl:; kw:}"},
         {posix, "function foo { :; }", "kw:function arg:foo kw:{ cmd:: ctl:; kw:}"},
@@ -138,8 +138,7 @@ namespace {
         {fish, "echo 'it\\'s' \"a $b c\" \"$(pwd)\"", "cmd:echo str:'it\\'s' str:\"a  var:$b str: c\" str:\" sub:$( cmd:pwd sub:) str:\""},
         {fish, "echo a(b)c", "cmd:echo arg:a sub:( cmd:b sub:) arg:c"},
         {fish, "begin; echo; end | cat", "kw:begin ctl:; cmd:echo ctl:; kw:end ctl:| cmd:cat"},
-        {fish, "if test -f x; and true; or false; else if not a; end",
-         "kw:if cmd:test opt:-f arg:x ctl:; kw:and cmd:true ctl:; kw:or cmd:false ctl:; kw:else kw:if kw:not cmd:a ctl:; kw:end"},
+        {fish, "if test -f x; and true; or false; else if not a; end", "kw:if cmd:test opt:-f arg:x ctl:; kw:and cmd:true ctl:; kw:or cmd:false ctl:; kw:else kw:if kw:not cmd:a ctl:; kw:end"},
         {fish, "while true; ! false; end", "kw:while cmd:true ctl:; kw:! cmd:false ctl:; kw:end"},
         {fish, "for f in *.txt; echo $f; end", "kw:for arg:f kw:in arg:*.txt ctl:; cmd:echo var:$f ctl:; kw:end"},
         {fish, "function foo -a x; echo; end", "kw:function arg:foo opt:-a arg:x ctl:; cmd:echo ctl:; kw:end"},
@@ -153,10 +152,13 @@ namespace {
         {fish, "echo \\n \\(", "cmd:echo arg:\\n arg:\\("},
         {fish, "end", "error:end"},
     };
+
     std::array<Token, 256> tokens;
-    for (const TokenCase &c : cases) {
+
+    for (const TokenCase& c : cases) {
       const Lexed lexed = lex(c.line, c.syntax, tokens);
       const std::string got = render(c.line, std::span{tokens}.first(lexed.tokens));
+
       check(!lexed.overflow && got == c.expected, "tokens", c.line, got);
     }
   }
@@ -165,6 +167,7 @@ namespace {
     std::array<Token, 32> tokens;
     const std::string_view line = "cat >f 'x";
     const Lexed lexed = lex(line, posix, tokens);
+
     check(lexed.tokens == 4, "flag count", line);
     check(tokens[0].flags == Token::word_start && tokens[0].role == TokenKind::command, "command flags", line);
     check(tokens[2].flags == (Token::word_start | Token::redirect_target), "redirect target", line);
@@ -172,16 +175,17 @@ namespace {
 
     const std::string_view dq = "echo \"a $b";
     const Lexed d = lex(dq, posix, tokens);
+
     check(tokens[d.tokens - 1].kind == TokenKind::variable, "double last piece", dq);
     const std::string_view dq2 = "echo \"a $b c";
     const Lexed d2 = lex(dq2, posix, tokens);
+
     check((tokens[d2.tokens - 1].flags & Token::unterminated) != 0, "double unterminated", dq2);
 
     const std::string_view mixed = "--opt=\"$x\"";
     const Lexed m = lex("cmd " + std::string{mixed}, posix, tokens);
-    check(m.tokens == 5 && tokens[2].role == TokenKind::option && tokens[3].role == TokenKind::option &&
-              tokens[3].kind == TokenKind::variable,
-          "piece role", mixed);
+
+    check(m.tokens == 5 && tokens[2].role == TokenKind::option && tokens[3].role == TokenKind::option && tokens[3].kind == TokenKind::variable, "piece role", mixed);
   }
 
   struct CompleteCase {
@@ -312,9 +316,12 @@ namespace {
         {fish, "a ||", trailing_operator},
         {fish, "a 2>|", trailing_operator},
     };
+
     std::array<Token, 128> tokens;
-    for (const CompleteCase &c : cases) {
+
+    for (const CompleteCase& c : cases) {
       const Lexed lexed = lex(c.line, c.syntax, tokens);
+
       check(lexed.completeness == c.expected, "completeness", c.line, std::to_string(static_cast<int>(lexed.completeness)));
     }
   }
@@ -322,26 +329,35 @@ namespace {
   void testLimits() {
     std::array<Token, 512> tokens;
     std::string deep;
+
     for (std::size_t i = 0; i < max_depth + 1; ++i) {
       deep += "$(";
     }
+
     Lexed lexed = lex(deep, posix, tokens);
+
     check(lexed.completeness == Completeness::limit && tokens[lexed.tokens - 1].kind == TokenKind::error, "nesting limit", "$( x 65");
     std::string shallow;
+
     for (std::size_t i = 0; i < max_depth - 1; ++i) {
       shallow += "$(";
     }
+
     lexed = lex(shallow, posix, tokens);
     check(lexed.completeness == Completeness::open_substitution, "nesting below limit", "$( x 63");
 
     std::string heredocs = "cat";
+
     for (std::size_t i = 0; i < max_heredocs + 1; ++i) {
       heredocs += " <<E";
     }
+
     check(lex(heredocs, posix, tokens).completeness == Completeness::limit, "heredoc count", heredocs);
     const std::string long_delimiter = "cat <<" + std::string(max_delimiter + 1, 'x') + "\n";
+
     check(lex(long_delimiter, posix, tokens).completeness == Completeness::limit, "delimiter length", "<<xxx...");
     const std::string fits = "cat <<" + std::string(max_delimiter, 'x') + "\n" + std::string(max_delimiter, 'x');
+
     check(lex(fits, posix, tokens).completeness == Completeness::complete, "delimiter fits", "<<xxx...");
   }
 
@@ -349,28 +365,35 @@ namespace {
     std::array<Token, 2> small;
     const std::string_view line = "a b c d |";
     const Lexed lexed = lex(line, posix, small);
+
     check(lexed.overflow && lexed.tokens == 2, "token overflow", line);
     check(lexed.completeness == Completeness::trailing_operator && lexed.commands == 1, "verdict survives overflow", line);
 
     std::array<Word, 8> words;
     std::array<char, 64> text;
+
     check(commandAt(line, posix, small, lex(line, posix, small, 3), words, text).overflow, "commandAt on overflow", line);
 
     std::array<Token, 16> tokens;
     const std::string_view two = "ab cd";
     const Lexed full = lex(two, posix, tokens, 5);
     std::array<Word, 1> one_word;
+
     check(commandAt(two, posix, tokens, full, one_word, text).overflow, "word overflow", two);
     std::array<char, 3> short_text;
+
     check(commandAt(two, posix, tokens, full, words, short_text).overflow, "text overflow", two);
     std::array<char, 4> exact_words;
+
     check(commandAt(two, posix, tokens, full, words, exact_words).overflow, "prefix overflow", two);
     std::array<char, 6> enough;
     const CommandAt at = commandAt(two, posix, tokens, full, words, enough);
+
     check(!at.overflow && at.prefix == "cd", "prefix fits", two);
 
     // Tokens that do not match the line are rejected without reading past it.
     std::array<Token, 16> forged = tokens;
+
     forged[0].end = 99;
     check(commandAt(two, posix, forged, full, words, text).overflow, "forged bounds", two);
     forged = tokens;
@@ -380,6 +403,7 @@ namespace {
     const std::string_view many = "a | b | c";
     const Lexed m = lex(many, posix, tokens);
     std::array<Segment, 2> segments;
+
     check(segment(std::span{tokens}.first(m.tokens), segments) == 3, "segment overflow count", many);
   }
 
@@ -387,12 +411,15 @@ namespace {
     std::array<Segment, 32> segments;
     const std::size_t count = segment(tokens, segments);
     std::string out;
+
     for (std::size_t i = 0; i < count; ++i) {
       if (i > 0) {
         out += '#';
       }
+
       out += line.substr(segments[i].source.begin, segments[i].source.end - segments[i].source.begin);
     }
+
     return out;
   }
 
@@ -404,10 +431,13 @@ namespace {
         {posix, "for i in a b; do :; done", "for i in a b#do :#done"},
         {fish, "set x (a | b); and c", "set x (a | b)#a#b#and c"},
     };
+
     std::array<Token, 64> tokens;
-    for (const TokenCase &c : cases) {
+
+    for (const TokenCase& c : cases) {
       const Lexed lexed = lex(c.line, c.syntax, tokens);
       const std::string got = renderSegments(c.line, std::span{tokens}.first(lexed.tokens));
+
       check(got == c.expected && lexed.commands == std::ranges::count(got, '#') + 1, "segments", c.line, got);
     }
   }
@@ -418,20 +448,24 @@ namespace {
     std::string_view expected;
   };
 
-  std::string renderCursor(std::string_view line, const CommandAt &at, std::span<const Word> words, bool completable) {
+  std::string renderCursor(std::string_view line, const CommandAt& at, std::span<const Word> words, bool completable) {
     if (!completable) {
       return "none";
     }
+
     std::string out = "words=";
+
     for (std::size_t i = 0; i < at.words; ++i) {
       if (i > 0) {
         out += ',';
       }
+
       out += words[i].text;
       if (words[i].flags & Token::redirect_target) {
         out += "(>)";
       }
     }
+
     out += " cmd=";
     out += at.command_word == no_word ? std::string{"-"} : std::to_string(at.command_word);
     out += " cur=" + std::to_string(at.current);
@@ -495,20 +529,25 @@ namespace {
         {fish, "echo a\\nb\\x41¦", "words=echo,a\nbA cmd=0 cur=1 in prefix=a\nbA replace=a\\nb\\x41"},
         {fish, "echo \"a\\$b\\q¦\"", "words=echo,a$b\\q cmd=0 cur=1 in prefix=a$b\\q replace=\"a\\$b\\q\""},
     };
+
     std::array<Token, 64> tokens;
     std::array<Word, 32> words;
     std::array<char, 512> text;
-    for (const CursorCase &c : cases) {
+
+    for (const CursorCase& c : cases) {
       const std::size_t cursor = c.line.find(mark);
       std::string line{c.line};
+
       line.erase(cursor, mark.size());
       const Lexed lexed = lex(line, c.syntax, tokens, cursor);
       const CommandAt at = commandAt(line, c.syntax, tokens, lexed, words, text);
       const std::string got = renderCursor(line, at, words, lexed.cursor_completable);
+
       check(!at.overflow && got == c.expected, "cursor", c.line, got);
     }
 
     std::array<Token, 8> few;
+
     check(!lex("ab", posix, few, 3).cursor_completable, "cursor past line", "ab");
     check(!lex("ab", posix, few).cursor_completable, "no cursor", "ab");
     check(lex("\xc3\xa9", posix, few, 1).cursor == 0, "cursor inside a sequence", "é");
@@ -560,15 +599,18 @@ namespace {
         "a=(",
         "=(",
     };
+
     std::mt19937_64 random{0x7e1a5};
     std::vector<Token> tokens(512);
     std::vector<Word> words(512);
     std::vector<char> text(1024);
     std::string line;
     std::size_t checked = 0;
+
     for (int round = 0; round < 60000; ++round) {
       line.clear();
       const std::size_t length = random() % 220;
+
       while (line.size() < length) {
         const std::uint64_t pick = random() % 10;
         if (pick < 6) {
@@ -579,39 +621,48 @@ namespace {
           line += static_cast<char>(random() % 256);
         }
       }
+
       for (const Syntax syntax : {posix, fish, Syntax{Dialect::posix, false}}) {
         const std::size_t cursor = random() % (line.size() + 2);
         // An exact-size buffer must never overflow; the bound holds for any input.
         const Lexed lexed = lex(line, syntax, std::span{tokens}.first(line.size()), cursor);
         bool ok = !lexed.overflow && lexed.tokens <= line.size();
         std::uint32_t last_end = 0;
+
         for (std::size_t i = 0; ok && i < lexed.tokens; ++i) {
-          const Token &t = tokens[i];
+          const Token& t = tokens[i];
+
           ok = t.begin < t.end && t.end <= line.size() && t.begin >= last_end &&
                (t.command == no_command || t.command < lexed.commands);
           last_end = t.end;
         }
-        const CommandAt at = commandAt(line, syntax, std::span{tokens}.first(lexed.tokens), lexed,
-                                       std::span{words}.first(line.size()), std::span{text}.first(2 * line.size()));
+
+        const CommandAt at = commandAt(line, syntax, std::span{tokens}.first(lexed.tokens), lexed, std::span{words}.first(line.size()), std::span{text}.first(2 * line.size()));
+
         ok = ok && !at.overflow && at.words <= line.size() && at.replace.begin <= at.replace.end &&
              at.replace.end <= line.size() && (!at.in_word || at.current < at.words);
         for (std::size_t i = 0; ok && i < at.words; ++i) {
           ok = words[i].source.end <= line.size() && words[i].text.size() <= words[i].source.end - words[i].source.begin;
         }
+
         std::array<Segment, 8> segments;
+
         ok = ok && segment(std::span{tokens}.first(lexed.tokens), segments) == lexed.commands;
         // Small buffers only report overflow.
         std::array<Token, 3> small;
         const Lexed short_lexed = lex(line, syntax, small, cursor);
+
         ok = ok && short_lexed.completeness == lexed.completeness && short_lexed.commands == lexed.commands &&
              short_lexed.cursor_command == lexed.cursor_command;
         check(ok, "fuzz invariant", line);
         if (!ok) {
           return;
         }
+
         ++checked;
       }
     }
+
     check(checked > 0, "fuzz ran", "");
   }
 
@@ -620,14 +671,18 @@ namespace {
     constexpr std::string_view pieces[] = {"é", "€", "😀", " ", "\"", "'", "$", "\\", "(", ")", "|", "a", "$(", "${", "\n"};
     std::mt19937_64 random{42};
     std::vector<Token> tokens(256);
+
     for (int round = 0; round < 20000; ++round) {
       std::string line;
       const std::size_t count = random() % 40;
+
       for (std::size_t i = 0; i < count; ++i) {
         line += pieces[random() % std::size(pieces)];
       }
+
       for (const Syntax syntax : {posix, fish}) {
         const Lexed lexed = lex(line, syntax, std::span{tokens}.first(line.size()));
+
         for (std::size_t i = 0; i < lexed.tokens; ++i) {
           const auto continuation = [&](std::uint32_t at) {
             return at < line.size() && (static_cast<unsigned char>(line[at]) & 0xc0) == 0x80;
@@ -657,6 +712,7 @@ int main() {
     std::println(std::cerr, "{} failures", failures);
     return 1;
   }
+
   std::println("telar-shell: all checks passed");
   return 0;
 }

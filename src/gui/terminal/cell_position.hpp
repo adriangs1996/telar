@@ -6,15 +6,15 @@
 
 namespace telar::gui {
 
-struct CellPosition {
-  std::uint16_t x = 0;
-  std::uint32_t y = 0;
+  struct CellPosition {
+    std::uint16_t x = 0;
+    std::uint32_t y = 0;
 
-  [[nodiscard]] auto operator<=>(const CellPosition &other) const noexcept {
-    return std::tie(y, x) <=> std::tie(other.y, other.x);
-  }
+    [[nodiscard]] auto operator<=>(const CellPosition& other) const noexcept {
+      return std::tie(y, x) <=> std::tie(other.y, other.x);
+    }
 
-  bool operator==(const CellPosition &) const = default;
-};
+    bool operator==(const CellPosition&) const = default;
+  };
 
 }

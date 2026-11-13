@@ -3,12 +3,10 @@
 static_assert(true);
 #endif
 
-
 #include <QObject>
 #include <QtQml/qqmlregistration.h>
 
 #pragma once
-
 
 import telar.gui.presentation.history_inspection_geometry;
 
@@ -28,7 +26,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(qreal focusAlpha READ focusAlpha CONSTANT)
 
   public:
-    explicit ChromeStyle(QObject *parent = nullptr)
+    explicit ChromeStyle(QObject* parent = nullptr)
         : QObject(parent) {}
 
     [[nodiscard]] qreal smallRadius() const noexcept {

@@ -1,14 +1,14 @@
 #ifdef __clangd__
 static_assert(true);
 #endif
-#include <tbc/view.hpp>
 #include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <stdexcept>
 #include <string_view>
-#include <optional>
+#include <tbc/view.hpp>
 #include <utility>
 #include <vector>
 
@@ -16,8 +16,8 @@ static_assert(true);
 
 #include <gtest/gtest.h>
 
-
 import telar.ebnf.parser;
+
 namespace {
   TEST(Grammar, SingleRuleisAValidSentence) {
     const auto sentence = std::string_view{"letters = \"abcdefghi\";"};
@@ -31,6 +31,7 @@ namespace {
     ASSERT_EQ(parser_testing::childCount(tree, root), 1u);
 
     const auto rule = parser_testing::nthChild(tree, root, 0);
+
     ASSERT_NE(rule, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(rule), ebnf::node_kind::Rule);
     EXPECT_EQ(tree.getText(rule), "letters");
@@ -49,10 +50,12 @@ namespace {
     ASSERT_EQ(parser_testing::childCount(tree, root), 2u);
 
     const auto first = parser_testing::nthChild(tree, root, 0);
+
     ASSERT_NE(first, ebnf::none_handle);
     EXPECT_EQ(tree.getText(first), "letters");
 
     const auto second = parser_testing::nthChild(tree, root, 1);
+
     ASSERT_NE(second, ebnf::none_handle);
     EXPECT_EQ(tree.getText(second), "digits");
   }
@@ -95,6 +98,7 @@ namespace {
     ASSERT_EQ(parser_testing::childCount(tree, root), 1u);
 
     const auto rule = parser_testing::nthChild(tree, root, 0);
+
     ASSERT_NE(rule, ebnf::none_handle);
     EXPECT_EQ(tree.getText(rule), "letters");
   }
@@ -102,6 +106,7 @@ namespace {
   TEST(Grammar, EndCanBeConsumedWithoutAdvancingPastTheBuffer) {
     auto tokenizer = ebnf::Lexer{};
     ebnf::parser parser{tokenizer};
+
     parser.parse("");
 
     EXPECT_FALSE(parser.consume(ebnf::token_kind::Identifier));
@@ -113,7 +118,7 @@ namespace {
   struct InvalidTokenizer {
     std::size_t count;
 
-    auto tokenizeSourceIntoBuffer(tbc::view<std::string_view, tbc::lt::a>, tbc::view<ebnf::parsing_ring_buffer &, tbc::lt::a> buffer, std::size_t) const -> std::size_t {
+    auto tokenizeSourceIntoBuffer(tbc::view<std::string_view, tbc::lt::a>, tbc::view<ebnf::parsing_ring_buffer&, tbc::lt::a> buffer, std::size_t) const -> std::size_t {
       buffer[0] = ebnf::token{
           .kind = ebnf::token_kind::Identifier,
           .text = {},

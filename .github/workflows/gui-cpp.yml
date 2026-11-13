@@ -111,3 +111,8 @@ jobs:
       - name: Check interface bodies
         if: matrix.configuration == 'Release'
         run: cmake --build src/gui/out --target gui-interface-bodies
+
+      # Only the macOS units have had the blank lines of docs/code-style.md applied.
+      - name: Check blank lines
+        if: matrix.configuration == 'Release' && runner.os == 'macOS'
+        run: cmake --build src/gui/out --target gui-blank-lines

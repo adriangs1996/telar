@@ -11,11 +11,12 @@ namespace telar {
     valid,
     invalid_leading,
     invalid_continuation,
-    invalid_scalar
+    invalid_scalar,
   };
 
   inline Utf8Validation inspectUtf8(std::string_view value) noexcept {
     std::size_t index = 0;
+
     while (index < value.size()) {
       const auto lead = static_cast<std::uint8_t>(value[index]);
       if (lead < 0x80) {
@@ -37,11 +38,13 @@ namespace telar {
           return Utf8Validation::invalid_continuation;
         }
       }
+
       const auto second = static_cast<std::uint8_t>(value[index + 1]);
       if ((lead == 0xe0 && second < 0xa0) || (lead == 0xed && second >= 0xa0) ||
           (lead == 0xf0 && second < 0x90) || (lead == 0xf4 && second > 0x8f)) {
         return Utf8Validation::invalid_scalar;
       }
+
       index += length;
     }
 
@@ -50,15 +53,15 @@ namespace telar {
 
   // Bytes that break a format's rules: the wire protocol, a configuration or a record on disk.
   struct EncodingError final : std::exception {
-    EncodingError(const char *message)
+    EncodingError(const char* message)
         : message{message} {}
 
-    const char *what() const noexcept override {
+    const char* what() const noexcept override {
       return message;
     }
 
   private:
-    const char *message;
+    const char* message;
   };
 
   inline void validateUtf8(std::string_view value) {
@@ -80,6 +83,7 @@ namespace telar::runtime {
 
   inline std::string_view utf8Prefix(std::string_view text, std::size_t capacity) noexcept {
     auto length = std::min(text.size(), capacity);
+
     while (length != 0 && length < text.size() && (static_cast<unsigned char>(text[length]) & 0xc0) == 0x80) {
       --length;
     }

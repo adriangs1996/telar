@@ -56,6 +56,18 @@ endfunction()
 
 include("${CMAKE_CURRENT_LIST_DIR}/../lib/tbc/cmake/tbcLifetimeCheck.cmake")
 
+# Sets <out> to a POSIX extended regular expression for the headers of the projects
+# under src/ and lib/, for telar_blank_line_check's HEADERS: neither what their build
+# folders (out, out-*) generate nor what an include path reaches through `..`, as vendor/.
+function(telar_repository_headers out)
+  get_filename_component(root "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/.." ABSOLUTE)
+  string(REGEX REPLACE "([][+.*()?^$\\|{}])" "\\\\\\1" root "${root}")
+  # A path component that is neither `..` nor, right below the project, out or out-*.
+  set(component "([^./][^/]*|\\.[^./][^/]*|\\.)")
+  set(first "([^./o][^/]*|\\.[^./][^/]*|\\.|o|o[^u/][^/]*|ou|ou[^t/][^/]*|out[^-/][^/]*)")
+  set(${out} "^${root}/(src|lib)/[^/]+/(\\./)*${first}(/${component})*$" PARENT_SCOPE)
+endfunction()
+
 # Checks the blank lines that docs/code-style.md asks for between the statements of
 # the selected translation units, and of the headers whose path matches HEADERS (a
 # POSIX extended regular expression). Fails on the first one missing unless FIX is

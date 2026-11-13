@@ -65,11 +65,11 @@ export namespace telar::gui::prompt {
     explicit Line(Keymap keymap = Keymap::emacs)
         : editor_(keymap) {}
 
-    Editor &editor() noexcept {
+    Editor& editor() noexcept {
       return editor_;
     }
 
-    [[nodiscard]] const Editor &editor() const noexcept {
+    [[nodiscard]] const Editor& editor() const noexcept {
       return editor_;
     }
 
@@ -96,7 +96,7 @@ export namespace telar::gui::prompt {
       return secret_keys_;
     }
 
-    [[nodiscard]] const std::vector<std::string> &recent() const noexcept {
+    [[nodiscard]] const std::vector<std::string>& recent() const noexcept {
       return recent_;
     }
 
@@ -112,7 +112,7 @@ export namespace telar::gui::prompt {
     // The rest of a command this one starts, from what this line sent (newest first) and then
     // `history`, newest first. Only while typing at the end of a non-empty line.
     [[nodiscard]] std::string_view suggestion(std::span<const std::string> history) const noexcept {
-      const auto &text = editor_.text();
+      const auto& text = editor_.text();
 
       if (textIsSmallAndInVimMode(text)) {
         return {};
@@ -120,13 +120,13 @@ export namespace telar::gui::prompt {
 
       const auto view = text.view();
 
-      for (const auto &entry : std::views::reverse(recent_)) {
+      for (const auto& entry : std::views::reverse(recent_)) {
         if (isCommandExtendedBy(entry, view)) {
           return std::string_view{entry}.substr(view.size());
         }
       }
 
-      for (const auto &command : history) {
+      for (const auto& command : history) {
         if (isCommandExtendedBy(command, view)) {
           return std::string_view{command}.substr(view.size());
         }
@@ -136,7 +136,7 @@ export namespace telar::gui::prompt {
     }
 
     template <typename Incomplete>
-    Outcome press(Surface surface, const KeyPress &key, Incomplete &&incomplete, std::span<const std::string> history = {}) {
+    Outcome press(Surface surface, const KeyPress& key, Incomplete&& incomplete, std::span<const std::string> history = {}) {
       delivery_.clear();
       const auto rest = suggestion(history);
       // → and Ctrl-E at the end take the whole suggestion, Alt-F its next word, as fish does.
@@ -150,16 +150,19 @@ export namespace telar::gui::prompt {
           if (word) {
             const auto start = taken.find_first_not_of(' ');
             const auto end = taken.find_first_of(" /", start == std::string_view::npos ? 0 : start);
+
             taken = taken.substr(0, end == std::string_view::npos ? taken.size() : end + (taken[end] == '/' ? 1 : 0));
           }
 
           const std::string copy{taken};
+
           editor_.text().insert(copy);
           return Outcome::edited;
         }
       }
 
       bool refining = false;
+
       refining_ = false;
 
       if (menu_) {
@@ -175,21 +178,25 @@ export namespace telar::gui::prompt {
       }
 
       const auto outcome = handle(editor_.press(key), surface, incomplete);
+
       return refining && menu_ ? refine(outcome) : outcome;
     }
 
     // A key the user bound to an action; the rest of the line answers it as for any key.
     template <typename Incomplete>
-    Outcome perform(Surface surface, Action action, Incomplete &&incomplete, std::span<const std::string> history = {}) {
+    Outcome perform(Surface surface, Action action, Incomplete&& incomplete, std::span<const std::string> history = {}) {
       delivery_.clear();
       closeMenu();
       if (action == Action::accept_suggestion) {
         if (const auto rest = suggestion(history); !rest.empty()) {
           const std::string copy{rest};
+
           editor_.text().insert(copy);
         }
+
         return Outcome::edited;
       }
+
       return handle(editor_.perform(action), surface, incomplete);
     }
 
@@ -204,7 +211,7 @@ export namespace telar::gui::prompt {
       editor_.text().replace(begin, end, text);
     }
 
-    const std::optional<Menu> &menu() const noexcept {
+    const std::optional<Menu>& menu() const noexcept {
       return menu_;
     }
 
@@ -215,7 +222,9 @@ export namespace telar::gui::prompt {
       if (!whole) {
         choices.resize(Menu::capacity);
       }
+
       auto all = choices;
+
       menu_ = Menu{.choices = std::move(choices), .begin = begin, .end = end, .requests = std::move(requests), .dialect = dialect, .label = std::move(label), .all = std::move(all), .floor = end, .whole = whole, .refined = std::exchange(refining_, false)};
       settle();
       ++revision_;
@@ -226,11 +235,13 @@ export namespace telar::gui::prompt {
       if (!menu_ || std::erase(menu_->requests, request) == 0) {
         return false;
       }
+
       menu_->whole = menu_->whole && !truncated && menu_->all.size() + paths.size() <= Menu::capacity;
       // Answers to an older word join, narrowed to the word as it is now.
       const auto word = typedWord();
-      for (const auto &path : paths) {
-        if (menu_->all.size() < Menu::capacity && std::ranges::none_of(menu_->all, [&](const Choice &choice) {
+
+      for (const auto& path : paths) {
+        if (menu_->all.size() < Menu::capacity && std::ranges::none_of(menu_->all, [&](const Choice& choice) {
               return choice.text == path.text;
             })) {
           menu_->all.push_back(path);
@@ -239,6 +250,7 @@ export namespace telar::gui::prompt {
           }
         }
       }
+
       settle();
       ++revision_;
       return true;
@@ -257,11 +269,13 @@ export namespace telar::gui::prompt {
       if (!armed_) {
         return Outcome::edited;
       }
+
       armed_ = false;
       ++revision_;
       if (!succeeded || editor_.text().empty()) {
         return Outcome::edited;
       }
+
       delivery_.assign(editor_.text().view());
       remember(delivery_);
       editor_.clear();
@@ -284,14 +298,16 @@ export namespace telar::gui::prompt {
       if (command.empty() || (!recent_.empty() && recent_.back() == command)) {
         return;
       }
+
       if (recent_.size() == recent_capacity) {
         recent_.erase(recent_.begin());
       }
+
       recent_.emplace_back(command);
     }
 
   private:
-    [[nodiscard]] bool textIsSmallAndInVimMode(const Text &text) const {
+    [[nodiscard]] bool textIsSmallAndInVimMode(const Text& text) const {
       return text.size() < 2 || text.cursor() != text.size() || menu_ || (editor_.keymap() == Keymap::vim && editor_.mode() != Mode::insert);
     }
 
@@ -300,7 +316,7 @@ export namespace telar::gui::prompt {
     }
 
     template <typename Incomplete>
-    Outcome handle(Request request, Surface surface, Incomplete &&incomplete) {
+    Outcome handle(Request request, Surface surface, Incomplete&& incomplete) {
       switch (request) {
       case Request::none:
         history_index_.reset();
@@ -315,6 +331,7 @@ export namespace telar::gui::prompt {
         if (surface == Surface::running && editor_.text().empty()) {
           return Outcome::terminal;
         }
+
         editor_.clear();
         armed_ = false;
         history_index_.reset();
@@ -324,6 +341,7 @@ export namespace telar::gui::prompt {
         if (surface == Surface::running) {
           return Outcome::terminal;
         }
+
         delivery_.assign("\x04");
         return Outcome::bytes;
       case Request::clear_screen:
@@ -336,6 +354,7 @@ export namespace telar::gui::prompt {
       case Request::unhandled:
         return Outcome::ignored;
       }
+
       return Outcome::ignored;
     }
 
@@ -351,6 +370,7 @@ export namespace telar::gui::prompt {
       if (!menu_->requests.empty()) {
         return;
       }
+
       if (menu_->choices.size() == 1 && !menu_->refined) {
         accept();
       } else if (menu_->choices.empty()) {
@@ -359,14 +379,17 @@ export namespace telar::gui::prompt {
     }
 
     void accept() {
-      const auto &menu = *menu_;
-      const auto &choice = menu.choices[menu.selected];
+      const auto& menu = *menu_;
+      const auto& choice = menu.choices[menu.selected];
       auto word = quoteWord(choice.text, menu.dialect);
+
       if (!choice.directory) {
         word.push_back(' ');
       }
+
       const auto begin = menu.begin;
       const auto end = std::min(menu.end, editor_.text().size());
+
       menu_.reset();
       editor_.text().replace(begin, end, word);
       ++revision_;
@@ -374,8 +397,8 @@ export namespace telar::gui::prompt {
 
     // While the menu is open, Tab and the arrows move through it, Enter takes the choice and
     // Escape closes it; any other key closes it and edits as usual.
-    std::optional<Outcome> menuKey(const KeyPress &key, bool &refining) {
-      auto &menu = *menu_;
+    std::optional<Outcome> menuKey(const KeyPress& key, bool& refining) {
+      auto& menu = *menu_;
       const auto count = menu.choices.size();
       const bool forward = (key.key == Key::tab && !key.modifiers.shift) || key.key == Key::down || (key.key == Key::character && key.modifiers.control && key.character == 'n');
       const bool backward = key.key == Key::backtab || (key.key == Key::tab && key.modifiers.shift) || key.key == Key::up || (key.key == Key::character && key.modifiers.control && key.character == 'p');
@@ -384,14 +407,17 @@ export namespace telar::gui::prompt {
         ++revision_;
         return Outcome::edited;
       }
+
       if (key.key == Key::enter && count != 0) {
         accept();
         return Outcome::edited;
       }
+
       if (key.key == Key::escape) {
         closeMenu();
         return Outcome::edited;
       }
+
       // Typing in the word, or erasing it, refines the choices once the editor has the key.
       const bool inserting = editor_.keymap() == Keymap::emacs || editor_.mode() == Mode::insert;
       const bool plain = !key.modifiers.control && !key.modifiers.alt;
@@ -400,6 +426,7 @@ export namespace telar::gui::prompt {
         refining = true;
         return std::nullopt;
       }
+
       closeMenu();
       return std::nullopt;
     }
@@ -410,19 +437,21 @@ export namespace telar::gui::prompt {
       if (!menu_ || menu_->begin > menu_->end || menu_->end > text.size()) {
         return {};
       }
+
       return text.substr(menu_->begin, menu_->end - menu_->begin);
     }
 
     // After a key typed or erased in the word: the choices that still start with it. Erasing
     // past where they were offered asks for them again; leaving the word closes the menu.
     Outcome refine(Outcome outcome) {
-      auto &menu = *menu_;
-      const auto &text = editor_.text();
+      auto& menu = *menu_;
+      const auto& text = editor_.text();
       const auto cursor = text.cursor();
       if (cursor < menu.begin || text.view().substr(menu.begin, cursor - menu.begin).find_first_of(" \t\n") != std::string_view::npos) {
         closeMenu();
         return outcome;
       }
+
       menu.end = cursor;
       if (cursor < menu.floor || (!menu.whole && cursor != menu.floor)) {
         menu_.reset();
@@ -430,18 +459,22 @@ export namespace telar::gui::prompt {
         ++revision_;
         return Outcome::complete;
       }
+
       const auto word = typedWord();
+
       menu.choices.clear();
-      for (const auto &choice : menu.all) {
+      for (const auto& choice : menu.all) {
         if (choice.text.starts_with(word)) {
           menu.choices.push_back(choice);
         }
       }
+
       menu.selected = 0;
       menu.refined = true;
       if (menu.choices.empty() && menu.requests.empty()) {
         closeMenu();
       }
+
       ++revision_;
       return outcome;
     }
@@ -451,16 +484,19 @@ export namespace telar::gui::prompt {
         editor_.newline();
         return Outcome::edited;
       }
+
       if (surface == Surface::running) {
         if (answering_) {
           delivery_.assign(editor_.text().view());
           editor_.clear();
           return Outcome::answer;
         }
+
         armed_ = !editor_.text().empty();
         ++revision_;
         return Outcome::edited;
       }
+
       // A blank line runs nothing: sent, the shell would only print its prompt again, which no
       // command's separator covers.
       if (editor_.text().view().find_first_not_of(" \t\n") == std::string_view::npos) {
@@ -468,8 +504,10 @@ export namespace telar::gui::prompt {
           editor_.clear();
           ++revision_;
         }
+
         return Outcome::edited;
       }
+
       delivery_.assign(editor_.text().view());
       remember(delivery_);
       editor_.clear();
@@ -483,17 +521,21 @@ export namespace telar::gui::prompt {
       if (recent_.empty()) {
         return Outcome::edited;
       }
+
       if (!history_index_) {
         if (direction > 0) {
           return Outcome::edited;
         }
+
         draft_.assign(editor_.text().view());
         history_index_ = recent_.size();
       }
+
       const auto next = static_cast<std::ptrdiff_t>(*history_index_) + direction;
       if (next < 0) {
         return Outcome::edited;
       }
+
       if (static_cast<std::size_t>(next) >= recent_.size()) {
         history_index_.reset();
         editor_.text().assign(draft_);
@@ -501,6 +543,7 @@ export namespace telar::gui::prompt {
         history_index_ = static_cast<std::size_t>(next);
         editor_.text().assign(recent_[*history_index_]);
       }
+
       editor_.text().moveTo(editor_.text().size());
       ++revision_;
       return Outcome::edited;

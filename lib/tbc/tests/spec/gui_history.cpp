@@ -34,7 +34,7 @@ spec::history_page historyOwnedWireCopy() {
 // STATUS: pending
 // CONTRACT: Swapping row vectors transfers allocation ownership without moving their elements.
 // SCENARIO: The old view follows its storage into the temporary page and dies with that page.
-void historySwapNewOwnerDies(tbc::view<spec::history_page &> page) {
+void historySwapNewOwnerDies(tbc::view<spec::history_page&> page) {
   const auto rows = page.rows();
   {
     spec::history_page replacement{std::span<const std::string_view>{}};
@@ -51,7 +51,7 @@ void historySwapNewOwnerDies(tbc::view<spec::history_page &> page) {
 // STATUS: pending
 // CONTRACT: The row allocation survives a compatible swap while its new owner remains alive.
 // SCENARIO: Read the old span before either page is destroyed; do not reject the swap itself.
-void historySwapLiveOwner(tbc::view<spec::history_page &> page) {
+void historySwapLiveOwner(tbc::view<spec::history_page&> page) {
   spec::history_page replacement{std::span<const std::string_view>{}};
   const auto rows = page.rows();
   page.exchangeWith(replacement);

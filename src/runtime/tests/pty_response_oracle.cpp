@@ -7,14 +7,14 @@ using namespace telar::runtime;
 
 struct Operation {
   std::uint32_t kind;
-  const std::uint8_t *bytes;
+  const std::uint8_t* bytes;
   std::size_t length;
 };
 
-extern "C" std::size_t evaluate(const Operation *operations, std::size_t count, std::uint8_t *output) {
+extern "C" std::size_t evaluate(const Operation* operations, std::size_t count, std::uint8_t* output) {
   PtyResponseQueue queue;
   std::size_t written = 0;
-  for (const auto &operation : std::span{operations, count}) {
+  for (const auto& operation : std::span{operations, count}) {
     bool accepted = true;
     if (operation.kind == 0) {
       accepted = queue.push({operation.bytes, operation.length});

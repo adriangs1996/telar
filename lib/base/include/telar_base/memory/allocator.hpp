@@ -16,8 +16,8 @@
 namespace telar {
 
   template <typename Memory>
-  concept Allocator = requires(Memory &memory, void *pointer, std::size_t size, std::size_t alignment) {
-    { memory.allocate(size, alignment) } noexcept -> std::same_as<void *>;
+  concept Allocator = requires(Memory& memory, void* pointer, std::size_t size, std::size_t alignment) {
+    { memory.allocate(size, alignment) } noexcept -> std::same_as<void*>;
     { memory.deallocate(pointer, size, alignment) } noexcept -> std::same_as<void>;
   };
 
@@ -25,16 +25,17 @@ namespace telar {
   public:
     static constexpr bool thread_safe = true;
 
-    void *allocate(std::size_t size, std::size_t alignment) noexcept {
+    void* allocate(std::size_t size, std::size_t alignment) noexcept {
       if (alignment <= alignof(std::max_align_t)) {
         return std::malloc(size);
       }
 
-      void *pointer = nullptr;
+      void* pointer = nullptr;
+
       return posix_memalign(&pointer, alignment, size) == 0 ? pointer : nullptr;
     }
 
-    void deallocate(void *pointer, std::size_t, std::size_t) noexcept {
+    void deallocate(void* pointer, std::size_t, std::size_t) noexcept {
       std::free(pointer);
     }
   };
@@ -44,17 +45,17 @@ namespace telar {
   public:
     static constexpr bool thread_safe = false;
 
-    explicit BudgetAllocator(Upstream &upstream, std::size_t limit) noexcept
+    explicit BudgetAllocator(Upstream& upstream, std::size_t limit) noexcept
         : upstream_(upstream),
           limit_(limit) {}
 
-    void *allocate(std::size_t size, std::size_t alignment) noexcept {
+    void* allocate(std::size_t size, std::size_t alignment) noexcept {
       if (size > limit_ - live_bytes_) {
         ++failures_;
         return nullptr;
       }
 
-      void *pointer = upstream_.allocate(size, alignment);
+      void* pointer = upstream_.allocate(size, alignment);
       if (pointer == nullptr) {
         ++failures_;
         return nullptr;
@@ -67,7 +68,7 @@ namespace telar {
       return pointer;
     }
 
-    void deallocate(void *pointer, std::size_t size, std::size_t alignment) noexcept {
+    void deallocate(void* pointer, std::size_t size, std::size_t alignment) noexcept {
       if (pointer == nullptr) {
         return;
       }
@@ -96,6 +97,7 @@ namespace telar {
 #if TELAR_DIAGNOSTICS
     AllocationStatistics statistics() const noexcept {
       auto result = statistics_;
+
       result.live_bytes = live_bytes_;
       return result;
     }
@@ -114,7 +116,7 @@ namespace telar {
 
     AllocationStatistics statistics_;
 #endif
-    Upstream &upstream_;
+    Upstream& upstream_;
     std::size_t limit_;
     std::size_t live_bytes_ = 0;
     std::size_t peak_bytes_ = 0;
@@ -123,40 +125,43 @@ namespace telar {
   };
 
   template <Allocator Upstream>
-  BudgetAllocator(Upstream &upstream, std::size_t limit) -> BudgetAllocator<Upstream>;
+  BudgetAllocator(Upstream& upstream, std::size_t limit) -> BudgetAllocator<Upstream>;
 
   template <Allocator Upstream>
   class TBC_SHARED SynchronizedAllocator {
   public:
     static constexpr bool thread_safe = true;
 
-    explicit SynchronizedAllocator(Upstream &upstream) noexcept
+    explicit SynchronizedAllocator(Upstream& upstream) noexcept
         : upstream_(upstream) {}
 
-    void *allocate(std::size_t size, std::size_t alignment) noexcept {
+    void* allocate(std::size_t size, std::size_t alignment) noexcept {
       const std::lock_guard lock{mutex_};
+
       return upstream_.allocate(size, alignment);
     }
 
-    void deallocate(void *pointer, std::size_t size, std::size_t alignment) noexcept {
+    void deallocate(void* pointer, std::size_t size, std::size_t alignment) noexcept {
       const std::lock_guard lock{mutex_};
+
       upstream_.deallocate(pointer, size, alignment);
     }
 
     auto statistics() const noexcept
-      requires requires(const Upstream &upstream) { upstream.statistics(); }
+      requires requires(const Upstream& upstream) { upstream.statistics(); }
     {
       const std::lock_guard lock{mutex_};
+
       return upstream_.statistics();
     }
 
   private:
-    Upstream &upstream_;
+    Upstream& upstream_;
     mutable std::mutex mutex_;
   };
 
   template <Allocator Upstream>
-  SynchronizedAllocator(Upstream &upstream) -> SynchronizedAllocator<Upstream>;
+  SynchronizedAllocator(Upstream& upstream) -> SynchronizedAllocator<Upstream>;
 
   template <typename Memory>
   concept ConcurrentAllocator = Allocator<Memory> && Memory::thread_safe;
@@ -169,19 +174,19 @@ namespace telar {
     using is_always_equal = std::false_type;
 
     // A handle to the allocator, whose region the containers that use it carry.
-    explicit AllocatorRef(tbc::view<Memory &, tbc::lt::a> memory) noexcept
+    explicit AllocatorRef(tbc::view<Memory&, tbc::lt::a> memory) noexcept
         : memory_(&memory) {}
 
     template <typename Other>
-    AllocatorRef(const AllocatorRef<Other, Memory> &other) noexcept
+    AllocatorRef(const AllocatorRef<Other, Memory>& other) noexcept
         : memory_(&other.memory()) {}
 
-    Value *allocate(std::size_t count) {
+    Value* allocate(std::size_t count) {
       if (count > std::numeric_limits<std::size_t>::max() / sizeof(Value)) {
         throw std::bad_array_new_length{};
       }
 
-      auto *pointer = static_cast<Value *>(memory_->allocate(count * sizeof(Value), alignof(Value)));
+      auto* pointer = static_cast<Value*>(memory_->allocate(count * sizeof(Value), alignof(Value)));
       if (pointer == nullptr) {
         throw std::bad_alloc{};
       }
@@ -189,21 +194,21 @@ namespace telar {
       return pointer;
     }
 
-    void deallocate(Value *pointer, std::size_t count) noexcept {
+    void deallocate(Value* pointer, std::size_t count) noexcept {
       memory_->deallocate(pointer, count * sizeof(Value), alignof(Value));
     }
 
-    tbc::view<Memory &, tbc::lt::a> memory() const noexcept {
+    tbc::view<Memory&, tbc::lt::a> memory() const noexcept {
       return *memory_;
     }
 
     template <typename Other>
-    bool operator==(const AllocatorRef<Other, Memory> &other) const noexcept {
+    bool operator==(const AllocatorRef<Other, Memory>& other) const noexcept {
       return memory_ == &other.memory();
     }
 
   private:
-    tbc::view<Memory *, tbc::lt::a> memory_;
+    tbc::view<Memory*, tbc::lt::a> memory_;
   };
 
   template <typename Value, Allocator Memory>
@@ -215,10 +220,10 @@ namespace telar {
   template <typename Value, Allocator Memory>
   class AllocationDeleter {
   public:
-    explicit AllocationDeleter(Memory &memory) noexcept
+    explicit AllocationDeleter(Memory& memory) noexcept
         : memory_(&memory) {}
 
-    void operator()(Value *value) const noexcept {
+    void operator()(Value* value) const noexcept {
       if (value != nullptr) {
         std::destroy_at(value);
         memory_->deallocate(value, sizeof(Value), alignof(Value));
@@ -226,7 +231,7 @@ namespace telar {
     }
 
   private:
-    Memory *memory_;
+    Memory* memory_;
   };
 
   template <typename Value, Allocator Memory>
@@ -234,9 +239,9 @@ namespace telar {
 
   // The owner keeps what Value's constructor keeps of the arguments, and its allocator.
   template <typename Value, Allocator Memory, typename... Arguments>
-  TBC_CONSTRUCTS Owned<Value, Memory> makeOwned(Memory &memory, Arguments &&...arguments) {
+  TBC_CONSTRUCTS Owned<Value, Memory> makeOwned(Memory& memory, Arguments&&... arguments) {
     AllocatorRef<Value, Memory> allocator{memory};
-    Value *value = allocator.allocate(1);
+    Value* value = allocator.allocate(1);
 
     try {
       std::construct_at(value, std::forward<Arguments>(arguments)...);

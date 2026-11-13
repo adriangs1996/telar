@@ -2,8 +2,20 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-enum { heap_stack_capacity = 8192, heap_stack_depth = 24, heap_stack_max_shift = 12 };
-enum HeapAllocationApi { heap_malloc, heap_calloc, heap_realloc, heap_aligned, heap_posix_aligned, heap_api_count };
+enum {
+  heap_stack_capacity = 8192,
+  heap_stack_depth = 24,
+  heap_stack_max_shift = 12,
+};
+
+enum HeapAllocationApi {
+  heap_malloc,
+  heap_calloc,
+  heap_realloc,
+  heap_aligned,
+  heap_posix_aligned,
+  heap_api_count,
+};
 
 typedef struct {
   uint64_t ordinal, at_ns, thread_id, requested_bytes;
@@ -19,4 +31,4 @@ typedef struct {
 } HeapStackSnapshot;
 
 int telar_heap_stack_begin(unsigned sample_shift, bool sampling);
-int telar_heap_stack_end(HeapStackSnapshot *result);
+int telar_heap_stack_end(HeapStackSnapshot* result);

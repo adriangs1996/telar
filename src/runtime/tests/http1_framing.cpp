@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -20,7 +19,7 @@ struct Result {
   std::uint8_t valid;
 };
 
-extern "C" void analyze(const char *bytes, std::size_t length, std::uint8_t flags, Result *result) {
+extern "C" void analyze(const char* bytes, std::size_t length, std::uint8_t flags, Result* result) {
   *result = {};
   const auto parsed = telar::runtime::Http1Head::analyze({bytes, length}, flags & 1, flags & 2);
   if (!parsed) {
@@ -33,7 +32,7 @@ extern "C" void analyze(const char *bytes, std::size_t length, std::uint8_t flag
   result->flags = parsed->head_request | (parsed->informational << 1) | (parsed->upgrade << 2) | (parsed->closes << 3);
 }
 
-extern "C" bool number(const char *bytes, std::size_t length, std::uint8_t base, std::uint64_t *result) {
+extern "C" bool number(const char* bytes, std::size_t length, std::uint8_t base, std::uint64_t* result) {
   const auto parsed = base == 10 ? telar::runtime::parseHttpNumber<10>({bytes, length}) : telar::runtime::parseHttpNumber<16>({bytes, length});
   if (!parsed) {
     return false;
@@ -43,10 +42,10 @@ extern "C" bool number(const char *bytes, std::size_t length, std::uint8_t base,
 }
 
 struct Input {
-  const std::uint8_t *bytes;
+  const std::uint8_t* bytes;
   std::size_t length;
-  std::uint8_t *output;
-  std::uint8_t *payload;
+  std::uint8_t* output;
+  std::uint8_t* payload;
   std::size_t capacity;
   std::size_t fragment;
   std::uint8_t flags;
@@ -67,7 +66,9 @@ class MessageStream {
 public:
   using StreamResult = telar::runtime::StreamResult;
 
-  explicit MessageStream(const Input &input, RelayResult &result) : input_(input), result_(result) {}
+  explicit MessageStream(const Input& input, RelayResult& result)
+      : input_(input),
+        result_(result) {}
 
   telar::runtime::StreamView peekView(std::size_t maximum) noexcept {
     const auto count = std::min({maximum, input_.length - result_.consumed, input_.fragment});
@@ -103,7 +104,11 @@ public:
   }
 
   void halfClose() noexcept {}
-  void headStarted() noexcept { ++result_.heads; }
+
+  void headStarted() noexcept {
+    ++result_.heads;
+  }
+
   void head(std::string_view) noexcept {}
 
   void payload(std::span<const std::uint8_t> bytes) noexcept {
@@ -118,11 +123,11 @@ public:
   }
 
 private:
-  const Input &input_;
-  RelayResult &result_;
+  const Input& input_;
+  RelayResult& result_;
 };
 
-static void relayMessage(telar::runtime::Http1MessageRelay &message, const Input *input, RelayResult *result) {
+static void relayMessage(telar::runtime::Http1MessageRelay& message, const Input* input, RelayResult* result) {
   using Message = telar::runtime::Http1MessageRelay;
   *result = {};
   MessageStream stream{*input, *result};
@@ -134,12 +139,12 @@ static void relayMessage(telar::runtime::Http1MessageRelay &message, const Input
   result->head_limits = message.state() == Message::State::head_too_large;
 }
 
-extern "C" void relay(const Input *input, RelayResult *result) {
+extern "C" void relay(const Input* input, RelayResult* result) {
   telar::runtime::Http1MessageRelay message;
   relayMessage(message, input, result);
 }
 
-extern "C" std::uint64_t batch(const Input *input, std::size_t iterations) {
+extern "C" std::uint64_t batch(const Input* input, std::size_t iterations) {
   telar::runtime::Http1MessageRelay message;
   std::uint64_t checksum = 0;
   for (std::size_t iteration = 0; iteration < iterations; ++iteration) {

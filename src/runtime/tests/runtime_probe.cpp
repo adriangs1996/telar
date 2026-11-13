@@ -3,19 +3,18 @@
 static_assert(true);
 #endif
 
-
+#include "cell_layout.hpp"
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
+#include <ghostty/vt.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/un.h>
-#include <unistd.h>
-#include "cell_layout.hpp"
-#include <cstdio>
 #include <termios.h>
-#include <ghostty/vt.h>
+#include <unistd.h>
 
 import std;
 import telar.base.memory;
@@ -44,6 +43,7 @@ static void writeAll(int descriptor, std::string_view bytes) {
 
 static std::string marker(unsigned sequence) {
   std::array<char, 32> buffer{};
+
   std::snprintf(buffer.data(), buffer.size(), "::%06u::", sequence);
   return buffer.data();
 }
@@ -92,6 +92,7 @@ static std::string fixture(std::string_view workload, unsigned sequence) {
         "\x1b[>4;0m\x1b]22;text\x1b\\\x1b[0 q",
         "\x1b[?1049h\x1b[?1049l\x1b[2J",
     };
+
     output += operations[sequence % operations.size()];
   } else if (workload == "graphics-cursor") {
     static constexpr std::array<std::string_view, 8> operations{
@@ -104,6 +105,7 @@ static std::string fixture(std::string_view workload, unsigned sequence) {
         "\x1b[4;3H\x1b_Ga=d,d=I,i=1,q=2;\x1b\\\x1b_Ga=p,i=1,q=2;\x1b\\deleted-image",
         "\x1b[4;3H\x1b_Ga=T,c=7,r=5,C=1,q=2;bad\x1b\\cursor-stays",
     };
+
     output += operations[sequence % operations.size()];
   } else if (workload == "colors") {
     output += "\x1b]10;#123456\x1b\\\x1b]11;#654321\x1b\\\x1b]4;1;#112233\x1b\\";
@@ -130,6 +132,7 @@ static int child(std::string_view workload) {
   writeAll(STDOUT_FILENO, fixture(workload, 0));
   unsigned sequence = 0;
   char command = 0;
+
   while (::read(STDIN_FILENO, &command, 1) == 1) {
     if (command == 'q') {
       writeAll(STDOUT_FILENO, "\x1b[2;1Hfinal-output-before-exit");
@@ -146,15 +149,15 @@ static int child(std::string_view workload) {
 
 class Probe {
 public:
-  explicit Probe(const char *socket_path)
+  explicit Probe(const char* socket_path)
       : socket_path_(socket_path),
         client_(Client::init(socket_path)),
         incoming_(max_payload_size),
         outgoing_(max_payload_size),
         scratch_(512 * 1024) {
     client_.handshake();
-    const timeval timeout{.tv_sec = 5,
-                          .tv_usec = 0};
+    const timeval timeout{.tv_sec = 5, .tv_usec = 0};
+
     ::setsockopt(client_.descriptor(), SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
     client_.send(ConfigureFrameInterval{.interval_ns = 1'000'000'000 / 240});
   }
@@ -163,10 +166,11 @@ public:
     client_.deinit();
   }
 
-  void open(const char *executable, std::string_view workload, bool fresh_workspace = false) {
+  void open(const char* executable, std::string_view workload, bool fresh_workspace = false) {
     const std::array<std::string_view, 3> arguments{executable, "--child", workload};
     const TerminalSize size{80, 24, 8, 16};
     const Launch launch{.cwd = "/tmp", .arguments = arguments};
+
     if (fresh_workspace) {
       send(CreateWorkspace{.request_id = 1, .size = size, .name = "Probe", .launch = launch});
     } else {
@@ -182,17 +186,13 @@ public:
 
   void next(unsigned sequence) {
     const std::array<Byte, 1> input{'n'};
-    send(PaneInput{.pane_id = pane_id_,
-                   .bytes = input});
+
+    send(PaneInput{.pane_id = pane_id_, .bytes = input});
     waitForMarker(sequence);
   }
 
   void resize(std::uint16_t columns, std::uint16_t rows) {
-    send(PaneResize{.pane_id = pane_id_,
-                    .size = {.cols = columns,
-                             .rows = rows,
-                             .cell_width_px = 8,
-                             .cell_height_px = 16}});
+    send(PaneResize{.pane_id = pane_id_, .size = {.cols = columns, .rows = rows, .cell_width_px = 8, .cell_height_px = 16}});
     while (header_.cols != columns || header_.rows != rows) {
       receive();
     }
@@ -202,75 +202,63 @@ public:
     client_.deinit();
     client_ = Client::init(socket_path_.c_str());
     client_.handshake();
-    const timeval timeout{.tv_sec = 5,
-                          .tv_usec = 0};
+    const timeval timeout{.tv_sec = 5, .tv_usec = 0};
+
     ::setsockopt(client_.descriptor(), SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
-    send(OpenPane{.request_id = 9,
-                  .target = {.kind = PaneTarget::Kind::pane,
-                             .id = pane_id_},
-                  .size = {.cols = 80,
-                           .rows = 24,
-                           .cell_width_px = 8,
-                           .cell_height_px = 16}});
+    send(OpenPane{.request_id = 9, .target = {.kind = PaneTarget::Kind::pane, .id = pane_id_}, .size = {.cols = 80, .rows = 24, .cell_width_px = 8, .cell_height_px = 16}});
     cells_.clear();
     header_ = {};
     waitForMarker(sequence);
   }
 
-  void dumpMatches(std::ostream &output) {
+  void dumpMatches(std::ostream& output) {
     for (const auto needle : {"log", "café", "LINK", "AAA"}) {
       matches_received_ = false;
-      send(SearchPane{.request_id = 4,
-                      .pane_id = pane_id_,
-                      .needle = needle});
+      send(SearchPane{.request_id = 4, .pane_id = pane_id_, .needle = needle});
       while (!matches_received_) {
         receive();
       }
-      output.write(reinterpret_cast<const char *>(matches_.data()), matches_.size());
+
+      output.write(reinterpret_cast<const char*>(matches_.data()), matches_.size());
     }
   }
 
-  void dumpText(std::ostream &output) {
+  void dumpText(std::ostream& output) {
     for (auto source : {PaneTextSource::screen, PaneTextSource::recent}) {
       text_received_ = false;
-      send(ReadPane{.request_id = 2,
-                    .pane_id = pane_id_,
-                    .pane_generation = pane_generation_,
-                    .rows = 100,
-                    .source = source});
+      send(ReadPane{.request_id = 2, .pane_id = pane_id_, .pane_generation = pane_generation_, .rows = 100, .source = source});
       while (!text_received_) {
         receive();
       }
 
       const auto size = static_cast<std::uint32_t>(text_.size());
-      output.write(reinterpret_cast<const char *>(&size), sizeof(size));
+
+      output.write(reinterpret_cast<const char*>(&size), sizeof(size));
       output.write(text_.data(), text_.size());
     }
 
     text_received_ = false;
-    send(CopySelection{.pane_id = pane_id_,
-                       .start_x = 2,
-                       .start_y = 0,
-                       .end_x = 10,
-                       .end_y = 2});
+    send(CopySelection{.pane_id = pane_id_, .start_x = 2, .start_y = 0, .end_x = 10, .end_y = 2});
     while (!text_received_) {
       receive();
     }
 
     const auto size = static_cast<std::uint32_t>(text_.size());
-    output.write(reinterpret_cast<const char *>(&size), sizeof(size));
+
+    output.write(reinterpret_cast<const char*>(&size), sizeof(size));
     output.write(text_.data(), text_.size());
   }
 
   void finish() {
     const std::array<Byte, 1> input{'q'};
-    send(PaneInput{.pane_id = pane_id_,
-                   .bytes = input});
+
+    send(PaneInput{.pane_id = pane_id_, .bytes = input});
     while (!exited_) {
       receive();
     }
 
     const std::string_view expected = "final-output-before-exit";
+
     for (std::size_t index = 0; index < expected.size(); ++index) {
       if (cells_.at(80 + index).text[0] != expected[index]) {
         throw SocketError{"Exit arrived before final terminal output"};
@@ -278,15 +266,16 @@ public:
     }
   }
 
-  void dump(std::ostream &output) {
+  void dump(std::ostream& output) {
     auto remaining = std::span<Byte>{outgoing_};
     auto header = header_;
+
     header.pane_id = 1;
     header.frame_id = 2;
     header.base_frame_id = 1;
     FrameSerializer::encodeBody(header, remaining);
 
-    for (const auto &cell : cells_) {
+    for (const auto& cell : cells_) {
       u8::encode(cell.length, remaining);
       u8::encode(static_cast<Byte>(cell.width), remaining);
       ValueCodec<CellStyle>::encode(cell.style, remaining);
@@ -294,13 +283,13 @@ public:
       remaining = remaining.subspan(cell.length);
     }
 
-    output.write(reinterpret_cast<const char *>(outgoing_.data()), outgoing_.size() - remaining.size());
-    output.write(reinterpret_cast<const char *>(metadata_.data()), metadata_.size());
+    output.write(reinterpret_cast<const char*>(outgoing_.data()), outgoing_.size() - remaining.size());
+    output.write(reinterpret_cast<const char*>(metadata_.data()), metadata_.size());
   }
 
 private:
   template <typename Message>
-  void send(const Message &message) {
+  void send(const Message& message) {
     client_.send(message, outgoing_);
   }
 
@@ -328,30 +317,36 @@ private:
   void receive() {
     const auto payload = client_.receiveFrame(incoming_);
     DecodeStorage storage{scratch_};
+
     switch (static_cast<ServerTag>(payload.front())) {
     case ServerTag::pane_opened: {
       const auto opened = Codec::decode<PaneOpened>(payload, storage);
+
       pane_id_ = opened.pane_id;
       pane_generation_ = opened.pane_generation;
       break;
     }
     case ServerTag::pane_matches: {
       auto matches = Codec::decode<PaneMatches>(payload, storage);
+
       matches.pane_id = 1;
       const auto encoded = Codec::encode(matches, outgoing_);
+
       matches_.assign(encoded.begin(), encoded.end());
       matches_received_ = true;
       break;
     }
     case ServerTag::pane_text: {
       const auto text = Codec::decode<PaneText>(payload, storage);
+
       text_.assign(text.text);
       text_received_ = true;
       break;
     }
     case ServerTag::pane_clipboard: {
       const auto clipboard = Codec::decode<PaneClipboard>(payload, storage);
-      text_.assign(reinterpret_cast<const char *>(clipboard.bytes.data()), clipboard.bytes.size());
+
+      text_.assign(reinterpret_cast<const char*>(clipboard.bytes.data()), clipboard.bytes.size());
       text_received_ = true;
       break;
     }
@@ -369,6 +364,7 @@ private:
     }
     case ServerTag::request_failed: {
       const auto failure = Codec::decode<RequestFailed>(payload, storage);
+
       std::fprintf(stderr, "Request failed: %.*s\n", static_cast<int>(failure.message.size()), failure.message.data());
       throw SocketError{"Probe request rejected"};
     }
@@ -377,17 +373,19 @@ private:
     }
   }
 
-  void apply(const PaneFrame &frame) {
+  void apply(const PaneFrame& frame) {
     if (frame.base_frame_id != 0 && frame.base_frame_id != header_.frame_id) {
       throw SocketError{"Frame refers to an unacknowledged baseline"};
     }
 
     cells_.resize(static_cast<std::size_t>(frame.cols) * frame.rows);
-    for (const auto &span : frame.spans) {
+    for (const auto& span : frame.spans) {
       auto reader = span.reader();
+
       for (std::size_t offset = 0; offset < span.count; ++offset) {
         const auto cell = *reader.next();
-        auto &destination = cells_.at(span.start + offset);
+        auto& destination = cells_.at(span.start + offset);
+
         destination = {};
         destination.length = static_cast<Byte>(cell.text.size());
         destination.width = cell.width;
@@ -398,6 +396,7 @@ private:
 
     if (frame.text_metadata) {
       auto remaining = std::span<Byte>{outgoing_};
+
       ValueCodec<TextMetadata>::encode(*frame.text_metadata, remaining);
       metadata_.assign(outgoing_.begin(), outgoing_.begin() + (outgoing_.size() - remaining.size()));
     }
@@ -405,8 +404,7 @@ private:
     header_ = frame;
     header_.spans = {};
     header_.text_metadata.reset();
-    client_.send(FrameAck{.pane_id = frame.pane_id,
-                          .frame_id = frame.frame_id});
+    client_.send(FrameAck{.pane_id = frame.pane_id, .frame_id = frame.frame_id});
   }
 
   std::string socket_path_;
@@ -426,13 +424,14 @@ private:
   std::vector<Byte> matches_;
 };
 
-static void measureConcurrent(Probe &foreground, char **arguments, unsigned iterations) {
+static void measureConcurrent(Probe& foreground, char** arguments, unsigned iterations) {
   std::atomic<bool> ready{false};
   std::exception_ptr failure;
   unsigned background_iterations = 0;
   std::jthread background{[&](std::stop_token stopping) {
     try {
       Probe probe{arguments[1]};
+
       probe.open(arguments[0], "bulk", true);
       probe.next(++background_iterations);
       ready.store(true, std::memory_order_release);
@@ -450,14 +449,19 @@ static void measureConcurrent(Probe &foreground, char **arguments, unsigned iter
   }
 
   std::vector<std::int64_t> latencies;
+
   latencies.reserve(iterations);
   const auto started = std::chrono::steady_clock::now();
+
   for (unsigned sequence = 1; sequence <= iterations; ++sequence) {
     const auto sent = std::chrono::steady_clock::now();
+
     foreground.next(sequence);
     latencies.push_back(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - sent).count());
   }
+
   const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - started).count();
+
   background.request_stop();
   background.join();
   if (failure) {
@@ -466,13 +470,14 @@ static void measureConcurrent(Probe &foreground, char **arguments, unsigned iter
 
   std::sort(latencies.begin(), latencies.end());
   std::ofstream dump{arguments[4], std::ios::binary};
+
   foreground.dump(dump);
   foreground.dumpText(dump);
   foreground.finish();
   std::printf("{\"iterations\":%u,\"background_iterations\":%u,\"elapsed_ns\":%lld,\"ns_per_iteration\":%.3f,\"p50_ns\":%lld,\"p95_ns\":%lld,\"p99_ns\":%lld,\"max_ns\":%lld}\n", iterations, background_iterations, static_cast<long long>(elapsed), static_cast<double>(elapsed) / iterations, static_cast<long long>(latencies[(iterations - 1) * 50 / 100]), static_cast<long long>(latencies[(iterations - 1) * 95 / 100]), static_cast<long long>(latencies[(iterations - 1) * 99 / 100]), static_cast<long long>(latencies.back()));
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   try {
     if (argc == 3 && std::string_view{argv[1]} == "--child") {
       return child(argv[2]);
@@ -486,12 +491,15 @@ int main(int argc, char **argv) {
     const unsigned iterations = static_cast<unsigned>(std::stoul(argv[3]));
     Probe probe{argv[1]};
     const bool concurrent = std::string_view{argv[2]} == "concurrent";
+
     probe.open(argv[0], concurrent ? "sparse" : argv[2]);
     if (concurrent) {
       measureConcurrent(probe, argv, iterations);
       return 0;
     }
+
     std::ofstream dump{argv[4], std::ios::binary};
+
     probe.dump(dump);
     const auto begin = std::chrono::steady_clock::now();
 
@@ -500,6 +508,7 @@ int main(int argc, char **argv) {
     }
 
     const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - begin).count();
+
     probe.dump(dump);
     probe.dumpText(dump);
     probe.dumpMatches(dump);
@@ -512,7 +521,7 @@ int main(int argc, char **argv) {
     probe.finish();
     std::printf("{\"iterations\":%u,\"elapsed_ns\":%lld,\"ns_per_iteration\":%.3f}\n", iterations, static_cast<long long>(elapsed), static_cast<double>(elapsed) / iterations);
     return 0;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     std::fprintf(stderr, "runtime-probe: %s\n", error.what());
     return 1;
   }

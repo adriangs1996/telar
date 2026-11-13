@@ -8,7 +8,7 @@
 
 namespace telar::gui {
 
-using ApplicationAllocator = TELAR_GUI_ALLOCATOR;
-static_assert(Allocator<ApplicationAllocator>);
+  using ApplicationAllocator = TELAR_GUI_ALLOCATOR;
+  static_assert(Allocator<ApplicationAllocator>);
 
 }

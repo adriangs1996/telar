@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-
 #include <cstdint>
 
 import std;
@@ -13,7 +12,7 @@ import telar.runtime.paths.query_task;
 using namespace telar;
 using namespace telar::runtime;
 
-extern "C" std::uint64_t fuzzy_score(const char *path, std::size_t path_length, const char *query, std::size_t query_length, std::uint16_t *positions) {
+extern "C" std::uint64_t fuzzy_score(const char* path, std::size_t path_length, const char* query, std::size_t query_length, std::uint16_t* positions) {
   static SystemAllocator memory;
   static FuzzyMatch matcher{memory};
   const std::string_view path_text{path, path_length};

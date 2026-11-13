@@ -3,8 +3,8 @@
 #if !defined(Q_OS_MACOS)
 
 namespace telar::gui::qt {
-std::unique_ptr<OpticalText> OpticalText::create() {
-  return nullptr;
-}
+  std::unique_ptr<OpticalText> OpticalText::create() {
+    return nullptr;
+  }
 } // namespace workbench
 #endif

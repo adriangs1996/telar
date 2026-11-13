@@ -333,11 +333,12 @@ requirements. Fixtures are never linked or executed. Provenance validation requi
 cmake --build --preset debug --target format
 cmake --build --preset debug --target format-check
 cmake --build --preset debug --target lint
+cmake --build --preset debug --target blank-lines
 ```
 
-Formatting and generic clang-tidy tooling follow `lib/ebnf`: LLVM style, two
-spaces, braces, unbounded signature lines, separate definitions, and no forced
-trailing return types. `.editorconfig` defines UTF-8, LF, and final newlines.
+`format` uses the repository root's `.clang-format`, and `blank-lines` checks the
+blank lines of `docs/code-style.md` with the `tbc-lint` this project builds. Generic
+clang-tidy tooling follows `lib/ebnf` and forces no trailing return types. `.editorconfig` defines UTF-8, LF, and final newlines.
 `lint` is clang-tidy; `lifetime-check` is the annotation-aware linter. Both fail on
 selected diagnostics. Builds, generated sources, and dependencies are excluded.
 C++ types, aliases, concepts, and type template parameters use `snake_case`, as

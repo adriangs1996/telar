@@ -7,24 +7,24 @@
 
 namespace telar::gui::test {
 
-// Redirects only this test process's general-pasteboard lookup to a unique
-// board. Neither the system clipboard nor another application is modified.
-class PrivateClipboard {
-public:
-  PrivateClipboard();
-  ~PrivateClipboard();
-  PrivateClipboard(const PrivateClipboard &) = delete;
-  PrivateClipboard &operator=(const PrivateClipboard &) = delete;
-  PrivateClipboard(PrivateClipboard &&) = delete;
-  PrivateClipboard &operator=(PrivateClipboard &&) = delete;
+  // Redirects only this test process's general-pasteboard lookup to a unique
+  // board. Neither the system clipboard nor another application is modified.
+  class PrivateClipboard {
+  public:
+    PrivateClipboard();
+    ~PrivateClipboard();
+    PrivateClipboard(const PrivateClipboard&) = delete;
+    PrivateClipboard& operator=(const PrivateClipboard&) = delete;
+    PrivateClipboard(PrivateClipboard&&) = delete;
+    PrivateClipboard& operator=(PrivateClipboard&&) = delete;
 
-  void setPng(std::span<const std::byte> bytes);
-  void clear();
-  void setText(std::string_view text);
+    void setPng(std::span<const std::byte> bytes);
+    void clear();
+    void setText(std::string_view text);
 
-private:
-  struct Native;
-  std::unique_ptr<Native> native_;
-};
+  private:
+    struct Native;
+    std::unique_ptr<Native> native_;
+  };
 
 }

@@ -6,22 +6,22 @@
 
 namespace telar::gui::qt {
 
-class AncestorGeometry {
-public:
-  explicit AncestorGeometry(QQuickItem &item);
-  ~AncestorGeometry();
-  AncestorGeometry(const AncestorGeometry &) = delete;
-  AncestorGeometry &operator=(const AncestorGeometry &) = delete;
-  AncestorGeometry(AncestorGeometry &&) = delete;
-  AncestorGeometry &operator=(AncestorGeometry &&) = delete;
+  class AncestorGeometry {
+  public:
+    explicit AncestorGeometry(QQuickItem& item);
+    ~AncestorGeometry();
+    AncestorGeometry(const AncestorGeometry&) = delete;
+    AncestorGeometry& operator=(const AncestorGeometry&) = delete;
+    AncestorGeometry(AncestorGeometry&&) = delete;
+    AncestorGeometry& operator=(AncestorGeometry&&) = delete;
 
-  void observe();
+    void observe();
 
-private:
-  void disconnect();
+  private:
+    void disconnect();
 
-  QQuickItem &item_;
-  QList<QMetaObject::Connection> connections_;
-};
+    QQuickItem& item_;
+    QList<QMetaObject::Connection> connections_;
+  };
 
 }

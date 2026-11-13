@@ -3,13 +3,12 @@
 static_assert(true);
 #endif
 
-
 #include <cstdint>
 
 import std;
 import telar.runtime.diagnostics.runtime_telemetry;
 
-extern "C" std::uint64_t classify_name(const char *bytes, std::size_t length) {
+extern "C" std::uint64_t classify_name(const char* bytes, std::size_t length) {
   const auto parsed = telar::runtime::diagnostics::LogName::parse({bytes, length});
   if (!parsed) {
     return 0;

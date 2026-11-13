@@ -9,6 +9,7 @@
 #include <llvm/Support/Regex.h>
 #include <llvm/Support/raw_ostream.h>
 
+#include <cstdint>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -23,7 +24,7 @@ namespace tbc_lint {
     bool claim(llvm::StringRef path, unsigned offset);
 
     // Inserts every claimed blank line. Returns false and explains why when a file cannot be written.
-    bool apply(llvm::raw_ostream &errors) const;
+    bool apply(llvm::raw_ostream& errors) const;
 
   private:
     mutable std::mutex mutex_;
@@ -35,14 +36,14 @@ namespace tbc_lint {
   class blank_line_check final : public clang::ast_matchers::MatchFinder::MatchCallback {
   public:
     // Headers are checked only when their path matches header_filter; an empty filter checks main files only.
-    blank_line_check(blank_line_fixes &fixes, bool errors, const std::string &header_filter);
+    blank_line_check(blank_line_fixes& fixes, bool errors, const std::string& header_filter);
 
-    void registerMatchers(clang::ast_matchers::MatchFinder &finder);
-    void run(const clang::ast_matchers::MatchFinder::MatchResult &result) override;
+    void registerMatchers(clang::ast_matchers::MatchFinder& finder);
+    void run(const clang::ast_matchers::MatchFinder::MatchResult& result) override;
     void onEndOfTranslationUnit() override;
 
   private:
-    enum class rule {
+    enum class rule : std::uint8_t {
       after_block,
       after_declarations,
     };
@@ -54,14 +55,14 @@ namespace tbc_lint {
       rule kind;
     };
 
-    bool selected(clang::FileID file, const clang::SourceManager &sources);
-    void inspect(const clang::Stmt &previous, const clang::Stmt &next, const clang::SourceManager &sources);
+    bool selected(clang::FileID file, const clang::SourceManager& sources);
+    void inspect(const clang::Stmt& previous, const clang::Stmt& next, const clang::SourceManager& sources);
 
-    blank_line_fixes &fixes_;
+    blank_line_fixes& fixes_;
     bool errors_;
     llvm::Regex header_filter_;
     bool filter_headers_;
-    clang::ASTContext *context_ = nullptr;
+    clang::ASTContext* context_ = nullptr;
     llvm::DenseMap<clang::FileID, bool> selected_;
     std::vector<gap> gaps_;
   };

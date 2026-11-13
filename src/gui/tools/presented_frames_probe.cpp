@@ -10,22 +10,22 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
-#include <memory>
 #include <deque>
+#include <memory>
 #include <stdexcept>
 #include <string_view>
 
 namespace telar::gui::test {
-struct FramePacing {
-  using Frame = qt::Application::PresentedFrame;
-};
+  struct FramePacing {
+    using Frame = qt::Application::PresentedFrame;
+  };
 }
 
 using namespace telar::gui;
 using PresentedFrame = test::FramePacing::Frame;
 
 struct WindowImages {
-  static void forWindow(QQuickWindow &) {}
+  static void forWindow(QQuickWindow&) {}
 };
 
 static void require(bool value) {
@@ -34,7 +34,7 @@ static void require(bool value) {
   }
 }
 
-static void fill(PresentedFrame &frame, std::uint64_t seed, std::size_t panes, bool history, bool links) {
+static void fill(PresentedFrame& frame, std::uint64_t seed, std::size_t panes, bool history, bool links) {
   frame = {};
   frame.machine_view = 7;
   frame.preparation_ns = seed;
@@ -46,7 +46,7 @@ static void fill(PresentedFrame &frame, std::uint64_t seed, std::size_t panes, b
   }
 
   for (std::size_t i = 0; i < panes; ++i) {
-    auto &pane = frame.panes[i];
+    auto& pane = frame.panes[i];
     pane.frame.pane = {.pane_id = i + 1, .frame_id = seed, .attached = true, .attachment_generation = seed / 13, .graphics_revision = seed * 2};
     pane.frame.revision = seed * 3 + i;
     if (links) {
@@ -67,7 +67,7 @@ static void fill(PresentedFrame &frame, std::uint64_t seed, std::size_t panes, b
     frame.history->enter_runs = seed % 2;
     frame.history_surface = {.bounds = {1, 2, 3, 4}, .generation = seed, .revision = seed * 2, .row_height = 17, .cell_height = 13, .scale = 2, .delivered = true, .has_rows = true};
     frame.history_actions.generation = seed;
-    auto &hover = frame.history_hover.emplace();
+    auto& hover = frame.history_hover.emplace();
     hover.count = hover.targets.size();
     hover.generation = seed;
     for (std::size_t i = 0; i < hover.count; ++i) {
@@ -77,7 +77,7 @@ static void fill(PresentedFrame &frame, std::uint64_t seed, std::size_t panes, b
   }
 }
 
-static bool equal(const PresentedFrame &a, const PresentedFrame &b) {
+static bool equal(const PresentedFrame& a, const PresentedFrame& b) {
   if (a.machine_view != b.machine_view || a.preparation_ns != b.preparation_ns || a.pane_count != b.pane_count || a.tabs.machine_view != b.tabs.machine_view || a.tabs.count != b.tabs.count || a.history.has_value() != b.history.has_value() || a.history_hover.has_value() != b.history_hover.has_value()) {
     return false;
   }
@@ -89,8 +89,8 @@ static bool equal(const PresentedFrame &a, const PresentedFrame &b) {
   }
 
   for (std::size_t i = 0; i < a.pane_count; ++i) {
-    const auto &x = a.panes[i].frame;
-    const auto &y = b.panes[i].frame;
+    const auto& x = a.panes[i].frame;
+    const auto& y = b.panes[i].frame;
     if (x.pane.pane_id != y.pane.pane_id || x.pane.frame_id != y.pane.frame_id || x.pane.attached != y.pane.attached || x.pane.attachment_generation != y.pane.attachment_generation || x.pane.graphics_revision != y.pane.graphics_revision || x.revision != y.revision || x.links.has_value() != y.links.has_value()) {
       return false;
     }
@@ -105,8 +105,8 @@ static bool equal(const PresentedFrame &a, const PresentedFrame &b) {
   }
 
   if (a.history_hover) {
-    const auto &x = *a.history_hover;
-    const auto &y = *b.history_hover;
+    const auto& x = *a.history_hover;
+    const auto& y = *b.history_hover;
     if (x.count != y.count || x.generation != y.generation) {
       return false;
     }
@@ -125,8 +125,8 @@ static SystemAllocator probe_memory;
 
 class ProbeApplication : public QObject {
 public:
-  SystemAllocator &memory_ = probe_memory;
-  QQuickWindow *window_ = nullptr;
+  SystemAllocator& memory_ = probe_memory;
+  QQuickWindow* window_ = nullptr;
   std::uint64_t window_generation_ = 1;
   std::uint64_t seed = 1;
   std::size_t panes = 1;
@@ -140,18 +140,18 @@ public:
 
   void prepareImagePlacements() {}
 
-  void prepareFrame(PresentedFrame &frame) {
+  void prepareFrame(PresentedFrame& frame) {
     fill(frame, seed, panes, history, links);
     observed_link = links && panes != 0 ? frame.panes[0].frame.links->link : std::shared_ptr<const LinkHit>{};
   }
 
-  void prepareTerminalFrames(PresentedFrame &) {}
+  void prepareTerminalFrames(PresentedFrame&) {}
 
-  void recordPreparedFrame(const PresentedFrame &) {}
+  void recordPreparedFrame(const PresentedFrame&) {}
 
-  void observeFrames(QQuickWindow &window);
+  void observeFrames(QQuickWindow& window);
 
-  void present(const PresentedFrame &frame) {
+  void present(const PresentedFrame& frame) {
     if (verify) {
       require(!expected.empty());
       require(equal(frame, *expected.front()));
@@ -162,12 +162,12 @@ public:
     ++delivered;
   }
 
-  void prepare(QQuickWindow &window) {
+  void prepare(QQuickWindow& window) {
     window.beforeSynchronizing();
     window.afterSynchronizing();
   }
 
-  void enqueue(QQuickWindow &window) {
+  void enqueue(QQuickWindow& window) {
     if (verify) {
       auto snapshot = std::make_unique<PresentedFrame>();
       fill(*snapshot, seed, panes, history, links);
@@ -192,7 +192,7 @@ static unsigned long long parameter(std::string_view text) {
   return result;
 }
 
-int execute(int argc, char **argv) {
+int execute(int argc, char** argv) {
   require(argc == 1 || argc == 5);
   QGuiApplication app(argc, argv);
   QQuickWindow window;
@@ -286,10 +286,10 @@ int execute(int argc, char **argv) {
   return 0;
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   try {
     return execute(argc, argv);
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     std::fprintf(stderr, "%s\n", error.what());
     return 1;
   }

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "telar_codec.hpp"
 #include "telar_base/text/utf8.hpp"
+#include "telar_codec.hpp"
 
 #include <bit>
 #include <limits>
@@ -11,16 +11,17 @@
 
 namespace telar {
 
-  template <std::signed_integral T> struct SignedLittleEndian {
+  template <std::signed_integral T>
+  struct SignedLittleEndian {
     using value_type = T;
     using Unsigned = std::make_unsigned_t<T>;
     static constexpr std::size_t width = sizeof(T);
 
-    static void encode(T value, std::span<Byte> &output) {
+    static void encode(T value, std::span<Byte>& output) {
       LittleEndian<Unsigned>::encode(std::bit_cast<Unsigned>(value), output);
     }
 
-    static T decode(std::span<const Byte> &input) {
+    static T decode(std::span<const Byte>& input) {
       return std::bit_cast<T>(LittleEndian<Unsigned>::decode(input));
     }
   };
@@ -28,10 +29,7 @@ namespace telar {
   using i32 = SignedLittleEndian<std::int32_t>;
   using i64 = SignedLittleEndian<std::int64_t>;
 
-  template <typename IntegerCodec,
-            typename IntegerCodec::value_type Minimum,
-            typename IntegerCodec::value_type Maximum =
-                std::numeric_limits<typename IntegerCodec::value_type>::max()>
+  template <typename IntegerCodec, typename IntegerCodec::value_type Minimum, typename IntegerCodec::value_type Maximum = std::numeric_limits<typename IntegerCodec::value_type>::max()>
   struct BoundedInteger : CodecWidth<IntegerCodec> {
     using value_type = typename IntegerCodec::value_type;
 
@@ -43,18 +41,19 @@ namespace telar {
       return value;
     }
 
-    static void encode(value_type value, std::span<Byte> &output) {
+    static void encode(value_type value, std::span<Byte>& output) {
       IntegerCodec::encode(validate(value), output);
     }
 
-    static value_type decode(std::span<const Byte> &input) {
+    static value_type decode(std::span<const Byte>& input) {
       return validate(IntegerCodec::decode(input));
     }
   };
 
   using NonzeroU64 = BoundedInteger<u64, 1>;
 
-  template <typename Enum, Byte Maximum, Byte Minimum = 0> struct EnumByte {
+  template <typename Enum, Byte Maximum, Byte Minimum = 0>
+  struct EnumByte {
     using value_type = Enum;
     static_assert(std::is_same_v<std::underlying_type_t<Enum>, Byte>);
     static constexpr std::size_t width = 1;
@@ -68,16 +67,17 @@ namespace telar {
       return value;
     }
 
-    static void encode(Enum value, std::span<Byte> &output) {
+    static void encode(Enum value, std::span<Byte>& output) {
       u8::encode(static_cast<Byte>(validate(value)), output);
     }
 
-    static Enum decode(std::span<const Byte> &input) {
+    static Enum decode(std::span<const Byte>& input) {
       return validate(static_cast<Enum>(u8::decode(input)));
     }
   };
 
-  template <typename Enum, Enum... Allowed> struct EnumChoiceByte {
+  template <typename Enum, Enum... Allowed>
+  struct EnumChoiceByte {
     using value_type = Enum;
     static_assert(std::is_same_v<std::underlying_type_t<Enum>, Byte>);
     static constexpr std::size_t width = 1;
@@ -90,11 +90,11 @@ namespace telar {
       return value;
     }
 
-    static void encode(Enum value, std::span<Byte> &output) {
+    static void encode(Enum value, std::span<Byte>& output) {
       u8::encode(static_cast<Byte>(validate(value)), output);
     }
 
-    static Enum decode(std::span<const Byte> &input) {
+    static Enum decode(std::span<const Byte>& input) {
       return validate(static_cast<Enum>(u8::decode(input)));
     }
   };
@@ -105,13 +105,10 @@ namespace telar {
     utf8_no_nul,
     display,
     multiline,
-    opaque
+    opaque,
   };
 
-  template <typename LengthCodec,
-            std::size_t Maximum,
-            bool EmptyAllowed = true,
-            TextRule Rule = TextRule::bytes>
+  template <typename LengthCodec, std::size_t Maximum, bool EmptyAllowed = true, TextRule Rule = TextRule::bytes>
   struct SizedText {
     using value_type = std::string_view;
     static constexpr std::size_t min_width = LengthCodec::width;
@@ -127,9 +124,11 @@ namespace telar {
           throw EncodingError{"Embedded NUL in text"};
         }
       }
+
       if constexpr (Rule != TextRule::bytes && Rule != TextRule::opaque) {
         validateUtf8(value);
       }
+
       if constexpr (Rule == TextRule::display || Rule == TextRule::multiline) {
         for (const auto character : value) {
           const auto byte = static_cast<Byte>(character);
@@ -147,7 +146,7 @@ namespace telar {
       return checkedWireSize(LengthCodec::width, value.size());
     }
 
-    static void encode(std::string_view value, std::span<Byte> &output) {
+    static void encode(std::string_view value, std::span<Byte>& output) {
       if (output.size() < encodedSize(value)) {
         throw EncodingError{"Output buffer too small"};
       }
@@ -156,16 +155,18 @@ namespace telar {
       if (!value.empty()) {
         std::memcpy(output.data(), value.data(), value.size());
       }
+
       output = output.subspan(value.size());
     }
 
-    static std::string_view decode(std::span<const Byte> &input) {
+    static std::string_view decode(std::span<const Byte>& input) {
       const auto length = LengthCodec::decode(input);
       if (length > Maximum || length > input.size()) {
         throw EncodingError{"Invalid sized text length"};
       }
 
       const auto value = textView(input.first(length));
+
       validate(value);
       input = input.subspan(length);
 
@@ -185,9 +186,11 @@ namespace telar {
   template <std::size_t Maximum>
   using MessageText16 = SizedText<u16, Maximum, true, TextRule::multiline>;
 
-  template <std::size_t Maximum> using Utf8Text16 = SizedText<u16, Maximum, true, TextRule::utf8>;
+  template <std::size_t Maximum>
+  using Utf8Text16 = SizedText<u16, Maximum, true, TextRule::utf8>;
 
-  template <typename LengthCodec, std::size_t Maximum, std::size_t Minimum = 0> struct SizedBytes {
+  template <typename LengthCodec, std::size_t Maximum, std::size_t Minimum = 0>
+  struct SizedBytes {
     using value_type = std::span<const Byte>;
     static constexpr std::size_t min_width = LengthCodec::width + Minimum;
     static_assert(Maximum <= std::numeric_limits<typename LengthCodec::value_type>::max());
@@ -196,32 +199,38 @@ namespace telar {
       if (value.size() < Minimum || value.size() > Maximum) {
         throw EncodingError{"Invalid binary field length"};
       }
+
       return checkedWireSize(LengthCodec::width, value.size());
     }
 
-    static void encode(value_type value, std::span<Byte> &output) {
+    static void encode(value_type value, std::span<Byte>& output) {
       if (output.size() < encodedSize(value)) {
         throw EncodingError{"Output buffer too small"};
       }
+
       LengthCodec::encode(static_cast<typename LengthCodec::value_type>(value.size()), output);
       if (!value.empty()) {
         std::memcpy(output.data(), value.data(), value.size());
       }
+
       output = output.subspan(value.size());
     }
 
-    static value_type decode(std::span<const Byte> &input) {
+    static value_type decode(std::span<const Byte>& input) {
       const auto length = LengthCodec::decode(input);
       if (length < Minimum || length > Maximum || length > input.size()) {
         throw EncodingError{"Invalid binary field length"};
       }
+
       const auto value = input.first(length);
+
       input = input.subspan(length);
       return value;
     }
   };
 
-  template <std::size_t Maximum, std::size_t Minimum = 0> struct TailBytes {
+  template <std::size_t Maximum, std::size_t Minimum = 0>
+  struct TailBytes {
     using value_type = std::span<const Byte>;
     static constexpr std::size_t min_width = Minimum;
 
@@ -229,28 +238,33 @@ namespace telar {
       if (value.size() < Minimum || value.size() > Maximum) {
         throw EncodingError{"Invalid tail length"};
       }
+
       return value.size();
     }
 
-    static void encode(value_type value, std::span<Byte> &output) {
+    static void encode(value_type value, std::span<Byte>& output) {
       if (output.size() < encodedSize(value)) {
         throw EncodingError{"Output buffer too small"};
       }
+
       if (!value.empty()) {
         std::memcpy(output.data(), value.data(), value.size());
       }
+
       output = output.subspan(value.size());
     }
 
-    static value_type decode(std::span<const Byte> &input) {
+    static value_type decode(std::span<const Byte>& input) {
       (void)encodedSize(input);
       const auto value = input;
+
       input = {};
       return value;
     }
   };
 
-  template <std::size_t Maximum> struct Utf8Tail {
+  template <std::size_t Maximum>
+  struct Utf8Tail {
     using value_type = std::string_view;
     static constexpr std::size_t min_width = 0;
 
@@ -259,36 +273,36 @@ namespace telar {
       if (value.size() > Maximum) {
         throw EncodingError{"Error message too long"};
       }
+
       return value.size();
     }
 
-    static void encode(value_type value, std::span<Byte> &output) {
+    static void encode(value_type value, std::span<Byte>& output) {
       (void)encodedSize(value);
       TailBytes<Maximum>::encode(byteView(value), output);
     }
 
-    static value_type decode(std::span<const Byte> &input) {
+    static value_type decode(std::span<const Byte>& input) {
       const auto bytes = TailBytes<Maximum>::decode(input);
       const auto value = textView(bytes);
+
       (void)encodedSize(value);
       return value;
     }
   };
 
-  template <typename Enum,
-            typename IntegerCodec,
-            typename IntegerCodec::value_type Minimum,
-            typename IntegerCodec::value_type Maximum>
+  template <typename Enum, typename IntegerCodec, typename IntegerCodec::value_type Minimum, typename IntegerCodec::value_type Maximum>
   struct EnumInteger : CodecWidth<IntegerCodec> {
     using value_type = Enum;
 
-    static void encode(Enum value, std::span<Byte> &output) {
+    static void encode(Enum value, std::span<Byte>& output) {
       BoundedInteger<IntegerCodec, Minimum, Maximum>::encode(
           static_cast<typename IntegerCodec::value_type>(value),
-          output);
+          output
+      );
     }
 
-    static Enum decode(std::span<const Byte> &input) {
+    static Enum decode(std::span<const Byte>& input) {
       return static_cast<Enum>(BoundedInteger<IntegerCodec, Minimum, Maximum>::decode(input));
     }
   };
@@ -297,34 +311,38 @@ namespace telar {
     using value_type = std::optional<Byte>;
     static constexpr std::size_t width = 1;
 
-    static void encode(value_type value, std::span<Byte> &output) {
+    static void encode(value_type value, std::span<Byte>& output) {
       if (value && *value > 100) {
         throw EncodingError{"Invalid progress percentage"};
       }
+
       u8::encode(value.value_or(255), output);
     }
 
-    static value_type decode(std::span<const Byte> &input) {
+    static value_type decode(std::span<const Byte>& input) {
       const auto value = u8::decode(input);
       if (value == 255) {
         return std::nullopt;
       }
+
       if (value > 100) {
         throw EncodingError{"Invalid progress percentage"};
       }
+
       return value;
     }
   };
 
-  template <typename ValueCodec> struct OptionalValue {
+  template <typename ValueCodec>
+  struct OptionalValue {
     using value_type = std::optional<typename ValueCodec::value_type>;
     static constexpr std::size_t min_width = 1;
 
-    static std::size_t encodedSize(const value_type &value) {
+    static std::size_t encodedSize(const value_type& value) {
       return value ? checkedWireSize(1, wireSize<ValueCodec>(*value)) : 1;
     }
 
-    static void encode(const value_type &value, std::span<Byte> &output) {
+    static void encode(const value_type& value, std::span<Byte>& output) {
       if (output.size() < encodedSize(value)) {
         throw EncodingError{"Output buffer too small"};
       }
@@ -335,7 +353,7 @@ namespace telar {
       }
     }
 
-    static Decoded<value_type> decode(DecodeInput input, DecodeStorage &storage) {
+    static Decoded<value_type> decode(DecodeInput input, DecodeStorage& storage) {
       if (!BoolByte::decode(input)) {
         return std::nullopt;
       }
@@ -344,10 +362,7 @@ namespace telar {
     }
   };
 
-  template <typename CountCodec,
-            typename ElementCodec,
-            std::size_t Maximum,
-            std::size_t Minimum = 0>
+  template <typename CountCodec, typename ElementCodec, std::size_t Maximum, std::size_t Minimum = 0>
   struct CountedSpan {
     using Element = typename ElementCodec::value_type;
     using value_type = std::span<const Element>;
@@ -365,33 +380,36 @@ namespace telar {
     static std::size_t encodedSize(value_type values) {
       validateCount(values.size());
       std::size_t size = CountCodec::width;
-      for (const auto &value : values) {
+
+      for (const auto& value : values) {
         size = checkedWireSize(size, wireSize<ElementCodec>(value));
       }
 
       return size;
     }
 
-    static void encode(value_type values, std::span<Byte> &output) {
+    static void encode(value_type values, std::span<Byte>& output) {
       if (output.size() < encodedSize(values)) {
         throw EncodingError{"Output buffer too small"};
       }
 
       CountCodec::encode(static_cast<typename CountCodec::value_type>(values.size()), output);
-      for (const auto &value : values) {
+      for (const auto& value : values) {
         ElementCodec::encode(value, output);
       }
     }
 
-    static Decoded<value_type> decode(DecodeInput input, DecodeStorage &storage) {
+    static Decoded<value_type> decode(DecodeInput input, DecodeStorage& storage) {
       const auto count = CountCodec::decode(input);
+
       validateCount(count);
       if (count > input.size() / minimumWidth<ElementCodec>()) {
         throw EncodingError{"Truncated list"};
       }
 
       auto values = storage.allocate<Element>(count);
-      for (auto &value : values) {
+
+      for (auto& value : values) {
         value = decodeValue<ElementCodec>(input, storage);
       }
 
@@ -399,23 +417,25 @@ namespace telar {
     }
   };
 
-  template <typename Value> void validateBody(const Value &value) {
+  template <typename Value>
+  void validateBody(const Value& value) {
     if constexpr (requires { BodySchema<Value>::validate(value); }) {
       BodySchema<Value>::validate(value);
     }
   }
 
-  template <typename Value> struct ValueCodec : CodecWidth<BodySchema<Value>> {
+  template <typename Value>
+  struct ValueCodec : CodecWidth<BodySchema<Value>> {
     using value_type = Value;
     static constexpr std::size_t min_width = minimumWidth<BodySchema<Value>>();
 
-    static std::size_t encodedSize(const Value &value) {
+    static std::size_t encodedSize(const Value& value) {
       validateBody(value);
 
       return BodySchema<Value>::encodedSize(value);
     }
 
-    static void encode(const Value &value, std::span<Byte> &output) {
+    static void encode(const Value& value, std::span<Byte>& output) {
       if (output.size() < encodedSize(value)) {
         throw EncodingError{"Output buffer too small"};
       }
@@ -423,8 +443,9 @@ namespace telar {
       BodySchema<Value>::encodeBody(value, output);
     }
 
-    static Decoded<Value> decode(DecodeInput input, DecodeStorage &storage) {
+    static Decoded<Value> decode(DecodeInput input, DecodeStorage& storage) {
       Value value{};
+
       BodySchema<Value>::decodeBody(input, value, storage);
       validateBody(value);
 
@@ -435,20 +456,21 @@ namespace telar {
   // Unlike Codec, this entry point never adds a message tag or transport prefix.
   struct BodyCodec {
     template <typename Value, typename... Context>
-    static std::size_t encodedSize(const Value &value, Context... context) {
+    static std::size_t encodedSize(const Value& value, Context... context) {
       validateBody(value);
 
       return BodySchema<Value>::encodedSize(value, context...);
     }
 
     template <typename Value, typename... Context>
-    static std::span<Byte> encode(const Value &value, std::span<Byte> buffer, Context... context) {
+    static std::span<Byte> encode(const Value& value, std::span<Byte> buffer, Context... context) {
       const auto size = encodedSize(value, context...);
       if (buffer.size() < size) {
         throw EncodingError{"Output buffer too small"};
       }
 
       auto output = buffer.first(size);
+
       BodySchema<Value>::encodeBody(value, output, context...);
       if (!output.empty()) {
         throw EncodingError{"Body serializer size mismatch"};
@@ -458,16 +480,18 @@ namespace telar {
     }
 
     template <typename Value, typename... Context>
-    static Decoded<Value> decode(DecodeFrame input, DecodeStorage &storage, Context... context) {
+    static Decoded<Value> decode(DecodeFrame input, DecodeStorage& storage, Context... context) {
       if (input.size() > max_payload_size) {
         throw EncodingError{"Encoded body exceeds the frame limit"};
       }
 
       Value value{};
+
       BodySchema<Value>::decodeBody(input, value, storage, context...);
       if (!input.empty()) {
         throw EncodingError{"Trailing bytes in body"};
       }
+
       validateBody(value);
 
       return value;

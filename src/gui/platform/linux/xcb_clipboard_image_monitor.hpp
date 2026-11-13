@@ -6,23 +6,23 @@
 
 namespace telar::gui::platform {
 
-class XcbClipboardImageMonitor {
-public:
-  explicit XcbClipboardImageMonitor(ApplicationAllocator &memory);
-  ~XcbClipboardImageMonitor();
-  XcbClipboardImageMonitor(const XcbClipboardImageMonitor &) = delete;
-  XcbClipboardImageMonitor &operator=(const XcbClipboardImageMonitor &) = delete;
-  XcbClipboardImageMonitor(XcbClipboardImageMonitor &&) = delete;
-  XcbClipboardImageMonitor &operator=(XcbClipboardImageMonitor &&) = delete;
+  class XcbClipboardImageMonitor {
+  public:
+    explicit XcbClipboardImageMonitor(ApplicationAllocator& memory);
+    ~XcbClipboardImageMonitor();
+    XcbClipboardImageMonitor(const XcbClipboardImageMonitor&) = delete;
+    XcbClipboardImageMonitor& operator=(const XcbClipboardImageMonitor&) = delete;
+    XcbClipboardImageMonitor(XcbClipboardImageMonitor&&) = delete;
+    XcbClipboardImageMonitor& operator=(XcbClipboardImageMonitor&&) = delete;
 
-  void cancel() noexcept;
+    void cancel() noexcept;
 
-  [[nodiscard]] ClipboardImageSource capture();
+    [[nodiscard]] ClipboardImageSource capture();
 
-private:
-  struct Native;
-  ApplicationAllocator &memory_;
-  Owned<Native, ApplicationAllocator> native_;
-};
+  private:
+    struct Native;
+    ApplicationAllocator& memory_;
+    Owned<Native, ApplicationAllocator> native_;
+  };
 
 }

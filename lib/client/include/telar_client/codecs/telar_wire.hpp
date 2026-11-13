@@ -24,13 +24,14 @@
 #define KILO_BYTES(x) x * 1024
 #define MEGA_BYTES(x) KILO_BYTES(x) * 1024
 
-#include "telar_client/codecs/telar_annotations.hpp"
 #include "telar_base/text/utf8.hpp"
+#include "telar_client/codecs/telar_annotations.hpp"
 #include "telar_vocabulary/vocabulary.hpp"
 
 namespace telar {
 
-  template <std::size_t N> struct FixedString {
+  template <std::size_t N>
+  struct FixedString {
     char value[N];
 
     constexpr FixedString(const char (&text)[N]) {
@@ -43,15 +44,14 @@ namespace telar {
   template <std::size_t N>
   FixedString(const char (&text)[N]) -> FixedString<N>;
 
-
   static_assert(std::same_as<Byte, unsigned char>);
 
   [[nodiscard]] inline std::span<const Byte> byteView(std::string_view text) noexcept {
-    return {reinterpret_cast<const Byte *>(text.data()), text.size()};
+    return {reinterpret_cast<const Byte*>(text.data()), text.size()};
   }
 
   [[nodiscard]] inline std::string_view textView(std::span<const Byte> bytes) noexcept {
-    return {reinterpret_cast<const char *>(bytes.data()), bytes.size()};
+    return {reinterpret_cast<const char*>(bytes.data()), bytes.size()};
   }
 
   inline constexpr std::size_t max_payload_size = MEGA_BYTES(4);
@@ -60,25 +60,24 @@ namespace telar {
   enum class Direction {
     client,
     server,
-    either
+    either,
   };
 
 #ifdef TELAR_DEBUG
   namespace debug {
 
-    template <std::size_t N> auto valueText(const std::array<Byte, N> &value) {
+    template <std::size_t N>
+    auto valueText(const std::array<Byte, N>& value) {
       std::array<char, N * 4 + 3> text{};
       std::size_t position = 0;
+
       text[position++] = '"';
 
       for (const auto byte : value) {
         if (byte >= 0x20 && byte <= 0x7e && byte != '"' && byte != '\\') {
           text[position++] = static_cast<char>(byte);
         } else {
-          std::snprintf(text.data() + position,
-                        text.size() - position,
-                        "\\x%02x",
-                        static_cast<unsigned>(byte));
+          std::snprintf(text.data() + position, text.size() - position, "\\x%02x", static_cast<unsigned>(byte));
           position += 4;
         }
       }
@@ -88,9 +87,11 @@ namespace telar {
       return text;
     }
 
-    template <typename Value> auto valueText(Value value) {
+    template <typename Value>
+    auto valueText(Value value) {
       if constexpr (std::same_as<Value, bool>) {
         std::array<char, sizeof("false")> text{};
+
         std::snprintf(text.data(), text.size(), "%s", value ? "true" : "false");
         return text;
       } else if constexpr (std::is_enum_v<Value>) {
@@ -99,12 +100,13 @@ namespace telar {
         static_assert(std::unsigned_integral<Value>, "Add a formatter for this field type");
 
         std::array<char, std::numeric_limits<Value>::digits10 + 2> text{};
+
         std::snprintf(text.data(), text.size(), "%llu", static_cast<unsigned long long>(value));
         return text;
       }
     }
 
-    inline std::size_t columnWidth(std::size_t byte_count, const char *name, const char *value) {
+    inline std::size_t columnWidth(std::size_t byte_count, const char* name, const char* value) {
       const auto bytes_width = byte_count == 0 ? 0 : byte_count * 3 - 1;
       const auto name_width = std::strlen(name);
       const auto value_width = std::strlen(value);
@@ -113,11 +115,7 @@ namespace telar {
       return width > value_width ? width : value_width;
     }
 
-    inline void printBytes(std::span<const Byte> bytes,
-                           const char *name,
-                           const char *value,
-                           std::FILE *output,
-                           bool more) {
+    inline void printBytes(std::span<const Byte> bytes, const char* name, const char* value, std::FILE* output, bool more) {
       for (std::size_t i = 0; i < bytes.size(); ++i) {
         if (i != 0) {
           std::fputc(' ', output);
@@ -129,33 +127,27 @@ namespace telar {
       if (more) {
         const auto bytes_width = bytes.empty() ? 0 : bytes.size() * 3 - 1;
         const auto padding = columnWidth(bytes.size(), name, value) - bytes_width;
+
         std::fprintf(output, "%*s | ", static_cast<int>(padding), "");
       }
     }
 
     inline void
-    printText(const char *text, std::size_t width, std::FILE *output, const char *separator) {
+    printText(const char* text, std::size_t width, std::FILE* output, const char* separator) {
       std::fputs(text, output);
 
       if (separator[0] != '\0') {
         const auto padding = width - std::strlen(text);
+
         std::fprintf(output, "%*s%s", static_cast<int>(padding), "", separator);
       }
     }
 
-    inline void printLabel(std::size_t byte_count,
-                           const char *name,
-                           const char *value,
-                           std::FILE *output,
-                           bool more) {
+    inline void printLabel(std::size_t byte_count, const char* name, const char* value, std::FILE* output, bool more) {
       printText(name, columnWidth(byte_count, name, value), output, more ? "   " : "");
     }
 
-    inline void printValue(std::size_t byte_count,
-                           const char *name,
-                           const char *value,
-                           std::FILE *output,
-                           bool more) {
+    inline void printValue(std::size_t byte_count, const char* name, const char* value, std::FILE* output, bool more) {
       printText(value, columnWidth(byte_count, name, value), output, more ? " | " : "");
     }
 
@@ -166,32 +158,36 @@ namespace telar {
   // owns decoded list elements and must not overlap the frame or be reused
   // while a decoded value still references it.
   // Decoded values view the input frame and the caller's decode storage, both in region `a`.
-  using DecodeInput = tbc::view<std::span<const Byte> &, tbc::lt::a>;
+  using DecodeInput = tbc::view<std::span<const Byte>&, tbc::lt::a>;
   using DecodeFrame = tbc::view<std::span<const Byte>, tbc::lt::a>;
-  template <typename Value> using Decoded = tbc::view<Value, tbc::lt::a>;
+  template <typename Value>
+  using Decoded = tbc::view<Value, tbc::lt::a>;
 
   struct DecodeStorage {
     tbc::view<std::span<Byte>, tbc::lt::a> remaining{};
 
-    template <typename T> tbc::view<std::span<T>, tbc::lt::a> allocate(std::size_t count) {
+    template <typename T>
+    tbc::view<std::span<T>, tbc::lt::a> allocate(std::size_t count) {
       static_assert(std::is_trivially_destructible_v<T>);
 
       if (count == 0) {
         return {};
       }
+
       if (count > remaining.size() / sizeof(T)) {
         throw EncodingError{"Decode storage is too small"};
       }
 
       const auto bytes = count * sizeof(T);
-      void *pointer = remaining.data();
+      void* pointer = remaining.data();
       auto available = remaining.size();
       if (std::align(alignof(T), bytes, pointer, available) == nullptr) {
         throw EncodingError{"Decode storage is too small after alignment"};
       }
 
-      auto *elements = static_cast<T *>(pointer);
-      auto *next = static_cast<Byte *>(pointer) + bytes;
+      auto* elements = static_cast<T*>(pointer);
+      auto* next = static_cast<Byte*>(pointer) + bytes;
+
       remaining = {next, available - bytes};
       for (std::size_t i = 0; i < count; ++i) {
         std::construct_at(elements + i);
@@ -208,7 +204,7 @@ namespace telar {
 
     static constexpr std::size_t width = sizeof(T);
 
-    static void encode(T value, _changes std::span<Byte> &output) _throw(EncodingError) {
+    static void encode(T value, _changes std::span<Byte>& output) _throw(EncodingError) {
       if (output.size() < width) {
         throw EncodingError{"Output buffer too small\0"};
       }
@@ -220,7 +216,7 @@ namespace telar {
       output = output.subspan(width);
     }
 
-    static T decode(_changes std::span<const Byte> &input) _throw(EncodingError) {
+    static T decode(_changes std::span<const Byte>& input) _throw(EncodingError) {
       if (input.size() < width) {
         throw EncodingError{"Input buffer is too small\0"};
       }
@@ -229,6 +225,7 @@ namespace telar {
 
       for (std::size_t i = 0; i < width; ++i) {
         const auto byte = static_cast<T>(input[i]);
+
         result |= byte << (i * 8);
       }
 
@@ -242,12 +239,12 @@ namespace telar {
   using u32 = LittleEndian<std::uint32_t>;
   using u64 = LittleEndian<std::uint64_t>;
 
-  template <std::size_t N> struct FixedBytes {
+  template <std::size_t N>
+  struct FixedBytes {
     using value_type = std::array<Byte, N>;
     static constexpr std::size_t width = N;
 
-    static void encode(const std::array<Byte, N> &value, std::span<Byte> &output)
-        _throw(EncodingError) {
+    static void encode(const std::array<Byte, N>& value, std::span<Byte>& output) _throw(EncodingError) {
       if (output.size() < width) {
         throw EncodingError{"Output buffer too small"};
       }
@@ -259,12 +256,13 @@ namespace telar {
       output = output.subspan(width);
     }
 
-    static std::array<Byte, N> decode(std::span<const Byte> &input) _throw(EncodingError) {
+    static std::array<Byte, N> decode(std::span<const Byte>& input) _throw(EncodingError) {
       if (input.size() < width) {
         throw EncodingError{"Input buffer is too small"};
       }
 
       std::array<Byte, N> value{};
+
       for (std::size_t i = 0; i < width; ++i) {
         value[i] = input[i];
       }
@@ -278,11 +276,11 @@ namespace telar {
     using value_type = bool;
     static constexpr std::size_t width = u8::width;
 
-    static void encode(bool value, std::span<Byte> &output) _throw(EncodingError) {
+    static void encode(bool value, std::span<Byte>& output) _throw(EncodingError) {
       u8::encode(static_cast<Byte>(value), output);
     }
 
-    static bool decode(_changes std::span<const Byte> &input) _throw(EncodingError) {
+    static bool decode(_changes std::span<const Byte>& input) _throw(EncodingError) {
       const auto value = u8::decode(input);
       if (value > 1) {
         throw EncodingError{"Bool value decode must be 0 or 1\0"};
@@ -292,7 +290,8 @@ namespace telar {
     }
   };
 
-  template <typename WireCodec> struct CodecWidth {};
+  template <typename WireCodec>
+  struct CodecWidth {};
 
   template <typename WireCodec>
     requires requires { WireCodec::width; }
@@ -300,7 +299,8 @@ namespace telar {
     static constexpr std::size_t width = WireCodec::width;
   };
 
-  template <typename WireCodec> consteval std::size_t minimumWidth() {
+  template <typename WireCodec>
+  consteval std::size_t minimumWidth() {
     if constexpr (requires { WireCodec::min_width; }) {
       return WireCodec::min_width;
     } else {
@@ -316,7 +316,8 @@ namespace telar {
     return first + second;
   }
 
-  template <typename WireCodec, typename Value> std::size_t wireSize(const Value &value) {
+  template <typename WireCodec, typename Value>
+  std::size_t wireSize(const Value& value) {
     if constexpr (requires { WireCodec::encodedSize(value); }) {
       return WireCodec::encodedSize(value);
     } else {
@@ -325,13 +326,13 @@ namespace telar {
   }
 
   template <typename WireCodec, typename Storage>
-    requires requires(std::span<const Byte> &input, Storage &storage) { WireCodec::decode(input, storage); }
-  Decoded<std::remove_cvref_t<decltype(WireCodec::decode(std::declval<std::span<const Byte> &>(), std::declval<Storage &>()))>> decodeValue(DecodeInput input, Storage &storage) {
+    requires requires(std::span<const Byte>& input, Storage& storage) { WireCodec::decode(input, storage); }
+  Decoded<std::remove_cvref_t<decltype(WireCodec::decode(std::declval<std::span<const Byte>&>(), std::declval<Storage&>()))>> decodeValue(DecodeInput input, Storage& storage) {
     return WireCodec::decode(input, storage);
   }
 
   template <typename WireCodec, typename Storage>
-  Decoded<std::remove_cvref_t<decltype(WireCodec::decode(std::declval<std::span<const Byte> &>()))>> decodeValue(DecodeInput input, Storage &) {
+  Decoded<std::remove_cvref_t<decltype(WireCodec::decode(std::declval<std::span<const Byte>&>()))>> decodeValue(DecodeInput input, Storage&) {
     return WireCodec::decode(input);
   }
 

@@ -6,7 +6,7 @@
 // STATUS: pending
 // CONTRACT: text borrows the current SQLite row; stepping ends that row's validity.
 // SCENARIO: The statement survives, but the old row view must not survive next.
-void sqliteNextInvalidates(tbc::view<spec::statement &> statement) {
+void sqliteNextInvalidates(tbc::view<spec::statement&> statement) {
   const auto row = statement.text();
   statement.next(); // expected-error [tbc-invalidated-borrow]
   spec::observe(row);
@@ -20,7 +20,7 @@ void sqliteNextInvalidates(tbc::view<spec::statement &> statement) {
 // STATUS: pending
 // CONTRACT: Copying row text into owned storage severs its SQLite-row dependency.
 // SCENARIO: A copied string remains valid after stepping to the next row.
-void sqliteCopySurvivesNext(tbc::view<spec::statement &> statement) {
+void sqliteCopySurvivesNext(tbc::view<spec::statement&> statement) {
   const auto copied = spec::copyText(statement.text());
   statement.next();
   spec::observe(copied);
@@ -34,7 +34,7 @@ void sqliteCopySurvivesNext(tbc::view<spec::statement &> statement) {
 // STATUS: pending
 // CONTRACT: reset invalidates row-backed views, independently of descriptor address stability.
 // SCENARIO: Reject reset while an old row view will be read again.
-void sqliteResetInvalidates(tbc::view<spec::statement &> statement) {
+void sqliteResetInvalidates(tbc::view<spec::statement&> statement) {
   const auto row = statement.text();
   statement.reset(); // expected-error [tbc-invalidated-borrow]
   spec::observe(row);
@@ -48,7 +48,7 @@ void sqliteResetInvalidates(tbc::view<spec::statement &> statement) {
 // STATUS: pending
 // CONTRACT: bind copies input; reset may invalidate old rows but cannot dangle a consumed input.
 // SCENARIO: A temporary bind argument is safe; read only a newly acquired row afterward.
-void sqliteTransientBind(tbc::view<spec::statement &> statement) {
+void sqliteTransientBind(tbc::view<spec::statement&> statement) {
   statement.bind(std::string{"copied by SQLITE_TRANSIENT"});
   statement.reset();
   spec::observe(statement.text());

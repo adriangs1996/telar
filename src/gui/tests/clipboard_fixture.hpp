@@ -7,15 +7,16 @@
 
 namespace telar::gui::test {
 
-inline std::unique_ptr<QMimeData> copyClipboard() {
-  auto saved = std::make_unique<QMimeData>();
-  if (const auto *current = QGuiApplication::clipboard()->mimeData()) {
-    for (const auto &format : current->formats()) {
-      saved->setData(format, current->data(format));
-    }
-  }
+  inline std::unique_ptr<QMimeData> copyClipboard() {
+    auto saved = std::make_unique<QMimeData>();
 
-  return saved;
-}
+    if (const auto* current = QGuiApplication::clipboard()->mimeData()) {
+      for (const auto& format : current->formats()) {
+        saved->setData(format, current->data(format));
+      }
+    }
+
+    return saved;
+  }
 
 }

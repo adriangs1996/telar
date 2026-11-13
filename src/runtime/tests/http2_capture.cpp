@@ -3,21 +3,20 @@
 static_assert(true);
 #endif
 
-
-#include <cstdint>
-#include <cstring>
-#include <cstddef>
 #include <brotli/decode.h>
-#include <zlib.h>
-#include <zstd.h>
 #include <cassert>
-#include <nghttp2/nghttp2.h>
 #include <cerrno>
 #include <csignal>
-#include <sys/socket.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <nghttp2/nghttp2.h>
+#include <sys/socket.h>
 #include <unistd.h>
+#include <zlib.h>
+#include <zstd.h>
 
 import std;
 import telar.base.memory;
@@ -32,13 +31,15 @@ using namespace telar;
 using namespace telar::runtime;
 
 struct CaptureSink {
-  Http2Capture<SystemAllocator> &capture;
+  Http2Capture<SystemAllocator>& capture;
   Http2Direction direction;
 
-  void emit(const Http2Event &event) noexcept { capture.observe(direction, event); }
+  void emit(const Http2Event& event) noexcept {
+    capture.observe(direction, event);
+  }
 };
 
-static void writeHalf(CaptureOracleOutput &output, const CaptureHalf<SystemAllocator> &half) {
+static void writeHalf(CaptureOracleOutput& output, const CaptureHalf<SystemAllocator>& half) {
   output.integer(half.key.connection);
   output.integer(half.key.stream);
   output.integer(static_cast<std::uint8_t>(half.side));
@@ -59,7 +60,7 @@ static void writeHalf(CaptureOracleOutput &output, const CaptureHalf<SystemAlloc
   output.bytes(half.body.bytes());
 }
 
-extern "C" void relay(const Http2OracleInput *input, Http2OracleResult *result) {
+extern "C" void relay(const Http2OracleInput* input, Http2OracleResult* result) {
   *result = {};
   SystemAllocator memory;
   CaptureProducer producer{memory, ProxyCaptureLimits{.enabled = true}};
@@ -100,7 +101,7 @@ extern "C" void relay(const Http2OracleInput *input, Http2OracleResult *result) 
   result->overflow = output_result.overflow;
 }
 
-extern "C" std::uint64_t batch(const Http2OracleInput *input, std::size_t iterations) {
+extern "C" std::uint64_t batch(const Http2OracleInput* input, std::size_t iterations) {
   std::uint64_t checksum = 0;
   for (std::size_t index = 0; index < iterations; ++index) {
     Http2OracleResult result;

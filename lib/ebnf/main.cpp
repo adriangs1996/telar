@@ -1,17 +1,16 @@
 #ifdef __clangd__
 static_assert(true);
 #endif
-#include <tbc/view.hpp>
 #include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <stdexcept>
 #include <string_view>
-#include <optional>
+#include <tbc/view.hpp>
 #include <utility>
 #include <vector>
-
 
 #include <unordered_map>
 
@@ -22,7 +21,6 @@ import telar.ebnf.parser;
 template class ebnf::parser<ebnf::Lexer>;
 
 class completion_database {
-
   std::unordered_map<std::string_view, ebnf::syntax_tree> db_{};
 };
 

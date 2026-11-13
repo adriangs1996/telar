@@ -3,13 +3,12 @@
 static_assert(true);
 #endif
 
-
 #include "cell_layout.hpp"
-#include <cstring>
 #include <csignal>
+#include <cstring>
+#include <ghostty/vt.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#include <ghostty/vt.h>
 
 import std;
 import telar.base.memory;
@@ -50,7 +49,7 @@ void writeAll(std::string_view text) {
   }
 }
 
-int child(int argc, char **argv) {
+int child(int argc, char** argv) {
   check(argc == 6);
   const std::string mode = argv[2];
   const unsigned index = std::stoul(argv[3]);
@@ -100,11 +99,11 @@ struct PaneState {
   bool exited = false;
   unsigned code = 0;
 
-  explicit PaneState(gui::SystemAllocator &memory)
+  explicit PaneState(gui::SystemAllocator& memory)
       : screen(memory) {}
 };
 
-int exercise(int argc, char **argv) {
+int exercise(int argc, char** argv) {
   check(argc == 6);
   const std::string mode = argv[2];
   const unsigned count = mode == "coalesced" ? 8 : 1;
@@ -113,18 +112,18 @@ int exercise(int argc, char **argv) {
   ProtocolPeer peer{argv[1]};
   gui::SystemAllocator memory;
   std::vector<std::unique_ptr<PaneState>> panes;
-  std::map<std::uint64_t, PaneState *> by_id;
+  std::map<std::uint64_t, PaneState*> by_id;
   std::ofstream canonical{argv[4], std::ios::binary};
   std::uint64_t request_id = 1;
   TabLocation location;
   std::size_t frames = 0;
-  auto consumeFrame = [&](const PaneFrame &frame) {
-    auto &pane = *by_id.at(frame.pane_id);
+  auto consumeFrame = [&](const PaneFrame& frame) {
+    auto& pane = *by_id.at(frame.pane_id);
     check(!pane.exited);
     check(pane.screen.apply(frame) == gui::FrameApplication::applied);
     ++frames;
     std::string text;
-    for (const auto &cell : pane.screen.cells()) {
+    for (const auto& cell : pane.screen.cells()) {
       text += cell.utf8();
     }
 
@@ -155,12 +154,12 @@ int exercise(int argc, char **argv) {
 
     for (;;) {
       const auto reply = peer.receiveAny<PaneOpened, PaneFrame>();
-      if (const auto *frame = std::get_if<PaneFrame>(&reply)) {
+      if (const auto* frame = std::get_if<PaneFrame>(&reply)) {
         consumeFrame(*frame);
         continue;
       }
 
-      const auto &opened = std::get<PaneOpened>(reply);
+      const auto& opened = std::get<PaneOpened>(reply);
       location = opened.location;
       pane->id = opened.pane_id;
       pane->generation = opened.pane_generation;
@@ -179,10 +178,10 @@ int exercise(int argc, char **argv) {
   unsigned exited = 0;
   while (exited != count) {
     const auto reply = peer.receiveAny<PaneFrame, PaneExited, PaneText>();
-    if (const auto *frame = std::get_if<PaneFrame>(&reply)) {
+    if (const auto* frame = std::get_if<PaneFrame>(&reply)) {
       consumeFrame(*frame);
-    } else if (const auto *text = std::get_if<PaneText>(&reply)) {
-      auto &pane = *by_id.at(text->pane_id);
+    } else if (const auto* text = std::get_if<PaneText>(&reply)) {
+      auto& pane = *by_id.at(text->pane_id);
       check(pane.text_requested && !pane.text_verified && pane.held_ack != 0);
       if (text->truncated || text->text != pane.expected) {
         std::ofstream actual{std::filesystem::path{argv[3]} / "actual.txt"};
@@ -196,8 +195,8 @@ int exercise(int argc, char **argv) {
       peer.send(FrameAck{pane.id, pane.held_ack});
       pane.held_ack = 0;
     } else {
-      const auto &exit = std::get<PaneExited>(reply);
-      auto &pane = *by_id.at(exit.pane_id);
+      const auto& exit = std::get<PaneExited>(reply);
+      auto& pane = *by_id.at(exit.pane_id);
       check(!pane.exited && pane.text_verified);
       check(exit.kind == (mode == "signal" ? ExitKind::signaled : ExitKind::exited));
       check(exit.value == pane.code);
@@ -206,7 +205,7 @@ int exercise(int argc, char **argv) {
     }
   }
 
-  for (const auto &pane : panes) {
+  for (const auto& pane : panes) {
     canonical << pane->code << ':' << pane->expected.size() << ':' << pane->expected << '\n';
   }
 
@@ -214,10 +213,10 @@ int exercise(int argc, char **argv) {
   return 0;
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   try {
     return argc > 1 && std::string_view{argv[1]} == "--child" ? child(argc, argv) : exercise(argc, argv);
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     std::cerr << error.what() << '\n';
     return 1;
   }

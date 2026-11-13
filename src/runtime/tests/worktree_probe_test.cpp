@@ -3,19 +3,18 @@
 static_assert(true);
 #endif
 
-
 #include <cassert>
-#include <cstdint>
-#include <cstring>
-#include <cstddef>
 #include <cerrno>
+#include <cstddef>
+#include <cstdint>
 #include <cstdlib>
-#include <sys/types.h>
+#include <cstring>
+#include <fcntl.h>
 #include <limits.h>
 #include <poll.h>
-#include <sys/wait.h>
-#include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 import std;
@@ -30,33 +29,40 @@ import telar.runtime.worktrees.git_probe;
 using namespace telar;
 using namespace telar::runtime;
 
-static void runGit(SystemAllocator &memory, const std::string &root, std::initializer_list<std::string_view> arguments) {
+static void runGit(SystemAllocator& memory, const std::string& root, std::initializer_list<std::string_view> arguments) {
   std::array<std::string_view, 32> complete;
   std::size_t count = 0;
+
   for (const auto prefix : {"git", "-c", "user.name=Runtime Test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null"}) {
     complete[count++] = prefix;
   }
+
   for (const auto argument : arguments) {
     complete[count++] = argument;
   }
+
   Command command{memory, Launch{.cwd = root, .arguments = std::span{complete}.first(count)}, CommandPurpose::administration};
   CommandOutput output{memory, 4096};
+
   check(output.run(command, std::chrono::steady_clock::now() + std::chrono::seconds{5}) == 0);
 }
 
 // A workspace counts untracked files as uncommitted work, as git status --porcelain lists them,
 // and ignored ones as nothing.
-static void untrackedFiles(SystemAllocator &memory) {
+static void untrackedFiles(SystemAllocator& memory) {
   std::array<char, 64> directory{};
+
   std::strcpy(directory.data(), "/tmp/telar-git-test.XXXXXX");
   check(::mkdtemp(directory.data()) != nullptr);
   const std::string root{directory.data()};
+
   runGit(memory, root, {"init", "--quiet", "--initial-branch=main", "--template="});
   std::ofstream{root + "/.gitignore"} << "ignored.txt\n";
   runGit(memory, root, {"add", ".gitignore"});
   runGit(memory, root, {"commit", "--quiet", "-m", "Initial fixture"});
   WorkspaceGitProbe probe{memory};
   WorkspaceGitRequest request{.identity = 3};
+
   request.path.assign(root);
   check(probe.observe(request).dirty == false);
   std::ofstream{root + "/ignored.txt"} << "ignored\n";
@@ -68,11 +74,14 @@ static void untrackedFiles(SystemAllocator &memory) {
 
 void testWorktreeProbe() {
   SystemAllocator memory;
+
   untrackedFiles(memory);
   std::array<char, 64> directory{};
+
   std::strcpy(directory.data(), "/tmp/telar-git-test.XXXXXX");
   check(::mkdtemp(directory.data()) != nullptr);
   const std::string root{directory.data()};
+
   runGit(memory, root, {"init", "--quiet", "--initial-branch=main", "--template="});
   std::ofstream{root + "/file.txt"} << "initial\n";
   runGit(memory, root, {"add", "file.txt"});
@@ -84,32 +93,40 @@ void testWorktreeProbe() {
   std::ofstream{root + "/file.txt", std::ios::app} << "uncommitted\n";
   std::ofstream{root + "/.gitattributes"} << "*.txt filter=unsafe\n";
   const std::string dangerous = "touch " + root + "/unexpected-execution; cat";
+
   runGit(memory, root, {"config", "filter.unsafe.clean", dangerous});
   runGit(memory, root, {"config", "core.fsmonitor", dangerous});
   runGit(memory, root, {"config", "diff.external", dangerous});
   WorktreeGitProbe probe{memory};
   WorktreeProbeRequest request{};
+
   request.identity = 7;
   request.path.assign(root);
   request.base.assign("main");
   const auto result = probe.observe(request);
+
   check(result.present && result.measured && result.dirty && result.identity == 7);
   check(result.branch.view() == "feature" && result.added == 2 && result.removed == 0 && result.files == 1 && result.ahead == 1);
   WorkspaceGitProbe workspace_probe{memory};
   WorkspaceGitRequest workspace_request{.identity = 9};
+
   workspace_request.path.assign(root);
   const auto workspace_result = workspace_probe.observe(workspace_request);
+
   check(workspace_result.identity == 9 && workspace_result.present && workspace_result.branch.view() == "feature");
   check(workspace_result.dirty == true && !workspace_result.timed_out);
   check(!std::filesystem::exists(root + "/unexpected-execution"));
   std::string commit;
+
   std::ifstream{root + "/.git/refs/heads/feature"} >> commit;
   std::ofstream{root + "/.git/HEAD"} << commit << '\n';
   const auto detached = probe.observe(request);
+
   check(detached.present && detached.measured && detached.branch.view() == commit.substr(0, 8));
   check(detached.added == result.added && detached.ahead == result.ahead && detached.timeout == GitProbeTimeout::none);
   std::ofstream{root + "/.git/HEAD"} << "ref: refs/heads/" << std::string(201, 'x') << '\n';
   const auto invalid_branch = probe.observe(request);
+
   check(invalid_branch.present && invalid_branch.branch.view().empty() && !invalid_branch.measured);
   std::filesystem::remove_all(root);
   check(!probe.observe(request).present);

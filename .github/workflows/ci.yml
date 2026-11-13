@@ -25,3 +25,15 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq shellcheck
           shellcheck install.sh packaging/release/*.sh packaging/homebrew/*.sh
+
+  cpp-format:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/cpp-toolchain
+
+      - name: Check the C++ formatting of the whole tree
+        run: cmake -DMODE=format-check -P cmake/format.cmake

@@ -2,6 +2,6 @@
 
 namespace telar::gui::test {
 
-int runAgentReportFixture(int &argc, char **argv);
+  int runAgentReportFixture(int& argc, char** argv);
 
 }

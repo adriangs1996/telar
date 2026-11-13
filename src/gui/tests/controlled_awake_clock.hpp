@@ -4,8 +4,8 @@
 
 namespace telar::gui::test {
 
-struct ControlledAwakeClock {
-  static void set(std::uint64_t now_ns) noexcept;
-};
+  struct ControlledAwakeClock {
+    static void set(std::uint64_t now_ns) noexcept;
+  };
 
 }

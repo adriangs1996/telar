@@ -4,7 +4,7 @@
 
 namespace telar::gui::qt {
 
-using CurveMask = AlphaMask;
-using CurveMaskRef = AlphaMaskRef;
+  using CurveMask = AlphaMask;
+  using CurveMaskRef = AlphaMaskRef;
 
 }

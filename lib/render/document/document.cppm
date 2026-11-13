@@ -40,7 +40,7 @@ export namespace telar::render {
     rule,
     table, // cells, row by row; the first row is the header
     html,  // verbatim raw HTML, never interpreted
-    count
+    count,
   };
 
   // What a list item shows before its first leaf block.
@@ -51,7 +51,7 @@ export namespace telar::render {
     task_open,
     task_done,
     footnote, // Block::number
-    count
+    count,
   };
 
   // The innermost GitHub admonition (`> [!NOTE]`) around a block.
@@ -62,7 +62,7 @@ export namespace telar::render {
     important,
     warning,
     caution,
-    count
+    count,
   };
 
   enum class Align : std::uint8_t {
@@ -70,7 +70,7 @@ export namespace telar::render {
     left,
     center,
     right,
-    count
+    count,
   };
 
   namespace style {
@@ -92,7 +92,7 @@ export namespace telar::render {
     Span target;
     std::uint16_t style = 0;
 
-    friend constexpr bool operator==(const Run &, const Run &) = default;
+    friend constexpr bool operator==(const Run&, const Run&) = default;
   };
 
   struct Cell {
@@ -100,7 +100,7 @@ export namespace telar::render {
     std::uint32_t count = 0;
     Align align = Align::start;
 
-    friend constexpr bool operator==(const Cell &, const Cell &) = default;
+    friend constexpr bool operator==(const Cell&, const Cell&) = default;
   };
 
   struct Block {
@@ -122,12 +122,12 @@ export namespace telar::render {
     std::uint32_t count = 0;
     Span info;
 
-    friend constexpr bool operator==(const Block &, const Block &) = default;
+    friend constexpr bool operator==(const Block&, const Block&) = default;
   };
 
   template <Allocator Memory>
   struct Document {
-    explicit Document(Memory &memory)
+    explicit Document(Memory& memory)
         : blocks(AllocatorRef<Block, Memory>{memory}),
           cells(AllocatorRef<Cell, Memory>{memory}),
           runs(AllocatorRef<Run, Memory>{memory}),
@@ -137,15 +137,15 @@ export namespace telar::render {
       return std::string_view{text}.substr(span.offset, span.size);
     }
 
-    [[nodiscard]] std::span<const Run> runsOf(const Block &block) const noexcept {
+    [[nodiscard]] std::span<const Run> runsOf(const Block& block) const noexcept {
       return std::span<const Run>{runs}.subspan(block.first, block.count);
     }
 
-    [[nodiscard]] std::span<const Run> runsOf(const Cell &cell) const noexcept {
+    [[nodiscard]] std::span<const Run> runsOf(const Cell& cell) const noexcept {
       return std::span<const Run>{runs}.subspan(cell.first, cell.count);
     }
 
-    [[nodiscard]] std::span<const Cell> cellsOf(const Block &block) const noexcept {
+    [[nodiscard]] std::span<const Cell> cellsOf(const Block& block) const noexcept {
       return std::span<const Cell>{cells}.subspan(block.first, block.count);
     }
 
@@ -233,11 +233,13 @@ export namespace telar::render {
 
       std::uint16_t u16() noexcept {
         const auto low = u8();
+
         return static_cast<std::uint16_t>(low | (u8() << 8));
       }
 
       std::uint32_t u32() noexcept {
         const auto low = u16();
+
         return low | (static_cast<std::uint32_t>(u16()) << 16);
       }
 
@@ -265,25 +267,28 @@ export namespace telar::render {
 
   // The encoded size, or nothing when the document exceeds max_document_bytes.
   template <Allocator Memory>
-  [[nodiscard]] std::optional<std::size_t> encodedSize(const Document<Memory> &document) noexcept {
+  [[nodiscard]] std::optional<std::size_t> encodedSize(const Document<Memory>& document) noexcept {
     const auto size = detail::encodedSize(document.blocks.size(), document.cells.size(), document.runs.size(), document.text.size());
+
     return size <= max_document_bytes ? std::optional<std::size_t>{static_cast<std::size_t>(size)} : std::nullopt;
   }
 
   // Writes exactly encodedSize(document) bytes into output.
   template <Allocator Memory>
-  void encode(const Document<Memory> &document, std::span<std::uint8_t> output) noexcept {
+  void encode(const Document<Memory>& document, std::span<std::uint8_t> output) noexcept {
     detail::Writer writer{output};
+
     for (const auto byte : magic) {
       writer.u8(byte);
     }
+
     writer.u16(version);
     writer.u16(0);
     writer.u32(static_cast<std::uint32_t>(document.blocks.size()));
     writer.u32(static_cast<std::uint32_t>(document.cells.size()));
     writer.u32(static_cast<std::uint32_t>(document.runs.size()));
     writer.u32(static_cast<std::uint32_t>(document.text.size()));
-    for (const auto &block : document.blocks) {
+    for (const auto& block : document.blocks) {
       writer.u8(static_cast<std::uint8_t>(block.kind));
       writer.u8(block.level);
       writer.u8(block.quote);
@@ -300,14 +305,16 @@ export namespace telar::render {
       writer.u32(block.info.offset);
       writer.u32(block.info.size);
     }
-    for (const auto &cell : document.cells) {
+
+    for (const auto& cell : document.cells) {
       writer.u32(cell.first);
       writer.u32(cell.count);
       writer.u8(static_cast<std::uint8_t>(cell.align));
       writer.u8(0);
       writer.u16(0);
     }
-    for (const auto &run : document.runs) {
+
+    for (const auto& run : document.runs) {
       writer.u32(run.text.offset);
       writer.u32(run.text.size);
       writer.u32(run.target.offset);
@@ -315,23 +322,28 @@ export namespace telar::render {
       writer.u16(run.style);
       writer.u16(0);
     }
+
     writer.bytes(document.text);
   }
 
   // Appends the OSC that begins document, or returns false when the document
   // exceeds max_document_bytes. On the primary screen, appendEnd closes it.
   template <Allocator Memory, Allocator Output>
-  [[nodiscard]] bool appendSequence(const Document<Memory> &document, String<Output> &output) {
+  [[nodiscard]] bool appendSequence(const Document<Memory>& document, String<Output>& output) {
     const auto size = encodedSize(document);
     if (!size) {
       return false;
     }
+
     Vector<std::uint8_t, Output> bytes(*size, AllocatorRef<std::uint8_t, Output>{output.get_allocator().memory()});
+
     encode(document, bytes);
     const auto encoded = (*size + 2) / 3 * 4;
+
     output.append("\x1b]");
     output.append(sequence_begin);
     const auto body = output.size();
+
     output.resize(body + encoded);
     static_cast<void>(runtime::base64::encode(bytes, std::span<char>{output.data() + body, encoded}));
     output.append("\x1b\\");
@@ -340,7 +352,7 @@ export namespace telar::render {
 
   // Appends the OSC that ends the zone a document stands for.
   template <Allocator Output>
-  void appendEnd(String<Output> &output) {
+  void appendEnd(String<Output>& output) {
     output.append("\x1b]");
     output.append(sequence_end);
     output.append("\x1b\\");
@@ -350,14 +362,16 @@ export namespace telar::render {
   // in a pane, so every count, range, enumeration and reserved byte is checked;
   // on failure the document is left empty.
   template <Allocator Memory>
-  [[nodiscard]] DecodeError decode(std::span<const std::uint8_t> input, Document<Memory> &document) {
+  [[nodiscard]] DecodeError decode(std::span<const std::uint8_t> input, Document<Memory>& document) {
     document.clear();
     if (input.size() > max_document_bytes) {
       return DecodeError::too_large;
     }
+
     if (input.size() < header_bytes) {
       return DecodeError::truncated;
     }
+
     if (!std::equal(magic.begin(), magic.end(), input.begin())) {
       return DecodeError::magic;
     }
@@ -366,9 +380,11 @@ export namespace telar::render {
     if (reader.u16() != version) {
       return DecodeError::version;
     }
+
     if (reader.u16() != 0) {
       return DecodeError::malformed;
     }
+
     const auto block_count = reader.u32();
     const auto cell_count = reader.u32();
     const auto run_count = reader.u32();
@@ -378,12 +394,13 @@ export namespace telar::render {
     if (expected < input.size()) {
       return DecodeError::malformed;
     }
+
     if (expected > input.size()) {
       return DecodeError::truncated;
     }
 
     const auto text_bytes = input.last(text_size);
-    const std::string_view text{reinterpret_cast<const char *>(text_bytes.data()), text_bytes.size()};
+    const std::string_view text{reinterpret_cast<const char*>(text_bytes.data()), text_bytes.size()};
     if (inspectUtf8(text) != Utf8Validation::valid) {
       return DecodeError::utf8;
     }
@@ -394,18 +411,23 @@ export namespace telar::render {
     };
 
     detail::Reader records{input.subspan(header_bytes)};
+
     document.blocks.resize(block_count);
-    for (auto &block : document.blocks) {
+    for (auto& block : document.blocks) {
       const auto kind = records.u8();
+
       block.level = records.u8();
       block.quote = records.u8();
       block.list = records.u8();
       const auto marker = records.u8();
       const auto callout = records.u8();
+
       block.flags = records.u8();
       const auto reserved = records.u8();
+
       block.columns = records.u16();
       const auto reserved_columns = records.u16();
+
       block.number = records.u32();
       block.first = records.u32();
       block.count = records.u32();
@@ -414,13 +436,14 @@ export namespace telar::render {
       if (kind >= static_cast<std::uint8_t>(BlockKind::count) || marker >= static_cast<std::uint8_t>(Marker::count) || callout >= static_cast<std::uint8_t>(Callout::count) || (block.flags & ~Block::known_flags) != 0 || reserved != 0 || reserved_columns != 0 || block.quote > max_nesting || block.list > max_nesting) {
         return fail(DecodeError::malformed);
       }
+
       block.kind = static_cast<BlockKind>(kind);
       block.marker = static_cast<Marker>(marker);
       block.callout = static_cast<Callout>(callout);
     }
 
     document.cells.resize(cell_count);
-    for (auto &cell : document.cells) {
+    for (auto& cell : document.cells) {
       cell.first = records.u32();
       cell.count = records.u32();
       const auto align = records.u8();
@@ -428,6 +451,7 @@ export namespace telar::render {
       if (align >= static_cast<std::uint8_t>(Align::count) || reserved != 0 || records.u16() != 0) {
         return fail(DecodeError::malformed);
       }
+
       cell.align = static_cast<Align>(align);
       if (!detail::within(cell.first, cell.count, run_count)) {
         return fail(DecodeError::range);
@@ -435,7 +459,7 @@ export namespace telar::render {
     }
 
     document.runs.resize(run_count);
-    for (auto &run : document.runs) {
+    for (auto& run : document.runs) {
       run.text.offset = records.u32();
       run.text.size = records.u32();
       run.target.offset = records.u32();
@@ -444,12 +468,13 @@ export namespace telar::render {
       if (records.u16() != 0 || (run.style & ~style::all) != 0) {
         return fail(DecodeError::malformed);
       }
+
       if (!detail::validSpan(text, run.text) || !detail::validSpan(text, run.target)) {
         return fail(DecodeError::range);
       }
     }
 
-    for (const auto &block : document.blocks) {
+    for (const auto& block : document.blocks) {
       const bool shape = [&] {
         switch (block.kind) {
         case BlockKind::paragraph:
@@ -466,6 +491,7 @@ export namespace telar::render {
         case BlockKind::count:
           break;
         }
+
         return false;
       }();
       if (!shape) {

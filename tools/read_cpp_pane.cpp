@@ -7,19 +7,19 @@
 
 namespace {
 
-std::uint64_t number(std::string_view text) {
-  std::uint64_t value = 0;
-  const auto parsed = std::from_chars(text.data(), text.data() + text.size(), value);
-  if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size() || value == 0) {
-    throw std::invalid_argument{"Expected a positive integer"};
+  std::uint64_t number(std::string_view text) {
+    std::uint64_t value = 0;
+    const auto parsed = std::from_chars(text.data(), text.data() + text.size(), value);
+    if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size() || value == 0) {
+      throw std::invalid_argument{"Expected a positive integer"};
+    }
+
+    return value;
   }
 
-  return value;
 }
 
-}
-
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   try {
     if (argc != 5) {
       throw std::invalid_argument{"Usage: read-cpp-pane SOCKET PANE GENERATION ROWS"};
@@ -40,7 +40,7 @@ int main(int argc, char **argv) {
 
     std::cout.write(reply.text.data(), static_cast<std::streamsize>(reply.text.size()));
     return std::cout.good() ? 0 : 1;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     std::cerr << error.what() << '\n';
     return 1;
   }

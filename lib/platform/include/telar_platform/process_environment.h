@@ -3,7 +3,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-extern char **environ;
+extern char** environ;
 #ifdef __cplusplus
 }
 #endif

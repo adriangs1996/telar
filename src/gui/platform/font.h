@@ -52,13 +52,13 @@ inline constexpr auto telar_font_family_not_found = static_cast<int>(TelarFontSt
 inline constexpr auto telar_font_style_not_found = static_cast<int>(TelarFontStatus::telar_font_style_not_found);
 #endif
 
-int telarGuiFindFont(const char *family, const char *style, telar_font_match *match);
+int telarGuiFindFont(const char* family, const char* style, telar_font_match* match);
 
-int telarGuiFindFallbackFont(const char *text, telar_font_match *match);
+int telarGuiFindFallbackFont(const char* text, telar_font_match* match);
 
-typedef int (*telar_font_validator)(const telar_font_match *match, void *context);
+typedef int (*telar_font_validator)(const telar_font_match* match, void* context);
 
-int telarGuiFindValidatedFallbackFont(const char *text, telar_font_match *match, telar_font_validator validator, void *context);
+int telarGuiFindValidatedFallbackFont(const char* text, telar_font_match* match, telar_font_validator validator, void* context);
 
 #ifdef __cplusplus
 }

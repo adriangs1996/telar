@@ -3,30 +3,27 @@
 static_assert(true);
 #endif
 
-
-#include "application.hpp"
-#include <cstdint>
-#include <algorithm>
-#include <array>
-#include <cstddef>
-#include <span>
-#include <stdexcept>
-#include <tuple>
 #include "../terminal/cell_position.hpp"
 #include "../terminal/screen.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include <optional>
+#include "application.hpp"
 #include "key_adapter.hpp"
-#include <utility>
+#include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_protocol.hpp"
 #include <QtCore/qbytearrayview.h>
 #include <QtCore/qobject.h>
 #include <QtCore/qstring.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtGui/qevent.h>
+#include <algorithm>
+#include <array>
+#include <cstddef>
+#include <cstdint>
 #include <exception>
-
-
+#include <optional>
+#include <span>
+#include <stdexcept>
+#include <tuple>
+#include <utility>
 
 import telar.gui.input.key_encoder;
 import telar.gui.input.copy_pointer;
@@ -35,115 +32,119 @@ import telar.gui.terminal.copy_mode;
 
 namespace telar::gui::qt {
 
-bool Application::copyModeActive() const noexcept {
-  return session().copyMode().active();
-}
-
-const std::optional<CopyState> &Application::copyState() const noexcept {
-  return session().copyMode().state();
-}
-
-bool Application::handleCopyKey(std::uint64_t pane_id, const QKeyEvent &event) {
-  const auto &copy = copyState();
-  if (!copy || copy->pointer || dialog_ != Dialog::none || copy->pane_id != pane_id) {
-    return false;
+  bool Application::copyModeActive() const noexcept {
+    return session().copyMode().active();
   }
 
-  const auto semantic = NativeKeyAdapter::terminalKey(event);
-  if (!semantic || semantic->has(KeyChord::Modifier::super)) {
+  const std::optional<CopyState>& Application::copyState() const noexcept {
+    return session().copyMode().state();
+  }
+
+  bool Application::handleCopyKey(std::uint64_t pane_id, const QKeyEvent& event) {
+    const auto& copy = copyState();
+    if (!copy || copy->pointer || dialog_ != Dialog::none || copy->pane_id != pane_id) {
+      return false;
+    }
+
+    const auto semantic = NativeKeyAdapter::terminalKey(event);
+    if (!semantic || semantic->has(KeyChord::Modifier::super)) {
+      return true;
+    }
+
+    try {
+      const auto effect = session().copyKey(*semantic);
+      if (effect.search) {
+        showDialog(Dialog::copy_search);
+      }
+
+      if (effect.open_link && copyState()) {
+        openCopyLink(pane_id, copyState()->cursor);
+      }
+
+      emit terminalChanged(pane_id);
+      emit stateChanged();
+    } catch (const std::exception& error) {
+      fail(error);
+    }
+
     return true;
   }
 
-  try {
-    const auto effect = session().copyKey(*semantic);
-    if (effect.search) {
-      showDialog(Dialog::copy_search);
+  void Application::publishCopyChange(std::uint64_t previous_pane) {
+    const auto& copy = copyState();
+
+    if (previous_pane != 0) {
+      emit terminalChanged(previous_pane);
     }
 
-    if (effect.open_link && copyState()) {
-      openCopyLink(pane_id, copyState()->cursor);
+    if (copy && copy->pane_id != previous_pane) {
+      emit terminalChanged(copy->pane_id);
     }
 
-    emit terminalChanged(pane_id);
     emit stateChanged();
-  } catch (const std::exception &error) {
-    fail(error);
   }
 
-  return true;
-}
+  void Application::leaveKeyboardCopyMode() {
+    const auto& copy = copyState();
+    if (copy && !copy->pointer) {
+      const auto pane_id = copy->pane_id;
 
-void Application::publishCopyChange(std::uint64_t previous_pane) {
-  const auto &copy = copyState();
-  if (previous_pane != 0) {
-    emit terminalChanged(previous_pane);
+      session().leaveCopyMode();
+      publishCopyChange(pane_id);
+    }
   }
 
-  if (copy && copy->pane_id != previous_pane) {
-    emit terminalChanged(copy->pane_id);
-  }
+  bool Application::beginSelection(std::uint64_t pane_id, CopyPoint local) {
+    if (dialog_ != Dialog::none) {
+      return false;
+    }
 
-  emit stateChanged();
-}
-
-void Application::leaveKeyboardCopyMode() {
-  const auto &copy = copyState();
-  if (copy && !copy->pointer) {
-    const auto pane_id = copy->pane_id;
-    session().leaveCopyMode();
-    publishCopyChange(pane_id);
-  }
-}
-
-bool Application::beginSelection(std::uint64_t pane_id, CopyPoint local) {
-  if (dialog_ != Dialog::none) {
-    return false;
-  }
-
-  key_bindings_.cancelSequence();
-  const auto &copy = copyState();
-  const auto previous = copy ? copy->pane_id : 0;
-  const auto began = session().beginSelection({.pane_id = pane_id, .position = local, .now_ns = key_bindings_.nowNanoseconds()});
-  if (began) {
-    publishCopyChange(previous);
-  }
-
-  return began;
-}
-
-bool Application::handleCopyPointer(const CopyPointerInput &input) {
-  const auto owner = session().copyMode().pointerOwner();
-  if (dialog_ != Dialog::none && (!owner || !owner->dragging)) {
-    return true;
-  }
-
-  if (input.kind == CopyPointerKind::press || input.kind == CopyPointerKind::wheel) {
     key_bindings_.cancelSequence();
-  }
-
-  const auto &copy = copyState();
-  const auto previous = copy ? copy->pane_id : 0;
-  const auto revision = session().copyMode().revision();
-  try {
-    const auto outcome = session().pointer(input);
-    if (session().copyMode().revision() != revision) {
+    const auto& copy = copyState();
+    const auto previous = copy ? copy->pane_id : 0;
+    const auto began = session().beginSelection({.pane_id = pane_id, .position = local, .now_ns = key_bindings_.nowNanoseconds()});
+    if (began) {
       publishCopyChange(previous);
     }
 
-    return outcome != CopyPointerDecision::Outcome::unowned;
-  } catch (const std::exception &error) {
-    fail(error);
-
-    return true;
+    return began;
   }
-}
 
-void Application::copySelection(std::uint64_t pane_id) {
-  try {
-    static_cast<void>(session().copySelection(pane_id));
-  } catch (const std::exception &error) {
-    fail(error);
+  bool Application::handleCopyPointer(const CopyPointerInput& input) {
+    const auto owner = session().copyMode().pointerOwner();
+    if (dialog_ != Dialog::none && (!owner || !owner->dragging)) {
+      return true;
+    }
+
+    if (input.kind == CopyPointerKind::press || input.kind == CopyPointerKind::wheel) {
+      key_bindings_.cancelSequence();
+    }
+
+    const auto& copy = copyState();
+    const auto previous = copy ? copy->pane_id : 0;
+    const auto revision = session().copyMode().revision();
+
+    try {
+      const auto outcome = session().pointer(input);
+
+      if (session().copyMode().revision() != revision) {
+        publishCopyChange(previous);
+      }
+
+      return outcome != CopyPointerDecision::Outcome::unowned;
+    } catch (const std::exception& error) {
+      fail(error);
+
+      return true;
+    }
   }
-}
+
+  void Application::copySelection(std::uint64_t pane_id) {
+    try {
+      static_cast<void>(session().copySelection(pane_id));
+    } catch (const std::exception& error) {
+      fail(error);
+    }
+  }
 
 }

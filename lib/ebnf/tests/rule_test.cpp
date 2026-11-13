@@ -1,14 +1,14 @@
 #ifdef __clangd__
 static_assert(true);
 #endif
-#include <tbc/view.hpp>
 #include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <stdexcept>
 #include <string_view>
-#include <optional>
+#include <tbc/view.hpp>
 #include <utility>
 #include <vector>
 
@@ -16,8 +16,8 @@ static_assert(true);
 
 #include <gtest/gtest.h>
 
-
 import telar.ebnf.parser;
+
 namespace {
   TEST(Rule, SemicolonTerminator) {
     auto tokenizer = ebnf::Lexer{};
@@ -28,6 +28,7 @@ namespace {
     ASSERT_EQ(parser_testing::childCount(tree, root), 1u);
 
     const auto rule = parser_testing::nthChild(tree, root, 0);
+
     ASSERT_NE(rule, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(rule), ebnf::node_kind::Rule);
     EXPECT_EQ(tree.getText(rule), "a");
@@ -43,6 +44,7 @@ namespace {
     ASSERT_EQ(parser_testing::childCount(tree, root), 1u);
 
     const auto rule = parser_testing::nthChild(tree, root, 0);
+
     ASSERT_NE(rule, ebnf::none_handle);
     EXPECT_EQ(tree.getKind(rule), ebnf::node_kind::Rule);
     EXPECT_EQ(tree.getText(rule), "a");
@@ -59,6 +61,7 @@ namespace {
     ASSERT_EQ(parser_testing::childCount(tree, root), 1u);
 
     const auto rule = parser_testing::nthChild(tree, root, 0);
+
     ASSERT_NE(rule, ebnf::none_handle);
     EXPECT_EQ(tree.getText(rule), "my_rule");
     ASSERT_TRUE(tree.getText(rule).has_value());
@@ -95,6 +98,7 @@ namespace {
     ASSERT_EQ(parser_testing::childCount(tree, root), 1u);
 
     const auto rule = parser_testing::nthChild(tree, root, 0);
+
     ASSERT_NE(rule, ebnf::none_handle);
     EXPECT_EQ(tree.getText(rule), "my_long_rule");
   }
@@ -108,6 +112,7 @@ namespace {
     ASSERT_EQ(parser_testing::childCount(tree, root), 1u);
 
     const auto rule = parser_testing::nthChild(tree, root, 0);
+
     ASSERT_NE(rule, ebnf::none_handle);
     ASSERT_EQ(parser_testing::childCount(tree, rule), 1u);
   }
@@ -143,10 +148,12 @@ namespace {
     ebnf::parser parser{tokenizer};
 
     auto first = parser.parse("a = foo ;");
+
     ASSERT_EQ(parser_testing::childCount(first, first.getRoot()), 1u);
     EXPECT_EQ(first.getText(parser_testing::nthChild(first, first.getRoot(), 0)), "a");
 
     auto second = parser.parse("b = bar ;");
+
     ASSERT_EQ(parser_testing::childCount(second, second.getRoot()), 1u);
     EXPECT_EQ(second.getText(parser_testing::nthChild(second, second.getRoot(), 0)), "b");
   }

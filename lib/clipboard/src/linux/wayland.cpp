@@ -10,10 +10,10 @@
 namespace telar::clipboard::linux_backend {
   namespace {
     struct offer {
-      zwlr_data_control_offer_v1 *handle;
+      zwlr_data_control_offer_v1* handle;
       std::array<bool, formats.size()> available{};
 
-      explicit offer(zwlr_data_control_offer_v1 *value)
+      explicit offer(zwlr_data_control_offer_v1* value)
           : handle(value) {}
 
       ~offer() {
@@ -24,13 +24,13 @@ namespace telar::clipboard::linux_backend {
     };
 
     struct connection {
-      wl_display *display = nullptr;
-      wl_registry *registry = nullptr;
-      wl_seat *seat = nullptr;
-      zwlr_data_control_manager_v1 *manager = nullptr;
-      zwlr_data_control_device_v1 *device = nullptr;
+      wl_display* display = nullptr;
+      wl_registry* registry = nullptr;
+      wl_seat* seat = nullptr;
+      zwlr_data_control_manager_v1* manager = nullptr;
+      zwlr_data_control_device_v1* device = nullptr;
       std::list<offer> offers;
-      offer *selected = nullptr;
+      offer* selected = nullptr;
       std::uint64_t revision = 0;
       std::uint32_t seat_id = 0;
       std::uint32_t manager_id = 0;
@@ -60,8 +60,8 @@ namespace telar::clipboard::linux_backend {
       }
     };
 
-    void offeredType(void *context, zwlr_data_control_offer_v1 *, const char *type) {
-      auto &value = *static_cast<offer *>(context);
+    void offeredType(void* context, zwlr_data_control_offer_v1*, const char* type) {
+      auto& value = *static_cast<offer*>(context);
       for (std::size_t index = 0; index < formats.size(); ++index) {
         value.available[index] = value.available[index] || std::strcmp(type, formats[index].target) == 0;
       }
@@ -69,19 +69,19 @@ namespace telar::clipboard::linux_backend {
 
     const zwlr_data_control_offer_v1_listener offer_listener{.offer = offeredType};
 
-    void offered(void *context, zwlr_data_control_device_v1 *, zwlr_data_control_offer_v1 *handle) {
-      auto &state = *static_cast<connection *>(context);
+    void offered(void* context, zwlr_data_control_device_v1*, zwlr_data_control_offer_v1* handle) {
+      auto& state = *static_cast<connection*>(context);
       try {
-        auto &value = state.offers.emplace_back(handle);
+        auto& value = state.offers.emplace_back(handle);
         zwlr_data_control_offer_v1_add_listener(handle, &offer_listener, &value);
-      } catch (const std::bad_alloc &) {
+      } catch (const std::bad_alloc&) {
         zwlr_data_control_offer_v1_destroy(handle);
         state.failure = read_error::allocation_failed;
       }
     }
 
-    void selection(void *context, zwlr_data_control_device_v1 *, zwlr_data_control_offer_v1 *handle) {
-      auto &state = *static_cast<connection *>(context);
+    void selection(void* context, zwlr_data_control_device_v1*, zwlr_data_control_offer_v1* handle) {
+      auto& state = *static_cast<connection*>(context);
       if (state.selected != nullptr && state.selected->handle != handle) {
         zwlr_data_control_offer_v1_destroy(state.selected->handle);
         state.selected->handle = nullptr;
@@ -89,7 +89,7 @@ namespace telar::clipboard::linux_backend {
 
       state.selected = nullptr;
       ++state.revision;
-      for (auto &value : state.offers) {
+      for (auto& value : state.offers) {
         if (handle != nullptr && value.handle == handle) {
           state.selected = &value;
           break;
@@ -97,11 +97,11 @@ namespace telar::clipboard::linux_backend {
       }
     }
 
-    void finished(void *context, zwlr_data_control_device_v1 *) {
-      static_cast<connection *>(context)->failure = read_error::read_failed;
+    void finished(void* context, zwlr_data_control_device_v1*) {
+      static_cast<connection*>(context)->failure = read_error::read_failed;
     }
 
-    void primarySelection(void *, zwlr_data_control_device_v1 *, zwlr_data_control_offer_v1 *) {}
+    void primarySelection(void*, zwlr_data_control_device_v1*, zwlr_data_control_offer_v1*) {}
 
     const zwlr_data_control_device_v1_listener device_listener{
         .data_offer = offered,
@@ -110,19 +110,19 @@ namespace telar::clipboard::linux_backend {
         .primary_selection = primarySelection,
     };
 
-    void seatCapabilities(void *, wl_seat *, std::uint32_t) {}
+    void seatCapabilities(void*, wl_seat*, std::uint32_t) {}
 
-    void seatName(void *, wl_seat *, const char *) {}
+    void seatName(void*, wl_seat*, const char*) {}
 
     const wl_seat_listener seat_listener{.capabilities = seatCapabilities, .name = seatName};
 
-    void global(void *context, wl_registry *registry, std::uint32_t id, const char *interface, std::uint32_t) {
-      auto &state = *static_cast<connection *>(context);
+    void global(void* context, wl_registry* registry, std::uint32_t id, const char* interface, std::uint32_t) {
+      auto& state = *static_cast<connection*>(context);
       if (state.manager == nullptr && std::strcmp(interface, zwlr_data_control_manager_v1_interface.name) == 0) {
-        state.manager = static_cast<zwlr_data_control_manager_v1 *>(wl_registry_bind(registry, id, &zwlr_data_control_manager_v1_interface, 1));
+        state.manager = static_cast<zwlr_data_control_manager_v1*>(wl_registry_bind(registry, id, &zwlr_data_control_manager_v1_interface, 1));
         state.manager_id = id;
       } else if (state.seat == nullptr && std::strcmp(interface, wl_seat_interface.name) == 0) {
-        state.seat = static_cast<wl_seat *>(wl_registry_bind(registry, id, &wl_seat_interface, 1));
+        state.seat = static_cast<wl_seat*>(wl_registry_bind(registry, id, &wl_seat_interface, 1));
         state.seat_id = id;
         if (state.seat != nullptr) {
           wl_seat_add_listener(state.seat, &seat_listener, nullptr);
@@ -130,8 +130,8 @@ namespace telar::clipboard::linux_backend {
       }
     }
 
-    void removed(void *context, wl_registry *, std::uint32_t id) {
-      auto &state = *static_cast<connection *>(context);
+    void removed(void* context, wl_registry*, std::uint32_t id) {
+      auto& state = *static_cast<connection*>(context);
       if (id == state.seat_id || id == state.manager_id) {
         state.failure = read_error::read_failed;
       }
@@ -139,7 +139,7 @@ namespace telar::clipboard::linux_backend {
 
     const wl_registry_listener registry_listener{.global = global, .global_remove = removed};
 
-    std::expected<void, read_error> flush(connection &state, deadline expires) {
+    std::expected<void, read_error> flush(connection& state, deadline expires) {
       while (wl_display_flush(state.display) < 0) {
         if (errno != EAGAIN) {
           return std::unexpected(read_error::read_failed);
@@ -154,10 +154,12 @@ namespace telar::clipboard::linux_backend {
     }
 
     // A bounded round trip avoids hanging on an unresponsive compositor.
-    std::expected<void, read_error> synchronize(connection &state, deadline expires) {
+    std::expected<void, read_error> synchronize(connection& state, deadline expires) {
       bool done = false;
       const wl_callback_listener listener{
-          .done = [](void *context, wl_callback *, std::uint32_t) { *static_cast<bool *>(context) = true; },
+          .done = [](void* context, wl_callback*, std::uint32_t) {
+            *static_cast<bool*>(context) = true;
+          },
       };
       std::unique_ptr<wl_callback, decltype(&wl_callback_destroy)> callback(wl_display_sync(state.display), wl_callback_destroy);
       if (!callback) {
@@ -200,7 +202,7 @@ namespace telar::clipboard::linux_backend {
       return {};
     }
 
-    std::expected<content, read_error> receive(connection &state, const format &type, deadline expires, std::size_t maximum_bytes) {
+    std::expected<content, read_error> receive(connection& state, const format& type, deadline expires, std::size_t maximum_bytes) {
       int pipe[2];
       if (pipe2(pipe, O_CLOEXEC) != 0) {
         return std::unexpected(read_error::read_failed);

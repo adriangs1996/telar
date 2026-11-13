@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-
 #include "telar_base/diagnostics/config.hpp"
 #include <cstdint>
 #include <cstring>
@@ -19,21 +18,21 @@ using namespace telar::runtime;
 
 namespace {
 
-struct Completion {
-  std::optional<int> exit_code;
+  struct Completion {
+    std::optional<int> exit_code;
 
-  void complete(CommandCompletion completion) noexcept {
-    exit_code = completion.exit_code;
+    void complete(CommandCompletion completion) noexcept {
+      exit_code = completion.exit_code;
+    }
+  };
+
+  std::span<const Byte> bytes(std::string_view text) {
+    return {reinterpret_cast<const Byte*>(text.data()), text.size()};
   }
-};
-
-std::span<const Byte> bytes(std::string_view text) {
-  return {reinterpret_cast<const Byte *>(text.data()), text.size()};
-}
 
 }
 
-extern "C" std::int64_t command_exit_status(const char *input, std::size_t length) {
+extern "C" std::int64_t command_exit_status(const char* input, std::size_t length) {
   CommandZones zones{"/"};
   Completion completion;
   zones.feed(bytes("\x1b]133;A\x07\x1b]133;B\x07"), {}, completion);
