@@ -128,7 +128,7 @@ private:
     QTest::keyClick(window_.get(), Qt::Key_B, NativeKeyAdapter::control_modifier);
     QVERIFY2(client_->prefixPending(), qPrintable(client_->error()));
     QTest::keyClick(window_.get(), Qt::Key_Question);
-    QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), QStringLiteral("palette"), wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(client_->dialog(), telar::gui::qt::Application::Dialog::palette, wait_ms);
     QCOMPARE(client_->paletteState().value(QStringLiteral("editorText")).toString(), QStringLiteral("?"));
     query()->forceActiveFocus();
     QTRY_VERIFY_WITH_TIMEOUT(query()->hasActiveFocus(), wait_ms);
@@ -149,7 +149,7 @@ private:
     QVERIFY(!QFileInfo::exists(marker_));
     query()->forceActiveFocus();
     QTest::keyClick(window_.get(), Qt::Key_Return);
-    QTRY_VERIFY_WITH_TIMEOUT(client_->dialog().isEmpty(), wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT((client_->dialog() == telar::gui::qt::Application::Dialog::none), wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(screenText(client_->pane(pane_id_)->screen, ScreenTextLayout::logical).contains(command), wait_ms);
     QVERIFY(!QFileInfo::exists(marker_));
     terminal_->forceActiveFocus();
@@ -172,7 +172,7 @@ private:
     submit();
     QTRY_VERIFY_WITH_TIMEOUT(state().value(QStringLiteral("failed")).toBool(), wait_ms);
     QCOMPARE(state().value(QStringLiteral("message")).toString(), QStringLiteral("The engine timed out. Try again."));
-    QCOMPARE(client_->dialog(), QStringLiteral("palette"));
+    QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::palette);
     client_->searchPalette(QStringLiteral("?fixture:ready"));
     submit();
     QTRY_VERIFY_WITH_TIMEOUT(state().value(QStringLiteral("ready")).toBool(), wait_ms);
@@ -183,7 +183,7 @@ private:
     QTest::mousePress(window_.get(), Qt::LeftButton, Qt::NoModifier, point);
     client_->searchPalette(QStringLiteral("?edited before release"));
     QTest::mouseRelease(window_.get(), Qt::LeftButton, Qt::NoModifier, point);
-    QCOMPARE(client_->dialog(), QStringLiteral("palette"));
+    QCOMPARE(client_->dialog(), telar::gui::qt::Application::Dialog::palette);
     QCOMPARE(state().value(QStringLiteral("heading")).toString(), QStringLiteral("Start with a task"));
     QVERIFY(!QFileInfo::exists(marker_));
     client_->execute(Application::Action::cancel);
@@ -197,7 +197,7 @@ private:
     QVERIFY(!lines.empty() && lines.back().toMap().value(QStringLiteral("shortened")).toBool());
     const auto command = state().value(QStringLiteral("text")).toString();
     submit();
-    QTRY_VERIFY_WITH_TIMEOUT(client_->dialog().isEmpty(), wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT((client_->dialog() == telar::gui::qt::Application::Dialog::none), wait_ms);
     QTRY_VERIFY_WITH_TIMEOUT(screenText(client_->pane(pane_id_)->screen, ScreenTextLayout::logical).contains(command), wait_ms);
     QVERIFY(!QFileInfo::exists(marker_));
     client_->input(pane_id_, "\x15");
@@ -228,8 +228,8 @@ private:
     const auto palette = client_->paletteGeometry().value(QStringLiteral("bounds")).toRectF();
     panel_->setPosition(palette.topLeft());
     panel_->setSize(palette.size());
-    panel_->setVisible(client_->dialog() == QLatin1StringView("palette"));
-    if (client_->dialog().isEmpty()) {
+    panel_->setVisible(client_->dialog() == telar::gui::qt::Application::Dialog::palette);
+    if ((client_->dialog() == telar::gui::qt::Application::Dialog::none)) {
       terminal_->forceActiveFocus();
     }
   }

@@ -42,7 +42,7 @@ void Application::initializePicks() {
   connect(&configuration_source_, &ConfigurationSource::changed, this, &Application::closeComponentPick);
   connect(this, &Application::machineChanged, this, &Application::closeComponentPick);
   connect(this, &Application::dialogChanged, this, [this] {
-    if (!dialog_.isEmpty()) {
+    if (dialog_ != Dialog::none) {
       closeComponentPick();
     }
   });
@@ -85,7 +85,7 @@ void Application::openComponentPick(std::size_t index) {
     return;
   }
 
-  if (!dialog_.isEmpty()) {
+  if (dialog_ != Dialog::none) {
     execute(Action::cancel);
   }
 

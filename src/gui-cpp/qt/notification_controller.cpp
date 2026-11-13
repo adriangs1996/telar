@@ -198,7 +198,7 @@ void Application::retireNotificationFocus(const QString &identity, QQuickItem *r
   // A delivered control can disappear before its disabled record is painted.
   // Complete its retirement before restoring the captured pane's keyboard owner.
   QMetaObject::invokeMethod(this, [this, target] {
-    if (window_ == nullptr || !dialog_.isEmpty()) {
+    if (window_ == nullptr || dialog_ != Dialog::none) {
       return;
     }
 
@@ -218,7 +218,7 @@ void Application::retireNotificationFocus(const QString &identity, QQuickItem *r
 void Application::restoreTerminalFocus() {
   const auto *pane = session().focusedPane();
   const auto terminal = pane != nullptr ? terminals_.value(pane->id) : nullptr;
-  if (terminal && terminal->isVisible() && dialog_.isEmpty()) {
+  if (terminal && terminal->isVisible() && dialog_ == Dialog::none) {
     terminal->forceActiveFocus(Qt::OtherFocusReason);
   }
 }

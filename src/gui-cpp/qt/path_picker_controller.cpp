@@ -56,7 +56,7 @@ void Application::showPathPicker() {
 
   path_query_ = toQString(session().pathSeed());
   path_selection_ = 0;
-  showDialog(QStringLiteral("paths"));
+  showDialog(Dialog::paths);
   refreshPathPicker();
 }
 
@@ -67,7 +67,7 @@ void Application::refreshPathPicker() {
 }
 
 void Application::searchPaths(const QString &text) {
-  if (dialog_ != QLatin1StringView("paths")) {
+  if (dialog_ != Dialog::paths) {
     return;
   }
 
@@ -90,7 +90,7 @@ void Application::searchPaths(const QString &text) {
 }
 
 void Application::reportPathQueryLimit(qulonglong requested_bytes) {
-  if (dialog_ == QLatin1StringView("paths") && requested_bytes > PathPickerLimits::query_bytes) {
+  if (dialog_ == Dialog::paths && requested_bytes > PathPickerLimits::query_bytes) {
     session().reportLimit({.name = "prompt.path_query_bytes", .noun = "bytes", .value = PathPickerLimits::query_bytes, .requested = requested_bytes, .route = {}});
     refreshNotifications();
   }
@@ -98,7 +98,7 @@ void Application::reportPathQueryLimit(qulonglong requested_bytes) {
 
 void Application::movePathSelection(int delta) {
   const auto count = session().pathPicker().matches().size();
-  if (dialog_ != QLatin1StringView("paths")) {
+  if (dialog_ != Dialog::paths) {
     return;
   }
 
@@ -112,7 +112,7 @@ void Application::movePathSelection(int delta) {
 
 void Application::descendPath() {
   applyInteraction([&] {
-    if (dialog_ == QLatin1StringView("paths") && session().descendPath(path_selection_)) {
+    if (dialog_ == Dialog::paths && session().descendPath(path_selection_)) {
       path_query_.clear();
       path_selection_ = 0;
       refreshPathPicker();
@@ -122,7 +122,7 @@ void Application::descendPath() {
 
 void Application::ascendPath() {
   applyInteraction([&] {
-    if (dialog_ == QLatin1StringView("paths") && session().ascendPath()) {
+    if (dialog_ == Dialog::paths && session().ascendPath()) {
       path_query_.clear();
       path_selection_ = 0;
       refreshPathPicker();
@@ -132,12 +132,12 @@ void Application::ascendPath() {
 
 void Application::insertPath(bool absolute) {
   applyInteraction([&] {
-    if (dialog_ != QLatin1StringView("paths")) {
+    if (dialog_ != Dialog::paths) {
       return;
     }
 
     if (session().insertPath(path_selection_, absolute)) {
-      showDialog({});
+      showDialog(Dialog::none);
     }
 
     refreshPathPicker();
@@ -146,7 +146,7 @@ void Application::insertPath(bool absolute) {
 
 void Application::activatePath(const QVariantMap &choice) {
   const auto &page = session().pathPicker();
-  if (dialog_ != QLatin1StringView("paths") || choice.value(QStringLiteral("revision")).toString() != QString::number(page.revision())) {
+  if (dialog_ != Dialog::paths || choice.value(QStringLiteral("revision")).toString() != QString::number(page.revision())) {
     return;
   }
 

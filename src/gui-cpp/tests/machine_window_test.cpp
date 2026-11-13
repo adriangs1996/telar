@@ -1208,7 +1208,7 @@ class MachineWindowTest : public QObject {
     application.peekActivity(key);
     QVERIFY(MachineWindow::pendingActivity(application));
     QVERIFY(finishOpening(*fixture.remote_runtime));
-    QTRY_COMPARE_WITH_TIMEOUT(application.dialog(), QStringLiteral("peek"), wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(application.dialog(), telar::gui::qt::Application::Dialog::peek, wait_ms);
     QCOMPARE(application.activityHover(), key);
     QTRY_COMPARE_WITH_TIMEOUT(fixture.remote_runtime->count(ClientTag::read_pane), 1, wait_ms);
     QCOMPARE(fixture.local_runtime->count(ClientTag::read_pane), 0);
@@ -1235,18 +1235,18 @@ class MachineWindowTest : public QObject {
     QCOMPARE(message.mode, PaneTextMode::prompt);
     QCOMPARE(message.text, "Continue the remote task");
     QCOMPARE(fixture.local_runtime->count(ClientTag::send_pane_text), 0);
-    QCOMPARE(application.dialog(), QString{});
+    QCOMPARE(application.dialog(), telar::gui::qt::Application::Dialog::none);
     panel.reset();
     fixture.remote_runtime->send(RequestCompleted{.request_id = message.request_id});
     QTRY_VERIFY_WITH_TIMEOUT(!MachineWindow::client(application, fixture.remote.machine.slot).session.requestsPending(), wait_ms);
     application.peekActivity(key);
-    QTRY_COMPARE_WITH_TIMEOUT(application.dialog(), QStringLiteral("peek"), wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(application.dialog(), telar::gui::qt::Application::Dialog::peek, wait_ms);
     const auto stale_revision = application.peekState().value(QStringLiteral("revision")).toString();
     QTRY_COMPARE_WITH_TIMEOUT(fixture.remote_runtime->count(ClientTag::read_pane), 2, wait_ms);
     const auto retired = fixture.remote_runtime->last<ReadPane>();
     ++agents.front().session_id.front();
     fixture.remote_runtime->send(AgentSnapshot{.revision = 2, .entries = agents});
-    QTRY_COMPARE_WITH_TIMEOUT(application.dialog(), QString{}, wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(application.dialog(), telar::gui::qt::Application::Dialog::none, wait_ms);
     application.searchPeek(QStringLiteral("/stop"));
     application.submitPeek(stale_revision);
     QCOMPARE(fixture.remote_runtime->count(ClientTag::interrupt_agent), 0);
@@ -1271,12 +1271,12 @@ class MachineWindowTest : public QObject {
     QTRY_COMPARE_WITH_TIMEOUT(application.agents()->rowCount(), 1, wait_ms);
     const auto key = activityRow(application, 0).value(QStringLiteral("key")).toString();
     application.peekActivity(key);
-    QCOMPARE(application.dialog(), QStringLiteral("peek"));
+    QCOMPARE(application.dialog(), telar::gui::qt::Application::Dialog::peek);
     const auto retired = application.peekState().value(QStringLiteral("revision")).toString();
     QTRY_COMPARE_WITH_TIMEOUT(fixture.local_runtime->count(ClientTag::read_pane), 1, wait_ms);
     const auto retired_read = fixture.local_runtime->last<ReadPane>();
     application.setWindow(replacement);
-    QCOMPARE(application.dialog(), QString{});
+    QCOMPARE(application.dialog(), telar::gui::qt::Application::Dialog::none);
     application.searchPeek(QStringLiteral("/stop"));
     application.submitPeek(retired);
     QCOMPARE(fixture.local_runtime->count(ClientTag::interrupt_agent), 0);
@@ -1284,7 +1284,7 @@ class MachineWindowTest : public QObject {
     QTRY_VERIFY_WITH_TIMEOUT(!MachineWindow::client(application, Machines::local_slot).session.requestsPending(), wait_ms);
     application.setWindow(window);
     application.peekActivity(key);
-    QCOMPARE(application.dialog(), QStringLiteral("peek"));
+    QCOMPARE(application.dialog(), telar::gui::qt::Application::Dialog::peek);
     application.searchPeek(QStringLiteral("/stop"));
     application.submitPeek(retired);
     QCOMPARE(fixture.local_runtime->count(ClientTag::interrupt_agent), 0);
@@ -1313,7 +1313,7 @@ class MachineWindowTest : public QObject {
     QVERIFY(MachineWindow::pendingActivity(application));
     MachineWindow::pointerMoved(application);
     QVERIFY(finishOpening(*fixture.remote_runtime));
-    QTRY_COMPARE_WITH_TIMEOUT(application.dialog(), QStringLiteral("peek"), wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(application.dialog(), telar::gui::qt::Application::Dialog::peek, wait_ms);
     QVERIFY(application.activityHover().isEmpty());
   }
 
@@ -1567,9 +1567,9 @@ class MachineWindowTest : public QObject {
     window.resize(wide);
     QTRY_COMPARE_WITH_TIMEOUT(lines().size(), line_count, wait_ms);
     window.resize(tiny);
-    QTRY_VERIFY2_WITH_TIMEOUT(!editor->isEnabled() && !editor->hasActiveFocus(), qPrintable(QStringLiteral("window=%1x%2 field=%3x%4 enabled=%5 focused=%6 owner=%7 dialog=%8 model=%9 qml=%10").arg(window.width()).arg(window.height()).arg(editor->width()).arg(editor->height()).arg(editor->isEnabled()).arg(editor->hasActiveFocus()).arg(window.activeFocusItem() == nullptr ? QStringLiteral("none") : window.activeFocusItem()->objectName()).arg(application.dialog()).arg(application.peekGeometry().value(QStringLiteral("field")).toRectF().height()).arg(panel->property("regions").toMap().value(QStringLiteral("field")).toRectF().height())), wait_ms);
+    QTRY_VERIFY2_WITH_TIMEOUT(!editor->isEnabled() && !editor->hasActiveFocus(), qPrintable(QStringLiteral("window=%1x%2 field=%3x%4 enabled=%5 focused=%6 owner=%7 dialog=%8 model=%9 qml=%10").arg(window.width()).arg(window.height()).arg(editor->width()).arg(editor->height()).arg(editor->isEnabled()).arg(editor->hasActiveFocus()).arg(window.activeFocusItem() == nullptr ? QStringLiteral("none") : window.activeFocusItem()->objectName()).arg(static_cast<int>(application.dialog())).arg(application.peekGeometry().value(QStringLiteral("field")).toRectF().height()).arg(panel->property("regions").toMap().value(QStringLiteral("field")).toRectF().height())), wait_ms);
     QTest::keyClick(&window, Qt::Key_Escape);
-    QTRY_VERIFY_WITH_TIMEOUT(application.dialog().isEmpty(), wait_ms);
+    QTRY_VERIFY_WITH_TIMEOUT((application.dialog() == telar::gui::qt::Application::Dialog::none), wait_ms);
   }
 
   Q_SLOT static void activityCombinesSourcesWithoutOpeningHiddenScreens() {

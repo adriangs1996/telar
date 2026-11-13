@@ -46,7 +46,6 @@ namespace telar::gui::qt {
 
 namespace {
 
-constexpr QLatin1StringView new_workspace{"new-workspace"};
 
 std::string_view view(const QByteArray &bytes) noexcept {
   return {bytes.constData(), static_cast<std::size_t>(bytes.size())};
@@ -78,7 +77,7 @@ void Application::resetWorkspaceForm() {
 // Folders are listed only on this computer: a remote machine's directories
 // are not here to list or to check.
 void Application::editWorkspaceDirectory(const QString &text) {
-  if (dialog_ != new_workspace) {
+  if (dialog_ != Dialog::new_workspace) {
     return;
   }
 
@@ -105,7 +104,7 @@ void Application::editWorkspaceDirectory(const QString &text) {
 
 void Application::moveWorkspaceDirectory(int delta) {
   const auto count = workspaceListingCurrent() ? workspace_form_.completion.entries.size() : 0;
-  if (dialog_ != new_workspace || count == 0) {
+  if (dialog_ != Dialog::new_workspace || count == 0) {
     return;
   }
 
@@ -115,7 +114,7 @@ void Application::moveWorkspaceDirectory(int delta) {
 }
 
 QString Application::acceptWorkspaceDirectory() {
-  if (dialog_ != new_workspace || !workspaceListingCurrent() || workspace_form_.completion.entries.empty()) {
+  if (dialog_ != Dialog::new_workspace || !workspaceListingCurrent() || workspace_form_.completion.entries.empty()) {
     return {};
   }
 
@@ -124,7 +123,7 @@ QString Application::acceptWorkspaceDirectory() {
 
 QString Application::chooseWorkspaceDirectory(int index) {
   const auto &entries = workspace_form_.completion.entries;
-  if (dialog_ != new_workspace || !workspaceListingCurrent() || index < 0 || static_cast<std::size_t>(index) >= entries.size()) {
+  if (dialog_ != Dialog::new_workspace || !workspaceListingCurrent() || index < 0 || static_cast<std::size_t>(index) >= entries.size()) {
     return {};
   }
 
@@ -158,7 +157,7 @@ void Application::listWorkspaceDirectory() {
 
 void Application::landWorkspaceDirectory() {
   auto result = workspace_listing_.result();
-  if (dialog_ != new_workspace) {
+  if (dialog_ != Dialog::new_workspace) {
     return;
   }
 

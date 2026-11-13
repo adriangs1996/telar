@@ -357,7 +357,7 @@ private:
     QCOMPARE(application.paletteState().value(QStringLiteral("count")).toInt(), 4);
     const auto offline = requireValue(machines.find(MachineId::fromRaw(2)), "Expected disabled picker row");
     application.usePaletteResult(machineChoice(application, QStringLiteral("Offline")));
-    QVERIFY(application.dialog().isEmpty());
+    QVERIFY((application.dialog() == telar::gui::qt::Application::Dialog::none));
     QTRY_VERIFY(machines.row(offline).enabled);
     QCOMPARE(machines.active(), slot);
     application.execute(Application::Action::machine_picker);
@@ -370,7 +370,7 @@ private:
     auto local = machineChoice(application, QStringLiteral("Personal"));
     local.insert(QStringLiteral("alternate"), true);
     application.usePaletteResult(local);
-    QVERIFY(application.dialog().isEmpty());
+    QVERIFY((application.dialog() == telar::gui::qt::Application::Dialog::none));
     QCOMPARE(machines.active(), slot);
     QVERIFY(machines.row(Machines::local_slot).enabled);
   }
@@ -383,7 +383,7 @@ private:
     application.searchPalette(QStringLiteral(":unmatched"));
     QCOMPARE(application.paletteState().value(QStringLiteral("count")).toInt(), 1);
     application.usePaletteResult(machineChoice(application, QStringLiteral("Add machine…")));
-    QCOMPARE(application.dialog(), QStringLiteral("machine"));
+    QCOMPARE(application.dialog(), telar::gui::qt::Application::Dialog::machine);
     const auto first_revision = application.machinePromptState().value(QStringLiteral("revision")).toString();
     application.searchMachinePrompt(QStringLiteral("Added"));
     application.submitMachinePrompt(first_revision);
@@ -393,9 +393,9 @@ private:
     application.searchMachinePrompt(QStringLiteral("window-added@fixture"));
     application.submitMachinePrompt(first_revision);
     QVERIFY(!MachineProfileWindow::profiles(application).editing());
-    QCOMPARE(application.dialog(), QStringLiteral("machine"));
+    QCOMPARE(application.dialog(), telar::gui::qt::Application::Dialog::machine);
     application.submitMachinePrompt(second_revision);
-    QVERIFY(application.dialog().isEmpty());
+    QVERIFY((application.dialog() == telar::gui::qt::Application::Dialog::none));
     const auto &machines = MachineProfileWindow::machines(application);
     QTRY_VERIFY(machines.findDestination("window-added@fixture").has_value());
     const auto slot = requireValue(machines.findDestination("window-added@fixture"), "Expected newly saved destination");
@@ -408,7 +408,7 @@ private:
     application.execute(Application::Action::machine_picker);
     application.editMachineResult(machineChoice(application, QStringLiteral("Renamed")), Application::MachineEditAction::remove);
     QTRY_VERIFY(!machines.row(slot).used);
-    QCOMPARE(application.dialog(), QStringLiteral("palette"));
+    QCOMPARE(application.dialog(), telar::gui::qt::Application::Dialog::palette);
     QCOMPARE(application.paletteState().value(QStringLiteral("count")).toInt(), 2);
   }
 

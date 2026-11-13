@@ -144,20 +144,20 @@ void Application::showPalette(PaletteMode mode) {
   palette_query_ = QChar{static_cast<char>(mode)};
   palette_selection_ = 0;
   ++palette_revision_;
-  showDialog(QStringLiteral("palette"));
+  showDialog(Dialog::palette);
   static_cast<void>(updatePaletteResults());
   emit paletteChanged();
 }
 
 void Application::reportPaletteQueryLimit(qulonglong requested_bytes) {
-  if (dialog_ == QLatin1StringView("palette") && requested_bytes > PaletteQuery::maximum_bytes) {
+  if (dialog_ == Dialog::palette && requested_bytes > PaletteQuery::maximum_bytes) {
     session().reportLimit({.name = "prompt.field_bytes", .noun = "bytes", .value = PaletteQuery::maximum_bytes, .requested = requested_bytes, .route = {}});
     refreshNotifications();
   }
 }
 
 void Application::searchPalette(const QString &text) {
-  if (dialog_ != QLatin1StringView("palette") || text == palette_query_) {
+  if (dialog_ != Dialog::palette || text == palette_query_) {
     return;
   }
 
@@ -185,7 +185,7 @@ void Application::searchPalette(const QString &text) {
 }
 
 void Application::movePalette(int delta) {
-  if (dialog_ != QLatin1StringView("palette") || palette_rows_.empty()) {
+  if (dialog_ != Dialog::palette || palette_rows_.empty()) {
     return;
   }
 
@@ -200,7 +200,7 @@ void Application::movePalette(int delta) {
 void Application::setPaletteMode(int mode) {
   const auto prefix = PaletteQuery::prefix(static_cast<char>(mode));
   const auto current = palette_query_.toUtf8();
-  if (dialog_ != QLatin1StringView("palette") || !prefix || mode != static_cast<int>(*prefix) || PaletteQuery::parse(paletteBytes(current)).mode == *prefix) {
+  if (dialog_ != Dialog::palette || !prefix || mode != static_cast<int>(*prefix) || PaletteQuery::parse(paletteBytes(current)).mode == *prefix) {
     return;
   }
 
@@ -214,7 +214,7 @@ void Application::setPaletteMode(int mode) {
 }
 
 void Application::refreshPalette() {
-  if (dialog_ == QLatin1StringView("palette") && updatePaletteResults()) {
+  if (dialog_ == Dialog::palette && updatePaletteResults()) {
     emit paletteChanged();
   }
 }
@@ -461,7 +461,7 @@ bool Application::navigatePaletteTarget(const NavigationTarget &target) {
 void Application::usePaletteResult(const QVariantMap &choice) {
   const auto key = choice.value(QStringLiteral("key")).toString();
   const auto revision = choice.value(QStringLiteral("revision")).toString();
-  if (dialog_ != QLatin1StringView("palette") || revision != QString::number(palette_revision_)) {
+  if (dialog_ != Dialog::palette || revision != QString::number(palette_revision_)) {
     return;
   }
 
@@ -483,7 +483,7 @@ void Application::usePaletteResult(const QVariantMap &choice) {
 
     if (const auto *navigation = std::get_if<NavigationTarget>(&target)) {
       if (navigatePaletteTarget(*navigation)) {
-        showDialog({});
+        showDialog(Dialog::none);
       }
 
       return;
@@ -501,7 +501,7 @@ void Application::usePaletteResult(const QVariantMap &choice) {
       return;
     }
 
-    showDialog({});
+    showDialog(Dialog::none);
     if (!executeNavigation(action, {}) && !executePane(action, 0)) {
       executeWindowAction(action);
     }

@@ -87,7 +87,7 @@ bool Application::promptKey(std::uint64_t pane_id, const prompt::KeyPress &key) 
   }
   // A search of a command's output asks for its query.
   if (session().takeSearchRequest()) {
-    showDialog(QStringLiteral("copy-search"));
+    showDialog(Dialog::copy_search);
   }
   return true;
 }
@@ -132,7 +132,7 @@ void Application::stepScrollbackMatch(bool forward) {
 // The search typed so far stays, its matches for n and N; the line goes back to the editor.
 void Application::finishScrollbackSearch() {
   session().finishCopySearch();
-  showDialog({});
+  showDialog(Dialog::none);
   emit copySearchChanged();
 }
 

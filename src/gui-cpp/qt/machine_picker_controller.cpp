@@ -89,7 +89,7 @@ void Application::moveMachine(int delta) {
 }
 
 void Application::refreshMachinePicker() {
-  if (dialog_ == QLatin1StringView("palette") && palette_query_.startsWith(QLatin1Char(':'))) {
+  if (dialog_ == Dialog::palette && palette_query_.startsWith(QLatin1Char(':'))) {
     refreshPalette();
   }
 }
@@ -175,7 +175,7 @@ QVariantMap Application::machinePickerRecord(MachinePickerTarget target) const {
 }
 
 std::optional<MachinePickerTarget> Application::chosenMachine(const QVariantMap &choice) const {
-  if (dialog_ != QLatin1StringView("palette") || choice.value(QStringLiteral("revision")).toString() != QString::number(palette_revision_)) {
+  if (dialog_ != Dialog::palette || choice.value(QStringLiteral("revision")).toString() != QString::number(palette_revision_)) {
     return std::nullopt;
   }
 
@@ -199,7 +199,7 @@ void Application::chooseMachine(MachinePickerTarget target, bool alternate) {
     return;
   }
 
-  showDialog({});
+  showDialog(Dialog::none);
   if (intent == MachinePicker::Intent::none || !target.machine) {
     return;
   }

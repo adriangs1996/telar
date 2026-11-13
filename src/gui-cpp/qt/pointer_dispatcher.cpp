@@ -97,7 +97,7 @@ void PointerDispatcher::setWindow(QQuickWindow &window) {
 bool PointerDispatcher::handleNativeScroll(std::string_view event_type, const void *message) {
   // The prompt line scrolls its own rows; the modal takes the wheel only while it shows.
   const bool hosted = application_.line_search_pane_ != 0 && !application_.session().historyBrowser().state().inspecting;
-  if (window_.isNull() || application_.dialog_ != QStringView{u"history"} || hosted) {
+  if (window_.isNull() || application_.dialog_ != Application::Dialog::history || hosted) {
     return false;
   }
 
@@ -171,7 +171,7 @@ void PointerDispatcher::presentHistoryHover(std::span<const HistoryHoverTarget> 
 
 void PointerDispatcher::observeHistoryHover(QPointF position, HistoryHover::Observation observation) {
   const auto &frame = application_.presented_history_hover_;
-  if (application_.dialog_ != QStringLiteral("history") || !frame || frame->generation != application_.dialog_generation_) {
+  if (application_.dialog_ != Application::Dialog::history || !frame || frame->generation != application_.dialog_generation_) {
     retireHistoryHover();
 
     return;
@@ -340,7 +340,7 @@ bool PointerDispatcher::press(QMouseEvent &event) {
 
     const auto &surface = application_.presented_history_actions_;
     HistoryActionCapture history;
-    if (application_.dialog_ == QStringLiteral("history") && surface.generation == application_.dialog_generation_ && history.begin(surface, {.x = event.position().x() * surface.scale, .y = event.position().y() * surface.scale}, event.button() == Qt::LeftButton)) {
+    if (application_.dialog_ == Application::Dialog::history && surface.generation == application_.dialog_generation_ && history.begin(surface, {.x = event.position().x() * surface.scale, .y = event.position().y() * surface.scale}, event.button() == Qt::LeftButton)) {
       *lease = {.terminal = {}, .history = history, .held = true};
 
       return true;
@@ -417,7 +417,7 @@ bool PointerDispatcher::release(QMouseEvent &event) {
     const auto &surface = application_.presented_history_actions_;
     const auto action = previous.history.release(surface, {.x = event.position().x() * surface.scale, .y = event.position().y() * surface.scale});
     const auto choice = surface.choice;
-    if (application_.dialog_ != QStringLiteral("history") || surface.generation != application_.dialog_generation_) {
+    if (application_.dialog_ != Application::Dialog::history || surface.generation != application_.dialog_generation_) {
       return true;
     }
 

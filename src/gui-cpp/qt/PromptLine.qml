@@ -32,9 +32,9 @@ Item {
     readonly property bool queueing: root.running && root.focused && (!editor.empty || editor.queued)
     // The history or the paths, searched from the editor's row, the rows they find under it.
     // The scrollback search lives in the line of the pane copy mode reads, whatever runs there.
-    readonly property bool scrollbackSearch: root.application.lineSearchPane === root.paneId && root.application.lineSearch === "copy-search"
-    readonly property string search: (root.editing && root.focused || root.scrollbackSearch) && root.application.lineSearchPane === root.paneId ? root.application.lineSearch : ""
-    readonly property bool searching: root.search.length > 0
+    readonly property bool scrollbackSearch: root.application.lineSearchPane === root.paneId && root.application.lineSearch === GuiController.Dialog.copy_search
+    readonly property int search: (root.editing && root.focused || root.scrollbackSearch) && root.application.lineSearchPane === root.paneId ? root.application.lineSearch : GuiController.Dialog.none
+    readonly property bool searching: root.search !== GuiController.Dialog.none
     // The rows a search shows at most, newest or best nearest the query.
     readonly property int searchRows: 8
     readonly property bool moving: editor.motion !== "none"
@@ -124,7 +124,7 @@ Item {
         interval: 400
         onTriggered: root.menuOpening = false
     }
-    readonly property int searchCount: root.search === "history" ? (root.application.historyState.count ?? 0) : root.search === "paths" ? (root.application.pathPickerState.count ?? 0) : 0
+    readonly property int searchCount: root.search === GuiController.Dialog.history ? (root.application.historyState.count ?? 0) : root.search === GuiController.Dialog.paths ? (root.application.pathPickerState.count ?? 0) : 0
     readonly property int listRows: Math.max(1, Math.min(root.searchRows, root.searchCount, root.screenRows - 2))
     readonly property int rowCount: root.searching ? 2 + (root.scrollbackSearch ? 0 : root.listRows) : root.editing ? 1 + editor.visibleRows + root.menuRows : root.holding ? 1 + editor.visibleRows : root.queueing ? editor.visibleRows : root.secret ? 2 : 0
     // The rows the line needs past the screen's last: the terminal rises by them, so the
@@ -819,7 +819,7 @@ Item {
     // A search the line stops hosting while it is open, as when its pane loses the focus,
     // closes; so does one whose field loses the keyboard to a click elsewhere in the window.
     function abandonSearch() {
-        if (!root.searching && root.application.lineSearch.length > 0 && root.application.lineSearchPane === root.paneId) {
+        if (!root.searching && root.application.lineSearch !== GuiController.Dialog.none && root.application.lineSearchPane === root.paneId) {
             root.application.execute(GuiController.Action.cancel);
         }
     }
@@ -834,7 +834,7 @@ Item {
     }
 
     Component.onDestruction: {
-        if (root.application.lineSearchPane === root.paneId && root.application.lineSearch.length > 0) {
+        if (root.application.lineSearchPane === root.paneId && root.application.lineSearch !== GuiController.Dialog.none) {
             root.application.execute(GuiController.Action.cancel);
         }
     }
@@ -1025,7 +1025,7 @@ Item {
 
         Item {
             id: view
-            readonly property bool history: root.search === "history"
+            readonly property bool history: root.search === GuiController.Dialog.history
             readonly property var current: view.history ? root.application.historyState : root.application.pathPickerState
             readonly property int count: view.current.count ?? 0
             readonly property int rows: root.listRows

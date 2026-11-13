@@ -171,7 +171,7 @@ void Application::initializeComponents() {
   });
   connect(this, &Application::machineChanged, this, &Application::resetComponents);
   connect(this, &Application::dialogChanged, this, [this] {
-    if (!dialog_.isEmpty() && component_surfaces_.open_panel) {
+    if (dialog_ != Dialog::none && component_surfaces_.open_panel) {
       closeComponentPanel();
     }
   });

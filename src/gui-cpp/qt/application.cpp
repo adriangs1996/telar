@@ -142,19 +142,20 @@ auto paneDirection(Application::Action action) noexcept -> PaneDirection {
   }
 }
 
-auto dialogName(Application::Action action) -> QString {
+auto dialogFor(Application::Action action) -> Application::Dialog {
   using Action = Application::Action;
+  using Dialog = Application::Dialog;
   switch (action) {
   case Action::palette:
-    return QStringLiteral("palette");
+    return Dialog::palette;
   case Action::new_workspace:
-    return QStringLiteral("new-workspace");
+    return Dialog::new_workspace;
   case Action::rename_tab:
-    return QStringLiteral("rename-tab");
+    return Dialog::rename_tab;
   case Action::rename_workspace:
-    return QStringLiteral("rename-workspace");
+    return Dialog::rename_workspace;
   default:
-    return {};
+    return Dialog::none;
   }
 }
 
@@ -298,12 +299,12 @@ void Application::runtimeDisconnected(MachineClient &client) {
     return;
   }
 
-  if (dialog_ == QLatin1StringView("palette")) {
+  if (dialog_ == Dialog::palette) {
     emit paletteChanged();
   }
 
-  if (dialog_ == QLatin1StringView("paths") || dialog_ == QLatin1StringView("peek")) {
-    showDialog({});
+  if (dialog_ == Dialog::paths || dialog_ == Dialog::peek) {
+    showDialog(Dialog::none);
   }
 
   scheduleGraphicsRecovery();
@@ -365,8 +366,8 @@ void Application::setWindow(QQuickWindow &window) {
     return;
   }
 
-  if (dialog_ == QLatin1StringView("peek")) {
-    showDialog({});
+  if (dialog_ == Dialog::peek) {
+    showDialog(Dialog::none);
   }
 
   if (window_ != nullptr) {
@@ -524,7 +525,7 @@ void Application::prepareFrame(PresentedFrame &frame) {
   }
 
   const auto &history = session().historyBrowser();
-  if (dialog_ == QLatin1StringView("history")) {
+  if (dialog_ == Dialog::history) {
     frame.history_actions = historyActionSurface();
     auto &hover = frame.history_hover.emplace();
     const auto *filters = qobject_cast<const HistoryFiltersLayout *>(history_filter_layout_.data());
@@ -552,7 +553,7 @@ void Application::prepareFrame(PresentedFrame &frame) {
     }
   }
 
-  if (dialog_ == QLatin1StringView("history") && !historyLoading() && history_view_version_ == history.viewVersion()) {
+  if (dialog_ == Dialog::history && !historyLoading() && history_view_version_ == history.viewVersion()) {
 
     if (const auto choice = history.choice()) {
       frame.history = {.choice = *choice, .dialog_generation = dialog_generation_, .enter_runs = session().configuration().history.enter_runs};
@@ -815,7 +816,7 @@ void Application::presentChange(Change change) {
     if (session().takeChromeChange() && !refresh_timer_.isActive()) {
       refresh_timer_.start();
     }
-    if (dialog_ == QLatin1StringView("paths")) {
+    if (dialog_ == Dialog::paths) {
       emit pathPickerGeometryChanged();
     }
 
@@ -922,14 +923,14 @@ void Application::executeHostCommand(const ClientCommand &message, CompleteClien
   // Name prompts: none opens over copy mode or another prompt, and
   // copy mode does not start over a prompt.
   case ClientAction::client_open_goto:
-    if (copyModeActive() || !dialog_.isEmpty()) {
+    if (copyModeActive() || dialog_ != Dialog::none) {
       throw EncodingError{"ClientPromptUnavailable"};
     }
 
     executeWindowAction(Action::goto_picker);
     break;
   case ClientAction::client_open_history:
-    if (copyModeActive() || !dialog_.isEmpty()) {
+    if (copyModeActive() || dialog_ != Dialog::none) {
       throw EncodingError{"ClientPromptUnavailable"};
     }
 
@@ -938,7 +939,7 @@ void Application::executeHostCommand(const ClientCommand &message, CompleteClien
     break;
   case ClientAction::client_copy_mode:
     if (!copyModeActive()) {
-      if (!dialog_.isEmpty()) {
+      if (dialog_ != Dialog::none) {
         throw EncodingError{"CopyModeUnavailable"};
       }
 
@@ -1029,7 +1030,7 @@ void Application::refresh() {
   refreshPalette();
   refreshElementBars();
   element_slots_.finish();
-  if (dialog_ == QLatin1StringView("paths")) {
+  if (dialog_ == Dialog::paths) {
     emit pathPickerGeometryChanged();
   }
 
@@ -1152,7 +1153,7 @@ void Application::resizeDivider(int index, qreal x, qreal y, bool commit) {
 void Application::execute(Action action, const QString &target) {
   key_bindings_.cancelSequence();
   applyInteraction([&] {
-    if (action != Action::copy_mode && (action != Action::cancel || dialog_.isEmpty())) {
+    if (action != Action::copy_mode && (action != Action::cancel || dialog_ == Dialog::none)) {
       leaveKeyboardCopyMode();
     }
 
@@ -1167,24 +1168,24 @@ void Application::submitDialog(const QVariantMap &input) {
     const auto name = input.value(QStringLiteral("text")).toString().toUtf8();
     const auto path = input.value(QStringLiteral("path")).toString().toUtf8();
     const std::string_view text{name.constData(), static_cast<std::size_t>(name.size())};
-    if (dialog_ == QLatin1StringView("new-workspace")) {
+    if (dialog_ == Dialog::new_workspace) {
       if (!submitWorkspace(input)) {
         return;
       }
-    } else if (dialog_ == QLatin1StringView("rename-tab")) {
+    } else if (dialog_ == Dialog::rename_tab) {
       session().renameTab(text);
-    } else if (dialog_ == QLatin1StringView("rename-workspace")) {
+    } else if (dialog_ == Dialog::rename_workspace) {
       session().renameWorkspace(text);
-    } else if (dialog_ == QLatin1StringView("copy-search")) {
+    } else if (dialog_ == Dialog::copy_search) {
       session().searchCopy(text);
     }
 
-    showDialog({});
+    showDialog(Dialog::none);
   });
 }
 
 void Application::submitHistory(std::uint64_t entry_id, bool alternate) {
-  if (dialog_ != QLatin1StringView("history")) {
+  if (dialog_ != Dialog::history) {
     return;
   }
 
@@ -1195,7 +1196,7 @@ void Application::submitHistory(std::uint64_t entry_id, bool alternate) {
 
     session().pasteHistory(entry_id, alternate);
     error_.clear();
-    showDialog({});
+    showDialog(Dialog::none);
   });
 }
 
@@ -1223,7 +1224,7 @@ void Application::usePresentedHistory(const QString &revision, bool alternate) {
 }
 
 const Application::PresentedHistory *Application::presentedHistory(const QString &revision) const {
-  if (dialog_ != QLatin1StringView("history") || historyLoading() || !presented_history_) {
+  if (dialog_ != Dialog::history || historyLoading() || !presented_history_) {
     return nullptr;
   }
 
@@ -1316,7 +1317,7 @@ void Application::executeWindowAction(Action action) {
   } else if (action == Action::history) {
     history_filters_ = {.author = session().configuration().history.show_agent_commands ? HistoryAuthorFilter::all : HistoryAuthorFilter::human};
     session().inspectHistory(false);
-    showDialog(QStringLiteral("history"));
+    showDialog(Dialog::history);
     // At the prompt line, the search starts from the command being written.
     QString seed;
     if (const auto *line = line_search_pane_ == 0 ? nullptr : session().promptLine(line_search_pane_)) {
@@ -1331,12 +1332,12 @@ void Application::executeWindowAction(Action action) {
   } else if (action == Action::suggest_command) {
     showPalette(PaletteMode::suggest);
   } else if (action == Action::new_workspace || action == Action::rename_tab || action == Action::rename_workspace) {
-    showDialog(dialogName(action));
+    showDialog(dialogFor(action));
   } else if (action == Action::copy_mode) {
-    if (dialog_.isEmpty() && session().enterBlocks()) {
+    if (dialog_ == Dialog::none && session().enterBlocks()) {
       emit promptChanged(session().changedPane());
       emit terminalChanged(session().changedPane());
-    } else if (dialog_.isEmpty()) {
+    } else if (dialog_ == Dialog::none) {
       static_cast<void>(session().enterCopyMode());
       emit stateChanged();
       if (const auto &copy = session().copyMode().state()) {
@@ -1355,14 +1356,14 @@ void Application::cancelCurrentInteraction() {
   }
 
   const auto &copy = session().copyMode().state();
-  if (dialog_.isEmpty() && copy && !copy->pointer) {
+  if (dialog_ == Dialog::none && copy && !copy->pointer) {
     const auto pane_id = copy->pane_id;
     session().leaveCopyMode();
     emit terminalChanged(pane_id);
     emit stateChanged();
   }
 
-  showDialog({});
+  showDialog(Dialog::none);
 }
 
 void Application::setSidebarWidth(qreal width) {
@@ -1469,23 +1470,23 @@ void Application::scroll(PaneScrollDelta delta) {
   }
 }
 
-void Application::showDialog(const QString &kind) {
-  if (kind != QLatin1StringView("peek")) {
+void Application::showDialog(Dialog kind) {
+  if (kind != Dialog::peek) {
     session().closePeek();
     peek_origin_.reset();
     peek_editor_.clear();
   }
 
-  if (kind != QLatin1StringView("machine")) {
+  if (kind != Dialog::machine) {
     machine_prompt_.reset();
   }
 
-  if (kind != QLatin1StringView("palette")) {
+  if (kind != Dialog::palette) {
     palette_parent_.reset();
     palette_editor_restore_ = {};
   }
 
-  if (dialog_ == QLatin1StringView("paths") && kind != QLatin1StringView("paths")) {
+  if (dialog_ == Dialog::paths && kind != Dialog::paths) {
     session().closePathPicker();
   }
 
@@ -1498,7 +1499,7 @@ void Application::showDialog(const QString &kind) {
   pointer_dispatcher_.presentHistoryActions({});
   pointer_dispatcher_.retireHistoryHover();
 
-  if (kind == QLatin1StringView("new-workspace") || dialog_ == QLatin1StringView("new-workspace")) {
+  if (kind == Dialog::new_workspace || dialog_ == Dialog::new_workspace) {
     resetWorkspaceForm();
   }
 
@@ -1506,9 +1507,9 @@ void Application::showDialog(const QString &kind) {
   // for a command; anywhere else they open as a dialog. The scrollback search lives in the
   // line of the pane copy mode reads, whatever runs there.
   const auto *focused = session().focusedPane();
-  const bool searching = kind == QLatin1StringView("history") || kind == QLatin1StringView("paths");
+  const bool searching = kind == Dialog::history || kind == Dialog::paths;
   const auto &copy = session().copyMode().state();
-  if (kind == QLatin1StringView("copy-search") && copy) {
+  if (kind == Dialog::copy_search && copy) {
     line_search_pane_ = copy->pane_id;
   } else {
     line_search_pane_ = searching && focused != nullptr && session().promptSurface(focused->id) == prompt::Surface::editor ? focused->id : 0;
@@ -1562,12 +1563,12 @@ qreal Application::windowControls() const {
   return window_ == nullptr ? 0 : platform::windowControls(*window_);
 }
 
-QString Application::dialog() const {
+Application::Dialog Application::dialog() const noexcept {
   return dialog_;
 }
 
-QString Application::lineSearch() const {
-  return line_search_pane_ == 0 ? QString{} : dialog_;
+Application::Dialog Application::lineSearch() const noexcept {
+  return line_search_pane_ == 0 ? Dialog::none : dialog_;
 }
 
 QString Application::lineSearchPane() const {

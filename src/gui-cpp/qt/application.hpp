@@ -190,7 +190,7 @@ class Application final : public QObject {
   Q_PROPERTY(bool connected READ connected NOTIFY stateChanged)
   Q_PROPERTY(bool copyModeActive READ copyModeActive NOTIFY stateChanged)
   Q_PROPERTY(bool prefixPending READ prefixPending NOTIFY prefixChanged)
-  Q_PROPERTY(QString dialog READ dialog NOTIFY dialogChanged)
+  Q_PROPERTY(Dialog dialog READ dialog NOTIFY dialogChanged)
   // The command whose output the scrollback search reads, empty while it reads the whole
   // scrollback; and whether Tab can switch between the two.
   Q_PROPERTY(QString copySearchScope READ copySearchScope NOTIFY dialogChanged)
@@ -199,7 +199,7 @@ class Application final : public QObject {
   // matches and which one the cursor is on, and what it reads.
   Q_PROPERTY(QVariantMap copySearchState READ copySearchState NOTIFY copySearchChanged)
   // The history or path search the focused pane's prompt line hosts in place of the dialog.
-  Q_PROPERTY(QString lineSearch READ lineSearch NOTIFY dialogChanged)
+  Q_PROPERTY(Dialog lineSearch READ lineSearch NOTIFY dialogChanged)
   Q_PROPERTY(QString lineSearchPane READ lineSearchPane NOTIFY dialogChanged)
   Q_PROPERTY(QVariantList commands READ commands NOTIFY configurationChanged)
   Q_PROPERTY(QVariantMap machinePromptState READ machinePromptState NOTIFY machinePromptChanged)
@@ -287,6 +287,21 @@ public:
   [[nodiscard]] QString activityHover() const;
   [[nodiscard]] int activityAgentCount() const noexcept;
   Q_INVOKABLE void hoverActivity(const QString &identity, QQuickItem *card = nullptr);
+
+  // The dialog or line search open over the workbench, if any.
+  enum class Dialog : quint8 {
+    none,
+    palette,
+    paths,
+    history,
+    peek,
+    machine,
+    copy_search,
+    new_workspace,
+    rename_tab,
+    rename_workspace,
+  };
+  Q_ENUM(Dialog)
 
   enum class HistoryAction : quint8 {
     copy,
@@ -510,8 +525,8 @@ public:
   [[nodiscard]] QString tlsBadgeColor() const;
   Q_INVOKABLE void dismissDiagnostic();
   [[nodiscard]] bool connected() const;
-  [[nodiscard]] QString dialog() const;
-  [[nodiscard]] QString lineSearch() const;
+  [[nodiscard]] Dialog dialog() const noexcept;
+  [[nodiscard]] Dialog lineSearch() const noexcept;
   [[nodiscard]] QString lineSearchPane() const;
 
 signals:
@@ -790,7 +805,7 @@ private:
   void synchronizeTabStrip();
   void activateHistoryCardAction(HistoryCardAction action, HistoryChoice choice);
   [[nodiscard]] QVariantList fullscreenEntries(const Tab<ApplicationAllocator> &tab);
-  void showDialog(const QString &kind);
+  void showDialog(Dialog kind);
   void fail(const std::exception &error);
   void publishCopyChange(std::uint64_t previous_pane);
   void leaveKeyboardCopyMode();
@@ -833,7 +848,7 @@ private:
       publishPromptWrite();
       refresh();
     } catch (const std::exception &error) {
-      if (dialog_ == QLatin1StringView("history")) {
+      if (dialog_ == Dialog::history) {
         session().reportHistoryError(error.what());
         refreshHistory();
       } else {
@@ -992,7 +1007,7 @@ private:
   QPointer<QQuickItem> history_content_;
   QPointer<QQuickItem> history_search_host_;
   QString error_;
-  QString dialog_;
+  Dialog dialog_ = Dialog::none;
   std::uint64_t dialog_generation_ = 0;
   // The pane whose prompt line hosts the open history or path search, or 0 for the dialog.
   std::uint64_t line_search_pane_ = 0;

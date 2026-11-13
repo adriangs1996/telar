@@ -45,7 +45,7 @@ const std::optional<CopyState> &Application::copyState() const noexcept {
 
 bool Application::handleCopyKey(std::uint64_t pane_id, const QKeyEvent &event) {
   const auto &copy = copyState();
-  if (!copy || copy->pointer || !dialog_.isEmpty() || copy->pane_id != pane_id) {
+  if (!copy || copy->pointer || dialog_ != Dialog::none || copy->pane_id != pane_id) {
     return false;
   }
 
@@ -57,7 +57,7 @@ bool Application::handleCopyKey(std::uint64_t pane_id, const QKeyEvent &event) {
   try {
     const auto effect = session().copyKey(*semantic);
     if (effect.search) {
-      showDialog(QStringLiteral("copy-search"));
+      showDialog(Dialog::copy_search);
     }
 
     if (effect.open_link && copyState()) {
@@ -96,7 +96,7 @@ void Application::leaveKeyboardCopyMode() {
 }
 
 bool Application::beginSelection(std::uint64_t pane_id, CopyPoint local) {
-  if (!dialog_.isEmpty()) {
+  if (dialog_ != Dialog::none) {
     return false;
   }
 
@@ -113,7 +113,7 @@ bool Application::beginSelection(std::uint64_t pane_id, CopyPoint local) {
 
 bool Application::handleCopyPointer(const CopyPointerInput &input) {
   const auto owner = session().copyMode().pointerOwner();
-  if (!dialog_.isEmpty() && (!owner || !owner->dragging)) {
+  if (dialog_ != Dialog::none && (!owner || !owner->dragging)) {
     return true;
   }
 

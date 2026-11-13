@@ -142,9 +142,9 @@ QString phaseName(HistoryPhase phase) {
 
 void Application::refreshHistory() {
   const auto &browser = session().historyBrowser();
-  const auto scope_value = dialog_ == QLatin1StringView("history") ? historyScopeValue() : QString{};
+  const auto scope_value = dialog_ == Dialog::history ? historyScopeValue() : QString{};
   const auto selection = browser.state().selection;
-  const auto *pane = dialog_ == QLatin1StringView("history") && selection < browser.rows().size() ? session().findPane(browser.rows()[selection].pane_id) : nullptr;
+  const auto *pane = dialog_ == Dialog::history && selection < browser.rows().size() ? session().findPane(browser.rows()[selection].pane_id) : nullptr;
   BoundedText<TabCaption::capacity> tab_name;
   tab_name.append(historyTabName(pane));
   const auto pane_open = pane != nullptr;
@@ -307,7 +307,7 @@ int Application::superModifier() {
 }
 
 void Application::reportHistoryQueryLimit(qulonglong requested_bytes) {
-  if (dialog_ != QLatin1StringView("history") || requested_bytes <= HistorySearch::maximum_query_bytes) {
+  if (dialog_ != Dialog::history || requested_bytes <= HistorySearch::maximum_query_bytes) {
     return;
   }
 
@@ -363,7 +363,7 @@ void Application::selectPresentedHistoryRow(int row, const QString &revision) {
 }
 
 void Application::executeHistory(HistoryAction action, const QString &entry_id) {
-  if (dialog_ != QLatin1StringView("history") || (historyLoading() && action != HistoryAction::inspect)) {
+  if (dialog_ != Dialog::history || (historyLoading() && action != HistoryAction::inspect)) {
     return;
   }
 
@@ -383,7 +383,7 @@ void Application::executeHistory(HistoryAction action, const QString &entry_id) 
         session().deleteHistory(identity);
       } else if (action == HistoryAction::visit) {
         session().visitHistory(identity);
-        showDialog({});
+        showDialog(Dialog::none);
       }
     }
   });

@@ -82,12 +82,12 @@ void Application::openActivityPeek(const MachineActivityTarget &target, const QS
     emit activityHoverChanged();
   }
 
-  showDialog(QStringLiteral("peek"));
+  showDialog(Dialog::peek);
   emit peekChanged();
 }
 
 bool Application::peekOriginValid() const {
-  if (dialog_ != QLatin1StringView("peek") || !peek_origin_ || peek_origin_->window != window_generation_ || !activityAvailable(peek_origin_->target)) {
+  if (dialog_ != Dialog::peek || !peek_origin_ || peek_origin_->window != window_generation_ || !activityAvailable(peek_origin_->target)) {
     return false;
   }
 
@@ -98,12 +98,12 @@ bool Application::peekOriginValid() const {
 }
 
 void Application::refreshPeek() {
-  if (dialog_ != QLatin1StringView("peek")) {
+  if (dialog_ != Dialog::peek) {
     return;
   }
 
   if (!peekOriginValid()) {
-    showDialog({});
+    showDialog(Dialog::none);
     return;
   }
 
@@ -144,7 +144,7 @@ void Application::submitPeek(const QString &revision) {
   const auto text = peek_editor_.toUtf8();
   applyInteraction([&] {
     if (session().submitPeek({text.constData(), static_cast<std::size_t>(text.size())})) {
-      showDialog({});
+      showDialog(Dialog::none);
     }
   });
 }

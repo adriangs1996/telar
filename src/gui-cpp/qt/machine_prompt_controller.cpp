@@ -63,7 +63,7 @@ void Application::showMachinePrompt(std::optional<MachineToken> renamed) {
     machine_prompt_->text = toQString(machines_.row(renamed->slot).label.view());
   }
 
-  showDialog(QStringLiteral("machine"));
+  showDialog(Dialog::machine);
   emit machinePromptChanged();
 }
 
@@ -72,7 +72,7 @@ std::size_t Application::machinePromptLimit() const noexcept {
 }
 
 void Application::searchMachinePrompt(const QString &text) {
-  if (dialog_ != QLatin1StringView("machine") || !machine_prompt_) {
+  if (dialog_ != Dialog::machine || !machine_prompt_) {
     return;
   }
 
@@ -89,7 +89,7 @@ void Application::searchMachinePrompt(const QString &text) {
 }
 
 void Application::reportMachinePromptLimit(qulonglong requested_bytes) {
-  if (dialog_ != QLatin1StringView("machine") || !machine_prompt_ || requested_bytes <= machinePromptLimit()) {
+  if (dialog_ != Dialog::machine || !machine_prompt_ || requested_bytes <= machinePromptLimit()) {
     return;
   }
 
@@ -99,7 +99,7 @@ void Application::reportMachinePromptLimit(qulonglong requested_bytes) {
 }
 
 void Application::submitMachinePrompt(const QString &revision) {
-  if (dialog_ != QLatin1StringView("machine") || !machine_prompt_ || machine_prompt_->text.isEmpty() || revision != QString::number(dialog_generation_)) {
+  if (dialog_ != Dialog::machine || !machine_prompt_ || machine_prompt_->text.isEmpty() || revision != QString::number(dialog_generation_)) {
     return;
   }
 
@@ -126,7 +126,7 @@ void Application::submitMachinePrompt(const QString &revision) {
   }
 
   machine_prompt_.reset();
-  showDialog({});
+  showDialog(Dialog::none);
 }
 
 QVariantMap Application::machinePromptState() const {

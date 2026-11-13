@@ -93,7 +93,7 @@ MachineClient &Application::createClient(Machines::Slot slot) {
   const bool replacing_active = clients_[slot] && slot == machines_.active();
   if (replacing_active) {
     releaseMachineInput();
-    showDialog({});
+    showDialog(Dialog::none);
     ++machine_view_revision_;
     forgetMachineView();
   }
@@ -227,7 +227,7 @@ void Application::selectMachine(MachineToken target) {
   pending_activity_.reset();
   clearActivityHover();
   releaseMachineInput();
-  showDialog({});
+  showDialog(Dialog::none);
   session().invalidateSuggestion();
   session().setPresented(false);
   ++machine_view_revision_;

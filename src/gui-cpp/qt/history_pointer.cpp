@@ -207,7 +207,7 @@ void Application::registerHistoryActions(QQuickItem *actions) {
 
 HistoryActionSurface Application::historyActionSurface() const {
   const auto *actions = qobject_cast<const HistoryMetaLayout *>(history_actions_.data());
-  if (dialog_ != QStringView{u"history"} || actions == nullptr || actions->window() != window_) {
+  if (dialog_ != Dialog::history || actions == nullptr || actions->window() != window_) {
     return {};
   }
 
@@ -279,7 +279,7 @@ HistoryScrollSurface Application::historyScrollSurface(const HistoryModalMetrics
 }
 
 bool Application::handleHistoryWheel(QWheelEvent &event) {
-  if (dialog_ != QStringView{u"history"}) {
+  if (dialog_ != Dialog::history) {
     return false;
   }
 

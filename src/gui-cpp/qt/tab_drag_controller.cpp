@@ -54,7 +54,7 @@ void Application::selectCapturedTab() {
   const auto id = captured->tab_id;
   const auto *active = session().activeTab();
   const auto &surface = presented_tabs_;
-  if (active == nullptr || !dialog_.isEmpty() || surface.machine_view != machine_view_revision_ || surface.workspace.kind != active->location.workspace.kind || surface.workspace.id != active->location.workspace.id || std::ranges::find(surface.view(), id, &TabDropSlot::id) == surface.view().end()) {
+  if (active == nullptr || dialog_ != Dialog::none || surface.machine_view != machine_view_revision_ || surface.workspace.kind != active->location.workspace.kind || surface.workspace.id != active->location.workspace.id || std::ranges::find(surface.view(), id, &TabDropSlot::id) == surface.view().end()) {
     return;
   }
 
@@ -71,7 +71,7 @@ TabDropSurface Application::tabDropSurface() const {
   TabDropSurface result;
   const auto *strip = qobject_cast<const TabStripLayout *>(tab_strip_.data());
   const auto *active = session().activeTab();
-  if (!dialog_.isEmpty() || strip == nullptr || active == nullptr || strip->window() != window_ || window_ == nullptr) {
+  if (dialog_ != Dialog::none || strip == nullptr || active == nullptr || strip->window() != window_ || window_ == nullptr) {
     return result;
   }
 
@@ -94,7 +94,7 @@ void PointerDispatcher::observeTabHover(std::optional<QPointF> position) {
     return;
   }
   const auto &surface = application_.presented_tabs_;
-  const auto *target = position && application_.dialog_.isEmpty() && surface.machine_view == application_.machine_view_revision_ ? surface.at({position->x() * surface.scale, position->y() * surface.scale}) : nullptr;
+  const auto *target = position && application_.dialog_ == Application::Dialog::none && surface.machine_view == application_.machine_view_revision_ ? surface.at({position->x() * surface.scale, position->y() * surface.scale}) : nullptr;
   strip->setPointerHover(target == nullptr ? std::nullopt : std::optional{target->id});
 }
 
@@ -163,14 +163,14 @@ void PointerDispatcher::presentTabs(const TabDropSurface &surface) {
       tabs[count++] = tab->location.tab_id;
     }
   }
-  tab_drag_.validate(surface.workspace, std::span{tabs}.first(count), !application_.dialog_.isEmpty());
+  tab_drag_.validate(surface.workspace, std::span{tabs}.first(count), application_.dialog_ != Application::Dialog::none);
   if (!tab_drag_.source()) {
     updateTabDragVisual();
   }
 }
 
 bool PointerDispatcher::pressTab(QMouseEvent &event) {
-  if (event.button() != Qt::LeftButton || !application_.dialog_.isEmpty()) {
+  if (event.button() != Qt::LeftButton || application_.dialog_ != Application::Dialog::none) {
     return false;
   }
 
@@ -206,7 +206,7 @@ bool PointerDispatcher::updateTabDrag(QMouseEvent &event, bool released) {
   }
 
   presentTabs(application_.presented_tabs_);
-  if (!application_.dialog_.isEmpty() || tab_capture_surface_.machine_view != application_.machine_view_revision_) {
+  if (application_.dialog_ != Application::Dialog::none || tab_capture_surface_.machine_view != application_.machine_view_revision_) {
     cancelTabDrag();
   }
 

@@ -65,7 +65,7 @@ Item {
     Connections {
         target: root.controller
         function onDialogChanged() {
-            if (root.controller.dialog === "new-workspace") {
+            if (root.controller.dialog === GuiController.Dialog.new_workspace) {
                 name.text = "";
                 directory.text = "";
                 root.controller.editWorkspaceDirectory("");

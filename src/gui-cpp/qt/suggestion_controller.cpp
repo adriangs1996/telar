@@ -74,13 +74,13 @@ QVariantMap Application::suggestionState() const {
 void Application::submitSuggestion(const QString &revision) {
   const auto encoded = palette_query_.toUtf8();
   const auto query = PaletteQuery::parse({encoded.constData(), static_cast<std::size_t>(encoded.size())});
-  if (dialog_ != QLatin1StringView("palette") || query.mode != PaletteMode::suggest || revision != suggestionState().value(QStringLiteral("revision")).toString()) {
+  if (dialog_ != Dialog::palette || query.mode != PaletteMode::suggest || revision != suggestionState().value(QStringLiteral("revision")).toString()) {
     return;
   }
 
   applyInteraction([&] {
     if (session().submitSuggestion(query.text)) {
-      showDialog({});
+      showDialog(Dialog::none);
     }
 
     emit paletteChanged();
@@ -88,7 +88,7 @@ void Application::submitSuggestion(const QString &revision) {
 }
 
 bool Application::restorePaletteParent() {
-  if (dialog_ != QLatin1StringView("palette") || !palette_parent_) {
+  if (dialog_ != Dialog::palette || !palette_parent_) {
     return false;
   }
 

@@ -108,7 +108,7 @@ TerminalSurface TerminalItem::terminalSurface() const {
 bool TerminalItem::linkEligible() const noexcept {
   const auto *current = pane();
 
-  return application_ != nullptr && current != nullptr && current->attached && window() != nullptr && window()->isActive() && isVisible() && isEnabled() && application_->dialog().isEmpty() && !application_->copyModeActive();
+  return application_ != nullptr && current != nullptr && current->attached && window() != nullptr && window()->isActive() && isVisible() && isEnabled() && application_->dialog() == Application::Dialog::none && !application_->copyModeActive();
 }
 
 LinkModifiers TerminalItem::linkModifiers(Qt::KeyboardModifiers modifiers) noexcept {

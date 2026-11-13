@@ -266,7 +266,7 @@ void TerminalItem::wheelEvent(QWheelEvent *event) {
     return;
   }
 
-  if (!application_->dialog().isEmpty() || link_hover_.covers({.x = static_cast<float>(event->position().x()), .y = static_cast<float>(event->position().y())}) || !link_hover_.surfaceVisible(terminalSurface())) {
+  if (application_->dialog() != Application::Dialog::none || link_hover_.covers({.x = static_cast<float>(event->position().x()), .y = static_cast<float>(event->position().y())}) || !link_hover_.surfaceVisible(terminalSurface())) {
     wheel_.reset();
     event->accept();
 
@@ -319,7 +319,7 @@ void TerminalItem::hoverMoveEvent(QHoverEvent *event) {
     return;
   }
 
-  if (application_ != nullptr && current != nullptr && current->screen.mouse().sgr && current->screen.mouse().tracking == MouseTracking::any && visibleCellAt(event->position()) && application_->dialog().isEmpty() && !link_hover_.covers({.x = static_cast<float>(event->position().x()), .y = static_cast<float>(event->position().y())})) {
+  if (application_ != nullptr && current != nullptr && current->screen.mouse().sgr && current->screen.mouse().tracking == MouseTracking::any && visibleCellAt(event->position()) && application_->dialog() == Application::Dialog::none && !link_hover_.covers({.x = static_cast<float>(event->position().x()), .y = static_cast<float>(event->position().y())})) {
     const auto no_button = static_cast<unsigned>(MouseButton::none);
     mousePacket(ChildMouseProjection::motion | no_button | mouseModifiers(event->modifiers()), event->position(), false);
   }

@@ -184,7 +184,7 @@ bool KeyBindings::route(QKeyEvent &event, QQuickItem &recipient, bool captures) 
   try {
     const auto repeating = router_.repeatAction();
     const auto policy = repeating ? application_.bindingRepeat(*repeating) : std::nullopt;
-    const auto decision = router_.route(input, nowNanoseconds(), {.captures_keys = captures || application_.copyModeActive() || !application_.dialog().isEmpty() || application_.pick_controller_.isOpen(), .repeat = policy});
+    const auto decision = router_.route(input, nowNanoseconds(), {.captures_keys = captures || application_.copyModeActive() || application_.dialog() != Application::Dialog::none || application_.pick_controller_.isOpen(), .repeat = policy});
     const auto consumed = apply(decision);
     if (input.phase == KeyPhase::release) {
       auto *const lease = std::ranges::find(recipients_, input.physical, &Recipient::physical);
@@ -241,7 +241,7 @@ bool KeyBindings::forward(const RoutedKey &event) {
 
     if (lease != recipients_.end()) {
       const auto &copy = application_.copyState();
-      const auto copying = copy && !copy->pointer && application_.dialog().isEmpty();
+      const auto copying = copy && !copy->pointer && application_.dialog() == Application::Dialog::none;
       *lease = {.physical = event.physical, .item = event.recipient, .owner = copying ? copy->pane_id : event.owner, .copy_mode = copying, .machine_view = application_.viewVersion().machine};
     }
 
@@ -415,7 +415,7 @@ bool KeyBindings::eventFilter(QObject *watched, QEvent *event) {
     return false;
   }
 
-  if (event->type() == QEvent::ShortcutOverride && application_.dialog().isEmpty() && router_.wantsBinding(capture(*key, *recipient))) {
+  if (event->type() == QEvent::ShortcutOverride && application_.dialog() == Application::Dialog::none && router_.wantsBinding(capture(*key, *recipient))) {
     // A dead key (Option+N on macOS) would otherwise start a composition and never arrive as a key press.
     if (auto *terminal = qobject_cast<TerminalItem *>(recipient); terminal != nullptr) {
       terminal->bypassInputMethod();
