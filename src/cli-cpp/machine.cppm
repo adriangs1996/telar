@@ -192,7 +192,7 @@ namespace telar::runtime::cli::machine {
 
 template <Allocator Memory>
 launch::Output runScript(Memory &memory, std::string_view destination, std::string_view script, std::chrono::seconds timeout = probe_timeout) {
-  return launch::captureBytes(ssh(memory, destination, "exec /bin/sh -s"), script, timeout);
+  return launch::capture(memory, ssh(memory, destination, "exec /bin/sh -s"), script, timeout);
 }
 
 inline std::string assign(std::string_view name, std::string_view value) {
@@ -234,21 +234,10 @@ inline std::set<std::string> localAgents() {
     return found;
   }
 
+  std::array<char, PATH_MAX> executable;
   for (std::size_t agent = 0; agent < agent_names.size(); ++agent) {
-    std::string_view directories{path};
-    for (;;) {
-      const auto colon = directories.find(':');
-      const auto directory = directories.substr(0, colon);
-      if (!directory.empty() && ::access((std::string{directory} + "/" + std::string{agent_commands[agent]}).c_str(), X_OK) == 0) {
-        found.emplace(agent_names[agent]);
-        break;
-      }
-
-      if (colon == std::string_view::npos) {
-        break;
-      }
-
-      directories.remove_prefix(colon + 1);
+    if (findExecutable(path, agent_commands[agent], executable)) {
+      found.emplace(agent_names[agent]);
     }
   }
 
@@ -1093,7 +1082,7 @@ public:
 
     stream += "end\n";
     constexpr auto send_timeout = std::chrono::seconds{600};
-    const auto output = launch::captureBytes(ssh(memory_, destination, platform.target + " machine receive-config"), stream, send_timeout);
+    const auto output = launch::capture(memory_, ssh(memory_, destination, platform.target + " machine receive-config"), stream, send_timeout);
     if (output.status != 0) {
       report.end(Step::configuration, Status::failed, "the machine refused the sync: " + std::string{output.errorLine()});
       return;
@@ -1313,7 +1302,7 @@ class Logins {
   inline std::string capture(const std::vector<std::string> &words, std::optional<std::string_view> input = std::nullopt) {
     // The same encoded command, length limit included, as every dispatch.
     const auto command = remoteCommand(profile_, words);
-    const auto output = input ? launch::captureBytes(ssh(memory_, profile_.destination(), command), *input, status_timeout) : launch::capture(ssh(memory_, profile_.destination(), command), -1, status_timeout);
+    const auto output = launch::capture(memory_, ssh(memory_, profile_.destination(), command), input.value_or(std::string_view{}), status_timeout);
     std::fwrite(output.err.data(), 1, output.err.size(), stderr);
     if (output.status != 0) {
       throw CommandError{"MachineCommandFailed"};
@@ -1984,7 +1973,8 @@ inline std::string releaseDigest(const std::string &asset) {
 
   launch::Output output;
   try {
-    output = launch::capture({"curl", "--proto", "=https,file", "--tlsv1.2", "-fsSL", "--", url}, -1, probe_timeout);
+    SystemAllocator memory;
+    output = launch::capture(memory, {"curl", "--proto", "=https,file", "--tlsv1.2", "-fsSL", "--", url}, {}, probe_timeout);
   } catch (const std::exception &) {
     throw CommandError{"ReleaseUnavailable"};
   }
@@ -2063,7 +2053,7 @@ trap 'rm -f "$temporary"' EXIT
 cat > "$temporary" && [ "$(hash "$temporary")" = "$expected" ] && chmod 755 "$temporary" && mv -f "$temporary" "$target"
 )Upload";
       const auto command = "exec /bin/sh -c " + launch::quote(script);
-      const auto uploaded = launch::capture(ssh(memory, target.destination, command), runtime.get(), install_timeout);
+      const auto uploaded = launch::captureFile(memory, ssh(memory, target.destination, command), runtime.get(), install_timeout);
       if (uploaded.status != 0) {
         report.end(Step::telar, Status::failed, "the runtime upload failed: " + std::string{uploaded.errorLine()});
         return std::nullopt;
@@ -2108,7 +2098,7 @@ bool install(Memory &memory, SetupReport &report, const Target &target, const Pl
     }
 
     try {
-      const auto uploaded = launch::capture(ssh(memory, target.destination, upload_command), binary.get(), install_timeout);
+      const auto uploaded = launch::captureFile(memory, ssh(memory, target.destination, upload_command), binary.get(), install_timeout);
       if (uploaded.status != 0) {
         report.end(Step::telar, Status::failed, "the upload failed: " + std::string{uploaded.errorLine()});
         return false;

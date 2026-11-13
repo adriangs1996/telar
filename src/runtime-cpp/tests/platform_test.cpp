@@ -373,9 +373,36 @@ static void testChildExitNotification() {
   check(::sigaction(SIGCHLD, &previous, nullptr) == 0);
 }
 
+static void testCommandHelpers(SystemAllocator &memory) {
+  std::array<char, PATH_MAX> found;
+  check(findExecutable("/nonexistent-telar:/bin", "sh", found) && std::string_view{found.data()} == "/bin/sh");
+  check(!findExecutable("/nonexistent-telar", "sh", found));
+  check(findExecutable("bin", "sh", found, "/") && std::string_view{found.data()} == "//bin/sh");
+
+  const auto self = ExecutablePath::sibling({"missing-telar-program", "runtime-tests"});
+  check(self && self->view() == ExecutablePath{}.view());
+  check(!ExecutablePath::sibling({"RUNTIME-TESTS"}));
+
+  const std::array<std::string_view, 3> words{"/bin/sh", "-c", "cat; echo error >&2"};
+  Command command{memory, Launch{.cwd = "/tmp", .arguments = words}, CommandPurpose::administration};
+  CommandOutput<SystemAllocator> process{memory, 0};
+  std::string output;
+  std::string error;
+  const std::array<std::string_view, 2> input{"in", "put"};
+  const auto status = process.streamWithInput(
+      command, std::chrono::steady_clock::now() + std::chrono::seconds{5}, input,
+      [&](std::span<const Byte> bytes) {
+        output.append(reinterpret_cast<const char *>(bytes.data()), bytes.size());
+        return true;
+      },
+      [&](std::span<const Byte> bytes) { error.append(reinterpret_cast<const char *>(bytes.data()), bytes.size()); });
+  check(status == 0 && output == "input" && error == "error\n");
+}
+
 void testPlatform() {
   testDisconnectedSocketClients();
   SystemAllocator memory;
+  testCommandHelpers(memory);
   testSpawn(memory);
   testForegroundProcessGroup(memory);
   testUnreadOutputShutdown();

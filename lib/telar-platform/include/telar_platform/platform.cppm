@@ -6,6 +6,7 @@ module;
 
 #if (defined(__APPLE__))
 #include <libproc.h>
+#include <sys/attr.h>
 #endif
 #if (!(defined(__APPLE__)))
 #include <limits.h>
@@ -216,6 +217,39 @@ export {
 
 namespace telar::runtime {
 
+// Where exec finds `program` along `path`, a colon-separated directory list: the first
+// `directory/program` this process may execute, written to `found` with its terminator. A
+// relative directory, the empty one included, is relative to `cwd`, or to this process's
+// working directory when `cwd` is empty. A candidate longer than PATH_MAX is passed over.
+inline bool findExecutable(std::string_view path, std::string_view program, std::span<char, PATH_MAX> found, std::string_view cwd = {}) noexcept {
+  for (;;) {
+    const auto separator = path.find(':');
+    const auto directory = path.substr(0, separator);
+    const bool relative = directory.empty() || directory.front() != '/';
+    const std::string_view base = !relative ? std::string_view{} : cwd.empty() ? std::string_view{"."} : cwd;
+    const auto length = base.size() + (relative ? 1 : 0) + directory.size() + 1 + program.size();
+    if (length < found.size()) {
+      auto *cursor = std::ranges::copy(base, found.data()).out;
+      if (relative) {
+        *cursor++ = '/';
+      }
+      cursor = std::ranges::copy(directory, cursor).out;
+      *cursor++ = '/';
+      cursor = std::ranges::copy(program, cursor).out;
+      *cursor = '\0';
+      if (::access(found.data(), X_OK) == 0) {
+        return true;
+      }
+    }
+
+    if (separator == std::string_view::npos) {
+      return false;
+    }
+
+    path.remove_prefix(separator + 1);
+  }
+}
+
 enum class CommandPurpose {
   terminal,
   administration,
@@ -398,28 +432,11 @@ private:
       }
     }
 
-    while (true) {
-      const auto separator = path.find(':');
-      const auto directory = path.substr(0, separator);
-      executable_.clear();
-      if (directory.empty() || directory.front() != '/') {
-        executable_.append(cwd());
-        executable_.push_back('/');
-      }
-      executable_.append(directory);
-      executable_.push_back('/');
-      executable_.append(program);
-
-      if (::access(executable_.c_str(), X_OK) == 0) {
-        return;
-      }
-
-      if (separator == std::string_view::npos) {
-        throw SystemError{"resolve pane executable", ENOENT};
-      }
-
-      path.remove_prefix(separator + 1);
+    std::array<char, PATH_MAX> found;
+    if (!findExecutable(path, program, found, cwd())) {
+      throw SystemError{"resolve pane executable", ENOENT};
     }
+    executable_.assign(found.data());
   }
 
   using SensitiveMemory = ErasingAllocator<Memory>;
@@ -534,6 +551,13 @@ public:
   template <typename OutputConsumer, typename ErrorConsumer>
   inline int streamDiagnostics(Command<Memory> &command, Clock::time_point deadline, OutputConsumer &&output, ErrorConsumer &&error) {
     return execute(command, deadline, ExecutionOptions{}, output, error);
+  }
+
+  // Writes `input` to the command while both of its streams go to their consumers; `output`
+  // returns false to stop reading, which ends the command.
+  template <typename OutputConsumer, typename ErrorConsumer>
+  inline int streamWithInput(Command<Memory> &command, Clock::time_point deadline, std::span<const std::string_view> input, OutputConsumer &&output, ErrorConsumer &&error) {
+    return execute(command, deadline, ExecutionOptions{.input = input}, output, error);
   }
 
   inline bool truncated() const noexcept {
@@ -710,6 +734,32 @@ public:
     path_[directory.size() + name.size()] = '\0';
   }
 
+  // The first of `candidates`, each relative to this executable's directory, that is a regular
+  // file this process may execute and whose directory entry carries exactly its name: APFS and
+  // HFS+ match names case-insensitively, so `telar` would otherwise find a bundle's `Telar`.
+  // The path found is resolved to the file itself.
+  inline static std::optional<ExecutablePath> sibling(std::initializer_list<std::string_view> candidates) {
+    ExecutablePath self;
+    const std::string_view own = self.path_.data();
+    const auto directory = own.substr(0, own.rfind('/') + 1);
+    for (const auto candidate : candidates) {
+      std::array<char, PATH_MAX> path;
+      if (directory.size() + candidate.size() >= path.size()) {
+        continue;
+      }
+
+      std::ranges::copy(candidate, std::ranges::copy(directory, path.data()).out);
+      path[directory.size() + candidate.size()] = '\0';
+      struct stat info{};
+      ExecutablePath found{self};
+      if (::stat(path.data(), &info) == 0 && S_ISREG(info.st_mode) && ::access(path.data(), X_OK) == 0 && exactlyNamed(path.data()) && ::realpath(path.data(), found.path_.data()) != nullptr) {
+        return found;
+      }
+    }
+
+    return std::nullopt;
+  }
+
   inline const char *c_str() const noexcept {
     return path_.data();
   }
@@ -719,6 +769,35 @@ public:
   }
 
 private:
+  inline static bool exactlyNamed(const char *path) noexcept {
+#if defined(__APPLE__)
+    attrlist request{};
+    request.bitmapcount = ATTR_BIT_MAP_COUNT;
+    request.commonattr = ATTR_CMN_NAME;
+    alignas(attrreference_t) std::array<char, sizeof(std::uint32_t) + sizeof(attrreference_t) + NAME_MAX * 3 + 1> answer{};
+    if (::getattrlist(path, &request, answer.data(), answer.size(), FSOPT_NOFOLLOW) != 0) {
+      return false;
+    }
+
+    constexpr auto reference_at = sizeof(std::uint32_t);
+    attrreference_t reference{};
+    std::memcpy(&reference, answer.data() + reference_at, sizeof(reference));
+    const auto offset = static_cast<std::size_t>(reference.attr_dataoffset);
+    const auto length = static_cast<std::size_t>(reference.attr_length);
+    if (reference.attr_dataoffset < 0 || length == 0 || offset > answer.size() - reference_at || length > answer.size() - reference_at - offset) {
+      return false;
+    }
+
+    // The length counts the terminating NUL.
+    const std::string_view name{answer.data() + reference_at + offset, length - 1};
+    const std::string_view written{path};
+    return name == written.substr(written.rfind('/') + 1);
+#else
+    static_cast<void>(path);
+    return true;
+#endif
+  }
+
   std::array<char, PATH_MAX> path_;
 };
 

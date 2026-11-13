@@ -262,9 +262,25 @@ void testLinuxTrustStores(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory>
   }
 }
 
+// A trust command, run through sudo, gets the terminal's streams and none of the runtime's other descriptors.
+void testTrustCommandDescriptors(TlsTestMemory &memory) {
+  FileDescriptor source{::open("/dev/null", O_RDONLY)};
+  check(static_cast<bool>(source));
+  FileDescriptor high{::fcntl(source.get(), F_DUPFD, 1000)};
+  check(static_cast<bool>(high));
+  std::FILE *log = std::fopen("/dev/null", "w");
+  check(log != nullptr);
+  proxy_trust::SystemCommand command{memory, log};
+  const auto probe = "test -e /dev/fd/0 && test ! -e /dev/fd/" + std::to_string(high.get());
+  const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", probe};
+  command.run(arguments);
+  std::fclose(log);
+}
+
 }
 
 void testProxyTrust(TlsTestMemory &memory, const TlsLibrary<TlsTestMemory> &library) {
+  testTrustCommandDescriptors(memory);
   testTrustRecords(memory);
   testTrustLifecycle(memory, library);
   testTrustFailures(memory, library);

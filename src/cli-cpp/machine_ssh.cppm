@@ -12,7 +12,9 @@ module;
 #if (!(defined(__APPLE__)))
 #include <unistd.h>
 #endif
+#include <sys/mman.h>
 #include <sys/stat.h>
+#include "telar_platform/mapped_region.hpp"
 #include <unistd.h>
 #include <fcntl.h>
 
@@ -367,7 +369,6 @@ namespace telar::runtime::cli::launch {
 inline constexpr int ssh_failure = 255;
 inline constexpr std::size_t output_limit = 256 * 1024;
 inline constexpr std::size_t error_limit = 64 * 1024;
-inline constexpr auto poll_interval = std::chrono::milliseconds{10};
 
 inline std::vector<char *> pointers(const std::vector<std::string> &arguments) {
   std::vector<char *> result;
@@ -387,45 +388,21 @@ inline std::vector<char *> pointers(const std::vector<std::string> &arguments) {
                                                                         : "Unexpected"};
 }
 
-inline pid_t spawn(const std::vector<std::string> &arguments, posix_spawn_file_actions_t *actions) {
+// Runs a program on this terminal: it keeps the standard streams and this process group, and
+// nothing else this process holds.
+inline int inherit(const std::vector<std::string> &arguments) {
   const auto argv = pointers(arguments);
-  posix_spawnattr_t attributes;
-  ::posix_spawnattr_init(&attributes);
-  sigset_t signals;
-  sigemptyset(&signals);
-  ::posix_spawnattr_setsigmask(&attributes, &signals);
-  short flags = POSIX_SPAWN_SETSIGMASK;
-#if defined(POSIX_SPAWN_CLOEXEC_DEFAULT)
-  flags |= POSIX_SPAWN_CLOEXEC_DEFAULT;
-#endif
-  ::posix_spawnattr_setflags(&attributes, flags);
-  posix_spawn_file_actions_t inherited;
-  const bool inherit_streams = actions == nullptr;
-  if (inherit_streams) {
-    ::posix_spawn_file_actions_init(&inherited);
-#if defined(__APPLE__)
-    for (int descriptor = STDIN_FILENO; descriptor <= STDERR_FILENO; ++descriptor) {
-      ::posix_spawn_file_actions_addinherit_np(&inherited, descriptor);
-    }
-#endif
-    actions = &inherited;
+  SpawnOptions spawn{0};
+  for (const int stream : {STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO}) {
+    spawn.redirect(stream, stream);
   }
 
+  spawn.closeOthers();
   pid_t process = -1;
-  const auto failure = ::posix_spawnp(&process, argv.front(), actions, &attributes, argv.data(), environ);
-  ::posix_spawnattr_destroy(&attributes);
-  if (inherit_streams) {
-    ::posix_spawn_file_actions_destroy(&inherited);
-  }
-
-  if (failure != 0) {
+  if (const auto failure = ::posix_spawnp(&process, argv.front(), &spawn.actions, &spawn.attributes, argv.data(), environ); failure != 0) {
     throw SystemError{"Start child process", failure};
   }
 
-  return process;
-}
-
-inline int wait(pid_t process) {
   int status = 0;
   while (::waitpid(process, &status, 0) < 0) {
     if (errno != EINTR) {
@@ -434,10 +411,6 @@ inline int wait(pid_t process) {
   }
 
   return WIFEXITED(status) ? WEXITSTATUS(status) : ssh_failure;
-}
-
-inline int inherit(const std::vector<std::string> &arguments) {
-  return wait(spawn(arguments, nullptr));
 }
 
 struct Output {
@@ -457,126 +430,61 @@ struct Output {
   }
 };
 
-struct Pipe {
-  FileDescriptor read;
-  FileDescriptor write;
+template <Allocator Memory>
+inline std::string retained(const RetainedStream<Memory> &stream) {
+  std::string text(static_cast<std::size_t>(stream.total() - stream.retainedOffset()), '\0');
+  static_cast<void>(stream.read(stream.retainedOffset(), {reinterpret_cast<Byte *>(text.data()), text.size()}));
+  return text;
+}
 
-  inline Pipe() {
-    std::array<int, 2> ends;
-    if (::pipe(ends.data()) != 0) {
-      throw SystemError{"Create process pipe"};
-    }
-
-    read.reset(ends[0]);
-    write.reset(ends[1]);
-    ::fcntl(read.get(), F_SETFD, FD_CLOEXEC);
-    ::fcntl(write.get(), F_SETFD, FD_CLOEXEC);
-    ::fcntl(read.get(), F_SETFL, O_NONBLOCK);
-  }
-};
-
-// The input is an unlinked owner-only file, so arbitrary script/binary sizes
-// cannot deadlock against a child filling either output pipe.
-inline Output capture(const std::vector<std::string> &arguments, int input, std::chrono::seconds timeout) {
-  Pipe out;
-  Pipe err;
-  posix_spawn_file_actions_t actions;
-  ::posix_spawn_file_actions_init(&actions);
-  if (input < 0) {
-    ::posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0);
-  } else {
-    ::posix_spawn_file_actions_adddup2(&actions, input, STDIN_FILENO);
-  }
-
-  ::posix_spawn_file_actions_adddup2(&actions, out.write.get(), STDOUT_FILENO);
-  ::posix_spawn_file_actions_adddup2(&actions, err.write.get(), STDERR_FILENO);
-  pid_t process;
-  try {
-    process = spawn(arguments, &actions);
-  } catch (...) {
-    ::posix_spawn_file_actions_destroy(&actions);
-    throw;
-  }
-
-  ::posix_spawn_file_actions_destroy(&actions);
-  out.write.reset();
-  err.write.reset();
+// Runs a program with `input` on its standard input, keeping the tail of each output stream.
+// Input and output are polled together, so no size of either deadlocks against the child.
+template <Allocator Memory>
+inline Output capture(Memory &memory, const std::vector<std::string> &arguments, std::string_view input, std::chrono::seconds timeout) {
+  const std::vector<std::string_view> words(arguments.begin(), arguments.end());
+  Command command{memory, Launch{.arguments = words}, CommandPurpose::configured_helper};
+  RetainedStream out{memory, output_limit};
+  RetainedStream err{memory, error_limit};
+  CommandOutput<Memory> process{memory, 0};
+  const std::array pieces{input};
   Output result;
-  const auto deadline = std::chrono::steady_clock::now() + timeout;
-  std::array<pollfd, 2> descriptors{{{out.read.get(), POLLIN, 0}, {err.read.get(), POLLIN, 0}}};
-  const std::array<std::string *, 2> buffers{&result.out, &result.err};
-  constexpr std::array limits{output_limit, error_limit};
-  std::optional<int> status;
   try {
-    while (!status || descriptors[0].fd >= 0 || descriptors[1].fd >= 0) {
-      if (std::chrono::steady_clock::now() >= deadline) {
-        throw CommandError{"Timeout"};
-      }
-
-      const auto ready = ::poll(descriptors.data(), descriptors.size(), static_cast<int>(poll_interval.count()));
-      if (ready < 0 && errno != EINTR) {
-        throw SystemError{"Read child process output"};
-      }
-
-      for (std::size_t index = 0; index < descriptors.size(); ++index) {
-        if (descriptors[index].fd < 0 || descriptors[index].revents == 0) {
-          continue;
-        }
-
-        std::array<char, 16 * 1024> chunk;
-        const auto count = ::read(descriptors[index].fd, chunk.data(), chunk.size());
-        if (count == 0) {
-          descriptors[index].fd = -1;
-        } else if (count > 0) {
-          auto &buffer = *buffers[index];
-          buffer.append(chunk.data(), static_cast<std::size_t>(count));
-          if (buffer.size() > limits[index]) {
-            const auto dropped = buffer.size() - limits[index];
-            if (index == 0) {
-              result.dropped += dropped;
-            }
-
-            buffer.erase(0, dropped);
-          }
-        } else if (errno != EINTR && errno != EAGAIN) {
-          throw SystemError{"Read child process stream"};
-        }
-      }
-
-      int exited = 0;
-      if (!status && ::waitpid(process, &exited, WNOHANG) == process) {
-        status = WIFEXITED(exited) ? WEXITSTATUS(exited) : ssh_failure;
-      }
-    }
-  } catch (...) {
-    if (!status) {
-      ::kill(process, SIGKILL);
-      wait(process);
-    }
-
-    throw;
+    result.status = process.streamWithInput(
+        command, std::chrono::steady_clock::now() + timeout, input.empty() ? std::span<const std::string_view>{} : std::span<const std::string_view>{pieces},
+        [&](std::span<const Byte> bytes) {
+          out.append(bytes);
+          return true;
+        },
+        [&](std::span<const Byte> bytes) { err.append(bytes); });
+  } catch (const RequestError &) {
+    throw CommandError{"Timeout"};
   }
 
-  result.status = *status;
+  result.out = retained(out);
+  result.err = retained(err);
+  result.dropped = static_cast<std::size_t>(out.retainedOffset());
   return result;
 }
 
-inline Output captureBytes(const std::vector<std::string> &arguments, std::string_view input, std::chrono::seconds timeout) {
-  const auto *temporary = std::getenv("TMPDIR");
-  std::string name = std::string{temporary && *temporary ? temporary : "/tmp"} + "/telar-script-XXXXXX";
-  FileDescriptor file{::mkstemp(name.data())};
-  if (!file) {
-    throw SystemError{"Create private process input"};
+// As `capture`, with the contents of an open regular file as the input, or none for -1.
+template <Allocator Memory>
+inline Output captureFile(Memory &memory, const std::vector<std::string> &arguments, int file, std::chrono::seconds timeout) {
+  if (file < 0) {
+    return capture(memory, arguments, {}, timeout);
   }
 
-  ::unlink(name.c_str());
-  ::fcntl(file.get(), F_SETFD, FD_CLOEXEC);
-  const auto failure = writeDescriptor(file.get(), {reinterpret_cast<const std::uint8_t *>(input.data()), input.size()});
-  if (failure != 0 || ::lseek(file.get(), 0, SEEK_SET) < 0) {
-    throw SystemError{"Write process input", failure != 0 ? failure : errno};
+  struct stat status{};
+  if (::fstat(file, &status) != 0) {
+    throw SystemError{"Read process input"};
   }
 
-  return capture(arguments, file.get(), timeout);
+  const auto size = static_cast<std::size_t>(status.st_size);
+  const MappedRegion mapped{file, size, PROT_READ};
+  if (size != 0 && !mapped) {
+    throw SystemError{"Map process input"};
+  }
+
+  return capture(memory, arguments, {reinterpret_cast<const char *>(mapped.bytes().data()), size}, timeout);
 }
 
 inline std::string quote(std::string_view value) {
@@ -1086,7 +994,7 @@ int forward(Memory &memory, const MachineProfile &profile, const Words &words) {
 template <Allocator Memory, typename Words>
 std::string capture(Memory &memory, const MachineProfile &profile, const Words &words, const char *failure, int input = -1) {
   constexpr auto capture_timeout = std::chrono::seconds{900};
-  const auto result = launch::capture(ssh(memory, profile.destination(), remoteCommand(profile, words)), input, capture_timeout);
+  const auto result = launch::captureFile(memory, ssh(memory, profile.destination(), remoteCommand(profile, words)), input, capture_timeout);
   std::fwrite(result.err.data(), 1, result.err.size(), stderr);
   if (result.status != 0 || result.dropped != 0) {
     throw CommandError{failure};
@@ -1145,7 +1053,7 @@ template <Allocator Memory>
 Discovery discover(Memory &memory, const MachineProfile &profile, std::string &detail) {
   launch::Output output;
   try {
-    output = launch::capture(ssh(memory, profile.destination(), MachineRemoteCommand::discovery(profile.program()).view()), -1, endpoint_timeout);
+    output = launch::capture(memory, ssh(memory, profile.destination(), MachineRemoteCommand::discovery(profile.program()).view()), {}, endpoint_timeout);
   } catch (const std::exception &) {
     throw MachineFailure{MachineError::endpoint_unavailable};
   }
@@ -1958,15 +1866,8 @@ export {
 namespace telar::runtime::cli {
 
 inline std::string guiProgram() {
-  const auto directory = std::filesystem::path{ExecutablePath{}.c_str()}.parent_path();
-  for (const auto &candidate : {directory / "telar-gui", directory / ".." / ".." / "MacOS" / "telar-gui"}) {
-    struct stat state{};
-    if (::stat(candidate.c_str(), &state) == 0 && S_ISREG(state.st_mode) && ::access(candidate.c_str(), X_OK) == 0) {
-      return candidate.lexically_normal().string();
-    }
-  }
-
-  return "telar-gui";
+  const auto found = ExecutablePath::sibling({"telar-gui", "../../MacOS/telar-gui"});
+  return found ? std::string{found->view()} : std::string{"telar-gui"};
 }
 
 inline std::string loginShell() {
