@@ -23,7 +23,7 @@ module telar.gui.fonts.face;
 import std;
 
 import telar.gui.terminal.font_grid;
-import telar.gui.terminal.copy_mode;
+import telar.gui.terminal.glyphs;
 import telar.base.diagnostics;
 
 #include "platform/font.h"

@@ -41,7 +41,7 @@ export import telar.gui.suggestions.state;
 export import telar.config;
 export import telar.platform;
 export import telar.gui.terminal.font_grid;
-export import telar.gui.terminal.copy_mode;
+export import telar.gui.input.copy_mode;
 export import telar.gui.prompt.line;
 export import telar.gui.prompt.layout;
 import telar.base.diagnostics;

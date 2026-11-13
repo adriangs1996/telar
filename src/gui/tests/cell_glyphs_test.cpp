@@ -14,7 +14,7 @@ import telar.gui.core.metrics;
 import telar.gui.core.unicode_scalar;
 import telar.gui.terminal.font_grid;
 import telar.gui.terminal.glyphs.curve_cache;
-import telar.gui.terminal.copy_mode;
+import telar.gui.terminal.glyphs;
 
 namespace {
 

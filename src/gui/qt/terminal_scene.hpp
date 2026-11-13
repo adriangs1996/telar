@@ -46,7 +46,7 @@ import telar.gui.core.unicode_scalar;
 import telar.gui.core.metrics;
 import telar.gui.graphics.texture_cache;
 import telar.gui.links.cell_links;
-import telar.gui.terminal.copy_mode;
+import telar.gui.terminal.selection;
 
 namespace telar::gui::qt {
 

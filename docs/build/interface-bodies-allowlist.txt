@@ -52,12 +52,14 @@ telar.gui.core.unicode_scalar
 telar.gui.fonts.face
 telar.gui.fonts.font_requests
 telar.gui.fonts.row_text_layout
+telar.gui.fonts.text_runs
 telar.gui.graphics.pauses
 telar.gui.graphics.placeholder
 telar.gui.graphics.texture_cache
 telar.gui.history.browser
 telar.gui.input.child_mouse
 telar.gui.input.configuration
+telar.gui.input.copy_mode
 telar.gui.input.copy_pointer
 telar.gui.input.key_encoder
 telar.gui.layout.geometry
@@ -93,9 +95,10 @@ telar.gui.prompt.line
 telar.gui.prompt.routing
 telar.gui.prompt.text
 telar.gui.suggestions.state
-telar.gui.terminal.copy_mode
 telar.gui.terminal.font_grid
+telar.gui.terminal.glyphs
 telar.gui.terminal.glyphs.curve_cache
+telar.gui.terminal.selection
 telar.gui.text.bounded_editor
 telar.gui.text.json_unsigned_integer
 telar.gui.transport.runtime_link

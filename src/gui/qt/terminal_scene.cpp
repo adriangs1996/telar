@@ -53,7 +53,8 @@ import telar.gui.core.json_writer;
 import telar.gui.fonts.face;
 import telar.gui.links.path_expansion;
 import telar.gui.links.link_hover;
-import telar.gui.terminal.copy_mode;
+import telar.gui.terminal.glyphs;
+import telar.gui.terminal.selection;
 
 namespace telar::gui::qt {
 
