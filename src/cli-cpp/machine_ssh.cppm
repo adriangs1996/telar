@@ -736,50 +736,12 @@ inline const char *describe(std::string_view error) {
   }
 
   if (error == "InsecureFile") {
-    return "machines.json must be a regular file only its owner can read and write (chmod 600)";
+    return MachineFailure::insecure_file.data();
   }
 
-  if (error == "UnknownMachine") {
-    return "no saved machine has that label; see `telar machine list`";
-  }
-
-  if (error == "DuplicateMachineLabel") {
-    return "that label is already taken, by a saved machine or by this machine";
-  }
-
-  if (error == "DuplicateMachineDestination") {
-    return "two saved machines cannot share one SSH destination";
-  }
-
-  if (error == "TooManyMachines") {
-    return "machines.json already holds the most machines it can";
-  }
-
-  if (error == "InvalidMachineLabel") {
-    return "labels are 1 to 32 letters, digits, '.', '_' or '-', starting with a letter or a digit";
-  }
-
-  if (error == "InvalidMachineColor") {
-    return "colors are #RRGGBB or a theme role such as red or accent";
-  }
-
-  if (error == "InvalidRemoteDestination") {
-    return "destinations are an ssh host alias or user@host, without spaces or a leading '-'";
-  }
-
-  if (error == "InvalidRemoteTelarPath") {
-    return "telar paths are absolute and hold only letters, digits, '/', '.', '_', '+' or '-'";
-  }
-
-  if (error == "InvalidMachineProfiles") {
-    return "machines.json is not a file this telar can read";
-  }
-
-  if (error == "IncompatibleMachineProfiles") {
-    return "machines.json was written by a newer telar; update this one to read it";
-  }
-
-  return nullptr;
+  const auto code = MachineFailure::named(error);
+  const auto description = code ? MachineFailure::description(*code) : std::nullopt;
+  return description ? description->data() : nullptr;
 }
 
 inline int report(const std::exception &error) {

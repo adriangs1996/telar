@@ -226,6 +226,47 @@ public:
     return names.at(static_cast<std::size_t>(code));
   }
 
+  // The error a name() spells, for an error that crossed a boundary as its text.
+  [[nodiscard]] inline static std::optional<MachineError> named(std::string_view text) noexcept {
+    for (auto code = std::uint8_t{0}; code <= static_cast<std::uint8_t>(MachineError::invalid_runtime_directory); ++code) {
+      if (text == name(static_cast<MachineError>(code))) {
+        return static_cast<MachineError>(code);
+      }
+    }
+    return std::nullopt;
+  }
+
+  // What a person reads for an error a saved machine's profile caused; none for the others.
+  [[nodiscard]] inline static std::optional<std::string_view> description(MachineError code) noexcept {
+    switch (code) {
+    case MachineError::unknown_machine:
+      return "no saved machine has that label; see `telar machine list`";
+    case MachineError::duplicate_label:
+      return "that label is already taken, by a saved machine or by this machine";
+    case MachineError::duplicate_destination:
+      return "two saved machines cannot share one SSH destination";
+    case MachineError::too_many:
+      return "machines.json already holds the most machines it can";
+    case MachineError::invalid_label:
+      return "labels are 1 to 32 letters, digits, '.', '_' or '-', starting with a letter or a digit";
+    case MachineError::invalid_color:
+      return "colors are #RRGGBB or a theme role such as red or accent";
+    case MachineError::invalid_destination:
+      return "destinations are an ssh host alias or user@host, without spaces or a leading '-'";
+    case MachineError::invalid_program:
+      return "telar paths are absolute and hold only letters, digits, '/', '.', '_', '+' or '-'";
+    case MachineError::invalid_profiles:
+      return "machines.json is not a file this telar can read";
+    case MachineError::incompatible_profiles:
+      return "machines.json was written by a newer telar; update this one to read it";
+    default:
+      return std::nullopt;
+    }
+  }
+
+  // machines.json refused for its owner or mode.
+  static constexpr std::string_view insecure_file = "machines.json must be a regular file only its owner can read and write (chmod 600)";
+
 private:
   MachineError code_;
 };
