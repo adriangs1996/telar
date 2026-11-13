@@ -23,7 +23,7 @@ export module telar.runtime.editors.remote_editor;
 
 import std;
 
-export import telar.runtime.runtime.background_executor;
+export import telar.runtime.platform.background_executor;
 export import telar.runtime.transport.connection;
 export import telar.base.editors;
 export import telar.platform;

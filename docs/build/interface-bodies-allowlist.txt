@@ -101,7 +101,6 @@ telar.render.markdown
 telar.render.terminal
 telar.runtime.agents.description_generator
 telar.runtime.agents.screen_inference
-telar.runtime.agents.session_host
 telar.runtime.agents.snapshot
 telar.runtime.cli.server
 telar.runtime.command_capture.tracker
@@ -133,11 +132,13 @@ telar.runtime.observation.processor
 telar.runtime.paths.query_task
 telar.runtime.persistence.launch_record
 telar.runtime.persistence.session_store
+telar.runtime.platform.background_executor
 telar.runtime.platform.git_status
 telar.runtime.platform.launch_program
 telar.runtime.platform.private_tunnel
 telar.runtime.platform.process_probe
 telar.runtime.platform.request_worker
+telar.runtime.platform.session_host
 telar.runtime.platform.signals
 telar.runtime.platform.stream_read_buffer
 telar.runtime.platform.system_certificates
@@ -155,7 +156,6 @@ telar.runtime.redirect.ingress
 telar.runtime.redirect.pf_rules
 telar.runtime.redirect.record
 telar.runtime.redirect.socket_owners
-telar.runtime.runtime.background_executor
 telar.runtime.runtime.client_control
 telar.runtime.runtime.delivery.client_delivery
 telar.runtime.runtime.execution_service

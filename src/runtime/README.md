@@ -287,7 +287,7 @@ configuration and compilation errors fail the command. No fixes are applied.
 | `config/`, `lua/` | Bounded Lua VM, local modules, profiles and runtime configuration. |
 | `metrics/` | Host counter projection and change revisions. |
 | `memory/` | Allocator concepts, budgets, synchronization, owned objects and bounded containers. |
-| `platform/` | Descriptors, PTYs, pipe processes, process identities, kqueue and workers. |
+| `platform/` | Descriptors, PTYs, pipe processes, process identities, host counters, kqueue and background workers. |
 | `transport/` | Client protocol framing, decoding and partial writes. |
 | `terminal/` | Ghostty state, cell projection, acknowledged damage frames, text and search. |
 | `model/` | Generational stores, panes, workspaces, attachments and retained client layouts. |

@@ -26,7 +26,7 @@ export module telar.runtime.agents.screen_inference;
 
 import std;
 
-export import telar.runtime.agents.session_host;
+export import telar.runtime.platform.session_host;
 
 export import telar.config;
 

@@ -12,7 +12,7 @@ module;
 #include <sys/sysctl.h>
 #include <unistd.h>
 
-module telar.runtime.platform.stream_read_buffer;
+module telar.runtime.platform.host_metrics;
 
 import std;
 

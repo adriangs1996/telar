@@ -38,7 +38,7 @@ export import telar.runtime.exchange_capture.exchange;
 export import telar.runtime.platform.stream_read_buffer;
 export import telar.runtime.suggestions.engine;
 
-export import telar.runtime.runtime.background_executor;
+export import telar.runtime.platform.background_executor;
 export import telar.runtime.runtime.delivery.client_delivery;
 
 export import telar.base.editors;
@@ -1668,6 +1668,39 @@ export {
       std::optional<std::uint64_t> observing_;
       Memory& memory_;
       LimitService<Memory>& limits_;
+    };
+
+  }
+}
+
+// Interface: runtime/background_executor.cppm
+export {
+  namespace telar::runtime {
+
+    template <typename Executor, typename Message>
+    concept SubmitsRequest = requires(Executor& executor, std::uint64_t client, const RequestContext& context) {
+      { executor.submit(client, Message{}, context) } -> std::same_as<void>;
+    };
+
+    // Whether `Executor` takes every request of the list that runs off the runtime's thread.
+    template <typename Executor, typename List>
+    inline constexpr bool submits_worker_requests = false;
+
+    template <typename Executor, typename... Requests>
+    inline constexpr bool submits_worker_requests<Executor, ClientRequestList<Requests...>> = ((Requests::lane < RequestLane::worker || SubmitsRequest<Executor, typename Requests::Type>) && ...);
+
+    template <typename Executor, typename Memory>
+    concept BackgroundExecutor = Allocator<Memory> && HistoryEventSink<Executor> && requires(Executor& executor, std::uint64_t client, const RequestContext& context, void (*consume)(std::uint64_t, ClientTag, std::span<const Byte>)) {
+      { executor.descriptors() } noexcept -> std::same_as<std::array<int, 5>>;
+      { executor.collect(consume) } -> std::same_as<void>;
+      { executor.cancel(client) } noexcept -> std::same_as<void>;
+      { executor.suggestionsAvailable() } noexcept -> std::same_as<bool>;
+      { executor.editorBusy() } noexcept -> std::same_as<bool>;
+      { executor.takeHistoryFailures() } noexcept -> std::same_as<std::uint64_t>;
+    } && submits_worker_requests<Executor, ClientRequests> && requires(Executor& executor, Connection<Memory>& reply, const WorktreeProbeRequest& request, void (*consume)(const WorktreeProbeResult&)) {
+      { executor.tryPaths(std::uint64_t{}, FindPaths{}, reply) } -> std::same_as<bool>;
+      { executor.observeWorktree(request) } -> std::same_as<bool>;
+      { executor.collectWorktrees(consume) } -> std::same_as<void>;
     };
 
   }

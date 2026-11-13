@@ -23,7 +23,7 @@ export import telar.runtime.history.event;
 export import telar.runtime.plugins.service;
 export import telar.runtime.plugins.tap_configuration;
 export import telar.runtime.proxy.runtime;
-export import telar.runtime.runtime.background_executor;
+export import telar.runtime.platform.background_executor;
 export import telar.runtime.runtime.delivery.client_delivery;
 export import telar.runtime.runtime.media_service;
 export import telar.runtime.runtime.runtime;

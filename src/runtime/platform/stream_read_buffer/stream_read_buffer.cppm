@@ -12,8 +12,6 @@ export module telar.runtime.platform.stream_read_buffer;
 
 import std;
 
-export import telar.runtime.metrics.host_sampler;
-
 export import telar.base.memory;
 
 // Interface: platform/byte_stream.cppm
@@ -267,20 +265,6 @@ export {
 
       return static_cast<EventSource>(token & source_mask);
     }
-
-  }
-}
-
-// Interface: platform/host_metrics.cppm
-export {
-  namespace telar::runtime {
-
-    class NativeHostMetrics {
-    public:
-      std::optional<HostCounters> read() noexcept;
-    };
-
-    static_assert(HostMetricsProbe<NativeHostMetrics>);
 
   }
 }
