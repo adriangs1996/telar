@@ -61,19 +61,46 @@ class HttpContentCodec {
   };
 
 public:
+  // An entity in the coding asked for: storage of the allocator when a coding changed it, else the
+  // input itself, which the caller keeps alive while it reads the result.
+  struct Coded {
+    std::optional<DecodedBody<Memory>> storage;
+    std::span<const std::uint8_t> input;
+
+    inline std::span<const std::uint8_t> bytes() const noexcept { return storage ? storage->bytes() : input; }
+  };
+
   // A body it produces is storage of the allocator, region `a`, not of the codec.
   inline explicit HttpContentCodec(tbc::view<Memory &, tbc::lt::a> memory) noexcept : memory_(memory) {}
 
   inline auto decode(std::span<const std::uint8_t> input, std::string_view encoding, std::size_t limit) -> tbc::view<DecodedBody<Memory>, tbc::lt::a> {
-    return transform(input, encoding, limit, false);
+    return materialize(transform(input, encoding, limit, false), false);
   }
 
   inline auto encode(std::span<const std::uint8_t> input, std::string_view encoding, std::size_t limit) -> tbc::view<DecodedBody<Memory>, tbc::lt::a> {
+    return materialize(transform(input, encoding, limit, true), true);
+  }
+
+  // As decode and encode, without copying an entity that only identity codings describe.
+  inline auto decodeView(std::span<const std::uint8_t> input, std::string_view encoding, std::size_t limit) -> Coded {
+    return transform(input, encoding, limit, false);
+  }
+
+  inline auto encodeView(std::span<const std::uint8_t> input, std::string_view encoding, std::size_t limit) -> Coded {
     return transform(input, encoding, limit, true);
   }
 
 private:
-  inline auto transform(std::span<const std::uint8_t> input, std::string_view encoding, std::size_t limit, bool encode) -> tbc::view<DecodedBody<Memory>, tbc::lt::a> {
+  inline auto materialize(Coded coded, bool encode) -> tbc::view<DecodedBody<Memory>, tbc::lt::a> {
+    if (coded.storage) { return std::move(*coded.storage); }
+    DecodedBody<Memory> result{memory_, coded.input.size()};
+    std::ranges::copy(coded.input, result.storage.bytes().begin());
+    result.size = coded.input.size();
+    result.decoded = !encode;
+    return result;
+  }
+
+  inline auto transform(std::span<const std::uint8_t> input, std::string_view encoding, std::size_t limit, bool encode) -> Coded {
     if (limit == 0 || limit > maximum_bytes || input.size() > maximum_bytes) {
       throw std::length_error{"Invalid HTTP content limit"};
     }
@@ -98,13 +125,8 @@ private:
       input = previous->bytes();
     }
     if (input.size() > limit) { throw std::length_error{"HTTP entity exceeds its limit"}; }
-    if (previous) { return std::move(*previous); }
-
-    DecodedBody<Memory> result{memory_, input.size()};
-    std::ranges::copy(input, result.storage.bytes().begin());
-    result.size = input.size();
-    result.decoded = !encode;
-    return result;
+    if (previous) { return {std::move(previous), {}}; }
+    return {std::nullopt, input};
   }
 
   inline static Coding coding(std::string_view value) {
@@ -527,17 +549,27 @@ public:
     return *analyzed;
   }
 
+  // `wire` may be the body itself, or part of it, as an HTTP/1 relay reads it.
   inline void decodeBody(std::span<const std::uint8_t> wire) {
     const auto coding = contentEncoding();
-    auto decoded = HttpContentCodec{upstream_}.decode(wire, coding, maximum_body_bytes);
-    body.assign(decoded.bytes().begin(), decoded.bytes().end());
+    const auto decoded = HttpContentCodec{upstream_}.decodeView(wire, coding, maximum_body_bytes);
+    const auto bytes = decoded.bytes();
+    const std::less_equal<const std::uint8_t *> before;
+    if (!decoded.storage && !body.empty() && before(body.data(), bytes.data()) && before(bytes.data() + bytes.size(), body.data() + body.size())) {
+      // An identity entity already in the body only has to be cut to the bytes it spans.
+      body.erase(body.begin(), body.begin() + (bytes.data() - body.data()));
+      body.resize(bytes.size());
+    } else {
+      body.assign(bytes.begin(), bytes.end());
+    }
     body_materialized = true;
   }
 
   inline bool bodyless() const noexcept { return response && bodylessResponse(status, response_to_head); }
 
-  inline auto encodeBody() -> DecodedBody<Memory> {
-    return HttpContentCodec{upstream_}.encode(body, contentEncoding(), maximum_body_bytes + content_overhead_bytes);
+  // The body in its content coding; a view of `body` when only identity codings describe it.
+  inline auto encodeBody() -> typename HttpContentCodec<Memory>::Coded {
+    return HttpContentCodec{upstream_}.encodeView(body, contentEncoding(), maximum_body_bytes + content_overhead_bytes);
   }
 
   inline void validateHttp2() const {
@@ -562,6 +594,14 @@ public:
 
   // Framing is regenerated from the complete entity, never copied from an application's length field.
   inline auto serializeHttp1() -> Bytes {
+    Bytes output{AllocatorRef<std::uint8_t, Secure>{memory_}};
+    serializeHttp1(output);
+    return output;
+  }
+
+  // Serializes into `output`, which may hold another allocator than the message's.
+  inline void serializeHttp1(Bytes &output) {
+    output.clear();
     if (version == HttpVersion::http2) { throw std::invalid_argument{"HTTP/2 messages require an HTTP/2 endpoint"}; }
     if (body.size() > maximum_body_bytes || headers.bytes() > HttpFields<Memory>::maximum_bytes - trailers.bytes()) { throw std::length_error{"HTTP message exceeds its limit"}; }
     if (response) {
@@ -573,7 +613,6 @@ public:
     const bool chunked = !without_body && !trailers.fields().empty();
     if (chunked && version == HttpVersion::http10) { throw std::invalid_argument{"HTTP/1.0 cannot carry trailers"}; }
     validateTrailers();
-    Bytes output{AllocatorRef<std::uint8_t, Secure>{memory_}};
     const auto protocol = version == HttpVersion::http10 ? "HTTP/1.0" : "HTTP/1.1";
     if (response) {
       append(output, protocol); append(output, " "); number(output, status); append(output, " "); append(output, reason); append(output, "\r\n");
@@ -587,18 +626,18 @@ public:
     if (without_body) {
       if (response_to_head && !bodylessResponse(status, false) && (body_materialized || !body.empty())) {
         const auto entity = encodeBody();
-        append(output, "Content-Length: "); number(output, entity.size); append(output, "\r\n");
+        append(output, "Content-Length: "); number(output, entity.bytes().size()); append(output, "\r\n");
       } else if (status >= 200 && status != 204 && status != 205 && (response_to_head || status == 304) && headers.get("content-length")) {
         validateLengths();
         fieldLine(output, "Content-Length", *headers.get("content-length"));
       } else if (status == 205) { fieldLine(output, "Content-Length", "0"); }
       append(output, "\r\n");
       validateHeadSize(output);
-      return output;
+      return;
     }
 
-    const auto encoding = contentEncoding();
-    auto entity = HttpContentCodec{upstream_}.encode(body, encoding, maximum_body_bytes + content_overhead_bytes);
+    const auto encoded = encodeBody();
+    const auto entity = encoded.bytes();
     if (chunked) {
       fieldLine(output, "Transfer-Encoding", "chunked");
       append(output, "Trailer: ");
@@ -610,18 +649,17 @@ public:
       }
       append(output, "\r\n\r\n");
       validateHeadSize(output);
-      if (entity.size != 0) {
-        number(output, entity.size, 16); append(output, "\r\n"); append(output, entity.bytes()); append(output, "\r\n");
+      if (!entity.empty()) {
+        number(output, entity.size(), 16); append(output, "\r\n"); append(output, entity); append(output, "\r\n");
       }
       append(output, "0\r\n");
       for (const auto &field : trailers.fields()) { fieldLine(output, field.name(), field.value()); }
       append(output, "\r\n");
     } else {
-      append(output, "Content-Length: "); number(output, entity.size); append(output, "\r\n\r\n");
+      append(output, "Content-Length: "); number(output, entity.size()); append(output, "\r\n\r\n");
       validateHeadSize(output);
-      append(output, entity.bytes());
+      append(output, entity);
     }
-    return output;
   }
 
   static constexpr std::size_t maximum_body_bytes = HttpMessageLimits::body_bytes;

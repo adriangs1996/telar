@@ -655,8 +655,10 @@ private:
     if (changed || regenerate_ || repair) {
       if (message_.response) { message_.response_to_head = destination_head_; }
       try {
-        auto wire = message_.serializeHttp1();
-        wire_.assign(wire.begin(), wire.end());
+        // Built aside and swapped in, so a message that fails to serialize leaves the wire as it was.
+        Bytes wire{AllocatorRef<Byte, Secure>{secure_}};
+        message_.serializeHttp1(wire);
+        wire_.swap(wire);
       } catch (...) { message_.response_to_head = source_head; throw; }
       message_.response_to_head = source_head;
     }

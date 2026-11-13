@@ -125,6 +125,20 @@ static void messages(SystemAllocator &memory) {
   check(std::ranges::equal(HttpContentCodec{memory}.decode(observer.body, "gzip", 1024).bytes(), body));
   request.decodeBody(observer.body);
   check(std::ranges::equal(request.body, body));
+
+  // An identity entity is not copied: the encoded body views the message's own, and decoding
+  // the body, or part of it, into itself keeps those bytes.
+  request.headers.set("Content-Encoding", "identity");
+  const auto identity = request.encodeBody();
+  check(!identity.storage && identity.bytes().data() == request.body.data() && identity.bytes().size() == body.size());
+  request.decodeBody(request.body);
+  check(std::ranges::equal(request.body, body));
+  request.decodeBody(std::span{request.body}.subspan(2, 3));
+  check(std::ranges::equal(request.body, std::span{body}.subspan(2, 3)));
+  check(HttpContentCodec{memory}.decode(body, "", 1024).size == body.size());
+  fails([&] { static_cast<void>(HttpContentCodec{memory}.decodeView(body, "identity", body.size() - 1)); });
+  request.body.assign(body.begin(), body.end());
+  request.headers.set("Content-Encoding", "gzip");
   request.headers.set("X-Order", "merged");
   check(*request.headers.get("x-order") == "merged");
   request.headers.remove("X-Order");
