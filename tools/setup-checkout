@@ -1,0 +1,36 @@
+#!/usr/bin/env python3
+"""Prepare a fresh checkout to build: share the clone's caches and bootstrap the toolchain.
+
+`.telar/setup.json` runs this in every worktree telar creates with --setup.
+"""
+from pathlib import Path
+import subprocess
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+# The pinned tools and the managed dependencies (Qt, OpenSSL, Ghostty) are
+# content-addressed and built under a lock, so every worktree of a clone can use
+# the main checkout's copies instead of downloading and building them again.
+CACHES = ('.toolchain', '.dependencies-cache', '.qt-cache')
+
+
+def main():
+    common = Path(subprocess.check_output(
+        ['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'], cwd=ROOT, text=True).strip())
+    home = common.parent if common.name == '.git' else common
+    if home.resolve() != ROOT:
+        for name in CACHES:
+            link = ROOT / name
+            if link.is_symlink() or link.exists():
+                continue
+            target = home / name
+            target.mkdir(exist_ok=True)
+            link.symlink_to(target, target_is_directory=True)
+    subprocess.run([sys.executable, str(ROOT / 'tools/cpp'), 'bootstrap'], check=True)
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except subprocess.CalledProcessError as error:
+        raise SystemExit(error.returncode)
