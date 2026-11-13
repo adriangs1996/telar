@@ -101,7 +101,7 @@ import telar.gui.application.session;
 import telar.gui.config.gui_query;
 import telar.gui.core.metrics;
 import telar.gui.history.browser;
-import telar.gui.input.child_mouse;
+import telar.gui.presentation.history_pointer;
 import telar.gui.links.cell_links;
 import telar.gui.platform.login_shell;
 import telar.gui.machines.picker;

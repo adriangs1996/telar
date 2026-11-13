@@ -28,7 +28,7 @@ static_assert(true);
 #include "qt/pointer_dispatcher.hpp"
 
 import telar.gui.layout.geometry;
-import telar.gui.input.child_mouse;
+import telar.gui.presentation.tab_drop;
 import telar.gui.platform.profile_file;
 import telar.gui.presentation.frame_pacer;
 

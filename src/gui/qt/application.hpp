@@ -97,6 +97,8 @@ import telar.gui.core.unicode_scalar;
 import telar.gui.core.metrics;
 import telar.gui.history.browser;
 import telar.gui.input.child_mouse;
+import telar.gui.presentation.history_pointer;
+import telar.gui.presentation.tab_drop;
 import telar.gui.machines.picker;
 import telar.gui.machines.profile_store;
 import telar.gui.palette.navigation_label;

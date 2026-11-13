@@ -36,6 +36,8 @@ static_assert(true);
 #pragma once
 
 import telar.gui.input.child_mouse;
+import telar.gui.presentation.history_pointer;
+import telar.gui.presentation.tab_drop;
 
 namespace telar::gui::qt {
 

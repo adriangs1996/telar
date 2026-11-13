@@ -54,6 +54,7 @@ static_assert(true);
 #include "qt/scroll_event.hpp"
 
 import telar.gui.input.child_mouse;
+import telar.gui.presentation.history_pointer;
 import telar.gui.history.browser;
 import telar.gui.presentation.history_filter_geometry;
 import telar.gui.presentation.history_meta_geometry;

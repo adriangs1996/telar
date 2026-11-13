@@ -44,7 +44,7 @@ static_assert(true);
 
 import telar.gui.core.metrics;
 import telar.gui.history.browser;
-import telar.gui.input.child_mouse;
+import telar.gui.presentation.history_pointer;
 import telar.gui.presentation.history_inspection;
 import telar.gui.presentation.history_inspection_geometry;
 

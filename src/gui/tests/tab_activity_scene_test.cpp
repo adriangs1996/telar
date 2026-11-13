@@ -86,7 +86,7 @@ static_assert(true);
 #include "qt/tab_strip_layout.hpp"
 
 import telar.gui.core.metrics;
-import telar.gui.input.child_mouse;
+import telar.gui.presentation.tab_drop;
 import telar.gui.presentation.activity_order;
 import telar.gui.presentation.display_metrics;
 

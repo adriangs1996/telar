@@ -23,7 +23,7 @@ export import telar.gui.history.browser;
 export import telar.gui.input.copy_pointer;
 export import telar.gui.input.configuration;
 export import telar.gui.input.key_encoder;
-export import telar.gui.input.child_mouse;
+export import telar.gui.presentation.tab_drop;
 export import telar.gui.application.sound_playback;
 export import telar.gui.layout.geometry;
 export import telar.gui.layout.snapshots;

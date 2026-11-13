@@ -27,7 +27,7 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.input.child_mouse;
+import telar.gui.presentation.tab_drop;
 import telar.gui.presentation.frame_pacer;
 
 namespace telar::gui::qt {

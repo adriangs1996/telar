@@ -13,7 +13,7 @@ import telar.gui.history.browser;
 import telar.gui.input.copy_pointer;
 import telar.gui.input.key_encoder;
 import telar.gui.input.configuration;
-import telar.gui.input.child_mouse;
+import telar.gui.presentation.history_pointer;
 import telar.gui.presentation.history_filter_geometry;
 
 import telar.gui.config.gui_query;

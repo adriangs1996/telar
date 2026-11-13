@@ -34,7 +34,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.core.metrics;
-import telar.gui.input.child_mouse;
+import telar.gui.presentation.history_pointer;
 import telar.gui.presentation.history_meta_geometry;
 
 namespace telar::gui::qt {
