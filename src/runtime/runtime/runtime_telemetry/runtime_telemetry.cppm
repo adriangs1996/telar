@@ -40,7 +40,7 @@ module;
 #include <mach/mach.h>
 #endif
 
-export module telar.runtime.diagnostics.runtime_telemetry;
+export module telar.runtime.runtime.runtime_telemetry;
 
 import std;
 

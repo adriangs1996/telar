@@ -291,7 +291,7 @@ configuration and compilation errors fail the command. No fixes are applied.
 | `transport/` | Client protocol framing, decoding and partial writes. |
 | `terminal/` | Ghostty state, cell projection, acknowledged damage frames, text and search. |
 | `model/` | Generational stores, panes, workspaces, attachments and retained client layouts. |
-| `runtime/` | Service composition, request dispatch and event handling. |
+| `runtime/` | Service composition, request dispatch, event handling and bounded runtime telemetry. |
 | `runtime/delivery/` | Current-state selection, service projections, attachment rotation and write completion. |
 | `agents/` | Provider identity, lifecycle transitions, screen evidence, progress and prompt budgets. |
 | `execution/` | Pipe executions, bounded output retention and stdin state. |
@@ -305,7 +305,7 @@ configuration and compilation errors fail the command. No fixes are applied.
 | `tls/` | Injected OpenSSL allocation, authority persistence, system roots, ALPN and verified two-sided TLS sessions. |
 | `exchange_capture/` | Erased buffers, shared quotas, directional metadata, joining, publication and bounded content decoding. |
 | `suggestions/` | A reusable Pi RPC process, bounded messages, deadlines and idle shutdown. |
-| `diagnostics/` | Limit ledgers, Debug function tracing and bounded runtime telemetry. |
+| `diagnostics/` | Limit ledgers, Debug function tracing, counters and operation timings shared by every component. |
 
 Components receive their allocator by reference. `Allocator`,
 `ConcurrentAllocator`, `EventLoop`, `ProcessInspection`, `RequestService`,
