@@ -14,7 +14,6 @@ module;
 #endif
 #include <sys/mman.h>
 #include <sys/stat.h>
-#include "telar_platform/mapped_region.hpp"
 #include <unistd.h>
 #include <fcntl.h>
 
