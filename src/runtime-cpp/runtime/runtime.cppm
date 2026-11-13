@@ -2057,17 +2057,9 @@ export {
           client.connection.send(CompletionWords{.request_id = message.request_id, .truncated = true, .words = {}});
           return;
         }
-        WordRequest request{.client = client.id, .request = message.request_id, .provider = message.provider, .prefix = {}, .directory = {}, .home = {}, .path = {}};
-        request.prefix.assign(message.prefix);
+        auto request = makeWordRequest(client, message.request_id, message.provider, message.prefix, *pane);
         request.directory.assign(pane->shell_zones && !pane->shell_zones->directory().empty() ? pane->shell_zones->directory() : std::string_view{pane->cwd});
-        const char *home = std::getenv("HOME");
-        request.home.assign(home == nullptr ? std::string_view{} : std::string_view{home});
-        const char *runtime_path = std::getenv("PATH");
-        request.path.assign(pane->shell_zones && !pane->shell_zones->path().empty() ? pane->shell_zones->path() : runtime_path == nullptr ? std::string_view{"/usr/bin:/bin"} : std::string_view{runtime_path});
-        request.shell = pane->shell_state.shell;
-        if (pane->shell_zones) {
-          request.names = pane->shell_zones->names();
-        }
+        request.home.assign(processHome());
         words_.request(request);
       }
 
@@ -2083,17 +2075,23 @@ export {
           client.connection.send(CommandSpec{.request_id = message.request_id, .command = message.command, .state = CommandSpecState::unavailable, .digest = 0, .source = {}});
           return;
         }
-        WordRequest request{.client = client.id, .request = message.request_id, .provider = CompletionProvider::command, .prefix = {}, .directory = {}, .home = {}, .path = {}};
-        request.prefix.assign(message.command);
-        const char *runtime_path = std::getenv("PATH");
-        request.path.assign(pane->shell_zones && !pane->shell_zones->path().empty() ? pane->shell_zones->path() : runtime_path == nullptr ? std::string_view{"/usr/bin:/bin"} : std::string_view{runtime_path});
-        request.shell = pane->shell_state.shell;
-        if (pane->shell_zones) {
-          request.names = pane->shell_zones->names();
-        }
+        auto request = makeWordRequest(client, message.request_id, CompletionProvider::command, message.command, *pane);
         request.spec = true;
         request.known_digest = message.known_digest;
         words_.request(request);
+      }
+
+      // What a completion asks for, from the PATH and shell of the pane's shell where its
+      // integration reported them, this runtime's PATH otherwise.
+      inline WordRequest makeWordRequest(const ClientSession<Memory> &client, std::uint64_t request_id, CompletionProvider provider, std::string_view prefix, const Pane<Memory> &pane) const {
+        WordRequest request{.client = client.id, .request = request_id, .provider = provider, .prefix = {}, .directory = {}, .home = {}, .path = {}};
+        request.prefix.assign(prefix);
+        request.path.assign(pane.shell_zones && !pane.shell_zones->path().empty() ? pane.shell_zones->path() : runtime_path_);
+        request.shell = pane.shell_state.shell;
+        if (pane.shell_zones) {
+          request.names = pane.shell_zones->names();
+        }
+        return request;
       }
 
       inline void handle(std::uint64_t identity, const FindPaths &message) {
@@ -2769,6 +2767,11 @@ export {
       WorkspaceGitService<Memory, WorkspaceGitProbe<Memory>> workspace_git_;
       ShellGitService shell_git_;
       WordService words_;
+      // This runtime's PATH, read once: nothing in the runtime changes it.
+      std::string_view runtime_path_ = [] {
+        const char *path = std::getenv("PATH");
+        return path == nullptr ? std::string_view{"/usr/bin:/bin"} : std::string_view{path};
+      }();
       WorktreeDetectionService<Memory, WorktreeDetectionProbe> worktree_detection_;
       AgentFileService<Memory, Agents> agent_files_;
       DescriptionService<Memory, Agents, Background> descriptions_;
