@@ -11,6 +11,7 @@ telar.base.memory.allocators
 telar.base.memory.containers
 telar.base.memory.sensitive
 telar.base.text
+telar.base.text.json
 telar.cli.command_limit
 telar.cli.control_session
 telar.cli.history
