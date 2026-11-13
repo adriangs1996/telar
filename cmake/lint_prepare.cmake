@@ -79,3 +79,27 @@ function(telar_blank_line_check project_directory build_directory include_regex 
     WORKING_DIRECTORY "${project_directory}"
     COMMAND_ERROR_IS_FATAL ANY)
 endfunction()
+
+# Checks rule 3 of the module layout on the selected module interface units: an
+# interface carries declarations, and function bodies go to implementation units,
+# except constexpr ones and the hot paths marked TBC_HOT_PATH. ALLOWLIST names the
+# modules that still keep bodies; the check fails on any other module with one,
+# and on an allowed module whose checked interfaces keep none.
+function(telar_interface_body_check project_directory build_directory include_regex exclude_regex jobs)
+  cmake_parse_arguments(PARSE_ARGV 5 arg "" "ALLOWLIST" "")
+  tbc_find_linter("${project_directory}" linter)
+  if(NOT EXISTS "${linter}")
+    message(FATAL_ERROR "tbc-lint was not found at '${linter}'. Build lib/tbc with its release preset or set TBC_LINTER.")
+  endif()
+  set(allowlist)
+  if(arg_ALLOWLIST)
+    if(NOT EXISTS "${arg_ALLOWLIST}")
+      message(FATAL_ERROR "No interface body allowlist at '${arg_ALLOWLIST}'")
+    endif()
+    set(allowlist "--interface-allowlist=${arg_ALLOWLIST}")
+  endif()
+  telar_lint_prepare("${build_directory}" "${include_regex}" "${exclude_regex}" "${jobs}" patterns sources)
+  execute_process(COMMAND "${linter}" --checks=interface-bodies --warnings-as-errors ${allowlist} "-p=${build_directory}" "-j=${jobs}" ${sources}
+    WORKING_DIRECTORY "${project_directory}"
+    COMMAND_ERROR_IS_FATAL ANY)
+endfunction()
