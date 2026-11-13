@@ -15,28 +15,12 @@ import telar.runtime.diagnostics.line;
 import telar.runtime.terminal.control;
 
 export import telar.platform;
+export import telar.runtime.history.command;
 export import telar.runtime.diagnostics.runtime_counters;
 export import telar.runtime.shell_integration.token;
 export import telar.runtime.terminal.text_reader;
 
 export namespace telar::runtime {
-
-  struct CapturedCommand {
-    std::string_view command;
-    std::string_view directory;
-    ObservationTime started{};
-    std::int64_t duration_ns = 0;
-    std::optional<int> exit_code = std::nullopt;
-    HistoryStatus status = HistoryStatus::completed;
-    HistoryAuthor author = HistoryAuthor::human;
-    bool truncated = false;
-    std::span<const Byte> output{};
-    std::uint64_t output_observed = 0;
-
-    inline bool outputTruncated() const noexcept {
-      return output_observed > output.size();
-    }
-  };
 
   template <typename Sink>
   concept CapturedCommandSink = requires(Sink& sink, const CapturedCommand& command) {
