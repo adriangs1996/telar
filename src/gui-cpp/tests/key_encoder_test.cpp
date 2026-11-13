@@ -82,6 +82,47 @@ void kittyMetadata() {
   require(maximal == "\x1b[4294967295:4294967295:4294967295;1:2;1114111u" && maximal.size() <= KeyEncoder::capacity, "the fixed encoder capacity must admit full-width Kitty fields");
 }
 
+// Every encoding over a fixed sweep of keys, modifiers, phases and modes, folded into one digest,
+// so any byte the encoder changes fails here. `golden` was taken from the encoder as it is.
+std::uint64_t sweepDigest() {
+  KeyEncoder encoder;
+  std::uint64_t digest = 14695981039346656037ULL;
+  const auto fold = [&](std::string_view bytes) {
+    for (const auto byte : bytes) {
+      digest = (digest ^ static_cast<unsigned char>(byte)) * 1099511628211ULL;
+    }
+    digest = (digest ^ 0xffU) * 1099511628211ULL;
+  };
+  constexpr auto codepoints = std::to_array<std::uint32_t>({'a', 'A', 'c', 'z', '2', '8', ' ', '@', '[', '\\', ']', '^', '_', '/', '?', '~', 0xe9, 0x4e2d, 0x1f600});
+  constexpr auto kitty_flags = std::to_array<telar::Byte>({0, 1, 2, 3, 8, 10, 31});
+  for (const auto flags : kitty_flags) {
+    for (unsigned mode = 0; mode < 8; ++mode) {
+      const telar::InputModes modes{.cursor_keys = (mode & 1U) != 0, .keypad_keys = (mode & 2U) != 0, .kitty_keyboard_flags = flags, .modify_other_keys_2 = (mode & 4U) != 0};
+      for (unsigned modifiers = 0; modifiers < 16; ++modifiers) {
+        for (const auto phase : {KeyPhase::press, KeyPhase::repeat, KeyPhase::release}) {
+          for (auto code = static_cast<unsigned>(Code::up); code <= static_cast<unsigned>(Code::back_tab); ++code) {
+            fold(encoder.encode({.code = static_cast<Code>(code), .modifiers = modifiers, .phase = phase}, modes));
+          }
+          for (const auto codepoint : codepoints) {
+            fold(encoder.encode({.codepoint = codepoint, .modifiers = modifiers, .phase = phase}, modes));
+            fold(encoder.encode({.codepoint = codepoint, .modifiers = modifiers, .phase = phase, .kitty = KittyCodepoints{.primary = codepoint, .shifted = codepoint + 1, .base = 'q'}}, modes));
+          }
+        }
+      }
+    }
+  }
+  return digest;
+}
+
+void golden() {
+  const auto digest = sweepDigest();
+  constexpr std::uint64_t expected = 10501462004054449213ULL;
+  if (digest != expected) {
+    std::fprintf(stderr, "gui-key-encoder: sweep digest %llu\n", static_cast<unsigned long long>(digest));
+  }
+  require(digest == expected, "the key encoder's bytes must match the golden sweep");
+}
+
 }
 
 int main() {
@@ -90,6 +131,7 @@ int main() {
     legacyControls();
     kittyEvents();
     kittyMetadata();
+    golden();
     std::puts("gui-key-encoder: passed");
   } catch (const std::exception &error) {
     std::cerr << "gui-key-encoder: " << error.what() << '\n';
