@@ -1293,4 +1293,328 @@ namespace telar {
   static_assert(MessageSchema<RequestRuntimeState>::payload_size == 10);
   static_assert(MessageSchema<SystemMetrics>::payload_size == 18);
 
+  enum class TabMoveDirection : Byte {
+    previous = 0,
+    next = 1,
+  };
+
+  enum class PaneDirection : Byte {
+    left = 0,
+    right = 1,
+    up = 2,
+    down = 3,
+  };
+
+  enum class PaneFocusOutcome : Byte {
+    focused = 0,
+    no_neighbor = 1,
+    source_not_focused = 2,
+  };
+
+  enum class ProxyScope : Byte {
+    exact = 0,
+    wildcard = 1,
+  };
+
+  enum class ExitKind : Byte {
+    exited = 0,
+    signaled = 1,
+  };
+
+  enum class AgentPlanOp : Byte {
+    none = 0,
+    add = 1,
+    mark = 2,
+    set = 3,
+  };
+
+  enum class AgentPlanStatus : Byte {
+    pending = 0,
+    in_progress = 1,
+    completed = 2,
+    deleted = 3,
+  };
+
+  enum class SuggestionStatus : Byte {
+    ready = 0,
+    unavailable = 1,
+    timeout = 2,
+    failed = 3,
+  };
+
+  enum class PaneTextSource : Byte {
+    screen = 0,
+    recent = 1,
+  };
+
+  enum class PaneTextMode : Byte {
+    raw = 0,
+    prompt = 1,
+    raw_enter = 2,
+  };
+
+  enum class PaneLifecycle : Byte {
+    running = 0,
+    exited = 1,
+  };
+
+  enum class PathKindFilter : Byte {
+    any = 0,
+    files = 1,
+    directories = 2,
+  };
+
+  enum class HistoryAuthorFilter : Byte {
+    all = 0,
+    human = 1,
+    agent = 2,
+  };
+
+  enum class AgentSound : Byte {
+    ready = 0,
+    needs_input = 1,
+  };
+
+  enum class AgentReportState : Byte {
+    working = 0,
+    blocked = 1,
+    ready = 2,
+    exited = 3,
+    settling = 4,
+    continuing = 5,
+    waiting = 6,
+    idle = 7,
+    released = 8,
+  };
+
+  enum class AgentSessionFileKind : Byte {
+    claude_transcript = 0,
+    codex_state = 1,
+    cursor_meta = 2,
+  };
+
+  enum class AgentCommandPhase : Byte {
+    started = 0,
+    finished = 1,
+  };
+
+  enum class HistoryMatch : Byte {
+    fts = 0,
+    fuzzy = 1,
+  };
+
+  enum class PaneProgressState : Byte {
+    remove = 0,
+    set = 1,
+    error = 2,
+    indeterminate = 3,
+    pause = 4,
+  };
+
+  // The shell telar integrated with in a pane; none for any other program.
+  enum class IntegratedShell : Byte {
+    none = 0,
+    zsh = 1,
+    bash = 2,
+    fish = 3,
+  };
+
+  // Where the integrated shell is, from the marks it signed.
+  enum class ShellPhase : Byte {
+    unknown = 0,
+    prompt = 1,
+    running = 2,
+  };
+
+  enum class SnapshotPhase : Byte {
+    begin = 0,
+    end = 1,
+  };
+
+  enum class ExecutionAction : Byte {
+    start = 0,
+    status = 1,
+    input = 2,
+    eof = 3,
+    cancel = 4,
+    forget = 5,
+    list = 6,
+  };
+
+  enum class ExecutionState : Byte {
+    starting = 0,
+    running = 1,
+    exited = 2,
+    failed = 3,
+  };
+
+  enum class EditorOutcome : Byte {
+    unavailable = 0,
+    opened = 1,
+    failed = 2,
+    missing = 3,
+  };
+
+  inline void validateAgentSession(std::string_view session, bool empty_allowed) {
+    if (session.empty()) {
+      if (!empty_allowed) {
+        throw EncodingError{"Missing agent session"};
+      }
+
+      return;
+    }
+
+    if (session.size() > 64 || session.front() == '-') {
+      throw EncodingError{"Invalid agent session"};
+    }
+
+    for (const auto character : session) {
+      const auto byte = static_cast<Byte>(character);
+      if (!((byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') ||
+              (byte >= '0' && byte <= '9') || byte == '.' || byte == '_' || byte == '-' ||
+              byte == ':')) {
+        throw EncodingError{"Invalid agent session"};
+      }
+    }
+  }
+
+  inline void validateWorkspaceClosure(const WorkspaceLocation& workspace, bool closed, std::optional<std::uint64_t> previous) {
+    if (previous && (!closed || workspace.kind != WorkspaceLocation::Kind::workspace ||
+                        *previous == workspace.id)) {
+      throw EncodingError{"Invalid previous workspace"};
+    }
+  }
+
+  inline void validateSharedImageName(std::string_view name) {
+    if (name.size() < 2 || name.size() > 31 || name.front() != '/') {
+      throw EncodingError{"Invalid shared image name"};
+    }
+
+    for (const auto byte : name.substr(1)) {
+      if (!((byte >= 'a' && byte <= 'z') || (byte >= '0' && byte <= '9') || byte == '-')) {
+        throw EncodingError{"Invalid shared image name"};
+      }
+    }
+  }
+
+  inline bool sameWorkspace(const WorkspaceLocation& left, const WorkspaceLocation& right) {
+    return left.kind == right.kind && left.id == right.id;
+  }
+
+  inline bool sameTab(const TabLocation& left, const TabLocation& right) {
+    return sameWorkspace(left.workspace, right.workspace) && left.tab_id == right.tab_id;
+  }
+
+  inline void validateLayoutCollection(std::optional<TabLocation> active, std::span<const ClientTabLayout> tabs) {
+    std::size_t nodes = 0;
+    bool active_found = !active;
+
+    for (std::size_t i = 0; i < tabs.size(); ++i) {
+      nodes += tabs[i].nodes.size();
+      for (std::size_t j = 0; j < i; ++j) {
+        if (sameTab(tabs[i].location, tabs[j].location) ||
+            (tabs[i].workspace_active && tabs[j].workspace_active &&
+                sameWorkspace(tabs[i].location.workspace, tabs[j].location.workspace))) {
+          throw EncodingError{"Duplicate client layout location"};
+        }
+      }
+
+      if (active && sameTab(*active, tabs[i].location) && tabs[i].workspace_active) {
+        active_found = true;
+      }
+    }
+
+    if (nodes > 511 || !active_found) {
+      throw EncodingError{"Invalid active client layout"};
+    }
+  }
+
+  struct ScopedHistoryValue {
+    using value_type = HistoryScopeValue;
+    static constexpr std::size_t min_width = 0;
+
+    static std::size_t encodedSize(const value_type& value, HistoryScope scope) {
+      return BodySchema<HistoryScopeValue>::encodedSize(value, scope);
+    }
+
+    static void encode(const value_type& value, std::span<Byte>& output, HistoryScope scope) {
+      BodySchema<HistoryScopeValue>::encodeBody(value, output, scope);
+    }
+
+    static Decoded<value_type>
+    decode(DecodeInput input, DecodeStorage& storage, HistoryScope scope) {
+      value_type value{};
+
+      BodySchema<HistoryScopeValue>::decodeBody(input, value, storage, scope);
+      return value;
+    }
+  };
+
+  struct TargetLaunch {
+    using value_type = std::optional<Launch>;
+    static constexpr std::size_t min_width = 0;
+
+    static std::size_t encodedSize(const value_type& value, const PaneTarget& target) {
+      if ((target.kind == PaneTarget::Kind::default_target) != value.has_value()) {
+        throw EncodingError{"Launch and pane target do not match"};
+      }
+
+      return value ? ValueCodec<Launch>::encodedSize(*value) : 0;
+    }
+
+    static void encode(const value_type& value, std::span<Byte>& output, const PaneTarget& target) {
+      (void)encodedSize(value, target);
+      if (value) {
+        ValueCodec<Launch>::encode(*value, output);
+      }
+    }
+
+    static Decoded<value_type>
+    decode(DecodeInput input, DecodeStorage& storage, const PaneTarget& target) {
+      if (target.kind != PaneTarget::Kind::default_target) {
+        return std::nullopt;
+      }
+
+      return ValueCodec<Launch>::decode(input, storage);
+    }
+  };
+
+  struct ImportHistoryEntry {
+    std::int64_t started_at_ms = 0;
+    std::string_view command{};
+  };
+
+  struct PaneDescriptor {
+    std::uint64_t pane_id = 0;
+    PaneLifecycle lifecycle{};
+    std::uint64_t pane_generation = 0;
+  };
+
+  struct PaneMatch {
+    std::uint16_t x = 0;
+    std::uint32_t y = 0;
+    std::uint16_t len = 0;
+  };
+
+  struct HistoryStatsEntry {
+    std::uint64_t count = 0;
+    std::string_view command{};
+  };
+
+  template <>
+  struct BodySchema<ImportHistoryEntry>
+      : Serializer<Field<&ImportHistoryEntry::started_at_ms, i64, "started_at_ms">, Field<&ImportHistoryEntry::command, Text16<65535, false>, "command">> {};
+
+  template <>
+  struct BodySchema<PaneDescriptor>
+      : Serializer<Field<&PaneDescriptor::pane_id, NonzeroU64, "pane_id">, Field<&PaneDescriptor::lifecycle, EnumByte<PaneLifecycle, 1>, "lifecycle">, Field<&PaneDescriptor::pane_generation, u64, "pane_generation">> {};
+
+  template <>
+  struct BodySchema<PaneMatch> : Serializer<Field<&PaneMatch::x, u16, "x">, Field<&PaneMatch::y, u32, "y">, Field<&PaneMatch::len, BoundedInteger<u16, 1>, "len">> {
+  };
+
+  template <>
+  struct BodySchema<HistoryStatsEntry>
+      : Serializer<Field<&HistoryStatsEntry::count, u64, "count">, Field<&HistoryStatsEntry::command, Text16<65535, false>, "command">> {};
+
 }; // namespace telar
