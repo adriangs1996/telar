@@ -12,10 +12,9 @@ ROOT = Path(__file__).resolve().parents[1]
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--build', type=Path, required=True)
-    parser.add_argument('--package', choices=('base', 'websock'), default='base')
     args = parser.parse_args()
-    package = 'telar-base' if args.package == 'base' else 'websock'
-    target = 'telar::base' if args.package == 'base' else 'telar::websock'
+    package = 'telar-base'
+    target = 'telar::base'
     build = args.build.resolve()
     cache = dict(line.split('=', 1) for line in (build / 'CMakeCache.txt').read_text().splitlines()
                  if '=' in line and not line.startswith(('#', '//')))
@@ -46,15 +45,7 @@ int main() {
          telar::runtime::JsonValue{"[1]"}.encoded() == "[1]" ? 0 : 1;
 }
 '''
-        websock_consumer = '''#include <telar_base/memory/allocator.hpp>
-import telar.websock;
-template <typename Memory>
-concept ServerMemory = requires { typename telar::websock::Server<Memory>; };
-static_assert(ServerMemory<telar::SystemAllocator>);
-static_assert(!ServerMemory<int>);
-int main() { return 0; }
-'''
-        (source / 'main.cpp').write_text(base_consumer if args.package == 'base' else websock_consumer)
+        (source / 'main.cpp').write_text(base_consumer)
         options = ['-G', 'Ninja', '-DCMAKE_TOOLCHAIN_FILE=' + str(chain), '-DCMAKE_PREFIX_PATH=' + str(stage)]
         run(cmake, '-S', source, '-B', consumer, '-DCMAKE_BUILD_TYPE=' + configuration, *options)
         run(cmake, '--build', consumer, '--parallel', '2')

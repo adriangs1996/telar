@@ -18,7 +18,6 @@ El runtime y el cliente siguen siendo procesos y bibliotecas separados.
 | CLI | `cli-core`, `cli-launch` | TLS | módulos de argumentos, comandos y conexión |
 | GUI | `gui-core`, auxiliares | config, VT, Qt | módulos de dominio; fronteras nativas separadas |
 | auth | `telar-auth-daemon` | sistema | `main` sin API propia |
-| WebSocket | `telar::websock` | base | módulos de framing y validación |
 
 El grafo de interfaces migradas no tiene ciclos. Las interfaces `.cppm`
 contienen las declaraciones y definiciones propias; no envuelven una copia
@@ -78,7 +77,7 @@ puede importar, de modo que `telar-platform` no vuelve a depender del protocolo 
 | Área | Interfaces finales | Organización |
 | --- | ---: | --- |
 | base | 5 | memoria, texto, diagnósticos, editores, historial |
-| client, platform, Lua, plugins, config, TLS, WebSocket | 7 | un módulo por biblioteca |
+| client, platform, Lua, plugins, config, TLS | 6 | un módulo por biblioteca |
 | runtime | 73 | transporte, terminal, persistencia, proxy, tráfico y servicios |
 | CLI | 17 | argumentos, conexión y familias de comandos |
 | GUI | 58 | dominios y adaptadores C++; incluye una partición de vistas de fuentes |
@@ -267,17 +266,17 @@ tools/cpp test base
 python3 tools/check-cpp-package.py --build lib/telar-base/out
 ```
 
-También acepta `client`, `platform`, `lua`, `plugins`, `config`, `tls`, `shell`, `websock`,
+También acepta `client`, `platform`, `lua`, `plugins`, `config`, `tls`, `shell`,
 `auth`, `ebnf` y `tbc`. Las bibliotecas sin tests standalone se verifican compilando
-su interfaz y mediante consumidores de runtime/CLI/GUI. Para EBNF/TBC/auth/WebSocket,
+su interfaz y mediante consumidores de runtime/CLI/GUI. Para EBNF/TBC/auth,
 los presets equivalentes seleccionan el mismo toolchain: ejecutar primero el
 bootstrap y usar el PATH anterior. `tools/cpp exec -- COMANDO` aplica ese entorno
 sin modificar la configuración global del shell. `just runtime-build`,
 `just gui-build`, `just editor` y las recetas lint usan la misma selección.
 
-Base y WebSocket instalan fuentes de módulos y exportaciones CMake, sin BMI del
+Base instala fuentes de módulos y exportaciones CMake, sin BMI del
 productor. Base comprueba que el consumidor use la misma configuración y versión
-de compilador que el archivo estático instalado. El check de paquete (`--package base` o `--package websock`) instala en
+de compilador que el archivo estático instalado. El check de paquete instala en
 un temporal, compila un consumidor externo, comprueba la generación de BMI local
 y rechaza una configuración incompatible. No instala nada en el sistema.
 

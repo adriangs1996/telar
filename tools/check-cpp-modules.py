@@ -19,7 +19,6 @@ LIBRARY_LAYERS = {
     'telar-client': {'telar-base'},
     'telar-lua': {'telar-base'},
     'telar-render': {'telar-base'},
-    'websock': {'telar-base'},
     'telar-platform': {'telar-base', 'telar-vocabulary'},
     'telar-machines': {'telar-base', 'telar-client'},
     'telar-git': {'telar-base', 'telar-platform'},

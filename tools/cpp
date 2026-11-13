@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PROJECTS = {'runtime': 'src/runtime-cpp', 'cli': 'src/cli-cpp',
             'gui': 'src/gui-cpp', 'auth': 'src/auth-daemon',
             **{name: 'lib/telar-' + name for name in ('base', 'vocabulary', 'client', 'machines', 'platform', 'lua', 'plugins', 'config', 'tls', 'shell', 'git', 'render')},
-            'tbc': 'lib/tbc', 'ebnf': 'lib/ebnf', 'websock': 'lib/websock'}
+            'tbc': 'lib/tbc', 'ebnf': 'lib/ebnf'}
 CACHE = ROOT / '.toolchain'
 
 

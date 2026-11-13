@@ -64,34 +64,6 @@ auth-format: auth-editor
 auth-format-check: auth-editor
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out --target format-check
 
-# Build the standalone WebSocket library's compilation smoke test.
-[working-directory: "lib/websock"]
-websock-build directory="out" build_type="Debug": (websock-configure directory build_type)
-    "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build "{{ directory }}"
-
-# Run the WebSocket library tests. Extra arguments are passed to CTest.
-[working-directory: "lib/websock"]
-websock-test *args: websock-build
-    "{{ justfile_directory() }}/tools/cpp" exec -- ctest --test-dir out --output-on-failure {{ args }}
-
-# Refresh the WebSocket library's header flags and compilation database for clangd.
-websock-editor: (websock-configure "out" "Debug")
-
-# Analyze the WebSocket library sources without applying fixes.
-[working-directory: "lib/websock"]
-websock-lint: websock-editor
-    "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out --target lint
-
-# Format the WebSocket library sources.
-[working-directory: "lib/websock"]
-websock-format: websock-editor
-    "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out --target format
-
-# Check the WebSocket library formatting without changing sources.
-[working-directory: "lib/websock"]
-websock-format-check: websock-editor
-    "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out --target format-check
-
 # Build the diagram renderer that the macOS bundle ships beside the runtime. It needs Cargo.
 renderer:
     cargo build --release --locked --manifest-path "{{ renderer_dir }}/Cargo.toml" --target-dir "{{ renderer_dir }}/target"
@@ -141,7 +113,7 @@ editor: runtime-editor
     export PATH="{{ justfile_directory() }}/.toolchain/bin:$PATH"
     ghostty=$("{{ justfile_directory() }}/tools/cpp" vt | tail -n 1)
     options+=("-DGHOSTTY_VT_ROOT=$ghostty" "-DCMAKE_TOOLCHAIN_FILE={{ justfile_directory() }}/.toolchain/toolchain.cmake")
-    for project in lib/telar-base lib/telar-client lib/telar-config lib/telar-lua lib/telar-platform lib/telar-plugins lib/telar-tls lib/websock src/cli-cpp src/auth-daemon; do
+    for project in lib/telar-base lib/telar-client lib/telar-config lib/telar-lua lib/telar-platform lib/telar-plugins lib/telar-tls src/cli-cpp src/auth-daemon; do
         cmake -S "$project" -B "$project/out" "${options[@]}" >/dev/null
         echo "configured $project/out"
     done
@@ -236,11 +208,6 @@ dev-app binary state_dir:
 [working-directory: "src/runtime-cpp"]
 runtime-configure directory build_type *options:
     "{{ justfile_directory() }}/tools/cpp" configure runtime -B "{{ directory }}" --config {{ build_type }} -- {{ options }}
-
-[private]
-[working-directory: "lib/websock"]
-websock-configure directory build_type *options:
-    "{{ justfile_directory() }}/tools/cpp" exec -- cmake -S . -B "{{ directory }}" -G Ninja -DCMAKE_BUILD_TYPE={{ build_type }} -DCMAKE_TOOLCHAIN_FILE="{{ justfile_directory() }}/.toolchain/toolchain.cmake" {{ options }}
 
 [private]
 [working-directory: "src/auth-daemon"]
