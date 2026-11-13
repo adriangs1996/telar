@@ -310,10 +310,11 @@ graph LR
 - **Depende de:** P1.2
 - **Toca:** `runtime.platform.system_certificates` (contiene `event_loop`) y `runtime.platform.launch_program` (contiene `local_listener`).
 
-### [ ] P3.15a · Ciclo `cli.tab` ↔ `cli.integration.settings`
+### [x] P3.15a · Ciclo `cli.tab` ↔ `cli.integration.settings`
 - **Depende de:** P1.2
 - **Toca:** `cli.tab`, su unidad `integration.cpp`, `cli.integration.settings`, `cli.server`.
 - **Cierra:** `integration → (root)` (`→ cli.server`, `→ cli.tab`) y el ciclo.
+- **Resultado:** `e20d44089`. `CommandError` sale a `telar.cli.base.command_error` (`cli.server` lo reexporta) e `IntegrationAction`, `IntegrationOptions` y `runIntegration` pasan de `cli.tab` a `cli.integration.settings`, con su `integration.cpp`. La salida de los errores al usuario no cambia. Ciclos de 5 a 3. Sobre la rama integrada con P3.15b compila el CLI y pasan 11 de 12 tests: `machine-setup-cli-tests` se cuelga en esta máquina también con el binario de P3.15a sola, que su agente vio pasar, así que es del entorno y no de la integración.
 
 ### [x] P3.15b · Ciclo `cli.window` ↔ `cli.machine`
 - **Depende de:** P1.2
