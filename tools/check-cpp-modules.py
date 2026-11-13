@@ -58,9 +58,11 @@ def main():
     for source, owner in inventory['origin_interfaces'].items():
         if owner not in interfaces:
             raise RuntimeError('Missing migrated definition owner: ' + source)
+    allowed = json.loads((ROOT / 'docs/build/textual-includes.json').read_text())
+    includes = check_includes(owned, allowed, inventory['macro_headers'], inventory['header_owners'])
     owned = check_header_owners(inventory['header_owners'], owned_units(owned))
     print(f'{len(graph)} module interfaces, acyclic imports, {upward} upward imports left, '
-          f'{len(headers)} justified textual boundaries, '
+          f'{len(headers)} justified textual boundaries, {includes} textual includes left, '
           f'{owned} headers reached only through their owner module')
 
 
@@ -279,6 +281,82 @@ optional ostream print queue random ranges ratio regex scoped_allocator semaphor
 source_location span spanstream sstream stack stacktrace stdexcept stdfloat stop_token streambuf
 string string_view syncstream system_error thread tuple type_traits typeindex typeinfo unordered_map
 unordered_set utility valarray variant vector'''.split())
+
+
+SOURCE_SUFFIXES = ('.cppm', '.cpp', '.hpp', '.h', '.inc', '.c', '.m', '.mm')
+# C and Objective-C(++) cannot import C++ modules.
+FOREIGN_SUFFIXES = ('.c', '.m', '.mm')
+QT_INCLUDE_RE = re.compile(r'^\s*#\s*include\s*<Qt?[A-Z]', re.M)
+ANY_INCLUDE_RE = re.compile(r'^\s*#\s*include\b\s*(<[^>\n]*>|"[^"\n]*"|\w+)', re.M)
+
+
+def includes_of(text):
+    """The spellings a file includes: `<string>` keeps its brackets, a quoted path drops its quotes."""
+    return {spelling.strip('"') for spelling in ANY_INCLUDE_RE.findall(text)}
+
+
+def textual_include_sites(files, macro_headers, owners):
+    """The includes rule 5 does not excuse, by file.
+
+    lib/sys, Qt/moc adapters and C or Objective-C(++) sources may include, and so may the headers
+    they reach: those headers stay textual because they cannot import. An owner module may include
+    the headers it owns that cross that boundary, and any file may include a macro header. Tests
+    and tools are out of the rule.
+    """
+    sources = {name: (ROOT / name).read_text(errors='replace') for name in files
+               if name.endswith(SOURCE_SUFFIXES) and not re.search(r'/(tests|tools)/', name)}
+    reached = set()
+    pending = [name for name, text in sources.items()
+               if name.startswith('lib/sys/') or name.endswith(FOREIGN_SUFFIXES) or QT_INCLUDE_RE.search(text)]
+    while pending:
+        name = pending.pop()
+        if name in reached:
+            continue
+
+        reached.add(name)
+        text = sources.get(name) or (ROOT / name).read_text(errors='replace')
+        pending += [header for header in (resolve(name, s) for s in includes_of(text)) if header]
+
+    def excused(unit, spelling):
+        header = resolve(unit, spelling)
+
+        return header in macro_headers or header in reached and header in owners.get(unit, ())
+
+    sites = {}
+    for name, text in sources.items():
+        if name in reached:
+            continue
+
+        spellings = {spelling for spelling in includes_of(text) if not excused(name, spelling)}
+        if spellings:
+            sites[name] = spellings
+
+    return sites
+
+
+def check_includes(files, allowed, macro_headers, owners):
+    """Rule 5: no #include outside the exceptions. docs/build/textual-includes.json lists, by
+    file, the includes that exist today; the change that removes one removes its entry.
+    `macro_headers` lists the project's macro headers, which include nothing themselves."""
+    errors = []
+
+    for header in macro_headers:
+        if header not in files:
+            errors.append(f'macro header {header} does not exist')
+        elif includes_of((ROOT / header).read_text()):
+            errors.append(f'macro header {header} includes other headers')
+
+    sites = textual_include_sites(files, set(macro_headers), owners)
+
+    for name in sorted(sites.keys() | allowed.keys()):
+        found, listed = sites.get(name, set()), set(allowed.get(name, ()))
+        errors += [f'{name} includes {spelling}' for spelling in sorted(found - listed)]
+        errors += [f'{name} no longer includes {spelling}; remove it from textual-includes.json'
+                   for spelling in sorted(listed - found)]
+    if errors:
+        raise RuntimeError('Includes outside the exceptions of rule 5:\n  ' + '\n  '.join(errors))
+
+    return sum(len(spellings) for spellings in sites.values())
 
 
 if __name__ == '__main__':

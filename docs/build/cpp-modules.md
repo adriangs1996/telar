@@ -79,6 +79,14 @@ procesos, y `process_layers` ordena los componentes de cada proceso (`runtime/pl
 componentes, y la regla cuenta también los imports de las unidades de implementación.
 `upward_imports` lista las aristas hacia arriba que quedan; quien cierra una borra su
 entrada, porque una entrada que ya no sube también hace fallar el checker.
+Fuera de las excepciones no hay `#include`. Pueden incluir `lib/sys`, los adaptadores
+Qt/moc (los ficheros que incluyen una cabecera `<Q…>`), las fuentes C y Objective-C(++)
+y las cabeceras que todos ellos alcanzan, porque no pueden importar módulos. Un módulo
+dueño puede incluir las cabeceras de `header_owners` que cruzan esa frontera, y
+cualquier fichero puede incluir una cabecera de `macro_headers`, que no incluye nada.
+Los tests y las herramientas quedan fuera de la regla. [textual-includes.json](textual-includes.json) lista por
+fichero los includes que quedan; quien quita uno borra su entrada, y una entrada que
+ya no está en el fichero también hace fallar el checker.
 
 | Área | Interfaces finales | Organización |
 | --- | ---: | --- |

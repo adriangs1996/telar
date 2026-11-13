@@ -740,6 +740,7 @@
     "src/runtime/terminal/ghostty_grid.hpp": "Needs the generated cell layout, which only runtime-core units include",
     "src/gui/platform/macos/cf_reference.hpp": "Objective-C++ sources include it; Objective-C++ cannot import the C++ modules"
   },
+  "macro_headers": [],
   "implementations": {
     "lib/platform/pty_process.cpp": "telar.platform",
     "lib/shell/syntax/syntax.cpp": "telar.shell.syntax",
