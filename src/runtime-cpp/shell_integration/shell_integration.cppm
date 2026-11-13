@@ -35,12 +35,8 @@ inline constexpr ScriptFile ssh{"ssh", "ssh.sh", shell_scripts::ssh};
 
 // FNV-1a over every script's place and content, computed at compile time.
 inline constexpr std::uint64_t digest = [] {
-  std::uint64_t hash = 14695981039346656037ULL;
-  const auto mix = [&](std::string_view part) {
-    for (const auto byte : part) {
-      hash = (hash ^ static_cast<unsigned char>(byte)) * 1099511628211ULL;
-    }
-  };
+  std::uint64_t hash = fnv1a64_basis;
+  const auto mix = [&](std::string_view part) { hash = fnv1a64(part, hash); };
   for (const auto &file : shells) {
     mix(file.directory);
     mix(file.name);

@@ -38,6 +38,7 @@ module;
 
 #include "telar_base/text/utf8.hpp"
 #include "telar_base/text/decimal.hpp"
+#include "telar_base/text/constant_time.hpp"
 
 export module telar.base.text;
 
@@ -58,6 +59,7 @@ using telar::runtime::NumberError;
 using telar::runtime::unsignedNumber;
 using telar::runtime::unsignedDecimal;
 using telar::runtime::parseExact;
+using telar::runtime::constantTimeEqual;
 }
 export namespace telar::runtime::base64 {
 using telar::runtime::base64::Padding;
@@ -101,6 +103,24 @@ inline constexpr bool asciiEqualIgnoreCase(std::string_view left, std::string_vi
     }
   }
   return true;
+}
+
+}
+}
+
+// Interface: telar_base/text/fnv.cppm
+export {
+namespace telar::runtime {
+
+inline constexpr std::uint64_t fnv1a64_basis = 0xcbf29ce484222325;
+inline constexpr std::uint64_t fnv1a64_prime = 0x100000001b3;
+
+// 64-bit FNV-1a over `bytes`, continuing `hash` to cover several pieces as one.
+constexpr std::uint64_t fnv1a64(std::string_view bytes, std::uint64_t hash = fnv1a64_basis) noexcept {
+  for (const auto byte : bytes) {
+    hash = (hash ^ static_cast<unsigned char>(byte)) * fnv1a64_prime;
+  }
+  return hash;
 }
 
 }

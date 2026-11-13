@@ -37,15 +37,7 @@ public:
 
   // Compares in constant time, so the time a forged mark takes does not reveal the token.
   inline bool signs(std::string_view candidate) const noexcept {
-    if (candidate.size() != length) {
-      return false;
-    }
-
-    unsigned difference = 0;
-    for (std::size_t index = 0; index < length; ++index) {
-      difference |= static_cast<unsigned char>(text_[index]) ^ static_cast<unsigned char>(candidate[index]);
-    }
-    return difference == 0;
+    return constantTimeEqual({text_.data(), text_.size()}, candidate);
   }
 
 private:

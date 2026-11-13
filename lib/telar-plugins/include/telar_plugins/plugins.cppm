@@ -184,12 +184,7 @@ namespace telar::runtime::plugins {
 using PackageDigest = std::array<std::uint8_t, 32>;
 
 constexpr std::uint64_t stableId(std::string_view name) noexcept {
-  std::uint64_t hash = 0xcbf29ce484222325;
-  for (const unsigned char byte : name) {
-    hash ^= byte;
-    hash *= 0x100000001b3;
-  }
-  return hash;
+  return fnv1a64(name);
 }
 
 inline bool validEntrypoint(std::string_view path) noexcept {

@@ -470,10 +470,7 @@ private:
 
   // FNV-1a: names a spec's text, so a client asks again only for one that changed.
   inline static std::uint64_t digest(std::string_view text) noexcept {
-    std::uint64_t value = 0xcbf29ce484222325;
-    for (const auto byte : text) {
-      value = (value ^ static_cast<unsigned char>(byte)) * 0x100000001b3;
-    }
+    const auto value = fnv1a64(text);
     return value == 0 ? 1 : value;
   }
 

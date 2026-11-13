@@ -1,5 +1,6 @@
 #pragma once
 
+#include "telar_base/text/constant_time.hpp"
 #include "telar_platform/random_bytes.hpp"
 #include "clipboard_metadata.hpp"
 #include <algorithm>
@@ -25,7 +26,7 @@ public:
     }
     Entry *entry = nullptr;
     for (auto &candidate : std::span{entries_}.first(count_)) {
-      if (candidate.route == route && equal(candidate.password.view(), password)) {
+      if (candidate.route == route && constantTimeEqual(candidate.password.view(), password)) {
         entry = &candidate;
         entry->once &= once;
         break;
@@ -54,7 +55,7 @@ public:
     std::optional<std::size_t> matching;
     for (std::size_t index = 0; index < count_; ++index) {
       const auto &entry = entries_[index];
-      if (!equal(entry.password.view(), password)) {
+      if (!constantTimeEqual(entry.password.view(), password)) {
         continue;
       }
       matching = index;
@@ -115,17 +116,6 @@ private:
     bool write = false;
     bool once = false;
   };
-
-  static bool equal(std::string_view left, std::string_view right) noexcept {
-    if (left.size() != right.size()) {
-      return false;
-    }
-    unsigned difference = 0;
-    for (std::size_t index = 0; index < left.size(); ++index) {
-      difference |= static_cast<unsigned char>(left[index]) ^ static_cast<unsigned char>(right[index]);
-    }
-    return difference == 0;
-  }
 
   std::array<Entry, capacity> entries_;
   std::size_t count_ = 0;

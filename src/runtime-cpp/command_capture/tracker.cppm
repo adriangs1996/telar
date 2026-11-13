@@ -745,8 +745,8 @@ public:
 private:
   using TrackedReference = GhosttyHandle<GhosttyTrackedGridRef, ghostty_tracked_grid_ref_free>;
   static constexpr std::size_t utf8_maximum_width = 4;
-  static constexpr std::uint64_t hash_basis = 0xcbf29ce484222325;
-  static constexpr std::uint64_t hash_prime = 0x100000001b3;
+  static constexpr std::uint64_t hash_basis = fnv1a64_basis;
+  static constexpr std::uint64_t hash_prime = fnv1a64_prime;
 
   struct PrefixWriter {
     std::span<Byte> destination;
