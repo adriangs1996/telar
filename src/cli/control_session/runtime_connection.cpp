@@ -13,7 +13,7 @@ module;
 #include <sys/un.h>
 #include <unistd.h>
 
-module telar.cli.runtime_observer;
+module telar.cli.control_session;
 
 import std;
 
