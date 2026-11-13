@@ -54,7 +54,6 @@ import std;
 import telar.base.diagnostics;
 import telar.base.memory;
 import telar.base.text;
-import telar.client.protocol;
 import telar.config;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
@@ -63,6 +62,7 @@ import telar.runtime.terminal.control;
 import telar.runtime.tests.check;
 import telar.runtime.persistence.session_store;
 import telar.runtime.platform.request_worker;
+import telar.wire.vocabulary;
 
 using namespace telar;
 using namespace telar::runtime;

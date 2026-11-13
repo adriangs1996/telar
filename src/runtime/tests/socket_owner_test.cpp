@@ -94,11 +94,11 @@ static_assert(true);
 import std;
 import telar.base.memory;
 import telar.base.text;
-import telar.client.protocol;
 import telar.platform.primitives;
 import telar.runtime.tests.check;
 import telar.runtime.redirect.socket_owners;
 import telar.runtime.redirect.pf_rules;
+import telar.wire.vocabulary;
 
 using namespace telar;
 using namespace telar::runtime;

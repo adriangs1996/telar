@@ -11,9 +11,9 @@ static_assert(true);
 
 import std;
 import telar.base.memory;
-import telar.client.protocol;
 import telar.runtime.tests.check;
 import telar.runtime.plugins.worker;
+import telar.wire.vocabulary;
 
 using namespace telar;
 using namespace telar::runtime;

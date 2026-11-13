@@ -7,7 +7,6 @@ static_assert(true);
 #include "../qt/pane_motion_layout.hpp"
 #include "frame_fixture.hpp"
 #include "gui_wait.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <QGuiApplication>
 #include <QQuickWindow>
 #include <QRectF>

@@ -15,8 +15,9 @@ static_assert(true);
 #include "telar_base/memory/allocator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
+#include "telar_client/protocol/layout.hpp"
+#include "telar_client/protocol/pane_io.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include "telar_platform/file_descriptor.hpp"
 #include "wire_runtime.hpp"
 #include <QByteArray>

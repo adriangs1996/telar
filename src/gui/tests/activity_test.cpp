@@ -13,7 +13,6 @@ static_assert(true);
 import std;
 import telar.base.memory;
 import telar.base.text;
-import telar.client.protocol;
 import telar.config;
 import telar.gui.core.primitives;
 import telar.gui.terminal.screen;
@@ -25,6 +24,10 @@ import telar.gui.application.workspace_replica;
 import telar.gui.application.session;
 import telar.gui.presentation.application_mark;
 import telar.gui.presentation.activity_order;
+import telar.wire.layout;
+import telar.wire.pane_io;
+import telar.wire.runtime;
+import telar.wire.vocabulary;
 
 namespace {
 

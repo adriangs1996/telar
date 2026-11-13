@@ -15,10 +15,12 @@ static_assert(true);
 #include "telar_base/text/utf8.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
+#include "telar_client/protocol/graphics.hpp"
+#include "telar_client/protocol/layout.hpp"
+#include "telar_client/protocol/pane_io.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "wire_runtime.hpp"
 #include <QAbstractItemModel>

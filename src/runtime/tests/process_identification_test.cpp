@@ -25,13 +25,14 @@ static_assert(true);
 import std;
 import telar.base.memory;
 import telar.base.text;
-import telar.client.protocol;
 import telar.platform.primitives;
 import telar.runtime.tests.check;
 import telar.runtime.agents.snapshot;
 import telar.runtime.agents.screen_inference;
 import telar.runtime.platform.process_probe;
 import telar.platform;
+import telar.wire.agents;
+import telar.wire.vocabulary;
 
 using namespace telar;
 using namespace telar::runtime;

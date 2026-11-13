@@ -12,10 +12,10 @@ static_assert(true);
 
 import std;
 import telar.base.memory;
-import telar.client.protocol;
 import telar.platform.primitives;
 import telar.runtime.plugins.protocol;
 import telar.plugins;
+import telar.vocabulary;
 
 using namespace telar;
 using namespace telar::runtime;

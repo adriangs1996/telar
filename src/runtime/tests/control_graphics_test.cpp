@@ -45,7 +45,6 @@ import std;
 import telar.base.diagnostics;
 import telar.base.memory;
 import telar.base.text;
-import telar.client.protocol;
 import telar.config;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
@@ -59,6 +58,7 @@ import telar.runtime.runtime.execution_service;
 import telar.runtime.runtime.media_service;
 import telar.platform;
 import telar.runtime.terminal.text_reader;
+import telar.wire.vocabulary;
 
 using namespace telar;
 using namespace telar::runtime;

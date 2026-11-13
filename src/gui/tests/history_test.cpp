@@ -12,12 +12,13 @@ static_assert(true);
 import std;
 import telar.base.memory;
 import telar.base.text;
-import telar.client.protocol;
 import telar.gui.core.primitives;
 import telar.gui.core.metrics;
 import telar.gui.history.browser;
 import telar.gui.presentation.history_inspection_geometry;
 import telar.gui.presentation.history_meta_geometry;
+import telar.wire.history;
+import telar.wire.vocabulary;
 
 namespace {
 

@@ -10,13 +10,13 @@ static_assert(true);
 
 import std;
 import telar.base.memory;
-import telar.client.protocol;
 import telar.gui.terminal.screen;
 import telar.gui.core.metrics;
 import telar.gui.core.unicode_scalar;
 import telar.gui.links.link_hover;
 import telar.gui.links.path_expansion;
 import telar.gui.links.cell_links;
+import telar.wire.vocabulary;
 
 namespace {
 

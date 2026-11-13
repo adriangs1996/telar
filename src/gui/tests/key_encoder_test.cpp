@@ -8,9 +8,9 @@ static_assert(true);
 #include <cstdio>
 
 import std;
-import telar.client.protocol;
 import telar.gui.core.unicode_scalar;
 import telar.gui.input.key_encoder;
+import telar.wire.vocabulary;
 
 namespace {
 

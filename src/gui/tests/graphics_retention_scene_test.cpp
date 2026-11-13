@@ -13,10 +13,11 @@ static_assert(true);
 #include "assertions.hpp"
 #include "telar_client/codecs/telar_cells.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
+#include "telar_client/protocol/graphics.hpp"
+#include "telar_client/protocol/pane_io.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include <QColor>
 #include <QDir>

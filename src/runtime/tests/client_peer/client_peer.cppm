@@ -23,7 +23,6 @@ export module telar.runtime.tests.client_peer;
 import std;
 export import telar.runtime.tests.check;
 export import telar.runtime.diagnostics.line;
-export import telar.client.protocol;
 export import telar.base.memory;
 export import telar.platform.primitives;
 export import telar.runtime.terminal.control;
@@ -33,6 +32,7 @@ export import telar.base.text;
 export import telar.base.diagnostics;
 export import telar.runtime.model.client_layouts;
 export import telar.runtime.runtime.delivery.client_delivery;
+export import telar.wire.vocabulary;
 
 export {
   class ClientPeer {

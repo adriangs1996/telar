@@ -18,10 +18,15 @@ static_assert(true);
 
 import std;
 import telar.base.memory;
-import telar.client.protocol;
 import telar.runtime.terminal.control;
 import telar.client;
 import telar.runtime.terminal.text_reader;
+import telar.wire.clipboard;
+import telar.wire.content;
+import telar.wire.layout;
+import telar.wire.pane_io;
+import telar.wire.runtime;
+import telar.wire.vocabulary;
 
 using namespace telar;
 using namespace telar::runtime;

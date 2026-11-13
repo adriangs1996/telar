@@ -9,7 +9,6 @@ static_assert(true);
 #include "../qt/system_notifier.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include <QCoreApplication>
 #include <QIODevice>
 #include <QObject>

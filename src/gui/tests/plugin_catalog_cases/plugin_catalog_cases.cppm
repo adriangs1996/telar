@@ -8,10 +8,11 @@ module;
 export module telar.gui.tests.plugin_catalog_cases;
 
 import std;
-export import telar.client.protocol;
 export import telar.gui.core.primitives;
 export import telar.base.memory;
 export import telar.gui.config.plugin_query;
+export import telar.wire.clients;
+export import telar.wire.vocabulary;
 
 export {
   namespace telar::gui::test {

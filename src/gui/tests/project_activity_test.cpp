@@ -9,7 +9,6 @@ static_assert(true);
 #include "assertions.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
-#include "telar_client/serializers/telar_protocol.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include <algorithm>
 #include <array>

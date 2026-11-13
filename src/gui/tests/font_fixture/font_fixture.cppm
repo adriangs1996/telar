@@ -15,7 +15,6 @@ export module telar.gui.tests.font_fixture;
 
 import std;
 export import telar.gui.core.primitives;
-export import telar.client.protocol;
 export import telar.base.memory;
 export import telar.platform.primitives;
 export import telar.gui.fonts.face;
