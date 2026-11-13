@@ -94,10 +94,11 @@ graph LR
 - **Mide:** porcentaje del código de módulos que está en interfaces (hoy 94,7%), dependientes transitivos de los hubs (`telar.client.protocol` 148, `telar.base.memory` 167), aristas hacia arriba (hoy 41 entre componentes y 55 entre módulos), ciclos (5), aristas `export import` (681 de 1236), líneas en fragmentos globales (4,84 M) y unidades que recompila `ninja -n` después de tocar la interfaz de cada hub. Además, el tiempo y el pico de memoria de un build en frío en cada máquina, que el coordinador usa para decidir cuántas tareas caben a la vez.
 - **Hecho cuando:** el script es reproducible y los números de partida están commiteados. P11.1 los vuelve a medir.
 
-### [ ] P0.3 · Spike: el lifetime checker de TBC con `tbc::view<Memory &, …>` sobre un tipo abstracto
+### [x] P0.3 · Spike: el lifetime checker de TBC con `tbc::view<Memory &, …>` sobre un tipo abstracto
 - **Depende de:** —
 - **Toca:** código desechable fuera del árbol del refactor. Se borra al terminar.
 - **Hecho cuando:** hay un ejemplo mínimo que el checker acepta (o un parche a TBC que lo hace posible). Si no es viable, se para P8.1 y se replantea la decisión de `Memory` con tipo borrado.
+- **Resultado:** viable sin tocar TBC (`bdcb86436`). Un `Memory` abstracto marcado `TBC_SHARED` se comparte por `tbc::view<Memory &, …>` y sus llamadas virtuales no invalidan préstamos; guardar un adaptador local que muere antes sigue dando `tbc-dangling-borrow`. El spike queda como 4 casos de regresión en `lib/tbc/tests/spec/declarations.cpp`. `590f57ca4` arregla cuatro procedencias rotas del corpus que hacían fallar `ctest -L spec` desde audit-39.
 
 ### [ ] P0.4 · Launcher que conserva el `.pcm` cuando no cambia
 - **Depende de:** —
@@ -440,6 +441,7 @@ Cada tarea empieza localizando todas las copias, crea un módulo con una interfa
 - **Depende de:** P0.3, P4.2a
 - **Qué hace:** una interfaz de unas 20 líneas con `allocate`/`deallocate` virtuales `noexcept` que devuelven `nullptr` al fallar (no `std::pmr`). `ConcurrentMemory : Memory` sustituye al concept `ConcurrentAllocator` y `ErasingMemory : Memory` cubre los secretos. `MemoryAdapter<A>` envuelve cualquier `Allocator`, también los fakes de los tests.
 - **Hecho cuando:** está en la familia de allocators de base, tiene tests con los fakes que fallan y con presupuesto, y el lifetime checker lo acepta en el build real. No se migra ningún servicio en esta tarea.
+- **De P0.3:** `TBC_SHARED` no se hereda. `Memory`, `ConcurrentMemory`, `ErasingMemory`, `MemoryAdapter<A>` y cada implementación llevan su propia marca.
 
 ### [ ] P8.2 · Medir el coste de la llamada virtual
 - **Depende de:** P8.1, P0.5
