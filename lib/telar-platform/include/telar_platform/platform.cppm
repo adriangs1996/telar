@@ -1811,13 +1811,19 @@ inline constexpr auto git_observation_options = std::to_array<std::string_view>(
 template <Allocator Memory>
 class HardenedGit {
 public:
+  inline HardenedGit(Memory &memory, std::string_view root)
+      : memory_(memory),
+        root_(root, AllocatorRef<char, Memory>{memory}),
+        overrides_(AllocatorRef<String<Memory>, Memory>{memory}) {}
+
+  HardenedGit(const HardenedGit &) = delete;
+  HardenedGit &operator=(const HardenedGit &) = delete;
+
+  // Reads the repository's filter drivers and lazy-fetch facts, before any other command:
   // `run(command)` returns the command's exit status and its output; `reject()` throws the
   // caller's failure.
   template <typename Run, typename Reject>
-  inline HardenedGit(Memory &memory, std::string_view root, Run &&run, Reject &&reject)
-      : memory_(memory),
-        root_(root, AllocatorRef<char, Memory>{memory}),
-        overrides_(AllocatorRef<String<Memory>, Memory>{memory}) {
+  inline void inspect(Run &&run, Reject &&reject) {
     const auto [status, text] = with({"config", "--show-scope", "-z", "--get-regexp", "^(filter\\.|extensions\\.partialclone$|remote\\..*\\.(promisor|partialclonefilter|uploadpack)$)"}, run);
     const auto facts = status > 1 ? std::nullopt : GitRepositoryFacts::parse(text);
     if (!facts) {
@@ -1826,7 +1832,7 @@ public:
 
     for (std::size_t index = 0; index < facts->driver_count; ++index) {
       for (const auto suffix : {".clean=", ".smudge=", ".process="}) {
-        overrides_.emplace_back("filter.", AllocatorRef<char, Memory>{memory});
+        overrides_.emplace_back("filter.", AllocatorRef<char, Memory>{memory_});
         overrides_.back() += facts->drivers[index];
         overrides_.back() += suffix;
       }

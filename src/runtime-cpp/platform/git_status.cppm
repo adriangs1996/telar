@@ -61,7 +61,9 @@ public:
   inline explicit GitRepository(Memory &memory, std::string_view root, Clock::time_point deadline, const std::atomic<bool> &cancelled)
       : deadline_(deadline),
         output_(memory, maximum_output, &cancelled),
-        git_(memory, root, [&](Command<Memory> &command) { return std::pair{output_.run(command, deadline_), output_.text()}; }, [] { reject(); }) {}
+        git_(memory, root) {
+    git_.inspect([&](Command<Memory> &command) { return std::pair{output_.run(command, deadline_), output_.text()}; }, [] { reject(); });
+  }
 
   inline std::string_view run(std::initializer_list<std::string_view> arguments, bool retain_prefix = false, std::size_t maximum_bytes = maximum_output) {
     if (execute(arguments, retain_prefix) != 0) {

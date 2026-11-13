@@ -169,7 +169,9 @@ class Git {
 public:
   inline Git(Memory &memory, std::string_view root)
       : memory_(memory),
-        git_(memory, root, [&](Command<Memory> &command) { return execute(command, false); }, [] { throw std::runtime_error{"GitFailed"}; }) {}
+        git_(memory, root) {
+    git_.inspect([&](Command<Memory> &command) { return execute(command, false); }, [] { throw std::runtime_error{"GitFailed"}; });
+  }
 
   inline std::string read(std::initializer_list<std::string_view> arguments) {
     return read(std::span{arguments.begin(), arguments.size()});

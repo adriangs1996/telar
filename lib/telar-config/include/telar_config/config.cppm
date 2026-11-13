@@ -3055,11 +3055,12 @@ inline constexpr std::array<std::string_view, 3> font_hinting_names{"native", "l
 inline constexpr std::array<std::string_view, 5> surface_names{"sidebar", "topbar", "bottombar", "workspace", "pane"};
 
 // The `gui` table as read: each field the configuration sets, already within its bounds.
-// Strings view the Lua state the table belongs to.
 struct GuiSettings {
+  using FontName = FixedText<GuiBounds::font_name_bytes>;
+
   struct Font {
-    std::optional<std::string_view> family;
-    std::optional<std::string_view> style;
+    std::optional<FontName> family;
+    std::optional<FontName> style;
     std::optional<double> size;
     std::optional<double> line_height;
     std::optional<double> letter_spacing;
@@ -3143,9 +3144,14 @@ private:
     font.hinting = optionalChoice<FontHinting>(table.field("hinting"), font_hinting_names);
   }
 
-  inline static std::optional<std::string_view> text(const lua::Value &value) {
+  inline static std::optional<GuiSettings::FontName> text(const lua::Value &value) {
     optionalUtf8Text(value, GuiBounds::font_name_bytes);
-    return value.present() ? std::optional{value.string()} : std::nullopt;
+    if (!value.present()) {
+      return std::nullopt;
+    }
+    GuiSettings::FontName name;
+    name.assign(value.string());
+    return name;
   }
 
   inline static void cursor(const lua::Value &table, GuiSettings::Cursor &cursor) {

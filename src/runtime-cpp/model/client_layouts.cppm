@@ -998,26 +998,26 @@ inline ClientSession<Memory> &requireClient(ClientStore<Memory> &clients, std::u
 // The pane `identity` names while it has `generation`; none for another generation. No pane has
 // generation 0, so 0 finds none.
 template <Allocator Memory>
-inline Pane<Memory> *findPane(PaneStore<Memory> &panes, std::uint64_t identity, std::uint64_t generation) noexcept {
+inline tbc::view<Pane<Memory> *, tbc::lt::a> findPane(tbc::view<PaneStore<Memory> &, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept {
   auto *pane = panes.find(identity);
   return pane != nullptr && pane->generation == generation ? pane : nullptr;
 }
 
 template <Allocator Memory>
-inline const Pane<Memory> *findPane(const PaneStore<Memory> &panes, std::uint64_t identity, std::uint64_t generation) noexcept {
+inline tbc::view<const Pane<Memory> *, tbc::lt::a> findPane(tbc::view<const PaneStore<Memory> &, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept {
   const auto *pane = panes.find(identity);
   return pane != nullptr && pane->generation == generation ? pane : nullptr;
 }
 
 // The same pane while its process runs and nobody asked it to close.
 template <Allocator Memory>
-inline Pane<Memory> *livePane(PaneStore<Memory> &panes, std::uint64_t identity, std::uint64_t generation) noexcept {
+inline tbc::view<Pane<Memory> *, tbc::lt::a> livePane(tbc::view<PaneStore<Memory> &, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept {
   auto *pane = findPane(panes, identity, generation);
   return pane != nullptr && !pane->exit_status && !pane->close_requested ? pane : nullptr;
 }
 
 template <Allocator Memory>
-inline const Pane<Memory> *livePane(const PaneStore<Memory> &panes, std::uint64_t identity, std::uint64_t generation) noexcept {
+inline tbc::view<const Pane<Memory> *, tbc::lt::a> livePane(tbc::view<const PaneStore<Memory> &, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept {
   const auto *pane = findPane(panes, identity, generation);
   return pane != nullptr && !pane->exit_status && !pane->close_requested ? pane : nullptr;
 }
@@ -1025,7 +1025,7 @@ inline const Pane<Memory> *livePane(const PaneStore<Memory> &panes, std::uint64_
 // The pane an agent's report names, which must still run the generation it names and be the one
 // the runtime verified the reporting client inside.
 template <Allocator Memory>
-inline Pane<Memory> &requireReporterPane(PaneStore<Memory> &panes, const ClientSession<Memory> &client, std::uint64_t identity, std::uint64_t generation) {
+inline tbc::view<Pane<Memory> &, tbc::lt::a> requireReporterPane(tbc::view<PaneStore<Memory> &, tbc::lt::a> panes, const ClientSession<Memory> &client, std::uint64_t identity, std::uint64_t generation) {
   auto *pane = findPane(panes, identity, generation);
   if (pane == nullptr || pane->exit_status) {
     throw RequestError{FailureCode::pane_not_found, "Pane not found"};

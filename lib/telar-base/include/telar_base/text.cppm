@@ -240,7 +240,7 @@ namespace telar::runtime {
 
 // Writes `bytes` as lowercase hexadecimal into the first 2 * bytes.size() characters of
 // `output`, which must hold them, and returns what it wrote.
-constexpr std::string_view encodeLowerHex(std::span<const std::uint8_t> bytes, std::span<char> output) noexcept {
+constexpr tbc::view<std::string_view, tbc::lt::a> encodeLowerHex(std::span<const std::uint8_t> bytes, tbc::view<std::span<char>, tbc::lt::a> output) noexcept {
   constexpr std::string_view digits = "0123456789abcdef";
   assert(output.size() >= 2 * bytes.size());
   for (std::size_t index = 0; index < bytes.size(); ++index) {

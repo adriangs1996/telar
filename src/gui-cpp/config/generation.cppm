@@ -717,11 +717,11 @@ private:
 
   inline static void font(const runtime::config::GuiSettings::Font &settings, FontConfiguration &font) {
     if (settings.family) {
-      font.family.assign(*settings.family);
+      font.family.assign(settings.family->view());
     }
 
     if (settings.style) {
-      font.style.assign(*settings.style);
+      font.style.assign(settings.style->view());
     }
 
     font.size = static_cast<float>(settings.size.value_or(font.size));
