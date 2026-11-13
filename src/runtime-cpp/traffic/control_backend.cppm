@@ -27,12 +27,6 @@ module;
 #include <brotli/decode.h>
 #include <zlib.h>
 #include <zstd.h>
-#if (defined(__APPLE__))
-#include <CoreFoundation/CoreFoundation.h>
-#endif
-#if (defined(__APPLE__))
-#include <Security/Security.h>
-#endif
 #if (!(defined(__APPLE__)))
 #include <cstdlib>
 #endif

@@ -5,7 +5,6 @@ module;
 #include <cstdio>
 #include <lauxlib.h>
 #include <lua.h>
-#include <print>
 #include <sys/stat.h>
 #include <sys/un.h>
 #include <unistd.h>
