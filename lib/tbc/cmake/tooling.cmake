@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 
-if(MODE STREQUAL "lint" OR MODE STREQUAL "lifetime-check")
+if(MODE STREQUAL "lint" OR MODE STREQUAL "lifetime-check" OR MODE STREQUAL "blank-lines")
   if(MODE STREQUAL "lint")
     find_program(CLANG_TIDY NAMES clang-tidy HINTS "${COMPILER_DIR}")
     if(NOT CLANG_TIDY)
@@ -42,6 +42,12 @@ if(MODE STREQUAL "lint" OR MODE STREQUAL "lifetime-check")
 
   if(MODE STREQUAL "lint")
     set(command "${CLANG_TIDY}" "-p=${BINARY_DIR}" "--config-file=${SOURCE_DIR}/.clang-tidy")
+  elseif(MODE STREQUAL "blank-lines")
+    # HEADER_FILTER, a POSIX extended regular expression, adds the headers whose path it matches.
+    set(command "${TBC_LINT}" --checks=blank-lines --warnings-as-errors "-p=${BINARY_DIR}")
+    if(HEADER_FILTER)
+      list(APPEND command "--header-filter=${HEADER_FILTER}")
+    endif()
   else()
     set(command "${TBC_LINT}" --warnings-as-errors "-p=${BINARY_DIR}")
   endif()
@@ -75,7 +81,7 @@ elseif(MODE STREQUAL "format" OR MODE STREQUAL "format-check")
 
   if(sources)
     execute_process(
-      COMMAND "${CLANG_FORMAT}" "--style=file:${SOURCE_DIR}/.clang-format" ${arguments} ${sources}
+      COMMAND "${CLANG_FORMAT}" --style=file ${arguments} ${sources}
       WORKING_DIRECTORY "${SOURCE_DIR}"
       COMMAND_ERROR_IS_FATAL ANY)
   endif()

@@ -18,6 +18,7 @@
 #include <llvm/Support/raw_ostream.h>
 
 #include <atomic>
+#include <cstdint>
 #include <exception>
 #include <memory>
 #include <mutex>
@@ -57,7 +58,7 @@ namespace {
     llvm::SmallPtrSet<const clang::FunctionDecl*, 32> visited_;
   };
 
-  enum class checker {
+  enum class checker : std::uint8_t {
     lifetime,
     blank_lines,
     interface_bodies,

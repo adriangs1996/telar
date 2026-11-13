@@ -1,0 +1,10 @@
+# Commits that only move or reformat code. git blame skips them with
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+# and GitHub's blame view reads this file on its own.
+
+# Move the C++ tree so each folder is a module
+7ed3d95a6622a46d0cd2f64ac9067f3961316523
+# Insert the blank lines of the code style across the tree
+8149b49719656fce4d7f1d2c122ab49abe53766c
+# Format the tree with the root .clang-format
+b45e865608636aeea55cac3d49f821f11b4edf9b

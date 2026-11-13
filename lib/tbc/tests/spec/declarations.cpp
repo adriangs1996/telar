@@ -1107,8 +1107,8 @@ namespace declarations {
         : failure_(reason) {}
 
     [[nodiscard]] static_text failure() const {
-      return failure_;
-    } // expected-error [tbc-contract-violation]
+      return failure_; // expected-error [tbc-contract-violation]
+    }
 
   private:
     std::string_view failure_;

@@ -92,6 +92,23 @@ if(PROJECT_IS_TOP_LEVEL)
   endforeach()
 endif()
 
+# The blank lines of docs/code-style.md in the linter's own sources, tests and headers.
+if(PROJECT_IS_TOP_LEVEL AND TBC_BUILD_LINTER)
+  string(REGEX REPLACE "([][+.*()?^$\\|{}])" "\\\\\\1" tbc_source_pattern "${CMAKE_CURRENT_SOURCE_DIR}")
+  add_custom_target(blank-lines
+    COMMAND "${CMAKE_COMMAND}"
+      -DMODE=blank-lines
+      "-DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
+      "-DBINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+      "-DTBC_LINTER=$<TARGET_FILE:tbc-lint>"
+      "-DHEADER_FILTER=^${tbc_source_pattern}/(include|linter|tests)/"
+      -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/tooling.cmake"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    USES_TERMINAL
+    VERBATIM)
+  add_dependencies(blank-lines tbc-lint)
+endif()
+
 include(cmake/tbcLifetimeCheck.cmake)
 if(TBC_BUILD_LINTER AND TBC_BUILD_EXAMPLE)
   tbc_add_lifetime_check(lifetime-check "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp")

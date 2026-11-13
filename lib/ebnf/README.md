@@ -314,7 +314,7 @@ compilation database, excluding dependencies and generated code, and fails on
 enabled diagnostics. Test sources are included. Build first if sources need
 generated headers. Tooling is explicit; normal builds do not run it.
 
-The format follows `src/runtime/.clang-format`. The tidy configuration
+The format follows the repository root's `.clang-format`. The tidy configuration
 enables the Clang analyzer, bug-prone code, performance, portability, and
 modernization checks. It does not enforce trailing return types.
 

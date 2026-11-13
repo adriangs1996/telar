@@ -9,6 +9,7 @@
 #include <llvm/Support/Regex.h>
 #include <llvm/Support/raw_ostream.h>
 
+#include <cstdint>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -42,7 +43,7 @@ namespace tbc_lint {
     void onEndOfTranslationUnit() override;
 
   private:
-    enum class rule {
+    enum class rule : std::uint8_t {
       after_block,
       after_declarations,
     };
