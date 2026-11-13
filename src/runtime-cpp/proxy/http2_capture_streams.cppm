@@ -584,8 +584,7 @@ public:
         half->setTarget(event.value);
       }
     } else if (event.name == ":status") {
-      const auto status = parseHttpNumber<10>(event.value);
-      half->status_code = status && *status <= std::numeric_limits<std::uint16_t>::max() ? static_cast<std::uint16_t>(*status) : 0;
+      half->status_code = parseHttpStatus(event.value).value_or(0);
       if (half->status_code >= 100 && half->status_code < 200) {
         half->head.reset();
       }

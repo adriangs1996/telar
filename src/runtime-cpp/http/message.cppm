@@ -534,7 +534,7 @@ public:
     body_materialized = true;
   }
 
-  inline bool bodyless() const noexcept { return response && (response_to_head || status < 200 || status == 204 || status == 205 || status == 304); }
+  inline bool bodyless() const noexcept { return response && bodylessResponse(status, response_to_head); }
 
   inline auto encodeBody() -> DecodedBody<Memory> {
     return HttpContentCodec{upstream_}.encode(body, contentEncoding(), maximum_body_bytes + content_overhead_bytes);
@@ -585,7 +585,7 @@ public:
     }
 
     if (without_body) {
-      if (response_to_head && status >= 200 && status != 204 && status != 205 && status != 304 && (body_materialized || !body.empty())) {
+      if (response_to_head && !bodylessResponse(status, false) && (body_materialized || !body.empty())) {
         const auto entity = encodeBody();
         append(output, "Content-Length: "); number(output, entity.size); append(output, "\r\n");
       } else if (status >= 200 && status != 204 && status != 205 && (response_to_head || status == 304) && headers.get("content-length")) {

@@ -1386,10 +1386,9 @@ private:
     else if (name == ":scheme") { half.message.scheme.assign(value); }
     else if (name == ":authority") { half.message.authority.assign(value); }
     else if (name == ":status") {
-      unsigned status = 0;
-      const auto parsed = std::from_chars(value.data(), value.data() + value.size(), status);
-      if (parsed.ec != std::errc{} || parsed.ptr != value.data() + value.size() || status < 100 || status > 599) { throw std::invalid_argument{"Invalid HTTP/2 status"}; }
-      half.message.status = static_cast<std::uint16_t>(status);
+      const auto status = parseHttpStatus(value);
+      if (!status) { throw std::invalid_argument{"Invalid HTTP/2 status"}; }
+      half.message.status = *status;
     } else if (name.starts_with(':')) { throw std::invalid_argument{"Unsupported HTTP/2 pseudo field"}; }
     else { half.message.headers.append(name, value); }
   }
@@ -1422,14 +1421,12 @@ private:
       half.streaming = !half.policy.enabled;
       if (half.policy.enabled) {
         if (const auto length = half.message.headers.get("content-length")) {
-          std::uint64_t size = 0;
-          const auto parsed = std::from_chars(length->data(), length->data() + length->size(), size);
-          if (parsed.ec == std::errc{} && size > wire_body_bytes) { unavailable(half, "http2_body_limit"); }
+          if (const auto size = parseExact<std::uint64_t>(*length); size && *size > wire_body_bytes) { unavailable(half, "http2_body_limit"); }
         }
       }
       const bool tunnel = child ? half.message.method == "CONNECT" : stream->request.message.method == "CONNECT" && half.message.status >= 200 && half.message.status < 300;
       const auto type = half.message.headers.get("content-type");
-      const bool event_stream = type && asciiEqualIgnoreCase(trimText(type->substr(0, type->find(';')), " \t"), "text/event-stream");
+      const bool event_stream = type && isEventStream(*type);
       if (half.policy.enabled && (tunnel || event_stream)) { unavailable(half, tunnel ? "http2_tunnel_body" : "http2_streaming_body"); }
       if (half.streaming && !stream->rejected) { forward(half, false); }
       if (child && half.policy.enabled && !half.streaming && !stream->rejected) {
@@ -1518,7 +1515,7 @@ private:
     }
     if (changed) {
       half.queue.clear();
-      const bool head_representation = half.message.response && half.message.response_to_head && half.message.status >= 200 && half.message.status != 204 && half.message.status != 205 && half.message.status != 304;
+      const bool head_representation = half.message.response && half.message.response_to_head && !bodylessResponse(half.message.status, false);
       const bool materialized_head = head_representation && (half.message.body_materialized || !half.message.body.empty());
       if (!half.message.bodyless() || materialized_head) { const auto body = half.message.encodeBody(); half.queue.append(body.bytes()); }
       if (!head_representation || materialized_head) { half.message.headers.remove("content-length"); }

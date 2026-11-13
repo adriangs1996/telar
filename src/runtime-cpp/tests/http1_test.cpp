@@ -221,6 +221,10 @@ static void checkConnectionEndings() {
 }
 
 void testHttp1() {
+  // Status codes are three digits from 100 to 599 in both HTTP versions.
+  check(parseHttpStatus("200") == 200 && parseHttpStatus("599") == 599 && !parseHttpStatus("99") && !parseHttpStatus("600") && !parseHttpStatus("0200") && !parseHttpStatus("+20"));
+  check(bodylessResponse(204, false) && bodylessResponse(304, false) && bodylessResponse(101, false) && bodylessResponse(200, true) && !bodylessResponse(200, false));
+  check(isEventStream("Text/Event-Stream; charset=utf-8") && !isEventStream("text/event-streams"));
   checkHeadAnalysis();
   checkMessageFragments();
   checkMessageFailures();

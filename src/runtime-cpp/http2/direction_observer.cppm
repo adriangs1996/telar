@@ -71,8 +71,7 @@ class Http2HeaderMetadata {
 public:
   inline void observe(std::string_view name, std::string_view value) noexcept {
     if (name == ":status") {
-      const auto parsed = parseHttpNumber<10>(value);
-      status_ = parsed && *parsed <= std::numeric_limits<std::uint16_t>::max() ? static_cast<std::uint16_t>(*parsed) : 0;
+      status_ = parseHttpStatus(value).value_or(0);
     }
     if (name == ":method") {
       request_ = true;
@@ -82,7 +81,7 @@ public:
         metadata_valid_ = false;
       } else {
         content_type_seen_ = true;
-        event_stream_ = asciiEqualIgnoreCase(trimText(value.substr(0, value.find(';')), " \t"), "text/event-stream");
+        event_stream_ = isEventStream(value);
       }
     }
     if (asciiEqualIgnoreCase(name, "content-encoding") && !identityEncoding(value)) {

@@ -594,7 +594,7 @@ private:
       head_bytes_ = bytes.size();
       if (repair && destination_head_ && !policy_.enabled) { repairHead(); return; }
       if (parsed.framing.kind == Http1Framing::Kind::content_length && parsed.framing.length > maximum_wire_body) { unavailable("http_body_limit"); return; }
-      if (const auto type = message_.headers.get("content-type"); type && asciiEqualIgnoreCase(trimText(type->substr(0, type->find(';')), " \t"), "text/event-stream")) { unavailable("http_streaming_body"); return; }
+      if (const auto type = message_.headers.get("content-type"); type && isEventStream(*type)) { unavailable("http_streaming_body"); return; }
       if (!message_.response) {
         if (const auto expect = message_.headers.get("expect")) {
           if (!asciiEqualIgnoreCase(*expect, "100-continue")) { unavailable("http_unsupported_expectation"); return; }

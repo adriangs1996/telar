@@ -62,6 +62,25 @@ std::optional<std::size_t> parseHttpNumber(std::string_view text) noexcept {
   return value;
 }
 
+// A status code as both HTTP versions write it: three digits, 100 to 599.
+inline std::optional<std::uint16_t> parseHttpStatus(std::string_view text) noexcept {
+  if (text.size() != 3) {
+    return std::nullopt;
+  }
+  const auto status = parseHttpNumber<10>(text);
+  return status && *status >= 100 && *status <= 599 ? std::optional{static_cast<std::uint16_t>(*status)} : std::nullopt;
+}
+
+// Whether a response with `status` carries no body (RFC 9110 6.4.1), as one to HEAD never does.
+constexpr bool bodylessResponse(std::uint16_t status, bool to_head) noexcept {
+  return to_head || status < 200 || status == 204 || status == 205 || status == 304;
+}
+
+// Whether a Content-Type names a server-sent event stream, whatever its parameters.
+inline bool isEventStream(std::string_view content_type) noexcept {
+  return asciiEqualIgnoreCase(trimText(content_type.substr(0, content_type.find(';')), " \t"), "text/event-stream");
+}
+
 }
 }
 
@@ -90,7 +109,7 @@ struct Http1Head {
     if (!status) {
       return std::nullopt;
     }
-    const bool bodyless = response && (response_to_head || (*status >= 100 && *status < 200) || *status == 204 || *status == 205 || *status == 304);
+    const bool bodyless = response && bodylessResponse(*status, response_to_head);
     const auto framing = bodyFraming(bytes, response, bodyless);
     if (!framing) {
       return std::nullopt;
@@ -192,11 +211,7 @@ private:
     TextFields parts{line, " "};
     parts.next();
     const auto text = parts.next();
-    if (!text || text->size() != 3) {
-      return std::nullopt;
-    }
-    const auto status = parseHttpNumber<10>(*text);
-    return status && *status >= 100 && *status <= 599 ? std::optional{static_cast<std::uint16_t>(*status)} : std::nullopt;
+    return text ? parseHttpStatus(*text) : std::nullopt;
   }
 
   inline static bool equals(std::string_view actual, std::string_view lower) noexcept {
