@@ -29,9 +29,15 @@ function(telar_managed_build)
       CMAKE_TOOLCHAIN_FILE CMAKE_SYSROOT CMAKE_C_FLAGS CMAKE_CXX_FLAGS
       CMAKE_C_FLAGS_RELEASE CMAKE_CXX_FLAGS_RELEASE)
     if(DEFINED ${variable} AND NOT "${${variable}}" STREQUAL "")
-      string(REPLACE ";" "\\;" value "${${variable}}")
+      set(value "${${variable}}")
+      # A worktree reaches the clone's toolchain through a link. Key on the file
+      # itself so every checkout finds the builds the others completed.
+      if(variable STREQUAL "CMAKE_TOOLCHAIN_FILE")
+        file(REAL_PATH "${value}" value)
+      endif()
+      string(APPEND identity ";${variable}=${value}")
+      string(REPLACE ";" "\\;" value "${value}")
       list(APPEND arguments "-D${variable}:STRING=${value}")
-      string(APPEND identity ";${variable}=${${variable}}")
     endif()
   endforeach()
 
