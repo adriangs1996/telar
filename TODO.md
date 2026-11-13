@@ -120,11 +120,12 @@ graph LR
 - **Hecho cuando:** el script genera el mapeo completo de forma determinista y `--dry-run` no deja ningún fichero sin destino.
 - **Resultado:** `tools/move-cpp-tree.py` (`--dry-run`, `--write-map`, `--apply`) y `docs/build/tree-moves.json`: 1769 ficheros, 1560 se mueven, 209 se quedan y 3 symlinks se reapuntan. Las librerías `telar-*` pierden el prefijo (`lib/git`, `lib/tls`…); `clipboard`, `tbc`, `ebnf` y `src/auth-daemon` se quedan donde están. Las cabeceras siguen en `lib/<x>/include/telar_<x>/`, así que los `#include` solo cambian de include dir en CMake.
 
-### [ ] P2.4 · Regla 3 en el linter de TBC: la interfaz solo lleva declaraciones
+### [x] P2.4 · Regla 3 en el linter de TBC: la interfaz solo lleva declaraciones
 - **Depende de:** — para desarrollarla en `lib/tbc/linter`. Para activarla en el build, de P1.2.
 - **Toca:** `lib/tbc/linter`, `cmake/lint_prepare.cmake`.
 - **Qué comprueba (sobre el AST, no con regex):** no hay cuerpos de función en unidades de interfaz salvo los `inline` de hot path anotados (definir la anotación aquí) y las plantillas que siguen siéndolo (primitivas de `base`).
 - **Hecho cuando:** corre en CI con una allowlist por módulo, que hoy los contiene casi todos. P9.x la vacía.
+- **Resultado:** `18dc56943`. `tbc-lint --checks=interface-bodies` avisa con `tbc-interface-body`. Se permiten las funciones `constexpr` y `consteval` (los importadores las evalúan; excepción añadida al implementar) y lo anotado con `TBC_HOT_PATH` (`<tbc/hot_path.hpp>`; en una clase cubre a todos sus miembros, y una función que no es plantilla tiene que ser además `inline`). La allowlist está en `docs/build/interface-bodies-allowlist.txt`, por módulo: 175 de 188. El check falla también si un módulo de la lista ya no tiene cuerpos, así que cada tarea de P9 borra su línea. Corre en `runtime-cpp.yml` y `gui-cpp.yml` (Release) y con `just runtime-interface-bodies` y `just gui-interface-bodies`; todavía no se ha ejecutado en GitHub.
 
 ### [x] P0.6 · Reglas de líneas en blanco de `docs/code-style.md` en el linter de TBC
 - **Depende de:** —
@@ -145,12 +146,14 @@ graph LR
 - **Depende de:** P0.1, P1.1
 - **Toca:** todo el árbol, CMake, `docs/build/modules.json`, `tools/check-cpp-modules.py` (`SCOPES`, `LIBRARY_LAYERS`), `cmake/lifetime_check.cmake`, `cmake/lint_prepare.cmake` y los scripts de `tools/` con rutas fijas.
 - **Contenido permitido:** `git mv`, rutas de `#include` relativas y CMake. Nada más.
+- **De P2.4:** las regex de rutas de `src/runtime-cpp/cmake/interface_bodies.cmake` y `src/gui-cpp/cmake/interface_bodies.cmake` cambian con el movimiento. La allowlist va por nombre de módulo y no cambia.
 - **Regla 1 en el checker:** ruta = nombre del módulo, ninguna unidad de implementación fuera de la carpeta de su módulo, ningún fichero de la carpeta declara otro módulo y las particiones siguen la forma `process-spawn.cppm` ↔ `:spawn`. Las particiones internas (`module X:detail;`) están permitidas.
 - **Hecho cuando:** compilan los tres procesos, pasa la suite completa y pasa el checker con la regla 1 sin allowlist. Los módulos cajón (P3.14) y los ciclos (P3.13a, P3.14a, P3.15a, P3.15b) quedan a la vista en el árbol, pero cumplen la regla porque cada unidad está en la carpeta del módulo que declara.
 
 ### [ ] P1.3 · Aplicar el estilo de `docs/code-style.md` a todo el árbol
 - **Depende de:** P1.2, P0.6. Todas las tareas que dependen de P1.2 dependen también de esta: el reformateo toca todos los ficheros, así que ninguna otra tarea puede estar editando mientras corre.
 - **Toca:** todo el árbol (sin `vendor/`).
+- **CI de TBC:** el workflow `tbc` falla en `main` desde al menos el 9 de noviembre en `format-check` y `lint` de `lib/tbc` (`tests/spec/*` y, desde P0.6, los `enum` de `blank_lines.hpp` y `main.cpp`). Esta tarea lo deja en verde.
 - **Qué hace:** borra los 16 `.clang-format` por directorio (hoy hay 4 variantes, y tapan al de la raíz). Aplica los arreglos de líneas en blanco de P0.6, ejecuta después el `clang-format` del toolchain sobre todos los ficheros C++, Objective-C++ y de módulo, y añade los commits del movimiento y del formato a `.git-blame-ignore-revs`. Las comas finales en listas con llaves y la separación de bloques por lo que hacen no se pueden aplicar de forma mecánica: las aplica cada tarea a los ficheros que toca.
 - **Hecho cuando:** solo queda `.clang-format` en la raíz, `clang-format --dry-run --Werror` y las reglas de P0.6 pasan en todo el árbol y se comprueban en CI, compilan los tres procesos y pasa la suite completa.
 
