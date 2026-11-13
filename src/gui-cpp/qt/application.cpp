@@ -118,6 +118,18 @@ namespace telar::gui::qt {
 
 namespace {
 
+// Calls `visit` with each pane leaf of `tab` in layout order; with `shown`, only the leaves the
+// tab shows: the focused one alone when it is fullscreen.
+template <typename Visit>
+void forEachLeaf(const Tab<ApplicationAllocator> &tab, bool shown, Visit &&visit) {
+  for (const auto &node : tab.layout.nodes()) {
+    const auto *leaf = std::get_if<ClientLayoutPane>(&node);
+    if (leaf != nullptr && (!shown || !tab.fullscreen || leaf->pane_id == tab.focused_pane)) {
+      visit(*leaf);
+    }
+  }
+}
+
 auto parseLocation(const QString &key) -> WorkspaceLocation {
   return {
       .kind = key.startsWith(QLatin1StringView("worktree:")) ? WorkspaceLocation::Kind::worktree : WorkspaceLocation::Kind::workspace,
@@ -442,17 +454,20 @@ void Application::observeFrames(QQuickWindow &window) {
   WindowImages::forWindow(window);
   connect(&window, &QQuickWindow::afterAnimating, this, &Application::prepareImagePlacements);
   const auto generation = window_generation_;
-  const auto preparation = std::allocate_shared<PresentedFrame>(AllocatorRef<PresentedFrame, ApplicationAllocator>{memory_});
-  connect(&window, &QQuickWindow::beforeSynchronizing, this, [this, preparation, generation] {
+  // Preparation runs while the scene graph synchronizes, with the GUI thread blocked, so it
+  // never overlaps a present on the GUI thread.
+  const auto frames = std::allocate_shared<PresentedFrames>(AllocatorRef<PresentedFrames, ApplicationAllocator>{memory_});
+  connect(&window, &QQuickWindow::beforeSynchronizing, this, [this, frames, generation] {
     if (generation == window_generation_) {
-      prepareFrame(*preparation);
+      prepareFrame(frames->next());
     }
   },
           Qt::DirectConnection);
-  connect(&window, &QQuickWindow::afterSynchronizing, this, [this, preparation, generation] {
+  connect(&window, &QQuickWindow::afterSynchronizing, this, [this, frames, generation] {
     if (generation == window_generation_) {
-      prepareTerminalFrames(*preparation);
-      recordPreparedFrame(*preparation);
+      auto &frame = frames->prepared[frames->current];
+      prepareTerminalFrames(frame);
+      recordPreparedFrame(frame);
     }
   },
           Qt::DirectConnection);
@@ -461,12 +476,13 @@ void Application::observeFrames(QQuickWindow &window) {
       &window,
       &QQuickWindow::frameSwapped,
       this,
-      [this, preparation, generation] {
+      [this, frames, generation] {
+        const auto slot = frames->current;
         QMetaObject::invokeMethod(
             this,
-            [this, frame = *preparation, generation] {
-              if (window_ != nullptr && generation == window_generation_) {
-                present(frame);
+            [this, frames, slot, sequence = frames->sequences[slot], generation] {
+              if (window_ != nullptr && generation == window_generation_ && frames->sequences[slot] == sequence) {
+                present(frames->prepared[slot]);
               }
             },
             Qt::QueuedConnection);
@@ -487,18 +503,13 @@ void Application::prepareImagePlacements() {
   std::size_t count = 0;
   const auto *tab = session().activeTab();
   if (tab != nullptr) {
-    for (const auto &node : tab->layout.nodes()) {
-      const auto *leaf = std::get_if<ClientLayoutPane>(&node);
-      if (leaf == nullptr || (tab->fullscreen && leaf->pane_id != tab->focused_pane)) {
-        continue;
-      }
-
-      const auto *pane = session().findPane(leaf->pane_id);
-      const auto terminal = terminals_.constFind(leaf->pane_id);
+    forEachLeaf(*tab, true, [&](const ClientLayoutPane &leaf) {
+      const auto *pane = session().findPane(leaf.pane_id);
+      const auto terminal = terminals_.constFind(leaf.pane_id);
       if (pane != nullptr && pane->attached && terminal != terminals_.cend() && *terminal != nullptr && (*terminal)->window() == window_ && (*terminal)->isVisible()) {
         sources[count++] = {.owner = *terminal, .store = &pane->graphics, .cell = (*terminal)->cellSize()};
       }
-    }
+    });
   }
 
   if (const auto reach = WindowImages::forWindow(*window_).preparePlacements(std::span{sources}.first(count))) {
@@ -550,13 +561,9 @@ void Application::prepareFrame(PresentedFrame &frame) {
 
     if (!historyLoading() && history_view_version_ == history.viewVersion()) {
       frame.history_surface = surface;
-    }
-  }
-
-  if (dialog_ == Dialog::history && !historyLoading() && history_view_version_ == history.viewVersion()) {
-
-    if (const auto choice = history.choice()) {
-      frame.history = {.choice = *choice, .dialog_generation = dialog_generation_, .enter_runs = session().configuration().history.enter_runs};
+      if (const auto choice = history.choice()) {
+        frame.history = {.choice = *choice, .dialog_generation = dialog_generation_, .enter_runs = session().configuration().history.enter_runs};
+      }
     }
   }
 }
@@ -571,26 +578,18 @@ void Application::prepareTerminalFrames(PresentedFrame &frame) {
     return;
   }
 
-  for (const auto &node : tab->layout.nodes()) {
-    const auto *leaf = std::get_if<ClientLayoutPane>(&node);
-    if (leaf == nullptr || (tab->fullscreen && leaf->pane_id != tab->focused_pane)) {
-      continue;
+  forEachLeaf(*tab, true, [&](const ClientLayoutPane &leaf) {
+    const auto *pane = session().findPane(leaf.pane_id);
+    auto *terminal = pane != nullptr && pane->attached ? visibleTerminal(pane->id) : nullptr;
+    if (terminal == nullptr) {
+      return;
     }
 
-    if (const auto *pane = session().findPane(leaf->pane_id); pane != nullptr && pane->attached) {
-      auto *terminal = visibleTerminal(pane->id);
-      if (terminal == nullptr) {
-        continue;
-      }
-
-      const auto &prepared = terminal->prepared_frame_;
-      if (!prepared.pane.attached || prepared.pane.pane_id != pane->id || prepared.pane.attachment_generation != pane->attachment_generation) {
-        continue;
-      }
-
+    const auto &prepared = terminal->prepared_frame_;
+    if (prepared.pane.attached && prepared.pane.pane_id == pane->id && prepared.pane.attachment_generation == pane->attachment_generation) {
       frame.panes[frame.pane_count++] = {.frame = prepared, .terminal = terminal};
     }
-  }
+  });
 }
 
 TerminalItem *Application::visibleTerminal(std::uint64_t pane_id) const {
@@ -609,16 +608,15 @@ std::size_t Application::collectPacingPanes(std::span<FramePacer::Pane, PaneLayo
   }
 
   std::size_t count = 0;
-  for (const auto &node : tab->layout.nodes()) {
-    const auto *leaf = std::get_if<ClientLayoutPane>(&node);
-    if (leaf == nullptr || (tab->fullscreen && leaf->pane_id != tab->focused_pane) || visibleTerminal(leaf->pane_id) == nullptr) {
-      continue;
+  forEachLeaf(*tab, true, [&](const ClientLayoutPane &leaf) {
+    if (visibleTerminal(leaf.pane_id) == nullptr) {
+      return;
     }
 
-    if (const auto *pane = session().findPane(leaf->pane_id); pane != nullptr && pane->attached) {
+    if (const auto *pane = session().findPane(leaf.pane_id); pane != nullptr && pane->attached) {
       panes[count++] = {.pane_id = pane->id, .frame_id = pane->screen.frameId(), .attached = true, .attachment_generation = pane->attachment_generation, .graphics_revision = pane->graphics.revision()};
     }
-  }
+  });
 
   return count;
 }
@@ -1047,12 +1045,10 @@ QVariantList Application::fullscreenEntries(const Tab<ApplicationAllocator> &tab
 
   std::uint16_t index = 0;
   const auto agents = std::span<const Agent<ApplicationAllocator>>{session().agents()};
-  for (const auto &node : tab.layout.nodes()) {
-    if (const auto *leaf = std::get_if<ClientLayoutPane>(&node)) {
-      ++index;
-      entries.append(fullscreenPaneRecord(session().findPane(leaf->pane_id), agents, {.pane_id = leaf->pane_id, .index = index, .focused = tab.focused_pane == leaf->pane_id}));
-    }
-  }
+  forEachLeaf(tab, false, [&](const ClientLayoutPane &leaf) {
+    ++index;
+    entries.append(fullscreenPaneRecord(session().findPane(leaf.pane_id), agents, {.pane_id = leaf.pane_id, .index = index, .focused = tab.focused_pane == leaf.pane_id}));
+  });
 
   return entries;
 }

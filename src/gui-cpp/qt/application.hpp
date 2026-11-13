@@ -754,6 +754,22 @@ private:
     std::optional<HistoryHoverFrame> history_hover;
   };
 
+  // The render thread prepares each frame into the slot after the last one while the GUI
+  // thread presents, and posts the slot and the sequence it prepared there. A slot prepared
+  // again before its frame was presented holds a newer frame, whose own post presents it.
+  struct PresentedFrames {
+    std::array<PresentedFrame, 2> prepared;
+    std::array<std::uint64_t, 2> sequences{};
+    std::uint64_t sequence = 0;
+    std::size_t current = 0;
+
+    PresentedFrame &next() noexcept {
+      current = ++sequence % prepared.size();
+      sequences[current] = sequence;
+      return prepared[current];
+    }
+  };
+
   // Answers the commands of the active machine's client. A configuration reply views the
   // application's buffers, region `a`, until the client encodes it.
   struct HostCommands {
