@@ -41,6 +41,7 @@ import std;
 #if defined(__APPLE__)
 
 export import telar.gui.fonts.face;
+import telar.platform.primitives;
 
 
 #endif
@@ -203,8 +204,11 @@ struct ProgressCosine {
 export {
 namespace telar::gui::platform {
 
+// The kernel's random bytes, as everything in telar draws them.
 struct SecureRandom {
-  static void fill(std::span<std::uint8_t> output);
+  inline static void fill(std::span<std::uint8_t> output) noexcept {
+    runtime::randomBytes(output.data(), output.size());
+  }
 };
 
 }

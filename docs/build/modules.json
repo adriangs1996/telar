@@ -545,7 +545,6 @@
     "src/gui-cpp/platform/runtime_endpoint.cpp": "telar.gui.platform.profile_file",
     "src/gui-cpp/platform/profile_file.cpp": "telar.gui.platform.profile_file",
     "src/gui-cpp/platform/awake_clock.cpp": "telar.gui.platform.profile_file",
-    "src/gui-cpp/platform/secure_random.cpp": "telar.gui.platform.private_file_stamp",
     "src/gui-cpp/platform/managed_directory.cpp": "telar.gui.platform.login_shell",
     "src/gui-cpp/platform/window_lease.cpp": "telar.gui.platform.notification_commands",
     "src/gui-cpp/platform/stdio_socket.cpp": "telar.gui.platform.notification_commands",

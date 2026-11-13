@@ -48,7 +48,7 @@ target_link_libraries(gui-glyphs INTERFACE gui-core)
 add_library(gui-clock INTERFACE)
 target_link_libraries(gui-clock INTERFACE gui-core)
 
-add_library(gui-posix STATIC platform/clipboard_image_source.cpp platform/clipboard_image_file.c platform/peer_identity.cpp platform/window_lease.cpp platform/profile_file.cpp platform/secure_random.cpp platform/stdio_socket.cpp platform/managed_directory.cpp platform/process_group.cpp platform/process_group.c)
+add_library(gui-posix STATIC platform/clipboard_image_source.cpp platform/clipboard_image_file.c platform/peer_identity.cpp platform/window_lease.cpp platform/profile_file.cpp  platform/stdio_socket.cpp platform/managed_directory.cpp platform/process_group.cpp platform/process_group.c)
 target_sources(gui-posix PRIVATE platform/shared_image_source.cpp)
 target_link_libraries(gui-posix PUBLIC gui-core Threads::Threads)
 add_executable(telar-gui-command platform/surface_command_main.c)
