@@ -44,8 +44,31 @@ static void runGit(SystemAllocator &memory, const std::string &root, std::initia
   check(output.run(command, std::chrono::steady_clock::now() + std::chrono::seconds{5}) == 0);
 }
 
+// A workspace counts untracked files as uncommitted work, as git status --porcelain lists them,
+// and ignored ones as nothing.
+static void untrackedFiles(SystemAllocator &memory) {
+  std::array<char, 64> directory{};
+  std::strcpy(directory.data(), "/tmp/telar-git-test.XXXXXX");
+  check(::mkdtemp(directory.data()) != nullptr);
+  const std::string root{directory.data()};
+  runGit(memory, root, {"init", "--quiet", "--initial-branch=main", "--template="});
+  std::ofstream{root + "/.gitignore"} << "ignored.txt\n";
+  runGit(memory, root, {"add", ".gitignore"});
+  runGit(memory, root, {"commit", "--quiet", "-m", "Initial fixture"});
+  WorkspaceGitProbe probe{memory};
+  WorkspaceGitRequest request{.identity = 3};
+  request.path.assign(root);
+  check(probe.observe(request).dirty == false);
+  std::ofstream{root + "/ignored.txt"} << "ignored\n";
+  check(probe.observe(request).dirty == false);
+  std::ofstream{root + "/untracked.txt"} << "untracked\n";
+  check(probe.observe(request).dirty == true);
+  std::filesystem::remove_all(root);
+}
+
 void testWorktreeProbe() {
   SystemAllocator memory;
+  untrackedFiles(memory);
   std::array<char, 64> directory{};
   std::strcpy(directory.data(), "/tmp/telar-git-test.XXXXXX");
   check(::mkdtemp(directory.data()) != nullptr);
