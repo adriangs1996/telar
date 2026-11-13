@@ -1082,6 +1082,7 @@ template <ConcurrentAllocator Memory, Http2CapturePolicy Capture = IgnoreHttp2Ca
 class Http2EndpointConnection {
   static constexpr std::size_t maximum_streams = 64;
   static constexpr std::size_t connection_bytes = 16 * 1024 * 1024;
+  static constexpr std::size_t io_bytes = 16 * 1024;
   static constexpr std::size_t wire_body_bytes = HttpMessageLimits::body_bytes + HttpMessageLimits::head_bytes;
   static constexpr auto collection_timeout = std::chrono::seconds{30};
   using Local = SynchronizedAllocator<BudgetAllocator<Memory>>;
@@ -1211,7 +1212,12 @@ class Http2EndpointConnection {
     Http2EndpointConnection *owner;
     bool child;
     nghttp2_session *session = nullptr;
+    // What one read takes from the peer, erased as soon as nghttp2 has parsed it.
+    std::array<std::uint8_t, io_bytes> input;
+    // What nghttp2 last produced, [output_offset, output_size) still unsent. The storage is kept
+    // for the next batch, and erased once a batch is sent.
     std::optional<SensitiveAllocation<Local>> output;
+    std::size_t output_size = 0;
     std::size_t output_offset = 0;
     StreamReadiness read_wait = StreamReadiness::readable, write_wait = StreamReadiness::writable;
     bool eof = false;
@@ -1265,8 +1271,8 @@ public:
       active |= progress;
       if (!progress || failed_) { break; }
     }
-    const bool drained_origin = origin_.eof || (!origin_.output && !nghttp2_session_want_write(origin_.session));
-    if ((origin_.eof || child_.eof || draining_) && inflight() == 0 && !child_.output && !nghttp2_session_want_write(child_.session) && drained_origin) { failed_ = true; }
+    const bool drained_origin = origin_.eof || (origin_.output_size == 0 && !nghttp2_session_want_write(origin_.session));
+    if ((origin_.eof || child_.eof || draining_) && inflight() == 0 && child_.output_size == 0 && !nghttp2_session_want_write(child_.session) && drained_origin) { failed_ = true; }
     if (failed_) { child.halfClose(); origin.halfClose(); }
     return active;
   }
@@ -1553,21 +1559,23 @@ private:
   template <ByteStream Source>
   inline bool receive(bool child, Source &source, SocketInterest readiness) noexcept {
     if (side(child).eof || !readiness.satisfies(side(child).read_wait)) { return false; }
-    SensitiveBuffer<io_bytes> input;
-    const auto read = source.read(input.bytes());
+    auto &input = side(child).input;
+    const auto read = source.read(input);
     if (read.state == StreamResult::State::blocked) { side(child).read_wait = read.waiting; return false; }
     if (read.state == StreamResult::State::ended || read.state == StreamResult::State::failed) {
       side(child).eof = true;
       if (!child) {
         draining_ = true;
         side(child).output.reset();
+        side(child).output_size = 0;
         for (auto &slot : streams_) { if (auto *stream = tbc::raw(slot.get()); stream && !stream->origin_closed) { reject(*stream, "http2_origin_closed"); } }
       }
       return true;
     }
     side(child).read_wait = StreamReadiness::readable;
     // The session calls back into this connection while it parses the input.
-    const auto consumed = nghttp2_session_mem_recv2(side(child).session, input.bytes().data(), read.bytes);
+    const auto consumed = nghttp2_session_mem_recv2(side(child).session, input.data(), read.bytes);
+    eraseSensitive(input.data(), read.bytes);
     if (consumed < 0 || static_cast<std::size_t>(consumed) != read.bytes) { fail("http2_connection_failed"); }
     return read.bytes != 0;
   }
@@ -1578,21 +1586,25 @@ private:
     if (endpoint.eof && !endpoint.child) { return false; }
     if (!readiness.satisfies(endpoint.write_wait)) { return false; }
     try {
-      if (!endpoint.output) {
+      if (endpoint.output_size == 0) {
         const std::uint8_t *bytes = nullptr;
         const auto size = nghttp2_session_mem_send2(endpoint.session, &bytes);
         if (size < 0) { fail("http2_output_failed"); return false; }
         if (size == 0) { return false; }
-        endpoint.output.emplace(memory_, static_cast<std::size_t>(size));
+        if (!endpoint.output || endpoint.output->bytes().size() < static_cast<std::size_t>(size)) { endpoint.output.emplace(memory_, static_cast<std::size_t>(size)); }
         std::copy_n(bytes, size, endpoint.output->bytes().data());
+        endpoint.output_size = static_cast<std::size_t>(size);
         endpoint.output_offset = 0;
       }
-      const auto result = destination.write(endpoint.output->bytes().subspan(endpoint.output_offset));
+      const auto result = destination.write(endpoint.output->bytes().subspan(endpoint.output_offset, endpoint.output_size - endpoint.output_offset));
       if (result.state == StreamResult::State::blocked) { endpoint.write_wait = result.waiting; return false; }
       if (result.state != StreamResult::State::data || result.bytes == 0) { fail("http2_socket_write_failed"); return false; }
       endpoint.write_wait = StreamReadiness::writable;
       endpoint.output_offset += result.bytes;
-      if (endpoint.output_offset == endpoint.output->bytes().size()) { endpoint.output.reset(); }
+      if (endpoint.output_offset == endpoint.output_size) {
+        eraseSensitive(endpoint.output->bytes().data(), endpoint.output_size);
+        endpoint.output_size = 0;
+      }
       return true;
     } catch (...) { fail("http2_output_limit"); return false; }
   }
@@ -1600,7 +1612,7 @@ private:
   inline static auto interest(const Endpoint &endpoint) noexcept -> SocketInterest {
     SocketInterest result;
     if (!endpoint.eof) { result.include(endpoint.read_wait); }
-    if ((!endpoint.eof || endpoint.child) && (endpoint.output || nghttp2_session_want_write(endpoint.session))) { result.include(endpoint.write_wait); }
+    if ((!endpoint.eof || endpoint.child) && (endpoint.output_size != 0 || nghttp2_session_want_write(endpoint.session))) { result.include(endpoint.write_wait); }
     return result;
   }
   inline static void check(int result) { if (result < 0) { throw std::runtime_error{nghttp2_strerror(result)}; } }
@@ -1617,7 +1629,6 @@ private:
   }
 
   static constexpr unsigned maximum_rounds = 8, maximum_informational = 8;
-  static constexpr std::size_t io_bytes = 16 * 1024;
   tbc::view<BudgetAllocator<Memory>, tbc::lt::a> budget_;
   tbc::view<Local, tbc::lt::a> memory_;
   tbc::view<Secure, tbc::lt::a> secure_;
