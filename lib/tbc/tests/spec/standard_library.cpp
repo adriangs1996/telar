@@ -62,7 +62,7 @@ void optionalArrowRead(std::string_view text) {
 
 // CASE: std.unique_get_escape
 // PAIR: std.unique_get
-// SOURCE: lib/telar-base/include/telar_base/memory/allocator.hpp :: Owned
+// SOURCE: lib/base/include/telar_base/memory/allocator.hpp :: Owned
 // STATUS: implemented
 // CONTRACT: unique_ptr::get points into storage that the owner releases when it dies.
 // SCENARIO: The pointer from a local owner is returned.
@@ -75,7 +75,7 @@ const standard::record *uniqueGetEscape(std::string_view text) {
 
 // CASE: std.unique_get_read
 // PAIR: std.unique_get
-// SOURCE: lib/telar-base/include/telar_base/memory/allocator.hpp :: Owned
+// SOURCE: lib/base/include/telar_base/memory/allocator.hpp :: Owned
 // STATUS: implemented
 // CONTRACT: Contents read through a smart pointer borrow what the owned object borrows.
 // SCENARIO: The owned record's text outlives the owner; accept.
@@ -88,7 +88,7 @@ std::string_view uniqueGetRead(std::string_view text) {
 
 // CASE: std.value_or_dangling
 // PAIR: std.value_or
-// SOURCE: src/cli-cpp/hook.cppm :: optionalText
+// SOURCE: src/cli/hook/hook.cppm :: optionalText
 // STATUS: implemented
 // CONTRACT: value_or copies a contained view, keeping that view's dependency.
 // SCENARIO: The contained view's source dies before the copy is read.
@@ -106,7 +106,7 @@ void valueOrDangling() {
 
 // CASE: std.value_or_temporary
 // PAIR: std.value_or
-// SOURCE: src/cli-cpp/hook.cppm :: optionalText
+// SOURCE: src/cli/hook/hook.cppm :: optionalText
 // STATUS: implemented
 // CONTRACT: value_or on a temporary optional does not borrow the temporary optional.
 // SCENARIO: The copied view outlives the optional that held it; accept.
@@ -119,7 +119,7 @@ void valueOrTemporary(std::string_view text) {
 
 // CASE: std.iterator_invalidated
 // PAIR: std.iterator
-// SOURCE: lib/telar-config/include/telar_config/config.cppm :: AgentManifests::tryAdd
+// SOURCE: lib/config/config.cppm :: AgentManifests::tryAdd
 // STATUS: implemented
 // CONTRACT: A vector iterator points into the vector's storage, which growth may reallocate.
 // SCENARIO: push_back can invalidate the iterator before it is dereferenced.
@@ -134,7 +134,7 @@ void iteratorInvalidated() {
 
 // CASE: std.iterator_range_for
 // PAIR: std.iterator
-// SOURCE: lib/telar-config/include/telar_config/config.cppm :: AgentManifests::tryAdd
+// SOURCE: lib/config/config.cppm :: AgentManifests::tryAdd
 // STATUS: implemented
 // CONTRACT: Dereferencing an iterator designates the element, not the iterator object.
 // SCENARIO: A range-for element and a pointer to it come from the caller's vector; accept.
@@ -150,7 +150,7 @@ const std::string_view *iteratorRangeFor(const std::vector<std::string_view> &va
 
 // CASE: std.element_escape
 // PAIR: std.element
-// SOURCE: lib/telar-base/include/telar_base/text.cppm :: JsonNode::find
+// SOURCE: lib/base/text/text.cppm :: JsonNode::find
 // STATUS: implemented
 // CONTRACT: An element reference from a range-for borrows the iterated container.
 // SCENARIO: A pointer to an element of a local vector is returned.
@@ -166,7 +166,7 @@ const std::string_view *elementEscape() {
 
 // CASE: std.initializer_list_copy
 // PAIR: std.element
-// SOURCE: lib/telar-base/include/telar_base/text.cppm :: JsonNode::find
+// SOURCE: lib/base/text/text.cppm :: JsonNode::find
 // STATUS: implemented
 // CONTRACT: A container copies an initializer list instead of borrowing its backing array.
 // SCENARIO: Elements built from an initializer list are read after the list's full expression; accept.
@@ -179,7 +179,7 @@ void initializerListCopy(std::string_view text) {
 
 // CASE: std.find_escape
 // PAIR: std.algorithm
-// SOURCE: lib/telar-base/include/telar_base/diagnostics.cppm :: LimitLedger
+// SOURCE: lib/base/diagnostics/diagnostics.cppm :: LimitLedger
 // STATUS: implemented
 // CONTRACT: An iterator returned by an algorithm comes from its iterator arguments.
 // SCENARIO: The found element of a local vector is returned as a view.
@@ -193,7 +193,7 @@ std::string_view findEscape() {
 
 // CASE: std.find_parameter
 // PAIR: std.algorithm
-// SOURCE: lib/telar-base/include/telar_base/diagnostics.cppm :: LimitLedger
+// SOURCE: lib/base/diagnostics/diagnostics.cppm :: LimitLedger
 // STATUS: implemented
 // CONTRACT: A needle argument does not become part of the found iterator's dependency.
 // SCENARIO: The found element comes from the caller's vector and a temporary needle; accept.
@@ -206,7 +206,7 @@ std::string_view findParameter(const std::vector<std::string> &owners) {
 
 // CASE: std.exchange_dangling
 // PAIR: std.exchange
-// SOURCE: lib/telar-base/include/telar_base/memory.cppm :: SensitiveAllocation
+// SOURCE: lib/base/memory/memory.cppm :: SensitiveAllocation
 // STATUS: implemented
 // CONTRACT: std::exchange returns a copy of its object's previous value.
 // SCENARIO: The previous view's source dies before it is read.
@@ -224,7 +224,7 @@ void exchangeDangling() {
 
 // CASE: std.exchange_live
 // PAIR: std.exchange
-// SOURCE: lib/telar-base/include/telar_base/memory.cppm :: SensitiveAllocation
+// SOURCE: lib/base/memory/memory.cppm :: SensitiveAllocation
 // STATUS: implemented
 // CONTRACT: An exchanged previous value may be read while its source is alive.
 // SCENARIO: The source outlives the read; accept.
@@ -237,7 +237,7 @@ void exchangeLive(std::string_view text) {
 
 // CASE: std.get_if_escape
 // PAIR: std.get_if
-// SOURCE: src/runtime-cpp/proxy/authenticate.cppm :: ProxyDecision
+// SOURCE: src/runtime/proxy/authenticate/authenticate.cppm :: ProxyDecision
 // STATUS: implemented
 // CONTRACT: std::get_if points into the variant passed by address.
 // SCENARIO: A pointer into a local variant is returned.
@@ -250,7 +250,7 @@ const std::string_view *getIfEscape() {
 
 // CASE: std.get_if_parameter
 // PAIR: std.get_if
-// SOURCE: src/runtime-cpp/proxy/authenticate.cppm :: ProxyDecision
+// SOURCE: src/runtime/proxy/authenticate/authenticate.cppm :: ProxyDecision
 // STATUS: implemented
 // CONTRACT: A pointer into a caller's variant may outlive the call.
 // SCENARIO: The variant belongs to the caller; accept.
@@ -262,7 +262,7 @@ const std::string_view *getIfParameter(const std::variant<std::string_view, int>
 
 // CASE: std.map_escape
 // PAIR: std.map
-// SOURCE: src/cli-cpp/hooks/command.cppm :: Object::find
+// SOURCE: src/cli/hooks/command/command.cppm :: Object::find
 // STATUS: implemented
 // CONTRACT: Associative containers are tracked like other standard containers.
 // SCENARIO: A view into a local map's string is returned.
@@ -275,7 +275,7 @@ std::string_view mapEscape() {
 
 // CASE: std.map_view
 // PAIR: std.map
-// SOURCE: src/cli-cpp/hooks/command.cppm :: Object::find
+// SOURCE: src/cli/hooks/command/command.cppm :: Object::find
 // STATUS: implemented
 // CONTRACT: A view stored in a map keeps its own source rather than the map.
 // SCENARIO: The mapped view outlives the local map; accept.
@@ -288,7 +288,7 @@ std::string_view mapView(std::string_view text) {
 
 // CASE: std.function_dangling
 // PAIR: std.function
-// SOURCE: src/runtime-cpp/platform/request_worker.cppm :: RequestWorker::run
+// SOURCE: src/runtime/platform/request_worker/request_worker.cppm :: RequestWorker::run
 // STATUS: implemented
 // CONTRACT: A std::function keeps the borrows of the callable it wraps.
 // SCENARIO: The stored callback is invoked after its captured owner dies.
@@ -305,7 +305,7 @@ void functionDangling() {
 
 // CASE: std.function_live
 // PAIR: std.function
-// SOURCE: src/runtime-cpp/platform/request_worker.cppm :: RequestWorker::run
+// SOURCE: src/runtime/platform/request_worker/request_worker.cppm :: RequestWorker::run
 // STATUS: implemented
 // CONTRACT: A stored callback may run while its captures are alive.
 // SCENARIO: The owner outlives the invocation; accept.
@@ -319,7 +319,7 @@ void functionLive() {
 
 // CASE: std.converted_owner_escape
 // PAIR: std.converted_owner
-// SOURCE: lib/telar-platform/include/telar_platform/platform.cppm :: LinkedWorktree
+// SOURCE: lib/platform/platform.cppm :: LinkedWorktree
 // STATUS: implemented
 // CONTRACT: A wrapper whose element is a view borrows an owner converted into that element.
 // SCENARIO: An optional view of a local string is returned.
@@ -332,7 +332,7 @@ std::optional<std::string_view> convertedOwnerEscape() {
 
 // CASE: std.converted_owner_copied
 // PAIR: std.converted_owner
-// SOURCE: lib/telar-platform/include/telar_platform/platform.cppm :: LinkedWorktree
+// SOURCE: lib/platform/platform.cppm :: LinkedWorktree
 // STATUS: implemented
 // CONTRACT: An owner stored in an owning element of a pair is copied, not borrowed.
 // SCENARIO: Only the first element is a view; the temporary string fills the owned second element; accept.
@@ -344,7 +344,7 @@ std::pair<std::string_view, std::string> convertedOwnerCopied(std::string_view t
 
 // CASE: std.range_copy
 // PAIR: std.range_construction
-// SOURCE: src/gui-cpp/tests/font_fixture.cppm :: FontFixture::read
+// SOURCE: src/gui/tests/font_fixture/font_fixture.cppm :: FontFixture::read
 // STATUS: implemented
 // CONTRACT: A container built from an iterator range copies the designated elements, not the range's storage.
 // SCENARIO: The copied views outlive the local vector they were read from; accept.
@@ -357,7 +357,7 @@ std::vector<std::string_view> rangeCopy(std::string_view text) {
 
 // CASE: std.range_copy_dangling
 // PAIR: std.range_construction
-// SOURCE: src/gui-cpp/tests/font_fixture.cppm :: FontFixture::read
+// SOURCE: src/gui/tests/font_fixture/font_fixture.cppm :: FontFixture::read
 // STATUS: implemented
 // CONTRACT: Copied elements keep the dependencies of the elements they copy.
 // SCENARIO: The copied views point into strings owned by a local vector.
@@ -372,7 +372,7 @@ std::vector<std::string_view> rangeCopyDangling() {
 
 // CASE: std.initializer_list_range
 // PAIR: std.initializer_list_range
-// SOURCE: src/runtime-cpp/tests/worktree_probe_test.cpp :: worktree
+// SOURCE: src/runtime/tests/worktree_probe_test.cpp :: worktree
 // STATUS: implemented
 // CONTRACT: Elements copied out of an initializer list keep their own dependencies, not the backing array's.
 // SCENARIO: Literal pointers copied by a range-for are used after the loop; accept.
@@ -389,7 +389,7 @@ void initializerListRange() {
 
 // CASE: std.initializer_list_range_dangling
 // PAIR: std.initializer_list_range
-// SOURCE: src/runtime-cpp/tests/worktree_probe_test.cpp :: worktree
+// SOURCE: src/runtime/tests/worktree_probe_test.cpp :: worktree
 // STATUS: implemented
 // CONTRACT: A view copied out of an initializer list keeps its referent's dependency.
 // SCENARIO: The listed view's string dies before the copied view is read.
@@ -408,7 +408,7 @@ void initializerListRangeDangling() {
 
 // CASE: std.moved_into_caller_owner
 // PAIR: std.moved_owner
-// SOURCE: src/gui-cpp/qt/terminal_scene.cpp :: TerminalScene
+// SOURCE: src/gui/qt/terminal_scene.cpp :: TerminalScene
 // STATUS: implemented
 // CONTRACT: Moving a unique_ptr hands its object to the destination, so a raw pointer follows the new owner.
 // SCENARIO: The replacement moves into the caller's owner before the raw pointer is returned; accept.
@@ -423,7 +423,7 @@ standard::node *movedIntoCallerOwner(std::unique_ptr<standard::node> &owner) {
 
 // CASE: std.moved_into_container
 // PAIR: std.moved_owner
-// SOURCE: src/gui-cpp/application/session.cppm :: Session::apply(TabCreated)
+// SOURCE: src/gui/application/session/session.cppm :: Session::apply(TabCreated)
 // STATUS: implemented
 // CONTRACT: A unique_ptr moved into a container keeps its object alive for as long as the container.
 // SCENARIO: A reference to the created object outlives the moved-from local; accept.
@@ -438,7 +438,7 @@ standard::node &movedIntoContainer(std::vector<std::unique_ptr<standard::node>> 
 
 // CASE: std.moved_into_local_owner
 // PAIR: std.moved_owner
-// SOURCE: src/gui-cpp/qt/terminal_scene.cpp :: TerminalScene
+// SOURCE: src/gui/qt/terminal_scene.cpp :: TerminalScene
 // STATUS: implemented
 // CONTRACT: An object moved into a local owner dies with that owner.
 // SCENARIO: The raw pointer is returned after its new local owner goes out of scope.
@@ -454,7 +454,7 @@ standard::node *movedIntoLocalOwner() {
 
 // CASE: std.emplaced_view_escape
 // PAIR: std.emplaced_view
-// SOURCE: src/runtime-cpp/terminal/text_reader.cppm :: FrameSync::encode
+// SOURCE: src/runtime/terminal/text_reader/text_reader.cppm :: FrameSync::encode
 // STATUS: implemented
 // CONTRACT: A view element emplaced from a pointer and a size designates what the pointer designates.
 // SCENARIO: The emplaced view points into a local string that dies before the returned vector.
@@ -469,7 +469,7 @@ std::vector<std::string_view> emplacedViewEscape() {
 
 // CASE: std.emplaced_view_parameter
 // PAIR: std.emplaced_view
-// SOURCE: src/runtime-cpp/terminal/text_reader.cppm :: FrameSync::encode
+// SOURCE: src/runtime/terminal/text_reader/text_reader.cppm :: FrameSync::encode
 // STATUS: implemented
 // CONTRACT: A view element emplaced from a pointer and a size designates what the pointer designates.
 // SCENARIO: The emplaced view points into the caller's string; accept.
@@ -483,7 +483,7 @@ std::vector<std::string_view> emplacedViewParameter(const std::string &text) {
 
 // CASE: std.pointer_element_escape
 // PAIR: std.pointer_element
-// SOURCE: src/gui-cpp/platform/runtime_endpoint.cpp :: spawn
+// SOURCE: src/gui/platform/profile_file/runtime_endpoint.cpp :: spawn
 // STATUS: implemented
 // CONTRACT: A pointer element, pushed or emplaced, designates the object it points to.
 // SCENARIO: The stored pointers designate a local that dies before the returned vector.
@@ -499,7 +499,7 @@ std::vector<const int *> pointerElementEscape() {
 
 // CASE: std.pointer_element_position
 // PAIR: std.pointer_element
-// SOURCE: src/gui-cpp/platform/runtime_endpoint.cpp :: spawn
+// SOURCE: src/gui/platform/profile_file/runtime_endpoint.cpp :: spawn
 // STATUS: implemented
 // CONTRACT: The position an insertion or an emplacement takes is not stored as an element.
 // SCENARIO: The stored pointers designate the caller's object, inserted at a position of the local vector; accept.
@@ -514,7 +514,7 @@ std::vector<const int *> pointerElementPosition(const int &value) {
 
 // CASE: std.inserted_range_escape
 // PAIR: std.inserted_range
-// SOURCE: src/gui-cpp/fonts/row_text_layout.cppm :: RowTextLayout::appendPrimary
+// SOURCE: src/gui/fonts/row_text_layout/row_text_layout.cppm :: RowTextLayout::appendPrimary
 // STATUS: implemented
 // CONTRACT: An inserted iterator range copies the elements it designates, with their dependencies.
 // SCENARIO: The copied views point into a local string that dies before the returned vector.
@@ -530,7 +530,7 @@ std::vector<std::string_view> insertedRangeEscape() {
 
 // CASE: std.inserted_range_parameter
 // PAIR: std.inserted_range
-// SOURCE: src/gui-cpp/fonts/row_text_layout.cppm :: RowTextLayout::appendPrimary
+// SOURCE: src/gui/fonts/row_text_layout/row_text_layout.cppm :: RowTextLayout::appendPrimary
 // STATUS: implemented
 // CONTRACT: An inserted iterator range copies the elements it designates, not the source container's storage.
 // SCENARIO: The copied views point into the caller's string, while the local source vector dies; accept.
@@ -545,7 +545,7 @@ std::vector<std::string_view> insertedRangeParameter(const std::string &text) {
 
 // CASE: std.ranges_find_local
 // PAIR: std.ranges_find
-// SOURCE: src/runtime-cpp/redirect/record.cppm :: PacketLog::normalize
+// SOURCE: src/runtime/redirect/record/record.cppm :: PacketLog::normalize
 // STATUS: implemented
 // CONTRACT: std::ranges::find returns an iterator into its range, not into the value it searches for.
 // SCENARIO: The searched character is a temporary of the call; the iterator into the live local array stays valid.
@@ -559,7 +559,7 @@ std::size_t rangesFindLocal(const std::array<char, 16> &input) {
 
 // CASE: std.ranges_find_escape
 // PAIR: std.ranges_find
-// SOURCE: src/runtime-cpp/redirect/record.cppm :: PacketLog::normalize
+// SOURCE: src/runtime/redirect/record/record.cppm :: PacketLog::normalize
 // STATUS: implemented
 // CONTRACT: std::ranges::find returns an iterator into its range, not into the value it searches for.
 // SCENARIO: The iterator points into a local array that dies when the function returns.
@@ -572,7 +572,7 @@ const char *rangesFindEscape() {
 
 // CASE: std.release_handoff
 // PAIR: std.release
-// SOURCE: src/gui-cpp/qt/scene_nodes.hpp :: adoptSceneNode
+// SOURCE: src/gui/qt/scene_nodes.hpp :: adoptSceneNode
 // STATUS: implemented
 // CONTRACT: Releasing a unique owner hands its object to an owner the analysis does not see, as Rust's Box::into_raw does; borrows of it become unchecked.
 // SCENARIO: A scene node is adopted by its parent and a reference to it is returned; accept.
@@ -596,7 +596,7 @@ standard::scene_node &stdReleaseHandoff(standard::scene_parent &parent, std::uni
 
 // CASE: std.release_kept
 // PAIR: std.release
-// SOURCE: src/gui-cpp/qt/scene_nodes.hpp :: adoptSceneNode
+// SOURCE: src/gui/qt/scene_nodes.hpp :: adoptSceneNode
 // STATUS: implemented
 // CONTRACT: Releasing a unique owner hands its object to an owner the analysis does not see, as Rust's Box::into_raw does; borrows of it become unchecked.
 // SCENARIO: Without the release, the local owner destroys the node the returned reference designates.
@@ -609,7 +609,7 @@ standard::scene_node &stdReleaseKept(std::unique_ptr<standard::scene_node> child
 
 // CASE: std.optional_owner_transfer
 // PAIR: std.optional_owner
-// SOURCE: src/gui-cpp/qt/machine_controller.cpp :: clients_
+// SOURCE: src/gui/qt/machine_controller.cpp :: clients_
 // STATUS: implemented
 // CONTRACT: Moving an owner into an optional slot hands its object to the slot.
 // SCENARIO: A client installed in the receiver's slot outlives the call; accept.
@@ -630,7 +630,7 @@ namespace standard {
 
 // CASE: std.optional_owner_kept
 // PAIR: std.optional_owner
-// SOURCE: src/gui-cpp/qt/machine_controller.cpp :: clients_
+// SOURCE: src/gui/qt/machine_controller.cpp :: clients_
 // STATUS: implemented
 // CONTRACT: Moving an owner into an optional slot hands its object to the slot.
 // SCENARIO: The client stays with the local owner, which destroys it on return.
@@ -645,7 +645,7 @@ standard::scene_node &stdOptionalOwnerKept(standard::client_slots &slots) {
 
 // CASE: std.range_adaptor_view
 // PAIR: std.range_adaptor
-// SOURCE: src/gui-cpp/input/child_mouse.cppm :: TabDropSurface::at
+// SOURCE: src/gui/input/child_mouse/child_mouse.cppm :: TabDropSurface::at
 // STATUS: implemented
 // CONTRACT: A standard range adaptor over a view views the range it adapts; one that owns its range does not.
 // SCENARIO: An element of a reversed span over the receiver's array is returned; accept.
@@ -669,7 +669,7 @@ namespace standard {
 
 // CASE: std.range_adaptor_owning
 // PAIR: std.range_adaptor
-// SOURCE: src/gui-cpp/input/child_mouse.cppm :: TabDropSurface::at
+// SOURCE: src/gui/input/child_mouse/child_mouse.cppm :: TabDropSurface::at
 // STATUS: implemented
 // CONTRACT: A standard range adaptor over a view views the range it adapts; one that owns its range does not.
 // SCENARIO: A reversed temporary vector is owned by the adaptor, which dies with the loop.

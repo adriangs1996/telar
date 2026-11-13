@@ -6,7 +6,7 @@ using int_view = tbc::view<const int &, tbc::lt::a>;
 
 // CASE: core.shared_write
 // PAIR: core.shared_liveness
-// SOURCE: lib/ebnf/lexer.cppm :: token
+// SOURCE: lib/ebnf/lexer/lexer.cppm :: token
 // STATUS: pending
 // CONTRACT: Shared references protect their referent from writes while required.
 // SCENARIO: The later read keeps the loan live; diagnose the intervening write.
@@ -21,7 +21,7 @@ void sharedWrite() {
 
 // CASE: core.ended_shared
 // PAIR: core.shared_liveness
-// SOURCE: lib/ebnf/lexer.cppm :: token
+// SOURCE: lib/ebnf/lexer/lexer.cppm :: token
 // STATUS: pending
 // CONTRACT: A loan with no remaining use or observing destructor may end before scope exit.
 // SCENARIO: The view is consumed before the write; accept the later mutation.
@@ -37,7 +37,7 @@ void endedShared() {
 
 // CASE: core.overlapping_mutable
 // PAIR: core.reborrow
-// SOURCE: lib/telar-base/include/telar_base/memory/byte_queue.hpp :: appendUninitialized
+// SOURCE: lib/base/include/telar_base/memory/byte_queue.hpp :: appendUninitialized
 // STATUS: pending
 // CONTRACT: A live exclusive loan forbids an independent overlapping mutable loan.
 // SCENARIO: Both references remain used; report creation of the second loan.
@@ -54,7 +54,7 @@ void overlappingMutable() {
 
 // CASE: core.derived_reborrow
 // PAIR: core.reborrow
-// SOURCE: lib/telar-base/include/telar_base/memory/byte_queue.hpp :: appendUninitialized
+// SOURCE: lib/base/include/telar_base/memory/byte_queue.hpp :: appendUninitialized
 // STATUS: pending
 // CONTRACT: A derived exclusive reborrow temporarily suspends conflicting parent access.
 // SCENARIO: Use the child, end its scope, then resume the parent; accept.

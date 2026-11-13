@@ -11,9 +11,9 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-PROJECTS = {'runtime': 'src/runtime-cpp', 'cli': 'src/cli-cpp',
-            'gui': 'src/gui-cpp', 'auth': 'src/auth-daemon',
-            **{name: 'lib/telar-' + name for name in ('base', 'vocabulary', 'client', 'machines', 'platform', 'lua', 'plugins', 'config', 'tls', 'shell', 'git', 'render')},
+PROJECTS = {'runtime': 'src/runtime', 'cli': 'src/cli',
+            'gui': 'src/gui', 'auth': 'src/auth-daemon',
+            **{name: 'lib/' + name for name in ('base', 'vocabulary', 'client', 'machines', 'platform', 'lua', 'plugins', 'config', 'tls', 'shell', 'git', 'render')},
             'tbc': 'lib/tbc', 'ebnf': 'lib/ebnf'}
 CACHE = ROOT / '.toolchain'
 
@@ -46,7 +46,7 @@ def vt():
         if not (zig / '.complete').exists():
             run(ROOT / 'packaging/release/install-zig.sh', zig, manifest['versions']['zig'])
             (zig / '.complete').touch()
-        recipe = ROOT / 'src/runtime-cpp'
+        recipe = ROOT / 'src/runtime'
         identity = hashlib.sha256()
         for file in ('tools/build_ghostty.py', 'vendor/ghostty-vt-state.patch', 'vendor/wuffs-codec.json'):
             identity.update((recipe / file).read_bytes())

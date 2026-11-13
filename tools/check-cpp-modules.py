@@ -1,31 +1,34 @@
 #!/usr/bin/env python3
-"""Check module ownership, import cycles and the documented textual boundaries."""
+"""Check module ownership and paths, import cycles and the documented textual boundaries."""
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
-SCOPES = ('lib/', 'src/runtime-cpp/', 'src/cli-cpp/',
-          'src/gui-cpp/', 'src/auth-daemon/')
+SCOPES = ('lib/', 'src/runtime/', 'src/cli/',
+          'src/gui/', 'src/auth-daemon/')
 # The libraries each library's modules may import, lowest layer first. A library reaching a
 # higher one, or a sibling it does not list, rebuilds and drags in more than it uses.
 LIBRARY_LAYERS = {
-    'telar-base': set(),
-    'telar-vocabulary': set(),
-    'telar-shell': set(),
+    'base': set(),
+    'vocabulary': set(),
+    'shell': set(),
     'ebnf': set(),
-    'telar-client': {'telar-base'},
-    'telar-lua': {'telar-base'},
-    'telar-render': {'telar-base'},
-    'telar-platform': {'telar-base', 'telar-vocabulary'},
-    'telar-machines': {'telar-base', 'telar-client'},
-    'telar-git': {'telar-base', 'telar-platform'},
-    'telar-tls': {'telar-base', 'telar-platform'},
-    'telar-plugins': {'telar-base', 'telar-client', 'telar-platform'},
-    'telar-config': {'telar-base', 'telar-client', 'telar-lua', 'telar-platform', 'telar-plugins'},
+    'client': {'base'},
+    'lua': {'base'},
+    'render': {'base'},
+    'platform': {'base', 'vocabulary'},
+    'machines': {'base', 'client'},
+    'git': {'base', 'platform'},
+    'tls': {'base', 'platform'},
+    'plugins': {'base', 'client', 'platform'},
+    'config': {'base', 'client', 'lua', 'platform', 'plugins'},
 }
+# The first segment after `telar.` that names a process tree in src/; any other module is a library.
+PROCESSES = {'runtime': 'src/runtime', 'gui': 'src/gui', 'cli': 'src/cli'}
+PLATFORMS = ('linux', 'macos')
 
 
 def main():
@@ -53,6 +56,7 @@ def main():
         if '#include' in text and not text.startswith('module;'):
             raise RuntimeError('Textual dependencies need a global fragment: ' + source)
     check_library_layers(inventory['interfaces'], graph)
+    check_module_paths(owned)
     visited, active = set(), []
     def visit(name):
         if name in active:
@@ -113,8 +117,63 @@ def check_library_layers(interfaces, graph):
                 raise RuntimeError(f'{name} imports {dependency}: {library} may not depend on {target}')
 
 
+COMMENTS_RE = re.compile(r'//[^\n]*|/\*.*?\*/', re.S)
+DECLARATION_RE = re.compile(r'^[ \t]*(export[ \t]+)?module[ \t]+([A-Za-z_][\w.]*)(?::([A-Za-z_][\w.]*))?[ \t]*;', re.M)
+
+
+def module_folder(name):
+    """The folder of a module is its name: telar.base.memory lives in lib/base/memory."""
+    parts = name.split('.')
+    if parts[0] != 'telar' or len(parts) < 2 or parts[1] in PROCESSES and len(parts) < 3:
+        return None
+    if parts[1] in PROCESSES:
+        return PurePosixPath(PROCESSES[parts[1]], *parts[2:])
+    return PurePosixPath('lib', *parts[1:])
+
+
+def expected_paths(path, exported, name, partition):
+    """Where a unit of `name` may live. The interface and each partition have one path; an
+    implementation unit keeps its file name in the module folder or in its linux/ or macos/ folder."""
+    folder = module_folder(name)
+    if folder is None:
+        return None
+    last = name.rsplit('.', 1)[-1]
+    source = PurePosixPath(path)
+    if partition:
+        return [folder / f'{last}-{partition}{source.suffix}']
+    if exported:
+        return [folder / f'{last}.cppm']
+    return [folder / source.name, *(folder / platform / source.name for platform in PLATFORMS)]
+
+
+def check_module_paths(files):
+    """Rule 1: the path is the module name. Every unit lives in the folder of the module it
+    declares, so no folder holds a unit of another module."""
+    errors = []
+    for path in sorted(name for name in files if name.endswith(('.cppm', '.cpp'))):
+        match = DECLARATION_RE.search(COMMENTS_RE.sub('', (ROOT / path).read_text(errors='replace')))
+        if not match:
+            if path.endswith('.cppm'):
+                errors.append(f'{path} declares no module')
+            continue
+        exported, name, partition = bool(match[1]), match[2], match[3]
+        expected = expected_paths(path, exported, name, partition)
+        if expected is None:
+            errors.append(f'{path} declares {name}, which names no folder')
+        elif PurePosixPath(path) not in expected:
+            unit = f'{name}:{partition}' if partition else name
+            errors.append(f'{path} declares {unit}; it belongs in {expected[0]}')
+    if errors:
+        raise RuntimeError('Module units outside the folder of their module:\n  ' + '\n  '.join(errors))
+
+
+# Test doubles that implement a production module live in its folder (rule 1), so the path no
+# longer marks them as tests; only test executables link them.
+TEST_UNITS = {'src/gui/platform/profile_file/controlled_awake_clock.cpp'}
+
+
 def owned_units(files):
-    return sorted(name for name in files if name.endswith(('.cppm', '.cpp'))
+    return sorted(name for name in files if name.endswith(('.cppm', '.cpp')) and name not in TEST_UNITS
                   and not re.search(r'/(tests|tools)/', name) and global_fragment((ROOT / name).read_text()))
 
 

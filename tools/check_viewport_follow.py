@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Check runtime live-follow through an isolated PTY and the real wire codec.
 
-Build src/runtime-cpp/tests/viewport_follow_probe.cpp with
-build_runtime_scroll_probe.py, adding --include-dir src/gui-cpp. Supply
+Build src/runtime/tests/viewport_follow_probe.cpp with
+build_runtime_scroll_probe.py, adding --include-dir src/gui. Supply
 the resulting probe and one frozen runtime.
 This checks cells and protocol behavior only; it does not measure GUI latency or presentation.
 

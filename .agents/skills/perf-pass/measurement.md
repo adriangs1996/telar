@@ -23,12 +23,12 @@ inputs.
 
 | Workload | Tool | Probe |
 | --- | --- | --- |
-| GUI text scene construction | `src/gui-cpp/tools/compare_text_scene.py` | `gui-text-scene-probe` |
-| GUI terminal scene | `src/gui-cpp/tools/compare_terminal_scene.py` | `gui-terminal-scene-probe` |
+| GUI text scene construction | `src/gui/tools/compare_text_scene.py` | `gui-text-scene-probe` |
+| GUI terminal scene | `src/gui/tools/compare_terminal_scene.py` | `gui-terminal-scene-probe` |
 | GUI terminal scene, cells outside ASCII | `compare_terminal_scene.py --snapshot-workload unicode` | `gui-terminal-scene-probe` |
-| GUI command separators | `src/gui-cpp/tools/compare_separators.py` | `gui-separators-probe` |
-| Runtime PTY round trips | `src/runtime-cpp/tools/bench_control_pty.py` | `control-pty-latency-probe` |
-| Runtime control queries | `src/runtime-cpp/tools/bench_control_queries.py` | its own fixtures |
+| GUI command separators | `src/gui/tools/compare_separators.py` | `gui-separators-probe` |
+| Runtime PTY round trips | `src/runtime/tools/bench_control_pty.py` | `control-pty-latency-probe` |
+| Runtime control queries | `src/runtime/tools/bench_control_queries.py` | its own fixtures |
 | Complete GUI against Ghostty | `tools/gui_tui_latency.py` | the GUI and runtime |
 
 A workload with no tool gets a probe beside the existing ones (a target in the

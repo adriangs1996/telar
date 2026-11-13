@@ -1,0 +1,27 @@
+module;
+
+#include "tests/controlled_awake_clock.hpp"
+#include <cstdint>
+#include <atomic>
+
+
+
+module telar.gui.platform.profile_file;
+
+namespace {
+
+std::atomic<std::uint64_t> &timestamp() noexcept {
+  static std::atomic<std::uint64_t> now_ns = 0;
+
+  return now_ns;
+}
+
+}
+
+extern "C++" void telar::gui::test::ControlledAwakeClock::set(std::uint64_t now_ns) noexcept {
+  timestamp().store(now_ns, std::memory_order_relaxed);
+}
+
+std::uint64_t telar::gui::platform::AwakeClock::nowNanoseconds() noexcept {
+  return timestamp().load(std::memory_order_relaxed);
+}

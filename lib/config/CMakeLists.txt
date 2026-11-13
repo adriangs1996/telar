@@ -1,0 +1,21 @@
+cmake_minimum_required(VERSION 4.4.5)
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/telar_editor.cmake")
+project(telar_config LANGUAGES CXX)
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/cpp_modules.cmake")
+
+foreach(dependency IN ITEMS lua plugins)
+  if(NOT TARGET telar-${dependency})
+    add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../${dependency}" "${CMAKE_BINARY_DIR}/telar-${dependency}")
+  endif()
+endforeach()
+
+add_library(telar-config STATIC)
+add_library(telar::config ALIAS telar-config)
+telar_modules(telar-config)
+target_include_directories(telar-config PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_link_libraries(telar-config PUBLIC telar::lua telar::plugins)
+
+set(GHOSTTY_VT_ROOT "" CACHE PATH "Installed libghostty-vt prefix")
+find_path(GHOSTTY_VT_INCLUDE_DIR ghostty/vt/unicode.h HINTS "${GHOSTTY_VT_ROOT}/include" REQUIRED)
+target_include_directories(telar-config PUBLIC "${GHOSTTY_VT_INCLUDE_DIR}")
+telar_editor_flags(telar-config GHOSTTY)

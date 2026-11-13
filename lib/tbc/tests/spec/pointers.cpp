@@ -51,7 +51,7 @@ namespace pointers {
 
 // CASE: pointer.dereference_dead
 // PAIR: pointer.dereference
-// SOURCE: lib/telar-base/include/telar_base/text.cppm :: JsonNode::find
+// SOURCE: lib/base/text/text.cppm :: JsonNode::find
 // STATUS: implemented
 // CONTRACT: Reading through a pointer requires its pointee to be alive.
 // SCENARIO: The pointee dies at the end of its block before the pointer is dereferenced.
@@ -68,7 +68,7 @@ void pointerDereferenceDead() {
 
 // CASE: pointer.dereference_live
 // PAIR: pointer.dereference
-// SOURCE: lib/telar-base/include/telar_base/text.cppm :: JsonNode::find
+// SOURCE: lib/base/text/text.cppm :: JsonNode::find
 // STATUS: implemented
 // CONTRACT: A pointer to a live view lends that view's referent.
 // SCENARIO: The pointee and its referent outlive every read; accept.
@@ -82,7 +82,7 @@ void pointerDereferenceLive(std::string_view text) {
 
 // CASE: pointer.referent_invalidated
 // PAIR: pointer.referent
-// SOURCE: lib/telar-base/include/telar_base/text.cppm :: JsonNode::find
+// SOURCE: lib/base/text/text.cppm :: JsonNode::find
 // STATUS: implemented
 // CONTRACT: A member call through a pointer reads the pointee's contents, not the pointer's storage.
 // SCENARIO: The view designated by the pointer loses its referent before data() is read.
@@ -98,7 +98,7 @@ void pointerReferentInvalidated() {
 
 // CASE: pointer.referent_live
 // PAIR: pointer.referent
-// SOURCE: lib/telar-base/include/telar_base/text.cppm :: JsonNode::find
+// SOURCE: lib/base/text/text.cppm :: JsonNode::find
 // STATUS: implemented
 // CONTRACT: A member call through a pointer to a live view is valid.
 // SCENARIO: The referent is unchanged before data() is read; accept.
@@ -113,7 +113,7 @@ void pointerReferentLive() {
 
 // CASE: pointer.write_through_dead
 // PAIR: pointer.write_through
-// SOURCE: src/cli-cpp/integration/settings.cppm :: installEvents
+// SOURCE: src/cli/integration/settings/settings.cppm :: installEvents
 // STATUS: implemented
 // CONTRACT: Writing through a pointer updates the variable it designates.
 // SCENARIO: A view stored through the pointer outlives its source.
@@ -131,7 +131,7 @@ void pointerWriteThroughDead() {
 
 // CASE: pointer.write_through_live
 // PAIR: pointer.write_through
-// SOURCE: src/cli-cpp/integration/settings.cppm :: installEvents
+// SOURCE: src/cli/integration/settings/settings.cppm :: installEvents
 // STATUS: implemented
 // CONTRACT: A view written through a pointer may be read while its source is alive.
 // SCENARIO: The source outlives the read of the designated variable; accept.
@@ -146,7 +146,7 @@ void pointerWriteThroughLive(std::string_view text) {
 
 // CASE: pointer.arrow_call_dead
 // PAIR: pointer.arrow_call
-// SOURCE: src/cli-cpp/integration/settings.cppm :: installEvents
+// SOURCE: src/cli/integration/settings/settings.cppm :: installEvents
 // STATUS: implemented
 // CONTRACT: A method called through a pointer writes the pointee's state.
 // SCENARIO: The pointee keeps a view of a source that dies before the read.
@@ -164,7 +164,7 @@ void pointerArrowCallDead() {
 
 // CASE: pointer.arrow_call_live
 // PAIR: pointer.arrow_call
-// SOURCE: src/cli-cpp/integration/settings.cppm :: installEvents
+// SOURCE: src/cli/integration/settings/settings.cppm :: installEvents
 // STATUS: implemented
 // CONTRACT: State written through a pointer may be read while its source is alive.
 // SCENARIO: The kept source outlives the read; accept.
@@ -179,7 +179,7 @@ void pointerArrowCallLive(std::string_view text) {
 
 // CASE: pointer.parameter_pointee_live
 // PAIR: pointer.parameter_pointee
-// SOURCE: lib/telar-config/include/telar_config/config.cppm :: AgentManifests::find
+// SOURCE: lib/config/config.cppm :: AgentManifests::find
 // STATUS: implemented
 // CONTRACT: A field read through a pointer parameter borrows the pointee's contents, not the pointee.
 // SCENARIO: The returned text outlives the local record that held it; accept.
@@ -192,7 +192,7 @@ std::string_view pointerParameterPointeeLive(std::string_view source) {
 
 // CASE: pointer.parameter_pointee_dead
 // PAIR: pointer.parameter_pointee
-// SOURCE: lib/telar-config/include/telar_config/config.cppm :: AgentManifests::find
+// SOURCE: lib/config/config.cppm :: AgentManifests::find
 // STATUS: implemented
 // CONTRACT: Contents read through a pointer parameter keep the dependency on their own source.
 // SCENARIO: The text's source dies before the returned view is read.
@@ -210,7 +210,7 @@ void pointerParameterPointeeDead() {
 
 // CASE: lambda.copy_capture_dead
 // PAIR: lambda.copy_capture
-// SOURCE: src/runtime-cpp/tests/pty_response_queue_test.cpp :: testConcurrentResponses
+// SOURCE: src/runtime/tests/pty_response_queue_test.cpp :: testConcurrentResponses
 // STATUS: implemented
 // CONTRACT: A closure holds copies of its by-value captures, including the borrows of a copied view.
 // SCENARIO: The captured view's source dies before the closure's result is read.
@@ -229,7 +229,7 @@ void lambdaCopyCaptureDead() {
 
 // CASE: lambda.copy_capture_live
 // PAIR: lambda.copy_capture
-// SOURCE: src/runtime-cpp/tests/pty_response_queue_test.cpp :: testConcurrentResponses
+// SOURCE: src/runtime/tests/pty_response_queue_test.cpp :: testConcurrentResponses
 // STATUS: implemented
 // CONTRACT: A closure's result may be read while its captured view's source is alive.
 // SCENARIO: The source outlives the read; accept.
@@ -242,7 +242,7 @@ void lambdaCopyCaptureLive(std::string_view text) {
 
 // CASE: lambda.reference_capture_dead
 // PAIR: lambda.reference_capture
-// SOURCE: lib/telar-platform/include/telar_platform/platform.cppm :: ServerOptions::parse
+// SOURCE: lib/platform/platform.cppm :: ServerOptions::parse
 // STATUS: implemented
 // CONTRACT: A by-reference capture is the caller's own variable when the enclosing function calls the lambda.
 // SCENARIO: The lambda returns a view of a captured owner that dies before the read.
@@ -260,7 +260,7 @@ void lambdaReferenceCaptureDead() {
 
 // CASE: lambda.reference_capture_contents
 // PAIR: lambda.reference_capture
-// SOURCE: lib/telar-platform/include/telar_platform/platform.cppm :: ServerOptions::parse
+// SOURCE: lib/platform/platform.cppm :: ServerOptions::parse
 // STATUS: implemented
 // CONTRACT: Contents read through a by-reference capture do not borrow the captured variable's storage.
 // SCENARIO: The result views the argument array, not the local span that was captured; accept.
@@ -276,7 +276,7 @@ pointers::options lambdaReferenceCaptureContents(std::span<const char *const> ar
 
 // CASE: lambda.write_capture_dead
 // PAIR: lambda.write_capture
-// SOURCE: lib/telar-platform/include/telar_platform/platform.cppm :: ServerOptions::parse
+// SOURCE: lib/platform/platform.cppm :: ServerOptions::parse
 // STATUS: implemented
 // CONTRACT: A write to a by-reference capture updates the caller's variable.
 // SCENARIO: The lambda stores a view whose source dies before the caller reads it.
@@ -294,7 +294,7 @@ void lambdaWriteCaptureDead() {
 
 // CASE: lambda.write_capture_live
 // PAIR: lambda.write_capture
-// SOURCE: lib/telar-platform/include/telar_platform/platform.cppm :: ServerOptions::parse
+// SOURCE: lib/platform/platform.cppm :: ServerOptions::parse
 // STATUS: implemented
 // CONTRACT: A view stored through a by-reference capture may be read while its source is alive.
 // SCENARIO: The source outlives the caller's read; accept.
@@ -309,7 +309,7 @@ void lambdaWriteCaptureLive(std::string_view text) {
 
 // CASE: pointer.by_value_parameter_local
 // PAIR: pointer.parameter_write
-// SOURCE: src/gui-cpp/tests/session_fixture.cppm :: deliverSingleCell
+// SOURCE: src/gui/tests/session_fixture/session_fixture.cppm :: deliverSingleCell
 // STATUS: implemented
 // CONTRACT: A by-value parameter is the callee's own copy; filling it with local views does not reach the caller.
 // SCENARIO: The parameter is filled with a view of a local array and consumed before returning; accept.
@@ -323,7 +323,7 @@ void pointerByValueParameterLocal(pointers::frame frame) {
 
 // CASE: pointer.reference_parameter_escape
 // PAIR: pointer.parameter_write
-// SOURCE: src/gui-cpp/tests/session_fixture.cppm :: deliverSingleCell
+// SOURCE: src/gui/tests/session_fixture/session_fixture.cppm :: deliverSingleCell
 // STATUS: implemented
 // CONTRACT: A write through a reference parameter reaches the caller and must outlive the call.
 // SCENARIO: The caller's frame receives a view of a local array.
@@ -407,7 +407,7 @@ namespace pointers {
 
 // CASE: pointer.reference_field_read
 // PAIR: pointer.reference_field
-// SOURCE: src/runtime-cpp/tls/interception.cppm :: TlsStream::peekView
+// SOURCE: src/runtime/tls/interception/interception.cppm :: TlsStream::peekView
 // STATUS: pending
 // CONTRACT: Reading a reference field yields what its referent holds, not the referent itself; a result that names the referent's region rather than the reference's, as `&'s &'b str` does, needs one region per level.
 // SCENARIO: The local view refers to the caller's string, so the view read back may be returned; accept.
@@ -421,7 +421,7 @@ std::string_view pointerReferenceFieldRead(const std::string &text) {
 
 // CASE: pointer.reference_field_dead
 // PAIR: pointer.reference_field
-// SOURCE: src/runtime-cpp/tls/interception.cppm :: TlsStream::peekView
+// SOURCE: src/runtime/tls/interception/interception.cppm :: TlsStream::peekView
 // STATUS: implemented
 // CONTRACT: Reading a reference field yields what its referent holds, not the referent itself.
 // SCENARIO: The view read back refers to a local string that dies on return.
@@ -436,7 +436,7 @@ std::string_view pointerReferenceFieldDead() {
 
 // CASE: pointer.nested_reference_wrapper
 // PAIR: pointer.nested_reference
-// SOURCE: src/runtime-cpp/proxy/runtime.cppm :: ApplicationRelay::advance
+// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: ApplicationRelay::advance
 // STATUS: pending
 // CONTRACT: A wrapper's view of the stream it wraps can name the stream's own region rather than the wrapper's, as `&'s Stream<'b>` does; one label per field cannot yet tell the two apart.
 // SCENARIO: The relay keeps a pointer into the caller's buffer through two local wrappers; accept.
@@ -450,7 +450,7 @@ void pointerNestedReferenceWrapper(pointers::buffer &source, pointers::relay &ou
 
 // CASE: pointer.nested_reference_dead
 // PAIR: pointer.nested_reference
-// SOURCE: src/runtime-cpp/proxy/runtime.cppm :: ApplicationRelay::advance
+// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: ApplicationRelay::advance
 // STATUS: implemented
 // CONTRACT: Wrappers that hold references to streams reach the buffer the innermost one designates.
 // SCENARIO: The relay keeps a pointer into a local buffer past its lifetime.
@@ -465,7 +465,7 @@ void pointerNestedReferenceDead(pointers::relay &out) {
 
 // CASE: pointer.aggregate_reference_member
 // PAIR: pointer.aggregate_reference
-// SOURCE: src/runtime-cpp/http1/intercepted_relay.cppm :: Http1InterceptedRelay::Sink
+// SOURCE: src/runtime/http1/intercepted_relay/intercepted_relay.cppm :: Http1InterceptedRelay::Sink
 // STATUS: implemented
 // CONTRACT: An aggregate's reference member is bound to its initializer, so operations through it reach the referent.
 // SCENARIO: Clearing the string through the member invalidates an earlier view of it.
@@ -480,7 +480,7 @@ void pointerAggregateReferenceMember(std::string &text) {
 
 // CASE: pointer.aggregate_reference_read
 // PAIR: pointer.aggregate_reference
-// SOURCE: src/runtime-cpp/http1/intercepted_relay.cppm :: Http1InterceptedRelay::Sink
+// SOURCE: src/runtime/http1/intercepted_relay/intercepted_relay.cppm :: Http1InterceptedRelay::Sink
 // STATUS: implemented
 // CONTRACT: An aggregate's reference member is bound to its initializer, so operations through it reach the referent.
 // SCENARIO: The view is read before the string is cleared through the member; accept.
@@ -495,7 +495,7 @@ void pointerAggregateReferenceRead(std::string &text) {
 
 // CASE: pointer.parameter_write_dead
 // PAIR: pointer.parameter_write_through
-// SOURCE: src/runtime-cpp/proxy/runtime.cppm :: FlowGate::write
+// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: FlowGate::write
 // STATUS: implemented
 // CONTRACT: A write through a pointer parameter lands in the object the argument designates.
 // SCENARIO: The record behind the pointer keeps a view of a string that dies before it is read.
@@ -513,7 +513,7 @@ void pointerParameterWriteDead() {
 
 // CASE: pointer.parameter_write_live
 // PAIR: pointer.parameter_write_through
-// SOURCE: src/runtime-cpp/proxy/runtime.cppm :: FlowGate::write
+// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: FlowGate::write
 // STATUS: implemented
 // CONTRACT: A write through a pointer parameter lands in the object the argument designates.
 // SCENARIO: The record behind the pointer is read while the string lives; accept.
@@ -529,7 +529,7 @@ void pointerParameterWriteLive() {
 
 // CASE: pointer.parameter_read_invalidated
 // PAIR: pointer.parameter_read_through
-// SOURCE: src/runtime-cpp/proxy/runtime.cppm :: FlowStream::write
+// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: FlowStream::write
 // STATUS: implemented
 // CONTRACT: A callee that reads through a pointer parameter uses what the argument's pointee holds.
 // SCENARIO: The record's view is invalidated before the callee reads it through the pointer.
@@ -543,7 +543,7 @@ void pointerParameterReadInvalidated(std::string &text) {
 
 // CASE: pointer.parameter_read_live
 // PAIR: pointer.parameter_read_through
-// SOURCE: src/runtime-cpp/proxy/runtime.cppm :: FlowStream::write
+// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: FlowStream::write
 // STATUS: implemented
 // CONTRACT: A callee that reads through a pointer parameter uses what the argument's pointee holds.
 // SCENARIO: The callee reads the record before the string is cleared; accept.
@@ -568,7 +568,7 @@ namespace pointers {
 
 // CASE: pointer.member_pointer_field
 // PAIR: pointer.member_pointer
-// SOURCE: lib/telar-client/include/telar_client/serializers/telar_serializer.hpp :: memberValue
+// SOURCE: lib/client/include/telar_client/serializers/telar_serializer.hpp :: memberValue
 // STATUS: implemented
 // CONTRACT: A member pointer selects a field of its object, so the result lies in that object's storage.
 // SCENARIO: The selected field of a live caller object is observed in place; accept.
@@ -581,7 +581,7 @@ void memberPointerField(pointers::labeled &record) {
 
 // CASE: pointer.member_pointer_escape
 // PAIR: pointer.member_pointer
-// SOURCE: lib/telar-client/include/telar_client/serializers/telar_serializer.hpp :: memberValue
+// SOURCE: lib/client/include/telar_client/serializers/telar_serializer.hpp :: memberValue
 // STATUS: implemented
 // CONTRACT: A member pointer selects a field of its object, so the result lies in that object's storage.
 // SCENARIO: The selected string belongs to a local object that dies when the function returns.
@@ -594,7 +594,7 @@ std::string_view memberPointerEscape() {
 
 // CASE: pointer.c_function_resource
 // PAIR: pointer.c_function
-// SOURCE: lib/telar-platform/include/telar_platform/platform.cppm :: DirectoryStream
+// SOURCE: lib/platform/platform.cppm :: DirectoryStream
 // STATUS: implemented
 // CONTRACT: A C function's pointer borrows only arguments of its own pointee type; otherwise, like a raw pointer from Rust's FFI, it names an unchecked resource.
 // SCENARIO: The directory stream does not point into its temporary path; accept.
@@ -609,7 +609,7 @@ void cFunctionResource() {
 
 // CASE: pointer.c_function_argument
 // PAIR: pointer.c_function
-// SOURCE: lib/telar-platform/include/telar_platform/platform.cppm :: DirectoryStream
+// SOURCE: lib/platform/platform.cppm :: DirectoryStream
 // STATUS: implemented
 // CONTRACT: A C function's pointer borrows only arguments of its own pointee type; otherwise, like a raw pointer from Rust's FFI, it names an unchecked resource.
 // SCENARIO: strchr points into its temporary string, which dies before the result is read through.
@@ -622,7 +622,7 @@ bool cFunctionArgument() {
 
 // CASE: pointer.function_pointer_resource
 // PAIR: pointer.c_function
-// SOURCE: src/cli-cpp/tab.cppm :: sqlite3_column_text through a loaded symbol
+// SOURCE: src/cli/tab/tab.cppm :: sqlite3_column_text through a loaded symbol
 // STATUS: implemented
 // CONTRACT: A C function's pointer borrows only arguments of its own pointee type; otherwise, like a raw pointer from Rust's FFI, it names an unchecked resource.
 // SCENARIO: A column read through a function pointer is a library row, not a view of the statement handle; accept.
@@ -637,7 +637,7 @@ bool functionPointerResource(column_text text, void *statement) {
 
 // CASE: pointer.read_live_pointee
 // PAIR: pointer.read_through
-// SOURCE: src/runtime-cpp/redirect/record.cppm :: PacketLog::normalize
+// SOURCE: src/runtime/redirect/record/record.cppm :: PacketLog::normalize
 // STATUS: implemented
 // CONTRACT: Reading through a pointer needs a live pointee wherever the read appears, as any use of a borrow does in Rust.
 // SCENARIO: The caller's string outlives the read in the condition; accept.
@@ -653,7 +653,7 @@ bool readLivePointee(const std::string &source) {
 
 // CASE: pointer.read_dead_pointee
 // PAIR: pointer.read_through
-// SOURCE: src/runtime-cpp/redirect/record.cppm :: PacketLog::normalize
+// SOURCE: src/runtime/redirect/record/record.cppm :: PacketLog::normalize
 // STATUS: implemented
 // CONTRACT: Reading through a pointer needs a live pointee wherever the read appears, as any use of a borrow does in Rust.
 // SCENARIO: The temporary string dies with its declaration, before the condition reads through the pointer.

@@ -1,8 +1,8 @@
 dev_dir := justfile_directory() / ".dev"
 release_dev_dir := dev_dir / "release"
 release_build_dir := "out-dev-release"
-runtime_dir := justfile_directory() / "src/runtime-cpp"
-gui_dir := justfile_directory() / "src/gui-cpp"
+runtime_dir := justfile_directory() / "src/runtime"
+gui_dir := justfile_directory() / "src/gui"
 renderer_dir := justfile_directory() / "tools/diagram-renderer"
 runtime := runtime_dir / "out/telar-runtime"
 cli := runtime_dir / "out/telar"
@@ -19,7 +19,7 @@ default:
     @just --list
 
 # Build the pinned libghostty-vt and bootstrap its verified Zig compiler.
-[working-directory: "src/runtime-cpp"]
+[working-directory: "src/runtime"]
 vt:
     "{{ justfile_directory() }}/tools/cpp" vt
 
@@ -27,12 +27,12 @@ vt:
 build: runtime-build gui-build
 
 # Build the runtime, using out/Debug by default.
-[working-directory: "src/runtime-cpp"]
+[working-directory: "src/runtime"]
 runtime-build directory="out" build_type="Debug": (runtime-configure directory build_type if build_type == "Debug" { "" } else { no_tests })
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build "{{ directory }}" --target telar-runtime telar
 
 # Build the GUI, using out/Debug by default.
-[working-directory: "src/gui-cpp"]
+[working-directory: "src/gui"]
 gui-build directory="out" build_type="Debug": (gui-configure directory build_type if build_type == "Debug" { "" } else { no_tests })
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build "{{ directory }}" --target telar-gui telar-gui-command
 
@@ -91,13 +91,13 @@ stop-release:
 test: runtime-test gui-test
 
 # Build and run the runtime tests. Extra arguments are passed to CTest.
-[working-directory: "src/runtime-cpp"]
+[working-directory: "src/runtime"]
 runtime-test *args: (runtime-configure "out" "Debug")
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out
     "{{ justfile_directory() }}/tools/cpp" exec -- ctest --test-dir out --output-on-failure {{ args }}
 
 # Build and run the GUI tests, the integration ones against the runtime. Extra arguments are passed to CTest.
-[working-directory: "src/gui-cpp"]
+[working-directory: "src/gui"]
 gui-test *args: dev-bin (gui-configure "out" "Debug" "-DTELAR_GUI_TEST_RUNTIME=" + dev_telar)
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out
     "{{ justfile_directory() }}/tools/cpp" exec -- ctest --test-dir out --output-on-failure {{ args }}
@@ -113,23 +113,23 @@ editor: runtime-editor
     export PATH="{{ justfile_directory() }}/.toolchain/bin:$PATH"
     ghostty=$("{{ justfile_directory() }}/tools/cpp" vt | tail -n 1)
     options+=("-DGHOSTTY_VT_ROOT=$ghostty" "-DCMAKE_TOOLCHAIN_FILE={{ justfile_directory() }}/.toolchain/toolchain.cmake")
-    for project in lib/telar-base lib/telar-client lib/telar-config lib/telar-lua lib/telar-platform lib/telar-plugins lib/telar-tls src/cli-cpp src/auth-daemon; do
+    for project in lib/base lib/client lib/config lib/lua lib/platform lib/plugins lib/tls src/cli src/auth-daemon; do
         cmake -S "$project" -B "$project/out" "${options[@]}" >/dev/null
         echo "configured $project/out"
     done
 
 # Refresh the runtime compilation database and generated headers for clangd.
-[working-directory: "src/runtime-cpp"]
+[working-directory: "src/runtime"]
 runtime-editor: (runtime-configure "out" "Debug")
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out --target cell-layout
 
 # Analyze the production runtime sources without applying fixes.
-[working-directory: "src/runtime-cpp"]
+[working-directory: "src/runtime"]
 runtime-lint jobs="2" directory="out": (runtime-configure directory "Debug")
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake "-DJOBS={{ jobs }}" "-DRUNTIME_BUILD_DIRECTORY={{ directory }}" -P cmake/lint.cmake
 
 # Analyze the GUI sources with its clang-tidy profile.
-[working-directory: "src/gui-cpp"]
+[working-directory: "src/gui"]
 gui-lint: (gui-configure "out" "Debug")
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out --target gui-lint
 
@@ -139,22 +139,22 @@ lifetime-checker:
     "{{ justfile_directory() }}/tools/cpp" build tbc -B lib/tbc/out/release -- --target tbc-lint
 
 # Check the lifetimes of the production runtime, CLI and telar library sources.
-[working-directory: "src/runtime-cpp"]
+[working-directory: "src/runtime"]
 runtime-lifetime directory="out": lifetime-checker (runtime-configure directory "Debug")
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake "-DRUNTIME_BUILD_DIRECTORY={{ directory }}" -P cmake/lifetime.cmake
 
 # Check the lifetimes of the GUI sources.
-[working-directory: "src/gui-cpp"]
+[working-directory: "src/gui"]
 gui-lifetime: lifetime-checker (gui-configure "out" "Debug")
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out --target gui-lifetime
 
 # Check that the runtime, CLI and telar library interfaces keep no function body outside the allowlist.
-[working-directory: "src/runtime-cpp"]
+[working-directory: "src/runtime"]
 runtime-interface-bodies directory="out": lifetime-checker (runtime-configure directory "Debug")
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake "-DRUNTIME_BUILD_DIRECTORY={{ directory }}" -P cmake/interface_bodies.cmake
 
 # Check that the GUI interfaces keep no function body outside the allowlist.
-[working-directory: "src/gui-cpp"]
+[working-directory: "src/gui"]
 gui-interface-bodies: lifetime-checker (gui-configure "out" "Debug")
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake --build out --target gui-interface-bodies
 
@@ -215,7 +215,7 @@ dev-app binary state_dir:
 
 # Both platforms use the verified repository-local compiler and managed libraries.
 [private]
-[working-directory: "src/runtime-cpp"]
+[working-directory: "src/runtime"]
 runtime-configure directory build_type *options:
     "{{ justfile_directory() }}/tools/cpp" configure runtime -B "{{ directory }}" --config {{ build_type }} -- {{ options }}
 
@@ -225,7 +225,7 @@ auth-configure directory build_type *options:
     "{{ justfile_directory() }}/tools/cpp" exec -- cmake -S . -B "{{ directory }}" -G Ninja -DCMAKE_BUILD_TYPE={{ build_type }} -DCMAKE_TOOLCHAIN_FILE="{{ justfile_directory() }}/.toolchain/toolchain.cmake" {{ options }}
 
 [private]
-[working-directory: "src/gui-cpp"]
+[working-directory: "src/gui"]
 gui-configure directory build_type *options:
     "{{ justfile_directory() }}/tools/cpp" configure gui -B "{{ directory }}" --config {{ build_type }} -- -DTELAR_GUI_QT_BUILD_DIR="{{ justfile_directory() }}/.qt-cache" {{ options }}
 

@@ -143,7 +143,7 @@ namespace places {
 
 // CASE: place.owned_object_mutation
 // PAIR: place.owned_object
-// SOURCE: src/gui-cpp/application/session.cppm :: Session::panes_
+// SOURCE: src/gui/application/session/session.cppm :: Session::panes_
 // STATUS: implemented
 // CONTRACT: Mutating an object owned through a container element does not invalidate the container's elements.
 // SCENARIO: Each owned pane is detached while the range loop keeps iterating the vector; accept.
@@ -157,7 +157,7 @@ void placeOwnedObjectMutation(std::vector<std::unique_ptr<places::pane>> &panes)
 
 // CASE: place.owned_object_destroyed
 // PAIR: place.owned_object
-// SOURCE: src/gui-cpp/application/session.cppm :: Session::panes_
+// SOURCE: src/gui/application/session/session.cppm :: Session::panes_
 // STATUS: implemented
 // CONTRACT: Clearing a container of owners destroys the objects they own.
 // SCENARIO: A pointer to an owned pane is read after the vector is cleared.
@@ -171,7 +171,7 @@ void placeOwnedObjectDestroyed(std::vector<std::unique_ptr<places::pane>> &panes
 
 // CASE: place.owned_object_survives_growth
 // PAIR: place.growth
-// SOURCE: src/runtime-cpp/plugins/service.cppm :: PluginService::workers_
+// SOURCE: src/runtime/plugins/service/service.cppm :: PluginService::workers_
 // STATUS: implemented
 // CONTRACT: Growing a container of owners moves the owners, not the objects they own.
 // SCENARIO: A pointer to an owned pane is read after another pane is appended; accept.
@@ -185,7 +185,7 @@ void placeOwnedObjectSurvivesGrowth(std::vector<std::unique_ptr<places::pane>> &
 
 // CASE: place.element_slot_growth
 // PAIR: place.growth
-// SOURCE: src/runtime-cpp/plugins/service.cppm :: PluginService::workers_
+// SOURCE: src/runtime/plugins/service/service.cppm :: PluginService::workers_
 // STATUS: implemented
 // CONTRACT: Growing a container can move its elements, so a pointer to an element slot is invalidated.
 // SCENARIO: A pointer to the owner stored in the vector is read after growth.
@@ -199,7 +199,7 @@ void placeElementSlotGrowth(std::vector<std::unique_ptr<places::pane>> &panes) {
 
 // CASE: place.nested_child_mutation
 // PAIR: place.nested
-// SOURCE: src/cli-cpp/integration/settings.cppm :: HookSettings::installEvents
+// SOURCE: src/cli/integration/settings/settings.cppm :: HookSettings::installEvents
 // STATUS: implemented
 // CONTRACT: Growing a child's own children leaves the child where it is inside its parent.
 // SCENARIO: A child node is extended twice through the same reference; accept.
@@ -213,7 +213,7 @@ void placeNestedChildMutation(places::tree &root) {
 
 // CASE: place.sibling_iteration_mutation
 // PAIR: place.nested
-// SOURCE: src/cli-cpp/integration/settings.cppm :: HookSettings::installEvents
+// SOURCE: src/cli/integration/settings/settings.cppm :: HookSettings::installEvents
 // STATUS: implemented
 // CONTRACT: Growing one node's children leaves its siblings, and the iteration over them, in place.
 // SCENARIO: Every child of a node gains a child while the range loop iterates the children; accept.
@@ -227,7 +227,7 @@ void placeSiblingIterationMutation(places::tree &root) {
 
 // CASE: place.nested_grandchild_growth
 // PAIR: place.nested
-// SOURCE: src/cli-cpp/integration/settings.cppm :: HookSettings::installEvents
+// SOURCE: src/cli/integration/settings/settings.cppm :: HookSettings::installEvents
 // STATUS: implemented
 // CONTRACT: Growing a child's children can move them, so a reference to a grandchild is invalidated.
 // SCENARIO: A grandchild reference is used after another grandchild is added.
@@ -242,7 +242,7 @@ void placeNestedGrandchildGrowth(places::tree &root) {
 
 // CASE: place.inline_element_growth
 // PAIR: place.inline_element
-// SOURCE: lib/telar-base/include/telar_base/text.cppm :: JsonNode::ensure
+// SOURCE: lib/base/text/text.cppm :: JsonNode::ensure
 // STATUS: implemented
 // CONTRACT: An element that keeps its contents inline, like a short string, moves them when the container grows.
 // SCENARIO: A view of a string element is read after the vector grows.
@@ -256,7 +256,7 @@ void placeInlineElementGrowth(std::vector<std::string> &names) {
 
 // CASE: place.detached_element_growth
 // PAIR: place.inline_element
-// SOURCE: lib/telar-base/include/telar_base/text.cppm :: JsonNode::ensure
+// SOURCE: lib/base/text/text.cppm :: JsonNode::ensure
 // STATUS: implemented
 // CONTRACT: An element that owns its contents through an allocation leaves them in place when the container grows.
 // SCENARIO: A view of a uniquely owned string is read after the vector grows; accept.
@@ -270,7 +270,7 @@ void placeDetachedElementGrowth(std::vector<std::unique_ptr<std::string>> &names
 
 // CASE: place.moved_owner_cleared
 // PAIR: place.moved_owner
-// SOURCE: src/gui-cpp/application/session.cppm :: Session::apply(TabCreated)
+// SOURCE: src/gui/application/session/session.cppm :: Session::apply(TabCreated)
 // STATUS: implemented
 // CONTRACT: An object moved into a container's element is destroyed when the container is cleared.
 // SCENARIO: A pointer to the moved object is read after the vector is cleared.
@@ -286,7 +286,7 @@ void placeMovedOwnerCleared(std::vector<std::unique_ptr<places::pane>> &panes) {
 
 // CASE: place.moved_owner_survives_growth
 // PAIR: place.moved_owner
-// SOURCE: src/gui-cpp/application/session.cppm :: Session::apply(TabCreated)
+// SOURCE: src/gui/application/session/session.cppm :: Session::apply(TabCreated)
 // STATUS: implemented
 // CONTRACT: An object moved into a container's element survives the container's reallocation.
 // SCENARIO: A pointer to the moved object is read after another element is appended; accept.
@@ -302,7 +302,7 @@ void placeMovedOwnerSurvivesGrowth(std::vector<std::unique_ptr<places::pane>> &p
 
 // CASE: place.sibling_field_mutation
 // PAIR: place.sibling_field
-// SOURCE: src/gui-cpp/application/session.cppm :: Session::launch_arguments_
+// SOURCE: src/gui/application/session/session.cppm :: Session::launch_arguments_
 // STATUS: implemented
 // CONTRACT: Mutating one field of an object leaves borrows of its other fields valid, including the object's views of itself.
 // SCENARIO: A closure reads views of the launcher's strings after its history field grows; accept.
@@ -319,7 +319,7 @@ void placeSiblingFieldMutation() {
 
 // CASE: place.viewed_field_growth
 // PAIR: place.sibling_field
-// SOURCE: src/gui-cpp/application/session.cppm :: Session::launch_arguments_
+// SOURCE: src/gui/application/session/session.cppm :: Session::launch_arguments_
 // STATUS: implemented
 // CONTRACT: Growing the field that views borrow invalidates those views.
 // SCENARIO: The arguments are read after the strings they view are reallocated.
@@ -335,7 +335,7 @@ void placeViewedFieldGrowth() {
 
 // CASE: place.rebuilt_views
 // PAIR: place.sibling_field
-// SOURCE: src/gui-cpp/application/session.cppm :: Session::launch_arguments_
+// SOURCE: src/gui/application/session/session.cppm :: Session::launch_arguments_
 // STATUS: implemented
 // CONTRACT: A method borrows its whole receiver, as `&mut self` does, so it may mutate any field.
 // SCENARIO: The arguments are read after a method that grows only the history; reject at the call.
@@ -351,7 +351,7 @@ void placeRebuiltViews() {
 
 // CASE: place.owned_sibling_mutation
 // PAIR: place.owned_sibling
-// SOURCE: src/runtime-cpp/proxy/runtime.cppm :: Http2EndpointConnection::streams_
+// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: Http2EndpointConnection::streams_
 // STATUS: implemented
 // CONTRACT: Mutating one field of an object owned through a pointer leaves borrows of its other fields valid.
 // SCENARIO: The request method is read after the response headers of the same stream are cleared; accept.
@@ -366,7 +366,7 @@ void placeOwnedSiblingMutation(std::vector<std::unique_ptr<places::stream>> &str
 
 // CASE: place.owned_field_mutation
 // PAIR: place.owned_sibling
-// SOURCE: src/runtime-cpp/proxy/runtime.cppm :: Http2EndpointConnection::streams_
+// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: Http2EndpointConnection::streams_
 // STATUS: implemented
 // CONTRACT: Reassigning the field a view borrows invalidates the view.
 // SCENARIO: The request method is read after it is reassigned.
@@ -381,7 +381,7 @@ void placeOwnedFieldMutation(std::vector<std::unique_ptr<places::stream>> &strea
 
 // CASE: place.returned_half_mutation
 // PAIR: place.returned_half
-// SOURCE: src/runtime-cpp/proxy/runtime.cppm :: Http2EndpointConnection::Endpoint::half
+// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: Http2EndpointConnection::Endpoint::half
 // STATUS: implemented
 // CONTRACT: A borrow last used before a mutation through a returned reference is not affected by it.
 // SCENARIO: The request method is read before the headers of whichever half is selected are cleared; accept.
@@ -396,7 +396,7 @@ void placeReturnedHalfMutation(std::vector<std::unique_ptr<places::stream>> &str
 
 // CASE: place.returned_half_headers
 // PAIR: place.returned_half
-// SOURCE: src/runtime-cpp/proxy/runtime.cppm :: Http2EndpointConnection::Endpoint::half
+// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: Http2EndpointConnection::Endpoint::half
 // STATUS: implemented
 // CONTRACT: A returned reference designates some part of its argument the declaration does not name, so mutating through it may invalidate any borrow of that argument, as Rust's `&mut` result does.
 // SCENARIO: A request header is read after the headers of whichever half is selected are cleared.
@@ -411,7 +411,7 @@ void placeReturnedHalfHeaders(std::vector<std::unique_ptr<places::stream>> &stre
 
 // CASE: place.callee_sibling_mutation
 // PAIR: place.callee_field
-// SOURCE: src/runtime-cpp/proxy/runtime.cppm :: Http2EndpointConnection::streams_
+// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: Http2EndpointConnection::streams_
 // STATUS: implemented
 // CONTRACT: A callee known by its declaration borrows its whole argument, as a Rust `&mut` does, so it may mutate any field.
 // SCENARIO: The request method is read after a helper clears only the response headers; reject at the call.
@@ -426,7 +426,7 @@ void placeCalleeSiblingMutation(std::vector<std::unique_ptr<places::stream>> &st
 
 // CASE: place.direct_sibling_mutation
 // PAIR: place.callee_field
-// SOURCE: src/runtime-cpp/http1/head.cppm :: Http1Session::response_
+// SOURCE: src/runtime/http1/head/head.cppm :: Http1Session::response_
 // STATUS: implemented
 // CONTRACT: Mutating one field directly leaves borrows of the object's other fields valid.
 // SCENARIO: The request method is read after the response headers are cleared in place; accept.
@@ -441,7 +441,7 @@ void placeDirectSiblingMutation(std::vector<std::unique_ptr<places::stream>> &st
 
 // CASE: place.callee_field_mutation
 // PAIR: place.callee_field
-// SOURCE: src/runtime-cpp/proxy/runtime.cppm :: Http2EndpointConnection::streams_
+// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: Http2EndpointConnection::streams_
 // STATUS: implemented
 // CONTRACT: A callee that mutates a field of its argument invalidates borrows of that field.
 // SCENARIO: A response header is read after a helper clears the response headers.
@@ -456,7 +456,7 @@ void placeCalleeFieldMutation(std::vector<std::unique_ptr<places::stream>> &stre
 
 // CASE: place.element_sibling_mutation
 // PAIR: place.element_field
-// SOURCE: src/runtime-cpp/runtime/runtime.cppm :: WorkspaceService
+// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: WorkspaceService
 // STATUS: implemented
 // CONTRACT: Mutating one field of a container element leaves borrows of the element's other fields valid.
 // SCENARIO: The last tab's title is read after a pane is added to the same tab; accept.
@@ -470,7 +470,7 @@ void placeElementSiblingMutation(std::vector<places::tab> &tabs) {
 
 // CASE: place.element_field_mutation
 // PAIR: place.element_field
-// SOURCE: src/runtime-cpp/runtime/runtime.cppm :: WorkspaceService
+// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: WorkspaceService
 // STATUS: implemented
 // CONTRACT: Mutating a field of a container element invalidates borrows of that field.
 // SCENARIO: The last tab's title is read after it is reassigned.
@@ -484,7 +484,7 @@ void placeElementFieldMutation(std::vector<places::tab> &tabs) {
 
 // CASE: place.element_member_growth
 // PAIR: place.element_member
-// SOURCE: src/runtime-cpp/runtime/runtime.cppm :: WorkspaceService
+// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: WorkspaceService
 // STATUS: implemented
 // CONTRACT: A pointer to a field of a container element is invalidated when the container moves its elements.
 // SCENARIO: A pointer to the last tab's title is read after another tab is appended.
@@ -498,7 +498,7 @@ void placeElementMemberGrowth(std::vector<places::tab> &tabs) {
 
 // CASE: place.owned_member_growth
 // PAIR: place.element_member
-// SOURCE: src/runtime-cpp/runtime/runtime.cppm :: WorkspaceService
+// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: WorkspaceService
 // STATUS: implemented
 // CONTRACT: A pointer to a field of an object owned by a container element survives the container's growth.
 // SCENARIO: A pointer to the last owned tab's title is read after another tab is appended; accept.
@@ -512,7 +512,7 @@ void placeOwnedMemberGrowth(std::vector<std::unique_ptr<places::tab>> &tabs) {
 
 // CASE: place.field_overwrite
 // PAIR: place.field_overwrite
-// SOURCE: src/runtime-cpp/terminal/text_reader.cppm :: FrameSync::encode
+// SOURCE: src/runtime/terminal/text_reader/text_reader.cppm :: FrameSync::encode
 // STATUS: implemented
 // CONTRACT: Assigning one field of a local aggregate replaces what that field borrowed.
 // SCENARIO: The spans field is pointed at the new storage after the old storage is cleared; accept.
@@ -528,7 +528,7 @@ void placeFieldOverwrite(std::vector<int> &spans, std::string_view metadata) {
 
 // CASE: place.sibling_overwrite
 // PAIR: place.field_overwrite
-// SOURCE: src/runtime-cpp/terminal/text_reader.cppm :: FrameSync::encode
+// SOURCE: src/runtime/terminal/text_reader/text_reader.cppm :: FrameSync::encode
 // STATUS: implemented
 // CONTRACT: Assigning one field of an aggregate leaves what its other fields borrow.
 // SCENARIO: Only the metadata field is reassigned, so the header still views the cleared spans.
@@ -543,7 +543,7 @@ void placeSiblingOverwrite(std::vector<int> &spans, std::string_view metadata) {
 
 // CASE: place.copied_field_overwrite
 // PAIR: place.copied_field
-// SOURCE: src/gui-cpp/history/browser.cppm :: HistoryBrowser::prepareQuery
+// SOURCE: src/gui/history/browser/browser.cppm :: HistoryBrowser::prepareQuery
 // STATUS: implemented
 // CONTRACT: Reassigning one field of a copied aggregate replaces that field's borrow and keeps the others.
 // SCENARIO: The query's text is replaced by a copy, so the caller may reuse its string; accept.
@@ -560,7 +560,7 @@ void placeCopiedFieldOverwrite() {
 
 // CASE: place.copied_field_kept
 // PAIR: place.copied_field
-// SOURCE: src/gui-cpp/history/browser.cppm :: HistoryBrowser::prepareQuery
+// SOURCE: src/gui/history/browser/browser.cppm :: HistoryBrowser::prepareQuery
 // STATUS: implemented
 // CONTRACT: A field copied from an argument and not reassigned still borrows what the argument's field borrowed.
 // SCENARIO: The query still views the caller's scope string after it is reassigned.
@@ -577,7 +577,7 @@ void placeCopiedFieldKept() {
 
 // CASE: place.cleared_field
 // PAIR: place.cleared_field
-// SOURCE: src/gui-cpp/application/session.cppm :: Session::launch
+// SOURCE: src/gui/application/session/session.cppm :: Session::launch
 // STATUS: implemented
 // CONTRACT: Clearing a container field forgets only the borrows its elements held.
 // SCENARIO: The cleared names viewed the local string, which is then reassigned; accept.
@@ -595,7 +595,7 @@ void placeClearedField(std::string_view fallback) {
 
 // CASE: place.cleared_sibling
 // PAIR: place.cleared_field
-// SOURCE: src/gui-cpp/application/session.cppm :: Session::launch
+// SOURCE: src/gui/application/session/session.cppm :: Session::launch
 // STATUS: implemented
 // CONTRACT: Clearing one container field keeps the borrows held by the object's other fields.
 // SCENARIO: The defaults still view the local string after the names are cleared and the string is reassigned.
@@ -613,7 +613,7 @@ void placeClearedSibling(std::string_view fallback) {
 
 // CASE: place.reassigned_result
 // PAIR: place.assignment
-// SOURCE: src/runtime-cpp/platform/request_worker.cppm :: ObservationWorker::run
+// SOURCE: src/runtime/platform/request_worker/request_worker.cppm :: ObservationWorker::run
 // STATUS: implemented
 // CONTRACT: Assigning an object replaces what it borrowed without reading it.
 // SCENARIO: An optional view of an invalidated element is reassigned before it is read; accept.
@@ -628,7 +628,7 @@ void placeReassignedResult(std::vector<std::string> &names) {
 
 // CASE: place.assigned_through_dangling
 // PAIR: place.assignment
-// SOURCE: src/runtime-cpp/platform/request_worker.cppm :: ObservationWorker::run
+// SOURCE: src/runtime/platform/request_worker/request_worker.cppm :: ObservationWorker::run
 // STATUS: implemented
 // CONTRACT: Writing through a pointer needs the object it designates to be live.
 // SCENARIO: A string is assigned through a pointer to an element the vector has moved.
@@ -642,7 +642,7 @@ void placeAssignedThroughDangling(std::vector<std::string> &names) {
 
 // CASE: place.captured_receiver_sibling
 // PAIR: place.captured_receiver
-// SOURCE: src/runtime-cpp/proxy/runtime.cppm :: ProxyService::run
+// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: ProxyService::run
 // STATUS: implemented
 // CONTRACT: Inside a lambda, `this` is the captured object, so a field it mutates belongs to that object, not to the closure; a closure's caller sees which fields, as Rust closures capture them.
 // SCENARIO: A name is read after a closure defined in the same method releases a slot; accept.
@@ -664,7 +664,7 @@ namespace places {
 
 // CASE: place.captured_receiver_field
 // PAIR: place.captured_receiver
-// SOURCE: src/runtime-cpp/proxy/runtime.cppm :: ProxyService::run
+// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: ProxyService::run
 // STATUS: implemented
 // CONTRACT: A field a lambda mutates through its captured `this` is invalidated in the captured object.
 // SCENARIO: A pointer to a released slot is read after the callback grows the released slots.
@@ -678,7 +678,7 @@ void placeCapturedReceiverField(places::service &service) {
 
 // CASE: place.rebuilt_before_read
 // PAIR: place.used_inputs
-// SOURCE: src/runtime-cpp/terminal/text_reader.cppm :: FrameSync::prepare
+// SOURCE: src/runtime/terminal/text_reader/text_reader.cppm :: FrameSync::prepare
 // STATUS: implemented
 // CONTRACT: Assigning an object replaces what it held without using it, so stale views it held are not used.
 // SCENARIO: The frame's view of resized cells is replaced by assignment before it is prepared again; accept.
@@ -696,7 +696,7 @@ void placeRebuiltBeforeRead() {
 
 // CASE: place.read_before_rebuild
 // PAIR: place.used_inputs
-// SOURCE: src/runtime-cpp/terminal/text_reader.cppm :: FrameSync::prepare
+// SOURCE: src/runtime/terminal/text_reader/text_reader.cppm :: FrameSync::prepare
 // STATUS: implemented
 // CONTRACT: A call uses everything its receiver holds, as a Rust call needs every borrow its inputs carry.
 // SCENARIO: The frame is used after the cells it views are resized.
@@ -712,7 +712,7 @@ void placeReadBeforeRebuild() {
 
 // CASE: place.counted_stale_views
 // PAIR: place.structural_use
-// SOURCE: src/runtime-cpp/terminal/text_reader.cppm :: FrameSync::prepare
+// SOURCE: src/runtime/terminal/text_reader/text_reader.cppm :: FrameSync::prepare
 // STATUS: implemented
 // CONTRACT: Counting, clearing, or growing a sequence container does not read what its elements borrow.
 // SCENARIO: The number of views is read after the strings they view are reallocated; accept.
@@ -726,7 +726,7 @@ void placeCountedStaleViews(std::vector<std::string> &names) {
 
 // CASE: place.read_stale_views
 // PAIR: place.structural_use
-// SOURCE: src/runtime-cpp/terminal/text_reader.cppm :: FrameSync::prepare
+// SOURCE: src/runtime/terminal/text_reader/text_reader.cppm :: FrameSync::prepare
 // STATUS: implemented
 // CONTRACT: Reading an element of a container reads what it borrows.
 // SCENARIO: The first view is read after the strings it views are reallocated.
@@ -740,7 +740,7 @@ void placeReadStaleViews(std::vector<std::string> &names) {
 
 // CASE: place.variant_rebound
 // PAIR: place.variant_alternative
-// SOURCE: src/gui-cpp/history/browser.cppm :: HistoryBrowser::prepareQuery
+// SOURCE: src/gui/history/browser/browser.cppm :: HistoryBrowser::prepareQuery
 // STATUS: implemented
 // CONTRACT: A variant whose other alternatives cannot borrow holds nothing borrowed once a test rules out the one that can.
 // SCENARIO: The scope view is rebound to a copy when it holds a view and otherwise holds no view; accept.
@@ -762,7 +762,7 @@ void placeVariantRebound() {
 
 // CASE: place.variant_kept
 // PAIR: place.variant_alternative
-// SOURCE: src/gui-cpp/history/browser.cppm :: HistoryBrowser::prepareQuery
+// SOURCE: src/gui/history/browser/browser.cppm :: HistoryBrowser::prepareQuery
 // STATUS: implemented
 // CONTRACT: Ruling out an alternative that cannot borrow says nothing about the one that can.
 // SCENARIO: Only an integer scope is cleared, so a scope view of the caller's string is returned.
@@ -780,7 +780,7 @@ void placeVariantKept() {
 
 // CASE: place.variant_negated
 // PAIR: place.variant_alternative
-// SOURCE: src/gui-cpp/history/browser.cppm :: HistoryBrowser::prepareQuery
+// SOURCE: src/gui/history/browser/browser.cppm :: HistoryBrowser::prepareQuery
 // STATUS: implemented
 // CONTRACT: A negated alternative test tells each branch which alternatives remain.
 // SCENARIO: The query is read early only when its scope holds no view, and is cleared otherwise; accept.
@@ -803,7 +803,7 @@ void placeVariantNegated(bool reuse) {
 
 // CASE: place.variant_bound_view
 // PAIR: place.variant_alternative
-// SOURCE: src/gui-cpp/history/browser.cppm :: HistoryBrowser::prepareQuery
+// SOURCE: src/gui/history/browser/browser.cppm :: HistoryBrowser::prepareQuery
 // STATUS: implemented
 // CONTRACT: A condition that declares `std::get_if` of an alternative tests that alternative.
 // SCENARIO: A scope view is copied and rebound inside the branch, and the other branch holds no view; accept.
@@ -823,7 +823,7 @@ void placeVariantBoundView() {
 
 // CASE: place.variant_other_condition
 // PAIR: place.variant_alternative
-// SOURCE: src/gui-cpp/history/browser.cppm :: HistoryBrowser::prepareQuery
+// SOURCE: src/gui/history/browser/browser.cppm :: HistoryBrowser::prepareQuery
 // STATUS: implemented
 // CONTRACT: A branch on any other standard call, such as an operator, is not an alternative test.
 // SCENARIO: The query is read when an optional flag it comes with is set; accept.

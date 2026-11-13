@@ -1,0 +1,28 @@
+cmake_minimum_required(VERSION 4.4.5)
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/telar_editor.cmake")
+project(telar_platform LANGUAGES C CXX)
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/cpp_modules.cmake")
+
+if(NOT TARGET telar-base)
+  add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../base" "${CMAKE_BINARY_DIR}/telar-base")
+endif()
+if(NOT TARGET telar-vocabulary)
+  add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../vocabulary" "${CMAKE_BINARY_DIR}/telar-vocabulary")
+endif()
+
+find_package(Threads REQUIRED)
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/openssl.cmake")
+
+add_library(telar-platform STATIC src/file_descriptor.cpp src/open_directory.c pipe_process.cpp pty_process.cpp src/trace.cpp daemon.cpp)
+add_library(telar::platform ALIAS telar-platform)
+telar_modules(telar-platform)
+target_compile_features(telar-platform PUBLIC cxx_std_23)
+target_include_directories(telar-platform PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_link_libraries(telar-platform PUBLIC telar::base telar::vocabulary OpenSSL::Crypto Threads::Threads ${CMAKE_DL_LIBS})
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  target_compile_definitions(telar-platform PRIVATE _GNU_SOURCE)
+  target_link_libraries(telar-platform PUBLIC util)
+endif()
+target_compile_options(telar-platform PRIVATE -Wall -Wextra -Wpedantic)
+
+telar_editor_flags(telar-platform)

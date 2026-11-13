@@ -78,7 +78,7 @@ endif()
 # installed consumers use the native module graph rather than custom BMI rules.
 function(telar_modules target)
   file(GLOB_RECURSE interfaces CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cppm")
-  list(FILTER interfaces EXCLUDE REGEX "/(tests|tools|vendor|out[^/]*|CMakeFiles)/")
+  list(FILTER interfaces EXCLUDE REGEX "/(tests|tools|vendor|out(-[^/]*)?|CMakeFiles)/")
   include("${CMAKE_CURRENT_FUNCTION_LIST_DIR}/module_platforms.cmake")
   get_filename_component(repository "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/.." ABSOLUTE)
   if(APPLE)

@@ -17,7 +17,7 @@ namespace third_party {
 
 // CASE: library.view_of_local
 // PAIR: library.view
-// SOURCE: src/gui-cpp/qt/application.cpp :: Application
+// SOURCE: src/gui/qt/application.cpp :: Application
 // STATUS: implemented
 // CONTRACT: A library type with a trivial destructor views the object it is built from.
 // SCENARIO: A library view of a local library string is returned.
@@ -30,7 +30,7 @@ library::string_view libraryViewOfLocal() {
 
 // CASE: library.view_of_parameter
 // PAIR: library.view
-// SOURCE: src/gui-cpp/qt/application.cpp :: Application
+// SOURCE: src/gui/qt/application.cpp :: Application
 // STATUS: implemented
 // CONTRACT: A library view of a caller's object may outlive the call.
 // SCENARIO: The viewed string belongs to the caller; accept.
@@ -42,7 +42,7 @@ library::string_view libraryViewOfParameter(const library::string &owner) {
 
 // CASE: library.element_reference_escape
 // PAIR: library.element
-// SOURCE: src/gui-cpp/tests/quick_test.cpp :: terminalIn
+// SOURCE: src/gui/tests/quick_test.cpp :: terminalIn
 // STATUS: implemented
 // CONTRACT: A reference returned by a library container points into its storage.
 // SCENARIO: A reference into a local library container is returned.
@@ -55,7 +55,7 @@ const int &libraryElementReferenceEscape() {
 
 // CASE: library.element_copy
 // PAIR: library.element
-// SOURCE: src/gui-cpp/tests/quick_test.cpp :: terminalIn
+// SOURCE: src/gui/tests/quick_test.cpp :: terminalIn
 // STATUS: implemented
 // CONTRACT: An element returned by value is a copy, not a view of the container.
 // SCENARIO: A pointer element copied out of a local container outlives it; accept.
@@ -68,7 +68,7 @@ int *libraryElementCopy() {
 
 // CASE: library.container_storage_escape
 // PAIR: library.owner_pointer
-// SOURCE: src/gui-cpp/qt/configuration_source.cpp :: optionalText
+// SOURCE: src/gui/qt/configuration_source.cpp :: optionalText
 // STATUS: implemented
 // CONTRACT: A pointer returned by a library container designates its storage.
 // SCENARIO: The data of a local library container is returned.
@@ -81,7 +81,7 @@ const int *libraryContainerStorageEscape() {
 
 // CASE: library.non_container_pointer
 // PAIR: library.owner_pointer
-// SOURCE: src/gui-cpp/qt/curve_scene.cpp :: QQuickWindow::createTextureFromImage
+// SOURCE: src/gui/qt/curve_scene.cpp :: QQuickWindow::createTextureFromImage
 // STATUS: implemented
 // CONTRACT: A pointer from a library owner that is not a container has no inferable relation to it and is not reported.
 // SCENARIO: A created object outlives the local component that created it; accept.
@@ -94,7 +94,7 @@ int *libraryNonContainerPointer() {
 
 // CASE: library.views_in_owner_dead
 // PAIR: library.views_in_owner
-// SOURCE: src/gui-cpp/qt/application.cpp :: Application
+// SOURCE: src/gui/qt/application.cpp :: Application
 // STATUS: implemented
 // CONTRACT: A library container of views keeps the borrows of the views appended to it.
 // SCENARIO: The appended view's string dies before the container is read.
@@ -111,7 +111,7 @@ void libraryViewsInOwnerDead() {
 
 // CASE: library.views_in_owner_live
 // PAIR: library.views_in_owner
-// SOURCE: src/gui-cpp/qt/application.cpp :: Application
+// SOURCE: src/gui/qt/application.cpp :: Application
 // STATUS: implemented
 // CONTRACT: Views stored in a library container may be read while their source is alive.
 // SCENARIO: The string outlives the read; accept.
@@ -125,7 +125,7 @@ void libraryViewsInOwnerLive(const library::string &owner) {
 
 // CASE: library.compiled_function
 // PAIR: library.function
-// SOURCE: src/runtime-cpp/tls/interception.cppm :: selectAlpn
+// SOURCE: src/runtime/tls/interception/interception.cppm :: selectAlpn
 // STATUS: implemented
 // CONTRACT: A compiled library function is outside the analysis and is not reported.
 // SCENARIO: The result of a function without a visible body is used; accept.
@@ -137,7 +137,7 @@ void libraryCompiledFunction() {
 
 // CASE: library.inline_function
 // PAIR: library.function
-// SOURCE: src/runtime-cpp/tls/interception.cppm :: selectAlpn
+// SOURCE: src/runtime/tls/interception/interception.cppm :: selectAlpn
 // STATUS: implemented
 // CONTRACT: A library function with a visible body is inferred from the shape of its arguments.
 // SCENARIO: The pointer passed through the library function views a local buffer and is returned.
@@ -150,7 +150,7 @@ const char *libraryInlineFunction() {
 
 // CASE: library.constant_expression
 // PAIR: library.constant
-// SOURCE: lib/telar-platform/include/telar_platform/trace.hpp :: trace::literal
+// SOURCE: lib/platform/include/telar_platform/trace.hpp :: trace::literal
 // STATUS: implemented
 // CONTRACT: A constant-evaluated result borrows exactly what its expression borrows.
 // SCENARIO: An immediate function returns a literal-backed view; accept.
@@ -162,7 +162,7 @@ std::string_view libraryConstantExpression() {
 
 // CASE: library.constant_alongside_local
 // PAIR: library.constant
-// SOURCE: lib/telar-platform/include/telar_platform/trace.hpp :: trace::literal
+// SOURCE: lib/platform/include/telar_platform/trace.hpp :: trace::literal
 // STATUS: implemented
 // CONTRACT: Unwrapping constant evaluation does not hide a borrow of local storage.
 // SCENARIO: A view of a local string is returned next to a constant one.
@@ -175,7 +175,7 @@ std::string_view libraryConstantAlongsideLocal(bool constant) {
 
 // CASE: library.raw_stream_pointer
 // PAIR: library.raw_stream
-// SOURCE: src/runtime-cpp/exchange_capture/producer.cppm :: FlateDecoder::decode
+// SOURCE: src/runtime/exchange_capture/producer/producer.cppm :: FlateDecoder::decode
 // STATUS: implemented
 // CONTRACT: A pointer field of a C struct a system header declares is a raw pointer, as Rust's `*const T` in an FFI struct, so storing a buffer in it keeps no borrow.
 // SCENARIO: A decoder hands one call's buffers to its C stream; accept.
@@ -205,7 +205,7 @@ int libraryRawStreamPointer(third_party::decoder &decoder, std::string_view inpu
 
 // CASE: library.project_stream_pointer
 // PAIR: library.raw_stream
-// SOURCE: src/runtime-cpp/exchange_capture/producer.cppm :: FlateDecoder::decode
+// SOURCE: src/runtime/exchange_capture/producer/producer.cppm :: FlateDecoder::decode
 // STATUS: implemented
 // CONTRACT: A pointer field of a C struct a system header declares is a raw pointer, as Rust's `*const T` in an FFI struct, so storing a buffer in it keeps no borrow.
 // SCENARIO: The same stream declared by the project keeps the borrow its declaration does not allow; reject the store.
@@ -233,7 +233,7 @@ void libraryProjectStreamPointer(third_party::project_decoder &decoder, std::str
 
 // CASE: library.raw_struct_value
 // PAIR: library.raw_struct
-// SOURCE: src/runtime-cpp/proxy/runtime.cppm :: Http2EndpointConnection::Fields::add
+// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: Http2EndpointConnection::Fields::add
 // STATUS: implemented
 // CONTRACT: A value of a C struct a system header declares holds raw pointers, as Rust's FFI structs do, so it carries no borrow of what they point at.
 // SCENARIO: A header list keeps entries pointing at names it owns and at the caller's values; accept.
@@ -260,7 +260,7 @@ void libraryRawStructValue(third_party::field_list &list, std::string_view value
 
 // CASE: library.project_struct_value
 // PAIR: library.raw_struct
-// SOURCE: src/runtime-cpp/proxy/runtime.cppm :: Http2EndpointConnection::Fields::add
+// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: Http2EndpointConnection::Fields::add
 // STATUS: implemented
 // CONTRACT: A value of a C struct a system header declares holds raw pointers, as Rust's FFI structs do, so it carries no borrow of what they point at.
 // SCENARIO: The same entry declared by the project keeps the caller's value its declaration does not allow; reject the store.

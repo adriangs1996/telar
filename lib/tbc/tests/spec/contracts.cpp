@@ -33,7 +33,7 @@ text_a correctReturnOrigin(text_a first, text_a second) {
 
 // CASE: contract.unknown_call
 // PAIR: contract.call_boundary
-// SOURCE: src/runtime-cpp/history/database.cpp :: Statement::bind
+// SOURCE: src/runtime/history/store/database.cpp :: Statement::bind
 // STATUS: pending
 // CONTRACT: Borrow-sensitive external calls need an analyzable implementation or a future boundary model.
 // SCENARIO: This native declaration has neither; do not assume it cannot retain input.
@@ -45,7 +45,7 @@ void unknownCall(spec::bytes input) {
 
 // CASE: contract.explicit_noescape
 // PAIR: contract.call_boundary
-// SOURCE: src/runtime-cpp/history/database.cpp :: Statement::bind
+// SOURCE: src/runtime/history/store/database.cpp :: Statement::bind
 // STATUS: pending
 // CONTRACT: The visible observer body does not retain its borrowed argument.
 // SCENARIO: Its view parameter is valid during this call and no state escapes it.
@@ -68,7 +68,7 @@ namespace contracts {
 
 // CASE: contract.elided_method_receiver
 // PAIR: contract.elided_method
-// SOURCE: src/gui-cpp/qt/configuration_source.cpp :: ConfigurationSource::input
+// SOURCE: src/gui/qt/configuration_source.cpp :: ConfigurationSource::input
 // STATUS: implemented
 // CONTRACT: A method's elided result follows its receiver, which callers in other translation units rely on.
 // SCENARIO: The out-of-line definition returns the receiver's own field; accept.
@@ -80,7 +80,7 @@ tbc::view<const std::string &> contracts::session::title() const {
 
 // CASE: contract.elided_method_parameter
 // PAIR: contract.elided_method
-// SOURCE: src/gui-cpp/qt/configuration_source.cpp :: ConfigurationSource::input
+// SOURCE: src/gui/qt/configuration_source.cpp :: ConfigurationSource::input
 // STATUS: implemented
 // CONTRACT: A method's elided result follows its receiver, which callers in other translation units rely on.
 // SCENARIO: The out-of-line definition returns its parameter instead, which those callers would not track.
@@ -140,7 +140,7 @@ contracts::static_text contracts::formatName(std::string_view requested) {
 
 // CASE: contract.opaque_constructor_escape
 // PAIR: contract.opaque_constructor
-// SOURCE: src/runtime-cpp/history/store.cppm :: Statement
+// SOURCE: src/runtime/history/store/store.cppm :: Statement
 // STATUS: implemented
 // CONTRACT: A constructor without a visible body retains every argument whose parameter shares a region with a field of its class.
 // SCENARIO: A prepared statement retains its local database and is returned; reject.
@@ -173,7 +173,7 @@ contracts::statement opaqueConstructorEscape() {
 
 // CASE: contract.opaque_constructor_retained
 // PAIR: contract.opaque_constructor
-// SOURCE: src/runtime-cpp/history/store.cppm :: Statement
+// SOURCE: src/runtime/history/store/store.cppm :: Statement
 // STATUS: implemented
 // CONTRACT: A constructor without a visible body retains every argument whose parameter shares a region with a field of its class.
 // SCENARIO: The statement borrows the caller's database and its temporary query text is not retained; accept.
@@ -185,7 +185,7 @@ contracts::statement opaqueConstructorRetained(contracts::database &owner) {
 
 // CASE: contract.elided_call_temporary
 // PAIR: contract.elided_call
-// SOURCE: src/gui-cpp/qt/application.hpp :: Application::session
+// SOURCE: src/gui/qt/application.hpp :: Application::session
 // STATUS: implemented
 // CONTRACT: A method declared without a contract and without a visible body returns a borrow of its receiver, as Rust's lifetime elision gives it.
 // SCENARIO: The receiver is a temporary that dies before the result is read.
@@ -198,7 +198,7 @@ void elidedCallTemporary() {
 
 // CASE: contract.elided_call_receiver
 // PAIR: contract.elided_call
-// SOURCE: src/gui-cpp/qt/application.hpp :: Application::session
+// SOURCE: src/gui/qt/application.hpp :: Application::session
 // STATUS: implemented
 // CONTRACT: A method declared without a contract and without a visible body returns a borrow of its receiver, as Rust's lifetime elision gives it.
 // SCENARIO: The receiver outlives the result; accept.
@@ -210,7 +210,7 @@ void elidedCallReceiver(const elision::registry &registry) {
 
 // CASE: contract.elided_definition_parameter
 // PAIR: contract.elided_definition
-// SOURCE: src/gui-cpp/qt/application.hpp :: Application::session
+// SOURCE: src/gui/qt/application.hpp :: Application::session
 // STATUS: implemented
 // CONTRACT: An out-of-line definition keeps the elided contract its callers assume without the body.
 // SCENARIO: A method returns its parameter, which callers that only see the declaration take for a borrow of the receiver.
@@ -222,7 +222,7 @@ const std::string &elision::registry::pick(const std::string &fallback) const {
 
 // CASE: contract.elided_definition_receiver
 // PAIR: contract.elided_definition
-// SOURCE: src/gui-cpp/qt/application.hpp :: Application::session
+// SOURCE: src/gui/qt/application.hpp :: Application::session
 // STATUS: implemented
 // CONTRACT: An out-of-line definition keeps the elided contract its callers assume without the body.
 // SCENARIO: A method returns its receiver's field; accept.
@@ -234,7 +234,7 @@ const std::string &elision::registry::name() const {
 
 // CASE: contract.self_field_internal
 // PAIR: contract.self_field
-// SOURCE: src/gui-cpp/qt/font_asset.hpp :: FontAsset
+// SOURCE: src/gui/qt/font_asset.hpp :: FontAsset
 // STATUS: implemented
 // CONTRACT: A field labeled lt::self borrows only its own pinned object, so the object holds no borrow of anything else.
 // SCENARIO: Shared pinned objects whose only borrow is internal cross an opaque two-input call without a contract; accept.
@@ -264,7 +264,7 @@ void selfFieldInternal(const std::shared_ptr<const contracts::self_text> &first,
 
 // CASE: contract.self_field_unlabeled
 // PAIR: contract.self_field
-// SOURCE: src/gui-cpp/qt/font_asset.hpp :: FontAsset
+// SOURCE: src/gui/qt/font_asset.hpp :: FontAsset
 // STATUS: implemented
 // CONTRACT: A field labeled lt::self borrows only its own pinned object, so the object holds no borrow of anything else.
 // SCENARIO: Without the label, the object keeps a borrow of itself, rejected where it is taken; its pointer may then borrow anything, so the opaque two-input call needs a contract.
@@ -294,7 +294,7 @@ void selfFieldUnlabeled(const std::shared_ptr<const contracts::borrowed_text> &f
 
 // CASE: contract.self_field_relocatable
 // PAIR: contract.self_field
-// SOURCE: src/gui-cpp/qt/font_asset.hpp :: FontAsset
+// SOURCE: src/gui/qt/font_asset.hpp :: FontAsset
 // STATUS: implemented
 // CONTRACT: A field labeled lt::self borrows only its own pinned object, so the object holds no borrow of anything else.
 // SCENARIO: A copy would carry the internal borrow away from its object; reject the labeled field's initializer.
@@ -319,7 +319,7 @@ void selfFieldRelocatable() {
 
 // CASE: contract.self_field_mutation
 // PAIR: contract.self_field
-// SOURCE: src/gui-cpp/qt/application.cpp :: Application
+// SOURCE: src/gui/qt/application.cpp :: Application
 // STATUS: implemented
 // CONTRACT: A field labeled lt::self borrows only its own pinned object, so the object holds no borrow of anything else.
 // SCENARIO: A pinned object's labeled field keeps the object and a sibling, and the constructor then mutates the object; the internal borrows are not the object's, so nothing is invalidated; accept.
@@ -365,7 +365,7 @@ void selfFieldMutation() {
 
 // CASE: contract.self_field_region
 // PAIR: contract.self_field
-// SOURCE: src/gui-cpp/qt/font_cache.hpp :: FontCache::Generation
+// SOURCE: src/gui/qt/font_cache.hpp :: FontCache::Generation
 // STATUS: implemented
 // CONTRACT: A field labeled lt::self borrows only its own pinned object, so the object holds no borrow of anything else.
 // SCENARIO: A pinned object's labeled field reads bytes a sibling allocates in the object's own region; the object already lives within that region, so the internal borrow may carry it; accept.
@@ -418,7 +418,7 @@ void selfFieldRegion(contracts::byte_pool &memory) {
 
 // CASE: contract.elided_constructor_escape
 // PAIR: contract.elided_constructor
-// SOURCE: src/gui-cpp/qt/ancestor_geometry.hpp :: AncestorGeometry
+// SOURCE: src/gui/qt/ancestor_geometry.hpp :: AncestorGeometry
 // STATUS: implemented
 // CONTRACT: A constructor without a visible body and without labeled fields may retain any argument that can lend.
 // SCENARIO: The object outlives the temporary text it was built from; reject.
@@ -442,7 +442,7 @@ std::size_t elidedConstructorEscape() {
 
 // CASE: contract.elided_constructor_retained
 // PAIR: contract.elided_constructor
-// SOURCE: src/gui-cpp/qt/ancestor_geometry.hpp :: AncestorGeometry
+// SOURCE: src/gui/qt/ancestor_geometry.hpp :: AncestorGeometry
 // STATUS: implemented
 // CONTRACT: A constructor without a visible body and without labeled fields may retain any argument that can lend.
 // SCENARIO: The text outlives the object; accept.
@@ -455,7 +455,7 @@ std::size_t elidedConstructorRetained(std::string_view source) {
 
 // CASE: contract.library_override
 // PAIR: contract.elided_definition
-// SOURCE: src/gui-cpp/qt/native_cell_text.cpp :: NativeCellText::updatePaintNode
+// SOURCE: src/gui/qt/native_cell_text.cpp :: NativeCellText::updatePaintNode
 // STATUS: implemented
 // CONTRACT: An out-of-line definition keeps the elided contract its callers assume without the body.
 // SCENARIO: An override of a library virtual takes its contract from the library, whose callers are not checked; it returns the node it was given; accept.
@@ -467,7 +467,7 @@ library::node *elision::painted_item::update(library::node *previous) {
 
 // CASE: contract.labeled_field_storage
 // PAIR: contract.labeled_field
-// SOURCE: src/gui-cpp/qt/configuration_source.hpp :: ConfigurationSource::commandTab
+// SOURCE: src/gui/qt/configuration_source.hpp :: ConfigurationSource::commandTab
 // STATUS: implemented
 // CONTRACT: What a field labeled with the result's region owns lives in that region, as a field of `&'a self` does.
 // SCENARIO: The result views the string the labeled field owns; accept.
@@ -487,7 +487,7 @@ namespace contracts {
 
 // CASE: contract.labeled_field_other
 // PAIR: contract.labeled_field
-// SOURCE: src/gui-cpp/qt/configuration_source.hpp :: ConfigurationSource::commandTab
+// SOURCE: src/gui/qt/configuration_source.hpp :: ConfigurationSource::commandTab
 // STATUS: implemented
 // CONTRACT: What a field labeled with the result's region owns lives in that region, as a field of `&'a self` does.
 // SCENARIO: The result views a string an unlabeled field owns; reject.
@@ -507,7 +507,7 @@ namespace contracts {
 
 // CASE: contract.deduced_result
 // PAIR: contract.deduced_result
-// SOURCE: src/gui-cpp/qt/configuration_source.cpp :: ConfigurationSource::reload
+// SOURCE: src/gui/qt/configuration_source.cpp :: ConfigurationSource::reload
 // STATUS: implemented
 // CONTRACT: A deduced return type repeats the label of what it returns, which is not a contract of the deducing function.
 // SCENARIO: A lambda returns a labeled result built from what it captured; accept.
@@ -526,7 +526,7 @@ std::size_t deducedResult(std::string_view source) {
 
 // CASE: contract.deduced_result_escape
 // PAIR: contract.deduced_result
-// SOURCE: src/gui-cpp/qt/configuration_source.cpp :: ConfigurationSource::reload
+// SOURCE: src/gui/qt/configuration_source.cpp :: ConfigurationSource::reload
 // STATUS: implemented
 // CONTRACT: A deduced return type repeats the label of what it returns, which is not a contract of the deducing function.
 // SCENARIO: The lambda's labeled result views a local whose scope ends before the result is read; the use is still checked.

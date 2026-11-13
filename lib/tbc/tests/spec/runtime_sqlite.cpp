@@ -2,7 +2,7 @@
 
 // CASE: runtime.sqlite_next_invalidates
 // PAIR: runtime.sqlite_next
-// SOURCE: src/runtime-cpp/history/database.cpp :: Statement::text / Statement::next
+// SOURCE: src/runtime/history/store/database.cpp :: Statement::text / Statement::next
 // STATUS: pending
 // CONTRACT: text borrows the current SQLite row; stepping ends that row's validity.
 // SCENARIO: The statement survives, but the old row view must not survive next.
@@ -16,7 +16,7 @@ void sqliteNextInvalidates(tbc::view<spec::statement &> statement) {
 
 // CASE: runtime.sqlite_copy_survives_next
 // PAIR: runtime.sqlite_next
-// SOURCE: src/runtime-cpp/history/store.cppm :: HistoryRows::append
+// SOURCE: src/runtime/history/store/store.cppm :: HistoryRows::append
 // STATUS: pending
 // CONTRACT: Copying row text into owned storage severs its SQLite-row dependency.
 // SCENARIO: A copied string remains valid after stepping to the next row.
@@ -30,7 +30,7 @@ void sqliteCopySurvivesNext(tbc::view<spec::statement &> statement) {
 
 // CASE: runtime.sqlite_reset_invalidates
 // PAIR: runtime.sqlite_reset
-// SOURCE: src/runtime-cpp/history/database.cpp :: Statement::reset
+// SOURCE: src/runtime/history/store/database.cpp :: Statement::reset
 // STATUS: pending
 // CONTRACT: reset invalidates row-backed views, independently of descriptor address stability.
 // SCENARIO: Reject reset while an old row view will be read again.
@@ -44,7 +44,7 @@ void sqliteResetInvalidates(tbc::view<spec::statement &> statement) {
 
 // CASE: runtime.sqlite_transient_bind
 // PAIR: runtime.sqlite_reset
-// SOURCE: src/runtime-cpp/history/database.cpp :: Statement::bind / SQLITE_TRANSIENT
+// SOURCE: src/runtime/history/store/database.cpp :: Statement::bind / SQLITE_TRANSIENT
 // STATUS: pending
 // CONTRACT: bind copies input; reset may invalidate old rows but cannot dangle a consumed input.
 // SCENARIO: A temporary bind argument is safe; read only a newly acquired row afterward.
@@ -58,7 +58,7 @@ void sqliteTransientBind(tbc::view<spec::statement &> statement) {
 
 // CASE: runtime.sqlite_statement_escape
 // PAIR: runtime.sqlite_owner
-// SOURCE: src/runtime-cpp/history/database.cpp :: Statement::~Statement / Statement::text
+// SOURCE: src/runtime/history/store/database.cpp :: Statement::~Statement / Statement::text
 // STATUS: pending
 // CONTRACT: Finalizing a statement ends the validity of its row storage.
 // SCENARIO: Reject exporting a view backed by a local statement.
@@ -71,7 +71,7 @@ tbc::view<std::string_view, tbc::lt::a> sqliteStatementEscape() {
 
 // CASE: runtime.sqlite_owned_result
 // PAIR: runtime.sqlite_owner
-// SOURCE: src/runtime-cpp/history/store.cppm :: HistoryRows::copy
+// SOURCE: src/runtime/history/store/store.cppm :: HistoryRows::copy
 // STATUS: pending
 // CONTRACT: Return an owning copy instead of the SQLite-managed view.
 // SCENARIO: Destroying the statement does not affect the returned string.
