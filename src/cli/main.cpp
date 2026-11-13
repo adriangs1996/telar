@@ -101,6 +101,7 @@ import telar.cli.server;
 import telar.cli.hook;
 import telar.cli.tab;
 import telar.cli.window;
+import telar.cli.launch_commands;
 import telar.cli.plugin;
 import telar.cli.worktree;
 import telar.cli.worktree_git;
