@@ -735,40 +735,26 @@ private:
 class WordService {
 public:
   inline explicit WordService(std::string_view configuration_directory = {})
-      : worker_(std::in_place, configuration_directory) {}
+      : observation_(std::in_place, configuration_directory) {}
 
   inline void request(const WordRequest &request) {
-    if (std::ranges::count(waiting_, request.client, &WordRequest::client) >= 4) {
+    if (std::ranges::count(observation_.waiting(), request.client, &WordRequest::client) >= 4) {
       return;
     }
-    if (!busy_ && worker_.submit(request)) {
-      busy_ = true;
-      return;
-    }
-    waiting_.push_back(request);
+    observation_.request(request);
   }
 
   template <typename Consumer>
   inline void collect(Consumer &&consume) {
-    worker_.collect([&](const WordResult &result) {
-      busy_ = false;
-      consume(result);
-    });
-    while (!busy_ && !waiting_.empty()) {
-      const auto next = waiting_.front();
-      waiting_.erase(waiting_.begin());
-      busy_ = worker_.submit(next);
-    }
+    observation_.collect(std::forward<Consumer>(consume));
   }
 
   inline int descriptor() const noexcept {
-    return worker_.descriptor();
+    return observation_.descriptor();
   }
 
 private:
-  ObservationWorker<WordReader> worker_;
-  std::vector<WordRequest> waiting_;
-  bool busy_ = false;
+  SerialObservation<WordReader> observation_;
 };
 
 }

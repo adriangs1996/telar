@@ -193,6 +193,66 @@ private:
 }
 }
 
+// Interface: platform/serial_observation.cppm
+export {
+namespace telar::runtime {
+
+// One observation at a time on its own worker. Requests that arrive while one runs wait in
+// order, without a bound, and the next one goes in as each result is collected.
+template <typename Service>
+class SerialObservation {
+  using Request = typename Service::Request;
+  using Result = typename Service::Result;
+
+public:
+  template <typename... Arguments>
+  inline explicit SerialObservation(std::in_place_t, Arguments &&...arguments)
+      : worker_(std::in_place, std::forward<Arguments>(arguments)...) {}
+
+  // Starts `request` when the worker is idle, else queues it behind the waiting ones.
+  inline void request(const Request &request) {
+    if (!busy_ && worker_.submit(request)) {
+      busy_ = true;
+      return;
+    }
+    waiting_.push_back(request);
+  }
+
+  inline std::span<const Request> waiting() const noexcept {
+    return waiting_;
+  }
+
+  template <typename Predicate>
+  inline void dropWaiting(Predicate &&matches) {
+    std::erase_if(waiting_, std::forward<Predicate>(matches));
+  }
+
+  template <typename Consumer>
+  inline void collect(Consumer &&consume) {
+    worker_.collect([&](const Result &result) {
+      busy_ = false;
+      consume(result);
+    });
+    while (!busy_ && !waiting_.empty()) {
+      const auto next = waiting_.front();
+      waiting_.erase(waiting_.begin());
+      busy_ = worker_.submit(next);
+    }
+  }
+
+  inline int descriptor() const noexcept {
+    return worker_.descriptor();
+  }
+
+private:
+  ObservationWorker<Service> worker_;
+  std::vector<Request> waiting_;
+  bool busy_ = false;
+};
+
+}
+}
+
 // Interface: platform/request_queue.cppm
 export {
 namespace telar::runtime {
