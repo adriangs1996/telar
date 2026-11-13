@@ -21,7 +21,7 @@ El coordinador es un agente en el checkout principal que usa la skill `telar-coo
 
 - **Rama de integración:** `refactor/deep-modules`, creada desde `main` después de P0.1. Contiene esta lista, `docs/code-style.md` y `.clang-format` commiteados, porque a otra máquina solo viajan commits. Cuándo pasa a `main` lo decides tú; los cierres de fase (P3.17, P6.8, P9.11 y P11.1) son puntos estables.
 - **Rama de cada tarea:** `refactor-<id>`, por ejemplo `refactor-p3-6`, creada desde la cabeza de la rama de integración en el momento de despacharla.
-- **Elegir máquina:** el coordinador compara `telar --machine <label> runtime metrics --json` de las máquinas habilitadas (hoy, esta y `Personal`) y despacha a la que tenga más memoria libre. No pasa del máximo de tareas simultáneas por máquina, que sale del pico de memoria de un build en frío medido en P0.2. Cada worktree empieza sin build, así que cada tarea paga un build completo.
+- **Elegir máquina:** el coordinador compara `telar --machine <label> runtime metrics --json` de las máquinas habilitadas (hoy, esta y `Personal`) y despacha a la que tenga más memoria libre. No pasa del máximo de tareas simultáneas por máquina, que sale del pico de memoria de un build en frío medido en P0.2: 3 en `Personal` y 1 en esta, que además es la de trabajo. Cada worktree empieza sin build, así que cada tarea paga un build completo.
 - **Despachar:** la rama se crea en local (`git branch refactor-<id> refactor/deep-modules`) y después se lanza `telar worktree create refactor-<id> [--machine <label>] --setup --title "<id> · <título>" --json -- claude --dangerously-skip-permissions "<brief>"`. El brief cabe en 32 palabras: *"Lee la tarea <id> de TODO.md y docs/code-style.md. Impleméntala, cumple su Hecho cuando y commitea en esta rama. No edites TODO.md."*
 - **LFS:** el historial antiguo tiene 11 punteros LFS (wallpapers de `desktop-mode`, materializados en `82ce41d42`). Con un hook `pre-push` de git-lfs, el despacho remoto falla al intentar subirlos; se despacha con `GIT_LFS_SKIP_PUSH=1` delante.
 - **Integrar:** cuando el agente termina, el coordinador revisa el diff y ejecuta en el worktree el checker y los tests del área (`telar [--machine <label>] worktree exec`). Si la tarea corrió en otra máquina, la trae con `telar worktree fetch refactor-<id> --machine <label>`. Después hace merge en la rama de integración, resuelve los conflictos de los ficheros calientes, compila y prueba el área sobre el resultado, marca la tarea `[x]` aquí, commitea y borra el worktree con `--delete-branch`.
@@ -88,11 +88,12 @@ graph LR
 - **Qué hace:** declara la receta que prepara un worktree recién creado: el bootstrap del toolchain fijado (`tools/cpp bootstrap`, que crea `.toolchain/`, ignorado por git) y lo que haga falta para configurar el build. Tiene que funcionar en cualquier máquina, sin rutas de una máquina concreta.
 - **Hecho cuando:** `telar worktree create … --setup` deja un worktree que compila los tres procesos, tanto en local como en `Personal`.
 
-### [ ] P0.2 · Script de métricas y línea base
+### [x] P0.2 · Script de métricas y línea base
 - **Depende de:** — (el script se escribe ya; la línea base se toma después de P0.1)
 - **Toca:** `tools/` (script nuevo), `docs/build/` (fichero con la línea base).
 - **Mide:** porcentaje del código de módulos que está en interfaces (hoy 94,7%), dependientes transitivos de los hubs (`telar.client.protocol` 148, `telar.base.memory` 167), aristas hacia arriba (hoy 41 entre componentes y 55 entre módulos), ciclos (5), aristas `export import` (681 de 1236), líneas en fragmentos globales (4,84 M) y unidades que recompila `ninja -n` después de tocar la interfaz de cada hub. Además, el tiempo y el pico de memoria de un build en frío en cada máquina, que el coordinador usa para decidir cuántas tareas caben a la vez.
 - **Hecho cuando:** el script es reproducible y los números de partida están commiteados. P11.1 los vuelve a medir.
+- **Resultado:** `tools/module-metrics.py` y `docs/build/module-metrics.json`, medido sobre `a1e1beb3c`. Interfaces 94,8 %; dependientes de `telar.client.protocol` 148 y de `telar.base.memory` 169; aristas hacia arriba 41 entre componentes y 56 entre módulos; 5 ciclos; `export import` 687 de 1251; camino crítico de 21 módulos; tocar un hub recompila 432–480 de 1154 unidades. Las líneas de fragmentos globales se cuentan sin blancos ni comentarios: 1,87 M en 231 unidades (no comparable con los 4,84 M del plan). Build en frío de los tres procesos: `Personal` (`Adrians-Laptop`, 10 núcleos, 32 GiB) 128 s y 7,5 GiB de pico; esta máquina (`Adrians-MacBook-Pro`, 8 núcleos, 16 GiB) 141 s y 3,5 GiB. El desempate del orden de componentes no reproduce exactamente la tabla del final: P2.1 toma su allowlist de la lista `upward` del JSON.
 
 ### [x] P0.3 · Spike: el lifetime checker de TBC con `tbc::view<Memory &, …>` sobre un tipo abstracto
 - **Depende de:** —
@@ -165,6 +166,7 @@ graph LR
 - **Depende de:** P1.2
 - **Toca:** `tools/check-cpp-modules.py`, `docs/build/modules.json`.
 - **Qué hace:** generaliza `LIBRARY_LAYERS` a todos los componentes de `src/` y mueve el orden de capas a `modules.json`. La allowlist inicial son las 55 aristas entre módulos de la sección "Aristas hacia arriba" del final.
+- **De P0.2:** la allowlist sale de la lista `upward` de `docs/build/module-metrics.json` (56 aristas), no de la tabla del final, que se calculó con otro desempate.
 - **Hecho cuando:** el checker falla con cualquier arista hacia arriba nueva.
 
 ### [ ] P2.2 · Regla 4: `export import` solo si el tipo aparece en la interfaz exportada
