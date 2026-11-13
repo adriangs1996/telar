@@ -1077,7 +1077,7 @@ if(TELAR_GUI_NATIVE)
     qt_add_resources(gui-font-resolver-test gui-font-fixtures
       PREFIX "/telar/test-fonts"
       BASE "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures"
-      FILES tests/fixtures/metrics-variable.ttf tests/fixtures/metrics-collection.ttc)
+      FILES tests/fixtures/metrics-variable.ttf tests/fixtures/metrics-collection.ttc tests/fixtures/metrics-wide-glyph.ttf)
     target_link_libraries(gui-font-resolver-test PRIVATE gui-quick gui-quickplugin Qt6::Test)
     add_test(NAME gui-font-resolver COMMAND gui-font-resolver-test)
     set_tests_properties(gui-font-resolver PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 30)

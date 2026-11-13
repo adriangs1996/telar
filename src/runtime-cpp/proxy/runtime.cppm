@@ -2427,6 +2427,7 @@ public:
   struct Identity {
     ProxyStatus status{};
     ProxySecret secret;
+    bool https_proxy = true;
     FixedText<PATH_MAX> certificate;
     FixedText<PATH_MAX> bundle;
   };
@@ -2446,15 +2447,17 @@ public:
       return;
     }
 
-    SensitiveBuffer<256> storage;
-    const auto bytes = storage.bytes();
-    const auto url = identity_->secret.formatUrl({reinterpret_cast<char *>(bytes.data()), bytes.size()}, *identity_->status.port);
-    if (!url) {
-      throw SystemError{"Format child proxy URL", EOVERFLOW};
+    if (identity_->https_proxy) {
+      SensitiveBuffer<256> storage;
+      const auto bytes = storage.bytes();
+      const auto url = identity_->secret.formatUrl({reinterpret_cast<char *>(bytes.data()), bytes.size()}, *identity_->status.port);
+      if (!url) {
+        throw SystemError{"Format child proxy URL", EOVERFLOW};
+      }
+      command.setEnvironment("HTTPS_PROXY", *url);
+      command.setEnvironment("https_proxy", *url);
+      command.setEnvironment("NODE_USE_ENV_PROXY", "1");
     }
-    command.setEnvironment("HTTPS_PROXY", *url);
-    command.setEnvironment("https_proxy", *url);
-    command.setEnvironment("NODE_USE_ENV_PROXY", "1");
     command.setEnvironment("NODE_EXTRA_CA_CERTS", identity_->certificate.view());
     for (const auto name : {"SSL_CERT_FILE", "CURL_CA_BUNDLE", "REQUESTS_CA_BUNDLE", "AWS_CA_BUNDLE", "GIT_SSL_CAINFO", "CLOUDSDK_CORE_CUSTOM_CA_CERTS_FILE"}) {
       command.setEnvironment(name, identity_->bundle.view());
@@ -3352,7 +3355,7 @@ public:
     status_.preferred_port = ports.preferred();
     status_.scope = std::ranges::any_of(options.intercept_hosts.patterns(), [](const auto &host) { return host.starts_with('*'); }) ? ProxyScope::wildcard : ProxyScope::exact;
     using Identity = ProxyClientConfiguration::Identity;
-    auto identity = std::allocate_shared<Identity>(AllocatorRef<Identity, Memory>{memory}, Identity{.status = status_, .secret = *secret_});
+    auto identity = std::allocate_shared<Identity>(AllocatorRef<Identity, Memory>{memory}, Identity{.status = status_, .secret = *secret_, .https_proxy = options.pane_https_proxy});
     identity->certificate.assign(certificate_path_);
     identity->bundle.assign(bundle_path_);
     client_ = std::move(identity);

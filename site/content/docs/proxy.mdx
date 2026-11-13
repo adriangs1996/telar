@@ -88,6 +88,10 @@ CLI read these variables, so they trust Telar's CA without any change to the
 system. Telar does not set `HTTP_PROXY`, so plain HTTP traffic does not go
 through the proxy.
 
+With `pane_https_proxy = false`, panes get only the CA variables and
+`TELAR_PROXY_TLS`; programs reach the proxy only when transparent redirection
+selects their connections.
+
 Processes that were already running keep the environment they started with.
 Open a new pane, or restart the program, after you turn the proxy on or off.
 

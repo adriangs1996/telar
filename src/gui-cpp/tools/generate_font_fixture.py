@@ -70,6 +70,26 @@ def main():
         collection.fonts = [static, variable]
         collection.save(output.with_name('metrics-collection.ttc'))
         print(f'{output}: {output.stat().st_size} bytes')
+    wide_glyph(original, output.with_name('metrics-wide-glyph.ttf'))
+
+
+# One non-ASCII glyph twice as wide as the rest raises hhea.advanceWidthMax, as U+0132 does
+# in Atkinson Hyperlegible Mono, while every ASCII advance stays at the cell width.
+def wide_glyph(original, output):
+    family = 'Telar Wide Glyph Fixture'
+    font = TTFont(original, recalcTimestamp=False)
+    subsetter = subset.Subsetter()
+    subsetter.populate(text=' Mg@—')
+    subsetter.subset(font)
+    for identifier, text in {1: family, 2: 'Regular', 3: 'TelarWideGlyphFixture-Regular', 4: family + ' Regular', 6: 'TelarWideGlyphFixture-Regular', 16: family, 17: 'Regular'}.items():
+        font['name'].removeNames(nameID=identifier)
+        font['name'].setName(text, identifier, 3, 1, 0x409)
+        font['name'].setName(text, identifier, 1, 0, 0)
+    name = font.getBestCmap()[0x2014]
+    advance, bearing = font['hmtx'].metrics[name]
+    font['hmtx'].metrics[name] = (advance * 2, bearing)
+    font.save(output)
+    print(f'{output}: {output.stat().st_size} bytes')
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@ module;
 #include "../platform/font.h"
 #include <cstring>
 #include <cmath>
+#include <freetype/ftadvanc.h>
 #include <freetype/ftimage.h>
 #include <freetype/ftmm.h>
 #include <freetype/ftoutln.h>
@@ -60,6 +61,29 @@ tbc::view<std::unique_ptr<FT_MM_Var, VariationDeleter>, tbc::lt::a> variationMas
   return result;
 }
 
+// Terminal cells hold the text a grid shows, so they follow printable ASCII instead of
+// `hhea.advanceWidthMax`: a single wide glyph, such as U+0132 in Atkinson Hyperlegible Mono
+// or the icons of a Nerd Font, would otherwise widen every cell. Unscaled advances include
+// the active variation. Bitmap faces keep the size's own maximum.
+FT_Pos asciiAdvance(FT_Face face) {
+  if (FT_IS_SCALABLE(face) == 0) {
+    return 0;
+  }
+
+  constexpr FT_ULong first_printable = 0x21;
+  constexpr FT_ULong last_printable = 0x7E;
+  FT_Pos widest = 0;
+  for (auto scalar = first_printable; scalar <= last_printable; ++scalar) {
+    const auto index = FT_Get_Char_Index(face, scalar);
+    FT_Fixed advance = 0;
+    if (index != 0 && FT_Get_Advance(face, index, FT_LOAD_NO_SCALE, &advance) == 0) {
+      widest = std::max(widest, advance);
+    }
+  }
+
+  return widest;
+}
+
 }
 
 Face::Face(std::span<const std::uint8_t> bytes, const FontMatch &match) {
@@ -79,6 +103,7 @@ Face::Face(std::span<const std::uint8_t> bytes, const FontMatch &match) {
   }
 
   applyVariation(match.variation);
+  ascii_advance_ = asciiAdvance(face_.get());
 }
 
 void Face::initializeShaping() {
@@ -276,7 +301,9 @@ void Face::selectSize(std::uint16_t pixel_height) {
 FontMetrics Face::metrics(std::uint16_t pixel_height) {
   selectSize(pixel_height);
   const auto &metrics = face_->size->metrics;
-  const auto advance = std::max(1, FontMetrics::roundFixed(metrics.max_advance));
+  // Scaled like FreeType scales `max_advance`, so a face whose widest glyph is ASCII keeps its width.
+  const auto cell = ascii_advance_ != 0 ? FT_MulFix(ascii_advance_, metrics.x_scale) : metrics.max_advance;
+  const auto advance = std::max(1, FontMetrics::roundFixed(cell));
   if (std::cmp_greater(advance, std::numeric_limits<std::uint16_t>::max())) {
     throw std::out_of_range{"FontMetricOutOfRange"};
   }

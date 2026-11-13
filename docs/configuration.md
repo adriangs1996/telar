@@ -1483,7 +1483,7 @@ validated values. No Lua state or closure enters the runtime process.
 substring patterns of up to 256 bytes; a list or pattern past that refuses
 the configuration and names the limit, because dropping a filter would record
 what it hides. `runtime.proxy` accepts
-`enabled`, `anonymous_tunnels`, `ca_dir`, `capture`, and `intercept_hosts`. ProxyTLS and exchange
+`enabled`, `anonymous_tunnels`, `pane_https_proxy`, `ca_dir`, `capture`, and `intercept_hosts`. ProxyTLS and exchange
 capture are disabled by default. A
 relative `ca_dir` is also resolved beside `config.lua`; Telar creates it
 owner-only and stores its private CA and derived trust bundle there with
@@ -1505,6 +1505,10 @@ TCP payload is forwarded opaquely and is not captured.
 `Proxy-Authorization` field to a host outside `intercept_hosts`, for clients
 that do not send the proxy URL's credential; see
 [ProxyTLS](proxy-tls.md#traffic-path-and-trust) for what it exposes.
+`pane_https_proxy`, `true` by default, sets `HTTPS_PROXY`, `https_proxy` and
+`NODE_USE_ENV_PROXY` in new panes. Set it to `false` when panes should reach
+the proxy only through [transparent redirection](transparent-redirect.md);
+the CA variables are still set.
 
 System trust is not a configuration side effect. Run `telar proxy trust
 install|uninstall|status` explicitly. If `ca_dir` is custom, pass the same

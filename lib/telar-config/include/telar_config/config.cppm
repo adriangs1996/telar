@@ -3372,6 +3372,7 @@ struct ProxyOptions {
   ProxyCaptureLimits capture;
   bool enabled = false;
   bool anonymous_tunnels = false;
+  bool pane_https_proxy = true;
   bool network_capture = false;
   bool network_control = false;
   bool transparent_redirect = false;
@@ -3394,9 +3395,10 @@ public:
       return;
     }
 
-    table.onlyFields({"enabled", "anonymous_tunnels", "ca_dir", "intercept_hosts", "capture", "network_capture", "network_control", "transparent_redirect", "transparent_tls", "stream_interception"});
+    table.onlyFields({"enabled", "anonymous_tunnels", "pane_https_proxy", "ca_dir", "intercept_hosts", "capture", "network_capture", "network_control", "transparent_redirect", "transparent_tls", "stream_interception"});
     values.enabled = table.field("enabled").boolean(values.enabled);
     values.anonymous_tunnels = table.field("anonymous_tunnels").boolean(values.anonymous_tunnels);
+    values.pane_https_proxy = table.field("pane_https_proxy").boolean(values.pane_https_proxy);
     values.network_capture = table.field("network_capture").boolean(values.network_capture);
     values.network_control = table.field("network_control").boolean(values.network_control);
     if (values.network_control && !values.network_capture) { table.fail("network_control requires network_capture"); }

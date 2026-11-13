@@ -5,6 +5,7 @@ module;
 #include <cstdio>
 #include <lauxlib.h>
 #include <lua.h>
+#include <print>
 #include <sys/stat.h>
 #include <sys/un.h>
 #include <unistd.h>
@@ -84,7 +85,7 @@ export namespace telar::runtime::cli {
 
   private:
     template <typename Integer>
-    inline static Integer number(std::string_view text) {
+    static Integer number(std::string_view text) {
       if (text.empty() || text.front() == '_' || text.back() == '_') {
         throw std::invalid_argument{"Invalid plugin worker integer"};
       }
@@ -118,6 +119,7 @@ export namespace telar::runtime::cli {
     constexpr std::string_view prefix = "local telar = require(\"telar\")\nlocal plugin = (function()\n";
     constexpr std::string_view middle = "\nend)()\nif type(plugin) ~= \"table\" or type(plugin.actions) ~= \"table\" then error(\"plugin must return a table with an actions table\") end\nlocal callback = plugin.actions[\"";
     constexpr std::string_view suffix = "\"]\nif type(callback) ~= \"function\" then error(\"plugin action is not a function\") end\nreturn {telar.bind_global({\"escape\"}, callback)}";
+
     String<Memory> wrapped{AllocatorRef<char, Memory>{memory}};
     wrapped.reserve(prefix.size() + source.size() + middle.size() + action.size() + suffix.size());
     wrapped.append(prefix).append(source).append(middle).append(action).append(suffix);
@@ -126,11 +128,12 @@ export namespace telar::runtime::cli {
   }
 
   inline int retainPluginCallback(lua_State *state, const config::RetainedActionValidator &validator, config::LimitNotices &limits) {
-    const lua::Value bindings{state, -1, "plugin binding"};
+    const auto bindings = lua::Value{state, -1, "plugin binding"};
     config::BindingKeymap keymap;
     config::BindingValidator::validate(bindings, validator, keymap, limits);
     const auto binding = bindings.element(1);
     const auto callback = binding.field("action");
+
     if (!callback.is(LUA_TFUNCTION) || binding.field("expression").boolean(false)) {
       callback.fail("must be an action callback");
     }
@@ -144,7 +147,8 @@ export namespace telar::runtime::cli {
     constexpr std::size_t maximum_source_bytes = std::size_t{1024} * 1024;
     const auto source = readFile(memory, options.entry, maximum_source_bytes);
     const auto directory = std::filesystem::canonical(std::filesystem::absolute(options.entry).parent_path()).string();
-    lua::Vm vm = {memory};
+
+    lua::Vm vm{memory};
     vm.resetBudget();
     vm.execute(config::bootstrap, "@telar/bootstrap.lua", 0);
     lua_getglobal(vm.state(), "telar");
@@ -177,7 +181,7 @@ export namespace telar::runtime::cli {
     }
   }
 
-#if defined(__APPLE__)
+#ifdef __APPLE__
 
   template <Allocator Memory>
   void runRedirect(Memory &memory, std::span<char *const> arguments, bool cleanup) {
@@ -189,71 +193,92 @@ export namespace telar::runtime::cli {
     bool dry_run = false;
     auto direction = redirect::Direction::outbound;
     bool direction_given = false;
+
     for (std::size_t index = 0; index < arguments.size(); ++index) {
       const std::string_view argument{arguments[index]};
+
       if (argument == "--dry-run" && !cleanup && !dry_run) {
         dry_run = true;
         continue;
       }
+
       if (index + 1 == arguments.size()) {
         throw std::invalid_argument{"Missing redirect option value"};
       }
+
       const std::string_view value{arguments[++index]};
+
       if (argument == "--socket" && socket == nullptr && !value.empty() && value.find_first_of("\r\n") == std::string_view::npos) {
         socket = arguments[index];
       } else if (argument == "--target" && !cleanup && count < targets.size()) {
         const auto target = redirect::Target::parse(value);
+
         if (std::ranges::any_of(std::span{targets}.first(count), [&](const auto &previous) { return previous.host.view() == target.host.view() && previous.port == target.port; })) {
           throw std::invalid_argument{"Duplicate redirect destination"};
         }
+
         targets[count++] = target;
       } else if (argument == "--direction" && !cleanup && !direction_given) {
         direction = redirect::parseDirection(value);
         direction_given = true;
       } else if (argument == "--process" && !cleanup && process_count < processes.size()) {
         const auto process = redirect::ProcessToken::parse(value);
+
         if (std::ranges::any_of(std::span{processes}.first(process_count), [&](const auto &other) { return other.pid == process.pid; })) {
           throw std::invalid_argument{"Duplicate selected process"};
         }
+
         processes[process_count++] = process;
       } else {
         throw std::invalid_argument{"Unknown, duplicate or excessive redirect option"};
       }
     }
+
     if (!socket || (!cleanup && count == 0)) {
       throw std::invalid_argument{"Expected traffic redirect --socket PATH --target IP:PORT [--direction outbound|inbound|both] [--process PID[@SECONDS.MICROSECONDS]] [--dry-run]"};
     }
+
     String<Memory> endpoint{socket, AllocatorRef<char, Memory>{memory}};
     endpoint += redirect::socket_suffix;
+
     if (endpoint.front() != '/' || endpoint.size() >= sizeof(sockaddr_un::sun_path)) {
       throw std::invalid_argument{"Invalid absolute redirect endpoint"};
     }
+
     const redirect::PfIdentity identity{memory, endpoint};
+
     if (cleanup) {
       if (::geteuid() != 0) {
         throw std::invalid_argument{"Redirect recovery requires root"};
       }
+
       redirect::Record state{memory, identity, endpoint};
       redirect::PfCommand command{memory};
       redirect::PfLoopback interface{command};
       redirect::SharedLoopback loopback{memory, interface, identity.label};
       redirect::PfSession session{command, state, identity, loopback};
       session.recover();
-      std::printf("telar redirect: recovered %s\n", identity.anchor.c_str());
+      std::println("telar redirect: recovered {}", identity.anchor.c_str());
       return;
     }
+
     if (!dry_run && ::geteuid() != 0) {
       throw std::invalid_argument{"Use sudo only for traffic redirect; keep the runtime unprivileged"};
     }
+
     redirect::Helper helper{memory, std::string_view{socket}, std::span{targets}.first(count), std::span{processes}.first(process_count), direction};
+
     if (dry_run) {
       struct stat metadata{};
+
       if (::lstat(endpoint.c_str(), &metadata) != 0 || !S_ISSOCK(metadata.st_mode) || (metadata.st_mode & 0077) != 0 || (::geteuid() != 0 && metadata.st_uid != ::geteuid())) {
         throw SystemError{"Enable runtime.proxy.transparent_redirect on an owned runtime first", EACCES};
       }
+
       if (process_count != 0) {
         const redirect::SocketOwners selected{metadata.st_uid, std::span{processes}.first(process_count)};
       }
+
       const auto rules = helper.plan(metadata.st_uid, identity, true);
       redirect::PfCommand command{memory};
       const std::array<std::string_view, 5> arguments{"-n", "-a", identity.anchor, "-f", "-"};
@@ -281,7 +306,9 @@ export namespace telar::runtime::cli {
     const ExecutablePath executable;
     const ExecutablePath cli{"telar"};
     plugins::TapConfiguration tap_configuration{memory, configuration.configuration_directory.view(), configuration.plugins.configured(), process_environment};
+
     installPngDecoder();
+
     // Shells keep starting without the integration when its scripts cannot be written.
     String<Memory> shell_integration{AllocatorRef<char, Memory>{memory}};
     if (configuration.shell_integration && !paths.data_home.empty()) {

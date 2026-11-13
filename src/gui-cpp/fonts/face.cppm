@@ -199,6 +199,8 @@ private:
   tbc::view<std::array<SizeEntry, maximum_sizes>, tbc::lt::self> sizes_{};
   std::size_t next_size_slot_ = 0;
   std::uint16_t active_height_ = 0;
+  // The widest printable ASCII advance in font units, 0 when the face has none.
+  FT_Pos ascii_advance_ = 0;
 };
 
 }

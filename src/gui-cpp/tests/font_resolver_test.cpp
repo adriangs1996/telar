@@ -423,6 +423,11 @@ private:
     QVERIFY(narrow_metrics.ascender != wide_metrics.ascender);
     QVERIFY(narrow_metrics.line_height != wide_metrics.line_height);
     QVERIFY(narrow_metrics.box_stroke != wide_metrics.box_stroke);
+    // The wide master scales every advance by 3/2; cells follow the variation's ASCII advances.
+    constexpr std::uint16_t narrow_cell = 18;
+    constexpr std::uint16_t wide_cell = 27;
+    QCOMPARE(narrow_metrics.maximum_advance, narrow_cell);
+    QCOMPARE(wide_metrics.maximum_advance, wide_cell);
     const auto resolved = FontResolver::resolve(wide, configuration, 2);
     QCOMPARE(resolved.grid.box_stroke, wide_metrics.box_stroke);
     QCOMPARE(resolved.font.faces.front().variableAxisValue("wdth"), wide_coordinate);
@@ -445,6 +450,19 @@ private:
     match.variation.tags[0] = width_axis;
     match.variation.values[0] = std::numeric_limits<float>::quiet_NaN();
     QVERIFY_THROWS_EXCEPTION(std::invalid_argument, (fonts::Face{bytes, match}));
+  }
+
+  Q_SLOT static void sizesCellsByAsciiInsteadOfWidestGlyph() {
+    QFile file{QStringLiteral(":/telar/test-fonts/metrics-wide-glyph.ttf")};
+    QVERIFY(file.open(QIODeviceBase::ReadOnly));
+    const auto data = file.readAll();
+    const std::vector<std::uint8_t> bytes{data.cbegin(), data.cend()};
+    fonts::Face face{bytes};
+    // 600 of 1000 units at 30 px; the em dash's 1200 units must not double the cell.
+    constexpr std::uint16_t height = 30;
+    constexpr std::uint16_t cell = 18;
+    QCOMPARE(face.metrics(height).maximum_advance, cell);
+    QCOMPARE(FontGrid::resolve(face.metrics(height), FontConfiguration{}, 1).width, cell);
   }
 
   Q_SLOT static void selectsCollectionFacesAndRejectsMissingNames() {

@@ -1185,6 +1185,12 @@ Boolean. Admit connections that carry no proxy credential, for hosts outside
 `intercept_hosts` only. Default `false`. Any local user can then open tunnels
 through the proxy.
 
+### `runtime.proxy.pane_https_proxy`
+
+Boolean. Set `HTTPS_PROXY`, `https_proxy` and `NODE_USE_ENV_PROXY` in new
+panes. Default `true`. Set it to `false` when traffic reaches the proxy only
+through transparent redirection; panes still get the CA variables.
+
 ### `runtime.proxy.capture.enabled`
 
 Boolean. Copy intercepted exchanges for tap plugins. Default `false`.

@@ -181,10 +181,16 @@ return {
     proxy = {
       enabled = true,
       transparent_redirect = true,
+      pane_https_proxy = false,
     },
   },
 }
 ```
+
+`pane_https_proxy = false` keeps `HTTPS_PROXY`, `https_proxy` and
+`NODE_USE_ENV_PROXY` out of new panes, so their applications connect to the
+original destinations and only the selected redirect reaches the proxy. The CA
+variables remain for `transparent_tls`. Omit it to offer both paths.
 
 This creates a private `<runtime socket>.redirect` endpoint. It accepts socket
 handoffs only from root. Received descriptors must be connected IP stream sockets,
