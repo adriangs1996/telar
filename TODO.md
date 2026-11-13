@@ -185,11 +185,12 @@ graph LR
 - **Toca:** el linter de TBC (lo más fiable sobre el AST) o el checker si basta una aproximación.
 - **Hecho cuando:** la allowlist contiene los re-exports actuales que no cumplen (al menos los 67 que no mencionan ningún tipo del módulo re-exportado) y falla con cualquiera nuevo.
 
-### [ ] P2.3 · Regla 5: ningún `#include` fuera de las excepciones
+### [x] P2.3 · Regla 5: ningún `#include` fuera de las excepciones
 - **Depende de:** P1.2
 - **Toca:** `tools/check-cpp-modules.py`, `textual_boundaries` en `modules.json`.
 - **Excepciones permitidas:** `lib/sys`, las cabeceras de macros del proyecto (P6.3), Qt/moc y Objective-C++.
 - **Hecho cuando:** hay allowlist por fichero con los includes de hoy y el checker falla con cualquiera nuevo.
+- **Resultado:** `f25185aaa` y `6e8549845`. Pueden incluir `lib/sys`, los adaptadores Qt/moc (los que incluyen una cabecera `<Q…>`), las fuentes C y Objective-C(++) y las cabeceras que todos ellos alcanzan; un módulo puede incluir sus propias cabeceras de `header_owners` que cruzan esa frontera; `macro_headers` (vacío hasta P6.3) no puede incluir nada. Tests y herramientas quedan fuera. La allowlist está en `docs/build/textual-includes.json` (3130 includes tras integrar P3.6), y el checker falla también con una entrada obsoleta: **cada tarea que quita o mueve un include actualiza ese fichero**. El checker también mira los ficheros sin rastrear, para comprobar los nuevos antes del commit.
 
 ---
 
@@ -434,6 +435,7 @@ Cada tarea empieza localizando todas las copias, crea un módulo con una interfa
 ### [ ] P6.5a–e · Sustituir los includes por imports (categorías A y B)
 - **Depende de:** P3.1, P6.4, P6.3
 - **Toca:** a = lib, b = runtime, c = gui (sin Qt ni `.mm`), d = cli, e = auth-daemon. Las cinco van en paralelo.
+- **Decidido (librerías de terceros):** cada librería externa (OpenSSL, ghostty, freetype, brotli, pcap, nghttp2, xcb, wayland, md4c…) se incluye solo en el fragmento global de un módulo dueño registrado en `modules.json`, y el resto importa ese módulo. Subtarea **f**: mover cada include de terceros a su dueño. Quedan como excepción de la regla 5 el linter de TBC (herramienta Clang sin módulos, 73 includes de Clang/LLVM) y los fragmentos de datos `.inc` generados.
 - **Qué hace:** la libc estándar pasa a `import std;` o `import std.compat;` (está en el toolchain y hoy nadie lo usa), las cabeceras del proyecto al módulo dueño y POSIX/Apple a `telar.sys.*`. Cada subtarea borra sus entradas de la allowlist de P2.3.
 
 ### [ ] P6.6 · Los hubs dejan de ser dueños textuales
