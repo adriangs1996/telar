@@ -73,6 +73,12 @@ proveedores, ausencia de ciclos y la explicación de cada header residual. Tambi
 comprueba las capas de `lib/`: `library_layers` en `modules.json` lista las bibliotecas
 que cada una puede importar, de modo que `telar-platform` no vuelve a depender del protocolo ni
 `telar-tls` de la configuración sin cambiar esa tabla a la vista de quien revisa.
+En `src/` solo se importa hacia abajo: las bibliotecas quedan por debajo de todos los
+procesos, y `process_layers` ordena los componentes de cada proceso (`runtime/platform`,
+`gui/input`…), el más bajo primero. Un proceso solo importa bibliotecas y sus propios
+componentes, y la regla cuenta también los imports de las unidades de implementación.
+`upward_imports` lista las aristas hacia arriba que quedan; quien cierra una borra su
+entrada, porque una entrada que ya no sube también hace fallar el checker.
 
 | Área | Interfaces finales | Organización |
 | --- | ---: | --- |

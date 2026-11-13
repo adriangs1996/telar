@@ -33,13 +33,13 @@ def main():
         if not match or match[1] != inventory['interfaces'][source] or match[1] in graph:
             raise RuntimeError('Invalid or duplicate module ownership: ' + source)
         name = match[1]
-        dependencies = re.findall(r'^(?:export )?import ([\w.:]+);', text, re.M)
-        # The toolchain's libc++ provides std.
-        graph[name] = {name.split(':')[0] + item if item.startswith(':') else item for item in dependencies} - {'std'}
+        graph[name] = imports_of(name, text)
         if '#include' in text and not text.startswith('module;'):
             raise RuntimeError('Textual dependencies need a global fragment: ' + source)
-    check_library_layers(inventory['library_layers'], inventory['interfaces'], graph)
     check_module_paths(owned)
+    imports = unit_imports(owned, graph)
+    check_library_layers(inventory['library_layers'], inventory['interfaces'], imports)
+    upward = check_process_layers(inventory['process_layers'], inventory['upward_imports'], imports)
     visited, active = set(), []
     def visit(name):
         if name in active:
@@ -59,8 +59,41 @@ def main():
         if owner not in interfaces:
             raise RuntimeError('Missing migrated definition owner: ' + source)
     owned = check_header_owners(inventory['header_owners'], owned_units(owned))
-    print(f'{len(graph)} module interfaces, acyclic imports, {len(headers)} justified textual boundaries, '
+    print(f'{len(graph)} module interfaces, acyclic imports, {upward} upward imports left, '
+          f'{len(headers)} justified textual boundaries, '
           f'{owned} headers reached only through their owner module')
+
+
+IMPORT_RE = re.compile(r'^(?:export )?import ([\w.:]+);', re.M)
+
+
+def imports_of(name, text):
+    """The modules a unit of `name` imports, with its partitions spelled in full."""
+    dependencies = IMPORT_RE.findall(text)
+
+    # The toolchain's libc++ provides std.
+    return {name.split(':')[0] + item if item.startswith(':') else item for item in dependencies} - {'std'}
+
+
+def unit_imports(files, graph):
+    """The imports of each module, its implementation units included: an import in a .cpp
+    still ties the module to the component it imports."""
+    imports = {name: set(dependencies) for name, dependencies in graph.items()}
+    for path in sorted(name for name in files if name.endswith('.cpp')):
+        text = COMMENTS_RE.sub('', (ROOT / path).read_text(errors='replace'))
+        match = DECLARATION_RE.search(text)
+        if not match:
+            continue
+
+        name = f'{match[2]}:{match[3]}' if match[3] else match[2]
+        imports.setdefault(name, set()).update(imports_of(name, text))
+
+    for name, dependencies in imports.items():
+        for dependency in dependencies:
+            if dependency not in graph:
+                raise RuntimeError(f'Missing provider: {dependency}, imported by {name}')
+
+    return imports
 
 
 INCLUDE_ROOTS = [str(path.relative_to(ROOT)) for path in sorted(ROOT.glob('lib/*/include*'))]
@@ -81,7 +114,7 @@ def global_fragment(text):
     return text[:match.start()] if match else ''
 
 
-def check_library_layers(layers, interfaces, graph):
+def check_library_layers(layers, interfaces, imports):
     """`library_layers` in modules.json lists the libraries each library's modules may import,
     lowest layer first. A library reaching a higher one, or a sibling it does not list, rebuilds
     and drags in more than it uses."""
@@ -93,14 +126,54 @@ def check_library_layers(layers, interfaces, graph):
     for name, library in library_of.items():
         if library not in layers:
             raise RuntimeError(f'Place {library} in library_layers before {name} imports anything')
-    for source, name in interfaces.items():
+    for name, dependencies in imports.items():
         library = library_of.get(name.split(':')[0])
         if library is None:
             continue
-        for dependency in graph[name]:
+        for dependency in dependencies:
             target = library_of.get(dependency.split(':')[0])
             if target and target != library and target not in layers[library]:
                 raise RuntimeError(f'{name} imports {dependency}: {library} may not depend on {target}')
+
+
+def component(name):
+    """`lib/<library>` for a library module, `<process>/<top folder>` for a process module."""
+    parts = name.split(':')[0].split('.')
+
+    return f'{parts[1]}/{parts[2]}' if parts[1] in PROCESSES else f'lib/{parts[1]}'
+
+
+def check_process_layers(layers, allowed, imports):
+    """Rule 2: a module imports only downward. Libraries sit below every process, and
+    `process_layers` in modules.json orders the components of each process, lowest first. A
+    process reaches only libraries and its own components. `upward_imports` lists the upward
+    imports that exist today; the change that removes one removes its entry."""
+    position = {f'{process}/{folder}': index
+                for process, folders in layers.items() for index, folder in enumerate(folders)}
+    unplaced = {component(name) for name in imports} - position.keys()
+    unplaced = sorted(name for name in unplaced if not name.startswith('lib/'))
+    if unplaced:
+        raise RuntimeError('Place each component in process_layers: ' + ', '.join(unplaced))
+
+    def downward(source, target):
+        upper, lower = component(source), component(target)
+        if lower.startswith('lib/'):
+            return True
+        if upper.startswith('lib/') or upper.split('/')[0] != lower.split('/')[0]:
+            return False
+
+        return position[lower] <= position[upper]
+
+    upward = {f'{name} -> {dependency}'
+              for name, dependencies in imports.items() for dependency in dependencies
+              if not downward(name, dependency)}
+    errors = [f'{edge} imports upward' for edge in sorted(upward - set(allowed))]
+    errors += [f'{edge} no longer imports upward; remove it from upward_imports'
+               for edge in sorted(set(allowed) - upward)]
+    if errors:
+        raise RuntimeError('Imports against the layer order:\n  ' + '\n  '.join(errors))
+
+    return len(upward)
 
 
 COMMENTS_RE = re.compile(r'//[^\n]*|/\*.*?\*/', re.S)
