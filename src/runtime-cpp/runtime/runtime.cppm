@@ -432,16 +432,7 @@ export {
       // Sends the agent sounds reported since the last delivery to subscribed clients.
       inline void deliverSounds(ClientStore<Memory> &clients) noexcept {
         for (const auto &notification : sounds_.queued()) {
-          for (auto *client : clients.items()) {
-            if (client == nullptr || !client->subscribed || client->connection.closing) {
-              continue;
-            }
-            try {
-              client->connection.trySend(notification);
-            } catch (...) {
-              client->connection.closing = true;
-            }
-          }
+          broadcast(clients, [](const ClientSession<Memory> &client) { return client.subscribed; }, notification);
         }
         sounds_.clear();
       }
@@ -1028,17 +1019,7 @@ export {
         auto *workspace = model.workspaces.find(identity);
         while (workspace != nullptr && !workspace->tabs.empty()) {
           const auto closed = removeTab(model, TabLocation{WorkspaceLocation{.id = identity}, workspace->tabs.front().id});
-          for (auto *client : clients.items()) {
-            if (client == nullptr || !client->connection.negotiated || client->connection.closing || client->workspace != identity) {
-              continue;
-            }
-
-            try {
-              publishTabClosed(*client, closed);
-            } catch (...) {
-              client->connection.closing = true;
-            }
-          }
+          broadcastTabClosed(clients, closed, [](const ClientSession<Memory> &) {});
 
           workspace = model.workspaces.find(identity);
         }
@@ -1139,18 +1120,7 @@ export {
         const auto closed = removeTab(model, location);
         std::array<std::uint64_t, client_capacity> viewers{};
         std::size_t count = 0;
-        for (auto *client : clients.items()) {
-          if (client == nullptr || !client->connection.negotiated || client->connection.closing || client->workspace != location.workspace.id) {
-            continue;
-          }
-
-          try {
-            publishTabClosed(*client, closed);
-          } catch (...) {
-            client->connection.closing = true;
-          }
-          viewers[count++] = client->id;
-        }
+        broadcastTabClosed(clients, closed, [&](const ClientSession<Memory> &client) { viewers[count++] = client.id; });
 
         if (closed.workspace_closed) {
           for (const auto viewer : std::span{viewers}.first(count)) {
@@ -1159,12 +1129,18 @@ export {
         }
       }
 
-      inline static void publishTabClosed(ClientSession<Memory> &client, const TabClosed &closed) {
-        if (!client.connection.trySend(closed)) {
-          client.workspace_resync = ResyncRequired{.workspace = closed.location.workspace,
-                                                   .workspace_closed = closed.workspace_closed,
-                                                   .previous_workspace = closed.previous_workspace};
-        }
+      // Tells each client viewing the closed tab's workspace, after `seen` notes it; one whose queue
+      // is full resynchronizes the workspace instead.
+      template <typename Seen>
+      inline static void broadcastTabClosed(ClientStore<Memory> &clients, const TabClosed &closed, Seen &&seen) noexcept {
+        deliver(clients, [&](const ClientSession<Memory> &client) { return client.connection.negotiated && client.workspace == closed.location.workspace.id; }, [&](ClientSession<Memory> &client) {
+          seen(client);
+          if (!client.connection.trySend(closed)) {
+            client.workspace_resync = ResyncRequired{.workspace = closed.location.workspace,
+                                                     .workspace_closed = closed.workspace_closed,
+                                                     .previous_workspace = closed.previous_workspace};
+          }
+        });
       }
 
       inline static TabClosed removeTab(RuntimeModel<Memory> &model, TabLocation location) {

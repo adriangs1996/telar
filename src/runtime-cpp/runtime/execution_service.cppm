@@ -181,17 +181,7 @@ private:
                                                      .duration_ms = 8000,
                                                      .title = "Limit reached",
                                                      .message = {text.data(), static_cast<std::size_t>(length)}}};
-    for (auto *client : clients.items()) {
-      if (client == nullptr || client->role != ClientRole::interactive || client->connection.closing) {
-        continue;
-      }
-
-      try {
-        client->connection.trySend(notification);
-      } catch (...) {
-        client->connection.closing = true;
-      }
-    }
+    broadcast(clients, [](const ClientSession<Memory> &client) { return client.role == ClientRole::interactive; }, notification);
   }
 
   static constexpr unsigned reports_per_second = 32;

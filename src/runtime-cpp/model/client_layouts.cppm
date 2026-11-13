@@ -973,6 +973,30 @@ using ClientStore = SlotStore<ClientSession<Memory>, client_capacity, Memory>;
 template <Allocator Memory>
 using WorkspaceStore = SlotStore<Workspace<Memory>, 64, Memory>;
 
+// Calls `send` for each open client `admits` accepts. A client whose send throws is closed: its
+// connection may hold part of a frame, and every broadcast treats that failure alike.
+template <Allocator Memory, typename Admits, typename Send>
+inline void deliver(ClientStore<Memory> &clients, Admits &&admits, Send &&send) noexcept {
+  for (auto *client : clients.items()) {
+    if (client == nullptr || client->connection.closing || !admits(*client)) {
+      continue;
+    }
+    try {
+      send(*client);
+    } catch (...) {
+      client->connection.closing = true;
+    }
+  }
+}
+
+// Sends `message` to each open client `admits` accepts, as deliver does; how many queued it.
+template <Allocator Memory, typename Admits, typename Message>
+inline std::size_t broadcast(ClientStore<Memory> &clients, Admits &&admits, const Message &message) noexcept {
+  std::size_t delivered = 0;
+  deliver(clients, admits, [&](ClientSession<Memory> &client) { delivered += client.connection.trySend(message); });
+  return delivered;
+}
+
 // Whether a live client holds a tab.
 template <Allocator Memory>
 inline bool tabHeld(const ClientStore<Memory> &clients, TabLocation location) noexcept {

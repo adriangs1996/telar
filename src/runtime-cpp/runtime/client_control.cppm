@@ -246,22 +246,9 @@ public:
   }
 
   inline static std::uint8_t publish(ClientStore<Memory> &clients, const NotificationBody &body) {
-    std::uint8_t delivered = 0;
     Notification notification;
     static_cast<NotificationBody &>(notification) = body;
-
-    for (auto *client : clients.items()) {
-      if (client == nullptr || client->connection.closing || client->role != ClientRole::interactive) {
-        continue;
-      }
-
-      try {
-        delivered += client->connection.trySend(notification);
-      } catch (const std::bad_alloc &) {
-      }
-    }
-
-    return delivered;
+    return static_cast<std::uint8_t>(broadcast(clients, [](const ClientSession<Memory> &client) { return client.role == ClientRole::interactive; }, notification));
   }
 
   inline static void abandon(ClientStore<Memory> &clients, std::uint64_t departed) noexcept {
