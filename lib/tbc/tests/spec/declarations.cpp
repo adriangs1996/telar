@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <memory>
+#include <new>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -1702,6 +1703,193 @@ void declarationAbstractSharedReleaseCollected(declarations::group_store& groups
   for (std::size_t index = 0; index < count; ++index) {
     groups.erase(identities[index]);
   }
+}
+
+// END CASE
+
+// CASE: declaration.shared_borrow_held_launch
+// PAIR: declaration.shared_borrow_held
+// SOURCE: src/runtime/persistence/session_store/session_store.cppm :: Restore::restore(const PaneRecord&) (launches a pane, then lists it in its tab)
+// STATUS: implemented
+// CONTRACT: A shared object keeps valid the storage it hands out. A place found through a borrow of it that an object holds, past a field the shared type does not have, is such storage; growth there still ends the borrows of the object that owns it.
+// SCENARIO: A launch stores in the model a pane made with the shared memory, which a workspace's tab list also keeps through its allocator; growing a tab's list and then finding the pane again is accepted.
+namespace declarations {
+  class TBC_SHARED model_memory {
+  public:
+    void* allocate(std::size_t size, std::size_t alignment) noexcept {
+      static_cast<void>(alignment);
+      return ::operator new(size, std::nothrow);
+    }
+
+    void deallocate(void* block, std::size_t size, std::size_t alignment) noexcept {
+      static_cast<void>(size);
+      static_cast<void>(alignment);
+      ::operator delete(block);
+    }
+  };
+
+  template <typename Value, typename... Arguments>
+  TBC_CONSTRUCTS std::unique_ptr<Value> makeFrom(model_memory& memory, Arguments&&... arguments) {
+    static_cast<void>(memory);
+    return std::make_unique<Value>(std::forward<Arguments>(arguments)...);
+  }
+
+  // A standard allocator over the shared memory, as AllocatorRef is.
+  template <typename Value>
+  struct model_allocator {
+    using value_type = Value;
+
+    explicit model_allocator(model_memory& memory) noexcept
+        : memory(&memory) {}
+
+    template <typename Other>
+    model_allocator(const model_allocator<Other>& other) noexcept
+        : memory(other.memory) {}
+
+    Value* allocate(std::size_t count) {
+      return static_cast<Value*>(memory->allocate(count * sizeof(Value), alignof(Value)));
+    }
+
+    void deallocate(Value* block, std::size_t count) noexcept {
+      memory->deallocate(block, count * sizeof(Value), alignof(Value));
+    }
+
+    template <typename Other>
+    bool operator==(const model_allocator<Other>& other) const noexcept {
+      return memory == other.memory;
+    }
+
+    model_memory* memory;
+  };
+
+  template <typename Value>
+  class pane_slots {
+  public:
+    void insert(std::size_t identity, Value* value) noexcept {
+      items_[identity % 4] = value;
+    }
+
+    Value* find(std::size_t identity) const noexcept {
+      return items_[identity % 4];
+    }
+
+  private:
+    std::array<Value*, 4> items_{};
+  };
+
+  // A command keeps the memory it was built with, as Command does.
+  class pane_command {
+  public:
+    explicit pane_command(tbc::view<model_memory&, tbc::lt::a> memory) noexcept
+        : memory_(memory) {}
+
+    pane_command(const pane_command&) = delete;
+    pane_command& operator=(const pane_command&) = delete;
+
+  private:
+    tbc::view<model_memory&, tbc::lt::a> memory_;
+  };
+
+  struct model_tab {
+    std::size_t id;
+    std::vector<std::size_t> panes;
+  };
+
+  struct model_workspace {
+    explicit model_workspace(model_memory& memory)
+        : tabs(model_allocator<model_tab>{memory}) {}
+
+    model_tab* tab(std::size_t identity) noexcept {
+      for (auto& candidate : tabs) {
+        if (candidate.id == identity) {
+          return &candidate;
+        }
+      }
+
+      return nullptr;
+    }
+
+    std::vector<model_tab, model_allocator<model_tab>> tabs;
+  };
+
+  struct model_pane {
+    int restored = 0;
+  };
+
+  struct runtime_model {
+    pane_slots<model_pane> panes;
+    pane_slots<model_workspace> workspaces;
+  };
+
+  class pane_launcher {
+  public:
+    explicit pane_launcher(tbc::view<model_memory&, tbc::lt::a> memory) noexcept
+        : memory_(memory) {}
+
+    pane_launcher(const pane_launcher&) = delete;
+    pane_launcher& operator=(const pane_launcher&) = delete;
+
+    tbc::view<model_pane&, tbc::lt::a> launch(tbc::view<runtime_model&, tbc::lt::a> model, pane_command& command, std::size_t identity) {
+      static_cast<void>(command);
+      auto pane = makeFrom<model_pane>(memory_);
+
+      model.panes.insert(identity, pane.release());
+      return *model.panes.find(identity);
+    }
+
+  private:
+    tbc::view<model_memory&, tbc::lt::a> memory_;
+  };
+
+  inline std::size_t readIdentity(const std::size_t& identity) noexcept {
+    return identity;
+  }
+}
+
+int declarationSharedBorrowHeldLaunch(tbc::view<declarations::model_memory&, tbc::lt::a> memory, tbc::view<declarations::runtime_model&, tbc::lt::a> model, tbc::view<declarations::pane_launcher&, tbc::lt::a> panes, std::size_t workspace, std::size_t tab, std::size_t record) {
+  declarations::pane_command command{memory};
+
+  panes.launch(model, command, record);
+  model.workspaces.find(workspace)->tab(tab)->panes.push_back(record);
+  auto& pane = *model.panes.find(record);
+
+  return pane.restored;
+}
+
+// END CASE
+
+// CASE: declaration.shared_borrow_held_field
+// PAIR: declaration.shared_borrow_held
+// SOURCE: src/runtime/persistence/session_store/session_store.cppm :: Restore::restore(const PaneRecord&) (launches a pane, then lists it in its tab)
+// STATUS: implemented
+// CONTRACT: A shared object keeps valid the storage it hands out. A place found through a borrow of it that an object holds, past a field the shared type does not have, is such storage; growth there still ends the borrows of the object that owns it.
+// SCENARIO: An element of a tab's pane list, a field the shared memory does not have, is read after the list grows; reject at the growth.
+std::size_t declarationSharedBorrowHeldField(tbc::view<declarations::model_memory&, tbc::lt::a> memory, tbc::view<declarations::runtime_model&, tbc::lt::a> model, tbc::view<declarations::pane_launcher&, tbc::lt::a> panes, std::size_t workspace, std::size_t tab, std::size_t record) {
+  declarations::pane_command command{memory};
+
+  panes.launch(model, command, record);
+  auto& first = model.workspaces.find(workspace)->tab(tab)->panes.front();
+
+  model.workspaces.find(workspace)->tab(tab)->panes.push_back(record); // expected-error [tbc-invalidated-borrow]
+  return declarations::readIdentity(first);
+}
+
+// END CASE
+
+// CASE: declaration.shared_borrow_held_element
+// PAIR: declaration.shared_borrow_held
+// SOURCE: src/runtime/persistence/session_store/session_store.cppm :: Restore::restore(const PaneRecord&) (launches a pane, then lists it in its tab)
+// STATUS: implemented
+// CONTRACT: A shared object keeps valid the storage it hands out. A place found through a borrow of it that an object holds, past a field the shared type does not have, is such storage; growth there still ends the borrows of the object that owns it.
+// SCENARIO: A tab found by scanning the workspace's list, an element no field names, is read after the list grows; reject at the growth.
+std::size_t declarationSharedBorrowHeldElement(tbc::view<declarations::model_memory&, tbc::lt::a> memory, tbc::view<declarations::runtime_model&, tbc::lt::a> model, tbc::view<declarations::pane_launcher&, tbc::lt::a> panes, std::size_t workspace, std::size_t tab, std::size_t record) {
+  declarations::pane_command command{memory};
+
+  panes.launch(model, command, record);
+  auto* found = model.workspaces.find(workspace)->tab(tab);
+
+  model.workspaces.find(workspace)->tabs.push_back(declarations::model_tab{record, {}}); // expected-error [tbc-invalidated-borrow]
+  return declarations::readIdentity(found->id);
 }
 
 // END CASE
