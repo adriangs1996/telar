@@ -196,12 +196,13 @@ graph LR
 - **Hecho cuando:** hay allowlist por fichero con los includes de hoy y el checker falla con cualquiera nuevo.
 - **Resultado:** `f25185aaa` y `6e8549845`. Pueden incluir `lib/sys`, los adaptadores Qt/moc (los que incluyen una cabecera `<Q…>`), las fuentes C y Objective-C(++) y las cabeceras que todos ellos alcanzan; un módulo puede incluir sus propias cabeceras de `header_owners` que cruzan esa frontera; `macro_headers` (vacío hasta P6.3) no puede incluir nada. Tests y herramientas quedan fuera. La allowlist está en `docs/build/textual-includes.json` (3130 includes tras integrar P3.6), y el checker falla también con una entrada obsoleta: **cada tarea que quita o mueve un include actualiza ese fichero**. El checker también mira los ficheros sin rastrear, para comprobar los nuevos antes del commit.
 
-### [ ] P2.5 · TBC lee los cuerpos de las funciones llamadas en otras unidades
+### [x] P2.5 · TBC lee los cuerpos de las funciones llamadas en otras unidades
 - **Depende de:** P8.3
 - **Toca:** `lib/tbc/linter` y su corpus de spec.
 - **Por qué:** TBC solo ve la declaración de la función llamada. Si el cuerpo está en otra unidad, supone que toda referencia o `this` no `const` invalida lo que se haya prestado de ella, como Rust con `&mut`. Al sacar cuerpos en la fase 9 eso dio errores nuevos (27 en la CLI, 5 por los accesores de `JsonNode`), y las tareas los esquivaron dejando los cuerpos en la interfaz con `TBC_HOT_PATH`, que el plan reserva para camino caliente medido. **Decidido:** que TBC lea los cuerpos, en vez de firmas más estrictas o de aceptar la marca.
 - **Qué hace:** una primera pasada sobre la base de compilación calcula un resumen de efectos por función definida (qué parámetros y qué `this` invalida, qué préstamos devuelve y de dónde), y la comprobación usa ese resumen cuando el cuerpo no es visible. Las llamadas virtuales e indirectas siguen con el supuesto conservador. Los resúmenes se guardan por unidad para que el lint no se vuelva cuadrático.
 - **Hecho cuando:** el corpus tiene casos para una función fuera de línea que no muta (se acepta), una que muta (se rechaza), recursión y una virtual (conservadora); el lint de runtime, CLI y GUI no tiene errores nuevos; y el tiempo del lint completo está medido antes y después.
+- **Resultado:** `5cc5d12fc`. Una primera pasada resume cada unidad una vez: por función llamable desde fuera, qué parámetros, campos del receptor y entorno invalida, con el nombre de enlace como clave (encaja con `extern template` y la instanciación explícita). Siguen conservadoras las llamadas virtuales no `final`, las indirectas, los constructores y los resúmenes que nombran algo local de su unidad. 6 casos nuevos en `tests/spec/cross_unit.cpp`; 309/309. Sin errores nuevos, medido con `-ferror-limit=0` (con el límite de 20 por unidad salía uno falso): runtime, CLI y librerías 76 → 72 diagnósticos distintos y 55 → 85 s de reloj (357 → 668 s de CPU); GUI 89 → 88 y 122 → 231 s (960 → 1867 s). **Pendiente:** los resúmenes no se guardan en disco entre ejecuciones, y solo se resumen las fuentes de esa ejecución.
 
 ---
 
@@ -478,10 +479,11 @@ Cada tarea empieza localizando todas las copias, crea un módulo con una interfa
 - **Depende de:** P6.2
 - **Qué hace:** dos o tres cabeceras sin includes propios: traza (`TELAR_TRACE`), diagnóstico (`TELAR_DIAGNOSTIC(S)`, `TELAR_DEBUG`) y anotaciones TBC (la de P6.2). Se registran como excepción en la regla 5.
 
-### [ ] P6.4 · Convertir macros de sistema en `telar.sys.*` (categoría B)
+### [x] P6.4 · Convertir macros de sistema en `telar.sys.*` (categoría B)
 - **Depende de:** P3.1
 - **Qué hace:** las constantes pasan a `inline constexpr` (`O_CLOEXEC`, `EINTR`, `PATH_MAX`, `POLLIN`…), las macros con forma de función a funciones `inline` (`WIFEXITED`, `S_ISREG`, `htons`) y `errno` a `lastError()`. `isfinite` pasa a `std::isfinite`. Las comprobaciones de plataforma (`__APPLE__`) no necesitan include.
 - **Se puede partir por familia en paralelo:** fs, wait/process, socket, apple y linux.
+- **Resultado:** `f54dd51e1`, rehecho sobre la fase 9 en `5d46180ff` y `385f0d337`. Unas 300 macros con el mismo nombre en `telar.sys.*`: constantes como `inline constexpr`, macros con forma de función como funciones; los enumeradores de glibc (`SOCK_STREAM`, `EPOLLIN`…) y `stdin`/`stdout`/`stderr` con `using`; lo que solo existe en una plataforma va a `telar.sys.apple` o `.linux`. `errno` pasa a `sys::lastError()` en 62 unidades (y `sys::setLastError()`); los miembros de struct definidos con macro tienen accesores `constexpr`. Por la regla 3, los envoltorios de macros sin valor constante (`lastError`, `errorName`, `WIFEXITED`, `CMSG_*`, `EV_SET`…) están en un `.cpp` por módulo: no se inlinean sin LTO, y todos van junto a una llamada al sistema. `telar.client` deja de pasar `MSG_NOSIGNAL` en macOS, sin efecto porque el socket ya tiene `SO_NOSIGPIPE`. En Linux solo se han compilado `telar.sys` y su test.
 
 ### [ ] P6.5a–e · Sustituir los includes por imports (categorías A y B)
 - **Depende de:** P3.1, P6.4, P6.3
