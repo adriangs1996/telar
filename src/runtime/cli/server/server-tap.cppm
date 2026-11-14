@@ -1,7 +1,7 @@
 module;
 #include "tbc/annotations.hpp"
 
-export module telar.runtime.traffic.tap;
+export module telar.runtime.cli.server:tap;
 
 import std;
 

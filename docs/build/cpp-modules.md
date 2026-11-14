@@ -104,9 +104,9 @@ existe también hace fallar el checker.
 | base | 5 | memoria, texto, diagnósticos, editores, historial |
 | client, platform, Lua, plugins, TLS | 5 | un módulo por biblioteca |
 | config | 5 | un módulo por proceso |
-| runtime | 73 | transporte, terminal, persistencia, proxy, tráfico y servicios |
+| runtime | 73 | transporte, terminal, persistencia, proxy, tráfico y servicios; incluye las particiones del tap del servidor, del registro de lanzamiento y de la ejecución |
 | CLI | 17 | argumentos, conexión y familias de comandos |
-| GUI | 58 | dominios y adaptadores C++; incluye las particiones de vistas de fuentes y de texto del editor de prompt |
+| GUI | 58 | dominios y adaptadores C++; incluye las particiones de vistas de fuentes, de texto del editor de prompt y del mapa de pliegues de la réplica |
 | EBNF | 2 | lexer y parser |
 
 Las agrupaciones respetan las dependencias entre componentes. Los servicios usan

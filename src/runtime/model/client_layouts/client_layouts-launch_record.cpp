@@ -1,4 +1,4 @@
-module telar.runtime.model.launch_record;
+module telar.runtime.model.client_layouts;
 
 namespace telar::runtime {
 

@@ -17,7 +17,7 @@ import telar.gui.terminal.screen;
 import telar.gui.text.json_unsigned_integer;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
-export import telar.gui.terminal.fold_map;
+export import :fold_map;
 
 // Interface: application/records.cppm
 export {
