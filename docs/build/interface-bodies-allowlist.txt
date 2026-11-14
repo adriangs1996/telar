@@ -118,16 +118,6 @@ telar.gui.text.notification_payload
 telar.gui.transport.runtime_link
 telar.lua
 telar.machines
-telar.platform.daemon
-telar.platform.error
-telar.platform.events
-telar.platform.fs
-telar.platform.graphics
-telar.platform.net
-telar.platform.paths
-telar.platform.process
-telar.platform.sha256
-telar.platform.thread
 telar.plugins
 telar.render.document
 telar.render.markdown

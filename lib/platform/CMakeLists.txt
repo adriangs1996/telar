@@ -16,7 +16,7 @@ endif()
 find_package(Threads REQUIRED)
 include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/openssl.cmake")
 
-add_library(telar-platform STATIC src/file_descriptor.cpp src/open_directory.c process/pipe_process.cpp process/pty_process.cpp src/trace.cpp daemon/daemon.cpp)
+add_library(telar-platform STATIC src/file_descriptor.cpp src/open_directory.c process/pipe_process.cpp process/pty_process.cpp src/trace.cpp daemon/daemon.cpp error/error.cpp events/events.cpp fs/fs.cpp graphics/graphics.cpp net/net.cpp sha256/sha256.cpp thread/thread.cpp paths/paths.cpp process/process.cpp)
 add_library(telar::platform ALIAS telar-platform)
 telar_modules(telar-platform)
 target_compile_features(telar-platform PUBLIC cxx_std_23)

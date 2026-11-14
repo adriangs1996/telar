@@ -748,13 +748,15 @@ namespace {
   void semanticFailureDuringResume() {
     control_test::OneShotAllocator upstream;
     BudgetAllocator budget{upstream, 64 * 1024 * 1024};
-    SynchronizedAllocator memory{budget};
+    SynchronizedAllocator synchronized{budget};
+    MemoryAdapter adapter{synchronized};
+    ConcurrentMemory& memory = adapter;
 
     {
       RuntimeModel model{memory};
-      ClientStore<decltype(memory)> clients{memory};
-      LimitService<decltype(memory)> limits;
-      NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
+      ClientStore<ConcurrentMemory> clients{memory};
+      LimitService<ConcurrentMemory> limits;
+      NativeEventLoop<ConcurrentMemory> poller{memory};
       PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/control-semantic-failure.sock"}};
       const std::array<std::string_view, 1> arguments{"/bin/cat"};
       const Launch launch{.cwd = "/tmp", .arguments = arguments};

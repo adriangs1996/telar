@@ -1051,13 +1051,15 @@ namespace {
 
   void deferredAllocationFailure() {
     FailingAllocator upstream;
-    BudgetAllocator memory{upstream, 64 * 1024 * 1024};
+    BudgetAllocator budget{upstream, 64 * 1024 * 1024};
+    MemoryAdapter adapter{budget};
+    Memory& memory = adapter;
 
     {
       RuntimeModel model{memory};
-      ClientStore<decltype(memory)> clients{memory};
-      LimitService<decltype(memory)> limits;
-      NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
+      ClientStore<Memory> clients{memory};
+      LimitService<Memory> limits;
+      NativeEventLoop<Memory> poller{memory};
       PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/control-failure.sock"}};
       const std::array<std::string_view, 1> arguments{"/bin/cat"};
       const Launch launch{.cwd = "/tmp", .arguments = arguments};
@@ -1089,7 +1091,7 @@ namespace {
       panes.remove(model, clients, healthy_id);
     }
 
-    check(memory.liveBytes() == 0);
+    check(budget.liveBytes() == 0);
   }
 }
 

@@ -9,17 +9,10 @@ export {
 
     class SystemError final : public std::exception {
     public:
-      inline explicit SystemError(const char* operation, int code = sys::lastError()) noexcept
-          : operation_(operation),
-            code_(code) {}
+      explicit SystemError(const char* operation, int code = sys::lastError()) noexcept;
 
-      inline const char* what() const noexcept override {
-        return operation_;
-      }
-
-      inline int code() const noexcept {
-        return code_;
-      }
+      const char* what() const noexcept override;
+      int code() const noexcept;
 
     private:
       const char* operation_;
