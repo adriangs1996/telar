@@ -1,7 +1,4 @@
 {
-  "telar.base.text": [
-    "telar.base.text.utf8"
-  ],
   "telar.cli.command_limit": [
     "telar.cli.output",
     "telar.platform.error"
