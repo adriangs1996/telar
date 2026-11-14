@@ -82,7 +82,8 @@ componentes, y la regla cuenta también los imports de las unidades de implement
 `upward_imports` está vacía: no queda ninguna arista hacia arriba, y una nueva hace
 fallar el checker.
 Fuera de las excepciones no hay `#include`. Pueden incluir `lib/sys`, los adaptadores
-Qt/moc (los ficheros que incluyen una cabecera `<Q…>`), las fuentes C y Objective-C(++)
+Qt/moc (los ficheros que incluyen una cabecera `<Q…>`, directamente o a través de las
+cabeceras del proyecto que incluyen), las fuentes C y Objective-C(++)
 y las cabeceras que todos ellos alcanzan, porque no pueden importar módulos. Un módulo
 dueño puede incluir las cabeceras de `header_owners` que cruzan esa frontera, y
 cualquier fichero puede incluir una cabecera de `macro_headers`, que no incluye nada, o

@@ -112,42 +112,6 @@
     "<cstdint>",
     "<string_view>"
   ],
-  "src/gui/platform/background_effect/background_effect.cppm": [
-    "platform/window.hpp"
-  ],
-  "src/gui/qt/application_effects.cpp": [
-    "<algorithm>",
-    "<array>",
-    "<charconv>",
-    "<chrono>",
-    "<concepts>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstring>",
-    "<exception>",
-    "<limits>",
-    "<optional>",
-    "<span>",
-    "<stdexcept>",
-    "<string_view>",
-    "<system_error>",
-    "<utility>",
-    "<variant>",
-    "application.hpp",
-    "application_effects.hpp",
-    "command_process.hpp",
-    "telar_base/memory/fixed_text.hpp",
-    "telar_client/serializers/telar_cells.hpp",
-    "telar_client/serializers/telar_frame.hpp",
-    "telar_client/serializers/telar_messages.hpp"
-  ],
-  "src/gui/qt/lua_host.cpp": [
-    "lua_host.hpp"
-  ],
-  "src/gui/qt/terminal_input.cpp": [
-    "<array>",
-    "terminal_input.hpp"
-  ],
   "src/runtime/diagnostics/line.hpp": [
     "<algorithm>",
     "<array>",
