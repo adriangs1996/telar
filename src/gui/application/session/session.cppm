@@ -49,6 +49,7 @@ export import telar.gui.prompt.layout;
 import telar.base.diagnostics;
 import telar.base.text;
 import telar.gui.core.primitives;
+import telar.gui.input.wheel_accumulator;
 import telar.gui.terminal.screen;
 import telar.wire.agents;
 import telar.wire.clients;

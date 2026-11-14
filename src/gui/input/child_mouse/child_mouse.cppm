@@ -14,7 +14,7 @@ import std;
 
 export import telar.gui.core.metrics;
 import telar.base.diagnostics;
-import telar.gui.core.primitives;
+import telar.gui.input.wheel_accumulator;
 import telar.wire.vocabulary;
 
 // Interface: input/child_mouse.cppm
