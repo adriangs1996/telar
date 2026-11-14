@@ -1,7 +1,7 @@
 module telar.gui.text.bounded_editor;
 
 import std;
-import telar.config.runtime;
+import telar.ghostty.unicode;
 import telar.gui.core.unicode_scalar;
 
 namespace telar::gui {

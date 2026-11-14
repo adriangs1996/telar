@@ -1,10 +1,10 @@
 module;
-#include <ghostty/vt/unicode.h>
 #include <lua.h>
 
 module telar.config.runtime;
 
 import std;
+import telar.ghostty.unicode;
 import telar.tbc;
 
 // Apart from runtime.cpp because an agent icon is measured with libghostty-vt: only the processes
