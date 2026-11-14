@@ -26,6 +26,7 @@ El coordinador es un agente en el checkout principal que usa la skill `telar-coo
 - **LFS:** el historial antiguo tiene 11 punteros LFS (wallpapers de `desktop-mode`, materializados en `82ce41d42`). Con un hook `pre-push` de git-lfs, el despacho remoto falla al intentar subirlos; se despacha con `GIT_LFS_SKIP_PUSH=1` delante.
 - **Integrar:** cuando el agente termina, el coordinador revisa el diff y ejecuta en el worktree el checker y los tests del área (`telar [--machine <label>] worktree exec`). Si la tarea corrió en otra máquina, la trae con `telar worktree fetch refactor-<id> --machine <label>`. Después hace merge en la rama de integración, resuelve los conflictos de los ficheros calientes, compila y prueba el área sobre el resultado, marca la tarea `[x]` aquí, commitea y borra el worktree con `--delete-branch`.
 - **Lints de TBC:** no se ejecutan sobre el árbol entero (`runtime-lifetime`, `gui-lifetime`, `*-blank-lines`, `*-interface-bodies`): saturan la máquina y tardan más de una hora en la GUI. Como mucho, `tbc-lint` sobre los ficheros que la tarea toca. Hacerlos manejables queda para después del refactor. `tools/check-cpp-modules.py` sí se pasa siempre.
+- **Pérdidas de rendimiento en la fase 9:** se investiga la causa con datos y se arregla dentro de la separación interfaz/implementación. Devolver cuerpos a la interfaz o inlinearlos no es una solución: la separación no es opcional. Si la única causa es que el llamador ya no inserta el cuerpo, la pérdida se acepta y se anota con su medición; el coste de las llamadas indirectas se trata más adelante, junto con las funciones virtuales. Si la causa es otra, se arregla sin romper la separación o se para y se informa.
 - **Comandos de shell:** nada de construcciones de zsh como `files=(${(f)"$(...)"})` en Bash: el analizador de Claude Code no las entiende y pide permiso aunque el agente corra sin prompts, así que la tarea se queda parada. Para pasar una lista de ficheros, `git diff --name-only ... | xargs ...` o un fichero.
 - **Barreras:** P1.2 y P1.3 se despachan solas, sin ninguna otra tarea en vuelo. Tocan todo el árbol, y cualquier tarea abierta tendría que rehacerse.
 - **Límite de telar:** sigue como mucho 64 worktrees por máquina, así que los worktrees se borran al integrar.
@@ -42,7 +43,7 @@ Cada ola puede ejecutarse entera en paralelo cuando la anterior ha cerrado las d
 | 3 | P3.3, P3.4a–e, P4.1b, P4.2b, P4.3b, P4.4b, P4.5, P5.1–P5.7, P6.3, P6.4, P7.1, P8.1 |
 | 4 | P3.5, P4.1c, P4.2c, P4.3c, P4.4c, P6.5a–e, P6.6, P8.2, P8.3, P9.6–P9.9 |
 | 5 | P3.17, P6.8, P7.2, P9.1–P9.5 |
-| 6 · cierres | P9.10, P9.11, P11.1 |
+| 6 · cierres | P9.10, P9.13, P9.11, P11.1 |
 
 Camino crítico: P0.1 → P1.2 → P1.3 → P4.2a → P8.1 → P9.x → P9.11 → P11.1. P0.3 tiene que estar verde antes de P8.1; si falla, la decisión de `Memory` se replantea antes de seguir.
 
@@ -564,7 +565,7 @@ Para cada módulo: `extern template class X<Memory>;` en la interfaz, la instanc
 | [ ] P9.5 | `telar.config.*` | P4.4c, P4.5, P8.1, P2.4 |
 | [x] P9.6 | Resto de `lib/`: git, tls, plugins, lua, machines, render, shell | P1.2, P8.1, P2.4 |
 | [ ] P9.7 | Runtime, una subtarea por dominio en paralelo (terminal, panes, agents, history, traffic/{proxy,tls,http,redirect}, plugins, graphics…) | P8.1, P0.5, P2.4 y las tareas de P3 del dominio |
-| [ ] P9.7a | Runtime: `terminal`, `graphics`, `vocabulary`, `observation` | P2.5 |
+| [x] P9.7a | Runtime: `terminal`, `graphics`, `vocabulary`, `observation` | P2.5 |
 | [ ] P9.7b | Runtime: `proxy`, `tls`, `http`, `http1`, `http2`, `redirect`, `traffic`, `plugins`, `exchange_capture` | P2.5 |
 | [ ] P9.7c | Runtime: `agents`, `history`, `command_capture`, `shell_integration`, `suggestions`, `editors`, `worktrees`, `workspaces` | P2.5 |
 
@@ -587,6 +588,9 @@ Para cada módulo: `extern template class X<Memory>;` en la interfaz, la instanc
   - **P9.9** (`4b8fb5020`): los 19 módulos de la CLI. `RepositoryCapture`, `HistoryPathVisitor` y `WorktreeFilter` pasan a clases abstractas pequeñas, como `Memory`. Se quedan en la interfaz con `TBC_HOT_PATH` las plantillas sobre los mensajes del protocolo y, por el lifetime checker, `Object`, `Payload`, `displayText`, `toolEvent`, `questionEvent` y `RuntimeConnection::receive` (27 errores fuera de línea; P2.5 y P9.12).
   - Al integrar el lote, el test de skin de P4.5 lee `budget.liveBytes()` porque `memory` ya es un `Memory&`.
   - **P9.1** (`863fffc92`): las interfaces `telar.wire.*` solo llevan `using`; las 106 funciones no plantilla con cuerpo de sus cabeceras textuales (validadores, codecs de mensajes poco frecuentes, `validate*`, printers de debug) pasan a un `.cpp` por dominio, definidas en `extern "C++"`. Se quedan inline con `TBC_HOT_PATH` los codecs por campo, celda o frame (`byteView`, `textView`, celdas, frames, `CellReader`, `PaneRows::reader`). `wire` puede importar `tbc`, y los checks de cuerpos y lifetimes del runtime incluyen ya `lib/wire`. Pasan los 50 tests del runtime y CLI y los 138 de la GUI.
+  - **P9.7a** (`e9fe60217`): los 15 módulos de `terminal`, `graphics`, `vocabulary` y `observation` salen de la allowlist. Plantillas sobre el allocator con `extern template` para `ConcurrentMemory` y `MediaAllocator<ConcurrentMemory>`; los callbacks de graphics pasan a `TerminalMedia`, `MediaInputSink`, `AtomicFrameSource` y `AtomicFrameSink` (una llamada indirecta por trozo o frame). Se queda con `TBC_HOT_PATH` lo genérico sobre el tipo del llamador, incluido `ObservationProcessor`, que comparte sink con `command_capture`. Medido en Release con ThinLTO, 7 pares: PTY sin pérdida consistente; las queries de control más cortas pierden 1–4 ns (0/7) y `glyph-coverage` 13 ns (165,7 → 178,4), porque las guardas de `Engine::feed` y `glyph()` ya no se insertan en el llamador. Aceptado así: no se ve en el viaje por el PTY (~20 µs).
+    - Pendiente: falso positivo nuevo del lifetime checker en `media_service::enqueueRetired` (con `PaneMedia::seal()` fuera de línea supone que invalida la lista retirada).
+    - Pendiente, ajeno a P9.7a: `service-admission-probe` no compila en Release en la cabeza de integración.
 
 ### [x] P9.12 · Sacar los cuerpos que se quedaron dentro por el checker
 - **Depende de:** P2.5 y las P9.1–P9.9 integradas.
@@ -595,12 +599,18 @@ Para cada módulo: `extern template class X<Memory>;` en la interfaz, la instanc
 - **Hecho cuando:** todo `TBC_HOT_PATH` que queda tiene medición o es una plantilla sobre un tipo del llamador, y el lint no tiene errores nuevos.
 - **Resultado:** `c6d9c39ca`. Salen a su `.cpp` los accesores y `erase` de `JsonNode` (con `extern template` de sus cuatro instancias), `Object` y `Payload` del hook, `displayText` (instanciado para 96 y 2048), `toolEvent`, `questionEvent` y `RuntimeConnection::receive`; `Capabilities` pasa a `constexpr`. Los 63 `TBC_HOT_PATH` que quedan en interfaces son plantillas sobre algo que elige el llamador (en `BoundedText`, `SensitiveBuffer`, `SensitiveText` y `DropChannel`, una capacidad). Lint de lifetimes sobre los 52 ficheros tocados y los que definen sus cuerpos: mismos 34 diagnósticos. La marca para esas plantillas sigue sin decidir.
 
+### [ ] P9.13 · Sacar los cuerpos que se quedaron dentro por rendimiento
+- **Depende de:** P9.1–P9.9 integradas.
+- **Qué hace:** recorre cada `TBC_HOT_PATH` de las interfaces y de las cabeceras textuales de `lib/` y `src/` (hoy 99 usos en 36 ficheros). Todo cuerpo que esté dentro solo para que el llamador lo inserte sale a su `.cpp`, con `extern template` si es una plantilla sobre el allocator: los codecs por campo, celda o frame que dejó P9.1 (`byteView`, `textView`, celdas, frames, `CellReader`, `PaneRows::reader`) y lo que las tareas de la fase 9 dejaron dentro con su medición. Solo se quedan las plantillas sobre un tipo que elige el llamador, que no admiten `extern template`.
+- **Rendimiento:** se mide con los benchmarks de hot path del área. Una pérdida cuya única causa es el inlining perdido se acepta y se anota con su medición, según "Ejecución".
+- **Hecho cuando:** todo `TBC_HOT_PATH` que queda marca una plantilla sobre un tipo del llamador, compila, pasan los tests del área y `check-cpp-modules.py`.
+
 ### [ ] P9.10 · Quitar el parámetro de plantilla `Memory` donde ya no aporta
 - **Depende de:** P9.1–P9.9
 - **Qué hace:** los servicios que solo se instancian con `Memory` dejan de ser plantillas y se borran los `extern template`.
 
 ### [ ] P9.11 · Cierre de la regla 3
-- **Depende de:** P9.1–P9.10
+- **Depende de:** P9.1–P9.10 y P9.13
 - **Hecho cuando:** la allowlist de la regla 3 está vacía y se ejecuta la suite completa.
 
 ---
