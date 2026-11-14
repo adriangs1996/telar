@@ -1,4 +1,5 @@
 module;
+#include "tbc/hot_path.hpp"
 #include "telar_base/memory/allocator.hpp"
 
 export module telar.base.memory.allocators;
@@ -42,8 +43,9 @@ export namespace telar {
 export {
   namespace telar {
 
+    // An allocator combinator on every allocation path, over any composed upstream.
     template <Allocator Upstream>
-    class TBC_SHARED BufferAllocator {
+    class TBC_SHARED TBC_HOT_PATH BufferAllocator {
     public:
       static constexpr bool thread_safe = false;
 

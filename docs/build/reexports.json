@@ -277,9 +277,6 @@
   "telar.platform.primitives": [
     "telar.sys.posix"
   ],
-  "telar.platform.process": [
-    "telar.base.memory.sensitive"
-  ],
   "telar.plugins": [
     "telar.base.text",
     "telar.base.text.utf8",
@@ -329,12 +326,9 @@
     "telar.base.text"
   ],
   "telar.runtime.exchange_capture.pipeline": [
-    "telar.platform.thread",
-    "telar.runtime.exchange_capture.producer",
-    "telar.runtime.platform.request_worker"
+    "telar.platform.thread"
   ],
   "telar.runtime.exchange_capture.producer": [
-    "telar.base.memory.containers",
     "telar.base.memory.sensitive",
     "telar.base.text"
   ],
@@ -350,7 +344,6 @@
     "telar.client"
   ],
   "telar.runtime.http.content": [
-    "telar.base.memory.containers",
     "telar.base.text"
   ],
   "telar.runtime.http.message": [
@@ -375,8 +368,7 @@
   "telar.runtime.persistence.session_store": [
     "telar.platform.error",
     "telar.platform.fs",
-    "telar.runtime.agents.snapshot",
-    "telar.runtime.platform.request_worker"
+    "telar.runtime.agents.snapshot"
   ],
   "telar.runtime.platform.descriptor_path": [
     "telar.platform.error"
@@ -387,17 +379,13 @@
   "telar.runtime.platform.launch_program": [
     "telar.platform.process"
   ],
-  "telar.runtime.platform.name_resolutions": [
-    "telar.runtime.platform.signals"
-  ],
   "telar.runtime.platform.private_tunnel": [
     "telar.platform.error"
   ],
   "telar.runtime.platform.request_worker": [
     "telar.base.text.json",
     "telar.client",
-    "telar.platform.thread",
-    "telar.runtime.platform.signals"
+    "telar.platform.thread"
   ],
   "telar.runtime.platform.system_certificates": [
     "telar.platform.error"
@@ -418,8 +406,7 @@
     "telar.runtime.platform.stream_read_buffer"
   ],
   "telar.runtime.plugins.worker": [
-    "telar.runtime.platform.request_worker",
-    "telar.runtime.platform.signals"
+    "telar.runtime.platform.request_worker"
   ],
   "telar.runtime.proxy.authenticate": [
     "telar.base.memory.sensitive",
@@ -427,7 +414,6 @@
     "telar.platform.fs"
   ],
   "telar.runtime.proxy.http2_capture_streams": [
-    "telar.runtime.exchange_capture.producer",
     "telar.runtime.http1.head"
   ],
   "telar.runtime.proxy.relay_direction": [
@@ -443,7 +429,6 @@
     "telar.platform.paths",
     "telar.platform.sha256",
     "telar.platform.thread",
-    "telar.runtime.exchange_capture.producer",
     "telar.runtime.platform.system_certificates",
     "telar.runtime.tls.system_root_bundle"
   ],
@@ -468,8 +453,7 @@
     "telar.platform.net"
   ],
   "telar.runtime.runtime.client_control": [
-    "telar.client",
-    "telar.runtime.platform.request_worker"
+    "telar.client"
   ],
   "telar.runtime.runtime.delivery.client_delivery": [
     "telar.runtime.terminal.text_reader"
@@ -501,8 +485,7 @@
   "telar.runtime.runtime.runtime_telemetry": [
     "telar.platform.fs",
     "telar.runtime.diagnostics.operation",
-    "telar.runtime.platform.proc_file",
-    "telar.runtime.platform.request_worker"
+    "telar.runtime.platform.proc_file"
   ],
   "telar.runtime.shell_integration": [
     "telar.platform.error",
@@ -578,8 +561,7 @@
     "telar.platform.net",
     "telar.platform.process",
     "telar.platform.thread",
-    "telar.runtime.platform.request_worker",
-    "telar.runtime.platform.signals"
+    "telar.runtime.platform.request_worker"
   ],
   "telar.runtime.transport.connection": [
     "telar.platform.error",

@@ -7,9 +7,6 @@
 telar.base.diagnostics
 telar.base.editors
 telar.base.history
-telar.base.memory.allocators
-telar.base.memory.containers
-telar.base.memory.sensitive
 telar.base.text
 telar.base.text.json
 telar.cli.command_limit

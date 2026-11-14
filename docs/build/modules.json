@@ -759,6 +759,8 @@
   },
   "macro_headers": [],
   "implementations": {
+    "lib/base/memory/containers/containers.cpp": "telar.base.memory.containers",
+    "lib/base/memory/sensitive/sensitive.cpp": "telar.base.memory.sensitive",
     "lib/platform/process/pty_process.cpp": "telar.platform.process",
     "lib/shell/syntax/syntax.cpp": "telar.shell.syntax",
     "lib/platform/daemon/daemon.cpp": "telar.platform.daemon",
