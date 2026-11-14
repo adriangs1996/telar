@@ -2,11 +2,17 @@ module;
 #include <lauxlib.h>
 #include <lua.h>
 
-#include "gui_config_bootstrap.hpp"
-
 module telar.gui.config.generation;
 
 namespace telar::gui {
+
+  namespace {
+
+    constexpr std::string_view config_bootstrap{
+#include "gui_config_bootstrap.inc"
+    };
+
+  }
 
   ExtendedActionDescription ActionDescriptionReader::read(const runtime::lua::Value& value, const runtime::config::ClientDefinitions& definitions) {
     return std::visit(

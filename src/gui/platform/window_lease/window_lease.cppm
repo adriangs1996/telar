@@ -1,9 +1,7 @@
-module;
-#include <climits>
-
 export module telar.gui.platform.window_lease;
 
 import std;
+import telar.sys.posix;
 
 export {
   namespace telar::gui::platform {

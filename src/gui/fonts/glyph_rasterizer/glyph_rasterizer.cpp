@@ -1,10 +1,5 @@
 module;
-
 #include "platform/macos/glyph_rasterizer.h"
-#include "platform/font.h"
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
 
 module telar.gui.fonts.glyph_rasterizer;
 

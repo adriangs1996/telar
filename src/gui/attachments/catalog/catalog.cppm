@@ -1,7 +1,7 @@
 module;
 #include "attachments/capture.hpp"
 #include "tbc/annotations.hpp"
-#include <cassert>
+#include "telar_base/diagnostics/config.hpp"
 
 export module telar.gui.attachments.catalog;
 
@@ -237,7 +237,7 @@ export namespace telar::gui {
 
     ~AttachmentCatalog() {
       for ([[maybe_unused]] const auto& slot : slots_) {
-        assert(!slot || delivery_.canRelease(slot->delivery));
+        TELAR_ASSERT(!slot || delivery_.canRelease(slot->delivery));
       }
     }
 

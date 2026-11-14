@@ -1,15 +1,10 @@
-module;
-
-#include <cerrno>
-#include <sys/socket.h>
-#include <unistd.h>
-
 module telar.gui.platform.stdio_socket;
 
 import std;
 
 import telar.platform.error;
 import telar.sys.posix;
+import telar.sys.socket;
 
 namespace telar::gui::platform {
 

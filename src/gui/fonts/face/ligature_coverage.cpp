@@ -1,7 +1,4 @@
 module;
-
-#include <cstddef>
-#include <cstdint>
 #include <freetype/freetype.h>
 #include <freetype/tttables.h>
 #include <hb-ot.h>

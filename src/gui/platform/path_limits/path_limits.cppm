@@ -1,10 +1,7 @@
-module;
-#include <limits.h>
-#include <sys/param.h>
-
 export module telar.gui.platform.path_limits;
 
 import std;
+import telar.sys.posix;
 
 export {
   namespace telar::gui::platform {

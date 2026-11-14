@@ -38,7 +38,6 @@ static_assert(true);
 #include <utility>
 #include <variant>
 
-#include "gui_config_bootstrap.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 
 #include "telar_config/graphics/limits.hpp"

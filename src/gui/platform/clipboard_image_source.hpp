@@ -35,7 +35,26 @@ namespace telar::gui::platform {
       return code_;
     }
 
-    [[nodiscard]] const char* what() const noexcept override;
+    [[nodiscard]] const char* what() const noexcept override {
+      switch (code_) {
+      case ClipboardImageError::no_image:
+        return "NoImageOnClipboard";
+      case ClipboardImageError::changed:
+        return "ClipboardChanged";
+      case ClipboardImageError::source_bytes:
+        return "ClipboardSourceTooLarge";
+      case ClipboardImageError::png_bytes:
+        return "ClipboardPngTooLarge";
+      case ClipboardImageError::pixels:
+        return "ClipboardPixelsTooLarge";
+      case ClipboardImageError::invalid_image:
+        return "InvalidClipboardImage";
+      case ClipboardImageError::read_failed:
+        return "ClipboardReadFailed";
+      }
+
+      return "ClipboardReadFailed";
+    }
 
   private:
     ClipboardImageError code_;

@@ -1,11 +1,3 @@
-module;
-#include <cstdio>
-
-#include <cstdint>
-
-#include <cstddef>
-#include <cstring>
-
 export module telar.gui.application.host_effects;
 
 import std;

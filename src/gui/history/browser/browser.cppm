@@ -1,7 +1,3 @@
-module;
-#include <cstddef>
-#include <cstdint>
-
 export module telar.gui.history.browser;
 
 import std;

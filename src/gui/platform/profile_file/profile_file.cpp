@@ -1,29 +1,3 @@
-module;
-#include <cstdio>
-#include <cstdlib>
-#include <new>
-
-#include <cerrno>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <fcntl.h>
-#include <limits.h>
-#include <sys/file.h>
-#include <sys/param.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
-#if (defined(__APPLE__))
-#include <sys/stdio.h>
-#endif
-#if (defined(__APPLE__))
-#include <sys/unistd.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <cstdio>
-#endif
-
 module telar.gui.platform.profile_file;
 
 import std;
@@ -38,13 +12,6 @@ import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.gui.core.primitives;
 import telar.platform.primitives;
-
-#ifdef __APPLE__
-#include <sys/stdio.h>
-#include <sys/unistd.h>
-#else
-#include <cstdio>
-#endif
 
 namespace telar::gui::platform {
 

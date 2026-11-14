@@ -34,7 +34,6 @@ static_assert(true);
 #include <utility>
 #include <variant>
 
-#include "gui_config_bootstrap.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"

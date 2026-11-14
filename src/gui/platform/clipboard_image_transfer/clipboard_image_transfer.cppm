@@ -1,9 +1,8 @@
-module;
-#include "platform/clipboard_image_source.hpp"
-
 export module telar.gui.platform.clipboard_image_transfer;
 
 import std;
+
+import telar.gui.platform.clipboard_image_pipe;
 
 // This class completes the forward declaration in the Objective-C++ ABI.
 export extern "C++" {

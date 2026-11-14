@@ -1,14 +1,3 @@
-module;
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <new>
-
-#include <cstddef>
-#include <cstdint>
-
-#include <cmath>
-
 module telar.gui.terminal.font_grid;
 
 import std;

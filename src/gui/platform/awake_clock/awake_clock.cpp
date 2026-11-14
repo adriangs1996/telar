@@ -1,11 +1,10 @@
-module;
-
-#include <cstdint>
-#include <ctime>
-
 module telar.gui.platform.awake_clock;
 
 import std;
+import telar.sys.posix;
+#if defined(__APPLE__)
+import telar.sys.apple;
+#endif
 
 namespace telar::gui::platform {
 

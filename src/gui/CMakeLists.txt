@@ -29,7 +29,7 @@ find_package(Threads REQUIRED)
 
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
 file(READ "${TELAR_ROOT}/lib/config/bootstrap.lua" TELAR_CONFIG_BOOTSTRAP)
-configure_file(config/bootstrap.hpp.in "${CMAKE_CURRENT_BINARY_DIR}/generated/gui_config_bootstrap.hpp" @ONLY)
+configure_file(config/bootstrap.inc.in "${CMAKE_CURRENT_BINARY_DIR}/generated/gui_config_bootstrap.inc" @ONLY)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${TELAR_ROOT}/lib/config/bootstrap.lua")
 
 include(cmake/fonts.cmake)
@@ -142,7 +142,7 @@ target_link_libraries(gui-glyphs INTERFACE gui-core)
 add_library(gui-clock INTERFACE)
 target_link_libraries(gui-clock INTERFACE gui-core)
 
-add_library(gui-posix STATIC platform/clipboard_image_source.cpp platform/clipboard_image_file.c platform/peer_identity/peer_identity.cpp platform/window_lease/window_lease.cpp platform/profile_file/profile_file.cpp  platform/stdio_socket/stdio_socket.cpp platform/managed_directory/managed_directory.cpp platform/process_group/process_group.cpp platform/process_group.c)
+add_library(gui-posix STATIC platform/clipboard_image_file.c platform/peer_identity/peer_identity.cpp platform/window_lease/window_lease.cpp platform/profile_file/profile_file.cpp  platform/stdio_socket/stdio_socket.cpp platform/managed_directory/managed_directory.cpp platform/process_group/process_group.cpp)
 target_sources(gui-posix PRIVATE platform/clipboard_image_pipe/clipboard_image_pipe.cpp)
 target_link_libraries(gui-posix PUBLIC gui-core Threads::Threads)
 add_executable(telar-gui-command platform/surface_command_main.c)

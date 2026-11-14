@@ -1,13 +1,5 @@
 module;
 #include "tbc/annotations.hpp"
-#include <cstdio>
-#include <cstdlib>
-#include <new>
-
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
 
 export module telar.gui.application.session;
 

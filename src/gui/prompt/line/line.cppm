@@ -1,7 +1,4 @@
 module;
-#include <cstddef>
-#include <cstdint>
-
 #include "tbc/annotations.hpp"
 
 export module telar.gui.prompt.line;

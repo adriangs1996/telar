@@ -1,15 +1,8 @@
 module;
-#include <cstdio>
-
-#include <cstddef>
-#include <cstdint>
-
 #include <freetype/freetype.h>
 #include <hb.h>
 
 #include "platform/font.h"
-
-#include <cmath>
 
 export module telar.gui.fonts.face;
 
@@ -197,4 +190,11 @@ export {
     };
 
   }
+}
+
+// Owned textual headers stay in this global module fragment only; importers
+// reach their names through these declarations instead of including them.
+export {
+  using ::telar_font_max_axes;
+  using ::telar_font_max_bytes;
 }

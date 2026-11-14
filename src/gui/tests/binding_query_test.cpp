@@ -31,7 +31,6 @@ static_assert(true);
 #include <utility>
 #include <variant>
 
-#include "gui_config_bootstrap.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_base/text/utf8.hpp"
 #include "telar_client/serializers/telar_cells.hpp"

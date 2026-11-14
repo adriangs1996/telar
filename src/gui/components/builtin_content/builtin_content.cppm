@@ -1,6 +1,4 @@
 module;
-#include <cstddef>
-#include <cstdint>
 #include <lua.h>
 
 export module telar.gui.components.builtin_content;

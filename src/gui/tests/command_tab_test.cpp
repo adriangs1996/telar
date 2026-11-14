@@ -51,8 +51,6 @@ static_assert(true);
 #include <utility>
 #include <variant>
 
-#include "gui_config_bootstrap.hpp"
-
 #include "telar_config/terminal/control/policy.hpp"
 #include <arpa/inet.h>
 #include <format>
