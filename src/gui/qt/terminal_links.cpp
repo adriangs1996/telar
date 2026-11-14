@@ -137,7 +137,7 @@ namespace telar::gui::qt {
     return key;
   }
 
-  const Screen<ApplicationAllocator>* TerminalItem::drawnScreen() const {
+  const Screen<Memory>* TerminalItem::drawnScreen() const {
     const auto* current = pane();
     if (current == nullptr || application_ == nullptr || !mapsRows() || view_rows_.empty()) {
       return nullptr;

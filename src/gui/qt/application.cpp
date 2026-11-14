@@ -122,7 +122,7 @@ namespace telar::gui::qt {
     // Calls `visit` with each pane leaf of `tab` in layout order; with `shown`, only the leaves the
     // tab shows: the focused one alone when it is fullscreen.
     template <typename Visit>
-    void forEachLeaf(const Tab<ApplicationAllocator>& tab, bool shown, Visit&& visit) {
+    void forEachLeaf(const Tab<Memory>& tab, bool shown, Visit&& visit) {
       for (const auto& node : tab.layout.nodes()) {
         const auto* leaf = std::get_if<ClientLayoutPane>(&node);
         if (leaf != nullptr && (!shown || !tab.fullscreen || leaf->pane_id == tab.focused_pane)) {
@@ -772,7 +772,7 @@ namespace telar::gui::qt {
     }
   }
 
-  Pane<ApplicationAllocator>* Application::pane(std::uint64_t identity) const noexcept {
+  Pane<Memory>* Application::pane(std::uint64_t identity) const noexcept {
     return session().findPane(identity);
   }
 
@@ -783,7 +783,7 @@ namespace telar::gui::qt {
   void Application::consume(MachineClient& client, QByteArrayView payload) {
     try {
       const bool active = client.key.machine.slot == machines_.active();
-      const auto handler = HostCommands{.application = *this, .active = active};
+      const HostCommands handler{*this, active};
       const auto notification_revision = client.session.notificationRevision();
       const auto graphics_revision = client.session.graphicsRecoveryRevision();
       const auto change = client.session.consume(byteView({payload.data(), static_cast<std::size_t>(payload.size())}), handler);
@@ -1022,7 +1022,7 @@ namespace telar::gui::qt {
 
     for (const auto& workspace : session().workspaceList().projects()) {
       const bool selected = selected_project == workspace.location.id;
-      auto record = projectRecord(workspace, session().workspaceList(), std::span<const Agent<ApplicationAllocator>>{session().agents()}, selected);
+      auto record = projectRecord(workspace, session().workspaceList(), std::span<const Agent<Memory>>{session().agents()}, selected);
 
       record.insert(QStringLiteral("index"), workspaces.size());
       if (selected) {
@@ -1035,7 +1035,7 @@ namespace telar::gui::qt {
     workspace_context_ = std::move(workspace_context);
     workspaces_.reconcile(std::move(workspaces));
 
-    QList<const Tab<ApplicationAllocator>*> ordered_tabs;
+    QList<const Tab<Memory>*> ordered_tabs;
 
     for (const auto& tab : session().tabs()) {
       if (active != nullptr && sameWorkspace(tab->location.workspace, active->location.workspace)) {
@@ -1051,7 +1051,7 @@ namespace telar::gui::qt {
 
     for (const auto* tab : ordered_tabs) {
       const auto* pane = session().findPane(tab->focused_pane);
-      auto record = tabRecord(*tab, pane, session().panes(), std::span<const Agent<ApplicationAllocator>>{session().agents()}, tab == active);
+      auto record = tabRecord(*tab, pane, session().panes(), std::span<const Agent<Memory>>{session().agents()}, tab == active);
 
       if (element_slots_.active()) {
         record.insert(QStringLiteral("elements"), elementsFor({components::Slot::tab, components::Slot::tab_cards, components::Slot::tab_title, components::Slot::tab_path, components::Slot::tab_activity}, record.value(QStringLiteral("key")).toString(), ElementSlots::tabItem(record, static_cast<int>(tabs.size()))));
@@ -1077,7 +1077,7 @@ namespace telar::gui::qt {
     reconsiderFrame();
   }
 
-  QVariantList Application::fullscreenEntries(const Tab<ApplicationAllocator>& tab) {
+  QVariantList Application::fullscreenEntries(const Tab<Memory>& tab) {
     QVariantList entries;
 
     if (!tab.fullscreen) {
@@ -1085,7 +1085,7 @@ namespace telar::gui::qt {
     }
 
     std::uint16_t index = 0;
-    const auto agents = std::span<const Agent<ApplicationAllocator>>{session().agents()};
+    const auto agents = std::span<const Agent<Memory>>{session().agents()};
 
     forEachLeaf(tab, false, [&](const ClientLayoutPane& leaf) {
       ++index;
@@ -1126,7 +1126,7 @@ namespace telar::gui::qt {
           record.insert(QStringLiteral("fullscreenEntries"), fullscreen_entries);
         }
 
-        auto chrome = paneChromeRecord(*pane, std::span<const Agent<ApplicationAllocator>>{session().agents()}, placement.display_index, session().graphicsPaused(pane->id));
+        auto chrome = paneChromeRecord(*pane, std::span<const Agent<Memory>>{session().agents()}, placement.display_index, session().graphicsPaused(pane->id));
 
         if (element_slots_.active()) {
           chrome.insert(QStringLiteral("elements"), elementsFor({components::Slot::pane_header, components::Slot::pane_mark, components::Slot::pane_program, components::Slot::pane_context, components::Slot::pane_status, components::Slot::pane_progress, components::Slot::pane_actions}, record.value(QStringLiteral("key")).toString(), ElementSlots::paneItem(record, chrome)));

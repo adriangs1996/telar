@@ -90,7 +90,7 @@ namespace {
   void lineRunsCommands() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     FrameBody frame;
@@ -194,7 +194,7 @@ namespace {
   void lineHidesTerminalCursor() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     deliverRow(client, 1, 0);
@@ -226,7 +226,7 @@ namespace {
   void commandsSettleAsTyped() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     deliver(client, atPrompt());
@@ -257,7 +257,7 @@ namespace {
   void promptRequestsSettleOnFailure() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     FrameBody frame;
@@ -302,7 +302,7 @@ namespace {
   void promptHistoryStaysBounded() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     FrameBody frame;
@@ -331,7 +331,7 @@ namespace {
   void paneRemovalForgetsPrompt() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     FrameBody frame;
@@ -362,7 +362,7 @@ namespace {
   void lineCompletes() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     FrameBody frame;
@@ -558,7 +558,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
   void lineBindings() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     FrameBody frame;
@@ -601,7 +601,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
 void lineBlocks() {
   SystemAllocator memory;
   Transport transport;
-  Session client{memory, transport};
+  TestSession client{memory, transport};
 
   openFirstPane(client, transport);
   FrameBody frame;
@@ -683,7 +683,7 @@ void lineBlocks() {
 void lineBlockMotions() {
   SystemAllocator memory;
   Transport transport;
-  Session client{memory, transport};
+  TestSession client{memory, transport};
 
   openFirstPane(client, transport);
   FrameBody frame;
@@ -793,7 +793,7 @@ void lineBlockMotions() {
 void lineSearches() {
   SystemAllocator memory;
   Transport transport;
-  Session client{memory, transport};
+  TestSession client{memory, transport};
 
   openFirstPane(client, transport);
   FrameBody frame;

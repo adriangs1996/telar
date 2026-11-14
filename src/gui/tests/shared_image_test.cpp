@@ -67,6 +67,7 @@ namespace {
   using namespace telar;
   using namespace telar::gui;
   using test::require;
+  using test::TestSession;
 
   constexpr std::uint32_t image_side = 2;
   constexpr auto pixels = std::to_array<Byte>({0, 255, 127, 0, 255, 1, 128, 255, 229, 191, 17, 152, 40, 80, 120, 128});
@@ -107,21 +108,21 @@ namespace {
 
   class ImageTransport : public test::Transport {
   public:
-    bool supportsSharedMemory() const noexcept {
+    bool supportsSharedMemory() const noexcept override {
       return local;
     }
 
-    platform::SharedImageSource sharedImage(std::string_view name) {
+    platform::SharedImageSource sharedImage(std::string_view name) const override {
       ++opened;
       return platform::SharedImageSource{name};
     }
 
-    void recover(std::string_view reason) {
+    void recover(std::string_view reason) override {
       recovery = reason;
     }
 
     bool local = true;
-    unsigned opened = 0;
+    mutable unsigned opened = 0;
     std::string recovery;
   };
 
@@ -256,7 +257,7 @@ namespace {
   void missingPixelsRequestRecoveryAndReturnCreditAtSnapshot() {
     SystemAllocator memory;
     ImageTransport transport;
-    Session<SystemAllocator, ImageTransport> client{memory, transport};
+    TestSession client{memory, transport};
 
     test::openFirstPane(client, transport);
     require(transport.last<ConfigureGraphics>().shared, "a capable local transport must request shared graphics");
@@ -273,7 +274,7 @@ namespace {
   void ignoredImagesReleaseNamesAndRemoteImagesCannotOpenObjects() {
     SystemAllocator memory;
     ImageTransport local;
-    Session<SystemAllocator, ImageTransport> client{memory, local};
+    TestSession client{memory, local};
 
     test::openFirstPane(client, local);
     PublishedImage ignored;
@@ -284,7 +285,7 @@ namespace {
     ImageTransport remote;
 
     remote.local = false;
-    Session<SystemAllocator, ImageTransport> remote_client{memory, remote};
+    TestSession remote_client{memory, remote};
 
     test::openFirstPane(remote_client, remote);
     require(!remote.last<ConfigureGraphics>().shared, "remote transports must retain inline delivery");

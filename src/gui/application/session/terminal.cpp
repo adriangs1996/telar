@@ -1,0 +1,510 @@
+module telar.gui.application.session;
+
+import std;
+
+namespace telar::gui {
+
+  void Session::input(std::uint64_t pane_id, std::string_view bytes, PaneInputSource source) {
+    auto* pane = findPane(pane_id);
+    if (pane == nullptr || !pane->attached || pane->exited || bytes.empty()) {
+      return;
+    }
+
+    if (source == PaneInputSource::keyboard && promptSurface(pane_id) == prompt::Surface::secret) {
+      const auto byte = static_cast<unsigned char>(bytes.front());
+      auto& line = lineEntry(pane_id).line;
+
+      if (byte == 0x7f || byte == 0x08 || byte == 0x15) {
+        line.clearSecret();
+      } else if (byte >= 0x20) {
+        line.countSecretKey();
+      }
+    }
+
+    if (source == PaneInputSource::keyboard || source == PaneInputSource::key_release) {
+      static_cast<void>(copy_mode_.clearPointer());
+      if (source != PaneInputSource::key_release) {
+        followLiveEnd(*pane);
+      }
+    }
+
+    auto pending_bytes = byteView(bytes);
+
+    while (!pending_bytes.empty()) {
+      const auto count = std::min(pending_bytes.size(), input_chunk_size);
+
+      send(PaneInput{.pane_id = pane_id, .bytes = pending_bytes.first(count)});
+      if (source != PaneInputSource::terminal_report && pending_bytes.size() == bytes.size()) {
+        notePaneInput(*pane);
+      }
+
+      pending_bytes = pending_bytes.subspan(count);
+    }
+  }
+
+  void Session::runCommand(std::uint64_t pane_id, std::string_view text) {
+    auto* pane = findPane(pane_id);
+    if (pane == nullptr || !pane->attached || pane->exited || text.empty()) {
+      return;
+    }
+
+    if (!reads_rows_) {
+      pasteBytes(pane_id, text);
+      input(pane_id, "\r");
+      return;
+    }
+
+    static_cast<void>(copy_mode_.clearPointer());
+    followLiveEnd(*pane);
+    send(PaneCommand{.pane_id = pane_id, .text = byteView(text)});
+    notePaneInput(*pane);
+  }
+
+  void Session::followLiveEnd(Pane<Memory>& pane) {
+    const auto bottom = copyGrid(pane.screen).maximumOffset();
+    if (pane.screen.scroll().offset != bottom) {
+      ++view_version_.viewport;
+      ++pane.viewport_requests;
+      pane.screen.setViewport(bottom);
+      send(SetPaneViewport{.pane_id = pane.id, .offset = follow_output});
+    }
+  }
+
+  void Session::notePaneInput(const Pane<Memory>& pane) {
+    effects_.notePaneInput({.pane_id = pane.id, .frame_id = pane.screen.frameId(), .attached = pane.attached, .attachment_generation = pane.attachment_generation, .graphics_revision = pane.graphics.revision()});
+  }
+
+  bool Session::readsRows() const noexcept {
+    return reads_rows_ && ready_;
+  }
+
+  void Session::requestRows(std::uint64_t pane_id, std::uint64_t first, std::uint64_t last) {
+    auto* pane = findPane(pane_id);
+    if (pane == nullptr || !pane->attached || !readsRows() || pane->scrollback_generation == 0 || last < first) {
+      return;
+    }
+
+    const auto screen_first = pane->scrollback_trimmed + pane->screen.cellsOffset();
+    const auto screen_last = screen_first + pane->screen.rows();
+    auto from = first;
+
+    while (!pane->rows.full()) {
+      const auto missing = pane->rows.missing(from, last);
+      if (!missing) {
+        return;
+      }
+
+      // Rows on the screen come in its frames.
+      if (*missing >= screen_first && *missing < screen_last) {
+        from = screen_last;
+        continue;
+      }
+
+      const auto count = static_cast<std::uint16_t>(std::min<std::uint64_t>(RowCache<Memory>::request_rows, last - *missing + 1));
+      const auto request_id = nextRequest();
+
+      send(ReadPaneRows{.request_id = request_id, .pane_id = pane_id, .from = *missing, .count = count});
+      pane->rows.ask(request_id, *missing, count);
+      from = *missing + count;
+    }
+  }
+
+  std::uint64_t Session::takeDroppedRows(std::uint64_t pane_id) noexcept {
+    auto* pane = findPane(pane_id);
+
+    return pane == nullptr ? 0 : std::exchange(pane->scrollback_dropped, 0);
+  }
+
+  void Session::resize(std::uint64_t pane_id, TerminalSize size) {
+    auto* pane = findPane(pane_id);
+    if (pane == nullptr || pane->size == size) {
+      return;
+    }
+
+    if (pane->attached) {
+      send(PaneResize{.pane_id = pane_id, .size = size});
+    }
+
+    pane->size = size;
+    ++view_version_.viewport;
+  }
+
+  void Session::presented(std::uint64_t pane_id, std::uint64_t frame_id) {
+    auto* pane = findPane(pane_id);
+    if (ready_ && pane != nullptr && pane->attached && frame_id > pane->acknowledged_frame && frame_id <= pane->screen.frameId()) {
+      send(FrameAck{.pane_id = pane_id, .frame_id = frame_id});
+      pane->acknowledged_frame = frame_id;
+    }
+  }
+
+  void Session::scroll(PaneScrollDelta delta) {
+    auto* pane = findPane(delta.pane_id);
+    if (pane == nullptr || !pane->attached || copy_mode_.active()) {
+      return;
+    }
+
+    const auto& viewport = pane->screen.scroll();
+    const auto maximum = std::max<std::int64_t>(0, static_cast<std::int64_t>(viewport.total_rows) - pane->screen.rows());
+    const auto offset = static_cast<std::int64_t>(viewport.offset);
+    const auto bounded_delta = std::clamp(delta.rows, offset - maximum, offset);
+    const auto requested = static_cast<std::uint32_t>(offset - bounded_delta);
+    if (requested == viewport.offset) {
+      return;
+    }
+
+    // The bottom as this replica knows it may be behind the runtime's: ask to follow instead.
+    ++pane->viewport_requests;
+    send(SetPaneViewport{.pane_id = delta.pane_id, .offset = requested == maximum ? follow_output : requested});
+    pane->screen.setViewport(requested);
+    ++view_version_.viewport;
+  }
+
+  void Session::scrollFocused(ScrollDirection direction) {
+    const auto* pane = focusedPane();
+    if (pane == nullptr || !pane->attached || pane->exited) {
+      return;
+    }
+
+    switch (wheelRoute(pane->screen)) {
+    case WheelRoute::report: {
+      MouseEncoder encoder;
+
+      input(pane->id, encoder.encode(direction == ScrollDirection::up ? MouseEncoder::wheel_up : MouseEncoder::wheel_down, 1, 1, false, true), PaneInputSource::mouse);
+      return;
+    }
+    case WheelRoute::keys: {
+      KeyEncoder encoder;
+      const auto bytes = encoder.alternateScroll(direction == ScrollDirection::up, pane->screen.modes());
+
+      for (std::int32_t step = 0; step < WheelAccumulator::rows_per_line; ++step) {
+        input(pane->id, bytes, PaneInputSource::mouse);
+      }
+
+      return;
+    }
+    case WheelRoute::scroll:
+      scroll({.pane_id = pane->id, .rows = direction == ScrollDirection::up ? WheelAccumulator::rows_per_line : -WheelAccumulator::rows_per_line});
+      return;
+    }
+  }
+
+  bool Session::measureInline(std::uint64_t pane_id, std::uint64_t id, std::uint32_t rows) {
+    auto* pane = findPane(pane_id);
+    if (pane == nullptr) {
+      return false;
+    }
+
+    using Inline = typename Pane<Memory>::InlineDocument;
+    const auto found = std::ranges::find(pane->inline_documents, id, &Inline::id);
+    if (found == pane->inline_documents.end() || found->view_rows == rows) {
+      return false;
+    }
+
+    found->view_rows = rows;
+    ++pane->inline_version;
+    refreshFolds(*pane);
+    return true;
+  }
+
+  Change Session::apply(const PaneFrame& message) {
+    auto* pane = findPane(message.pane_id);
+    if (pane == nullptr || !pane->attached) {
+      return Change::none;
+    }
+
+    const auto previous_offset = pane->screen.scroll().offset;
+    const auto outcome = pane->screen.apply(message);
+    if (outcome == FrameApplication::needs_snapshot && !pane->snapshot_requested) {
+      pane->snapshot_requested = true;
+      send(RequestSnapshot{message.pane_id, pane->screen.frameId()});
+    }
+
+    if (outcome == FrameApplication::applied) {
+      if (copy_mode_.state() && copy_mode_.state()->pane_id == pane->id) {
+        copy_mode_.onFrame(previous_offset, copyGrid(pane->screen));
+      }
+
+      if (const auto line = lines_.find(pane->id); line != lines_.end()) {
+        line->second.output = now_();
+      }
+
+      pane->snapshot_requested = false;
+      if (const auto prompt = livePromptRow(*pane)) {
+        pane->live_prompt_row = prompt;
+      }
+
+      if (!pane->folded.empty()) {
+        refreshFolds(*pane);
+      }
+
+      changed_pane_ = pane->id;
+
+      return Change::terminal;
+    }
+
+    return Change::none;
+  }
+
+  Change Session::apply(const PaneTitle& message) {
+    if (auto* pane = findPane(message.pane_id)) {
+      pane->title = message.title;
+    }
+
+    return Change::model;
+  }
+
+  Change Session::apply(const PaneCwd& message) {
+    if (auto* pane = findPane(message.pane_id)) {
+      pane->cwd = message.cwd;
+    }
+
+    return Change::model;
+  }
+
+  Change Session::apply(const PaneForeground& message) {
+    if (auto* pane = findPane(message.pane_id)) {
+      pane->foreground = message.name;
+    }
+
+    for (const auto& tab : tabs_) {
+      tab->observeForeground(message);
+    }
+
+    return Change::model;
+  }
+
+  Change Session::apply(const PaneClipboard& message) {
+    clipboard_ = textView(message.bytes);
+
+    return Change::clipboard;
+  }
+
+  Change Session::apply(const PaneProgress& message) {
+    auto* pane = findPane(message.pane_id);
+    if (pane == nullptr || (pane->progress_state == message.state && pane->progress_percent == message.percent)) {
+      return Change::none;
+    }
+
+    pane->progress_state = message.state;
+    pane->progress_percent = message.percent;
+
+    return Change::model;
+  }
+
+  Change Session::apply(const PaneGit& message) {
+    auto* pane = findPane(message.pane_id);
+    if (pane == nullptr || pane->git == message) {
+      return Change::none;
+    }
+
+    pane->git_branch.assign(message.branch);
+    pane->git = message;
+    pane->git.branch = pane->git_branch;
+    changed_pane_ = pane->id;
+    return Change::model;
+  }
+
+  Change Session::apply(const PaneShell& message) {
+    auto* pane = findPane(message.pane_id);
+    if (pane == nullptr || pane->shell == message) {
+      return Change::none;
+    }
+
+    const auto previous_host = pane->shell_host;
+    const auto previous = std::exchange(pane->shell, message);
+
+    pane->shell_host.assign(message.host);
+    pane->shell.host = pane->shell_host;
+    pane->shell_directory.assign(message.directory);
+    pane->shell.directory = pane->shell_directory;
+    // The pane's header names the host and the link.
+    chrome_changed_ |= previous.remote != message.remote || previous_host != pane->shell_host || previous.link_ms != message.link_ms;
+    if (const auto found = lines_.find(pane->id); found != lines_.end()) {
+      auto& line = found->second.line;
+
+      if (message.phase != ShellPhase::running || message.echo) {
+        line.clearSecret();
+      }
+
+      if (previous.phase == ShellPhase::running && message.phase == ShellPhase::prompt) {
+        deliverPrompt(pane->id, line.promptReturned(message.commands != previous.commands && message.status == 0), line);
+      }
+    }
+
+    changed_pane_ = pane->id;
+    return Change::terminal;
+  }
+
+  Change Session::apply(const PaneDocument& message) {
+    auto* pane = findPane(message.pane_id);
+    if (pane == nullptr) {
+      return Change::none;
+    }
+
+    if (message.id != 0) {
+      return applyInline(*pane, message);
+    }
+
+    if (message.revision != pane->document_revision || message.offset == 0) {
+      pane->document_revision = message.revision;
+      pane->document_parts.clear();
+    }
+
+    if (message.offset != pane->document_parts.size()) {
+      return Change::none;
+    }
+
+    if (message.size == 0) {
+      pane->document_parts.shrink_to_fit();
+      if (!pane->document_shown) {
+        return Change::none;
+      }
+
+      pane->document.clear();
+      pane->document_shown = false;
+    } else {
+      pane->document_parts.insert(pane->document_parts.end(), message.bytes.begin(), message.bytes.end());
+      if (pane->document_parts.size() < message.size) {
+        return Change::none;
+      }
+
+      pane->document_shown = render::decode(pane->document_parts, pane->document) == render::DecodeError::none;
+      pane->document_parts.clear();
+      pane->document_parts.shrink_to_fit();
+    }
+
+    ++pane->document_version;
+    changed_pane_ = pane->id;
+    return Change::document;
+  }
+
+  Change Session::applyInline(Pane<Memory>& pane, const PaneDocument& message) {
+    using Inline = typename Pane<Memory>::InlineDocument;
+    auto found = std::ranges::find(pane.inline_documents, message.id, &Inline::id);
+
+    if (message.size == 0) {
+      if (found == pane.inline_documents.end()) {
+        return Change::none;
+      }
+
+      pane.inline_documents.erase(found);
+    } else {
+      if (found == pane.inline_documents.end()) {
+        if (message.offset != 0) {
+          return Change::none;
+        }
+
+        pane.inline_documents.emplace_back(memory_, message.id);
+        found = std::prev(pane.inline_documents.end());
+      }
+
+      auto& document = *found;
+      if (!document.whole) {
+        if (message.offset != document.parts.size()) {
+          return Change::none;
+        }
+
+        document.parts.insert(document.parts.end(), message.bytes.begin(), message.bytes.end());
+        if (document.parts.size() == message.size) {
+          document.shown = render::decode(document.parts, document.document) == render::DecodeError::none;
+          document.whole = true;
+          document.parts.clear();
+          document.parts.shrink_to_fit();
+        }
+      }
+
+      if (document.rows != message.rows) {
+        document.view_rows = 0;
+      }
+
+      document.generation = message.generation;
+      document.first_row = message.first_row;
+      document.rows = message.rows;
+    }
+
+    ++pane.inline_version;
+    refreshFolds(pane);
+    changed_pane_ = pane.id;
+    return Change::document;
+  }
+
+  Change Session::apply(const PaneScrollback& message) {
+    auto* pane = findPane(message.pane_id);
+    if (pane == nullptr) {
+      return Change::none;
+    }
+
+    if (pane->scrollback_generation == message.generation && message.trimmed > pane->scrollback_trimmed) {
+      // The blocks come again with their rows moved up; until then they are moved here, so
+      // their folds keep hiding the same rows.
+      const auto dropped = message.trimmed - pane->scrollback_trimmed;
+
+      pane->scrollback_dropped += dropped;
+      std::erase_if(pane->blocks, [dropped](const CommandBlock& block) {
+        return block.row < dropped;
+      });
+
+      for (auto& block : pane->blocks) {
+        block.row -= static_cast<std::uint32_t>(dropped);
+      }
+
+      if (pane->live_prompt_row) {
+        pane->live_prompt_row = *pane->live_prompt_row >= dropped ? std::optional{static_cast<std::uint32_t>(*pane->live_prompt_row - dropped)} : std::nullopt;
+      }
+    } else if (pane->scrollback_generation != 0 && pane->scrollback_generation != message.generation && !pane->folded.empty()) {
+      // Renumbered rows: the blocks come again with their new rows, and their folds follow them
+      // by order then.
+      pane->refold.clear();
+      for (std::size_t index = 0; index < pane->blocks.size(); ++index) {
+        if (std::ranges::find(pane->folded, blockKey(*pane, index)) != pane->folded.end()) {
+          pane->refold.push_back(index);
+        }
+      }
+
+      pane->folded.clear();
+    }
+
+    if (pane->scrollback_generation != message.generation) {
+      pane->live_prompt_row.reset();
+    }
+
+    pane->scrollback_generation = message.generation;
+    pane->scrollback_trimmed = message.trimmed;
+    pane->rows.number(message.generation);
+    refreshFolds(*pane);
+    changed_pane_ = pane->id;
+    return Change::terminal;
+  }
+
+  Change Session::apply(const PaneRows& message) {
+    auto* pane = findPane(message.pane_id);
+    if (pane == nullptr) {
+      return Change::none;
+    }
+
+    if (!pane->rows.store(message, pane->screen.columns())) {
+      return Change::none;
+    }
+
+    changed_pane_ = pane->id;
+    return Change::terminal;
+  }
+
+  Change Session::apply(const PaneText& message) {
+    if (!completeRequest(RequestKind::peek_screen, message.request_id)) {
+      return Change::none;
+    }
+
+    const auto dropped = peek_.store(message);
+    if (!dropped) {
+      return Change::none;
+    }
+
+    if (*dropped != 0) {
+      reportLimit({.name = "peek.text_bytes", .noun = "bytes", .value = PeekLimits::text_bytes, .requested = message.text.size()});
+    }
+
+    return Change::peek;
+  }
+
+}

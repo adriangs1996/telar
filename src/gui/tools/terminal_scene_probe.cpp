@@ -398,9 +398,9 @@ namespace {
     ApplicationMemory application_memory_;
     ApplicationAllocator& memory_ = application_memory_.memory();
     Configuration configuration_;
-    Screen<ApplicationAllocator> screen_;
+    Screen<Memory> screen_;
     GraphicsBudget graphics_budget_;
-    GraphicsStore<ApplicationAllocator> graphics_;
+    GraphicsStore<Memory> graphics_;
     std::shared_ptr<const FontCollection> collection_;
     std::shared_ptr<ResidentFonts> fonts_;
     ResolvedFont resolved_;

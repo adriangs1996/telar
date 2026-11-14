@@ -64,6 +64,7 @@ namespace {
   using namespace telar::gui;
   using telar::gui::test::agentSnapshotEntry;
   using telar::gui::test::require;
+  using telar::gui::test::TestSession;
 
   constexpr std::uint64_t second = StatusAgeInterval::nanoseconds_per_second;
   constexpr std::uint32_t initial_age = 5;
@@ -301,7 +302,7 @@ namespace {
   void sessionUsesTheInjectedClock() {
     SystemAllocator memory;
     telar::gui::test::Transport transport;
-    Session<SystemAllocator, telar::gui::test::Transport, FakeClock> session{memory, transport};
+    TestSession session{memory, transport, &FakeClock::nowNanoseconds};
     const std::array entries{agentSnapshotEntry(initial_age)};
 
     FakeClock::current = second;
@@ -316,7 +317,7 @@ namespace {
   void paneListRevisions() {
     SystemAllocator memory;
     telar::gui::test::Transport transport;
-    Session<SystemAllocator, telar::gui::test::Transport, FakeClock> session{memory, transport};
+    TestSession session{memory, transport, &FakeClock::nowNanoseconds};
     const TabLocation location{.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 1}, .tab_id = 1};
     const std::array<std::uint16_t, 2> ports{3000, 9229};
     std::array entries{

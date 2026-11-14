@@ -81,21 +81,26 @@ namespace {
     return {.pane_id = target.agent.pane_id, .pane_generation = target.agent.pane_generation, .location = location, .pane_index = 1, .session_id = target.session, .workspace_label = "Other", .session_title = "Owned agent", .title_source = AgentTitleSource::agent, .title_state = AgentTitleState::ready, .provider = AgentProvider::codex, .provider_name = "codex", .status = AgentStatus::working, .sequence = 1};
   }
 
-  struct PeekTransport {
+  struct PeekTransport final : RuntimeTransport {
     Transport recorded;
     bool reject = false;
     bool reject_open = false;
 
-    template <typename Message>
-    void send(const Message& message) {
-      if constexpr (std::is_same_v<Message, ReadPane> || std::is_same_v<Message, InterruptAgent>) {
-        if (reject) {
-          throw EncodingError{"Peek delivery rejected"};
-        }
+    std::span<Byte> buffer(std::size_t size) override {
+      return recorded.buffer(size);
+    }
+
+    void send(std::span<const Byte> message) override {
+      const auto tag = static_cast<ClientTag>(message.front());
+      if ((tag == MessageSchema<ReadPane>::tag || tag == MessageSchema<InterruptAgent>::tag) && reject) {
+        throw EncodingError{"Peek delivery rejected"};
       }
 
-      if constexpr (std::is_same_v<Message, OpenPane>) {
-        if (reject_open && message.target.kind == PaneTarget::Kind::pane && message.target.id == target.agent.pane_id) {
+      if (tag == MessageSchema<OpenPane>::tag && reject_open) {
+        std::array<Byte, Transport::decode_capacity> storage{};
+        DecodeStorage decoded{storage};
+        const auto open = Codec::decode<OpenPane>(message, decoded);
+        if (open.target.kind == PaneTarget::Kind::pane && open.target.id == target.agent.pane_id) {
           throw EncodingError{"Workspace target transport is full"};
         }
       }
@@ -195,7 +200,7 @@ namespace {
   void rejectedTransportReleasesOnlyItsOwnAdmission() {
     SystemAllocator memory;
     PeekTransport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport.recorded);
     const std::array agents{agent()};
@@ -245,7 +250,7 @@ namespace {
   void snapshotsRefreshMetadataWithoutAttachingThePeekedPane() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     std::array agents{agent()};
@@ -277,7 +282,7 @@ namespace {
   void peekMessagesAndInterruptsKeepTheOriginalProtocol() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     const std::array agents{agent()};
@@ -308,7 +313,7 @@ namespace {
   void diffLaunchQuotesItsBranchAsAnArgumentAndWaitsForHandoff() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     const std::array agents{agent()};
@@ -340,7 +345,7 @@ namespace {
   void openingTaskPeekDetachesBeforeItsCanonicalPaneHandoff() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     const std::array agents{agent()};
@@ -375,7 +380,7 @@ namespace {
   void aBusyTaskPeekOpenClosesWithoutLeavingItsCurrentWorkspace() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     const std::array agents{agent()};
@@ -394,7 +399,7 @@ namespace {
   void aMissingTaskPaneRetriesItsWorkspaceOnlyOnce() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     const std::array agents{agent()};
@@ -416,7 +421,7 @@ namespace {
   void aRejectedTaskOpenRestoresItsDepartingAttachment() {
     SystemAllocator memory;
     PeekTransport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport.recorded);
     const auto source = client.activeTab()->location;
@@ -444,7 +449,7 @@ namespace {
   void aPartialTaskDepartureRepairsOnlyItsAcceptedDetaches() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     const auto source = client.activeTab()->location;
@@ -478,7 +483,7 @@ namespace {
   void aDiffArrivalWithPendingPeekReadKeepsItsCurrentWorkspace() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     const std::array agents{agent()};
@@ -503,7 +508,7 @@ namespace {
   void peekReadFailuresRetryAndRejectedActionsNotifyTheirPane() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     const std::array agents{agent()};

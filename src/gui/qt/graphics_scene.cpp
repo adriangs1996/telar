@@ -68,7 +68,7 @@ namespace telar::gui::qt {
     return {resolved_.data(), resolved_count_};
   }
 
-  const WindowImage* GraphicsScene::texture(const GraphicsStore<ApplicationAllocator>& store, ImageKey key) {
+  const WindowImage* GraphicsScene::texture(const GraphicsStore<Memory>& store, ImageKey key) {
     for (auto& entry : std::span{resolved_}.first(resolved_count_)) {
       if (entry.image_id == key.image_id) {
         return entry.texture ? &*entry.texture : nullptr;
@@ -94,7 +94,7 @@ namespace telar::gui::qt {
     return z_index < 0 ? *layers_.below_text : *layers_.above_text;
   }
 
-  void GraphicsScene::synchronize(QQuickItem& owner, const GraphicsStore<ApplicationAllocator>& store, const ImageRows& rows, QSizeF cell, qreal scale) {
+  void GraphicsScene::synchronize(QQuickItem& owner, const GraphicsStore<Memory>& store, const ImageRows& rows, QSizeF cell, qreal scale) {
     auto* images = WindowImages::findWindow(*owner.window());
     if (images == nullptr) {
       throw std::logic_error{"Window image resources must be installed before synchronization"};
@@ -123,7 +123,7 @@ namespace telar::gui::qt {
     waiting_ = false;
     retry_requested_ = false;
 
-    std::array<GraphicsPlacement, GraphicsStore<ApplicationAllocator>::placement_capacity> placements;
+    std::array<GraphicsPlacement, GraphicsStore<Memory>::placement_capacity> placements;
     const auto count = store.placements().size();
 
     std::copy(store.placements().begin(), store.placements().end(), placements.begin());
@@ -161,7 +161,7 @@ namespace telar::gui::qt {
     ++draw_count_;
   }
 
-  void GraphicsScene::drawPlacements(const GraphicsStore<ApplicationAllocator>& store, std::span<const GraphicsPlacement> placements, const ImageRows& rows) {
+  void GraphicsScene::drawPlacements(const GraphicsStore<Memory>& store, std::span<const GraphicsPlacement> placements, const ImageRows& rows) {
     for (const auto& placement : placements) {
       if (!images_->placements().contains(store.lifetime(), placement.virtual_id)) {
         continue;
@@ -197,7 +197,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void GraphicsScene::drawPlaceholder(const GraphicsStore<ApplicationAllocator>& store, const PlaceholderRun& run, std::uint16_t row) {
+  void GraphicsScene::drawPlaceholder(const GraphicsStore<Memory>& store, const PlaceholderRun& run, std::uint16_t row) {
     if (draw_count_ == ImageDrawBudget::capacity) {
       return;
     }
@@ -234,7 +234,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void GraphicsScene::placeholders(const GraphicsStore<ApplicationAllocator>& store, const ImageRows& rows) {
+  void GraphicsScene::placeholders(const GraphicsStore<Memory>& store, const ImageRows& rows) {
     const auto has_placeholders = std::any_of(store.placements().begin(), store.placements().end(), [](const auto& placement) {
       return placement.location == PlacementLocation::placeholders;
     });
@@ -247,7 +247,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void GraphicsScene::placeholderRow(const GraphicsStore<ApplicationAllocator>& store, std::span<const CellValue> row, std::uint16_t row_index) {
+  void GraphicsScene::placeholderRow(const GraphicsStore<Memory>& store, std::span<const CellValue> row, std::uint16_t row_index) {
     std::optional<PlaceholderRun> run;
 
     for (std::size_t column = 0; column < row.size(); ++column) {

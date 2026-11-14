@@ -294,7 +294,7 @@ namespace telar::gui::qt {
 
         row_height = row_height ? std::min(*row_height, frame.height) : frame.height;
         const auto index = row->historyIndex();
-        if (index >= 0 && std::cmp_less(index, HistoryBrowser<ApplicationAllocator>::page_entries)) {
+        if (index >= 0 && std::cmp_less(index, HistoryBrowser<Memory>::page_entries)) {
           const auto bounds = row->mapRectToScene(toQRectF(frame, density)).intersected(viewport);
 
           hover.append({.identity = {.action = HistoryChoice{.index = static_cast<std::size_t>(index), .revision = browser.revision()}, .generation = dialog_generation_}, .bounds = {.x = static_cast<float>(bounds.x() * density), .y = static_cast<float>(bounds.y() * density), .width = static_cast<float>(bounds.width() * density), .height = static_cast<float>(bounds.height() * density)}});

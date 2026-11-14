@@ -180,7 +180,7 @@ namespace telar::gui::qt {
     emit historyChanged();
   }
 
-  std::string_view Application::historyTabName(const Pane<ApplicationAllocator>* pane) const {
+  std::string_view Application::historyTabName(const Pane<Memory>* pane) const {
     if (pane != nullptr) {
       for (const auto& tab : session().tabs()) {
         if (sameTab(tab->location, pane->location)) {

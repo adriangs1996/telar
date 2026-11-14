@@ -95,7 +95,7 @@ namespace {
     SystemAllocator system;
     BudgetAllocator<SystemAllocator> memory;
     Transport transport;
-    Session<BudgetAllocator<SystemAllocator>, Transport> client;
+    TestSession<BudgetAllocator<SystemAllocator>> client;
     Environment environment;
   };
 
@@ -290,7 +290,7 @@ namespace {
     require(tab.launch.arguments.size() == 2 && tab.launch.arguments[0] == "code" && tab.launch.arguments[1] == "/tmp/new.cpp", "a sourceless absolute file must open in a new tab");
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     client.openFile(filePath("file:/tmp/first.cpp"), "nvim", fixture.environment);
     const auto opened = transport.last<OpenPane>();
