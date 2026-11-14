@@ -86,9 +86,7 @@ namespace telar::runtime {
     }
 
     if (arguments_.empty()) {
-      const char* shell = std::getenv("SHELL");
-
-      arguments_.emplace_back(shell != nullptr ? shell : "/bin/sh", AllocatorRef<char, Memory>{memory});
+      arguments_.emplace_back(loginShell().view(), AllocatorRef<char, Memory>{memory});
     }
 
     if (launch.environment_mode == EnvironmentMode::inherit_runtime) {
@@ -528,7 +526,7 @@ namespace telar::runtime {
   FixedText<PATH_MAX> loginShell() {
     FixedText<PATH_MAX> shell;
     const auto pick = [&](const char* candidate) {
-      if (candidate == nullptr || *candidate == '\0' || std::strlen(candidate) > PATH_MAX) {
+      if (candidate == nullptr || *candidate != '/' || std::strlen(candidate) > PATH_MAX) {
         return false;
       }
 

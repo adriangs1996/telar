@@ -41,10 +41,7 @@ namespace {
     }
 
     const auto program = (std::filesystem::path{path.data()}.parent_path() / "telar-gui").lexically_normal().string();
-    std::string shell{telar::runtime::loginShell().view()};
-    if (shell.empty() || shell.front() != '/') {
-      shell = "/bin/sh";
-    }
+    const std::string shell{telar::runtime::loginShell().view()};
 
     if (input.size() == 1 && !adoptHome(environment)) {
       std::perror("Telar C++: cannot open home directory");

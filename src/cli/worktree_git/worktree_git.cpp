@@ -327,6 +327,7 @@ namespace telar::runtime::cli::sessions {
           throw Failure{"WorkspaceCommandTooLong"};
         }
 
+        const auto login = loginShell();
         std::array<std::string_view, workspace_command_words> command;
         std::size_t count = 0;
 
@@ -335,9 +336,7 @@ namespace telar::runtime::cli::sessions {
         }
 
         if (count == 0) {
-          const auto configured = ::getenv("SHELL");
-
-          command[count++] = configured && *configured ? configured : "/bin/sh";
+          command[count++] = login.view();
         }
 
         auto size = workspace_size;

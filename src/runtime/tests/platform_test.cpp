@@ -54,6 +54,7 @@ static_assert(true);
 #include <csignal>
 #include <cstddef>
 #include <poll.h>
+#include <pwd.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
 #include <termios.h>
@@ -457,6 +458,28 @@ static void testCommandHelpers(SystemAllocator& memory) {
   check(status == 0 && output == "input" && error == "error\n");
 }
 
+static void testLoginShell(SystemAllocator& memory) {
+  const char* saved = std::getenv("SHELL");
+  const std::optional<std::string> previous = saved != nullptr ? std::optional<std::string>{saved} : std::nullopt;
+  const auto* account = ::getpwuid(::getuid());
+  const std::string_view fallback = account != nullptr && account->pw_shell[0] == '/' ? account->pw_shell : "/bin/sh";
+
+  check(::setenv("SHELL", "/bin/sh", 1) == 0);
+  check(loginShell().view() == "/bin/sh");
+
+  Command shell{memory, Launch{.cwd = "/tmp"}, CommandPurpose::administration};
+
+  check(shell.arguments().size() == 1 && std::string_view{shell.arguments().front()} == "/bin/sh");
+
+  // A relative or empty SHELL names no login shell.
+  check(::setenv("SHELL", "sh", 1) == 0);
+  check(loginShell().view() == fallback);
+  check(::setenv("SHELL", "", 1) == 0);
+  check(loginShell().view() == fallback);
+
+  check((previous ? ::setenv("SHELL", previous->c_str(), 1) : ::unsetenv("SHELL")) == 0);
+}
+
 static void testHardenedGit(SystemAllocator& system) {
   using Git = HardenedGit<Memory>;
   MemoryAdapter adapter{system};
@@ -478,6 +501,7 @@ void testPlatform() {
   SystemAllocator memory;
 
   testCommandHelpers(memory);
+  testLoginShell(memory);
   testHardenedGit(memory);
   testSpawn(memory);
   testForegroundProcessGroup(memory);

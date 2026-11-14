@@ -8,11 +8,6 @@ import telar.platform.process;
 namespace telar::gui::platform::login_shell {
   Command::Command()
       : shell_(runtime::loginShell().view()) {
-    // The runtime searches its own PATH for a relative program, which need not be the user's.
-    if (shell_.front() != '/') {
-      shell_ = "/bin/sh";
-    }
-
     storage_.push_back(shell_);
     if (!runtime::loginShellScript(shell_).empty()) {
       storage_.push_back("-l");
