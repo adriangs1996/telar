@@ -14,7 +14,7 @@ export module telar.runtime.vocabulary.traffic;
 import std;
 
 export import telar.plugins;
-export import telar.runtime.exchange_capture.exchange;
+export import telar.runtime.vocabulary.exchange;
 export import telar.runtime.vocabulary.frames;
 
 export import telar.platform.error;

@@ -35,7 +35,7 @@ export import telar.runtime.worktrees.git_probe;
 
 export import telar.runtime.runtime.runtime_telemetry;
 export import telar.runtime.exchange_capture.pipeline;
-export import telar.runtime.exchange_capture.exchange;
+export import telar.runtime.vocabulary.exchange;
 export import telar.runtime.platform.stream_read_buffer;
 export import telar.runtime.suggestions.engine;
 

@@ -40,21 +40,7 @@ def main():
     imports = unit_imports(owned, graph)
     check_library_layers(inventory['library_layers'], inventory['interfaces'], imports)
     upward = check_process_layers(inventory['process_layers'], inventory['upward_imports'], imports)
-    visited, active = set(), []
-    def visit(name):
-        if name in active:
-            raise RuntimeError('Module cycle: ' + ' -> '.join([*active, name]))
-        if name in visited:
-            return
-        if name not in graph:
-            raise RuntimeError('Missing provider: ' + name)
-        active.append(name)
-        for dependency in sorted(graph[name]):
-            visit(dependency)
-        active.pop()
-        visited.add(name)
-    for name in graph:
-        visit(name)
+    check_cycles(imports)
     for source, owner in inventory['origin_interfaces'].items():
         if owner not in interfaces:
             raise RuntimeError('Missing migrated definition owner: ' + source)
@@ -99,6 +85,28 @@ def unit_imports(files, graph):
                 raise RuntimeError(f'Missing provider: {dependency}, imported by {name}')
 
     return imports
+
+
+def check_cycles(imports):
+    """No module reaches itself through imports, implementation units included: the build
+    orders them, but the two modules still depend on each other."""
+    visited, active = set(), []
+
+    def visit(name):
+        if name in active:
+            raise RuntimeError('Module cycle: ' + ' -> '.join([*active[active.index(name):], name]))
+        if name in visited:
+            return
+
+        active.append(name)
+        for dependency in sorted(imports.get(name, ())):
+            visit(dependency)
+
+        active.pop()
+        visited.add(name)
+
+    for name in sorted(imports):
+        visit(name)
 
 
 INCLUDE_ROOTS = [str(path.relative_to(ROOT)) for path in sorted(ROOT.glob('lib/*/include*'))]

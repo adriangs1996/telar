@@ -19,7 +19,8 @@ El runtime y el cliente siguen siendo procesos y bibliotecas separados.
 | GUI | `gui-core`, auxiliares | config, VT, Qt | módulos de dominio; fronteras nativas separadas |
 | auth | `telar-auth-daemon` | sistema | `main` sin API propia |
 
-El grafo de interfaces migradas no tiene ciclos. Las interfaces `.cppm`
+El grafo de módulos no tiene ciclos, tampoco a través de las unidades de
+implementación. Las interfaces `.cppm`
 contienen las declaraciones y definiciones propias; no envuelven una copia
 completa de la API de headers. Los headers de macros siguen siendo textuales.
 Las declaraciones utilizadas por Objective-C++ deben conservar su frontera de
@@ -69,7 +70,8 @@ Las declaraciones y definiciones migradas viven en 162 interfaces reales, no en
 headers incluidos desde un `export`. [modules.json](modules.json) registra cada
 interfaz, su propietario actual y la correspondencia de 1021 interfaces de origen
 con las unidades finales. `python3 tools/check-cpp-modules.py` comprueba propietarios,
-proveedores, ausencia de ciclos y la explicación de cada header residual. También
+proveedores, ausencia de ciclos (con los imports de las unidades de implementación) y
+la explicación de cada header residual. También
 comprueba las capas de `lib/`: `library_layers` en `modules.json` lista las bibliotecas
 que cada una puede importar, de modo que `telar-platform` no vuelve a depender del protocolo ni
 `telar-tls` de la configuración sin cambiar esa tabla a la vista de quien revisa.
@@ -77,8 +79,8 @@ En `src/` solo se importa hacia abajo: las bibliotecas quedan por debajo de todo
 procesos, y `process_layers` ordena los componentes de cada proceso (`runtime/platform`,
 `gui/input`…), el más bajo primero. Un proceso solo importa bibliotecas y sus propios
 componentes, y la regla cuenta también los imports de las unidades de implementación.
-`upward_imports` lista las aristas hacia arriba que quedan; quien cierra una borra su
-entrada, porque una entrada que ya no sube también hace fallar el checker.
+`upward_imports` está vacía: no queda ninguna arista hacia arriba, y una nueva hace
+fallar el checker.
 Fuera de las excepciones no hay `#include`. Pueden incluir `lib/sys`, los adaptadores
 Qt/moc (los ficheros que incluyen una cabecera `<Q…>`), las fuentes C y Objective-C(++)
 y las cabeceras que todos ellos alcanzan, porque no pueden importar módulos. Un módulo

@@ -59,7 +59,7 @@ import telar.runtime.terminal.control;
 export import telar.runtime.platform.proc_file;
 #endif
 
-export import telar.runtime.exchange_capture.exchange;
+export import telar.runtime.vocabulary.exchange;
 export import telar.runtime.proxy.http2_capture_streams;
 
 export import telar.runtime.model.client_layouts;

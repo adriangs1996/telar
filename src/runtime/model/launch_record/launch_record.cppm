@@ -6,7 +6,7 @@ module;
 #include <cstring>
 #include <new>
 
-export module telar.runtime.persistence.launch_record;
+export module telar.runtime.model.launch_record;
 
 import std;
 

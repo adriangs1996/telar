@@ -178,7 +178,6 @@
   ],
   "telar.gui.machines.discovery": [
     "telar.client",
-    "telar.gui.platform.notification_commands",
     "telar.gui.text.json_unsigned_integer"
   ],
   "telar.gui.machines.profile_store": [
@@ -309,9 +308,6 @@
     "telar.lua",
     "telar.platform.error",
     "telar.platform.fs"
-  ],
-  "telar.runtime.exchange_capture.exchange": [
-    "telar.base.text"
   ],
   "telar.runtime.exchange_capture.pipeline": [
     "telar.platform.thread"
@@ -554,6 +550,9 @@
   "telar.runtime.transport.connection": [
     "telar.platform.error",
     "telar.platform.net"
+  ],
+  "telar.runtime.vocabulary.exchange": [
+    "telar.base.text"
   ],
   "telar.runtime.vocabulary.traffic": [
     "telar.platform.error"
