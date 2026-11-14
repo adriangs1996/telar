@@ -223,8 +223,8 @@ static void testRestore(ConcurrentMemory& memory) {
   std::array<Byte, 4096> buffer;
   const auto fixture = checkpointFixture(buffer);
   RuntimeModel model{memory};
-  ClientStore<ConcurrentMemory> clients{memory};
-  LimitService<ConcurrentMemory> limits;
+  ClientStore clients{memory};
+  LimitService limits;
   NativeEventLoop<ConcurrentMemory> poller{memory};
   PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/unused-checkpoint-test.sock"}};
   ClientLayouts layouts{memory};
@@ -310,13 +310,13 @@ struct SnapshotAgents {
 
 static void testSnapshotChanges(ConcurrentMemory& memory) {
   RuntimeModel model{memory};
-  ClientStore<ConcurrentMemory> clients{memory};
-  LimitService<ConcurrentMemory> limits;
+  ClientStore clients{memory};
+  LimitService limits;
   NativeEventLoop<ConcurrentMemory> poller{memory};
   PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/unused-checkpoint-test.sock"}};
   ClientLayouts layouts{memory};
   SnapshotAgents agents;
-  checkpoint::Snapshot<ConcurrentMemory, SnapshotAgents> snapshot;
+  checkpoint::Snapshot<SnapshotAgents> snapshot;
   const auto expect = [&](bool changed) {
     check(snapshot.changed(model, layouts, agents) == changed);
     check(!snapshot.changed(model, layouts, agents));
@@ -393,8 +393,8 @@ static void testLargePaneIdentity(ConcurrentMemory& memory) {
 
   writer.append(checkpoint::PaneRecord{identity, 1, 1, "/tmp", 80, 24, 3, {arguments, sizeof(arguments) - 1}});
   RuntimeModel model{memory};
-  ClientStore<ConcurrentMemory> clients{memory};
-  LimitService<ConcurrentMemory> limits;
+  ClientStore clients{memory};
+  LimitService limits;
   NativeEventLoop<ConcurrentMemory> poller{memory};
   PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/unused-checkpoint-test.sock"}};
   ClientLayouts layouts{memory};

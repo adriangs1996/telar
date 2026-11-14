@@ -142,16 +142,15 @@ export {
     // only the managed OpenSSL build, patched to clean up immediately, does that.
     static_assert(std::string_view{OPENSSL_VERSION_STR} == TELAR_OPENSSL_VERSION, "TLS allocator ownership requires the managed OpenSSL headers");
 
-    template <ConcurrentAllocator Memory>
     class TlsLibrary {
     public:
-      explicit TlsLibrary(Memory& memory);
+      explicit TlsLibrary(ConcurrentMemory& memory);
       ~TlsLibrary();
 
       TlsLibrary(const TlsLibrary&) = delete;
       TlsLibrary& operator=(const TlsLibrary&) = delete;
 
-      bool uses(const Memory& memory) const noexcept;
+      bool uses(const ConcurrentMemory& memory) const noexcept;
 
     private:
       static void* allocate(std::size_t size, const char*, int) noexcept;
@@ -159,14 +158,9 @@ export {
       static void* reallocate(void* pointer, std::size_t size, const char* file, int line) noexcept;
 
       // OpenSSL cannot be reinitialized after cleanup, and its callbacks have no context argument.
-      inline static Memory* memory_ = nullptr;
+      inline static ConcurrentMemory* memory_ = nullptr;
       inline static bool used_ = false;
     };
-
-    template <ConcurrentAllocator Memory>
-    TlsLibrary(Memory& memory) -> TlsLibrary<Memory>;
-
-    extern template class TlsLibrary<ConcurrentMemory>;
 
   }
 }
@@ -189,15 +183,14 @@ export {
       }
     };
 
-    template <ConcurrentAllocator Memory>
     class CertificateAuthority {
     public:
       static constexpr std::string_view common_name = "telar local CA";
 
       // An authority allocates from its allocator in region `a`; the library only checks that it is configured.
-      static tbc::view<CertificateAuthority, tbc::lt::a> loadOrCreate(tbc::view<Memory&, tbc::lt::a> memory, const TlsLibrary<Memory>& library, int directory, AuthorityKind kind);
-      static tbc::view<std::optional<CertificateAuthority>, tbc::lt::a> loadExisting(tbc::view<Memory&, tbc::lt::a> memory, const TlsLibrary<Memory>& library, int directory, AuthorityKind kind);
-      static tbc::view<CertificateAuthority, tbc::lt::a> create(tbc::view<Memory&, tbc::lt::a> memory, const TlsLibrary<Memory>& library, int directory, AuthorityFiles files, AuthorityKind kind);
+      static tbc::view<CertificateAuthority, tbc::lt::a> loadOrCreate(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const TlsLibrary& library, int directory, AuthorityKind kind);
+      static tbc::view<std::optional<CertificateAuthority>, tbc::lt::a> loadExisting(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const TlsLibrary& library, int directory, AuthorityKind kind);
+      static tbc::view<CertificateAuthority, tbc::lt::a> create(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const TlsLibrary& library, int directory, AuthorityFiles files, AuthorityKind kind);
 
       CertificatePair mint(std::string_view hostname) const;
       X509* certificate() const noexcept;
@@ -213,13 +206,11 @@ export {
       void writeBundle(int directory, std::span<const std::uint8_t> roots) const;
 
     private:
-      explicit CertificateAuthority(tbc::view<Memory&, tbc::lt::a> memory, CertificatePair pair) noexcept;
+      explicit CertificateAuthority(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, CertificatePair pair) noexcept;
 
-      tbc::view<Memory&, tbc::lt::a> memory_;
+      tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
       CertificatePair pair_;
     };
-
-    extern template class CertificateAuthority<ConcurrentMemory>;
 
   }
 }
@@ -229,10 +220,7 @@ export {
   namespace telar::runtime {
 
     // The directory without the caller's environment type: lookup reads a variable from environment.
-    template <Allocator Memory>
-    String<Memory> proxyAuthorityDirectoryFrom(Memory& memory, const void* environment, std::string_view (*lookup)(const void*, const char*));
-
-    extern template String<ConcurrentMemory> proxyAuthorityDirectoryFrom<ConcurrentMemory>(ConcurrentMemory& memory, const void* environment, std::string_view (*lookup)(const void*, const char*));
+    String<ConcurrentMemory> proxyAuthorityDirectoryFrom(ConcurrentMemory& memory, const void* environment, std::string_view (*lookup)(const void*, const char*));
 
     // Generic over the caller's environment, so it stays here and hands the lookup to proxyAuthorityDirectoryFrom.
     template <Allocator Memory, EnvironmentLookup Environment>
@@ -261,22 +249,16 @@ export {
       virtual void run(std::span<const std::string_view> arguments) = 0;
     };
 
-    template <Allocator Memory>
     class SystemCommand : public TrustCommandRunner {
     public:
-      explicit SystemCommand(Memory& memory, FILE* output) noexcept;
+      explicit SystemCommand(ConcurrentMemory& memory, FILE* output) noexcept;
 
       void run(std::span<const std::string_view> arguments) override;
 
     private:
-      Memory& memory_;
+      ConcurrentMemory& memory_;
       FILE* output_;
     };
-
-    template <Allocator Memory>
-    SystemCommand(Memory& memory, FILE* output) -> SystemCommand<Memory>;
-
-    extern template class SystemCommand<ConcurrentMemory>;
 
   }
 }
@@ -301,19 +283,12 @@ export {
       std::array<char, 40> fingerprint;
       FixedText<PATH_MAX> store;
 
-      template <Allocator Memory>
-      static Record parse(Memory& memory, std::string_view source);
+      static Record parse(ConcurrentMemory& memory, std::string_view source);
 
-      template <Allocator Memory>
-      static std::optional<Record> read(Memory& memory, int directory);
+      static std::optional<Record> read(ConcurrentMemory& memory, int directory);
 
-      template <Allocator Memory>
-      void write(Memory& memory, int directory) const;
+      void write(ConcurrentMemory& memory, int directory) const;
     };
-
-    extern template Record Record::parse<ConcurrentMemory>(ConcurrentMemory& memory, std::string_view source);
-    extern template std::optional<Record> Record::read<ConcurrentMemory>(ConcurrentMemory& memory, int directory);
-    extern template void Record::write<ConcurrentMemory>(ConcurrentMemory& memory, int directory) const;
 
   }
 }
@@ -346,20 +321,19 @@ export {
 export {
   namespace telar::runtime::proxy_trust {
 
-    template <Allocator Memory>
     class Paths {
     public:
-      explicit Paths(Memory& memory, std::string_view directory);
+      explicit Paths(ConcurrentMemory& memory, std::string_view directory);
 
-      const String<Memory>& directory() const noexcept;
-      String<Memory> file(std::string_view name) const;
+      const String<ConcurrentMemory>& directory() const noexcept;
+      String<ConcurrentMemory> file(std::string_view name) const;
       FileDescriptor open() const;
       FileDescriptor prepare() const;
       static void validateDirectory(int descriptor);
 
       // Generic over the caller's environment, so it stays here and hands the lookup to keychainFrom.
       template <EnvironmentLookup Environment>
-      TBC_HOT_PATH static String<Memory> keychain(Memory& memory, const Environment& environment) {
+      TBC_HOT_PATH static String<ConcurrentMemory> keychain(ConcurrentMemory& memory, const Environment& environment) {
         return keychainFrom(memory, std::addressof(environment), [](const void* target, const char* name) {
           return static_cast<const Environment*>(target)->lookup(name);
         });
@@ -367,7 +341,7 @@ export {
 
       // Generic over the caller's environment, so it stays here and hands the lookup to nativeDestinationFrom.
       template <EnvironmentLookup Environment>
-      TBC_HOT_PATH Destination nativeDestination(Memory& memory, const Environment& environment, std::optional<Backend> selected = std::nullopt) const {
+      TBC_HOT_PATH Destination nativeDestination(ConcurrentMemory& memory, const Environment& environment, std::optional<Backend> selected = std::nullopt) const {
         return nativeDestinationFrom(memory, selected, std::addressof(environment), [](const void* target, const char* name) {
           return static_cast<const Environment*>(target)->lookup(name);
         });
@@ -376,16 +350,11 @@ export {
     private:
       using Lookup = std::string_view (*)(const void*, const char*);
 
-      static String<Memory> keychainFrom(Memory& memory, const void* environment, Lookup lookup);
-      Destination nativeDestinationFrom(Memory& memory, std::optional<Backend> selected, const void* environment, Lookup lookup) const;
+      static String<ConcurrentMemory> keychainFrom(ConcurrentMemory& memory, const void* environment, Lookup lookup);
+      Destination nativeDestinationFrom(ConcurrentMemory& memory, std::optional<Backend> selected, const void* environment, Lookup lookup) const;
 
-      String<Memory> directory_;
+      String<ConcurrentMemory> directory_;
     };
-
-    template <Allocator Memory>
-    Paths(Memory& memory, std::string_view directory) -> Paths<Memory>;
-
-    extern template class Paths<ConcurrentMemory>;
 
   }
 }
@@ -411,10 +380,7 @@ export {
 
     void validateTarget(const Record& record, const Destination& destination);
 
-    template <ConcurrentAllocator Memory>
-    Inspection inspect(Memory& memory, const TlsLibrary<Memory>& library, const Paths<Memory>& paths, const Destination& destination) noexcept;
-
-    extern template Inspection inspect<ConcurrentMemory>(ConcurrentMemory& memory, const TlsLibrary<ConcurrentMemory>& library, const Paths<ConcurrentMemory>& paths, const Destination& destination) noexcept;
+    Inspection inspect(ConcurrentMemory& memory, const TlsLibrary& library, const Paths& paths, const Destination& destination) noexcept;
 
   }
 }
@@ -428,17 +394,16 @@ export {
       bool force_rotation = false;
     };
 
-    template <ConcurrentAllocator Memory>
     class PreparedAuthority {
     public:
-      explicit PreparedAuthority(Memory& memory, const TlsLibrary<Memory>& library, int directory, AuthorityPreparation options = {});
+      explicit PreparedAuthority(ConcurrentMemory& memory, const TlsLibrary& library, int directory, AuthorityPreparation options = {});
       ~PreparedAuthority();
 
       PreparedAuthority(const PreparedAuthority&) = delete;
       PreparedAuthority& operator=(const PreparedAuthority&) = delete;
 
       std::string_view certificateName() const noexcept;
-      const CertificateAuthority<Memory>& authority() const noexcept;
+      const CertificateAuthority& authority() const noexcept;
       void activate();
       void commit() noexcept;
 
@@ -453,7 +418,7 @@ export {
 
       int directory_;
       AuthorityFiles canonical_;
-      std::optional<CertificateAuthority<Memory>> authority_;
+      std::optional<CertificateAuthority> authority_;
       Filename key_;
       Filename certificate_;
       Filename previous_key_;
@@ -464,11 +429,6 @@ export {
       bool saved_key_ = false;
       bool saved_certificate_ = false;
     };
-
-    template <ConcurrentAllocator Memory>
-    PreparedAuthority(Memory& memory, const TlsLibrary<Memory>& library, int directory) -> PreparedAuthority<Memory>;
-
-    extern template class PreparedAuthority<ConcurrentMemory>;
 
   }
 }
@@ -483,10 +443,9 @@ export {
       rotate,
     };
 
-    template <ConcurrentAllocator Memory>
     class Service {
     public:
-      explicit Service(Memory& memory, const TlsLibrary<Memory>& library, const Paths<Memory>& paths, TrustCommandRunner& executor, Destination destination) noexcept;
+      explicit Service(ConcurrentMemory& memory, const TlsLibrary& library, const Paths& paths, TrustCommandRunner& executor, Destination destination) noexcept;
 
       Inspection inspect() const noexcept;
       Record install(const std::optional<Record>& previous, bool force_rotation = false);
@@ -497,17 +456,12 @@ export {
       void installAuthority(std::string_view certificate);
       void remove(const Record& record);
 
-      Memory& memory_;
-      const TlsLibrary<Memory>& library_;
-      const Paths<Memory>& paths_;
+      ConcurrentMemory& memory_;
+      const TlsLibrary& library_;
+      const Paths& paths_;
       TrustCommandRunner& executor_;
       Destination destination_;
     };
-
-    template <ConcurrentAllocator Memory>
-    Service(Memory& memory, const TlsLibrary<Memory>& library, const Paths<Memory>& paths, TrustCommandRunner& executor, Destination destination) -> Service<Memory>;
-
-    extern template class Service<ConcurrentMemory>;
 
   }
 }

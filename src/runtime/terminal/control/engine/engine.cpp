@@ -6,47 +6,40 @@ module telar.runtime.terminal.control.engine;
 
 namespace telar::runtime::control {
 
-  template <Allocator Memory>
-  Engine<Memory>::Engine(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<PtyResponseQueue&, tbc::lt::a> responses, bool enabled, tbc::view<GraphicsQueryResources, tbc::lt::a> resources)
+  Engine::Engine(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<PtyResponseQueue&, tbc::lt::a> responses, bool enabled, tbc::view<GraphicsQueryResources, tbc::lt::a> resources)
       : parser_(memory),
         reply_(memory),
         checksum_(memory),
         clipboard_(memory),
         graphics_queries_(memory, resources),
         reports_(memory),
-        document_(AllocatorRef<std::uint8_t, Memory>{memory}),
-        zones_(AllocatorRef<Zone, Memory>{memory}),
+        document_(AllocatorRef<std::uint8_t, ConcurrentMemory>{memory}),
+        zones_(AllocatorRef<Zone, ConcurrentMemory>{memory}),
         responses_(responses),
         enabled_(enabled) {}
 
-  template <Allocator Memory>
-  void Engine<Memory>::bind(tbc::view<GhosttyTerminal, tbc::lt::a> terminal, tbc::view<GhosttyRenderState, tbc::lt::a> render, bool separate_media) noexcept {
+  void Engine::bind(tbc::view<GhosttyTerminal, tbc::lt::a> terminal, tbc::view<GhosttyRenderState, tbc::lt::a> render, bool separate_media) noexcept {
     state_.bind(terminal, render, separate_media);
   }
 
-  template <Allocator Memory>
-  void Engine<Memory>::failWrite() noexcept {
+  void Engine::failWrite() noexcept {
     closed_ = true;
     state_.failWrite();
   }
 
-  template <Allocator Memory>
-  void Engine<Memory>::enableMediaBoundaries() noexcept {
+  void Engine::enableMediaBoundaries() noexcept {
     media_boundaries_ = true;
   }
 
-  template <Allocator Memory>
-  bool Engine<Memory>::awaitingMedia() const noexcept {
+  bool Engine::awaitingMedia() const noexcept {
     return awaiting_media_;
   }
 
-  template <Allocator Memory>
-  void Engine<Memory>::mediaComplete() noexcept {
+  void Engine::mediaComplete() noexcept {
     awaiting_media_ = false;
   }
 
-  template <Allocator Memory>
-  void Engine<Memory>::discard() noexcept {
+  void Engine::discard() noexcept {
     closed_ = true;
     responses_.release();
     parser_.discard();
@@ -63,8 +56,7 @@ namespace telar::runtime::control {
     streamed_media_ = false;
   }
 
-  template <Allocator Memory>
-  std::size_t Engine<Memory>::feed(std::span<const std::uint8_t> input) {
+  std::size_t Engine::feed(std::span<const std::uint8_t> input) {
     if (closed_) {
       return input.size();
     }
@@ -89,8 +81,7 @@ namespace telar::runtime::control {
     return parser_.feed(input, *this);
   }
 
-  template <Allocator Memory>
-  std::size_t Engine<Memory>::feedAtomicMedia(std::span<const std::uint8_t> input) {
+  std::size_t Engine::feedAtomicMedia(std::span<const std::uint8_t> input) {
     TELAR_ASSERT(media_boundaries_ && !blocked() && parser_.ground());
     media_boundaries_ = false;
     try {
@@ -109,26 +100,22 @@ namespace telar::runtime::control {
     }
   }
 
-  template <Allocator Memory>
-  bool Engine<Memory>::blocked() const noexcept {
+  bool Engine::blocked() const noexcept {
     return awaiting_media_ || parser_.blocked() || reports_.pending() || clipboard_.hasReply();
   }
 
-  template <Allocator Memory>
-  bool Engine<Memory>::ground() const noexcept {
+  bool Engine::ground() const noexcept {
     return parser_.ground();
   }
 
-  template <Allocator Memory>
-  void Engine<Memory>::ordinary(std::span<const std::uint8_t> input) {
+  void Engine::ordinary(std::span<const std::uint8_t> input) {
     history_erased_ = false;
     homed_ = false;
     responses_.release();
     state_.write(input);
   }
 
-  template <Allocator Memory>
-  std::size_t Engine<Memory>::ordinaryRun(std::span<const std::uint8_t> input, std::size_t offset) {
+  std::size_t Engine::ordinaryRun(std::span<const std::uint8_t> input, std::size_t offset) {
     history_erased_ = false;
     homed_ = false;
     const auto remaining = input.subspan(offset);
@@ -143,16 +130,14 @@ namespace telar::runtime::control {
     return end;
   }
 
-  template <Allocator Memory>
-  void Engine<Memory>::escapeBoundary() {
+  void Engine::escapeBoundary() {
     if (state_.needsEscapeBoundary()) {
       responses_.release();
       state_.escapeBoundary();
     }
   }
 
-  template <Allocator Memory>
-  bool Engine<Memory>::streamable(Sequence sequence) noexcept {
+  bool Engine::streamable(Sequence sequence) noexcept {
     const bool stream = control::streamable(sequence);
     if (stream && media_boundaries_ && sequence.kind == Kind::apc && sequence.body().starts_with('G')) {
       streamed_media_ = true;
@@ -161,13 +146,11 @@ namespace telar::runtime::control {
     return stream;
   }
 
-  template <Allocator Memory>
-  bool Engine<Memory>::borrowableApc(Sequence header) const noexcept {
+  bool Engine::borrowableApc(Sequence header) const noexcept {
     return graphicsQuery(header.body());
   }
 
-  template <Allocator Memory>
-  bool Engine<Memory>::streamComplete() noexcept {
+  bool Engine::streamComplete() noexcept {
     if (std::exchange(streamed_media_, false)) {
       awaiting_media_ = true;
       return false;
@@ -176,8 +159,7 @@ namespace telar::runtime::control {
     return true;
   }
 
-  template <Allocator Memory>
-  bool Engine<Memory>::enquire() {
+  bool Engine::enquire() {
     escapeBoundary();
     if (!enabled_ || policy.answerback_length == 0) {
       return true;
@@ -186,8 +168,7 @@ namespace telar::runtime::control {
     return responses_.tryPush({reinterpret_cast<const std::uint8_t*>(policy.answerback.data()), policy.answerback_length});
   }
 
-  template <Allocator Memory>
-  bool Engine<Memory>::complete(Sequence sequence) {
+  bool Engine::complete(Sequence sequence) {
     if (awaiting_media_) {
       return false;
     }
@@ -259,16 +240,14 @@ namespace telar::runtime::control {
     return true;
   }
 
-  template <Allocator Memory>
-  void Engine<Memory>::configureSize(TerminalSize size) {
+  void Engine::configureSize(TerminalSize size) {
     state_.configureSize(size);
     if (!closed_ && state_.mode(size_events_mode)) {
       reports_.changed(Report::size);
     }
   }
 
-  template <Allocator Memory>
-  void Engine<Memory>::configureFacts(ClientFacts facts) noexcept {
+  void Engine::configureFacts(ClientFacts facts) noexcept {
     if (closed_) {
       facts_ = facts;
       return;
@@ -289,8 +268,7 @@ namespace telar::runtime::control {
     facts_ = facts;
   }
 
-  template <Allocator Memory>
-  void Engine<Memory>::publishReports() {
+  void Engine::publishReports() {
     if (closed_ || awaiting_media_) {
       return;
     }
@@ -302,21 +280,18 @@ namespace telar::runtime::control {
     }
   }
 
-  template <Allocator Memory>
-  void Engine<Memory>::externalColorsChanged() noexcept {
+  void Engine::externalColorsChanged() noexcept {
     state_.invalidateColors();
     if (!closed_ && state_.mode(scheme_events_mode)) {
       reports_.changed(Report::scheme);
     }
   }
 
-  template <Allocator Memory>
-  Clipboard<Memory>& Engine<Memory>::clipboard() noexcept {
+  Clipboard& Engine::clipboard() noexcept {
     return clipboard_;
   }
 
-  template <Allocator Memory>
-  auto Engine<Memory>::takeZone() noexcept -> std::optional<Zone> {
+  auto Engine::takeZone() noexcept -> std::optional<Zone> {
     if (zones_.empty()) {
       return std::nullopt;
     }
@@ -327,8 +302,7 @@ namespace telar::runtime::control {
     return zone;
   }
 
-  template <Allocator Memory>
-  bool Engine<Memory>::takeDocument(Vector<std::uint8_t, Memory>& into) noexcept {
+  bool Engine::takeDocument(Vector<std::uint8_t, ConcurrentMemory>& into) noexcept {
     if (!document_pending_) {
       return false;
     }
@@ -339,19 +313,17 @@ namespace telar::runtime::control {
     return true;
   }
 
-  template <Allocator Memory>
-  bool Engine<Memory>::pasteEvents() const noexcept {
+  bool Engine::pasteEvents() const noexcept {
     return paste_events_;
   }
 
-  template <Allocator Memory>
-  void Engine<Memory>::document(std::string_view encoded) noexcept {
+  void Engine::document(std::string_view encoded) noexcept {
     if (!enabled_ || encoded.size() > ::telar::render::max_sequence_body - ::telar::render::sequence_begin.size()) {
       return;
     }
 
     try {
-      Vector<std::uint8_t, Memory> bytes(encoded.size() / 4 * 3 + 3, document_.get_allocator());
+      Vector<std::uint8_t, ConcurrentMemory> bytes(encoded.size() / 4 * 3 + 3, document_.get_allocator());
       const auto size = base64::decode<base64::Padding::optional>(encoded, bytes);
       if (!size || *size > ::telar::render::max_document_bytes) {
         return;
@@ -369,8 +341,7 @@ namespace telar::runtime::control {
     }
   }
 
-  template <Allocator Memory>
-  void Engine<Memory>::closeZone() noexcept {
+  void Engine::closeZone() noexcept {
     if (!open_zone_ || !state_.primaryScreen()) {
       return;
     }
@@ -394,8 +365,7 @@ namespace telar::runtime::control {
     }
   }
 
-  template <Allocator Memory>
-  std::size_t Engine<Memory>::ordinaryAscii(std::span<const std::uint8_t> input) {
+  std::size_t Engine::ordinaryAscii(std::span<const std::uint8_t> input) {
     std::array<std::uint32_t, ascii_detail::codepoint_capacity> codepoints;
 
     TELAR_ASSERT(input.size() >= ascii_detail::gate_bytes);
@@ -417,13 +387,11 @@ namespace telar::runtime::control {
     return count;
   }
 
-  template <Allocator Memory>
-  Engine<Memory>::ReleaseProducer::~ReleaseProducer() {
+  Engine::ReleaseProducer::~ReleaseProducer() {
     producer.release();
   }
 
-  template <Allocator Memory>
-  void Engine<Memory>::passthrough(Sequence sequence) {
+  void Engine::passthrough(Sequence sequence) {
     responses_.release();
     state_.write(sequence.bytes);
     if (sequence.ending != Ending::final_byte) {
@@ -433,8 +401,7 @@ namespace telar::runtime::control {
     }
   }
 
-  template <Allocator Memory>
-  void Engine<Memory>::escape(Sequence sequence) {
+  void Engine::escape(Sequence sequence) {
     if (sequence.body() == "\\") {
       return;
     }
@@ -454,8 +421,7 @@ namespace telar::runtime::control {
     passthrough(sequence);
   }
 
-  template <Allocator Memory>
-  void Engine<Memory>::attributes(bool secondary) {
+  void Engine::attributes(bool secondary) {
     if (!enabled_) {
       return;
     }
@@ -467,8 +433,7 @@ namespace telar::runtime::control {
     }
   }
 
-  template <Allocator Memory>
-  void Engine<Memory>::csi(Sequence sequence, bool history_erased, bool homed) {
+  void Engine::csi(Sequence sequence, bool history_erased, bool homed) {
     const auto body = sequence.body();
     if (body == "5n") {
       operatingStatus();
@@ -610,8 +575,7 @@ namespace telar::runtime::control {
     passthrough(sequence);
   }
 
-  template <Allocator Memory>
-  void Engine<Memory>::eraseDisplay(Sequence sequence, unsigned mode, bool history_erased, bool homed) {
+  void Engine::eraseDisplay(Sequence sequence, unsigned mode, bool history_erased, bool homed) {
     static constexpr std::array<std::uint8_t, 4> erase_history{0x1b, '[', '3', 'J'};
     static constexpr std::array<std::uint8_t, 4> erase_screen{0x1b, '[', '2', 'J'};
 
@@ -630,15 +594,13 @@ namespace telar::runtime::control {
     }
   }
 
-  template <Allocator Memory>
-  bool Engine<Memory>::homeOnPrimary() const {
+  bool Engine::homeOnPrimary() const {
     const auto cursor = state_.cursor();
 
     return cursor.column == 0 && cursor.row == 0 && state_.primaryScreen();
   }
 
-  template <Allocator Memory>
-  void Engine<Memory>::privateModes(const Parameters& parameters) {
+  void Engine::privateModes(const Parameters& parameters) {
     for (std::size_t index = 0; index < parameters.count; ++index) {
       const auto mode = parameters.values[index];
       const auto owned = std::find(desktop_modes.begin(), desktop_modes.end(), mode);
@@ -663,8 +625,7 @@ namespace telar::runtime::control {
     }
   }
 
-  template <Allocator Memory>
-  void Engine<Memory>::modeEffect(unsigned mode, bool set) {
+  void Engine::modeEffect(unsigned mode, bool set) {
     switch (mode) {
     case paste_events_mode:
       paste_events_ = set;
@@ -692,8 +653,7 @@ namespace telar::runtime::control {
     }
   }
 
-  template <Allocator Memory>
-  void Engine<Memory>::operatingStatus() {
+  void Engine::operatingStatus() {
     if (!enabled_) {
       return;
     }
@@ -706,8 +666,7 @@ namespace telar::runtime::control {
     reply_.append("\x1b[0n");
   }
 
-  template <Allocator Memory>
-  void Engine<Memory>::status(const Parameters& parameters) {
+  void Engine::status(const Parameters& parameters) {
     if (!enabled_ || parameters.count != 1) {
       return;
     }
@@ -725,8 +684,7 @@ namespace telar::runtime::control {
     }
   }
 
-  template <Allocator Memory>
-  void Engine<Memory>::reportCursor(bool extended) {
+  void Engine::reportCursor(bool extended) {
     if (!enabled_) {
       return;
     }
@@ -743,8 +701,7 @@ namespace telar::runtime::control {
     cursorReport(reply_, position, extended);
   }
 
-  template <Allocator Memory>
-  bool Engine<Memory>::knownMode(std::uint16_t value, bool ansi) noexcept {
+  bool Engine::knownMode(std::uint16_t value, bool ansi) noexcept {
     if (ansi) {
       return value == 2 || value == 4 || value == 12 || value == 20;
     }
@@ -794,8 +751,7 @@ namespace telar::runtime::control {
     }
   }
 
-  template <Allocator Memory>
-  void Engine<Memory>::modeReport(const Parameters& parameters) {
+  void Engine::modeReport(const Parameters& parameters) {
     if (!enabled_ || parameters.count != 1) {
       return;
     }
@@ -846,8 +802,7 @@ namespace telar::runtime::control {
     reply_.append("$y");
   }
 
-  template <Allocator Memory>
-  void Engine<Memory>::sizeEvent() {
+  void Engine::sizeEvent() {
     if (!enabled_) {
       return;
     }
@@ -855,8 +810,7 @@ namespace telar::runtime::control {
     control::sizeReport<SizeReport::event>(reply_, state_.size());
   }
 
-  template <Allocator Memory>
-  void Engine<Memory>::sizeReport(unsigned request) {
+  void Engine::sizeReport(unsigned request) {
     if (!enabled_) {
       return;
     }
@@ -917,8 +871,7 @@ namespace telar::runtime::control {
     }
   }
 
-  template <Allocator Memory>
-  bool Engine<Memory>::termcap(std::string_view request) {
+  bool Engine::termcap(std::string_view request) {
     if (!enabled_) {
       return true;
     }
@@ -938,8 +891,7 @@ namespace telar::runtime::control {
     return true;
   }
 
-  template <Allocator Memory>
-  void Engine<Memory>::dcs(Sequence sequence) {
+  void Engine::dcs(Sequence sequence) {
     const auto end = sequence.body().find_first_of("@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~");
     if (end != std::string_view::npos) {
       const auto parameters = Parameters::parse(sequence.body().substr(0, end + 1));
@@ -956,8 +908,7 @@ namespace telar::runtime::control {
     passthrough(sequence);
   }
 
-  template <Allocator Memory>
-  void Engine<Memory>::statusString(std::string_view request) {
+  void Engine::statusString(std::string_view request) {
     if (!enabled_ || request.size() > 2) {
       return;
     }
@@ -989,8 +940,7 @@ namespace telar::runtime::control {
     reply_.append("\x1b\\");
   }
 
-  template <Allocator Memory>
-  void Engine<Memory>::attributesString() {
+  void Engine::attributesString() {
     const auto style = state_.style();
 
     reply_.append("0");
@@ -1012,8 +962,7 @@ namespace telar::runtime::control {
     styleColor(style.bg_color, true);
   }
 
-  template <Allocator Memory>
-  void Engine<Memory>::styleColor(const GhosttyStyleColor& color, bool background) {
+  void Engine::styleColor(const GhosttyStyleColor& color, bool background) {
     if (color.tag == GHOSTTY_STYLE_COLOR_NONE) {
       return;
     }
@@ -1037,8 +986,7 @@ namespace telar::runtime::control {
     }
   }
 
-  template <Allocator Memory>
-  void Engine<Memory>::osc(Sequence sequence) {
+  void Engine::osc(Sequence sequence) {
     responses_.release();
     if (const auto body = sequence.body(); oscOperation(body.substr(0, body.find(';'))) == ::telar::render::sequence_number) {
       if (body.starts_with(::telar::render::sequence_begin)) {
@@ -1075,8 +1023,7 @@ namespace telar::runtime::control {
     passthrough(sequence);
   }
 
-  template <Allocator Memory>
-  void Engine<Memory>::apc(Sequence sequence) {
+  void Engine::apc(Sequence sequence) {
     if (sequence.body().starts_with("25a1;")) {
       if (enabled_) {
         glyph(sequence.body().substr(5), reply_);
@@ -1091,7 +1038,5 @@ namespace telar::runtime::control {
 
     passthrough(sequence);
   }
-
-  template class Engine<telar::ConcurrentMemory>;
 
 }

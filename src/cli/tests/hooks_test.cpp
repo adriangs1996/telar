@@ -76,7 +76,7 @@ static void boundedInput() {
   std::array<char, 4096> padding;
 
   padding.fill('x');
-  for (std::size_t written = prefix.size(); written <= Input<Memory>::maximum_bytes; written += padding.size()) {
+  for (std::size_t written = prefix.size(); written <= Input::maximum_bytes; written += padding.size()) {
     check(::write(file.get(), padding.data(), padding.size()) == static_cast<ssize_t>(padding.size()));
   }
 

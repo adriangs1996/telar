@@ -7,12 +7,10 @@ import std;
 
 namespace telar::runtime {
 
-  template <ConcurrentAllocator Memory>
-  WorkspaceGitProbe<Memory>::WorkspaceGitProbe(Memory& memory) noexcept
+  WorkspaceGitProbe::WorkspaceGitProbe(ConcurrentMemory& memory) noexcept
       : reader_(memory) {}
 
-  template <ConcurrentAllocator Memory>
-  WorkspaceGitResult WorkspaceGitProbe<Memory>::observe(const Request& request) noexcept {
+  WorkspaceGitResult WorkspaceGitProbe::observe(const Request& request) noexcept {
     TELAR_TRACE("workspaces.gitProbe");
     const auto observed = reader_.read(request.path.view());
     Result result{.identity = request.identity};
@@ -24,11 +22,8 @@ namespace telar::runtime {
     return result;
   }
 
-  template <ConcurrentAllocator Memory>
-  void WorkspaceGitProbe<Memory>::stop() noexcept {
+  void WorkspaceGitProbe::stop() noexcept {
     reader_.stop();
   }
-
-  template class WorkspaceGitProbe<ConcurrentMemory>;
 
 }

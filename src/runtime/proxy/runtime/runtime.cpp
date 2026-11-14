@@ -172,14 +172,12 @@ namespace telar::runtime {
     offset_ += count;
   }
 
-  template <ConcurrentAllocator Memory>
-  ApplicationRelay<Memory>::ApplicationRelay(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<ConnectionObservation<Memory>, tbc::lt::a> observation, std::string_view hostname)
-      : relays_{.memory_ = memory, .observation_ = observation, .http1_ = {nullptr, AllocationDeleter<Http1, Memory>{memory}}, .http2_ = {nullptr, AllocationDeleter<Http2, Memory>{memory}}, .http2_endpoint_ = {nullptr, AllocationDeleter<Http2Endpoint, Memory>{memory}}} {
+  ApplicationRelay::ApplicationRelay(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<ConnectionObservation, tbc::lt::a> observation, std::string_view hostname)
+      : relays_{.memory_ = memory, .observation_ = observation, .http1_ = {nullptr, AllocationDeleter<Http1, ConcurrentMemory>{memory}}, .http2_ = {nullptr, AllocationDeleter<Http2, ConcurrentMemory>{memory}}, .http2_endpoint_ = {nullptr, AllocationDeleter<Http2Endpoint, ConcurrentMemory>{memory}}} {
     relays_.hostname_.assign(hostname.substr(0, ProxyHostname::maximum_bytes));
   }
 
-  template <ConcurrentAllocator Memory>
-  void ApplicationRelay<Memory>::select(HttpProtocol protocol, bool unnegotiated) noexcept {
+  void ApplicationRelay::select(HttpProtocol protocol, bool unnegotiated) noexcept {
     if (!selected_) {
       if (!unnegotiated) {
         protocol_ = protocol;
@@ -189,13 +187,11 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  [[nodiscard]] auto ApplicationRelay<Memory>::finished() const noexcept -> bool {
+  [[nodiscard]] auto ApplicationRelay::finished() const noexcept -> bool {
     return relays_.failed_ || (relays_.http1_ && relays_.http1_->finished()) || (relays_.http2_ && relays_.http2_->finished()) || (relays_.http2_endpoint_ && relays_.http2_endpoint_->finished()) || relays_.duplex_.finished();
   }
 
-  template <ConcurrentAllocator Memory>
-  [[nodiscard]] auto ApplicationRelay<Memory>::halfClosed() const noexcept -> bool {
+  [[nodiscard]] auto ApplicationRelay::halfClosed() const noexcept -> bool {
     if (relays_.http2_endpoint_) {
       return relays_.http2_endpoint_->halfClosed();
     }
@@ -203,13 +199,11 @@ namespace telar::runtime {
     return relays_.http2_ ? relays_.http2_->halfClosed() : relays_.duplex_.halfClosed();
   }
 
-  template <ConcurrentAllocator Memory>
-  [[nodiscard]] auto ApplicationRelay<Memory>::idle() const noexcept -> bool {
+  [[nodiscard]] auto ApplicationRelay::idle() const noexcept -> bool {
     return relays_.http1_ && relays_.http1_->idle();
   }
 
-  template <ConcurrentAllocator Memory>
-  [[nodiscard]] auto ApplicationRelay<Memory>::inflight() const noexcept -> std::uint32_t {
+  [[nodiscard]] auto ApplicationRelay::inflight() const noexcept -> std::uint32_t {
     if (relays_.http2_endpoint_) {
       return relays_.http2_endpoint_->inflight();
     }
@@ -218,13 +212,11 @@ namespace telar::runtime {
                                                                         : 0;
   }
 
-  template <ConcurrentAllocator Memory>
-  [[nodiscard]] auto ApplicationRelay<Memory>::buffered() const noexcept -> bool {
+  [[nodiscard]] auto ApplicationRelay::buffered() const noexcept -> bool {
     return protocol_ && !prefix_.empty() && readsChild();
   }
 
-  template <ConcurrentAllocator Memory>
-  [[nodiscard]] auto ApplicationRelay<Memory>::readsChild() const noexcept -> bool {
+  [[nodiscard]] auto ApplicationRelay::readsChild() const noexcept -> bool {
     if (relays_.http2_endpoint_) {
       return relays_.http2_endpoint_->readsChild();
     }
@@ -233,8 +225,7 @@ namespace telar::runtime {
                                                                                                          : relays_.duplex_.readsChild();
   }
 
-  template <ConcurrentAllocator Memory>
-  [[nodiscard]] auto ApplicationRelay<Memory>::readsOrigin() const noexcept -> bool {
+  [[nodiscard]] auto ApplicationRelay::readsOrigin() const noexcept -> bool {
     if (relays_.http2_endpoint_) {
       return relays_.http2_endpoint_->readsOrigin();
     }
@@ -243,8 +234,7 @@ namespace telar::runtime {
                                                                                                           : relays_.duplex_.readsOrigin();
   }
 
-  template <ConcurrentAllocator Memory>
-  [[nodiscard]] auto ApplicationRelay<Memory>::deadline() const noexcept -> std::optional<traffic::FlowControl::Time> {
+  [[nodiscard]] auto ApplicationRelay::deadline() const noexcept -> std::optional<traffic::FlowControl::Time> {
     if (relays_.http2_endpoint_) {
       return relays_.http2_endpoint_->deadline();
     }
@@ -256,8 +246,7 @@ namespace telar::runtime {
     return !protocol_ && sniff_until_ != traffic::FlowControl::Time{} ? std::optional{sniff_until_} : std::nullopt;
   }
 
-  template <ConcurrentAllocator Memory>
-  [[nodiscard]] auto ApplicationRelay<Memory>::interest(TlsSide side) const noexcept -> SocketInterest {
+  [[nodiscard]] auto ApplicationRelay::interest(TlsSide side) const noexcept -> SocketInterest {
     if (!protocol_ && !prefix_.empty()) {
       return {.readable = side == TlsSide::child};
     }
@@ -277,8 +266,7 @@ namespace telar::runtime {
     return side == TlsSide::child ? relays_.duplex_.childInterest() : relays_.duplex_.originInterest();
   }
 
-  template <ConcurrentAllocator Memory>
-  void ApplicationRelay<Memory>::identify() noexcept {
+  void ApplicationRelay::identify() noexcept {
     const auto bytes = prefix_.bytes();
     const std::string_view head{reinterpret_cast<const char*>(bytes.data()), bytes.size()};
 
@@ -329,8 +317,7 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  [[nodiscard]] auto ApplicationRelay<Memory>::Relays::captureStart(CaptureProtocol protocol) const noexcept -> CaptureStart {
+  [[nodiscard]] auto ApplicationRelay::Relays::captureStart(CaptureProtocol protocol) const noexcept -> CaptureStart {
     return {
         .key = {
             observation_.identity,
@@ -341,67 +328,56 @@ namespace telar::runtime {
     };
   }
 
-  template <ConcurrentAllocator Memory>
-  PlainTunnel<Memory>::PlainTunnel(tbc::view<Memory&, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname, tbc::view<ConnectionObservation<Memory>, tbc::lt::a> observation)
+  PlainTunnel::PlainTunnel(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname, tbc::view<ConnectionObservation, tbc::lt::a> observation)
       : sockets_(sockets),
         application_(memory, observation, hostname) {}
 
-  template <ConcurrentAllocator Memory>
-  bool PlainTunnel<Memory>::advance(TunnelReadiness readiness, FlowState* flow) noexcept {
+  bool PlainTunnel::advance(TunnelReadiness readiness, FlowState* flow) noexcept {
     SocketStream child{sockets_.child}, origin{sockets_.origin};
 
     return application_.advance(child, origin, readiness, flow);
   }
 
-  template <ConcurrentAllocator Memory>
-  bool PlainTunnel<Memory>::finished() const noexcept {
+  bool PlainTunnel::finished() const noexcept {
     return application_.finished();
   }
 
-  template <ConcurrentAllocator Memory>
-  bool PlainTunnel<Memory>::halfClosed() const noexcept {
+  bool PlainTunnel::halfClosed() const noexcept {
     return application_.halfClosed();
   }
 
-  template <ConcurrentAllocator Memory>
-  bool PlainTunnel<Memory>::idle() const noexcept {
+  bool PlainTunnel::idle() const noexcept {
     return application_.idle();
   }
 
-  template <ConcurrentAllocator Memory>
-  std::uint32_t PlainTunnel<Memory>::inflight() const noexcept {
+  std::uint32_t PlainTunnel::inflight() const noexcept {
     return application_.inflight();
   }
 
-  template <ConcurrentAllocator Memory>
-  bool PlainTunnel<Memory>::buffered() const noexcept {
+  bool PlainTunnel::buffered() const noexcept {
     return application_.buffered();
   }
 
-  template <ConcurrentAllocator Memory>
-  auto PlainTunnel<Memory>::deadline() const noexcept {
+  auto PlainTunnel::deadline() const noexcept {
     return application_.deadline();
   }
 
-  template <ConcurrentAllocator Memory>
-  SocketInterest PlainTunnel<Memory>::interest(TlsSide side) const noexcept {
+  SocketInterest PlainTunnel::interest(TlsSide side) const noexcept {
     return application_.interest(side);
   }
 
-  template <ConcurrentAllocator Memory>
-  TlsTunnel<Memory>::TlsTunnel(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<const TlsInterception<Memory>&, tbc::lt::a> interception, TunnelSockets sockets, std::string_view hostname, tbc::view<Owned<AlpnOffer, Memory>, tbc::lt::a> offer, tbc::view<ConnectionObservation<Memory>, tbc::lt::a> observation)
+  TlsTunnel::TlsTunnel(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<const TlsInterception&, tbc::lt::a> interception, TunnelSockets sockets, std::string_view hostname, tbc::view<Owned<AlpnOffer, ConcurrentMemory>, tbc::lt::a> offer, tbc::view<ConnectionObservation, tbc::lt::a> observation)
       : observation_(observation),
         session_(interception.open(memory, sockets, hostname, std::move(offer))),
         application_(memory, observation, hostname) {}
 
-  template <ConcurrentAllocator Memory>
-  auto TlsTunnel<Memory>::advance(TunnelReadiness readiness, FlowState* flow) noexcept -> bool {
+  auto TlsTunnel::advance(TunnelReadiness readiness, FlowState* flow) noexcept -> bool {
     if (failed_) {
       return false;
     }
 
     if (!established()) {
-      if (session_->advance() == TlsSession<Memory>::State::failed) {
+      if (session_->advance() == TlsSession::State::failed) {
         const auto reason = recordFailure();
 
         if (flow != nullptr) {
@@ -433,46 +409,38 @@ namespace telar::runtime {
     return application_.advance(child, origin, readiness, flow);
   }
 
-  template <ConcurrentAllocator Memory>
-  auto TlsTunnel<Memory>::deadline() const noexcept {
+  auto TlsTunnel::deadline() const noexcept {
     const auto session = session_->deadline();
     const auto application = application_.deadline();
 
     return earliest(session, application);
   }
 
-  template <ConcurrentAllocator Memory>
-  [[nodiscard]] auto TlsTunnel<Memory>::established() const noexcept -> bool {
-    return session_->state() == TlsSession<Memory>::State::established;
+  [[nodiscard]] auto TlsTunnel::established() const noexcept -> bool {
+    return session_->state() == TlsSession::State::established;
   }
 
-  template <ConcurrentAllocator Memory>
-  [[nodiscard]] auto TlsTunnel<Memory>::finished() const noexcept -> bool {
+  [[nodiscard]] auto TlsTunnel::finished() const noexcept -> bool {
     return failed_ || application_.finished();
   }
 
-  template <ConcurrentAllocator Memory>
-  [[nodiscard]] auto TlsTunnel<Memory>::halfClosed() const noexcept -> bool {
+  [[nodiscard]] auto TlsTunnel::halfClosed() const noexcept -> bool {
     return application_.halfClosed();
   }
 
-  template <ConcurrentAllocator Memory>
-  [[nodiscard]] auto TlsTunnel<Memory>::idle() const noexcept -> bool {
+  [[nodiscard]] auto TlsTunnel::idle() const noexcept -> bool {
     return application_.idle();
   }
 
-  template <ConcurrentAllocator Memory>
-  [[nodiscard]] auto TlsTunnel<Memory>::inflight() const noexcept -> std::uint32_t {
+  [[nodiscard]] auto TlsTunnel::inflight() const noexcept -> std::uint32_t {
     return application_.inflight();
   }
 
-  template <ConcurrentAllocator Memory>
-  [[nodiscard]] auto TlsTunnel<Memory>::buffered() const noexcept -> bool {
+  [[nodiscard]] auto TlsTunnel::buffered() const noexcept -> bool {
     return application_.buffered() || (application_.readsChild() && session_->buffered(TlsSide::child)) || (application_.readsOrigin() && session_->buffered(TlsSide::origin));
   }
 
-  template <ConcurrentAllocator Memory>
-  [[nodiscard]] auto TlsTunnel<Memory>::interest(TlsSide side) const noexcept -> SocketInterest {
+  [[nodiscard]] auto TlsTunnel::interest(TlsSide side) const noexcept -> SocketInterest {
     if (established()) {
       return application_.interest(side);
     }
@@ -483,9 +451,8 @@ namespace telar::runtime {
     return interest;
   }
 
-  template <ConcurrentAllocator Memory>
-  tbc::view<std::string_view, tbc::lt::static_storage> TlsTunnel<Memory>::recordFailure() noexcept {
-    using Failure = typename TlsSession<Memory>::Failure;
+  tbc::view<std::string_view, tbc::lt::static_storage> TlsTunnel::recordFailure() noexcept {
+    using Failure = TlsSession::Failure;
 
     switch (session_->failure()) {
     case Failure::context:
@@ -510,57 +477,47 @@ namespace telar::runtime {
     return "tls_handshake_failed";
   }
 
-  template <ConcurrentAllocator Memory>
-  ConnectionTransport<Memory>::ConnectionTransport(tbc::view<Memory&, tbc::lt::a> memory) noexcept
+  ConnectionTransport::ConnectionTransport(tbc::view<ConcurrentMemory&, tbc::lt::a> memory) noexcept
       : memory_(memory),
-        flow_(nullptr, AllocationDeleter<FlowState, Memory>{memory}),
-        plain_(nullptr, AllocationDeleter<PlainTunnel<Memory>, Memory>{memory}),
-        tls_(nullptr, AllocationDeleter<TlsTunnel<Memory>, Memory>{memory}) {}
+        flow_(nullptr, AllocationDeleter<FlowState, ConcurrentMemory>{memory}),
+        plain_(nullptr, AllocationDeleter<PlainTunnel, ConcurrentMemory>{memory}),
+        tls_(nullptr, AllocationDeleter<TlsTunnel, ConcurrentMemory>{memory}) {}
 
-  template <ConcurrentAllocator Memory>
-  bool ConnectionTransport<Memory>::opened() const noexcept {
+  bool ConnectionTransport::opened() const noexcept {
     return plain_ || tls_;
   }
 
-  template <ConcurrentAllocator Memory>
-  bool ConnectionTransport<Memory>::advance(TunnelReadiness readiness) noexcept {
+  bool ConnectionTransport::advance(TunnelReadiness readiness) noexcept {
     TELAR_TRACE("proxy.relayTunnel");
     return plain_ ? plain_->advance(readiness, flow_.get()) : tls_->advance(readiness, flow_.get());
   }
 
-  template <ConcurrentAllocator Memory>
-  bool ConnectionTransport<Memory>::established() const noexcept {
+  bool ConnectionTransport::established() const noexcept {
     return plain_ || tls_->established();
   }
 
-  template <ConcurrentAllocator Memory>
-  bool ConnectionTransport<Memory>::finished() const noexcept {
+  bool ConnectionTransport::finished() const noexcept {
     return (flow_ && flow_->rejected()) || (plain_ ? plain_->finished() : tls_->finished());
   }
 
-  template <ConcurrentAllocator Memory>
-  bool ConnectionTransport<Memory>::halfClosed() const noexcept {
+  bool ConnectionTransport::halfClosed() const noexcept {
     return plain_ ? plain_->halfClosed() : tls_->halfClosed();
   }
 
-  template <ConcurrentAllocator Memory>
-  bool ConnectionTransport<Memory>::idle() const noexcept {
+  bool ConnectionTransport::idle() const noexcept {
     return plain_ ? plain_->idle() : tls_ && tls_->idle();
   }
 
-  template <ConcurrentAllocator Memory>
-  std::uint32_t ConnectionTransport<Memory>::inflight() const noexcept {
+  std::uint32_t ConnectionTransport::inflight() const noexcept {
     return plain_ ? plain_->inflight() : tls_ ? tls_->inflight()
                                               : 0;
   }
 
-  template <ConcurrentAllocator Memory>
-  bool ConnectionTransport<Memory>::buffered() const noexcept {
+  bool ConnectionTransport::buffered() const noexcept {
     return plain_ ? plain_->buffered() : tls_ && tls_->buffered();
   }
 
-  template <ConcurrentAllocator Memory>
-  SocketInterest ConnectionTransport<Memory>::interest(TlsSide side) const noexcept {
+  SocketInterest ConnectionTransport::interest(TlsSide side) const noexcept {
     if (plain_) {
       return plain_->interest(side);
     }
@@ -568,8 +525,7 @@ namespace telar::runtime {
     return tls_->interest(side);
   }
 
-  template <ConcurrentAllocator Memory>
-  std::optional<traffic::FlowControl::Time> ConnectionTransport<Memory>::deadline() const noexcept {
+  std::optional<traffic::FlowControl::Time> ConnectionTransport::deadline() const noexcept {
     const auto flow = flow_ ? flow_->deadline() : std::nullopt;
     const auto tls = plain_ ? plain_->deadline() : tls_ ? tls_->deadline()
                                                         : std::nullopt;
@@ -577,28 +533,24 @@ namespace telar::runtime {
     return earliest(flow, tls);
   }
 
-  template <ConcurrentAllocator Memory>
-  void ConnectionTransport<Memory>::reason(tbc::view<std::string_view, tbc::lt::static_storage> value) noexcept {
+  void ConnectionTransport::reason(tbc::view<std::string_view, tbc::lt::static_storage> value) noexcept {
     if (flow_) {
       flow_->reason(value);
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  void ConnectionTransport<Memory>::error(tbc::view<std::string_view, tbc::lt::static_storage> value) noexcept {
+  void ConnectionTransport::error(tbc::view<std::string_view, tbc::lt::static_storage> value) noexcept {
     if (flow_) {
       flow_->error(value);
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  ProxyObservations<Memory>::ProxyObservations(Memory& memory, ProxyCaptureLimits limits, traffic::FlowControl* flows)
+  ProxyObservations::ProxyObservations(ConcurrentMemory& memory, ProxyCaptureLimits limits, traffic::FlowControl* flows)
       : captures(memory, limits),
         capture_enabled_(limits.enabled),
         flows_(flows) {}
 
-  template <ConcurrentAllocator Memory>
-  ConnectionObservation<Memory> ProxyObservations<Memory>::connection() noexcept {
+  ConnectionObservation ProxyObservations::connection() noexcept {
     return {counters, capture_enabled_ ? &captures : nullptr, next_connection_++, flows_};
   }
 
@@ -971,12 +923,6 @@ namespace telar::runtime {
     return deadline_;
   }
 
-  template struct ConnectionObservation<ConcurrentMemory>;
-  template class ApplicationRelay<ConcurrentMemory>;
-  template class PlainTunnel<ConcurrentMemory>;
-  template class TlsTunnel<ConcurrentMemory>;
-  template class ConnectionTransport<ConcurrentMemory>;
-  template class ProxyObservations<ConcurrentMemory>;
   template class ProxyPortMemory<Memory>;
   template class ProxyPortMemory<ConcurrentMemory>;
 

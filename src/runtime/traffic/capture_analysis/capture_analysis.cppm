@@ -101,7 +101,6 @@ export {
 export {
   namespace telar::runtime::traffic {
 
-    template <Allocator Memory>
     class IpFragments {
       using Clock = std::chrono::steady_clock;
 
@@ -138,7 +137,7 @@ export {
         Key key;
         Event event;
         Clock::time_point created;
-        std::optional<SensitiveAllocation<Memory>> storage;
+        std::optional<SensitiveAllocation<ConcurrentMemory>> storage;
         std::array<Range, 128> ranges;
         std::size_t count = 0;
         std::size_t received = 0;
@@ -153,7 +152,7 @@ export {
       static constexpr std::size_t maximum_prefix = 256;
       static constexpr auto lifetime = std::chrono::seconds{60};
 
-      explicit IpFragments(Memory& memory) noexcept;
+      explicit IpFragments(ConcurrentMemory& memory) noexcept;
 
       // Generic over the caller's callbacks, and called for every captured packet.
       template <typename Consume, typename Report>
@@ -284,11 +283,9 @@ export {
         report(event, reason);
       }
 
-      Memory& memory_;
+      ConcurrentMemory& memory_;
       std::array<std::optional<Entry>, maximum_datagrams> entries_;
     };
-
-    extern template class IpFragments<ConcurrentMemory>;
 
   }
 }
@@ -333,9 +330,8 @@ export {
 export {
   namespace telar::runtime::traffic {
 
-    template <ConcurrentAllocator Memory>
     class TcpFlows {
-      using Secure = ErasingAllocator<Memory>;
+      using Secure = ErasingAllocator<ConcurrentMemory>;
       using Bytes = Vector<Byte, Secure>;
       using Clock = std::chrono::steady_clock;
 
@@ -386,7 +382,7 @@ export {
       using Map = std::unordered_map<Key, Flow, Hash, std::equal_to<Key>, AllocatorRef<Entry, Secure>>;
 
     public:
-      explicit TcpFlows(Memory& memory);
+      explicit TcpFlows(ConcurrentMemory& memory);
 
       // Generic over the caller's callbacks, and called for every captured packet.
       template <typename Emit>
@@ -643,8 +639,6 @@ export {
       std::uint64_t next_ = 0;
     };
 
-    extern template class TcpFlows<ConcurrentMemory>;
-
   }
 }
 
@@ -652,10 +646,9 @@ export {
 export {
   namespace telar::runtime::traffic {
 
-    template <ConcurrentAllocator Memory>
     class CaptureAnalysis {
     public:
-      explicit CaptureAnalysis(Memory& memory);
+      explicit CaptureAnalysis(ConcurrentMemory& memory);
 
       // Generic over the caller's callbacks, and called for every captured packet.
       template <typename Emit>
@@ -708,12 +701,10 @@ export {
         emit(event);
       }
 
-      Memory& memory_;
-      IpFragments<Memory> fragments_;
-      TcpFlows<Memory> tcp_;
+      ConcurrentMemory& memory_;
+      IpFragments fragments_;
+      TcpFlows tcp_;
     };
-
-    extern template class CaptureAnalysis<ConcurrentMemory>;
 
   }
 }

@@ -169,7 +169,7 @@ static void testScrollbackOrigin() {
   check(terminal.scrollbackTrimmed() > 0 && dropped == terminal.scrollbackTrimmed() && terminal.scrollbackGeneration() == generation);
 
   // Stable row N holds the line printed N-th.
-  ScrollbackRows<ConcurrentMemory> rows{memory};
+  ScrollbackRows rows{memory};
   const auto trimmed = terminal.scrollbackTrimmed();
   const auto stable = trimmed + 3;
   const auto reply = rows.read(terminal, ReadPaneRows{.request_id = 1, .pane_id = 1, .from = stable, .count = 2});

@@ -73,7 +73,7 @@ namespace {
         ProxyCounters counters;
 
         {
-          Http1Capture<ConcurrentMemory, TestCaptureClock> capture{memory, &producer, {.key = {17, 0}, .host = "example.test"}};
+          Http1Capture<TestCaptureClock> capture{memory, &producer, {.key = {17, 0}, .host = "example.test"}};
           Http1Connection connection{memory, counters, std::move(capture)};
           TestByteStream child;
           TestByteStream origin;
@@ -224,7 +224,7 @@ namespace {
         ProxyCounters counters;
 
         {
-          Http2Capture<ConcurrentMemory, TestCaptureClock> capture{&producer, counters, {.key = {31, 0}, .protocol = CaptureProtocol::http2, .host = "example.test"}};
+          Http2Capture<TestCaptureClock> capture{&producer, counters, {.key = {31, 0}, .protocol = CaptureProtocol::http2, .host = "example.test"}};
           Http2Connection connection{memory, counters, std::move(capture)};
           TestByteStream child;
           TestByteStream origin;
@@ -338,17 +338,16 @@ namespace {
     inline static std::int64_t current = 100;
   };
 
-  template <Allocator Memory>
   struct RecordingTap {
     bool listening() const noexcept {
       return decode;
     }
 
-    void submit(CapturedExchange<Memory>& exchange) noexcept {
+    void submit(CapturedExchange& exchange) noexcept {
       exchanges.push_back(std::move(exchange));
     }
 
-    std::vector<CapturedExchange<Memory>> exchanges;
+    std::vector<CapturedExchange> exchanges;
     bool decode = false;
   };
 
@@ -368,8 +367,7 @@ namespace {
     return full;
   }
 
-  template <ConcurrentAllocator Memory>
-  void publishHalf(CaptureProducer<Memory>& producer, CaptureStart start, std::span<const std::uint8_t> body, std::string_view encoding) {
+  void publishHalf(CaptureProducer& producer, CaptureStart start, std::span<const std::uint8_t> body, std::string_view encoding) {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
 
     for (;;) {
@@ -401,12 +399,12 @@ namespace {
 
       {
         CaptureProducer producer{memory, limits};
-        RecordingTap<ConcurrentMemory> tap;
+        RecordingTap tap;
 
         tap.decode = decode;
         PipelineClock::current = 100;
         {
-          CapturePipeline<ConcurrentMemory, decltype(tap), PipelineClock> pipeline{memory, producer, limits, tap};
+          CapturePipeline<decltype(tap), PipelineClock> pipeline{memory, producer, limits, tap};
 
           publishHalf(producer, {.key = {1, 0}}, compressed, "gzip");
           check(!collectReady(pipeline) && tap.exchanges.empty());
@@ -430,15 +428,15 @@ namespace {
           check(tap.exchanges.front().request->key.connection == 2);
           tap.exchanges.clear();
 
-          for (std::size_t index = 0; index <= CaptureJoiner<ConcurrentMemory>::capacity; ++index) {
+          for (std::size_t index = 0; index <= CaptureJoiner::capacity; ++index) {
             publishHalf(producer, {.key = {index + 3, 0}}, {}, "");
-            check(collectReady(pipeline) == (index == CaptureJoiner<ConcurrentMemory>::capacity));
+            check(collectReady(pipeline) == (index == CaptureJoiner::capacity));
           }
 
           check(tap.exchanges.size() == 1 && tap.exchanges.front().request->key.connection == 259);
           tap.exchanges.clear();
           PipelineClock::current = 200;
-          check(!pipeline.collect() && tap.exchanges.size() == CaptureJoiner<ConcurrentMemory>::capacity);
+          check(!pipeline.collect() && tap.exchanges.size() == CaptureJoiner::capacity);
           tap.exchanges.clear();
         }
 

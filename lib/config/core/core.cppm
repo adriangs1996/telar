@@ -136,7 +136,6 @@ export {
 
       static IntegrationProvider describe(AgentProvider provider);
 
-      template <Allocator Memory>
       String<Memory> root(Memory& memory, const EnvironmentSource& environment, bool legacy = false) const;
 
     private:
@@ -151,8 +150,6 @@ export {
 
 // The allocator IntegrationProvider::root is built for, in core.cpp.
 namespace telar::runtime::config {
-
-  extern template String<Memory> IntegrationProvider::root<Memory>(Memory& memory, const EnvironmentSource& environment, bool legacy) const;
 
 }
 

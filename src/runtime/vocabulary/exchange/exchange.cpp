@@ -45,20 +45,17 @@ namespace telar::runtime {
     return used_.load(std::memory_order_relaxed);
   }
 
-  template <Allocator Memory>
-  CaptureBuffer<Memory>::CaptureBuffer(Memory& memory, CaptureQuota& quota, std::size_t limit) noexcept
+  CaptureBuffer::CaptureBuffer(ConcurrentMemory& memory, CaptureQuota& quota, std::size_t limit) noexcept
       : memory_(memory),
         quota_(quota),
         limit_(limit) {}
 
-  template <Allocator Memory>
-  CaptureBuffer<Memory>::~CaptureBuffer() {
+  CaptureBuffer::~CaptureBuffer() {
     memory_.deallocate(storage_, capacity_, alignof(std::uint8_t));
     quota_.release(capacity_);
   }
 
-  template <Allocator Memory>
-  std::size_t CaptureBuffer<Memory>::append(std::span<const std::uint8_t> input) noexcept {
+  std::size_t CaptureBuffer::append(std::span<const std::uint8_t> input) noexcept {
     const auto allowed = std::min(input.size(), limit_ - size_);
     const auto accepted = reserveAdditional(allowed);
     if (accepted != 0) {
@@ -70,35 +67,29 @@ namespace telar::runtime {
     return accepted;
   }
 
-  template <Allocator Memory>
-  void CaptureBuffer<Memory>::reset() noexcept {
+  void CaptureBuffer::reset() noexcept {
     eraseSensitive(storage_, size_);
     size_ = 0;
     truncated = false;
   }
 
-  template <Allocator Memory>
-  std::span<const std::uint8_t> CaptureBuffer<Memory>::bytes() const noexcept {
+  std::span<const std::uint8_t> CaptureBuffer::bytes() const noexcept {
     return {storage_, size_};
   }
 
-  template <Allocator Memory>
-  std::size_t CaptureBuffer<Memory>::size() const noexcept {
+  std::size_t CaptureBuffer::size() const noexcept {
     return size_;
   }
 
-  template <Allocator Memory>
-  std::size_t CaptureBuffer<Memory>::capacity() const noexcept {
+  std::size_t CaptureBuffer::capacity() const noexcept {
     return capacity_;
   }
 
-  template <Allocator Memory>
-  std::size_t CaptureBuffer<Memory>::remaining() const noexcept {
+  std::size_t CaptureBuffer::remaining() const noexcept {
     return limit_ - size_;
   }
 
-  template <Allocator Memory>
-  std::size_t CaptureBuffer<Memory>::grownCapacity(std::size_t needed) const noexcept {
+  std::size_t CaptureBuffer::grownCapacity(std::size_t needed) const noexcept {
     auto capacity = std::min(limit_, std::max(initial_capacity, capacity_));
 
     while (capacity < needed) {
@@ -108,8 +99,7 @@ namespace telar::runtime {
     return capacity;
   }
 
-  template <Allocator Memory>
-  std::size_t CaptureBuffer<Memory>::reserveAdditional(std::size_t bytes) noexcept {
+  std::size_t CaptureBuffer::reserveAdditional(std::size_t bytes) noexcept {
     if (bytes <= capacity_ - size_) {
       return bytes;
     }
@@ -146,8 +136,7 @@ namespace telar::runtime {
     return oversized_;
   }
 
-  template <Allocator Memory>
-  CaptureHalf<Memory>::CaptureHalf(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<CaptureQuota&, tbc::lt::a> quota, const ProxyCaptureLimits& limits, CaptureStart start)
+  CaptureHalf::CaptureHalf(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<CaptureQuota&, tbc::lt::a> quota, const ProxyCaptureLimits& limits, CaptureStart start)
       : key(start.key),
         side(start.side),
         protocol(start.protocol),
@@ -158,8 +147,7 @@ namespace telar::runtime {
     host_.append(start.host.view());
   }
 
-  template <Allocator Memory>
-  bool CaptureHalf<Memory>::append(CapturePart part, std::span<const std::uint8_t> input) noexcept {
+  bool CaptureHalf::append(CapturePart part, std::span<const std::uint8_t> input) noexcept {
     auto* selected = select(part);
     if (selected == nullptr) {
       return false;
@@ -185,13 +173,11 @@ namespace telar::runtime {
     return accepted == input.size() && !selected->truncated;
   }
 
-  template <Allocator Memory>
-  bool CaptureHalf<Memory>::append(CapturePart part, std::string_view input) noexcept {
+  bool CaptureHalf::append(CapturePart part, std::string_view input) noexcept {
     return append(part, {reinterpret_cast<const std::uint8_t*>(input.data()), input.size()});
   }
 
-  template <Allocator Memory>
-  void CaptureHalf<Memory>::appendHead(std::string_view bytes) noexcept {
+  void CaptureHalf::appendHead(std::string_view bytes) noexcept {
     append(headPart(), bytes);
     if (side == CaptureSide::request) {
       const auto line_end = bytes.find("\r\n");
@@ -222,77 +208,63 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  void CaptureHalf<Memory>::setMethod(std::string_view value) noexcept {
+  void CaptureHalf::setMethod(std::string_view value) noexcept {
     setRouteField(head.truncated, method_, value);
   }
 
-  template <Allocator Memory>
-  void CaptureHalf<Memory>::setTarget(std::string_view value) noexcept {
+  void CaptureHalf::setTarget(std::string_view value) noexcept {
     setRouteField(head.truncated, target_, value);
   }
 
-  template <Allocator Memory>
-  void CaptureHalf<Memory>::setEncoding(std::string_view value) noexcept {
+  void CaptureHalf::setEncoding(std::string_view value) noexcept {
     encoding_.clear();
     encoding_.append(value.substr(0, maximum_encoding_bytes));
     body.truncated = body.truncated || value.size() > maximum_encoding_bytes;
   }
 
-  template <Allocator Memory>
-  void CaptureHalf<Memory>::finish(CaptureOutcome result, std::int64_t timestamp) noexcept {
+  void CaptureHalf::finish(CaptureOutcome result, std::int64_t timestamp) noexcept {
     outcome = result;
     finished_at_ms = timestamp;
   }
 
-  template <Allocator Memory>
-  CapturePart CaptureHalf<Memory>::headPart() const noexcept {
+  CapturePart CaptureHalf::headPart() const noexcept {
     return side == CaptureSide::request ? CapturePart::request_head : CapturePart::response_head;
   }
 
-  template <Allocator Memory>
-  CapturePart CaptureHalf<Memory>::bodyPart() const noexcept {
+  CapturePart CaptureHalf::bodyPart() const noexcept {
     return side == CaptureSide::request ? CapturePart::request_body : CapturePart::response_body;
   }
 
-  template <Allocator Memory>
-  std::size_t CaptureHalf<Memory>::capturedBytes() const noexcept {
+  std::size_t CaptureHalf::capturedBytes() const noexcept {
     return head.size() + body.size();
   }
 
-  template <Allocator Memory>
-  std::size_t CaptureHalf<Memory>::remaining() const noexcept {
+  std::size_t CaptureHalf::remaining() const noexcept {
     return maximum_bytes_ - capturedBytes();
   }
 
-  template <Allocator Memory>
-  std::size_t CaptureHalf<Memory>::bodyLimit() const noexcept {
+  std::size_t CaptureHalf::bodyLimit() const noexcept {
     return maximum_bytes_ - head.size();
   }
 
-  template <Allocator Memory>
-  std::string_view CaptureHalf<Memory>::host() const noexcept {
+  std::string_view CaptureHalf::host() const noexcept {
     return host_.view();
   }
 
-  template <Allocator Memory>
-  std::string_view CaptureHalf<Memory>::method() const noexcept {
+  std::string_view CaptureHalf::method() const noexcept {
     return method_.view();
   }
 
-  template <Allocator Memory>
-  std::string_view CaptureHalf<Memory>::target() const noexcept {
+  std::string_view CaptureHalf::target() const noexcept {
     return target_.view();
   }
 
-  template <Allocator Memory>
-  std::string_view CaptureHalf<Memory>::encoding() const noexcept {
+  std::string_view CaptureHalf::encoding() const noexcept {
     return encoding_.view();
   }
 
-  template <Allocator Memory>
   template <std::size_t Capacity>
-  void CaptureHalf<Memory>::setRouteField(bool& truncated, SensitiveText<Capacity>& field, std::string_view value) noexcept {
+  void CaptureHalf::setRouteField(bool& truncated, SensitiveText<Capacity>& field, std::string_view value) noexcept {
     if (value.size() > Capacity) {
       truncated = true;
       return;
@@ -302,8 +274,7 @@ namespace telar::runtime {
     field.append(value);
   }
 
-  template <Allocator Memory>
-  CaptureBuffer<Memory>* CaptureHalf<Memory>::select(CapturePart part) noexcept {
+  CaptureBuffer* CaptureHalf::select(CapturePart part) noexcept {
     switch (part) {
     case CapturePart::request_head:
       return side == CaptureSide::request ? &head : nullptr;
@@ -318,13 +289,11 @@ namespace telar::runtime {
     return nullptr;
   }
 
-  template <Allocator Memory>
-  CapturedExchange<Memory>::CapturedExchange(tbc::view<Memory&, tbc::lt::a> memory) noexcept
-      : request(nullptr, AllocationDeleter<CaptureHalf<Memory>, Memory>{memory}),
-        response(nullptr, AllocationDeleter<CaptureHalf<Memory>, Memory>{memory}) {}
+  CapturedExchange::CapturedExchange(tbc::view<ConcurrentMemory&, tbc::lt::a> memory) noexcept
+      : request(nullptr, AllocationDeleter<CaptureHalf, ConcurrentMemory>{memory}),
+        response(nullptr, AllocationDeleter<CaptureHalf, ConcurrentMemory>{memory}) {}
 
-  template <Allocator Memory>
-  void CapturedExchange<Memory>::include(tbc::view<Half, tbc::lt::a> half) noexcept {
+  void CapturedExchange::include(tbc::view<Half, tbc::lt::a> half) noexcept {
     (half->side == CaptureSide::request ? request : response) = std::move(half);
   }
 
@@ -390,11 +359,5 @@ namespace telar::runtime {
 
     return offset;
   }
-
-  template class CaptureBuffer<telar::ConcurrentMemory>;
-
-  template class CaptureHalf<telar::ConcurrentMemory>;
-
-  template struct CapturedExchange<telar::ConcurrentMemory>;
 
 }

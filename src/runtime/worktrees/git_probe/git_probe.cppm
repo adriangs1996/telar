@@ -19,12 +19,11 @@ export {
       std::uint32_t ahead = 0;
     };
 
-    template <Allocator Memory>
     class GitBaseDistance {
     public:
       using Clock = std::chrono::steady_clock;
 
-      explicit GitBaseDistance(Memory& memory, const std::atomic<bool>& cancelled) noexcept;
+      explicit GitBaseDistance(ConcurrentMemory& memory, const std::atomic<bool>& cancelled) noexcept;
 
       GitDistance read(std::string_view root, std::string_view base, Clock::time_point deadline);
 
@@ -35,11 +34,9 @@ export {
       static void parseDiff(std::string_view output, GitDistance& result) noexcept;
       [[noreturn]] static void reject();
 
-      Memory& memory_;
+      ConcurrentMemory& memory_;
       const std::atomic<bool>& cancelled_;
     };
-
-    extern template class GitBaseDistance<ConcurrentMemory>;
 
   }
 }
@@ -111,13 +108,12 @@ export {
       GitProbeTimeout timeout = GitProbeTimeout::none;
     };
 
-    template <ConcurrentAllocator Memory>
     class WorktreeGitProbe {
     public:
       using Request = WorktreeProbeRequest;
       using Result = WorktreeProbeResult;
 
-      explicit WorktreeGitProbe(Memory& memory);
+      explicit WorktreeGitProbe(ConcurrentMemory& memory);
 
       void stop() noexcept;
       Result observe(const Request& request) noexcept;
@@ -126,14 +122,12 @@ export {
       static void assignBranch(FixedText<200>& destination, std::string_view value);
       static void discoverBase(std::string_view root, FixedText<200>& base);
 
-      Memory& memory_;
+      ConcurrentMemory& memory_;
       std::atomic<bool> cancelled_{false};
-      GitStatusReader<Memory> status_;
+      GitStatusReader status_;
       // Watches cancelled_.
-      tbc::view<GitBaseDistance<Memory>, tbc::lt::self> distance_;
+      tbc::view<GitBaseDistance, tbc::lt::self> distance_;
     };
-
-    extern template class WorktreeGitProbe<ConcurrentMemory>;
 
   }
 }

@@ -43,11 +43,11 @@ import telar.wire.vocabulary;
 using namespace telar;
 using namespace telar::runtime;
 
-static void feedObserver(PaneObserver<ConcurrentMemory>& observer, std::string_view bytes) {
+static void feedObserver(PaneObserver& observer, std::string_view bytes) {
   observer.bytes(ObservationKind::output, {reinterpret_cast<const Byte*>(bytes.data()), bytes.size()}, false);
 }
 
-static ScreenObservationResult observe(PaneObserver<ConcurrentMemory>& observer, AgentProvider provider) {
+static ScreenObservationResult observe(PaneObserver& observer, AgentProvider provider) {
   check(observer.seal());
   const auto result = observer.observe(builtin_manifests, provider);
 
@@ -203,9 +203,9 @@ struct UnusedAgents {
     return nullptr;
   }
 
-  void observeScreen(Pane<ConcurrentMemory>&, AgentSignal, ObservationTime) noexcept {}
+  void observeScreen(Pane&, AgentSignal, ObservationTime) noexcept {}
 
-  void observeProcess(Pane<ConcurrentMemory>&, const ProcessProbeResult&) noexcept {}
+  void observeProcess(Pane&, const ProcessProbeResult&) noexcept {}
 };
 
 struct NoObservationFailures {
@@ -271,10 +271,10 @@ static void testDirectoryChangesFollowQueuedCommands(ConcurrentMemory& memory) {
   for (const bool probe_process : {false, true}) {
     ChangedDirectoryProbe probe;
     DirectoryHistory history;
-    auto observer = std::allocate_shared<PaneObserver<ConcurrentMemory>>(AllocatorRef<PaneObserver<ConcurrentMemory>, ConcurrentMemory>{memory}, memory, TerminalSize{80, 24, 8, 16}, "/initial");
+    auto observer = std::allocate_shared<PaneObserver>(AllocatorRef<PaneObserver, ConcurrentMemory>{memory}, memory, TerminalSize{80, 24, 8, 16}, "/initial");
 
     observer->configureHistory({.pane = 1, .workspace_path = "/initial", .shell = "/bin/sh"});
-    ObservationProcessor<ConcurrentMemory, ChangedDirectoryProbe, DirectoryHistory> processor{builtin_manifests, probe, history};
+    ObservationProcessor<ChangedDirectoryProbe, DirectoryHistory> processor{builtin_manifests, probe, history};
     decltype(processor)::Request request;
 
     request.count = 1;
@@ -317,10 +317,10 @@ static void testDirectoryChangesFollowQueuedCommands(ConcurrentMemory& memory) {
 
 static void testPendingInputPreservesForegroundObservation(ConcurrentMemory& memory) {
   RuntimeModel model{memory};
-  ClientStore<ConcurrentMemory> clients{memory};
+  ClientStore clients{memory};
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
   Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
-  auto owned = makeOwned<Pane<ConcurrentMemory>>(memory, memory, 1, TabLocation{}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits});
+  auto owned = makeOwned<Pane>(memory, memory, 1, TabLocation{}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits});
   auto& pane = *owned;
 
   model.panes.insert(1, std::move(owned));
@@ -328,7 +328,7 @@ static void testPendingInputPreservesForegroundObservation(ConcurrentMemory& mem
   NoObservationFailures limits;
   DirectoryOnlyProbe probe;
   CaptureHistory history;
-  PaneObservationService<ConcurrentMemory, decltype(agents), decltype(limits), decltype(probe), decltype(history)> service{limits, model.manifests, probe, history};
+  PaneObservationService<decltype(agents), decltype(limits), decltype(probe), decltype(history)> service{limits, model.manifests, probe, history};
   const std::array<Byte, 1> editing{'x'};
   const std::array<Byte, 1> submitted{'\r'};
 
@@ -349,10 +349,10 @@ static void testPendingInputPreservesForegroundObservation(ConcurrentMemory& mem
 
 static void testEmptyObservationRequiresExplicitRecheck(ConcurrentMemory& memory) {
   RuntimeModel model{memory};
-  ClientStore<ConcurrentMemory> clients{memory};
+  ClientStore clients{memory};
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
   Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
-  auto owned = makeOwned<Pane<ConcurrentMemory>>(memory, memory, 1, TabLocation{}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits});
+  auto owned = makeOwned<Pane>(memory, memory, 1, TabLocation{}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits});
   auto& pane = *owned;
 
   model.panes.insert(1, std::move(owned));
@@ -360,7 +360,7 @@ static void testEmptyObservationRequiresExplicitRecheck(ConcurrentMemory& memory
   NoObservationFailures limits;
   DirectoryOnlyProbe probe;
   CaptureHistory history;
-  PaneObservationService<ConcurrentMemory, decltype(agents), decltype(limits), decltype(probe), decltype(history)> service{limits, model.manifests, probe, history};
+  PaneObservationService<decltype(agents), decltype(limits), decltype(probe), decltype(history)> service{limits, model.manifests, probe, history};
   const auto now = std::chrono::steady_clock::now();
 
   service.refresh(model, agents);
@@ -383,16 +383,16 @@ static void testEmptyObservationRequiresExplicitRecheck(ConcurrentMemory& memory
 
 static void testRetiredCapture(ConcurrentMemory& memory) {
   RuntimeModel model{memory};
-  ClientStore<ConcurrentMemory> clients{memory};
+  ClientStore clients{memory};
   UnusedAgents agents;
   NoObservationFailures limits;
   ProcessInspector inspector;
   ProcessProbe probe{inspector};
   CaptureHistory history;
-  PaneObservationService<ConcurrentMemory, decltype(agents), decltype(limits), decltype(probe), decltype(history)> service{limits, model.manifests, probe, history};
+  PaneObservationService<decltype(agents), decltype(limits), decltype(probe), decltype(history)> service{limits, model.manifests, probe, history};
 
   for (unsigned index = 1; index <= 2; ++index) {
-    auto observer = std::allocate_shared<PaneObserver<ConcurrentMemory>>(AllocatorRef<PaneObserver<ConcurrentMemory>, ConcurrentMemory>{memory}, memory, TerminalSize{20, 4, 8, 16});
+    auto observer = std::allocate_shared<PaneObserver>(AllocatorRef<PaneObserver, ConcurrentMemory>{memory}, memory, TerminalSize{20, 4, 8, 16});
 
     observer->configureHistory({.id = {static_cast<Byte>(index)}, .pane = index, .workspace_path = "/tmp", .shell = "/bin/sh"});
     feedObserver(*observer, "$ ");
@@ -422,8 +422,8 @@ static void testSubmittedCommand(ConcurrentMemory& memory) {
   ProcessInspector inspector;
   ProcessProbe probe{inspector};
   CaptureHistory history;
-  PaneObservationService<ConcurrentMemory, decltype(agents), decltype(limits), decltype(probe), decltype(history)> service{limits, model.manifests, probe, history};
-  auto observer = std::allocate_shared<PaneObserver<ConcurrentMemory>>(AllocatorRef<PaneObserver<ConcurrentMemory>, ConcurrentMemory>{memory}, memory, TerminalSize{20, 4, 8, 16});
+  PaneObservationService<decltype(agents), decltype(limits), decltype(probe), decltype(history)> service{limits, model.manifests, probe, history};
+  auto observer = std::allocate_shared<PaneObserver>(AllocatorRef<PaneObserver, ConcurrentMemory>{memory}, memory, TerminalSize{20, 4, 8, 16});
 
   observer->configureHistory({.id = {1}, .pane = 1, .workspace_path = "/tmp", .shell = "/bin/zsh"});
   feedObserver(*observer, "$ ");

@@ -68,7 +68,6 @@ namespace telar::git {
     invalid,
   };
 
-  template <Allocator Memory>
   class Index {
   public:
     explicit Index(Memory& memory) noexcept;
@@ -97,19 +96,16 @@ namespace telar::git {
     bool loaded_ = false;
   };
 
-  extern template class Index<Memory>;
-
   inline constexpr std::uint32_t no_cache_tree = std::numeric_limits<std::uint32_t>::max();
 
   // Compares HEAD's tree with the index, recursing only into trees whose
   // cache-tree entry is missing, invalid or different.
-  template <Allocator Memory>
   class StagedComparison {
   public:
     explicit StagedComparison(Memory& memory) noexcept;
 
     // `tree` is HEAD's root tree, or nullopt on an unborn branch.
-    bool compare(ObjectDatabase<Memory>& objects, const Index<Memory>& index, std::optional<ObjectId> tree, const Limits& limits, ChangeCounts& counts);
+    bool compare(ObjectDatabase& objects, const Index& index, std::optional<ObjectId> tree, const Limits& limits, ChangeCounts& counts);
 
     std::uint64_t trees_read = 0;
 
@@ -137,14 +133,12 @@ namespace telar::git {
 
     Vector<String<Memory>, Memory> trees_;
     Memory& memory_;
-    ObjectDatabase<Memory>* objects_ = nullptr;
-    const Index<Memory>* index_ = nullptr;
+    ObjectDatabase* objects_ = nullptr;
+    const Index* index_ = nullptr;
     const Limits* limits_ = nullptr;
     ChangeCounts* counts_ = nullptr;
     std::size_t trees_read_ = 0;
   };
-
-  extern template class StagedComparison<Memory>;
 
   // The verdict of a racily clean entry whose content was hashed, kept while
   // neither the index nor the file changes.
@@ -155,7 +149,6 @@ namespace telar::git {
   };
 
   // Compares each index entry with the working tree.
-  template <Allocator Memory>
   class UnstagedComparison {
   public:
     explicit UnstagedComparison(Memory& memory) noexcept;
@@ -166,14 +159,14 @@ namespace telar::git {
       bool symlinks = true;
     };
 
-    bool compare(int worktree, const Index<Memory>& index, Options options, const Limits& limits, ChangeCounts& counts);
+    bool compare(int worktree, const Index& index, Options options, const Limits& limits, ChangeCounts& counts);
 
     std::uint64_t entries_checked = 0;
     std::uint64_t files_hashed = 0;
     std::uint64_t bytes_hashed = 0;
 
   private:
-    bool scan(int worktree, const Index<Memory>& index, Options options, const Limits& limits, ChangeCounts& counts);
+    bool scan(int worktree, const Index& index, Options options, const Limits& limits, ChangeCounts& counts);
 
     enum class Verdict : std::uint8_t {
       clean,
@@ -216,7 +209,5 @@ namespace telar::git {
     String<Memory> buffer_;
     Directories directories_;
   };
-
-  extern template class UnstagedComparison<Memory>;
 
 }

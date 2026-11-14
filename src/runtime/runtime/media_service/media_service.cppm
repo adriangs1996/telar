@@ -1,6 +1,5 @@
 module;
 #include "tbc/annotations.hpp"
-#include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
 #include "telar_platform/trace_macro.hpp"
 
@@ -48,10 +47,10 @@ export {
     // The workers behind history, paths, editors, suggestions and worktrees, which the runtime's services
     // and their own workers share: each queue it holds is synchronized, and what it hands a consumer lives
     // for the callback.
-    template <ConcurrentAllocator Memory, typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees = WorktreeGitProbe<Memory>>
+    template <typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees = WorktreeGitProbe>
     class TBC_SHARED BackgroundPool {
     public:
-      explicit BackgroundPool(Memory& memory, History& history, Paths& paths, Editor& editor, Suggestions& suggestions);
+      explicit BackgroundPool(ConcurrentMemory& memory, History& history, Paths& paths, Editor& editor, Suggestions& suggestions);
 
       std::array<int, 5> descriptors() const noexcept;
 
@@ -123,15 +122,15 @@ export {
       std::uint64_t history_queries_ = 0;
       std::uint64_t history_query_failures_ = 0;
 #endif
-      RequestWorker<Memory, History> history_;
-      RequestWorker<Memory, Editor> editor_;
-      RequestWorker<Memory, Suggestions> suggestions_;
+      RequestWorker<ConcurrentMemory, History> history_;
+      RequestWorker<ConcurrentMemory, Editor> editor_;
+      RequestWorker<ConcurrentMemory, Suggestions> suggestions_;
       ObservationWorker<Worktrees> worktrees_;
       std::atomic<std::uint64_t> history_submission_failures_{0};
     };
 
-    template <ConcurrentAllocator Memory, typename History, typename Paths, typename Editor, typename Suggestions>
-    BackgroundPool(Memory& memory, History& history, Paths& paths, Editor& editor, Suggestions& suggestions) -> BackgroundPool<Memory, History, Paths, Editor, Suggestions>;
+    template <typename History, typename Paths, typename Editor, typename Suggestions>
+    BackgroundPool(ConcurrentMemory& memory, History& history, Paths& paths, Editor& editor, Suggestions& suggestions) -> BackgroundPool<History, Paths, Editor, Suggestions>;
 
   }
 }
@@ -143,14 +142,13 @@ export {
 
   namespace telar::runtime {
 
-    template <ConcurrentAllocator Memory>
     class BackgroundService {
     public:
-      using InternalRequest = HistoryEvent<Memory>;
+      using InternalRequest = HistoryEvent;
 
-      explicit BackgroundService(Memory& memory, const char* history_path, const HistoryFilters& filters = default_history_filters);
+      explicit BackgroundService(ConcurrentMemory& memory, const char* history_path, const HistoryFilters& filters = default_history_filters);
 
-      void process(std::span<const Byte> payload, EncodedReply<Memory>& reply, const RequestContext& context = {});
+      void process(std::span<const Byte> payload, EncodedReply<ConcurrentMemory>& reply, const RequestContext& context = {});
 
       void processInternal(const InternalRequest& request);
 
@@ -164,21 +162,16 @@ export {
 
     private:
       template <typename Message>
-      void execute(const Message& request, EncodedReply<Memory>& reply, const RequestContext& context);
+      void execute(const Message& request, EncodedReply<ConcurrentMemory>& reply, const RequestContext& context);
 
       static constexpr std::size_t decode_capacity = 128 * 1024;
-      std::variant<HistoryFilters, HistoryStore<Memory>> history_;
+      std::variant<HistoryFilters, HistoryStore> history_;
 #if TELAR_DIAGNOSTICS
-      diagnostics::FileStorage<Memory> storage_;
+      diagnostics::FileStorage<ConcurrentMemory> storage_;
 #endif
-      Vector<Byte, Memory> decode_;
+      Vector<Byte, ConcurrentMemory> decode_;
       [[no_unique_address]] HistoryCounters counters_;
     };
-
-    template <ConcurrentAllocator Memory>
-    BackgroundService(Memory& memory, const char* history_path, const HistoryFilters& filters = default_history_filters) -> BackgroundService<Memory>;
-
-    extern template class BackgroundService<ConcurrentMemory>;
 
   }
 }
@@ -188,7 +181,6 @@ export {
   namespace telar::runtime {
 
     // Which agents' sessions get a generated title. It holds no agents; each call is given the registry.
-    template <Allocator Memory>
     class DescriptionQueue {
     public:
       void enable(bool enabled) noexcept;
@@ -196,21 +188,19 @@ export {
       bool enabled() const noexcept;
 
       // How many descriptions are pending, which project reads before it changes an agent.
-      static std::size_t pending(const AgentRegistry<Memory>& agents) noexcept;
+      static std::size_t pending(const AgentRegistry<ConcurrentMemory>& agents) noexcept;
 
       void project(std::size_t pending, Agent& agent) noexcept;
 
-      std::optional<DescriptionRequest> nextDescription(AgentRegistry<Memory>& agents);
+      std::optional<DescriptionRequest> nextDescription(AgentRegistry<ConcurrentMemory>& agents);
 
-      std::optional<HistorySessionTitle> completeDescription(AgentRegistry<Memory>& agents, const DescriptionResult& result);
+      std::optional<HistorySessionTitle> completeDescription(AgentRegistry<ConcurrentMemory>& agents, const DescriptionResult& result);
 
     private:
       static constexpr std::size_t description_queue_capacity = 8;
       std::uint64_t description_revision_ = 0;
       bool descriptions_enabled_ = false;
     };
-
-    extern template class DescriptionQueue<ConcurrentMemory>;
 
   }
 }
@@ -286,35 +276,35 @@ export {
   namespace telar::runtime {
 
     // Decodes pane media on a worker. The model, the clients and the pane service are lent to each call.
-    template <ConcurrentAllocator Memory, EventLoop Poller, typename Limits, HistoryEventSink History = DiscardedHistory>
+    template <EventLoop Poller, typename Limits, HistoryEventSink History = DiscardedHistory>
     class MediaService {
-      using Processor = MediaProcessor<Memory>;
-      using Panes = PaneService<Memory, Poller, History>;
+      using Processor = MediaProcessor;
+      using Panes = PaneService<Poller, History>;
 
     public:
       explicit MediaService(Poller& poller, Limits& limits);
 
-      void start(RuntimeModel<Memory>& model, const ClientStore<Memory>& clients, Panes& service);
+      void start(RuntimeModel& model, const ClientStore& clients, Panes& service);
 
-      void collect(RuntimeModel<Memory>& model, ClientStore<Memory>& clients, Panes& service);
+      void collect(RuntimeModel& model, ClientStore& clients, Panes& service);
 
-      void updateReadInterest(Pane<Memory>& pane);
+      void updateReadInterest(Pane& pane);
 
-      void finish(RuntimeModel<Memory>& model) noexcept;
+      void finish(RuntimeModel& model) noexcept;
 
       int descriptor() const noexcept;
 
     private:
-      static bool wanted(const ClientStore<Memory>& clients, std::uint64_t pane, ImageKey key, bool shared) noexcept;
+      static bool wanted(const ClientStore& clients, std::uint64_t pane, ImageKey key, bool shared) noexcept;
 
       // The request shares the model's retired media, and so what that media keeps: region `a`.
-      static void enqueueRetired(tbc::view<RuntimeModel<Memory>&, tbc::lt::a> model, tbc::view<typename Processor::Request&, tbc::lt::a> request) noexcept;
+      static void enqueueRetired(tbc::view<RuntimeModel&, tbc::lt::a> model, tbc::view<typename Processor::Request&, tbc::lt::a> request) noexcept;
 
-      void apply(RuntimeModel<Memory>& model, ClientStore<Memory>& clients, Panes& service, const typename Processor::Result& result);
+      void apply(RuntimeModel& model, ClientStore& clients, Panes& service, const typename Processor::Result& result);
 
-      static void stageTransfers(ClientStore<Memory>& clients, [[maybe_unused]] diagnostics::RuntimeCounters& metrics, std::uint64_t pane, const GraphicsStorage<MediaAllocator<Memory>>& storage);
+      static void stageTransfers(ClientStore& clients, [[maybe_unused]] diagnostics::RuntimeCounters& metrics, std::uint64_t pane, const GraphicsStorage<MediaAllocator<ConcurrentMemory>>& storage);
 
-      void reportLimits(const GraphicsLimits& graphics, MediaTerminal<MediaAllocator<Memory>>& terminal);
+      void reportLimits(const GraphicsLimits& graphics, MediaTerminal& terminal);
 
       Poller& poller_;
       Limits& limits_;
@@ -331,7 +321,7 @@ export {
   namespace telar::runtime {
 
     // Kept whole: tests instantiate it with their own fake Index and Memory (path_service_test's GatedPathIndex).
-    template <ConcurrentAllocator Memory, typename Index = PathIndex<Memory>>
+    template <ConcurrentAllocator Memory, typename Index = PathIndex>
       requires PathSearchIndex<Index, Memory>
     class TBC_HOT_PATH PathService {
     public:
@@ -524,10 +514,10 @@ export {
     PathService(Memory& memory) -> PathService<Memory>;
 
     // The runtime's pool and media service, which name the services above.
-    extern template class BackgroundPool<ConcurrentMemory, BackgroundService<ConcurrentMemory>, PathService<ConcurrentMemory>, EditorService<ConcurrentMemory>, SuggestionService<ConcurrentMemory>>;
+    extern template class BackgroundPool<BackgroundService, PathService<ConcurrentMemory>, EditorService, SuggestionService>;
 
-    extern template class MediaService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>, LimitService<ConcurrentMemory>, BackgroundPool<ConcurrentMemory, BackgroundService<ConcurrentMemory>, PathService<ConcurrentMemory>, EditorService<ConcurrentMemory>, SuggestionService<ConcurrentMemory>>>;
-    extern template class MediaService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>, LimitService<ConcurrentMemory>>;
+    extern template class MediaService<NativeEventLoop<ConcurrentMemory>, LimitService, BackgroundPool<BackgroundService, PathService<ConcurrentMemory>, EditorService, SuggestionService>>;
+    extern template class MediaService<NativeEventLoop<ConcurrentMemory>, LimitService>;
 
   }
 }
@@ -537,7 +527,7 @@ export {
   namespace telar::runtime {
 
     // Kept whole: tests instantiate it with their own fake Probe (workspace_git_test's ControlledGitProbe).
-    template <Allocator Memory, WorkspaceGitObserver Probe>
+    template <WorkspaceGitObserver Probe>
     class TBC_HOT_PATH WorkspaceGitService {
     public:
       using Clock = std::chrono::steady_clock;
@@ -545,11 +535,11 @@ export {
 
       // The probe is built in place on its worker from the arguments.
       template <typename... Arguments>
-      inline explicit WorkspaceGitService(LimitService<Memory>& limits, Arguments&&... probe)
+      inline explicit WorkspaceGitService(LimitService& limits, Arguments&&... probe)
           : limits_(limits),
             worker_(std::in_place, std::forward<Arguments>(probe)...) {}
 
-      inline std::chrono::nanoseconds tick(RuntimeModel<Memory>& model, Clock::time_point now) {
+      inline std::chrono::nanoseconds tick(RuntimeModel& model, Clock::time_point now) {
         collect(model, now);
         if (pending_) {
           return probe_interval;
@@ -559,7 +549,7 @@ export {
           return next_check_ - now;
         }
 
-        Workspace<Memory>* oldest = nullptr;
+        Workspace* oldest = nullptr;
 
         next_check_ = now + probe_interval;
         checked_revision_ = model.workspace_revision;
@@ -590,7 +580,7 @@ export {
         return next_check_ - now;
       }
 
-      inline void collect(RuntimeModel<Memory>& model, Clock::time_point now) {
+      inline void collect(RuntimeModel& model, Clock::time_point now) {
         worker_.collect([&](const WorkspaceGitResult& result) {
           if (pending_ != result.identity) {
             return;
@@ -624,7 +614,7 @@ export {
       }
 
     private:
-      LimitService<Memory>& limits_;
+      LimitService& limits_;
       ObservationWorker<Probe> worker_;
       std::optional<std::uint64_t> pending_;
       Clock::time_point next_check_{};

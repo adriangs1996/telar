@@ -96,7 +96,7 @@ static void testDelivery() {
   MemoryAdapter adapter{system};
   ConcurrentMemory& memory = adapter;
   RuntimeModel model{memory};
-  ClientStore<ConcurrentMemory> clients{memory};
+  ClientStore clients{memory};
   ClientPeer client{memory, model, clients, ClientRole::interactive};
   FakeHostMetrics probe;
 

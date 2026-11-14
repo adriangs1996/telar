@@ -83,10 +83,9 @@ export {
 #endif
     };
 
-    template <Allocator Memory>
     class PaneObserver {
     public:
-      explicit PaneObserver(Memory& memory, TerminalSize size, std::string_view directory = {}, bool capture_output = false, std::optional<ShellToken> shell_token = std::nullopt);
+      explicit PaneObserver(ConcurrentMemory& memory, TerminalSize size, std::string_view directory = {}, bool capture_output = false, std::optional<ShellToken> shell_token = std::nullopt);
 
       void configureHistory(const HistorySession& session, bool capture_output = false);
 
@@ -227,20 +226,18 @@ export {
       unsigned active_ = 0;
       std::optional<unsigned> sealed_;
       std::optional<LimitReach> drop_;
-      Terminal<Memory> terminal_;
+      Terminal terminal_;
       // Reads terminal_.
-      tbc::view<CommandTracker<Memory>, tbc::lt::self> tracker_;
+      tbc::view<CommandTracker, tbc::lt::self> tracker_;
       tbc::view<HistorySession, tbc::lt::self> session_;
-      String<Memory> workspace_path_;
-      String<Memory> shell_;
+      String<ConcurrentMemory> workspace_path_;
+      String<ConcurrentMemory> shell_;
       TerminalSize initial_size_;
       AgentScreenInference inference_;
       bool reset_needed_ = false;
       bool session_started_ = false;
       std::atomic<std::uint64_t> injected_submissions_{0};
     };
-
-    extern template class PaneObserver<telar::ConcurrentMemory>;
 
   }
 }
@@ -255,14 +252,14 @@ export {
     };
 
     // Generic over the caller's process probe and history sink, so it stays here whole.
-    template <Allocator Memory, PaneProcessProbe Probe, HistoryEventSink History>
+    template <PaneProcessProbe Probe, HistoryEventSink History>
     class TBC_HOT_PATH ObservationProcessor {
     public:
       struct RequestEntry {
         std::uint64_t pane = 0;
         std::uint64_t generation = 0;
         AgentProvider provider = AgentProvider::unknown;
-        std::shared_ptr<PaneObserver<Memory>> observer;
+        std::shared_ptr<PaneObserver> observer;
         ProcessProbeRequest process_request{};
         bool probe_process = false;
         bool tracked_agent = false;
@@ -279,7 +276,7 @@ export {
         std::uint64_t generation = 0;
         std::uint64_t cwd_revision = 0;
         std::uint64_t input_revision = 0;
-        std::shared_ptr<PaneObserver<Memory>> observer;
+        std::shared_ptr<PaneObserver> observer;
         ScreenObservationResult screen{};
         std::optional<ProcessProbeResult> process_result;
         bool process_recheck = false;

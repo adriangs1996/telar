@@ -22,15 +22,13 @@ namespace telar::runtime::traffic {
     return total_;
   }
 
-  template <Allocator Memory>
-  Capture<Memory>::Device::Device(pcap_t* value, std::string_view interface, std::uint32_t identity)
+  Capture::Device::Device(pcap_t* value, std::string_view interface, std::uint32_t identity)
       : handle(value, &pcap_close),
         index(identity) {
     name.assign(interface);
   }
 
-  template <Allocator Memory>
-  Capture<Memory>::Capture(Memory& memory, FileDescriptor socket)
+  Capture::Capture(Memory& memory, FileDescriptor socket)
       : memory_(memory),
         socket_(std::move(socket)),
         output_(AllocatorRef<Byte, ErasingAllocator<Memory>>{memory_}) {
@@ -38,8 +36,7 @@ namespace telar::runtime::traffic {
     randomBytes(&session_, sizeof(session_));
   }
 
-  template <Allocator Memory>
-  void Capture<Memory>::live() {
+  void Capture::live() {
     if (::geteuid() != 0) {
       throw std::invalid_argument{"Live interface capture requires the privileged capture helper"};
     }
@@ -81,8 +78,7 @@ namespace telar::runtime::traffic {
     }
   }
 
-  template <Allocator Memory>
-  void Capture<Memory>::offline(const char* path) {
+  void Capture::offline(const char* path) {
     std::array<char, PCAP_ERRBUF_SIZE> error{};
     const std::unique_ptr<pcap_t, decltype(&pcap_close)> file{pcap_open_offline(path, error.data()), &pcap_close};
     if (!file) {
@@ -111,8 +107,7 @@ namespace telar::runtime::traffic {
     }
   }
 
-  template <Allocator Memory>
-  Capture<Memory>::Signals::Signals() {
+  Capture::Signals::Signals() {
     sigemptyset(&selected_);
     sigaddset(&selected_, SIGTERM);
     sigaddset(&selected_, SIGINT);
@@ -122,28 +117,24 @@ namespace telar::runtime::traffic {
     }
   }
 
-  template <Allocator Memory>
-  Capture<Memory>::Signals::~Signals() {
+  Capture::Signals::~Signals() {
     pthread_sigmask(SIG_SETMASK, &previous_, nullptr);
   }
 
-  template <Allocator Memory>
-  bool Capture<Memory>::Signals::stopped() const noexcept {
+  bool Capture::Signals::stopped() const noexcept {
     sigset_t pending;
 
     return ::sigpending(&pending) == 0 && (sigismember(&pending, SIGTERM) || sigismember(&pending, SIGINT));
   }
 
-  template <Allocator Memory>
-  void Capture<Memory>::greet(Role role) {
+  void Capture::greet(Role role) {
     std::array<Byte, Protocol::greeting_bytes> output;
 
     sendAll(socket_.get(), Protocol::greeting(output, role));
     setNonblocking(socket_.get());
   }
 
-  template <Allocator Memory>
-  void Capture<Memory>::drainControl() {
+  void Capture::drainControl() {
     std::array<Byte, Limits::metadata_bytes> bytes;
     const auto count = ::recv(socket_.get(), bytes.data(), bytes.size(), MSG_DONTWAIT);
     if (count == 0 || (count < 0 && !socketWouldBlock(sys::lastError()))) {
@@ -151,8 +142,7 @@ namespace telar::runtime::traffic {
     }
   }
 
-  template <Allocator Memory>
-  void Capture<Memory>::emit(Event event) {
+  void Capture::emit(Event event) {
     event.session = session_;
     event.sequence = ++sequence_;
     event.offline = offline_;
@@ -202,13 +192,11 @@ namespace telar::runtime::traffic {
     }
   }
 
-  template <Allocator Memory>
-  void Capture<Memory>::notice(Kind kind, std::string_view interface, std::string_view message, std::uint32_t index) {
+  void Capture::notice(Kind kind, std::string_view interface, std::string_view message, std::uint32_t index) {
     emit(Event{.kind = kind, .interface_index = index, .interface = interface, .bytes = {reinterpret_cast<const Byte*>(message.data()), message.size()}});
   }
 
-  template <Allocator Memory>
-  void Capture<Memory>::discover() {
+  void Capture::discover() {
     pcap_if_t* raw = nullptr;
     std::array<char, PCAP_ERRBUF_SIZE> error{};
     if (pcap_findalldevs(&raw, error.data()) < 0) {
@@ -283,8 +271,7 @@ namespace telar::runtime::traffic {
     }
   }
 
-  template <Allocator Memory>
-  bool Capture<Memory>::drain(std::size_t slot) {
+  bool Capture::drain(std::size_t slot) {
     constexpr std::size_t batch_packets = 64;
     auto* handle = devices_[slot]->handle.get();
     const auto name = devices_[slot]->name;
@@ -310,8 +297,7 @@ namespace telar::runtime::traffic {
     return true;
   }
 
-  template <Allocator Memory>
-  void Capture<Memory>::packet(std::uint32_t link_type, const pcap_pkthdr& header, const u_char* bytes, std::string_view interface, std::uint32_t index) {
+  void Capture::packet(std::uint32_t link_type, const pcap_pkthdr& header, const u_char* bytes, std::string_view interface, std::uint32_t index) {
     constexpr std::uint64_t micros_per_second = 1000000;
     const auto captured = std::min<std::size_t>(header.caplen, Limits::packet_bytes);
 
@@ -326,8 +312,7 @@ namespace telar::runtime::traffic {
     });
   }
 
-  template <Allocator Memory>
-  void Capture<Memory>::statistics() {
+  void Capture::statistics() {
     for (auto& device : devices_) {
       if (device) {
         sample(kernel_drops_, *device);
@@ -337,16 +322,14 @@ namespace telar::runtime::traffic {
     emit(Event{.kind = Kind::statistics});
   }
 
-  template <Allocator Memory>
-  void Capture<Memory>::sample(KernelDrops& drops, Device& device) noexcept {
+  void Capture::sample(KernelDrops& drops, Device& device) noexcept {
     pcap_stat value{};
     if (pcap_stats(device.handle.get(), &value) == 0) {
       drops.observe(device.drops, value.ps_drop, value.ps_ifdrop);
     }
   }
 
-  template <Allocator Memory>
-  void Capture<Memory>::close(std::size_t slot) {
+  void Capture::close(std::size_t slot) {
     sample(kernel_drops_, *devices_[slot]);
     const auto name = devices_[slot]->name;
     const auto index = devices_[slot]->index;
@@ -355,11 +338,7 @@ namespace telar::runtime::traffic {
     devices_[slot].reset();
   }
 
-  template <Allocator Memory>
-  EventFrame<Memory>::EventFrame(Memory& memory, std::size_t size)
+  EventFrame::EventFrame(ConcurrentMemory& memory, std::size_t size)
       : bytes(memory, size) {}
-
-  template class Capture<Memory>;
-  template struct EventFrame<ConcurrentMemory>;
 
 }

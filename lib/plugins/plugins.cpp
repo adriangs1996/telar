@@ -336,7 +336,6 @@ namespace telar::runtime::plugins {
 
   // Inspection
 
-  template <Allocator Memory>
   void appendInspection(String<Memory>& output, const Package& package) {
     const auto& manifest = package.manifest;
 
@@ -532,12 +531,10 @@ namespace telar::runtime::plugins {
 
   // Package installation
 
-  template <Allocator Memory>
-  PackageInstallation<Memory>::PackageInstallation(Memory& memory) noexcept
+  PackageInstallation::PackageInstallation(Memory& memory) noexcept
       : memory_(memory) {}
 
-  template <Allocator Memory>
-  void PackageInstallation<Memory>::install(const Package& package, std::string_view destination) {
+  void PackageInstallation::install(const Package& package, std::string_view destination) {
     String<Memory> path{destination, AllocatorRef<char, Memory>{memory_}};
 
     resolveAbsolutePath(path);
@@ -573,8 +570,7 @@ namespace telar::runtime::plugins {
     }
   }
 
-  template <Allocator Memory>
-  bool PackageInstallation<Memory>::existing(const Package& package, const char* path) {
+  bool PackageInstallation::existing(const Package& package, const char* path) {
     struct stat state{};
     if (::lstat(path, &state) != 0) {
       if (sys::lastError() == ENOENT) {
@@ -641,7 +637,6 @@ namespace telar::runtime::plugins {
     return path;
   }
 
-  template <Allocator Memory>
   String<Memory> Paths::installationDirectory(String<Memory> data, const Package& package) {
     auto path = required(std::move(data));
 
@@ -756,7 +751,6 @@ namespace telar::runtime::plugins {
     return false;
   }
 
-  template <Allocator Memory>
   String<Memory> TrustStore::json(Memory& memory) const {
     String<Memory> output{"{\"version\":1,\"grants\":[", AllocatorRef<char, Memory>{memory}};
 
@@ -812,7 +806,6 @@ namespace telar::runtime::plugins {
 
   // Trust update
 
-  template <Allocator Memory>
   void saveTrust(Memory& memory, const TrustStore& store, String<Memory> path) {
     const auto contents = store.json(memory);
 
@@ -827,7 +820,6 @@ namespace telar::runtime::plugins {
     }
   }
 
-  template <Allocator Memory>
   void updateTrust(Memory& memory, const Package& package, Capabilities capabilities, String<Memory> path) {
     auto store = TrustStore::load(memory, path);
 
@@ -835,7 +827,6 @@ namespace telar::runtime::plugins {
     saveTrust(memory, store, std::move(path));
   }
 
-  template <Allocator Memory>
   void revokeTrust(Memory& memory, std::string_view id, String<Memory> path) {
     auto store = TrustStore::load(memory, path);
 
@@ -851,8 +842,6 @@ namespace telar::runtime::plugins {
   template Manifest Manifest::parse<Memory>(Memory& memory, std::string_view bytes);
   template Manifest Manifest::parse<ConcurrentMemory>(ConcurrentMemory& memory, std::string_view bytes);
 
-  template void appendInspection<Memory>(String<Memory>& output, const Package& package);
-
   template class PackageFiles<Memory>;
   template class PackageFiles<ConcurrentMemory>;
 
@@ -864,23 +853,15 @@ namespace telar::runtime::plugins {
   template Package inspectPackage<Memory>(Memory& memory, std::string_view path, PackageHashing hashing);
   template Package inspectPackage<ConcurrentMemory>(ConcurrentMemory& memory, std::string_view path, PackageHashing hashing);
 
-  template class PackageInstallation<Memory>;
-
   template void registerPackages<Memory>(Vector<Package, Memory>& packages, Memory& memory, std::string_view directory, std::span<const ConfiguredPlugin> specifications, Package (*inspect)(Memory& memory, std::string_view directory, std::string_view path));
   template void registerPackages<ConcurrentMemory>(Vector<Package, ConcurrentMemory>& packages, ConcurrentMemory& memory, std::string_view directory, std::span<const ConfiguredPlugin> specifications, Package (*inspect)(ConcurrentMemory& memory, std::string_view directory, std::string_view path));
 
   template String<Memory> Paths::trustFile<Memory>(String<Memory> home);
   template String<ConcurrentMemory> Paths::trustFile<ConcurrentMemory>(String<ConcurrentMemory> home);
-  template String<Memory> Paths::installationDirectory<Memory>(String<Memory> data, const Package& package);
 
   template TrustStore TrustStore::load<Memory>(Memory& memory, std::string_view path);
   template TrustStore TrustStore::load<ConcurrentMemory>(ConcurrentMemory& memory, std::string_view path);
   template TrustStore TrustStore::parse<Memory>(Memory& memory, std::string_view bytes);
   template TrustStore TrustStore::parse<ConcurrentMemory>(ConcurrentMemory& memory, std::string_view bytes);
-  template String<Memory> TrustStore::json<Memory>(Memory& memory) const;
-
-  template void saveTrust<Memory>(Memory& memory, const TrustStore& store, String<Memory> path);
-  template void updateTrust<Memory>(Memory& memory, const Package& package, Capabilities capabilities, String<Memory> path);
-  template void revokeTrust<Memory>(Memory& memory, std::string_view id, String<Memory> path);
 
 }

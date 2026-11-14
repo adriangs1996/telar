@@ -46,12 +46,11 @@ import telar.platform.net;
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory>
     class PendingClipboard {
     public:
       static constexpr std::size_t capacity = 1024 * 1024;
 
-      explicit PendingClipboard(Memory& memory);
+      explicit PendingClipboard(ConcurrentMemory& memory);
 
       void replace(std::uint64_t pane, std::span<const Byte> bytes);
 
@@ -62,12 +61,10 @@ export {
       void delivered() noexcept;
 
     private:
-      Vector<Byte, Memory> bytes_;
+      Vector<Byte, ConcurrentMemory> bytes_;
       std::uint64_t pane_ = 0;
       bool pending_ = false;
     };
-
-    extern template class PendingClipboard<ConcurrentMemory>;
 
   }
 }
@@ -105,14 +102,13 @@ export {
       std::uint64_t trimmed = 0;
     };
 
-    template <Allocator Memory>
     struct Attachment {
-      explicit Attachment(Memory& memory, GraphicsCreditBudget& budget, std::uint64_t pane, std::shared_ptr<PaneMedia<Memory>> media);
+      explicit Attachment(ConcurrentMemory& memory, GraphicsCreditBudget& budget, std::uint64_t pane, std::shared_ptr<PaneMedia> media);
 
       std::uint64_t pane_id;
       std::size_t slot = 0;
-      FrameSync<Memory> frames;
-      GraphicsSynchronizer<Memory> graphics;
+      FrameSync frames;
+      GraphicsSynchronizer graphics;
       std::optional<std::uint32_t> viewport;
       std::optional<ConfigurePaneDesktop> desktop;
       bool exit_sent = false;
@@ -143,10 +139,8 @@ export {
     // The clients a runtime serves at once; a client's slot is its bit in what a pane is observed by.
     inline constexpr std::size_t client_capacity = 32;
 
-    template <Allocator Memory>
     class Pane;
 
-    template <Allocator Memory>
     class ClientSession {
     public:
       static constexpr std::size_t attachment_capacity = 64;
@@ -156,17 +150,17 @@ export {
         std::uint64_t revision = 0;
       };
 
-      explicit ClientSession(Memory& memory, std::uint64_t identity, FileDescriptor descriptor);
+      explicit ClientSession(ConcurrentMemory& memory, std::uint64_t identity, FileDescriptor descriptor);
 
       std::size_t availableAttachmentSlot() const;
 
       // The bit its slot sets in a pane's observers; none before the client is stored.
       std::uint32_t observerBit() const noexcept;
 
-      Attachment<Memory>* attachment(std::uint64_t pane_id) const noexcept;
+      Attachment* attachment(std::uint64_t pane_id) const noexcept;
 
       // Whether the runtime verified this client runs inside `pane`, the generation it has now.
-      bool verifiedFor(const Pane<Memory>& pane) const noexcept;
+      bool verifiedFor(const Pane& pane) const noexcept;
 
       std::uint64_t id;
       std::uint64_t generation;
@@ -178,9 +172,9 @@ export {
       std::uint64_t last_input_sequence = 0;
       std::optional<PendingClientCommand> pending_command;
       std::optional<PendingPaneFocus> pending_focus;
-      Connection<Memory> connection;
-      Vector<Owned<Attachment<Memory>, Memory>, Memory> attachments;
-      PendingClipboard<Memory> clipboard;
+      Connection<ConcurrentMemory> connection;
+      Vector<Owned<Attachment, ConcurrentMemory>, ConcurrentMemory> attachments;
+      PendingClipboard clipboard;
       std::size_t next_attachment = 0;
       std::optional<std::uint64_t> completing_exit;
       bool layout_sent = false;
@@ -198,7 +192,7 @@ export {
       ProcessLineage verified_lineage;
       std::optional<DescentCheck> pending_descent;
       bool descent_running = false;
-      DeferredReport<Memory> deferred_report;
+      DeferredReport<ConcurrentMemory> deferred_report;
       unsigned limit_reports = 0;
       std::chrono::steady_clock::time_point limit_report_window{};
       std::optional<std::uint64_t> workspace;
@@ -216,8 +210,6 @@ export {
       HeldTabs held_tabs;
     };
 
-    extern template class ClientSession<ConcurrentMemory>;
-
   }
 }
 
@@ -225,7 +217,6 @@ export {
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory>
     class Pane {
       // Kept whole: the default writer of write, which stays here, on every PTY write.
       struct TBC_HOT_PATH ResponseWriter {
@@ -240,7 +231,7 @@ export {
         burst,
       };
 
-      explicit Pane(Memory& memory, std::uint64_t identity, TabLocation location, Command<Memory>& command, PaneLaunch settings);
+      explicit Pane(ConcurrentMemory& memory, std::uint64_t identity, TabLocation location, Command<ConcurrentMemory>& command, PaneLaunch settings);
 
       bool read(ReadMode mode = ReadMode::once);
 
@@ -339,17 +330,17 @@ export {
       std::uint64_t generation = 1;
       std::array<Byte, 16> history_session;
       TabLocation location;
-      LaunchRecord<Memory> launch;
+      LaunchRecord<ConcurrentMemory> launch;
       std::optional<AgentResume> restored_agent;
       std::shared_ptr<PtyResponseQueue> pty_responses;
-      std::shared_ptr<PaneObserver<Memory>> observer;
-      std::shared_ptr<PaneMedia<Memory>> media;
+      std::shared_ptr<PaneObserver> observer;
+      std::shared_ptr<PaneMedia> media;
       // Reports its graphics queries to media.
-      tbc::view<Terminal<Memory>, tbc::lt::self> terminal;
-      ByteQueue<Memory> input;
+      tbc::view<Terminal, tbc::lt::self> terminal;
+      ByteQueue<ConcurrentMemory> input;
       // Reads rows of `terminal`'s scrollback for clients that ask for them.
-      ScrollbackRows<Memory> scrollback_rows;
-      String<Memory> cwd;
+      ScrollbackRows scrollback_rows;
+      String<ConcurrentMemory> cwd;
       std::optional<PtyProcess> process;
       std::uint32_t observers = 0;
       std::uint64_t cwd_revision = 0;
@@ -372,7 +363,7 @@ export {
       // state reaches clients with the output that changed it.
       std::optional<CommandZones> shell_zones;
       // The commands it ran, anchored in `terminal`, which outlives them.
-      std::optional<CommandBlocks<Memory>> blocks;
+      std::optional<CommandBlocks> blocks;
       // When input last reached a remote shell's line editor, until its echo arrives, and the
       // link's round trip so far, smoothed.
       std::optional<std::chrono::steady_clock::time_point> echo_sent;
@@ -430,8 +421,6 @@ export {
 #endif
     };
 
-    extern template class Pane<ConcurrentMemory>;
-
   }
 }
 
@@ -452,40 +441,34 @@ export {
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory>
     struct Tab {
-      explicit Tab(Memory& memory, std::uint64_t identity, std::string_view name);
+      explicit Tab(ConcurrentMemory& memory, std::uint64_t identity, std::string_view name);
 
       std::uint64_t id;
-      String<Memory> label;
-      Vector<std::uint64_t, Memory> panes;
+      String<ConcurrentMemory> label;
+      Vector<std::uint64_t, ConcurrentMemory> panes;
     };
 
-    extern template struct Tab<ConcurrentMemory>;
-
-    template <Allocator Memory>
     class Workspace {
     public:
-      explicit Workspace(Memory& memory, std::uint64_t identity, std::string_view directory, std::string_view label);
+      explicit Workspace(ConcurrentMemory& memory, std::uint64_t identity, std::string_view directory, std::string_view label);
 
-      Tab<Memory>* tab(std::uint64_t tab_id) noexcept;
+      Tab* tab(std::uint64_t tab_id) noexcept;
 
-      const Tab<Memory>* tab(std::uint64_t tab_id) const noexcept;
+      const Tab* tab(std::uint64_t tab_id) const noexcept;
 
       std::string_view displayName() const noexcept;
 
       std::uint64_t id;
-      String<Memory> path;
-      String<Memory> name;
-      Vector<Tab<Memory>, Memory> tabs;
+      String<ConcurrentMemory> path;
+      String<ConcurrentMemory> name;
+      Vector<Tab, ConcurrentMemory> tabs;
       std::optional<std::uint64_t> geometry_client;
       FixedText<200> git_branch;
       std::chrono::steady_clock::time_point git_checked_at{};
       bool git_dirty = false;
       bool git_timed_out = false;
     };
-
-    extern template class Workspace<ConcurrentMemory>;
 
   }
 }
@@ -494,9 +477,8 @@ export {
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory>
     struct Worktree {
-      explicit Worktree(Memory& memory, std::uint64_t identity, const RegisterWorktree& request);
+      explicit Worktree(ConcurrentMemory& memory, std::uint64_t identity, const RegisterWorktree& request);
 
       WorktreeListEntry entry() const noexcept;
 
@@ -507,7 +489,7 @@ export {
       std::optional<CoordinatorReference> coordinator;
       WorktreeOrigin origin;
       WorktreeState state = WorktreeState::active;
-      String<Memory> path;
+      String<ConcurrentMemory> path;
       FixedText<200> branch;
       FixedText<200> base;
       FixedText<96> title;
@@ -526,22 +508,19 @@ export {
       std::optional<std::uint64_t> command_pane;
     };
 
-    extern template struct Worktree<ConcurrentMemory>;
-
-    template <Allocator Memory>
     class Worktrees {
     public:
-      explicit Worktrees(Memory& memory);
+      explicit Worktrees(ConcurrentMemory& memory);
 
       WorktreeRegistered registerEntry(const RegisterWorktree& request, std::uint64_t restored_identity = 0);
 
-      Worktree<Memory>* find(std::uint64_t identity) noexcept;
+      Worktree* find(std::uint64_t identity) noexcept;
 
-      std::span<Worktree<Memory>* const> items() const noexcept;
+      std::span<Worktree* const> items() const noexcept;
 
       void remove(std::uint64_t identity) noexcept;
 
-      Worktree<Memory>* containing(std::string_view path) noexcept;
+      Worktree* containing(std::string_view path) noexcept;
 
       std::uint64_t sourceFor(std::uint64_t workspace) const noexcept;
 
@@ -549,11 +528,9 @@ export {
 
     private:
       static constexpr std::size_t reserved_for_telar = 16;
-      Memory& memory_;
-      SlotStore<Worktree<Memory>, capacity, Memory> entries_;
+      ConcurrentMemory& memory_;
+      SlotStore<Worktree, capacity, ConcurrentMemory> entries_;
     };
-
-    extern template class Worktrees<ConcurrentMemory>;
 
   }
 }
@@ -564,18 +541,15 @@ export {
 
     // The runtime's tables. Functions take the ones they read or change, so the borrows they keep of one
     // table are not disturbed by another, as Rust's disjoint field borrows are.
-    template <Allocator Memory>
-    using PaneStore = SlotStore<Pane<Memory>, 256, Memory>;
-    template <Allocator Memory>
-    using ClientStore = SlotStore<ClientSession<Memory>, client_capacity, Memory>;
-    template <Allocator Memory>
-    using WorkspaceStore = SlotStore<Workspace<Memory>, 64, Memory>;
+    using PaneStore = SlotStore<Pane, 256, ConcurrentMemory>;
+    using ClientStore = SlotStore<ClientSession, client_capacity, ConcurrentMemory>;
+    using WorkspaceStore = SlotStore<Workspace, 64, ConcurrentMemory>;
 
     // Calls `send` for each open client `admits` accepts. A client whose send throws is closed: its
     // connection may hold part of a frame, and every broadcast treats that failure alike.
     // Generic over the caller's predicate and sender, and run for every message sent to all clients.
-    template <Allocator Memory, typename Admits, typename Send>
-    TBC_HOT_PATH inline void deliver(ClientStore<Memory>& clients, Admits&& admits, Send&& send) noexcept {
+    template <typename Admits, typename Send>
+    TBC_HOT_PATH inline void deliver(ClientStore& clients, Admits&& admits, Send&& send) noexcept {
       for (auto* client : clients.items()) {
         if (client == nullptr || client->connection.closing || !admits(*client)) {
           continue;
@@ -591,11 +565,11 @@ export {
 
     // Sends `message` to each open client `admits` accepts, as deliver does; how many queued it.
     // Generic over the caller's predicate and message, as deliver.
-    template <Allocator Memory, typename Admits, typename Message>
-    TBC_HOT_PATH inline std::size_t broadcast(ClientStore<Memory>& clients, Admits&& admits, const Message& message) noexcept {
+    template <typename Admits, typename Message>
+    TBC_HOT_PATH inline std::size_t broadcast(ClientStore& clients, Admits&& admits, const Message& message) noexcept {
       std::size_t delivered = 0;
 
-      deliver(clients, admits, [&](ClientSession<Memory>& client) {
+      deliver(clients, admits, [&](ClientSession& client) {
         delivered += client.connection.trySend(message);
       });
 
@@ -603,46 +577,30 @@ export {
     }
 
     // Whether a live client holds a tab.
-    template <Allocator Memory>
-    bool tabHeld(const ClientStore<Memory>& clients, TabLocation location) noexcept;
+    bool tabHeld(const ClientStore& clients, TabLocation location) noexcept;
 
     // The stored client with an identity, which a request names.
-    template <Allocator Memory>
-    ClientSession<Memory>& requireClient(ClientStore<Memory>& clients, std::uint64_t identity);
+    ClientSession& requireClient(ClientStore& clients, std::uint64_t identity);
 
     // The pane `identity` names while it has `generation`; none for another generation. No pane has
     // generation 0, so 0 finds none.
-    template <Allocator Memory>
-    tbc::view<Pane<Memory>*, tbc::lt::a> findPane(tbc::view<PaneStore<Memory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
+    tbc::view<Pane*, tbc::lt::a> findPane(tbc::view<PaneStore&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
 
-    template <Allocator Memory>
-    tbc::view<const Pane<Memory>*, tbc::lt::a> findPane(tbc::view<const PaneStore<Memory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
+    tbc::view<const Pane*, tbc::lt::a> findPane(tbc::view<const PaneStore&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
 
     // The same pane while its process runs and nobody asked it to close.
-    template <Allocator Memory>
-    tbc::view<Pane<Memory>*, tbc::lt::a> livePane(tbc::view<PaneStore<Memory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
+    tbc::view<Pane*, tbc::lt::a> livePane(tbc::view<PaneStore&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
 
-    template <Allocator Memory>
-    tbc::view<const Pane<Memory>*, tbc::lt::a> livePane(tbc::view<const PaneStore<Memory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
+    tbc::view<const Pane*, tbc::lt::a> livePane(tbc::view<const PaneStore&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
 
     // The pane an agent's report names, which must still run the generation it names and be the one
     // the runtime verified the reporting client inside.
-    template <Allocator Memory>
-    tbc::view<Pane<Memory>&, tbc::lt::a> requireReporterPane(tbc::view<PaneStore<Memory>&, tbc::lt::a> panes, const ClientSession<Memory>& client, std::uint64_t identity, std::uint64_t generation);
-
-    extern template bool tabHeld<ConcurrentMemory>(const ClientStore<ConcurrentMemory>& clients, TabLocation location) noexcept;
-    extern template ClientSession<ConcurrentMemory>& requireClient<ConcurrentMemory>(ClientStore<ConcurrentMemory>& clients, std::uint64_t identity);
-    extern template tbc::view<Pane<ConcurrentMemory>*, tbc::lt::a> findPane<ConcurrentMemory>(tbc::view<PaneStore<ConcurrentMemory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
-    extern template tbc::view<const Pane<ConcurrentMemory>*, tbc::lt::a> findPane<ConcurrentMemory>(tbc::view<const PaneStore<ConcurrentMemory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
-    extern template tbc::view<Pane<ConcurrentMemory>*, tbc::lt::a> livePane<ConcurrentMemory>(tbc::view<PaneStore<ConcurrentMemory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
-    extern template tbc::view<const Pane<ConcurrentMemory>*, tbc::lt::a> livePane<ConcurrentMemory>(tbc::view<const PaneStore<ConcurrentMemory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
-    extern template tbc::view<Pane<ConcurrentMemory>&, tbc::lt::a> requireReporterPane<ConcurrentMemory>(tbc::view<PaneStore<ConcurrentMemory>&, tbc::lt::a> panes, const ClientSession<ConcurrentMemory>& client, std::uint64_t identity, std::uint64_t generation);
+    tbc::view<Pane&, tbc::lt::a> requireReporterPane(tbc::view<PaneStore&, tbc::lt::a> panes, const ClientSession& client, std::uint64_t identity, std::uint64_t generation);
 
     // The runtime's data apart from its clients, whose table is separate so that a call can borrow one
     // client and the model at once, as Rust borrows two fields of a struct.
-    template <Allocator Memory>
     struct RuntimeModel {
-      explicit RuntimeModel(Memory& memory, GraphicsLimits graphics = {});
+      explicit RuntimeModel(ConcurrentMemory& memory, GraphicsLimits graphics = {});
 
       GraphicsLimits graphics_limits;
       RuntimeLimits limits;
@@ -651,13 +609,13 @@ export {
       AgentManifests manifests = builtin_manifests;
       std::string_view cli_executable;
       bool capture_output = false;
-      PaneStore<Memory> panes;
-      WorkspaceStore<Memory> workspaces;
-      Worktrees<Memory> worktrees;
+      PaneStore panes;
+      WorkspaceStore workspaces;
+      Worktrees worktrees;
       ExitedPanes exited_panes;
-      std::shared_ptr<PaneObserver<Memory>> retired_observers;
+      std::shared_ptr<PaneObserver> retired_observers;
       std::size_t retired_observer_count = 0;
-      std::shared_ptr<PaneMedia<Memory>> retired_media;
+      std::shared_ptr<PaneMedia> retired_media;
       std::size_t retired_media_count = 0;
       std::uint64_t next_tab_id = 1;
       std::uint64_t workspace_revision = 1;
@@ -668,8 +626,6 @@ export {
       bool stopping = false;
     };
 
-    extern template struct RuntimeModel<ConcurrentMemory>;
-
   }
 }
 
@@ -677,17 +633,16 @@ export {
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory>
     class ClientLayouts {
     public:
-      explicit ClientLayouts(Memory& memory);
+      explicit ClientLayouts(ConcurrentMemory& memory);
 
-      void retain(const RuntimeModel<Memory>& model, std::uint64_t identity, const UpdateClientLayout& update);
+      void retain(const RuntimeModel& model, std::uint64_t identity, const UpdateClientLayout& update);
 
       // Kept here (P9.12): out of line, the lifetime checker's summary takes the whole receiver as
       // mutated, and Runtime::writeClient's StateProjection, which borrows these layouts, then
       // overlaps the client it publishes to (tbc-invalidated-borrow).
-      TBC_HOT_PATH inline void publish(const RuntimeModel<Memory>& model, ClientSession<Memory>& client) {
+      TBC_HOT_PATH inline void publish(const RuntimeModel& model, ClientSession& client) {
         auto* record = find(client.identity);
         if (record == nullptr) {
           client.connection.send(ClientLayoutSnapshot{});
@@ -727,7 +682,7 @@ export {
 
       // Generic over the caller's consumer, which each record is handed to.
       template <typename Consumer>
-      TBC_HOT_PATH inline void exportRecords(const RuntimeModel<Memory>& model, Consumer&& consume) const {
+      TBC_HOT_PATH inline void exportRecords(const RuntimeModel& model, Consumer&& consume) const {
         std::array<ClientTabLayout, maximum_tabs> tabs;
 
         for (const auto& record : records_) {
@@ -787,15 +742,13 @@ export {
 
       static bool sameLocation(TabLocation left, TabLocation right) noexcept;
 
-      static bool current(const RuntimeModel<Memory>& model, const ClientTabLayout& layout) noexcept;
+      static bool current(const RuntimeModel& model, const ClientTabLayout& layout) noexcept;
 
       Record* find(std::uint64_t identity) noexcept;
 
-      Vector<Record, Memory> records_;
+      Vector<Record, ConcurrentMemory> records_;
       std::uint64_t clock_ = 0;
     };
-
-    extern template class ClientLayouts<ConcurrentMemory>;
 
   }
 }

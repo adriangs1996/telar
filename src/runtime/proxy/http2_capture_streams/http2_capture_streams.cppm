@@ -595,10 +595,10 @@ export {
   namespace telar::runtime {
 
     // Generic over the caller's clock.
-    template <ConcurrentAllocator Memory, CaptureClock Clock = CaptureWallClock>
+    template <CaptureClock Clock = CaptureWallClock>
     class TBC_HOT_PATH Http2CaptureStreams {
     public:
-      inline explicit Http2CaptureStreams(CaptureProducer<Memory>* producer, ProxyCounters& counters, CaptureStart context, CaptureSide side) noexcept
+      inline explicit Http2CaptureStreams(CaptureProducer* producer, ProxyCounters& counters, CaptureStart context, CaptureSide side) noexcept
           : producer_(producer),
             counters_(counters),
             context_(context) {
@@ -674,7 +674,7 @@ export {
       static constexpr std::size_t capacity = Http2StreamTracker::capacity;
 
     private:
-      inline CaptureHalf<Memory>* ensure(std::uint32_t stream) noexcept {
+      inline CaptureHalf* ensure(std::uint32_t stream) noexcept {
         if (producer_ == nullptr) {
           return nullptr;
         }
@@ -722,10 +722,10 @@ export {
         producer_->publish(std::move(half));
       }
 
-      CaptureProducer<Memory>* producer_;
+      CaptureProducer* producer_;
       ProxyCounters& counters_;
       CaptureStart context_;
-      std::array<std::optional<typename CaptureProducer<Memory>::Half>, capacity> slots_;
+      std::array<std::optional<CaptureProducer::Half>, capacity> slots_;
       SlotIndexes<capacity> occupied_;
     };
 

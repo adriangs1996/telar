@@ -182,7 +182,6 @@ namespace telar::runtime {
     return ProxyAdmission{*target, true};
   }
 
-  template <Allocator Memory>
   std::optional<ProxySecret> ProxySecretFile::load(Memory& memory, int directory) {
     ErasingAllocator sensitive{memory};
     Vector<unsigned char, decltype(sensitive)> bytes{AllocatorRef<unsigned char, decltype(sensitive)>{sensitive}};
@@ -225,7 +224,6 @@ namespace telar::runtime {
 
   template tbc::view<ProxyDecision, tbc::lt::a> authenticateProxy<Memory>(const ProxySecret& secret, bool anonymous_tunnels, const ProxyHostPolicy<Memory>& policy, tbc::view<std::string_view, tbc::lt::a> head) noexcept;
   template tbc::view<ProxyDecision, tbc::lt::a> authenticateProxy<ConcurrentMemory>(const ProxySecret& secret, bool anonymous_tunnels, const ProxyHostPolicy<ConcurrentMemory>& policy, tbc::view<std::string_view, tbc::lt::a> head) noexcept;
-  template std::optional<ProxySecret> ProxySecretFile::load<Memory>(Memory& memory, int directory);
   template ProxySecret ProxySecretFile::ensure<Memory>(Memory& memory, int directory);
   template ProxySecret ProxySecretFile::ensure<ConcurrentMemory>(ConcurrentMemory& memory, int directory);
 

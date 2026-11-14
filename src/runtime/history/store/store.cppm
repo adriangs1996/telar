@@ -243,10 +243,9 @@ INSERT INTO command (
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory>
     class HistoryRows {
     public:
-      explicit HistoryRows(Memory& memory);
+      explicit HistoryRows(ConcurrentMemory& memory);
 
       void clear() noexcept;
       bool append(const Statement& row);
@@ -261,12 +260,10 @@ export {
       static constexpr std::size_t maximum_entries = 1000;
       static constexpr std::size_t result_header_bytes = sizeof(Byte) + sizeof(std::uint64_t) * 2 + sizeof(std::uint16_t) + sizeof(Byte);
       // Reserved whole and bounded before each copy, so the texts the entries view never move.
-      ByteQueue<Memory> text_;
-      tbc::view<Vector<HistoryEntry, Memory>, tbc::lt::self> entries_;
+      ByteQueue<ConcurrentMemory> text_;
+      tbc::view<Vector<HistoryEntry, ConcurrentMemory>, tbc::lt::self> entries_;
       std::size_t encoded_bytes_ = result_header_bytes;
     };
-
-    extern template class HistoryRows<ConcurrentMemory>;
 
   }
 }
@@ -357,20 +354,19 @@ CREATE INDEX IF NOT EXISTS session_pane_started ON session(pane_id, started_at_m
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory>
     class HistoryStore {
     public:
-      explicit HistoryStore(Memory& memory, const char* path, const HistoryFilters& filters = default_history_filters);
+      explicit HistoryStore(ConcurrentMemory& memory, const char* path, const HistoryFilters& filters = default_history_filters);
 
-      void reportAgentCommand(const ReportAgentCommand& request, const RequestContext& context, EncodedReply<Memory>& reply);
+      void reportAgentCommand(const ReportAgentCommand& request, const RequestContext& context, EncodedReply<ConcurrentMemory>& reply);
       void record(const HistoryEventView& event);
       bool accepts(const HistoryEventView& event) const noexcept;
-      void importEntries(const ImportHistory& request, EncodedReply<Memory>& reply);
-      void query(QueryHistory request, EncodedReply<Memory>& reply);
-      void remove(const DeleteHistory& request, EncodedReply<Memory>& reply);
-      void prune(const PruneHistory& request, EncodedReply<Memory>& reply);
-      void readOutput(const ReadHistoryOutput& request, EncodedReply<Memory>& reply);
-      void stats(const HistoryStatsQuery& request, EncodedReply<Memory>& reply);
+      void importEntries(const ImportHistory& request, EncodedReply<ConcurrentMemory>& reply);
+      void query(QueryHistory request, EncodedReply<ConcurrentMemory>& reply);
+      void remove(const DeleteHistory& request, EncodedReply<ConcurrentMemory>& reply);
+      void prune(const PruneHistory& request, EncodedReply<ConcurrentMemory>& reply);
+      void readOutput(const ReadHistoryOutput& request, EncodedReply<ConcurrentMemory>& reply);
+      void stats(const HistoryStatsQuery& request, EncodedReply<ConcurrentMemory>& reply);
 
     private:
       static constexpr auto entry_columns = "id, pane_id, started_at_ms, duration_ns, exit_code, status, command, cwd, workspace_path, author, origin, provider, command_truncated";
@@ -380,7 +376,7 @@ export {
       static_assert(maximum_fuzzy_candidates == 10'000 && fuzzy_candidate_limit == "10000");
       static constexpr std::size_t maximum_stats_candidates = 400;
       static constexpr std::size_t maximum_stats_results = 10;
-      using HashSet = std::unordered_set<std::uint64_t, std::hash<std::uint64_t>, std::equal_to<std::uint64_t>, AllocatorRef<std::uint64_t, Memory>>;
+      using HashSet = std::unordered_set<std::uint64_t, std::hash<std::uint64_t>, std::equal_to<std::uint64_t>, AllocatorRef<std::uint64_t, ConcurrentMemory>>;
 
       struct RankedEntry {
         std::int64_t id;
@@ -394,29 +390,27 @@ export {
         std::optional<std::uint32_t> score;
       };
 
-      void queryFuzzy(const QueryHistory& request, EncodedReply<Memory>& reply);
-      String<Memory> string(std::string_view value) const;
+      void queryFuzzy(const QueryHistory& request, EncodedReply<ConcurrentMemory>& reply);
+      String<ConcurrentMemory> string(std::string_view value) const;
       static std::int64_t integer(std::uint64_t value);
       static void checkRow(Statement& statement);
       bool useIndex(std::string_view query) const noexcept;
-      void appendMatch(String<Memory>& sql, std::string_view query) const;
+      void appendMatch(String<ConcurrentMemory>& sql, std::string_view query) const;
       void bindMatch(Statement& statement, std::string_view query) const;
-      static void appendScope(String<Memory>& sql, HistoryScope scope);
+      static void appendScope(String<ConcurrentMemory>& sql, HistoryScope scope);
       static void bindScope(Statement& statement, HistoryScope scope, const HistoryScopeValue& value);
-      static void appendFilters(String<Memory>& sql, const QueryHistory& request);
+      static void appendFilters(String<ConcurrentMemory>& sql, const QueryHistory& request);
       static void bindFilters(Statement& statement, const QueryHistory& request);
 
-      Memory& memory_;
+      ConcurrentMemory& memory_;
       const HistoryFilters& filters_;
       Database database_;
-      HistoryRows<Memory> rows_;
+      HistoryRows rows_;
       bool indexed_ = false;
       std::optional<AgentCommandWriter> agent_commands_;
       std::optional<PaneHistoryWriter> pane_writer_;
       std::optional<LaunchHistoryWriter> launch_writer_;
     };
-
-    extern template class HistoryStore<ConcurrentMemory>;
 
   }
 }

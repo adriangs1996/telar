@@ -86,10 +86,9 @@ namespace telar::render::terminal {
     }
   }
 
-  template <Allocator Memory, Allocator Output>
   class Painter {
   public:
-    Painter(const Document<Memory>& document, std::size_t width, String<Output>& output)
+    Painter(const Document<Memory>& document, std::size_t width, String<Memory>& output)
         : document_(document),
           width_(width),
           output_(output),
@@ -558,15 +557,12 @@ namespace telar::render::terminal {
 
     const Document<Memory>& document_;
     std::size_t width_;
-    String<Output>& output_;
-    String<Output> destination_;
+    String<Memory>& output_;
+    String<Memory> destination_;
   };
 
-  template <Allocator Memory, Allocator Output>
-  void render(const Document<Memory>& document, std::uint16_t width, String<Output>& output) {
-    Painter<Memory, Output>{document, std::max(width, min_width), output}.paint();
+  void render(const Document<Memory>& document, std::uint16_t width, String<Memory>& output) {
+    Painter{document, std::max(width, min_width), output}.paint();
   }
-
-  template void render(const Document<Memory>& document, std::uint16_t width, String<Memory>& output);
 
 }

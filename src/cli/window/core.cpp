@@ -76,7 +76,6 @@ namespace telar::runtime::cli::window {
     }
   }
 
-  template <Allocator Memory>
   void appendJson(String<Memory>& output, const JsonValue& value, bool pretty, unsigned depth) {
     const auto encoded = value.encoded();
     if (encoded.starts_with('"')) {
@@ -196,7 +195,6 @@ namespace telar::runtime::cli::machine {
     });
   }
 
-  template <Allocator Memory>
   int SetupReport::refuse(Memory& memory, const std::string& label, const std::string& destination, std::string_view reason) const {
     if (!json) {
       std::printf("telar machine setup %s: %.*s.\n", label.c_str(), static_cast<int>(reason.size()), reason.data());
@@ -216,7 +214,6 @@ namespace telar::runtime::cli::machine {
     return 1;
   }
 
-  template <Allocator Memory>
   int SetupReport::finish(Memory& memory, const std::string& label, const std::string& destination) const {
     const bool failed = has(Status::failed);
     const bool pending = has(Status::pending);
@@ -287,9 +284,6 @@ namespace telar::runtime::cli::machine {
     std::fwrite(output.data(), 1, output.size(), stdout);
     return failed ? 1 : 0;
   }
-
-  template int SetupReport::refuse<Memory>(Memory& memory, const std::string& label, const std::string& destination, std::string_view reason) const;
-  template int SetupReport::finish<Memory>(Memory& memory, const std::string& label, const std::string& destination) const;
 
 }
 
@@ -489,7 +483,5 @@ namespace telar::runtime::cli::window {
 
     return self;
   }
-
-  template void appendJson<Memory>(String<Memory>& output, const JsonValue& value, bool pretty, unsigned depth);
 
 }

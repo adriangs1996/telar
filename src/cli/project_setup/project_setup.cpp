@@ -369,8 +369,7 @@ namespace telar::runtime::cli::pane_agents {
     }
   }
 
-  template <Allocator Memory>
-  void writeAgent(Output<Memory>& out, const AgentSnapshotEntry& agent, bool json) {
+  void writeAgent(Output& out, const AgentSnapshotEntry& agent, bool json) {
     const auto provider = agent.provider_name.empty() ? std::string_view{"unknown"} : agent.provider_name;
     const auto status = status_names[static_cast<std::size_t>(agent.status)];
 
@@ -414,8 +413,7 @@ namespace telar::runtime::cli::pane_agents {
 
   constexpr std::string_view agent_header = "PANE  GEN  STATUS   PROV    WORKSPACE         TAB           TITLE\n";
 
-  template <Allocator Memory>
-  void writeOne(Output<Memory>& out, const AgentSnapshotEntry& agent, bool json) {
+  void writeOne(Output& out, const AgentSnapshotEntry& agent, bool json) {
     if (!json) {
       out.text(agent_header);
     }
@@ -426,8 +424,7 @@ namespace telar::runtime::cli::pane_agents {
     }
   }
 
-  template <Allocator Memory>
-  void writeText(Output<Memory>& out, const PaneText& reply, bool json, bool agent) {
+  void writeText(Output& out, const PaneText& reply, bool json, bool agent) {
     if (json) {
       out.text("{\"pane_id\":").number(reply.pane_id).text(",\"truncated\":").boolean(reply.truncated).text(",\"exit_code\":");
       if (reply.exit_code) {
@@ -460,8 +457,7 @@ namespace telar::runtime::cli::pane_agents {
     PaneDescriptor pane;
   };
 
-  template <Allocator Memory>
-  WorkspaceList runtimeList(ControlSession<Memory>& session) {
+  WorkspaceList runtimeList(ControlSession& session) {
     session.send(RequestRuntimeState{.client_identity = static_cast<std::uint64_t>(::getpid()), .interactive = false});
     return session.template receive<WorkspaceList>();
   }
@@ -609,13 +605,11 @@ namespace telar::runtime::cli::pane_agents {
     return 1;
   }
 
-  template <Allocator Memory>
-  void interruptAgent(ControlSession<Memory>& session, const AgentSnapshotEntry& agent) {
+  void interruptAgent(ControlSession& session, const AgentSnapshotEntry& agent) {
     session.template exchange<RequestCompleted>(InterruptAgent{.pane_id = agent.pane_id, .pane_generation = agent.pane_generation});
   }
 
-  template <Allocator Memory>
-  int waitAgent(ControlSession<Memory>& session, const Options& options, std::optional<std::uint64_t> worktree, Output<Memory>& out) {
+  int waitAgent(ControlSession& session, const Options& options, std::optional<std::uint64_t> worktree, Output& out) {
     const auto deadline = std::chrono::system_clock::now() + std::chrono::seconds{options.timeout};
 
     for (;;) {
@@ -635,8 +629,7 @@ namespace telar::runtime::cli::pane_agents {
     }
   }
 
-  template <Allocator Memory>
-  void settleAgent(ControlSession<Memory>& session, AgentSnapshotEntry agent) {
+  void settleAgent(ControlSession& session, AgentSnapshotEntry agent) {
     const auto pane = agent.pane_id;
 
     interruptAgent(session, agent);
@@ -660,8 +653,7 @@ namespace telar::runtime::cli::pane_agents {
     throw Failure{"InterruptNotSettled"};
   }
 
-  template <Allocator Memory>
-  int promptAgent(ControlSession<Memory>& session, const Options& options, AgentSnapshotEntry agent, Output<Memory>& out) {
+  int promptAgent(ControlSession& session, const Options& options, AgentSnapshotEntry agent, Output& out) {
     const auto pane = agent.pane_id;
     const auto generation = agent.pane_generation;
 
@@ -707,8 +699,7 @@ namespace telar::runtime::cli::pane_agents {
     }
   }
 
-  template <Allocator Memory>
-  void reportAgent(ControlSession<Memory>& session, const Options& options, const std::pair<std::uint64_t, std::uint64_t>& pane, Output<Memory>& out) {
+  void reportAgent(ControlSession& session, const Options& options, const std::pair<std::uint64_t, std::uint64_t>& pane, Output& out) {
     try {
       session.template exchange<RequestCompleted>(VerifyPaneDescent{.pane_id = pane.first, .pane_generation = pane.second});
     } catch (const std::exception&) {
@@ -734,8 +725,7 @@ namespace telar::runtime::cli::pane_agents {
     }
   }
 
-  template <Allocator Memory>
-  int executeAgent(Memory& memory, const RuntimePaths<Memory>& paths, const Options& options, Output<Memory>& out) {
+  int executeAgent(Memory& memory, const RuntimePaths<Memory>& paths, const Options& options, Output& out) {
     ControlSession session{memory, paths.socket.c_str()};
 
     session.receiveTimeout(30);
@@ -847,7 +837,6 @@ namespace telar::runtime::cli::pane_agents {
 
 namespace telar::runtime::cli {
 
-  template <Allocator Memory>
   int runAgent(Memory& memory, const pane_agents::Options& options) {
     using namespace pane_agents;
     const RuntimePaths paths{memory, socketOptions(options.socket), process_environment};
@@ -885,8 +874,7 @@ namespace telar::runtime::cli::execution {
     return reply.state == ExecutionState::exited || reply.state == ExecutionState::failed;
   }
 
-  template <Allocator Memory>
-  tbc::view<ExecutionReply, tbc::lt::a> exchange(tbc::view<ControlSession<Memory>&, tbc::lt::a> session, ExecutionRequest request) {
+  tbc::view<ExecutionReply, tbc::lt::a> exchange(tbc::view<ControlSession&, tbc::lt::a> session, ExecutionRequest request) {
     for (;;) {
       try {
         return session.template exchange<ExecutionReply>(request);
@@ -916,8 +904,7 @@ namespace telar::runtime::cli::execution {
     request.stderr_offset += reply.stderr_bytes.size();
   }
 
-  template <Allocator Memory>
-  void list(ControlSession<Memory>& session) {
+  void list(ControlSession& session) {
     ExecutionRequest request{.action = ExecutionAction::list};
     std::string output = "[";
 
@@ -940,8 +927,7 @@ namespace telar::runtime::cli::execution {
   }
 
   // Forgets a finished execution; a refusal leaves it retained, as before.
-  template <Allocator Memory>
-  void release(ControlSession<Memory>& session, ExecutionRequest request) noexcept {
+  void release(ControlSession& session, ExecutionRequest request) noexcept {
     request.action = ExecutionAction::forget;
     try {
       exchange(session, request);
@@ -949,8 +935,7 @@ namespace telar::runtime::cli::execution {
     }
   }
 
-  template <Allocator Memory>
-  int observe(ControlSession<Memory>& session, ExecutionRequest request, ExecutionReply reply, const ExecutionOptions& options) {
+  int observe(ControlSession& session, ExecutionRequest request, ExecutionReply reply, const ExecutionOptions& options) {
     const auto started = std::chrono::steady_clock::now();
     bool stdin_open = request.stdin_open;
     const auto stdout_end = reply.stdout_total;
@@ -1017,8 +1002,7 @@ namespace telar::runtime::cli::execution {
     }
   }
 
-  template <Allocator Memory>
-  int start(ControlSession<Memory>& session, const ExecutionOptions& options) {
+  int start(ControlSession& session, const ExecutionOptions& options) {
     if (options.action == ExecutionOptions::Action::list) {
       list(session);
       return 0;
@@ -1056,7 +1040,6 @@ namespace telar::runtime::cli::execution {
     }
   }
 
-  template <Allocator Memory>
   int run(Memory& memory, const ExecutionOptions& options) {
     try {
       ServerOptions server_options{};
@@ -1085,8 +1068,7 @@ namespace telar::runtime::cli::pane_agents {
   constexpr std::array<std::string_view, 3> focus_outcomes{"focused", "no_neighbor", "source_not_focused"};
   constexpr std::array<std::string_view, 2> lifecycles{"running", "exited"};
 
-  template <Allocator Memory>
-  void writePane(Output<Memory>& out, const PaneRecord& entry, bool json) {
+  void writePane(Output& out, const PaneRecord& entry, bool json) {
     const auto& pane = entry.pane;
     const auto lifecycle = lifecycles.at(static_cast<std::size_t>(pane.lifecycle));
 
@@ -1097,8 +1079,7 @@ namespace telar::runtime::cli::pane_agents {
     }
   }
 
-  template <Allocator Memory>
-  void inspectPanes(Memory& memory, const char* socket, const Options& options, Output<Memory>& out) {
+  void inspectPanes(Memory& memory, const char* socket, const Options& options, Output& out) {
     const auto catalog = paneCatalog(memory, socket, options);
 
     if (options.action == "get") {
@@ -1135,8 +1116,7 @@ namespace telar::runtime::cli::pane_agents {
     }
   }
 
-  template <Allocator Memory>
-  void watchPane(ControlSession<Memory>& session, const Options& options, const PaneDescriptor& pane, Output<Memory>& out) {
+  void watchPane(ControlSession& session, const Options& options, const PaneDescriptor& pane, Output& out) {
     std::optional<std::array<unsigned char, SHA256_DIGEST_LENGTH>> previous;
     bool previous_truncated = false;
     std::uint64_t count = 0;
@@ -1165,8 +1145,7 @@ namespace telar::runtime::cli::pane_agents {
     }
   }
 
-  template <Allocator Memory>
-  int executePane(Memory& memory, const RuntimePaths<Memory>& paths, Options options, Output<Memory>& out) {
+  int executePane(Memory& memory, const RuntimePaths<Memory>& paths, Options options, Output& out) {
     ControlSession session{memory, paths.socket.c_str()};
 
     session.receiveTimeout(30);
@@ -1284,7 +1263,6 @@ namespace telar::runtime::cli::pane_agents {
 
 namespace telar::runtime::cli {
 
-  template <Allocator Memory>
   int runPane(Memory& memory, const pane_agents::Options& options) {
     using namespace pane_agents;
     const RuntimePaths paths{memory, socketOptions(options.socket), process_environment};
@@ -1509,8 +1487,7 @@ namespace telar::runtime::cli::project_setup {
     return recipeArguments(memory, text);
   }
 
-  template <Allocator Memory>
-  void awaitSetup(ControlSession<Memory>& session, ExecutionRequest request, ExecutionReply reply) {
+  void awaitSetup(ControlSession& session, ExecutionRequest request, ExecutionReply reply) {
     request.action = ExecutionAction::status;
     request.arguments = {};
     const auto started = std::chrono::steady_clock::now();
@@ -1542,8 +1519,7 @@ namespace telar::runtime::cli::project_setup {
   }
 
   // Starts a recipe as an execution in `cwd` and, unless `detach`, waits for it to succeed.
-  template <Allocator Memory>
-  std::uint64_t execute(ControlSession<Memory>& session, std::string_view cwd, std::span<const std::string> recipe, bool detach) {
+  std::uint64_t execute(ControlSession& session, std::string_view cwd, std::span<const std::string> recipe, bool detach) {
     std::array<std::string_view, ExecutionOptions::max_arguments> argv;
 
     for (std::size_t index = 0; index < recipe.size(); ++index) {
@@ -1563,8 +1539,7 @@ namespace telar::runtime::cli::project_setup {
     return id;
   }
 
-  template <Allocator Memory>
-  std::optional<std::uint64_t> prepare(Memory& memory, ControlSession<Memory>& session, std::string_view cwd, bool authorized, bool detach) {
+  std::optional<std::uint64_t> prepare(Memory& memory, ControlSession& session, std::string_view cwd, bool authorized, bool detach) {
     const auto recipe = loadRecipe(memory, cwd, authorized);
     if (!recipe) {
       return std::nullopt;
@@ -1573,7 +1548,6 @@ namespace telar::runtime::cli::project_setup {
     return execute(session, cwd, *recipe, detach);
   }
 
-  template <Allocator Memory>
   std::optional<std::uint64_t> prepare(Memory& memory, std::string_view cwd, bool authorized, bool detach, std::string_view socket) {
     const auto recipe = loadRecipe(memory, cwd, authorized);
     if (!recipe) {
@@ -1592,7 +1566,6 @@ namespace telar::runtime::cli::project_setup {
     return execute(session, cwd, *recipe, detach);
   }
 
-  template <Allocator Memory>
   int run(Memory& memory, const Options& options) {
     try {
       const auto id = prepare(memory, options.cwd, true, options.detach, {});
@@ -1611,26 +1584,17 @@ namespace telar::runtime::cli::project_setup {
 
 namespace telar::runtime::cli::execution {
 
-  template int run<Memory>(Memory& memory, const ExecutionOptions& options);
-
 }
 
 namespace telar::runtime::cli::project_setup {
-
-  template int run<Memory>(Memory& memory, const Options& options);
 
 }
 
 namespace telar::runtime::cli {
 
-  template int runAgent<Memory>(Memory& memory, const pane_agents::Options& options);
-  template int runPane<Memory>(Memory& memory, const pane_agents::Options& options);
-
 }
 
 namespace telar::runtime::cli::project_setup {
-
-  template std::optional<std::uint64_t> prepare<Memory>(Memory& memory, ControlSession<Memory>& session, std::string_view cwd, bool authorized, bool detach);
 
 }
 

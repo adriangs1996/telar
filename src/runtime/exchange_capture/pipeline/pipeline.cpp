@@ -6,14 +6,12 @@ namespace telar::runtime {
     return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
   }
 
-  template <Allocator Memory>
-  CaptureJoiner<Memory>::CaptureJoiner(tbc::view<Memory&, tbc::lt::a> memory, std::chrono::milliseconds timeout) noexcept
+  CaptureJoiner::CaptureJoiner(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, std::chrono::milliseconds timeout) noexcept
       : memory_(memory),
         timeout_ms_(timeout.count()) {}
 
-  template <Allocator Memory>
-  auto CaptureJoiner<Memory>::push(std::int64_t now_ms, tbc::view<Half, tbc::lt::a> half) noexcept -> tbc::view<Result, tbc::lt::a> {
-    Result result{State::pending, CapturedExchange<Memory>{memory_}};
+  auto CaptureJoiner::push(std::int64_t now_ms, tbc::view<Half, tbc::lt::a> half) noexcept -> tbc::view<Result, tbc::lt::a> {
+    Result result{State::pending, CapturedExchange{memory_}};
     const auto existing = find(half->key);
     if (existing) {
       auto& entry = *slots_[*existing];
@@ -45,8 +43,7 @@ namespace telar::runtime {
     return result;
   }
 
-  template <Allocator Memory>
-  tbc::view<std::optional<CapturedExchange<Memory>>, tbc::lt::a> CaptureJoiner<Memory>::expire(std::int64_t now_ms) noexcept {
+  tbc::view<std::optional<CapturedExchange>, tbc::lt::a> CaptureJoiner::expire(std::int64_t now_ms) noexcept {
     std::optional<std::size_t> expired;
 
     occupied_.forEach([&](std::size_t index) {
@@ -59,7 +56,7 @@ namespace telar::runtime {
       return std::nullopt;
     }
 
-    CapturedExchange<Memory> result{memory_};
+    CapturedExchange result{memory_};
 
     result.include(std::move(slots_[*expired]->half));
     slots_[*expired].reset();
@@ -67,8 +64,7 @@ namespace telar::runtime {
     return result;
   }
 
-  template <Allocator Memory>
-  std::optional<std::size_t> CaptureJoiner<Memory>::find(CaptureKey key) const noexcept {
+  std::optional<std::size_t> CaptureJoiner::find(CaptureKey key) const noexcept {
     std::optional<std::size_t> found;
 
     occupied_.forEach([&](std::size_t index) {
@@ -80,12 +76,10 @@ namespace telar::runtime {
     return found;
   }
 
-  template <ConcurrentAllocator Memory>
-  CaptureReceiver<Memory>::CaptureReceiver(CaptureProducer<Memory>& producer) noexcept
+  CaptureReceiver::CaptureReceiver(CaptureProducer& producer) noexcept
       : producer_(producer) {}
 
-  template <ConcurrentAllocator Memory>
-  auto CaptureReceiver<Memory>::observe(const Request& request) noexcept -> Result {
+  auto CaptureReceiver::observe(const Request& request) noexcept -> Result {
     if (!named_) {
       setThreadName("telar.capture");
       named_ = true;
@@ -99,12 +93,8 @@ namespace telar::runtime {
     return half;
   }
 
-  template <ConcurrentAllocator Memory>
-  void CaptureReceiver<Memory>::stop() noexcept {
+  void CaptureReceiver::stop() noexcept {
     producer_.close();
   }
-
-  template class CaptureJoiner<ConcurrentMemory>;
-  template class CaptureReceiver<ConcurrentMemory>;
 
 }

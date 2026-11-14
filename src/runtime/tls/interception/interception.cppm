@@ -134,10 +134,9 @@ export {
 export {
   namespace telar::runtime {
 
-    template <ConcurrentAllocator Memory>
     class TlsTrustStore {
     public:
-      explicit TlsTrustStore(Memory& memory, const TlsLibrary<Memory>& library);
+      explicit TlsTrustStore(ConcurrentMemory& memory, const TlsLibrary& library);
 
       void addDer(std::span<const unsigned char> encoded);
 
@@ -153,8 +152,6 @@ export {
       std::size_t count_ = 0;
     };
 
-    extern template class TlsTrustStore<ConcurrentMemory>;
-
   }
 }
 
@@ -162,10 +159,9 @@ export {
 export {
   namespace telar::runtime {
 
-    template <ConcurrentAllocator Memory>
     class TlsContexts {
     public:
-      explicit TlsContexts(Memory& memory, const TlsLibrary<Memory>& library, const TlsTrustStore<Memory>& trust);
+      explicit TlsContexts(ConcurrentMemory& memory, const TlsLibrary& library, const TlsTrustStore& trust);
 
       SSL_CTX* origin() const noexcept;
 
@@ -175,8 +171,6 @@ export {
       TlsContext origin_;
       TlsContext child_;
     };
-
-    extern template class TlsContexts<ConcurrentMemory>;
 
   }
 }
@@ -197,7 +191,6 @@ export {
 export {
   namespace telar::runtime {
 
-    template <ConcurrentAllocator Memory>
     class TlsSession {
     public:
       enum class State {
@@ -222,7 +215,7 @@ export {
       // `offer` is the child's ClientHello when the caller already read it complete; without one the
       // session reads its own, from an offer allocated in `memory`. Either is released once the origin
       // has the protocols.
-      explicit TlsSession(tbc::view<const TlsContexts<Memory>&, tbc::lt::a> contexts, tbc::view<std::shared_ptr<const CertificateAuthority<Memory>>, tbc::lt::a> authority, TunnelSockets sockets, std::string_view hostname, tbc::view<Memory&, tbc::lt::a> memory, tbc::view<Owned<AlpnOffer, Memory>, tbc::lt::a> offer);
+      explicit TlsSession(tbc::view<const TlsContexts&, tbc::lt::a> contexts, tbc::view<std::shared_ptr<const CertificateAuthority>, tbc::lt::a> authority, TunnelSockets sockets, std::string_view hostname, tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<Owned<AlpnOffer, ConcurrentMemory>, tbc::lt::a> offer);
 
       ~TlsSession();
 
@@ -277,12 +270,12 @@ export {
       StreamReadBuffer<read_capacity> child_input_;
       StreamReadBuffer<read_capacity> origin_input_;
 
-      tbc::view<const TlsContexts<Memory>&, tbc::lt::a> contexts_;
-      tbc::view<std::shared_ptr<const CertificateAuthority<Memory>>, tbc::lt::a> authority_;
+      tbc::view<const TlsContexts&, tbc::lt::a> contexts_;
+      tbc::view<std::shared_ptr<const CertificateAuthority>, tbc::lt::a> authority_;
       TunnelSockets sockets_;
       FixedText<ProxyHostname::maximum_bytes> hostname_;
       bool offered_;
-      tbc::view<Owned<AlpnOffer, Memory>, tbc::lt::a> offer_;
+      tbc::view<Owned<AlpnOffer, ConcurrentMemory>, tbc::lt::a> offer_;
       AlpnSelection selection_;
       TlsConnection origin_;
       TlsConnection child_;
@@ -292,8 +285,6 @@ export {
       StreamReadiness child_waiting_ = StreamReadiness::readable;
     };
 
-    extern template class TlsSession<ConcurrentMemory>;
-
   }
 }
 
@@ -301,33 +292,30 @@ export {
 export {
   namespace telar::runtime {
 
-    template <ConcurrentAllocator Memory>
     class TlsInterception {
     public:
       // A session it opens keeps the contexts and the allocator it is built in, region `a`.
-      explicit TlsInterception(tbc::view<const TlsContexts<Memory>&, tbc::lt::a> contexts, tbc::view<std::shared_ptr<const CertificateAuthority<Memory>>, tbc::lt::a> authority) noexcept;
+      explicit TlsInterception(tbc::view<const TlsContexts&, tbc::lt::a> contexts, tbc::view<std::shared_ptr<const CertificateAuthority>, tbc::lt::a> authority) noexcept;
 
       // `offer` is the child's ClientHello when the caller already read it complete, or null.
-      tbc::view<Owned<TlsSession<Memory>, Memory>, tbc::lt::a> open(tbc::view<Memory&, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname, tbc::view<Owned<AlpnOffer, Memory>, tbc::lt::a> offer) const;
+      tbc::view<Owned<TlsSession, ConcurrentMemory>, tbc::lt::a> open(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname, tbc::view<Owned<AlpnOffer, ConcurrentMemory>, tbc::lt::a> offer) const;
 
-      tbc::view<Owned<TlsSession<Memory>, Memory>, tbc::lt::a> open(tbc::view<Memory&, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname) const;
+      tbc::view<Owned<TlsSession, ConcurrentMemory>, tbc::lt::a> open(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname) const;
 
-      tbc::view<std::shared_ptr<const CertificateAuthority<Memory>>, tbc::lt::a> snapshot() const noexcept;
+      tbc::view<std::shared_ptr<const CertificateAuthority>, tbc::lt::a> snapshot() const noexcept;
 
-      void replace(tbc::view<std::shared_ptr<const CertificateAuthority<Memory>>, tbc::lt::a> authority) noexcept;
+      void replace(tbc::view<std::shared_ptr<const CertificateAuthority>, tbc::lt::a> authority) noexcept;
 
       void suspend(bool value) noexcept;
 
       bool suspended() const noexcept;
 
     private:
-      tbc::view<const TlsContexts<Memory>&, tbc::lt::a> contexts_;
+      tbc::view<const TlsContexts&, tbc::lt::a> contexts_;
       mutable std::mutex mutex_;
-      tbc::view<std::shared_ptr<const CertificateAuthority<Memory>>, tbc::lt::a> replacement_;
+      tbc::view<std::shared_ptr<const CertificateAuthority>, tbc::lt::a> replacement_;
       std::atomic<bool> suspended_{false};
     };
-
-    extern template class TlsInterception<ConcurrentMemory>;
 
   }
 }
@@ -336,10 +324,9 @@ export {
 export {
   namespace telar::runtime {
 
-    template <ConcurrentAllocator Memory>
     class TlsStream {
     public:
-      explicit TlsStream(TlsSession<Memory>& session, TlsSide side) noexcept;
+      explicit TlsStream(TlsSession& session, TlsSide side) noexcept;
 
       StreamResult read(std::span<std::uint8_t> destination) noexcept;
 
@@ -354,18 +341,13 @@ export {
       void halfClose() noexcept;
 
     private:
-      TlsSession<Memory>& session_;
+      TlsSession& session_;
       TlsSide side_;
     };
 
-    extern template class TlsStream<ConcurrentMemory>;
-
-    template <ConcurrentAllocator Memory>
-    TlsStream(TlsSession<Memory>& session, TlsSide side) -> TlsStream<Memory>;
-
-    static_assert(ByteStream<TlsStream<SystemAllocator>>);
-    static_assert(PeekableByteStream<TlsStream<SystemAllocator>>);
-    static_assert(BufferedByteStream<TlsStream<SystemAllocator>>);
+    static_assert(ByteStream<TlsStream>);
+    static_assert(PeekableByteStream<TlsStream>);
+    static_assert(BufferedByteStream<TlsStream>);
 
   }
 }

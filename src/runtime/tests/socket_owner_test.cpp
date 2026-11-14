@@ -271,7 +271,7 @@ static void accountSnapshot(bool ipv6) {
   std::memcpy(bytes.data() + sizeof(header), &client, sizeof(client));
   std::memcpy(bytes.data() + sizeof(header) + sizeof(client), &peer, sizeof(peer));
   std::memcpy(bytes.data() + bytes.size() - sizeof(header), &header, sizeof(header));
-  using Accounts = redirect::SocketAccounts<Memory>;
+  using Accounts = redirect::SocketAccounts;
 
   check(Accounts::decode(bytes, origin.endpoint.storage, server.endpoint.storage) == 501);
   check(Accounts::decode(bytes, server.endpoint.storage, origin.endpoint.storage) == 0);

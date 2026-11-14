@@ -532,24 +532,21 @@ namespace telar::runtime::plugins {
     return registration;
   }
 
-  template <ConcurrentAllocator Memory>
-  TrafficBridge<Memory>::Connection::Connection(tbc::view<Secure&, tbc::lt::a> memory, TrafficRegistration registration, traffic::PackageChannel channel)
+  TrafficBridge::Connection::Connection(tbc::view<Secure&, tbc::lt::a> memory, TrafficRegistration registration, traffic::PackageChannel channel)
       : registration(std::move(registration)),
         socket(std::move(channel.socket)),
         owner(channel.owner),
         output(memory, 2 * traffic::Limits::http_frame_bytes),
         registration_ack(this->registration.stage == TrafficStage::stream || this->registration.stage == TrafficStage::http) {}
 
-  template <ConcurrentAllocator Memory>
-  TrafficBridge<Memory>::TrafficBridge(tbc::view<Memory&, tbc::lt::a> memory, const ServiceSpec& specification, tbc::view<traffic::PackagePort&, tbc::lt::a> port)
+  TrafficBridge::TrafficBridge(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const ServiceSpec& specification, tbc::view<traffic::PackagePort&, tbc::lt::a> port)
       : memory_(memory),
         secure_(memory),
         specification_(specification),
         port_(port),
         reply_(makeOwned<TrafficReply>(memory)) {}
 
-  template <ConcurrentAllocator Memory>
-  void TrafficBridge<Memory>::attach(Session<Memory>& session) {
+  void TrafficBridge::attach(Session<ConcurrentMemory>& session) {
     std::array<Byte, 1024> output;
     auto initialized = session.request(TrafficProtocol::setup(output, specification_), TrafficLimits::reply_bytes);
 
@@ -562,8 +559,7 @@ namespace telar::runtime::plugins {
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  void TrafficBridge<Memory>::detach() noexcept {
+  void TrafficBridge::detach() noexcept {
     for (auto& connection : connections_) {
       if (connection && connection->registration.stage == TrafficStage::control) {
         connection.reset();
@@ -574,25 +570,21 @@ namespace telar::runtime::plugins {
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  std::uint64_t TrafficBridge<Memory>::errors() const noexcept {
+  std::uint64_t TrafficBridge::errors() const noexcept {
     return errors_;
   }
 
-  template <ConcurrentAllocator Memory>
-  bool TrafficBridge<Memory>::transportFailed() const noexcept {
+  bool TrafficBridge::transportFailed() const noexcept {
     return transport_failed_;
   }
 
-  template <ConcurrentAllocator Memory>
-  void TrafficBridge<Memory>::fail(Connection& connection, const traffic::FlowEvent& flow) {
+  void TrafficBridge::fail(Connection& connection, const traffic::FlowEvent& flow) {
     std::array<Byte, 32> decision;
 
     enqueue(connection, traffic::InterceptionCodec::decision(decision, flow.ticket, connection.registration.fail_closed ? traffic::Verdict::reject : traffic::Verdict::allow));
   }
 
-  template <ConcurrentAllocator Memory>
-  auto TrafficBridge<Memory>::find(std::uint32_t id) noexcept -> Connection* {
+  auto TrafficBridge::find(std::uint32_t id) noexcept -> Connection* {
     for (auto& connection : connections_) {
       if (connection && connection->registration.id == id) {
         return &*connection;
@@ -602,8 +594,7 @@ namespace telar::runtime::plugins {
     return nullptr;
   }
 
-  template <ConcurrentAllocator Memory>
-  tbc::view<TrafficOutcome, tbc::lt::a> TrafficBridge<Memory>::apply(std::uint64_t event_id, tbc::view<std::span<const Byte>, tbc::lt::a> input) {
+  tbc::view<TrafficOutcome, tbc::lt::a> TrafficBridge::apply(std::uint64_t event_id, tbc::view<std::span<const Byte>, tbc::lt::a> input) {
     const auto outcome = TrafficProtocol::readReply(input, *reply_);
 
     if (reply_->event_id != event_id) {
@@ -712,14 +703,12 @@ namespace telar::runtime::plugins {
     return outcome;
   }
 
-  template <ConcurrentAllocator Memory>
-  void TrafficBridge<Memory>::enqueue(Connection& connection, std::span<const Byte> frame) {
+  void TrafficBridge::enqueue(Connection& connection, std::span<const Byte> frame) {
     connection.output.append(traffic::Protocol::prefix(frame.size()));
     connection.output.append(frame);
   }
 
-  template <ConcurrentAllocator Memory>
-  void TrafficBridge<Memory>::write(Connection& connection) {
+  void TrafficBridge::write(Connection& connection) {
     const auto bytes = connection.output.readable();
     const auto count = ::send(connection.socket.get(), bytes.data(), bytes.size(), 0);
     if (count < 0 && socketWouldBlock(sys::lastError())) {
@@ -733,8 +722,7 @@ namespace telar::runtime::plugins {
     connection.output.consume(static_cast<std::size_t>(count));
   }
 
-  template <ConcurrentAllocator Memory>
-  tbc::view<std::optional<SensitiveAllocation<Memory>>, tbc::lt::a> TrafficBridge<Memory>::read(tbc::view<Memory&, tbc::lt::a> memory, Connection& connection) {
+  tbc::view<std::optional<SensitiveAllocation<ConcurrentMemory>>, tbc::lt::a> TrafficBridge::read(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, Connection& connection) {
     if (!connection.input) {
       const auto prefix_bytes = connection.registration.stage == TrafficStage::control ? traffic::control::Protocol::prefix_bytes : traffic::Protocol::prefix_bytes;
       const auto count = ::recv(connection.socket.get(), connection.prefix.data() + connection.prefix_bytes, prefix_bytes - connection.prefix_bytes, 0);
@@ -796,6 +784,5 @@ namespace telar::runtime::plugins {
   template class ResultQueue<ConcurrentMemory>;
   template class Session<Memory>;
   template class Session<ConcurrentMemory>;
-  template class TrafficBridge<ConcurrentMemory>;
 
 }

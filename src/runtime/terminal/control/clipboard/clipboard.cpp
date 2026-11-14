@@ -235,15 +235,13 @@ namespace telar::runtime::control {
     return result;
   }
 
-  template <Allocator Memory>
-  ClipboardWrite<Memory>::ClipboardWrite(tbc::view<Memory&, tbc::lt::a> memory, const ClipboardMetadata& metadata, std::size_t limit)
+  ClipboardWrite::ClipboardWrite(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const ClipboardMetadata& metadata, std::size_t limit)
       : metadata(metadata),
         memory_(memory),
-        spool_(AllocatorRef<std::uint8_t, Memory>{memory}),
+        spool_(AllocatorRef<std::uint8_t, ConcurrentMemory>{memory}),
         limit_(limit) {}
 
-  template <Allocator Memory>
-  ClipboardStatus ClipboardWrite<Memory>::data(std::string_view mime, std::string_view encoded) {
+  ClipboardStatus ClipboardWrite::data(std::string_view mime, std::string_view encoded) {
     if (!current_ || entries_[*current_].mime.view() != mime) {
       if (finishCurrent() != ClipboardStatus::ok) {
         return ClipboardStatus::invalid;
@@ -301,9 +299,8 @@ namespace telar::runtime::control {
     return ClipboardStatus::ok;
   }
 
-  template <Allocator Memory>
-  ClipboardStatus ClipboardWrite<Memory>::alias(std::string_view mime, std::string_view encoded) {
-    Vector<std::uint8_t, Memory> decoded{AllocatorRef<std::uint8_t, Memory>{memory_}};
+  ClipboardStatus ClipboardWrite::alias(std::string_view mime, std::string_view encoded) {
+    Vector<std::uint8_t, ConcurrentMemory> decoded{AllocatorRef<std::uint8_t, ConcurrentMemory>{memory_}};
 
     if (encoded.size() / 4 * 3 > limit_) {
       return ClipboardStatus::too_large;
@@ -355,8 +352,7 @@ namespace telar::runtime::control {
     return ClipboardStatus::ok;
   }
 
-  template <Allocator Memory>
-  ClipboardStatus ClipboardWrite<Memory>::commit() {
+  ClipboardStatus ClipboardWrite::commit() {
     if (finishCurrent() != ClipboardStatus::ok) {
       return ClipboardStatus::invalid;
     }
@@ -411,13 +407,11 @@ namespace telar::runtime::control {
     return ClipboardStatus::ok;
   }
 
-  template <Allocator Memory>
-  std::span<const ClipboardContentView> ClipboardWrite<Memory>::contents() const noexcept {
+  std::span<const ClipboardContentView> ClipboardWrite::contents() const noexcept {
     return std::span{contents_}.first(content_count_);
   }
 
-  template <Allocator Memory>
-  std::optional<std::string_view> ClipboardWrite<Memory>::token(std::string_view& remaining) noexcept {
+  std::optional<std::string_view> ClipboardWrite::token(std::string_view& remaining) noexcept {
     constexpr std::string_view whitespace = " \t\n\r\f\v";
     const auto first = remaining.find_first_not_of(whitespace);
     if (first == std::string_view::npos) {
@@ -433,8 +427,7 @@ namespace telar::runtime::control {
     return result;
   }
 
-  template <Allocator Memory>
-  ClipboardStatus ClipboardWrite<Memory>::finishCurrent() noexcept {
+  ClipboardStatus ClipboardWrite::finishCurrent() noexcept {
     if (group_size_ != 0) {
       return ClipboardStatus::invalid;
     }
@@ -446,15 +439,13 @@ namespace telar::runtime::control {
     return ClipboardStatus::ok;
   }
 
-  template <Allocator Memory>
-  void ClipboardWrite<Memory>::reserve(std::size_t count) {
+  void ClipboardWrite::reserve(std::size_t count) {
     if (count > spool_.capacity() - spool_.size()) {
       spool_.reserve(std::min(limit_, std::max(spool_.size() + count, std::max(initial_capacity, spool_.capacity() * 2))));
     }
   }
 
-  template <Allocator Memory>
-  void clipboardBase64(Reply<Memory>& reply, std::span<const std::uint8_t> input) {
+  void clipboardBase64(Reply<ConcurrentMemory>& reply, std::span<const std::uint8_t> input) {
     constexpr std::size_t raw_chunk_bytes = 3072;
     std::array<char, raw_chunk_bytes / 3 * 4> encoded;
 
@@ -470,13 +461,11 @@ namespace telar::runtime::control {
     }
   }
 
-  template <Allocator Memory>
-  void clipboardBase64(Reply<Memory>& reply, std::string_view input) {
+  void clipboardBase64(Reply<ConcurrentMemory>& reply, std::string_view input) {
     clipboardBase64(reply, std::span{reinterpret_cast<const std::uint8_t*>(input.data()), input.size()});
   }
 
-  template <Allocator Memory>
-  void clipboardPacket(Reply<Memory>& reply, const ClipboardPacket& packet) {
+  void clipboardPacket(Reply<ConcurrentMemory>& reply, const ClipboardPacket& packet) {
     reply.append(packet.operation == ClipboardOperation::read ? "\x1b]5522;type=read:status=" : "\x1b]5522;type=write:status=");
     reply.append(clipboardStatusName(packet.status));
     if (packet.primary) {
@@ -506,8 +495,7 @@ namespace telar::runtime::control {
     reply.append(packet.ending == Ending::bell ? "\a" : "\x1b\\");
   }
 
-  template <Allocator Memory>
-  void clipboardReadSuccess(Reply<Memory>& reply, const ClipboardPacket& request, std::span<const ClipboardContentView> contents, std::span<const std::string_view> available, bool listing) {
+  void clipboardReadSuccess(Reply<ConcurrentMemory>& reply, const ClipboardPacket& request, std::span<const ClipboardContentView> contents, std::span<const std::string_view> available, bool listing) {
     auto packet = request;
 
     packet.operation = ClipboardOperation::read;
@@ -562,16 +550,14 @@ namespace telar::runtime::control {
     clipboardPacket(reply, packet);
   }
 
-  template <Allocator Memory>
-  Clipboard<Memory>::Clipboard(Memory& memory)
+  Clipboard::Clipboard(ConcurrentMemory& memory)
       : memory_(memory),
-        decoded_(AllocatorRef<std::uint8_t, Memory>{memory}),
-        transaction_(nullptr, AllocationDeleter<ClipboardWrite<Memory>, Memory>{memory}),
-        pending_(nullptr, AllocationDeleter<Pending, Memory>{memory}),
-        asynchronous_replies_{Reply<Memory>{memory}, Reply<Memory>{memory}} {}
+        decoded_(AllocatorRef<std::uint8_t, ConcurrentMemory>{memory}),
+        transaction_(nullptr, AllocationDeleter<ClipboardWrite, ConcurrentMemory>{memory}),
+        pending_(nullptr, AllocationDeleter<Pending, ConcurrentMemory>{memory}),
+        asynchronous_replies_{Reply<ConcurrentMemory>{memory}, Reply<ConcurrentMemory>{memory}} {}
 
-  template <Allocator Memory>
-  void Clipboard<Memory>::routes(std::span<const ClipboardRoute> routes, std::optional<ClipboardRoute> preferred) {
+  void Clipboard::routes(std::span<const ClipboardRoute> routes, std::optional<ClipboardRoute> preferred) {
     if (routes.size() > routes_.size()) {
       throw std::logic_error{"Too many clipboard client routes"};
     }
@@ -586,8 +572,7 @@ namespace telar::runtime::control {
     }
   }
 
-  template <Allocator Memory>
-  void Clipboard<Memory>::traditional(std::string_view payload, const Policy& policy) {
+  void Clipboard::traditional(std::string_view payload, const Policy& policy) {
     const auto separator = payload.find(';');
     if (separator == std::string_view::npos || separator > 1) {
       return;
@@ -628,8 +613,7 @@ namespace telar::runtime::control {
     }
   }
 
-  template <Allocator Memory>
-  void Clipboard<Memory>::kitty(std::string_view payload, Ending ending, const Policy& policy, Reply<Memory>& reply) {
+  void Clipboard::kitty(std::string_view payload, Ending ending, const Policy& policy, Reply<ConcurrentMemory>& reply) {
     const auto separator = payload.find(';');
     const auto metadata = ClipboardMetadata::parse(payload.substr(0, separator));
     if (!metadata) {
@@ -658,7 +642,7 @@ namespace telar::runtime::control {
         if (policy.clipboard_write == Access::deny) {
           status(*metadata, ClipboardStatus::denied, ending, reply);
         } else {
-          transaction_ = makeOwned<ClipboardWrite<Memory>>(memory_, memory_, *metadata, maximum_bytes);
+          transaction_ = makeOwned<ClipboardWrite>(memory_, memory_, *metadata, maximum_bytes);
         }
 
         return;
@@ -698,8 +682,7 @@ namespace telar::runtime::control {
     }
   }
 
-  template <Allocator Memory>
-  std::optional<ClipboardDesktopRequest> Clipboard<Memory>::request(std::uint64_t pane, std::uint64_t generation) {
+  std::optional<ClipboardDesktopRequest> Clipboard::request(std::uint64_t pane, std::uint64_t generation) {
     if (!pending_ || pending_->announced) {
       return std::nullopt;
     }
@@ -722,20 +705,17 @@ namespace telar::runtime::control {
     };
   }
 
-  template <Allocator Memory>
-  std::optional<ClipboardRoute> Clipboard<Memory>::route() const noexcept {
+  std::optional<ClipboardRoute> Clipboard::route() const noexcept {
     return pending_ ? std::optional{pending_->route} : std::nullopt;
   }
 
-  template <Allocator Memory>
-  void Clipboard<Memory>::announced() noexcept {
+  void Clipboard::announced() noexcept {
     if (pending_) {
       pending_->announced = true;
     }
   }
 
-  template <Allocator Memory>
-  bool Clipboard<Memory>::complete(ClipboardRoute sender, const CompleteClipboardDesktop& completion) {
+  bool Clipboard::complete(ClipboardRoute sender, const CompleteClipboardDesktop& completion) {
     if (!pending_ || !pending_->announced || pending_->route != sender || pending_->ticket != completion.ticket || !live(sender)) {
       return false;
     }
@@ -779,8 +759,7 @@ namespace telar::runtime::control {
     return true;
   }
 
-  template <Allocator Memory>
-  void Clipboard<Memory>::completeResult(ClipboardRoute sender, const CompleteClipboardDesktop& completion) {
+  void Clipboard::completeResult(ClipboardRoute sender, const CompleteClipboardDesktop& completion) {
     const auto result = completion.status == ClipboardDesktopStatus::success ? ClipboardStatus::done : completion.status == ClipboardDesktopStatus::denied    ? ClipboardStatus::denied
                                                                                                    : completion.status == ClipboardDesktopStatus::unsupported ? ClipboardStatus::unsupported
                                                                                                                                                               : ClipboardStatus::io_error;
@@ -848,8 +827,7 @@ namespace telar::runtime::control {
     return;
   }
 
-  template <Allocator Memory>
-  void Clipboard<Memory>::discard() noexcept {
+  void Clipboard::discard() noexcept {
     if (pending_) {
       cancelPending();
     }
@@ -857,7 +835,7 @@ namespace telar::runtime::control {
     pending_.reset();
     transaction_.reset();
     grants_.clear();
-    Vector<std::uint8_t, Memory>{decoded_.get_allocator()}.swap(decoded_);
+    Vector<std::uint8_t, ConcurrentMemory>{decoded_.get_allocator()}.swap(decoded_);
     for (auto& reply : asynchronous_replies_) {
       reply.discard();
     }
@@ -866,21 +844,18 @@ namespace telar::runtime::control {
     reply_head_ = 0;
   }
 
-  template <Allocator Memory>
-  void Clipboard<Memory>::expire(Clock::time_point now) {
+  void Clipboard::expire(Clock::time_point now) {
     if (pending_ && now >= pending_->deadline) {
       cancelPending();
       finish(ClipboardStatus::denied);
     }
   }
 
-  template <Allocator Memory>
-  bool Clipboard<Memory>::hasReply() const noexcept {
+  bool Clipboard::hasReply() const noexcept {
     return reply_count_ != 0;
   }
 
-  template <Allocator Memory>
-  void Clipboard<Memory>::reset() {
+  void Clipboard::reset() {
     if (pending_) {
       cancelPending();
       finish(ClipboardStatus::denied);
@@ -890,8 +865,7 @@ namespace telar::runtime::control {
     grants_.clear();
   }
 
-  template <Allocator Memory>
-  bool Clipboard<Memory>::paste(ClipboardRoute route, bool primary, std::span<const std::string_view> available) {
+  bool Clipboard::paste(ClipboardRoute route, bool primary, std::span<const std::string_view> available) {
     if (!live(route) || reply_count_ != 0) {
       return false;
     }
@@ -910,18 +884,15 @@ namespace telar::runtime::control {
     }
   }
 
-  template <Allocator Memory>
-  auto Clipboard<Memory>::cancellation() const noexcept -> std::optional<Cancellation> {
+  auto Clipboard::cancellation() const noexcept -> std::optional<Cancellation> {
     return cancellation_;
   }
 
-  template <Allocator Memory>
-  void Clipboard<Memory>::cancelled() noexcept {
+  void Clipboard::cancelled() noexcept {
     cancellation_.reset();
   }
 
-  template <Allocator Memory>
-  std::optional<ClipboardDesktopExecute> Clipboard<Memory>::execution() const noexcept {
+  std::optional<ClipboardDesktopExecute> Clipboard::execution() const noexcept {
     if (pending_ && pending_->prepared && !pending_->committed) {
       return ClipboardDesktopExecute{pending_->ticket};
     }
@@ -929,25 +900,22 @@ namespace telar::runtime::control {
     return std::nullopt;
   }
 
-  template <Allocator Memory>
-  void Clipboard<Memory>::committed() noexcept {
+  void Clipboard::committed() noexcept {
     if (pending_) {
       pending_->committed = true;
     }
   }
 
-  template <Allocator Memory>
-  Clipboard<Memory>::Pending::Pending(Memory& memory)
-      : text(AllocatorRef<std::uint8_t, Memory>{memory}),
-        transaction(nullptr, AllocationDeleter<ClipboardWrite<Memory>, Memory>{memory}) {
+  Clipboard::Pending::Pending(ConcurrentMemory& memory)
+      : text(AllocatorRef<std::uint8_t, ConcurrentMemory>{memory}),
+        transaction(nullptr, AllocationDeleter<ClipboardWrite, ConcurrentMemory>{memory}) {
     randomBytes(&nonce, sizeof(nonce));
     if (nonce == 0) {
       nonce = 1;
     }
   }
 
-  template <Allocator Memory>
-  std::size_t Clipboard<Memory>::Pending::prepareViews() noexcept {
+  std::size_t Clipboard::Pending::prepareViews() noexcept {
     for (std::size_t index = 0; index < mime_count; ++index) {
       mime_views[index] = mimes[index].view();
     }
@@ -965,19 +933,16 @@ namespace telar::runtime::control {
     return contents;
   }
 
-  template <Allocator Memory>
-  bool Clipboard<Memory>::textMime(std::string_view mime) noexcept {
+  bool Clipboard::textMime(std::string_view mime) noexcept {
     return mime == "text/plain" || mime == "text/plain;charset=utf-8" || mime == "UTF8_STRING" || mime == "STRING" || mime == "TEXT";
   }
 
-  template <Allocator Memory>
-  bool Clipboard<Memory>::live(ClipboardRoute route) const noexcept {
+  bool Clipboard::live(ClipboardRoute route) const noexcept {
     return std::find(routes_.begin(), routes_.begin() + route_count_, route) != routes_.begin() + route_count_;
   }
 
-  template <Allocator Memory>
   template <base64::Padding Rule>
-  bool Clipboard<Memory>::decode(std::string_view encoded) {
+  bool Clipboard::decode(std::string_view encoded) {
     if (encoded.size() > maximum_encoded_bytes) {
       return false;
     }
@@ -992,26 +957,22 @@ namespace telar::runtime::control {
     return true;
   }
 
-  template <Allocator Memory>
-  void Clipboard<Memory>::status(const ClipboardMetadata& metadata, ClipboardStatus status, Ending ending, Reply<Memory>& reply) {
+  void Clipboard::status(const ClipboardMetadata& metadata, ClipboardStatus status, Ending ending, Reply<ConcurrentMemory>& reply) {
     clipboardPacket(reply, ClipboardPacket{.operation = metadata.operation == ClipboardOperation::read ? ClipboardOperation::read : ClipboardOperation::write, .status = status, .id = metadata.id.view(), .ending = ending});
   }
 
-  template <Allocator Memory>
-  void Clipboard<Memory>::abort(ClipboardStatus result, Ending ending, Reply<Memory>& reply) {
+  void Clipboard::abort(ClipboardStatus result, Ending ending, Reply<ConcurrentMemory>& reply) {
     status(transaction_->metadata, result, ending, reply);
     transaction_.reset();
   }
 
-  template <Allocator Memory>
-  void Clipboard<Memory>::cancelPending() noexcept {
+  void Clipboard::cancelPending() noexcept {
     if (pending_->announced) {
       cancellation_ = Cancellation{pending_->route, pending_->ticket};
     }
   }
 
-  template <Allocator Memory>
-  void Clipboard<Memory>::finish(ClipboardStatus result) {
+  void Clipboard::finish(ClipboardStatus result) {
     if (!pending_->traditional) {
       auto builder = buildReply();
 
@@ -1022,8 +983,7 @@ namespace telar::runtime::control {
     pending_.reset();
   }
 
-  template <Allocator Memory>
-  std::optional<ClipboardRoute> Clipboard<Memory>::authorizedRoute(ClipboardGrants& grants, const ClipboardMetadata& metadata, bool write, bool exempt) {
+  std::optional<ClipboardRoute> Clipboard::authorizedRoute(ClipboardGrants& grants, const ClipboardMetadata& metadata, bool write, bool exempt) {
     if (!exempt && !metadata.name.view().empty()) {
       if (const auto granted = grants.use(metadata.password.view(), write)) {
         return granted;
@@ -1033,8 +993,7 @@ namespace telar::runtime::control {
     return std::nullopt;
   }
 
-  template <Allocator Memory>
-  void Clipboard<Memory>::read(const ClipboardMetadata& metadata, std::string_view data, Ending ending, const Policy& policy, Reply<Memory>& reply) {
+  void Clipboard::read(const ClipboardMetadata& metadata, std::string_view data, Ending ending, const Policy& policy, Reply<ConcurrentMemory>& reply) {
     if (!decode(data)) {
       return;
     }
@@ -1062,7 +1021,7 @@ namespace telar::runtime::control {
 
     request.metadata = metadata;
     request.ending = ending;
-    while (const auto mime = ClipboardWrite<Memory>::token(decoded)) {
+    while (const auto mime = ClipboardWrite::token(decoded)) {
       if (*mime == ".") {
         request.listing = true;
       } else if (request.mime_count < request.mimes.size() && mime->size() <= ClipboardMetadata::maximum_mime && !mime->contains('\0')) {
@@ -1076,8 +1035,7 @@ namespace telar::runtime::control {
     request.prompt = policy.clipboard_read == Access::ask && request.mime_count != 0 && !granted;
   }
 
-  template <Allocator Memory>
-  void Clipboard<Memory>::commit(Ending ending, const Policy& policy, Reply<Memory>& reply) {
+  void Clipboard::commit(Ending ending, const Policy& policy, Reply<ConcurrentMemory>& reply) {
     const auto result = transaction_->commit();
     if (result != ClipboardStatus::ok) {
       abort(result, ending, reply);
@@ -1107,8 +1065,7 @@ namespace telar::runtime::control {
     request.transaction = std::move(transaction_);
   }
 
-  template <Allocator Memory>
-  Clipboard<Memory>::ReplyBuilder::ReplyBuilder(Clipboard& owner)
+  Clipboard::ReplyBuilder::ReplyBuilder(Clipboard& owner)
       : owner_(owner),
         reply_(owner.asynchronous_replies_[(owner.reply_head_ + owner.reply_count_) % owner.asynchronous_replies_.size()]) {
     if (owner.reply_count_ == owner.asynchronous_replies_.size()) {
@@ -1116,40 +1073,24 @@ namespace telar::runtime::control {
     }
   }
 
-  template <Allocator Memory>
-  Clipboard<Memory>::ReplyBuilder::~ReplyBuilder() {
+  Clipboard::ReplyBuilder::~ReplyBuilder() {
     if (!committed_) {
       reply_.clear();
     }
   }
 
-  template <Allocator Memory>
-  Reply<Memory>& Clipboard<Memory>::ReplyBuilder::reply() noexcept {
+  Reply<ConcurrentMemory>& Clipboard::ReplyBuilder::reply() noexcept {
     return reply_;
   }
 
-  template <Allocator Memory>
-  void Clipboard<Memory>::ReplyBuilder::commit() {
+  void Clipboard::ReplyBuilder::commit() {
     reply_.seal();
     ++owner_.reply_count_;
     committed_ = true;
   }
 
-  template <Allocator Memory>
-  auto Clipboard<Memory>::buildReply() -> ReplyBuilder {
+  auto Clipboard::buildReply() -> ReplyBuilder {
     return ReplyBuilder{*this};
   }
-
-  template class ClipboardWrite<telar::ConcurrentMemory>;
-
-  template void clipboardBase64<telar::ConcurrentMemory>(Reply<telar::ConcurrentMemory>& reply, std::span<const std::uint8_t> input);
-
-  template void clipboardBase64<telar::ConcurrentMemory>(Reply<telar::ConcurrentMemory>& reply, std::string_view input);
-
-  template void clipboardPacket<telar::ConcurrentMemory>(Reply<telar::ConcurrentMemory>& reply, const ClipboardPacket& packet);
-
-  template void clipboardReadSuccess<telar::ConcurrentMemory>(Reply<telar::ConcurrentMemory>& reply, const ClipboardPacket& request, std::span<const ClipboardContentView> contents, std::span<const std::string_view> available, bool listing);
-
-  template class Clipboard<telar::ConcurrentMemory>;
 
 }

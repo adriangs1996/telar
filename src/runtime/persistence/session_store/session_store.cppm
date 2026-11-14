@@ -259,18 +259,18 @@ export {
   namespace telar::runtime::checkpoint {
 
     // The service that launches the restored panes and writes the input that resumes their agents.
-    template <typename Panes, typename Memory>
-    concept PaneLauncher = requires(Panes& panes, RuntimeModel<Memory>& model, Command<Memory>& command, Pane<Memory>& pane, TabLocation location, TerminalSize size, std::uint64_t identity) {
+    template <typename Panes>
+    concept PaneLauncher = requires(Panes& panes, RuntimeModel& model, Command<ConcurrentMemory>& command, Pane& pane, TabLocation location, TerminalSize size, std::uint64_t identity) {
       panes.launch(model, nullptr, false, command, location, size, identity).id;
       panes.flushInput(pane);
     };
 
     // Kept whole: generic over the pane launcher, PaneService in telar.runtime.runtime, which imports this module.
-    template <Allocator Memory, PaneLauncher<Memory> Panes>
+    template <PaneLauncher Panes>
     class TBC_HOT_PATH Restore {
     public:
       // The panes it launches keep the allocator, so everything the restore reaches lives in region `a`.
-      inline explicit Restore(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<RuntimeModel<Memory>&, tbc::lt::a> model, tbc::view<Panes&, tbc::lt::a> panes, tbc::view<ClientLayouts<Memory>&, tbc::lt::a> layouts, bool resume_agents)
+      inline explicit Restore(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<RuntimeModel&, tbc::lt::a> model, tbc::view<Panes&, tbc::lt::a> panes, tbc::view<ClientLayouts&, tbc::lt::a> layouts, bool resume_agents)
           : memory_(memory),
             model_(model),
             panes_(panes),
@@ -337,7 +337,7 @@ export {
       inline void restore(const WorkspaceRecord& record) {
         validateIdentity(record.id);
         validateIdentity(record.first_tab);
-        auto workspace = makeOwned<Workspace<Memory>>(memory_, memory_, record.id, record.path, record.name);
+        auto workspace = makeOwned<Workspace>(memory_, memory_, record.id, record.path, record.name);
 
         workspace->tabs.emplace_back(memory_, record.first_tab, record.first_label);
         model_.workspaces.insert(record.id, std::move(workspace));
@@ -410,7 +410,7 @@ export {
       }
 
       // Types the command that resumes an agent, its words separated by spaces, and presses enter.
-      inline static void writeResume(ByteQueue<Memory>& input, std::span<const std::string_view> words) {
+      inline static void writeResume(ByteQueue<ConcurrentMemory>& input, std::span<const std::string_view> words) {
         for (std::size_t index = 0; index < words.size(); ++index) {
           constexpr Byte separator = ' ';
 
@@ -445,7 +445,7 @@ export {
       }
 
       inline void dropEmptyTabs() {
-        std::array<std::uint64_t, WorkspaceStore<Memory>::capacity> emptied{};
+        std::array<std::uint64_t, WorkspaceStore::capacity> emptied{};
         std::size_t count = 0;
 
         for (auto* workspace : model_.workspaces.items()) {
@@ -474,10 +474,10 @@ export {
         }
       }
 
-      tbc::view<Memory&, tbc::lt::a> memory_;
-      tbc::view<RuntimeModel<Memory>&, tbc::lt::a> model_;
+      tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
+      tbc::view<RuntimeModel&, tbc::lt::a> model_;
       tbc::view<Panes&, tbc::lt::a> panes_;
-      tbc::view<ClientLayouts<Memory>&, tbc::lt::a> layouts_;
+      tbc::view<ClientLayouts&, tbc::lt::a> layouts_;
       bool resume_agents_;
     };
 
@@ -552,11 +552,11 @@ export {
     // Encodes the session the model, the layouts and the agents describe, which each call lends. It keeps
     // only the stamps that tell whether the session changed.
     // Kept whole: generic over the agents, AgentService in telar.runtime.runtime and persistence_test's SnapshotAgents.
-    template <Allocator Memory, AgentSource Agents>
+    template <AgentSource Agents>
     class TBC_HOT_PATH Snapshot {
     public:
       // The bytes view the buffer.
-      inline static tbc::view<std::span<const Byte>, tbc::lt::a> encode(const RuntimeModel<Memory>& model, const ClientLayouts<Memory>& layouts, const Agents& agents, tbc::view<std::span<Byte>, tbc::lt::a> buffer, std::size_t& dropped) {
+      inline static tbc::view<std::span<const Byte>, tbc::lt::a> encode(const RuntimeModel& model, const ClientLayouts& layouts, const Agents& agents, tbc::view<std::span<Byte>, tbc::lt::a> buffer, std::size_t& dropped) {
         Writer writer{buffer, Counters{model.workspaces.nextCounter(), model.next_tab_id, model.panes.nextCounter(), model.next_pane_generation}};
 
         for (const auto* workspace : model.workspaces.items()) {
@@ -623,7 +623,7 @@ export {
         return writer.finish();
       }
 
-      inline bool changed(const RuntimeModel<Memory>& model, const ClientLayouts<Memory>& layouts, const Agents& agents) noexcept {
+      inline bool changed(const RuntimeModel& model, const ClientLayouts& layouts, const Agents& agents) noexcept {
         const std::array revisions{model.workspace_revision, layouts.revision(), agents.revision()};
         bool changed = revisions != revisions_;
 
@@ -654,7 +654,7 @@ export {
 
       std::array<std::uint64_t, 3> revisions_{};
       // One stamp per pane slot, so `changed` indexes it with every slot the store can hold.
-      std::array<PaneStamp, PaneStore<Memory>::capacity> stamps_{};
+      std::array<PaneStamp, PaneStore::capacity> stamps_{};
     };
 
   }
@@ -665,14 +665,14 @@ export {
   namespace telar::runtime::checkpoint {
 
     // Kept whole: generic over the agents, AgentService in telar.runtime.runtime, which imports this module.
-    template <ConcurrentAllocator Memory, AgentSource Agents>
+    template <AgentSource Agents>
     class TBC_HOT_PATH SessionStore {
       using Clock = std::chrono::steady_clock;
 
     public:
-      inline explicit SessionStore(Memory& memory)
+      inline explicit SessionStore(ConcurrentMemory& memory)
           : memory_(memory),
-            buffer_(AllocatorRef<Byte, Memory>{memory}) {}
+            buffer_(AllocatorRef<Byte, ConcurrentMemory>{memory}) {}
 
       inline ~SessionStore() {
         if (worker_) {
@@ -683,13 +683,13 @@ export {
       SessionStore(const SessionStore&) = delete;
       SessionStore& operator=(const SessionStore&) = delete;
 
-      template <PaneLauncher<Memory> Panes>
-      inline void configure(RuntimeModel<Memory>& model, Panes& panes, ClientLayouts<Memory>& layouts, Options options) {
+      template <PaneLauncher Panes>
+      inline void configure(RuntimeModel& model, Panes& panes, ClientLayouts& layouts, Options options) {
         if (options.path.empty()) {
           return;
         }
 
-        FileStore<Memory> file{memory_, options.path};
+        FileStore<ConcurrentMemory> file{memory_, options.path};
 
         try {
           if (file.load(buffer_)) {
@@ -711,7 +711,7 @@ export {
         due_ = Clock::now() + debounce;
       }
 
-      inline std::chrono::nanoseconds tick(const RuntimeModel<Memory>& model, const ClientLayouts<Memory>& layouts, const Agents& agents, Clock::time_point now) {
+      inline std::chrono::nanoseconds tick(const RuntimeModel& model, const ClientLayouts& layouts, const Agents& agents, Clock::time_point now) {
         if (!worker_) {
           return std::chrono::seconds{1};
         }
@@ -732,7 +732,7 @@ export {
 
         try {
           TELAR_TRACE("checkpoint.encode");
-          const auto bytes = Snapshot<Memory, Agents>::encode(model, layouts, agents, buffer_, dropped_records);
+          const auto bytes = Snapshot<Agents>::encode(model, layouts, agents, buffer_, dropped_records);
 
           pending_ = worker_->submit(bytes);
           dirty_ = !pending_;
@@ -752,7 +752,7 @@ export {
         }
       }
 
-      inline void finish(const RuntimeModel<Memory>& model, const ClientLayouts<Memory>& layouts, const Agents& agents) noexcept {
+      inline void finish(const RuntimeModel& model, const ClientLayouts& layouts, const Agents& agents) noexcept {
         if (!worker_) {
           return;
         }
@@ -763,7 +763,7 @@ export {
           });
 
           if (snapshot_.changed(model, layouts, agents) || dirty_) {
-            const auto bytes = Snapshot<Memory, Agents>::encode(model, layouts, agents, buffer_, dropped_records);
+            const auto bytes = Snapshot<Agents>::encode(model, layouts, agents, buffer_, dropped_records);
             if (worker_->submit(bytes)) {
               worker_->wait([&](int error) {
                 completed(error);
@@ -795,11 +795,11 @@ export {
         }
       }
 
-      Memory& memory_;
-      Snapshot<Memory, Agents> snapshot_;
-      Vector<Byte, Memory> buffer_;
+      ConcurrentMemory& memory_;
+      Snapshot<Agents> snapshot_;
+      Vector<Byte, ConcurrentMemory> buffer_;
       // The worker stores the encoded buffer above until its result is collected, so the store stays put.
-      tbc::view<std::optional<ObservationWorker<FileStore<Memory>>>, tbc::lt::self> worker_;
+      tbc::view<std::optional<ObservationWorker<FileStore<ConcurrentMemory>>>, tbc::lt::self> worker_;
       Clock::time_point due_{};
       bool dirty_ = false;
       bool pending_ = false;

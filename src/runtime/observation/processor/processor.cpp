@@ -12,16 +12,14 @@ namespace telar::runtime {
     return std::span{bytes}.subspan(event.offset, event.length);
   }
 
-  template <Allocator Memory>
-  PaneObserver<Memory>::PaneObserver(Memory& memory, TerminalSize size, std::string_view directory, bool capture_output, std::optional<ShellToken> shell_token)
+  PaneObserver::PaneObserver(ConcurrentMemory& memory, TerminalSize size, std::string_view directory, bool capture_output, std::optional<ShellToken> shell_token)
       : terminal_(memory, size, TerminalPurpose::observation),
         tracker_(memory, terminal_, directory, capture_output, shell_token),
-        workspace_path_(AllocatorRef<char, Memory>{memory}),
-        shell_(AllocatorRef<char, Memory>{memory}),
+        workspace_path_(AllocatorRef<char, ConcurrentMemory>{memory}),
+        shell_(AllocatorRef<char, ConcurrentMemory>{memory}),
         initial_size_(size) {}
 
-  template <Allocator Memory>
-  void PaneObserver<Memory>::configureHistory(const HistorySession& session, bool capture_output) {
+  void PaneObserver::configureHistory(const HistorySession& session, bool capture_output) {
     workspace_path_.assign(session.workspace_path);
     shell_.assign(session.shell);
     // The session kept views the observer's own copies of its texts.
@@ -35,23 +33,19 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  void PaneObserver<Memory>::updateDirectory(std::string_view directory) {
+  void PaneObserver::updateDirectory(std::string_view directory) {
     tracker_.updateDirectory(directory);
   }
 
-  template <Allocator Memory>
-  std::string_view PaneObserver<Memory>::observedDirectory() const noexcept {
+  std::string_view PaneObserver::observedDirectory() const noexcept {
     return tracker_.directory();
   }
 
-  template <Allocator Memory>
-  void PaneObserver<Memory>::noteInjectedSubmission() noexcept {
+  void PaneObserver::noteInjectedSubmission() noexcept {
     injected_submissions_.fetch_add(1, std::memory_order_relaxed);
   }
 
-  template <Allocator Memory>
-  void PaneObserver<Memory>::bytes(ObservationKind kind, std::span<const Byte> bytes, std::optional<bool> shell_foreground) noexcept {
+  void PaneObserver::bytes(ObservationKind kind, std::span<const Byte> bytes, std::optional<bool> shell_foreground) noexcept {
     auto& batch = batches_[active_];
     if (batch.event_count == ObservationBatch::event_capacity || bytes.size() > ObservationBatch::byte_capacity - batch.byte_count) {
       drop(bytes.size());
@@ -68,28 +62,23 @@ namespace telar::runtime {
     batch.events[batch.event_count++] = {kind, ObservationTime::now(), static_cast<std::uint32_t>(offset), static_cast<std::uint32_t>(bytes.size()), shell_foreground};
   }
 
-  template <Allocator Memory>
-  void PaneObserver<Memory>::resize(TerminalSize size) noexcept {
+  void PaneObserver::resize(TerminalSize size) noexcept {
     control(ObservationEvent{.kind = ObservationKind::resize, .time = ObservationTime::now(), .size = size});
   }
 
-  template <Allocator Memory>
-  void PaneObserver<Memory>::shellExit(int code) noexcept {
+  void PaneObserver::shellExit(int code) noexcept {
     control(ObservationEvent{.kind = ObservationKind::shell_exit, .time = ObservationTime::now(), .exit_code = code});
   }
 
-  template <Allocator Memory>
-  void PaneObserver<Memory>::finishSession() noexcept {
+  void PaneObserver::finishSession() noexcept {
     control(ObservationEvent{.kind = ObservationKind::session_end, .time = ObservationTime::now()});
   }
 
-  template <Allocator Memory>
-  bool PaneObserver<Memory>::idle() const noexcept {
+  bool PaneObserver::idle() const noexcept {
     return !sealed_ && batches_[active_].event_count == 0;
   }
 
-  template <Allocator Memory>
-  bool PaneObserver<Memory>::seal(bool allow_empty) noexcept {
+  bool PaneObserver::seal(bool allow_empty) noexcept {
     if (sealed_ || (!allow_empty && batches_[active_].event_count == 0)) {
       return false;
     }
@@ -99,26 +88,22 @@ namespace telar::runtime {
     return true;
   }
 
-  template <Allocator Memory>
-  void PaneObserver<Memory>::complete() noexcept {
+  void PaneObserver::complete() noexcept {
     batches_[*sealed_].clear();
     sealed_.reset();
   }
 
-  template <Allocator Memory>
-  std::optional<LimitReach> PaneObserver<Memory>::takeDrop() noexcept {
+  std::optional<LimitReach> PaneObserver::takeDrop() noexcept {
     return std::exchange(drop_, std::nullopt);
   }
 
-  template <Allocator Memory>
-  ScreenObservationResult PaneObserver<Memory>::observe(const AgentManifests& manifests, AgentProvider provider, bool inspect_screen) noexcept {
+  ScreenObservationResult PaneObserver::observe(const AgentManifests& manifests, AgentProvider provider, bool inspect_screen) noexcept {
     DiscardedHistory history;
 
     return observe(manifests, provider, history, inspect_screen);
   }
 
-  template <Allocator Memory>
-  void PaneObserver<Memory>::control(const ObservationEvent& event) noexcept {
+  void PaneObserver::control(const ObservationEvent& event) noexcept {
     auto& batch = batches_[active_];
     if (batch.event_count == ObservationBatch::event_capacity) {
       drop(0);
@@ -127,8 +112,7 @@ namespace telar::runtime {
     batch.events[batch.event_count++] = event;
   }
 
-  template <Allocator Memory>
-  void PaneObserver<Memory>::drop(std::size_t incoming) noexcept {
+  void PaneObserver::drop(std::size_t incoming) noexcept {
     auto& batch = batches_[active_];
     if (batch.event_count == ObservationBatch::event_capacity) {
       drop_ = LimitReach{.name = "history.observer_batch_events", .noun = "events", .value = ObservationBatch::event_capacity, .requested = batch.event_count + 1};
@@ -139,7 +123,5 @@ namespace telar::runtime {
     batch.clear();
     batch.reset_before = true;
   }
-
-  template class PaneObserver<telar::ConcurrentMemory>;
 
 }

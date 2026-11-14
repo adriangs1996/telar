@@ -417,7 +417,6 @@ namespace telar::runtime::cli::diagnostics {
     writeText(output);
   }
 
-  template <Allocator Memory>
   int run(Memory& memory, const DiagnosticsOptions& options) {
     try {
       ServerOptions server_options{};
@@ -452,7 +451,6 @@ namespace telar::runtime::cli::diagnostics {
 
 namespace telar::runtime::cli {
 
-  template <Allocator Memory>
   void ensureRuntime(Memory& memory, const RuntimePaths<Memory>& paths, const ServerOptions& options) {
     std::optional<RuntimeConnection> connection;
     if (connectExisting(connection, paths.socket.c_str())) {
@@ -732,8 +730,7 @@ namespace telar::runtime::cli::history {
     return {.kind = kind, .path = path, .text = std::move(text), .truncated = truncated};
   }
 
-  template <Allocator Memory>
-  int importHistory(ControlSession<Memory>& session, const ImportSource& input) {
+  int importHistory(ControlSession& session, const ImportSource& input) {
     constexpr std::array kind_names{"auto", "zsh", "bash", "fish"};
     const auto source = std::string{kind_names.at(static_cast<std::size_t>(input.kind))} + ":" + input.path;
     std::vector<ImportedLine> batch;
@@ -865,8 +862,7 @@ namespace telar::runtime::cli::history {
     throw std::runtime_error{"InvalidHistoryScope"};
   }
 
-  template <Allocator Memory>
-  tbc::view<HistoryResults, tbc::lt::b> query(tbc::view<ControlSession<Memory>&, tbc::lt::b> session, const HistoryOptions& options, const HistoryScopeValue& scope) {
+  tbc::view<HistoryResults, tbc::lt::b> query(tbc::view<ControlSession&, tbc::lt::b> session, const HistoryOptions& options, const HistoryScopeValue& scope) {
     return session.template exchange<HistoryResults>(QueryHistory{
         .query = options.query,
         .scope = options.scope,
@@ -901,8 +897,7 @@ namespace telar::runtime::cli::history {
     return false;
   }
 
-  template <Allocator Memory>
-  void prune(Memory& memory, const char* socket, ControlSession<Memory>& session, const HistoryOptions& options, const HistoryScopeValue& scope) {
+  void prune(Memory& memory, const char* socket, ControlSession& session, const HistoryOptions& options, const HistoryScopeValue& scope) {
     if (options.action == HistoryOptions::Action::remove) {
       const auto result = session.template exchange<HistoryPruned>(DeleteHistory{.id = options.id});
 
@@ -948,8 +943,7 @@ namespace telar::runtime::cli::history {
     writeText(std::format("removed {} entries\n", result.removed));
   }
 
-  template <Allocator Memory>
-  void show(ControlSession<Memory>& session, const HistoryOptions& options) {
+  void show(ControlSession& session, const HistoryOptions& options) {
     const auto output = session.template exchange<HistoryOutput>(ReadHistoryOutput{.id = options.id});
     if (output.observed_bytes == 0) {
       writeText(std::format("telar history: no output captured for entry {} (runtime.history.output = \"bounded\" enables capture)\n", output.id), STDERR_FILENO);
@@ -962,8 +956,7 @@ namespace telar::runtime::cli::history {
     }
   }
 
-  template <Allocator Memory>
-  void stats(ControlSession<Memory>& session, const HistoryOptions& options, const HistoryScopeValue& scope) {
+  void stats(ControlSession& session, const HistoryOptions& options, const HistoryScopeValue& scope) {
     constexpr std::int64_t milliseconds_per_day = 86400000;
     const auto now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     const auto result = session.template exchange<HistoryStatsResult>(HistoryStatsQuery{
@@ -985,7 +978,6 @@ namespace telar::runtime::cli::history {
     writeText(output);
   }
 
-  template <Allocator Memory>
   int run(Memory& memory, const HistoryOptions& options) {
     try {
       std::optional<ImportSource> input;
@@ -1044,19 +1036,13 @@ namespace telar::runtime::cli::history {
 
 namespace telar::runtime::cli::diagnostics {
 
-  template int run<Memory>(Memory& memory, const DiagnosticsOptions& options);
-
 }
 
 namespace telar::runtime::cli::history {
 
-  template int run<Memory>(Memory& memory, const HistoryOptions& options);
-
 }
 
 namespace telar::runtime::cli {
-
-  template void ensureRuntime<Memory>(Memory& memory, const RuntimePaths<Memory>& paths, const ServerOptions& options);
 
   DiagnosticsOptions DiagnosticsOptions::parse(Arguments words) {
     if (words.empty() || (std::string_view{words.front()} != "logs" && std::string_view{words.front()} != "limits")) {

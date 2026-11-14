@@ -5,23 +5,19 @@ module telar.runtime.terminal.control.checksum;
 
 namespace telar::runtime::control {
 
-  template <Allocator Memory>
-  Checksum<Memory>::Checksum(Memory& memory)
-      : graphemes_(AllocatorRef<std::uint32_t, Memory>{memory}) {}
+  Checksum::Checksum(ConcurrentMemory& memory)
+      : graphemes_(AllocatorRef<std::uint32_t, ConcurrentMemory>{memory}) {}
 
-  template <Allocator Memory>
-  void Checksum<Memory>::discard() noexcept {
-    Vector<std::uint32_t, Memory>{graphemes_.get_allocator()}.swap(graphemes_);
+  void Checksum::discard() noexcept {
+    Vector<std::uint32_t, ConcurrentMemory>{graphemes_.get_allocator()}.swap(graphemes_);
   }
 
   // Defined here, beside accumulate, so that this unit instantiates every specialization it names.
-  template <Allocator Memory>
-  const std::array<typename Checksum<Memory>::Accumulator, 16> Checksum<Memory>::accumulators = []<std::size_t... Index>(std::index_sequence<Index...>) {
-    return std::array<Accumulator, sizeof...(Index)>{&Checksum::template accumulate<static_cast<unsigned>(Index << 1)>...};
+  const std::array<Checksum::Accumulator, 16> Checksum::accumulators = []<std::size_t... Index>(std::index_sequence<Index...>) {
+    return std::array<Accumulator, sizeof...(Index)>{&Checksum::accumulate<static_cast<unsigned>(Index << 1)>...};
   }(std::make_index_sequence<16>{});
 
-  template <Allocator Memory>
-  std::uint16_t Checksum<Memory>::compute(const VtState& state, const Parameters& request) {
+  std::uint16_t Checksum::compute(const VtState& state, const Parameters& request) {
     const auto size = state.size();
     if (size.cols == 0 || size.rows == 0) {
       return 0;
@@ -50,9 +46,8 @@ namespace telar::runtime::control {
     return (selected_flags & static_cast<unsigned>(ChecksumFlag::positive)) != 0 ? sum : static_cast<std::uint16_t>(0u - sum);
   }
 
-  template <Allocator Memory>
   template <unsigned SelectedFlags>
-  std::uint16_t Checksum<Memory>::accumulate(const VtState& state, Rectangle rectangle) {
+  std::uint16_t Checksum::accumulate(const VtState& state, Rectangle rectangle) {
     constexpr auto selected = [](ChecksumFlag flag) {
       return (SelectedFlags & static_cast<unsigned>(flag)) != 0;
     };
@@ -183,8 +178,7 @@ namespace telar::runtime::control {
     return sum;
   }
 
-  template <Allocator Memory>
-  std::uint16_t Checksum<Memory>::combiningBatch(GhosttyGridRef reference, std::span<const std::uint16_t> columns) {
+  std::uint16_t Checksum::combiningBatch(GhosttyGridRef reference, std::span<const std::uint16_t> columns) {
     std::array<std::uint32_t, batch_points> points;
     std::uint16_t sum = 0;
 
@@ -229,8 +223,7 @@ namespace telar::runtime::control {
     return sum;
   }
 
-  template <Allocator Memory>
-  std::uint16_t Checksum<Memory>::combining(const GhosttyGridRef& reference) {
+  std::uint16_t Checksum::combining(const GhosttyGridRef& reference) {
     std::array<std::uint32_t, 16> inline_points;
     std::size_t count = 0;
     auto status = ghostty_grid_ref_graphemes(&reference, inline_points.data(), inline_points.size(), &count);
@@ -256,7 +249,5 @@ namespace telar::runtime::control {
 
     return result;
   }
-
-  template class Checksum<telar::ConcurrentMemory>;
 
 }

@@ -2,12 +2,11 @@ module telar.runtime.platform.git_status;
 
 namespace telar::runtime {
 
-  template <Allocator Memory>
-  GitRepository<Memory>::GitRepository(Memory& memory, std::string_view root, Clock::time_point deadline, const std::atomic<bool>& cancelled)
+  GitRepository::GitRepository(ConcurrentMemory& memory, std::string_view root, Clock::time_point deadline, const std::atomic<bool>& cancelled)
       : deadline_(deadline),
         output_(memory, maximum_output, &cancelled),
         git_(memory, root) {
-    git_.inspect([&](Command<Memory>& command) {
+    git_.inspect([&](Command<ConcurrentMemory>& command) {
       return std::pair{output_.run(command, deadline_), output_.text()};
     },
         [] {
@@ -15,8 +14,7 @@ namespace telar::runtime {
         });
   }
 
-  template <Allocator Memory>
-  std::string_view GitRepository<Memory>::run(std::initializer_list<std::string_view> arguments, bool retain_prefix, std::size_t maximum_bytes) {
+  std::string_view GitRepository::run(std::initializer_list<std::string_view> arguments, bool retain_prefix, std::size_t maximum_bytes) {
     if (execute(arguments, retain_prefix) != 0) {
       reject();
     }
@@ -33,26 +31,20 @@ namespace telar::runtime {
     return text;
   }
 
-  template <Allocator Memory>
-  int GitRepository<Memory>::execute(std::initializer_list<std::string_view> arguments, bool retain_prefix) {
+  int GitRepository::execute(std::initializer_list<std::string_view> arguments, bool retain_prefix) {
     return withCommand(arguments, [&](auto& command) {
       return output_.run(command, deadline_, retain_prefix);
     });
   }
 
-  template <Allocator Memory>
-  void GitRepository<Memory>::reject() {
+  void GitRepository::reject() {
     throw RequestError{FailureCode::invalid_request, "Git observation unavailable"};
   }
 
-  template class GitRepository<ConcurrentMemory>;
-
-  template <ConcurrentAllocator Memory>
-  GitStatusReader<Memory>::GitStatusReader(Memory& memory) noexcept
+  GitStatusReader::GitStatusReader(ConcurrentMemory& memory) noexcept
       : memory_(memory) {}
 
-  template <ConcurrentAllocator Memory>
-  GitStatus GitStatusReader<Memory>::read(std::string_view root) noexcept {
+  GitStatus GitStatusReader::read(std::string_view root) noexcept {
     GitStatus result;
     GitHead head;
     const auto branch = head.read(root);
@@ -83,11 +75,8 @@ namespace telar::runtime {
     return result;
   }
 
-  template <ConcurrentAllocator Memory>
-  void GitStatusReader<Memory>::stop() noexcept {
+  void GitStatusReader::stop() noexcept {
     cancelled_ = true;
   }
-
-  template class GitStatusReader<ConcurrentMemory>;
 
 }

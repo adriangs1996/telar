@@ -382,7 +382,6 @@ namespace telar::runtime::cli::launch {
     return result;
   }
 
-  template <Allocator Memory>
   Output captureFile(Memory& memory, const std::vector<std::string>& arguments, int file, std::chrono::seconds timeout) {
     if (file < 0) {
       return capture(memory, arguments, {}, timeout);
@@ -426,7 +425,6 @@ namespace telar::runtime::cli::machine {
     return std::string{directory} + "/machines.json";
   }
 
-  template <Allocator Memory>
   MachineProfiles load(Memory& memory, const std::string& path) {
     Vector<unsigned char, Memory> source{AllocatorRef<unsigned char, Memory>{memory}};
 
@@ -520,7 +518,6 @@ namespace telar::runtime::cli::machine {
     return 1;
   }
 
-  template <Allocator Memory>
   int list(Memory& memory, const MachineProfiles& profiles, bool json) {
     if (json) {
       String<Memory> output{AllocatorRef<char, Memory>{memory}};
@@ -655,7 +652,6 @@ namespace telar::runtime::cli::machine {
     return {"-o", "BatchMode=yes", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4", "-o", "ForwardAgent=no", "-o", "ControlMaster=auto", "-o", "ControlPersist=600", "-o", "ControlPath=" + std::string{directory} + name.data()};
   }
 
-  template <Allocator Memory>
   std::vector<std::string> ssh(Memory& memory, std::string_view destination, std::string_view command, bool terminal) {
     auto argv = sshOptions(memory, destination);
 
@@ -664,7 +660,6 @@ namespace telar::runtime::cli::machine {
     return argv;
   }
 
-  template <Allocator Memory>
   std::string gitSshCommand(Memory& memory, std::string_view destination) {
     std::string command{"ssh"};
 
@@ -698,7 +693,7 @@ namespace telar::runtime::cli::machine {
     return command;
   }
 
-  template <Allocator Memory, typename Words>
+  template <typename Words>
   int forward(Memory& memory, const MachineProfile& profile, const Words& words) {
     // A terminal there lets the command ask the person here, as a removal that needs
     // confirmation does. It merges stderr into stdout and writes \r\n, so it is only
@@ -721,7 +716,6 @@ namespace telar::runtime::cli::machine {
     return result.out;
   }
 
-  template <Allocator Memory>
   std::optional<MachineProfile> resolve(Memory& memory, std::string_view label) {
     const auto profiles = load(memory, profilesPath());
     if (const auto index = profiles.find(label)) {
@@ -757,7 +751,6 @@ namespace telar::runtime::cli::machine {
     return MachineError::endpoint_unavailable;
   }
 
-  template <Allocator Memory>
   Discovery discover(Memory& memory, const MachineProfile& profile, std::string& detail) {
     launch::Output output;
 
@@ -813,7 +806,6 @@ namespace telar::runtime::cli::machine {
     }
   }
 
-  template <Allocator Memory>
   int check(Memory& memory, const MachineProfile& profile, bool json) {
     std::string detail;
     std::optional<Discovery> found;
@@ -988,7 +980,6 @@ namespace telar::runtime::cli::machine::filter {
     return plain;
   }
 
-  template <Allocator Memory>
   void json(Memory& memory, const JsonValue& value, String<Memory>& output, std::vector<std::string>& dropped) {
     const auto source = value.encoded();
     String<Memory> scratch{AllocatorRef<char, Memory>{memory}};
@@ -1484,7 +1475,6 @@ namespace telar::runtime::cli {
     launch::replace(arguments);
   }
 
-  template <Allocator Memory>
   int openWindow(Memory& memory, const WindowOptions& options) {
 #if defined(__APPLE__)
     const bool display = std::getenv("SSH_CONNECTION") == nullptr && std::getenv("SSH_TTY") == nullptr;
@@ -1573,47 +1563,34 @@ namespace telar::runtime::cli {
 
 namespace telar::runtime::cli::machine {
 
-  template int forward<Memory, std::span<char* const>>(Memory& memory, const MachineProfile& profile, const std::span<char* const>& words);
-  template std::optional<MachineProfile> resolve<Memory>(Memory& memory, std::string_view label);
+  template int forward<std::span<char* const>>(Memory& memory, const MachineProfile& profile, const std::span<char* const>& words);
 
 }
 
 namespace telar::runtime::cli {
-
-  template int openWindow<Memory>(Memory& memory, const WindowOptions& options);
 
 }
 
 namespace telar::runtime::cli::launch {
 
   template Output capture<Memory>(Memory& memory, const std::vector<std::string>& arguments, std::string_view input, std::chrono::seconds timeout);
-  template Output captureFile<Memory>(Memory& memory, const std::vector<std::string>& arguments, int file, std::chrono::seconds timeout);
 
 }
 
 namespace telar::runtime::cli::machine {
 
-  template int list<Memory>(Memory& memory, const MachineProfiles& profiles, bool json);
-  template std::string gitSshCommand<Memory>(Memory& memory, std::string_view destination);
   template std::string remoteCommand<std::vector<std::string>>(const MachineProfile& profile, const std::vector<std::string>& words);
-  template int forward<Memory, std::vector<std::string>>(Memory& memory, const MachineProfile& profile, const std::vector<std::string>& words);
+  template int forward<std::vector<std::string>>(Memory& memory, const MachineProfile& profile, const std::vector<std::string>& words);
   template std::string capture<Memory, std::vector<std::string>>(Memory& memory, const MachineProfile& profile, const std::vector<std::string>& words, const char* failure, int input);
   template std::string capture<Memory, std::span<const std::string_view>>(Memory& memory, const MachineProfile& profile, const std::span<const std::string_view>& words, const char* failure, int input);
-  template Discovery discover<Memory>(Memory& memory, const MachineProfile& profile, std::string& detail);
-  template int check<Memory>(Memory& memory, const MachineProfile& profile, bool json);
 
 }
 
 namespace telar::runtime::cli::machine::filter {
 
-  template void json<Memory>(Memory& memory, const JsonValue& value, String<Memory>& output, std::vector<std::string>& dropped);
-
 }
 
 namespace telar::runtime::cli::machine {
-
-  template MachineProfiles load<Memory>(Memory& memory, const std::string& path);
-  template std::vector<std::string> ssh<Memory>(Memory& memory, std::string_view destination, std::string_view command, bool terminal);
 
 }
 

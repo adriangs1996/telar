@@ -335,15 +335,15 @@ namespace {
   void mediaAcknowledgements(ConcurrentMemory& memory) {
     auto queue = std::make_shared<PtyResponseQueue>();
     MediaBudget budget{GraphicsLimits::maximum_global_bytes};
-    auto media = std::make_shared<PaneMedia<ConcurrentMemory>>(memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue);
-    MediaProcessor<ConcurrentMemory> processor;
+    auto media = std::make_shared<PaneMedia>(memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue);
+    MediaProcessor processor;
     ObservationWorker<decltype(processor)&> worker{std::in_place, processor};
 #if TELAR_DIAGNOSTICS
     bool initial = true;
 #endif
     const auto process = [&] {
       check(media->seal());
-      MediaProcessor<ConcurrentMemory>::Request request;
+      MediaProcessor::Request request;
 
       request.entries[request.count++].media = media;
       check(worker.submit(request));
@@ -493,12 +493,12 @@ namespace {
     ConcurrentMemory& memory = adapter;
     auto queue = std::make_shared<PtyResponseQueue>();
     MediaBudget budget{GraphicsLimits::maximum_global_bytes};
-    auto media = std::make_shared<PaneMedia<ConcurrentMemory>>(memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue);
-    MediaProcessor<ConcurrentMemory> processor;
+    auto media = std::make_shared<PaneMedia>(memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue);
+    MediaProcessor processor;
     ObservationWorker<decltype(processor)&> worker{std::in_place, processor};
     const auto process = [&] {
       check(media->seal());
-      MediaProcessor<ConcurrentMemory>::Request request;
+      MediaProcessor::Request request;
 
       request.entries[request.count++].media = media;
       check(worker.submit(request));
@@ -585,13 +585,13 @@ namespace {
     ConcurrentMemory& memory = adapter;
     auto queue = std::make_shared<PtyResponseQueue>();
     MediaBudget budget{GraphicsLimits::maximum_global_bytes};
-    auto media = std::make_shared<PaneMedia<ConcurrentMemory>>(memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue);
-    MediaProcessor<ConcurrentMemory> processor;
+    auto media = std::make_shared<PaneMedia>(memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue);
+    MediaProcessor processor;
     ObservationWorker<decltype(processor)&> worker{std::in_place, processor};
     constexpr std::string_view command = "\x1b_Ga=t,f=24,s=1,v=1,i=7;/wAA\x1b\\";
     const auto submit = [&] {
       check(media->seal());
-      MediaProcessor<ConcurrentMemory>::Request request;
+      MediaProcessor::Request request;
 
       request.entries[request.count++].media = media;
       check(worker.submit(request));
@@ -650,7 +650,7 @@ namespace {
       ConcurrentMemory& memory = adapter;
       MediaBudget budget{GraphicsLimits::maximum_global_bytes};
       auto queue = std::make_shared<PtyResponseQueue>();
-      auto shared_media = std::make_shared<PaneMedia<ConcurrentMemory>>(memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue);
+      auto shared_media = std::make_shared<PaneMedia>(memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue);
       auto& media = *shared_media;
       Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, queue};
 
@@ -687,7 +687,7 @@ namespace {
     ConcurrentMemory& memory = adapter;
     MediaBudget budget{GraphicsLimits::maximum_global_bytes};
     auto queue = std::make_shared<PtyResponseQueue>();
-    auto shared_media = std::make_shared<PaneMedia<ConcurrentMemory>>(memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue);
+    auto shared_media = std::make_shared<PaneMedia>(memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue);
     auto& media = *shared_media;
     Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, queue};
 
@@ -720,11 +720,11 @@ namespace {
       MemoryAdapter adapter{system};
       ConcurrentMemory& memory = adapter;
       RuntimeModel model{memory};
-      ClientStore<ConcurrentMemory> clients{memory};
-      LimitService<ConcurrentMemory> limits;
+      ClientStore clients{memory};
+      LimitService limits;
       NativeEventLoop<ConcurrentMemory> poller{memory};
       PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/control-resize-failure.sock"}};
-      MediaService<ConcurrentMemory, decltype(poller), decltype(limits)> service{poller, limits};
+      MediaService<decltype(poller), decltype(limits)> service{poller, limits};
       const std::array<std::string_view, 1> arguments{"/bin/cat"};
       const Launch launch{.cwd = "/tmp", .arguments = arguments};
       const TabLocation location{.workspace = {.id = 7}, .tab_id = 1};
@@ -768,8 +768,8 @@ namespace {
 
     {
       RuntimeModel model{memory};
-      ClientStore<ConcurrentMemory> clients{memory};
-      LimitService<ConcurrentMemory> limits;
+      ClientStore clients{memory};
+      LimitService limits;
       NativeEventLoop<ConcurrentMemory> poller{memory};
       PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/control-semantic-failure.sock"}};
       const std::array<std::string_view, 1> arguments{"/bin/cat"};
@@ -834,7 +834,7 @@ namespace {
     ConcurrentMemory& memory = adapter;
     MediaBudget budget{GraphicsLimits::maximum_global_bytes};
     auto queue = std::make_shared<PtyResponseQueue>();
-    auto shared_media = std::make_shared<PaneMedia<ConcurrentMemory>>(memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue);
+    auto shared_media = std::make_shared<PaneMedia>(memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue);
     auto& media = *shared_media;
     Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, queue};
 

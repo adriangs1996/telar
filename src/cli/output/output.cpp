@@ -66,37 +66,31 @@ namespace telar::runtime::cli {
     return code_;
   }
 
-  template <Allocator Memory>
-  Output<Memory>::Output(Memory& memory)
+  Output::Output(Memory& memory)
       : data(AllocatorRef<char, Memory>{memory}) {}
 
-  template <Allocator Memory>
-  Output<Memory>& Output<Memory>::text(std::string_view value) {
+  Output& Output::text(std::string_view value) {
     data.append(value);
     return *this;
   }
 
-  template <Allocator Memory>
-  Output<Memory>& Output<Memory>::boolean(bool value) {
+  Output& Output::boolean(bool value) {
     return text(value ? "true" : "false");
   }
 
-  template <Allocator Memory>
-  Output<Memory>& Output<Memory>::json(std::string_view value, JsonEscapes escapes) {
+  Output& Output::json(std::string_view value, JsonEscapes escapes) {
     appendJsonText(data, value, escapes);
     return *this;
   }
 
-  template <Allocator Memory>
-  void Output<Memory>::flush() {
+  void Output::flush() {
     std::fwrite(data.data(), 1, data.size(), stdout);
     std::fflush(stdout);
     data.clear();
   }
 
-  template <Allocator Memory>
   template <typename Integer>
-  Output<Memory>& Output<Memory>::number(Integer value) {
+  Output& Output::number(Integer value) {
     std::array<char, 32> buffer;
     const auto end = std::to_chars(buffer.data(), buffer.data() + buffer.size(), value).ptr;
 
@@ -104,14 +98,13 @@ namespace telar::runtime::cli {
     return *this;
   }
 
-  template class Output<Memory>;
-  template Output<Memory>& Output<Memory>::number<int>(int value);
-  template Output<Memory>& Output<Memory>::number<long>(long value);
-  template Output<Memory>& Output<Memory>::number<long long>(long long value);
-  template Output<Memory>& Output<Memory>::number<unsigned char>(unsigned char value);
-  template Output<Memory>& Output<Memory>::number<unsigned short>(unsigned short value);
-  template Output<Memory>& Output<Memory>::number<unsigned int>(unsigned int value);
-  template Output<Memory>& Output<Memory>::number<unsigned long>(unsigned long value);
-  template Output<Memory>& Output<Memory>::number<unsigned long long>(unsigned long long value);
+  template Output& Output::number<int>(int value);
+  template Output& Output::number<long>(long value);
+  template Output& Output::number<long long>(long long value);
+  template Output& Output::number<unsigned char>(unsigned char value);
+  template Output& Output::number<unsigned short>(unsigned short value);
+  template Output& Output::number<unsigned int>(unsigned int value);
+  template Output& Output::number<unsigned long>(unsigned long value);
+  template Output& Output::number<unsigned long long>(unsigned long long value);
 
 }

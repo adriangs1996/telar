@@ -15,13 +15,11 @@ namespace telar::git {
 
   }
 
-  template <Allocator Memory>
-  ShallowCommits<Memory>::ShallowCommits(Memory& memory) noexcept
+  ShallowCommits::ShallowCommits(Memory& memory) noexcept
       : ids_(AllocatorRef<ObjectId, Memory>{memory}),
         bytes_(AllocatorRef<char, Memory>{memory}) {}
 
-  template <Allocator Memory>
-  bool ShallowCommits<Memory>::load(int common, ObjectFormat format, const Limits& limits) {
+  bool ShallowCommits::load(int common, ObjectFormat format, const Limits& limits) {
     const auto identity = fingerprintAt(common, "shallow");
     if (loaded_ && identity == identity_ && format == format_) {
       return valid_;
@@ -64,22 +62,17 @@ namespace telar::git {
     return true;
   }
 
-  template <Allocator Memory>
-  bool ShallowCommits<Memory>::empty() const noexcept {
+  bool ShallowCommits::empty() const noexcept {
     return ids_.empty();
   }
 
-  template <Allocator Memory>
-  bool ShallowCommits<Memory>::contains(const ObjectId& id) const noexcept {
+  bool ShallowCommits::contains(const ObjectId& id) const noexcept {
     return std::ranges::binary_search(ids_, id, [](const ObjectId& left, const ObjectId& right) {
       return compareBytes(left.view(), right.view()) < 0;
     });
   }
 
-  template class ShallowCommits<Memory>;
-
-  template <Allocator Memory>
-  DivergenceWalk<Memory>::DivergenceWalk(Memory& memory) noexcept
+  DivergenceWalk::DivergenceWalk(Memory& memory) noexcept
       : nodes_(AllocatorRef<Node, Memory>{memory}),
         slots_(AllocatorRef<std::uint32_t, Memory>{memory}),
         parents_(AllocatorRef<ObjectId, Memory>{memory}),
@@ -87,8 +80,7 @@ namespace telar::git {
         heap_(AllocatorRef<Queued, Memory>{memory}),
         object_(AllocatorRef<char, Memory>{memory}) {}
 
-  template <Allocator Memory>
-  std::optional<Divergence> DivergenceWalk<Memory>::count(ObjectDatabase<Memory>& objects, const CommitGraph<Memory>& graph, const ShallowCommits<Memory>& shallow, const Limits& limits, const ObjectId& left, const ObjectId& right) {
+  std::optional<Divergence> DivergenceWalk::count(ObjectDatabase& objects, const CommitGraph& graph, const ShallowCommits& shallow, const Limits& limits, const ObjectId& left, const ObjectId& right) {
     if (left == right) {
       return Divergence{};
     }
@@ -112,8 +104,7 @@ namespace telar::git {
     return result;
   }
 
-  template <Allocator Memory>
-  std::optional<Divergence> DivergenceWalk<Memory>::walk(const CommitGraph<Memory>& graph) {
+  std::optional<Divergence> DivergenceWalk::walk(const CommitGraph& graph) {
     // Generation numbers make the order exact (commits outside the graph are
     // newer than all of it and come first); commit dates may be skewed, so
     // like git's limit_list the walk drains a few stale commits past the end.
@@ -152,8 +143,7 @@ namespace telar::git {
     return Divergence{ahead_, behind_};
   }
 
-  template <Allocator Memory>
-  void DivergenceWalk<Memory>::reset() {
+  void DivergenceWalk::reset() {
     nodes_.clear();
     parents_.clear();
     heap_.clear();
@@ -163,8 +153,7 @@ namespace telar::git {
     slots_.assign(initial_slots, 0);
   }
 
-  template <Allocator Memory>
-  void DivergenceWalk<Memory>::release() {
+  void DivergenceWalk::release() {
     constexpr std::size_t retained = 4096;
     if (slots_.size() > retained) {
       slots_.clear();
@@ -180,8 +169,7 @@ namespace telar::git {
     }
   }
 
-  template <Allocator Memory>
-  void DivergenceWalk<Memory>::grow() {
+  void DivergenceWalk::grow() {
     slots_.assign(slots_.size() * 2, 0);
     const auto mask = slots_.size() - 1;
 
@@ -196,15 +184,13 @@ namespace telar::git {
     }
   }
 
-  template <Allocator Memory>
-  std::uint64_t DivergenceWalk<Memory>::key(std::uint64_t generation, std::int64_t time) const noexcept {
+  std::uint64_t DivergenceWalk::key(std::uint64_t generation, std::int64_t time) const noexcept {
     const auto seconds = static_cast<std::uint64_t>(std::max<std::int64_t>(time, 0)) & time_mask;
 
     return graph_->empty() ? seconds : generation << 34 | seconds;
   }
 
-  template <Allocator Memory>
-  std::uint32_t& DivergenceWalk<Memory>::slot(const ObjectId& id) noexcept {
+  std::uint32_t& DivergenceWalk::slot(const ObjectId& id) noexcept {
     const auto mask = slots_.size() - 1;
 
     for (auto index = static_cast<std::size_t>(hashOf(id)) & mask;; index = (index + 1) & mask) {
@@ -215,8 +201,7 @@ namespace telar::git {
     }
   }
 
-  template <Allocator Memory>
-  std::optional<std::uint32_t> DivergenceWalk<Memory>::insert(const ObjectId& id, std::optional<std::uint32_t> position) {
+  std::optional<std::uint32_t> DivergenceWalk::insert(const ObjectId& id, std::optional<std::uint32_t> position) {
     if (2 * (nodes_.size() + 1) > slots_.size()) {
       grow();
     }
@@ -265,8 +250,7 @@ namespace telar::git {
     return entry - 1;
   }
 
-  template <Allocator Memory>
-  bool DivergenceWalk<Memory>::readCommit(const ObjectId& id, CommitHeader& header) {
+  bool DivergenceWalk::readCommit(const ObjectId& id, CommitHeader& header) {
     ++commits_read;
     const auto begin = parents_.size();
     constexpr std::size_t first_prefix = 4096;
@@ -290,8 +274,7 @@ namespace telar::git {
     return false;
   }
 
-  template <Allocator Memory>
-  void DivergenceWalk<Memory>::classify(std::uint8_t flags, bool add) noexcept {
+  void DivergenceWalk::classify(std::uint8_t flags, bool add) noexcept {
     auto* count = flags == left_flag ? &ahead_ : flags == right_flag ? &behind_
                                                                      : nullptr;
     if (count != nullptr) {
@@ -299,8 +282,7 @@ namespace telar::git {
     }
   }
 
-  template <Allocator Memory>
-  void DivergenceWalk<Memory>::mark(std::uint32_t index, std::uint8_t flags) {
+  void DivergenceWalk::mark(std::uint32_t index, std::uint8_t flags) {
     auto& node = nodes_[index];
     const auto previous = node.flags;
     const auto next = static_cast<std::uint8_t>(previous | flags);
@@ -328,8 +310,7 @@ namespace telar::git {
     std::ranges::push_heap(heap_, std::less{}, &Queued::key);
   }
 
-  template <Allocator Memory>
-  bool DivergenceWalk<Memory>::expand(std::uint32_t index) {
+  bool DivergenceWalk::expand(std::uint32_t index) {
     const auto flags = nodes_[index].flags;
 
     if (nodes_[index].graph != no_position) {
@@ -374,7 +355,5 @@ namespace telar::git {
 
     return true;
   }
-
-  template class DivergenceWalk<Memory>;
 
 }

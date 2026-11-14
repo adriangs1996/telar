@@ -97,7 +97,7 @@ namespace {
     }
   };
 
-  using Connection = Http1Connection<ConcurrentMemory, IgnoreHttp1Capture>;
+  using Connection = Http1Connection<IgnoreHttp1Capture>;
 
   template <typename Predicate>
   void pump(Connection& connection, TestByteStream& child, TestByteStream& origin, Predicate&& done, std::source_location location = std::source_location::current()) {

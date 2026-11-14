@@ -279,12 +279,11 @@ namespace telar::runtime {
     return identity;
   }
 
-  template <Allocator Memory>
-  MediaTerminal<Memory>::MediaTerminal(Memory& memory, TerminalSize size, GraphicsLimits limits, std::shared_ptr<PtyResponseQueue> responses)
+  MediaTerminal::MediaTerminal(telar::runtime::MediaAllocator<ConcurrentMemory>& memory, TerminalSize size, GraphicsLimits limits, std::shared_ptr<PtyResponseQueue> responses)
       : graphics(memory),
         control_parser_(memory),
         allocator_(memory),
-        responses_(responses ? std::move(responses) : std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, Memory>{memory})),
+        responses_(responses ? std::move(responses) : std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, telar::runtime::MediaAllocator<ConcurrentMemory>>{memory})),
         response_outbox_(memory, responses_),
         storage_limit_(limits.screenBytes()),
         uploads_(limits.screenBytes()) {
@@ -305,8 +304,7 @@ namespace telar::runtime {
     resize(size);
   }
 
-  template <Allocator Memory>
-  void MediaTerminal<Memory>::feed(std::span<const Byte> bytes) {
+  void MediaTerminal::feed(std::span<const Byte> bytes) {
     try {
       requireOpen();
       const auto consumed = control_parser_.feed(bytes, *this);
@@ -324,18 +322,15 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  void MediaTerminal<Memory>::ordinary(std::span<const Byte> bytes) {
+  void MediaTerminal::ordinary(std::span<const Byte> bytes) {
     GraphicsFileInput::feed(bytes, storage_limit_, *this);
   }
 
-  template <Allocator Memory>
-  bool MediaTerminal<Memory>::enquire() const noexcept {
+  bool MediaTerminal::enquire() const noexcept {
     return true;
   }
 
-  template <Allocator Memory>
-  bool MediaTerminal<Memory>::streamable(control::Sequence sequence) const noexcept {
+  bool MediaTerminal::streamable(control::Sequence sequence) const noexcept {
     if (sequence.kind == control::Kind::osc && sequence.body().starts_with(::telar::render::sequence_begin.substr(0, ::telar::render::sequence_begin.find(';') + 1))) {
       return true;
     }
@@ -343,8 +338,7 @@ namespace telar::runtime {
     return sequence.kind != control::Kind::apc && control::streamable(sequence);
   }
 
-  template <Allocator Memory>
-  bool MediaTerminal<Memory>::complete(control::Sequence sequence) {
+  bool MediaTerminal::complete(control::Sequence sequence) {
     if (sequence.kind == control::Kind::csi) {
       const auto parameters = control::Parameters::parse(sequence.body());
       if (parameters && !parameters->colon && parameters->modifiers() == "?" && (parameters->final == 'h' || parameters->final == 'l' || parameters->final == 's' || parameters->final == 'r')) {
@@ -377,38 +371,32 @@ namespace telar::runtime {
     return true;
   }
 
-  template <Allocator Memory>
-  void MediaTerminal<Memory>::reply(std::span<const Byte> bytes) {
+  void MediaTerminal::reply(std::span<const Byte> bytes) {
     response_outbox_.append(bytes);
     response_outbox_.drain();
   }
 
-  template <Allocator Memory>
-  void MediaTerminal<Memory>::ingest(std::span<const Byte> bytes) {
+  void MediaTerminal::ingest(std::span<const Byte> bytes) {
     requireOpen();
     TELAR_TRACE("media.terminal.feed");
     write(bytes, uploads_.observe(terminal_.get(), bytes));
   }
 
-  template <Allocator Memory>
-  void MediaTerminal<Memory>::ingestEncodedChunk(std::span<const Byte> bytes) {
+  void MediaTerminal::ingestEncodedChunk(std::span<const Byte> bytes) {
     requireOpen();
     TELAR_TRACE("media.terminal.feed");
     write(bytes, uploads_.observeEncodedChunk(terminal_.get()));
   }
 
-  template <Allocator Memory>
-  void MediaTerminal<Memory>::resize(TerminalSize size) {
+  void MediaTerminal::resize(TerminalSize size) {
     checkGhostty(ghostty_terminal_resize(terminal_.get(), size.cols, size.rows, size.cell_width_px, size.cell_height_px));
   }
 
-  template <Allocator Memory>
-  void MediaTerminal<Memory>::refresh() {
+  void MediaTerminal::refresh() {
     graphics.update(terminal_.get());
   }
 
-  template <Allocator Memory>
-  bool MediaTerminal<Memory>::insertImage(const AtomicFrameControl& control, std::span<const Byte> data) noexcept {
+  bool MediaTerminal::insertImage(const AtomicFrameControl& control, std::span<const Byte> data) noexcept {
     const GhosttyKittyGraphicsImageInsert image{
         .size = sizeof(GhosttyKittyGraphicsImageInsert),
         .image_id = control.key.image_id,
@@ -422,8 +410,7 @@ namespace telar::runtime {
     return ghostty_kitty_graphics_image_insert(terminal_.get(), &image) == GHOSTTY_SUCCESS;
   }
 
-  template <Allocator Memory>
-  ImageKey MediaTerminal<Memory>::imageKey(std::uint32_t identity) {
+  ImageKey MediaTerminal::imageKey(std::uint32_t identity) {
     GhosttyKittyGraphics storage = nullptr;
 
     checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_KITTY_GRAPHICS, &storage));
@@ -435,62 +422,51 @@ namespace telar::runtime {
   }
 
 #if TELAR_DIAGNOSTICS
-  template <Allocator Memory>
-  diagnostics::GraphicsStorageSnapshot MediaTerminal<Memory>::storageMetrics() {
+  diagnostics::GraphicsStorageSnapshot MediaTerminal::storageMetrics() {
     return graphics.storageMetrics(terminal_.get());
   }
 #endif
 
-  template <Allocator Memory>
-  std::size_t MediaTerminal<Memory>::storageLimit() const noexcept {
+  std::size_t MediaTerminal::storageLimit() const noexcept {
     return storage_limit_;
   }
 
-  template <Allocator Memory>
-  std::span<const Byte> MediaTerminal<Memory>::responses() const noexcept {
+  std::span<const Byte> MediaTerminal::responses() const noexcept {
     return responses_->readable();
   }
 
-  template <Allocator Memory>
-  void MediaTerminal<Memory>::consumeResponses(std::size_t count) noexcept {
+  void MediaTerminal::consumeResponses(std::size_t count) noexcept {
     responses_->consume(count);
     response_outbox_.drain();
   }
 
-  template <Allocator Memory>
-  bool MediaTerminal<Memory>::drainResponses() noexcept {
+  bool MediaTerminal::drainResponses() noexcept {
     return response_outbox_.drain();
   }
 
-  template <Allocator Memory>
-  bool MediaTerminal<Memory>::pendingResponses() const noexcept {
+  bool MediaTerminal::pendingResponses() const noexcept {
     return response_outbox_.pending();
   }
 
-  template <Allocator Memory>
-  std::size_t MediaTerminal<Memory>::nextResponseSize() const noexcept {
+  std::size_t MediaTerminal::nextResponseSize() const noexcept {
     return response_outbox_.nextSize();
   }
 
-  template <Allocator Memory>
-  bool MediaTerminal<Memory>::responseFailed() const noexcept {
+  bool MediaTerminal::responseFailed() const noexcept {
     return response_failed_;
   }
 
-  template <Allocator Memory>
-  void MediaTerminal<Memory>::requireOpen() const {
+  void MediaTerminal::requireOpen() const {
     if (responses_->closed()) {
       throw ResponseFailure{};
     }
   }
 
-  template <Allocator Memory>
-  GraphicsUploadLimits::Reached MediaTerminal<Memory>::takeUploadLimits() noexcept {
+  GraphicsUploadLimits::Reached MediaTerminal::takeUploadLimits() noexcept {
     return uploads_.takeReached();
   }
 
-  template <Allocator Memory>
-  void MediaTerminal<Memory>::write(std::span<const Byte> bytes, const GraphicsUploadLimits::Observation& observation) {
+  void MediaTerminal::write(std::span<const Byte> bytes, const GraphicsUploadLimits::Observation& observation) {
     ghostty_terminal_vt_write(terminal_.get(), bytes.data(), bytes.size());
     if (response_failed_) {
       throw ResponseFailure{};
@@ -508,8 +484,7 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  void MediaTerminal<Memory>::replyUploadLimit(std::uint32_t image) {
+  void MediaTerminal::replyUploadLimit(std::uint32_t image) {
     constexpr std::string_view prefix = "\x1b_Gi=";
     constexpr std::string_view suffix = ";ENOMEM: graphics upload limit exceeded\x1b\\";
     std::array<char, prefix.size() + 10 + suffix.size()> response;
@@ -520,8 +495,7 @@ namespace telar::runtime {
     reply({reinterpret_cast<const Byte*>(response.data()), static_cast<std::size_t>(end - response.data())});
   }
 
-  template <Allocator Memory>
-  void MediaTerminal<Memory>::receiveResponse(GhosttyTerminal, void* context, const Byte* bytes, std::size_t count) noexcept {
+  void MediaTerminal::receiveResponse(GhosttyTerminal, void* context, const Byte* bytes, std::size_t count) noexcept {
     constexpr std::string_view kitty_response = "\x1b_G";
     if (count < kitty_response.size() || std::memcmp(bytes, kitty_response.data(), kitty_response.size()) != 0) {
       return;
@@ -539,14 +513,12 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  AtomicFrameLoader<Memory>::AtomicFrameLoader(MediaAllocator<Memory>& memory, MediaTerminal<MediaAllocator<Memory>>& terminal, PreparedImages<Memory>& prepared) noexcept
+  AtomicFrameLoader::AtomicFrameLoader(MediaAllocator<ConcurrentMemory>& memory, MediaTerminal& terminal, PreparedImages& prepared) noexcept
       : memory_(memory),
         terminal_(terminal),
         prepared_(prepared) {}
 
-  template <Allocator Memory>
-  bool AtomicFrameLoader<Memory>::load(const AtomicFrameView& frame, bool shared_transport) {
+  bool AtomicFrameLoader::load(const AtomicFrameView& frame, bool shared_transport) {
     TELAR_TRACE("media.loadAtomicFrame");
     const auto child = GraphicsFramePixels::open({frame.encoded_name, frame.control.byte_count, terminal_.storageLimit(), frame.control.medium});
     if (!child) {
@@ -578,7 +550,7 @@ namespace telar::runtime {
     place(frame.control.key);
     terminal_.feed(frame.bytes.subspan(frame.command_end));
     if (shared_transport) {
-      auto frozen = FrozenImage<Memory>::adoptSharedName(storage->takeName(), frame.control.byte_count);
+      auto frozen = FrozenImage::adoptSharedName(storage->takeName(), frame.control.byte_count);
 
       prepared_.put(terminal_.imageKey(frame.control.key.image_id), std::move(frozen));
     }
@@ -586,8 +558,7 @@ namespace telar::runtime {
     return true;
   }
 
-  template <Allocator Memory>
-  void AtomicFrameLoader<Memory>::place(AtomicFrameKey key) {
+  void AtomicFrameLoader::place(AtomicFrameKey key) {
     std::array<char, 64> command;
     auto* end = std::copy_n("\x1b_Ga=p,i=", 9, command.data());
 
@@ -598,70 +569,59 @@ namespace telar::runtime {
     terminal_.feed({reinterpret_cast<const Byte*>(command.data()), static_cast<std::size_t>(end - command.data())});
   }
 
-  template <Allocator Memory>
-  MediaInput<Memory>::MediaInput(MediaAllocator<Memory>& memory, MediaTerminal<MediaAllocator<Memory>>& terminal, PreparedImages<Memory>& prepared, const std::atomic<unsigned>& shared_clients) noexcept
+  MediaInput::MediaInput(MediaAllocator<ConcurrentMemory>& memory, MediaTerminal& terminal, PreparedImages& prepared, const std::atomic<unsigned>& shared_clients) noexcept
       : terminal_(terminal),
         atomic_frames_(memory, terminal, prepared),
         shared_clients_(shared_clients) {}
 
-  template <Allocator Memory>
-  AtomicFrameFilter::Statistics MediaInput<Memory>::feed(std::span<const Byte> bytes) {
+  AtomicFrameFilter::Statistics MediaInput::feed(std::span<const Byte> bytes) {
     terminal_.requireOpen();
     CheckedSource source{terminal_};
 
     return AtomicFrameFilter::feed(bytes, terminal_.storageLimit(), source, *this);
   }
 
-  template <Allocator Memory>
-  void MediaInput<Memory>::output(std::span<const Byte> bytes) {
+  void MediaInput::output(std::span<const Byte> bytes) {
     terminal_.feed(bytes);
   }
 
-  template <Allocator Memory>
-  void MediaInput<Memory>::resize(TerminalSize size) {
+  void MediaInput::resize(TerminalSize size) {
     terminal_.resize(size);
   }
 
-  template <Allocator Memory>
-  bool MediaInput<Memory>::atomicFrame(const AtomicFrameView& frame) {
+  bool MediaInput::atomicFrame(const AtomicFrameView& frame) {
     terminal_.requireOpen();
     return atomic_frames_.load(frame, shared_clients_.load(std::memory_order_acquire) != 0);
   }
 
-  template <Allocator Memory>
-  MediaInput<Memory>::CheckedSource::CheckedSource(MediaTerminal<MediaAllocator<Memory>>& terminal) noexcept
+  MediaInput::CheckedSource::CheckedSource(MediaTerminal& terminal) noexcept
       : terminal_(terminal) {}
 
-  template <Allocator Memory>
-  bool MediaInput<Memory>::CheckedSource::available(const AtomicFrameResource& resource) {
+  bool MediaInput::CheckedSource::available(const AtomicFrameResource& resource) {
     terminal_.requireOpen();
     return GraphicsFrameSource::available(resource);
   }
 
-  template <Allocator Memory>
-  void MediaInput<Memory>::CheckedSource::release(const AtomicFrameResource& resource) {
+  void MediaInput::CheckedSource::release(const AtomicFrameResource& resource) {
     terminal_.requireOpen();
     GraphicsFrameSource::release(resource);
   }
 
-  template <Allocator Memory>
-  PaneMedia<Memory>::PaneMedia(Memory& memory, MediaBudget& budget, GraphicsLimits limits, TerminalSize size, std::shared_ptr<PtyResponseQueue> responses)
+  PaneMedia::PaneMedia(ConcurrentMemory& memory, MediaBudget& budget, GraphicsLimits limits, TerminalSize size, std::shared_ptr<PtyResponseQueue> responses)
       : memory_(memory, budget, limits.pane_bytes),
         prepared_(memory, memory_),
         requests_(memory, memory_),
-        responses_(responses ? std::move(responses) : std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, Memory>{memory})),
+        responses_(responses ? std::move(responses) : std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, ConcurrentMemory>{memory})),
         limits_(limits),
         current_size_(size) {
     terminal_.emplace(memory_, size, limits, responses_);
   }
 
-  template <Allocator Memory>
-  void PaneMedia<Memory>::requireOrderedInput() noexcept {
+  void PaneMedia::requireOrderedInput() noexcept {
     ordered_input_ = true;
   }
 
-  template <Allocator Memory>
-  std::size_t PaneMedia<Memory>::atomicPrefix(std::span<const Byte> bytes) const noexcept {
+  std::size_t PaneMedia::atomicPrefix(std::span<const Byte> bytes) const noexcept {
     constexpr unsigned maximum_frames = 8;
     constexpr std::size_t maximum_pixels_bytes = GraphicsLimits::maximum_pane_bytes / 2;
     constexpr std::string_view filename_alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
@@ -682,8 +642,7 @@ namespace telar::runtime {
     return consumed;
   }
 
-  template <Allocator Memory>
-  void PaneMedia<Memory>::output(std::span<const Byte> bytes) noexcept {
+  void PaneMedia::output(std::span<const Byte> bytes) noexcept {
     if (cancelled_) {
       return;
     }
@@ -705,8 +664,7 @@ namespace telar::runtime {
     TELAR_DIAGNOSTIC(observeQueue());
   }
 
-  template <Allocator Memory>
-  void PaneMedia<Memory>::resize(TerminalSize size) noexcept {
+  void PaneMedia::resize(TerminalSize size) noexcept {
     if (cancelled_) {
       return;
     }
@@ -727,13 +685,11 @@ namespace telar::runtime {
     TELAR_DIAGNOSTIC(observeQueue());
   }
 
-  template <Allocator Memory>
-  bool PaneMedia<Memory>::holdsRead(std::size_t bytes) const noexcept {
+  bool PaneMedia::holdsRead(std::size_t bytes) const noexcept {
     return pending_responses_ || (!batches_[active_].hasReadCapacity(bytes) && (ordered_input_ || (busy_ && (batches_[active_].kitty || batches_[sealed_].kitty || framing_.inside()))));
   }
 
-  template <Allocator Memory>
-  bool PaneMedia<Memory>::seal() noexcept {
+  bool PaneMedia::seal() noexcept {
     if (busy_) {
       return false;
     }
@@ -765,8 +721,7 @@ namespace telar::runtime {
     return true;
   }
 
-  template <Allocator Memory>
-  void PaneMedia<Memory>::complete() noexcept {
+  void PaneMedia::complete() noexcept {
     if (!drain_only_) {
       batches_[sealed_].clear();
     }
@@ -782,8 +737,7 @@ namespace telar::runtime {
     TELAR_DIAGNOSTIC(observeQueue());
   }
 
-  template <Allocator Memory>
-  bool PaneMedia<Memory>::process() noexcept {
+  bool PaneMedia::process() noexcept {
     progress_ = {};
     TELAR_DIAGNOSTIC(batch_metrics_ = {});
     if (responses_->closed()) {
@@ -855,8 +809,7 @@ namespace telar::runtime {
     return reset;
   }
 
-  template <Allocator Memory>
-  void PaneMedia<Memory>::cancel() noexcept {
+  void PaneMedia::cancel() noexcept {
     cancelled_ = true;
     responses_->close();
     if (!busy_) {
@@ -870,14 +823,12 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  bool PaneMedia<Memory>::failed() const noexcept {
+  bool PaneMedia::failed() const noexcept {
     return failed_ || ingress_failed_;
   }
 
 #if TELAR_DIAGNOSTICS
-  template <Allocator Memory>
-  diagnostics::GraphicsStorageSnapshot PaneMedia<Memory>::storageMetrics() {
+  diagnostics::GraphicsStorageSnapshot PaneMedia::storageMetrics() {
     if (busy_) {
       return {.busy_panes = 1};
     }
@@ -891,45 +842,38 @@ namespace telar::runtime {
 #endif
 
 #if TELAR_DIAGNOSTICS
-  template <Allocator Memory>
-  const diagnostics::MediaQueue& PaneMedia<Memory>::queueMetrics() const noexcept {
+  const diagnostics::MediaQueue& PaneMedia::queueMetrics() const noexcept {
     return queue_metrics_;
   }
 #endif
 
 #if TELAR_DIAGNOSTICS
-  template <Allocator Memory>
-  void PaneMedia<Memory>::noteHeldRead() noexcept {
+  void PaneMedia::noteHeldRead() noexcept {
     diagnostics::accumulate(queue_metrics_.held_reads);
   }
 #endif
 
 #if TELAR_DIAGNOSTICS
-  template <Allocator Memory>
-  std::size_t PaneMedia<Memory>::usedBytes() const noexcept {
+  std::size_t PaneMedia::usedBytes() const noexcept {
     return memory_.used();
   }
 #endif
 
 #if TELAR_DIAGNOSTICS
-  template <Allocator Memory>
-  const diagnostics::MediaCounters& PaneMedia<Memory>::batchMetrics() const noexcept {
+  const diagnostics::MediaCounters& PaneMedia::batchMetrics() const noexcept {
     return batch_metrics_;
   }
 #endif
 
-  template <Allocator Memory>
-  MediaUsage& PaneMedia<Memory>::queryUsage() noexcept {
+  MediaUsage& PaneMedia::queryUsage() noexcept {
     return memory_.usage();
   }
 
-  template <Allocator Memory>
-  bool PaneMedia<Memory>::busy() const noexcept {
+  bool PaneMedia::busy() const noexcept {
     return busy_;
   }
 
-  template <Allocator Memory>
-  void PaneMedia<Memory>::noteSharedTransport(bool added) noexcept {
+  void PaneMedia::noteSharedTransport(bool added) noexcept {
     if (added) {
       shared_clients_.fetch_add(1, std::memory_order_release);
     } else {
@@ -937,8 +881,7 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  std::optional<FrozenImage<Memory>> PaneMedia<Memory>::takeTransfer(ImageKey key, bool shared) {
+  std::optional<FrozenImage> PaneMedia::takeTransfer(ImageKey key, bool shared) {
     if (shared) {
       if (auto prepared = prepared_.take(key)) {
         return prepared;
@@ -953,23 +896,19 @@ namespace telar::runtime {
     return frozen;
   }
 
-  template <Allocator Memory>
-  bool PaneMedia<Memory>::idle() const noexcept {
+  bool PaneMedia::idle() const noexcept {
     return !busy_ && !pending_responses_ && batches_[active_].events().empty();
   }
 
-  template <Allocator Memory>
-  auto PaneMedia<Memory>::terminal() noexcept -> MediaTerminal<AllocatedMemory>* {
+  auto PaneMedia::terminal() noexcept -> MediaTerminal* {
     return busy_ || !terminal_ ? nullptr : &*terminal_;
   }
 
-  template <Allocator Memory>
-  std::uint64_t PaneMedia<Memory>::takeDroppedBytes() noexcept {
+  std::uint64_t PaneMedia::takeDroppedBytes() noexcept {
     return std::exchange(dropped_bytes_, 0);
   }
 
-  template <Allocator Memory>
-  void PaneMedia<Memory>::responseProgress() noexcept {
+  void PaneMedia::responseProgress() noexcept {
     if (terminal_) {
       terminal_->drainResponses();
       progress_.pending_responses = terminal_->pendingResponses();
@@ -980,14 +919,12 @@ namespace telar::runtime {
   }
 
 #if TELAR_DIAGNOSTICS
-  template <Allocator Memory>
-  void PaneMedia<Memory>::observeQueue() noexcept {
+  void PaneMedia::observeQueue() noexcept {
     queue_metrics_.observe(batches_[0].events().size() + batches_[1].events().size(), batches_[0].byteCount() + batches_[1].byteCount());
   }
 #endif
 
-  template <Allocator Memory>
-  void PaneMedia<Memory>::dropActive(std::size_t incoming) noexcept {
+  void PaneMedia::dropActive(std::size_t incoming) noexcept {
     auto& batch = batches_[active_];
 
     TELAR_DIAGNOSTIC(diagnostics::accumulate(queue_metrics_.dropped_events, batch.events().size() + 1));
@@ -996,13 +933,5 @@ namespace telar::runtime {
     batch.clear();
     batch.reset_before = true;
   }
-
-  template class MediaTerminal<telar::runtime::MediaAllocator<telar::ConcurrentMemory>>;
-
-  template class AtomicFrameLoader<telar::ConcurrentMemory>;
-
-  template class MediaInput<telar::ConcurrentMemory>;
-
-  template class PaneMedia<telar::ConcurrentMemory>;
 
 }

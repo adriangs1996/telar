@@ -31,7 +31,6 @@ import telar.platform.fs;
 export {
   namespace telar::runtime::cli::hooks {
 
-    template <Allocator Memory>
     class Input {
     public:
       static constexpr std::size_t maximum_bytes = 16 * 1024 * 1024;
@@ -55,11 +54,6 @@ export {
       std::uint64_t received_ = 0;
     };
 
-    extern template class Input<Memory>;
-
-    template <Allocator Memory>
-    Input(Memory& memory) -> Input<Memory>;
-
   }
 }
 
@@ -72,8 +66,8 @@ export {
       template <EnvironmentLookup Environment>
       std::string_view codex(const Environment& environment) noexcept;
 
-      template <Allocator Memory, EnvironmentLookup Environment>
-      std::string_view cursor(Payload<Memory>& input, const Environment& environment) noexcept;
+      template <EnvironmentLookup Environment>
+      std::string_view cursor(Payload& input, const Environment& environment) noexcept;
 
     private:
       template <EnvironmentLookup Environment>
@@ -96,10 +90,10 @@ export {
 export {
   namespace telar::runtime::cli::hooks {
 
-    template <Allocator Memory, EnvironmentLookup Environment>
+    template <EnvironmentLookup Environment>
     // The reports view the payload, the files and their own texts, all region `a`.
-    void map(tbc::view<Payload<Memory>&, tbc::lt::a> input, tbc::view<Reports&, tbc::lt::a> reports, tbc::view<SessionFiles&, tbc::lt::a> files, const Environment& environment);
-    extern template void map<Memory, ProcessEnvironment>(tbc::view<Payload<Memory>&, tbc::lt::a> input, tbc::view<Reports&, tbc::lt::a> reports, tbc::view<SessionFiles&, tbc::lt::a> files, const ProcessEnvironment& environment);
+    void map(tbc::view<Payload&, tbc::lt::a> input, tbc::view<Reports&, tbc::lt::a> reports, tbc::view<SessionFiles&, tbc::lt::a> files, const Environment& environment);
+    extern template void map<ProcessEnvironment>(tbc::view<Payload&, tbc::lt::a> input, tbc::view<Reports&, tbc::lt::a> reports, tbc::view<SessionFiles&, tbc::lt::a> files, const ProcessEnvironment& environment);
 
   }
 }
@@ -108,9 +102,9 @@ export {
 export {
   namespace telar::runtime::cli {
 
-    template <Allocator Memory, EnvironmentLookup Environment>
+    template <EnvironmentLookup Environment>
     int runHook(Memory& memory, const HookOptions& options, const Environment& environment) noexcept;
-    extern template int runHook<Memory, ProcessEnvironment>(Memory& memory, const HookOptions& options, const ProcessEnvironment& environment) noexcept;
+    extern template int runHook<ProcessEnvironment>(Memory& memory, const HookOptions& options, const ProcessEnvironment& environment) noexcept;
 
   }
 }

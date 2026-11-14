@@ -28,22 +28,19 @@ export {
   namespace telar::runtime {
 
     // Desktop clipboard routing between panes and their attached clients.
-    template <Allocator Memory>
     class ClipboardService {
     public:
-      static bool eligible(const ClientSession<Memory>& client, const Pane<Memory>& pane) noexcept;
+      static bool eligible(const ClientSession& client, const Pane& pane) noexcept;
 
-      static void configure(const ClientStore<Memory>& clients, Pane<Memory>& pane);
+      static void configure(const ClientStore& clients, Pane& pane);
 
-      static bool advance(ClientStore<Memory>& clients, Pane<Memory>& pane, std::chrono::steady_clock::time_point now);
+      static bool advance(ClientStore& clients, Pane& pane, std::chrono::steady_clock::time_point now);
 
-      static tbc::view<Pane<Memory>*, tbc::lt::a> complete(tbc::view<PaneStore<Memory>&, tbc::lt::a> panes, ClientSession<Memory>& sender, const CompleteClipboardDesktop& completion);
+      static tbc::view<Pane*, tbc::lt::a> complete(tbc::view<PaneStore&, tbc::lt::a> panes, ClientSession& sender, const CompleteClipboardDesktop& completion);
 
     private:
-      static bool precedes(const ClientSession<Memory>& candidate, const ClientSession<Memory>& current, std::uint64_t pane) noexcept;
+      static bool precedes(const ClientSession& candidate, const ClientSession& current, std::uint64_t pane) noexcept;
     };
-
-    extern template class ClipboardService<ConcurrentMemory>;
 
   }
 }
@@ -55,14 +52,13 @@ export {
     // Which of a client's attachments can deliver, found once per write. It keeps the attachments' indexes,
     // not the attachments or their panes, so the client and the model are lent to each call, and the
     // connection apart from the attachment it delivers.
-    template <Allocator Memory>
     class AttachmentDelivery {
     public:
       using Clock = std::chrono::steady_clock;
 
-      explicit AttachmentDelivery(const RuntimeModel<Memory>& model, const ClientSession<Memory>& client);
+      explicit AttachmentDelivery(const RuntimeModel& model, const ClientSession& client);
 
-      bool prepare(RuntimeModel<Memory>& model, ClientSession<Memory>& client, DeliveryLane lane, Clock::time_point now, std::chrono::nanoseconds& timeout);
+      bool prepare(RuntimeModel& model, ClientSession& client, DeliveryLane lane, Clock::time_point now, std::chrono::nanoseconds& timeout);
 
     private:
       struct Slot {
@@ -72,44 +68,42 @@ export {
 
       // The parts of the client and the model a delivery writes, lent apart from the attachment and its pane.
       struct Output {
-        Connection<Memory>& connection;
+        Connection<ConcurrentMemory>& connection;
         std::optional<std::uint64_t>& completing_exit;
         std::chrono::nanoseconds frame_interval;
         [[maybe_unused]] diagnostics::RuntimeCounters& metrics;
       };
 
-      bool prepare(Output& output, Attachment<Memory>& attachment, Pane<Memory>& pane, DeliveryLane lane, Clock::time_point now, std::chrono::nanoseconds& timeout);
+      bool prepare(Output& output, Attachment& attachment, Pane& pane, DeliveryLane lane, Clock::time_point now, std::chrono::nanoseconds& timeout);
 
       template <typename Message>
-      static bool metadata(Connection<Memory>& connection, std::uint64_t& observed, std::uint64_t revision, const Message& message);
+      static bool metadata(Connection<ConcurrentMemory>& connection, std::uint64_t& observed, std::uint64_t revision, const Message& message);
 
       // The pane's document, one chunk per delivery; a newer revision restarts from its start, so
       // a client never assembles parts of two documents.
-      static bool document(Connection<Memory>& connection, Attachment<Memory>& attachment, const Pane<Memory>& pane);
+      static bool document(Connection<ConcurrentMemory>& connection, Attachment& attachment, const Pane& pane);
 
       // The documents that stand for rows of the pane's scrollback: one a client has that the pane
       // let go of is withdrawn first, then each one's parts go in order, then rows that moved.
-      static bool inlineDocuments(Connection<Memory>& connection, Attachment<Memory>& attachment, const Pane<Memory>& pane);
+      static bool inlineDocuments(Connection<ConcurrentMemory>& connection, Attachment& attachment, const Pane& pane);
 
-      static bool blocks(Connection<Memory>& connection, Attachment<Memory>& attachment, const Pane<Memory>& pane);
+      static bool blocks(Connection<ConcurrentMemory>& connection, Attachment& attachment, const Pane& pane);
 
       // How the scrollback numbers its rows, before a frame numbered so. A viewport held above the
       // bottom keeps showing the same rows when the scrollback drops rows above them.
-      static bool scrollback(Connection<Memory>& connection, Attachment<Memory>& attachment, Pane<Memory>& pane);
+      static bool scrollback(Connection<ConcurrentMemory>& connection, Attachment& attachment, Pane& pane);
 
-      bool cells(Output& output, Attachment<Memory>& attachment, Pane<Memory>& pane, Clock::time_point now, std::chrono::nanoseconds& timeout);
+      bool cells(Output& output, Attachment& attachment, Pane& pane, Clock::time_point now, std::chrono::nanoseconds& timeout);
 
-      bool exit(Output& output, Attachment<Memory>& attachment, const Pane<Memory>& pane);
+      bool exit(Output& output, Attachment& attachment, const Pane& pane);
 
-      static bool graphics(Output& output, Attachment<Memory>& attachment, Pane<Memory>& pane, std::chrono::nanoseconds& timeout);
+      static bool graphics(Output& output, Attachment& attachment, Pane& pane, std::chrono::nanoseconds& timeout);
 
-      static bool publishGraphics(Connection<Memory>& connection, Attachment<Memory>& attachment, Pane<Memory>& pane, std::chrono::nanoseconds& timeout);
+      static bool publishGraphics(Connection<ConcurrentMemory>& connection, Attachment& attachment, Pane& pane, std::chrono::nanoseconds& timeout);
 
-      std::array<Slot, ClientSession<Memory>::attachment_capacity> slots_;
+      std::array<Slot, ClientSession::attachment_capacity> slots_;
       std::uint64_t occupied_ = 0;
     };
-
-    extern template class AttachmentDelivery<ConcurrentMemory>;
 
   }
 }
@@ -118,10 +112,9 @@ export {
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory>
     class ResponseProjection {
     public:
-      explicit ResponseProjection(Memory& memory, RuntimeModel<Memory>& model) noexcept;
+      explicit ResponseProjection(ConcurrentMemory& memory, RuntimeModel& model) noexcept;
 
       // Kept here: `send` is the connection's callable, an open set no unit can instantiate ahead.
       TBC_HOT_PATH inline void operator()(const DeferredResponse& response, auto&& send) const {
@@ -133,7 +126,7 @@ export {
       }
 
     private:
-      static bool matchesSnapshot(const Pane<Memory>& pane, TabLocation location) noexcept;
+      static bool matchesSnapshot(const Pane& pane, TabLocation location) noexcept;
 
       // A pane's output decodes its OSC 7 directory, so it can hold a NUL the codec rejects;
       // one such pane must not fail the snapshot of its whole workspace.
@@ -224,14 +217,9 @@ export {
         send(LimitList{request.request_id, model_.limits.runtime.evicted(), model_.limits.clients.evicted(), model_.limits.refused_reports, std::span{entries}.first(count)});
       }
 
-      Memory& memory_;
-      RuntimeModel<Memory>& model_;
+      ConcurrentMemory& memory_;
+      RuntimeModel& model_;
     };
-
-    template <Allocator Memory>
-    ResponseProjection(Memory& memory, RuntimeModel<Memory>& model) -> ResponseProjection<Memory>;
-
-    extern template class ResponseProjection<ConcurrentMemory>;
 
   }
 }
@@ -240,12 +228,11 @@ export {
 export {
   namespace telar::runtime {
 
-    template <typename Source, typename Memory>
-    concept RuntimeStateSource = Allocator<Memory> && requires(Source& source, ClientSession<Memory>& client, const RuntimeModel<Memory>& model, DeliveryLane lane) {
+    template <typename Source>
+    concept RuntimeStateSource = requires(Source& source, ClientSession& client, const RuntimeModel& model, DeliveryLane lane) {
       { source.prepare(client, model, lane) } -> std::same_as<bool>;
     };
 
-    template <Allocator Memory>
     class ClientDelivery {
     public:
       using Clock = std::chrono::steady_clock;
@@ -255,11 +242,11 @@ export {
         std::optional<std::uint64_t> detach_pane;
       };
 
-      explicit ClientDelivery(Memory& memory, RuntimeModel<Memory>& model);
+      explicit ClientDelivery(ConcurrentMemory& memory, RuntimeModel& model);
 
       // Kept here: the source is the runtime's StateProjection over its own services, or a test's fake.
-      template <RuntimeStateSource<Memory> Source>
-      TBC_HOT_PATH inline Result write(ClientSession<Memory>& client, Source& source, Clock::time_point now) {
+      template <RuntimeStateSource Source>
+      TBC_HOT_PATH inline Result write(ClientSession& client, Source& source, Clock::time_point now) {
         TELAR_TRACE("runtime.deliverClient");
         Result result;
 
@@ -282,8 +269,8 @@ export {
 
     private:
       // Kept here: the source is the runtime's StateProjection over its own services, or a test's fake.
-      template <RuntimeStateSource<Memory> Source>
-      TBC_HOT_PATH inline void prepare(ClientSession<Memory>& client, Source& source, Clock::time_point now, std::chrono::nanoseconds& timeout) {
+      template <RuntimeStateSource Source>
+      TBC_HOT_PATH inline void prepare(ClientSession& client, Source& source, Clock::time_point now, std::chrono::nanoseconds& timeout) {
         const auto queued_lane = client.connection.nextLane();
         if (queued_lane <= DeliveryLane::management) {
           return;
@@ -299,7 +286,7 @@ export {
           }
         }
 
-        AttachmentDelivery<Memory> attachments{model_, client};
+        AttachmentDelivery attachments{model_, client};
 
         for (const auto lane : {DeliveryLane::shell, DeliveryLane::scrollback, DeliveryLane::cells}) {
           if (queued_lane <= lane || attachments.prepare(model_, client, lane, now, timeout)) {
@@ -328,22 +315,17 @@ export {
         }
       }
 
-      bool resync(ClientSession<Memory>& client);
+      bool resync(ClientSession& client);
 
-      bool clipboard(ClientSession<Memory>& client);
+      bool clipboard(ClientSession& client);
 
-      bool paneList(ClientSession<Memory>& client, Clock::time_point now);
+      bool paneList(ClientSession& client, Clock::time_point now);
 
-      bool foreground(ClientSession<Memory>& client);
+      bool foreground(ClientSession& client);
 
-      Memory& memory_;
-      RuntimeModel<Memory>& model_;
+      ConcurrentMemory& memory_;
+      RuntimeModel& model_;
     };
-
-    template <Allocator Memory>
-    ClientDelivery(Memory& memory, RuntimeModel<Memory>& model) -> ClientDelivery<Memory>;
-
-    extern template class ClientDelivery<ConcurrentMemory>;
 
   }
 }
@@ -363,8 +345,8 @@ export {
             layouts_(layouts),
             proxy_(proxy) {}
 
-      template <Allocator Memory>
-        requires requires(Workspaces& workspaces, Agents& agents, Metrics& metrics, Layouts& layouts, const Proxy& proxy, const RuntimeModel<Memory>& model, ClientSession<Memory>& client) {
+      inline bool prepare(ClientSession& client, const RuntimeModel& model, DeliveryLane lane)
+        requires requires(Workspaces& workspaces, Agents& agents, Metrics& metrics, Layouts& layouts, const Proxy& proxy) {
           workspaces.publishList(model, client);
           agents.query(model, client);
           { agents.revision() } -> std::convertible_to<std::uint64_t>;
@@ -372,7 +354,7 @@ export {
           layouts.publish(model, client);
           { proxy.status() } -> std::convertible_to<ProxyStatus>;
         }
-      inline bool prepare(ClientSession<Memory>& client, const RuntimeModel<Memory>& model, DeliveryLane lane) {
+      {
         switch (lane) {
         case DeliveryLane::layout:
           if (client.subscribed && !client.layout_sent) {
@@ -434,21 +416,15 @@ export {
 export {
   namespace telar::runtime {
 
-    template <ConcurrentAllocator Memory>
     class EditorService {
     public:
-      explicit EditorService(Memory& memory);
+      explicit EditorService(ConcurrentMemory& memory);
 
-      void process(std::span<const Byte> payload, EncodedReply<Memory>& reply, const RequestContext& context = {});
+      void process(std::span<const Byte> payload, EncodedReply<ConcurrentMemory>& reply, const RequestContext& context = {});
 
     private:
-      RemoteEditor<Memory> editor_;
+      RemoteEditor editor_;
     };
-
-    template <ConcurrentAllocator Memory>
-    EditorService(Memory& memory) -> EditorService<Memory>;
-
-    extern template class EditorService<ConcurrentMemory>;
 
   }
 }

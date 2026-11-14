@@ -301,8 +301,7 @@ namespace telar::runtime::diagnostics {
     line.field("proxy_capture_queue_high_water", metrics.queue_high_water);
   }
 
-  template <Allocator Memory>
-  void writeRuntimeSample(Line& line, RuntimeModel<Memory>& model, const ClientStore<Memory>& clients) {
+  void writeRuntimeSample(Line& line, RuntimeModel& model, const ClientStore& clients) {
     std::size_t tabs = 0;
     std::size_t attachments = 0;
     std::size_t outstanding_frames = 0;
@@ -387,7 +386,6 @@ namespace telar::runtime::diagnostics {
 
   // The sample reads counters that only a diagnostics build keeps.
 #if TELAR_DIAGNOSTICS
-  template void writeRuntimeSample<ConcurrentMemory>(Line& line, RuntimeModel<ConcurrentMemory>& model, const ClientStore<ConcurrentMemory>& clients);
 #endif
 
 #if TELAR_DIAGNOSTICS

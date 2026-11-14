@@ -7,8 +7,8 @@ module telar.runtime.runtime.media_service;
 
 namespace telar::runtime {
 
-  template <ConcurrentAllocator Memory, typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>
-  BackgroundPool<Memory, History, Paths, Editor, Suggestions, Worktrees>::BackgroundPool(Memory& memory, History& history, Paths& paths, Editor& editor, Suggestions& suggestions)
+  template <typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>
+  BackgroundPool<History, Paths, Editor, Suggestions, Worktrees>::BackgroundPool(ConcurrentMemory& memory, History& history, Paths& paths, Editor& editor, Suggestions& suggestions)
       : path_service_(paths),
         suggestion_service_(suggestions),
 #if TELAR_DIAGNOSTICS
@@ -20,23 +20,23 @@ namespace telar::runtime {
         worktrees_(std::in_place, memory) {
   }
 
-  template <ConcurrentAllocator Memory, typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>
-  std::array<int, 5> BackgroundPool<Memory, History, Paths, Editor, Suggestions, Worktrees>::descriptors() const noexcept {
+  template <typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>
+  std::array<int, 5> BackgroundPool<History, Paths, Editor, Suggestions, Worktrees>::descriptors() const noexcept {
     return {history_.descriptor(), path_service_.descriptor(), editor_.descriptor(), suggestions_.descriptor(), worktrees_.descriptor()};
   }
 
-  template <ConcurrentAllocator Memory, typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>
-  bool BackgroundPool<Memory, History, Paths, Editor, Suggestions, Worktrees>::suggestionsAvailable() const noexcept {
+  template <typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>
+  bool BackgroundPool<History, Paths, Editor, Suggestions, Worktrees>::suggestionsAvailable() const noexcept {
     return suggestion_service_.available();
   }
 
-  template <ConcurrentAllocator Memory, typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>
-  bool BackgroundPool<Memory, History, Paths, Editor, Suggestions, Worktrees>::editorBusy() noexcept {
+  template <typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>
+  bool BackgroundPool<History, Paths, Editor, Suggestions, Worktrees>::editorBusy() noexcept {
     return editor_.pending();
   }
 
-  template <ConcurrentAllocator Memory, typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>
-  bool BackgroundPool<Memory, History, Paths, Editor, Suggestions, Worktrees>::recordHistory(const HistoryEventView& event) noexcept {
+  template <typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>
+  bool BackgroundPool<History, Paths, Editor, Suggestions, Worktrees>::recordHistory(const HistoryEventView& event) noexcept {
     try {
       history_.submitInternal(event);
       return true;
@@ -46,18 +46,18 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory, typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>
-  std::uint64_t BackgroundPool<Memory, History, Paths, Editor, Suggestions, Worktrees>::takeHistoryFailures() noexcept {
+  template <typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>
+  std::uint64_t BackgroundPool<History, Paths, Editor, Suggestions, Worktrees>::takeHistoryFailures() noexcept {
     return history_submission_failures_.exchange(0, std::memory_order_relaxed) + history_.takeInternalFailures();
   }
 
-  template <ConcurrentAllocator Memory, typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>
-  bool BackgroundPool<Memory, History, Paths, Editor, Suggestions, Worktrees>::observeWorktree(const WorktreeProbeRequest& request) {
+  template <typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>
+  bool BackgroundPool<History, Paths, Editor, Suggestions, Worktrees>::observeWorktree(const WorktreeProbeRequest& request) {
     return worktrees_.submit(request);
   }
 
-  template <ConcurrentAllocator Memory, typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>
-  void BackgroundPool<Memory, History, Paths, Editor, Suggestions, Worktrees>::cancel(std::uint64_t client) noexcept {
+  template <typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>
+  void BackgroundPool<History, Paths, Editor, Suggestions, Worktrees>::cancel(std::uint64_t client) noexcept {
     history_.cancel(client);
     path_service_.cancel(client);
     editor_.cancel(client);
@@ -65,8 +65,8 @@ namespace telar::runtime {
   }
 
 #if TELAR_DIAGNOSTICS
-  template <ConcurrentAllocator Memory, typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>
-  HistoryMetrics BackgroundPool<Memory, History, Paths, Editor, Suggestions, Worktrees>::historyMetrics() const noexcept
+  template <typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>
+  HistoryMetrics BackgroundPool<History, Paths, Editor, Suggestions, Worktrees>::historyMetrics() const noexcept
     requires requires(const History& service) { service.historyMetrics(); }
   {
     auto snapshot = history_service_.historyMetrics();
@@ -78,16 +78,15 @@ namespace telar::runtime {
   }
 #endif
 
-  template <ConcurrentAllocator Memory>
-  BackgroundService<Memory>::BackgroundService(Memory& memory, const char* history_path, const HistoryFilters& filters)
+  BackgroundService::BackgroundService(ConcurrentMemory& memory, const char* history_path, const HistoryFilters& filters)
       : history_(std::in_place_type<HistoryFilters>, filters),
 #if TELAR_DIAGNOSTICS
         storage_(memory, history_path),
 #endif
-        decode_(AllocatorRef<Byte, Memory>{memory}) {
+        decode_(AllocatorRef<Byte, ConcurrentMemory>{memory}) {
     decode_.resize(decode_capacity);
     try {
-      history_.template emplace<HistoryStore<Memory>>(memory, history_path, filters);
+      history_.template emplace<HistoryStore>(memory, history_path, filters);
     } catch (const SystemError&) {
       throw;
     } catch (const RequestError& error) {
@@ -97,15 +96,14 @@ namespace telar::runtime {
     } catch (...) {
     }
 
-    if (!std::holds_alternative<HistoryStore<Memory>>(history_)) {
+    if (!std::holds_alternative<HistoryStore>(history_)) {
       history_.template emplace<HistoryFilters>(filters);
     }
 
     TELAR_DIAGNOSTIC(idle());
   }
 
-  template <ConcurrentAllocator Memory>
-  void BackgroundService<Memory>::process(std::span<const Byte> payload, EncodedReply<Memory>& reply, const RequestContext& context) {
+  void BackgroundService::process(std::span<const Byte> payload, EncodedReply<ConcurrentMemory>& reply, const RequestContext& context) {
     TELAR_TRACE("background_service.process");
     TELAR_DIAGNOSTIC(idle());
     const bool known = ClientRequests::dispatch<RequestLane::service>(static_cast<ClientTag>(payload.front()), [&]<typename Message> {
@@ -118,11 +116,10 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  void BackgroundService<Memory>::processInternal(const InternalRequest& request) {
+  void BackgroundService::processInternal(const InternalRequest& request) {
     TELAR_DIAGNOSTIC(idle());
     TELAR_DIAGNOSTIC(diagnostics::OperationTimer timing{&counters_.writes});
-    if (auto* store = std::get_if<HistoryStore<Memory>>(&history_)) {
+    if (auto* store = std::get_if<HistoryStore>(&history_)) {
       try {
         store->record(request.view());
         return;
@@ -133,9 +130,8 @@ namespace telar::runtime {
     TELAR_DIAGNOSTIC(timing.fail());
   }
 
-  template <ConcurrentAllocator Memory>
-  bool BackgroundService<Memory>::acceptsInternal(const HistoryEventView& event) const noexcept {
-    if (const auto* store = std::get_if<HistoryStore<Memory>>(&history_)) {
+  bool BackgroundService::acceptsInternal(const HistoryEventView& event) const noexcept {
+    if (const auto* store = std::get_if<HistoryStore>(&history_)) {
       return store->accepts(event);
     }
 
@@ -143,25 +139,22 @@ namespace telar::runtime {
   }
 
 #if TELAR_DIAGNOSTICS
-  template <ConcurrentAllocator Memory>
-  void BackgroundService<Memory>::idle() noexcept {
-    storage_.sample(diagnostics::FileStorage<Memory>::Clock::now());
+  void BackgroundService::idle() noexcept {
+    storage_.sample(diagnostics::FileStorage<ConcurrentMemory>::Clock::now());
   }
 
-  template <ConcurrentAllocator Memory>
-  HistoryMetrics BackgroundService<Memory>::historyMetrics() const noexcept {
-    auto snapshot = counters_.snapshot(std::holds_alternative<HistoryStore<Memory>>(history_));
+  HistoryMetrics BackgroundService::historyMetrics() const noexcept {
+    auto snapshot = counters_.snapshot(std::holds_alternative<HistoryStore>(history_));
 
     snapshot.sqlite_bytes = storage_.bytes();
     return snapshot;
   }
 #endif
 
-  template <ConcurrentAllocator Memory>
   template <typename Message>
-  void BackgroundService<Memory>::execute(const Message& request, EncodedReply<Memory>& reply, const RequestContext& context) {
+  void BackgroundService::execute(const Message& request, EncodedReply<ConcurrentMemory>& reply, const RequestContext& context) {
     TELAR_DIAGNOSTIC(diagnostics::OperationTimer timing{counters_.template operation<Message>()});
-    auto* store = std::get_if<HistoryStore<Memory>>(&history_);
+    auto* store = std::get_if<HistoryStore>(&history_);
     if (store != nullptr) {
       try {
         if constexpr (std::same_as<Message, QueryHistory>) {
@@ -193,34 +186,27 @@ namespace telar::runtime {
     replyHistoryFailure(request, reply, store != nullptr);
   }
 
-  template class BackgroundService<ConcurrentMemory>;
-
-  template <Allocator Memory>
-  void DescriptionQueue<Memory>::enable(bool enabled) noexcept {
+  void DescriptionQueue::enable(bool enabled) noexcept {
     descriptions_enabled_ = enabled;
   }
 
-  template <Allocator Memory>
-  bool DescriptionQueue<Memory>::enabled() const noexcept {
+  bool DescriptionQueue::enabled() const noexcept {
     return descriptions_enabled_;
   }
 
-  template <Allocator Memory>
-  std::size_t DescriptionQueue<Memory>::pending(const AgentRegistry<Memory>& agents) noexcept {
+  std::size_t DescriptionQueue::pending(const AgentRegistry<ConcurrentMemory>& agents) noexcept {
     return static_cast<std::size_t>(std::ranges::count_if(agents.records(), [](const auto& entry) {
       return entry->hasPendingDescription();
     }));
   }
 
-  template <Allocator Memory>
-  void DescriptionQueue<Memory>::project(std::size_t pending, Agent& agent) noexcept {
+  void DescriptionQueue::project(std::size_t pending, Agent& agent) noexcept {
     if (descriptions_enabled_ && agent.description_phase == DescriptionPhase::waiting_work && pending < description_queue_capacity) {
       agent.queueDescription();
     }
   }
 
-  template <Allocator Memory>
-  std::optional<DescriptionRequest> DescriptionQueue<Memory>::nextDescription(AgentRegistry<Memory>& agents) {
+  std::optional<DescriptionRequest> DescriptionQueue::nextDescription(AgentRegistry<ConcurrentMemory>& agents) {
     std::size_t pending = 0;
 
     for (const auto& agent : agents.records()) {
@@ -261,8 +247,7 @@ namespace telar::runtime {
     return std::nullopt;
   }
 
-  template <Allocator Memory>
-  std::optional<HistorySessionTitle> DescriptionQueue<Memory>::completeDescription(AgentRegistry<Memory>& agents, const DescriptionResult& result) {
+  std::optional<HistorySessionTitle> DescriptionQueue::completeDescription(AgentRegistry<ConcurrentMemory>& agents, const DescriptionResult& result) {
     auto* agent = agents.find(result.identity.pane, result.identity.generation);
     if (agent == nullptr || agent->description_phase != DescriptionPhase::running || agent->session_id != result.identity.session || agent->description_revision != result.identity.revision) {
       return std::nullopt;
@@ -292,16 +277,14 @@ namespace telar::runtime {
     return finished;
   }
 
-  template class DescriptionQueue<ConcurrentMemory>;
-
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Limits, HistoryEventSink History>
-  MediaService<Memory, Poller, Limits, History>::MediaService(Poller& poller, Limits& limits)
+  template <EventLoop Poller, typename Limits, HistoryEventSink History>
+  MediaService<Poller, Limits, History>::MediaService(Poller& poller, Limits& limits)
       : poller_(poller),
         limits_(limits),
         worker_(std::in_place) {}
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Limits, HistoryEventSink History>
-  void MediaService<Memory, Poller, Limits, History>::start(RuntimeModel<Memory>& model, const ClientStore<Memory>& clients, Panes& service) {
+  template <EventLoop Poller, typename Limits, HistoryEventSink History>
+  void MediaService<Poller, Limits, History>::start(RuntimeModel& model, const ClientStore& clients, Panes& service) {
     if (pending_) {
       return;
     }
@@ -343,8 +326,8 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Limits, HistoryEventSink History>
-  void MediaService<Memory, Poller, Limits, History>::collect(RuntimeModel<Memory>& model, ClientStore<Memory>& clients, Panes& service) {
+  template <EventLoop Poller, typename Limits, HistoryEventSink History>
+  void MediaService<Poller, Limits, History>::collect(RuntimeModel& model, ClientStore& clients, Panes& service) {
     if (pending_) {
       worker_.collect([&](const typename Processor::Result& result) {
         apply(model, clients, service, result);
@@ -352,21 +335,21 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Limits, HistoryEventSink History>
-  void MediaService<Memory, Poller, Limits, History>::updateReadInterest(Pane<Memory>& pane) {
+  template <EventLoop Poller, typename Limits, HistoryEventSink History>
+  void MediaService<Poller, Limits, History>::updateReadInterest(Pane& pane) {
     if (pane.output_closed) {
       return;
     }
 
-    const bool paused = pane.terminal.hasPendingControl() || pane.media->holdsRead(Pane<Memory>::read_buffer_size);
+    const bool paused = pane.terminal.hasPendingControl() || pane.media->holdsRead(Pane::read_buffer_size);
     if (paused != pane.read_paused) {
       poller_.readInterest(pane.process->descriptor(), eventToken(EventSource::pane, pane.event_identity), !paused);
       pane.read_paused = paused;
     }
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Limits, HistoryEventSink History>
-  void MediaService<Memory, Poller, Limits, History>::finish(RuntimeModel<Memory>& model) noexcept {
+  template <EventLoop Poller, typename Limits, HistoryEventSink History>
+  void MediaService<Poller, Limits, History>::finish(RuntimeModel& model) noexcept {
     for (auto* pane : model.panes.items()) {
       if (pane != nullptr) {
         pane->media->cancel();
@@ -406,13 +389,13 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Limits, HistoryEventSink History>
-  int MediaService<Memory, Poller, Limits, History>::descriptor() const noexcept {
+  template <EventLoop Poller, typename Limits, HistoryEventSink History>
+  int MediaService<Poller, Limits, History>::descriptor() const noexcept {
     return worker_.descriptor();
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Limits, HistoryEventSink History>
-  bool MediaService<Memory, Poller, Limits, History>::wanted(const ClientStore<Memory>& clients, std::uint64_t pane, ImageKey key, bool shared) noexcept {
+  template <EventLoop Poller, typename Limits, HistoryEventSink History>
+  bool MediaService<Poller, Limits, History>::wanted(const ClientStore& clients, std::uint64_t pane, ImageKey key, bool shared) noexcept {
     for (const auto* client : clients.items()) {
       const auto* attachment = client == nullptr ? nullptr : client->attachment(pane);
       if (attachment != nullptr && attachment->graphics.wantsImage(key, shared)) {
@@ -423,8 +406,8 @@ namespace telar::runtime {
     return false;
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Limits, HistoryEventSink History>
-  void MediaService<Memory, Poller, Limits, History>::enqueueRetired(tbc::view<RuntimeModel<Memory>&, tbc::lt::a> model, tbc::view<typename Processor::Request&, tbc::lt::a> request) noexcept {
+  template <EventLoop Poller, typename Limits, HistoryEventSink History>
+  void MediaService<Poller, Limits, History>::enqueueRetired(tbc::view<RuntimeModel&, tbc::lt::a> model, tbc::view<typename Processor::Request&, tbc::lt::a> request) noexcept {
     auto* link = &model.retired_media;
 
     while (*link && request.count < request.entries.size()) {
@@ -445,8 +428,8 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Limits, HistoryEventSink History>
-  void MediaService<Memory, Poller, Limits, History>::apply(RuntimeModel<Memory>& model, ClientStore<Memory>& clients, Panes& service, const typename Processor::Result& result) {
+  template <EventLoop Poller, typename Limits, HistoryEventSink History>
+  void MediaService<Poller, Limits, History>::apply(RuntimeModel& model, ClientStore& clients, Panes& service, const typename Processor::Result& result) {
     pending_ = false;
     for (const auto& entry : std::span{result.entries}.first(result.count)) {
       entry.media->complete();
@@ -485,8 +468,8 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Limits, HistoryEventSink History>
-  void MediaService<Memory, Poller, Limits, History>::stageTransfers(ClientStore<Memory>& clients, [[maybe_unused]] diagnostics::RuntimeCounters& metrics, std::uint64_t pane, const GraphicsStorage<MediaAllocator<Memory>>& storage) {
+  template <EventLoop Poller, typename Limits, HistoryEventSink History>
+  void MediaService<Poller, Limits, History>::stageTransfers(ClientStore& clients, [[maybe_unused]] diagnostics::RuntimeCounters& metrics, std::uint64_t pane, const GraphicsStorage<MediaAllocator<ConcurrentMemory>>& storage) {
     if (storage.revision() == 0) {
       return;
     }
@@ -499,8 +482,8 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Limits, HistoryEventSink History>
-  void MediaService<Memory, Poller, Limits, History>::reportLimits(const GraphicsLimits& graphics, MediaTerminal<MediaAllocator<Memory>>& terminal) {
+  template <EventLoop Poller, typename Limits, HistoryEventSink History>
+  void MediaService<Poller, Limits, History>::reportLimits(const GraphicsLimits& graphics, MediaTerminal& terminal) {
     auto& storage = terminal.graphics;
     if (const auto images = storage.takeTrimmedImages()) {
       limits_.report(LimitReach{.name = "graphics.images_per_screen", .noun = "images", .value = graphics_image_count, .requested = images});
@@ -520,9 +503,9 @@ namespace telar::runtime {
     }
   }
 
-  template class BackgroundPool<ConcurrentMemory, BackgroundService<ConcurrentMemory>, PathService<ConcurrentMemory>, EditorService<ConcurrentMemory>, SuggestionService<ConcurrentMemory>>;
+  template class BackgroundPool<BackgroundService, PathService<ConcurrentMemory>, EditorService, SuggestionService>;
 
-  template class MediaService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>, LimitService<ConcurrentMemory>, BackgroundPool<ConcurrentMemory, BackgroundService<ConcurrentMemory>, PathService<ConcurrentMemory>, EditorService<ConcurrentMemory>, SuggestionService<ConcurrentMemory>>>;
-  template class MediaService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>, LimitService<ConcurrentMemory>>;
+  template class MediaService<NativeEventLoop<ConcurrentMemory>, LimitService, BackgroundPool<BackgroundService, PathService<ConcurrentMemory>, EditorService, SuggestionService>>;
+  template class MediaService<NativeEventLoop<ConcurrentMemory>, LimitService>;
 
 }

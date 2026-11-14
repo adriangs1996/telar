@@ -97,11 +97,9 @@ export {
 
     class Protocol {
     public:
-      template <Allocator Memory>
-      static tbc::view<std::span<const Byte>, tbc::lt::a> encodeExchange(tbc::view<std::span<Byte>, tbc::lt::a> output, ExchangeIdentity identity, const CapturedExchange<Memory>& exchange, std::size_t part_limit = std::numeric_limits<std::size_t>::max());
+      static tbc::view<std::span<const Byte>, tbc::lt::a> encodeExchange(tbc::view<std::span<Byte>, tbc::lt::a> output, ExchangeIdentity identity, const CapturedExchange& exchange, std::size_t part_limit = std::numeric_limits<std::size_t>::max());
 
-      template <Allocator Memory>
-      static std::size_t exchangeBytes(const CapturedExchange<Memory>& exchange);
+      static std::size_t exchangeBytes(const CapturedExchange& exchange);
 
       static ExchangeView decodeExchange(std::span<const Byte> input);
 
@@ -116,19 +114,16 @@ export {
       static constexpr std::size_t prefix_bytes = sizeof(std::uint32_t);
 
     private:
-      template <FrameOutput Output, Allocator Memory>
-      static void writeExchange(Output& writer, ExchangeIdentity identity, const CapturedExchange<Memory>& exchange, std::size_t part_limit = std::numeric_limits<std::size_t>::max());
+      template <FrameOutput Output>
+      static void writeExchange(Output& writer, ExchangeIdentity identity, const CapturedExchange& exchange, std::size_t part_limit = std::numeric_limits<std::size_t>::max());
 
       static ExchangeProtocol exchangeProtocol(CaptureProtocol protocol);
 
-      template <FrameOutput Output, Allocator Memory>
-      static void writeHalf(Output& writer, const CaptureHalf<Memory>* half, std::size_t part_limit);
+      template <FrameOutput Output>
+      static void writeHalf(Output& writer, const CaptureHalf* half, std::size_t part_limit);
 
       static tbc::view<std::optional<HalfView>, tbc::lt::a> readHalf(FrameReader& reader);
     };
-
-    extern template tbc::view<std::span<const Byte>, tbc::lt::a> Protocol::encodeExchange<telar::ConcurrentMemory>(tbc::view<std::span<Byte>, tbc::lt::a> output, ExchangeIdentity identity, const CapturedExchange<telar::ConcurrentMemory>& exchange, std::size_t part_limit);
-    extern template std::size_t Protocol::exchangeBytes<telar::ConcurrentMemory>(const CapturedExchange<telar::ConcurrentMemory>& exchange);
 
   }
 }

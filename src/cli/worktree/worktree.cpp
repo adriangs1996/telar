@@ -413,8 +413,7 @@ namespace telar::runtime::cli::repository {
   // What the bundle leaves out: the machine's tips, which its clone holds with
   // all their history. When they already reach `commit`, its parents instead,
   // since Git refuses an empty bundle. Only hashes pass, never an option.
-  template <Allocator Memory>
-  std::vector<std::string> exclusions(Git<Memory>& git, std::string_view commit, std::string_view listing) {
+  std::vector<std::string> exclusions(Git& git, std::string_view commit, std::string_view listing) {
     std::vector<std::string> tips;
 
     appendHashes(tips, listing);
@@ -450,7 +449,6 @@ namespace telar::runtime::cli::repository {
     return {.path = std::string{path->text()}, .commit = std::string{commit}, .repository = std::string{identity}, .reused = reused->text() == "true"};
   }
 
-  template <Allocator Memory>
   PreparedRepository prepare(Memory& memory, const RepositoryOptions& options, std::string_view remote_program, RepositoryCapture& capture) {
     const auto cwd = std::filesystem::canonical(".").string();
     const auto root = mainRoot(memory, cwd);
@@ -575,14 +573,12 @@ namespace telar::runtime::cli::repository {
     const machines::MachineProfile& profile_;
   };
 
-  template <Allocator Memory>
   PreparedRepository prepare(Memory& memory, const RepositoryOptions& options, const machines::MachineProfile& profile) {
     ProfileCapture capture{memory, profile};
 
     return prepare(memory, options, profile.program().value_or("telar"), capture);
   }
 
-  template <Allocator Memory>
   int run(Memory& memory, const RepositoryOptions& options) {
     try {
       if (options.action == RepositoryOptions::Action::receive) {
@@ -636,7 +632,6 @@ namespace telar::runtime::cli::sessions {
     return found == descriptions.end() ? name : found->second;
   }
 
-  template <Allocator Memory>
   class WorktreeDispatch {
   public:
     WorktreeDispatch(Memory& memory, const WorktreeOptions& options, const machines::MachineProfile& profile)
@@ -782,7 +777,7 @@ namespace telar::runtime::cli::sessions {
       }
 
       try {
-        Channel<Memory> session{memory_, std::nullopt, false};
+        Channel session{memory_, std::nullopt, false};
 
         session.template exchange<RequestCompleted>(VerifyPaneDescent{.pane_id = *id, .pane_generation = *generation});
         const auto agents = session.template exchange<AgentSnapshot>(QueryAgents{});
@@ -813,7 +808,7 @@ namespace telar::runtime::cli::sessions {
     Memory& memory_;
     const WorktreeOptions& options_;
     const machines::MachineProfile& profile_;
-    WorktreeGit<Memory> git_;
+    WorktreeGit git_;
     std::string root_;
   };
 
@@ -857,8 +852,7 @@ namespace telar::runtime::cli::sessions {
     return "none";
   }
 
-  template <Allocator Memory>
-  void worktreeAgent(Output<Memory>& output, const AgentSnapshotEntry& agent) {
+  void worktreeAgent(Output& output, const AgentSnapshotEntry& agent) {
     constexpr auto escapes = JsonEscapes::control;
 
     output.text("{\"pane_id\":").number(agent.pane_id).text(",\"pane_generation\":").number(agent.pane_generation).text(",\"workspace_id\":").number(agent.location.workspace.id).text(",\"tab_id\":").number(agent.location.tab_id).text(",\"pane_index\":").number(agent.pane_index).text(",\"provider\":").json(agent.provider_name.empty() ? "unknown" : agent.provider_name, escapes).text(",\"provider_index\":").number(static_cast<Byte>(agent.provider)).text(",\"status\":").json(agentStatus(agent.status), escapes).text(",\"workspace\":").json(agent.workspace_label, escapes).text(",\"tab\":").json(agent.tab_label, escapes).text(",\"title\":").json(agent.session_title, escapes).text(",\"cwd\":").json(agent.cwd_label, escapes).text(",\"blocked_reason\":").json(blockedReason(agent.blocked_reason), escapes).text(",\"status_age_s\":").number(agent.status_age_s).text(",\"worktree_id\":").number(agent.work_tree).text(",\"last_event\":").json(agent.last_event, escapes).text(",\"plan\":{\"done\":").number(agent.plan_done).text(",\"total\":").number(agent.plan_total).text(",\"step\":").json(agent.plan_step, escapes).text("},\"final_message\":").json(agent.final_message, escapes).text(",\"session_id\":").json(hexSession(agent.session_id), escapes).text("}");
@@ -890,8 +884,7 @@ namespace telar::runtime::cli::sessions {
     return "none";
   }
 
-  template <Allocator Memory>
-  void worktreeEntry(Output<Memory>& output, const WorktreeListEntry& entry, std::span<const AgentSnapshotEntry> agents, bool json) {
+  void worktreeEntry(Output& output, const WorktreeListEntry& entry, std::span<const AgentSnapshotEntry> agents, bool json) {
     constexpr auto escapes = JsonEscapes::control;
 
     if (!json) {
@@ -941,8 +934,7 @@ namespace telar::runtime::cli::sessions {
     PaneOpened opened{};
   };
 
-  template <Allocator Memory>
-  void worktreeLaunch(Output<Memory>& output, const WorktreeLaunch& launch, bool json) {
+  void worktreeLaunch(Output& output, const WorktreeLaunch& launch, bool json) {
     if (json) {
       output.text("{\"worktree_id\":").number(launch.worktree).text(",\"setup_execution_id\":");
       if (launch.setup) {
@@ -984,7 +976,6 @@ namespace telar::runtime::cli::sessions {
     return answer == "y" || answer == "yes";
   }
 
-  template <Allocator Memory>
   class WorktreeCommand {
   public:
     WorktreeCommand(Memory& memory, const WorktreeOptions& options)
@@ -1560,17 +1551,16 @@ namespace telar::runtime::cli::sessions {
 
     Memory& memory_;
     const WorktreeOptions& options_;
-    Channel<Memory> catalog_channel_;
+    Channel catalog_channel_;
     // Views what the catalog channel decoded.
     tbc::view<WorkspaceList, tbc::lt::self> catalog_;
-    Channel<Memory> session_;
-    WorktreeGit<Memory> git_;
-    Output<Memory> output_;
+    Channel session_;
+    WorktreeGit git_;
+    Output output_;
     std::uint64_t verified_generation_ = 0;
     std::string adopted_path_, adopted_branch_, adopted_base_;
   };
 
-  template <Allocator Memory>
   int worktree(Memory& memory, const WorktreeOptions& options) {
     try {
       // The machine's own label runs here like any other create.
@@ -1604,19 +1594,13 @@ namespace telar::runtime::cli::sessions {
 
 namespace telar::runtime::cli::repository {
 
-  template int run<Memory>(Memory& memory, const RepositoryOptions& options);
-
 }
 
 namespace telar::runtime::cli::sessions {
 
-  template int worktree<Memory>(Memory& memory, const WorktreeOptions& options);
-
 }
 
 namespace telar::runtime::cli::repository {
-
-  template PreparedRepository prepare<Memory>(Memory& memory, const RepositoryOptions& options, std::string_view remote_program, RepositoryCapture& capture);
 
 }
 

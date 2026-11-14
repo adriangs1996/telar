@@ -198,7 +198,7 @@ namespace {
   class PaneProbe {
   public:
     PaneProbe(ConcurrentMemory& memory, TerminalSize size, ShellToken token)
-        : media_(std::make_shared<PaneMedia<ConcurrentMemory>>(memory, budget_, GraphicsLimits{}, size, queue_)),
+        : media_(std::make_shared<PaneMedia>(memory, budget_, GraphicsLimits{}, size, queue_)),
           terminal_(memory, size, TerminalPurpose::separate_media, queue_, GraphicsQueryResources{GraphicsLimits{}, budget_, &media_->queryUsage()}),
           zones_("/home/user/src/telar", token),
           blocks_(memory, terminal_) {
@@ -239,7 +239,7 @@ namespace {
     }
 
     void finish(Digest& digest, Counts& counts) const {
-      std::array<CommandBlock, CommandBlocks<ConcurrentMemory>::capacity> storage;
+      std::array<CommandBlock, CommandBlocks::capacity> storage;
       const auto message = blocks_.message(1, storage);
 
       digest.add(blocks_.revision());
@@ -278,10 +278,10 @@ namespace {
 
     MediaBudget budget_{GraphicsLimits::maximum_global_bytes};
     std::shared_ptr<PtyResponseQueue> queue_ = std::make_shared<PtyResponseQueue>();
-    std::shared_ptr<PaneMedia<ConcurrentMemory>> media_;
-    Terminal<ConcurrentMemory> terminal_;
+    std::shared_ptr<PaneMedia> media_;
+    Terminal terminal_;
     CommandZones zones_;
-    CommandBlocks<ConcurrentMemory> blocks_;
+    CommandBlocks blocks_;
     std::chrono::steady_clock::time_point now_{};
   };
 
@@ -331,8 +331,8 @@ namespace {
       return time_;
     }
 
-    Terminal<ConcurrentMemory> terminal_;
-    CommandTracker<ConcurrentMemory> tracker_;
+    Terminal terminal_;
+    CommandTracker tracker_;
     ObservationTime time_{1, 1'000'000};
   };
 

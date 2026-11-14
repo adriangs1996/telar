@@ -76,24 +76,21 @@ export {
       LaunchFailure failure{};
     };
 
-    template <Allocator Memory>
     class HistoryEvent {
     public:
-      explicit HistoryEvent(Memory& memory, const HistoryEventView& event);
+      explicit HistoryEvent(ConcurrentMemory& memory, const HistoryEventView& event);
 
       HistoryEventView view() const noexcept;
 
     private:
       HistoryEventView event_;
-      String<Memory> workspace_;
-      String<Memory> shell_;
-      String<Memory> command_;
-      String<Memory> directory_;
-      Vector<Byte, Memory> output_;
-      String<Memory> cause_;
+      String<ConcurrentMemory> workspace_;
+      String<ConcurrentMemory> shell_;
+      String<ConcurrentMemory> command_;
+      String<ConcurrentMemory> directory_;
+      Vector<Byte, ConcurrentMemory> output_;
+      String<ConcurrentMemory> cause_;
     };
-
-    extern template class HistoryEvent<ConcurrentMemory>;
 
     template <typename Sink>
     concept HistoryEventSink = requires(Sink& sink, const HistoryEventView& event) {
@@ -183,10 +180,9 @@ export {
 export {
   namespace telar::runtime {
 
-    template <ConcurrentAllocator Memory>
     class SqliteAllocator {
     public:
-      explicit SqliteAllocator(Memory& memory);
+      explicit SqliteAllocator(ConcurrentMemory& memory);
       ~SqliteAllocator();
 
       SqliteAllocator(const SqliteAllocator&) = delete;
@@ -205,14 +201,9 @@ export {
       static int allocationSize(void* pointer) noexcept;
       static int roundedSize(int bytes) noexcept;
 
-      inline static Memory* active_ = nullptr;
+      inline static ConcurrentMemory* active_ = nullptr;
       sqlite3_mem_methods previous_{};
     };
-
-    template <ConcurrentAllocator Memory>
-    SqliteAllocator(Memory& memory) -> SqliteAllocator<Memory>;
-
-    extern template class SqliteAllocator<ConcurrentMemory>;
 
   }
 }

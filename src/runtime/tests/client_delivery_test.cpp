@@ -74,7 +74,7 @@ namespace {
       return version;
     }
 
-    void query(const RuntimeModel<ConcurrentMemory>&, ClientSession<ConcurrentMemory>& client) {
+    void query(const RuntimeModel&, ClientSession& client) {
       client.connection.send(AgentSnapshot{.revision = version});
       client.agent_revision = version;
       client.agent_workspace_revision = workspace_revision;
@@ -85,11 +85,11 @@ namespace {
   };
 
   struct Metrics {
-    void publish(ClientSession<ConcurrentMemory>&) {}
+    void publish(ClientSession&) {}
   };
 
   struct NoState {
-    bool prepare(ClientSession<ConcurrentMemory>&, const RuntimeModel<ConcurrentMemory>&, DeliveryLane) {
+    bool prepare(ClientSession&, const RuntimeModel&, DeliveryLane) {
       return false;
     }
   };
@@ -120,7 +120,7 @@ namespace {
     clipboard.replace(3, {});
     check(clipboard.pending() && clipboard.message().bytes.empty());
 
-    std::vector<Byte> oversized(PendingClipboard<ConcurrentMemory>::capacity + 1);
+    std::vector<Byte> oversized(PendingClipboard::capacity + 1);
 
     try {
       clipboard.replace(4, oversized);
@@ -136,11 +136,11 @@ namespace {
     MemoryAdapter adapter{system};
     ConcurrentMemory& memory = adapter;
     RuntimeModel model{memory};
-    ClientStore<ConcurrentMemory> clients{memory};
-    LimitService<ConcurrentMemory> limits;
+    ClientStore clients{memory};
+    LimitService limits;
     NativeEventLoop<ConcurrentMemory> poller{memory};
     PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/client-delivery.sock"}};
-    WorkspaceService<ConcurrentMemory, decltype(poller)> workspaces{memory};
+    WorkspaceService<decltype(poller)> workspaces{memory};
     ClientLayouts layouts{memory};
     Agents agents;
     Metrics metrics;
@@ -236,11 +236,11 @@ namespace {
     MemoryAdapter adapter{system};
     ConcurrentMemory& memory = adapter;
     RuntimeModel model{memory};
-    ClientStore<ConcurrentMemory> clients{memory};
-    LimitService<ConcurrentMemory> limits;
+    ClientStore clients{memory};
+    LimitService limits;
     NativeEventLoop<ConcurrentMemory> poller{memory};
     PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/shell-delivery.sock"}};
-    WorkspaceService<ConcurrentMemory, decltype(poller)> workspaces{memory};
+    WorkspaceService<decltype(poller)> workspaces{memory};
     ClientPeer peer{memory, model, clients, ClientRole::interactive};
     auto& client = peer.session();
     const std::array<std::string_view, 1> arguments{"/bin/cat"};
@@ -270,11 +270,11 @@ namespace {
     MemoryAdapter adapter{system};
     ConcurrentMemory& memory = adapter;
     RuntimeModel model{memory};
-    ClientStore<ConcurrentMemory> clients{memory};
-    LimitService<ConcurrentMemory> limits;
+    ClientStore clients{memory};
+    LimitService limits;
     NativeEventLoop<ConcurrentMemory> poller{memory};
     PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/scrollback-delivery.sock"}};
-    WorkspaceService<ConcurrentMemory, decltype(poller)> workspaces{memory};
+    WorkspaceService<decltype(poller)> workspaces{memory};
     ClientPeer peer{memory, model, clients, ClientRole::interactive};
     auto& client = peer.session();
     const std::array<std::string_view, 1> arguments{"/bin/cat"};
@@ -326,11 +326,11 @@ namespace {
     MemoryAdapter adapter{system};
     ConcurrentMemory& memory = adapter;
     RuntimeModel model{memory};
-    ClientStore<ConcurrentMemory> clients{memory};
-    LimitService<ConcurrentMemory> limits;
+    ClientStore clients{memory};
+    LimitService limits;
     NativeEventLoop<ConcurrentMemory> poller{memory};
     PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/document-delivery.sock"}};
-    WorkspaceService<ConcurrentMemory, decltype(poller)> workspaces{memory};
+    WorkspaceService<decltype(poller)> workspaces{memory};
     ClientPeer peer{memory, model, clients, ClientRole::interactive};
     auto& client = peer.session();
     const std::array<std::string_view, 1> arguments{"/bin/cat"};
@@ -344,15 +344,15 @@ namespace {
     };
 
     // Reads as the pane's read loop does: no more than the media worker holds at once.
-    MediaProcessor<ConcurrentMemory> processor;
+    MediaProcessor processor;
     ObservationWorker<decltype(processor)&> worker{std::in_place, processor};
     const auto feed = [&](std::string_view bytes) {
       while (!bytes.empty()) {
-        const auto take = std::min(bytes.size(), Pane<ConcurrentMemory>::read_buffer_size);
+        const auto take = std::min(bytes.size(), Pane::read_buffer_size);
 
         while (pane.media->holdsRead(take)) {
           check(pane.media->seal());
-          MediaProcessor<ConcurrentMemory>::Request request;
+          MediaProcessor::Request request;
 
           request.entries[request.count++].media = pane.media;
           check(worker.submit(request));
@@ -464,11 +464,11 @@ namespace {
     MemoryAdapter adapter{system};
     ConcurrentMemory& memory = adapter;
     RuntimeModel model{memory};
-    ClientStore<ConcurrentMemory> clients{memory};
-    LimitService<ConcurrentMemory> limits;
+    ClientStore clients{memory};
+    LimitService limits;
     NativeEventLoop<ConcurrentMemory> poller{memory};
     PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/attachment-delivery.sock"}};
-    WorkspaceService<ConcurrentMemory, decltype(poller)> workspaces{memory};
+    WorkspaceService<decltype(poller)> workspaces{memory};
     ClientPeer peer{memory, model, clients, ClientRole::interactive};
     auto& client = peer.session();
     const std::array<std::string_view, 1> arguments{"/bin/cat"};

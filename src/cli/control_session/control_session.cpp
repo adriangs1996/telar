@@ -53,18 +53,14 @@ namespace telar::runtime::cli {
     return message_;
   }
 
-  template <Allocator Memory>
-  ControlSession<Memory>::ControlSession(Memory& memory, const char* socket, std::size_t reply_bytes, std::size_t request_bytes)
+  ControlSession::ControlSession(Memory& memory, const char* socket, std::size_t reply_bytes, std::size_t request_bytes)
       : connection_(socket),
         outgoing_(request_bytes, Byte{}, AllocatorRef<Byte, Memory>{memory}),
         incoming_(reply_bytes, Byte{}, AllocatorRef<Byte, Memory>{memory}),
         decoded_(reply_bytes, Byte{}, AllocatorRef<Byte, Memory>{memory}) {}
 
-  template <Allocator Memory>
-  void ControlSession<Memory>::receiveTimeout(unsigned seconds) {
+  void ControlSession::receiveTimeout(unsigned seconds) {
     connection_.receiveTimeout(seconds);
   }
-
-  template class ControlSession<Memory>;
 
 }

@@ -13,39 +13,34 @@ import telar.platform.net;
 
 namespace telar::runtime {
 
-  template <Allocator Memory>
-  SuggestionEngine<Memory>::SuggestionEngine(Memory& memory, SuggestionOptions options)
+  SuggestionEngine::SuggestionEngine(ConcurrentMemory& memory, SuggestionOptions options)
       : memory_(memory),
         options_(options),
         input_(memory, 128 * 1024),
-        line_(AllocatorRef<char, Memory>{memory}),
-        text_(AllocatorRef<char, Memory>{memory}),
-        encoded_(AllocatorRef<char, Memory>{memory}) {
+        line_(AllocatorRef<char, ConcurrentMemory>{memory}),
+        text_(AllocatorRef<char, ConcurrentMemory>{memory}),
+        encoded_(AllocatorRef<char, ConcurrentMemory>{memory}) {
     line_.reserve(maximum_record);
     text_.reserve(maximum_record);
     encoded_.reserve(maximum_record);
     input_.reserve(128 * 1024);
   }
 
-  template <Allocator Memory>
-  bool SuggestionEngine<Memory>::available() const noexcept {
+  bool SuggestionEngine::available() const noexcept {
     return !options_.arguments.empty();
   }
 
-  template <Allocator Memory>
-  void SuggestionEngine<Memory>::stop() noexcept {
+  void SuggestionEngine::stop() noexcept {
     stopping_ = true;
   }
 
-  template <Allocator Memory>
-  void SuggestionEngine<Memory>::idle() noexcept {
+  void SuggestionEngine::idle() noexcept {
     if (process_ && Clock::now() - last_used_ >= options_.idle_timeout) {
       process_.reset();
     }
   }
 
-  template <Allocator Memory>
-  void SuggestionEngine<Memory>::suggest(const SuggestCommand& request, std::string_view prompt, EncodedReply<Memory>& reply) {
+  void SuggestionEngine::suggest(const SuggestCommand& request, std::string_view prompt, EncodedReply<ConcurrentMemory>& reply) {
     TELAR_TRACE("suggestions.ask");
     if (!available()) {
       reply.send(CommandSuggestion{request.request_id, SuggestionStatus::unavailable});
@@ -133,8 +128,7 @@ namespace telar::runtime {
     reply.send(CommandSuggestion{request.request_id, status, status == SuggestionStatus::ready ? suggestion : std::string_view{}});
   }
 
-  template <Allocator Memory>
-  std::string_view SuggestionEngine<Memory>::extract(std::string_view text) noexcept {
+  std::string_view SuggestionEngine::extract(std::string_view text) noexcept {
     while (!text.empty()) {
       const auto newline = text.find('\n');
       auto line = trimText(text.substr(0, newline), " \r\t");
@@ -164,8 +158,7 @@ namespace telar::runtime {
     return {};
   }
 
-  template <Allocator Memory>
-  void SuggestionEngine<Memory>::poll(bool writing) {
+  void SuggestionEngine::poll(bool writing) {
     if (stopping_) {
       throw Rejected{};
     }
@@ -203,8 +196,7 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  void SuggestionEngine<Memory>::write(std::string_view bytes) {
+  void SuggestionEngine::write(std::string_view bytes) {
     while (!bytes.empty()) {
       if (stopping_) {
         throw Rejected{};
@@ -225,8 +217,7 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  void SuggestionEngine<Memory>::nextLine() {
+  void SuggestionEngine::nextLine() {
     bool discarded = false;
 
     for (;;) {
@@ -252,11 +243,8 @@ namespace telar::runtime {
     }
   }
 
-  template class SuggestionEngine<ConcurrentMemory>;
-
-  template <Allocator Memory>
-  String<Memory> suggestionPrompt(Memory& memory, std::string_view cwd, std::string_view screen, std::string_view request) {
-    String<Memory> prompt{AllocatorRef<char, Memory>{memory}};
+  String<ConcurrentMemory> suggestionPrompt(ConcurrentMemory& memory, std::string_view cwd, std::string_view screen, std::string_view request) {
+    String<ConcurrentMemory> prompt{AllocatorRef<char, ConcurrentMemory>{memory}};
 
     prompt.reserve(9 * 1024);
     prompt = "You are a shell assistant inside a terminal multiplexer. Reply with exactly one shell command line that fulfils the request, and nothing else: no markdown, no code fences, no quotes around the command, no explanation. If one command cannot fulfil the request, reply with one line starting with '#' that says why.\nWorking directory: ";
@@ -268,7 +256,5 @@ namespace telar::runtime {
     prompt += '\n';
     return prompt;
   }
-
-  template String<ConcurrentMemory> suggestionPrompt<ConcurrentMemory>(ConcurrentMemory& memory, std::string_view cwd, std::string_view screen, std::string_view request);
 
 }

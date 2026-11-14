@@ -28,23 +28,20 @@ export {
       { probe.stop() } noexcept -> std::same_as<void>;
     };
 
-    template <ConcurrentAllocator Memory>
     class WorkspaceGitProbe {
     public:
       using Request = WorkspaceGitRequest;
       using Result = WorkspaceGitResult;
       using Clock = std::chrono::steady_clock;
 
-      explicit WorkspaceGitProbe(Memory& memory) noexcept;
+      explicit WorkspaceGitProbe(ConcurrentMemory& memory) noexcept;
 
       Result observe(const Request& request) noexcept;
       void stop() noexcept;
 
     private:
-      GitStatusReader<Memory> reader_;
+      GitStatusReader reader_;
     };
-
-    extern template class WorkspaceGitProbe<ConcurrentMemory>;
 
   }
 }

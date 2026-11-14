@@ -2,8 +2,7 @@ module telar.cli.hooks.command;
 
 namespace telar::runtime::cli::hooks {
 
-  template <Allocator Memory>
-  Object<Memory>::Object(Memory& memory, JsonValue value, bool reject_duplicates)
+  Object::Object(Memory& memory, JsonValue value, bool reject_duplicates)
       : memory_(memory),
         members_(AllocatorRef<Member, Memory>{memory}),
         reject_duplicates_(reject_duplicates) {
@@ -21,8 +20,7 @@ namespace telar::runtime::cli::hooks {
     indexMembers();
   }
 
-  template <Allocator Memory>
-  std::optional<JsonValue> Object<Memory>::value(std::string_view name) const {
+  std::optional<JsonValue> Object::value(std::string_view name) const {
     const auto* member = find(name);
     if (member != nullptr) {
       checkUnique(*member);
@@ -31,8 +29,7 @@ namespace telar::runtime::cli::hooks {
     return member == nullptr ? std::nullopt : std::optional{member->value};
   }
 
-  template <Allocator Memory>
-  std::optional<std::string_view> Object<Memory>::optionalText(std::string_view name) {
+  std::optional<std::string_view> Object::optionalText(std::string_view name) {
     auto* member = find(name);
     if (member == nullptr) {
       return std::nullopt;
@@ -46,22 +43,19 @@ namespace telar::runtime::cli::hooks {
     return decode(*member);
   }
 
-  template <Allocator Memory>
-  std::string_view Object<Memory>::text(std::string_view name) {
+  std::string_view Object::text(std::string_view name) {
     auto* member = find(name);
 
     return member == nullptr ? std::string_view{} : decode(*member);
   }
 
-  template <Allocator Memory>
-  std::optional<std::string_view> Object<Memory>::stringField(std::string_view name) {
+  std::optional<std::string_view> Object::stringField(std::string_view name) {
     const auto field = value(name);
 
     return field && field->encoded().starts_with('"') ? optionalText(name) : std::nullopt;
   }
 
-  template <Allocator Memory>
-  std::optional<bool> Object<Memory>::boolean(std::string_view name) const {
+  std::optional<bool> Object::boolean(std::string_view name) const {
     const auto field = value(name);
     if (!field || field->encoded() == "null") {
       return std::nullopt;
@@ -74,8 +68,7 @@ namespace telar::runtime::cli::hooks {
     return field->boolean();
   }
 
-  template <Allocator Memory>
-  void Object<Memory>::requireUnique() const {
+  void Object::requireUnique() const {
     for (const auto& member : members_) {
       if (member.duplicate) {
         throw std::invalid_argument{"Duplicate hook field"};
@@ -83,16 +76,14 @@ namespace telar::runtime::cli::hooks {
     }
   }
 
-  template <Allocator Memory>
   template <typename Consumer>
-  void Object<Memory>::eachValue(Consumer&& consume) const {
+  void Object::eachValue(Consumer&& consume) const {
     for (const auto& member : members_) {
       consume(member.value);
     }
   }
 
-  template <Allocator Memory>
-  auto Object<Memory>::find(std::string_view name) noexcept -> Member* {
+  auto Object::find(std::string_view name) noexcept -> Member* {
     const auto found = std::lower_bound(members_.begin(), members_.end(), name, [](const Member& member, std::string_view key) {
       return member.name < key;
     });
@@ -100,13 +91,11 @@ namespace telar::runtime::cli::hooks {
     return found != members_.end() && found->name == name ? &*found : nullptr;
   }
 
-  template <Allocator Memory>
-  auto Object<Memory>::find(std::string_view name) const noexcept -> const Member* {
+  auto Object::find(std::string_view name) const noexcept -> const Member* {
     return const_cast<Object*>(this)->find(name);
   }
 
-  template <Allocator Memory>
-  void Object<Memory>::indexMembers() {
+  void Object::indexMembers() {
     std::ranges::sort(members_, [](const Member& left, const Member& right) {
       return left.name == right.name ? left.position < right.position : left.name < right.name;
     });
@@ -129,8 +118,7 @@ namespace telar::runtime::cli::hooks {
     members_.erase(members_.begin() + unique, members_.end());
   }
 
-  template <Allocator Memory>
-  auto Object<Memory>::decode(tbc::view<Member&, tbc::lt::a> member) -> tbc::view<std::string_view, tbc::lt::a> {
+  auto Object::decode(tbc::view<Member&, tbc::lt::a> member) -> tbc::view<std::string_view, tbc::lt::a> {
     checkUnique(member);
     if (!member.text) {
       String<Memory> decoded{AllocatorRef<char, Memory>{memory_}};
@@ -142,19 +130,16 @@ namespace telar::runtime::cli::hooks {
     return *member.text;
   }
 
-  template <Allocator Memory>
-  void Object<Memory>::checkUnique(const Member& member) const {
+  void Object::checkUnique(const Member& member) const {
     if (reject_duplicates_ && member.duplicate) {
       throw std::invalid_argument{"Duplicate hook field"};
     }
   }
 
-  template <Allocator Memory>
-  Payload<Memory>::Payload(Memory& memory, AgentProvider provider, JsonValue input)
-      : Payload(memory, provider, Object<Memory>{memory, input, true}) {}
+  Payload::Payload(Memory& memory, AgentProvider provider, JsonValue input)
+      : Payload(memory, provider, Object{memory, input, true}) {}
 
-  template <Allocator Memory>
-  Payload<Memory>::Payload(Memory& memory, AgentProvider provider, Object<Memory> input)
+  Payload::Payload(Memory& memory, AgentProvider provider, Object input)
       : memory(memory),
         provider(provider),
         fields(std::move(input)),
@@ -239,28 +224,23 @@ namespace telar::runtime::cli::hooks {
     }
   }
 
-  template <Allocator Memory>
-  std::string_view Payload<Memory>::event() {
+  std::string_view Payload::event() {
     return fields.text(provider == AgentProvider::pi || provider == AgentProvider::opencode ? "event" : "hook_event_name");
   }
 
-  template <Allocator Memory>
-  std::string_view Payload<Memory>::session() {
+  std::string_view Payload::session() {
     return fields.text(provider == AgentProvider::cursor ? "conversation_id" : "session_id");
   }
 
-  template <Allocator Memory>
-  bool Payload<Memory>::subagent() {
+  bool Payload::subagent() {
     return !fields.optionalText("agent_id").value_or("").empty();
   }
 
-  template <Allocator Memory>
-  std::string_view Payload<Memory>::workspace() const noexcept {
+  std::string_view Payload::workspace() const noexcept {
     return workspace_ ? std::string_view{*workspace_} : std::string_view{};
   }
 
-  template <Allocator Memory>
-  std::string_view Payload<Memory>::toolEvent() {
+  std::string_view Payload::toolEvent() {
     const auto name = event();
 
     if (provider != AgentProvider::cursor) {
@@ -278,8 +258,7 @@ namespace telar::runtime::cli::hooks {
     return name;
   }
 
-  template <Allocator Memory>
-  AgentBlockedReason Payload<Memory>::blockedReason() {
+  AgentBlockedReason Payload::blockedReason() {
     const auto name = fields.value("blocked") ? fields.text("blocked") : "none";
     constexpr std::array names{"none", "permission", "question", "plan", "other"};
     const auto found = std::ranges::find(names, name);
@@ -290,21 +269,18 @@ namespace telar::runtime::cli::hooks {
     return static_cast<AgentBlockedReason>(found - names.begin());
   }
 
-  template <Allocator Memory>
-  void Payload<Memory>::strictBoolean(std::string_view name) {
+  void Payload::strictBoolean(std::string_view name) {
     if (fields.value(name) && !fields.boolean(name).has_value()) {
       throw std::invalid_argument{"Expected hook boolean"};
     }
   }
 
-  template <Allocator Memory>
-  JsonValue Payload<Memory>::toolObject(const Object<Memory>& fields) {
+  JsonValue Payload::toolObject(const Object& fields) {
     const auto value = fields.value("tool_input");
 
     return value && value->encoded().starts_with('{') ? *value : JsonValue{"{}"};
   }
 
-  template <Allocator Memory>
   void validateUnicodeEscapes(Memory& memory, std::string_view input) {
     if (!input.contains("\\u")) {
       return;
@@ -331,7 +307,6 @@ namespace telar::runtime::cli::hooks {
     }
   }
 
-  template <Allocator Memory>
   void validateDynamicValue(Memory& memory, JsonValue value) {
     if (value.encoded().starts_with('{')) {
       Object fields{memory, value};
@@ -437,8 +412,7 @@ namespace telar::runtime::cli::hooks {
     return false;
   }
 
-  template <Allocator Memory>
-  void toolEvent(FixedText<96>& output, Payload<Memory>& input) {
+  void toolEvent(FixedText<96>& output, Payload& input) {
     const auto name = input.fields.text("tool_name");
     if (name.empty()) {
       output.assign({});
@@ -467,8 +441,7 @@ namespace telar::runtime::cli::hooks {
     eventLine(output, {buffer.data(), length});
   }
 
-  template <Allocator Memory>
-  bool questionEvent(FixedText<96>& output, Payload<Memory>& input) {
+  bool questionEvent(FixedText<96>& output, Payload& input) {
     const auto questions = input.tools.value("questions");
     if (!questions || !questions->encoded().starts_with('[')) {
       return false;
@@ -492,8 +465,7 @@ namespace telar::runtime::cli::hooks {
     return found;
   }
 
-  template <Allocator Memory>
-  std::optional<std::int32_t> commandExitCode(Payload<Memory>& input) {
+  std::optional<std::int32_t> commandExitCode(Payload& input) {
     if (input.provider == AgentProvider::claude) {
       return input.event() == "PostToolUse" ? std::optional<std::int32_t>{0} : std::nullopt;
     }
@@ -519,8 +491,7 @@ namespace telar::runtime::cli::hooks {
     }
   }
 
-  template <Allocator Memory>
-  std::optional<ReportAgentCommand> commandReport(Payload<Memory>& input) {
+  std::optional<ReportAgentCommand> commandReport(Payload& input) {
     if ((input.provider == AgentProvider::claude || input.provider == AgentProvider::codex) && input.subagent()) {
       return std::nullopt;
     }
@@ -560,15 +531,8 @@ namespace telar::runtime::cli::hooks {
     output.assign({buffer.data(), static_cast<std::size_t>(length)});
   }
 
-  template class Object<Memory>;
-  template class Payload<Memory>;
   template void displayText<96>(FixedText<96>& output, std::string_view text, bool multiline);
   template void displayText<2048>(FixedText<2048>& output, std::string_view text, bool multiline);
-  template void toolEvent<Memory>(FixedText<96>& output, Payload<Memory>& input);
-  template bool questionEvent<Memory>(FixedText<96>& output, Payload<Memory>& input);
-  template std::optional<ReportAgentCommand> commandReport<Memory>(Payload<Memory>& input);
-  template void validateUnicodeEscapes<Memory>(Memory& memory, std::string_view input);
-  template void validateDynamicValue<Memory>(Memory& memory, JsonValue value);
 
 }
 

@@ -65,7 +65,6 @@ namespace telar::render::markdown {
 
   // A copy of source with every invalid UTF-8 sequence replaced by U+FFFD, so
   // that every span of the document starts and ends on a character.
-  template <Allocator Memory>
   String<Memory> repairUtf8(std::string_view source, Memory& memory) {
     String<Memory> repaired{AllocatorRef<char, Memory>{memory}};
 
@@ -91,7 +90,6 @@ namespace telar::render::markdown {
     return repaired;
   }
 
-  template <Allocator Memory>
   class Builder {
   public:
     explicit Builder(Document<Memory>& document, Memory& memory)
@@ -607,7 +605,6 @@ namespace telar::render::markdown {
     bool failed_ = false;
   };
 
-  template <Allocator Memory>
   Error render(std::string_view source, Document<Memory>& document) {
     document.clear();
     if (source.size() > max_source_bytes) {
@@ -622,15 +619,15 @@ namespace telar::render::markdown {
       source = repaired;
     }
 
-    Builder<Memory> builder{document, memory};
+    Builder builder{document, memory};
     const MD_PARSER parser{
         .abi_version = 0,
         .flags = dialect,
-        .enter_block = &Builder<Memory>::onEnterBlock,
-        .leave_block = &Builder<Memory>::onLeaveBlock,
-        .enter_span = &Builder<Memory>::onEnterSpan,
-        .leave_span = &Builder<Memory>::onLeaveSpan,
-        .text = &Builder<Memory>::onText,
+        .enter_block = &Builder::onEnterBlock,
+        .leave_block = &Builder::onLeaveBlock,
+        .enter_span = &Builder::onEnterSpan,
+        .leave_span = &Builder::onLeaveSpan,
+        .text = &Builder::onText,
         .debug_log = nullptr,
         .syntax = nullptr,
     };
@@ -654,7 +651,5 @@ namespace telar::render::markdown {
 
     return Error::none;
   }
-
-  template Error render(std::string_view source, Document<Memory>& document);
 
 }

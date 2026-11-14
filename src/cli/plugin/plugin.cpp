@@ -152,7 +152,7 @@ namespace telar::runtime::cli {
     }
   }
 
-  template <Allocator Memory, EnvironmentLookup Environment>
+  template <EnvironmentLookup Environment>
   void runPlugin(Memory& memory, const PluginOptions& options, const Environment& environment) {
     try {
       executePlugin(memory, options, environment);
@@ -163,9 +163,9 @@ namespace telar::runtime::cli {
     }
   }
 
-  template <ConcurrentAllocator Memory, EnvironmentLookup Environment>
-  int runProxyTrust(Memory& memory, const ProxyTrustOptions& options, const Environment& environment) {
-    const auto directory = options.directory.empty() ? proxyAuthorityDirectory(memory, environment) : String<Memory>{options.directory, AllocatorRef<char, Memory>{memory}};
+  template <EnvironmentLookup Environment>
+  int runProxyTrust(ConcurrentMemory& memory, const ProxyTrustOptions& options, const Environment& environment) {
+    const auto directory = options.directory.empty() ? proxyAuthorityDirectory(memory, environment) : String<ConcurrentMemory>{options.directory, AllocatorRef<char, ConcurrentMemory>{memory}};
     if (directory.empty() || directory.front() != '/') {
       std::fputs("telar proxy trust: --ca-dir must be absolute\n", stderr);
       return 1;
@@ -268,8 +268,8 @@ namespace telar::runtime::cli {
     }
   }
 
-  template int runProxyTrust<ConcurrentMemory, ProcessEnvironment>(ConcurrentMemory& memory, const ProxyTrustOptions& options, const ProcessEnvironment& environment);
-  template void runPlugin<Memory, ProcessEnvironment>(Memory& memory, const PluginOptions& options, const ProcessEnvironment& environment);
+  template int runProxyTrust<ProcessEnvironment>(ConcurrentMemory& memory, const ProxyTrustOptions& options, const ProcessEnvironment& environment);
+  template void runPlugin<ProcessEnvironment>(Memory& memory, const PluginOptions& options, const ProcessEnvironment& environment);
 
   PluginOptions PluginOptions::parse(std::span<char* const> arguments) {
     if (arguments.size() < 2) {

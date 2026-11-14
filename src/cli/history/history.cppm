@@ -91,9 +91,7 @@ export {
 export {
   namespace telar::runtime::cli::diagnostics {
 
-    template <Allocator Memory>
     int run(Memory& memory, const DiagnosticsOptions& options);
-    extern template int run<Memory>(Memory& memory, const DiagnosticsOptions& options);
 
   }
 }
@@ -104,9 +102,7 @@ export {
 
     // Connects to the runtime, starting it when none listens. Commands that only
     // report must never resurrect a stopped runtime and do not call this.
-    template <Allocator Memory>
     void ensureRuntime(Memory& memory, const RuntimePaths<Memory>& paths, const ServerOptions& options = {});
-    extern template void ensureRuntime<Memory>(Memory& memory, const RuntimePaths<Memory>& paths, const ServerOptions& options);
 
   }
 }
@@ -167,21 +163,15 @@ export {
   namespace telar::runtime::cli::history {
 
     // The results view the session; region `b` keeps them apart from the options' own `a`.
-    template <Allocator Memory>
-    tbc::view<HistoryResults, tbc::lt::b> query(tbc::view<ControlSession<Memory>&, tbc::lt::b> session, const HistoryOptions& options, const HistoryScopeValue& scope);
+    tbc::view<HistoryResults, tbc::lt::b> query(tbc::view<ControlSession&, tbc::lt::b> session, const HistoryOptions& options, const HistoryScopeValue& scope);
 
-    template <Allocator Memory>
-    void prune(Memory& memory, const char* socket, ControlSession<Memory>& session, const HistoryOptions& options, const HistoryScopeValue& scope);
+    void prune(Memory& memory, const char* socket, ControlSession& session, const HistoryOptions& options, const HistoryScopeValue& scope);
 
-    template <Allocator Memory>
-    void show(ControlSession<Memory>& session, const HistoryOptions& options);
+    void show(ControlSession& session, const HistoryOptions& options);
 
-    template <Allocator Memory>
-    void stats(ControlSession<Memory>& session, const HistoryOptions& options, const HistoryScopeValue& scope);
+    void stats(ControlSession& session, const HistoryOptions& options, const HistoryScopeValue& scope);
 
-    template <Allocator Memory>
     int run(Memory& memory, const HistoryOptions& options);
-    extern template int run<Memory>(Memory& memory, const HistoryOptions& options);
 
   }
 }

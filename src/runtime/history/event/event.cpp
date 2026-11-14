@@ -8,18 +8,16 @@ import std;
 
 namespace telar::runtime {
 
-  template <Allocator Memory>
-  HistoryEvent<Memory>::HistoryEvent(Memory& memory, const HistoryEventView& event)
+  HistoryEvent::HistoryEvent(ConcurrentMemory& memory, const HistoryEventView& event)
       : event_(event),
-        workspace_(event.session.workspace_path, AllocatorRef<char, Memory>{memory}),
-        shell_(event.session.shell, AllocatorRef<char, Memory>{memory}),
-        command_(event.command.command, AllocatorRef<char, Memory>{memory}),
-        directory_(event.command.directory, AllocatorRef<char, Memory>{memory}),
-        output_(event.command.output.begin(), event.command.output.end(), AllocatorRef<Byte, Memory>{memory}),
-        cause_(event.failure.cause, AllocatorRef<char, Memory>{memory}) {}
+        workspace_(event.session.workspace_path, AllocatorRef<char, ConcurrentMemory>{memory}),
+        shell_(event.session.shell, AllocatorRef<char, ConcurrentMemory>{memory}),
+        command_(event.command.command, AllocatorRef<char, ConcurrentMemory>{memory}),
+        directory_(event.command.directory, AllocatorRef<char, ConcurrentMemory>{memory}),
+        output_(event.command.output.begin(), event.command.output.end(), AllocatorRef<Byte, ConcurrentMemory>{memory}),
+        cause_(event.failure.cause, AllocatorRef<char, ConcurrentMemory>{memory}) {}
 
-  template <Allocator Memory>
-  HistoryEventView HistoryEvent<Memory>::view() const noexcept {
+  HistoryEventView HistoryEvent::view() const noexcept {
     auto result = event_;
 
     result.session.workspace_path = workspace_;
@@ -31,8 +29,6 @@ namespace telar::runtime {
     return result;
   }
 
-  template class HistoryEvent<ConcurrentMemory>;
-
   bool DiscardedHistory::recordHistory(const HistoryEventView&) noexcept {
     return true;
   }
@@ -43,8 +39,7 @@ namespace telar::runtime {
   }
 #endif
 
-  template <ConcurrentAllocator Memory>
-  SqliteAllocator<Memory>::SqliteAllocator(Memory& memory) {
+  SqliteAllocator::SqliteAllocator(ConcurrentMemory& memory) {
     if (active_ != nullptr || sqlite3_config(SQLITE_CONFIG_GETMALLOC, &previous_) != SQLITE_OK) {
       throw std::logic_error{"SQLite allocation must be configured before opening databases"};
     }
@@ -71,24 +66,20 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  SqliteAllocator<Memory>::~SqliteAllocator() {
+  SqliteAllocator::~SqliteAllocator() {
     sqlite3_shutdown();
     sqlite3_config(SQLITE_CONFIG_MALLOC, &previous_);
     active_ = nullptr;
   }
 
-  template <ConcurrentAllocator Memory>
-  int SqliteAllocator<Memory>::initialize(void* context) noexcept {
-    active_ = static_cast<Memory*>(context);
+  int SqliteAllocator::initialize(void* context) noexcept {
+    active_ = static_cast<ConcurrentMemory*>(context);
     return SQLITE_OK;
   }
 
-  template <ConcurrentAllocator Memory>
-  void SqliteAllocator<Memory>::shutdown(void*) noexcept {}
+  void SqliteAllocator::shutdown(void*) noexcept {}
 
-  template <ConcurrentAllocator Memory>
-  void* SqliteAllocator<Memory>::allocate(int bytes) noexcept {
+  void* SqliteAllocator::allocate(int bytes) noexcept {
     if (bytes <= 0) {
       return nullptr;
     }
@@ -102,8 +93,7 @@ namespace telar::runtime {
     return header + 1;
   }
 
-  template <ConcurrentAllocator Memory>
-  void SqliteAllocator<Memory>::deallocate(void* pointer) noexcept {
+  void SqliteAllocator::deallocate(void* pointer) noexcept {
     if (pointer == nullptr) {
       return;
     }
@@ -113,8 +103,7 @@ namespace telar::runtime {
     active_->deallocate(header, sizeof(Header) + static_cast<std::size_t>(header->bytes), alignof(Header));
   }
 
-  template <ConcurrentAllocator Memory>
-  void* SqliteAllocator<Memory>::reallocate(void* pointer, int bytes) noexcept {
+  void* SqliteAllocator::reallocate(void* pointer, int bytes) noexcept {
     if (bytes == 0) {
       deallocate(pointer);
       return nullptr;
@@ -129,13 +118,11 @@ namespace telar::runtime {
     return replacement;
   }
 
-  template <ConcurrentAllocator Memory>
-  int SqliteAllocator<Memory>::allocationSize(void* pointer) noexcept {
+  int SqliteAllocator::allocationSize(void* pointer) noexcept {
     return (static_cast<Header*>(pointer) - 1)->bytes;
   }
 
-  template <ConcurrentAllocator Memory>
-  int SqliteAllocator<Memory>::roundedSize(int bytes) noexcept {
+  int SqliteAllocator::roundedSize(int bytes) noexcept {
     constexpr int alignment = alignof(Header);
     if (bytes <= 0 || bytes > std::numeric_limits<int>::max() - alignment + 1) {
       return 0;
@@ -143,7 +130,5 @@ namespace telar::runtime {
 
     return (bytes + alignment - 1) & ~(alignment - 1);
   }
-
-  template class SqliteAllocator<ConcurrentMemory>;
 
 }

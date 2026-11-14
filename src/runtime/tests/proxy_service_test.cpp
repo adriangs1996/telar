@@ -264,11 +264,11 @@ static std::string servicePayload(ProxyServiceScenario scenario, bool response) 
 }
 
 template <EventLoop Poller>
-static void checkService(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory>& library, ProxyServiceScenario scenario, bool capture) {
+static void checkService(TlsTestMemory& memory, const TlsLibrary& library, ProxyServiceScenario scenario, bool capture) {
   const bool intercepted = scenario != ProxyServiceScenario::opaque;
   const bool http2 = scenario == ProxyServiceScenario::http2 || scenario == ProxyServiceScenario::http2_decode_failure;
   AuthorityDirectory directory;
-  const auto authority = std::make_shared<const CertificateAuthority<TlsTestMemory>>(CertificateAuthority<TlsTestMemory>::loadOrCreate(memory, library, directory.descriptor.get(), AuthorityKind::private_local));
+  const auto authority = std::make_shared<const CertificateAuthority>(CertificateAuthority::loadOrCreate(memory, library, directory.descriptor.get(), AuthorityKind::private_local));
   const auto issuer = CertificatePair::authority("Fixture origin CA", CertificatePair::private_lifetime);
   const auto leaf = issuer.mint("origin.test");
   TlsTrustStore trust{memory, library};
@@ -286,7 +286,7 @@ static void checkService(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory>&
 
   const auto secret = ProxySecret::generate();
   auto origin_listener = ProxyListener::bind(std::nullopt, {});
-  ProxyService<TlsTestMemory, Poller, ServiceResolver> service{memory, options, secret, interception, ProxyListener::bind(std::nullopt, {})};
+  ProxyService<Poller, ServiceResolver> service{memory, options, secret, interception, ProxyListener::bind(std::nullopt, {})};
   auto child = connectLocal(service.port());
 
   writeText(child.get(), request(secret, origin_listener.port(), "origin.test"));
@@ -432,15 +432,15 @@ static void checkService(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory>&
   check(service.captures().reservedBytes() == 0);
 }
 
-static void checkAdmissionAndStop(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory>& library) {
+static void checkAdmissionAndStop(TlsTestMemory& memory, const TlsLibrary& library) {
   AuthorityDirectory directory;
-  const auto authority = std::make_shared<const CertificateAuthority<TlsTestMemory>>(CertificateAuthority<TlsTestMemory>::loadOrCreate(memory, library, directory.descriptor.get(), AuthorityKind::private_local));
+  const auto authority = std::make_shared<const CertificateAuthority>(CertificateAuthority::loadOrCreate(memory, library, directory.descriptor.get(), AuthorityKind::private_local));
   TlsTrustStore trust{memory, library};
   TlsContexts contexts{memory, library, trust};
   TlsInterception interception{contexts, authority};
   ProxyOptions options{memory};
   const auto secret = ProxySecret::generate();
-  std::optional<ProxyService<TlsTestMemory, NativeEventLoop<TlsTestMemory>, ServiceResolver>> service;
+  std::optional<ProxyService<NativeEventLoop<TlsTestMemory>, ServiceResolver>> service;
 
   service.emplace(memory, options, secret, interception, ProxyListener::bind(std::nullopt, {}));
   std::array<FileDescriptor, ProxyConnectionPolicy::maximum_unauthenticated> silent;
@@ -483,7 +483,7 @@ static void checkAdmissionAndStop(TlsTestMemory& memory, const TlsLibrary<TlsTes
   });
 }
 
-void testProxyService(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory>& library) {
+void testProxyService(TlsTestMemory& memory, const TlsLibrary& library) {
   for (const auto scenario : {ProxyServiceScenario::opaque, ProxyServiceScenario::http1, ProxyServiceScenario::http2, ProxyServiceScenario::http2_decode_failure}) {
     for (const bool capture : {false, true}) {
       checkService<NativeEventLoop<TlsTestMemory>>(memory, library, scenario, capture);

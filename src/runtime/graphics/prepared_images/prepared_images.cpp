@@ -9,8 +9,7 @@ import telar.sys.posix;
 
 namespace telar::runtime {
 
-  template <Allocator Memory>
-  FrozenImage<Memory>::FrozenImage(Memory& memory, MediaAllocator<Memory>& budget, std::span<const std::uint8_t> pixels, bool shared)
+  FrozenImage::FrozenImage(ConcurrentMemory& memory, MediaAllocator<ConcurrentMemory>& budget, std::span<const std::uint8_t> pixels, bool shared)
       : memory_(&memory),
         budget_(&budget) {
     TELAR_TRACE("media.freezeImage");
@@ -38,18 +37,15 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  FrozenImage<Memory>::~FrozenImage() {
+  FrozenImage::~FrozenImage() {
     reset();
   }
 
-  template <Allocator Memory>
-  FrozenImage<Memory>::FrozenImage(FrozenImage&& other) noexcept {
+  FrozenImage::FrozenImage(FrozenImage&& other) noexcept {
     take(other);
   }
 
-  template <Allocator Memory>
-  auto FrozenImage<Memory>::operator=(FrozenImage&& other) noexcept -> FrozenImage& {
+  auto FrozenImage::operator=(FrozenImage&& other) noexcept -> FrozenImage& {
     if (this != &other) {
       reset();
       take(other);
@@ -58,28 +54,23 @@ namespace telar::runtime {
     return *this;
   }
 
-  template <Allocator Memory>
-  std::span<const std::uint8_t> FrozenImage<Memory>::pixels() const noexcept {
+  std::span<const std::uint8_t> FrozenImage::pixels() const noexcept {
     return {pixels_, pixels_ == nullptr ? 0 : byte_count_};
   }
 
-  template <Allocator Memory>
-  std::size_t FrozenImage<Memory>::byteCount() const noexcept {
+  std::size_t FrozenImage::byteCount() const noexcept {
     return byte_count_;
   }
 
-  template <Allocator Memory>
-  std::string_view FrozenImage<Memory>::name() const noexcept {
+  std::string_view FrozenImage::name() const noexcept {
     return name_.data();
   }
 
-  template <Allocator Memory>
-  void FrozenImage<Memory>::published() noexcept {
+  void FrozenImage::published() noexcept {
     owns_name_ = false;
   }
 
-  template <Allocator Memory>
-  auto FrozenImage<Memory>::adoptSharedName(SharedImageStorage::Name name, std::size_t byte_count) noexcept -> FrozenImage {
+  auto FrozenImage::adoptSharedName(SharedImageStorage::Name name, std::size_t byte_count) noexcept -> FrozenImage {
     FrozenImage image;
 
     image.name_ = name;
@@ -88,8 +79,7 @@ namespace telar::runtime {
     return image;
   }
 
-  template <Allocator Memory>
-  bool FrozenImage<Memory>::freezeShared(std::span<const std::uint8_t> pixels) noexcept {
+  bool FrozenImage::freezeShared(std::span<const std::uint8_t> pixels) noexcept {
     auto shared = SharedImageStorage::create(pixels.size());
     if (!shared) {
       return false;
@@ -101,8 +91,7 @@ namespace telar::runtime {
     return true;
   }
 
-  template <Allocator Memory>
-  void FrozenImage<Memory>::removeName() noexcept {
+  void FrozenImage::removeName() noexcept {
     if (owns_name_) {
       ::shm_unlink(name_.data());
     }
@@ -111,8 +100,7 @@ namespace telar::runtime {
     owns_name_ = false;
   }
 
-  template <Allocator Memory>
-  void FrozenImage<Memory>::reset() noexcept {
+  void FrozenImage::reset() noexcept {
     removeName();
     if (pixels_ != nullptr) {
       memory_->deallocate(pixels_, byte_count_, alignof(std::uint8_t));
@@ -126,8 +114,7 @@ namespace telar::runtime {
     byte_count_ = 0;
   }
 
-  template <Allocator Memory>
-  void FrozenImage<Memory>::take(FrozenImage& other) noexcept {
+  void FrozenImage::take(FrozenImage& other) noexcept {
     memory_ = other.memory_;
     budget_ = other.budget_;
     pixels_ = std::exchange(other.pixels_, nullptr);
@@ -138,13 +125,11 @@ namespace telar::runtime {
     owns_name_ = std::exchange(other.owns_name_, false);
   }
 
-  template <Allocator Memory>
-  PreparedImages<Memory>::PreparedImages(Memory& memory, MediaAllocator<Memory>& budget) noexcept
+  PreparedImages::PreparedImages(ConcurrentMemory& memory, MediaAllocator<ConcurrentMemory>& budget) noexcept
       : memory_(memory),
         budget_(budget) {}
 
-  template <Allocator Memory>
-  void PreparedImages<Memory>::prepare(std::span<const GraphicsImageView> images) noexcept {
+  void PreparedImages::prepare(std::span<const GraphicsImageView> images) noexcept {
     TELAR_TRACE("media.prepareShared");
     retain(images);
     for (const auto& image : images) {
@@ -159,7 +144,7 @@ namespace telar::runtime {
 
       slot->reset();
       try {
-        FrozenImage<Memory> frozen{memory_, budget_, image.pixels, true};
+        FrozenImage frozen{memory_, budget_, image.pixels, true};
         if (frozen.name().empty()) {
           continue;
         }
@@ -172,8 +157,7 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  std::optional<FrozenImage<Memory>> PreparedImages<Memory>::take(ImageKey key) noexcept {
+  std::optional<FrozenImage> PreparedImages::take(ImageKey key) noexcept {
     for (auto& slot : entries_) {
       if (slot && sameImage(slot->key, key)) {
         auto frozen = std::move(slot->frozen);
@@ -186,8 +170,7 @@ namespace telar::runtime {
     return std::nullopt;
   }
 
-  template <Allocator Memory>
-  bool PreparedImages<Memory>::put(ImageKey key, FrozenImage<Memory>&& image) noexcept {
+  bool PreparedImages::put(ImageKey key, FrozenImage&& image) noexcept {
     auto* slot = availableSlot(key.image_id);
     if (slot == nullptr) {
       return false;
@@ -198,8 +181,7 @@ namespace telar::runtime {
     return true;
   }
 
-  template <Allocator Memory>
-  void PreparedImages<Memory>::clear() noexcept {
+  void PreparedImages::clear() noexcept {
     for (auto& slot : entries_) {
       slot.reset();
     }
@@ -208,15 +190,13 @@ namespace telar::runtime {
   }
 
 #if TELAR_DIAGNOSTICS
-  template <Allocator Memory>
-  std::uint64_t PreparedImages<Memory>::takePreparedCount() noexcept {
+  std::uint64_t PreparedImages::takePreparedCount() noexcept {
     return std::exchange(prepared_count_, 0);
   }
 #endif
 
 #if TELAR_DIAGNOSTICS
-  template <Allocator Memory>
-  std::size_t PreparedImages<Memory>::storedBytes() const noexcept {
+  std::size_t PreparedImages::storedBytes() const noexcept {
     std::size_t bytes = 0;
 
     for (const auto& entry : entries_) {
@@ -229,8 +209,7 @@ namespace telar::runtime {
   }
 #endif
 
-  template <Allocator Memory>
-  void PreparedImages<Memory>::retain(std::span<const GraphicsImageView> images) noexcept {
+  void PreparedImages::retain(std::span<const GraphicsImageView> images) noexcept {
     for (auto& slot : entries_) {
       if (slot && std::ranges::none_of(images, [&](const auto& image) {
             return sameImage(slot->key, image.description.key);
@@ -248,15 +227,13 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  bool PreparedImages<Memory>::covered(ImageKey key) const noexcept {
+  bool PreparedImages::covered(ImageKey key) const noexcept {
     return std::ranges::any_of(frozen_, [&](auto known) {
       return known.image_id == key.image_id && known.generation >= key.generation;
     });
   }
 
-  template <Allocator Memory>
-  auto PreparedImages<Memory>::availableSlot(std::uint32_t identity) noexcept -> std::optional<Entry>* {
+  auto PreparedImages::availableSlot(std::uint32_t identity) noexcept -> std::optional<Entry>* {
     std::optional<Entry>* free = nullptr;
 
     for (auto& slot : entries_) {
@@ -272,8 +249,7 @@ namespace telar::runtime {
     return free;
   }
 
-  template <Allocator Memory>
-  void PreparedImages<Memory>::remember(ImageKey key) noexcept {
+  void PreparedImages::remember(ImageKey key) noexcept {
     auto found = std::ranges::find_if(frozen_, [&](auto known) {
       return known.image_id == key.image_id;
     });
@@ -288,13 +264,11 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  TransferRequests<Memory>::TransferRequests(Memory& memory, MediaAllocator<Memory>& budget) noexcept
+  TransferRequests::TransferRequests(ConcurrentMemory& memory, MediaAllocator<ConcurrentMemory>& budget) noexcept
       : memory_(memory),
         budget_(budget) {}
 
-  template <Allocator Memory>
-  bool TransferRequests<Memory>::request(ImageKey key, bool shared) noexcept {
+  bool TransferRequests::request(ImageKey key, bool shared) noexcept {
     std::optional<Entry>* free = nullptr;
 
     for (auto& entry : entries_) {
@@ -315,8 +289,7 @@ namespace telar::runtime {
     return true;
   }
 
-  template <Allocator Memory>
-  std::optional<FrozenImage<Memory>> TransferRequests<Memory>::take(ImageKey key, bool shared) {
+  std::optional<FrozenImage> TransferRequests::take(ImageKey key, bool shared) {
     for (auto& entry : entries_) {
       if (!entry || entry->shared != shared || !sameImage(entry->key, key) || entry->state == State::pending) {
         continue;
@@ -336,8 +309,7 @@ namespace telar::runtime {
     return std::nullopt;
   }
 
-  template <Allocator Memory>
-  void TransferRequests<Memory>::process(std::span<const GraphicsImageView> images) noexcept {
+  void TransferRequests::process(std::span<const GraphicsImageView> images) noexcept {
     TELAR_TRACE("media.prepareTransfers");
     for (auto& entry : entries_) {
       if (!entry) {
@@ -365,16 +337,14 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  void TransferRequests<Memory>::clear() noexcept {
+  void TransferRequests::clear() noexcept {
     for (auto& entry : entries_) {
       entry.reset();
     }
   }
 
 #if TELAR_DIAGNOSTICS
-  template <Allocator Memory>
-  std::size_t TransferRequests<Memory>::storedBytes() const noexcept {
+  std::size_t TransferRequests::storedBytes() const noexcept {
     std::size_t bytes = 0;
 
     for (const auto& entry : entries_) {
@@ -386,11 +356,5 @@ namespace telar::runtime {
     return bytes;
   }
 #endif
-
-  template class FrozenImage<telar::ConcurrentMemory>;
-
-  template class PreparedImages<telar::ConcurrentMemory>;
-
-  template class TransferRequests<telar::ConcurrentMemory>;
 
 }

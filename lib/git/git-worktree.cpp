@@ -93,15 +93,13 @@ namespace telar::git {
     return (extended & 0x2000u) != 0;
   }
 
-  template <Allocator Memory>
-  Index<Memory>::Index(Memory& memory) noexcept
+  Index::Index(Memory& memory) noexcept
       : entries(AllocatorRef<IndexEntry, Memory>{memory}),
         tree(AllocatorRef<CacheTreeNode, Memory>{memory}),
         bytes_(AllocatorRef<char, Memory>{memory}),
         paths_(AllocatorRef<char, Memory>{memory}) {}
 
-  template <Allocator Memory>
-  IndexState Index<Memory>::load(int gitdir, ObjectFormat format, const Limits& limits) {
+  IndexState Index::load(int gitdir, ObjectFormat format, const Limits& limits) {
     const auto identity = fingerprintAt(gitdir, "index");
     if (loaded_ && identity == fingerprint && format == format_) {
       return state;
@@ -136,18 +134,15 @@ namespace telar::git {
     return state;
   }
 
-  template <Allocator Memory>
-  std::string_view Index<Memory>::path(const IndexEntry& entry) const noexcept {
+  std::string_view Index::path(const IndexEntry& entry) const noexcept {
     return {paths_.data() + entry.path_offset, entry.path_length};
   }
 
-  template <Allocator Memory>
-  std::int64_t Index<Memory>::timestamp() const noexcept {
+  std::int64_t Index::timestamp() const noexcept {
     return fingerprint.modified_seconds;
   }
 
-  template <Allocator Memory>
-  IndexState Index<Memory>::parse(const Limits& limits) {
+  IndexState Index::parse(const Limits& limits) {
     const auto hash_size = hashSize(format_);
     const auto data = asBytes(bytes_);
     if (data.size() < 12 + hash_size || std::memcmp(data.data(), "DIRC", 4) != 0) {
@@ -331,8 +326,7 @@ namespace telar::git {
     return IndexState::ready;
   }
 
-  template <Allocator Memory>
-  bool Index<Memory>::parseTree(std::span<const std::uint8_t> data, std::size_t& position, std::size_t depth, const Limits& limits) {
+  bool Index::parseTree(std::span<const std::uint8_t> data, std::size_t& position, std::size_t depth, const Limits& limits) {
     if (depth > limits.path_depth || tree.size() >= entries.size() + 1 + limits.path_depth) {
       return false;
     }
@@ -391,15 +385,11 @@ namespace telar::git {
     return true;
   }
 
-  template class Index<Memory>;
-
-  template <Allocator Memory>
-  StagedComparison<Memory>::StagedComparison(Memory& memory) noexcept
+  StagedComparison::StagedComparison(Memory& memory) noexcept
       : trees_(AllocatorRef<String<Memory>, Memory>{memory}),
         memory_(memory) {}
 
-  template <Allocator Memory>
-  bool StagedComparison<Memory>::compare(ObjectDatabase<Memory>& objects, const Index<Memory>& index, std::optional<ObjectId> tree, const Limits& limits, ChangeCounts& counts) {
+  bool StagedComparison::compare(ObjectDatabase& objects, const Index& index, std::optional<ObjectId> tree, const Limits& limits, ChangeCounts& counts) {
     objects_ = &objects;
     index_ = &index;
     limits_ = &limits;
@@ -429,13 +419,11 @@ namespace telar::git {
     return complete;
   }
 
-  template <Allocator Memory>
-  String<Memory>& StagedComparison<Memory>::buffer(std::size_t depth) noexcept {
+  String<Memory>& StagedComparison::buffer(std::size_t depth) noexcept {
     return trees_[depth];
   }
 
-  template <Allocator Memory>
-  bool StagedComparison<Memory>::readTree(const ObjectId& id, std::size_t depth) {
+  bool StagedComparison::readTree(const ObjectId& id, std::size_t depth) {
     if (++trees_read_ > limits_->tree_objects || depth > limits_->path_depth) {
       return false;
     }
@@ -446,13 +434,11 @@ namespace telar::git {
     return objects_->read(id, type, buffer(depth)) == Lookup::found && type == ObjectType::tree;
   }
 
-  template <Allocator Memory>
-  std::string_view StagedComparison<Memory>::relative(std::uint32_t entry, std::size_t prefix) const noexcept {
+  std::string_view StagedComparison::relative(std::uint32_t entry, std::size_t prefix) const noexcept {
     return index_->path(index_->entries[entry]).substr(prefix);
   }
 
-  template <Allocator Memory>
-  void StagedComparison<Memory>::addRange(std::uint32_t begin, std::uint32_t end) noexcept {
+  void StagedComparison::addRange(std::uint32_t begin, std::uint32_t end) noexcept {
     for (auto entry = begin; entry < end; ++entry) {
       const auto& item = index_->entries[entry];
       if (item.stage() == 0 && !item.intentToAdd()) {
@@ -461,8 +447,7 @@ namespace telar::git {
     }
   }
 
-  template <Allocator Memory>
-  bool StagedComparison<Memory>::deleteTree(const ObjectId& id, std::size_t depth) {
+  bool StagedComparison::deleteTree(const ObjectId& id, std::size_t depth) {
     if (!readTree(id, depth)) {
       return false;
     }
@@ -484,8 +469,7 @@ namespace telar::git {
     return !reader.failed();
   }
 
-  template <Allocator Memory>
-  bool StagedComparison<Memory>::compareTree(const ObjectId& id, std::size_t prefix, std::uint32_t begin, std::uint32_t end, std::uint32_t cache, std::size_t depth) {
+  bool StagedComparison::compareTree(const ObjectId& id, std::size_t prefix, std::uint32_t begin, std::uint32_t end, std::uint32_t cache, std::size_t depth) {
     if (cache != no_cache_tree) {
       const auto& node = index_->tree[cache];
       if (node.entries >= 0 && node.id == id) {
@@ -564,8 +548,7 @@ namespace telar::git {
     return true;
   }
 
-  template <Allocator Memory>
-  std::uint32_t StagedComparison<Memory>::pathEnd(std::uint32_t begin, std::uint32_t end) const noexcept {
+  std::uint32_t StagedComparison::pathEnd(std::uint32_t begin, std::uint32_t end) const noexcept {
     const auto path = index_->path(index_->entries[begin]);
     auto current = begin + 1;
 
@@ -576,8 +559,7 @@ namespace telar::git {
     return current;
   }
 
-  template <Allocator Memory>
-  std::uint32_t StagedComparison<Memory>::groupEnd(std::uint32_t begin, std::uint32_t end, std::size_t prefix, std::string_view component) const noexcept {
+  std::uint32_t StagedComparison::groupEnd(std::uint32_t begin, std::uint32_t end, std::size_t prefix, std::string_view component) const noexcept {
     auto current = begin;
 
     while (current < end) {
@@ -592,23 +574,18 @@ namespace telar::git {
     return current;
   }
 
-  template class StagedComparison<Memory>;
-
-  template <Allocator Memory>
-  UnstagedComparison<Memory>::UnstagedComparison(Memory& memory) noexcept
+  UnstagedComparison::UnstagedComparison(Memory& memory) noexcept
       : verified_(AllocatorRef<Verified, Memory>{memory}),
         buffer_(AllocatorRef<char, Memory>{memory}) {}
 
-  template <Allocator Memory>
-  bool UnstagedComparison<Memory>::compare(int worktree, const Index<Memory>& index, Options options, const Limits& limits, ChangeCounts& counts) {
+  bool UnstagedComparison::compare(int worktree, const Index& index, Options options, const Limits& limits, ChangeCounts& counts) {
     const auto complete = scan(worktree, index, options, limits, counts);
 
     directories_.reset(-1);
     return complete;
   }
 
-  template <Allocator Memory>
-  bool UnstagedComparison<Memory>::scan(int worktree, const Index<Memory>& index, Options options, const Limits& limits, ChangeCounts& counts) {
+  bool UnstagedComparison::scan(int worktree, const Index& index, Options options, const Limits& limits, ChangeCounts& counts) {
     options_ = options;
     limits_ = &limits;
     hashed_bytes_ = 0;
@@ -694,8 +671,7 @@ namespace telar::git {
     return true;
   }
 
-  template <Allocator Memory>
-  void UnstagedComparison<Memory>::Directories::reset(int root) noexcept {
+  void UnstagedComparison::Directories::reset(int root) noexcept {
     root_ = root;
     for (std::size_t level = 0; level < depth_; ++level) {
       descriptors_[level].reset();
@@ -705,8 +681,7 @@ namespace telar::git {
     missing_ = no_missing;
   }
 
-  template <Allocator Memory>
-  int UnstagedComparison<Memory>::Directories::open(std::string_view directory, std::size_t maximum_depth, bool& missing) noexcept {
+  int UnstagedComparison::Directories::open(std::string_view directory, std::size_t maximum_depth, bool& missing) noexcept {
     if (directory.size() > path_.size()) {
       return -1;
     }
@@ -777,8 +752,7 @@ namespace telar::git {
     return depth_ == 0 ? root_ : descriptors_[depth_ - 1].get();
   }
 
-  template <Allocator Memory>
-  typename UnstagedComparison<Memory>::Verdict UnstagedComparison<Memory>::examine(const IndexEntry& entry, std::int64_t index_time, int parent, const char* name, const struct stat& status, Verified& verified) {
+  UnstagedComparison::Verdict UnstagedComparison::examine(const IndexEntry& entry, std::int64_t index_time, int parent, const char* name, const struct stat& status, Verified& verified) {
     const auto index_type = entry.mode & mode_type_mask;
     const auto type = static_cast<std::uint32_t>(status.st_mode) & S_IFMT;
     if (type == S_IFDIR) {
@@ -841,8 +815,7 @@ namespace telar::git {
     return modified ? Verdict::modified : Verdict::clean;
   }
 
-  template <Allocator Memory>
-  std::optional<ObjectId> UnstagedComparison<Memory>::hashLink(int parent, const char* name, const struct stat& status) {
+  std::optional<ObjectId> UnstagedComparison::hashLink(int parent, const char* name, const struct stat& status) {
     std::array<char, 4096> target;
     const auto length = ::readlinkat(parent, name, target.data(), target.size());
     if (length < 0 || static_cast<std::size_t>(length) >= target.size() || length != status.st_size) {
@@ -857,8 +830,7 @@ namespace telar::git {
     return hasher.finish();
   }
 
-  template <Allocator Memory>
-  std::optional<ObjectId> UnstagedComparison<Memory>::hashFile(int parent, const char* name, const struct stat& expected) {
+  std::optional<ObjectId> UnstagedComparison::hashFile(int parent, const char* name, const struct stat& expected) {
     const auto size = static_cast<std::uint64_t>(expected.st_size);
     if (size > limits_->hashed_bytes - hashed_bytes_) {
       return std::nullopt;
@@ -899,7 +871,5 @@ namespace telar::git {
 
     return hasher.finish();
   }
-
-  template class UnstagedComparison<Memory>;
 
 }

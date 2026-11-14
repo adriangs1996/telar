@@ -13,18 +13,16 @@ import telar.runtime.terminal.control;
 
 namespace telar::runtime {
 
-  template <Allocator Memory>
-  bool ClipboardService<Memory>::eligible(const ClientSession<Memory>& client, const Pane<Memory>& pane) noexcept {
+  bool ClipboardService::eligible(const ClientSession& client, const Pane& pane) noexcept {
     const auto* attachment = client.attachment(pane.id);
 
     return !pane.close_requested && !pane.output_closed && client.role == ClientRole::interactive && !client.connection.closing && attachment != nullptr && attachment->desktop && attachment->desktop->pane_generation == pane.generation && attachment->desktop->visible && attachment->desktop->clipboard;
   }
 
-  template <Allocator Memory>
-  void ClipboardService<Memory>::configure(const ClientStore<Memory>& clients, Pane<Memory>& pane) {
+  void ClipboardService::configure(const ClientStore& clients, Pane& pane) {
     std::array<control::ClipboardRoute, control::ClipboardGrants::capacity> routes;
     std::size_t count = 0;
-    const ClientSession<Memory>* preferred = nullptr;
+    const ClientSession* preferred = nullptr;
 
     for (const auto* client : clients.items()) {
       if (client == nullptr || !eligible(*client, pane)) {
@@ -44,8 +42,7 @@ namespace telar::runtime {
     pane.terminal.clipboardControl().routes(std::span{routes}.first(count), preferred != nullptr ? std::optional{control::ClipboardRoute{preferred->id, preferred->generation}} : std::nullopt);
   }
 
-  template <Allocator Memory>
-  bool ClipboardService<Memory>::advance(ClientStore<Memory>& clients, Pane<Memory>& pane, std::chrono::steady_clock::time_point now) {
+  bool ClipboardService::advance(ClientStore& clients, Pane& pane, std::chrono::steady_clock::time_point now) {
     auto& clipboard = pane.terminal.clipboardControl();
 
     clipboard.expire(now);
@@ -96,8 +93,7 @@ namespace telar::runtime {
     return false;
   }
 
-  template <Allocator Memory>
-  tbc::view<Pane<Memory>*, tbc::lt::a> ClipboardService<Memory>::complete(tbc::view<PaneStore<Memory>&, tbc::lt::a> panes, ClientSession<Memory>& sender, const CompleteClipboardDesktop& completion) {
+  tbc::view<Pane*, tbc::lt::a> ClipboardService::complete(tbc::view<PaneStore&, tbc::lt::a> panes, ClientSession& sender, const CompleteClipboardDesktop& completion) {
     auto* pane = findPane(panes, completion.ticket.pane_id, completion.ticket.pane_generation);
     if (pane == nullptr || sender.generation != completion.ticket.client_generation || !eligible(sender, *pane)) {
       return nullptr;
@@ -112,8 +108,7 @@ namespace telar::runtime {
     return pane;
   }
 
-  template <Allocator Memory>
-  bool ClipboardService<Memory>::precedes(const ClientSession<Memory>& candidate, const ClientSession<Memory>& current, std::uint64_t pane) noexcept {
+  bool ClipboardService::precedes(const ClientSession& candidate, const ClientSession& current, std::uint64_t pane) noexcept {
     const bool candidate_focus = candidate.attachment(pane)->desktop->focused;
     const bool current_focus = current.attachment(pane)->desktop->focused;
     if (candidate_focus != current_focus) {
@@ -126,10 +121,7 @@ namespace telar::runtime {
     return candidate_input != current_input ? candidate_input > current_input : candidate.id < current.id;
   }
 
-  template class ClipboardService<ConcurrentMemory>;
-
-  template <Allocator Memory>
-  AttachmentDelivery<Memory>::AttachmentDelivery(const RuntimeModel<Memory>& model, const ClientSession<Memory>& client) {
+  AttachmentDelivery::AttachmentDelivery(const RuntimeModel& model, const ClientSession& client) {
     for (std::size_t index = 0; index < client.attachments.size(); ++index) {
       const auto& attachment = *client.attachments[index];
       if (model.panes.find(attachment.pane_id) != nullptr && !attachment.exit_sent) {
@@ -139,20 +131,19 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  bool AttachmentDelivery<Memory>::prepare(RuntimeModel<Memory>& model, ClientSession<Memory>& client, DeliveryLane lane, Clock::time_point now, std::chrono::nanoseconds& timeout) {
+  bool AttachmentDelivery::prepare(RuntimeModel& model, ClientSession& client, DeliveryLane lane, Clock::time_point now, std::chrono::nanoseconds& timeout) {
     const auto start = client.next_attachment;
     auto candidates = std::rotr(occupied_, static_cast<int>(start));
 
     while (candidates != 0) {
-      const auto slot = (start + std::countr_zero(candidates)) % ClientSession<Memory>::attachment_capacity;
+      const auto slot = (start + std::countr_zero(candidates)) % ClientSession::attachment_capacity;
 
       candidates &= candidates - 1;
       auto& attachment = *client.attachments[slots_[slot].index];
       auto& pane = *model.panes.find(attachment.pane_id);
       Output output{client.connection, client.completing_exit, client.frame_interval, model.metrics};
       if (prepare(output, attachment, pane, lane, now, timeout)) {
-        client.next_attachment = (slot + 1) % ClientSession<Memory>::attachment_capacity;
+        client.next_attachment = (slot + 1) % ClientSession::attachment_capacity;
         return true;
       }
     }
@@ -160,8 +151,7 @@ namespace telar::runtime {
     return false;
   }
 
-  template <Allocator Memory>
-  bool AttachmentDelivery<Memory>::prepare(Output& output, Attachment<Memory>& attachment, Pane<Memory>& pane, DeliveryLane lane, Clock::time_point now, std::chrono::nanoseconds& timeout) {
+  bool AttachmentDelivery::prepare(Output& output, Attachment& attachment, Pane& pane, DeliveryLane lane, Clock::time_point now, std::chrono::nanoseconds& timeout) {
     const auto& effects = pane.terminal.effects;
 
     switch (lane) {
@@ -194,9 +184,8 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
   template <typename Message>
-  bool AttachmentDelivery<Memory>::metadata(Connection<Memory>& connection, std::uint64_t& observed, std::uint64_t revision, const Message& message) {
+  bool AttachmentDelivery::metadata(Connection<ConcurrentMemory>& connection, std::uint64_t& observed, std::uint64_t revision, const Message& message) {
     if (observed == revision) {
       return false;
     }
@@ -206,8 +195,7 @@ namespace telar::runtime {
     return true;
   }
 
-  template <Allocator Memory>
-  bool AttachmentDelivery<Memory>::document(Connection<Memory>& connection, Attachment<Memory>& attachment, const Pane<Memory>& pane) {
+  bool AttachmentDelivery::document(Connection<ConcurrentMemory>& connection, Attachment& attachment, const Pane& pane) {
     static_assert(PaneDocument::max_size == ::telar::render::max_document_bytes);
     const auto& effects = pane.terminal.effects;
     if (attachment.document_revision != effects.document_revision) {
@@ -234,8 +222,7 @@ namespace telar::runtime {
     return true;
   }
 
-  template <Allocator Memory>
-  bool AttachmentDelivery<Memory>::inlineDocuments(Connection<Memory>& connection, Attachment<Memory>& attachment, const Pane<Memory>& pane) {
+  bool AttachmentDelivery::inlineDocuments(Connection<ConcurrentMemory>& connection, Attachment& attachment, const Pane& pane) {
     const auto& effects = pane.terminal.effects;
     const auto generation = pane.terminal.scrollbackGeneration();
     const auto trimmed = pane.terminal.scrollbackTrimmed();
@@ -246,7 +233,7 @@ namespace telar::runtime {
 
     for (std::size_t index = 0; index < sent.count; ++index) {
       const auto id = sent.items[index].id;
-      if (std::ranges::find(effects.inline_documents, id, &TerminalEffects<Memory>::InlineDocument::id) == effects.inline_documents.end()) {
+      if (std::ranges::find(effects.inline_documents, id, &TerminalEffects::InlineDocument::id) == effects.inline_documents.end()) {
         connection.send(PaneDocument{.pane_id = pane.id, .id = id, .revision = id});
         sent.erase(index);
         return true;
@@ -292,8 +279,7 @@ namespace telar::runtime {
     return false;
   }
 
-  template <Allocator Memory>
-  bool AttachmentDelivery<Memory>::blocks(Connection<Memory>& connection, Attachment<Memory>& attachment, const Pane<Memory>& pane) {
+  bool AttachmentDelivery::blocks(Connection<ConcurrentMemory>& connection, Attachment& attachment, const Pane& pane) {
     if (!pane.blocks || attachment.blocks_revision == pane.blocks->revision()) {
       return false;
     }
@@ -305,8 +291,7 @@ namespace telar::runtime {
     return true;
   }
 
-  template <Allocator Memory>
-  bool AttachmentDelivery<Memory>::scrollback(Connection<Memory>& connection, Attachment<Memory>& attachment, Pane<Memory>& pane) {
+  bool AttachmentDelivery::scrollback(Connection<ConcurrentMemory>& connection, Attachment& attachment, Pane& pane) {
     const auto generation = pane.terminal.scrollbackGeneration();
     const auto trimmed = pane.terminal.scrollbackTrimmed();
     if (attachment.scrollback_generation == generation && attachment.scrollback_trimmed == trimmed) {
@@ -326,8 +311,7 @@ namespace telar::runtime {
     return true;
   }
 
-  template <Allocator Memory>
-  bool AttachmentDelivery<Memory>::cells(Output& output, Attachment<Memory>& attachment, Pane<Memory>& pane, Clock::time_point now, std::chrono::nanoseconds& timeout) {
+  bool AttachmentDelivery::cells(Output& output, Attachment& attachment, Pane& pane, Clock::time_point now, std::chrono::nanoseconds& timeout) {
     if (attachment.frames.waitingForAck(pane.terminal.screen)) {
       return false;
     }
@@ -389,8 +373,7 @@ namespace telar::runtime {
     return true;
   }
 
-  template <Allocator Memory>
-  bool AttachmentDelivery<Memory>::exit(Output& output, Attachment<Memory>& attachment, const Pane<Memory>& pane) {
+  bool AttachmentDelivery::exit(Output& output, Attachment& attachment, const Pane& pane) {
     if (!pane.output_closed || !pane.exit_status || !pane.media->idle() || attachment.frames.waitingForAck() || !slots_[attachment.slot].cells_current) {
       return false;
     }
@@ -408,16 +391,14 @@ namespace telar::runtime {
     return true;
   }
 
-  template <Allocator Memory>
-  bool AttachmentDelivery<Memory>::graphics(Output& output, Attachment<Memory>& attachment, Pane<Memory>& pane, std::chrono::nanoseconds& timeout) {
+  bool AttachmentDelivery::graphics(Output& output, Attachment& attachment, Pane& pane, std::chrono::nanoseconds& timeout) {
     const bool sent = publishGraphics(output.connection, attachment, pane, timeout);
 
     TELAR_DIAGNOSTIC(output.metrics.graphics.merge(attachment.graphics.takeCounters()));
     return sent;
   }
 
-  template <Allocator Memory>
-  bool AttachmentDelivery<Memory>::publishGraphics(Connection<Memory>& connection, Attachment<Memory>& attachment, Pane<Memory>& pane, std::chrono::nanoseconds& timeout) {
+  bool AttachmentDelivery::publishGraphics(Connection<ConcurrentMemory>& connection, Attachment& attachment, Pane& pane, std::chrono::nanoseconds& timeout) {
     const auto queued = connection.queuedBytes();
 
     if (pane.media->busy()) {
@@ -442,34 +423,25 @@ namespace telar::runtime {
     return connection.queuedBytes() != queued;
   }
 
-  template class AttachmentDelivery<ConcurrentMemory>;
-
-  template <Allocator Memory>
-  ResponseProjection<Memory>::ResponseProjection(Memory& memory, RuntimeModel<Memory>& model) noexcept
+  ResponseProjection::ResponseProjection(ConcurrentMemory& memory, RuntimeModel& model) noexcept
       : memory_(memory),
         model_(model) {}
 
-  template <Allocator Memory>
-  bool ResponseProjection<Memory>::matchesSnapshot(const Pane<Memory>& pane, TabLocation location) noexcept {
+  bool ResponseProjection::matchesSnapshot(const Pane& pane, TabLocation location) noexcept {
     return !pane.close_requested && !pane.exit_status && pane.location.workspace.kind == location.workspace.kind && pane.location.workspace.id == location.workspace.id && pane.location.tab_id == location.tab_id;
   }
 
-  template <Allocator Memory>
-  [[nodiscard]] std::string_view ResponseProjection<Memory>::snapshotDirectory(std::string_view cwd) noexcept {
+  [[nodiscard]] std::string_view ResponseProjection::snapshotDirectory(std::string_view cwd) noexcept {
     constexpr std::size_t maximum_bytes = 4096;
 
     return cwd.size() <= maximum_bytes && cwd.find('\0') == std::string_view::npos ? cwd : std::string_view{};
   }
 
-  template class ResponseProjection<ConcurrentMemory>;
-
-  template <Allocator Memory>
-  ClientDelivery<Memory>::ClientDelivery(Memory& memory, RuntimeModel<Memory>& model)
+  ClientDelivery::ClientDelivery(ConcurrentMemory& memory, RuntimeModel& model)
       : memory_(memory),
         model_(model) {}
 
-  template <Allocator Memory>
-  bool ClientDelivery<Memory>::resync(ClientSession<Memory>& client) {
+  bool ClientDelivery::resync(ClientSession& client) {
     if (!client.workspace_resync) {
       return false;
     }
@@ -483,8 +455,7 @@ namespace telar::runtime {
     return true;
   }
 
-  template <Allocator Memory>
-  bool ClientDelivery<Memory>::clipboard(ClientSession<Memory>& client) {
+  bool ClientDelivery::clipboard(ClientSession& client) {
     if (client.clipboard.pending()) {
       client.connection.send(client.clipboard.message());
       client.clipboard.delivered();
@@ -505,8 +476,7 @@ namespace telar::runtime {
     return false;
   }
 
-  template <Allocator Memory>
-  bool ClientDelivery<Memory>::paneList(ClientSession<Memory>& client, Clock::time_point now) {
+  bool ClientDelivery::paneList(ClientSession& client, Clock::time_point now) {
     if (!client.subscribed || (client.pane_revision == model_.pane_revision && client.pane_workspace_revision == model_.workspace_revision)) {
       return false;
     }
@@ -543,8 +513,7 @@ namespace telar::runtime {
     return true;
   }
 
-  template <Allocator Memory>
-  bool ClientDelivery<Memory>::foreground(ClientSession<Memory>& client) {
+  bool ClientDelivery::foreground(ClientSession& client) {
     if (!client.subscribed) {
       return false;
     }
@@ -568,20 +537,14 @@ namespace telar::runtime {
     return false;
   }
 
-  template class ClientDelivery<ConcurrentMemory>;
-
-  template <ConcurrentAllocator Memory>
-  EditorService<Memory>::EditorService(Memory& memory)
+  EditorService::EditorService(ConcurrentMemory& memory)
       : editor_(memory) {}
 
-  template <ConcurrentAllocator Memory>
-  void EditorService<Memory>::process(std::span<const Byte> payload, EncodedReply<Memory>& reply, const RequestContext& context) {
+  void EditorService::process(std::span<const Byte> payload, EncodedReply<ConcurrentMemory>& reply, const RequestContext& context) {
     std::array<Byte, 1024> scratch;
     DecodeStorage storage{scratch};
 
     editor_.open(Codec::decode<OpenEditor>(payload, storage), context, reply);
   }
-
-  template class EditorService<ConcurrentMemory>;
 
 }

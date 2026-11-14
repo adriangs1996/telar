@@ -33,10 +33,9 @@ using namespace telar;
 using namespace telar::runtime;
 namespace tap = telar::runtime::plugins;
 
-template <Allocator Memory>
-auto copyHalf(Memory& memory, CaptureQuota& quota, const tap::ExchangeView& exchange, const tap::HalfView& view, CaptureSide side) {
+auto copyHalf(ConcurrentMemory& memory, CaptureQuota& quota, const tap::ExchangeView& exchange, const tap::HalfView& view, CaptureSide side) {
   const ProxyCaptureLimits limits{.enabled = true};
-  auto half = makeOwned<CaptureHalf<Memory>>(memory, memory, quota, limits, CaptureStart{.key = exchange.key, .side = side, .protocol = static_cast<CaptureProtocol>(exchange.protocol), .host = exchange.host, .started_at_ms = exchange.started_at_ms});
+  auto half = makeOwned<CaptureHalf>(memory, memory, quota, limits, CaptureStart{.key = exchange.key, .side = side, .protocol = static_cast<CaptureProtocol>(exchange.protocol), .host = exchange.host, .started_at_ms = exchange.started_at_ms});
 
   half->setMethod(exchange.method);
   half->setTarget(exchange.target);

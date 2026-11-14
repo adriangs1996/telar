@@ -39,9 +39,7 @@ export {
       static Options parse(Arguments words);
     };
 
-    template <Allocator Memory>
     int run(Memory& memory, const Options& options);
-    extern template int run<Memory>(Memory& memory, const Options& options);
 
   }
 }
@@ -72,9 +70,7 @@ export {
 export {
   namespace telar::runtime::cli {
 
-    template <Allocator Memory>
     int runRuntime(Memory& memory, const RuntimeOptions& options);
-    extern template int runRuntime<Memory>(Memory& memory, const RuntimeOptions& options);
 
   }
 }

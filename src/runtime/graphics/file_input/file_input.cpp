@@ -327,8 +327,7 @@ namespace telar::runtime {
     return {reinterpret_cast<const std::uint8_t*>(chunk.data()), static_cast<std::size_t>(end - chunk.data())};
   }
 
-  template <Allocator Memory>
-  ImageAllocation<Memory>::ImageAllocation(MediaAllocator<Memory>& memory, std::size_t byte_count) noexcept
+  ImageAllocation::ImageAllocation(MediaAllocator<ConcurrentMemory>& memory, std::size_t byte_count) noexcept
       : memory_(memory) {
     placeholder_ = static_cast<std::uint8_t*>(memory_.allocate(placeholder_bytes, alignof(std::uint8_t)));
     if (placeholder_ == nullptr) {
@@ -343,13 +342,11 @@ namespace telar::runtime {
     reserved_bytes_ = byte_count;
   }
 
-  template <Allocator Memory>
-  ImageAllocation<Memory>::~ImageAllocation() {
+  ImageAllocation::~ImageAllocation() {
     reset();
   }
 
-  template <Allocator Memory>
-  void ImageAllocation<Memory>::reset() noexcept {
+  void ImageAllocation::reset() noexcept {
     if (reserved_bytes_ != 0) {
       memory_.release(std::exchange(reserved_bytes_, 0));
     }
@@ -357,13 +354,11 @@ namespace telar::runtime {
     memory_.deallocate(std::exchange(placeholder_, nullptr), placeholder_bytes, alignof(std::uint8_t));
   }
 
-  template <Allocator Memory>
-  ImageAllocation<Memory>::operator bool() const noexcept {
+  ImageAllocation::operator bool() const noexcept {
     return placeholder_ != nullptr;
   }
 
-  template <Allocator Memory>
-  bool ImageAllocation<Memory>::adopt(MappedRegion& mapping) noexcept {
+  bool ImageAllocation::adopt(MappedRegion& mapping) noexcept {
     if (placeholder_ == nullptr || mapping.bytes().size() != reserved_bytes_ || !memory_.adoptMapping(placeholder_, mapping)) {
       return false;
     }
@@ -372,13 +367,11 @@ namespace telar::runtime {
     return true;
   }
 
-  template <Allocator Memory>
-  std::span<const std::uint8_t> ImageAllocation<Memory>::placeholder() const noexcept {
+  std::span<const std::uint8_t> ImageAllocation::placeholder() const noexcept {
     return {placeholder_, placeholder_bytes};
   }
 
-  template <Allocator Memory>
-  void ImageAllocation<Memory>::release() noexcept {
+  void ImageAllocation::release() noexcept {
     placeholder_ = nullptr;
   }
 
@@ -444,7 +437,5 @@ namespace telar::runtime {
 
     return bytes <= byte_capacity - byte_count_ && event_count_ + reserved_events <= event_capacity;
   }
-
-  template class ImageAllocation<telar::ConcurrentMemory>;
 
 }

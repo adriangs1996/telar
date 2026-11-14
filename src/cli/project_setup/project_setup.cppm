@@ -66,8 +66,7 @@ export {
 export {
   namespace telar::runtime::cli::pane_agents {
 
-    template <Allocator Memory>
-    void writeText(Output<Memory>& out, const PaneText& reply, bool json, bool agent);
+    void writeText(Output& out, const PaneText& reply, bool json, bool agent);
 
     tbc::view<AgentSnapshotEntry, tbc::lt::a> resolve(tbc::view<const AgentSnapshot&, tbc::lt::a> snapshot, std::string_view target, std::optional<std::uint64_t> worktree = std::nullopt);
 
@@ -78,9 +77,7 @@ export {
 export {
   namespace telar::runtime::cli {
 
-    template <Allocator Memory>
     int runAgent(Memory& memory, const pane_agents::Options& options);
-    extern template int runAgent<Memory>(Memory& memory, const pane_agents::Options& options);
 
   }
 }
@@ -125,18 +122,13 @@ export {
 
     bool finished(const ExecutionReply& reply);
 
-    template <Allocator Memory>
-    tbc::view<ExecutionReply, tbc::lt::a> exchange(tbc::view<ControlSession<Memory>&, tbc::lt::a> session, ExecutionRequest request);
+    tbc::view<ExecutionReply, tbc::lt::a> exchange(tbc::view<ControlSession&, tbc::lt::a> session, ExecutionRequest request);
 
-    template <Allocator Memory>
-    void list(ControlSession<Memory>& session);
+    void list(ControlSession& session);
 
-    template <Allocator Memory>
-    int start(ControlSession<Memory>& session, const ExecutionOptions& options);
+    int start(ControlSession& session, const ExecutionOptions& options);
 
-    template <Allocator Memory>
     int run(Memory& memory, const ExecutionOptions& options);
-    extern template int run<Memory>(Memory& memory, const ExecutionOptions& options);
 
   }
 }
@@ -145,9 +137,7 @@ export {
 export {
   namespace telar::runtime::cli {
 
-    template <Allocator Memory>
     int runPane(Memory& memory, const pane_agents::Options& options);
-    extern template int runPane<Memory>(Memory& memory, const pane_agents::Options& options);
 
   }
 }
@@ -164,17 +154,12 @@ export {
     };
 
     // `project setup` and `worktree create --setup` share the authorization gate and execution semantics.
-    template <Allocator Memory>
-    std::optional<std::uint64_t> prepare(Memory& memory, ControlSession<Memory>& session, std::string_view cwd, bool authorized, bool detach = false);
-    extern template std::optional<std::uint64_t> prepare<Memory>(Memory& memory, ControlSession<Memory>& session, std::string_view cwd, bool authorized, bool detach);
+    std::optional<std::uint64_t> prepare(Memory& memory, ControlSession& session, std::string_view cwd, bool authorized, bool detach = false);
 
     // Starts the runtime only when the checkout declares a recipe.
-    template <Allocator Memory>
     std::optional<std::uint64_t> prepare(Memory& memory, std::string_view cwd, bool authorized, bool detach, std::string_view socket);
 
-    template <Allocator Memory>
     int run(Memory& memory, const Options& options);
-    extern template int run<Memory>(Memory& memory, const Options& options);
 
   }
 }

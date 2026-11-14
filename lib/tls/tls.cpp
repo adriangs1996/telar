@@ -221,8 +221,7 @@ namespace telar::runtime {
     return 0;
   }
 
-  template <ConcurrentAllocator Memory>
-  TlsLibrary<Memory>::TlsLibrary(Memory& memory) {
+  TlsLibrary::TlsLibrary(ConcurrentMemory& memory) {
     if (used_ || CRYPTO_set_mem_functions(&allocate, &reallocate, &deallocate) != 1) {
       throw std::logic_error{"TLS allocation must be configured once before using OpenSSL"};
     }
@@ -236,19 +235,16 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  TlsLibrary<Memory>::~TlsLibrary() {
+  TlsLibrary::~TlsLibrary() {
     OPENSSL_cleanup();
     memory_ = nullptr;
   }
 
-  template <ConcurrentAllocator Memory>
-  bool TlsLibrary<Memory>::uses(const Memory& memory) const noexcept {
+  bool TlsLibrary::uses(const ConcurrentMemory& memory) const noexcept {
     return memory_ == &memory;
   }
 
-  template <ConcurrentAllocator Memory>
-  void* TlsLibrary<Memory>::allocate(std::size_t size, const char*, int) noexcept {
+  void* TlsLibrary::allocate(std::size_t size, const char*, int) noexcept {
     if (memory_ == nullptr || size == 0) {
       return nullptr;
     }
@@ -256,8 +252,7 @@ namespace telar::runtime {
     return CAllocationBlocks{*memory_}.allocate(size);
   }
 
-  template <ConcurrentAllocator Memory>
-  void TlsLibrary<Memory>::deallocate(void* pointer, const char*, int) noexcept {
+  void TlsLibrary::deallocate(void* pointer, const char*, int) noexcept {
     if (pointer == nullptr) {
       return;
     }
@@ -265,8 +260,7 @@ namespace telar::runtime {
     CAllocationBlocks{*memory_}.release(pointer);
   }
 
-  template <ConcurrentAllocator Memory>
-  void* TlsLibrary<Memory>::reallocate(void* pointer, std::size_t size, const char* file, int line) noexcept {
+  void* TlsLibrary::reallocate(void* pointer, std::size_t size, const char* file, int line) noexcept {
     if (size == 0) {
       deallocate(pointer, file, line);
       return nullptr;
@@ -275,10 +269,7 @@ namespace telar::runtime {
     return memory_ == nullptr ? nullptr : CAllocationBlocks{*memory_}.resize(pointer, size);
   }
 
-  template class TlsLibrary<ConcurrentMemory>;
-
-  template <ConcurrentAllocator Memory>
-  tbc::view<CertificateAuthority<Memory>, tbc::lt::a> CertificateAuthority<Memory>::loadOrCreate(tbc::view<Memory&, tbc::lt::a> memory, const TlsLibrary<Memory>& library, int directory, AuthorityKind kind) {
+  tbc::view<CertificateAuthority, tbc::lt::a> CertificateAuthority::loadOrCreate(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const TlsLibrary& library, int directory, AuthorityKind kind) {
     if (auto existing = loadExisting(memory, library, directory, kind)) {
       return std::move(*existing);
     }
@@ -286,14 +277,13 @@ namespace telar::runtime {
     return create(memory, library, directory, AuthorityFiles::forKind(kind), kind);
   }
 
-  template <ConcurrentAllocator Memory>
-  tbc::view<std::optional<CertificateAuthority<Memory>>, tbc::lt::a> CertificateAuthority<Memory>::loadExisting(tbc::view<Memory&, tbc::lt::a> memory, const TlsLibrary<Memory>& library, int directory, AuthorityKind kind) {
+  tbc::view<std::optional<CertificateAuthority>, tbc::lt::a> CertificateAuthority::loadExisting(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const TlsLibrary& library, int directory, AuthorityKind kind) {
     TELAR_TRACE("tls.loadAuthority");
     requireTls(library.uses(memory), "TLS authority allocator does not match its library");
     const auto files = AuthorityFiles::forKind(kind);
     ErasingAllocator sensitive_memory{memory};
     Vector<unsigned char, decltype(sensitive_memory)> key_bytes{AllocatorRef<unsigned char, decltype(sensitive_memory)>{sensitive_memory}};
-    Vector<unsigned char, Memory> certificate_bytes{AllocatorRef<unsigned char, Memory>{memory}};
+    Vector<unsigned char, ConcurrentMemory> certificate_bytes{AllocatorRef<unsigned char, ConcurrentMemory>{memory}};
     const bool has_key = readPrivateFile(directory, files.key, key_bytes, PemDocument::maximum_bytes);
     const bool has_certificate = readPrivateFile(directory, files.certificate, certificate_bytes, PemDocument::maximum_bytes);
 
@@ -309,8 +299,7 @@ namespace telar::runtime {
     return CertificateAuthority{memory, std::move(pair)};
   }
 
-  template <ConcurrentAllocator Memory>
-  tbc::view<CertificateAuthority<Memory>, tbc::lt::a> CertificateAuthority<Memory>::create(tbc::view<Memory&, tbc::lt::a> memory, const TlsLibrary<Memory>& library, int directory, AuthorityFiles files, AuthorityKind kind) {
+  tbc::view<CertificateAuthority, tbc::lt::a> CertificateAuthority::create(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const TlsLibrary& library, int directory, AuthorityFiles files, AuthorityKind kind) {
     requireTls(library.uses(memory), "TLS authority allocator does not match its library");
     const auto lifetime = kind == AuthorityKind::system_trust ? CertificatePair::system_lifetime : CertificatePair::private_lifetime;
     auto pair = CertificatePair::authority(common_name, lifetime);
@@ -332,29 +321,24 @@ namespace telar::runtime {
     return CertificateAuthority{memory, std::move(pair)};
   }
 
-  template <ConcurrentAllocator Memory>
-  CertificatePair CertificateAuthority<Memory>::mint(std::string_view hostname) const {
+  CertificatePair CertificateAuthority::mint(std::string_view hostname) const {
     return pair_.mint(hostname);
   }
 
-  template <ConcurrentAllocator Memory>
-  X509* CertificateAuthority<Memory>::certificate() const noexcept {
+  X509* CertificateAuthority::certificate() const noexcept {
     return pair_.certificate.get();
   }
 
-  template <ConcurrentAllocator Memory>
-  std::array<char, 40> CertificateAuthority<Memory>::fingerprint() const {
+  std::array<char, 40> CertificateAuthority::fingerprint() const {
     return fingerprint<20>(EVP_sha1());
   }
 
-  template <ConcurrentAllocator Memory>
-  std::array<char, 64> CertificateAuthority<Memory>::fingerprintSha256() const {
+  std::array<char, 64> CertificateAuthority::fingerprintSha256() const {
     return fingerprint<32>(EVP_sha256());
   }
 
-  template <ConcurrentAllocator Memory>
   template <std::size_t digest_bytes>
-  std::array<char, digest_bytes * 2> CertificateAuthority<Memory>::fingerprint(const EVP_MD* algorithm) const {
+  std::array<char, digest_bytes * 2> CertificateAuthority::fingerprint(const EVP_MD* algorithm) const {
     std::array<unsigned char, EVP_MAX_MD_SIZE> digest;
     unsigned length = 0;
 
@@ -370,8 +354,7 @@ namespace telar::runtime {
     return result;
   }
 
-  template <ConcurrentAllocator Memory>
-  bool CertificateAuthority<Memory>::expiresWithin(std::chrono::seconds duration) const {
+  bool CertificateAuthority::expiresWithin(std::chrono::seconds duration) const {
     TlsHandle<ASN1_TIME, ASN1_TIME_free> deadline{ASN1_TIME_adj(nullptr, std::time(nullptr), 0, duration.count())};
 
     requireTls(deadline != nullptr, "Compute TLS authority expiration deadline");
@@ -381,13 +364,12 @@ namespace telar::runtime {
     return comparison <= 0;
   }
 
-  template <ConcurrentAllocator Memory>
-  void CertificateAuthority<Memory>::writeBundle(int directory, std::span<const std::uint8_t> roots) const {
+  void CertificateAuthority::writeBundle(int directory, std::span<const std::uint8_t> roots) const {
     constexpr std::size_t maximum_root_bytes = 4 * 1024 * 1024;
 
     requireTls(roots.size() <= maximum_root_bytes, "TLS root bundle exceeds its bound");
     const PemDocument own{certificate()};
-    Vector<std::uint8_t, Memory> bundle{AllocatorRef<std::uint8_t, Memory>{memory_}};
+    Vector<std::uint8_t, ConcurrentMemory> bundle{AllocatorRef<std::uint8_t, ConcurrentMemory>{memory_}};
 
     bundle.reserve(roots.size() + own.bytes().size());
     bundle.insert(bundle.end(), roots.begin(), roots.end());
@@ -397,16 +379,12 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  CertificateAuthority<Memory>::CertificateAuthority(tbc::view<Memory&, tbc::lt::a> memory, CertificatePair pair) noexcept
+  CertificateAuthority::CertificateAuthority(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, CertificatePair pair) noexcept
       : memory_(memory),
         pair_(std::move(pair)) {}
 
-  template class CertificateAuthority<ConcurrentMemory>;
-
-  template <Allocator Memory>
-  String<Memory> proxyAuthorityDirectoryFrom(Memory& memory, const void* environment, std::string_view (*lookup)(const void*, const char*)) {
-    String<Memory> path{lookup(environment, "XDG_DATA_HOME"), AllocatorRef<char, Memory>{memory}};
+  String<ConcurrentMemory> proxyAuthorityDirectoryFrom(ConcurrentMemory& memory, const void* environment, std::string_view (*lookup)(const void*, const char*)) {
+    String<ConcurrentMemory> path{lookup(environment, "XDG_DATA_HOME"), AllocatorRef<char, ConcurrentMemory>{memory}};
     if (path.empty() || path.front() != '/') {
       path = lookup(environment, "HOME");
       if (path.empty()) {
@@ -419,8 +397,6 @@ namespace telar::runtime {
     path += "/telar/proxy";
     return path;
   }
-
-  template String<ConcurrentMemory> proxyAuthorityDirectoryFrom<ConcurrentMemory>(ConcurrentMemory& memory, const void* environment, std::string_view (*lookup)(const void*, const char*));
 
 }
 
@@ -436,16 +412,14 @@ namespace telar::runtime::proxy_trust {
 
   }
 
-  template <Allocator Memory>
-  SystemCommand<Memory>::SystemCommand(Memory& memory, FILE* output) noexcept
+  SystemCommand::SystemCommand(ConcurrentMemory& memory, FILE* output) noexcept
       : memory_(memory),
         output_(output) {}
 
-  template <Allocator Memory>
-  void SystemCommand<Memory>::run(std::span<const std::string_view> arguments) {
-    Vector<String<Memory>, Memory> owned{AllocatorRef<String<Memory>, Memory>{memory_}};
-    Vector<char*, Memory> pointers{AllocatorRef<char*, Memory>{memory_}};
-    String<Memory> line{"telar proxy trust: exec", AllocatorRef<char, Memory>{memory_}};
+  void SystemCommand::run(std::span<const std::string_view> arguments) {
+    Vector<String<ConcurrentMemory>, ConcurrentMemory> owned{AllocatorRef<String<ConcurrentMemory>, ConcurrentMemory>{memory_}};
+    Vector<char*, ConcurrentMemory> pointers{AllocatorRef<char*, ConcurrentMemory>{memory_}};
+    String<ConcurrentMemory> line{"telar proxy trust: exec", AllocatorRef<char, ConcurrentMemory>{memory_}};
 
     owned.reserve(arguments.size());
     pointers.reserve(arguments.size() + 1);
@@ -454,7 +428,7 @@ namespace telar::runtime::proxy_trust {
         throw std::invalid_argument{"Invalid proxy trust command argument"};
       }
 
-      owned.emplace_back(argument, AllocatorRef<char, Memory>{memory_});
+      owned.emplace_back(argument, AllocatorRef<char, ConcurrentMemory>{memory_});
       line += ' ';
       appendJsonText(line, argument);
     }
@@ -497,8 +471,6 @@ namespace telar::runtime::proxy_trust {
     }
   }
 
-  template class SystemCommand<ConcurrentMemory>;
-
   std::string_view backendName(Backend backend) noexcept {
     switch (backend) {
     case Backend::macos:
@@ -512,12 +484,11 @@ namespace telar::runtime::proxy_trust {
     std::unreachable();
   }
 
-  template <Allocator Memory>
-  Record Record::parse(Memory& memory, std::string_view source) {
+  Record Record::parse(ConcurrentMemory& memory, std::string_view source) {
     validateUtf8(source);
     constexpr auto names = std::to_array<std::string_view>({"version", "backend", "fingerprint", "store_path"});
     JsonFields fields{memory, JsonValue::parse(source), names};
-    if (!SchemaVersion<Memory>::isOne(memory, fields.required("version"))) {
+    if (!SchemaVersion<ConcurrentMemory>::isOne(memory, fields.required("version"))) {
       throw std::invalid_argument{"Invalid proxy trust record version"};
     }
 
@@ -558,9 +529,8 @@ namespace telar::runtime::proxy_trust {
     return record;
   }
 
-  template <Allocator Memory>
-  std::optional<Record> Record::read(Memory& memory, int directory) {
-    Vector<unsigned char, Memory> source{AllocatorRef<unsigned char, Memory>{memory}};
+  std::optional<Record> Record::read(ConcurrentMemory& memory, int directory) {
+    Vector<unsigned char, ConcurrentMemory> source{AllocatorRef<unsigned char, ConcurrentMemory>{memory}};
     if (!readPrivateFile(directory, filename, source, maximum_bytes - 1)) {
       return std::nullopt;
     }
@@ -568,9 +538,8 @@ namespace telar::runtime::proxy_trust {
     return parse(memory, {reinterpret_cast<const char*>(source.data()), source.size()});
   }
 
-  template <Allocator Memory>
-  void Record::write(Memory& memory, int directory) const {
-    String<Memory> source{"{\n  \"version\": 1,\n  \"backend\": ", AllocatorRef<char, Memory>{memory}};
+  void Record::write(ConcurrentMemory& memory, int directory) const {
+    String<ConcurrentMemory> source{"{\n  \"version\": 1,\n  \"backend\": ", AllocatorRef<char, ConcurrentMemory>{memory}};
 
     appendJsonText(source, backendName(backend));
     source += ",\n  \"fingerprint\": ";
@@ -587,10 +556,6 @@ namespace telar::runtime::proxy_trust {
     }
   }
 
-  template Record Record::parse<ConcurrentMemory>(ConcurrentMemory& memory, std::string_view source);
-  template std::optional<Record> Record::read<ConcurrentMemory>(ConcurrentMemory& memory, int directory);
-  template void Record::write<ConcurrentMemory>(ConcurrentMemory& memory, int directory) const;
-
   Destination::Destination(std::string_view path)
       : Destination(Backend::macos, path) {}
 
@@ -599,21 +564,18 @@ namespace telar::runtime::proxy_trust {
     store.assign(path);
   }
 
-  template <Allocator Memory>
-  Paths<Memory>::Paths(Memory& memory, std::string_view directory)
-      : directory_(directory, AllocatorRef<char, Memory>{memory}) {
+  Paths::Paths(ConcurrentMemory& memory, std::string_view directory)
+      : directory_(directory, AllocatorRef<char, ConcurrentMemory>{memory}) {
     if (directory.empty() || directory.front() != '/' || directory.contains('\0') || directory.size() + AuthorityFiles::forKind(AuthorityKind::system_trust).certificate.size() + 1 >= PATH_MAX) {
       throw std::invalid_argument{"Proxy authority directory must be an absolute bounded path"};
     }
   }
 
-  template <Allocator Memory>
-  const String<Memory>& Paths<Memory>::directory() const noexcept {
+  const String<ConcurrentMemory>& Paths::directory() const noexcept {
     return directory_;
   }
 
-  template <Allocator Memory>
-  String<Memory> Paths<Memory>::file(std::string_view name) const {
+  String<ConcurrentMemory> Paths::file(std::string_view name) const {
     auto path = directory_;
 
     path += '/';
@@ -625,8 +587,7 @@ namespace telar::runtime::proxy_trust {
     return path;
   }
 
-  template <Allocator Memory>
-  FileDescriptor Paths<Memory>::open() const {
+  FileDescriptor Paths::open() const {
     // A path that names no directory holds no trust record.
     FileDescriptor descriptor{::open(directory_.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
     if (!descriptor && sys::lastError() != ENOENT && sys::lastError() != ENOTDIR) {
@@ -636,8 +597,7 @@ namespace telar::runtime::proxy_trust {
     return descriptor;
   }
 
-  template <Allocator Memory>
-  FileDescriptor Paths<Memory>::prepare() const {
+  FileDescriptor Paths::prepare() const {
     createPrivateDirectory(directory_);
     auto descriptor = open();
     if (!descriptor) {
@@ -648,18 +608,16 @@ namespace telar::runtime::proxy_trust {
     return descriptor;
   }
 
-  template <Allocator Memory>
-  void Paths<Memory>::validateDirectory(int descriptor) {
+  void Paths::validateDirectory(int descriptor) {
     struct stat state{};
     if (::fstat(descriptor, &state) != 0 || !S_ISDIR(state.st_mode) || state.st_uid != ::geteuid() || (state.st_mode & 0077) != 0) {
       throw SystemError{"Validate proxy authority directory", EACCES};
     }
   }
 
-  template <Allocator Memory>
-  String<Memory> Paths<Memory>::keychainFrom(Memory& memory, const void* environment, Lookup lookup) {
+  String<ConcurrentMemory> Paths::keychainFrom(ConcurrentMemory& memory, const void* environment, Lookup lookup) {
     const auto home = lookup(environment, "HOME");
-    String<Memory> result{home, AllocatorRef<char, Memory>{memory}};
+    String<ConcurrentMemory> result{home, AllocatorRef<char, ConcurrentMemory>{memory}};
 
     if (home.empty()) {
       return result;
@@ -673,8 +631,7 @@ namespace telar::runtime::proxy_trust {
     return result;
   }
 
-  template <Allocator Memory>
-  Destination Paths<Memory>::nativeDestinationFrom(Memory& memory, std::optional<Backend> selected, const void* environment, Lookup lookup) const {
+  Destination Paths::nativeDestinationFrom(ConcurrentMemory& memory, std::optional<Backend> selected, const void* environment, Lookup lookup) const {
 #if defined(__APPLE__)
     if (selected && *selected != Backend::macos) {
       throw std::invalid_argument{"Linux trust backend is not supported on macOS"};
@@ -700,8 +657,6 @@ namespace telar::runtime::proxy_trust {
 #endif
   }
 
-  template class Paths<ConcurrentMemory>;
-
   std::string_view statusName(Status status) noexcept {
     switch (status) {
     case Status::absent:
@@ -721,8 +676,7 @@ namespace telar::runtime::proxy_trust {
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  Inspection inspect(Memory& memory, const TlsLibrary<Memory>& library, const Paths<Memory>& paths, const Destination& destination) noexcept {
+  Inspection inspect(ConcurrentMemory& memory, const TlsLibrary& library, const Paths& paths, const Destination& destination) noexcept {
     Inspection result;
 
     try {
@@ -737,8 +691,8 @@ namespace telar::runtime::proxy_trust {
       }
 
       validateTarget(*result.record, destination);
-      Paths<Memory>::validateDirectory(directory.get());
-      const auto authority = CertificateAuthority<Memory>::loadExisting(memory, library, directory.get(), AuthorityKind::system_trust);
+      Paths::validateDirectory(directory.get());
+      const auto authority = CertificateAuthority::loadExisting(memory, library, directory.get(), AuthorityKind::system_trust);
 
       result.status = authority && authority->fingerprint() == result.record->fingerprint && !authority->expiresWithin(rotation_window) ? Status::installed : Status::stale;
     } catch (...) {
@@ -748,14 +702,11 @@ namespace telar::runtime::proxy_trust {
     return result;
   }
 
-  template Inspection inspect<ConcurrentMemory>(ConcurrentMemory& memory, const TlsLibrary<ConcurrentMemory>& library, const Paths<ConcurrentMemory>& paths, const Destination& destination) noexcept;
-
-  template <ConcurrentAllocator Memory>
-  PreparedAuthority<Memory>::PreparedAuthority(Memory& memory, const TlsLibrary<Memory>& library, int directory, AuthorityPreparation options)
+  PreparedAuthority::PreparedAuthority(ConcurrentMemory& memory, const TlsLibrary& library, int directory, AuthorityPreparation options)
       : directory_(directory),
         canonical_(AuthorityFiles::forKind(options.kind)) {
     try {
-      auto existing = CertificateAuthority<Memory>::loadExisting(memory, library, directory, options.kind);
+      auto existing = CertificateAuthority::loadExisting(memory, library, directory, options.kind);
       if (existing && !options.force_rotation && !existing->expiresWithin(rotation_window)) {
         authority_.emplace(std::move(*existing));
         return;
@@ -771,12 +722,11 @@ namespace telar::runtime::proxy_trust {
     makeName(certificate_, canonical_.certificate, "rotate", nonce);
     makeName(previous_key_, canonical_.key, "previous", nonce);
     makeName(previous_certificate_, canonical_.certificate, "previous", nonce);
-    authority_.emplace(CertificateAuthority<Memory>::create(memory, library, directory, {key_.data(), certificate_.data()}, options.kind));
+    authority_.emplace(CertificateAuthority::create(memory, library, directory, {key_.data(), certificate_.data()}, options.kind));
     temporary_ = true;
   }
 
-  template <ConcurrentAllocator Memory>
-  PreparedAuthority<Memory>::~PreparedAuthority() {
+  PreparedAuthority::~PreparedAuthority() {
     if (activated_ && !committed_) {
       restore(certificate_, canonical_.certificate.data());
       restore(key_, canonical_.key.data());
@@ -796,18 +746,15 @@ namespace telar::runtime::proxy_trust {
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  std::string_view PreparedAuthority<Memory>::certificateName() const noexcept {
+  std::string_view PreparedAuthority::certificateName() const noexcept {
     return temporary_ && !activated_ ? std::string_view{certificate_.data()} : canonical_.certificate;
   }
 
-  template <ConcurrentAllocator Memory>
-  const CertificateAuthority<Memory>& PreparedAuthority<Memory>::authority() const noexcept {
+  const CertificateAuthority& PreparedAuthority::authority() const noexcept {
     return *authority_;
   }
 
-  template <ConcurrentAllocator Memory>
-  void PreparedAuthority<Memory>::activate() {
+  void PreparedAuthority::activate() {
     if (!temporary_) {
       return;
     }
@@ -825,8 +772,7 @@ namespace telar::runtime::proxy_trust {
     activated_ = true;
   }
 
-  template <ConcurrentAllocator Memory>
-  void PreparedAuthority<Memory>::commit() noexcept {
+  void PreparedAuthority::commit() noexcept {
     committed_ = true;
     if (saved_key_) {
       ::unlinkat(directory_, previous_key_.data(), 0);
@@ -839,15 +785,13 @@ namespace telar::runtime::proxy_trust {
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  void PreparedAuthority<Memory>::rename(const char* source, const char* destination) const {
+  void PreparedAuthority::rename(const char* source, const char* destination) const {
     if (renameAt(directory_, source, directory_, destination, RenameMode::create_only) != 0) {
       throw SystemError{"Activate proxy authority"};
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  bool PreparedAuthority<Memory>::savePrevious(const char* source, const Filename& destination) const {
+  bool PreparedAuthority::savePrevious(const char* source, const Filename& destination) const {
     if (renameAt(directory_, source, directory_, destination.data(), RenameMode::create_only) == 0) {
       return true;
     }
@@ -859,37 +803,30 @@ namespace telar::runtime::proxy_trust {
     throw SystemError{"Preserve previous proxy authority"};
   }
 
-  template <ConcurrentAllocator Memory>
-  void PreparedAuthority<Memory>::restore(const Filename& temporary, const char* canonical) const noexcept {
+  void PreparedAuthority::restore(const Filename& temporary, const char* canonical) const noexcept {
     if (::renameat(directory_, canonical, directory_, temporary.data()) != 0) {
       std::fprintf(stderr, "telar proxy trust: could not roll back %s: %s\n", canonical, std::strerror(sys::lastError()));
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  void PreparedAuthority<Memory>::restorePrevious(const Filename& previous, const char* canonical) const noexcept {
+  void PreparedAuthority::restorePrevious(const Filename& previous, const char* canonical) const noexcept {
     if (::renameat(directory_, previous.data(), directory_, canonical) != 0) {
       std::fprintf(stderr, "telar proxy trust: could not restore %s: %s\n", canonical, std::strerror(sys::lastError()));
     }
   }
 
-  template class PreparedAuthority<ConcurrentMemory>;
-
-  template <ConcurrentAllocator Memory>
-  Service<Memory>::Service(Memory& memory, const TlsLibrary<Memory>& library, const Paths<Memory>& paths, TrustCommandRunner& executor, Destination destination) noexcept
+  Service::Service(ConcurrentMemory& memory, const TlsLibrary& library, const Paths& paths, TrustCommandRunner& executor, Destination destination) noexcept
       : memory_(memory),
         library_(library),
         paths_(paths),
         executor_(executor),
         destination_(destination) {}
 
-  template <ConcurrentAllocator Memory>
-  Inspection Service<Memory>::inspect() const noexcept {
+  Inspection Service::inspect() const noexcept {
     return proxy_trust::inspect(memory_, library_, paths_, destination_);
   }
 
-  template <ConcurrentAllocator Memory>
-  Record Service<Memory>::install(const std::optional<Record>& previous, bool force_rotation) {
+  Record Service::install(const std::optional<Record>& previous, bool force_rotation) {
     TELAR_TRACE("proxy.installSystemTrust");
     if (destination_.store.view().empty()) {
       throw std::invalid_argument{"Home directory unavailable for proxy trust"};
@@ -930,8 +867,7 @@ namespace telar::runtime::proxy_trust {
     return replacement;
   }
 
-  template <ConcurrentAllocator Memory>
-  void Service<Memory>::uninstall(const Record& record) {
+  void Service::uninstall(const Record& record) {
     TELAR_TRACE("proxy.removeSystemTrust");
     validateTarget(record, destination_);
     const auto directory = paths_.open();
@@ -945,8 +881,7 @@ namespace telar::runtime::proxy_trust {
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  std::optional<Record> Service<Memory>::rotateIfNeeded() {
+  std::optional<Record> Service::rotateIfNeeded() {
     const auto current = inspect();
     if (current.status != Status::stale || !current.record) {
       return std::nullopt;
@@ -959,8 +894,7 @@ namespace telar::runtime::proxy_trust {
     return install(current.record);
   }
 
-  template <ConcurrentAllocator Memory>
-  void Service<Memory>::installAuthority(std::string_view certificate) {
+  void Service::installAuthority(std::string_view certificate) {
     switch (destination_.backend) {
     case Backend::macos:
       executor_.run(std::to_array<std::string_view>({"/usr/bin/security", "add-trusted-cert", "-r", "trustRoot", "-k", destination_.store.view(), certificate}));
@@ -975,8 +909,7 @@ namespace telar::runtime::proxy_trust {
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  void Service<Memory>::remove(const Record& record) {
+  void Service::remove(const Record& record) {
     switch (record.backend) {
     case Backend::macos:
       executor_.run(std::to_array<std::string_view>({"/usr/bin/security", "delete-certificate", "-t", "-Z", {record.fingerprint.data(), record.fingerprint.size()}, record.store.view()}));
@@ -990,7 +923,5 @@ namespace telar::runtime::proxy_trust {
       break;
     }
   }
-
-  template class Service<ConcurrentMemory>;
 
 }

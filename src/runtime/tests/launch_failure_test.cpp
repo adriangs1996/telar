@@ -87,14 +87,13 @@ namespace {
     }
   };
 
-  template <Allocator Memory>
-  struct FailingPoller : NativeEventLoop<Memory> {
-    explicit FailingPoller(Memory& memory, RuntimeModel<Memory>& model)
-        : NativeEventLoop<Memory>(memory),
+  struct FailingPoller : NativeEventLoop<ConcurrentMemory> {
+    explicit FailingPoller(ConcurrentMemory& memory, RuntimeModel& model)
+        : NativeEventLoop<ConcurrentMemory>(memory),
           model(model) {}
 
     void watch(int descriptor, std::uint64_t token) {
-      NativeEventLoop<Memory>::watch(descriptor, token);
+      NativeEventLoop<ConcurrentMemory>::watch(descriptor, token);
       for (const auto* pane : model.panes.items()) {
         if (pane != nullptr && pane->process->descriptor() == descriptor) {
           process = pane->process->processId();
@@ -110,21 +109,20 @@ namespace {
 
     void remove(int descriptor) noexcept {
       ++removals;
-      NativeEventLoop<Memory>::remove(descriptor);
+      NativeEventLoop<ConcurrentMemory>::remove(descriptor);
     }
 
-    RuntimeModel<Memory>& model;
+    RuntimeModel& model;
     pid_t process = -1;
     int descriptor = -1;
     unsigned removals = 0;
     bool fail = true;
   };
 
-  template <ConcurrentAllocator Memory>
-  void checkLaunchRollback(Memory& memory, BackgroundService<Memory>& service) {
+  void checkLaunchRollback(ConcurrentMemory& memory, BackgroundService& service) {
     RuntimeModel model{memory};
-    ClientStore<Memory> clients{memory};
-    LimitService<Memory> limits;
+    ClientStore clients{memory};
+    LimitService limits;
     FailingPoller poller{memory, model};
     RequestWorker worker{memory, service};
     QueuedHistory history{worker};
@@ -133,7 +131,7 @@ namespace {
     constexpr TerminalSize size{80, 24, 0, 0};
     constexpr std::array<std::string_view, 1> arguments{"/bin/cat"};
     const Launch launch{.cwd = "/", .arguments = arguments};
-    auto workspace = makeOwned<Workspace<Memory>>(memory, memory, location.workspace.id, "/workspace with spaces", "Failure fixture");
+    auto workspace = makeOwned<Workspace>(memory, memory, location.workspace.id, "/workspace with spaces", "Failure fixture");
 
     model.workspaces.insert(location.workspace.id, std::move(workspace));
 

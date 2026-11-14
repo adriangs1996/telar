@@ -88,13 +88,13 @@ static void testMediaBatches(ConcurrentMemory& memory) {
   MediaBudget budget{GraphicsLimits::maximum_global_bytes};
 
   {
-    auto media = std::make_shared<PaneMedia<ConcurrentMemory>>(memory, budget, GraphicsLimits{}, TerminalSize{10, 4, 8, 16});
-    MediaProcessor<ConcurrentMemory> processor;
+    auto media = std::make_shared<PaneMedia>(memory, budget, GraphicsLimits{}, TerminalSize{10, 4, 8, 16});
+    MediaProcessor processor;
     ObservationWorker<decltype(processor)&> worker{std::in_place, processor};
 
     media->output(mediaBytes("\x1b_Ga=T,s=1,v=1,i=7,q=2,m=1;/wAA"));
     check(media->seal());
-    MediaProcessor<ConcurrentMemory>::Request request;
+    MediaProcessor::Request request;
 
     request.entries[request.count++].media = media;
     check(worker.submit(request));

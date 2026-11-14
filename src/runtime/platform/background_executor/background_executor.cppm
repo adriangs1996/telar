@@ -37,27 +37,21 @@ export {
 export {
   namespace telar::runtime {
 
-    template <ConcurrentAllocator Memory>
     class SuggestionService {
     public:
-      explicit SuggestionService(Memory& memory, SuggestionOptions options);
+      explicit SuggestionService(ConcurrentMemory& memory, SuggestionOptions options);
 
       bool available() const noexcept;
 
-      void process(std::span<const Byte> payload, EncodedReply<Memory>& reply, const RequestContext& context = {});
+      void process(std::span<const Byte> payload, EncodedReply<ConcurrentMemory>& reply, const RequestContext& context = {});
 
       void idle() noexcept;
 
       void stop() noexcept;
 
     private:
-      SuggestionEngine<Memory> engine_;
+      SuggestionEngine engine_;
     };
-
-    template <ConcurrentAllocator Memory>
-    SuggestionService(Memory& memory, SuggestionOptions options) -> SuggestionService<Memory>;
-
-    extern template class SuggestionService<ConcurrentMemory>;
 
   }
 }

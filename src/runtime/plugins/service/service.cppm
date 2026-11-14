@@ -57,10 +57,9 @@ export {
     // Proxy threads submit exchanges and the runtime collects results while the trust monitor revokes
     // workers: the workers are fixed once built, and what changes after is atomic or a synchronized
     // channel, so every borrow the service lends stays valid whatever is done through it.
-    template <ConcurrentAllocator Memory>
     class TBC_SHARED Service {
     public:
-      explicit Service(Memory& memory, std::span<const ServiceSpec> specifications, const char* executable, std::string_view trace_prefix = {}, traffic::PackagePort* traffic = nullptr);
+      explicit Service(ConcurrentMemory& memory, std::span<const ServiceSpec> specifications, const char* executable, std::string_view trace_prefix = {}, traffic::PackagePort* traffic = nullptr);
 
       ~Service();
 
@@ -75,7 +74,7 @@ export {
 
       int descriptor() const noexcept;
 
-      void submit(CapturedExchange<Memory>& captured) noexcept;
+      void submit(CapturedExchange& captured) noexcept;
 
       // Generic over the caller's consumer.
       template <typename Consumer>
@@ -94,27 +93,21 @@ export {
     private:
       void refreshTrust() noexcept;
 
-      Memory& memory_;
+      ConcurrentMemory& memory_;
       TapBudget budget_;
-      ResultQueue<Memory> results_;
+      ResultQueue<ConcurrentMemory> results_;
       std::optional<CancellationSignal> cancellation_;
       // Workers report to the queue, budget and cancellation above, so the service is pinned.
-      tbc::view<Vector<Owned<Worker<Memory>, Memory>, Memory>, tbc::lt::self> workers_;
+      tbc::view<Vector<Owned<Worker<>, ConcurrentMemory>, ConcurrentMemory>, tbc::lt::self> workers_;
       FixedText<PATH_MAX> trust_path_;
       std::jthread trust_monitor_;
       std::atomic<std::uint64_t> next_event_{1};
       std::atomic<bool> stopped_{false};
     };
 
-    extern template class Service<ConcurrentMemory>;
-
-    template <ConcurrentAllocator Memory>
-    Service(Memory& memory, std::span<const ServiceSpec> specifications, const char* executable, std::string_view trace_prefix = {}) -> Service<Memory>;
-
-    template <ConcurrentAllocator Memory>
     class ShutdownGuard {
     public:
-      explicit ShutdownGuard(Service<Memory>& service) noexcept;
+      explicit ShutdownGuard(Service& service) noexcept;
 
       ~ShutdownGuard();
 
@@ -122,13 +115,8 @@ export {
       ShutdownGuard& operator=(const ShutdownGuard&) = delete;
 
     private:
-      Service<Memory>& service_;
+      Service& service_;
     };
-
-    extern template class ShutdownGuard<ConcurrentMemory>;
-
-    template <ConcurrentAllocator Memory>
-    ShutdownGuard(Service<Memory>& service) -> ShutdownGuard<Memory>;
 
   }
 }

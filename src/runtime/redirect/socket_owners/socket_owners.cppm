@@ -73,7 +73,6 @@ export {
 export {
   namespace telar::runtime::redirect {
 
-    template <Allocator Memory>
     class PfCommand {
     public:
       explicit PfCommand(Memory& memory) noexcept;
@@ -83,8 +82,6 @@ export {
     private:
       Memory& memory_;
     };
-
-    extern template class PfCommand<Memory>;
 
   }
 }
@@ -246,7 +243,6 @@ export {
 export {
   namespace telar::runtime::redirect {
 
-    template <Allocator Memory>
     class SocketAccounts {
     public:
       explicit SocketAccounts(Memory& memory) noexcept;
@@ -267,8 +263,6 @@ export {
       std::optional<SensitiveAllocation<Memory>> snapshot_;
       std::size_t size_ = 0;
     };
-
-    extern template class SocketAccounts<Memory>;
 
   }
 }
@@ -446,7 +440,6 @@ export {
       sigset_t previous_{};
     };
 
-    template <Allocator Memory>
     class Helper {
       struct Pending {
         Connection connection;
@@ -559,14 +552,12 @@ export {
       std::optional<NatLookup> nat_;
       std::optional<PacketLog> packet_log_;
       std::optional<SocketOwners> owners_;
-      std::optional<SocketAccounts<Memory>> accounts_;
+      std::optional<SocketAccounts> accounts_;
       std::array<ProcessIdentity, SocketOwners::maximum_processes> selected_processes_;
       std::size_t process_count_ = 0;
       std::size_t count_ = 0;
       Direction direction_ = Direction::outbound;
     };
-
-    extern template class Helper<Memory>;
 
   }
 }

@@ -183,7 +183,6 @@ export {
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory>
     class CaptureContentDecoder {
     public:
       explicit CaptureContentDecoder(Memory& memory) noexcept;
@@ -200,11 +199,6 @@ export {
       Memory& memory_;
     };
 
-    extern template class CaptureContentDecoder<Memory>;
-
-    template <Allocator Memory>
-    CaptureContentDecoder(Memory& memory) -> CaptureContentDecoder<Memory>;
-
   }
 }
 
@@ -215,12 +209,11 @@ export {
     // Proxy threads start and publish halves while the receiver drains them: the limits are fixed once
     // built, and what changes after is atomic or the synchronized channel, so the halves that borrow its
     // quota stay valid whatever is done through it.
-    template <ConcurrentAllocator Memory>
     class TBC_SHARED CaptureProducer {
     public:
-      using Half = typename CapturedExchange<Memory>::Half;
+      using Half = CapturedExchange::Half;
 
-      explicit CaptureProducer(Memory& memory, ProxyCaptureLimits limits);
+      explicit CaptureProducer(ConcurrentMemory& memory, ProxyCaptureLimits limits);
 
       Half start(CaptureStart context) noexcept;
 
@@ -234,7 +227,7 @@ export {
 
       std::size_t reservedBytes() const noexcept;
 
-      void decodeBody(CaptureHalf<Memory>& half) noexcept;
+      void decodeBody(CaptureHalf& half) noexcept;
 
       CaptureMetrics metrics() const noexcept;
 
@@ -243,7 +236,7 @@ export {
     private:
       void countTruncation(CaptureTruncation truncation) noexcept;
 
-      Memory& memory_;
+      ConcurrentMemory& memory_;
       const ProxyCaptureLimits limits_;
       CaptureQuota quota_;
       DropChannel<Half, queue_capacity> channel_;
@@ -255,8 +248,6 @@ export {
       std::atomic<std::uint64_t> skipped_{0};
       std::atomic<std::uint64_t> decode_failed_{0};
     };
-
-    extern template class CaptureProducer<ConcurrentMemory>;
 
   }
 }

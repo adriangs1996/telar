@@ -34,7 +34,7 @@ using telar::Byte;
 namespace {
   struct Owner : HttpControl {
     ConcurrentMemory& memory;
-    Interception<ConcurrentMemory, HttpMessageLimits::message_bytes> broker;
+    Interception<HttpMessageLimits::message_bytes> broker;
 
     struct Request {
       std::uint64_t ticket;

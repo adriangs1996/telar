@@ -230,19 +230,16 @@ namespace telar::git {
 
   }
 
-  template <Allocator Memory>
-  Inflater<Memory>::Inflater(Memory& memory) noexcept
+  Inflater::Inflater(Memory& memory) noexcept
       : blocks_(memory) {}
 
-  template <Allocator Memory>
-  Inflater<Memory>::~Inflater() {
+  Inflater::~Inflater() {
     if (ready_) {
       ::inflateEnd(&stream_);
     }
   }
 
-  template <Allocator Memory>
-  bool Inflater<Memory>::start() noexcept {
+  bool Inflater::start() noexcept {
     if (!ready_) {
       stream_ = {};
       stream_.zalloc = &allocate;
@@ -257,33 +254,24 @@ namespace telar::git {
     return ::inflateReset(&stream_) == Z_OK;
   }
 
-  template <Allocator Memory>
-  z_stream& Inflater<Memory>::stream() noexcept {
+  z_stream& Inflater::stream() noexcept {
     return stream_;
   }
 
-  template <Allocator Memory>
-  voidpf Inflater<Memory>::allocate(voidpf opaque, uInt items, uInt size) noexcept {
+  voidpf Inflater::allocate(voidpf opaque, uInt items, uInt size) noexcept {
     return static_cast<CAllocationBlocks<Memory>*>(opaque)->allocateZeroed(items, size);
   }
 
-  template <Allocator Memory>
-  void Inflater<Memory>::release(voidpf opaque, voidpf address) noexcept {
+  void Inflater::release(voidpf opaque, voidpf address) noexcept {
     static_cast<CAllocationBlocks<Memory>*>(opaque)->release(address);
   }
 
-  template class Inflater<Memory>;
-
-  template <Allocator Memory>
   void resizeForOverwrite(String<Memory>& string, std::size_t size) {
     string.resize_and_overwrite(size, [](char*, std::size_t count) {
       return count;
     });
   }
 
-  template void resizeForOverwrite<Memory>(String<Memory>& string, std::size_t size);
-
-  template <Allocator Memory>
   bool parseCommit(std::string_view content, ObjectFormat format, std::size_t maximum_parents, CommitHeader& header, Vector<ObjectId, Memory>& parents) {
     const auto tree = headerId(content, "tree ", format);
     if (!tree) {
@@ -338,8 +326,6 @@ namespace telar::git {
 
     return false;
   }
-
-  template bool parseCommit<Memory>(std::string_view content, ObjectFormat format, std::size_t maximum_parents, CommitHeader& header, Vector<ObjectId, Memory>& parents);
 
   bool TreeEntry::directory() const noexcept {
     return (mode & mode_type_mask) == mode_directory;
@@ -427,8 +413,7 @@ namespace telar::git {
     return false;
   }
 
-  template <Allocator Memory>
-  ObjectDatabase<Memory>::ObjectDatabase(Memory& memory) noexcept
+  ObjectDatabase::ObjectDatabase(Memory& memory) noexcept
       : inflater_(memory),
         packs_(AllocatorRef<Pack, Memory>{memory}),
         chain_(AllocatorRef<Link, Memory>{memory}),
@@ -437,8 +422,7 @@ namespace telar::git {
         target_(AllocatorRef<char, Memory>{memory}),
         delta_(AllocatorRef<char, Memory>{memory}) {}
 
-  template <Allocator Memory>
-  bool ObjectDatabase<Memory>::open(int common, ObjectFormat format, const Limits& limits) {
+  bool ObjectDatabase::open(int common, ObjectFormat format, const Limits& limits) {
     limits_ = &limits;
     inflated_ = 0;
     if (format != format_ || !objects_) {
@@ -457,25 +441,21 @@ namespace telar::git {
     return true;
   }
 
-  template <Allocator Memory>
-  void ObjectDatabase<Memory>::close() noexcept {
+  void ObjectDatabase::close() noexcept {
     objects_.reset();
     packs_.clear();
     packs_identity_ = {};
   }
 
-  template <Allocator Memory>
-  int ObjectDatabase<Memory>::objects() const noexcept {
+  int ObjectDatabase::objects() const noexcept {
     return objects_.get();
   }
 
-  template <Allocator Memory>
-  ObjectFormat ObjectDatabase<Memory>::format() const noexcept {
+  ObjectFormat ObjectDatabase::format() const noexcept {
     return format_;
   }
 
-  template <Allocator Memory>
-  Lookup ObjectDatabase<Memory>::read(const ObjectId& id, ObjectType& type, String<Memory>& output, std::size_t prefix) {
+  Lookup ObjectDatabase::read(const ObjectId& id, ObjectType& type, String<Memory>& output, std::size_t prefix) {
     std::uint32_t pack = 0;
     std::uint64_t offset = 0;
     const auto located = locate(id, pack, offset);
@@ -491,8 +471,7 @@ namespace telar::git {
     return readPacked(pack, offset, type, output, prefix);
   }
 
-  template <Allocator Memory>
-  void ObjectDatabase<Memory>::trim() {
+  void ObjectDatabase::trim() {
     constexpr std::size_t retained = 1 << 20;
 
     for (auto* buffer : {&compressed_, &base_, &target_, &delta_}) {
@@ -503,8 +482,7 @@ namespace telar::git {
     }
   }
 
-  template <Allocator Memory>
-  void ObjectDatabase<Memory>::refreshPacks() {
+  void ObjectDatabase::refreshPacks() {
     auto directory = openDirectory(objects_.get(), "pack");
     if (!directory) {
       packs_.clear();
@@ -546,8 +524,7 @@ namespace telar::git {
     packs_identity_ = identity;
   }
 
-  template <Allocator Memory>
-  bool ObjectDatabase<Memory>::openPack(int directory, std::string_view index_name, Pack& pack) noexcept {
+  bool ObjectDatabase::openPack(int directory, std::string_view index_name, Pack& pack) noexcept {
     const auto hash_size = hashSize(format_);
     PathName name;
     struct stat status{};
@@ -600,8 +577,7 @@ namespace telar::git {
     return std::memcmp(pack_header.data(), "PACK", 4) == 0 && (version == 2 || version == 3) && loadBig32(pack_header.data() + 8) == pack.count;
   }
 
-  template <Allocator Memory>
-  std::optional<std::uint32_t> ObjectDatabase<Memory>::findInPack(const Pack& pack, const ObjectId& id) noexcept {
+  std::optional<std::uint32_t> ObjectDatabase::findInPack(const Pack& pack, const ObjectId& id) noexcept {
     const auto hash_size = std::size_t{id.size};
     const auto first = id.bytes[0];
     std::uint32_t low = first == 0 ? 0 : pack.fanout[first - 1];
@@ -656,8 +632,7 @@ namespace telar::git {
     return std::nullopt;
   }
 
-  template <Allocator Memory>
-  std::optional<std::uint64_t> ObjectDatabase<Memory>::packOffset(const Pack& pack, std::uint32_t position) noexcept {
+  std::optional<std::uint64_t> ObjectDatabase::packOffset(const Pack& pack, std::uint32_t position) noexcept {
     const auto hash_size = hashSize(format_);
     const auto offsets = pack_index_header + std::uint64_t{pack.count} * (hash_size + 4);
     std::array<std::uint8_t, 8> bytes;
@@ -682,8 +657,7 @@ namespace telar::git {
     return offset;
   }
 
-  template <Allocator Memory>
-  Lookup ObjectDatabase<Memory>::locate(const ObjectId& id, std::uint32_t& pack, std::uint64_t& offset) {
+  Lookup ObjectDatabase::locate(const ObjectId& id, std::uint32_t& pack, std::uint64_t& offset) {
     if (id.size != hashSize(format_)) {
       return Lookup::invalid;
     }
@@ -719,8 +693,7 @@ namespace telar::git {
     return Lookup::found;
   }
 
-  template <Allocator Memory>
-  bool ObjectDatabase<Memory>::entryAt(const Pack& pack, std::uint64_t offset, Entry& entry) noexcept {
+  bool ObjectDatabase::entryAt(const Pack& pack, std::uint64_t offset, Entry& entry) noexcept {
     const auto hash_size = hashSize(format_);
     const auto end = pack.data_size - hash_size;
     if (offset < 12 || offset >= end) {
@@ -787,8 +760,7 @@ namespace telar::git {
     return true;
   }
 
-  template <Allocator Memory>
-  bool ObjectDatabase<Memory>::inflatePacked(const Pack& pack, std::uint64_t data_offset, std::span<std::uint8_t> output, bool whole) {
+  bool ObjectDatabase::inflatePacked(const Pack& pack, std::uint64_t data_offset, std::span<std::uint8_t> output, bool whole) {
     if (!inflater_.start()) {
       return false;
     }
@@ -802,8 +774,7 @@ namespace telar::git {
     return inflatePrefix(inflater_.stream(), source, output);
   }
 
-  template <Allocator Memory>
-  Lookup ObjectDatabase<Memory>::readPacked(std::uint32_t pack, std::uint64_t offset, ObjectType& type, String<Memory>& output, std::size_t prefix) {
+  Lookup ObjectDatabase::readPacked(std::uint32_t pack, std::uint64_t offset, ObjectType& type, String<Memory>& output, std::size_t prefix) {
     chain_.clear();
     Entry entry;
     bool loose_base = false;
@@ -902,8 +873,7 @@ namespace telar::git {
     return Lookup::found;
   }
 
-  template <Allocator Memory>
-  Lookup ObjectDatabase<Memory>::readLoose(const ObjectId& id, ObjectType& type, String<Memory>& output, std::size_t prefix) {
+  Lookup ObjectDatabase::readLoose(const ObjectId& id, ObjectType& type, String<Memory>& output, std::size_t prefix) {
     std::array<char, 2 * maximum_hash_size> hex;
     const auto digits = id.hex(hex);
     PathName name;
@@ -991,8 +961,7 @@ namespace telar::git {
     return inflateExactly(stream, source, rest) ? Lookup::found : Lookup::invalid;
   }
 
-  template <Allocator Memory>
-  bool ObjectDatabase<Memory>::charge(std::uint64_t bytes) noexcept {
+  bool ObjectDatabase::charge(std::uint64_t bytes) noexcept {
     if (bytes > limits_->inflated_bytes - inflated_) {
       return false;
     }
@@ -1001,15 +970,11 @@ namespace telar::git {
     return true;
   }
 
-  template class ObjectDatabase<Memory>;
-
-  template <Allocator Memory>
-  CommitGraph<Memory>::CommitGraph(Memory& memory) noexcept
+  CommitGraph::CommitGraph(Memory& memory) noexcept
       : layers_(AllocatorRef<Layer, Memory>{memory}),
         chain_(AllocatorRef<char, Memory>{memory}) {}
 
-  template <Allocator Memory>
-  void CommitGraph<Memory>::load(int objects, ObjectFormat format, const Limits& limits, bool disabled) {
+  void CommitGraph::load(int objects, ObjectFormat format, const Limits& limits, bool disabled) {
     if (disabled || objects < 0) {
       clear();
       return;
@@ -1055,21 +1020,18 @@ namespace telar::git {
     }
   }
 
-  template <Allocator Memory>
-  void CommitGraph<Memory>::clear() noexcept {
+  void CommitGraph::clear() noexcept {
     layers_.clear();
     loaded_ = false;
     single_ = {};
     chain_identity_ = {};
   }
 
-  template <Allocator Memory>
-  bool CommitGraph<Memory>::empty() const noexcept {
+  bool CommitGraph::empty() const noexcept {
     return layers_.empty();
   }
 
-  template <Allocator Memory>
-  std::optional<std::uint32_t> CommitGraph<Memory>::find(const ObjectId& id) const noexcept {
+  std::optional<std::uint32_t> CommitGraph::find(const ObjectId& id) const noexcept {
     const auto hash_size = hashSize(format_);
     if (id.size != hash_size) {
       return std::nullopt;
@@ -1103,8 +1065,7 @@ namespace telar::git {
     return std::nullopt;
   }
 
-  template <Allocator Memory>
-  std::optional<ObjectId> CommitGraph<Memory>::id(std::uint32_t position) const noexcept {
+  std::optional<ObjectId> CommitGraph::id(std::uint32_t position) const noexcept {
     const auto* layer = layerOf(position);
     const auto hash_size = hashSize(format_);
     std::array<std::uint8_t, maximum_hash_size> name;
@@ -1115,8 +1076,7 @@ namespace telar::git {
     return ObjectId::fromBytes({name.data(), hash_size});
   }
 
-  template <Allocator Memory>
-  std::optional<typename CommitGraph<Memory>::Commit> CommitGraph<Memory>::commit(std::uint32_t position) const noexcept {
+  std::optional<CommitGraph::Commit> CommitGraph::commit(std::uint32_t position) const noexcept {
     const auto* layer = layerOf(position);
     const auto hash_size = hashSize(format_);
     std::array<std::uint8_t, maximum_hash_size + 16> record;
@@ -1139,8 +1099,7 @@ namespace telar::git {
     return commit;
   }
 
-  template <Allocator Memory>
-  bool CommitGraph<Memory>::visitParents(const Commit& commit, std::size_t maximum, void* target, void (*output)(void*, std::uint32_t)) const {
+  bool CommitGraph::visitParents(const Commit& commit, std::size_t maximum, void* target, void (*output)(void*, std::uint32_t)) const {
     const auto limit = commit.layer->base + commit.layer->count;
 
     if (commit.first == no_parent) {
@@ -1186,8 +1145,7 @@ namespace telar::git {
     }
   }
 
-  template <Allocator Memory>
-  const typename CommitGraph<Memory>::Layer* CommitGraph<Memory>::layerOf(std::uint32_t position) const noexcept {
+  const CommitGraph::Layer* CommitGraph::layerOf(std::uint32_t position) const noexcept {
     for (const auto& layer : layers_) {
       if (position - layer.base < layer.count) {
         return &layer;
@@ -1197,8 +1155,7 @@ namespace telar::git {
     return nullptr;
   }
 
-  template <Allocator Memory>
-  bool CommitGraph<Memory>::addLayer(int objects, const char* path) {
+  bool CommitGraph::addLayer(int objects, const char* path) {
     const auto hash_size = hashSize(format_);
     Layer layer;
     struct stat status{};
@@ -1285,7 +1242,5 @@ namespace telar::git {
     layers_.push_back(std::move(layer));
     return true;
   }
-
-  template class CommitGraph<Memory>;
 
 }

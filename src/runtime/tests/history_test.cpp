@@ -484,22 +484,20 @@ static void testQueuedCommandsSurviveDisconnect(Memory& memory) {
   check(result.entries.size() == 3);
 }
 
-template <ConcurrentAllocator Memory>
-class PausedHistoryService : public BackgroundService<Memory> {
+class PausedHistoryService : public BackgroundService {
 public:
-  using BackgroundService<Memory>::BackgroundService;
+  using BackgroundService::BackgroundService;
 
-  void process(std::span<const Byte> payload, EncodedReply<Memory>& reply) {
+  void process(std::span<const Byte> payload, EncodedReply<ConcurrentMemory>& reply) {
     ready.wait();
-    BackgroundService<Memory>::process(payload, reply);
+    BackgroundService::process(payload, reply);
   }
 
   std::latch ready{1};
 };
 
-template <ConcurrentAllocator Memory>
-static void testQueuedImportsSurviveDisconnect(Memory& memory) {
-  PausedHistoryService<Memory> service{memory, ":memory:"};
+static void testQueuedImportsSurviveDisconnect(ConcurrentMemory& memory) {
+  PausedHistoryService service{memory, ":memory:"};
 
   {
     RequestWorker worker{memory, service};

@@ -116,11 +116,11 @@ void testInputCapacity() {
   MemoryAdapter adapter{system};
   ConcurrentMemory& memory = adapter;
   RuntimeModel model{memory};
-  ClientStore<ConcurrentMemory> clients{memory};
-  LimitService<ConcurrentMemory> limits;
+  ClientStore clients{memory};
+  LimitService limits;
   NativeEventLoop<ConcurrentMemory> poller{memory};
   PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/input-capacity.sock"}};
-  WorkspaceService<ConcurrentMemory, decltype(poller)> workspaces{memory};
+  WorkspaceService<decltype(poller)> workspaces{memory};
   ClientPeer owner{memory, model, clients, ClientRole::interactive};
   ClientPeer control{memory, model, clients, ClientRole::control};
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
@@ -128,7 +128,7 @@ void testInputCapacity() {
   workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 1, .size = {80, 24, 0, 0}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
   const auto opened = owner.receive<PaneOpened>();
   auto& pane = panes.require(model.panes, opened.pane_id);
-  const std::vector<Byte> retained(Pane<ConcurrentMemory>::input_limit, 'a');
+  const std::vector<Byte> retained(Pane::input_limit, 'a');
 
   pane.input.append(retained);
   const auto revision = pane.input_revision;
@@ -157,7 +157,7 @@ void testInputCapacity() {
   check(pane.input_revision == revision && observations == 0 && pane.input.size() == retained.size());
 
   limits.deliver(model, clients);
-  LimitService<ConcurrentMemory>::query(control.session(), QueryLimits{.request_id = 3});
+  LimitService::query(control.session(), QueryLimits{.request_id = 3});
   const auto listed = control.receive<LimitList>();
 
   check(listed.entries.size() == 1 && listed.entries.front().hits == 2);

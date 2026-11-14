@@ -214,7 +214,6 @@ namespace telar::runtime::config {
     }
   }
 
-  template <Allocator Memory>
   String<Memory> IntegrationProvider::root(Memory& memory, const EnvironmentSource& environment, bool legacy) const {
     String<Memory> result{AllocatorRef<char, Memory>{memory}};
 
@@ -235,7 +234,5 @@ namespace telar::runtime::config {
     result += home_directory;
     return result;
   }
-
-  template String<Memory> IntegrationProvider::root<Memory>(Memory& memory, const EnvironmentSource& environment, bool legacy) const;
 
 }

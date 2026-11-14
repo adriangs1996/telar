@@ -233,15 +233,10 @@ export namespace telar::render {
 
   // Appends the OSC that begins document, or returns false when the document
   // exceeds max_document_bytes. On the primary screen, appendEnd closes it.
-  template <Allocator Memory, Allocator Output>
-  [[nodiscard]] bool appendSequence(const Document<Memory>& document, String<Output>& output);
+  [[nodiscard]] bool appendSequence(const Document<Memory>& document, String<Memory>& output);
 
   // Appends the OSC that ends the zone a document stands for.
-  template <Allocator Output>
-  void appendEnd(String<Output>& output);
-
-  extern template bool appendSequence(const Document<Memory>& document, String<Memory>& output);
-  extern template void appendEnd(String<Memory>& output);
+  void appendEnd(String<Memory>& output);
 
   // Replaces document with the one input encodes. Input comes from any program
   // in a pane, so every count, range, enumeration and reserved byte is checked;

@@ -77,15 +77,11 @@ namespace telar::git {
 
   }
 
-  template <Allocator Memory>
-  Status<Memory>::Status(Memory& memory)
+  Status::Status(Memory& memory)
       : branch(AllocatorRef<char, Memory>{memory}),
         upstream_name(AllocatorRef<char, Memory>{memory}) {}
 
-  template struct Status<Memory>;
-
-  template <Allocator Memory>
-  StatusReader<Memory>::StatusReader(Memory& memory, Limits limits)
+  StatusReader::StatusReader(Memory& memory, Limits limits)
       : memory_(memory),
         limits_(limits),
         status_(memory),
@@ -105,8 +101,7 @@ namespace telar::git {
         commit_(AllocatorRef<char, Memory>{memory}),
         parents_(AllocatorRef<ObjectId, Memory>{memory}) {}
 
-  template <Allocator Memory>
-  const Status<Memory>& StatusReader<Memory>::read(std::string_view directory) noexcept {
+  const Status& StatusReader::read(std::string_view directory) noexcept {
     try {
       readRepository(directory);
     } catch (...) {
@@ -122,13 +117,11 @@ namespace telar::git {
     return status_;
   }
 
-  template <Allocator Memory>
-  const Status<Memory>& StatusReader<Memory>::status() const noexcept {
+  const Status& StatusReader::status() const noexcept {
     return status_;
   }
 
-  template <Allocator Memory>
-  void StatusReader<Memory>::visitRemotes(void* target, void (*visit)(void*, std::string_view)) noexcept {
+  void StatusReader::visitRemotes(void* target, void (*visit)(void*, std::string_view)) noexcept {
     if (status_.repository != RepositoryState::ready) {
       return;
     }
@@ -145,8 +138,7 @@ namespace telar::git {
     }
   }
 
-  template <Allocator Memory>
-  std::size_t StatusReader<Memory>::stashes(std::size_t limit) const noexcept {
+  std::size_t StatusReader::stashes(std::size_t limit) const noexcept {
     if (status_.repository != RepositoryState::ready || !common_) {
       return 0;
     }
@@ -163,8 +155,7 @@ namespace telar::git {
     }
   }
 
-  template <Allocator Memory>
-  void StatusReader<Memory>::visitBranches(std::size_t limit, void* target, void (*visit)(void*, std::string_view)) const noexcept {
+  void StatusReader::visitBranches(std::size_t limit, void* target, void (*visit)(void*, std::string_view)) const noexcept {
     if (status_.repository != RepositoryState::ready || !common_) {
       return;
     }
@@ -205,8 +196,7 @@ namespace telar::git {
     }
   }
 
-  template <Allocator Memory>
-  bool StatusReader<Memory>::changed() const noexcept {
+  bool StatusReader::changed() const noexcept {
     if (!gitdir_ || status_.repository != RepositoryState::ready) {
       return true;
     }
@@ -214,8 +204,7 @@ namespace telar::git {
     return probe() != inputs_ || (worktree_ && fingerprintAt(gitdir_.get(), "index") != index_.fingerprint);
   }
 
-  template <Allocator Memory>
-  void StatusReader<Memory>::looseBranches(int directory, std::string& name, unsigned depth, std::size_t limit, std::size_t& count, void* target, void (*visit)(void*, std::string_view)) const {
+  void StatusReader::looseBranches(int directory, std::string& name, unsigned depth, std::size_t limit, std::size_t& count, void* target, void (*visit)(void*, std::string_view)) const {
     constexpr unsigned maximum_depth = 16;
     runtime::DirectoryStream entries{directory};
 
@@ -252,8 +241,7 @@ namespace telar::git {
     }
   }
 
-  template <Allocator Memory>
-  void StatusReader<Memory>::reset(RepositoryState state) {
+  void StatusReader::reset(RepositoryState state) {
     status_.repository = state;
     status_.bare = false;
     status_.linked_worktree = false;
@@ -271,8 +259,7 @@ namespace telar::git {
     status_.changes = {};
   }
 
-  template <Allocator Memory>
-  void StatusReader<Memory>::forget() noexcept {
+  void StatusReader::forget() noexcept {
     worktree_.reset();
     gitdir_.reset();
     common_.reset();
@@ -290,8 +277,7 @@ namespace telar::git {
     refs_current_ = false;
   }
 
-  template <Allocator Memory>
-  Inputs StatusReader<Memory>::probe() const noexcept {
+  Inputs StatusReader::probe() const noexcept {
     Inputs inputs;
 
     inputs.head = fingerprintAt(gitdir_.get(), "HEAD");
@@ -304,8 +290,7 @@ namespace telar::git {
     return inputs;
   }
 
-  template <Allocator Memory>
-  Fingerprint StatusReader<Memory>::referenceFingerprint(std::string_view name) const noexcept {
+  Fingerprint StatusReader::referenceFingerprint(std::string_view name) const noexcept {
     PathName path;
     if (name.empty() || !path.assign({name})) {
       return {};
@@ -314,8 +299,7 @@ namespace telar::git {
     return fingerprintAt(perWorktreeReference(name) ? gitdir_.get() : common_.get(), path.c_str());
   }
 
-  template <Allocator Memory>
-  void StatusReader<Memory>::readRepository(std::string_view directory) {
+  void StatusReader::readRepository(std::string_view directory) {
     status_.work = {};
     objects_.objects_read = 0;
     walk_.commits_read = 0;
@@ -413,8 +397,7 @@ namespace telar::git {
     status_.work.bytes_hashed = unstaged_.bytes_hashed;
   }
 
-  template <Allocator Memory>
-  Discovered StatusReader<Memory>::discover(std::string_view directory, FileDescriptor& worktree, FileDescriptor& gitdir, FileDescriptor& common) const {
+  Discovered StatusReader::discover(std::string_view directory, FileDescriptor& worktree, FileDescriptor& gitdir, FileDescriptor& common) const {
     PathName start;
     if (directory.empty() || directory.front() != '/' || !start.assign({directory})) {
       return Discovered::error;
@@ -489,8 +472,7 @@ namespace telar::git {
     return Discovered::none;
   }
 
-  template <Allocator Memory>
-  Discovered StatusReader<Memory>::readGitFile(FileDescriptor& current, const struct stat& current_status, const struct stat& dot, FileDescriptor& worktree, FileDescriptor& gitdir, FileDescriptor& common) const {
+  Discovered StatusReader::readGitFile(FileDescriptor& current, const struct stat& current_status, const struct stat& dot, FileDescriptor& worktree, FileDescriptor& gitdir, FileDescriptor& common) const {
     if (!ownedByCaller(current_status) || !ownedByCaller(dot)) {
       return Discovered::not_owned;
     }
@@ -527,8 +509,7 @@ namespace telar::git {
     return checked;
   }
 
-  template <Allocator Memory>
-  Discovered StatusReader<Memory>::checkGitDirectory(int directory, FileDescriptor& common) const {
+  Discovered StatusReader::checkGitDirectory(int directory, FileDescriptor& common) const {
     struct stat status{};
     if (::fstat(directory, &status) != 0) {
       return Discovered::error;
@@ -585,8 +566,7 @@ namespace telar::git {
     return Discovered::repository;
   }
 
-  template <Allocator Memory>
-  RepositoryState StatusReader<Memory>::openConfiguredWorktree() {
+  RepositoryState StatusReader::openConfiguredWorktree() {
     PathName path;
     if (configured_worktree_.empty() || !path.assign({configured_worktree_})) {
       return RepositoryState::invalid;
@@ -606,8 +586,7 @@ namespace telar::git {
     return RepositoryState::ready;
   }
 
-  template <Allocator Memory>
-  RepositoryState StatusReader<Memory>::loadConfig() {
+  RepositoryState StatusReader::loadConfig() {
     const auto identity = fingerprintAt(common_.get(), "config");
     const auto worktree_identity = fingerprintAt(gitdir_.get(), "config.worktree");
     if (config_loaded_ && identity == inputs_.config && (!config_.worktree_config || worktree_identity == inputs_.worktree_config)) {
@@ -692,8 +671,7 @@ namespace telar::git {
     return config_state_;
   }
 
-  template <Allocator Memory>
-  void StatusReader<Memory>::extension(const ConfigEntry& entry) {
+  void StatusReader::extension(const ConfigEntry& entry) {
     const auto value = entry.value.value_or("");
 
     if (asciiEqualIgnoreCase(entry.key, "objectformat")) {
@@ -720,8 +698,7 @@ namespace telar::git {
     }
   }
 
-  template <Allocator Memory>
-  void StatusReader<Memory>::readReferences() {
+  void StatusReader::readReferences() {
     resolveReferences();
     // A large packed-refs is read again when a ref changes rather than kept.
     constexpr std::size_t retained = 1 << 20;
@@ -732,8 +709,7 @@ namespace telar::git {
     }
   }
 
-  template <Allocator Memory>
-  void StatusReader<Memory>::resolveReferences() {
+  void StatusReader::resolveReferences() {
     refs_current_ = true;
     status_.head = HeadState::unknown;
     status_.branch.clear();
@@ -796,8 +772,7 @@ namespace telar::git {
     readUpstream();
   }
 
-  template <Allocator Memory>
-  void StatusReader<Memory>::readUpstream() {
+  void StatusReader::readUpstream() {
     if (!head_reference_.starts_with("refs/heads/")) {
       return;
     }
@@ -901,8 +876,7 @@ namespace telar::git {
     }
   }
 
-  template <Allocator Memory>
-  RefLookup StatusReader<Memory>::resolve(std::string_view name, ObjectId& id, Fingerprint* identity) {
+  RefLookup StatusReader::resolve(std::string_view name, ObjectId& id, Fingerprint* identity) {
     for (std::size_t depth = 0; depth <= limits_.symbolic_depth; ++depth) {
       PathName path;
       if (!validReferenceName(name, limits_.path_length) || !path.assign({name})) {
@@ -950,8 +924,7 @@ namespace telar::git {
     return RefLookup::invalid;
   }
 
-  template <Allocator Memory>
-  RefLookup StatusReader<Memory>::packedReference(std::string_view name, ObjectId& id) const {
+  RefLookup StatusReader::packedReference(std::string_view name, ObjectId& id) const {
     if (packed_state_ == ReadStatus::missing) {
       return RefLookup::missing;
     }
@@ -990,8 +963,7 @@ namespace telar::git {
     }
   }
 
-  template <Allocator Memory>
-  void StatusReader<Memory>::readDivergence() {
+  void StatusReader::readDivergence() {
     if (status_.upstream != UpstreamState::tracking || status_.head != HeadState::branch) {
       status_.divergence = status_.upstream == UpstreamState::unknown || status_.head == HeadState::unknown ? Accuracy::unknown : Accuracy::not_applicable;
       status_.ahead = 0;
@@ -1022,8 +994,7 @@ namespace telar::git {
     status_.behind = divergence_.behind;
   }
 
-  template <Allocator Memory>
-  void StatusReader<Memory>::readChanges() {
+  void StatusReader::readChanges() {
     if (!worktree_) {
       status_.staged = Accuracy::not_applicable;
       status_.unstaged = Accuracy::not_applicable;
@@ -1066,8 +1037,7 @@ namespace telar::git {
     }
   }
 
-  template <Allocator Memory>
-  bool StatusReader<Memory>::compareStaged() {
+  bool StatusReader::compareStaged() {
     std::optional<ObjectId> tree;
 
     if (status_.head_id) {
@@ -1085,7 +1055,5 @@ namespace telar::git {
 
     return staged_.compare(objects_, index_, tree, limits_, staged_counts_);
   }
-
-  template class StatusReader<Memory>;
 
 }

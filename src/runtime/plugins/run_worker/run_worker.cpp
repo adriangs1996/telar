@@ -1009,8 +1009,7 @@ namespace telar::runtime::plugins {
     return true;
   }
 
-  template <Allocator Memory>
-  Host<Memory>::Host(Memory& memory, const char* entry_path, const ServiceSpec* traffic)
+  Host::Host(Memory& memory, const char* entry_path, const ServiceSpec* traffic)
       : memory_(memory),
         vm_(erased_, {Limits::lua_bytes, Limits::lua_instructions, Limits::callback_deadline}) {
     std::array<char, PATH_MAX> resolved;
@@ -1038,8 +1037,7 @@ namespace telar::runtime::plugins {
     lua_settop(vm_.state(), 0);
   }
 
-  template <Allocator Memory>
-  tbc::view<std::span<const Byte>, tbc::lt::a> Host<Memory>::trafficSetup(tbc::view<std::span<Byte>, tbc::lt::a> output) {
+  tbc::view<std::span<const Byte>, tbc::lt::a> Host::trafficSetup(tbc::view<std::span<Byte>, tbc::lt::a> output) {
     if (!traffic_) {
       throw EncodingError{"Traffic worker is not configured"};
     }
@@ -1047,8 +1045,7 @@ namespace telar::runtime::plugins {
     return traffic_->finish(0, output);
   }
 
-  template <Allocator Memory>
-  tbc::view<std::span<const Byte>, tbc::lt::a> Host<Memory>::invokeTraffic(const TrafficEvent& event, tbc::view<std::span<Byte>, tbc::lt::a> output) {
+  tbc::view<std::span<const Byte>, tbc::lt::a> Host::invokeTraffic(const TrafficEvent& event, tbc::view<std::span<Byte>, tbc::lt::a> output) {
     if (!traffic_) {
       throw EncodingError{"Traffic worker is not configured"};
     }
@@ -1068,8 +1065,7 @@ namespace telar::runtime::plugins {
     return traffic_->finish(event.event_id, output);
   }
 
-  template <Allocator Memory>
-  tbc::view<std::span<const Byte>, tbc::lt::a> Host<Memory>::invoke(const ExchangeView& exchange, tbc::view<std::span<Byte>, tbc::lt::a> output) {
+  tbc::view<std::span<const Byte>, tbc::lt::a> Host::invoke(const ExchangeView& exchange, tbc::view<std::span<Byte>, tbc::lt::a> output) {
     TELAR_TRACE("plugins.invokeExchange");
     auto* state = vm_.state();
 
@@ -1092,13 +1088,11 @@ namespace telar::runtime::plugins {
     return output.first(invocation.encoded_bytes);
   }
 
-  template <Allocator Memory>
-  tbc::view<void*, tbc::lt::static_storage> Host<Memory>::callContext(lua_State* state) noexcept {
+  tbc::view<void*, tbc::lt::static_storage> Host::callContext(lua_State* state) noexcept {
     return lua_touserdata(state, 1);
   }
 
-  template <Allocator Memory>
-  int Host<Memory>::invokeTrafficCallback(lua_State* state) {
+  int Host::invokeTrafficCallback(lua_State* state) {
     auto& invocation = *static_cast<TrafficInvocation*>(callContext(state));
     const auto event = invocation.event;
     std::array<char, 1024> error{};
@@ -1113,21 +1107,18 @@ namespace telar::runtime::plugins {
     return luaL_error(state, "%s", error.data());
   }
 
-  template <Allocator Memory>
-  auto Host<Memory>::context(lua_State* state) noexcept -> tbc::view<Host&, tbc::lt::static_storage> {
+  auto Host::context(lua_State* state) noexcept -> tbc::view<Host&, tbc::lt::static_storage> {
     return *static_cast<Host*>(callContext(state));
   }
 
-  template <Allocator Memory>
-  std::string_view Host<Memory>::errorMessage(lua_State* state) {
+  std::string_view Host::errorMessage(lua_State* state) {
     std::size_t size = 0;
     const auto* bytes = lua_tolstring(state, -1, &size);
 
     return bytes == nullptr ? std::string_view{"unknown Lua error"} : std::string_view{bytes, size};
   }
 
-  template <Allocator Memory>
-  int Host<Memory>::install(lua_State* state) {
+  int Host::install(lua_State* state) {
     auto& host = context(state);
 
     try {
@@ -1148,8 +1139,7 @@ namespace telar::runtime::plugins {
     }
   }
 
-  template <Allocator Memory>
-  int Host<Memory>::loadEntrypoint(lua_State* state) {
+  int Host::loadEntrypoint(lua_State* state) {
     auto& entry = *static_cast<Entrypoint*>(lua_touserdata(state, 1));
     if (luaL_loadbufferx(state, entry.source.data(), entry.source.size(), "@tap-plugin.lua", "t") != LUA_OK) {
       return lua_error(state);
@@ -1174,8 +1164,7 @@ namespace telar::runtime::plugins {
     return 0;
   }
 
-  template <Allocator Memory>
-  int Host<Memory>::invokeCallback(lua_State* state) {
+  int Host::invokeCallback(lua_State* state) {
     auto& invocation = *static_cast<Invocation*>(lua_touserdata(state, 1));
 
     lua_rawgeti(state, LUA_REGISTRYINDEX, invocation.host.callback_reference_);
@@ -1198,8 +1187,7 @@ namespace telar::runtime::plugins {
     }
   }
 
-  template <Allocator Memory>
-  int Host<Memory>::redactSecrets(lua_State* state) {
+  int Host::redactSecrets(lua_State* state) {
     std::size_t size = 0;
     const auto* bytes = lua_tolstring(state, 1, &size);
     if (bytes == nullptr) {
@@ -1214,7 +1202,6 @@ namespace telar::runtime::plugins {
     return 1;
   }
 
-  template <Allocator Memory>
   void runWorker(Memory& memory, const char* entry_path, bool traffic) {
     PipeStream stream{STDIN_FILENO, STDOUT_FILENO};
     FrameChannel channel{stream};
@@ -1250,8 +1237,5 @@ namespace telar::runtime::plugins {
       eraseSensitive(output.bytes().data(), encoded.size());
     }
   }
-
-  template class Host<Memory>;
-  template void runWorker<Memory>(Memory& memory, const char* entry_path, bool traffic);
 
 }

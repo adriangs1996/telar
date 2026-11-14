@@ -2468,7 +2468,6 @@ mkdir -p "$HOME/.local/bin" && "$telar" cli install --dir "$HOME/.local/bin" >/d
 
 namespace telar::runtime::cli {
 
-  template <Allocator Memory>
   int runMachine(Memory& memory, const MachineOptions& options) {
     if (options.action == MachineOptions::Action::receive_config) {
       return config_receive::run();
@@ -2523,7 +2522,5 @@ namespace telar::runtime::cli {
       return machine::report(error);
     }
   }
-
-  template int runMachine<Memory>(Memory& memory, const MachineOptions& options);
 
 }

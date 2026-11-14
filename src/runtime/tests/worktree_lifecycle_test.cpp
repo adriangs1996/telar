@@ -83,11 +83,11 @@ static void testDeferredClosure(bool worktree) {
   MemoryAdapter adapter{system};
   ConcurrentMemory& memory = adapter;
   RuntimeModel model{memory};
-  ClientStore<ConcurrentMemory> clients{memory};
-  LimitService<ConcurrentMemory> limits;
+  ClientStore clients{memory};
+  LimitService limits;
   NativeEventLoop<ConcurrentMemory> poller{memory};
   PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/closure-fixture.sock"}};
-  WorkspaceService<ConcurrentMemory, decltype(poller)> workspaces{memory};
+  WorkspaceService<decltype(poller)> workspaces{memory};
   ClientPeer owner{memory, model, clients, ClientRole::interactive};
   ClientPeer observer{memory, model, clients, ClientRole::interactive};
   constexpr TerminalSize size{80, 24, 0, 0};

@@ -74,11 +74,11 @@ static void expectFailure(Operation operation, FailureCode code, std::string_vie
 
 static void testLaunchScopes(ConcurrentMemory& memory) {
   RuntimeModel model{memory};
-  ClientStore<ConcurrentMemory> clients{memory};
-  LimitService<ConcurrentMemory> limits;
+  ClientStore clients{memory};
+  LimitService limits;
   NativeEventLoop<ConcurrentMemory> poller{memory};
   PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/launch-fixture.sock"}};
-  WorkspaceService<ConcurrentMemory, decltype(poller)> workspaces{memory};
+  WorkspaceService<decltype(poller)> workspaces{memory};
   ClientPeer owner{memory, model, clients, ClientRole::interactive};
   ClientPeer outsider{memory, model, clients, ClientRole::interactive};
 
@@ -144,7 +144,7 @@ static void testLaunchScopes(ConcurrentMemory& memory) {
       FailureCode::invalid_request,
       unavailable);
 
-  owner.session().attachments.push_back(makeOwned<Attachment<ConcurrentMemory>>(memory, memory, owner.session().graphics_credit, pane.id, pane.media));
+  owner.session().attachments.push_back(makeOwned<Attachment>(memory, memory, owner.session().graphics_credit, pane.id, pane.media));
   panes.remove(model, clients, pane.id);
   expectFailure([&] {
     resolveLaunchDirectory(model, owner.session(), launch, directory);
@@ -155,15 +155,15 @@ static void testLaunchScopes(ConcurrentMemory& memory) {
 
 static void testEmptyDefaultTab(ConcurrentMemory& memory) {
   RuntimeModel model{memory};
-  ClientStore<ConcurrentMemory> clients{memory};
-  LimitService<ConcurrentMemory> limits;
+  ClientStore clients{memory};
+  LimitService limits;
   NativeEventLoop<ConcurrentMemory> poller{memory};
   PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/launch-fixture.sock"}};
-  WorkspaceService<ConcurrentMemory, decltype(poller)> workspaces{memory};
+  WorkspaceService<decltype(poller)> workspaces{memory};
   ClientPeer owner{memory, model, clients, ClientRole::interactive};
   ClientPeer spectator{memory, model, clients, ClientRole::interactive};
   const auto identity = model.workspaces.nextId();
-  auto workspace = makeOwned<Workspace<ConcurrentMemory>>(memory, memory, identity, "/", "Existing");
+  auto workspace = makeOwned<Workspace>(memory, memory, identity, "/", "Existing");
 
   workspace->tabs.emplace_back(memory, model.next_tab_id++, "Default");
   workspace->tabs.emplace_back(memory, model.next_tab_id++, "Running");
@@ -210,14 +210,14 @@ static void testEmptyDefaultTab(ConcurrentMemory& memory) {
 
 static void testFailedLaunchLease(ConcurrentMemory& memory) {
   RuntimeModel model{memory};
-  ClientStore<ConcurrentMemory> clients{memory};
-  LimitService<ConcurrentMemory> limits;
+  ClientStore clients{memory};
+  LimitService limits;
   NativeEventLoop<ConcurrentMemory> poller{memory};
   PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/launch-fixture.sock"}};
-  WorkspaceService<ConcurrentMemory, decltype(poller)> workspaces{memory};
+  WorkspaceService<decltype(poller)> workspaces{memory};
   ClientPeer owner{memory, model, clients, ClientRole::interactive};
   const auto identity = model.workspaces.nextId();
-  auto workspace = makeOwned<Workspace<ConcurrentMemory>>(memory, memory, identity, "/", "Existing");
+  auto workspace = makeOwned<Workspace>(memory, memory, identity, "/", "Existing");
 
   workspace->tabs.emplace_back(memory, model.next_tab_id++, "Default");
   auto& stored = *workspace;
@@ -238,11 +238,11 @@ static void testFailedLaunchLease(ConcurrentMemory& memory) {
 
 static void testPaneReuseAndBackgroundColors(ConcurrentMemory& memory) {
   RuntimeModel model{memory};
-  ClientStore<ConcurrentMemory> clients{memory};
-  LimitService<ConcurrentMemory> limits;
+  ClientStore clients{memory};
+  LimitService limits;
   NativeEventLoop<ConcurrentMemory> poller{memory};
   PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/launch-fixture.sock"}};
-  WorkspaceService<ConcurrentMemory, decltype(poller)> workspaces{memory};
+  WorkspaceService<decltype(poller)> workspaces{memory};
   ClientPeer owner{memory, model, clients, ClientRole::interactive};
 
   owner.session().colors.foreground = std::array<Byte, 3>{17, 34, 51};
@@ -273,11 +273,11 @@ static void testPaneReuseAndBackgroundColors(ConcurrentMemory& memory) {
 
 static void testExhaustedTabIdentities(ConcurrentMemory& memory) {
   RuntimeModel model{memory};
-  ClientStore<ConcurrentMemory> clients{memory};
-  LimitService<ConcurrentMemory> limits;
+  ClientStore clients{memory};
+  LimitService limits;
   NativeEventLoop<ConcurrentMemory> poller{memory};
   PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/launch-fixture.sock"}};
-  WorkspaceService<ConcurrentMemory, decltype(poller)> workspaces{memory};
+  WorkspaceService<decltype(poller)> workspaces{memory};
   ClientPeer owner{memory, model, clients, ClientRole::interactive};
   const Launch launch{.cwd = "/", .arguments = arguments};
 

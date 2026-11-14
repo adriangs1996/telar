@@ -63,7 +63,7 @@ import telar.runtime.shell_integration.words;
 // instantiated for them.
 namespace telar::runtime {
 
-  using RuntimeBackground = BackgroundPool<ConcurrentMemory, BackgroundService<ConcurrentMemory>, PathService<ConcurrentMemory>, EditorService<ConcurrentMemory>, SuggestionService<ConcurrentMemory>>;
+  using RuntimeBackground = BackgroundPool<BackgroundService, PathService<ConcurrentMemory>, EditorService, SuggestionService>;
 
 }
 
@@ -71,17 +71,14 @@ namespace telar::runtime {
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory>
     class AgentSnapshotBuilder {
     public:
-      void publish(ClientSession<Memory>& client, const RuntimeModel<Memory>& model, const AgentRegistry<Memory>& registry);
+      void publish(ClientSession& client, const RuntimeModel& model, const AgentRegistry<ConcurrentMemory>& registry);
 
     private:
-      std::array<FixedText<48>, AgentRegistry<Memory>::capacity> directories_;
-      std::array<FixedText<96>, AgentRegistry<Memory>::capacity> placeholders_;
+      std::array<FixedText<48>, AgentRegistry<ConcurrentMemory>::capacity> directories_;
+      std::array<FixedText<96>, AgentRegistry<ConcurrentMemory>::capacity> placeholders_;
     };
-
-    extern template class AgentSnapshotBuilder<ConcurrentMemory>;
 
   }
 }
@@ -90,66 +87,66 @@ export {
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory, EventLoop Poller, HistoryEventSink History = DiscardedHistory>
+    template <EventLoop Poller, HistoryEventSink History = DiscardedHistory>
     class AgentService {
     public:
-      using Panes = PaneService<Memory, Poller, History>;
+      using Panes = PaneService<Poller, History>;
 
-      explicit AgentService(Memory& memory);
+      explicit AgentService(ConcurrentMemory& memory);
 
       void enableDescriptions(bool enabled) noexcept;
 
-      void observeInput(const Pane<Memory>& pane, std::span<const Byte> bytes);
+      void observeInput(const Pane& pane, std::span<const Byte> bytes);
 
       std::optional<DescriptionRequest> nextDescription();
 
       std::optional<HistorySessionTitle> completeDescription(const DescriptionResult& result);
 
-      void report(RuntimeModel<Memory>& model, ClientSession<Memory>& client, const ReportAgent& request);
+      void report(RuntimeModel& model, ClientSession& client, const ReportAgent& request);
 
-      void reportSession(RuntimeModel<Memory>& model, ClientSession<Memory>& client, const ReportAgentSession& request);
+      void reportSession(RuntimeModel& model, ClientSession& client, const ReportAgentSession& request);
 
-      void reportTitle(RuntimeModel<Memory>& model, ClientSession<Memory>& client, const ReportAgentTitle& request);
+      void reportTitle(RuntimeModel& model, ClientSession& client, const ReportAgentTitle& request);
 
       std::optional<SessionFileRequest> nextSessionFile(std::chrono::steady_clock::time_point now) const;
 
       void completeSessionFile(const SessionFileResult& result, std::chrono::steady_clock::time_point now);
 
-      bool reportProgress(RuntimeModel<Memory>& model, ClientSession<Memory>& client, const ReportAgentProgress& request);
+      bool reportProgress(RuntimeModel& model, ClientSession& client, const ReportAgentProgress& request);
 
-      tbc::view<Pane<Memory>&, tbc::lt::a> validateCommand(tbc::view<RuntimeModel<Memory>&, tbc::lt::a> model, ClientSession<Memory>& client, const ReportAgentCommand& request);
+      tbc::view<Pane&, tbc::lt::a> validateCommand(tbc::view<RuntimeModel&, tbc::lt::a> model, ClientSession& client, const ReportAgentCommand& request);
 
       // Sends text to a pane, which its caller says no attached window focuses.
-      void sendText(RuntimeModel<Memory>& model, Panes& panes, ClientSession<Memory>& client, const SendPaneText& request, bool focused);
+      void sendText(RuntimeModel& model, Panes& panes, ClientSession& client, const SendPaneText& request, bool focused);
 
       void acknowledge(const AcknowledgeAgent& request) noexcept;
 
       // Interrupts a pane's agent, which its caller says no attached window focuses.
-      void interrupt(RuntimeModel<Memory>& model, Panes& panes, ClientSession<Memory>& client, const InterruptAgent& request, bool focused);
+      void interrupt(RuntimeModel& model, Panes& panes, ClientSession& client, const InterruptAgent& request, bool focused);
 
       // Whether an attached window focuses a pane.
-      static bool focused(const ClientStore<Memory>& clients, const ClientLayouts<Memory>& layouts, std::uint64_t pane) noexcept;
+      static bool focused(const ClientStore& clients, const ClientLayouts& layouts, std::uint64_t pane) noexcept;
 
-      bool blocked(const Pane<Memory>& pane) const noexcept;
+      bool blocked(const Pane& pane) const noexcept;
 
-      void query(const RuntimeModel<Memory>& model, ClientSession<Memory>& client);
+      void query(const RuntimeModel& model, ClientSession& client);
 
       std::uint64_t revision() const noexcept;
 
       const Agent* find(std::uint64_t pane, std::uint64_t generation) const noexcept;
 
-      void observeProcess(Pane<Memory>& pane, std::optional<ProcessIdentity> identity, AgentProvider provider);
+      void observeProcess(Pane& pane, std::optional<ProcessIdentity> identity, AgentProvider provider);
 
-      void observeProcess(Pane<Memory>& pane, const ProcessProbeResult& observation);
+      void observeProcess(Pane& pane, const ProcessProbeResult& observation);
 
-      void observeScreen(Pane<Memory>& pane, const AgentSignal& signal, ObservationTime time);
+      void observeScreen(Pane& pane, const AgentSignal& signal, ObservationTime time);
 
-      void refresh(RuntimeModel<Memory>& model, Panes& panes, const ClientStore<Memory>& clients, const ClientLayouts<Memory>& layouts, std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now());
+      void refresh(RuntimeModel& model, Panes& panes, const ClientStore& clients, const ClientLayouts& layouts, std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now());
 
-      Agent& ensure(Pane<Memory>& pane);
+      Agent& ensure(Pane& pane);
 
       // Sends the agent sounds reported since the last delivery to subscribed clients.
-      void deliverSounds(ClientStore<Memory>& clients) noexcept;
+      void deliverSounds(ClientStore& clients) noexcept;
 
     private:
       // Stamps an agent whose projection changed, named by its pane: it may queue for a description and
@@ -160,11 +157,11 @@ export {
       static bool alerts(const Agent& agent, AgentStatus previous) noexcept;
 
       // Ends an interrupt once its pane settles; whether the agent's projection changed.
-      static bool settleInterrupt(Panes& panes, bool focused, Pane<Memory>& pane, Agent& agent, std::chrono::steady_clock::time_point now);
+      static bool settleInterrupt(Panes& panes, bool focused, Pane& pane, Agent& agent, std::chrono::steady_clock::time_point now);
 
-      static Pane<Memory>& require(PaneStore<Memory>& panes, std::uint64_t identity, std::uint64_t generation);
+      static Pane& require(PaneStore& panes, std::uint64_t identity, std::uint64_t generation);
 
-      tbc::view<Pane<Memory>&, tbc::lt::a> authorize(tbc::view<PaneStore<Memory>&, tbc::lt::a> panes, const ClientSession<Memory>& client, std::uint64_t pane_id, std::uint64_t generation, AgentProvider provider);
+      tbc::view<Pane&, tbc::lt::a> authorize(tbc::view<PaneStore&, tbc::lt::a> panes, const ClientSession& client, std::uint64_t pane_id, std::uint64_t generation, AgentProvider provider);
 
       // Queues an agent's sound, delivered once no client is borrowed.
       // Agent sounds queued while a client is borrowed, delivered to the subscribed clients afterwards.
@@ -181,9 +178,9 @@ export {
         std::size_t count_ = 0;
       };
 
-      AgentRegistry<Memory> agents_;
-      DescriptionQueue<Memory> descriptions_;
-      AgentSnapshotBuilder<Memory> snapshots_;
+      AgentRegistry<ConcurrentMemory> agents_;
+      DescriptionQueue descriptions_;
+      AgentSnapshotBuilder snapshots_;
       PromptBudget prompt_budget_;
       std::uint64_t sequence_ = 0;
       std::uint64_t session_watch_revision_ = 0;
@@ -191,8 +188,8 @@ export {
       SoundQueue sounds_;
     };
 
-    extern template class AgentService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>, RuntimeBackground>;
-    extern template class AgentService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>, DiscardedHistory>;
+    extern template class AgentService<NativeEventLoop<ConcurrentMemory>, RuntimeBackground>;
+    extern template class AgentService<NativeEventLoop<ConcurrentMemory>, DiscardedHistory>;
 
   }
 }
@@ -211,10 +208,7 @@ export {
     void ownDirectory(tbc::view<Launch&, tbc::lt::a> launch, tbc::view<LaunchDirectory&, tbc::lt::a> storage, std::string_view directory);
 
     // The launch with the directory of the pane it names as its source, copied into `directory`.
-    template <Allocator Memory>
-    tbc::view<Launch, tbc::lt::a> resolveLaunchDirectory(const RuntimeModel<Memory>& model, const ClientSession<Memory>& client, tbc::view<Launch, tbc::lt::a> launch, tbc::view<LaunchDirectory&, tbc::lt::a> directory, LaunchDirectoryScope scope = {});
-
-    extern template tbc::view<Launch, tbc::lt::a> resolveLaunchDirectory<ConcurrentMemory>(const RuntimeModel<ConcurrentMemory>& model, const ClientSession<ConcurrentMemory>& client, tbc::view<Launch, tbc::lt::a> launch, tbc::view<LaunchDirectory&, tbc::lt::a> directory, LaunchDirectoryScope scope);
+    tbc::view<Launch, tbc::lt::a> resolveLaunchDirectory(const RuntimeModel& model, const ClientSession& client, tbc::view<Launch, tbc::lt::a> launch, tbc::view<LaunchDirectory&, tbc::lt::a> directory, LaunchDirectoryScope scope = {});
 
   }
 }
@@ -247,15 +241,14 @@ export {
   namespace telar::runtime {
 
     // Shows plugins' notifications on the clients and reports their dropped work as limits.
-    template <Allocator Memory>
     class PluginDelivery {
     public:
-      explicit PluginDelivery(LimitService<Memory>& limits) noexcept;
+      explicit PluginDelivery(LimitService& limits) noexcept;
 
       // Generic over the caller's plugin event source; the metrics it reads are reported in the
       // implementation unit.
       template <plugins::EventSource Source>
-      TBC_HOT_PATH inline void collect(ClientStore<Memory>& clients, Source& source) {
+      TBC_HOT_PATH inline void collect(ClientStore& clients, Source& source) {
         source.collect([&](const plugins::EffectBatch& batch) {
           for (const auto& notification : std::span{batch.notifications}.first(batch.count)) {
             publish(clients, notification);
@@ -269,19 +262,14 @@ export {
       // Reports the work the plugins dropped since the last collection as limits.
       void reportMetrics(const plugins::TapMetrics& now);
 
-      static void publish(ClientStore<Memory>& clients, const NotificationBody& body);
+      static void publish(ClientStore& clients, const NotificationBody& body);
 
       void reportGrowth(std::uint64_t current, std::uint64_t previous, const LimitReach& reach);
 
       static constexpr std::size_t validation_bytes = 512;
-      LimitService<Memory>& limits_;
+      LimitService& limits_;
       plugins::TapMetrics previous_;
     };
-
-    template <Allocator Memory>
-    PluginDelivery(LimitService<Memory>& limits) -> PluginDelivery<Memory>;
-
-    extern template class PluginDelivery<ConcurrentMemory>;
 
   }
 }
@@ -290,62 +278,62 @@ export {
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory, EventLoop Poller, HistoryEventSink History = DiscardedHistory>
+    template <EventLoop Poller, HistoryEventSink History = DiscardedHistory>
     class WorkspaceService {
     public:
-      using Panes = PaneService<Memory, Poller, History>;
+      using Panes = PaneService<Poller, History>;
 
-      explicit WorkspaceService(Memory& memory);
+      explicit WorkspaceService(ConcurrentMemory& memory);
 
-      static Workspace<Memory>& require(WorkspaceStore<Memory>& workspaces, WorkspaceLocation location);
+      static Workspace& require(WorkspaceStore& workspaces, WorkspaceLocation location);
 
-      static Tab<Memory>& requireTab(WorkspaceStore<Memory>& workspaces, TabLocation location);
+      static Tab& requireTab(WorkspaceStore& workspaces, TabLocation location);
 
       // The colors of a workspace's geometry owner, which its new panes take.
-      static tbc::view<const ConfigureTerminalColors*, tbc::lt::a> ownerColors(const WorkspaceStore<Memory>& workspaces, tbc::view<const ClientStore<Memory>&, tbc::lt::a> clients, std::uint64_t workspace) noexcept;
+      static tbc::view<const ConfigureTerminalColors*, tbc::lt::a> ownerColors(const WorkspaceStore& workspaces, tbc::view<const ClientStore&, tbc::lt::a> clients, std::uint64_t workspace) noexcept;
 
       // Whether a workspace's geometry owner draws telar's editor, so its new panes' shells print no prompt.
-      static bool ownerBarePrompt(const WorkspaceStore<Memory>& workspaces, const ClientStore<Memory>& clients, std::uint64_t workspace) noexcept;
+      static bool ownerBarePrompt(const WorkspaceStore& workspaces, const ClientStore& clients, std::uint64_t workspace) noexcept;
 
-      void open(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients, std::uint64_t client_id, const OpenPane& request);
+      void open(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const OpenPane& request);
 
-      void createWorkspace(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients, std::uint64_t client_id, const CreateWorkspace& request);
+      void createWorkspace(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreateWorkspace& request);
 
-      void createTab(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients, std::uint64_t client_id, const CreateTab& request);
+      void createTab(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreateTab& request);
 
       // A tab launched without a client, in the colors of its workspace's geometry owner.
-      std::uint64_t launchBackground(RuntimeModel<Memory>& model, Panes& panes, const ConfigureTerminalColors* owner_colors, bool bare_prompt, const LaunchTab& request);
+      std::uint64_t launchBackground(RuntimeModel& model, Panes& panes, const ConfigureTerminalColors* owner_colors, bool bare_prompt, const LaunchTab& request);
 
-      void launchTab(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients, std::uint64_t client_id, const LaunchTab& request);
+      void launchTab(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const LaunchTab& request);
 
-      void createPane(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients, std::uint64_t client_id, const CreatePane& request);
+      void createPane(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreatePane& request);
 
-      void renameWorkspace(RuntimeModel<Memory>& model, ClientSession<Memory>& client, const RenameWorkspace& request);
+      void renameWorkspace(RuntimeModel& model, ClientSession& client, const RenameWorkspace& request);
 
-      void renameTab(RuntimeModel<Memory>& model, ClientSession<Memory>& client, const RenameTab& request);
+      void renameTab(RuntimeModel& model, ClientSession& client, const RenameTab& request);
 
-      void moveTab(RuntimeModel<Memory>& model, ClientSession<Memory>& client, const MoveTab& request);
+      void moveTab(RuntimeModel& model, ClientSession& client, const MoveTab& request);
 
-      static void closePane(RuntimeModel<Memory>& model, const ClientSession<Memory>& client, const ClosePane& request);
+      static void closePane(RuntimeModel& model, const ClientSession& client, const ClosePane& request);
 
-      void collectExited(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients);
+      void collectExited(RuntimeModel& model, Panes& panes, ClientStore& clients);
 
-      void holdTab(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients, std::uint64_t client_id, const HoldTab& request);
+      void holdTab(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const HoldTab& request);
 
-      void releaseHeldTabs(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients, std::uint64_t client_id);
+      void releaseHeldTabs(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id);
 
-      void closeTab(RuntimeModel<Memory>& model, ClientSession<Memory>& client, const CloseTab& request);
+      void closeTab(RuntimeModel& model, ClientSession& client, const CloseTab& request);
 
-      void closeWorkspace(RuntimeModel<Memory>& model, ClientStore<Memory>& clients, std::uint64_t identity);
+      void closeWorkspace(RuntimeModel& model, ClientStore& clients, std::uint64_t identity);
 
-      static void tabSnapshot(RuntimeModel<Memory>& model, ClientStore<Memory>& clients, std::uint64_t client_id, const RequestTabSnapshot& request);
+      static void tabSnapshot(RuntimeModel& model, ClientStore& clients, std::uint64_t client_id, const RequestTabSnapshot& request);
 
-      static void workspaceSnapshot(RuntimeModel<Memory>& model, ClientSession<Memory>& client, const RequestWorkspaceSnapshot& request);
+      static void workspaceSnapshot(RuntimeModel& model, ClientSession& client, const RequestWorkspaceSnapshot& request);
 
-      static void publishList(const RuntimeModel<Memory>& model, ClientSession<Memory>& client);
+      static void publishList(const RuntimeModel& model, ClientSession& client);
 
       // Marks the clients viewing the workspaces changed since the last delivery for a resync.
-      void deliverNotices(ClientStore<Memory>& clients) noexcept;
+      void deliverNotices(ClientStore& clients) noexcept;
 
     private:
       struct Notice {
@@ -357,29 +345,29 @@ export {
       // Queues a workspace change for the clients that view it but did not make it.
       void notify(std::uint64_t workspace, std::uint64_t origin, std::optional<std::uint64_t> previous = {}) noexcept;
 
-      void releaseEmptyTab(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients, TabLocation location);
+      void releaseEmptyTab(RuntimeModel& model, Panes& panes, ClientStore& clients, TabLocation location);
 
       // Tells each client viewing the closed tab's workspace, after `seen` notes it; one whose queue
       // is full resynchronizes the workspace instead.
       template <typename Seen>
-      static void broadcastTabClosed(ClientStore<Memory>& clients, const TabClosed& closed, Seen&& seen) noexcept;
+      static void broadcastTabClosed(ClientStore& clients, const TabClosed& closed, Seen&& seen) noexcept;
 
-      static TabClosed removeTab(RuntimeModel<Memory>& model, TabLocation location);
+      static TabClosed removeTab(RuntimeModel& model, TabLocation location);
 
-      void leaveEmptyViews(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients, std::uint64_t workspace) noexcept;
+      void leaveEmptyViews(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t workspace) noexcept;
 
-      void retainFinalText(ExitedPanes& exited, Pane<Memory>& pane) noexcept;
+      void retainFinalText(ExitedPanes& exited, Pane& pane) noexcept;
 
-      std::uint64_t createRoot(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients, std::uint64_t client_id, const Launch& launch, TerminalSize size, std::string_view name, bool replace_view = false);
+      std::uint64_t createRoot(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const Launch& launch, TerminalSize size, std::string_view name, bool replace_view = false);
 
-      static std::uint64_t nextTabIdentity(const RuntimeModel<Memory>& model);
+      static std::uint64_t nextTabIdentity(const RuntimeModel& model);
 
       // A pane launched into a tab whose workspace the client takes the geometry of.
-      std::uint64_t createAt(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients, std::uint64_t client_id, TabLocation location, Launch launch, TerminalSize size);
+      std::uint64_t createAt(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, TabLocation location, Launch launch, TerminalSize size);
 
-      static std::optional<std::uint64_t> firstPane(const PaneStore<Memory>& panes, const Workspace<Memory>& workspace) noexcept;
+      static std::optional<std::uint64_t> firstPane(const PaneStore& panes, const Workspace& workspace) noexcept;
 
-      static std::optional<std::uint64_t> firstPane(const PaneStore<Memory>& panes, const Tab<Memory>& tab) noexcept;
+      static std::optional<std::uint64_t> firstPane(const PaneStore& panes, const Tab& tab) noexcept;
 
       static void createDirectories(std::string_view path);
 
@@ -388,18 +376,18 @@ export {
         omitted,
       };
 
-      static void sendOpened(ClientSession<Memory>& client, std::uint64_t request, const Pane<Memory>& pane, bool created, GenerationField generation = GenerationField::included);
+      static void sendOpened(ClientSession& client, std::uint64_t request, const Pane& pane, bool created, GenerationField generation = GenerationField::included);
 
       static constexpr std::size_t maximum_tabs = 64;
       static constexpr std::size_t maximum_panes_per_tab = 64;
-      Memory& memory_;
+      ConcurrentMemory& memory_;
       std::array<Notice, 64> notices_{};
       std::size_t notice_count_ = 0;
       bool overflowed_ = false;
     };
 
-    extern template class WorkspaceService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>, RuntimeBackground>;
-    extern template class WorkspaceService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>, DiscardedHistory>;
+    extern template class WorkspaceService<NativeEventLoop<ConcurrentMemory>, RuntimeBackground>;
+    extern template class WorkspaceService<NativeEventLoop<ConcurrentMemory>, DiscardedHistory>;
 
   }
 }
@@ -408,37 +396,37 @@ export {
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory, EventLoop Poller, HistoryEventSink History = DiscardedHistory>
+    template <EventLoop Poller, HistoryEventSink History = DiscardedHistory>
     class WorktreeService {
     public:
-      using Workspaces = WorkspaceService<Memory, Poller, History>;
-      using Panes = PaneService<Memory, Poller, History>;
+      using Workspaces = WorkspaceService<Poller, History>;
+      using Panes = PaneService<Poller, History>;
 
-      explicit WorktreeService(Memory& memory, LimitService<Memory>& limits);
+      explicit WorktreeService(ConcurrentMemory& memory, LimitService& limits);
 
-      static void registerEntry(RuntimeModel<Memory>& model, ClientSession<Memory>& client, const RegisterWorktree& request);
+      static void registerEntry(RuntimeModel& model, ClientSession& client, const RegisterWorktree& request);
 
-      void launch(RuntimeModel<Memory>& model, Workspaces& workspaces, Panes& panes, ClientStore<Memory>& clients, std::uint64_t client_id, const LaunchWorktree& request);
+      void launch(RuntimeModel& model, Workspaces& workspaces, Panes& panes, ClientStore& clients, std::uint64_t client_id, const LaunchWorktree& request);
 
-      static void forget(RuntimeModel<Memory>& model, Workspaces& workspaces, ClientStore<Memory>& clients, std::uint64_t client_id, const ForgetWorktree& request);
+      static void forget(RuntimeModel& model, Workspaces& workspaces, ClientStore& clients, std::uint64_t client_id, const ForgetWorktree& request);
 
       template <typename Background>
-      void observe(const RuntimeModel<Memory>& model, Background& background);
+      void observe(const RuntimeModel& model, Background& background);
 
-      void observed(RuntimeModel<Memory>& model, const WorktreeProbeResult& result);
+      void observed(RuntimeModel& model, const WorktreeProbeResult& result);
 
-      static void refresh(RuntimeModel<Memory>& model) noexcept;
+      static void refresh(RuntimeModel& model) noexcept;
 
     private:
-      static Worktree<Memory>& require(Worktrees<Memory>& worktrees, std::uint64_t identity);
+      static Worktree& require(Worktrees& worktrees, std::uint64_t identity);
 
       std::optional<std::uint64_t> observing_;
-      Memory& memory_;
-      LimitService<Memory>& limits_;
+      ConcurrentMemory& memory_;
+      LimitService& limits_;
     };
 
-    extern template class WorktreeService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>, RuntimeBackground>;
-    extern template class WorktreeService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>, DiscardedHistory>;
+    extern template class WorktreeService<NativeEventLoop<ConcurrentMemory>, RuntimeBackground>;
+    extern template class WorktreeService<NativeEventLoop<ConcurrentMemory>, DiscardedHistory>;
 
   }
 }
@@ -483,19 +471,19 @@ export {
     // The runtime owns the model, the client table and the services, and lends each service the tables
     // a call needs. A request names its client by identity, and a handler looks the client up again after
     // any call that can change the table, as Rust code holds an index across a mutation, not a reference.
-    template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-      requires BackgroundExecutor<Background, Memory>
+    template <EventLoop Poller, typename Background>
+      requires BackgroundExecutor<Background, ConcurrentMemory>
     class Runtime {
-      using Agents = AgentService<Memory, Poller, Background>;
-      using Panes = PaneService<Memory, Poller, Background>;
-      using Workspaces = WorkspaceService<Memory, Poller, Background>;
-      using Worktrees = WorktreeService<Memory, Poller, Background>;
-      using Control = ClientControl<Memory>;
-      using Descents = DescentService<Memory, ProcessInspector>;
-      using Frames = typename Connection<Memory>::Frames;
+      using Agents = AgentService<Poller, Background>;
+      using Panes = PaneService<Poller, Background>;
+      using Workspaces = WorkspaceService<Poller, Background>;
+      using Worktrees = WorktreeService<Poller, Background>;
+      using Control = ClientControl;
+      using Descents = DescentService<ProcessInspector>;
+      using Frames = typename Connection<ConcurrentMemory>::Frames;
 
     public:
-      explicit Runtime(Memory& memory, Poller& poller, Background& background, const RuntimeOptions& options, ProxyClientConfiguration proxy = {});
+      explicit Runtime(ConcurrentMemory& memory, Poller& poller, Background& background, const RuntimeOptions& options, ProxyClientConfiguration proxy = {});
 
       void run();
 
@@ -527,7 +515,7 @@ export {
 
         while (!model_.stopping) {
           if (captures.collect()) {
-            limits_.report(LimitReach{.name = "proxy.capture.joiner_capacity", .noun = "pending exchanges", .value = CaptureJoiner<Memory>::capacity});
+            limits_.report(LimitReach{.name = "proxy.capture.joiner_capacity", .noun = "pending exchanges", .value = CaptureJoiner::capacity});
           }
 
           delivery.collect(clients_, plugins);
@@ -629,7 +617,7 @@ export {
 
       // What a completion asks for, from the PATH and shell of the pane's shell where its
       // integration reported them, this runtime's PATH otherwise.
-      WordRequest makeWordRequest(const ClientSession<Memory>& client, std::uint64_t request_id, CompletionProvider provider, std::string_view prefix, const Pane<Memory>& pane) const;
+      WordRequest makeWordRequest(const ClientSession& client, std::uint64_t request_id, CompletionProvider provider, std::string_view prefix, const Pane& pane) const;
 
       void handle(std::uint64_t identity, const FindPaths& message);
 
@@ -740,7 +728,7 @@ export {
       void handle(std::uint64_t, const RuntimeStop&);
 
       template <typename Message>
-      static void submitBackground(Background& background, const ClientSession<Memory>& client, const Message& message, RequestContext context = {});
+      static void submitBackground(Background& background, const ClientSession& client, const Message& message, RequestContext context = {});
 
       static bool isHistoryRequest(ClientTag tag) noexcept;
 
@@ -755,13 +743,13 @@ export {
 
       // An opened editor reported to the client that asked, as failed unless it opened beside the
       // pane it was asked from.
-      static void deliverEditorReply(const PaneStore<Memory>& panes, ClientSession<Memory>& client, std::span<const Byte> payload);
+      static void deliverEditorReply(const PaneStore& panes, ClientSession& client, std::span<const Byte> payload);
 
       std::chrono::nanoseconds publish(Clock::time_point now);
 
       std::chrono::nanoseconds writeClient(std::uint64_t identity, Clock::time_point now);
 
-      static void updateWriteInterest(Poller& poller, ClientSession<Memory>& client);
+      static void updateWriteInterest(Poller& poller, ClientSession& client);
 
       // A due report runs as its client's next request, its payload and the client's frames held apart
       // from the client meanwhile.
@@ -771,38 +759,38 @@ export {
 
       static std::string_view runtimePath();
 
-      Memory& memory_;
+      ConcurrentMemory& memory_;
       Poller& poller_;
       Background& background_;
       ProxyClientConfiguration proxy_;
       LocalListener listener_;
-      RuntimeModel<Memory> model_;
-      ClientStore<Memory> clients_;
-      LimitService<Memory> limits_;
-      RuntimeClipboardService<Memory> runtime_clipboard_;
-      ClientAdmission<Memory, Poller> admissions_;
-      ClientLayouts<Memory> client_layouts_;
+      RuntimeModel model_;
+      ClientStore clients_;
+      LimitService limits_;
+      RuntimeClipboardService<> runtime_clipboard_;
+      ClientAdmission<Poller> admissions_;
+      ClientLayouts client_layouts_;
       Panes panes_;
       Workspaces workspaces_;
       Worktrees worktrees_;
-      ExecutionService<Memory, Poller> executions_;
+      ExecutionService<Poller> executions_;
       ProcessInspector process_inspector_;
       Agents agents_;
       ProcessProbe<ProcessInspector> process_probe_;
-      PaneObservationService<Memory, Agents, LimitService<Memory>, ProcessProbe<ProcessInspector>, Background> observations_;
-      MediaService<Memory, Poller, LimitService<Memory>, Background> media_;
-      DeferredReports<Memory, Agents> deferred_reports_;
+      PaneObservationService<Agents, LimitService, ProcessProbe<ProcessInspector>, Background> observations_;
+      MediaService<Poller, LimitService, Background> media_;
+      DeferredReports<Agents> deferred_reports_;
       Descents descents_;
-      checkpoint::SessionStore<Memory, Agents> session_;
+      checkpoint::SessionStore<Agents> session_;
       HostMetricsService<NativeHostMetrics> metrics_;
-      WorkspaceGitService<Memory, WorkspaceGitProbe<Memory>> workspace_git_;
+      WorkspaceGitService<WorkspaceGitProbe> workspace_git_;
       ShellGitService shell_git_;
       WordService words_;
       // This runtime's PATH, read once: nothing in the runtime changes it.
       std::string_view runtime_path_ = runtimePath();
-      WorktreeDetectionService<Memory, WorktreeDetectionProbe> worktree_detection_;
-      AgentFileService<Memory, Agents> agent_files_;
-      DescriptionService<Memory, Agents, Background> descriptions_;
+      WorktreeDetectionService<WorktreeDetectionProbe> worktree_detection_;
+      AgentFileService<ConcurrentMemory, Agents> agent_files_;
+      DescriptionService<ConcurrentMemory, Agents, Background> descriptions_;
       [[no_unique_address]] diagnostics::RuntimeTelemetry telemetry_;
       static constexpr auto pane_poll_interval = std::chrono::milliseconds{100};
       Clock::time_point next_pane_poll_{};
@@ -810,11 +798,11 @@ export {
       bool children_exited_ = true;
     };
 
-    template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-      requires BackgroundExecutor<Background, Memory>
-    Runtime(Memory& memory, Poller& poller, Background& background, const RuntimeOptions& options, ProxyClientConfiguration proxy = {}) -> Runtime<Memory, Poller, Background>;
+    template <EventLoop Poller, typename Background>
+      requires BackgroundExecutor<Background, ConcurrentMemory>
+    Runtime(ConcurrentMemory& memory, Poller& poller, Background& background, const RuntimeOptions& options, ProxyClientConfiguration proxy = {}) -> Runtime<Poller, Background>;
 
-    extern template class Runtime<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>, RuntimeBackground>;
+    extern template class Runtime<NativeEventLoop<ConcurrentMemory>, RuntimeBackground>;
 
   }
 }

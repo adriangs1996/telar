@@ -236,8 +236,7 @@ namespace telar::runtime::cli {
 
 namespace telar::runtime::cli::sessions {
 
-  template <Allocator Memory>
-  void tabSnapshot(Output<Memory>& output, const TabSnapshot& reply, bool json) {
+  void tabSnapshot(Output& output, const TabSnapshot& reply, bool json) {
     if (json) {
       output.text("{\"workspace_id\":").number(reply.location.workspace.id).text(",\"tab_id\":").number(reply.location.tab_id).text(",\"panes\":[");
     } else {
@@ -267,8 +266,7 @@ namespace telar::runtime::cli::sessions {
     }
   }
 
-  template <Allocator Memory>
-  void tabList(Output<Memory>& output, const WorkspaceSnapshot& reply, bool json) {
+  void tabList(Output& output, const WorkspaceSnapshot& reply, bool json) {
     output.text(json ? "[" : "ID\tPOSITION\tPANES\tLABEL\n");
     bool first = true;
 
@@ -291,8 +289,7 @@ namespace telar::runtime::cli::sessions {
     }
   }
 
-  template <Allocator Memory>
-  void tabOperation(Channel<Memory>& session, Output<Memory>& output, const TabOptions& options, TabLocation location) {
+  void tabOperation(Channel& session, Output& output, const TabOptions& options, TabLocation location) {
     using Action = TabOptions::Action;
 
     if (options.action == Action::get) {
@@ -349,7 +346,6 @@ namespace telar::runtime::cli::sessions {
     output.text(options.json ? "}\n" : "\n");
   }
 
-  template <Allocator Memory>
   int tab(Memory& memory, const TabOptions& options) {
     try {
       const auto workspace = options.workspace.resolve("TELAR_WORKSPACE_ID");
@@ -398,7 +394,5 @@ namespace telar::runtime::cli::sessions {
       return 1;
     }
   }
-
-  template int tab<Memory>(Memory& memory, const TabOptions& options);
 
 }

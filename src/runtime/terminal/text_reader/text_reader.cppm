@@ -31,12 +31,11 @@ import telar.runtime.terminal.control.engine;
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory>
     // Links and runs of the text read, which a view lends with the row flags it is given: region `a`
     // holds both, as `&'a self` and an argument of the same lifetime would.
     class TextMetadataCapture {
     public:
-      explicit TextMetadataCapture(tbc::view<Memory&, tbc::lt::a> memory);
+      explicit TextMetadataCapture(tbc::view<ConcurrentMemory&, tbc::lt::a> memory);
 
       tbc::view<TextMetadata, tbc::lt::a> view(tbc::view<std::span<const Byte>, tbc::lt::a> row_flags) const noexcept;
 
@@ -72,13 +71,11 @@ export {
 
       void captureRow(LinkTable& table, GhosttyRenderStateRowIterator iterator, std::uint32_t row_start);
 
-      tbc::view<Vector<MetadataLink, Memory>, tbc::lt::a> links_;
-      tbc::view<Vector<MetadataRun, Memory>, tbc::lt::a> runs_;
-      tbc::view<Vector<Byte, Memory>, tbc::lt::a> uris_;
+      tbc::view<Vector<MetadataLink, ConcurrentMemory>, tbc::lt::a> links_;
+      tbc::view<Vector<MetadataRun, ConcurrentMemory>, tbc::lt::a> runs_;
+      tbc::view<Vector<Byte, ConcurrentMemory>, tbc::lt::a> uris_;
       MetadataStatus status_ = MetadataStatus::complete;
     };
-
-    extern template class TextMetadataCapture<telar::ConcurrentMemory>;
 
   }
 }
@@ -101,19 +98,18 @@ export {
     static_assert(sizeof(ScreenCell) == 32);
     static_assert(std::has_unique_object_representations_v<ScreenCell>);
 
-    template <Allocator Memory>
     class Screen {
     public:
-      explicit Screen(Memory& memory);
+      explicit Screen(ConcurrentMemory& memory);
 
       void reserve(std::uint16_t columns, std::uint16_t lines);
 
       void resize(std::uint16_t columns, std::uint16_t lines);
 
-      Vector<ScreenCell, Memory> cells;
-      Vector<std::uint64_t, Memory> row_revisions;
-      Vector<Byte, Memory> row_flags;
-      TextMetadataCapture<Memory> metadata;
+      Vector<ScreenCell, ConcurrentMemory> cells;
+      Vector<std::uint64_t, ConcurrentMemory> row_revisions;
+      Vector<Byte, ConcurrentMemory> row_flags;
+      TextMetadataCapture metadata;
       std::uint64_t metadata_revision = 1;
       std::uint16_t cols = 0;
       std::uint16_t rows = 0;
@@ -124,8 +120,6 @@ export {
       PointerShape pointer_shape{};
       Scroll scroll{};
     };
-
-    extern template class Screen<telar::ConcurrentMemory>;
 
   }
 }
@@ -157,15 +151,14 @@ export {
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory>
     class TerminalEffects {
     public:
-      explicit TerminalEffects(Memory& memory);
+      explicit TerminalEffects(ConcurrentMemory& memory);
 
       // A document that stands for rows of the scrollback, kept while the scrollback keeps them.
       struct InlineDocument {
         std::uint64_t id = 0;
-        Vector<Byte, Memory> bytes;
+        Vector<Byte, ConcurrentMemory> bytes;
         TrackedRow first;
         TrackedRow end;
         bool end_inclusive = false;
@@ -174,12 +167,12 @@ export {
         std::uint32_t rows = 0;
         // What each of its rows held when the terminal first drew it, 0 before: a document stands
         // for that text, and goes once a row of it changes. A reflow learns them again.
-        Vector<std::uint64_t, Memory> contents;
+        Vector<std::uint64_t, ConcurrentMemory> contents;
       };
 
       // Keeps the document of a zone a program closed. Past the pane's limits the oldest documents
       // go, and their rows show their text again.
-      void keepInline(Vector<Byte, Memory> bytes, TrackedRow first, TrackedRow end, bool end_inclusive);
+      void keepInline(Vector<Byte, ConcurrentMemory> bytes, TrackedRow first, TrackedRow end, bool end_inclusive);
 
       // Follows the documents' rows through output and reflow, and lets go of those whose rows the
       // scrollback dropped. Only the primary screen holds them.
@@ -196,13 +189,13 @@ export {
 
       void setProgress(PaneProgressState state, std::optional<Byte> percent) noexcept;
 
-      Vector<Byte, Memory> clipboard;
+      Vector<Byte, ConcurrentMemory> clipboard;
       // The encoded document the pane's program shows over the pane, empty when none.
-      Vector<Byte, Memory> document;
+      Vector<Byte, ConcurrentMemory> document;
       std::uint64_t document_revision = 0;
       // The documents that stand for rows of the scrollback, oldest first; the revision changes
       // whenever one comes, goes or moves.
-      Vector<InlineDocument, Memory> inline_documents;
+      Vector<InlineDocument, ConcurrentMemory> inline_documents;
       std::uint64_t inline_revision = 0;
       std::uint64_t next_document_id = 1;
       std::size_t inline_bytes = 0;
@@ -226,8 +219,6 @@ export {
       std::size_t cwd_length_ = 0;
     };
 
-    extern template class TerminalEffects<telar::ConcurrentMemory>;
-
   }
 }
 
@@ -244,10 +235,9 @@ export {
 
     // Encodes a pane's frames. Its spans view its own cell bytes, so it stays where it is built; its
     // buffers come from an allocator, and its counters from the runtime, in region `a`.
-    template <Allocator Memory>
     class FrameSync {
     public:
-      explicit FrameSync(tbc::view<Memory&, tbc::lt::a> memory, std::uint64_t pane_id);
+      explicit FrameSync(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, std::uint64_t pane_id);
 
       FrameSync(const FrameSync&) = delete;
       FrameSync& operator=(const FrameSync&) = delete;
@@ -256,15 +246,15 @@ export {
 
       void requestSnapshot() noexcept;
 
-      bool needsSnapshot(const Screen<Memory>& screen) const noexcept;
+      bool needsSnapshot(const Screen& screen) const noexcept;
 
       bool waitingForAck() const noexcept;
 
-      bool waitingForAck(const Screen<Memory>& screen) const noexcept;
+      bool waitingForAck(const Screen& screen) const noexcept;
 
       std::uint64_t observedRevision() const noexcept;
 
-      std::span<const Byte> prepare(const Screen<Memory>& screen);
+      std::span<const Byte> prepare(const Screen& screen);
 
 #if TELAR_DIAGNOSTICS
       // What the sync counted since the last call, which the caller adds to the runtime's metrics.
@@ -272,11 +262,11 @@ export {
 #endif
 
     private:
-      FrameBody frameHeader(const Screen<Memory>& screen) const noexcept;
+      FrameBody frameHeader(const Screen& screen) const noexcept;
 
       static bool sameHeader(const FrameBody& left, const FrameBody& right) noexcept;
 
-      void appendDamage(const Screen<Memory>& screen, std::size_t& written);
+      void appendDamage(const Screen& screen, std::size_t& written);
 
       void appendSpan(std::span<const ScreenCell> cells, std::size_t start, std::size_t& written);
 
@@ -288,13 +278,13 @@ export {
       diagnostics::FrameCounters counters_;
 #endif
       std::uint64_t pane_id_;
-      tbc::view<Vector<ScreenCell, Memory>, tbc::lt::a> baseline_;
-      tbc::view<Vector<Byte, Memory>, tbc::lt::a> cell_bytes_;
-      tbc::view<Vector<Byte, Memory>, tbc::lt::a> payload_;
+      tbc::view<Vector<ScreenCell, ConcurrentMemory>, tbc::lt::a> baseline_;
+      tbc::view<Vector<Byte, ConcurrentMemory>, tbc::lt::a> cell_bytes_;
+      tbc::view<Vector<Byte, ConcurrentMemory>, tbc::lt::a> payload_;
       // Views of cell_bytes_.
-      tbc::view<Vector<FrameSpan, Memory>, tbc::lt::self> spans_;
-      tbc::view<Vector<Byte, Memory>, tbc::lt::a> metadata_bytes_;
-      tbc::view<Vector<Byte, Memory>, tbc::lt::a> previous_metadata_;
+      tbc::view<Vector<FrameSpan, ConcurrentMemory>, tbc::lt::self> spans_;
+      tbc::view<Vector<Byte, ConcurrentMemory>, tbc::lt::a> metadata_bytes_;
+      tbc::view<Vector<Byte, ConcurrentMemory>, tbc::lt::a> previous_metadata_;
       std::uint64_t metadata_revision_ = 0;
       FrameBody previous_header_{};
       std::uint64_t next_frame_id_ = 1;
@@ -303,8 +293,6 @@ export {
       std::uint64_t observed_revision_ = 0;
       bool snapshot_pending_ = true;
     };
-
-    extern template class FrameSync<telar::ConcurrentMemory>;
 
   }
 }
@@ -338,11 +326,10 @@ export {
       ~TerminalMedia() = default;
     };
 
-    template <Allocator Memory>
     class Terminal {
     public:
       // The terminal keeps the allocator, the query resources and the media it feeds: region `a`.
-      explicit Terminal(tbc::view<Memory&, tbc::lt::a> memory, TerminalSize size, TerminalPurpose purpose = TerminalPurpose::interactive, tbc::view<std::shared_ptr<PtyResponseQueue>, tbc::lt::a> responses = {}, tbc::view<GraphicsQueryResources, tbc::lt::a> resources = {});
+      explicit Terminal(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, TerminalSize size, TerminalPurpose purpose = TerminalPurpose::interactive, tbc::view<std::shared_ptr<PtyResponseQueue>, tbc::lt::a> responses = {}, tbc::view<GraphicsQueryResources, tbc::lt::a> resources = {});
 
       // The bytes view the destination, region `b`, apart from what the terminal keeps.
       tbc::view<std::span<const Byte>, tbc::lt::b> encodeKey(GhosttyKey key, GhosttyMods modifiers, tbc::view<std::span<Byte>, tbc::lt::b> destination);
@@ -370,7 +357,7 @@ export {
 
       control::Policy& controlPolicy() noexcept;
 
-      control::Clipboard<Memory>& clipboardControl() noexcept;
+      control::Clipboard& clipboardControl() noexcept;
 
       bool pasteEvents() const noexcept;
 
@@ -432,9 +419,9 @@ export {
       diagnostics::TerminalStorageSnapshot storageMetrics() const;
 #endif
 
-      tbc::view<Screen<Memory>, tbc::lt::a> screen;
-      tbc::view<TerminalEffects<Memory>, tbc::lt::a> effects;
-      tbc::view<GraphicsStorage<Memory>, tbc::lt::a> graphics;
+      tbc::view<Screen, tbc::lt::a> screen;
+      tbc::view<TerminalEffects, tbc::lt::a> effects;
+      tbc::view<GraphicsStorage<ConcurrentMemory>, tbc::lt::a> graphics;
 
     private:
       // The media to feed, or none once abortControl let it go.
@@ -483,19 +470,19 @@ export {
 
       void updateScroll();
 
-      tbc::view<GhosttyAllocatorBridge<Memory>, tbc::lt::a> allocator_;
+      tbc::view<GhosttyAllocatorBridge<ConcurrentMemory>, tbc::lt::a> allocator_;
       TerminalHandle terminal_;
       RenderStateHandle render_state_;
       RowIteratorHandle row_iterator_;
       RowCellsHandle row_cells_;
       tbc::view<std::shared_ptr<PtyResponseQueue>, tbc::lt::a> responses_;
-      tbc::view<ResponseOutbox<Memory>, tbc::lt::a> response_outbox_;
+      tbc::view<ResponseOutbox<ConcurrentMemory>, tbc::lt::a> response_outbox_;
       // Which media the terminal feeds, never dereferenced: its owner passes it to every call.
       const TerminalMedia* media_ = nullptr;
       static constexpr std::size_t control_input_limit = 128 * 1024;
       // The engine keeps the queue responses_ owns, a shared type, so the terminal stays where it was built.
-      tbc::view<control::Engine<Memory>, tbc::lt::a> control_;
-      tbc::view<ByteQueue<Memory>, tbc::lt::a> pending_control_input_;
+      tbc::view<control::Engine, tbc::lt::a> control_;
+      tbc::view<ByteQueue<ConcurrentMemory>, tbc::lt::a> pending_control_input_;
       TerminalPurpose purpose_;
       CellProjection projection_;
       TerminalSize size_{};
@@ -511,8 +498,6 @@ export {
       std::uint64_t scrollback_generation_ = 1;
     };
 
-    extern template class Terminal<telar::ConcurrentMemory>;
-
   }
 }
 
@@ -523,21 +508,18 @@ export {
     // Reads rows of a terminal's scrollback for `ReadPaneRows`, by their stable number, into
     // buffers it keeps between requests. A reply views them, and the terminal's screen, until the
     // next read or refresh.
-    template <Allocator Memory>
     class ScrollbackRows {
     public:
-      explicit ScrollbackRows(tbc::view<Memory&, tbc::lt::a> memory);
+      explicit ScrollbackRows(tbc::view<ConcurrentMemory&, tbc::lt::a> memory);
 
       // The rows from `request.from` the scrollback still has, at most a screen of them. The
       // terminal is scrolled to them to read them, and left at its bottom again.
-      tbc::view<PaneRows, tbc::lt::a> read(tbc::view<Terminal<Memory>&, tbc::lt::a> terminal, const ReadPaneRows& request);
+      tbc::view<PaneRows, tbc::lt::a> read(tbc::view<Terminal&, tbc::lt::a> terminal, const ReadPaneRows& request);
 
     private:
-      tbc::view<Vector<Byte, Memory>, tbc::lt::a> cells_;
-      tbc::view<Vector<MetadataRun, Memory>, tbc::lt::a> runs_;
+      tbc::view<Vector<Byte, ConcurrentMemory>, tbc::lt::a> cells_;
+      tbc::view<Vector<MetadataRun, ConcurrentMemory>, tbc::lt::a> runs_;
     };
-
-    extern template class ScrollbackRows<telar::ConcurrentMemory>;
 
   }
 }
@@ -553,10 +535,7 @@ export {
 
     // Plain text of `selection`. Pane reads keep the spaces a program wrote, as
     // Ghostty's `Screen.dumpString`; copies trim them, as `Screen.selectionString`.
-    template <Allocator Memory>
-    void formatTerminalSelection(Terminal<Memory>& terminal, const GhosttySelection& selection, bool unwrap, TrailingSpaces spaces, GhosttyWriter writer);
-
-    extern template void formatTerminalSelection<telar::ConcurrentMemory>(Terminal<telar::ConcurrentMemory>& terminal, const GhosttySelection& selection, bool unwrap, TrailingSpaces spaces, GhosttyWriter writer);
+    void formatTerminalSelection(Terminal& terminal, const GhosttySelection& selection, bool unwrap, TrailingSpaces spaces, GhosttyWriter writer);
 
   }
 }
@@ -565,10 +544,9 @@ export {
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory>
     class TextReader {
     public:
-      explicit TextReader(Memory& memory, Terminal<Memory>& terminal, std::size_t capacity);
+      explicit TextReader(ConcurrentMemory& memory, Terminal& terminal, std::size_t capacity);
 
       void read(PaneTextSource source, std::uint16_t wanted_rows);
 
@@ -591,18 +569,13 @@ export {
 
       static bool receive(void* context, const Byte* bytes, std::size_t count) noexcept;
 
-      Terminal<Memory>& terminal_;
+      Terminal& terminal_;
       // The text is written before it is read, so the storage is not zeroed first.
-      ByteStorage<Memory> storage_;
+      ByteStorage<ConcurrentMemory> storage_;
       std::size_t position_ = 0;
       std::size_t length_ = 0;
       bool wrapped_ = false;
     };
-
-    extern template class TextReader<telar::ConcurrentMemory>;
-
-    template <Allocator Memory>
-    TextReader(Memory& memory, Terminal<Memory>& terminal, std::size_t capacity) -> TextReader<Memory>;
 
   }
 }

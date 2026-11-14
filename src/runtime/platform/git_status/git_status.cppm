@@ -15,12 +15,11 @@ import telar.platform.primitives;
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory>
     class GitRepository {
     public:
       using Clock = std::chrono::steady_clock;
 
-      explicit GitRepository(Memory& memory, std::string_view root, Clock::time_point deadline, const std::atomic<bool>& cancelled);
+      explicit GitRepository(ConcurrentMemory& memory, std::string_view root, Clock::time_point deadline, const std::atomic<bool>& cancelled);
 
       std::string_view run(std::initializer_list<std::string_view> arguments, bool retain_prefix = false, std::size_t maximum_bytes = maximum_output);
 
@@ -45,14 +44,9 @@ export {
 
       static constexpr std::size_t maximum_output = 64 * 1024;
       Clock::time_point deadline_;
-      CommandOutput<Memory> output_;
-      HardenedGit<Memory> git_;
+      CommandOutput<ConcurrentMemory> output_;
+      HardenedGit<ConcurrentMemory> git_;
     };
-
-    template <Allocator Memory>
-    GitRepository(Memory& memory, std::string_view root, typename GitRepository<Memory>::Clock::time_point deadline, const std::atomic<bool>& cancelled) -> GitRepository<Memory>;
-
-    extern template class GitRepository<ConcurrentMemory>;
 
   }
 }
@@ -70,23 +64,20 @@ export {
       bool timed_out = false;
     };
 
-    template <ConcurrentAllocator Memory>
     class GitStatusReader {
     public:
       using Clock = std::chrono::steady_clock;
 
-      explicit GitStatusReader(Memory& memory) noexcept;
+      explicit GitStatusReader(ConcurrentMemory& memory) noexcept;
 
       GitStatus read(std::string_view root) noexcept;
 
       void stop() noexcept;
 
     private:
-      Memory& memory_;
+      ConcurrentMemory& memory_;
       std::atomic<bool> cancelled_{false};
     };
-
-    extern template class GitStatusReader<ConcurrentMemory>;
 
   }
 }

@@ -53,7 +53,7 @@ static void retained() {
   ConcurrentMemory& memory = adapter;
 
   {
-    tr::Recordings<ConcurrentMemory, Clock> recordings{memory};
+    tr::Recordings<Clock> recordings{memory};
     SensitiveAllocation output{memory, rec::Limits::page_bytes};
     const auto start = rec::Protocol::page(recordings.handle({.operation = rec::Operation::start, .max_bytes = 4096, .max_events = 3, .max_age_ms = 10, .selection = tr::Selection::packets}, output.bytes()));
 
