@@ -375,6 +375,7 @@
     "src/runtime/terminal/control/engine/engine.cppm": "telar.runtime.terminal.control.engine",
     "src/runtime/terminal/control/glyph/glyph.cppm": "telar.runtime.terminal.control.glyph",
     "src/gui/core/primitives/primitives.cppm": "telar.gui.core.primitives",
+    "src/gui/input/wheel_accumulator/wheel_accumulator.cppm": "telar.gui.input.wheel_accumulator",
     "src/gui/terminal/screen/screen.cppm": "telar.gui.terminal.screen",
     "src/gui/attachments/catalog/catalog.cppm": "telar.gui.attachments.catalog",
     "src/runtime/platform/session_host/session_host.cppm": "telar.runtime.platform.session_host",
@@ -2907,9 +2908,10 @@
       "src/gui/attachments/types.hpp"
     ],
     "src/gui/core/primitives/primitives.cppm": [
-      "src/gui/application/dependencies.hpp",
       "src/gui/core/memory.hpp",
-      "src/gui/core/terminal_size.hpp",
+      "src/gui/core/terminal_size.hpp"
+    ],
+    "src/gui/input/wheel_accumulator/wheel_accumulator.cppm": [
       "src/gui/input/wheel_accumulator.hpp"
     ],
     "src/gui/graphics/placeholder/placeholder.cppm": [

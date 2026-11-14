@@ -1,7 +1,6 @@
 module;
-#include "application/dependencies.hpp"
+#include "core/memory.hpp"
 #include "core/terminal_size.hpp"
-#include "input/wheel_accumulator.hpp"
 
 export module telar.gui.core.primitives;
 
@@ -10,18 +9,13 @@ export module telar.gui.core.primitives;
 export namespace telar::gui {
   using telar::gui::Allocator;
   using telar::gui::AllocatorRef;
-  using telar::gui::ApplicationAllocator;
-  using telar::gui::ApplicationMemory;
   using telar::gui::BudgetAllocator;
   using telar::gui::default_terminal_size;
   using telar::gui::makeOwned;
   using telar::gui::Owned;
-  using telar::gui::ScrollPhase;
-  using telar::gui::ScrollSample;
   using telar::gui::String;
   using telar::gui::SynchronizedAllocator;
   using telar::gui::SystemAllocator;
   using telar::gui::TerminalGrid;
   using telar::gui::Vector;
-  using telar::gui::WheelAccumulator;
 }
