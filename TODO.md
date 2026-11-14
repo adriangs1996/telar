@@ -564,7 +564,7 @@ Para cada módulo: `extern template class X<Memory>;` en la interfaz, la instanc
 | [x] P9.6 | Resto de `lib/`: git, tls, plugins, lua, machines, render, shell | P1.2, P8.1, P2.4 |
 | [ ] P9.7 | Runtime, una subtarea por dominio en paralelo (terminal, panes, agents, history, traffic/{proxy,tls,http,redirect}, plugins, graphics…) | P8.1, P0.5, P2.4 y las tareas de P3 del dominio |
 | [ ] P9.7a | Runtime: `terminal`, `graphics`, `vocabulary`, `observation` | P2.5 |
-| [ ] P9.7b | Runtime: `proxy`, `tls`, `http`, `http1`, `redirect`, `traffic`, `plugins`, `exchange_capture` | P2.5 |
+| [ ] P9.7b | Runtime: `proxy`, `tls`, `http`, `http1`, `http2`, `redirect`, `traffic`, `plugins`, `exchange_capture` | P2.5 |
 | [ ] P9.7c | Runtime: `agents`, `history`, `command_capture`, `shell_integration`, `suggestions`, `editors`, `worktrees`, `workspaces` | P2.5 |
 | [ ] P9.7d | Runtime: `runtime`, `model`, `persistence`, `platform`, `transport`, `diagnostics`, `metrics`, `execution`, `cli` y el resto | P2.5 |
 | [ ] P9.8 | GUI, una subtarea por dominio. `gui.application.session` (5815 líneas) pasa a `session/session.cppm` con `prompt.cpp`, `blocks.cpp`, `copy_mode.cpp`… | P8.1, P0.5, P2.4 y las tareas de P3 del dominio |
