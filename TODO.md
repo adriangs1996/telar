@@ -502,6 +502,8 @@ Cada tarea empieza localizando todas las copias, crea un módulo con una interfa
 - **Qué hace:** partir `runtime.terminal.control` (118 líneas propias y 13 256 de cabeceras, `control/engine.hpp` y sus 28 headers) por familia de secuencias: graphics, clipboard, glyph y checksum. Revisar `gui.terminal.screen` (6456 líneas de cabeceras) y `gui.attachments.catalog` (7784). Lo de `gui.core.primitives` es P3.16.
 - **Se puede partir:** a = terminal.control, b = gui.terminal.screen, c = attachments.catalog.
 - **Resultado de a:** `07d2de5a4`. `runtime.terminal.control` se queda con parser, estado VT, replies, reports, clasificación y consultas de color y graphics; `control.clipboard`, `control.glyph`, `control.checksum` y `control.engine` pasan a código de módulo. Fragmento global de la base: 12 888 → 7 934 líneas del proyecto. Graphics no se separa: sus consultas leen cabeceras de `graphics.kitty`, que está por encima, y con `<arm_neon.h>` en dos fragmentos globales Clang emite dos veces sus intrínsecos. `VtState::writeAscii` pasa a pública porque el `friend class Engine` no se puede nombrar entre módulos. El `[x]` del título marca solo `a`.
+- **Resultado de b:** `446e6430d`. `RowCache` pasa a código de módulo en `telar.gui.terminal.row_cache`; `screen` se queda con `CellValue`, `Screen`, `FrameApplication` y `CellPosition`, que tienen que seguir textuales porque los nombran los adaptadores Qt. Builds reales: tocar `content.hpp` recompila 59 unidades en vez de 123; el fragmento global apenas baja (46 137 → 45 788, de ellas 4 150 → 3 801 del proyecto).
+- **Resultado de c:** `8df10ddb6`. El fragmento global de `gui.attachments.catalog` se queda con lo que usa el Objective-C++ del portapapeles (`types`, `secure_erase`, `sensitive_bytes`, `capture`); los marcadores y `AttachmentCatalog` pasan a código de módulo y se borran 5 cabeceras. Fragmento: 65 504 → 56 232 líneas, 6 298 → 741 del proyecto. **P6.7 cerrada.**
 
 ### [ ] P6.8 · Cierre de includes
 - **Depende de:** P2.3, P6.1–P6.7
@@ -511,14 +513,16 @@ Cada tarea empieza localizando todas las copias, crea un módulo con una interfa
 
 ## Fase 7 · Re-exports
 
-### [ ] P7.1 · Quitar los `export import` que no cumplen la regla 4
+### [x] P7.1 · Quitar los `export import` que no cumplen la regla 4
 - **Depende de:** P2.2
 - **Se puede partir por árbol:** runtime (`runtime.runtime` re-exporta 23 y `runtime.cli.server` ve 90), gui (`gui.application.session` re-exporta 29, `gui.machines.profile_store` ×3…) y cli.
 - **Qué hace:** los importadores que dependían del transitivo pasan a import explícito. Los 443 imports directos "redundantes" se quedan, porque la regla elige el estilo explícito.
+- **Resultado:** `1f4b9b7de`. Los 330 `export import` de la allowlist (119 módulos) pasan a `import`, y 142 unidades que solo los veían por el re-export los importan ellas mismas (226 imports). Al integrar con P6.4, 41 unidades que leían `sys::lastError` por esa vía importan `telar.sys.posix`, y `git`, `plugins` y `tls` pueden importar `sys`.
 
-### [ ] P7.2 · Cierre de re-exports
+### [x] P7.2 · Cierre de re-exports
 - **Depende de:** P7.1
 - **Hecho cuando:** la allowlist de la regla 4 está vacía.
+- **Resultado:** la dejó vacía P7.1; el checker da `0 re-exports without a type left` sobre la rama integrada. **Fase 7 cerrada.**
 
 ---
 
