@@ -675,7 +675,7 @@ namespace telar::git {
 
       struct stat status{};
       if (::fstatat(parent, file.c_str(), &status, AT_SYMLINK_NOFOLLOW) != 0) {
-        if (errno == ENOENT || errno == ENOTDIR) {
+        if (sys::lastError() == ENOENT || sys::lastError() == ENOTDIR) {
           ++counts.unstaged_deleted;
           continue;
         }
@@ -762,7 +762,7 @@ namespace telar::git {
 
         descriptors_[depth_].reset(::openat(parent, component.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
         if (!descriptors_[depth_]) {
-          if (errno != ENOENT && errno != ENOTDIR && errno != ELOOP) {
+          if (sys::lastError() != ENOENT && sys::lastError() != ENOTDIR && sys::lastError() != ELOOP) {
             ++depth_;
             return -1;
           }
@@ -891,7 +891,7 @@ namespace telar::git {
 
     while (remaining != 0) {
       const auto count = ::read(file.get(), buffer_.data(), static_cast<std::size_t>(std::min<std::uint64_t>(remaining, chunk)));
-      if (count < 0 && errno == EINTR) {
+      if (count < 0 && sys::lastError() == EINTR) {
         continue;
       }
 

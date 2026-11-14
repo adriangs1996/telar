@@ -365,7 +365,7 @@ export {
     inline void sendAll(int socket, std::span<const Byte> bytes) {
       while (!bytes.empty()) {
         const auto count = ::send(socket, bytes.data(), bytes.size(), 0);
-        if (count < 0 && errno == EINTR) {
+        if (count < 0 && sys::lastError() == EINTR) {
           continue;
         }
 

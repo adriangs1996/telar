@@ -18,6 +18,7 @@ module telar.gui.platform.window_lease;
 import std;
 
 import telar.platform.fs;
+import telar.sys.posix;
 
 namespace telar::gui::platform {
 
@@ -90,7 +91,7 @@ namespace telar::gui::platform {
 
       validateFile(file.get());
       if (::flock(file.get(), LOCK_EX | LOCK_NB) != 0) {
-        if (errno == EWOULDBLOCK || errno == EAGAIN) {
+        if (sys::lastError() == EWOULDBLOCK || sys::lastError() == EAGAIN) {
           continue;
         }
 

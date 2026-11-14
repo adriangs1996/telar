@@ -3237,7 +3237,7 @@ export {
       inline FileDescriptor accept() const {
         FileDescriptor child{::accept(socket_.get(), nullptr, nullptr)};
         if (!child) {
-          if (socketWouldBlock(errno)) {
+          if (socketWouldBlock(sys::lastError())) {
             return child;
           }
 
@@ -3305,7 +3305,7 @@ export {
 
         const auto loopback = address(port);
         if (::bind(socket.get(), loopback.address(), loopback.length) != 0 || ::listen(socket.get(), backlog) != 0) {
-          if (errno == EADDRINUSE) {
+          if (sys::lastError() == EADDRINUSE) {
             return FileDescriptor{};
           }
 
@@ -3323,11 +3323,11 @@ export {
             return true;
           }
 
-          if (errno == ECONNREFUSED) {
+          if (sys::lastError() == ECONNREFUSED) {
             return false;
           }
 
-          if (errno != EINPROGRESS) {
+          if (sys::lastError() != EINPROGRESS) {
             return true;
           }
 
@@ -3548,7 +3548,7 @@ export {
         parent[length] = '\0';
         struct stat metadata{};
 
-        return ::stat(parent.data(), &metadata) != 0 && errno == ENOENT;
+        return ::stat(parent.data(), &metadata) != 0 && sys::lastError() == ENOENT;
       }
 
       inline static std::string_view trimCarriageReturns(std::string_view text) noexcept {

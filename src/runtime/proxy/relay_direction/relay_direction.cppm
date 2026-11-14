@@ -121,7 +121,7 @@ export {
             return;
           }
 
-          if (errno == EINPROGRESS || errno == EINTR) {
+          if (sys::lastError() == EINPROGRESS || sys::lastError() == EINTR) {
             state_ = State::connecting;
             return;
           }

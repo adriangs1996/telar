@@ -59,8 +59,8 @@ namespace telar::runtime::cli::machine {
     }
 
     while (::flock(lock.get(), LOCK_EX) != 0) {
-      if (errno != EINTR) {
-        throw fileError(errno);
+      if (sys::lastError() != EINTR) {
+        throw fileError(sys::lastError());
       }
     }
 
@@ -669,7 +669,7 @@ fetch() {
 
       for (;;) {
         const auto count = ::read(file.get(), buffer.data(), buffer.size());
-        if (count < 0 && errno == EINTR) {
+        if (count < 0 && sys::lastError() == EINTR) {
           continue;
         }
 
@@ -1957,7 +1957,7 @@ fetch() {
 
     for (;;) {
       const auto count = ::read(file.get(), buffer.data(), buffer.size());
-      if (count < 0 && errno == EINTR) {
+      if (count < 0 && sys::lastError() == EINTR) {
         continue;
       }
 
@@ -2125,7 +2125,7 @@ fetch() {
 
         FileDescriptor runtime{::open(sibling.c_str(), O_RDONLY | O_CLOEXEC)};
         if (!runtime) {
-          throw fileError(errno);
+          throw fileError(sys::lastError());
         }
 
         const auto script = assign("target", remote) + assign("expected", digest) + std::string{hasher} + R"Upload(umask 077
@@ -2175,7 +2175,7 @@ cat > "$temporary" && [ "$(hash "$temporary")" = "$expected" ] && chmod 755 "$te
       const auto upload_command = "exec /bin/sh -c 'umask 077 && mkdir -p \"$HOME/.local/share/telar/versions\" && exec cat > \"$HOME/.local/share/telar/versions/.upload-" + build.digest->substr(0, MachineId::hex_digits) + "\"'";
       FileDescriptor binary{::open(build.binary->c_str(), O_RDONLY | O_CLOEXEC)};
       if (!binary) {
-        report.end(Step::telar, Status::failed, std::string{fileError(errno).what()} + ": cannot open --binary");
+        report.end(Step::telar, Status::failed, std::string{fileError(sys::lastError()).what()} + ": cannot open --binary");
         return false;
       }
 

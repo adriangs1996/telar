@@ -813,7 +813,7 @@ namespace telar::runtime::cli::sessions {
     } catch (const ControlFailure& failure) {
       throw Failure{reason ? failure.message() : std::string_view{controlFailureDescription(failure.code())}, 1, failure.code()};
     } catch (const SocketError&) {
-      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+      if (sys::lastError() == EAGAIN || sys::lastError() == EWOULDBLOCK) {
         throw Failure{"RuntimeTimeout", 3};
       }
 

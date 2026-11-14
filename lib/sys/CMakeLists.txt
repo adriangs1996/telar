@@ -5,11 +5,14 @@ include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/cpp_modules.cmake")
 
 find_package(Threads REQUIRED)
 
-add_library(telar-sys STATIC)
+add_library(telar-sys STATIC posix/posix.cpp process/process.cpp socket/socket.cpp)
 add_library(telar::sys ALIAS telar-sys)
 telar_modules(telar-sys)
+if(APPLE)
+  target_sources(telar-sys PRIVATE apple/apple.cpp)
+endif()
 target_compile_features(telar-sys PUBLIC cxx_std_23)
-# The modules only declare; the libraries that define what they export.
+# The libraries that define what the modules declare.
 target_link_libraries(telar-sys PUBLIC Threads::Threads ${CMAKE_DL_LIBS})
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_compile_definitions(telar-sys PRIVATE _GNU_SOURCE)

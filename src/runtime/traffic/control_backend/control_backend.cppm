@@ -1421,7 +1421,7 @@ export {
 
         constexpr int heartbeat_ms = 1000;
         const auto result = ::poll(descriptors.data(), descriptors.size(), heartbeat_ms);
-        if (result < 0 && errno != EINTR) {
+        if (result < 0 && sys::lastError() != EINTR) {
           throw SystemError{"Poll traffic sockets"};
         }
 
@@ -1594,7 +1594,7 @@ export {
           const auto count = ::recv(peer.socket.get(), peer.input.data() + previous, peer.expected - previous, 0);
           if (count <= 0) {
             peer.input.resize(previous);
-            if (count == 0 || !socketWouldBlock(errno)) {
+            if (count == 0 || !socketWouldBlock(sys::lastError())) {
               peer.failed = true;
             }
 
@@ -1864,7 +1864,7 @@ export {
           const auto bytes = delivery.offset < prefix.size() ? prefix.subspan(delivery.offset) : body.subspan(delivery.offset - prefix.size());
           const auto count = ::send(peer.socket.get(), bytes.data(), bytes.size(), 0);
           if (count <= 0) {
-            if (count == 0 || !socketWouldBlock(errno)) {
+            if (count == 0 || !socketWouldBlock(sys::lastError())) {
               peer.failed = true;
             }
 
@@ -2319,7 +2319,7 @@ export {
 
         int status;
         const auto waited = ::waitpid(child, &status, WNOHANG);
-        if (waited == child || (waited < 0 && errno == ECHILD)) {
+        if (waited == child || (waited < 0 && sys::lastError() == ECHILD)) {
           child = -1;
         }
       }
@@ -2436,7 +2436,7 @@ export {
           descriptors[index + 2] = {.fd = peer ? peer->socket.get() : -1, .events = static_cast<short>(peer && peer->reply_bytes ? POLLOUT : POLLIN)};
         }
 
-        if (::poll(descriptors.data(), descriptors.size(), 100) < 0 && errno != EINTR) {
+        if (::poll(descriptors.data(), descriptors.size(), 100) < 0 && sys::lastError() != EINTR) {
           throw SystemError{"Poll network control"};
         }
 
@@ -2500,7 +2500,7 @@ export {
       inline static bool advance(Peer& peer, Handler& handler, const std::atomic<bool>& stopping) {
         if (peer.reply_bytes != 0) {
           const auto count = ::send(peer.socket.get(), peer.output.bytes().data() + peer.sent, peer.reply_bytes - peer.sent, 0);
-          if (count < 0 && socketWouldBlock(errno)) {
+          if (count < 0 && socketWouldBlock(sys::lastError())) {
             return false;
           }
 
@@ -2514,7 +2514,7 @@ export {
 
         for (std::size_t round = 0; round < 2; ++round) {
           const auto count = ::recv(peer.socket.get(), peer.input.bytes().data() + peer.received, peer.expected - peer.received, 0);
-          if (count < 0 && socketWouldBlock(errno)) {
+          if (count < 0 && socketWouldBlock(sys::lastError())) {
             return false;
           }
 

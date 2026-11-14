@@ -105,7 +105,7 @@ namespace telar::runtime {
     const int count = ::kevent(queue_.get(), nullptr, 0, kernel_events_.data(), static_cast<int>(kernel_events_.size()), &duration);
 
     if (count < 0) {
-      if (errno == EINTR) {
+      if (sys::lastError() == EINTR) {
         return {};
       }
 

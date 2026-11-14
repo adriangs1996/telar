@@ -20,6 +20,7 @@ import std;
 import telar.platform.net;
 import telar.platform.error;
 import telar.platform.fs;
+import telar.sys.posix;
 
 namespace telar::runtime {
 
@@ -76,7 +77,7 @@ namespace telar::runtime {
     bound_ = true;
 
     if (::chmod(path_.data(), 0600) != 0 || ::listen(socket_.get(), 32) != 0) {
-      const int failure = errno;
+      const int failure = sys::lastError();
 
       cleanup();
       throw SystemError{"listen on runtime socket", failure};
@@ -86,7 +87,7 @@ namespace telar::runtime {
   void LocalListener::removeStaleSocket(const sockaddr_un& address) {
     struct stat existing{};
     if (::lstat(path_.data(), &existing) != 0) {
-      if (errno == ENOENT) {
+      if (sys::lastError() == ENOENT) {
         return;
       }
 
@@ -103,7 +104,7 @@ namespace telar::runtime {
     }
 
     setNonblocking(probe.get());
-    if (::connect(probe.get(), reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0 || errno != ECONNREFUSED) {
+    if (::connect(probe.get(), reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0 || sys::lastError() != ECONNREFUSED) {
       throw SystemError{"runtime endpoint is in use", EADDRINUSE};
     }
 
@@ -137,7 +138,7 @@ namespace telar::runtime {
   FileDescriptor LocalListener::accept(LocalPeerPolicy policy) {
     FileDescriptor connection{::accept(socket_.get(), nullptr, nullptr)};
     if (!connection) {
-      if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+      if (sys::lastError() == EAGAIN || sys::lastError() == EWOULDBLOCK || sys::lastError() == EINTR) {
         return connection;
       }
 

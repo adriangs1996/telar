@@ -1530,7 +1530,7 @@ export {
           const char separator = directory[index];
 
           directory[index] = '\0';
-          if (::mkdir(directory.data(), 0700) != 0 && errno != EEXIST) {
+          if (::mkdir(directory.data(), 0700) != 0 && sys::lastError() != EEXIST) {
             throw SystemError{"create working directory"};
           }
 

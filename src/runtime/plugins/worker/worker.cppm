@@ -274,12 +274,12 @@ export {
 
       inline bool active() const noexcept {
         if (cancellation_.requested()) {
-          errno = ECANCELED;
+          sys::setLastError(ECANCELED);
           return false;
         }
 
         if (deadline_ != Clock::time_point::max() && Clock::now() >= deadline_) {
-          errno = ETIMEDOUT;
+          sys::setLastError(ETIMEDOUT);
           return false;
         }
 
@@ -296,25 +296,25 @@ export {
 
           const auto timeout = remainingMilliseconds();
           if (timeout == 0) {
-            errno = ETIMEDOUT;
+            sys::setLastError(ETIMEDOUT);
             return false;
           }
 
           const auto count = ::poll(watches.data(), watches.size(), timeout);
-          if (count < 0 && errno == EINTR) {
+          if (count < 0 && sys::lastError() == EINTR) {
             continue;
           }
 
           if (count <= 0) {
             if (count == 0) {
-              errno = ETIMEDOUT;
+              sys::setLastError(ETIMEDOUT);
             }
 
             return false;
           }
 
           if (watches[2].revents != 0) {
-            errno = ECANCELED;
+            sys::setLastError(ECANCELED);
             return false;
           }
 
@@ -334,12 +334,12 @@ export {
 
         while (process_.error() >= 0 && drained < maximum_error_drain_bytes) {
           const auto count = ::read(process_.error(), bytes.data(), bytes.size());
-          if (count < 0 && errno == EINTR) {
+          if (count < 0 && sys::lastError() == EINTR) {
             continue;
           }
 
           if (count <= 0) {
-            if (count == 0 || (errno != EAGAIN && errno != EWOULDBLOCK)) {
+            if (count == 0 || (sys::lastError() != EAGAIN && sys::lastError() != EWOULDBLOCK)) {
               process_.closeError();
             }
 
@@ -983,7 +983,7 @@ export {
         }
 
         if (::poll(descriptors.data(), descriptors.size(), immediate ? 0 : 100) < 0) {
-          if (errno == EINTR) {
+          if (sys::lastError() == EINTR) {
             return;
           }
 
@@ -1330,7 +1330,7 @@ export {
       inline static void write(Connection& connection) {
         const auto bytes = connection.output.readable();
         const auto count = ::send(connection.socket.get(), bytes.data(), bytes.size(), 0);
-        if (count < 0 && socketWouldBlock(errno)) {
+        if (count < 0 && socketWouldBlock(sys::lastError())) {
           return;
         }
 
@@ -1346,7 +1346,7 @@ export {
         if (!connection.input) {
           const auto prefix_bytes = connection.registration.stage == TrafficStage::control ? traffic::control::Protocol::prefix_bytes : traffic::Protocol::prefix_bytes;
           const auto count = ::recv(connection.socket.get(), connection.prefix.data() + connection.prefix_bytes, prefix_bytes - connection.prefix_bytes, 0);
-          if (count < 0 && socketWouldBlock(errno)) {
+          if (count < 0 && socketWouldBlock(sys::lastError())) {
             return std::nullopt;
           }
 
@@ -1378,7 +1378,7 @@ export {
 
         const auto bytes = connection.input->bytes();
         const auto count = ::recv(connection.socket.get(), bytes.data() + connection.received, bytes.size() - connection.received, 0);
-        if (count < 0 && socketWouldBlock(errno)) {
+        if (count < 0 && socketWouldBlock(sys::lastError())) {
           return std::nullopt;
         }
 
@@ -1541,7 +1541,7 @@ export {
         while (!launch_.cancellation.requested() && !cancellation_.requested()) {
           if (disabled_.load(std::memory_order_relaxed)) {
             std::array watches{pollfd{cancellation_.descriptor(), POLLIN, 0}, pollfd{launch_.cancellation.descriptor(), POLLIN, 0}};
-            if (::poll(watches.data(), watches.size(), -1) < 0 && errno != EINTR) {
+            if (::poll(watches.data(), watches.size(), -1) < 0 && sys::lastError() != EINTR) {
               return;
             }
 

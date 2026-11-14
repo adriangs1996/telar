@@ -717,7 +717,7 @@ namespace telar::git {
 
     struct stat status{};
     if (::fstatat(objects_.get(), name.c_str(), &status, AT_SYMLINK_NOFOLLOW) != 0) {
-      return errno == ENOENT || errno == ENOTDIR ? Lookup::missing : Lookup::invalid;
+      return sys::lastError() == ENOENT || sys::lastError() == ENOTDIR ? Lookup::missing : Lookup::invalid;
     }
 
     pack = loose;

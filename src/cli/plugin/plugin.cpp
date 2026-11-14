@@ -86,12 +86,12 @@ namespace telar::runtime::cli {
     const ExecutablePath target;
     std::array<char, PATH_MAX> buffer;
     const auto count = ::readlink(path.c_str(), buffer.data(), buffer.size());
-    if (count < 0 && errno != ENOENT) {
-      if (errno == EINVAL && action != "status") {
+    if (count < 0 && sys::lastError() != ENOENT) {
+      if (sys::lastError() == EINVAL && action != "status") {
         std::fprintf(stderr, "telar cli: %s exists and is not a symlink; refusing to replace it\n", path.c_str());
       }
 
-      throw fileError(errno);
+      throw fileError(sys::lastError());
     }
 
     if (action == "status") {
@@ -105,12 +105,12 @@ namespace telar::runtime::cli {
     }
 
     if (count >= 0 && ::unlink(path.c_str()) != 0) {
-      throw fileError(errno);
+      throw fileError(sys::lastError());
     }
 
     if (action == "install") {
       if (::symlink(target.c_str(), path.c_str()) != 0) {
-        const auto failure = errno;
+        const auto failure = sys::lastError();
         if (failure == EACCES || failure == EPERM) {
           std::fprintf(stderr, "telar cli: cannot write %s; rerun with sudo or pass --dir ~/.local/bin\n", path.c_str());
         }

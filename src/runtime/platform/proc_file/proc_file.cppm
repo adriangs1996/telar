@@ -42,7 +42,7 @@ export {
         std::size_t used = 0;
         while (used < buffer.size()) {
           const auto count = ::read(file.get(), buffer.data() + used, buffer.size() - used);
-          if (count < 0 && errno == EINTR) {
+          if (count < 0 && sys::lastError() == EINTR) {
             continue;
           }
           if (count < 0) {

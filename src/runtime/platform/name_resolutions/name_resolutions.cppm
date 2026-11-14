@@ -40,7 +40,7 @@ export {
 
         do {
           error = ::getaddrinfo(hostname, nullptr, &hints, &entries);
-        } while (error == EAI_SYSTEM && errno == EINTR);
+        } while (error == EAI_SYSTEM && sys::lastError() == EINTR);
 
         if (error != 0) {
           return {.error = error};

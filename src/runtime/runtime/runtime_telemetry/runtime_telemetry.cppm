@@ -208,7 +208,7 @@ export {
 
         while (!bytes.empty()) {
           const auto count = ::write(file_.get(), bytes.data(), bytes.size());
-          if (count < 0 && errno == EINTR) {
+          if (count < 0 && sys::lastError() == EINTR) {
             continue;
           }
 
@@ -257,7 +257,7 @@ export {
 
             if (name->process <= static_cast<std::uint32_t>(std::numeric_limits<pid_t>::max())) {
               const auto process = static_cast<pid_t>(name->process);
-              if (::kill(process, 0) == 0 || errno != ESRCH) {
+              if (::kill(process, 0) == 0 || sys::lastError() != ESRCH) {
                 continue;
               }
             }

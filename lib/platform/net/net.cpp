@@ -31,7 +31,7 @@ namespace telar::runtime {
   }
 
   void suppressSocketSignals(int descriptor) {
-#if defined(SO_NOSIGPIPE)
+#if defined(__APPLE__)
     const int enabled = 1;
     if (::setsockopt(descriptor, SOL_SOCKET, SO_NOSIGPIPE, &enabled, sizeof(enabled)) != 0) {
       throw SystemError{"Disable socket SIGPIPE"};
@@ -188,7 +188,7 @@ namespace telar::runtime {
       return {StreamResult::State::ended};
     }
 
-    return socketWouldBlock(errno) ? StreamResult{StreamResult::State::blocked, 0, waiting} : StreamResult{StreamResult::State::failed};
+    return socketWouldBlock(sys::lastError()) ? StreamResult{StreamResult::State::blocked, 0, waiting} : StreamResult{StreamResult::State::failed};
   }
 
 }

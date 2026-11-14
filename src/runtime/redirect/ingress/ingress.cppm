@@ -220,7 +220,7 @@ export {
 
       inline tbc::view<std::span<Byte>, tbc::lt::a> receive(tbc::view<std::span<Byte>, tbc::lt::a> bytes) {
         const auto size = ::read(tunnel_.descriptor(), bytes.data(), bytes.size());
-        if (size < 0 && socketWouldBlock(errno)) {
+        if (size < 0 && socketWouldBlock(sys::lastError())) {
           return {};
         }
 
@@ -319,7 +319,7 @@ export {
 
         do {
           written = ::sendmsg(channel, &message, 0);
-        } while (written < 0 && errno == EINTR);
+        } while (written < 0 && sys::lastError() == EINTR);
 
         if (written <= 0) {
           throw SystemError{"Transfer redirected sockets"};
@@ -329,7 +329,7 @@ export {
 
         while (!remaining.empty()) {
           written = ::send(channel, remaining.data(), remaining.size(), 0);
-          if (written < 0 && errno == EINTR) {
+          if (written < 0 && sys::lastError() == EINTR) {
             continue;
           }
 
@@ -359,7 +359,7 @@ export {
         message.msg_controllen = control.size();
         const auto count = ::recvmsg(channel, &message, 0);
         if (count < 0) {
-          if (socketWouldBlock(errno)) {
+          if (socketWouldBlock(sys::lastError())) {
             return false;
           }
 
@@ -576,7 +576,7 @@ export {
         }
 
         constexpr int poll_ms = 100;
-        if (::poll(descriptors.data(), descriptors.size(), poll_ms) < 0 && errno != EINTR) {
+        if (::poll(descriptors.data(), descriptors.size(), poll_ms) < 0 && sys::lastError() != EINTR) {
           throw SystemError{"Poll redirected socket ingress"};
         }
 
@@ -664,7 +664,7 @@ export {
         for (std::size_t count = 0; count < 3; ++count) {
           Byte update;
           const auto received = ::recv(peer.socket.get(), &update, 1, 0);
-          if (received < 0 && socketWouldBlock(errno)) {
+          if (received < 0 && socketWouldBlock(sys::lastError())) {
             return false;
           }
 
@@ -809,7 +809,7 @@ export {
 
           if (remaining != 0) {
             pollfd descriptor{signal.descriptor(), POLLIN, 0};
-            if (::poll(&descriptor, 1, 20) < 0 && errno != EINTR) {
+            if (::poll(&descriptor, 1, 20) < 0 && sys::lastError() != EINTR) {
               throw SystemError{"Wait for redirect hostname resolution"};
             }
 

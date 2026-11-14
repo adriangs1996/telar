@@ -3,6 +3,7 @@ module;
 #include <dlfcn.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <poll.h>
 #include <pwd.h>
 #include <stdio.h>
@@ -119,47 +120,285 @@ export {
   using ::dlsym;
 }
 
+// Macros do not cross an import. Each one the tree reads is captured while the headers still
+// define it, undefined, and exported under its own name, so `O_CLOEXEC` reads the same to an
+// importer that includes the header and to one that only imports this module.
+#define TELAR_SYS_ERRNOS(X) \
+  X(EACCES)                 \
+  X(EADDRINUSE)             \
+  X(EADDRNOTAVAIL)          \
+  X(EAFNOSUPPORT)           \
+  X(EAGAIN)                 \
+  X(EBADF)                  \
+  X(EBUSY)                  \
+  X(ECANCELED)              \
+  X(ECHILD)                 \
+  X(ECONNREFUSED)           \
+  X(ECONNRESET)             \
+  X(EEXIST)                 \
+  X(EFBIG)                  \
+  X(EINPROGRESS)            \
+  X(EINTR)                  \
+  X(EINVAL)                 \
+  X(EIO)                    \
+  X(EISDIR)                 \
+  X(ELOOP)                  \
+  X(EMFILE)                 \
+  X(ENAMETOOLONG)           \
+  X(ENETUNREACH)            \
+  X(ENFILE)                 \
+  X(ENOBUFS)                \
+  X(ENODEV)                 \
+  X(ENOENT)                 \
+  X(ENOMEM)                 \
+  X(ENOSPC)                 \
+  X(ENOTDIR)                \
+  X(ENOTSUP)                \
+  X(ENXIO)                  \
+  X(EOVERFLOW)              \
+  X(EPERM)                  \
+  X(EPIPE)                  \
+  X(ESRCH)                  \
+  X(ETIMEDOUT)              \
+  X(EWOULDBLOCK)
+
+// open, fcntl, flock and the *at calls.
+#define TELAR_SYS_FILE_FLAGS(X) \
+  X(AT_FDCWD)                   \
+  X(AT_REMOVEDIR)               \
+  X(AT_SYMLINK_NOFOLLOW)        \
+  X(FD_CLOEXEC)                 \
+  X(F_DUPFD_CLOEXEC)            \
+  X(F_GETFD)                    \
+  X(F_SETFD)                    \
+  X(LOCK_EX)                    \
+  X(LOCK_NB)                    \
+  X(O_APPEND)                   \
+  X(O_CLOEXEC)                  \
+  X(O_CREAT)                    \
+  X(O_DIRECTORY)                \
+  X(O_EXCL)                     \
+  X(O_NOCTTY)                   \
+  X(O_NOFOLLOW)                 \
+  X(O_NONBLOCK)                 \
+  X(O_RDONLY)                   \
+  X(O_RDWR)                     \
+  X(O_WRONLY)
+
+// File modes, access checks, seeks, mappings, polls and the standard descriptors.
+#define TELAR_SYS_FILE_CONSTANTS(X) \
+  X(F_OK)                           \
+  X(POLLERR)                        \
+  X(POLLHUP)                        \
+  X(POLLIN)                         \
+  X(POLLNVAL)                       \
+  X(POLLOUT)                        \
+  X(PROT_READ)                      \
+  X(PROT_WRITE)                     \
+  X(R_OK)                           \
+  X(SEEK_SET)                       \
+  X(STDERR_FILENO)                  \
+  X(STDIN_FILENO)                   \
+  X(STDOUT_FILENO)                  \
+  X(S_IFCHR)                        \
+  X(S_IFDIR)                        \
+  X(S_IFLNK)                        \
+  X(S_IFMT)                         \
+  X(S_IFREG)                        \
+  X(S_IRUSR)                        \
+  X(S_IRWXU)                        \
+  X(S_IWUSR)                        \
+  X(S_IXUSR)                        \
+  X(X_OK)
+
+// System limits, clocks and dynamic loading.
+#define TELAR_SYS_LIMITS(X) \
+  X(CLOCKS_PER_SEC)         \
+  X(CLOCK_MONOTONIC)        \
+  X(CLOCK_REALTIME)         \
+  X(NAME_MAX)               \
+  X(PATH_MAX)               \
+  X(PIPE_BUF)               \
+  X(RTLD_LOCAL)             \
+  X(RTLD_NOW)
+
+// glibc declares these as enumerators and defines each macro as its own name.
+#define TELAR_SYS_ENUMERATORS(X) \
+  X(DT_DIR)                      \
+  X(DT_REG)
+
+namespace telar::sys::captured {
+
+#define TELAR_SYS_CAPTURE(name) inline constexpr auto name##_ = name;
+  TELAR_SYS_ERRNOS(TELAR_SYS_CAPTURE)
+  TELAR_SYS_FILE_FLAGS(TELAR_SYS_CAPTURE)
+  TELAR_SYS_FILE_CONSTANTS(TELAR_SYS_CAPTURE)
+  TELAR_SYS_LIMITS(TELAR_SYS_CAPTURE)
+#if !defined(__GLIBC__)
+  TELAR_SYS_ENUMERATORS(TELAR_SYS_CAPTURE)
+#endif
+
+  inline constexpr bool S_ISDIR_(mode_t mode) noexcept {
+    return S_ISDIR(mode);
+  }
+
+  inline constexpr bool S_ISREG_(mode_t mode) noexcept {
+    return S_ISREG(mode);
+  }
+
+  inline constexpr bool S_ISSOCK_(mode_t mode) noexcept {
+    return S_ISSOCK(mode);
+  }
+
+}
+
+#undef EACCES
+#undef EADDRINUSE
+#undef EADDRNOTAVAIL
+#undef EAFNOSUPPORT
+#undef EAGAIN
+#undef EBADF
+#undef EBUSY
+#undef ECANCELED
+#undef ECHILD
+#undef ECONNREFUSED
+#undef ECONNRESET
+#undef EEXIST
+#undef EFBIG
+#undef EINPROGRESS
+#undef EINTR
+#undef EINVAL
+#undef EIO
+#undef EISDIR
+#undef ELOOP
+#undef EMFILE
+#undef ENAMETOOLONG
+#undef ENETUNREACH
+#undef ENFILE
+#undef ENOBUFS
+#undef ENODEV
+#undef ENOENT
+#undef ENOMEM
+#undef ENOSPC
+#undef ENOTDIR
+#undef ENOTSUP
+#undef ENXIO
+#undef EOVERFLOW
+#undef EPERM
+#undef EPIPE
+#undef ESRCH
+#undef ETIMEDOUT
+#undef EWOULDBLOCK
+#undef AT_FDCWD
+#undef AT_REMOVEDIR
+#undef AT_SYMLINK_NOFOLLOW
+#undef FD_CLOEXEC
+#undef F_DUPFD_CLOEXEC
+#undef F_GETFD
+#undef F_SETFD
+#undef LOCK_EX
+#undef LOCK_NB
+#undef O_APPEND
+#undef O_CLOEXEC
+#undef O_CREAT
+#undef O_DIRECTORY
+#undef O_EXCL
+#undef O_NOCTTY
+#undef O_NOFOLLOW
+#undef O_NONBLOCK
+#undef O_RDONLY
+#undef O_RDWR
+#undef O_WRONLY
+#undef F_OK
+#undef POLLERR
+#undef POLLHUP
+#undef POLLIN
+#undef POLLNVAL
+#undef POLLOUT
+#undef PROT_READ
+#undef PROT_WRITE
+#undef R_OK
+#undef SEEK_SET
+#undef STDERR_FILENO
+#undef STDIN_FILENO
+#undef STDOUT_FILENO
+#undef S_IFCHR
+#undef S_IFDIR
+#undef S_IFLNK
+#undef S_IFMT
+#undef S_IFREG
+#undef S_IRUSR
+#undef S_IRWXU
+#undef S_IWUSR
+#undef S_IXUSR
+#undef X_OK
+#undef CLOCKS_PER_SEC
+#undef CLOCK_MONOTONIC
+#undef CLOCK_REALTIME
+#undef NAME_MAX
+#undef PATH_MAX
+#undef PIPE_BUF
+#undef RTLD_LOCAL
+#undef RTLD_NOW
+#undef DT_DIR
+#undef DT_REG
+#undef S_ISDIR
+#undef S_ISREG
+#undef S_ISSOCK
+#undef stderr
+#undef stdin
+#undef stdout
+
+#define TELAR_SYS_CONSTANT(name) inline constexpr auto name = telar::sys::captured::name##_;
+#if defined(__GLIBC__)
+#define TELAR_SYS_ENUMERATOR(name) using ::name;
+#else
+#define TELAR_SYS_ENUMERATOR TELAR_SYS_CONSTANT
+#endif
+
+export {
+  TELAR_SYS_ERRNOS(TELAR_SYS_CONSTANT)
+  TELAR_SYS_FILE_FLAGS(TELAR_SYS_CONSTANT)
+  TELAR_SYS_FILE_CONSTANTS(TELAR_SYS_CONSTANT)
+  TELAR_SYS_LIMITS(TELAR_SYS_CONSTANT)
+  TELAR_SYS_ENUMERATORS(TELAR_SYS_ENUMERATOR)
+
+  inline constexpr bool S_ISDIR(mode_t mode) noexcept {
+    return telar::sys::captured::S_ISDIR_(mode);
+  }
+
+  inline constexpr bool S_ISREG(mode_t mode) noexcept {
+    return telar::sys::captured::S_ISREG_(mode);
+  }
+
+  inline constexpr bool S_ISSOCK(mode_t mode) noexcept {
+    return telar::sys::captured::S_ISSOCK_(mode);
+  }
+
+  // Darwin's stream macros name __stdinp, __stdoutp and __stderrp; glibc and musl declare the
+  // streams under their own names.
+#if defined(__APPLE__)
+  inline FILE*& stdin = ::__stdinp;
+  inline FILE*& stdout = ::__stdoutp;
+  inline FILE*& stderr = ::__stderrp;
+#else
+  using ::stderr;
+  using ::stdin;
+  using ::stdout;
+#endif
+}
+
 // errno is a macro, so importers that include no header reach it through these.
 export namespace telar::sys {
 
   // The calling thread's errno.
-  inline int lastError() noexcept {
-    return errno;
-  }
+  int lastError() noexcept;
+
+  // Sets the calling thread's errno, for a caller that reports its failure the way a system call does.
+  void setLastError(int code) noexcept;
 
   // The name telar reports for an errno: a token scripts read after `error: ` and history stores
   // as a failure cause. An errno without a name gets the caller's fallback.
-  inline const char* errorName(int code, const char* fallback = "Unexpected") noexcept {
-    switch (code) {
-    case ENOENT:
-      return "FileNotFound";
-    case ECONNREFUSED:
-      return "ConnectionRefused";
-    case EACCES:
-    case EPERM:
-      return "AccessDenied";
-    case ENOTDIR:
-      return "NotDir";
-    case ENAMETOOLONG:
-      return "NameTooLong";
-    case ELOOP:
-      return "SymLinkLoop";
-    case EEXIST:
-      return "PathAlreadyExists";
-    case ENOSPC:
-      return "NoSpaceLeft";
-    case EINVAL:
-      return "InvalidArgument";
-    case EIO:
-      return "InputOutput";
-    case ENOMEM:
-    case ENOBUFS:
-      return "SystemResources";
-    case EBADF:
-      return "InvalidDescriptor";
-    default:
-      return fallback;
-    }
-  }
+  const char* errorName(int code, const char* fallback = "Unexpected") noexcept;
 
 }

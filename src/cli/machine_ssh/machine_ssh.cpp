@@ -131,7 +131,7 @@ namespace telar::runtime::cli::config_receive {
   bool place(int home, const std::string& path, std::string_view bytes, mode_t mode) {
     FileDescriptor parent{::openat(home, ".", O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
     if (!parent) {
-      throw fileError(errno);
+      throw fileError(sys::lastError());
     }
 
     std::string_view tail{path};
@@ -144,20 +144,20 @@ namespace telar::runtime::cli::config_receive {
 
       const std::string component{tail.substr(0, slash)};
       auto next = ::openat(parent.get(), component.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
-      if (next < 0 && errno == ENOENT) {
-        if (::mkdirat(parent.get(), component.c_str(), 0700) != 0 && errno != EEXIST) {
-          throw fileError(errno);
+      if (next < 0 && sys::lastError() == ENOENT) {
+        if (::mkdirat(parent.get(), component.c_str(), 0700) != 0 && sys::lastError() != EEXIST) {
+          throw fileError(sys::lastError());
         }
 
         next = ::openat(parent.get(), component.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
       }
 
       if (next < 0) {
-        if (errno == ELOOP || errno == ENOTDIR) {
+        if (sys::lastError() == ELOOP || sys::lastError() == ENOTDIR) {
           throw CommandError{"SymlinkOnTheWay"};
         }
 
-        throw fileError(errno);
+        throw fileError(sys::lastError());
       }
 
       parent.reset(next);
@@ -174,7 +174,7 @@ namespace telar::runtime::cli::config_receive {
       if (state.st_size == static_cast<off_t>(bytes.size()) && (state.st_mode & 0777) == mode) {
         FileDescriptor existing{::openat(parent.get(), name.c_str(), O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)};
         if (!existing) {
-          throw fileError(errno);
+          throw fileError(sys::lastError());
         }
 
         std::array<char, 16 * 1024> buffer;
@@ -183,12 +183,12 @@ namespace telar::runtime::cli::config_receive {
 
         for (;;) {
           const auto count = ::read(existing.get(), buffer.data(), buffer.size());
-          if (count < 0 && errno == EINTR) {
+          if (count < 0 && sys::lastError() == EINTR) {
             continue;
           }
 
           if (count < 0) {
-            throw fileError(errno);
+            throw fileError(sys::lastError());
           }
 
           if (count == 0) {
@@ -208,8 +208,8 @@ namespace telar::runtime::cli::config_receive {
           return false;
         }
       }
-    } else if (errno != ENOENT) {
-      throw fileError(errno);
+    } else if (sys::lastError() != ENOENT) {
+      throw fileError(sys::lastError());
     }
 
     std::uint64_t nonce;
@@ -220,7 +220,7 @@ namespace telar::runtime::cli::config_receive {
     std::snprintf(temporary.data(), temporary.size(), ".telar-%016llx", static_cast<unsigned long long>(nonce));
     FileDescriptor file{::openat(parent.get(), temporary.data(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, mode)};
     if (!file) {
-      throw fileError(errno);
+      throw fileError(sys::lastError());
     }
 
     try {
@@ -230,12 +230,12 @@ namespace telar::runtime::cli::config_receive {
       }
 
       if (::fchmod(file.get(), mode) != 0 || ::fsync(file.get()) != 0) {
-        throw fileError(errno);
+        throw fileError(sys::lastError());
       }
 
       file.reset();
       if (::renameat(parent.get(), temporary.data(), parent.get(), name.c_str()) != 0) {
-        throw fileError(errno);
+        throw fileError(sys::lastError());
       }
     } catch (...) {
       ::unlinkat(parent.get(), temporary.data(), 0);
@@ -253,7 +253,7 @@ namespace telar::runtime::cli::config_receive {
 
     FileDescriptor home{::open(home_path, O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
     if (!home) {
-      throw fileError(errno);
+      throw fileError(sys::lastError());
     }
 
     if (line() != "telar-config 1") {
@@ -357,7 +357,7 @@ namespace telar::runtime::cli::launch {
     const auto argv = pointers(arguments);
 
     ::execvp(argv.front(), argv.data());
-    throw CommandError{sys::errorName(errno)};
+    throw CommandError{sys::errorName(sys::lastError())};
   }
 
   int inherit(const std::vector<std::string>& arguments) {
@@ -374,7 +374,7 @@ namespace telar::runtime::cli::launch {
     int status = 0;
 
     while (::waitpid(process, &status, 0) < 0) {
-      if (errno != EINTR) {
+      if (sys::lastError() != EINTR) {
         throw SystemError{"Wait for child process"};
       }
     }

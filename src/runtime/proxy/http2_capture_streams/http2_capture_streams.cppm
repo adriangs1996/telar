@@ -462,7 +462,7 @@ export {
             return;
           }
 
-          if (count == 0 || (count < 0 && !socketWouldBlock(errno))) {
+          if (count == 0 || (count < 0 && !socketWouldBlock(sys::lastError()))) {
             state_ = State::closed;
             failure_ = "origin_closed_before_client_hello";
             return;

@@ -71,7 +71,7 @@ export {
             return candidate - 1;
           }
 
-          if (errno != EEXIST) {
+          if (sys::lastError() != EEXIST) {
             throw SystemError{"Create private PF log interface"};
           }
         }
@@ -92,7 +92,7 @@ export {
         ifreq request{};
 
         std::snprintf(request.ifr_name, sizeof(request.ifr_name), "pflog%u", index);
-        if (::ioctl(control.get(), SIOCIFDESTROY, &request) != 0 && errno != ENXIO && errno != ENODEV) {
+        if (::ioctl(control.get(), SIOCIFDESTROY, &request) != 0 && sys::lastError() != ENXIO && sys::lastError() != ENODEV) {
           throw SystemError{"Remove private PF log interface"};
         }
       }
@@ -235,7 +235,7 @@ export {
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{6};
 
         while (::flock(lock_.get(), LOCK_EX | LOCK_NB) != 0) {
-          if (mode == RecordLock::owner || errno != EWOULDBLOCK || std::chrono::steady_clock::now() >= deadline) {
+          if (mode == RecordLock::owner || sys::lastError() != EWOULDBLOCK || std::chrono::steady_clock::now() >= deadline) {
             throw SystemError{"Redirect helper already active or recovery update busy"};
           }
 
@@ -245,7 +245,7 @@ export {
 
       inline std::optional<String<Memory>> load() {
         FileDescriptor file{::openat(directory_.get(), name_.c_str(), O_RDONLY | O_NONBLOCK | O_NOFOLLOW | O_CLOEXEC)};
-        if (!file && errno == ENOENT) {
+        if (!file && sys::lastError() == ENOENT) {
           return std::nullopt;
         }
 
@@ -265,7 +265,7 @@ export {
       }
 
       inline void clear() {
-        if (::unlinkat(directory_.get(), name_.c_str(), 0) != 0 && errno != ENOENT) {
+        if (::unlinkat(directory_.get(), name_.c_str(), 0) != 0 && sys::lastError() != ENOENT) {
           throw SystemError{"Remove redirect recovery record"};
         }
       }

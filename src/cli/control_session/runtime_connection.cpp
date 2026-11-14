@@ -88,7 +88,7 @@ namespace telar::runtime::cli {
 
       for (;;) {
         const auto count = ::read(direction.source, buffer.data(), buffer.size());
-        if (count < 0 && errno == EINTR) {
+        if (count < 0 && sys::lastError() == EINTR) {
           continue;
         }
 
@@ -100,7 +100,7 @@ namespace telar::runtime::cli {
 
         while (!pending.empty()) {
           const auto written = ::write(direction.destination, pending.data(), pending.size());
-          if (written < 0 && errno == EINTR) {
+          if (written < 0 && sys::lastError() == EINTR) {
             continue;
           }
 

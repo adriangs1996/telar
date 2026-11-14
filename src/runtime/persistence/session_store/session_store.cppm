@@ -200,7 +200,7 @@ export {
         }
 
         while (::flock(file.get(), LOCK_EX) != 0) {
-          if (errno != EINTR) {
+          if (sys::lastError() != EINTR) {
             throw SystemError{"Lock session"};
           }
         }
@@ -228,7 +228,7 @@ export {
         String<Memory> previous{name, AllocatorRef<char, Memory>{memory}};
 
         previous += ".previous";
-        if (::renameat(parent.get(), name.c_str(), parent.get(), previous.c_str()) != 0 && errno != ENOENT) {
+        if (::renameat(parent.get(), name.c_str(), parent.get(), previous.c_str()) != 0 && sys::lastError() != ENOENT) {
           throw SystemError{"Set previous session aside"};
         }
       }

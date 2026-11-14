@@ -36,7 +36,7 @@ export {
       inline void notify() noexcept {
         const std::uint8_t byte = 1;
 
-        while (::write(writer_.get(), &byte, sizeof(byte)) < 0 && errno == EINTR) {
+        while (::write(writer_.get(), &byte, sizeof(byte)) < 0 && sys::lastError() == EINTR) {
         }
       }
 
@@ -53,7 +53,7 @@ export {
 
         do {
           count = ::read(reader_.get(), &byte, sizeof(byte));
-        } while (count < 0 && errno == EINTR);
+        } while (count < 0 && sys::lastError() == EINTR);
 
         return count == sizeof(byte);
       }

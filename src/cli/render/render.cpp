@@ -11,6 +11,9 @@ module;
 
 module telar.cli.render;
 
+import telar.sys.posix;
+import telar.sys.process;
+
 namespace telar::runtime::cli::render_command {
 
   RenderOptions RenderOptions::parse(std::span<char* const> words) {
@@ -72,7 +75,7 @@ namespace telar::runtime::cli::render_command {
     while (!bytes.empty()) {
       const auto written = ::write(descriptor, bytes.data(), bytes.size());
       if (written < 0) {
-        if (errno == EINTR) {
+        if (sys::lastError() == EINTR) {
           continue;
         }
 
@@ -99,7 +102,7 @@ namespace telar::runtime::cli::render_command {
       const auto got = ::read(descriptor, source.data() + at, source.size() - at);
       if (got < 0) {
         source.resize(at);
-        if (errno == EINTR) {
+        if (sys::lastError() == EINTR) {
           continue;
         }
 
@@ -173,7 +176,7 @@ namespace telar::runtime::cli::render_command {
 
       while (stop_signal == 0) {
         const auto got = ::read(descriptor_, keys.data(), keys.size());
-        if (got < 0 && (errno == EINTR || errno == EAGAIN)) {
+        if (got < 0 && (sys::lastError() == EINTR || sys::lastError() == EAGAIN)) {
           continue;
         }
 
@@ -237,7 +240,7 @@ namespace telar::runtime::cli::render_command {
     Viewer viewer{descriptor};
     struct sigaction action{};
 
-    action.sa_handler = onStopSignal;
+    sys::signalHandler(action) = onStopSignal;
     sigemptyset(&action.sa_mask);
     for (const int signal : {SIGTERM, SIGHUP, SIGINT, SIGQUIT}) {
       ::sigaction(signal, &action, nullptr);
@@ -265,12 +268,12 @@ namespace telar::runtime::cli::render_command {
     {
       const auto descriptor = from_stdin ? STDIN_FILENO : ::open(std::string{options.path}.c_str(), O_RDONLY | O_CLOEXEC);
       if (descriptor < 0) {
-        std::fprintf(stderr, "telar render: %.*s: %s\n", static_cast<int>(options.path.size()), options.path.data(), std::strerror(errno));
+        std::fprintf(stderr, "telar render: %.*s: %s\n", static_cast<int>(options.path.size()), options.path.data(), std::strerror(sys::lastError()));
         return 1;
       }
 
       const bool read = readSource(descriptor, source);
-      const auto error = errno;
+      const auto error = sys::lastError();
 
       if (!from_stdin) {
         ::close(descriptor);
@@ -318,7 +321,7 @@ namespace telar::runtime::cli::render_command {
     }
 
     if (!writeAll(STDOUT_FILENO, output)) {
-      std::fprintf(stderr, "telar render: could not write the output: %s\n", std::strerror(errno));
+      std::fprintf(stderr, "telar render: could not write the output: %s\n", std::strerror(sys::lastError()));
       return 1;
     }
 

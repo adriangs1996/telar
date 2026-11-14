@@ -333,11 +333,11 @@ export {
       inline StreamResult read(std::span<std::uint8_t> destination) noexcept {
         while (wait_.active()) {
           const auto count = ::read(input_, destination.data(), destination.size());
-          if (count < 0 && errno == EINTR) {
+          if (count < 0 && sys::lastError() == EINTR) {
             continue;
           }
 
-          if (count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK) && wait_.ready(input_, POLLIN)) {
+          if (count < 0 && (sys::lastError() == EAGAIN || sys::lastError() == EWOULDBLOCK) && wait_.ready(input_, POLLIN)) {
             continue;
           }
 
@@ -369,16 +369,16 @@ export {
           }
 
           const auto count = ::writev(output_, vectors.data() + first, static_cast<int>(vectors.size() - first));
-          if (count < 0 && errno == EINTR) {
+          if (count < 0 && sys::lastError() == EINTR) {
             continue;
           }
 
-          if (count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK) && wait_.ready(output_, POLLOUT)) {
+          if (count < 0 && (sys::lastError() == EAGAIN || sys::lastError() == EWOULDBLOCK) && wait_.ready(output_, POLLOUT)) {
             continue;
           }
 
           if (count <= 0) {
-            throw SystemError{"Write tap frame", count == 0 ? EPIPE : errno};
+            throw SystemError{"Write tap frame", count == 0 ? EPIPE : sys::lastError()};
           }
 
           auto consumed = static_cast<std::size_t>(count);

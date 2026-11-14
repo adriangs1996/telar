@@ -9,6 +9,7 @@ module telar.gui.platform.stdio_socket;
 import std;
 
 import telar.platform.error;
+import telar.sys.posix;
 
 namespace telar::gui::platform {
 
@@ -24,8 +25,8 @@ namespace telar::gui::platform {
 
     int redirectDescriptor(int source, int destination) noexcept {
       while (::dup2(source, destination) < 0) {
-        if (errno != EINTR) {
-          return errno;
+        if (sys::lastError() != EINTR) {
+          return sys::lastError();
         }
       }
 

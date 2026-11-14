@@ -74,7 +74,7 @@ export {
       inline Read peek(int socket) noexcept {
         const auto count = ::recv(socket, bytes_.data(), bytes_.size(), MSG_PEEK);
         if (count <= 0) {
-          return count < 0 && socketWouldBlock(errno) ? Read::pending : Read::ended;
+          return count < 0 && socketWouldBlock(sys::lastError()) ? Read::pending : Read::ended;
         }
 
         tls_ = bytes_[0] == handshake_record;

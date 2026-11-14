@@ -28,7 +28,7 @@ namespace telar::gui::platform {
 
     std::ranges::copy(path, name.begin());
     constexpr mode_t owner_only = 0700;
-    if (::mkdir(name.data(), owner_only) != 0 && errno != EEXIST) {
+    if (::mkdir(name.data(), owner_only) != 0 && sys::lastError() != EEXIST) {
       throw runtime::SystemError{"Create managed runtime directory"};
     }
 

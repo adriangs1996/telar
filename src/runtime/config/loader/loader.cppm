@@ -14,6 +14,7 @@ export import telar.lua;
 export import telar.platform.error;
 export import telar.platform.fs;
 export import telar.platform.paths;
+import telar.sys.posix;
 
 export namespace telar::runtime::config {
 
@@ -40,7 +41,7 @@ export namespace telar::runtime::config {
 
       std::array<char, PATH_MAX> canonical;
       if (::realpath(path.c_str(), canonical.data()) == nullptr) {
-        if (errno == ENOENT && options.config.empty() && options.profile.empty()) {
+        if (sys::lastError() == ENOENT && options.config.empty() && options.profile.empty()) {
           return;
         }
 

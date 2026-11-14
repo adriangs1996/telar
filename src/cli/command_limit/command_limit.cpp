@@ -130,7 +130,7 @@ namespace telar::runtime::cli {
   void writeBytes(int descriptor, std::span<const Byte> bytes) {
     while (!bytes.empty()) {
       const auto count = ::write(descriptor, bytes.data(), bytes.size());
-      if (count < 0 && errno == EINTR) {
+      if (count < 0 && sys::lastError() == EINTR) {
         continue;
       }
 

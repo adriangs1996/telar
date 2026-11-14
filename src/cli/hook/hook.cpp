@@ -809,7 +809,7 @@ namespace telar::runtime::cli::hooks {
 
     for (;;) {
       const auto count = ::read(descriptor, buffer.data(), buffer.size());
-      if (count < 0 && errno == EINTR) {
+      if (count < 0 && sys::lastError() == EINTR) {
         continue;
       }
 
