@@ -44,4 +44,15 @@
 #define TBC_HOT_PATH
 #endif
 
+// A function marked TBC_GENERIC keeps its body in a module interface because it is a template, or a
+// member of one, over a type its caller chooses (a protocol message, a visitor, a callable), which no
+// `extern template` can instantiate in advance. tbc-lint's interface-bodies check reports the mark on
+// a declaration that is neither. On a class template, it covers the bodies of all its members; on a
+// variable template, the lambdas that initialize it.
+#if defined(__clang__)
+#define TBC_GENERIC [[clang::annotate("tbc::generic")]]
+#else
+#define TBC_GENERIC
+#endif
+
 #endif
