@@ -194,6 +194,13 @@ graph LR
 - **Hecho cuando:** hay allowlist por fichero con los includes de hoy y el checker falla con cualquiera nuevo.
 - **Resultado:** `f25185aaa` y `6e8549845`. Pueden incluir `lib/sys`, los adaptadores Qt/moc (los que incluyen una cabecera `<Q…>`), las fuentes C y Objective-C(++) y las cabeceras que todos ellos alcanzan; un módulo puede incluir sus propias cabeceras de `header_owners` que cruzan esa frontera; `macro_headers` (vacío hasta P6.3) no puede incluir nada. Tests y herramientas quedan fuera. La allowlist está en `docs/build/textual-includes.json` (3130 includes tras integrar P3.6), y el checker falla también con una entrada obsoleta: **cada tarea que quita o mueve un include actualiza ese fichero**. El checker también mira los ficheros sin rastrear, para comprobar los nuevos antes del commit.
 
+### [ ] P2.5 · TBC lee los cuerpos de las funciones llamadas en otras unidades
+- **Depende de:** P8.3
+- **Toca:** `lib/tbc/linter` y su corpus de spec.
+- **Por qué:** TBC solo ve la declaración de la función llamada. Si el cuerpo está en otra unidad, supone que toda referencia o `this` no `const` invalida lo que se haya prestado de ella, como Rust con `&mut`. Al sacar cuerpos en la fase 9 eso dio errores nuevos (27 en la CLI, 5 por los accesores de `JsonNode`), y las tareas los esquivaron dejando los cuerpos en la interfaz con `TBC_HOT_PATH`, que el plan reserva para camino caliente medido. **Decidido:** que TBC lea los cuerpos, en vez de firmas más estrictas o de aceptar la marca.
+- **Qué hace:** una primera pasada sobre la base de compilación calcula un resumen de efectos por función definida (qué parámetros y qué `this` invalida, qué préstamos devuelve y de dónde), y la comprobación usa ese resumen cuando el cuerpo no es visible. Las llamadas virtuales e indirectas siguen con el supuesto conservador. Los resúmenes se guardan por unidad para que el lint no se vuelva cuadrático.
+- **Hecho cuando:** el corpus tiene casos para una función fuera de línea que no muta (se acepta), una que muta (se rechaza), recursión y una virtual (conservadora); el lint de runtime, CLI y GUI no tiene errores nuevos; y el tiempo del lint completo está medido antes y después.
+
 ---
 
 ## Fase 3 · Capas
@@ -546,6 +553,12 @@ Para cada módulo: `extern template class X<Memory>;` en la interfaz, la instanc
 | [ ] P9.9 | CLI | P8.1, P2.4, P3.15a–c |
 
 - **Hecho cuando (cada una):** compila, pasan los tests del área, y en runtime y GUI los benchmarks de hot path no empeoran respecto a P0.5 o la diferencia está justificada.
+
+### [ ] P9.12 · Sacar los cuerpos que se quedaron dentro por el checker
+- **Depende de:** P2.5 y las P9.1–P9.9 integradas.
+- **Qué hace:** recorre cada `TBC_HOT_PATH`. Los que se pusieron solo porque el lifetime checker no veía el cuerpo (accesores de `JsonNode`, `Object` y `Payload` del hook de la CLI, `displayText`, `toolEvent`, `questionEvent`, `RuntimeConnection::receive`…) salen de la interfaz. Los de camino caliente se quedan con su medición.
+- **Pendiente de decidir:** las plantillas sobre un tipo que elige el llamador (`send`/`receive`/`exchange` sobre los mensajes del protocolo, visitantes, callables, tipos de salida) no admiten `extern template`. Hoy llevan `TBC_HOT_PATH` sin medición; o se acepta así o se les da una marca propia.
+- **Hecho cuando:** todo `TBC_HOT_PATH` que queda tiene medición o es una plantilla sobre un tipo del llamador, y el lint no tiene errores nuevos.
 
 ### [ ] P9.10 · Quitar el parámetro de plantilla `Memory` donde ya no aporta
 - **Depende de:** P9.1–P9.9
