@@ -810,9 +810,7 @@
     "<cstring>",
     "<new>"
   ],
-  "src/cli/hooks/command/command.cppm": [
-    "<cstring>"
-  ],
+  "src/cli/hooks/command/command.cppm": [],
   "src/cli/hooks/session/session.cpp": [
     "<cerrno>",
     "<cstddef>",

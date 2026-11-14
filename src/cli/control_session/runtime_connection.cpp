@@ -56,6 +56,10 @@ namespace telar::runtime::cli {
     client_.deinit();
   }
 
+  auto RuntimeConnection::receive(tbc::view<std::span<Byte>, tbc::lt::a> buffer) -> tbc::view<std::span<const Byte>, tbc::lt::a> {
+    return client_.receiveFrame(buffer);
+  }
+
   void RuntimeConnection::requestStop() {
     const timeval timeout{.tv_sec = 10, .tv_usec = 0};
     if (::setsockopt(client_.descriptor(), SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) != 0) {

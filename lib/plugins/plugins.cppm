@@ -82,16 +82,17 @@ export {
 
     class Capabilities {
     public:
-      // Bit tests the runtime runs on every plugin traffic result and authorization check.
-      TBC_HOT_PATH inline bool contains(Capability capability) const noexcept {
+      // Bit tests the runtime runs on every plugin traffic result and authorization check;
+      // constexpr, so importers evaluate and inline them.
+      constexpr bool contains(Capability capability) const noexcept {
         return (bits_ & bit(capability)) != 0;
       }
 
-      TBC_HOT_PATH inline bool containsAll(Capabilities other) const noexcept {
+      constexpr bool containsAll(Capabilities other) const noexcept {
         return (bits_ & other.bits_) == other.bits_;
       }
 
-      TBC_HOT_PATH inline Capabilities intersection(Capabilities other) const noexcept {
+      constexpr Capabilities intersection(Capabilities other) const noexcept {
         Capabilities result;
 
         result.bits_ = bits_ & other.bits_;

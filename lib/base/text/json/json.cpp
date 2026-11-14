@@ -423,6 +423,49 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
+  JsonKind JsonNode<Memory>::kind() const noexcept {
+    return kind_;
+  }
+
+  template <Allocator Memory>
+  std::string_view JsonNode<Memory>::text() const noexcept {
+    return text_;
+  }
+
+  template <Allocator Memory>
+  std::span<JsonNode<Memory>> JsonNode<Memory>::children() noexcept {
+    return children_;
+  }
+
+  template <Allocator Memory>
+  std::span<const JsonNode<Memory>> JsonNode<Memory>::children() const noexcept {
+    return children_;
+  }
+
+  template <Allocator Memory>
+  JsonNode<Memory>* JsonNode<Memory>::find(std::string_view name) noexcept {
+    if (kind_ != JsonKind::object) {
+      return nullptr;
+    }
+
+    const auto found = std::ranges::find_if(children_, [name](const auto& child) {
+      return child.name_ == name;
+    });
+
+    return found == children_.end() ? nullptr : &*found;
+  }
+
+  template <Allocator Memory>
+  const JsonNode<Memory>* JsonNode<Memory>::find(std::string_view name) const noexcept {
+    return const_cast<JsonNode*>(this)->find(name);
+  }
+
+  template <Allocator Memory>
+  void JsonNode<Memory>::erase(std::size_t index) {
+    children_.erase(children_.begin() + index);
+  }
+
+  template <Allocator Memory>
   JsonNode<Memory>& JsonNode<Memory>::ensure(std::string_view name, JsonKind kind) {
     if (kind_ != JsonKind::object) {
       throw std::invalid_argument{"Expected JSON object"};
