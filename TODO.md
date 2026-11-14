@@ -233,10 +233,11 @@ graph LR
 - **Resultado de e:** `fb0ed0838`. 122 unidades de test (18 pierden el import, 19 a `telar.vocabulary`, 32 solo vocabulario, 53 vocabulario y dominios), 12 fixtures que reexportaban el agregador reexportan solo sus módulos wire, y 67 ficheros textuales incluyen sus dominios o pierden el paraguas. CPU por unidad −8 % a +7 %, salvo `session_fixture` (+38 %, importa 8 módulos). Con a–e, ningún fichero fuera de `lib/client` importa el agregador ni incluye el paraguas.
 - **De P3.3:** las cabeceras de dominio incluyen el vocabulario como texto, así que un fichero que importe el vocabulario y varios dominios fusiona una copia del vocabulario por dominio (el coste medido en P3.2). `ClientCommand`, `PaneForeground`, `PaneFrame`, `RequestRuntimeState` y `SystemMetrics` los exportan tanto el vocabulario como el dominio de su schema. Medir con `ninja -n` y con el tiempo de compilación de alguna unidad que importe varios dominios antes de cerrar cada subtarea.
 
-### [ ] P3.5 · Borrar el agregador `telar.client.protocol`
+### [x] P3.5 · Borrar el agregador `telar.client.protocol`
 - **Depende de:** P3.4a–e
 - **Qué hace:** borra el módulo y la cabecera paraguas `telar_protocol.hpp`.
 - **Hecho cuando:** ni el módulo ni la cabecera paraguas existen, y `ninja -n` tras tocar la cabecera de un dominio recompila solo a sus usuarios, adaptadores Qt y tests incluidos (no basta con el grafo de módulos de P0.2).
+- **Resultado:** `39aebf84a`. Medido con builds reales (un `ninja -n` en seco no puede hacer restat de los dyndep y da por sucias todas las unidades de cada target), runtime y GUI con tests, tocar la cabecera de un dominio recompila (runtime / GUI, entre paréntesis los adaptadores Qt): `execution` 45 / 1 (1), `worktrees` 47 / 77 (3), `graphics` 63 / 112 (6), `agents` 74 / 221 (10), `clipboard` 83 / 186 (3), `pane_io` 86 / 139 (77), `editor` 98 / 98 (6), `history` 99 / 138 (5), `layout` 126 / 235 (15), `runtime` 133 / 88 (71), `content` 149 / 221 (8), `clients` 172 / 240 (58). Antes, tocar el protocolo recompilaba unas 267 unidades del runtime y 530 de la GUI. Al integrar, dos ficheros de P3.9 (`graphics_storage` y su probe) aún importaban el agregador y pasan a `telar.wire.vocabulary`.
 
 ### [x] P3.6 · Bajar `background_executor` y limpiar `runtime/platform`
 - **Depende de:** P1.2
