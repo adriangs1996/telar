@@ -7,6 +7,10 @@
 import std;
 import telar.runtime.tests.backpressure;
 import telar.runtime.tests.check;
+import telar.wire.agents;
+import telar.wire.clients;
+import telar.wire.clipboard;
+import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 

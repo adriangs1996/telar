@@ -8,6 +8,8 @@ import std;
 import telar.runtime.tests.check;
 import telar.runtime.tests.clipboard_task;
 import telar.runtime.tests.protocol_peer;
+import telar.wire.clipboard;
+import telar.wire.content;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 

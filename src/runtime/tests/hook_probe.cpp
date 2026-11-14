@@ -3,6 +3,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 import std;
+import telar.config.core;
 import telar.runtime.tests.agent_oracle;
 import telar.runtime.tests.hook_fixture;
 import telar.runtime.tests.hook_worktree_fixture;
