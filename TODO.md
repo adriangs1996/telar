@@ -539,13 +539,14 @@ Cada tarea empieza localizando todas las copias, crea un módulo con una interfa
 - **Rendimiento:** es el camino más caliente del terminal. Se mide en Release con el PTY y los gráficos, con control A′ e instrucciones por operación como en P9.13d, y se comprueba en el desensamblado que el bucle vectorial sigue insertado en el parser.
 - **Tamaño:** se reparte por bloques al despacharla: primero `terminal/control` con las cabeceras SIMD, después `graphics` y las cabeceras de `lib/` con sus dueños.
 
-#### [ ] P6.8d · `lib/tbc` fuera del alcance de la regla 5
+#### [x] P6.8d · `lib/tbc` fuera del alcance de la regla 5
 - **Problema:** el linter es una herramienta de Clang: usa el AST, los matchers y los diagnósticos de Clang/LLVM, que llegan por cabecera (79 includes). Los 29 estándar y los 12 propios se pueden resolver en cualquiera de las opciones.
-- **Opción 1, módulo dueño `telar.tbc.clang`:** incluye las cabeceras de Clang/LLVM en su fragmento global y exporta lo que usa el linter. Riesgo medio-alto: las macros (`AST_MATCHER`, `LLVM_DEBUG`, las de `DiagnosticIDs`) no cruzan un import y hay que sustituirlas, como con ghostty; el BMI de las cabeceras del AST es grande y lento y puede tropezar con fallos de módulos de Clang; la LLVM de la toolchain se compiló sin módulos, y mezclar `import std` con sus cabeceras en una misma unidad puede dar conflictos de redeclaración.
+- **Opción 1, módulo dueño `telar.tbc.clang`:** incluye las cabeceras de Clang/LLVM en su fragmento global y exporta lo que usa el linter. Riesgo medio-alto: las macros de las cabeceras de Clang/LLVM no cruzan un import (el linter no usa `AST_MATCHER`, `LLVM_DEBUG` ni las de `DiagnosticIDs`, como se dijo al plantearla sin comprobarlo); el BMI de las cabeceras del AST es grande y lento y puede tropezar con fallos de módulos de Clang; la LLVM de la toolchain se compiló sin módulos, y mezclar `import std` con sus cabeceras en una misma unidad puede dar conflictos de redeclaración.
 - **Opción 2, unidades de cabecera de C++20** (`import <clang/AST/RecursiveASTVisitor.h>;`): las macros sí cruzan. Riesgo alto: CMake no construye unidades de cabecera y habría que montarlas a mano.
 - **Opción 3, el linter fuera del alcance de la regla 5:** `check-cpp-modules.py` deja de escanear `lib/tbc` por ser una herramienta de build, no código de telar. Riesgo nulo, pero es una excepción con otro nombre, contra la decisión de vaciar la allowlist.
 - **Decidido (Adrian): opción 3.** `check-cpp-modules.py` deja de escanear `lib/tbc` por ser una herramienta de build. El motivo se documenta donde el checker define su alcance, y el alcance se declara por directorio, no con una lista de ficheros. Los 29 includes estándar y los 12 propios del linter se quedan como están.
 - **Hecho cuando:** `lib/tbc` sale del alcance declarado del checker, sus 120 entradas salen de la allowlist y `check-cpp-modules.py` pasa.
+- **Resultado:** `f6a09bab3`. `check-cpp-modules.py` declara `OUTSIDE_RULE_5 = ('lib/tbc/',)` junto a `SCOPES`, con el motivo encima, y solo admite directorios enteros. `lib/tbc` sale solo de la regla 5: `telar.tbc` (que importan 139 ficheros) sigue en las reglas 1–4, y los ficheros de telar que incluyen `tbc/annotations.hpp` o `tbc/view.hpp` siguen sujetos a la regla 5. Salen de la allowlist las 11 entradas de `lib/tbc` con sus 120 includes: quedan 314.
 
 ---
 
