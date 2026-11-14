@@ -51,13 +51,13 @@ import telar.runtime.model.client_layouts;
 import telar.runtime.runtime.client_control;
 import telar.runtime.runtime.runtime;
 import telar.runtime.tests.check;
-#if (TELAR_DIAGNOSTICS)
-import telar.runtime.runtime.runtime_telemetry;
 import telar.wire.clients;
 import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
+#if (TELAR_DIAGNOSTICS)
+import telar.runtime.runtime.runtime_telemetry;
 #endif
 
 using namespace telar;

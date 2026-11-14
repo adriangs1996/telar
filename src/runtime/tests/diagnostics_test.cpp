@@ -4,49 +4,27 @@ static_assert(true);
 #endif
 
 #include "telar_base/diagnostics/config.hpp"
+#include <cassert>
 #include <cerrno>
 #include <csignal>
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <dirent.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <pthread.h>
+#include <sys/mman.h>
 #include <sys/stat.h>
-#if (TELAR_DIAGNOSTICS)
-#include <cstddef>
-#endif
+#include <sys/types.h>
+#include <sys/uio.h>
+#include <sys/wait.h>
+#include <unistd.h>
 #if (TELAR_DIAGNOSTICS) && (defined(__APPLE__))
 #include <mach/mach.h>
 #endif
-#if (TELAR_DIAGNOSTICS) && (!(defined(__APPLE__)))
-#include <unistd.h>
-#endif
-#if (TELAR_DIAGNOSTICS)
-#include <sys/types.h>
-#endif
-#if (TELAR_DIAGNOSTICS)
-#include <cassert>
-#endif
-#if (TELAR_DIAGNOSTICS)
-#include <cstdlib>
-#endif
-#if (TELAR_DIAGNOSTICS)
-#include <sys/mman.h>
-#endif
-#if (TELAR_DIAGNOSTICS)
-#include <unistd.h>
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#include <sys/uio.h>
-#endif
-#if (TELAR_DIAGNOSTICS)
-#include <sys/wait.h>
-#endif
-#include <cstdlib>
 #include <ghostty/vt.h>
 
 import std;
