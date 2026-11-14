@@ -1,5 +1,5 @@
 module;
-#include "tbc/hot_path.hpp"
+#include "tbc/annotations.hpp"
 #include "telar_base/memory/allocator.hpp"
 
 export module telar.base.memory.allocators;

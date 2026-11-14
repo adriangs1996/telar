@@ -1,6 +1,5 @@
 module;
 #include "tbc/annotations.hpp"
-#include "tbc/hot_path.hpp"
 
 export module telar.base.memory.sensitive;
 

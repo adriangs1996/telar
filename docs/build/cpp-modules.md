@@ -186,8 +186,9 @@ listado en `header_owners` de [modules.json](modules.json). Solo el dueño lo
 incluye en su fragmento global y reexporta sus nombres con
 `export namespace … { using …; }`. El resto de unidades de módulo importa el
 dueño y mantiene en su fragmento global únicamente headers estándar, de sistema,
-de terceros y de macros (`telar_base/diagnostics/config.hpp`,
-`telar_platform/trace_macro.hpp`, `telar_client/codecs/telar_annotations.hpp`).
+de terceros y las cabeceras de macros del proyecto que lista `macro_headers`
+(`telar_base/diagnostics/config.hpp`, `telar_platform/trace_macro.hpp`,
+`tbc/annotations.hpp` y `telar_client/codecs/telar_annotations.hpp`).
 
 Cada copia textual de un header en un fragmento global se serializa en el BMI de
 ese módulo, y cada importador vuelve a fusionar las copias. Con un concepto como

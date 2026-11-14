@@ -1,6 +1,5 @@
 module;
 #include "tbc/annotations.hpp"
-#include "tbc/hot_path.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include <cassert>
 

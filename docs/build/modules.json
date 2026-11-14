@@ -476,7 +476,6 @@
     "lib/ebnf/tests/spec_support.hpp": "Textual test fixture shared by the shipped specs' GoogleTest files",
     "lib/tbc/include/tbc/contracts.hpp": "Consumer-side preprocessor annotations inspected by Clang AST tooling",
     "lib/tbc/include/tbc/detail/attributes.hpp": "Consumer-side preprocessor annotations inspected by Clang AST tooling",
-    "lib/tbc/include/tbc/hot_path.hpp": "Consumer-side preprocessor annotations inspected by Clang AST tooling",
     "lib/tbc/include/tbc/lifetime.hpp": "Consumer-side preprocessor annotations inspected by Clang AST tooling",
     "lib/tbc/include/tbc/view.hpp": "Lifetime vocabulary for sources that cannot import telar.tbc, which owns it",
     "lib/tbc/linter/lifetime_analysis.hpp": "Private Clang AST adapter; must use the SDK declarations of the selected linter toolchain",
@@ -487,7 +486,7 @@
     "lib/tbc/tests/spec/elision.hpp": "Textual test fixture, including compiler diagnostic and macro expansion locations",
     "lib/tbc/tests/spec/system_library.hpp": "Textual test fixture, including compiler diagnostic and macro expansion locations",
     "lib/tbc/tests/spec/system_macro.hpp": "Textual test fixture, including compiler diagnostic and macro expansion locations",
-    "lib/base/include/telar_base/diagnostics/config.hpp": "Objective-C++ ABI",
+    "lib/base/include/telar_base/diagnostics/config.hpp": "Project macro header: TELAR_DIAGNOSTIC and TELAR_DIAGNOSTICS; includes nothing",
     "lib/base/include/telar_base/diagnostics/limit_reach.hpp": "Included by other textual headers and tests; module units import its owner module",
     "lib/base/include/telar_base/diagnostics/timing.hpp": "Objective-C++ ABI",
     "lib/base/include/telar_base/memory/allocation_statistics.hpp": "Objective-C++ ABI",
@@ -496,7 +495,7 @@
     "lib/base/include/telar_base/program_identity.hpp": "Per-consumer SIMD test specialization",
     "lib/base/include/telar_base/text/base64.hpp": "Per-consumer SIMD test specialization",
     "lib/base/include/telar_base/text/utf8.hpp": "Qt adapters include it; module units import its owner module",
-    "lib/client/include/telar_client/codecs/telar_annotations.hpp": "Consumer-side preprocessor annotations inspected by Clang AST tooling",
+    "lib/client/include/telar_client/codecs/telar_annotations.hpp": "Project macro header: the codec annotations _throw and _changes; includes nothing",
     "lib/client/include/telar_client/codecs/telar_cells.hpp": "Included by other textual headers and tests; module units import its owner module",
     "lib/client/include/telar_client/codecs/telar_codec.hpp": "Qt adapters include it; module units import its owner module",
     "lib/client/include/telar_client/codecs/telar_value_codec.hpp": "Qt adapters include it; module units import its owner module",
@@ -527,7 +526,7 @@
     "lib/platform/include/telar_platform/process_environment.h": "C ABI for the process environment",
     "lib/platform/include/telar_platform/random_bytes.hpp": "Per-consumer SIMD test specialization",
     "lib/platform/include/telar_platform/trace.hpp": "Preprocessor contract",
-    "lib/platform/include/telar_platform/trace_macro.hpp": "Preprocessor contract",
+    "lib/platform/include/telar_platform/trace_macro.hpp": "Project macro header: TELAR_TRACE; includes nothing",
     "src/gui/application/dependencies.hpp": "Objective-C++ ABI",
     "src/gui/attachments/capture.hpp": "Objective-C++ ABI",
     "src/gui/attachments/secure_erase.hpp": "Objective-C++ ABI",
@@ -757,9 +756,14 @@
     "src/runtime/terminal/ghostty_grid.hpp": "Needs the generated cell layout, which only runtime-core units include",
     "src/gui/platform/macos/cf_reference.hpp": "Objective-C++ sources include it; Objective-C++ cannot import the C++ modules",
     "lib/tbc/tests/spec/units/cross_unit/node.hpp": "Textual spec fixture shared by the cross-unit cases and the unit that defines their bodies",
-    "lib/tbc/include/tbc/annotations.hpp": "Consumer-side preprocessor annotations inspected by Clang AST tooling; includes nothing"
+    "lib/tbc/include/tbc/annotations.hpp": "Project macro header: the TBC annotations tbc-lint reads on declarations; includes nothing"
   },
-  "macro_headers": [],
+  "macro_headers": [
+    "lib/base/include/telar_base/diagnostics/config.hpp",
+    "lib/client/include/telar_client/codecs/telar_annotations.hpp",
+    "lib/platform/include/telar_platform/trace_macro.hpp",
+    "lib/tbc/include/tbc/annotations.hpp"
+  ],
   "implementations": {
     "lib/base/diagnostics/diagnostics.cpp": "telar.base.diagnostics",
     "lib/base/text/text.cpp": "telar.base.text",

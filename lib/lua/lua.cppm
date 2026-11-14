@@ -1,6 +1,5 @@
 module;
 #include "tbc/annotations.hpp"
-#include "tbc/hot_path.hpp"
 #include <cstddef>
 
 #include <lauxlib.h>
