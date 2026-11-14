@@ -1,15 +1,7 @@
 module;
-#include <cerrno>
+#include "tbc/hot_path.hpp"
 #if (defined(__APPLE__))
 #include <CoreFoundation/CoreFoundation.h>
-#include <Security/Security.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <cstdlib>
-#include <openssl/err.h>
-#include <openssl/pem.h>
-#include <openssl/x509.h>
-#include <unistd.h>
 #endif
 
 export module telar.runtime.platform.system_certificates;
@@ -25,9 +17,7 @@ export {
 
     class SystemCertificates {
       struct FreeEncoded {
-        inline void operator()(unsigned char* bytes) const noexcept {
-          OPENSSL_free(bytes);
-        }
+        void operator()(unsigned char* bytes) const noexcept;
       };
 
       // telar links its own OpenSSL, whose default bundle path matches only some
@@ -41,53 +31,20 @@ export {
           "/etc/ssl/cert.pem",                                 // Alpine
       };
 
-      inline static const char* bundle() noexcept {
-        const auto* path = std::getenv(X509_get_default_cert_file_env());
-        if (path != nullptr && path[0] != '\0') {
-          return path;
-        }
+      static const char* bundle() noexcept;
 
-        for (const auto* candidate : bundles) {
-          if (::access(candidate, R_OK) == 0) {
-            return candidate;
-          }
-        }
-
-        return bundles.back();
-      }
+      // Reads the bundle and hands each certificate to `consume`, which calls the caller's consumer at `target`.
+      static void readBundle(void* target, void (*consume)(void*, std::span<const std::uint8_t>));
 
     public:
+      // Stays generic over the caller's consumer, which the reader calls through a function pointer.
       template <typename Consumer>
-      inline static void read(Consumer&& consume) {
-        const auto* path = bundle();
-        const std::unique_ptr<BIO, decltype(&BIO_free)> file{BIO_new_file(path, "r"), &BIO_free};
-        if (!file) {
-          throw SystemError{"Open system certificate bundle", EACCES};
-        }
+      TBC_HOT_PATH inline static void read(Consumer&& consume) {
+        using Target = std::remove_reference_t<Consumer>;
 
-        std::size_t count = 0;
-        for (;;) {
-          const std::unique_ptr<X509, decltype(&X509_free)> certificate{PEM_read_bio_X509_AUX(file.get(), nullptr, nullptr, nullptr), &X509_free};
-          if (!certificate) {
-            if (!BIO_eof(file.get()) || count == 0) {
-              throw SystemError{"Read system certificate bundle", EINVAL};
-            }
-            ERR_clear_error();
-            return;
-          }
-          ++count;
-          if (X509_check_trust(certificate.get(), X509_TRUST_SSL_SERVER, 0) == X509_TRUST_REJECTED) {
-            continue;
-          }
-
-          unsigned char* encoded = nullptr;
-          const auto length = i2d_X509(certificate.get(), &encoded);
-          const std::unique_ptr<unsigned char, FreeEncoded> bytes{encoded};
-          if (length <= 0 || encoded == nullptr) {
-            throw SystemError{"Encode system certificate", EINVAL};
-          }
-          consume(std::span<const std::uint8_t>{bytes.get(), static_cast<std::size_t>(length)});
-        }
+        readBundle(const_cast<std::remove_const_t<Target>*>(std::addressof(consume)), [](void* target, std::span<const std::uint8_t> bytes) {
+          (*static_cast<Target*>(target))(bytes);
+        });
       }
     };
 
@@ -103,68 +60,24 @@ export {
 
     class SystemCertificates {
     public:
+      // Stays generic over the caller's consumer, which the reader calls through a function pointer.
       template <typename Consumer>
-      inline static void read(Consumer&& consume) {
+      TBC_HOT_PATH inline static void read(Consumer&& consume) {
+        using Target = std::remove_reference_t<Consumer>;
+        const auto sink = [](void* target, std::span<const std::uint8_t> bytes) {
+          (*static_cast<Target*>(target))(bytes);
+        };
+
         for (const auto path : keychains) {
-          readKeychain(path, consume);
+          readKeychain(path, const_cast<std::remove_const_t<Target>*>(std::addressof(consume)), sink);
         }
       }
 
     private:
       using Resource = std::unique_ptr<const void, decltype(&CFRelease)>;
 
-      template <typename Consumer>
-      inline static void readKeychain(const char* path, Consumer& consume) {
-        SecKeychainRef opened = nullptr;
-        if (SecKeychainOpen(path, &opened) != errSecSuccess) {
-          throw SystemError{"Open system certificate keychain", EACCES};
-        }
-
-        const Resource keychain{opened, &CFRelease};
-        const void* search_items[]{opened};
-        const Resource search{CFArrayCreate(kCFAllocatorDefault, search_items, 1, &kCFTypeArrayCallBacks), &CFRelease};
-        if (!search) {
-          throw std::bad_alloc{};
-        }
-
-        const void* keys[]{kSecClass, kSecMatchSearchList, kSecMatchLimit, kSecReturnRef, kSecUseAuthenticationUI};
-        const void* values[]{kSecClassCertificate, search.get(), kSecMatchLimitAll, kCFBooleanTrue, kSecUseAuthenticationUISkip};
-        const Resource query{CFDictionaryCreate(kCFAllocatorDefault, keys, values, std::size(keys), &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks), &CFRelease};
-        if (!query) {
-          throw std::bad_alloc{};
-        }
-
-        CFTypeRef matched = nullptr;
-        const auto status = SecItemCopyMatching(static_cast<CFDictionaryRef>(query.get()), &matched);
-        const Resource result{matched, &CFRelease};
-
-        if (status == errSecItemNotFound) {
-          return;
-        }
-
-        if (status != errSecSuccess || !result || CFGetTypeID(result.get()) != CFArrayGetTypeID()) {
-          throw SystemError{"Read system certificate keychain", EIO};
-        }
-
-        const auto certificates = static_cast<CFArrayRef>(result.get());
-
-        for (CFIndex index = 0; index < CFArrayGetCount(certificates); ++index) {
-          const auto item = CFArrayGetValueAtIndex(certificates, index);
-          if (item == nullptr || CFGetTypeID(item) != SecCertificateGetTypeID()) {
-            throw SystemError{"Invalid system certificate entry", EINVAL};
-          }
-
-          const auto certificate = static_cast<SecCertificateRef>(const_cast<void*>(item));
-          const Resource encoded{SecCertificateCopyData(certificate), &CFRelease};
-          if (!encoded) {
-            throw std::bad_alloc{};
-          }
-
-          const auto data = static_cast<CFDataRef>(encoded.get());
-
-          consume(std::span<const std::uint8_t>{CFDataGetBytePtr(data), static_cast<std::size_t>(CFDataGetLength(data))});
-        }
-      }
+      // Reads one keychain and hands each certificate to `consume`, which calls the caller's consumer at `target`.
+      static void readKeychain(const char* path, void* target, void (*consume)(void*, std::span<const std::uint8_t>));
 
       static constexpr std::array<const char*, 2> keychains{
           "/System/Library/Keychains/SystemRootCertificates.keychain",

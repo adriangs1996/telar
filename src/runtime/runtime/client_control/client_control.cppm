@@ -1,21 +1,8 @@
 module;
-#include <new>
-#include <stdlib.h>
-
-#include <cerrno>
-#include <cstdint>
-#include <fcntl.h>
-#include <sys/stat.h>
-
+#include "tbc/hot_path.hpp"
 #include "telar_base/diagnostics/config.hpp"
-#include <cassert>
 #include <cstddef>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <limits.h>
-#include <sys/types.h>
-#include <unistd.h>
+#include <cstdint>
 
 #include <clipboard.hpp>
 
@@ -61,8 +48,9 @@ export {
     };
 
     // Reads agents' session files on a worker; the agents are lent to each call.
+    // Kept whole: Agents is the runtime's AgentService, from a module that imports this one.
     template <ConcurrentAllocator Memory, SessionFileObserver Agents>
-    class AgentFileService {
+    class TBC_HOT_PATH AgentFileService {
     public:
       inline explicit AgentFileService(Memory& memory)
           : worker_(std::in_place, memory) {}
@@ -108,225 +96,43 @@ export {
     template <Allocator Memory>
     class ClientControl {
     public:
-      inline static void list(ClientStore<Memory>& clients, std::uint64_t requester_id, const QueryClients& request) {
-        std::array<ClientDescriptor, client_capacity> entries;
-        std::size_t count = 0;
+      static void list(ClientStore<Memory>& clients, std::uint64_t requester_id, const QueryClients& request);
 
-        for (const auto* client : clients.items()) {
-          if (!routable(client)) {
-            continue;
-          }
+      static void detach(ClientStore<Memory>& clients, std::uint64_t requester_id, const DetachClient& request);
 
-          entries[count++] = ClientDescriptor{
-              .id = client->id,
-              .generation = client->generation,
-              .identity = client->identity,
-              .attachments = static_cast<std::uint16_t>(client->attachments.size()),
-              .last_input_pane = client->last_input_pane,
-              .last_input_sequence = client->last_input_sequence,
-          };
-        }
+      static void requestCommand(ClientStore<Memory>& clients, std::uint64_t requester_id, const RequestClientCommand& request);
 
-        requireClient(clients, requester_id).connection.send(ClientList{.request_id = request.request_id, .entries = std::span{entries}.first(count)});
-      }
+      static void completeCommand(ClientStore<Memory>& clients, std::uint64_t sender_id, const CompleteClientCommand& completion);
 
-      inline static void detach(ClientStore<Memory>& clients, std::uint64_t requester_id, const DetachClient& request) {
-        auto& requester = requireClient(clients, requester_id);
+      static void requestFocus(const PaneStore<Memory>& panes, ClientStore<Memory>& clients, std::uint64_t requester_id, const RequestPaneFocus& request);
 
-        requireRole(requester, ClientRole::control);
-        auto* target = resolve(clients, ClientRoute{request.client_id, request.client_generation});
-        if (!routable(target) || target == &requester) {
-          throw RequestError{FailureCode::invalid_request, "Interactive client is absent, closing, or stale"};
-        }
-
-        requester.connection.send(RequestCompleted{.request_id = request.request_id});
-        target->connection.closing = true;
-      }
-
-      inline static void requestCommand(ClientStore<Memory>& clients, std::uint64_t requester_id, const RequestClientCommand& request) {
-        auto& requester = requireClient(clients, requester_id);
-
-        requireRole(requester, ClientRole::control);
-        if (request.status != ClientCommandStatus::request || requester.pending_command) {
-          throw RequestError{FailureCode::invalid_request, "Invalid or already pending client command"};
-        }
-
-        auto* target = resolve(clients, request.route);
-        if (!routable(target)) {
-          throw RequestError{FailureCode::invalid_request, "Interactive client is absent, closing, or stale"};
-        }
-
-        ClientCommand forwarded = request;
-
-        forwarded.route = route(requester);
-        try {
-          target->connection.send(forwarded);
-        } catch (const ResponseQueueFull&) {
-          throw RequestError{FailureCode::invalid_request, "ResponseQueueFull"};
-        }
-
-        requester.pending_command = PendingClientCommand{target->id, request.request_id, request.action, request.target_id};
-      }
-
-      inline static void completeCommand(ClientStore<Memory>& clients, std::uint64_t sender_id, const CompleteClientCommand& completion) {
-        const auto& sender = requireClient(clients, sender_id);
-
-        requireRole(sender, ClientRole::interactive);
-        auto* requester = resolve(clients, completion.route);
-        if (requester == nullptr || requester->connection.closing || requester->role != ClientRole::control || !requester->pending_command) {
-          return;
-        }
-
-        const auto& pending = *requester->pending_command;
-        if (pending.target != sender.id || pending.request_id != completion.request_id || pending.action != completion.action || pending.target_id != completion.target_id || completion.status == ClientCommandStatus::request) {
-          return;
-        }
-
-        ClientCommandResult result;
-
-        static_cast<ClientCommand&>(result) = completion;
-        result.route = route(sender);
-        requester->connection.send(result);
-        requester->pending_command.reset();
-      }
-
-      inline static void requestFocus(const PaneStore<Memory>& panes, ClientStore<Memory>& clients, std::uint64_t requester_id, const RequestPaneFocus& request) {
-        auto& requester = requireClient(clients, requester_id);
-
-        requireRole(requester, ClientRole::control);
-        const auto* pane = findPane(panes, request.pane_id, request.pane_generation);
-        if (pane == nullptr) {
-          throw RequestError{FailureCode::pane_not_found, "Pane does not exist or its generation is stale"};
-        }
-
-        if (pane->exit_status) {
-          throw RequestError{FailureCode::pane_exited, "Pane already exited"};
-        }
-
-        if (requester.pending_focus) {
-          throw RequestError{FailureCode::invalid_request, "A pane focus request is already pending"};
-        }
-
-        auto* target = focusOrigin(clients, pane->id);
-        if (target == nullptr) {
-          throw RequestError{FailureCode::invalid_request, "No interactive client originated input for this pane"};
-        }
-
-        target->connection.send(PaneFocusCommand{
-            .requester = route(requester),
-            .request_id = request.request_id,
-            .pane_id = pane->id,
-            .pane_generation = pane->generation,
-            .direction = request.direction,
-        });
-
-        requester.pending_focus = PendingPaneFocus{target->id, request.request_id, pane->id, pane->generation};
-      }
-
-      inline static void completeFocus(ClientStore<Memory>& clients, std::uint64_t sender_id, const CompletePaneFocus& completion) {
-        const auto& sender = requireClient(clients, sender_id);
-
-        requireRole(sender, ClientRole::interactive);
-        auto* requester = resolve(clients, completion.requester);
-        if (requester == nullptr || requester->connection.closing || requester->role != ClientRole::control || !requester->pending_focus) {
-          return;
-        }
-
-        const auto& pending = *requester->pending_focus;
-        if (pending.target != sender.id || pending.request_id != completion.request_id || pending.pane_id != completion.pane_id || pending.pane_generation != completion.pane_generation) {
-          return;
-        }
-
-        requester->connection.send(PaneFocusResult{.request_id = completion.request_id, .outcome = completion.outcome, .focused_pane_id = completion.focused_pane_id});
-        requester->pending_focus.reset();
-        requester->connection.closing = true;
-      }
+      static void completeFocus(ClientStore<Memory>& clients, std::uint64_t sender_id, const CompletePaneFocus& completion);
 
       // Shows a notification on the interactive clients and tells the requester how many received it. The
       // confirmation takes its place in the requester's queue first, so a full queue refuses the request
       // before anything is shown; its count is filled in by offset once the clients are reached.
-      inline static void notify(ClientStore<Memory>& clients, std::uint64_t requester_id, const ShowNotification& request) {
-        NotificationShown confirmation{.request_id = request.request_id};
-        const auto offset = requireClient(clients, requester_id).connection.reserve(confirmation);
+      static void notify(ClientStore<Memory>& clients, std::uint64_t requester_id, const ShowNotification& request);
 
-        confirmation.delivered_clients = publish(clients, request.notification);
-        requireClient(clients, requester_id).connection.complete(offset, confirmation);
-      }
+      static std::uint8_t publish(ClientStore<Memory>& clients, const NotificationBody& body);
 
-      inline static std::uint8_t publish(ClientStore<Memory>& clients, const NotificationBody& body) {
-        Notification notification;
-
-        static_cast<NotificationBody&>(notification) = body;
-        return static_cast<std::uint8_t>(broadcast(clients, [](const ClientSession<Memory>& client) {
-          return client.role == ClientRole::interactive;
-        },
-            notification));
-      }
-
-      inline static void abandon(ClientStore<Memory>& clients, std::uint64_t departed) noexcept {
-        for (auto* client : clients.items()) {
-          if (client == nullptr || client->id == departed) {
-            continue;
-          }
-
-          if (client->pending_command && client->pending_command->target == departed) {
-            failAbandoned(*client, client->pending_command->request_id);
-            client->pending_command.reset();
-          }
-
-          if (client->pending_focus && client->pending_focus->target == departed) {
-            failAbandoned(*client, client->pending_focus->request_id);
-            client->pending_focus.reset();
-            client->connection.closing = true;
-          }
-        }
-      }
+      static void abandon(ClientStore<Memory>& clients, std::uint64_t departed) noexcept;
 
     private:
-      inline static void requireRole(const ClientSession<Memory>& client, ClientRole expected) {
-        if (client.role != expected) {
-          throw RequestError{FailureCode::invalid_request, "Invalid client role"};
-        }
-      }
+      static void requireRole(const ClientSession<Memory>& client, ClientRole expected);
 
-      inline static bool routable(const ClientSession<Memory>* client) noexcept {
-        return client != nullptr && !client->connection.closing && client->role == ClientRole::interactive && client->identity != 0;
-      }
+      static bool routable(const ClientSession<Memory>* client) noexcept;
 
-      inline static ClientSession<Memory>* resolve(ClientStore<Memory>& clients, ClientRoute target) noexcept {
-        auto* client = clients.find(target.id);
+      static ClientSession<Memory>* resolve(ClientStore<Memory>& clients, ClientRoute target) noexcept;
 
-        return client != nullptr && client->generation == target.generation ? client : nullptr;
-      }
+      static ClientRoute route(const ClientSession<Memory>& client) noexcept;
 
-      inline static ClientRoute route(const ClientSession<Memory>& client) noexcept {
-        return ClientRoute{client.id, client.generation};
-      }
+      static ClientSession<Memory>* focusOrigin(ClientStore<Memory>& clients, std::uint64_t pane_id) noexcept;
 
-      inline static ClientSession<Memory>* focusOrigin(ClientStore<Memory>& clients, std::uint64_t pane_id) noexcept {
-        ClientSession<Memory>* selected = nullptr;
-
-        for (auto* client : clients.items()) {
-          if (client == nullptr || client->connection.closing || client->role != ClientRole::interactive || client->last_input_pane != pane_id || client->attachment(pane_id) == nullptr || client->last_input_sequence == 0) {
-            continue;
-          }
-
-          if (selected == nullptr || client->last_input_sequence > selected->last_input_sequence) {
-            selected = client;
-          }
-        }
-
-        return selected;
-      }
-
-      inline static void failAbandoned(ClientSession<Memory>& client, std::uint64_t request_id) noexcept {
-        try {
-          client.connection.send(RequestFailed{.request_id = request_id, .code = FailureCode::invalid_request, .message = "Target client disconnected before confirming the operation"});
-        } catch (...) {
-          client.connection.closeImmediately();
-        }
-      }
+      static void failAbandoned(ClientSession<Memory>& client, std::uint64_t request_id) noexcept;
     };
+
+    extern template class ClientControl<SystemAllocator>;
+    extern template class ClientControl<ConcurrentMemory>;
 
   }
 }
@@ -341,8 +147,9 @@ export {
       rejected,
     };
 
+    // Kept here: the message is any of the protocol's, an open set no unit can instantiate ahead.
     template <typename Message>
-    std::optional<ReporterIdentity> reporterOf(const AgentManifests& manifests, const Message& message) noexcept {
+    TBC_HOT_PATH std::optional<ReporterIdentity> reporterOf(const AgentManifests& manifests, const Message& message) noexcept {
       if constexpr (std::same_as<Message, ReportAgent> || std::same_as<Message, ReportAgentTitle> || std::same_as<Message, ReportAgentProgress>) {
         return ReporterIdentity{message.pane_id, message.pane_generation, message.provider};
       } else if constexpr (std::same_as<Message, ReportAgentCommand>) {
@@ -359,8 +166,9 @@ export {
 
     // Holds a report back until the pane's process is checked again. A held report keeps its payload in
     // its client; the runtime takes it out to replay it.
+    // Kept whole: tests instantiate it with their own fake Agents (deferred_reports_test's RecordedAgents).
     template <Allocator Memory, ReporterAgents Agents>
-    class DeferredReports {
+    class TBC_HOT_PATH DeferredReports {
     public:
       // The clients whose held reports are due, in the order they were held.
       struct Due {
@@ -521,8 +329,9 @@ export {
 
     // Checks on a worker that a client's process descends from a pane. A request is held in its client
     // until the caller schedules the held checks.
+    // Kept whole: tests instantiate it with their own fake Inspector (agents_test's TestProcessInspector).
     template <ConcurrentAllocator Memory, LineageInspector Inspector>
-    class DescentService {
+    class TBC_HOT_PATH DescentService {
     public:
       inline explicit DescentService(const Inspector& inspector)
           : worker_(std::in_place, inspector) {}
@@ -636,9 +445,10 @@ export {
 
     // Samples the host on the metrics worker. It owns its probe, built from the arguments; a reference
     // type as `Probe` lends one instead.
+    // Kept whole: tests instantiate it with their own fake Probe (metrics_test's FakeHostMetrics).
     template <typename Probe>
       requires HostMetricsProbe<std::remove_reference_t<Probe>>
-    class HostMetricsReader {
+    class TBC_HOT_PATH HostMetricsReader {
     public:
       using Request = HostSampler;
       using Result = HostSampler;
@@ -666,9 +476,10 @@ export {
       Probe probe_;
     };
 
+    // Kept whole: tests instantiate it with their own fake Probe (metrics_test's FakeHostMetrics).
     template <typename Probe>
       requires HostMetricsProbe<std::remove_reference_t<Probe>>
-    class HostMetricsService {
+    class TBC_HOT_PATH HostMetricsService {
     public:
       using Clock = std::chrono::steady_clock;
       static constexpr auto sample_interval = std::chrono::seconds{2};
@@ -751,9 +562,10 @@ export {
     };
 
     // Observes pane screens and processes on a worker. The model and the agents are lent to each call.
+    // Kept whole: tests instantiate it with their own fakes (observation_test's UnusedAgents and DirectoryOnlyProbe).
     template <ConcurrentAllocator Memory, typename Agents, ObservationLimitSink Limits, PaneProcessProbe Probe, HistoryEventSink History>
       requires AgentObservationSink<Agents, Memory>
-    class PaneObservationService {
+    class TBC_HOT_PATH PaneObservationService {
       using Processor = ObservationProcessor<Memory, Probe, History>;
 
     public:
@@ -1032,17 +844,16 @@ export {
       using Request = bool;
       using Result = std::expected<clipboard::content, clipboard::read_error>;
 
-      inline Result observe(const Request&) noexcept {
-        return clipboard::read(runtime_clipboard_max_bytes);
-      }
+      Result observe(const Request&) noexcept;
 
-      inline void stop() noexcept {}
+      void stop() noexcept;
     };
 
     // One bounded capture at a time. Pulling one chunk per request keeps a slow
     // consumer from filling the response queue or stalling terminal delivery.
+    // Kept whole: tests instantiate it with their own fake Reader (runtime_clipboard_test's Reader).
     template <Allocator Memory, typename Reader = RuntimeClipboardReader>
-    class RuntimeClipboardService {
+    class TBC_HOT_PATH RuntimeClipboardService {
     public:
       using Clock = std::chrono::steady_clock;
       static constexpr auto transfer_timeout = std::chrono::seconds{30};
@@ -1166,8 +977,9 @@ export {
 export {
   namespace telar::runtime {
 
+    // Kept whole: tests instantiate it with their own fake Probe (worktree_detection_test's GatedWorktreeDetector).
     template <Allocator Memory, WorktreeDetector Probe>
-    class WorktreeDetectionService {
+    class TBC_HOT_PATH WorktreeDetectionService {
     public:
       // The probe is built in place on its worker from the arguments.
       template <typename... Arguments>

@@ -1,11 +1,8 @@
 module;
-
-#include <cstdint>
-
-#include <cstring>
-
-#include <cassert>
+#include "tbc/hot_path.hpp"
 #include <cstddef>
+#include <cstdint>
+#include <cstring>
 
 export module telar.runtime.platform.stream_read_buffer;
 
@@ -41,8 +38,9 @@ export {
       }
 
       // Writes what `stream` accepts now and returns the stream's result.
+      // Generic over the caller's stream, so it stays a template here.
       template <ByteStream Stream>
-      inline StreamResult write(Stream& stream) noexcept {
+      TBC_HOT_PATH inline StreamResult write(Stream& stream) noexcept {
         const auto rest = remaining();
         const auto result = stream.write({reinterpret_cast<const std::uint8_t*>(rest.data()), rest.size()});
         if (result.state == StreamResult::State::data) {
@@ -58,8 +56,9 @@ export {
     };
 
     // Reads and discards what a refused peer still sends; true once its stream ended or failed.
+    // Generic over the caller's stream, so it stays a template here.
     template <ByteStream Stream>
-    inline bool drainEnded(Stream& stream) noexcept {
+    TBC_HOT_PATH inline bool drainEnded(Stream& stream) noexcept {
       std::array<std::uint8_t, 4096> discarded;
       const auto read = stream.read(discarded);
 
@@ -82,8 +81,9 @@ export {
         too_large,
       };
 
+      // Generic over the caller's stream, so it stays a template here.
       template <PeekableByteStream Stream>
-      inline Result receive(Stream& source, std::span<std::uint8_t> storage, std::string_view delimiter) noexcept {
+      TBC_HOT_PATH inline Result receive(Stream& source, std::span<std::uint8_t> storage, std::string_view delimiter) noexcept {
         if (complete_) {
           return Result::complete;
         }
@@ -119,23 +119,16 @@ export {
                                                                         : Result::pending;
       }
 
-      inline std::size_t length() const noexcept {
-        return length_;
-      }
+      std::size_t length() const noexcept;
 
-      inline StreamReadiness waiting() const noexcept {
-        return waiting_;
-      }
+      StreamReadiness waiting() const noexcept;
 
-      inline void reset() noexcept {
-        length_ = 0;
-        complete_ = false;
-        waiting_ = StreamReadiness::readable;
-      }
+      void reset() noexcept;
 
     private:
+      // Generic over the caller's stream, so it stays a template here.
       template <BufferedByteStream Stream>
-      inline Result receiveBuffered(Stream& source, std::span<std::uint8_t> storage, std::string_view delimiter) noexcept {
+      TBC_HOT_PATH inline Result receiveBuffered(Stream& source, std::span<std::uint8_t> storage, std::string_view delimiter) noexcept {
         const auto visible = source.peekView(storage.size() - length_);
         if (visible.state != StreamResult::State::data || visible.bytes.empty()) {
           return interrupted({visible.state, 0, visible.waiting});
@@ -155,29 +148,9 @@ export {
                                                                         : Result::pending;
       }
 
-      inline static std::size_t delimiterEnd(std::string_view previous, std::string_view incoming, std::string_view delimiter) noexcept {
-        const auto overlap = std::min(previous.size(), delimiter.size() - 1);
+      static std::size_t delimiterEnd(std::string_view previous, std::string_view incoming, std::string_view delimiter) noexcept;
 
-        for (std::size_t prefix = overlap; prefix != 0; --prefix) {
-          const auto suffix = delimiter.size() - prefix;
-          if (suffix <= incoming.size() && previous.ends_with(delimiter.substr(0, prefix)) && incoming.starts_with(delimiter.substr(prefix))) {
-            return suffix;
-          }
-        }
-
-        const auto position = incoming.find(delimiter);
-
-        return position == std::string_view::npos ? position : position + delimiter.size();
-      }
-
-      inline Result interrupted(StreamResult result) noexcept {
-        if (result.state == StreamResult::State::blocked) {
-          waiting_ = result.waiting;
-          return Result::pending;
-        }
-
-        return Result::ended;
-      }
+      Result interrupted(StreamResult result) noexcept;
 
       std::size_t length_ = 0;
       bool complete_ = false;
@@ -232,11 +205,12 @@ export {
     template <std::size_t Capacity>
     class StreamReadBuffer {
     public:
+      // Generic over the caller's read, so it stays a template here.
       template <typename Read>
         requires requires(Read read, std::span<std::uint8_t> destination) {
           { read(destination) } noexcept -> std::same_as<StreamResult>;
         }
-      inline StreamView peek(Read read, std::size_t maximum) noexcept {
+      TBC_HOT_PATH inline StreamView peek(Read read, std::size_t maximum) noexcept {
         if (empty()) {
           const auto received = read(storage_.bytes());
           if (received.state != StreamResult::State::data || received.bytes == 0) {
@@ -250,30 +224,19 @@ export {
         return {StreamResult::State::data, storage_.bytes().subspan(offset_, std::min(maximum, length_ - offset_))};
       }
 
-      inline std::size_t copyTo(std::span<std::uint8_t> destination) noexcept {
-        const auto count = std::min(destination.size(), length_ - offset_);
-        if (count != 0) {
-          std::memcpy(destination.data(), storage_.bytes().data() + offset_, count);
-          consume(count);
-        }
+      std::size_t copyTo(std::span<std::uint8_t> destination) noexcept;
 
-        return count;
-      }
+      void consume(std::size_t count) noexcept;
 
-      inline void consume(std::size_t count) noexcept {
-        assert(count <= length_ - offset_);
-        offset_ += count;
-      }
-
-      inline bool empty() const noexcept {
-        return offset_ == length_;
-      }
+      bool empty() const noexcept;
 
     private:
       SensitiveBuffer<Capacity> storage_;
       std::size_t offset_ = 0;
       std::size_t length_ = 0;
     };
+
+    extern template class StreamReadBuffer<16 * 1024>;
 
   }
 }

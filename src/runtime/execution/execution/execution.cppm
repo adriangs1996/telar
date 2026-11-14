@@ -1,16 +1,3 @@
-module;
-#include <cstdio>
-#include <cstdlib>
-#include <new>
-#include <unistd.h>
-
-#include <cassert>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <limits.h>
-#include <sys/types.h>
-
 export module telar.runtime.execution.execution;
 
 import std;
@@ -32,45 +19,9 @@ export {
     template <Allocator Memory>
     class Execution {
     public:
-      inline explicit Execution(Memory& memory, std::uint64_t token, const ExecutionRequest& request, std::uint64_t workspace, std::string_view cwd)
-          : token(token),
-            id(request.execution_id),
-            workspace(workspace),
-            input(memory, input_capacity),
-            output(memory, retained_capacity),
-            error(memory, retained_capacity),
-            requested_cwd(request.cwd, AllocatorRef<char, Memory>{memory}),
-            arguments(AllocatorRef<String<Memory>, Memory>{memory}),
-            requested_workspace(request.workspace_id),
-            requested_stdin(request.stdin_open),
-            eof(!request.stdin_open) {
-        input.reserve(input_capacity);
-        for (const auto argument : request.arguments) {
-          arguments.emplace_back(argument, AllocatorRef<char, Memory>{memory});
-        }
+      explicit Execution(Memory& memory, std::uint64_t token, const ExecutionRequest& request, std::uint64_t workspace, std::string_view cwd);
 
-        try {
-          Command command{memory, Launch{.cwd = cwd, .arguments = request.arguments}, CommandPurpose::administration};
-
-          process.emplace(command.specification({}));
-          state = ExecutionState::running;
-        } catch (const SystemError& failure) {
-          state = ExecutionState::failed;
-          exit_code = 125;
-          failure_name = sys::errorName(failure.code(), "ExecutionSpawnFailed");
-          eof = true;
-        }
-      }
-
-      inline bool matches(const ExecutionRequest& request) const noexcept {
-        if (requested_workspace != request.workspace_id || requested_cwd != request.cwd || requested_stdin != request.stdin_open || arguments.size() != request.arguments.size()) {
-          return false;
-        }
-
-        return std::equal(arguments.begin(), arguments.end(), request.arguments.begin(), [](const auto& left, auto right) {
-          return left == right;
-        });
-      }
+      bool matches(const ExecutionRequest& request) const noexcept;
 
       static constexpr std::size_t retained_capacity = 1024 * 1024;
       static constexpr std::size_t input_capacity = 64 * 1024;
@@ -93,6 +44,9 @@ export {
       int exit_code = 0;
       std::string_view failure_name;
     };
+
+    extern template class Execution<ConcurrentMemory>;
+    extern template class Execution<SystemAllocator>;
 
   }
 }

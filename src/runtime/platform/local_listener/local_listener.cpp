@@ -135,6 +135,10 @@ namespace telar::runtime {
     bound_ = false;
   }
 
+  int LocalListener::descriptor() const noexcept {
+    return socket_.get();
+  }
+
   FileDescriptor LocalListener::accept(LocalPeerPolicy policy) {
     FileDescriptor connection{::accept(socket_.get(), nullptr, nullptr)};
     if (!connection) {
@@ -164,6 +168,10 @@ namespace telar::runtime {
     }
 
     return connection;
+  }
+
+  std::string_view LocalListener::path() const noexcept {
+    return path_.data();
   }
 
 }

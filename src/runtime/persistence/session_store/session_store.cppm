@@ -1,61 +1,10 @@
 module;
+#include "tbc/hot_path.hpp"
 #include "telar_platform/trace_macro.hpp"
-#include <ghostty/vt.h>
-#include <stdlib.h>
-#include <zlib.h>
-
-#include <cerrno>
-#include <cstdint>
-#include <cstdio>
-#include <fcntl.h>
-#include <limits.h>
-#include <sys/stat.h>
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <linux/fs.h>
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <sys/syscall.h>
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <unistd.h>
-#endif
-#include <cstdlib>
-#include <sys/file.h>
-#include <unistd.h>
-
-#include "cell_layout.hpp"
-#include "telar_base/diagnostics/config.hpp"
-#include <cassert>
-#include <csignal>
-#include <cstddef>
-#include <cstring>
-#include <sys/mman.h>
-#include <sys/types.h>
-#include <sys/uio.h>
-#include <sys/wait.h>
-#if (defined(__APPLE__))
-#include <sys/event.h>
-#endif
-#if (defined(__linux__))
-#include <climits>
-#endif
-#if (defined(__linux__))
-#include <sched.h>
-#endif
-#if (defined(__linux__))
-#include <sys/epoll.h>
-#endif
-#if (defined(__linux__))
-#include <sys/syscall.h>
-#endif
-#include <new>
-
-#include <pthread.h>
 
 export module telar.runtime.persistence.session_store;
 
 import std;
-import telar.sys.posix;
 import telar.tbc;
 
 export import telar.platform.process;
@@ -70,8 +19,6 @@ import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
 import telar.runtime.graphics.kitty;
 import telar.runtime.terminal.control;
-import telar.platform.error;
-import telar.platform.fs;
 import telar.runtime.agents.snapshot;
 
 // Interface: persistence/records.cppm
@@ -140,26 +87,9 @@ export {
       RegisterWorktree registration;
     };
 
-    inline void validatePath(std::string_view path) {
-      if (path.empty() || path.size() > 4096 || path.find('\0') != std::string_view::npos) {
-        throw EncodingError{"Invalid checkpoint directory"};
-      }
-    }
+    void validatePath(std::string_view path);
 
-    inline void validateTitle(std::string_view title, AgentTitleSource source) {
-      if (title.empty()) {
-        if (source != AgentTitleSource::telar) {
-          throw EncodingError{"Empty checkpoint title has a source"};
-        }
-
-        return;
-      }
-
-      DisplayText16<96, false>::validate(title);
-      if (source != AgentTitleSource::generated && source != AgentTitleSource::manual && source != AgentTitleSource::agent) {
-        throw EncodingError{"Checkpoint title is not durable"};
-      }
-    }
+    void validateTitle(std::string_view title, AgentTitleSource source);
 
   }
 }
@@ -174,64 +104,19 @@ export {
       using Request = std::span<const Byte>;
       using Result = int;
 
-      inline explicit FileStore(Memory& memory, std::string_view path)
-          : parent_(openPrivateParent(path)),
-            name_(path.substr(path.rfind('/') + 1), AllocatorRef<char, Memory>{memory}) {}
+      explicit FileStore(Memory& memory, std::string_view path);
 
-      inline bool load(Vector<Byte, Memory>& bytes) {
-        return readPrivateFile(parent_.get(), name_, bytes, maximum_bytes);
-      }
+      bool load(Vector<Byte, Memory>& bytes);
 
-      inline FileDescriptor lock() const {
-        std::array<char, NAME_MAX + 1> name;
-        const auto length = std::snprintf(name.data(), name.size(), "%s.lock", name_.c_str());
-        if (length < 0 || static_cast<std::size_t>(length) >= name.size()) {
-          throw SystemError{"Session lock path is too long", ENAMETOOLONG};
-        }
+      FileDescriptor lock() const;
 
-        FileDescriptor file{::openat(parent_.get(), name.data(), O_RDWR | O_CREAT | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC, 0600)};
-        struct stat state{};
-        if (!file || ::fstat(file.get(), &state) != 0) {
-          throw SystemError{"Open session lock"};
-        }
+      Result observe(const Request& bytes) noexcept;
 
-        if (!S_ISREG(state.st_mode) || state.st_uid != ::geteuid() || state.st_nlink != 1 || (state.st_mode & 0077) != 0) {
-          throw SystemError{"Unsafe session lock", EACCES};
-        }
+      void quarantine() noexcept;
 
-        while (::flock(file.get(), LOCK_EX) != 0) {
-          if (sys::lastError() != EINTR) {
-            throw SystemError{"Lock session"};
-          }
-        }
+      void stop() noexcept;
 
-        return file;
-      }
-
-      inline Result observe(const Request& bytes) noexcept {
-        return writePrivateFile(parent_.get(), name_, bytes, PrivateFileMode::replace);
-      }
-
-      inline void quarantine() noexcept {
-        std::array<char, NAME_MAX + 1> destination;
-        const auto length = std::snprintf(destination.data(), destination.size(), "%s.corrupt", name_.c_str());
-        if (length >= 0 && static_cast<std::size_t>(length) < destination.size()) {
-          ::renameat(parent_.get(), name_.c_str(), parent_.get(), destination.data());
-        }
-      }
-
-      inline void stop() noexcept {}
-
-      inline static void setAside(Memory& memory, std::string_view path) {
-        const auto parent = openPrivateParent(path);
-        const String<Memory> name{path.substr(path.rfind('/') + 1), AllocatorRef<char, Memory>{memory}};
-        String<Memory> previous{name, AllocatorRef<char, Memory>{memory}};
-
-        previous += ".previous";
-        if (::renameat(parent.get(), name.c_str(), parent.get(), previous.c_str()) != 0 && sys::lastError() != ENOENT) {
-          throw SystemError{"Set previous session aside"};
-        }
-      }
+      static void setAside(Memory& memory, std::string_view path);
 
     private:
       FileDescriptor parent_;
@@ -240,6 +125,9 @@ export {
 
     template <Allocator Memory>
     FileStore(Memory& memory, std::string_view path) -> FileStore<Memory>;
+
+    extern template class FileStore<SystemAllocator>;
+    extern template class FileStore<ConcurrentMemory>;
 
   }
 }
@@ -262,25 +150,11 @@ export {
 
     class Reader {
     public:
-      inline explicit Reader(std::span<const Byte> bytes)
-          : input_(bytes) {
-        if (bytes.size() > maximum_bytes || text(magic.size()) != magic) {
-          throw EncodingError{"Invalid checkpoint header"};
-        }
+      explicit Reader(std::span<const Byte> bytes);
 
-        version_ = u16::decode(input_);
-        if (version_ == 0 || version_ > current_version) {
-          throw EncodingError{"Unsupported checkpoint version"};
-        }
-
-        counters = {u64::decode(input_), u64::decode(input_), u64::decode(input_), u64::decode(input_)};
-        if (counters.workspace == 0 || counters.tab == 0 || counters.pane == 0 || counters.generation == 0) {
-          throw EncodingError{"Invalid checkpoint counters"};
-        }
-      }
-
+      // Generic over the caller's consumer, which each record is handed to.
       template <typename Consumer>
-      inline void read(Consumer&& consume) {
+      TBC_HOT_PATH inline void read(Consumer&& consume) {
         std::size_t pane_count = 0;
 
         for (;;) {
@@ -361,106 +235,17 @@ export {
       std::size_t skipped_worktrees = 0;
 
     private:
-      inline bool boolean() {
-        const auto value = u8::decode(input_);
-        if (value > 1) {
-          throw EncodingError{"Invalid checkpoint boolean"};
-        }
+      bool boolean();
 
-        return value != 0;
-      }
+      std::string_view text(std::size_t length);
 
-      inline std::string_view text(std::size_t length) {
-        if (length > input_.size()) {
-          throw EncodingError{"Truncated checkpoint text"};
-        }
+      std::string_view text16();
 
-        const std::string_view result{reinterpret_cast<const char*>(input_.data()), length};
+      std::span<const Byte> bytes32();
 
-        input_ = input_.subspan(length);
-        return result;
-      }
+      std::optional<PaneRecord> pane();
 
-      inline std::string_view text16() {
-        return text(u16::decode(input_));
-      }
-
-      inline std::span<const Byte> bytes32() {
-        const auto value = text(u32::decode(input_));
-
-        return {reinterpret_cast<const Byte*>(value.data()), value.size()};
-      }
-
-      inline std::optional<PaneRecord> pane() {
-        PaneRecord record{u64::decode(input_), u64::decode(input_), u64::decode(input_), text16(), u16::decode(input_), u16::decode(input_), u16::decode(input_), {}};
-
-        record.arguments = version_ >= 9 ? text(u32::decode(input_)) : text16();
-        validatePath(record.cwd);
-        if (record.argument_count > 64 || record.arguments.size() > 128 * 1024 || std::ranges::count(record.arguments, '\0') != record.argument_count) {
-          throw EncodingError{"Invalid checkpoint launch arguments"};
-        }
-
-        record.provider = static_cast<AgentProvider>(u8::decode(input_));
-        record.session = text16();
-        if (!record.session.empty()) {
-          validateAgentSession(record.session, false);
-        }
-
-        if (version_ >= 2) {
-          record.title = text16();
-          record.title_source = static_cast<AgentTitleSource>(u8::decode(input_));
-        }
-
-        validateTitle(record.title, record.title_source);
-
-        record.in_pane = version_ >= 8 && boolean();
-        if (version_ == 4 && boolean()) {
-          return std::nullopt;
-        }
-
-        if (record.argument_count == 0) {
-          throw EncodingError{"Checkpoint launch has no arguments"};
-        }
-
-        return record;
-      }
-
-      inline WorktreeRecord worktree() {
-        WorktreeRecord record{};
-
-        record.id = u64::decode(input_);
-        auto& registration = record.registration;
-
-        registration.request_id = 1;
-        registration.source = u64::decode(input_);
-        record.workspace = u64::decode(input_);
-        const auto created_by = u64::decode(input_);
-        if (created_by != 0) {
-          registration.created_by = created_by;
-        }
-
-        registration.origin = static_cast<WorktreeOrigin>(u8::decode(input_));
-        registration.path = text16();
-        registration.branch = text16();
-        registration.base = text16();
-        registration.title = text16();
-        registration.brief = text16();
-        if (version_ >= 7) {
-          registration.dispatched_from = text16();
-        }
-
-        if (version_ >= 10 && boolean()) {
-          CoordinatorReference coordinator;
-          const auto session = text(coordinator.session_id.size());
-
-          std::copy(session.begin(), session.end(), coordinator.session_id.begin());
-          coordinator.pane_id = u64::decode(input_);
-          coordinator.pane_generation = u64::decode(input_);
-          registration.coordinator = coordinator;
-        }
-
-        return record;
-      }
+      WorktreeRecord worktree();
 
       std::span<const Byte> input_;
       std::uint16_t version_;
@@ -480,8 +265,9 @@ export {
       panes.flushInput(pane);
     };
 
+    // Kept whole: generic over the pane launcher, PaneService in telar.runtime.runtime, which imports this module.
     template <Allocator Memory, PaneLauncher<Memory> Panes>
-    class Restore {
+    class TBC_HOT_PATH Restore {
     public:
       // The panes it launches keep the allocator, so everything the restore reaches lives in region `a`.
       inline explicit Restore(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<RuntimeModel<Memory>&, tbc::lt::a> model, tbc::view<Panes&, tbc::lt::a> panes, tbc::view<ClientLayouts<Memory>&, tbc::lt::a> layouts, bool resume_agents)
@@ -705,181 +491,50 @@ export {
     // Writes a checkpoint into the caller's buffer, region `a`, which the finished bytes view.
     class Writer {
     public:
-      inline explicit Writer(tbc::view<std::span<Byte>, tbc::lt::a> buffer, Counters counters)
-          : buffer_(buffer),
-            remaining_(buffer.empty() ? buffer : buffer.first(buffer.size() - 1)) {
-        constexpr std::size_t header_bytes = magic.size() + sizeof(current_version) + 4 * sizeof(std::uint64_t);
-        if (buffer.size() <= header_bytes) {
-          throw EncodingError{"Checkpoint buffer cannot hold its header"};
-        }
-
-        raw(magic);
-        integer(current_version);
-        integer(counters.workspace);
-        integer(counters.tab);
-        integer(counters.pane);
-        integer(counters.generation);
-      }
+      explicit Writer(tbc::view<std::span<Byte>, tbc::lt::a> buffer, Counters counters);
 
       template <typename Record>
-      inline void append(const Record& record) {
-        if (dropped != 0) {
-          ++dropped;
-          return;
-        }
+      void append(const Record& record);
 
-        const auto previous = remaining_;
-
-        try {
-          write(record);
-        } catch (const CapacityReached&) {
-          remaining_ = previous;
-          dropped = 1;
-        }
-      }
-
-      inline tbc::view<std::span<const Byte>, tbc::lt::a> finish() {
-        const auto count = buffer_.size() - remaining_.size() - 1;
-
-        buffer_[count] = static_cast<Byte>(Kind::end);
-        return buffer_.first(count + 1);
-      }
+      tbc::view<std::span<const Byte>, tbc::lt::a> finish();
 
       std::size_t dropped = 0;
 
     private:
       struct CapacityReached {};
 
-      inline void require(std::size_t count) {
-        if (count > remaining_.size()) {
-          throw CapacityReached{};
-        }
-      }
+      void require(std::size_t count);
 
       template <std::unsigned_integral Integer>
-      inline void integer(Integer value) {
-        require(sizeof(value));
-        LittleEndian<Integer>::encode(value, remaining_);
-      }
+      void integer(Integer value);
 
-      inline void raw(std::string_view value) {
-        require(value.size());
-        std::copy(value.begin(), value.end(), remaining_.begin());
-        remaining_ = remaining_.subspan(value.size());
-      }
+      void raw(std::string_view value);
 
-      inline void text16(std::string_view value) {
-        if (value.size() > std::numeric_limits<std::uint16_t>::max()) {
-          throw EncodingError{"Checkpoint text exceeds its length field"};
-        }
+      void text16(std::string_view value);
 
-        integer(static_cast<std::uint16_t>(value.size()));
-        raw(value);
-      }
+      void text32(std::string_view value);
 
-      inline void text32(std::string_view value) {
-        if (value.size() > maximum_bytes) {
-          throw EncodingError{"Checkpoint data exceeds file limit"};
-        }
+      void kind(Kind value);
 
-        integer(static_cast<std::uint32_t>(value.size()));
-        raw(value);
-      }
+      void write(const WorkspaceRecord& record);
 
-      inline void kind(Kind value) {
-        integer(static_cast<Byte>(value));
-      }
+      void write(const TabRecord& record);
 
-      inline void write(const WorkspaceRecord& record) {
-        validatePath(record.path);
-        if (record.name.size() > 256 || record.first_label.size() > 128) {
-          throw EncodingError{"Invalid checkpoint workspace label"};
-        }
+      void write(const PaneRecord& record);
 
-        kind(Kind::workspace);
-        integer(record.id);
-        text16(record.path);
-        text16(record.name);
-        integer(record.first_tab);
-        text16(record.first_label);
-      }
+      void write(const WorktreeRecord& record);
 
-      inline void write(const TabRecord& record) {
-        kind(Kind::tab);
-        integer(record.workspace);
-        integer(record.id);
-        text16(record.label);
-      }
-
-      inline void write(const PaneRecord& record) {
-        validatePath(record.cwd);
-        validateTitle(record.title, record.title_source);
-        if (record.argument_count == 0 || record.argument_count > 64 || record.arguments.size() > 128 * 1024 || record.session.size() > 64) {
-          throw EncodingError{"Invalid checkpoint launch record"};
-        }
-
-        kind(Kind::pane);
-        integer(record.id);
-        integer(record.workspace);
-        integer(record.tab);
-        text16(record.cwd);
-        integer(record.columns);
-        integer(record.rows);
-        integer(record.argument_count);
-        text32(record.arguments);
-        integer(static_cast<Byte>(record.provider));
-        text16(record.session);
-        text16(record.title);
-        integer(static_cast<Byte>(record.title_source));
-        integer(static_cast<Byte>(record.in_pane));
-      }
-
-      inline void write(const WorktreeRecord& record) {
-        const auto& registration = record.registration;
-        auto checked = registration;
-
-        checked.request_id = 1;
-        Codec::encodedSize(checked);
-        if (record.id == 0) {
-          throw EncodingError{"Invalid checkpoint worktree identity"};
-        }
-
-        kind(Kind::worktree);
-        integer(record.id);
-        integer(registration.source);
-        integer(record.workspace);
-        integer(registration.created_by.value_or(0));
-        integer(static_cast<Byte>(registration.origin));
-        text16(registration.path);
-        text16(registration.branch);
-        text16(registration.base);
-        text16(registration.title);
-        text16(registration.brief);
-        text16(registration.dispatched_from);
-        integer(static_cast<Byte>(registration.coordinator.has_value()));
-        if (registration.coordinator) {
-          const auto& coordinator = *registration.coordinator;
-
-          raw({reinterpret_cast<const char*>(coordinator.session_id.data()), coordinator.session_id.size()});
-          integer(coordinator.pane_id);
-          integer(coordinator.pane_generation);
-        }
-      }
-
-      inline void write(const LayoutRecord& record) {
-        if (record.payload.empty() || record.payload.size() > 16 * 1024) {
-          throw EncodingError{"Invalid checkpoint layout size"};
-        }
-
-        kind(Kind::layout);
-        integer(record.identity);
-        integer(record.last_used);
-        text32({reinterpret_cast<const char*>(record.payload.data()), record.payload.size()});
-      }
+      void write(const LayoutRecord& record);
 
       tbc::view<std::span<Byte>, tbc::lt::a> buffer_;
       tbc::view<std::span<Byte>, tbc::lt::a> remaining_;
     };
+
+    extern template void Writer::append<WorkspaceRecord>(const WorkspaceRecord& record);
+    extern template void Writer::append<TabRecord>(const TabRecord& record);
+    extern template void Writer::append<PaneRecord>(const PaneRecord& record);
+    extern template void Writer::append<WorktreeRecord>(const WorktreeRecord& record);
+    extern template void Writer::append<LayoutRecord>(const LayoutRecord& record);
 
   }
 }
@@ -896,8 +551,9 @@ export {
 
     // Encodes the session the model, the layouts and the agents describe, which each call lends. It keeps
     // only the stamps that tell whether the session changed.
+    // Kept whole: generic over the agents, AgentService in telar.runtime.runtime and persistence_test's SnapshotAgents.
     template <Allocator Memory, AgentSource Agents>
-    class Snapshot {
+    class TBC_HOT_PATH Snapshot {
     public:
       // The bytes view the buffer.
       inline static tbc::view<std::span<const Byte>, tbc::lt::a> encode(const RuntimeModel<Memory>& model, const ClientLayouts<Memory>& layouts, const Agents& agents, tbc::view<std::span<Byte>, tbc::lt::a> buffer, std::size_t& dropped) {
@@ -1008,8 +664,9 @@ export {
 export {
   namespace telar::runtime::checkpoint {
 
+    // Kept whole: generic over the agents, AgentService in telar.runtime.runtime, which imports this module.
     template <ConcurrentAllocator Memory, AgentSource Agents>
-    class SessionStore {
+    class TBC_HOT_PATH SessionStore {
       using Clock = std::chrono::steady_clock;
 
     public:

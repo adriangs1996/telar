@@ -1,32 +1,8 @@
 module;
+#include "tbc/hot_path.hpp"
 #include "telar_platform/trace_macro.hpp"
-#include "telar_render/sequence.hpp"
-#include <ghostty/vt.h>
-#include <new>
-#include <stdlib.h>
-#include <zlib.h>
-
-#include "cell_layout.hpp"
-#include "telar_base/diagnostics/config.hpp"
-#include <cassert>
-#include <cerrno>
-#include <csignal>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <fcntl.h>
-#include <limits.h>
-#include <sys/mman.h>
-#include <sys/types.h>
-#include <sys/uio.h>
-#include <sys/wait.h>
-#include <unistd.h>
-
-#include <dirent.h>
-#include <poll.h>
-#include <sys/stat.h>
 
 export module telar.runtime.runtime.delivery.client_delivery;
 
@@ -57,115 +33,22 @@ export {
     template <Allocator Memory>
     class ClipboardService {
     public:
-      inline static bool eligible(const ClientSession<Memory>& client, const Pane<Memory>& pane) noexcept {
-        const auto* attachment = client.attachment(pane.id);
+      static bool eligible(const ClientSession<Memory>& client, const Pane<Memory>& pane) noexcept;
 
-        return !pane.close_requested && !pane.output_closed && client.role == ClientRole::interactive && !client.connection.closing && attachment != nullptr && attachment->desktop && attachment->desktop->pane_generation == pane.generation && attachment->desktop->visible && attachment->desktop->clipboard;
-      }
+      static void configure(const ClientStore<Memory>& clients, Pane<Memory>& pane);
 
-      inline static void configure(const ClientStore<Memory>& clients, Pane<Memory>& pane) {
-        std::array<control::ClipboardRoute, control::ClipboardGrants::capacity> routes;
-        std::size_t count = 0;
-        const ClientSession<Memory>* preferred = nullptr;
+      static bool advance(ClientStore<Memory>& clients, Pane<Memory>& pane, std::chrono::steady_clock::time_point now);
 
-        for (const auto* client : clients.items()) {
-          if (client == nullptr || !eligible(*client, pane)) {
-            continue;
-          }
-
-          if (count == routes.size()) {
-            break;
-          }
-
-          routes[count++] = {client->id, client->generation};
-          if (preferred == nullptr || precedes(*client, *preferred, pane.id)) {
-            preferred = client;
-          }
-        }
-
-        pane.terminal.clipboardControl().routes(std::span{routes}.first(count), preferred != nullptr ? std::optional{control::ClipboardRoute{preferred->id, preferred->generation}} : std::nullopt);
-      }
-
-      inline static bool advance(ClientStore<Memory>& clients, Pane<Memory>& pane, std::chrono::steady_clock::time_point now) {
-        auto& clipboard = pane.terminal.clipboardControl();
-
-        clipboard.expire(now);
-        if (const auto cancellation = clipboard.cancellation()) {
-          auto* client = clients.find(cancellation->route.client);
-          if (client == nullptr || client->generation != cancellation->route.generation || client->connection.closing) {
-            clipboard.cancelled();
-          } else {
-            try {
-              client->connection.send(CancelClipboardDesktop{cancellation->ticket});
-              clipboard.cancelled();
-            } catch (const ResponseQueueFull&) {
-            } catch (const std::bad_alloc&) {
-            }
-          }
-        }
-
-        const auto route = clipboard.route();
-        if (route) {
-          auto* client = clients.find(route->client);
-          if (client == nullptr || client->generation != route->generation || !eligible(*client, pane)) {
-            configure(clients, pane);
-          } else {
-            try {
-              if (const auto request = clipboard.request(pane.id, pane.generation)) {
-                client->connection.send(*request);
-                clipboard.announced();
-              } else {
-                clipboard.expire(std::chrono::steady_clock::now());
-                if (const auto execution = clipboard.execution()) {
-                  client->connection.send(*execution);
-                  clipboard.committed();
-                }
-              }
-            } catch (const ResponseQueueFull&) {
-              // The owned request survives queue pressure until its deadline.
-            } catch (const std::bad_alloc&) {
-              // The deadline also bounds retries under the runtime memory budget.
-            }
-          }
-        }
-
-        if (clipboard.hasReply()) {
-          pane.resumeControl();
-          return true;
-        }
-
-        return false;
-      }
-
-      inline static tbc::view<Pane<Memory>*, tbc::lt::a> complete(tbc::view<PaneStore<Memory>&, tbc::lt::a> panes, ClientSession<Memory>& sender, const CompleteClipboardDesktop& completion) {
-        auto* pane = findPane(panes, completion.ticket.pane_id, completion.ticket.pane_generation);
-        if (pane == nullptr || sender.generation != completion.ticket.client_generation || !eligible(sender, *pane)) {
-          return nullptr;
-        }
-
-        pane->terminal.clipboardControl().expire(std::chrono::steady_clock::now());
-        if (!pane->terminal.clipboardControl().complete({sender.id, sender.generation}, completion)) {
-          return nullptr;
-        }
-
-        pane->resumeControl();
-        return pane;
-      }
+      static tbc::view<Pane<Memory>*, tbc::lt::a> complete(tbc::view<PaneStore<Memory>&, tbc::lt::a> panes, ClientSession<Memory>& sender, const CompleteClipboardDesktop& completion);
 
     private:
-      inline static bool precedes(const ClientSession<Memory>& candidate, const ClientSession<Memory>& current, std::uint64_t pane) noexcept {
-        const bool candidate_focus = candidate.attachment(pane)->desktop->focused;
-        const bool current_focus = current.attachment(pane)->desktop->focused;
-        if (candidate_focus != current_focus) {
-          return candidate_focus;
-        }
-
-        const auto candidate_input = candidate.last_input_pane == pane ? candidate.last_input_sequence : 0;
-        const auto current_input = current.last_input_pane == pane ? current.last_input_sequence : 0;
-
-        return candidate_input != current_input ? candidate_input > current_input : candidate.id < current.id;
-      }
+      static bool precedes(const ClientSession<Memory>& candidate, const ClientSession<Memory>& current, std::uint64_t pane) noexcept;
     };
+
+    extern template class ClipboardService<SystemAllocator>;
+    extern template class ClipboardService<Memory>;
+    extern template class ClipboardService<ConcurrentMemory>;
+    extern template class ClipboardService<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>;
 
   }
 }
@@ -182,35 +65,9 @@ export {
     public:
       using Clock = std::chrono::steady_clock;
 
-      inline explicit AttachmentDelivery(const RuntimeModel<Memory>& model, const ClientSession<Memory>& client) {
-        for (std::size_t index = 0; index < client.attachments.size(); ++index) {
-          const auto& attachment = *client.attachments[index];
-          if (model.panes.find(attachment.pane_id) != nullptr && !attachment.exit_sent) {
-            slots_[attachment.slot] = {static_cast<std::uint8_t>(index), false};
-            occupied_ |= std::uint64_t{1} << attachment.slot;
-          }
-        }
-      }
+      explicit AttachmentDelivery(const RuntimeModel<Memory>& model, const ClientSession<Memory>& client);
 
-      inline bool prepare(RuntimeModel<Memory>& model, ClientSession<Memory>& client, DeliveryLane lane, Clock::time_point now, std::chrono::nanoseconds& timeout) {
-        const auto start = client.next_attachment;
-        auto candidates = std::rotr(occupied_, static_cast<int>(start));
-
-        while (candidates != 0) {
-          const auto slot = (start + std::countr_zero(candidates)) % ClientSession<Memory>::attachment_capacity;
-
-          candidates &= candidates - 1;
-          auto& attachment = *client.attachments[slots_[slot].index];
-          auto& pane = *model.panes.find(attachment.pane_id);
-          Output output{client.connection, client.completing_exit, client.frame_interval, model.metrics};
-          if (prepare(output, attachment, pane, lane, now, timeout)) {
-            client.next_attachment = (slot + 1) % ClientSession<Memory>::attachment_capacity;
-            return true;
-          }
-        }
-
-        return false;
-      }
+      bool prepare(RuntimeModel<Memory>& model, ClientSession<Memory>& client, DeliveryLane lane, Clock::time_point now, std::chrono::nanoseconds& timeout);
 
     private:
       struct Slot {
@@ -226,287 +83,39 @@ export {
         [[maybe_unused]] diagnostics::RuntimeCounters& metrics;
       };
 
-      inline bool prepare(Output& output, Attachment<Memory>& attachment, Pane<Memory>& pane, DeliveryLane lane, Clock::time_point now, std::chrono::nanoseconds& timeout) {
-        const auto& effects = pane.terminal.effects;
-
-        switch (lane) {
-        case DeliveryLane::scrollback:
-          return scrollback(output.connection, attachment, pane);
-        case DeliveryLane::cells:
-          return cells(output, attachment, pane, now, timeout);
-        case DeliveryLane::cwd:
-          return metadata(output.connection, attachment.cwd_revision, pane.cwd_revision + 1, PaneCwd{pane.id, pane.cwd});
-        case DeliveryLane::foreground:
-          return metadata(output.connection, attachment.foreground_revision, pane.foreground_revision, PaneForeground{pane.id, pane.foreground.view()});
-        case DeliveryLane::title:
-          return metadata(output.connection, attachment.title_revision, effects.title_revision, PaneTitle{pane.id, effects.title()});
-        case DeliveryLane::progress:
-          return metadata(output.connection, attachment.progress_revision, effects.progress_revision, PaneProgress{pane.id, effects.progress_state, effects.progress_percent});
-        case DeliveryLane::shell:
-          return metadata(output.connection, attachment.shell_revision, pane.shell_revision, pane.shell_state);
-        case DeliveryLane::git:
-          return metadata(output.connection, attachment.git_revision, pane.git_revision, pane.git.message(pane.id));
-        case DeliveryLane::blocks:
-          return blocks(output.connection, attachment, pane);
-        case DeliveryLane::exit:
-          return exit(output, attachment, pane);
-        case DeliveryLane::graphics:
-          return graphics(output, attachment, pane, timeout);
-        case DeliveryLane::document:
-          return document(output.connection, attachment, pane) || inlineDocuments(output.connection, attachment, pane);
-        default:
-          return false;
-        }
-      }
+      bool prepare(Output& output, Attachment<Memory>& attachment, Pane<Memory>& pane, DeliveryLane lane, Clock::time_point now, std::chrono::nanoseconds& timeout);
 
       template <typename Message>
-      inline static bool metadata(Connection<Memory>& connection, std::uint64_t& observed, std::uint64_t revision, const Message& message) {
-        if (observed == revision) {
-          return false;
-        }
-
-        connection.send(message);
-        observed = revision;
-        return true;
-      }
+      static bool metadata(Connection<Memory>& connection, std::uint64_t& observed, std::uint64_t revision, const Message& message);
 
       // The pane's document, one chunk per delivery; a newer revision restarts from its start, so
       // a client never assembles parts of two documents.
-      inline static bool document(Connection<Memory>& connection, Attachment<Memory>& attachment, const Pane<Memory>& pane) {
-        static_assert(PaneDocument::max_size == ::telar::render::max_document_bytes);
-        const auto& effects = pane.terminal.effects;
-        if (attachment.document_revision != effects.document_revision) {
-          attachment.document_revision = effects.document_revision;
-          attachment.document_offset = 0;
-          attachment.document_whole = false;
-        } else if (attachment.document_whole) {
-          return false;
-        }
-
-        const auto size = static_cast<std::uint32_t>(effects.document.size());
-        const auto chunk = std::min(size - attachment.document_offset, PaneDocument::chunk_bytes);
-
-        connection.send(PaneDocument{
-            .pane_id = pane.id,
-            .revision = effects.document_revision,
-            .size = size,
-            .offset = attachment.document_offset,
-            .bytes = std::span<const Byte>{effects.document}.subspan(attachment.document_offset, chunk),
-        });
-
-        attachment.document_offset += chunk;
-        attachment.document_whole = attachment.document_offset == size;
-        return true;
-      }
+      static bool document(Connection<Memory>& connection, Attachment<Memory>& attachment, const Pane<Memory>& pane);
 
       // The documents that stand for rows of the pane's scrollback: one a client has that the pane
       // let go of is withdrawn first, then each one's parts go in order, then rows that moved.
-      inline static bool inlineDocuments(Connection<Memory>& connection, Attachment<Memory>& attachment, const Pane<Memory>& pane) {
-        const auto& effects = pane.terminal.effects;
-        const auto generation = pane.terminal.scrollbackGeneration();
-        const auto trimmed = pane.terminal.scrollbackTrimmed();
-        auto& sent = attachment.inline_documents;
-        if (sent.settled(effects.inline_revision, generation, trimmed)) {
-          return false;
-        }
+      static bool inlineDocuments(Connection<Memory>& connection, Attachment<Memory>& attachment, const Pane<Memory>& pane);
 
-        for (std::size_t index = 0; index < sent.count; ++index) {
-          const auto id = sent.items[index].id;
-          if (std::ranges::find(effects.inline_documents, id, &TerminalEffects<Memory>::InlineDocument::id) == effects.inline_documents.end()) {
-            connection.send(PaneDocument{.pane_id = pane.id, .id = id, .revision = id});
-            sent.erase(index);
-            return true;
-          }
-        }
-
-        for (const auto& document : effects.inline_documents) {
-          if (document.rows == 0) {
-            continue;
-          }
-
-          auto* item = sent.find(document.id);
-          if (item == nullptr && (item = sent.add(document.id)) == nullptr) {
-            continue;
-          }
-
-          const auto size = static_cast<std::uint32_t>(document.bytes.size());
-          const auto first_row = trimmed + document.row;
-          if (item->offset < size || item->generation != generation || item->first_row != first_row || item->rows != document.rows) {
-            const auto chunk = std::min(size - item->offset, PaneDocument::chunk_bytes);
-
-            connection.send(PaneDocument{
-                .pane_id = pane.id,
-                .id = document.id,
-                .revision = document.id,
-                .generation = generation,
-                .first_row = first_row,
-                .rows = document.rows,
-                .size = size,
-                .offset = item->offset,
-                .bytes = std::span<const Byte>{document.bytes}.subspan(item->offset, chunk),
-            });
-
-            item->offset += chunk;
-            item->generation = generation;
-            item->first_row = first_row;
-            item->rows = document.rows;
-            return true;
-          }
-        }
-
-        sent.settle(effects.inline_revision, generation, trimmed);
-        return false;
-      }
-
-      inline static bool blocks(Connection<Memory>& connection, Attachment<Memory>& attachment, const Pane<Memory>& pane) {
-        if (!pane.blocks || attachment.blocks_revision == pane.blocks->revision()) {
-          return false;
-        }
-
-        std::array<CommandBlock, PaneBlocks::capacity> storage;
-
-        connection.send(pane.blocks->message(pane.id, storage));
-        attachment.blocks_revision = pane.blocks->revision();
-        return true;
-      }
+      static bool blocks(Connection<Memory>& connection, Attachment<Memory>& attachment, const Pane<Memory>& pane);
 
       // How the scrollback numbers its rows, before a frame numbered so. A viewport held above the
       // bottom keeps showing the same rows when the scrollback drops rows above them.
-      inline static bool scrollback(Connection<Memory>& connection, Attachment<Memory>& attachment, Pane<Memory>& pane) {
-        const auto generation = pane.terminal.scrollbackGeneration();
-        const auto trimmed = pane.terminal.scrollbackTrimmed();
-        if (attachment.scrollback_generation == generation && attachment.scrollback_trimmed == trimmed) {
-          return false;
-        }
+      static bool scrollback(Connection<Memory>& connection, Attachment<Memory>& attachment, Pane<Memory>& pane);
 
-        if (attachment.viewport && attachment.scrollback_generation == generation && trimmed > attachment.scrollback_trimmed) {
-          const auto dropped = trimmed - attachment.scrollback_trimmed;
+      bool cells(Output& output, Attachment<Memory>& attachment, Pane<Memory>& pane, Clock::time_point now, std::chrono::nanoseconds& timeout);
 
-          attachment.viewport = static_cast<std::uint32_t>(*attachment.viewport > dropped ? *attachment.viewport - dropped : 0);
-          attachment.frames.requestSnapshot();
-        }
+      bool exit(Output& output, Attachment<Memory>& attachment, const Pane<Memory>& pane);
 
-        connection.send(PaneScrollback{.pane_id = pane.id, .generation = generation, .trimmed = trimmed});
-        attachment.scrollback_generation = generation;
-        attachment.scrollback_trimmed = trimmed;
-        return true;
-      }
+      static bool graphics(Output& output, Attachment<Memory>& attachment, Pane<Memory>& pane, std::chrono::nanoseconds& timeout);
 
-      inline bool cells(Output& output, Attachment<Memory>& attachment, Pane<Memory>& pane, Clock::time_point now, std::chrono::nanoseconds& timeout) {
-        if (attachment.frames.waitingForAck(pane.terminal.screen)) {
-          return false;
-        }
-
-        const bool snapshot = attachment.frames.needsSnapshot(pane.terminal.screen);
-        if (!snapshot && !pane.terminal.dirty() && attachment.frames.observedRevision() == pane.terminal.screen.revision) {
-          slots_[attachment.slot].cells_current = true;
-          return false;
-        }
-
-        attachment.pacer.configure(output.frame_interval);
-        if (pane.last_input) {
-          attachment.pacer.noteInput(*pane.last_input);
-        }
-
-        const auto deadline = attachment.pacer.deadline(now);
-        if (!snapshot && !pane.output_closed && deadline && now < *deadline) {
-          timeout = std::min(timeout, std::chrono::duration_cast<std::chrono::nanoseconds>(*deadline - now));
-          return false;
-        }
-
-        if (pane.terminal.mode(GHOSTTY_MODE_SYNC_OUTPUT)) {
-          if (pane.sync_started == Clock::time_point{}) {
-            pane.sync_started = now;
-          }
-
-          const auto release = pane.sync_started + std::chrono::seconds{1};
-          if (now < release) {
-            timeout = std::min(timeout, std::chrono::duration_cast<std::chrono::nanoseconds>(release - now));
-            return false;
-          }
-        } else {
-          pane.sync_started = {};
-        }
-
-        TELAR_TRACE("runtime.publishFrame");
-        if (attachment.viewport) {
-          pane.terminal.scrollTo(*attachment.viewport);
-        }
-
-        pane.terminal.refresh();
-        const auto payload = attachment.frames.prepare(pane.terminal.screen);
-
-        TELAR_DIAGNOSTIC(output.metrics.frames.merge(attachment.frames.takeCounters()));
-        slots_[attachment.slot].cells_current = true;
-        if (attachment.viewport) {
-          pane.terminal.scrollToBottom();
-        }
-
-        if (!snapshot) {
-          attachment.pacer.record(now, deadline);
-        }
-
-        if (payload.empty()) {
-          return false;
-        }
-
-        output.connection.sendPayload(payload);
-        return true;
-      }
-
-      inline bool exit(Output& output, Attachment<Memory>& attachment, const Pane<Memory>& pane) {
-        if (!pane.output_closed || !pane.exit_status || !pane.media->idle() || attachment.frames.waitingForAck() || !slots_[attachment.slot].cells_current) {
-          return false;
-        }
-
-        const auto status = *pane.exit_status;
-
-        output.connection.send(PaneExited{
-            .pane_id = pane.id,
-            .kind = WIFEXITED(status) ? ExitKind::exited : ExitKind::signaled,
-            .value = static_cast<std::uint32_t>(WIFEXITED(status) ? WEXITSTATUS(status) : WTERMSIG(status)),
-        });
-
-        attachment.exit_sent = true;
-        output.completing_exit = pane.id;
-        return true;
-      }
-
-      inline static bool graphics(Output& output, Attachment<Memory>& attachment, Pane<Memory>& pane, std::chrono::nanoseconds& timeout) {
-        const bool sent = publishGraphics(output.connection, attachment, pane, timeout);
-
-        TELAR_DIAGNOSTIC(output.metrics.graphics.merge(attachment.graphics.takeCounters()));
-        return sent;
-      }
-
-      inline static bool publishGraphics(Connection<Memory>& connection, Attachment<Memory>& attachment, Pane<Memory>& pane, std::chrono::nanoseconds& timeout) {
-        const auto queued = connection.queuedBytes();
-
-        if (pane.media->busy()) {
-          if (attachment.graphics.advanceTransfer(connection)) {
-            timeout = std::chrono::nanoseconds::zero();
-          }
-
-          return connection.queuedBytes() != queued;
-        }
-
-        auto* terminal = pane.media->terminal();
-
-        try {
-          const bool pending = terminal == nullptr ? attachment.graphics.publish(connection, pane.terminal.graphics) : attachment.graphics.publish(connection, terminal->graphics);
-          if (pending) {
-            timeout = std::chrono::nanoseconds::zero();
-          }
-        } catch (const std::bad_alloc&) {
-          attachment.graphics.abandon(terminal == nullptr ? pane.terminal.graphics.revision() : terminal->graphics.revision());
-        }
-
-        return connection.queuedBytes() != queued;
-      }
+      static bool publishGraphics(Connection<Memory>& connection, Attachment<Memory>& attachment, Pane<Memory>& pane, std::chrono::nanoseconds& timeout);
 
       std::array<Slot, ClientSession<Memory>::attachment_capacity> slots_;
       std::uint64_t occupied_ = 0;
     };
+
+    extern template class AttachmentDelivery<SystemAllocator>;
+    extern template class AttachmentDelivery<ConcurrentMemory>;
 
   }
 }
@@ -518,11 +127,10 @@ export {
     template <Allocator Memory>
     class ResponseProjection {
     public:
-      inline explicit ResponseProjection(Memory& memory, RuntimeModel<Memory>& model) noexcept
-          : memory_(memory),
-            model_(model) {}
+      explicit ResponseProjection(Memory& memory, RuntimeModel<Memory>& model) noexcept;
 
-      inline void operator()(const DeferredResponse& response, auto&& send) const {
+      // Kept here: `send` is the connection's callable, an open set no unit can instantiate ahead.
+      TBC_HOT_PATH inline void operator()(const DeferredResponse& response, auto&& send) const {
         TELAR_TRACE("runtime.projectResponse");
         std::visit([&](const auto& request) {
           project(request, send);
@@ -531,19 +139,14 @@ export {
       }
 
     private:
-      inline static bool matchesSnapshot(const Pane<Memory>& pane, TabLocation location) noexcept {
-        return !pane.close_requested && !pane.exit_status && pane.location.workspace.kind == location.workspace.kind && pane.location.workspace.id == location.workspace.id && pane.location.tab_id == location.tab_id;
-      }
+      static bool matchesSnapshot(const Pane<Memory>& pane, TabLocation location) noexcept;
 
       // A pane's output decodes its OSC 7 directory, so it can hold a NUL the codec rejects;
       // one such pane must not fail the snapshot of its whole workspace.
-      [[nodiscard]] inline static std::string_view snapshotDirectory(std::string_view cwd) noexcept {
-        constexpr std::size_t maximum_bytes = 4096;
+      [[nodiscard]] static std::string_view snapshotDirectory(std::string_view cwd) noexcept;
 
-        return cwd.size() <= maximum_bytes && cwd.find('\0') == std::string_view::npos ? cwd : std::string_view{};
-      }
-
-      inline void project(const ReadPane& request, auto& send) const {
+      // Kept here: `send` is the connection's callable, an open set no unit can instantiate ahead.
+      TBC_HOT_PATH inline void project(const ReadPane& request, auto& send) const {
         // Generation 0 reads whatever generation the pane has, as clients that predate generations ask.
         auto* pane = request.pane_generation == 0 ? model_.panes.find(request.pane_id) : findPane(model_.panes, request.pane_id, request.pane_generation);
         if (pane == nullptr) {
@@ -563,7 +166,8 @@ export {
         send(PaneText{.request_id = request.request_id, .pane_id = pane->id, .truncated = reader.truncated(), .text = reader.text(), .exit_code = pane->exitCode()});
       }
 
-      inline void project(const RequestTabSnapshot& request, auto& send) const {
+      // Kept here: `send` is the connection's callable, an open set no unit can instantiate ahead.
+      TBC_HOT_PATH inline void project(const RequestTabSnapshot& request, auto& send) const {
         std::array<PaneDescriptor, 64> descriptors;
         std::size_t count = 0;
 
@@ -576,7 +180,8 @@ export {
         send(TabSnapshot{.request_id = request.request_id, .location = request.location, .panes = std::span{descriptors}.first(count)});
       }
 
-      inline void project(const RequestWorkspaceSnapshot& request, auto& send) const {
+      // Kept here: `send` is the connection's callable, an open set no unit can instantiate ahead.
+      TBC_HOT_PATH inline void project(const RequestWorkspaceSnapshot& request, auto& send) const {
         const auto* workspace = model_.workspaces.find(request.workspace.id);
         if (request.workspace.kind != WorkspaceLocation::Kind::workspace || workspace == nullptr) {
           send(RequestFailed{.request_id = request.request_id, .code = FailureCode::workspace_not_found, .message = "workspace closed before its snapshot was sent"});
@@ -609,7 +214,8 @@ export {
         send(WorkspaceSnapshot{.request_id = request.request_id, .workspace = request.workspace, .name = workspace->displayName(), .tabs = std::span{descriptors}.first(count)});
       }
 
-      inline void project(const QueryLimits& request, auto& send) const {
+      // Kept here: `send` is the connection's callable, an open set no unit can instantiate ahead.
+      TBC_HOT_PATH inline void project(const QueryLimits& request, auto& send) const {
         std::array<LimitListEntry, 2 * LimitLedger::capacity> entries;
         std::size_t count = 0;
 
@@ -630,6 +236,9 @@ export {
 
     template <Allocator Memory>
     ResponseProjection(Memory& memory, RuntimeModel<Memory>& model) -> ResponseProjection<Memory>;
+
+    extern template class ResponseProjection<SystemAllocator>;
+    extern template class ResponseProjection<ConcurrentMemory>;
 
   }
 }
@@ -653,12 +262,11 @@ export {
         std::optional<std::uint64_t> detach_pane;
       };
 
-      inline explicit ClientDelivery(Memory& memory, RuntimeModel<Memory>& model)
-          : memory_(memory),
-            model_(model) {}
+      explicit ClientDelivery(Memory& memory, RuntimeModel<Memory>& model);
 
+      // Kept here: the source is the runtime's StateProjection over its own services, or a test's fake.
       template <RuntimeStateSource<Memory> Source>
-      inline Result write(ClientSession<Memory>& client, Source& source, Clock::time_point now) {
+      TBC_HOT_PATH inline Result write(ClientSession<Memory>& client, Source& source, Clock::time_point now) {
         TELAR_TRACE("runtime.deliverClient");
         Result result;
 
@@ -680,8 +288,9 @@ export {
       }
 
     private:
+      // Kept here: the source is the runtime's StateProjection over its own services, or a test's fake.
       template <RuntimeStateSource<Memory> Source>
-      inline void prepare(ClientSession<Memory>& client, Source& source, Clock::time_point now, std::chrono::nanoseconds& timeout) {
+      TBC_HOT_PATH inline void prepare(ClientSession<Memory>& client, Source& source, Clock::time_point now, std::chrono::nanoseconds& timeout) {
         const auto queued_lane = client.connection.nextLane();
         if (queued_lane <= DeliveryLane::management) {
           return;
@@ -726,101 +335,13 @@ export {
         }
       }
 
-      inline bool resync(ClientSession<Memory>& client) {
-        if (!client.workspace_resync) {
-          return false;
-        }
+      bool resync(ClientSession<Memory>& client);
 
-        TELAR_DIAGNOSTIC(diagnostics::accumulate(model_.metrics.client_resyncs));
-        auto& change = *client.workspace_resync;
+      bool clipboard(ClientSession<Memory>& client);
 
-        change.workspace_closed = model_.workspaces.find(change.workspace.id) == nullptr;
-        client.connection.send(change);
-        client.workspace_resync.reset();
-        return true;
-      }
+      bool paneList(ClientSession<Memory>& client, Clock::time_point now);
 
-      inline bool clipboard(ClientSession<Memory>& client) {
-        if (client.clipboard.pending()) {
-          client.connection.send(client.clipboard.message());
-          client.clipboard.delivered();
-          return true;
-        }
-
-        for (const auto& attachment : client.attachments) {
-          const auto* pane = model_.panes.find(attachment->pane_id);
-          if (pane == nullptr || attachment->clipboard_revision == pane->terminal.effects.clipboard_revision) {
-            continue;
-          }
-
-          client.connection.send(PaneClipboard{pane->id, pane->terminal.effects.clipboard});
-          attachment->clipboard_revision = pane->terminal.effects.clipboard_revision;
-          return true;
-        }
-
-        return false;
-      }
-
-      inline bool paneList(ClientSession<Memory>& client, Clock::time_point now) {
-        if (!client.subscribed || (client.pane_revision == model_.pane_revision && client.pane_workspace_revision == model_.workspace_revision)) {
-          return false;
-        }
-
-        std::array<PaneListEntry, max_pane_list_entries> entries;
-        std::size_t count = 0;
-
-        for (const auto* pane : model_.panes.items()) {
-          if (pane == nullptr || pane->exit_status || pane->close_requested) {
-            continue;
-          }
-
-          if (count == entries.size()) {
-            break;
-          }
-
-          const auto age = std::chrono::duration_cast<std::chrono::seconds>(now - pane->foreground_since).count();
-          const auto name = pane->foreground.view();
-
-          entries[count++] = {
-              .pane_id = pane->id,
-              .pane_generation = pane->generation,
-              .location = pane->location,
-              .foreground = name.empty() ? "shell" : name,
-              .foreground_age_s = static_cast<std::uint32_t>(std::clamp<std::int64_t>(age, 0, std::numeric_limits<std::uint32_t>::max())),
-              .shell = pane->foreground_shell,
-              .ports = pane->listening_ports.view(),
-          };
-        }
-
-        client.connection.send(PaneList{model_.pane_revision + model_.workspace_revision, std::span{entries}.first(count)});
-        client.pane_revision = model_.pane_revision;
-        client.pane_workspace_revision = model_.workspace_revision;
-        return true;
-      }
-
-      inline bool foreground(ClientSession<Memory>& client) {
-        if (!client.subscribed) {
-          return false;
-        }
-
-        const auto panes = model_.panes.items();
-
-        for (std::size_t slot = 0; slot < panes.size(); ++slot) {
-          const auto* pane = panes[slot];
-          if (pane == nullptr || pane->exit_status || pane->close_requested || (pane->observers & client.observerBit()) != 0) {
-            continue;
-          }
-
-          auto& sent = client.foregrounds[slot];
-          if (sent.pane != pane->id || sent.revision != pane->foreground_revision) {
-            client.connection.send(PaneForeground{pane->id, pane->foreground.view()});
-            sent = {pane->id, pane->foreground_revision};
-            return true;
-          }
-        }
-
-        return false;
-      }
+      bool foreground(ClientSession<Memory>& client);
 
       Memory& memory_;
       RuntimeModel<Memory>& model_;
@@ -829,6 +350,9 @@ export {
     template <Allocator Memory>
     ClientDelivery(Memory& memory, RuntimeModel<Memory>& model) -> ClientDelivery<Memory>;
 
+    extern template class ClientDelivery<SystemAllocator>;
+    extern template class ClientDelivery<ConcurrentMemory>;
+
   }
 }
 
@@ -836,8 +360,9 @@ export {
 export {
   namespace telar::runtime {
 
+    // Kept whole: tests instantiate it with their own fake services (client_delivery_test's Agents and Metrics).
     template <typename Workspaces, typename Agents, typename Metrics, typename Layouts, typename Proxy>
-    class StateProjection {
+    class TBC_HOT_PATH StateProjection {
     public:
       inline explicit StateProjection(Workspaces& workspaces, Agents& agents, Metrics& metrics, Layouts& layouts, const Proxy& proxy)
           : workspaces_(workspaces),
@@ -920,15 +445,9 @@ export {
     template <ConcurrentAllocator Memory>
     class EditorService {
     public:
-      inline explicit EditorService(Memory& memory)
-          : editor_(memory) {}
+      explicit EditorService(Memory& memory);
 
-      inline void process(std::span<const Byte> payload, EncodedReply<Memory>& reply, const RequestContext& context = {}) {
-        std::array<Byte, 1024> scratch;
-        DecodeStorage storage{scratch};
-
-        editor_.open(Codec::decode<OpenEditor>(payload, storage), context, reply);
-      }
+      void process(std::span<const Byte> payload, EncodedReply<Memory>& reply, const RequestContext& context = {});
 
     private:
       RemoteEditor<Memory> editor_;
@@ -937,6 +456,8 @@ export {
     template <ConcurrentAllocator Memory>
     EditorService(Memory& memory) -> EditorService<Memory>;
 
+    extern template class EditorService<ConcurrentMemory>;
+
   }
 }
 
@@ -944,8 +465,9 @@ export {
 export {
   namespace telar::runtime {
 
+    // Kept here: the consumer is the caller's callable, an open set no unit can instantiate ahead.
     template <typename Consumer>
-    bool dispatchRequest(ClientTag tag, Consumer&& consume) {
+    TBC_HOT_PATH bool dispatchRequest(ClientTag tag, Consumer&& consume) {
       return ClientRequests::dispatch(tag, std::forward<Consumer>(consume));
     }
 
