@@ -46,6 +46,8 @@ add_library(control-query-probe SHARED tests/control_query_probe.cpp tests/contr
 target_link_libraries(control-query-probe PRIVATE runtime-core runtime-test-fixtures)
 add_executable(terminal-media-feed-probe tests/terminal_media_feed_probe.cpp)
 target_link_libraries(terminal-media-feed-probe PRIVATE runtime-core)
+add_executable(command-capture-probe tests/command_capture_probe.cpp)
+target_link_libraries(command-capture-probe PRIVATE runtime-core)
 add_executable(control-query-accounting-probe tests/control_accounting_probe.cpp)
 target_link_libraries(control-query-accounting-probe PRIVATE runtime-core runtime-test-fixtures)
 add_executable(control-queue-tests tests/control_queue_test.cpp tests/pty_response_queue_test.cpp)
@@ -278,7 +280,7 @@ set_tests_properties(plugin-action-worker PROPERTIES TIMEOUT 90)
 # Probes run by hand or by tools/ scripts, never by CTest: building them on every test run
 # costs a full module compile each. `cmake --build out --target runtime-probes` builds them.
 set(runtime_probes
-  admission-probe agent-probe capture-probe control-clipboard-lifetime-probe
+  admission-probe agent-probe capture-probe command-capture-probe control-clipboard-lifetime-probe
   control-pty-latency-probe control-query-accounting-probe deferred-response-probe
   description-probe graphics-limits-probe graphics-probe history-probe hook-probe
   input-capacity-probe launch-probe model-probe path-probe plugin-package-probe
