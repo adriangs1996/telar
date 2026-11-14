@@ -208,10 +208,9 @@ export {
 export {
   namespace telar::runtime::diagnostics {
 
-    void writeRuntimeSample(Line& line, RuntimeModel& model, const ClientStore& clients);
-
     // The sample reads counters that only a diagnostics build keeps.
 #if TELAR_DIAGNOSTICS
+    void writeRuntimeSample(Line& line, RuntimeModel& model, const ClientStore& clients);
 #endif
 
   }

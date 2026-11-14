@@ -301,6 +301,8 @@ namespace telar::runtime::diagnostics {
     line.field("proxy_capture_queue_high_water", metrics.queue_high_water);
   }
 
+  // The sample reads counters that only a diagnostics build keeps.
+#if TELAR_DIAGNOSTICS
   void writeRuntimeSample(Line& line, RuntimeModel& model, const ClientStore& clients) {
     std::size_t tabs = 0;
     std::size_t attachments = 0;
@@ -383,9 +385,6 @@ namespace telar::runtime::diagnostics {
     graphics_storage.write(line);
     terminal_storage.write(line);
   }
-
-  // The sample reads counters that only a diagnostics build keeps.
-#if TELAR_DIAGNOSTICS
 #endif
 
 #if TELAR_DIAGNOSTICS

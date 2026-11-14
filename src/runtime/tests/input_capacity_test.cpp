@@ -3,71 +3,27 @@
 static_assert(true);
 #endif
 
-#if (TELAR_DIAGNOSTICS)
 #include "telar_base/diagnostics/config.hpp"
-#endif
-#if (TELAR_DIAGNOSTICS)
-#include <sys/types.h>
-#endif
-#if (TELAR_DIAGNOSTICS)
-#include <cstdint>
-#endif
-#if (TELAR_DIAGNOSTICS)
 #include <cassert>
-#endif
-#if (TELAR_DIAGNOSTICS)
-#include <cstring>
-#endif
-#if (TELAR_DIAGNOSTICS)
-#include <cstddef>
-#endif
-#if (TELAR_DIAGNOSTICS)
 #include <cerrno>
-#endif
-#if (TELAR_DIAGNOSTICS)
-#include <cstdio>
-#endif
-#if (TELAR_DIAGNOSTICS)
-#include <cstdlib>
-#endif
-#if (TELAR_DIAGNOSTICS)
-#include <fcntl.h>
-#endif
-#if (TELAR_DIAGNOSTICS)
-#include <sys/mman.h>
-#endif
-#if (TELAR_DIAGNOSTICS)
-#include <unistd.h>
-#endif
-#if (TELAR_DIAGNOSTICS)
-#endif
-#if (TELAR_DIAGNOSTICS)
-#include <limits.h>
-#endif
-#if (TELAR_DIAGNOSTICS)
 #include <csignal>
-#endif
-#if (TELAR_DIAGNOSTICS)
-#include <sys/uio.h>
-#endif
-#if (TELAR_DIAGNOSTICS)
-#include <sys/wait.h>
-#endif
+#include <cstddef>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <fcntl.h>
+#include <limits.h>
+#include <sys/mman.h>
+#include <sys/types.h>
+#include <sys/uio.h>
+#include <sys/wait.h>
+#include <unistd.h>
 #if (defined(__APPLE__))
 #include <sys/event.h>
 #endif
 #if (defined(__linux__))
-#include <cerrno>
-#endif
-#if (defined(__linux__))
 #include <climits>
-#endif
-#if (defined(__linux__))
-#include <csignal>
-#endif
-#if (defined(__linux__))
-#include <fcntl.h>
 #endif
 #if (defined(__linux__))
 #include <sched.h>
@@ -78,18 +34,10 @@ static_assert(true);
 #if (defined(__linux__))
 #include <sys/syscall.h>
 #endif
-#if (defined(__linux__))
-#include <unistd.h>
-#endif
-#include <csignal>
-#include <cstdio>
-#include <cstdlib>
+#include <ghostty/vt.h>
 #include <new>
 #include <sys/stat.h>
-#include <sys/wait.h>
 
-#if (TELAR_DIAGNOSTICS)
-#include <ghostty/vt.h>
 import std;
 import telar.base.diagnostics;
 import telar.base.memory.allocators;
@@ -99,14 +47,15 @@ import telar.runtime.diagnostics.line;
 import telar.runtime.graphics.kitty;
 import telar.runtime.terminal.control;
 import telar.runtime.tests.client_peer;
-import telar.runtime.runtime.runtime_telemetry;
-#endif
 import telar.runtime.runtime.runtime;
 import telar.runtime.tests.check;
 import telar.wire.clients;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
+#if (TELAR_DIAGNOSTICS)
+import telar.runtime.runtime.runtime_telemetry;
+#endif
 
 using namespace telar;
 using namespace telar::runtime;
