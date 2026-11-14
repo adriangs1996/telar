@@ -106,13 +106,13 @@ export import telar.runtime.plugins.protocol;
 export import telar.runtime.traffic.capture;
 
 export import telar.runtime.platform.launch_program;
-export import telar.runtime.proxy.relay_direction;
+export import telar.runtime.platform.signals;
 export import telar.runtime.traffic.capture_analysis;
 
-export import telar.runtime.proxy.runtime;
 export import telar.runtime.redirect.socket_owners;
 export import telar.runtime.redirect.ingress;
 import telar.base.diagnostics;
+import telar.tls;
 import telar.wire.vocabulary;
 import telar.platform.primitives;
 

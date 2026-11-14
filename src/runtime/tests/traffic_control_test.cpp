@@ -93,6 +93,8 @@ import telar.runtime.tests.socket_pair;
 import telar.runtime.tests.tls_fixture;
 import telar.platform.error;
 import telar.platform.fs;
+import telar.platform.net;
+import telar.runtime.proxy.runtime;
 import telar.runtime.traffic.capture;
 import telar.runtime.traffic.control_backend;
 import telar.wire.vocabulary;

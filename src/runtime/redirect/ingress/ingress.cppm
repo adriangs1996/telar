@@ -72,8 +72,7 @@ export module telar.runtime.redirect.ingress;
 
 import std;
 
-export import telar.runtime.proxy.relay_direction;
-export import telar.runtime.proxy.authenticate;
+export import telar.runtime.platform.name_resolutions;
 
 export import telar.runtime.platform.private_tunnel;
 

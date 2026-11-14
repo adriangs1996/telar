@@ -127,8 +127,6 @@ export import telar.platform.error;
 export import telar.platform.fs;
 export import telar.platform.process;
 
-export import telar.runtime.proxy.relay_direction;
-
 export import telar.runtime.platform.process_probe;
 import telar.base.diagnostics;
 import telar.platform.primitives;

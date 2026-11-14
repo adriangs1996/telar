@@ -413,16 +413,20 @@
     "telar_base/memory/allocator.hpp",
     "telar_platform/trace_macro.hpp"
   ],
+  "lib/platform/net/net.cppm": [
+    "<cerrno>",
+    "<csignal>",
+    "<cstdint>",
+    "<cstring>",
+    "<netinet/in.h>",
+    "<netinet/tcp.h>",
+    "<sys/socket.h>",
+    "<sys/types.h>",
+    "<unistd.h>"
+  ],
   "lib/platform/paths/paths.cppm": [
     "<cstdlib>",
     "<sys/un.h>",
-    "<unistd.h>"
-  ],
-  "lib/platform/platform.cppm": [
-    "<cerrno>",
-    "<csignal>",
-    "<sys/socket.h>",
-    "<sys/types.h>",
     "<unistd.h>"
   ],
   "lib/platform/primitives/primitives.cppm": [
@@ -2704,6 +2708,14 @@
     "<sys/un.h>",
     "<unistd.h>"
   ],
+  "src/runtime/platform/name_resolutions/name_resolutions.cppm": [
+    "<cerrno>",
+    "<cstddef>",
+    "<netdb.h>",
+    "<netinet/in.h>",
+    "<pthread.h>",
+    "<sys/socket.h>"
+  ],
   "src/runtime/platform/private_tunnel/private_tunnel.cppm": [
     "<arpa/inet.h>",
     "<cerrno>",
@@ -3010,18 +3022,9 @@
   "src/runtime/proxy/relay_direction/relay_direction.cppm": [
     "<arpa/inet.h>",
     "<cerrno>",
-    "<csignal>",
-    "<cstddef>",
     "<cstdint>",
-    "<cstdlib>",
-    "<cstring>",
-    "<netdb.h>",
     "<netinet/in.h>",
-    "<netinet/tcp.h>",
-    "<new>",
-    "<pthread.h>",
-    "<sys/socket.h>",
-    "<unistd.h>"
+    "<sys/socket.h>"
   ],
   "src/runtime/proxy/runtime/runtime.cppm": [
     "<arpa/inet.h>",

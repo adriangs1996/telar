@@ -50,7 +50,7 @@ export import telar.plugins;
 export import telar.runtime.traffic.control_backend;
 export import telar.runtime.traffic.control_protocol;
 
-export import telar.runtime.proxy.relay_direction;
+export import telar.runtime.platform.signals;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.platform.primitives;
