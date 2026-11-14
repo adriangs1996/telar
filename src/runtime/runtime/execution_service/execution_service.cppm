@@ -36,7 +36,7 @@ export import telar.runtime.platform.stream_read_buffer;
 export import telar.runtime.transport.connection;
 
 export import telar.client;
-export import telar.platform;
+export import telar.platform.net;
 export import telar.platform.error;
 export import telar.platform.events;
 export import telar.platform.process;

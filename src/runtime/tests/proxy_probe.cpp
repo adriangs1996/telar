@@ -33,7 +33,7 @@ import telar.base.text;
 import telar.platform.primitives;
 import telar.runtime.tests.protocol_peer;
 import telar.runtime.proxy.authenticate;
-import telar.platform;
+import telar.platform.net;
 import telar.wire.content;
 import telar.wire.layout;
 

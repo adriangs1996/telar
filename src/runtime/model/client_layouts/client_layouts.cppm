@@ -47,7 +47,7 @@ export import telar.runtime.shell_integration.git_context;
 export import telar.runtime.persistence.launch_record;
 export import telar.base.memory.allocators;
 export import telar.base.memory.containers;
-export import telar.platform;
+export import telar.platform.net;
 export import telar.platform.events;
 export import telar.platform.process;
 

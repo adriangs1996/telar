@@ -20,7 +20,7 @@ import telar.platform.primitives;
 import telar.gui.platform.login_shell;
 import telar.gui.platform.private_file_stamp;
 import telar.gui.platform.notification_commands;
-import telar.platform;
+import telar.platform.net;
 import telar.platform.fs;
 
 namespace {

@@ -17,7 +17,7 @@ family:
 | `telar.platform.graphics` | shared memory for images handed to the GUI |
 | `telar.platform.primitives` | the owner of the textual headers: owned descriptors, mapped regions, random bytes and debug tracing |
 
-`telar.platform` imports every family. Import the family a file uses instead. Git checkout files and hardened git
+There is no `telar.platform` module: import the family a file uses. Git checkout files and hardened git
 commands live in `telar.git.checkout`, in `lib/git/checkout`.
 
 It builds a static library for the sources in `src/` and the implementation units

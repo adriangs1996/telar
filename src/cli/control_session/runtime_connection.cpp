@@ -17,7 +17,7 @@ module telar.cli.control_session;
 
 import std;
 
-import telar.platform;
+import telar.platform.net;
 import telar.platform.error;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;

@@ -78,7 +78,7 @@ export import telar.runtime.http2.frame_reader;
 export import telar.runtime.tls.interception;
 export import telar.runtime.platform.launch_program;
 export import telar.runtime.proxy.authenticate;
-export import telar.platform;
+export import telar.platform.net;
 export import telar.platform.error;
 export import telar.platform.events;
 export import telar.platform.fs;
