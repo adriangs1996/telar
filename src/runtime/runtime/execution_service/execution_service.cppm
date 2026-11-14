@@ -480,7 +480,8 @@ export {
     template <Allocator Memory, EventLoop Poller, HistoryEventSink History = DiscardedHistory>
     class PaneService {
     public:
-      inline explicit PaneService(Memory& memory, Poller& poller, LimitService<Memory>& limits, PaneLaunchOptions options, History& history = discarded_history)
+      // The panes it launches keep the allocator, and the service keeps what it is given, all in region `a`.
+      inline explicit PaneService(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<Poller&, tbc::lt::a> poller, tbc::view<LimitService<Memory>&, tbc::lt::a> limits, tbc::view<PaneLaunchOptions, tbc::lt::a> options, tbc::view<History&, tbc::lt::a> history = discarded_history)
           : memory_(memory),
             poller_(poller),
             limits_(limits),
@@ -1142,14 +1143,14 @@ export {
 
       static constexpr std::size_t pane_capacity = 256;
 
-      Memory& memory_;
-      Poller& poller_;
-      LimitService<Memory>& limits_;
-      History& history_;
-      std::string_view socket_path_;
+      tbc::view<Memory&, tbc::lt::a> memory_;
+      tbc::view<Poller&, tbc::lt::a> poller_;
+      tbc::view<LimitService<Memory>&, tbc::lt::a> limits_;
+      tbc::view<History&, tbc::lt::a> history_;
+      tbc::view<std::string_view, tbc::lt::a> socket_path_;
       ProxyClientConfiguration proxy_;
       control::Policy control_policy_;
-      ShellIntegration<Memory> shell_integration_;
+      tbc::view<ShellIntegration<Memory>, tbc::lt::a> shell_integration_;
     };
 
   }
