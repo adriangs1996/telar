@@ -16,7 +16,7 @@ if(NOT TARGET telar-wire)
   add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../wire" "${CMAKE_BINARY_DIR}/telar-wire")
 endif()
 
-add_library(telar-client STATIC)
+add_library(telar-client STATIC client.cpp)
 add_library(telar::client ALIAS telar-client)
 telar_modules(telar-client)
 target_compile_features(telar-client PUBLIC cxx_std_23)

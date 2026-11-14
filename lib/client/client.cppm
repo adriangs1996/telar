@@ -1,4 +1,5 @@
 module;
+#include "tbc/annotations.hpp"
 #include "telar_client/codecs/telar_annotations.hpp"
 
 export module telar.client;
@@ -79,23 +80,11 @@ export {
     struct HandshakeReasonByte {
       static constexpr std::size_t width = u8::width;
 
-      inline static HandshakeRejectReason validate(HandshakeRejectReason reason) _throw(EncodingError) {
-        switch (reason) {
-        case HandshakeRejectReason::incompatible_schema:
-        case HandshakeRejectReason::client_limit_reached:
-          return reason;
-        default:
-          throw EncodingError{"Unknown handshake rejection reason"};
-        }
-      }
+      static HandshakeRejectReason validate(HandshakeRejectReason reason) _throw(EncodingError);
 
-      inline static void encode(HandshakeRejectReason reason, std::span<Byte>& output) _throw(EncodingError) {
-        u8::encode(static_cast<Byte>(validate(reason)), output);
-      }
+      static void encode(HandshakeRejectReason reason, std::span<Byte>& output) _throw(EncodingError);
 
-      inline static HandshakeRejectReason decode(std::span<const Byte>& input) _throw(EncodingError) {
-        return validate(static_cast<HandshakeRejectReason>(u8::decode(input)));
-      }
+      static HandshakeRejectReason decode(std::span<const Byte>& input) _throw(EncodingError);
     };
 
     template <Direction Side, HandshakeTag Tag, typename... Fields>
@@ -137,93 +126,26 @@ export {
       static constexpr std::size_t max_message_size = HandshakeSchema<ServerReject>::payload_size;
 
       template <typename Message>
-      inline static auto encode(const Message& message) _throw(EncodingError) {
-        using Sch = HandshakeSchema<Message>;
-        std::array<Byte, Sch::payload_size> payload{};
-        std::span<Byte> output = payload;
-
-        FixedBytes<handshake::magic.size()>::encode(handshake::magic, output);
-        u8::encode(static_cast<Byte>(Sch::tag), output);
-        Sch::encodeBody(message, output);
-
-        return payload;
-      }
+      static std::array<Byte, HandshakeSchema<Message>::payload_size> encode(const Message& message) _throw(EncodingError);
 
       template <typename Message>
-      inline static Message decode(std::span<const Byte> input) _throw(EncodingError) {
-        if (decodeHeader(input) != HandshakeSchema<Message>::tag) {
-          throw EncodingError{"Unexpected handshake message"};
-        }
+      static Message decode(std::span<const Byte> input) _throw(EncodingError);
 
-        return decodeBody<Message>(input);
-      }
-
-      inline static HandshakeResponse decodeResponse(std::span<const Byte> input) _throw(EncodingError) {
-        switch (decodeHeader(input)) {
-        case HandshakeTag::server_accept:
-          return decodeBody<ServerAccept>(input);
-        case HandshakeTag::server_reject:
-          return decodeBody<ServerReject>(input);
-        default:
-          throw EncodingError{"Unexpected handshake response"};
-        }
-      }
+      static HandshakeResponse decodeResponse(std::span<const Byte> input) _throw(EncodingError);
 
 #ifdef TELAR_DEBUG
       template <typename Message>
-      inline static void pretty_print(const Message& message, std::FILE* output = stderr) {
-        const auto payload = encode(message);
-
-        debug::printFrame<HandshakeSchema<Message>>(payload, output);
-      }
+      static void pretty_print(const Message& message, std::FILE* output = stderr);
 #endif
 
     private:
       static constexpr std::size_t header_size = handshake::magic.size() + u8::width;
 
-      inline static HandshakeTag decodeHeader(std::span<const Byte>& input) _throw(EncodingError) {
-        if (input.size() < header_size) {
-          throw EncodingError{"Invalid handshake response length"};
-        }
-
-        if (FixedBytes<handshake::magic.size()>::decode(input) != handshake::magic) {
-          throw EncodingError{"Invalid handshake magic"};
-        }
-
-        const auto tag = static_cast<HandshakeTag>(u8::decode(input));
-
-        switch (tag) {
-        case HandshakeTag::client_hello:
-        case HandshakeTag::server_accept:
-        case HandshakeTag::server_reject:
-          return tag;
-        default:
-          throw EncodingError{"Unknown handshake message tag"};
-        }
-      }
+      static HandshakeTag decodeHeader(std::span<const Byte>& input) _throw(EncodingError);
 
       template <typename Message>
-      inline static Message decodeBody(std::span<const Byte> input) _throw(EncodingError) {
-        using Sch = HandshakeSchema<Message>;
-
-        if (input.size() != Sch::payload_size - header_size) {
-          throw EncodingError{"Invalid handshake response length"};
-        }
-
-        Message message{};
-
-        Sch::decodeBody(input, message);
-        return message;
-      }
+      static Message decodeBody(std::span<const Byte> input) _throw(EncodingError);
     };
-
-#ifdef TELAR_DEBUG
-    template <Direction Side, HandshakeTag Tag, typename... Fields>
-    template <typename Message>
-    void HandshakeLayout<Side, Tag, Fields...>::pretty_print(const Message& message, std::FILE* output) {
-      HandshakeCodec::pretty_print(message, output);
-    }
-#endif
 
     static_assert(HandshakeSchema<ClientHello>::payload_size == 17);
     static_assert(HandshakeSchema<ServerAccept>::payload_size == 17);
@@ -245,12 +167,9 @@ export {
   namespace telar {
 
     struct SocketError final : std::exception {
-      inline SocketError(const char* message)
-          : message{message} {}
+      SocketError(const char* message);
 
-      inline const char* what() const noexcept override {
-        return message;
-      }
+      const char* what() const noexcept override;
 
     private:
       const char* message;
@@ -264,130 +183,18 @@ export {
       Client(const Client&) = delete;
       Client& operator=(const Client&) = delete;
 
-      inline Client(Client&& other) noexcept
-          : _address(other._address),
-            _fd(std::exchange(other._fd, -1)) {}
+      Client(Client&& other) noexcept;
+      Client& operator=(Client&& other) noexcept;
+      ~Client();
 
-      inline Client& operator=(Client&& other) noexcept {
-        if (this != &other) {
-          deinit();
-          _address = other._address;
-          _fd = std::exchange(other._fd, -1);
-        }
+      static Client init(const char* socket_path) _throw(SocketError);
 
-        return *this;
-      }
+      void handshake() _throw(std::exception);
 
-      inline ~Client() {
-        deinit();
-      }
-
-      inline static Client init(const char* socket_path) _throw(SocketError) {
-        Client client{};
-
-        client._address.sun_family = AF_UNIX;
-
-        const auto path_length = std::strlen(socket_path);
-        if (path_length >= sizeof(client._address.sun_path)) {
-          throw SocketError{"Socket path too long"};
-        }
-
-        std::memcpy(client._address.sun_path, socket_path, path_length + 1);
-
-#if defined(__linux__)
-        client._fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
-#else
-        // Darwin has no SOCK_CLOEXEC: a fork between these two calls can still inherit it.
-        client._fd = socket(AF_UNIX, SOCK_STREAM, 0);
-        if (client._fd >= 0 && fcntl(client._fd, F_SETFD, FD_CLOEXEC) < 0) {
-          client.deinit();
-          throw SocketError{"Error configuring socket"};
-        }
-
-#endif
-        if (client._fd < 0) {
-          throw SocketError{"Error opening socket"};
-        }
-
-        if (setsockopt(client._fd, SOL_SOCKET, SO_SNDTIMEO, &io_timeout, sizeof(io_timeout)) < 0) {
-          client.deinit();
-          throw SocketError{"Error configuring runtime I/O timeout"};
-        }
-
-#if defined(__APPLE__)
-        const int enabled = 1;
-        if (setsockopt(client._fd, SOL_SOCKET, SO_NOSIGPIPE, &enabled, sizeof(enabled)) < 0) {
-          client.deinit();
-          throw SocketError{"Error configuring socket"};
-        }
-#endif
-
-        auto address_ptr = reinterpret_cast<sockaddr*>(&client._address);
-
-        while (connect(client._fd, address_ptr, sizeof(client._address)) < 0) {
-          if (sys::lastError() == EINTR) {
-            continue;
-          }
-
-          client.deinit();
-          throw SocketError{"Error connecting"};
-        }
-
-        return client;
-      }
-
-      inline void handshake() _throw(std::exception) {
-        timeval timeout{
-            .tv_sec = 30,
-            .tv_usec = 0,
-        };
-
-        if (setsockopt(_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
-          throw SocketError{"Error enabling runtime receive timeout for handshake"};
-        }
-
-        try {
-          const ClientHello request{};
-
-          sendFrame(HandshakeCodec::encode(request));
-
-          std::array<Byte, HandshakeCodec::max_message_size> buffer{};
-          const auto response = HandshakeCodec::decodeResponse(receiveFrame(buffer));
-
-          if (const auto* accepted = std::get_if<ServerAccept>(&response)) {
-            if (accepted->schema != request.schema) {
-              throw SocketError{"Runtime accepted an unexpected wire schema"};
-            }
-
-            timeout.tv_sec = 0;
-            if (setsockopt(_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
-              throw SocketError{"Error disabling runtime receive timeout"};
-            }
-
-            return;
-          }
-
-          switch (std::get<ServerReject>(response).reason) {
-          case HandshakeRejectReason::incompatible_schema:
-            throw SocketError{"Runtime rejected the wire schema"};
-          case HandshakeRejectReason::client_limit_reached:
-            throw SocketError{"Runtime client limit reached"};
-          }
-        } catch (...) {
-          deinit();
-          throw;
-        }
-      }
-
-      inline void deinit() {
-        if (_fd >= 0) {
-          close(_fd);
-          _fd = -1;
-        }
-      }
+      void deinit();
 
       template <typename Message>
-      inline void send(const Message& message) {
+      TBC_GENERIC inline void send(const Message& message) {
         using Schema = MessageSchema<Message>;
         static_assert(Schema::direction == Direction::client, "Can only send Client Messages");
 
@@ -395,7 +202,7 @@ export {
       }
 
       template <typename Message>
-      inline void send(const Message& message, std::span<Byte> frame_buffer) {
+      TBC_GENERIC inline void send(const Message& message, std::span<Byte> frame_buffer) {
         static_assert(MessageSchema<Message>::direction == Direction::client, "Can only send Client Messages");
 
         if (frame_buffer.size() < frame_prefix_size) {
@@ -409,30 +216,11 @@ export {
         writeAll(frame_buffer.data(), frame_prefix_size + payload.size());
       }
 
-      inline tbc::view<std::span<const Byte>, tbc::lt::a> receiveFrame(tbc::view<std::span<Byte>, tbc::lt::a> buffer) _throw(SocketError) {
-        std::array<Byte, frame_prefix_size> prefix{};
+      tbc::view<std::span<const Byte>, tbc::lt::a> receiveFrame(tbc::view<std::span<Byte>, tbc::lt::a> buffer) _throw(SocketError);
 
-        readAll(prefix.data(), prefix.size());
+      int descriptor() const noexcept;
 
-        std::span<const Byte> input = prefix;
-        const auto length = u32::decode(input);
-        if (length == 0 || length > max_payload_size || length > buffer.size()) {
-          throw SocketError{"Invalid runtime frame length"};
-        }
-
-        readAll(buffer.data(), length);
-        return buffer.first(length);
-      }
-
-      inline int descriptor() const noexcept {
-        return _fd;
-      }
-
-      inline void interrupt() const noexcept {
-        if (_fd >= 0) {
-          ::shutdown(_fd, SHUT_RDWR);
-        }
-      }
+      void interrupt() const noexcept;
 
     private:
       static constexpr timeval io_timeout{
@@ -441,7 +229,7 @@ export {
       };
 
       template <std::size_t N>
-      inline void sendFrame(const std::array<Byte, N>& payload) _throw(SocketError) {
+      TBC_GENERIC inline void sendFrame(const std::array<Byte, N>& payload) _throw(SocketError) {
         static_assert(N > 0 && N <= max_payload_size, "Invalid runtime frame length");
         std::array<Byte, frame_prefix_size + N> frame{};
         std::span<Byte> output = frame;
@@ -452,54 +240,9 @@ export {
         writeAll(frame.data(), frame.size());
       }
 
-      inline void writeAll(const std::uint8_t* bytes, std::size_t size) _throw(SocketError) {
-        while (size != 0) {
-#if defined(__linux__)
-          const auto count = ::send(_fd, bytes, size, MSG_NOSIGNAL);
-#else
-          // SO_NOSIGPIPE already keeps a closed peer from raising SIGPIPE.
-          const auto count = ::send(_fd, bytes, size, 0);
-#endif
-          if (count < 0 && sys::lastError() == EINTR) {
-            continue;
-          }
+      void writeAll(const std::uint8_t* bytes, std::size_t size) _throw(SocketError);
 
-          if (count <= 0) {
-            if (count < 0 && (sys::lastError() == EAGAIN || sys::lastError() == EWOULDBLOCK)) {
-              throw SocketError{"Runtime send timed out"};
-            }
-
-            throw SocketError{"Error sending runtime message"};
-          }
-
-          bytes += count;
-          size -= static_cast<std::size_t>(count);
-        }
-      }
-
-      inline void readAll(std::uint8_t* bytes, std::size_t size) _throw(SocketError) {
-        while (size != 0) {
-          const auto count = recv(_fd, bytes, size, 0);
-          if (count < 0 && sys::lastError() == EINTR) {
-            continue;
-          }
-
-          if (count < 0) {
-            if (sys::lastError() == EAGAIN || sys::lastError() == EWOULDBLOCK) {
-              throw SocketError{"Runtime receive timed out"};
-            }
-
-            throw SocketError{"Error receiving runtime message"};
-          }
-
-          if (count == 0) {
-            throw SocketError{"Runtime closed the connection"};
-          }
-
-          bytes += count;
-          size -= static_cast<std::size_t>(count);
-        }
-      }
+      void readAll(std::uint8_t* bytes, std::size_t size) _throw(SocketError);
 
       sockaddr_un _address = {};
       int _fd = -1;

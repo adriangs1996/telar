@@ -3,7 +3,3 @@
 # partition counts as its module. The check fails on a body in any other module
 # and on a listed module whose interfaces keep none, so each task that moves a
 # module's bodies out deletes its line.
-
-telar.base.editors
-telar.base.history
-telar.client
