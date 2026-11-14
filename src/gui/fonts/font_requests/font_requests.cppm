@@ -27,7 +27,7 @@ export {
     struct FontCascade {
       // Generic over the caller's font provider; asked once per text run that needs a face.
       template <FontProvider Fonts>
-      TBC_HOT_PATH [[nodiscard]] static std::optional<FontRole> source(Fonts& fonts, std::string_view text, FontRole preferred) {
+      TBC_GENERIC [[nodiscard]] static std::optional<FontRole> source(Fonts& fonts, std::string_view text, FontRole preferred) {
         if (FontCoverage::covers(fonts.face(preferred), text)) {
           return preferred;
         }

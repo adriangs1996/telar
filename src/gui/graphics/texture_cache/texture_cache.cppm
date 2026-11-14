@@ -203,7 +203,7 @@ export {
 
     // Generic over the caller's texture resources: it only erases them for ImageResidencyTable.
     template <ImageTextureReleases Resources>
-    class TBC_HOT_PATH ImageResidency : public ImageResidencyTable {
+    class TBC_GENERIC ImageResidency : public ImageResidencyTable {
     public:
       explicit ImageResidency(Resources& resources) noexcept
           : ImageResidencyTable(&resources, [](void* context, ImageTextureHandle handle) noexcept {
@@ -365,7 +365,7 @@ export {
 
         // Generic over the caller's shared image source.
         template <typename Source>
-        TBC_HOT_PATH bool readShared(Source& source) {
+        TBC_GENERIC bool readShared(Source& source) {
           if (received_ != 0 || chunks_ != 0) {
             throw EncodingError{"Shared image already received pixels"};
           }
@@ -407,7 +407,7 @@ export {
 
       // Generic over the caller's shared image source.
       template <typename Source>
-      TBC_HOT_PATH bool sharedImage(const GraphicsSharedImage& message, Source& source) {
+      TBC_GENERIC bool sharedImage(const GraphicsSharedImage& message, Source& source) {
         if (!accept(message.header.revision)) {
           return false;
         }

@@ -40,7 +40,7 @@ export {
       // Generic over the caller's consumer, which takes each complete frame in turn.
       template <typename Consumer>
         requires std::invocable<Consumer&, std::span<const Byte>>
-      TBC_HOT_PATH void feed(std::span<const Byte> input, Consumer& consume) {
+      TBC_GENERIC void feed(std::span<const Byte> input, Consumer& consume) {
         while (const auto frame = next(input)) {
           if (!consumeFrame(consume, *frame)) {
             return;
@@ -55,7 +55,7 @@ export {
 
       template <typename Consumer>
         requires std::invocable<Consumer&, std::span<const Byte>>
-      [[nodiscard]] TBC_HOT_PATH static bool consumeFrame(Consumer& consume, std::span<const Byte> frame) {
+      [[nodiscard]] TBC_GENERIC static bool consumeFrame(Consumer& consume, std::span<const Byte> frame) {
         if constexpr (std::same_as<std::invoke_result_t<Consumer&, std::span<const Byte>>, bool>) {
           return consume(frame);
         } else {

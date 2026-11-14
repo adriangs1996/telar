@@ -167,7 +167,7 @@ export {
       // Opens `path` in an editor. A relative path is anchored at the cwd of pane `source_id`,
       // after `environment` expands it.
       template <PathEnvironment Environment>
-      TBC_HOT_PATH void openFile(const FilePath& path, std::string_view executable, const Environment& environment, std::optional<std::uint64_t> source_id = {}) {
+      TBC_GENERIC void openFile(const FilePath& path, std::string_view executable, const Environment& environment, std::optional<std::uint64_t> source_id = {}) {
         const auto base = fileBase(path, executable, source_id);
         const auto anchored = base ? PathExpansion::expand({.text = path.text(), .base = *base}, environment) : PathExpansion::PathText{};
 

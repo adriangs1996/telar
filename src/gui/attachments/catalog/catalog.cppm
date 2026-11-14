@@ -214,7 +214,7 @@ export namespace telar::gui {
   // its last render lease is released; eviction may only reuse releasable slots.
   // Generic over the caller's delivery and its slot state, so it stays whole for each importer.
   template <Allocator Memory, typename Delivery>
-  class TBC_HOT_PATH AttachmentCatalog {
+  class TBC_GENERIC AttachmentCatalog {
   public:
     struct Slot {
       AttachmentCapture<Memory> capture;

@@ -41,7 +41,7 @@ export {
 
     // Generic over the caller's font provider; walks a text's clusters once per shaped span.
     template <CascadingFontProvider Fonts>
-    class TBC_HOT_PATH FontRuns {
+    class TBC_GENERIC FontRuns {
     public:
       inline FontRuns(Fonts& fonts, std::string_view text, FontRole preferred) noexcept
           : fonts_(fonts),
@@ -126,13 +126,13 @@ export {
       [[nodiscard]] std::int32_t advance() const noexcept;
 
       template <CascadingFontProvider Fonts>
-      TBC_HOT_PATH void shape(Fonts& fonts, std::string_view text, TextRequest request) {
+      TBC_GENERIC void shape(Fonts& fonts, std::string_view text, TextRequest request) {
         clear();
         append(fonts, text, request);
       }
 
       template <CascadingFontProvider Fonts>
-      TBC_HOT_PATH void shapeCaption(Fonts& fonts, std::string_view text, TextRequest request) {
+      TBC_GENERIC void shapeCaption(Fonts& fonts, std::string_view text, TextRequest request) {
         clear();
         CaptionRuns runs{text};
 
@@ -147,7 +147,7 @@ export {
       }
 
       template <CascadingFontProvider Fonts>
-      TBC_HOT_PATH [[nodiscard]] static std::int32_t measure(Fonts& fonts, std::string_view text, TextRequest request) {
+      TBC_GENERIC [[nodiscard]] static std::int32_t measure(Fonts& fonts, std::string_view text, TextRequest request) {
         std::int32_t advance = 0;
 
         visit(fonts, text, request, [&](FontSpan span) {
@@ -163,7 +163,7 @@ export {
       void clear();
 
       template <CascadingFontProvider Fonts>
-      TBC_HOT_PATH void append(Fonts& fonts, std::string_view text, TextRequest request) {
+      TBC_GENERIC void append(Fonts& fonts, std::string_view text, TextRequest request) {
         visit(fonts, text, request, [&](FontSpan span) {
           const auto role = span.role.value_or(FontRole::primary);
           const auto run = fonts.face(role).shape(span.text, request.pixel_height);
@@ -182,7 +182,7 @@ export {
       void appendSpan(TextSpan span);
 
       template <CascadingFontProvider Fonts, typename Visitor>
-      TBC_HOT_PATH static void visit(Fonts& fonts, std::string_view text, TextRequest request, Visitor visitor) {
+      TBC_GENERIC static void visit(Fonts& fonts, std::string_view text, TextRequest request, Visitor visitor) {
         if (request.pixel_height == 0) {
           throw std::invalid_argument{"InvalidTextPixelHeight"};
         }
@@ -204,7 +204,7 @@ export {
       }
 
       template <CascadingFontProvider Fonts>
-      TBC_HOT_PATH static std::int32_t spanAdvance(Fonts& fonts, FontSpan span, TextRequest request, std::int32_t shaped_advance) {
+      TBC_GENERIC static std::int32_t spanAdvance(Fonts& fonts, FontSpan span, TextRequest request, std::int32_t shaped_advance) {
         if (!span.role || !fittedFont(*span.role)) {
           return shaped_advance;
         }
@@ -242,7 +242,7 @@ export {
 
       // Generic over the caller's font provider, so it stays here; shapes a cell's text whenever it is painted.
       template <CascadingFontProvider Fonts>
-      TBC_HOT_PATH void shape(Fonts& fonts, std::string_view text, const FontGrid& grid) {
+      TBC_GENERIC void shape(Fonts& fonts, std::string_view text, const FontGrid& grid) {
         begin(text, grid);
         GraphemeCursor cursor{text};
 
@@ -348,7 +348,7 @@ export {
       [[nodiscard]] Rect ink() const noexcept;
 
       template <CascadingFontProvider Fonts>
-      TBC_HOT_PATH void shape(Fonts& fonts, std::string_view text, IconRequest request) {
+      TBC_GENERIC void shape(Fonts& fonts, std::string_view text, IconRequest request) {
         if (text.size() > maximum_text_bytes || request.pixel_height == 0 || request.pixel_height > maximum_pixel_height) {
           throw std::invalid_argument{"InvalidIconLayoutRequest"};
         }
@@ -375,7 +375,7 @@ export {
       };
 
       template <CascadingFontProvider Fonts>
-      TBC_HOT_PATH float appendRun(Fonts& fonts, std::string_view text, Run run) {
+      TBC_GENERIC float appendRun(Fonts& fonts, std::string_view text, Run run) {
         auto& face = fonts.face(run.role);
         const auto shaped = face.shape(text, run.request.pixel_height);
         const auto start = glyphs_.size();
@@ -477,7 +477,7 @@ export {
       [[nodiscard]] CellTextRange cell(std::size_t column) const noexcept;
 
       template <CascadingFontProvider Fonts>
-      TBC_HOT_PATH void shape(Fonts& fonts, std::span<const CellValue> cells, RowTextRequest request) {
+      TBC_GENERIC void shape(Fonts& fonts, std::span<const CellValue> cells, RowTextRequest request) {
         if (request.pixel_height == 0 || request.cell_width == 0 || cells.size() > std::numeric_limits<std::uint16_t>::max()) {
           throw std::invalid_argument{"InvalidRowTextRequest"};
         }
@@ -530,7 +530,7 @@ export {
       bool appendTogether(Face& face, std::span<const CellValue> cells, std::size_t column, RowTextRequest request);
 
       template <CascadingFontProvider Fonts>
-      TBC_HOT_PATH void appendAlone(Fonts& fonts, const CellValue& cell, std::size_t column, RowTextRequest request) {
+      TBC_GENERIC void appendAlone(Fonts& fonts, const CellValue& cell, std::size_t column, RowTextRequest request) {
         if (cell.width == CellWidth::continuation || hasAttribute(cell.style, CellAttribute::invisible) || glyphs::Symbol::parse(cell.utf8()) || cell.utf8().starts_with(placeholder_prefix)) {
           return;
         }

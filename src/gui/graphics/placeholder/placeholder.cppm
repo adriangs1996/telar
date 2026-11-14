@@ -158,7 +158,7 @@ namespace telar::gui {
 
     // Generic over the caller's visitor, so it stays here.
     template <typename Visitor>
-    TBC_HOT_PATH static PaintSink of(Visitor& visitor) noexcept {
+    TBC_GENERIC static PaintSink of(Visitor& visitor) noexcept {
       return {
           .context = &visitor,
           .call = [](void* context, const RoundedRectanglePaint& paint) {
@@ -191,7 +191,7 @@ export {
       std::optional<Color> track = std::nullopt;
 
       template <typename Visitor>
-      TBC_HOT_PATH void visit(Visitor visitor) const {
+      TBC_GENERIC void visit(Visitor visitor) const {
         visit(PaintSink::of(visitor));
       }
 
@@ -221,7 +221,7 @@ export {
       bool compact = true;
 
       template <typename Visitor>
-      TBC_HOT_PATH void visit(Visitor append) const {
+      TBC_GENERIC void visit(Visitor append) const {
         visit(PaintSink::of(append));
       }
 

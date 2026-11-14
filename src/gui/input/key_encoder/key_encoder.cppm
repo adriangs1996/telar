@@ -30,7 +30,7 @@ export {
     int compareChords(KeyChord left, KeyChord right) noexcept;
 
     template <typename Action>
-    struct TBC_HOT_PATH KeyBinding {
+    struct TBC_GENERIC KeyBinding {
       std::array<KeyChord, BindingLimits::keys> keys{};
       std::size_t length = 0;
       Action action{};
@@ -48,7 +48,7 @@ export {
     };
 
     template <typename Action>
-    class TBC_HOT_PATH BindingMap {
+    class TBC_GENERIC BindingMap {
     public:
       struct Range {
         std::size_t begin = 0;
@@ -364,7 +364,7 @@ export {
     };
 
     template <typename Action, BindingInput Event = BindingEvent>
-    class TBC_HOT_PATH KeyRouter {
+    class TBC_GENERIC KeyRouter {
     public:
       enum class Outcome : std::uint8_t {
         forward,
@@ -692,7 +692,7 @@ export {
     // A paste as one bounded value, encoded by the paste encoder the runtime uses too.
     struct PasteEncoding {
       template <std::size_t Capacity>
-      [[nodiscard]] TBC_HOT_PATH inline static BoundedText<Capacity + BracketedPaste::framing_bytes> encode(std::string_view text, bool bracketed) {
+      [[nodiscard]] TBC_GENERIC inline static BoundedText<Capacity + BracketedPaste::framing_bytes> encode(std::string_view text, bool bracketed) {
         if (text.size() > Capacity) {
           throw std::length_error{"Paste text exceeds its capacity"};
         }
