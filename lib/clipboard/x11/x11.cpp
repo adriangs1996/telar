@@ -1,11 +1,13 @@
 module;
-#include "../src/linux/backend.hpp"
 #include <xcb/xcb.h>
 #include <xcb/xcbext.h>
 
 module telar.clipboard.x11;
 
 import std;
+import telar.clipboard;
+import telar.clipboard.linux;
+import telar.sys.posix;
 
 namespace telar::clipboard::linux_backend {
   namespace {

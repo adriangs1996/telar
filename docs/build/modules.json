@@ -8,7 +8,9 @@
     "vocabulary": [],
     "ghostty": [],
     "native": [],
-    "clipboard": [],
+    "clipboard": [
+      "sys"
+    ],
     "shell": [],
     "ebnf": [
       "tbc"
@@ -217,6 +219,7 @@
     "src/runtime/platform/stream_read_buffer/stream_read_buffer.cppm": "telar.runtime.platform.stream_read_buffer",
     "src/runtime/platform/name_resolutions/name_resolutions.cppm": "telar.runtime.platform.name_resolutions",
     "src/runtime/platform/host_metrics/host_metrics.cppm": "telar.runtime.platform.host_metrics",
+    "src/runtime/platform/frameworks/frameworks.cppm": "telar.runtime.platform.frameworks",
     "src/runtime/platform/process_probe/process_probe.cppm": "telar.runtime.platform.process_probe",
     "src/runtime/platform/request_worker/request_worker.cppm": "telar.runtime.platform.request_worker",
     "src/runtime/platform/launch_program/launch_program.cppm": "telar.runtime.platform.launch_program",
@@ -453,6 +456,8 @@
     "lib/native/zstd/zstd.cppm": "telar.native.zstd",
     "lib/clipboard/wayland/wayland.cppm": "telar.clipboard.wayland",
     "lib/clipboard/x11/x11.cppm": "telar.clipboard.x11",
+    "lib/clipboard/clipboard.cppm": "telar.clipboard",
+    "lib/clipboard/linux/linux.cppm": "telar.clipboard.linux",
     "lib/machines/machines.cppm": "telar.machines",
     "lib/render/document/document.cppm": "telar.render.document",
     "lib/render/terminal/terminal.cppm": "telar.render.terminal",
@@ -512,8 +517,7 @@
     "lib/client/include/telar_client/serializers/telar_frame.hpp": "Qt adapters include it; module units import its owner module",
     "lib/client/include/telar_client/serializers/telar_messages.hpp": "Qt adapters include it; module units import its owner module",
     "lib/client/include/telar_client/serializers/telar_serializer.hpp": "Qt adapters include it; module units import its owner module",
-    "lib/clipboard/includes/clipboard.hpp": "Native clipboard ABI shared with Objective-C++ and platform backends",
-    "lib/clipboard/src/linux/backend.hpp": "Native clipboard ABI shared with Objective-C++ and platform backends",
+    "lib/clipboard/includes/clipboard.hpp": "Native clipboard ABI shared with Objective-C++",
     "lib/config/include/telar_config/graphics/limits.hpp": "Per-consumer SIMD test specialization",
     "lib/config/include/telar_config/terminal/control/policy.hpp": "Per-consumer SIMD test specialization",
     "lib/ebnf/tests/parser_assertions.hpp": "Textual test fixture, including compiler diagnostic and macro expansion locations",
@@ -865,6 +869,7 @@
     "lib/native/zlib/zlib.cpp": "telar.native.zlib",
     "lib/clipboard/wayland/wayland.cpp": "telar.clipboard.wayland",
     "lib/clipboard/x11/x11.cpp": "telar.clipboard.x11",
+    "lib/clipboard/linux/linux.cpp": "telar.clipboard.linux",
     "lib/machines/machines.cpp": "telar.machines",
     "lib/plugins/plugins.cpp": "telar.plugins",
     "lib/render/document/document.cpp": "telar.render.document",
@@ -3135,7 +3140,7 @@
       "src/runtime/graphics/query_resources.hpp",
       "src/runtime/graphics/temporary_path.hpp"
     ],
-    "src/runtime/runtime/client_control/client_control.cppm": [
+    "lib/clipboard/clipboard.cppm": [
       "lib/clipboard/includes/clipboard.hpp"
     ],
     "src/runtime/terminal/control/control.cppm": [
@@ -3209,6 +3214,10 @@
     ]
   },
   "library_owners": {
+    "<CoreFoundation/CoreFoundation.h>": "telar.runtime.platform.frameworks",
+    "<IOKit/ps/IOPSKeys.h>": "telar.runtime.platform.frameworks",
+    "<IOKit/ps/IOPowerSources.h>": "telar.runtime.platform.frameworks",
+    "<Security/Security.h>": "telar.runtime.platform.frameworks",
     "<brotli/decode.h>": "telar.native.brotli",
     "<brotli/encode.h>": "telar.native.brotli",
     "<freetype/freetype.h>": "telar.gui.fonts.face",

@@ -1,13 +1,10 @@
-module;
-#if (defined(__APPLE__))
-#include <CoreFoundation/CoreFoundation.h>
-#include <Security/Security.h>
-#endif
-
 module telar.runtime.platform.system_certificates;
 
 import telar.sys.posix;
 import telar.tls;
+#if defined(__APPLE__)
+import telar.runtime.platform.frameworks;
+#endif
 
 #if defined(__linux__)
 namespace telar::runtime {
@@ -69,6 +66,9 @@ namespace telar::runtime {
 
 #if defined(__APPLE__)
 namespace telar::runtime {
+  namespace {
+    using Resource = std::unique_ptr<const void, decltype(&CFRelease)>;
+  }
 
   void SystemCertificates::readKeychain(const char* path, void* target, void (*consume)(void*, std::span<const std::uint8_t>)) {
     SecKeychainRef opened = nullptr;

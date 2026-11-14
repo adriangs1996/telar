@@ -1,12 +1,14 @@
 module;
-#include "../src/linux/backend.hpp"
 #include "wlr-data-control-client-protocol.h"
-#include <fcntl.h>
 #include <wayland-client.h>
 
 module telar.clipboard.wayland;
 
 import std;
+import telar.clipboard;
+import telar.clipboard.linux;
+import telar.sys.linux;
+import telar.sys.posix;
 
 namespace telar::clipboard::linux_backend {
   namespace {
@@ -142,7 +144,7 @@ namespace telar::clipboard::linux_backend {
 
     std::expected<void, read_error> flush(connection& state, deadline expires) {
       while (wl_display_flush(state.display) < 0) {
-        if (errno != EAGAIN) {
+        if (sys::lastError() != EAGAIN) {
           return std::unexpected(read_error::read_failed);
         }
 
@@ -238,11 +240,11 @@ namespace telar::clipboard::linux_backend {
           result.bytes.insert(result.bytes.end(), buffer.begin(), buffer.begin() + count);
         } else if (count == 0) {
           break;
-        } else if (errno == EAGAIN) {
+        } else if (sys::lastError() == EAGAIN) {
           if (auto status = wait(reading.get(), POLLIN, expires); !status) {
             return std::unexpected(status.error());
           }
-        } else if (errno != EINTR) {
+        } else if (sys::lastError() != EINTR) {
           return std::unexpected(read_error::read_failed);
         }
       }

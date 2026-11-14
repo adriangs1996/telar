@@ -102,6 +102,7 @@ export {
   using ::getegid;
   using ::geteuid;
   using ::gethostname;
+  using ::getpagesize;
   using ::getpid;
   using ::getpwuid;
   using ::getuid;

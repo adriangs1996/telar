@@ -19,44 +19,6 @@
     "telar_base/text/base64.hpp",
     "telar_base/text/decimal.hpp"
   ],
-  "lib/clipboard/main.cpp": [
-    "<cstdio>",
-    "<print>",
-    "<string_view>",
-    "<unistd.h>",
-    "clipboard.hpp"
-  ],
-  "lib/clipboard/src/linux/backend.hpp": [
-    "<array>",
-    "<cerrno>",
-    "<chrono>",
-    "<climits>",
-    "<poll.h>",
-    "<unistd.h>",
-    "clipboard.hpp"
-  ],
-  "lib/clipboard/src/linux/clipboard.cpp": [
-    "<cstdlib>",
-    "<new>",
-    "<stdexcept>",
-    "backend.hpp"
-  ],
-  "lib/clipboard/src/unavailable.cpp": [
-    "clipboard.hpp"
-  ],
-  "lib/clipboard/wayland/wayland.cpp": [
-    "../src/linux/backend.hpp",
-    "<fcntl.h>"
-  ],
-  "lib/clipboard/wayland/wayland.cppm": [
-    "../src/linux/backend.hpp"
-  ],
-  "lib/clipboard/x11/x11.cpp": [
-    "../src/linux/backend.hpp"
-  ],
-  "lib/clipboard/x11/x11.cppm": [
-    "../src/linux/backend.hpp"
-  ],
   "lib/ghostty/vt/vt.cppm": [
     "telar_ghostty/vt.hpp"
   ],
@@ -212,18 +174,6 @@
   ],
   "src/runtime/platform/descriptor_path/descriptor_path.cpp": [
     "telar_platform/descriptor_path.hpp"
-  ],
-  "src/runtime/platform/host_metrics/macos/host_metrics.cpp": [
-    "<CoreFoundation/CoreFoundation.h>",
-    "<IOKit/ps/IOPSKeys.h>",
-    "<IOKit/ps/IOPowerSources.h>"
-  ],
-  "src/runtime/platform/system_certificates/system_certificates.cpp": [
-    "<CoreFoundation/CoreFoundation.h>",
-    "<Security/Security.h>"
-  ],
-  "src/runtime/platform/system_certificates/system_certificates.cppm": [
-    "<CoreFoundation/CoreFoundation.h>"
   ],
   "src/runtime/terminal/control/apc_borrow.hpp": [
     "<algorithm>",

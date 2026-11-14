@@ -22,7 +22,7 @@ option(CLIPBOARD_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSaniti
 option(CLIPBOARD_LINUX_INTEGRATION_TESTS "Test private Sway and Xvfb clipboards" OFF)
 
 include(cmake/library.cmake)
-add_executable(clipboard main.cpp)
+add_executable(clipboard main.cpp cli.cpp)
 target_link_libraries(clipboard PRIVATE telar-clipboard)
 
 if(MSVC)
@@ -32,9 +32,6 @@ if(MSVC)
   endif()
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   target_compile_options(telar-clipboard PUBLIC -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wshadow)
-  if(CLIPBOARD_WARNINGS_AS_ERRORS)
-    target_compile_options(telar-clipboard PUBLIC -Werror)
-  endif()
 endif()
 
 if(CLIPBOARD_SANITIZERS)
@@ -54,16 +51,13 @@ if(BUILD_TESTING)
     set(clipboard_test_support "${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/tests")
     add_executable(clipboard-test
       tests/clipboard_test.mm
+      cli.cpp
       "${clipboard_test_support}/platform/macos/private_clipboard.mm"
     )
     target_include_directories(clipboard-test PRIVATE includes "${clipboard_test_support}")
     set_target_properties(clipboard-test PROPERTIES OBJCXX_STANDARD 23 OBJCXX_STANDARD_REQUIRED YES OBJCXX_EXTENSIONS NO)
-    target_compile_options(clipboard-test PRIVATE -fobjc-arc -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wshadow)
+    target_compile_options(clipboard-test PRIVATE "$<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>" -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wshadow)
     target_link_libraries(clipboard-test PRIVATE telar-clipboard)
-
-    if(CLIPBOARD_WARNINGS_AS_ERRORS)
-      target_compile_options(clipboard-test PRIVATE -Werror)
-    endif()
 
     if(CLIPBOARD_SANITIZERS)
       target_compile_options(clipboard-test PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
@@ -86,8 +80,34 @@ if(BUILD_TESTING)
   endif()
 endif()
 
+# -Werror goes on each source of these targets, not on the targets: CMake compiles the std
+# module of every importer with that importer's options, and Clang warns about the
+# toolchain's std.cppm (reserved module name, unused -stdlib).
+if(CLIPBOARD_WARNINGS_AS_ERRORS AND NOT MSVC)
+  set(clipboard_strict_sources)
+  foreach(target IN ITEMS telar-clipboard clipboard clipboard-test)
+    if(NOT TARGET ${target})
+      continue()
+    endif()
+
+    get_target_property(sources ${target} SOURCES)
+    get_target_property(module_sets ${target} CXX_MODULE_SETS)
+    list(APPEND clipboard_strict_sources ${sources})
+    foreach(module_set IN LISTS module_sets)
+      if(module_set STREQUAL "CXX_MODULES")
+        get_target_property(modules ${target} CXX_MODULE_SET)
+      else()
+        get_target_property(modules ${target} CXX_MODULE_SET_${module_set})
+      endif()
+      list(APPEND clipboard_strict_sources ${modules})
+    endforeach()
+  endforeach()
+  list(REMOVE_DUPLICATES clipboard_strict_sources)
+  set_property(SOURCE ${clipboard_strict_sources} APPEND PROPERTY COMPILE_OPTIONS -Werror)
+endif()
+
 include("${CMAKE_CURRENT_SOURCE_DIR}/../tbc/cmake/tbcLifetimeCheck.cmake")
-tbc_add_lifetime_check(lifetime-check "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp")
+tbc_add_lifetime_check(lifetime-check "${CMAKE_CURRENT_SOURCE_DIR}/cli.cpp")
 
 get_filename_component(clipboard_compiler_directory "${CMAKE_CXX_COMPILER}" DIRECTORY)
 foreach(mode IN ITEMS format format-check lint)
