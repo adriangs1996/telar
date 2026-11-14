@@ -778,11 +778,255 @@ namespace telar::runtime::plugins {
     return frame;
   }
 
+  template <WorkerClock Clock>
+  Worker<Clock>::Worker(ConcurrentMemory& memory, const ServiceSpec& specification, ResultQueue<ConcurrentMemory>& results, TapBudget& budget, WorkerLaunch launch)
+      : memory_(memory),
+        specification_(bindPermissions(memory, specification)),
+        results_(results),
+        budget_(budget),
+        launch_(launch),
+        entry_(specification.entry.view(), AllocatorRef<char, ConcurrentMemory>{memory}),
+        trace_path_(AllocatorRef<char, ConcurrentMemory>{memory}),
+        thread_([this] {
+          run();
+        }) {}
+
+  template <WorkerClock Clock>
+  Worker<Clock>::~Worker() {
+    stop();
+  }
+
+  template <WorkerClock Clock>
+  void Worker<Clock>::stop() noexcept {
+    cancellation_.request();
+    requests_.close();
+    if (thread_.joinable()) {
+      thread_.join();
+    }
+
+    bridge_.reset();
+    session_.reset();
+  }
+
+  template <WorkerClock Clock>
+  void Worker<Clock>::revoke() noexcept {
+    specification_.permission->store(false, std::memory_order_release);
+    if (revoked_.exchange(true, std::memory_order_acq_rel)) {
+      return;
+    }
+
+    disabled_.store(true, std::memory_order_relaxed);
+    cancellation_.request();
+    requests_.close();
+    if (launch_.traffic) {
+      launch_.traffic->revokePackage(specification_);
+    }
+  }
+
+  template <WorkerClock Clock>
+  bool Worker<Clock>::revoked() const noexcept {
+    return revoked_.load(std::memory_order_acquire);
+  }
+
+  template <WorkerClock Clock>
+  void Worker<Clock>::submit(tbc::view<Shared, tbc::lt::a> exchange) noexcept {
+    if (specification_.allows(Capability::proxy_tap) && !disabled_.load(std::memory_order_relaxed)) {
+      requests_.publish(std::move(exchange));
+      wake_.notify();
+    }
+  }
+
+  template <WorkerClock Clock>
+  WorkerMetrics Worker<Clock>::metrics() const noexcept {
+    return {requests_.metrics().dropped, timeouts_.load(std::memory_order_relaxed), disabled_.load(std::memory_order_relaxed), callback_errors_.load(std::memory_order_relaxed)};
+  }
+
+  template <WorkerClock Clock>
+  const ServiceSpec& Worker<Clock>::specification() const noexcept {
+    return specification_;
+  }
+
+  template <WorkerClock Clock>
+  ServiceSpec Worker<Clock>::bindPermissions(ConcurrentMemory& memory, const ServiceSpec& specification) {
+    auto bound = specification;
+    if (!bound.permission) {
+      bound.permission = std::allocate_shared<std::atomic<bool>>(AllocatorRef<std::atomic<bool>, ConcurrentMemory>{memory}, true);
+    }
+
+    return bound;
+  }
+
+  template <WorkerClock Clock>
+  void Worker<Clock>::run() noexcept {
+    if (launch_.traffic && specification_.traffic()) {
+      runTraffic();
+    } else {
+      while (auto request = requests_.receive()) {
+        if (!disabled_.load(std::memory_order_relaxed)) {
+          process(**request);
+        }
+      }
+    }
+
+    if (revoked() || cancellation_.requested() || launch_.cancellation.requested()) {
+      bridge_.reset();
+      session_.reset();
+    }
+  }
+
+  template <WorkerClock Clock>
+  void Worker<Clock>::runTraffic() noexcept {
+    while (!launch_.cancellation.requested() && !cancellation_.requested()) {
+      if (disabled_.load(std::memory_order_relaxed)) {
+        std::array watches{pollfd{cancellation_.descriptor(), POLLIN, 0}, pollfd{launch_.cancellation.descriptor(), POLLIN, 0}};
+        if (::poll(watches.data(), watches.size(), -1) < 0 && sys::lastError() != EINTR) {
+          return;
+        }
+
+        continue;
+      }
+
+      try {
+        if (!session_) {
+          ensureSession(true);
+          if (!bridge_) {
+            bridge_ = makeOwned<TrafficBridge>(memory_, memory_, specification_, *launch_.traffic);
+          }
+
+          bridge_->attach(*session_);
+        }
+
+        wake_.drain();
+        if (auto request = requests_.tryReceive()) {
+          process(**request);
+        }
+
+        if (!bridge_) {
+          continue;
+        }
+
+        bridge_->step(session_ ? &*session_ : nullptr, wake_.descriptor(), cancellation_, [&](OwnedResult<ConcurrentMemory> result) {
+          results_.publish(std::move(result));
+        },
+            requests_.metrics().queued != 0);
+
+        callback_errors_.store(callback_errors_base_ + bridge_->errors(), std::memory_order_relaxed);
+      } catch (const SystemError& error) {
+        if (!recover(error)) {
+          return;
+        }
+      } catch (...) {
+        restart();
+      }
+    }
+  }
+
+  template <WorkerClock Clock>
+  void Worker<Clock>::process(const SharedExchange& shared) noexcept {
+    TELAR_TRACE("plugins.processExchange");
+    try {
+      ensureSession(false);
+    } catch (...) {
+      restart();
+      return;
+    }
+
+    try {
+      const auto size = SharedExchange::capturedBytes(shared.exchange) + Limits::frame_overhead;
+      auto charged = budget_.charge(size);
+      if (!charged) {
+        return;
+      }
+
+      const auto encoded_size = Protocol::exchangeBytes(shared.exchange);
+      if (encoded_size > size) {
+        return;
+      }
+
+      SensitiveAllocation frame{memory_, encoded_size};
+      const auto payload = Protocol::encodeExchange(frame.bytes(), {shared.event_id, specification_.generation}, shared.exchange);
+
+      exchange(shared.event_id, payload);
+    } catch (...) {
+    }
+  }
+
+  template <WorkerClock Clock>
+  void Worker<Clock>::exchange(std::uint64_t event_id, std::span<const Byte> payload) noexcept {
+    try {
+      auto result = session_->exchange(specification_, event_id, payload);
+      if (result) {
+        results_.publish(std::move(result));
+      }
+    } catch (const SystemError& error) {
+      static_cast<void>(recover(error));
+    } catch (...) {
+      restart();
+    }
+  }
+
+  template <WorkerClock Clock>
+  void Worker<Clock>::ensureSession(bool traffic) {
+    if (session_) {
+      return;
+    }
+
+    prepareTrace();
+    session_.emplace(memory_, SessionOptions{.executable = launch_.executable, .entry = entry_.c_str(), .cancellation = cancellation_, .timeout = launch_.timeout, .trace_path = trace_path_.empty() ? nullptr : trace_path_.c_str(), .traffic = traffic});
+  }
+
+  template <WorkerClock Clock>
+  bool Worker<Clock>::recover(const SystemError& error) noexcept {
+    if (error.code() == ECANCELED) {
+      return false;
+    }
+
+    if (error.code() == ETIMEDOUT) {
+      timeouts_.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    restart();
+    return true;
+  }
+
+  template <WorkerClock Clock>
+  void Worker<Clock>::restart() noexcept {
+    if (bridge_) {
+      bridge_->detach();
+      if (bridge_->transportFailed()) {
+        callback_errors_base_ += bridge_->errors();
+        bridge_.reset();
+      }
+    }
+
+    session_.reset();
+    const auto now = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch());
+    if (restarts_.record(now)) {
+      disabled_.store(true, std::memory_order_relaxed);
+    }
+  }
+
+  template <WorkerClock Clock>
+  void Worker<Clock>::prepareTrace() {
+#if TELAR_DEBUG
+    if (launch_.trace_prefix.empty()) {
+      return;
+    }
+
+    std::array<char, 64> suffix;
+    const auto length = std::snprintf(suffix.data(), suffix.size(), ".tap-%u-%llu.json", static_cast<unsigned>(specification_.package_index), static_cast<unsigned long long>(session_number_++));
+
+    trace_path_ = launch_.trace_prefix;
+    trace_path_.append(suffix.data(), static_cast<std::size_t>(length));
+#endif
+  }
+
   template struct Result<Memory>;
   template struct Result<ConcurrentMemory>;
   template class ResultQueue<Memory>;
   template class ResultQueue<ConcurrentMemory>;
   template class Session<Memory>;
   template class Session<ConcurrentMemory>;
+  template class Worker<std::chrono::steady_clock>;
 
 }

@@ -148,7 +148,7 @@ export {
 
     // Generic over the caller's sink and peer policy.
     template <typename Sink, typename PeerPolicy = PrivilegedPeer>
-    class TBC_HOT_PATH Ingress {
+    class TBC_GENERIC Ingress {
       struct Peer {
         FileDescriptor socket;
         Incoming incoming;
@@ -355,7 +355,7 @@ export {
 
     // Generic over the caller's resolver.
     template <HostnameResolver Resolver = SystemNameResolver>
-    class TBC_HOT_PATH Selection {
+    class TBC_GENERIC Selection {
       using Resolutions = NameResolutions<Resolver>;
       using Clock = std::chrono::steady_clock;
 

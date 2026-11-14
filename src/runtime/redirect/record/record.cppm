@@ -64,7 +64,7 @@ export {
 
     // Generic over the caller's command and flags.
     template <typename Command, typename Flags = LoopbackFlags>
-    class TBC_HOT_PATH PfLoopback {
+    class TBC_GENERIC PfLoopback {
     public:
       inline explicit PfLoopback(Command& command) noexcept
           : command_(command) {}
@@ -165,7 +165,7 @@ export {
 
       // Generic over the caller's store and interface.
       template <typename Store, typename Interface>
-      TBC_HOT_PATH void acquire(Store& store, Interface& interface, std::string_view owner) {
+      TBC_GENERIC void acquire(Store& store, Interface& interface, std::string_view owner) {
         validateOwner(owner);
         load(store);
         const auto marker = ownerMarker(owner);
@@ -189,7 +189,7 @@ export {
       }
 
       template <typename Store, typename Interface>
-      TBC_HOT_PATH void release(Store& store, Interface& interface, std::string_view owner) {
+      TBC_GENERIC void release(Store& store, Interface& interface, std::string_view owner) {
         validateOwner(owner);
         load(store);
         const auto marker = ownerMarker(owner);
@@ -219,7 +219,7 @@ export {
       String<Memory> ownerMarker(std::string_view owner);
 
       template <typename Store>
-      TBC_HOT_PATH void load(Store& store) {
+      TBC_GENERIC void load(Store& store) {
         owners_.clear();
         restore_skip_ = false;
         const auto saved = store.load();
@@ -253,7 +253,7 @@ export {
       }
 
       template <typename Store>
-      TBC_HOT_PATH void save(Store& store) {
+      TBC_GENERIC void save(Store& store) {
         String<Memory> content{restore_skip_ ? "skip\n" : "filter\n", AllocatorRef<char, Memory>{memory_}};
 
         content.append(owners_);
@@ -270,7 +270,7 @@ export {
 
     // Generic over the caller's interface.
     template <Allocator Memory, typename Interface>
-    class TBC_HOT_PATH SharedLoopback {
+    class TBC_GENERIC SharedLoopback {
     public:
       inline explicit SharedLoopback(Memory& memory, Interface& interface, std::string_view owner) noexcept
           : memory_(memory),
@@ -341,7 +341,7 @@ export {
 
       // Generic over the caller's store and interface.
       template <typename State>
-      TBC_HOT_PATH explicit PacketLog(State& state, uid_t uid, Direction direction = Direction::outbound)
+      TBC_GENERIC explicit PacketLog(State& state, uid_t uid, Direction direction = Direction::outbound)
           : uid_(uid),
             direction_(direction),
             capture_(nullptr, &pcap_close) {

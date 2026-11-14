@@ -100,7 +100,7 @@ export {
 
     // Generic over the caller's wait, and called for every frame a tap worker exchanges.
     template <PipeWait Wait = BlockingPipeWait>
-    class TBC_HOT_PATH PipeStream {
+    class TBC_GENERIC PipeStream {
     public:
       inline explicit PipeStream(int input, int output, Wait wait = {}) noexcept
           : input_(input),
@@ -272,7 +272,7 @@ export {
     public:
       // Generic over the caller's environment.
       template <EnvironmentLookup Environment>
-      TBC_HOT_PATH explicit TapConfiguration(Memory& memory, std::string_view directory, std::span<const ConfiguredPlugin> configured, const Environment& environment)
+      TBC_GENERIC explicit TapConfiguration(Memory& memory, std::string_view directory, std::span<const ConfiguredPlugin> configured, const Environment& environment)
           : snapshots_(memory) {
         if (directory.empty()) {
           return;
@@ -317,7 +317,7 @@ export {
 
     private:
       template <EnvironmentLookup Environment>
-      TBC_HOT_PATH static TrustStore loadTrust(Memory& memory, const Environment& environment) {
+      TBC_GENERIC static TrustStore loadTrust(Memory& memory, const Environment& environment) {
         return TrustStore::load(memory, Paths::trust(memory, environment));
       }
 

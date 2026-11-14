@@ -224,7 +224,7 @@ export {
 
     // Generic over the caller's resolver.
     template <Allocator Memory, HostnameResolver Resolver>
-    class TBC_HOT_PATH ConnectHandshake {
+    class TBC_GENERIC ConnectHandshake {
     public:
       using Time = ProxyConnectionPolicy::Time;
 
@@ -595,7 +595,7 @@ export {
 
     // Generic over the caller's clock.
     template <CaptureClock Clock = CaptureWallClock>
-    class TBC_HOT_PATH Http2CaptureStreams {
+    class TBC_GENERIC Http2CaptureStreams {
     public:
       inline explicit Http2CaptureStreams(CaptureProducer* producer, ProxyCounters& counters, CaptureStart context, CaptureSide side) noexcept
           : producer_(producer),

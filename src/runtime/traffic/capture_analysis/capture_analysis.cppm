@@ -155,7 +155,7 @@ export {
 
       // Generic over the caller's callbacks, and called for every captured packet.
       template <typename Consume, typename Report>
-      TBC_HOT_PATH void packet(const Event& event, Consume consume, Report report) {
+      TBC_GENERIC void packet(const Event& event, Consume consume, Report report) {
         const auto network = NetworkPacket::decode(event);
         auto fragment = parse(network);
         if (!fragment) {
@@ -251,7 +251,7 @@ export {
       }
 
       template <typename Report>
-      TBC_HOT_PATH void expire(Report report, bool stop = false, Clock::time_point now = Clock::now()) {
+      TBC_GENERIC void expire(Report report, bool stop = false, Clock::time_point now = Clock::now()) {
         for (auto& entry : entries_) {
           if (entry && (stop || now - entry->created >= lifetime)) {
             if (entry->storage) {
@@ -274,7 +274,7 @@ export {
       static std::span<const Byte> assembled(Entry& entry);
 
       template <typename Report>
-      TBC_HOT_PATH static void failure(Entry& entry, std::string_view reason, Report report) {
+      TBC_GENERIC static void failure(Entry& entry, std::string_view reason, Report report) {
         entry.storage.reset();
         auto event = entry.event;
 
@@ -385,7 +385,7 @@ export {
 
       // Generic over the caller's callbacks, and called for every captured packet.
       template <typename Emit>
-      TBC_HOT_PATH void packet(const Event& event, Emit emit) {
+      TBC_GENERIC void packet(const Event& event, Emit emit) {
         const auto parsed = TcpPacketDecoder::decode(event);
         if (parsed) {
           consumePacket(event, *parsed, emit);
@@ -393,7 +393,7 @@ export {
       }
 
       template <typename Emit>
-      TBC_HOT_PATH void payload(const Event& event, const IpPayload& ip, Emit emit) {
+      TBC_GENERIC void payload(const Event& event, const IpPayload& ip, Emit emit) {
         const auto parsed = TcpPacketDecoder::decodePayload(ip);
         if (parsed) {
           consumePacket(event, *parsed, emit);
@@ -401,7 +401,7 @@ export {
       }
 
       template <typename Emit>
-      TBC_HOT_PATH void expire(Emit emit, bool stop = false) {
+      TBC_GENERIC void expire(Emit emit, bool stop = false) {
         const auto now = Clock::now();
         Event event;
 
@@ -421,7 +421,7 @@ export {
 
     private:
       template <typename Emit>
-      TBC_HOT_PATH void consumePacket(const Event& event, const TcpPacket& packet, Emit emit) {
+      TBC_GENERIC void consumePacket(const Event& event, const TcpPacket& packet, Emit emit) {
         const bool reverse = packet.destination < packet.source;
         Key key{.session = event.session, .interface = event.interface_index, .first = reverse ? packet.destination : packet.source, .second = reverse ? packet.source : packet.destination};
 
@@ -506,10 +506,10 @@ export {
 
       static std::int32_t distance(std::uint32_t a, std::uint32_t b) noexcept;
 
+      // Reassembles one direction of a flow; the bytes buffered over every flow and the allocator are lent
+      // apart from it.
       template <typename Emit>
-      TBC_HOT_PATH // Reassembles one direction of a flow; the bytes buffered over every flow and the allocator are lent
-                   // apart from it.
-          inline static bool consume(tbc::view<Entry&, tbc::lt::a> entry, Direction direction, std::size_t& total_buffered, tbc::view<Secure&, tbc::lt::a> memory, const TcpPacket& packet, const Event& event, Emit emit) {
+      TBC_GENERIC inline static bool consume(tbc::view<Entry&, tbc::lt::a> entry, Direction direction, std::size_t& total_buffered, tbc::view<Secure&, tbc::lt::a> memory, const TcpPacket& packet, const Event& event, Emit emit) {
         auto& flow = entry.second;
         auto& side = direction == Direction::outbound ? flow.outbound : flow.inbound;
         auto sequence = packet.sequence + ((packet.flags & syn) ? 1u : 0u);
@@ -588,7 +588,7 @@ export {
       }
 
       template <typename Emit>
-      TBC_HOT_PATH static void publish(Kind kind, const Entry& entry, Event event, FlowEvent item, Emit emit) {
+      TBC_GENERIC static void publish(Kind kind, const Entry& entry, Event event, FlowEvent item, Emit emit) {
         const auto& [key, flow] = entry;
         const auto client = (flow.reverse ? key.second : key.first).text();
         const auto server = (flow.reverse ? key.first : key.second).text();
@@ -609,7 +609,7 @@ export {
       }
 
       template <typename Emit>
-      TBC_HOT_PATH void close(typename Map::iterator cursor, const Event& event, std::string_view reason, Emit emit, bool gap) {
+      TBC_GENERIC void close(typename Map::iterator cursor, const Event& event, std::string_view reason, Emit emit, bool gap) {
         const auto& flow = cursor->second;
         if (flow.outbound.gap) {
           publish(Kind::flow_gap, *cursor, event, {.offset = flow.outbound.offset, .reason = reason}, emit);
@@ -651,7 +651,7 @@ export {
 
       // Generic over the caller's callbacks, and called for every captured packet.
       template <typename Emit>
-      TBC_HOT_PATH void packet(const Event& event, Selection selection, Emit emit) {
+      TBC_GENERIC void packet(const Event& event, Selection selection, Emit emit) {
         fragments_.packet(event, [&](std::span<const Byte> bytes) {
           const auto ip = IpPayload::decode(bytes);
           if (!ip) {
@@ -684,7 +684,7 @@ export {
       }
 
       template <typename Emit>
-      TBC_HOT_PATH void expire(Emit emit, bool stop = false) {
+      TBC_GENERIC void expire(Emit emit, bool stop = false) {
         fragments_.expire([&](const Event& source, std::string_view reason) {
           fragmentError(source, reason, emit);
         },
@@ -694,7 +694,7 @@ export {
 
     private:
       template <typename Emit>
-      TBC_HOT_PATH static void fragmentError(Event event, std::string_view reason, Emit emit) {
+      TBC_GENERIC static void fragmentError(Event event, std::string_view reason, Emit emit) {
         event.kind = Kind::error;
         event.bytes = {reinterpret_cast<const Byte*>(reason.data()), reason.size()};
         emit(event);

@@ -23,7 +23,7 @@ export {
 
     // Generic over the caller's resolver.
     template <HostnameResolver Resolver>
-    class TBC_HOT_PATH OriginConnection {
+    class TBC_GENERIC OriginConnection {
     public:
       enum class State {
         resolving,
@@ -148,7 +148,7 @@ export {
 
     // The relay's loop for every read, generic over the caller's streams and buffer size.
     template <std::size_t BufferCapacity = 16 * 1024>
-    class TBC_HOT_PATH RelayDirection {
+    class TBC_GENERIC RelayDirection {
       static_assert(BufferCapacity != 0);
 
     public:

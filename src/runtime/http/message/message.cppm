@@ -202,7 +202,7 @@ export {
 
       // Generic over the caller's message type.
       template <typename Message>
-      TBC_HOT_PATH static auto encodeMessage(tbc::view<std::span<Byte>, tbc::lt::a> output, const Message& message) -> tbc::view<std::span<const Byte>, tbc::lt::a> {
+      TBC_GENERIC static auto encodeMessage(tbc::view<std::span<Byte>, tbc::lt::a> output, const Message& message) -> tbc::view<std::span<const Byte>, tbc::lt::a> {
         HttpMessageView view{.version = message.version, .response = message.response, .response_to_head = message.response_to_head, .stream = message.stream, .method = message.method, .target = message.target, .reason = message.reason, .scheme = message.scheme, .authority = message.authority, .status = message.status, .body = message.body};
 
         for (const auto& field : message.headers.fields()) {
@@ -217,7 +217,7 @@ export {
       }
 
       template <typename Message>
-      TBC_HOT_PATH static void readMessage(Message& message, std::span<const Byte> input) {
+      TBC_GENERIC static void readMessage(Message& message, std::span<const Byte> input) {
         const auto view = decode(input);
         if (view.response != message.response || view.response_to_head != message.response_to_head || view.version != message.version || view.stream != message.stream) {
           throw EncodingError{"HTTP decision changed immutable transport metadata"};

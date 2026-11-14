@@ -550,6 +550,13 @@ namespace telar::runtime {
     return identity_ ? identity_->status : inactive;
   }
 
+  template <Allocator Memory>
+  void ProxyClientConfiguration::apply(Command<Memory>& command) const {
+    environment(&command, [](void* target, std::string_view name, std::string_view value) {
+      static_cast<Command<Memory>*>(target)->setEnvironment(name, value);
+    });
+  }
+
   void ProxyClientConfiguration::environment(void* target, void (*set)(void* target, std::string_view name, std::string_view value)) const {
     if (!identity_ || !identity_->status.active) {
       return;
@@ -914,5 +921,10 @@ namespace telar::runtime {
 
   template class ProxyPortMemory<Memory>;
   template class ProxyPortMemory<ConcurrentMemory>;
+  template void ProxyClientConfiguration::apply(Command<Memory>& command) const;
+  template void ProxyClientConfiguration::apply(Command<ConcurrentMemory>& command) const;
+  template void ProxyClientConfiguration::apply(Command<SystemAllocator>& command) const;
+  template void ProxyClientConfiguration::apply(Command<BudgetAllocator<SystemAllocator>>& command) const;
+  template void ProxyClientConfiguration::apply(Command<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>& command) const;
 
 }

@@ -87,7 +87,7 @@ export {
 
     // Generic over the caller's command, state and loopback.
     template <typename Command, typename State, typename Loopback, Allocator Memory>
-    class TBC_HOT_PATH PfSession {
+    class TBC_GENERIC PfSession {
     public:
       inline explicit PfSession(Command& command, State& state, const PfIdentity<Memory>& identity, Loopback& loopback) noexcept
           : command_(command),
@@ -291,7 +291,7 @@ export {
 
     // Generic over the caller's visitor.
     template <typename Visitor>
-    TBC_HOT_PATH void visitLinuxTcpSockets(Visitor&& visit) {
+    TBC_GENERIC void visitLinuxTcpSockets(Visitor&& visit) {
       constexpr std::array families{AF_INET, AF_INET6};
       constexpr std::size_t read_capacity = 4096;
       constexpr std::size_t maximum_line_bytes = 1024;
@@ -461,7 +461,7 @@ export {
     private:
       // Generic over the caller's session.
       template <typename Session>
-      TBC_HOT_PATH void discover(Session& session, uid_t uid, const PfIdentity<Memory>& identity) {
+      TBC_GENERIC void discover(Session& session, uid_t uid, const PfIdentity<Memory>& identity) {
         std::array<Byte, 65540> bytes;
         auto packet = discovery_->receive(bytes);
         if (packet.empty()) {
@@ -476,7 +476,7 @@ export {
       }
 
       template <typename Session>
-      TBC_HOT_PATH void discovered(Session& session, uid_t uid, const PfIdentity<Memory>& identity, std::span<Byte> packet, const PacketLog::Metadata* metadata = nullptr) {
+      TBC_GENERIC void discovered(Session& session, uid_t uid, const PfIdentity<Memory>& identity, std::span<Byte> packet, const PacketLog::Metadata* metadata = nullptr) {
         const auto key = FlowKey::syn(packet);
         const bool incoming = metadata && metadata->incoming;
         if (!key || (incoming ? !allowsIncoming(direction_) : !allowsOutgoing(direction_)) || !std::ranges::any_of(std::span{mappings_}.first(count_), [&](const auto& mapping) {
