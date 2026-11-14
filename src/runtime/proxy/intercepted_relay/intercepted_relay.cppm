@@ -66,7 +66,7 @@ export {
 
       // Generic over the caller's streams and observer, and called for every read the relay makes.
       template <PeekableByteStream Source, ByteStream Destination, Http1Observer Observer>
-      TBC_HOT_PATH bool advance(Source& source, Destination& destination, Observer& observer) noexcept {
+      TBC_GENERIC bool advance(Source& source, Destination& destination, Observer& observer) noexcept {
         active_ = false;
         for (std::size_t round = 0; round < maximum_rounds; ++round) {
           bool continued = false;
@@ -142,7 +142,7 @@ export {
       };
 
       template <PeekableByteStream Source, Http1Observer Observer>
-      TBC_HOT_PATH bool readHead(Source& source, Observer& observer) noexcept {
+      TBC_GENERIC bool readHead(Source& source, Observer& observer) noexcept {
         const auto previous = reader_.length();
         const auto result = reader_.receive(source, storage_.bytes(), "\r\n\r\n");
         const bool progress = reader_.length() != previous;
@@ -172,7 +172,7 @@ export {
       }
 
       template <ByteStream Source>
-      TBC_HOT_PATH bool readBody(Source& source) noexcept {
+      TBC_GENERIC bool readBody(Source& source) noexcept {
         const auto capacity = body_stage_ == BodyStage::until_close ? body_capacity : std::min(remaining_, body_capacity);
         const auto received = bodyInput(source, capacity);
         if (received.state == StreamResult::State::blocked) {
@@ -197,7 +197,7 @@ export {
 
       // How much body arrived: in the source until it is consumed, or read into the relay's storage.
       template <ByteStream Source>
-      TBC_HOT_PATH StreamResult bodyInput(Source& source, std::size_t maximum) noexcept {
+      TBC_GENERIC StreamResult bodyInput(Source& source, std::size_t maximum) noexcept {
         if constexpr (BufferedByteStream<Source>) {
           const auto peeked = source.peekView(maximum);
 
@@ -208,7 +208,7 @@ export {
       }
 
       template <PeekableByteStream Source>
-      TBC_HOT_PATH bool readLine(Source& source) noexcept {
+      TBC_GENERIC bool readLine(Source& source) noexcept {
         const auto previous = reader_.length();
         const auto capacity = body_stage_ == BodyStage::trailer ? trailer_line_capacity : chunk_line_capacity;
 
@@ -230,7 +230,7 @@ export {
       }
 
       template <ByteStream Destination, Http1Observer Observer>
-      TBC_HOT_PATH bool writePending(Destination& destination, Observer& observer, std::span<const std::uint8_t> pending) noexcept {
+      TBC_GENERIC bool writePending(Destination& destination, Observer& observer, std::span<const std::uint8_t> pending) noexcept {
         const auto sent = destination.write(pending.subspan(write_offset_));
         if (sent.state == StreamResult::State::blocked) {
           write_waiting_ = sent.waiting;
@@ -298,7 +298,7 @@ export {
       void finishLine() noexcept;
 
       template <Http1Observer Observer>
-      TBC_HOT_PATH void recordLineLimit(Observer& observer) noexcept {
+      TBC_GENERIC void recordLineLimit(Observer& observer) noexcept {
         if (line_result_ == DelimitedRead::Result::too_large) {
           observer.lineTooLong(body_stage_ == BodyStage::trailer ? Http1Line::trailer : Http1Line::chunk_size);
         }
@@ -364,7 +364,7 @@ export {
       // goes on as it is.
       // The slot keeps an allocation of `memory`, region `a`, until the decision is released.
       template <typename Message>
-      TBC_HOT_PATH bool begin(tbc::view<Memory&, tbc::lt::a> memory, traffic::HttpControl& control, traffic::FlowEvent event, const Message& message) {
+      TBC_GENERIC bool begin(tbc::view<Memory&, tbc::lt::a> memory, traffic::HttpControl& control, traffic::FlowEvent event, const Message& message) {
         decision_.emplace(memory, HttpMessageLimits::message_bytes);
         event.bytes = HttpMessageCodec::encodeMessage(decision_->bytes(), message);
         ticket_ = control.interceptHttp(event);
@@ -374,7 +374,7 @@ export {
       // The hook's verdict, once it has one; a replacement is read into `message`, which throws when
       // the hook's bytes are no message.
       template <typename Message>
-      TBC_HOT_PATH Outcome poll(traffic::HttpControl& control, Message& message) {
+      TBC_GENERIC Outcome poll(traffic::HttpControl& control, Message& message) {
         const auto decision = control.pollHttp(ticket_, decision_->bytes());
         if (decision.verdict == traffic::Verdict::pending) {
           return Outcome::pending;
@@ -442,7 +442,7 @@ export {
 
       // Generic over the caller's observer.
       template <Http1Observer Observer>
-      struct TBC_HOT_PATH Observation {
+      struct TBC_GENERIC Observation {
         Http1InterceptedRelay& relay;
         Observer& next;
 
@@ -540,7 +540,7 @@ export {
 
       // Generic over the caller's destination.
       template <ByteStream Destination>
-      struct TBC_HOT_PATH Sink {
+      struct TBC_GENERIC Sink {
         Http1InterceptedRelay& relay;
         Destination& destination;
 
@@ -591,7 +591,7 @@ export {
 
       // Generic over the caller's streams and observer, and called for every read the relay makes.
       template <PeekableByteStream Source, ByteStream Destination, Http1Observer Observer>
-      TBC_HOT_PATH bool advance(Source& source, Destination& destination, Observer& observer) noexcept {
+      TBC_GENERIC bool advance(Source& source, Destination& destination, Observer& observer) noexcept {
         if (mode_ == Mode::failed) {
           return false;
         }
@@ -673,7 +673,7 @@ export {
       void repairHead();
 
       template <ByteStream Destination>
-      TBC_HOT_PATH bool flush(Destination& destination) noexcept {
+      TBC_GENERIC bool flush(Destination& destination) noexcept {
         if (!continue_.remaining().empty()) {
           return false;
         }

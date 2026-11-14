@@ -43,7 +43,7 @@ export {
 
     // Generic over the caller's stream, and called for every frame a worker exchanges.
     template <FrameStream Stream>
-    class TBC_HOT_PATH FrameChannel {
+    class TBC_GENERIC FrameChannel {
     public:
       inline explicit FrameChannel(Stream& stream) noexcept
           : stream_(stream) {}
@@ -185,7 +185,7 @@ export {
 
       // Generic over the caller's consumer.
       template <typename Consumer>
-      TBC_HOT_PATH void collect(Consumer&& consumer) {
+      TBC_GENERIC void collect(Consumer&& consumer) {
         if (!ready_ || !ready_->consume()) {
           return;
         }
@@ -453,7 +453,7 @@ export {
 
       // `session` is the worker's session, or null while it restarts.
       template <typename Consumer>
-      TBC_HOT_PATH void step(Session<ConcurrentMemory>* session, int wake, const CancellationSignal& cancellation, Consumer&& consume, bool immediate = false) {
+      TBC_GENERIC void step(Session<ConcurrentMemory>* session, int wake, const CancellationSignal& cancellation, Consumer&& consume, bool immediate = false) {
         for (std::size_t index = 0; index < connections_.size(); ++index) {
           auto& connection = connections_[index];
           if (!connection || connection->registration.stage != TrafficStage::control) {
@@ -629,7 +629,7 @@ export {
     private:
       // A control connection is spent once its event is sent; the callback's reply may change the table.
       template <typename Consumer>
-      TBC_HOT_PATH void dispatchControl(Session<ConcurrentMemory>* session, std::size_t index, std::span<const Byte> frame, std::string_view error, Consumer&& consume) {
+      TBC_GENERIC void dispatchControl(Session<ConcurrentMemory>* session, std::size_t index, std::span<const Byte> frame, std::string_view error, Consumer&& consume) {
         auto& connection = connections_[index];
 
         if (!session) {
@@ -659,7 +659,7 @@ export {
 
       // The result owns the reply and finds its effects again where the outcome saw them.
       template <typename Consumer>
-      TBC_HOT_PATH void publishEffects(std::uint64_t event_id, SensitiveAllocation<ConcurrentMemory> response, std::span<const Byte> effects, Consumer&& consume) {
+      TBC_GENERIC void publishEffects(std::uint64_t event_id, SensitiveAllocation<ConcurrentMemory> response, std::span<const Byte> effects, Consumer&& consume) {
         if (effects.empty()) {
           return;
         }
@@ -677,7 +677,7 @@ export {
 
       // The connection is named by its slot, as the callback's reply may change the table it lives in.
       template <typename Consumer>
-      TBC_HOT_PATH void dispatch(Session<ConcurrentMemory>* session, std::size_t index, std::span<const Byte> frame, std::uint64_t dropped, Consumer&& consume) {
+      TBC_GENERIC void dispatch(Session<ConcurrentMemory>* session, std::size_t index, std::span<const Byte> frame, std::uint64_t dropped, Consumer&& consume) {
         auto& connection = *connections_[index];
         const auto event = traffic::Protocol::decode(frame);
         const bool control = event.kind == traffic::Kind::intercept_request || event.kind == traffic::Kind::http_intercept_request;
@@ -779,246 +779,47 @@ export {
     // A package's worker thread. The proxy submits exchanges, the runtime reads metrics and the trust
     // monitor revokes it from their own threads: what they touch is atomic or a synchronized channel, and
     // the session, the bridge and the thread's state belong to its thread alone. That split is audited
-    // here, so the worker is TBC_SHARED; its thread keeps `this`, so it stays where it was built.
-    // Generic over the caller's clock.
+    // here, so the worker is TBC_SHARED; its thread keeps `this`, so it stays where it was built. Built in
+    // worker.cpp for the steady clock.
     template <WorkerClock Clock = std::chrono::steady_clock>
-    class TBC_SHARED TBC_HOT_PATH Worker {
+    class TBC_SHARED Worker {
     public:
       using Shared = std::shared_ptr<SharedExchange>;
 
-      inline explicit Worker(ConcurrentMemory& memory, const ServiceSpec& specification, ResultQueue<ConcurrentMemory>& results, TapBudget& budget, WorkerLaunch launch)
-          : memory_(memory),
-            specification_(bindPermissions(memory, specification)),
-            results_(results),
-            budget_(budget),
-            launch_(launch),
-            entry_(specification.entry.view(), AllocatorRef<char, ConcurrentMemory>{memory}),
-            trace_path_(AllocatorRef<char, ConcurrentMemory>{memory}),
-            thread_([this] {
-              run();
-            }) {}
+      explicit Worker(ConcurrentMemory& memory, const ServiceSpec& specification, ResultQueue<ConcurrentMemory>& results, TapBudget& budget, WorkerLaunch launch);
 
-      inline ~Worker() {
-        stop();
-      }
+      ~Worker();
 
       Worker(const Worker&) = delete;
       Worker& operator=(const Worker&) = delete;
 
-      inline void stop() noexcept {
-        cancellation_.request();
-        requests_.close();
-        if (thread_.joinable()) {
-          thread_.join();
-        }
-
-        bridge_.reset();
-        session_.reset();
-      }
-
-      inline void revoke() noexcept {
-        specification_.permission->store(false, std::memory_order_release);
-        if (revoked_.exchange(true, std::memory_order_acq_rel)) {
-          return;
-        }
-
-        disabled_.store(true, std::memory_order_relaxed);
-        cancellation_.request();
-        requests_.close();
-        if (launch_.traffic) {
-          launch_.traffic->revokePackage(specification_);
-        }
-      }
-
-      inline bool revoked() const noexcept {
-        return revoked_.load(std::memory_order_acquire);
-      }
+      void stop() noexcept;
+      void revoke() noexcept;
+      bool revoked() const noexcept;
 
       // The worker queues the exchange, and what it keeps of the allocator: region `a`.
-      inline void submit(tbc::view<Shared, tbc::lt::a> exchange) noexcept {
-        if (specification_.allows(Capability::proxy_tap) && !disabled_.load(std::memory_order_relaxed)) {
-          requests_.publish(std::move(exchange));
-          wake_.notify();
-        }
-      }
+      void submit(tbc::view<Shared, tbc::lt::a> exchange) noexcept;
 
-      inline WorkerMetrics metrics() const noexcept {
-        return {requests_.metrics().dropped, timeouts_.load(std::memory_order_relaxed), disabled_.load(std::memory_order_relaxed), callback_errors_.load(std::memory_order_relaxed)};
-      }
-
-      inline const ServiceSpec& specification() const noexcept {
-        return specification_;
-      }
+      WorkerMetrics metrics() const noexcept;
+      const ServiceSpec& specification() const noexcept;
 
     private:
-      inline static ServiceSpec bindPermissions(ConcurrentMemory& memory, const ServiceSpec& specification) {
-        auto bound = specification;
-        if (!bound.permission) {
-          bound.permission = std::allocate_shared<std::atomic<bool>>(AllocatorRef<std::atomic<bool>, ConcurrentMemory>{memory}, true);
-        }
+      static ServiceSpec bindPermissions(ConcurrentMemory& memory, const ServiceSpec& specification);
 
-        return bound;
-      }
-
-      inline void run() noexcept {
-        if (launch_.traffic && specification_.traffic()) {
-          runTraffic();
-        } else {
-          while (auto request = requests_.receive()) {
-            if (!disabled_.load(std::memory_order_relaxed)) {
-              process(**request);
-            }
-          }
-        }
-
-        if (revoked() || cancellation_.requested() || launch_.cancellation.requested()) {
-          bridge_.reset();
-          session_.reset();
-        }
-      }
-
-      inline void runTraffic() noexcept {
-        while (!launch_.cancellation.requested() && !cancellation_.requested()) {
-          if (disabled_.load(std::memory_order_relaxed)) {
-            std::array watches{pollfd{cancellation_.descriptor(), POLLIN, 0}, pollfd{launch_.cancellation.descriptor(), POLLIN, 0}};
-            if (::poll(watches.data(), watches.size(), -1) < 0 && sys::lastError() != EINTR) {
-              return;
-            }
-
-            continue;
-          }
-
-          try {
-            if (!session_) {
-              ensureSession(true);
-              if (!bridge_) {
-                bridge_ = makeOwned<TrafficBridge>(memory_, memory_, specification_, *launch_.traffic);
-              }
-
-              bridge_->attach(*session_);
-            }
-
-            wake_.drain();
-            if (auto request = requests_.tryReceive()) {
-              process(**request);
-            }
-
-            if (!bridge_) {
-              continue;
-            }
-
-            bridge_->step(session_ ? &*session_ : nullptr, wake_.descriptor(), cancellation_, [&](OwnedResult<ConcurrentMemory> result) {
-              results_.publish(std::move(result));
-            },
-                requests_.metrics().queued != 0);
-
-            callback_errors_.store(callback_errors_base_ + bridge_->errors(), std::memory_order_relaxed);
-          } catch (const SystemError& error) {
-            if (!recover(error)) {
-              return;
-            }
-          } catch (...) {
-            restart();
-          }
-        }
-      }
-
-      inline void process(const SharedExchange& shared) noexcept {
-        TELAR_TRACE("plugins.processExchange");
-        try {
-          ensureSession(false);
-        } catch (...) {
-          restart();
-          return;
-        }
-
-        try {
-          const auto size = SharedExchange::capturedBytes(shared.exchange) + Limits::frame_overhead;
-          auto charged = budget_.charge(size);
-          if (!charged) {
-            return;
-          }
-
-          const auto encoded_size = Protocol::exchangeBytes(shared.exchange);
-          if (encoded_size > size) {
-            return;
-          }
-
-          SensitiveAllocation frame{memory_, encoded_size};
-          const auto payload = Protocol::encodeExchange(frame.bytes(), {shared.event_id, specification_.generation}, shared.exchange);
-
-          exchange(shared.event_id, payload);
-        } catch (...) {
-        }
-      }
-
-      inline void exchange(std::uint64_t event_id, std::span<const Byte> payload) noexcept {
-        try {
-          auto result = session_->exchange(specification_, event_id, payload);
-          if (result) {
-            results_.publish(std::move(result));
-          }
-        } catch (const SystemError& error) {
-          static_cast<void>(recover(error));
-        } catch (...) {
-          restart();
-        }
-      }
+      void run() noexcept;
+      void runTraffic() noexcept;
+      void process(const SharedExchange& shared) noexcept;
+      void exchange(std::uint64_t event_id, std::span<const Byte> payload) noexcept;
 
       // Starts the plugin's session unless one runs; `traffic` gives it the traffic bridge's channel.
-      inline void ensureSession(bool traffic) {
-        if (session_) {
-          return;
-        }
-
-        prepareTrace();
-        session_.emplace(memory_, SessionOptions{.executable = launch_.executable, .entry = entry_.c_str(), .cancellation = cancellation_, .timeout = launch_.timeout, .trace_path = trace_path_.empty() ? nullptr : trace_path_.c_str(), .traffic = traffic});
-      }
+      void ensureSession(bool traffic);
 
       // Restarts a failed session, counting a timeout; false when the session was cancelled, which
       // ends it rather than restarting it.
-      inline bool recover(const SystemError& error) noexcept {
-        if (error.code() == ECANCELED) {
-          return false;
-        }
+      bool recover(const SystemError& error) noexcept;
 
-        if (error.code() == ETIMEDOUT) {
-          timeouts_.fetch_add(1, std::memory_order_relaxed);
-        }
-
-        restart();
-        return true;
-      }
-
-      inline void restart() noexcept {
-        if (bridge_) {
-          bridge_->detach();
-          if (bridge_->transportFailed()) {
-            callback_errors_base_ += bridge_->errors();
-            bridge_.reset();
-          }
-        }
-
-        session_.reset();
-        const auto now = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch());
-        if (restarts_.record(now)) {
-          disabled_.store(true, std::memory_order_relaxed);
-        }
-      }
-
-      inline void prepareTrace() {
-#if TELAR_DEBUG
-        if (launch_.trace_prefix.empty()) {
-          return;
-        }
-
-        std::array<char, 64> suffix;
-        const auto length = std::snprintf(suffix.data(), suffix.size(), ".tap-%u-%llu.json", static_cast<unsigned>(specification_.package_index), static_cast<unsigned long long>(session_number_++));
-
-        trace_path_ = launch_.trace_prefix;
-        trace_path_.append(suffix.data(), static_cast<std::size_t>(length));
-#endif
-      }
+      void restart() noexcept;
+      void prepareTrace();
 
       ConcurrentMemory& memory_;
       ServiceSpec specification_;
@@ -1041,6 +842,8 @@ export {
       std::atomic<std::uint64_t> callback_errors_{0};
       std::jthread thread_;
     };
+
+    extern template class Worker<std::chrono::steady_clock>;
 
   }
 }

@@ -87,7 +87,7 @@ export {
 
     // Generic over the caller's clock.
     template <CaptureClock Clock = CaptureWallClock>
-    class TBC_HOT_PATH Http1Capture {
+    class TBC_GENERIC Http1Capture {
     public:
       inline explicit Http1Capture(ConcurrentMemory& memory, CaptureProducer* producer, CaptureStart context) noexcept
           : producer_(producer),
@@ -172,7 +172,7 @@ export {
 
     // Generic over the caller's capture policy, and called for every read the relay makes.
     template <Http1CapturePolicy Capture>
-    class TBC_HOT_PATH Http1TransportObserver {
+    class TBC_GENERIC Http1TransportObserver {
     public:
       inline explicit Http1TransportObserver(ProxyCounters& counters, Capture& capture, CaptureSide side) noexcept
           : counters_(counters),
@@ -254,7 +254,7 @@ export {
     // each message as it comes.
     // Generic over the caller's capture policy, and called for every read the relay makes.
     template <Http1CapturePolicy Capture = IgnoreHttp1Capture>
-    class TBC_HOT_PATH Http1Connection {
+    class TBC_GENERIC Http1Connection {
       using Relay = Http1InterceptedRelay;
 
     public:
@@ -514,7 +514,7 @@ export {
     public:
       // Generic over the caller's event loop.
       template <EventLoop Poller>
-      TBC_HOT_PATH void update(Poller& poller, int descriptor, std::uint64_t token, SocketInterest interest) {
+      TBC_GENERIC void update(Poller& poller, int descriptor, std::uint64_t token, SocketInterest interest) {
         const bool changed = descriptor != descriptor_ || token != token_ || interest != interest_;
 
         if (descriptor != descriptor_) {
@@ -532,7 +532,7 @@ export {
       }
 
       template <EventLoop Poller>
-      TBC_HOT_PATH void remove(Poller& poller) noexcept {
+      TBC_GENERIC void remove(Poller& poller) noexcept {
         if (descriptor_ >= 0) {
           poller.remove(descriptor_);
           descriptor_ = -1;
@@ -572,7 +572,7 @@ export {
 
     // The tunnel's loop for every read, generic over the caller's streams and buffer size.
     template <std::size_t BufferCapacity = RelayDirection<>::capacity>
-    class TBC_HOT_PATH DuplexRelay {
+    class TBC_GENERIC DuplexRelay {
       using Direction = RelayDirection<BufferCapacity>;
 
     public:
@@ -679,7 +679,7 @@ export {
     // A stream of one direction of a flow, whose writes a hook may hold or replace.
     // Generic over the caller's stream, and called for every read the relay makes.
     template <ByteStream Stream>
-    class TBC_HOT_PATH FlowStream {
+    class TBC_GENERIC FlowStream {
     public:
       inline explicit FlowStream(Stream& stream, FlowState* flow, traffic::Direction direction) noexcept
           : stream_(stream),
@@ -741,7 +741,7 @@ export {
 
       // The caller retains its input until the entire replacement has been sent, including partial TLS writes.
       template <ByteStream Stream>
-      TBC_HOT_PATH StreamResult write(traffic::Direction direction, Stream& stream, std::span<const Byte> bytes) noexcept {
+      TBC_GENERIC StreamResult write(traffic::Direction direction, Stream& stream, std::span<const Byte> bytes) noexcept {
         auto& gate = this->gate(direction);
         if (gate.rejected_) {
           return {StreamResult::State::failed};
@@ -873,7 +873,7 @@ export {
 
     // Generic over the caller's clock.
     template <CaptureClock Clock = CaptureWallClock>
-    class TBC_HOT_PATH Http2Capture {
+    class TBC_GENERIC Http2Capture {
     public:
       inline explicit Http2Capture(CaptureProducer* producer, ProxyCounters& counters, CaptureStart context) noexcept
           : request_(producer, counters, context, CaptureSide::request),
@@ -929,7 +929,7 @@ export {
 
     // Generic over the caller's capture policy, and called for every read the relay makes.
     template <Allocator Memory, Http2CapturePolicy Capture = IgnoreHttp2Capture>
-    class TBC_HOT_PATH Http2Connection {
+    class TBC_GENERIC Http2Connection {
     public:
       inline explicit Http2Connection(Memory& memory, ProxyCounters& counters, Capture capture = {}) noexcept
           : counters_(counters),
@@ -1106,7 +1106,7 @@ export {
 
     // Generic over the caller's capture policy, and called for every read the relay makes.
     template <ConcurrentAllocator Memory, Http2CapturePolicy Capture = IgnoreHttp2Capture>
-    class TBC_HOT_PATH Http2EndpointConnection {
+    class TBC_GENERIC Http2EndpointConnection {
       static constexpr std::size_t maximum_streams = 64;
       static constexpr std::size_t connection_bytes = 16 * 1024 * 1024;
       static constexpr std::size_t io_bytes = 16 * 1024;
@@ -2123,7 +2123,7 @@ export {
 
       // Generic over the caller's streams, and called for every read the relay makes.
       template <ByteStream Stream>
-      TBC_HOT_PATH StreamResult fill(Stream& stream) noexcept {
+      TBC_GENERIC StreamResult fill(Stream& stream) noexcept {
         const auto result = stream.read(storage_.bytes().subspan(length_));
         if (result.state == StreamResult::State::data) {
           length_ += result.bytes;
@@ -2146,7 +2146,7 @@ export {
 
     // Generic over the caller's stream, and called for every read the relay makes.
     template <PeekableByteStream Stream>
-    class TBC_HOT_PATH PrefixedStream {
+    class TBC_GENERIC PrefixedStream {
     public:
       inline explicit PrefixedStream(Stream& stream, StreamPrefix& prefix) noexcept
           : stream_(stream),
@@ -2205,7 +2205,7 @@ export {
 
       // Generic over the caller's streams, and called for every read the relay makes.
       template <PeekableByteStream Child, PeekableByteStream Origin>
-      TBC_HOT_PATH auto advance(Child& child_stream, Origin& origin_stream, TunnelReadiness readiness, FlowState* flow) noexcept -> bool {
+      TBC_GENERIC auto advance(Child& child_stream, Origin& origin_stream, TunnelReadiness readiness, FlowState* flow) noexcept -> bool {
         bool active = false;
 
         if (!protocol_) {
@@ -2286,7 +2286,7 @@ export {
 
         // Generic over the caller's streams, and called for every read the relay makes.
         template <PeekableByteStream Child, PeekableByteStream Origin>
-        TBC_HOT_PATH auto transfer(HttpProtocol protocol, Child& child, Origin& origin, TunnelReadiness readiness, FlowState* flow) noexcept -> bool {
+        TBC_GENERIC auto transfer(HttpProtocol protocol, Child& child, Origin& origin, TunnelReadiness readiness, FlowState* flow) noexcept -> bool {
           if (protocol == HttpProtocol::http2) {
             if (!http2_ && !http2_endpoint_) {
               try {
@@ -2443,7 +2443,7 @@ export {
 
       // Generic over the caller's resolver.
       template <HostnameResolver Resolver>
-      TBC_HOT_PATH void open(tbc::view<const TlsInterception&, tbc::lt::a> interception, tbc::view<ConnectHandshake<ConcurrentMemory, Resolver>&, tbc::lt::a> handshake, tbc::view<ConnectionObservation, tbc::lt::a> observation) {
+      TBC_GENERIC void open(tbc::view<const TlsInterception&, tbc::lt::a> interception, tbc::view<ConnectHandshake<ConcurrentMemory, Resolver>&, tbc::lt::a> handshake, tbc::view<ConnectionObservation, tbc::lt::a> observation) {
         if (observation.flows) {
           flow_ = makeOwned<FlowState>(memory_);
           flow_->open(observation.flows, observation.identity, handshake.childDescriptor(), handshake.originDescriptor(), handshake.hostname());
@@ -2523,7 +2523,7 @@ export {
 
     // Generic over the caller's resolver.
     template <HostnameResolver Resolver>
-    class TBC_HOT_PATH ProxyConnection {
+    class TBC_GENERIC ProxyConnection {
     public:
       using Time = ProxyConnectionPolicy::Time;
 
@@ -2712,13 +2712,10 @@ export {
 
       const ProxyStatus& status() const noexcept;
 
-      // Generic over the caller's allocator: the command takes each variable the child gets.
+      // The command takes each variable the child gets. Built in runtime.cpp for the allocators of
+      // Command.
       template <Allocator Memory>
-      TBC_HOT_PATH void apply(Command<Memory>& command) const {
-        environment(&command, [](void* target, std::string_view name, std::string_view value) {
-          static_cast<Command<Memory>*>(target)->setEnvironment(name, value);
-        });
-      }
+      void apply(Command<Memory>& command) const;
 
     private:
       void environment(void* target, void (*set)(void* target, std::string_view name, std::string_view value)) const;
@@ -2726,6 +2723,12 @@ export {
       inline static const ProxyStatus inactive{};
       std::shared_ptr<const Identity> identity_;
     };
+
+    extern template void ProxyClientConfiguration::apply(Command<Memory>& command) const;
+    extern template void ProxyClientConfiguration::apply(Command<ConcurrentMemory>& command) const;
+    extern template void ProxyClientConfiguration::apply(Command<SystemAllocator>& command) const;
+    extern template void ProxyClientConfiguration::apply(Command<BudgetAllocator<SystemAllocator>>& command) const;
+    extern template void ProxyClientConfiguration::apply(Command<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>& command) const;
 
   }
 }
@@ -2818,7 +2821,7 @@ export {
 
       // Generic over the caller's visitor.
       template <typename Visitor>
-      TBC_HOT_PATH void scan(const Visitor& visit) const noexcept {
+      TBC_GENERIC void scan(const Visitor& visit) const noexcept {
         try {
           FileDescriptor descriptor{::openat(directory_, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
           if (!descriptor) {
@@ -2919,7 +2922,7 @@ export {
     // secret and its observations, so it stays where it was built; other threads only stop it and read
     // atomics, which is audited here.
     // Generic over the caller's event loop and resolver.
-    class TBC_SHARED TBC_HOT_PATH ProxyService {
+    class TBC_SHARED TBC_GENERIC ProxyService {
     public:
       inline explicit ProxyService(ConcurrentMemory& memory, const ProxyOptions<ConcurrentMemory>& options, const ProxySecret& secret, const TlsInterception& interception, ProxyListener listener, traffic::FlowControl* flows = nullptr)
           : memory_(memory),
@@ -3345,7 +3348,7 @@ export {
     // Generic over the caller's event loop, resolver and tap.
     template <EventLoop Poller, HostnameResolver Resolver, typename Tap = IgnoreCaptureTap>
       requires CaptureTap<Tap>
-    class TBC_HOT_PATH ProxyRuntime {
+    class TBC_GENERIC ProxyRuntime {
     public:
       inline explicit ProxyRuntime(ConcurrentMemory& memory, const ProxyOptions<ConcurrentMemory>& options, std::string_view endpoint, bool inherit_legacy)
         requires std::same_as<Tap, IgnoreCaptureTap>

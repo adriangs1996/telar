@@ -167,7 +167,7 @@ export {
 
       // The service queues requests on its own thread, without a lossy cross-thread channel.
       template <typename Consumer>
-      TBC_HOT_PATH void deliver(Owner owner, Consumer&& consumer) noexcept {
+      TBC_GENERIC void deliver(Owner owner, Consumer&& consumer) noexcept {
         std::scoped_lock lock{mutex_};
 
         for (auto& slot : pending_) {
@@ -301,7 +301,7 @@ export {
     // Recording sessions proxy threads append to and clients page through, under its mutex.
     // Generic over the caller's clock.
     template <typename Clock = std::chrono::steady_clock>
-    class TBC_SHARED TBC_HOT_PATH Recordings {
+    class TBC_SHARED TBC_GENERIC Recordings {
       using Request = recording::Request;
 
       struct Entry {
@@ -905,7 +905,7 @@ export {
 
     // Generic over the caller's proxy.
     template <typename Proxy>
-    class TBC_HOT_PATH Backend {
+    class TBC_GENERIC Backend {
       using Clock = std::chrono::steady_clock;
 
     public:
@@ -1242,7 +1242,7 @@ export {
 
       // Generic over the caller's callback.
       template <typename Predicate>
-      TBC_HOT_PATH bool wait(Predicate predicate, const std::atomic<bool>& cancelled) {
+      TBC_GENERIC bool wait(Predicate predicate, const std::atomic<bool>& cancelled) {
         const auto deadline = Clock::now() + std::chrono::seconds{5};
 
         while (!predicate()) {
@@ -1299,7 +1299,7 @@ export {
     // one bounded request. Closing a client only cancels delivery of its reply.
     // Generic over the caller's handler.
     template <ConcurrentAllocator Memory, typename Handler>
-    class TBC_HOT_PATH Service : public PackagePort {
+    class TBC_GENERIC Service : public PackagePort {
       using Clock = std::chrono::steady_clock;
 
       struct Peer {

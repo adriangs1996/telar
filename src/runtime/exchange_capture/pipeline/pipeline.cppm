@@ -136,7 +136,7 @@ export {
     // Generic over the caller's tap and clock.
     template <typename Tap, CaptureClock Clock = CaptureWallClock>
       requires CaptureTap<Tap>
-    class TBC_HOT_PATH CapturePipeline {
+    class TBC_GENERIC CapturePipeline {
     public:
       inline explicit CapturePipeline(ConcurrentMemory& memory, CaptureProducer& producer, ProxyCaptureLimits limits, Tap& tap)
           : tap_(tap),

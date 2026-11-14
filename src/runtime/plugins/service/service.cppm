@@ -44,7 +44,7 @@ export {
 
       // Generic over the caller's consumer.
       template <typename Consumer>
-      TBC_HOT_PATH constexpr void collect(Consumer&&) const noexcept {}
+      TBC_GENERIC constexpr void collect(Consumer&&) const noexcept {}
     };
 
   }
@@ -78,7 +78,7 @@ export {
 
       // Generic over the caller's consumer.
       template <typename Consumer>
-      TBC_HOT_PATH void collect(Consumer&& consumer) {
+      TBC_GENERIC void collect(Consumer&& consumer) {
         results_.collect([&](const auto& result) {
           if (result.package_index < workers_.size() && !workers_[result.package_index]->revoked() && result.authorized(workers_[result.package_index]->specification())) {
             consumer(result.batch());

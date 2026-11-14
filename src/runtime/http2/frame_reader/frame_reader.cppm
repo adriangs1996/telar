@@ -69,7 +69,7 @@ export {
         requires requires(Receiver receive, const Http2FrameEvent& event) {
           { receive(event) } noexcept -> std::same_as<void>;
         }
-      TBC_HOT_PATH void feed(std::span<const std::uint8_t> input, Receiver receive) noexcept {
+      TBC_GENERIC void feed(std::span<const std::uint8_t> input, Receiver receive) noexcept {
         while (!input.empty()) {
           if (header_length_ != header_.size()) {
             const auto count = std::min(header_.size() - header_length_, input.size());
