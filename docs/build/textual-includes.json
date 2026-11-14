@@ -1690,13 +1690,31 @@
     "<cstring>",
     "<new>"
   ],
+  "src/gui/platform/awake_clock/awake_clock.cpp": [
+    "<cstdint>",
+    "<ctime>"
+  ],
+  "src/gui/platform/clipboard_image_pipe/clipboard_image_pipe.cppm": [
+    "<cerrno>",
+    "<cstddef>",
+    "<poll.h>",
+    "<time.h>",
+    "<unistd.h>",
+    "platform/clipboard_image_source.hpp"
+  ],
   "src/gui/platform/clipboard_image_source.cpp": [
     "platform/clipboard_image_source.hpp"
+  ],
+  "src/gui/platform/clipboard_image_transfer/clipboard_image_transfer.cppm": [
+    "platform/clipboard_image_source.hpp"
+  ],
+  "src/gui/platform/file_stamp/file_stamp.cppm": [
+    "<sys/stat.h>"
   ],
   "src/gui/platform/login_shell/login_shell.cppm": [
     "tbc/view.hpp"
   ],
-  "src/gui/platform/login_shell/managed_directory.cpp": [
+  "src/gui/platform/managed_directory/managed_directory.cpp": [
     "<cerrno>",
     "<cstddef>",
     "<fcntl.h>",
@@ -1738,6 +1756,10 @@
     "<unistd.h>",
     "tbc/view.hpp"
   ],
+  "src/gui/platform/path_limits/path_limits.cppm": [
+    "<limits.h>",
+    "<sys/param.h>"
+  ],
   "src/gui/platform/private_file_stamp/macos/glyph_rasterizer.cpp": [
     "<cstddef>",
     "<cstdint>",
@@ -1764,15 +1786,6 @@
     "<cstdint>",
     "platform/process_group.h"
   ],
-  "src/gui/platform/profile_file/awake_clock.cpp": [
-    "<cstdint>",
-    "<ctime>"
-  ],
-  "src/gui/platform/profile_file/controlled_awake_clock.cpp": [
-    "<atomic>",
-    "<cstdint>",
-    "tests/controlled_awake_clock.hpp"
-  ],
   "src/gui/platform/profile_file/profile_file.cpp": [
     "<cerrno>",
     "<cstddef>",
@@ -1793,23 +1806,10 @@
   ],
   "src/gui/platform/profile_file/profile_file.cppm": [
     "<cerrno>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
     "<fcntl.h>",
-    "<limits.h>",
-    "<new>",
-    "<poll.h>",
-    "<sys/param.h>",
-    "<sys/stat.h>",
-    "<time.h>",
-    "<unistd.h>",
-    "platform/clipboard_image_source.hpp",
     "tbc/view.hpp"
   ],
-  "src/gui/platform/profile_file/runtime_endpoint.cpp": [
+  "src/gui/platform/runtime_endpoint/runtime_endpoint.cpp": [
     "<cctype>",
     "<cerrno>",
     "<climits>",
@@ -1830,7 +1830,7 @@
     "<unistd.h>",
     "telar_platform/process_environment.h"
   ],
-  "src/gui/platform/profile_file/shared_image_source.cpp": [
+  "src/gui/platform/shared_image_source/shared_image_source.cpp": [
     "<cerrno>",
     "<cstddef>",
     "<cstdint>",

@@ -34,7 +34,7 @@ static_assert(true);
 #include <string_view>
 #include <system_error>
 
-import telar.gui.platform.profile_file;
+import telar.gui.platform.awake_clock;
 import telar.gui.presentation.suggestion_labels;
 import telar.gui.presentation.activity_order;
 import telar.gui.presentation.display_metrics;

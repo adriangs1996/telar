@@ -29,7 +29,7 @@ static_assert(true);
 #include <string_view>
 
 import telar.gui.core.metrics;
-import telar.gui.platform.profile_file;
+import telar.gui.platform.awake_clock;
 import telar.gui.presentation.display_metrics;
 
 namespace telar::gui::qt {

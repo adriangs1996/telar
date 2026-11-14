@@ -47,7 +47,7 @@ static_assert(true);
 #include "qt/window_animation_clock.hpp"
 
 import telar.gui.core.metrics;
-import telar.gui.platform.profile_file;
+import telar.gui.platform.awake_clock;
 
 namespace {
 

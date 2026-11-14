@@ -31,7 +31,7 @@ export import telar.gui.links.path_expansion;
 export import telar.gui.links.cell_links;
 export import telar.gui.paths.label;
 export import telar.gui.peek.screen;
-export import telar.gui.platform.profile_file;
+export import telar.gui.platform.awake_clock;
 export import telar.gui.presentation.notification_stack;
 export import telar.gui.presentation.activity_order;
 export import telar.gui.presentation.client_view_state;

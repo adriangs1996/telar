@@ -1,10 +1,8 @@
-module;
-
-#include "tests/controlled_awake_clock.hpp"
+#include "controlled_awake_clock.hpp"
 #include <atomic>
 #include <cstdint>
 
-module telar.gui.platform.profile_file;
+import telar.gui.platform.awake_clock;
 
 namespace {
 
@@ -16,10 +14,12 @@ namespace {
 
 }
 
-extern "C++" void telar::gui::test::ControlledAwakeClock::set(std::uint64_t now_ns) noexcept {
+void telar::gui::test::ControlledAwakeClock::set(std::uint64_t now_ns) noexcept {
   timestamp().store(now_ns, std::memory_order_relaxed);
 }
 
+// AwakeClock belongs to the global module, so this test double replaces its definition
+// without being a unit of telar.gui.platform.awake_clock.
 std::uint64_t telar::gui::platform::AwakeClock::nowNanoseconds() noexcept {
   return timestamp().load(std::memory_order_relaxed);
 }

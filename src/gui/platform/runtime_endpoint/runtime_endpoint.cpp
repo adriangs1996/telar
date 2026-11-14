@@ -23,12 +23,12 @@ module;
 #include <sys/attr.h>
 #endif
 
-module telar.gui.platform.profile_file;
+module telar.gui.platform.runtime_endpoint;
 
 import std;
 
-import telar.gui.platform.login_shell;
 import telar.client;
+import telar.vocabulary;
 import telar.platform.process;
 
 #if defined(__APPLE__)

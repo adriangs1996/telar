@@ -8,7 +8,7 @@ static_assert(true);
 #include <ctime>
 
 import std;
-import telar.gui.platform.profile_file;
+import telar.gui.platform.awake_clock;
 
 namespace {
 

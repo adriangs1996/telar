@@ -44,7 +44,7 @@ import telar.gui.machines.profile_store;
 import telar.gui.machines.discovery;
 import telar.gui.machines.picker;
 import telar.gui.palette.navigation_label;
-import telar.gui.platform.profile_file;
+import telar.gui.platform.runtime_endpoint;
 import telar.gui.presentation.suggestion_geometry;
 import telar.config;
 import telar.gui.text.json_unsigned_integer;

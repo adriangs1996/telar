@@ -46,7 +46,7 @@ static_assert(true);
 import telar.gui.core.metrics;
 import telar.gui.graphics.placeholder;
 import telar.gui.graphics.texture_cache;
-import telar.gui.platform.profile_file;
+import telar.gui.platform.awake_clock;
 
 namespace telar::gui::qt {
 

@@ -107,7 +107,7 @@ import telar.gui.platform.login_shell;
 import telar.gui.machines.picker;
 import telar.gui.palette.navigation_label;
 import telar.gui.paths.label;
-import telar.gui.platform.profile_file;
+import telar.gui.platform.awake_clock;
 import telar.gui.presentation.frame_pacer;
 import telar.gui.presentation.history_inspection;
 import telar.gui.text.bounded_editor;

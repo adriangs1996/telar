@@ -66,7 +66,7 @@ static_assert(true);
 import telar.gui.config.plugin_query;
 import telar.gui.config.generation;
 import telar.gui.core.metrics;
-import telar.gui.platform.profile_file;
+import telar.gui.platform.file_stamp;
 import telar.gui.platform.private_file_stamp;
 import telar.gui.presentation.suggestion_geometry;
 

@@ -31,7 +31,7 @@ static_assert(true);
 #include "platform/window.hpp"
 #include "qt/window_frame_pacer.hpp"
 
-import telar.gui.platform.profile_file;
+import telar.gui.platform.awake_clock;
 import telar.gui.presentation.frame_pacer;
 
 namespace {

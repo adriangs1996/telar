@@ -84,7 +84,7 @@ import telar.gui.tests.activity_fixture;
 import telar.gui.tests.agent_fixture;
 import telar.gui.application.workspace_replica;
 import telar.gui.core.metrics;
-import telar.gui.platform.profile_file;
+import telar.gui.platform.awake_clock;
 import telar.gui.presentation.application_mark;
 import telar.gui.presentation.activity_order;
 

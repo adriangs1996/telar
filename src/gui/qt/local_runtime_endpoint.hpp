@@ -29,7 +29,7 @@ static_assert(true);
 
 #include "core/memory.hpp"
 
-import telar.gui.platform.profile_file;
+import telar.gui.platform.runtime_endpoint;
 import telar.platform.paths;
 
 namespace telar::gui::qt {

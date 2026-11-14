@@ -44,7 +44,7 @@ static_assert(true);
 #include "platform/clipboard_image_source.hpp"
 #include "platform/linux/wayland_clipboard_image_monitor.hpp"
 
-import telar.gui.platform.profile_file;
+import telar.gui.platform.clipboard_image_pipe;
 
 namespace {
 

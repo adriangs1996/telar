@@ -59,7 +59,7 @@ static_assert(true);
 import telar.gui.tests.session_fixture;
 import telar.gui.application.session;
 import telar.gui.graphics.texture_cache;
-import telar.gui.platform.profile_file;
+import telar.gui.platform.shared_image_source;
 import telar.platform.graphics;
 
 namespace {

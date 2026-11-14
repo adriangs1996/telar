@@ -40,7 +40,7 @@ static_assert(true);
 import telar.gui.application.workspace_replica;
 import telar.gui.core.metrics;
 import telar.gui.links.cell_links;
-import telar.gui.platform.profile_file;
+import telar.gui.platform.awake_clock;
 import telar.gui.presentation.display_metrics;
 
 namespace telar::gui::qt {
