@@ -30,6 +30,7 @@ inputs.
 | GUI box, block and Braille glyph ink | `src/gui/tools/compare_glyph_ink.py` | `gui-glyph-ink-probe` |
 | Runtime PTY round trips | `src/runtime/tools/bench_control_pty.py` | `control-pty-latency-probe` |
 | Runtime control queries | `src/runtime/tools/bench_control_queries.py` | its own fixtures |
+| Runtime tap plugin exchanges | `src/runtime/tools/bench_plugin_exchange.py` | `plugin-exchange-probe` |
 | Complete GUI against Ghostty | `tools/gui_tui_latency.py` | the GUI and runtime |
 
 A workload with no tool gets a probe beside the existing ones (a target in the

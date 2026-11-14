@@ -28,6 +28,8 @@ target_link_libraries(ghostty-modes-tests PRIVATE telar::ghostty)
 add_test(NAME ghostty-modes-tests COMMAND ghostty-modes-tests)
 add_executable(plugin-package-probe tests/plugin_package_probe.cpp)
 target_link_libraries(plugin-package-probe PRIVATE runtime-core runtime-test-fixtures)
+add_executable(plugin-exchange-probe tests/plugin_exchange_probe.cpp)
+target_link_libraries(plugin-exchange-probe PRIVATE runtime-core runtime-test-fixtures)
 add_executable(plugin-service-probe tests/plugin_service_probe.cpp)
 target_link_libraries(plugin-service-probe PRIVATE runtime-core runtime-test-fixtures)
 add_executable(proxy-probe tests/proxy_probe.cpp)
@@ -287,9 +289,9 @@ set(runtime_probes
   admission-probe agent-probe capture-probe command-capture-probe control-clipboard-lifetime-probe
   control-pty-latency-probe control-query-accounting-probe deferred-response-probe
   description-probe graphics-limits-probe graphics-probe history-probe hook-probe
-  input-capacity-probe launch-probe model-probe path-probe plugin-package-probe
-  plugin-service-probe process-probe proxy-probe reporter-probe resume-probe runtime-probe
-  screen-probe service-admission-probe services-probe session-file-probe shell-capture-probe
+  input-capacity-probe launch-probe model-probe path-probe plugin-exchange-probe
+  plugin-package-probe plugin-service-probe process-probe proxy-probe reporter-probe resume-probe
+  runtime-probe screen-probe service-admission-probe services-probe session-file-probe shell-capture-probe
   state-delivery-probe tab-holds-probe terminal-media-feed-probe workspace-git-probe
   worktree-detection-probe worktree-lifecycle-probe)
 set_target_properties(${runtime_probes} PROPERTIES EXCLUDE_FROM_ALL ON)
