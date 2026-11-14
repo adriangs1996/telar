@@ -1,5 +1,5 @@
 module;
-#include "tbc/hot_path.hpp"
+#include "tbc/annotations.hpp"
 
 export module telar.cli.control_session;
 

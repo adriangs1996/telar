@@ -80,7 +80,7 @@ text_a longerText(text_a first, text_a second) {
 
 A telar module unit imports the same declarations as `telar.tbc` instead of
 including `<tbc/view.hpp>`, and includes `<tbc/annotations.hpp>`, which includes
-nothing, when it needs `TBC_SHARED`, `TBC_CONSTRUCTS` or `TBC_RAW`.
+nothing, when it needs `TBC_SHARED`, `TBC_CONSTRUCTS`, `TBC_RAW` or `TBC_HOT_PATH`.
 
 [`docs/contracts.md`](docs/contracts.md) describes the signature design. Repeated
 `lt::a` denotes a common region, not one particular argument or allocation.
@@ -255,7 +255,7 @@ These bodies stay:
 
 - `constexpr` and `consteval` functions, whose bodies importers evaluate, and a
   lambda that a `constexpr` variable holds when it can be evaluated too.
-- Hot paths marked `TBC_HOT_PATH`, from `<tbc/hot_path.hpp>`, so that importers
+- Hot paths marked `TBC_HOT_PATH`, from `<tbc/annotations.hpp>`, so that importers
   can inline them. A marked function that is not a template must also be
   `inline`: the body of a non-inline function never reaches an importer, and a
   member defined in its class is not implicitly inline in a module. On a class,

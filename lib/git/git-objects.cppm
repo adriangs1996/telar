@@ -1,5 +1,5 @@
 module;
-#include "tbc/hot_path.hpp"
+#include "tbc/annotations.hpp"
 #include <zlib.h>
 
 export module telar.git:objects;

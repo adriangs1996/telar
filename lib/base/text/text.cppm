@@ -1,5 +1,5 @@
 module;
-#include "tbc/hot_path.hpp"
+#include "tbc/annotations.hpp"
 #include "telar_base/program_identity.hpp"
 #include "telar_base/text/base64.hpp"
 #include "telar_base/text/decimal.hpp"

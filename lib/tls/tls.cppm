@@ -1,5 +1,5 @@
 module;
-#include "tbc/hot_path.hpp"
+#include "tbc/annotations.hpp"
 
 #include <openssl/crypto.h>
 #include <openssl/ssl.h>

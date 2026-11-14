@@ -1,5 +1,5 @@
 module;
-#include "tbc/hot_path.hpp"
+#include "tbc/annotations.hpp"
 #include "telar_platform/trace_macro.hpp"
 
 export module telar.cli.hooks.session;

@@ -1,5 +1,5 @@
 module;
-#include "tbc/hot_path.hpp"
+#include "tbc/annotations.hpp"
 #include "telar_render/sequence.hpp"
 
 export module telar.render.document;
