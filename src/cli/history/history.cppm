@@ -1,9 +1,7 @@
-module;
-#include "tbc/view.hpp"
-
 export module telar.cli.history;
 
 import std;
+import telar.tbc;
 
 export import telar.cli.command_limit;
 

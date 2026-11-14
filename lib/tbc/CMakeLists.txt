@@ -38,6 +38,16 @@ target_include_directories(tbc INTERFACE
   "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
   "$<INSTALL_INTERFACE:include>")
 
+# The telar projects that add this one import its declarations as telar.tbc. The standalone
+# build has no named modules, so it builds the linter with the LLVM SDK's standard library.
+if(NOT PROJECT_IS_TOP_LEVEL)
+  include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/cpp_modules.cmake")
+  add_library(telar-tbc STATIC)
+  add_library(telar::tbc ALIAS telar-tbc)
+  telar_modules(telar-tbc)
+  target_link_libraries(telar-tbc PUBLIC tbc)
+endif()
+
 # Project warnings and instrumentation must not propagate to library consumers.
 add_library(tbc_options INTERFACE)
 if(MSVC)

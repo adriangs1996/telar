@@ -1,5 +1,5 @@
 module;
-#include "tbc/view.hpp"
+#include "tbc/annotations.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <cstdlib>
 #include <errno.h>
@@ -59,6 +59,7 @@ module;
 export module telar.runtime.proxy.runtime;
 
 import std;
+import telar.tbc;
 
 export import telar.runtime.exchange_capture.exchange;
 export import telar.runtime.exchange_capture.pipeline;
@@ -4012,7 +4013,7 @@ export {
       }
 
       inline std::uint64_t nextGeneration() {
-        if (generation_ == (UINT64_MAX >> generation_shift)) {
+        if (generation_ == (std::numeric_limits<std::uint64_t>::max() >> generation_shift)) {
           throw SystemError{"Proxy event generations exhausted", EOVERFLOW};
         }
 

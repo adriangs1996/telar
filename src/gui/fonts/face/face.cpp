@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include <cstdio>
 
 #include "platform/font.h"
@@ -21,6 +20,7 @@ module;
 module telar.gui.fonts.face;
 
 import std;
+import telar.tbc;
 
 import telar.gui.terminal.font_grid;
 import telar.gui.terminal.glyphs;

@@ -1,11 +1,11 @@
 module;
-#include "tbc/view.hpp"
 #include <cstdint>
 #include <lua.h>
 
 export module telar.config.client;
 
 import std;
+import telar.tbc;
 export import telar.config.core;
 import telar.base.diagnostics;
 import telar.wire.clients;
@@ -710,7 +710,7 @@ export {
       }
 
       inline static bool validIndex(std::string_view number) noexcept {
-        return unsignedNumber<unsigned>(number, UINT8_MAX).value_or(0) != 0;
+        return unsignedNumber<unsigned>(number, std::numeric_limits<std::uint8_t>::max()).value_or(0) != 0;
       }
 
       inline static void requiredInteger(const lua::Value& value, lua_Integer minimum, lua_Integer maximum) {
@@ -2446,7 +2446,7 @@ namespace telar::runtime::config {
     struct Position {
       Place place = Place::bar;
       unsigned priority = 50;
-      unsigned rank = UINT8_MAX;
+      unsigned rank = std::numeric_limits<std::uint8_t>::max();
       unsigned depth = 0;
     };
 

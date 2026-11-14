@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include "telar_render/sequence.hpp"
 #include <cassert>

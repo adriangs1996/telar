@@ -24,34 +24,25 @@
   "lib/base/memory/allocators/allocators.cppm": [
     "tbc/hot_path.hpp"
   ],
-  "lib/base/memory/containers/containers.cpp": [
-    "tbc/view.hpp"
-  ],
   "lib/base/memory/containers/containers.cppm": [
     "<cassert>",
-    "tbc/hot_path.hpp",
-    "tbc/view.hpp"
+    "tbc/annotations.hpp",
+    "tbc/hot_path.hpp"
   ],
   "lib/base/memory/sensitive/sensitive.cppm": [
-    "tbc/hot_path.hpp",
-    "tbc/view.hpp"
-  ],
-  "lib/base/text/json/json.cpp": [
-    "tbc/view.hpp"
+    "tbc/annotations.hpp",
+    "tbc/hot_path.hpp"
   ],
   "lib/base/text/json/json.cppm": [
-    "tbc/hot_path.hpp",
-    "tbc/view.hpp"
+    "tbc/hot_path.hpp"
   ],
   "lib/base/text/text.cpp": [
-    "<arpa/inet.h>",
-    "tbc/view.hpp"
+    "<arpa/inet.h>"
   ],
   "lib/base/text/text.cppm": [
     "<cassert>",
     "<netinet/in.h>",
     "tbc/hot_path.hpp",
-    "tbc/view.hpp",
     "telar_base/program_identity.hpp",
     "telar_base/text/base64.hpp",
     "telar_base/text/decimal.hpp"
@@ -69,7 +60,6 @@
     "<sys/time.h>",
     "<sys/un.h>",
     "<unistd.h>",
-    "tbc/view.hpp",
     "telar_client/codecs/telar_annotations.hpp"
   ],
   "lib/client/include/telar_client/protocol/agents.hpp": [
@@ -147,13 +137,11 @@
   ],
   "lib/config/client/client.cppm": [
     "<cstdint>",
-    "<lua.h>",
-    "tbc/view.hpp"
+    "<lua.h>"
   ],
   "lib/config/core/core.cppm": [
     "<cinttypes>",
-    "<cstdio>",
-    "tbc/view.hpp"
+    "<cstdio>"
   ],
   "lib/config/gui/gui.cppm": [
     "<lua.h>"
@@ -163,16 +151,14 @@
     "<cstdint>",
     "<ghostty/vt/unicode.h>",
     "<limits.h>",
-    "<lua.h>",
-    "tbc/view.hpp"
+    "<lua.h>"
   ],
   "lib/config/snapshot/snapshot.cppm": [
     "<lua.h>"
   ],
   "lib/ebnf/lexer/lexer.cppm": [
     "<cstddef>",
-    "<cstdint>",
-    "<tbc/view.hpp>"
+    "<cstdint>"
   ],
   "lib/ebnf/main.cpp": [
     "<algorithm>",
@@ -193,13 +179,11 @@
   ],
   "lib/ebnf/parser/parser.cppm": [
     "<cstddef>",
-    "<cstdint>",
-    "<tbc/view.hpp>"
+    "<cstdint>"
   ],
   "lib/git/checkout/checkout.cppm": [
     "<limits.h>",
-    "tbc/hot_path.hpp",
-    "tbc/view.hpp"
+    "tbc/hot_path.hpp"
   ],
   "lib/git/git-format.cppm": [
     "<openssl/sha.h>",
@@ -221,8 +205,8 @@
     "<lauxlib.h>",
     "<limits.h>",
     "<lua.h>",
-    "tbc/hot_path.hpp",
-    "tbc/view.hpp"
+    "tbc/annotations.hpp",
+    "tbc/hot_path.hpp"
   ],
   "lib/machines/machines.cppm": [
     "<cstddef>",
@@ -263,16 +247,14 @@
     "<sys/stat.h>",
     "<sys/syscall.h>",
     "<sys/types.h>",
-    "<unistd.h>",
-    "tbc/view.hpp"
+    "<unistd.h>"
   ],
   "lib/platform/fs/fs.cppm": [
     "<dirent.h>",
     "<limits.h>",
     "<sys/stat.h>",
     "<sys/types.h>",
-    "tbc/hot_path.hpp",
-    "tbc/view.hpp"
+    "tbc/hot_path.hpp"
   ],
   "lib/platform/graphics/graphics.cpp": [
     "<cstdio>",
@@ -346,13 +328,11 @@
   ],
   "lib/platform/paths/paths.cpp": [
     "<cstdlib>",
-    "<unistd.h>",
-    "tbc/view.hpp"
+    "<unistd.h>"
   ],
   "lib/platform/paths/paths.cppm": [
     "<sys/un.h>",
-    "tbc/hot_path.hpp",
-    "tbc/view.hpp"
+    "tbc/hot_path.hpp"
   ],
   "lib/platform/primitives/primitives.cppm": [
     "telar_platform/graphics/child_shared_memory.hpp",
@@ -392,7 +372,6 @@
     "<sys/stat.h>",
     "<sys/types.h>",
     "<unistd.h>",
-    "tbc/view.hpp",
     "telar_platform/process_environment.h"
   ],
   "lib/platform/process/process.cppm": [
@@ -400,8 +379,7 @@
     "<spawn.h>",
     "<sys/types.h>",
     "<sys/wait.h>",
-    "tbc/hot_path.hpp",
-    "tbc/view.hpp"
+    "tbc/hot_path.hpp"
   ],
   "lib/platform/process/pty_process.cpp": [
     "<cerrno>",
@@ -617,8 +595,7 @@
     "<openssl/crypto.h>",
     "<openssl/ssl.h>",
     "<openssl/x509.h>",
-    "tbc/hot_path.hpp",
-    "tbc/view.hpp"
+    "tbc/hot_path.hpp"
   ],
   "lib/wire/agents/agents.cppm": [
     "telar_client/protocol/agents.hpp"
@@ -656,12 +633,10 @@
     "<cstring>",
     "<new>",
     "<stdlib.h>",
-    "<unistd.h>",
-    "tbc/view.hpp"
+    "<unistd.h>"
   ],
   "src/cli/command_limit/command_limit.cppm": [
-    "<unistd.h>",
-    "tbc/view.hpp"
+    "<unistd.h>"
   ],
   "src/cli/config_check_main.cpp": [
     "<cstdint>",
@@ -671,12 +646,10 @@
     "<cstddef>",
     "<cstdint>",
     "<sys/socket.h>",
-    "<sys/time.h>",
-    "tbc/view.hpp"
+    "<sys/time.h>"
   ],
   "src/cli/control_session/control_session.cppm": [
-    "tbc/hot_path.hpp",
-    "tbc/view.hpp"
+    "tbc/hot_path.hpp"
   ],
   "src/cli/control_session/runtime_connection.cpp": [
     "<cerrno>",
@@ -715,11 +688,7 @@
     "<sys/time.h>",
     "<sys/un.h>",
     "<sys/wait.h>",
-    "<unistd.h>",
-    "tbc/view.hpp"
-  ],
-  "src/cli/history/history.cppm": [
-    "tbc/view.hpp"
+    "<unistd.h>"
   ],
   "src/cli/hook/hook.cpp": [
     "<cassert>",
@@ -743,12 +712,10 @@
     "<sys/un.h>",
     "<sys/wait.h>",
     "<unistd.h>",
-    "tbc/view.hpp",
     "telar_platform/trace_macro.hpp"
   ],
   "src/cli/hook/hook.cppm": [
-    "<limits.h>",
-    "tbc/view.hpp"
+    "<limits.h>"
   ],
   "src/cli/hooks/command/command.cpp": [
     "<cstddef>",
@@ -756,13 +723,11 @@
     "<cstdio>",
     "<cstdlib>",
     "<cstring>",
-    "<new>",
-    "tbc/view.hpp"
+    "<new>"
   ],
   "src/cli/hooks/command/command.cppm": [
     "<cstring>",
-    "tbc/hot_path.hpp",
-    "tbc/view.hpp"
+    "tbc/hot_path.hpp"
   ],
   "src/cli/hooks/session/session.cpp": [
     "<cerrno>",
@@ -779,12 +744,10 @@
     "<sys/time.h>",
     "<sys/un.h>",
     "<unistd.h>",
-    "tbc/view.hpp",
     "telar_platform/trace_macro.hpp"
   ],
   "src/cli/hooks/session/session.cppm": [
     "tbc/hot_path.hpp",
-    "tbc/view.hpp",
     "telar_platform/trace_macro.hpp"
   ],
   "src/cli/integration/settings/integration.cpp": [
@@ -820,11 +783,7 @@
     "<sys/stat.h>",
     "<sys/syscall.h>",
     "<unistd.h>",
-    "integration_assets.hpp",
-    "tbc/view.hpp"
-  ],
-  "src/cli/integration/settings/settings.cppm": [
-    "tbc/view.hpp"
+    "integration_assets.hpp"
   ],
   "src/cli/launch_commands/completions.cpp": [
     "<cstdio>"
@@ -888,8 +847,7 @@
     "<sys/wait.h>",
     "<unistd.h>",
     "help_texts.hpp",
-    "machine_assets.hpp",
-    "tbc/view.hpp"
+    "machine_assets.hpp"
   ],
   "src/cli/machine_ssh/machine_ssh.cpp": [
     "<cctype>",
@@ -921,7 +879,6 @@
     "<sys/un.h>",
     "<sys/wait.h>",
     "<unistd.h>",
-    "tbc/view.hpp",
     "telar_platform/process_environment.h"
   ],
   "src/cli/machine_ssh/machine_ssh.cppm": [
@@ -1040,11 +997,7 @@
     "<sys/syscall.h>",
     "<sys/wait.h>",
     "<unistd.h>",
-    "tbc/view.hpp",
     "telar_platform/open_directory.h"
-  ],
-  "src/cli/plugin/plugin.cppm": [
-    "tbc/view.hpp"
   ],
   "src/cli/project_setup/project_setup.cpp": [
     "<cerrno>",
@@ -1071,11 +1024,7 @@
     "<sys/time.h>",
     "<sys/un.h>",
     "<sys/wait.h>",
-    "<unistd.h>",
-    "tbc/view.hpp"
-  ],
-  "src/cli/project_setup/project_setup.cppm": [
-    "tbc/view.hpp"
+    "<unistd.h>"
   ],
   "src/cli/render/render.cpp": [
     "<cerrno>",
@@ -1103,8 +1052,7 @@
     "<sys/stat.h>",
     "<sys/time.h>",
     "<sys/un.h>",
-    "<unistd.h>",
-    "tbc/view.hpp"
+    "<unistd.h>"
   ],
   "src/cli/server/server.cpp": [
     "<cerrno>",
@@ -1174,8 +1122,7 @@
     "<sys/time.h>",
     "<sys/un.h>",
     "<sys/wait.h>",
-    "<unistd.h>",
-    "tbc/view.hpp"
+    "<unistd.h>"
   ],
   "src/cli/window/core.cpp": [
     "<cmath>",
@@ -1202,8 +1149,7 @@
     "<sys/stat.h>",
     "<sys/time.h>",
     "<sys/un.h>",
-    "<unistd.h>",
-    "tbc/view.hpp"
+    "<unistd.h>"
   ],
   "src/cli/worktree/worktree.cpp": [
     "<cassert>",
@@ -1237,8 +1183,7 @@
     "<sys/types.h>",
     "<sys/un.h>",
     "<sys/wait.h>",
-    "<unistd.h>",
-    "tbc/view.hpp"
+    "<unistd.h>"
   ],
   "src/cli/worktree_git/worktree_git.cpp": [
     "<cassert>",
@@ -1264,12 +1209,10 @@
     "<sys/types.h>",
     "<sys/un.h>",
     "<sys/wait.h>",
-    "<unistd.h>",
-    "tbc/view.hpp"
+    "<unistd.h>"
   ],
   "src/cli/worktree_git/worktree_git.cppm": [
-    "tbc/hot_path.hpp",
-    "tbc/view.hpp"
+    "tbc/hot_path.hpp"
   ],
   "src/gui/application/host_effects/host_effects.cppm": [
     "<cstddef>",
@@ -1284,8 +1227,7 @@
     "<cstdio>",
     "<cstdlib>",
     "<cstring>",
-    "<new>",
-    "tbc/view.hpp"
+    "<new>"
   ],
   "src/gui/application/workspace_replica/workspace_replica.cppm": [
     "<cmath>",
@@ -1294,8 +1236,7 @@
     "<cstdio>",
     "<cstdlib>",
     "<cstring>",
-    "<new>",
-    "tbc/view.hpp"
+    "<new>"
   ],
   "src/gui/attachments/marker_input/marker_input.cppm": [
     "<cmath>",
@@ -1317,8 +1258,7 @@
     "<lauxlib.h>",
     "<lua.h>",
     "<lualib.h>",
-    "<new>",
-    "tbc/view.hpp"
+    "<new>"
   ],
   "src/gui/components/configuration/configuration.cppm": [
     "<cinttypes>",
@@ -1331,8 +1271,7 @@
     "<lauxlib.h>",
     "<lua.h>",
     "<lualib.h>",
-    "<new>",
-    "tbc/view.hpp"
+    "<new>"
   ],
   "src/gui/config/generation/generation.cppm": [
     "<arpa/inet.h>",
@@ -1350,8 +1289,7 @@
     "<lualib.h>",
     "<new>",
     "<sys/stat.h>",
-    "gui_config_bootstrap.hpp",
-    "tbc/view.hpp"
+    "gui_config_bootstrap.hpp"
   ],
   "src/gui/config/gui_query/gui_query.cppm": [
     "<cmath>",
@@ -1360,8 +1298,7 @@
     "<cstdio>",
     "<cstring>",
     "config/palette_actions.inc",
-    "config/theme_presets.inc",
-    "tbc/view.hpp"
+    "config/theme_presets.inc"
   ],
   "src/gui/config/plugin_effects/plugin_effects.cppm": [
     "<arpa/inet.h>",
@@ -1378,8 +1315,7 @@
     "<lua.h>",
     "<new>",
     "<sys/stat.h>",
-    "<unistd.h>",
-    "tbc/view.hpp"
+    "<unistd.h>"
   ],
   "src/gui/config/plugin_query/plugin_query.cppm": [
     "<cinttypes>",
@@ -1390,16 +1326,14 @@
     "<cstdlib>",
     "<cstring>",
     "<limits.h>",
-    "<new>",
-    "tbc/view.hpp"
+    "<new>"
   ],
   "src/gui/core/json_writer/json_writer.cppm": [
     "<cmath>",
     "<cstddef>",
     "<cstdint>",
     "<cstdio>",
-    "<cstring>",
-    "tbc/view.hpp"
+    "<cstring>"
   ],
   "src/gui/core/metrics/metrics.cppm": [
     "<cmath>",
@@ -1436,8 +1370,7 @@
     "<freetype/fttypes.h>",
     "<hb-ft.h>",
     "<hb.h>",
-    "platform/font.h",
-    "tbc/view.hpp"
+    "platform/font.h"
   ],
   "src/gui/fonts/face/face.cppm": [
     "<cmath>",
@@ -1447,8 +1380,7 @@
     "<cstring>",
     "<freetype/freetype.h>",
     "<hb.h>",
-    "platform/font.h",
-    "tbc/view.hpp"
+    "platform/font.h"
   ],
   "src/gui/fonts/face/ligature_coverage.cpp": [
     "<cstddef>",
@@ -1486,8 +1418,7 @@
     "<ghostty/vt/unicode.h>",
     "<hb.h>",
     "<new>",
-    "platform/font.h",
-    "tbc/view.hpp"
+    "platform/font.h"
   ],
   "src/gui/graphics/pauses/pauses.cppm": [
     "<cmath>",
@@ -1513,7 +1444,7 @@
     "<cstdlib>",
     "<cstring>",
     "<new>",
-    "tbc/view.hpp"
+    "tbc/annotations.hpp"
   ],
   "src/gui/history/browser/browser.cppm": [
     "<cstddef>",
@@ -1521,8 +1452,7 @@
     "<cstdio>",
     "<cstdlib>",
     "<cstring>",
-    "<new>",
-    "tbc/view.hpp"
+    "<new>"
   ],
   "src/gui/input/child_mouse/child_mouse.cppm": [
     "<cmath>",
@@ -1537,9 +1467,6 @@
     "<cstdio>",
     "<cstring>",
     "input/default_bindings.inc"
-  ],
-  "src/gui/input/copy_mode/copy_mode.cppm": [
-    "tbc/view.hpp"
   ],
   "src/gui/input/copy_pointer/copy_pointer.cppm": [
     "<cmath>",
@@ -1556,9 +1483,6 @@
     "<cstdio>",
     "<cstring>"
   ],
-  "src/gui/layout/snapshots/snapshots.cppm": [
-    "tbc/view.hpp"
-  ],
   "src/gui/links/cell_links/cell_links.cppm": [
     "<cmath>",
     "<cstddef>",
@@ -1566,8 +1490,7 @@
     "<cstdio>",
     "<cstdlib>",
     "<cstring>",
-    "<new>",
-    "tbc/view.hpp"
+    "<new>"
   ],
   "src/gui/links/link_hover/link_hover.cppm": [
     "<cmath>",
@@ -1585,8 +1508,7 @@
     "<cstdio>",
     "<cstdlib>",
     "<cstring>",
-    "<new>",
-    "tbc/view.hpp"
+    "<new>"
   ],
   "src/gui/machines/discovery/discovery.cppm": [
     "<cstddef>",
@@ -1599,8 +1521,7 @@
     "<cstddef>",
     "<cstdint>",
     "<cstdio>",
-    "<cstring>",
-    "tbc/view.hpp"
+    "<cstring>"
   ],
   "src/gui/machines/profile_store/profile_store.cppm": [
     "<cstddef>",
@@ -1609,12 +1530,6 @@
     "<cstdlib>",
     "<cstring>",
     "<new>"
-  ],
-  "src/gui/model/records/records.cppm": [
-    "tbc/view.hpp"
-  ],
-  "src/gui/model/replicas/replicas.cppm": [
-    "tbc/view.hpp"
   ],
   "src/gui/palette/navigation_label/navigation_label.cppm": [
     "<cstddef>",
@@ -1627,8 +1542,7 @@
     "<cstdint>",
     "<cstdio>",
     "<cstring>",
-    "<ghostty/vt/unicode.h>",
-    "tbc/view.hpp"
+    "<ghostty/vt/unicode.h>"
   ],
   "src/gui/peek/screen/screen.cppm": [
     "<cstddef>",
@@ -1662,9 +1576,6 @@
   "src/gui/platform/file_stamp/file_stamp.cppm": [
     "<sys/stat.h>"
   ],
-  "src/gui/platform/login_shell/login_shell.cppm": [
-    "tbc/view.hpp"
-  ],
   "src/gui/platform/managed_directory/managed_directory.cpp": [
     "<cerrno>",
     "<cstddef>",
@@ -1680,8 +1591,7 @@
     "<cstdio>",
     "<cstring>",
     "<sys/un.h>",
-    "<unistd.h>",
-    "tbc/view.hpp"
+    "<unistd.h>"
   ],
   "src/gui/platform/path_limits/path_limits.cppm": [
     "<limits.h>",
@@ -1720,8 +1630,7 @@
   ],
   "src/gui/platform/profile_file/profile_file.cppm": [
     "<cerrno>",
-    "<fcntl.h>",
-    "tbc/view.hpp"
+    "<fcntl.h>"
   ],
   "src/gui/platform/runtime_endpoint/runtime_endpoint.cpp": [
     "<cctype>",
@@ -1776,8 +1685,7 @@
     "<sys/file.h>",
     "<sys/stat.h>",
     "<sys/types.h>",
-    "<unistd.h>",
-    "tbc/view.hpp"
+    "<unistd.h>"
   ],
   "src/gui/platform/window_lease/window_lease.cppm": [
     "<climits>"
@@ -1789,15 +1697,13 @@
     "<cstdio>",
     "<cstdlib>",
     "<cstring>",
-    "<new>",
-    "tbc/view.hpp"
+    "<new>"
   ],
   "src/gui/presentation/application_mark/application_mark.cppm": [
     "<cstddef>",
     "<cstdint>",
     "<cstdio>",
-    "<cstring>",
-    "tbc/view.hpp"
+    "<cstring>"
   ],
   "src/gui/presentation/display_metrics/display_metrics.cppm": [
     "<cmath>",
@@ -1812,8 +1718,7 @@
     "<cstdint>",
     "<cstdio>",
     "<cstring>",
-    "<ghostty/vt/unicode.h>",
-    "tbc/view.hpp"
+    "<ghostty/vt/unicode.h>"
   ],
   "src/gui/presentation/frame_pacer/frame_pacer.cppm": [
     "<cmath>",
@@ -1829,8 +1734,7 @@
     "<cstdio>",
     "<cstdlib>",
     "<cstring>",
-    "<new>",
-    "tbc/view.hpp"
+    "<new>"
   ],
   "src/gui/presentation/history_inspection/history_inspection.cppm": [
     "<cmath>",
@@ -1840,8 +1744,7 @@
     "<cstdlib>",
     "<cstring>",
     "<ghostty/vt/unicode.h>",
-    "<new>",
-    "tbc/view.hpp"
+    "<new>"
   ],
   "src/gui/presentation/history_inspection_geometry/history_inspection_geometry.cppm": [
     "<cmath>",
@@ -1860,11 +1763,7 @@
     "<cstdio>",
     "<cstring>",
     "<ghostty/vt/unicode.h>",
-    "<stdlib.h>",
-    "tbc/view.hpp"
-  ],
-  "src/gui/presentation/notification_center/notification_center.cppm": [
-    "tbc/view.hpp"
+    "<stdlib.h>"
   ],
   "src/gui/presentation/notification_stack/notification_stack.cppm": [
     "<cmath>",
@@ -1874,8 +1773,7 @@
     "<cstdlib>",
     "<cstring>",
     "<ghostty/vt/unicode.h>",
-    "<new>",
-    "tbc/view.hpp"
+    "<new>"
   ],
   "src/gui/presentation/suggestion_geometry/suggestion_geometry.cppm": [
     "<cmath>",
@@ -2003,8 +1901,7 @@
     "<cstdlib>",
     "<cstring>",
     "<ghostty/vt/unicode.h>",
-    "<new>",
-    "tbc/view.hpp"
+    "<new>"
   ],
   "src/gui/transport/runtime_link/runtime_link.cppm": [
     "<cstddef>",
@@ -2028,7 +1925,6 @@
     "<sys/types.h>",
     "<sys/wait.h>",
     "<unistd.h>",
-    "tbc/view.hpp",
     "telar_platform/trace_macro.hpp"
   ],
   "src/runtime/agents/screen_inference/screen_inference.cppm": [
@@ -2049,7 +1945,6 @@
     "<unistd.h>",
     "<zlib.h>",
     "cell_layout.hpp",
-    "tbc/view.hpp",
     "telar_base/diagnostics/config.hpp"
   ],
   "src/runtime/agents/snapshot/snapshot.cppm": [
@@ -2149,7 +2044,6 @@
     "<sys/types.h>",
     "<sys/wait.h>",
     "<unistd.h>",
-    "tbc/view.hpp",
     "telar_platform/trace_macro.hpp"
   ],
   "src/runtime/exchange_capture/exchange/exchange.cppm": [
@@ -2159,7 +2053,7 @@
     "<cstdlib>",
     "<cstring>",
     "<new>",
-    "tbc/view.hpp"
+    "tbc/annotations.hpp"
   ],
   "src/runtime/exchange_capture/pipeline/pipeline.cppm": [
     "<brotli/decode.h>",
@@ -2174,7 +2068,6 @@
     "<unistd.h>",
     "<zlib.h>",
     "<zstd.h>",
-    "tbc/view.hpp",
     "telar_platform/trace_macro.hpp"
   ],
   "src/runtime/exchange_capture/producer/producer.cppm": [
@@ -2187,7 +2080,7 @@
     "<new>",
     "<zlib.h>",
     "<zstd.h>",
-    "tbc/view.hpp",
+    "tbc/annotations.hpp",
     "telar_platform/trace_macro.hpp"
   ],
   "src/runtime/execution/execution/execution.cppm": [
@@ -2229,8 +2122,7 @@
     "<new>",
     "<sys/mman.h>",
     "<sys/stat.h>",
-    "<unistd.h>",
-    "tbc/view.hpp"
+    "<unistd.h>"
   ],
   "src/runtime/graphics/kitty/kitty.cppm": [
     "graphics/kitty_cursor.hpp",
@@ -2292,7 +2184,6 @@
     "<sys/mman.h>",
     "<sys/stat.h>",
     "<unistd.h>",
-    "tbc/view.hpp",
     "telar_base/diagnostics/config.hpp",
     "telar_platform/trace_macro.hpp",
     "telar_render/sequence.hpp"
@@ -2332,7 +2223,6 @@
     "<stdlib.h>",
     "<sys/mman.h>",
     "<unistd.h>",
-    "tbc/view.hpp",
     "telar_base/diagnostics/config.hpp",
     "telar_platform/trace_macro.hpp"
   ],
@@ -2355,7 +2245,6 @@
     "<sys/mman.h>",
     "<sys/stat.h>",
     "<unistd.h>",
-    "tbc/view.hpp",
     "telar_base/diagnostics/config.hpp",
     "telar_platform/trace_macro.hpp"
   ],
@@ -2400,14 +2289,13 @@
     "<sqlite3.h>",
     "<sys/types.h>",
     "<unistd.h>",
-    "tbc/view.hpp",
     "telar_platform/trace_macro.hpp"
   ],
   "src/runtime/http/content/content.cppm": [
     "<cstddef>",
     "<cstdint>",
     "<nghttp2/nghttp2.h>",
-    "tbc/view.hpp"
+    "tbc/annotations.hpp"
   ],
   "src/runtime/http/message/message.cppm": [
     "<brotli/decode.h>",
@@ -2419,8 +2307,7 @@
     "<cstring>",
     "<new>",
     "<zlib.h>",
-    "<zstd.h>",
-    "tbc/view.hpp"
+    "<zstd.h>"
   ],
   "src/runtime/http1/head/head.cppm": [
     "<cstddef>",
@@ -2432,8 +2319,7 @@
     "<cstdlib>",
     "<cstring>",
     "<new>",
-    "<nghttp2/nghttp2.h>",
-    "tbc/view.hpp"
+    "<nghttp2/nghttp2.h>"
   ],
   "src/runtime/http2/frame_reader/frame_reader.cppm": [
     "<cstddef>",
@@ -2471,7 +2357,6 @@
     "<unistd.h>",
     "<zlib.h>",
     "cell_layout.hpp",
-    "tbc/view.hpp",
     "telar_base/diagnostics/config.hpp",
     "telar_render/sequence.hpp"
   ],
@@ -2499,7 +2384,6 @@
     "<sys/stat.h>",
     "<sys/types.h>",
     "<unistd.h>",
-    "tbc/view.hpp",
     "telar_base/diagnostics/config.hpp",
     "telar_platform/trace_macro.hpp"
   ],
@@ -2520,7 +2404,6 @@
     "<sys/types.h>",
     "<sys/wait.h>",
     "<unistd.h>",
-    "tbc/view.hpp",
     "telar_platform/trace_macro.hpp"
   ],
   "src/runtime/persistence/launch_record/launch_record.cppm": [
@@ -2561,7 +2444,6 @@
     "<unistd.h>",
     "<zlib.h>",
     "cell_layout.hpp",
-    "tbc/view.hpp",
     "telar_base/diagnostics/config.hpp",
     "telar_platform/trace_macro.hpp"
   ],
@@ -2584,7 +2466,7 @@
     "<sys/syscall.h>",
     "<time.h>",
     "<unistd.h>",
-    "tbc/view.hpp"
+    "tbc/annotations.hpp"
   ],
   "src/runtime/platform/event_loop/macos/event_loop.cpp": [
     "<cassert>",
@@ -2602,8 +2484,7 @@
     "<sys/event.h>",
     "<sys/syscall.h>",
     "<time.h>",
-    "<unistd.h>",
-    "tbc/view.hpp"
+    "<unistd.h>"
   ],
   "src/runtime/platform/git_status/git_status.cppm": [
     "<cassert>",
@@ -2751,7 +2632,7 @@
     "<sys/stat.h>",
     "<sys/types.h>",
     "<unistd.h>",
-    "tbc/view.hpp",
+    "tbc/annotations.hpp",
     "telar_platform/trace_macro.hpp"
   ],
   "src/runtime/platform/request_worker/request_worker.cppm": [
@@ -2765,7 +2646,7 @@
     "<new>",
     "<sys/types.h>",
     "<unistd.h>",
-    "tbc/view.hpp",
+    "tbc/annotations.hpp",
     "telar_base/diagnostics/config.hpp"
   ],
   "src/runtime/platform/session_host/session_host.cppm": [
@@ -2780,14 +2661,13 @@
     "<cerrno>",
     "<cstdint>",
     "<unistd.h>",
-    "tbc/view.hpp"
+    "tbc/annotations.hpp"
   ],
   "src/runtime/platform/stream_read_buffer/stream_read_buffer.cppm": [
     "<cassert>",
     "<cstddef>",
     "<cstdint>",
-    "<cstring>",
-    "tbc/view.hpp"
+    "<cstring>"
   ],
   "src/runtime/platform/system_certificates/system_certificates.cppm": [
     "<CoreFoundation/CoreFoundation.h>",
@@ -2822,7 +2702,6 @@
     "<sys/uio.h>",
     "<unistd.h>",
     "plugin_bootstrap.hpp",
-    "tbc/view.hpp",
     "telar_platform/trace_macro.hpp",
     "traffic_api.hpp"
   ],
@@ -2849,7 +2728,7 @@
     "<sys/types.h>",
     "<sys/uio.h>",
     "<unistd.h>",
-    "tbc/view.hpp",
+    "tbc/annotations.hpp",
     "telar_platform/trace_macro.hpp"
   ],
   "src/runtime/plugins/tap_configuration/tap_configuration.cppm": [
@@ -2896,7 +2775,7 @@
     "<sys/types.h>",
     "<sys/uio.h>",
     "<unistd.h>",
-    "tbc/view.hpp",
+    "tbc/annotations.hpp",
     "telar_platform/trace_macro.hpp"
   ],
   "src/runtime/proxy/authenticate/authenticate.cppm": [
@@ -2914,8 +2793,7 @@
     "<stdlib.h>",
     "<sys/stat.h>",
     "<sys/syscall.h>",
-    "<unistd.h>",
-    "tbc/view.hpp"
+    "<unistd.h>"
   ],
   "src/runtime/proxy/http2_capture_streams/http2_capture_streams.cppm": [
     "<arpa/inet.h>",
@@ -2937,7 +2815,7 @@
     "<unistd.h>",
     "<zlib.h>",
     "<zstd.h>",
-    "tbc/view.hpp",
+    "tbc/annotations.hpp",
     "telar_platform/trace_macro.hpp"
   ],
   "src/runtime/proxy/intercepted_relay/intercepted_relay.cppm": [
@@ -2950,8 +2828,7 @@
     "<cstring>",
     "<new>",
     "<zlib.h>",
-    "<zstd.h>",
-    "tbc/view.hpp"
+    "<zstd.h>"
   ],
   "src/runtime/proxy/relay_direction/relay_direction.cppm": [
     "<arpa/inet.h>",
@@ -2994,7 +2871,7 @@
     "<sys/stat.h>",
     "<sys/types.h>",
     "<unistd.h>",
-    "tbc/view.hpp",
+    "tbc/annotations.hpp",
     "telar_platform/trace_macro.hpp"
   ],
   "src/runtime/redirect/ingress/ingress.cppm": [
@@ -3027,8 +2904,7 @@
     "<sys/types.h>",
     "<sys/uio.h>",
     "<sys/un.h>",
-    "<unistd.h>",
-    "tbc/view.hpp"
+    "<unistd.h>"
   ],
   "src/runtime/redirect/pf_rules/pf_rules.cppm": [
     "<arpa/inet.h>",
@@ -3138,7 +3014,6 @@
     "<sys/stat.h>",
     "<sys/types.h>",
     "<unistd.h>",
-    "tbc/view.hpp",
     "telar_base/diagnostics/config.hpp"
   ],
   "src/runtime/runtime/delivery/client_delivery/client_delivery.cppm": [
@@ -3165,7 +3040,6 @@
     "<unistd.h>",
     "<zlib.h>",
     "cell_layout.hpp",
-    "tbc/view.hpp",
     "telar_base/diagnostics/config.hpp",
     "telar_platform/trace_macro.hpp",
     "telar_render/sequence.hpp"
@@ -3187,12 +3061,12 @@
     "<sys/stat.h>",
     "<sys/types.h>",
     "<unistd.h>",
-    "tbc/view.hpp",
+    "tbc/annotations.hpp",
     "telar_base/diagnostics/config.hpp",
     "telar_platform/trace_macro.hpp"
   ],
   "src/runtime/runtime/media_service/media_service.cppm": [
-    "tbc/view.hpp",
+    "tbc/annotations.hpp",
     "telar_base/diagnostics/config.hpp",
     "telar_platform/trace_macro.hpp"
   ],
@@ -3204,7 +3078,6 @@
     "<sys/stat.h>",
     "<sys/wait.h>",
     "<unistd.h>",
-    "tbc/view.hpp",
     "telar_base/diagnostics/config.hpp",
     "telar_platform/trace_macro.hpp"
   ],
@@ -3233,7 +3106,6 @@
     "<unistd.h>",
     "<zlib.h>",
     "cell_layout.hpp",
-    "tbc/view.hpp",
     "telar_base/diagnostics/config.hpp"
   ],
   "src/runtime/shell_integration/git_context/git_context.cppm": [
@@ -3293,8 +3165,7 @@
   ],
   "src/runtime/terminal/control/checksum/checksum.cppm": [
     "<ghostty/vt.h>",
-    "cell_layout.hpp",
-    "tbc/view.hpp"
+    "cell_layout.hpp"
   ],
   "src/runtime/terminal/control/classification.hpp": [
     "../../graphics/kitty_control.hpp",
@@ -3303,9 +3174,6 @@
     "parameters.hpp",
     "sequence.hpp",
     "telar_render/sequence.hpp"
-  ],
-  "src/runtime/terminal/control/clipboard/clipboard.cppm": [
-    "tbc/view.hpp"
   ],
   "src/runtime/terminal/control/color_queries.hpp": [
     "<algorithm>",
@@ -3325,7 +3193,6 @@
     "<string_view>"
   ],
   "src/runtime/terminal/control/control.cppm": [
-    "tbc/view.hpp",
     "terminal/control/ascii_ordinary.hpp",
     "terminal/control/capabilities.hpp",
     "terminal/control/classification.hpp",
@@ -3349,11 +3216,7 @@
   ],
   "src/runtime/terminal/control/engine/engine.cppm": [
     "<cassert>",
-    "<ghostty/vt.h>",
-    "tbc/view.hpp"
-  ],
-  "src/runtime/terminal/control/glyph/glyph.cppm": [
-    "tbc/view.hpp"
+    "<ghostty/vt.h>"
   ],
   "src/runtime/terminal/control/graphics_base64_block.hpp": [
     "<cstdint>",
@@ -3476,7 +3339,6 @@
     "<cstddef>",
     "<cstdint>",
     "<ghostty/vt.h>",
-    "tbc/view.hpp",
     "telar_base/diagnostics/config.hpp"
   ],
   "src/runtime/terminal/osc_scanner/osc_scanner.cppm": [
@@ -3530,7 +3392,6 @@
     "<unistd.h>",
     "<zlib.h>",
     "cell_layout.hpp",
-    "tbc/view.hpp",
     "telar_base/diagnostics/config.hpp",
     "telar_platform/trace_macro.hpp",
     "telar_render/sequence.hpp",
@@ -3571,7 +3432,6 @@
     "<sys/stat.h>",
     "<sys/syscall.h>",
     "<unistd.h>",
-    "tbc/view.hpp",
     "telar_platform/trace_macro.hpp"
   ],
   "src/runtime/tls/system_root_bundle/system_root_bundle.cppm": [
@@ -3613,8 +3473,7 @@
     "<cstdlib>",
     "<cstring>",
     "<new>",
-    "<pcap/pcap.h>",
-    "tbc/view.hpp"
+    "<pcap/pcap.h>"
   ],
   "src/runtime/traffic/control_backend/control_backend.cppm": [
     "<arpa/inet.h>",
@@ -3667,7 +3526,7 @@
     "<unistd.h>",
     "<zlib.h>",
     "<zstd.h>",
-    "tbc/view.hpp"
+    "tbc/annotations.hpp"
   ],
   "src/runtime/traffic/control_protocol/control_protocol.cppm": [
     "<cstddef>",
@@ -3677,7 +3536,7 @@
     "<cstring>",
     "<new>",
     "<pcap/pcap.h>",
-    "tbc/view.hpp"
+    "tbc/annotations.hpp"
   ],
   "src/runtime/traffic/tap/tap.cppm": [
     "<cassert>",
@@ -3705,10 +3564,6 @@
     "<new>",
     "<unistd.h>"
   ],
-  "src/runtime/vocabulary/frames/frames.cppm": [
-    "<cstdint>",
-    "tbc/view.hpp"
-  ],
   "src/runtime/vocabulary/traffic/traffic.cppm": [
     "<cerrno>",
     "<cstdint>",
@@ -3716,8 +3571,7 @@
     "<sys/socket.h>",
     "<sys/stat.h>",
     "<sys/un.h>",
-    "<unistd.h>",
-    "tbc/view.hpp"
+    "<unistd.h>"
   ],
   "src/runtime/workspaces/git_probe/git_probe.cppm": [
     "<cassert>",
@@ -3753,14 +3607,12 @@
     "<sys/types.h>",
     "<sys/wait.h>",
     "<unistd.h>",
-    "tbc/view.hpp",
     "telar_platform/trace_macro.hpp"
   ],
   "lib/git/checkout/checkout.cpp": [
     "<cstring>",
     "<limits.h>",
-    "<sys/stat.h>",
-    "tbc/view.hpp"
+    "<sys/stat.h>"
   ],
   "lib/git/git-config.cppm": [
     "tbc/hot_path.hpp"
@@ -3810,8 +3662,7 @@
     "<lua.h>",
     "<lualib.h>",
     "<new>",
-    "<sys/stat.h>",
-    "tbc/view.hpp"
+    "<sys/stat.h>"
   ],
   "lib/machines/machines.cpp": [
     "<cstddef>",
@@ -3868,7 +3719,6 @@
     "<sys/syscall.h>",
     "<sys/wait.h>",
     "<unistd.h>",
-    "tbc/view.hpp",
     "telar_platform/process_environment.h",
     "telar_platform/trace_macro.hpp"
   ]

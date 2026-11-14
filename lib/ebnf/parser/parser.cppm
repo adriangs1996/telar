@@ -2,11 +2,11 @@ module;
 
 #include <cstddef>
 #include <cstdint>
-#include <tbc/view.hpp>
 
 export module telar.ebnf.parser;
 
 import std;
+import telar.tbc;
 
 export import telar.ebnf.lexer;
 
@@ -16,7 +16,7 @@ export {
 
     using node_handle = uint32_t;
 
-    inline constexpr node_handle none_handle{UINT32_MAX};
+    inline constexpr node_handle none_handle{std::numeric_limits<std::uint32_t>::max()};
     inline constexpr std::size_t max_nesting_depth = 64;
 
     enum class node_kind : std::uint8_t {

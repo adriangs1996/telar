@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include <cstdint>
 #include <ghostty/vt/unicode.h>
 #include <lua.h>
@@ -13,6 +12,7 @@ module;
 export module telar.config.runtime;
 
 import std;
+import telar.tbc;
 export import telar.config.core;
 export import telar.plugins;
 export import telar.platform.events;

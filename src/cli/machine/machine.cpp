@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include <stdlib.h>
 
 #include <cerrno>
@@ -39,6 +38,8 @@ module;
 #include "machine_assets.hpp"
 
 module telar.cli.machine;
+
+import telar.tbc;
 
 namespace telar::runtime::cli::machine {
 

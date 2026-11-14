@@ -1,12 +1,12 @@
 module;
 #include "tbc/hot_path.hpp"
-#include "tbc/view.hpp"
 
 #include <sys/un.h>
 
 export module telar.platform.paths;
 
 import std;
+import telar.tbc;
 
 export import telar.base.memory.allocators;
 

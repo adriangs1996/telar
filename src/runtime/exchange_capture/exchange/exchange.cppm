@@ -5,13 +5,14 @@ module;
 #include <cassert>
 #include <cstddef>
 
-#include "tbc/view.hpp"
+#include "tbc/annotations.hpp"
 #include <cstdint>
 #include <cstring>
 
 export module telar.runtime.exchange_capture.exchange;
 
 import std;
+import telar.tbc;
 
 export import telar.base.memory.allocators;
 export import telar.base.memory.sensitive;

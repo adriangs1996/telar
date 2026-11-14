@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <cerrno>
 #include <ghostty/vt.h>
@@ -30,6 +29,7 @@ module;
 export module telar.runtime.terminal.text_reader;
 
 import std;
+import telar.tbc;
 
 export import telar.runtime.diagnostics.runtime_counters;
 
@@ -1637,8 +1637,8 @@ export {
         GhosttyTerminalScrollbar scrollbar{};
 
         checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_SCROLLBAR, &scrollbar));
-        screen.scroll.total_rows = static_cast<std::uint32_t>(std::min<std::uint64_t>(scrollbar.total, UINT32_MAX));
-        screen.scroll.offset = static_cast<std::uint32_t>(std::min<std::uint64_t>(scrollbar.offset, UINT32_MAX));
+        screen.scroll.total_rows = static_cast<std::uint32_t>(std::min<std::uint64_t>(scrollbar.total, std::numeric_limits<std::uint32_t>::max()));
+        screen.scroll.offset = static_cast<std::uint32_t>(std::min<std::uint64_t>(scrollbar.offset, std::numeric_limits<std::uint32_t>::max()));
       }
 
       tbc::view<GhosttyAllocatorBridge<Memory>, tbc::lt::a> allocator_;
@@ -1853,7 +1853,7 @@ export {
 
     private:
       inline std::uint32_t totalRows() const {
-        return static_cast<std::uint32_t>(std::min<std::size_t>(terminal_.totalRows(), UINT32_MAX));
+        return static_cast<std::uint32_t>(std::min<std::size_t>(terminal_.totalRows(), std::numeric_limits<std::uint32_t>::max()));
       }
 
       inline GhosttyGridRef reference(GhosttyPointTag tag, GhosttyPointCoordinate coordinate) const {

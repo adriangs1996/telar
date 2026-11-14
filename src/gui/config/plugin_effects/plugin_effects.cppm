@@ -13,7 +13,6 @@ module;
 #include <limits.h>
 #include <sys/stat.h>
 
-#include "tbc/view.hpp"
 #include <arpa/inet.h>
 #include <cinttypes>
 #include <cmath>
@@ -23,6 +22,7 @@ module;
 export module telar.gui.config.plugin_effects;
 
 import std;
+import telar.tbc;
 
 export import telar.gui.input.copy_pointer;
 export import telar.gui.input.binding_effects;

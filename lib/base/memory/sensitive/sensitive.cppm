@@ -1,10 +1,11 @@
 module;
+#include "tbc/annotations.hpp"
 #include "tbc/hot_path.hpp"
-#include "tbc/view.hpp"
 
 export module telar.base.memory.sensitive;
 
 import std;
+import telar.tbc;
 import telar.base.memory.allocators;
 
 // Interface: telar_base/memory/erase_sensitive.cppm

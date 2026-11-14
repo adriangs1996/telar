@@ -10,12 +10,12 @@ module;
 #include <cstdio>
 #include <cstring>
 
-#include "tbc/view.hpp"
 #include <limits.h>
 
 export module telar.gui.config.plugin_query;
 
 import std;
+import telar.tbc;
 
 export import telar.gui.input.key_encoder;
 

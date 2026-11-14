@@ -1,9 +1,7 @@
-module;
-#include "tbc/view.hpp"
-
 module telar.base.text.json;
 
 import std;
+import telar.tbc;
 
 namespace telar {
 

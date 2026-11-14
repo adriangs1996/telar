@@ -1,6 +1,6 @@
 module;
+#include "tbc/annotations.hpp"
 #include "tbc/hot_path.hpp"
-#include "tbc/view.hpp"
 #include <cstddef>
 
 #include <lauxlib.h>
@@ -11,6 +11,7 @@ module;
 export module telar.lua;
 
 import std;
+import telar.tbc;
 
 export import telar.base.text;
 export import telar.base.text.json;

@@ -6,7 +6,6 @@ module;
 #include <cstddef>
 #include <cstring>
 
-#include "tbc/view.hpp"
 #include <cmath>
 #include <cstdint>
 #include <ghostty/vt/unicode.h>
@@ -14,6 +13,7 @@ module;
 export module telar.gui.presentation.notification_stack;
 
 import std;
+import telar.tbc;
 
 export import telar.gui.text.json_unsigned_integer;
 

@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include <cstdio>
 
 #include <cmath>
@@ -12,6 +11,7 @@ module;
 export module telar.gui.core.json_writer;
 
 import std;
+import telar.tbc;
 
 import telar.base.text.json;
 import telar.base.text.utf8;

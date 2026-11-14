@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include <ghostty/vt.h>
 #include <new>
 #include <stdlib.h>
@@ -43,6 +42,7 @@ module;
 export module telar.runtime.runtime.runtime_telemetry;
 
 import std;
+import telar.tbc;
 
 export import telar.runtime.history.event;
 

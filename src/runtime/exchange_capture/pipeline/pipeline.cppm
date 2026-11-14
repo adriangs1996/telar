@@ -15,12 +15,12 @@ module;
 #include <zlib.h>
 #include <zstd.h>
 
-#include "tbc/view.hpp"
 #include <cerrno>
 
 export module telar.runtime.exchange_capture.pipeline;
 
 import std;
+import telar.tbc;
 
 export import telar.runtime.exchange_capture.exchange;
 export import telar.base.memory.allocators;

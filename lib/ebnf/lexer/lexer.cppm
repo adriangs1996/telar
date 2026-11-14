@@ -2,11 +2,11 @@ module;
 
 #include <cstddef>
 #include <cstdint>
-#include <tbc/view.hpp>
 
 export module telar.ebnf.lexer;
 
 import std;
+import telar.tbc;
 
 // Interface: lexer.cppm
 export {

@@ -1,10 +1,10 @@
 module;
-#include "tbc/view.hpp"
 #include <limits.h>
 
 export module telar.cli.hook;
 
 import std;
+import telar.tbc;
 
 export import telar.cli.hooks.command;
 export import telar.platform.error;

@@ -18,7 +18,7 @@ module;
 #include <netdb.h>
 #include <pthread.h>
 
-#include "tbc/view.hpp"
+#include "tbc/annotations.hpp"
 #include <brotli/decode.h>
 #include <cassert>
 #include <zlib.h>
@@ -27,6 +27,7 @@ module;
 export module telar.runtime.proxy.http2_capture_streams;
 
 import std;
+import telar.tbc;
 
 export import telar.runtime.platform.stream_read_buffer;
 export import telar.runtime.proxy.relay_direction;

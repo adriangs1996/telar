@@ -28,7 +28,7 @@ endif()
 add_library(ebnf-core STATIC)
 add_library(ebnf::ebnf ALIAS ebnf-core)
 telar_modules(ebnf-core)
-target_link_libraries(ebnf-core PUBLIC tbc::tbc)
+target_link_libraries(ebnf-core PUBLIC telar::tbc)
 target_include_directories(ebnf-core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 
 add_library(ebnf_options INTERFACE)

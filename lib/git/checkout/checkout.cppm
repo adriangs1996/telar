@@ -1,12 +1,12 @@
 module;
 #include "tbc/hot_path.hpp"
-#include "tbc/view.hpp"
 
 #include <limits.h>
 
 export module telar.git.checkout;
 
 import std;
+import telar.tbc;
 
 export import telar.base.memory.allocators;
 export import telar.platform.process;

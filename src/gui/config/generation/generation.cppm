@@ -14,7 +14,6 @@ module;
 
 #include "gui_config_bootstrap.hpp"
 
-#include "tbc/view.hpp"
 #include <arpa/inet.h>
 #include <ghostty/vt/unicode.h>
 #include <limits.h>
@@ -23,6 +22,7 @@ module;
 export module telar.gui.config.generation;
 
 import std;
+import telar.tbc;
 
 export import telar.gui.config.plugin_query;
 export import telar.config.snapshot;

@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include <cstdlib>
 #include <new>
 
@@ -12,6 +11,7 @@ module;
 export module telar.runtime.http2.direction_observer;
 
 import std;
+import telar.tbc;
 
 export import telar.runtime.http1.head;
 export import telar.base.text;

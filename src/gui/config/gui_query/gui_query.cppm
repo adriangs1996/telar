@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include <cstdio>
 
 #include <cstddef>
@@ -11,6 +10,7 @@ module;
 export module telar.gui.config.gui_query;
 
 import std;
+import telar.tbc;
 
 export import telar.gui.presentation.client_view_state;
 export import telar.gui.core.metrics;

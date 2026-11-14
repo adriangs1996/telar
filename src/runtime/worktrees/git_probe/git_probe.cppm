@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <cstdio>
 #include <cstdlib>
@@ -21,6 +20,7 @@ module;
 export module telar.runtime.worktrees.git_probe;
 
 import std;
+import telar.tbc;
 
 export import telar.runtime.platform.git_status;
 import telar.base.diagnostics;

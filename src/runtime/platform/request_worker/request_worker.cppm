@@ -8,7 +8,7 @@ module;
 
 #include <cassert>
 
-#include "tbc/view.hpp"
+#include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
 #include <cstddef>
 #include <cstring>
@@ -18,6 +18,7 @@ module;
 export module telar.runtime.platform.request_worker;
 
 import std;
+import telar.tbc;
 
 export import telar.runtime.platform.signals;
 

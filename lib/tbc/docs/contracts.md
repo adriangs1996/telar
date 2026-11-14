@@ -523,7 +523,7 @@ carry no label still keeps every argument that lends.
 
 ## Shared types
 
-A class marked `TBC_SHARED`, from `<tbc/view.hpp>`, keeps every borrow it hands
+A class marked `TBC_SHARED`, from `<tbc/annotations.hpp>`, keeps every borrow it hands
 out valid whatever is done through it, as a Rust type with interior mutability
 does through `&self`. An allocator is the usual case: many objects keep a
 reference to it, a call through it invalidates nothing, and two arguments may

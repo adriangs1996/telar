@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <cstdio>
 #include <new>
@@ -251,9 +250,9 @@ namespace telar::runtime::cli::hooks {
         return;
       }
 
-      report.plan_total += report.plan_total < UINT16_MAX;
+      report.plan_total += report.plan_total < std::numeric_limits<std::uint16_t>::max();
       if (status == AgentPlanStatus::completed) {
-        report.plan_done += report.plan_done < UINT16_MAX;
+        report.plan_done += report.plan_done < std::numeric_limits<std::uint16_t>::max();
       } else if (status == AgentPlanStatus::in_progress && current.empty()) {
         current = item.stringField(todo ? "activeForm" : "step").value_or(item.stringField(todo ? "content" : "step").value_or(""));
       } else if (status == AgentPlanStatus::pending && pending.empty()) {

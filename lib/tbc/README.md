@@ -78,6 +78,10 @@ text_a longerText(text_a first, text_a second) {
 }
 ```
 
+A telar module unit imports the same declarations as `telar.tbc` instead of
+including `<tbc/view.hpp>`, and includes `<tbc/annotations.hpp>`, which includes
+nothing, when it needs `TBC_SHARED`, `TBC_CONSTRUCTS` or `TBC_RAW`.
+
 [`docs/contracts.md`](docs/contracts.md) describes the signature design. Repeated
 `lt::a` denotes a common region, not one particular argument or allocation.
 The linter instantiates region variables per call. `lt::b`, `lt::c`, and

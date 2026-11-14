@@ -1,5 +1,5 @@
 module;
-#include "tbc/view.hpp"
+#include "tbc/annotations.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <cstddef>
 #include <new>
@@ -20,6 +20,7 @@ module;
 export module telar.runtime.platform.process_probe;
 
 import std;
+import telar.tbc;
 
 export import telar.runtime.platform.session_host;
 export import telar.config.runtime;

@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include <new>
 
 #include <cerrno>
@@ -23,6 +22,7 @@ module;
 module telar.cli.window;
 
 import std;
+import telar.tbc;
 
 import telar.cli.runtime_observer;
 import telar.cli.output;

@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -13,6 +12,7 @@ module;
 export module telar.gui.links.cell_links;
 
 import std;
+import telar.tbc;
 
 export import telar.gui.links.path_expansion;
 

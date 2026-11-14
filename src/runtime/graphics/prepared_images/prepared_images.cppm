@@ -14,7 +14,6 @@ module;
 
 #include <cstdint>
 
-#include "tbc/view.hpp"
 #include "telar_base/diagnostics/config.hpp"
 
 export module telar.runtime.graphics.prepared_images;

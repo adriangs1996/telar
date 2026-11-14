@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include "telar_render/sequence.hpp"
 #include <ghostty/vt.h>
@@ -32,6 +31,7 @@ module;
 export module telar.runtime.runtime.delivery.client_delivery;
 
 import std;
+import telar.tbc;
 
 export import telar.runtime.model.client_layouts;
 
@@ -787,7 +787,7 @@ export {
               .pane_generation = pane->generation,
               .location = pane->location,
               .foreground = name.empty() ? "shell" : name,
-              .foreground_age_s = static_cast<std::uint32_t>(std::clamp<std::int64_t>(age, 0, UINT32_MAX)),
+              .foreground_age_s = static_cast<std::uint32_t>(std::clamp<std::int64_t>(age, 0, std::numeric_limits<std::uint32_t>::max())),
               .shell = pane->foreground_shell,
               .ports = pane->listening_ports.view(),
           };

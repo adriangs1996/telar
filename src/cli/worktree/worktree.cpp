@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include <stdlib.h>
 
 #include <cerrno>
@@ -48,6 +47,8 @@ module;
 #include <cmath>
 
 module telar.cli.worktree;
+
+import telar.tbc;
 
 namespace telar::runtime::cli::repository {
 

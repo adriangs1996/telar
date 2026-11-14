@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <new>
@@ -16,6 +15,7 @@ module;
 export module telar.runtime.http.message;
 
 import std;
+import telar.tbc;
 
 export import telar.runtime.http.content;
 export import telar.base.text;

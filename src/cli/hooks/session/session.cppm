@@ -1,11 +1,11 @@
 module;
 #include "tbc/hot_path.hpp"
-#include "tbc/view.hpp"
 #include "telar_platform/trace_macro.hpp"
 
 export module telar.cli.hooks.session;
 
 import std;
+import telar.tbc;
 
 export import telar.cli.control_session;
 import telar.base.diagnostics;

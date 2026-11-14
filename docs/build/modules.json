@@ -1,20 +1,27 @@
 {
   "library_layers": {
-    "base": [],
+    "tbc": [],
+    "base": [
+      "tbc"
+    ],
     "sys": [],
     "vocabulary": [],
     "shell": [],
-    "ebnf": [],
+    "ebnf": [
+      "tbc"
+    ],
     "wire": [
       "base",
       "vocabulary"
     ],
     "client": [
       "base",
+      "tbc",
       "wire"
     ],
     "lua": [
-      "base"
+      "base",
+      "tbc"
     ],
     "render": [
       "base"
@@ -22,6 +29,7 @@
     "platform": [
       "base",
       "sys",
+      "tbc",
       "vocabulary"
     ],
     "machines": [
@@ -31,11 +39,13 @@
     "git": [
       "base",
       "platform",
+      "tbc",
       "vocabulary"
     ],
     "tls": [
       "base",
-      "platform"
+      "platform",
+      "tbc"
     ],
     "plugins": [
       "base",
@@ -49,6 +59,7 @@
       "lua",
       "platform",
       "plugins",
+      "tbc",
       "wire"
     ]
   },
@@ -458,7 +469,8 @@
     "src/gui/text/notification_payload/notification_payload.cppm": "telar.gui.text.notification_payload",
     "src/gui/platform/stdio_socket/stdio_socket.cppm": "telar.gui.platform.stdio_socket",
     "src/gui/platform/wall_clock/wall_clock.cppm": "telar.gui.platform.wall_clock",
-    "src/gui/platform/window_lease/window_lease.cppm": "telar.gui.platform.window_lease"
+    "src/gui/platform/window_lease/window_lease.cppm": "telar.gui.platform.window_lease",
+    "lib/tbc/tbc.cppm": "telar.tbc"
   },
   "textual_boundaries": {
     "lib/clipboard/includes/clipboard.hpp": "Native clipboard ABI shared with Objective-C++ and platform backends",
@@ -469,7 +481,8 @@
     "lib/tbc/include/tbc/detail/attributes.hpp": "Consumer-side preprocessor annotations inspected by Clang AST tooling",
     "lib/tbc/include/tbc/hot_path.hpp": "Consumer-side preprocessor annotations inspected by Clang AST tooling",
     "lib/tbc/include/tbc/lifetime.hpp": "Consumer-side preprocessor annotations inspected by Clang AST tooling",
-    "lib/tbc/include/tbc/view.hpp": "Consumer-side preprocessor annotations inspected by Clang AST tooling",
+    "lib/tbc/include/tbc/annotations.hpp": "Consumer-side preprocessor annotations inspected by Clang AST tooling; includes nothing",
+    "lib/tbc/include/tbc/view.hpp": "Lifetime vocabulary for sources that cannot import telar.tbc, which owns it",
     "lib/tbc/linter/lifetime_analysis.hpp": "Private Clang AST adapter; must use the SDK declarations of the selected linter toolchain",
     "lib/tbc/linter/blank_lines.hpp": "Private Clang AST adapter; must use the SDK declarations of the selected linter toolchain",
     "lib/tbc/linter/interface_bodies.hpp": "Private Clang AST adapter; must use the SDK declarations of the selected linter toolchain",
@@ -2901,6 +2914,9 @@
     "telar.runtime.history.command": "telar.runtime.history.command"
   },
   "header_owners": {
+    "lib/tbc/tbc.cppm": [
+      "lib/tbc/include/tbc/view.hpp"
+    ],
     "lib/base/diagnostics/diagnostics.cppm": [
       "lib/base/include/telar_base/diagnostics/limit_reach.hpp",
       "lib/base/include/telar_base/diagnostics/timing.hpp"

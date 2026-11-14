@@ -1,5 +1,5 @@
 module;
-#include "tbc/view.hpp"
+#include "tbc/annotations.hpp"
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -22,6 +22,7 @@ module;
 export module telar.runtime.platform.event_loop;
 
 import std;
+import telar.tbc;
 
 export import telar.platform.error;
 import telar.base.memory.allocators;

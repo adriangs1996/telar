@@ -9,12 +9,12 @@ module;
 
 #include <ghostty/vt/unicode.h>
 
-#include "tbc/view.hpp"
 #include <cmath>
 
 export module telar.gui.presentation.history_inspection;
 
 import std;
+import telar.tbc;
 
 export import telar.gui.core.unicode_scalar;
 export import telar.gui.core.metrics;

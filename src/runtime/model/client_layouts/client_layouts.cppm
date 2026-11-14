@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include "telar_render/sequence.hpp"
 #include <ghostty/vt.h>
 #include <new>
@@ -30,6 +29,7 @@ module;
 export module telar.runtime.model.client_layouts;
 
 import std;
+import telar.tbc;
 
 export import telar.runtime.agents.description_generator;
 export import telar.runtime.graphics.synchronizer;
@@ -232,7 +232,7 @@ export {
           occupied |= std::uint64_t{1} << entry->slot;
         }
 
-        if (occupied == UINT64_MAX) {
+        if (occupied == std::numeric_limits<std::uint64_t>::max()) {
           throw std::bad_alloc{};
         }
 

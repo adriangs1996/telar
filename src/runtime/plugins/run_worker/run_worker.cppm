@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <cstdlib>
 #include <new>
@@ -33,6 +32,7 @@ module;
 export module telar.runtime.plugins.run_worker;
 
 import std;
+import telar.tbc;
 
 export import telar.runtime.vocabulary.traffic;
 export import telar.lua;
@@ -886,7 +886,7 @@ export {
       inline static std::uint32_t identifier(lua_State* state, int index) {
         const lua::Value value{state, index, "Traffic operation identifier"};
 
-        return static_cast<std::uint32_t>(value.boundedInteger(0, 1, UINT32_MAX));
+        return static_cast<std::uint32_t>(value.boundedInteger(0, 1, std::numeric_limits<std::uint32_t>::max()));
       }
 
       inline Binding* find(std::uint32_t id) noexcept {
@@ -904,7 +904,7 @@ export {
           throw lua::Error{"Traffic callback must be a function"};
         }
 
-        if (next_identifier_ == UINT32_MAX) {
+        if (next_identifier_ == std::numeric_limits<std::uint32_t>::max()) {
           throw lua::Error{"Traffic identifiers exhausted"};
         }
 
@@ -938,7 +938,7 @@ export {
           throw lua::Error{"Traffic callback must be a function"};
         }
 
-        if (next_identifier_ == UINT32_MAX) {
+        if (next_identifier_ == std::numeric_limits<std::uint32_t>::max()) {
           throw lua::Error{"Traffic identifiers exhausted"};
         }
 

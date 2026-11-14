@@ -1,11 +1,11 @@
 module;
 #include "tbc/hot_path.hpp"
-#include "tbc/view.hpp"
 #include <cstring>
 
 export module telar.cli.hooks.command;
 
 import std;
+import telar.tbc;
 
 export import telar.config.runtime;
 

@@ -1,5 +1,5 @@
 module;
-#include "tbc/view.hpp"
+#include "tbc/annotations.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <ghostty/vt.h>
 #include <stdlib.h>
@@ -27,6 +27,7 @@ module;
 export module telar.runtime.runtime.execution_service;
 
 import std;
+import telar.tbc;
 
 export import telar.runtime.model.client_layouts;
 export import telar.base.diagnostics;
@@ -996,7 +997,7 @@ export {
         auto& pane = require(model.panes, identity);
         control::ClientFacts facts;
         const ConfigurePaneDesktop* theme = nullptr;
-        std::uint64_t theme_client = UINT64_MAX;
+        std::uint64_t theme_client = std::numeric_limits<std::uint64_t>::max();
 
         for (const auto* client : clients.items()) {
           if (client == nullptr || client->connection.closing) {
@@ -1050,7 +1051,7 @@ export {
           throw RequestError{FailureCode::resource_limit, "Pane capacity is occupied by active processes or pending observations"};
         }
 
-        if (model.next_pane_generation == 0 || model.next_pane_generation == UINT64_MAX || (restored_identity == 0 && model.panes.nextCounter() == 0)) {
+        if (model.next_pane_generation == 0 || model.next_pane_generation == std::numeric_limits<std::uint64_t>::max() || (restored_identity == 0 && model.panes.nextCounter() == 0)) {
           throw RequestError{FailureCode::spawn_failed, "could not start the command"};
         }
 

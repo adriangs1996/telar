@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include <cstddef>
 #include <cstdlib>
 #include <new>
@@ -22,6 +21,7 @@ module;
 module telar.lua;
 
 import std;
+import telar.tbc;
 
 namespace telar::runtime::lua {
   namespace {

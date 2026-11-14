@@ -1,5 +1,5 @@
 module;
-#include "tbc/view.hpp"
+#include "tbc/annotations.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <nghttp2/nghttp2.h>
@@ -7,6 +7,7 @@ module;
 export module telar.runtime.http.content;
 
 import std;
+import telar.tbc;
 
 export import telar.base.memory.allocators;
 export import telar.base.memory.containers;

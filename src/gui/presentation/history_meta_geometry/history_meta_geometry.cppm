@@ -8,12 +8,12 @@ module;
 
 #include <ghostty/vt/unicode.h>
 
-#include "tbc/view.hpp"
 #include <cstring>
 
 export module telar.gui.presentation.history_meta_geometry;
 
 import std;
+import telar.tbc;
 
 export import telar.gui.core.metrics;
 
