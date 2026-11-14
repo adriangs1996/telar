@@ -17,7 +17,7 @@ ActivityFrame {
 
     ApplicationTile {
         objectName: "agentProviderMark"
-        x: root.geometry.padding
+        x: root.geometry.padding + (root.geometry.markColumn - width) / 2
         y: root.geometry.padding + (root.geometry.agentTitleRow - height) / 2
         width: root.geometry.tileWidth
         height: root.geometry.tileHeight
@@ -57,7 +57,7 @@ ActivityFrame {
 
     ChromeText {
         objectName: "agentTitleLabel"
-        x: root.geometry.padding + root.geometry.tileWidth + root.geometry.gap
+        x: root.geometry.textInset
         y: root.geometry.padding
         width: Math.max(0, root.width - x - root.geometry.padding - portChip.reserved)
         height: root.geometry.agentTitleRow
@@ -70,9 +70,10 @@ ActivityFrame {
 
     Item {
         id: detailRow
-        x: root.geometry.padding
+        // The detail starts under the title, past the mark column.
+        x: root.geometry.textInset
         y: root.geometry.agentDetailY
-        width: Math.max(0, root.width - 2 * x)
+        width: Math.max(0, root.width - x - root.geometry.padding)
         height: root.geometry.agentDetailRow
         visible: !root.drawn
 
@@ -105,8 +106,8 @@ ActivityFrame {
     // A mod piece takes the place of the default piece it names.
     Repeater {
         model: root.drawn ? [] : [
-            {slot: "agent_mark", x: root.geometry.padding, y: root.geometry.padding, width: root.geometry.tileWidth, height: root.geometry.agentTitleRow},
-            {slot: "agent_title", x: root.geometry.padding + root.geometry.tileWidth + root.geometry.gap, y: root.geometry.padding, width: Math.max(0, root.width - 2 * root.geometry.padding - root.geometry.tileWidth - root.geometry.gap), height: root.geometry.agentTitleRow},
+            {slot: "agent_mark", x: root.geometry.padding, y: root.geometry.padding, width: root.geometry.markColumn, height: root.geometry.agentTitleRow},
+            {slot: "agent_title", x: root.geometry.textInset, y: root.geometry.padding, width: Math.max(0, root.width - root.geometry.textInset - root.geometry.padding), height: root.geometry.agentTitleRow},
             {slot: "agent_project", x: detailRow.x, y: detailRow.y, width: Math.max(0, detailRow.width / 2 - root.geometry.gap), height: detailRow.height},
             {slot: "agent_status", x: detailRow.x + detailRow.width / 2, y: detailRow.y, width: detailRow.width / 2, height: detailRow.height},
         ].filter(piece => root.elements[piece.slot] !== undefined)

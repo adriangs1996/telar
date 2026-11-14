@@ -17,6 +17,10 @@ Item {
     readonly property bool hovered: enabled && (heldHover || (!semanticHover && pointer.containsMouse))
     readonly property real outlinePhysicalWidth: 1
     readonly property real density: Screen.devicePixelRatio
+    // A nested card's status glyph has this column, wide enough that a card one level under an
+    // agent starts its text where the agent's card does.
+    readonly property real glyphColumn: Math.max(geometry.projectSide, geometry.markColumn - geometry.taskIndent)
+    readonly property real textX: geometry.context.x + glyphColumn + geometry.gap
     default property alias content: cardContent.data
     signal selected(string key)
     signal peekRequested(string key)

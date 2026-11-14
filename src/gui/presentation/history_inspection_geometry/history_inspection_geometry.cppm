@@ -57,6 +57,8 @@ export {
       static constexpr float mark_side = 14;
       static constexpr float tile_width = 18;
       static constexpr float tile_height = 14;
+      // Every card keeps its mark in this column, so titles and details share one left edge.
+      static constexpr float mark_column = 24;
       static constexpr float project_label_gap = 4;
       static constexpr float project_label_minimum = 24;
       static constexpr float title_gap = 4;
@@ -77,11 +79,16 @@ export {
       float scale = 1;
 
       [[nodiscard]] inline static AgentCardGeometry derive(const ChromeMetrics& chrome) noexcept {
-        return {.small_row = ChromeMetrics::lineHeight(chrome.small), .title_row = ChromeMetrics::lineHeight(chrome.title), .scale = chrome.ratio};
+        return {.small_row = ChromeMetrics::lineHeight(chrome.small), .title_row = ChromeMetrics::lineHeight(chrome.title), .scale = chrome.text_ratio};
       }
 
       [[nodiscard]] inline float px(float logical) const noexcept {
         return std::round(logical * scale);
+      }
+
+      // Where a card's text starts: past its inset, its mark column and the gap after it.
+      [[nodiscard]] inline float textInset() const noexcept {
+        return px(horizontal_padding) + px(mark_column) + px(gap);
       }
 
       [[nodiscard]] inline float height() const noexcept {

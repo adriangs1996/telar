@@ -602,7 +602,8 @@ namespace {
       const auto regions = sidebarRegionsRecord(area, display, 1);
       const auto cards = regions.value(QStringLiteral("cards")).toMap();
       constexpr qreal expected_workspace_height = 55.5;
-      constexpr qreal expected_card_height = 75.5;
+      // Card insets follow the default font, one size above the design font.
+      constexpr qreal expected_card_height = 77;
 
       QCOMPARE(regions.value(QStringLiteral("workspaceHeight")).toReal(), expected_workspace_height);
       QCOMPARE(cards.value(QStringLiteral("height")).toReal(), expected_card_height);
@@ -686,6 +687,17 @@ namespace {
       QVERIFY(ProviderArtwork::image(telar::AgentProvider::claude, ApplicationMark::maximum_cell + 1).isNull());
       QVERIFY(ProviderArtwork::telar(ApplicationMark::minimum_cell - 1).isNull());
       QVERIFY(ProviderArtwork::telar(ApplicationMark::maximum_cell + 1).isNull());
+      for (const auto* const name : {u"bot", u"chevron-down", u"chevron-right", u"git-branch", u"server", u"square-terminal"}) {
+        const auto icon = ProviderArtwork::symbol(name, mark_side);
+
+        QVERIFY2(!icon.isNull() && icon.hasAlphaChannel(), "every bundled line icon must rasterize");
+        QVERIFY(std::ranges::any_of(std::span{icon.constBits(), static_cast<std::size_t>(icon.sizeInBytes())}, [](uchar byte) {
+          return byte != 0;
+        }));
+      }
+
+      QVERIFY(ProviderArtwork::symbol(u"../fonts/telar-mark", mark_side).isNull());
+      QVERIFY(ProviderArtwork::symbol(u"server", ApplicationMark::maximum_cell + 1).isNull());
       const auto application_artwork = ProviderArtwork::telar(mark_side);
 
       QCOMPARE(application_artwork.size(), QSize(mark_side, mark_side));

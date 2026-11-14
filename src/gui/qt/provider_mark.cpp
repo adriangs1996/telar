@@ -47,13 +47,26 @@ namespace telar::gui::qt {
       int side = 0;
     };
 
+    void tint(QImage& image, const QColor& color) {
+      QPainter painter{&image};
+
+      painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
+      painter.fillRect(image.rect(), color);
+    }
+
     QImage coloredMark(AgentProvider provider, int side, const QColor& color, bool telar_mark, bool monochrome, int theme) {
       auto image = telar_mark ? ProviderArtwork::telar(side, monochrome, theme) : ProviderArtwork::image(provider, side);
       if (!image.isNull() && (monochrome || (!telar_mark && ApplicationMark{.provider = provider}.followsTheme()))) {
-        QPainter painter{&image};
+        tint(image, color);
+      }
 
-        painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
-        painter.fillRect(image.rect(), color);
+      return image;
+    }
+
+    QImage coloredSymbol(const QString& symbol, int side, const QColor& color) {
+      auto image = ProviderArtwork::symbol(symbol, side);
+      if (!image.isNull()) {
+        tint(image, color);
       }
 
       return image;
@@ -134,6 +147,19 @@ namespace telar::gui::qt {
     }
   }
 
+  QString ProviderMark::symbol() const {
+    return symbol_;
+  }
+
+  void ProviderMark::setSymbol(const QString& symbol) {
+    if (symbol_ != symbol) {
+      symbol_ = symbol;
+      dirty_ = true;
+      emit symbolChanged();
+      update();
+    }
+  }
+
   void ProviderMark::setColor(const QColor& color) {
     if (color_ != color) {
       color_ = color;
@@ -155,7 +181,7 @@ namespace telar::gui::qt {
   QSGNode* ProviderMark::updatePaintNode(QSGNode* previous, [[maybe_unused]] UpdatePaintNodeData* data) {
     std::unique_ptr<ProviderNode> node{dynamic_cast<ProviderNode*>(previous)};
 
-    if (window() == nullptr || width() <= 0 || height() <= 0 || (provider_ == AgentProvider::unknown && !telar_mark_)) {
+    if (window() == nullptr || width() <= 0 || height() <= 0 || (provider_ == AgentProvider::unknown && !telar_mark_ && symbol_.isEmpty())) {
       return nullptr;
     }
 
@@ -171,7 +197,7 @@ namespace telar::gui::qt {
     }
 
     if (dirty_ || !node->texture || node->side != side) {
-      const auto pixels = coloredMark(provider_, side, color_, telar_mark_, monochrome_, theme_);
+      const auto pixels = symbol_.isEmpty() ? coloredMark(provider_, side, color_, telar_mark_, monochrome_, theme_) : coloredSymbol(symbol_, side, color_);
       if (pixels.isNull()) {
         return nullptr;
       }

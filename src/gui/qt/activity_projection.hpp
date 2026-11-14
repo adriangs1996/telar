@@ -47,6 +47,7 @@ namespace telar::gui::qt {
     auto record = agentRecord(agent, context);
     const auto activity = TaskCardLabels::activity(agent);
     const auto facts = TaskCardLabels::facts(context.machine, task);
+    const auto parts = TaskCardLabels::factParts(context.machine, task);
     const auto plan = TaskCardLabels::plan(agent.plan_done, agent.plan_total);
 
     record.insert(QStringLiteral("task"), true);
@@ -56,6 +57,10 @@ namespace telar::gui::qt {
     record.insert(QStringLiteral("taskHandle"), toQString(task.handle()));
     record.insert(QStringLiteral("title"), toQString(task.displayName()));
     record.insert(QStringLiteral("facts"), toQString(facts.view()));
+    record.insert(QStringLiteral("factsLead"), toQString(parts.lead.view()));
+    record.insert(QStringLiteral("diffAdded"), toQString(parts.added.view()));
+    record.insert(QStringLiteral("diffRemoved"), toQString(parts.removed.view()));
+    record.insert(QStringLiteral("factsTail"), toQString(parts.tail.view()));
     record.insert(QStringLiteral("activity"), toQString(activity.text));
     record.insert(QStringLiteral("activityColor"), QString::fromLatin1(palette_names[static_cast<std::size_t>(activity.color)]));
     record.insert(QStringLiteral("showPlan"), activity.plan);
@@ -138,6 +143,7 @@ namespace telar::gui::qt {
         {QStringLiteral("key"), QStringLiteral("processes")},
         {QStringLiteral("header"), true},
         {QStringLiteral("title"), QStringLiteral("Processes")},
+        {QStringLiteral("symbol"), QStringLiteral("square-terminal")},
         {QStringLiteral("count"), QString::number(count)},
         {QStringLiteral("enabled"), false},
     };

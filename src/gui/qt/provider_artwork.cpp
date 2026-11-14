@@ -116,11 +116,22 @@ namespace telar::gui::qt {
   }
 
   QImage ProviderArtwork::telar(int side, bool monochrome, int theme) {
+    return vector(telarSource(monochrome, theme), side);
+  }
+
+  QImage ProviderArtwork::symbol(QStringView name, int side) {
+    static constexpr std::array<QStringView, 6> names{u"bot", u"chevron-down", u"chevron-right", u"git-branch", u"server", u"square-terminal"};
+    const auto* const found = std::ranges::find(names, name);
+
+    return found == names.end() ? QImage{} : vector(QStringLiteral(":/telar/icons/%1.svg").arg(name), side);
+  }
+
+  QImage ProviderArtwork::vector(const QString& source, int side) {
     if (side < ApplicationMark::minimum_cell || side > ApplicationMark::maximum_cell) {
       return {};
     }
 
-    QSvgRenderer renderer{telarSource(monochrome, theme)};
+    QSvgRenderer renderer{source};
     if (!renderer.isValid()) {
       return {};
     }

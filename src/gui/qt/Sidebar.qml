@@ -18,7 +18,13 @@ NativeRoundedRectangle {
     signal agentPeekRequested(string key)
     signal sidebarResized(real requestedWidth)
 
-    readonly property real headerInset: 8 * ratio
+    // One design pixel beside the chrome text, which the cards and rows are sized in.
+    readonly property real unit: regions.cards?.ratio ?? ratio
+    readonly property real headerInset: regions.cards?.padding ?? 8 * unit
+    readonly property real markColumn: regions.cards?.markColumn ?? 24 * unit
+    readonly property real textInset: regions.cards?.textInset ?? 38 * unit
+    readonly property real iconSide: Math.round(14 * unit)
+    readonly property real sectionGap: regions.sectionGap ?? 0
     readonly property real resizeWidth: 6 * ratio
 
     color: colors.sidebarBackground
@@ -49,33 +55,45 @@ NativeRoundedRectangle {
 
         HoverHandler { cursorShape: Qt.PointingHandCursor }
 
-        ChromeIcon {
-            id: chevron
-            x: root.headerInset
-            width: 10 * root.ratio
-            height: parent.height
-            glyph: machinesHeader.collapsed ? "\uf054" : "\uf078"
+        ProviderMark {
+            objectName: "machinesIcon"
+            x: root.headerInset + (root.markColumn - width) / 2
+            y: (parent.height - height) / 2
+            width: root.iconSide
+            height: root.iconSide
+            symbol: "server"
             color: root.colors.subtext0
-            pixelSize: 9 * root.ratio
         }
 
         ChromeText {
             id: machinesTitle
-            x: chevron.x + chevron.width + 6 * root.ratio
+            x: root.textInset
             width: implicitWidth
             height: parent.height
-            text: "Machines"
-            color: root.colors.chromeText
-            pixelSize: root.typography.body
+            text: "MACHINES"
+            color: root.colors.text
+            pixelSize: root.typography.small
             emphasized: true
             elide: Text.ElideNone
         }
 
+        // The chevron follows the label, so the count keeps the column the cards' ages use.
+        ProviderMark {
+            id: chevron
+            objectName: "machinesChevron"
+            x: machinesTitle.x + machinesTitle.width + 4 * root.unit
+            y: (parent.height - height) / 2
+            width: Math.round(12 * root.unit)
+            height: width
+            symbol: machinesHeader.collapsed ? "chevron-right" : "chevron-down"
+            color: root.colors.subtext0
+        }
+
         NativeRoundedRectangle {
             objectName: "machinesAttention"
-            x: machinesTitle.x + machinesTitle.width + 6 * root.ratio
+            x: chevron.x + chevron.width + 6 * root.unit
             y: (parent.height - height) / 2
-            width: 6 * root.ratio
+            width: 6 * root.unit
             height: width
             radius: width / 2
             color: root.colors.yellow
@@ -107,6 +125,17 @@ NativeRoundedRectangle {
         visible: root.expanded && shown && height > 0
     }
 
+    // The line between the machines and the agents, in the middle of the gap that parts them.
+    Rectangle {
+        objectName: "sidebarSectionSeparator"
+        x: root.regions.activityHeader.x + root.headerInset
+        y: Math.round(root.regions.activityHeader.y - root.sectionGap / 2)
+        width: Math.max(0, root.regions.activityHeader.width - 2 * root.headerInset)
+        height: 1 / Screen.devicePixelRatio
+        color: Qt.alpha(root.colors.text, ChromeStyle.outlineAlpha)
+        visible: machinesHeader.visible && root.sectionGap > 0
+    }
+
     Item {
         x: root.regions.activityHeader.x
         y: root.regions.activityHeader.y
@@ -114,14 +143,24 @@ NativeRoundedRectangle {
         height: root.regions.activityHeader.height
         visible: root.expanded && height > 0
 
+        ProviderMark {
+            objectName: "activityIcon"
+            x: root.headerInset + (root.markColumn - width) / 2
+            y: (parent.height - height) / 2
+            width: root.iconSide
+            height: root.iconSide
+            symbol: "bot"
+            color: root.colors.subtext0
+        }
+
         ChromeText {
             id: activityTitle
-            x: root.headerInset
+            x: root.textInset
             width: Math.max(0, parent.width - x - root.headerInset)
             height: parent.height
-            text: "Agents"
-            color: root.colors.chromeText
-            pixelSize: root.typography.body
+            text: "AGENTS"
+            color: root.colors.text
+            pixelSize: root.typography.small
             emphasized: true
         }
 
@@ -153,7 +192,8 @@ NativeRoundedRectangle {
         typography: root.typography
         geometry: root.regions.cards
         headerHeight: root.regions.activityHeader.height
-        ratio: root.ratio
+        sectionGap: root.sectionGap
+        ratio: root.unit
         textScale: root.textScale
         visible: root.expanded
         onSelected: key => root.agentSelected(key)

@@ -73,17 +73,22 @@ export {
         fold,
       };
 
-      static constexpr float list_row = 32;
+      static constexpr float list_vertical_padding = 5;
       static constexpr float list_padding = 8;
-      static constexpr float list_disc = 7;
-      static constexpr float list_gap = 8;
+      // As wide as an agent card's mark column, so labels share the cards' text column.
+      static constexpr float list_avatar = 24;
+      static constexpr float list_gap = 6;
+      static constexpr float list_dot = 7;
+      static constexpr float list_dot_overhang = 2;
       // The tab strip's front card and the two slivers behind it, with room for their tilt.
       static constexpr float stack_width = 42;
 
       struct ListRow {
         Rect bounds;
-        Rect disc;
+        Rect avatar;
+        Rect dot;
         Rect label;
+        Rect status;
         Rect stack;
       };
 
@@ -95,36 +100,79 @@ export {
         float radius = 0;
       };
 
-      // The sidebar lists the machines other than the active one, one row each: the machine's
-      // disc, its label and, on the right, the stack of its agents that work or wait.
-      [[nodiscard]] inline static float listHeight(const ChromeMetrics& chrome, std::size_t rows) noexcept {
-        return chrome.px(list_row) * static_cast<float>(rows);
+      static constexpr std::size_t list_status_capacity = 32;
+
+      // What a machine row reads under its label: that its link is down, or how many of its
+      // agents work or wait.
+      [[nodiscard]] inline static std::string_view listStatus(bool live, std::size_t agents, std::span<char, list_status_capacity> storage) noexcept {
+        if (!live) {
+          return "Offline";
+        }
+
+        if (agents == 0) {
+          return "No active agents";
+        }
+
+        if (agents == 1) {
+          return "1 active agent";
+        }
+
+        constexpr std::string_view suffix = " active agents";
+        auto* const last = storage.data() + storage.size();
+        const auto [end, error] = std::to_chars(storage.data(), last, agents);
+        if (error != std::errc{} || static_cast<std::size_t>(last - end) < suffix.size()) {
+          return suffix.substr(1);
+        }
+
+        std::ranges::copy(suffix, end);
+
+        return {storage.data(), static_cast<std::size_t>(end - storage.data()) + suffix.size()};
       }
 
-      // The width that shows a row's whole label.
-      [[nodiscard]] inline static float listNaturalWidth(const ChromeMetrics& chrome, float label_advance, bool stacked) noexcept {
-        return chrome.px((2 * list_padding) + list_disc + list_gap) + (stacked ? chrome.px(list_gap + stack_width) : 0) + label_advance;
+      // The sidebar lists the machines other than the active one, one row each: the machine's
+      // avatar with its connection dot, its label over its status line and, on the right, the
+      // stack of its agents that work or wait.
+      [[nodiscard]] inline static float listRowHeight(const ChromeMetrics& chrome) noexcept {
+        return ChromeMetrics::lineHeight(chrome.body) + ChromeMetrics::lineHeight(chrome.small) + std::round(chrome.textPx(2 * list_vertical_padding));
+      }
+
+      [[nodiscard]] inline static float listHeight(const ChromeMetrics& chrome, std::size_t rows) noexcept {
+        return listRowHeight(chrome) * static_cast<float>(rows);
+      }
+
+      // The width that shows a row's whole label and status line, whichever advances further.
+      [[nodiscard]] inline static float listNaturalWidth(const ChromeMetrics& chrome, float text_advance, bool stacked) noexcept {
+        return chrome.textPx((2 * list_padding) + list_avatar + list_gap) + (stacked ? chrome.textPx(list_gap + stack_width) : 0) + text_advance;
       }
 
       [[nodiscard]] inline static ListRow listRow(Rect area, const ChromeMetrics& chrome, std::size_t index, bool stacked) noexcept {
-        const auto height = chrome.px(list_row);
-        const auto padding = chrome.px(list_padding);
-        const auto disc = chrome.px(list_disc);
-        const auto gap = chrome.px(list_gap);
+        const auto height = listRowHeight(chrome);
+        const auto padding = std::round(chrome.textPx(list_padding));
+        const auto avatar = std::round(chrome.textPx(list_avatar));
+        const auto dot = std::round(chrome.textPx(list_dot));
+        const auto gap = std::round(chrome.textPx(list_gap));
+        const auto label_height = ChromeMetrics::lineHeight(chrome.body);
         ListRow row;
 
         row.bounds = {.x = area.x, .y = area.y + (height * static_cast<float>(index)), .width = area.width, .height = height};
-        row.disc = {.x = area.x + padding, .y = row.bounds.y + ((height - disc) / 2), .width = disc, .height = disc};
+        row.avatar = {.x = area.x + padding, .y = row.bounds.y + std::round((height - avatar) / 2), .width = avatar, .height = avatar};
+
+        const auto overhang = std::round(chrome.textPx(list_dot_overhang));
+
+        row.dot = {.x = row.avatar.right() - dot + overhang, .y = row.avatar.bottom() - dot + overhang, .width = dot, .height = dot};
         if (stacked) {
-          const auto width = chrome.px(stack_width);
+          const auto width = std::round(chrome.textPx(stack_width));
 
           row.stack = {.x = area.right() - padding - width, .y = row.bounds.y, .width = width, .height = height};
         }
 
-        const auto left = row.disc.right() + gap;
+        const auto left = row.avatar.right() + gap;
         const auto right = stacked ? row.stack.x - gap : area.right() - padding;
+        const auto top = row.bounds.y + std::round(chrome.textPx(list_vertical_padding));
+        const auto width = std::max(0.0F, right - left);
 
-        row.label = {.x = left, .y = row.bounds.y, .width = std::max(0.0F, right - left), .height = height};
+        row.label = {.x = left, .y = top, .width = width, .height = label_height};
+        row.status = {.x = left, .y = top + label_height, .width = width, .height = ChromeMetrics::lineHeight(chrome.small)};
 
         return row;
       }
@@ -378,6 +426,12 @@ export {
     struct SidebarGeometry {
       static constexpr float margin = 8;
       static constexpr float workspace_vertical_padding = 20;
+      // The room between two sections, which their separator halves.
+      static constexpr float section_gap = 16;
+
+      [[nodiscard]] inline static float sectionGap(const ChromeMetrics& chrome) noexcept {
+        return std::round(chrome.textPx(section_gap));
+      }
 
       Rect machines_header;
       Rect machines;
@@ -391,7 +445,7 @@ export {
       }
 
       [[nodiscard]] inline static SidebarGeometry measure(Rect area, const ChromeMetrics& chrome, std::size_t, SidebarMachines machines = {}) noexcept {
-        const auto inset = chrome.px(margin);
+        const auto inset = std::round(chrome.textPx(margin));
         Rect content{.x = area.x + inset, .y = area.y + inset, .width = std::max(0.0F, area.width - 2 * inset), .height = std::max(0.0F, area.height - 2 * inset)};
         const auto header = chrome.pane_header;
         const auto gap = 0.0F;
@@ -407,13 +461,14 @@ export {
           content.y += header;
           content.height -= header;
           // Activity keeps two headers of room; machine rows that do not fit stay out whole.
-          const auto row = chrome.px(MachineChromeGeometry::list_row);
-          const auto room = std::max(0.0F, content.height - ((minimum_machine_headers - 1) * header));
+          const auto row = MachineChromeGeometry::listRowHeight(chrome);
+          const auto section = sectionGap(chrome);
+          const auto room = std::max(0.0F, content.height - ((minimum_machine_headers - 1) * header) - section);
           const auto rows = std::min(static_cast<float>(machines.rows), std::floor(room / row));
 
           geometry.machines = {.x = content.x, .y = content.y, .width = content.width, .height = rows * row};
-          content.y += geometry.machines.height + gap;
-          content.height -= geometry.machines.height + gap;
+          content.y += geometry.machines.height + section;
+          content.height -= geometry.machines.height + section;
         }
 
         geometry.activity_header = {.x = content.x, .y = content.y, .width = content.width, .height = header};

@@ -179,13 +179,15 @@ namespace {
       QCOMPARE(project.size(), 1);
       QCOMPARE(background.size(), 1);
       constexpr qreal expected_height = 55;
-      constexpr QPointF title_origin{32, 8};
+      // Past the card's inset, its mark column and the gap after it.
+      constexpr QPointF title_origin{38, 8};
       constexpr qreal detail_origin_y = 31;
 
       QCOMPARE(card->height(), expected_height);
       QCOMPARE(title.front()->position(), title_origin);
       QCOMPARE(title.front()->height(), qreal{19});
       QCOMPARE(project.front()->parentItem()->y(), detail_origin_y);
+      QCOMPARE(project.front()->parentItem()->x(), title_origin.x());
       const auto colors = themeColors(Configuration{});
       auto selection_color = colors.value(QStringLiteral("text")).value<QColor>();
 

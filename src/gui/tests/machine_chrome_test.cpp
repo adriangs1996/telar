@@ -20,6 +20,7 @@ static_assert(true);
 #include <cstring>
 #include <exception>
 #include <iostream>
+#include <limits>
 #include <optional>
 #include <span>
 #include <stdexcept>
@@ -64,25 +65,42 @@ namespace {
     }
   }
 
-  void machineListRowsPlaceDiscLabelAndStack() {
+  void machineListRowsPlaceAvatarTextAndStack() {
     using Geometry = MachineChromeGeometry;
     const ChromeMetrics chrome;
-    constexpr Rect area{.x = 8, .y = 40, .width = 224, .height = 64};
+    constexpr Rect area{.x = 8, .y = 40, .width = 224, .height = 86};
     const auto first = Geometry::listRow(area, chrome, 0, true);
-    constexpr Rect bounds{.x = 8, .y = 40, .width = 224, .height = 32};
-    constexpr Rect disc{.x = 16, .y = 52.5F, .width = 7, .height = 7};
-    constexpr Rect stack{.x = 182, .y = 40, .width = 42, .height = 32};
-    constexpr Rect label{.x = 31, .y = 40, .width = 143, .height = 32};
+    constexpr Rect bounds{.x = 8, .y = 40, .width = 224, .height = 43};
+    constexpr Rect avatar{.x = 16, .y = 50, .width = 24, .height = 24};
+    constexpr Rect dot{.x = 35, .y = 69, .width = 7, .height = 7};
+    constexpr Rect stack{.x = 182, .y = 40, .width = 42, .height = 43};
+    constexpr Rect label{.x = 46, .y = 45, .width = 130, .height = 17};
+    constexpr Rect status{.x = 46, .y = 62, .width = 130, .height = 16};
 
-    require(first.bounds == bounds && first.disc == disc && first.stack == stack && first.label == label, "a machine row keeps its disc, label and agent stack apart");
+    require(first.bounds == bounds && first.avatar == avatar && first.dot == dot && first.stack == stack, "a machine row keeps its avatar, link dot and agent stack apart");
+    require(first.label == label && first.status == status, "the status line sits under the label in the cards' text column");
     const auto second = Geometry::listRow(area, chrome, 1, false);
-    constexpr Rect wide_label{.x = 31, .y = 72, .width = 193, .height = 32};
+    constexpr Rect wide_label{.x = 46, .y = 88, .width = 178, .height = 17};
 
-    require(second.bounds.y == 72 && second.stack.empty() && second.label == wide_label, "a row without agents gives the stack's room to its label");
-    require(Geometry::listHeight(chrome, 3) == 96, "machine rows stack at their fixed height");
-    constexpr float label_advance = 100;
+    require(second.bounds.y == 83 && second.stack.empty() && second.label == wide_label, "a row without agents gives the stack's room to its text");
+    require(Geometry::listHeight(chrome, 3) == 129, "machine rows stack at the height of their two lines");
+    constexpr float text_advance = 100;
 
-    require(Geometry::listNaturalWidth(chrome, label_advance, false) == 131 && Geometry::listNaturalWidth(chrome, label_advance, true) == 181, "the natural width holds the whole label and, when shown, the stack");
+    require(Geometry::listNaturalWidth(chrome, text_advance, false) == 146 && Geometry::listNaturalWidth(chrome, text_advance, true) == 194, "the natural width holds the whole text and, when shown, the stack");
+    ChromeMetrics enlarged;
+
+    enlarged.text_ratio = 2;
+    require(Geometry::listRow(area, enlarged, 0, false).avatar.width == 48 && Geometry::listRow(area, chrome, 0, false).avatar.width == 24, "rows follow the chrome text, whatever the display ratio is");
+  }
+
+  void machineListStatusCountsActiveAgents() {
+    using Geometry = MachineChromeGeometry;
+    std::array<char, Geometry::list_status_capacity> storage{};
+
+    require(Geometry::listStatus(false, 3, storage) == "Offline", "a machine whose link is down reads offline, whatever it last reported");
+    require(Geometry::listStatus(true, 0, storage) == "No active agents" && Geometry::listStatus(true, 1, storage) == "1 active agent", "an idle machine and a single agent read in plain words");
+    require(Geometry::listStatus(true, 12, storage) == "12 active agents", "several agents read as their count");
+    require(Geometry::listStatus(true, std::numeric_limits<std::size_t>::max(), storage) == "active agents", "a count that does not fit drops out instead of overrunning the storage");
   }
 
   void inlineMachineFactsKeepOriginalStateAndGeometry() {
@@ -163,7 +181,8 @@ namespace {
 int main() {
   try {
     colorNamesKeepWrittenSemantics();
-    machineListRowsPlaceDiscLabelAndStack();
+    machineListRowsPlaceAvatarTextAndStack();
+    machineListStatusCountsActiveAgents();
     machineControlInkAreasKeepOriginalInsets();
     inlineMachineFactsKeepOriginalStateAndGeometry();
   } catch (const std::exception& error) {

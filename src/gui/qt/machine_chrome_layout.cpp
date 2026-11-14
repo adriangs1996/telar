@@ -296,16 +296,23 @@ namespace telar::gui::qt {
 
     active_background.setAlphaF(gui::ChromeStyle::selection_alpha);
     hover_background.setAlphaF(gui::ChromeStyle::hover_alpha);
+    // The sidebar's rows sit beside its cards and follow the chrome text as they do.
+    const auto length = [this](float logical) {
+      return (mode_ == Mode::list ? chrome_.textPx(logical) : chrome_.px(logical)) / density_;
+    };
+
     QVariantMap style{
         {QStringLiteral("activeBackground"), active_background},
         {QStringLiteral("hoverBackground"), hover_background},
         {QStringLiteral("activeText"), toQColor(theme.chromeColor(PaletteRole::text))},
         {QStringLiteral("attention"), fill(theme.chrome[static_cast<std::size_t>(PaletteRole::yellow)])},
         {QStringLiteral("pixelSize"), (mode_ == Mode::facts ? chrome_.small : chrome_.body) / density_},
-        {QStringLiteral("rowRadius"), chrome_.px(gui::ChromeStyle::control_radius) / density_},
-        {QStringLiteral("tileWidth"), chrome_.px(TabStripGeometry::tile_width) / density_},
-        {QStringLiteral("tileHeight"), chrome_.px(TabStripGeometry::tile_height) / density_},
-        {QStringLiteral("tileRadius"), chrome_.px(TabStripGeometry::tile_radius) / density_},
+        {QStringLiteral("smallSize"), chrome_.small / density_},
+        {QStringLiteral("rowRadius"), length(mode_ == Mode::list ? gui::ChromeStyle::surface_radius : gui::ChromeStyle::control_radius)},
+        {QStringLiteral("avatarRadius"), length(gui::ChromeStyle::control_radius)},
+        {QStringLiteral("tileWidth"), length(TabStripGeometry::tile_width)},
+        {QStringLiteral("tileHeight"), length(TabStripGeometry::tile_height)},
+        {QStringLiteral("tileRadius"), length(TabStripGeometry::tile_radius)},
     };
 
     QList<QVariantMap> records;
@@ -384,6 +391,7 @@ namespace telar::gui::qt {
     }
 
     source.card_count = shown;
+    source.agent_count = count;
   }
 
   QVariantMap MachineChromeLayout::listRecord(const Source& source, const MachineChromeGeometry::ListRow& row) const {
@@ -395,8 +403,8 @@ namespace telar::gui::qt {
       const auto& pose = TabCardMotion::rest[rank];
       auto record = applicationMarkRecord(runtime::describeProvider(static_cast<AgentProvider>(card.provider)).display_name);
 
-      record.insert(QStringLiteral("x"), chrome_.px(pose.x) / density_);
-      record.insert(QStringLiteral("y"), chrome_.px(pose.y) / density_);
+      record.insert(QStringLiteral("x"), chrome_.textPx(pose.x) / density_);
+      record.insert(QStringLiteral("y"), chrome_.textPx(pose.y) / density_);
       record.insert(QStringLiteral("rotation"), pose.rotation);
       record.insert(QStringLiteral("scale"), pose.scale);
       record.insert(QStringLiteral("layer"), static_cast<int>(stack_cards - 1 - rank));
@@ -406,14 +414,21 @@ namespace telar::gui::qt {
     }
 
     const auto label = toQString(source.label.view());
+    std::array<char, MachineChromeGeometry::list_status_capacity> storage{};
+    const auto status = MachineChromeGeometry::listStatus(source.live, source.agent_count, storage);
 
     return {
         {QStringLiteral("key"), machineKey(source.token)},
         {QStringLiteral("bounds"), toQRectF(row.bounds, density_)},
-        {QStringLiteral("discBounds"), toQRectF(row.disc, density_)},
+        {QStringLiteral("avatarBounds"), toQRectF(row.avatar, density_)},
+        {QStringLiteral("dotBounds"), toQRectF(row.dot, density_)},
         {QStringLiteral("labelBounds"), toQRectF(row.label, density_)},
+        {QStringLiteral("statusBounds"), toQRectF(row.status, density_)},
         {QStringLiteral("stackBounds"), toQRectF(row.stack, density_)},
         {QStringLiteral("text"), label},
+        // The avatar reads the label's first character, whole when it is a surrogate pair.
+        {QStringLiteral("initial"), label.left(label.size() > 1 && label.at(0).isHighSurrogate() ? 2 : 1).toUpper()},
+        {QStringLiteral("status"), toQString(status)},
         {QStringLiteral("ink"), ink(source.color.view())},
         {QStringLiteral("enabled"), source.live},
         {QStringLiteral("attention"), source.attention},
@@ -433,8 +448,10 @@ namespace telar::gui::qt {
       }
 
       const bool stacked = source->card_count != 0;
+      std::array<char, Geometry::list_status_capacity> storage{};
+      const auto advance = std::max(measure(source->label.view(), true), measure(Geometry::listStatus(source->live, source->agent_count, storage), false));
 
-      widest = std::max(widest, Geometry::listNaturalWidth(chrome_, measure(source->label.view(), false), stacked));
+      widest = std::max(widest, Geometry::listNaturalWidth(chrome_, advance, stacked));
       // The sidebar sizes the area to the rows that fit; the item clips the rest.
       if (!area.empty()) {
         records.append(listRecord(*source, Geometry::listRow(area, chrome_, index, stacked)));
