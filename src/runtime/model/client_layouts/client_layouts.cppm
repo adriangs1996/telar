@@ -1,30 +1,12 @@
 module;
-#include "telar_render/sequence.hpp"
-#include <ghostty/vt.h>
-#include <new>
-#include <stdlib.h>
-#include <sys/stat.h>
-#include <zlib.h>
-
-#include "cell_layout.hpp"
+#include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
-#include <cassert>
+#include "telar_render/sequence.hpp"
 #include <cerrno>
-#include <cstddef>
-#include <cstdint>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <fcntl.h>
-#include <sys/mman.h>
-#include <sys/types.h>
-#include <unistd.h>
-
-#include <csignal>
 #include <limits.h>
+#include <sys/types.h>
 #include <sys/uio.h>
-#include <sys/wait.h>
-#include <termios.h>
+#include <unistd.h>
 
 export module telar.runtime.model.client_layouts;
 
@@ -75,38 +57,25 @@ export {
     public:
       static constexpr std::size_t capacity = 1024 * 1024;
 
-      inline explicit PendingClipboard(Memory& memory)
-          : bytes_(AllocatorRef<Byte, Memory>{memory}) {}
+      explicit PendingClipboard(Memory& memory);
 
-      inline void replace(std::uint64_t pane, std::span<const Byte> bytes) {
-        if (bytes.size() > capacity) {
-          throw EncodingError{"Selection exceeds the clipboard limit"};
-        }
+      void replace(std::uint64_t pane, std::span<const Byte> bytes);
 
-        Vector<Byte, Memory> replacement{bytes.begin(), bytes.end(), bytes_.get_allocator()};
+      bool pending() const noexcept;
 
-        bytes_.swap(replacement);
-        pane_ = pane;
-        pending_ = true;
-      }
+      PaneClipboard message() const noexcept;
 
-      inline bool pending() const noexcept {
-        return pending_;
-      }
-
-      inline PaneClipboard message() const noexcept {
-        return {.pane_id = pane_, .bytes = bytes_};
-      }
-
-      inline void delivered() noexcept {
-        pending_ = false;
-      }
+      void delivered() noexcept;
 
     private:
       Vector<Byte, Memory> bytes_;
       std::uint64_t pane_ = 0;
       bool pending_ = false;
     };
+
+    extern template class PendingClipboard<SystemAllocator>;
+    extern template class PendingClipboard<ConcurrentMemory>;
+    extern template class PendingClipboard<BudgetAllocator<SystemAllocator>>;
 
   }
 }
@@ -126,36 +95,15 @@ export {
         std::uint32_t rows = 0;
       };
 
-      [[nodiscard]] Item* find(std::uint64_t id) noexcept {
-        const auto kept = std::span{items}.first(count);
-        const auto found = std::ranges::find(kept, id, &Item::id);
+      [[nodiscard]] Item* find(std::uint64_t id) noexcept;
 
-        return found == kept.end() ? nullptr : &*found;
-      }
+      Item* add(std::uint64_t id) noexcept;
 
-      Item* add(std::uint64_t id) noexcept {
-        if (count == items.size()) {
-          return nullptr;
-        }
+      void erase(std::size_t index) noexcept;
 
-        items[count] = Item{.id = id};
-        return &items[count++];
-      }
+      [[nodiscard]] bool settled(std::uint64_t at_revision, std::uint64_t at_generation, std::uint64_t at_trimmed) const noexcept;
 
-      void erase(std::size_t index) noexcept {
-        std::move(items.begin() + static_cast<std::ptrdiff_t>(index) + 1, items.begin() + static_cast<std::ptrdiff_t>(count), items.begin() + static_cast<std::ptrdiff_t>(index));
-        --count;
-      }
-
-      [[nodiscard]] bool settled(std::uint64_t at_revision, std::uint64_t at_generation, std::uint64_t at_trimmed) const noexcept {
-        return revision == at_revision && generation == at_generation && trimmed == at_trimmed;
-      }
-
-      void settle(std::uint64_t at_revision, std::uint64_t at_generation, std::uint64_t at_trimmed) noexcept {
-        revision = at_revision;
-        generation = at_generation;
-        trimmed = at_trimmed;
-      }
+      void settle(std::uint64_t at_revision, std::uint64_t at_generation, std::uint64_t at_trimmed) noexcept;
 
       std::array<Item, ::telar::render::max_pane_documents> items{};
       std::size_t count = 0;
@@ -167,10 +115,7 @@ export {
 
     template <Allocator Memory>
     struct Attachment {
-      inline explicit Attachment(Memory& memory, GraphicsCreditBudget& budget, std::uint64_t pane, std::shared_ptr<PaneMedia<Memory>> media)
-          : pane_id(pane),
-            frames(memory, pane),
-            graphics(budget, pane, std::move(media)) {}
+      explicit Attachment(Memory& memory, GraphicsCreditBudget& budget, std::uint64_t pane, std::shared_ptr<PaneMedia<Memory>> media);
 
       std::uint64_t pane_id;
       std::size_t slot = 0;
@@ -199,6 +144,10 @@ export {
       FramePacer pacer;
     };
 
+    // client_layouts.cpp instantiates the constructor for SystemAllocator and ConcurrentMemory. It is
+    // not declared `extern template` here: with that declaration, Clang 23 crashes in importers that
+    // emit ~GraphicsSynchronizer<SystemAllocator> (GetVTTParameter, from runtime-tests' units).
+
     // The clients a runtime serves at once; a client's slot is its bit in what a pane is observed by.
     inline constexpr std::size_t client_capacity = 32;
 
@@ -215,49 +164,17 @@ export {
         std::uint64_t revision = 0;
       };
 
-      inline explicit ClientSession(Memory& memory, std::uint64_t identity, FileDescriptor descriptor)
-          : id(identity),
-            generation(identity),
-            connection(memory, std::move(descriptor)),
-            attachments(AllocatorRef<Owned<Attachment<Memory>, Memory>, Memory>{memory}),
-            clipboard(memory),
-            deferred_report(memory) {
-        attachments.reserve(attachment_capacity);
-      }
+      explicit ClientSession(Memory& memory, std::uint64_t identity, FileDescriptor descriptor);
 
-      inline std::size_t availableAttachmentSlot() const {
-        std::uint64_t occupied = 0;
-
-        for (const auto& entry : attachments) {
-          occupied |= std::uint64_t{1} << entry->slot;
-        }
-
-        if (occupied == std::numeric_limits<std::uint64_t>::max()) {
-          throw std::bad_alloc{};
-        }
-
-        return std::countr_zero(~occupied);
-      }
+      std::size_t availableAttachmentSlot() const;
 
       // The bit its slot sets in a pane's observers; none before the client is stored.
-      inline std::uint32_t observerBit() const noexcept {
-        return event_identity == 0 ? 0 : std::uint32_t{1} << (event_identity % client_capacity);
-      }
+      std::uint32_t observerBit() const noexcept;
 
-      inline Attachment<Memory>* attachment(std::uint64_t pane_id) const noexcept {
-        for (const auto& entry : attachments) {
-          if (entry->pane_id == pane_id) {
-            return entry.get();
-          }
-        }
-
-        return nullptr;
-      }
+      Attachment<Memory>* attachment(std::uint64_t pane_id) const noexcept;
 
       // Whether the runtime verified this client runs inside `pane`, the generation it has now.
-      inline bool verifiedFor(const Pane<Memory>& pane) const noexcept {
-        return verified_pane == pane.id && verified_generation == pane.generation;
-      }
+      bool verifiedFor(const Pane<Memory>& pane) const noexcept;
 
       std::uint64_t id;
       std::uint64_t generation;
@@ -307,6 +224,13 @@ export {
       HeldTabs held_tabs;
     };
 
+    extern template class ClientSession<SystemAllocator>;
+    extern template class ClientSession<ConcurrentMemory>;
+    extern template Attachment<Memory>* ClientSession<Memory>::attachment(std::uint64_t pane_id) const noexcept;
+    extern template std::uint32_t ClientSession<Memory>::observerBit() const noexcept;
+    extern template Attachment<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>* ClientSession<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>::attachment(std::uint64_t pane_id) const noexcept;
+    extern template std::uint32_t ClientSession<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>::observerBit() const noexcept;
+
   }
 }
 
@@ -316,7 +240,8 @@ export {
 
     template <Allocator Memory>
     class Pane {
-      struct ResponseWriter {
+      // Kept whole: the default writer of write, which stays here, on every PTY write.
+      struct TBC_HOT_PATH ResponseWriter {
         inline ssize_t operator()(int descriptor, std::span<const iovec> vectors) const {
           return ::writev(descriptor, vectors.data(), static_cast<int>(vectors.size()));
         }
@@ -328,174 +253,20 @@ export {
         burst,
       };
 
-      inline explicit Pane(Memory& memory, std::uint64_t identity, TabLocation location, Command<Memory>& command, PaneLaunch settings)
-          : id(identity),
-            location(location),
-            launch(memory),
-            pty_responses(std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, Memory>{memory})),
-            observer(std::allocate_shared<PaneObserver<Memory>>(AllocatorRef<PaneObserver<Memory>, Memory>{memory}, memory, settings.size, command.cwd(), false, settings.shell ? std::optional{settings.shell->token} : std::nullopt)),
-            media(std::allocate_shared<PaneMedia<Memory>>(AllocatorRef<PaneMedia<Memory>, Memory>{memory}, memory, settings.media_budget, settings.graphics, settings.size, pty_responses)),
-            terminal(memory, settings.size, TerminalPurpose::separate_media, pty_responses, GraphicsQueryResources{settings.graphics, settings.media_budget, &media->queryUsage()}),
-            input(memory, input_limit),
-            scrollback_rows(memory),
-            cwd(command.cwd(), AllocatorRef<char, Memory>{memory}) {
-        randomBytes(history_session.data(), history_session.size());
-        input.reserve(input_limit);
-        launch.capture(command.arguments(), command.restorable());
-        const auto executable = std::string_view{command.arguments().front()};
+      explicit Pane(Memory& memory, std::uint64_t identity, TabLocation location, Command<Memory>& command, PaneLaunch settings);
 
-        foreground.assign(utf8Prefix(executable.substr(executable.rfind('/') + 1), 48));
-        process.emplace(command.specification(settings.size));
-        terminal.attachMedia(*media);
-        shell_state.pane_id = identity;
-        if (settings.shell) {
-          shell_zones.emplace(command.cwd(), settings.shell->token);
-          blocks.emplace(memory, terminal);
-          shell_state.shell = settings.shell->shell;
-          local_shell = settings.shell->shell;
-          shell_revision = 1;
-          observeShell();
-        }
-      }
-
-      inline bool read(ReadMode mode = ReadMode::once) {
-        constexpr std::size_t batch_byte_limit = 64 * 1024;
-        constexpr unsigned batch_read_limit = 8;
-        std::array<Byte, read_buffer_size> buffer;
-        std::size_t batch_bytes = 0;
-        const unsigned read_limit = mode == ReadMode::burst ? batch_read_limit : 1;
-        // Read the shell's state once per call, after the output that may have changed it.
-        const auto observed = [&](bool result) {
-          if (batch_bytes != 0) {
-            observeShell();
-            terminal.followScrollback();
-            if (blocks) {
-              blocks->follow();
-            }
-          }
-
-          return result;
-        };
-
-        for (unsigned attempt = 0; attempt < read_limit && batch_bytes < batch_byte_limit; ++attempt) {
-          const auto capacity = std::min(buffer.size(), batch_byte_limit - batch_bytes);
-          if (terminal.hasPendingControl() || media->holdsRead(capacity)) {
-            TELAR_DIAGNOSTIC(media->noteHeldRead());
-            return observed(true);
-          }
-
-          const auto count = ::read(process->descriptor(), buffer.data(), capacity);
-          if (count > 0 && echo_sent) {
-            timeLink(std::chrono::steady_clock::now() - *std::exchange(echo_sent, std::nullopt));
-          }
-
-          if (count > 0) {
-            const auto bytes = std::span<const Byte>{buffer}.first(static_cast<std::size_t>(count));
-
-            TELAR_DIAGNOSTIC(recordRead(bytes.size(), batch_bytes != 0));
-            const auto foreground = needs_foreground_observation ? shellForeground() : std::nullopt;
-
-            expireProgress(foreground);
-            observer->bytes(ObservationKind::output, bytes, foreground);
-            ShellCompletions completions{shell_state};
-
-            if (shell_zones) {
-              const auto before = shell_state.commands;
-
-              shell_zones->feed(bytes, ObservationTime{}, completions);
-              shell_revision += shell_state.commands != before;
-            }
-
-            {
-              TELAR_DIAGNOSTIC(diagnostics::TimedScope timing{counters == nullptr ? nullptr : &counters->ingest});
-              // Up to each signed mark, so a command's block anchors where its mark was printed.
-              std::size_t fed = 0;
-              const auto now = std::chrono::steady_clock::now();
-
-              for (const auto& mark : completions.marks()) {
-                if (mark.end > fed) {
-                  terminal.feed(bytes.subspan(fed, mark.end - fed), *media);
-                  fed = mark.end;
-                }
-
-                if (mark.action == 'D') {
-                  blocks->finished(mark.status, now);
-                } else {
-                  blocks->mark(mark.action, now);
-                }
-              }
-
-              if (fed < bytes.size()) {
-                terminal.feed(bytes.subspan(fed), *media);
-              }
-            }
-
-            batch_bytes += bytes.size();
-            continue;
-          }
-
-          if (count < 0 && socketWouldBlock(sys::lastError())) {
-            return observed(true);
-          }
-
-          output_closed = true;
-          terminal.abortControl();
-          return observed(false);
-        }
-
-        return observed(true);
-      }
+      bool read(ReadMode mode = ReadMode::once);
 
       // Reads where the integrated shell is and how the line discipline is set, and counts a
       // change. Two ioctls; the runtime calls it after output and, while a program runs, on its
       // tick, since a program can change the terminal without printing.
-      inline void observeShell() noexcept {
-        if (!shell_zones) {
-          return;
-        }
-
-        auto next = shell_state;
-
-        next.phase = shell_zones->editing() ? ShellPhase::prompt : shell_zones->running() ? ShellPhase::running
-                                                                                          : ShellPhase::unknown;
-        next.remote = shell_zones->remote();
-        next.host = shell_zones->remoteHost();
-        next.directory = shell_zones->remoteDirectory();
-        if (!next.remote) {
-          next.link_ms = 0;
-          link_average_ms = 0;
-          echo_sent.reset();
-        }
-
-        next.shell = next.remote && shell_zones->remoteShell() != IntegratedShell::none ? shell_zones->remoteShell() : local_shell;
-        const auto group = process->foregroundProcessGroup();
-
-        next.shell_foreground = group && *group == process->processId();
-        termios settings{};
-        if (::tcgetattr(process->descriptor(), &settings) == 0) {
-          const auto character = [&](int index) {
-            return settings.c_cc[index] == _POSIX_VDISABLE ? Byte{0} : static_cast<Byte>(settings.c_cc[index]);
-          };
-
-          next.canonical = (settings.c_lflag & ICANON) != 0;
-          next.echo = (settings.c_lflag & ECHO) != 0;
-          next.signal_keys = (settings.c_lflag & ISIG) != 0;
-          next.interrupt = character(VINTR);
-          next.quit = character(VQUIT);
-          next.suspend = character(VSUSP);
-          next.end_of_file = character(VEOF);
-        }
-
-        if (next != shell_state) {
-          shell_state = next;
-          ++shell_revision;
-        }
-      }
+      void observeShell() noexcept;
 
       // The response writer borrows vectors only for this call. Only a positive
       // syscall result consumes the admitted prefix; EINTR/EAGAIN retain it.
+      // Generic over the caller's writer: control_desktop_test passes its own.
       template <typename WriteResponses = ResponseWriter>
-      inline void write(WriteResponses write_responses = {}) {
+      TBC_HOT_PATH inline void write(WriteResponses write_responses = {}) {
         const auto batch = pty_responses->peekBatch();
         const bool response = batch.count != 0;
         const auto bytes = input.readable();
@@ -550,73 +321,24 @@ export {
         throw std::system_error{count < 0 ? sys::lastError() : EIO, std::generic_category(), "PTY write failed"};
       }
 
-      inline bool hasInput() const noexcept {
-        return !input.empty() || !pty_responses->empty();
-      }
+      bool hasInput() const noexcept;
 
-      inline void requestClose() noexcept {
-        if (close_requested) {
-          return;
-        }
+      void requestClose() noexcept;
 
-        close_requested = true;
-        process->shutdown();
-      }
-
-      inline void enqueueInput(std::span<const Byte> bytes) {
-        input.append(bytes);
-        TELAR_DIAGNOSTIC(if (counters != nullptr) {
-          diagnostics::accumulate(counters->input_events);
-          diagnostics::accumulate(counters->input_bytes, bytes.size());
-        });
-        observer->bytes(ObservationKind::input, bytes, shellForeground());
-        if (shell_zones) {
-          shell_zones->input(bytes);
-        }
-
-        ++input_revision;
-        needs_foreground_observation = true;
-      }
+      void enqueueInput(std::span<const Byte> bytes);
 
       // The text of the command a client runs at the prompt, recorded before the bytes that type it,
       // so the command's history keeps it instead of reading it back from the screen.
-      inline void submitCommand(std::span<const Byte> text) {
-        observer->bytes(ObservationKind::command, text, shellForeground());
-      }
+      void submitCommand(std::span<const Byte> text);
 
       // The terminal feeds the pane's media as it resumes.
-      inline void resumeControl() {
-        terminal.resumeControl(*media);
-      }
+      void resumeControl();
 
-      inline void resize(TerminalSize size) {
-        if (terminal.hasSize(size)) {
-          return;
-        }
+      void resize(TerminalSize size);
 
-        terminal.resize(size, *media);
-        if (blocks) {
-          blocks->follow(true);
-        }
+      std::optional<bool> shellForeground() const noexcept;
 
-        process->resize(size);
-        observer->resize(size);
-        media->resize(size);
-      }
-
-      inline std::optional<bool> shellForeground() const noexcept {
-        if (shell_markers) {
-          return std::nullopt;
-        }
-
-        const auto foreground = process->foregroundProcessGroup();
-
-        return foreground ? std::optional<bool>{*foreground == process->processId()} : std::nullopt;
-      }
-
-      inline std::optional<std::int32_t> exitCode() const noexcept {
-        return exit_status ? std::optional{shellExitCode(*exit_status)} : std::nullopt;
-      }
+      std::optional<std::int32_t> exitCode() const noexcept;
 
       static constexpr std::size_t input_limit = 128 * 1024;
       static constexpr std::size_t read_buffer_size = 16 * 1024;
@@ -704,70 +426,37 @@ export {
         std::array<Mark, 16> kept{};
         std::size_t count = 0;
 
-        inline void complete(CommandCompletion completion) noexcept {
-          ++state.commands;
-          state.status = completion.exit_code.value_or(0);
-          if (count != 0 && kept[count - 1].action == 'D') {
-            kept[count - 1].status = completion.exit_code;
-          }
-        }
+        void complete(CommandCompletion completion) noexcept;
 
-        inline void mark(CommandMark mark) noexcept {
-          if (count < kept.size()) {
-            kept[count++] = Mark{.action = mark.action, .end = mark.end, .status = std::nullopt};
-          }
-        }
+        void mark(CommandMark mark) noexcept;
 
-        inline std::span<const Mark> marks() const noexcept {
-          return std::span<const Mark>{kept}.first(count);
-        }
+        std::span<const Mark> marks() const noexcept;
       };
 
       // Folds one round trip into the link's; clients hear of it when it moves by a tenth.
-      inline void timeLink(std::chrono::steady_clock::duration elapsed) noexcept {
-        constexpr double longest_ms = 5000;
-        const auto sample = std::chrono::duration<double, std::milli>(elapsed).count();
-        if (!shell_state.remote || sample > longest_ms) {
-          return;
-        }
+      void timeLink(std::chrono::steady_clock::duration elapsed) noexcept;
 
-        link_average_ms = link_average_ms == 0 ? sample : link_average_ms * 0.7 + sample * 0.3;
-        const auto shown = static_cast<std::uint32_t>(std::max(1.0, std::round(link_average_ms)));
-        const auto published = shell_state.link_ms;
-        if (published == 0 || std::max(shown, published) - std::min(shown, published) >= std::max<std::uint32_t>(2, published / 10)) {
-          shell_state.link_ms = shown;
-          ++shell_revision;
-        }
-      }
-
-      inline void expireProgress(std::optional<bool> shell_foreground) noexcept {
-        if (terminal.effects.progress_state == PaneProgressState::remove) {
-          return;
-        }
-
-        if (!shell_foreground) {
-          const auto group = process->foregroundProcessGroup();
-
-          shell_foreground = group && *group == process->processId();
-        }
-
-        if (*shell_foreground) {
-          terminal.effects.setProgress(PaneProgressState::remove, std::nullopt);
-        }
-      }
+      void expireProgress(std::optional<bool> shell_foreground) noexcept;
 
 #if TELAR_DIAGNOSTICS
-      inline void recordRead(std::size_t size, bool folded) noexcept {
-        if (counters == nullptr) {
-          return;
-        }
-
-        diagnostics::accumulate(counters->pty_events);
-        diagnostics::accumulate(counters->pty_bytes, size);
-        diagnostics::accumulate(counters->folded_pty_events, folded);
-      }
+      void recordRead(std::size_t size, bool folded) noexcept;
 #endif
     };
+
+    extern template class Pane<SystemAllocator>;
+    extern template class Pane<ConcurrentMemory>;
+    extern template Pane<Memory>::Pane(Memory& memory, std::uint64_t identity, TabLocation location, Command<Memory>& command, PaneLaunch settings);
+    extern template void Pane<Memory>::observeShell() noexcept;
+    extern template bool Pane<Memory>::hasInput() const noexcept;
+    extern template void Pane<Memory>::requestClose() noexcept;
+    extern template void Pane<Memory>::resumeControl();
+    extern template std::optional<std::int32_t> Pane<Memory>::exitCode() const noexcept;
+    extern template Pane<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>::Pane(SynchronizedAllocator<BudgetAllocator<SystemAllocator>>& memory, std::uint64_t identity, TabLocation location, Command<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>& command, PaneLaunch settings);
+    extern template void Pane<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>::observeShell() noexcept;
+    extern template bool Pane<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>::hasInput() const noexcept;
+    extern template void Pane<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>::requestClose() noexcept;
+    extern template void Pane<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>::resumeControl();
+    extern template std::optional<std::int32_t> Pane<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>::exitCode() const noexcept;
 
   }
 }
@@ -791,58 +480,27 @@ export {
 
     template <Allocator Memory>
     struct Tab {
-      inline explicit Tab(Memory& memory, std::uint64_t identity, std::string_view name)
-          : id(identity),
-            label(name, AllocatorRef<char, Memory>{memory}),
-            panes(AllocatorRef<std::uint64_t, Memory>{memory}) {
-        panes.reserve(64);
-      }
+      explicit Tab(Memory& memory, std::uint64_t identity, std::string_view name);
 
       std::uint64_t id;
       String<Memory> label;
       Vector<std::uint64_t, Memory> panes;
     };
 
+    extern template struct Tab<SystemAllocator>;
+    extern template struct Tab<ConcurrentMemory>;
+    extern template struct Tab<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>;
+
     template <Allocator Memory>
     class Workspace {
     public:
-      inline explicit Workspace(Memory& memory, std::uint64_t identity, std::string_view directory, std::string_view label)
-          : id(identity),
-            path(directory, AllocatorRef<char, Memory>{memory}),
-            name(label, AllocatorRef<char, Memory>{memory}),
-            tabs(AllocatorRef<Tab<Memory>, Memory>{memory}) {
-        tabs.reserve(64);
-      }
+      explicit Workspace(Memory& memory, std::uint64_t identity, std::string_view directory, std::string_view label);
 
-      inline Tab<Memory>* tab(std::uint64_t tab_id) noexcept {
-        for (auto& entry : tabs) {
-          if (entry.id == tab_id) {
-            return &entry;
-          }
-        }
+      Tab<Memory>* tab(std::uint64_t tab_id) noexcept;
 
-        return nullptr;
-      }
+      const Tab<Memory>* tab(std::uint64_t tab_id) const noexcept;
 
-      inline const Tab<Memory>* tab(std::uint64_t tab_id) const noexcept {
-        return const_cast<Workspace*>(this)->tab(tab_id);
-      }
-
-      inline std::string_view displayName() const noexcept {
-        if (!name.empty()) {
-          return name;
-        }
-
-        std::string_view directory = path;
-
-        while (directory.size() > 1 && directory.back() == '/') {
-          directory.remove_suffix(1);
-        }
-
-        const auto basename = directory.substr(directory.rfind('/') + 1);
-
-        return utf8Prefix(basename.empty() ? directory : basename, 256);
-      }
+      std::string_view displayName() const noexcept;
 
       std::uint64_t id;
       String<Memory> path;
@@ -855,6 +513,10 @@ export {
       bool git_timed_out = false;
     };
 
+    extern template class Workspace<SystemAllocator>;
+    extern template class Workspace<ConcurrentMemory>;
+    extern template Workspace<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>::Workspace(SynchronizedAllocator<BudgetAllocator<SystemAllocator>>& memory, std::uint64_t identity, std::string_view directory, std::string_view label);
+
   }
 }
 
@@ -864,23 +526,9 @@ export {
 
     template <Allocator Memory>
     struct Worktree {
-      inline explicit Worktree(Memory& memory, std::uint64_t identity, const RegisterWorktree& request)
-          : id(identity),
-            source(request.source),
-            created_by(request.created_by),
-            coordinator(request.coordinator),
-            origin(request.origin),
-            path(request.path, AllocatorRef<char, Memory>{memory}) {
-        branch.assign(request.branch);
-        base.assign(request.base);
-        title.assign(request.title);
-        brief.assign(request.brief);
-        dispatched_from.assign(request.dispatched_from);
-      }
+      explicit Worktree(Memory& memory, std::uint64_t identity, const RegisterWorktree& request);
 
-      inline WorktreeListEntry entry() const noexcept {
-        return {.worktree = id, .source = source, .workspace = workspace, .created_by = created_by, .origin = origin, .state = state, .path = path, .branch = branch.view(), .base = base.view(), .title = title.view(), .brief = brief.view(), .dispatched_from = dispatched_from.view(), .coordinator = coordinator, .diff_added = diff_added, .diff_removed = diff_removed, .diff_files = diff_files, .commits_ahead = commits_ahead, .command_label = command_label.view(), .command_state = command_state, .command_exit = command_exit};
-      }
+      WorktreeListEntry entry() const noexcept;
 
       std::uint64_t id;
       std::uint64_t source;
@@ -908,87 +556,25 @@ export {
       std::optional<std::uint64_t> command_pane;
     };
 
+    extern template struct Worktree<SystemAllocator>;
+    extern template struct Worktree<ConcurrentMemory>;
+
     template <Allocator Memory>
     class Worktrees {
     public:
-      inline explicit Worktrees(Memory& memory)
-          : memory_(memory),
-            entries_(memory) {}
+      explicit Worktrees(Memory& memory);
 
-      inline WorktreeRegistered registerEntry(const RegisterWorktree& request, std::uint64_t restored_identity = 0) {
-        for (auto* entry : entries_.items()) {
-          if (entry == nullptr || entry->path != request.path) {
-            continue;
-          }
+      WorktreeRegistered registerEntry(const RegisterWorktree& request, std::uint64_t restored_identity = 0);
 
-          if (!request.title.empty()) {
-            entry->title.assign(request.title);
-          }
+      Worktree<Memory>* find(std::uint64_t identity) noexcept;
 
-          if (!request.brief.empty()) {
-            entry->brief.assign(request.brief);
-          }
+      std::span<Worktree<Memory>* const> items() const noexcept;
 
-          if (request.coordinator) {
-            entry->coordinator = request.coordinator;
-          }
+      void remove(std::uint64_t identity) noexcept;
 
-          return {request.request_id, entry->id, false};
-        }
+      Worktree<Memory>* containing(std::string_view path) noexcept;
 
-        if (request.origin == WorktreeOrigin::external && entries_.size() >= capacity - reserved_for_telar) {
-          throw RequestError{FailureCode::resource_limit, "Worktree limit reached"};
-        }
-
-        const auto identity = restored_identity == 0 ? entries_.nextId() : restored_identity;
-        auto entry = makeOwned<Worktree<Memory>>(memory_, memory_, identity, request);
-
-        entries_.insert(identity, std::move(entry));
-        return {request.request_id, identity, true};
-      }
-
-      inline Worktree<Memory>* find(std::uint64_t identity) noexcept {
-        return entries_.find(identity);
-      }
-
-      inline auto items() const noexcept {
-        return entries_.items();
-      }
-
-      inline void remove(std::uint64_t identity) noexcept {
-        entries_.erase(identity);
-      }
-
-      inline Worktree<Memory>* containing(std::string_view path) noexcept {
-        Worktree<Memory>* selected = nullptr;
-
-        for (auto* entry : entries_.items()) {
-          if (entry == nullptr || !path.starts_with(entry->path)) {
-            continue;
-          }
-
-          const auto length = entry->path.size();
-          if (path.size() != length && path[length] != '/' && entry->path.back() != '/') {
-            continue;
-          }
-
-          if (selected == nullptr || length > selected->path.size()) {
-            selected = entry;
-          }
-        }
-
-        return selected;
-      }
-
-      inline std::uint64_t sourceFor(std::uint64_t workspace) const noexcept {
-        for (const auto* entry : entries_.items()) {
-          if (entry != nullptr && entry->workspace == workspace) {
-            return entry->source;
-          }
-        }
-
-        return workspace;
-      }
+      std::uint64_t sourceFor(std::uint64_t workspace) const noexcept;
 
       static constexpr std::size_t capacity = 64;
 
@@ -997,6 +583,11 @@ export {
       Memory& memory_;
       SlotStore<Worktree<Memory>, capacity, Memory> entries_;
     };
+
+    extern template class Worktrees<SystemAllocator>;
+    extern template class Worktrees<ConcurrentMemory>;
+    extern template Worktrees<Memory>::Worktrees(Memory& memory);
+    extern template Worktrees<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>::Worktrees(SynchronizedAllocator<BudgetAllocator<SystemAllocator>>& memory);
 
   }
 }
@@ -1016,8 +607,9 @@ export {
 
     // Calls `send` for each open client `admits` accepts. A client whose send throws is closed: its
     // connection may hold part of a frame, and every broadcast treats that failure alike.
+    // Generic over the caller's predicate and sender, and run for every message sent to all clients.
     template <Allocator Memory, typename Admits, typename Send>
-    inline void deliver(ClientStore<Memory>& clients, Admits&& admits, Send&& send) noexcept {
+    TBC_HOT_PATH inline void deliver(ClientStore<Memory>& clients, Admits&& admits, Send&& send) noexcept {
       for (auto* client : clients.items()) {
         if (client == nullptr || client->connection.closing || !admits(*client)) {
           continue;
@@ -1032,8 +624,9 @@ export {
     }
 
     // Sends `message` to each open client `admits` accepts, as deliver does; how many queued it.
+    // Generic over the caller's predicate and message, as deliver.
     template <Allocator Memory, typename Admits, typename Message>
-    inline std::size_t broadcast(ClientStore<Memory>& clients, Admits&& admits, const Message& message) noexcept {
+    TBC_HOT_PATH inline std::size_t broadcast(ClientStore<Memory>& clients, Admits&& admits, const Message& message) noexcept {
       std::size_t delivered = 0;
 
       deliver(clients, admits, [&](ClientSession<Memory>& client) {
@@ -1045,84 +638,56 @@ export {
 
     // Whether a live client holds a tab.
     template <Allocator Memory>
-    inline bool tabHeld(const ClientStore<Memory>& clients, TabLocation location) noexcept {
-      for (const auto* client : clients.items()) {
-        if (client != nullptr && !client->connection.closing && client->held_tabs.contains(location)) {
-          return true;
-        }
-      }
-
-      return false;
-    }
+    bool tabHeld(const ClientStore<Memory>& clients, TabLocation location) noexcept;
 
     // The stored client with an identity, which a request names.
     template <Allocator Memory>
-    inline ClientSession<Memory>& requireClient(ClientStore<Memory>& clients, std::uint64_t identity) {
-      auto* client = clients.find(identity);
-      if (client == nullptr) {
-        throw RequestError{FailureCode::invalid_request, "Client does not exist"};
-      }
-
-      return *client;
-    }
+    ClientSession<Memory>& requireClient(ClientStore<Memory>& clients, std::uint64_t identity);
 
     // The pane `identity` names while it has `generation`; none for another generation. No pane has
     // generation 0, so 0 finds none.
     template <Allocator Memory>
-    inline tbc::view<Pane<Memory>*, tbc::lt::a> findPane(tbc::view<PaneStore<Memory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept {
-      auto* pane = panes.find(identity);
-
-      return pane != nullptr && pane->generation == generation ? pane : nullptr;
-    }
+    tbc::view<Pane<Memory>*, tbc::lt::a> findPane(tbc::view<PaneStore<Memory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
 
     template <Allocator Memory>
-    inline tbc::view<const Pane<Memory>*, tbc::lt::a> findPane(tbc::view<const PaneStore<Memory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept {
-      const auto* pane = panes.find(identity);
-
-      return pane != nullptr && pane->generation == generation ? pane : nullptr;
-    }
+    tbc::view<const Pane<Memory>*, tbc::lt::a> findPane(tbc::view<const PaneStore<Memory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
 
     // The same pane while its process runs and nobody asked it to close.
     template <Allocator Memory>
-    inline tbc::view<Pane<Memory>*, tbc::lt::a> livePane(tbc::view<PaneStore<Memory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept {
-      auto* pane = findPane(panes, identity, generation);
-
-      return pane != nullptr && !pane->exit_status && !pane->close_requested ? pane : nullptr;
-    }
+    tbc::view<Pane<Memory>*, tbc::lt::a> livePane(tbc::view<PaneStore<Memory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
 
     template <Allocator Memory>
-    inline tbc::view<const Pane<Memory>*, tbc::lt::a> livePane(tbc::view<const PaneStore<Memory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept {
-      const auto* pane = findPane(panes, identity, generation);
-
-      return pane != nullptr && !pane->exit_status && !pane->close_requested ? pane : nullptr;
-    }
+    tbc::view<const Pane<Memory>*, tbc::lt::a> livePane(tbc::view<const PaneStore<Memory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
 
     // The pane an agent's report names, which must still run the generation it names and be the one
     // the runtime verified the reporting client inside.
     template <Allocator Memory>
-    inline tbc::view<Pane<Memory>&, tbc::lt::a> requireReporterPane(tbc::view<PaneStore<Memory>&, tbc::lt::a> panes, const ClientSession<Memory>& client, std::uint64_t identity, std::uint64_t generation) {
-      auto* pane = findPane(panes, identity, generation);
-      if (pane == nullptr || pane->exit_status) {
-        throw RequestError{FailureCode::pane_not_found, "Pane not found"};
-      }
+    tbc::view<Pane<Memory>&, tbc::lt::a> requireReporterPane(tbc::view<PaneStore<Memory>&, tbc::lt::a> panes, const ClientSession<Memory>& client, std::uint64_t identity, std::uint64_t generation);
 
-      if (!client.verifiedFor(*pane)) {
-        throw RequestError{FailureCode::foreign_process, "The report does not come from this pane's agent"};
-      }
-
-      return *pane;
-    }
+    extern template bool tabHeld<SystemAllocator>(const ClientStore<SystemAllocator>& clients, TabLocation location) noexcept;
+    extern template ClientSession<SystemAllocator>& requireClient<SystemAllocator>(ClientStore<SystemAllocator>& clients, std::uint64_t identity);
+    extern template tbc::view<Pane<SystemAllocator>*, tbc::lt::a> findPane<SystemAllocator>(tbc::view<PaneStore<SystemAllocator>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
+    extern template tbc::view<const Pane<SystemAllocator>*, tbc::lt::a> findPane<SystemAllocator>(tbc::view<const PaneStore<SystemAllocator>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
+    extern template tbc::view<Pane<SystemAllocator>*, tbc::lt::a> livePane<SystemAllocator>(tbc::view<PaneStore<SystemAllocator>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
+    extern template tbc::view<const Pane<SystemAllocator>*, tbc::lt::a> livePane<SystemAllocator>(tbc::view<const PaneStore<SystemAllocator>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
+    extern template tbc::view<Pane<SystemAllocator>&, tbc::lt::a> requireReporterPane<SystemAllocator>(tbc::view<PaneStore<SystemAllocator>&, tbc::lt::a> panes, const ClientSession<SystemAllocator>& client, std::uint64_t identity, std::uint64_t generation);
+    extern template bool tabHeld<ConcurrentMemory>(const ClientStore<ConcurrentMemory>& clients, TabLocation location) noexcept;
+    extern template ClientSession<ConcurrentMemory>& requireClient<ConcurrentMemory>(ClientStore<ConcurrentMemory>& clients, std::uint64_t identity);
+    extern template tbc::view<Pane<ConcurrentMemory>*, tbc::lt::a> findPane<ConcurrentMemory>(tbc::view<PaneStore<ConcurrentMemory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
+    extern template tbc::view<const Pane<ConcurrentMemory>*, tbc::lt::a> findPane<ConcurrentMemory>(tbc::view<const PaneStore<ConcurrentMemory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
+    extern template tbc::view<Pane<ConcurrentMemory>*, tbc::lt::a> livePane<ConcurrentMemory>(tbc::view<PaneStore<ConcurrentMemory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
+    extern template tbc::view<const Pane<ConcurrentMemory>*, tbc::lt::a> livePane<ConcurrentMemory>(tbc::view<const PaneStore<ConcurrentMemory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
+    extern template tbc::view<Pane<ConcurrentMemory>&, tbc::lt::a> requireReporterPane<ConcurrentMemory>(tbc::view<PaneStore<ConcurrentMemory>&, tbc::lt::a> panes, const ClientSession<ConcurrentMemory>& client, std::uint64_t identity, std::uint64_t generation);
+    extern template tbc::view<Pane<Memory>*, tbc::lt::a> findPane<Memory>(tbc::view<PaneStore<Memory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
+    extern template tbc::view<const Pane<Memory>*, tbc::lt::a> findPane<Memory>(tbc::view<const PaneStore<Memory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
+    extern template tbc::view<Pane<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>*, tbc::lt::a> findPane<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>(tbc::view<PaneStore<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
+    extern template tbc::view<const Pane<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>*, tbc::lt::a> findPane<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>(tbc::view<const PaneStore<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
 
     // The runtime's data apart from its clients, whose table is separate so that a call can borrow one
     // client and the model at once, as Rust borrows two fields of a struct.
     template <Allocator Memory>
     struct RuntimeModel {
-      inline explicit RuntimeModel(Memory& memory, GraphicsLimits graphics = {})
-          : graphics_limits(graphics),
-            media_budget(graphics.global_bytes),
-            panes(memory),
-            workspaces(memory),
-            worktrees(memory) {}
+      explicit RuntimeModel(Memory& memory, GraphicsLimits graphics = {});
 
       GraphicsLimits graphics_limits;
       RuntimeLimits limits;
@@ -1148,6 +713,11 @@ export {
       bool stopping = false;
     };
 
+    extern template struct RuntimeModel<SystemAllocator>;
+    extern template struct RuntimeModel<Memory>;
+    extern template struct RuntimeModel<ConcurrentMemory>;
+    extern template struct RuntimeModel<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>;
+
   }
 }
 
@@ -1158,77 +728,14 @@ export {
     template <Allocator Memory>
     class ClientLayouts {
     public:
-      inline explicit ClientLayouts(Memory& memory)
-          : records_(AllocatorRef<Record, Memory>{memory}) {
-        records_.reserve(maximum_identities);
-      }
+      explicit ClientLayouts(Memory& memory);
 
-      inline void retain(const RuntimeModel<Memory>& model, std::uint64_t identity, const UpdateClientLayout& update) {
-        if (identity == 0) {
-          throw RequestError{FailureCode::invalid_request, "Client layout requires a subscribed identity"};
-        }
+      void retain(const RuntimeModel<Memory>& model, std::uint64_t identity, const UpdateClientLayout& update);
 
-        bool active_valid = false;
-
-        for (const auto& tab : update.tabs) {
-          if (sameLocation(tab.location, update.active_tab)) {
-            active_valid = current(model, tab);
-          }
-        }
-
-        if (!active_valid) {
-          return;
-        }
-
-        auto* existing = find(identity);
-        Record replacement;
-
-        replacement.identity = identity;
-        replacement.last_used = clock_ + 1;
-        replacement.sidebar_visible = update.sidebar_visible;
-        replacement.sidebar_width = update.sidebar_width;
-        replacement.workspace_list_collapsed = update.workspace_list_collapsed;
-        replacement.active_tab = update.active_tab;
-
-        if (existing != nullptr) {
-          for (std::size_t index = 0; index < existing->tab_count; ++index) {
-            auto tab = existing->tabAt(index);
-            if (!current(model, tab) || std::ranges::any_of(update.tabs, [&](const auto& incoming) {
-                  return current(model, incoming) && sameLocation(incoming.location, tab.location);
-                })) {
-              continue;
-            }
-
-            if (std::ranges::any_of(update.tabs, [&](const auto& incoming) {
-                  return incoming.workspace_active && sameWorkspace(incoming.location.workspace, tab.location.workspace) && current(model, incoming);
-                })) {
-              tab.workspace_active = false;
-            }
-
-            replacement.append(tab);
-          }
-        }
-
-        for (const auto& tab : update.tabs) {
-          if (current(model, tab)) {
-            replacement.append(tab);
-          }
-        }
-
-        if (existing == nullptr) {
-          if (records_.size() < maximum_identities) {
-            records_.emplace_back();
-            existing = &records_.back();
-          } else {
-            existing = &*std::ranges::min_element(records_, {}, &Record::last_used);
-          }
-        }
-
-        *existing = replacement;
-        ++clock_;
-      }
-
-      inline void publish(const RuntimeModel<Memory>& model, ClientSession<Memory>& client) {
+      // Kept here (P9.12): out of line, the lifetime checker's summary takes the whole receiver as
+      // mutated, and Runtime::writeClient's StateProjection, which borrows these layouts, then
+      // overlaps the client it publishes to (tbc-invalidated-borrow).
+      TBC_HOT_PATH inline void publish(const RuntimeModel<Memory>& model, ClientSession<Memory>& client) {
         auto* record = find(client.identity);
         if (record == nullptr) {
           client.connection.send(ClientLayoutSnapshot{});
@@ -1262,29 +769,13 @@ export {
         });
       }
 
-      inline std::optional<std::uint64_t> focusedPane(std::uint64_t identity) const noexcept {
-        for (const auto& record : records_) {
-          if (record.identity != identity) {
-            continue;
-          }
+      std::optional<std::uint64_t> focusedPane(std::uint64_t identity) const noexcept;
 
-          for (std::size_t index = 0; index < record.tab_count; ++index) {
-            const auto& tab = record.tabs[index];
-            if (sameLocation(tab.location, record.active_tab)) {
-              return tab.focused_pane;
-            }
-          }
-        }
+      std::uint64_t revision() const noexcept;
 
-        return std::nullopt;
-      }
-
-      inline std::uint64_t revision() const noexcept {
-        return clock_;
-      }
-
+      // Generic over the caller's consumer, which each record is handed to.
       template <typename Consumer>
-      inline void exportRecords(const RuntimeModel<Memory>& model, Consumer&& consume) const {
+      TBC_HOT_PATH inline void exportRecords(const RuntimeModel<Memory>& model, Consumer&& consume) const {
         std::array<ClientTabLayout, maximum_tabs> tabs;
 
         for (const auto& record : records_) {
@@ -1335,69 +826,25 @@ export {
         std::size_t tab_count = 0;
         std::size_t node_count = 0;
 
-        inline ClientTabLayout tabAt(std::size_t index) const noexcept {
-          const auto& tab = tabs[index];
+        ClientTabLayout tabAt(std::size_t index) const noexcept;
 
-          return ClientTabLayout{tab.location, tab.focused_pane, tab.fullscreen, tab.workspace_active, std::span{nodes}.subspan(tab.node_start, tab.node_count)};
-        }
-
-        inline void append(const ClientTabLayout& tab) {
-          if (tab_count == maximum_tabs || tab.nodes.size() > maximum_nodes - node_count) {
-            throw std::bad_alloc{};
-          }
-
-          tabs[tab_count++] = StoredTab{tab.location, tab.focused_pane, tab.fullscreen, tab.workspace_active, static_cast<std::uint16_t>(node_count), static_cast<std::uint16_t>(tab.nodes.size())};
-          std::copy(tab.nodes.begin(), tab.nodes.end(), nodes.begin() + node_count);
-          node_count += tab.nodes.size();
-        }
+        void append(const ClientTabLayout& tab);
       };
 
-      inline static bool sameWorkspace(WorkspaceLocation left, WorkspaceLocation right) noexcept {
-        return left.kind == right.kind && left.id == right.id;
-      }
+      static bool sameWorkspace(WorkspaceLocation left, WorkspaceLocation right) noexcept;
 
-      inline static bool sameLocation(TabLocation left, TabLocation right) noexcept {
-        return sameWorkspace(left.workspace, right.workspace) && left.tab_id == right.tab_id;
-      }
+      static bool sameLocation(TabLocation left, TabLocation right) noexcept;
 
-      inline static bool current(const RuntimeModel<Memory>& model, const ClientTabLayout& layout) noexcept {
-        auto* workspace = model.workspaces.find(layout.location.workspace.id);
-        auto* tab = workspace == nullptr ? nullptr : workspace->tab(layout.location.tab_id);
-        if (layout.location.workspace.kind != WorkspaceLocation::Kind::workspace || tab == nullptr) {
-          return false;
-        }
+      static bool current(const RuntimeModel<Memory>& model, const ClientTabLayout& layout) noexcept;
 
-        std::size_t pane_count = 0;
-
-        for (const auto& node : layout.nodes) {
-          const auto* leaf = std::get_if<ClientLayoutPane>(&node);
-          if (leaf == nullptr) {
-            continue;
-          }
-
-          if (model.panes.find(leaf->pane_id) == nullptr || std::ranges::find(tab->panes, leaf->pane_id) == tab->panes.end()) {
-            return false;
-          }
-
-          ++pane_count;
-        }
-
-        return pane_count == tab->panes.size();
-      }
-
-      inline Record* find(std::uint64_t identity) noexcept {
-        for (auto& record : records_) {
-          if (record.identity == identity) {
-            return &record;
-          }
-        }
-
-        return nullptr;
-      }
+      Record* find(std::uint64_t identity) noexcept;
 
       Vector<Record, Memory> records_;
       std::uint64_t clock_ = 0;
     };
+
+    extern template class ClientLayouts<SystemAllocator>;
+    extern template class ClientLayouts<ConcurrentMemory>;
 
   }
 }

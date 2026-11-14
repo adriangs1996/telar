@@ -57,6 +57,10 @@ namespace telar::runtime {
     setCloseOnExec(queue_.get());
   }
 
+  template <Allocator Memory>
+  Kqueue::Kqueue(Memory&)
+      : Kqueue() {}
+
   void Kqueue::change(const struct kevent& event) {
     if (::kevent(queue_.get(), &event, 1, nullptr, 0, nullptr) != 0) {
       throw SystemError{"register runtime event"};
@@ -127,5 +131,10 @@ namespace telar::runtime {
 
     return std::span<const Event>{events}.first(static_cast<std::size_t>(count));
   }
+
+  template Kqueue::Kqueue(SystemAllocator&);
+  template Kqueue::Kqueue(Memory&);
+  template Kqueue::Kqueue(ConcurrentMemory&);
+  template Kqueue::Kqueue(SynchronizedAllocator<BudgetAllocator<SystemAllocator>>&);
 
 }

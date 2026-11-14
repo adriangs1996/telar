@@ -118,28 +118,58 @@ else()
 endif()
 
 add_library(runtime-core STATIC
-  graphics/png_decoder.cpp
-  platform/process_probe/process_inspector.cpp
-  platform/process_probe/${TELAR_PLATFORM}/process_inspector.cpp
-  platform/host_metrics/${TELAR_PLATFORM}/host_metrics.cpp
-  platform/local_listener/local_listener.cpp
-  history/store/database.cpp
-  terminal/text_reader/cell_projection.cpp
-  terminal/text_reader/text_reader.cpp
-  terminal/control/checksum/checksum.cpp
-  terminal/control/glyph/glyph.cpp
-  terminal/control/clipboard/clipboard.cpp
-  terminal/control/engine/engine.cpp
-  terminal/graphics_storage/graphics_storage.cpp
-  terminal/osc_scanner/osc_scanner.cpp
+  cli/server/server.cpp
+  config/loader/loader.cpp
+  diagnostics/operation/operation.cpp
+  diagnostics/runtime_counters/runtime_counters.cpp
+  execution/execution/execution.cpp
   graphics/file_input/file_input.cpp
   graphics/pane_media/pane_media.cpp
+  graphics/png_decoder.cpp
   graphics/prepared_images/prepared_images.cpp
   graphics/synchronizer/synchronizer.cpp
+  history/store/database.cpp
+  metrics/host_sampler/host_sampler.cpp
+  model/client_layouts/client_layouts.cpp
+  model/launch_record/launch_record.cpp
+  model/slot_store/slot_store.cpp
+  observation/processor/processor.cpp
+  paths/query_task/query_task.cpp
+  persistence/session_store/session_store.cpp
+  platform/background_executor/background_executor.cpp
+  platform/descriptor_path/descriptor_path.cpp
+  platform/event_loop/${TELAR_PLATFORM}/event_loop.cpp
+  platform/git_status/git_status.cpp
+  platform/host_metrics/${TELAR_PLATFORM}/host_metrics.cpp
+  platform/launch_program/launch_program.cpp
+  platform/local_listener/local_listener.cpp
+  platform/name_resolutions/name_resolutions.cpp
+  platform/private_tunnel/private_tunnel.cpp
+  platform/process_probe/${TELAR_PLATFORM}/process_inspector.cpp
+  platform/process_probe/process_inspector.cpp
+  platform/request_worker/request_worker.cpp
+  platform/session_host/session_host.cpp
+  platform/signals/signals.cpp
+  platform/stream_read_buffer/stream_read_buffer.cpp
+  platform/system_certificates/system_certificates.cpp
+  runtime/client_control/client_control.cpp
+  runtime/delivery/client_delivery/client_delivery.cpp
+  runtime/execution_service/execution_service.cpp
+  runtime/media_service/media_service.cpp
+  runtime/runtime/runtime.cpp
+  runtime/runtime_telemetry/runtime_telemetry.cpp
+  terminal/control/checksum/checksum.cpp
+  terminal/control/clipboard/clipboard.cpp
+  terminal/control/engine/engine.cpp
+  terminal/control/glyph/glyph.cpp
+  terminal/graphics_storage/graphics_storage.cpp
+  terminal/osc_scanner/osc_scanner.cpp
+  terminal/text_reader/cell_projection.cpp
+  terminal/text_reader/text_reader.cpp
+  transport/connection/connection.cpp
   vocabulary/exchange/exchange.cpp
   vocabulary/frames/frames.cpp
-  vocabulary/traffic/traffic.cpp
-  observation/processor/processor.cpp)
+  vocabulary/traffic/traffic.cpp)
 # The traffic domain: proxy, TLS interception, HTTP, redirection, capture and plugins.
 target_sources(runtime-core PRIVATE
   exchange_capture/pipeline/pipeline.cpp
@@ -186,10 +216,10 @@ target_link_libraries(runtime-core PUBLIC ebnf::ebnf)
 target_link_libraries(runtime-core PUBLIC "${ZLIB_LIBRARY}" "${BROTLI_DECODER_LIBRARY}" "${BROTLI_ENCODER_LIBRARY}" "${BROTLI_COMMON_LIBRARY}" "${ZSTD_LIBRARY}")
 target_link_libraries(runtime-core PUBLIC ghostty-vt "${SQLITE3_LIBRARY}" Threads::Threads OpenSSL::SSL OpenSSL::Crypto)
 if(APPLE)
-  target_sources(runtime-core PRIVATE platform/event_loop/macos/event_loop.cpp)
   target_link_libraries(runtime-core PUBLIC "-framework IOKit" "-framework CoreFoundation" "-framework Security")
 else()
   target_compile_definitions(runtime-core PUBLIC _GNU_SOURCE)
+  target_sources(runtime-core PRIVATE platform/proc_file/proc_file.cpp)
   target_link_libraries(runtime-core PUBLIC util)
 endif()
 option(TELAR_RUNTIME_DIAGNOSTICS "Enable runtime telemetry outside Debug builds" OFF)

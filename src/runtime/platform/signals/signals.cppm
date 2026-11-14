@@ -1,10 +1,6 @@
 module;
 #include "tbc/annotations.hpp"
 
-#include <cerrno>
-#include <cstdint>
-#include <unistd.h>
-
 export module telar.runtime.platform.signals;
 
 import std;
@@ -20,48 +16,15 @@ export {
     // A pipe one thread notifies and another drains: both ends share it.
     class TBC_SHARED CompletionSignal {
     public:
-      inline CompletionSignal() {
-        int descriptors[2];
-        if (::pipe(descriptors) != 0) {
-          throw SystemError{"Create completion pipe"};
-        }
+      CompletionSignal();
 
-        reader_ = FileDescriptor{descriptors[0]};
-        writer_ = FileDescriptor{descriptors[1]};
-        setCloseOnExec(reader_.get());
-        setCloseOnExec(writer_.get());
-        setNonblocking(reader_.get());
-        setNonblocking(writer_.get());
-      }
+      void notify() noexcept;
 
-      inline void notify() noexcept {
-        const std::uint8_t byte = 1;
+      void drain() noexcept;
 
-        while (::write(writer_.get(), &byte, sizeof(byte)) < 0 && sys::lastError() == EINTR) {
-        }
-      }
+      bool consume() noexcept;
 
-      inline void drain() noexcept {
-        std::array<std::uint8_t, 64> bytes;
-
-        while (::read(reader_.get(), bytes.data(), bytes.size()) > 0) {
-        }
-      }
-
-      inline bool consume() noexcept {
-        std::uint8_t byte;
-        ssize_t count;
-
-        do {
-          count = ::read(reader_.get(), &byte, sizeof(byte));
-        } while (count < 0 && sys::lastError() == EINTR);
-
-        return count == sizeof(byte);
-      }
-
-      inline int descriptor() const noexcept {
-        return reader_.get();
-      }
+      int descriptor() const noexcept;
 
     private:
       FileDescriptor reader_;
@@ -79,18 +42,11 @@ export {
     // is shared, so a reference to it stays valid whatever is done through it.
     class TBC_SHARED CancellationSignal {
     public:
-      inline void request() noexcept {
-        requested_.store(true, std::memory_order_relaxed);
-        wake_.notify();
-      }
+      void request() noexcept;
 
-      inline bool requested() const noexcept {
-        return requested_.load(std::memory_order_relaxed);
-      }
+      bool requested() const noexcept;
 
-      inline int descriptor() const noexcept {
-        return wake_.descriptor();
-      }
+      int descriptor() const noexcept;
 
     private:
       CompletionSignal wake_;
