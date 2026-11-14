@@ -27,19 +27,24 @@ static_assert(true);
 #pragma once
 
 import telar.gui.text.notification_payload;
+import telar.gui.application.host_effects;
 import telar.gui.presentation.frame_pacer;
 
 namespace telar::gui::qt {
 
   class Application;
 
-  struct ApplicationEffects {
+  struct ApplicationEffects final : HostEffects {
+    ApplicationEffects(Application& owner, MachineClientKey client) noexcept
+        : application(owner),
+          source(client) {}
+
+    bool postNotification(const NotificationPayload& payload) override;
+    bool playSound(AgentSound sound) override;
+    void notePaneInput(FramePacer::Pane pane) noexcept override;
+
     Application& application;
     MachineClientKey source;
-
-    bool postNotification(const NotificationPayload& payload);
-    bool playSound(AgentSound sound);
-    void notePaneInput(FramePacer::Pane pane, std::uint64_t now_ns) noexcept;
   };
 
 }

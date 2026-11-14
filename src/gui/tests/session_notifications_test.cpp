@@ -74,13 +74,16 @@ namespace {
     }
   };
 
-  using Client = Session<telar::ConcurrentMemory, Transport, Clock>;
+  // A session that reads `Clock`.
+  struct Client : test::TestSession<SystemAllocator> {
+    Client(SystemAllocator& memory, Transport& transport)
+        : TestSession(memory, transport, &Clock::nowNanoseconds) {}
+  };
+
   constexpr std::uint64_t second = 1'000'000'000;
 
   void wireMessagesOwnTextAndRetainStructuredActions() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
     Client client{memory, transport};
 
@@ -108,9 +111,7 @@ namespace {
   }
 
   void agentTransitionsPublishOnlyAfterACommittedRevision() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
     Client client{memory, transport};
     std::array entries{agentSnapshotEntry()};
@@ -137,9 +138,7 @@ namespace {
   }
 
   void routedDismissalCompletesOnceAndPreservesItsRoute() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
     Client client{memory, transport};
 
@@ -168,9 +167,7 @@ namespace {
   }
 
   void activationNavigatesBySemanticTargetOnce() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
     Client client{memory, transport};
 

@@ -70,7 +70,7 @@ namespace {
   void selectionAndProgressPrecedence() {
     SystemAllocator system;
     telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    telar::Memory& memory = adapter;
     GraphicsBudget budget;
     const TabLocation location{.workspace = {.id = 1}, .tab_id = 1};
     Tab tab{memory, location};
@@ -86,24 +86,24 @@ namespace {
       agent.status = AgentStatus::working;
     }
 
-    auto activity = TabActivity::derive(tab, pane.progress_state, std::span<const Agent<telar::ConcurrentMemory>>{agents}, true);
+    auto activity = TabActivity::derive(tab, pane.progress_state, std::span<const Agent<Memory>>{agents}, true);
 
     require(activity.kind == TabActivity::Kind::spinner && activity.width() == TabActivity::spinner_side, "working tabs must reserve the original spinner width");
     agents.front().status = AgentStatus::blocked;
-    activity = TabActivity::derive(tab, pane.progress_state, std::span<const Agent<telar::ConcurrentMemory>>{agents}, true);
+    activity = TabActivity::derive(tab, pane.progress_state, std::span<const Agent<Memory>>{agents}, true);
     require(activity.kind == TabActivity::Kind::dot && activity.color == PaletteRole::yellow && activity.attention == PaletteRole::yellow, "a request for input must precede another pane's work");
     pane.progress_state = PaneProgressState::set;
     pane.progress_percent = quarter_percent;
-    activity = TabActivity::derive(tab, pane.progress_state, std::span<const Agent<telar::ConcurrentMemory>>{agents}, true);
+    activity = TabActivity::derive(tab, pane.progress_state, std::span<const Agent<Memory>>{agents}, true);
     require(activity.kind == TabActivity::Kind::progress && activity.attention == PaletteRole::yellow, "active single-pane progress must retain independent hidden-tab attention");
-    require(TabActivity::derive(tab, pane.progress_state, std::span<const Agent<telar::ConcurrentMemory>>{agents}, false).kind == TabActivity::Kind::dot, "inactive tabs must keep agent status instead of terminal progress");
+    require(TabActivity::derive(tab, pane.progress_state, std::span<const Agent<Memory>>{agents}, false).kind == TabActivity::Kind::dot, "inactive tabs must keep agent status instead of terminal progress");
     tab.layout.add(2, ClientLayoutAxis::horizontal, 1);
-    require(TabActivity::derive(tab, pane.progress_state, std::span<const Agent<telar::ConcurrentMemory>>{agents}, true).kind == TabActivity::Kind::dot, "multi-pane tabs must not project one pane's progress as the tab's progress");
+    require(TabActivity::derive(tab, pane.progress_state, std::span<const Agent<Memory>>{agents}, true).kind == TabActivity::Kind::dot, "multi-pane tabs must not project one pane's progress as the tab's progress");
     for (auto& agent : agents) {
       agent.status = AgentStatus::ready;
     }
 
-    require(TabActivity::derive(tab, pane.progress_state, std::span<const Agent<telar::ConcurrentMemory>>{agents}, true).kind == TabActivity::Kind::none, "ready agents must reserve no trailing slot");
+    require(TabActivity::derive(tab, pane.progress_state, std::span<const Agent<Memory>>{agents}, true).kind == TabActivity::Kind::none, "ready agents must reserve no trailing slot");
   }
 
   void transitionRetargetsAndAttachmentReplacement() {
@@ -140,7 +140,7 @@ namespace {
     telar::MemoryAdapter adapter{gate};
     telar::Memory& memory = adapter;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     const auto allocations = budget.allocations();

@@ -272,11 +272,9 @@ namespace {
   }
 
   void commandNavigationUsesTheCurrentWorkspace() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
-    Session session{memory, transport};
+    TestSession session{memory, transport};
     std::array rows{worktreeEntry()};
     const std::array entries{WorkspaceListEntry{.workspace = 2, .name = "task", .path = "/project/worktree"}};
 

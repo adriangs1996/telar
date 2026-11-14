@@ -84,11 +84,9 @@ namespace {
   }
 
   void hiddenStartupKeepsMetadataWithoutOpeningAPane() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     client.setPresented(false);
     client.connected(1);
@@ -102,11 +100,9 @@ namespace {
   }
 
   void aHiddenRestoredLayoutOwnsItsDataUntilPresentation() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     client.setPresented(false);
     client.connected(1);
@@ -140,11 +136,9 @@ namespace {
   }
 
   void rapidReturnDoesNotDuplicateAnOpeningAlreadyInFlight() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     client.setPresented(false);
@@ -164,7 +158,7 @@ namespace {
     Transport transport;
 
     {
-      Session client{memory, transport};
+      TestSession client{memory, transport};
 
       openFirstPane(client, transport);
       const auto location = client.activeTab()->location;
@@ -194,11 +188,9 @@ namespace {
   }
 
   void hidingWaitsForCanonicalSnapshotsBeforeDetaching() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     client.connected(1);
     deliver(client, ClientLayoutSnapshot{});
@@ -219,11 +211,9 @@ namespace {
   }
 
   void hidingWaitsForAnAttachmentAndHandlesItsLateReply() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     const auto location = client.activeTab()->location;
@@ -241,11 +231,9 @@ namespace {
   }
 
   void metadataDoesNotReattachAHiddenMachine() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     const auto location = client.activeTab()->location;
@@ -262,11 +250,9 @@ namespace {
   }
 
   void hiddenCompletionRemainsUnacknowledgedUntilPresentation() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openWithPendingWorkspaceSnapshot(client, transport);
     std::array entries{agentSnapshotEntry()};
@@ -281,11 +267,9 @@ namespace {
   }
 
   void failedSnapshotsDoNotPreventDeparture() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     client.connected(1);
     deliver(client, ClientLayoutSnapshot{});
@@ -304,11 +288,9 @@ namespace {
   }
 
   void disconnectionReleasesAHiddenWorkspaceWithoutSendingDetaches() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openWithPendingWorkspaceSnapshot(client, transport);
     client.setPresented(false);
@@ -318,11 +300,9 @@ namespace {
   }
 
   void returningBeforeDepartureSettlesKeepsTheWorkspace() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openWithPendingWorkspaceSnapshot(client, transport);
     const auto location = client.activeTab()->location;
@@ -337,11 +317,9 @@ namespace {
   }
 
   void aMissingRememberedPaneFallsBackToItsSourceWorkspaceOnce() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     client.setPresented(false);
@@ -359,11 +337,9 @@ namespace {
   }
 
   void aPartialDetachCanRetryWithoutDroppingPendingScreens() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     const auto location = client.activeTab()->location;

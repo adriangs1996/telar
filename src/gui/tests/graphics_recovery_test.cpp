@@ -65,6 +65,7 @@ namespace {
   using telar::gui::test::deliver;
   using telar::gui::test::openFirstPane;
   using telar::gui::test::require;
+  using telar::gui::test::TestSession;
   using telar::gui::test::Transport;
 
   struct Clock {
@@ -77,24 +78,20 @@ namespace {
 
   class RecoveryTransport : public Transport {
   public:
-    template <typename Message>
-    void send(const Message& message) {
-      if constexpr (std::same_as<Message, RequestGraphicsSnapshot> || std::same_as<Message, GraphicsCredit>) {
-        if (reject_graphics) {
-          throw EncodingError{"Graphics transport is full"};
-        }
+    void send(std::span<const Byte> message) override {
+      const auto tag = static_cast<ClientTag>(message.front());
+      if ((tag == MessageSchema<RequestGraphicsSnapshot>::tag || tag == MessageSchema<GraphicsCredit>::tag) && reject_graphics) {
+        throw EncodingError{"Graphics transport is full"};
       }
 
-      if constexpr (std::same_as<Message, ReportLimit>) {
-        if (reject_reports) {
-          throw EncodingError{"Report transport is full"};
-        }
+      if (tag == MessageSchema<ReportLimit>::tag && reject_reports) {
+        throw EncodingError{"Report transport is full"};
       }
 
       Transport::send(message);
     }
 
-    void recover(std::string_view reason) {
+    void recover(std::string_view reason) override {
       recovery_reason = reason;
     }
 
@@ -110,11 +107,9 @@ namespace {
 
   void windowLimitUsesTheSharedReportAndNotificationLedger() {
     Clock::now_ns = 0;
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     RecoveryTransport transport;
-    Session<telar::ConcurrentMemory, RecoveryTransport, Clock> client{memory, transport};
+    TestSession client{memory, transport, &Clock::nowNanoseconds};
 
     openFirstPane(client, transport);
     constexpr LimitReach reach{.name = ImagePlacementSelection::limit_name, .noun = ImagePlacementSelection::limit_noun, .value = ImagePlacementSelection::capacity, .requested = ImagePlacementSelection::capacity + 1};
@@ -210,11 +205,9 @@ namespace {
   }
 
   void repeatedOversizedSnapshotsUseThePaneBudget() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
-    Session<telar::ConcurrentMemory, Transport, Clock> client{memory, transport};
+    TestSession client{memory, transport, &Clock::nowNanoseconds};
 
     openFirstPane(client, transport);
     constexpr std::uint64_t failed_snapshots = 4;
@@ -232,11 +225,9 @@ namespace {
 
   void pausedDeletesReturnCreditAndACompleteSnapshotClearsTheMarker() {
     Clock::now_ns = 0;
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     RecoveryTransport transport;
-    Session<telar::ConcurrentMemory, RecoveryTransport, Clock> client{memory, transport};
+    TestSession client{memory, transport, &Clock::nowNanoseconds};
 
     openFirstPane(client, transport);
     deliver(client, PaneForeground{.pane_id = 1, .name = "nvim"});
@@ -267,11 +258,9 @@ namespace {
 
   void resumeDeadlineAndFocusKeepTheBackoff() {
     Clock::now_ns = 0;
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     RecoveryTransport transport;
-    Session<telar::ConcurrentMemory, RecoveryTransport, Clock> client{memory, transport};
+    TestSession client{memory, transport, &Clock::nowNanoseconds};
 
     openFirstPane(client, transport);
     for (std::uint64_t revision = 1; revision <= 4; ++revision) {
@@ -302,11 +291,9 @@ namespace {
 
   void failedReportsRetainHitsAndNeverDropTheLink() {
     Clock::now_ns = 0;
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     RecoveryTransport transport;
-    Session<telar::ConcurrentMemory, RecoveryTransport, Clock> client{memory, transport};
+    TestSession client{memory, transport, &Clock::nowNanoseconds};
 
     openFirstPane(client, transport);
     transport.reject_reports = true;
@@ -325,11 +312,9 @@ namespace {
   void criticalDeliveryAndMalformedImagesRecoverTheRuntimeLink() {
     for (const bool malformed : {false, true}) {
       Clock::now_ns = 0;
-      SystemAllocator system;
-      telar::MemoryAdapter adapter{system};
-      telar::ConcurrentMemory& memory = adapter;
+      SystemAllocator memory;
       RecoveryTransport transport;
-      Session<telar::ConcurrentMemory, RecoveryTransport, Clock> client{memory, transport};
+      TestSession client{memory, transport, &Clock::nowNanoseconds};
 
       openFirstPane(client, transport);
       transport.reject_graphics = !malformed;
@@ -351,11 +336,9 @@ namespace {
 
   void snapshotMismatchRequestsRecoveryWithoutALimitNotice() {
     Clock::now_ns = 0;
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
-    Session<telar::ConcurrentMemory, Transport, Clock> client{memory, transport};
+    TestSession client{memory, transport, &Clock::nowNanoseconds};
 
     openFirstPane(client, transport);
     deliver(client, GraphicsSnapshot{.header = header, .phase = SnapshotPhase::begin});

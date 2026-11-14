@@ -231,7 +231,7 @@ namespace telar::gui::qt {
       matches.add(NavigationTarget{workspace.location}, label.view(), query);
     }
 
-    std::array<const Tab<ApplicationAllocator>*, GuiSession::maximum_workspace_tabs> tabs{};
+    std::array<const Tab<Memory>*, GuiSession::maximum_workspace_tabs> tabs{};
     std::size_t count = 0;
     const auto* active = session().activeTab();
 
@@ -243,7 +243,7 @@ namespace telar::gui::qt {
 
     const auto ordered = std::span{tabs}.first(count);
 
-    std::ranges::sort(ordered, {}, &Tab<ApplicationAllocator>::position);
+    std::ranges::sort(ordered, {}, &Tab<Memory>::position);
     for (const auto* tab : ordered) {
       NavigationLabel label;
 

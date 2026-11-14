@@ -80,8 +80,7 @@ namespace {
   struct Fixture {
     Fixture()
         : memory(system, allocation_budget),
-          adapter(memory),
-          client(adapter, transport) {
+          client(memory, transport) {
       openFirstPane(client, transport);
       deliver(client, PaneCwd{.pane_id = 1, .cwd = "/work/project"});
     }
@@ -93,9 +92,8 @@ namespace {
     static constexpr std::size_t allocation_budget = std::size_t{16} * 1024 * 1024;
     SystemAllocator system;
     BudgetAllocator<SystemAllocator> memory;
-    telar::MemoryAdapter<BudgetAllocator<SystemAllocator>> adapter;
     Transport transport;
-    Session<telar::Memory, Transport> client;
+    TestSession<BudgetAllocator<SystemAllocator>> client;
     Environment environment;
   };
 
@@ -288,11 +286,9 @@ namespace {
     const auto tab = fixture.transport.last<CreateTab>();
 
     require(tab.launch.arguments.size() == 2 && tab.launch.arguments[0] == "code" && tab.launch.arguments[1] == "/tmp/new.cpp", "a sourceless absolute file must open in a new tab");
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     client.openFile(filePath("file:/tmp/first.cpp"), "nvim", fixture.environment);
     const auto opened = transport.last<OpenPane>();

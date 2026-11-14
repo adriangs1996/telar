@@ -357,19 +357,19 @@ namespace telar::gui::qt {
     [[nodiscard]] std::uint32_t runtimeOffset(std::uint64_t top) const;
     // The screen row drawn at `drawn`, the row under a pointer counted from the view's top.
     [[nodiscard]] std::optional<std::size_t> screenRowAt(double drawn) const noexcept;
-    [[nodiscard]] std::uint64_t viewRevision(const Pane<ApplicationAllocator>& current) const noexcept;
+    [[nodiscard]] std::uint64_t viewRevision(const Pane<Memory>& current) const noexcept;
     // The rows a scrolled or folded view draws, put together as a screen with their links, for
     // the links under the pointer; nothing while the view draws the screen's own rows.
-    [[nodiscard]] const Screen<ApplicationAllocator>* drawnScreen() const;
+    [[nodiscard]] const Screen<Memory>* drawnScreen() const;
     [[nodiscard]] std::uint64_t drawnScreenKey() const noexcept;
     void appendDrawnRow(std::size_t index) const;
     [[nodiscard]] int indexAt(QPointF position) const noexcept;
     [[nodiscard]] CopyPointerInput pointerInput(QPointF position, CopyPointerKind kind, bool left_button = true, std::int32_t rows = 0) const noexcept;
     [[nodiscard]] static unsigned mouseModifiers(Qt::KeyboardModifiers modifiers) noexcept;
-    [[nodiscard]] Pane<ApplicationAllocator>* pane() const noexcept;
+    [[nodiscard]] Pane<Memory>* pane() const noexcept;
     // The first command of the remote session the pane is in, counting the ssh that opened it;
     // past the last command when the pane's shell is its own. Its separators name the host.
-    [[nodiscard]] static std::size_t liveSession(const Pane<ApplicationAllocator>& pane) noexcept;
+    [[nodiscard]] static std::size_t liveSession(const Pane<Memory>& pane) noexcept;
     void observeLinkPointer(QPointF position, Qt::KeyboardModifiers modifiers);
     void refreshLinkHover();
     void clearLinkHover();
@@ -469,7 +469,7 @@ namespace telar::gui::qt {
     QVariantList rail_matches_;
     int fold_from_ = -1;
     qreal fold_offset_ = 0;
-    mutable std::optional<Screen<ApplicationAllocator>> drawn_screen_;
+    mutable std::optional<Screen<Memory>> drawn_screen_;
     mutable std::uint64_t drawn_screen_key_ = 0;
     mutable std::vector<std::span<const CellValue>> drawn_spans_;
     mutable std::vector<Byte> drawn_flags_;

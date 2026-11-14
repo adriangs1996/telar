@@ -6,7 +6,10 @@ module;
 export module telar.gui.tests.session_fixture;
 
 import std;
+export import telar.base.memory.allocators;
 export import telar.gui.application.host_effects;
+export import telar.gui.application.session;
+import telar.wire.clients;
 import telar.wire.clipboard;
 import telar.wire.editor;
 import telar.wire.history;
@@ -19,52 +22,43 @@ export import telar.wire.vocabulary;
 export {
   namespace telar::gui::test {
 
-    class Transport {
+    class Transport : public RuntimeTransport {
     public:
-      template <typename Message>
-      void send(const Message& message) {
-        validatePaneDelivery<Message>();
+      std::span<Byte> buffer(std::size_t size) override {
+        buffer_.resize(size);
 
-        if constexpr (std::same_as<Message, OpenEditor>) {
-          if (reject_editor) {
-            throw EncodingError{"Editor transport is full"};
-          }
+        return buffer_;
+      }
+
+      void send(std::span<const Byte> message) override {
+        const auto tag = static_cast<ClientTag>(message.front());
+
+        validatePaneDelivery(tag);
+        if (tag == MessageSchema<OpenEditor>::tag && reject_editor) {
+          throw EncodingError{"Editor transport is full"};
         }
 
-        if constexpr (std::same_as<Message, CreatePane>) {
-          if (reject_create_pane) {
-            throw EncodingError{"Pane transport is full"};
-          }
+        if (tag == MessageSchema<CreatePane>::tag && reject_create_pane) {
+          throw EncodingError{"Pane transport is full"};
         }
 
-        if constexpr (std::same_as<Message, CreateTab>) {
-          if (reject_create_tab) {
-            throw EncodingError{"Tab transport is full"};
-          }
+        if (tag == MessageSchema<CreateTab>::tag && reject_create_tab) {
+          throw EncodingError{"Tab transport is full"};
         }
 
-        if constexpr (std::same_as<Message, ForgetWorktree>) {
-          if (reject_forget_worktree) {
-            throw EncodingError{"Worktree transport is full"};
-          }
+        if (tag == MessageSchema<ForgetWorktree>::tag && reject_forget_worktree) {
+          throw EncodingError{"Worktree transport is full"};
         }
 
-        if constexpr (std::same_as<Message, QueryHistory>) {
-          if (reject_history) {
-            throw EncodingError{"History transport is full"};
-          }
+        if (tag == MessageSchema<QueryHistory>::tag && reject_history) {
+          throw EncodingError{"History transport is full"};
         }
 
-        if constexpr (std::same_as<Message, CopySelection>) {
-          if (reject_copy) {
-            throw EncodingError{"Copy transport is full"};
-          }
+        if (tag == MessageSchema<CopySelection>::tag && reject_copy) {
+          throw EncodingError{"Copy transport is full"};
         }
 
-        std::vector<Byte> bytes(Codec::encodedSize(message));
-
-        Codec::encode(message, bytes);
-        sent.push_back(std::move(bytes));
+        sent.emplace_back(message.begin(), message.end());
       }
 
       template <typename Message>
@@ -87,7 +81,7 @@ export {
         }));
       }
 
-      void willDetach(std::uint64_t pane_id) {
+      void willDetach(std::uint64_t pane_id) override {
         detaching.push_back(pane_id);
       }
 
@@ -131,35 +125,68 @@ export {
       mutable std::array<Byte, decode_capacity> storage{};
 
     private:
-      template <typename Message>
-      void validatePaneDelivery() {
-        if constexpr (std::same_as<Message, PaneInput>) {
-          if (reject_input_after && count(ClientTag::pane_input) >= *reject_input_after) {
-            throw EncodingError{"Pane input transport is full"};
-          }
+      std::vector<Byte> buffer_;
+
+      void validatePaneDelivery(ClientTag tag) {
+        if (tag == MessageSchema<PaneInput>::tag && reject_input_after && count(ClientTag::pane_input) >= *reject_input_after) {
+          throw EncodingError{"Pane input transport is full"};
         }
 
-        if constexpr (std::same_as<Message, DetachPane>) {
-          if (reject_detach_after && count(ClientTag::detach_pane) >= *reject_detach_after) {
-            throw EncodingError{"Detach transport is full"};
-          }
+        if (tag == MessageSchema<DetachPane>::tag && reject_detach_after && count(ClientTag::detach_pane) >= *reject_detach_after) {
+          throw EncodingError{"Detach transport is full"};
         }
 
-        if constexpr (std::same_as<Message, PaneResize>) {
-          if (std::exchange(reject_next_pane_resize, false)) {
-            throw EncodingError{"Resize transport is full"};
-          }
+        if (tag == MessageSchema<PaneResize>::tag && std::exchange(reject_next_pane_resize, false)) {
+          throw EncodingError{"Resize transport is full"};
         }
       }
     };
 
-    template <typename Message, typename Client, ClientCommandHandler Handler>
+    template <Allocator Upstream>
+    struct AdaptedMemory {
+      MemoryAdapter<Upstream> adapter;
+    };
+
+    // A session over a test's allocator, which it puts behind Memory.
+    template <Allocator Upstream>
+    class TestSession : private AdaptedMemory<Upstream>, public Session {
+    public:
+      TestSession(Upstream& memory, RuntimeTransport& transport, MonotonicNow now = &platform::AwakeClock::nowNanoseconds)
+          : AdaptedMemory<Upstream>{MemoryAdapter<Upstream>{memory}},
+            Session(this->adapter, transport, now) {}
+
+      TestSession(Upstream& memory, RuntimeTransport& transport, HostEffects& effects, MonotonicNow now = &platform::AwakeClock::nowNanoseconds)
+          : AdaptedMemory<Upstream>{MemoryAdapter<Upstream>{memory}},
+            Session(this->adapter, transport, effects, now) {}
+    };
+
+    // Runs a test's callable as the session's command handler.
+    template <typename Handler>
+    class CommandHandler final : public ClientCommandHandler {
+    public:
+      explicit CommandHandler(Handler& handler)
+          : handler_(handler) {}
+
+      void operator()(const ClientCommand& message, CompleteClientCommand& reply) const override {
+        handler_(message, reply);
+      }
+
+    private:
+      Handler& handler_;
+    };
+
+    template <typename Message, typename Client, typename Handler>
     auto deliver(Client& client, const Message& message, Handler& handler) {
       std::vector<Byte> bytes(Codec::encodedSize(message));
 
       Codec::encode(message, bytes);
+      if constexpr (std::derived_from<Handler, ClientCommandHandler>) {
+        return client.consume(bytes, handler);
+      } else {
+        const CommandHandler<Handler> adapter{handler};
 
-      return client.consume(bytes, handler);
+        return client.consume(bytes, adapter);
+      }
     }
 
     template <typename Message, typename Client>

@@ -66,11 +66,9 @@ namespace {
   constexpr WorktreeListEntry second_gone_checkout{.worktree = second_checkout_id, .source = project_id, .state = WorktreeState::gone, .path = "/project/other", .branch = "other"};
 
   void leavingAWorktreeOpensItsProjectWithoutALaunchCommand() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     require(!client.leaveWorktree(), "an unconnected client must not request a workspace handoff");
     openFirstPane(client, transport);
@@ -99,7 +97,7 @@ namespace {
     Transport transport;
 
     {
-      Session client{memory, transport};
+      TestSession client{memory, transport};
 
       openFirstPane(client, transport);
       const std::array worktrees{
@@ -130,11 +128,9 @@ namespace {
   }
 
   void cleanupStopsAtCapacityAndReleasesRejectedDelivery() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     const std::array worktrees{gone_checkout};

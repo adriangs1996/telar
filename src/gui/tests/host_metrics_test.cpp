@@ -59,6 +59,7 @@ namespace {
   using namespace telar::gui;
   using telar::gui::test::hostSample;
   using telar::gui::test::require;
+  using telar::gui::test::TestSession;
 
   constexpr std::uint8_t initial_cpu = 42;
   constexpr std::uint8_t old_cpu = 99;
@@ -107,11 +108,9 @@ namespace {
   }
 
   void connectionReplacementAcceptsARevisionRestart() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     telar::gui::test::Transport transport;
-    Session session{memory, transport};
+    TestSession session{memory, transport};
 
     session.connected(1);
     constexpr std::uint64_t previous_revision = 9;

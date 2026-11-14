@@ -43,11 +43,9 @@ namespace {
 
   // A document shows once all its parts arrived in order, and goes away when the runtime says so.
   void partsAssembleIntoTheDocument() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     auto* pane = client.findPane(1);
@@ -66,11 +64,9 @@ namespace {
 
   // Bytes that do not decode never show, whatever program wrote them.
   void corruptDocumentsDoNotShow() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     auto bytes = encoded("text");

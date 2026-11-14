@@ -104,7 +104,7 @@ namespace {
     ImageNode(ImageNode&&) = delete;
     ImageNode& operator=(ImageNode&&) = delete;
 
-    void synchronize(QQuickItem& owner, const GraphicsStore<ApplicationAllocator>& store, const Screen<ApplicationAllocator>& screen, QSizeF cell) {
+    void synchronize(QQuickItem& owner, const GraphicsStore<Memory>& store, const Screen<Memory>& screen, QSizeF cell) {
       images_.synchronize(owner, store, ImageRows::of(screen, rows_), cell, owner.window()->devicePixelRatio());
     }
 
@@ -118,7 +118,7 @@ namespace {
 
   class ImageItem final : public QQuickItem {
   public:
-    ImageItem(const std::optional<GraphicsStore<ApplicationAllocator>>& store, const Screen<ApplicationAllocator>& screen, QQuickItem& parent)
+    ImageItem(const std::optional<GraphicsStore<Memory>>& store, const Screen<Memory>& screen, QQuickItem& parent)
         : QQuickItem(&parent),
           store_(store),
           screen_(screen) {
@@ -160,8 +160,8 @@ namespace {
     }
 
   private:
-    const std::optional<GraphicsStore<ApplicationAllocator>>& store_;
-    const Screen<ApplicationAllocator>& screen_;
+    const std::optional<GraphicsStore<Memory>>& store_;
+    const Screen<Memory>& screen_;
     QSizeF cell_{cell_side, cell_side};
   };
 
@@ -207,7 +207,7 @@ namespace {
       window_.show();
     }
 
-    [[nodiscard]] GraphicsStore<ApplicationAllocator>& graphics() {
+    [[nodiscard]] GraphicsStore<Memory>& graphics() {
       if (!catalog_) {
         throw std::logic_error{"The image fixture requires its catalog"};
       }
@@ -235,7 +235,7 @@ namespace {
       return statistics_;
     }
 
-    [[nodiscard]] const std::optional<GraphicsStore<ApplicationAllocator>>& catalog() const noexcept {
+    [[nodiscard]] const std::optional<GraphicsStore<Memory>>& catalog() const noexcept {
       return catalog_;
     }
 
@@ -346,8 +346,8 @@ namespace {
     ApplicationMemory application_memory_;
     ApplicationAllocator& memory_ = application_memory_.memory();
     GraphicsBudget budget_;
-    std::optional<GraphicsStore<ApplicationAllocator>> catalog_;
-    Screen<ApplicationAllocator> screen_;
+    std::optional<GraphicsStore<Memory>> catalog_;
+    Screen<Memory> screen_;
     WindowImageStatistics statistics_;
     std::vector<LimitReach> placement_limits_;
     QQuickWindow window_;
@@ -429,14 +429,14 @@ namespace {
       fixture.finish(image, red);
       fixture.place(image);
       fixture.placeholders();
-      constexpr auto placements_per_view = GraphicsStore<ApplicationAllocator>::placement_capacity;
+      constexpr auto placements_per_view = GraphicsStore<Memory>::placement_capacity;
       constexpr auto view_count = (ImagePlacementSelection::capacity / placements_per_view) + 1;
 
       for (std::size_t index = 0; index < placements_per_view; ++index) {
         fixture.graphics().placement({.header = header, .placement = {.key = image.key, .virtual_id = index + 1, .columns = 2, .rows = 2, .z_index = std::numeric_limits<std::int32_t>::max(), .location = PlacementLocation::placeholders}});
       }
 
-      std::array<std::optional<GraphicsStore<ApplicationAllocator>>, view_count - 1> catalogs;
+      std::array<std::optional<GraphicsStore<Memory>>, view_count - 1> catalogs;
       std::vector<std::unique_ptr<ImageItem>> views;
 
       for (std::size_t index = 1; index < view_count; ++index) {
@@ -591,7 +591,7 @@ namespace {
 
       fixture.finish(image, red);
       constexpr std::size_t global_draw_capacity = 2048;
-      constexpr auto draws_per_view = GraphicsStore<ApplicationAllocator>::placement_capacity;
+      constexpr auto draws_per_view = GraphicsStore<Memory>::placement_capacity;
       constexpr auto view_count = (global_draw_capacity / draws_per_view) + 1;
 
       for (std::size_t index = 0; index < draws_per_view; ++index) {
@@ -600,7 +600,7 @@ namespace {
 
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
-      const Screen<ApplicationAllocator> screen{memory};
+      const Screen<Memory> screen{memory};
       QQuickItem group{fixture.window().contentItem()};
 
       group.setSize({static_cast<qreal>(view_count * window_side), window_side});
@@ -730,7 +730,7 @@ namespace {
       fixture.place(image);
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
-      const Screen<ApplicationAllocator> screen{memory};
+      const Screen<Memory> screen{memory};
       ImageItem other{fixture.catalog(), screen, *fixture.window().contentItem()};
 
       other.setX(window_side);
@@ -761,7 +761,7 @@ namespace {
         const GraphicsStore temporary{memory, fixture.budget()};
       }
 
-      std::optional<GraphicsStore<ApplicationAllocator>> catalog{std::in_place, memory, fixture.budget()};
+      std::optional<GraphicsStore<Memory>> catalog{std::in_place, memory, fixture.budget()};
       constexpr std::size_t texture_bytes = 16;
       constexpr Byte full_channel = 255;
       const std::array<Byte, texture_bytes> pixels{0, 0, full_channel, full_channel, 0, 0, full_channel, full_channel, 0, 0, full_channel, full_channel, 0, 0, full_channel, full_channel};
@@ -769,7 +769,7 @@ namespace {
       catalog->image({.header = header, .image = image});
       catalog->chunk({.header = header, .key = image.key, .bytes = pixels});
       catalog->placement({.header = header, .placement = {.key = image.key, .virtual_id = 1, .columns = 2, .rows = 2}});
-      const Screen<ApplicationAllocator> screen{memory};
+      const Screen<Memory> screen{memory};
       ImageItem other{catalog, screen, *fixture.window().contentItem()};
 
       other.setX(window_side);

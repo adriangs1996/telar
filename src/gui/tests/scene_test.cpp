@@ -502,7 +502,7 @@ namespace {
       item_.offsetRows(std::move(offsets));
     }
 
-    [[nodiscard]] const Screen<ApplicationAllocator>& screen() const noexcept {
+    [[nodiscard]] const Screen<Memory>& screen() const noexcept {
       return screen_;
     }
 
@@ -730,9 +730,9 @@ namespace {
     ApplicationMemory application_memory_;
     ApplicationAllocator& memory_ = application_memory_.memory();
     GraphicsBudget budget_;
-    Screen<ApplicationAllocator> screen_;
+    Screen<Memory> screen_;
     std::vector<std::vector<CellValue>> kept_;
-    GraphicsStore<ApplicationAllocator> graphics_;
+    GraphicsStore<Memory> graphics_;
     Configuration configuration_;
     QString preedit_;
     QQuickWindow window_;

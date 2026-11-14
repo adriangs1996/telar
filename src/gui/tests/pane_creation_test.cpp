@@ -65,7 +65,7 @@ namespace {
   using namespace telar::gui;
   using namespace telar::gui::test;
 
-  const Tab<telar::ConcurrentMemory>* tabIn(const Session<telar::ConcurrentMemory, Transport>& client, TabLocation location) {
+  const Tab<Memory>* tabIn(const Session& client, TabLocation location) {
     for (const auto& tab : client.tabs()) {
       if (sameTab(tab->location, location)) {
         return tab.get();
@@ -76,11 +76,9 @@ namespace {
   }
 
   void newTabsKeepTheWorkbenchSizeAfterAChildResize() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     const auto workbench = client.focusedPane()->size;
@@ -101,11 +99,9 @@ namespace {
   }
 
   void splitRequestsStartAtTheirChildSize() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     const auto parent = client.focusedPane()->size;
@@ -118,11 +114,9 @@ namespace {
   }
 
   void splitRepliesWithoutAnIdentityRefreshTheRuntimeGeneration() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     client.split(ClientLayoutAxis::horizontal);
@@ -173,11 +167,9 @@ namespace {
   constexpr WorkbenchGeometry framed_geometry{.area = {.width = 1010, .height = 850}, .grid = {.cell_width_px = 20, .cell_height_px = 40, .scale = 2}, .layout_metrics = {.border = 1, .gap = 1}};
 
   void aRejectedSplitRestoresTheSinglePane() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     client.setWorkbenchGeometry(framed_geometry);
     openFirstPane(client, transport);
@@ -205,11 +197,9 @@ namespace {
     });
 
     for (const auto& entry : cases) {
-      SystemAllocator system;
-      telar::MemoryAdapter adapter{system};
-      telar::ConcurrentMemory& memory = adapter;
+      SystemAllocator memory;
       Transport transport;
-      Session client{memory, transport};
+      TestSession client{memory, transport};
 
       client.setWorkbenchGeometry(framed_geometry);
       openFirstPane(client, transport);
@@ -234,11 +224,9 @@ namespace {
 
   void splitDeliveryFailuresRestoreTheSourceAndReleaseOwnership() {
     for (const bool reject_resize : std::array{false, true}) {
-      SystemAllocator system;
-      telar::MemoryAdapter adapter{system};
-      telar::ConcurrentMemory& memory = adapter;
+      SystemAllocator memory;
       Transport transport;
-      Session client{memory, transport};
+      TestSession client{memory, transport};
 
       openFirstPane(client, transport);
       const auto original = client.focusedPane()->size;
@@ -264,11 +252,9 @@ namespace {
   }
 
   void runtimeFailureRestoresCurrentGeometryAndBusyRequestsDoNotOverlap() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     client.split(ClientLayoutAxis::horizontal);
@@ -288,7 +274,7 @@ namespace {
     require(transport.count(ClientTag::create_pane) == 2, "runtime rejection must release the pane operation");
   }
 
-  TabLocation openAnotherTab(Session<telar::ConcurrentMemory, Transport>& client, const Transport& transport) {
+  TabLocation openAnotherTab(Session& client, const Transport& transport) {
     client.createTab();
     const auto request = transport.last<CreateTab>();
     const TabLocation location{.workspace = request.workspace, .tab_id = 2};
@@ -299,11 +285,9 @@ namespace {
   }
 
   void lateSplitConfirmationPreservesTheActiveTabAndDuplicateOwnership() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     client.split(ClientLayoutAxis::horizontal);
@@ -323,11 +307,9 @@ namespace {
   }
 
   void confirmationCannotRecreateARemovedTab() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     client.split(ClientLayoutAxis::horizontal);
@@ -341,11 +323,9 @@ namespace {
   }
 
   void aVanishedSourceUsesTheSurvivingTabMembership() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     client.split(ClientLayoutAxis::horizontal);
@@ -362,11 +342,9 @@ namespace {
   }
 
   void anEmptyWorkbenchCannotCreateOrResizeProcesses() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     auto geometry = client.workbenchGeometry();
@@ -398,7 +376,7 @@ namespace {
     std::size_t allocations = 0;
 
     {
-      Session client{memory, transport};
+      TestSession client{memory, transport};
 
       openFirstPane(client, transport);
       client.split(ClientLayoutAxis::horizontal);
@@ -438,11 +416,9 @@ namespace {
   }
 
   void routedCommandsRejectBusyAndUnavailableCreation() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     ClientCommand command{.request_id = 1, .route = {.id = 1, .generation = 1}, .action = ClientAction::pane_create};
@@ -474,11 +450,9 @@ namespace {
   }
 
   void routedTabsRejectAnExistingTabOperation() {
-    SystemAllocator system;
-    telar::MemoryAdapter adapter{system};
-    telar::ConcurrentMemory& memory = adapter;
+    SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     client.createTab();

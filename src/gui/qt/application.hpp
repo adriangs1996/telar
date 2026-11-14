@@ -335,7 +335,7 @@ namespace telar::gui::qt {
     void configureRemoteLaunch(const QString& destination, const QStringList& arguments);
     void setWindow(QQuickWindow& window);
     bool eventFilter(QObject* watched, QEvent* event) override;
-    [[nodiscard]] Pane<ApplicationAllocator>* pane(std::uint64_t identity) const noexcept;
+    [[nodiscard]] Pane<Memory>* pane(std::uint64_t identity) const noexcept;
     [[nodiscard]] const Configuration& configuration() const noexcept;
     [[nodiscard]] ResolvedFont resolveFont(qreal scale);
     [[nodiscard]] ViewVersion viewVersion() const noexcept;
@@ -622,7 +622,7 @@ namespace telar::gui::qt {
     void scrollBinding(ScrollDirection direction);
     [[nodiscard]] QString bindingShortcut(BindingActionKind action) const;
     using PaletteTarget = std::variant<NavigationTarget, Action, MachinePickerTarget>;
-    static constexpr std::size_t palette_capacity = WorkspaceReplica<ApplicationAllocator>::maximum_workspaces + GuiSession::maximum_workspace_tabs + AgentReplica<ApplicationAllocator>::capacity;
+    static constexpr std::size_t palette_capacity = WorkspaceReplica<Memory>::maximum_workspaces + GuiSession::maximum_workspace_tabs + AgentReplica<Memory>::capacity;
     using PaletteMatches = RankedMatches<PaletteTarget, palette_capacity>;
 
     enum class MachineRetirement : std::uint8_t {
@@ -729,7 +729,7 @@ namespace telar::gui::qt {
     };
 
     struct HistoryHoverFrame {
-      std::array<HistoryHoverTarget, HistoryBrowser<ApplicationAllocator>::page_entries + HistoryActions::count + HistoryFooter::capacity + history_filter_target_count + history_inspection_action_count> targets;
+      std::array<HistoryHoverTarget, HistoryBrowser<Memory>::page_entries + HistoryActions::count + HistoryFooter::capacity + history_filter_target_count + history_inspection_action_count> targets;
       std::size_t count = 0;
       std::uint64_t generation = 0;
       double scale = 1;
@@ -775,11 +775,15 @@ namespace telar::gui::qt {
 
     // Answers the commands of the active machine's client. A configuration reply views the
     // application's buffers, region `a`, until the client encodes it.
-    struct HostCommands {
+    struct HostCommands final : ClientCommandHandler {
+      HostCommands(tbc::view<Application&, tbc::lt::a> owner, bool is_active) noexcept
+          : application(owner),
+            active(is_active) {}
+
+      void operator()(const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply) const override;
+
       tbc::view<Application&, tbc::lt::a> application;
       bool active = false;
-
-      void operator()(const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply) const;
     };
 
     void consume(MachineClient& client, QByteArrayView payload);
@@ -796,7 +800,7 @@ namespace telar::gui::qt {
     [[nodiscard]] const PresentedHistory* presentedHistory(const QString& revision) const;
     void refreshHistory();
     [[nodiscard]] QString historyScopeValue();
-    [[nodiscard]] std::string_view historyTabName(const Pane<ApplicationAllocator>* pane) const;
+    [[nodiscard]] std::string_view historyTabName(const Pane<Memory>* pane) const;
     void refresh();
     void refreshAgents();
     void fitSidebarWhenReady();
@@ -825,7 +829,7 @@ namespace telar::gui::qt {
     [[nodiscard]] TabDropSurface tabDropSurface() const;
     void synchronizeTabStrip();
     void activateHistoryCardAction(HistoryCardAction action, HistoryChoice choice);
-    [[nodiscard]] QVariantList fullscreenEntries(const Tab<ApplicationAllocator>& tab);
+    [[nodiscard]] QVariantList fullscreenEntries(const Tab<Memory>& tab);
     void showDialog(Dialog kind);
     void fail(const std::exception& error);
     void publishCopyChange(std::uint64_t previous_pane);

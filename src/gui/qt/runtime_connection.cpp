@@ -253,7 +253,7 @@ namespace telar::gui::qt {
     }
   }
 
-  bool RuntimeConnection::report(const ReportLimit& message) {
+  bool RuntimeConnection::report(std::span<const Byte> message) {
     constexpr qint64 reserved_input_messages = 8;
     constexpr auto reserved_input_bytes = reserved_input_messages * static_cast<qint64>(read_chunk_size);
     if (socket_.bytesToWrite() >= output_limit - reserved_input_bytes) {
@@ -263,6 +263,23 @@ namespace telar::gui::qt {
     send(message);
 
     return true;
+  }
+
+  std::span<Byte> RuntimeConnection::buffer(std::size_t size) {
+    output_.resize(size);
+
+    return output_;
+  }
+
+  void RuntimeConnection::send(std::span<const Byte> message) {
+    if (!accepted_) {
+      throw std::runtime_error{"Runtime is not connected"};
+    }
+
+    write(message);
+    if (accepted_ && !message.empty() && message.front() == static_cast<Byte>(MessageSchema<OpenPane>::tag)) {
+      static_cast<void>(socket_.flush());
+    }
   }
 
   void RuntimeConnection::connectSocket() {

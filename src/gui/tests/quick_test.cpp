@@ -333,7 +333,7 @@ return {api_version = 2, client = {
     }
   }
 
-  std::optional<std::uint32_t> logicalRowStart(const Screen<ApplicationAllocator>& screen, std::size_t requested_line) {
+  std::optional<std::uint32_t> logicalRowStart(const Screen<telar::Memory>& screen, std::size_t requested_line) {
     const auto grid = screenGrid(screen);
     std::size_t line = 0;
 
@@ -4088,7 +4088,7 @@ return {api_version=2, client={keybindings={
       seedHistoryPages();
       client_->execute(Application::Action::history);
       client_->searchHistory(QStringLiteral("GUI_BROWSER_PAGE"));
-      constexpr auto page_entries = static_cast<int>(HistoryBrowser<ApplicationAllocator>::page_entries);
+      constexpr auto page_entries = static_cast<int>(HistoryBrowser<telar::Memory>::page_entries);
 
       QTRY_VERIFY_WITH_TIMEOUT(!client_->historyLoading() && client_->history()->rowCount() == page_entries, runtime_wait_ms);
       QVERIFY(client_->historyState().value(QStringLiteral("canOlder")).toBool());
@@ -4575,7 +4575,7 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void historyWheelStopsAtPageAdmission() {
-      constexpr auto page_count = HistoryBrowser<ApplicationAllocator>::page_entries;
+      constexpr auto page_count = HistoryBrowser<telar::Memory>::page_entries;
       constexpr auto entry_count = page_count + 2;
       std::array<std::string, entry_count> commands;
       std::array<telar::ImportHistoryEntry, entry_count> entries{};
@@ -4714,7 +4714,7 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void historyEqualSizedReplyUpdatesPendingDelegates() {
-      constexpr auto entry_count = HistoryBrowser<ApplicationAllocator>::page_entries;
+      constexpr auto entry_count = HistoryBrowser<telar::Memory>::page_entries;
       std::array<std::string, entry_count> commands;
       std::array<telar::ImportHistoryEntry, entry_count> entries{};
 
@@ -8134,7 +8134,7 @@ return {api_version=2, client={keybindings={
     }
 
     void seedHistoryPages() {
-      constexpr auto entry_count = HistoryBrowser<ApplicationAllocator>::page_entries + 1;
+      constexpr auto entry_count = HistoryBrowser<telar::Memory>::page_entries + 1;
       std::array<std::string, entry_count> commands;
       std::array<telar::ImportHistoryEntry, entry_count> entries{};
 
@@ -8940,7 +8940,7 @@ return {api_version=2, client={keybindings={
       return nullptr;
     }
 
-    [[nodiscard]] Pane<ApplicationAllocator>* firstPane() const {
+    [[nodiscard]] Pane<telar::Memory>* firstPane() const {
       if (client_->panes()->rowCount() == 0) {
         return nullptr;
       }

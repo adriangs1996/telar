@@ -38,6 +38,7 @@ static_assert(true);
 
 #include "application/dependencies.hpp"
 
+import telar.gui.application.host_effects;
 import telar.gui.machines.discovery;
 import telar.gui.platform.shared_image_source;
 import telar.client;
@@ -45,7 +46,7 @@ import telar.gui.transport.runtime_link;
 
 namespace telar::gui::qt {
 
-  class RuntimeConnection final : public QObject {
+  class RuntimeConnection final : public QObject, public RuntimeTransport {
     Q_OBJECT
 
   public:
@@ -72,11 +73,11 @@ namespace telar::gui::qt {
     void resumeSession();
     [[nodiscard]] bool ready() const noexcept;
 
-    [[nodiscard]] bool supportsSharedMemory() const noexcept {
+    [[nodiscard]] bool supportsSharedMemory() const noexcept override {
       return accepted_ && !remote_target_;
     }
 
-    [[nodiscard]] platform::SharedImageSource sharedImage(std::string_view name) const {
+    [[nodiscard]] platform::SharedImageSource sharedImage(std::string_view name) const override {
       if (!supportsSharedMemory()) {
         throw EncodingError{"Shared graphics requires a local runtime"};
       }
@@ -91,27 +92,20 @@ namespace telar::gui::qt {
     [[nodiscard]] const RuntimeLink& link() const noexcept;
     [[nodiscard]] QString error() const;
     void dismissError();
-    void recover(std::string_view reason);
-    bool report(const ReportLimit& message);
+    void recover(std::string_view reason) override;
+    bool report(std::span<const Byte> message) override;
 
-    void willDetach(std::uint64_t pane_id) {
+    void willDetach(std::uint64_t pane_id) override {
       emit paneWillDetach(pane_id);
     }
 
+    std::span<Byte> buffer(std::size_t size) override;
+    void send(std::span<const Byte> message) override;
+
     template <typename Message>
+      requires(!std::convertible_to<const Message&, std::span<const Byte>>)
     void send(const Message& message) {
-      if (!accepted_) {
-        throw std::runtime_error{"Runtime is not connected"};
-      }
-
-      output_.resize(Codec::encodedSize(message));
-      write(Codec::encode(message, output_));
-
-      if constexpr (std::same_as<Message, OpenPane>) {
-        if (accepted_) {
-          static_cast<void>(socket_.flush());
-        }
-      }
+      send(Codec::encode(message, buffer(Codec::encodedSize(message))));
     }
 
   signals:
