@@ -518,7 +518,7 @@ namespace telar::runtime::cli::window {
       std::println(stderr, "{}{}", prefix, error.what());
     } catch (const SystemError& error) {
       const bool timeout = error.code() == EAGAIN || error.code() == ETIMEDOUT;
-      const char* description = timeout ? "RuntimeTimeout" : error.code() == ENOENT || error.code() == ECONNREFUSED ? systemErrorName(error.code())
+      const char* description = timeout ? "RuntimeTimeout" : error.code() == ENOENT || error.code() == ECONNREFUSED ? sys::errorName(error.code())
                                                                                                                     : error.what();
 
       if constexpr (std::is_same_v<Options, NotificationOptions>) {

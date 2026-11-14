@@ -435,18 +435,7 @@ export {
       }
 
       if (const auto* system = dynamic_cast<const SystemError*>(&error)) {
-        switch (system->code()) {
-        case ENOMEM:
-        case ENOBUFS:
-          return "SystemResources";
-        case EACCES:
-        case EPERM:
-          return "AccessDenied";
-        case EBADF:
-          return "InvalidDescriptor";
-        default:
-          return "Unexpected";
-        }
+        return sys::errorName(system->code());
       }
 
       return "Unexpected";

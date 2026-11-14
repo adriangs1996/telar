@@ -339,9 +339,6 @@
     "<limits.h>",
     "<sys/types.h>"
   ],
-  "lib/platform/error/error.cppm": [
-    "<cerrno>"
-  ],
   "lib/platform/fs/fs.cppm": [
     "<cerrno>",
     "<cstdio>",
@@ -2251,7 +2248,6 @@
   ],
   "src/runtime/execution/execution/execution.cppm": [
     "<cassert>",
-    "<cerrno>",
     "<cstddef>",
     "<cstdint>",
     "<cstdio>",

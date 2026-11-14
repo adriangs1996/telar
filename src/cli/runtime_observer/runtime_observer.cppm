@@ -611,7 +611,7 @@ export {
       } catch (const SystemError& error) {
         const bool timeout = error.code() == EAGAIN || error.code() == ETIMEDOUT;
 
-        writeText(std::string{"telar runtime: "} + (timeout ? "RuntimeTimeout" : systemErrorName(error.code())) + "\n", STDERR_FILENO);
+        writeText(std::string{"telar runtime: "} + (timeout ? "RuntimeTimeout" : sys::errorName(error.code())) + "\n", STDERR_FILENO);
         return timeout ? 3 : 1;
       } catch (const std::exception& error) {
         const auto reason = commandErrorName(error);
