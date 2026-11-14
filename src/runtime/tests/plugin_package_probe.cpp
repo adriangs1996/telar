@@ -34,7 +34,9 @@ int main(int argc, char** argv) {
     }
 
     SystemAllocator system;
-    BudgetAllocator memory{system, 64 * 1024 * 1024};
+    BudgetAllocator budget{system, 64 * 1024 * 1024};
+    MemoryAdapter adapter{budget};
+    Memory& memory = adapter;
     auto package = plugins::PackageInspector::inspect(memory, argv[3]);
     plugins::PackageSnapshots snapshots{memory};
 
@@ -42,7 +44,7 @@ int main(int argc, char** argv) {
       package = snapshots.copy(package, 0);
     }
 
-    String<decltype(memory)> output{AllocatorRef<char, decltype(memory)>{memory}};
+    String<Memory> output{AllocatorRef<char, Memory>{memory}};
 
     plugins::appendInspection(output, package);
     const auto error = writeDescriptor(STDOUT_FILENO, {reinterpret_cast<const std::uint8_t*>(output.data()), output.size()});

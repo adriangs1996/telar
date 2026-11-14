@@ -257,13 +257,21 @@
     "<cstdint>",
     "<tbc/view.hpp>"
   ],
-  "lib/git/checkout/checkout.cppm": [
+  "lib/git/checkout/checkout.cpp": [
     "<cstring>",
     "<limits.h>",
     "<sys/stat.h>",
     "tbc/view.hpp"
   ],
-  "lib/git/git-format.cppm": [
+  "lib/git/checkout/checkout.cppm": [
+    "<limits.h>",
+    "tbc/hot_path.hpp",
+    "tbc/view.hpp"
+  ],
+  "lib/git/git-config.cppm": [
+    "tbc/hot_path.hpp"
+  ],
+  "lib/git/git-format.cpp": [
     "<cerrno>",
     "<fcntl.h>",
     "<openssl/sha.h>",
@@ -272,7 +280,11 @@
     "<time.h>",
     "<unistd.h>"
   ],
-  "lib/git/git-objects.cppm": [
+  "lib/git/git-format.cppm": [
+    "<openssl/sha.h>",
+    "<sys/stat.h>"
+  ],
+  "lib/git/git-objects.cpp": [
     "<cerrno>",
     "<climits>",
     "<dirent.h>",
@@ -281,21 +293,32 @@
     "<unistd.h>",
     "<zlib.h>"
   ],
-  "lib/git/git-worktree.cppm": [
+  "lib/git/git-objects.cppm": [
+    "<zlib.h>",
+    "tbc/hot_path.hpp"
+  ],
+  "lib/git/git-worktree.cpp": [
     "<cerrno>",
     "<fcntl.h>",
     "<sys/stat.h>",
     "<time.h>",
     "<unistd.h>"
   ],
-  "lib/git/git.cppm": [
+  "lib/git/git-worktree.cppm": [
+    "<sys/stat.h>"
+  ],
+  "lib/git/git.cpp": [
     "<cerrno>",
     "<dirent.h>",
     "<fcntl.h>",
     "<sys/stat.h>",
     "<unistd.h>"
   ],
-  "lib/lua/lua.cppm": [
+  "lib/git/git.cppm": [
+    "<sys/stat.h>",
+    "tbc/hot_path.hpp"
+  ],
+  "lib/lua/lua.cpp": [
     "<cmath>",
     "<cstddef>",
     "<cstdint>",
@@ -311,10 +334,26 @@
     "<sys/stat.h>",
     "tbc/view.hpp"
   ],
+  "lib/lua/lua.cppm": [
+    "<cstddef>",
+    "<lauxlib.h>",
+    "<limits.h>",
+    "<lua.h>",
+    "tbc/hot_path.hpp",
+    "tbc/view.hpp"
+  ],
+  "lib/machines/machines.cpp": [
+    "<cstddef>",
+    "<cstdint>",
+    "<cstring>",
+    "<limits.h>"
+  ],
   "lib/machines/machines.cppm": [
     "<cstddef>",
     "<cstdint>",
-    "<cstring>"
+    "<cstring>",
+    "<limits.h>",
+    "tbc/hot_path.hpp"
   ],
   "lib/platform/daemon/daemon.cpp": [
     "<cerrno>",
@@ -523,7 +562,7 @@
     "<pthread.h>",
     "<unistd.h>"
   ],
-  "lib/plugins/plugins.cppm": [
+  "lib/plugins/plugins.cpp": [
     "<cerrno>",
     "<cstddef>",
     "<cstdint>",
@@ -535,14 +574,23 @@
     "<limits.h>",
     "<linux/fs.h>",
     "<new>",
-    "<openssl/sha.h>",
     "<stdlib.h>",
     "<sys/stat.h>",
     "<sys/syscall.h>",
     "<unistd.h>",
     "telar_platform/open_directory.h"
   ],
+  "lib/plugins/plugins.cppm": [
+    "<cstddef>",
+    "<cstdint>",
+    "<limits.h>",
+    "tbc/hot_path.hpp"
+  ],
+  "lib/render/document/document.cpp": [
+    "telar_render/sequence.hpp"
+  ],
   "lib/render/document/document.cppm": [
+    "tbc/hot_path.hpp",
     "telar_render/sequence.hpp"
   ],
   "lib/render/include/telar_render/sequence.hpp": [
@@ -550,7 +598,7 @@
     "<cstdint>",
     "<string_view>"
   ],
-  "lib/render/markdown/markdown.cppm": [
+  "lib/render/markdown/markdown.cpp": [
     "entity.h",
     "md4c.h"
   ],
@@ -686,7 +734,7 @@
     "<string_view>",
     "tbc/view.hpp"
   ],
-  "lib/tls/tls.cppm": [
+  "lib/tls/tls.cpp": [
     "<arpa/inet.h>",
     "<cerrno>",
     "<cstddef>",
@@ -713,6 +761,17 @@
     "tbc/view.hpp",
     "telar_platform/process_environment.h",
     "telar_platform/trace_macro.hpp"
+  ],
+  "lib/tls/tls.cppm": [
+    "<cstddef>",
+    "<cstdint>",
+    "<cstdio>",
+    "<limits.h>",
+    "<openssl/crypto.h>",
+    "<openssl/ssl.h>",
+    "<openssl/x509.h>",
+    "tbc/hot_path.hpp",
+    "tbc/view.hpp"
   ],
   "lib/wire/agents/agents.cppm": [
     "telar_client/protocol/agents.hpp"

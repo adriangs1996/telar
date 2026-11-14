@@ -9,7 +9,7 @@ endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/openssl.cmake")
 
-add_library(telar-tls STATIC)
+add_library(telar-tls STATIC tls.cpp)
 add_library(telar::tls ALIAS telar-tls)
 telar_modules(telar-tls)
 target_include_directories(telar-tls PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")

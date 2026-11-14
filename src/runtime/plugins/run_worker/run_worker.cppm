@@ -1129,7 +1129,7 @@ export {
     public:
       inline explicit Host(Memory& memory, const char* entry_path, const ServiceSpec* traffic = nullptr)
           : memory_(memory),
-            vm_(memory_, {Limits::lua_bytes, Limits::lua_instructions, Limits::callback_deadline}) {
+            vm_(erased_, {Limits::lua_bytes, Limits::lua_instructions, Limits::callback_deadline}) {
         std::array<char, PATH_MAX> resolved;
         if (::realpath(entry_path, resolved.data()) == nullptr) {
           throw SystemError{"Resolve tap entrypoint"};
@@ -1268,7 +1268,7 @@ export {
           lua_pushcfunction(state, &redactSecrets);
           lua_setfield(state, -2, "secrets");
           lua_pop(state, 1);
-          lua::JsonDecoder<SensitiveMemory>::install(state, host.memory_);
+          lua::JsonDecoder<ErasingMemory>::install(state, host.erased_);
           host.modules_.emplace(state, host.package_root_.view());
           if (host.traffic_) {
             host.traffic_->install(state);
@@ -1345,7 +1345,9 @@ export {
 
       using SensitiveMemory = RecyclingAllocator<Memory>;
       SensitiveMemory memory_;
-      lua::Vm<SensitiveMemory> vm_;
+      // The machine compiles once, for any Memory: it reaches the recycling allocator through the adapter.
+      MemoryAdapter<SensitiveMemory> erased_{memory_};
+      lua::Vm<ErasingMemory> vm_;
       FixedText<PATH_MAX> package_root_;
       std::optional<lua::LocalModules<lua::ModuleDomain::package>> modules_;
       int callback_reference_ = LUA_NOREF;

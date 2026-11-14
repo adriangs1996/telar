@@ -457,8 +457,10 @@ static void testCommandHelpers(SystemAllocator& memory) {
   check(status == 0 && output == "input" && error == "error\n");
 }
 
-static void testHardenedGit(SystemAllocator& memory) {
-  using Git = HardenedGit<SystemAllocator>;
+static void testHardenedGit(SystemAllocator& system) {
+  using Git = HardenedGit<Memory>;
+  MemoryAdapter adapter{system};
+  Memory& memory = adapter;
 
   check(Git::honorsLazyFetchControl("git version 2.45.0\n") && Git::honorsLazyFetchControl("git version 3.0") && Git::honorsLazyFetchControl("git version 2.50.1 (Apple Git-155)"));
   check(!Git::honorsLazyFetchControl("git version 2.44.9") && !Git::honorsLazyFetchControl("git version 2") && !Git::honorsLazyFetchControl("version 2.45"));

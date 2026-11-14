@@ -72,7 +72,9 @@ namespace {
   }
 
   void completeThemeInheritanceAndProjection() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     const ConfigurationSourceText source{
         .source = R"(
         return {api_version=2,theme={base='vesper',colors={text='#010203',mauve='#040506',panel_bg='default'},
@@ -113,7 +115,9 @@ namespace {
 
   void themeQueriesRetainValuesWithoutAllocation() {
     SystemAllocator system;
-    BudgetAllocator memory{system, std::numeric_limits<std::size_t>::max()};
+    BudgetAllocator budget{system, std::numeric_limits<std::size_t>::max()};
+    telar::MemoryAdapter adapter{budget};
+    telar::Memory& memory = adapter;
 
     {
       const ConfigurationSourceText source{
@@ -129,10 +133,10 @@ namespace {
 
       ConfigurationGeneration generation{memory, source};
       std::array<char, ConfigurationQuery::capacity> output{};
-      const auto allocations = memory.allocations();
+      const auto allocations = budget.allocations();
       const std::string before{ThemeQuery::write(generation.configuration().themes, output)};
 
-      require(memory.allocations() == allocations, "serializing a retained theme must not allocate through the application allocator");
+      require(budget.allocations() == allocations, "serializing a retained theme must not allocate through the application allocator");
       require(before.contains(R"("kind":"rgb","value":"\u0001\u0002\u0003")"), "valid RGB UTF-8 storage must serialize as a JSON string");
       require(before.contains(R"("foreground":[255,255,255])"), "invalid RGB UTF-8 storage must serialize as numeric elements");
       static_cast<void>(generation.invoke(generation.input().configured.front().action, {}));
@@ -153,7 +157,7 @@ namespace {
       require(ThemeQuery::write(generation.configuration().themes, output) == before, "a rejected oversized query must leave the retained snapshot intact");
     }
 
-    require(memory.liveBytes() == 0, "complete theme snapshots must release all application allocations");
+    require(budget.liveBytes() == 0, "complete theme snapshots must release all application allocations");
   }
 
   void syntaxFallbackAndAliases() {

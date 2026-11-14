@@ -10,7 +10,7 @@ namespace {
 
   using namespace telar;
   using namespace telar::render;
-  using Memory = SystemAllocator;
+  using Memory = telar::Memory;
   using Doc = Document<Memory>;
 
   int failures = 0;
@@ -22,7 +22,9 @@ namespace {
     }
   }
 
-  Memory memory;
+  SystemAllocator system;
+  MemoryAdapter adapter{system};
+  Memory& memory = adapter;
 
   Doc parse(std::string_view source) {
     Doc document{memory};

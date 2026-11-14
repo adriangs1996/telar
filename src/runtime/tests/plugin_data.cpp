@@ -28,7 +28,9 @@ static void writeCapabilities(tap::FrameWriter& writer, tap::Capabilities capabi
 }
 
 extern "C" std::size_t plugin_data(unsigned mode, const Byte* input, std::size_t length, Byte* output, std::size_t capacity) {
-  SystemAllocator memory;
+  SystemAllocator system;
+  MemoryAdapter adapter{system};
+  Memory& memory = adapter;
   tap::FrameWriter writer{{output, capacity}};
   try {
     const std::string_view source{reinterpret_cast<const char*>(input), length};

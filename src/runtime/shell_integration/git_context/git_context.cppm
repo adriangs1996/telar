@@ -54,7 +54,7 @@ export namespace telar::runtime {
     using Result = ShellGitResult;
 
     inline ShellGitReader()
-        : reader_(memory_) {}
+        : reader_(erased_) {}
 
     inline Result observe(const Request& request) noexcept {
       Result result{.pane = request.pane, .generation = request.generation, .summary = {}};
@@ -91,7 +91,8 @@ export namespace telar::runtime {
 
   private:
     SystemAllocator memory_;
-    git::StatusReader<SystemAllocator> reader_;
+    MemoryAdapter<SystemAllocator> erased_{memory_};
+    git::StatusReader<Memory> reader_;
   };
 
   // One read at a time: while one runs, the latest request of each other pane waits.

@@ -422,7 +422,8 @@ def declared_type(found, index):
         return None
 
     index += 1
-    while found[index] in ('class', 'struct', 'alignas', '['):
+    # TBC_HOT_PATH stands where a class attribute does.
+    while found[index] in ('class', 'struct', 'alignas', '[', 'TBC_HOT_PATH'):
         if found[index] == '[':
             index = skip_balanced(found, index, '[', ']')
         elif found[index] == 'alignas':

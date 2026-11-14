@@ -82,7 +82,9 @@ namespace {
   }
 
   void configuredOrderAndCallbackReferences() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     const ConfigurationSourceText source{
         .source = R"(
         return {api_version=2,client={keybindings={telar.bind({'z'},function() return telar.action.new_tab() end)}},
@@ -110,7 +112,9 @@ namespace {
 
   void retainedCommandAndPluginDescriptions() {
     SystemAllocator system;
-    BudgetAllocator memory{system, std::numeric_limits<std::size_t>::max()};
+    BudgetAllocator budget{system, std::numeric_limits<std::size_t>::max()};
+    telar::MemoryAdapter adapter{budget};
+    telar::Memory& memory = adapter;
 
     {
       const ConfigurationSourceText source{
@@ -135,20 +139,22 @@ namespace {
       const auto value = requiredJsonField(requiredJsonField(parsed, "action"), "value");
 
       require(requiredJsonField(value, "plugin").encoded() == std::to_string(telar::runtime::plugins::stableId("fixture")), "plugin descriptions must use the shared stable identifier algorithm");
-      const auto before = memory.allocations();
+      const auto before = budget.allocations();
 
       static_cast<void>(query(generation, 0));
       static_cast<void>(query(generation, 1));
-      require(memory.allocations() == before, "repeated binding queries must not allocate through the application allocator");
+      require(budget.allocations() == before, "repeated binding queries must not allocate through the application allocator");
       static_cast<void>(generation.invoke(generation.input().configured[2].action, {}));
       require(query(generation, 0) == command && query(generation, 1) == plugin, "callback mutation must not change retained command or plugin descriptions");
     }
 
-    require(memory.liveBytes() == 0, "binding descriptions must release every retained allocation with their generation");
+    require(budget.liveBytes() == 0, "binding descriptions must release every retained allocation with their generation");
   }
 
   void notificationValuesAndDefinitionIndices() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     const ConfigurationSourceText source{
         .source = R"(
         local panels={};for i=1,18 do panels[string.format('p%02d',i)]=telar.panel{command={'true'}} end
@@ -167,7 +173,7 @@ namespace {
 
     require(requiredJsonField(value, "level").equals("warning") && requiredJsonField(value, "duration_ms").encoded() == "750", "notification descriptions must preserve severity and duration");
     require(requiredJsonField(value, "target").encoded() == R"({"pane":99})", "notification targets must retain the original tagged id shape");
-    String<SystemAllocator> title{AllocatorRef<char, SystemAllocator>{memory}};
+    String<telar::ConcurrentMemory> title{AllocatorRef<char, telar::ConcurrentMemory>{memory}};
 
     requiredJsonField(value, "title").string(title);
     require(title.size() == telar::max_notification_title_bytes, "notification fitting must preserve complete UTF-8 at the wire's title bound");
@@ -176,7 +182,9 @@ namespace {
   }
 
   void byteArgumentsRemainQueryable() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     const ConfigurationSourceText source{
         .source = "return {api_version=2,client={keybindings={telar.bind({'x'},telar.action.command_tab{command={'echo',string.char(255)}})}}}",
         .directory = {},
@@ -189,7 +197,9 @@ namespace {
   }
 
   void commandLabelsFollowPosixPaths() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     const ConfigurationSourceText source{
         .source = R"(
         return {api_version=2,client={keybindings={
@@ -211,7 +221,9 @@ namespace {
   }
 
   void boundedRepliesAndSkippedActions() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     const ConfigurationSourceText source{
         .source = R"(
         local too_many={};for i=1,33 do too_many[i]='x' end
