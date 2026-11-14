@@ -150,7 +150,7 @@ const char* libraryInlineFunction() {
 
 // CASE: library.constant_expression
 // PAIR: library.constant
-// SOURCE: lib/platform/include/telar_platform/trace.hpp :: trace::literal
+// SOURCE: lib/platform/primitives/primitives.cppm :: trace::literal
 // STATUS: implemented
 // CONTRACT: A constant-evaluated result borrows exactly what its expression borrows.
 // SCENARIO: An immediate function returns a literal-backed view; accept.
@@ -162,7 +162,7 @@ std::string_view libraryConstantExpression() {
 
 // CASE: library.constant_alongside_local
 // PAIR: library.constant
-// SOURCE: lib/platform/include/telar_platform/trace.hpp :: trace::literal
+// SOURCE: lib/platform/primitives/primitives.cppm :: trace::literal
 // STATUS: implemented
 // CONTRACT: Unwrapping constant evaluation does not hide a borrow of local storage.
 // SCENARIO: A view of a local string is returned next to a constant one.

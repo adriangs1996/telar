@@ -15,14 +15,12 @@ static_assert(true);
 #include "telar_client/codecs/telar_codec.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/protocol/graphics.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "telar_platform/file_descriptor.hpp"
 #include "telar_platform/mapped_region.hpp"
-#include "telar_platform/random_bytes.hpp"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -61,6 +59,7 @@ import telar.gui.application.session;
 import telar.gui.graphics.texture_cache;
 import telar.gui.platform.shared_image_source;
 import telar.platform.graphics;
+import telar.wire.graphics;
 
 namespace {
 

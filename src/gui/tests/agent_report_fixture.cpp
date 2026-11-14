@@ -3,7 +3,6 @@
 #include "qt/runtime_connection.hpp"
 #include "telar_client/codecs/telar_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/protocol/agents.hpp"
 #include "telar_client/protocol/pane_io.hpp"
 #include "telar_client/protocol/runtime.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
@@ -22,6 +21,8 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+
+import telar.wire.agents;
 
 namespace {
 

@@ -15,6 +15,11 @@ if(NOT TARGET tbc::tbc)
   add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../tbc" "${CMAKE_CURRENT_BINARY_DIR}/tbc")
 endif()
 target_link_libraries(telar-base PUBLIC telar::tbc)
+# The socket addresses text.cpp parses.
+if(NOT TARGET telar-sys)
+  add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../sys" "${CMAKE_BINARY_DIR}/telar-sys")
+endif()
+target_link_libraries(telar-base PUBLIC telar::sys)
 
 telar_editor_flags(telar-base)
 
@@ -73,10 +78,12 @@ set(telar_base_package_directory "lib/cmake/telar-base")
 set_target_properties(telar-base PROPERTIES EXPORT_NAME base)
 # The package carries the telar.tbc module its interfaces import, under the same telar::tbc name.
 set_target_properties(telar-tbc PROPERTIES EXPORT_NAME tbc)
+# And the telar.sys modules text.cpp reads socket addresses through, as telar::sys.
+set_target_properties(telar-sys PROPERTIES EXPORT_NAME sys)
 configure_package_config_file(cmake/telar-base-config.cmake.in
   "${CMAKE_CURRENT_BINARY_DIR}/telar-base-config.cmake"
   INSTALL_DESTINATION "${telar_base_package_directory}")
-install(TARGETS telar-base telar-tbc EXPORT telar-base-targets
+install(TARGETS telar-base telar-tbc telar-sys EXPORT telar-base-targets
   ARCHIVE DESTINATION lib
   FILE_SET CXX_MODULES DESTINATION share/telar-base/modules)
 install(DIRECTORY include/ DESTINATION include FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h")

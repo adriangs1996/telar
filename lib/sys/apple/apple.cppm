@@ -1,6 +1,7 @@
 module;
 #include <fcntl.h>
 #include <libproc.h>
+#include <mach-o/dyld.h>
 #include <mach/mach.h>
 #include <mach/mach_vm.h>
 #include <net/if.h>
@@ -34,6 +35,7 @@ export module telar.sys.apple;
 export {
   // Process information.
   using ::proc_bsdinfo;
+  using ::proc_fdinfo;
   using ::proc_listallpids;
   using ::proc_listpids;
   using ::proc_name;
@@ -58,9 +60,13 @@ export {
   using ::mach_vm_size_t;
   using ::task_info;
 
+  // The running executable.
+  using ::_NSGetExecutablePath;
+
   // BSD and Darwin extensions.
   using ::arc4random_buf;
   using ::attrlist;
+  using ::attrreference_t;
   using ::devname_r;
   using ::getattrlist;
   using ::getpeereid;

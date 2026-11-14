@@ -1,13 +1,11 @@
 module;
-#include <cstdint>
 #include <lua.h>
-
-#include <arpa/inet.h>
 
 module telar.config.runtime;
 
 import std;
 import telar.tbc;
+import telar.sys.socket;
 
 namespace telar::runtime {
 
@@ -664,7 +662,7 @@ namespace telar::runtime::config {
 
   template <Allocator Memory>
   std::size_t ProxyReader<Memory>::positive(const lua::Value& field, std::size_t fallback) {
-    return field.boundedInteger(fallback, 1, SIZE_MAX);
+    return field.boundedInteger(fallback, 1, std::numeric_limits<std::size_t>::max());
   }
 
   template <Allocator Memory>

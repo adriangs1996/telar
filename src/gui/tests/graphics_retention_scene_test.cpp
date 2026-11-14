@@ -13,7 +13,6 @@ static_assert(true);
 #include "assertions.hpp"
 #include "telar_client/codecs/telar_cells.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/protocol/graphics.hpp"
 #include "telar_client/protocol/pane_io.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
@@ -68,6 +67,7 @@ static_assert(true);
 #include "terminal/screen.hpp"
 
 import telar.gui.graphics.texture_cache;
+import telar.wire.graphics;
 
 namespace {
 

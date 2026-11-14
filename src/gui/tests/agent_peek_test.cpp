@@ -15,12 +15,8 @@ static_assert(true);
 #include "telar_client/codecs/telar_codec.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/protocol/agents.hpp"
-#include "telar_client/protocol/content.hpp"
-#include "telar_client/protocol/layout.hpp"
 #include "telar_client/protocol/pane_io.hpp"
 #include "telar_client/protocol/runtime.hpp"
-#include "telar_client/protocol/worktrees.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
@@ -63,6 +59,8 @@ import telar.gui.core.unicode_scalar;
 import telar.gui.peek.screen;
 import telar.gui.presentation.suggestion_labels;
 import telar.gui.presentation.notification_center;
+import telar.wire.agents;
+import telar.wire.content;
 import telar.wire.layout;
 import telar.wire.runtime;
 import telar.wire.worktrees;

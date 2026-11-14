@@ -12,7 +12,6 @@ module;
 #include <lua.h>
 #include <lualib.h>
 
-#include "telar_platform/open_directory.h"
 #include <cerrno>
 #include <cstdlib>
 #include <dirent.h>

@@ -1,10 +1,3 @@
-module;
-#include <cerrno>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <time.h>
-#include <unistd.h>
-
 module telar.git;
 
 import std;

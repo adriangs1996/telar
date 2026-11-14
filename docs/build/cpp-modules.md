@@ -197,8 +197,8 @@ ese módulo, y cada importador vuelve a fusionar las copias. Con un concepto com
 llegó a costar 8 s y 23 MB de BMI en un módulo de 30 líneas (`traffic.tap`).
 `python3 tools/check-cpp-modules.py` rechaza un fragmento global que incluya un
 header con dueño. Los headers solo de dueño (`telar.wire.pane_io`,
-`telar.platform.primitives`, `telar.runtime.terminal.control`, …) no contienen
-código propio: son el punto de entrada de esos headers para los módulos.
+`telar.runtime.terminal.control`, …) no contienen código propio: son el punto de
+entrada de esos headers para los módulos.
 
 Los generadores de bindings, temas, paleta y tablas gráficas producen fragmentos
 `.inc` de datos dentro de sus módulos propietarios. El código vendorizado conserva

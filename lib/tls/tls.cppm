@@ -5,11 +5,6 @@ module;
 #include <openssl/ssl.h>
 #include <openssl/x509.h>
 
-#include <cstddef>
-#include <cstdint>
-#include <cstdio>
-#include <limits.h>
-
 export module telar.tls;
 
 import std;
@@ -29,6 +24,7 @@ import telar.platform.error;
 import telar.platform.fs;
 import telar.platform.primitives;
 import telar.platform.process;
+import telar.sys.posix;
 
 // Interface: telar_tls/handle.cppm
 export {

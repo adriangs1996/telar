@@ -1,6 +1,5 @@
 module;
 #include <openssl/sha.h>
-#include <sys/stat.h>
 
 export module telar.git:format;
 
@@ -8,6 +7,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.platform.sha256;
 import telar.platform.primitives;
+import telar.sys.posix;
 
 // Byte-level primitives every other part of the reader shares: object ids,
 // hashing, bounded file reads beneath a directory descriptor and file

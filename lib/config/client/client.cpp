@@ -1,5 +1,4 @@
 module;
-#include <cstdint>
 #include <lua.h>
 
 module telar.config.client;
@@ -386,7 +385,7 @@ namespace telar::runtime::config {
       requiredInteger(action.field("index"), 1, 256);
     } else if (kind == "select-tab-offset") {
       action.onlyFields({"kind", "offset"});
-      requiredInteger(action.field("offset"), INT8_MIN, INT8_MAX);
+      requiredInteger(action.field("offset"), std::numeric_limits<std::int8_t>::min(), std::numeric_limits<std::int8_t>::max());
     } else if (kind == "command-tab") {
       return commandTab(action);
     } else if (kind == "notification") {
@@ -620,7 +619,7 @@ namespace telar::runtime::config {
     for (const auto* name : {"pane_id", "tab_id", "workspace_id"}) {
       const auto target = action.field(name);
       if (target.present()) {
-        requiredInteger(target, 1, INT64_MAX);
+        requiredInteger(target, 1, std::numeric_limits<std::int64_t>::max());
         ++target_count;
       }
     }

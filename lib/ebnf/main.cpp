@@ -1,18 +1,4 @@
-#ifdef __clangd__
-static_assert(true);
-#endif
-#include <algorithm>
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <optional>
-#include <stdexcept>
-#include <string_view>
-#include <tbc/view.hpp>
-#include <utility>
-#include <vector>
-
-#include <unordered_map>
+import std;
 
 import telar.ebnf.lexer;
 import telar.ebnf.parser;

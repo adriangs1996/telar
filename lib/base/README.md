@@ -5,8 +5,9 @@ JSON (`text/json/`), ASCII and other text codecs (`text/`), each imported on its
 own (`telar.base.text.utf8`, `telar.base.text.json`, `telar.base.text`),
 allocators (`memory/allocators/`), sensitive buffers (`memory/sensitive/`) and
 fixed-capacity containers (`memory/containers/`), each its own module, the diagnostics switches and timing (`diagnostics/`), the editor kinds (`editors/`), the history search policy
-(`history/`), and the program name and version children see (`program_identity.hpp`).
-It is C++23 with compiled standard module interfaces, with no dependency on the client protocol or runtime.
+(`history/`), and the program name and version children see (`telar.base.text`).
+It is C++23 with compiled standard module interfaces, with no dependency on the client protocol or runtime;
+the only telar library below it is `telar-sys`, through which `telar.base.text` parses socket addresses.
 Allocators and their adapters live in the neutral `telar` namespace. The caller
 owns their lifetime; consumers inject them by reference. `Memory` is the
 type-erased allocator a service can take instead of a template parameter:

@@ -9,7 +9,6 @@ static_assert(true);
 #include "assertions.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_client/codecs/telar_cells.hpp"
-#include "telar_client/protocol/content.hpp"
 #include <array>
 #include <cmath>
 #include <cstdint>
@@ -25,6 +24,7 @@ import telar.gui.application.session;
 import telar.gui.terminal.row_cache;
 import telar.gui.terminal.screen;
 import telar.gui.links.cell_links;
+import telar.wire.content;
 
 namespace {
 

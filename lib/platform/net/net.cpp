@@ -1,17 +1,15 @@
-module;
-#include <cerrno>
-#include <csignal>
-#include <cstring>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <unistd.h>
-
 module telar.platform.net;
 
 import std;
 import telar.sys.posix;
+import telar.sys.process;
+import telar.sys.socket;
+#if defined(__APPLE__)
+import telar.sys.apple;
+#endif
+#if defined(__linux__)
+import telar.sys.linux;
+#endif
 
 namespace telar::runtime {
   namespace {

@@ -1,6 +1,4 @@
 module;
-#include <limits.h>
-
 #include "telar_config/terminal/control/policy.hpp"
 
 export module telar.config.runtime;
@@ -13,6 +11,7 @@ export import telar.platform.events;
 import telar.base.diagnostics;
 import telar.base.text;
 import telar.wire.vocabulary;
+import telar.sys.posix;
 
 // Owned textual headers stay in this global module fragment only; importers
 // reach their names through these declarations instead of including them.

@@ -1,6 +1,7 @@
 {
   "library_layers": {
     "base": [
+      "sys",
       "tbc"
     ],
     "sys": [],
@@ -22,6 +23,7 @@
     ],
     "lua": [
       "base",
+      "sys",
       "tbc"
     ],
     "render": [
@@ -35,7 +37,8 @@
     ],
     "machines": [
       "base",
-      "client"
+      "client",
+      "sys"
     ],
     "git": [
       "base",
@@ -63,6 +66,7 @@
       "lua",
       "platform",
       "plugins",
+      "sys",
       "tbc",
       "wire"
     ],
@@ -487,13 +491,12 @@
     "lib/tbc/tests/spec/elision.hpp": "Textual test fixture, including compiler diagnostic and macro expansion locations",
     "lib/tbc/tests/spec/system_library.hpp": "Textual test fixture, including compiler diagnostic and macro expansion locations",
     "lib/tbc/tests/spec/system_macro.hpp": "Textual test fixture, including compiler diagnostic and macro expansion locations",
-    "lib/base/include/telar_base/diagnostics/config.hpp": "Project macro header: TELAR_DIAGNOSTIC and TELAR_DIAGNOSTICS; includes nothing",
+    "lib/base/include/telar_base/diagnostics/config.hpp": "Project macro header: TELAR_DIAGNOSTIC, TELAR_DIAGNOSTICS and TELAR_ASSERT; includes nothing",
     "lib/base/include/telar_base/diagnostics/limit_reach.hpp": "Included by other textual headers and tests; module units import its owner module",
     "lib/base/include/telar_base/diagnostics/timing.hpp": "Objective-C++ ABI",
     "lib/base/include/telar_base/memory/allocation_statistics.hpp": "Objective-C++ ABI",
     "lib/base/include/telar_base/memory/allocator.hpp": "Objective-C++ ABI",
     "lib/base/include/telar_base/memory/fixed_text.hpp": "Per-consumer SIMD test specialization",
-    "lib/base/include/telar_base/program_identity.hpp": "Per-consumer SIMD test specialization",
     "lib/base/include/telar_base/text/base64.hpp": "Per-consumer SIMD test specialization",
     "lib/base/include/telar_base/text/utf8.hpp": "Qt adapters include it; module units import its owner module",
     "lib/client/include/telar_client/codecs/telar_annotations.hpp": "Project macro header: the codec annotations _throw and _changes; includes nothing",
@@ -501,18 +504,9 @@
     "lib/client/include/telar_client/codecs/telar_codec.hpp": "Qt adapters include it; module units import its owner module",
     "lib/client/include/telar_client/codecs/telar_value_codec.hpp": "Qt adapters include it; module units import its owner module",
     "lib/client/include/telar_client/codecs/telar_wire.hpp": "Qt adapters include it; module units import its owner module",
-    "lib/client/include/telar_client/protocol/agents.hpp": "Qt adapters and tests include it; module units import its owner module",
     "lib/client/include/telar_client/protocol/clients.hpp": "Qt adapters and tests include it; module units import its owner module",
-    "lib/client/include/telar_client/protocol/clipboard.hpp": "Qt adapters and tests include it; module units import its owner module",
-    "lib/client/include/telar_client/protocol/content.hpp": "Qt adapters and tests include it; module units import its owner module",
-    "lib/client/include/telar_client/protocol/editor.hpp": "Qt adapters and tests include it; module units import its owner module",
-    "lib/client/include/telar_client/protocol/execution.hpp": "Qt adapters and tests include it; module units import its owner module",
-    "lib/client/include/telar_client/protocol/graphics.hpp": "Qt adapters and tests include it; module units import its owner module",
-    "lib/client/include/telar_client/protocol/history.hpp": "Qt adapters and tests include it; module units import its owner module",
-    "lib/client/include/telar_client/protocol/layout.hpp": "Qt adapters and tests include it; module units import its owner module",
     "lib/client/include/telar_client/protocol/pane_io.hpp": "Qt adapters and tests include it; module units import its owner module",
     "lib/client/include/telar_client/protocol/runtime.hpp": "Qt adapters and tests include it; module units import its owner module",
-    "lib/client/include/telar_client/protocol/worktrees.hpp": "Qt adapters and tests include it; module units import its owner module",
     "lib/client/include/telar_client/serializers/telar_cells.hpp": "Qt adapters include it; module units import its owner module",
     "lib/client/include/telar_client/serializers/telar_frame.hpp": "Qt adapters include it; module units import its owner module",
     "lib/client/include/telar_client/serializers/telar_messages.hpp": "Qt adapters include it; module units import its owner module",
@@ -525,8 +519,6 @@
     "lib/platform/include/telar_platform/mapped_region.hpp": "Per-consumer SIMD test specialization",
     "lib/platform/include/telar_platform/open_directory.h": "C ABI",
     "lib/platform/include/telar_platform/process_environment.h": "C ABI for the process environment",
-    "lib/platform/include/telar_platform/random_bytes.hpp": "Per-consumer SIMD test specialization",
-    "lib/platform/include/telar_platform/trace.hpp": "Preprocessor contract",
     "lib/platform/include/telar_platform/trace_macro.hpp": "Project macro header: TELAR_TRACE; includes nothing",
     "src/gui/application/dependencies.hpp": "Objective-C++ ABI",
     "src/gui/attachments/capture.hpp": "Objective-C++ ABI",
@@ -791,6 +783,7 @@
     "lib/platform/graphics/graphics.cpp": "telar.platform.graphics",
     "lib/platform/net/net.cpp": "telar.platform.net",
     "lib/platform/paths/paths.cpp": "telar.platform.paths",
+    "lib/platform/primitives/primitives.cpp": "telar.platform.primitives",
     "lib/platform/process/process.cpp": "telar.platform.process",
     "lib/platform/sha256/sha256.cpp": "telar.platform.sha256",
     "lib/platform/thread/thread.cpp": "telar.platform.thread",
@@ -3031,7 +3024,6 @@
       "lib/base/include/telar_base/memory/fixed_text.hpp"
     ],
     "lib/base/text/text.cppm": [
-      "lib/base/include/telar_base/program_identity.hpp",
       "lib/base/include/telar_base/text/base64.hpp",
       "lib/base/include/telar_base/text/decimal.hpp"
     ],
@@ -3044,13 +3036,14 @@
     "lib/config/runtime/runtime.cppm": [
       "lib/config/include/telar_config/terminal/control/policy.hpp"
     ],
+    "lib/platform/fs/fs.cppm": [
+      "lib/platform/include/telar_platform/open_directory.h"
+    ],
     "lib/platform/primitives/primitives.cppm": [
       "lib/platform/include/telar_platform/file_descriptor.hpp",
       "lib/platform/include/telar_platform/graphics/child_name.hpp",
       "lib/platform/include/telar_platform/graphics/child_shared_memory.hpp",
-      "lib/platform/include/telar_platform/mapped_region.hpp",
-      "lib/platform/include/telar_platform/random_bytes.hpp",
-      "lib/platform/include/telar_platform/trace.hpp"
+      "lib/platform/include/telar_platform/mapped_region.hpp"
     ],
     "src/gui/attachments/catalog/catalog.cppm": [
       "src/gui/attachments/capture.hpp",
@@ -3128,41 +3121,14 @@
       "lib/client/include/telar_client/serializers/telar_messages.hpp",
       "lib/client/include/telar_client/serializers/telar_serializer.hpp"
     ],
-    "lib/wire/agents/agents.cppm": [
-      "lib/client/include/telar_client/protocol/agents.hpp"
-    ],
     "lib/wire/clients/clients.cppm": [
       "lib/client/include/telar_client/protocol/clients.hpp"
-    ],
-    "lib/wire/clipboard/clipboard.cppm": [
-      "lib/client/include/telar_client/protocol/clipboard.hpp"
-    ],
-    "lib/wire/content/content.cppm": [
-      "lib/client/include/telar_client/protocol/content.hpp"
-    ],
-    "lib/wire/editor/editor.cppm": [
-      "lib/client/include/telar_client/protocol/editor.hpp"
-    ],
-    "lib/wire/execution/execution.cppm": [
-      "lib/client/include/telar_client/protocol/execution.hpp"
-    ],
-    "lib/wire/graphics/graphics.cppm": [
-      "lib/client/include/telar_client/protocol/graphics.hpp"
-    ],
-    "lib/wire/history/history.cppm": [
-      "lib/client/include/telar_client/protocol/history.hpp"
-    ],
-    "lib/wire/layout/layout.cppm": [
-      "lib/client/include/telar_client/protocol/layout.hpp"
     ],
     "lib/wire/pane_io/pane_io.cppm": [
       "lib/client/include/telar_client/protocol/pane_io.hpp"
     ],
     "lib/wire/runtime/runtime.cppm": [
       "lib/client/include/telar_client/protocol/runtime.hpp"
-    ],
-    "lib/wire/worktrees/worktrees.cppm": [
-      "lib/client/include/telar_client/protocol/worktrees.hpp"
     ],
     "lib/tbc/tbc.cppm": [
       "lib/tbc/include/tbc/view.hpp"

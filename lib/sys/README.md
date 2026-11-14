@@ -14,8 +14,8 @@ copying the headers into their own BMIs.
 | `telar.sys.apple` | Darwin only: `libproc`, `sysctl`, kqueue, Mach and the `_np` extensions |
 | `telar.sys.linux` | Linux only: epoll, `getrandom` and the glibc extensions |
 
-`sys` is the lowest layer: it imports nothing from telar, and `telar-platform`
-builds on it.
+`sys` is the lowest layer: it imports nothing from telar, and `telar-base`,
+`telar-platform` and the libraries above them build on it.
 
 Macros do not cross an import, so each module also exports the ones the tree
 reads under their own names: constants as `inline constexpr` (`O_CLOEXEC`,

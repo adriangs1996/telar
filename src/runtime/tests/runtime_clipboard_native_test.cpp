@@ -21,11 +21,9 @@ static_assert(true);
 #include "telar_base/diagnostics/limit_reach.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/program_identity.hpp"
 #include "telar_base/text/utf8.hpp"
 #include "telar_client/codecs/telar_codec.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
-#include "telar_client/protocol/clipboard.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_client/serializers/telar_serializer.hpp"
@@ -33,8 +31,6 @@ static_assert(true);
 #include "telar_platform/file_descriptor.hpp"
 #include "telar_platform/graphics/child_shared_memory.hpp"
 #include "telar_platform/mapped_region.hpp"
-#include "telar_platform/random_bytes.hpp"
-#include "telar_platform/trace.hpp"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -78,6 +74,7 @@ static_assert(true);
 import telar.runtime.tests.client_peer;
 import telar.runtime.runtime.client_control;
 import telar.runtime.tests.check;
+import telar.wire.clipboard;
 
 using namespace telar;
 using namespace telar::runtime;

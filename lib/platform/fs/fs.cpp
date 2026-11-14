@@ -1,24 +1,14 @@
-module;
-#include <cerrno>
-#include <cstdio>
-#include <cstring>
-#include <dirent.h>
-#include <fcntl.h>
-#include <limits.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
-
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <linux/fs.h>
-#include <sys/syscall.h>
-#endif
-
 module telar.platform.fs;
 
 import std;
 import telar.sys.posix;
 import telar.tbc;
+#if defined(__linux__)
+import telar.sys.linux;
+#endif
+#if defined(__APPLE__)
+import telar.sys.apple;
+#endif
 
 namespace telar::runtime {
   namespace {

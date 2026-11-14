@@ -1,30 +1,3 @@
-module;
-#include <cstring>
-#include <new>
-#include <stdlib.h>
-
-#include <cstddef>
-#include <cstdint>
-
-#include <limits.h>
-
-#include <cerrno>
-#include <dirent.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-
-#include "telar_platform/open_directory.h"
-#include <unistd.h>
-
-#include <cstdio>
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <linux/fs.h>
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <sys/syscall.h>
-#endif
-#include <cstdlib>
-
 module telar.plugins;
 
 import std;
@@ -54,7 +27,7 @@ namespace telar::runtime::plugins {
       std::array<char, sizeof(length)> encoded;
 
       for (std::size_t index = 0; index < encoded.size(); ++index) {
-        encoded[index] = static_cast<char>(length & UINT8_MAX);
+        encoded[index] = static_cast<char>(length & std::numeric_limits<std::uint8_t>::max());
         length >>= std::numeric_limits<std::uint8_t>::digits;
       }
 

@@ -1,14 +1,11 @@
-module;
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-
 export module telar.platform.net;
 
 import std;
 
 import telar.platform.error;
 import telar.platform.primitives;
+import telar.sys.posix;
+import telar.sys.socket;
 
 // Interface: platform/byte_stream.cppm
 export {
