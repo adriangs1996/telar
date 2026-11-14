@@ -761,6 +761,12 @@
   },
   "macro_headers": [],
   "implementations": {
+    "lib/config/client/client.cpp": "telar.config.client",
+    "lib/config/core/core.cpp": "telar.config.core",
+    "lib/config/gui/gui.cpp": "telar.config.gui",
+    "lib/config/runtime/runtime.cpp": "telar.config.runtime",
+    "lib/config/runtime/runtime_reader.cpp": "telar.config.runtime",
+    "lib/config/snapshot/snapshot.cpp": "telar.config.snapshot",
     "lib/base/diagnostics/diagnostics.cpp": "telar.base.diagnostics",
     "lib/base/text/text.cpp": "telar.base.text",
     "lib/base/text/json/json.cpp": "telar.base.text.json",
