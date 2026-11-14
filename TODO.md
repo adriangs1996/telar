@@ -628,9 +628,10 @@ Para cada módulo: `extern template class X<Memory>;` en la interfaz, la instanc
 - **Depende de:** P1.2
 - **Módulos:** `gui.terminal.fold_map` (10 líneas), `telar.vocabulary` (19), `runtime.traffic.tap` (60, con 21 includes), `runtime.tls.system_root_bundle` (63), `runtime.persistence.launch_record` (71), `gui.prompt.routing` (71), `runtime.workspaces.git_probe` (82), `runtime.execution.execution` (93).
 
-### [ ] P10.2 · Cadenas lineales
+### [x] P10.2 · Cadenas lineales
 - **Depende de:** P1.2
 - **Qué hace:** evaluar si se colapsan `gui.prompt.text` → `prompt.editor` → `prompt.line` y `render.document` → `render.terminal` → `cli.render`. Comparte `prompt` con P9.8: no se ejecutan a la vez.
+- **Resultado:** `6c9a9760c`. `prompt.text` pasa a ser la partición `telar.gui.prompt.editor:text`; `prompt.editor` sigue aparte de `prompt.line` porque el adaptador de teclas Qt y su test lo importan sin `line`. La cadena de render se queda: `render.document` tiene cinco importadores y `render.terminal` es un módulo público de la librería de render. Pasan los 138 tests de la GUI.
 
 ### [x] P10.3 · Módulos sin importadores
 - **Depende de:** P0.1 (el caso 38 cubre `telar.websock`)
