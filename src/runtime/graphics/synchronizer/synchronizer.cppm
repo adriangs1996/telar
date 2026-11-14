@@ -34,7 +34,6 @@ export import telar.runtime.transport.connection;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.wire.graphics;
-import telar.config;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
 import telar.runtime.graphics.kitty;

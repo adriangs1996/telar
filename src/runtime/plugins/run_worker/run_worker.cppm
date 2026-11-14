@@ -48,7 +48,7 @@ export import telar.base.memory.allocators;
 export import telar.base.memory.containers;
 export import telar.base.memory.sensitive;
 
-export import telar.config;
+export import telar.config.runtime;
 export import telar.platform.error;
 export import telar.platform.fs;
 

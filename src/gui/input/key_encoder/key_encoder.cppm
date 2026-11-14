@@ -10,7 +10,7 @@ export module telar.gui.input.key_encoder;
 
 import std;
 
-export import telar.config;
+export import telar.config.client;
 
 export import telar.gui.core.unicode_scalar;
 

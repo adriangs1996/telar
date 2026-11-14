@@ -24,7 +24,7 @@ export module telar.runtime.observation.processor;
 
 import std;
 
-export import telar.config;
+export import telar.config.runtime;
 
 export import telar.runtime.agents.screen_inference;
 export import telar.runtime.command_capture.tracker;

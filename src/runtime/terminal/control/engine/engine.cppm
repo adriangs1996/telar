@@ -9,7 +9,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.base.text;
-import telar.config;
+import telar.config.runtime;
 import telar.vocabulary;
 import telar.runtime.terminal.control;
 import telar.runtime.terminal.control.checksum;

@@ -21,6 +21,7 @@ export import telar.gui.core.unicode_scalar;
 
 export import telar.gui.text.bounded_editor;
 import telar.base.diagnostics;
+import telar.base.memory.containers;
 import telar.base.text;
 import telar.wire.editor;
 import telar.wire.runtime;

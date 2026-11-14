@@ -28,7 +28,7 @@ import std;
 
 export import telar.runtime.platform.session_host;
 
-export import telar.config;
+export import telar.config.runtime;
 
 export import telar.runtime.terminal.text_reader;
 import telar.base.diagnostics;

@@ -43,8 +43,6 @@ export module telar.runtime.tls.interception;
 
 import std;
 
-export import telar.config;
-
 export import telar.tls;
 
 export import telar.runtime.platform.stream_read_buffer;

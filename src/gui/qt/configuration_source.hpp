@@ -71,7 +71,7 @@ import telar.gui.config.gui_query;
 import telar.gui.core.metrics;
 import telar.gui.input.copy_pointer;
 import telar.gui.input.configuration;
-import telar.config;
+import telar.config.client;
 
 namespace telar::gui {
 

@@ -24,7 +24,7 @@ export import telar.runtime.runtime.execution_service;
 export import telar.client;
 export import telar.runtime.agents.description_generator;
 export import telar.runtime.persistence.session_store;
-export import telar.config;
+export import telar.config.runtime;
 
 export import telar.runtime.plugins.service;
 export import telar.runtime.runtime.client_control;

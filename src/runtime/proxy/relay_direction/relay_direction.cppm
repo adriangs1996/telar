@@ -14,8 +14,6 @@ export import telar.platform.error;
 export import telar.platform.thread;
 export import telar.runtime.platform.signals;
 
-export import telar.config;
-
 export import telar.runtime.platform.name_resolutions;
 export import telar.runtime.platform.stream_read_buffer;
 import telar.platform.primitives;

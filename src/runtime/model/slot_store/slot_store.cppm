@@ -28,7 +28,7 @@ import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.worktrees;
-import telar.config;
+import telar.config.core;
 import telar.platform.primitives;
 import telar.runtime.graphics.kitty;
 export import telar.runtime.shell_integration.token;

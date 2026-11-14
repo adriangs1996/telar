@@ -91,7 +91,7 @@ import telar.gui.core.metrics;
 import telar.gui.input.copy_pointer;
 import telar.gui.input.key_encoder;
 import telar.gui.presentation.suggestion_geometry;
-import telar.config;
+import telar.config.client;
 import telar.plugins;
 
 namespace telar::gui::qt {

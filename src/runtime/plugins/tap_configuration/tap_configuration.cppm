@@ -30,7 +30,7 @@ export module telar.runtime.plugins.tap_configuration;
 
 import std;
 
-export import telar.config;
+export import telar.config.client;
 export import telar.plugins;
 
 export import telar.platform.error;

@@ -15,7 +15,7 @@ static_assert(true);
 import std;
 import telar.base.memory.allocators;
 import telar.runtime.tests.check;
-import telar.config;
+import telar.config.runtime;
 import telar.lua;
 import telar.platform.process;
 import telar.runtime.proxy.runtime;

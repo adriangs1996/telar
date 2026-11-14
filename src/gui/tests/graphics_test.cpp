@@ -9,7 +9,6 @@ static_assert(true);
 #include <cstdio>
 
 import std;
-import telar.config;
 import telar.gui.core.primitives;
 import telar.gui.terminal.screen;
 import telar.gui.core.metrics;

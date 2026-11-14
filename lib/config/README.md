@@ -18,7 +18,7 @@ Each process imports only the modules it uses:
 - `telar.config.snapshot`: `SnapshotReader`, which validates a whole configuration
   with the other four.
 
-`telar.config` still re-exports all of them while importers move to the ones they use.
+`telar.config` still re-exports all of them, but no importer uses it any more.
 
 ```cmake
 add_subdirectory("${TELAR_ROOT}/lib/config" "${CMAKE_CURRENT_BINARY_DIR}/telar-config")

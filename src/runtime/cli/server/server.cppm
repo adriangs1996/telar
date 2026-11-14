@@ -15,7 +15,8 @@ import std;
 import telar.platform.primitives;
 import telar.runtime.graphics.kitty;
 
-export import telar.config;
+export import telar.config.client;
+export import telar.config.runtime;
 export import telar.lua;
 export import telar.platform.daemon;
 export import telar.platform.error;

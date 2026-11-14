@@ -11,7 +11,7 @@ export module telar.gui.presentation.application_mark;
 
 import std;
 
-export import telar.config;
+export import telar.config.core;
 
 export import telar.gui.core.unicode_scalar;
 import telar.base.diagnostics;
