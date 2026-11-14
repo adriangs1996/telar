@@ -3,10 +3,6 @@
 static_assert(true);
 #endif
 
-#include "../attachments/catalog.hpp"
-#include "../attachments/marker_removal.hpp"
-#include "../attachments/marker_screen.hpp"
-#include "../attachments/path_markers.hpp"
 #include "../attachments/types.hpp"
 #include "../core/memory.hpp"
 #include "../core/terminal_size.hpp"
@@ -53,14 +49,11 @@ static_assert(true);
 #include <utility>
 #include <variant>
 
-#include "attachments/catalog.hpp"
-#include "attachments/marker_removal.hpp"
-#include "attachments/marker_screen.hpp"
-#include "attachments/path_markers.hpp"
 #include "attachments/types.hpp"
 #include "platform/clipboard_image_source.hpp"
 #include "terminal/screen.hpp"
 
+import telar.gui.attachments.catalog;
 import telar.gui.layout.geometry;
 import telar.gui.application.workspace_replica;
 import telar.gui.attachments.marker_input;

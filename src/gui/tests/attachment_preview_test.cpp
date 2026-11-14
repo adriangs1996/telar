@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "../application/dependencies.hpp"
-#include "../attachments/catalog.hpp"
+#include "../attachments/capture.hpp"
 #include "../attachments/sensitive_bytes.hpp"
 #include "../attachments/types.hpp"
 #include "../qt/attachment_preview.hpp"
@@ -28,7 +28,7 @@ static_assert(true);
 
 #include "application/dependencies.hpp"
 #include "attachment_preview.hpp"
-#include "attachments/catalog.hpp"
+#include "attachments/capture.hpp"
 #include "attachments/sensitive_bytes.hpp"
 #include "attachments/types.hpp"
 

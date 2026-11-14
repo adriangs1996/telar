@@ -1,7 +1,4 @@
 #include "assertions.hpp"
-#include "attachments/catalog.hpp"
-#include "attachments/marker_removal.hpp"
-#include "attachments/marker_screen.hpp"
 #include "attachments/sensitive_bytes.hpp"
 #include "attachments/types.hpp"
 #include "terminal/screen.hpp"
@@ -16,6 +13,7 @@
 #include <string_view>
 #include <utility>
 
+import telar.gui.attachments.catalog;
 import telar.gui.tests.erasure_allocator;
 
 namespace {

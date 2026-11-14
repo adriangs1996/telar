@@ -2,7 +2,7 @@
 
 #include "application/dependencies.hpp"
 #include "attachment_preview.hpp"
-#include "attachments/catalog.hpp"
+#include "attachments/capture.hpp"
 #include "attachments/types.hpp"
 #include "machine_client_key.hpp"
 #include "platform/clipboard_image_monitor.hpp"

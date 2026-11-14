@@ -515,11 +515,6 @@
     "lib/platform/include/telar_platform/trace_macro.hpp": "Preprocessor contract",
     "src/gui/application/dependencies.hpp": "Objective-C++ ABI",
     "src/gui/attachments/capture.hpp": "Objective-C++ ABI",
-    "src/gui/attachments/catalog.hpp": "Qt adapters include it; module units import its owner module",
-    "src/gui/attachments/marker_removal.hpp": "Qt adapters include it; module units import its owner module",
-    "src/gui/attachments/marker_screen.hpp": "Qt adapters include it; module units import its owner module",
-    "src/gui/attachments/numeric_markers.hpp": "Included by other textual headers and tests; module units import its owner module",
-    "src/gui/attachments/path_markers.hpp": "Qt adapters include it; module units import its owner module",
     "src/gui/attachments/secure_erase.hpp": "Objective-C++ ABI",
     "src/gui/attachments/sensitive_bytes.hpp": "Objective-C++ ABI",
     "src/gui/attachments/types.hpp": "Objective-C++ ABI",
@@ -2934,11 +2929,6 @@
     ],
     "src/gui/attachments/catalog/catalog.cppm": [
       "src/gui/attachments/capture.hpp",
-      "src/gui/attachments/catalog.hpp",
-      "src/gui/attachments/marker_removal.hpp",
-      "src/gui/attachments/marker_screen.hpp",
-      "src/gui/attachments/numeric_markers.hpp",
-      "src/gui/attachments/path_markers.hpp",
       "src/gui/attachments/secure_erase.hpp",
       "src/gui/attachments/sensitive_bytes.hpp",
       "src/gui/attachments/types.hpp"
