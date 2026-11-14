@@ -58,9 +58,10 @@ void testCaptureDecoding() {
 
     for (const std::size_t limit : {1, 11, 12, 13, 1024}) {
       BudgetAllocator memory{system, 2 * 1024 * 1024};
+      MemoryAdapter adapter{memory};
 
       {
-        CaptureContentDecoder decoder{memory};
+        CaptureContentDecoder decoder{static_cast<Memory&>(adapter)};
         const auto body = decoder.decode(input, fixture.coding, limit);
 
         check(body.decoded && !body.failed && body.truncated == (limit < plaintext.size()));
@@ -74,9 +75,10 @@ void testCaptureDecoding() {
       const std::size_t budget = fixture.coding == "zstd" ? 128 * 1024 : fixture.coding == "br" ? 2 * 1024
                                                                                                 : 32 * 1024;
       BudgetAllocator memory{system, budget};
+      MemoryAdapter adapter{memory};
 
       {
-        CaptureContentDecoder decoder{memory};
+        CaptureContentDecoder decoder{static_cast<Memory&>(adapter)};
         const auto body = decoder.decode(input, fixture.coding, 1024);
 
         check(body.decoded && !body.failed && !body.truncated);
@@ -88,9 +90,10 @@ void testCaptureDecoding() {
 
     for (const std::size_t budget : {0, 12, 1024, 65536, 131072}) {
       BudgetAllocator memory{system, budget};
+      MemoryAdapter adapter{memory};
 
       {
-        CaptureContentDecoder decoder{memory};
+        CaptureContentDecoder decoder{static_cast<Memory&>(adapter)};
 
         try {
           const auto body = decoder.decode(input, fixture.coding, 1024);
@@ -124,7 +127,9 @@ void testCaptureDecoding() {
 static void testCapturePublication() {
   SystemAllocator system;
   BudgetAllocator budget{system, 8 * 1024 * 1024};
-  SynchronizedAllocator memory{budget};
+  SynchronizedAllocator synchronized{budget};
+  MemoryAdapter adapter{synchronized};
+  ConcurrentMemory& memory = adapter;
   ProxyCaptureLimits limits{.part_bytes = 64, .exchange_bytes = 128, .total_bytes = 32768, .enabled = true};
   CaptureProducer producer{memory, limits};
 
@@ -154,7 +159,9 @@ static void testCapturePublication() {
 }
 
 static void testDecodedCaptureCounters() {
-  SystemAllocator memory;
+  SystemAllocator system;
+  MemoryAdapter adapter{system};
+  ConcurrentMemory& memory = adapter;
   ProxyCaptureLimits limits{.part_bytes = 32, .exchange_bytes = 64, .total_bytes = 4096, .enabled = true};
   CaptureProducer producer{memory, limits};
   auto half = producer.start({});
@@ -179,7 +186,8 @@ static void testDecodedCaptureCounters() {
 
   BudgetAllocator failing{memory, 0};
   SynchronizedAllocator synchronized{failing};
-  CaptureProducer exhausted{synchronized, limits};
+  MemoryAdapter failing_adapter{synchronized};
+  CaptureProducer exhausted{static_cast<ConcurrentMemory&>(failing_adapter), limits};
 
   check(!exhausted.start({}) && exhausted.metrics().skipped == 1 && exhausted.metrics().started == 0);
 }

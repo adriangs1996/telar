@@ -28,7 +28,7 @@ using telar::Byte;
 
 namespace {
   struct HttpOwner final : HttpControl {
-    SystemAllocator& memory;
+    ConcurrentMemory& memory;
     bool fail_closed = true;
     bool observe_response = true;
     std::vector<Byte> input, replacement;
@@ -37,7 +37,7 @@ namespace {
     Verdict answer = Verdict::pending;
     traffic::Direction direction = traffic::Direction::outbound;
 
-    explicit HttpOwner(SystemAllocator& memory)
+    explicit HttpOwner(ConcurrentMemory& memory)
         : memory(memory) {}
 
     HttpPolicy policy(const FlowEvent& event) noexcept override {
@@ -97,7 +97,7 @@ namespace {
     }
   };
 
-  using Connection = Http1Connection<SystemAllocator, IgnoreHttp1Capture>;
+  using Connection = Http1Connection<ConcurrentMemory, IgnoreHttp1Capture>;
 
   template <typename Predicate>
   void pump(Connection& connection, TestByteStream& child, TestByteStream& origin, Predicate&& done, std::source_location location = std::source_location::current()) {
@@ -129,7 +129,7 @@ namespace {
     }
   };
 
-  void editing(SystemAllocator& memory) {
+  void editing(ConcurrentMemory& memory) {
     HttpOwner owner{memory};
     ProxyCounters counters;
     Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, {.id = 7, .host = "fixture.test"}}};
@@ -169,7 +169,7 @@ namespace {
     check(child.output.contains("Content-Length: 7\r\n") && owner.errors.empty());
   }
 
-  void compressedTrailers(SystemAllocator& memory) {
+  void compressedTrailers(ConcurrentMemory& memory) {
     HttpOwner owner{memory};
     ProxyCounters counters;
     Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, {.id = 8, .host = "fixture.test"}}};
@@ -217,7 +217,7 @@ namespace {
     check(std::ranges::equal(HttpContentCodec{memory}.decode(parsed.bytes, "gzip", 1024).bytes(), after));
   }
 
-  void expectContinue(SystemAllocator& memory) {
+  void expectContinue(ConcurrentMemory& memory) {
     HttpOwner owner{memory};
     ProxyCounters counters;
     Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, {.id = 9, .host = "fixture.test"}}};
@@ -245,7 +245,7 @@ namespace {
     check(!origin.output.contains("Expect:") && owner.errors.empty());
   }
 
-  void headResponse(SystemAllocator& memory) {
+  void headResponse(ConcurrentMemory& memory) {
     HttpOwner owner{memory};
     ProxyCounters counters;
     Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, {.id = 11, .host = "fixture.test"}}};
@@ -279,7 +279,7 @@ namespace {
     check(owner.errors.empty());
   }
 
-  void invalidFraming(SystemAllocator& memory) {
+  void invalidFraming(ConcurrentMemory& memory) {
     for (const std::string_view body : {"+0\r\n\r\n", "1_0\r\n0123456789abcdef\r\n0\r\n\r\n", "1\r\nx!!0\r\n\r\n", "0\r\r\n\r\n"}) {
       HttpOwner owner{memory};
       ProxyCounters counters;
@@ -296,7 +296,7 @@ namespace {
     }
   }
 
-  void incompleteMessage(SystemAllocator& memory) {
+  void incompleteMessage(ConcurrentMemory& memory) {
     for (const bool closed : {false, true}) {
       HttpOwner owner{memory};
 
@@ -319,7 +319,7 @@ namespace {
     }
   }
 
-  void headMethods(SystemAllocator& memory) {
+  void headMethods(ConcurrentMemory& memory) {
     for (const bool original_head : {false, true}) {
       for (const bool observe_response : {false, true}) {
         HttpOwner owner{memory};
@@ -382,7 +382,7 @@ namespace {
     }
   }
 
-  void limits(SystemAllocator& memory) {
+  void limits(ConcurrentMemory& memory) {
     for (const bool closed : {false, true}) {
       HttpOwner owner{memory};
 
@@ -412,7 +412,7 @@ namespace {
   }
 
   // A hook's reject closes the exchange and is reported, as an HTTP/2 stream's is.
-  void rejected(SystemAllocator& memory) {
+  void rejected(ConcurrentMemory& memory) {
     HttpOwner owner{memory};
     ProxyCounters counters;
     Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, {.id = 12, .host = "fixture.test"}}};
@@ -434,7 +434,9 @@ namespace {
 }
 
 void testHttpInterception() {
-  SystemAllocator memory;
+  SystemAllocator system;
+  MemoryAdapter adapter{system};
+  ConcurrentMemory& memory = adapter;
 
   rejected(memory);
   editing(memory);

@@ -98,7 +98,9 @@ static void write(const std::string& path, std::string_view source) {
 
 static void host() {
   SystemAllocator system;
-  BudgetAllocator memory{system, 80 * 1024 * 1024};
+  BudgetAllocator budget{system, 80 * 1024 * 1024};
+  MemoryAdapter adapter{budget};
+  Memory& memory = adapter;
   TemporaryDirectory directory{"/tmp/tlr-app-host.XXXXXX"};
   const auto entry = std::string{directory.path()} + "/main.lua";
 
@@ -184,7 +186,7 @@ return {}
     check(h2_edited.version == HttpVersion::http2 && h2_edited.stream == 7 && h2_edited.authority == "example.test" && h2_edited.target == "/edited");
   }
 
-  check(memory.liveBytes() == 0);
+  check(budget.liveBytes() == 0);
   write(entry, R"lua(
 local traffic = require('telar.traffic')
 local allowed, message = pcall(function() traffic.intercept({host='*'},function() end) end)
@@ -201,7 +203,7 @@ return {}
     check(setup.registration_count == 1 && setup.registrations[0].stage == app::TrafficStage::observe);
   }
 
-  check(memory.liveBytes() == 0);
+  check(budget.liveBytes() == 0);
 }
 
 static bool closed(int descriptor) {
@@ -218,7 +220,9 @@ static bool closed(int descriptor) {
 static void packageChannels() {
   SystemAllocator system;
   BudgetAllocator budget{system, 64 * 1024 * 1024};
-  SynchronizedAllocator memory{budget};
+  SynchronizedAllocator synchronized{budget};
+  MemoryAdapter adapter{synchronized};
+  ConcurrentMemory& memory = adapter;
   TemporaryDirectory directory{"/tmp/tlr-app-port.XXXXXX"};
   const auto path = std::string{directory.path()} + "/traffic";
 
@@ -257,7 +261,9 @@ static void packageChannels() {
 static void unavailablePolicies() {
   SystemAllocator system;
   BudgetAllocator budget{system, 8 * 1024 * 1024};
-  SynchronizedAllocator memory{budget};
+  SynchronizedAllocator synchronized{budget};
+  MemoryAdapter adapter{synchronized};
+  ConcurrentMemory& memory = adapter;
 
   {
     traffic::Interception broker{memory};
@@ -309,7 +315,9 @@ static void unavailablePolicies() {
 
 static void controlHost() {
   SystemAllocator system;
-  BudgetAllocator memory{system, 80 * 1024 * 1024};
+  BudgetAllocator budget{system, 80 * 1024 * 1024};
+  MemoryAdapter adapter{budget};
+  Memory& memory = adapter;
   TemporaryDirectory directory{"/tmp/tlr-app-control-host.XXXXXX"};
   const auto entry = std::string{directory.path()} + "/main.lua";
 
@@ -360,12 +368,14 @@ return {}
     check(setup->changed && setup->registration_count == 0);
   }
 
-  check(memory.liveBytes() == 0);
+  check(budget.liveBytes() == 0);
 }
 
 static void datagramHost() {
   SystemAllocator system;
-  BudgetAllocator memory{system, 80 * 1024 * 1024};
+  BudgetAllocator budget{system, 80 * 1024 * 1024};
+  MemoryAdapter adapter{budget};
+  Memory& memory = adapter;
   TemporaryDirectory directory{"/tmp/tlr-datagram-host.XXXXXX"};
   const auto entry = std::string{directory.path()} + "/main.lua";
 
@@ -426,7 +436,7 @@ return {}
     check(setup->changed && setup->registration_count == 0);
   }
 
-  check(memory.liveBytes() == 0);
+  check(budget.liveBytes() == 0);
 }
 
 int main() {

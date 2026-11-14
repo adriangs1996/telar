@@ -43,68 +43,14 @@ export {
       std::size_t count = 0;
       Failure failure = Failure::none;
 
-      inline static ContentCoding coding(std::string_view name) noexcept {
-        if (asciiEqualIgnoreCase(name, "identity")) {
-          return ContentCoding::identity;
-        }
+      static ContentCoding coding(std::string_view name) noexcept;
 
-        if (asciiEqualIgnoreCase(name, "gzip")) {
-          return ContentCoding::gzip;
-        }
-
-        if (asciiEqualIgnoreCase(name, "deflate")) {
-          return ContentCoding::deflate;
-        }
-
-        if (asciiEqualIgnoreCase(name, "br")) {
-          return ContentCoding::brotli;
-        }
-
-        if (asciiEqualIgnoreCase(name, "zstd")) {
-          return ContentCoding::zstd;
-        }
-
-        return ContentCoding::unknown;
-      }
-
-      inline static ContentCodings parse(std::string_view value) noexcept {
-        ContentCodings result;
-        TextFields fields{value, ","};
-
-        while (const auto field = fields.next()) {
-          if (result.count == maximum) {
-            result.failure = Failure::too_many;
-            break;
-          }
-
-          const auto name = trimText(*field, " \t");
-          if (name.empty()) {
-            result.failure = Failure::empty;
-            break;
-          }
-
-          result.codings[result.count++] = coding(name);
-        }
-
-        return result;
-      }
+      static ContentCodings parse(std::string_view value) noexcept;
 
       // Whether every element of `value`, however many, names identity.
-      inline static bool onlyIdentity(std::string_view value) noexcept {
-        TextFields fields{value, ","};
+      static bool onlyIdentity(std::string_view value) noexcept;
 
-        while (const auto field = fields.next()) {
-          if (coding(trimText(*field, " \t")) != ContentCoding::identity) {
-            return false;
-          }
-        }
-
-        return true;
-      }
-
-      inline std::span<const ContentCoding> list() const noexcept {
-        return std::span{codings}.first(count);
-      }
+      std::span<const ContentCoding> list() const noexcept;
     };
 
   }
@@ -119,30 +65,26 @@ export {
     template <Allocator Memory>
     class TBC_SHARED DecoderMemory {
     public:
-      inline explicit DecoderMemory(Memory& memory) noexcept
-          : memory_(memory),
-            blocks_(memory_) {}
+      explicit DecoderMemory(Memory& memory) noexcept;
 
-      inline static void* allocate(void* context, std::size_t bytes) noexcept {
-        return static_cast<DecoderMemory*>(context)->blocks_.allocate(bytes);
-      }
+      static void* allocate(void* context, std::size_t bytes) noexcept;
 
-      inline static void* allocateArray(void* context, unsigned count, unsigned size) noexcept {
-        if (size != 0 && count > std::numeric_limits<std::size_t>::max() / size) {
-          return nullptr;
-        }
+      static void* allocateArray(void* context, unsigned count, unsigned size) noexcept;
 
-        return allocate(context, static_cast<std::size_t>(count) * size);
-      }
-
-      inline static void release(void* context, void* pointer) noexcept {
-        static_cast<DecoderMemory*>(context)->blocks_.release(pointer);
-      }
+      static void release(void* context, void* pointer) noexcept;
 
     private:
       ErasingAllocator<Memory> memory_;
       CAllocationBlocks<ErasingAllocator<Memory>> blocks_;
     };
+
+    extern template class DecoderMemory<SynchronizedAllocator<BudgetAllocator<ConcurrentMemory>>>;
+
+    extern template class DecoderMemory<BufferAllocator<ConcurrentMemory>>;
+    extern template class DecoderMemory<BufferAllocator<Memory>>;
+
+    extern template class DecoderMemory<Memory>;
+    extern template class DecoderMemory<ConcurrentMemory>;
 
   }
 }
@@ -153,12 +95,9 @@ export {
 
     template <Allocator Memory>
     struct DecodedBody {
-      inline explicit DecodedBody(Memory& memory, std::size_t capacity)
-          : storage(memory, capacity) {}
+      explicit DecodedBody(Memory& memory, std::size_t capacity);
 
-      inline std::span<const std::uint8_t> bytes() const noexcept {
-        return storage.bytes().first(size);
-      }
+      std::span<const std::uint8_t> bytes() const noexcept;
 
       SensitiveAllocation<Memory> storage;
       std::size_t size = 0;
@@ -166,6 +105,11 @@ export {
       bool truncated = false;
       bool failed = false;
     };
+
+    extern template struct DecodedBody<SynchronizedAllocator<BudgetAllocator<ConcurrentMemory>>>;
+
+    extern template struct DecodedBody<Memory>;
+    extern template struct DecodedBody<ConcurrentMemory>;
 
   }
 }
@@ -179,40 +123,32 @@ export {
       using Blocks = CAllocationBlocks<ErasingAllocator<Memory>>;
 
     public:
-      inline explicit Http2Memory(Memory& memory) noexcept
-          : memory_(memory),
-            blocks_(memory_),
-            callbacks_{.mem_user_data = &blocks_, .malloc = &allocate, .free = &release, .calloc = &allocateZeroed, .realloc = &resize} {}
+      explicit Http2Memory(Memory& memory) noexcept;
 
       Http2Memory(const Http2Memory&) = delete;
       Http2Memory& operator=(const Http2Memory&) = delete;
 
-      inline auto callbacks() noexcept -> nghttp2_mem* {
-        return &callbacks_;
-      }
+      auto callbacks() noexcept -> nghttp2_mem*;
 
     private:
-      inline static void* allocate(std::size_t size, void* owner) noexcept {
-        return static_cast<Blocks*>(owner)->allocate(size);
-      }
+      static void* allocate(std::size_t size, void* owner) noexcept;
 
-      inline static void release(void* pointer, void* owner) noexcept {
-        static_cast<Blocks*>(owner)->release(pointer);
-      }
+      static void release(void* pointer, void* owner) noexcept;
 
-      inline static void* allocateZeroed(std::size_t count, std::size_t size, void* owner) noexcept {
-        return static_cast<Blocks*>(owner)->allocateZeroed(count, size);
-      }
+      static void* allocateZeroed(std::size_t count, std::size_t size, void* owner) noexcept;
 
-      inline static void* resize(void* pointer, std::size_t size, void* owner) noexcept {
-        return static_cast<Blocks*>(owner)->resize(pointer, size);
-      }
+      static void* resize(void* pointer, std::size_t size, void* owner) noexcept;
 
       ErasingAllocator<Memory> memory_;
       // nghttp2 allocates through the blocks, which allocate from the sibling allocator.
       tbc::view<Blocks, tbc::lt::self> blocks_;
       tbc::view<nghttp2_mem, tbc::lt::self> callbacks_;
     };
+
+    extern template class Http2Memory<SynchronizedAllocator<BudgetAllocator<ConcurrentMemory>>>;
+
+    extern template class Http2Memory<Memory>;
+    extern template class Http2Memory<ConcurrentMemory>;
 
   }
 }

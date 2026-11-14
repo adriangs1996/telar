@@ -72,7 +72,9 @@ namespace tap = telar::runtime::plugins;
 
 int runPluginSessionFixture(std::string_view mode) {
   SystemAllocator system;
-  BudgetAllocator memory{system, 128 * 1024 * 1024};
+  BudgetAllocator budget{system, 128 * 1024 * 1024};
+  MemoryAdapter adapter{budget};
+  Memory& memory = adapter;
 
   if (mode.starts_with('/')) {
     tap::runWorker(memory, mode.data());
@@ -167,7 +169,9 @@ static void testRestartWindow() {
 void testPluginSessions() {
   testRestartWindow();
   SystemAllocator system;
-  BudgetAllocator memory{system, 4 * 1024 * 1024};
+  BudgetAllocator budget{system, 4 * 1024 * 1024};
+  MemoryAdapter adapter{budget};
+  Memory& memory = adapter;
   const ExecutablePath executable;
   const std::string executable_path{executable.view()};
   CancellationSignal cancellation;
@@ -176,7 +180,7 @@ void testPluginSessions() {
   CapturedExchange exchange{memory};
   const ProxyCaptureLimits limits{.part_bytes = 1024, .exchange_bytes = 2048, .total_bytes = 4096, .enabled = true};
 
-  exchange.request = makeOwned<CaptureHalf<decltype(memory)>>(memory, memory, quota, limits, CaptureStart{.key = {1, 1}, .side = CaptureSide::request, .protocol = CaptureProtocol::http1, .host = "test", .started_at_ms = 1});
+  exchange.request = makeOwned<CaptureHalf<Memory>>(memory, memory, quota, limits, CaptureStart{.key = {1, 1}, .side = CaptureSide::request, .protocol = CaptureProtocol::http1, .host = "test", .started_at_ms = 1});
   exchange.request->appendHead("GET / HTTP/1.1\r\n\r\n");
   const auto frame = tap::Protocol::encodeExchange(output, {73, 1}, exchange);
   tap::ServiceSpec specification;
@@ -257,5 +261,5 @@ void testPluginSessions() {
   }
 
   exchange.request.reset();
-  check(memory.liveBytes() == 0 && quota.used() == 0);
+  check(budget.liveBytes() == 0 && quota.used() == 0);
 }

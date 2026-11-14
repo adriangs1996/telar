@@ -102,7 +102,9 @@ namespace {
 
     for (const std::size_t fragment : {1, 2, 3, 7, 16, 64, 16384}) {
       SystemAllocator system;
-      BudgetAllocator memory{system, 1024 * 1024};
+      BudgetAllocator budget{system, 1024 * 1024};
+      MemoryAdapter adapter{budget};
+      Memory& memory = adapter;
 
       {
         Http2DirectionObserver observer{memory, Http2Direction::request};
@@ -116,26 +118,30 @@ namespace {
         check(events.kinds.back() == Http2Event::Kind::request_finished);
       }
 
-      check(memory.liveBytes() == 0);
+      check(budget.liveBytes() == 0);
     }
   }
 
   void testObservationLimits() {
     SystemAllocator system;
+    MemoryAdapter adapter{system};
+    Memory& memory = adapter;
 
     {
-      BudgetAllocator memory{system, 0};
-      Http2Observer observer{memory, Http2Direction::request};
+      BudgetAllocator budget{system, 0};
+      MemoryAdapter exhausted{budget};
+      Memory& limited = exhausted;
+      Http2Observer observer{limited, Http2Direction::request};
       Events events;
 
       feed(observer, http2Frame(Http2FrameKind::data, 1, 3, "body"), 1, events);
       check(observer.finish().decode_failed && events.body == "body");
       check(events.kinds.back() == Http2Event::Kind::request_finished);
-      check(memory.liveBytes() == 0);
+      check(budget.liveBytes() == 0);
     }
 
     {
-      Http2Observer observer{system, Http2Direction::request};
+      Http2Observer observer{memory, Http2Direction::request};
       Events events;
 
       for (std::uint32_t stream = 1; stream <= Http2StreamTracker::capacity + 2; ++stream) {
@@ -147,7 +153,7 @@ namespace {
     }
 
     {
-      Http2Observer observer{system, Http2Direction::response};
+      Http2Observer observer{memory, Http2Direction::response};
       Events events;
 
       feed(observer, http2Frame(Http2FrameKind::headers, 4, 1, std::string(Http2Observer<SystemAllocator>::maximum_header_bytes + 1, 'a')), 16384, events);
@@ -155,7 +161,7 @@ namespace {
     }
 
     {
-      Http2Observer observer{system, Http2Direction::response};
+      Http2Observer observer{memory, Http2Direction::response};
       Events events;
 
       feed(observer, http2Frame(Http2FrameKind::headers, 0, 1, "\x88"), 16, events);
@@ -163,7 +169,7 @@ namespace {
     }
 
     {
-      Http2DirectionObserver observer{system, Http2Direction::request};
+      Http2DirectionObserver observer{memory, Http2Direction::request};
       Events events;
 
       feed(observer, "PRI * HTTP/2.0", 16, events);
@@ -173,7 +179,9 @@ namespace {
 
   void testResponseMetadata() {
     SystemAllocator system;
-    Http2Observer observer{system, Http2Direction::response};
+    MemoryAdapter adapter{system};
+    Memory& memory = adapter;
+    Http2Observer observer{memory, Http2Direction::response};
     Events events;
     const auto headers = std::string{"\x88\x0f\x10\x11", 4} + "text/event-stream";
 
@@ -198,7 +206,9 @@ namespace {
 
   void testConnectionBackpressure() {
     SystemAllocator system;
-    BudgetAllocator memory{system, 1024 * 1024};
+    BudgetAllocator budget{system, 1024 * 1024};
+    MemoryAdapter adapter{budget};
+    Memory& memory = adapter;
     ProxyCounters counters;
 
     {
@@ -235,7 +245,7 @@ namespace {
       check(counters.read(ProxyCounter::h2_decode_failure) == 0);
     }
 
-    check(memory.liveBytes() == 0);
+    check(budget.liveBytes() == 0);
 
     {
       Http2Connection connection{memory, counters};
@@ -249,7 +259,7 @@ namespace {
     }
 
     check(counters.read(ProxyCounter::h2_decode_failure) == 1);
-    check(memory.liveBytes() == 0);
+    check(budget.liveBytes() == 0);
   }
 
 }

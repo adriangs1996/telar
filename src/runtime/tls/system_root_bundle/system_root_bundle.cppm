@@ -30,25 +30,9 @@ export {
     template <Allocator Memory>
     class SystemRootBundle {
     public:
-      inline explicit SystemRootBundle(Memory& memory)
-          : bytes_(memory, maximum_bytes + 1) {
-        const auto storage = bytes_.appendUninitialized(maximum_bytes + 1);
-        const std::span<char> destination{reinterpret_cast<char*>(storage.data()), storage.size()};
+      explicit SystemRootBundle(Memory& memory);
 
-        for (const auto path : paths) {
-          const auto contents = readRegularFile(path, destination);
-          if (contents && contents->size() <= maximum_bytes) {
-            bytes_.truncate(contents->size());
-            return;
-          }
-        }
-
-        throw SystemError{"Read system PEM root bundle", ENOENT};
-      }
-
-      inline std::span<const std::uint8_t> bytes() const noexcept {
-        return bytes_.readable();
-      }
+      std::span<const std::uint8_t> bytes() const noexcept;
 
     private:
       static constexpr std::size_t maximum_bytes = 4 * 1024 * 1024;
@@ -60,6 +44,8 @@ export {
       };
       ByteQueue<Memory> bytes_;
     };
+
+    extern template class SystemRootBundle<ConcurrentMemory>;
 
     template <Allocator Memory>
     SystemRootBundle(Memory& memory) -> SystemRootBundle<Memory>;

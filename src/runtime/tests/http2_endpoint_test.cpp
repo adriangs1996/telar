@@ -33,8 +33,8 @@ using telar::Byte;
 
 namespace {
   struct Owner : HttpControl {
-    SystemAllocator& memory;
-    Interception<SystemAllocator, HttpMessageLimits::message_bytes> broker;
+    ConcurrentMemory& memory;
+    Interception<ConcurrentMemory, HttpMessageLimits::message_bytes> broker;
 
     struct Request {
       std::uint64_t ticket;
@@ -44,7 +44,7 @@ namespace {
     std::vector<Request> requests;
     std::vector<std::string> errors;
 
-    Owner(SystemAllocator& memory, bool fail_closed = true, std::string_view host = "fixture.test", std::uint32_t timeout_ms = 5000)
+    Owner(ConcurrentMemory& memory, bool fail_closed = true, std::string_view host = "fixture.test", std::uint32_t timeout_ms = 5000)
         : memory(memory),
           broker(memory) {
       broker.configure({.host = host, .visibility = 3, .timeout_ms = timeout_ms, .fail_closed = fail_closed});
@@ -298,10 +298,12 @@ namespace {
   };
 
   struct Fixture {
-    SystemAllocator memory;
+    SystemAllocator system;
+    MemoryAdapter<SystemAllocator> adapter{system};
+    ConcurrentMemory& memory = adapter;
     Owner owner;
     Peer client{false}, server{true};
-    Http2EndpointConnection<SystemAllocator> connection;
+    Http2EndpointConnection<ConcurrentMemory> connection;
     TestByteStream child, origin;
 
     explicit Fixture(bool fail_closed = true, std::string_view host = "fixture.test", std::uint32_t timeout_ms = 5000)

@@ -37,8 +37,9 @@ struct Result {
 
 extern "C" void decode(const Input* input, Result* result) {
   *result = {};
-  SystemAllocator memory;
-  CaptureContentDecoder decoder{memory};
+  SystemAllocator system;
+  MemoryAdapter adapter{system};
+  CaptureContentDecoder decoder{static_cast<Memory&>(adapter)};
   try {
     const auto body = decoder.decode({input->bytes, input->length}, {input->encoding, input->encoding_length}, input->limit);
     std::copy(body.bytes().begin(), body.bytes().end(), input->output);

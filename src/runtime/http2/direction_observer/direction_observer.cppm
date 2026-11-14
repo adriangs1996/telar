@@ -1,4 +1,5 @@
 module;
+#include "tbc/hot_path.hpp"
 #include <cstdlib>
 #include <new>
 
@@ -68,40 +69,13 @@ export {
 
     class Http2HeaderMetadata {
     public:
-      inline void observe(std::string_view name, std::string_view value) noexcept {
-        if (name == ":status") {
-          status_ = parseHttpStatus(value).value_or(0);
-        }
+      void observe(std::string_view name, std::string_view value) noexcept;
 
-        if (name == ":method") {
-          request_ = true;
-        }
+      std::uint16_t status() const noexcept;
 
-        if (asciiEqualIgnoreCase(name, "content-type")) {
-          if (content_type_seen_) {
-            metadata_valid_ = false;
-          } else {
-            content_type_seen_ = true;
-            event_stream_ = isEventStream(value);
-          }
-        }
+      bool request() const noexcept;
 
-        if (asciiEqualIgnoreCase(name, "content-encoding") && !ContentCodings::onlyIdentity(value)) {
-          identity_encoding_ = false;
-        }
-      }
-
-      inline std::uint16_t status() const noexcept {
-        return status_;
-      }
-
-      inline bool request() const noexcept {
-        return request_;
-      }
-
-      inline bool eventStream() const noexcept {
-        return metadata_valid_ && content_type_seen_ && event_stream_ && identity_encoding_;
-      }
+      bool eventStream() const noexcept;
 
     private:
       std::uint16_t status_ = 0;
@@ -124,29 +98,21 @@ export {
     public:
       static constexpr std::size_t maximum_table_bytes = 128 * 1024;
 
-      inline explicit HpackDecoder(Memory& memory) noexcept
-          : memory_(memory) {
-        ready_ = nghttp2_hd_inflate_new2(&inflater_, memory_.callbacks()) == 0 && nghttp2_hd_inflate_change_table_size(inflater_, maximum_table_bytes) == 0;
-      }
+      explicit HpackDecoder(Memory& memory) noexcept;
 
-      inline ~HpackDecoder() {
-        if (inflater_ != nullptr) {
-          nghttp2_hd_inflate_del(inflater_);
-        }
-      }
+      ~HpackDecoder();
 
       HpackDecoder(const HpackDecoder&) = delete;
       HpackDecoder& operator=(const HpackDecoder&) = delete;
 
-      inline bool ready() const noexcept {
-        return ready_;
-      }
+      bool ready() const noexcept;
 
+      // Generic over the caller's visitor, and called for every header block relayed.
       template <typename Visitor>
         requires requires(Visitor visit, std::string_view name, std::string_view value) {
           { visit(name, value) } noexcept -> std::same_as<void>;
         }
-      inline bool decode(std::span<const std::uint8_t> bytes, Visitor visit) noexcept {
+      TBC_HOT_PATH bool decode(std::span<const std::uint8_t> bytes, Visitor visit) noexcept {
         if (!ready_) {
           return false;
         }
@@ -184,6 +150,9 @@ export {
       bool ready_ = false;
     };
 
+    extern template class HpackDecoder<Memory>;
+    extern template class HpackDecoder<ConcurrentMemory>;
+
   }
 }
 
@@ -193,47 +162,14 @@ export {
 
     class Http2PayloadFragment {
     public:
-      inline void reset() noexcept {
-        padding_ = 0;
-      }
+      void reset() noexcept;
 
-      inline tbc::view<std::optional<std::span<const std::uint8_t>>, tbc::lt::a> body(tbc::view<const Http2FrameEvent&, tbc::lt::a> event) noexcept {
-        return extract(event, 0);
-      }
+      tbc::view<std::optional<std::span<const std::uint8_t>>, tbc::lt::a> body(tbc::view<const Http2FrameEvent&, tbc::lt::a> event) noexcept;
 
-      inline tbc::view<std::optional<std::span<const std::uint8_t>>, tbc::lt::a> headers(tbc::view<const Http2FrameEvent&, tbc::lt::a> event) noexcept {
-        std::size_t prefix = 0;
-
-        if (event.frame.kind == Http2FrameKind::headers && event.frame.has(Http2Flag::priority)) {
-          prefix = priority_bytes;
-        } else if (event.frame.kind == Http2FrameKind::push_promise) {
-          prefix = promised_stream_bytes;
-        }
-
-        return extract(event, prefix);
-      }
+      tbc::view<std::optional<std::span<const std::uint8_t>>, tbc::lt::a> headers(tbc::view<const Http2FrameEvent&, tbc::lt::a> event) noexcept;
 
     private:
-      inline tbc::view<std::optional<std::span<const std::uint8_t>>, tbc::lt::a> extract(tbc::view<const Http2FrameEvent&, tbc::lt::a> event, std::size_t prefix) noexcept {
-        if (event.frame.has(Http2Flag::padded)) {
-          ++prefix;
-          if (event.offset == 0 && !event.bytes.empty()) {
-            padding_ = event.bytes.front();
-          }
-        }
-
-        if (prefix > event.frame.length || padding_ > event.frame.length - prefix) {
-          return std::nullopt;
-        }
-
-        const auto start = std::max(event.offset, prefix);
-        const auto end = std::min(event.offset + event.bytes.size(), event.frame.length - padding_);
-        if (start >= end) {
-          return std::span<const std::uint8_t>{};
-        }
-
-        return event.bytes.subspan(start - event.offset, end - start);
-      }
+      tbc::view<std::optional<std::span<const std::uint8_t>>, tbc::lt::a> extract(tbc::view<const Http2FrameEvent&, tbc::lt::a> event, std::size_t prefix) noexcept;
 
       static constexpr std::size_t priority_bytes = 5;
       static constexpr std::size_t promised_stream_bytes = 4;
@@ -258,14 +194,11 @@ export {
         std::uint32_t untracked_streams = 0;
       };
 
-      inline explicit Http2Observer(Memory& memory, Http2Direction direction) noexcept
-          : decoder_(memory),
-            direction_(direction) {
-        statistics_.decode_failed = !decoder_.ready();
-      }
+      explicit Http2Observer(Memory& memory, Http2Direction direction) noexcept;
 
+      // Generic over the caller's sink, and called for every chunk relayed.
       template <Http2EventSink Sink>
-      inline void observe(std::span<const std::uint8_t> bytes, Sink& sink) noexcept {
+      TBC_HOT_PATH void observe(std::span<const std::uint8_t> bytes, Sink& sink) noexcept {
         framing_.feed(bytes, [&](const Http2FrameEvent& event) noexcept {
           switch (event.kind) {
           case Http2FrameEvent::Kind::begin:
@@ -281,24 +214,11 @@ export {
         });
       }
 
-      inline void fail() noexcept {
-        statistics_.decode_failed = true;
-        block_length_ = 0;
-        continuation_stream_ = 0;
-        block_kind_ = BlockKind::none;
-      }
+      void fail() noexcept;
 
-      inline Statistics finish() noexcept {
-        if (framing_.incomplete() || continuation_stream_ != 0) {
-          fail();
-        }
+      Statistics finish() noexcept;
 
-        return statistics_;
-      }
-
-      inline const Statistics& statistics() const noexcept {
-        return statistics_;
-      }
+      const Statistics& statistics() const noexcept;
 
     private:
       enum class BlockKind {
@@ -307,42 +227,10 @@ export {
         push_promise,
       };
 
-      inline void beginFrame(const Http2Frame& frame) noexcept {
-        fragment_.reset();
-        const bool starts_block = frame.kind == Http2FrameKind::headers || frame.kind == Http2FrameKind::push_promise;
-        if (starts_block) {
-          block_end_stream_ = frame.has(Http2Flag::end_stream);
-        }
-
-        if (statistics_.decode_failed) {
-          if (frame.kind == Http2FrameKind::headers && continuation_stream_ == 0) {
-            block_stream_ = frame.stream;
-            block_kind_ = BlockKind::headers;
-          }
-
-          return;
-        }
-
-        if (starts_block) {
-          if (continuation_stream_ != 0 || frame.stream == 0) {
-            fail();
-            return;
-          }
-
-          block_length_ = 0;
-          block_stream_ = frame.stream;
-          block_kind_ = frame.kind == Http2FrameKind::headers ? BlockKind::headers : BlockKind::push_promise;
-        } else if (frame.kind == Http2FrameKind::continuation) {
-          if (continuation_stream_ == 0 || continuation_stream_ != frame.stream) {
-            fail();
-          }
-        } else if (continuation_stream_ != 0) {
-          fail();
-        }
-      }
+      void beginFrame(const Http2Frame& frame) noexcept;
 
       template <Http2EventSink Sink>
-      inline void payload(const Http2FrameEvent& event, Sink& sink) noexcept {
+      TBC_HOT_PATH void payload(const Http2FrameEvent& event, Sink& sink) noexcept {
         if (event.frame.kind == Http2FrameKind::data && !event.bytes.empty()) {
           Http2StreamTracker::Response response;
 
@@ -386,7 +274,7 @@ export {
       }
 
       template <Http2EventSink Sink>
-      inline void finishFrame(const Http2Frame& frame, Sink& sink) noexcept {
+      TBC_HOT_PATH void finishFrame(const Http2Frame& frame, Sink& sink) noexcept {
         if (frame.containsHeaders()) {
           if (frame.has(Http2Flag::end_headers)) {
             continuation_stream_ = 0;
@@ -410,7 +298,7 @@ export {
       }
 
       template <Http2EventSink Sink>
-      inline void finishHeaders(Sink& sink) noexcept {
+      TBC_HOT_PATH void finishHeaders(Sink& sink) noexcept {
         const auto metadata = statistics_.decode_failed ? Http2HeaderMetadata{} : decodeHeaders(sink);
 
         if (block_kind_ == BlockKind::headers) {
@@ -435,7 +323,7 @@ export {
       }
 
       template <Http2EventSink Sink>
-      inline void finishStream(std::uint32_t stream, Sink& sink) noexcept {
+      TBC_HOT_PATH void finishStream(std::uint32_t stream, Sink& sink) noexcept {
         if (direction_ == Http2Direction::request) {
           sink.emit({Http2Event::Kind::request_finished, stream});
           streams_.finishRequest(stream);
@@ -446,7 +334,7 @@ export {
       }
 
       template <Http2EventSink Sink>
-      inline Http2HeaderMetadata decodeHeaders(Sink& sink) noexcept {
+      TBC_HOT_PATH Http2HeaderMetadata decodeHeaders(Sink& sink) noexcept {
         Http2HeaderMetadata metadata;
         const bool decoded = decoder_.decode(block_.bytes().first(block_length_), [&](std::string_view name, std::string_view value) noexcept {
           if (block_kind_ == BlockKind::headers) {
@@ -469,11 +357,7 @@ export {
         return metadata;
       }
 
-      inline void recordUntracked() noexcept {
-        if (statistics_.untracked_streams != std::numeric_limits<std::uint32_t>::max()) {
-          ++statistics_.untracked_streams;
-        }
-      }
+      void recordUntracked() noexcept;
 
       HpackDecoder<Memory> decoder_;
       Http2Direction direction_;
@@ -489,6 +373,9 @@ export {
       bool block_end_stream_ = false;
     };
 
+    extern template class Http2Observer<Memory>;
+    extern template class Http2Observer<ConcurrentMemory>;
+
   }
 }
 
@@ -501,12 +388,11 @@ export {
     public:
       static constexpr std::string_view client_preface = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 
-      inline explicit Http2DirectionObserver(Memory& memory, Http2Direction direction) noexcept
-          : observer_(memory, direction),
-            direction_(direction) {}
+      explicit Http2DirectionObserver(Memory& memory, Http2Direction direction) noexcept;
 
+      // Generic over the caller's sink, and called for every chunk relayed.
       template <Http2EventSink Sink>
-      inline void observe(std::span<const std::uint8_t> bytes, Sink& sink) noexcept {
+      TBC_HOT_PATH void observe(std::span<const std::uint8_t> bytes, Sink& sink) noexcept {
         if (direction_ == Http2Direction::request && preface_offset_ < client_preface.size()) {
           const auto count = std::min(client_preface.size() - preface_offset_, bytes.size());
           if (std::memcmp(bytes.data(), client_preface.data() + preface_offset_, count) != 0) {
@@ -520,19 +406,16 @@ export {
         observer_.observe(bytes, sink);
       }
 
-      inline typename Http2Observer<Memory>::Statistics finish() noexcept {
-        if (direction_ == Http2Direction::request && preface_offset_ != client_preface.size()) {
-          observer_.fail();
-        }
-
-        return observer_.finish();
-      }
+      typename Http2Observer<Memory>::Statistics finish() noexcept;
 
     private:
       Http2Observer<Memory> observer_;
       Http2Direction direction_;
       std::size_t preface_offset_ = 0;
     };
+
+    extern template class Http2DirectionObserver<Memory>;
+    extern template class Http2DirectionObserver<ConcurrentMemory>;
 
   }
 }

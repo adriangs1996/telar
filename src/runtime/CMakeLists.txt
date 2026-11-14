@@ -125,6 +125,34 @@ add_library(runtime-core STATIC
   platform/local_listener/local_listener.cpp
   history/store/database.cpp
   terminal/text_reader/cell_projection.cpp)
+# The traffic domain: proxy, TLS interception, HTTP, redirection, capture and plugins.
+target_sources(runtime-core PRIVATE
+  exchange_capture/pipeline/pipeline.cpp
+  exchange_capture/producer/producer.cpp
+  http/content/content.cpp
+  http/message/message.cpp
+  http1/head/head.cpp
+  http2/direction_observer/direction_observer.cpp
+  http2/frame_reader/frame_reader.cpp
+  plugins/run_worker/run_worker.cpp
+  plugins/service/service.cpp
+  plugins/tap_configuration/tap_configuration.cpp
+  plugins/worker/worker.cpp
+  proxy/authenticate/authenticate.cpp
+  proxy/http2_capture_streams/http2_capture_streams.cpp
+  proxy/intercepted_relay/intercepted_relay.cpp
+  proxy/runtime/runtime.cpp
+  redirect/direction/direction.cpp
+  redirect/ingress/ingress.cpp
+  redirect/pf_rules/pf_rules.cpp
+  redirect/record/record.cpp
+  redirect/socket_owners/socket_owners.cpp
+  tls/interception/interception.cpp
+  tls/system_root_bundle/system_root_bundle.cpp
+  traffic/capture/capture.cpp
+  traffic/capture_analysis/capture_analysis.cpp
+  traffic/control_backend/control_backend.cpp
+  traffic/control_protocol/control_protocol.cpp)
 telar_modules(runtime-core)
 set_target_properties(runtime-core telar-lua-vm telar-platform PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(runtime-core PUBLIC . "${CMAKE_CURRENT_BINARY_DIR}/generated" "${CMAKE_CURRENT_SOURCE_DIR}/../../lib/tbc/include")

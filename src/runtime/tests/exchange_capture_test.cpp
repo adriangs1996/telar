@@ -97,12 +97,15 @@ static void testCaptureFailuresAndMetadata() {
 
 static void testCaptureJoinOwnership() {
   SystemAllocator system;
-  BudgetAllocator memory{system, 8 * 1024 * 1024};
+  BudgetAllocator budget{system, 8 * 1024 * 1024};
+  SynchronizedAllocator synchronized{budget};
+  MemoryAdapter adapter{synchronized};
+  ConcurrentMemory& memory = adapter;
   CaptureQuota quota{4096};
   ProxyCaptureLimits limits;
-  using Joiner = CaptureJoiner<decltype(memory)>;
+  using Joiner = CaptureJoiner<ConcurrentMemory>;
   auto half = [&](std::uint64_t connection, CaptureSide side) {
-    return makeOwned<CaptureHalf<decltype(memory)>>(memory, memory, quota, limits, CaptureStart{.key = {connection, 1}, .side = side});
+    return makeOwned<CaptureHalf<ConcurrentMemory>>(memory, memory, quota, limits, CaptureStart{.key = {connection, 1}, .side = side});
   };
 
   {
@@ -130,7 +133,7 @@ static void testCaptureJoinOwnership() {
     check(joiner.push(31, half(2, CaptureSide::response)).state == Joiner::State::complete);
   }
 
-  check(memory.liveBytes() == 0 && quota.used() == 0);
+  check(budget.liveBytes() == 0 && quota.used() == 0);
 }
 
 static void testConcurrentCaptureQuota() {
