@@ -118,7 +118,7 @@ namespace telar::gui::platform {
 
     window.setFlag(Qt::FramelessWindowHint, !appearance.titlebar);
     if (QGuiApplication::platformName().startsWith(QLatin1StringView{"wayland"})) {
-      configureBackgroundEffect(window, appearance);
+      configureBackgroundEffect(window, appearance.background_opacity, appearance.background_blur);
     }
   }
 

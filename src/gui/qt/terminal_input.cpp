@@ -1,5 +1,6 @@
 #include "terminal_input.hpp"
-#include <array>
+
+import std;
 
 namespace telar::gui::qt {
   namespace {

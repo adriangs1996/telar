@@ -5,29 +5,8 @@ static_assert(true);
 
 #include "application_effects.hpp"
 #include "application.hpp"
-#include "command_process.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_client/serializers/telar_cells.hpp"
-#include "telar_client/serializers/telar_frame.hpp"
-#include "telar_client/serializers/telar_messages.hpp"
-#include <algorithm>
-#include <array>
-#include <charconv>
-#include <chrono>
-#include <concepts>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <exception>
-#include <limits>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <system_error>
-#include <utility>
-#include <variant>
 
+import std;
 import telar.gui.text.notification_payload;
 import telar.gui.platform.awake_clock;
 import telar.gui.presentation.frame_pacer;

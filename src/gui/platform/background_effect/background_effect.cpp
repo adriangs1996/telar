@@ -7,7 +7,6 @@ module;
 #include <QtWaylandClient/private/qwaylanddisplay_p.h>
 #include <QtWaylandClient/private/qwaylandwindow_p.h>
 
-#include "platform/window.hpp"
 // These C headers carry no __cplusplus guard of their own.
 extern "C" {
 #include "ext-background-effect-v1-client-protocol.h"
@@ -62,8 +61,9 @@ namespace telar::gui::platform {
         telar_background_effect_deinit(&native_);
       }
 
-      void set(WindowAppearance appearance) {
-        appearance_ = appearance;
+      void set(float background_opacity, std::uint8_t background_blur) {
+        background_opacity_ = background_opacity;
+        background_blur_ = background_blur;
         apply();
       }
 
@@ -154,8 +154,8 @@ namespace telar::gui::platform {
       }
 
       [[nodiscard]] bool changed(telar_gui_viewport viewport) const noexcept {
-        const bool opaque = appearance_.background_opacity >= 1;
-        const bool blurred = !opaque && appearance_.background_blur > 0 && native_.manager != nullptr && (native_.capabilities & EXT_BACKGROUND_EFFECT_MANAGER_V1_CAPABILITY_BLUR) != 0;
+        const bool opaque = background_opacity_ >= 1;
+        const bool blurred = !opaque && background_blur_ > 0 && native_.manager != nullptr && (native_.capabilities & EXT_BACKGROUND_EFFECT_MANAGER_V1_CAPABILITY_BLUR) != 0;
         return native_.dirty || !native_.configured || native_.opaque != opaque || native_.blurred != blurred || native_.width != viewport.width || native_.height != viewport.height;
       }
 
@@ -179,7 +179,7 @@ namespace telar::gui::platform {
         if (!changed(viewport)) {
           return;
         }
-        if (telar_background_effect_apply(&native_, viewport, appearance_.background_opacity, appearance_.background_blur)) {
+        if (telar_background_effect_apply(&native_, viewport, background_opacity_, background_blur_)) {
           if (auto* quick = qobject_cast<QQuickWindow*>(&window_)) {
             quick->update();
           } else {
@@ -192,7 +192,8 @@ namespace telar::gui::platform {
       }
 
       QWindow& window_;
-      WindowAppearance appearance_;
+      float background_opacity_ = 1;
+      std::uint8_t background_blur_ = 0;
       telar_background_effect native_{};
       Display* display_ = nullptr;
       wl_callback* synchronization_ = nullptr;
@@ -202,15 +203,15 @@ namespace telar::gui::platform {
 
   }
 
-  void configureBackgroundEffect(QWindow& window, WindowAppearance appearance) {
+  void configureBackgroundEffect(QWindow& window, float background_opacity, std::uint8_t background_blur) {
     for (auto* child : window.children()) {
       if (auto* effect = dynamic_cast<BackgroundEffect*>(child)) {
-        effect->set(appearance);
+        effect->set(background_opacity, background_blur);
         return;
       }
     }
     auto effect = std::make_unique<BackgroundEffect>(window);
-    effect->set(appearance);
+    effect->set(background_opacity, background_blur);
     std::ignore = effect.release();
   }
 

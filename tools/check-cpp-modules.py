@@ -331,22 +331,45 @@ def unit_modules(files, owners):
     return modules
 
 
+def qt_adapters(sources):
+    """The sources that include a `<Q…>` header, directly or through the project headers they
+    include. A unit that defines members of a class declared in a Qt header compiles Qt textually
+    whether or not it names a Qt type itself."""
+    includes, qt, pending = {}, set(), list(sources)
+    while pending:
+        name = pending.pop()
+        if name in includes:
+            continue
+
+        text = sources.get(name) or (ROOT / name).read_text(errors='replace')
+        includes[name] = {header for header in (resolve(name, s) for s in includes_of(text)) if header}
+        pending += includes[name]
+        if QT_INCLUDE_RE.search(text):
+            qt.add(name)
+
+    while found := {name for name, headers in includes.items() if name not in qt and headers & qt}:
+        qt |= found
+
+    return qt
+
+
 def textual_include_sites(files, macro_headers, owners, libraries, modules):
     """The includes rule 5 does not excuse, by file.
 
-    lib/sys, Qt/moc adapters and C or Objective-C(++) sources may include, and so may the headers
-    they reach: those headers stay textual because they cannot import. An owner module may include
-    the headers it owns that cross that boundary, and the units of the module that `libraries`
-    names for a third-party header may include it, the headers that module owns included. Any
-    file may include a macro header or a generated `.inc` data fragment, which the build writes
-    outside the tree. Tests, tools and OUTSIDE_RULE_5 are out of the rule.
+    lib/sys, Qt/moc adapters (qt_adapters) and C or Objective-C(++) sources may include, and so
+    may the headers they reach: those headers stay textual because they cannot import. An owner
+    module may include the headers it owns that cross that boundary, and the units of the module
+    that `libraries` names for a third-party header may include it, the headers that module owns
+    included. Any file may include a macro header or a generated `.inc` data fragment, which the
+    build writes outside the tree. Tests, tools and OUTSIDE_RULE_5 are out of the rule.
     """
     sources = {name: (ROOT / name).read_text(errors='replace') for name in files
                if name.endswith(SOURCE_SUFFIXES) and not name.startswith(OUTSIDE_RULE_5)
                and not re.search(r'/(tests|tools)/', name)}
+    qt = qt_adapters(sources)
     reached = set()
-    pending = [name for name, text in sources.items()
-               if name.startswith('lib/sys/') or name.endswith(FOREIGN_SUFFIXES) or QT_INCLUDE_RE.search(text)]
+    pending = [name for name in sources
+               if name.startswith('lib/sys/') or name.endswith(FOREIGN_SUFFIXES) or name in qt]
     while pending:
         name = pending.pop()
         if name in reached:
