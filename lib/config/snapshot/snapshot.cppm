@@ -78,7 +78,7 @@ export {
 
         const auto base_client = root.field("client");
 
-        ThemeValidator::selection(root);
+        static_cast<void>(ThemeReader::selection(root));
         ClientValidator::validate(base_client, values_.limits, client_state);
         static_cast<void>(GuiReader::read(root.field("gui")));
         RuntimeReader{values_}.read(root.field("runtime"));
@@ -134,7 +134,7 @@ export {
       template <CommandTabStore Commands>
       inline static void readProfile(const lua::Value& profile, RuntimeValues<Memory>& values, const lua::Value& base_client, BasicClientValidationState<Commands>& client_state) {
         profile.onlyFields({"theme", "client", "gui", "runtime", "plugins"});
-        ThemeValidator::selection(profile);
+        static_cast<void>(ThemeReader::selection(profile));
         ClientValidator::validate(profile.field("client"), values.limits, client_state, &base_client);
         static_cast<void>(GuiReader::read(profile.field("gui")));
         RuntimeReader{values}.read(profile.field("runtime"));
@@ -147,6 +147,83 @@ export {
 
     template <Allocator Memory>
     SnapshotReader(Memory& memory, RuntimeValues<Memory>& values) -> SnapshotReader<Memory>;
+
+  }
+}
+
+// Interface: telar_config/configuration_layers.cppm
+export {
+  namespace telar::runtime::config {
+
+    // What a client applies from one configuration table: the root's, or a profile's.
+    struct ClientLayerSettings {
+      ThemeSelectionSettings themes;
+      ClientSettings client;
+      GuiSettings gui;
+    };
+
+    // The tables a configuration layers for a client: the root and then the selected profile's,
+    // which overlays it. Each one is read after SnapshotReader validated the whole configuration.
+    class ConfigurationLayers {
+    public:
+      // Hands `consume` the root and then the selected profile's configuration.
+      template <typename Consume>
+      inline static void each(const lua::Value& root, std::string_view profile, Consume&& consume) {
+        consume(root);
+        if (!profile.empty()) {
+          const auto profiles = root.field("profiles");
+          const auto selected = profiles.entry(profile);
+
+          consume(selected.as("config"));
+        }
+      }
+
+      // Hands `consume` the root's client table and then the selected profile's, with the root's
+      // as the one it inherits from.
+      template <typename Consume>
+      inline static void clients(const lua::Value& root, std::string_view profile, Consume&& consume) {
+        const auto client = root.field("client");
+
+        consume(client, static_cast<const lua::Value*>(nullptr));
+        if (!profile.empty()) {
+          overlay(root, profile, client, consume);
+        }
+      }
+
+      // Hands `consume` the client table in effect and the one it inherits from, if any, and
+      // returns what `consume` returns.
+      template <typename Consume>
+      inline static decltype(auto) client(const lua::Value& root, std::string_view profile, Consume&& consume) {
+        const auto client = root.field("client");
+
+        if (profile.empty()) {
+          return consume(client, static_cast<const lua::Value*>(nullptr));
+        }
+
+        return overlay(root, profile, client, consume);
+      }
+
+      // Hands each `client.prompt` binding to `binding` in order.
+      template <typename Binding>
+      [[nodiscard]] inline static ClientLayerSettings read(const lua::Value& configuration, Binding&& binding) {
+        return {
+            .themes = ThemeReader::selection(configuration),
+            .client = ClientReader::read(configuration.field("client"), std::forward<Binding>(binding)),
+            .gui = GuiReader::read(configuration.field("gui")),
+        };
+      }
+
+    private:
+      template <typename Consume>
+      inline static decltype(auto) overlay(const lua::Value& root, std::string_view profile, const lua::Value& client, Consume& consume) {
+        const auto profiles = root.field("profiles");
+        const auto selected = profiles.entry(profile);
+        const auto configuration = selected.as("config");
+        const auto overlay = configuration.field("client");
+
+        return consume(overlay, &client);
+      }
+    };
 
   }
 }

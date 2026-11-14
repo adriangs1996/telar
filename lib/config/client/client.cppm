@@ -16,10 +16,12 @@ namespace telar::runtime::config {
 
   class NamedDefinitionsValidator {
   public:
+    // Hands the definitions to `validate_definition` in name order, each with its index, and
+    // returns how many it kept, if the table is present.
     template <typename Validator>
-    inline static void validate(const lua::Value& table, tbc::view<LimitReach, tbc::lt::b> reach, tbc::view<LimitNotices&, tbc::lt::b> limits, Validator&& validate_definition) {
+    inline static std::optional<std::size_t> validate(const lua::Value& table, tbc::view<LimitReach, tbc::lt::b> reach, tbc::view<LimitNotices&, tbc::lt::b> limits, Validator&& validate_definition) {
       if (!table.present()) {
-        return;
+        return std::nullopt;
       }
 
       std::array<std::string_view, maximum_definitions> names;
@@ -46,14 +48,17 @@ namespace telar::runtime::config {
         limits.add(reach);
       }
 
-      for (const auto name : std::span{names}.first(kept)) {
-        const auto definition = table.entry(name);
+      for (std::size_t index = 0; index < kept; ++index) {
+        const auto definition = table.entry(names[index]);
 
-        validate_definition(name, definition);
+        validate_definition(names[index], definition, index);
       }
+
+      return kept;
     }
 
-    inline static void heading(std::string_view name, const lua::Value& definition, LimitNotices& limits) {
+    // The definition's title, or its name, cut to the title limit.
+    inline static std::string_view heading(std::string_view name, const lua::Value& definition, LimitNotices& limits) {
       if (name.empty() || name.size() > maximum_name_bytes || !std::ranges::all_of(name, [](unsigned char byte) {
             return (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9') || byte == '_' || byte == '-';
           })) {
@@ -61,9 +66,10 @@ namespace telar::runtime::config {
       }
 
       const auto title = definition.field("title");
-      const auto text = title.present() ? title.string() : name;
+      const auto text = fittedUiText(title.present() ? title.string() : name, {"panels.title_bytes", "title bytes", maximum_title_bytes, {}, {}}, limits);
 
-      printableUiText(title, fittedUiText(text, {"panels.title_bytes", "title bytes", maximum_title_bytes, {}, {}}, limits));
+      printableUiText(title, text);
+      return text;
     }
 
     static constexpr std::size_t maximum_definitions = 16;
@@ -421,6 +427,110 @@ export {
   }
 }
 
+// Interface: telar_config/action_setting.cppm
+export {
+  namespace telar::runtime::config {
+
+    enum class ActionKind : std::uint8_t {
+      function,
+      builtin,
+      select_tab,
+      select_workspace,
+      select_tab_offset,
+      command_tab,
+      notification,
+      panel,
+      pick,
+      plugin,
+    };
+
+    // An action as read. A function or a notification, panel, pick or plugin action is read
+    // again from its value when it runs; ExtendedActionReader reads the last four.
+    struct ActionSetting {
+      ActionKind kind = ActionKind::builtin;
+      // A built-in action's name, with a direction joined to its stem: "split-horizontal". It views
+      // the configuration's string or, for a direction, a name that outlives it.
+      std::string_view name;
+      // The tab or workspace `index`, from 1, or the tab `offset`.
+      std::int32_t number = 0;
+      // A command tab's arguments and label, views of the configuration's strings.
+      CommandTabView command;
+    };
+
+    struct NotificationActionSetting {
+      std::string_view title;
+      std::string_view body;
+      NotificationLevel level = NotificationLevel::info;
+      std::uint32_t duration_ms = default_notification_duration_ms;
+      NotificationTarget target;
+    };
+
+    struct DefinitionActionSetting {
+      bool panel = false;
+      std::uint8_t index = 0;
+    };
+
+    struct PluginActionSetting {
+      std::string_view plugin;
+      std::string_view action;
+    };
+
+    using ExtendedActionSetting = std::variant<NotificationActionSetting, DefinitionActionSetting, PluginActionSetting>;
+
+    // Reads a notification, panel, pick or plugin action a validator already accepted.
+    class ExtendedActionReader {
+    public:
+      // The definition is the one `definitions` holds now: a profile may replace it.
+      [[nodiscard]] inline static ExtendedActionSetting read(const lua::Value& action, const ClientDefinitions& definitions) {
+        const auto kind = action.field("kind").string();
+        if (kind == "notification") {
+          return notification(action);
+        }
+
+        if (kind == "plugin") {
+          return PluginActionSetting{.plugin = action.field("plugin").string(), .action = action.field("action").string()};
+        }
+
+        const bool panel = kind == "open-panel";
+        const auto selected = action.field(panel ? "panel" : "pick");
+        const auto index = definitions.index(panel ? "panels" : "picks", selected.string());
+        if (!index) {
+          selected.fail("names an unknown client definition");
+        }
+
+        return DefinitionActionSetting{.panel = panel, .index = *index};
+      }
+
+    private:
+      inline static NotificationActionSetting notification(const lua::Value& action) {
+        NotificationActionSetting result;
+
+        result.title = utf8Prefix(action.field("title").string(), max_notification_title_bytes);
+        const auto body = action.field("body");
+        if (body.present()) {
+          result.body = utf8Prefix(body.string(), max_notification_message_bytes);
+        }
+
+        result.level = optionalChoice<NotificationLevel>(action.field("level"), notification_level_names).value_or(NotificationLevel::info);
+        result.duration_ms = static_cast<std::uint32_t>(action.field("duration_ms").boundedInteger(default_notification_duration_ms, min_notification_duration_ms, max_notification_duration_ms));
+        constexpr std::array targets{"pane_id", "tab_id", "workspace_id"};
+
+        for (std::size_t index = 0; index < targets.size(); ++index) {
+          const auto target = action.field(targets[index]);
+          if (target.present()) {
+            result.target = {.kind = static_cast<NotificationTarget::Kind>(index + 1), .id = static_cast<std::uint64_t>(target.integer())};
+          }
+        }
+
+        return result;
+      }
+
+      static constexpr std::array<std::string_view, 4> notification_level_names{"info", "success", "warning", "failure"};
+    };
+
+  }
+}
+
 // Interface: telar_config/action_validator.cppm
 export {
   namespace telar::runtime::config {
@@ -493,11 +603,97 @@ export {
         return validate(action);
       }
 
+      // Validates the action and reads it; nothing when a limit drops it.
+      [[nodiscard]] inline std::optional<ActionSetting> read(const lua::Value& action, bool expression = false) const {
+        if (!validate(action, expression)) {
+          return std::nullopt;
+        }
+
+        ActionSetting setting;
+
+        if (action.is(LUA_TFUNCTION)) {
+          setting.kind = ActionKind::function;
+          return setting;
+        }
+
+        if (action.is(LUA_TSTRING)) {
+          setting.name = action.string();
+          return setting;
+        }
+
+        const auto kind = action.field("kind").string();
+        if (kind == "select-tab" || kind == "select-workspace") {
+          setting.kind = kind == "select-tab" ? ActionKind::select_tab : ActionKind::select_workspace;
+          setting.number = static_cast<std::int32_t>(action.field("index").integer());
+        } else if (kind == "select-tab-offset") {
+          setting.kind = ActionKind::select_tab_offset;
+          setting.number = static_cast<std::int32_t>(action.field("offset").integer());
+        } else if (kind == "command-tab") {
+          setting.kind = ActionKind::command_tab;
+          command(action, setting.command);
+        } else if (kind == "notification") {
+          setting.kind = ActionKind::notification;
+        } else if (kind == "open-panel") {
+          setting.kind = ActionKind::panel;
+        } else if (kind == "pick") {
+          setting.kind = ActionKind::pick;
+        } else if (kind == "plugin") {
+          setting.kind = ActionKind::plugin;
+        } else {
+          setting.name = builtinName(action, kind);
+        }
+
+        return setting;
+      }
+
     private:
+      inline static void command(const lua::Value& action, CommandTabView& command) {
+        const auto arguments = action.field("command");
+
+        command.count = arguments.listLength();
+        for (std::size_t index = 0; index < command.count; ++index) {
+          command.arguments[index] = arguments.element(static_cast<lua_Integer>(index) + 1).string();
+        }
+
+        const auto label = action.field("label");
+
+        command.configured_label = label.is(LUA_TSTRING) ? label.string() : std::string_view{};
+      }
+
+      // A directional action names its stem and its direction: {kind = "split-pane", direction =
+      // "horizontal"} is "split-horizontal".
+      inline static std::string_view builtinName(const lua::Value& action, std::string_view kind) {
+        constexpr auto stems = std::to_array<std::pair<std::string_view, std::string_view>>({
+            {"scroll-pane", "scroll-pane-"},
+            {"split-pane", "split-"},
+            {"focus-pane", "focus-"},
+            {"navigate-pane", "navigate-"},
+            {"resize-pane", "resize-"},
+            {"resize-sidebar", "resize-sidebar-"},
+            {"move-tab", "move-tab-"},
+        });
+
+        const auto* const found = std::ranges::find(stems, kind, &decltype(stems)::value_type::first);
+        if (found == stems.end()) {
+          return kind;
+        }
+
+        const auto direction = action.field("direction").string();
+        const auto* const joined = std::ranges::find_if(builtin_names, [&](std::string_view name) {
+          return name.size() == found->second.size() + direction.size() && name.starts_with(found->second) && name.ends_with(direction);
+        });
+        if (joined == builtin_names.end()) {
+          action.fail("names an unknown action");
+        }
+
+        return *joined;
+      }
+
+      static constexpr std::array<std::string_view, 45> builtin_names{"next-machine", "previous-machine", "machine-picker", "add-machine", "scroll-pane-up", "scroll-pane-down", "split-horizontal", "split-vertical", "focus-left", "focus-right", "focus-up", "focus-down", "navigate-left", "navigate-right", "navigate-up", "navigate-down", "resize-left", "resize-right", "resize-up", "resize-down", "toggle-pane-fullscreen", "toggle-sidebar", "resize-sidebar-left", "resize-sidebar-right", "toggle-workspace-list", "leave-worktree", "forget-gone-worktrees", "new-workspace", "rename-workspace", "close-pane", "new-tab", "next-tab", "previous-tab", "rename-tab", "close-tab", "move-tab-previous", "move-tab-next", "detach", "copy-mode", "goto-picker", "history-palette", "path-picker", "suggest-command", "close-panel", "refresh-panel"};
+
       inline static void builtin(const lua::Value& value) {
-        constexpr std::string_view names[]{"next-machine", "previous-machine", "machine-picker", "add-machine", "scroll-pane-up", "scroll-pane-down", "split-horizontal", "split-vertical", "focus-left", "focus-right", "focus-up", "focus-down", "navigate-left", "navigate-right", "navigate-up", "navigate-down", "resize-left", "resize-right", "resize-up", "resize-down", "toggle-pane-fullscreen", "toggle-sidebar", "resize-sidebar-left", "resize-sidebar-right", "toggle-workspace-list", "leave-worktree", "forget-gone-worktrees", "new-workspace", "rename-workspace", "close-pane", "new-tab", "next-tab", "previous-tab", "rename-tab", "close-tab", "move-tab-previous", "move-tab-next", "detach", "copy-mode", "goto-picker", "history-palette", "path-picker", "suggest-command", "close-panel", "refresh-panel"};
         const auto name = value.string();
-        if (std::ranges::find(names, name) != std::end(names)) {
+        if (std::ranges::find(builtin_names, name) != builtin_names.end()) {
           return;
         }
 
@@ -644,6 +840,15 @@ export {
 export {
   namespace telar::runtime::config {
 
+    enum class UiMark : std::uint8_t {
+      claude,
+      codex,
+      pi,
+      telar,
+    };
+
+    inline constexpr std::array<std::string_view, 4> ui_mark_names{"claude", "codex", "pi", "telar"};
+
     enum class ComponentKind : std::uint8_t {
       label,
       icon,
@@ -665,8 +870,16 @@ export {
       divider,
     };
 
+    // How a component is written: as text, as a `text` or `icon` segment, or as a `ui` table.
+    enum class ComponentForm : std::uint8_t {
+      text,
+      segment,
+      component,
+    };
+
     struct ComponentShape {
       ComponentKind kind = ComponentKind::label;
+      ComponentForm form = ComponentForm::text;
       std::string_view text{};
       std::string_view detail{};
       std::string_view url{};
@@ -868,6 +1081,7 @@ export {
         ComponentShape shape;
 
         shape.kind = kind(value.field("ui"));
+        shape.form = ComponentForm::component;
         fields(value, shape.kind);
         shape.priority = static_cast<unsigned>(std::round(value.field("priority").boundedNumber(inherited_priority, 0, 100)));
         const auto tone = value.field("tone");
@@ -963,6 +1177,7 @@ export {
         value.onlyFields({"text", "icon", "fg", "bg", "bold", "italic", "faint", "underline", "strikethrough"});
         ComponentShape shape;
 
+        shape.form = ComponentForm::segment;
         shape.text = text(value, "text");
         shape.kind = shape.text.empty() ? ComponentKind::icon : ComponentKind::label;
         shape.priority = priority;
@@ -1078,6 +1293,1133 @@ export {
   }
 }
 
+// Interface: telar_config/component_values.cppm
+export {
+  namespace telar::runtime::config {
+
+    enum class ComponentTone : std::uint8_t {
+      neutral,
+      muted,
+      accent,
+      success,
+      warning,
+      danger,
+    };
+
+    enum class ComponentMetric : std::uint8_t {
+      cpu,
+      memory,
+      battery,
+    };
+
+    inline constexpr std::array<std::string_view, 6> component_tone_names{"neutral", "muted", "accent", "success", "warning", "danger"};
+    inline constexpr std::array<std::string_view, 3> component_metric_names{"cpu", "memory", "battery"};
+
+    // Turns the colors a configuration names into a client's: `index` takes a 256-color index
+    // and `name` a name or "#RRGGBB", or nothing for one it does not know.
+    template <typename Colors>
+    concept UiColors = requires(const Colors& colors, std::uint8_t index, std::string_view name) {
+      { colors.index(index) } -> std::same_as<typename Colors::Color>;
+      { colors.name(name) } -> std::same_as<std::optional<typename Colors::Color>>;
+    };
+
+    // What a component shows beyond its shape. The views are the component's strings.
+    template <typename Color>
+    struct ComponentValues {
+      static constexpr std::size_t maximum_samples = 120;
+      static constexpr double sample_percent = 100;
+      ComponentTone tone = ComponentTone::neutral;
+      std::optional<Color> foreground;
+      std::optional<Color> background;
+      bool bold = false;
+      bool italic = false;
+      bool faint = false;
+      bool underline = false;
+      bool strikethrough = false;
+      std::optional<std::string_view> icon;
+      std::optional<UiMark> mark;
+      ComponentMetric metric = ComponentMetric::cpu;
+      std::optional<double> value;
+      std::optional<double> marker;
+      bool primary = false;
+      // A sparkline's last samples, as percentages of its scale.
+      std::array<std::uint8_t, maximum_samples> samples{};
+      std::size_t sample_count = 0;
+    };
+
+    class ComponentValuesReader {
+    public:
+      template <UiColors Colors>
+      [[nodiscard]] inline static ComponentValues<typename Colors::Color> read(const lua::Value& value, const ComponentShape& shape, const Colors& colors) {
+        ComponentValues<typename Colors::Color> result;
+
+        if (shape.form == ComponentForm::text) {
+          return result;
+        }
+
+        if (shape.form == ComponentForm::segment) {
+          result.icon = icon(value.field("icon"));
+          style(value, colors, result);
+          return result;
+        }
+
+        result.tone = tone(value.field("tone"));
+        switch (shape.kind) {
+        case ComponentKind::label:
+          style(value, colors, result);
+          break;
+        case ComponentKind::icon:
+          result.icon = icon(value.field("name"));
+          break;
+        case ComponentKind::mark:
+          result.mark = mark(value.field("name"));
+          break;
+        case ComponentKind::meter:
+        case ComponentKind::meter_row:
+          result.value = number(value.field("value"));
+          result.marker = number(value.field("marker"));
+          break;
+        case ComponentKind::sparkline:
+          samples(value, result);
+          break;
+        case ComponentKind::metric:
+          result.metric = metric(value.field("name"));
+          break;
+        case ComponentKind::group:
+          result.mark = mark(value.field("mark"));
+          result.icon = icon(value.field("icon"));
+          break;
+        case ComponentKind::callout:
+          result.icon = icon(value.field("icon"));
+          break;
+        case ComponentKind::button:
+          result.primary = value.field("primary").boolean(false);
+          break;
+        default:
+          break;
+        }
+
+        return result;
+      }
+
+      [[nodiscard]] inline static ComponentTone tone(const lua::Value& value) {
+        if (!value.present()) {
+          return ComponentTone::neutral;
+        }
+
+        const auto* const found = std::ranges::find(component_tone_names, value.string());
+        if (found == component_tone_names.end()) {
+          value.fail("names an unknown component tone");
+        }
+
+        return static_cast<ComponentTone>(found - component_tone_names.begin());
+      }
+
+      // Hands a component's action, which cannot be a function, to `consume` and returns what it
+      // returns.
+      template <typename Consume>
+      inline static decltype(auto) action(const lua::Value& value, const ComponentShape& shape, Consume&& consume) {
+        const auto action = value.field(shape.action_field);
+        if (action.is(LUA_TFUNCTION)) {
+          action.fail("cannot be a callback in a component");
+        }
+
+        return std::forward<Consume>(consume)(action);
+      }
+
+    private:
+      template <typename Colors, typename Values>
+      inline static void style(const lua::Value& value, const Colors& colors, Values& result) {
+        result.foreground = color(value.field("fg"), colors);
+        result.background = color(value.field("bg"), colors);
+        result.bold = value.field("bold").boolean(false);
+        result.italic = value.field("italic").boolean(false);
+        result.faint = value.field("faint").boolean(false);
+        result.underline = value.field("underline").boolean(false);
+        result.strikethrough = value.field("strikethrough").boolean(false);
+      }
+
+      template <typename Colors>
+      inline static std::optional<typename Colors::Color> color(const lua::Value& value, const Colors& colors) {
+        if (!value.present()) {
+          return std::nullopt;
+        }
+
+        if (const auto index = value.asInteger()) {
+          if (*index < 0 || std::cmp_greater(*index, std::numeric_limits<std::uint8_t>::max())) {
+            value.fail("is outside the component color index range");
+          }
+
+          return colors.index(static_cast<std::uint8_t>(*index));
+        }
+
+        auto parsed = colors.name(value.string());
+        if (!parsed) {
+          value.fail("is not a supported component color");
+        }
+
+        return parsed;
+      }
+
+      inline static std::optional<std::string_view> icon(const lua::Value& value) {
+        if (!value.present()) {
+          return std::nullopt;
+        }
+
+        uiIcon(value);
+        return value.string();
+      }
+
+      inline static std::optional<UiMark> mark(const lua::Value& value) {
+        if (!value.present()) {
+          return std::nullopt;
+        }
+
+        uiMark(value);
+        return static_cast<UiMark>(std::ranges::find(ui_mark_names, value.string()) - ui_mark_names.begin());
+      }
+
+      inline static ComponentMetric metric(const lua::Value& value) {
+        const auto* const found = std::ranges::find(component_metric_names, value.string());
+        if (found == component_metric_names.end()) {
+          value.fail("names an unknown component metric");
+        }
+
+        return static_cast<ComponentMetric>(found - component_metric_names.begin());
+      }
+
+      inline static std::optional<double> number(const lua::Value& value) {
+        if (!value.present()) {
+          return std::nullopt;
+        }
+
+        return value.boundedNumber(0, std::numeric_limits<double>::lowest(), std::numeric_limits<double>::max());
+      }
+
+      template <typename Values>
+      inline static void samples(const lua::Value& value, Values& result) {
+        const auto maximum = value.field("max");
+        const auto values = value.field("values");
+        const auto total = values.listLength();
+
+        result.sample_count = std::min(total, result.samples.size());
+        std::array<double, Values::maximum_samples> kept{};
+        double largest = 0;
+
+        for (std::size_t index = 0; index < result.sample_count; ++index) {
+          const auto sample = values.element(static_cast<lua_Integer>(total - result.sample_count + index) + 1);
+          if (!sample.present()) {
+            sample.fail("must be a number");
+          }
+
+          kept[index] = sample.boundedNumber(0, 0, std::numeric_limits<double>::max());
+          largest = std::max(largest, kept[index]);
+        }
+
+        const auto scale = maximum.boundedNumber(largest, std::numeric_limits<double>::lowest(), std::numeric_limits<double>::max());
+
+        for (std::size_t index = 0; index < result.sample_count; ++index) {
+          const auto fraction = scale > 0 ? std::clamp(kept[index] / scale, 0.0, 1.0) : 0;
+
+          result.samples[index] = static_cast<std::uint8_t>(std::round(fraction * Values::sample_percent));
+        }
+      }
+    };
+
+  }
+}
+
+// Interface: telar_config/component_walker.cppm
+export {
+  namespace telar::runtime::config {
+
+    enum class ComponentPlace : std::uint8_t {
+      bar,
+      panel,
+      group,
+      tooltip,
+      buttons,
+    };
+
+    inline bool componentAllowed(ComponentKind kind, ComponentPlace place) noexcept {
+      switch (place) {
+      case ComponentPlace::bar:
+        return kind <= ComponentKind::group;
+      case ComponentPlace::panel:
+        return true;
+      case ComponentPlace::group:
+        return kind < ComponentKind::group;
+      case ComponentPlace::tooltip:
+        return kind != ComponentKind::group && kind != ComponentKind::callout && kind != ComponentKind::actions && kind != ComponentKind::button;
+      case ComponentPlace::buttons:
+        return kind == ComponentKind::button;
+      }
+
+      return false;
+    }
+
+    struct ComponentPosition {
+      static constexpr std::uint8_t no_parent = std::numeric_limits<std::uint8_t>::max();
+      static constexpr unsigned default_priority = 50;
+      ComponentPlace place = ComponentPlace::bar;
+      std::uint8_t parent = no_parent;
+      unsigned priority = default_priority;
+      unsigned rank = std::numeric_limits<std::uint8_t>::max();
+      unsigned depth = 0;
+    };
+
+    // The node a builder kept for a container, which its children name as their parent.
+    struct ComponentParent {
+      std::uint8_t index = ComponentPosition::no_parent;
+      unsigned rank = 0;
+    };
+
+    // Walks a component tree: text, a component, a segment, or a list of them. It hands each one
+    // a builder may place to `builder.node(value, shape, position)`, which returns the parent its
+    // children name, or nothing to leave them out. An explicit stack bounds both the nested lists
+    // and the Lua stack the walk holds.
+    template <typename Builder>
+    class ComponentWalker {
+    public:
+      inline ComponentWalker(lua_State& state, Builder& builder, LimitNotices& limits) noexcept
+          : state_(state),
+            builder_(builder),
+            limits_(limits) {}
+
+      inline void walk(const lua::Value& value, ComponentPosition position) {
+        const auto original_top = lua_gettop(&state_);
+
+        value.pushCopy();
+        try {
+          push(position);
+          while (frame_count_ != 0) {
+            advance();
+          }
+        } catch (...) {
+          while (frame_count_ != 0) {
+            pop();
+          }
+
+          lua_settop(&state_, original_top);
+
+          throw;
+        }
+
+        lua_settop(&state_, original_top);
+      }
+
+    private:
+      enum class Phase : std::uint8_t {
+        visit,
+        list,
+        children,
+        tooltip,
+        button,
+        done,
+      };
+
+      struct Frame {
+        std::optional<lua::Value> value = std::nullopt;
+        ComponentPosition position;
+        ComponentPosition child;
+        Phase phase = Phase::visit;
+        bool tooltip = false;
+        int index = 0;
+        std::size_t next = 0;
+        std::size_t count = 0;
+      };
+
+      static constexpr unsigned maximum_list_depth = 4;
+      static constexpr std::size_t maximum_frames = (std::size_t{maximum_list_depth} + 2) * 2;
+
+      inline void push(ComponentPosition position) {
+        if (frame_count_ == frames_.size()) {
+          throw std::length_error{"Component traversal stack exceeded"};
+        }
+
+        auto& frame = frames_[frame_count_++];
+
+        frame.index = lua_gettop(&state_);
+        frame.value.emplace(&state_, frame.index, "component");
+        frame.position = position;
+        frame.phase = Phase::visit;
+        frame.tooltip = false;
+        frame.next = 0;
+        frame.count = 0;
+      }
+
+      inline void pop() noexcept {
+        auto& frame = frames_[--frame_count_];
+
+        frame.value.reset();
+        lua_settop(&state_, frame.index - 1);
+      }
+
+      inline void advance() {
+        auto& frame = frames_[frame_count_ - 1];
+
+        switch (frame.phase) {
+        case Phase::visit:
+          visit(frame);
+          break;
+        case Phase::list:
+        case Phase::children:
+          if (frame.next == frame.count) {
+            frame.phase = frame.tooltip ? Phase::tooltip : Phase::done;
+          } else {
+            lua_rawgeti(&state_, frame.index, static_cast<lua_Integer>(++frame.next));
+            push(frame.child);
+          }
+
+          break;
+        case Phase::tooltip:
+        case Phase::button: {
+          const bool tooltip = frame.phase == Phase::tooltip;
+
+          frame.phase = Phase::done;
+          lua_getfield(&state_, frame.index, tooltip ? "tooltip" : "button");
+          auto child = frame.child;
+
+          child.place = tooltip ? ComponentPlace::tooltip : ComponentPlace::buttons;
+          child.priority = ComponentPosition::default_priority;
+          push(child);
+        } break;
+        case Phase::done:
+          pop();
+          break;
+        }
+      }
+
+      inline static const lua::Value& frameValue(const Frame& frame) {
+        if (!frame.value) {
+          throw std::logic_error{"Component traversal frame has no value"};
+        }
+
+        return *frame.value;
+      }
+
+      inline void visit(Frame& frame) {
+        const auto& value = frameValue(frame);
+        const auto position = frame.position;
+
+        frame.phase = Phase::done;
+        if (!value.present()) {
+          return;
+        }
+
+        if (value.is(LUA_TSTRING)) {
+          static_cast<void>(node(value, {.text = value.string(), .priority = position.priority}, position));
+          return;
+        }
+
+        if (!value.is(LUA_TTABLE)) {
+          value.fail("components must be text, a component or a list");
+        }
+
+        if (value.field("ui").present()) {
+          component(frame);
+          return;
+        }
+
+        if (value.field("text").present() || value.field("icon").present()) {
+          static_cast<void>(node(value, ComponentShapeReader::segment(value, position.priority), position));
+          return;
+        }
+
+        if (position.depth == maximum_list_depth) {
+          value.fail("exceeds the component nesting limit");
+        }
+
+        frame.child = position;
+        ++frame.child.depth;
+        frame.count = value.arraySize();
+        frame.phase = Phase::list;
+      }
+
+      inline void component(Frame& frame) {
+        const auto& value = frameValue(frame);
+        const auto shape = ComponentShapeReader::read(value, frame.position.priority, limits_);
+        const auto parent = node(value, shape, frame.position);
+        if (!parent) {
+          return;
+        }
+
+        frame.child = {.parent = parent->index, .rank = parent->rank};
+        switch (shape.kind) {
+        case ComponentKind::group:
+          frame.child.place = ComponentPlace::group;
+          frame.child.priority = shape.priority;
+          frame.tooltip = true;
+          frame.count = value.listLength();
+          frame.phase = Phase::children;
+          break;
+        case ComponentKind::actions:
+          frame.child.place = ComponentPlace::buttons;
+          frame.count = value.listLength();
+          frame.phase = Phase::children;
+          break;
+        case ComponentKind::callout:
+          frame.phase = Phase::button;
+          break;
+        default:
+          break;
+        }
+      }
+
+      inline std::optional<ComponentParent> node(const lua::Value& value, const ComponentShape& shape, const ComponentPosition& position) {
+        if (!componentAllowed(shape.kind, position.place)) {
+          value.fail("contains a component unsupported in this position");
+        }
+
+        return builder_.node(value, shape, position);
+      }
+
+      lua_State& state_;
+      Builder& builder_;
+      LimitNotices& limits_;
+      std::array<Frame, maximum_frames> frames_{};
+      std::size_t frame_count_ = 0;
+    };
+
+  }
+}
+
+// Interface: telar_config/element_reader.cppm
+export {
+  namespace telar::runtime::config {
+
+    // What a mod draws: a tree of layout boxes, text, marks, native pieces and canvases.
+    enum class ElementKind : std::uint8_t {
+      row,
+      column,
+      stack,
+      spacer,
+      label,
+      icon,
+      mark,
+      badge,
+      tile,
+      canvas,
+      builtin,
+      elapsed,
+      clock,
+    };
+
+    inline constexpr std::array<std::string_view, 13> element_kind_names{"row", "column", "stack", "spacer", "label", "icon", "mark", "badge", "tile", "canvas", "builtin", "elapsed", "clock"};
+
+    // Native pieces `ui.builtin` can place: every slot plus parts of the two bars.
+    inline constexpr std::array<std::string_view, 27> ui_builtin_names{
+        "tab",
+        "pane_header",
+        "agent_card",
+        "tab_cards",
+        "tab_title",
+        "tab_path",
+        "tab_activity",
+        "pane_mark",
+        "pane_program",
+        "pane_context",
+        "pane_status",
+        "pane_progress",
+        "pane_actions",
+        "agent_mark",
+        "agent_title",
+        "agent_project",
+        "agent_status",
+        "sidebar_toggle",
+        "workspace_identity",
+        "project_switcher",
+        "tabs",
+        "palette_button",
+        "new_tab",
+        "metrics",
+        "bar_left",
+        "bar_center",
+        "bar_right",
+    };
+
+    template <typename Color>
+    struct ElementColorSetting {
+      std::optional<Color> value = std::nullopt;
+      std::uint8_t alpha = std::numeric_limits<std::uint8_t>::max();
+    };
+
+    // One element as read. Its texts view the result's strings.
+    template <typename Color>
+    struct ElementSetting {
+      static constexpr std::uint32_t none = std::numeric_limits<std::uint32_t>::max();
+      static constexpr std::size_t maximum_elements = 4096;
+      static constexpr std::size_t maximum_text_bytes = std::size_t{256} * 1024;
+      static constexpr std::size_t maximum_steps = 4096;
+      static constexpr std::size_t maximum_actions = 1024;
+      static constexpr unsigned maximum_depth = 32;
+
+      ElementKind kind = ElementKind::row;
+      std::uint32_t parent = none;
+      std::string_view text;
+      std::string_view key;
+      std::string_view tooltip;
+      std::string_view url;
+      // Left, top, right and bottom, in logical pixels like every length below.
+      std::array<float, 4> padding{};
+      float gap = 0;
+      float width = -1;
+      float height = -1;
+      float min_width = 0;
+      float max_width = -1;
+      float min_height = 0;
+      float max_height = -1;
+      float grow = 0;
+      float x = 0;
+      float y = 0;
+      float rotation = 0;
+      float scale = 1;
+      float opacity = 1;
+      float radius = 0;
+      float border_width = 0;
+      float size = 0;
+      std::uint16_t transition_ms = 0;
+      std::int16_t z = 0;
+      ElementColorSetting<Color> background;
+      ElementColorSetting<Color> border;
+      ElementColorSetting<Color> color;
+      ElementColorSetting<Color> hover;
+      ComponentTone tone = ComponentTone::neutral;
+      std::uint8_t align = 0;
+      std::uint8_t justify = 0;
+      std::optional<std::uint8_t> align_self = std::nullopt;
+      std::uint8_t easing = 0;
+      std::uint8_t size_role = 1;
+      std::uint8_t max_lines = 1;
+      bool bold = false;
+      bool italic = false;
+      bool clip = false;
+      bool shadow = false;
+      // An icon given by name rather than by glyph.
+      bool named = false;
+      std::uint32_t action = none;
+      std::uint32_t callback = none;
+      std::uint32_t steps_offset = 0;
+      std::uint32_t steps_count = 0;
+      std::int64_t since = 0;
+    };
+
+    template <typename Color>
+    struct CanvasStepSetting {
+      std::uint8_t op = 0;
+      std::uint8_t count = 0;
+      std::array<float, 6> values{};
+      ElementColorSetting<Color> color;
+      std::string_view text;
+    };
+
+    // Turns what a slot function returned into elements, handing each one to `sink`:
+    // `element(setting)` keeps an element and returns its index, `step(setting)` keeps a canvas
+    // operation, `resolve(action)` reads an `on_click` action, or drops it, `bind(resolved)`
+    // keeps the action it read and `callback(function)` keeps an `on_click` function and returns
+    // its index. Each view the sink gets is one of the result's strings.
+    template <UiColors Colors, typename Sink>
+    class ElementReader {
+    public:
+      using Element = ElementSetting<typename Colors::Color>;
+      using Kind = ElementKind;
+      using Value = lua::Value;
+
+      inline ElementReader(Sink& sink, const Colors& colors) noexcept
+          : sink_(sink),
+            colors_(colors) {}
+
+      inline void read(const Value& root) {
+        if (root.is(LUA_TTABLE) && !root.field("ui").present()) {
+          Element row;
+          const auto index = append(root, row);
+
+          children(root, index, 1);
+
+          return;
+        }
+
+        element(root, Element::none, 0);
+      }
+
+    private:
+      inline void element(const Value& value, std::uint32_t parent, unsigned depth) {
+        if (!value.present()) {
+          return;
+        }
+
+        if (depth > Element::maximum_depth) {
+          value.fail("nests elements deeper than 32 levels");
+        }
+
+        if (value.is(LUA_TSTRING)) {
+          Element label;
+
+          label.kind = Kind::label;
+          label.parent = parent;
+          label.text = text(value);
+          static_cast<void>(append(value, label));
+
+          return;
+        }
+
+        if (!value.is(LUA_TTABLE)) {
+          value.fail("must be text, an element or a list of elements");
+        }
+
+        if (!value.field("ui").present()) {
+          // A list inside a container flattens into it.
+          children(value, parent, depth + 1);
+
+          return;
+        }
+
+        const auto name = value.field("ui").string();
+        const auto* const found = std::ranges::find(element_kind_names, name);
+        if (found == element_kind_names.end()) {
+          value.field("ui").fail("names an unknown element");
+        }
+
+        Element result;
+
+        result.kind = static_cast<Kind>(found - element_kind_names.begin());
+        result.parent = parent;
+        fields(value, result);
+        const auto index = append(value, result);
+
+        if (result.kind == Kind::row || result.kind == Kind::column || result.kind == Kind::stack) {
+          children(value, index, depth + 1);
+        }
+      }
+
+      inline void children(const Value& value, std::uint32_t parent, unsigned depth) {
+        const auto count = value.listLength();
+
+        for (std::size_t index = 0; index < count; ++index) {
+          element(value.element(static_cast<lua_Integer>(index) + 1), parent, depth);
+        }
+      }
+
+      inline std::uint32_t append(const Value& value, const Element& element) {
+        if (elements_ == Element::maximum_elements) {
+          value.fail("exceeds 4096 elements");
+        }
+
+        ++elements_;
+
+        return sink_.element(element);
+      }
+
+      static constexpr std::array<std::string_view, 27> layout_fields{"ui", "id", "width", "height", "min_width", "max_width", "min_height", "max_height", "grow", "align_self", "x", "y", "rotation", "scale", "opacity", "z", "background", "border", "radius", "padding", "shadow", "clip", "on_click", "url", "tooltip", "hover", "transition"};
+
+      inline void fields(const Value& value, Element& element) {
+        switch (element.kind) {
+        case Kind::row:
+        case Kind::column:
+        case Kind::stack:
+          value.onlyFields(std::span<const std::string_view>{combined(layout_fields, {"gap", "align", "justify"})}, true);
+          element.gap = length(value.field("gap"), 0);
+          element.align = choice(value.field("align"), {"start", "center", "end", "stretch"}, 0);
+          element.justify = choice(value.field("justify"), {"start", "center", "end", "between"}, 0);
+          break;
+        case Kind::spacer:
+          value.onlyFields(std::span<const std::string_view>{layout_fields});
+          element.grow = 1;
+          break;
+        case Kind::label:
+          value.onlyFields(std::span<const std::string_view>{combined(layout_fields, {"text", "size", "bold", "italic", "color", "tone", "max_lines"})});
+          element.text = text(value.field("text"));
+          typography(value, element);
+          element.max_lines = static_cast<std::uint8_t>(value.field("max_lines").boundedInteger(1, 1, 64));
+          break;
+        case Kind::icon:
+          value.onlyFields(std::span<const std::string_view>{combined(layout_fields, {"name", "glyph", "size", "color", "tone"})});
+          element.named = value.field("name").present();
+          element.text = text(element.named ? value.field("name") : value.field("glyph"));
+          if (element.text.empty()) {
+            value.fail("requires an icon name or a glyph");
+          }
+
+          typography(value, element);
+          break;
+        case Kind::mark:
+          value.onlyFields(std::span<const std::string_view>{combined(layout_fields, {"name"})});
+          uiMark(value.field("name"));
+          element.text = text(value.field("name"));
+          break;
+        case Kind::badge:
+          value.onlyFields(std::span<const std::string_view>{combined(layout_fields, {"text", "tone", "color", "size"})});
+          element.text = text(value.field("text"));
+          typography(value, element);
+          break;
+        case Kind::tile:
+          value.onlyFields(std::span<const std::string_view>{combined(layout_fields, {"program", "size"})});
+          element.text = text(value.field("program"));
+          element.size = length(value.field("size"), 0);
+          break;
+        case Kind::canvas:
+          value.onlyFields(std::span<const std::string_view>{combined(layout_fields, {"ops", "label"})});
+          element.text = text(value.field("label"));
+          canvas(value.field("ops"), element);
+          break;
+        case Kind::builtin: {
+          value.onlyFields(std::span<const std::string_view>{combined(layout_fields, {"name"})});
+          const auto name = value.field("name").string();
+          if (std::ranges::find(ui_builtin_names, name) == ui_builtin_names.end()) {
+            value.field("name").fail("names an unknown built-in piece");
+          }
+
+          element.text = text(value.field("name"));
+        } break;
+        case Kind::elapsed:
+          value.onlyFields(std::span<const std::string_view>{combined(layout_fields, {"since", "size", "bold", "color", "tone"})});
+          element.since = value.field("since").integer();
+          typography(value, element);
+          break;
+        case Kind::clock:
+          value.onlyFields(std::span<const std::string_view>{combined(layout_fields, {"format", "size", "bold", "color", "tone"})});
+          element.text = value.field("format").present() ? text(value.field("format")) : store("%H:%M", value);
+          typography(value, element);
+          break;
+        }
+
+        box(value, element);
+      }
+
+      inline void box(const Value& value, Element& element) {
+        if (const auto id = value.field("id"); id.present()) {
+          element.key = text(id);
+        }
+
+        element.width = length(value.field("width"), -1);
+        element.height = length(value.field("height"), -1);
+        element.min_width = length(value.field("min_width"), 0);
+        element.max_width = length(value.field("max_width"), -1);
+        element.min_height = length(value.field("min_height"), 0);
+        element.max_height = length(value.field("max_height"), -1);
+        element.grow = static_cast<float>(value.field("grow").boundedNumber(element.grow, 0, 1000));
+        if (const auto align = value.field("align_self"); align.present()) {
+          element.align_self = choice(align, {"start", "center", "end", "stretch"}, 0);
+        }
+
+        element.x = offset(value.field("x"));
+        element.y = offset(value.field("y"));
+        element.rotation = static_cast<float>(value.field("rotation").boundedNumber(0, -3600, 3600));
+        element.scale = static_cast<float>(value.field("scale").boundedNumber(1, 0, 16));
+        element.opacity = static_cast<float>(value.field("opacity").boundedNumber(1, 0, 1));
+        element.z = static_cast<std::int16_t>(std::lround(value.field("z").boundedNumber(0, -1000, 1000)));
+        element.background = color(value.field("background"));
+        element.radius = length(value.field("radius"), 0);
+        element.shadow = value.field("shadow").boolean(false);
+        element.clip = value.field("clip").boolean(false);
+        padding(value.field("padding"), element);
+        if (const auto border = value.field("border"); border.present()) {
+          if (border.is(LUA_TTABLE)) {
+            border.onlyFields({"color", "width"});
+            element.border = color(border.field("color"));
+            element.border_width = length(border.field("width"), 1);
+          } else {
+            element.border = color(border);
+            element.border_width = 1;
+          }
+        }
+
+        if (const auto hover = value.field("hover"); hover.present()) {
+          hover.onlyFields({"background"});
+          element.hover = color(hover.field("background"));
+        }
+
+        if (const auto transition = value.field("transition"); transition.present()) {
+          if (transition.is(LUA_TTABLE)) {
+            transition.onlyFields({"duration", "easing"});
+            element.transition_ms = static_cast<std::uint16_t>(transition.field("duration").boundedInteger(220, 0, 10000));
+            element.easing = choice(transition.field("easing"), {"ease_out", "linear", "ease_in_out"}, 0);
+          } else {
+            element.transition_ms = static_cast<std::uint16_t>(transition.boundedInteger(220, 0, 10000));
+          }
+        }
+
+        if (const auto tooltip = value.field("tooltip"); tooltip.present()) {
+          element.tooltip = text(tooltip);
+        }
+
+        if (const auto url = value.field("url"); url.present()) {
+          const auto link = url.string();
+          constexpr std::size_t maximum_url_bytes = 1024;
+          if (link.size() > maximum_url_bytes || link.contains(' ') || (!link.starts_with("https://") && !link.starts_with("http://"))) {
+            url.fail("must be an http or https address");
+          }
+
+          element.url = text(url);
+        }
+
+        if (const auto click = value.field("on_click"); click.present()) {
+          if (click.is(LUA_TFUNCTION)) {
+            if (callbacks_ == Element::maximum_actions) {
+              click.fail("exceeds 1024 click functions");
+            }
+
+            element.callback = sink_.callback(click);
+            ++callbacks_;
+          } else if (auto resolved = sink_.resolve(click)) {
+            if (actions_ == Element::maximum_actions) {
+              click.fail("exceeds 1024 click actions");
+            }
+
+            element.action = actions_++;
+            sink_.bind(std::move(*resolved));
+          }
+        }
+      }
+
+      inline void typography(const Value& value, Element& element) {
+        if (const auto size = value.field("size"); size.present()) {
+          if (size.is(LUA_TSTRING)) {
+            element.size_role = choice(size, {"title", "body", "small"}, 1);
+          } else {
+            element.size = static_cast<float>(size.boundedNumber(0, 1, 256));
+          }
+        }
+
+        element.bold = value.field("bold").boolean(false);
+        element.italic = value.field("italic").boolean(false);
+        element.color = color(value.field("color"));
+        element.tone = ComponentValuesReader::tone(value.field("tone"));
+      }
+
+      inline void padding(const Value& value, Element& element) {
+        if (!value.present()) {
+          return;
+        }
+
+        if (!value.is(LUA_TTABLE)) {
+          element.padding.fill(length(value, 0));
+
+          return;
+        }
+
+        // CSS order: {all}, {vertical, horizontal} or {top, right, bottom, left}.
+        const auto count = value.listLength();
+        std::array<float, 4> sides{};
+
+        for (std::size_t index = 0; index < std::min<std::size_t>(count, 4); ++index) {
+          sides[index] = length(value.element(static_cast<lua_Integer>(index) + 1), 0);
+        }
+
+        if (count == 1) {
+          element.padding.fill(sides[0]);
+        } else if (count == 2) {
+          element.padding = {sides[1], sides[0], sides[1], sides[0]};
+        } else if (count == 4) {
+          element.padding = {sides[3], sides[0], sides[1], sides[2]};
+        } else {
+          value.fail("must hold one, two or four lengths");
+        }
+      }
+
+      inline void canvas(const Value& ops, Element& element) {
+        struct Shape {
+          std::string_view name;
+          std::uint8_t numbers;
+          bool text;
+          bool color;
+        };
+
+        // Matches ElementCanvas::Operation, in order.
+        constexpr std::array<Shape, 21> shapes{{
+            {"move", 2, false, false},
+            {"line", 2, false, false},
+            {"curve", 6, false, false},
+            {"quad", 4, false, false},
+            {"arc", 5, false, false},
+            {"rect", 4, false, false},
+            {"round_rect", 5, false, false},
+            {"circle", 3, false, false},
+            {"path", 0, true, false},
+            {"close", 0, false, false},
+            {"fill", 0, false, true},
+            {"stroke", 1, false, true},
+            {"width", 1, false, false},
+            {"cap", 0, true, false},
+            {"join", 0, true, false},
+            {"alpha", 1, false, false},
+            {"translate", 2, false, false},
+            {"rotate", 1, false, false},
+            {"scale", 2, false, false},
+            {"save", 0, false, false},
+            {"restore", 0, false, false},
+        }};
+
+        element.steps_offset = steps_;
+        const auto count = ops.present() ? ops.listLength() : 0;
+
+        for (std::size_t index = 0; index < count; ++index) {
+          if (steps_ == Element::maximum_steps) {
+            ops.fail("exceeds 4096 canvas operations");
+          }
+
+          const auto op = ops.element(static_cast<lua_Integer>(index) + 1);
+          const auto name = op.element(1).string();
+          const auto* const shape = std::ranges::find(shapes, name, &Shape::name);
+          if (shape == shapes.end()) {
+            op.fail("names an unknown canvas operation");
+          }
+
+          CanvasStepSetting<typename Colors::Color> step;
+
+          step.op = static_cast<std::uint8_t>(shape - shapes.begin());
+          lua_Integer next = 2;
+
+          if (shape->text) {
+            step.text = text(op.element(next++));
+          }
+
+          if (shape->color) {
+            step.color = color(op.element(next++));
+          }
+
+          const auto available = op.listLength() - static_cast<std::size_t>(next - 1);
+
+          step.count = static_cast<std::uint8_t>(std::min<std::size_t>(available, shape->numbers));
+          if ((step.count < shape->numbers && shape->name != "stroke" && shape->name != "scale") || available > shape->numbers) {
+            op.fail("has the wrong number of values");
+          }
+
+          for (std::uint8_t number = 0; number < step.count; ++number) {
+            step.values[number] = static_cast<float>(op.element(next++).boundedNumber(0, -1e6, 1e6));
+          }
+
+          sink_.step(step);
+          ++steps_;
+        }
+
+        element.steps_count = steps_ - element.steps_offset;
+      }
+
+      inline ElementColorSetting<typename Colors::Color> color(const Value& value) const {
+        ElementColorSetting<typename Colors::Color> result;
+
+        if (!value.present()) {
+          return result;
+        }
+
+        if (const auto index = value.asInteger()) {
+          if (*index < 0 || *index > std::numeric_limits<std::uint8_t>::max()) {
+            value.fail("is outside the color index range");
+          }
+
+          result.value = colors_.index(static_cast<std::uint8_t>(*index));
+
+          return result;
+        }
+
+        auto name = value.string();
+        constexpr std::size_t rgba_length = std::string_view{"#RRGGBBAA"}.size();
+        if (name.size() == rgba_length && name.front() == '#') {
+          unsigned alpha = 0;
+          const auto parsed = std::from_chars(name.data() + rgba_length - 2, name.data() + rgba_length, alpha, 16);
+          if (parsed.ec != std::errc{} || parsed.ptr != name.data() + rgba_length) {
+            value.fail("is not a supported color");
+          }
+
+          result.alpha = static_cast<std::uint8_t>(alpha);
+          name.remove_suffix(2);
+        }
+
+        result.value = colors_.name(name);
+        if (!result.value) {
+          value.fail("is not a supported color");
+        }
+
+        return result;
+      }
+
+      inline static float length(const Value& value, float fallback) {
+        return static_cast<float>(value.boundedNumber(fallback, 0, 100000));
+      }
+
+      inline static float offset(const Value& value) {
+        return static_cast<float>(value.boundedNumber(0, -100000, 100000));
+      }
+
+      inline static std::uint8_t choice(const Value& value, std::initializer_list<std::string_view> names, std::uint8_t fallback) {
+        if (!value.present()) {
+          return fallback;
+        }
+
+        const auto name = value.string();
+        const auto* const found = std::ranges::find(names, name);
+        if (found == names.end()) {
+          value.fail("names an unknown option");
+        }
+
+        return static_cast<std::uint8_t>(found - names.begin());
+      }
+
+      struct Fields {
+        std::array<std::string_view, 40> names{};
+        std::size_t count = 0;
+
+        // NOLINTNEXTLINE(google-explicit-constructor): reads like the field lists it joins.
+        operator std::span<const std::string_view>() const noexcept {
+          return std::span{names}.first(count);
+        }
+      };
+
+      // The fields name what the base and the extra names view, region `a`.
+      inline static tbc::view<Fields, tbc::lt::a> combined(tbc::view<std::span<const std::string_view>, tbc::lt::a> base, tbc::view<std::initializer_list<std::string_view>, tbc::lt::a> extra) {
+        Fields result;
+
+        for (const auto name : base) {
+          result.names[result.count++] = name;
+        }
+
+        for (const auto name : extra) {
+          result.names[result.count++] = name;
+        }
+
+        return result;
+      }
+
+      inline std::string_view text(const Value& value) {
+        if (!value.present()) {
+          return {};
+        }
+
+        return store(value.string(), value);
+      }
+
+      inline std::string_view store(std::string_view text, const Value& value) {
+        validateUtf8(text);
+        constexpr unsigned char first_printable = 0x20;
+        constexpr unsigned char delete_control = 0x7f;
+        if (std::ranges::any_of(text, [](unsigned char byte) {
+              return (byte < first_printable && byte != '\n') || byte == delete_control;
+            })) {
+          value.fail("holds control characters");
+        }
+
+        if (text.size() > Element::maximum_text_bytes - text_bytes_) {
+          value.fail("exceeds 256 KiB of element text");
+        }
+
+        text_bytes_ += text.size();
+
+        return text;
+      }
+
+      Sink& sink_;
+      const Colors& colors_;
+      std::uint32_t elements_ = 0;
+      std::uint32_t steps_ = 0;
+      std::uint32_t actions_ = 0;
+      std::uint32_t callbacks_ = 0;
+      std::size_t text_bytes_ = 0;
+    };
+
+  }
+}
+
 // Interface: telar_config/component_validator.cppm
 namespace telar::runtime::config {
 
@@ -1099,12 +2441,7 @@ namespace telar::runtime::config {
     }
 
   private:
-    enum class Place {
-      bar,
-      group,
-      tooltip,
-      buttons,
-    };
+    using Place = ComponentPlace;
 
     struct Position {
       Place place = Place::bar;
@@ -1172,7 +2509,7 @@ namespace telar::runtime::config {
     }
 
     inline bool append(const lua::Value& value, const ComponentShape& shape, Position position) {
-      if (!allowed(shape.kind, position.place)) {
+      if (!componentAllowed(shape.kind, position.place)) {
         value.fail("contains a component unsupported in this position");
       }
 
@@ -1204,21 +2541,6 @@ namespace telar::runtime::config {
       printableUiText(value, shape.text);
       printableUiText(value, shape.detail);
       return true;
-    }
-
-    inline static bool allowed(ComponentKind kind, Place place) noexcept {
-      switch (place) {
-      case Place::bar:
-        return kind <= ComponentKind::group;
-      case Place::group:
-        return kind < ComponentKind::group;
-      case Place::tooltip:
-        return kind != ComponentKind::group && kind != ComponentKind::callout && kind != ComponentKind::actions && kind != ComponentKind::button;
-      case Place::buttons:
-        return kind == ComponentKind::button;
-      }
-
-      return false;
     }
 
     inline static void validateUrl(const lua::Value& value, std::string_view url) {
@@ -1280,34 +2602,109 @@ namespace telar::runtime::config {
 
 }
 
-// Interface: telar_config/dynamic_source_validator.cppm
-namespace telar::runtime::config {
+// Interface: telar_config/command_arguments_reader.cppm
+export {
+  namespace telar::runtime::config {
 
-  class DynamicSourceValidator {
-  public:
-    inline static void validate(const lua::Value& source) {
-      const auto kind = source.field("bar_kind");
-      const bool command = kind.string() == "command";
-      if (command) {
-        source.onlyFields({"bar_kind", "command", "every_ms", "timeout_ms", "render"});
-        source.field("timeout_ms").boundedInteger(2000, 100, 10000);
-        CommandArgumentsValidator::validate(source.field("command"));
-      } else {
-        if (kind.string() != "dynamic") {
-          kind.fail("requires a render function or a command");
+    class CommandArgumentsReader {
+    public:
+      // Hands each argument of the definition's `field` list to `visit`, in order.
+      template <typename Visit>
+      inline static void read(const lua::Value& definition, const char* field, Visit&& visit) {
+        const auto command = definition.field(field);
+        const auto count = command.listLength();
+
+        for (std::size_t index = 0; index < count; ++index) {
+          visit(command.element(static_cast<lua_Integer>(index) + 1).string());
+        }
+      }
+    };
+
+  }
+}
+
+// Interface: telar_config/source_reader.cppm
+export {
+  namespace telar::runtime::config {
+
+    // What fills a bar position or a panel, as `bar_kind` names it.
+    enum class SourceKind : std::uint8_t {
+      tabs,
+      metrics,
+      machines,
+      fixed,
+      dynamic,
+      command,
+    };
+
+    inline constexpr std::array<std::string_view, 6> source_kind_names{"tabs", "metrics", "machines", "static", "dynamic", "command"};
+
+    struct SourceSetting {
+      static constexpr Bounds<double> every_ms_bounds{100, 3'600'000};
+      static constexpr Bounds<double> timeout_ms_bounds{100, 10'000};
+      static constexpr std::uint32_t default_every_ms = 1000;
+      static constexpr std::uint32_t default_timeout_ms = 2000;
+      SourceKind kind = SourceKind::tabs;
+      // How often a dynamic or command source renders. A panel's renders when it opens, unless
+      // it sets an interval.
+      std::optional<std::uint32_t> every_ms;
+      std::uint32_t timeout_ms = default_timeout_ms;
+      // Whether it has a render function; a command source without one shows the output.
+      bool render = false;
+    };
+
+    class SourceReader {
+    public:
+      [[nodiscard]] inline static SourceSetting read(const lua::Value& source, bool panel = false) {
+        const auto kind = source.field("bar_kind");
+        const auto* const found = std::ranges::find(source_kind_names, kind.string());
+        if (found == source_kind_names.end()) {
+          source.fail("names an unsupported bar source");
         }
 
-        source.onlyFields({"bar_kind", "every_ms", "render"});
+        SourceSetting setting;
+
+        setting.kind = static_cast<SourceKind>(found - source_kind_names.begin());
+        if (setting.kind != SourceKind::dynamic && setting.kind != SourceKind::command) {
+          return setting;
+        }
+
+        const auto every = source.field("every_ms");
+        if (!panel || every.present()) {
+          setting.every_ms = static_cast<std::uint32_t>(every.boundedInteger(SourceSetting::default_every_ms, SourceSetting::every_ms_bounds.minimum, SourceSetting::every_ms_bounds.maximum));
+        }
+
+        setting.render = source.field("render").present();
+        setting.timeout_ms = static_cast<std::uint32_t>(source.field("timeout_ms").boundedInteger(SourceSetting::default_timeout_ms, SourceSetting::timeout_ms_bounds.minimum, SourceSetting::timeout_ms_bounds.maximum));
+        return setting;
       }
 
-      source.field("every_ms").boundedInteger(1000, 100, 3600000);
-      const auto render = source.field("render");
-      if ((!command || render.present()) && !render.is(LUA_TFUNCTION)) {
-        render.fail("must be a function");
-      }
-    }
-  };
+      // Validates a source that renders, a dynamic or a command one, and reads it.
+      [[nodiscard]] inline static SourceSetting dynamic(const lua::Value& source, bool panel = false) {
+        const auto kind = source.field("bar_kind");
+        const bool command = kind.string() == "command";
+        if (command) {
+          source.onlyFields({"bar_kind", "command", "every_ms", "timeout_ms", "render"});
+          CommandArgumentsValidator::validate(source.field("command"));
+        } else {
+          if (kind.string() != "dynamic") {
+            kind.fail("requires a render function or a command");
+          }
 
+          source.onlyFields({"bar_kind", "every_ms", "render"});
+        }
+
+        const auto setting = read(source, panel);
+        const auto render = source.field("render");
+        if ((!command || render.present()) && !render.is(LUA_TFUNCTION)) {
+          render.fail("must be a function");
+        }
+
+        return setting;
+      }
+    };
+
+  }
 }
 
 // Interface: telar_config/bars_validator.cppm
@@ -1389,7 +2786,7 @@ namespace telar::runtime::config {
         value.onlyFields({"bar_kind", "value"});
         ComponentValidator{actions_, limits_}.validate(value.field("value"));
       } else {
-        DynamicSourceValidator::validate(value);
+        static_cast<void>(SourceReader::dynamic(value));
       }
 
       return Source::content;
@@ -1400,6 +2797,69 @@ namespace telar::runtime::config {
     LimitNotices& limits_;
   };
 
+}
+
+// Interface: telar_config/bars_reader.cppm
+export {
+  namespace telar::runtime::config {
+
+    enum class BarPosition : std::uint8_t {
+      bottom_left,
+      bottom_center,
+      bottom_right,
+      top_right,
+      footer_left,
+      footer_center,
+      footer_right,
+    };
+
+    class BarsReader {
+    public:
+      static constexpr std::size_t footer_slots = 3;
+
+      // The content of a static source.
+      [[nodiscard]] inline static lua::Value content(const lua::Value& source) {
+        return source.field("value");
+      }
+
+      // Hands `visit` each position `client.bars` sets with its source. A footer hands its three
+      // slots, an empty one with a nil source.
+      template <typename Visit>
+      inline static void sources(const lua::Value& client, Visit&& visit) {
+        const auto bars = client.field("bars");
+        if (!bars.present()) {
+          return;
+        }
+
+        const auto bottom = bars.field("bottom");
+        if (bottom.present()) {
+          constexpr std::array names{"left", "center", "right"};
+
+          for (std::size_t index = 0; index < names.size(); ++index) {
+            visit(static_cast<BarPosition>(index), bottom.field(names[index]));
+          }
+        }
+
+        const auto top = bars.field("top");
+        if (top.present()) {
+          visit(BarPosition::top_right, top.field("right"));
+        }
+
+        const auto footer = bars.field("sidebar_footer");
+        if (footer.present()) {
+          // An array has nothing past its size, so a slot it leaves empty reads nil.
+          static_cast<void>(footer.arraySize());
+
+          for (std::size_t index = 0; index < footer_slots; ++index) {
+            const auto position = static_cast<BarPosition>(std::to_underlying(BarPosition::footer_left) + index);
+
+            visit(position, footer.element(static_cast<lua_Integer>(index) + 1));
+          }
+        }
+      }
+    };
+
+  }
 }
 
 // Interface: telar_config/key_chord.cppm
@@ -1687,9 +3147,67 @@ export {
   }
 }
 
-// Interface: telar_config/binding_validator.cppm
+// Interface: telar_config/binding_reader.cppm
 export {
   namespace telar::runtime::config {
+
+    // One `client.keybindings` entry as read; a prefixed binding starts with the prefix.
+    struct BindingSetting {
+      static constexpr std::size_t maximum_keys = 5;
+      std::array<KeyChord, maximum_keys> keys{};
+      std::size_t length = 0;
+      bool prefixed = false;
+      bool expression = false;
+    };
+
+    class BindingReader {
+    public:
+      static constexpr std::size_t maximum_bindings = BindingKeymap::maximum_bindings;
+
+      // Hands the first maximum_bindings entries of `bindings` to `visit`, each with its action,
+      // and returns how many it lists.
+      template <typename Visit>
+      inline static std::size_t read(const lua::Value& bindings, KeyChord prefix, Visit&& visit) {
+        if (!bindings.present()) {
+          return 0;
+        }
+
+        const auto listed = bindings.listLength();
+        const auto count = std::min(listed, maximum_bindings);
+
+        for (std::size_t index = 1; index <= count; ++index) {
+          const auto binding = bindings.element(static_cast<lua_Integer>(index));
+
+          binding.onlyFields({"keys", "action", "expression", "prefixed"});
+          const auto prefixed = binding.field("prefixed");
+          if (!prefixed.present()) {
+            prefixed.fail("must be a boolean");
+          }
+
+          BindingSetting setting{.prefixed = prefixed.boolean(false)};
+          const auto offset = static_cast<std::size_t>(setting.prefixed);
+          const auto keys = binding.field("keys");
+          const auto key_count = keys.listLength();
+          if (key_count == 0 || key_count > BindingSetting::maximum_keys - offset) {
+            keys.fail("has an invalid number of keys");
+          }
+
+          if (setting.prefixed) {
+            setting.keys[0] = prefix;
+          }
+
+          setting.length = key_count + offset;
+          for (std::size_t key = 0; key < key_count; ++key) {
+            setting.keys[key + offset] = KeyChordValidator::parse(keys.element(static_cast<lua_Integer>(key) + 1));
+          }
+
+          setting.expression = binding.field("expression").boolean(false);
+          visit(std::as_const(setting), binding.field("action"));
+        }
+
+        return listed;
+      }
+    };
 
     class BindingValidator {
     public:
@@ -1699,51 +3217,22 @@ export {
           return;
         }
 
-        constexpr auto maximum_bindings = BindingKeymap::maximum_bindings;
+        constexpr auto maximum_bindings = BindingReader::maximum_bindings;
+        const auto listed = bindings.listLength();
 
         keymap.clear();
-        const auto listed = bindings.listLength();
-        const auto count = std::min(listed, maximum_bindings);
-
         if (listed > maximum_bindings) {
           limits.add({"config.max_bindings", "key bindings", maximum_bindings, listed, {}});
         }
 
-        for (std::size_t index = 1; index <= count; ++index) {
-          const auto binding = bindings.element(index);
+        BindingReader::read(bindings, keymap.prefix(), [&](const BindingSetting& binding, const lua::Value& action) {
+          BindingKeymap::Sequence sequence{.length = binding.length, .prefixed = binding.prefixed};
 
-          binding.onlyFields({"keys", "action", "expression", "prefixed"});
-          const auto prefix = binding.field("prefixed");
-          if (!prefix.present()) {
-            prefix.fail("must be a boolean");
-          }
-
-          const bool prefixed = prefix.boolean(false);
-          const auto keys = binding.field("keys");
-          const auto key_count = keys.listLength();
-          constexpr std::size_t maximum_keys = 5;
-          if (key_count == 0 || key_count > maximum_keys - prefixed) {
-            keys.fail("has an invalid number of keys");
-          }
-
-          BindingKeymap::Sequence sequence{.length = key_count + prefixed, .prefixed = prefixed};
-
-          if (prefixed) {
-            sequence.keys[0] = keymap.prefix();
-          }
-
-          for (std::size_t key = 1; key <= key_count; ++key) {
-            const auto parsed = KeyChordValidator::parse(keys.element(key));
-            const auto position = key - 1 + prefixed;
-            if (position < sequence.keys.size()) {
-              sequence.keys[position] = parsed;
-            }
-          }
-
-          if (actions.validate(binding.field("action"), binding.field("expression").boolean(false))) {
+          std::ranges::copy(std::span{binding.keys}.first(std::min(binding.length, sequence.keys.size())), sequence.keys.begin());
+          if (actions.validate(action, binding.expression)) {
             keymap.append(sequence);
           }
-        }
+        });
       }
     };
 
@@ -1879,6 +3368,193 @@ export {
   }
 }
 
+// Interface: telar_config/callback_result_reader.cppm
+export {
+  namespace telar::runtime::config {
+
+    // What an expression binding's function decided for the keys that triggered it.
+    struct InputDecisionSetting {
+      enum class Kind : std::uint8_t {
+        consume,
+        forward,
+        keys,
+        paste,
+      };
+
+      static constexpr std::size_t maximum_keys = 16;
+      Kind kind = Kind::consume;
+      std::array<KeyChord, maximum_keys> keys{};
+      std::size_t length = 0;
+      // A view of the result's string, alive while the result is.
+      std::string_view text;
+    };
+
+    // Reads what a binding's function returned.
+    class CallbackResultReader {
+    public:
+      // Hands each of the first `maximum` actions of an action or an array of actions to `visit`
+      // and returns how many it dropped past them.
+      template <typename Visit>
+      inline static std::size_t actions(const lua::Value& result, std::size_t maximum, Visit&& visit) {
+        if (!result.is(LUA_TTABLE)) {
+          result.fail("must be an action or an array of actions");
+        }
+
+        if (result.field("kind").present()) {
+          action(result, visit);
+          return 0;
+        }
+
+        const auto count = result.listLength();
+
+        for (std::size_t index = 0; index < std::min(count, maximum); ++index) {
+          action(result.element(static_cast<lua_Integer>(index) + 1), visit);
+        }
+
+        return count - std::min(count, maximum);
+      }
+
+      [[nodiscard]] inline static InputDecisionSetting decision(const lua::Value& result) {
+        using Kind = InputDecisionSetting::Kind;
+
+        const auto kind_value = result.field("input_kind");
+        const auto kind = kind_value.string();
+        InputDecisionSetting decision;
+
+        if (kind == "consume" || kind == "forward") {
+          result.onlyFields({"input_kind"});
+          decision.kind = kind == "consume" ? Kind::consume : Kind::forward;
+        } else if (kind == "keys") {
+          result.onlyFields({"input_kind", "keys"});
+          decision.kind = Kind::keys;
+          keys(result.field("keys"), decision);
+        } else if (kind == "paste") {
+          result.onlyFields({"input_kind", "text"});
+          decision.kind = Kind::paste;
+          decision.text = result.field("text").string();
+        } else {
+          kind_value.fail("names an unknown input decision");
+        }
+
+        return decision;
+      }
+
+    private:
+      template <typename Visit>
+      inline static void action(const lua::Value& value, Visit& visit) {
+        if (value.is(LUA_TFUNCTION)) {
+          value.fail("cannot return a recursive callback");
+        }
+
+        visit(value);
+      }
+
+      inline static void keys(const lua::Value& keys, InputDecisionSetting& decision) {
+        const auto count = keys.listLength();
+        if (count == 0 || count > InputDecisionSetting::maximum_keys) {
+          keys.fail("must contain one to sixteen keys");
+        }
+
+        for (std::size_t index = 0; index < count; ++index) {
+          decision.keys[index] = KeyChordValidator::parse(keys.element(static_cast<lua_Integer>(index) + 1));
+        }
+
+        decision.length = count;
+      }
+    };
+
+  }
+}
+
+// Interface: telar_config/pick_items_reader.cppm
+export {
+  namespace telar::runtime::config {
+
+    // One pick option as listed: a label alone, or a table. The views are the list's strings.
+    struct PickItemSetting {
+      using Swatch = std::array<std::uint32_t, 3>;
+      std::string_view label;
+      std::optional<std::string_view> value;
+      std::optional<std::string_view> detail;
+      std::optional<Swatch> swatch;
+      bool selected = false;
+    };
+
+    class PickItemsReader {
+    public:
+      // Hands each option of `items` to `visit` with its value, in order.
+      template <typename Visit>
+      inline static void read(const lua::Value& items, Visit&& visit) {
+        const auto count = items.arraySize();
+
+        for (std::size_t index = 1; index <= count; ++index) {
+          const auto item = items.element(static_cast<lua_Integer>(index));
+          const auto setting = option(item);
+
+          visit(setting, item);
+        }
+      }
+
+      // The options a pick definition lists.
+      template <typename Visit>
+      inline static void definition(const lua::Value& pick, Visit&& visit) {
+        read(pick.field("items"), std::forward<Visit>(visit));
+      }
+
+    private:
+      inline static PickItemSetting option(const lua::Value& item) {
+        PickItemSetting setting;
+
+        if (item.is(LUA_TSTRING)) {
+          setting.label = item.string();
+          return setting;
+        }
+
+        item.onlyFields({"label", "value", "detail", "selected", "swatch"});
+        setting.label = item.field("label").string();
+        if (const auto value = item.field("value"); value.present()) {
+          setting.value = value.string();
+        }
+
+        if (const auto detail = item.field("detail"); detail.present()) {
+          setting.detail = detail.string();
+        }
+
+        setting.selected = item.field("selected").boolean(false);
+        setting.swatch = swatch(item.field("swatch"));
+        return setting;
+      }
+
+      inline static std::optional<PickItemSetting::Swatch> swatch(const lua::Value& value) {
+        if (!value.present()) {
+          return std::nullopt;
+        }
+
+        PickItemSetting::Swatch result{};
+        if (value.arraySize() != result.size()) {
+          value.fail("must contain three RGB colors");
+        }
+
+        constexpr int hexadecimal_base = 16;
+
+        for (std::size_t index = 0; index < result.size(); ++index) {
+          const auto color = value.element(static_cast<lua_Integer>(index) + 1);
+
+          hexadecimalColor(color);
+          const auto text = color.string();
+          const auto parsed = std::from_chars(text.data() + 1, text.data() + text.size(), result[index], hexadecimal_base);
+          if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size()) {
+            color.fail("must be an RGB color");
+          }
+        }
+
+        return result;
+      }
+    };
+
+  }
+}
+
 // Interface: telar_config/pick_items_validator.cppm
 namespace telar::runtime::config {
 
@@ -1888,26 +3564,12 @@ namespace telar::runtime::config {
         : limits_(limits) {}
 
     inline void validate(const lua::Value& items) {
-      const auto count = items.arraySize();
+      std::size_t count = 0;
 
-      for (std::size_t index = 1; index <= count; ++index) {
-        const auto item = items.element(index);
-        if (item.is(LUA_TSTRING)) {
-          const auto label = item.string();
-
-          keep(item, label, label, {});
-          continue;
-        }
-
-        item.onlyFields({"label", "value", "detail", "selected", "swatch"});
-        const auto label = item.field("label");
-        const auto value = item.field("value");
-        const auto detail = item.field("detail");
-
-        item.field("selected").boolean(false);
-        swatch(item.field("swatch"));
-        keep(item, label.string(), value.present() ? value.string() : label.string(), detail.present() ? detail.string() : std::string_view{});
-      }
+      PickItemsReader::read(items, [&](const PickItemSetting& option, const lua::Value& item) {
+        keep(item, option.label, option.value.value_or(option.label), option.detail.value_or(std::string_view{}));
+        ++count;
+      });
 
       if (count > maximum_items) {
         limits_.add({"picks.max_items", "options", maximum_items, count, {}});
@@ -1964,20 +3626,6 @@ namespace telar::runtime::config {
       ++kept_items_;
     }
 
-    inline static void swatch(const lua::Value& value) {
-      if (!value.present()) {
-        return;
-      }
-
-      if (value.arraySize() != 3) {
-        value.fail("must contain three RGB colors");
-      }
-
-      for (lua_Integer index = 1; index <= 3; ++index) {
-        hexadecimalColor(value.element(index));
-      }
-    }
-
     static constexpr std::size_t maximum_items = 4096;
     static constexpr std::size_t maximum_text_bytes = 256 * 1024;
     static constexpr std::size_t maximum_label_bytes = 128;
@@ -1996,60 +3644,115 @@ namespace telar::runtime::config {
 
 }
 
-// Interface: telar_config/client_definitions_validator.cppm
-namespace telar::runtime::config {
+// Interface: telar_config/client_definitions_reader.cppm
+export {
+  namespace telar::runtime::config {
 
-  class ClientDefinitionsValidator {
-  public:
-    inline static void validate(const lua::Value& client, LimitNotices& limits) {
-      NamedDefinitionsValidator::validate(client.field("panels"), {"panels.max_panels", "panels", NamedDefinitionsValidator::maximum_definitions, {}, {}}, limits, [&](std::string_view name, const lua::Value& definition) {
-        definition.onlyFields({"panel_kind", "title", "mark", "icon", "width", "source", "refresh"});
-        NamedDefinitionsValidator::heading(name, definition, limits);
-        const auto mark = definition.field("mark");
-        if (mark.is(LUA_TSTRING)) {
-          uiMark(mark);
-        }
+    // A named `client.panels` or `client.picks` definition's name and title; the views are the
+    // configuration's strings.
+    struct DefinitionHeading {
+      std::string_view name;
+      std::string_view title;
+    };
 
-        const auto icon = definition.field("icon");
-        if (icon.is(LUA_TSTRING)) {
-          uiIcon(icon);
-        }
+    struct PanelSetting {
+      static constexpr Bounds<double> width_bounds{240, 720};
+      static constexpr std::uint16_t default_width = 420;
+      DefinitionHeading heading;
+      std::uint16_t width = default_width;
+      std::optional<UiMark> mark;
+      // An icon name, as uiIcon admits it.
+      std::optional<std::string_view> icon;
+      SourceSetting source;
+    };
 
-        definition.field("width").boundedInteger(420, 240, 720);
-        DynamicSourceValidator::validate(definition.field("source"));
-      });
+    struct PickSetting {
+      static constexpr Bounds<double> timeout_ms_bounds{100, 60'000};
+      DefinitionHeading heading;
+      std::uint32_t timeout_ms = SourceSetting::default_timeout_ms;
+      // Whether a command lists the options, and whether a function renders them.
+      bool command = false;
+      bool render = false;
+      bool refresh = true;
+    };
 
-      NamedDefinitionsValidator::validate(client.field("picks"), {"picks.max_picks", "picks", NamedDefinitionsValidator::maximum_definitions, {}, {}}, limits, [&](std::string_view name, const lua::Value& definition) {
-        definition.onlyFields({"pick_kind", "title", "command", "items", "on_select", "timeout_ms", "refresh"});
-        NamedDefinitionsValidator::heading(name, definition, limits);
-        definition.field("timeout_ms").boundedInteger(2000, 100, 60000);
-        const auto command = definition.field("command");
-        if (command.present()) {
-          CommandArgumentsValidator::validate(command);
-        }
+    // How many panels and picks a client table defines, for each list it has.
+    struct DefinitionCounts {
+      std::optional<std::size_t> panels;
+      std::optional<std::size_t> picks;
+    };
 
-        const auto items = definition.field("items");
-        if (items.present()) {
-          if (command.present()) {
-            if (!items.is(LUA_TFUNCTION)) {
-              items.fail("must be a function when a command is provided");
-            }
-          } else {
-            PickItemsValidator{limits}.validate(items);
+    class ClientDefinitionsReader {
+    public:
+      // Validates and reads `client.panels` and `client.picks`, in name order, handing each
+      // panel to `panel` with its source and each pick to `pick` with its definition.
+      template <typename Panel, typename Pick>
+      inline static DefinitionCounts read(const lua::Value& client, LimitNotices& limits, Panel&& panel, Pick&& pick) {
+        DefinitionCounts counts;
+
+        counts.panels = NamedDefinitionsValidator::validate(client.field("panels"), {"panels.max_panels", "panels", NamedDefinitionsValidator::maximum_definitions, {}, {}}, limits, [&](std::string_view name, const lua::Value& definition, std::size_t index) {
+          definition.onlyFields({"panel_kind", "title", "mark", "icon", "width", "source", "refresh"});
+          PanelSetting setting;
+
+          setting.heading = {.name = name, .title = NamedDefinitionsValidator::heading(name, definition, limits)};
+          const auto mark = definition.field("mark");
+          if (mark.present()) {
+            uiMark(mark);
+            setting.mark = static_cast<UiMark>(std::ranges::find(ui_mark_names, mark.string()) - ui_mark_names.begin());
           }
-        } else if (!command.present()) {
-          definition.fail("requires items or a command");
-        }
 
-        if (!CommandArgumentsValidator::validate(definition.field("on_select"))) {
-          definition.fail("requires a choice placeholder after the program");
-        }
+          const auto icon = definition.field("icon");
+          if (icon.present()) {
+            uiIcon(icon);
+            setting.icon = icon.string();
+          }
 
-        definition.field("refresh").boolean(false);
-      });
-    }
-  };
+          setting.width = static_cast<std::uint16_t>(definition.field("width").boundedInteger(PanelSetting::default_width, PanelSetting::width_bounds.minimum, PanelSetting::width_bounds.maximum));
+          const auto source = definition.field("source");
 
+          setting.source = SourceReader::dynamic(source, true);
+          panel(index, std::as_const(setting), source);
+        });
+
+        counts.picks = NamedDefinitionsValidator::validate(client.field("picks"), {"picks.max_picks", "picks", NamedDefinitionsValidator::maximum_definitions, {}, {}}, limits, [&](std::string_view name, const lua::Value& definition, std::size_t index) {
+          definition.onlyFields({"pick_kind", "title", "command", "items", "on_select", "timeout_ms", "refresh"});
+          PickSetting setting;
+
+          setting.heading = {.name = name, .title = NamedDefinitionsValidator::heading(name, definition, limits)};
+          setting.timeout_ms = static_cast<std::uint32_t>(definition.field("timeout_ms").boundedInteger(SourceSetting::default_timeout_ms, PickSetting::timeout_ms_bounds.minimum, PickSetting::timeout_ms_bounds.maximum));
+          const auto command = definition.field("command");
+          if (command.present()) {
+            CommandArgumentsValidator::validate(command);
+          }
+
+          const auto items = definition.field("items");
+          if (items.present()) {
+            if (command.present()) {
+              if (!items.is(LUA_TFUNCTION)) {
+                items.fail("must be a function when a command is provided");
+              }
+            } else {
+              PickItemsValidator{limits}.validate(items);
+            }
+          } else if (!command.present()) {
+            definition.fail("requires items or a command");
+          }
+
+          if (!CommandArgumentsValidator::validate(definition.field("on_select"))) {
+            definition.fail("requires a choice placeholder after the program");
+          }
+
+          setting.command = command.present();
+          setting.render = items.is(LUA_TFUNCTION);
+          setting.refresh = definition.field("refresh").boolean(true);
+          pick(index, std::as_const(setting), definition);
+        });
+
+        return counts;
+      }
+    };
+
+  }
 }
 
 // Interface: telar_config/client_validation_state.cppm
@@ -2236,46 +3939,104 @@ export {
         "agent_status",
     };
 
-    class ClientValidator {
+    // `client.prefix` and `client.input`.
+    struct ClientInputSettings {
+      static constexpr Bounds<double> sequence_timeout_bounds{10, 10'000};
+      std::optional<KeyChord> prefix;
+      std::optional<std::uint16_t> sequence_timeout_ms;
+    };
+
+    // The settings of a `client` table, each one as the configuration sets it.
+    struct ClientSettings {
+      enum class Delivery : std::uint8_t {
+        telar,
+        system,
+        terminal,
+      };
+
+      enum class HistoryEnter : std::uint8_t {
+        paste,
+        run,
+      };
+
+      enum class HistoryMatch : std::uint8_t {
+        fuzzy,
+        fts,
+      };
+
+      struct History {
+        std::optional<bool> show_agent_commands;
+        std::optional<HistoryEnter> enter;
+        std::optional<HistoryMatch> match;
+      };
+
+      struct Sound {
+        std::optional<bool> enabled;
+        std::optional<bool> ready;
+        std::optional<bool> needs_input;
+      };
+
+      std::optional<bool> sidebar_visible;
+      std::optional<bool> pane_gaps;
+      // Views of the configuration's strings, alive while its table is.
+      std::optional<std::string_view> editor;
+      std::optional<std::string_view> window_title;
+      History history;
+      Sound sound;
+      std::optional<Delivery> delivery;
+      ClientInputSettings input;
+      PromptSettings prompt;
+    };
+
+    class ClientReader {
     public:
-      template <CommandTabStore Commands>
-      inline static void validate(const lua::Value& client, LimitNotices& limits, BasicClientValidationState<Commands>& state, const lua::Value* inherited = nullptr) {
+      static constexpr std::size_t maximum_editor_bytes = 4096;
+      static constexpr std::size_t maximum_window_title_bytes = 128;
+
+      // Hands each `client.prompt` binding to `binding` in order.
+      template <typename Binding>
+      [[nodiscard]] inline static ClientSettings read(const lua::Value& client, Binding&& binding) {
+        ClientSettings settings;
+
         if (!client.present()) {
-          return;
+          return settings;
         }
 
         client.onlyFields({"prefix", "theme", "icons", "sidebar", "pane_gaps", "editor", "window_title", "sound", "notifications", "appearance", "input", "keybindings", "bars", "panels", "picks", "history", "components", "prompt"});
-        const auto prefix = client.field("prefix");
-        if (prefix.present()) {
-          state.keymap.setPrefix(KeyChordValidator::parse(prefix));
-        }
-
-        client.field("pane_gaps").boolean(false);
-        printableText(client.field("editor"), 4096, false);
-        printableText(client.field("window_title"), 128, true);
-        sidebar(client.field("sidebar"));
-        sound(client.field("sound"));
-        notifications(client.field("notifications"));
-        input(client.field("input"));
-        history(client.field("history"));
-        prompt(client.field("prompt"));
-        ClientDefinitionsValidator::validate(client, limits);
-        const ClientDefinitions definitions{client, inherited};
-        const BasicActionValidator actions{definitions, limits, state.commands};
-
-        BindingValidator::validate(client.field("keybindings"), actions, state.keymap, limits);
-        BarsValidator{actions, limits}.validate(client.field("bars"));
-        components(client.field("components"));
+        settings.input = input(client);
+        settings.pane_gaps = optionalBoolean(client.field("pane_gaps"));
+        settings.editor = printableText(client.field("editor"), maximum_editor_bytes, false);
+        settings.window_title = printableText(client.field("window_title"), maximum_window_title_bytes, true);
+        sidebar(client.field("sidebar"), settings);
+        sound(client.field("sound"), settings.sound);
+        notifications(client.field("notifications"), settings);
+        history(client.field("history"), settings.history);
+        settings.prompt = PromptReader::read(client.field("prompt"), std::forward<Binding>(binding));
+        return settings;
       }
 
-    private:
-      inline static void components(const lua::Value& value) {
-        if (!value.present()) {
+      // Hands each `client.keybindings` entry to `visit` with its action, `prefix` in front of the
+      // prefixed ones, and returns how many it lists, if it lists them.
+      template <typename Visit>
+      [[nodiscard]] inline static std::optional<std::size_t> bindings(const lua::Value& client, KeyChord prefix, Visit&& visit) {
+        if (!listsBindings(client)) {
+          return std::nullopt;
+        }
+
+        return BindingReader::read(client.field("keybindings"), prefix, std::forward<Visit>(visit));
+      }
+
+      // Hands each `client.components` function to `visit` with its index in component_slots.
+      template <typename Visit>
+      inline static void slots(const lua::Value& client, Visit&& visit) {
+        const auto components = client.field("components");
+        if (!components.present()) {
           return;
         }
 
-        value.eachField([](std::string_view name, const lua::Value& entry) {
-          if (std::ranges::find(component_slots, name) == component_slots.end()) {
+        components.eachField([&](std::string_view name, const lua::Value& entry) {
+          const auto* const found = std::ranges::find(component_slots, name);
+          if (found == component_slots.end()) {
             const auto message = std::string{"names an unknown component slot \""} + std::string{name} + "\"";
 
             entry.fail(message.c_str());
@@ -2284,12 +4045,46 @@ export {
           if (!entry.is(LUA_TFUNCTION)) {
             entry.fail("must be a function from the context and the item to an element");
           }
+
+          visit(static_cast<std::size_t>(found - component_slots.begin()), entry);
         });
       }
 
-      inline static void printableText(const lua::Value& value, std::size_t maximum, bool allow_empty) {
+      // Whether the table lists keybindings, before `bindings` reads them.
+      [[nodiscard]] inline static bool listsBindings(const lua::Value& client) {
+        return client.present() && client.field("keybindings").present();
+      }
+
+      [[nodiscard]] inline static ClientInputSettings input(const lua::Value& client) {
+        ClientInputSettings settings;
+
+        if (!client.present()) {
+          return settings;
+        }
+
+        const auto prefix = client.field("prefix");
+        if (prefix.present()) {
+          settings.prefix = KeyChordValidator::parse(prefix);
+        }
+
+        const auto table = client.field("input");
+        if (table.present()) {
+          table.onlyFields({"escape_timeout_ms", "sequence_timeout_ms"});
+          const auto timeout = table.field("sequence_timeout_ms");
+          if (timeout.present()) {
+            constexpr auto bounds = ClientInputSettings::sequence_timeout_bounds;
+
+            settings.sequence_timeout_ms = static_cast<std::uint16_t>(timeout.boundedInteger(bounds.minimum, bounds.minimum, bounds.maximum));
+          }
+        }
+
+        return settings;
+      }
+
+    private:
+      inline static std::optional<std::string_view> printableText(const lua::Value& value, std::size_t maximum, bool allow_empty) {
         if (!value.present()) {
-          return;
+          return std::nullopt;
         }
 
         optionalUtf8Text(value, maximum);
@@ -2299,49 +4094,63 @@ export {
             })) {
           value.fail("must contain printable text");
         }
+
+        return text;
       }
 
-      inline static void sidebar(const lua::Value& table) {
+      inline static void sidebar(const lua::Value& table, ClientSettings& settings) {
         if (table.present()) {
           table.onlyFields({"visible", "renderer"});
-          table.field("visible").boolean(true);
+          settings.sidebar_visible = optionalBoolean(table.field("visible"));
         }
       }
 
-      inline static void sound(const lua::Value& table) {
+      inline static void sound(const lua::Value& table, ClientSettings::Sound& sound) {
         if (table.present()) {
           table.onlyFields({"enabled", "ready", "needs_input"});
-          for (const auto* name : {"enabled", "ready", "needs_input"}) {
-            table.field(name).boolean(false);
-          }
+          sound.enabled = optionalBoolean(table.field("enabled"));
+          sound.ready = optionalBoolean(table.field("ready"));
+          sound.needs_input = optionalBoolean(table.field("needs_input"));
         }
       }
 
-      inline static void notifications(const lua::Value& table) {
+      inline static void notifications(const lua::Value& table, ClientSettings& settings) {
         if (table.present()) {
           table.onlyFields({"delivery"});
-          optionalChoice(table.field("delivery"), {"telar", "system", "terminal"});
+          settings.delivery = optionalChoice<ClientSettings::Delivery>(table.field("delivery"), std::array<std::string_view, 3>{"telar", "system", "terminal"});
         }
       }
 
-      inline static void input(const lua::Value& table) {
-        if (table.present()) {
-          table.onlyFields({"escape_timeout_ms", "sequence_timeout_ms"});
-          table.field("sequence_timeout_ms").boundedInteger(1000, 10, 10000);
-        }
-      }
-
-      inline static void prompt(const lua::Value& table) {
-        static_cast<void>(PromptReader::read(table, [](const PromptBindingSetting&) {}));
-      }
-
-      inline static void history(const lua::Value& table) {
+      inline static void history(const lua::Value& table, ClientSettings::History& history) {
         if (table.present()) {
           table.onlyFields({"show_agent_commands", "enter", "match"});
-          table.field("show_agent_commands").boolean(false);
-          optionalChoice(table.field("enter"), {"paste", "run"});
-          optionalChoice(table.field("match"), {"fuzzy", "fts"});
+          history.show_agent_commands = optionalBoolean(table.field("show_agent_commands"));
+          history.enter = optionalChoice<ClientSettings::HistoryEnter>(table.field("enter"), std::array<std::string_view, 2>{"paste", "run"});
+          history.match = optionalChoice<ClientSettings::HistoryMatch>(table.field("match"), std::array<std::string_view, 2>{"fuzzy", "fts"});
         }
+      }
+    };
+
+    class ClientValidator {
+    public:
+      template <CommandTabStore Commands>
+      inline static void validate(const lua::Value& client, LimitNotices& limits, BasicClientValidationState<Commands>& state, const lua::Value* inherited = nullptr) {
+        if (!client.present()) {
+          return;
+        }
+
+        const auto settings = ClientReader::read(client, [](const PromptBindingSetting&) {});
+        if (settings.input.prefix) {
+          state.keymap.setPrefix(*settings.input.prefix);
+        }
+
+        static_cast<void>(ClientDefinitionsReader::read(client, limits, [](std::size_t, const PanelSetting&, const lua::Value&) {}, [](std::size_t, const PickSetting&, const lua::Value&) {}));
+        const ClientDefinitions definitions{client, inherited};
+        const BasicActionValidator actions{definitions, limits, state.commands};
+
+        BindingValidator::validate(client.field("keybindings"), actions, state.keymap, limits);
+        BarsValidator{actions, limits}.validate(client.field("bars"));
+        ClientReader::slots(client, [](std::size_t, const lua::Value&) {});
       }
     };
 

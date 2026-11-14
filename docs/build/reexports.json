@@ -103,9 +103,6 @@
     "telar.cli.server",
     "telar.platform.error"
   ],
-  "telar.config.snapshot": [
-    "telar.config.gui"
-  ],
   "telar.gui.application.host_effects": [
     "telar.gui.presentation.display_metrics"
   ],

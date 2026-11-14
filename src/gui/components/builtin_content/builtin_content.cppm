@@ -529,15 +529,24 @@ export {
     class PickItemsReader {
     public:
       inline static void read(const runtime::lua::Value& value, PickItems& output, runtime::config::LimitNotices& limits) {
-        PickItems next;
-        const auto count = value.arraySize();
+        keep(
+            [&](const auto& collect) {
+              runtime::config::PickItemsReader::read(value, collect);
+            },
+            output,
+            limits
+        );
+      }
 
-        for (std::size_t index = 0; index < count; ++index) {
-          item(value.element(static_cast<lua_Integer>(index) + 1), next);
-        }
-
-        output = next;
-        output.report(limits);
+      // The options a pick definition lists.
+      inline static void definition(const runtime::lua::Value& pick, PickItems& output, runtime::config::LimitNotices& limits) {
+        keep(
+            [&](const auto& collect) {
+              runtime::config::PickItemsReader::definition(pick, collect);
+            },
+            output,
+            limits
+        );
       }
 
       inline static void lines(std::string_view text, PickItems& output, runtime::config::LimitNotices& limits) {
@@ -574,59 +583,16 @@ export {
       }
 
     private:
-      inline static void item(const runtime::lua::Value& value, PickItems& items) {
-        PickInput input;
+      template <typename Read>
+      inline static void keep(const Read& read, PickItems& output, runtime::config::LimitNotices& limits) {
+        PickItems next;
 
-        if (value.is(LUA_TSTRING)) {
-          input.label = value.string();
-          items.keep(input);
+        read([&](const runtime::config::PickItemSetting& option, const runtime::lua::Value&) {
+          next.keep({.label = option.label, .detail = option.detail.value_or(std::string_view{}), .value = option.value, .swatch = option.swatch, .selected = option.selected});
+        });
 
-          return;
-        }
-
-        value.onlyFields({"label", "value", "detail", "selected", "swatch"});
-        const auto label = value.field("label");
-        const auto chosen = value.field("value");
-        const auto detail = value.field("detail");
-
-        input.label = label.string();
-        if (chosen.present()) {
-          input.value = chosen.string();
-        }
-
-        if (detail.present()) {
-          input.detail = detail.string();
-        }
-
-        input.selected = value.field("selected").boolean(false);
-        input.swatch = swatch(value.field("swatch"));
-        items.keep(input);
-      }
-
-      inline static std::optional<PickSwatch> swatch(const runtime::lua::Value& value) {
-        if (!value.present()) {
-          return std::nullopt;
-        }
-
-        PickSwatch result;
-        if (value.arraySize() != result.size()) {
-          value.fail("must contain three RGB colors");
-        }
-
-        constexpr int hexadecimal_base = 16;
-
-        for (std::size_t index = 0; index < result.size(); ++index) {
-          const auto color = value.element(static_cast<lua_Integer>(index) + 1);
-
-          runtime::config::hexadecimalColor(color);
-          const auto text = color.string();
-          const auto parsed = std::from_chars(text.data() + 1, text.data() + text.size(), result[index], hexadecimal_base);
-          if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size()) {
-            color.fail("must be an RGB color");
-          }
-        }
-
-        return result;
+        output = next;
+        output.report(limits);
       }
     };
 

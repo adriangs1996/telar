@@ -539,166 +539,59 @@ export {
 export {
   namespace telar::gui::components {
 
-    struct SampleValues {
-      std::array<std::uint8_t, Node::maximum_samples> values{};
-      std::size_t length = 0;
+    // The colors a configuration names, as the GUI draws them.
+    struct ComponentColors {
+      using Color = ColorName::Value;
+
+      [[nodiscard]] inline Color index(std::uint8_t index) const noexcept {
+        return CellColor{.kind = CellColor::Kind::indexed, .channels = {index, 0, 0}};
+      }
+
+      [[nodiscard]] inline std::optional<Color> name(std::string_view name) const noexcept {
+        return ColorName::parse(name);
+      }
     };
 
-    class ValueReader {
+    // Maps what the configuration's readers read onto the GUI's nodes.
+    class ValueMapper {
     public:
-      inline static Style style(const runtime::lua::Value& value) {
-        Style result;
-
-        result.foreground = color(value.field("fg"));
-        result.background = color(value.field("bg"));
-        constexpr auto fields = std::to_array<std::pair<const char*, bool Style::*>>({
-            {"bold", &Style::bold},
-            {"italic", &Style::italic},
-            {"faint", &Style::faint},
-            {"underline", &Style::underline},
-            {"strikethrough", &Style::strikethrough},
-        });
-
-        for (const auto& [name, member] : fields) {
-          result.*member = value.field(name).boolean(false);
-        }
-
-        return result;
-      }
-
-      inline static Tone tone(const runtime::lua::Value& value) {
-        if (!value.present()) {
-          return Tone::neutral;
-        }
-
-        constexpr std::array names{"neutral", "muted", "accent", "success", "warning", "danger"};
-        const auto name = value.string();
-
-        for (std::size_t index = 0; index < names.size(); ++index) {
-          if (name == names[index]) {
-            return static_cast<Tone>(index);
-          }
-        }
-
-        value.fail("names an unknown component tone");
-      }
-
-      inline static std::optional<Mark> mark(const runtime::lua::Value& value) {
-        if (!value.present()) {
-          return std::nullopt;
-        }
-
-        runtime::config::uiMark(value);
-        constexpr std::array names{"claude", "codex", "pi", "telar"};
-        const auto name = value.string();
-
-        return static_cast<Mark>(std::ranges::find(names, name) - names.begin());
-      }
-
-      inline static BarMetric metric(const runtime::lua::Value& value) {
-        constexpr std::array names{"cpu", "memory", "battery"};
-        const auto name = value.string();
-        const auto* const found = std::ranges::find(names, name);
-        if (found == names.end()) {
-          value.fail("names an unknown component metric");
-        }
-
-        return static_cast<BarMetric>(found - names.begin());
-      }
-
-      inline static std::optional<runtime::FixedText<Node::maximum_icon_bytes>> icon(const runtime::lua::Value& value) {
-        if (!value.present()) {
-          return std::nullopt;
-        }
-
-        runtime::config::uiIcon(value);
-        runtime::FixedText<Node::maximum_icon_bytes> result;
+      // An icon name as the GUI keys it: lowercase, with underscores for hyphens.
+      inline static runtime::FixedText<Node::maximum_icon_bytes> iconName(std::string_view name) {
         std::array<char, Node::maximum_icon_bytes> normalized{};
-        const auto name = value.string();
         if (name.size() > normalized.size()) {
-          value.fail("exceeds the component icon name limit");
+          throw std::invalid_argument{"Component icon name exceeds its limit"};
         }
 
         std::ranges::transform(name, normalized.begin(), [](char byte) {
           return byte == '-' ? '_' : runtime::asciiLower(byte);
         });
 
+        runtime::FixedText<Node::maximum_icon_bytes> result;
+
         result.assign({normalized.data(), name.size()});
 
         return result;
       }
 
-      inline static std::optional<std::uint16_t> fraction(const runtime::lua::Value& value) {
-        if (!value.present()) {
-          return std::nullopt;
-        }
+      inline static std::optional<runtime::FixedText<Node::maximum_icon_bytes>> icon(const std::optional<std::string_view>& name) {
+        return name ? std::optional{iconName(*name)} : std::nullopt;
+      }
 
-        const auto number = value.boundedNumber(0, std::numeric_limits<double>::lowest(), std::numeric_limits<double>::max());
+      inline static std::optional<Mark> mark(std::optional<runtime::config::UiMark> mark) noexcept {
+        return mark ? std::optional{static_cast<Mark>(std::to_underlying(*mark))} : std::nullopt;
+      }
 
+      inline static Tone tone(runtime::config::ComponentTone tone) noexcept {
+        return static_cast<Tone>(std::to_underlying(tone));
+      }
+
+      inline static std::uint16_t fraction(double number) noexcept {
         return static_cast<std::uint16_t>(std::round(std::clamp(number, 0.0, 1.0) * Node::full_scale));
       }
 
-      inline static SampleValues samples(const runtime::lua::Value& value, runtime::config::LimitNotices& limits) {
-        const auto maximum = value.field("max");
-        const auto values = value.field("values");
-        const auto total = values.listLength();
-        SampleValues result;
-
-        result.length = std::min(total, result.values.size());
-        if (total > result.length) {
-          limits.add({.name = "bars.max_node_samples", .noun = "sparkline values", .value = Node::maximum_samples, .requested = total, .route = {}});
-        }
-
-        std::array<double, Node::maximum_samples> kept{};
-        double largest = 0;
-
-        for (std::size_t index = 0; index < result.length; ++index) {
-          const auto sample = values.element(static_cast<lua_Integer>(total - result.length) + static_cast<lua_Integer>(index) + 1);
-          if (!sample.present()) {
-            sample.fail("must be a number");
-          }
-
-          const auto number = sample.boundedNumber(0, 0, std::numeric_limits<double>::max());
-
-          kept[index] = number;
-          largest = std::max(largest, number);
-        }
-
-        const auto scale = maximum.boundedNumber(largest, std::numeric_limits<double>::lowest(), std::numeric_limits<double>::max());
-        constexpr double percent_scale = 100;
-
-        for (std::size_t index = 0; index < result.length; ++index) {
-          const auto fraction = scale > 0 ? std::clamp(kept[index] / scale, 0.0, 1.0) : 0;
-
-          result.values[index] = static_cast<std::uint8_t>(std::round(fraction * percent_scale));
-        }
-
-        return result;
-      }
-
-    private:
-      inline static std::optional<ColorName::Value> color(const runtime::lua::Value& value) {
-        if (!value.present()) {
-          return std::nullopt;
-        }
-
-        constexpr auto maximum_index = std::numeric_limits<std::uint8_t>::max();
-
-        if (const auto index = value.asInteger()) {
-          if (*index < 0 || std::cmp_greater(*index, maximum_index)) {
-            value.fail("is outside the component color index range");
-          }
-
-          return CellColor{.kind = CellColor::Kind::indexed, .channels = {static_cast<std::uint8_t>(*index), 0, 0}};
-        }
-
-        const auto parsed = ColorName::parse(value.string());
-        if (!parsed) {
-          value.fail("is not a supported component color");
-        }
-
-        return parsed;
-      }
+      static_assert(std::to_underlying(Tone::danger) == std::to_underlying(runtime::config::ComponentTone::danger));
+      static_assert(std::to_underlying(BarMetric::battery) == std::to_underlying(runtime::config::ComponentMetric::battery));
+      static_assert(Node::maximum_samples == runtime::config::ComponentValues<ComponentColors::Color>::maximum_samples);
     };
 
   }
@@ -715,7 +608,14 @@ export {
 
     template <typename Actions>
     class ContentReader {
+      using Place = runtime::config::ComponentPlace;
+      using Position = runtime::config::ComponentPosition;
+      using Parent = runtime::config::ComponentParent;
+      using Shape = runtime::config::ComponentShape;
+
     public:
+      static_assert(Node::no_parent == Position::no_parent && Node::default_priority == Position::default_priority);
+
       inline explicit ContentReader(lua_State& state, const Actions& actions, runtime::config::LimitNotices& limits, StagedContent& staged, Surface surface = Surface::bar)
           : state_(state),
             builder_{.actions_ = actions, .limits_ = limits, .staged_ = staged, .surface_ = surface} {}
@@ -729,298 +629,49 @@ export {
         builder_.counting_ = true;
         builder_.staged_.clear();
         const Position root{.place = builder_.surface_ == Surface::bar ? Place::bar : Place::panel};
+        runtime::config::ComponentWalker walker{state_, builder_, builder_.limits_};
 
-        walk(value, root);
+        walker.walk(value, root);
         builder_.budget_.prepare();
         builder_.counting_ = false;
-        walk(value, root);
+        walker.walk(value, root);
         output.keepFitting(builder_.staged_, &builder_.had_children_);
         builder_.report(Bounds);
       }
 
     private:
-      enum class Place : std::uint8_t {
-        bar,
-        panel,
-        group,
-        tooltip,
-        buttons,
-      };
-
-      struct Position {
-        Place place = Place::bar;
-        std::uint8_t parent = Node::no_parent;
-        unsigned priority = Node::default_priority;
-        unsigned rank = std::numeric_limits<std::uint8_t>::max();
-        unsigned depth = 0;
-      };
-
-      struct Staged {
-        std::uint8_t index;
-        unsigned rank;
-      };
-
-      enum class Phase : std::uint8_t {
-        visit,
-        list,
-        children,
-        tooltip,
-        button,
-        done,
-      };
-
-      struct Frame {
-        std::optional<runtime::lua::Value> value = std::nullopt;
-        Position position;
-        Position child;
-        Phase phase = Phase::visit;
-        bool tooltip = false;
-        int index = 0;
-        std::size_t next = 0;
-        std::size_t count = 0;
-      };
-
-      static constexpr unsigned maximum_list_depth = 4;
-      static constexpr std::size_t maximum_frames = (std::size_t{maximum_list_depth} + 2) * 2;
-
-      inline void push(Position position) {
-        if (frame_count_ == frames_.size()) {
-          throw std::length_error{"Component traversal stack exceeded"};
-        }
-
-        auto& frame = frames_[frame_count_++];
-
-        frame.index = lua_gettop(&state_);
-        frame.value.emplace(&state_, frame.index, "component");
-        frame.position = position;
-        frame.phase = Phase::visit;
-        frame.tooltip = false;
-        frame.next = 0;
-        frame.count = 0;
-      }
-
-      inline void pop() noexcept {
-        auto& frame = frames_[--frame_count_];
-
-        frame.value.reset();
-        lua_settop(&state_, frame.index - 1);
-      }
-
-      // The explicit traversal stack bounds both nested lists and container work.
-      inline void walk(const runtime::lua::Value& value, Position position) {
-        const auto original_top = lua_gettop(&state_);
-
-        value.pushCopy();
-        try {
-          push(position);
-          while (frame_count_ != 0) {
-            advance();
-          }
-        } catch (...) {
-          while (frame_count_ != 0) {
-            pop();
-          }
-
-          lua_settop(&state_, original_top);
-
-          throw;
-        }
-
-        lua_settop(&state_, original_top);
-      }
-
-      inline void advance() {
-        auto& frame = frames_[frame_count_ - 1];
-
-        switch (frame.phase) {
-        case Phase::visit:
-          builder_.visit(frame);
-          break;
-        case Phase::list:
-        case Phase::children:
-          if (frame.next == frame.count) {
-            frame.phase = frame.tooltip ? Phase::tooltip : Phase::done;
-          } else {
-            lua_rawgeti(&state_, frame.index, static_cast<lua_Integer>(++frame.next));
-            push(frame.child);
-          }
-
-          break;
-        case Phase::tooltip:
-        case Phase::button: {
-          const bool tooltip = frame.phase == Phase::tooltip;
-
-          frame.phase = Phase::done;
-          lua_getfield(&state_, frame.index, tooltip ? "tooltip" : "button");
-          auto child = frame.child;
-
-          child.place = tooltip ? Place::tooltip : Place::buttons;
-          child.priority = Node::default_priority;
-          push(child);
-        } break;
-        case Phase::done:
-          pop();
-          break;
-        }
-      }
-
-      inline static const runtime::lua::Value& frameValue(const Frame& frame) {
-        if (!frame.value) {
-          throw std::logic_error{"Component traversal frame has no value"};
-        }
-
-        return *frame.value;
-      }
-
-      // What the walk builds, apart from the stack whose values it reads, so a frame's value stays
-      // valid while the content changes.
+      // What the walk builds from each component it places.
       struct Builder {
-        inline void visit(Frame& frame) {
-          const auto& value = frameValue(frame);
-          const auto position = frame.position;
-
-          frame.phase = Phase::done;
-          if (!value.present()) {
-            return;
-          }
-
-          if (value.is(LUA_TSTRING)) {
-            Input input;
-
-            input.node.priority = static_cast<std::uint8_t>(position.priority);
-            input.text = value.string();
-            const runtime::config::ComponentShape shape{.text = input.text, .priority = position.priority};
-
-            static_cast<void>(append(value, shape, input, position));
-
-            return;
-          }
-
-          if (!value.is(LUA_TTABLE)) {
-            value.fail("components must be text, a component or a list");
-          }
-
-          if (value.field("ui").present()) {
-            component(frame);
-
-            return;
-          }
-
-          if (value.field("text").present() || value.field("icon").present()) {
-            const auto shape = runtime::config::ComponentShapeReader::segment(value, position.priority);
-            Input input;
-
-            input.node.kind = shape.kind;
-            input.node.priority = static_cast<std::uint8_t>(shape.priority);
-            input.node.icon = ValueReader::icon(value.field("icon"));
-            input.node.style = ValueReader::style(value);
-            input.text = shape.text;
-            static_cast<void>(append(value, shape, input, position));
-
-            return;
-          }
-
-          if (position.depth == maximum_list_depth) {
-            value.fail("exceeds the component nesting limit");
-          }
-
-          frame.child = position;
-          ++frame.child.depth;
-          frame.count = value.arraySize();
-          frame.phase = Phase::list;
-        }
-
-        inline void component(Frame& frame) {
-          const auto& value = frameValue(frame);
-          const auto shape = runtime::config::ComponentShapeReader::read(value, frame.position.priority, limits_);
+        inline std::optional<Parent> node(const runtime::lua::Value& value, const Shape& shape, const Position& position) {
+          const auto values = runtime::config::ComponentValuesReader::read(value, shape, ComponentColors{});
           Input input;
 
           input.node.kind = shape.kind;
           input.node.priority = static_cast<std::uint8_t>(shape.priority);
-          input.node.tone = ValueReader::tone(value.field("tone"));
+          input.node.tone = ValueMapper::tone(values.tone);
+          input.node.style = {.foreground = values.foreground, .background = values.background, .bold = values.bold, .italic = values.italic, .faint = values.faint, .underline = values.underline, .strikethrough = values.strikethrough};
+          input.node.icon = ValueMapper::icon(values.icon);
+          input.node.mark = ValueMapper::mark(values.mark);
+          input.node.metric = static_cast<BarMetric>(std::to_underlying(values.metric));
+          input.node.value = ValueMapper::fraction(values.value.value_or(0));
+          input.node.marker = values.marker ? std::optional{ValueMapper::fraction(*values.marker)} : std::nullopt;
+          input.node.primary = values.primary;
           input.text = shape.text;
           input.detail = shape.detail;
           input.url = shape.url;
-          SampleValues samples;
+          input.samples = std::span{values.samples}.first(values.sample_count);
 
-          values(value, input, samples);
-          const auto node = append(value, shape, input, frame.position);
-          if (!node) {
-            return;
-          }
-
-          frame.child = {.parent = node->index, .rank = node->rank};
-          switch (shape.kind) {
-          case Kind::group:
-            frame.child.place = Place::group;
-            frame.child.priority = shape.priority;
-            frame.tooltip = true;
-            frame.count = value.listLength();
-            frame.phase = Phase::children;
-            break;
-          case Kind::actions:
-            frame.child.place = Place::buttons;
-            frame.count = value.listLength();
-            frame.phase = Phase::children;
-            break;
-          case Kind::callout:
-            frame.phase = Phase::button;
-            break;
-          default:
-            break;
-          }
+          return append(value, shape, input, position);
         }
 
-        // A sparkline's input views the samples, region `a`.
-        inline void values(const runtime::lua::Value& value, tbc::view<Input&, tbc::lt::a> input, tbc::view<SampleValues&, tbc::lt::a> samples) {
-          switch (input.node.kind) {
-          case Kind::label:
-            input.node.style = ValueReader::style(value);
-            break;
-          case Kind::icon:
-            input.node.icon = ValueReader::icon(value.field("name"));
-            break;
-          case Kind::mark:
-            input.node.mark = ValueReader::mark(value.field("name"));
-            break;
-          case Kind::meter:
-          case Kind::meter_row:
-            input.node.value = ValueReader::fraction(value.field("value")).value_or(0);
-            input.node.marker = ValueReader::fraction(value.field("marker"));
-            break;
-          case Kind::sparkline:
-            samples = ValueReader::samples(value, limits_);
-            input.samples = std::span{samples.values}.first(samples.length);
-            break;
-          case Kind::metric:
-            input.node.metric = ValueReader::metric(value.field("name"));
-            break;
-          case Kind::group:
-            input.node.mark = ValueReader::mark(value.field("mark"));
-            [[fallthrough]];
-          case Kind::callout:
-            input.node.icon = ValueReader::icon(value.field("icon"));
-            break;
-          case Kind::button:
-            input.node.primary = value.field("primary").boolean(false);
-            break;
-          default:
-            break;
-          }
-        }
-
-        inline std::optional<Staged> append(const runtime::lua::Value& value, const runtime::config::ComponentShape& shape, Input& input, Position position) {
-          if (!allowed(shape.kind, position.place)) {
-            value.fail("contains a component unsupported in this position");
-          }
-
+        inline std::optional<Parent> append(const runtime::lua::Value& value, const Shape& shape, Input& input, const Position& position) {
           const auto rank = std::min(shape.priority + shape.tone_bonus, position.rank);
 
           if (counting_) {
             budget_.count(shape, rank);
             demand_ = demand_ + usage(shape);
 
-            return Staged{.index = 0, .rank = rank};
+            return Parent{.index = 0, .rank = rank};
           }
 
           if (position.parent != Node::no_parent) {
@@ -1032,12 +683,10 @@ export {
           }
 
           if (shape.action_field != nullptr) {
-            const auto action = value.field(shape.action_field);
-            if (action.is(LUA_TFUNCTION)) {
-              action.fail("cannot be a callback in a component");
-            }
+            input.action = runtime::config::ComponentValuesReader::action(value, shape, [&](const runtime::lua::Value& action) {
+              return actions_.read(action);
+            });
 
-            input.action = actions_.read(action);
             if (!input.action) {
               budget_.release(shape, rank);
 
@@ -1052,27 +701,10 @@ export {
           input.node.parent = position.parent;
           input.node.tooltip = position.place == Place::tooltip;
 
-          return Staged{.index = staged_.append(input), .rank = rank};
+          return Parent{.index = staged_.append(input), .rank = rank};
         }
 
-        inline static bool allowed(Kind kind, Place place) noexcept {
-          switch (place) {
-          case Place::bar:
-            return kind <= Kind::group;
-          case Place::panel:
-            return true;
-          case Place::group:
-            return kind < Kind::group;
-          case Place::tooltip:
-            return kind != Kind::group && kind != Kind::callout && kind != Kind::actions && kind != Kind::button;
-          case Place::buttons:
-            return kind == Kind::button;
-          }
-
-          return false;
-        }
-
-        inline static runtime::config::ComponentBudget::Usage usage(const runtime::config::ComponentShape& shape) noexcept {
+        inline static runtime::config::ComponentBudget::Usage usage(const Shape& shape) noexcept {
           return {.nodes = 1, .text = shape.text.size() + shape.detail.size() + shape.url.size(), .actions = shape.action_field == nullptr ? 0U : 1U, .samples = shape.samples};
         }
 
@@ -1103,8 +735,6 @@ export {
       };
 
       lua_State& state_;
-      std::array<Frame, maximum_frames> frames_{};
-      std::size_t frame_count_ = 0;
       Builder builder_;
     };
 
@@ -1211,37 +841,10 @@ export {
 
     inline constexpr const auto& slot_names = runtime::config::component_slots;
     static_assert(slot_names.size() == static_cast<std::size_t>(Slot::count) && slot_names[static_cast<std::size_t>(Slot::agent_status)] == "agent_status");
-
-    // Native pieces `ui.builtin` can place: every slot plus parts of the two bars.
-    inline constexpr std::array<std::string_view, 27> builtin_names{
-        "tab",
-        "pane_header",
-        "agent_card",
-        "tab_cards",
-        "tab_title",
-        "tab_path",
-        "tab_activity",
-        "pane_mark",
-        "pane_program",
-        "pane_context",
-        "pane_status",
-        "pane_progress",
-        "pane_actions",
-        "agent_mark",
-        "agent_title",
-        "agent_project",
-        "agent_status",
-        "sidebar_toggle",
-        "workspace_identity",
-        "project_switcher",
-        "tabs",
-        "palette_button",
-        "new_tab",
-        "metrics",
-        "bar_left",
-        "bar_center",
-        "bar_right",
-    };
+    // The positions, the source kinds after `empty` and the marks follow the configuration's.
+    static_assert(std::to_underlying(Position::footer_right) == std::to_underlying(runtime::config::BarPosition::footer_right));
+    static_assert(std::to_underlying(SourceKind::command) == std::to_underlying(runtime::config::SourceKind::command) + 1);
+    static_assert(std::to_underlying(Mark::telar) == std::to_underlying(runtime::config::UiMark::telar));
 
     struct Source {
       static constexpr std::chrono::milliseconds default_interval{1000};
@@ -1257,30 +860,24 @@ export {
       bool has_render = false;
 
       inline static Source read(lua_State& state, const runtime::lua::Value& value, bool panel = false) {
+        if (!value.present()) {
+          return {};
+        }
+
+        return read(state, value, runtime::config::SourceReader::read(value, panel));
+      }
+
+      // Keeps the source's table in the registry, where its render function and command are.
+      inline static Source read(lua_State& state, const runtime::lua::Value& value, const runtime::config::SourceSetting& setting) {
         Source result;
 
-        if (!value.present()) {
-          return result;
+        result.kind = static_cast<SourceKind>(std::to_underlying(setting.kind) + 1);
+        if (setting.every_ms) {
+          result.interval = std::chrono::milliseconds{*setting.every_ms};
         }
 
-        const auto kind = value.field("bar_kind").string();
-        constexpr std::array<std::string_view, 6> names{"tabs", "metrics", "machines", "static", "dynamic", "command"};
-        const auto* const found = std::ranges::find(names, kind);
-        if (found == names.end()) {
-          value.fail("names an unsupported bar source");
-        }
-
-        result.kind = static_cast<SourceKind>(found - names.begin() + 1);
-        if (result.kind == SourceKind::dynamic || result.kind == SourceKind::command) {
-          const auto every = value.field("every_ms");
-          if (!panel || every.present()) {
-            result.interval = std::chrono::milliseconds{every.boundedInteger(default_interval.count(), minimum_interval_ms, maximum_interval_ms)};
-          }
-
-          result.has_render = value.field("render").present();
-          result.timeout = std::chrono::milliseconds{value.field("timeout_ms").boundedInteger(default_timeout.count(), minimum_timeout_ms, maximum_timeout_ms)};
-        }
-
+        result.has_render = setting.render;
+        result.timeout = std::chrono::milliseconds{setting.timeout_ms};
         value.pushCopy();
         result.reference = luaL_ref(&state, LUA_REGISTRYINDEX);
 
@@ -1294,11 +891,9 @@ export {
       runtime::FixedText<maximum_name_bytes> name;
       runtime::FixedText<maximum_title_bytes> title;
 
-      inline void read(std::string_view key, const runtime::lua::Value& value) {
-        name.assign(key);
-        const auto text = value.field("title");
-
-        title.assign(runtime::utf8Prefix(text.present() ? text.string() : key, maximum_title_bytes));
+      inline void assign(const runtime::config::DefinitionHeading& heading) {
+        name.assign(heading.name);
+        title.assign(heading.title);
       }
     };
 
@@ -1339,29 +934,49 @@ export {
           return;
         }
 
-        bars(state, client.field("bars"));
-        slots(state, client.field("components"));
-        named(client.field("panels"), panel_count_, [&](std::string_view name, const runtime::lua::Value& value, std::size_t index) {
-          auto& panel = panels_[index];
-
-          panel.heading.read(name, value);
-          panel.width = static_cast<std::uint16_t>(value.field("width").boundedInteger(Panel::default_width, Panel::minimum_width, Panel::maximum_width));
-          panel.mark = ValueReader::mark(value.field("mark"));
-          panel.icon = ValueReader::icon(value.field("icon"));
-          panel.source = Source::read(state, value.field("source"), true);
+        runtime::config::BarsReader::sources(client, [&](runtime::config::BarPosition position, const runtime::lua::Value& source) {
+          sources_[std::to_underlying(position)] = Source::read(state, source);
         });
 
-        named(client.field("picks"), pick_count_, [&](std::string_view name, const runtime::lua::Value& value, std::size_t index) {
-          auto& pick = picks_[index];
+        runtime::config::ClientReader::slots(client, [&](std::size_t slot, const runtime::lua::Value& function) {
+          auto& reference = slots_[slot];
+          if (reference != LUA_NOREF) {
+            luaL_unref(&state, LUA_REGISTRYINDEX, reference);
+          }
 
-          pick.heading.read(name, value);
-          pick.timeout = std::chrono::milliseconds{value.field("timeout_ms").boundedInteger(Source::default_timeout.count(), Source::minimum_timeout_ms, Pick::maximum_timeout_ms)};
-          pick.command = value.field("command").present();
-          pick.render = value.field("items").is(LUA_TFUNCTION);
-          pick.refresh = value.field("refresh").boolean(true);
-          value.pushCopy();
-          pick.reference = luaL_ref(&state, LUA_REGISTRYINDEX);
+          function.pushCopy();
+          reference = luaL_ref(&state, LUA_REGISTRYINDEX);
         });
+
+        // SnapshotReader reported the definitions' limits.
+        runtime::config::LimitNotices limits;
+        const auto counts = runtime::config::ClientDefinitionsReader::read(
+            client,
+            limits,
+            [&](std::size_t index, const runtime::config::PanelSetting& setting, const runtime::lua::Value& source) {
+              auto& panel = panels_[index];
+
+              panel.heading.assign(setting.heading);
+              panel.width = setting.width;
+              panel.mark = ValueMapper::mark(setting.mark);
+              panel.icon = ValueMapper::icon(setting.icon);
+              panel.source = Source::read(state, source, setting.source);
+            },
+            [&](std::size_t index, const runtime::config::PickSetting& setting, const runtime::lua::Value& definition) {
+              auto& pick = picks_[index];
+
+              pick.heading.assign(setting.heading);
+              pick.timeout = std::chrono::milliseconds{setting.timeout_ms};
+              pick.command = setting.command;
+              pick.render = setting.render;
+              pick.refresh = setting.refresh;
+              definition.pushCopy();
+              pick.reference = luaL_ref(&state, LUA_REGISTRYINDEX);
+            }
+        );
+
+        panel_count_ = counts.panels.value_or(panel_count_);
+        pick_count_ = counts.picks.value_or(pick_count_);
       }
 
       [[nodiscard]] inline const Source& source(Position position) const {
@@ -1388,91 +1003,6 @@ export {
       }
 
     private:
-      inline void bars(lua_State& state, const runtime::lua::Value& value) {
-        if (!value.present()) {
-          return;
-        }
-
-        const auto bottom = value.field("bottom");
-        if (bottom.present()) {
-          constexpr std::array names{"left", "center", "right"};
-
-          for (std::size_t index = 0; index < names.size(); ++index) {
-            sources_[index] = Source::read(state, bottom.field(names[index]));
-          }
-        }
-
-        const auto top = value.field("top");
-        if (top.present()) {
-          sources_[static_cast<std::size_t>(Position::top_right)] = Source::read(state, top.field("right"));
-        }
-
-        const auto footer = value.field("sidebar_footer");
-        if (footer.present()) {
-          constexpr std::size_t footer_slots = 3;
-          const auto count = footer.arraySize();
-
-          for (std::size_t index = 0; index < footer_slots; ++index) {
-            sources_[static_cast<std::size_t>(Position::footer_left) + index] = index < count ? Source::read(state, footer.element(static_cast<lua_Integer>(index) + 1)) : Source{};
-          }
-        }
-      }
-
-      inline void slots(lua_State& state, const runtime::lua::Value& value) {
-        if (!value.present()) {
-          return;
-        }
-
-        value.eachField([&](std::string_view name, const runtime::lua::Value& entry) {
-          const auto* const found = std::ranges::find(slot_names, name);
-          if (found == slot_names.end()) {
-            const auto message = std::string{"names an unknown component slot \""} + std::string{name} + "\"";
-
-            entry.fail(message.c_str());
-          }
-
-          if (!entry.is(LUA_TFUNCTION)) {
-            entry.fail("must be a function from the context and the item to an element");
-          }
-
-          auto& reference = slots_[static_cast<std::size_t>(found - slot_names.begin())];
-          if (reference != LUA_NOREF) {
-            luaL_unref(&state, LUA_REGISTRYINDEX, reference);
-          }
-
-          entry.pushCopy();
-          reference = luaL_ref(&state, LUA_REGISTRYINDEX);
-        });
-      }
-
-      template <typename Read>
-      inline static void named(const runtime::lua::Value& value, std::size_t& count, const Read& read) {
-        if (!value.present()) {
-          return;
-        }
-
-        std::array<std::string_view, maximum_definitions> names;
-
-        count = 0;
-        value.eachField([&](std::string_view name, const runtime::lua::Value&) {
-          auto* const end = names.begin() + static_cast<std::ptrdiff_t>(count);
-          auto* const place = std::lower_bound(names.begin(), end, name);
-          if (count == names.size() && place == end) {
-            return;
-          }
-
-          auto* const last = count < names.size() ? end : end - 1;
-
-          std::move_backward(place, last, last + 1);
-          *place = name;
-          count = std::min(count + 1, names.size());
-        });
-
-        for (std::size_t index = 0; index < count; ++index) {
-          read(names[index], value.entry(names[index]), index);
-        }
-      }
-
       std::array<Source, positions> sources_{};
       std::array<Panel, maximum_definitions> panels_{};
       std::array<Pick, maximum_definitions> picks_{};
@@ -1518,7 +1048,7 @@ export {
           if (source.kind == SourceKind::fixed) {
             const auto value = registry.element(source.reference);
 
-            bars_[index].read(value.field("value"), actions, limits, staged_, next_reference_);
+            bars_[index].read(runtime::config::BarsReader::content(value), actions, limits, staged_, next_reference_);
           }
         }
       }
