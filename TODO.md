@@ -527,8 +527,10 @@ Cada tarea empieza localizando todas las copias, crea un módulo con una interfa
 #### [ ] P6.8a · `lib/clipboard` y los frameworks de macOS
 - **Qué hace:** los includes de `lib/clipboard` pasan a `import std`, `telar.sys.*` y sus dueños; `CoreFoundation`, `IOKit` y `Security` pasan a un único dueño (`telar.sys.apple` o uno propio) en `library_owners`. Las ramas Linux de clipboard se compilan en la VM de OrbStack con el toolchain fijado.
 
-#### [ ] P6.8b · `src/gui/qt` y `background_effect`
+#### [x] P6.8b · `src/gui/qt` y `background_effect`
 - **Qué hace:** los tres adaptadores de Qt y `background_effect.cppm` dejan sus includes estándar y de proyecto; lo que Qt obligue a dejar textual se justifica en el commit y se resuelve aquí, no con una entrada en la allowlist.
+- **Resultado:** `510d41d20`. `application_effects.cpp` se queda con `application_effects.hpp`, `application.hpp` e `import std` (sobraban 17 includes estándar y 5 de proyecto); `terminal_input.cpp` pasa `<array>` a `import std`. Los tres ficheros definen miembros de clases declaradas en cabeceras de Qt (`Application` y `LuaHost` son `QObject` y moc necesita sus cabeceras; `terminalKey` recibe un `QKeyEvent`), así que son adaptadores Qt: el checker solo reconocía como tal al fichero que incluía `<Q…>` él mismo, y su función nueva `qt_adapters` cuenta también los que llegan a Qt por las cabeceras del proyecto (solo cambian de clase estos tres). `background_effect.cppm` deja `platform/window.hpp` (la usa también Objective-C++): `configureBackgroundEffect` recibe la opacidad y el blur. Allowlist de includes: de 314 a 286. En Debug y en Release compila la GUI con `gui-probes` y pasan sus tests; `gui-quick` como en la base (falla `configuredTooltipsYieldToOpenSurfaces`, y en Release el SIGBUS pendiente). La rama Linux de `background_effect` y `linux/window.cpp` no se han compilado: la VM no respondió.
+
 
 #### [ ] P6.8c · Frontera SIMD de los tests
 - **Problema:** el camino más caliente del terminal (`styled_ordinary.hpp`, `ascii_ordinary.hpp`, `graphics_base64_wide.hpp`) tiene dos implementaciones por macro de arquitectura, y los tests escalares las recompilan quitando esas macros. Una cabecera textual no puede importar, así que todo lo que alcanzan (unos 258 includes) se queda textual.
