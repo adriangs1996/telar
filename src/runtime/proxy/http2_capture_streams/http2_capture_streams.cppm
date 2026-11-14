@@ -1,4 +1,5 @@
 module;
+#include "tbc/annotations.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <new>
 #include <stdlib.h>
@@ -77,22 +78,13 @@ export {
       using Read = DelimitedRead::Result;
 
       // The storage is written before it is read: allocating a head does not zero 16 KiB.
-      inline ConnectHead() noexcept {}
+      ConnectHead() noexcept;
 
-      inline Read receive(int socket) noexcept {
-        SocketStream stream{socket};
+      Read receive(int socket) noexcept;
 
-        return reader_.receive(stream, storage_.bytes(), "\r\n\r\n");
-      }
+      std::string_view text() noexcept;
 
-      inline std::string_view text() noexcept {
-        return {reinterpret_cast<const char*>(storage_.bytes().data()), reader_.length()};
-      }
-
-      inline void erase() noexcept {
-        eraseSensitive(storage_.bytes().data(), capacity);
-        reader_.reset();
-      }
+      void erase() noexcept;
 
     private:
       SensitiveBuffer<capacity> storage_;
@@ -139,62 +131,23 @@ export {
         evict_silent,
       };
 
-      inline explicit ProxyConnectionPolicy(Time now) noexcept
-          : since_(now),
-            active_(now) {}
+      explicit ProxyConnectionPolicy(Time now) noexcept;
 
-      inline void enter(Phase phase, Time now) noexcept {
-        if (phase_ != phase) {
-          phase_ = phase;
-          since_ = now;
-        }
-      }
+      void enter(Phase phase, Time now) noexcept;
 
-      inline void touch(Time now) noexcept {
-        active_ = now;
-      }
+      void touch(Time now) noexcept;
 
-      inline void exchanges(std::uint32_t count) noexcept {
-        exchanges_ = count;
-      }
+      void exchanges(std::uint32_t count) noexcept;
 
-      inline Phase phase() const noexcept {
-        return phase_;
-      }
+      Phase phase() const noexcept;
 
-      inline Time since() const noexcept {
-        return since_;
-      }
+      Time since() const noexcept;
 
-      inline Time active() const noexcept {
-        return active_;
-      }
+      Time active() const noexcept;
 
-      inline Closure expired(Time now) const noexcept {
-        switch (phase_) {
-        case Phase::connect_head:
-          return now - since_ >= head_timeout ? Closure::head_timeout : Closure::none;
-        case Phase::establishing:
-          return now - since_ >= establishment_timeout ? Closure::establishment_timeout : Closure::none;
-        case Phase::half_closed:
-          return now - active_ >= half_closed_timeout ? Closure::half_closed_timeout : Closure::none;
-        default:
-          return Closure::none;
-        }
-      }
+      Closure expired(Time now) const noexcept;
 
-      inline bool evictable(Closure reason, Time now) const noexcept {
-        switch (reason) {
-        case Closure::evict_head:
-          return phase_ == Phase::connect_head && now - since_ >= evictable_head_age;
-        case Closure::evict_idle:
-          return phase_ == Phase::idle && exchanges_ == 0 && now - active_ >= evictable_idle_age;
-        case Closure::evict_silent:
-          return phase_ == Phase::open && exchanges_ == 0 && now - active_ >= evictable_silent_age;
-        default:
-          return false;
-        }
-      }
+      bool evictable(Closure reason, Time now) const noexcept;
 
     private:
       Phase phase_ = Phase::connect_head;
@@ -271,23 +224,11 @@ export {
           "resolution_truncated"
       };
 
-      inline void record(ProxyCounter counter, std::uint64_t count = 1) noexcept {
-        counters_[static_cast<std::size_t>(counter)].fetch_add(count, std::memory_order_relaxed);
-      }
+      void record(ProxyCounter counter, std::uint64_t count = 1) noexcept;
 
-      inline std::uint64_t read(ProxyCounter counter) const noexcept {
-        return counters_[static_cast<std::size_t>(counter)].load(std::memory_order_relaxed);
-      }
+      std::uint64_t read(ProxyCounter counter) const noexcept;
 
-      inline std::array<std::uint64_t, capacity> snapshot() const noexcept {
-        std::array<std::uint64_t, capacity> result;
-
-        for (std::size_t index = 0; index != capacity; ++index) {
-          result[index] = counters_[index].load(std::memory_order_relaxed);
-        }
-
-        return result;
-      }
+      std::array<std::uint64_t, capacity> snapshot() const noexcept;
 
     private:
       std::array<std::atomic<std::uint64_t>, capacity> counters_{};
@@ -300,8 +241,9 @@ export {
 export {
   namespace telar::runtime {
 
+    // Generic over the caller's resolver.
     template <Allocator Memory, HostnameResolver Resolver>
-    class ConnectHandshake {
+    class TBC_HOT_PATH ConnectHandshake {
     public:
       using Time = ProxyConnectionPolicy::Time;
 
@@ -656,9 +598,9 @@ export {
     };
 
     struct IgnoreHttp2Capture {
-      inline void observe(Http2Direction, const Http2Event&) noexcept {}
+      constexpr void observe(Http2Direction, const Http2Event&) noexcept {}
 
-      inline void finish(Http2Direction) noexcept {}
+      constexpr void finish(Http2Direction) noexcept {}
     };
 
     static_assert(Http2CapturePolicy<IgnoreHttp2Capture>);
@@ -670,8 +612,9 @@ export {
 export {
   namespace telar::runtime {
 
+    // Generic over the caller's clock.
     template <ConcurrentAllocator Memory, CaptureClock Clock = CaptureWallClock>
-    class Http2CaptureStreams {
+    class TBC_HOT_PATH Http2CaptureStreams {
     public:
       inline explicit Http2CaptureStreams(CaptureProducer<Memory>* producer, ProxyCounters& counters, CaptureStart context, CaptureSide side) noexcept
           : producer_(producer),
@@ -816,9 +759,7 @@ export {
       std::uint32_t active_connections = 0;
       std::uint64_t connection_limit_drops = 0;
 
-      inline std::uint64_t read(ProxyCounter counter) const noexcept {
-        return counters[static_cast<std::size_t>(counter)];
-      }
+      std::uint64_t read(ProxyCounter counter) const noexcept;
     };
 
   }

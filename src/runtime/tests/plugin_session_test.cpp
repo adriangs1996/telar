@@ -73,9 +73,8 @@ namespace tap = telar::runtime::plugins;
 int runPluginSessionFixture(std::string_view mode) {
   SystemAllocator system;
   BudgetAllocator budget{system, 128 * 1024 * 1024};
-  SynchronizedAllocator synchronized{budget};
-  MemoryAdapter adapter{synchronized};
-  ConcurrentMemory& memory = adapter;
+  MemoryAdapter adapter{budget};
+  Memory& memory = adapter;
 
   if (mode.starts_with('/')) {
     tap::runWorker(memory, mode.data());

@@ -205,7 +205,7 @@ static void kernelLossAccounting() {
   check(wrapping.count() == before + 5);
 }
 
-static void offlineDelivery(ConcurrentMemory& memory, const std::string& path, const std::string& directory) {
+static void offlineDelivery(Memory& memory, const std::string& path, const std::string& directory) {
   const auto udp = packet(17, std::string_view{"a\0b", 3});
   const auto tcp = packet(6, "ignored");
   const auto file_path = directory + "/fixture.pcap";
@@ -482,7 +482,7 @@ int main() {
   codecAndFilters();
   kernelLossAccounting();
   SystemAllocator system;
-  MemoryAdapter system_memory{system};
+  MemoryAdapter offline{system};
   BudgetAllocator budget{system, 64 * 1024 * 1024};
   SynchronizedAllocator synchronized{budget};
   MemoryAdapter adapter{synchronized};
@@ -497,7 +497,7 @@ int main() {
   {
     Service service{memory, path, true};
 
-    offlineDelivery(system_memory, path, directory);
+    offlineDelivery(offline, path, directory);
     backpressureAndIsolation(path);
     exchangeDelivery(service, memory, path);
     interceptionDelivery(service, path);

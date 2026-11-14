@@ -45,7 +45,7 @@ static void privateRecord(int directory, std::string_view name, std::string_view
   check(writePrivateFile(directory, name, {reinterpret_cast<const std::uint8_t*>(text.data()), text.size()}, PrivateFileMode::replace) == 0);
 }
 
-static void testPortMemory(SystemAllocator& memory) {
+static void testPortMemory(Memory& memory) {
   std::array<char, 64> path;
 
   std::strcpy(path.data(), "/tmp/telar-proxy-ports-XXXXXX");
@@ -161,7 +161,9 @@ static void testProxyListener() {
 }
 
 void testProxyNetwork() {
-  SystemAllocator memory;
+  SystemAllocator system;
+  MemoryAdapter adapter{system};
+  Memory& memory = adapter;
 
   testPortMemory(memory);
   testProxyListener();

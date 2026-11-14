@@ -176,7 +176,9 @@ static std::string readHead(int descriptor) {
 }
 
 static std::string credential(const char* socket_path) {
-  SystemAllocator memory;
+  SystemAllocator system;
+  MemoryAdapter adapter{system};
+  Memory& memory = adapter;
   const auto path = std::filesystem::path{socket_path}.parent_path() / "proxy";
   FileDescriptor directory{::open(path.c_str(), O_DIRECTORY | O_RDONLY | O_NOFOLLOW | O_CLOEXEC)};
 

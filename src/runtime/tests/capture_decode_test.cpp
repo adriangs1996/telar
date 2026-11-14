@@ -58,9 +58,10 @@ void testCaptureDecoding() {
 
     for (const std::size_t limit : {1, 11, 12, 13, 1024}) {
       BudgetAllocator memory{system, 2 * 1024 * 1024};
+      MemoryAdapter adapter{memory};
 
       {
-        CaptureContentDecoder decoder{memory};
+        CaptureContentDecoder decoder{static_cast<Memory&>(adapter)};
         const auto body = decoder.decode(input, fixture.coding, limit);
 
         check(body.decoded && !body.failed && body.truncated == (limit < plaintext.size()));
@@ -74,9 +75,10 @@ void testCaptureDecoding() {
       const std::size_t budget = fixture.coding == "zstd" ? 128 * 1024 : fixture.coding == "br" ? 2 * 1024
                                                                                                 : 32 * 1024;
       BudgetAllocator memory{system, budget};
+      MemoryAdapter adapter{memory};
 
       {
-        CaptureContentDecoder decoder{memory};
+        CaptureContentDecoder decoder{static_cast<Memory&>(adapter)};
         const auto body = decoder.decode(input, fixture.coding, 1024);
 
         check(body.decoded && !body.failed && !body.truncated);
@@ -88,9 +90,10 @@ void testCaptureDecoding() {
 
     for (const std::size_t budget : {0, 12, 1024, 65536, 131072}) {
       BudgetAllocator memory{system, budget};
+      MemoryAdapter adapter{memory};
 
       {
-        CaptureContentDecoder decoder{memory};
+        CaptureContentDecoder decoder{static_cast<Memory&>(adapter)};
 
         try {
           const auto body = decoder.decode(input, fixture.coding, 1024);
@@ -183,8 +186,8 @@ static void testDecodedCaptureCounters() {
 
   BudgetAllocator failing{system, 0};
   SynchronizedAllocator synchronized{failing};
-  MemoryAdapter exhausted_memory{synchronized};
-  CaptureProducer exhausted{static_cast<ConcurrentMemory&>(exhausted_memory), limits};
+  MemoryAdapter failing_adapter{synchronized};
+  CaptureProducer exhausted{static_cast<ConcurrentMemory&>(failing_adapter), limits};
 
   check(!exhausted.start({}) && exhausted.metrics().skipped == 1 && exhausted.metrics().started == 0);
 }

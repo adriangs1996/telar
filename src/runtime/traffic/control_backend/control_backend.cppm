@@ -1,5 +1,6 @@
 module;
 #include "tbc/annotations.hpp"
+#include "tbc/annotations.hpp"
 #include <new>
 #include <stdlib.h>
 
@@ -121,21 +122,7 @@ import telar.base.text;
 export {
   namespace telar::runtime::traffic::control {
 
-    inline bool authorized(const plugins::ServiceSpec& package, const Request& request) noexcept {
-      if (!package.authorized()) {
-        return false;
-      }
-
-      if (request.operation == Operation::recording) {
-        return package.allows(plugins::Capability::traffic_record);
-      }
-
-      if (request.operation == Operation::status || request.operation == Operation::ca_certificate) {
-        return package.traffic();
-      }
-
-      return package.allows(plugins::Capability::traffic_control);
-    }
+    bool authorized(const plugins::ServiceSpec& package, const Request& request) noexcept;
 
     class PackagePort {
     public:
@@ -170,39 +157,11 @@ export {
         http_rule = 3,
       };
 
-      inline static auto rule(tbc::view<std::span<Byte>, tbc::lt::a> output, InterceptionRule rule) -> tbc::view<std::span<const Byte>, tbc::lt::a> {
-        plugins::FrameWriter writer{output};
+      static auto rule(tbc::view<std::span<Byte>, tbc::lt::a> output, InterceptionRule rule) -> tbc::view<std::span<const Byte>, tbc::lt::a>;
 
-        writer.tag(rule.http ? Command::http_rule : Command::rule);
-        writer.text(rule.host);
-        writer.integer(rule.directions);
-        writer.integer(rule.visibility);
-        writer.integer(rule.timeout_ms);
-        writer.boolean(rule.fail_closed);
-        return writer.finish();
-      }
+      static auto readRule(plugins::FrameReader& reader) -> InterceptionRule;
 
-      inline static auto readRule(plugins::FrameReader& reader) -> InterceptionRule {
-        InterceptionRule rule{.host = reader.text(), .directions = reader.integer<Byte>(), .visibility = reader.integer<Byte>(), .timeout_ms = reader.integer<std::uint32_t>(), .fail_closed = reader.boolean()};
-
-        reader.finish();
-
-        if (!ProxyHostname::validPattern(rule.host) || rule.directions == 0 || rule.directions > 3 || rule.visibility == 0 || rule.visibility > 3 || rule.timeout_ms == 0 || rule.timeout_ms > maximum_timeout_ms) {
-          throw EncodingError{"Invalid interception rule"};
-        }
-
-        return rule;
-      }
-
-      inline static auto decision(tbc::view<std::span<Byte>, tbc::lt::a> output, std::uint64_t ticket, Verdict verdict, std::span<const Byte> bytes = {}) -> tbc::view<std::span<const Byte>, tbc::lt::a> {
-        plugins::FrameWriter writer{output};
-
-        writer.tag(Command::decision);
-        writer.integer(ticket);
-        writer.tag(verdict);
-        writer.bytes(bytes);
-        return writer.finish();
-      }
+      static auto decision(tbc::view<std::span<Byte>, tbc::lt::a> output, std::uint64_t ticket, Verdict verdict, std::span<const Byte> bytes = {}) -> tbc::view<std::span<const Byte>, tbc::lt::a>;
     };
 
     // Each chunk snapshots registration order. A new ticket authenticates every step of the chain.
@@ -222,17 +181,7 @@ export {
       };
 
       struct Registration {
-        inline Registration(Memory& memory, Owner owner, InterceptionRule rule, std::uint64_t generation, std::uint64_t order)
-            : route{owner, generation, rule.timeout_ms, rule.fail_closed, order},
-              hosts(memory),
-              directions(rule.directions),
-              visibility(rule.visibility) {
-          if (!ProxyHostname::validPattern(rule.host) || rule.directions == 0 || rule.directions > 3 || rule.visibility == 0 || rule.visibility > 3 || rule.timeout_ms == 0 || rule.timeout_ms > maximum_timeout_ms || !hosts.append(rule.host)) {
-            throw EncodingError{"Invalid interception rule"};
-          }
-
-          hosts.finish();
-        }
+        Registration(Memory& memory, Owner owner, InterceptionRule rule, std::uint64_t generation, std::uint64_t order);
 
         Route route;
         ProxyHostPolicy<Memory> hosts;
@@ -242,26 +191,9 @@ export {
       };
 
       struct Pending {
-        inline Pending(Secure& memory, std::uint64_t ticket, const FlowEvent& event, std::span<const Route> matches)
-            : ticket(ticket),
-              decision_ticket(ticket),
-              id(event.id),
-              offset(event.offset),
-              direction(event.direction),
-              visibility(event.visibility),
-              source(event.source),
-              bytes(event.bytes.begin(), event.bytes.end(), AllocatorRef<Byte, Secure>{memory}),
-              routes(matches.size()) {
-          client.append(event.client);
-          server.append(event.server);
-          host.append(event.host);
-          reason.append(event.reason);
-          std::ranges::copy(matches, chain.begin());
-        }
+        Pending(Secure& memory, std::uint64_t ticket, const FlowEvent& event, std::span<const Route> matches);
 
-        inline auto event() const noexcept -> FlowEvent {
-          return {.id = id, .direction = direction, .visibility = visibility, .source = source, .offset = offset, .ticket = decision_ticket, .client = client.view(), .server = server.view(), .host = host.view(), .reason = reason.view(), .bytes = bytes};
-        }
+        auto event() const noexcept -> FlowEvent;
 
         std::uint64_t ticket;
         std::uint64_t decision_ticket;
@@ -285,243 +217,33 @@ export {
       using Registrations = std::array<std::optional<Registration>, Limits::subscribers>;
 
     public:
-      inline explicit Interception(Memory& memory, CompletionSignal* completion = nullptr, CompletionSignal* requests = nullptr)
-          : upstream_(memory),
-            memory_(memory),
-            completion_(completion ? *completion : wake_),
-            request_signal_(requests ? *requests : requests_) {
-        randomBytes(&next_, sizeof(next_));
-        next_ >>= 1;
-      }
+      explicit Interception(Memory& memory, CompletionSignal* completion = nullptr, CompletionSignal* requests = nullptr);
 
-      inline void configure(InterceptionRule rule) {
-        configure(default_owner, rule);
-      }
+      void configure(InterceptionRule rule);
 
-      inline auto policy(const FlowEvent& event) noexcept -> HttpPolicy {
-        if (active_.load(std::memory_order_acquire) == 0) {
-          return {};
-        }
+      auto policy(const FlowEvent& event) noexcept -> HttpPolicy;
 
-        std::scoped_lock lock{mutex_};
-        HttpPolicy result;
+      void configure(Owner owner, InterceptionRule rule, std::uint64_t order = std::numeric_limits<std::uint64_t>::max());
 
-        for (const auto& entry : registrations_) {
-          if (entry && entry->hosts.contains(event.host) && (entry->directions & (1 << static_cast<Byte>(event.direction))) && (entry->visibility & (1 << static_cast<Byte>(event.visibility)))) {
-            result.enabled = true;
-            result.fail_closed |= entry->route.fail_closed;
-          }
-        }
+      void disconnect(Owner owner = default_owner) noexcept;
 
-        return result;
-      }
+      void setAvailable(Owner owner, bool available) noexcept;
 
-      inline void configure(Owner owner, InterceptionRule rule, std::uint64_t order = std::numeric_limits<std::uint64_t>::max()) {
-        std::scoped_lock lock{mutex_};
+      bool pending(Owner owner, std::uint64_t ticket) noexcept;
 
-        if (owner == 0 || registration(owner)) {
-          throw EncodingError{"Interception owner already registered"};
-        }
+      auto begin(const FlowEvent& event) noexcept -> std::uint64_t;
 
-        for (auto& slot : registrations_) {
-          if (!slot) {
-            slot.emplace(upstream_, owner, rule, ++generation_, order);
-            active_.fetch_add(1, std::memory_order_release);
-            return;
-          }
-        }
+      void decide(std::uint64_t ticket, Verdict verdict, std::span<const Byte> bytes);
 
-        throw EncodingError{"Interception registration limit reached"};
-      }
+      void decide(Owner owner, std::uint64_t ticket, Verdict verdict, std::span<const Byte> bytes);
 
-      inline void disconnect(Owner owner = default_owner) noexcept {
-        std::scoped_lock lock{mutex_};
+      auto poll(std::uint64_t ticket, std::span<Byte> replacement) noexcept -> FlowControl::Decision;
 
-        for (auto& slot : registrations_) {
-          if (slot && slot->route.owner == owner) {
-            slot.reset();
-            active_.fetch_sub(1, std::memory_order_release);
-          }
-        }
-
-        for (auto& slot : pending_) {
-          if (slot && slot->verdict == Verdict::pending && slot->chain[slot->step].owner == owner) {
-            advance(*slot, failure(*slot), registrations_, next_, completion_, request_signal_);
-          }
-        }
-      }
-
-      inline void setAvailable(Owner owner, bool available) noexcept {
-        std::scoped_lock lock{mutex_};
-        auto* entry = registration(owner);
-        if (!entry || (!available && !entry->available)) {
-          return;
-        }
-
-        entry->available = false;
-        for (auto& pending : pending_) {
-          if (pending && pending->verdict == Verdict::pending && pending->chain[pending->step].owner == owner) {
-            advance(*pending, failure(*pending), registrations_, next_, completion_, request_signal_);
-          }
-        }
-
-        if (available) {
-          entry->route.generation = ++generation_;
-          entry->available = true;
-        }
-      }
-
-      inline bool pending(Owner owner, std::uint64_t ticket) noexcept {
-        std::scoped_lock lock{mutex_};
-        const auto* entry = registration(owner);
-        if (!entry || !entry->available) {
-          return false;
-        }
-
-        for (const auto& pending : pending_) {
-          if (pending && pending->verdict == Verdict::pending && pending->decision_ticket == ticket && pending->chain[pending->step].owner == owner && pending->chain[pending->step].generation == entry->route.generation && std::chrono::steady_clock::now() < pending->deadline) {
-            return true;
-          }
-        }
-
-        return false;
-      }
-
-      inline auto begin(const FlowEvent& event) noexcept -> std::uint64_t {
-        if (active_.load(std::memory_order_acquire) == 0) {
-          return 0;
-        }
-
-        std::scoped_lock lock{mutex_};
-        std::array<Route, Limits::subscribers> matches;
-        std::size_t count = 0;
-        bool fail_closed = false;
-
-        for (const auto& entry : registrations_) {
-          if (entry && entry->hosts.contains(event.host) && (entry->directions & (1 << static_cast<Byte>(event.direction))) && (entry->visibility & (1 << static_cast<Byte>(event.visibility)))) {
-            if (!entry->available) {
-              if (entry->route.fail_closed) {
-                return rejected_ticket;
-              }
-
-              continue;
-            }
-
-            matches[count++] = entry->route;
-            fail_closed |= entry->route.fail_closed;
-          }
-        }
-
-        if (count == 0) {
-          return 0;
-        }
-
-        std::ranges::sort(std::span{matches}.first(count), [](const auto& left, const auto& right) {
-          return left.order < right.order || (left.order == right.order && left.generation < right.generation);
-        });
-
-        for (auto& slot : pending_) {
-          if (!slot) {
-            try {
-              if (event.bytes.size() > maximum_bytes) {
-                return fail_closed ? rejected_ticket : 0;
-              }
-
-              slot.emplace(memory_, ++next_, event, std::span{matches}.first(count));
-              slot->deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds{matches[0].timeout_ms};
-              request_signal_.notify();
-              return slot->ticket;
-            } catch (...) {
-              slot.reset();
-              return fail_closed ? rejected_ticket : 0;
-            }
-          }
-        }
-
-        return fail_closed ? rejected_ticket : 0;
-      }
-
-      inline void decide(std::uint64_t ticket, Verdict verdict, std::span<const Byte> bytes) {
-        decide(default_owner, ticket, verdict, bytes);
-      }
-
-      inline void decide(Owner owner, std::uint64_t ticket, Verdict verdict, std::span<const Byte> bytes) {
-        if (verdict == Verdict::pending || bytes.size() > maximum_bytes || (verdict != Verdict::replace && !bytes.empty())) {
-          throw EncodingError{"Invalid stream decision"};
-        }
-
-        std::scoped_lock lock{mutex_};
-
-        for (auto& slot : pending_) {
-          if (slot && slot->decision_ticket == ticket && slot->verdict == Verdict::pending && slot->chain[slot->step].owner == owner) {
-            if (std::chrono::steady_clock::now() >= slot->deadline) {
-              advance(*slot, failure(*slot), registrations_, next_, completion_, request_signal_);
-              return;
-            }
-
-            if (verdict == Verdict::replace) {
-              slot->bytes.assign(bytes.begin(), bytes.end());
-              slot->replaced = true;
-            }
-
-            advance(*slot, verdict, registrations_, next_, completion_, request_signal_);
-            return;
-          }
-        }
-        // Late responses are harmless and must never apply to a different chunk.
-      }
-
-      inline auto poll(std::uint64_t ticket, std::span<Byte> replacement) noexcept -> FlowControl::Decision {
-        if (ticket == rejected_ticket) {
-          return {.verdict = Verdict::reject};
-        }
-
-        std::scoped_lock lock{mutex_};
-
-        for (auto& slot : pending_) {
-          if (slot && slot->ticket == ticket) {
-            if (slot->verdict == Verdict::pending && std::chrono::steady_clock::now() >= slot->deadline) {
-              advance(*slot, failure(*slot), registrations_, next_, completion_, request_signal_);
-            }
-
-            const auto verdict = slot->verdict;
-            if (verdict == Verdict::pending) {
-              return {verdict};
-            }
-
-            const auto count = verdict == Verdict::replace ? slot->bytes.size() : 0;
-            if (count > replacement.size()) {
-              slot.reset();
-              return {.verdict = Verdict::reject};
-            }
-
-            if (count != 0) {
-              std::ranges::copy(slot->bytes, replacement.begin());
-            }
-
-            slot.reset();
-            return {verdict, count};
-          }
-        }
-
-        return {.verdict = Verdict::reject};
-      }
-
-      inline auto pending(std::uint64_t ticket) noexcept -> bool {
-        std::scoped_lock lock{mutex_};
-
-        for (const auto& slot : pending_) {
-          if (slot && slot->ticket == ticket) {
-            return slot->verdict == Verdict::pending && std::chrono::steady_clock::now() < slot->deadline;
-          }
-        }
-
-        return false;
-      }
+      auto pending(std::uint64_t ticket) noexcept -> bool;
 
       // The service queues requests on its own thread, without a lossy cross-thread channel.
       template <typename Consumer>
-      inline void deliver(Owner owner, Consumer&& consumer) noexcept {
+      TBC_HOT_PATH void deliver(Owner owner, Consumer&& consumer) noexcept {
         std::scoped_lock lock{mutex_};
 
         for (auto& slot : pending_) {
@@ -546,104 +268,33 @@ export {
         }
       }
 
-      inline int requestDescriptor() const noexcept {
-        return request_signal_.descriptor();
-      }
+      int requestDescriptor() const noexcept;
 
-      inline void drainRequests() noexcept {
-        request_signal_.drain();
-      }
+      void drainRequests() noexcept;
 
-      inline auto completionSignal() noexcept -> CompletionSignal& {
-        return completion_;
-      }
+      auto completionSignal() noexcept -> CompletionSignal&;
 
-      inline auto requestSignal() noexcept -> CompletionSignal& {
-        return request_signal_;
-      }
+      auto requestSignal() noexcept -> CompletionSignal&;
 
-      inline void cancel(std::uint64_t ticket) noexcept {
-        std::scoped_lock lock{mutex_};
+      void cancel(std::uint64_t ticket) noexcept;
 
-        for (auto& slot : pending_) {
-          if (slot && slot->ticket == ticket) {
-            slot.reset();
-            return;
-          }
-        }
-      }
+      std::optional<FlowControl::Time> deadline(std::uint64_t ticket) noexcept;
 
-      inline std::optional<FlowControl::Time> deadline(std::uint64_t ticket) noexcept {
-        std::lock_guard lock{mutex_};
+      int descriptor() const noexcept;
 
-        for (const auto& slot : pending_) {
-          if (slot && slot->ticket == ticket) {
-            return slot->deadline;
-          }
-        }
-
-        return std::chrono::steady_clock::now();
-      }
-
-      inline int descriptor() const noexcept {
-        return completion_.descriptor();
-      }
-
-      inline void drain() noexcept {
-        completion_.drain();
-      }
+      void drain() noexcept;
 
       static constexpr std::uint64_t rejected_ticket = std::numeric_limits<std::uint64_t>::max();
 
     private:
-      inline auto registration(Owner owner) noexcept -> Registration* {
-        for (auto& slot : registrations_) {
-          if (slot && slot->route.owner == owner) {
-            return &*slot;
-          }
-        }
+      auto registration(Owner owner) noexcept -> Registration*;
 
-        return nullptr;
-      }
+      static auto registration(const Registrations& registrations, Owner owner) noexcept -> const Registration*;
 
-      inline static auto registration(const Registrations& registrations, Owner owner) noexcept -> const Registration* {
-        for (const auto& slot : registrations) {
-          if (slot && slot->route.owner == owner) {
-            return &*slot;
-          }
-        }
-
-        return nullptr;
-      }
-
-      inline static Verdict failure(const Pending& pending) noexcept {
-        return pending.chain[pending.step].fail_closed ? Verdict::reject : Verdict::allow;
-      }
+      static Verdict failure(const Pending& pending) noexcept;
 
       // Moves an exchange to its next hook, or settles it. The tables it reads are lent apart from it.
-      inline static void advance(Pending& pending, Verdict verdict, const Registrations& registrations, std::uint64_t& next, CompletionSignal& completion, CompletionSignal& requests) noexcept {
-        for (;;) {
-          if (verdict == Verdict::reject || ++pending.step == pending.routes) {
-            pending.verdict = verdict == Verdict::reject ? Verdict::reject : pending.replaced ? Verdict::replace
-                                                                                              : Verdict::allow;
-            completion.notify();
-            return;
-          }
-
-          const auto& route = pending.chain[pending.step];
-          const auto* entry = registration(registrations, route.owner);
-          if (entry && entry->available && entry->route.generation == route.generation) {
-            pending.decision_ticket = ++next;
-            pending.deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds{route.timeout_ms};
-            pending.delivered = false;
-            requests.notify();
-            completion.notify();
-            return;
-          }
-
-          verdict = failure(pending);
-        }
-      }
+      static void advance(Pending& pending, Verdict verdict, const Registrations& registrations, std::uint64_t& next, CompletionSignal& completion, CompletionSignal& requests) noexcept;
 
       static constexpr Owner default_owner = 1;
       Memory& upstream_;
@@ -660,6 +311,10 @@ export {
       std::atomic<std::size_t> active_{0};
     };
 
+    extern template class Interception<ConcurrentMemory, HttpMessageLimits::message_bytes>;
+
+    extern template class Interception<ConcurrentMemory>;
+
   }
 }
 
@@ -671,9 +326,7 @@ export {
       FileDescriptor socket;
       std::uint64_t owner;
 
-      inline int get() const noexcept {
-        return socket.get();
-      }
+      int get() const noexcept;
     };
 
     // Only native runtime code can attach a package. Lua never supplies this grant
@@ -686,13 +339,11 @@ export {
       virtual void setPackageAvailable(std::uint64_t owner, bool available) noexcept = 0;
       virtual bool packagePending(std::uint64_t owner, std::uint64_t ticket, bool http) noexcept = 0;
 
-      inline virtual void packageFailure(const plugins::ServiceSpec&, FlowEvent) noexcept {}
+      virtual void packageFailure(const plugins::ServiceSpec&, FlowEvent) noexcept;
 
-      inline virtual FileDescriptor openControl(const plugins::ServiceSpec&) {
-        throw SystemError{"Package control is not available", EAGAIN};
-      }
+      virtual FileDescriptor openControl(const plugins::ServiceSpec&);
 
-      inline virtual void revokePackage(const plugins::ServiceSpec&) noexcept {}
+      virtual void revokePackage(const plugins::ServiceSpec&) noexcept;
     };
 
   }
@@ -707,21 +358,13 @@ export {
       plugins::PackageDigest digest{};
       std::shared_ptr<std::atomic<bool>> permission;
 
-      inline static Owner package(const plugins::ServiceSpec& package) {
-        return {package.plugin_id, package.digest, package.permission};
-      }
+      static Owner package(const plugins::ServiceSpec& package);
 
-      inline bool authorized() const noexcept {
-        return !permission || permission->load(std::memory_order_acquire);
-      }
+      bool authorized() const noexcept;
 
-      inline bool matches(const Owner& other) const noexcept {
-        return id == other.id && digest == other.digest;
-      }
+      bool matches(const Owner& other) const noexcept;
 
-      inline bool canRead(const Owner& other) const noexcept {
-        return id == 0 || matches(other);
-      }
+      bool canRead(const Owner& other) const noexcept;
     };
 
   }
@@ -732,8 +375,9 @@ export {
   namespace telar::runtime::traffic {
 
     // Recording sessions proxy threads append to and clients page through, under its mutex.
+    // Generic over the caller's clock.
     template <ConcurrentAllocator Memory, typename Clock = std::chrono::steady_clock>
-    class TBC_SHARED Recordings {
+    class TBC_SHARED TBC_HOT_PATH Recordings {
       using Request = recording::Request;
 
       struct Entry {
@@ -1144,10 +788,7 @@ export {
       };
 
       struct Peer {
-        inline explicit Peer(SensitiveMemory& memory, FileDescriptor socket, uid_t uid)
-            : socket(std::move(socket)),
-              uid(uid),
-              input(AllocatorRef<Byte, SensitiveMemory>{memory}) {}
+        explicit Peer(SensitiveMemory& memory, FileDescriptor socket, uid_t uid);
 
         FileDescriptor socket;
         uid_t uid;
@@ -1186,99 +827,30 @@ export {
       };
 
     public:
-      inline explicit Service(Memory& memory, std::string_view path, bool allow_interception = false)
-          : upstream_(memory),
-            memory_(memory),
-            listener_(path),
-            interception_(memory),
-            http_interception_(memory, &interception_.completionSignal(), &interception_.requestSignal()),
-            analysis_(memory),
-            recordings_(memory),
-            allow_interception_(allow_interception) {
-        randomBytes(&session_, sizeof(session_));
-        thread_ = startThread("Start traffic service", [this] {
-          run();
-        });
-      }
+      explicit Service(Memory& memory, std::string_view path, bool allow_interception = false);
 
-      inline ~Service() {
-        stopping_.store(true, std::memory_order_release);
-        wake_.notify();
-        thread_.join();
-      }
+      ~Service();
 
       Service(const Service&) = delete;
       Service& operator=(const Service&) = delete;
 
-      inline bool listening() const noexcept {
-        return exchange_subscribers_.load(std::memory_order_acquire) != 0 || recordings_.selects(Selection::exchanges);
-      }
+      bool listening() const noexcept;
 
-      inline tbc::view<std::span<const Byte>, tbc::lt::a> recording(const recording::Request& request, tbc::view<std::span<Byte>, tbc::lt::a> output, recording::Owner owner = {}) {
-        return recordings_.handle(request, output, std::move(owner));
-      }
+      tbc::view<std::span<const Byte>, tbc::lt::a> recording(const recording::Request& request, tbc::view<std::span<Byte>, tbc::lt::a> output, recording::Owner owner = {});
 
-      inline void packageControl(control::PackagePort* port) noexcept {
-        package_control_.store(port, std::memory_order_release);
-      }
+      void packageControl(control::PackagePort* port) noexcept;
 
-      inline FileDescriptor openControl(const plugins::ServiceSpec& package) override {
-        const auto port = package_control_.load(std::memory_order_acquire);
-        if (!port) {
-          throw SystemError{"Package control is starting", EAGAIN};
-        }
+      FileDescriptor openControl(const plugins::ServiceSpec& package) override;
 
-        return port->openPackage(package);
-      }
+      void revokePackage(const plugins::ServiceSpec& package) noexcept override;
 
-      inline void revokePackage(const plugins::ServiceSpec& package) noexcept override {
-        recordings_.revoke(recording::Owner::package(package));
-      }
+      PackageChannel openPackage(const plugins::ServiceSpec& specification, std::uint32_t registration = 0) override;
 
-      inline PackageChannel openPackage(const plugins::ServiceSpec& specification, std::uint32_t registration = 0) override {
-        const bool observe = specification.allows(plugins::Capability::traffic_observe);
-        const bool intercept = specification.allows(plugins::Capability::traffic_intercept);
-        if ((!observe && !intercept) || specification.plugin_id == 0 || specification.generation == 0) {
-          throw EncodingError{"Package has no granted traffic capability"};
-        }
+      void setPackageAvailable(std::uint64_t owner, bool available) noexcept override;
 
-        std::array<int, 2> descriptors;
-        if (::socketpair(AF_UNIX, SOCK_STREAM, 0, descriptors.data()) != 0) {
-          throw SystemError{"Create package traffic channel"};
-        }
+      bool packagePending(std::uint64_t owner, std::uint64_t ticket, bool http) noexcept override;
 
-        FileDescriptor native{descriptors[0]}, client{descriptors[1]};
-
-        configureProxySocket(native.get());
-        configureProxySocket(client.get());
-        const auto order = (static_cast<std::uint64_t>(specification.package_index) << 32) | registration;
-        const auto owner = ++next_owner_;
-        if (!attachments_.publish(Attachment{std::move(native), {specification.plugin_id, specification.digest, specification.generation, observe, intercept, order, specification.permission}, owner})) {
-          throw SystemError{"Package traffic attachment queue is full", EBUSY};
-        }
-
-        wake_.notify();
-        return {std::move(client), owner};
-      }
-
-      inline void setPackageAvailable(std::uint64_t owner, bool available) noexcept override {
-        interception_.setAvailable(owner, available);
-        http_interception_.setAvailable(owner, available);
-      }
-
-      inline bool packagePending(std::uint64_t owner, std::uint64_t ticket, bool http) noexcept override {
-        return http ? http_interception_.pending(owner, ticket) : interception_.pending(owner, ticket);
-      }
-
-      inline void packageFailure(const plugins::ServiceSpec& specification, FlowEvent event) noexcept override {
-        std::array<char, 128> reason;
-        const auto name = specification.name.view();
-        const auto length = std::snprintf(reason.data(), reason.size(), "app_callback_error:%.*s", static_cast<int>(name.size()), name.data());
-
-        event.reason = {reason.data(), length > 0 ? std::min(static_cast<std::size_t>(length), reason.size() - 1) : 0};
-        event.bytes = {};
-        observeFlow(Kind::flow_error, event);
-      }
+      void packageFailure(const plugins::ServiceSpec& specification, FlowEvent event) noexcept override;
 
       enum class CaptureState : Byte {
         idle,
@@ -1293,594 +865,62 @@ export {
         std::uint32_t interface_errors;
       };
 
-      inline CaptureStatus captureStatus() const noexcept {
-        std::lock_guard lock{capture_mutex_};
+      CaptureStatus captureStatus() const noexcept;
 
-        return capture_status_;
-      }
+      std::uint64_t stopCapture() noexcept;
 
-      inline std::uint64_t stopCapture() noexcept {
-        const auto revision = capture_stop_.fetch_add(1, std::memory_order_release) + 1;
+      bool captureStopped(std::uint64_t revision) const noexcept;
 
-        wake_.notify();
-        return revision;
-      }
+      void submit(CapturedExchange<Memory>& exchange) noexcept;
 
-      inline bool captureStopped(std::uint64_t revision) const noexcept {
-        return capture_stopped_.load(std::memory_order_acquire) >= revision;
-      }
+      void observeFlow(Kind kind, const FlowEvent& flow) noexcept override;
 
-      inline void submit(CapturedExchange<Memory>& exchange) noexcept {
-        if (!listening()) {
-          return;
-        }
+      std::uint64_t intercept(const FlowEvent& event) noexcept override;
 
-        try {
-          SensitiveBuffer<Limits::frame_bytes> output;
-          const auto sequence = next_exchange_.fetch_add(1, std::memory_order_relaxed);
-          const auto payload = plugins::Protocol::encodeExchange(output.bytes(), {sequence, session_}, exchange, Limits::http_part_bytes);
-          auto frame = encode(Event{.kind = Kind::exchange, .session = session_, .sequence = sequence, .bytes = payload});
+      Decision poll(std::uint64_t ticket, std::span<Byte> replacement) noexcept override;
 
-          injections_.publish(std::move(frame));
-          wake_.notify();
-        } catch (const std::exception&) {
-          allocation_drops_.fetch_add(1, std::memory_order_relaxed);
-        }
-      }
+      void cancel(std::uint64_t ticket) noexcept override;
 
-      inline void observeFlow(Kind kind, const FlowEvent& flow) noexcept override {
-        if (kind != Kind::intercept_request && flow_subscribers_.load(std::memory_order_acquire) == 0 && !recordings_.selects(Selection::flows)) {
-          return;
-        }
+      std::optional<Time> deadline(std::uint64_t ticket) noexcept override;
 
-        try {
-          SensitiveBuffer<FlowControl::chunk_bytes + Limits::metadata_bytes> output;
-          const auto payload = FlowCodec::encode(output.bytes(), flow);
-          const auto now = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-          auto frame = encode(Event{.kind = kind, .session = session_, .sequence = next_exchange_.fetch_add(1, std::memory_order_relaxed), .timestamp_us = static_cast<std::uint64_t>(now), .bytes = payload});
+      int descriptor() const noexcept override;
 
-          injections_.publish(std::move(frame));
-          wake_.notify();
-        } catch (const std::exception&) {
-          allocation_drops_.fetch_add(1, std::memory_order_relaxed);
-        }
-      }
+      void drain() noexcept override;
 
-      inline std::uint64_t intercept(const FlowEvent& event) noexcept override {
-        return interception_.begin(event);
-      }
+      HttpControl* http() noexcept override;
 
-      inline Decision poll(std::uint64_t ticket, std::span<Byte> replacement) noexcept override {
-        return interception_.poll(ticket, replacement);
-      }
+      HttpPolicy policy(const FlowEvent& context) noexcept override;
 
-      inline void cancel(std::uint64_t ticket) noexcept override {
-        interception_.cancel(ticket);
-      }
+      std::uint64_t interceptHttp(const FlowEvent& event) noexcept override;
 
-      inline std::optional<Time> deadline(std::uint64_t ticket) noexcept override {
-        return interception_.deadline(ticket);
-      }
+      Decision pollHttp(std::uint64_t ticket, std::span<Byte> replacement) noexcept override;
 
-      inline int descriptor() const noexcept override {
-        return interception_.descriptor();
-      }
+      void cancelHttp(std::uint64_t ticket) noexcept override;
 
-      inline void drain() noexcept override {
-        interception_.drain();
-      }
+      std::optional<Time> httpDeadline(std::uint64_t ticket) noexcept override;
 
-      inline HttpControl* http() noexcept override {
-        return allow_interception_ ? this : nullptr;
-      }
-
-      inline HttpPolicy policy(const FlowEvent& context) noexcept override {
-        return http_interception_.policy(context);
-      }
-
-      inline std::uint64_t interceptHttp(const FlowEvent& event) noexcept override {
-        return http_interception_.begin(event);
-      }
-
-      inline Decision pollHttp(std::uint64_t ticket, std::span<Byte> replacement) noexcept override {
-        return http_interception_.poll(ticket, replacement);
-      }
-
-      inline void cancelHttp(std::uint64_t ticket) noexcept override {
-        http_interception_.cancel(ticket);
-      }
-
-      inline std::optional<Time> httpDeadline(std::uint64_t ticket) noexcept override {
-        return http_interception_.deadline(ticket);
-      }
-
-      inline void httpUnavailable(const FlowEvent& event) noexcept override {
-        observeFlow(Kind::flow_error, event);
-      }
+      void httpUnavailable(const FlowEvent& event) noexcept override;
 
     private:
-      inline void run() noexcept {
-        while (!stopping_.load(std::memory_order_acquire)) {
-          try {
-            step();
-          } catch (const std::exception& error) {
-            std::fprintf(stderr, "telar traffic: %s\n", error.what());
-          }
-        }
-      }
+      void run() noexcept;
 
-      inline void step() {
-        std::array<pollfd, maximum_peers + 3> descriptors{};
+      void step();
 
-        descriptors[0] = {.fd = listener_.descriptor(), .events = POLLIN, .revents = 0};
-        descriptors[1] = {.fd = wake_.descriptor(), .events = POLLIN, .revents = 0};
-        descriptors[2] = {.fd = interception_.requestDescriptor(), .events = POLLIN, .revents = 0};
-        for (std::size_t index = 0; index < peers_.size(); ++index) {
-          const auto& peer = peers_[index];
+      void accept();
 
-          descriptors[index + 3] = {.fd = peer ? peer->socket.get() : -1, .events = static_cast<short>(POLLIN | (peer && peer->count ? POLLOUT : 0)), .revents = 0};
-        }
+      void read(Peer& peer);
 
-        constexpr int heartbeat_ms = 1000;
-        const auto result = ::poll(descriptors.data(), descriptors.size(), heartbeat_ms);
-        if (result < 0 && sys::lastError() != EINTR) {
-          throw SystemError{"Poll traffic sockets"};
-        }
+      bool greet(Peer& peer);
 
-        if (stopping_.load(std::memory_order_acquire)) {
-          return;
-        }
+      void control(Peer& peer);
 
-        const auto stop_capture = capture_stop_.load(std::memory_order_acquire);
-        if (stop_capture != capture_stopped_.load(std::memory_order_relaxed)) {
-          for (auto& peer : peers_) {
-            if (peer && (peer->role == Role::live_capture || peer->role == Role::offline_capture)) {
-              peer->failed = true;
-            }
-          }
-        }
+      std::shared_ptr<Frame> encode(const Event& event);
 
-        if (descriptors[1].revents & POLLIN) {
-          wake_.drain();
-          while (auto attachment = attachments_.tryReceive()) {
-            for (auto& slot : peers_) {
-              if (!slot) {
-                slot.emplace(memory_, std::move(attachment->socket), ::geteuid());
-                slot->package = attachment->package;
-                slot->owner = attachment->owner;
-                break;
-              }
-            }
-          }
+      void publish(const Event& event, std::shared_ptr<Frame> shared = {});
 
-          while (auto frame = injections_.tryReceive()) {
-            const auto event = Protocol::decode((*frame)->bytes.bytes());
+      static void enqueue(Peer& peer, std::shared_ptr<Frame> frame);
 
-            publish(event, std::move(*frame));
-          }
-        }
-
-        if (descriptors[2].revents & POLLIN) {
-          interception_.drainRequests();
-        }
-
-        for (std::size_t index = 0; index < peers_.size(); ++index) {
-          auto& peer = peers_[index];
-          if (!peer) {
-            continue;
-          }
-
-          const auto ready = descriptors[index + 3].revents;
-
-          try {
-            if (ready & (POLLIN | POLLHUP)) {
-              read(*peer);
-            }
-
-            if (ready & POLLOUT) {
-              write(*peer);
-            }
-          } catch (const std::exception&) {
-            peer->failed = true;
-          }
-
-          constexpr auto handshake_timeout = std::chrono::seconds{5};
-          const bool expired = !peer->role && std::chrono::steady_clock::now() - peer->connected >= handshake_timeout;
-          if (peer->failed || expired || (ready & (POLLERR | POLLNVAL))) {
-            const bool producer = peer->role == Role::live_capture || peer->role == Role::offline_capture;
-
-            if (peer->role == Role::intercept) {
-              interception_.disconnect(peer->owner);
-              http_interception_.disconnect(peer->owner);
-            }
-
-            if (peer->role == Role::subscribe && selects(peer->selection, Selection::exchanges)) {
-              exchange_subscribers_.fetch_sub(1, std::memory_order_release);
-            }
-
-            if (peer->role == Role::subscribe && selects(peer->selection, Selection::flows)) {
-              flow_subscribers_.fetch_sub(1, std::memory_order_release);
-            }
-
-            if (peer->role == Role::subscribe && selects(peer->selection, Selection::datagrams)) {
-              datagram_subscribers_.fetch_sub(1, std::memory_order_release);
-            }
-
-            peer.reset();
-            if (producer) {
-              producer_ = false;
-              {
-                std::lock_guard lock{capture_mutex_};
-
-                capture_status_ = {};
-              }
-
-              analysis_.expire([&](const Event& event) {
-                publish(event);
-              },
-                  true);
-              publish(Event{.kind = Kind::capture_stopped});
-            }
-          }
-        }
-
-        capture_stopped_.store(stop_capture, std::memory_order_release);
-
-        if (descriptors[0].revents & POLLIN) {
-          accept();
-        }
-
-        for (auto& peer : peers_) {
-          if (!peer || peer->failed || !peer->configured || peer->role != Role::intercept) {
-            continue;
-          }
-
-          auto deliver = [&](const FlowEvent& flow) {
-            if (peer->count == peer->queue.size()) {
-              return false;
-            }
-
-            SensitiveAllocation output{upstream_, flow.bytes.size() + Limits::metadata_bytes};
-            const auto payload = FlowCodec::encode(output.bytes(), flow);
-            const auto now = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-
-            enqueue(*peer, encode(Event{.kind = peer->http ? Kind::http_intercept_request : Kind::intercept_request, .session = session_, .sequence = next_exchange_.fetch_add(1, std::memory_order_relaxed), .timestamp_us = static_cast<std::uint64_t>(now), .bytes = payload}));
-            return true;
-          };
-
-          if (peer->http) {
-            http_interception_.deliver(peer->owner, deliver);
-          } else {
-            interception_.deliver(peer->owner, deliver);
-          }
-        }
-
-        const auto now = std::chrono::steady_clock::now();
-        if (now - heartbeat_ >= std::chrono::seconds{1}) {
-          analysis_.expire([&](const Event& event) {
-            publish(event);
-          });
-
-          recordings_.expire();
-          publish(Event{.kind = Kind::statistics, .runtime_drops = injections_.metrics().dropped + allocation_drops_.load(std::memory_order_relaxed)});
-          heartbeat_ = now;
-        }
-      }
-
-      inline void accept() {
-        auto socket = listener_.accept(LocalPeerPolicy::same_user_or_root);
-        if (!socket) {
-          return;
-        }
-
-        const auto credentials = peerCredentials(socket.get());
-        if (!credentials) {
-          return;
-        }
-
-        for (auto& slot : peers_) {
-          if (!slot) {
-            slot.emplace(memory_, std::move(socket), credentials->user);
-            return;
-          }
-        }
-      }
-
-      inline void read(Peer& peer) {
-        constexpr std::size_t frames_per_tick = 32;
-
-        for (std::size_t frame = 0; frame < frames_per_tick; ++frame) {
-          const auto previous = peer.input.size();
-
-          peer.input.resize(peer.expected);
-          const auto count = ::recv(peer.socket.get(), peer.input.data() + previous, peer.expected - previous, 0);
-          if (count <= 0) {
-            peer.input.resize(previous);
-            if (count == 0 || !socketWouldBlock(sys::lastError())) {
-              peer.failed = true;
-            }
-
-            return;
-          }
-
-          peer.input.resize(previous + static_cast<std::size_t>(count));
-          if (peer.input.size() != peer.expected) {
-            return;
-          }
-
-          if (!peer.role) {
-            if (!greet(peer)) {
-              continue;
-            }
-          } else {
-            if (*peer.role == Role::subscribe) {
-              throw EncodingError{"Subscribers cannot publish traffic"};
-            }
-
-            if (peer.expected == Protocol::prefix_bytes) {
-              plugins::FrameReader reader{peer.input};
-              const auto size = reader.integer<std::uint32_t>();
-              const auto limit = peer.http ? Limits::http_frame_bytes : Limits::frame_bytes;
-              if (size == 0 || size > limit || reader.integer<std::uint64_t>() != 0) {
-                throw EncodingError{"Invalid capture frame prefix"};
-              }
-
-              peer.expected = size;
-              peer.input.clear();
-              continue;
-            }
-
-            if (*peer.role == Role::intercept) {
-              control(peer);
-              peer.input.clear();
-              peer.expected = Protocol::prefix_bytes;
-              continue;
-            }
-
-            auto event = Protocol::decode(peer.input);
-            if (event.kind >= Kind::exchange) {
-              throw EncodingError{"Capture helpers cannot publish decrypted exchanges"};
-            }
-
-            event.offline = *peer.role == Role::offline_capture;
-            if (event.kind != Kind::packet) {
-              std::lock_guard lock{capture_mutex_};
-
-              capture_status_.session = event.session;
-              if (event.kind == Kind::interface_open) {
-                ++capture_status_.interfaces;
-              } else if (event.kind == Kind::interface_closed && capture_status_.interfaces != 0) {
-                --capture_status_.interfaces;
-              } else if (event.kind == Kind::interface_error) {
-                ++capture_status_.interface_errors;
-              }
-            }
-
-            publish(event);
-            if (event.kind == Kind::packet) {
-              const bool flows = flow_subscribers_.load(std::memory_order_acquire) != 0 || recordings_.selects(Selection::flows);
-              const bool datagrams = datagram_subscribers_.load(std::memory_order_acquire) != 0 || recordings_.selects(Selection::datagrams);
-              if (flows || datagrams) {
-                const auto selected = static_cast<Selection>((flows ? static_cast<Byte>(Selection::flows) : 0) | (datagrams ? static_cast<Byte>(Selection::datagrams) : 0));
-
-                analysis_.packet(event, selected, [&](const Event& item) {
-                  publish(item);
-                });
-              }
-            }
-          }
-
-          peer.input.clear();
-          peer.expected = Protocol::prefix_bytes;
-        }
-      }
-
-      inline bool greet(Peer& peer) {
-        if (peer.package && peer.package->permission && !peer.package->permission->load(std::memory_order_acquire)) {
-          throw EncodingError{"Package traffic permission revoked"};
-        }
-
-        std::span<const Byte> input{peer.input};
-        if (LittleEndian<std::uint32_t>::decode(input) != Protocol::magic) {
-          throw EncodingError{"Incompatible traffic protocol"};
-        }
-
-        const auto role = LittleEndian<Byte>::decode(input);
-        const auto selection = LittleEndian<Byte>::decode(input);
-        const auto size = LittleEndian<std::uint32_t>::decode(input);
-        if (role < static_cast<Byte>(Role::subscribe) || role > static_cast<Byte>(Role::intercept) || selection < static_cast<Byte>(Selection::packets) || selection > static_cast<Byte>(Selection::all) || size > Limits::filter_bytes) {
-          throw EncodingError{"Invalid traffic greeting"};
-        }
-
-        if (peer.expected == Protocol::greeting_bytes && size != 0) {
-          peer.expected += size;
-          return false;
-        }
-
-        if (input.size() != size) {
-          throw EncodingError{"Truncated traffic filter"};
-        }
-
-        const auto selected = static_cast<Role>(role);
-        if (peer.package && !((selected == Role::subscribe && peer.package->observe) || (selected == Role::intercept && peer.package->intercept))) {
-          throw EncodingError{"Package traffic capability denied"};
-        }
-
-        peer.selection = static_cast<Selection>(selection);
-        if (selected == Role::subscribe) {
-          const auto subscribers = std::ranges::count_if(peers_, [](const auto& slot) {
-            return slot && slot->role == Role::subscribe;
-          });
-          if (static_cast<std::size_t>(subscribers) >= Limits::subscribers || peer.uid != ::geteuid()) {
-            throw EncodingError{"Traffic subscription is unavailable"};
-          }
-
-          peer.filter.emplace(std::string_view{reinterpret_cast<const char*>(input.data()), input.size()});
-          if (selects(peer.selection, Selection::flows)) {
-            flow_subscribers_.fetch_add(1, std::memory_order_release);
-          }
-
-          if (selects(peer.selection, Selection::datagrams)) {
-            datagram_subscribers_.fetch_add(1, std::memory_order_release);
-          }
-
-          if (selects(peer.selection, Selection::exchanges)) {
-            exchange_subscribers_.fetch_add(1, std::memory_order_release);
-          }
-        } else if (selected == Role::intercept) {
-          const auto controllers = std::ranges::count_if(peers_, [](const auto& slot) {
-            return slot && slot->role == Role::intercept;
-          });
-          if (!allow_interception_ || static_cast<std::size_t>(controllers) >= Limits::subscribers || size != 0 || peer.uid != ::geteuid()) {
-            throw EncodingError{"Stream interception is unavailable"};
-          }
-
-          if (peer.owner == 0) {
-            peer.owner = ++next_owner_;
-          }
-        } else {
-          if (producer_ || size != 0 || (selected == Role::live_capture && peer.uid != 0)) {
-            throw EncodingError{"Traffic capture requires one authorized helper"};
-          }
-
-          producer_ = true;
-        }
-
-        peer.role = selected;
-        enqueue(peer, encode(Event{.kind = Kind::ready}));
-        if (selected == Role::live_capture || selected == Role::offline_capture) {
-          {
-            std::lock_guard lock{capture_mutex_};
-
-            capture_status_ = {.state = selected == Role::live_capture ? CaptureState::live : CaptureState::offline};
-          }
-
-          publish(Event{.kind = Kind::capture_started, .offline = selected == Role::offline_capture});
-        }
-
-        return true;
-      }
-
-      inline void control(Peer& peer) {
-        if (peer.package && peer.package->permission && !peer.package->permission->load(std::memory_order_acquire)) {
-          throw EncodingError{"Package traffic permission revoked"};
-        }
-
-        plugins::FrameReader reader{peer.input};
-        const auto command = reader.tag(InterceptionCodec::Command::http_rule);
-        if (command == InterceptionCodec::Command::rule || command == InterceptionCodec::Command::http_rule) {
-          if (peer.configured) {
-            throw EncodingError{"Interception rule already registered"};
-          }
-
-          const auto rule = InterceptionCodec::readRule(reader);
-
-          peer.http = command == InterceptionCodec::Command::http_rule;
-          const auto order = peer.package ? peer.package->order : std::numeric_limits<std::uint64_t>::max();
-
-          if (peer.http) {
-            http_interception_.configure(peer.owner, rule, order);
-          } else {
-            interception_.configure(peer.owner, rule, order);
-          }
-
-          peer.configured = true;
-          enqueue(peer, encode(Event{.kind = Kind::ready}));
-        } else if (command == InterceptionCodec::Command::decision && peer.configured) {
-          const auto ticket = reader.integer<std::uint64_t>();
-          const auto verdict = reader.tag(Verdict::reject);
-          const auto bytes = reader.bytes();
-
-          reader.finish();
-          if (peer.http) {
-            if (verdict == Verdict::replace) {
-              HttpMessageCodec::decode(bytes);
-            }
-
-            http_interception_.decide(peer.owner, ticket, verdict, bytes);
-          } else {
-            interception_.decide(peer.owner, ticket, verdict, bytes);
-          }
-        } else {
-          throw EncodingError{"Interception requires a rule before decisions"};
-        }
-      }
-
-      inline std::shared_ptr<Frame> encode(const Event& event) {
-        auto frame = std::allocate_shared<Frame>(AllocatorRef<Frame, SensitiveMemory>{memory_}, upstream_, Protocol::encodedSize(event));
-
-        Protocol::encode(frame->bytes.bytes(), event);
-        return frame;
-      }
-
-      inline void publish(const Event& event, std::shared_ptr<Frame> shared = {}) {
-        shared = recordings_.record(event, std::move(shared));
-        for (auto& peer : peers_) {
-          if (!peer || peer->failed) {
-            continue;
-          }
-
-          if (peer->role != Role::subscribe || event.kind == Kind::intercept_request || event.kind == Kind::http_intercept_request) {
-            continue;
-          }
-
-          try {
-            if ((event.kind == Kind::packet && !selects(peer->selection, Selection::packets)) || (event.kind == Kind::exchange && !selects(peer->selection, Selection::exchanges)) || (isFlow(event.kind) && !selects(peer->selection, Selection::flows)) || (event.kind == Kind::datagram && !selects(peer->selection, Selection::datagrams))) {
-              continue;
-            }
-
-            if (peer->filter && !peer->filter->matches(event)) {
-              continue;
-            }
-
-            if (!shared) {
-              shared = encode(event);
-            }
-
-            enqueue(*peer, shared);
-          } catch (const std::exception&) {
-            peer->failed = true;
-          }
-        }
-      }
-
-      inline static void enqueue(Peer& peer, std::shared_ptr<Frame> frame) {
-        if (peer.count == peer.queue.size()) {
-          ++peer.dropped;
-          return;
-        }
-
-        auto& delivery = peer.queue[(peer.head + peer.count) % peer.queue.size()];
-
-        delivery.prefix = Protocol::prefix(frame->bytes.bytes().size(), peer.dropped);
-        delivery.frame = std::move(frame);
-        delivery.offset = 0;
-        ++peer.count;
-      }
-
-      inline static void write(Peer& peer) {
-        for (std::size_t round = 0; round < Limits::pending_frames && peer.count != 0; ++round) {
-          auto& delivery = peer.queue[peer.head];
-          const auto prefix = std::span<const Byte>{delivery.prefix};
-          const auto body = std::span<const Byte>{delivery.frame->bytes.bytes()};
-          const auto bytes = delivery.offset < prefix.size() ? prefix.subspan(delivery.offset) : body.subspan(delivery.offset - prefix.size());
-          const auto count = ::send(peer.socket.get(), bytes.data(), bytes.size(), 0);
-          if (count <= 0) {
-            if (count == 0 || !socketWouldBlock(sys::lastError())) {
-              peer.failed = true;
-            }
-
-            return;
-          }
-
-          delivery.offset += static_cast<std::size_t>(count);
-          if (delivery.offset == prefix.size() + body.size()) {
-            delivery.frame.reset();
-            peer.head = (peer.head + 1) % peer.queue.size();
-            --peer.count;
-          }
-        }
-      }
+      static void write(Peer& peer);
 
       Memory& upstream_;
       SensitiveMemory memory_;
@@ -1912,6 +952,8 @@ export {
       std::atomic<control::PackagePort*> package_control_{nullptr};
     };
 
+    extern template class Service<ConcurrentMemory>;
+
   }
 }
 
@@ -1922,31 +964,16 @@ export {
     template <Allocator Memory>
     class TrustCommand : public proxy_trust::TrustCommandRunner {
     public:
-      inline explicit TrustCommand(Memory& memory, const std::atomic<bool>& cancelled) noexcept
-          : memory_(memory),
-            cancelled_(cancelled) {}
+      explicit TrustCommand(Memory& memory, const std::atomic<bool>& cancelled) noexcept;
 
-      inline void run(std::span<const std::string_view> arguments) override {
-        bool allowed = !arguments.empty() && arguments.front() == "/usr/bin/security";
-#if defined(__linux__)
-        constexpr std::array executables{"/usr/bin/trust", "/usr/bin/install", "/usr/bin/rm", "/usr/sbin/update-ca-certificates"};
-        allowed = arguments.size() >= 3 && arguments[0] == "/usr/bin/sudo" && arguments[1] == "--" && std::ranges::find(executables, arguments[2]) != executables.end();
-#endif
-        if (!allowed) {
-          throw std::invalid_argument{"Invalid trust operation"};
-        }
-
-        Command command{memory_, Launch{.arguments = arguments}, CommandPurpose::administration};
-        CommandOutput output{memory_, Limits::reply_bytes, &cancelled_};
-        if (output.run(command, std::chrono::steady_clock::now() + std::chrono::seconds{10}, true) != 0) {
-          throw SystemError{"Certificate store operation failed", EACCES};
-        }
-      }
+      void run(std::span<const std::string_view> arguments) override;
 
     private:
       Memory& memory_;
       const std::atomic<bool>& cancelled_;
     };
+
+    extern template class TrustCommand<ConcurrentMemory>;
 
     struct Configuration {
       std::string_view endpoint;
@@ -1958,8 +985,9 @@ export {
       bool administration = false;
     };
 
+    // Generic over the caller's proxy.
     template <ConcurrentAllocator Memory, typename Proxy>
-    class Backend {
+    class TBC_HOT_PATH Backend {
       using Clock = std::chrono::steady_clock;
 
     public:
@@ -2294,8 +1322,9 @@ export {
         reply.argument_count = 0;
       }
 
+      // Generic over the caller's callback.
       template <typename Predicate>
-      inline bool wait(Predicate predicate, const std::atomic<bool>& cancelled) {
+      TBC_HOT_PATH bool wait(Predicate predicate, const std::atomic<bool>& cancelled) {
         const auto deadline = Clock::now() + std::chrono::seconds{5};
 
         while (!predicate()) {
@@ -2350,8 +1379,9 @@ export {
     // Administration has its own worker; certificate-store operations never run on
     // the packet, proxy, or terminal workers. Each authenticated connection issues
     // one bounded request. Closing a client only cancels delivery of its reply.
+    // Generic over the caller's handler.
     template <ConcurrentAllocator Memory, typename Handler>
-    class Service : public PackagePort {
+    class TBC_HOT_PATH Service : public PackagePort {
       using Clock = std::chrono::steady_clock;
 
       struct Peer {

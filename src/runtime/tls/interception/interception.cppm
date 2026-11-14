@@ -71,262 +71,52 @@ export {
       };
 
       // The bytes are written before they are read: allocating an offer does not zero 64 KiB.
-      inline AlpnOffer() noexcept {}
+      AlpnOffer() noexcept;
 
-      inline Read peek(int socket) noexcept {
-        const auto count = ::recv(socket, bytes_.data(), bytes_.size(), MSG_PEEK);
-        if (count <= 0) {
-          return count < 0 && socketWouldBlock(sys::lastError()) ? Read::pending : Read::ended;
-        }
-
-        tls_ = bytes_[0] == handshake_record;
-        if (!tls_) {
-          return Read::complete;
-        }
-
-        const auto available = static_cast<std::size_t>(count);
-        std::size_t cursor = 0, collected = 0;
-
-        while (cursor < available) {
-          if (available - cursor < record_header_bytes) {
-            return incomplete(available);
-          }
-
-          const auto* header = bytes_.data() + cursor;
-          const std::size_t length = (std::size_t{header[3]} << 8) | header[4];
-          if (header[0] != handshake_record || header[1] != 3 || length == 0 || length > maximum_record_bytes) {
-            return Read::complete;
-          }
-
-          if (available - cursor - record_header_bytes < length) {
-            return incomplete(available);
-          }
-
-          std::memmove(bytes_.data() + collected, header + record_header_bytes, length);
-          collected += length;
-          cursor += record_header_bytes + length;
-          if (collected >= 4) {
-            const auto expected = (std::size_t{bytes_[1]} << 16) | (std::size_t{bytes_[2]} << 8) | bytes_[3];
-            if (expected > maximum_hello_bytes - 4 || bytes_[0] != client_hello) {
-              return Read::complete;
-            }
-
-            if (collected >= expected + 4) {
-              parseStored(expected + 4);
-              return Read::complete;
-            }
-          }
-        }
-
-        return incomplete(available);
-      }
+      Read peek(int socket) noexcept;
 
       // Parses a handshake by copying it into the offer, which keeps where its protocols lie.
-      inline void parse(std::span<const std::uint8_t> handshake) noexcept {
-        if (handshake.size() > bytes_.size()) {
-          parseStored(0);
-          return;
-        }
+      void parse(std::span<const std::uint8_t> handshake) noexcept;
 
-        std::ranges::copy(handshake, bytes_.begin());
-        parseStored(handshake.size());
-      }
+      bool tls() const noexcept;
 
-      inline bool tls() const noexcept {
-        return tls_;
-      }
+      bool valid() const noexcept;
 
-      inline bool valid() const noexcept {
-        return valid_;
-      }
+      bool encrypted() const noexcept;
 
-      inline bool encrypted() const noexcept {
-        return encrypted_;
-      }
+      std::string_view serverName() const noexcept;
 
-      inline std::string_view serverName() const noexcept {
-        return server_name_.view();
-      }
-
-      inline std::span<const std::uint8_t> encoded() const noexcept {
-        return std::span{bytes_}.subspan(protocols_offset_, protocols_size_);
-      }
+      std::span<const std::uint8_t> encoded() const noexcept;
 
     private:
-      inline void parseStored(std::size_t size) noexcept {
-        const auto handshake = std::span<const std::uint8_t>{bytes_}.first(size);
-
-        protocols_offset_ = protocols_size_ = 0;
-        valid_ = false;
-        encrypted_ = false;
-        server_name_.assign({});
-        Cursor record{handshake};
-        if (record.byte() != client_hello) {
-          return;
-        }
-
-        const auto declared = record.take(handshake_length_bytes);
-        if (declared.size() != 3 || ((std::size_t{declared[0]} << 16) | (std::size_t{declared[1]} << 8) | declared[2]) != record.remaining()) {
-          return;
-        }
-
-        record.take(version_bytes + random_bytes);
-        record.take(record.byte());
-        const auto ciphers = record.word();
-        if (ciphers == 0 || ciphers % 2 != 0) {
-          return;
-        }
-
-        record.take(ciphers);
-        record.take(record.byte());
-        if (record.failed()) {
-          return;
-        }
-
-        if (record.empty()) {
-          valid_ = true;
-          return;
-        }
-
-        const auto extension_bytes = record.take(record.word());
-
-        if (record.failed() || !record.empty()) {
-          return;
-        }
-
-        bool seen_alpn = false, seen_name = false;
-        Cursor extensions{extension_bytes};
-
-        while (!extensions.empty()) {
-          const auto kind = extensions.word();
-          const auto body = extensions.take(extensions.word());
-
-          if (extensions.failed()) {
-            return;
-          }
-
-          if (kind == alpn_extension) {
-            if (seen_alpn) {
-              return;
-            }
-
-            seen_alpn = true;
-            if (!protocols(body)) {
-              return;
-            }
-          } else if (kind == 0) {
-            if (seen_name || !serverName(body)) {
-              return;
-            }
-
-            seen_name = true;
-          } else if (kind == 0xfe0d) {
-            encrypted_ = true;
-          }
-        }
-
-        valid_ = true;
-      }
+      void parseStored(std::size_t size) noexcept;
 
       class Cursor {
       public:
-        inline explicit Cursor(std::span<const std::uint8_t> bytes) noexcept
-            : bytes_(bytes) {}
+        explicit Cursor(std::span<const std::uint8_t> bytes) noexcept;
 
-        inline std::span<const std::uint8_t> take(std::size_t count) noexcept {
-          if (count > bytes_.size()) {
-            failed_ = true;
-            bytes_ = {};
-            return {};
-          }
+        std::span<const std::uint8_t> take(std::size_t count) noexcept;
 
-          const auto result = bytes_.first(count);
+        std::uint8_t byte() noexcept;
 
-          bytes_ = bytes_.subspan(count);
-          return result;
-        }
+        std::uint16_t word() noexcept;
 
-        inline std::uint8_t byte() noexcept {
-          const auto value = take(1);
+        bool failed() const noexcept;
 
-          return value.empty() ? 0 : value.front();
-        }
+        bool empty() const noexcept;
 
-        inline std::uint16_t word() noexcept {
-          const auto value = take(2);
-
-          return value.empty() ? 0 : static_cast<std::uint16_t>((std::uint16_t{value[0]} << 8) | value[1]);
-        }
-
-        inline bool failed() const noexcept {
-          return failed_;
-        }
-
-        inline bool empty() const noexcept {
-          return bytes_.empty();
-        }
-
-        inline std::size_t remaining() const noexcept {
-          return bytes_.size();
-        }
+        std::size_t remaining() const noexcept;
 
       private:
         std::span<const std::uint8_t> bytes_;
         bool failed_ = false;
       };
 
-      inline Read incomplete(std::size_t count) const noexcept {
-        return count == bytes_.size() ? Read::complete : Read::pending;
-      }
+      Read incomplete(std::size_t count) const noexcept;
 
-      inline bool serverName(std::span<const std::uint8_t> extension) noexcept {
-        Cursor names{extension};
-        const auto length = names.word();
-        if (names.failed() || length != names.remaining()) {
-          return false;
-        }
+      bool serverName(std::span<const std::uint8_t> extension) noexcept;
 
-        while (!names.empty()) {
-          const auto type = names.byte();
-          const auto value = names.take(names.word());
-
-          if (names.failed()) {
-            return false;
-          }
-
-          if (type == 0) {
-            const std::string_view host{reinterpret_cast<const char*>(value.data()), value.size()};
-            if (!server_name_.view().empty() || !ProxyHostname::validTarget(host)) {
-              return false;
-            }
-
-            server_name_.assign(host);
-          }
-        }
-
-        return true;
-      }
-
-      inline bool protocols(std::span<const std::uint8_t> extension) noexcept {
-        Cursor names{extension};
-        const auto declared = names.word();
-        if (names.failed() || declared == 0 || declared != names.remaining()) {
-          return false;
-        }
-
-        while (!names.empty()) {
-          const auto length = names.byte();
-
-          names.take(length);
-          if (names.failed() || length == 0) {
-            return false;
-          }
-        }
-
-        protocols_offset_ = static_cast<std::size_t>(extension.data() - bytes_.data()) + 2;
-        protocols_size_ = extension.size() - 2;
-        return true;
-      }
+      bool protocols(std::span<const std::uint8_t> extension) noexcept;
 
       static constexpr std::uint8_t handshake_record = 22;
       static constexpr std::uint8_t client_hello = 1;
@@ -355,48 +145,12 @@ export {
 
     class AlpnSelection {
     public:
-      inline bool assign(std::span<const unsigned char> protocol) noexcept {
-        if (protocol.size() > name_.size()) {
-          return false;
-        }
+      bool assign(std::span<const unsigned char> protocol) noexcept;
 
-        std::copy(protocol.begin(), protocol.end(), name_.begin());
-        length_ = static_cast<unsigned char>(protocol.size());
-        return true;
-      }
-
-      inline std::span<const unsigned char> protocol() const noexcept {
-        return std::span{name_}.first(length_);
-      }
+      std::span<const unsigned char> protocol() const noexcept;
 
       // OpenSSL fixes this ABI; the selection is borrowed from the stable session via SSL app data.
-      inline static int select(SSL* connection, const unsigned char** selected, unsigned char* length, const unsigned char* offered, unsigned offered_length, void*) noexcept {
-        const auto* selection = static_cast<const AlpnSelection*>(SSL_get_app_data(connection));
-        if (selection == nullptr || selection->length_ == 0) {
-          return SSL_TLSEXT_ERR_NOACK;
-        }
-
-        std::span<const unsigned char> names{offered, offered_length};
-
-        while (!names.empty()) {
-          const auto size = names.front();
-
-          names = names.subspan(1);
-          if (size > names.size()) {
-            return SSL_TLSEXT_ERR_ALERT_FATAL;
-          }
-
-          if (std::ranges::equal(names.first(size), selection->protocol())) {
-            *selected = selection->name_.data();
-            *length = selection->length_;
-            return SSL_TLSEXT_ERR_OK;
-          }
-
-          names = names.subspan(size);
-        }
-
-        return SSL_TLSEXT_ERR_ALERT_FATAL;
-      }
+      static int select(SSL* connection, const unsigned char** selected, unsigned char* length, const unsigned char* offered, unsigned offered_length, void*) noexcept;
 
     private:
       std::array<unsigned char, 255> name_;
@@ -413,63 +167,23 @@ export {
     template <ConcurrentAllocator Memory>
     class TlsTrustStore {
     public:
-      inline explicit TlsTrustStore(Memory& memory, const TlsLibrary<Memory>& library) {
-        requireTls(library.uses(memory), "TLS trust allocator does not match its library");
-        store_.reset(X509_STORE_new());
-        requireTls(store_ != nullptr, "Allocate TLS trust store");
-      }
+      explicit TlsTrustStore(Memory& memory, const TlsLibrary<Memory>& library);
 
-      inline void addDer(std::span<const unsigned char> encoded) {
-        requireTls(!encoded.empty() && encoded.size() <= maximum_certificate_bytes, "Invalid TLS root certificate size");
-        auto* position = encoded.data();
-        TlsCertificate certificate{d2i_X509(nullptr, &position, static_cast<long>(encoded.size()))};
+      void addDer(std::span<const unsigned char> encoded);
 
-        requireTls(certificate != nullptr && position == encoded.data() + encoded.size(), "Decode TLS root certificate");
-        add(certificate.get());
-      }
+      void add(X509* certificate);
 
-      inline void add(X509* certificate) {
-        TlsHandle<ASN1_TIME, ASN1_TIME_free> now{ASN1_TIME_set(nullptr, std::time(nullptr))};
+      X509_STORE* native() const noexcept;
 
-        requireTls(now != nullptr, "Read TLS trust validation time");
-        const int expiration = ASN1_TIME_compare(X509_get0_notAfter(certificate), now.get());
-
-        requireTls(expiration != -2, "Invalid TLS root expiration");
-        if (expiration < 0) {
-          return;
-        }
-
-        const auto* objects = X509_STORE_get0_objects(store_.get());
-
-        for (int index = 0; index < sk_X509_OBJECT_num(objects); ++index) {
-          const auto* object = sk_X509_OBJECT_value(objects, index);
-          if (X509_OBJECT_get_type(object) != X509_LU_X509) {
-            continue;
-          }
-
-          const auto* existing = X509_OBJECT_get0_X509(object);
-          if (X509_cmp(existing, certificate) == 0) {
-            return;
-          }
-        }
-
-        requireTls(X509_STORE_add_cert(store_.get(), certificate) == 1, "Add TLS trust anchor");
-        ++count_;
-      }
-
-      inline X509_STORE* native() const noexcept {
-        return store_.get();
-      }
-
-      inline std::size_t count() const noexcept {
-        return count_;
-      }
+      std::size_t count() const noexcept;
 
     private:
       static constexpr std::size_t maximum_certificate_bytes = 1024 * 1024;
       TlsHandle<X509_STORE, X509_STORE_free> store_;
       std::size_t count_ = 0;
     };
+
+    extern template class TlsTrustStore<ConcurrentMemory>;
 
   }
 }
@@ -481,39 +195,18 @@ export {
     template <ConcurrentAllocator Memory>
     class TlsContexts {
     public:
-      inline explicit TlsContexts(Memory& memory, const TlsLibrary<Memory>& library, const TlsTrustStore<Memory>& trust) {
-        requireTls(library.uses(memory), "TLS contexts allocator does not match its library");
-        origin_.reset(SSL_CTX_new(TLS_client_method()));
-        child_.reset(SSL_CTX_new(TLS_server_method()));
-        requireTls(origin_ != nullptr && child_ != nullptr, "Allocate TLS contexts");
+      explicit TlsContexts(Memory& memory, const TlsLibrary<Memory>& library, const TlsTrustStore<Memory>& trust);
 
-        for (auto* context : {origin_.get(), child_.get()}) {
-          requireTls(SSL_CTX_set_min_proto_version(context, TLS1_2_VERSION) == 1, "Set TLS minimum version");
-          // A TCP half-close ends only the receiving direction. HTTP framing
-          // determines whether that EOF truncates an unfinished message.
-          SSL_CTX_set_options(context, SSL_OP_NO_COMPRESSION | SSL_OP_NO_RENEGOTIATION | SSL_OP_IGNORE_UNEXPECTED_EOF);
-          SSL_CTX_set_mode(context, SSL_MODE_ENABLE_PARTIAL_WRITE | SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
-          SSL_CTX_set_session_cache_mode(context, SSL_SESS_CACHE_OFF);
-        }
+      SSL_CTX* origin() const noexcept;
 
-        SSL_CTX_set_verify(origin_.get(), SSL_VERIFY_PEER, nullptr);
-        requireTls(SSL_CTX_set1_verify_cert_store(origin_.get(), trust.native()) == 1, "Set TLS origin trust");
-        requireTls(SSL_CTX_set_num_tickets(child_.get(), 0) == 1, "Disable TLS session tickets");
-        SSL_CTX_set_alpn_select_cb(child_.get(), &AlpnSelection::select, nullptr);
-      }
-
-      inline SSL_CTX* origin() const noexcept {
-        return origin_.get();
-      }
-
-      inline SSL_CTX* child() const noexcept {
-        return child_.get();
-      }
+      SSL_CTX* child() const noexcept;
 
     private:
       TlsContext origin_;
       TlsContext child_;
     };
+
+    extern template class TlsContexts<ConcurrentMemory>;
 
   }
 }
@@ -559,252 +252,55 @@ export {
       // `offer` is the child's ClientHello when the caller already read it complete; without one the
       // session reads its own, from an offer allocated in `memory`. Either is released once the origin
       // has the protocols.
-      inline explicit TlsSession(tbc::view<const TlsContexts<Memory>&, tbc::lt::a> contexts, tbc::view<std::shared_ptr<const CertificateAuthority<Memory>>, tbc::lt::a> authority, TunnelSockets sockets, std::string_view hostname, tbc::view<Memory&, tbc::lt::a> memory, tbc::view<Owned<AlpnOffer, Memory>, tbc::lt::a> offer)
-          : contexts_(contexts),
-            authority_(std::move(authority)),
-            sockets_(sockets),
-            offered_(offer != nullptr),
-            offer_(offer ? std::move(offer) : makeOwned<AlpnOffer>(memory)) {
-        requireTls(authority_ != nullptr, "TLS authority is unavailable");
-        requireTls(TlsHostname::valid(hostname), "Invalid TLS session hostname");
-        hostname_.assign(hostname);
-      }
+      explicit TlsSession(tbc::view<const TlsContexts<Memory>&, tbc::lt::a> contexts, tbc::view<std::shared_ptr<const CertificateAuthority<Memory>>, tbc::lt::a> authority, TunnelSockets sockets, std::string_view hostname, tbc::view<Memory&, tbc::lt::a> memory, tbc::view<Owned<AlpnOffer, Memory>, tbc::lt::a> offer);
 
-      inline ~TlsSession() {
-        if (child_) {
-          SSL_shutdown(child_.get());
-        }
-
-        if (origin_) {
-          SSL_shutdown(origin_.get());
-        }
-      }
+      ~TlsSession();
 
       TlsSession(const TlsSession&) = delete;
       TlsSession& operator=(const TlsSession&) = delete;
 
-      inline State advance() noexcept {
-        TELAR_TRACE("tls.advanceHandshake");
-        try {
-          if (state_ == State::initialize) {
-            initialize();
-          }
+      State advance() noexcept;
 
-          if (state_ == State::offer) {
-            if (!offered_) {
-              const auto now = std::chrono::steady_clock::now();
-              if (now < offer_after_) {
-                return state_;
-              }
+      State state() const noexcept;
 
-              const auto read = offer_->peek(sockets_.child);
-              if (read == AlpnOffer::Read::pending) {
-                offer_after_ = now + std::chrono::milliseconds{2};
-                return state_;
-              }
+      Failure failure() const noexcept;
 
-              failure_ = Failure::client_hello;
-              requireTls(read == AlpnOffer::Read::complete, "Read TLS ClientHello");
-            }
+      StreamReadiness waiting(TlsSide side) const noexcept;
 
-            const auto names = offer_->encoded();
+      std::optional<std::chrono::steady_clock::time_point> deadline() const noexcept;
 
-            failure_ = Failure::origin_handshake;
-            // OpenSSL copies the protocols, so the offer is done with.
-            requireTls(SSL_set_alpn_protos(origin_.get(), names.data(), static_cast<unsigned>(names.size())) == 0, "Set TLS origin ALPN offer");
-            offer_.reset();
-            state_ = State::origin;
-          }
+      HttpProtocol protocol() const noexcept;
 
-          if (state_ == State::origin && handshake(origin_.get(), origin_waiting_)) {
-            mirrorProtocol();
-            state_ = State::child;
-            failure_ = Failure::child_handshake;
-          }
+      bool unnegotiated() const noexcept;
 
-          if (state_ == State::child && handshake(child_.get(), child_waiting_)) {
-            state_ = State::established;
-            failure_ = Failure::none;
-          }
-        } catch (...) {
-          state_ = State::failed;
-        }
+      StreamResult read(TlsSide side, std::span<std::uint8_t> destination) noexcept;
 
-        return state_;
-      }
+      StreamResult write(TlsSide side, std::span<const std::uint8_t> bytes) noexcept;
 
-      inline State state() const noexcept {
-        return state_;
-      }
+      StreamResult peek(TlsSide side, std::span<std::uint8_t> destination) noexcept;
 
-      inline Failure failure() const noexcept {
-        return state_ == State::failed ? failure_ : Failure::none;
-      }
+      StreamView peekView(TlsSide side, std::size_t maximum) noexcept;
 
-      inline StreamReadiness waiting(TlsSide side) const noexcept {
-        if (side == TlsSide::child) {
-          return state_ == State::offer ? (offer_after_ == std::chrono::steady_clock::time_point{} ? StreamReadiness::readable : StreamReadiness::none) : state_ == State::child ? child_waiting_
-                                                                                                                                                                                 : StreamReadiness::none;
-        }
+      void consume(TlsSide side, std::size_t count) noexcept;
 
-        return state_ == State::origin ? origin_waiting_ : StreamReadiness::none;
-      }
+      bool buffered(TlsSide side) const noexcept;
 
-      inline std::optional<std::chrono::steady_clock::time_point> deadline() const noexcept {
-        return state_ == State::offer && offer_after_ != std::chrono::steady_clock::time_point{} ? std::optional{offer_after_} : std::nullopt;
-      }
-
-      inline HttpProtocol protocol() const noexcept {
-        const auto selected = selection_.protocol();
-        if (selected.size() == 2 && selected[0] == 'h' && selected[1] == '2') {
-          return HttpProtocol::http2;
-        }
-
-        constexpr std::string_view http11 = "http/1.1";
-
-        return std::ranges::equal(selected, http11) ? HttpProtocol::http11 : HttpProtocol::other;
-      }
-
-      inline bool unnegotiated() const noexcept {
-        return selection_.protocol().empty();
-      }
-
-      inline StreamResult read(TlsSide side, std::span<std::uint8_t> destination) noexcept {
-        auto& buffer = input(side);
-        if (!buffer.empty()) {
-          return {StreamResult::State::data, buffer.copyTo(destination)};
-        }
-
-        return readNative(side, destination);
-      }
-
-      inline StreamResult write(TlsSide side, std::span<const std::uint8_t> bytes) noexcept {
-        if (state_ != State::established) {
-          return {StreamResult::State::failed};
-        }
-
-        ERR_clear_error();
-        std::size_t sent = 0;
-        auto* connection = endpoint(side);
-        const int result = SSL_write_ex(connection, bytes.data(), bytes.size(), &sent);
-
-        return result == 1 ? StreamResult{StreamResult::State::data, sent} : ioFailure(connection, result);
-      }
-
-      inline StreamResult peek(TlsSide side, std::span<std::uint8_t> destination) noexcept {
-        const auto visible = peekView(side, destination.size());
-        if (!visible.bytes.empty()) {
-          std::memcpy(destination.data(), visible.bytes.data(), visible.bytes.size());
-        }
-
-        return {visible.state, visible.bytes.size(), visible.waiting};
-      }
-
-      inline StreamView peekView(TlsSide side, std::size_t maximum) noexcept {
-        return input(side).peek([&](std::span<std::uint8_t> destination) noexcept {
-          return readNative(side, destination);
-        },
-            maximum);
-      }
-
-      inline void consume(TlsSide side, std::size_t count) noexcept {
-        input(side).consume(count);
-      }
-
-      inline bool buffered(TlsSide side) const noexcept {
-        const auto& buffer = side == TlsSide::child ? child_input_ : origin_input_;
-
-        return state_ == State::established && (!buffer.empty() || SSL_pending(endpoint(side)) > 0);
-      }
-
-      inline void halfClose(TlsSide side) noexcept {
-        ::shutdown(side == TlsSide::child ? sockets_.child : sockets_.origin, SHUT_WR);
-      }
+      void halfClose(TlsSide side) noexcept;
 
     private:
-      inline StreamResult readNative(TlsSide side, std::span<std::uint8_t> destination) noexcept {
-        if (state_ != State::established) {
-          return {StreamResult::State::failed};
-        }
+      StreamResult readNative(TlsSide side, std::span<std::uint8_t> destination) noexcept;
 
-        ERR_clear_error();
-        std::size_t received = 0;
-        auto* connection = endpoint(side);
-        const int result = SSL_read_ex(connection, destination.data(), destination.size(), &received);
+      auto& input(TlsSide side) noexcept;
 
-        return result == 1 ? StreamResult{StreamResult::State::data, received} : ioFailure(connection, result);
-      }
+      void initialize();
 
-      inline auto& input(TlsSide side) noexcept {
-        return side == TlsSide::child ? child_input_ : origin_input_;
-      }
+      static bool handshake(SSL* connection, StreamReadiness& waiting);
 
-      inline void initialize() {
-        failure_ = Failure::context;
-        origin_.reset(SSL_new(contexts_.origin()));
-        child_.reset(SSL_new(contexts_.child()));
-        requireTls(origin_ != nullptr && child_ != nullptr, "Allocate TLS connections");
-        requireTls(SSL_set_fd(origin_.get(), sockets_.origin) == 1 && SSL_set_fd(child_.get(), sockets_.child) == 1, "Attach TLS sockets");
-        SSL_set_connect_state(origin_.get());
-        SSL_set_accept_state(child_.get());
-        SSL_set_app_data(child_.get(), &selection_);
+      void mirrorProtocol();
 
-        std::array<char, ProxyHostname::maximum_bytes + 1> terminated{};
+      static StreamResult ioFailure(SSL* connection, int result) noexcept;
 
-        std::copy(hostname_.view().begin(), hostname_.view().end(), terminated.begin());
-        if (TlsHostname::numeric(hostname_.view())) {
-          requireTls(X509_VERIFY_PARAM_set1_ip_asc(SSL_get0_param(origin_.get()), terminated.data()) == 1, "Set TLS origin IP verification");
-        } else {
-          requireTls(SSL_set1_host(origin_.get(), terminated.data()) == 1, "Set TLS origin hostname verification");
-          requireTls(SSL_set_tlsext_host_name(origin_.get(), terminated.data()) == 1, "Set TLS origin server name");
-        }
-
-        failure_ = Failure::mint;
-        const auto leaf = authority_->mint(hostname_.view());
-
-        requireTls(SSL_use_certificate(child_.get(), leaf.certificate.get()) == 1 && SSL_use_PrivateKey(child_.get(), leaf.key.get()) == 1 && SSL_add1_chain_cert(child_.get(), authority_->certificate()) == 1, "Configure TLS child certificate");
-        state_ = State::offer;
-      }
-
-      inline static bool handshake(SSL* connection, StreamReadiness& waiting) {
-        ERR_clear_error();
-        const int result = SSL_do_handshake(connection);
-        if (result == 1) {
-          waiting = StreamReadiness::none;
-          return true;
-        }
-
-        const auto failure = ioFailure(connection, result);
-
-        requireTls(failure.state == StreamResult::State::blocked, "TLS handshake failed");
-        waiting = failure.waiting;
-        return false;
-      }
-
-      inline void mirrorProtocol() {
-        const unsigned char* selected = nullptr;
-        unsigned length = 0;
-
-        SSL_get0_alpn_selected(origin_.get(), &selected, &length);
-        requireTls(selection_.assign({selected, length}), "Invalid TLS origin ALPN selection");
-      }
-
-      inline static StreamResult ioFailure(SSL* connection, int result) noexcept {
-        switch (SSL_get_error(connection, result)) {
-        case SSL_ERROR_WANT_READ:
-          return {StreamResult::State::blocked, 0, StreamReadiness::readable};
-        case SSL_ERROR_WANT_WRITE:
-          return {StreamResult::State::blocked, 0, StreamReadiness::writable};
-        case SSL_ERROR_ZERO_RETURN:
-          return {StreamResult::State::ended};
-        default:
-          return {StreamResult::State::failed};
-        }
-      }
-
-      inline SSL* endpoint(TlsSide side) const noexcept {
-        return side == TlsSide::child ? child_.get() : origin_.get();
-      }
+      SSL* endpoint(TlsSide side) const noexcept;
 
       std::chrono::steady_clock::time_point offer_after_{};
       static constexpr std::size_t read_capacity = 16 * 1024;
@@ -826,6 +322,8 @@ export {
       StreamReadiness child_waiting_ = StreamReadiness::readable;
     };
 
+    extern template class TlsSession<ConcurrentMemory>;
+
   }
 }
 
@@ -837,39 +335,20 @@ export {
     class TlsInterception {
     public:
       // A session it opens keeps the contexts and the allocator it is built in, region `a`.
-      inline explicit TlsInterception(tbc::view<const TlsContexts<Memory>&, tbc::lt::a> contexts, tbc::view<std::shared_ptr<const CertificateAuthority<Memory>>, tbc::lt::a> authority) noexcept
-          : contexts_(contexts),
-            replacement_(std::move(authority)) {}
+      explicit TlsInterception(tbc::view<const TlsContexts<Memory>&, tbc::lt::a> contexts, tbc::view<std::shared_ptr<const CertificateAuthority<Memory>>, tbc::lt::a> authority) noexcept;
 
       // `offer` is the child's ClientHello when the caller already read it complete, or null.
-      inline tbc::view<Owned<TlsSession<Memory>, Memory>, tbc::lt::a> open(tbc::view<Memory&, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname, tbc::view<Owned<AlpnOffer, Memory>, tbc::lt::a> offer) const {
-        requireTls(!suspended_.load(std::memory_order_acquire), "TLS authority synchronization is in progress");
-        return makeOwned<TlsSession<Memory>>(memory, contexts_, snapshot(), sockets, hostname, memory, std::move(offer));
-      }
+      tbc::view<Owned<TlsSession<Memory>, Memory>, tbc::lt::a> open(tbc::view<Memory&, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname, tbc::view<Owned<AlpnOffer, Memory>, tbc::lt::a> offer) const;
 
-      inline tbc::view<Owned<TlsSession<Memory>, Memory>, tbc::lt::a> open(tbc::view<Memory&, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname) const {
-        return open(memory, sockets, hostname, Owned<AlpnOffer, Memory>{nullptr, AllocationDeleter<AlpnOffer, Memory>{memory}});
-      }
+      tbc::view<Owned<TlsSession<Memory>, Memory>, tbc::lt::a> open(tbc::view<Memory&, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname) const;
 
-      inline tbc::view<std::shared_ptr<const CertificateAuthority<Memory>>, tbc::lt::a> snapshot() const noexcept {
-        std::lock_guard lock{mutex_};
+      tbc::view<std::shared_ptr<const CertificateAuthority<Memory>>, tbc::lt::a> snapshot() const noexcept;
 
-        return replacement_;
-      }
+      void replace(tbc::view<std::shared_ptr<const CertificateAuthority<Memory>>, tbc::lt::a> authority) noexcept;
 
-      inline void replace(tbc::view<std::shared_ptr<const CertificateAuthority<Memory>>, tbc::lt::a> authority) noexcept {
-        std::lock_guard lock{mutex_};
+      void suspend(bool value) noexcept;
 
-        replacement_.swap(authority);
-      }
-
-      inline void suspend(bool value) noexcept {
-        suspended_.store(value, std::memory_order_release);
-      }
-
-      inline bool suspended() const noexcept {
-        return suspended_.load(std::memory_order_acquire);
-      }
+      bool suspended() const noexcept;
 
     private:
       tbc::view<const TlsContexts<Memory>&, tbc::lt::a> contexts_;
@@ -877,6 +356,8 @@ export {
       tbc::view<std::shared_ptr<const CertificateAuthority<Memory>>, tbc::lt::a> replacement_;
       std::atomic<bool> suspended_{false};
     };
+
+    extern template class TlsInterception<ConcurrentMemory>;
 
   }
 }
@@ -888,38 +369,26 @@ export {
     template <ConcurrentAllocator Memory>
     class TlsStream {
     public:
-      inline explicit TlsStream(TlsSession<Memory>& session, TlsSide side) noexcept
-          : session_(session),
-            side_(side) {}
+      explicit TlsStream(TlsSession<Memory>& session, TlsSide side) noexcept;
 
-      inline StreamResult read(std::span<std::uint8_t> destination) noexcept {
-        return session_.read(side_, destination);
-      }
+      StreamResult read(std::span<std::uint8_t> destination) noexcept;
 
-      inline StreamResult peek(std::span<std::uint8_t> destination) noexcept {
-        return session_.peek(side_, destination);
-      }
+      StreamResult peek(std::span<std::uint8_t> destination) noexcept;
 
-      inline StreamView peekView(std::size_t maximum) noexcept {
-        return session_.peekView(side_, maximum);
-      }
+      StreamView peekView(std::size_t maximum) noexcept;
 
-      inline void consume(std::size_t count) noexcept {
-        session_.consume(side_, count);
-      }
+      void consume(std::size_t count) noexcept;
 
-      inline StreamResult write(std::span<const std::uint8_t> bytes) noexcept {
-        return session_.write(side_, bytes);
-      }
+      StreamResult write(std::span<const std::uint8_t> bytes) noexcept;
 
-      inline void halfClose() noexcept {
-        session_.halfClose(side_);
-      }
+      void halfClose() noexcept;
 
     private:
       TlsSession<Memory>& session_;
       TlsSide side_;
     };
+
+    extern template class TlsStream<ConcurrentMemory>;
 
     template <ConcurrentAllocator Memory>
     TlsStream(TlsSession<Memory>& session, TlsSide side) -> TlsStream<Memory>;

@@ -114,10 +114,9 @@ namespace {
   void testResultDeliveryBound() {
     SystemAllocator system;
     BudgetAllocator budget{system, 1024 * 1024};
-    SynchronizedAllocator synchronized{budget};
-    MemoryAdapter adapter{synchronized};
-    ConcurrentMemory& memory = adapter;
-    tap::ResultQueue<ConcurrentMemory> results;
+    MemoryAdapter adapter{budget};
+    Memory& memory = adapter;
+    tap::ResultQueue<Memory> results;
 
     results.activate();
     const auto identity = specification("echo");
@@ -125,7 +124,7 @@ namespace {
       SensitiveAllocation storage{memory, 64};
       const auto size = tap::Protocol::encodeEffects(storage.bytes(), event_id, {}).size();
 
-      results.publish(makeOwned<tap::Result<ConcurrentMemory>>(memory, identity, std::move(storage), 0, size));
+      results.publish(makeOwned<tap::Result<Memory>>(memory, identity, std::move(storage), 0, size));
     };
 
     publish(1);

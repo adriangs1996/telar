@@ -44,7 +44,7 @@ static std::string authorization(std::string_view userinfo) {
   return "Proxy-Authorization: Basic " + encoded + "\r\n";
 }
 
-static void testAuthorization(SystemAllocator& memory) {
+static void testAuthorization(Memory& memory) {
   const std::string hexadecimal(64, 'a');
   const auto secret = ProxySecret::fromHexadecimal(hexadecimal);
 
@@ -111,7 +111,7 @@ static void testAuthorization(SystemAllocator& memory) {
   }
 }
 
-static void testSecretFile(SystemAllocator& memory) {
+static void testSecretFile(Memory& memory) {
   std::array<char, 64> path;
 
   std::strcpy(path.data(), "/tmp/telar-proxy-secret-XXXXXX");
@@ -154,7 +154,9 @@ static void testSecretFile(SystemAllocator& memory) {
 }
 
 void testProxyAuthentication() {
-  SystemAllocator memory;
+  SystemAllocator system;
+  MemoryAdapter adapter{system};
+  Memory& memory = adapter;
 
   testAuthorization(memory);
   testSecretFile(memory);

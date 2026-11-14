@@ -96,7 +96,9 @@ static tap::ExchangeView sampleExchange() {
 
 void testPluginHost() {
   SystemAllocator system;
-  BudgetAllocator memory{system, 80 * 1024 * 1024};
+  BudgetAllocator budget{system, 80 * 1024 * 1024};
+  MemoryAdapter adapter{budget};
+  Memory& memory = adapter;
   std::array<char, 64> temporary;
 
   std::strcpy(temporary.data(), "/tmp/telar-plugin-host-XXXXXX");
@@ -160,7 +162,7 @@ end}
     }
   }
 
-  check(memory.liveBytes() == 0);
+  check(budget.liveBytes() == 0);
 
   writePlugin(path, "local first = true; return {on_exchange = function() if first then first = false; error(string.rep('x', 5000), 0) end return {} end}");
   {
@@ -219,6 +221,6 @@ end}
     check(tap::Protocol::decodeEffects(host.invoke(exchange, output)).batch.count == 0);
   }
 
-  check(memory.liveBytes() == 0);
+  check(budget.liveBytes() == 0);
   std::filesystem::remove_all(root);
 }
