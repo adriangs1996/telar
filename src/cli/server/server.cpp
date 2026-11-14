@@ -1,35 +1,27 @@
-module;
-#include <cstdio>
-#include <new>
-
-#include "help_texts.hpp"
-#include <cstdint>
-
-#include <cerrno>
-#include <cstddef>
-#include <cstdlib>
-#include <cstring>
-#include <limits.h>
-#include <sys/socket.h>
-#include <sys/time.h>
-#include <sys/un.h>
-#include <unistd.h>
-#if (defined(__APPLE__))
-#include <mach-o/dyld.h>
-#endif
-#include <csignal>
-#include <dirent.h>
-#include <fcntl.h>
-#include <spawn.h>
-#include <sys/stat.h>
-#include <sys/wait.h>
-
 module telar.cli.server;
+
+import telar.sys.posix;
+import telar.sys.process;
 
 import telar.cli.control_session;
 import telar.client;
 
 namespace telar::runtime::cli {
+
+  namespace {
+
+    // One help text: the root has no family, a family no command.
+    struct HelpText {
+      std::string_view family;
+      std::string_view command;
+      std::string_view text;
+    };
+
+    constexpr std::array help_texts{
+#include "help_texts.inc"
+    };
+
+  }
 
   std::optional<std::string_view> helpText(HelpTopic topic) noexcept {
     for (const auto& entry : help_texts) {

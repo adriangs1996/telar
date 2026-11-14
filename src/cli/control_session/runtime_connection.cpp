@@ -1,22 +1,9 @@
-module;
-#include <cstdio>
-
-#include <cerrno>
-#include <csignal>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <pthread.h>
-#include <sys/socket.h>
-#include <sys/time.h>
-#include <sys/types.h>
-#include <sys/un.h>
-#include <unistd.h>
-
 module telar.cli.control_session;
 
 import std;
 import telar.sys.posix;
+import telar.sys.process;
+import telar.sys.socket;
 
 import telar.platform.net;
 import telar.platform.error;

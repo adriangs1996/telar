@@ -1,41 +1,3 @@
-module;
-#include <new>
-#include <stdlib.h>
-
-#include <cerrno>
-#include <cstdint>
-#include <unistd.h>
-
-#include <cstdio>
-#include <fcntl.h>
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <linux/fs.h>
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <sys/syscall.h>
-#endif
-#include <sys/stat.h>
-#if (defined(__linux__))
-#include <sys/syscall.h>
-#endif
-
-#include <cstddef>
-#include <cstdlib>
-#include <cstring>
-#include <ctime>
-#include <dirent.h>
-#include <limits.h>
-#include <sys/socket.h>
-#include <sys/time.h>
-#include <sys/un.h>
-
-#if (defined(__APPLE__))
-#include <mach-o/dyld.h>
-#endif
-#include <csignal>
-#include <spawn.h>
-#include <sys/wait.h>
-
 module telar.cli.history;
 
 import telar.cli.control_session;
@@ -691,7 +653,7 @@ namespace telar::runtime::cli::history {
       return {kind, std::string{file}};
     }
 
-    const auto* home = ::getenv("HOME");
+    const auto* home = std::getenv("HOME");
     if (home == nullptr) {
       throw std::runtime_error{"HistfileNotFound"};
     }
@@ -869,7 +831,7 @@ namespace telar::runtime::cli::history {
     std::string output;
 
     for (const auto& entry : results.entries) {
-      const auto seconds = static_cast<time_t>(std::max<std::int64_t>(0, entry.started_at_ms / 1000));
+      const auto seconds = static_cast<std::time_t>(std::max<std::int64_t>(0, entry.started_at_ms / 1000));
       std::tm utc{};
 
       ::gmtime_r(&seconds, &utc);

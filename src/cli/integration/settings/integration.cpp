@@ -1,28 +1,3 @@
-module;
-#include <cstddef>
-#include <new>
-#include <stdlib.h>
-
-#include <cerrno>
-#include <cstdint>
-#include <cstdio>
-#include <cstdlib>
-#include <fcntl.h>
-#include <limits.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <linux/fs.h>
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <sys/syscall.h>
-#endif
-#include "integration_assets.hpp"
-#include <cstring>
-#if (defined(__APPLE__))
-#include <mach-o/dyld.h>
-#endif
-
 module telar.cli.integration.settings;
 
 import std;

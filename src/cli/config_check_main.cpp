@@ -3,10 +3,8 @@
 static_assert(true);
 #endif
 
-#include <cstdint>
-#include <cstdio>
-
 import std;
+import telar.sys.posix;
 import telar.cli.tab;
 
 int main(int argc, char** argv) {
