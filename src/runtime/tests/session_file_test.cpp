@@ -32,7 +32,7 @@ static void writeSessionFile(const std::string& path, std::string_view contents,
   check(file.good());
 }
 
-static void testTranscript(SessionFileReader<SystemAllocator>& reader, const std::string& root) {
+static void testTranscript(SessionFileReader<ConcurrentMemory>& reader, const std::string& root) {
   const auto path = root + "/claude.jsonl";
 
   writeSessionFile(path, "{\"type\":\"custom-title\",\"sessionId\":\"session\",\"customTitle\":\"old title\"}\n");
@@ -72,7 +72,7 @@ static void testTranscript(SessionFileReader<SystemAllocator>& reader, const std
   check(result.title && result.title->view() == "after long line");
 }
 
-static void testCursorMetadata(SessionFileReader<SystemAllocator>& reader, const std::string& root) {
+static void testCursorMetadata(SessionFileReader<ConcurrentMemory>& reader, const std::string& root) {
   const auto directory = root + "/0192-abcd";
 
   std::filesystem::create_directory(directory);
@@ -105,7 +105,7 @@ static void testCursorMetadata(SessionFileReader<SystemAllocator>& reader, const
   check(!reader.observe(request).title);
 }
 
-static void testCodexDatabase(SessionFileReader<SystemAllocator>& reader, const std::string& root) {
+static void testCodexDatabase(SessionFileReader<ConcurrentMemory>& reader, const std::string& root) {
   const auto path = root + "/codex.sqlite";
   SessionFileRequest request;
 
@@ -153,8 +153,9 @@ static void testWatchAndTitle() {
 }
 
 void testSessionFiles() {
-  SystemAllocator memory;
-  SessionFileReader reader{memory};
+  SystemAllocator system;
+  MemoryAdapter memory{system};
+  SessionFileReader<ConcurrentMemory> reader{memory};
   std::array<char, 64> temporary{};
 
   std::strcpy(temporary.data(), "/tmp/telar-session-file-XXXXXX");

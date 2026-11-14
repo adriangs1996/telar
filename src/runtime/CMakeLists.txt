@@ -139,7 +139,21 @@ add_library(runtime-core STATIC
   vocabulary/exchange/exchange.cpp
   vocabulary/frames/frames.cpp
   vocabulary/traffic/traffic.cpp
-  observation/processor/processor.cpp)
+  observation/processor/processor.cpp
+  agents/description_generator/description_generator.cpp
+  agents/screen_inference/screen_inference.cpp
+  agents/snapshot/snapshot.cpp
+  command_capture/tracker/tracker.cpp
+  editors/remote_editor/remote_editor.cpp
+  history/event/event.cpp
+  history/store/store.cpp
+  shell_integration/git_context/git_context.cpp
+  shell_integration/shell_integration.cpp
+  shell_integration/token/token.cpp
+  shell_integration/words/words.cpp
+  suggestions/engine/engine.cpp
+  workspaces/git_probe/git_probe.cpp
+  worktrees/git_probe/git_probe.cpp)
 # The traffic domain: proxy, TLS interception, HTTP, redirection, capture and plugins.
 target_sources(runtime-core PRIVATE
   exchange_capture/pipeline/pipeline.cpp

@@ -258,13 +258,13 @@ static void testCaptureBoundsAndResize() {
   CaptureFixture large;
 
   large.output("$ ");
-  const std::string command = std::string(CommandSelection<ConcurrentMemory>::maximum_bytes - 1, 'a') + "🙂";
+  const std::string command = std::string(CommandSelection::maximum_bytes - 1, 'a') + "🙂";
 
   large.input(command + "\r");
   large.output(command + "\r\n");
   large.finish();
   check(large.commands.size() == 1 && large.commands[0].metadata.truncated);
-  check(large.commands[0].command == command.substr(0, CommandSelection<ConcurrentMemory>::maximum_bytes - 1));
+  check(large.commands[0].command == command.substr(0, CommandSelection::maximum_bytes - 1));
 
   CaptureFixture resized;
 

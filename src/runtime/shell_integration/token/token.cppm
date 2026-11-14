@@ -2,8 +2,6 @@ export module telar.runtime.shell_integration.token;
 
 import std;
 export import telar.wire.vocabulary;
-import telar.platform.primitives;
-import telar.base.text;
 
 export namespace telar::runtime {
 
@@ -13,38 +11,15 @@ export namespace telar::runtime {
   public:
     static constexpr std::size_t length = 32;
 
-    inline static ShellToken generate() noexcept {
-      std::array<unsigned char, length / 2> random;
-
-      randomBytes(random.data(), random.size());
-      ShellToken token;
-
-      static_cast<void>(encodeLowerHex(random, token.text_));
-      return token;
-    }
+    static ShellToken generate() noexcept;
 
     // A token another shell chose, as 32 lowercase hexadecimal digits.
-    inline static std::optional<ShellToken> parse(std::string_view text) noexcept {
-      if (text.size() != length || !std::ranges::all_of(text, [](char digit) {
-            return (digit >= '0' && digit <= '9') || (digit >= 'a' && digit <= 'f');
-          })) {
-        return std::nullopt;
-      }
+    static std::optional<ShellToken> parse(std::string_view text) noexcept;
 
-      ShellToken token;
-
-      std::ranges::copy(text, token.text_.begin());
-      return token;
-    }
-
-    inline std::string_view text() const noexcept {
-      return {text_.data(), text_.size()};
-    }
+    std::string_view text() const noexcept;
 
     // Compares in constant time, so the time a forged mark takes does not reveal the token.
-    inline bool signs(std::string_view candidate) const noexcept {
-      return constantTimeEqual({text_.data(), text_.size()}, candidate);
-    }
+    bool signs(std::string_view candidate) const noexcept;
 
   private:
     std::array<char, length> text_{};
