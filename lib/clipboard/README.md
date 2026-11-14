@@ -105,10 +105,11 @@ stdout remains untouched. The filename does not select or convert the encoding:
 a clipboard TIFF stays TIFF even if the output filename ends in `.png`.
 Empty or unsupported clipboards and read/write failures exit with status `1`.
 
-To treat compiler warnings as errors:
+To treat compiler warnings as errors in this project's own sources (the library,
+the reader and its tests, not the `std` module CMake builds from the toolchain):
 
 ```sh
-cmake --preset debug -DCLIPBOARD_WARNINGS_AS_ERRORS=ON
+cmake --preset debug -DCMAKE_TOOLCHAIN_FILE=<cache>/toolchain.cmake -DCLIPBOARD_WARNINGS_AS_ERRORS=ON
 ```
 
 The previous `build/` directory is not used by the presets. Direct configuration
