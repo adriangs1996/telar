@@ -77,7 +77,6 @@
     "<lua.h>"
   ],
   "lib/config/runtime/runtime_reader.cpp": [
-    "<ghostty/vt/unicode.h>",
     "<lua.h>"
   ],
   "lib/config/snapshot/snapshot.cpp": [
@@ -94,15 +93,6 @@
   ],
   "lib/git/git-objects.cppm": [
     "<zlib.h>"
-  ],
-  "lib/lua/lua.cpp": [
-    "<lauxlib.h>",
-    "<lua.h>",
-    "<lualib.h>"
-  ],
-  "lib/lua/lua.cppm": [
-    "<lauxlib.h>",
-    "<lua.h>"
   ],
   "lib/platform/include/telar_platform/descriptor_path.hpp": [
     "<array>",
@@ -337,54 +327,6 @@
   "src/cli/worktree/worktree.cpp": [
     "<openssl/sha.h>"
   ],
-  "src/gui/components/builtin_content/builtin_content.cpp": [
-    "<lauxlib.h>",
-    "<lua.h>"
-  ],
-  "src/gui/components/builtin_content/builtin_content.cppm": [
-    "<lua.h>"
-  ],
-  "src/gui/components/configuration/configuration.cpp": [
-    "<lauxlib.h>",
-    "<lua.h>"
-  ],
-  "src/gui/components/configuration/configuration.cppm": [
-    "<lauxlib.h>",
-    "<lua.h>"
-  ],
-  "src/gui/config/generation/generation.cpp": [
-    "<lauxlib.h>",
-    "<lua.h>"
-  ],
-  "src/gui/config/generation/generation.cppm": [
-    "<lauxlib.h>",
-    "<lua.h>"
-  ],
-  "src/gui/fonts/face/face-views.cppm": [
-    "<hb.h>"
-  ],
-  "src/gui/fonts/face/face.cpp": [
-    "<freetype/freetype.h>",
-    "<freetype/ftadvanc.h>",
-    "<freetype/ftimage.h>",
-    "<freetype/ftmm.h>",
-    "<freetype/ftoutln.h>",
-    "<freetype/ftsizes.h>",
-    "<freetype/ftsynth.h>",
-    "<freetype/fttypes.h>",
-    "<hb-ft.h>",
-    "<hb.h>"
-  ],
-  "src/gui/fonts/face/face.cppm": [
-    "<freetype/freetype.h>",
-    "<hb.h>"
-  ],
-  "src/gui/fonts/face/ligature_coverage.cpp": [
-    "<freetype/freetype.h>",
-    "<freetype/tttables.h>",
-    "<hb-ot.h>",
-    "<hb.h>"
-  ],
   "src/gui/platform/background_effect/background_effect.cppm": [
     "platform/window.hpp"
   ],
@@ -420,9 +362,6 @@
   "src/gui/qt/terminal_input.cpp": [
     "<array>",
     "terminal_input.hpp"
-  ],
-  "src/gui/text/bounded_editor/bounded_editor.cpp": [
-    "<ghostty/vt/unicode.h>"
   ],
   "src/runtime/cli/server/server.cpp": [
     "<lauxlib.h>",

@@ -1,6 +1,3 @@
-module;
-#include <lua.h>
-
 export module telar.gui.components.builtin_content;
 
 import std;

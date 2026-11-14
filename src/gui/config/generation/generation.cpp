@@ -1,7 +1,3 @@
-module;
-#include <lauxlib.h>
-#include <lua.h>
-
 module telar.gui.config.generation;
 
 namespace telar::gui {

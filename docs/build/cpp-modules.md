@@ -199,7 +199,14 @@ ese módulo, y cada importador vuelve a fusionar las copias. Con un concepto com
 `ConcurrentAllocator` repetido en casi cien BMIs, restringir un template con él
 llegó a costar 8 s y 23 MB de BMI en un módulo de 30 líneas (`traffic.tap`).
 `python3 tools/check-cpp-modules.py` rechaza un fragmento global que incluya un
-header con dueño. Los headers solo de dueño (`telar.wire.pane_io`,
+header con dueño. Los headers de terceros siguen la misma regla con
+`library_owners`, que da a cada uno un único módulo: solo las unidades de ese
+módulo lo incluyen (las de implementación también, porque las macros no cruzan un
+import), y el dueño exporta sus nombres con `using ::…;`. Las macros que leen los
+importadores se capturan como constantes y las que tienen forma de función pasan a
+funciones del `.cpp` del dueño, como en `telar.sys.*`. Lua es de `telar.lua`,
+FreeType y HarfBuzz de `telar.gui.fonts.face` y `<ghostty/vt/unicode.h>` de
+`telar.config.runtime`. Los headers solo de dueño (`telar.wire.pane_io`,
 `telar.runtime.terminal.control`, …) no contienen código propio: son el punto de
 entrada de esos headers para los módulos.
 

@@ -250,3 +250,56 @@ export {
 
   }
 }
+
+// The C headers stay in this global module fragment only; importers reach the Lua API through
+// these declarations instead of including them.
+export {
+  using ::lua_CFunction;
+  using ::lua_Integer;
+  using ::lua_State;
+
+  using ::lua_getfield;
+  using ::lua_getglobal;
+  using ::lua_pushlstring;
+  using ::lua_rawgeti;
+  using ::lua_setfield;
+  using ::lua_settop;
+  using ::lua_touserdata;
+  using ::luaL_ref;
+  using ::luaL_unref;
+}
+
+// Macros do not cross an import. Each constant the tree reads is captured while the headers still
+// define it, undefined, and exported under its own name, so `LUA_NOREF` reads the same to an
+// importer that includes the header and to one that only imports this module. The function-like
+// macros are functions defined in lua.cpp, where the macros are.
+#define TELAR_LUA_CONSTANTS(X) \
+  X(LUA_NOREF)                 \
+  X(LUA_REGISTRYINDEX)
+
+namespace telar::runtime::lua::captured {
+
+#define TELAR_LUA_CAPTURE(name) inline constexpr auto name##_ = name;
+  TELAR_LUA_CONSTANTS(TELAR_LUA_CAPTURE)
+
+}
+
+#undef LUA_NOREF
+#undef LUA_REGISTRYINDEX
+#undef lua_call
+#undef lua_newtable
+#undef lua_pop
+#undef lua_remove
+#undef lua_replace
+
+#define TELAR_LUA_CONSTANT(name) inline constexpr auto name = telar::runtime::lua::captured::name##_;
+
+export {
+  TELAR_LUA_CONSTANTS(TELAR_LUA_CONSTANT)
+
+  void lua_call(lua_State* state, int arguments, int results);
+  void lua_newtable(lua_State* state);
+  void lua_pop(lua_State* state, int count);
+  void lua_remove(lua_State* state, int index);
+  void lua_replace(lua_State* state, int index);
+}
