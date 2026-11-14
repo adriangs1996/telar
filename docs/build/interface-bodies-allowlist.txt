@@ -84,6 +84,7 @@ telar.gui.suggestions.state
 telar.gui.terminal.font_grid
 telar.gui.terminal.glyphs
 telar.gui.terminal.glyphs.curve_cache
+telar.gui.terminal.row_cache
 telar.gui.terminal.selection
 telar.gui.text.bounded_editor
 telar.gui.text.json_unsigned_integer

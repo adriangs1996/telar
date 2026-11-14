@@ -1,6 +1,5 @@
 module;
 #include "terminal/cell_position.hpp"
-#include "terminal/row_cache.hpp"
 #include "terminal/screen.hpp"
 
 export module telar.gui.terminal.screen;
@@ -11,6 +10,5 @@ export namespace telar::gui {
   using telar::gui::CellPosition;
   using telar::gui::CellValue;
   using telar::gui::FrameApplication;
-  using telar::gui::RowCache;
   using telar::gui::Screen;
 }

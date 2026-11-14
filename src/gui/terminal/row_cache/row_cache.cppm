@@ -1,15 +1,12 @@
-#pragma once
+export module telar.gui.terminal.row_cache;
 
-#include "core/memory.hpp"
-#include "telar_client/protocol/content.hpp"
-#include "terminal/screen.hpp"
-#include <algorithm>
-#include <cstdint>
-#include <optional>
-#include <span>
-#include <string_view>
+import std;
+import telar.gui.core.primitives;
+import telar.gui.terminal.screen;
+import telar.wire.content;
+import telar.wire.vocabulary;
 
-namespace telar::gui {
+export namespace telar::gui {
 
   // Rows of a pane's scrollback the runtime sent apart from its screen, by stable number: the
   // rows a scrolled or folded view shows beyond the screen it holds. A fixed number of slots, a
