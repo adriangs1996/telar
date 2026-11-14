@@ -162,7 +162,6 @@
     "lib/base/text/utf8/utf8.cppm": "telar.base.text.utf8",
     "lib/client/client.cppm": "telar.client",
     "lib/lua/lua.cppm": "telar.lua",
-    "lib/config/config.cppm": "telar.config",
     "lib/platform/daemon/daemon.cppm": "telar.platform.daemon",
     "lib/platform/error/error.cppm": "telar.platform.error",
     "lib/platform/events/events.cppm": "telar.platform.events",
