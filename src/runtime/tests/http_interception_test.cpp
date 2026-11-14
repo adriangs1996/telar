@@ -132,7 +132,7 @@ namespace {
   void editing(ConcurrentMemory& memory) {
     HttpOwner owner{memory};
     ProxyCounters counters;
-    Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, {.id = 7, .host = "fixture.test"}}};
+    Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 7, .host = "fixture.test"})}};
     TestByteStream child, origin;
 
     child.input = "POST /original HTTP/1.1\r\nHost: fixture.test\r\nContent-Length: 3\r\n\r\n" + std::string{"a\0b", 3};
@@ -172,7 +172,7 @@ namespace {
   void compressedTrailers(ConcurrentMemory& memory) {
     HttpOwner owner{memory};
     ProxyCounters counters;
-    Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, {.id = 8, .host = "fixture.test"}}};
+    Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 8, .host = "fixture.test"})}};
     HttpMessage message{memory};
 
     message.method = "POST";
@@ -220,7 +220,7 @@ namespace {
   void expectContinue(ConcurrentMemory& memory) {
     HttpOwner owner{memory};
     ProxyCounters counters;
-    Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, {.id = 9, .host = "fixture.test"}}};
+    Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 9, .host = "fixture.test"})}};
     TestByteStream child, origin;
 
     child.input = "POST /expect HTTP/1.1\r\nHost: fixture.test\r\nContent-Length: 3\r\nExpect: 100-continue\r\n\r\n";
@@ -248,7 +248,7 @@ namespace {
   void headResponse(ConcurrentMemory& memory) {
     HttpOwner owner{memory};
     ProxyCounters counters;
-    Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, {.id = 11, .host = "fixture.test"}}};
+    Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 11, .host = "fixture.test"})}};
     TestByteStream child, origin;
 
     child.input = "HEAD /metadata HTTP/1.1\r\nHost: fixture.test\r\n\r\n";
@@ -283,7 +283,7 @@ namespace {
     for (const std::string_view body : {"+0\r\n\r\n", "1_0\r\n0123456789abcdef\r\n0\r\n\r\n", "1\r\nx!!0\r\n\r\n", "0\r\r\n\r\n"}) {
       HttpOwner owner{memory};
       ProxyCounters counters;
-      Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, {.id = 12, .host = "fixture.test"}}};
+      Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 12, .host = "fixture.test"})}};
       TestByteStream child, origin;
 
       child.input = "POST /invalid HTTP/1.1\r\nHost: fixture.test\r\nTransfer-Encoding: chunked\r\n\r\n" + std::string{body};
@@ -302,7 +302,7 @@ namespace {
 
       owner.fail_closed = closed;
       ProxyCounters counters;
-      Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, {.id = 13, .host = "fixture.test"}}};
+      Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 13, .host = "fixture.test"})}};
       TestByteStream child, origin;
 
       child.input = "POST /incomplete HTTP/1.1\r\nHost: fixture.test\r\nContent-Length: 8\r\n\r\nabc";
@@ -326,7 +326,7 @@ namespace {
 
         owner.observe_response = observe_response;
         ProxyCounters counters;
-        Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, {.id = 14, .host = "fixture.test"}}};
+        Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 14, .host = "fixture.test"})}};
         TestByteStream child, origin;
 
         child.input = std::string{original_head ? "HEAD" : "GET"} + " /method HTTP/1.1\r\nHost: fixture.test\r\n\r\n";
@@ -388,7 +388,7 @@ namespace {
 
       owner.fail_closed = closed;
       ProxyCounters counters;
-      Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, {.id = 10, .host = "fixture.test"}}};
+      Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 10, .host = "fixture.test"})}};
       TestByteStream child, origin;
       const std::string body(HttpMessageLimits::body_bytes + Http1Head::capacity + 1, 'x');
 
@@ -415,7 +415,7 @@ namespace {
   void rejected(ConcurrentMemory& memory) {
     HttpOwner owner{memory};
     ProxyCounters counters;
-    Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, {.id = 12, .host = "fixture.test"}}};
+    Connection connection{memory, counters, IgnoreHttp1Capture{}, HttpRelayContext{&owner, traffic::FlowIdentity::of({.id = 12, .host = "fixture.test"})}};
     TestByteStream child, origin;
 
     child.input = "POST /reject HTTP/1.1\r\nHost: fixture.test\r\nContent-Length: 6\r\n\r\nsecret";

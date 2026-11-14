@@ -2376,7 +2376,7 @@ export {
               try {
                 Http1Capture capture{memory_, observation_.captures, captureStart(CaptureProtocol::http1)};
                 const auto event = flow ? flow->context() : traffic::FlowEvent{.id = observation_.identity, .host = hostname_.view()};
-                const HttpRelayContext context{observation_.flows ? observation_.flows->http() : nullptr, event};
+                const HttpRelayContext context{observation_.flows ? observation_.flows->http() : nullptr, traffic::FlowIdentity::of(event)};
 
                 http1_ = makeOwned<Http1>(memory_, memory_, observation_.counters, std::move(capture), context);
               } catch (...) {

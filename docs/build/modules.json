@@ -757,6 +757,7 @@
     "src/runtime/terminal/ghostty_grid.hpp": "Needs the generated cell layout, which only runtime-core units include",
     "src/gui/platform/macos/cf_reference.hpp": "Objective-C++ sources include it; Objective-C++ cannot import the C++ modules",
     "lib/tbc/tests/spec/units/cross_unit/node.hpp": "Textual spec fixture shared by the cross-unit cases and the unit that defines their bodies",
+    "lib/tbc/tests/spec/units/cross_unit/stream.hpp": "Textual spec fixture shared by the cross-unit cases and the unit that defines their bodies",
     "lib/tbc/include/tbc/annotations.hpp": "Consumer-side preprocessor annotations inspected by Clang AST tooling; includes nothing"
   },
   "macro_headers": [],

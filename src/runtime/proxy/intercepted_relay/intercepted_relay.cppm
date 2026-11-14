@@ -430,9 +430,10 @@ export {
 export {
   namespace telar::runtime {
 
+    // The identity is a copy, so a context, and the relays built from it, borrow none of the flow's text.
     struct HttpRelayContext {
       traffic::HttpControl* control = nullptr;
-      traffic::FlowEvent event;
+      traffic::FlowIdentity identity;
     };
 
     // The parser retains a blocked fragment while a buffered prefix drains during fail-open fallback.

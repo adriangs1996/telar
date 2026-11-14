@@ -204,7 +204,7 @@ namespace telar::runtime {
       : memory_(memory),
         secure_(memory),
         control_(context.control),
-        identity_(traffic::FlowIdentity::of(context.event)),
+        identity_(context.identity),
         direction_(response ? traffic::Direction::inbound : traffic::Direction::outbound),
         message_(memory, response),
         wire_(AllocatorRef<Byte, Secure>{secure_}) {
