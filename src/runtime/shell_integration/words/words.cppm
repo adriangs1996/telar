@@ -21,6 +21,7 @@ export import telar.runtime.platform.request_worker;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.base.text;
+import telar.base.text.json;
 import telar.platform.fs;
 import telar.platform.primitives;
 import telar.ebnf.matcher;

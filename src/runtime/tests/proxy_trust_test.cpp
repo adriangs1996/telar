@@ -30,7 +30,6 @@ static_assert(true);
 #include <openssl/x509v3.h>
 
 import std;
-import telar.base.text;
 import telar.platform.primitives;
 import telar.runtime.tests.check;
 import telar.runtime.tests.tls_fixture;

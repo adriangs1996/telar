@@ -28,7 +28,6 @@ export import telar.platform.primitives;
 export import telar.runtime.terminal.control;
 export import telar.runtime.graphics.kitty;
 export import telar.config;
-export import telar.base.text;
 export import telar.base.diagnostics;
 export import telar.runtime.model.client_layouts;
 export import telar.runtime.runtime.delivery.client_delivery;

@@ -27,7 +27,7 @@ export import telar.runtime.diagnostics.operation;
 export import telar.runtime.platform.background_executor;
 export import telar.runtime.transport.connection;
 
-export import telar.base.text;
+export import telar.base.text.json;
 export import telar.client;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;

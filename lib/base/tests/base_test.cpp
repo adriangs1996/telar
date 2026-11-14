@@ -30,6 +30,8 @@ import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.base.memory.sensitive;
 import telar.base.text;
+import telar.base.text.json;
+import telar.base.text.utf8;
 
 namespace {
 

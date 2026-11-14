@@ -50,6 +50,7 @@ export import telar.runtime.execution.execution;
 export import telar.runtime.shell_integration;
 export import telar.runtime.shell_integration.words;
 import telar.base.text;
+import telar.base.text.utf8;
 import telar.wire.vocabulary;
 import telar.wire.clients;
 import telar.wire.clipboard;

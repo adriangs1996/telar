@@ -45,7 +45,6 @@ static_assert(true);
 
 import std;
 import telar.base.memory.allocators;
-import telar.base.text;
 import telar.platform.primitives;
 import telar.cli.worktree;
 import telar.vocabulary;

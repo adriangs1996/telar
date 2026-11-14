@@ -23,7 +23,7 @@ export module telar.client;
 
 import std;
 
-export import telar.base.text;
+export import telar.base.text.utf8;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 

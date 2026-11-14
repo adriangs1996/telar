@@ -12,7 +12,6 @@ static_assert(true);
 
 import std;
 import telar.base.memory.allocators;
-import telar.base.text;
 import telar.config;
 import telar.gui.core.primitives;
 import telar.gui.terminal.screen;

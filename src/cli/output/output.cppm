@@ -14,7 +14,7 @@ import std;
 
 import telar.base.diagnostics;
 import telar.base.memory.allocators;
-import telar.base.text;
+import telar.base.text.json;
 import telar.vocabulary;
 
 // Interface: failure.cppm

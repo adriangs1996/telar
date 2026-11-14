@@ -33,7 +33,7 @@ export import telar.platform.fs;
 export import telar.platform.paths;
 
 export import telar.cli.base.command_error;
-export import telar.base.text;
+export import telar.base.text.json;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.platform.primitives;

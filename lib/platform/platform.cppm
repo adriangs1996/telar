@@ -1,7 +1,6 @@
 export module telar.platform;
 
 // Every platform family, for the importers that still take all of them.
-export import telar.base.text;
 export import telar.platform.daemon;
 export import telar.platform.error;
 export import telar.platform.events;

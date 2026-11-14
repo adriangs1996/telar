@@ -64,7 +64,7 @@ import telar.gui.config.plugin_query;
 import telar.gui.core.metrics;
 import telar.gui.core.json_writer;
 import telar.gui.input.copy_pointer;
-import telar.base.text;
+import telar.base.text.json;
 
 namespace {
 

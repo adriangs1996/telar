@@ -16,7 +16,6 @@ export module telar.gui.text.json_unsigned_integer;
 
 import std;
 
-export import telar.base.text;
 export import telar.machines;
 
 export import telar.gui.text.bounded_editor;

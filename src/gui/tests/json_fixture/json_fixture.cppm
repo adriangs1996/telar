@@ -4,7 +4,7 @@ module;
 export module telar.gui.tests.json_fixture;
 
 import std;
-export import telar.base.text;
+export import telar.base.text.json;
 
 export {
   namespace telar::gui::test {

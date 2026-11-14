@@ -64,6 +64,8 @@ export import telar.platform.process;
 export import telar.cli.machine_ssh;
 import telar.cli.project_setup;
 export import telar.base.text;
+export import telar.base.text.json;
+export import telar.base.text.utf8;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.wire.agents;

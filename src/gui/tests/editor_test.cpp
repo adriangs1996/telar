@@ -16,6 +16,7 @@ import telar.gui.core.metrics;
 import telar.gui.presentation.form_field_geometry;
 import telar.gui.terminal.font_grid;
 import telar.gui.text.bounded_editor;
+import telar.base.text.utf8;
 import telar.wire.vocabulary;
 
 namespace {

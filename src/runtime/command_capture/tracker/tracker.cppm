@@ -9,6 +9,7 @@ export module telar.runtime.command_capture.tracker;
 
 import std;
 import telar.base.text;
+import telar.base.text.utf8;
 import telar.wire.vocabulary;
 import telar.wire.content;
 import telar.platform.primitives;
