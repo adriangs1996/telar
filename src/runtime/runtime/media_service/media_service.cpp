@@ -194,7 +194,6 @@ namespace telar::runtime {
   }
 
   template class BackgroundService<ConcurrentMemory>;
-  template class BackgroundService<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>;
 
   template <Allocator Memory>
   void DescriptionQueue<Memory>::enable(bool enabled) noexcept {
@@ -293,7 +292,6 @@ namespace telar::runtime {
     return finished;
   }
 
-  template class DescriptionQueue<SystemAllocator>;
   template class DescriptionQueue<ConcurrentMemory>;
 
   template <ConcurrentAllocator Memory, EventLoop Poller, typename Limits, HistoryEventSink History>
@@ -524,7 +522,7 @@ namespace telar::runtime {
 
   template class BackgroundPool<ConcurrentMemory, BackgroundService<ConcurrentMemory>, PathService<ConcurrentMemory>, EditorService<ConcurrentMemory>, SuggestionService<ConcurrentMemory>>;
 
-  template class MediaService<SystemAllocator, NativeEventLoop<SystemAllocator>, LimitService<SystemAllocator>>;
   template class MediaService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>, LimitService<ConcurrentMemory>, BackgroundPool<ConcurrentMemory, BackgroundService<ConcurrentMemory>, PathService<ConcurrentMemory>, EditorService<ConcurrentMemory>, SuggestionService<ConcurrentMemory>>>;
+  template class MediaService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>, LimitService<ConcurrentMemory>>;
 
 }

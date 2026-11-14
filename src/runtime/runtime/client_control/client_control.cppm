@@ -131,7 +131,6 @@ export {
       static void failAbandoned(ClientSession<Memory>& client, std::uint64_t request_id) noexcept;
     };
 
-    extern template class ClientControl<SystemAllocator>;
     extern template class ClientControl<ConcurrentMemory>;
 
   }

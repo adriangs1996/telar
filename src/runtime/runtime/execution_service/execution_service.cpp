@@ -118,7 +118,6 @@ namespace telar::runtime {
   }
 
   template class LimitService<ConcurrentMemory>;
-  template class LimitService<SystemAllocator>;
 
   template <Allocator Memory, EventLoop Poller>
   ClientAdmission<Memory, Poller>::ClientAdmission(Poller& poller, LimitService<Memory>& limits)
@@ -277,9 +276,7 @@ namespace telar::runtime {
   }
 
   template void notifyWorkspaceObservers<ConcurrentMemory>(ClientStore<ConcurrentMemory>& clients, std::uint64_t workspace, std::uint64_t origin, std::optional<std::uint64_t> previous) noexcept;
-  template void notifyWorkspaceObservers<SystemAllocator>(ClientStore<SystemAllocator>& clients, std::uint64_t workspace, std::uint64_t origin, std::optional<std::uint64_t> previous) noexcept;
   template std::optional<std::uint64_t> previousWorkspace<ConcurrentMemory>(const WorkspaceStore<ConcurrentMemory>& workspaces, std::uint64_t identity) noexcept;
-  template std::optional<std::uint64_t> previousWorkspace<SystemAllocator>(const WorkspaceStore<SystemAllocator>& workspaces, std::uint64_t identity) noexcept;
 
   template <Allocator Memory>
   bool acquireGeometry(PaneStore<Memory>& panes, [[maybe_unused]] diagnostics::RuntimeCounters& metrics, const ClientSession<Memory>& client, Workspace<Memory>& workspace) {
@@ -319,11 +316,8 @@ namespace telar::runtime {
   }
 
   template bool acquireGeometry<ConcurrentMemory>(PaneStore<ConcurrentMemory>& panes, diagnostics::RuntimeCounters& metrics, const ClientSession<ConcurrentMemory>& client, Workspace<ConcurrentMemory>& workspace);
-  template bool acquireGeometry<SystemAllocator>(PaneStore<SystemAllocator>& panes, diagnostics::RuntimeCounters& metrics, const ClientSession<SystemAllocator>& client, Workspace<SystemAllocator>& workspace);
   template void releaseGeometry<ConcurrentMemory>(ClientStore<ConcurrentMemory>& clients, std::uint64_t client, Workspace<ConcurrentMemory>& workspace) noexcept;
-  template void releaseGeometry<SystemAllocator>(ClientStore<SystemAllocator>& clients, std::uint64_t client, Workspace<SystemAllocator>& workspace) noexcept;
   template void releaseAllGeometry<ConcurrentMemory>(WorkspaceStore<ConcurrentMemory>& workspaces, ClientStore<ConcurrentMemory>& clients, std::uint64_t client) noexcept;
-  template void releaseAllGeometry<SystemAllocator>(WorkspaceStore<SystemAllocator>& workspaces, ClientStore<SystemAllocator>& clients, std::uint64_t client) noexcept;
 
   std::string_view launchFailureCause(const std::exception& error) noexcept {
     if (dynamic_cast<const std::bad_alloc*>(&error) != nullptr) {
@@ -714,6 +708,5 @@ namespace telar::runtime {
   }
 
   template class ExecutionService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>>;
-  template class ExecutionService<SystemAllocator, NativeEventLoop<SystemAllocator>>;
 
 }

@@ -73,9 +73,7 @@ export {
       bool pending_ = false;
     };
 
-    extern template class PendingClipboard<SystemAllocator>;
     extern template class PendingClipboard<ConcurrentMemory>;
-    extern template class PendingClipboard<BudgetAllocator<SystemAllocator>>;
 
   }
 }
@@ -144,9 +142,9 @@ export {
       FramePacer pacer;
     };
 
-    // client_layouts.cpp instantiates the constructor for SystemAllocator and ConcurrentMemory. It is
-    // not declared `extern template` here: with that declaration, Clang 23 crashes in importers that
-    // emit ~GraphicsSynchronizer<SystemAllocator> (GetVTTParameter, from runtime-tests' units).
+    // client_layouts.cpp instantiates the constructor for ConcurrentMemory. It is not declared
+    // `extern template` here: with that declaration, Clang 23 crashed in importers that emitted
+    // ~GraphicsSynchronizer<SystemAllocator> (GetVTTParameter, from runtime-tests' units).
 
     // The clients a runtime serves at once; a client's slot is its bit in what a pane is observed by.
     inline constexpr std::size_t client_capacity = 32;
@@ -224,12 +222,7 @@ export {
       HeldTabs held_tabs;
     };
 
-    extern template class ClientSession<SystemAllocator>;
     extern template class ClientSession<ConcurrentMemory>;
-    extern template Attachment<Memory>* ClientSession<Memory>::attachment(std::uint64_t pane_id) const noexcept;
-    extern template std::uint32_t ClientSession<Memory>::observerBit() const noexcept;
-    extern template Attachment<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>* ClientSession<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>::attachment(std::uint64_t pane_id) const noexcept;
-    extern template std::uint32_t ClientSession<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>::observerBit() const noexcept;
 
   }
 }
@@ -443,20 +436,7 @@ export {
 #endif
     };
 
-    extern template class Pane<SystemAllocator>;
     extern template class Pane<ConcurrentMemory>;
-    extern template Pane<Memory>::Pane(Memory& memory, std::uint64_t identity, TabLocation location, Command<Memory>& command, PaneLaunch settings);
-    extern template void Pane<Memory>::observeShell() noexcept;
-    extern template bool Pane<Memory>::hasInput() const noexcept;
-    extern template void Pane<Memory>::requestClose() noexcept;
-    extern template void Pane<Memory>::resumeControl();
-    extern template std::optional<std::int32_t> Pane<Memory>::exitCode() const noexcept;
-    extern template Pane<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>::Pane(SynchronizedAllocator<BudgetAllocator<SystemAllocator>>& memory, std::uint64_t identity, TabLocation location, Command<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>& command, PaneLaunch settings);
-    extern template void Pane<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>::observeShell() noexcept;
-    extern template bool Pane<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>::hasInput() const noexcept;
-    extern template void Pane<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>::requestClose() noexcept;
-    extern template void Pane<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>::resumeControl();
-    extern template std::optional<std::int32_t> Pane<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>::exitCode() const noexcept;
 
   }
 }
@@ -487,9 +467,7 @@ export {
       Vector<std::uint64_t, Memory> panes;
     };
 
-    extern template struct Tab<SystemAllocator>;
     extern template struct Tab<ConcurrentMemory>;
-    extern template struct Tab<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>;
 
     template <Allocator Memory>
     class Workspace {
@@ -513,9 +491,7 @@ export {
       bool git_timed_out = false;
     };
 
-    extern template class Workspace<SystemAllocator>;
     extern template class Workspace<ConcurrentMemory>;
-    extern template Workspace<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>::Workspace(SynchronizedAllocator<BudgetAllocator<SystemAllocator>>& memory, std::uint64_t identity, std::string_view directory, std::string_view label);
 
   }
 }
@@ -556,7 +532,6 @@ export {
       std::optional<std::uint64_t> command_pane;
     };
 
-    extern template struct Worktree<SystemAllocator>;
     extern template struct Worktree<ConcurrentMemory>;
 
     template <Allocator Memory>
@@ -584,10 +559,7 @@ export {
       SlotStore<Worktree<Memory>, capacity, Memory> entries_;
     };
 
-    extern template class Worktrees<SystemAllocator>;
     extern template class Worktrees<ConcurrentMemory>;
-    extern template Worktrees<Memory>::Worktrees(Memory& memory);
-    extern template Worktrees<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>::Worktrees(SynchronizedAllocator<BudgetAllocator<SystemAllocator>>& memory);
 
   }
 }
@@ -664,13 +636,6 @@ export {
     template <Allocator Memory>
     tbc::view<Pane<Memory>&, tbc::lt::a> requireReporterPane(tbc::view<PaneStore<Memory>&, tbc::lt::a> panes, const ClientSession<Memory>& client, std::uint64_t identity, std::uint64_t generation);
 
-    extern template bool tabHeld<SystemAllocator>(const ClientStore<SystemAllocator>& clients, TabLocation location) noexcept;
-    extern template ClientSession<SystemAllocator>& requireClient<SystemAllocator>(ClientStore<SystemAllocator>& clients, std::uint64_t identity);
-    extern template tbc::view<Pane<SystemAllocator>*, tbc::lt::a> findPane<SystemAllocator>(tbc::view<PaneStore<SystemAllocator>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
-    extern template tbc::view<const Pane<SystemAllocator>*, tbc::lt::a> findPane<SystemAllocator>(tbc::view<const PaneStore<SystemAllocator>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
-    extern template tbc::view<Pane<SystemAllocator>*, tbc::lt::a> livePane<SystemAllocator>(tbc::view<PaneStore<SystemAllocator>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
-    extern template tbc::view<const Pane<SystemAllocator>*, tbc::lt::a> livePane<SystemAllocator>(tbc::view<const PaneStore<SystemAllocator>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
-    extern template tbc::view<Pane<SystemAllocator>&, tbc::lt::a> requireReporterPane<SystemAllocator>(tbc::view<PaneStore<SystemAllocator>&, tbc::lt::a> panes, const ClientSession<SystemAllocator>& client, std::uint64_t identity, std::uint64_t generation);
     extern template bool tabHeld<ConcurrentMemory>(const ClientStore<ConcurrentMemory>& clients, TabLocation location) noexcept;
     extern template ClientSession<ConcurrentMemory>& requireClient<ConcurrentMemory>(ClientStore<ConcurrentMemory>& clients, std::uint64_t identity);
     extern template tbc::view<Pane<ConcurrentMemory>*, tbc::lt::a> findPane<ConcurrentMemory>(tbc::view<PaneStore<ConcurrentMemory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
@@ -678,10 +643,6 @@ export {
     extern template tbc::view<Pane<ConcurrentMemory>*, tbc::lt::a> livePane<ConcurrentMemory>(tbc::view<PaneStore<ConcurrentMemory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
     extern template tbc::view<const Pane<ConcurrentMemory>*, tbc::lt::a> livePane<ConcurrentMemory>(tbc::view<const PaneStore<ConcurrentMemory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
     extern template tbc::view<Pane<ConcurrentMemory>&, tbc::lt::a> requireReporterPane<ConcurrentMemory>(tbc::view<PaneStore<ConcurrentMemory>&, tbc::lt::a> panes, const ClientSession<ConcurrentMemory>& client, std::uint64_t identity, std::uint64_t generation);
-    extern template tbc::view<Pane<Memory>*, tbc::lt::a> findPane<Memory>(tbc::view<PaneStore<Memory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
-    extern template tbc::view<const Pane<Memory>*, tbc::lt::a> findPane<Memory>(tbc::view<const PaneStore<Memory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
-    extern template tbc::view<Pane<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>*, tbc::lt::a> findPane<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>(tbc::view<PaneStore<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
-    extern template tbc::view<const Pane<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>*, tbc::lt::a> findPane<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>(tbc::view<const PaneStore<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
 
     // The runtime's data apart from its clients, whose table is separate so that a call can borrow one
     // client and the model at once, as Rust borrows two fields of a struct.
@@ -713,10 +674,7 @@ export {
       bool stopping = false;
     };
 
-    extern template struct RuntimeModel<SystemAllocator>;
-    extern template struct RuntimeModel<Memory>;
     extern template struct RuntimeModel<ConcurrentMemory>;
-    extern template struct RuntimeModel<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>;
 
   }
 }
@@ -843,7 +801,6 @@ export {
       std::uint64_t clock_ = 0;
     };
 
-    extern template class ClientLayouts<SystemAllocator>;
     extern template class ClientLayouts<ConcurrentMemory>;
 
   }

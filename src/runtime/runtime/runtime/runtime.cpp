@@ -101,7 +101,6 @@ namespace telar::runtime {
   }
 
   template class AgentSnapshotBuilder<ConcurrentMemory>;
-  template class AgentSnapshotBuilder<SystemAllocator>;
 
   template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
   AgentService<Memory, Poller, History>::AgentService(Memory& memory)
@@ -672,7 +671,7 @@ namespace telar::runtime {
   }
 
   template class AgentService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>, RuntimeBackground>;
-  template class AgentService<SystemAllocator, NativeEventLoop<SystemAllocator>, DiscardedHistory>;
+  template class AgentService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>, DiscardedHistory>;
 
   void ownDirectory(tbc::view<Launch&, tbc::lt::a> launch, tbc::view<LaunchDirectory&, tbc::lt::a> storage, std::string_view directory) {
     if (directory.size() > 4096) {
@@ -714,7 +713,6 @@ namespace telar::runtime {
   }
 
   template tbc::view<Launch, tbc::lt::a> resolveLaunchDirectory<ConcurrentMemory>(const RuntimeModel<ConcurrentMemory>& model, const ClientSession<ConcurrentMemory>& client, tbc::view<Launch, tbc::lt::a> launch, tbc::view<LaunchDirectory&, tbc::lt::a> directory, LaunchDirectoryScope scope);
-  template tbc::view<Launch, tbc::lt::a> resolveLaunchDirectory<SystemAllocator>(const RuntimeModel<SystemAllocator>& model, const ClientSession<SystemAllocator>& client, tbc::view<Launch, tbc::lt::a> launch, tbc::view<LaunchDirectory&, tbc::lt::a> directory, LaunchDirectoryScope scope);
 
   template <Allocator Memory>
   PluginDelivery<Memory>::PluginDelivery(LimitService<Memory>& limits) noexcept
@@ -752,7 +750,6 @@ namespace telar::runtime {
   }
 
   template class PluginDelivery<ConcurrentMemory>;
-  template class PluginDelivery<SystemAllocator>;
 
   template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
   WorkspaceService<Memory, Poller, History>::WorkspaceService(Memory& memory)
@@ -1440,7 +1437,7 @@ namespace telar::runtime {
   }
 
   template class WorkspaceService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>, RuntimeBackground>;
-  template class WorkspaceService<SystemAllocator, NativeEventLoop<SystemAllocator>, DiscardedHistory>;
+  template class WorkspaceService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>, DiscardedHistory>;
 
   template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
   WorktreeService<Memory, Poller, History>::WorktreeService(Memory& memory, LimitService<Memory>& limits)
@@ -1657,7 +1654,7 @@ namespace telar::runtime {
   }
 
   template class WorktreeService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>, RuntimeBackground>;
-  template class WorktreeService<SystemAllocator, NativeEventLoop<SystemAllocator>, DiscardedHistory>;
+  template class WorktreeService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>, DiscardedHistory>;
 
   template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, Memory>

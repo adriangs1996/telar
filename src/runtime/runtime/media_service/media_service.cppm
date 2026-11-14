@@ -179,7 +179,6 @@ export {
     BackgroundService(Memory& memory, const char* history_path, const HistoryFilters& filters = default_history_filters) -> BackgroundService<Memory>;
 
     extern template class BackgroundService<ConcurrentMemory>;
-    extern template class BackgroundService<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>;
 
   }
 }
@@ -211,7 +210,6 @@ export {
       bool descriptions_enabled_ = false;
     };
 
-    extern template class DescriptionQueue<SystemAllocator>;
     extern template class DescriptionQueue<ConcurrentMemory>;
 
   }
@@ -528,8 +526,8 @@ export {
     // The runtime's pool and media service, which name the services above.
     extern template class BackgroundPool<ConcurrentMemory, BackgroundService<ConcurrentMemory>, PathService<ConcurrentMemory>, EditorService<ConcurrentMemory>, SuggestionService<ConcurrentMemory>>;
 
-    extern template class MediaService<SystemAllocator, NativeEventLoop<SystemAllocator>, LimitService<SystemAllocator>>;
     extern template class MediaService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>, LimitService<ConcurrentMemory>, BackgroundPool<ConcurrentMemory, BackgroundService<ConcurrentMemory>, PathService<ConcurrentMemory>, EditorService<ConcurrentMemory>, SuggestionService<ConcurrentMemory>>>;
+    extern template class MediaService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>, LimitService<ConcurrentMemory>>;
 
   }
 }

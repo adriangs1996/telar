@@ -45,10 +45,7 @@ export {
       static bool precedes(const ClientSession<Memory>& candidate, const ClientSession<Memory>& current, std::uint64_t pane) noexcept;
     };
 
-    extern template class ClipboardService<SystemAllocator>;
-    extern template class ClipboardService<Memory>;
     extern template class ClipboardService<ConcurrentMemory>;
-    extern template class ClipboardService<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>;
 
   }
 }
@@ -114,7 +111,6 @@ export {
       std::uint64_t occupied_ = 0;
     };
 
-    extern template class AttachmentDelivery<SystemAllocator>;
     extern template class AttachmentDelivery<ConcurrentMemory>;
 
   }
@@ -237,7 +233,6 @@ export {
     template <Allocator Memory>
     ResponseProjection(Memory& memory, RuntimeModel<Memory>& model) -> ResponseProjection<Memory>;
 
-    extern template class ResponseProjection<SystemAllocator>;
     extern template class ResponseProjection<ConcurrentMemory>;
 
   }
@@ -350,7 +345,6 @@ export {
     template <Allocator Memory>
     ClientDelivery(Memory& memory, RuntimeModel<Memory>& model) -> ClientDelivery<Memory>;
 
-    extern template class ClientDelivery<SystemAllocator>;
     extern template class ClientDelivery<ConcurrentMemory>;
 
   }

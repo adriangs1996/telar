@@ -95,7 +95,6 @@ export {
     };
 
     extern template class LimitService<ConcurrentMemory>;
-    extern template class LimitService<SystemAllocator>;
 
   }
 }
@@ -163,9 +162,7 @@ export {
     std::optional<std::uint64_t> previousWorkspace(const WorkspaceStore<Memory>& workspaces, std::uint64_t identity) noexcept;
 
     extern template void notifyWorkspaceObservers<ConcurrentMemory>(ClientStore<ConcurrentMemory>& clients, std::uint64_t workspace, std::uint64_t origin, std::optional<std::uint64_t> previous) noexcept;
-    extern template void notifyWorkspaceObservers<SystemAllocator>(ClientStore<SystemAllocator>& clients, std::uint64_t workspace, std::uint64_t origin, std::optional<std::uint64_t> previous) noexcept;
     extern template std::optional<std::uint64_t> previousWorkspace<ConcurrentMemory>(const WorkspaceStore<ConcurrentMemory>& workspaces, std::uint64_t identity) noexcept;
-    extern template std::optional<std::uint64_t> previousWorkspace<SystemAllocator>(const WorkspaceStore<SystemAllocator>& workspaces, std::uint64_t identity) noexcept;
 
   }
 }
@@ -185,11 +182,8 @@ export {
     void releaseAllGeometry(WorkspaceStore<Memory>& workspaces, ClientStore<Memory>& clients, std::uint64_t client) noexcept;
 
     extern template bool acquireGeometry<ConcurrentMemory>(PaneStore<ConcurrentMemory>& panes, diagnostics::RuntimeCounters& metrics, const ClientSession<ConcurrentMemory>& client, Workspace<ConcurrentMemory>& workspace);
-    extern template bool acquireGeometry<SystemAllocator>(PaneStore<SystemAllocator>& panes, diagnostics::RuntimeCounters& metrics, const ClientSession<SystemAllocator>& client, Workspace<SystemAllocator>& workspace);
     extern template void releaseGeometry<ConcurrentMemory>(ClientStore<ConcurrentMemory>& clients, std::uint64_t client, Workspace<ConcurrentMemory>& workspace) noexcept;
-    extern template void releaseGeometry<SystemAllocator>(ClientStore<SystemAllocator>& clients, std::uint64_t client, Workspace<SystemAllocator>& workspace) noexcept;
     extern template void releaseAllGeometry<ConcurrentMemory>(WorkspaceStore<ConcurrentMemory>& workspaces, ClientStore<ConcurrentMemory>& clients, std::uint64_t client) noexcept;
-    extern template void releaseAllGeometry<SystemAllocator>(WorkspaceStore<SystemAllocator>& workspaces, ClientStore<SystemAllocator>& clients, std::uint64_t client) noexcept;
 
   }
 }
@@ -963,7 +957,6 @@ export {
     };
 
     extern template class ExecutionService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>>;
-    extern template class ExecutionService<SystemAllocator, NativeEventLoop<SystemAllocator>>;
 
   }
 }

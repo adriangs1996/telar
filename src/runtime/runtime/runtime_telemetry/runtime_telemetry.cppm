@@ -219,13 +219,7 @@ export {
 
     // The sample reads counters that only a diagnostics build keeps.
 #if TELAR_DIAGNOSTICS
-    extern template void writeRuntimeSample<SystemAllocator>(Line& line, RuntimeModel<SystemAllocator>& model, const ClientStore<SystemAllocator>& clients);
     extern template void writeRuntimeSample<ConcurrentMemory>(Line& line, RuntimeModel<ConcurrentMemory>& model, const ClientStore<ConcurrentMemory>& clients);
-    extern template void writeRuntimeSample<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>(
-        Line& line,
-        RuntimeModel<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>& model,
-        const ClientStore<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>& clients
-    );
 #endif
 
   }

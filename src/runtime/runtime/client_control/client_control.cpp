@@ -253,7 +253,6 @@ namespace telar::runtime {
     }
   }
 
-  template class ClientControl<SystemAllocator>;
   template class ClientControl<ConcurrentMemory>;
 
   RuntimeClipboardReader::Result RuntimeClipboardReader::observe(const Request&) noexcept {

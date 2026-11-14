@@ -82,7 +82,6 @@ export {
     };
 
     extern template class AgentSnapshotBuilder<ConcurrentMemory>;
-    extern template class AgentSnapshotBuilder<SystemAllocator>;
 
   }
 }
@@ -193,7 +192,7 @@ export {
     };
 
     extern template class AgentService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>, RuntimeBackground>;
-    extern template class AgentService<SystemAllocator, NativeEventLoop<SystemAllocator>, DiscardedHistory>;
+    extern template class AgentService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>, DiscardedHistory>;
 
   }
 }
@@ -216,7 +215,6 @@ export {
     tbc::view<Launch, tbc::lt::a> resolveLaunchDirectory(const RuntimeModel<Memory>& model, const ClientSession<Memory>& client, tbc::view<Launch, tbc::lt::a> launch, tbc::view<LaunchDirectory&, tbc::lt::a> directory, LaunchDirectoryScope scope = {});
 
     extern template tbc::view<Launch, tbc::lt::a> resolveLaunchDirectory<ConcurrentMemory>(const RuntimeModel<ConcurrentMemory>& model, const ClientSession<ConcurrentMemory>& client, tbc::view<Launch, tbc::lt::a> launch, tbc::view<LaunchDirectory&, tbc::lt::a> directory, LaunchDirectoryScope scope);
-    extern template tbc::view<Launch, tbc::lt::a> resolveLaunchDirectory<SystemAllocator>(const RuntimeModel<SystemAllocator>& model, const ClientSession<SystemAllocator>& client, tbc::view<Launch, tbc::lt::a> launch, tbc::view<LaunchDirectory&, tbc::lt::a> directory, LaunchDirectoryScope scope);
 
   }
 }
@@ -284,7 +282,6 @@ export {
     PluginDelivery(LimitService<Memory>& limits) -> PluginDelivery<Memory>;
 
     extern template class PluginDelivery<ConcurrentMemory>;
-    extern template class PluginDelivery<SystemAllocator>;
 
   }
 }
@@ -402,7 +399,7 @@ export {
     };
 
     extern template class WorkspaceService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>, RuntimeBackground>;
-    extern template class WorkspaceService<SystemAllocator, NativeEventLoop<SystemAllocator>, DiscardedHistory>;
+    extern template class WorkspaceService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>, DiscardedHistory>;
 
   }
 }
@@ -441,7 +438,7 @@ export {
     };
 
     extern template class WorktreeService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>, RuntimeBackground>;
-    extern template class WorktreeService<SystemAllocator, NativeEventLoop<SystemAllocator>, DiscardedHistory>;
+    extern template class WorktreeService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>, DiscardedHistory>;
 
   }
 }
