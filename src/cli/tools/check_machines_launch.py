@@ -4,7 +4,9 @@ import base64
 import json
 import os
 from pathlib import Path
+import pty
 import re
+import select
 import subprocess
 import socket
 import tempfile
@@ -67,6 +69,23 @@ def outcomes(binary):
             result = invoke(binary, root, env, args, data)
             cases.append({'name': normalize(name, root, binary), **result})
             return result
+        def run_terminal(name, args, streams):
+            leader, follower = pty.openpty()
+            try:
+                result = subprocess.run([str(binary), *args], stdin=follower,
+                                        stdout=follower if 'stdout' in streams else subprocess.PIPE,
+                                        stderr=subprocess.PIPE, env=env, cwd=root, timeout=15)
+                # Drain while the follower is still open: closing it can drop what is queued.
+                output = result.stdout or b''
+                while select.select([leader], [], [], 0)[0]:
+                    output += os.read(leader, 65536)
+            finally:
+                os.close(follower)
+                os.close(leader)
+            cases.append({'name': name, 'status': result.returncode,
+                          'stdout': normalize(output.decode(errors='backslashreplace').replace('\r\n', '\n'), root, binary),
+                          'stderr': normalize(result.stderr.decode(errors='backslashreplace'), root, binary),
+                          'files': snapshot(root, binary)})
         for args in [[], ['wat'], ['add'], ['add', 'box'], ['check'], ['receive-config', 'extra'], ['list', '--socket', '/x'],
                      ['add','box','host','--color'], ['add','box','host','--color','red','--color','blue'],
                      ['add','box','host','--binary','x'], ['add','box','host','--skip','agents'],
@@ -132,6 +151,10 @@ def outcomes(binary):
         env['PATH']=str(bindir)+':/usr/bin:/bin'
         # The isolated profile is disabled: dispatch still explicitly selects it.
         run('ssh-forward', ['--machine','box','cli','status','--dir',"space ' quote $(touch nope);\nline"])
+        # A person at a terminal gets one there, so a remote removal can ask them;
+        # a terminal on stdin alone keeps stdout clean of the remote terminal's \r\n.
+        for name, streams in [('ssh-forward-terminal', ('stdin', 'stdout')), ('ssh-forward-terminal-stdin', ('stdin',))]:
+            run_terminal(name, ['--machine','box','worktree','remove','branch','--force'], streams)
         schema = 'cqp00004' if b'cqp00004' in binary.read_bytes() else '886b480d'
         fixtures = [
             ('reachable', f'printf "%s\\n" "$HOME" /bin/sh "{root}/remote.sock" {schema}\n'),
