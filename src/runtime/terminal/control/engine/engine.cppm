@@ -10,6 +10,7 @@ import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.base.text;
 import telar.config.runtime;
+import telar.base.text.utf8;
 import telar.vocabulary;
 import telar.runtime.terminal.control;
 import telar.runtime.terminal.control.checksum;

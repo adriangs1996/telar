@@ -7,7 +7,6 @@ static_assert(true);
 #include <sqlite3.h>
 
 import std;
-import telar.base.text;
 import telar.runtime.tests.agent_oracle;
 import telar.runtime.history.store;
 import telar.config.core;

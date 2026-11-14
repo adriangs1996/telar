@@ -15,7 +15,6 @@ import std;
 
 export import telar.gui.machines.discovery;
 
-export import telar.base.text;
 export import telar.gui.text.json_unsigned_integer;
 import telar.base.diagnostics;
 import telar.base.memory.allocators;

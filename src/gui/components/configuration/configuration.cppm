@@ -28,6 +28,7 @@ export import telar.lua;
 
 export import telar.base.memory.containers;
 export import telar.base.text;
+export import telar.base.text.utf8;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 

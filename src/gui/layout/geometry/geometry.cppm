@@ -2,7 +2,7 @@ export module telar.gui.layout.geometry;
 
 import std;
 
-export import telar.base.text;
+export import telar.base.text.utf8;
 export import telar.gui.core.metrics;
 export import telar.gui.core.unicode_scalar;
 import telar.wire.layout;

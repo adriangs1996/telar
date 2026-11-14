@@ -24,6 +24,8 @@ export module telar.lua;
 import std;
 
 export import telar.base.text;
+export import telar.base.text.json;
+export import telar.base.text.utf8;
 import telar.base.diagnostics;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;

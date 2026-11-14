@@ -8,6 +8,7 @@ import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.base.text;
 import telar.config.runtime;
+import telar.base.text.utf8;
 import telar.platform.primitives;
 import telar.wire.clipboard;
 import telar.wire.vocabulary;

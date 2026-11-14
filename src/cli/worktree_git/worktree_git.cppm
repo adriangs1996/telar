@@ -47,6 +47,8 @@ export import telar.cli.server;
 export import telar.base.memory.allocators;
 export import telar.base.memory.containers;
 import telar.base.diagnostics;
+import telar.base.text;
+import telar.base.text.json;
 import telar.wire.vocabulary;
 import telar.wire.layout;
 import telar.wire.pane_io;

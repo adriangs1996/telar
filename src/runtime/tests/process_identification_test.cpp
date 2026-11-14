@@ -25,7 +25,6 @@ static_assert(true);
 import std;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
-import telar.base.text;
 import telar.platform.primitives;
 import telar.runtime.tests.check;
 import telar.runtime.agents.snapshot;

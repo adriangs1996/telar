@@ -7,7 +7,7 @@ static_assert(true);
 
 import std;
 import telar.base.memory.allocators;
-import telar.base.text;
+import telar.base.text.json;
 import telar.cli.tests.check;
 import telar.cli.output;
 

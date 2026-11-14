@@ -10,7 +10,6 @@ export import telar.wire.pane_io;
 export import telar.runtime.platform.request_worker;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
-import telar.base.text;
 
 // The git context of integrated shells: after each command, the repository their working
 // directory is in, read natively on a worker so a large work tree never stalls the runtime.

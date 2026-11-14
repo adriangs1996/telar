@@ -6,6 +6,7 @@ export module telar.render.document;
 import std;
 export import telar.base.memory.allocators;
 import telar.base.text;
+import telar.base.text.utf8;
 
 // A rendered document: what every renderer produces and what a client draws.
 // Containers (quotes, lists, callouts) are flattened into the decorations of

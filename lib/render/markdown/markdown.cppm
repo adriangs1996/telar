@@ -9,7 +9,7 @@ export module telar.render.markdown;
 
 import std;
 export import telar.render.document;
-import telar.base.text;
+import telar.base.text.utf8;
 
 // Renders GitHub-flavoured Markdown into a Document. The source is never
 // fetched from or resolved against anything: links and images stay text.

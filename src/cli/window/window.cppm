@@ -17,7 +17,8 @@ export import telar.cli.output;
 
 export import telar.cli.plugin;
 
-export import telar.base.text;
+export import telar.base.text.json;
+export import telar.base.text.utf8;
 
 export import telar.cli.command_limit;
 export import telar.plugins;

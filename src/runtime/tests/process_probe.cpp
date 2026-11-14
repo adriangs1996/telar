@@ -10,7 +10,6 @@ static_assert(true);
 #include <unistd.h>
 
 import std;
-import telar.base.text;
 import telar.runtime.tests.agent_oracle;
 import telar.runtime.platform.process_probe;
 import telar.wire.agents;

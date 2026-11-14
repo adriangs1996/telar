@@ -60,7 +60,7 @@ import telar.gui.config.plugin_query;
 import telar.gui.config.generation;
 import telar.gui.config.gui_query;
 import telar.gui.input.copy_pointer;
-import telar.base.text;
+import telar.base.text.json;
 import telar.plugins;
 
 namespace {

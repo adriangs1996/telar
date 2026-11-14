@@ -85,7 +85,7 @@ import telar.gui.config.generation;
 import telar.gui.core.metrics;
 import telar.gui.input.copy_pointer;
 import telar.gui.input.configuration;
-import telar.base.text;
+import telar.base.text.json;
 import telar.plugins;
 
 namespace telar::gui::qt {

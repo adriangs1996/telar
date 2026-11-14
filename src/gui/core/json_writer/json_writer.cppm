@@ -13,7 +13,8 @@ export module telar.gui.core.json_writer;
 
 import std;
 
-import telar.base.text;
+import telar.base.text.json;
+import telar.base.text.utf8;
 import telar.wire.vocabulary;
 
 // Interface: core/cosine.cppm

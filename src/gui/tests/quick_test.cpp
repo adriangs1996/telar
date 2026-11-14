@@ -173,7 +173,8 @@ import telar.gui.platform.runtime_endpoint;
 import telar.gui.presentation.frame_pacer;
 import telar.gui.presentation.history_meta_geometry;
 import telar.gui.presentation.history_inspection;
-import telar.base.text;
+import telar.base.text.json;
+import telar.base.text.utf8;
 import telar.plugins;
 import telar.gui.text.bounded_editor;
 

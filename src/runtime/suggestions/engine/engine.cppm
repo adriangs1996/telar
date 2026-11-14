@@ -22,6 +22,7 @@ import std;
 export import telar.runtime.transport.connection;
 export import telar.base.text;
 export import telar.platform.net;
+export import telar.base.text.json;
 export import telar.platform.error;
 export import telar.platform.process;
 import telar.base.diagnostics;

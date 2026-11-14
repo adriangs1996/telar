@@ -48,7 +48,6 @@ static_assert(true);
 
 import telar.gui.tests.plugin_catalog_cases;
 import telar.gui.tests.plugin_effect_cases;
-import telar.base.text;
 import telar.platform.fs;
 import telar.plugins;
 #if (defined(__APPLE__))

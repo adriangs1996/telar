@@ -19,6 +19,7 @@ import std;
 
 export import telar.runtime.http.content;
 export import telar.base.text;
+export import telar.base.text.utf8;
 
 export import telar.base.memory.allocators;
 export import telar.base.memory.sensitive;

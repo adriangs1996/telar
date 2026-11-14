@@ -11,7 +11,6 @@ export module telar.runtime.diagnostics.runtime_counters;
 import std;
 
 import telar.base.diagnostics;
-import telar.base.text;
 import telar.wire.vocabulary;
 import telar.wire.graphics;
 import telar.runtime.diagnostics.line;

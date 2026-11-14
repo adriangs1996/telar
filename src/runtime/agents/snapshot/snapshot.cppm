@@ -41,7 +41,8 @@ export import telar.client;
 
 export import telar.runtime.history.store;
 
-export import telar.base.text;
+export import telar.base.text.json;
+export import telar.base.text.utf8;
 export import telar.platform.error;
 export import telar.platform.events;
 

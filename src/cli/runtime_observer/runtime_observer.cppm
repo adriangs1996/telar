@@ -30,6 +30,8 @@ export import telar.client;
 export import telar.platform.error;
 export import telar.platform.paths;
 import telar.base.diagnostics;
+import telar.base.text;
+import telar.base.text.json;
 import telar.wire.vocabulary;
 import telar.wire.agents;
 import telar.wire.clipboard;

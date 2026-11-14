@@ -42,7 +42,8 @@ export import telar.runtime.platform.background_executor;
 export import telar.runtime.runtime.delivery.client_delivery;
 
 export import telar.base.editors;
-export import telar.base.text;
+export import telar.base.text.json;
+export import telar.base.text.utf8;
 import telar.wire.vocabulary;
 import telar.wire.agents;
 import telar.wire.clients;

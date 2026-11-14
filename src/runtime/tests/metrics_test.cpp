@@ -22,7 +22,7 @@ static_assert(true);
 
 import std;
 import telar.base.memory.allocators;
-import telar.base.text;
+
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
 import telar.runtime.graphics.kitty;

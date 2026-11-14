@@ -67,6 +67,7 @@ export import telar.machines;
 export import telar.cli.output;
 
 export import telar.base.text;
+export import telar.base.text.json;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.platform.primitives;

@@ -23,6 +23,7 @@ export import telar.gui.text.bounded_editor;
 import telar.base.diagnostics;
 import telar.base.memory.containers;
 import telar.base.text;
+import telar.base.text.utf8;
 import telar.wire.editor;
 import telar.wire.runtime;
 import telar.wire.vocabulary;

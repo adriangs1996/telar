@@ -8,7 +8,6 @@ static_assert(true);
 #include <unistd.h>
 
 import std;
-import telar.base.text;
 import telar.runtime.tests.protocol_peer;
 import telar.config.core;
 import telar.wire.agents;

@@ -1,6 +1,7 @@
 import std;
 import telar.base.memory.allocators;
 import telar.base.text;
+import telar.base.text.utf8;
 import telar.render.document;
 import telar.render.markdown;
 import telar.render.terminal;

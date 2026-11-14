@@ -12,7 +12,7 @@ import std;
 
 import telar.base.diagnostics;
 import telar.base.memory.allocators;
-import telar.base.text;
+import telar.base.text.utf8;
 
 // Interface: persistence/launch_record.cppm
 export {

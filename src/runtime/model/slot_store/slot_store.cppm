@@ -14,7 +14,6 @@ import std;
 
 import telar.base.diagnostics;
 import telar.base.memory.allocators;
-import telar.base.text;
 import telar.wire.vocabulary;
 import telar.wire.agents;
 import telar.wire.clients;
