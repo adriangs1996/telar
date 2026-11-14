@@ -87,6 +87,14 @@ cualquier fichero puede incluir una cabecera de `macro_headers`, que no incluye 
 Los tests y las herramientas quedan fuera de la regla. [textual-includes.json](textual-includes.json) lista por
 fichero los includes que quedan; quien quita uno borra su entrada, y una entrada que
 ya no está en el fichero también hace fallar el checker.
+Una interfaz solo hace `export import` de un módulo si sus declaraciones exportadas
+nombran un tipo de ese módulo fuera de los cuerpos de función: es lo único que sus
+importadores necesitan nombrar, y lo demás lo importan ellos. La regla lee tokens, no
+el AST: un nombre sin cualificar que la interfaz declara también es el suyo, y uno
+cualificado cuenta si el cualificador es un namespace del tipo. Las particiones propias
+y `std` quedan fuera. [reexports.json](reexports.json) lista por módulo los re-exports
+que no cumplen; quien quita uno borra su entrada, y una entrada que ya cumple o ya no
+existe también hace fallar el checker.
 
 | Área | Interfaces finales | Organización |
 | --- | ---: | --- |
