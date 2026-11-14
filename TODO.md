@@ -629,10 +629,11 @@ Para cada módulo: `extern template class X<Memory>;` en la interfaz, la instanc
 
 ## Fase 10 · Colapsos (prioridad baja)
 
-### [ ] P10.1 · Módulos pequeños con un solo importador pasan a partición del importador
+### [x] P10.1 · Módulos pequeños con un solo importador pasan a partición del importador
 - **Depende de:** P1.2
 - **Módulos:** `gui.terminal.fold_map` (10 líneas), `telar.vocabulary` (19), `runtime.traffic.tap` (60, con 21 includes), `runtime.tls.system_root_bundle` (63), `runtime.persistence.launch_record` (71), `gui.prompt.routing` (71), `runtime.workspaces.git_probe` (82), `runtime.execution.execution` (93).
 
+- **Resultado:** `7720de780`. Pasan a partición de su único importador (tests incluidos) `gui.terminal.fold_map` (`workspace_replica:fold_map`), `runtime.traffic.tap` (`cli.server:tap`, importada solo por `server.cpp`), `runtime.model.launch_record` (`client_layouts:launch_record`) y `runtime.execution.execution` (`execution_service:execution`); la capa `execution` sale de `process_layers`. Se quedan por tener más de un importador `telar.vocabulary` (unos 35), `runtime.tls.system_root_bundle` (`proxy.runtime` y `tls_trust_test`), `gui.prompt.routing` (`prompt.line` y `prompt_editor_test`) y `runtime.workspaces.git_probe` (`media_service` y `worktree_probe_test`). Al integrar, `control-query-accounting-probe` (roto por P9.10, no por esta tarea) pasa a `ConcurrentMemory` en `247449863`. Con `fix-runtime-release` (`6a07c6922`: `writeRuntimeSample` queda bajo `TELAR_DIAGNOSTICS` como sus llamadas, y `diagnostics_test`, `client_control_test` e `input_capacity_test` dejan de condicionar a los diagnósticos imports que usan siempre), sobre `617e13168`: en Debug y en Release compilan runtime (`all runtime-probes`), CLI y GUI (`all gui-probes`), y pasan runtime (49), CLI (12) y GUI (138). En Release, `runtime-tests` y `tls-tests` fallan si `ulimit -n` es 256 (el `exec` de telar en `Personal` arranca así): `platform_test` y `proxy_trust_test` duplican descriptores por encima de 1000 y 4096. Con 8192 pasan; los tests no suben su propio límite.
 ### [x] P10.2 · Cadenas lineales
 - **Depende de:** P1.2
 - **Qué hace:** evaluar si se colapsan `gui.prompt.text` → `prompt.editor` → `prompt.line` y `render.document` → `render.terminal` → `cli.render`. Comparte `prompt` con P9.8: no se ejecutan a la vez.
