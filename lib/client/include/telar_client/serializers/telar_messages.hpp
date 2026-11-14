@@ -157,11 +157,7 @@ namespace telar {
     std::uint64_t client_identity;
     bool interactive = false;
 
-    void validate() const {
-      if (client_identity == 0) {
-        throw std::runtime_error{"Invalid client identity"};
-      }
-    }
+    void validate() const;
   };
 
   struct SystemMetrics {
@@ -173,15 +169,7 @@ namespace telar {
     std::uint16_t cpu_count;
     std::uint16_t memory_total_decigib;
 
-    void validate() const {
-      if (revision == 0 || cpu_percent > 100) {
-        throw std::runtime_error{"Invalid system metrics"};
-      }
-
-      if ((has_battery && battery_percent > 100) || (!has_battery && battery_percent != 0)) {
-        throw std::runtime_error{"Invalid battery metrics"};
-      }
-    }
+    void validate() const;
   };
 
   template <>
@@ -352,15 +340,7 @@ namespace telar {
   inline constexpr std::size_t max_notification_link_bytes = 1024;
   inline constexpr std::string_view notification_link_scheme = "https://";
 
-  inline std::string_view notificationLinkHost(std::string_view link) noexcept {
-    if (!link.starts_with(notification_link_scheme)) {
-      return {};
-    }
-
-    const auto rest = link.substr(notification_link_scheme.size());
-
-    return rest.substr(0, rest.find_first_of("/?#"));
-  }
+  tbc::view<std::string_view, tbc::lt::a> notificationLinkHost(tbc::view<std::string_view, tbc::lt::a> link) noexcept;
 
   enum class NotificationLevel : Byte {
     info = 0,
@@ -669,12 +649,7 @@ namespace telar {
     // Matches frame_support.max_cell_count and its worst-case metadata budget.
     static constexpr std::uint32_t max_cells = 130359;
 
-    static void validate(const TerminalSize& value) {
-      const auto cells = static_cast<std::uint32_t>(value.cols) * value.rows;
-      if (value.cols == 0 || value.rows == 0 || cells > max_cells) {
-        throw EncodingError{"Invalid terminal dimensions"};
-      }
-    }
+    static void validate(const TerminalSize& value);
   };
 
   template <typename Value, Byte Maximum>
@@ -725,65 +700,9 @@ namespace telar {
     static constexpr bool fixed_size = false;
     using PathCodec = Text16<4096, false>;
 
-    static std::size_t encodedSize(const HistoryScopeValue& value, HistoryScope scope) {
-      EnumByte<HistoryScope, 3>::validate(scope);
-      switch (scope) {
-      case HistoryScope::global:
-        if (std::holds_alternative<std::monostate>(value)) {
-          return 0;
-        }
-
-        break;
-      case HistoryScope::cwd:
-      case HistoryScope::workspace:
-        if (const auto* path = std::get_if<std::string_view>(&value)) {
-          return PathCodec::encodedSize(*path);
-        }
-
-        break;
-      case HistoryScope::pane:
-        if (const auto* id = std::get_if<std::uint64_t>(&value)) {
-          NonzeroU64::validate(*id);
-          return 8;
-        }
-
-        break;
-      }
-
-      throw EncodingError{"History scope and value do not match"};
-    }
-
-    static void
-    encodeBody(const HistoryScopeValue& value, std::span<Byte>& output, HistoryScope scope) {
-      (void)encodedSize(value, scope);
-      switch (scope) {
-      case HistoryScope::global:
-        break;
-      case HistoryScope::cwd:
-      case HistoryScope::workspace:
-        PathCodec::encode(std::get<std::string_view>(value), output);
-        break;
-      case HistoryScope::pane:
-        NonzeroU64::encode(std::get<std::uint64_t>(value), output);
-        break;
-      }
-    }
-
-    static void decodeBody(DecodeInput input, tbc::view<HistoryScopeValue&, tbc::lt::a> value, DecodeStorage&, HistoryScope scope) {
-      EnumByte<HistoryScope, 3>::validate(scope);
-      switch (scope) {
-      case HistoryScope::global:
-        value = std::monostate{};
-        break;
-      case HistoryScope::cwd:
-      case HistoryScope::workspace:
-        value = PathCodec::decode(input);
-        break;
-      case HistoryScope::pane:
-        value = NonzeroU64::decode(input);
-        break;
-      }
-    }
+    static std::size_t encodedSize(const HistoryScopeValue& value, HistoryScope scope);
+    static void encodeBody(const HistoryScopeValue& value, std::span<Byte>& output, HistoryScope scope);
+    static void decodeBody(DecodeInput input, tbc::view<HistoryScopeValue&, tbc::lt::a> value, DecodeStorage&, HistoryScope scope);
   };
 
   template <>
@@ -793,25 +712,13 @@ namespace telar {
   template <>
   struct BodySchema<CoordinatorReference>
       : Serializer<Field<&CoordinatorReference::session_id, FixedBytes<16>, "session_id">, Field<&CoordinatorReference::pane_id, NonzeroU64, "pane_id">, Field<&CoordinatorReference::pane_generation, NonzeroU64, "pane_generation">> {
-    static void validate(const CoordinatorReference& value) {
-      for (const auto byte : value.session_id) {
-        if (byte != 0) {
-          return;
-        }
-      }
-
-      throw EncodingError{"Missing coordinator session identity"};
-    }
+    static void validate(const CoordinatorReference& value);
   };
 
   template <>
   struct BodySchema<EnvironmentEntry>
       : Serializer<Field<&EnvironmentEntry::name, Text16<65535, false>, "name">, Field<&EnvironmentEntry::value, Text32<512 * 1024>, "value">> {
-    static void validate(const EnvironmentEntry& value) {
-      if (value.name.find('=') != std::string_view::npos) {
-        throw EncodingError{"Invalid environment name"};
-      }
-    }
+    static void validate(const EnvironmentEntry& value);
   };
 
   template <>
@@ -822,29 +729,7 @@ namespace telar {
             Field<&Launch::arguments, CountedSpan<u16, Text16<65535>, 64, 1>, "arguments">,
             Field<&Launch::environment_mode, EnumByte<EnvironmentMode, 1>, "environment_mode">,
             Field<&Launch::environment, CountedSpan<u16, ValueCodec<EnvironmentEntry>, 256>, "environment">> {
-    static void validate(const Launch& value) {
-      if (value.arguments.empty() || value.arguments.size() > 64 ||
-          value.arguments.front().empty() || value.environment.size() > 256) {
-        throw EncodingError{"Invalid launch collections"};
-      }
-
-      std::size_t arguments = 0;
-
-      for (const auto argument : value.arguments) {
-        arguments = checkedWireSize(arguments, argument.size());
-      }
-
-      std::size_t environment = 0;
-
-      for (const auto& entry : value.environment) {
-        environment = checkedWireSize(environment, entry.name.size());
-        environment = checkedWireSize(environment, entry.value.size());
-      }
-
-      if (arguments > 128 * 1024 || environment > 512 * 1024) {
-        throw EncodingError{"Launch byte budget exceeded"};
-      }
-    }
+    static void validate(const Launch& value);
   };
 
   template <>
@@ -854,29 +739,13 @@ namespace telar {
   template <>
   struct BodySchema<PaneListEntry>
       : Serializer<Field<&PaneListEntry::pane_id, NonzeroU64, "pane_id">, Field<&PaneListEntry::pane_generation, NonzeroU64, "pane_generation">, Field<&PaneListEntry::location, ValueCodec<TabLocation>, "location">, Field<&PaneListEntry::foreground, Text16<48, false>, "foreground">, Field<&PaneListEntry::foreground_age_s, u32, "foreground_age_s">, Field<&PaneListEntry::shell, BoolByte, "shell">, Field<&PaneListEntry::ports, CountedSpan<u8, BoundedInteger<u16, 1>, max_listed_ports>, "ports">> {
-    static void validate(const PaneListEntry& value) {
-      if (std::ranges::adjacent_find(value.ports, std::ranges::greater_equal{}) != value.ports.end()) {
-        throw EncodingError{"Listening ports must ascend without repeats"};
-      }
-    }
+    static void validate(const PaneListEntry& value);
   };
 
   template <>
   struct BodySchema<TabDescriptor>
       : Serializer<Field<&TabDescriptor::tab_id, NonzeroU64, "tab_id">, Field<&TabDescriptor::position, u16, "position">, Field<&TabDescriptor::pane_count, BoundedInteger<u16, 0, 64>, "pane_count">, Field<&TabDescriptor::label, DisplayText16<128>, "label">, Field<&TabDescriptor::panes, CountedSpan<u16, ValueCodec<TabPane>, 64>, "panes">> {
-    static void validate(const TabDescriptor& value) {
-      if (value.panes.size() > value.pane_count) {
-        throw EncodingError{"Too many tab pane entries"};
-      }
-
-      for (std::size_t i = 0; i < value.panes.size(); ++i) {
-        for (std::size_t j = 0; j < i; ++j) {
-          if (value.panes[i].pane_id == value.panes[j].pane_id) {
-            throw EncodingError{"Duplicate tab pane"};
-          }
-        }
-      }
-    }
+    static void validate(const TabDescriptor& value);
   };
 
   template <>
@@ -906,11 +775,7 @@ namespace telar {
             Field<&WorktreeListEntry::command_label, DisplayText16<48>, "command_label">,
             Field<&WorktreeListEntry::command_state, EnumByte<CommandState, 2>, "command_state">,
             Field<&WorktreeListEntry::command_exit, i32, "command_exit">> {
-    static void validate(const WorktreeListEntry& value) {
-      if (value.path.empty() || value.path.front() != '/') {
-        throw EncodingError{"Worktree path must be absolute"};
-      }
-    }
+    static void validate(const WorktreeListEntry& value);
   };
 
   template <>
@@ -952,36 +817,7 @@ namespace telar {
             Field<&AgentSnapshotEntry::plan_done, u16, "plan_done">,
             Field<&AgentSnapshotEntry::plan_total, u16, "plan_total">,
             Field<&AgentSnapshotEntry::plan_step, DisplayText16<96>, "plan_step">> {
-    static void validate(const AgentSnapshotEntry& value) {
-      if (value.expires_at_ms < value.observed_at_ms || value.plan_done > value.plan_total ||
-          (value.status != AgentStatus::blocked &&
-              value.blocked_reason != AgentBlockedReason::none)) {
-        throw EncodingError{"Invalid agent state"};
-      }
-
-      switch (value.title_source) {
-      case AgentTitleSource::telar:
-        if (value.title_state == AgentTitleState::ready) {
-          throw EncodingError{"Invalid agent title"};
-        }
-
-        break;
-      case AgentTitleSource::generated:
-      case AgentTitleSource::manual:
-      case AgentTitleSource::agent:
-        if (value.title_state != AgentTitleState::ready || value.session_title.empty()) {
-          throw EncodingError{"Invalid agent title"};
-        }
-
-        break;
-      case AgentTitleSource::terminal:
-        if (value.session_title.empty()) {
-          throw EncodingError{"Invalid agent title"};
-        }
-
-        break;
-      }
-    }
+    static void validate(const AgentSnapshotEntry& value);
   };
 
   template <>
@@ -1005,86 +841,15 @@ namespace telar {
     static constexpr std::size_t min_width = 4;
     static constexpr bool fixed_size = false;
 
-    static std::size_t encodedSize(const ClientLayoutNode& value) {
-      if (const auto* pane = std::get_if<ClientLayoutPane>(&value)) {
-        return 1 + ValueCodec<ClientLayoutPane>::encodedSize(*pane);
-      }
-
-      if (const auto* split = std::get_if<ClientLayoutSplit>(&value)) {
-        return 1 + ValueCodec<ClientLayoutSplit>::encodedSize(*split);
-      }
-
-      throw EncodingError{"Invalid layout node"};
-    }
-
-    static void encodeBody(const ClientLayoutNode& value, std::span<Byte>& output) {
-      if (const auto* pane = std::get_if<ClientLayoutPane>(&value)) {
-        u8::encode(0, output);
-        ValueCodec<ClientLayoutPane>::encode(*pane, output);
-      } else if (const auto* split = std::get_if<ClientLayoutSplit>(&value)) {
-        u8::encode(1, output);
-        ValueCodec<ClientLayoutSplit>::encode(*split, output);
-      } else {
-        throw EncodingError{"Invalid layout node"};
-      }
-    }
-
-    static void
-    decodeBody(std::span<const Byte>& input, ClientLayoutNode& value, DecodeStorage& storage) {
-      switch (u8::decode(input)) {
-      case 0:
-        value = ValueCodec<ClientLayoutPane>::decode(input, storage);
-        break;
-      case 1:
-        value = ValueCodec<ClientLayoutSplit>::decode(input, storage);
-        break;
-      default:
-        throw EncodingError{"Unknown layout node tag"};
-      }
-    }
+    static std::size_t encodedSize(const ClientLayoutNode& value);
+    static void encodeBody(const ClientLayoutNode& value, std::span<Byte>& output);
+    static void decodeBody(std::span<const Byte>& input, ClientLayoutNode& value, DecodeStorage& storage);
   };
 
   template <>
   struct BodySchema<ClientTabLayout>
       : Serializer<Field<&ClientTabLayout::location, ValueCodec<TabLocation>, "location">, Field<&ClientTabLayout::focused_pane, NonzeroU64, "focused_pane">, Field<&ClientTabLayout::fullscreen, BoolByte, "fullscreen">, Field<&ClientTabLayout::workspace_active, BoolByte, "workspace_active">, Field<&ClientTabLayout::nodes, CountedSpan<u16, ValueCodec<ClientLayoutNode>, 127, 1>, "nodes">> {
-    static void validate(const ClientTabLayout& value) {
-      if (value.nodes.empty() || value.nodes.size() > 127) {
-        throw EncodingError{"Invalid layout node count"};
-      }
-
-      std::array<std::uint64_t, 64> panes{};
-      std::size_t pane_count = 0;
-      std::size_t pending = 1;
-      bool focused = false;
-
-      for (const auto& node : value.nodes) {
-        if (pending == 0) {
-          throw EncodingError{"Invalid layout tree"};
-        }
-
-        --pending;
-        if (const auto* pane = std::get_if<ClientLayoutPane>(&node)) {
-          if (pane_count == panes.size()) {
-            throw EncodingError{"Too many layout panes"};
-          }
-
-          for (std::size_t i = 0; i < pane_count; ++i) {
-            if (panes[i] == pane->pane_id) {
-              throw EncodingError{"Duplicate layout pane"};
-            }
-          }
-
-          panes[pane_count++] = pane->pane_id;
-          focused = focused || pane->pane_id == value.focused_pane;
-        } else {
-          pending += 2;
-        }
-      }
-
-      if (pending != 0 || !focused) {
-        throw EncodingError{"Invalid layout tree or focus"};
-      }
-    }
+    static void validate(const ClientTabLayout& value);
   };
 
   template <>
@@ -1099,36 +864,7 @@ namespace telar {
             Field<&NotificationBody::title, DisplayText16<max_notification_title_bytes, false>, "title">,
             Field<&NotificationBody::message, DisplayText16<max_notification_message_bytes>, "message">,
             Field<&NotificationBody::link, Text16<max_notification_link_bytes>, "link">> {
-    static void validate(const NotificationBody& value) {
-      const auto link = value.link;
-      if (link.empty()) {
-        return;
-      }
-
-      if (!link.starts_with(notification_link_scheme)) {
-        throw EncodingError{"Notification link must use HTTPS"};
-      }
-
-      for (const auto character : link) {
-        const auto byte = static_cast<Byte>(character);
-        if (byte <= 0x20 || byte >= 0x7f || byte == '\\') {
-          throw EncodingError{"Invalid notification link"};
-        }
-      }
-
-      const auto host = notificationLinkHost(link);
-      if (host.empty() || host.front() == '.' || host.front() == '-' || host.back() == '.') {
-        throw EncodingError{"Invalid notification host"};
-      }
-
-      for (const auto byte : host) {
-        const auto alphanumeric = (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') ||
-                                  (byte >= '0' && byte <= '9');
-        if (!alphanumeric && byte != '.' && byte != '-') {
-          throw EncodingError{"Invalid notification host"};
-        }
-      }
-    }
+    static void validate(const NotificationBody& value);
   };
 
   // One value a completion provider found.
@@ -1140,11 +876,7 @@ namespace telar {
   template <>
   struct BodySchema<CompletionWord>
       : Serializer<Field<&CompletionWord::text, DisplayText16<256, false>, "text">, Field<&CompletionWord::description, DisplayText16<256>, "description">> {
-    static void validate(const CompletionWord& value) {
-      if (value.text.empty()) {
-        throw EncodingError{"Empty completion word"};
-      }
-    }
+    static void validate(const CompletionWord& value);
   };
 
   enum class CommandBlockState : Byte {
@@ -1181,61 +913,19 @@ namespace telar {
   template <>
   struct BodySchema<CommandBlock>
       : Serializer<Field<&CommandBlock::row, u32, "row">, Field<&CommandBlock::rows, u16, "rows">, Field<&CommandBlock::lines, u16, "lines">, Field<&CommandBlock::state, EnumByte<CommandBlockState, 4>, "state">, Field<&CommandBlock::status, i32, "status">, Field<&CommandBlock::duration_ms, u32, "duration_ms">, Field<&CommandBlock::command, DisplayText16<256>, "command">, Field<&CommandBlock::nest, EnumByte<CommandBlockNest, 2>, "nest">> {
-    static void validate(const CommandBlock& value) {
-      if (value.rows == 0) {
-        throw EncodingError{"Command block without rows"};
-      }
-    }
+    static void validate(const CommandBlock& value);
   };
 
   template <>
   struct BodySchema<PathMatch>
       : Serializer<Field<&PathMatch::path, DisplayText16<1024, false>, "path">, Field<&PathMatch::kind, EnumByte<PathKind, 1>, "kind">, Field<&PathMatch::positions, CountedSpan<u8, u16, 64>, "positions">> {
-    static void validate(const PathMatch& value) {
-      if (value.path.empty() || (value.kind == PathKind::directory) != (value.path.back() == '/')) {
-        throw EncodingError{"Invalid path kind"};
-      }
-
-      std::size_t next = 0;
-
-      for (const auto position : value.positions) {
-        if (position < next || position >= value.path.size()) {
-          throw EncodingError{"Invalid path match positions"};
-        }
-
-        next = static_cast<std::size_t>(position) + 1;
-      }
-    }
+    static void validate(const PathMatch& value);
   };
 
   template <>
   struct BodySchema<LimitReach>
       : Serializer<Field<&LimitReach::name, Text16<64, false>, "name">, Field<&LimitReach::noun, Text16<32>, "noun">, Field<&LimitReach::value, u64, "value">, Field<&LimitReach::requested, OptionalValue<u64>, "requested">, Field<&LimitReach::route, Text16<32>, "route">> {
-    static void validate(const LimitReach& value) {
-      const auto alphanumeric = [](char byte) {
-        return (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') ||
-               (byte >= '0' && byte <= '9');
-      };
-
-      for (const auto byte : value.name) {
-        if (!alphanumeric(byte) && byte != '.' && byte != '_' && byte != '-') {
-          throw EncodingError{"Invalid limit name"};
-        }
-      }
-
-      for (const auto character : value.noun) {
-        const auto byte = static_cast<Byte>(character);
-        if (byte < 0x20 || byte >= 0x7f) {
-          throw EncodingError{"Invalid limit noun"};
-        }
-      }
-
-      for (const auto byte : value.route) {
-        if (!alphanumeric(byte) && byte != '_') {
-          throw EncodingError{"Invalid limit route"};
-        }
-      }
-    }
+    static void validate(const LimitReach& value);
   };
 
   template <>
@@ -1253,15 +943,7 @@ namespace telar {
   template <>
   struct BodySchema<ImageDescription>
       : Serializer<Field<&ImageDescription::key, ValueCodec<ImageKey>, "key">, Field<&ImageDescription::format, EnumChoiceByte<ImageFormat, ImageFormat::rgb, ImageFormat::rgba>, "format">, Field<&ImageDescription::width, BoundedInteger<u32, 1>, "width">, Field<&ImageDescription::height, BoundedInteger<u32, 1>, "height">, Field<&ImageDescription::byte_len, u64, "byte_len">> {
-    static void validate(const ImageDescription& value) {
-      const auto pixels = static_cast<std::uint64_t>(value.width) * value.height;
-      const auto channels = value.format == ImageFormat::rgb ? 3u : 4u;
-      constexpr std::uint64_t maximum = 256 * 1024 * 1024;
-
-      if (pixels > maximum / channels || value.byte_len != pixels * channels) {
-        throw EncodingError{"Invalid image byte length"};
-      }
-    }
+    static void validate(const ImageDescription& value);
   };
 
   template <>
@@ -1441,128 +1123,38 @@ namespace telar {
     missing = 3,
   };
 
-  inline void validateAgentSession(std::string_view session, bool empty_allowed) {
-    if (session.empty()) {
-      if (!empty_allowed) {
-        throw EncodingError{"Missing agent session"};
-      }
+  void validateAgentSession(std::string_view session, bool empty_allowed);
 
-      return;
-    }
+  void validateWorkspaceClosure(const WorkspaceLocation& workspace, bool closed, std::optional<std::uint64_t> previous);
 
-    if (session.size() > 64 || session.front() == '-') {
-      throw EncodingError{"Invalid agent session"};
-    }
+  void validateSharedImageName(std::string_view name);
 
-    for (const auto character : session) {
-      const auto byte = static_cast<Byte>(character);
-      if (!((byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') ||
-              (byte >= '0' && byte <= '9') || byte == '.' || byte == '_' || byte == '-' ||
-              byte == ':')) {
-        throw EncodingError{"Invalid agent session"};
-      }
-    }
-  }
-
-  inline void validateWorkspaceClosure(const WorkspaceLocation& workspace, bool closed, std::optional<std::uint64_t> previous) {
-    if (previous && (!closed || workspace.kind != WorkspaceLocation::Kind::workspace ||
-                        *previous == workspace.id)) {
-      throw EncodingError{"Invalid previous workspace"};
-    }
-  }
-
-  inline void validateSharedImageName(std::string_view name) {
-    if (name.size() < 2 || name.size() > 31 || name.front() != '/') {
-      throw EncodingError{"Invalid shared image name"};
-    }
-
-    for (const auto byte : name.substr(1)) {
-      if (!((byte >= 'a' && byte <= 'z') || (byte >= '0' && byte <= '9') || byte == '-')) {
-        throw EncodingError{"Invalid shared image name"};
-      }
-    }
-  }
-
-  inline bool sameWorkspace(const WorkspaceLocation& left, const WorkspaceLocation& right) {
+  constexpr bool sameWorkspace(const WorkspaceLocation& left, const WorkspaceLocation& right) {
     return left.kind == right.kind && left.id == right.id;
   }
 
-  inline bool sameTab(const TabLocation& left, const TabLocation& right) {
+  constexpr bool sameTab(const TabLocation& left, const TabLocation& right) {
     return sameWorkspace(left.workspace, right.workspace) && left.tab_id == right.tab_id;
   }
 
-  inline void validateLayoutCollection(std::optional<TabLocation> active, std::span<const ClientTabLayout> tabs) {
-    std::size_t nodes = 0;
-    bool active_found = !active;
-
-    for (std::size_t i = 0; i < tabs.size(); ++i) {
-      nodes += tabs[i].nodes.size();
-      for (std::size_t j = 0; j < i; ++j) {
-        if (sameTab(tabs[i].location, tabs[j].location) ||
-            (tabs[i].workspace_active && tabs[j].workspace_active &&
-                sameWorkspace(tabs[i].location.workspace, tabs[j].location.workspace))) {
-          throw EncodingError{"Duplicate client layout location"};
-        }
-      }
-
-      if (active && sameTab(*active, tabs[i].location) && tabs[i].workspace_active) {
-        active_found = true;
-      }
-    }
-
-    if (nodes > 511 || !active_found) {
-      throw EncodingError{"Invalid active client layout"};
-    }
-  }
+  void validateLayoutCollection(std::optional<TabLocation> active, std::span<const ClientTabLayout> tabs);
 
   struct ScopedHistoryValue {
     using value_type = HistoryScopeValue;
     static constexpr std::size_t min_width = 0;
 
-    static std::size_t encodedSize(const value_type& value, HistoryScope scope) {
-      return BodySchema<HistoryScopeValue>::encodedSize(value, scope);
-    }
-
-    static void encode(const value_type& value, std::span<Byte>& output, HistoryScope scope) {
-      BodySchema<HistoryScopeValue>::encodeBody(value, output, scope);
-    }
-
-    static Decoded<value_type>
-    decode(DecodeInput input, DecodeStorage& storage, HistoryScope scope) {
-      value_type value{};
-
-      BodySchema<HistoryScopeValue>::decodeBody(input, value, storage, scope);
-      return value;
-    }
+    static std::size_t encodedSize(const value_type& value, HistoryScope scope);
+    static void encode(const value_type& value, std::span<Byte>& output, HistoryScope scope);
+    static Decoded<value_type> decode(DecodeInput input, DecodeStorage& storage, HistoryScope scope);
   };
 
   struct TargetLaunch {
     using value_type = std::optional<Launch>;
     static constexpr std::size_t min_width = 0;
 
-    static std::size_t encodedSize(const value_type& value, const PaneTarget& target) {
-      if ((target.kind == PaneTarget::Kind::default_target) != value.has_value()) {
-        throw EncodingError{"Launch and pane target do not match"};
-      }
-
-      return value ? ValueCodec<Launch>::encodedSize(*value) : 0;
-    }
-
-    static void encode(const value_type& value, std::span<Byte>& output, const PaneTarget& target) {
-      (void)encodedSize(value, target);
-      if (value) {
-        ValueCodec<Launch>::encode(*value, output);
-      }
-    }
-
-    static Decoded<value_type>
-    decode(DecodeInput input, DecodeStorage& storage, const PaneTarget& target) {
-      if (target.kind != PaneTarget::Kind::default_target) {
-        return std::nullopt;
-      }
-
-      return ValueCodec<Launch>::decode(input, storage);
-    }
+    static std::size_t encodedSize(const value_type& value, const PaneTarget& target);
+    static void encode(const value_type& value, std::span<Byte>& output, const PaneTarget& target);
+    static Decoded<value_type> decode(DecodeInput input, DecodeStorage& storage, const PaneTarget& target);
   };
 
   struct ImportHistoryEntry {

@@ -27,9 +27,7 @@ namespace telar {
     std::uint64_t pane_generation{};
     std::string_view session{};
 
-    void validate() const {
-      validateAgentSession(session, false);
-    }
+    void validate() const;
   };
 
   template <>
@@ -48,12 +46,7 @@ namespace telar {
     AgentBlockedReason blocked_reason{};
     std::string_view event{};
 
-    void validate() const {
-      validateAgentSession(session, true);
-      if (state != AgentReportState::blocked && blocked_reason != AgentBlockedReason::none) {
-        throw EncodingError{"Unexpected blocked reason"};
-      }
-    }
+    void validate() const;
   };
 
   template <>
@@ -84,12 +77,7 @@ namespace telar {
     std::string_view session{};
     std::optional<std::int32_t> exit_code{};
 
-    void validate() const {
-      validateAgentSession(session, true);
-      if (phase == AgentCommandPhase::started && exit_code) {
-        throw EncodingError{"Unexpected command exit code"};
-      }
-    }
+    void validate() const;
   };
 
   template <>
@@ -134,11 +122,7 @@ namespace telar {
     std::uint16_t plan_total{};
     std::string_view plan_text{};
 
-    void validate() const {
-      if (plan_done > plan_total) {
-        throw EncodingError{"Invalid agent plan counts"};
-      }
-    }
+    void validate() const;
   };
 
   template <>

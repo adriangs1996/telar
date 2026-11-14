@@ -5,8 +5,9 @@
 
 namespace telar {
 
-  // Styles are inherited only within one span. Text borrows the encoded frame.
-  class CellReader {
+  // Styles are inherited only within one span. Text borrows the encoded frame. The reader and the
+  // run codec visit every cell of a frame, so they keep their bodies.
+  class TBC_HOT_PATH CellReader {
   public:
     CellReader(std::span<const Byte> bytes, std::uint32_t count)
         : input{bytes},
@@ -54,7 +55,7 @@ namespace telar {
     std::optional<CellStyle> previous_style{};
   };
 
-  struct CellRunCodec {
+  struct TBC_HOT_PATH CellRunCodec {
     static std::size_t encodedSize(std::span<const Cell> cells) {
       std::size_t size = 0;
       const CellStyle* previous = nullptr;

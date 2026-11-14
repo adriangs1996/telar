@@ -13,7 +13,7 @@ get_filename_component(allowlist "${runtime_directory}/../../docs/build/interfac
 telar_lifetime_jobs(jobs)
 # Every module interface of the runtime's database: the runtime, the CLI and the telar libraries.
 telar_interface_body_check("${runtime_directory}" "${runtime_build_directory}"
-  "/(src/(runtime|cli)/|lib/(base|client|config|git|lua|machines|platform|plugins|render|shell|sys|tls|vocabulary)/).*\\.cppm$"
-  "/(src/(runtime|cli)/|lib/(base|client|config|git|lua|machines|platform|plugins|render|shell|sys|tls|vocabulary)/)(.*/)?(tests|out(-[^/]*)?)/"
+  "/(src/(runtime|cli)/|lib/(base|client|config|git|lua|machines|platform|plugins|render|shell|sys|tls|vocabulary|wire)/).*\\.cppm$"
+  "/(src/(runtime|cli)/|lib/(base|client|config|git|lua|machines|platform|plugins|render|shell|sys|tls|vocabulary|wire)/)(.*/)?(tests|out(-[^/]*)?)/"
   "${jobs}"
   ALLOWLIST "${allowlist}")

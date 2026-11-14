@@ -50,17 +50,7 @@ namespace telar {
   struct BodySchema<ClipboardRepresentation>
       : Serializer<Field<&ClipboardRepresentation::mime, Utf8Text16<256>, "mime">, Field<&ClipboardRepresentation::data, SizedBytes<u32, clipboard_content_limit>, "data">> {};
 
-  inline void validateClipboardContents(std::span<const ClipboardRepresentation> contents) {
-    std::size_t size = 0;
-
-    for (const auto& content : contents) {
-      if (content.mime.empty() || content.mime.contains('\0') || content.data.size() > clipboard_content_limit - size) {
-        throw EncodingError{"Invalid clipboard representation or aggregate size"};
-      }
-
-      size += content.data.size();
-    }
-  }
+  void validateClipboardContents(std::span<const ClipboardRepresentation> contents);
 
   struct ClipboardDesktopRequest {
     ClipboardTicket ticket;
@@ -73,16 +63,7 @@ namespace telar {
     std::span<const std::string_view> mimes{};
     std::span<const ClipboardRepresentation> contents{};
 
-    void validate() const {
-      if (mimes.size() > 4 || contents.size() > 128) {
-        throw EncodingError{"Invalid clipboard request bounds"};
-      }
-
-      validateClipboardContents(contents);
-      if (!write && !contents.empty()) {
-        throw EncodingError{"Clipboard read request contains write data"};
-      }
-    }
+    void validate() const;
   };
 
   template <>
@@ -104,16 +85,7 @@ namespace telar {
     std::span<const ClipboardRepresentation> contents{};
     std::span<const std::string_view> available{};
 
-    void validate() const {
-      if (contents.size() > 4 || available.size() > 16 || (prepared && (!contents.empty() || !available.empty()))) {
-        throw EncodingError{"Invalid clipboard completion phase or bounds"};
-      }
-
-      validateClipboardContents(contents);
-      if (status != ClipboardDesktopStatus::success && (!contents.empty() || !available.empty() || remember)) {
-        throw EncodingError{"Unsuccessful clipboard completion carries data"};
-      }
-    }
+    void validate() const;
   };
 
   template <>
@@ -160,11 +132,7 @@ namespace telar {
     std::uint64_t transfer_id = 0;
     std::uint64_t offset = 0;
 
-    void validate() const {
-      if (offset > runtime_clipboard_max_bytes || (transfer_id == 0 && offset != 0)) {
-        throw EncodingError{"Invalid clipboard offset"};
-      }
-    }
+    void validate() const;
   };
 
   template <>
@@ -179,12 +147,7 @@ namespace telar {
     std::string_view mime;
     std::span<const Byte> bytes;
 
-    void validate() const {
-      if (mime.empty() || total_bytes > runtime_clipboard_max_bytes || offset > total_bytes ||
-          bytes.size() > total_bytes - offset || (bytes.empty() && offset != total_bytes)) {
-        throw EncodingError{"Invalid clipboard chunk"};
-      }
-    }
+    void validate() const;
   };
 
   template <>

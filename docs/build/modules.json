@@ -11,7 +11,8 @@
     ],
     "wire": [
       "base",
-      "vocabulary"
+      "vocabulary",
+      "tbc"
     ],
     "client": [
       "base",
@@ -761,6 +762,17 @@
   },
   "macro_headers": [],
   "implementations": {
+    "lib/wire/agents/agents.cpp": "telar.wire.agents",
+    "lib/wire/clients/clients.cpp": "telar.wire.clients",
+    "lib/wire/clipboard/clipboard.cpp": "telar.wire.clipboard",
+    "lib/wire/content/content.cpp": "telar.wire.content",
+    "lib/wire/editor/editor.cpp": "telar.wire.editor",
+    "lib/wire/execution/execution.cpp": "telar.wire.execution",
+    "lib/wire/graphics/graphics.cpp": "telar.wire.graphics",
+    "lib/wire/layout/layout.cpp": "telar.wire.layout",
+    "lib/wire/pane_io/pane_io.cpp": "telar.wire.pane_io",
+    "lib/wire/vocabulary/vocabulary.cpp": "telar.wire.vocabulary",
+    "lib/wire/worktrees/worktrees.cpp": "telar.wire.worktrees",
     "lib/base/diagnostics/diagnostics.cpp": "telar.base.diagnostics",
     "lib/base/text/text.cpp": "telar.base.text",
     "lib/base/text/json/json.cpp": "telar.base.text.json",

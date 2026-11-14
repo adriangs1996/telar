@@ -92,9 +92,7 @@ namespace telar {
     ImageDescription image{};
     std::string_view name{};
 
-    void validate() const {
-      validateSharedImageName(name);
-    }
+    void validate() const;
   };
 
   template <>

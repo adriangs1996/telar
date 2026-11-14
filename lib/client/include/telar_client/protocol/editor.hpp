@@ -23,12 +23,7 @@ namespace telar {
     std::uint32_t line{};
     std::uint32_t column{};
 
-    void validate() const {
-      if (pane_generation == 0 || editor.empty() || editor.front() == '-' || path.empty() ||
-          path.front() != '/' || (column != 0 && line == 0)) {
-        throw EncodingError{"Invalid editor target"};
-      }
-    }
+    void validate() const;
   };
 
   template <>
@@ -43,11 +38,7 @@ namespace telar {
     std::uint16_t limit{};
     bool refresh{};
 
-    void validate() const {
-      if (root.empty() || root.front() != '/') {
-        throw EncodingError{"Invalid path root"};
-      }
-    }
+    void validate() const;
   };
 
   template <>
@@ -59,11 +50,7 @@ namespace telar {
     SuggestionStatus status{};
     std::string_view text{};
 
-    void validate() const {
-      if (status != SuggestionStatus::ready && !text.empty()) {
-        throw EncodingError{"Unexpected suggestion text"};
-      }
-    }
+    void validate() const;
   };
 
   template <>
@@ -143,11 +130,7 @@ namespace telar {
     // and completion follows the words.
     std::string_view expansion{};
 
-    void validate() const {
-      if ((state == CommandSpecState::available) == source.empty()) {
-        throw EncodingError{"Command spec source does not match its state"};
-      }
-    }
+    void validate() const;
   };
 
   template <>
@@ -160,11 +143,7 @@ namespace telar {
     std::uint64_t pane_id{};
     std::uint64_t pane_generation{};
 
-    void validate() const {
-      if (outcome == EditorOutcome::opened && (pane_id == 0 || pane_generation == 0)) {
-        throw EncodingError{"Missing editor pane identity"};
-      }
-    }
+    void validate() const;
   };
 
   template <>
@@ -179,11 +158,7 @@ namespace telar {
     bool truncated{};
     std::span<const PathMatch> matches{};
 
-    void validate() const {
-      if (root.empty() || root.front() != '/') {
-        throw EncodingError{"Invalid path root"};
-      }
-    }
+    void validate() const;
   };
 
   template <>
