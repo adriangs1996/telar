@@ -567,6 +567,9 @@ Para cada módulo: `extern template class X<Memory>;` en la interfaz, la instanc
 | [ ] P9.7a | Runtime: `terminal`, `graphics`, `vocabulary`, `observation` | P2.5 |
 | [ ] P9.7b | Runtime: `proxy`, `tls`, `http`, `http1`, `http2`, `redirect`, `traffic`, `plugins`, `exchange_capture` | P2.5 |
 | [ ] P9.7c | Runtime: `agents`, `history`, `command_capture`, `shell_integration`, `suggestions`, `editors`, `worktrees`, `workspaces` | P2.5 |
+
+- **P9.7c, sin integrar hasta medir:** hecha en `refactor-p9-7c` (`906b2b763`) en `Personal`. `CommandTracker`, `CommandBlocks` y `CommandOutputTail` pasan a envoltorios `final` con hooks virtuales por chunk o por marca (no por byte). Medir en `Personal` sin builds en marcha, desde el worktree: `python3 src/runtime/tools/bench_command_capture.py --baseline $S/buildA --candidate $S/buildB --output $S/bench-command-capture-1`, con `S` el scratchpad que nombra el agente; 12 casos (`pane-*` y `observer-*` × `command-cycle`, `command-cycle-256-byte-reads`, `typed-1-byte-echo`, `plain-output`, `path-report`, `forged-marks`). Se integra si B no empeora fuera del ruido.
+
 | [ ] P9.7d | Runtime: `runtime`, `model`, `persistence`, `platform`, `transport`, `diagnostics`, `metrics`, `execution`, `cli` y el resto | P2.5 |
 | [ ] P9.8 | GUI, una subtarea por dominio. `gui.application.session` (5815 líneas) pasa a `session/session.cppm` con `prompt.cpp`, `blocks.cpp`, `copy_mode.cpp`… | P8.1, P0.5, P2.4 y las tareas de P3 del dominio |
 | [ ] P9.8a | GUI: `application` (incluido `gui.application.session`) | P2.5 |
