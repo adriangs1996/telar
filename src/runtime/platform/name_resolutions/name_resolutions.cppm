@@ -44,7 +44,7 @@ export {
 
     // Kept whole: tests instantiate it with their own fake Resolver (proxy_resolution_test's BlockingNameResolver).
     template <HostnameResolver Resolver>
-    class TBC_HOT_PATH NameResolutions {
+    class TBC_GENERIC NameResolutions {
     public:
       static constexpr std::size_t capacity = 64;
       static constexpr std::size_t maximum_addresses = 32;

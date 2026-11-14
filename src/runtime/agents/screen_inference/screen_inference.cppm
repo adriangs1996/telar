@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.agents.screen_inference;
 
 import std;
@@ -92,20 +89,11 @@ export {
       Cursor cursor{};
     };
 
-    TBC_HOT_PATH inline AgentScreenView agentScreenView(const Screen& screen) noexcept {
-      return AgentScreenView{
-          .cells = std::span{screen.cells},
-          .row_flags = std::span{screen.row_flags},
-          .cols = screen.cols,
-          .rows = screen.rows,
-          .cursor = screen.cursor,
-      };
-    }
+    AgentScreenView agentScreenView(const Screen& screen) noexcept;
 
     class AgentScreenReader {
     public:
-      TBC_HOT_PATH inline explicit AgentScreenReader(const Terminal& terminal, const AgentManifests& manifests = builtin_manifests)
-          : AgentScreenReader(agentScreenView(terminal.screen), terminal.effects.title(), manifests) {}
+      explicit AgentScreenReader(const Terminal& terminal, const AgentManifests& manifests = builtin_manifests);
 
       AgentScreenReader(AgentScreenView screen, std::string_view title, const AgentManifests& manifests) noexcept;
 
@@ -150,17 +138,7 @@ export {
 
     class AgentScreenInference {
     public:
-      TBC_HOT_PATH inline std::optional<AgentSignal> observe(Terminal& terminal, const AgentManifests& manifests, AgentProvider provider, ObservationTime now) {
-        if (!terminal.outputSettled()) {
-          return std::nullopt;
-        }
-
-        terminal.refresh();
-
-        const auto screen = agentScreenView(terminal.screen);
-
-        return infer(AgentScreenReader{screen, terminal.effects.title(), manifests}, screen, manifests, provider, now);
-      }
+      std::optional<AgentSignal> observe(Terminal& terminal, const AgentManifests& manifests, AgentProvider provider, ObservationTime now);
 
       void reset() noexcept;
 

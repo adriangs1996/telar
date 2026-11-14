@@ -39,7 +39,7 @@ export {
 
       // Generic over the caller's integer and enumeration types, so these stay here.
       template <std::unsigned_integral Integer>
-      TBC_HOT_PATH inline Integer integer() {
+      TBC_GENERIC inline Integer integer() {
         return LittleEndian<Integer>::decode(remaining_);
       }
 
@@ -49,7 +49,7 @@ export {
 
       template <typename Enum>
         requires std::is_enum_v<Enum>
-      TBC_HOT_PATH Enum tag(Enum maximum) {
+      TBC_GENERIC Enum tag(Enum maximum) {
         const auto value = integer<Byte>();
         if (value > static_cast<Byte>(maximum)) {
           throw EncodingError{"Unknown tap enumeration value"};
@@ -60,7 +60,7 @@ export {
 
       template <typename Enum>
         requires std::is_enum_v<Enum>
-      TBC_HOT_PATH void require(Enum expected) {
+      TBC_GENERIC void require(Enum expected) {
         if (integer<Byte>() != static_cast<Byte>(expected)) {
           throw EncodingError{"Unexpected tap frame tag"};
         }
@@ -87,7 +87,7 @@ export {
     public:
       // Generic over the caller's integer and enumeration types, so these stay here.
       template <std::unsigned_integral Integer>
-      TBC_HOT_PATH inline void integer(Integer) {
+      TBC_GENERIC inline void integer(Integer) {
         add(sizeof(Integer));
       }
 
@@ -97,7 +97,7 @@ export {
 
       template <typename Enum>
         requires std::is_enum_v<Enum>
-      TBC_HOT_PATH void tag(Enum) {
+      TBC_GENERIC void tag(Enum) {
         integer(Byte{});
       }
 
@@ -129,7 +129,7 @@ export {
 
       // Generic over the caller's integer and enumeration types, so these stay here.
       template <std::unsigned_integral Integer>
-      TBC_HOT_PATH inline void integer(Integer value) {
+      TBC_GENERIC inline void integer(Integer value) {
         LittleEndian<Integer>::encode(value, remaining_);
       }
 
@@ -139,7 +139,7 @@ export {
 
       template <typename Enum>
         requires std::is_enum_v<Enum>
-      TBC_HOT_PATH void tag(Enum value) {
+      TBC_GENERIC void tag(Enum value) {
         integer(static_cast<Byte>(value));
       }
 

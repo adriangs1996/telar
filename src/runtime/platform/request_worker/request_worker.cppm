@@ -46,7 +46,7 @@ export {
     // GatedLineageInspector).
     template <typename Service>
       requires ObservationService<std::remove_reference_t<Service>>
-    class TBC_SHARED TBC_HOT_PATH ObservationWorker {
+    class TBC_SHARED TBC_GENERIC ObservationWorker {
       using Request = typename std::remove_reference_t<Service>::Request;
       using Result = typename std::remove_reference_t<Service>::Result;
 
@@ -212,7 +212,7 @@ export {
     //
     // Generic over the caller's request, worker and consumer, so it stays whole here.
     template <typename Request>
-    class TBC_HOT_PATH SerialQueue {
+    class TBC_GENERIC SerialQueue {
     public:
       // Starts `request` on `worker` when it is idle, else queues it behind the waiting ones.
       template <typename Worker>
@@ -263,7 +263,7 @@ export {
 
     // Generic over the caller's value (RequestWorker's jobs and completions), so it stays whole here.
     template <typename Value, std::size_t Capacity, ConcurrentAllocator Memory>
-    class TBC_HOT_PATH RequestQueue {
+    class TBC_GENERIC RequestQueue {
       static_assert(Capacity != 0 && std::is_nothrow_move_constructible_v<Value>);
 
     public:
@@ -372,7 +372,7 @@ export {
     // ControlledHistoryService).
     template <ConcurrentAllocator Memory, typename Service>
       requires RequestService<Service, Memory>
-    class TBC_HOT_PATH RequestWorker {
+    class TBC_GENERIC RequestWorker {
     public:
       inline explicit RequestWorker(Memory& memory, Service& service)
           : memory_(memory),

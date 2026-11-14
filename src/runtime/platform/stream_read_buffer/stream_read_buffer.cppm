@@ -37,7 +37,7 @@ export {
       // Writes what `stream` accepts now and returns the stream's result.
       // Generic over the caller's stream, so it stays a template here.
       template <ByteStream Stream>
-      TBC_HOT_PATH inline StreamResult write(Stream& stream) noexcept {
+      TBC_GENERIC inline StreamResult write(Stream& stream) noexcept {
         const auto rest = remaining();
         const auto result = stream.write({reinterpret_cast<const std::uint8_t*>(rest.data()), rest.size()});
         if (result.state == StreamResult::State::data) {
@@ -55,7 +55,7 @@ export {
     // Reads and discards what a refused peer still sends; true once its stream ended or failed.
     // Generic over the caller's stream, so it stays a template here.
     template <ByteStream Stream>
-    TBC_HOT_PATH inline bool drainEnded(Stream& stream) noexcept {
+    TBC_GENERIC inline bool drainEnded(Stream& stream) noexcept {
       std::array<std::uint8_t, 4096> discarded;
       const auto read = stream.read(discarded);
 
@@ -80,7 +80,7 @@ export {
 
       // Generic over the caller's stream, so it stays a template here.
       template <PeekableByteStream Stream>
-      TBC_HOT_PATH inline Result receive(Stream& source, std::span<std::uint8_t> storage, std::string_view delimiter) noexcept {
+      TBC_GENERIC inline Result receive(Stream& source, std::span<std::uint8_t> storage, std::string_view delimiter) noexcept {
         if (complete_) {
           return Result::complete;
         }
@@ -125,7 +125,7 @@ export {
     private:
       // Generic over the caller's stream, so it stays a template here.
       template <BufferedByteStream Stream>
-      TBC_HOT_PATH inline Result receiveBuffered(Stream& source, std::span<std::uint8_t> storage, std::string_view delimiter) noexcept {
+      TBC_GENERIC inline Result receiveBuffered(Stream& source, std::span<std::uint8_t> storage, std::string_view delimiter) noexcept {
         const auto visible = source.peekView(storage.size() - length_);
         if (visible.state != StreamResult::State::data || visible.bytes.empty()) {
           return interrupted({visible.state, 0, visible.waiting});
@@ -207,7 +207,7 @@ export {
         requires requires(Read read, std::span<std::uint8_t> destination) {
           { read(destination) } noexcept -> std::same_as<StreamResult>;
         }
-      TBC_HOT_PATH inline StreamView peek(Read read, std::size_t maximum) noexcept {
+      TBC_GENERIC inline StreamView peek(Read read, std::size_t maximum) noexcept {
         if (empty()) {
           const auto received = read(storage_.bytes());
           if (received.state != StreamResult::State::data || received.bytes == 0) {

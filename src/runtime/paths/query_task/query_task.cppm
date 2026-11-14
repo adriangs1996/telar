@@ -170,7 +170,7 @@ export {
 
       // Generic over the caller's reply, as queryPublished, which it calls.
       template <typename Reply>
-      TBC_HOT_PATH inline void query(const FindPaths& request, Reply& reply) {
+      TBC_GENERIC inline void query(const FindPaths& request, Reply& reply) {
         if (!complete() || root_ != request.root || request.refresh) {
           reset(request.root);
           build();
@@ -182,7 +182,7 @@ export {
       // The reply is the caller's (an encoded reply or a client connection) and it views the ranking
       // this body builds on its stack, so the whole query stays here.
       template <typename Reply>
-      TBC_HOT_PATH inline bool queryPublished(const FindPaths& request, Reply& reply) {
+      TBC_GENERIC inline bool queryPublished(const FindPaths& request, Reply& reply) {
         TELAR_TRACE("paths.query");
         const bool complete = this->complete();
         const auto published = storage_.published.load(std::memory_order_acquire);
@@ -297,7 +297,7 @@ export {
     // Kept whole: path_service_test instantiates it with its own GatedPathMemory and GatedPathIndex.
     template <Allocator Memory, typename Index = PathIndex>
       requires PathSearchIndex<Index, Memory>
-    class TBC_HOT_PATH PathQueryTask {
+    class TBC_GENERIC PathQueryTask {
     public:
       using Request = OwnedPathQuery;
 
@@ -335,7 +335,7 @@ export {
 
     // Kept whole: path_service_test instantiates it with its own GatedPathIndex.
     template <typename Index>
-    class TBC_HOT_PATH PathBuildTask {
+    class TBC_GENERIC PathBuildTask {
     public:
       using Request = bool;
       using Result = bool;

@@ -27,7 +27,7 @@ export {
 
       // Generic over the caller's consumer, so it stays a template here.
       template <typename Consumer>
-      TBC_HOT_PATH inline int stream(std::initializer_list<std::string_view> arguments, Consumer&& consume, Clock::time_point deadline = Clock::time_point::max()) {
+      TBC_GENERIC inline int stream(std::initializer_list<std::string_view> arguments, Consumer&& consume, Clock::time_point deadline = Clock::time_point::max()) {
         return withCommand(arguments, [&](auto& command) {
           return output_.stream(command, deadline, consume);
         });
@@ -36,7 +36,7 @@ export {
     private:
       // Generic over the caller's operation, so it stays a template here.
       template <typename Operation>
-      TBC_HOT_PATH inline int withCommand(std::initializer_list<std::string_view> arguments, Operation&& operation) {
+      TBC_GENERIC inline int withCommand(std::initializer_list<std::string_view> arguments, Operation&& operation) {
         return git_.with(arguments, operation);
       }
 

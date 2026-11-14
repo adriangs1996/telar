@@ -224,4 +224,20 @@ namespace telar::runtime {
   template class DescriptionGenerator<Memory>;
   template class DescriptionGenerator<ConcurrentMemory>;
 
+  template <Allocator Memory>
+  DeferredReport<Memory>::DeferredReport(Memory& memory)
+      : payload(AllocatorRef<Byte, Memory>{memory}) {}
+
+  template <Allocator Memory>
+  bool DeferredReport<Memory>::rechecked(std::uint32_t completed) const noexcept {
+    return std::bit_cast<std::int32_t>(completed - required_recheck) >= 0;
+  }
+
+  template <Allocator Memory>
+  ObservationTime DeferredReport<Memory>::reportTime() const noexcept {
+    return answering ? observed : ObservationTime::now();
+  }
+
+  template struct DeferredReport<ConcurrentMemory>;
+
 }

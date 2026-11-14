@@ -248,7 +248,7 @@ export {
       // Generic over the caller's plugin event source; the metrics it reads are reported in the
       // implementation unit.
       template <plugins::EventSource Source>
-      TBC_HOT_PATH inline void collect(ClientStore& clients, Source& source) {
+      TBC_GENERIC inline void collect(ClientStore& clients, Source& source) {
         source.collect([&](const plugins::EffectBatch& batch) {
           for (const auto& notification : std::span{batch.notifications}.first(batch.count)) {
             publish(clients, notification);
@@ -489,7 +489,7 @@ export {
 
       // Generic over the caller's capture source, the proxy in production.
       template <CaptureEventSource Captures>
-      TBC_HOT_PATH inline void run(Captures& captures) {
+      TBC_GENERIC inline void run(Captures& captures) {
         plugins::IgnoreEvents plugins;
 
         run(captures, plugins);
@@ -498,7 +498,7 @@ export {
       // Generic over the caller's capture and plugin event sources, the proxy and the plugin service in
       // production; each ready event is routed in the implementation unit.
       template <CaptureEventSource Captures, plugins::EventSource Plugins>
-      TBC_HOT_PATH inline void run(Captures& captures, Plugins& plugins) {
+      TBC_GENERIC inline void run(Captures& captures, Plugins& plugins) {
         TELAR_TRACE("runtime.run");
         TELAR_DIAGNOSTIC(AllocationScope allocation_scope{AllocationPath::interactive});
         std::array<Event, Poller::event_capacity> ready{};

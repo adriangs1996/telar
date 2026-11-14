@@ -85,7 +85,7 @@ export {
 
       // Generic over the caller's predicate, so it stays here.
       template <typename Consumer>
-      TBC_HOT_PATH inline void discardUnwanted(const Consumer& wanted) noexcept {
+      TBC_GENERIC inline void discardUnwanted(const Consumer& wanted) noexcept {
         for (auto& slot : entries_) {
           if (slot && !wanted(slot->key, true)) {
             slot.reset();
@@ -144,7 +144,7 @@ export {
 
       // Generic over the caller's predicate, so it stays here.
       template <typename Consumer>
-      TBC_HOT_PATH inline void discardUnwanted(const Consumer& wanted) noexcept {
+      TBC_GENERIC inline void discardUnwanted(const Consumer& wanted) noexcept {
         for (auto& entry : entries_) {
           if (entry && !wanted(entry->key, entry->shared)) {
             entry.reset();

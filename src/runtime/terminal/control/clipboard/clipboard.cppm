@@ -216,7 +216,7 @@ export namespace telar::runtime::control {
 
     // Generic over the caller's response sink, so it stays here.
     template <typename Sink>
-    TBC_HOT_PATH bool publish(Sink& sink) {
+    TBC_GENERIC bool publish(Sink& sink) {
       while (reply_count_ != 0) {
         auto& reply = asynchronous_replies_[reply_head_];
         if (!reply.publish(sink)) {

@@ -143,7 +143,7 @@ export {
 
       // Kept here: the format is the caller's callable, an open set no unit can instantiate ahead.
       template <typename Format>
-      TBC_HOT_PATH inline void sample(Format&& format) noexcept {
+      TBC_GENERIC inline void sample(Format&& format) noexcept {
         if (!worker_) {
           return;
         }
@@ -233,7 +233,7 @@ export {
 
       // Kept here: Captures and Background are the runtime's services, from modules that import this one.
       template <typename Captures, typename Background>
-      TBC_HOT_PATH inline std::chrono::nanoseconds tick(RuntimeModel& model, const ClientStore& clients, ConcurrentMemory& memory, const Captures& captures, const Background& background, Clock::time_point now) noexcept {
+      TBC_GENERIC inline std::chrono::nanoseconds tick(RuntimeModel& model, const ClientStore& clients, ConcurrentMemory& memory, const Captures& captures, const Background& background, Clock::time_point now) noexcept {
         if (now < next_sample_) {
           return next_sample_ - now;
         }

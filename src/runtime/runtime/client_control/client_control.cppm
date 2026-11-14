@@ -57,7 +57,7 @@ export {
     // Reads agents' session files on a worker; the agents are lent to each call.
     // Kept whole: Agents is the runtime's AgentService, from a module that imports this one.
     template <ConcurrentAllocator Memory, SessionFileObserver Agents>
-    class TBC_HOT_PATH AgentFileService {
+    class TBC_GENERIC AgentFileService {
     public:
       inline explicit AgentFileService(Memory& memory)
           : worker_(std::in_place, memory) {}
@@ -152,7 +152,7 @@ export {
 
     // Kept here: the message is any of the protocol's, an open set no unit can instantiate ahead.
     template <typename Message>
-    TBC_HOT_PATH std::optional<ReporterIdentity> reporterOf(const AgentManifests& manifests, const Message& message) noexcept {
+    TBC_GENERIC std::optional<ReporterIdentity> reporterOf(const AgentManifests& manifests, const Message& message) noexcept {
       if constexpr (std::same_as<Message, ReportAgent> || std::same_as<Message, ReportAgentTitle> || std::same_as<Message, ReportAgentProgress>) {
         return ReporterIdentity{message.pane_id, message.pane_generation, message.provider};
       } else if constexpr (std::same_as<Message, ReportAgentCommand>) {
@@ -171,7 +171,7 @@ export {
     // its client; the runtime takes it out to replay it.
     // Kept whole: tests instantiate it with their own fake Agents (deferred_reports_test's RecordedAgents).
     template <ReporterAgents Agents>
-    class TBC_HOT_PATH DeferredReports {
+    class TBC_GENERIC DeferredReports {
     public:
       // The clients whose held reports are due, in the order they were held.
       struct Due {
@@ -334,7 +334,7 @@ export {
     // until the caller schedules the held checks.
     // Kept whole: tests instantiate it with their own fake Inspector (agents_test's TestProcessInspector).
     template <LineageInspector Inspector>
-    class TBC_HOT_PATH DescentService {
+    class TBC_GENERIC DescentService {
     public:
       inline explicit DescentService(const Inspector& inspector)
           : worker_(std::in_place, inspector) {}
@@ -451,7 +451,7 @@ export {
     // Kept whole: tests instantiate it with their own fake Probe (metrics_test's FakeHostMetrics).
     template <typename Probe>
       requires HostMetricsProbe<std::remove_reference_t<Probe>>
-    class TBC_HOT_PATH HostMetricsReader {
+    class TBC_GENERIC HostMetricsReader {
     public:
       using Request = HostSampler;
       using Result = HostSampler;
@@ -482,7 +482,7 @@ export {
     // Kept whole: tests instantiate it with their own fake Probe (metrics_test's FakeHostMetrics).
     template <typename Probe>
       requires HostMetricsProbe<std::remove_reference_t<Probe>>
-    class TBC_HOT_PATH HostMetricsService {
+    class TBC_GENERIC HostMetricsService {
     public:
       using Clock = std::chrono::steady_clock;
       static constexpr auto sample_interval = std::chrono::seconds{2};
@@ -567,7 +567,7 @@ export {
     // Kept whole: tests instantiate it with their own fakes (observation_test's UnusedAgents and DirectoryOnlyProbe).
     template <typename Agents, ObservationLimitSink Limits, PaneProcessProbe Probe, HistoryEventSink History>
       requires AgentObservationSink<Agents>
-    class TBC_HOT_PATH PaneObservationService {
+    class TBC_GENERIC PaneObservationService {
       using Processor = ObservationProcessor<Probe, History>;
 
     public:
@@ -855,7 +855,7 @@ export {
     // consumer from filling the response queue or stalling terminal delivery.
     // Kept whole: tests instantiate it with their own fake Reader (runtime_clipboard_test's Reader).
     template <typename Reader = RuntimeClipboardReader>
-    class TBC_HOT_PATH RuntimeClipboardService {
+    class TBC_GENERIC RuntimeClipboardService {
     public:
       using Clock = std::chrono::steady_clock;
       static constexpr auto transfer_timeout = std::chrono::seconds{30};
@@ -981,7 +981,7 @@ export {
 
     // Kept whole: tests instantiate it with their own fake Probe (worktree_detection_test's GatedWorktreeDetector).
     template <WorktreeDetector Probe>
-    class TBC_HOT_PATH WorktreeDetectionService {
+    class TBC_GENERIC WorktreeDetectionService {
     public:
       // The probe is built in place on its worker from the arguments.
       template <typename... Arguments>

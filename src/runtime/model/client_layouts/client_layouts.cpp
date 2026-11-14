@@ -142,6 +142,10 @@ namespace telar::runtime {
     }
   }
 
+  ssize_t Pane::ResponseWriter::operator()(int descriptor, std::span<const iovec> vectors) const {
+    return ::writev(descriptor, vectors.data(), static_cast<int>(vectors.size()));
+  }
+
   bool Pane::read(ReadMode mode) {
     constexpr std::size_t batch_byte_limit = 64 * 1024;
     constexpr unsigned batch_read_limit = 8;
@@ -673,6 +677,40 @@ namespace telar::runtime {
 
     *existing = replacement;
     ++clock_;
+  }
+
+  void ClientLayouts::publish(const RuntimeModel& model, ClientSession& client) {
+    auto* record = find(client.identity);
+    if (record == nullptr) {
+      client.connection.send(ClientLayoutSnapshot{});
+      return;
+    }
+
+    std::array<ClientTabLayout, maximum_tabs> tabs;
+    std::size_t count = 0;
+    std::optional<TabLocation> active;
+
+    for (std::size_t index = 0; index < record->tab_count; ++index) {
+      const auto tab = record->tabAt(index);
+      if (!current(model, tab)) {
+        continue;
+      }
+
+      tabs[count++] = tab;
+      if (sameLocation(tab.location, record->active_tab)) {
+        active = tab.location;
+      }
+    }
+
+    record->last_used = ++clock_;
+    client.connection.send(ClientLayoutSnapshot{
+        .restored = true,
+        .sidebar_visible = record->sidebar_visible,
+        .sidebar_width = record->sidebar_width,
+        .workspace_list_collapsed = record->workspace_list_collapsed,
+        .active_tab = active,
+        .tabs = std::span{tabs}.first(count),
+    });
   }
 
   std::optional<std::uint64_t> ClientLayouts::focusedPane(std::uint64_t identity) const noexcept {

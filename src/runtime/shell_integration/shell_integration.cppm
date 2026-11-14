@@ -168,7 +168,7 @@ export namespace telar::runtime {
   // keeps the startup the user asked for. A template over the caller's argument range, so only
   // the walk stays here.
   template <std::ranges::input_range Arguments>
-  TBC_HOT_PATH inline std::optional<IntegratedShell> integrableShell(const Arguments& arguments) noexcept {
+  TBC_GENERIC inline std::optional<IntegratedShell> integrableShell(const Arguments& arguments) noexcept {
     auto argument = std::ranges::begin(arguments);
     if (argument == std::ranges::end(arguments)) {
       return std::nullopt;

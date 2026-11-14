@@ -104,7 +104,7 @@ export namespace telar::runtime {
 
     // The consumer is the caller's type; the queue's collect is a template over it too.
     template <typename Consumer>
-    TBC_HOT_PATH inline void collect(Consumer&& consume) {
+    TBC_GENERIC inline void collect(Consumer&& consume) {
       queue_.collect(worker_, std::forward<Consumer>(consume));
     }
 

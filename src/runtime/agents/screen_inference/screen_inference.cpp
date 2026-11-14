@@ -113,6 +113,19 @@ namespace telar::runtime {
     return start == std::string_view::npos ? std::string_view{} : value.substr(start, value.find_last_not_of(' ') - start + 1);
   }
 
+  AgentScreenView agentScreenView(const Screen& screen) noexcept {
+    return AgentScreenView{
+        .cells = std::span{screen.cells},
+        .row_flags = std::span{screen.row_flags},
+        .cols = screen.cols,
+        .rows = screen.rows,
+        .cursor = screen.cursor,
+    };
+  }
+
+  AgentScreenReader::AgentScreenReader(const Terminal& terminal, const AgentManifests& manifests)
+      : AgentScreenReader(agentScreenView(terminal.screen), terminal.effects.title(), manifests) {}
+
   AgentScreenReader::AgentScreenReader(AgentScreenView screen, std::string_view title, const AgentManifests& manifests) noexcept
       : screen_(screen),
         title_(title),
@@ -372,6 +385,18 @@ namespace telar::runtime {
 
   std::string_view AgentScreenSample::text() const noexcept {
     return {bytes_.data() + start_, bytes_.size() - start_};
+  }
+
+  std::optional<AgentSignal> AgentScreenInference::observe(Terminal& terminal, const AgentManifests& manifests, AgentProvider provider, ObservationTime now) {
+    if (!terminal.outputSettled()) {
+      return std::nullopt;
+    }
+
+    terminal.refresh();
+
+    const auto screen = agentScreenView(terminal.screen);
+
+    return infer(AgentScreenReader{screen, terminal.effects.title(), manifests}, screen, manifests, provider, now);
   }
 
   std::optional<AgentSignal> AgentScreenInference::infer(const AgentScreenReader& reader, AgentScreenView screen, const AgentManifests& manifests, AgentProvider provider, ObservationTime now) {

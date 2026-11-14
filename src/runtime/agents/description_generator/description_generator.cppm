@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.agents.description_generator;
 
 import std;
@@ -157,21 +154,12 @@ export {
       bool operator==(const RejectedReporter&) const = default;
     };
 
-    // Every client layout builds one with its own allocator, the tests' included. Moving the
-    // allocator-free part to a base class with out-of-line members crashes clang 23 when an
-    // importer reads ClientSession<SystemAllocator> from a module.
     template <Allocator Memory>
-    struct TBC_HOT_PATH DeferredReport {
-      inline explicit DeferredReport(Memory& memory)
-          : payload(AllocatorRef<Byte, Memory>{memory}) {}
+    struct DeferredReport {
+      explicit DeferredReport(Memory& memory);
 
-      inline bool rechecked(std::uint32_t completed) const noexcept {
-        return std::bit_cast<std::int32_t>(completed - required_recheck) >= 0;
-      }
-
-      inline ObservationTime reportTime() const noexcept {
-        return answering ? observed : ObservationTime::now();
-      }
+      bool rechecked(std::uint32_t completed) const noexcept;
+      ObservationTime reportTime() const noexcept;
 
       Vector<Byte, Memory> payload;
       ReporterIdentity reporter;
@@ -182,6 +170,8 @@ export {
       bool answering = false;
       bool answer_rechecked = false;
     };
+
+    extern template struct DeferredReport<ConcurrentMemory>;
 
   }
 }

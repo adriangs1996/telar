@@ -57,7 +57,7 @@ export {
     // lanes all derive from this one list.
     // Kept whole: generic over the requests and the caller's consumer, and read on every decoded request.
     template <typename... Requests>
-    struct TBC_HOT_PATH ClientRequestList {
+    struct TBC_GENERIC ClientRequestList {
       // Calls `consume.template operator()<Message>()` for the request `tag` names, when its lane is at
       // least `Lane`; false when no such request has that tag.
       template <RequestLane Lane = RequestLane::runtime, typename Consumer>
@@ -294,7 +294,7 @@ export {
 
     // Kept whole: a container over the caller's value, from modules that import this one (Pane, Execution...).
     template <typename Value, std::size_t Capacity, Allocator Memory>
-    class TBC_HOT_PATH SlotStore {
+    class TBC_GENERIC SlotStore {
       static_assert(Capacity > 0 && Capacity <= std::numeric_limits<std::uint16_t>::max());
 
     public:
