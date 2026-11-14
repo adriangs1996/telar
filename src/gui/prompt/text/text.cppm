@@ -18,186 +18,67 @@ export namespace telar::gui::prompt {
     static constexpr std::size_t capacity = 256 * 1024;
     static constexpr std::size_t undo_capacity = 256;
 
-    inline std::string_view view() const noexcept {
-      return bytes_;
-    }
+    std::string_view view() const noexcept;
 
-    inline std::size_t size() const noexcept {
-      return bytes_.size();
-    }
+    std::size_t size() const noexcept;
 
-    inline bool empty() const noexcept {
-      return bytes_.empty();
-    }
+    bool empty() const noexcept;
 
-    inline std::size_t cursor() const noexcept {
-      return cursor_;
-    }
+    std::size_t cursor() const noexcept;
 
     // The other end of the selection; equal to the cursor without one.
-    inline std::size_t anchor() const noexcept {
-      return anchor_;
-    }
+    std::size_t anchor() const noexcept;
 
-    inline bool selecting() const noexcept {
-      return anchor_ != cursor_;
-    }
+    bool selecting() const noexcept;
 
-    inline std::size_t selectionStart() const noexcept {
-      return std::min(anchor_, cursor_);
-    }
+    std::size_t selectionStart() const noexcept;
 
-    inline std::size_t selectionEnd() const noexcept {
-      return std::max(anchor_, cursor_);
-    }
+    std::size_t selectionEnd() const noexcept;
 
     // Counts every change to the text, so views redraw only what changed.
-    inline std::uint64_t revision() const noexcept {
-      return revision_;
-    }
+    std::uint64_t revision() const noexcept;
 
-    inline void moveTo(std::size_t offset, bool extend = false) noexcept {
-      cursor_ = boundary(std::min(offset, bytes_.size()));
-      if (!extend) {
-        anchor_ = cursor_;
-      }
+    void moveTo(std::size_t offset, bool extend = false) noexcept;
 
-      group_ = Group::none;
-    }
-
-    inline void select(std::size_t anchor, std::size_t cursor) noexcept {
-      anchor_ = boundary(std::min(anchor, bytes_.size()));
-      cursor_ = boundary(std::min(cursor, bytes_.size()));
-      group_ = Group::none;
-    }
+    void select(std::size_t anchor, std::size_t cursor) noexcept;
 
     // Replaces [start, end) with `text` and leaves the cursor after it. Consecutive typing or
     // deleting joins one undo step, so undo removes a word typed, not a letter. Returns false
     // when the result would exceed the capacity, leaving everything as it was.
-    inline bool replace(std::size_t start, std::size_t end, std::string_view text, bool typing = false) {
-      start = boundary(std::min(start, bytes_.size()));
-      end = boundary(std::clamp(end, start, bytes_.size()));
-      if (bytes_.size() - (end - start) + text.size() > capacity) {
-        return false;
-      }
+    bool replace(std::size_t start, std::size_t end, std::string_view text, bool typing = false);
 
-      const auto kind = !typing ? Group::none : text.empty() ? Group::erase
-                                                             : Group::insert;
-      const bool joined = kind != Group::none && kind == group_ && !undo_.empty() && (kind == Group::insert ? start == cursor_ : end == cursor_ || start == cursor_);
-      if (!joined) {
-        record();
-      }
+    bool insert(std::string_view text, bool typing = false);
 
-      bytes_.replace(start, end - start, text);
-      cursor_ = anchor_ = start + text.size();
-      group_ = kind;
-      redo_.clear();
-      ++revision_;
-      return true;
-    }
+    void assign(std::string_view text);
 
-    inline bool insert(std::string_view text, bool typing = false) {
-      return replace(selectionStart(), selectionEnd(), text, typing);
-    }
+    void clear() noexcept;
 
-    inline void assign(std::string_view text) {
-      replace(0, bytes_.size(), text.substr(0, capacity));
-    }
+    bool undo();
 
-    inline void clear() noexcept {
-      bytes_.clear();
-      cursor_ = anchor_ = 0;
-      undo_.clear();
-      redo_.clear();
-      group_ = Group::none;
-      ++revision_;
-    }
-
-    inline bool undo() {
-      return swap(undo_, redo_);
-    }
-
-    inline bool redo() {
-      return swap(redo_, undo_);
-    }
+    bool redo();
 
     // Ends the current undo group, as moving the cursor does.
-    inline void seal() noexcept {
-      group_ = Group::none;
-    }
+    void seal() noexcept;
 
     // Code point navigation.
-    inline std::size_t next(std::size_t offset) const noexcept {
-      if (offset >= bytes_.size()) {
-        return bytes_.size();
-      }
+    std::size_t next(std::size_t offset) const noexcept;
 
-      ++offset;
-      while (offset < bytes_.size() && continuation(bytes_[offset])) {
-        ++offset;
-      }
+    std::size_t previous(std::size_t offset) const noexcept;
 
-      return offset;
-    }
+    std::size_t lineStart(std::size_t offset) const noexcept;
 
-    inline std::size_t previous(std::size_t offset) const noexcept {
-      if (offset == 0) {
-        return 0;
-      }
+    std::size_t lineEnd(std::size_t offset) const noexcept;
 
-      --offset;
-      while (offset > 0 && continuation(bytes_[offset])) {
-        --offset;
-      }
+    std::size_t lineCount() const noexcept;
 
-      return offset;
-    }
-
-    inline std::size_t lineStart(std::size_t offset) const noexcept {
-      const auto found = bytes_.rfind('\n', offset == 0 ? std::string::npos : offset - 1);
-
-      return offset == 0 || found == std::string::npos ? 0 : found + 1;
-    }
-
-    inline std::size_t lineEnd(std::size_t offset) const noexcept {
-      const auto found = bytes_.find('\n', offset);
-
-      return found == std::string::npos ? bytes_.size() : found;
-    }
-
-    inline std::size_t lineCount() const noexcept {
-      return static_cast<std::size_t>(std::ranges::count(bytes_, '\n')) + 1;
-    }
-
-    inline std::size_t lineOf(std::size_t offset) const noexcept {
-      return static_cast<std::size_t>(std::count(bytes_.begin(), bytes_.begin() + static_cast<std::ptrdiff_t>(std::min(offset, bytes_.size())), '\n'));
-    }
+    std::size_t lineOf(std::size_t offset) const noexcept;
 
     // The code points between the line start and the offset, for keeping a column across lines.
-    inline std::size_t column(std::size_t offset) const noexcept {
-      std::size_t count = 0;
+    std::size_t column(std::size_t offset) const noexcept;
 
-      for (auto position = lineStart(offset); position < offset; position = next(position)) {
-        ++count;
-      }
+    std::size_t atColumn(std::size_t line_start, std::size_t column) const noexcept;
 
-      return count;
-    }
-
-    inline std::size_t atColumn(std::size_t line_start, std::size_t column) const noexcept {
-      const auto end = lineEnd(line_start);
-      auto position = line_start;
-
-      for (std::size_t count = 0; count < column && position < end; ++count) {
-        position = next(position);
-      }
-
-      return position;
-    }
-
-    inline static bool continuation(char byte) noexcept {
-      return (static_cast<unsigned char>(byte) & 0xc0) == 0x80;
-    }
+    static bool continuation(char byte) noexcept;
 
   private:
     enum class Group : std::uint8_t {
@@ -211,35 +92,11 @@ export namespace telar::gui::prompt {
       std::size_t cursor;
     };
 
-    inline std::size_t boundary(std::size_t offset) const noexcept {
-      while (offset > 0 && offset < bytes_.size() && continuation(bytes_[offset])) {
-        --offset;
-      }
+    std::size_t boundary(std::size_t offset) const noexcept;
 
-      return offset;
-    }
+    void record();
 
-    inline void record() {
-      if (undo_.size() == undo_capacity) {
-        undo_.erase(undo_.begin());
-      }
-
-      undo_.push_back({bytes_, cursor_});
-    }
-
-    inline bool swap(std::vector<Snapshot>& from, std::vector<Snapshot>& to) {
-      if (from.empty()) {
-        return false;
-      }
-
-      to.push_back({bytes_, cursor_});
-      bytes_ = std::move(from.back().bytes);
-      cursor_ = anchor_ = std::min(from.back().cursor, bytes_.size());
-      from.pop_back();
-      group_ = Group::none;
-      ++revision_;
-      return true;
-    }
+    bool swap(std::vector<Snapshot>& from, std::vector<Snapshot>& to);
 
     std::string bytes_;
     std::vector<Snapshot> undo_;
@@ -258,17 +115,6 @@ export namespace telar::gui::prompt {
     punctuation,
   };
 
-  inline CharacterClass classify(char byte) noexcept {
-    const auto value = static_cast<unsigned char>(byte);
-    if (value == ' ' || value == '\t' || value == '\n') {
-      return CharacterClass::blank;
-    }
-
-    if (value >= 0x80 || value == '_' || (value >= '0' && value <= '9') || ((value | 0x20) >= 'a' && (value | 0x20) <= 'z')) {
-      return CharacterClass::word;
-    }
-
-    return CharacterClass::punctuation;
-  }
+  CharacterClass classify(char byte) noexcept;
 
 }

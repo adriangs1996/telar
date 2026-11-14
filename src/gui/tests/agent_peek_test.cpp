@@ -129,9 +129,10 @@ namespace {
     SystemAllocator upstream;
     BudgetAllocator budget{upstream, std::numeric_limits<std::size_t>::max()};
     AllocationGate memory{budget};
+    telar::MemoryAdapter adapter{memory};
 
     {
-      PeekScreen screen{memory};
+      PeekScreen<telar::Memory> screen{adapter};
       const auto baseline = budget.allocations();
 
       screen.show(target);

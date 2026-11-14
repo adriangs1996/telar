@@ -80,7 +80,8 @@ namespace {
   struct Fixture {
     Fixture()
         : memory(system, allocation_budget),
-          client(memory, transport) {
+          adapter(memory),
+          client(adapter, transport) {
       openFirstPane(client, transport);
       deliver(client, PaneCwd{.pane_id = 1, .cwd = "/work/project"});
     }
@@ -92,8 +93,9 @@ namespace {
     static constexpr std::size_t allocation_budget = std::size_t{16} * 1024 * 1024;
     SystemAllocator system;
     BudgetAllocator<SystemAllocator> memory;
+    telar::MemoryAdapter<BudgetAllocator<SystemAllocator>> adapter;
     Transport transport;
-    Session<BudgetAllocator<SystemAllocator>, Transport> client;
+    Session<telar::Memory, Transport> client;
     Environment environment;
   };
 

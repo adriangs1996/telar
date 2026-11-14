@@ -125,7 +125,9 @@ namespace {
     const auto parent = std::filesystem::path{directory.path()};
     const auto path = (parent / "machines.json").string();
     ProfileFile file{path};
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::Memory& memory = adapter;
 
     {
       std::ofstream source{path};
@@ -194,7 +196,9 @@ namespace {
     require(::chmod(path.c_str(), private_file_mode) == 0, "prepare the private oversized-file fixture");
     ProfileFile file{path};
     SystemAllocator system;
-    BudgetAllocator memory{system, MachineLimits::file_bytes};
+    BudgetAllocator budget{system, MachineLimits::file_bytes};
+    telar::MemoryAdapter adapter{budget};
+    telar::Memory& memory = adapter;
     bool rejected = false;
 
     try {
@@ -204,7 +208,7 @@ namespace {
       rejected = true;
     }
 
-    require(rejected && memory.liveBytes() == 0, "oversized sources must be refused before allocating their unbounded content");
+    require(rejected && budget.liveBytes() == 0, "oversized sources must be refused before allocating their unbounded content");
   }
 
   void concurrentTransactionsRetainEveryWriter() {
@@ -290,8 +294,9 @@ namespace {
     constexpr std::string_view source = "{\"version\":1,\"machines\":[]}\n";
 
     transaction.replace(source);
-    SystemAllocator memory;
-    const auto saved = transaction.read(memory);
+    SystemAllocator system;
+    telar::MemoryAdapter memory{system};
+    const auto saved = transaction.read<telar::ConcurrentMemory>(memory);
 
     require(saved && telar::textView(*saved) == source, "a transaction must read and replace through the same held directory descriptor");
     require(std::filesystem::exists(moved / "machines.json") && !std::filesystem::exists(original / "machines.json"), "replacing a directory path must not redirect an in-flight transaction into a new directory");

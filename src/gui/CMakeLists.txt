@@ -36,6 +36,52 @@ include(cmake/fonts.cmake)
 
 add_library(gui-core STATIC terminal/glyphs/curve_cache/box_curve.cpp platform/awake_clock/awake_clock.cpp platform/wall_clock/wall_clock.cpp)
 telar_modules(gui-core)
+# The implementation units of the input, prompt, components, config, platform, machines,
+# attachments, history, text and remaining domain interfaces.
+target_sources(gui-core PRIVATE
+  attachments/catalog/catalog.cpp
+  attachments/marker_input/marker_input.cpp
+  components/builtin_content/builtin_content.cpp
+  components/configuration/configuration.cpp
+  config/generation/generation.cpp
+  config/gui_query/gui_query.cpp
+  config/plugin_effects/plugin_effects.cpp
+  config/plugin_query/plugin_query.cpp
+  core/json_writer/json_writer.cpp
+  core/metrics/metrics.cpp
+  core/unicode_scalar/unicode_scalar.cpp
+  history/browser/browser.cpp
+  input/child_mouse/child_mouse.cpp
+  input/configuration/configuration.cpp
+  input/copy_mode/copy_mode.cpp
+  input/copy_pointer/copy_pointer.cpp
+  input/key_encoder/key_encoder.cpp
+  links/cell_links/cell_links.cpp
+  links/link_hover/link_hover.cpp
+  links/path_expansion/path_expansion.cpp
+  machines/discovery/discovery.cpp
+  machines/picker/picker.cpp
+  machines/profile_store/profile_store.cpp
+  palette/navigation_label/navigation_label.cpp
+  paths/label/label.cpp
+  peek/screen/screen.cpp
+  platform/file_stamp/file_stamp.cpp
+  platform/notification_commands/notification_commands.cpp
+  platform/private_file_stamp/private_file_stamp.cpp
+  platform/progress_cosine/progress_cosine.cpp
+  platform/secure_random/secure_random.cpp
+  prompt/completion/completion.cpp
+  prompt/editor/editor.cpp
+  prompt/layout/layout.cpp
+  prompt/line/line.cpp
+  prompt/routing/routing.cpp
+  prompt/text/text.cpp
+  suggestions/state/state.cpp
+  text/bounded_editor/bounded_editor.cpp
+  text/json_unsigned_integer/json_unsigned_integer.cpp
+  text/notification_payload/notification_payload.cpp
+  transport/runtime_link/runtime_link.cpp
+)
 target_link_libraries(gui-core PUBLIC telar::shell telar::render ebnf::ebnf)
 target_include_directories(gui-core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/generated" "${TELAR_ROOT}/lib/tbc/include")
 target_link_libraries(gui-core PUBLIC telar::config telar::machines gui-harfbuzz)
@@ -49,7 +95,7 @@ add_library(gui-clock INTERFACE)
 target_link_libraries(gui-clock INTERFACE gui-core)
 
 add_library(gui-posix STATIC platform/clipboard_image_source.cpp platform/clipboard_image_file.c platform/peer_identity/peer_identity.cpp platform/window_lease/window_lease.cpp platform/profile_file/profile_file.cpp  platform/stdio_socket/stdio_socket.cpp platform/managed_directory/managed_directory.cpp platform/process_group/process_group.cpp platform/process_group.c)
-target_sources(gui-posix PRIVATE platform/shared_image_source/shared_image_source.cpp)
+target_sources(gui-posix PRIVATE platform/shared_image_source/shared_image_source.cpp platform/clipboard_image_pipe/clipboard_image_pipe.cpp)
 target_link_libraries(gui-posix PUBLIC gui-core Threads::Threads)
 add_executable(telar-gui-command platform/surface_command_main.c)
 target_compile_definitions(telar-gui-command PRIVATE "$<$<PLATFORM_ID:Linux>:_GNU_SOURCE>")

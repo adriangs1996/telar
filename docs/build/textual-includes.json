@@ -365,108 +365,35 @@
     "<cassert>"
   ],
   "src/gui/attachments/marker_input/marker_input.cppm": [
-    "<cmath>",
     "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>"
+    "<cstdint>"
   ],
   "src/gui/components/builtin_content/builtin_content.cppm": [
-    "<cinttypes>",
-    "<cmath>",
     "<cstddef>",
     "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<lauxlib.h>",
-    "<lua.h>",
-    "<lualib.h>",
-    "<new>"
+    "<lua.h>"
   ],
   "src/gui/components/configuration/configuration.cppm": [
-    "<cinttypes>",
-    "<cmath>",
     "<cstddef>",
     "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
     "<lauxlib.h>",
-    "<lua.h>",
-    "<lualib.h>",
-    "<new>"
+    "<lua.h>"
   ],
   "src/gui/config/generation/generation.cppm": [
-    "<arpa/inet.h>",
-    "<cinttypes>",
-    "<cmath>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<ghostty/vt/unicode.h>",
     "<lauxlib.h>",
-    "<limits.h>",
-    "<lua.h>",
-    "<lualib.h>",
-    "<new>",
-    "<sys/stat.h>",
-    "gui_config_bootstrap.hpp"
+    "<lua.h>"
   ],
   "src/gui/config/gui_query/gui_query.cppm": [
-    "<cmath>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstring>",
     "config/palette_actions.inc",
     "config/theme_presets.inc"
   ],
-  "src/gui/config/plugin_effects/plugin_effects.cppm": [
-    "<arpa/inet.h>",
-    "<cerrno>",
-    "<cinttypes>",
-    "<cmath>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<fcntl.h>",
-    "<limits.h>",
-    "<lua.h>",
-    "<new>",
-    "<sys/stat.h>",
-    "<unistd.h>"
-  ],
-  "src/gui/config/plugin_query/plugin_query.cppm": [
-    "<cinttypes>",
-    "<cmath>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<limits.h>",
-    "<new>"
-  ],
   "src/gui/core/json_writer/json_writer.cppm": [
-    "<cmath>",
     "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstring>"
+    "<cstdint>"
   ],
   "src/gui/core/metrics/metrics.cppm": [
-    "<cmath>",
     "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstring>"
+    "<cstdint>"
   ],
   "src/gui/core/unicode_scalar/unicode_scalar.cppm": [
     "<cstddef>",
@@ -573,109 +500,36 @@
   ],
   "src/gui/history/browser/browser.cppm": [
     "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>"
+    "<cstdint>"
   ],
   "src/gui/input/child_mouse/child_mouse.cppm": [
-    "<cmath>",
     "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstring>"
+    "<cstdint>"
   ],
   "src/gui/input/configuration/configuration.cppm": [
     "<cstddef>",
     "<cstdint>",
-    "<cstdio>",
-    "<cstring>",
     "input/default_bindings.inc"
   ],
   "src/gui/input/copy_pointer/copy_pointer.cppm": [
-    "<cmath>",
     "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>"
+    "<cstdint>"
   ],
   "src/gui/input/key_encoder/key_encoder.cppm": [
     "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstring>"
-  ],
-  "src/gui/links/cell_links/cell_links.cppm": [
-    "<cmath>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>"
-  ],
-  "src/gui/links/link_hover/link_hover.cppm": [
-    "<cmath>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>"
-  ],
-  "src/gui/links/path_expansion/path_expansion.cppm": [
-    "<cmath>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>"
-  ],
-  "src/gui/machines/discovery/discovery.cppm": [
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstring>",
-    "<sys/un.h>"
-  ],
-  "src/gui/machines/picker/picker.cppm": [
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstring>"
-  ],
-  "src/gui/machines/profile_store/profile_store.cppm": [
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>"
+    "<cstdint>"
   ],
   "src/gui/palette/navigation_label/navigation_label.cppm": [
     "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstring>"
+    "<cstdint>"
   ],
   "src/gui/paths/label/label.cppm": [
     "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstring>",
-    "<ghostty/vt/unicode.h>"
+    "<cstdint>"
   ],
   "src/gui/peek/screen/screen.cppm": [
     "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>"
+    "<cstdint>"
   ],
   "src/gui/platform/awake_clock/awake_clock.cpp": [
     "<cstdint>",
@@ -685,11 +539,6 @@
     "platform/window.hpp"
   ],
   "src/gui/platform/clipboard_image_pipe/clipboard_image_pipe.cppm": [
-    "<cerrno>",
-    "<cstddef>",
-    "<poll.h>",
-    "<time.h>",
-    "<unistd.h>",
     "platform/clipboard_image_source.hpp"
   ],
   "src/gui/platform/clipboard_image_source.cpp": [
@@ -697,9 +546,6 @@
   ],
   "src/gui/platform/clipboard_image_transfer/clipboard_image_transfer.cppm": [
     "platform/clipboard_image_source.hpp"
-  ],
-  "src/gui/platform/file_stamp/file_stamp.cppm": [
-    "<sys/stat.h>"
   ],
   "src/gui/platform/managed_directory/managed_directory.cpp": [
     "<cerrno>",
@@ -713,10 +559,7 @@
   "src/gui/platform/notification_commands/notification_commands.cppm": [
     "<cstddef>",
     "<cstdint>",
-    "<cstdio>",
-    "<cstring>",
-    "<sys/un.h>",
-    "<unistd.h>"
+    "<sys/un.h>"
   ],
   "src/gui/platform/path_limits/path_limits.cppm": [
     "<limits.h>",
@@ -727,9 +570,6 @@
     "<sys/socket.h>",
     "<sys/types.h>",
     "<unistd.h>"
-  ],
-  "src/gui/platform/private_file_stamp/private_file_stamp.cppm": [
-    "<sys/stat.h>"
   ],
   "src/gui/platform/process_group/process_group.cpp": [
     "<cstdint>",
@@ -752,10 +592,6 @@
     "<sys/types.h>",
     "<sys/unistd.h>",
     "<unistd.h>"
-  ],
-  "src/gui/platform/profile_file/profile_file.cppm": [
-    "<cerrno>",
-    "<fcntl.h>"
   ],
   "src/gui/platform/runtime_endpoint/runtime_endpoint.cpp": [
     "<cctype>",
@@ -973,9 +809,7 @@
   ],
   "src/gui/suggestions/state/state.cppm": [
     "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstring>"
+    "<cstdint>"
   ],
   "src/gui/terminal/fold_map/fold_map.cppm": [
     "terminal/fold_map.hpp"
@@ -1002,26 +836,11 @@
   ],
   "src/gui/text/bounded_editor/bounded_editor.cppm": [
     "<cstddef>",
-    "<cstdint>",
-    "<cstring>",
-    "<ghostty/vt/unicode.h>"
+    "<cstdint>"
   ],
   "src/gui/text/json_unsigned_integer/json_unsigned_integer.cppm": [
-    "<cmath>",
     "<cstddef>",
-    "<cstdint>",
-    "<cstdlib>",
-    "<cstring>",
-    "<ghostty/vt/unicode.h>",
-    "<new>"
-  ],
-  "src/gui/transport/runtime_link/runtime_link.cppm": [
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>"
+    "<cstdint>"
   ],
   "src/runtime/cli/server/server.cpp": [
     "<lauxlib.h>",
@@ -1608,5 +1427,37 @@
   ],
   "src/runtime/traffic/control_protocol/control_protocol.cppm": [
     "<pcap/pcap.h>"
+  ],
+  "src/gui/attachments/marker_input/marker_input.cpp": [
+    "<cmath>"
+  ],
+  "src/gui/components/builtin_content/builtin_content.cpp": [
+    "<lauxlib.h>",
+    "<lua.h>"
+  ],
+  "src/gui/components/configuration/configuration.cpp": [
+    "<lauxlib.h>",
+    "<lua.h>"
+  ],
+  "src/gui/config/generation/generation.cpp": [
+    "<lauxlib.h>",
+    "<lua.h>",
+    "gui_config_bootstrap.hpp"
+  ],
+  "src/gui/platform/clipboard_image_pipe/clipboard_image_pipe.cpp": [
+    "<cerrno>",
+    "<poll.h>",
+    "<time.h>",
+    "<unistd.h>",
+    "platform/clipboard_image_source.hpp"
+  ],
+  "src/gui/platform/file_stamp/file_stamp.cpp": [
+    "<sys/stat.h>"
+  ],
+  "src/gui/platform/private_file_stamp/private_file_stamp.cpp": [
+    "<sys/stat.h>"
+  ],
+  "src/gui/text/bounded_editor/bounded_editor.cpp": [
+    "<ghostty/vt/unicode.h>"
   ]
 }

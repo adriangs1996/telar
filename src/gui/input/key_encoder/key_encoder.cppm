@@ -1,10 +1,7 @@
 module;
-#include <cstdio>
-
+#include "tbc/annotations.hpp"
 #include <cstddef>
 #include <cstdint>
-
-#include <cstring>
 
 export module telar.gui.input.key_encoder;
 
@@ -32,19 +29,10 @@ export {
       static constexpr std::uint64_t sequence_timeout_ns = std::uint64_t{1000} * 1000 * 1000;
     };
 
-    inline int compareChords(KeyChord left, KeyChord right) noexcept {
-      const auto left_value = std::tie(left.key, left.character, left.modifiers);
-      const auto right_value = std::tie(right.key, right.character, right.modifiers);
-
-      if (left_value < right_value) {
-        return -1;
-      }
-
-      return static_cast<int>(left_value > right_value);
-    }
+    int compareChords(KeyChord left, KeyChord right) noexcept;
 
     template <typename Action>
-    struct KeyBinding {
+    struct TBC_HOT_PATH KeyBinding {
       std::array<KeyChord, BindingLimits::keys> keys{};
       std::size_t length = 0;
       Action action{};
@@ -62,7 +50,7 @@ export {
     };
 
     template <typename Action>
-    class BindingMap {
+    class TBC_HOT_PATH BindingMap {
     public:
       struct Range {
         std::size_t begin = 0;
@@ -146,24 +134,11 @@ export {
   namespace telar::gui {
 
     struct KeyCharacter {
-      [[nodiscard]] inline static std::uint32_t pack(std::uint32_t codepoint) {
-        return std::bit_cast<std::uint32_t>(Utf8Scalar::encode(codepoint).bytes);
-      }
+      [[nodiscard]] static std::uint32_t pack(std::uint32_t codepoint);
 
-      [[nodiscard]] inline static Utf8Scalar text(std::uint32_t storage) noexcept {
-        Utf8Scalar result;
+      [[nodiscard]] static Utf8Scalar text(std::uint32_t storage) noexcept;
 
-        result.bytes = std::bit_cast<std::array<char, sizeof(storage)>>(storage);
-        const auto* const terminator = std::ranges::find(result.bytes, '\0');
-
-        result.length = std::max<std::size_t>(1, static_cast<std::size_t>(terminator - result.bytes.begin()));
-
-        return result;
-      }
-
-      [[nodiscard]] inline static std::uint32_t codepoint(std::uint32_t storage) {
-        return Utf8Scalar::decode(text(storage).view());
-      }
+      [[nodiscard]] static std::uint32_t codepoint(std::uint32_t storage);
     };
 
   }
@@ -220,9 +195,7 @@ export {
       KeyPhase phase = KeyPhase::press;
       std::optional<KittyCodepoints> kitty = std::nullopt;
 
-      [[nodiscard]] inline bool has(KeyChord::Modifier modifier) const noexcept {
-        return (modifiers & static_cast<unsigned>(modifier)) != 0;
-      }
+      [[nodiscard]] bool has(KeyChord::Modifier modifier) const noexcept;
     };
 
   }
@@ -243,34 +216,9 @@ export {
 
       // The key one alternate-scroll step sends: Up or Down as the cursor key mode encodes them, as
       // Ghostty sends it (Surface.zig), whatever keyboard protocol the application asked for.
-      [[nodiscard]] inline std::string_view alternateScroll(bool up, const InputModes& modes) {
-        return encode({.code = up ? KeyChord::Key::up : KeyChord::Key::down}, {.cursor_keys = modes.cursor_keys});
-      }
+      [[nodiscard]] std::string_view alternateScroll(bool up, const InputModes& modes);
 
-      [[nodiscard]] inline std::string_view encode(const TerminalKey& key, const InputModes& modes) {
-        used_ = 0;
-
-        if (key.has(KeyChord::Modifier::super)) {
-          return view();
-        }
-
-        const Encoding encoding{key, modes};
-        if (key.phase == KeyPhase::release && !encoding.event) {
-          return view();
-        }
-
-        if (encodeText(key, encoding)) {
-          return view();
-        }
-
-        if (encoding.usesKitty(key)) {
-          encodeKitty(key, encoding);
-        } else if (key.phase != KeyPhase::release || reportsLegacyRelease(key.code)) {
-          encodeLegacy(key, encoding, modes);
-        }
-
-        return view();
-      }
+      [[nodiscard]] std::string_view encode(const TerminalKey& key, const InputModes& modes);
 
     private:
       using Code = KeyChord::Key;
@@ -286,43 +234,14 @@ export {
       static constexpr char escape = '\x1b';
       static constexpr char erase = '\x7f';
 
-      inline static bool reportsLegacyRelease(Code code) noexcept {
-        switch (code) {
-        case Code::enter:
-        case Code::backspace:
-        case Code::tab:
-        case Code::back_tab:
-          return false;
-        default:
-          return true;
-        }
-      }
+      static bool reportsLegacyRelease(Code code) noexcept;
 
       struct Encoding {
-        inline explicit Encoding(const TerminalKey& key, const InputModes& modes)
-            : modifier(1 + (key.has(Modifier::shift) ? 1 : 0) + (key.has(Modifier::alt) ? 2 : 0) + (key.has(Modifier::control) ? 4 : 0)),
-              flags(modes.kitty_keyboard_flags),
-              cursor_keys(modes.cursor_keys) {
-          if (has(KittyKeyboardFlag::report_events) && key.phase != KeyPhase::press) {
-            event = static_cast<unsigned>(key.phase) + 1;
-          }
-        }
+        explicit Encoding(const TerminalKey& key, const InputModes& modes);
 
-        [[nodiscard]] inline bool has(KittyKeyboardFlag flag) const noexcept {
-          return (flags & static_cast<unsigned>(flag)) != 0;
-        }
+        [[nodiscard]] bool has(KittyKeyboardFlag flag) const noexcept;
 
-        [[nodiscard]] inline bool usesKitty(const TerminalKey& key) const noexcept {
-          if (flags == 0) {
-            return false;
-          }
-
-          if (key.code == Code::character || key.code == Code::escape) {
-            return true;
-          }
-
-          return (key.code == Code::enter || key.code == Code::backspace || key.code == Code::tab) && (modifier != 1 || has(KittyKeyboardFlag::all_keys) || (has(KittyKeyboardFlag::report_events) && key.kitty.has_value()));
-        }
+        [[nodiscard]] bool usesKitty(const TerminalKey& key) const noexcept;
 
         unsigned modifier;
         unsigned flags;
@@ -330,275 +249,33 @@ export {
         std::optional<unsigned> event;
       };
 
-      [[nodiscard]] inline std::string_view view() const noexcept {
-        return {bytes_.data(), used_};
-      }
+      [[nodiscard]] std::string_view view() const noexcept;
 
-      inline void append(std::string_view text) {
-        if (text.size() > bytes_.size() - used_) {
-          throw std::length_error{"Encoded key exceeds its byte capacity"};
-        }
+      void append(std::string_view text);
 
-        for (const auto byte : text) {
-          bytes_[used_++] = byte;
-        }
-      }
+      void byte(char value);
 
-      inline void byte(char value) {
-        append({&value, 1});
-      }
+      void number(std::uint32_t value);
 
-      inline void number(std::uint32_t value) {
-        const auto encoded = std::to_chars(bytes_.data() + used_, bytes_.data() + bytes_.size(), value);
-        if (encoded.ec != std::errc{}) {
-          throw std::length_error{"Encoded key number exceeds its byte capacity"};
-        }
+      static std::uint32_t textCodepoint(const TerminalKey& key);
 
-        used_ = static_cast<std::size_t>(encoded.ptr - bytes_.data());
-      }
+      bool encodeText(const TerminalKey& key, const Encoding& encoding);
 
-      inline static std::uint32_t textCodepoint(const TerminalKey& key) {
-        const auto codepoint = key.has(Modifier::shift) && key.kitty && key.kitty->shifted ? *key.kitty->shifted : key.codepoint;
-        if (!Utf8Scalar::valid(codepoint)) {
-          throw std::invalid_argument{"Key contains an invalid Unicode scalar"};
-        }
+      static std::optional<std::uint32_t> associatedText(const TerminalKey& key, const Encoding& encoding);
 
-        return codepoint;
-      }
+      void kittyCodepoints(const TerminalKey& key, const Encoding& encoding);
 
-      inline bool encodeText(const TerminalKey& key, const Encoding& encoding) {
-        if (key.code != Code::character || encoding.has(KittyKeyboardFlag::all_keys) || (encoding.has(KittyKeyboardFlag::report_events) && key.kitty) || key.has(Modifier::control) || key.has(Modifier::alt)) {
-          return false;
-        }
+      void encodeKitty(const TerminalKey& key, const Encoding& encoding);
 
-        if (key.phase != KeyPhase::release) {
-          append(Utf8Scalar::encode(textCodepoint(key)).view());
-        }
+      void altText(const TerminalKey& key, std::string_view text);
 
-        return true;
-      }
+      static std::optional<char> controlByte(std::uint32_t codepoint) noexcept;
 
-      inline static std::optional<std::uint32_t> associatedText(const TerminalKey& key, const Encoding& encoding) {
-        if (!encoding.has(KittyKeyboardFlag::associated_text) || key.phase == KeyPhase::release || key.code != Code::character || key.has(Modifier::control) || key.has(Modifier::alt)) {
-          return {};
-        }
+      void legacyCharacter(const TerminalKey& key);
 
-        constexpr std::uint32_t first_private_key = 57344;
-        constexpr std::uint32_t last_private_key = 63743;
-        if (key.kitty && key.kitty->primary >= first_private_key && key.kitty->primary <= last_private_key) {
-          return {};
-        }
+      void sequence(SequenceCode code, char final, const Encoding& encoding);
 
-        const auto codepoint = textCodepoint(key);
-        constexpr std::uint32_t first_printable = 32;
-        constexpr std::uint32_t first_c1_control = 127;
-        constexpr std::uint32_t last_c1_control = 159;
-
-        return codepoint < first_printable || (codepoint >= first_c1_control && codepoint <= last_c1_control) ? std::nullopt : std::optional{codepoint};
-      }
-
-      inline void kittyCodepoints(const TerminalKey& key, const Encoding& encoding) {
-        if (key.kitty) {
-          number(key.kitty->primary);
-          if (encoding.has(KittyKeyboardFlag::alternate_keys) && (key.kitty->shifted || key.kitty->base)) {
-            byte(':');
-            if (key.kitty->shifted) {
-              number(*key.kitty->shifted);
-            }
-
-            if (key.kitty->base) {
-              byte(':');
-              number(*key.kitty->base);
-            }
-          }
-
-          return;
-        }
-
-        switch (key.code) {
-        case Code::character:
-          if (!Utf8Scalar::valid(key.codepoint)) {
-            throw std::invalid_argument{"Key contains an invalid Unicode scalar"};
-          }
-
-          number(key.codepoint);
-          break;
-        case Code::enter:
-          number('\r');
-          break;
-        case Code::escape:
-          number(escape);
-          break;
-        case Code::backspace:
-          number(erase);
-          break;
-        case Code::tab:
-          number('\t');
-          break;
-        default:
-          throw std::invalid_argument{"Key has no Kitty codepoint"};
-        }
-      }
-
-      inline void encodeKitty(const TerminalKey& key, const Encoding& encoding) {
-        const auto associated = associatedText(key, encoding);
-
-        append("\x1b[");
-        kittyCodepoints(key, encoding);
-        if (encoding.modifier != 1 || encoding.event || associated) {
-          byte(';');
-          number(encoding.modifier);
-        }
-
-        if (encoding.event) {
-          byte(':');
-          number(*encoding.event);
-        }
-
-        if (associated) {
-          byte(';');
-          number(*associated);
-        }
-
-        byte('u');
-      }
-
-      inline void altText(const TerminalKey& key, std::string_view text) {
-        if (key.has(Modifier::alt)) {
-          byte(escape);
-        }
-
-        append(text);
-      }
-
-      inline static std::optional<char> controlByte(std::uint32_t codepoint) noexcept {
-        constexpr unsigned control_mask = 0x1f;
-
-        if ((codepoint >= 'a' && codepoint <= 'z') || (codepoint >= 'A' && codepoint <= 'Z')) {
-          return static_cast<char>(codepoint & control_mask);
-        }
-
-        constexpr auto controls = std::to_array<std::pair<std::uint32_t, char>>({
-            {' ', '\0'},
-            {'@', '\0'},
-            {'2', '\0'},
-            {'[', '\x1b'},
-            {'3', '\x1b'},
-            {'\\', '\x1c'},
-            {'4', '\x1c'},
-            {']', '\x1d'},
-            {'5', '\x1d'},
-            {'^', '\x1e'},
-            {'~', '\x1e'},
-            {'6', '\x1e'},
-            {'_', '\x1f'},
-            {'/', '\x1f'},
-            {'7', '\x1f'},
-            {'?', erase},
-            {'8', erase},
-        });
-
-        for (const auto& [known, value] : controls) {
-          if (codepoint == known) {
-            return value;
-          }
-        }
-
-        return {};
-      }
-
-      inline void legacyCharacter(const TerminalKey& key) {
-        if (key.has(Modifier::alt)) {
-          byte(escape);
-        }
-
-        const auto control = key.has(Modifier::control) ? controlByte(key.codepoint) : std::nullopt;
-        if (control) {
-          byte(*control);
-        } else {
-          append(Utf8Scalar::encode(key.codepoint).view());
-        }
-      }
-
-      inline void sequence(SequenceCode code, char final, const Encoding& encoding) {
-        if (code == SequenceCode::cursor && !encoding.event && encoding.modifier == 1) {
-          append(encoding.cursor_keys && !encoding.has(KittyKeyboardFlag::report_events) ? "\x1bO" : "\x1b[");
-          byte(final);
-
-          return;
-        }
-
-        append("\x1b[");
-        number(static_cast<unsigned>(code));
-        if (encoding.modifier != 1 || encoding.event) {
-          byte(';');
-          number(encoding.modifier);
-        }
-
-        if (encoding.event) {
-          byte(':');
-          number(*encoding.event);
-        }
-
-        byte(final);
-      }
-
-      inline void encodeLegacy(const TerminalKey& key, const Encoding& encoding, const InputModes& modes) {
-        switch (key.code) {
-        case Code::character:
-          legacyCharacter(key);
-          break;
-        case Code::up:
-          sequence(SequenceCode::cursor, 'A', encoding);
-          break;
-        case Code::down:
-          sequence(SequenceCode::cursor, 'B', encoding);
-          break;
-        case Code::right:
-          sequence(SequenceCode::cursor, 'C', encoding);
-          break;
-        case Code::left:
-          sequence(SequenceCode::cursor, 'D', encoding);
-          break;
-        case Code::home:
-          sequence(SequenceCode::cursor, 'H', encoding);
-          break;
-        case Code::end:
-          sequence(SequenceCode::cursor, 'F', encoding);
-          break;
-        case Code::erase:
-          sequence(SequenceCode::erase, '~', encoding);
-          break;
-        case Code::page_up:
-          sequence(SequenceCode::page_up, '~', encoding);
-          break;
-        case Code::page_down:
-          sequence(SequenceCode::page_down, '~', encoding);
-          break;
-        case Code::enter:
-          if (modes.modify_other_keys_2 && encoding.modifier != 1) {
-            append("\x1b[27;");
-            number(encoding.modifier);
-            append(";13~");
-          } else {
-            altText(key, "\r");
-          }
-
-          break;
-        case Code::escape:
-          altText(key, "\x1b");
-          break;
-        case Code::backspace:
-          altText(key, key.has(Modifier::control) ? "\x08" : "\x7f");
-          break;
-        case Code::tab:
-          altText(key, key.has(Modifier::shift) ? "\x1b[Z" : "\t");
-          break;
-        case Code::back_tab:
-          altText(key, "\x1b[Z");
-          break;
-        }
-      }
+      void encodeLegacy(const TerminalKey& key, const Encoding& encoding, const InputModes& modes);
 
       std::array<char, capacity> bytes_{};
       std::size_t used_ = 0;
@@ -621,18 +298,7 @@ export {
       static constexpr std::size_t capacity = 64;
       using Text = BoundedText<capacity>;
 
-      [[nodiscard]] inline static Text chord(std::optional<KeyChord> prefix, KeyChord key, KeyLabelStyle style) {
-        Text text;
-
-        if (prefix) {
-          append(text, *prefix, style);
-          text.append(" ");
-        }
-
-        append(text, key, style);
-
-        return text;
-      }
+      [[nodiscard]] static Text chord(std::optional<KeyChord> prefix, KeyChord key, KeyLabelStyle style);
 
     private:
       struct ModifierLabel {
@@ -647,55 +313,7 @@ export {
         std::string_view mac;
       };
 
-      inline static void append(Text& text, KeyChord key, KeyLabelStyle style) {
-        constexpr auto modifiers = std::to_array<ModifierLabel>({
-            {.modifier = KeyChord::Modifier::control, .pc = "Ctrl+", .mac = "⌃"},
-            {.modifier = KeyChord::Modifier::alt, .pc = "Alt+", .mac = "⌥"},
-            {.modifier = KeyChord::Modifier::shift, .pc = "Shift+", .mac = "⇧"},
-            {.modifier = KeyChord::Modifier::super, .pc = "Super+", .mac = "⌘"},
-        });
-
-        for (const auto& modifier : modifiers) {
-          if (key.has(modifier.modifier)) {
-            text.append(style == KeyLabelStyle::mac ? modifier.mac : modifier.pc);
-          }
-        }
-
-        if (key.key == KeyChord::Key::character) {
-          constexpr auto case_offset = 'a' - 'A';
-          const auto ascii_lower = key.character >= 'a' && key.character <= 'z';
-          const auto character = style == KeyLabelStyle::mac && ascii_lower ? key.character - case_offset : key.character;
-
-          text.append(Utf8Scalar::encode(character).view());
-
-          return;
-        }
-
-        constexpr auto names = std::to_array<KeyName>({
-            {.key = KeyChord::Key::up, .pc = "Up", .mac = "↑"},
-            {.key = KeyChord::Key::down, .pc = "Down", .mac = "↓"},
-            {.key = KeyChord::Key::left, .pc = "Left", .mac = "←"},
-            {.key = KeyChord::Key::right, .pc = "Right", .mac = "→"},
-            {.key = KeyChord::Key::home, .pc = "Home", .mac = "↖"},
-            {.key = KeyChord::Key::end, .pc = "End", .mac = "↘"},
-            {.key = KeyChord::Key::erase, .pc = "Del", .mac = "⌦"},
-            {.key = KeyChord::Key::page_up, .pc = "PgUp", .mac = "⇞"},
-            {.key = KeyChord::Key::page_down, .pc = "PgDn", .mac = "⇟"},
-            {.key = KeyChord::Key::enter, .pc = "Enter", .mac = "↩"},
-            {.key = KeyChord::Key::escape, .pc = "Esc", .mac = "esc"},
-            {.key = KeyChord::Key::backspace, .pc = "Backspace", .mac = "⌫"},
-            {.key = KeyChord::Key::tab, .pc = "Tab", .mac = "⇥"},
-            {.key = KeyChord::Key::back_tab, .pc = "Shift+Tab", .mac = "⇧⇥"},
-        });
-
-        for (const auto& name : names) {
-          if (name.key == key.key) {
-            text.append(style == KeyLabelStyle::mac ? name.mac : name.pc);
-
-            return;
-          }
-        }
-      }
+      static void append(Text& text, KeyChord key, KeyLabelStyle style);
     };
 
   }
@@ -712,8 +330,43 @@ export {
       { event.physical } -> std::convertible_to<std::uint64_t>;
     };
 
+    // The physical keys a router holds down, and whether a binding or the application owns what each
+    // one does until it is released.
+    class KeyLeases {
+    public:
+      enum class Owner : std::uint8_t {
+        binding,
+        application,
+      };
+
+      [[nodiscard]] std::optional<Owner> owner(std::uint64_t physical) const noexcept;
+
+      // A new press of a held key gives it back to the bindings; nothing is held past the table's size.
+      bool acquire(std::uint64_t physical) noexcept;
+
+      void transfer(std::uint64_t physical) noexcept;
+
+      std::optional<Owner> release(std::uint64_t physical) noexcept;
+
+      void clear() noexcept;
+
+      [[nodiscard]] std::uint64_t overflowCount() const noexcept;
+
+    private:
+      struct Lease {
+        std::uint64_t physical = 0;
+        Owner owner = Owner::binding;
+      };
+
+      [[nodiscard]] std::size_t find(std::uint64_t physical) const noexcept;
+
+      std::array<Lease, BindingLimits::physical_keys> leases_{};
+      std::size_t count_ = 0;
+      std::uint64_t overflow_ = 0;
+    };
+
     template <typename Action, BindingInput Event = BindingEvent>
-    class KeyRouter {
+    class TBC_HOT_PATH KeyRouter {
     public:
       enum class Outcome : std::uint8_t {
         forward,
@@ -746,9 +399,7 @@ export {
 
       [[nodiscard]] inline bool wantsBinding(const Event& event) const noexcept {
         if (event.phase != KeyPhase::press) {
-          const auto* lease = findLease(event.physical);
-
-          return lease != nullptr && lease->owner == Owner::binding;
+          return leases_.owner(event.physical) == Owner::binding;
         }
 
         const auto matched = map_.match({0, map_.size()}, 0, event.chord);
@@ -775,7 +426,7 @@ export {
       }
 
       [[nodiscard]] inline bool hasPhysicalKey(std::uint64_t physical) const noexcept {
-        return findLease(physical) != nullptr;
+        return leases_.owner(physical).has_value();
       }
 
       [[nodiscard]] inline std::optional<std::uint64_t> deadline() const noexcept {
@@ -804,7 +455,7 @@ export {
         }
 
         if (event.physical != 0) {
-          if (event.phase == KeyPhase::press && !acquire(event.physical)) {
+          if (event.phase == KeyPhase::press && !leases_.acquire(event.physical)) {
             return {};
           }
 
@@ -867,8 +518,6 @@ export {
 
       inline void inheritLeases(const KeyRouter& previous) noexcept {
         leases_ = previous.leases_;
-        lease_count_ = previous.lease_count_;
-        overflow_ = previous.overflow_;
         repeating_.reset();
       }
 
@@ -890,23 +539,15 @@ export {
 
       inline void clear() noexcept {
         cancelSequence();
-        lease_count_ = 0;
+        leases_.clear();
       }
 
       [[nodiscard]] inline std::uint64_t overflowCount() const noexcept {
-        return overflow_;
+        return leases_.overflowCount();
       }
 
     private:
-      enum class Owner : std::uint8_t {
-        binding,
-        application,
-      };
-
-      struct Lease {
-        std::uint64_t physical = 0;
-        Owner owner = Owner::binding;
-      };
+      using Owner = KeyLeases::Owner;
 
       struct Repeating {
         Event event;
@@ -915,41 +556,8 @@ export {
         std::uint64_t last_ns = 0;
       };
 
-      inline Lease* findLease(std::uint64_t physical) noexcept {
-        auto* const end = leases_.begin() + lease_count_;
-        auto* const found = std::ranges::find(leases_.begin(), end, physical, &Lease::physical);
-
-        return physical == 0 || found == end ? nullptr : found;
-      }
-
-      [[nodiscard]] inline const Lease* findLease(std::uint64_t physical) const noexcept {
-        const auto* const end = leases_.begin() + lease_count_;
-        const auto* const found = std::ranges::find(leases_.begin(), end, physical, &Lease::physical);
-
-        return physical == 0 || found == end ? nullptr : found;
-      }
-
-      inline bool acquire(std::uint64_t physical) noexcept {
-        auto* slot = findLease(physical);
-        if (slot == nullptr) {
-          if (lease_count_ == leases_.size()) {
-            ++overflow_;
-
-            return false;
-          }
-
-          slot = &leases_[lease_count_++];
-        }
-
-        *slot = {.physical = physical, .owner = Owner::binding};
-
-        return true;
-      }
-
       inline void transfer(std::uint64_t physical) noexcept {
-        if (auto* lease = findLease(physical)) {
-          lease->owner = Owner::application;
-        }
+        leases_.transfer(physical);
       }
 
       inline std::optional<Owner> release(std::uint64_t physical) noexcept {
@@ -957,16 +565,7 @@ export {
           repeating_.reset();
         }
 
-        auto* lease = findLease(physical);
-        if (lease == nullptr) {
-          return {};
-        }
-
-        const auto owner = lease->owner;
-
-        *lease = leases_[--lease_count_];
-
-        return owner;
+        return leases_.release(physical);
       }
 
       inline Decision routeLease(const Event& event, std::uint64_t now_ns, std::optional<BindingRepeat> policy) {
@@ -974,12 +573,12 @@ export {
           return release(event.physical) == Owner::application ? Decision{.outcome = Outcome::forward, .event = event} : Decision{};
         }
 
-        const auto* lease = findLease(event.physical);
-        if (lease == nullptr) {
+        const auto owner = leases_.owner(event.physical);
+        if (!owner) {
           return {};
         }
 
-        if (lease->owner == Owner::application) {
+        if (*owner == Owner::application) {
           return {.outcome = Outcome::forward, .event = event};
         }
 
@@ -1077,12 +676,10 @@ export {
       std::optional<KeyChord> prefix_;
       BindingMap<Action>::Range candidates_;
       std::array<Event, BindingLimits::keys> held_{};
-      std::array<Lease, BindingLimits::physical_keys> leases_{};
+      KeyLeases leases_;
       std::optional<Repeating> repeating_;
       std::optional<std::uint64_t> since_;
       std::uint64_t timeout_ns_ = BindingLimits::sequence_timeout_ns;
-      std::uint64_t overflow_ = 0;
-      std::size_t lease_count_ = 0;
       std::size_t depth_ = 0;
       bool prefix_pending_ = false;
     };
@@ -1097,7 +694,7 @@ export {
     // A paste as one bounded value, encoded by the paste encoder the runtime uses too.
     struct PasteEncoding {
       template <std::size_t Capacity>
-      [[nodiscard]] inline static BoundedText<Capacity + BracketedPaste::framing_bytes> encode(std::string_view text, bool bracketed) {
+      [[nodiscard]] TBC_HOT_PATH inline static BoundedText<Capacity + BracketedPaste::framing_bytes> encode(std::string_view text, bool bracketed) {
         if (text.size() > Capacity) {
           throw std::length_error{"Paste text exceeds its capacity"};
         }

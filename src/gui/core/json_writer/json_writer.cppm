@@ -1,12 +1,8 @@
 module;
-#include <cstdio>
-
-#include <cmath>
+#include "tbc/annotations.hpp"
 
 #include <cstddef>
 #include <cstdint>
-
-#include <cstring>
 
 export module telar.gui.core.json_writer;
 
@@ -27,9 +23,7 @@ export {
     };
 
     struct StandardCosine {
-      [[nodiscard]] inline static float evaluate(float angle) noexcept {
-        return std::cos(angle);
-      }
+      [[nodiscard]] static float evaluate(float angle) noexcept;
     };
 
   }
@@ -44,22 +38,10 @@ export {
       static constexpr std::size_t capacity = 32;
       using Samples = std::array<std::uint8_t, capacity>;
 
-      inline void push(std::uint8_t percent) noexcept {
-        samples_[next_] = percent;
-        next_ = (next_ + 1) % capacity;
-        count_ = count_ < capacity ? count_ + 1 : capacity;
-      }
+      void push(std::uint8_t percent) noexcept;
 
       // The samples are copied into the buffer, region `a`, in the order they were taken.
-      [[nodiscard]] inline tbc::view<std::span<const std::uint8_t>, tbc::lt::a> ordered(tbc::view<Samples&, tbc::lt::a> buffer) const noexcept {
-        const auto start = (next_ + capacity - count_) % capacity;
-
-        for (std::size_t index = 0; index < count_; ++index) {
-          buffer[index] = samples_[(start + index) % capacity];
-        }
-
-        return std::span{buffer}.first(count_);
-      }
+      [[nodiscard]] tbc::view<std::span<const std::uint8_t>, tbc::lt::a> ordered(tbc::view<Samples&, tbc::lt::a> buffer) const noexcept;
 
     private:
       Samples samples_{};
@@ -95,54 +77,15 @@ export {
       static constexpr std::uint8_t battery_warning = 20;
       static constexpr std::uint8_t battery_danger = 10;
 
-      [[nodiscard]] inline static bool available(BarMetric metric, const SystemMetrics& sample) noexcept {
-        return sample.revision != 0 && (metric != BarMetric::battery || sample.has_battery);
-      }
+      [[nodiscard]] static bool available(BarMetric metric, const SystemMetrics& sample) noexcept;
 
       // How full the metric is, 0..100: memory in use of the total, or the battery's charge.
-      [[nodiscard]] inline static std::uint8_t percent(BarMetric metric, const SystemMetrics& sample) noexcept {
-        switch (metric) {
-        case BarMetric::cpu:
-          return sample.cpu_percent;
-        case BarMetric::memory:
-          if (sample.memory_total_decigib == 0) {
-            return 0;
-          }
-
-          return static_cast<std::uint8_t>(std::min<unsigned>(100, ((sample.memory_used_decigib * 100U) + (sample.memory_total_decigib / 2U)) / sample.memory_total_decigib));
-        case BarMetric::battery:
-          return sample.battery_percent;
-        }
-
-        return 0;
-      }
+      [[nodiscard]] static std::uint8_t percent(BarMetric metric, const SystemMetrics& sample) noexcept;
 
       // The severity the thresholds give. `margin` moves every threshold that many
       // points away from the current value, so a level is kept until the value has
       // clearly left it.
-      [[nodiscard]] inline static MetricSeverity severity(BarMetric metric, const SystemMetrics& sample, int margin = 0) noexcept {
-        if (!available(metric, sample) || (metric == BarMetric::memory && sample.memory_total_decigib == 0)) {
-          return MetricSeverity::normal;
-        }
-
-        const int value = percent(metric, sample);
-        const auto rising = [&](int warning, int danger) noexcept {
-          return value + margin >= danger ? MetricSeverity::danger : value + margin >= warning ? MetricSeverity::warning
-                                                                                               : MetricSeverity::normal;
-        };
-
-        switch (metric) {
-        case BarMetric::cpu:
-          return rising(cpu_warning, cpu_danger);
-        case BarMetric::memory:
-          return rising(memory_warning, memory_danger);
-        case BarMetric::battery:
-          return value - margin <= battery_danger ? MetricSeverity::danger : value - margin <= battery_warning ? MetricSeverity::warning
-                                                                                                               : MetricSeverity::normal;
-        }
-
-        return MetricSeverity::normal;
-      }
+      [[nodiscard]] static MetricSeverity severity(BarMetric metric, const SystemMetrics& sample, int margin = 0) noexcept;
     };
 
     // Each metric's severity, debounced: a CPU or memory peak must last
@@ -154,36 +97,9 @@ export {
       static constexpr std::uint8_t confirm_samples = 3;
       static constexpr int release_margin = 5;
 
-      inline void update(const SystemMetrics& sample) noexcept {
-        for (std::size_t index = 0; index < states_.size(); ++index) {
-          const auto metric = static_cast<BarMetric>(index);
-          auto& state = states_[index];
+      void update(const SystemMetrics& sample) noexcept;
 
-          if (!MetricLevels::available(metric, sample)) {
-            state = {};
-            continue;
-          }
-
-          const auto raw = MetricLevels::severity(metric, sample);
-          if (raw > state.current) {
-            state.pending_count = raw == state.pending ? state.pending_count + 1 : 1;
-            state.pending = raw;
-            if (metric == BarMetric::battery || state.pending_count >= confirm_samples) {
-              state.current = raw;
-              state.pending_count = 0;
-            }
-
-            continue;
-          }
-
-          state.pending_count = 0;
-          state.current = std::min(state.current, MetricLevels::severity(metric, sample, release_margin));
-        }
-      }
-
-      [[nodiscard]] inline MetricSeverity severity(BarMetric metric) const noexcept {
-        return states_[static_cast<std::size_t>(metric)].current;
-      }
+      [[nodiscard]] MetricSeverity severity(BarMetric metric) const noexcept;
 
     private:
       struct State {
@@ -205,21 +121,20 @@ export {
     // Writes JSON into the caller's buffer, region `a`, which the written text views.
     class JsonWriter {
     public:
-      inline explicit JsonWriter(tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept
-          : buffer_(buffer) {}
+      explicit JsonWriter(tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept;
 
       template <typename Consumer>
-      inline void object(Consumer&& consume) {
+      TBC_HOT_PATH void object(Consumer&& consume) {
         container(Container::object, std::forward<Consumer>(consume));
       }
 
       template <typename Consumer>
-      inline void array(Consumer&& consume) {
+      TBC_HOT_PATH void array(Consumer&& consume) {
         container(Container::array, std::forward<Consumer>(consume));
       }
 
       template <typename Value>
-      inline void member(std::string_view name, const Value& value) {
+      TBC_HOT_PATH void member(std::string_view name, const Value& value) {
         separator();
         write(name);
         append(":");
@@ -227,32 +142,19 @@ export {
       }
 
       template <typename Value>
-      inline void element(const Value& value) {
+      TBC_HOT_PATH void element(const Value& value) {
         separator();
         write(value);
       }
 
-      [[nodiscard]] inline tbc::view<std::string_view, tbc::lt::a> view() const noexcept {
-        return {buffer_.data(), length_};
-      }
+      [[nodiscard]] tbc::view<std::string_view, tbc::lt::a> view() const noexcept;
 
       template <typename Value>
-      inline void value(const Value& value) {
+      TBC_HOT_PATH void value(const Value& value) {
         write(value);
       }
 
-      inline void bytes(std::span<const Byte> bytes) {
-        const auto text = textView(bytes);
-        if (inspectUtf8(text) == Utf8Validation::valid) {
-          writeString(text);
-        } else {
-          array([&](JsonWriter& items) {
-            for (const auto byte : bytes) {
-              items.element(byte);
-            }
-          });
-        }
-      }
+      void bytes(std::span<const Byte> bytes);
 
     private:
       enum class Container : std::uint8_t {
@@ -261,50 +163,27 @@ export {
       };
 
       template <typename Consumer>
-      inline void container(Container kind, Consumer&& consume) {
-        append(kind == Container::object ? "{" : "[");
+      TBC_HOT_PATH void container(Container kind, Consumer&& consume) {
+        open(kind);
         const auto previous = std::exchange(first_, true);
 
         std::invoke(std::forward<Consumer>(consume), *this);
-        append(kind == Container::object ? "}" : "]");
+        close(kind);
         first_ = previous;
       }
 
-      inline void separator() {
-        if (!std::exchange(first_, false)) {
-          append(",");
-        }
-      }
-
-      inline void append(std::string_view text) {
-        if (text.size() > buffer_.size() - length_) {
-          throw std::length_error{"WriteFailed"};
-        }
-
-        if (!text.empty()) {
-          std::memcpy(buffer_.data() + length_, text.data(), text.size());
-          length_ += text.size();
-        }
-      }
-
-      inline void write(std::string_view text) {
-        validateUtf8(text);
-
-        writeString(text);
-      }
-
-      inline void writeString(std::string_view text) {
-        append("\"");
-        runtime::escapeJson(text, runtime::JsonEscapes::standard, [&](std::string_view piece) {
-          append(piece);
-        });
-
-        append("\"");
-      }
+      void open(Container kind);
+      void close(Container kind);
+      void separator();
+      void append(std::string_view text);
+      void write(std::string_view text);
+      void writeString(std::string_view text);
+      void writeSigned(std::int64_t value);
+      void writeUnsigned(std::uint64_t value);
 
       template <typename Text>
         requires(std::is_array_v<Text> && std::same_as<std::remove_extent_t<Text>, char>)
-      void write(const Text& text) {
+      TBC_HOT_PATH void write(const Text& text) {
         const auto bytes = std::span{text};
         const auto end = std::ranges::find(bytes, '\0');
 
@@ -312,16 +191,14 @@ export {
       }
 
       template <std::same_as<bool> Boolean>
-      inline void write(Boolean value) {
+      TBC_HOT_PATH void write(Boolean value) {
         append(value ? "true" : "false");
       }
 
-      inline void write(std::nullptr_t) {
-        append("null");
-      }
+      void write(std::nullptr_t);
 
       template <typename Value>
-      inline void write(const std::optional<Value>& value) {
+      TBC_HOT_PATH void write(const std::optional<Value>& value) {
         if (value) {
           write(*value);
         } else {
@@ -331,42 +208,20 @@ export {
 
       template <std::integral Number>
         requires(!std::same_as<Number, bool>)
-      void write(Number value) {
-        const auto output = buffer_.subspan(length_);
-        if (output.empty()) {
-          throw std::length_error{"WriteFailed"};
+      TBC_HOT_PATH void write(Number value) {
+        if constexpr (std::is_signed_v<Number>) {
+          writeSigned(value);
+        } else {
+          writeUnsigned(value);
         }
-
-        const auto result = std::to_chars(output.data(), output.data() + output.size(), value);
-        if (result.ec != std::errc{}) {
-          throw std::length_error{"WriteFailed"};
-        }
-
-        length_ += static_cast<std::size_t>(result.ptr - output.data());
       }
 
-      inline void write(float value) {
-        write(static_cast<double>(value));
-      }
-
-      inline void write(double value) {
-        if (!std::isfinite(value)) {
-          throw std::invalid_argument{"InvalidJsonNumber"};
-        }
-
-        constexpr std::size_t capacity = std::numeric_limits<double>::max_exponent10 + std::numeric_limits<double>::max_digits10 + sizeof("-0.");
-        std::array<char, capacity> encoded{};
-        const auto result = std::to_chars(encoded.data(), encoded.data() + encoded.size(), value, std::chars_format::fixed);
-        if (result.ec != std::errc{}) {
-          throw std::length_error{"WriteFailed"};
-        }
-
-        append({encoded.data(), static_cast<std::size_t>(result.ptr - encoded.data())});
-      }
+      void write(float value);
+      void write(double value);
 
       template <typename Consumer>
         requires std::invocable<Consumer, JsonWriter&>
-      void write(Consumer&& consume) {
+      TBC_HOT_PATH void write(Consumer&& consume) {
         std::invoke(std::forward<Consumer>(consume), *this);
       }
 

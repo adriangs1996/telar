@@ -31,6 +31,7 @@ import telar.sys.posix;
 
 import telar.gui.platform.secure_random;
 import telar.platform.error;
+import telar.machines;
 import telar.platform.fs;
 import telar.gui.text.json_unsigned_integer;
 import telar.base.diagnostics;
@@ -191,6 +192,49 @@ namespace telar::gui::platform {
     };
 
   }
+
+  InsecureProfileFile::InsecureProfileFile()
+      : std::runtime_error("InsecureFile") {}
+
+  const char* ProfileOperationCancelled::what() const noexcept {
+    return "Machine profile operation cancelled";
+  }
+
+  template <Allocator Memory>
+  tbc::view<std::optional<Vector<Byte, Memory>>, tbc::lt::a> readProfileSource(tbc::view<Memory&, tbc::lt::a> memory, int directory, std::string_view name) {
+    Vector<Byte, Memory> bytes{AllocatorRef<Byte, Memory>{memory}};
+
+    try {
+      if (!runtime::readPrivateFile(directory, name, bytes, runtime::machines::MachineLimits::file_bytes)) {
+        return std::nullopt;
+      }
+    } catch (const runtime::SystemError& error) {
+      if (error.code() == EACCES || error.code() == ELOOP || error.code() == EISDIR) {
+        throw InsecureProfileFile{};
+      }
+
+      throw;
+    }
+
+    return bytes;
+  }
+
+  template <Allocator Memory>
+  tbc::view<std::optional<Vector<Byte, Memory>>, tbc::lt::a> ProfileFileTransaction::read(tbc::view<Memory&, tbc::lt::a> memory) const {
+    return readProfileSource(memory, parent_.get(), name_.data());
+  }
+
+  template <Allocator Memory>
+  tbc::view<std::optional<Vector<Byte, Memory>>, tbc::lt::a> ProfileFile::read(tbc::view<Memory&, tbc::lt::a> memory) const {
+    return readProfileSource(memory, AT_FDCWD, path());
+  }
+
+  template tbc::view<std::optional<Vector<Byte, telar::Memory>>, tbc::lt::a> readProfileSource<telar::Memory>(tbc::view<telar::Memory&, tbc::lt::a> memory, int directory, std::string_view name);
+  template tbc::view<std::optional<Vector<Byte, telar::ConcurrentMemory>>, tbc::lt::a> readProfileSource<telar::ConcurrentMemory>(tbc::view<telar::ConcurrentMemory&, tbc::lt::a> memory, int directory, std::string_view name);
+  template tbc::view<std::optional<Vector<Byte, telar::Memory>>, tbc::lt::a> ProfileFileTransaction::read<telar::Memory>(tbc::view<telar::Memory&, tbc::lt::a> memory) const;
+  template tbc::view<std::optional<Vector<Byte, telar::ConcurrentMemory>>, tbc::lt::a> ProfileFileTransaction::read<telar::ConcurrentMemory>(tbc::view<telar::ConcurrentMemory&, tbc::lt::a> memory) const;
+  template tbc::view<std::optional<Vector<Byte, telar::Memory>>, tbc::lt::a> ProfileFile::read<telar::Memory>(tbc::view<telar::Memory&, tbc::lt::a> memory) const;
+  template tbc::view<std::optional<Vector<Byte, telar::ConcurrentMemory>>, tbc::lt::a> ProfileFile::read<telar::ConcurrentMemory>(tbc::view<telar::ConcurrentMemory&, tbc::lt::a> memory) const;
 
   ProfileFile::ProfileFile(std::string_view path, std::stop_token stop)
       : stop_(std::move(stop)) {

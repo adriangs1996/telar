@@ -313,7 +313,8 @@ namespace {
     require(none, "a row without links has none");
 
     // The second kept row drawn first, as a folded view may draw it.
-    Screen<SystemAllocator> drawn{memory};
+    telar::MemoryAdapter adapter{memory};
+    Screen<telar::ConcurrentMemory> drawn{adapter};
     const auto row = cache.find(from + 1);
     const std::array spans{row->cells, std::span<const CellValue>{}};
     const std::array<Byte, rows> drawn_flags{row->flags, 0};
