@@ -8,16 +8,12 @@ import std;
 
 export import telar.cli.command_limit;
 
-export import telar.platform.error;
 export import telar.platform.paths;
 export import telar.platform.process;
 
-export import telar.cli.runtime_observer;
 import telar.cli.output;
-export import telar.cli.server;
 
 export import telar.base.memory.allocators;
-export import telar.base.memory.containers;
 import telar.base.diagnostics;
 import telar.base.text;
 import telar.base.text.json;
@@ -27,6 +23,11 @@ import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.git.checkout;
 import telar.platform.primitives;
+import telar.base.memory.containers;
+import telar.cli.runtime_observer;
+import telar.cli.server;
+import telar.platform.error;
+import telar.cli.control_session;
 
 // Interface: repository_identity.cppm
 export {

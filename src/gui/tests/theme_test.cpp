@@ -55,6 +55,7 @@ static_assert(true);
 
 #include "core/memory.hpp"
 
+import telar.base.text.utf8;
 import telar.gui.config.generation;
 import telar.gui.config.gui_query;
 import telar.gui.core.metrics;

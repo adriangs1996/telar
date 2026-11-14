@@ -30,6 +30,7 @@ import telar.base.text;
 import telar.platform.primitives;
 import telar.runtime.tests.check;
 import telar.runtime.proxy.authenticate;
+import telar.platform.error;
 
 using namespace telar;
 using namespace telar::runtime;

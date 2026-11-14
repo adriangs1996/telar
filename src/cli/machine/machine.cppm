@@ -6,21 +6,18 @@ export import telar.cli.machine_ssh;
 
 import telar.cli.machine_ssh;
 
-export import telar.cli.command_limit;
-
 import telar.cli.window;
 
-export import telar.cli.integration.settings;
-
-export import telar.cli.runtime_observer;
-
-export import telar.platform.paths;
-export import telar.platform.process;
-export import telar.platform.sha256;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.wire.clients;
 import telar.platform.primitives;
+import telar.cli.command_limit;
+import telar.cli.integration.settings;
+import telar.cli.runtime_observer;
+import telar.platform.paths;
+import telar.platform.process;
+import telar.platform.sha256;
 
 // Interface: machines/setup.cppm
 export {

@@ -5,26 +5,23 @@ export module telar.cli.machine_ssh;
 
 import std;
 
-export import telar.cli.command_limit;
-export import telar.cli.plugin;
-export import telar.platform.daemon;
-export import telar.platform.error;
-export import telar.platform.fs;
-export import telar.platform.paths;
-export import telar.platform.process;
-
-export import telar.cli.server;
-
-export import telar.client;
 export import telar.machines;
 
-export import telar.cli.output;
-
-export import telar.base.text;
 export import telar.base.text.json;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.platform.primitives;
+import telar.base.text;
+import telar.cli.command_limit;
+import telar.cli.output;
+import telar.cli.plugin;
+import telar.cli.server;
+import telar.client;
+import telar.platform.daemon;
+import telar.platform.error;
+import telar.platform.fs;
+import telar.platform.paths;
+import telar.platform.process;
 
 // Interface: config_receive.cppm
 export {

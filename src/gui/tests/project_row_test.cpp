@@ -60,6 +60,8 @@ static_assert(true);
 
 import telar.gui.application.workspace_replica;
 import telar.gui.core.metrics;
+import telar.gui.model.records;
+import telar.gui.model.replicas;
 import telar.gui.presentation.history_inspection_geometry;
 
 namespace {

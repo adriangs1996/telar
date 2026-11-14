@@ -36,6 +36,8 @@ import telar.runtime.proxy.authenticate;
 import telar.platform.net;
 import telar.wire.content;
 import telar.wire.layout;
+import telar.wire.pane_io;
+import telar.wire.runtime;
 
 using namespace telar;
 using namespace telar::runtime;

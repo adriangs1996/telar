@@ -3,11 +3,7 @@ export module telar.cli.runtime_observer;
 import std;
 
 export import telar.cli.command_limit;
-export import telar.cli.control_session;
-export import telar.client;
 
-export import telar.platform.error;
-export import telar.platform.paths;
 import telar.base.diagnostics;
 import telar.base.text;
 import telar.base.text.json;
@@ -19,6 +15,10 @@ import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.platform.primitives;
+import telar.cli.control_session;
+import telar.client;
+import telar.platform.error;
+import telar.platform.paths;
 
 // Interface: api_schema.cppm
 export {

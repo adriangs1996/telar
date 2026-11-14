@@ -44,10 +44,10 @@ export import telar.runtime.http2.direction_observer;
 
 export import telar.runtime.exchange_capture.pipeline;
 export import telar.runtime.exchange_capture.producer;
-export import telar.runtime.http1.head;
 export import telar.runtime.http2.frame_reader;
 import telar.base.diagnostics;
 import telar.platform.primitives;
+import telar.runtime.http1.head;
 
 // Interface: proxy/responses.cppm
 export {

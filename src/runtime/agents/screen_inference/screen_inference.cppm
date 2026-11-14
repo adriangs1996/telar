@@ -26,8 +26,6 @@ export module telar.runtime.agents.screen_inference;
 
 import std;
 
-export import telar.runtime.platform.session_host;
-
 export import telar.config.runtime;
 
 export import telar.runtime.terminal.text_reader;
@@ -37,6 +35,7 @@ import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
 import telar.runtime.graphics.kitty;
 import telar.runtime.terminal.control;
+import telar.runtime.platform.session_host;
 
 // Interface: agents/prompt_budget.cppm
 export {

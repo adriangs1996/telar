@@ -39,6 +39,9 @@ module;
 
 module telar.cli.history;
 
+import telar.cli.control_session;
+import telar.sys.posix;
+
 namespace telar::runtime::cli::file_transfer {
 
   constexpr std::uint64_t max_bytes = 128 * 1024 * 1024;

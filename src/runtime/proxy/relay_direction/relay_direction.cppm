@@ -10,14 +10,14 @@ export module telar.runtime.proxy.relay_direction;
 import std;
 
 export import telar.platform.net;
-export import telar.platform.error;
-export import telar.platform.thread;
-export import telar.runtime.platform.signals;
 
 export import telar.runtime.platform.name_resolutions;
-export import telar.runtime.platform.stream_read_buffer;
 import telar.base.text;
+import telar.platform.error;
 import telar.platform.primitives;
+import telar.platform.thread;
+import telar.runtime.platform.signals;
+import telar.runtime.platform.stream_read_buffer;
 
 // Interface: proxy/origin_connection.cppm
 export {

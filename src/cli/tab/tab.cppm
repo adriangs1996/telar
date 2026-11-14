@@ -4,14 +4,13 @@ import std;
 
 export import telar.cli.window;
 
-export import telar.cli.command_limit;
-
 export import telar.cli.worktree_git;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.platform.primitives;
+import telar.cli.command_limit;
 
 // Interface: config_check.cppm
 export {

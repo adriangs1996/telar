@@ -85,6 +85,8 @@ import telar.gui.core.metrics;
 import telar.gui.platform.awake_clock;
 import telar.gui.presentation.suggestion_labels;
 import telar.gui.presentation.application_mark;
+import telar.gui.model.records;
+import telar.gui.model.replicas;
 
 namespace {
 

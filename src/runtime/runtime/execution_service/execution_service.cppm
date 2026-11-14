@@ -32,23 +32,14 @@ export import telar.runtime.model.client_layouts;
 export import telar.base.diagnostics;
 
 export import telar.runtime.platform.event_loop;
-export import telar.runtime.platform.stream_read_buffer;
 export import telar.runtime.transport.connection;
 
-export import telar.client;
-export import telar.platform.net;
-export import telar.platform.error;
-export import telar.platform.events;
 export import telar.platform.process;
 
 export import telar.runtime.proxy.runtime;
 
-export import telar.runtime.terminal.text_reader;
-export import telar.runtime.runtime.delivery.client_delivery;
-
 export import telar.runtime.execution.execution;
 export import telar.runtime.shell_integration;
-export import telar.runtime.shell_integration.words;
 import telar.base.text;
 import telar.base.text.utf8;
 import telar.wire.vocabulary;
@@ -63,6 +54,15 @@ import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
 import telar.runtime.graphics.kitty;
 import telar.runtime.terminal.control;
+import telar.client;
+import telar.platform.error;
+import telar.platform.events;
+import telar.platform.net;
+import telar.runtime.platform.stream_read_buffer;
+import telar.runtime.runtime.delivery.client_delivery;
+import telar.runtime.shell_integration.words;
+import telar.runtime.terminal.text_reader;
+import telar.sys.posix;
 
 // Interface: runtime/limit_service.cppm
 export {

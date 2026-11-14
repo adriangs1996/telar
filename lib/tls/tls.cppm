@@ -17,18 +17,18 @@ import std;
 
 export import telar.base.memory.allocators;
 export import telar.base.memory.containers;
-export import telar.base.memory.sensitive;
 
-export import telar.platform.error;
-export import telar.platform.fs;
 export import telar.platform.paths;
-export import telar.platform.process;
 
-export import telar.base.text;
-export import telar.base.text.json;
-export import telar.base.text.utf8;
 import telar.base.diagnostics;
+import telar.base.memory.sensitive;
+import telar.base.text;
+import telar.base.text.json;
+import telar.base.text.utf8;
+import telar.platform.error;
+import telar.platform.fs;
 import telar.platform.primitives;
+import telar.platform.process;
 
 // Interface: telar_tls/handle.cppm
 export {

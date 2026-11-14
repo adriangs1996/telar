@@ -50,6 +50,7 @@ static_assert(true);
 import telar.gui.tests.session_fixture;
 import telar.gui.application.session;
 import telar.gui.suggestions.state;
+import telar.wire.editor;
 
 namespace {
 

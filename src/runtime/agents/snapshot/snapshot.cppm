@@ -37,13 +37,6 @@ export import telar.config.runtime;
 export import telar.runtime.platform.process_probe;
 export import telar.runtime.agents.description_generator;
 
-export import telar.client;
-
-export import telar.runtime.history.store;
-
-export import telar.base.text.json;
-export import telar.base.text.utf8;
-export import telar.platform.error;
 export import telar.platform.events;
 
 import telar.wire.vocabulary;
@@ -52,6 +45,11 @@ import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
 import telar.runtime.graphics.kitty;
 import telar.runtime.terminal.control;
+import telar.base.text.json;
+import telar.base.text.utf8;
+import telar.client;
+import telar.platform.error;
+import telar.runtime.history.store;
 
 // Interface: agents/evidence_state.cppm
 export {

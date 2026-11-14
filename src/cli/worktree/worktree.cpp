@@ -49,6 +49,9 @@ module;
 
 module telar.cli.worktree;
 
+import telar.cli.control_session;
+import telar.sys.posix;
+
 namespace telar::runtime::cli::repository {
 
   struct Catalog {

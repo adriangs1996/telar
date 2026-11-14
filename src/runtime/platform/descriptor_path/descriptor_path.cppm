@@ -6,7 +6,7 @@ export module telar.runtime.platform.descriptor_path;
 
 import std;
 
-export import telar.platform.error;
+import telar.platform.error;
 
 // Interface: platform/descriptor_path.cppm
 export {

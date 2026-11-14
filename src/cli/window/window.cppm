@@ -7,11 +7,11 @@ export import telar.cli.output;
 export import telar.cli.plugin;
 
 export import telar.base.text.json;
-export import telar.base.text.utf8;
 
-export import telar.cli.command_limit;
-export import telar.plugins;
 import telar.base.diagnostics;
+import telar.base.text.utf8;
+import telar.cli.command_limit;
+import telar.plugins;
 import telar.wire.vocabulary;
 
 // Interface: machines/setup_report.cppm

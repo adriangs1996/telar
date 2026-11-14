@@ -15,6 +15,7 @@ export import telar.base.memory.allocators;
 
 import telar.platform.error;
 import telar.platform.primitives;
+import telar.sys.posix;
 
 // Interface: telar_platform/private_directory.cppm
 export {

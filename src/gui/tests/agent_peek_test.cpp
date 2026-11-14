@@ -62,6 +62,10 @@ import telar.gui.application.workspace_replica;
 import telar.gui.core.unicode_scalar;
 import telar.gui.peek.screen;
 import telar.gui.presentation.suggestion_labels;
+import telar.gui.presentation.notification_center;
+import telar.wire.layout;
+import telar.wire.runtime;
+import telar.wire.worktrees;
 
 namespace {
 

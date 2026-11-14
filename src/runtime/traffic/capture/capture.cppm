@@ -22,10 +22,7 @@ export module telar.runtime.traffic.capture;
 
 import std;
 
-export import telar.platform.net;
-export import telar.platform.error;
 export import telar.runtime.traffic.control_protocol;
-export import telar.runtime.vocabulary.traffic;
 
 export import telar.base.memory.allocators;
 export import telar.base.memory.containers;
@@ -33,6 +30,9 @@ export import telar.base.memory.sensitive;
 import telar.base.diagnostics;
 import telar.vocabulary;
 import telar.platform.primitives;
+import telar.platform.error;
+import telar.platform.net;
+import telar.runtime.vocabulary.traffic;
 
 // Interface: traffic/kernel_drops.cppm
 export {

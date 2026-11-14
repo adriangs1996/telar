@@ -40,6 +40,13 @@ module;
 
 module telar.cli.machine;
 
+import telar.base.text;
+import telar.cli.base.command_error;
+import telar.cli.control_session;
+import telar.cli.server;
+import telar.client;
+import telar.tls;
+
 namespace telar::runtime::cli::machine {
 
   // Rewrites the profiles at `path` under an exclusive lock: `edit` changes what

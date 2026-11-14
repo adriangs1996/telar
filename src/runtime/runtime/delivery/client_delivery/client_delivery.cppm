@@ -35,8 +35,6 @@ import std;
 
 export import telar.runtime.model.client_layouts;
 
-export import telar.runtime.terminal.text_reader;
-
 export import telar.runtime.editors.remote_editor;
 import telar.wire.vocabulary;
 import telar.wire.clipboard;
@@ -49,6 +47,7 @@ import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
 import telar.runtime.graphics.kitty;
 import telar.runtime.terminal.control.clipboard;
+import telar.runtime.terminal.text_reader;
 
 // Interface: runtime/clipboard_service.cppm
 export {

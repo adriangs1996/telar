@@ -111,6 +111,9 @@ import telar.gui.platform.awake_clock;
 import telar.gui.presentation.frame_pacer;
 import telar.gui.presentation.history_inspection;
 import telar.gui.text.bounded_editor;
+import telar.base.text.utf8;
+import telar.gui.model.records;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

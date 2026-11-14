@@ -29,6 +29,7 @@ import telar.runtime.tests.check;
 import telar.runtime.graphics.pane_media;
 import telar.runtime.terminal.text_reader;
 import telar.vocabulary;
+import telar.base.text;
 
 using namespace telar;
 using namespace telar::runtime;

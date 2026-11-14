@@ -13,7 +13,6 @@ export import telar.runtime.worktrees.git_probe;
 
 export import telar.runtime.history.store;
 export import telar.runtime.platform.background_executor;
-export import telar.platform.error;
 import telar.wire.vocabulary;
 import telar.wire.agents;
 import telar.wire.editor;
@@ -22,6 +21,7 @@ import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
 import telar.runtime.graphics.kitty;
 import telar.runtime.terminal.control;
+import telar.platform.error;
 #if (TELAR_DIAGNOSTICS)
 export import telar.runtime.diagnostics.operation;
 #endif

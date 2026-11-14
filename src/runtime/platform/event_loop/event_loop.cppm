@@ -23,8 +23,8 @@ export module telar.runtime.platform.event_loop;
 
 import std;
 
-export import telar.platform.error;
 import telar.base.memory.allocators;
+import telar.platform.error;
 import telar.platform.primitives;
 
 // Interface: platform/event_loop.cppm

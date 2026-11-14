@@ -28,7 +28,6 @@ export import telar.runtime.agents.snapshot;
 export import telar.runtime.platform.request_worker;
 
 export import telar.runtime.model.client_layouts;
-export import telar.client;
 
 export import telar.runtime.platform.process_probe;
 
@@ -49,6 +48,7 @@ import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
 import telar.runtime.graphics.kitty;
 import telar.runtime.terminal.control;
+import telar.client;
 
 // Interface: runtime/agent_file_service.cppm
 export {

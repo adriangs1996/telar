@@ -42,6 +42,12 @@ module;
 
 module telar.cli.project_setup;
 
+import telar.cli.base.command_error;
+import telar.cli.control_session;
+import telar.client;
+import telar.platform.error;
+import telar.sys.posix;
+
 namespace telar::runtime::cli::pane_agents {
 
   constexpr std::size_t max_input_bytes = 65536;

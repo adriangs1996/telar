@@ -5,6 +5,7 @@
 import std;
 import telar.runtime.tests.check;
 import telar.runtime.tests.protocol_peer;
+import telar.wire.runtime;
 
 using namespace telar;
 

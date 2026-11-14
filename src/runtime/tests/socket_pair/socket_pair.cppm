@@ -8,9 +8,9 @@ module;
 export module telar.runtime.tests.socket_pair;
 
 import std;
-export import telar.runtime.tests.check;
 export import telar.platform.primitives;
-export import telar.runtime.proxy.relay_direction;
+import telar.runtime.proxy.relay_direction;
+import telar.runtime.tests.check;
 
 export {
   using telar::runtime::configureProxySocket;

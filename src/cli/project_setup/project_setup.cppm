@@ -6,16 +6,9 @@ export module telar.cli.project_setup;
 import std;
 
 export import telar.cli.command_limit;
-export import telar.cli.plugin;
-export import telar.base.text;
-export import telar.base.text.json;
-export import telar.base.text.utf8;
 
-export import telar.cli.runtime_observer;
-export import telar.cli.server;
 export import telar.cli.output;
 
-export import telar.cli.history;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.wire.agents;
@@ -25,6 +18,14 @@ import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.platform.primitives;
+import telar.base.text;
+import telar.base.text.json;
+import telar.base.text.utf8;
+import telar.cli.history;
+import telar.cli.plugin;
+import telar.cli.runtime_observer;
+import telar.cli.server;
+import telar.cli.control_session;
 
 // Interface: pane_agent_options.cppm
 export {

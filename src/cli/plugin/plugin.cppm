@@ -6,18 +6,19 @@ export module telar.cli.plugin;
 import std;
 
 export import telar.cli.command_limit;
-export import telar.cli.server;
-export import telar.platform.error;
-export import telar.platform.fs;
 export import telar.platform.paths;
-export import telar.platform.process;
 
 export import telar.plugins;
 
-export import telar.tls;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.platform.primitives;
+import telar.cli.server;
+import telar.platform.error;
+import telar.platform.fs;
+import telar.platform.process;
+import telar.tls;
+import telar.cli.base.command_error;
 
 // Interface: cli_install.cppm
 export {

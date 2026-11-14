@@ -8,7 +8,7 @@ export module telar.runtime.http1.head;
 
 import std;
 
-export import telar.base.text;
+import telar.base.text;
 
 // Interface: http1/framing.cppm
 export {

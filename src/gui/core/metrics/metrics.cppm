@@ -12,9 +12,9 @@ export module telar.gui.core.metrics;
 
 import std;
 
-export import telar.base.text;
 import telar.base.diagnostics;
 import telar.base.memory.containers;
+import telar.base.text;
 import telar.gui.core.primitives;
 import telar.wire.vocabulary;
 

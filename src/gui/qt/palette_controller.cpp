@@ -56,6 +56,7 @@ static_assert(true);
 import telar.gui.application.workspace_replica;
 import telar.gui.core.metrics;
 import telar.gui.machines.picker;
+import telar.gui.model.records;
 import telar.gui.palette.navigation_label;
 import telar.gui.presentation.suggestion_geometry;
 import telar.gui.text.bounded_editor;

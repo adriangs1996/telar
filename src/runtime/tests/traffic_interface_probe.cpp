@@ -67,6 +67,7 @@ import telar.runtime.tests.check;
 import telar.runtime.platform.private_tunnel;
 import telar.runtime.traffic.capture_analysis;
 import telar.vocabulary;
+import telar.platform.error;
 
 using namespace telar;
 using namespace telar::runtime;

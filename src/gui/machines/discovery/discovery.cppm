@@ -12,13 +12,12 @@ export module telar.gui.machines.discovery;
 
 import std;
 
-export import telar.client;
 export import telar.machines;
 
-export import telar.gui.text.json_unsigned_integer;
-
-export import telar.gui.platform.notification_commands;
 import telar.base.memory.allocators;
+import telar.client;
+import telar.gui.platform.notification_commands;
+import telar.gui.text.json_unsigned_integer;
 import telar.platform.paths;
 
 // Interface: machines/failure.cppm

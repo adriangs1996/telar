@@ -66,6 +66,10 @@ import telar.gui.history.browser;
 import telar.gui.input.copy_pointer;
 import telar.gui.input.key_encoder;
 import telar.gui.presentation.display_metrics;
+import telar.wire.clipboard;
+import telar.wire.history;
+import telar.wire.layout;
+import telar.wire.runtime;
 
 namespace {
 

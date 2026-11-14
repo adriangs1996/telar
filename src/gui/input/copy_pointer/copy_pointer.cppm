@@ -15,6 +15,7 @@ import std;
 
 export import telar.gui.terminal.font_grid;
 import telar.base.diagnostics;
+import telar.base.text;
 import telar.gui.core.primitives;
 import telar.gui.terminal.screen;
 

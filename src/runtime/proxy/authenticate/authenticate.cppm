@@ -31,14 +31,14 @@ export module telar.runtime.proxy.authenticate;
 import std;
 
 export import telar.base.memory.allocators;
-export import telar.base.memory.sensitive;
 export import telar.base.text;
 
 export import telar.config.runtime;
 
-export import telar.platform.error;
-export import telar.platform.fs;
 import telar.base.diagnostics;
+import telar.base.memory.sensitive;
+import telar.platform.error;
+import telar.platform.fs;
 import telar.platform.primitives;
 
 // Interface: proxy/secret.cppm

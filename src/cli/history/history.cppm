@@ -7,18 +7,18 @@ import std;
 
 export import telar.cli.command_limit;
 
-export import telar.platform.error;
-export import telar.platform.fs;
 export import telar.platform.paths;
 
-export import telar.cli.runtime_observer;
-
-export import telar.cli.server;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.wire.history;
 import telar.wire.runtime;
 import telar.platform.primitives;
+import telar.cli.runtime_observer;
+import telar.cli.server;
+import telar.platform.error;
+import telar.platform.fs;
+import telar.cli.control_session;
 
 // Interface: diagnostics_options.cppm
 export {

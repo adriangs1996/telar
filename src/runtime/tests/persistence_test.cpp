@@ -63,6 +63,8 @@ import telar.runtime.persistence.session_store;
 import telar.runtime.platform.request_worker;
 import telar.runtime.runtime.execution_service;
 import telar.wire.vocabulary;
+import telar.platform.error;
+import telar.runtime.agents.snapshot;
 
 using namespace telar;
 using namespace telar::runtime;

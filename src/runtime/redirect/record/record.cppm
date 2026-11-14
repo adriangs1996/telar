@@ -41,12 +41,14 @@ export module telar.runtime.redirect.record;
 
 import std;
 
-export import telar.platform.error;
-export import telar.platform.fs;
-
 export import telar.runtime.redirect.pf_rules;
 import telar.base.diagnostics;
+import telar.base.memory.containers;
+import telar.base.text;
+import telar.platform.error;
+import telar.platform.fs;
 import telar.platform.primitives;
+import telar.platform.process;
 import telar.vocabulary;
 
 // Interface: redirect/log_interface.cppm

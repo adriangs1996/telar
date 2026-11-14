@@ -57,6 +57,7 @@ import telar.runtime.runtime.runtime;
 import telar.config.runtime;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
+import telar.runtime.tests.check;
 
 using namespace telar;
 using namespace telar::runtime;

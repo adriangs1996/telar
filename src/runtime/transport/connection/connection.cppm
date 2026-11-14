@@ -16,8 +16,6 @@ export module telar.runtime.transport.connection;
 import std;
 
 export import telar.client;
-export import telar.platform.net;
-export import telar.platform.error;
 
 export import telar.base.memory.allocators;
 export import telar.base.memory.containers;
@@ -27,6 +25,8 @@ import telar.wire.content;
 import telar.wire.layout;
 import telar.wire.runtime;
 import telar.platform.primitives;
+import telar.platform.error;
+import telar.platform.net;
 
 // Interface: transport/client_handshake.cppm
 export {

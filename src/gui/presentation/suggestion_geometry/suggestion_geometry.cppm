@@ -12,9 +12,9 @@ import std;
 
 export import telar.gui.core.metrics;
 
-export import telar.gui.machines.discovery;
 import telar.base.diagnostics;
 import telar.gui.core.primitives;
+import telar.gui.machines.discovery;
 
 // Interface: presentation/link_status_geometry.cppm
 export {

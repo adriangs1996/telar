@@ -17,6 +17,7 @@ export import telar.gui.suggestions.state;
 export import telar.gui.palette.navigation_label;
 import telar.base.diagnostics;
 import telar.base.memory.allocators;
+import telar.base.text;
 import telar.gui.core.primitives;
 import telar.wire.content;
 import telar.wire.vocabulary;

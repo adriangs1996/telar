@@ -18,8 +18,6 @@ export module telar.runtime.http.message;
 import std;
 
 export import telar.runtime.http.content;
-export import telar.base.text;
-export import telar.base.text.utf8;
 
 export import telar.base.memory.allocators;
 export import telar.base.memory.sensitive;
@@ -28,6 +26,8 @@ export import telar.runtime.vocabulary.frames;
 
 export import telar.runtime.http1.head;
 import telar.base.diagnostics;
+import telar.base.text;
+import telar.base.text.utf8;
 
 // Interface: http/content_codec.cppm
 export {

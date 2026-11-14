@@ -46,6 +46,7 @@ static_assert(true);
 #include "core/memory.hpp"
 #include "qt/plugin_packages.hpp"
 
+import telar.base.text;
 import telar.gui.tests.plugin_catalog_cases;
 import telar.gui.tests.plugin_effect_cases;
 import telar.platform.fs;

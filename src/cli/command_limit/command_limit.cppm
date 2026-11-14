@@ -6,13 +6,13 @@ export module telar.cli.command_limit;
 
 import std;
 
-export import telar.cli.output;
-export import telar.platform.error;
 import telar.base.diagnostics;
 import telar.base.text;
 import telar.base.text.json;
 import telar.vocabulary;
 import telar.platform.primitives;
+import telar.cli.output;
+import telar.platform.error;
 
 // Interface: arguments.cppm
 export {

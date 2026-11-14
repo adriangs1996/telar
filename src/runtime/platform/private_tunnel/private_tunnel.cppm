@@ -32,8 +32,8 @@ export module telar.runtime.platform.private_tunnel;
 
 import std;
 
-export import telar.platform.error;
 import telar.base.memory.containers;
+import telar.platform.error;
 import telar.platform.primitives;
 
 #if defined(__linux__)

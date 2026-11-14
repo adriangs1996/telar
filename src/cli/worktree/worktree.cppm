@@ -2,21 +2,12 @@ export module telar.cli.worktree;
 
 import std;
 
-export import telar.cli.history;
 export import telar.cli.worktree_git;
-export import telar.cli.tab;
 
 export import telar.cli.command_limit;
 
-export import telar.platform.fs;
-export import telar.platform.paths;
-export import telar.platform.process;
-
 import telar.cli.machine_ssh;
 import telar.cli.project_setup;
-export import telar.base.text;
-export import telar.base.text.json;
-export import telar.base.text.utf8;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.wire.agents;
@@ -27,6 +18,14 @@ import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.worktrees;
 import telar.platform.primitives;
+import telar.base.text;
+import telar.base.text.json;
+import telar.base.text.utf8;
+import telar.cli.history;
+import telar.cli.tab;
+import telar.platform.fs;
+import telar.platform.paths;
+import telar.platform.process;
 
 // Interface: repository_options.cppm
 export {

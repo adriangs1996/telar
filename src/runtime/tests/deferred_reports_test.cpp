@@ -33,6 +33,7 @@ import telar.runtime.terminal.control;
 import telar.runtime.tests.client_peer;
 import telar.runtime.runtime.client_control;
 import telar.wire.vocabulary;
+import telar.runtime.tests.check;
 
 using namespace telar;
 using namespace telar::runtime;

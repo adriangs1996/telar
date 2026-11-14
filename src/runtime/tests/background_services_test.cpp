@@ -33,6 +33,7 @@ import telar.wire.clients;
 import telar.wire.editor;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
+import telar.platform.error;
 
 using namespace telar;
 using namespace telar::runtime;

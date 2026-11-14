@@ -24,14 +24,15 @@ export module telar.runtime.paths.query_task;
 
 import std;
 
-export import telar.runtime.platform.git_status;
-
 export import telar.runtime.transport.connection;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.wire.editor;
 import telar.wire.runtime;
 import telar.platform.primitives;
+import telar.runtime.platform.git_status;
+import telar.platform.error;
+import telar.sys.posix;
 
 // Interface: paths/fuzzy_match.cppm
 export {

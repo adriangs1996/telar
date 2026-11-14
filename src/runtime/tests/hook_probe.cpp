@@ -4,7 +4,10 @@
 #include <unistd.h>
 import std;
 import telar.runtime.tests.agent_oracle;
+import telar.runtime.tests.hook_fixture;
 import telar.runtime.tests.hook_worktree_fixture;
+import telar.wire.agents;
+import telar.wire.pane_io;
 
 using namespace telar;
 using namespace telar::runtime;

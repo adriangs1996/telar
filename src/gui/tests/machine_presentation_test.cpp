@@ -53,6 +53,8 @@ import telar.gui.tests.agent_fixture;
 import telar.gui.tests.session_fixture;
 import telar.gui.layout.geometry;
 import telar.gui.application.session;
+import telar.wire.layout;
+import telar.wire.runtime;
 
 namespace {
 

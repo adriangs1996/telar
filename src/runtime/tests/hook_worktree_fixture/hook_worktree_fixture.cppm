@@ -4,10 +4,13 @@ module;
 export module telar.runtime.tests.hook_worktree_fixture;
 
 import std;
+import telar.base.memory.allocators;
+import telar.platform.process;
+import telar.runtime.tests.hook_fixture;
 import telar.wire.content;
 import telar.wire.layout;
+import telar.wire.pane_io;
 import telar.wire.worktrees;
-export import telar.runtime.tests.hook_fixture;
 
 export {
   namespace hook_fixture {

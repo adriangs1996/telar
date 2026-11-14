@@ -54,6 +54,10 @@ static_assert(true);
 import telar.gui.tests.session_fixture;
 import telar.gui.application.session;
 import telar.gui.prompt.line;
+import telar.wire.clipboard;
+import telar.wire.editor;
+import telar.wire.history;
+import telar.wire.runtime;
 
 namespace {
 

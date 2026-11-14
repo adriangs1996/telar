@@ -26,6 +26,9 @@ module;
 
 module telar.cli.server;
 
+import telar.cli.control_session;
+import telar.client;
+
 namespace telar::runtime::cli {
 
   std::optional<std::string_view> helpText(HelpTopic topic) noexcept {

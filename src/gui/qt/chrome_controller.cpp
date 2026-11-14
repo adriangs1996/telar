@@ -45,6 +45,7 @@ import telar.gui.presentation.suggestion_geometry;
 import telar.gui.core.metrics;
 import telar.gui.presentation.display_metrics;
 import telar.gui.presentation.history_inspection_geometry;
+import telar.gui.machines.picker;
 
 namespace telar::gui::qt {
 

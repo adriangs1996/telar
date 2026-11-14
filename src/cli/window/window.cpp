@@ -35,6 +35,10 @@ import telar.wire.clients;
 import telar.wire.editor;
 import telar.wire.runtime;
 import telar.platform.primitives;
+import telar.cli.control_session;
+import telar.client;
+import telar.sys.posix;
+import telar.tls;
 
 namespace telar::runtime::cli::window {
 

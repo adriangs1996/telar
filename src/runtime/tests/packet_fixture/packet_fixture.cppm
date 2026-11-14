@@ -6,7 +6,7 @@ module;
 export module telar.runtime.tests.packet_fixture;
 
 import std;
-export import telar.runtime.traffic.control_protocol;
+import telar.runtime.traffic.control_protocol;
 export import telar.vocabulary;
 
 export {

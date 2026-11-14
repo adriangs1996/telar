@@ -32,6 +32,10 @@ module;
 
 module telar.cli.worktree_git;
 
+import telar.cli.control_session;
+import telar.client;
+import telar.sys.posix;
+
 namespace telar::runtime::cli::repository {
 
   std::string normalize(std::string_view url) {

@@ -59,6 +59,7 @@ import telar.gui.input.copy_pointer;
 import telar.gui.input.key_encoder;
 import telar.lua;
 
+import telar.config.snapshot;
 import telar.gui.config.gui_query;
 
 namespace {

@@ -13,11 +13,11 @@ export module telar.gui.fonts.font_requests;
 
 import std;
 
-export import telar.gui.core.unicode_scalar;
 export import telar.gui.fonts.face;
 
-export import telar.gui.core.json_writer;
 import telar.base.diagnostics;
+import telar.gui.core.json_writer;
+import telar.gui.core.unicode_scalar;
 
 // Interface: fonts/font_coverage.cppm
 export {

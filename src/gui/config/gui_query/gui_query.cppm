@@ -16,10 +16,10 @@ export import telar.gui.presentation.client_view_state;
 export import telar.gui.core.metrics;
 export import telar.gui.core.json_writer;
 
-export import telar.gui.input.copy_pointer;
-export import telar.gui.input.key_encoder;
 import telar.base.diagnostics;
 import telar.config.gui;
+import telar.gui.input.copy_pointer;
+import telar.gui.input.key_encoder;
 import telar.wire.vocabulary;
 
 // Interface: config/query.cppm
