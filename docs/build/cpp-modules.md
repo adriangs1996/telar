@@ -87,7 +87,9 @@ y las cabeceras que todos ellos alcanzan, porque no pueden importar módulos. Un
 dueño puede incluir las cabeceras de `header_owners` que cruzan esa frontera, y
 cualquier fichero puede incluir una cabecera de `macro_headers`, que no incluye nada, o
 un fragmento `.inc` de datos que genera el build fuera del árbol.
-Los tests y las herramientas quedan fuera de la regla. [textual-includes.json](textual-includes.json) lista por
+Los tests, las herramientas y `lib/tbc` quedan fuera de la regla: el alcance se declara por
+directorio en `OUTSIDE_RULE_5`, junto al motivo de cada uno. TBC es una herramienta de build;
+su linter usa las cabeceras de Clang/LLVM, que no se pueden importar. [textual-includes.json](textual-includes.json) lista por
 fichero los includes que quedan; quien quita uno borra su entrada, y una entrada que
 ya no está en el fichero también hace fallar el checker.
 Una interfaz solo hace `export import` de un módulo si sus declaraciones exportadas

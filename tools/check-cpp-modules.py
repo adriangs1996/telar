@@ -12,6 +12,16 @@ SCOPES = ('lib/', 'src/runtime/', 'src/cli/',
 # The first segment after `telar.` that names a process tree in src/; any other module is a library.
 PROCESSES = {'runtime': 'src/runtime', 'gui': 'src/gui', 'cli': 'src/cli'}
 PLATFORMS = ('linux', 'macos')
+# Rule 5 checks every source in SCOPES except those under a tests/ or tools/ folder and those
+# under these directories. Only whole directories leave the rule: a file that breaks it goes in
+# textual-includes.json until the change that fixes it.
+#
+# lib/tbc is TBC, a build tool and not telar code. tbc-lint is a Clang tool: its AST, matchers
+# and diagnostics reach it through the Clang/LLVM headers of the linter toolchain, which offer
+# no C++ named modules to import. The rest of lib/tbc (the example, the annotation headers)
+# keeps the includes of its own standalone build. Telar's sources stay in the rule when they
+# use TBC.
+OUTSIDE_RULE_5 = ('lib/tbc/',)
 
 
 def main():
@@ -329,10 +339,11 @@ def textual_include_sites(files, macro_headers, owners, libraries, modules):
     the headers it owns that cross that boundary, and the units of the module that `libraries`
     names for a third-party header may include it, the headers that module owns included. Any
     file may include a macro header or a generated `.inc` data fragment, which the build writes
-    outside the tree. Tests and tools are out of the rule.
+    outside the tree. Tests, tools and OUTSIDE_RULE_5 are out of the rule.
     """
     sources = {name: (ROOT / name).read_text(errors='replace') for name in files
-               if name.endswith(SOURCE_SUFFIXES) and not re.search(r'/(tests|tools)/', name)}
+               if name.endswith(SOURCE_SUFFIXES) and not name.startswith(OUTSIDE_RULE_5)
+               and not re.search(r'/(tests|tools)/', name)}
     reached = set()
     pending = [name for name, text in sources.items()
                if name.startswith('lib/sys/') or name.endswith(FOREIGN_SUFFIXES) or QT_INCLUDE_RE.search(text)]
