@@ -441,7 +441,7 @@ Cada tarea empieza localizando todas las copias, crea un módulo con una interfa
 | [x] P5.4 | `setup.json` | 2 | módulo dueño único (decidir capa) | P1.2 |
 | [x] P5.5 | Login shell | 4 | `telar.platform.process` o `telar.sys.process` | P4.1a, P3.1 |
 | [x] P5.6 | Nombres de errno | 8 | `telar.sys.posix` (`lastError()` y el nombre) | P3.1 |
-| [ ] P5.7 | Spawn con higiene de descriptores | — | `telar.platform.process` | P4.1a, P3.1 |
+| [x] P5.7 | Spawn con higiene de descriptores | — | `telar.platform.process` | P4.1a, P3.1 |
 
 **audit-39** ya dejó un dueño único para casi todo, aunque en el hub y no en el destino de la tabla. Mover cada dueño a su familia es parte de P4.1 y P4.3:
 - P5.1: `RuntimePaths::configHome/configFile` y `SocketLocation` en `telar.platform` (`c96b3e0ee`).
@@ -453,6 +453,7 @@ Cada tarea empieza localizando todas las copias, crea un módulo con una interfa
 - P5.6: `systemErrorName` en `telar.platform` (`845c69d6d`), sin `lastError()`. Quedan copias en `runtime.runtime.execution_service`, `runtime.execution.execution` y en `worktree_git` e `history` de la CLI.
   - **Cerrada** (`9ac9af040`): `telar::sys::errorName(code, fallback)` y `telar::sys::lastError()` en `telar.sys.posix`; `systemErrorName` sale de `platform.error` y las copias del runtime y la CLI usan la tabla común. `ENOMEM`, `ENOBUFS` y `EBADF` se nombran igual en todos los mensajes.
 - P5.7: todos los spawns usan `SpawnOptions` (`be47a6b84`). Tres sitios repiten a mano "conservar los tres flujos estándar y cerrar el resto": `traffic.control_backend`, `machine_ssh` de la CLI y `tls` del runtime.
+  - **Cerrada** (`3a1c0e8`): `SpawnOptions::keepStandardStreams()` en `telar.platform.process` (dup2 de cada flujo sobre sí mismo, que en macOS lo mantiene abierto, y `closeOthers()`); las tres copias lo llaman. `testStandardStreamsOnly` falla si se quita el dup2 o si el hijo hereda un descriptor de más. **Fase 5 cerrada.**
 
 ---
 
