@@ -124,15 +124,25 @@ clicking the workspace opens the workspace picker; when the line is narrow the
 machine elides first.
 
 With more than one machine, the sidebar lists the others under `Machines`,
-above the agents. A row shows the machine's color disc, its label and, on the
-right, a stack of its agents that work or wait on the person, in attention
-order, at most three. The cards are the tab strip's: the same tiles, provider
+above the agents. A row shows the machine's avatar (its color and the first
+character of its label) with a dot for its link, its label over a status line
+and, on the right, a stack of its agents that work or wait on the person, in
+attention order, at most three. The status line reads `Offline`, `No active
+agents` or the number of agents that work or wait, in yellow when one of them
+waits on the person. The cards are the tab strip's: the same tiles, provider
 colors and resting poses. A row has no focused pane, so a waiting agent's card
 is tinted even when it is in front. Clicking a row switches to that machine.
 Rows that do not fit leave whole, so the agents keep at least two headers of
 room.
 
-The header collapses the list. A collapsed header shows a yellow dot when
+Every section header (`Machines`, `Agents`, `Processes`) reads its name in
+capitals at the small size, after a line icon in the cards' mark column and
+before its count. The icons are Lucide's (`assets/icons`, ISC), rasterized
+from SVG and tinted with `subtext0`. A hairline halves the gap between two
+sections.
+
+The header collapses the list; its chevron follows the label, so the count
+keeps the column the cards' ages use. A collapsed header shows a yellow dot when
 another machine needs attention. The collapse belongs to the window, not to
 any machine's runtime, since the list spans every connected machine.
 
@@ -201,7 +211,19 @@ The window draws cards in device pixels inside the sidebar band. Text uses the `
 `small` line boxes. The title is body-sized without the pane header's height cap. Insets are 10 horizontal and 8 vertical logical pixels,
 with 4 logical pixels before the title and 2 before the detail. Card spacing
 is 3, sidebar margins 8, radius 8 and provider symbols 14 logical pixels.
-These lengths follow the chrome's display/font ratio before being rounded.
+These lengths follow the chrome's display/font ratio before being rounded:
+they are written for a 14-pixel font and grow with `font.size` and
+`chrome.scale` as the chrome text does, so a mark keeps its size beside its
+title. Machine rows and the sidebar margin follow the same ratio.
+
+Every card keeps its mark in a 24-pixel column and starts its title and its
+detail row after it, so the text of machine rows, agents and processes shares
+one left edge. A task or command one level under an agent leads with its
+status glyph in a column that ends on that same edge. A task card reads its
+title first, at body size in the regular face, then its branch with the lines
+it added (green) and removed (red), then its activity. A compact task gives
+its title the room it needs before its branch or machine, and never cuts its
+state.
 The header reads `agents`. One array of at most 64 replica indices is sorted by
 `agent_attention.lessThan` when snapshot identity changes, never per frame.
 

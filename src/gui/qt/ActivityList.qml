@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import Telar.Gui
 
 ListView {
     id: root
@@ -9,6 +10,8 @@ ListView {
     required property var typography
     required property var geometry
     property real headerHeight: 0
+    // The room above a section header, which its separator halves.
+    property real sectionGap: 0
     property real ratio: 1
     property real textScale: 1
     property var controller: null
@@ -27,13 +30,23 @@ ListView {
         id: entry
         required property var record
         required property int index
-        readonly property real groupGap: index > 0 && (record.startsProject || record.header) ? root.geometry.groupGap : 0
+        readonly property real groupGap: index === 0 ? 0 : record.header ? Math.max(root.sectionGap, root.geometry.groupGap) : record.startsProject ? root.geometry.groupGap : 0
         readonly property real cardHeight: record.header ? root.headerHeight : record.compact ? root.geometry.compactHeight : record.command || record.task ? root.geometry.height : root.geometry.agentHeight
         readonly property real indentation: Math.min(root.geometry.width / 3, (record.depth ?? 0) * root.geometry.taskIndent)
         readonly property bool animate: y + height > root.contentY && y < root.contentY + root.height
 
         width: root.geometry.width
         height: cardHeight + groupGap
+
+        Rectangle {
+            objectName: "activitySectionSeparator"
+            x: root.geometry.padding
+            y: Math.round(entry.groupGap / 2)
+            width: Math.max(0, root.geometry.width - 2 * x)
+            height: 1 / Screen.devicePixelRatio
+            color: Qt.alpha(root.colors.text, ChromeStyle.outlineAlpha)
+            visible: entry.record.header === true && entry.index > 0
+        }
 
         Loader {
             x: entry.indentation
@@ -49,19 +62,30 @@ ListView {
             Item {
                 objectName: "activitySectionHeader"
 
+                ProviderMark {
+                    objectName: "activitySectionIcon"
+                    x: root.geometry.padding + (root.geometry.markColumn - width) / 2
+                    y: (parent.height - height) / 2
+                    width: Math.round(14 * root.ratio)
+                    height: width
+                    symbol: entry.record.symbol ?? ""
+                    color: root.colors.subtext0
+                    visible: symbol.length > 0
+                }
+
                 ChromeText {
-                    x: 8 * root.ratio
-                    width: Math.max(0, parent.width - x - sectionCount.width - 16 * root.ratio)
+                    x: root.geometry.textInset
+                    width: Math.max(0, parent.width - x - sectionCount.width - 2 * root.geometry.padding)
                     height: parent.height
-                    text: entry.record.title
-                    color: root.colors.chromeText
-                    pixelSize: root.typography.body
+                    text: entry.record.title.toUpperCase()
+                    color: root.colors.text
+                    pixelSize: root.typography.small
                     emphasized: true
                 }
 
                 ChromeText {
                     id: sectionCount
-                    x: parent.width - width - 8 * root.ratio
+                    x: parent.width - width - root.geometry.padding
                     width: implicitWidth
                     height: parent.height
                     text: entry.record.count

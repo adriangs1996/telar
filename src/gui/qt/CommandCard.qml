@@ -9,9 +9,9 @@ ActivityFrame {
 
     ChromeText {
         objectName: "commandFacts"
-        x: root.geometry.context.x
+        x: root.textX
         y: root.geometry.context.y
-        width: Math.max(0, root.width - 2 * x)
+        width: Math.max(0, root.width - x - root.geometry.context.x)
         height: root.geometry.context.height
         text: root.record.facts
         color: root.colors.subtext0
@@ -20,9 +20,9 @@ ActivityFrame {
 
     ChromeText {
         objectName: "commandTitle"
-        x: root.geometry.title.x
+        x: root.textX
         y: root.geometry.title.y
-        width: Math.max(0, root.width - 2 * x)
+        width: Math.max(0, root.width - x - root.geometry.title.x)
         height: root.geometry.title.height
         text: root.record.title
         color: root.colors.text
@@ -31,9 +31,9 @@ ActivityFrame {
 
     ChromeText {
         objectName: "commandLabel"
-        x: root.geometry.detail.x
+        x: root.textX
         y: root.geometry.detail.y
-        width: Math.max(0, root.width - 2 * x)
+        width: Math.max(0, root.width - x - root.geometry.detail.x)
         height: root.geometry.detail.height
         text: root.record.detail
         color: root.colors.overlay1

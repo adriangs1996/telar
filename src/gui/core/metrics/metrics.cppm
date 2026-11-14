@@ -647,6 +647,9 @@ export {
       static constexpr float minimum_text = 6;
 
       float ratio = 1;
+      // The display scale times the chrome text's growth over the design font. Lengths that frame
+      // chrome text (insets, marks, rows) follow it to keep their proportion to that text.
+      float text_ratio = 1;
       float top_bar = logical_top_bar;
       float status_bar = logical_status_bar;
       float pane_header = logical_pane_header;
@@ -660,6 +663,8 @@ export {
         metrics.ratio = viewport.scale;
         const auto base = configuration.font.size * viewport.scale * configuration.chrome_scale;
         const auto bars = base / design_font_size;
+
+        metrics.text_ratio = bars;
 
         metrics.top_bar = std::round(logical_top_bar * bars);
         metrics.status_bar = std::round(logical_status_bar * bars);
@@ -687,6 +692,10 @@ export {
 
       [[nodiscard]] inline float px(float logical) const noexcept {
         return logical * ratio;
+      }
+
+      [[nodiscard]] inline float textPx(float logical) const noexcept {
+        return logical * text_ratio;
       }
 
       [[nodiscard]] inline static float lineHeight(std::uint16_t pixels) noexcept {

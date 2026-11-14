@@ -1129,35 +1129,69 @@ export {
         BoundedText<plan_count_capacity> count;
       };
 
+      // The facts row in the pieces a card draws on their own: the machine before the branch, the
+      // lines the worktree added and removed, and everything after them.
+      struct Facts {
+        Text lead;
+        Text added;
+        Text removed;
+        Text tail;
+      };
+
       template <Allocator Memory>
-      [[nodiscard]] inline static Text facts(std::string_view machine, const Worktree<Memory>& task) {
-        Text result;
+      [[nodiscard]] inline static Facts factParts(std::string_view machine, const Worktree<Memory>& task) {
+        Facts parts;
 
         if (!machine.empty()) {
-          append(result, machine);
-          append(result, " · ");
+          append(parts.lead, machine);
+          append(parts.lead, " · ");
         }
 
-        append(result, "\u2387 ");
-        append(result, task.handle());
         if (task.diff_files != 0) {
-          append(result, "  +");
-          decimal(result, task.diff_added);
-          append(result, " \u2212");
-          decimal(result, task.diff_removed);
-          append(result, " · ");
-          decimal(result, task.diff_files);
+          append(parts.added, "+");
+          decimal(parts.added, task.diff_added);
+          append(parts.removed, "\u2212");
+          decimal(parts.removed, task.diff_removed);
+          append(parts.tail, "· ");
+          decimal(parts.tail, task.diff_files);
         }
 
         if (task.commits_ahead != 0) {
-          append(result, "  \u2191");
-          decimal(result, task.commits_ahead);
+          append(parts.tail, parts.tail.view().empty() ? "\u2191" : "  \u2191");
+          decimal(parts.tail, task.commits_ahead);
         }
 
         if (task.command_state == CommandState::exited) {
-          append(result, task.command_exit == 0 ? "  \u2713 " : "  \u2715 ");
-          append(result, task.command_label);
+          if (!parts.tail.view().empty()) {
+            append(parts.tail, "  ");
+          }
+
+          append(parts.tail, task.command_exit == 0 ? "\u2713 " : "\u2715 ");
+          append(parts.tail, task.command_label);
         }
+
+        return parts;
+      }
+
+      template <Allocator Memory>
+      [[nodiscard]] inline static Text facts(std::string_view machine, const Worktree<Memory>& task) {
+        const auto parts = factParts(machine, task);
+        Text result;
+
+        append(result, parts.lead.view());
+        append(result, "\u2387 ");
+        append(result, task.handle());
+        if (!parts.added.view().empty()) {
+          append(result, "  ");
+          append(result, parts.added.view());
+          append(result, " ");
+          append(result, parts.removed.view());
+          append(result, " ");
+        } else if (!parts.tail.view().empty()) {
+          append(result, "  ");
+        }
+
+        append(result, parts.tail.view());
 
         return result;
       }

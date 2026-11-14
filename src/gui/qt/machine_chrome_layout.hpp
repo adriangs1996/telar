@@ -114,9 +114,11 @@ namespace telar::gui::qt {
       std::optional<std::uint8_t> cpu_percent = std::nullopt;
       std::array<StackCard, stack_cards> cards{};
       std::size_t card_count = 0;
+      // Every agent that works or waits there, past the cards the stack shows.
+      std::size_t agent_count = 0;
 
       bool operator==(const Source& other) const noexcept {
-        return token == other.token && label.view() == other.label.view() && color.view() == other.color.view() && active == other.active && attention == other.attention && live == other.live && phase == other.phase && cpu_percent == other.cpu_percent && card_count == other.card_count && cards == other.cards;
+        return agent_count == other.agent_count && token == other.token && label.view() == other.label.view() && color.view() == other.color.view() && active == other.active && attention == other.attention && live == other.live && phase == other.phase && cpu_percent == other.cpu_percent && card_count == other.card_count && cards == other.cards;
       }
     };
 

@@ -6,6 +6,7 @@
 #include <QColor>
 #include <QQuickItem>
 #include <QSGNode>
+#include <QString>
 #include <QtCore/qtypes.h>
 #include <QtQml/qqmlregistration.h>
 
@@ -17,6 +18,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(qreal dimmedAlpha READ dimmedAlpha CONSTANT)
     Q_PROPERTY(int provider READ provider WRITE setProvider NOTIFY providerChanged)
     Q_PROPERTY(bool telarMark READ telarMark WRITE setTelarMark NOTIFY telarMarkChanged)
+    Q_PROPERTY(QString symbol READ symbol WRITE setSymbol NOTIFY symbolChanged)
     Q_PROPERTY(bool monochrome READ monochrome WRITE setMonochrome NOTIFY monochromeChanged)
     Q_PROPERTY(int theme READ theme WRITE setTheme NOTIFY themeChanged)
     Q_PROPERTY(QColor color READ color WRITE setColor NOTIFY colorChanged)
@@ -34,6 +36,9 @@ namespace telar::gui::qt {
     void setProvider(int provider);
     [[nodiscard]] bool telarMark() const noexcept;
     void setTelarMark(bool enabled);
+    // A bundled line icon by name, tinted with `color`; it takes the place of the provider's mark.
+    [[nodiscard]] QString symbol() const;
+    void setSymbol(const QString& symbol);
     [[nodiscard]] bool monochrome() const noexcept;
     void setMonochrome(bool monochrome);
     [[nodiscard]] int theme() const noexcept;
@@ -46,6 +51,7 @@ namespace telar::gui::qt {
   signals:
     void providerChanged();
     void telarMarkChanged();
+    void symbolChanged();
     void monochromeChanged();
     void themeChanged();
     void colorChanged();
@@ -60,6 +66,7 @@ namespace telar::gui::qt {
     tbc::view<AncestorGeometry, tbc::lt::self> ancestors_;
     AgentProvider provider_ = AgentProvider::unknown;
     bool telar_mark_ = false;
+    QString symbol_;
     bool monochrome_ = false;
     int theme_ = -1;
     QColor color_;

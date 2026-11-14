@@ -245,7 +245,7 @@ namespace telar::gui::qt {
     const auto card = AgentCardGeometry::derive(chrome);
     const auto padding = 2 * card.px(AgentCardGeometry::horizontal_padding);
     const auto gap = card.px(AgentCardGeometry::gap);
-    const auto tile = chrome.px(AgentCardGeometry::tile_width);
+    const auto mark = card.px(AgentCardGeometry::mark_column);
     const auto status_side = std::round(static_cast<float>(chrome.title) * AgentCardGeometry::icon_size_ratio);
     // A status whose clock is drawn later reserves a short age.
     const auto age = QStringLiteral("59m");
@@ -255,8 +255,8 @@ namespace telar::gui::qt {
       const auto record = agents_.data(agents_.index(row), ListModel::record_role).toMap();
       const auto ports = record.value(QStringLiteral("ports")).toString();
       const auto status = record.value(QStringLiteral("status")).toString();
-      const auto title = padding + tile + gap + measure(record.value(QStringLiteral("title")).toString(), chrome.body, true) + (ports.isEmpty() ? 0 : gap + measure(ports, chrome.small, false) + chrome.px(2 * AgentCardGeometry::horizontal_padding));
-      const auto detail = padding + measure(record.value(QStringLiteral("project")).toString(), chrome.small, false) + gap + status_side + gap + measure(status.isEmpty() ? age : status, chrome.small, false);
+      const auto title = padding + mark + gap + measure(record.value(QStringLiteral("title")).toString(), chrome.body, true) + (ports.isEmpty() ? 0 : gap + measure(ports, chrome.small, false) + padding);
+      const auto detail = padding + mark + gap + measure(record.value(QStringLiteral("project")).toString(), chrome.small, false) + gap + status_side + gap + measure(status.isEmpty() ? age : status, chrome.small, false);
 
       card_width = std::max({card_width, title, detail});
     }
@@ -270,15 +270,24 @@ namespace telar::gui::qt {
       }
 
       const auto& client = clients_[index];
-      const bool stacked = client && std::ranges::any_of((*client)->session.agents(), [](const auto& agent) {
-        return AgentOrder::stacked(agent.status);
-      });
+      const auto& row = machines_.row(slot);
+      std::size_t active = 0;
 
-      machines_width = std::max(machines_width, MachineChromeGeometry::listNaturalWidth(chrome, measure(toQString(machines_.row(slot).label.view()), chrome.body, false), stacked));
+      if (client) {
+        active = static_cast<std::size_t>(std::ranges::count_if((*client)->session.agents(), [](const auto& agent) {
+          return AgentOrder::stacked(agent.status);
+        }));
+      }
+
+      std::array<char, MachineChromeGeometry::list_status_capacity> storage{};
+      const auto status = MachineChromeGeometry::listStatus(row.live, active, storage);
+      const auto advance = std::max(measure(toQString(row.label.view()), chrome.body, true), measure(toQString(status), chrome.small, false));
+
+      machines_width = std::max(machines_width, MachineChromeGeometry::listNaturalWidth(chrome, advance, active != 0));
     }
 
     const auto scale = display.viewport.scale;
-    const auto content = std::max(card.listWidth(card_width), machines_width) + (2 * chrome.px(SidebarGeometry::margin));
+    const auto content = std::max(card.listWidth(card_width), machines_width) + (2 * std::round(chrome.textPx(SidebarGeometry::margin)));
     const auto third = static_cast<float>(display.viewport.width) / scale / 3;
 
     return std::clamp(std::ceil(content / scale), Configuration::minimum_sidebar_width, std::max(Configuration::minimum_sidebar_width, third));

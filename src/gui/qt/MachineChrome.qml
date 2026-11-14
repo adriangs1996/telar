@@ -41,23 +41,70 @@ MachineChromeLayout {
 
             HoverHandler { cursorShape: Qt.PointingHandCursor }
 
+            // The machine's color and initial, with the dot of its link at the corner.
             NativeRoundedRectangle {
-                x: row.record.discBounds.x - row.record.bounds.x
-                y: row.record.discBounds.y - row.record.bounds.y
-                width: row.record.discBounds.width
-                height: row.record.discBounds.height
+                id: avatar
+                objectName: "machineAvatar"
+                readonly property color ink: row.record.ink.a > 0 ? row.record.ink : root.colors.accent
+                x: row.record.avatarBounds.x - row.record.bounds.x
+                y: row.record.avatarBounds.y - row.record.bounds.y
+                width: row.record.avatarBounds.width
+                height: row.record.avatarBounds.height
+                radius: root.style.avatarRadius
+                color: Qt.alpha(ink, 0.16)
+                borderColor: ink
+                borderAlpha: 0.4
+                borderWidth: 1 / Screen.devicePixelRatio
+                opacity: row.enabled ? 1 : 0.5
+
+                ChromeText {
+                    objectName: "machineInitial"
+                    anchors.fill: parent
+                    text: row.record.initial
+                    color: avatar.ink
+                    pixelSize: root.style.smallSize
+                    emphasized: true
+                    horizontalAlignment: Text.AlignHCenter
+                    elide: Text.ElideNone
+                    Accessible.ignored: true
+                }
+            }
+
+            NativeRoundedRectangle {
+                objectName: "machineLinkDot"
+                x: row.record.dotBounds.x - row.record.bounds.x
+                y: row.record.dotBounds.y - row.record.bounds.y
+                width: row.record.dotBounds.width
+                height: row.record.dotBounds.height
                 radius: Math.max(width, height)
-                color: row.record.ink.a > 0 ? row.record.ink : root.colors.accent
+                color: row.enabled ? root.colors.green : root.colors.overlay1
+                borderColor: root.colors.sidebarBackground
+                borderAlpha: 1
+                borderWidth: Math.max(1, Math.round(width / 5))
             }
 
             ChromeText {
                 objectName: "machineListLabel"
                 x: row.record.labelBounds.x - row.record.bounds.x
+                y: row.record.labelBounds.y - row.record.bounds.y
                 width: row.record.labelBounds.width
-                height: row.height
+                height: row.record.labelBounds.height
                 text: row.record.text
-                color: row.enabled ? root.colors.text : root.colors.overlay1
+                color: row.enabled ? root.colors.chromeText : root.colors.overlay1
                 pixelSize: root.style.pixelSize
+                emphasized: true
+                Accessible.ignored: true
+            }
+
+            ChromeText {
+                objectName: "machineListStatus"
+                x: row.record.statusBounds.x - row.record.bounds.x
+                y: row.record.statusBounds.y - row.record.bounds.y
+                width: row.record.statusBounds.width
+                height: row.record.statusBounds.height
+                text: row.record.status
+                color: row.record.attention ? root.style.attention : root.colors.subtext0
+                pixelSize: root.style.smallSize
                 Accessible.ignored: true
             }
 

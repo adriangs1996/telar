@@ -42,7 +42,8 @@ namespace {
     const auto card = AgentCardGeometry::derive(display.chrome);
     constexpr std::uint16_t expected_small_pixels = 26;
     constexpr float expected_small_row = 34;
-    constexpr float expected_card_height = 151;
+    // The card's insets follow the default font, one size above the design font.
+    constexpr float expected_card_height = 154;
     constexpr Viewport expected{.width = 1600, .height = 1000, .scale = density};
 
     require(display.viewport == expected, "logical view dimensions must become physical dimensions once");

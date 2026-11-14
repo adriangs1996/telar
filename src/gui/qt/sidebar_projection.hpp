@@ -61,8 +61,12 @@ namespace telar::gui::qt {
         {QStringLiteral("agentDetailY"), (geometry.px(AgentCardGeometry::vertical_padding) + geometry.title_row + geometry.px(AgentCardGeometry::title_gap)) / density},
         {QStringLiteral("agentDetailRow"), geometry.small_row / density},
         {QStringLiteral("padding"), geometry.px(AgentCardGeometry::horizontal_padding) / density},
-        {QStringLiteral("tileWidth"), chrome.px(AgentCardGeometry::tile_width) / density},
-        {QStringLiteral("tileHeight"), chrome.px(AgentCardGeometry::tile_height) / density},
+        {QStringLiteral("tileWidth"), geometry.px(AgentCardGeometry::tile_width) / density},
+        {QStringLiteral("tileHeight"), geometry.px(AgentCardGeometry::tile_height) / density},
+        {QStringLiteral("markColumn"), geometry.px(AgentCardGeometry::mark_column) / density},
+        {QStringLiteral("textInset"), geometry.textInset() / density},
+        // What one design pixel measures beside the chrome text, in logical pixels.
+        {QStringLiteral("ratio"), geometry.scale / density},
         {QStringLiteral("compactPadding"), geometry.px(AgentCardGeometry::compact_vertical_padding) / density},
         {QStringLiteral("taskIndent"), geometry.px(AgentCardGeometry::task_indent) / density},
         {QStringLiteral("planCellWidth"), geometry.px(TaskCardLabels::plan_cell_width) / density},
@@ -78,11 +82,11 @@ namespace telar::gui::qt {
         {QStringLiteral("statusGap"), geometry.px(AgentCardGeometry::gap) / density},
         {QStringLiteral("statusSide"), std::round(static_cast<float>(chrome.title) * AgentCardGeometry::icon_size_ratio) / density},
         {QStringLiteral("projectSide"), std::round(static_cast<float>(chrome.small) * AgentCardGeometry::icon_size_ratio) / density},
-        {QStringLiteral("providerSide"), std::round(chrome.px(AgentCardGeometry::mark_side)) / density},
+        {QStringLiteral("providerSide"), geometry.px(AgentCardGeometry::mark_side) / density},
         {QStringLiteral("providerAlpha"), AgentCardGeometry::provider_alpha},
         {QStringLiteral("spacing"), geometry.px(AgentCardGeometry::spacing) / density},
         {QStringLiteral("groupGap"), geometry.px(AgentCardGeometry::group_gap) / density},
-        {QStringLiteral("scrollbarWidth"), chrome.px(AgentCardGeometry::scrollbar_width) / density},
+        {QStringLiteral("scrollbarWidth"), geometry.px(AgentCardGeometry::scrollbar_width) / density},
     };
   }
 
@@ -99,6 +103,7 @@ namespace telar::gui::qt {
         {QStringLiteral("activityHeader"), toQRectF(geometry.activity_header, density)},
         {QStringLiteral("activity"), toQRectF(geometry.activity, density)},
         {QStringLiteral("workspaceHeight"), SidebarGeometry::workspaceHeight(chrome) / density},
+        {QStringLiteral("sectionGap"), SidebarGeometry::sectionGap(chrome) / density},
         {QStringLiteral("cards"), agentCardGeometryRecord(display, geometry.activity.width)},
         {QStringLiteral("activitySeparatorY"), (std::floor(geometry.activity_header.y + (geometry.activity_header.height / 2)) - geometry.activity_header.y) / density},
     };

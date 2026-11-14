@@ -161,9 +161,17 @@ namespace {
       show(window);
       QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(visualItems(*card, QStringLiteral("taskTitle")).size(), 1, wait_ms);
-      QCOMPARE(visualItems(*card, QStringLiteral("taskFacts")).front()->property("text").toString(), QStringLiteral("host · \u2387 fix  +12 \u22123 · 2  \u2713 test"));
+      QCOMPARE(record.value(QStringLiteral("facts")).toString(), QStringLiteral("host · \u2387 fix  +12 \u22123 · 2  \u2713 test"));
+      QCOMPARE(visualItems(*card, QStringLiteral("taskFactsLead")).front()->property("text").toString(), QStringLiteral("host · "));
+      QCOMPARE(visualItems(*card, QStringLiteral("taskBranchIcon")).front()->property("symbol").toString(), QStringLiteral("git-branch"));
+      QCOMPARE(visualItems(*card, QStringLiteral("taskHandle")).front()->property("text").toString(), QStringLiteral("fix"));
+      QCOMPARE(visualItems(*card, QStringLiteral("taskAdded")).front()->property("text").toString(), QStringLiteral("+12"));
+      QCOMPARE(visualItems(*card, QStringLiteral("taskRemoved")).front()->property("text").toString(), QStringLiteral("\u22123"));
+      QCOMPARE(visualItems(*card, QStringLiteral("taskFactsTail")).front()->property("text").toString(), QStringLiteral("· 2  \u2713 test"));
       QCOMPARE(visualItems(*card, QStringLiteral("taskTitle")).front()->property("text").toString(), QStringLiteral("Fix the task"));
-      QVERIFY(visualItems(*card, QStringLiteral("taskTitle")).front()->property("emphasized").toBool());
+      // The task reads lighter than the agent it hangs from.
+      QVERIFY(!visualItems(*card, QStringLiteral("taskTitle")).front()->property("emphasized").toBool());
+      QVERIFY(visualItems(*card, QStringLiteral("taskTitle")).front()->y() < visualItems(*card, QStringLiteral("taskFacts")).front()->y());
       QCOMPARE(visualItems(*card, QStringLiteral("taskActivity")).front()->property("text").toString(), QStringLiteral("Compile the changes"));
       QCOMPARE(visualItems(*card, QStringLiteral("taskPlanCell")).size(), agent.plan_total);
       QCOMPARE(visualItems(*card, QStringLiteral("taskPlanCount")).front()->property("text").toString(), QStringLiteral("2/4"));
@@ -227,7 +235,8 @@ namespace {
 
       QCOMPARE(timers.size(), 1);
       QTRY_VERIFY_WITH_TIMEOUT(timers.front()->isActive(), wait_ms);
-      QTRY_COMPARE_WITH_TIMEOUT(visualItems(*card, QStringLiteral("taskCompactStatus")).front()->property("text").toString(), QStringLiteral("host · 1m"), wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(visualItems(*card, QStringLiteral("taskCompactStatus")).front()->property("text").toString(), QStringLiteral("1m"), wait_ms);
+      QCOMPARE(visualItems(*card, QStringLiteral("taskCompactPlace")).front()->property("text").toString(), QStringLiteral("host"));
       record.insert(QStringLiteral("compact"), false);
       QVERIFY(card->setProperty("record", record));
       QTRY_COMPARE_WITH_TIMEOUT(visualItems(*card, QStringLiteral("taskTitle")).size(), 1, wait_ms);
