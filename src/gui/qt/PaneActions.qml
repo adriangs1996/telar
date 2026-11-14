@@ -172,9 +172,16 @@ Row {
                 visible: root.shown.length < root.entries.length
             }
 
+            // One button per state: a binding on the required modelData leaves it undefined.
             ActionButton {
-                modelData: root.zoomed ? ({label: "Restore panes", glyph: "", action: GuiController.Action.fullscreen}) : ({label: "Expand pane", glyph: "", action: GuiController.Action.fullscreen})
-                engaged: root.zoomed
+                modelData: ({label: "Restore panes", glyph: "", action: GuiController.Action.fullscreen})
+                engaged: true
+                visible: root.zoomed
+            }
+
+            ActionButton {
+                modelData: ({label: "Expand pane", glyph: "", action: GuiController.Action.fullscreen})
+                visible: !root.zoomed
             }
         }
     }
