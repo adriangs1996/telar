@@ -181,10 +181,11 @@ graph LR
 - **Hecho cuando:** el checker falla con cualquier arista hacia arriba nueva.
 - **Resultado:** `7f7e342b4`. `process_layers` en `modules.json` ordena los componentes de `runtime`, `gui` y `cli` (con `tests` arriba); las librerías quedan por debajo de los procesos y entre ellas manda `library_layers`. La regla lee también los imports de las unidades de implementación. `upward_imports` es la allowlist: 53 aristas (las 56 de P0.2 menos las 3 que cerraron P3.15a y P3.15c), y el checker falla también si queda una entrada cuya arista ya no sube. **Cada tarea de P3 borra sus entradas de `upward_imports` al integrar.**
 
-### [ ] P2.2 · Regla 4: `export import` solo si el tipo aparece en la interfaz exportada
+### [x] P2.2 · Regla 4: `export import` solo si el tipo aparece en la interfaz exportada
 - **Depende de:** P1.2
 - **Toca:** el linter de TBC (lo más fiable sobre el AST) o el checker si basta una aproximación.
 - **Hecho cuando:** la allowlist contiene los re-exports actuales que no cumplen (al menos los 67 que no mencionan ningún tipo del módulo re-exportado) y falla con cualquiera nuevo.
+- **Resultado:** en `tools/check-cpp-modules.py` leyendo tokens, no sobre el AST: todas las interfaces exportan con `export { }`, `export namespace` o `export extern "C++"`, el chequeo tarda 1–2 s y no necesita build. Un re-export cumple si una declaración exportada nombra un tipo del módulo re-exportado; no cuentan las menciones dentro de cuerpos de función, y un nombre cualificado solo cuenta si el cualificador es un namespace del tipo. Allowlist en `docs/build/reexports.json`: 352 re-exports en 124 módulos (143 no mencionan el tipo en ningún sitio). El checker falla también con una entrada obsoleta: **cada tarea que quite o añada un `export import` la actualiza.** Límite: se cuentan las dos ramas de un `#if`.
 
 ### [x] P2.3 · Regla 5: ningún `#include` fuera de las excepciones
 - **Depende de:** P1.2
@@ -331,15 +332,17 @@ graph LR
 - **Cierra:** `platform → attachments`, `platform → machines` y el ciclo `login_shell` ↔ `profile_file`.
 - **Resultado:** `aec8b60ed`. Las ocho interfaces de `profile_file` pasan a módulos propios en `gui/platform/` (`awake_clock`, `clipboard_image_pipe`, `clipboard_image_transfer`, `file_stamp`, `path_limits`, `runtime_endpoint`, `shared_image_source`) y `profile_file` se queda con `ProfileFile`; `managed_directory` sale de `login_shell`. El ciclo caía con un import que `runtime_endpoint.cpp` no usaba. `AwakeClock` se declara `extern "C++"` (como `ClipboardImageTransfer`), así que `tests/controlled_awake_clock.cpp` deja de ser unidad de un módulo de producción y el checker pierde `TEST_UNITS`. Al integrar con P4.1b, seis conflictos de imports. Compila la GUI.
 
-### [ ] P3.14b · Módulo cajón `gui.platform.private_file_stamp`
+### [x] P3.14b · Módulo cajón `gui.platform.private_file_stamp`
 - **Depende de:** P1.2
 - **Toca:** sus unidades `background_effect`, `glyph_rasterizer`, `peer_identity`, `process_group` y `secure_random`.
 - **Cierra:** `platform → fonts`.
 - **audit-39:** `secure_random.cpp` ya no existe (`f8cc271a9`). Las otras cuatro unidades y la arista siguen. P3.14a, P3.14c y P3.14d no los cubre.
+- **Resultado:** `ea929a9c1`. `private_file_stamp` se queda con `PrivateFileStamp`; salen `gui.platform.keyboard`, `.background_effect` (solo Linux), `.peer_identity`, `.process_group`, `.progress_cosine`, `.secure_random` y `gui.fonts.glyph_rasterizer` (solo macOS), que cierra `platform → fonts`. `secure_random` importa `platform.primitives` en todas las plataformas: en Linux usaba `randomBytes` sin ese import.
 
-### [ ] P3.14c · Módulo cajón `gui.platform.notification_commands`
+### [x] P3.14c · Módulo cajón `gui.platform.notification_commands`
 - **Depende de:** P1.2. Toca `host_effects`, igual que P3.12c.
 - **Toca:** sus unidades `stdio_socket`, `wall_clock` y `window_lease`.
+- **Resultado:** `15ab97148`. `gui.platform.stdio_socket`, `.wall_clock` y `.window_lease` pasan a módulos propios; `notification_commands` se queda con `CommandLine`, los comandos de notificación y sonido y `SocketLimits`. **Para P3.17:** sigue la arista `gui.machines.discovery → gui.platform.notification_commands`, y `discovery` no parece usar nada de ese módulo.
 
 ### [x] P3.14d · Módulos cajón del runtime
 - **Depende de:** P1.2
@@ -398,6 +401,7 @@ Cada hub sigue el patrón agregador: `a` crea los módulos y deja el agregador, 
 - **Depende de:** a: P1.2 · b: P4.3a · c: P4.3b
 - **Qué hace:** `json`, `json_error`, `json_fields` y `json_node` a `telar.base.text.json`. ASCII, `fields`, `hostname` y `schema_version` se quedan en su propio módulo.
 - **Resultado de a:** `450f8127a`. `telar.base.text.json` (`JsonError`, `JsonValue`, `JsonEscapes`, `escapeJson`, `appendJsonText`, `JsonFields`, `JsonKind`, `JsonNode`), con `import std` y dependiendo solo de `base.memory.allocators` y de un módulo nuevo, `telar.base.text.utf8` (dueño de `utf8.hpp`), sin el cual había un ciclo entre el JSON y `SchemaVersion`. `telar.base.text` hace `export import` de los dos. **En b, los importadores que solo usan UTF-8 pasan a `telar.base.text.utf8`.** El `[x]` del título marca solo `a`.
+- **Resultado de c:** `17ff16ba3`. `telar.base.text` deja de reexportar `json` y `utf8`; sigue importando el JSON porque `SchemaVersion::isOne` recibe un `JsonValue`. No hay fichero que borrar: el módulo conserva ASCII, `fields`, `hostname`, `schema_version`… **P4.3 cerrada.**
 - **Resultado de b:** `683e960ef`. De 134 importadores: `telar.base.text.json` en 31, `.utf8` en 41, `telar.base.text` en 57, y 51 pierden el import; `telar.platform` y `telar.config` dejan de reexportarlo, `telar.client` reexporta solo UTF-8. El árbol compila con el agregador sin reexports, así que c puede quitarlos. Al integrar con P4.4b y P4.1c, 29 conflictos de imports (regla: `config` y `platform` de P4.4b/P4.1c, `base.text` de P4.3b), y `proxy.relay_direction` importa `telar.base.text` directamente.
 
 ### [x] P4.4a/b/c · `telar.config` por proceso
@@ -426,7 +430,7 @@ Cada tarea empieza localizando todas las copias, crea un módulo con una interfa
 | [x] P5.3 | Hardening de git | 3 | `telar.platform.git` | P4.1a |
 | [x] P5.4 | `setup.json` | 2 | módulo dueño único (decidir capa) | P1.2 |
 | [ ] P5.5 | Login shell | 4 | `telar.platform.process` o `telar.sys.process` | P4.1a, P3.1 |
-| [ ] P5.6 | Nombres de errno | 8 | `telar.sys.posix` (`lastError()` y el nombre) | P3.1 |
+| [x] P5.6 | Nombres de errno | 8 | `telar.sys.posix` (`lastError()` y el nombre) | P3.1 |
 | [ ] P5.7 | Spawn con higiene de descriptores | — | `telar.platform.process` | P4.1a, P3.1 |
 
 **audit-39** ya dejó un dueño único para casi todo, aunque en el hub y no en el destino de la tabla. Mover cada dueño a su familia es parte de P4.1 y P4.3:
@@ -436,6 +440,7 @@ Cada tarea empieza localizando todas las copias, crea un módulo con una interfa
 - P5.4: `cli.project_setup::prepare` (`b12d9a859`).
 - P5.5: `loginShell` y `loginShellScript` en `telar.platform` (`8bfa863cd`). Quedan dos lecturas sueltas de `$SHELL`: en la CLI (`worktree_git`) y en `Command` de `telar.platform`.
 - P5.6: `systemErrorName` en `telar.platform` (`845c69d6d`), sin `lastError()`. Quedan copias en `runtime.runtime.execution_service`, `runtime.execution.execution` y en `worktree_git` e `history` de la CLI.
+  - **Cerrada** (`9ac9af040`): `telar::sys::errorName(code, fallback)` y `telar::sys::lastError()` en `telar.sys.posix`; `systemErrorName` sale de `platform.error` y las copias del runtime y la CLI usan la tabla común. `ENOMEM`, `ENOBUFS` y `EBADF` se nombran igual en todos los mensajes.
 - P5.7: todos los spawns usan `SpawnOptions` (`be47a6b84`). Tres sitios repiten a mano "conservar los tres flujos estándar y cerrar el resto": `traffic.control_backend`, `machine_ssh` de la CLI y `tls` del runtime.
 
 ---
