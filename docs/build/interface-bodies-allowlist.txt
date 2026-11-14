@@ -6,9 +6,6 @@
 
 telar.base.editors
 telar.base.history
-telar.base.memory.allocators
-telar.base.memory.containers
-telar.base.memory.sensitive
 telar.cli.command_limit
 telar.cli.control_session
 telar.cli.history

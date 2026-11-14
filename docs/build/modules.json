@@ -802,7 +802,9 @@
     "src/gui/fonts/face/ligature_coverage.cpp": "telar.gui.fonts.face",
     "src/gui/platform/wall_clock/wall_clock.cpp": "telar.gui.platform.wall_clock",
     "src/gui/platform/window_lease/window_lease.cpp": "telar.gui.platform.window_lease",
-    "src/gui/platform/stdio_socket/stdio_socket.cpp": "telar.gui.platform.stdio_socket"
+    "src/gui/platform/stdio_socket/stdio_socket.cpp": "telar.gui.platform.stdio_socket",
+    "lib/base/memory/containers/containers.cpp": "telar.base.memory.containers",
+    "lib/base/memory/sensitive/sensitive.cpp": "telar.base.memory.sensitive"
   },
   "merged_interfaces": {
     "lib/client/include/telar_client/codecs/telar_handshake.cppm": "lib/client/include/telar_client/serializers/telar_handshake.cppm"

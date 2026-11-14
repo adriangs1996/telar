@@ -10,15 +10,17 @@ static_assert(true);
 import std;
 import telar.runtime.tests.check;
 import telar.runtime.tests.erasure_checking_allocator;
+import telar.base.memory.allocators;
 import telar.base.memory.sensitive;
 
 using namespace telar;
 
 void testRecyclingAllocator() {
   ErasureCheckingAllocator upstream;
+  MemoryAdapter erased{upstream};
 
   {
-    RecyclingAllocator memory{upstream};
+    RecyclingAllocator<Memory> memory{erased};
 
     for (const auto alignment : {alignof(char), alignof(std::max_align_t), std::size_t{64}}) {
       for (const std::size_t size : {1, 15, 16, 17, 31, 32, 4095, 4096, 4097}) {

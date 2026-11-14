@@ -1,4 +1,5 @@
 module;
+#include "tbc/hot_path.hpp"
 #include "tbc/view.hpp"
 
 export module telar.base.memory.sensitive;
@@ -10,15 +11,8 @@ import telar.base.memory.allocators;
 export {
   namespace telar {
 
-    inline void eraseSensitive(void* storage, std::size_t length) noexcept {
-      if (length == 0) {
-        return;
-      }
-
-      std::memset(storage, 0, length);
-      // The memory clobber preserves the wipe after the buffer's final use without forcing byte stores.
-      asm volatile("" : : "r"(storage) : "memory");
-    }
+    // Zeroes the bytes in a way the compiler cannot drop as a dead store.
+    void eraseSensitive(void* storage, std::size_t length) noexcept;
 
   }
 }
@@ -27,8 +21,9 @@ export {
 export {
   namespace telar {
 
+    // The release path of every secure container and of SensitiveAllocation, over any composed upstream.
     template <Allocator Upstream>
-    class TBC_SHARED ErasingAllocator {
+    class TBC_SHARED TBC_HOT_PATH ErasingAllocator {
     public:
       static constexpr bool thread_safe = ConcurrentAllocator<Upstream>;
       static constexpr bool erasing = true;
@@ -68,68 +63,15 @@ export {
       // Every block it releases or keeps for reuse is erased first.
       static constexpr bool erasing = true;
 
-      inline explicit RecyclingAllocator(Upstream& upstream) noexcept
-          : upstream_(upstream) {}
-
-      inline ~RecyclingAllocator() {
-        for (std::size_t index = 0; index < available_.size(); ++index) {
-          const auto capacity = (index + 1) * block_alignment;
-
-          while (auto* block = available_[index]) {
-            available_[index] = block->next;
-            eraseSensitive(block, capacity);
-            upstream_.deallocate(block, capacity, block_alignment);
-          }
-        }
-      }
+      explicit RecyclingAllocator(Upstream& upstream) noexcept;
+      ~RecyclingAllocator();
 
       RecyclingAllocator(const RecyclingAllocator&) = delete;
       RecyclingAllocator& operator=(const RecyclingAllocator&) = delete;
 
-      inline void* allocate(std::size_t size, std::size_t alignment) noexcept {
-        if (!recyclable(size, alignment)) {
-          return upstream_.allocate(size, alignment);
-        }
-
-        const auto index = bucket(size);
-        const auto capacity = (index + 1) * block_alignment;
-
-        if (auto* block = available_[index]) {
-          available_[index] = block->next;
-          retained_bytes_ -= capacity;
-          return block;
-        }
-
-        return upstream_.allocate(capacity, block_alignment);
-      }
-
-      inline void deallocate(void* pointer, std::size_t size, std::size_t alignment) noexcept {
-        if (pointer == nullptr) {
-          return;
-        }
-
-        if (!recyclable(size, alignment)) {
-          eraseSensitive(pointer, size);
-          upstream_.deallocate(pointer, size, alignment);
-          return;
-        }
-
-        const auto index = bucket(size);
-        const auto capacity = (index + 1) * block_alignment;
-
-        eraseSensitive(pointer, capacity);
-        if (capacity > maximum_retained_bytes - retained_bytes_) {
-          upstream_.deallocate(pointer, capacity, block_alignment);
-          return;
-        }
-
-        available_[index] = std::construct_at(static_cast<Block*>(pointer), Block{available_[index]});
-        retained_bytes_ += capacity;
-      }
-
-      inline std::size_t retainedBytes() const noexcept {
-        return retained_bytes_;
-      }
+      void* allocate(std::size_t size, std::size_t alignment) noexcept;
+      void deallocate(void* pointer, std::size_t size, std::size_t alignment) noexcept;
+      std::size_t retainedBytes() const noexcept;
 
       static constexpr std::size_t maximum_retained_bytes = 512 * 1024;
 
@@ -138,13 +80,8 @@ export {
         Block* next;
       };
 
-      inline static bool recyclable(std::size_t size, std::size_t alignment) noexcept {
-        return size != 0 && size <= maximum_block_bytes && alignment <= block_alignment;
-      }
-
-      inline static std::size_t bucket(std::size_t size) noexcept {
-        return (size - 1) / block_alignment;
-      }
+      static bool recyclable(std::size_t size, std::size_t alignment) noexcept;
+      static std::size_t bucket(std::size_t size) noexcept;
 
       static constexpr std::size_t block_alignment = alignof(std::max_align_t);
       static constexpr std::size_t maximum_block_bytes = 4096;
@@ -156,13 +93,22 @@ export {
   }
 }
 
+// Instantiated in the implementation unit for the erased interfaces and for base's own allocators,
+// which the tests of the services that use them still pass.
+namespace telar {
+  extern template class RecyclingAllocator<Memory>;
+  extern template class RecyclingAllocator<ConcurrentMemory>;
+  extern template class RecyclingAllocator<SystemAllocator>;
+  extern template class RecyclingAllocator<BudgetAllocator<SystemAllocator>>;
+}
+
 // Interface: telar_base/memory/sensitive_allocation.cppm
 export {
   namespace telar::runtime {
 
     // Bytes erased on release, allocated from an allocator in region `a`.
     template <Allocator Memory>
-    class SensitiveAllocation {
+    class TBC_HOT_PATH SensitiveAllocation {
     public:
       inline explicit SensitiveAllocation(tbc::view<Memory&, tbc::lt::a> memory, std::size_t size)
           : memory_(&memory),
@@ -228,8 +174,9 @@ export {
 export {
   namespace telar::runtime {
 
+    // Generic over its capacity, so no implementation unit can instantiate it for every importer.
     template <std::size_t Capacity>
-    class SensitiveBuffer {
+    class TBC_HOT_PATH SensitiveBuffer {
     public:
       inline SensitiveBuffer() noexcept {}
 
@@ -255,8 +202,9 @@ export {
 export {
   namespace telar::runtime {
 
+    // Generic over its capacity, so no implementation unit can instantiate it for every importer.
     template <std::size_t Capacity>
-    class SensitiveText {
+    class TBC_HOT_PATH SensitiveText {
     public:
       inline SensitiveText() noexcept {}
 

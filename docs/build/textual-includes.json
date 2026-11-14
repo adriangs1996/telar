@@ -21,11 +21,19 @@
     "<string_view>",
     "<system_error>"
   ],
+  "lib/base/memory/allocators/allocators.cppm": [
+    "tbc/hot_path.hpp"
+  ],
+  "lib/base/memory/containers/containers.cpp": [
+    "tbc/view.hpp"
+  ],
   "lib/base/memory/containers/containers.cppm": [
     "<cassert>",
+    "tbc/hot_path.hpp",
     "tbc/view.hpp"
   ],
   "lib/base/memory/sensitive/sensitive.cppm": [
+    "tbc/hot_path.hpp",
     "tbc/view.hpp"
   ],
   "lib/base/text/json/json.cpp": [
