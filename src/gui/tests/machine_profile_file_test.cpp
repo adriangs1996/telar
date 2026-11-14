@@ -92,7 +92,8 @@ namespace {
     SystemAllocator system;
     constexpr std::size_t allocation_budget = std::size_t{128} * 1024;
     BudgetAllocator memory{system, allocation_budget};
-    MachineProfileStore store{memory, file};
+    telar::MemoryAdapter erased{memory};
+    MachineProfileStore<telar::Memory, ProfileFile> store{erased, file};
 
     require(store.load().rows().empty(), "missing profile files and missing parent directories must load as empty");
     Random random;
@@ -218,7 +219,8 @@ namespace {
         try {
           SystemAllocator memory;
           ProfileFile file{path};
-          MachineProfileStore store{memory, file};
+          telar::MemoryAdapter erased{memory};
+          MachineProfileStore<telar::Memory, ProfileFile> store{erased, file};
           Random random{.next = static_cast<std::uint8_t>(index + 1)};
           const auto label = "machine" + std::to_string(index);
           const auto destination = "dev@host" + std::to_string(index);
@@ -243,7 +245,8 @@ namespace {
 
     SystemAllocator memory;
     ProfileFile file{path};
-    MachineProfileStore store{memory, file};
+    telar::MemoryAdapter erased{memory};
+    MachineProfileStore<telar::Memory, ProfileFile> store{erased, file};
     const auto profiles = store.load();
 
     require(profiles.rows().size() == writers, "independent concurrent writers must reload under one shared kernel lock without losing another edit");

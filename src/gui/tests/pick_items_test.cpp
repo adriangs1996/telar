@@ -39,7 +39,8 @@ namespace {
     telar::runtime::config::LimitNotices limits;
 
     {
-      telar::runtime::lua::Vm machine{memory};
+      telar::MemoryAdapter erased{memory};
+      telar::runtime::lua::Vm<telar::Memory> machine{erased};
 
       machine.execute(R"(
       return {

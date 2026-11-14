@@ -13,7 +13,7 @@ add_library(telar-render-md4c STATIC "${TELAR_MD4C_SOURCE_DIR}/md4c.c" "${TELAR_
 target_include_directories(telar-render-md4c SYSTEM PUBLIC "${TELAR_MD4C_SOURCE_DIR}")
 set_target_properties(telar-render-md4c PROPERTIES C_STANDARD 99 POSITION_INDEPENDENT_CODE ON)
 
-add_library(telar-render STATIC)
+add_library(telar-render STATIC document/document.cpp markdown/markdown.cpp terminal/terminal.cpp)
 add_library(telar::render ALIAS telar-render)
 telar_modules(telar-render)
 target_include_directories(telar-render PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")

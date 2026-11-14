@@ -194,6 +194,13 @@ graph LR
 - **Hecho cuando:** hay allowlist por fichero con los includes de hoy y el checker falla con cualquiera nuevo.
 - **Resultado:** `f25185aaa` y `6e8549845`. Pueden incluir `lib/sys`, los adaptadores Qt/moc (los que incluyen una cabecera `<Q…>`), las fuentes C y Objective-C(++) y las cabeceras que todos ellos alcanzan; un módulo puede incluir sus propias cabeceras de `header_owners` que cruzan esa frontera; `macro_headers` (vacío hasta P6.3) no puede incluir nada. Tests y herramientas quedan fuera. La allowlist está en `docs/build/textual-includes.json` (3130 includes tras integrar P3.6), y el checker falla también con una entrada obsoleta: **cada tarea que quita o mueve un include actualiza ese fichero**. El checker también mira los ficheros sin rastrear, para comprobar los nuevos antes del commit.
 
+### [ ] P2.5 · TBC lee los cuerpos de las funciones llamadas en otras unidades
+- **Depende de:** P8.3
+- **Toca:** `lib/tbc/linter` y su corpus de spec.
+- **Por qué:** TBC solo ve la declaración de la función llamada. Si el cuerpo está en otra unidad, supone que toda referencia o `this` no `const` invalida lo que se haya prestado de ella, como Rust con `&mut`. Al sacar cuerpos en la fase 9 eso dio errores nuevos (27 en la CLI, 5 por los accesores de `JsonNode`), y las tareas los esquivaron dejando los cuerpos en la interfaz con `TBC_HOT_PATH`, que el plan reserva para camino caliente medido. **Decidido:** que TBC lea los cuerpos, en vez de firmas más estrictas o de aceptar la marca.
+- **Qué hace:** una primera pasada sobre la base de compilación calcula un resumen de efectos por función definida (qué parámetros y qué `this` invalida, qué préstamos devuelve y de dónde), y la comprobación usa ese resumen cuando el cuerpo no es visible. Las llamadas virtuales e indirectas siguen con el supuesto conservador. Los resúmenes se guardan por unidad para que el lint no se vuelva cuadrático.
+- **Hecho cuando:** el corpus tiene casos para una función fuera de línea que no muta (se acepta), una que muta (se rechaza), recursión y una virtual (conservadora); el lint de runtime, CLI y GUI no tiene errores nuevos; y el tiempo del lint completo está medido antes y después.
+
 ---
 
 ## Fase 3 · Capas
@@ -413,11 +420,12 @@ Cada hub sigue el patrón agregador: `a` crea los módulos y deja el agregador, 
 - **Resultado de b:** `b113c9cab`. 90 unidades: 59 importan módulos estrechos (`.runtime` 25, `.core` 16, `.client` 10, `.snapshot` 3, `.gui` 2…) y 31 pierden el import. Compilan runtime, CLI y GUI. `.core` (lo compartido: avisos de límites, restricciones, proveedores de agentes, `IntegrationProvider`, `LocalModules`, `GraphicsLimits`), `.runtime`, `.client`, `.gui` (secciones `gui` y `theme`) y `.snapshot` (`SnapshotReader`, que valida el config entero y usan los tres procesos; dentro de `.runtime` habría obligado a importar `.client` y `.gui`). `docs/build/cpp-modules.md` actualizado. El `[x]` del título marca solo `a`.
 - **Resultado de c:** `fd239ac18`. `lib/config/config.cppm` borrado; `docs/build/cpp-modules.md` dice "un módulo por proceso" (cinco interfaces). Compilan runtime, CLI y GUI sobre la rama integrada. **P4.4 cerrada: con P4.1, P4.2 y P4.3, la fase 4 queda hecha salvo P4.5.**
 
-### [ ] P4.5 · Un solo lector tipado del schema de config
+### [x] P4.5 · Un solo lector tipado del schema de config
 - **Depende de:** P4.4a
 - **Qué hace:** hoy el schema se valida en la lib y la GUI lo vuelve a leer por su cuenta, por eso la GUI rechaza `client.prompt.skin` y la lib lo acepta. Queda un único lector tipado y la GUI consume su resultado.
 - **Hecho cuando:** hay un test que cubre `client.prompt.skin` en los dos procesos y no queda código de lectura del schema en la GUI.
 - **audit-39:** `3529b1fdc` creó `GuiReader` y `PromptReader` en `telar-config`, que ya leen `gui` y `client.prompt` y aceptan `skin`. La GUI sigue leyendo por su cuenta el resto de `client.*`, los temas, los atajos y los componentes (unas 130 llamadas a `field(…)` en `gui.config.generation`), y el test de `skin` solo existe en la GUI.
+- **Resultado:** `e4baaf901`. Cada sección tiene un único lector tipado en `telar.config.*` (`ThemeReader`, `ClientReader`, `BindingReader`, `CallbackResultReader`, `SourceReader`, `BarsReader`, `ClientDefinitionsReader`, `ElementReader`, `ConfigurationLayers`…) y la GUI solo traduce sus resultados. Fuera de los tests no queda en la GUI ninguna lectura del schema. `client.prompt.skin` tiene test en los dos procesos. **Cambio visible:** el runtime rechaza ahora un `mark` o `icon` de panel que no sea texto, como ya hacía la GUI.
 
 ---
 
@@ -536,16 +544,29 @@ Para cada módulo: `extern template class X<Memory>;` en la interfaz, la instanc
 | ID | Módulos | Depende de |
 |---|---|---|
 | [ ] P9.1 | `telar.wire.*` | P3.5, P8.1, P2.4 |
-| [ ] P9.2 | `telar.platform.*` | P4.1c, P8.1, P2.4 |
-| [ ] P9.3 | `telar.base.text.*`, `telar.base.diagnostics` | P4.3c, P6.6, P8.1, P2.4 |
-| [ ] P9.4 | `telar.base.memory.*` (solo lo que no es primitiva) | P4.2c, P6.6, P8.1, P2.4 |
+| [x] P9.2 | `telar.platform.*` | P4.1c, P8.1, P2.4 |
+| [x] P9.3 | `telar.base.text.*`, `telar.base.diagnostics` | P4.3c, P6.6, P8.1, P2.4 |
+| [x] P9.4 | `telar.base.memory.*` (solo lo que no es primitiva) | P4.2c, P6.6, P8.1, P2.4 |
 | [ ] P9.5 | `telar.config.*` | P4.4c, P4.5, P8.1, P2.4 |
-| [ ] P9.6 | Resto de `lib/`: git, tls, plugins, lua, machines, render, shell | P1.2, P8.1, P2.4 |
+| [x] P9.6 | Resto de `lib/`: git, tls, plugins, lua, machines, render, shell | P1.2, P8.1, P2.4 |
 | [ ] P9.7 | Runtime, una subtarea por dominio en paralelo (terminal, panes, agents, history, traffic/{proxy,tls,http,redirect}, plugins, graphics…) | P8.1, P0.5, P2.4 y las tareas de P3 del dominio |
 | [ ] P9.8 | GUI, una subtarea por dominio. `gui.application.session` (5815 líneas) pasa a `session/session.cppm` con `prompt.cpp`, `blocks.cpp`, `copy_mode.cpp`… | P8.1, P0.5, P2.4 y las tareas de P3 del dominio |
-| [ ] P9.9 | CLI | P8.1, P2.4, P3.15a–c |
+| [x] P9.9 | CLI | P8.1, P2.4, P3.15a–c |
 
 - **Hecho cuando (cada una):** compila, pasan los tests del área, y en runtime y GUI los benchmarks de hot path no empeoran respecto a P0.5 o la diferencia está justificada.
+- **Resultados:**
+  - **P9.2** (`f181c3b16`): las diez interfaces de `telar.platform.*` solo llevan declaraciones. En `fs` y `xdgDirectory` el trabajo va a funciones no plantilla del `.cpp` y en la interfaz queda el envoltorio que dimensiona el contenedor del llamante. Proxy sin pérdida consistente en Release con ThinLTO, 7 pares.
+  - **P9.3** (`df4eeb180`): cuerpos de `base.text`, `base.text.json` y `base.diagnostics` a `text.cpp`, `json/json.cpp` y `diagnostics/diagnostics.cpp`. Las plantillas sobre un callable o tipo de salida (`eachElement`, `eachMember`, `escapeJson`, `appendJsonText`, `JsonFields`…) quedan como envoltorios finos; los accesores de `JsonNode` se quedan en la clase porque fuera de línea el lifetime checker daba 5 errores (P2.5).
+  - **P9.4** (`720832c87`): `base.memory.*`, sin benchmarks cronometrados (justificado por desensamblado). Arregla el checker, que leía `class TBC_SHARED Nombre` como un tipo `TBC_SHARED`.
+  - **P9.6** (`bfdd7ce9b`): salen de la allowlist `telar.git`, `.git.checkout`, `.lua`, `.machines`, `.plugins`, `.render.*` y `.tls`. Sin benchmarks de hot path medidos.
+  - **P9.9** (`4b8fb5020`): los 19 módulos de la CLI. `RepositoryCapture`, `HistoryPathVisitor` y `WorktreeFilter` pasan a clases abstractas pequeñas, como `Memory`. Se quedan en la interfaz con `TBC_HOT_PATH` las plantillas sobre los mensajes del protocolo y, por el lifetime checker, `Object`, `Payload`, `displayText`, `toolEvent`, `questionEvent` y `RuntimeConnection::receive` (27 errores fuera de línea; P2.5 y P9.12).
+  - Al integrar el lote, el test de skin de P4.5 lee `budget.liveBytes()` porque `memory` ya es un `Memory&`.
+
+### [ ] P9.12 · Sacar los cuerpos que se quedaron dentro por el checker
+- **Depende de:** P2.5 y las P9.1–P9.9 integradas.
+- **Qué hace:** recorre cada `TBC_HOT_PATH`. Los que se pusieron solo porque el lifetime checker no veía el cuerpo (accesores de `JsonNode`, `Object` y `Payload` del hook de la CLI, `displayText`, `toolEvent`, `questionEvent`, `RuntimeConnection::receive`…) salen de la interfaz. Los de camino caliente se quedan con su medición.
+- **Pendiente de decidir:** las plantillas sobre un tipo que elige el llamador (`send`/`receive`/`exchange` sobre los mensajes del protocolo, visitantes, callables, tipos de salida) no admiten `extern template`. Hoy llevan `TBC_HOT_PATH` sin medición; o se acepta así o se les da una marca propia.
+- **Hecho cuando:** todo `TBC_HOT_PATH` que queda tiene medición o es una plantilla sobre un tipo del llamador, y el lint no tiene errores nuevos.
 
 ### [ ] P9.10 · Quitar el parámetro de plantilla `Memory` donde ya no aporta
 - **Depende de:** P9.1–P9.9

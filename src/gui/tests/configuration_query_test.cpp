@@ -143,7 +143,9 @@ namespace {
 
   void retainedRuntimeProfileAndCallbackMutation() {
     SystemAllocator system;
-    BudgetAllocator memory{system, std::numeric_limits<std::size_t>::max()};
+    BudgetAllocator budget{system, std::numeric_limits<std::size_t>::max()};
+    telar::MemoryAdapter adapter{budget};
+    telar::Memory& memory = adapter;
 
     {
       const ConfigurationSourceText source{
@@ -162,10 +164,10 @@ namespace {
 
       ConfigurationGeneration generation{memory, source};
       std::array<char, ConfigurationQuery::capacity> output{};
-      const auto before = memory.allocations();
+      const auto before = budget.allocations();
       const auto encoded = RuntimeQuery::write(generation.runtimeValues(), output);
 
-      require(memory.allocations() == before, "querying adopted runtime values must not allocate through the injected allocator");
+      require(budget.allocations() == before, "querying adopted runtime values must not allocate through the injected allocator");
       const auto parsed = telar::runtime::JsonValue::parse(encoded);
 
       require(requiredJsonField(parsed, "history_path").equals("history.db"), "profile overlays must preserve an inherited history path");
@@ -180,12 +182,14 @@ namespace {
       require(requiredJsonField(unchanged, "history_path").equals("history.db"), "queries must read adopted values rather than mutable Lua tables");
     }
 
-    require(memory.liveBytes() == 0, "runtime query snapshots must release all injected storage with their generation");
+    require(budget.liveBytes() == 0, "runtime query snapshots must release all injected storage with their generation");
   }
 
   void runtimeQueryBoundsAndGenerationFailure() {
     SystemAllocator system;
-    BudgetAllocator memory{system, std::numeric_limits<std::size_t>::max()};
+    BudgetAllocator budget{system, std::numeric_limits<std::size_t>::max()};
+    telar::MemoryAdapter adapter{budget};
+    telar::Memory& memory = adapter;
 
     {
       const ConfigurationSourceText source{.source = "return {api_version=2}", .directory = {}, .profile = {}};
@@ -207,7 +211,7 @@ namespace {
       require(requiredJsonField(parsed, "proxy_intercept_hosts").encoded() == "[]", "default proxy interception must be empty");
     }
 
-    require(memory.liveBytes() == 0, "default snapshot ownership must be balanced");
+    require(budget.liveBytes() == 0, "default snapshot ownership must be balanced");
     bool rejected = false;
 
     try {
@@ -216,12 +220,14 @@ namespace {
       rejected = true;
     }
 
-    require(rejected && memory.liveBytes() == 0, "failed runtime preparation must release its partially constructed generation");
+    require(rejected && budget.liveBytes() == 0, "failed runtime preparation must release its partially constructed generation");
   }
 
   void oversizedRuntimeSectionDoesNotRejectConfiguration() {
     SystemAllocator system;
-    BudgetAllocator memory{system, std::numeric_limits<std::size_t>::max()};
+    BudgetAllocator budget{system, std::numeric_limits<std::size_t>::max()};
+    telar::MemoryAdapter adapter{budget};
+    telar::Memory& memory = adapter;
 
     {
       const ConfigurationSourceText source{
@@ -243,12 +249,14 @@ namespace {
       require(rejected && !generation.runtimeValues().history_path.empty(), "a valid snapshot must survive a section that exceeds the command response capacity");
     }
 
-    require(memory.liveBytes() == 0, "oversized query results must not retain configuration storage after teardown");
+    require(budget.liveBytes() == 0, "oversized query results must not retain configuration storage after teardown");
   }
 
   void configuredAgentsRetainTheCompleteProviderRange() {
     SystemAllocator system;
-    BudgetAllocator memory{system, std::numeric_limits<std::size_t>::max()};
+    BudgetAllocator budget{system, std::numeric_limits<std::size_t>::max()};
+    telar::MemoryAdapter adapter{budget};
+    telar::Memory& memory = adapter;
 
     {
       const ConfigurationSourceText source{
@@ -264,7 +272,7 @@ namespace {
       require(agents.back().provider == telar::AgentProvider::last_custom, "custom agent identifiers must span the complete wire range");
     }
 
-    require(memory.liveBytes() == 0, "full agent snapshots must release their retained state");
+    require(budget.liveBytes() == 0, "full agent snapshots must release their retained state");
     bool rejected = false;
 
     try {
@@ -273,11 +281,13 @@ namespace {
       rejected = true;
     }
 
-    require(rejected && memory.liveBytes() == 0, "configured icons must use the runtime's exact Unicode cell-width validation");
+    require(rejected && budget.liveBytes() == 0, "configured icons must use the runtime's exact Unicode cell-width validation");
   }
 
   void shortEscapesPreserveTheOriginalResponseCapacity() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     const ConfigurationSourceText source{
         .source = "local p=string.rep(string.char(10),512); return {api_version=2,runtime={history={path=p},session={path=p},proxy={ca_dir=p}}}",
         .directory = {},
@@ -288,7 +298,7 @@ namespace {
     std::array<char, ConfigurationQuery::capacity> output{};
     const auto encoded = RuntimeQuery::write(generation.runtimeValues(), output);
     const auto parsed = telar::runtime::JsonValue::parse(encoded);
-    String<SystemAllocator> decoded{AllocatorRef<char, SystemAllocator>{memory}};
+    String<telar::ConcurrentMemory> decoded{AllocatorRef<char, telar::ConcurrentMemory>{memory}};
 
     requiredJsonField(parsed, "history_path").string(decoded);
     constexpr std::size_t path_length = 512;
@@ -299,7 +309,9 @@ namespace {
   void runtimeSnapshotAllocationFailureReleasesTheVm() {
     SystemAllocator system;
     constexpr std::size_t insufficient_snapshot_budget = std::size_t{128} * 1024;
-    BudgetAllocator memory{system, insufficient_snapshot_budget};
+    BudgetAllocator budget{system, insufficient_snapshot_budget};
+    telar::MemoryAdapter adapter{budget};
+    telar::Memory& memory = adapter;
     bool rejected = false;
 
     try {
@@ -308,12 +320,14 @@ namespace {
       rejected = true;
     }
 
-    require(rejected && memory.liveBytes() == 0, "a failed typed snapshot allocation must release the Lua VM constructed before it");
+    require(rejected && budget.liveBytes() == 0, "a failed typed snapshot allocation must release the Lua VM constructed before it");
   }
 
   void adoptedGuiAndInputQueries() {
     SystemAllocator system;
-    BudgetAllocator memory{system, std::numeric_limits<std::size_t>::max()};
+    BudgetAllocator budget{system, std::numeric_limits<std::size_t>::max()};
+    telar::MemoryAdapter adapter{budget};
+    telar::Memory& memory = adapter;
 
     {
       const ConfigurationSourceText source{
@@ -331,7 +345,7 @@ namespace {
 
       ConfigurationGeneration generation{memory, source};
       std::array<char, ConfigurationQuery::capacity> output{};
-      const auto allocations = memory.allocations();
+      const auto allocations = budget.allocations();
       const auto gui = telar::runtime::JsonValue::parse(GuiQuery::write(generation.configuration(), output, false));
       const auto font = requiredJsonField(gui, "font");
 
@@ -346,7 +360,7 @@ namespace {
       require(requiredJsonField(input, "binding_count").encoded() == "2", "input queries must count configured bindings independently of builtin defaults");
       require(requiredJsonField(input, "sequence_timeout_ns").encoded() == "250000000", "input queries must preserve inherited sequence timing");
       require(requiredJsonField(requiredJsonField(input, "prefix"), "code").encoded() == R"({"char":{"bytes":"中\u0000","len":3}})", "a profile prefix must preserve its UTF-8 bytes and zero-filled suffix");
-      require(memory.allocations() == allocations, "GUI and input queries must not allocate from the application allocator");
+      require(budget.allocations() == allocations, "GUI and input queries must not allocate from the application allocator");
       static_cast<void>(generation.invoke(generation.input().configured.front().action, {}));
       const auto unchanged = telar::runtime::JsonValue::parse(GuiQuery::write(generation.configuration(), output, true));
 
@@ -354,7 +368,7 @@ namespace {
       require(requiredJsonField(requiredJsonField(unchanged, "window"), "titlebar").encoded() == "true", "the same snapshot must accept either platform's titlebar default");
     }
 
-    require(memory.liveBytes() == 0, "GUI and input snapshots must release every injected allocation");
+    require(budget.liveBytes() == 0, "GUI and input snapshots must release every injected allocation");
   }
 
   void floatingPointBoundsAndNamedPrefixes() {
@@ -395,7 +409,9 @@ namespace {
 
   void clientPoliciesAndLiveViewRemainIndependent() {
     SystemAllocator system;
-    BudgetAllocator memory{system, std::numeric_limits<std::size_t>::max()};
+    BudgetAllocator budget{system, std::numeric_limits<std::size_t>::max()};
+    telar::MemoryAdapter adapter{budget};
+    telar::Memory& memory = adapter;
 
     {
       const ConfigurationSourceText source{
@@ -424,7 +440,7 @@ namespace {
       };
 
       std::array<char, ConfigurationQuery::capacity> output{};
-      const auto allocations = memory.allocations();
+      const auto allocations = budget.allocations();
       const std::string before{ClientQuery::write(generation.configuration(), context, output)};
       const auto parsed = telar::runtime::JsonValue::parse(before);
 
@@ -434,12 +450,12 @@ namespace {
       require(requiredJsonField(parsed, "sound").encoded() == R"({"enabled":false,"ready":true,"needs_input":true})", "sound fields must inherit independently across selected profiles");
       require(requiredJsonField(parsed, "notification_delivery").equals("system"), "the retired terminal delivery alias must preserve inherited delivery");
       require(!requiredJsonField(parsed, "history_enter_runs").boolean() && requiredJsonField(parsed, "history_match_fts").boolean(), "history query flags must retain independent profile overrides");
-      require(memory.allocations() == allocations, "client serialization must not allocate through the application allocator");
+      require(budget.allocations() == allocations, "client serialization must not allocate through the application allocator");
       static_cast<void>(generation.invoke(generation.input().configured.front().action, {}));
       require(ClientQuery::write(generation.configuration(), context, output) == before, "Lua mutation must not change adopted client policies");
     }
 
-    require(memory.liveBytes() == 0, "client policy snapshots must release their generation's allocations");
+    require(budget.liveBytes() == 0, "client policy snapshots must release their generation's allocations");
   }
 
   void clientMetadataAndResponseBounds() {
@@ -483,7 +499,9 @@ namespace {
     });
 
     SystemAllocator system;
-    BudgetAllocator memory{system, std::numeric_limits<std::size_t>::max()};
+    BudgetAllocator budget{system, std::numeric_limits<std::size_t>::max()};
+    telar::MemoryAdapter adapter{budget};
+    telar::Memory& memory = adapter;
 
     for (const auto source : invalid_configurations) {
       bool rejected = false;
@@ -494,7 +512,7 @@ namespace {
         rejected = true;
       }
 
-      require(rejected && memory.liveBytes() == 0, "an invalid unselected profile must reject the generation and release partial construction");
+      require(rejected && budget.liveBytes() == 0, "an invalid unselected profile must reject the generation and release partial construction");
     }
 
     const ConfigurationSourceText source{

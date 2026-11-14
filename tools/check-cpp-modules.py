@@ -366,6 +366,8 @@ TOKEN_RE = re.compile(r'''
 ''', re.S | re.M | re.X)
 IDENTIFIER_RE = re.compile(r'[A-Za-z_]\w*')
 TYPE_KEYWORDS = {'class', 'struct', 'union', 'enum', 'concept'}
+# An attribute macro between the keyword and the name, as TBC_SHARED or TBC_HOT_PATH.
+ATTRIBUTE_MACRO_RE = re.compile(r'[A-Z][A-Z0-9]*_[A-Z0-9_]+')
 # What may follow the name a type declaration introduces; `<` would be a specialization.
 DECLARED_FOLLOWERS = {'{', ';', ':', 'final', '='}
 FUNCTION_QUALIFIERS = {'const', 'noexcept', 'override', 'final', 'mutable', 'volatile', '&'}
@@ -421,7 +423,7 @@ def declared_type(found, index):
         return None
 
     index += 1
-    while found[index] in ('class', 'struct', 'alignas', '['):
+    while found[index] in ('class', 'struct', 'alignas', '[') or ATTRIBUTE_MACRO_RE.fullmatch(found[index]) and IDENTIFIER_RE.fullmatch(found[index + 1]):
         if found[index] == '[':
             index = skip_balanced(found, index, '[', ']')
         elif found[index] == 'alignas':

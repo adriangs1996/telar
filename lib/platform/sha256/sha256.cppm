@@ -11,20 +11,10 @@ export {
 
     class Sha256 {
     public:
-      inline Sha256() noexcept {
-        SHA256_Init(&context_);
-      }
+      Sha256() noexcept;
 
-      inline void update(std::string_view bytes) noexcept {
-        SHA256_Update(&context_, bytes.data(), bytes.size());
-      }
-
-      inline std::array<std::uint8_t, SHA256_DIGEST_LENGTH> finish() noexcept {
-        std::array<std::uint8_t, SHA256_DIGEST_LENGTH> digest;
-
-        SHA256_Final(digest.data(), &context_);
-        return digest;
-      }
+      void update(std::string_view bytes) noexcept;
+      std::array<std::uint8_t, SHA256_DIGEST_LENGTH> finish() noexcept;
 
     private:
       SHA256_CTX context_;

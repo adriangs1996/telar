@@ -1918,13 +1918,13 @@ export {
   namespace telar::runtime::traffic::control {
 
     template <Allocator Memory>
-    class TrustCommand {
+    class TrustCommand : public proxy_trust::TrustCommandRunner {
     public:
       inline explicit TrustCommand(Memory& memory, const std::atomic<bool>& cancelled) noexcept
           : memory_(memory),
             cancelled_(cancelled) {}
 
-      inline void run(std::span<const std::string_view> arguments) {
+      inline void run(std::span<const std::string_view> arguments) override {
         bool allowed = !arguments.empty() && arguments.front() == "/usr/bin/security";
 #if defined(__linux__)
         constexpr std::array executables{"/usr/bin/trust", "/usr/bin/install", "/usr/bin/rm", "/usr/sbin/update-ca-certificates"};

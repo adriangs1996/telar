@@ -20,8 +20,9 @@ namespace {
   using namespace telar::gui::test;
 
   std::vector<Byte> encoded(std::string_view markdown) {
-    SystemAllocator memory;
-    render::Document<SystemAllocator> document{memory};
+    SystemAllocator system;
+    telar::MemoryAdapter memory{system};
+    render::Document<telar::Memory> document{memory};
 
     require(render::markdown::render(markdown, document) == render::markdown::Error::none, "the fixture renders");
     std::vector<Byte> bytes(*render::encodedSize(document));

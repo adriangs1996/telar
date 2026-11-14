@@ -236,7 +236,9 @@ int main(int argc, char** argv) {
   try {
     SystemAllocator system;
     BudgetAllocator budget{system, 64 * 1024 * 1024};
-    SynchronizedAllocator memory{budget};
+    SynchronizedAllocator synchronized{budget};
+    MemoryAdapter adapter{synchronized};
+    TlsTestMemory& memory = adapter;
 
     {
       const bool tracing = argc == 3 && std::string_view{argv[1]} == "--trace";
@@ -253,7 +255,7 @@ int main(int argc, char** argv) {
         FileDescriptor directory{::open(argv[2], O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
 
         check(static_cast<bool>(directory));
-        auto authority = CertificateAuthority<decltype(memory)>::loadExisting(memory, library, directory.get(), AuthorityKind::system_trust);
+        auto authority = CertificateAuthority<TlsTestMemory>::loadExisting(memory, library, directory.get(), AuthorityKind::system_trust);
 
         check(authority.has_value());
         check(!authority->expiresWithin(proxy_trust::rotation_window + std::chrono::hours{24}));
@@ -266,7 +268,7 @@ int main(int argc, char** argv) {
         FileDescriptor directory{::open(argv[2], O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
 
         check(static_cast<bool>(directory));
-        auto authority = CertificateAuthority<decltype(memory)>::loadOrCreate(memory, library, directory.get(), AuthorityKind::private_local);
+        auto authority = CertificateAuthority<TlsTestMemory>::loadOrCreate(memory, library, directory.get(), AuthorityKind::private_local);
         auto leaf = authority.mint("validation.invalid");
         const PemDocument certificate{leaf.certificate.get()};
 

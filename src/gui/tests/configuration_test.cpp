@@ -73,23 +73,25 @@ namespace {
   Configuration read(ConfigurationExample example) {
     SystemAllocator system;
     constexpr std::size_t allocation_budget = std::size_t{8} * 1024 * 1024;
-    BudgetAllocator memory{system, allocation_budget};
+    BudgetAllocator budget{system, allocation_budget};
+    telar::MemoryAdapter adapter{budget};
+    telar::Memory& memory = adapter;
     Configuration result;
 
     {
-      telar::runtime::lua::Vm machine{memory};
+      telar::runtime::lua::Vm<telar::Memory> machine{memory};
 
       machine.execute(config_bootstrap, "@bootstrap.lua", 0);
       machine.execute(example.source, "@test.lua");
       // As a configuration generation reads it: validated by the library's reader first.
       const telar::runtime::lua::Value root{machine.state(), -1, "config"};
-      const auto values = telar::makeOwned<telar::runtime::config::RuntimeValues<decltype(memory)>>(memory, memory);
+      const auto values = telar::makeOwned<telar::runtime::config::RuntimeValues<telar::Memory>>(memory, memory);
 
       telar::runtime::config::SnapshotReader{memory, *values}.read(root, example.profile);
       result = ConfigurationReader::read(root, example.profile);
     }
 
-    if (memory.liveBytes() != 0) {
+    if (budget.liveBytes() != 0) {
       throw std::runtime_error{"Configuration VM leaked injected allocations"};
     }
 
@@ -112,7 +114,7 @@ namespace {
     const auto bound = read({.source = R"(return {api_version = 2, client = {prompt = {bindings = {{keys = "ctrl+j", action = "submit"}, {keys = "H", action = "line_start", mode = "normal"}}}}})", .profile = {}});
 
     require(bound.prompt.bindings.size() == 2 && bound.prompt.bindings[0].character == 'j' && bound.prompt.bindings[1].normal && bound.prompt.bindings[1].action == 8, "prompt bindings must be read with their action and mode");
-    constexpr auto invalid_sources = std::to_array<std::string_view>({R"(return {api_version = 2, client = {prompt = {mode = "fancy"}}})", R"(return {api_version = 2, client = {prompt = {max_lines = 0}}})", R"(return {api_version = 2, client = {prompt = {keymap = "helix"}}})", R"(return {api_version = 2, client = {prompt = {ambient = true}}})", R"(return {api_version = 2, client = {prompt = {bindings = {{keys = "ctrl+j", action = "explode"}}}}})"});
+    constexpr auto invalid_sources = std::to_array<std::string_view>({R"(return {api_version = 2, client = {prompt = {mode = "fancy"}}})", R"(return {api_version = 2, client = {prompt = {max_lines = 0}}})", R"(return {api_version = 2, client = {prompt = {keymap = "helix"}}})", R"(return {api_version = 2, client = {prompt = {skin = "neon"}}})", R"(return {api_version = 2, client = {prompt = {ambient = true}}})", R"(return {api_version = 2, client = {prompt = {bindings = {{keys = "ctrl+j", action = "explode"}}}}})"});
 
     for (const auto source : invalid_sources) {
       bool rejected = false;
@@ -241,7 +243,9 @@ namespace {
   void keymapProfilesAndCallbacks() {
     SystemAllocator system;
     constexpr std::size_t allocation_budget = std::size_t{8} * 1024 * 1024;
-    BudgetAllocator memory{system, allocation_budget};
+    BudgetAllocator budget{system, allocation_budget};
+    telar::MemoryAdapter adapter{budget};
+    telar::Memory& memory = adapter;
 
     {
       const ConfigurationSourceText source{
@@ -279,11 +283,13 @@ namespace {
       require(first.length == 2 && first.actions[0].kind == BindingActionKind::toggle_sidebar && first.actions[1].parameter == 0 && second.actions[1].parameter == 1, "callback closures must survive configuration loading and retain validated action order");
     }
 
-    require(memory.liveBytes() == 0, "retained configuration generations must release their VM through the injected allocator");
+    require(budget.liveBytes() == 0, "retained configuration generations must release their VM through the injected allocator");
   }
 
   void inputExpressions() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     const ConfigurationSourceText source{
         .source = R"(
     return {api_version = 2, client = {keybindings = {
@@ -312,7 +318,9 @@ namespace {
   }
 
   void invalidCallbacksAndRecovery() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     const ConfigurationSourceText source{
         .source = R"(
     return {api_version = 2, client = {keybindings = {

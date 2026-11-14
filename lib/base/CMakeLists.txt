@@ -3,7 +3,7 @@ include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/telar_editor.cmake")
 project(telar_base LANGUAGES CXX)
 include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/cpp_modules.cmake")
 
-add_library(telar-base STATIC)
+add_library(telar-base STATIC diagnostics/diagnostics.cpp text/text.cpp text/json/json.cpp memory/containers/containers.cpp memory/sensitive/sensitive.cpp)
 add_library(telar::base ALIAS telar-base)
 telar_modules(telar-base)
 target_compile_features(telar-base PUBLIC cxx_std_23)

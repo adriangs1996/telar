@@ -8,7 +8,7 @@ if(NOT TARGET telar-platform)
 endif()
 
 # Its own target, without zlib, so the CLI links it and not the native reader.
-add_library(telar-git-checkout STATIC)
+add_library(telar-git-checkout STATIC checkout.cpp)
 add_library(telar::git-checkout ALIAS telar-git-checkout)
 telar_modules(telar-git-checkout)
 target_link_libraries(telar-git-checkout PUBLIC telar::platform)

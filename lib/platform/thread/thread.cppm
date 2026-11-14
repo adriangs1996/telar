@@ -1,6 +1,5 @@
 module;
-#include <pthread.h>
-#include <unistd.h>
+#include "tbc/hot_path.hpp"
 
 export module telar.platform.thread;
 
@@ -13,9 +12,10 @@ export {
   namespace telar::runtime {
 
     // A thread running `body`, whose failure to start is the SystemError every other system call
-    // reports. Its owner joins it before anything the body touches goes away.
+    // reports. Its owner joins it before anything the body touches goes away. It stays in the
+    // interface because it is a template over the caller's body.
     template <typename Body>
-    inline std::jthread startThread(const char* operation, Body&& body) {
+    TBC_HOT_PATH inline std::jthread startThread(const char* operation, Body&& body) {
       try {
         return std::jthread{std::forward<Body>(body)};
       } catch (const std::system_error& error) {
@@ -30,16 +30,7 @@ export {
 export {
   namespace telar::runtime {
 
-    inline std::uint64_t currentThreadId() noexcept {
-#if defined(__APPLE__)
-      std::uint64_t identity = 0;
-
-      ::pthread_threadid_np(nullptr, &identity);
-      return identity;
-#else
-      return static_cast<std::uint64_t>(::gettid());
-#endif
-    }
+    std::uint64_t currentThreadId() noexcept;
 
   }
 }
@@ -48,13 +39,7 @@ export {
 export {
   namespace telar::runtime {
 
-    inline void setThreadName(const char* name) noexcept {
-#if defined(__APPLE__)
-      ::pthread_setname_np(name);
-#else
-      ::pthread_setname_np(::pthread_self(), name);
-#endif
-    }
+    void setThreadName(const char* name) noexcept;
 
   }
 }

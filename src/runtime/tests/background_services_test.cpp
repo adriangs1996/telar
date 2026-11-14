@@ -37,8 +37,8 @@ import telar.wire.vocabulary;
 using namespace telar;
 using namespace telar::runtime;
 
-static void testJson(SystemAllocator& memory) {
-  String<SystemAllocator> text{AllocatorRef<char, SystemAllocator>{memory}};
+static void testJson(ConcurrentMemory& memory) {
+  String<ConcurrentMemory> text{AllocatorRef<char, ConcurrentMemory>{memory}};
   const auto object = JsonValue::parse(R"({"type":"response","data":{"text":"printf \"caf\u00e9\" \ud83d\ude42"},"success":true})");
 
   check(object.field("type")->equals("response") && object.field("success")->boolean());
@@ -46,7 +46,7 @@ static void testJson(SystemAllocator& memory) {
   check(text == "printf \"café\" 🙂");
   text.clear();
   appendJsonText(text, "\t\n\"\\");
-  String<SystemAllocator> decoded{AllocatorRef<char, SystemAllocator>{memory}};
+  String<ConcurrentMemory> decoded{AllocatorRef<char, ConcurrentMemory>{memory}};
 
   JsonValue::parse(text).string(decoded);
   check(decoded == "\t\n\"\\");
@@ -64,12 +64,12 @@ static void testJson(SystemAllocator& memory) {
 }
 
 struct MalformedJsonService {
-  void process(std::span<const Byte>, EncodedReply<SystemAllocator>&) {
+  void process(std::span<const Byte>, EncodedReply<ConcurrentMemory>&) {
     JsonValue::parse("{");
   }
 };
 
-static void testJsonFailure(SystemAllocator& memory) {
+static void testJsonFailure(ConcurrentMemory& memory) {
   MalformedJsonService service;
   RequestWorker worker{memory, service};
 
@@ -92,7 +92,7 @@ static void testJsonFailure(SystemAllocator& memory) {
   check(received && !worker.pending());
 }
 
-static void testSuggestions(SystemAllocator& memory) {
+static void testSuggestions(ConcurrentMemory& memory) {
   constexpr std::string_view mock = "while IFS= read -r line; do case \"$line\" in *get_last_assistant_text*) printf '%s\\n' '{\"type\":\"response\",\"command\":\"get_last_assistant_text\",\"success\":true,\"data\":{\"text\":\"```sh\\ngit status\\n```\"}}';; *) printf '%s\\n' '{\"type\":\"response\",\"command\":\"prompt\",\"success\":true}' '{\"type\":\"agent_settled\"}';; esac; done";
   const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", mock};
   SuggestionEngine engine{memory, SuggestionOptions{.arguments = arguments, .timeout = std::chrono::milliseconds{1000}}};
@@ -118,7 +118,7 @@ static void testSuggestions(SystemAllocator& memory) {
   check(Codec::decode<CommandSuggestion>(reply.payload(), storage).status == SuggestionStatus::timeout);
 }
 
-static void testPaths(SystemAllocator& memory) {
+static void testPaths(ConcurrentMemory& memory) {
   std::array<char, 64> directory{};
 
   std::strcpy(directory.data(), "/tmp/telar-path-test.XXXXXX");
@@ -161,7 +161,7 @@ static void testPaths(SystemAllocator& memory) {
   std::filesystem::remove_all(root);
 }
 
-static void testMissingEditor(SystemAllocator& memory) {
+static void testMissingEditor(ConcurrentMemory& memory) {
   RemoteEditor editor{memory};
   EncodedReply reply{memory};
 
@@ -172,7 +172,7 @@ static void testMissingEditor(SystemAllocator& memory) {
   check(Codec::decode<EditorOpened>(reply.payload(), storage).outcome == EditorOutcome::missing);
 }
 
-static void testNeovimEditor(SystemAllocator& memory) {
+static void testNeovimEditor(ConcurrentMemory& memory) {
   try {
     Command locate{memory, Launch{.cwd = "/tmp", .arguments = std::array<std::string_view, 2>{"nvim", "--version"}}, CommandPurpose::administration};
     CommandOutput version{memory, 16384};
@@ -249,7 +249,9 @@ static void testNeovimEditor(SystemAllocator& memory) {
 }
 
 void testBackgroundServices() {
-  SystemAllocator memory;
+  SystemAllocator system;
+  MemoryAdapter adapter{system};
+  ConcurrentMemory& memory = adapter;
 
   testJson(memory);
   testJsonFailure(memory);

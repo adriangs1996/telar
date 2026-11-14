@@ -88,9 +88,9 @@ namespace {
     require(rejected, "invalid package must be rejected");
   }
 
-  void snapshotCopies(BudgetAllocator<SystemAllocator>& memory, const plugins::Package& package) {
+  void snapshotCopies(telar::Memory& memory, const plugins::Package& package) {
     const telar::runtime::TemporaryDirectory snapshot{"/tmp/telar-gui-plugin-copy-XXXXXX"};
-    plugins::PackageCopyStorage<BudgetAllocator<SystemAllocator>, Inspector> copier{memory};
+    plugins::PackageCopyStorage<telar::Memory, Inspector> copier{memory};
     const auto copied = copier.copy(package, snapshot.descriptor(), snapshot.path());
 
     require(copied.digest == package.digest && copied.root.view() != package.root.view(), "snapshot must retain package bytes in a separate root");
@@ -144,7 +144,7 @@ namespace {
 #endif
   }
 
-  void packages(BudgetAllocator<SystemAllocator>& memory) {
+  void packages(telar::Memory& memory) {
     const QTemporaryDir temporary;
 
     require(temporary.isValid(), "owned package directory must exist");
@@ -159,7 +159,7 @@ namespace {
     const auto directory = temporary.path().toUtf8();
     const std::string_view path{encoded.constData(), static_cast<std::size_t>(encoded.size())};
     const auto inspected = Inspector::inspect(memory, path);
-    String<BudgetAllocator<SystemAllocator>> digest{AllocatorRef<char, BudgetAllocator<SystemAllocator>>{memory}};
+    String<telar::Memory> digest{AllocatorRef<char, telar::Memory>{memory}};
 
     telar::runtime::appendLowerHex(digest, inspected.digest);
     require(digest == "38c0b5755058a4a00997332cc04a7678549e25854bcd8acf9e7080f81a9622b7", "package digest must match the independent SHA-256 framing control");
@@ -174,7 +174,7 @@ namespace {
       specs[0].path.assign("missing-disabled");
       specs[0].enabled = false;
       specs[1].path.assign("example");
-      const plugins::PackageRegistryStorage<BudgetAllocator<SystemAllocator>, Inspector> registry{memory, {directory.constData(), static_cast<std::size_t>(directory.size())}, specs};
+      const plugins::PackageRegistryStorage<telar::Memory, Inspector> registry{memory, {directory.constData(), static_cast<std::size_t>(directory.size())}, specs};
 
       require(registry.packages().size() == 1 && registry.packages().front().digest == inspected.digest, "configured registry must skip disabled packages and resolve relative paths");
 #ifdef __APPLE__
@@ -184,7 +184,7 @@ namespace {
 #endif
       specs[0] = specs[1];
       rejects([&] {
-        const plugins::PackageRegistryStorage<BudgetAllocator<SystemAllocator>, Inspector> duplicate{memory, {directory.constData(), static_cast<std::size_t>(directory.size())}, specs};
+        const plugins::PackageRegistryStorage<telar::Memory, Inspector> duplicate{memory, {directory.constData(), static_cast<std::size_t>(directory.size())}, specs};
       });
     }
 
@@ -217,8 +217,9 @@ int main() {
     SystemAllocator system;
     constexpr std::size_t budget = std::size_t{32} * 1024 * 1024;
     BudgetAllocator memory{system, budget};
+    telar::MemoryAdapter adapter{memory};
 
-    packages(memory);
+    packages(adapter);
     test::pluginCatalogCases();
     test::pluginEffectCases();
     require(memory.liveBytes() == 0, "package inspection must release every injected allocation");

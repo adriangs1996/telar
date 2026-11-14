@@ -1,4 +1,5 @@
 module;
+#include "tbc/hot_path.hpp"
 #include "telar_render/sequence.hpp"
 
 export module telar.render.document;
@@ -126,8 +127,10 @@ export namespace telar::render {
     friend constexpr bool operator==(const Block&, const Block&) = default;
   };
 
+  // A data type: its accessors are one-line views that a client reads for every block it draws,
+  // and it takes whatever allocator the client's documents live in, so it stays here whole.
   template <Allocator Memory>
-  struct Document {
+  struct TBC_HOT_PATH Document {
     explicit Document(Memory& memory)
         : blocks(AllocatorRef<Block, Memory>{memory}),
           cells(AllocatorRef<Cell, Memory>{memory}),
@@ -189,86 +192,34 @@ export namespace telar::render {
   };
 
   namespace detail {
-    inline std::uint64_t encodedSize(std::uint64_t blocks, std::uint64_t cells, std::uint64_t runs, std::uint64_t text) noexcept {
+    constexpr std::uint64_t encodedSize(std::uint64_t blocks, std::uint64_t cells, std::uint64_t runs, std::uint64_t text) noexcept {
       return header_bytes + blocks * block_bytes + cells * cell_bytes + runs * run_bytes + text;
     }
 
-    class Writer {
-    public:
-      explicit Writer(std::span<std::uint8_t> output) noexcept
-          : output_(output) {}
-
-      void u8(std::uint8_t value) noexcept {
-        output_[at_++] = value;
-      }
-
-      void u16(std::uint16_t value) noexcept {
-        u8(static_cast<std::uint8_t>(value));
-        u8(static_cast<std::uint8_t>(value >> 8));
-      }
-
-      void u32(std::uint32_t value) noexcept {
-        u16(static_cast<std::uint16_t>(value));
-        u16(static_cast<std::uint16_t>(value >> 16));
-      }
-
-      void bytes(std::string_view value) noexcept {
-        std::memcpy(output_.data() + at_, value.data(), value.size());
-        at_ += value.size();
-      }
-
-    private:
-      std::span<std::uint8_t> output_;
-      std::size_t at_ = 0;
+    // The counts an encoding's header promises.
+    struct Counts {
+      std::uint32_t blocks = 0;
+      std::uint32_t cells = 0;
+      std::uint32_t runs = 0;
+      std::uint32_t text = 0;
     };
 
-    // Reads records the caller already proved to be in bounds.
-    class Reader {
-    public:
-      explicit Reader(std::span<const std::uint8_t> input) noexcept
-          : input_(input) {}
+    void encode(std::span<const Block> blocks, std::span<const Cell> cells, std::span<const Run> runs, std::string_view text, std::span<std::uint8_t> output) noexcept;
 
-      std::uint8_t u8() noexcept {
-        return input_[at_++];
-      }
-
-      std::uint16_t u16() noexcept {
-        const auto low = u8();
-
-        return static_cast<std::uint16_t>(low | (u8() << 8));
-      }
-
-      std::uint32_t u32() noexcept {
-        const auto low = u16();
-
-        return low | (static_cast<std::uint32_t>(u16()) << 16);
-      }
-
-      [[nodiscard]] std::size_t at() const noexcept {
-        return at_;
-      }
-
-    private:
-      std::span<const std::uint8_t> input_;
-      std::size_t at_ = 0;
-    };
-
-    inline bool within(std::uint32_t first, std::uint32_t count, std::size_t size) noexcept {
-      return first <= size && count <= size - first;
-    }
-
-    inline bool boundary(std::string_view text, std::size_t at) noexcept {
-      return at == text.size() || (static_cast<std::uint8_t>(text[at]) & 0xc0) != 0x80;
-    }
-
-    inline bool validSpan(std::string_view text, Span span) noexcept {
-      return within(span.offset, span.size, text.size()) && boundary(text, span.offset) && boundary(text, span.offset + span.size);
-    }
+    // Each step of decode, in its order: the header and the text first, then each kind of record
+    // as its vector is sized, and last what a block refers to.
+    [[nodiscard]] DecodeError decodeHeader(std::span<const std::uint8_t> input, Counts& counts) noexcept;
+    [[nodiscard]] DecodeError decodeBlocks(std::span<const std::uint8_t> input, std::span<Block> blocks) noexcept;
+    [[nodiscard]] DecodeError decodeCells(std::span<const std::uint8_t> input, const Counts& counts, std::span<Cell> cells) noexcept;
+    [[nodiscard]] DecodeError decodeRuns(std::span<const std::uint8_t> input, const Counts& counts, std::span<Run> runs) noexcept;
+    [[nodiscard]] DecodeError checkBlocks(std::span<const std::uint8_t> input, const Counts& counts, std::span<const Block> blocks) noexcept;
+    [[nodiscard]] std::string_view text(std::span<const std::uint8_t> input, const Counts& counts) noexcept;
   }
 
   // The encoded size, or nothing when the document exceeds max_document_bytes.
+  // Generic over the caller's allocator, as Document is; the work is detail's.
   template <Allocator Memory>
-  [[nodiscard]] std::optional<std::size_t> encodedSize(const Document<Memory>& document) noexcept {
+  [[nodiscard]] TBC_HOT_PATH std::optional<std::size_t> encodedSize(const Document<Memory>& document) noexcept {
     const auto size = detail::encodedSize(document.blocks.size(), document.cells.size(), document.runs.size(), document.text.size());
 
     return size <= max_document_bytes ? std::optional<std::size_t>{static_cast<std::size_t>(size)} : std::nullopt;
@@ -276,249 +227,58 @@ export namespace telar::render {
 
   // Writes exactly encodedSize(document) bytes into output.
   template <Allocator Memory>
-  void encode(const Document<Memory>& document, std::span<std::uint8_t> output) noexcept {
-    detail::Writer writer{output};
-
-    for (const auto byte : magic) {
-      writer.u8(byte);
-    }
-
-    writer.u16(version);
-    writer.u16(0);
-    writer.u32(static_cast<std::uint32_t>(document.blocks.size()));
-    writer.u32(static_cast<std::uint32_t>(document.cells.size()));
-    writer.u32(static_cast<std::uint32_t>(document.runs.size()));
-    writer.u32(static_cast<std::uint32_t>(document.text.size()));
-    for (const auto& block : document.blocks) {
-      writer.u8(static_cast<std::uint8_t>(block.kind));
-      writer.u8(block.level);
-      writer.u8(block.quote);
-      writer.u8(block.list);
-      writer.u8(static_cast<std::uint8_t>(block.marker));
-      writer.u8(static_cast<std::uint8_t>(block.callout));
-      writer.u8(block.flags);
-      writer.u8(0);
-      writer.u16(block.columns);
-      writer.u16(0);
-      writer.u32(block.number);
-      writer.u32(block.first);
-      writer.u32(block.count);
-      writer.u32(block.info.offset);
-      writer.u32(block.info.size);
-    }
-
-    for (const auto& cell : document.cells) {
-      writer.u32(cell.first);
-      writer.u32(cell.count);
-      writer.u8(static_cast<std::uint8_t>(cell.align));
-      writer.u8(0);
-      writer.u16(0);
-    }
-
-    for (const auto& run : document.runs) {
-      writer.u32(run.text.offset);
-      writer.u32(run.text.size);
-      writer.u32(run.target.offset);
-      writer.u32(run.target.size);
-      writer.u16(run.style);
-      writer.u16(0);
-    }
-
-    writer.bytes(document.text);
+  TBC_HOT_PATH void encode(const Document<Memory>& document, std::span<std::uint8_t> output) noexcept {
+    detail::encode(document.blocks, document.cells, document.runs, document.text, output);
   }
 
   // Appends the OSC that begins document, or returns false when the document
   // exceeds max_document_bytes. On the primary screen, appendEnd closes it.
   template <Allocator Memory, Allocator Output>
-  [[nodiscard]] bool appendSequence(const Document<Memory>& document, String<Output>& output) {
-    const auto size = encodedSize(document);
-    if (!size) {
-      return false;
-    }
-
-    Vector<std::uint8_t, Output> bytes(*size, AllocatorRef<std::uint8_t, Output>{output.get_allocator().memory()});
-
-    encode(document, bytes);
-    const auto encoded = (*size + 2) / 3 * 4;
-
-    output.append("\x1b]");
-    output.append(sequence_begin);
-    const auto body = output.size();
-
-    output.resize(body + encoded);
-    static_cast<void>(runtime::base64::encode(bytes, std::span<char>{output.data() + body, encoded}));
-    output.append("\x1b\\");
-    return true;
-  }
+  [[nodiscard]] bool appendSequence(const Document<Memory>& document, String<Output>& output);
 
   // Appends the OSC that ends the zone a document stands for.
   template <Allocator Output>
-  void appendEnd(String<Output>& output) {
-    output.append("\x1b]");
-    output.append(sequence_end);
-    output.append("\x1b\\");
-  }
+  void appendEnd(String<Output>& output);
+
+  extern template bool appendSequence(const Document<Memory>& document, String<Memory>& output);
+  extern template void appendEnd(String<Memory>& output);
 
   // Replaces document with the one input encodes. Input comes from any program
   // in a pane, so every count, range, enumeration and reserved byte is checked;
-  // on failure the document is left empty.
+  // on failure the document is left empty. Generic over the caller's allocator,
+  // it only sizes the document; detail reads and checks each part.
   template <Allocator Memory>
-  [[nodiscard]] DecodeError decode(std::span<const std::uint8_t> input, Document<Memory>& document) {
+  [[nodiscard]] TBC_HOT_PATH DecodeError decode(std::span<const std::uint8_t> input, Document<Memory>& document) {
     document.clear();
-    if (input.size() > max_document_bytes) {
-      return DecodeError::too_large;
+    detail::Counts counts;
+
+    auto error = detail::decodeHeader(input, counts);
+    if (error != DecodeError::none) {
+      return error;
     }
 
-    if (input.size() < header_bytes) {
-      return DecodeError::truncated;
+    document.blocks.resize(counts.blocks);
+    error = detail::decodeBlocks(input, document.blocks);
+    if (error == DecodeError::none) {
+      document.cells.resize(counts.cells);
+      error = detail::decodeCells(input, counts, document.cells);
     }
 
-    if (!std::equal(magic.begin(), magic.end(), input.begin())) {
-      return DecodeError::magic;
+    if (error == DecodeError::none) {
+      document.runs.resize(counts.runs);
+      error = detail::decodeRuns(input, counts, document.runs);
     }
 
-    detail::Reader reader{input.subspan(magic.size())};
-    if (reader.u16() != version) {
-      return DecodeError::version;
+    if (error == DecodeError::none) {
+      error = detail::checkBlocks(input, counts, document.blocks);
     }
 
-    if (reader.u16() != 0) {
-      return DecodeError::malformed;
-    }
-
-    const auto block_count = reader.u32();
-    const auto cell_count = reader.u32();
-    const auto run_count = reader.u32();
-    const auto text_size = reader.u32();
-    // Each count is below 2^32 and each record below 2^6 bytes, so the sum cannot wrap.
-    const auto expected = detail::encodedSize(block_count, cell_count, run_count, text_size);
-    if (expected < input.size()) {
-      return DecodeError::malformed;
-    }
-
-    if (expected > input.size()) {
-      return DecodeError::truncated;
-    }
-
-    const auto text_bytes = input.last(text_size);
-    const std::string_view text{reinterpret_cast<const char*>(text_bytes.data()), text_bytes.size()};
-    if (inspectUtf8(text) != Utf8Validation::valid) {
-      return DecodeError::utf8;
-    }
-
-    const auto fail = [&](DecodeError error) {
+    if (error != DecodeError::none) {
       document.clear();
       return error;
-    };
-
-    detail::Reader records{input.subspan(header_bytes)};
-
-    document.blocks.resize(block_count);
-    for (auto& block : document.blocks) {
-      const auto kind = records.u8();
-
-      block.level = records.u8();
-      block.quote = records.u8();
-      block.list = records.u8();
-      const auto marker = records.u8();
-      const auto callout = records.u8();
-
-      block.flags = records.u8();
-      const auto reserved = records.u8();
-
-      block.columns = records.u16();
-      const auto reserved_columns = records.u16();
-
-      block.number = records.u32();
-      block.first = records.u32();
-      block.count = records.u32();
-      block.info.offset = records.u32();
-      block.info.size = records.u32();
-      if (kind >= static_cast<std::uint8_t>(BlockKind::count) || marker >= static_cast<std::uint8_t>(Marker::count) || callout >= static_cast<std::uint8_t>(Callout::count) || (block.flags & ~Block::known_flags) != 0 || reserved != 0 || reserved_columns != 0 || block.quote > max_nesting || block.list > max_nesting) {
-        return fail(DecodeError::malformed);
-      }
-
-      block.kind = static_cast<BlockKind>(kind);
-      block.marker = static_cast<Marker>(marker);
-      block.callout = static_cast<Callout>(callout);
     }
 
-    document.cells.resize(cell_count);
-    for (auto& cell : document.cells) {
-      cell.first = records.u32();
-      cell.count = records.u32();
-      const auto align = records.u8();
-      const auto reserved = records.u8();
-      if (align >= static_cast<std::uint8_t>(Align::count) || reserved != 0 || records.u16() != 0) {
-        return fail(DecodeError::malformed);
-      }
-
-      cell.align = static_cast<Align>(align);
-      if (!detail::within(cell.first, cell.count, run_count)) {
-        return fail(DecodeError::range);
-      }
-    }
-
-    document.runs.resize(run_count);
-    for (auto& run : document.runs) {
-      run.text.offset = records.u32();
-      run.text.size = records.u32();
-      run.target.offset = records.u32();
-      run.target.size = records.u32();
-      run.style = records.u16();
-      if (records.u16() != 0 || (run.style & ~style::all) != 0) {
-        return fail(DecodeError::malformed);
-      }
-
-      if (!detail::validSpan(text, run.text) || !detail::validSpan(text, run.target)) {
-        return fail(DecodeError::range);
-      }
-    }
-
-    for (const auto& block : document.blocks) {
-      const bool shape = [&] {
-        switch (block.kind) {
-        case BlockKind::paragraph:
-          return block.level == 0 && block.columns == 0;
-        case BlockKind::heading:
-          return block.level >= 1 && block.level <= max_heading && block.columns == 0;
-        case BlockKind::code:
-        case BlockKind::html:
-          return block.level == 0 && block.columns == 0;
-        case BlockKind::rule:
-          return block.level == 0 && block.columns == 0 && block.first == 0 && block.count == 0;
-        case BlockKind::table:
-          return block.level == 0 && block.columns != 0 && block.count % block.columns == 0;
-        case BlockKind::count:
-          break;
-        }
-
-        return false;
-      }();
-      if (!shape) {
-        return fail(DecodeError::malformed);
-      }
-
-      const bool in_range = [&] {
-        switch (block.kind) {
-        case BlockKind::paragraph:
-        case BlockKind::heading:
-          return detail::within(block.first, block.count, run_count);
-        case BlockKind::table:
-          return detail::within(block.first, block.count, cell_count);
-        case BlockKind::code:
-        case BlockKind::html:
-          return detail::validSpan(text, Span{block.first, block.count});
-        default:
-          return true;
-        }
-      }();
-      if (!in_range || !detail::validSpan(text, block.info)) {
-        return fail(DecodeError::range);
-      }
-    }
-
-    document.text.assign(text);
+    document.text.assign(detail::text(input, counts));
     return DecodeError::none;
   }
 

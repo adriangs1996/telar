@@ -19,12 +19,13 @@ import telar.git;
 namespace {
 
   namespace git = telar::git;
-  using Reader = git::StatusReader<telar::SystemAllocator>;
+  using Reader = git::StatusReader<telar::Memory>;
 
   int failures = 0;
   int checks = 0;
   std::string root;
-  telar::SystemAllocator system_memory;
+  telar::SystemAllocator system_allocator;
+  telar::MemoryAdapter system_memory{system_allocator};
 
   void check(bool condition, std::string_view what, std::source_location location = std::source_location::current()) {
     ++checks;
@@ -885,7 +886,8 @@ namespace {
   }
 
   int timeReads(const char* directory) {
-    telar::SystemAllocator memory;
+    telar::SystemAllocator allocator;
+    telar::MemoryAdapter memory{allocator};
     Reader reader{memory};
     timeval start{};
     timeval end{};

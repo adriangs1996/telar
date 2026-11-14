@@ -467,11 +467,11 @@ static void redirectControl() {
   });
 }
 
-struct TrustCommands {
+struct TrustCommands : proxy_trust::TrustCommandRunner {
   std::vector<std::vector<std::string>> calls;
   bool fail = false;
 
-  void run(std::span<const std::string_view> arguments) {
+  void run(std::span<const std::string_view> arguments) override {
     if (fail) {
       throw SystemError{"Fixture certificate-store rejection", EACCES};
     }
@@ -553,7 +553,9 @@ int main() {
   codec();
   SystemAllocator system;
   BudgetAllocator budget{system, 256 * 1024 * 1024};
-  TlsTestMemory memory{budget};
+  SynchronizedAllocator synchronized{budget};
+  MemoryAdapter adapter{synchronized};
+  TlsTestMemory& memory = adapter;
 
   captureControl(memory);
   destinationAuthorization(memory);

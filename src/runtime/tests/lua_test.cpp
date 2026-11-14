@@ -33,7 +33,8 @@ static void testLuaFailures(SystemAllocator& system) {
   BudgetAllocator memory{system, 32 * 1024 * 1024};
 
   {
-    lua::Vm vm{memory};
+    MemoryAdapter erased{memory};
+    lua::Vm<Memory> vm{erased};
     bool destroyed = false;
     bool failed = false;
 
@@ -74,7 +75,8 @@ static void testLuaFailures(SystemAllocator& system) {
   bool failed = false;
 
   try {
-    lua::Vm vm{insufficient};
+    MemoryAdapter erased{insufficient};
+    lua::Vm<Memory> vm{erased};
   } catch (const std::bad_alloc&) {
     failed = true;
   }
@@ -86,10 +88,11 @@ static void testLuaJson(SystemAllocator& system) {
   BudgetAllocator memory{system, 32 * 1024 * 1024};
 
   {
-    lua::Vm vm{memory};
+    MemoryAdapter erased{memory};
+    lua::Vm<Memory> vm{erased};
 
     lua_newtable(vm.state());
-    lua::JsonDecoder<decltype(memory)>::install(vm.state(), memory);
+    lua::JsonDecoder<Memory>::install(vm.state(), erased);
     lua_setglobal(vm.state(), "telar");
     vm.execute(R"lua(
 local decode = telar.json.decode
@@ -120,7 +123,8 @@ void testLua() {
   SystemAllocator system;
 
   {
-    lua::Vm vm{system};
+    MemoryAdapter erased{system};
+    lua::Vm<Memory> vm{erased};
 
     // The sandbox keeps only the clock of the os library.
     vm.execute(R"lua(

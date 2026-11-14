@@ -13,10 +13,15 @@ Each process imports only the modules it uses:
 - `telar.config.runtime`: the `runtime` section. Agents, proxy, history filters,
   terminal control and `RuntimeValues`.
 - `telar.config.client`: the `client` section. Commands, actions, components,
-  bindings and the prompt.
+  bindings and the prompt, and the elements and items its functions return.
 - `telar.config.gui`: the `gui` and `theme` sections.
 - `telar.config.snapshot`: `SnapshotReader`, which validates a whole configuration
-  with the other four.
+  with the other four, and `ConfigurationLayers`, which reads what a client
+  applies from the root and the selected profile.
+
+Each section has one typed reader, which validates what it reads. `SnapshotReader`
+validates with those readers and the GUI maps what they read; it never reads the
+Lua tables itself.
 
 ```cmake
 add_subdirectory("${TELAR_ROOT}/lib/config" "${CMAKE_CURRENT_BINARY_DIR}/telar-config")

@@ -295,10 +295,12 @@ int main(int argc, char** argv) {
   try {
     SystemAllocator system;
     constexpr std::size_t allocation_budget = std::size_t{8} * 1024 * 1024;
-    BudgetAllocator memory{system, allocation_budget};
+    BudgetAllocator budget{system, allocation_budget};
+    telar::MemoryAdapter adapter{budget};
+    telar::Memory& memory = adapter;
 
     lifecycle(memory);
-    require(memory.liveBytes() == 0, "pick teardown must release every injected allocation");
+    require(budget.liveBytes() == 0, "pick teardown must release every injected allocation");
     std::cout << "Pick filtering, literal selection, cancellation, failures and stale ownership passed\n";
   } catch (const std::exception& error) {
     std::cerr << error.what() << '\n';

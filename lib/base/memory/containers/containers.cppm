@@ -1,4 +1,5 @@
 module;
+#include "tbc/hot_path.hpp"
 #include "tbc/view.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include <cassert>
@@ -19,7 +20,7 @@ export {
   namespace telar::runtime {
 
     template <Allocator Memory>
-    class ByteQueue {
+    class TBC_HOT_PATH ByteQueue {
     public:
       inline explicit ByteQueue(Memory& memory, std::size_t limit) noexcept
           : memory_(memory),
@@ -182,33 +183,14 @@ export {
     template <Allocator Memory>
     class ByteStorage {
     public:
-      inline explicit ByteStorage(tbc::view<Memory&, tbc::lt::a> memory, std::size_t size)
-          : memory_(memory),
-            size_(size) {
-        if (size != 0) {
-          storage_ = static_cast<std::uint8_t*>(memory.allocate(size, alignof(std::uint8_t)));
-          if (storage_ == nullptr) {
-            throw std::bad_alloc{};
-          }
-        }
-      }
-
-      inline ~ByteStorage() {
-        if (storage_ != nullptr) {
-          memory_.deallocate(storage_, size_, alignof(std::uint8_t));
-        }
-      }
+      explicit ByteStorage(tbc::view<Memory&, tbc::lt::a> memory, std::size_t size);
+      ~ByteStorage();
 
       ByteStorage(const ByteStorage&) = delete;
       ByteStorage& operator=(const ByteStorage&) = delete;
 
-      inline std::span<std::uint8_t> bytes() noexcept {
-        return {storage_, size_};
-      }
-
-      inline std::span<const std::uint8_t> bytes() const noexcept {
-        return {storage_, size_};
-      }
+      std::span<std::uint8_t> bytes() noexcept;
+      std::span<const std::uint8_t> bytes() const noexcept;
 
     private:
       tbc::view<Memory&, tbc::lt::a> memory_;
@@ -219,12 +201,22 @@ export {
   }
 }
 
+// Instantiated in the implementation unit for the erased interfaces and for base's own allocators,
+// which the tests of the services that use them still pass.
+namespace telar::runtime {
+  extern template class ByteStorage<Memory>;
+  extern template class ByteStorage<ConcurrentMemory>;
+  extern template class ByteStorage<SystemAllocator>;
+  extern template class ByteStorage<BudgetAllocator<SystemAllocator>>;
+}
+
 // Interface: telar_base/memory/c_allocation_blocks.cppm
 export {
   namespace telar {
 
+    // The allocation hook of the C libraries, over the composed allocators that hand it their memory.
     template <Allocator Memory>
-    class TBC_SHARED CAllocationBlocks {
+    class TBC_SHARED TBC_HOT_PATH CAllocationBlocks {
     public:
       inline explicit CAllocationBlocks(Memory& memory) noexcept
           : memory_(memory) {}
@@ -315,10 +307,11 @@ export {
       keep_newest,
     };
 
-    // A bounded channel between threads, as a Rust channel is: both ends share it.
+    // A bounded channel between threads, as a Rust channel is: both ends share it. Generic over the
+    // value it carries, so no implementation unit can instantiate it for every importer.
     template <typename Value, std::size_t Capacity, ChannelPolicy policy = ChannelPolicy::best_effort>
       requires std::is_nothrow_move_constructible_v<Value> && std::is_nothrow_swappable_v<Value>
-    class TBC_SHARED DropChannel {
+    class TBC_SHARED TBC_HOT_PATH DropChannel {
       static_assert(Capacity != 0);
 
     public:
@@ -429,54 +422,17 @@ export {
       using Byte = std::uint8_t;
 
     public:
-      inline explicit RetainedStream(Memory& memory, std::size_t capacity)
-          : memory_(memory),
-            capacity_(capacity) {
-        bytes_ = static_cast<Byte*>(memory_.allocate(capacity_, alignof(Byte)));
-        if (bytes_ == nullptr) {
-          throw std::bad_alloc{};
-        }
-      }
-
-      inline ~RetainedStream() {
-        memory_.deallocate(bytes_, capacity_, alignof(Byte));
-      }
+      explicit RetainedStream(Memory& memory, std::size_t capacity);
+      ~RetainedStream();
 
       RetainedStream(const RetainedStream&) = delete;
       RetainedStream& operator=(const RetainedStream&) = delete;
 
-      inline void append(std::span<const Byte> bytes) noexcept {
-        total_ += bytes.size();
-        bytes = bytes.last(std::min(bytes.size(), capacity_));
-        const auto start = static_cast<std::size_t>((total_ - bytes.size()) % capacity_);
-        const auto first = std::min(bytes.size(), capacity_ - start);
-
-        std::memcpy(bytes_ + start, bytes.data(), first);
-        std::memcpy(bytes_, bytes.data() + first, bytes.size() - first);
-      }
-
+      void append(std::span<const Byte> bytes) noexcept;
       // The bytes copied into the caller's destination, not a view of the stream.
-      inline tbc::view<std::span<const Byte>, tbc::lt::a> read(std::uint64_t offset, tbc::view<std::span<Byte>, tbc::lt::a> destination) const noexcept {
-        if (offset < retainedOffset() || offset >= total_) {
-          return {};
-        }
-
-        const auto count = static_cast<std::size_t>(std::min<std::uint64_t>(destination.size(), total_ - offset));
-        const auto start = static_cast<std::size_t>(offset % capacity_);
-        const auto first = std::min(count, capacity_ - start);
-
-        std::memcpy(destination.data(), bytes_ + start, first);
-        std::memcpy(destination.data() + first, bytes_, count - first);
-        return destination.first(count);
-      }
-
-      inline std::uint64_t total() const noexcept {
-        return total_;
-      }
-
-      inline std::uint64_t retainedOffset() const noexcept {
-        return total_ - std::min<std::uint64_t>(total_, capacity_);
-      }
+      tbc::view<std::span<const Byte>, tbc::lt::a> read(std::uint64_t offset, tbc::view<std::span<Byte>, tbc::lt::a> destination) const noexcept;
+      std::uint64_t total() const noexcept;
+      std::uint64_t retainedOffset() const noexcept;
 
     private:
       Memory& memory_;
@@ -491,12 +447,21 @@ export {
   }
 }
 
+// Instantiated in the implementation unit for the erased interfaces and for base's own allocators,
+// which the tests of the services that use them still pass.
+namespace telar::runtime {
+  extern template class RetainedStream<Memory>;
+  extern template class RetainedStream<ConcurrentMemory>;
+  extern template class RetainedStream<SystemAllocator>;
+  extern template class RetainedStream<BudgetAllocator<SystemAllocator>>;
+}
+
 // Interface: telar_base/memory/slot_indexes.cppm
 export {
   namespace telar::runtime {
 
     template <std::size_t Capacity>
-    class SlotIndexes {
+    class TBC_HOT_PATH SlotIndexes {
       static_assert(Capacity > 0);
 
     public:

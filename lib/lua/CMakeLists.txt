@@ -23,7 +23,7 @@ add_library(telar-lua-vm STATIC ${TELAR_LUA_SOURCES})
 target_include_directories(telar-lua-vm SYSTEM PUBLIC "${TELAR_LUA_SOURCE_DIR}")
 target_compile_definitions(telar-lua-vm PRIVATE LUA_USE_POSIX)
 
-add_library(telar-lua STATIC)
+add_library(telar-lua STATIC lua.cpp)
 add_library(telar::lua ALIAS telar-lua)
 telar_modules(telar-lua)
 target_include_directories(telar-lua PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")

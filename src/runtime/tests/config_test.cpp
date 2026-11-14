@@ -116,7 +116,9 @@ static void testCommandTabRegistry() {
 void testConfig() {
   testCommandTabRegistry();
   SystemAllocator system;
-  BudgetAllocator memory{system, 32 * 1024 * 1024};
+  BudgetAllocator budget{system, 32 * 1024 * 1024};
+  MemoryAdapter adapter{budget};
+  Memory& memory = adapter;
   std::array<char, 64> temporary{};
 
   std::strcpy(temporary.data(), "/tmp/telar-config-test-XXXXXX");
@@ -171,7 +173,7 @@ return telar.config {
     check(values.manifests.find(AgentProvider::claude)->working.matches("custom working phrase"));
   }
 
-  check(memory.liveBytes() == 0);
+  check(budget.liveBytes() == 0);
 
   for (const auto source : {
            "return {api_version=2, profiles={unused={runtime={history={output='invalid'}}}}}",
@@ -203,7 +205,7 @@ return telar.config {
       rejected = true;
     }
 
-    check(rejected && memory.liveBytes() == 0);
+    check(rejected && budget.liveBytes() == 0);
   }
 
   writeConfig(path, R"lua(
@@ -232,7 +234,7 @@ return {api_version=2, runtime={agents=agents}}
     check(overflow != reaches.end() && overflow->requested == 10);
   }
 
-  check(memory.liveBytes() == 0);
+  check(budget.liveBytes() == 0);
 
   writeConfig(path, R"lua(
 local plugins={}
@@ -256,7 +258,23 @@ return {api_version=2,plugins=plugins,profiles={selected={plugins={{path='replac
   }
 
   options.profile = {};
-  check(memory.liveBytes() == 0);
+  check(budget.liveBytes() == 0);
+
+  // The runtime reads client.prompt.skin with the reader the GUI applies, so both accept the same skins.
+  for (const auto& [skin, accepted] : {std::pair{std::string_view{"glass"}, true}, std::pair{std::string_view{"neon"}, false}}) {
+    writeConfig(path, std::format("return {{api_version=2, client={{prompt={{mode='telar', skin='{}'}}}}}}", skin));
+    bool rejected = false;
+
+    try {
+      config::RuntimeValues values{memory};
+
+      config::Loader{memory, values}.load(options, ProcessEnvironment{});
+    } catch (const std::exception&) {
+      rejected = true;
+    }
+
+    check(rejected != accepted && budget.liveBytes() == 0);
+  }
 
   const auto outside = root + ".lua";
 
@@ -273,7 +291,7 @@ return {api_version=2,plugins=plugins,profiles={selected={plugins={{path='replac
     rejected = std::string_view{error.what()}.contains("escapes");
   }
 
-  check(rejected && memory.liveBytes() == 0);
+  check(rejected && budget.liveBytes() == 0);
   std::filesystem::remove(outside);
   std::filesystem::remove_all(root);
 }

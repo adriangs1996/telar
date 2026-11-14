@@ -233,13 +233,58 @@ export {
   }
 }
 
-// Interface: telar_config/theme_validator.cppm
+// Interface: telar_config/theme_reader.cppm
 export {
   namespace telar::runtime::config {
 
-    class ThemeValidator {
+    // The names `theme.colors` and `theme.syntax` admit, in the order of the GUI's palette and
+    // syntax roles.
+    inline constexpr std::array<std::string_view, 16> theme_color_names{"accent", "panel_bg", "surface0", "surface1", "surface_dim", "overlay0", "overlay1", "text", "subtext0", "mauve", "green", "yellow", "red", "blue", "teal", "peach"};
+    inline constexpr std::array<std::string_view, 15> theme_syntax_names{"plain", "keyword", "string", "number", "comment", "constant", "builtin_constant", "builtin", "func", "type", "parameter", "property", "namespace", "operator", "punctuation"};
+
+    using ThemeRgb = std::array<std::uint8_t, 3>;
+
+    // A theme color as configured: an RGB value, or the terminal's own color for "default".
+    struct ThemeColor {
+      std::optional<ThemeRgb> rgb;
+    };
+
+    // One theme table as read: the preset it starts from and each value it sets.
+    struct ThemeSettings {
+      struct Terminal {
+        static constexpr std::size_t palette_size = 16;
+        std::optional<ThemeRgb> foreground;
+        std::optional<ThemeRgb> background;
+        std::optional<ThemeRgb> cursor_color;
+        std::optional<ThemeRgb> cursor_text_color;
+        std::optional<std::array<ThemeRgb, palette_size>> palette;
+      };
+
+      struct Syntax {
+        std::optional<ThemeColor> color;
+        std::optional<bool> italic;
+        std::optional<bool> bold;
+      };
+
+      // The preset's canonical name, which outlives the configuration.
+      std::optional<std::string_view> preset;
+      std::array<std::optional<ThemeColor>, theme_color_names.size()> colors{};
+      Terminal terminal;
+      std::array<std::optional<Syntax>, theme_syntax_names.size()> syntax{};
+    };
+
+    // `theme` (or its alias `client.theme`) and the `client.appearance` variants of a
+    // configuration or a profile.
+    struct ThemeSelectionSettings {
+      std::optional<ThemeSettings> base;
+      std::optional<ThemeSettings> light;
+      std::optional<ThemeSettings> dark;
+    };
+
+    class ThemeReader {
     public:
-      inline static void selection(const lua::Value& configuration) {
+      [[nodiscard]] inline static ThemeSelectionSettings selection(const lua::Value& configuration) {
+        ThemeSelectionSettings result;
         const auto theme = configuration.field("theme");
         const auto client = configuration.field("client");
         if (client.is(LUA_TTABLE)) {
@@ -248,129 +293,183 @@ export {
             theme.fail("cannot be combined with client.theme");
           }
 
-          validate(alias);
-          appearance(client.field("appearance"));
+          result.base = read(alias);
+          appearance(client.field("appearance"), result);
         }
 
-        validate(theme);
+        if (theme.present()) {
+          result.base = read(theme);
+        }
+
+        return result;
       }
 
-      inline static void validate(const lua::Value& theme) {
+      [[nodiscard]] inline static std::optional<ThemeSettings> read(const lua::Value& theme) {
         if (!theme.present()) {
-          return;
+          return std::nullopt;
         }
 
+        ThemeSettings result;
+
         if (theme.is(LUA_TSTRING)) {
-          preset(theme);
-          return;
+          result.preset = preset(theme);
+          return result;
         }
 
         theme.onlyFields({"base", "colors", "terminal", "syntax"});
-        preset(theme.field("base"));
-        colors(theme.field("colors"));
-        terminal(theme.field("terminal"));
-        syntax(theme.field("syntax"));
+        result.preset = preset(theme.field("base"));
+        colors(theme.field("colors"), result.colors);
+        terminal(theme.field("terminal"), result.terminal);
+        syntax(theme.field("syntax"), result.syntax);
+        return result;
       }
 
     private:
-      inline static void preset(const lua::Value& value) {
+      // Each name a theme may give, with the preset it selects.
+      static constexpr std::array<std::pair<std::string_view, std::string_view>, 18> presets{{
+          {"cybervenom", "cybervenom"},
+          {"shade", "shade"},
+          {"vesper", "vesper"},
+          {"catppuccin", "catppuccin"},
+          {"catppuccin-mocha", "catppuccin"},
+          {"mocha", "catppuccin"},
+          {"tokyo-night", "tokyo-night"},
+          {"tokyonight", "tokyo-night"},
+          {"tokyo_night", "tokyo-night"},
+          {"pierre-dark", "pierre-dark"},
+          {"pierre-dark-soft", "pierre-dark-soft"},
+          {"kanagawa", "kanagawa"},
+          {"kanagawa-wave", "kanagawa"},
+          {"kanagawa_wave", "kanagawa"},
+          {"kanagawa-dragon", "kanagawa-dragon"},
+          {"kanagawa_dragon", "kanagawa-dragon"},
+          {"terminal", "terminal"},
+          {"default", "terminal"},
+      }};
+
+      inline static std::optional<std::string_view> preset(const lua::Value& value) {
         if (!value.present()) {
-          return;
+          return std::nullopt;
         }
 
         const auto text = value.string();
-        constexpr std::string_view names[]{"cybervenom", "shade", "vesper", "catppuccin", "catppuccin-mocha", "mocha", "tokyo-night", "tokyonight", "tokyo_night", "pierre-dark", "pierre-dark-soft", "kanagawa", "kanagawa-wave", "kanagawa_wave", "kanagawa-dragon", "kanagawa_dragon", "terminal", "default"};
-        const bool found = std::ranges::any_of(names, [&](std::string_view name) {
-          return text.size() == name.size() && std::equal(text.begin(), text.end(), name.begin(), [](char left, char right) {
+        const auto* const found = std::ranges::find_if(presets, [&](const auto& preset) {
+          return text.size() == preset.first.size() && std::equal(text.begin(), text.end(), preset.first.begin(), [](char left, char right) {
             return asciiLower(left) == right;
           });
         });
-        if (!found) {
+        if (found == presets.end()) {
           value.fail("names an unknown theme");
         }
+
+        return found->second;
       }
 
-      inline static void color(const lua::Value& value, bool allow_default) {
-        if (!value.present()) {
-          return;
-        }
-
+      inline static ThemeColor color(const lua::Value& value, bool allow_default) {
         const auto text = value.string();
         if (allow_default && text == "default") {
-          return;
+          return {};
         }
 
         if (text.size() != 7 || text.front() != '#') {
           value.fail("must be an RGB hexadecimal color");
         }
 
-        if (!std::ranges::all_of(text.substr(1), [](char byte) {
-              return (byte >= '0' && byte <= '9') || (asciiLower(byte) >= 'a' && asciiLower(byte) <= 'f');
-            })) {
-          value.fail("contains an invalid hexadecimal digit");
+        ThemeRgb rgb{};
+
+        for (std::size_t channel = 0; channel < rgb.size(); ++channel) {
+          for (const auto digit : text.substr(1 + (channel * 2), 2)) {
+            const auto lower = asciiLower(digit);
+            const bool decimal = lower >= '0' && lower <= '9';
+            if (!decimal && (lower < 'a' || lower > 'f')) {
+              value.fail("contains an invalid hexadecimal digit");
+            }
+
+            rgb[channel] = static_cast<std::uint8_t>((rgb[channel] << 4) | (decimal ? lower - '0' : lower - 'a' + 10));
+          }
         }
+
+        return {.rgb = rgb};
       }
 
-      inline static void colors(const lua::Value& table) {
+      inline static std::optional<ThemeRgb> rgb(const lua::Value& value) {
+        return value.present() ? color(value, false).rgb : std::nullopt;
+      }
+
+      inline static void colors(const lua::Value& table, std::array<std::optional<ThemeColor>, theme_color_names.size()>& colors) {
         if (!table.present()) {
           return;
         }
 
-        table.onlyFields({"accent", "panel_bg", "surface0", "surface1", "surface_dim", "overlay0", "overlay1", "text", "subtext0", "mauve", "green", "yellow", "red", "blue", "teal", "peach"});
-        table.eachField([](std::string_view, const lua::Value& value) {
-          color(value, true);
-        });
+        table.onlyFields(theme_color_names);
+        for (std::size_t index = 0; index < theme_color_names.size(); ++index) {
+          const auto value = table.field(theme_color_names[index].data());
+          if (value.present()) {
+            colors[index] = color(value, true);
+          }
+        }
       }
 
-      inline static void terminal(const lua::Value& table) {
+      inline static void terminal(const lua::Value& table, ThemeSettings::Terminal& terminal) {
         if (!table.present()) {
           return;
         }
 
         table.onlyFields({"foreground", "background", "palette", "cursor_color", "cursor_text_color"});
-        for (const auto* name : {"foreground", "background", "cursor_color", "cursor_text_color"}) {
-          color(table.field(name), false);
+        terminal.foreground = rgb(table.field("foreground"));
+        terminal.background = rgb(table.field("background"));
+        terminal.cursor_color = rgb(table.field("cursor_color"));
+        terminal.cursor_text_color = rgb(table.field("cursor_text_color"));
+        const auto palette = table.field("palette");
+        if (!palette.present()) {
+          return;
         }
 
-        const auto palette = table.field("palette");
-        if (palette.present()) {
-          constexpr std::size_t palette_size = 16;
-          if (palette.arraySize() != palette_size) {
-            palette.fail("must contain 16 RGB colors");
-          }
+        if (palette.arraySize() != ThemeSettings::Terminal::palette_size) {
+          palette.fail("must contain 16 RGB colors");
+        }
 
-          for (std::size_t index = 1; index <= palette_size; ++index) {
-            const auto entry = palette.element(static_cast<lua_Integer>(index));
+        auto& entries = terminal.palette.emplace();
 
-            entry.string();
-            color(entry, false);
-          }
+        for (std::size_t index = 0; index < entries.size(); ++index) {
+          entries[index] = *color(palette.element(static_cast<lua_Integer>(index) + 1), false).rgb;
         }
       }
 
-      inline static void syntax(const lua::Value& table) {
+      inline static void syntax(const lua::Value& table, std::array<std::optional<ThemeSettings::Syntax>, theme_syntax_names.size()>& syntax) {
         if (!table.present()) {
           return;
         }
 
-        table.onlyFields({"plain", "keyword", "string", "number", "comment", "constant", "builtin_constant", "builtin", "func", "type", "parameter", "property", "namespace", "operator", "punctuation"});
-        table.eachField([](std::string_view, const lua::Value& style) {
+        table.onlyFields(theme_syntax_names);
+        for (std::size_t index = 0; index < theme_syntax_names.size(); ++index) {
+          const auto style = table.field(theme_syntax_names[index].data());
+          if (!style.present()) {
+            continue;
+          }
+
+          auto& result = syntax[index].emplace();
+
           if (style.is(LUA_TTABLE)) {
             style.onlyFields({"fg", "italic", "bold"});
-            color(style.field("fg"), true);
-            style.field("italic").boolean(false);
-            style.field("bold").boolean(false);
+            const auto foreground = style.field("fg");
+            if (foreground.present()) {
+              result.color = color(foreground, true);
+            }
+
+            result.italic = optionalBoolean(style.field("italic"));
+            result.bold = optionalBoolean(style.field("bold"));
           } else {
-            color(style, true);
+            result.color = color(style, true);
           }
-        });
+        }
       }
 
-      inline static void appearance(const lua::Value& table) {
+      inline static void appearance(const lua::Value& table, ThemeSelectionSettings& selection) {
         if (table.present()) {
           table.onlyFields({"light", "dark"});
-          validate(table.field("light"));
-          validate(table.field("dark"));
+          selection.light = read(table.field("light"));
+          selection.dark = read(table.field("dark"));
         }
       }
     };

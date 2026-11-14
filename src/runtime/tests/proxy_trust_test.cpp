@@ -41,9 +41,9 @@ using namespace telar::runtime;
 
 namespace {
 
-  class TrustCommands {
+  class TrustCommands : public proxy_trust::TrustCommandRunner {
   public:
-    void run(std::span<const std::string_view> arguments) {
+    void run(std::span<const std::string_view> arguments) override {
       std::vector<std::string> command;
 
       for (const auto argument : arguments) {
