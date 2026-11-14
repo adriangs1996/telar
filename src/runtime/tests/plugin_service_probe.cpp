@@ -58,7 +58,9 @@ int main(int argc, char** argv) {
 
     SystemAllocator system;
     BudgetAllocator budget{system, 512 * 1024 * 1024};
-    SynchronizedAllocator memory{budget};
+    SynchronizedAllocator synchronized{budget};
+    MemoryAdapter adapter{synchronized};
+    ConcurrentMemory& memory = adapter;
 #if TELAR_DEBUG
     trace::Session tracing{memory, argc == 4 ? argv[3] : nullptr};
 #endif
