@@ -28,13 +28,21 @@
   "lib/base/memory/sensitive/sensitive.cppm": [
     "tbc/view.hpp"
   ],
+  "lib/base/text/json/json.cpp": [
+    "tbc/view.hpp"
+  ],
   "lib/base/text/json/json.cppm": [
+    "tbc/hot_path.hpp",
+    "tbc/view.hpp"
+  ],
+  "lib/base/text/text.cpp": [
+    "<arpa/inet.h>",
     "tbc/view.hpp"
   ],
   "lib/base/text/text.cppm": [
-    "<arpa/inet.h>",
     "<cassert>",
     "<netinet/in.h>",
+    "tbc/hot_path.hpp",
     "tbc/view.hpp",
     "telar_base/program_identity.hpp",
     "telar_base/text/base64.hpp",
