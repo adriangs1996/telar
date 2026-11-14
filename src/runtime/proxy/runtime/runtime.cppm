@@ -63,7 +63,7 @@ import std;
 export import telar.runtime.exchange_capture.exchange;
 export import telar.runtime.exchange_capture.pipeline;
 export import telar.runtime.exchange_capture.producer;
-export import telar.runtime.http1.intercepted_relay;
+export import telar.runtime.proxy.intercepted_relay;
 export import telar.runtime.proxy.http2_capture_streams;
 export import telar.runtime.platform.stream_read_buffer;
 export import telar.runtime.platform.event_loop;

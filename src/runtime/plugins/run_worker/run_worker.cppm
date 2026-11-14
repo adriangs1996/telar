@@ -34,7 +34,7 @@ export module telar.runtime.plugins.run_worker;
 
 import std;
 
-export import telar.runtime.plugins.protocol;
+export import telar.runtime.vocabulary.traffic;
 export import telar.lua;
 
 export import telar.runtime.http.message;

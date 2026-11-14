@@ -14,7 +14,7 @@ export module telar.runtime.traffic.control_protocol;
 
 import std;
 
-export import telar.runtime.plugins.protocol;
+export import telar.runtime.vocabulary.frames;
 export import telar.runtime.http.message;
 
 export import telar.runtime.redirect.direction;

@@ -477,7 +477,7 @@ void pointerNestedReferenceDead(pointers::relay& out) {
 
 // CASE: pointer.aggregate_reference_member
 // PAIR: pointer.aggregate_reference
-// SOURCE: src/runtime/http1/intercepted_relay/intercepted_relay.cppm :: Http1InterceptedRelay::Sink
+// SOURCE: src/runtime/proxy/intercepted_relay/intercepted_relay.cppm :: Http1InterceptedRelay::Sink
 // STATUS: implemented
 // CONTRACT: An aggregate's reference member is bound to its initializer, so operations through it reach the referent.
 // SCENARIO: Clearing the string through the member invalidates an earlier view of it.
@@ -492,7 +492,7 @@ void pointerAggregateReferenceMember(std::string& text) {
 
 // CASE: pointer.aggregate_reference_read
 // PAIR: pointer.aggregate_reference
-// SOURCE: src/runtime/http1/intercepted_relay/intercepted_relay.cppm :: Http1InterceptedRelay::Sink
+// SOURCE: src/runtime/proxy/intercepted_relay/intercepted_relay.cppm :: Http1InterceptedRelay::Sink
 // STATUS: implemented
 // CONTRACT: An aggregate's reference member is bound to its initializer, so operations through it reach the referent.
 // SCENARIO: The view is read before the string is cleared through the member; accept.

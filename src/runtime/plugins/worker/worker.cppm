@@ -33,7 +33,7 @@ export module telar.runtime.plugins.worker;
 import std;
 
 export import telar.runtime.platform.stream_read_buffer;
-export import telar.runtime.plugins.protocol;
+export import telar.runtime.vocabulary.traffic;
 export import telar.base.memory.allocators;
 export import telar.base.memory.containers;
 export import telar.base.memory.sensitive;

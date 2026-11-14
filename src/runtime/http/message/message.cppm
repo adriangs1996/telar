@@ -24,7 +24,7 @@ export import telar.base.text.utf8;
 export import telar.base.memory.allocators;
 export import telar.base.memory.sensitive;
 
-export import telar.runtime.plugins.protocol;
+export import telar.runtime.vocabulary.frames;
 
 export import telar.runtime.http1.head;
 import telar.base.diagnostics;

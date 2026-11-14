@@ -152,7 +152,6 @@ telar.runtime.history.store
 telar.runtime.http.content
 telar.runtime.http.message
 telar.runtime.http1.head
-telar.runtime.http1.intercepted_relay
 telar.runtime.http2.direction_observer
 telar.runtime.http2.frame_reader
 telar.runtime.metrics.host_sampler
@@ -177,13 +176,13 @@ telar.runtime.platform.session_host
 telar.runtime.platform.signals
 telar.runtime.platform.stream_read_buffer
 telar.runtime.platform.system_certificates
-telar.runtime.plugins.protocol
 telar.runtime.plugins.run_worker
 telar.runtime.plugins.service
 telar.runtime.plugins.tap_configuration
 telar.runtime.plugins.worker
 telar.runtime.proxy.authenticate
 telar.runtime.proxy.http2_capture_streams
+telar.runtime.proxy.intercepted_relay
 telar.runtime.proxy.relay_direction
 telar.runtime.proxy.runtime
 telar.runtime.redirect.direction
@@ -217,6 +216,8 @@ telar.runtime.traffic.control_backend
 telar.runtime.traffic.control_protocol
 telar.runtime.traffic.tap
 telar.runtime.transport.connection
+telar.runtime.vocabulary.frames
+telar.runtime.vocabulary.traffic
 telar.runtime.workspaces.git_probe
 telar.runtime.worktrees.git_probe
 telar.tls

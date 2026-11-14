@@ -16,7 +16,6 @@ module;
 #include <cstdlib>
 #include <dirent.h>
 #include <fcntl.h>
-#include <limits.h>
 #include <openssl/sha.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -40,6 +39,7 @@ export import telar.platform.paths;
 export import telar.runtime.platform.stream_read_buffer;
 
 export import telar.runtime.exchange_capture.exchange;
+export import telar.runtime.vocabulary.traffic;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.platform.primitives;
@@ -431,46 +431,6 @@ export {
     private:
       std::array<std::chrono::milliseconds, Limits::restarts> restarts_;
       std::size_t count_ = 0;
-    };
-
-  }
-}
-
-// Interface: plugins/service_spec.cppm
-export {
-  namespace telar::runtime::plugins {
-
-    struct ServiceSpec {
-      std::uint8_t package_index = 0;
-      std::uint64_t plugin_id = 0;
-      PackageDigest digest{};
-      std::uint64_t generation = 0;
-      FixedText<PackageLimits::id_bytes> name;
-      FixedText<PATH_MAX> entry;
-      Capabilities declared;
-      Capabilities granted;
-      std::shared_ptr<std::atomic<bool>> permission;
-
-      inline bool allows(Capability capability) const noexcept {
-        return authorized() && declared.contains(capability) && granted.contains(capability);
-      }
-
-      inline bool authorized() const noexcept {
-        return !permission || permission->load(std::memory_order_acquire);
-      }
-
-      // The capabilities that give a plugin the traffic bridge.
-      static constexpr std::array traffic_capabilities{Capability::traffic_observe, Capability::traffic_intercept, Capability::traffic_control, Capability::traffic_record};
-
-      inline bool traffic() const noexcept {
-        return std::ranges::any_of(traffic_capabilities, [&](Capability capability) {
-          return allows(capability);
-        });
-      }
-
-      inline bool stillAuthorized(Capabilities current) const noexcept {
-        return current.containsAll(declared.intersection(granted));
-      }
     };
 
   }

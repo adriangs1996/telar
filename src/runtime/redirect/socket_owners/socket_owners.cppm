@@ -152,9 +152,8 @@ export import telar.base.memory.sensitive;
 
 #if defined(__APPLE__)
 
-export import telar.runtime.traffic.capture;
-
 export import telar.runtime.redirect.record;
+import telar.runtime.vocabulary.traffic;
 
 #endif
 
