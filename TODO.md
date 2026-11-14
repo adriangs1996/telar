@@ -557,7 +557,7 @@ Para cada módulo: `extern template class X<Memory>;` en la interfaz, la instanc
 
 | ID | Módulos | Depende de |
 |---|---|---|
-| [ ] P9.1 | `telar.wire.*` | P3.5, P8.1, P2.4 |
+| [x] P9.1 | `telar.wire.*` | P3.5, P8.1, P2.4 |
 | [x] P9.2 | `telar.platform.*` | P4.1c, P8.1, P2.4 |
 | [x] P9.3 | `telar.base.text.*`, `telar.base.diagnostics` | P4.3c, P6.6, P8.1, P2.4 |
 | [x] P9.4 | `telar.base.memory.*` (solo lo que no es primitiva) | P4.2c, P6.6, P8.1, P2.4 |
@@ -585,6 +585,7 @@ Para cada módulo: `extern template class X<Memory>;` en la interfaz, la instanc
   - **P9.6** (`bfdd7ce9b`): salen de la allowlist `telar.git`, `.git.checkout`, `.lua`, `.machines`, `.plugins`, `.render.*` y `.tls`. Sin benchmarks de hot path medidos.
   - **P9.9** (`4b8fb5020`): los 19 módulos de la CLI. `RepositoryCapture`, `HistoryPathVisitor` y `WorktreeFilter` pasan a clases abstractas pequeñas, como `Memory`. Se quedan en la interfaz con `TBC_HOT_PATH` las plantillas sobre los mensajes del protocolo y, por el lifetime checker, `Object`, `Payload`, `displayText`, `toolEvent`, `questionEvent` y `RuntimeConnection::receive` (27 errores fuera de línea; P2.5 y P9.12).
   - Al integrar el lote, el test de skin de P4.5 lee `budget.liveBytes()` porque `memory` ya es un `Memory&`.
+  - **P9.1** (`863fffc92`): las interfaces `telar.wire.*` solo llevan `using`; las 106 funciones no plantilla con cuerpo de sus cabeceras textuales (validadores, codecs de mensajes poco frecuentes, `validate*`, printers de debug) pasan a un `.cpp` por dominio, definidas en `extern "C++"`. Se quedan inline con `TBC_HOT_PATH` los codecs por campo, celda o frame (`byteView`, `textView`, celdas, frames, `CellReader`, `PaneRows::reader`). `wire` puede importar `tbc`, y los checks de cuerpos y lifetimes del runtime incluyen ya `lib/wire`. Pasan los 50 tests del runtime y CLI y los 138 de la GUI.
 
 ### [x] P9.12 · Sacar los cuerpos que se quedaron dentro por el checker
 - **Depende de:** P2.5 y las P9.1–P9.9 integradas.
