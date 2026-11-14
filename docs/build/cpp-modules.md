@@ -182,7 +182,9 @@ El inventario contiene 300 headers vivos, cada uno con su motivo concreto:
   textual. `assertions.hpp` sigue textual porque también la usan unidades `.mm`. Ningún importador llama a los
   `static inline` de libghostty-vt: no cruzan un import, así que `telar.ghostty.vt`
   captura los modos que construye `ghostty_mode_new` y `telar.ghostty.wuffs` llama a
-  los ayudantes del códec PNG desde su `.cpp`.
+  los ayudantes del códec PNG desde su `.cpp`. La captura repite el empaquetado de
+  bits de `ghostty_mode_new`; `ghostty-modes-tests` compara cada modo de
+  `TELAR_GHOSTTY_MODES` (en `telar_ghostty/vt.hpp`) con la función real.
 
 ### Un módulo dueño por header textual
 

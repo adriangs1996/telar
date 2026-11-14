@@ -248,24 +248,14 @@ export {
 // Macros do not cross an import. Each constant the tree reads is captured while the header still
 // defines it, undefined, and exported under its own name. A mode packs its number in bits 0-14
 // and the ANSI flag in bit 15 through ghostty_mode_new, a static inline function that no constant
-// expression can call, so the capture packs the same bits.
+// expression can call, so the capture packs the same bits. The captures are exported too: an
+// importer that also includes the header, as the ghostty-modes test does, can only reach them,
+// and that test checks each against the header's ghostty_mode_new.
 #define TELAR_GHOSTTY_CONSTANTS(X) \
   X(GHOSTTY_MODS_CTRL)             \
-  X(GHOSTTY_MODE_ALT_SCROLL)       \
-  X(GHOSTTY_MODE_ANY_MOUSE)        \
-  X(GHOSTTY_MODE_BRACKETED_PASTE)  \
-  X(GHOSTTY_MODE_BUTTON_MOUSE)     \
-  X(GHOSTTY_MODE_DECCKM)           \
-  X(GHOSTTY_MODE_FOCUS_EVENT)      \
-  X(GHOSTTY_MODE_KEYPAD_KEYS)      \
-  X(GHOSTTY_MODE_NORMAL_MOUSE)     \
-  X(GHOSTTY_MODE_REVERSE_COLORS)   \
-  X(GHOSTTY_MODE_SGR_MOUSE)        \
-  X(GHOSTTY_MODE_SGR_PIXELS_MOUSE) \
-  X(GHOSTTY_MODE_SYNC_OUTPUT)      \
-  X(GHOSTTY_MODE_X10_MOUSE)
+  TELAR_GHOSTTY_MODES(X)
 
-namespace telar::ghostty::captured {
+export namespace telar::ghostty::captured {
 
 #define ghostty_mode_new(value, ansi) static_cast<GhosttyMode>(((value) & 0x7FFF) | (static_cast<std::uint16_t>(ansi) << 15))
 #define TELAR_GHOSTTY_CAPTURE(name) inline constexpr auto name##_ = name;
