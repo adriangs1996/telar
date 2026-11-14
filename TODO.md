@@ -530,18 +530,22 @@ Cada tarea empieza localizando todas las copias, crea un módulo con una interfa
 #### [ ] P6.8b · `src/gui/qt` y `background_effect`
 - **Qué hace:** los tres adaptadores de Qt y `background_effect.cppm` dejan sus includes estándar y de proyecto; lo que Qt obligue a dejar textual se justifica en el commit y se resuelve aquí, no con una entrada en la allowlist.
 
-#### [ ] P6.8c · Frontera SIMD de los tests (pendiente de decidir)
+#### [ ] P6.8c · Frontera SIMD de los tests
 - **Problema:** el camino más caliente del terminal (`styled_ordinary.hpp`, `ascii_ordinary.hpp`, `graphics_base64_wide.hpp`) tiene dos implementaciones por macro de arquitectura, y los tests escalares las recompilan quitando esas macros. Una cabecera textual no puede importar, así que todo lo que alcanzan (unos 258 includes) se queda textual.
 - **Opción 1, dos funciones con nombre en el módulo dueño:** `telar.runtime.terminal.control` compila siempre la escalar y la vectorial (`scanOrdinaryScalar`, `scanOrdinaryVector`) en su unidad de implementación; el parser de producción llama a la vectorial dentro de esa misma unidad, así que sigue insertada, y el módulo exporta las dos solo para los tests. Se quita el `-U__AARCH64EL__ -U__SSE2__`. Riesgo bajo de rendimiento si el bucle y su llamador comparten unidad (hay que medirlo con el PTY y los gráficos); la escalar entra en el binario, salvo que el enlazador la quite por no tener llamadores; el test escalar prueba la función que usaría otra arquitectura en vez del mismo texto recompilado.
 - **Opción 2, plantilla sobre la ISA:** `Scanner<Isa::scalar>`, `Scanner<Isa::neon>`, `Scanner<Isa::sse2>` con `extern template` de las instancias de cada plataforma; producción usa la nativa y los tests instancian las dos. Riesgo: si el llamador está en otra unidad, el bucle queda detrás de una llamada por lote (barata, pero se mide según la regla de Ejecución); más código de plantilla que la opción 1.
 - **Opción 3, frontera mínima:** solo las tres cabeceras SIMD siguen textuales, con `<arm_neon.h>`/`<emmintrin.h>` y tipos triviales, y el resto (unos 250 includes) pasa a módulos. Riesgo de rendimiento nulo, pero deja unas 10 entradas en la allowlist, contra la decisión de vaciarla.
-- **Tamaño:** con la 1 o la 2 se reparte por bloques al despacharla (`terminal/control`, `graphics`, y las cabeceras de `lib/` con sus dueños).
+- **Decidido (Adrian): opción 1.** Dos funciones con nombre en el módulo dueño; producción llama a la vectorial dentro de la misma unidad y los tests llaman a las dos; se quita `-U__AARCH64EL__ -U__SSE2__`.
+- **Rendimiento:** es el camino más caliente del terminal. Se mide en Release con el PTY y los gráficos, con control A′ e instrucciones por operación como en P9.13d, y se comprueba en el desensamblado que el bucle vectorial sigue insertado en el parser.
+- **Tamaño:** se reparte por bloques al despacharla: primero `terminal/control` con las cabeceras SIMD, después `graphics` y las cabeceras de `lib/` con sus dueños.
 
-#### [ ] P6.8d · `lib/tbc` (pendiente de decidir)
+#### [ ] P6.8d · `lib/tbc` fuera del alcance de la regla 5
 - **Problema:** el linter es una herramienta de Clang: usa el AST, los matchers y los diagnósticos de Clang/LLVM, que llegan por cabecera (79 includes). Los 29 estándar y los 12 propios se pueden resolver en cualquiera de las opciones.
 - **Opción 1, módulo dueño `telar.tbc.clang`:** incluye las cabeceras de Clang/LLVM en su fragmento global y exporta lo que usa el linter. Riesgo medio-alto: las macros (`AST_MATCHER`, `LLVM_DEBUG`, las de `DiagnosticIDs`) no cruzan un import y hay que sustituirlas, como con ghostty; el BMI de las cabeceras del AST es grande y lento y puede tropezar con fallos de módulos de Clang; la LLVM de la toolchain se compiló sin módulos, y mezclar `import std` con sus cabeceras en una misma unidad puede dar conflictos de redeclaración.
 - **Opción 2, unidades de cabecera de C++20** (`import <clang/AST/RecursiveASTVisitor.h>;`): las macros sí cruzan. Riesgo alto: CMake no construye unidades de cabecera y habría que montarlas a mano.
 - **Opción 3, el linter fuera del alcance de la regla 5:** `check-cpp-modules.py` deja de escanear `lib/tbc` por ser una herramienta de build, no código de telar. Riesgo nulo, pero es una excepción con otro nombre, contra la decisión de vaciar la allowlist.
+- **Decidido (Adrian): opción 3.** `check-cpp-modules.py` deja de escanear `lib/tbc` por ser una herramienta de build. El motivo se documenta donde el checker define su alcance, y el alcance se declara por directorio, no con una lista de ficheros. Los 29 includes estándar y los 12 propios del linter se quedan como están.
+- **Hecho cuando:** `lib/tbc` sale del alcance declarado del checker, sus 120 entradas salen de la allowlist y `check-cpp-modules.py` pasa.
 
 ---
 
