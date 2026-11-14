@@ -1,8 +1,6 @@
 module;
 #include "telar_config/terminal/control/policy.hpp"
 
-#include <ghostty/vt/unicode.h>
-
 export module telar.config.runtime;
 
 import std;
@@ -21,11 +19,6 @@ export namespace telar::runtime::control {
   using telar::runtime::control::Access;
   using telar::runtime::control::ColorFormat;
   using telar::runtime::control::Policy;
-}
-
-// libghostty-vt's Unicode header too: importers measure text with the terminal's width tables.
-export {
-  using ::ghostty_unicode_grapheme_width;
 }
 
 // Interface: telar_config/agents/evidence.cppm

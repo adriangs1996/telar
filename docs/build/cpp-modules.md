@@ -206,7 +206,8 @@ import), y el dueño exporta sus nombres con `using ::…;`. Las macros que leen
 importadores se capturan como constantes y las que tienen forma de función pasan a
 funciones del `.cpp` del dueño, como en `telar.sys.*`. Lua es de `telar.lua`,
 FreeType y HarfBuzz de `telar.gui.fonts.face` y `<ghostty/vt/unicode.h>` de
-`telar.config.runtime`. Los headers solo de dueño (`telar.wire.pane_io`,
+`telar.ghostty.unicode`, en `lib/ghostty`, por debajo de `telar.config` y de la
+GUI. Los headers solo de dueño (`telar.wire.pane_io`,
 `telar.runtime.terminal.control`, …) no contienen código propio: son el punto de
 entrada de esos headers para los módulos.
 

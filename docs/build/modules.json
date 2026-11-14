@@ -6,6 +6,7 @@
     ],
     "sys": [],
     "vocabulary": [],
+    "ghostty": [],
     "shell": [],
     "ebnf": [
       "tbc"
@@ -63,6 +64,7 @@
     "config": [
       "base",
       "client",
+      "ghostty",
       "lua",
       "platform",
       "plugins",
@@ -438,6 +440,7 @@
     "src/runtime/shell_integration/git_context/git_context.cppm": "telar.runtime.shell_integration.git_context",
     "src/runtime/shell_integration/words/words.cppm": "telar.runtime.shell_integration.words",
     "lib/vocabulary/vocabulary.cppm": "telar.vocabulary",
+    "lib/ghostty/unicode/unicode.cppm": "telar.ghostty.unicode",
     "lib/machines/machines.cppm": "telar.machines",
     "lib/render/document/document.cppm": "telar.render.document",
     "lib/render/terminal/terminal.cppm": "telar.render.terminal",
@@ -3188,7 +3191,7 @@
     "<freetype/ftsynth.h>": "telar.gui.fonts.face",
     "<freetype/fttypes.h>": "telar.gui.fonts.face",
     "<freetype/tttables.h>": "telar.gui.fonts.face",
-    "<ghostty/vt/unicode.h>": "telar.config.runtime",
+    "<ghostty/vt/unicode.h>": "telar.ghostty.unicode",
     "<hb-ft.h>": "telar.gui.fonts.face",
     "<hb-ot.h>": "telar.gui.fonts.face",
     "<hb.h>": "telar.gui.fonts.face",
