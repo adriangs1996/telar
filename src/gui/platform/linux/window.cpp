@@ -24,7 +24,7 @@ static_assert(true);
 
 #include "platform/window.hpp"
 
-import telar.gui.platform.private_file_stamp;
+import telar.gui.platform.background_effect;
 
 namespace telar::gui::platform {
 

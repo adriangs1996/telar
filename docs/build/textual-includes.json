@@ -1527,6 +1527,13 @@
     "<hb.h>",
     "platform/font.h"
   ],
+  "src/gui/fonts/glyph_rasterizer/glyph_rasterizer.cpp": [
+    "<cstddef>",
+    "<cstdint>",
+    "<cstring>",
+    "platform/font.h",
+    "platform/macos/glyph_rasterizer.h"
+  ],
   "src/gui/fonts/row_text_layout/row_text_layout.cppm": [
     "<cmath>",
     "<cstddef>",
@@ -1694,6 +1701,9 @@
     "<cstdint>",
     "<ctime>"
   ],
+  "src/gui/platform/background_effect/background_effect.cppm": [
+    "platform/window.hpp"
+  ],
   "src/gui/platform/clipboard_image_pipe/clipboard_image_pipe.cppm": [
     "<cerrno>",
     "<cstddef>",
@@ -1760,29 +1770,16 @@
     "<limits.h>",
     "<sys/param.h>"
   ],
-  "src/gui/platform/private_file_stamp/macos/glyph_rasterizer.cpp": [
-    "<cstddef>",
-    "<cstdint>",
-    "<cstring>",
-    "platform/font.h",
-    "platform/macos/glyph_rasterizer.h"
-  ],
-  "src/gui/platform/private_file_stamp/peer_identity.cpp": [
+  "src/gui/platform/peer_identity/peer_identity.cpp": [
     "<cstdint>",
     "<sys/socket.h>",
     "<sys/types.h>",
     "<unistd.h>"
   ],
   "src/gui/platform/private_file_stamp/private_file_stamp.cppm": [
-    "<cmath>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstring>",
-    "<sys/stat.h>",
-    "platform/font.h",
-    "platform/window.hpp"
+    "<sys/stat.h>"
   ],
-  "src/gui/platform/private_file_stamp/process_group.cpp": [
+  "src/gui/platform/process_group/process_group.cpp": [
     "<cstdint>",
     "platform/process_group.h"
   ],

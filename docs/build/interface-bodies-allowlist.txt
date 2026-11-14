@@ -84,6 +84,8 @@ telar.gui.platform.file_stamp
 telar.gui.platform.notification_commands
 telar.gui.platform.private_file_stamp
 telar.gui.platform.profile_file
+telar.gui.platform.progress_cosine
+telar.gui.platform.secure_random
 telar.gui.presentation.activity_order
 telar.gui.presentation.application_mark
 telar.gui.presentation.display_metrics

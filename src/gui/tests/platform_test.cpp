@@ -18,7 +18,7 @@ static_assert(true);
 import std;
 import telar.platform.primitives;
 import telar.gui.platform.managed_directory;
-import telar.gui.platform.private_file_stamp;
+import telar.gui.platform.peer_identity;
 import telar.gui.platform.notification_commands;
 import telar.platform.net;
 import telar.platform.fs;

@@ -44,7 +44,7 @@ import telar.platform.process;
 import telar.gui.machines.discovery;
 import telar.gui.machines.picker;
 import telar.gui.machines.profile_store;
-import telar.gui.platform.private_file_stamp;
+import telar.gui.platform.peer_identity;
 
 namespace telar::gui::qt {
 

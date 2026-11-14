@@ -30,7 +30,7 @@ extern "C" {
 #include <wayland-client-core.h>
 #include <wayland-client-protocol.h>
 
-module telar.gui.platform.private_file_stamp;
+module telar.gui.platform.background_effect;
 
 import std;
 

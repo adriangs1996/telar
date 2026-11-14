@@ -5,7 +5,7 @@ module;
 #include <sys/types.h>
 #include <unistd.h>
 
-module telar.gui.platform.private_file_stamp;
+module telar.gui.platform.peer_identity;
 
 import std;
 

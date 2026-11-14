@@ -34,7 +34,7 @@ static_assert(true);
 
 import telar.gui.core.unicode_scalar;
 import telar.gui.input.key_encoder;
-import telar.gui.platform.private_file_stamp;
+import telar.gui.platform.keyboard;
 
 namespace {
 
