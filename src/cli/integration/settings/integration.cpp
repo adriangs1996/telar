@@ -35,7 +35,7 @@ import telar.platform.primitives;
 
 namespace telar::runtime::cli {
 
-  int runIntegration(BudgetAllocator<SystemAllocator>& memory, const IntegrationOptions& options) {
+  int runIntegration(Memory& memory, const IntegrationOptions& options) {
     const ExecutablePath executable;
     const ProcessEnvironment environment;
 

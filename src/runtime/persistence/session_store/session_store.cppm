@@ -483,7 +483,8 @@ export {
     template <Allocator Memory, PaneLauncher<Memory> Panes>
     class Restore {
     public:
-      inline explicit Restore(Memory& memory, RuntimeModel<Memory>& model, Panes& panes, ClientLayouts<Memory>& layouts, bool resume_agents)
+      // The panes it launches keep the allocator, so everything the restore reaches lives in region `a`.
+      inline explicit Restore(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<RuntimeModel<Memory>&, tbc::lt::a> model, tbc::view<Panes&, tbc::lt::a> panes, tbc::view<ClientLayouts<Memory>&, tbc::lt::a> layouts, bool resume_agents)
           : memory_(memory),
             model_(model),
             panes_(panes),
@@ -616,21 +617,27 @@ export {
         pane.restored_agent = resume;
 
         if (resume && !direct) {
-          for (std::size_t index = 0; index < resumed.size(); ++index) {
-            const Byte separator = index == 0 ? 0 : ' ';
+          writeResume(pane.input, resumed);
+          // Writing the input may grow its buffer, so the pane is found again.
+          panes_.flushInput(*model_.panes.find(identity));
+        }
+      }
 
-            if (index != 0) {
-              pane.input.append({&separator, 1});
-            }
+      // Types the command that resumes an agent, its words separated by spaces, and presses enter.
+      inline static void writeResume(ByteQueue<Memory>& input, std::span<const std::string_view> words) {
+        for (std::size_t index = 0; index < words.size(); ++index) {
+          constexpr Byte separator = ' ';
 
-            pane.input.append({reinterpret_cast<const Byte*>(resumed[index].data()), resumed[index].size()});
+          if (index != 0) {
+            input.append({&separator, 1});
           }
 
-          constexpr Byte enter = '\r';
-
-          pane.input.append({&enter, 1});
-          panes_.flushInput(pane);
+          input.append({reinterpret_cast<const Byte*>(words[index].data()), words[index].size()});
         }
+
+        constexpr Byte enter = '\r';
+
+        input.append({&enter, 1});
       }
 
       inline std::optional<AgentResume> resumable(const PaneRecord& record) const {
@@ -652,6 +659,9 @@ export {
       }
 
       inline void dropEmptyTabs() {
+        std::array<std::uint64_t, WorkspaceStore<Memory>::capacity> emptied{};
+        std::size_t count = 0;
+
         for (auto* workspace : model_.workspaces.items()) {
           if (workspace == nullptr) {
             continue;
@@ -662,8 +672,13 @@ export {
           });
 
           if (workspace->tabs.empty()) {
-            model_.workspaces.erase(workspace->id);
+            emptied[count++] = workspace->id;
           }
+        }
+
+        // Erasing releases a workspace, so the store is not walked while it erases.
+        for (const auto identity : std::span{emptied}.first(count)) {
+          model_.workspaces.erase(identity);
         }
 
         for (auto* worktree : model_.worktrees.items()) {
@@ -673,10 +688,10 @@ export {
         }
       }
 
-      Memory& memory_;
-      RuntimeModel<Memory>& model_;
-      Panes& panes_;
-      ClientLayouts<Memory>& layouts_;
+      tbc::view<Memory&, tbc::lt::a> memory_;
+      tbc::view<RuntimeModel<Memory>&, tbc::lt::a> model_;
+      tbc::view<Panes&, tbc::lt::a> panes_;
+      tbc::view<ClientLayouts<Memory>&, tbc::lt::a> layouts_;
       bool resume_agents_;
     };
 

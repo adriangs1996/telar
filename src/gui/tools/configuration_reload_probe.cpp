@@ -89,7 +89,8 @@ namespace {
     const auto path = directory.filePath(QStringLiteral("config.lua"));
 
     writeFile(path, rootSource(false));
-    ApplicationAllocator memory;
+    ApplicationMemory application_memory;
+    ApplicationAllocator& memory = application_memory.memory();
     ConfigurationSource source{memory};
 
     source.open({.path = path, .profile = QString{}, .theme = QString{}});

@@ -395,7 +395,8 @@ namespace {
     Options options_;
     unsigned columns_;
     unsigned rows_;
-    ApplicationAllocator memory_;
+    ApplicationMemory application_memory_;
+    ApplicationAllocator& memory_ = application_memory_.memory();
     Configuration configuration_;
     Screen<ApplicationAllocator> screen_;
     GraphicsBudget graphics_budget_;

@@ -11,6 +11,7 @@ export namespace telar::gui {
   using telar::gui::Allocator;
   using telar::gui::AllocatorRef;
   using telar::gui::ApplicationAllocator;
+  using telar::gui::ApplicationMemory;
   using telar::gui::BudgetAllocator;
   using telar::gui::default_terminal_size;
   using telar::gui::makeOwned;

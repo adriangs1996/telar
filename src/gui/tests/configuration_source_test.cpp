@@ -176,7 +176,8 @@ namespace {
   };
 
   struct ConfigurationOwner {
-    ApplicationAllocator memory;
+    ApplicationMemory application_memory;
+    ApplicationAllocator& memory = application_memory.memory();
     ConfigurationSource source{memory};
   };
 
@@ -238,7 +239,8 @@ namespace {
   private:
     Q_SLOT static void pluginCompletionRejectsObsoleteIdentityAndGeneration() {
       const PluginFixture fixture;
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       ConfigurationSource source{memory};
       const telar::ClientCommand request{.action = telar::ClientAction::plugin_run, .target_id = telar::runtime::plugins::stableId("run"), .text = "sample"};
 
@@ -279,7 +281,8 @@ namespace {
 
     Q_SLOT static void pluginOverridesRetainPendingPolicyAfterFailure() {
       const PluginFixture fixture;
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       ConfigurationSource source{memory};
 
       fixture.open(source);
@@ -323,7 +326,8 @@ namespace {
         left=t.bar.static(t.ui.group({on_click={kind='plugin',plugin='sample',action='run'},t.ui.label('Run')})),center=t.bar.tabs()
       }}}}
     )");
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       ConfigurationSource source{memory};
 
       fixture.open(source);
@@ -371,7 +375,8 @@ namespace {
 
     Q_SLOT static void pluginOverrideRequestsSupersedeCapturedWorkers() {
       const PluginFixture fixture;
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       ConfigurationSource source{memory};
 
       fixture.open(source);
@@ -398,7 +403,8 @@ namespace {
 
     Q_SLOT static void pluginTrustAndActionFailuresRetainTheAdoptedGeneration() {
       const PluginFixture fixture;
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       ConfigurationSource source{memory};
 
       fixture.open(source);
@@ -445,7 +451,8 @@ namespace {
       const QByteArray valid{"return {api_version=2,client={sound={enabled=false}},profiles={chosen={client={notifications={delivery='system'}}}}}"};
 
       writeFile(absolute_path, valid);
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       ConfigurationSource source{memory};
 
       source.open({.path = path, .profile = QStringLiteral("chosen"), .theme = QString{}});
@@ -491,7 +498,8 @@ namespace {
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
       writeFile(path, "return {api_version=2,client={keybindings={telar.bind({'c'},telar.action.command_tab{command={'echo','kept'},label='original'})}}}");
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       ConfigurationSource source{memory};
 
       source.open({.path = path, .profile = QString{}, .theme = QString{}});
@@ -517,7 +525,8 @@ namespace {
     }
 
     Q_SLOT static void bindingQueryErrorsPreserveAuthority() {
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       ConfigurationSource source{memory};
 
       QVERIFY_THROWS_EXCEPTION(std::runtime_error, static_cast<void>(source.query({.section = ConfigurationQuery::Section::binding, .index = -1})));
@@ -537,7 +546,8 @@ namespace {
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
       writeFile(path, "local n=0;return {api_version=2,theme='terminal',client={appearance={light={colors={text='#010203'}}},keybindings={telar.bind({'s'},function() n=n+1;return telar.action.select_tab{index=n} end)}}}");
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       ConfigurationSource source{memory};
 
       AppearanceFixture::set(Qt::ColorScheme::Unknown);
@@ -572,7 +582,8 @@ namespace {
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
       writeFile(path, "return {api_version=2,theme='catppuccin',client={appearance={light='vesper',dark='kanagawa'}}}");
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       ConfigurationSource source{memory};
 
       source.open({.path = path, .profile = QString{}, .theme = QStringLiteral("shade")});
@@ -599,7 +610,8 @@ namespace {
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
       writeFile(path, "return {api_version=2,gui={font={size=16}},client={prefix='ctrl+b'},profiles={selected={gui={font={size=18.25}},client={prefix='shift+tab'}}}}");
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       ConfigurationSource source{memory};
 
       source.open({.path = path, .profile = QStringLiteral("selected"), .theme = QString{}});
@@ -632,7 +644,8 @@ namespace {
     }
 
     Q_SLOT static void guiAndInputQueryErrorsPreserveAuthority() {
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       ConfigurationSource source{memory};
 
       for (const auto section : {ConfigurationQuery::Section::gui, ConfigurationQuery::Section::input}) {
@@ -656,7 +669,8 @@ namespace {
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
       writeFile(path, "return {api_version=2,runtime={history={path='retained.db'},session={persist=false}}}");
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       ConfigurationSource source{memory};
 
       source.open({.path = path, .profile = QString{}, .theme = QString{}});
@@ -685,7 +699,8 @@ namespace {
     }
 
     Q_SLOT static void runtimeQueryErrorsPreserveAuthority() {
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       ConfigurationSource source{memory};
       const ConfigurationQuery query{.section = ConfigurationQuery::Section::runtime, .index = -1};
 
@@ -706,7 +721,8 @@ namespace {
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
       writeFile(path, valid_configuration);
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       ConfigurationSource source{memory};
 
       source.open({.path = path, .profile = QString{}, .theme = QString{}});
@@ -732,7 +748,8 @@ namespace {
 
       writeFile(path, "return require('nested.preferences')");
       writeFile(dependency, valid_configuration);
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       ConfigurationSource source{memory};
 
       source.open({.path = path, .profile = QString{}, .theme = QString{}});
@@ -761,7 +778,8 @@ namespace {
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
       writeFile(path, "local t=require('telar');return {api_version=2,client={bars={bottom={left=t.bar.dynamic({render=function() while true do end end}),center=t.bar.tabs()}}}}");
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       ConfigurationSource source{memory};
 
       source.open({.path = path, .profile = QString{}, .theme = QString{}});
@@ -799,7 +817,8 @@ namespace {
 
       writeFile(path, deferred_module_configuration);
       writeFile(dependency, toggle_module);
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       ConfigurationSource source{memory};
 
       source.open({.path = path, .profile = QString{}, .theme = QString{}});
@@ -826,7 +845,8 @@ namespace {
 
       writeFile(path, deferred_module_configuration);
       writeFile(dependency, "return function() error('fixture failure') end");
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       ConfigurationSource source{memory};
 
       source.open({.path = path, .profile = QString{}, .theme = QString{}});
@@ -847,7 +867,8 @@ namespace {
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
       writeFile(path, stateful_configuration);
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       ConfigurationSource source{memory};
 
       source.open({.path = path, .profile = QString{}, .theme = QString{}});
@@ -876,7 +897,8 @@ namespace {
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
       writeFile(path, valid_configuration);
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       ConfigurationSource source{memory};
 
       source.open({.path = path, .profile = QString{}, .theme = QString{}});
@@ -895,7 +917,8 @@ namespace {
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
       writeFile(path, valid_configuration);
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       ConfigurationSource source{memory};
 
       source.open({.path = path, .profile = QString{}, .theme = QString{}});
@@ -925,7 +948,8 @@ namespace {
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
       writeFile(path, valid_configuration);
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       ConfigurationSource source{memory};
 
       source.open({.path = path, .profile = QString{}, .theme = QString{}});
@@ -959,7 +983,8 @@ namespace {
 
       writeFile(first, valid_configuration);
       writeFile(second, visible_configuration);
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       ConfigurationSource source{memory};
 
       source.open({.path = first, .profile = QString{}, .theme = QString{}});
@@ -987,7 +1012,8 @@ namespace {
 
       writeFile(path, deferred_module_configuration);
       writeFile(dependency, toggle_module);
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       ConfigurationSource source{memory};
 
       source.open({.path = path, .profile = QString{}, .theme = QString{}});
@@ -1013,7 +1039,8 @@ namespace {
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
       writeFile(path, stateful_configuration);
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       ConfigurationSource source{memory};
 
       source.open({.path = path, .profile = QString{}, .theme = QString{}});
@@ -1045,7 +1072,8 @@ namespace {
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
       writeFile(path, valid_configuration);
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       auto source = std::make_unique<ConfigurationSource>(memory);
 
       source->open({.path = path, .profile = QString{}, .theme = QString{}});
@@ -1070,7 +1098,8 @@ namespace {
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
       writeFile(path, valid_configuration);
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       ConfigurationSource source{memory};
 
       source.open({.path = path, .profile = QString{}, .theme = QString{}});

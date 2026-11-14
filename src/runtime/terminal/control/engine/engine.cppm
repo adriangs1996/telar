@@ -1117,9 +1117,9 @@ export namespace telar::runtime::control {
     tbc::view<GraphicsQueries<Memory>, tbc::lt::a> graphics_queries_;
     tbc::view<Reports<Memory>, tbc::lt::a> reports_;
     ColorQueries<Memory> colors_;
-    Vector<std::uint8_t, Memory> document_;
+    tbc::view<Vector<std::uint8_t, Memory>, tbc::lt::a> document_;
     std::optional<Zone> open_zone_;
-    Vector<Zone, Memory> zones_;
+    tbc::view<Vector<Zone, Memory>, tbc::lt::a> zones_;
     ClientFacts facts_;
     tbc::view<PtyResponseQueue::Producer, tbc::lt::a> responses_;
     bool enabled_;

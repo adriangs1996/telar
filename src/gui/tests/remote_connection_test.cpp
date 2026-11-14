@@ -118,7 +118,8 @@ namespace {
       QLocalServer listener;
 
       QVERIFY(listener.listen(directory.filePath(QStringLiteral("open-flush.sock"))));
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       RuntimeConnection connection{memory};
 
       connection.open(listener.fullServerName());
@@ -159,7 +160,8 @@ namespace {
       QLocalServer listener;
 
       QVERIFY(listener.listen(directory.filePath(QStringLiteral("pressure.sock"))));
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       RuntimeConnection connection{memory};
 
       connection.open(listener.fullServerName());
@@ -225,7 +227,8 @@ namespace {
       QLocalServer listener;
 
       QVERIFY(listener.listen(directory.filePath(QStringLiteral("resume.sock"))));
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       RuntimeConnection connection{memory};
       std::vector<QByteArray> delivered;
 
@@ -280,7 +283,8 @@ namespace {
       QLocalServer listener;
 
       QVERIFY(listener.listen(directory.filePath(QStringLiteral("prefix.sock"))));
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       RuntimeConnection connection{memory};
 
       connection.open(listener.fullServerName());
@@ -308,7 +312,8 @@ namespace {
       QLocalServer listener;
 
       QVERIFY(listener.listen(directory.filePath(QStringLiteral("schema.sock"))));
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       RuntimeConnection connection{memory};
 
       connection.open(listener.fullServerName());
@@ -345,7 +350,8 @@ namespace {
       QLocalServer listener;
 
       QVERIFY(listener.listen(directory.filePath(QStringLiteral("legacy.sock"))));
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       RuntimeConnection connection{memory};
       std::vector<QByteArray> delivered;
 
@@ -404,7 +410,8 @@ namespace {
       QLocalServer listener;
 
       QVERIFY(listener.listen(directory.filePath(QStringLiteral("alternating.sock"))));
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       RuntimeConnection connection{memory};
 
       connection.open(listener.fullServerName());
@@ -450,7 +457,8 @@ namespace {
       QLocalServer listener;
 
       QVERIFY(listener.listen(directory.filePath(QStringLiteral("pipeline.sock"))));
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       RuntimeConnection connection{memory};
       QByteArray received;
 
@@ -479,7 +487,8 @@ namespace {
       QLocalServer listener;
 
       QVERIFY(listener.listen(directory.filePath(QStringLiteral("capacity.sock"))));
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       RuntimeConnection connection{memory};
 
       connection.open(listener.fullServerName());
@@ -522,7 +531,8 @@ namespace {
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       RuntimeConnection connection{memory};
       QElapsedTimer elapsed;
 
@@ -576,7 +586,8 @@ namespace {
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       RuntimeConnection connection{memory};
       QLocalServer listener;
 
@@ -620,7 +631,8 @@ namespace {
       });
 
       qputenv("PATH", directory.path().toUtf8() + ":" + previous_path);
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       RuntimeConnection connection{memory};
       QByteArray received;
 
@@ -654,7 +666,8 @@ namespace {
       });
 
       QVERIFY(qputenv("PATH", directory.path().toUtf8()));
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       RuntimeConnection connection{memory};
       std::size_t handshakes = 0;
       std::size_t disconnects = 0;

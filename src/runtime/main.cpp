@@ -28,14 +28,16 @@ auto main(int argc, char** argv) -> int {
     SystemAllocator system;
     constexpr std::size_t memory_budget = std::size_t{2} * 1024 * 1024 * 1024;
     BudgetAllocator budget{system, memory_budget};
+    MemoryAdapter budget_memory{budget};
+    Memory& memory = budget_memory;
 
     if (command == "traffic") {
-      cli::runTraffic(budget, args.subspan<2>());
+      cli::runTraffic(memory, args.subspan<2>());
       return 0;
     }
 
     if (command == "plugin-worker") {
-      cli::runPluginWorker(budget, cli::PluginWorkerOptions::parse(args.subspan<2>()));
+      cli::runPluginWorker(memory, cli::PluginWorkerOptions::parse(args.subspan<2>()));
       return 0;
     }
 
@@ -44,16 +46,19 @@ auto main(int argc, char** argv) -> int {
 
       requireTracingBuild(options.trace_path != nullptr);
 #if TELAR_DEBUG
-      trace::Session tracing{budget, options.trace_path};
+      trace::Session tracing{memory, options.trace_path};
 
 #endif
-      plugins::runWorker(budget, options.entry, options.traffic);
+      plugins::runWorker(memory, options.entry, options.traffic);
       return 0;
     }
 
-    SynchronizedAllocator memory{budget};
+    // The server shares its allocator with its worker threads.
+    SynchronizedAllocator synchronized{budget};
+    MemoryAdapter synchronized_memory{synchronized};
+    ConcurrentMemory& shared = synchronized_memory;
 
-    cli::runServer(memory, cli::ServerOptions::parse(args.subspan<1>()));
+    cli::runServer(shared, cli::ServerOptions::parse(args.subspan<1>()));
     return 0;
   } catch (const SystemError& error) {
     std::fprintf(stderr, "telar runtime: %s: %s\n", error.what(), std::strerror(error.code()));

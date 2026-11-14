@@ -91,7 +91,8 @@ int telar::gui::test::runAgentReportFixture(int& argc, char** argv) {
     return 1;
   }
 
-  ApplicationAllocator memory;
+  ApplicationMemory application_memory;
+  ApplicationAllocator& memory = application_memory.memory();
   qt::RuntimeConnection connection{memory};
   QTimer deadline;
 

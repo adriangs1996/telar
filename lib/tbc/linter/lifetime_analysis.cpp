@@ -1315,6 +1315,10 @@ namespace tbc_lint {
       bool collecting_ = false;
       // Where the statement being transferred writes, for what a store reports.
       clang::SourceLocation write_site_{};
+      // The expression the statement being transferred belongs to, and the calls in it whose effects have
+      // been applied. Reading their arguments again reads what was read before they ran.
+      const clang::Stmt* evaluating_ = nullptr;
+      llvm::SmallVector<const clang::Stmt*, 2> applied_;
       // What each receiver held when the call being resolved began; null outside such a call.
       llvm::DenseMap<std::pair<const clang::Expr*, const state*>, loans>* receiver_contents_ = nullptr;
 
@@ -4121,6 +4125,50 @@ namespace tbc_lint {
         }
       }
 
+      // The outermost expression, or declaration, that a statement is evaluated as part of.
+      const clang::Stmt* expressionRoot(const clang::Stmt& statement) const {
+        auto node = clang::DynTypedNode::create(statement);
+        const clang::Stmt* last = &statement;
+
+        while (true) {
+          const auto parents = context_.getParents(node);
+          if (parents.empty()) {
+            return last;
+          }
+
+          const auto& parent = parents[0];
+          if (const auto* parent_statement = parent.get<clang::Stmt>()) {
+            if (!llvm::isa<clang::Expr>(parent_statement) && !llvm::isa<clang::DeclStmt>(parent_statement)) {
+              return last;
+            }
+
+            last = parent_statement;
+          } else if (parent.get<clang::VarDecl>() == nullptr) {
+            return last;
+          }
+
+          node = parent;
+        }
+      }
+
+      // Whether an expression is part of a statement: the statement itself or one of its subexpressions.
+      [[nodiscard]] bool partOf(const clang::Stmt& node, const clang::Stmt& statement) const {
+        clang::DynTypedNode next = clang::DynTypedNode::create(node);
+
+        while (true) {
+          if (next.get<clang::Stmt>() == &statement) {
+            return true;
+          }
+
+          const auto parents = context_.getParents(next);
+          if (parents.empty()) {
+            return false;
+          }
+
+          next = parents[0];
+        }
+      }
+
       void checkUse(const loans& borrow, const clang::Stmt& use) {
         for (const auto& source : borrow.values) {
           // What a caller passed in is used here, so a call to this function uses that part of it. Handing
@@ -4130,6 +4178,10 @@ namespace tbc_lint {
           }
 
           if (source.invalidated != nullptr) {
+            if (llvm::is_contained(applied_, source.invalidated) && partOf(use, *source.invalidated)) {
+              continue;
+            }
+
             report(issue::invalidated, source.invalidated->getEndLoc(), &source, &use);
           } else if (source.kind == origin_kind::temporary && source.full_expression != fullExpression(&use)) {
             report(issue::dangling, source.borrow_site.isValid() ? source.borrow_site : use.getBeginLoc(), &source);
@@ -4283,10 +4335,7 @@ namespace tbc_lint {
 
           // An object of a shared type, such as an allocator, keeps what it handed out valid whatever is
           // done to the inputs that reach it, also when an object that keeps it designates it.
-          if (place.target.path.empty() && std::ranges::all_of(place.target.select, [](const projection& step) {
-                return step.dereference || step.field == nullptr;
-              }) &&
-              sharedType(owner->getType())) {
+          if (sharedType(owner->getType()) && !insideShared(*owner, place.target)) {
             continue;
           }
 
@@ -4339,6 +4388,38 @@ namespace tbc_lint {
             }
           }
         }
+      }
+
+      // Whether a place lies inside the shared object a variable holds or designates, along the object's
+      // own fields, rather than in storage it handed out. A borrow of the object held elsewhere is also
+      // found through it: a place past a field no step names, or past another type's field, is not the
+      // object's.
+      [[nodiscard]] static bool insideShared(const clang::ValueDecl& owner, const object_place& target) {
+        const auto unknown = [](const projection& step) {
+          return step.field == nullptr && !step.dereference;
+        };
+        if (std::ranges::any_of(target.path, unknown) || std::ranges::any_of(target.select, unknown)) {
+          return false;
+        }
+
+        const auto named = [](const projection& step) {
+          return step.field != nullptr;
+        };
+        const auto first = target.path.empty() ? std::ranges::find_if(target.select, named) : target.path.begin();
+        if (first == (target.path.empty() ? target.select.end() : target.path.end())) {
+          return false;
+        }
+
+        const auto type = owner.getType().getNonReferenceType();
+        const auto* record = recordOf(type->isPointerType() ? type->getPointeeType() : type);
+        const auto* parent = llvm::dyn_cast<clang::CXXRecordDecl>(first->field->getParent());
+        if (record == nullptr || record->getDefinition() == nullptr || parent == nullptr) {
+          return false;
+        }
+
+        const auto* definition = record->getDefinition();
+
+        return parent == definition || definition->isDerivedFrom(parent);
       }
 
       void invalidateEnvironment(const clang::CallExpr& call, state& current) {
@@ -4451,6 +4532,9 @@ namespace tbc_lint {
         const auto inputs = callInputs(call, current);
 
         applyInferredInvalidations(call, current);
+        // The call's arguments were read before it ran, and checked then; resolving its effects, and the
+        // expression around it, reads them again from the state it left.
+        applied_.push_back(&call);
         checkOverlap(call, inputs, current);
         const auto type = object == nullptr ? clang::QualType{} : objectType(*object);
         if (object != nullptr && libraryRecord(type) && !viewType(type) && !iteratorRecord(type)) {
@@ -5244,6 +5328,9 @@ namespace tbc_lint {
       }
 
       void transfer(const clang::CFGBlock& block, state& current) {
+        evaluating_ = nullptr;
+        applied_.clear();
+
         for (const auto& element : block) {
           if (const auto initialized = element.getAs<clang::CFGInitializer>()) {
             const auto* initializer = initialized->getInitializer();
@@ -5290,6 +5377,11 @@ namespace tbc_lint {
           const auto* node = statement->getStmt();
 
           write_site_ = node->getBeginLoc();
+          if (const auto* root = expressionRoot(*node); root != evaluating_) {
+            evaluating_ = root;
+            applied_.clear();
+          }
+
           checkPointerAccesses(*node, current);
           if (const auto* declaration = llvm::dyn_cast<clang::DeclStmt>(node)) {
             for (const auto* entry : declaration->decls()) {

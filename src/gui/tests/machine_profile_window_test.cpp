@@ -116,7 +116,8 @@ namespace {
 
   struct ProfileFixture {
     QTemporaryDir directory;
-    ApplicationAllocator memory;
+    ApplicationMemory application_memory;
+    ApplicationAllocator& memory = application_memory.memory();
     Application application{memory};
     QLocalServer listener;
     std::unique_ptr<QLocalSocket> socket;

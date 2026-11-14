@@ -267,7 +267,8 @@ namespace {
       client_->submitSuggestion(state().value(QStringLiteral("revision")).toString());
     }
 
-    ApplicationAllocator memory_;
+    ApplicationMemory application_memory_;
+    ApplicationAllocator& memory_ = application_memory_.memory();
     QTemporaryDir directory_{QDir::tempPath() + QStringLiteral("/telar-suggest-XXXXXX")};
     QProcess runtime_;
     std::unique_ptr<QQuickWindow> window_ = std::make_unique<QQuickWindow>();

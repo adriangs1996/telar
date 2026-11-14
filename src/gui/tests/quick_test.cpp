@@ -8940,7 +8940,8 @@ return {api_version=2, client={keybindings={
       return client_->pane(record.value(QStringLiteral("key")).toString().toULongLong());
     }
 
-    ApplicationAllocator memory_;
+    ApplicationMemory application_memory_;
+    ApplicationAllocator& memory_ = application_memory_.memory();
     QTemporaryDir directory_;
     QProcess runtime_;
     QString socket_;

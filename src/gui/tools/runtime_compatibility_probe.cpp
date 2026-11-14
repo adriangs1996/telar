@@ -20,7 +20,8 @@ int main(int argc, char** argv) {
     return EXIT_FAILURE;
   }
 
-  telar::gui::ApplicationAllocator memory;
+  telar::gui::ApplicationMemory application_memory;
+  telar::gui::ApplicationAllocator& memory = application_memory.memory();
   telar::gui::qt::RuntimeConnection connection{memory};
   QTimer watchdog;
 

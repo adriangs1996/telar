@@ -311,8 +311,10 @@ Components receive their allocator by reference. `Allocator`,
 `ConcurrentAllocator`, `EventLoop`, `ProcessInspection`, `RequestService`,
 `BackgroundExecutor` and `ObservationService` constrain template dependencies.
 The composition root chooses concrete implementations; there is no virtual
-service dispatch or runtime dependency container. Tests inject process
-inspectors, services and allocators through the same interfaces.
+service dispatch or runtime dependency container. It composes the allocator and
+hands it over through a `MemoryAdapter`, as `Memory &` or, to the server and its
+workers, `ConcurrentMemory &`. Tests inject process inspectors, services and
+allocators through the same interfaces.
 
 The application allocation budget is 2 GiB. Owned containers, Ghostty, PNG codec,
 SQLite and trace buffers use that allocator. Allocator callbacks at C library

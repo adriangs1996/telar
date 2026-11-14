@@ -114,7 +114,8 @@ namespace {
       const auto endpoint = directory.filePath(QStringLiteral("runtime.sock"));
 
       QVERIFY(listener.listen(endpoint));
-      ApplicationAllocator memory;
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
       Application application{memory};
 
       application.open(endpoint);

@@ -49,6 +49,7 @@ import telar.gui.platform.profile_file;
 namespace {
 
   using telar::gui::ApplicationAllocator;
+  using telar::gui::ApplicationMemory;
   using telar::gui::platform::ClipboardImageError;
   using telar::gui::platform::ClipboardImageFailure;
   using telar::gui::platform::ClipboardImagePipe;
@@ -172,7 +173,8 @@ int main(int argc, char** argv) try {
   }
 
   const bool late_seat = argc == 3 && std::string_view{argv[2]} == "late";
-  ApplicationAllocator memory;
+  ApplicationMemory application_memory;
+  ApplicationAllocator& memory = application_memory.memory();
   Connection connection;
   connection.connect();
   WaylandClipboardImageMonitor monitor{memory, connection.display};

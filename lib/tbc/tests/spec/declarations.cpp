@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <memory>
+#include <new>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -1505,6 +1506,390 @@ bool declarationAbstractSharedSiblingUnmarked(declarations::arena& system) {
   declarations::unmarked_service service(system);
 
   return service.grow();
+}
+
+// END CASE
+
+// CASE: declaration.abstract_shared_release_read_first
+// PAIR: declaration.abstract_shared_release
+// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: Runtime::closeWorkspace (removeTab erases the workspace through SlotStore and AllocationDeleter)
+// STATUS: implemented
+// CONTRACT: A call through an abstract TBC_SHARED type's virtual deallocate releases only the block it is given, after the caller has evaluated the call's arguments.
+// SCENARIO: The identity is copied into a local, then a call releases the group it was read from through `memory &`, and the group is found again; accept.
+namespace declarations {
+  struct released_group {
+    std::size_t id;
+  };
+
+  // Releases a group through the memory it came from, as AllocationDeleter does.
+  class group_deleter {
+  public:
+    explicit group_deleter(memory& memory) noexcept
+        : memory_(&memory) {}
+
+    void operator()(released_group* group) const noexcept {
+      std::destroy_at(group);
+      memory_->deallocate(group, sizeof(released_group), alignof(released_group));
+    }
+
+  private:
+    memory* memory_;
+  };
+
+  // Slots of groups that it releases on erase, as SlotStore does.
+  class group_store {
+  public:
+    explicit group_store(memory& memory) noexcept
+        : memory_(memory) {}
+
+    group_store(const group_store&) = delete;
+    group_store& operator=(const group_store&) = delete;
+
+    const std::array<released_group*, 4>& items() const noexcept {
+      return items_;
+    }
+
+    released_group* find(std::size_t id) const noexcept {
+      return items_[id % 4];
+    }
+
+    void erase(std::size_t id) noexcept {
+      auto* group = find(id);
+      if (group == nullptr) {
+        return;
+      }
+
+      items_[id % 4] = nullptr;
+      group_deleter{memory_}(group);
+    }
+
+  private:
+    memory& memory_;
+    std::array<released_group*, 4> items_{};
+  };
+
+  inline void releaseGroup(group_store& groups, std::size_t group, std::size_t tab) noexcept {
+    static_cast<void>(tab);
+    groups.erase(group);
+  }
+
+  inline bool releaseGroupFound(group_store& groups, std::size_t group, std::size_t tab) noexcept {
+    const bool found = groups.find(group) != nullptr;
+
+    releaseGroup(groups, group, tab);
+    return found;
+  }
+}
+
+void declarationAbstractSharedReleaseReadFirst(declarations::group_store& groups, std::size_t id) {
+  auto* current = groups.find(id);
+
+  while (current != nullptr) {
+    const auto tab = current->id;
+
+    declarations::releaseGroup(groups, id, tab);
+    current = groups.find(id);
+  }
+}
+
+// END CASE
+
+// CASE: declaration.abstract_shared_release_use
+// PAIR: declaration.abstract_shared_release
+// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: Runtime::closeWorkspace (removeTab erases the workspace through SlotStore and AllocationDeleter)
+// STATUS: implemented
+// CONTRACT: A call through an abstract TBC_SHARED type's virtual deallocate releases only the block it is given, after the caller has evaluated the call's arguments.
+// SCENARIO: The group is read after the call that releases it through `memory &`; reject at the call.
+std::size_t declarationAbstractSharedReleaseUse(declarations::group_store& groups, std::size_t id) {
+  auto* current = groups.find(id);
+  if (current == nullptr) {
+    return 0;
+  }
+
+  declarations::releaseGroup(groups, id, 0); // expected-error [tbc-invalidated-borrow]
+  return current->id;
+}
+
+// END CASE
+
+// CASE: declaration.abstract_shared_release_argument
+// PAIR: declaration.abstract_shared_release
+// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: Runtime::closeWorkspace (removeTab erases the workspace through SlotStore and AllocationDeleter)
+// STATUS: implemented
+// CONTRACT: A call through an abstract TBC_SHARED type's virtual deallocate releases only the block it is given, after the caller has evaluated the call's arguments.
+// SCENARIO: The identity is read from the group as a by-value argument of the call that releases it; the read completes before the call runs, as when it is copied into a local first; accept.
+void declarationAbstractSharedReleaseArgument(declarations::group_store& groups, std::size_t id) {
+  auto* current = groups.find(id);
+
+  while (current != nullptr) {
+    declarations::releaseGroup(groups, id, current->id);
+    current = groups.find(id);
+  }
+}
+
+// END CASE
+
+// CASE: declaration.abstract_shared_release_argument_kept
+// PAIR: declaration.abstract_shared_release
+// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: Runtime::closeWorkspace (removeTab erases the workspace through SlotStore and AllocationDeleter)
+// STATUS: implemented
+// CONTRACT: A call through an abstract TBC_SHARED type's virtual deallocate releases only the block it is given, after the caller has evaluated the call's arguments.
+// SCENARIO: The releasing call's result initializes a local, and its by-value argument was read from the group before it ran; accept.
+void declarationAbstractSharedReleaseArgumentKept(declarations::group_store& groups, std::size_t id) {
+  auto* current = groups.find(id);
+
+  while (current != nullptr) {
+    const bool released = declarations::releaseGroupFound(groups, id, current->id);
+
+    static_cast<void>(released);
+    current = groups.find(id);
+  }
+}
+
+// END CASE
+
+// CASE: declaration.abstract_shared_release_next_round
+// PAIR: declaration.abstract_shared_release
+// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: Runtime::closeWorkspace (removeTab erases the workspace through SlotStore and AllocationDeleter)
+// STATUS: implemented
+// CONTRACT: A call through an abstract TBC_SHARED type's virtual deallocate releases only the block it is given, after the caller has evaluated the call's arguments.
+// SCENARIO: A loop's second round passes the call an argument read from the group the first round released, without finding the group again; reject at the call.
+void declarationAbstractSharedReleaseNextRound(declarations::group_store& groups, std::size_t id) {
+  auto* current = groups.find(id);
+
+  for (int round = 0; round < 2; ++round) {
+    declarations::releaseGroup(groups, id, current->id); // expected-error [tbc-invalidated-borrow]
+  }
+}
+
+// END CASE
+
+// CASE: declaration.abstract_shared_release_iteration
+// PAIR: declaration.abstract_shared_release
+// SOURCE: src/runtime/persistence/session_store/session_store.cppm :: Restore::dropEmptyTabs (erases workspaces while iterating the store's slots)
+// STATUS: implemented
+// CONTRACT: A method whose body releases a block through an abstract TBC_SHARED type's virtual deallocate borrows its whole receiver, as a Rust `&mut self` method does.
+// SCENARIO: The store's slot array is iterated while the store erases one slot's group; the erase borrows the whole store, so the loop's view of its slots ends there, as Rust rejects calling a `&mut self` method while iterating a field; reject at the erase.
+void declarationAbstractSharedReleaseIteration(declarations::group_store& groups) {
+  for (auto* group : groups.items()) {
+    if (group == nullptr) {
+      continue;
+    }
+
+    const auto id = group->id;
+
+    groups.erase(id); // expected-error [tbc-invalidated-borrow]
+  }
+}
+
+// END CASE
+
+// CASE: declaration.abstract_shared_release_collected
+// PAIR: declaration.abstract_shared_release
+// SOURCE: src/runtime/persistence/session_store/session_store.cppm :: Restore::dropEmptyTabs (erases workspaces while iterating the store's slots)
+// STATUS: implemented
+// CONTRACT: A method whose body releases a block through an abstract TBC_SHARED type's virtual deallocate borrows its whole receiver, as a Rust `&mut self` method does.
+// SCENARIO: The identities are collected while iterating, and erased after the loop; accept.
+void declarationAbstractSharedReleaseCollected(declarations::group_store& groups) {
+  std::array<std::size_t, 4> identities{};
+  std::size_t count = 0;
+
+  for (const auto* group : groups.items()) {
+    if (group != nullptr) {
+      identities[count++] = group->id;
+    }
+  }
+
+  for (std::size_t index = 0; index < count; ++index) {
+    groups.erase(identities[index]);
+  }
+}
+
+// END CASE
+
+// CASE: declaration.shared_borrow_held_launch
+// PAIR: declaration.shared_borrow_held
+// SOURCE: src/runtime/persistence/session_store/session_store.cppm :: Restore::restore(const PaneRecord&) (launches a pane, then lists it in its tab)
+// STATUS: implemented
+// CONTRACT: A shared object keeps valid the storage it hands out. A place found through a borrow of it that an object holds, past a field the shared type does not have, is such storage; growth there still ends the borrows of the object that owns it.
+// SCENARIO: A launch stores in the model a pane made with the shared memory, which a workspace's tab list also keeps through its allocator; growing a tab's list and then finding the pane again is accepted.
+namespace declarations {
+  class TBC_SHARED model_memory {
+  public:
+    void* allocate(std::size_t size, std::size_t alignment) noexcept {
+      static_cast<void>(alignment);
+      return ::operator new(size, std::nothrow);
+    }
+
+    void deallocate(void* block, std::size_t size, std::size_t alignment) noexcept {
+      static_cast<void>(size);
+      static_cast<void>(alignment);
+      ::operator delete(block);
+    }
+  };
+
+  template <typename Value, typename... Arguments>
+  TBC_CONSTRUCTS std::unique_ptr<Value> makeFrom(model_memory& memory, Arguments&&... arguments) {
+    static_cast<void>(memory);
+    return std::make_unique<Value>(std::forward<Arguments>(arguments)...);
+  }
+
+  // A standard allocator over the shared memory, as AllocatorRef is.
+  template <typename Value>
+  struct model_allocator {
+    using value_type = Value;
+
+    explicit model_allocator(model_memory& memory) noexcept
+        : memory(&memory) {}
+
+    template <typename Other>
+    model_allocator(const model_allocator<Other>& other) noexcept
+        : memory(other.memory) {}
+
+    Value* allocate(std::size_t count) {
+      return static_cast<Value*>(memory->allocate(count * sizeof(Value), alignof(Value)));
+    }
+
+    void deallocate(Value* block, std::size_t count) noexcept {
+      memory->deallocate(block, count * sizeof(Value), alignof(Value));
+    }
+
+    template <typename Other>
+    bool operator==(const model_allocator<Other>& other) const noexcept {
+      return memory == other.memory;
+    }
+
+    model_memory* memory;
+  };
+
+  template <typename Value>
+  class pane_slots {
+  public:
+    void insert(std::size_t identity, Value* value) noexcept {
+      items_[identity % 4] = value;
+    }
+
+    Value* find(std::size_t identity) const noexcept {
+      return items_[identity % 4];
+    }
+
+  private:
+    std::array<Value*, 4> items_{};
+  };
+
+  // A command keeps the memory it was built with, as Command does.
+  class pane_command {
+  public:
+    explicit pane_command(tbc::view<model_memory&, tbc::lt::a> memory) noexcept
+        : memory_(memory) {}
+
+    pane_command(const pane_command&) = delete;
+    pane_command& operator=(const pane_command&) = delete;
+
+  private:
+    tbc::view<model_memory&, tbc::lt::a> memory_;
+  };
+
+  struct model_tab {
+    std::size_t id;
+    std::vector<std::size_t> panes;
+  };
+
+  struct model_workspace {
+    explicit model_workspace(model_memory& memory)
+        : tabs(model_allocator<model_tab>{memory}) {}
+
+    model_tab* tab(std::size_t identity) noexcept {
+      for (auto& candidate : tabs) {
+        if (candidate.id == identity) {
+          return &candidate;
+        }
+      }
+
+      return nullptr;
+    }
+
+    std::vector<model_tab, model_allocator<model_tab>> tabs;
+  };
+
+  struct model_pane {
+    int restored = 0;
+  };
+
+  struct runtime_model {
+    pane_slots<model_pane> panes;
+    pane_slots<model_workspace> workspaces;
+  };
+
+  class pane_launcher {
+  public:
+    explicit pane_launcher(tbc::view<model_memory&, tbc::lt::a> memory) noexcept
+        : memory_(memory) {}
+
+    pane_launcher(const pane_launcher&) = delete;
+    pane_launcher& operator=(const pane_launcher&) = delete;
+
+    tbc::view<model_pane&, tbc::lt::a> launch(tbc::view<runtime_model&, tbc::lt::a> model, pane_command& command, std::size_t identity) {
+      static_cast<void>(command);
+      auto pane = makeFrom<model_pane>(memory_);
+
+      model.panes.insert(identity, pane.release());
+      return *model.panes.find(identity);
+    }
+
+  private:
+    tbc::view<model_memory&, tbc::lt::a> memory_;
+  };
+
+  inline std::size_t readIdentity(const std::size_t& identity) noexcept {
+    return identity;
+  }
+}
+
+int declarationSharedBorrowHeldLaunch(tbc::view<declarations::model_memory&, tbc::lt::a> memory, tbc::view<declarations::runtime_model&, tbc::lt::a> model, tbc::view<declarations::pane_launcher&, tbc::lt::a> panes, std::size_t workspace, std::size_t tab, std::size_t record) {
+  declarations::pane_command command{memory};
+
+  panes.launch(model, command, record);
+  model.workspaces.find(workspace)->tab(tab)->panes.push_back(record);
+  auto& pane = *model.panes.find(record);
+
+  return pane.restored;
+}
+
+// END CASE
+
+// CASE: declaration.shared_borrow_held_field
+// PAIR: declaration.shared_borrow_held
+// SOURCE: src/runtime/persistence/session_store/session_store.cppm :: Restore::restore(const PaneRecord&) (launches a pane, then lists it in its tab)
+// STATUS: implemented
+// CONTRACT: A shared object keeps valid the storage it hands out. A place found through a borrow of it that an object holds, past a field the shared type does not have, is such storage; growth there still ends the borrows of the object that owns it.
+// SCENARIO: An element of a tab's pane list, a field the shared memory does not have, is read after the list grows; reject at the growth.
+std::size_t declarationSharedBorrowHeldField(tbc::view<declarations::model_memory&, tbc::lt::a> memory, tbc::view<declarations::runtime_model&, tbc::lt::a> model, tbc::view<declarations::pane_launcher&, tbc::lt::a> panes, std::size_t workspace, std::size_t tab, std::size_t record) {
+  declarations::pane_command command{memory};
+
+  panes.launch(model, command, record);
+  auto& first = model.workspaces.find(workspace)->tab(tab)->panes.front();
+
+  model.workspaces.find(workspace)->tab(tab)->panes.push_back(record); // expected-error [tbc-invalidated-borrow]
+  return declarations::readIdentity(first);
+}
+
+// END CASE
+
+// CASE: declaration.shared_borrow_held_element
+// PAIR: declaration.shared_borrow_held
+// SOURCE: src/runtime/persistence/session_store/session_store.cppm :: Restore::restore(const PaneRecord&) (launches a pane, then lists it in its tab)
+// STATUS: implemented
+// CONTRACT: A shared object keeps valid the storage it hands out. A place found through a borrow of it that an object holds, past a field the shared type does not have, is such storage; growth there still ends the borrows of the object that owns it.
+// SCENARIO: A tab found by scanning the workspace's list, an element no field names, is read after the list grows; reject at the growth.
+std::size_t declarationSharedBorrowHeldElement(tbc::view<declarations::model_memory&, tbc::lt::a> memory, tbc::view<declarations::runtime_model&, tbc::lt::a> model, tbc::view<declarations::pane_launcher&, tbc::lt::a> panes, std::size_t workspace, std::size_t tab, std::size_t record) {
+  declarations::pane_command command{memory};
+
+  panes.launch(model, command, record);
+  auto* found = model.workspaces.find(workspace)->tab(tab);
+
+  model.workspaces.find(workspace)->tabs.push_back(declarations::model_tab{record, {}}); // expected-error [tbc-invalidated-borrow]
+  return declarations::readIdentity(found->id);
 }
 
 // END CASE

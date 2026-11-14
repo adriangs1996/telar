@@ -13,6 +13,7 @@ owns their lifetime; consumers inject them by reference. `Memory` is the
 type-erased allocator a service can take instead of a template parameter:
 `MemoryAdapter<A>` puts any `Allocator` behind it, as `ConcurrentMemory` when `A`
 is thread safe and as `ErasingMemory` when `A` erases what it releases.
+`allocator.hpp` declares them too, so Qt and Objective-C++ code can name them.
 
 `JsonError` reports malformed JSON without a protocol failure code. Protocol
 boundaries translate it to `FailureCode::invalid_request`; `RequestError` lives
