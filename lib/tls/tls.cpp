@@ -504,11 +504,8 @@ namespace telar::runtime::proxy_trust {
     // standard streams and this process group, and nothing else this process holds.
     SpawnOptions spawn{0};
 
-    for (const int stream : {STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO}) {
-      spawn.redirect(stream, stream);
-    }
+    spawn.keepStandardStreams();
 
-    spawn.closeOthers();
     pid_t child;
     if (const int error = ::posix_spawn(&child, pointers.front(), &spawn.actions, &spawn.attributes, pointers.data(), environ)) {
       throw SystemError{"Start proxy trust command", error};

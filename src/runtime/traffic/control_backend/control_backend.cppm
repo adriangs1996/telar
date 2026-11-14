@@ -2260,9 +2260,8 @@ export {
         }
 
         spawn.redirect(input.get(), STDIN_FILENO);
-        spawn.redirect(STDOUT_FILENO, STDOUT_FILENO);
-        spawn.redirect(STDERR_FILENO, STDERR_FILENO);
-        spawn.closeOthers();
+        spawn.keepStandardStreams();
+
         pid_t started;
 
         checkSpawn(::posix_spawn(&started, specification.executable, &spawn.actions, &spawn.attributes, specification.arguments, specification.environment));

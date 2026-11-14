@@ -364,11 +364,8 @@ namespace telar::runtime::cli::launch {
     const auto argv = pointers(arguments);
     SpawnOptions spawn{0};
 
-    for (const int stream : {STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO}) {
-      spawn.redirect(stream, stream);
-    }
+    spawn.keepStandardStreams();
 
-    spawn.closeOthers();
     pid_t process = -1;
     if (const auto failure = ::posix_spawnp(&process, argv.front(), &spawn.actions, &spawn.attributes, argv.data(), environ); failure != 0) {
       throw SystemError{"Start child process", failure};

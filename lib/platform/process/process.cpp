@@ -629,6 +629,16 @@ namespace telar::runtime {
 #endif
   }
 
+  void SpawnOptions::keepStandardStreams() {
+    // A dup2 onto itself keeps the stream open across exec where
+    // POSIX_SPAWN_CLOEXEC_DEFAULT would close it, and leaves an earlier redirect in place.
+    for (const int stream : {STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO}) {
+      redirect(stream, stream);
+    }
+
+    closeOthers();
+  }
+
   template class Command<Memory>;
   template class Command<ConcurrentMemory>;
   template class Command<SystemAllocator>;

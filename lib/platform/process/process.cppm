@@ -324,6 +324,10 @@ export {
       // exec, this process keeps it, and dup2 targets are fresh descriptors.
       void closeOthers();
 
+      // The child keeps this process's standard streams, or what `redirect` placed on them, and
+      // nothing else.
+      void keepStandardStreams();
+
       posix_spawnattr_t attributes{};
       posix_spawn_file_actions_t actions{};
     };
