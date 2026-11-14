@@ -2639,6 +2639,46 @@
     "telar_base/diagnostics/config.hpp",
     "telar_platform/trace_macro.hpp"
   ],
+  "src/runtime/platform/descriptor_path/descriptor_path.cppm": [
+    "<limits.h>",
+    "telar_platform/descriptor_path.hpp"
+  ],
+  "src/runtime/platform/event_loop/event_loop.cppm": [
+    "<cassert>",
+    "<cerrno>",
+    "<climits>",
+    "<csignal>",
+    "<cstddef>",
+    "<cstdint>",
+    "<fcntl.h>",
+    "<sched.h>",
+    "<signal.h>",
+    "<sys/epoll.h>",
+    "<sys/event.h>",
+    "<sys/syscall.h>",
+    "<time.h>",
+    "<unistd.h>",
+    "tbc/view.hpp"
+  ],
+  "src/runtime/platform/event_loop/macos/event_loop.cpp": [
+    "<cassert>",
+    "<cerrno>",
+    "<climits>",
+    "<csignal>",
+    "<cstddef>",
+    "<cstdint>",
+    "<cstdlib>",
+    "<errno.h>",
+    "<fcntl.h>",
+    "<new>",
+    "<sched.h>",
+    "<sys/epoll.h>",
+    "<sys/event.h>",
+    "<sys/syscall.h>",
+    "<time.h>",
+    "<unistd.h>",
+    "tbc/view.hpp"
+  ],
   "src/runtime/platform/git_status/git_status.cppm": [
     "<cassert>",
     "<cerrno>",
@@ -2684,16 +2724,7 @@
     "<unistd.h>",
     "telar_platform/trace_macro.hpp"
   ],
-  "src/runtime/platform/launch_program/launch_program.cppm": [
-    "<cstdint>",
-    "<cstdio>",
-    "<errno.h>",
-    "<fcntl.h>",
-    "<sys/stat.h>",
-    "<sys/un.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/platform/launch_program/local_listener.cpp": [
+  "src/runtime/platform/local_listener/local_listener.cpp": [
     "<cerrno>",
     "<csignal>",
     "<cstdint>",
@@ -2706,6 +2737,10 @@
     "<sys/types.h>",
     "<sys/un.h>",
     "<unistd.h>"
+  ],
+  "src/runtime/platform/local_listener/local_listener.cppm": [
+    "<sys/stat.h>",
+    "<sys/un.h>"
   ],
   "src/runtime/platform/name_resolutions/name_resolutions.cppm": [
     "<cerrno>",
@@ -2731,6 +2766,14 @@
     "<sys/socket.h>",
     "<sys/sys_domain.h>",
     "<sys/uio.h>",
+    "<unistd.h>"
+  ],
+  "src/runtime/platform/proc_file/proc_file.cppm": [
+    "<cstdint>",
+    "<cstdio>",
+    "<errno.h>",
+    "<fcntl.h>",
+    "<sys/stat.h>",
     "<unistd.h>"
   ],
   "src/runtime/platform/process_probe/linux/process_inspector.cpp": [
@@ -2820,51 +2863,15 @@
     "<cstring>",
     "tbc/view.hpp"
   ],
-  "src/runtime/platform/system_certificates/macos/event_loop.cpp": [
-    "<cassert>",
-    "<cerrno>",
-    "<climits>",
-    "<csignal>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdlib>",
-    "<errno.h>",
-    "<fcntl.h>",
-    "<new>",
-    "<sched.h>",
-    "<sys/epoll.h>",
-    "<sys/event.h>",
-    "<sys/syscall.h>",
-    "<time.h>",
-    "<unistd.h>",
-    "tbc/view.hpp"
-  ],
   "src/runtime/platform/system_certificates/system_certificates.cppm": [
     "<CoreFoundation/CoreFoundation.h>",
     "<Security/Security.h>",
-    "<cassert>",
     "<cerrno>",
-    "<climits>",
-    "<csignal>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
     "<cstdlib>",
-    "<fcntl.h>",
-    "<limits.h>",
-    "<new>",
     "<openssl/err.h>",
     "<openssl/pem.h>",
     "<openssl/x509.h>",
-    "<sched.h>",
-    "<signal.h>",
-    "<sys/epoll.h>",
-    "<sys/event.h>",
-    "<sys/syscall.h>",
-    "<time.h>",
-    "<unistd.h>",
-    "tbc/view.hpp",
-    "telar_platform/descriptor_path.hpp"
+    "<unistd.h>"
   ],
   "src/runtime/plugins/protocol/protocol.cppm": [
     "<cassert>",

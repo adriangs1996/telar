@@ -56,7 +56,7 @@ import telar.runtime.graphics.kitty;
 import telar.runtime.terminal.control;
 
 #if (!(defined(__APPLE__)))
-export import telar.runtime.platform.launch_program;
+export import telar.runtime.platform.proc_file;
 #endif
 
 export import telar.runtime.exchange_capture.exchange;

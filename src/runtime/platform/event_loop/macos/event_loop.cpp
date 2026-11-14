@@ -38,12 +38,11 @@ module;
 #endif
 #include <csignal>
 
-module telar.runtime.platform.system_certificates;
+module telar.runtime.platform.event_loop;
 
 import std;
 
 import telar.platform.error;
-import telar.base.diagnostics;
 import telar.platform.primitives;
 
 namespace telar::runtime {

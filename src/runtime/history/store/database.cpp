@@ -15,7 +15,7 @@ module telar.runtime.history.store;
 
 import std;
 
-import telar.runtime.platform.system_certificates;
+import telar.runtime.platform.descriptor_path;
 import telar.platform.error;
 import telar.platform.fs;
 import telar.wire.vocabulary;

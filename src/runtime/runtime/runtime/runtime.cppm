@@ -30,6 +30,7 @@ export import telar.runtime.plugins.service;
 export import telar.runtime.runtime.client_control;
 
 export import telar.runtime.platform.launch_program;
+export import telar.runtime.platform.local_listener;
 export import telar.runtime.worktrees.git_probe;
 
 export import telar.runtime.runtime.runtime_telemetry;

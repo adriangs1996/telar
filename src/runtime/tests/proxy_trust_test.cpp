@@ -34,7 +34,7 @@ import telar.base.text;
 import telar.platform.primitives;
 import telar.runtime.tests.check;
 import telar.runtime.tests.tls_fixture;
-import telar.runtime.platform.system_certificates;
+import telar.runtime.platform.descriptor_path;
 import telar.tls;
 
 using namespace telar;

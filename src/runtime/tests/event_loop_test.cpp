@@ -40,7 +40,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.platform.primitives;
 import telar.runtime.tests.check;
-import telar.runtime.platform.system_certificates;
+import telar.runtime.platform.event_loop;
 
 using namespace telar;
 using namespace telar::runtime;
