@@ -289,7 +289,8 @@ export {
   namespace telar::runtime {
 
     // The user's login shell: SHELL when the session names one, else the account's shell, else
-    // /bin/sh. An empty account shell, or a path longer than PATH_MAX, counts as none.
+    // /bin/sh. A relative or empty path, or one longer than PATH_MAX, counts as none: the runtime
+    // would search its own PATH for a relative program, which need not be the user's.
     FixedText<PATH_MAX> loginShell();
 
     // The line `shell -c` runs to exec the command its positional parameters name; empty for a
