@@ -1,5 +1,6 @@
 #pragma once
 
+#include "tbc/hot_path.hpp"
 #include "tbc/view.hpp"
 
 #include <type_traits>
@@ -46,11 +47,12 @@ namespace telar {
 
   static_assert(std::same_as<Byte, unsigned char>);
 
-  [[nodiscard]] inline std::span<const Byte> byteView(std::string_view text) noexcept {
+  // The field codecs below run once per field of every message, so they stay inline.
+  [[nodiscard]] TBC_HOT_PATH inline std::span<const Byte> byteView(std::string_view text) noexcept {
     return {reinterpret_cast<const Byte*>(text.data()), text.size()};
   }
 
-  [[nodiscard]] inline std::string_view textView(std::span<const Byte> bytes) noexcept {
+  [[nodiscard]] TBC_HOT_PATH inline std::string_view textView(std::span<const Byte> bytes) noexcept {
     return {reinterpret_cast<const char*>(bytes.data()), bytes.size()};
   }
 
@@ -106,50 +108,11 @@ namespace telar {
       }
     }
 
-    inline std::size_t columnWidth(std::size_t byte_count, const char* name, const char* value) {
-      const auto bytes_width = byte_count == 0 ? 0 : byte_count * 3 - 1;
-      const auto name_width = std::strlen(name);
-      const auto value_width = std::strlen(value);
-      const auto width = bytes_width > name_width ? bytes_width : name_width;
-
-      return width > value_width ? width : value_width;
-    }
-
-    inline void printBytes(std::span<const Byte> bytes, const char* name, const char* value, std::FILE* output, bool more) {
-      for (std::size_t i = 0; i < bytes.size(); ++i) {
-        if (i != 0) {
-          std::fputc(' ', output);
-        }
-
-        std::fprintf(output, "%02x", static_cast<unsigned>(bytes[i]));
-      }
-
-      if (more) {
-        const auto bytes_width = bytes.empty() ? 0 : bytes.size() * 3 - 1;
-        const auto padding = columnWidth(bytes.size(), name, value) - bytes_width;
-
-        std::fprintf(output, "%*s | ", static_cast<int>(padding), "");
-      }
-    }
-
-    inline void
-    printText(const char* text, std::size_t width, std::FILE* output, const char* separator) {
-      std::fputs(text, output);
-
-      if (separator[0] != '\0') {
-        const auto padding = width - std::strlen(text);
-
-        std::fprintf(output, "%*s%s", static_cast<int>(padding), "", separator);
-      }
-    }
-
-    inline void printLabel(std::size_t byte_count, const char* name, const char* value, std::FILE* output, bool more) {
-      printText(name, columnWidth(byte_count, name, value), output, more ? "   " : "");
-    }
-
-    inline void printValue(std::size_t byte_count, const char* name, const char* value, std::FILE* output, bool more) {
-      printText(value, columnWidth(byte_count, name, value), output, more ? " | " : "");
-    }
+    std::size_t columnWidth(std::size_t byte_count, const char* name, const char* value);
+    void printBytes(std::span<const Byte> bytes, const char* name, const char* value, std::FILE* output, bool more);
+    void printText(const char* text, std::size_t width, std::FILE* output, const char* separator);
+    void printLabel(std::size_t byte_count, const char* name, const char* value, std::FILE* output, bool more);
+    void printValue(std::size_t byte_count, const char* name, const char* value, std::FILE* output, bool more);
 
   } // namespace debug
 #endif
@@ -272,7 +235,7 @@ namespace telar {
     }
   };
 
-  struct BoolByte {
+  struct TBC_HOT_PATH BoolByte {
     using value_type = bool;
     static constexpr std::size_t width = u8::width;
 
@@ -308,7 +271,7 @@ namespace telar {
     }
   }
 
-  inline std::size_t checkedWireSize(std::size_t first, std::size_t second) {
+  constexpr std::size_t checkedWireSize(std::size_t first, std::size_t second) {
     if (first > max_payload_size || second > max_payload_size - first) {
       throw EncodingError{"Encoded body exceeds the frame limit"};
     }

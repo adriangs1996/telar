@@ -104,13 +104,7 @@ namespace telar {
     TabLocation active_tab{};
     std::span<const ClientTabLayout> tabs{};
 
-    void validate() const {
-      if (sidebar_width == 0) {
-        throw EncodingError{"Invalid sidebar width"};
-      }
-
-      validateLayoutCollection(active_tab, tabs);
-    }
+    void validate() const;
   };
 
   template <>
@@ -123,11 +117,7 @@ namespace telar {
     std::uint64_t pane_generation{};
     PaneDirection direction{};
 
-    void validate() const {
-      if (pane_generation == 0) {
-        throw EncodingError{"Invalid pane generation"};
-      }
-    }
+    void validate() const;
   };
 
   template <>
@@ -142,11 +132,7 @@ namespace telar {
     PaneFocusOutcome outcome{};
     std::uint64_t focused_pane_id{};
 
-    void validate() const {
-      if (pane_generation == 0 || (outcome == PaneFocusOutcome::focused && focused_pane_id == 0)) {
-        throw EncodingError{"Invalid focus completion"};
-      }
-    }
+    void validate() const;
   };
 
   template <>
@@ -170,15 +156,7 @@ namespace telar {
     TabLocation location{};
     std::span<const PaneDescriptor> panes{};
 
-    void validate() const {
-      for (std::size_t i = 0; i < panes.size(); ++i) {
-        for (std::size_t j = 0; j < i; ++j) {
-          if (panes[i].pane_id == panes[j].pane_id) {
-            throw EncodingError{"Duplicate pane identity"};
-          }
-        }
-      }
-    }
+    void validate() const;
   };
 
   template <>
@@ -225,9 +203,7 @@ namespace telar {
     bool workspace_closed{};
     std::optional<std::uint64_t> previous_workspace{};
 
-    void validate() const {
-      validateWorkspaceClosure(location.workspace, workspace_closed, previous_workspace);
-    }
+    void validate() const;
   };
 
   template <>
@@ -249,9 +225,7 @@ namespace telar {
     bool workspace_closed{};
     std::optional<std::uint64_t> previous_workspace{};
 
-    void validate() const {
-      validateWorkspaceClosure(workspace, workspace_closed, previous_workspace);
-    }
+    void validate() const;
   };
 
   template <>
@@ -284,19 +258,7 @@ namespace telar {
     std::optional<TabLocation> active_tab{};
     std::span<const ClientTabLayout> tabs{};
 
-    void validate() const {
-      if (!restored) {
-        if (sidebar_width != 0 || active_tab || !tabs.empty()) {
-          throw EncodingError{"Invalid empty layout"};
-        }
-      } else {
-        if (sidebar_width == 0) {
-          throw EncodingError{"Invalid sidebar width"};
-        }
-
-        validateLayoutCollection(active_tab, tabs);
-      }
-    }
+    void validate() const;
   };
 
   template <>
@@ -310,11 +272,7 @@ namespace telar {
     std::uint64_t pane_generation{};
     PaneDirection direction{};
 
-    void validate() const {
-      if (pane_generation == 0) {
-        throw EncodingError{"Invalid pane generation"};
-      }
-    }
+    void validate() const;
   };
 
   template <>
@@ -326,11 +284,7 @@ namespace telar {
     PaneFocusOutcome outcome{};
     std::uint64_t focused_pane_id{};
 
-    void validate() const {
-      if (outcome == PaneFocusOutcome::focused && focused_pane_id == 0) {
-        throw EncodingError{"Missing focused pane"};
-      }
-    }
+    void validate() const;
   };
 
   template <>

@@ -36,11 +36,7 @@ namespace telar {
     std::uint32_t first_row{};
     std::uint32_t last_row{};
 
-    void validate() const {
-      if (last_row < first_row) {
-        throw EncodingError{"Search rows end before they begin"};
-      }
-    }
+    void validate() const;
   };
 
   template <>
@@ -137,15 +133,7 @@ namespace telar {
     std::uint32_t offset{};
     std::span<const Byte> bytes{};
 
-    void validate() const {
-      if (size > max_size || offset > size || bytes.size() > size - offset || (size != 0 && bytes.empty() && (offset != size || id == 0))) {
-        throw EncodingError{"Invalid document part"};
-      }
-
-      if ((id == 0 && (generation != 0 || first_row != 0 || rows != 0)) || (id != 0 && size != 0 && rows == 0)) {
-        throw EncodingError{"Invalid document rows"};
-      }
-    }
+    void validate() const;
   };
 
   template <>
@@ -165,34 +153,12 @@ namespace telar {
     std::optional<TextMetadata> text_metadata{};
     std::span<const Byte> cells{};
 
-    [[nodiscard]] CellReader reader() const {
+    // A reader over the message's cells, which borrows them.
+    [[nodiscard]] TBC_HOT_PATH CellReader reader() const {
       return CellReader{cells, static_cast<std::uint32_t>(cols) * rows};
     }
 
-    void validate() const {
-      const auto count = static_cast<std::uint32_t>(cols) * rows;
-      if (rows > ReadPaneRows::maximum_rows || count > 130359 || (rows != 0 && cols == 0)) {
-        throw EncodingError{"Invalid pane rows header"};
-      }
-
-      if (rows == 0) {
-        if (text_metadata || !cells.empty()) {
-          throw EncodingError{"Empty pane rows carry cells"};
-        }
-
-        return;
-      }
-
-      if (!text_metadata) {
-        throw EncodingError{"Pane rows without metadata"};
-      }
-
-      text_metadata->validate(cols, rows);
-      auto cells_reader = reader();
-
-      while (cells_reader.next()) {
-      }
-    }
+    void validate() const;
   };
 
   template <>

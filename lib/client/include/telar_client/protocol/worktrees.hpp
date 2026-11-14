@@ -17,11 +17,7 @@ namespace telar {
     std::string_view dispatched_from{};
     std::optional<CoordinatorReference> coordinator{};
 
-    void validate() const {
-      if (path.empty() || path.front() != '/') {
-        throw EncodingError{"Invalid worktree path"};
-      }
-    }
+    void validate() const;
   };
 
   template <>
