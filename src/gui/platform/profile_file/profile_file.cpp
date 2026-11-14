@@ -27,6 +27,7 @@ module;
 module telar.gui.platform.profile_file;
 
 import std;
+import telar.sys.posix;
 
 import telar.gui.platform.secure_random;
 import telar.platform.error;

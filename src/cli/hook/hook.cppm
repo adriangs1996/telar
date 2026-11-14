@@ -7,16 +7,10 @@ export module telar.cli.hook;
 import std;
 
 export import telar.cli.hooks.command;
-export import telar.platform.error;
-export import telar.platform.fs;
 export import telar.platform.paths;
 import telar.platform.process;
 
 export import telar.cli.hooks.session;
-
-export import telar.base.text;
-export import telar.base.text.json;
-export import telar.base.text.utf8;
 
 export import telar.base.memory.allocators;
 import telar.base.memory.containers;
@@ -29,6 +23,11 @@ import telar.wire.runtime;
 import telar.wire.worktrees;
 import telar.git.checkout;
 import telar.platform.primitives;
+import telar.base.text;
+import telar.base.text.json;
+import telar.base.text.utf8;
+import telar.platform.error;
+import telar.platform.fs;
 
 // Interface: hooks/input.cppm
 export {

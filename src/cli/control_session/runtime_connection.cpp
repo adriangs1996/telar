@@ -16,6 +16,7 @@ module;
 module telar.cli.control_session;
 
 import std;
+import telar.sys.posix;
 
 import telar.platform.net;
 import telar.platform.error;

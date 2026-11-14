@@ -10,7 +10,7 @@ export module telar.gui.text.bounded_editor;
 
 import std;
 
-export import telar.gui.core.unicode_scalar;
+import telar.gui.core.unicode_scalar;
 
 // Interface: text/grapheme_cursor.cppm
 export {

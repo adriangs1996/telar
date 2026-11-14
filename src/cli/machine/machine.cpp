@@ -39,6 +39,14 @@ module;
 #include "machine_assets.hpp"
 
 module telar.cli.machine;
+import telar.sys.posix;
+
+import telar.base.text;
+import telar.cli.base.command_error;
+import telar.cli.control_session;
+import telar.cli.server;
+import telar.client;
+import telar.tls;
 
 namespace telar::runtime::cli::machine {
 

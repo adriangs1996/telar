@@ -77,6 +77,8 @@ import telar.gui.presentation.tab_drop;
 import telar.config.client;
 
 import telar.gui.config.gui_query;
+import telar.wire.layout;
+import telar.wire.runtime;
 
 namespace {
 

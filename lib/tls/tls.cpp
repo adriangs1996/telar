@@ -44,6 +44,7 @@ module;
 module telar.tls;
 
 import std;
+import telar.sys.posix;
 
 namespace telar::runtime {
 

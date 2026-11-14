@@ -31,6 +31,7 @@ static_assert(true);
 
 import telar.gui.machines.profile_store;
 import telar.gui.machines.discovery;
+import telar.client;
 
 namespace {
 

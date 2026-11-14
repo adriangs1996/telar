@@ -20,6 +20,7 @@ import telar.platform.primitives;
 import telar.runtime.tests.check;
 import telar.runtime.agents.snapshot;
 import telar.wire.vocabulary;
+import telar.runtime.history.store;
 
 using namespace telar;
 using namespace telar::runtime;

@@ -22,9 +22,10 @@ module;
 export module telar.runtime.platform.event_loop;
 
 import std;
+import telar.sys.posix;
 
-export import telar.platform.error;
 import telar.base.memory.allocators;
+import telar.platform.error;
 import telar.platform.primitives;
 import telar.sys.process;
 

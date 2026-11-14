@@ -25,17 +25,18 @@ module;
 export module telar.runtime.redirect.pf_rules;
 
 import std;
+import telar.sys.posix;
 
 export import telar.runtime.redirect.direction;
 
 export import telar.runtime.redirect.ingress;
 
-export import telar.platform.net;
-export import telar.platform.error;
-
-export import telar.plugins;
 import telar.base.diagnostics;
+import telar.base.text.utf8;
+import telar.platform.error;
+import telar.platform.net;
 import telar.platform.primitives;
+import telar.plugins;
 import telar.vocabulary;
 import telar.sys.socket;
 

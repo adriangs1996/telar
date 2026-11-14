@@ -18,17 +18,18 @@ module;
 export module telar.runtime.suggestions.engine;
 
 import std;
+import telar.sys.posix;
 
 export import telar.runtime.transport.connection;
-export import telar.base.text;
-export import telar.platform.net;
-export import telar.base.text.json;
-export import telar.platform.error;
 export import telar.platform.process;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.wire.editor;
 import telar.platform.primitives;
+import telar.base.text;
+import telar.base.text.json;
+import telar.platform.error;
+import telar.platform.net;
 
 // Interface: suggestions/engine.cppm
 export {

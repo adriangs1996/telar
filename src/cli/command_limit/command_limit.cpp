@@ -14,6 +14,7 @@ module;
 
 module telar.cli.command_limit;
 
+import telar.sys.posix;
 import telar.wire.vocabulary;
 
 namespace telar::runtime::cli {

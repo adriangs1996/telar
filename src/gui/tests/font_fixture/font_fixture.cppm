@@ -16,10 +16,10 @@ export module telar.gui.tests.font_fixture;
 import std;
 export import telar.gui.core.primitives;
 export import telar.base.memory.allocators;
-export import telar.platform.primitives;
 export import telar.gui.fonts.face;
-export import telar.gui.fonts.font_requests;
-export import telar.platform.fs;
+import telar.gui.fonts.font_requests;
+import telar.platform.fs;
+import telar.platform.primitives;
 
 export {
   namespace telar::gui::test {

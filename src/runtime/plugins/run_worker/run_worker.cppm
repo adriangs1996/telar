@@ -38,24 +38,23 @@ export import telar.runtime.vocabulary.traffic;
 export import telar.lua;
 
 export import telar.runtime.http.message;
-export import telar.runtime.traffic.capture_analysis;
 
 export import telar.runtime.plugins.worker;
-
-export import telar.runtime.traffic.control_backend;
 
 export import telar.base.memory.allocators;
 export import telar.base.memory.containers;
 export import telar.base.memory.sensitive;
 
-export import telar.config.runtime;
-export import telar.platform.error;
-export import telar.platform.fs;
-
-export import telar.runtime.plugins.tap_configuration;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.platform.primitives;
+import telar.config.runtime;
+import telar.platform.error;
+import telar.platform.fs;
+import telar.runtime.plugins.tap_configuration;
+import telar.runtime.traffic.capture_analysis;
+import telar.runtime.traffic.control_backend;
+import telar.base.text;
 
 // Interface: plugins/lua_effects.cppm
 export {

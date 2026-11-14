@@ -5,6 +5,8 @@
 
 import std;
 import telar.runtime.tests.agent_oracle;
+import telar.wire.pane_io;
+import telar.wire.runtime;
 
 using namespace telar;
 

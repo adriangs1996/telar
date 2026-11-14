@@ -9,11 +9,11 @@ export module telar.gui.palette.navigation_label;
 
 import std;
 
-export import telar.gui.core.unicode_scalar;
 export import telar.gui.text.json_unsigned_integer;
 
-export import telar.base.history;
 import telar.base.diagnostics;
+import telar.base.history;
+import telar.gui.core.unicode_scalar;
 import telar.wire.vocabulary;
 
 // Interface: palette/navigation_label.cppm

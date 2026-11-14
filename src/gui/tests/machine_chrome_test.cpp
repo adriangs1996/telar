@@ -32,6 +32,7 @@ import telar.gui.machines.discovery;
 import telar.gui.machines.picker;
 import telar.gui.presentation.suggestion_geometry;
 import telar.gui.presentation.history_filter_geometry;
+import telar.client;
 
 namespace {
 

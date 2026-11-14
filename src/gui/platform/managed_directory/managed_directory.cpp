@@ -11,6 +11,7 @@ module;
 module telar.gui.platform.managed_directory;
 
 import std;
+import telar.sys.posix;
 
 import telar.gui.platform.path_limits;
 import telar.platform.error;

@@ -55,6 +55,8 @@ import telar.gui.application.workspace_replica;
 import telar.gui.application.session;
 import telar.gui.graphics.pauses;
 import telar.gui.graphics.texture_cache;
+import telar.gui.presentation.notification_center;
+import telar.wire.runtime;
 
 namespace {
 

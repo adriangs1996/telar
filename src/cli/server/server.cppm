@@ -2,16 +2,17 @@ export module telar.cli.server;
 
 import std;
 
-export import telar.cli.base.command_error;
 import telar.cli.output;
 
-export import telar.cli.runtime_observer;
-export import telar.platform.daemon;
-export import telar.platform.error;
 export import telar.platform.paths;
-export import telar.platform.process;
 import telar.base.diagnostics;
+import telar.cli.base.command_error;
+import telar.cli.control_session;
+import telar.cli.runtime_observer;
+import telar.platform.daemon;
+import telar.platform.error;
 import telar.platform.primitives;
+import telar.platform.process;
 
 // Interface: help.cppm
 export {

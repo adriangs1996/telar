@@ -13,17 +13,15 @@ export module telar.gui.paths.label;
 
 import std;
 
-export import telar.gui.input.key_encoder;
-
 export import telar.gui.text.json_unsigned_integer;
 
-export import telar.gui.core.unicode_scalar;
-
-export import telar.gui.text.bounded_editor;
 import telar.base.diagnostics;
 import telar.base.memory.containers;
 import telar.base.text;
 import telar.base.text.utf8;
+import telar.gui.core.unicode_scalar;
+import telar.gui.input.key_encoder;
+import telar.gui.text.bounded_editor;
 import telar.wire.editor;
 import telar.wire.runtime;
 import telar.wire.vocabulary;

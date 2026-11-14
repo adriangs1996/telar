@@ -17,6 +17,7 @@ export import telar.config.core;
 export import telar.plugins;
 export import telar.platform.events;
 import telar.base.diagnostics;
+import telar.base.text;
 import telar.wire.vocabulary;
 
 // Owned textual headers stay in this global module fragment only; importers

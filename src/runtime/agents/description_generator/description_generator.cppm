@@ -26,14 +26,15 @@ export import telar.base.memory.allocators;
 export import telar.base.memory.containers;
 export import telar.base.memory.sensitive;
 
-export import telar.platform.error;
 export import telar.platform.events;
 export import telar.platform.process;
 
-export import telar.runtime.platform.process_probe;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.platform.primitives;
+import telar.platform.error;
+import telar.runtime.platform.process_probe;
+import telar.base.text;
 
 // Interface: agents/description_capture.cppm
 export {

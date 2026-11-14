@@ -20,6 +20,7 @@ module;
 #include <sys/un.h>
 
 module telar.cli.hooks.session;
+import telar.sys.posix;
 
 namespace telar::runtime::cli::hooks {
 

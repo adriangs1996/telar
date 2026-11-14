@@ -11,10 +11,9 @@ export module telar.gui.presentation.application_mark;
 
 import std;
 
-export import telar.config.core;
-
-export import telar.gui.core.unicode_scalar;
 import telar.base.diagnostics;
+import telar.config.core;
+import telar.gui.core.unicode_scalar;
 import telar.wire.vocabulary;
 
 // Interface: presentation/activity_card.cppm

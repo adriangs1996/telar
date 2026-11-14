@@ -87,19 +87,14 @@ module;
 export module telar.runtime.traffic.control_backend;
 
 import std;
+import telar.sys.posix;
 
 export import telar.runtime.traffic.control_protocol;
 
-export import telar.runtime.platform.request_worker;
 export import telar.base.memory.allocators;
 export import telar.base.memory.containers;
 export import telar.base.memory.sensitive;
 export import telar.config.runtime;
-
-export import telar.platform.net;
-export import telar.platform.error;
-export import telar.platform.process;
-export import telar.platform.thread;
 
 export import telar.runtime.vocabulary.traffic;
 export import telar.runtime.traffic.capture;
@@ -114,6 +109,12 @@ import telar.base.diagnostics;
 import telar.tls;
 import telar.wire.vocabulary;
 import telar.platform.primitives;
+import telar.platform.error;
+import telar.platform.net;
+import telar.platform.process;
+import telar.platform.thread;
+import telar.runtime.platform.request_worker;
+import telar.base.text;
 
 // Interface: traffic/control_access.cppm
 export {

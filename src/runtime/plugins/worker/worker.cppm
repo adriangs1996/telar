@@ -31,6 +31,7 @@ module;
 export module telar.runtime.plugins.worker;
 
 import std;
+import telar.sys.posix;
 
 export import telar.runtime.platform.stream_read_buffer;
 export import telar.runtime.vocabulary.traffic;
@@ -43,8 +44,6 @@ export import telar.platform.process;
 
 export import telar.runtime.plugins.tap_configuration;
 
-export import telar.runtime.platform.request_worker;
-
 export import telar.plugins;
 
 export import telar.runtime.traffic.control_backend;
@@ -54,6 +53,8 @@ export import telar.runtime.platform.signals;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.platform.primitives;
+import telar.runtime.platform.request_worker;
+import telar.base.text;
 
 // Interface: plugins/frame_channel.cppm
 export {

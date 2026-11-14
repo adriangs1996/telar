@@ -56,14 +56,11 @@ module;
 export module telar.runtime.persistence.session_store;
 
 import std;
+import telar.sys.posix;
 
-export import telar.platform.error;
-export import telar.platform.fs;
 export import telar.platform.process;
 
 export import telar.runtime.model.client_layouts;
-
-export import telar.runtime.agents.snapshot;
 
 export import telar.runtime.platform.request_worker;
 import telar.wire.vocabulary;
@@ -73,6 +70,9 @@ import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
 import telar.runtime.graphics.kitty;
 import telar.runtime.terminal.control;
+import telar.platform.error;
+import telar.platform.fs;
+import telar.runtime.agents.snapshot;
 
 // Interface: persistence/records.cppm
 export {

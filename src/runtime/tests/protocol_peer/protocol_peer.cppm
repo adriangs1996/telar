@@ -13,8 +13,8 @@ export module telar.runtime.tests.protocol_peer;
 
 import std;
 export import telar.client;
-export import telar.wire.pane_io;
-export import telar.wire.runtime;
+import telar.wire.pane_io;
+import telar.wire.runtime;
 export import telar.wire.vocabulary;
 
 export {

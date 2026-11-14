@@ -9,10 +9,10 @@ export module telar.runtime.config.loader;
 
 import std;
 
-export import telar.config.snapshot;
-export import telar.lua;
-export import telar.platform.error;
-export import telar.platform.fs;
+import telar.config.snapshot;
+import telar.lua;
+import telar.platform.error;
+import telar.platform.fs;
 export import telar.platform.paths;
 import telar.sys.posix;
 

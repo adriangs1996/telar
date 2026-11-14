@@ -23,13 +23,13 @@ import std;
 
 export import telar.base.memory.allocators;
 export import telar.base.memory.containers;
-export import telar.base.memory.sensitive;
 
 export import telar.runtime.vocabulary.exchange;
 export import telar.runtime.http.content;
 
-export import telar.base.text;
 import telar.base.diagnostics;
+import telar.base.memory.sensitive;
+import telar.base.text;
 import telar.platform.primitives;
 
 // Interface: exchange_capture/brotli_decoder.cppm

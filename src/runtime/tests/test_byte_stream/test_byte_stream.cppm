@@ -5,8 +5,8 @@ module;
 export module telar.runtime.tests.test_byte_stream;
 
 import std;
-export import telar.runtime.tests.check;
-export import telar.runtime.platform.stream_read_buffer;
+import telar.runtime.platform.stream_read_buffer;
+import telar.runtime.tests.check;
 
 export {
   class TestByteStream {

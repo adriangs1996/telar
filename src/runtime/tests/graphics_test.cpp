@@ -29,6 +29,7 @@ import telar.runtime.terminal.text_reader;
 import telar.wire.graphics;
 import telar.wire.history;
 import telar.wire.vocabulary;
+import telar.runtime.tests.check;
 
 using namespace telar;
 using namespace telar::runtime;

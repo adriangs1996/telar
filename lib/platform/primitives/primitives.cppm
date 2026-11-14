@@ -8,7 +8,7 @@ export module telar.platform.primitives;
 
 // The descriptors, mappings and shared memory below are POSIX objects: their
 // importers reach the system calls that operate on them from telar.sys.
-export import telar.sys.posix;
+import telar.sys.posix;
 
 // Owned textual headers stay in this global module fragment only; importers
 // reach their names through these declarations instead of including them.

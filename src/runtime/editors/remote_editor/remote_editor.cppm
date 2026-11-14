@@ -31,6 +31,8 @@ import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.wire.editor;
 import telar.platform.primitives;
+import telar.base.text;
+import telar.sys.posix;
 
 // Interface: editors/remote_editor.cppm
 export {

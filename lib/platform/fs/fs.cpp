@@ -19,6 +19,7 @@ module;
 module telar.platform.fs;
 
 import std;
+import telar.sys.posix;
 
 namespace telar::runtime {
   namespace {

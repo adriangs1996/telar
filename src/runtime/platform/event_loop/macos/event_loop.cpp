@@ -41,6 +41,7 @@ module;
 module telar.runtime.platform.event_loop;
 
 import std;
+import telar.sys.posix;
 
 import telar.platform.error;
 import telar.platform.primitives;

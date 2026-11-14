@@ -17,14 +17,14 @@ import std;
 
 export import telar.gui.core.metrics;
 
-export import telar.gui.text.bounded_editor;
-
 export import telar.gui.presentation.history_filter_geometry;
 
 export import telar.gui.text.json_unsigned_integer;
 import telar.base.diagnostics;
 import telar.base.memory.containers;
+import telar.base.text.utf8;
 import telar.gui.core.primitives;
+import telar.gui.text.bounded_editor;
 import telar.wire.vocabulary;
 
 // Interface: presentation/history_row_geometry.cppm

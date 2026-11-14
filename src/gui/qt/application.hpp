@@ -111,6 +111,7 @@ import telar.gui.presentation.suggestion_geometry;
 import telar.gui.presentation.form_field_geometry;
 import telar.gui.presentation.history_inspection;
 import telar.gui.text.json_unsigned_integer;
+import telar.gui.presentation.notification_center;
 
 namespace telar::gui::test {
   struct HistoryPresentation;

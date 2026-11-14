@@ -54,6 +54,8 @@ import telar.gui.tests.agent_fixture;
 import telar.gui.tests.session_fixture;
 import telar.gui.application.workspace_replica;
 import telar.gui.application.session;
+import telar.gui.presentation.notification_center;
+import telar.wire.layout;
 
 namespace {
 

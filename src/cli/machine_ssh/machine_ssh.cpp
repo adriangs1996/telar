@@ -49,6 +49,10 @@ module;
 
 module telar.cli.machine_ssh;
 
+import telar.cli.base.command_error;
+import telar.cli.control_session;
+import telar.sys.posix;
+
 namespace telar::runtime::cli::config_receive {
 
   constexpr std::size_t max_line_bytes = PATH_MAX + 64;

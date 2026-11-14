@@ -21,20 +21,19 @@ import std;
 
 export import telar.runtime.platform.signals;
 
-export import telar.platform.thread;
-
 export import telar.runtime.diagnostics.operation;
 export import telar.runtime.platform.background_executor;
 export import telar.runtime.transport.connection;
 
-export import telar.base.text.json;
-export import telar.client;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.wire.editor;
 import telar.wire.history;
 import telar.wire.runtime;
 import telar.platform.primitives;
+import telar.base.text.json;
+import telar.client;
+import telar.platform.thread;
 
 // Interface: platform/observation_worker.cppm
 export {

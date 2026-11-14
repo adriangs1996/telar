@@ -103,6 +103,7 @@ import telar.runtime.tests.client_peer;
 import telar.runtime.runtime.runtime_telemetry;
 #endif
 import telar.runtime.runtime.runtime;
+import telar.runtime.tests.check;
 import telar.wire.clients;
 import telar.wire.pane_io;
 import telar.wire.runtime;

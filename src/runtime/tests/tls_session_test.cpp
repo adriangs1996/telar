@@ -38,6 +38,7 @@ static_assert(true);
 import std;
 import telar.base.memory.allocators;
 import telar.platform.primitives;
+import telar.runtime.tests.check;
 import telar.runtime.tests.socket_pair;
 import telar.runtime.tests.tls_fixture;
 import telar.runtime.tls.interception;

@@ -160,6 +160,7 @@ import telar.gui.machines.picker;
 #if (defined(__APPLE__))
 import telar.gui.layout.geometry;
 #endif
+import telar.gui.presentation.notification_center;
 import telar.gui.transport.runtime_link;
 
 namespace telar::gui::test {

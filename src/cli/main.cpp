@@ -106,6 +106,8 @@ import telar.cli.plugin;
 import telar.cli.worktree;
 import telar.cli.worktree_git;
 import telar.cli.render;
+import telar.cli.base.command_error;
+import telar.platform.error;
 
 namespace telar::runtime::cli {
   namespace {

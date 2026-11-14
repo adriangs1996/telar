@@ -17,10 +17,9 @@ export import telar.gui.core.metrics;
 export import telar.gui.terminal.font_grid;
 export import telar.gui.text.bounded_editor;
 
-export import telar.base.text;
-
 export import telar.gui.core.unicode_scalar;
 import telar.base.diagnostics;
+import telar.base.text;
 import telar.gui.core.primitives;
 import telar.gui.terminal.screen;
 

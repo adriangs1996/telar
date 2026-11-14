@@ -7,14 +7,13 @@ export module telar.cli.hooks.command;
 
 import std;
 
-export import telar.config.runtime;
-
-export import telar.base.text;
 export import telar.base.text.json;
-export import telar.base.text.utf8;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.wire.agents;
+import telar.base.text;
+import telar.base.text.utf8;
+import telar.config.runtime;
 
 // Interface: hook_options.cppm
 export {

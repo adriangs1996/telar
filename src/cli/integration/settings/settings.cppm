@@ -6,15 +6,15 @@ export module telar.cli.integration.settings;
 import std;
 
 export import telar.config.core;
-export import telar.platform.error;
-export import telar.platform.fs;
 export import telar.platform.paths;
 
-export import telar.cli.base.command_error;
 export import telar.base.text.json;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.platform.primitives;
+import telar.cli.base.command_error;
+import telar.platform.error;
+import telar.platform.fs;
 
 // Interface: integration_options.cppm
 export {

@@ -15,6 +15,7 @@ module;
 module telar.runtime.platform.process_probe;
 
 import std;
+import telar.sys.posix;
 
 import telar.runtime.platform.proc_file;
 import telar.base.diagnostics;

@@ -62,6 +62,7 @@ static_assert(true);
 
 import telar.gui.application.workspace_replica;
 import telar.gui.core.metrics;
+import telar.gui.presentation.notification_center;
 
 namespace {
 

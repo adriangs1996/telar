@@ -12,12 +12,13 @@ module;
 export module telar.runtime.vocabulary.traffic;
 
 import std;
+import telar.sys.posix;
 
 export import telar.plugins;
 export import telar.runtime.vocabulary.exchange;
 export import telar.runtime.vocabulary.frames;
 
-export import telar.platform.error;
+import telar.platform.error;
 import telar.platform.net;
 import telar.platform.primitives;
 import telar.wire.vocabulary;

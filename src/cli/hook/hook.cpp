@@ -29,6 +29,7 @@ module;
 #include <sys/wait.h>
 
 module telar.cli.hook;
+import telar.sys.posix;
 
 namespace telar::runtime::cli::hooks {
 

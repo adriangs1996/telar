@@ -177,6 +177,7 @@ import telar.base.text.json;
 import telar.base.text.utf8;
 import telar.plugins;
 import telar.gui.text.bounded_editor;
+import telar.gui.presentation.notification_center;
 
 namespace telar::gui::test {
 

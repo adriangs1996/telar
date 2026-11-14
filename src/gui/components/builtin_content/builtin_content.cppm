@@ -27,8 +27,10 @@ export import telar.config.client;
 
 export import telar.lua;
 
-export import telar.base.history;
 import telar.base.diagnostics;
+import telar.base.history;
+import telar.base.text.utf8;
+import telar.gui.core.json_writer;
 import telar.wire.vocabulary;
 
 // Interface: components/builtin_content.cppm

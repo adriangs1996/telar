@@ -35,6 +35,9 @@ static_assert(true);
 #include "core/memory.hpp"
 
 import telar.gui.application.workspace_replica;
+import telar.gui.model.records;
+import telar.gui.model.replicas;
+import telar.gui.presentation.notification_center;
 
 namespace {
 

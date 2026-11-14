@@ -25,26 +25,24 @@ export module telar.gui.config.generation;
 import std;
 
 export import telar.gui.config.plugin_query;
-export import telar.config.snapshot;
 export import telar.lua;
-export import telar.plugins;
 
 export import telar.gui.input.copy_pointer;
 
 export import telar.gui.input.key_encoder;
 export import telar.gui.input.configuration;
 
-export import telar.gui.config.gui_query;
-
-export import telar.gui.presentation.suggestion_geometry;
-
 export import telar.gui.core.metrics;
 
-export import telar.gui.config.plugin_effects;
 export import telar.gui.components.configuration;
 export import telar.gui.components.builtin_content;
 import telar.base.diagnostics;
+import telar.config.snapshot;
+import telar.gui.config.gui_query;
+import telar.gui.config.plugin_effects;
 import telar.gui.core.primitives;
+import telar.gui.presentation.suggestion_geometry;
+import telar.plugins;
 import telar.wire.vocabulary;
 
 // Interface: config/action_description_reader.cppm

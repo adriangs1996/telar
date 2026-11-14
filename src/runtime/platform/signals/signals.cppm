@@ -8,6 +8,7 @@ module;
 export module telar.runtime.platform.signals;
 
 import std;
+import telar.sys.posix;
 
 import telar.platform.error;
 import telar.platform.primitives;

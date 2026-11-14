@@ -67,7 +67,6 @@ export import telar.runtime.proxy.intercepted_relay;
 export import telar.runtime.proxy.http2_capture_streams;
 export import telar.runtime.platform.stream_read_buffer;
 export import telar.runtime.platform.event_loop;
-export import telar.runtime.platform.system_certificates;
 export import telar.runtime.traffic.control_protocol;
 export import telar.runtime.proxy.relay_direction;
 export import telar.base.memory.allocators;
@@ -80,20 +79,22 @@ export import telar.runtime.tls.interception;
 export import telar.runtime.platform.tunnel_sockets;
 export import telar.runtime.proxy.authenticate;
 export import telar.platform.net;
-export import telar.platform.error;
-export import telar.platform.events;
-export import telar.platform.fs;
-export import telar.platform.paths;
 export import telar.platform.process;
-export import telar.platform.sha256;
-export import telar.platform.thread;
 export import telar.runtime.redirect.ingress;
-export import telar.runtime.tls.system_root_bundle;
 export import telar.tls;
 import telar.base.diagnostics;
 import telar.platform.primitives;
 import telar.wire.vocabulary;
 import telar.wire.runtime;
+import telar.platform.error;
+import telar.platform.events;
+import telar.platform.fs;
+import telar.platform.paths;
+import telar.platform.sha256;
+import telar.platform.thread;
+import telar.runtime.platform.system_certificates;
+import telar.runtime.tls.system_root_bundle;
+import telar.sys.posix;
 
 // Interface: proxy/http1_capture_policy.cppm
 export {

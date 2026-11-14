@@ -29,13 +29,14 @@ module;
 export module telar.runtime.plugins.service;
 
 import std;
+import telar.sys.posix;
 
 export import telar.runtime.vocabulary.traffic;
 
-export import telar.plugins;
 export import telar.runtime.plugins.worker;
 import telar.base.diagnostics;
 import telar.platform.primitives;
+import telar.plugins;
 
 // Interface: plugins/event_source.cppm
 export {

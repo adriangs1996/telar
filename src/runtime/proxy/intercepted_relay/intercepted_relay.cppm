@@ -27,6 +27,7 @@ export import telar.base.memory.sensitive;
 export import telar.runtime.http.message;
 export import telar.runtime.traffic.control_protocol;
 import telar.base.diagnostics;
+import telar.base.text;
 
 // Interface: http1/observer.cppm
 export {

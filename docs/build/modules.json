@@ -32,16 +32,19 @@
     "git": [
       "base",
       "platform",
+      "sys",
       "vocabulary"
     ],
     "tls": [
       "base",
-      "platform"
+      "platform",
+      "sys"
     ],
     "plugins": [
       "base",
       "client",
       "platform",
+      "sys",
       "wire"
     ],
     "config": [

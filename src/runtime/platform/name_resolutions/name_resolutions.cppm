@@ -9,6 +9,7 @@ module;
 export module telar.runtime.platform.name_resolutions;
 
 import std;
+import telar.sys.posix;
 
 export import telar.platform.net;
 export import telar.runtime.platform.signals;

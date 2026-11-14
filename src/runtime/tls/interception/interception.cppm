@@ -42,12 +42,14 @@ module;
 export module telar.runtime.tls.interception;
 
 import std;
+import telar.sys.posix;
 
 export import telar.tls;
 
 export import telar.runtime.platform.stream_read_buffer;
 export import telar.runtime.platform.tunnel_sockets;
 import telar.base.diagnostics;
+import telar.base.text;
 import telar.platform.primitives;
 
 // Interface: tls/alpn_offer.cppm

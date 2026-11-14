@@ -46,6 +46,7 @@ import telar.runtime.tests.test_byte_stream;
 import telar.runtime.proxy.http2_capture_streams;
 import telar.runtime.proxy.runtime;
 import telar.runtime.proxy.relay_direction;
+import telar.platform.error;
 
 using namespace telar;
 using namespace telar::runtime;

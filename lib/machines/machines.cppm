@@ -11,11 +11,11 @@ export module telar.machines;
 // what discovery learns of the runtime on each.
 import std;
 
-export import telar.base.text;
 export import telar.base.text.json;
-export import telar.base.text.utf8;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
+import telar.base.text;
+import telar.base.text.utf8;
 import telar.client;
 
 // Interface: telar_machines/number_radix.cppm

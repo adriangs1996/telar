@@ -55,6 +55,7 @@ static_assert(true);
 #include "application/dependencies.hpp"
 #include "platform/window.hpp"
 
+import telar.base.text.utf8;
 import telar.gui.application.workspace_replica;
 import telar.gui.core.metrics;
 import telar.gui.history.browser;

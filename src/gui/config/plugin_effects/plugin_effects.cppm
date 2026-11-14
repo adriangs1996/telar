@@ -26,17 +26,16 @@ import std;
 
 export import telar.gui.input.copy_pointer;
 export import telar.gui.input.binding_effects;
-export import telar.gui.input.key_encoder;
 export import telar.config.client;
 export import telar.config.runtime;
-
-export import telar.gui.config.plugin_query;
 
 export import telar.plugins;
 
 export import telar.gui.core.json_writer;
 import telar.base.diagnostics;
+import telar.gui.config.plugin_query;
 import telar.gui.core.primitives;
+import telar.gui.input.key_encoder;
 import telar.platform.primitives;
 import telar.wire.vocabulary;
 

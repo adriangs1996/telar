@@ -10,12 +10,12 @@ export module telar.runtime.shell_integration;
 
 import std;
 
-export import telar.platform.error;
-export import telar.platform.fs;
 export import telar.platform.process;
 export import telar.runtime.shell_integration.token;
 import telar.platform.primitives;
 import telar.base.text;
+import telar.platform.error;
+import telar.platform.fs;
 
 namespace telar::runtime::shell_files {
 

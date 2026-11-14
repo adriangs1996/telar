@@ -28,21 +28,23 @@ module;
 export module telar.runtime.plugins.tap_configuration;
 
 import std;
+import telar.sys.posix;
 
 export import telar.config.client;
 export import telar.plugins;
 
-export import telar.platform.error;
 export import telar.platform.fs;
 export import telar.platform.paths;
-
-export import telar.runtime.platform.stream_read_buffer;
 
 export import telar.runtime.vocabulary.exchange;
 export import telar.runtime.vocabulary.traffic;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.platform.primitives;
+import telar.platform.error;
+import telar.runtime.platform.stream_read_buffer;
+import telar.base.text.utf8;
+import telar.base.text;
 
 // Interface: plugins/action_encoder.cppm
 export {

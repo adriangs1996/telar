@@ -21,15 +21,15 @@ import std;
 
 export import telar.gui.core.metrics;
 export import telar.gui.input.copy_pointer;
-export import telar.gui.presentation.history_filter_geometry;
 export import telar.config.client;
 
 export import telar.lua;
 
 export import telar.base.memory.containers;
-export import telar.base.text;
-export import telar.base.text.utf8;
 import telar.base.diagnostics;
+import telar.base.text;
+import telar.base.text.utf8;
+import telar.gui.presentation.history_filter_geometry;
 import telar.wire.vocabulary;
 
 // Interface: components/node.cppm

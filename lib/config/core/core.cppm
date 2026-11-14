@@ -11,6 +11,8 @@ import std;
 export import telar.lua;
 export import telar.platform.paths;
 import telar.base.diagnostics;
+import telar.base.text;
+import telar.base.text.utf8;
 import telar.wire.vocabulary;
 
 // Owned textual headers stay in this global module fragment only; importers

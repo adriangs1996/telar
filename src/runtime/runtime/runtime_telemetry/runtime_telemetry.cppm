@@ -43,10 +43,9 @@ module;
 export module telar.runtime.runtime.runtime_telemetry;
 
 import std;
+import telar.sys.posix;
 
 export import telar.runtime.history.event;
-
-export import telar.platform.fs;
 
 export import telar.runtime.platform.request_worker;
 import telar.wire.runtime;
@@ -54,16 +53,17 @@ import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
 import telar.runtime.graphics.kitty;
 import telar.runtime.terminal.control;
+import telar.platform.fs;
+import telar.runtime.diagnostics.operation;
 
 #if (!(defined(__APPLE__)))
-export import telar.runtime.platform.proc_file;
+import telar.runtime.platform.proc_file;
 #endif
 
 export import telar.runtime.vocabulary.exchange;
 export import telar.runtime.proxy.http2_capture_streams;
 
 export import telar.runtime.model.client_layouts;
-export import telar.runtime.diagnostics.operation;
 
 #if (TELAR_DIAGNOSTICS)
 

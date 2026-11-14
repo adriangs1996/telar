@@ -30,6 +30,7 @@ module;
 export module telar.runtime.model.client_layouts;
 
 import std;
+import telar.sys.posix;
 
 export import telar.runtime.agents.description_generator;
 export import telar.runtime.graphics.synchronizer;
@@ -47,13 +48,9 @@ export import telar.runtime.shell_integration.git_context;
 export import telar.runtime.model.launch_record;
 export import telar.base.memory.allocators;
 export import telar.base.memory.containers;
-export import telar.platform.net;
-export import telar.platform.events;
 export import telar.platform.process;
 
 export import telar.base.diagnostics;
-
-export import telar.client;
 
 export import telar.config.runtime;
 import telar.wire.vocabulary;
@@ -65,6 +62,9 @@ import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
 import telar.runtime.graphics.kitty;
 import telar.runtime.terminal.control;
+import telar.client;
+import telar.platform.events;
+import telar.platform.net;
 
 // Interface: model/pending_clipboard.cppm
 export {

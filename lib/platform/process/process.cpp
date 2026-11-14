@@ -25,6 +25,7 @@ module;
 module telar.platform.process;
 
 import std;
+import telar.sys.posix;
 
 namespace telar::runtime {
 

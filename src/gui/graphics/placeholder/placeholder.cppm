@@ -17,11 +17,10 @@ import std;
 
 export import telar.gui.core.metrics;
 
-export import telar.gui.core.json_writer;
-
-export import telar.gui.presentation.activity_order;
 import telar.base.diagnostics;
+import telar.gui.core.json_writer;
 import telar.gui.core.primitives;
+import telar.gui.presentation.activity_order;
 import telar.gui.terminal.screen;
 import telar.wire.vocabulary;
 

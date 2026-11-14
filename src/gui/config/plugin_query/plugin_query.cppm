@@ -24,15 +24,14 @@ export import telar.config.client;
 
 export import telar.gui.core.json_writer;
 
-export import telar.gui.core.unicode_scalar;
 export import telar.gui.input.binding_effects;
 export import telar.gui.input.configuration;
 
-export import telar.gui.config.gui_query;
-
 export import telar.plugins;
 import telar.base.diagnostics;
+import telar.gui.config.gui_query;
 import telar.gui.core.primitives;
+import telar.gui.core.unicode_scalar;
 import telar.wire.vocabulary;
 
 // Interface: config/action_descriptions.cppm

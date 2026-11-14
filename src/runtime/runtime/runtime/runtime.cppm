@@ -13,6 +13,7 @@ module;
 export module telar.runtime.runtime.runtime;
 
 import std;
+import telar.sys.posix;
 
 export import telar.runtime.agents.screen_inference;
 export import telar.runtime.agents.snapshot;
@@ -21,7 +22,6 @@ export import telar.runtime.platform.process_probe;
 export import telar.runtime.runtime.media_service;
 export import telar.runtime.runtime.execution_service;
 
-export import telar.client;
 export import telar.runtime.agents.description_generator;
 export import telar.runtime.persistence.session_store;
 export import telar.config.runtime;
@@ -29,22 +29,14 @@ export import telar.config.runtime;
 export import telar.runtime.plugins.service;
 export import telar.runtime.runtime.client_control;
 
-export import telar.runtime.platform.launch_program;
 export import telar.runtime.platform.local_listener;
 export import telar.runtime.worktrees.git_probe;
 
 export import telar.runtime.runtime.runtime_telemetry;
-export import telar.runtime.exchange_capture.pipeline;
 export import telar.runtime.vocabulary.exchange;
-export import telar.runtime.platform.stream_read_buffer;
-export import telar.runtime.suggestions.engine;
 
 export import telar.runtime.platform.background_executor;
-export import telar.runtime.runtime.delivery.client_delivery;
 
-export import telar.base.editors;
-export import telar.base.text.json;
-export import telar.base.text.utf8;
 import telar.wire.vocabulary;
 import telar.wire.agents;
 import telar.wire.clients;
@@ -62,6 +54,16 @@ import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
 import telar.runtime.graphics.kitty;
 import telar.runtime.terminal.control;
+import telar.base.editors;
+import telar.base.text.json;
+import telar.base.text.utf8;
+import telar.client;
+import telar.runtime.exchange_capture.pipeline;
+import telar.runtime.platform.launch_program;
+import telar.runtime.platform.stream_read_buffer;
+import telar.runtime.runtime.delivery.client_delivery;
+import telar.runtime.suggestions.engine;
+import telar.runtime.shell_integration.words;
 
 // Interface: agents/snapshot.cppm
 export {

@@ -42,6 +42,9 @@ module;
 
 module telar.cli.plugin;
 
+import telar.cli.base.command_error;
+import telar.sys.posix;
+
 namespace telar::runtime::cli {
 
   CommandError fileError(int code) {

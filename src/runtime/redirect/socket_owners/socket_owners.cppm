@@ -119,16 +119,19 @@ module;
 export module telar.runtime.redirect.socket_owners;
 
 import std;
+import telar.sys.posix;
 
 export import telar.runtime.redirect.pf_rules;
 export import telar.runtime.redirect.ingress;
-export import telar.platform.net;
-export import telar.platform.error;
-export import telar.platform.fs;
 export import telar.platform.process;
 
 export import telar.runtime.platform.process_probe;
 import telar.base.diagnostics;
+import telar.base.text;
+import telar.base.text.utf8;
+import telar.platform.error;
+import telar.platform.fs;
+import telar.platform.net;
 import telar.platform.primitives;
 import telar.vocabulary;
 

@@ -49,6 +49,10 @@ static_assert(true);
 
 import telar.runtime.tests.check;
 import telar.runtime.config.loader;
+import telar.config.client;
+import telar.config.core;
+import telar.config.runtime;
+import telar.lua;
 
 using namespace telar::runtime;
 using namespace telar;

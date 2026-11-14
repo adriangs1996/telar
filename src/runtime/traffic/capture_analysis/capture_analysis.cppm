@@ -20,6 +20,7 @@ export import telar.runtime.traffic.control_protocol;
 export import telar.base.memory.allocators;
 export import telar.base.memory.sensitive;
 import telar.base.diagnostics;
+import telar.base.text.utf8;
 import telar.vocabulary;
 
 // Interface: traffic/network_packet.cppm

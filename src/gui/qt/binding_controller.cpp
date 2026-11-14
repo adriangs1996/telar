@@ -72,6 +72,7 @@ import telar.gui.input.copy_pointer;
 import telar.gui.input.key_encoder;
 
 import telar.gui.config.gui_query;
+import telar.gui.presentation.notification_center;
 
 namespace telar::gui::qt {
 

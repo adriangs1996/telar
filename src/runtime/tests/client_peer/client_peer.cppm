@@ -21,16 +21,16 @@ module;
 export module telar.runtime.tests.client_peer;
 
 import std;
-export import telar.runtime.tests.check;
-export import telar.runtime.diagnostics.line;
 export import telar.base.memory.allocators;
 export import telar.platform.primitives;
-export import telar.runtime.terminal.control;
-export import telar.runtime.graphics.kitty;
 
-export import telar.base.diagnostics;
+import telar.base.diagnostics;
+import telar.runtime.diagnostics.line;
+import telar.runtime.graphics.kitty;
+import telar.runtime.runtime.delivery.client_delivery;
+import telar.runtime.terminal.control;
+import telar.runtime.tests.check;
 export import telar.runtime.model.client_layouts;
-export import telar.runtime.runtime.delivery.client_delivery;
 export import telar.wire.vocabulary;
 
 export {

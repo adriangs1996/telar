@@ -71,22 +71,23 @@ module;
 export module telar.runtime.redirect.ingress;
 
 import std;
+import telar.sys.posix;
 
 export import telar.runtime.platform.name_resolutions;
 
 export import telar.runtime.platform.private_tunnel;
 
-export import telar.runtime.vocabulary.frames;
-
 export import telar.platform.net;
-export import telar.platform.error;
-export import telar.runtime.platform.request_worker;
 export import telar.runtime.platform.local_listener;
 
-export import telar.client;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.platform.primitives;
+import telar.client;
+import telar.platform.error;
+import telar.runtime.platform.request_worker;
+import telar.runtime.vocabulary.frames;
+import telar.base.text;
 
 // Interface: redirect/target.cppm
 export {

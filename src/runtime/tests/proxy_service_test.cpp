@@ -62,6 +62,7 @@ import telar.platform.primitives;
 import telar.runtime.tests.http2_fixture;
 import telar.runtime.tests.tls_fixture;
 import telar.runtime.proxy.runtime;
+import telar.runtime.tests.check;
 
 using namespace telar;
 using namespace telar::runtime;

@@ -21,6 +21,8 @@ module;
 
 module telar.cli.runtime_observer;
 
+import telar.sys.posix;
+
 namespace telar::runtime::cli {
 
   std::string nativeSchemaVersion() {

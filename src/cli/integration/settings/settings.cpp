@@ -24,6 +24,7 @@ module;
 #include <cstring>
 
 module telar.cli.integration.settings;
+import telar.sys.posix;
 
 namespace telar::runtime::cli::integration {
 

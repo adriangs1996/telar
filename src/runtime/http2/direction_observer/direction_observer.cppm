@@ -13,15 +13,14 @@ export module telar.runtime.http2.direction_observer;
 
 import std;
 
-export import telar.runtime.http1.head;
-export import telar.base.text;
-
 export import telar.base.memory.allocators;
 export import telar.base.memory.sensitive;
 
 export import telar.runtime.http2.frame_reader;
 export import telar.runtime.http.content;
 import telar.base.diagnostics;
+import telar.base.text;
+import telar.runtime.http1.head;
 
 // Interface: http2/event.cppm
 export {

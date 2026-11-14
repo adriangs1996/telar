@@ -33,6 +33,7 @@ import telar.platform.paths;
 import telar.plugins;
 import telar.base.diagnostics;
 import telar.platform.primitives;
+import telar.sys.posix;
 
 namespace telar::runtime::cli {
 

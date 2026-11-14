@@ -7,6 +7,7 @@ import std;
 
 export import telar.gui.layout.geometry;
 import telar.base.memory.allocators;
+import telar.base.text;
 import telar.wire.layout;
 import telar.wire.vocabulary;
 

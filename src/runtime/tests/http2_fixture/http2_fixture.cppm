@@ -6,7 +6,7 @@ module;
 export module telar.runtime.tests.http2_fixture;
 
 import std;
-export import telar.runtime.tests.check;
+import telar.runtime.tests.check;
 export import telar.runtime.http2.frame_reader;
 
 export {

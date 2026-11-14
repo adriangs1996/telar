@@ -42,6 +42,7 @@ import telar.gui.config.plugin_query;
 import telar.gui.config.plugin_effects;
 import telar.gui.input.copy_pointer;
 import telar.gui.platform.runtime_endpoint;
+import telar.gui.presentation.notification_center;
 
 namespace telar::gui::qt {
 

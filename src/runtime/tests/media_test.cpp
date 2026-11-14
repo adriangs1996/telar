@@ -31,6 +31,7 @@ import telar.runtime.graphics.synchronizer;
 import telar.runtime.platform.request_worker;
 import telar.runtime.terminal.text_reader;
 import telar.wire.vocabulary;
+import telar.base.text;
 
 using namespace telar;
 using namespace telar::runtime;

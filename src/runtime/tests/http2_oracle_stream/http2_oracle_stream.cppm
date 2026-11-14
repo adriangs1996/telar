@@ -5,7 +5,7 @@ export module telar.runtime.tests.http2_oracle_stream;
 
 import std;
 export import telar.runtime.tests.http2_oracle;
-export import telar.runtime.platform.stream_read_buffer;
+import telar.runtime.platform.stream_read_buffer;
 
 export {
   class Http2OracleStream {

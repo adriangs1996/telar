@@ -2,7 +2,7 @@ export module telar.runtime.platform.launch_program;
 
 import std;
 
-export import telar.platform.process;
+import telar.platform.process;
 
 // Interface: platform/launch_program.cppm
 export {

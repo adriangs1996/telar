@@ -17,12 +17,13 @@ import std;
 
 export import telar.base.memory.allocators;
 export import telar.base.memory.containers;
-export import telar.platform.error;
 export import telar.platform.process;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.wire.execution;
 import telar.platform.primitives;
+import telar.platform.error;
+import telar.sys.posix;
 
 // Interface: execution/execution.cppm
 export {

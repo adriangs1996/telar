@@ -23,7 +23,6 @@ import std;
 
 export import telar.platform.graphics;
 
-export import telar.runtime.diagnostics.operation;
 export import telar.runtime.terminal.graphics_storage;
 import telar.base.diagnostics;
 import telar.base.memory.allocators;
@@ -32,6 +31,7 @@ import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
 import telar.runtime.graphics.kitty;
 import telar.runtime.terminal.control;
+import telar.runtime.diagnostics.operation;
 
 // Interface: graphics/frozen_image.cppm
 export {

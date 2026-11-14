@@ -15,20 +15,18 @@ export module telar.gui.application.workspace_replica;
 
 import std;
 
-export import telar.gui.core.unicode_scalar;
-
-export import telar.gui.text.json_unsigned_integer;
-
 export import telar.gui.graphics.texture_cache;
-export import telar.gui.layout.geometry;
-export import telar.gui.model.replicas;
-export import telar.gui.presentation.application_mark;
-export import telar.gui.presentation.notification_center;
 export import telar.render.document;
 import telar.base.diagnostics;
 import telar.gui.core.primitives;
+import telar.gui.core.unicode_scalar;
+import telar.gui.layout.geometry;
+import telar.gui.model.replicas;
+import telar.gui.presentation.application_mark;
+import telar.gui.presentation.notification_center;
 import telar.gui.terminal.row_cache;
 import telar.gui.terminal.screen;
+import telar.gui.text.json_unsigned_integer;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
 export import telar.gui.terminal.fold_map;

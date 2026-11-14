@@ -19,11 +19,7 @@ export module telar.runtime.history.store;
 
 import std;
 
-export import telar.client;
-
 export import telar.runtime.platform.background_executor;
-
-export import telar.base.diagnostics;
 
 export import telar.runtime.history.event;
 
@@ -32,13 +28,15 @@ export import telar.base.memory.containers;
 
 export import telar.runtime.transport.connection;
 
-export import telar.base.history;
 export import telar.config.runtime;
 import telar.wire.vocabulary;
 import telar.wire.agents;
 import telar.wire.history;
 import telar.wire.runtime;
 import telar.platform.primitives;
+import telar.base.diagnostics;
+import telar.base.history;
+import telar.client;
 
 // Interface: history/database.cppm
 export {

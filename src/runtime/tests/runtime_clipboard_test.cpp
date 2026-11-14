@@ -78,6 +78,7 @@ static_assert(true);
 
 import telar.runtime.tests.client_peer;
 import telar.runtime.runtime.client_control;
+import telar.runtime.tests.check;
 
 using namespace telar;
 using namespace telar::runtime;

@@ -4,6 +4,7 @@ module;
 export module telar.config.gui;
 
 import std;
+import telar.base.text;
 export import telar.base.memory.containers;
 export import telar.config.core;
 

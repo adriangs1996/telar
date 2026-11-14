@@ -10,6 +10,7 @@ import std;
 import telar.gui.prompt.editor;
 import telar.gui.prompt.routing;
 import telar.gui.prompt.layout;
+import telar.wire.vocabulary;
 
 using namespace telar::gui::prompt;
 

@@ -28,6 +28,7 @@ module;
 module telar.plugins;
 
 import std;
+import telar.sys.posix;
 
 namespace telar::runtime::plugins {
   namespace {

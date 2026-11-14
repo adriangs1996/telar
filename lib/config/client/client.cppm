@@ -8,6 +8,8 @@ export module telar.config.client;
 import std;
 export import telar.config.core;
 import telar.base.diagnostics;
+import telar.base.text;
+import telar.base.text.utf8;
 import telar.wire.clients;
 import telar.wire.vocabulary;
 

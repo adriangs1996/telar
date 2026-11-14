@@ -8,6 +8,7 @@ module;
 module telar.git;
 
 import std;
+import telar.sys.posix;
 import telar.base.text;
 import telar.platform.fs;
 
