@@ -168,12 +168,31 @@ static void testProcessCache() {
   check(cache.preferred(43) == AgentProvider::unknown);
 }
 
-// The members run this test binary under each agent's name as their first argument: copies
-// under those names would be new executables, and deleting them while Gatekeeper still
-// assesses them crashes syspolicyd and leaves every launch waiting on it in _dyld_start.
-static void testGroupMembers(SystemAllocator& memory) {
+// The members run this test binary through hard links named after each agent, so the kernel
+// names their processes codex and claude. Copies would be new executables, and deleting them
+// while Gatekeeper still assesses them crashes syspolicyd and leaves every launch waiting on it
+// in _dyld_start; a link shares the binary's vnode, so there is nothing new to assess.
+static void testGroupMembers(SystemAllocator& memory, const std::filesystem::path& root) {
   const ExecutablePath executable;
-  const std::array<std::string_view, 5> arguments{"/bin/sh", "-c", "\"$1\" --process-identification-fixture codex & \"$1\" --process-identification-fixture claude & wait", "fixture", executable.view()};
+  std::filesystem::path directory = root;
+  std::error_code error;
+
+  std::filesystem::create_hard_link(executable.c_str(), directory / "codex", error);
+  // A link cannot cross volumes, and the directory beside the binary is always on its volume.
+  if (error == std::errc::cross_device_link) {
+    auto beside = (std::filesystem::path{executable.view()}.parent_path() / "telar-process-test-XXXXXX").string();
+
+    check(::mkdtemp(beside.data()) != nullptr);
+    directory = beside;
+    std::filesystem::create_hard_link(executable.c_str(), directory / "codex");
+  } else {
+    check(!error);
+  }
+
+  std::filesystem::create_hard_link(executable.c_str(), directory / "claude");
+  const auto codex = (directory / "codex").string();
+  const auto claude = (directory / "claude").string();
+  const std::array<std::string_view, 6> arguments{"/bin/sh", "-c", "\"$1\" --process-identification-fixture & \"$2\" --process-identification-fixture & wait", "fixture", codex, claude};
   Command command{memory, Launch{.cwd = "/", .arguments = arguments}, CommandPurpose::administration};
   PipeProcess process{command.specification({})};
   ProcessInspector inspector;
@@ -192,6 +211,8 @@ static void testGroupMembers(SystemAllocator& memory) {
   } while (std::chrono::steady_clock::now() < deadline);
 
   check(selected_codex.provider == AgentProvider::codex && selected_claude.provider == AgentProvider::claude);
+  check(inspector.name(selected_codex.identity->pid).view() == "codex");
+  check(inspector.name(selected_claude.identity->pid).view() == "claude");
   check(selected_codex.identity->pid != process.processId());
   check(selected_codex.identity->process_group == process.processId());
   check(selected_codex.session_host == SessionHost::shared_server && selected_codex.name.view() == "Codex");
@@ -208,6 +229,9 @@ static void testGroupMembers(SystemAllocator& memory) {
   check(result.count == 1 && result.panes[0].provider == AgentProvider::codex);
   check(!result.panes[0].shell_foreground && result.panes[0].identity->pid == process.processId());
   check(result.panes[0].agent_identity == selected_codex.identity);
+  if (directory != root) {
+    std::filesystem::remove_all(directory);
+  }
 }
 
 struct LeaderlessGroupInspector {
@@ -389,6 +413,6 @@ void testProcessIdentification() {
   testListeningPortsOrder();
   testListeningPorts();
   testTerminalForegroundSnapshot(memory);
-  testGroupMembers(memory);
+  testGroupMembers(memory, root);
   std::filesystem::remove_all(root);
 }

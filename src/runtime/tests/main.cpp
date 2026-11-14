@@ -15,15 +15,6 @@ import telar.runtime.tests.check;
 import telar.platform.error;
 
 int main(int argc, char** argv) {
-  // Re-executes this same binary with the given name as its first argument, so the
-  // process reads as that agent without a new executable that Gatekeeper must assess.
-  if (argc == 3 && std::strcmp(argv[1], "--process-identification-fixture") == 0) {
-    char* const arguments[]{argv[2], argv[1], nullptr};
-
-    ::execv(argv[0], arguments);
-    return 1;
-  }
-
   if (argc == 2 && std::strcmp(argv[1], "--process-identification-fixture") == 0) {
     for (;;) {
       ::pause();
