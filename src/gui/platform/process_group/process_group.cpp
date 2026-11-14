@@ -3,7 +3,7 @@ module;
 #include "platform/process_group.h"
 #include <cstdint>
 
-module telar.gui.platform.private_file_stamp;
+module telar.gui.platform.process_group;
 
 import std;
 

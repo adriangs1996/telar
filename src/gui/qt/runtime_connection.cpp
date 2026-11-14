@@ -45,7 +45,7 @@ static_assert(true);
 import telar.gui.machines.discovery;
 import telar.gui.machines.picker;
 import telar.gui.platform.awake_clock;
-import telar.gui.platform.private_file_stamp;
+import telar.gui.platform.peer_identity;
 import telar.client;
 import telar.gui.transport.runtime_link;
 

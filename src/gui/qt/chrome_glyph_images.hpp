@@ -65,7 +65,7 @@ static_assert(true);
 import telar.gui.fonts.face;
 import telar.gui.fonts.font_requests;
 #if (defined(Q_OS_MACOS))
-import telar.gui.platform.private_file_stamp;
+import telar.gui.fonts.glyph_rasterizer;
 #endif
 
 namespace telar::gui::qt {

@@ -6,7 +6,7 @@ module;
 #include <cstdint>
 #include <cstring>
 
-module telar.gui.platform.private_file_stamp;
+module telar.gui.fonts.glyph_rasterizer;
 
 import std;
 

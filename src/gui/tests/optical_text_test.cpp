@@ -45,7 +45,7 @@ static_assert(true);
 #include "qt/optical_text.hpp"
 
 import telar.gui.fonts.face;
-import telar.gui.platform.private_file_stamp;
+import telar.gui.fonts.glyph_rasterizer;
 
 extern "C" {
 #include "glyph_rasterizer.h"

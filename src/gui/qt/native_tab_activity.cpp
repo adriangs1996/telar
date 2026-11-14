@@ -54,7 +54,7 @@ static_assert(true);
 import telar.gui.core.metrics;
 import telar.gui.graphics.placeholder;
 import telar.gui.platform.awake_clock;
-import telar.gui.platform.private_file_stamp;
+import telar.gui.platform.progress_cosine;
 import telar.gui.presentation.display_metrics;
 import telar.gui.presentation.activity_order;
 

@@ -28,7 +28,7 @@ module telar.gui.platform.profile_file;
 
 import std;
 
-import telar.gui.platform.private_file_stamp;
+import telar.gui.platform.secure_random;
 import telar.platform.error;
 import telar.platform.fs;
 import telar.gui.text.json_unsigned_integer;

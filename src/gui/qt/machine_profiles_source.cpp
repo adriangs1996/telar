@@ -49,7 +49,7 @@ import telar.gui.machines.profile_store;
 import telar.gui.machines.discovery;
 import telar.gui.platform.file_stamp;
 import telar.gui.platform.profile_file;
-import telar.gui.platform.private_file_stamp;
+import telar.gui.platform.secure_random;
 
 namespace telar::gui::qt {
 

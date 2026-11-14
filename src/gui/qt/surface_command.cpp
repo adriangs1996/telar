@@ -28,7 +28,7 @@ static_assert(true);
 #include <string_view>
 #include <utility>
 
-import telar.gui.platform.private_file_stamp;
+import telar.gui.platform.process_group;
 
 namespace telar::gui::qt {
 

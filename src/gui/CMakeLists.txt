@@ -48,7 +48,7 @@ target_link_libraries(gui-glyphs INTERFACE gui-core)
 add_library(gui-clock INTERFACE)
 target_link_libraries(gui-clock INTERFACE gui-core)
 
-add_library(gui-posix STATIC platform/clipboard_image_source.cpp platform/clipboard_image_file.c platform/private_file_stamp/peer_identity.cpp platform/notification_commands/window_lease.cpp platform/profile_file/profile_file.cpp  platform/notification_commands/stdio_socket.cpp platform/managed_directory/managed_directory.cpp platform/private_file_stamp/process_group.cpp platform/process_group.c)
+add_library(gui-posix STATIC platform/clipboard_image_source.cpp platform/clipboard_image_file.c platform/peer_identity/peer_identity.cpp platform/notification_commands/window_lease.cpp platform/profile_file/profile_file.cpp  platform/notification_commands/stdio_socket.cpp platform/managed_directory/managed_directory.cpp platform/process_group/process_group.cpp platform/process_group.c)
 target_sources(gui-posix PRIVATE platform/shared_image_source/shared_image_source.cpp)
 target_link_libraries(gui-posix PUBLIC gui-core Threads::Threads)
 add_executable(telar-gui-command platform/surface_command_main.c)
@@ -626,7 +626,7 @@ if(TELAR_GUI_NATIVE)
     add_test(NAME gui-native-window-update COMMAND gui-native-window-update-test)
     set_tests_properties(gui-native-window-update PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=cocoa" TIMEOUT 30)
     add_dependencies(gui-lint gui-native-window-update-test)
-    target_sources(gui-platform PRIVATE platform/macos/font.mm platform/macos/glyph_rasterizer.mm platform/private_file_stamp/macos/glyph_rasterizer.cpp)
+    target_sources(gui-platform PRIVATE platform/macos/font.mm platform/macos/glyph_rasterizer.mm fonts/glyph_rasterizer/glyph_rasterizer.cpp)
     target_sources(gui-platform PRIVATE platform/macos/optical_text.mm)
     target_link_libraries(gui-platform PRIVATE Qt6::GuiPrivate)
     target_compile_options(gui-platform PRIVATE "$<$<COMPILE_LANGUAGE:OBJC,OBJCXX>:-fobjc-arc>")
@@ -674,7 +674,7 @@ if(TELAR_GUI_NATIVE)
       COMMAND "${GUI_WAYLAND_SCANNER}" server-header "${GUI_BACKGROUND_EFFECT_XML}" "${GUI_BACKGROUND_EFFECT_SERVER_HEADER}"
       COMMAND "${GUI_WAYLAND_SCANNER}" private-code "${GUI_BACKGROUND_EFFECT_XML}" "${GUI_BACKGROUND_EFFECT_CODE}"
       DEPENDS "${GUI_BACKGROUND_EFFECT_XML}" VERBATIM)
-    target_sources(gui-platform PRIVATE platform/private_file_stamp/linux/background_effect.cpp
+    target_sources(gui-platform PRIVATE platform/background_effect/background_effect.cpp
       platform/linux/background_effect.c "${GUI_BACKGROUND_EFFECT_HEADER}" "${GUI_BACKGROUND_EFFECT_CODE}")
     target_include_directories(gui-platform PRIVATE "${GUI_BACKGROUND_EFFECT_DIR}")
     target_link_libraries(gui-platform PRIVATE Qt6::WaylandClientPrivate PkgConfig::GUI_WAYLAND_CLIENT PkgConfig::GUI_XCB)
