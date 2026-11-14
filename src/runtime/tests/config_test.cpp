@@ -273,7 +273,7 @@ return {api_version=2,plugins=plugins,profiles={selected={plugins={{path='replac
       rejected = true;
     }
 
-    check(rejected != accepted && memory.liveBytes() == 0);
+    check(rejected != accepted && budget.liveBytes() == 0);
   }
 
   const auto outside = root + ".lua";
