@@ -3,6 +3,8 @@
 
 import std;
 import telar.runtime.tests.protocol_peer;
+import telar.wire.content;
+import telar.wire.history;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 

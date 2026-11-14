@@ -23,8 +23,6 @@ using namespace telar;
 using namespace telar::runtime;
 
 namespace {
-  using Memory = BudgetAllocator<SystemAllocator>;
-
   struct Workload {
     std::string_view name;
     std::string input;
@@ -60,15 +58,17 @@ namespace {
 
   struct Probe {
     SystemAllocator system;
-    Memory memory{system, 64 * 1024 * 1024};
+    BudgetAllocator<SystemAllocator> budgeted{system, 64 * 1024 * 1024};
+    SynchronizedAllocator<BudgetAllocator<SystemAllocator>> synchronized{budgeted};
+    MemoryAdapter<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>> memory{synchronized};
     MediaBudget budget{GraphicsLimits::maximum_global_bytes};
     std::shared_ptr<PtyResponseQueue> queue = std::make_shared<PtyResponseQueue>();
-    std::shared_ptr<PaneMedia<Memory>> media;
-    Terminal<Memory> terminal;
+    std::shared_ptr<PaneMedia> media;
+    Terminal terminal;
     std::uint64_t digest = 0xcbf29ce484222325;
 
     explicit Probe(TerminalSize size)
-        : media(std::make_shared<PaneMedia<Memory>>(memory, budget, GraphicsLimits{}, size, queue)),
+        : media(std::make_shared<PaneMedia>(memory, budget, GraphicsLimits{}, size, queue)),
           terminal(memory, size, TerminalPurpose::separate_media, queue, GraphicsQueryResources{GraphicsLimits{}, budget, &media->queryUsage()}) {
       terminal.attachMedia(*media);
     }

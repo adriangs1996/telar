@@ -5,8 +5,13 @@
 import std;
 import telar.runtime.tests.agent_oracle;
 import telar.runtime.tests.protocol_peer;
+import telar.wire.agents;
+import telar.wire.editor;
+import telar.wire.execution;
+import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.runtime;
+import telar.wire.worktrees;
 
 using namespace telar;
 
