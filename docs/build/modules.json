@@ -420,7 +420,7 @@
     "src/gui/tests/plugin_catalog_cases/plugin_catalog_cases.cppm": "telar.gui.tests.plugin_catalog_cases",
     "src/gui/tests/plugin_effect_cases/plugin_effect_cases.cppm": "telar.gui.tests.plugin_effect_cases",
     "src/gui/tests/session_fixture/session_fixture.cppm": "telar.gui.tests.session_fixture",
-    "src/gui/prompt/text/text.cppm": "telar.gui.prompt.text",
+    "src/gui/prompt/editor/editor-text.cppm": "telar.gui.prompt.editor:text",
     "src/gui/prompt/routing/routing.cppm": "telar.gui.prompt.routing",
     "src/gui/prompt/editor/editor.cppm": "telar.gui.prompt.editor",
     "src/gui/prompt/layout/layout.cppm": "telar.gui.prompt.layout",

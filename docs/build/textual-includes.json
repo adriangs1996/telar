@@ -770,7 +770,7 @@
     "<cstddef>",
     "<cstdint>"
   ],
-  "src/gui/prompt/text/text.cppm": [
+  "src/gui/prompt/editor/editor-text.cppm": [
     "<cstddef>",
     "<cstdint>"
   ],

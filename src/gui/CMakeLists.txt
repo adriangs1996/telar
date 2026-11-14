@@ -72,10 +72,10 @@ target_sources(gui-core PRIVATE
   platform/secure_random/secure_random.cpp
   prompt/completion/completion.cpp
   prompt/editor/editor.cpp
+  prompt/editor/editor-text.cpp
   prompt/layout/layout.cpp
   prompt/line/line.cpp
   prompt/routing/routing.cpp
-  prompt/text/text.cpp
   suggestions/state/state.cpp
   text/bounded_editor/bounded_editor.cpp
   text/json_unsigned_integer/json_unsigned_integer.cpp

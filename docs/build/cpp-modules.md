@@ -106,7 +106,7 @@ existe también hace fallar el checker.
 | config | 5 | un módulo por proceso |
 | runtime | 73 | transporte, terminal, persistencia, proxy, tráfico y servicios |
 | CLI | 17 | argumentos, conexión y familias de comandos |
-| GUI | 58 | dominios y adaptadores C++; incluye una partición de vistas de fuentes |
+| GUI | 58 | dominios y adaptadores C++; incluye las particiones de vistas de fuentes y de texto del editor de prompt |
 | EBNF | 2 | lexer y parser |
 
 Las agrupaciones respetan las dependencias entre componentes. Los servicios usan
