@@ -92,7 +92,7 @@ ya no está en el fichero también hace fallar el checker.
 | --- | ---: | --- |
 | base | 5 | memoria, texto, diagnósticos, editores, historial |
 | client, platform, Lua, plugins, TLS | 5 | un módulo por biblioteca |
-| config | 5 | un módulo por proceso, más un agregador mientras migran los importadores |
+| config | 5 | un módulo por proceso |
 | runtime | 73 | transporte, terminal, persistencia, proxy, tráfico y servicios |
 | CLI | 17 | argumentos, conexión y familias de comandos |
 | GUI | 58 | dominios y adaptadores C++; incluye una partición de vistas de fuentes |
