@@ -55,6 +55,7 @@ static_assert(true);
 #include <cstddef>
 #include <poll.h>
 #include <pwd.h>
+#include <spawn.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
 #include <termios.h>
@@ -273,6 +274,74 @@ static void testInheritedDescriptors() {
 
   check(WIFEXITED(status) && WEXITSTATUS(status) == 0);
   check(::fcntl(high.get(), F_GETFD) >= 0);
+}
+
+// A child spawned with keepStandardStreams sees this process's stdout and stderr, the stdin a
+// redirect placed, and none of the other descriptors this process left open across exec.
+static void testStandardStreamsOnly() {
+  std::array<int, 2> pipe{};
+
+  check(::pipe(pipe.data()) == 0);
+
+  FileDescriptor reader{pipe[0]};
+  FileDescriptor writer{pipe[1]};
+
+  const auto child = ::fork();
+
+  check(child >= 0);
+  if (child == 0) {
+    try {
+      if (::dup2(writer.get(), STDOUT_FILENO) < 0 || ::dup2(writer.get(), STDERR_FILENO) < 0 || ::dup2(writer.get(), 9) < 0) {
+        _exit(1);
+      }
+
+      FileDescriptor input{::open("/dev/null", O_RDONLY | O_CLOEXEC)};
+      if (!input) {
+        _exit(1);
+      }
+
+      SpawnOptions spawn{0};
+
+      spawn.redirect(input.get(), STDIN_FILENO);
+      spawn.keepStandardStreams();
+
+      const char* script = "{ true >&9; } 2>/dev/null && exit 2; read -r line && exit 3; echo out; echo err >&2";
+      std::array<char*, 4> arguments{const_cast<char*>("/bin/sh"), const_cast<char*>("-c"), const_cast<char*>(script), nullptr};
+      std::array<char*, 1> environment{nullptr};
+      pid_t started = -1;
+      int status = 0;
+
+      checkSpawn(::posix_spawn(&started, arguments.front(), &spawn.actions, &spawn.attributes, arguments.data(), environment.data()));
+      while (::waitpid(started, &status, 0) < 0 && errno == EINTR) {
+      }
+
+      _exit(WIFEXITED(status) ? WEXITSTATUS(status) : 1);
+    } catch (...) {
+      _exit(1);
+    }
+  }
+
+  writer.reset();
+
+  std::string output;
+  std::array<char, 64> buffer{};
+
+  for (ssize_t count; (count = ::read(reader.get(), buffer.data(), buffer.size())) != 0;) {
+    if (count < 0 && errno == EINTR) {
+      continue;
+    }
+
+    check(count > 0);
+    output.append(buffer.data(), static_cast<std::size_t>(count));
+  }
+
+  int status = 0;
+
+  while (::waitpid(child, &status, 0) < 0 && errno == EINTR) {
+  }
+
+  check(WIFEXITED(status) && WEXITSTATUS(status) == 0);
+  check(output == "out\nerr\n");
 }
 
 static void testSocketOwnership() {
@@ -509,6 +578,7 @@ void testPlatform() {
   testFraming(memory);
   testDescriptorHoles();
   testInheritedDescriptors();
+  testStandardStreamsOnly();
   testSocketOwnership();
   testChildExitNotification();
   ProcessInspector inspector;
