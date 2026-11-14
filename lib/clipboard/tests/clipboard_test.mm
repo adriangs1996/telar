@@ -1,14 +1,19 @@
-#define main clipboard_cli_main
-#include "../main.cpp"
-#undef main
-
+#include "clipboard.hpp"
 #include "platform/private_clipboard.hpp"
 #import <AppKit/AppKit.h>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <random>
 #include <string>
+#include <unistd.h>
+#include <vector>
+
+// Defined in cli.cpp, which this test links in place of the reader's main.
+namespace telar::clipboard {
+  int runCli(int argc, char** argv);
+}
 
 namespace {
   void check(bool condition, const char* message) {
@@ -29,7 +34,7 @@ namespace {
     char option[] = "--output";
     char* arguments[] = {program, option, path.data()};
 
-    check(clipboard_cli_main(3, arguments) == 0, "CLI saves content");
+    check(telar::clipboard::runCli(3, arguments) == 0, "CLI saves content");
 
     FILE* file = std::fopen(path.c_str(), "rb");
 
@@ -56,7 +61,7 @@ int main() {
     char program[] = "clipboard";
     char* arguments[] = {program};
 
-    check(clipboard_cli_main(1, arguments) == 1, "CLI reports missing content");
+    check(telar::clipboard::runCli(1, arguments) == 1, "CLI reports missing content");
 
     NSMutableString* text = [NSMutableString stringWithString:@"UTF-8: áéíóú 🧵\n"];
 

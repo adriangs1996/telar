@@ -1,8 +1,8 @@
-#include "backend.hpp"
-#include <cstdlib>
-#include <new>
-#include <stdexcept>
-
+// Outside the module: the reader imports the Wayland and X11 backends, which import
+// telar.clipboard, whose header declares read in the global module.
+import std;
+import telar.clipboard;
+import telar.clipboard.linux;
 import telar.clipboard.wayland;
 import telar.clipboard.x11;
 

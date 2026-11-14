@@ -18,13 +18,15 @@ dependencies, for headless installations.
 
 ## Build and test
 
-Requires CMake 3.25+, Ninja, and a C++23 compiler. On Linux, also install
-pkg-config, the Wayland client and XCB development packages, and `wayland-scanner`.
-The Linux backends are C++ modules (`telar.clipboard.wayland` and `telar.clipboard.x11`),
-each the only owner of its library's headers, so a native Linux build needs the
-toolchain that `cmake/cpp_modules.cmake` requires: configure with
-`-DCMAKE_TOOLCHAIN_FILE=<cache>/toolchain.cmake` from `tools/bootstrap-cpp.py`.
-On Arch/Omarchy:
+C++ importers reach the API through the `telar.clipboard` module, which owns
+`includes/clipboard.hpp`; the header stays for Objective-C++. The Linux backends
+are C++ modules too (`telar.clipboard.wayland` and `telar.clipboard.x11`, each the
+only owner of its library's headers, on top of `telar.clipboard.linux`), and the
+reader imports `std` and `telar.sys`. Every build therefore needs the toolchain
+that `cmake/cpp_modules.cmake` requires: Ninja and the pinned Clang, configured
+with `-DCMAKE_TOOLCHAIN_FILE=<cache>/toolchain.cmake` from `tools/bootstrap-cpp.py`.
+On Linux, also install pkg-config, the Wayland client and XCB development packages,
+and `wayland-scanner`. On Arch/Omarchy:
 
 ```sh
 sudo pacman -S --needed base-devel clang cmake ninja pkgconf wayland libxcb
@@ -35,23 +37,15 @@ LLVM's `clangd`,
 No machine-specific compiler or SDK paths are stored in the project.
 
 ```sh
-cmake --preset debug
+cmake --preset debug -DCMAKE_TOOLCHAIN_FILE=<cache>/toolchain.cmake
 cmake --build --preset debug
 ctest --preset debug
 ./out/debug/clipboard
 ```
 
-`release` and `sanitize` have matching configure, build, and test presets.
-`sanitize` enables AddressSanitizer and UndefinedBehaviorSanitizer with GCC or Clang.
-To select a different compiler, pass `-DCMAKE_CXX_COMPILER=/path/to/clang++`
-when configuring that preset. If Apple's sanitizer runtime hangs before `main`,
-try Homebrew LLVM on macOS:
-
-```sh
-cmake --preset sanitize -DCMAKE_CXX_COMPILER="$(brew --prefix llvm)/bin/clang++"
-cmake --build --preset sanitize
-ctest --preset sanitize
-```
+`release` and `sanitize` have matching configure, build, and test presets;
+pass them the same toolchain file. `sanitize` enables AddressSanitizer and
+UndefinedBehaviorSanitizer.
 
 Tests cover large UTF-8 text, empty text, PNG/TIFF/JPEG images larger than 2048
 bytes, MIME types, image priority, exact file output, and unsupported content.
@@ -82,7 +76,7 @@ GUI tests' X11 provider and fixture helpers. No desktop clipboard is modified.
 
 ```sh
 sudo pacman -S --needed sway wl-clipboard xorg-server-xvfb xorg-xauth xclip python-pillow
-cmake --preset debug -DCMAKE_CXX_COMPILER=clang++ -DCLIPBOARD_LINUX_INTEGRATION_TESTS=ON
+cmake --preset debug -DCMAKE_TOOLCHAIN_FILE=<cache>/toolchain.cmake -DCLIPBOARD_LINUX_INTEGRATION_TESTS=ON
 cmake --build --preset debug
 ctest --preset debug
 ```

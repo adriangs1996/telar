@@ -2,6 +2,7 @@
 set(TELAR_MACOS_MODULES
   lib/sys/apple/apple.cppm
   src/gui/fonts/glyph_rasterizer/glyph_rasterizer.cppm
+  src/runtime/platform/frameworks/frameworks.cppm
   src/runtime/redirect/record/record.cppm
 )
 set(TELAR_LINUX_MODULES

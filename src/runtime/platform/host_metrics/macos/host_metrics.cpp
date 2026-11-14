@@ -1,17 +1,15 @@
 module;
 #include "telar_platform/trace_macro.hpp"
 
-#include <CoreFoundation/CoreFoundation.h>
-#include <IOKit/ps/IOPSKeys.h>
-#include <IOKit/ps/IOPowerSources.h>
-
 module telar.runtime.platform.host_metrics;
 
 import std;
 import telar.sys.apple;
+import telar.sys.posix;
 
 import telar.base.diagnostics;
 import telar.platform.primitives;
+import telar.runtime.platform.frameworks;
 
 namespace telar::runtime {
   namespace {
@@ -50,8 +48,8 @@ namespace telar::runtime {
           continue;
         }
 
-        const auto current = integerValue(description, CFSTR(kIOPSCurrentCapacityKey));
-        const auto maximum = integerValue(description, CFSTR(kIOPSMaxCapacityKey));
+        const auto current = integerValue(description, power_source_keys::current_capacity);
+        const auto maximum = integerValue(description, power_source_keys::max_capacity);
         if (!current || !maximum || *current < 0 || *maximum <= 0) {
           continue;
         }

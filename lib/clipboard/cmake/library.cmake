@@ -4,14 +4,19 @@ if(TARGET telar-clipboard)
 endif()
 option(TELAR_CLIPBOARD_NATIVE "Build native graphical-session clipboard access" ON)
 set(clipboard_source_dir "${CMAKE_CURRENT_LIST_DIR}/..")
-# The Linux backends are modules that own their libraries' headers; the reader imports both.
-if(TELAR_CLIPBOARD_NATIVE AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  include("${clipboard_source_dir}/../../cmake/cpp_modules.cmake")
+# telar.clipboard exports the API to C++ importers; the Linux backends are modules that own
+# their libraries' headers, and the reader imports both.
+include("${clipboard_source_dir}/../../cmake/cpp_modules.cmake")
+if(NOT TARGET telar-sys)
+  add_subdirectory("${clipboard_source_dir}/../sys" "${CMAKE_BINARY_DIR}/telar-sys")
 endif()
 add_library(telar-clipboard STATIC)
 target_compile_features(telar-clipboard PUBLIC cxx_std_23)
 # The header-only tbc annotations state the API's lifetime contracts.
 target_include_directories(telar-clipboard PUBLIC "${clipboard_source_dir}/includes" "${clipboard_source_dir}/../tbc/include")
+target_sources(telar-clipboard PUBLIC FILE_SET CXX_MODULES BASE_DIRS "${clipboard_source_dir}"
+  FILES "${clipboard_source_dir}/clipboard.cppm")
+target_link_libraries(telar-clipboard PUBLIC telar::sys)
 if(NOT TELAR_CLIPBOARD_NATIVE)
   target_sources(telar-clipboard PRIVATE "${clipboard_source_dir}/src/unavailable.cpp")
 elseif(APPLE)
@@ -40,10 +45,12 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     COMMAND "${WAYLAND_SCANNER}" private-code "${clipboard_protocol}" "${clipboard_protocol_code}"
     DEPENDS "${clipboard_protocol}" VERBATIM)
   target_sources(telar-clipboard PRIVATE
-    "${clipboard_source_dir}/src/linux/clipboard.cpp" "${clipboard_source_dir}/wayland/wayland.cpp"
-    "${clipboard_source_dir}/x11/x11.cpp" "${clipboard_protocol_header}" "${clipboard_protocol_code}")
-  target_sources(telar-clipboard PRIVATE FILE_SET CXX_MODULES BASE_DIRS "${clipboard_source_dir}"
-    FILES "${clipboard_source_dir}/wayland/wayland.cppm" "${clipboard_source_dir}/x11/x11.cppm")
+    "${clipboard_source_dir}/src/linux/clipboard.cpp" "${clipboard_source_dir}/linux/linux.cpp"
+    "${clipboard_source_dir}/wayland/wayland.cpp" "${clipboard_source_dir}/x11/x11.cpp"
+    "${clipboard_protocol_header}" "${clipboard_protocol_code}")
+  target_sources(telar-clipboard PRIVATE FILE_SET clipboard_linux TYPE CXX_MODULES BASE_DIRS "${clipboard_source_dir}"
+    FILES "${clipboard_source_dir}/linux/linux.cppm" "${clipboard_source_dir}/wayland/wayland.cppm"
+    "${clipboard_source_dir}/x11/x11.cppm")
   target_include_directories(telar-clipboard PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
   target_link_libraries(telar-clipboard PUBLIC PkgConfig::CLIPBOARD_LINUX)
 else()

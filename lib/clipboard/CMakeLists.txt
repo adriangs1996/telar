@@ -22,7 +22,7 @@ option(CLIPBOARD_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSaniti
 option(CLIPBOARD_LINUX_INTEGRATION_TESTS "Test private Sway and Xvfb clipboards" OFF)
 
 include(cmake/library.cmake)
-add_executable(clipboard main.cpp)
+add_executable(clipboard main.cpp cli.cpp)
 target_link_libraries(clipboard PRIVATE telar-clipboard)
 
 if(MSVC)
@@ -54,11 +54,12 @@ if(BUILD_TESTING)
     set(clipboard_test_support "${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/tests")
     add_executable(clipboard-test
       tests/clipboard_test.mm
+      cli.cpp
       "${clipboard_test_support}/platform/macos/private_clipboard.mm"
     )
     target_include_directories(clipboard-test PRIVATE includes "${clipboard_test_support}")
     set_target_properties(clipboard-test PROPERTIES OBJCXX_STANDARD 23 OBJCXX_STANDARD_REQUIRED YES OBJCXX_EXTENSIONS NO)
-    target_compile_options(clipboard-test PRIVATE -fobjc-arc -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wshadow)
+    target_compile_options(clipboard-test PRIVATE "$<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>" -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wshadow)
     target_link_libraries(clipboard-test PRIVATE telar-clipboard)
 
     if(CLIPBOARD_WARNINGS_AS_ERRORS)
@@ -87,7 +88,7 @@ if(BUILD_TESTING)
 endif()
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/../tbc/cmake/tbcLifetimeCheck.cmake")
-tbc_add_lifetime_check(lifetime-check "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp")
+tbc_add_lifetime_check(lifetime-check "${CMAKE_CURRENT_SOURCE_DIR}/cli.cpp")
 
 get_filename_component(clipboard_compiler_directory "${CMAKE_CXX_COMPILER}" DIRECTORY)
 foreach(mode IN ITEMS format format-check lint)

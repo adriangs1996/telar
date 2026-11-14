@@ -1,8 +1,5 @@
 module;
 #include "tbc/annotations.hpp"
-#if (defined(__APPLE__))
-#include <CoreFoundation/CoreFoundation.h>
-#endif
 
 export module telar.runtime.platform.system_certificates;
 
@@ -74,8 +71,6 @@ export {
       }
 
     private:
-      using Resource = std::unique_ptr<const void, decltype(&CFRelease)>;
-
       // Reads one keychain and hands each certificate to `consume`, which calls the caller's consumer at `target`.
       static void readKeychain(const char* path, void* target, void (*consume)(void*, std::span<const std::uint8_t>));
 
