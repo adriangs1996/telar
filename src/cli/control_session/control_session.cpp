@@ -1,10 +1,6 @@
-module;
-#include <cstddef>
-#include <cstdint>
-#include <sys/socket.h>
-#include <sys/time.h>
-
 module telar.cli.control_session;
+
+import telar.sys.socket;
 
 namespace telar::runtime::cli {
 
@@ -38,7 +34,7 @@ namespace telar::runtime::cli {
   }
 
   void RuntimeConnection::receiveTimeout(unsigned seconds) {
-    const timeval timeout{.tv_sec = static_cast<time_t>(seconds), .tv_usec = 0};
+    const timeval timeout{.tv_sec = static_cast<std::time_t>(seconds), .tv_usec = 0};
     if (::setsockopt(client_.descriptor(), SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) != 0) {
       throw SystemError{"Set runtime reply timeout"};
     }

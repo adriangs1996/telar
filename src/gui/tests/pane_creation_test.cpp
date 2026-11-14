@@ -16,7 +16,6 @@ static_assert(true);
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/protocol/clients.hpp"
-#include "telar_client/protocol/layout.hpp"
 #include "telar_client/protocol/pane_io.hpp"
 #include "telar_client/protocol/runtime.hpp"
 #include "telar_client/serializers/telar_cells.hpp"

@@ -1,10 +1,5 @@
 module;
-#include "shell_scripts.hpp"
-#include <cerrno>
-#include <fcntl.h>
-#include <limits.h>
-#include <sys/stat.h>
-#include <unistd.h>
+#include "tbc/annotations.hpp"
 
 export module telar.runtime.shell_integration;
 
@@ -14,8 +9,13 @@ export import telar.platform.process;
 export import telar.runtime.shell_integration.token;
 import telar.platform.primitives;
 import telar.base.text;
-import telar.platform.error;
-import telar.platform.fs;
+
+// The scripts of shell_integration/, which the build compiles in.
+namespace telar::runtime::shell_scripts {
+
+#include "shell_scripts.inc"
+
+}
 
 namespace telar::runtime::shell_files {
 
@@ -157,32 +157,27 @@ namespace telar::runtime::shell_files {
 
 export namespace telar::runtime {
 
+  // The shell `program` names, when telar can integrate with it.
+  std::optional<IntegratedShell> integrableShellProgram(std::string_view program) noexcept;
+
+  // Whether a shell started with `option` still runs interactively, as the integration needs.
+  bool integrableShellOption(std::string_view option) noexcept;
+
   // The shell these arguments start interactively, when telar can integrate with it: a shell it
   // knows, with no command, no script and no option but login and interactive. Anything else
-  // keeps the startup the user asked for.
+  // keeps the startup the user asked for. A template over the caller's argument range, so only
+  // the walk stays here.
   template <std::ranges::input_range Arguments>
-  inline std::optional<IntegratedShell> integrableShell(const Arguments& arguments) noexcept {
+  TBC_HOT_PATH inline std::optional<IntegratedShell> integrableShell(const Arguments& arguments) noexcept {
     auto argument = std::ranges::begin(arguments);
     if (argument == std::ranges::end(arguments)) {
       return std::nullopt;
     }
 
-    auto program = std::string_view{*argument};
-
-    program = program.substr(program.rfind('/') + 1);
-    std::optional<IntegratedShell> shell;
-
-    if (program == "zsh") {
-      shell = IntegratedShell::zsh;
-    } else if (program == "bash") {
-      shell = IntegratedShell::bash;
-    } else if (program == "fish") {
-      shell = IntegratedShell::fish;
-    }
+    auto shell = integrableShellProgram(std::string_view{*argument});
 
     for (++argument; shell && argument != std::ranges::end(arguments); ++argument) {
-      const auto option = std::string_view{*argument};
-      if (option != "-l" && option != "-i" && option != "-il" && option != "-li" && option != "--login") {
+      if (!integrableShellOption(std::string_view{*argument})) {
         return std::nullopt;
       }
     }
@@ -195,172 +190,36 @@ export namespace telar::runtime {
   public:
     // `directory` holds the installed scripts; an empty one turns the integration off. With
     // `ssh`, an integrated shell's `ssh` brings the integration to the hosts it reaches.
-    inline ShellIntegration(Memory& memory, std::string_view directory, bool ssh = false)
-        : directory_(directory, AllocatorRef<char, Memory>{memory}),
-          sentinel_(AllocatorRef<char, Memory>{memory}),
-          ssh_(AllocatorRef<char, Memory>{memory}),
-          memory_(memory) {
-      if (!directory_.empty()) {
-        sentinel_.assign(directory_);
-        sentinel_ += '/';
-        sentinel_ += files.back().directory;
-        sentinel_ += '/';
-        sentinel_ += files.back().name;
-      }
-
-      if (!directory_.empty() && ssh) {
-        ssh_.assign(directory_);
-        ssh_ += '/';
-        ssh_ += shell_files::ssh.directory;
-        ssh_ += '/';
-        ssh_ += shell_files::ssh.name;
-      }
-    }
+    ShellIntegration(Memory& memory, std::string_view directory, bool ssh = false);
 
     // Writes the scripts beneath `data_home` and returns their directory. It is named after
     // their content, so runtimes of different versions never overwrite each other's.
-    inline static String<Memory> install(Memory& memory, std::string_view data_home) {
-      String<Memory> directory{data_home, AllocatorRef<char, Memory>{memory}};
-
-      directory += "/telar/shell-integration/";
-      directory.append(shell_files::digest_digits.data(), shell_files::digest_digits.size());
-      writeScripts(directory);
-      return directory;
-    }
+    static String<Memory> install(Memory& memory, std::string_view data_home);
 
     // Points an integrable shell at the scripts and returns the token its marks are signed
     // with. Leaves every other command untouched, and a shell too if the scripts are gone and
     // cannot be written again. `bare_prompt`: telar's editor stands in for the shell's prompt, so
     // the shell prints only its marks (TELAR_PROMPT_MODE=telar).
-    inline std::optional<ShellLaunch> apply(Command<Memory>& command, bool bare_prompt = false) const {
-      for (const auto name : {"TELAR_SHELL_TOKEN", "TELAR_SHELL_SSH", "TELAR_PROMPT_MODE", "TELAR_ZSH_ZDOTDIR", "TELAR_BASH_LOGIN", "TELAR_FISH_XDG_DATA_DIRS"}) {
-        command.removeEnvironment(name);
-      }
-
-      const auto shell = integrableShell(command.arguments());
-      if (directory_.empty() || !shell || !present()) {
-        return std::nullopt;
-      }
-
-      const auto token = ShellToken::generate();
-
-      command.setEnvironment("TELAR_SHELL_TOKEN", token.text());
-      if (!ssh_.empty()) {
-        command.setEnvironment("TELAR_SHELL_SSH", ssh_);
-      }
-
-      if (bare_prompt) {
-        command.setEnvironment("TELAR_PROMPT_MODE", "telar");
-      }
-
-      String<Memory> path{directory_, AllocatorRef<char, Memory>{memory_}};
-
-      switch (*shell) {
-      case IntegratedShell::none:
-        break;
-      case IntegratedShell::zsh:
-        // Copy before setting: setting a variable can move the one a view points into.
-        if (const auto previous = command.environment("ZDOTDIR")) {
-          const String<Memory> saved{*previous, AllocatorRef<char, Memory>{memory_}};
-
-          command.setEnvironment("TELAR_ZSH_ZDOTDIR", saved);
-        }
-
-        path += "/zsh";
-        command.setEnvironment("ZDOTDIR", path);
-        break;
-      case IntegratedShell::bash: {
-        // A login shell ignores --rcfile, so the script reads the login files itself.
-        if (std::ranges::any_of(command.arguments() | std::views::drop(1), [](std::string_view option) {
-              return option == "-l" || option == "-il" || option == "-li" || option == "--login";
-            })) {
-          command.setEnvironment("TELAR_BASH_LOGIN", "1");
-        }
-
-        path += "/bash/telar.bash";
-        const std::array<std::string_view, 3> arguments{"--rcfile", path, "-i"};
-
-        command.replaceSpawnArguments(arguments);
-        break;
-      }
-      case IntegratedShell::fish: {
-        // XDG's default when the variable is unset, so fish keeps finding the system's files.
-        String<Memory> saved{"/usr/local/share:/usr/share", AllocatorRef<char, Memory>{memory_}};
-        const auto previous = command.environment("XDG_DATA_DIRS");
-        if (previous) {
-          saved.assign(*previous);
-        }
-
-        path += "/fish:";
-        path += saved;
-        if (previous) {
-          command.setEnvironment("TELAR_FISH_XDG_DATA_DIRS", saved);
-        }
-
-        command.setEnvironment("XDG_DATA_DIRS", path);
-        break;
-      }
-      }
-
-      return ShellLaunch{*shell, token};
-    }
+    std::optional<ShellLaunch> apply(Command<Memory>& command, bool bare_prompt = false) const;
 
   private:
     static constexpr const auto& files = shell_files::installed;
 
-    // Writes the files that are missing. A file that exists is complete, since each one is
-    // written to a temporary name and renamed into place.
-    inline static void writeScripts(std::string_view root) {
-      for (const auto& file : files) {
-        std::array<char, PATH_MAX> path{};
-        const auto length = root.size() + 1 + file.directory.size();
-        if (length >= path.size()) {
-          throw SystemError{"Shell integration path is too long", ENAMETOOLONG};
-        }
-
-        std::ranges::copy(root, path.begin());
-        path[root.size()] = '/';
-        std::ranges::copy(file.directory, path.begin() + root.size() + 1);
-        createPrivateDirectory({path.data(), length});
-
-        FileDescriptor directory{::open(path.data(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
-        if (!directory) {
-          throw SystemError{"Open shell integration directory"};
-        }
-
-        std::array<char, NAME_MAX + 1> name{};
-
-        std::ranges::copy(file.name, name.begin());
-        struct stat state{};
-        if (::fstatat(directory.get(), name.data(), &state, AT_SYMLINK_NOFOLLOW) == 0 && S_ISREG(state.st_mode)) {
-          continue;
-        }
-
-        const auto bytes = std::span{reinterpret_cast<const std::uint8_t*>(file.content.data()), file.content.size()};
-        if (const int failure = writePrivateFile(directory.get(), file.name, bytes, PrivateFileMode::replace); failure != 0) {
-          throw SystemError{"Write shell integration script", failure};
-        }
-      }
-    }
-
     // Writes the scripts again if something removed them since the runtime started.
-    inline bool present() const noexcept {
-      if (::access(sentinel_.c_str(), R_OK) == 0) {
-        return true;
-      }
-
-      try {
-        writeScripts(directory_);
-        return true;
-      } catch (const SystemError&) {
-        return false;
-      }
-    }
+    bool present() const noexcept;
 
     String<Memory> directory_;
     String<Memory> sentinel_;
     String<Memory> ssh_;
     Memory& memory_;
   };
+
+  // The allocators Command is instantiated for, which the runtime's services and their tests
+  // still start panes with.
+  extern template class ShellIntegration<Memory>;
+  extern template class ShellIntegration<ConcurrentMemory>;
+  extern template class ShellIntegration<SystemAllocator>;
+  extern template class ShellIntegration<BudgetAllocator<SystemAllocator>>;
+  extern template class ShellIntegration<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>;
 
 }

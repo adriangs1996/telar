@@ -1,9 +1,5 @@
 module;
 #include "tbc/annotations.hpp"
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <limits.h>
 
 export module telar.machines;
 
@@ -17,6 +13,7 @@ import telar.base.memory.containers;
 import telar.base.text;
 import telar.base.text.utf8;
 import telar.client;
+import telar.sys.posix;
 
 // Interface: telar_machines/number_radix.cppm
 export {

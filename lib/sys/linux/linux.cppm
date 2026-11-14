@@ -29,16 +29,17 @@ export {
 
   // Linux extensions glibc and musl both declare.
   using ::getrandom;
+  using ::gettid;
   using ::pipe2;
   using ::posix_spawn_file_actions_addchdir_np;
   using ::syscall;
+  using ::ucred;
 }
 
 // musl declares none of these; its callers reach the kernel through syscall.
 #if defined(__GLIBC__)
 export {
   using ::epoll_pwait2;
-  using ::gettid;
   using ::posix_spawn_file_actions_addclosefrom_np;
   using ::renameat2;
 }
@@ -56,6 +57,7 @@ export {
   X(IFF_TUN)                   \
   X(RENAME_NOREPLACE)          \
   X(SO_PEERCRED)               \
+  X(SYS_close_range)           \
   X(TCP_KEEPIDLE)              \
   X(TUNSETIFF)
 
@@ -72,7 +74,6 @@ export {
 
 // The system calls musl has no wrapper for.
 #define TELAR_SYS_MUSL_SYSCALLS(X) \
-  X(SYS_close_range)               \
   X(SYS_epoll_pwait2)              \
   X(SYS_renameat2)
 

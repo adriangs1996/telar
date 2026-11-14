@@ -1,31 +1,7 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <cstdio>
-#include <new>
-#include <stdlib.h>
 
-#include <cerrno>
-#include <cstdint>
-#include <unistd.h>
-
-#include <cstring>
-#include <fcntl.h>
-#include <limits.h>
-#include <sys/stat.h>
-
-#include <cstdlib>
-#include <dirent.h>
 #include <openssl/md5.h>
-
-#include <cstddef>
-#include <sys/socket.h>
-#include <sys/time.h>
-#include <sys/un.h>
-
-#include <cassert>
-#include <poll.h>
-#include <sys/types.h>
-#include <sys/wait.h>
 
 module telar.cli.hook;
 import telar.sys.posix;

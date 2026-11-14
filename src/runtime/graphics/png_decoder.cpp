@@ -9,16 +9,9 @@ static_assert(true);
 #include "../terminal/ghostty_handle.hpp"
 #include "telar_base/diagnostics/config.hpp"
 #include "telar_vocabulary/vocabulary.hpp"
-#include <algorithm>
-#include <array>
-#include <bit>
-#include <cstddef>
-#include <cstdint>
 #include <ghostty/wuffs-v0.4.h>
-#include <limits>
-#include <optional>
-#include <utility>
 
+import std;
 import telar.runtime.graphics.prepared_images;
 
 namespace telar::runtime {

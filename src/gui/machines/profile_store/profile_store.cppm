@@ -1,13 +1,5 @@
 module;
-#include <cstdio>
-#include <cstdlib>
-
-#include <cstddef>
-#include <cstdint>
-
-#include <cstring>
-
-#include <new>
+#include "tbc/annotations.hpp"
 
 export module telar.gui.machines.profile_store;
 
@@ -72,46 +64,23 @@ export {
 
     struct MachineProfileEdits {
       template <MachineIdentityRandom Random>
-      inline static void apply(MachineProfiles& profiles, const MachineEdit& edit, Random& random, std::string_view local_fallback) {
-        switch (edit.kind) {
-        case MachineEditKind::add:
-          requireRemoteLabel(profiles, edit.label, local_fallback);
-          profiles.add(MachineProfile::create(MachineId::generate(random), {
-                                                                               .label = edit.label,
-                                                                               .destination = edit.value,
-                                                                               .color = edit.color,
-                                                                               .enabled = edit.enabled,
-                                                                           }));
-
-          break;
-        case MachineEditKind::remove:
-          profiles.remove(edit.label);
-          break;
-        case MachineEditKind::rename:
-          requireRemoteLabel(profiles, edit.value, local_fallback);
-          profiles.rename(edit.label, edit.value);
-          break;
-        case MachineEditKind::enable:
-          profiles.enable(edit.label, true);
-          break;
-        case MachineEditKind::disable:
-          profiles.enable(edit.label, false);
-          break;
-        case MachineEditKind::place_program:
-          profiles.placeProgram(edit.label, edit.value);
-          break;
-        case MachineEditKind::record_login:
-          profiles.recordLogin(edit.label, edit.login_agent, edit.login);
-          break;
+      TBC_HOT_PATH static void apply(MachineProfiles& profiles, const MachineEdit& edit, Random& random, std::string_view local_fallback) {
+        if (edit.kind != MachineEditKind::add) {
+          change(profiles, edit, local_fallback);
+          return;
         }
+
+        requireRemoteLabel(profiles, edit.label, local_fallback);
+        add(profiles, edit, MachineId::generate(random));
       }
 
     private:
-      inline static void requireRemoteLabel(const MachineProfiles& profiles, std::string_view label, std::string_view fallback) {
-        if (label == profiles.localLabel().value_or(fallback)) {
-          throw MachineFailure{MachineError::duplicate_label};
-        }
-      }
+      static void add(MachineProfiles& profiles, const MachineEdit& edit, MachineId id);
+
+      // Every edit but add, which alone draws an identity.
+      static void change(MachineProfiles& profiles, const MachineEdit& edit, std::string_view local_fallback);
+
+      static void requireRemoteLabel(const MachineProfiles& profiles, std::string_view label, std::string_view fallback);
     };
 
   }
@@ -123,42 +92,9 @@ export {
 
     class OwnedMachineEdit {
     public:
-      [[nodiscard]] inline static OwnedMachineEdit copy(const MachineEdit& edit) {
-        if (edit.label.size() > MachineLimits::label_bytes || edit.value.size() > MachineLimits::destination_bytes) {
-          throw MachineFailure{MachineError::invalid_label};
-        }
+      [[nodiscard]] static OwnedMachineEdit copy(const MachineEdit& edit);
 
-        if (edit.color && edit.color->size() > MachineLimits::color_bytes) {
-          throw MachineFailure{MachineError::invalid_color};
-        }
-
-        OwnedMachineEdit result;
-
-        result.kind_ = edit.kind;
-        result.enabled_ = edit.enabled;
-        result.login_agent_ = edit.login_agent;
-        result.login_ = edit.login;
-        result.has_color_ = edit.color.has_value();
-        result.label_.assign(edit.label);
-        result.value_.assign(edit.value);
-        if (edit.color) {
-          result.color_.assign(*edit.color);
-        }
-
-        return result;
-      }
-
-      [[nodiscard]] inline MachineEdit view() const noexcept {
-        return {
-            .kind = kind_,
-            .label = label_.view(),
-            .value = value_.view(),
-            .color = has_color_ ? std::optional{color_.view()} : std::nullopt,
-            .enabled = enabled_,
-            .login_agent = login_agent_,
-            .login = login_,
-        };
-      }
+      [[nodiscard]] MachineEdit view() const noexcept;
 
     private:
       OwnedMachineEdit() = default;
@@ -198,8 +134,9 @@ export {
       { storage.lock().replace(std::string_view{}) } -> std::same_as<void>;
     };
 
+    // Generic over the caller's storage, a file in production and fakes in tests.
     template <Allocator Memory, MachineProfileStorage<Memory> Storage>
-    class MachineProfileStore {
+    class TBC_HOT_PATH MachineProfileStore {
     public:
       inline MachineProfileStore(Memory& memory, Storage& storage) noexcept
           : memory_(memory),

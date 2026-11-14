@@ -64,14 +64,16 @@ namespace {
     for (const std::size_t fragment : {1, 3, 7, 16384}) {
       SystemAllocator system;
       BudgetAllocator budget{system, 1024 * 1024};
-      SynchronizedAllocator memory{budget};
+      SynchronizedAllocator synchronized{budget};
+      MemoryAdapter adapter{synchronized};
+      ConcurrentMemory& memory = adapter;
 
       {
         CaptureProducer producer{memory, ProxyCaptureLimits{.enabled = true}};
         ProxyCounters counters;
 
         {
-          Http1Capture<decltype(memory), TestCaptureClock> capture{memory, &producer, {.key = {17, 0}, .host = "example.test"}};
+          Http1Capture<ConcurrentMemory, TestCaptureClock> capture{memory, &producer, {.key = {17, 0}, .host = "example.test"}};
           Http1Connection connection{memory, counters, std::move(capture)};
           TestByteStream child;
           TestByteStream origin;
@@ -128,7 +130,9 @@ namespace {
              Fixture{"GET / HTTP/1.1\r\n\r\n", "HTTP/1.1 200 OK\r\nContent-Length: invalid\r\n\r\n", true, 2, CaptureOutcome::finished},
              Fixture{"GET / HTTP/1.1\r\n\r\n", std::string(Http1Head::capacity, 'a'), true, 2, CaptureOutcome::finished},
          }) {
-      SystemAllocator memory;
+      SystemAllocator system;
+      MemoryAdapter adapter{system};
+      ConcurrentMemory& memory = adapter;
       CaptureProducer producer{memory, ProxyCaptureLimits{.enabled = true}};
       ProxyCounters counters;
 
@@ -157,7 +161,9 @@ namespace {
   }
 
   void testHttp1CaptureEarlyResponseAndReuse() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    ConcurrentMemory& memory = adapter;
     CaptureProducer producer{memory, ProxyCaptureLimits{.enabled = true}};
     ProxyCounters counters;
 
@@ -200,7 +206,7 @@ namespace {
   }
 
   void testHttp2CaptureFragments() {
-    const auto request = std::string{Http2DirectionObserver<SystemAllocator>::client_preface} +
+    const auto request = std::string{Http2DirectionObserver<ConcurrentMemory>::client_preface} +
                          http2Frame(Http2FrameKind::headers, 4, 3, "\x82\x84") +
                          http2Frame(Http2FrameKind::data, 9, 3, std::string{"\x02hello!!", 8});
     const auto response = http2Frame(Http2FrameKind::headers, 4, 3, "\x88") +
@@ -209,14 +215,16 @@ namespace {
     for (const std::size_t fragment : {1, 3, 7, 16384}) {
       SystemAllocator system;
       BudgetAllocator budget{system, 4 * 1024 * 1024};
-      SynchronizedAllocator memory{budget};
+      SynchronizedAllocator synchronized{budget};
+      MemoryAdapter adapter{synchronized};
+      ConcurrentMemory& memory = adapter;
 
       {
         CaptureProducer producer{memory, ProxyCaptureLimits{.enabled = true}};
         ProxyCounters counters;
 
         {
-          Http2Capture<decltype(memory), TestCaptureClock> capture{&producer, counters, {.key = {31, 0}, .protocol = CaptureProtocol::http2, .host = "example.test"}};
+          Http2Capture<ConcurrentMemory, TestCaptureClock> capture{&producer, counters, {.key = {31, 0}, .protocol = CaptureProtocol::http2, .host = "example.test"}};
           Http2Connection connection{memory, counters, std::move(capture)};
           TestByteStream child;
           TestByteStream origin;
@@ -252,7 +260,9 @@ namespace {
   }
 
   void testHttp2CaptureLifecycle() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    ConcurrentMemory& memory = adapter;
     CaptureProducer producer{memory, ProxyCaptureLimits{.enabled = true}};
     ProxyCounters counters;
 
@@ -293,7 +303,9 @@ namespace {
 
   void testHttp2CaptureMalformedHeaders() {
     for (const auto& headers : {std::string{}, std::string{"\x82\xff"}}) {
-      SystemAllocator memory;
+      SystemAllocator system;
+      MemoryAdapter adapter{system};
+      ConcurrentMemory& memory = adapter;
       CaptureProducer producer{memory, ProxyCaptureLimits{.enabled = true}};
       ProxyCounters counters;
 
@@ -302,7 +314,7 @@ namespace {
         TestByteStream child;
         TestByteStream origin;
 
-        child.input = std::string{Http2DirectionObserver<SystemAllocator>::client_preface} + http2Frame(Http2FrameKind::headers, 4, 1, headers);
+        child.input = std::string{Http2DirectionObserver<ConcurrentMemory>::client_preface} + http2Frame(Http2FrameKind::headers, 4, 1, headers);
         child.ended = true;
         drive(connection, child, origin);
         check(origin.output == child.input && origin.half_closed);
@@ -383,16 +395,18 @@ namespace {
     for (const bool decode : {false, true}) {
       SystemAllocator system;
       BudgetAllocator budget{system, 8 * 1024 * 1024};
-      SynchronizedAllocator memory{budget};
+      SynchronizedAllocator synchronized{budget};
+      MemoryAdapter adapter{synchronized};
+      ConcurrentMemory& memory = adapter;
 
       {
         CaptureProducer producer{memory, limits};
-        RecordingTap<decltype(memory)> tap;
+        RecordingTap<ConcurrentMemory> tap;
 
         tap.decode = decode;
         PipelineClock::current = 100;
         {
-          CapturePipeline<decltype(memory), decltype(tap), PipelineClock> pipeline{memory, producer, limits, tap};
+          CapturePipeline<ConcurrentMemory, decltype(tap), PipelineClock> pipeline{memory, producer, limits, tap};
 
           publishHalf(producer, {.key = {1, 0}}, compressed, "gzip");
           check(!collectReady(pipeline) && tap.exchanges.empty());
@@ -416,15 +430,15 @@ namespace {
           check(tap.exchanges.front().request->key.connection == 2);
           tap.exchanges.clear();
 
-          for (std::size_t index = 0; index <= CaptureJoiner<decltype(memory)>::capacity; ++index) {
+          for (std::size_t index = 0; index <= CaptureJoiner<ConcurrentMemory>::capacity; ++index) {
             publishHalf(producer, {.key = {index + 3, 0}}, {}, "");
-            check(collectReady(pipeline) == (index == CaptureJoiner<decltype(memory)>::capacity));
+            check(collectReady(pipeline) == (index == CaptureJoiner<ConcurrentMemory>::capacity));
           }
 
           check(tap.exchanges.size() == 1 && tap.exchanges.front().request->key.connection == 259);
           tap.exchanges.clear();
           PipelineClock::current = 200;
-          check(!pipeline.collect() && tap.exchanges.size() == CaptureJoiner<decltype(memory)>::capacity);
+          check(!pipeline.collect() && tap.exchanges.size() == CaptureJoiner<ConcurrentMemory>::capacity);
           tap.exchanges.clear();
         }
 

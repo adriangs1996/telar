@@ -1,45 +1,13 @@
-module;
-#include <cstddef>
-#include <cstdint>
-#include <cstdio>
-#include <cstring>
-
-#include <sys/types.h>
-#if (defined(__APPLE__))
-#include <libproc.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <limits.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <linux/close_range.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <sys/syscall.h>
-#endif
-#include <cerrno>
-#include <csignal>
-#include <fcntl.h>
-#include <sys/ioctl.h>
-#include <sys/wait.h>
-#include <termios.h>
-#include <unistd.h>
-#if (defined(__APPLE__))
-#include <util.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <pty.h>
-#endif
-
 module telar.platform.process;
 
 import std;
 import telar.sys.posix;
-
-#ifdef __APPLE__
-#include <util.h>
-#else
-#include <pty.h>
+import telar.sys.process;
+#if defined(__APPLE__)
+import telar.sys.apple;
+#endif
+#if defined(__linux__)
+import telar.sys.linux;
 #endif
 
 namespace telar::runtime {
@@ -48,8 +16,8 @@ namespace telar::runtime {
     return winsize{
         .ws_row = size.rows,
         .ws_col = size.cols,
-        .ws_xpixel = static_cast<unsigned short>(std::min<unsigned>(UINT16_MAX, size.cols * size.cell_width_px)),
-        .ws_ypixel = static_cast<unsigned short>(std::min<unsigned>(UINT16_MAX, size.rows * size.cell_height_px)),
+        .ws_xpixel = static_cast<unsigned short>(std::min<unsigned>(std::numeric_limits<std::uint16_t>::max(), size.cols * size.cell_width_px)),
+        .ws_ypixel = static_cast<unsigned short>(std::min<unsigned>(std::numeric_limits<std::uint16_t>::max(), size.rows * size.cell_height_px)),
     };
   }
 
@@ -109,7 +77,7 @@ namespace telar::runtime {
 #else
     const auto first = static_cast<unsigned>(STDERR_FILENO + 1);
     const bool lower_closed = retained <= static_cast<int>(first) || ::syscall(SYS_close_range, first, static_cast<unsigned>(retained - 1), 0) == 0;
-    const bool upper_closed = ::syscall(SYS_close_range, static_cast<unsigned>(retained + 1), UINT_MAX, 0) == 0;
+    const bool upper_closed = ::syscall(SYS_close_range, static_cast<unsigned>(retained + 1), std::numeric_limits<unsigned>::max(), 0) == 0;
     if (lower_closed && upper_closed) {
       return;
     }

@@ -33,7 +33,10 @@ static void rejects(Operation&& operation) {
 
 static void testExchangeProtocol() {
   SystemAllocator system;
-  BudgetAllocator memory{system, 1024 * 1024};
+  BudgetAllocator budget{system, 1024 * 1024};
+  SynchronizedAllocator synchronized{budget};
+  MemoryAdapter adapter{synchronized};
+  ConcurrentMemory& memory = adapter;
   CaptureQuota quota{4096};
   const ProxyCaptureLimits limits{.part_bytes = 1024, .exchange_bytes = 2048, .total_bytes = 4096, .enabled = true};
   std::array<Byte, 4096> buffer;
@@ -48,7 +51,7 @@ static void testExchangeProtocol() {
           continue;
         }
 
-        auto half = makeOwned<CaptureHalf<decltype(memory)>>(memory, memory, quota, limits, CaptureStart{.key = {UINT64_MAX, UINT32_MAX}, .side = side, .protocol = protocol, .host = "example.test", .started_at_ms = INT64_MIN});
+        auto half = makeOwned<CaptureHalf<ConcurrentMemory>>(memory, memory, quota, limits, CaptureStart{.key = {UINT64_MAX, UINT32_MAX}, .side = side, .protocol = protocol, .host = "example.test", .started_at_ms = INT64_MIN});
 
         half->setMethod("POST");
         half->setTarget("/resource");
@@ -105,7 +108,7 @@ static void testExchangeProtocol() {
     tap::Protocol::exchangeBytes(empty);
   });
 
-  check(memory.liveBytes() == 0 && quota.used() == 0);
+  check(budget.liveBytes() == 0 && quota.used() == 0);
 }
 
 static void testEffectProtocol() {

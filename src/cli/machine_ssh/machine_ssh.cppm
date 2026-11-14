@@ -1,9 +1,7 @@
-module;
-#include <limits.h>
-
 export module telar.cli.machine_ssh;
 
 import std;
+import telar.sys.posix;
 
 export import telar.machines;
 
@@ -161,9 +159,10 @@ export {
 
     std::string decode(std::string_view word);
 
+    // The SSH argv that runs `command` there, with a terminal there only when `terminal`.
     template <Allocator Memory>
-    std::vector<std::string> ssh(Memory& memory, std::string_view destination, std::string_view command);
-    extern template std::vector<std::string> ssh<Memory>(Memory& memory, std::string_view destination, std::string_view command);
+    std::vector<std::string> ssh(Memory& memory, std::string_view destination, std::string_view command, bool terminal = false);
+    extern template std::vector<std::string> ssh<Memory>(Memory& memory, std::string_view destination, std::string_view command, bool terminal);
 
     // `GIT_SSH_COMMAND` for Git traffic to `destination` over the same options.
     template <Allocator Memory>
@@ -176,7 +175,8 @@ export {
     extern template std::string remoteCommand<std::vector<std::string>>(const MachineProfile& profile, const std::vector<std::string>& words);
 
     // Runs one telar command on the machine with this terminal's streams and
-    // returns its exit status.
+    // returns its exit status. When stdin and stdout are a terminal, so is the
+    // command's there, so it can ask the person here.
     template <Allocator Memory, typename Words>
     int forward(Memory& memory, const MachineProfile& profile, const Words& words);
     extern template int forward<Memory, std::vector<std::string>>(Memory& memory, const MachineProfile& profile, const std::vector<std::string>& words);

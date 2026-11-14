@@ -1,10 +1,4 @@
 module;
-#include <cerrno>
-#include <climits>
-#include <dirent.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <unistd.h>
 #include <zlib.h>
 
 module telar.git;
@@ -58,7 +52,7 @@ namespace telar::git {
     // Continues `stream` until `output` is full or the stream ends.
     template <typename Source>
     Inflated pump(z_stream& stream, Source& source, std::span<std::uint8_t> output) noexcept {
-      if (output.size() > UINT_MAX) {
+      if (output.size() > std::numeric_limits<unsigned>::max()) {
         return Inflated::failed;
       }
 

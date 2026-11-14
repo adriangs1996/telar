@@ -1,12 +1,6 @@
 module;
-#include <cstdio>
-
 #include <cstddef>
-
 #include <cstdint>
-#include <cstring>
-
-#include <ghostty/vt/unicode.h>
 
 export module telar.gui.paths.label;
 
@@ -15,13 +9,8 @@ import telar.tbc;
 
 export import telar.gui.text.json_unsigned_integer;
 
-import telar.base.diagnostics;
 import telar.base.memory.containers;
 import telar.base.text;
-import telar.base.text.utf8;
-import telar.gui.core.unicode_scalar;
-import telar.gui.input.key_encoder;
-import telar.gui.text.bounded_editor;
 import telar.wire.editor;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
@@ -49,100 +38,24 @@ export {
 
       // The query for what the user typed: a field that is empty or ends with
       // '/' asks for the children of the expanded directory.
-      [[nodiscard]] inline static std::string query(TypedDirectory typed) {
-        const bool children = typed.text.empty() || typed.text.ends_with('/');
-        std::string result{typed.expanded};
-        if (children && !result.empty() && !result.ends_with('/')) {
-          result.push_back('/');
-        }
-
-        return result;
-      }
+      [[nodiscard]] static std::string query(TypedDirectory typed);
 
       // Splits the query at its last '/': the part before is listed and the rest
       // filters names by prefix. Hidden directories are listed only when the
       // filter itself starts with '.'.
-      [[nodiscard]] inline static DirectoryCompletion list(std::string_view query) {
-        DirectoryCompletion result;
-
-        if (!query.starts_with('/')) {
-          return result;
-        }
-
-        const auto split = query.rfind('/');
-
-        result.base = split == 0 ? std::string{"/"} : std::string{query.substr(0, split)};
-        const auto partial = query.substr(split + 1);
-        std::error_code error;
-
-        result.exact_exists = partial.empty() || std::filesystem::is_directory(std::filesystem::path{std::string{query}}, error);
-
-        std::filesystem::directory_iterator directory{result.base, std::filesystem::directory_options::skip_permission_denied, error};
-
-        for (const std::filesystem::directory_iterator end; !error && directory != end; directory.increment(error)) {
-          const auto name = directory->path().filename().string();
-          if (!name.starts_with(partial) || (name.starts_with('.') && !partial.starts_with('.'))) {
-            continue;
-          }
-
-          std::error_code status;
-          if (!directory->is_directory(status)) {
-            continue;
-          }
-
-          ++result.matched;
-          result.keep(name);
-        }
-
-        std::ranges::sort(result.entries);
-
-        return result;
-      }
+      [[nodiscard]] static DirectoryCompletion list(std::string_view query);
 
       // The last component of an expanded directory, ignoring a trailing '/'.
-      [[nodiscard]] inline static std::string_view basename(std::string_view path) {
-        while (path.size() > 1 && path.ends_with('/')) {
-          path.remove_suffix(1);
-        }
-
-        const auto split = path.rfind('/');
-
-        return split == std::string_view::npos ? path : path.substr(split + 1);
-      }
+      [[nodiscard]] static std::string_view basename(std::string_view path);
 
       // The directory an entry names, ending in '/' so the next listing shows
       // its children.
-      [[nodiscard]] inline std::string join(std::size_t index) const {
-        std::string path = base;
-        if (!path.ends_with('/')) {
-          path.push_back('/');
-        }
-
-        path.append(entries.at(index));
-        path.push_back('/');
-
-        return path;
-      }
+      [[nodiscard]] std::string join(std::size_t index) const;
 
     private:
       // Keeps the first maximum_entries names whatever order the listing finds
       // them in: a full result gives up its last name for one that sorts before.
-      inline void keep(const std::string& name) {
-        if (name.empty() || name.size() > maximum_name_bytes) {
-          return;
-        }
-
-        if (entries.size() < maximum_entries) {
-          entries.push_back(name);
-
-          return;
-        }
-
-        const auto last = std::ranges::max_element(entries);
-        if (name < *last) {
-          *last = name;
-        }
-      }
+      void keep(const std::string& name);
     };
 
   }
@@ -186,171 +99,53 @@ export {
       std::array<std::uint16_t, PathPickerLimits::query_bytes> positions{};
       std::uint8_t position_count = 0;
 
-      [[nodiscard]] inline std::span<const std::uint16_t> highlights() const noexcept {
-        return std::span{positions}.first(position_count);
-      }
+      [[nodiscard]] std::span<const std::uint16_t> highlights() const noexcept;
     };
 
     class PathPickerPage {
     public:
-      inline void begin(std::uint64_t pane, std::string_view directory) {
-        anchor_.assign(directory);
-        pane_id_ = pane;
-        setRoot(directory);
-        ++revision_;
-      }
+      void begin(std::uint64_t pane, std::string_view directory);
 
-      inline void setRoot(std::string_view directory) {
-        root_.assign(directory);
-        refresh_ = true;
-        count_ = 0;
-        page_used_ = 0;
-        scanned_ = 0;
-        complete_ = true;
-        truncated_ = false;
-        error_.assign({});
-        phase_ = PathPickerPhase::idle;
-        ++revision_;
-      }
+      void setRoot(std::string_view directory);
 
-      inline void close() noexcept {
-        phase_ = PathPickerPhase::idle;
-        pending_request_ = 0;
-        pane_id_ = 0;
-        count_ = 0;
-        page_used_ = 0;
-        ++revision_;
-      }
+      void close() noexcept;
 
-      inline void expect(std::uint64_t request_id) noexcept {
-        requests_[next_slot_] = request_id;
-        next_slot_ = (next_slot_ + 1) % requests_.size();
-        pending_request_ = request_id;
-        refresh_ = false;
-        phase_ = PathPickerPhase::loading;
-        ++revision_;
-      }
+      void expect(std::uint64_t request_id) noexcept;
 
-      inline bool receive(const PathResults& results) {
-        if (results.request_id == 0 || results.request_id != pending_request_ || results.root != root_.view()) {
-          return false;
-        }
+      bool receive(const PathResults& results);
 
-        validate(results.matches);
-        count_ = 0;
-        page_used_ = 0;
-        for (const auto& match : results.matches) {
-          auto& retained = matches_[count_];
+      bool fail(const RequestFailed& failure);
 
-          retained.offset = static_cast<std::uint16_t>(page_used_);
-          retained.length = static_cast<std::uint16_t>(match.path.size());
-          retained.kind = match.kind;
-          retained.position_count = static_cast<std::uint8_t>(match.positions.size());
-          std::ranges::copy(match.positions, retained.positions.begin());
-          std::memcpy(page_.data() + page_used_, match.path.data(), match.path.size());
-          page_used_ += match.path.size();
-          ++count_;
-        }
+      void setError(std::string_view message);
 
-        scanned_ = results.scanned;
-        complete_ = results.complete;
-        truncated_ = results.truncated;
-        error_.assign({});
-        phase_ = PathPickerPhase::ready;
-        if (complete_) {
-          pending_request_ = 0;
-        }
+      [[nodiscard]] std::span<const PathPickerMatch> matches() const noexcept;
 
-        ++revision_;
+      [[nodiscard]] std::string_view path(const PathPickerMatch& match) const noexcept;
 
-        return true;
-      }
+      [[nodiscard]] std::string_view root() const noexcept;
 
-      inline bool fail(const RequestFailed& failure) {
-        if (failure.request_id == 0 || std::ranges::find(requests_, failure.request_id) == requests_.end()) {
-          return false;
-        }
+      [[nodiscard]] std::string_view anchor() const noexcept;
 
-        if (failure.request_id == pending_request_) {
-          pending_request_ = 0;
-          setError(failure.message);
-        }
+      [[nodiscard]] std::string_view error() const noexcept;
 
-        return true;
-      }
+      [[nodiscard]] PathPickerPhase phase() const noexcept;
 
-      inline void setError(std::string_view message) {
-        error_.assign(runtime::utf8Prefix(message, PathPickerLimits::error_bytes));
-        phase_ = PathPickerPhase::failed;
-        ++revision_;
-      }
+      [[nodiscard]] std::uint64_t paneId() const noexcept;
 
-      [[nodiscard]] inline std::span<const PathPickerMatch> matches() const noexcept {
-        return std::span{matches_}.first(count_);
-      }
+      [[nodiscard]] std::uint64_t pendingRequest() const noexcept;
 
-      [[nodiscard]] inline std::string_view path(const PathPickerMatch& match) const noexcept {
-        return {page_.data() + match.offset, match.length};
-      }
+      [[nodiscard]] std::uint64_t revision() const noexcept;
 
-      [[nodiscard]] inline std::string_view root() const noexcept {
-        return root_.view();
-      }
+      [[nodiscard]] std::uint32_t scanned() const noexcept;
 
-      [[nodiscard]] inline std::string_view anchor() const noexcept {
-        return anchor_.view();
-      }
+      [[nodiscard]] bool refreshRequested() const noexcept;
 
-      [[nodiscard]] inline std::string_view error() const noexcept {
-        return error_.view();
-      }
+      [[nodiscard]] bool complete() const noexcept;
 
-      [[nodiscard]] inline PathPickerPhase phase() const noexcept {
-        return phase_;
-      }
-
-      [[nodiscard]] inline std::uint64_t paneId() const noexcept {
-        return pane_id_;
-      }
-
-      [[nodiscard]] inline std::uint64_t pendingRequest() const noexcept {
-        return pending_request_;
-      }
-
-      [[nodiscard]] inline std::uint64_t revision() const noexcept {
-        return revision_;
-      }
-
-      [[nodiscard]] inline std::uint32_t scanned() const noexcept {
-        return scanned_;
-      }
-
-      [[nodiscard]] inline bool refreshRequested() const noexcept {
-        return refresh_;
-      }
-
-      [[nodiscard]] inline bool complete() const noexcept {
-        return complete_;
-      }
-
-      [[nodiscard]] inline bool truncated() const noexcept {
-        return truncated_;
-      }
+      [[nodiscard]] bool truncated() const noexcept;
 
     private:
-      inline static void validate(std::span<const PathMatch> matches) {
-        if (matches.size() > PathPickerLimits::results) {
-          throw EncodingError{"Too many path matches"};
-        }
-
-        for (const auto& match : matches) {
-          if (match.path.empty() || match.path.size() > PathPickerLimits::path_bytes || match.positions.size() > PathPickerLimits::query_bytes) {
-            throw EncodingError{"Invalid path match bounds"};
-          }
-
-          static_cast<void>(ValueCodec<PathMatch>::encodedSize(match));
-        }
-      }
+      static void validate(std::span<const PathMatch> matches);
 
       runtime::FixedText<PathPickerLimits::root_bytes> root_;
       runtime::FixedText<PathPickerLimits::root_bytes> anchor_;
@@ -398,108 +193,17 @@ export {
         std::string_view relative;
       };
 
-      [[nodiscard]] inline static AbsolutePath join(JoinParts parts) {
-        AbsolutePath path;
-
-        path.append(parts.root);
-        if (parts.root.size() != 1) {
-          path.append("/");
-        }
-
-        path.append(parts.relative);
-
-        return path;
-      }
+      [[nodiscard]] static AbsolutePath join(JoinParts parts);
 
       // The relative path is a suffix of the path, region `a`.
-      [[nodiscard]] inline static tbc::view<std::optional<std::string_view>, tbc::lt::a> relativeTo(std::string_view anchor, tbc::view<std::string_view, tbc::lt::a> path) noexcept {
-        if (anchor.size() == 1) {
-          if (path.size() <= 1) {
-            return std::nullopt;
-          }
+      [[nodiscard]] static tbc::view<std::optional<std::string_view>, tbc::lt::a> relativeTo(std::string_view anchor, tbc::view<std::string_view, tbc::lt::a> path) noexcept;
 
-          path.remove_prefix(1);
+      [[nodiscard]] static std::optional<Quoted> quote(std::string_view word);
 
-          return path;
-        }
-
-        if (path.size() <= anchor.size() + 1 || !path.starts_with(anchor) || path[anchor.size()] != '/') {
-          return std::nullopt;
-        }
-
-        path.remove_prefix(anchor.size() + 1);
-
-        return path;
-      }
-
-      [[nodiscard]] inline static std::optional<Quoted> quote(std::string_view word) {
-        Quoted output;
-
-        if (word.empty()) {
-          return output;
-        }
-
-        try {
-          if (word.front() == '-') {
-            output.append("./");
-          }
-
-          if (plain(word)) {
-            output.append(word);
-
-            return output;
-          }
-
-          output.append("'");
-          for (const auto byte : word) {
-            if (byte == '\'') {
-              output.append("'\\''");
-            } else {
-              output.append(std::string_view{&byte, 1});
-            }
-          }
-
-          output.append("'");
-        } catch (const std::length_error&) {
-          return std::nullopt;
-        }
-
-        return output;
-      }
-
-      [[nodiscard]] inline static std::optional<Text> prepare(const PathPickerPage& page, Choice choice) {
-        if (page.matches().empty()) {
-          return std::nullopt;
-        }
-
-        const auto& match = page.matches()[std::min(choice.selection, page.matches().size() - 1)];
-        const auto full = join({.root = page.root(), .relative = page.path(match)});
-        auto word = full.view();
-
-        if (!choice.absolute) {
-          if (const auto relative = relativeTo(page.anchor(), word)) {
-            word = *relative;
-          }
-        }
-
-        const auto quoted = quote(word);
-        if (!quoted) {
-          return std::nullopt;
-        }
-
-        return PasteEncoding::encode<PathPickerLimits::quoted_bytes>(quoted->view(), choice.bracketed);
-      }
+      [[nodiscard]] static std::optional<Text> prepare(const PathPickerPage& page, Choice choice);
 
       // A word the shell reads as written, with nothing to quote or expand.
-      [[nodiscard]] inline static bool plain(std::string_view word) noexcept {
-        return std::ranges::all_of(word, [](char byte) {
-          constexpr std::string_view literal_punctuation = "_-./+@%,:";
-          const auto letter = (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z');
-          const auto digit = byte >= '0' && byte <= '9';
-
-          return letter || digit || literal_punctuation.contains(byte);
-        });
-      }
+      [[nodiscard]] static bool plain(std::string_view word) noexcept;
     };
 
   }
@@ -530,28 +234,9 @@ export {
       static constexpr std::uint32_t ellipsis_columns = 1;
 
       // The runs view the laid out path, region `a`, until the next layout.
-      inline void layout(tbc::view<std::string_view, tbc::lt::a> path, std::span<const std::uint16_t> positions, std::uint16_t width) {
-        count_ = 0;
-        const auto name_start = nameStart(path);
+      void layout(tbc::view<std::string_view, tbc::lt::a> path, std::span<const std::uint16_t> positions, std::uint16_t width);
 
-        if (cellTextColumns(path) <= width) {
-          appendSpan({.path = path, .positions = positions, .end = path.size(), .name_start = name_start});
-
-          return;
-        }
-
-        const auto name_width = cellTextColumns(path.substr(name_start));
-        const auto head_width = width > name_width + ellipsis_columns ? width - name_width - ellipsis_columns : 0;
-        const auto head_end = fitting(path.substr(0, name_start), head_width);
-
-        appendSpan({.path = path, .positions = positions, .end = head_end, .name_start = name_start});
-        push({.text = ellipsis, .tone = PathLabelTone::ellipsis});
-        appendSpan({.path = path, .positions = positions, .start = name_start, .end = path.size(), .name_start = name_start});
-      }
-
-      [[nodiscard]] inline tbc::view<std::span<const PathLabelRun>, tbc::lt::a> runs() const noexcept {
-        return std::span{runs_}.first(count_);
-      }
+      [[nodiscard]] tbc::view<std::span<const PathLabelRun>, tbc::lt::a> runs() const noexcept;
 
     private:
       struct Span {
@@ -562,79 +247,17 @@ export {
         std::size_t name_start = 0;
       };
 
-      [[nodiscard]] inline static std::size_t nameStart(std::string_view path) noexcept {
-        const auto last = path.find_last_not_of('/');
+      [[nodiscard]] static std::size_t nameStart(std::string_view path) noexcept;
 
-        path.remove_suffix(last == std::string_view::npos ? path.size() : path.size() - last - 1);
-        const auto split = path.rfind('/');
+      [[nodiscard]] static std::size_t nextScalar(std::string_view text, std::size_t offset) noexcept;
 
-        return split == std::string_view::npos ? 0 : split + 1;
-      }
+      [[nodiscard]] static std::size_t fitting(std::string_view text, std::uint32_t width);
 
-      [[nodiscard]] inline static std::size_t nextScalar(std::string_view text, std::size_t offset) noexcept {
-        const auto sequence = Utf8Scalar::sequenceLength(static_cast<unsigned char>(text[offset]));
-        const auto length = sequence >= 1 && sequence <= Utf8Scalar::leading_masks.size() ? sequence : 1;
+      [[nodiscard]] static PathLabelTone toneAt(const Span& span, std::size_t first, std::size_t last) noexcept;
 
-        return std::min(offset + length, text.size());
-      }
+      void appendSpan(tbc::view<Span, tbc::lt::a> span);
 
-      [[nodiscard]] inline static std::size_t fitting(std::string_view text, std::uint32_t width) {
-        std::uint32_t used = 0;
-        std::size_t end = 0;
-
-        while (end < text.size()) {
-          const auto next = nextScalar(text, end);
-          const auto columns = cellTextColumns(text.substr(end, next - end));
-          if (used + columns > width) {
-            break;
-          }
-
-          used += columns;
-          end = next;
-        }
-
-        return end;
-      }
-
-      [[nodiscard]] inline static PathLabelTone toneAt(const Span& span, std::size_t first, std::size_t last) noexcept {
-        for (const auto position : span.positions) {
-          if (position >= first && position < last) {
-            return PathLabelTone::match;
-          }
-        }
-
-        return first >= span.name_start ? PathLabelTone::name : PathLabelTone::directory;
-      }
-
-      inline void appendSpan(tbc::view<Span, tbc::lt::a> span) {
-        if (span.start == span.end) {
-          return;
-        }
-
-        auto run_start = span.start;
-        auto tone = toneAt(span, span.start, nextScalar(span.path, span.start));
-        auto cursor = span.start;
-
-        while (cursor < span.end) {
-          const auto next = nextScalar(span.path, cursor);
-          const auto current = toneAt(span, cursor, next);
-          if (current != tone) {
-            push({.text = span.path.substr(run_start, cursor - run_start), .tone = tone});
-            run_start = cursor;
-            tone = current;
-          }
-
-          cursor = next;
-        }
-
-        push({.text = span.path.substr(run_start, span.end - run_start), .tone = tone});
-      }
-
-      inline void push(tbc::view<PathLabelRun, tbc::lt::a> run) noexcept {
-        if (count_ < runs_.size()) {
-          runs_[count_++] = run;
-        }
-      }
+      void push(tbc::view<PathLabelRun, tbc::lt::a> run) noexcept;
 
       tbc::view<std::array<PathLabelRun, maximum_runs>, tbc::lt::a> runs_{};
       std::size_t count_ = 0;
@@ -652,56 +275,13 @@ export {
       using Status = BoundedText<PathPickerLimits::error_bytes>;
       using Count = BoundedText<count_bytes>;
 
-      [[nodiscard]] inline static std::string_view root(std::string_view path) noexcept {
-        if (path.size() <= 1) {
-          return "/";
-        }
+      [[nodiscard]] static std::string_view root(std::string_view path) noexcept;
 
-        const auto split = path.rfind('/');
-        if (split != std::string_view::npos) {
-          path.remove_prefix(split + 1);
-        }
+      [[nodiscard]] static Count count(const PathPickerPage& page);
 
-        return path;
-      }
+      [[nodiscard]] static Status status(const PathPickerPage& page);
 
-      [[nodiscard]] inline static Count count(const PathPickerPage& page) {
-        Count result;
-
-        result.appendDecimal(page.matches().size());
-        result.append(" of ");
-        result.appendDecimal(page.scanned());
-
-        return result;
-      }
-
-      [[nodiscard]] inline static Status status(const PathPickerPage& page) {
-        Status result;
-
-        if (page.phase() == PathPickerPhase::failed) {
-          result.append(page.error());
-
-          return result;
-        }
-
-        if (!page.complete()) {
-          result.append("indexing · ");
-          result.appendDecimal(page.scanned());
-        } else {
-          result.appendDecimal(page.scanned());
-          result.append(page.truncated() ? "+ paths" : " paths");
-        }
-
-        return result;
-      }
-
-      [[nodiscard]] inline static std::string_view empty(const PathPickerPage& page) noexcept {
-        if (page.phase() == PathPickerPhase::failed) {
-          return "No paths";
-        }
-
-        return page.phase() == PathPickerPhase::ready && page.complete() ? "No paths match" : "Searching…";
-      }
+      [[nodiscard]] static std::string_view empty(const PathPickerPage& page) noexcept;
     };
 
   }

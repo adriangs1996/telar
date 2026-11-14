@@ -16,11 +16,7 @@ static_assert(true);
 #include "telar_client/codecs/telar_codec.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/protocol/agents.hpp"
 #include "telar_client/protocol/clients.hpp"
-#include "telar_client/protocol/clipboard.hpp"
-#include "telar_client/protocol/history.hpp"
-#include "telar_client/protocol/layout.hpp"
 #include "telar_client/protocol/pane_io.hpp"
 #include "telar_client/protocol/runtime.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
@@ -66,6 +62,7 @@ import telar.gui.history.browser;
 import telar.gui.input.copy_pointer;
 import telar.gui.input.key_encoder;
 import telar.gui.presentation.display_metrics;
+import telar.wire.agents;
 import telar.wire.clipboard;
 import telar.wire.history;
 import telar.wire.layout;
@@ -80,8 +77,8 @@ namespace {
   void sessionLifecycle() {
     SystemAllocator system;
     constexpr std::size_t allocation_budget = std::size_t{16} * 1024 * 1024;
-    BudgetAllocator allocator{system, allocation_budget};
-    telar::MemoryAdapter adapter{allocator};
+    BudgetAllocator budget{system, allocation_budget};
+    telar::MemoryAdapter adapter{budget};
     telar::Memory& memory = adapter;
     Transport transport;
 
@@ -147,13 +144,13 @@ namespace {
       require(transport.last<OpenPane>().target.id == 1 && !transport.last<OpenPane>().launch, "reconnect must restore the current pane from the runtime's owned layout snapshot");
     }
 
-    require(allocator.liveBytes() == 0, "session must release injected allocations");
+    require(budget.liveBytes() == 0, "session must release injected allocations");
   }
 
   void detachedTabForegroundsAndAgentTitles() {
     SystemAllocator system;
-    BudgetAllocator allocator{system, std::numeric_limits<std::size_t>::max()};
-    telar::MemoryAdapter adapter{allocator};
+    BudgetAllocator budget{system, std::numeric_limits<std::size_t>::max()};
+    telar::MemoryAdapter adapter{budget};
     telar::Memory& memory = adapter;
     Transport transport;
 
@@ -198,13 +195,13 @@ namespace {
       require(agent.provider_kind == AgentProvider::codex && agent.blocked_reason == AgentBlockedReason::permission, "agent cards must retain typed provider and blocked reason");
     }
 
-    require(allocator.liveBytes() == 0, "foreground and agent-title metadata must release injected allocations");
+    require(budget.liveBytes() == 0, "foreground and agent-title metadata must release injected allocations");
   }
 
   void configuredWindowTitles() {
     SystemAllocator system;
-    BudgetAllocator allocator{system, std::numeric_limits<std::size_t>::max()};
-    telar::MemoryAdapter adapter{allocator};
+    BudgetAllocator budget{system, std::numeric_limits<std::size_t>::max()};
+    telar::MemoryAdapter adapter{budget};
     telar::Memory& memory = adapter;
     Transport transport;
 
@@ -231,11 +228,11 @@ namespace {
 
       deliver(client, PaneTitle{.pane_id = 1, .title = "compiler"});
       deliver(client, PaneForeground{.pane_id = 1, .name = "nvim"});
-      const auto allocations = allocator.allocations();
+      const auto allocations = budget.allocations();
       const auto rendered = client.windowTitle("host");
 
       require(rendered.view() == "project/nvim/compiler@host", "titles must follow current workspace, foreground and pane metadata");
-      require(allocator.allocations() == allocations, "title projection must not allocate through the session allocator");
+      require(budget.allocations() == allocations, "title projection must not allocate through the session allocator");
       const std::array tabs{TabDescriptor{.tab_id = location.tab_id, .label = "manual"}};
 
       deliver(client, WorkspaceSnapshot{.request_id = 1, .workspace = location.workspace, .name = "renamed", .tabs = tabs});
@@ -251,7 +248,7 @@ namespace {
       require(client.windowTitle("host").view() == "Telar", "clearing a configured template must restore the original GUI default");
     }
 
-    require(allocator.liveBytes() == 0, "title projection must preserve session allocation ownership");
+    require(budget.liveBytes() == 0, "title projection must preserve session allocation ownership");
   }
 
   void restoredLayoutAndFailure() {

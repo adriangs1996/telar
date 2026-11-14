@@ -1,15 +1,6 @@
-module;
-#include <cstddef>
-#include <cstring>
-#include <new>
-
-#include <cstdint>
-#include <cstdio>
-
-#include <cmath>
-#include <cstdlib>
-
 module telar.cli.window;
+
+import telar.sys.posix;
 
 // The bodies of the window interface that cli-core carries, since
 // telar-config-check parses its options too; window.cpp builds only into the

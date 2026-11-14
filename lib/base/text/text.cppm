@@ -1,10 +1,8 @@
 module;
 #include "tbc/annotations.hpp"
-#include "telar_base/program_identity.hpp"
+#include "telar_base/diagnostics/config.hpp"
 #include "telar_base/text/base64.hpp"
 #include "telar_base/text/decimal.hpp"
-#include <cassert>
-#include <netinet/in.h>
 
 export module telar.base.text;
 
@@ -13,6 +11,7 @@ import telar.tbc;
 import telar.base.diagnostics;
 import telar.base.memory.allocators;
 import telar.base.text.json;
+import telar.sys.socket;
 
 // Owned textual headers stay in this global module fragment only; importers
 // reach their names through these declarations instead of including them.
@@ -31,10 +30,13 @@ export namespace telar::runtime::base64 {
   using telar::runtime::base64::Padding;
 }
 
+// The program's name and version, as child processes and terminal queries see them.
 export namespace telar::runtime::control {
-  using telar::runtime::control::program_name;
-  using telar::runtime::control::program_version;
-  using telar::runtime::control::terminfo_name;
+
+  inline constexpr std::string_view program_name = "telar";
+  inline constexpr std::string_view program_version = "dev";
+  inline constexpr std::string_view terminfo_name = "xterm-256color";
+
 }
 
 // Interface: telar_base/text/ascii.cppm
@@ -197,7 +199,7 @@ export {
     constexpr tbc::view<std::string_view, tbc::lt::a> encodeLowerHex(std::span<const std::uint8_t> bytes, tbc::view<std::span<char>, tbc::lt::a> output) noexcept {
       constexpr std::string_view digits = "0123456789abcdef";
 
-      assert(output.size() >= 2 * bytes.size());
+      TELAR_ASSERT(output.size() >= 2 * bytes.size());
       for (std::size_t index = 0; index < bytes.size(); ++index) {
         output[2 * index] = digits[bytes[index] >> 4];
         output[2 * index + 1] = digits[bytes[index] & 15];

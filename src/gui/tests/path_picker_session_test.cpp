@@ -15,7 +15,6 @@ static_assert(true);
 #include "telar_client/codecs/telar_codec.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/protocol/editor.hpp"
 #include "telar_client/protocol/pane_io.hpp"
 #include "telar_client/protocol/runtime.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
@@ -168,8 +167,8 @@ namespace {
 
   void rejectedDeliveryKeepsThePickerAndPasteAtomic() {
     SystemAllocator system;
-    BudgetAllocator allocator{system, std::numeric_limits<std::size_t>::max()};
-    telar::MemoryAdapter adapter{allocator};
+    BudgetAllocator budget{system, std::numeric_limits<std::size_t>::max()};
+    telar::MemoryAdapter adapter{budget};
     telar::Memory& memory = adapter;
     PathTransport transport;
 
@@ -198,7 +197,7 @@ namespace {
       require(client.pathPicker().phase() == PathPickerPhase::idle && !client.requestPaths({}), "disconnecting must retire disposable picker state");
     }
 
-    require(allocator.liveBytes() == 0, "path searches must release every injected session allocation");
+    require(budget.liveBytes() == 0, "path searches must release every injected session allocation");
   }
 
 }

@@ -1,9 +1,7 @@
-module;
-#include <cstdio>
-
 module telar.cli.launch_commands;
 
 import std;
+import telar.sys.posix;
 import telar.ebnf.matcher;
 
 namespace telar::runtime::cli {

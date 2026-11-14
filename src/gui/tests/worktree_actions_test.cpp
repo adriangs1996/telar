@@ -15,10 +15,8 @@ static_assert(true);
 #include "telar_client/codecs/telar_codec.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/protocol/layout.hpp"
 #include "telar_client/protocol/pane_io.hpp"
 #include "telar_client/protocol/runtime.hpp"
-#include "telar_client/protocol/worktrees.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
@@ -95,8 +93,8 @@ namespace {
 
   void forgettingOnlyTargetsGoneCheckoutsWithoutTabs() {
     SystemAllocator system;
-    BudgetAllocator allocator{system, std::numeric_limits<std::size_t>::max()};
-    telar::MemoryAdapter adapter{allocator};
+    BudgetAllocator budget{system, std::numeric_limits<std::size_t>::max()};
+    telar::MemoryAdapter adapter{budget};
     telar::Memory& memory = adapter;
     Transport transport;
 
@@ -128,7 +126,7 @@ namespace {
       require(client.forgetGoneWorktrees() == 0, "disconnected cleanup must not queue requests against stale state");
     }
 
-    require(allocator.liveBytes() == 0, "worktree snapshots and cleanup must release all injected allocations");
+    require(budget.liveBytes() == 0, "worktree snapshots and cleanup must release all injected allocations");
   }
 
   void cleanupStopsAtCapacityAndReleasesRejectedDelivery() {

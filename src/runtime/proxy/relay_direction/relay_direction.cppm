@@ -1,13 +1,10 @@
 module;
-#include <arpa/inet.h>
-#include <cerrno>
-#include <cstdint>
-#include <netinet/in.h>
-#include <sys/socket.h>
+#include "tbc/annotations.hpp"
 
 export module telar.runtime.proxy.relay_direction;
 
 import std;
+import telar.sys.socket;
 import telar.sys.posix;
 
 export import telar.platform.net;
@@ -24,8 +21,9 @@ import telar.runtime.platform.stream_read_buffer;
 export {
   namespace telar::runtime {
 
+    // Generic over the caller's resolver.
     template <HostnameResolver Resolver>
-    class OriginConnection {
+    class TBC_HOT_PATH OriginConnection {
     public:
       enum class State {
         resolving,
@@ -148,8 +146,9 @@ export {
 export {
   namespace telar::runtime {
 
+    // The relay's loop for every read, generic over the caller's streams and buffer size.
     template <std::size_t BufferCapacity = 16 * 1024>
-    class RelayDirection {
+    class TBC_HOT_PATH RelayDirection {
       static_assert(BufferCapacity != 0);
 
     public:

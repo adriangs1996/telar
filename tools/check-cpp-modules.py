@@ -305,8 +305,9 @@ def textual_include_sites(files, macro_headers, owners):
 
     lib/sys, Qt/moc adapters and C or Objective-C(++) sources may include, and so may the headers
     they reach: those headers stay textual because they cannot import. An owner module may include
-    the headers it owns that cross that boundary, and any file may include a macro header. Tests
-    and tools are out of the rule.
+    the headers it owns that cross that boundary, and any file may include a macro header or a
+    generated `.inc` data fragment, which the build writes outside the tree. Tests and tools are
+    out of the rule.
     """
     sources = {name: (ROOT / name).read_text(errors='replace') for name in files
                if name.endswith(SOURCE_SUFFIXES) and not re.search(r'/(tests|tools)/', name)}
@@ -324,6 +325,8 @@ def textual_include_sites(files, macro_headers, owners):
 
     def excused(unit, spelling):
         header = resolve(unit, spelling)
+        if header is None and spelling.endswith('.inc') and not spelling.startswith('<'):
+            return True
 
         return header in macro_headers or header in reached and header in owners.get(unit, ())
 

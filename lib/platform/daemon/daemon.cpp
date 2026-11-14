@@ -1,31 +1,9 @@
-module;
-#include <cstddef>
-#include <cstdint>
-#include <new>
-#include <unistd.h>
-
-#include "telar_platform/process_environment.h"
-
-#include <cerrno>
-#include <cstdlib>
-#include <limits.h>
-#if (defined(__APPLE__))
-#include <mach-o/dyld.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <unistd.h>
-#endif
-#include <csignal>
-#include <dirent.h>
-#include <fcntl.h>
-#include <spawn.h>
-#include <sys/stat.h>
-#include <sys/un.h>
-#include <sys/wait.h>
-
 module telar.platform.daemon;
 
 import std;
+import telar.sys.posix;
+import telar.sys.process;
+import telar.sys.socket;
 
 namespace telar::runtime::cli {
 

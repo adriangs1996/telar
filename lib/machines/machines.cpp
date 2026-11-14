@@ -1,12 +1,7 @@
-module;
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <limits.h>
-
 module telar.machines;
 
 import std;
+import telar.sys.posix;
 
 namespace telar::runtime::machines {
 

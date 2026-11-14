@@ -1,10 +1,6 @@
 module;
 #include "tbc/annotations.hpp"
-
-#include <dirent.h>
-#include <limits.h>
-#include <sys/stat.h>
-#include <sys/types.h>
+#include "telar_platform/open_directory.h"
 
 export module telar.platform.fs;
 
@@ -16,6 +12,12 @@ export import telar.base.memory.allocators;
 import telar.platform.error;
 import telar.platform.primitives;
 import telar.sys.posix;
+
+// The C function behind open_directory.h, shared with Qt; the owned header stays in this global
+// module fragment only.
+export {
+  using ::telarOpenDirectoryNoFollow;
+}
 
 // Interface: telar_platform/private_directory.cppm
 export {

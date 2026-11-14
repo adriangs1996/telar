@@ -1,56 +1,12 @@
 module;
-#include <stdlib.h>
-
-#include <cerrno>
-#include <cstdint>
-#include <cstdlib>
-#include <limits.h>
-#if (defined(__APPLE__))
-#include <mach-o/dyld.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <unistd.h>
-#endif
-#include <fcntl.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <unistd.h>
-
-#include "telar_platform/process_environment.h"
-
-#include <cstdio>
-#include <poll.h>
-#include <signal.h>
-#include <spawn.h>
-#include <sys/wait.h>
-
-#include <cstddef>
-#include <cstring>
-#include <new>
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <linux/fs.h>
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <sys/syscall.h>
-#endif
-#include <sys/file.h>
-
 #include <openssl/sha.h>
-#include <sys/un.h>
-
-#include <cctype>
-
-#include <csignal>
-#include <dirent.h>
-#include <pwd.h>
-#include <sys/socket.h>
-#include <sys/time.h>
 
 module telar.cli.machine_ssh;
 
 import telar.cli.base.command_error;
 import telar.cli.control_session;
 import telar.sys.posix;
+import telar.sys.process;
 
 namespace telar::runtime::cli::config_receive {
 
@@ -700,10 +656,10 @@ namespace telar::runtime::cli::machine {
   }
 
   template <Allocator Memory>
-  std::vector<std::string> ssh(Memory& memory, std::string_view destination, std::string_view command) {
+  std::vector<std::string> ssh(Memory& memory, std::string_view destination, std::string_view command, bool terminal) {
     auto argv = sshOptions(memory, destination);
 
-    argv.insert(argv.begin(), {"ssh", "-T"});
+    argv.insert(argv.begin(), {"ssh", terminal ? "-t" : "-T"});
     argv.insert(argv.end(), {"--", std::string{destination}, std::string{command}});
     return argv;
   }
@@ -744,7 +700,12 @@ namespace telar::runtime::cli::machine {
 
   template <Allocator Memory, typename Words>
   int forward(Memory& memory, const MachineProfile& profile, const Words& words) {
-    return launch::inherit(ssh(memory, profile.destination(), remoteCommand(profile, words)));
+    // A terminal there lets the command ask the person here, as a removal that needs
+    // confirmation does. It merges stderr into stdout and writes \r\n, so it is only
+    // given when both ends here are a terminal; anyone else gets none, as before.
+    const bool terminal = ::isatty(STDIN_FILENO) && ::isatty(STDOUT_FILENO);
+
+    return launch::inherit(ssh(memory, profile.destination(), remoteCommand(profile, words), terminal));
   }
 
   template <Allocator Memory, typename Words>
@@ -1652,7 +1613,7 @@ namespace telar::runtime::cli::machine::filter {
 namespace telar::runtime::cli::machine {
 
   template MachineProfiles load<Memory>(Memory& memory, const std::string& path);
-  template std::vector<std::string> ssh<Memory>(Memory& memory, std::string_view destination, std::string_view command);
+  template std::vector<std::string> ssh<Memory>(Memory& memory, std::string_view destination, std::string_view command, bool terminal);
 
 }
 

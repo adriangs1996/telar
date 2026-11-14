@@ -15,8 +15,6 @@ static_assert(true);
 #include "telar_client/codecs/telar_codec.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/protocol/agents.hpp"
-#include "telar_client/protocol/layout.hpp"
 #include "telar_client/protocol/pane_io.hpp"
 #include "telar_client/protocol/runtime.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
@@ -53,6 +51,7 @@ import telar.gui.tests.agent_fixture;
 import telar.gui.tests.session_fixture;
 import telar.gui.layout.geometry;
 import telar.gui.application.session;
+import telar.wire.agents;
 import telar.wire.layout;
 import telar.wire.runtime;
 
@@ -159,8 +158,8 @@ namespace {
 
   void hidingReleasesScreensAndReturningReopensTheFocusedPane() {
     SystemAllocator system;
-    BudgetAllocator allocator{system, std::numeric_limits<std::size_t>::max()};
-    telar::MemoryAdapter adapter{allocator};
+    BudgetAllocator budget{system, std::numeric_limits<std::size_t>::max()};
+    telar::MemoryAdapter adapter{budget};
     telar::Memory& memory = adapter;
     Transport transport;
 
@@ -172,11 +171,11 @@ namespace {
 
       client.toggleFullscreen();
       deliverSingleCell(client, {.pane_id = 1, .frame_id = 1, .scroll = {.total_rows = 1}});
-      const auto retained = allocator.liveBytes();
+      const auto retained = budget.liveBytes();
 
       client.setPresented(false);
       require(client.ready() && !client.presented() && client.activeTab() == nullptr && client.panes().empty(), "hiding must retire the workspace and all pane-owned screen storage while retaining the connection");
-      require(allocator.liveBytes() < retained, "hiding must release allocator-owned pane and screen storage");
+      require(budget.liveBytes() < retained, "hiding must release allocator-owned pane and screen storage");
       require(transport.count(ClientTag::detach_pane) == 1 && transport.detaching.size() == 1, "hiding must release input ownership before detaching the pane exactly once");
       require(transport.count(ClientTag::close_pane) == 0 && transport.count(ClientTag::runtime_stop) == 0, "hiding must preserve the runtime's processes");
       require(!client.settlePresentation(), "completed departure must be idempotent");
@@ -191,7 +190,7 @@ namespace {
       require(client.activeTab() != nullptr && client.activeTab()->focused_pane == 1 && client.activeTab()->fullscreen, "returning must retain focus and fullscreen layout state");
     }
 
-    require(allocator.liveBytes() == 0, "presentation and restoration must release every session allocation on destruction");
+    require(budget.liveBytes() == 0, "presentation and restoration must release every session allocation on destruction");
   }
 
   void hidingWaitsForCanonicalSnapshotsBeforeDetaching() {

@@ -140,7 +140,7 @@ namespace telar::gui {
     divider_count_ = 0;
     reserved_ = {};
     if (fullscreen && contains(*fullscreen)) {
-      placements_[placement_count_++] = {.pane_id = *fullscreen, .bounds = bounds, .display_index = displayIndex(*fullscreen), .content = bounds.inner(metrics.border), .framed = hasBorders(metrics)};
+      placements_[placement_count_++] = {.pane_id = *fullscreen, .bounds = bounds, .display_index = displayIndex(*fullscreen), .content = metrics.content(bounds), .framed = hasBorders(metrics)};
     } else if (count_ != 0) {
       arrangeNodes(bounds, metrics);
     }

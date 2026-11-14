@@ -1,22 +1,10 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <cstddef>
-#include <cstdlib>
-#include <new>
-
-#include <cerrno>
-#include <cstdint>
-#include <cstdio>
-#include <cstring>
-#include <dirent.h>
-#include <fcntl.h>
-#include <limits.h>
-#include <sys/sysinfo.h>
-#include <unistd.h>
 
 module telar.runtime.platform.host_metrics;
 
 import std;
+import telar.sys.posix;
 
 import telar.platform.fs;
 import telar.base.diagnostics;

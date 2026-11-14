@@ -7,6 +7,7 @@ module;
 #include <netinet/tcp.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <sys/un.h>
 
 export module telar.sys.socket;
@@ -44,6 +45,8 @@ export {
   using ::shutdown;
   using ::socket;
   using ::socketpair;
+  // The timeout SO_RCVTIMEO and SO_SNDTIMEO take.
+  using ::timeval;
 
   // Text forms, name resolution and network interfaces.
   using ::addrinfo;

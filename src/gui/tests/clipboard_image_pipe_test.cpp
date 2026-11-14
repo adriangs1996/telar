@@ -41,6 +41,15 @@ namespace {
   using telar::gui::test::ErasureAllocator;
   using telar::gui::test::require;
 
+  // The test allocator behind the Memory interface the pipe is instantiated for.
+  struct ErasureMemory : ErasureAllocator {
+    MemoryAdapter<ErasureAllocator> adapter{*this};
+
+    telar::Memory& memory() noexcept {
+      return adapter;
+    }
+  };
+
   struct Pipe {
     Pipe() {
       TelarGuiClipboardImagePipe native{};
@@ -64,9 +73,9 @@ namespace {
 
   constexpr std::array binary{std::byte{0xff}, std::byte{0}, std::byte{0x5a}, std::byte{0x80}, std::byte{0x17}, std::byte{0x23}};
 
-  void expectFailure(const Pipe& pipe, ErasureAllocator& memory, ClipboardImagePipeLimits limits, ClipboardImageError expected) {
+  void expectFailure(const Pipe& pipe, ErasureMemory& memory, ClipboardImagePipeLimits limits, ClipboardImageError expected) {
     try {
-      static_cast<void>(ClipboardImagePipe::read(memory, pipe.reading.get(), limits));
+      static_cast<void>(ClipboardImagePipe::read(memory.memory(), pipe.reading.get(), limits));
       require(false, "a failed transfer must never return an empty or partial attachment");
     } catch (const ClipboardImageFailure& failure) {
       require(failure.code() == expected, "the transfer must retain its exact failure classification");
@@ -80,13 +89,13 @@ namespace {
 
     for (const auto png_limit : std::array{binary.size(), larger_png_limit}) {
       Pipe pipe;
-      ErasureAllocator memory;
+      ErasureMemory memory;
 
       pipe.send(binary);
       pipe.writing.reset();
       require(telarGuiTestClipboardPipeHasReceiveFlags(pipe.reading.get()) != 0, "the native source must own a nonblocking close-on-exec read end");
       {
-        const auto bytes = ClipboardImagePipe::read(memory, pipe.reading.get(), {.source_bytes = binary.size(), .png_bytes = png_limit});
+        const auto bytes = ClipboardImagePipe::read(memory.memory(), pipe.reading.get(), {.source_bytes = binary.size(), .png_bytes = png_limit});
 
         require(std::ranges::equal(bytes.view(), binary), "EOF at both exact byte limits must return unchanged binary data including NUL");
         require(memory.live == bytes.size(), "a small completed transfer must retain its allocator owner without exceeding the source cap when the PNG cap is larger");
@@ -104,7 +113,7 @@ namespace {
 
     for (std::size_t index = 0; index < limits.size(); ++index) {
       Pipe pipe;
-      ErasureAllocator memory;
+      ErasureMemory memory;
 
       pipe.send(binary);
       pipe.writing.reset();
@@ -112,7 +121,7 @@ namespace {
     }
 
     Pipe empty;
-    ErasureAllocator memory;
+    ErasureMemory memory;
 
     empty.writing.reset();
     const ClipboardImagePipeLimits defaults;
@@ -122,13 +131,13 @@ namespace {
 
   void allocationFailureRetainsTheSourceAndClearsItsStorage() {
     Pipe pipe;
-    ErasureAllocator memory;
+    ErasureMemory memory;
 
     memory.fail = true;
     pipe.send(binary);
     pipe.writing.reset();
     try {
-      static_cast<void>(ClipboardImagePipe::read(memory, pipe.reading.get()));
+      static_cast<void>(ClipboardImagePipe::read(memory.memory(), pipe.reading.get()));
       require(false, "allocation failure must propagate instead of publishing a partial image");
     } catch (const std::bad_alloc&) {
       require(memory.live == 0 && !memory.dirty_release, "failed allocation must not retain transfer storage");
@@ -139,7 +148,7 @@ namespace {
 
   void providerActivityCannotRestartTheFiveSecondDeadline() {
     const Pipe pipe;
-    ErasureAllocator memory;
+    ErasureMemory memory;
     std::atomic<bool> delivered = false;
     const auto started = std::chrono::steady_clock::now();
     std::jthread provider{[descriptor = pipe.writing.get(), &delivered] {

@@ -1,19 +1,6 @@
 module;
-#include <cstdio>
-#include <cstdlib>
-#include <new>
-
-#include <cerrno>
-#include <cstdint>
-
-#include <cassert>
-
 #include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
-#include <cstddef>
-#include <cstring>
-#include <sys/types.h>
-#include <unistd.h>
 
 export module telar.runtime.platform.request_worker;
 
@@ -54,9 +41,12 @@ export {
     // when the worker is idle, and its result, which may view the service, is consumed before the next
     // request is accepted. That protocol is audited here, as the unsafe code behind a Rust channel is, so
     // the worker is TBC_SHARED; callers still see that it keeps what they submit.
+    //
+    // Kept whole: tests instantiate it with their own fake Service (descent_test's DescentProbe over a
+    // GatedLineageInspector).
     template <typename Service>
       requires ObservationService<std::remove_reference_t<Service>>
-    class TBC_SHARED ObservationWorker {
+    class TBC_SHARED TBC_HOT_PATH ObservationWorker {
       using Request = typename std::remove_reference_t<Service>::Request;
       using Result = typename std::remove_reference_t<Service>::Result;
 
@@ -219,8 +209,10 @@ export {
 
     // One observation at a time on a worker its owner keeps. Requests that arrive while one runs wait
     // in order, without a bound, and the next one goes in as each result is collected.
+    //
+    // Generic over the caller's request, worker and consumer, so it stays whole here.
     template <typename Request>
-    class SerialQueue {
+    class TBC_HOT_PATH SerialQueue {
     public:
       // Starts `request` on `worker` when it is idle, else queues it behind the waiting ones.
       template <typename Worker>
@@ -269,8 +261,9 @@ export {
 export {
   namespace telar::runtime {
 
+    // Generic over the caller's value (RequestWorker's jobs and completions), so it stays whole here.
     template <typename Value, std::size_t Capacity, ConcurrentAllocator Memory>
-    class RequestQueue {
+    class TBC_HOT_PATH RequestQueue {
       static_assert(Capacity != 0 && std::is_nothrow_move_constructible_v<Value>);
 
     public:
@@ -290,18 +283,18 @@ export {
       }
 
       inline Value& operator[](std::size_t offset) noexcept {
-        assert(offset < count_);
+        TELAR_ASSERT(offset < count_);
         return *slots_[(head_ + offset) % Capacity];
       }
 
       inline const Value& operator[](std::size_t offset) const noexcept {
-        assert(offset < count_);
+        TELAR_ASSERT(offset < count_);
         return *slots_[(head_ + offset) % Capacity];
       }
 
       template <typename... Arguments>
       inline Value& emplace(Arguments&&... arguments) {
-        assert(!full());
+        TELAR_ASSERT(!full());
         auto& value = slots_[(head_ + count_) % Capacity].emplace(std::forward<Arguments>(arguments)...);
 
         ++count_;
@@ -309,13 +302,13 @@ export {
       }
 
       inline void removeLast() noexcept {
-        assert(!empty());
+        TELAR_ASSERT(!empty());
         --count_;
         slots_[(head_ + count_) % Capacity].reset();
       }
 
       inline Value take() noexcept {
-        assert(!empty());
+        TELAR_ASSERT(!empty());
         auto value = std::move(*slots_[head_]);
 
         slots_[head_].reset();
@@ -325,7 +318,7 @@ export {
       }
 
       inline void swap(RequestQueue& other) noexcept {
-        assert(slots_.get_allocator() == other.slots_.get_allocator());
+        TELAR_ASSERT(slots_.get_allocator() == other.slots_.get_allocator());
         slots_.swap(other.slots_);
         std::swap(head_, other.head_);
         std::swap(count_, other.count_);
@@ -345,13 +338,9 @@ export {
   namespace telar::runtime {
 
     struct HistoryQueryOrder {
-      inline explicit HistoryQueryOrder(const QueryHistory& query, bool persistent_client) noexcept
-          : replaceable(persistent_client && query.offset == 0 && query.snapshot_id == 0 && query.entry_id == 0),
-            distinct(query.distinct) {}
+      explicit HistoryQueryOrder(const QueryHistory& query, bool persistent_client) noexcept;
 
-      inline bool supersededBy(const HistoryQueryOrder& newer) const noexcept {
-        return replaceable && newer.replaceable && distinct == newer.distinct;
-      }
+      bool supersededBy(const HistoryQueryOrder& newer) const noexcept;
 
       bool replaceable;
       bool distinct;
@@ -379,9 +368,11 @@ export {
       { service.process(request, reply) } -> std::same_as<void>;
     };
 
+    // Kept whole: tests instantiate it with their own fake Service (history_capacity_test's
+    // ControlledHistoryService).
     template <ConcurrentAllocator Memory, typename Service>
       requires RequestService<Service, Memory>
-    class RequestWorker {
+    class TBC_HOT_PATH RequestWorker {
     public:
       inline explicit RequestWorker(Memory& memory, Service& service)
           : memory_(memory),

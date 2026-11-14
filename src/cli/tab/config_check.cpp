@@ -1,26 +1,7 @@
 module;
-#include <new>
-
-#include "window_config_bootstrap.hpp"
-#include <arpa/inet.h>
-#include <cerrno>
-#include <cinttypes>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <dirent.h>
-#include <fcntl.h>
-#include <ghostty/vt/unicode.h>
 #include <lauxlib.h>
-#include <limits.h>
 #include <lua.h>
 #include <lualib.h>
-#include <openssl/sha.h>
-#include <sys/stat.h>
-#include <unistd.h>
 
 module telar.cli.tab;
 
@@ -38,6 +19,8 @@ import telar.sys.posix;
 namespace telar::runtime::cli {
 
   namespace {
+
+#include "window_config_bootstrap.inc"
 
     struct ConfigurationFailure : std::runtime_error {
       using std::runtime_error::runtime_error;

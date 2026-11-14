@@ -35,7 +35,7 @@ static void fails(Function&& function) {
   check(failed);
 }
 
-static void content(SystemAllocator& memory) {
+static void content(Memory& memory) {
   HttpContentCodec codec{memory};
   const std::array<std::uint8_t, 11> payload{'b', 'i', 0, 'n', 'a', 'r', 'y', '\r', '\n', 255, 1};
   constexpr std::size_t limit = 1024;
@@ -110,9 +110,11 @@ static void content(SystemAllocator& memory) {
   });
 
   BudgetAllocator budget{memory, 4096};
+  MemoryAdapter adapter{budget};
+  Memory& limited = adapter;
 
   {
-    HttpContentCodec bounded{budget};
+    HttpContentCodec bounded{limited};
 
     fails([&] {
       bounded.encode(payload, "gzip", limit);
@@ -165,7 +167,7 @@ static void contentCodings() {
   check(ContentCodings::onlyIdentity("identity, Identity, identity") && !ContentCodings::onlyIdentity("identity, gzip") && !ContentCodings::onlyIdentity(""));
 }
 
-static void messages(SystemAllocator& memory) {
+static void messages(Memory& memory) {
   HttpMessage request{memory};
   const auto framing = request.readHttp1Head("POST /original HTTP/1.1\r\nHost: fixture.test\r\nContent-Length: 999\r\n\r\n");
 
@@ -302,7 +304,9 @@ static void messages(SystemAllocator& memory) {
 }
 
 int main() {
-  SystemAllocator memory;
+  SystemAllocator system;
+  MemoryAdapter adapter{system};
+  Memory& memory = adapter;
 
   content(memory);
   contentCodings();

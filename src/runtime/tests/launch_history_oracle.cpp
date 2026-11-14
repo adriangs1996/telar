@@ -23,7 +23,9 @@ using namespace std::string_view_literals;
 
 extern "C" int record_launch_failure(const char* path, std::uint32_t seed) {
   try {
-    SystemAllocator memory;
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    ConcurrentMemory& memory = adapter;
     HistoryStore store{memory, path};
     constexpr std::array<std::uint64_t, 3> identities{0, 17, INT64_MAX};
     constexpr std::array texts{""sv, "spaces and café 好"sv, "embedded\0text"sv, "OutOfMemory"sv};

@@ -1,12 +1,5 @@
 module;
-#include <cstdio>
-#include <cstdlib>
-#include <new>
-
-#include <cstddef>
-
-#include <cstdint>
-#include <cstring>
+#include "tbc/annotations.hpp"
 
 export module telar.gui.transport.runtime_link;
 
@@ -31,8 +24,7 @@ export {
     template <Allocator Memory>
     class FrameStream {
     public:
-      inline explicit FrameStream(Memory& memory)
-          : payload_(AllocatorRef<Byte, Memory>{memory}) {}
+      explicit FrameStream(Memory& memory);
 
       ~FrameStream() = default;
 
@@ -41,76 +33,33 @@ export {
       FrameStream(FrameStream&&) = delete;
       FrameStream& operator=(FrameStream&&) = delete;
 
-      inline void reset() noexcept {
-        payload_.clear();
-        prefix_used_ = 0;
-        expected_ = 0;
-      }
+      void reset() noexcept;
 
-      inline void setMaximum(std::size_t maximum) {
-        if (maximum == 0 || maximum > max_payload_size) {
-          throw std::invalid_argument{"Invalid runtime receive capacity"};
-        }
+      void setMaximum(std::size_t maximum);
 
-        maximum_ = maximum;
-      }
-
+      // Generic over the caller's consumer, which takes each complete frame in turn.
       template <typename Consumer>
         requires std::invocable<Consumer&, std::span<const Byte>>
-      void feed(std::span<const Byte> input, Consumer& consume) {
-        while (!input.empty()) {
-          if (prefix_used_ < prefix_.size()) {
-            const auto count = std::min(input.size(), prefix_.size() - prefix_used_);
-
-            std::copy_n(input.begin(), count, prefix_.begin() + prefix_used_);
-            prefix_used_ += count;
-            input = input.subspan(count);
-
-            if (prefix_used_ != prefix_.size()) {
-              return;
-            }
-
-            std::span<const Byte> prefix{prefix_};
-
-            expected_ = u32::decode(prefix);
-            if (expected_ == 0) {
-              throw EncodingError{"InvalidLength"};
-            }
-
-            if (expected_ > max_payload_size) {
-              throw EncodingError{"FrameTooLarge"};
-            }
-
-            if (expected_ > maximum_) {
-              throw EncodingError{"BufferTooSmall"};
-            }
-
-            payload_.clear();
-            payload_.reserve(expected_);
-          }
-
-          const auto count = std::min(input.size(), expected_ - payload_.size());
-
-          payload_.insert(payload_.end(), input.begin(), input.begin() + count);
-          input = input.subspan(count);
-
-          if (payload_.size() == expected_) {
-            prefix_used_ = 0;
-            if (!consumeFrame(consume)) {
-              return;
-            }
+      TBC_HOT_PATH void feed(std::span<const Byte> input, Consumer& consume) {
+        while (const auto frame = next(input)) {
+          if (!consumeFrame(consume, *frame)) {
+            return;
           }
         }
       }
 
     private:
+      // Takes bytes from input until a frame completes, and returns that frame's payload; nothing
+      // once input runs out first. The payload stays valid until the next call.
+      [[nodiscard]] std::optional<std::span<const Byte>> next(std::span<const Byte>& input);
+
       template <typename Consumer>
         requires std::invocable<Consumer&, std::span<const Byte>>
-      [[nodiscard]] bool consumeFrame(Consumer& consume) {
+      [[nodiscard]] TBC_HOT_PATH static bool consumeFrame(Consumer& consume, std::span<const Byte> frame) {
         if constexpr (std::same_as<std::invoke_result_t<Consumer&, std::span<const Byte>>, bool>) {
-          return consume(std::span<const Byte>{payload_});
+          return consume(frame);
         } else {
-          consume(std::span<const Byte>{payload_});
+          consume(frame);
 
           return true;
         }
@@ -122,6 +71,9 @@ export {
       std::size_t expected_ = 0;
       std::size_t maximum_ = max_payload_size;
     };
+
+    extern template class FrameStream<telar::Memory>;
+    extern template class FrameStream<telar::ConcurrentMemory>;
 
   }
 }
@@ -140,34 +92,14 @@ export {
       // current schema's.
       static constexpr SchemaId cqp00003{'c', 'q', 'p', '0', '0', '0', '0', '3'};
 
-      [[nodiscard]] inline static bool supports(const SchemaId& schema) noexcept {
-        return schema == handshake::schema_id || schema == cqp00003 || schema == cqp00002 || schema == schema87;
-      }
+      [[nodiscard]] static bool supports(const SchemaId& schema) noexcept;
 
-      [[nodiscard]] inline static bool supports(const SchemaId& schema, ClientTag tag) noexcept {
-        const bool current = tag == ClientTag::read_pane_rows || tag == ClientTag::search_pane_rows || tag == ClientTag::pane_command || tag == ClientTag::configure_shell_prompt;
-
-        return supports(schema) && (schema != schema87 || tag != ClientTag::hold_tab) && (!current || readsRows(schema));
-      }
+      [[nodiscard]] static bool supports(const SchemaId& schema, ClientTag tag) noexcept;
 
       // Whether the runtime reads rows of a scrollback by their stable number.
-      [[nodiscard]] inline static bool readsRows(const SchemaId& schema) noexcept {
-        return schema == handshake::schema_id || schema == cqp00003;
-      }
+      [[nodiscard]] static bool readsRows(const SchemaId& schema) noexcept;
 
-      [[nodiscard]] inline static std::optional<SchemaId> retry(std::span<const Byte> payload, const SchemaId& requested) {
-        try {
-          const auto response = HandshakeCodec::decodeResponse(payload);
-          const auto* rejected = std::get_if<ServerReject>(&response);
-          if (rejected != nullptr && rejected->reason == HandshakeRejectReason::incompatible_schema && rejected->expected_schema != requested && supports(requested) && supports(rejected->expected_schema)) {
-            return rejected->expected_schema;
-          }
-        } catch (const EncodingError&) {
-          return std::nullopt;
-        }
-
-        return std::nullopt;
-      }
+      [[nodiscard]] static std::optional<SchemaId> retry(std::span<const Byte> payload, const SchemaId& requested);
     };
 
   }
@@ -186,69 +118,14 @@ export {
         Detail detail{};
       };
 
-      [[nodiscard]] inline static Result inspect(std::span<const Byte> payload, const SchemaId& requested = handshake::schema_id) {
-        if (!RuntimeProtocol::supports(requested)) {
-          return failure(MachineError::endpoint_unavailable, "InvalidServerSelection");
-        }
-
-        if (payload.size() > HandshakeCodec::max_message_size) {
-          return failure(MachineError::endpoint_unavailable, "BufferTooSmall");
-        }
-
-        try {
-          const auto response = HandshakeCodec::decodeResponse(payload);
-          if (const auto* accepted = std::get_if<ServerAccept>(&response)) {
-            return accepted->schema == requested ? Result{} : failure(MachineError::endpoint_unavailable, "InvalidServerSelection");
-          }
-
-          return rejected(std::get<ServerReject>(response));
-        } catch (const EncodingError& error) {
-          return failure(MachineError::endpoint_unavailable, decodingFailure(error.what()));
-        }
-      }
+      [[nodiscard]] static Result inspect(std::span<const Byte> payload, const SchemaId& requested = handshake::schema_id);
 
     private:
-      [[nodiscard]] inline static Result failure(MachineError error, std::string_view message) {
-        Result result{.error = error};
+      [[nodiscard]] static Result failure(MachineError error, std::string_view message);
 
-        result.detail.append(message);
+      [[nodiscard]] static Result rejected(const ServerReject& reply);
 
-        return result;
-      }
-
-      [[nodiscard]] inline static Result rejected(const ServerReject& reply) {
-        if (reply.reason == HandshakeRejectReason::client_limit_reached) {
-          return failure(MachineError::endpoint_unavailable, "clients.max_clients: the runtime holds its limit of 32 clients (windows, CLI calls and agent hooks); close a window or retry once running commands finish");
-        }
-
-        Result result{.error = MachineError::incompatible_schema};
-
-        result.detail.append("the runtime speaks wire schema ");
-        result.detail.append(textView(std::span{reply.expected_schema}));
-        result.detail.append("; this telar speaks ");
-        result.detail.append(textView(std::span{handshake::schema_id}));
-        result.detail.append(". Update telar on one side");
-
-        return result;
-      }
-
-      [[nodiscard]] inline static std::string_view decodingFailure(std::string_view message) noexcept {
-        constexpr std::array names{
-            std::pair{"Invalid handshake response length", "InvalidLength"},
-            std::pair{"Invalid handshake magic", "InvalidMagic"},
-            std::pair{"Unknown handshake message tag", "UnknownMessage"},
-            std::pair{"Unexpected handshake response", "UnexpectedMessage"},
-            std::pair{"Unknown handshake rejection reason", "UnknownRejectReason"},
-        };
-
-        for (const auto& [native, original] : names) {
-          if (message == native) {
-            return original;
-          }
-        }
-
-        return message;
-      }
+      [[nodiscard]] static std::string_view decodingFailure(std::string_view message) noexcept;
     };
 
   }
@@ -276,154 +153,40 @@ export {
       BoundedText<failure_bytes> failure_storage;
       BoundedText<target_bytes> target_storage;
 
-      inline void name(std::string_view text) {
-        target_storage.truncate(0);
-        target_storage.append(validPrefix(text, target_bytes));
-      }
+      void name(std::string_view text);
 
-      [[nodiscard]] inline std::string_view target() const noexcept {
-        return target_storage.view();
-      }
+      [[nodiscard]] std::string_view target() const noexcept;
 
-      inline void fail(std::string_view text) {
-        failure_storage.truncate(0);
-        const auto first = text.find_first_not_of(" \t\r\n");
-        if (first == std::string_view::npos) {
-          return;
-        }
+      void fail(std::string_view text);
 
-        const auto last = text.find_last_not_of(" \t\r\n");
-        const auto kept = validPrefix(text.substr(first, last - first + 1), failure_bytes);
-        std::array<char, failure_bytes> cleaned{};
+      [[nodiscard]] std::optional<std::string_view> failure() const noexcept;
 
-        for (std::size_t index = 0; index < kept.size(); ++index) {
-          const auto byte = static_cast<unsigned char>(kept[index]);
+      void clearFailure() noexcept;
 
-          cleaned[index] = byte < static_cast<unsigned char>(' ') || byte == static_cast<unsigned char>(ControlByte::delete_character) ? ' ' : kept[index];
-        }
+      void start(std::string_view text);
 
-        failure_storage.append({cleaned.data(), kept.size()});
-      }
+      void adopt(std::uint64_t now_ns);
 
-      [[nodiscard]] inline std::optional<std::string_view> failure() const noexcept {
-        return failure_storage.view().empty() ? std::nullopt : std::optional{failure_storage.view()};
-      }
+      void lose(std::string_view text, std::uint64_t now_ns);
 
-      inline void clearFailure() noexcept {
-        failure_storage = {};
-        setup_repairs = false;
-      }
+      void connectionFailed(MachineError error, std::string_view text);
 
-      inline void start(std::string_view text) {
-        name(text);
-        phase = MachinePhase::connecting;
-        clearFailure();
-      }
+      bool retry();
 
-      inline void adopt(std::uint64_t now_ns) {
-        connected_at_ns = now_ns;
-        phase = MachinePhase::connected;
-        if (sessions != std::numeric_limits<std::uint32_t>::max()) {
-          ++sessions;
-        }
+      bool retryNow();
 
-        clearFailure();
-      }
+      void stop() noexcept;
 
-      inline void lose(std::string_view text, std::uint64_t now_ns) {
-        if (phase != MachinePhase::connected) {
-          return;
-        }
+      [[nodiscard]] int retryDelayMilliseconds() const noexcept;
 
-        if (now_ns >= connected_at_ns && now_ns - connected_at_ns >= healthy_after_ns) {
-          attempt = 0;
-        }
-
-        fail(text);
-        setup_repairs = false;
-        phase = MachinePhase::lost;
-      }
-
-      inline void connectionFailed(MachineError error, std::string_view text) {
-        fail(text);
-        setup_repairs = MachineConnectionPolicy::setupRepairs(error);
-        phase = MachineConnectionPolicy::permanent(error) ? MachinePhase::failed : MachinePhase::lost;
-      }
-
-      inline bool retry() {
-        if (phase != MachinePhase::lost) {
-          return false;
-        }
-
-        phase = MachinePhase::connecting;
-        if (attempt != std::numeric_limits<std::uint16_t>::max()) {
-          ++attempt;
-        }
-
-        return true;
-      }
-
-      inline bool retryNow() {
-        if (phase != MachinePhase::lost && phase != MachinePhase::failed) {
-          return false;
-        }
-
-        phase = MachinePhase::connecting;
-        attempt = 0;
-
-        return true;
-      }
-
-      inline void stop() noexcept {
-        phase = MachinePhase::stopped;
-        clearFailure();
-      }
-
-      [[nodiscard]] inline int retryDelayMilliseconds() const noexcept {
-        const auto shift = std::min(static_cast<unsigned>(attempt), maximum_backoff_doublings);
-
-        return static_cast<int>(std::min(std::uint64_t{first_retry_ms} << shift, std::uint64_t{longest_retry_ms}));
-      }
-
-      [[nodiscard]] inline Headline headline() const {
-        switch (phase) {
-        case MachinePhase::connected:
-          return {};
-        case MachinePhase::connecting:
-          if (sessions == 0 && attempt == 0) {
-            return assemble({.prefix = "Connecting to ", .suffix = "…", .fallback = "Connecting…"});
-          }
-
-          {
-            auto result = assemble({.prefix = "Reconnecting to ", .suffix = "", .fallback = "Reconnecting…"});
-
-            result.append(" (attempt ");
-            result.appendDecimal(static_cast<std::uint32_t>(attempt) + 1);
-            result.append(")…");
-
-            return result;
-          }
-        case MachinePhase::lost:
-          return assemble({.prefix = "", .suffix = " is unreachable; trying again shortly", .fallback = "The runtime is unreachable"});
-        case MachinePhase::failed:
-          return setup_repairs ? assemble({.prefix = "", .suffix = " lacks this telar build; choose it in the machine list to set it up", .fallback = "This machine lacks this telar build"}) : assemble({.prefix = "Cannot connect to ", .suffix = "; retry it from the machine list", .fallback = "Cannot connect to the runtime"});
-        case MachinePhase::stopped:
-          return assemble({.prefix = "", .suffix = " is disabled", .fallback = "The machine is disabled"});
-        }
-
-        return {};
-      }
+      [[nodiscard]] Headline headline() const;
 
     private:
       enum class ControlByte : unsigned char {
         delete_character = 0x7f,
       };
 
-      [[nodiscard]] inline static std::string_view validPrefix(std::string_view text, std::size_t capacity) noexcept {
-        const auto prefix = runtime::utf8Prefix(text, capacity);
-
-        return inspectUtf8(prefix) == Utf8Validation::valid ? prefix : std::string_view{};
-      }
+      [[nodiscard]] static std::string_view validPrefix(std::string_view text, std::size_t capacity) noexcept;
 
       struct Label {
         std::string_view prefix;
@@ -431,19 +194,7 @@ export {
         std::string_view fallback;
       };
 
-      [[nodiscard]] inline Headline assemble(Label label) const {
-        Headline result;
-
-        if (label.prefix.size() + target().size() + label.suffix.size() > headline_bytes) {
-          result.append(label.fallback);
-        } else {
-          result.append(label.prefix);
-          result.append(target());
-          result.append(label.suffix);
-        }
-
-        return result;
-      }
+      [[nodiscard]] Headline assemble(Label label) const;
     };
 
   }

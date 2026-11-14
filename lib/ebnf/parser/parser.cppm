@@ -1,8 +1,3 @@
-module;
-
-#include <cstddef>
-#include <cstdint>
-
 export module telar.ebnf.parser;
 
 import std;
@@ -14,7 +9,7 @@ export import telar.ebnf.lexer;
 export {
   namespace ebnf {
 
-    using node_handle = uint32_t;
+    using node_handle = std::uint32_t;
 
     inline constexpr node_handle none_handle{std::numeric_limits<std::uint32_t>::max()};
     inline constexpr std::size_t max_nesting_depth = 64;

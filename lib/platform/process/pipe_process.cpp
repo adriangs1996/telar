@@ -1,24 +1,12 @@
-module;
-#include <cstddef>
-#include <cstdint>
-#include <cstdio>
-#include <cstring>
-#include <unistd.h>
-
-#include <cerrno>
-#include <csignal>
-#include <cstdlib>
-#include <dirent.h>
-#include <fcntl.h>
-#include <spawn.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-
 module telar.platform.process;
 
 import std;
 import telar.sys.posix;
+import telar.sys.process;
+import telar.sys.socket;
+#if defined(__APPLE__)
+import telar.sys.apple;
+#endif
 
 namespace telar::runtime {
   namespace {

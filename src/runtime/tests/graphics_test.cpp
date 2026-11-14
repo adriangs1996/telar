@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "cell_layout.hpp"
 #include "telar_base/diagnostics/config.hpp"
 #include <cassert>
 #include <cerrno>
@@ -34,11 +33,11 @@ import telar.runtime.tests.check;
 using namespace telar;
 using namespace telar::runtime;
 
-static void feedGraphics(Terminal<SystemAllocator>& terminal, std::string_view bytes) {
+static void feedGraphics(Terminal<ConcurrentMemory>& terminal, std::string_view bytes) {
   terminal.feed({reinterpret_cast<const Byte*>(bytes.data()), bytes.size()});
 }
 
-static void testMediaBudget(SystemAllocator& system) {
+static void testMediaBudget(ConcurrentMemory& system) {
   MediaBudget budget{1024};
   MediaAllocator first{system, budget, 768};
   MediaAllocator second{system, budget, 768};
@@ -132,7 +131,7 @@ static void testKittyFraming() {
   check(!framing.touches(bytes("plain")));
 }
 
-static void testGraphicsProjection(SystemAllocator& memory) {
+static void testGraphicsProjection(ConcurrentMemory& memory) {
   Terminal terminal{memory, TerminalSize{.cols = 80, .rows = 24, .cell_width_px = 8, .cell_height_px = 16}};
 
   feedGraphics(terminal, "\x1b_Ga=T,f=32,s=1,v=1,i=17,p=5,q=2;/wAA/w==\x1b\\");
@@ -172,11 +171,11 @@ static void testGraphicsProjection(SystemAllocator& memory) {
   }));
 }
 
-static void testGraphicsTransfer(SystemAllocator& memory, bool shared) {
+static void testGraphicsTransfer(ConcurrentMemory& memory, bool shared) {
   RuntimeModel model{memory};
-  ClientStore<SystemAllocator> clients{memory};
+  ClientStore<ConcurrentMemory> clients{memory};
   ClientPeer peer{memory, model, clients, ClientRole::control};
-  auto media = std::allocate_shared<PaneMedia<SystemAllocator>>(AllocatorRef<PaneMedia<SystemAllocator>, SystemAllocator>{memory}, memory, model.media_budget, model.graphics_limits, TerminalSize{80, 24, 8, 16});
+  auto media = std::allocate_shared<PaneMedia<ConcurrentMemory>>(AllocatorRef<PaneMedia<ConcurrentMemory>, ConcurrentMemory>{memory}, memory, model.media_budget, model.graphics_limits, TerminalSize{80, 24, 8, 16});
   auto& terminal = *media->terminal();
   GraphicsSynchronizer sync{peer.session().graphics_credit, 42, media};
   const auto feed = [&](std::string_view text) {
@@ -259,11 +258,11 @@ static void testGraphicsTransfer(SystemAllocator& memory, bool shared) {
 #endif
 }
 
-static void testIdleBoundaryTransfer(SystemAllocator& memory, bool shared, std::size_t placement_count) {
+static void testIdleBoundaryTransfer(ConcurrentMemory& memory, bool shared, std::size_t placement_count) {
   RuntimeModel model{memory};
-  ClientStore<SystemAllocator> clients{memory};
+  ClientStore<ConcurrentMemory> clients{memory};
   ClientPeer peer{memory, model, clients, ClientRole::control};
-  auto media = std::allocate_shared<PaneMedia<SystemAllocator>>(AllocatorRef<PaneMedia<SystemAllocator>, SystemAllocator>{memory}, memory, model.media_budget, model.graphics_limits, TerminalSize{80, 24, 8, 16});
+  auto media = std::allocate_shared<PaneMedia<ConcurrentMemory>>(AllocatorRef<PaneMedia<ConcurrentMemory>, ConcurrentMemory>{memory}, memory, model.media_budget, model.graphics_limits, TerminalSize{80, 24, 8, 16});
   GraphicsSynchronizer sync{peer.session().graphics_credit, 42, media};
   using StageResult = decltype(sync)::StageResult;
 
@@ -372,7 +371,7 @@ static void testIdleBoundaryTransfer(SystemAllocator& memory, bool shared, std::
   check(!sameImage(storage.images().front().description.key, key));
 }
 
-static void testPng(SystemAllocator& memory) {
+static void testPng(ConcurrentMemory& memory) {
   Terminal terminal{memory, TerminalSize{.cols = 80, .rows = 24, .cell_width_px = 8, .cell_height_px = 16}};
 
   feedGraphics(terminal, "\x1b_Ga=t,f=100,i=42,q=2;iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==\x1b\\");
@@ -413,7 +412,9 @@ static void testGraphicsCredit() {
 }
 
 void testGraphics() {
-  SystemAllocator memory;
+  SystemAllocator system;
+  MemoryAdapter adapter{system};
+  ConcurrentMemory& memory = adapter;
 
   testMediaBudget(memory);
   testKittyFraming();

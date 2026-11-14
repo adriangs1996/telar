@@ -10,7 +10,20 @@ if(NOT TARGET telar-vocabulary)
   add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../vocabulary" "${CMAKE_BINARY_DIR}/telar-vocabulary")
 endif()
 
-add_library(telar-wire STATIC)
+add_library(
+  telar-wire STATIC
+  agents/agents.cpp
+  clients/clients.cpp
+  clipboard/clipboard.cpp
+  content/content.cpp
+  editor/editor.cpp
+  execution/execution.cpp
+  graphics/graphics.cpp
+  layout/layout.cpp
+  pane_io/pane_io.cpp
+  vocabulary/vocabulary.cpp
+  worktrees/worktrees.cpp
+)
 add_library(telar::wire ALIAS telar-wire)
 telar_modules(telar-wire)
 target_link_libraries(telar-wire PUBLIC telar::base telar::vocabulary)

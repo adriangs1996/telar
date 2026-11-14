@@ -1,7 +1,3 @@
-module;
-
-#include <cstdint>
-
 export module telar.base.history;
 
 import std;

@@ -103,7 +103,8 @@ namespace telar {
     std::uint16_t link_index = 0;
   };
 
-  struct TextMetadata {
+  // Frames are the hottest messages: their types and codecs keep their bodies.
+  struct TBC_HOT_PATH TextMetadata {
     MetadataStatus status{};
     std::span<const Byte> row_flags{};
     std::span<const MetadataLink> links{};
@@ -177,7 +178,7 @@ namespace telar {
 
   // All four counts precede the row, link, run and URI arrays.
   template <>
-  struct BodySchema<TextMetadata> {
+  struct TBC_HOT_PATH BodySchema<TextMetadata> {
     static constexpr bool fixed_size = false;
     static constexpr std::size_t min_width = 11;
 
@@ -265,7 +266,7 @@ namespace telar {
     }
   };
 
-  struct FrameMetadataCodec {
+  struct TBC_HOT_PATH FrameMetadataCodec {
     using value_type = std::optional<TextMetadata>;
     static constexpr std::size_t min_width = 4;
 
@@ -302,7 +303,7 @@ namespace telar {
     }
   };
 
-  struct FrameSpan {
+  struct TBC_HOT_PATH FrameSpan {
     std::uint32_t start = 0, count = 0;
     std::span<const Byte> cells{};
 
@@ -315,7 +316,7 @@ namespace telar {
   struct BodySchema<FrameSpan>
       : Serializer<Field<&FrameSpan::start, u32, "start">, Field<&FrameSpan::count, BoundedInteger<u32, 1>, "count">, Field<&FrameSpan::cells, SizedBytes<u32, max_payload_size>, "cells">> {};
 
-  struct FrameBody {
+  struct TBC_HOT_PATH FrameBody {
     std::uint64_t pane_id = 0, frame_id = 0, base_frame_id = 0;
     std::uint16_t cols = 0, rows = 0;
     Cursor cursor{};
@@ -466,7 +467,7 @@ namespace telar {
           SpanItemsField<&FrameBody::spans, ValueCodec<FrameSpan>, "spans">>;
 
   template <>
-  struct BodySchema<FrameBody> : FrameSerializer {
+  struct TBC_HOT_PATH BodySchema<FrameBody> : FrameSerializer {
     static void validate(const FrameBody& frame) {
       frame.validate();
     }

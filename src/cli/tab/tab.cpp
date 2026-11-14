@@ -1,34 +1,6 @@
-module;
-#include <new>
-#include <stdlib.h>
-
-#include <cstdint>
-
-#include <cerrno>
-#include <climits>
-#include <dlfcn.h>
-#include <unistd.h>
-
-#include <cstddef>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <limits.h>
-#include <sys/socket.h>
-#include <sys/time.h>
-#include <sys/un.h>
-#if (defined(__APPLE__))
-#include <mach-o/dyld.h>
-#endif
-#include <csignal>
-#include <dirent.h>
-#include <fcntl.h>
-#include <pwd.h>
-#include <spawn.h>
-#include <sys/stat.h>
-#include <sys/wait.h>
-
 module telar.cli.tab;
+
+import telar.sys.posix;
 
 import telar.tbc;
 

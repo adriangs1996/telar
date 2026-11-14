@@ -34,7 +34,7 @@ namespace telar::gui::test {
   public:
     explicit WireRuntime(QLocalSocket& socket)
         : socket_(socket),
-          stream_(memory_) {
+          stream_(adapter_) {
       QObject::connect(&socket_, &QLocalSocket::readyRead, &socket_, [this] {
         const auto bytes = socket_.readAll();
         const auto consume = [this](std::span<const Byte> payload) {
@@ -100,7 +100,8 @@ namespace telar::gui::test {
 
     QLocalSocket& socket_;
     SystemAllocator memory_;
-    FrameStream<SystemAllocator> stream_;
+    MemoryAdapter<SystemAllocator> adapter_{memory_};
+    FrameStream<telar::ConcurrentMemory> stream_;
     std::vector<std::vector<Byte>> received_;
     static constexpr std::size_t decode_capacity = 4096;
     mutable std::array<Byte, decode_capacity> decode_{};

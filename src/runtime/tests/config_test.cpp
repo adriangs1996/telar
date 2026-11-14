@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "config_bootstrap.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_base/text/utf8.hpp"

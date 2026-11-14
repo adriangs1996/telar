@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "cell_layout.hpp"
 #include "telar_base/diagnostics/config.hpp"
 #include <cassert>
 #include <cstddef>
@@ -21,6 +20,7 @@ import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
 import telar.runtime.graphics.kitty;
 import telar.runtime.terminal.control;
+import telar.runtime.terminal.grid;
 import telar.runtime.tests.check;
 import telar.runtime.terminal.text_reader;
 import telar.wire.content;
@@ -35,7 +35,10 @@ static std::span<const Byte> bytes(std::string_view text) {
 
 static void testTerminalStorage() {
   SystemAllocator system;
-  BudgetAllocator memory{system, 64 * 1024 * 1024};
+  BudgetAllocator budget{system, 64 * 1024 * 1024};
+  SynchronizedAllocator synchronized{budget};
+  MemoryAdapter adapter{synchronized};
+  ConcurrentMemory& memory = adapter;
   Terminal terminal{memory, TerminalSize{80, 24, 0, 0}};
   std::size_t initial_bytes = 0;
 
@@ -60,10 +63,10 @@ static void testTerminalStorage() {
 
   terminal.feed(bytes("\x1b[?1049h"));
   std::size_t both_screen_bytes = 0;
-  const auto allocations = memory.allocations();
+  const auto allocations = budget.allocations();
 
   checkGhostty(ghostty_terminal_page_bytes(terminal.handle(), &both_screen_bytes));
-  check(both_screen_bytes > retained_bytes && memory.allocations() == allocations);
+  check(both_screen_bytes > retained_bytes && budget.allocations() == allocations);
   GhosttyTerminalScreen active{};
 
   checkGhostty(ghostty_terminal_get(terminal.handle(), GHOSTTY_TERMINAL_DATA_ACTIVE_SCREEN, &active));
@@ -90,7 +93,9 @@ static void testTerminalStorage() {
 // `clear` erases the scrollback before the screen; Ghostty would move a screen ending in a prompt
 // back into it. ^L at a prompt, without ED 3, still keeps the screen in the scrollback.
 static void testClearAtPrompt() {
-  SystemAllocator memory;
+  SystemAllocator system;
+  MemoryAdapter adapter{system};
+  ConcurrentMemory& memory = adapter;
   Terminal terminal{memory, TerminalSize{40, 5, 0, 0}};
   std::string history;
 
@@ -136,7 +141,9 @@ static std::string replyRow(const PaneRows& reply, std::size_t index) {
 // Rows keep their stable number, the rows dropped above them plus their row, while the
 // scrollback drops its oldest; a resize renumbers them under a new generation.
 static void testScrollbackOrigin() {
-  SystemAllocator memory;
+  SystemAllocator system;
+  MemoryAdapter adapter{system};
+  ConcurrentMemory& memory = adapter;
   Terminal terminal{memory, TerminalSize{40, 5, 0, 0}};
   const std::size_t limit = 1;
 
@@ -162,7 +169,7 @@ static void testScrollbackOrigin() {
   check(terminal.scrollbackTrimmed() > 0 && dropped == terminal.scrollbackTrimmed() && terminal.scrollbackGeneration() == generation);
 
   // Stable row N holds the line printed N-th.
-  ScrollbackRows<SystemAllocator> rows{memory};
+  ScrollbackRows<ConcurrentMemory> rows{memory};
   const auto trimmed = terminal.scrollbackTrimmed();
   const auto stable = trimmed + 3;
   const auto reply = rows.read(terminal, ReadPaneRows{.request_id = 1, .pane_id = 1, .from = stable, .count = 2});
@@ -196,7 +203,9 @@ void testTerminal() {
   testClearAtPrompt();
   testScrollbackOrigin();
   {
-    SystemAllocator memory;
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    ConcurrentMemory& memory = adapter;
     Terminal terminal{memory, TerminalSize{80, 24, 9, 18}};
 
     for (const auto input : {"\x1b[?5522h", "\x1b[?5522l", "\x1b[?5522h", "\x1b"
@@ -209,7 +218,10 @@ void testTerminal() {
   }
 
   SystemAllocator system;
-  BudgetAllocator memory{system, 64 * 1024 * 1024};
+  BudgetAllocator budget{system, 64 * 1024 * 1024};
+  SynchronizedAllocator synchronized{budget};
+  MemoryAdapter adapter{synchronized};
+  ConcurrentMemory& memory = adapter;
 
   {
     Terminal terminal{memory, TerminalSize{.cols = 40, .rows = 5, .cell_width_px = 0, .cell_height_px = 0}};
@@ -235,14 +247,14 @@ void testTerminal() {
     terminal.consumeResponses(terminal.responses().size());
     terminal.refresh();
 
-    const auto allocations = memory.allocations();
+    const auto allocations = budget.allocations();
 
     for (int iteration = 0; iteration < 100; ++iteration) {
       terminal.feed(bytes("\x1b[1;1HX"));
       terminal.refresh();
     }
 
-    check(memory.allocations() == allocations);
+    check(budget.allocations() == allocations);
     terminal.feed(bytes("\x1b]2;safe\x07\x1b]7;file://localhost/tmp/hello%20world\x07\x1b]52;c;aGVsbG8=\x07"));
     check(terminal.effects.title() == "safe");
     check(terminal.effects.cwd() == "/tmp/hello world");
@@ -274,7 +286,7 @@ void testTerminal() {
     check(terminal.screen.revision > revision);
   }
 
-  check(memory.liveBytes() == 0);
+  check(budget.liveBytes() == 0);
 
   std::uint64_t seed = 1;
 

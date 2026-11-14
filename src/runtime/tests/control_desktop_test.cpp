@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "cell_layout.hpp"
 #include "telar_base/diagnostics/config.hpp"
 #include <cassert>
 #include <cerrno>
@@ -77,7 +76,7 @@ namespace {
     return output;
   }
 
-  void policyConfiguration(SystemAllocator& memory) {
+  void policyConfiguration(ConcurrentMemory& memory) {
     MemoryAdapter erased{memory};
     lua::Vm<Memory> vm{erased};
 
@@ -145,13 +144,13 @@ namespace {
     check(actual == std::string{expected} + std::string{marker});
   }
 
-  void paletteNotification(SystemAllocator& memory) {
+  void paletteNotification(ConcurrentMemory& memory) {
     RuntimeModel model{memory};
-    ClientStore<SystemAllocator> clients{memory};
-    LimitService<SystemAllocator> limits;
-    NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
+    ClientStore<ConcurrentMemory> clients{memory};
+    LimitService<ConcurrentMemory> limits;
+    NativeEventLoop<ConcurrentMemory> poller{memory};
     PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/control-notifications.sock"}};
-    WorkspaceService<SystemAllocator, decltype(poller)> workspaces{memory};
+    WorkspaceService<ConcurrentMemory, decltype(poller)> workspaces{memory};
     ClientPeer client{memory, model, clients, ClientRole::interactive};
     const std::array<std::string_view, 1> arguments{"/bin/cat"};
 
@@ -177,13 +176,13 @@ namespace {
     panes.remove(model, clients, pane.id);
   }
 
-  void notificationTransitions(SystemAllocator& memory) {
+  void notificationTransitions(ConcurrentMemory& memory) {
     RuntimeModel model{memory};
-    ClientStore<SystemAllocator> clients{memory};
-    LimitService<SystemAllocator> limits;
-    NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
+    ClientStore<ConcurrentMemory> clients{memory};
+    LimitService<ConcurrentMemory> limits;
+    NativeEventLoop<ConcurrentMemory> poller{memory};
     PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/control-notification-transitions.sock"}};
-    WorkspaceService<SystemAllocator, decltype(poller)> workspaces{memory};
+    WorkspaceService<ConcurrentMemory, decltype(poller)> workspaces{memory};
     ClientPeer first{memory, model, clients, ClientRole::interactive};
     ClientPeer second{memory, model, clients, ClientRole::interactive};
     const std::array<std::string_view, 1> arguments{"/bin/cat"};
@@ -267,13 +266,13 @@ namespace {
     panes.remove(model, clients, pane.id);
   }
 
-  void interruptedResponseWrites(SystemAllocator& memory) {
+  void interruptedResponseWrites(ConcurrentMemory& memory) {
     RuntimeModel model{memory};
-    ClientStore<SystemAllocator> clients{memory};
-    LimitService<SystemAllocator> limits;
-    NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
+    ClientStore<ConcurrentMemory> clients{memory};
+    LimitService<ConcurrentMemory> limits;
+    NativeEventLoop<ConcurrentMemory> poller{memory};
     PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/control-interrupted-writes.sock"}};
-    WorkspaceService<SystemAllocator, decltype(poller)> workspaces{memory};
+    WorkspaceService<ConcurrentMemory, decltype(poller)> workspaces{memory};
     ClientPeer client{memory, model, clients, ClientRole::interactive};
     const std::array<std::string_view, 1> arguments{"/bin/cat"};
 
@@ -382,13 +381,13 @@ namespace {
     panes.remove(model, clients, pane.id);
   }
 
-  void multipleClients(SystemAllocator& memory) {
+  void multipleClients(ConcurrentMemory& memory) {
     RuntimeModel model{memory};
-    ClientStore<SystemAllocator> clients{memory};
-    LimitService<SystemAllocator> limits;
-    NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
+    ClientStore<ConcurrentMemory> clients{memory};
+    LimitService<ConcurrentMemory> limits;
+    NativeEventLoop<ConcurrentMemory> poller{memory};
     PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/control-desktop.sock"}};
-    WorkspaceService<SystemAllocator, decltype(poller)> workspaces{memory};
+    WorkspaceService<ConcurrentMemory, decltype(poller)> workspaces{memory};
     ClientPeer first{memory, model, clients, ClientRole::interactive};
     ClientPeer second{memory, model, clients, ClientRole::interactive};
     ClientPeer outsider{memory, model, clients, ClientRole::interactive};
@@ -453,7 +452,9 @@ namespace {
 }
 
 int main() {
-  SystemAllocator memory;
+  SystemAllocator system;
+  MemoryAdapter adapter{system};
+  ConcurrentMemory& memory = adapter;
 
   policyConfiguration(memory);
   multipleClients(memory);

@@ -9,7 +9,7 @@ foreach(dependency IN ITEMS lua plugins)
   endif()
 endforeach()
 
-add_library(telar-config STATIC)
+add_library(telar-config STATIC client/client.cpp core/core.cpp gui/gui.cpp runtime/runtime.cpp runtime/runtime_reader.cpp snapshot/snapshot.cpp)
 add_library(telar::config ALIAS telar-config)
 telar_modules(telar-config)
 target_include_directories(telar-config PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")

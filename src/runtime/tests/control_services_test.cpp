@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "cell_layout.hpp"
 #include "telar_base/diagnostics/config.hpp"
 #include <cassert>
 #include <cerrno>
@@ -62,10 +61,10 @@ import telar.runtime.tests.check;
 using namespace telar;
 using namespace telar::runtime;
 
-static void testLimits(SystemAllocator& memory) {
+static void testLimits(ConcurrentMemory& memory) {
   RuntimeModel model{memory};
-  ClientStore<SystemAllocator> clients{memory};
-  LimitService<SystemAllocator> limits;
+  ClientStore<ConcurrentMemory> clients{memory};
+  LimitService<ConcurrentMemory> limits;
   ClientPeer reporter{memory, model, clients, ClientRole::control};
   ClientPeer observer{memory, model, clients, ClientRole::interactive};
   const ReportLimit report{.reach = {.name = "test.capacity", .noun = "items", .value = 10, .requested = 11, .route = "testing"}, .hits = 3};
@@ -97,7 +96,7 @@ static void testLimits(SystemAllocator& memory) {
   check(ledger.rows().size() == LimitLedger::capacity && ledger.evicted() == 1);
 }
 
-static void testWorktreeOwnership(SystemAllocator& memory) {
+static void testWorktreeOwnership(ConcurrentMemory& memory) {
   Worktrees worktrees{memory};
   RegisterWorktree request{.request_id = 1, .source = 5, .path = "/tmp/worktree", .branch = "feature", .title = "Initial"};
   const auto added = worktrees.registerEntry(request);
@@ -115,11 +114,11 @@ static void testWorktreeOwnership(SystemAllocator& memory) {
   check(worktrees.registerEntry(request).worktree != added.worktree);
 }
 
-static void testExecutions(SystemAllocator& memory) {
+static void testExecutions(ConcurrentMemory& memory) {
   RuntimeModel model{memory};
-  ClientStore<SystemAllocator> clients{memory};
-  LimitService<SystemAllocator> limits;
-  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
+  ClientStore<ConcurrentMemory> clients{memory};
+  LimitService<ConcurrentMemory> limits;
+  NativeEventLoop<ConcurrentMemory> poller{memory};
   ExecutionService executions{memory, poller, limits};
   ClientPeer owner{memory, model, clients, ClientRole::control};
   ClientPeer outsider{memory, model, clients, ClientRole::control};
@@ -198,7 +197,9 @@ static void testExecutions(SystemAllocator& memory) {
 }
 
 void testControlServices() {
-  SystemAllocator memory;
+  SystemAllocator system;
+  MemoryAdapter adapter{system};
+  ConcurrentMemory& memory = adapter;
 
   testLimits(memory);
   testWorktreeOwnership(memory);

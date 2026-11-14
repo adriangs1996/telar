@@ -1,8 +1,3 @@
-module;
-#include <cstring>
-#include <limits.h>
-#include <sys/stat.h>
-
 module telar.git.checkout;
 
 import std;
@@ -10,6 +5,7 @@ import telar.tbc;
 import telar.base.text;
 import telar.platform.fs;
 import telar.vocabulary;
+import telar.sys.posix;
 
 namespace telar::runtime {
 

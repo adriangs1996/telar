@@ -1,22 +1,5 @@
 module;
 #include "telar_client/codecs/telar_annotations.hpp"
-#include <cstdio>
-#include <cstdlib>
-
-#include <cstddef>
-
-#include <cstdint>
-
-#include <cstring>
-
-#include <new>
-
-#include <cerrno>
-#include <fcntl.h>
-#include <sys/socket.h>
-#include <sys/time.h>
-#include <sys/un.h>
-#include <unistd.h>
 
 export module telar.client;
 
@@ -27,6 +10,13 @@ export import telar.base.text.utf8;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.sys.posix;
+import telar.sys.socket;
+#if defined(__APPLE__)
+import telar.sys.apple;
+#endif
+#if defined(__linux__)
+import telar.sys.linux;
+#endif
 
 // The connection reports request failures with it; the rest of the wire
 // vocabulary stays with telar.wire.vocabulary.

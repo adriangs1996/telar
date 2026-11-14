@@ -24,7 +24,9 @@ export module telar.sys.posix;
 // declarations through these using-declarations instead of including them.
 export {
   // Types shared by the rest of the interface.
+  using ::dev_t;
   using ::gid_t;
+  using ::ino_t;
   using ::iovec;
   using ::mode_t;
   using ::nfds_t;
@@ -96,6 +98,7 @@ export {
   using ::shm_unlink;
 
   // Identity, environment and system limits.
+  using ::getdtablesize;
   using ::getegid;
   using ::geteuid;
   using ::gethostname;
@@ -170,7 +173,9 @@ export {
   X(FD_CLOEXEC)                 \
   X(F_DUPFD_CLOEXEC)            \
   X(F_GETFD)                    \
+  X(F_GETFL)                    \
   X(F_SETFD)                    \
+  X(F_SETFL)                    \
   X(LOCK_EX)                    \
   X(LOCK_NB)                    \
   X(O_APPEND)                   \
@@ -295,7 +300,9 @@ namespace telar::sys::captured {
 #undef FD_CLOEXEC
 #undef F_DUPFD_CLOEXEC
 #undef F_GETFD
+#undef F_GETFL
 #undef F_SETFD
+#undef F_SETFL
 #undef LOCK_EX
 #undef LOCK_NB
 #undef O_APPEND
@@ -400,5 +407,17 @@ export namespace telar::sys {
   // The name telar reports for an errno: a token scripts read after `error: ` and history stores
   // as a failure cause. An errno without a name gets the caller's fallback.
   const char* errorName(int code, const char* fallback = "Unexpected") noexcept;
+
+  // sys/ioctl.h's _IOW and _IOWR take the argument's type, so they cross as templates: the request
+  // that passes an Argument to the kernel, and the one that also reads it back.
+  template <typename Argument>
+  constexpr unsigned long ioctlWrite(char group, unsigned char number) noexcept {
+    return _IOW(group, number, Argument);
+  }
+
+  template <typename Argument>
+  constexpr unsigned long ioctlReadWrite(char group, unsigned char number) noexcept {
+    return _IOWR(group, number, Argument);
+  }
 
 }

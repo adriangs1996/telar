@@ -1,6 +1,5 @@
 module;
 #include "tbc/annotations.hpp"
-#include <sys/stat.h>
 
 export module telar.git;
 
@@ -11,6 +10,7 @@ export import :format;
 import :config;
 import :objects;
 import :history;
+import telar.sys.posix;
 export import :worktree;
 
 // A native, read-only reader of a repository's state: the branch, its

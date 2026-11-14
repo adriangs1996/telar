@@ -1,30 +1,15 @@
-module;
-#include "telar_platform/process_environment.h"
-
-#include <cerrno>
-#include <csignal>
-#include <cstdlib>
-#include <cstring>
-#include <dirent.h>
-#include <fcntl.h>
-#include <limits.h>
-#include <poll.h>
-#include <pwd.h>
-#include <spawn.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
-
-#if (defined(__APPLE__))
-#include <mach-o/dyld.h>
-#include <sys/attr.h>
-#endif
-
 module telar.platform.process;
 
 import std;
 import telar.sys.posix;
 import telar.tbc;
+import telar.sys.process;
+#if defined(__APPLE__)
+import telar.sys.apple;
+#endif
+#if defined(__linux__)
+import telar.sys.linux;
+#endif
 
 namespace telar::runtime {
 

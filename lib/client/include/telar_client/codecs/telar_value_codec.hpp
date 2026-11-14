@@ -307,7 +307,7 @@ namespace telar {
     }
   };
 
-  struct PercentSentinel {
+  struct TBC_HOT_PATH PercentSentinel {
     using value_type = std::optional<Byte>;
     static constexpr std::size_t width = 1;
 

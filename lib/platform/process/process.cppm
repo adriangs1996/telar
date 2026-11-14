@@ -1,11 +1,6 @@
 module;
 #include "tbc/annotations.hpp"
 
-#include <limits.h>
-#include <spawn.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-
 export module telar.platform.process;
 
 import std;
@@ -19,6 +14,8 @@ import telar.base.text;
 import telar.platform.error;
 import telar.platform.primitives;
 import telar.vocabulary;
+import telar.sys.posix;
+import telar.sys.process;
 
 // Interface: telar_platform/child_descriptors.cppm
 export {

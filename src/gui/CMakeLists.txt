@@ -36,6 +36,8 @@ include(cmake/fonts.cmake)
 
 add_library(gui-core STATIC terminal/glyphs/curve_cache/box_curve.cpp platform/awake_clock/awake_clock.cpp platform/wall_clock/wall_clock.cpp)
 telar_modules(gui-core)
+# The implementation units of the terminal, fonts, graphics, presentation, layout and model
+# domain interfaces.
 target_sources(gui-core PRIVATE
   fonts/text_runs/text_runs.cpp
   graphics/pauses/pauses.cpp
@@ -65,6 +67,53 @@ target_sources(gui-core PRIVATE
   terminal/glyphs/glyphs.cpp
   terminal/row_cache/row_cache.cpp
   terminal/selection/selection.cpp)
+
+# The implementation units of the input, prompt, components, config, platform, machines,
+# attachments, history, text and remaining domain interfaces.
+target_sources(gui-core PRIVATE
+  attachments/catalog/catalog.cpp
+  attachments/marker_input/marker_input.cpp
+  components/builtin_content/builtin_content.cpp
+  components/configuration/configuration.cpp
+  config/generation/generation.cpp
+  config/gui_query/gui_query.cpp
+  config/plugin_effects/plugin_effects.cpp
+  config/plugin_query/plugin_query.cpp
+  core/json_writer/json_writer.cpp
+  core/metrics/metrics.cpp
+  core/unicode_scalar/unicode_scalar.cpp
+  history/browser/browser.cpp
+  input/child_mouse/child_mouse.cpp
+  input/configuration/configuration.cpp
+  input/copy_mode/copy_mode.cpp
+  input/copy_pointer/copy_pointer.cpp
+  input/key_encoder/key_encoder.cpp
+  links/cell_links/cell_links.cpp
+  links/link_hover/link_hover.cpp
+  links/path_expansion/path_expansion.cpp
+  machines/discovery/discovery.cpp
+  machines/picker/picker.cpp
+  machines/profile_store/profile_store.cpp
+  palette/navigation_label/navigation_label.cpp
+  paths/label/label.cpp
+  peek/screen/screen.cpp
+  platform/file_stamp/file_stamp.cpp
+  platform/notification_commands/notification_commands.cpp
+  platform/private_file_stamp/private_file_stamp.cpp
+  platform/progress_cosine/progress_cosine.cpp
+  platform/secure_random/secure_random.cpp
+  prompt/completion/completion.cpp
+  prompt/editor/editor.cpp
+  prompt/editor/editor-text.cpp
+  prompt/layout/layout.cpp
+  prompt/line/line.cpp
+  prompt/routing/routing.cpp
+  suggestions/state/state.cpp
+  text/bounded_editor/bounded_editor.cpp
+  text/json_unsigned_integer/json_unsigned_integer.cpp
+  text/notification_payload/notification_payload.cpp
+  transport/runtime_link/runtime_link.cpp
+)
 target_link_libraries(gui-core PUBLIC telar::shell telar::render ebnf::ebnf)
 target_include_directories(gui-core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/generated" "${TELAR_ROOT}/lib/tbc/include")
 target_link_libraries(gui-core PUBLIC telar::config telar::machines gui-harfbuzz)
@@ -78,7 +127,7 @@ add_library(gui-clock INTERFACE)
 target_link_libraries(gui-clock INTERFACE gui-core)
 
 add_library(gui-posix STATIC platform/clipboard_image_source.cpp platform/clipboard_image_file.c platform/peer_identity/peer_identity.cpp platform/window_lease/window_lease.cpp platform/profile_file/profile_file.cpp  platform/stdio_socket/stdio_socket.cpp platform/managed_directory/managed_directory.cpp platform/process_group/process_group.cpp platform/process_group.c)
-target_sources(gui-posix PRIVATE platform/shared_image_source/shared_image_source.cpp)
+target_sources(gui-posix PRIVATE platform/shared_image_source/shared_image_source.cpp platform/clipboard_image_pipe/clipboard_image_pipe.cpp)
 target_link_libraries(gui-posix PUBLIC gui-core Threads::Threads)
 add_executable(telar-gui-command platform/surface_command_main.c)
 target_compile_definitions(telar-gui-command PRIVATE "$<$<PLATFORM_ID:Linux>:_GNU_SOURCE>")
@@ -880,7 +929,7 @@ if(TELAR_GUI_NATIVE)
     VERSION 1.0
     OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/Telar/Gui"
     SOURCES qt/attachment_image.cpp qt/attachment_image.hpp qt/attachment_shelf.cpp qt/attachment_shelf.hpp qt/native_agent_status.cpp qt/native_agent_status.hpp qt/native_rounded_rectangle.cpp qt/native_rounded_rectangle.hpp qt/application.cpp qt/application.hpp qt/runtime_connection.cpp qt/runtime_connection.hpp qt/terminal_item.cpp qt/terminal_item.hpp qt/configuration_source.cpp qt/configuration_source.hpp qt/lua_host.cpp qt/lua_host.hpp qt/element_layout.cpp qt/element_layout.hpp qt/element_canvas.cpp qt/element_canvas.hpp qt/graphics_scene.cpp qt/graphics_scene.hpp qt/tab_strip_layout.cpp qt/tab_strip_layout.hpp qt/provider_mark.cpp qt/provider_mark.hpp qt/native_chrome_text.cpp qt/native_chrome_text.hpp qt/native_chrome_icon.cpp qt/native_chrome_icon.hpp qt/native_cell_text.cpp qt/native_cell_text.hpp qt/native_mode_layout.cpp qt/native_mode_layout.hpp qt/prompt_editor_item.cpp qt/prompt_editor_item.hpp qt/document_view.cpp qt/document_view.hpp
-    QML_FILES qt/ComponentFit.js qt/Elements.js qt/ElementNode.qml qt/ElementHost.qml qt/ComponentPick.qml qt/ComponentBranch.qml qt/ComponentNode.qml qt/ComponentTree.qml qt/ComponentOverflow.qml qt/ComponentSlot.qml qt/ComponentPanel.qml qt/AttachmentShelf.qml qt/AttachmentModal.qml qt/PeekPanel.qml qt/LinkStatus.qml qt/MachineChrome.qml qt/MachinePromptPanel.qml qt/PromptPanel.qml qt/PromptField.qml qt/PromptActions.qml qt/WorkspaceFormPanel.qml qt/FormTextField.qml qt/KeyboardAction.qml qt/ActionPointer.qml qt/Main.qml qt/DialogSurface.qml qt/Sidebar.qml qt/TerminalTabs.qml qt/PaneArea.qml qt/PaneActions.qml qt/PaneHeader.qml qt/FullscreenStrip.qml qt/PaneStatusChip.qml qt/PaneProgress.qml qt/CommandDialog.qml qt/PathPickerPanel.qml qt/PalettePanel.qml qt/SuggestionPanel.qml qt/PaletteRow.qml qt/PaletteKeycap.qml qt/PaletteButton.qml qt/HistoryPanel.qml qt/HistoryKeys.qml qt/PathKeys.qml qt/HistoryEmpty.qml qt/HistoryInspector.qml qt/FormButton.qml qt/HistoryRow.qml qt/HistoryMeta.qml qt/HistoryHint.qml qt/HistoryFooter.qml qt/HistoryFilters.qml qt/HistoryFilterChip.qml qt/HistorySearchBar.qml qt/LinkPreview.qml qt/ChromeText.qml qt/ChromeIcon.qml qt/ChromeButton.qml qt/ApplicationMark.qml qt/ApplicationTile.qml qt/ElevationShadow.qml qt/WorkspaceList.qml qt/ProjectRow.qml qt/ProjectSwitcher.qml qt/WorkspaceIdentity.qml qt/ActivityList.qml qt/ActivityFrame.qml qt/AgentCard.qml qt/AgentStatus.qml qt/TaskCard.qml qt/TaskPlan.qml qt/CommandCard.qml qt/NavigationBar.qml qt/BarBattery.qml qt/BarSparkline.qml qt/BarMetric.qml qt/BarRing.qml qt/BarPill.qml qt/SystemSummary.qml qt/MetricsGroup.qml qt/StatusBar.qml qt/BarBadge.qml qt/CellText.qml qt/ModeBar.qml qt/NotificationOverlay.qml qt/PromptLine.qml qt/CommandSeparators.qml qt/CommandRail.qml qt/JumpToEnd.qml qt/DocumentView.qml qt/DocumentBlock.qml qt/DocumentTheme.qml qt/InlineDocuments.qml)
+    QML_FILES qt/ComponentFit.js qt/Elements.js qt/ElementNode.qml qt/ElementHost.qml qt/ComponentPick.qml qt/ComponentBranch.qml qt/ComponentNode.qml qt/ComponentTree.qml qt/ComponentOverflow.qml qt/ComponentSlot.qml qt/ComponentPanel.qml qt/AttachmentShelf.qml qt/AttachmentModal.qml qt/PeekPanel.qml qt/LinkStatus.qml qt/MachineChrome.qml qt/MachinePromptPanel.qml qt/PromptPanel.qml qt/PromptField.qml qt/PromptActions.qml qt/WorkspaceFormPanel.qml qt/FormTextField.qml qt/KeyboardAction.qml qt/ActionPointer.qml qt/Main.qml qt/DialogSurface.qml qt/Sidebar.qml qt/TerminalTabs.qml qt/PaneArea.qml qt/PaneActions.qml qt/PaneHeader.qml qt/FullscreenStrip.qml qt/PaneStatusChip.qml qt/PaneProgress.qml qt/CommandDialog.qml qt/PathPickerPanel.qml qt/PalettePanel.qml qt/SuggestionPanel.qml qt/PaletteRow.qml qt/PaletteKeycap.qml qt/PaletteButton.qml qt/HistoryPanel.qml qt/HistoryKeys.qml qt/PathKeys.qml qt/HistoryEmpty.qml qt/HistoryInspector.qml qt/FormButton.qml qt/HistoryRow.qml qt/HistoryMeta.qml qt/HistoryHint.qml qt/HistoryFooter.qml qt/HistoryFilters.qml qt/HistoryFilterChip.qml qt/HistorySearchBar.qml qt/LinkPreview.qml qt/ChromeText.qml qt/ChromeToolTip.qml qt/ChromeIcon.qml qt/ChromeButton.qml qt/ApplicationMark.qml qt/ApplicationTile.qml qt/ElevationShadow.qml qt/WorkspaceList.qml qt/ProjectRow.qml qt/ProjectSwitcher.qml qt/WorkspaceIdentity.qml qt/ActivityList.qml qt/ActivityFrame.qml qt/AgentCard.qml qt/AgentStatus.qml qt/TaskCard.qml qt/TaskPlan.qml qt/CommandCard.qml qt/NavigationBar.qml qt/BarBattery.qml qt/BarSparkline.qml qt/BarMetric.qml qt/BarRing.qml qt/BarPill.qml qt/SystemSummary.qml qt/MetricsGroup.qml qt/StatusBar.qml qt/BarBadge.qml qt/CellText.qml qt/ModeBar.qml qt/NotificationOverlay.qml qt/PromptLine.qml qt/CommandSeparators.qml qt/CommandRail.qml qt/JumpToEnd.qml qt/DocumentView.qml qt/DocumentBlock.qml qt/DocumentTheme.qml qt/InlineDocuments.qml)
 
   qt_add_executable(telar-gui main.cpp)
   if(APPLE)

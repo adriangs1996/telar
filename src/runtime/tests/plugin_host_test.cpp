@@ -3,16 +3,12 @@
 static_assert(true);
 #endif
 
-#include "plugin_bootstrap.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_platform/file_descriptor.hpp"
-#include "telar_platform/random_bytes.hpp"
-#include "telar_platform/trace.hpp"
-#include "traffic_api.hpp"
 #include <algorithm>
 #include <arpa/inet.h>
 #include <array>
@@ -96,7 +92,9 @@ static tap::ExchangeView sampleExchange() {
 
 void testPluginHost() {
   SystemAllocator system;
-  BudgetAllocator memory{system, 80 * 1024 * 1024};
+  BudgetAllocator budget{system, 80 * 1024 * 1024};
+  MemoryAdapter adapter{budget};
+  Memory& memory = adapter;
   std::array<char, 64> temporary;
 
   std::strcpy(temporary.data(), "/tmp/telar-plugin-host-XXXXXX");
@@ -160,7 +158,7 @@ end}
     }
   }
 
-  check(memory.liveBytes() == 0);
+  check(budget.liveBytes() == 0);
 
   writePlugin(path, "local first = true; return {on_exchange = function() if first then first = false; error(string.rep('x', 5000), 0) end return {} end}");
   {
@@ -219,6 +217,6 @@ end}
     check(tap::Protocol::decodeEffects(host.invoke(exchange, output)).batch.count == 0);
   }
 
-  check(memory.liveBytes() == 0);
+  check(budget.liveBytes() == 0);
   std::filesystem::remove_all(root);
 }

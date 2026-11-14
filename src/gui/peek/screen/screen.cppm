@@ -1,9 +1,4 @@
 module;
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <new>
-
 #include <cstdint>
 
 #include <cstddef>
@@ -15,10 +10,7 @@ import std;
 export import telar.gui.suggestions.state;
 
 export import telar.gui.palette.navigation_label;
-import telar.base.diagnostics;
 import telar.base.memory.allocators;
-import telar.base.text;
-import telar.gui.core.primitives;
 import telar.wire.content;
 import telar.wire.vocabulary;
 
@@ -34,18 +26,7 @@ export {
     };
 
     struct PeekInput {
-      [[nodiscard]] inline static PeekCommand command(std::string_view text) noexcept {
-        text = runtime::trimText(text, " \t");
-        if (text.empty() || text == "/open") {
-          return PeekCommand::open;
-        }
-
-        if (text == "/stop") {
-          return PeekCommand::stop;
-        }
-
-        return text == "/diff" ? PeekCommand::diff : PeekCommand::message;
-      }
+      [[nodiscard]] static PeekCommand command(std::string_view text) noexcept;
     };
 
   }
@@ -87,116 +68,20 @@ export {
     template <Allocator Memory>
     class PeekScreen {
     public:
-      inline explicit PeekScreen(Memory& memory)
-          : text_(AllocatorRef<char, Memory>{memory}) {}
+      explicit PeekScreen(Memory& memory);
 
-      inline void show(PeekTarget target) noexcept {
-        target_ = target;
-        text_.clear();
-        request_id_ = 0;
-        ++revision_;
-      }
+      void show(PeekTarget target) noexcept;
+      void close() noexcept;
 
-      inline void close() noexcept {
-        target_.reset();
-        text_.clear();
-        request_id_ = 0;
-        ++revision_;
-      }
-
-      [[nodiscard]] inline const auto& target() const noexcept {
-        return target_;
-      }
-
-      [[nodiscard]] inline std::string_view text() const noexcept {
-        return text_;
-      }
-
-      [[nodiscard]] inline std::uint64_t revision() const noexcept {
-        return revision_;
-      }
-
-      [[nodiscard]] inline bool reading() const noexcept {
-        return request_id_ != 0;
-      }
-
-      [[nodiscard]] inline bool owns(std::uint64_t request) const noexcept {
-        return request != 0 && request_id_ == request;
-      }
-
-      [[nodiscard]] inline std::optional<ReadPane> request(std::uint64_t identity) {
-        if (!target_ || reading()) {
-          return std::nullopt;
-        }
-
-        if (identity == 0) {
-          throw std::invalid_argument{"InvalidPeekRequest"};
-        }
-
-        request_id_ = identity;
-
-        return ReadPane{.request_id = identity, .pane_id = target_->agent.pane_id, .pane_generation = target_->agent.pane_generation, .rows = PeekLimits::rows, .source = PaneTextSource::recent};
-      }
-
-      inline bool fail(std::uint64_t identity) noexcept {
-        if (!owns(identity)) {
-          return false;
-        }
-
-        request_id_ = 0;
-
-        return true;
-      }
-
-      [[nodiscard]] inline std::optional<std::size_t> store(const PaneText& reply) {
-        if (!owns(reply.request_id)) {
-          return std::nullopt;
-        }
-
-        request_id_ = 0;
-        if (!target_ || target_->agent.pane_id != reply.pane_id) {
-          return std::nullopt;
-        }
-
-        auto start = reply.text.size() - std::min(reply.text.size(), PeekLimits::text_bytes);
-        constexpr unsigned char continuation_mask = 0xc0;
-        constexpr unsigned char continuation_bits = 0x80;
-
-        while (start > 0 && start < reply.text.size() && (static_cast<unsigned char>(reply.text[start]) & continuation_mask) == continuation_bits) {
-          ++start;
-        }
-
-        text_ = reply.text.substr(start);
-        ++revision_;
-
-        return start;
-      }
-
-      [[nodiscard]] inline static std::string_view lastLines(std::string_view text, std::uint16_t count) noexcept {
-        const auto last = text.find_last_not_of(" \n\r\t");
-        if (last == std::string_view::npos) {
-          return {};
-        }
-
-        text.remove_suffix(text.size() - last - 1);
-        auto start = text.size();
-        std::uint16_t seen = 0;
-
-        while (start > 0 && seen < count) {
-          --start;
-          if (text[start] == '\n') {
-            ++seen;
-            if (seen == count) {
-              ++start;
-              break;
-            }
-          }
-        }
-
-        text.remove_prefix(start);
-
-        return text;
-      }
+      [[nodiscard]] const std::optional<PeekTarget>& target() const noexcept;
+      [[nodiscard]] std::string_view text() const noexcept;
+      [[nodiscard]] std::uint64_t revision() const noexcept;
+      [[nodiscard]] bool reading() const noexcept;
+      [[nodiscard]] bool owns(std::uint64_t request) const noexcept;
+      [[nodiscard]] std::optional<ReadPane> request(std::uint64_t identity);
+      bool fail(std::uint64_t identity) noexcept;
+      [[nodiscard]] std::optional<std::size_t> store(const PaneText& reply);
+      [[nodiscard]] static std::string_view lastLines(std::string_view text, std::uint16_t count) noexcept;
 
     private:
       String<Memory> text_;
@@ -204,6 +89,10 @@ export {
       std::uint64_t request_id_ = 0;
       std::uint64_t revision_ = 0;
     };
+
+    extern template class PeekScreen<telar::Memory>;
+    extern template class PeekScreen<telar::ConcurrentMemory>;
+    extern template class PeekScreen<telar::SystemAllocator>;
 
   }
 }

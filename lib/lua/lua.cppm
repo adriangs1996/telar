@@ -1,11 +1,8 @@
 module;
 #include "tbc/annotations.hpp"
-#include <cstddef>
 
 #include <lauxlib.h>
 #include <lua.h>
-
-#include <limits.h>
 
 export module telar.lua;
 
@@ -17,6 +14,7 @@ import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.base.text;
 import telar.base.text.utf8;
+import telar.sys.posix;
 
 // Interface: telar_lua/vm.cppm
 export {

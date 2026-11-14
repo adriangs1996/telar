@@ -120,7 +120,12 @@ namespace telar::gui::qt {
 
       [[nodiscard]] MaskQuad quad(const GlyphPlacement& placed, MaskSampling sampling = MaskSampling::continuous) const {
         const auto full = placed.bounds(origin);
-        auto clipped = full.intersect(area);
+
+        return quad(full, full.intersect(area), sampling);
+      }
+
+      // The quad of a glyph whose bounds are full and whose part inside area is clipped.
+      [[nodiscard]] MaskQuad quad(Rect full, Rect clipped, MaskSampling sampling) const {
         if (clipped.empty()) {
           return {};
         }
@@ -266,16 +271,35 @@ namespace telar::gui::qt {
       }
 
       void paint(const TextProjection& position, Color foreground) {
+        // Glyphs go in batches: their bounds, then a copy clipped to the area in one call, whose
+        // loop vectorizes.
+        constexpr std::size_t batch_glyphs = 16;
+        const auto& glyphs = glyphs_;
+        const auto count = static_cast<std::size_t>(glyphs.size());
         auto* vertices = static_cast<AlphaMaskVertex*>(geometry_.vertexData());
+        std::array<Rect, batch_glyphs> full;
+        std::array<Rect, batch_glyphs> clipped;
         std::size_t offset = 0;
 
-        for (const auto& glyph : glyphs_) {
-          const auto quad = position.quad(glyph, placement_);
-          const auto atlas = glyph.mask->texture->normalizedTextureSubRect();
-          const QRectF source{atlas.x() + (quad.source.x() * atlas.width()), atlas.y() + (quad.source.y() * atlas.height()), quad.source.width() * atlas.width(), quad.source.height() * atlas.height()};
+        for (std::size_t first = 0; first < count; first += batch_glyphs) {
+          const auto batch = std::min(batch_glyphs, count - first);
 
-          writeAlphaMaskQuad(std::span<AlphaMaskVertex, alpha_mask_triangle_vertices>{vertices + offset, alpha_mask_triangle_vertices}, quad.bounds, source, quad.opacity);
-          offset += alpha_mask_triangle_vertices;
+          for (std::size_t index = 0; index < batch; ++index) {
+            full[index] = glyphs[static_cast<qsizetype>(first + index)].bounds(position.origin);
+            clipped[index] = full[index];
+          }
+
+          Rect::intersectEach(std::span{clipped}.first(batch), position.area);
+
+          for (std::size_t index = 0; index < batch; ++index) {
+            const auto& glyph = glyphs[static_cast<qsizetype>(first + index)];
+            const auto quad = position.quad(full[index], clipped[index], placement_);
+            const auto atlas = glyph.mask->texture->normalizedTextureSubRect();
+            const QRectF source{atlas.x() + (quad.source.x() * atlas.width()), atlas.y() + (quad.source.y() * atlas.height()), quad.source.width() * atlas.width(), quad.source.height() * atlas.height()};
+
+            writeAlphaMaskQuad(std::span<AlphaMaskVertex, alpha_mask_triangle_vertices>{vertices + offset, alpha_mask_triangle_vertices}, quad.bounds, source, quad.opacity);
+            offset += alpha_mask_triangle_vertices;
+          }
         }
 
         material_.setForeground(foreground);

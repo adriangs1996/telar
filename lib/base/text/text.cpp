@@ -1,10 +1,8 @@
-module;
-#include <arpa/inet.h>
-
 module telar.base.text;
 
 import std;
 import telar.tbc;
+import telar.sys.socket;
 
 namespace telar::runtime {
 

@@ -1,7 +1,7 @@
 module;
 #include "tbc/annotations.hpp"
+#include "telar_base/diagnostics/config.hpp"
 #include "telar_base/memory/fixed_text.hpp"
-#include <cassert>
 
 export module telar.base.memory.containers;
 
@@ -37,7 +37,7 @@ export {
 
       // Exchanges contents with a queue of the same allocator, as Rust's `mem::swap` moves buffers.
       inline void swap(ByteQueue& other) noexcept {
-        assert(&memory_ == &other.memory_);
+        TELAR_ASSERT(&memory_ == &other.memory_);
         std::swap(limit_, other.limit_);
         std::swap(bytes_, other.bytes_);
         std::swap(capacity_, other.capacity_);
@@ -74,7 +74,7 @@ export {
       inline std::span<std::uint8_t> insertUninitialized(std::size_t offset, std::size_t count) {
         const auto previous_size = size();
 
-        assert(offset <= previous_size);
+        TELAR_ASSERT(offset <= previous_size);
         appendUninitialized(count);
         auto* start = bytes_ + consumed_ + offset;
 
@@ -83,7 +83,7 @@ export {
       }
 
       inline void consume(std::size_t count) noexcept {
-        assert(count <= size());
+        TELAR_ASSERT(count <= size());
         consumed_ += count;
         if (consumed_ == written_) {
           clear();
@@ -91,17 +91,17 @@ export {
       }
 
       inline void truncate(std::size_t length) noexcept {
-        assert(length <= size());
+        TELAR_ASSERT(length <= size());
         written_ = consumed_ + length;
       }
 
       inline void overwrite(std::size_t offset, std::span<const std::uint8_t> bytes) noexcept {
-        assert(offset <= size() && bytes.size() <= size() - offset);
+        TELAR_ASSERT(offset <= size() && bytes.size() <= size() - offset);
         std::memmove(bytes_ + consumed_ + offset, bytes.data(), bytes.size());
       }
 
       inline void erase(std::size_t offset, std::size_t count) noexcept {
-        assert(offset <= size() && count <= size() - offset);
+        TELAR_ASSERT(offset <= size() && count <= size() - offset);
         if (offset == 0) {
           consume(count);
           return;

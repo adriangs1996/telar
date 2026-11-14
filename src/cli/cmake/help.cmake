@@ -33,4 +33,5 @@ foreach(help_file IN LISTS help_files)
   string(APPEND TELAR_HELP_ENTRIES "    HelpText{.family = \"${help_family}\", .command = \"${help_command}\", .text = R\"${help_delimiter}(${help_text})${help_delimiter}\"},\n")
 endforeach()
 
-configure_file(help_texts.hpp.in "${CMAKE_CURRENT_BINARY_DIR}/generated/help_texts.hpp" @ONLY)
+configure_file(help_texts.inc.in "${CMAKE_CURRENT_BINARY_DIR}/generated/help_texts.inc" @ONLY)
+configure_file(version.inc.in "${CMAKE_CURRENT_BINARY_DIR}/generated/version.inc" @ONLY)

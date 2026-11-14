@@ -85,8 +85,7 @@ namespace {
   constexpr int wait_ms = 5000;
   constexpr int header_width = 460;
   constexpr int header_height = 30;
-  constexpr int compact_header_width = 160;
-  constexpr int attention_header_width = 120;
+  constexpr int compact_header_width = 120;
   constexpr std::uint32_t working_seconds = 24 * 60 * 60;
 
   QVariantMap agentRecord(AgentStatus status) {
@@ -223,19 +222,20 @@ namespace {
                                                                          {QStringLiteral("typography"), typography},
                                                                      });
 
-      auto* background = named(*item, QStringLiteral("paneStatusBackground"));
+      const auto* state = named(*item, QStringLiteral("applicationStatus"));
       const auto* program = named(*item, QStringLiteral("paneProgram"));
 
-      QVERIFY(background != nullptr && program != nullptr);
+      QVERIFY(state != nullptr && program != nullptr);
       QCOMPARE(program->property("color").value<QColor>(), colors.value(QStringLiteral("text")).value<QColor>());
-      const auto attention_alpha = background->property("color").value<QColor>().alphaF();
+      const auto attention_color = state->property("color").value<QColor>();
 
       record.insert(QStringLiteral("agent"), agentRecord(AgentStatus::ready));
       record.insert(QStringLiteral("needsAttention"), false);
       QVERIFY(item->setProperty("record", record));
-      const auto quiet_alpha = background->property("color").value<QColor>().alphaF();
+      const auto quiet_color = state->property("color").value<QColor>();
 
-      QCOMPARE(quiet_alpha, attention_alpha);
+      QCOMPARE(attention_color, colors.value(QStringLiteral("yellow")).value<QColor>());
+      QCOMPARE(quiet_color, attention_color);
     }
 
     Q_SLOT static void compactHeaderKeepsTheProgramInsteadOfAnAmbiguousEllipsis() {
@@ -266,7 +266,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(program->width() >= program->implicitWidth(), wait_ms);
     }
 
-    Q_SLOT static void independentHeaderKeepsAttentionBeforeProgress() {
+    Q_SLOT static void independentHeaderMarksTheStateOnTheTileAndKeepsProgress() {
       QQmlEngine engine;
       QQuickWindow window;
 
@@ -287,29 +287,26 @@ namespace {
       window.show();
       QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
       const auto* program = named(*item, QStringLiteral("paneProgram"));
-      const auto* status = qobject_cast<NativeAgentStatus*>(named(*item, QStringLiteral("paneStatus")));
+      const auto* state = named(*item, QStringLiteral("applicationStatus"));
 
-      QVERIFY(program != nullptr && status != nullptr);
-      QTRY_VERIFY_WITH_TIMEOUT(layout->chipBounds().width() > 0 && layout->progressBounds().width() > 0 && !layout->compactProgress(), wait_ms);
+      QVERIFY(program != nullptr && state != nullptr && state->isVisible());
+      // The default header places no worded chip, so the title and the progress share the band.
+      QVERIFY(visualItems(*item, QStringLiteral("paneStatus")).isEmpty());
+      QTRY_VERIFY_WITH_TIMEOUT(layout->chipBounds().isEmpty() && layout->progressBounds().width() > 0 && !layout->compactProgress(), wait_ms);
       QCOMPARE(program->property("text").toString(), QStringLiteral("clang++"));
-      QCOMPARE(status->statusText(), QStringLiteral("permission"));
       const auto* progress = qobject_cast<NativeTabActivity*>(named(*item, QStringLiteral("paneProgress")));
 
       QVERIFY(progress != nullptr);
       QTRY_VERIFY_WITH_TIMEOUT(progress->fraction() > 0 && !progress->compact(), wait_ms);
       item->setWidth(compact_header_width);
-      QTRY_VERIFY_WITH_TIMEOUT(layout->progressBounds().isEmpty() && layout->chipBounds().width() > 0, wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(layout->compactProgress() && layout->progressBounds().width() > 0, wait_ms);
       QCOMPARE(program->property("text").toString(), QStringLiteral("clang++"));
-      item->setWidth(attention_header_width);
-      QTRY_VERIFY_WITH_TIMEOUT(layout->progressBounds().isEmpty() && layout->chipBounds().width() > 0, wait_ms);
-      item->setWidth(status->implicitWidth() + 2 * PaneHeaderGeometry::margin);
-      QTRY_VERIFY_WITH_TIMEOUT(layout->indexBounds().isEmpty() && layout->progressBounds().isEmpty() && layout->chipBounds().width() > 0, wait_ms);
       auto record = headerRecord();
 
       record.insert(QStringLiteral("agent"), QVariantMap{});
       record.insert(QStringLiteral("needsAttention"), false);
       item->setProperty("record", record);
-      QTRY_VERIFY_WITH_TIMEOUT(layout->chipBounds().isEmpty() && layout->progressBounds().width() > 0, wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(!state->isVisible() && layout->progressBounds().width() > 0, wait_ms);
     }
   };
 

@@ -1,13 +1,3 @@
-module;
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <new>
-
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-
 export module telar.gui.links.link_hover;
 
 import std;
@@ -36,9 +26,7 @@ export {
       Rect area;
       LinkMatch match;
 
-      [[nodiscard]] bool operator==(const LinkHit& other) const noexcept {
-        return pane_id == other.pane_id && generation == other.generation && sameTab(location, other.location) && content == other.content && scroll_offset == other.scroll_offset && area == other.area && match == other.match;
-      }
+      [[nodiscard]] bool operator==(const LinkHit& other) const noexcept;
     };
 
   }
@@ -50,30 +38,15 @@ export {
 
     class LinkGesture {
     public:
-      inline void begin(const LinkHit& hit, ViewVersion version) {
-        pressed_ = hit;
-        version_ = version;
-      }
+      void begin(const LinkHit& hit, ViewVersion version);
 
-      inline void validate(const std::optional<LinkHit>& current, ViewVersion version) {
-        if (pressed_ && (version_ != version || current != pressed_)) {
-          cancel();
-        }
-      }
+      void validate(const std::optional<LinkHit>& current, ViewVersion version);
 
-      [[nodiscard]] inline std::optional<LinkHit> finish(const std::optional<LinkHit>& current, ViewVersion version) {
-        validate(current, version);
+      [[nodiscard]] std::optional<LinkHit> finish(const std::optional<LinkHit>& current, ViewVersion version);
 
-        return std::exchange(pressed_, std::nullopt);
-      }
+      void cancel() noexcept;
 
-      inline void cancel() noexcept {
-        pressed_.reset();
-      }
-
-      [[nodiscard]] inline bool active() const noexcept {
-        return pressed_.has_value();
-      }
+      [[nodiscard]] bool active() const noexcept;
 
     private:
       std::optional<LinkHit> pressed_;
@@ -95,53 +68,23 @@ export {
 
     class LinkHover {
     public:
-      [[nodiscard]] inline bool assign(std::optional<LinkHit> hit, const TerminalSurface& surface, bool frame_presented) {
-        const auto changed = hit != current_;
+      [[nodiscard]] bool assign(std::optional<LinkHit> hit, const TerminalSurface& surface, bool frame_presented);
 
-        current_ = std::move(hit);
-        if (current_ && frame_presented && surfaceVisible(surface)) {
-          shown_ = current_;
-        }
+      void clear() noexcept;
 
-        return changed;
-      }
+      [[nodiscard]] bool openable(const TerminalSurface& surface) const noexcept;
 
-      inline void clear() noexcept {
-        current_.reset();
-        shown_.reset();
-      }
+      [[nodiscard]] bool surfaceVisible(const TerminalSurface& surface) const noexcept;
 
-      [[nodiscard]] inline bool openable(const TerminalSurface& surface) const noexcept {
-        return current_ && current_ == shown_ && surfaceVisible(surface);
-      }
+      [[nodiscard]] bool covers(Point point) const noexcept;
 
-      [[nodiscard]] inline bool surfaceVisible(const TerminalSurface& surface) const noexcept {
-        return shown_surface_ && *shown_surface_ == surface;
-      }
+      [[nodiscard]] bool needsPresentation(const TerminalSurface& surface, const std::optional<Rect>& cover) const noexcept;
 
-      [[nodiscard]] inline bool covers(Point point) const noexcept {
-        return shown_cover_ && shown_cover_->contains(point);
-      }
+      [[nodiscard]] LinkPresentation prepare(const TerminalSurface& surface, std::optional<Rect> cover) const;
 
-      [[nodiscard]] inline bool needsPresentation(const TerminalSurface& surface, const std::optional<Rect>& cover) const noexcept {
-        return !surfaceVisible(surface) || shown_ != current_ || shown_cover_ != cover;
-      }
+      void present(const LinkPresentation& frame, bool delivered = true);
 
-      [[nodiscard]] inline LinkPresentation prepare(const TerminalSurface& surface, std::optional<Rect> cover) const {
-        return {.surface = surface, .link = current_, .cover = cover};
-      }
-
-      inline void present(const LinkPresentation& frame, bool delivered = true) {
-        if (delivered) {
-          shown_ = frame.link;
-          shown_surface_ = frame.surface;
-          shown_cover_ = frame.cover;
-        }
-      }
-
-      [[nodiscard]] inline const std::optional<LinkHit>& current() const noexcept {
-        return current_;
-      }
+      [[nodiscard]] const std::optional<LinkHit>& current() const noexcept;
 
     private:
       std::optional<LinkHit> current_;
@@ -159,34 +102,13 @@ export {
 
     class LinkOpening {
     public:
-      [[nodiscard]] inline bool request(const LinkTarget& target) {
-        if (active_) {
-          pending_ = target;
+      [[nodiscard]] bool request(const LinkTarget& target);
 
-          return false;
-        }
+      [[nodiscard]] std::optional<LinkTarget> complete();
 
-        active_ = true;
+      void schedulingFailed() noexcept;
 
-        return true;
-      }
-
-      [[nodiscard]] inline std::optional<LinkTarget> complete() {
-        auto next = std::move(pending_);
-
-        pending_.reset();
-        active_ = next.has_value();
-
-        return next;
-      }
-
-      inline void schedulingFailed() noexcept {
-        active_ = false;
-      }
-
-      [[nodiscard]] inline bool active() const noexcept {
-        return active_;
-      }
+      [[nodiscard]] bool active() const noexcept;
 
     private:
       bool active_ = false;
@@ -215,67 +137,16 @@ export {
         std::uint16_t rows;
       };
 
-      inline LinkRegions(const LinkMatch& match, LinkGrid grid, std::span<const MetadataRun> runs)
-          : LinkRegions(match, grid, runs, {.columns = grid.columns, .rows = grid.rows}) {}
+      LinkRegions(const LinkMatch& match, LinkGrid grid, std::span<const MetadataRun> runs);
 
-      inline LinkRegions(const LinkMatch& match, LinkGrid grid, std::span<const MetadataRun> runs, Viewport viewport)
-          : match_(match),
-            grid_(grid),
-            runs_(runs),
-            viewport_{.columns = std::min(grid.columns, viewport.columns), .rows = std::min(grid.rows, viewport.rows)},
-            row_(std::max(grid.scroll.offset, match.start.y)) {}
+      LinkRegions(const LinkMatch& match, LinkGrid grid, std::span<const MetadataRun> runs, Viewport viewport);
 
-      [[nodiscard]] inline std::optional<LinkRegion> next() noexcept {
-        if (grid_.columns == 0) {
-          return {};
-        }
-
-        if (const auto index = match_.metadata_index) {
-          return nextMetadataRun(*index);
-        }
-
-        while (row_ <= match_.end.y && row_ - grid_.scroll.offset < viewport_.rows) {
-          const auto row = row_++;
-          const auto relative = static_cast<std::uint32_t>(row - grid_.scroll.offset);
-          auto right = row == match_.end.y ? match_.end.x : grid_.columns;
-
-          if (relative < grid_.row_flags.size() && (grid_.row_flags[relative] & static_cast<Byte>(RowFlag::wide_padding)) != 0) {
-            right = std::min<std::uint16_t>(right, grid_.columns - 1);
-          }
-
-          if (const auto area = clipped(relative, row == match_.start.y ? match_.start.x : 0, right)) {
-            return area;
-          }
-        }
-
-        return {};
-      }
+      [[nodiscard]] std::optional<LinkRegion> next() noexcept;
 
     private:
-      [[nodiscard]] inline std::optional<LinkRegion> nextMetadataRun(std::uint16_t link_index) noexcept {
-        while (run_index_ < runs_.size()) {
-          const auto& run = runs_[run_index_++];
-          if (run.link_index != link_index) {
-            continue;
-          }
+      [[nodiscard]] std::optional<LinkRegion> nextMetadataRun(std::uint16_t link_index) noexcept;
 
-          const auto column = run.start % grid_.columns;
-          if (const auto area = clipped(run.start / grid_.columns, column, column + run.len)) {
-            return area;
-          }
-        }
-
-        return {};
-      }
-
-      [[nodiscard]] inline std::optional<LinkRegion> clipped(std::uint32_t row, std::uint32_t left, std::uint32_t right) const noexcept {
-        right = std::min<std::uint32_t>(right, viewport_.columns);
-        if (row >= viewport_.rows || left >= right) {
-          return {};
-        }
-
-        return LinkRegion{.x = static_cast<std::uint16_t>(left), .y = static_cast<std::uint16_t>(row), .width = static_cast<std::uint16_t>(right - left)};
-      }
+      [[nodiscard]] std::optional<LinkRegion> clipped(std::uint32_t row, std::uint32_t left, std::uint32_t right) const noexcept;
 
       const LinkMatch& match_;
       LinkGrid grid_;

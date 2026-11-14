@@ -1,50 +1,5 @@
 module;
-#include <stdlib.h>
-
-#include <cerrno>
-#include <cstddef>
-#include <cstdint>
-#include <cstdlib>
-#include <cstring>
-#include <limits.h>
-#include <sys/socket.h>
-#include <sys/time.h>
-#include <sys/un.h>
-#include <unistd.h>
-#if (defined(__APPLE__))
-#include <mach-o/dyld.h>
-#endif
-#include <csignal>
-#include <cstdio>
-#include <dirent.h>
-#include <fcntl.h>
-#include <spawn.h>
-#include <sys/stat.h>
-#include <sys/wait.h>
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <linux/fs.h>
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <sys/syscall.h>
-#endif
-#if (defined(__linux__))
-#include <sys/syscall.h>
-#endif
-#include <cassert>
-#include <climits>
-#include <dlfcn.h>
 #include <openssl/sha.h>
-#include <poll.h>
-#include <sys/types.h>
-
-#include <sys/file.h>
-
-#include <new>
-#include <signal.h>
-
-#include <pwd.h>
-
-#include <cmath>
 
 module telar.cli.worktree;
 
@@ -1003,7 +958,7 @@ namespace telar::runtime::cli::sessions {
   }
 
   std::optional<std::uint64_t> currentWorkspace() {
-    const auto value = ::getenv("TELAR_WORKSPACE_ID");
+    const auto value = std::getenv("TELAR_WORKSPACE_ID");
 
     return value ? maybeUnsigned(value) : std::nullopt;
   }
@@ -1187,9 +1142,9 @@ namespace telar::runtime::cli::sessions {
 
     std::optional<std::uint64_t> attributedPane() {
       // Each value is parsed before the next getenv, which may overwrite the storage it returned.
-      const auto* id_text = ::getenv("TELAR_PANE_ID");
+      const auto* id_text = std::getenv("TELAR_PANE_ID");
       const auto id = id_text ? maybeUnsigned(id_text) : std::nullopt;
-      const auto* generation_text = ::getenv("TELAR_PANE_GENERATION");
+      const auto* generation_text = std::getenv("TELAR_PANE_GENERATION");
       const auto generation = generation_text ? maybeUnsigned(generation_text) : std::nullopt;
       if (!id || !generation || *id == 0 || *generation == 0) {
         return std::nullopt;

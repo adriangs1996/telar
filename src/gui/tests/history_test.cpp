@@ -149,17 +149,18 @@ namespace {
   void allocationFailureIsAtomic() {
     SystemAllocator system;
     constexpr std::size_t allocation_budget = std::size_t{4} * 1024;
-    BudgetAllocator memory{system, allocation_budget};
+    BudgetAllocator budget{system, allocation_budget};
+    telar::MemoryAdapter adapter{budget};
 
     {
-      HistoryBrowser browser{memory};
+      HistoryBrowser<telar::Memory> browser{adapter};
 
       static_cast<void>(browser.begin({.request_id = 1}));
       const std::array initial{HistoryEntry{.id = 1, .pane_id = 1, .command = "retained"}};
 
       browser.apply(HistoryResults{.request_id = 1, .snapshot_id = 1, .entries = initial});
       static_cast<void>(browser.begin({.request_id = 2}));
-      const auto live_bytes = memory.liveBytes();
+      const auto live_bytes = budget.liveBytes();
       const std::string large_command(decltype(browser)::maximum_output_bytes, 'x');
       const std::array replacement{HistoryEntry{.id = 2, .pane_id = 1, .command = large_command}};
       bool rejected = false;
@@ -172,22 +173,23 @@ namespace {
 
       require(rejected && browser.state().phase == HistoryPhase::failed, "allocation failure must close input authority");
       require(browser.rows().size() == 1 && browser.rows().front().command == "retained", "allocation failure must preserve the previous complete page");
-      require(memory.liveBytes() == live_bytes, "failed page staging must release every temporary allocation");
+      require(budget.liveBytes() == live_bytes, "failed page staging must release every temporary allocation");
       static_cast<void>(browser.begin({.request_id = 3}));
       browser.apply(HistoryResults{.request_id = 3, .snapshot_id = 3, .entries = initial});
       require(browser.command(1) == "retained", "a later successful query must restore submission authority");
     }
 
-    require(memory.liveBytes() == 0 && memory.failures() != 0, "history ownership must release all injected storage after a tested failure");
+    require(budget.liveBytes() == 0 && budget.failures() != 0, "history ownership must release all injected storage after a tested failure");
   }
 
   void inspectionAllocationFailure() {
     SystemAllocator system;
     constexpr std::size_t allocation_budget = std::size_t{4} * 1024;
-    BudgetAllocator memory{system, allocation_budget};
+    BudgetAllocator budget{system, allocation_budget};
+    telar::MemoryAdapter adapter{budget};
 
     {
-      HistoryBrowser browser{memory};
+      HistoryBrowser<telar::Memory> browser{adapter};
 
       static_cast<void>(browser.begin({.request_id = 1}));
       const std::array entries{HistoryEntry{.id = 1, .pane_id = 1, .command = "available"}};
@@ -217,7 +219,7 @@ namespace {
       require(browser.output() == "recovered" && browser.error().empty(), "a later successful inspection must clear its previous error");
     }
 
-    require(memory.liveBytes() == 0, "failed inspections must release every injected allocation");
+    require(budget.liveBytes() == 0, "failed inspections must release every injected allocation");
   }
 
   void inspectionAndDeletion() {
@@ -264,12 +266,13 @@ namespace {
   void boundedCommandsAndSelectedReads() {
     SystemAllocator system;
     constexpr std::size_t allocation_budget = std::size_t{1024} * 1024;
-    BudgetAllocator memory{system, allocation_budget};
+    BudgetAllocator budget{system, allocation_budget};
+    telar::MemoryAdapter adapter{budget};
 
     {
-      HistoryBrowser browser{memory};
+      HistoryBrowser<telar::Memory> browser{adapter};
       std::uint64_t sequence = 0;
-      using Storage = HistoryPageStorage<decltype(memory)>;
+      using Storage = HistoryPageStorage<telar::Memory>;
       constexpr auto command_bytes = decltype(browser)::maximum_command_bytes;
       constexpr auto first_uncached = Storage::command_cache_bytes / command_bytes;
       const std::string large_command(command_bytes, 'x');
@@ -281,7 +284,7 @@ namespace {
 
       static_cast<void>(browser.begin({.request_id = ++sequence}));
       browser.apply(HistoryResults{.request_id = sequence, .snapshot_id = 1, .entries = entries});
-      require(memory.failures() == 0 && memory.liveBytes() < allocation_budget, "a page of maximal commands must fit its bounded cache and previews");
+      require(budget.failures() == 0 && budget.liveBytes() < allocation_budget, "a page of maximal commands must fit its bounded cache and previews");
       require(browser.rows().front().command.size() == Storage::command_preview_bytes && browser.command(1) == large_command, "bounded previews must retain complete cached commands for input");
       require(browser.rows()[first_uncached - 1].command_complete && !browser.rows()[first_uncached].command_complete, "the shared command budget must admit only complete commands");
       browser.select(first_uncached);
@@ -305,12 +308,12 @@ namespace {
       browser.apply(HistoryResults{.request_id = current->request_id, .entries = std::span{entries}.subspan(first_uncached + 1, 1)});
       require(browser.canSubmit() && browser.command(current->entry_id) == large_command, "only a complete matching reply may authorize the selected command");
       require(browser.selectedCommand() == large_command, "inspection must expose the complete selected command after its matching read");
-      require(browser.rowsVersion() == rows_version && memory.failures() == 0, "selected detail must not rebuild the page or exceed its memory budget");
+      require(browser.rowsVersion() == rows_version && budget.failures() == 0, "selected detail must not rebuild the page or exceed its memory budget");
       static_cast<void>(browser.begin({.request_id = ++sequence}));
       require(!browser.canSubmit() && browser.state().command_phase == HistoryPhase::idle, "a new search must invalidate selected command ownership");
     }
 
-    require(memory.liveBytes() == 0, "bounded command storage must release all injected memory");
+    require(budget.liveBytes() == 0, "bounded command storage must release all injected memory");
   }
 
   void selectedCommandFailures() {
@@ -367,15 +370,16 @@ namespace {
 
   void selectedCommandAllocationFailure() {
     SystemAllocator system;
-    using Storage = HistoryPageStorage<SystemAllocator>;
-    using Browser = HistoryBrowser<SystemAllocator>;
+    using Storage = HistoryPageStorage<telar::Memory>;
+    using Browser = HistoryBrowser<telar::Memory>;
     constexpr auto command_bytes = Browser::maximum_command_bytes;
     constexpr auto cached_entries = Storage::command_cache_bytes / command_bytes;
     constexpr auto allocation_budget = Storage::command_cache_bytes + (command_bytes / 2);
-    BudgetAllocator memory{system, allocation_budget};
+    BudgetAllocator budget{system, allocation_budget};
+    telar::MemoryAdapter adapter{budget};
 
     {
-      HistoryBrowser browser{memory};
+      HistoryBrowser<telar::Memory> browser{adapter};
       const std::string command(command_bytes, 'x');
       std::array<HistoryEntry, cached_entries + 1> entries{};
 
@@ -385,10 +389,10 @@ namespace {
 
       static_cast<void>(browser.begin({.request_id = 1}));
       browser.apply(HistoryResults{.request_id = 1, .entries = entries});
-      require(memory.failures() == 0, "the page fixture must fit before selected-detail allocation");
+      require(budget.failures() == 0, "the page fixture must fit before selected-detail allocation");
       browser.select(cached_entries);
       static_cast<void>(browser.readCommand(2));
-      const auto live_bytes = memory.liveBytes();
+      const auto live_bytes = budget.liveBytes();
       bool rejected = false;
 
       try {
@@ -398,12 +402,12 @@ namespace {
       }
 
       require(rejected && browser.state().command_phase == HistoryPhase::failed && !browser.canSubmit(), "a detail allocation failure must end loading without authorizing a preview");
-      require(browser.state().phase == HistoryPhase::ready && memory.liveBytes() == live_bytes && !browser.owns(2), "detail allocation failure must retain page ownership and retire its request");
+      require(browser.state().phase == HistoryPhase::ready && budget.liveBytes() == live_bytes && !browser.owns(2), "detail allocation failure must retain page ownership and retire its request");
       browser.select(0);
       require(browser.canSubmit() && browser.command(1) == command, "a cached command must remain available after detail allocation failure");
     }
 
-    require(memory.liveBytes() == 0 && memory.failures() != 0, "detail failure must release all injected memory");
+    require(budget.liveBytes() == 0 && budget.failures() != 0, "detail failure must release all injected memory");
   }
 
   void pageAllocatorOwnership() {
@@ -411,11 +415,13 @@ namespace {
     constexpr std::size_t allocation_budget = std::size_t{4} * 1024;
     BudgetAllocator first_memory{system, allocation_budget};
     BudgetAllocator second_memory{system, allocation_budget};
+    telar::MemoryAdapter first_adapter{first_memory};
+    telar::MemoryAdapter second_adapter{second_memory};
 
     {
       const std::array entries{HistoryEntry{.id = 1, .pane_id = 1, .command = "owned command"}};
-      HistoryPageStorage first{first_memory, entries};
-      HistoryPageStorage second{second_memory};
+      HistoryPageStorage<telar::Memory> first{first_adapter, entries};
+      HistoryPageStorage<telar::Memory> second{second_adapter};
       bool rejected = false;
 
       try {

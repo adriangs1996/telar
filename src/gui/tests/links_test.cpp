@@ -136,8 +136,9 @@ namespace {
   }
 
   void metadataAuthority() {
-    SystemAllocator memory;
-    Screen screen{memory};
+    SystemAllocator system;
+    telar::MemoryAdapter memory{system};
+    Screen<telar::ConcurrentMemory> screen{memory};
     constexpr std::string_view label = "https://label.test";
     constexpr std::string_view destination = "https://destination.test";
     std::vector<Cell> cells;

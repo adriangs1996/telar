@@ -41,7 +41,6 @@ static_assert(true);
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/protocol/clients.hpp"
-#include "telar_client/protocol/history.hpp"
 #include "telar_client/protocol/runtime.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
@@ -178,6 +177,7 @@ import telar.base.text.utf8;
 import telar.plugins;
 import telar.gui.text.bounded_editor;
 import telar.gui.presentation.notification_center;
+import telar.wire.history;
 
 namespace telar::gui::test {
 
@@ -5198,7 +5198,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->error(), QString{});
     }
 
-    Q_SLOT void fullscreenStripSwitchesHiddenPanesAndRestoresTiling() {
+    Q_SLOT void zoomCapsuleSwitchesHiddenPanesAndRestoresTiling() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       const TabRestorePoint before{.count = client_->tabs()->rowCount(), .pane_id = firstPane()->id};
       const auto restore = qScopeGuard([this, before] {
@@ -5214,13 +5214,8 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 2, runtime_wait_ms);
       client_->execute(Application::Action::fullscreen);
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 1, runtime_wait_ms);
-      const auto strips = [&] {
-        return telar::gui::test::visualItems(*window_->contentItem(), QStringLiteral("paneFullscreenStrip"));
-      };
-
-      QTRY_VERIFY_WITH_TIMEOUT(strips().size() == 1 && strips().front()->isVisible(), runtime_wait_ms);
       const auto entries = [&] {
-        return telar::gui::test::visualItems(*strips().front(), QStringLiteral("fullscreenPaneEntry"));
+        return telar::gui::test::visualItems(*window_->contentItem(), QStringLiteral("fullscreenPaneEntry"));
       };
 
       QTRY_COMPARE_WITH_TIMEOUT(entries().size(), 2, runtime_wait_ms);
@@ -5234,19 +5229,29 @@ return {api_version=2, client={keybindings={
         }
       }
 
-      QVERIFY(hidden != nullptr);
+      QVERIFY(hidden != nullptr && hidden->isVisible());
+      // The selectors live in the pane's header, above its content.
+      QVERIFY(hidden->mapToScene({0, hidden->height()}).y() <= terminalIn(window_->contentItem())->mapToScene({0, 0}).y());
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, hidden->mapToScene({hidden->width() / 2, hidden->height() / 2}).toPoint());
       QTRY_COMPARE_WITH_TIMEOUT(firstPane()->id, source_id, runtime_wait_ms);
       QCOMPARE(client_->panes()->rowCount(), 1);
-      QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && strips().size() == 1, runtime_wait_ms);
-      const auto buttons = telar::gui::test::visualItems(*strips().front(), QStringLiteral("leavePaneFullscreen"));
+      QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && entries().size() == 2, runtime_wait_ms);
+      const auto leave = [&]() -> const QQuickItem* {
+        for (const auto* action : telar::gui::test::visualItems(*window_->contentItem(), QStringLiteral("paneAction"))) {
+          if (action->isVisible() && action->property("modelData").toMap().value(QStringLiteral("label")).toString() == QLatin1StringView("Restore panes")) {
+            return action;
+          }
+        }
 
-      QCOMPARE(buttons.size(), 1);
-      const auto* button = buttons.front();
+        return nullptr;
+      };
+
+      QTRY_VERIFY_WITH_TIMEOUT(leave() != nullptr, runtime_wait_ms);
+      const auto* button = leave();
 
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, button->mapToScene({button->width() / 2, button->height() / 2}).toPoint());
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 2, runtime_wait_ms);
-      QTRY_VERIFY_WITH_TIMEOUT(strips().isEmpty(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(entries().isEmpty(), runtime_wait_ms);
       QCOMPARE(client_->error(), QString{});
     }
 
@@ -5311,11 +5316,13 @@ return {api_version=2, client={keybindings={
 
       QTRY_COMPARE_WITH_TIMEOUT(rings().front()->property("alpha").toDouble(), 1, runtime_wait_ms);
       captureArtifact(QStringLiteral("question-unfocused"));
-      const auto statuses = test::visualItems(*source_terminal->parentItem()->parentItem(), QStringLiteral("paneStatus"));
+      // The header words no state: the tile carries it as a dot in the state's color.
+      const auto states = test::visualItems(*source_terminal->parentItem()->parentItem(), QStringLiteral("applicationStatus"));
 
-      QCOMPARE(statuses.size(), 1);
+      QCOMPARE(states.size(), 1);
+      QCOMPARE(states.front()->parentItem()->property("statusColor").toString(), QStringLiteral("yellow"));
       client_->input(source_id, "ready\r");
-      QTRY_COMPARE_WITH_TIMEOUT(statuses.front()->property("statusText").toString(), QStringLiteral("ready"), runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(states.front()->parentItem()->property("statusColor").toString(), QStringLiteral("green"), runtime_wait_ms);
       QCOMPARE(contexts.front()->property("text").toString(), QStringLiteral("Visual state check"));
       QTRY_VERIFY_WITH_TIMEOUT(rings().isEmpty(), runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
@@ -5331,7 +5338,7 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(other_terminal->hasActiveFocus(), runtime_wait_ms);
       captureArtifact(QStringLiteral("ready-unfocused-wide"));
       client_->input(source_id, "question\r");
-      QTRY_COMPARE_WITH_TIMEOUT(statuses.front()->property("statusText").toString(), QStringLiteral("question"), runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(states.front()->parentItem()->property("statusColor").toString(), QStringLiteral("yellow"), runtime_wait_ms);
       QCOMPARE(contexts.front()->property("text").toString(), QStringLiteral("Visual state check"));
       QTRY_COMPARE_WITH_TIMEOUT(rings().size(), 1, runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(rings().front()->property("alpha").toDouble(), 1, runtime_wait_ms);

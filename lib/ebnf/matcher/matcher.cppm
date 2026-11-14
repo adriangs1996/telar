@@ -1,8 +1,3 @@
-module;
-
-#include <cstddef>
-#include <cstdint>
-
 export module telar.ebnf.matcher;
 
 import std;
