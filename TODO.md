@@ -476,9 +476,10 @@ Cada tarea empieza localizando todas las copias, crea un módulo con una interfa
 - **Contexto:** 98 unidades de módulo y 456 mil líneas; 68 de ellas no usan ninguna macro suya.
 - **Resultado:** `1e26112e0`. `tbc/annotations.hpp` (solo `TBC_SHARED`, `TBC_CONSTRUCTS` y `TBC_RAW`, sin includes) y el módulo `telar.tbc` (`lib/tbc/tbc.cppm`), que envuelve `view.hpp` en su fragmento global y exporta `tbc::view`, `tbc::raw` y `tbc::lt::*`. `view.hpp` se queda para Qt, `.mm` y los tests de tbc, con `telar.tbc` como dueño. 139 unidades migradas: 124 importan `telar.tbc`, 19 incluyen `annotations.hpp`, 17 se quedan sin fragmento global. `UINT*_MAX` → `std::numeric_limits`. Target `telar::tbc` y capa `tbc` en `modules.json`. Runtime: las 103 unidades afectadas de 583 153 a 470 178 líneas de fragmento global. Allowlist de includes: 3002 tras integrar.
 
-### [ ] P6.3 · Cabeceras de macros del proyecto (categoría C)
+### [x] P6.3 · Cabeceras de macros del proyecto (categoría C)
 - **Depende de:** P6.2
 - **Qué hace:** dos o tres cabeceras sin includes propios: traza (`TELAR_TRACE`), diagnóstico (`TELAR_DIAGNOSTIC(S)`, `TELAR_DEBUG`) y anotaciones TBC (la de P6.2). Se registran como excepción en la regla 5.
+- **Resultado:** `ac93eebb8`. `macro_headers` registra `telar_platform/trace_macro.hpp`, `telar_base/diagnostics/config.hpp`, `tbc/annotations.hpp` y `telar_client/codecs/telar_annotations.hpp` (`_throw`, `_changes`). `TBC_HOT_PATH` pasa a `tbc/annotations.hpp` y `hot_path.hpp` se borra. Allowlist de includes: 3002 → 2902. **Las tareas de la fase 9 en vuelo que incluyan `tbc/hot_path.hpp` pasan a `tbc/annotations.hpp` al integrar.**
 
 ### [x] P6.4 · Convertir macros de sistema en `telar.sys.*` (categoría B)
 - **Depende de:** P3.1
