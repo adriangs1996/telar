@@ -1,18 +1,10 @@
-module;
-#include <dirent.h>
-#include <fcntl.h>
-#include <limits.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#if defined(__APPLE__)
-#include <libproc.h>
-#include <sys/proc_info.h>
-#endif
-#include "command_specs.hpp"
-
 module telar.runtime.shell_integration.words;
 
 import std;
+import telar.sys.posix;
+#if defined(__APPLE__)
+import telar.sys.apple;
+#endif
 import telar.base.memory.containers;
 import telar.base.text;
 import telar.base.text.json;
@@ -23,6 +15,13 @@ import telar.ebnf.matcher;
 namespace telar::runtime {
 
   namespace {
+
+    // The completion specs telar ships, by the command they describe.
+    namespace shipped {
+
+#include "command_specs.inc"
+
+    }
 
     bool printable(std::string_view word) noexcept {
       return std::ranges::none_of(word, [](char byte) {
@@ -740,6 +739,10 @@ namespace telar::runtime {
 
     result.spec_state = CommandSpecState::available;
     result.source = std::move(source);
+  }
+
+  std::span<const std::pair<std::string_view, std::string_view>> shippedSpecs() noexcept {
+    return shipped::specs;
   }
 
   std::string WordReader::userSpec(std::string_view name) {

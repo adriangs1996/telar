@@ -1,19 +1,12 @@
 module;
-// Templates instantiated here use the SDK's static inline byte swaps; without a
-// textual declaration clang emits them twice (duplicate _OSSwapInt32).
-#include <arpa/inet.h>
-
-#include "config_bootstrap.hpp"
-#include <cerrno>
-#include <csignal>
-#include <cstdio>
 #include <lauxlib.h>
 #include <lua.h>
-#include <sys/stat.h>
-#include <sys/un.h>
-#include <unistd.h>
 
 module telar.runtime.cli.server;
+
+import telar.sys.posix;
+import telar.sys.socket;
+import telar.sys.process;
 
 import telar.lua;
 import telar.platform.daemon;

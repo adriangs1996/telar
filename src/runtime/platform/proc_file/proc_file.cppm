@@ -1,7 +1,3 @@
-module;
-#include <cstdint>
-#include <sys/types.h>
-
 export module telar.runtime.platform.proc_file;
 
 import std;

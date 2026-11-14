@@ -1,110 +1,14 @@
 module;
-#include <cstdio>
-#include <cstdlib>
-#include <new>
-#include <stdlib.h>
-
-#include <arpa/inet.h>
-#include <cerrno>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <ifaddrs.h>
-#include <net/if.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-
-#include <csignal>
-#include <limits.h>
-#include <netinet/tcp.h>
-#include <poll.h>
-#include <sys/types.h>
-
-#if defined(__APPLE__)
-#include <net/if_dl.h>
-#include <net/route.h>
-#endif
-
-#include <unistd.h>
-
 #if defined(__APPLE__)
 
-#include <netinet/in_pcb.h>
-#include <netinet/tcp_fsm.h>
-#include <netinet/tcp_var.h>
-#include <sys/socketvar.h>
-#include <sys/sysctl.h>
-
-#endif
-
-#if defined(__linux__)
-
-#include <fcntl.h>
-
-#endif
-
-#if (defined(__APPLE__))
-#include <libproc.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <fcntl.h>
-
-#include <dirent.h>
-
-#include <cstdio>
-#endif
-
-#if defined(__APPLE__)
-
-#include <sys/stat.h>
-#include <sys/un.h>
-#if (defined(__APPLE__))
-#include <net/if_utun.h>
-
-#include <netinet6/in6_var.h>
-
-#include <sys/ioctl.h>
-
-#include <sys/kern_control.h>
-
-#include <sys/sys_domain.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <fcntl.h>
-
-#include <linux/if_ether.h>
-
-#include <linux/if_tun.h>
-
-#include <sys/ioctl.h>
-
-#include <sys/uio.h>
-#endif
-#include <cstdio>
-#include <fcntl.h>
 #include <pcap/pcap.h>
-#include <sys/ioctl.h>
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <linux/fs.h>
-
-#include <sys/syscall.h>
-#endif
-#include <cstdlib>
-#include <sys/file.h>
-#include <sys/sockio.h>
-#include <sys/uio.h>
-#if (defined(__APPLE__))
-#include <libproc.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <dirent.h>
-
-#include <cstdio>
-#endif
 
 #endif
 
 module telar.runtime.redirect.socket_owners;
+
+import telar.sys.socket;
+import telar.sys.process;
 
 namespace telar::runtime::redirect {
 
@@ -224,7 +128,7 @@ namespace telar::runtime::redirect {
   ProcessIdentity ProcessToken::parse(std::string_view value) {
     const auto separator = value.find('@');
     const auto pid = number(value.substr(0, separator));
-    if (pid == 0 || pid > INT32_MAX) {
+    if (pid == 0 || pid > std::numeric_limits<std::int32_t>::max()) {
       throw std::invalid_argument{"Invalid selected process PID"};
     }
 

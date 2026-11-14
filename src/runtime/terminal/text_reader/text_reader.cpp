@@ -1,18 +1,12 @@
 module;
 #include "telar_platform/trace_macro.hpp"
 #include <ghostty/vt.h>
-#include <unistd.h>
-
-#include "cell_layout.hpp"
-#include "telar_render/sequence.hpp"
-#include "terminal/ghostty_grid.hpp"
-#include "terminal/tracked_row.hpp"
 
 #include "telar_base/diagnostics/config.hpp"
 
-#include <cassert>
-
 module telar.runtime.terminal.text_reader;
+
+import telar.runtime.terminal.grid;
 
 namespace telar::runtime {
 
@@ -705,7 +699,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   void Terminal<Memory>::feed(std::span<const Byte> bytes) {
-    assert(media_ == nullptr);
+    TELAR_ASSERT(media_ == nullptr);
     feedWith(bytes, nullptr);
   }
 
@@ -716,7 +710,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   void Terminal<Memory>::resumeControl() {
-    assert(media_ == nullptr);
+    TELAR_ASSERT(media_ == nullptr);
     resumeWith(nullptr);
   }
 
@@ -727,7 +721,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   void Terminal<Memory>::attachMedia(TerminalMedia& media) noexcept {
-    assert(purpose_ == TerminalPurpose::separate_media && media_ == nullptr);
+    TELAR_ASSERT(purpose_ == TerminalPurpose::separate_media && media_ == nullptr);
     media.requireOrderedInput();
     media_ = &media;
     control_.enableMediaBoundaries();
@@ -761,7 +755,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   void Terminal<Memory>::resize(TerminalSize size) {
-    assert(media_ == nullptr);
+    TELAR_ASSERT(media_ == nullptr);
     resizeWith(size, nullptr);
   }
 
@@ -1011,7 +1005,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   TerminalMedia* Terminal<Memory>::attached(TerminalMedia& media) const noexcept {
-    assert(media_ == nullptr || media_ == &media);
+    TELAR_ASSERT(media_ == nullptr || media_ == &media);
     return media_ != nullptr ? &media : nullptr;
   }
 

@@ -1,7 +1,6 @@
 module;
 #include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
-#include "terminal/ghostty_grid.hpp"
 #include <ghostty/vt.h>
 
 export module telar.runtime.command_capture.tracker;

@@ -1,6 +1,5 @@
 module;
 #include "telar_base/diagnostics/config.hpp"
-#include <cstring>
 #include <sqlite3.h>
 
 module telar.runtime.history.event;

@@ -1,33 +1,10 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <cstdlib>
-#include <new>
-#include <stdlib.h>
-
-#include <cassert>
-#include <cerrno>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-
-#include <limits.h>
-
-#include <climits>
-#include <poll.h>
-#include <sys/types.h>
-
-#include <csignal>
-#include <cstdio>
-#include <sys/uio.h>
-#include <unistd.h>
-
-#include <arpa/inet.h>
-
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <sys/socket.h>
 
 module telar.runtime.plugins.worker;
+
+import telar.sys.socket;
+import telar.sys.process;
 
 namespace telar::runtime::plugins {
 
@@ -187,7 +164,7 @@ namespace telar::runtime::plugins {
 
     const auto remaining = std::chrono::ceil<std::chrono::milliseconds>(deadline_ - Clock::now()).count();
 
-    return static_cast<int>(std::clamp<decltype(remaining)>(remaining, 0, INT_MAX));
+    return static_cast<int>(std::clamp<decltype(remaining)>(remaining, 0, std::numeric_limits<int>::max()));
   }
 
   TapWorkerOptions TapWorkerOptions::parse(std::span<char* const> words) {

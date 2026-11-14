@@ -1,17 +1,13 @@
 module;
 #include "tbc/annotations.hpp"
-#include "telar_render/sequence.hpp"
 #include <ghostty/vt.h>
-#include <limits.h>
-#include <unistd.h>
 
 #include "telar_base/diagnostics/config.hpp"
-
-#include <fcntl.h>
 
 export module telar.runtime.graphics.pane_media;
 
 import std;
+import telar.sys.posix;
 
 export import telar.runtime.graphics.file_input;
 

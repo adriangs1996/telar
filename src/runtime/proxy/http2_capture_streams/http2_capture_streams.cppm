@@ -1,33 +1,15 @@
 module;
 #include "tbc/annotations.hpp"
 #include "telar_platform/trace_macro.hpp"
-#include <new>
-#include <stdlib.h>
 
-#include <cerrno>
-#include <csignal>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <sys/socket.h>
-#include <unistd.h>
-
-#include <arpa/inet.h>
-#include <cstdlib>
-#include <netdb.h>
-#include <pthread.h>
-
-#include "tbc/annotations.hpp"
 #include <brotli/decode.h>
-#include <cassert>
 #include <zlib.h>
 #include <zstd.h>
 
 export module telar.runtime.proxy.http2_capture_streams;
 
 import std;
+import telar.sys.socket;
 import telar.sys.posix;
 import telar.tbc;
 

@@ -1,7 +1,5 @@
 module;
 #include "tbc/annotations.hpp"
-#include <cstddef>
-#include <cstdint>
 #include <nghttp2/nghttp2.h>
 
 export module telar.runtime.http.content;

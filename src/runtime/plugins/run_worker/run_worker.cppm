@@ -1,37 +1,16 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <cstdlib>
-#include <new>
-#include <stdlib.h>
 
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
 
-#include <arpa/inet.h>
-#include <cassert>
-#include <cerrno>
-#include <cmath>
-#include <cstdio>
-#include <limits.h>
 #include <pcap/pcap.h>
-
-#include "traffic_api.hpp"
-
-#include "plugin_bootstrap.hpp"
-#include <fcntl.h>
-#include <sys/stat.h>
-
-#include <poll.h>
-#include <sys/uio.h>
-#include <unistd.h>
 
 export module telar.runtime.plugins.run_worker;
 
 import std;
+import telar.sys.posix;
 import telar.tbc;
 
 export import telar.runtime.vocabulary.traffic;

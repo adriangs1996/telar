@@ -1,41 +1,12 @@
 module;
-#include <new>
-#include <stdlib.h>
-
-#include <cerrno>
-#include <cstdio>
-#include <net/if.h>
-#include <sys/ioctl.h>
-#include <sys/socket.h>
-#include <sys/sockio.h>
-
-#include <cstddef>
-#include <fcntl.h>
-
-#include <limits.h>
-#include <sys/stat.h>
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <linux/fs.h>
-
-#include <sys/syscall.h>
-
-#include <unistd.h>
-#endif
-#include <cstdint>
-#include <cstdlib>
-#include <sys/file.h>
-#include <unistd.h>
-
-#include <arpa/inet.h>
 #include <pcap/pcap.h>
 
-#include <cstring>
-#include <net/if_dl.h>
-#include <net/route.h>
-#include <netinet/in.h>
-#include <poll.h>
-
 module telar.runtime.redirect.record;
+
+import telar.sys.socket;
+#if defined(__APPLE__)
+import telar.sys.apple;
+#endif
 
 namespace telar::runtime::redirect {
 
@@ -225,7 +196,7 @@ namespace telar::runtime::redirect {
     std::memcpy(&header, packet.data(), sizeof(header));
     const bool incoming = header.direction == static_cast<Byte>(PfDirection::incoming);
     const bool outgoing = header.direction == static_cast<Byte>(PfDirection::outgoing);
-    if (header.length != offsetof(Header, padding) || !((incoming && allowsIncoming(direction)) || (outgoing && allowsOutgoing(direction))) || header.action != static_cast<Byte>(Action::pass) || header.uid != uid || (header.family != AF_INET && header.family != AF_INET6) || packet.size() - sizeof(Header) > output.size() - sizeof(std::uint32_t)) {
+    if (header.length != __builtin_offsetof(Header, padding) || !((incoming && allowsIncoming(direction)) || (outgoing && allowsOutgoing(direction))) || header.action != static_cast<Byte>(Action::pass) || header.uid != uid || (header.family != AF_INET && header.family != AF_INET6) || packet.size() - sizeof(Header) > output.size() - sizeof(std::uint32_t)) {
       return 0;
     }
 

@@ -1427,15 +1427,21 @@
     "<cstring>",
     "<new>"
   ],
-  "src/runtime/agents/description_generator/description_generator.cppm": [
-    "<sys/types.h>"
+  "src/runtime/cli/server/server.cpp": [
+    "<lauxlib.h>",
+    "<lua.h>"
   ],
   "src/runtime/cli/server/server.cppm": [
     "<lua.h>"
   ],
+  "src/runtime/command_capture/tracker/tracker.cpp": [
+    "<ghostty/vt.h>"
+  ],
   "src/runtime/command_capture/tracker/tracker.cppm": [
-    "<ghostty/vt.h>",
-    "terminal/ghostty_grid.hpp"
+    "<ghostty/vt.h>"
+  ],
+  "src/runtime/config/loader/loader.cpp": [
+    "<lua.h>"
   ],
   "src/runtime/diagnostics/line.hpp": [
     "<algorithm>",
@@ -1452,31 +1458,18 @@
   "src/runtime/diagnostics/timing.hpp": [
     "telar_base/diagnostics/timing.hpp"
   ],
-  "src/runtime/editors/remote_editor/remote_editor.cppm": [
-    "<sys/types.h>"
-  ],
   "src/runtime/exchange_capture/pipeline/pipeline.cppm": [
     "<brotli/decode.h>",
-    "<cassert>",
-    "<cerrno>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>",
-    "<pthread.h>",
-    "<unistd.h>",
+    "<zlib.h>",
+    "<zstd.h>"
+  ],
+  "src/runtime/exchange_capture/producer/producer.cpp": [
+    "<brotli/decode.h>",
     "<zlib.h>",
     "<zstd.h>"
   ],
   "src/runtime/exchange_capture/producer/producer.cppm": [
     "<brotli/decode.h>",
-    "<cassert>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>",
     "<zlib.h>",
     "<zstd.h>"
   ],
@@ -1539,26 +1532,17 @@
     "tbc/view.hpp",
     "telar_base/memory/allocator.hpp"
   ],
+  "src/runtime/graphics/pane_media/pane_media.cpp": [
+    "<ghostty/vt.h>"
+  ],
   "src/runtime/graphics/pane_media/pane_media.cppm": [
-    "<fcntl.h>",
-    "<ghostty/vt.h>",
-    "<limits.h>",
-    "<unistd.h>",
-    "telar_render/sequence.hpp"
+    "<ghostty/vt.h>"
   ],
   "src/runtime/graphics/png_decoder.cpp": [
     "../diagnostics/line.hpp",
     "../terminal/ghostty_allocator.hpp",
     "../terminal/ghostty_handle.hpp",
-    "<algorithm>",
-    "<array>",
-    "<bit>",
-    "<cstddef>",
-    "<cstdint>",
     "<ghostty/wuffs-v0.4.h>",
-    "<limits>",
-    "<optional>",
-    "<utility>",
     "png_decoder.hpp",
     "telar_vocabulary/vocabulary.hpp"
   ],
@@ -1571,9 +1555,6 @@
   "src/runtime/graphics/query_resources.hpp": [
     "telar_config/graphics/limits.hpp"
   ],
-  "src/runtime/graphics/synchronizer/synchronizer.cppm": [
-    "<fcntl.h>"
-  ],
   "src/runtime/graphics/temporary_path.hpp": [
     "<cstdio>",
     "<cstdlib>",
@@ -1582,413 +1563,113 @@
     "tbc/view.hpp",
     "telar_platform/descriptor_path.hpp"
   ],
+  "src/runtime/history/event/event.cpp": [
+    "<sqlite3.h>"
+  ],
   "src/runtime/history/event/event.cppm": [
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<new>",
     "<sqlite3.h>"
   ],
   "src/runtime/history/store/database.cpp": [
-    "<cerrno>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstring>",
-    "<fcntl.h>",
-    "<limits.h>",
-    "<sqlite3.h>",
-    "<sys/stat.h>",
-    "<unistd.h>"
+    "<sqlite3.h>"
+  ],
+  "src/runtime/history/store/store.cpp": [
+    "<sqlite3.h>"
   ],
   "src/runtime/history/store/store.cppm": [
-    "<cassert>",
-    "<cstddef>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<new>",
-    "<sqlite3.h>",
-    "<sys/types.h>",
-    "<unistd.h>"
+    "<sqlite3.h>"
+  ],
+  "src/runtime/http/content/content.cpp": [
+    "<nghttp2/nghttp2.h>"
   ],
   "src/runtime/http/content/content.cppm": [
-    "<cstddef>",
-    "<cstdint>",
     "<nghttp2/nghttp2.h>"
+  ],
+  "src/runtime/http/message/message.cpp": [
+    "<brotli/decode.h>",
+    "<brotli/encode.h>",
+    "<zlib.h>",
+    "<zstd.h>"
   ],
   "src/runtime/http/message/message.cppm": [
     "<brotli/decode.h>",
     "<brotli/encode.h>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>",
     "<zlib.h>",
     "<zstd.h>"
   ],
-  "src/runtime/http1/head/head.cppm": [
-    "<cstddef>",
-    "<cstdint>"
-  ],
-  "src/runtime/http2/direction_observer/direction_observer.cppm": [
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>",
+  "src/runtime/http2/direction_observer/direction_observer.cpp": [
     "<nghttp2/nghttp2.h>"
   ],
-  "src/runtime/http2/frame_reader/frame_reader.cppm": [
-    "<cstddef>",
-    "<cstdint>",
-    "<cstring>"
-  ],
-  "src/runtime/main.cpp": [
-    "<arpa/inet.h>",
-    "<cstdio>"
-  ],
-  "src/runtime/metrics/host_sampler/host_sampler.cppm": [
-    "<cstdint>"
-  ],
-  "src/runtime/model/client_layouts/client_layouts.cppm": [
-    "<cerrno>",
-    "<limits.h>",
-    "<sys/types.h>",
-    "<sys/uio.h>",
-    "<unistd.h>",
-    "telar_render/sequence.hpp"
-  ],
-  "src/runtime/model/slot_store/slot_store.cppm": [
-    "<cstdint>"
+  "src/runtime/http2/direction_observer/direction_observer.cppm": [
+    "<nghttp2/nghttp2.h>"
   ],
   "src/runtime/observation/processor/processor.cppm": [
-    "<ghostty/vt.h>",
-    "<sys/types.h>"
+    "<ghostty/vt.h>"
   ],
-  "src/runtime/platform/descriptor_path/descriptor_path.cppm": [
-    "<limits.h>"
-  ],
-  "src/runtime/platform/event_loop/event_loop.cppm": [
-    "<csignal>",
-    "<cstddef>",
-    "<cstdint>",
-    "<signal.h>",
-    "<sys/epoll.h>",
-    "<sys/event.h>"
-  ],
-  "src/runtime/platform/event_loop/macos/event_loop.cpp": [
-    "<cassert>",
-    "<cerrno>",
-    "<climits>",
-    "<csignal>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdlib>",
-    "<errno.h>",
-    "<fcntl.h>",
-    "<new>",
-    "<sched.h>",
-    "<sys/epoll.h>",
-    "<sys/event.h>",
-    "<sys/syscall.h>",
-    "<time.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/platform/host_metrics/linux/host_metrics.cpp": [
-    "<cerrno>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<dirent.h>",
-    "<fcntl.h>",
-    "<limits.h>",
-    "<new>",
-    "<sys/sysinfo.h>",
-    "<unistd.h>"
+  "src/runtime/platform/descriptor_path/descriptor_path.cpp": [
+    "telar_platform/descriptor_path.hpp"
   ],
   "src/runtime/platform/host_metrics/macos/host_metrics.cpp": [
     "<CoreFoundation/CoreFoundation.h>",
     "<IOKit/ps/IOPSKeys.h>",
-    "<IOKit/ps/IOPowerSources.h>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdlib>",
-    "<mach/mach.h>",
-    "<new>",
-    "<sys/sysctl.h>",
-    "<unistd.h>"
+    "<IOKit/ps/IOPowerSources.h>"
   ],
-  "src/runtime/platform/local_listener/local_listener.cpp": [
-    "<cerrno>",
-    "<csignal>",
-    "<cstdint>",
-    "<cstring>",
-    "<fcntl.h>",
-    "<limits.h>",
-    "<sys/file.h>",
-    "<sys/socket.h>",
-    "<sys/stat.h>",
-    "<sys/types.h>",
-    "<sys/un.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/platform/local_listener/local_listener.cppm": [
-    "<sys/stat.h>",
-    "<sys/un.h>"
-  ],
-  "src/runtime/platform/name_resolutions/name_resolutions.cppm": [
-    "<cerrno>",
-    "<cstddef>",
-    "<netdb.h>",
-    "<pthread.h>"
-  ],
-  "src/runtime/platform/private_tunnel/private_tunnel.cppm": [
-    "<cstdint>",
-    "<net/if.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/platform/proc_file/proc_file.cppm": [
-    "<cstdint>",
-    "<sys/types.h>"
-  ],
-  "src/runtime/platform/process_probe/linux/process_inspector.cpp": [
-    "<cerrno>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstring>",
-    "<dirent.h>",
-    "<fcntl.h>",
-    "<sys/socket.h>",
-    "<sys/stat.h>",
-    "<sys/types.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/platform/process_probe/macos/process_inspector.cpp": [
-    "<arpa/inet.h>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstring>",
-    "<libproc.h>",
-    "<stdlib.h>",
-    "<sys/proc_info.h>",
-    "<sys/socket.h>",
-    "<sys/stat.h>",
-    "<sys/sysctl.h>",
-    "<sys/types.h>",
-    "<sys/un.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/platform/process_probe/process_inspector.cpp": [
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstring>",
-    "<sys/types.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/platform/process_probe/process_probe.cppm": [
-    "<cstddef>",
-    "<cstdint>",
-    "<sys/types.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/platform/request_worker/request_worker.cppm": [
-    "<cassert>",
-    "<cerrno>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>",
-    "<sys/types.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/platform/stream_read_buffer/stream_read_buffer.cppm": [
-    "<cstddef>",
-    "<cstdint>",
-    "<cstring>"
+  "src/runtime/platform/system_certificates/system_certificates.cpp": [
+    "<CoreFoundation/CoreFoundation.h>",
+    "<Security/Security.h>",
+    "<openssl/err.h>",
+    "<openssl/pem.h>",
+    "<openssl/x509.h>"
   ],
   "src/runtime/platform/system_certificates/system_certificates.cppm": [
     "<CoreFoundation/CoreFoundation.h>"
   ],
-  "src/runtime/plugins/run_worker/run_worker.cppm": [
-    "<arpa/inet.h>",
-    "<cassert>",
-    "<cerrno>",
-    "<cmath>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<fcntl.h>",
+  "src/runtime/plugins/run_worker/run_worker.cpp": [
     "<lauxlib.h>",
-    "<limits.h>",
     "<lua.h>",
     "<lualib.h>",
-    "<new>",
-    "<pcap/pcap.h>",
-    "<poll.h>",
-    "<stdlib.h>",
-    "<sys/stat.h>",
-    "<sys/uio.h>",
-    "<unistd.h>",
-    "plugin_bootstrap.hpp",
-    "traffic_api.hpp"
+    "<pcap/pcap.h>"
   ],
-  "src/runtime/plugins/service/service.cppm": [
-    "<arpa/inet.h>",
-    "<cassert>",
-    "<cerrno>",
-    "<climits>",
-    "<csignal>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<fcntl.h>",
-    "<limits.h>",
-    "<netinet/in.h>",
-    "<netinet/tcp.h>",
-    "<new>",
-    "<poll.h>",
-    "<stdlib.h>",
-    "<sys/socket.h>",
-    "<sys/stat.h>",
-    "<sys/types.h>",
-    "<sys/uio.h>",
-    "<unistd.h>"
+  "src/runtime/plugins/run_worker/run_worker.cppm": [
+    "<lauxlib.h>",
+    "<lua.h>",
+    "<lualib.h>",
+    "<pcap/pcap.h>"
+  ],
+  "src/runtime/plugins/tap_configuration/tap_configuration.cpp": [
+    "<lauxlib.h>",
+    "<lua.h>",
+    "<lualib.h>",
+    "<openssl/sha.h>"
   ],
   "src/runtime/plugins/tap_configuration/tap_configuration.cppm": [
-    "<cassert>",
-    "<cerrno>",
-    "<cinttypes>",
-    "<cmath>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<dirent.h>",
-    "<fcntl.h>",
     "<lauxlib.h>",
     "<lua.h>",
     "<lualib.h>",
-    "<new>",
-    "<openssl/sha.h>",
-    "<poll.h>",
-    "<sys/stat.h>",
-    "<sys/uio.h>",
-    "<unistd.h>",
-    "telar_platform/open_directory.h"
+    "<openssl/sha.h>"
   ],
-  "src/runtime/plugins/worker/worker.cppm": [
-    "<arpa/inet.h>",
-    "<cassert>",
-    "<cerrno>",
-    "<climits>",
-    "<csignal>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<limits.h>",
-    "<netinet/in.h>",
-    "<netinet/tcp.h>",
-    "<new>",
-    "<poll.h>",
-    "<stdlib.h>",
-    "<sys/socket.h>",
-    "<sys/types.h>",
-    "<sys/uio.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/proxy/authenticate/authenticate.cppm": [
-    "<arpa/inet.h>",
-    "<cerrno>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<fcntl.h>",
-    "<limits.h>",
-    "<linux/fs.h>",
-    "<new>",
-    "<stdlib.h>",
-    "<sys/stat.h>",
-    "<sys/syscall.h>",
-    "<unistd.h>"
+  "src/runtime/proxy/http2_capture_streams/http2_capture_streams.cpp": [
+    "<brotli/decode.h>",
+    "<zlib.h>",
+    "<zstd.h>"
   ],
   "src/runtime/proxy/http2_capture_streams/http2_capture_streams.cppm": [
-    "<arpa/inet.h>",
     "<brotli/decode.h>",
-    "<cassert>",
-    "<cerrno>",
-    "<csignal>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdlib>",
-    "<cstring>",
-    "<netdb.h>",
-    "<netinet/in.h>",
-    "<netinet/tcp.h>",
-    "<new>",
-    "<pthread.h>",
-    "<stdlib.h>",
-    "<sys/socket.h>",
-    "<unistd.h>",
+    "<zlib.h>",
+    "<zstd.h>"
+  ],
+  "src/runtime/proxy/intercepted_relay/intercepted_relay.cpp": [
+    "<brotli/decode.h>",
+    "<brotli/encode.h>",
     "<zlib.h>",
     "<zstd.h>"
   ],
   "src/runtime/proxy/intercepted_relay/intercepted_relay.cppm": [
     "<brotli/decode.h>",
     "<brotli/encode.h>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>",
     "<zlib.h>",
     "<zstd.h>"
   ],
-  "src/runtime/proxy/relay_direction/relay_direction.cppm": [
-    "<arpa/inet.h>",
-    "<cerrno>",
-    "<cstdint>",
-    "<netinet/in.h>",
-    "<sys/socket.h>"
-  ],
-  "src/runtime/proxy/runtime/runtime.cppm": [
-    "<arpa/inet.h>",
-    "<cassert>",
-    "<cerrno>",
-    "<climits>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<ctime>",
-    "<dirent.h>",
-    "<errno.h>",
-    "<fcntl.h>",
-    "<limits.h>",
-    "<linux/fs.h>",
-    "<netdb.h>",
-    "<netinet/in.h>",
-    "<new>",
+  "src/runtime/proxy/runtime/runtime.cpp": [
     "<nghttp2/nghttp2.h>",
     "<openssl/crypto.h>",
     "<openssl/err.h>",
@@ -1996,166 +1677,49 @@
     "<openssl/sha.h>",
     "<openssl/ssl.h>",
     "<openssl/x509.h>",
-    "<openssl/x509v3.h>",
-    "<poll.h>",
-    "<stdlib.h>",
-    "<sys/resource.h>",
-    "<sys/socket.h>",
-    "<sys/stat.h>",
-    "<sys/types.h>",
-    "<unistd.h>"
+    "<openssl/x509v3.h>"
+  ],
+  "src/runtime/proxy/runtime/runtime.cppm": [
+    "<nghttp2/nghttp2.h>",
+    "<openssl/crypto.h>",
+    "<openssl/err.h>",
+    "<openssl/pem.h>",
+    "<openssl/sha.h>",
+    "<openssl/ssl.h>",
+    "<openssl/x509.h>",
+    "<openssl/x509v3.h>"
+  ],
+  "src/runtime/redirect/ingress/ingress.cpp": [
+    "<pcap/pcap.h>"
   ],
   "src/runtime/redirect/ingress/ingress.cppm": [
-    "<arpa/inet.h>",
-    "<cerrno>",
-    "<csignal>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<fcntl.h>",
-    "<linux/if_ether.h>",
-    "<linux/if_tun.h>",
-    "<net/if.h>",
-    "<net/if_utun.h>",
-    "<netdb.h>",
-    "<netinet/in.h>",
-    "<netinet/tcp.h>",
-    "<netinet6/in6_var.h>",
-    "<new>",
-    "<pcap/pcap.h>",
-    "<poll.h>",
-    "<pthread.h>",
-    "<sys/ioctl.h>",
-    "<sys/kern_control.h>",
-    "<sys/socket.h>",
-    "<sys/stat.h>",
-    "<sys/sys_domain.h>",
-    "<sys/types.h>",
-    "<sys/uio.h>",
-    "<sys/un.h>",
-    "<unistd.h>"
+    "<pcap/pcap.h>"
   ],
-  "src/runtime/redirect/pf_rules/pf_rules.cppm": [
-    "<arpa/inet.h>",
-    "<cerrno>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<fcntl.h>",
-    "<net/if.h>",
-    "<net/if_dl.h>",
-    "<net/route.h>",
-    "<netinet/in.h>",
-    "<new>",
-    "<poll.h>",
-    "<sys/ioctl.h>",
-    "<sys/socket.h>",
-    "<unistd.h>"
+  "src/runtime/redirect/record/record.cpp": [
+    "<pcap/pcap.h>"
   ],
   "src/runtime/redirect/record/record.cppm": [
-    "<arpa/inet.h>",
-    "<cerrno>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<fcntl.h>",
-    "<limits.h>",
-    "<linux/fs.h>",
-    "<net/if.h>",
-    "<net/if_dl.h>",
-    "<net/route.h>",
-    "<netinet/in.h>",
-    "<new>",
-    "<pcap/pcap.h>",
-    "<poll.h>",
-    "<stdlib.h>",
-    "<sys/file.h>",
-    "<sys/ioctl.h>",
-    "<sys/socket.h>",
-    "<sys/sockio.h>",
-    "<sys/stat.h>",
-    "<sys/syscall.h>",
-    "<unistd.h>"
+    "<pcap/pcap.h>"
+  ],
+  "src/runtime/redirect/socket_owners/socket_owners.cpp": [
+    "<pcap/pcap.h>"
   ],
   "src/runtime/redirect/socket_owners/socket_owners.cppm": [
-    "<arpa/inet.h>",
-    "<cerrno>",
-    "<csignal>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<dirent.h>",
-    "<fcntl.h>",
-    "<ifaddrs.h>",
-    "<libproc.h>",
-    "<limits.h>",
-    "<linux/fs.h>",
-    "<linux/if_ether.h>",
-    "<linux/if_tun.h>",
-    "<net/if.h>",
-    "<net/if_dl.h>",
-    "<net/if_utun.h>",
-    "<net/route.h>",
-    "<netinet/in.h>",
-    "<netinet/in_pcb.h>",
-    "<netinet/tcp.h>",
-    "<netinet/tcp_fsm.h>",
-    "<netinet/tcp_var.h>",
-    "<netinet6/in6_var.h>",
-    "<new>",
-    "<pcap/pcap.h>",
-    "<poll.h>",
-    "<stdlib.h>",
-    "<sys/file.h>",
-    "<sys/ioctl.h>",
-    "<sys/kern_control.h>",
-    "<sys/socket.h>",
-    "<sys/socketvar.h>",
-    "<sys/sockio.h>",
-    "<sys/stat.h>",
-    "<sys/sys_domain.h>",
-    "<sys/syscall.h>",
-    "<sys/sysctl.h>",
-    "<sys/types.h>",
-    "<sys/uio.h>",
-    "<sys/un.h>",
-    "<unistd.h>"
+    "<pcap/pcap.h>"
   ],
-  "src/runtime/runtime/client_control/client_control.cppm": [
-    "<clipboard.hpp>",
-    "<cstddef>",
-    "<cstdint>"
-  ],
-  "src/runtime/runtime/delivery/client_delivery/client_delivery.cppm": [
-    "<cstddef>",
-    "<cstdint>"
+  "src/runtime/runtime/delivery/client_delivery/client_delivery.cpp": [
+    "<ghostty/vt.h>",
+    "<zlib.h>"
   ],
   "src/runtime/runtime/execution_service/execution_service.cppm": [
     "<ghostty/vt.h>"
   ],
-  "src/runtime/runtime/runtime_telemetry/runtime_telemetry.cppm": [
-    "<cstddef>",
-    "<cstdint>",
-    "<limits.h>",
-    "<sys/types.h>",
-    "<unistd.h>"
+  "src/runtime/runtime/runtime/runtime.cpp": [
+    "<ghostty/vt.h>"
   ],
-  "src/runtime/shell_integration/git_context/git_context.cppm": [
-    "<limits.h>"
-  ],
-  "src/runtime/shell_integration/shell_integration.cppm": [
-    "shell_scripts.hpp"
-  ],
-  "src/runtime/shell_integration/words/words.cppm": [
-    "<limits.h>"
+  "src/runtime/runtime/runtime_telemetry/runtime_telemetry.cpp": [
+    "<ghostty/vt.h>",
+    "<zlib.h>"
   ],
   "src/runtime/terminal/control/apc_borrow.hpp": [
     "<algorithm>",
@@ -2175,9 +1739,11 @@
     "<span>",
     "<string_view>"
   ],
+  "src/runtime/terminal/control/checksum/checksum.cpp": [
+    "<ghostty/vt.h>"
+  ],
   "src/runtime/terminal/control/checksum/checksum.cppm": [
-    "<ghostty/vt.h>",
-    "cell_layout.hpp"
+    "<ghostty/vt.h>"
   ],
   "src/runtime/terminal/control/classification.hpp": [
     "../../graphics/kitty_control.hpp",
@@ -2225,6 +1791,9 @@
     "<charconv>",
     "reply.hpp",
     "vt_state.hpp"
+  ],
+  "src/runtime/terminal/control/engine/engine.cpp": [
+    "<ghostty/vt.h>"
   ],
   "src/runtime/terminal/control/engine/engine.cppm": [
     "<ghostty/vt.h>"
@@ -2328,12 +1897,6 @@
     "tbc/view.hpp",
     "telar_base/memory/allocator.hpp"
   ],
-  "src/runtime/terminal/ghostty_grid.hpp": [
-    "<cstddef>",
-    "<ghostty/vt.h>",
-    "cell_layout.hpp",
-    "ghostty_handle.hpp"
-  ],
   "src/runtime/terminal/ghostty_handle.hpp": [
     "<exception>",
     "<ghostty/vt.h>",
@@ -2346,12 +1909,20 @@
     "ghostty_handle.hpp",
     "telar_vocabulary/vocabulary.hpp"
   ],
+  "src/runtime/terminal/graphics_storage/graphics_storage.cpp": [
+    "<ghostty/vt.h>"
+  ],
   "src/runtime/terminal/graphics_storage/graphics_storage.cppm": [
     "<ghostty/vt.h>"
   ],
+  "src/runtime/terminal/grid/grid.cppm": [
+    "<ghostty/vt.h>"
+  ],
+  "src/runtime/terminal/osc_scanner/osc_scanner.cpp": [
+    "<ghostty/vt.h>"
+  ],
   "src/runtime/terminal/osc_scanner/osc_scanner.cppm": [
-    "<ghostty/vt.h>",
-    "terminal/ghostty_grid.hpp"
+    "<ghostty/vt.h>"
   ],
   "src/runtime/terminal/pty_response_queue.hpp": [
     "../diagnostics/line.hpp",
@@ -2365,21 +1936,13 @@
     "tbc/view.hpp"
   ],
   "src/runtime/terminal/text_reader/cell_projection.cpp": [
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<ghostty/vt.h>",
-    "<new>",
-    "cell_layout.hpp"
+    "<ghostty/vt.h>"
+  ],
+  "src/runtime/terminal/text_reader/text_reader.cpp": [
+    "<ghostty/vt.h>"
   ],
   "src/runtime/terminal/text_reader/text_reader.cppm": [
-    "<ghostty/vt.h>",
-    "<unistd.h>",
-    "telar_render/sequence.hpp",
-    "terminal/ghostty_grid.hpp",
-    "terminal/tracked_row.hpp"
+    "<ghostty/vt.h>"
   ],
   "src/runtime/terminal/tracked_row.hpp": [
     "<cstdint>",
@@ -2388,621 +1951,35 @@
     "<utility>",
     "ghostty_handle.hpp"
   ],
-  "src/runtime/tls/interception/interception.cppm": [
-    "<arpa/inet.h>",
-    "<cassert>",
-    "<cerrno>",
-    "<csignal>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<ctime>",
-    "<fcntl.h>",
-    "<limits.h>",
-    "<linux/fs.h>",
-    "<netinet/in.h>",
-    "<netinet/tcp.h>",
-    "<new>",
-    "<openssl/crypto.h>",
-    "<openssl/err.h>",
-    "<openssl/pem.h>",
-    "<openssl/ssl.h>",
-    "<openssl/x509v3.h>",
-    "<stdlib.h>",
-    "<sys/socket.h>",
-    "<sys/stat.h>",
-    "<sys/syscall.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/tls/system_root_bundle/system_root_bundle.cppm": [
-    "<cassert>",
-    "<cerrno>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdlib>",
-    "<cstring>",
-    "<fcntl.h>",
-    "<limits.h>",
-    "<new>",
-    "<sys/stat.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/traffic/capture/capture.cppm": [
-    "<cerrno>",
-    "<csignal>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<net/if.h>",
-    "<new>",
-    "<pcap/pcap.h>",
-    "<poll.h>",
-    "<pthread.h>",
-    "<stdlib.h>",
-    "<sys/socket.h>",
-    "<sys/types.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/traffic/capture_analysis/capture_analysis.cppm": [
-    "<arpa/inet.h>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>",
-    "<pcap/pcap.h>"
-  ],
-  "src/runtime/traffic/control_backend/control_backend.cppm": [
-    "<arpa/inet.h>",
-    "<brotli/decode.h>",
-    "<brotli/encode.h>",
-    "<cassert>",
-    "<cerrno>",
-    "<climits>",
-    "<csignal>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<ctime>",
-    "<dirent.h>",
-    "<fcntl.h>",
-    "<ifaddrs.h>",
-    "<libproc.h>",
-    "<limits.h>",
-    "<linux/fs.h>",
-    "<net/if.h>",
-    "<netdb.h>",
-    "<netinet/in.h>",
-    "<netinet/tcp.h>",
-    "<new>",
-    "<nghttp2/nghttp2.h>",
-    "<openssl/crypto.h>",
-    "<openssl/err.h>",
-    "<openssl/pem.h>",
-    "<openssl/sha.h>",
-    "<openssl/ssl.h>",
-    "<openssl/x509.h>",
-    "<openssl/x509v3.h>",
-    "<pcap/pcap.h>",
-    "<poll.h>",
-    "<sched.h>",
-    "<spawn.h>",
-    "<stdlib.h>",
-    "<sys/epoll.h>",
-    "<sys/event.h>",
-    "<sys/resource.h>",
-    "<sys/socket.h>",
-    "<sys/stat.h>",
-    "<sys/syscall.h>",
-    "<sys/types.h>",
-    "<sys/uio.h>",
-    "<sys/un.h>",
-    "<sys/wait.h>",
-    "<unistd.h>",
-    "<zlib.h>",
-    "<zstd.h>"
-  ],
-  "src/runtime/traffic/control_protocol/control_protocol.cppm": [
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>",
-    "<pcap/pcap.h>"
-  ],
-  "src/runtime/traffic/tap/tap.cppm": [
-    "<cassert>",
-    "<cerrno>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<limits.h>",
-    "<new>",
-    "<stdlib.h>",
-    "<sys/stat.h>",
-    "<sys/types.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/transport/connection/connection.cppm": [
-    "<cstddef>",
-    "<cstdint>",
-    "<unistd.h>"
-  ],
-  "src/runtime/vocabulary/traffic/traffic.cppm": [
-    "<cstdint>",
-    "<limits.h>",
-    "<sys/socket.h>"
-  ],
-  "src/runtime/graphics/file_input/file_input.cpp": [
-    "<cstdint>",
-    "<fcntl.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/graphics/pane_media/pane_media.cpp": [
-    "<fcntl.h>",
-    "<ghostty/vt.h>",
-    "<limits.h>",
-    "<sys/mman.h>",
-    "<sys/stat.h>",
-    "<unistd.h>",
-    "telar_render/sequence.hpp"
-  ],
-  "src/runtime/graphics/prepared_images/prepared_images.cpp": [
-    "<new>",
-    "<sys/mman.h>"
-  ],
-  "src/runtime/graphics/synchronizer/synchronizer.cpp": [
-    "<fcntl.h>",
-    "<new>"
-  ],
-  "src/runtime/terminal/control/checksum/checksum.cpp": [
-    "<ghostty/vt.h>",
-    "cell_layout.hpp"
-  ],
-  "src/runtime/terminal/control/engine/engine.cpp": [
-    "<cassert>",
-    "<ghostty/vt.h>"
-  ],
-  "src/runtime/terminal/graphics_storage/graphics_storage.cpp": [
-    "<ghostty/vt.h>"
-  ],
-  "src/runtime/terminal/osc_scanner/osc_scanner.cpp": [
-    "<cassert>",
-    "<cstdint>",
-    "<ghostty/vt.h>",
-    "cell_layout.hpp",
-    "terminal/ghostty_grid.hpp"
-  ],
-  "src/runtime/terminal/text_reader/text_reader.cpp": [
-    "<cassert>",
-    "<ghostty/vt.h>",
-    "<unistd.h>",
-    "cell_layout.hpp",
-    "telar_render/sequence.hpp",
-    "terminal/ghostty_grid.hpp",
-    "terminal/tracked_row.hpp"
-  ],
-  "src/runtime/vocabulary/exchange/exchange.cpp": [
-    "<cassert>"
-  ],
-  "src/runtime/vocabulary/traffic/traffic.cpp": [
-    "<cerrno>",
-    "<sys/socket.h>",
-    "<sys/stat.h>",
-    "<sys/un.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/exchange_capture/producer/producer.cpp": [
-    "<brotli/decode.h>",
-    "<cassert>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>",
-    "<zlib.h>",
-    "<zstd.h>"
-  ],
-  "src/runtime/http/content/content.cpp": [
-    "<nghttp2/nghttp2.h>"
-  ],
-  "src/runtime/http/message/message.cpp": [
-    "<brotli/decode.h>",
-    "<brotli/encode.h>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>",
-    "<zlib.h>",
-    "<zstd.h>"
-  ],
-  "src/runtime/http2/direction_observer/direction_observer.cpp": [
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>",
-    "<nghttp2/nghttp2.h>"
-  ],
-  "src/runtime/plugins/run_worker/run_worker.cpp": [
-    "<arpa/inet.h>",
-    "<cassert>",
-    "<cerrno>",
-    "<cmath>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<fcntl.h>",
-    "<lauxlib.h>",
-    "<limits.h>",
-    "<lua.h>",
-    "<lualib.h>",
-    "<new>",
-    "<pcap/pcap.h>",
-    "<poll.h>",
-    "<stdlib.h>",
-    "<sys/stat.h>",
-    "<sys/uio.h>",
-    "<unistd.h>",
-    "plugin_bootstrap.hpp",
-    "traffic_api.hpp"
-  ],
-  "src/runtime/plugins/service/service.cpp": [
-    "<arpa/inet.h>",
-    "<cassert>",
-    "<cerrno>",
-    "<climits>",
-    "<csignal>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<fcntl.h>",
-    "<limits.h>",
-    "<netinet/in.h>",
-    "<netinet/tcp.h>",
-    "<new>",
-    "<poll.h>",
-    "<stdlib.h>",
-    "<sys/socket.h>",
-    "<sys/stat.h>",
-    "<sys/types.h>",
-    "<sys/uio.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/plugins/tap_configuration/tap_configuration.cpp": [
-    "<cassert>",
-    "<cerrno>",
-    "<cinttypes>",
-    "<cmath>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<dirent.h>",
-    "<fcntl.h>",
-    "<lauxlib.h>",
-    "<lua.h>",
-    "<lualib.h>",
-    "<new>",
-    "<openssl/sha.h>",
-    "<poll.h>",
-    "<sys/stat.h>",
-    "<sys/uio.h>",
-    "<unistd.h>",
-    "telar_platform/open_directory.h"
-  ],
-  "src/runtime/plugins/worker/worker.cpp": [
-    "<arpa/inet.h>",
-    "<cassert>",
-    "<cerrno>",
-    "<climits>",
-    "<csignal>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<limits.h>",
-    "<netinet/in.h>",
-    "<netinet/tcp.h>",
-    "<new>",
-    "<poll.h>",
-    "<stdlib.h>",
-    "<sys/socket.h>",
-    "<sys/types.h>",
-    "<sys/uio.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/proxy/http2_capture_streams/http2_capture_streams.cpp": [
-    "<arpa/inet.h>",
-    "<brotli/decode.h>",
-    "<cassert>",
-    "<cerrno>",
-    "<csignal>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdlib>",
-    "<cstring>",
-    "<netdb.h>",
-    "<netinet/in.h>",
-    "<netinet/tcp.h>",
-    "<new>",
-    "<pthread.h>",
-    "<stdlib.h>",
-    "<sys/socket.h>",
-    "<unistd.h>",
-    "<zlib.h>",
-    "<zstd.h>"
-  ],
-  "src/runtime/proxy/intercepted_relay/intercepted_relay.cpp": [
-    "<brotli/decode.h>",
-    "<brotli/encode.h>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>",
-    "<zlib.h>",
-    "<zstd.h>"
-  ],
-  "src/runtime/proxy/runtime/runtime.cpp": [
-    "<arpa/inet.h>",
-    "<cassert>",
-    "<cerrno>",
-    "<climits>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<ctime>",
-    "<dirent.h>",
-    "<errno.h>",
-    "<fcntl.h>",
-    "<limits.h>",
-    "<linux/fs.h>",
-    "<netdb.h>",
-    "<netinet/in.h>",
-    "<new>",
-    "<nghttp2/nghttp2.h>",
-    "<openssl/crypto.h>",
-    "<openssl/err.h>",
-    "<openssl/pem.h>",
-    "<openssl/sha.h>",
-    "<openssl/ssl.h>",
-    "<openssl/x509.h>",
-    "<openssl/x509v3.h>",
-    "<poll.h>",
-    "<stdlib.h>",
-    "<sys/resource.h>",
-    "<sys/socket.h>",
-    "<sys/stat.h>",
-    "<sys/types.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/redirect/ingress/ingress.cpp": [
-    "<arpa/inet.h>",
-    "<cerrno>",
-    "<csignal>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<fcntl.h>",
-    "<linux/if_ether.h>",
-    "<linux/if_tun.h>",
-    "<net/if.h>",
-    "<net/if_utun.h>",
-    "<netdb.h>",
-    "<netinet/in.h>",
-    "<netinet/tcp.h>",
-    "<netinet6/in6_var.h>",
-    "<new>",
-    "<pcap/pcap.h>",
-    "<poll.h>",
-    "<pthread.h>",
-    "<sys/ioctl.h>",
-    "<sys/kern_control.h>",
-    "<sys/socket.h>",
-    "<sys/stat.h>",
-    "<sys/sys_domain.h>",
-    "<sys/types.h>",
-    "<sys/uio.h>",
-    "<sys/un.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/redirect/pf_rules/pf_rules.cpp": [
-    "<arpa/inet.h>",
-    "<cerrno>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<fcntl.h>",
-    "<net/if.h>",
-    "<net/if_dl.h>",
-    "<net/route.h>",
-    "<netinet/in.h>",
-    "<new>",
-    "<poll.h>",
-    "<sys/ioctl.h>",
-    "<sys/socket.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/redirect/record/record.cpp": [
-    "<arpa/inet.h>",
-    "<cerrno>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<fcntl.h>",
-    "<limits.h>",
-    "<linux/fs.h>",
-    "<net/if.h>",
-    "<net/if_dl.h>",
-    "<net/route.h>",
-    "<netinet/in.h>",
-    "<new>",
-    "<pcap/pcap.h>",
-    "<poll.h>",
-    "<stdlib.h>",
-    "<sys/file.h>",
-    "<sys/ioctl.h>",
-    "<sys/socket.h>",
-    "<sys/sockio.h>",
-    "<sys/stat.h>",
-    "<sys/syscall.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/redirect/socket_owners/socket_owners.cpp": [
-    "<arpa/inet.h>",
-    "<cerrno>",
-    "<csignal>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<dirent.h>",
-    "<fcntl.h>",
-    "<ifaddrs.h>",
-    "<libproc.h>",
-    "<limits.h>",
-    "<linux/fs.h>",
-    "<linux/if_ether.h>",
-    "<linux/if_tun.h>",
-    "<net/if.h>",
-    "<net/if_dl.h>",
-    "<net/if_utun.h>",
-    "<net/route.h>",
-    "<netinet/in.h>",
-    "<netinet/in_pcb.h>",
-    "<netinet/tcp.h>",
-    "<netinet/tcp_fsm.h>",
-    "<netinet/tcp_var.h>",
-    "<netinet6/in6_var.h>",
-    "<new>",
-    "<pcap/pcap.h>",
-    "<poll.h>",
-    "<stdlib.h>",
-    "<sys/file.h>",
-    "<sys/ioctl.h>",
-    "<sys/kern_control.h>",
-    "<sys/socket.h>",
-    "<sys/socketvar.h>",
-    "<sys/sockio.h>",
-    "<sys/stat.h>",
-    "<sys/sys_domain.h>",
-    "<sys/syscall.h>",
-    "<sys/sysctl.h>",
-    "<sys/types.h>",
-    "<sys/uio.h>",
-    "<sys/un.h>",
-    "<unistd.h>"
-  ],
   "src/runtime/tls/interception/interception.cpp": [
-    "<arpa/inet.h>",
-    "<cassert>",
-    "<cerrno>",
-    "<csignal>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<ctime>",
-    "<fcntl.h>",
-    "<limits.h>",
-    "<linux/fs.h>",
-    "<netinet/in.h>",
-    "<netinet/tcp.h>",
-    "<new>",
     "<openssl/crypto.h>",
     "<openssl/err.h>",
     "<openssl/pem.h>",
     "<openssl/ssl.h>",
-    "<openssl/x509v3.h>",
-    "<stdlib.h>",
-    "<sys/socket.h>",
-    "<sys/stat.h>",
-    "<sys/syscall.h>",
-    "<unistd.h>"
+    "<openssl/x509v3.h>"
+  ],
+  "src/runtime/tls/interception/interception.cppm": [
+    "<openssl/crypto.h>",
+    "<openssl/err.h>",
+    "<openssl/pem.h>",
+    "<openssl/ssl.h>",
+    "<openssl/x509v3.h>"
   ],
   "src/runtime/traffic/capture/capture.cpp": [
-    "<cerrno>",
-    "<csignal>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<net/if.h>",
-    "<new>",
-    "<pcap/pcap.h>",
-    "<poll.h>",
-    "<pthread.h>",
-    "<stdlib.h>",
-    "<sys/socket.h>",
-    "<sys/types.h>",
-    "<unistd.h>"
+    "<pcap/pcap.h>"
+  ],
+  "src/runtime/traffic/capture/capture.cppm": [
+    "<pcap/pcap.h>"
   ],
   "src/runtime/traffic/capture_analysis/capture_analysis.cpp": [
-    "<arpa/inet.h>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>",
+    "<pcap/pcap.h>"
+  ],
+  "src/runtime/traffic/capture_analysis/capture_analysis.cppm": [
     "<pcap/pcap.h>"
   ],
   "src/runtime/traffic/control_backend/control_backend.cpp": [
-    "<arpa/inet.h>",
     "<brotli/decode.h>",
     "<brotli/encode.h>",
-    "<cassert>",
-    "<cerrno>",
-    "<climits>",
-    "<csignal>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<ctime>",
-    "<dirent.h>",
-    "<fcntl.h>",
-    "<ifaddrs.h>",
-    "<libproc.h>",
-    "<limits.h>",
-    "<linux/fs.h>",
-    "<net/if.h>",
-    "<netdb.h>",
-    "<netinet/in.h>",
-    "<netinet/tcp.h>",
-    "<new>",
     "<nghttp2/nghttp2.h>",
     "<openssl/crypto.h>",
     "<openssl/err.h>",
@@ -3012,306 +1989,28 @@
     "<openssl/x509.h>",
     "<openssl/x509v3.h>",
     "<pcap/pcap.h>",
-    "<poll.h>",
-    "<sched.h>",
-    "<spawn.h>",
-    "<stdlib.h>",
-    "<sys/epoll.h>",
-    "<sys/event.h>",
-    "<sys/resource.h>",
-    "<sys/socket.h>",
-    "<sys/stat.h>",
-    "<sys/syscall.h>",
-    "<sys/types.h>",
-    "<sys/uio.h>",
-    "<sys/un.h>",
-    "<sys/wait.h>",
-    "<unistd.h>",
+    "<zlib.h>",
+    "<zstd.h>"
+  ],
+  "src/runtime/traffic/control_backend/control_backend.cppm": [
+    "<brotli/decode.h>",
+    "<brotli/encode.h>",
+    "<nghttp2/nghttp2.h>",
+    "<openssl/crypto.h>",
+    "<openssl/err.h>",
+    "<openssl/pem.h>",
+    "<openssl/sha.h>",
+    "<openssl/ssl.h>",
+    "<openssl/x509.h>",
+    "<openssl/x509v3.h>",
+    "<pcap/pcap.h>",
     "<zlib.h>",
     "<zstd.h>"
   ],
   "src/runtime/traffic/control_protocol/control_protocol.cpp": [
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>",
     "<pcap/pcap.h>"
   ],
-  "src/runtime/agents/description_generator/description_generator.cpp": [
-    "<cerrno>"
-  ],
-  "src/runtime/agents/snapshot/snapshot.cpp": [
-    "<cerrno>",
-    "<cstdint>",
-    "<fcntl.h>",
-    "<sys/stat.h>",
-    "<sys/types.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/command_capture/tracker/tracker.cpp": [
-    "<ghostty/vt.h>",
-    "cell_layout.hpp",
-    "terminal/ghostty_grid.hpp"
-  ],
-  "src/runtime/editors/remote_editor/remote_editor.cpp": [
-    "<dirent.h>",
-    "<fcntl.h>",
-    "<limits.h>",
-    "<sys/stat.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/history/event/event.cpp": [
-    "<cstring>",
-    "<sqlite3.h>"
-  ],
-  "src/runtime/history/store/store.cpp": [
-    "<cstdint>",
-    "<cstring>",
-    "<sqlite3.h>"
-  ],
-  "src/runtime/shell_integration/git_context/git_context.cpp": [
-    "<limits.h>"
-  ],
-  "src/runtime/shell_integration/shell_integration.cpp": [
-    "<cerrno>",
-    "<fcntl.h>",
-    "<limits.h>",
-    "<sys/stat.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/shell_integration/words/words.cpp": [
-    "<dirent.h>",
-    "<fcntl.h>",
-    "<libproc.h>",
-    "<limits.h>",
-    "<sys/proc_info.h>",
-    "<sys/stat.h>",
-    "<unistd.h>",
-    "command_specs.hpp"
-  ],
-  "src/runtime/suggestions/engine/engine.cpp": [
-    "<cerrno>",
-    "<poll.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/worktrees/git_probe/git_probe.cpp": [
-    "<sys/stat.h>"
-  ],
-  "src/runtime/cli/server/server.cpp": [
-    "<arpa/inet.h>",
-    "<cerrno>",
-    "<csignal>",
-    "<cstdio>",
-    "<lauxlib.h>",
-    "<lua.h>",
-    "<sys/stat.h>",
-    "<sys/un.h>",
-    "<unistd.h>",
-    "config_bootstrap.hpp"
-  ],
-  "src/runtime/config/loader/loader.cpp": [
-    "<cerrno>",
-    "<climits>",
-    "<cstdlib>",
-    "<lua.h>",
-    "config_bootstrap.hpp"
-  ],
-  "src/runtime/diagnostics/operation/operation.cpp": [
-    "<sys/stat.h>"
-  ],
-  "src/runtime/metrics/host_sampler/host_sampler.cpp": [
-    "<cstdint>"
-  ],
-  "src/runtime/model/client_layouts/client_layouts.cpp": [
-    "<termios.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/paths/query_task/query_task.cpp": [
-    "<dirent.h>",
-    "<fcntl.h>",
-    "<limits.h>",
-    "<sys/stat.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/persistence/session_store/session_store.cpp": [
-    "<cerrno>",
-    "<cstdio>",
-    "<fcntl.h>",
-    "<limits.h>",
-    "<sys/file.h>",
-    "<sys/stat.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/platform/descriptor_path/descriptor_path.cpp": [
-    "<limits.h>",
-    "telar_platform/descriptor_path.hpp"
-  ],
-  "src/runtime/platform/event_loop/linux/event_loop.cpp": [
-    "<cassert>",
-    "<cerrno>",
-    "<climits>",
-    "<csignal>",
-    "<cstddef>",
-    "<cstdint>",
-    "<fcntl.h>",
-    "<sched.h>",
-    "<signal.h>",
-    "<sys/epoll.h>",
-    "<sys/syscall.h>",
-    "<time.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/platform/name_resolutions/name_resolutions.cpp": [
-    "<cerrno>",
-    "<cstddef>",
-    "<netdb.h>",
-    "<netinet/in.h>",
-    "<sys/socket.h>"
-  ],
-  "src/runtime/platform/private_tunnel/private_tunnel.cpp": [
-    "<arpa/inet.h>",
-    "<cerrno>",
-    "<cstdint>",
-    "<cstring>",
-    "<fcntl.h>",
-    "<linux/if_ether.h>",
-    "<linux/if_tun.h>",
-    "<net/if.h>",
-    "<net/if_utun.h>",
-    "<netinet6/in6_var.h>",
-    "<sys/ioctl.h>",
-    "<sys/kern_control.h>",
-    "<sys/socket.h>",
-    "<sys/sys_domain.h>",
-    "<sys/uio.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/platform/proc_file/proc_file.cpp": [
-    "<cstdint>",
-    "<cstdio>",
-    "<errno.h>",
-    "<fcntl.h>",
-    "<sys/stat.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/platform/session_host/session_host.cpp": [
-    "<cstdio>",
-    "<cstdlib>",
-    "<fcntl.h>",
-    "<limits.h>",
-    "<sys/stat.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/platform/signals/signals.cpp": [
-    "<cerrno>",
-    "<cstdint>",
-    "<unistd.h>"
-  ],
-  "src/runtime/platform/stream_read_buffer/stream_read_buffer.cpp": [
-    "<cassert>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstring>"
-  ],
-  "src/runtime/platform/system_certificates/system_certificates.cpp": [
-    "<CoreFoundation/CoreFoundation.h>",
-    "<Security/Security.h>",
-    "<cerrno>",
-    "<cstdlib>",
-    "<openssl/err.h>",
-    "<openssl/pem.h>",
-    "<openssl/x509.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/runtime/client_control/client_control.cpp": [
-    "<cassert>",
-    "<cerrno>",
-    "<clipboard.hpp>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<fcntl.h>",
-    "<limits.h>",
-    "<new>",
-    "<stdlib.h>",
-    "<sys/stat.h>",
-    "<sys/types.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/runtime/delivery/client_delivery/client_delivery.cpp": [
-    "<cassert>",
-    "<cerrno>",
-    "<csignal>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<dirent.h>",
-    "<fcntl.h>",
-    "<ghostty/vt.h>",
-    "<limits.h>",
-    "<new>",
-    "<poll.h>",
-    "<stdlib.h>",
-    "<sys/mman.h>",
-    "<sys/stat.h>",
-    "<sys/types.h>",
-    "<sys/uio.h>",
-    "<sys/wait.h>",
-    "<unistd.h>",
-    "<zlib.h>",
-    "cell_layout.hpp",
-    "telar_render/sequence.hpp"
-  ],
-  "src/runtime/runtime/execution_service/execution_service.cpp": [
-    "<csignal>",
-    "<unistd.h>"
-  ],
-  "src/runtime/runtime/runtime/runtime.cpp": [
-    "<cerrno>",
-    "<csignal>",
-    "<ghostty/vt.h>",
-    "<limits.h>",
-    "<sys/stat.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/runtime/runtime_telemetry/runtime_telemetry.cpp": [
-    "<cassert>",
-    "<cerrno>",
-    "<csignal>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<dirent.h>",
-    "<fcntl.h>",
-    "<ghostty/vt.h>",
-    "<limits.h>",
-    "<mach/mach.h>",
-    "<new>",
-    "<pthread.h>",
-    "<stdlib.h>",
-    "<sys/mman.h>",
-    "<sys/stat.h>",
-    "<sys/types.h>",
-    "<sys/uio.h>",
-    "<sys/wait.h>",
-    "<unistd.h>",
-    "<zlib.h>",
-    "cell_layout.hpp"
-  ],
-  "src/runtime/transport/connection/connection.cpp": [
-    "<cassert>",
-    "<cerrno>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstring>",
-    "<unistd.h>"
+  "src/runtime/traffic/control_protocol/control_protocol.cppm": [
+    "<pcap/pcap.h>"
   ]
 }

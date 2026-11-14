@@ -24,7 +24,9 @@ expression can evaluate stay `constexpr` in the interface (`S_ISREG`,
 `CMSG_SPACE`); the rest are declared there and defined in the module's `.cpp`,
 which includes the header again and calls the macro (`WIFEXITED`, `CMSG_DATA`,
 `EV_SET`). The same spelling works whether or not an importer
-also includes the header. glibc declares some of them as enumerators behind a
+also includes the header. `_IOW` and `_IOWR` take a type, so they cross as
+templates: `telar::sys::ioctlWrite<Argument>(group, number)` and
+`ioctlReadWrite<Argument>`. glibc declares some of them as enumerators behind a
 macro of the same name (`SOCK_STREAM`, `IPPROTO_TCP`), which are exported with a
 using-declaration instead. `errno` is read through `telar::sys::lastError()` and
 set through `telar::sys::setLastError()`, and the struct members a header names

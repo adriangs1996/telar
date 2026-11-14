@@ -1,19 +1,11 @@
 module;
-#include <cassert>
-#include <cerrno>
-#include <climits>
-#include <csignal>
-#include <cstddef>
-#include <cstdint>
-#include <fcntl.h>
-#include <sched.h>
-#include <signal.h>
-#include <sys/epoll.h>
-#include <sys/syscall.h>
-#include <time.h>
-#include <unistd.h>
+#include "telar_base/diagnostics/config.hpp"
 
 module telar.runtime.platform.event_loop;
+
+import telar.sys.posix;
+import telar.sys.process;
+import telar.sys.linux;
 
 namespace telar::runtime {
   namespace linux_signals {
@@ -133,7 +125,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   tbc::view<std::span<const Event>, tbc::lt::a> Epoll<Memory>::wait(std::chrono::nanoseconds timeout, tbc::view<std::span<Event>, tbc::lt::a> events) {
-    assert(events.size() >= event_capacity);
+    TELAR_ASSERT(events.size() >= event_capacity);
     timeout = std::max(timeout, std::chrono::nanoseconds::zero());
     const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(timeout);
     const timespec duration{.tv_sec = seconds.count(), .tv_nsec = (timeout - seconds).count()};

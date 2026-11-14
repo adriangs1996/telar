@@ -1,5 +1,5 @@
 module;
-#include <cassert>
+#include "telar_base/diagnostics/config.hpp"
 
 module telar.runtime.vocabulary.exchange;
 
@@ -38,7 +38,7 @@ namespace telar::runtime {
 
     [[maybe_unused]] const auto previous = used_.fetch_sub(bytes, std::memory_order_relaxed);
 
-    assert(previous >= bytes);
+    TELAR_ASSERT(previous >= bytes);
   }
 
   std::size_t CaptureQuota::used() const noexcept {

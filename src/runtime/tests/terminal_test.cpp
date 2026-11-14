@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "cell_layout.hpp"
 #include "telar_base/diagnostics/config.hpp"
 #include <cassert>
 #include <cstddef>
@@ -21,6 +20,7 @@ import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
 import telar.runtime.graphics.kitty;
 import telar.runtime.terminal.control;
+import telar.runtime.terminal.grid;
 import telar.runtime.tests.check;
 import telar.runtime.terminal.text_reader;
 import telar.wire.content;

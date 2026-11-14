@@ -1,10 +1,8 @@
-module;
-#include <sys/stat.h>
-#include <sys/un.h>
-
 export module telar.runtime.platform.local_listener;
 
 import std;
+import telar.sys.posix;
+import telar.sys.socket;
 
 import telar.platform.primitives;
 

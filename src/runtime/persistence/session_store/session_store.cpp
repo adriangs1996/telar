@@ -1,12 +1,3 @@
-module;
-#include <cerrno>
-#include <cstdio>
-#include <fcntl.h>
-#include <limits.h>
-#include <sys/file.h>
-#include <sys/stat.h>
-#include <unistd.h>
-
 module telar.runtime.persistence.session_store;
 
 import telar.platform.error;

@@ -40,6 +40,7 @@ export namespace telar::runtime {
 
 export namespace telar::render {
   using telar::render::max_document_bytes;
+  using telar::render::max_pane_document_bytes;
   using telar::render::max_pane_documents;
   using telar::render::max_sequence_body;
   using telar::render::sequence_begin;

@@ -1,22 +1,10 @@
 module;
 #include "tbc/annotations.hpp"
 #include "telar_platform/trace_macro.hpp"
-#include <cstdlib>
-#include <new>
-#include <unistd.h>
-
-#include <cstdint>
-
-#include <cassert>
-#include <cstddef>
-#include <cstring>
 
 #include <brotli/decode.h>
-#include <pthread.h>
 #include <zlib.h>
 #include <zstd.h>
-
-#include <cerrno>
 
 export module telar.runtime.exchange_capture.pipeline;
 

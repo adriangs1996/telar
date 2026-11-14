@@ -1,10 +1,5 @@
 module;
 #include <ghostty/vt.h>
-#include <unistd.h>
-
-#include "telar_render/sequence.hpp"
-#include "terminal/ghostty_grid.hpp"
-#include "terminal/tracked_row.hpp"
 
 #include "telar_base/diagnostics/config.hpp"
 

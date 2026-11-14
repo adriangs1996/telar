@@ -1,9 +1,7 @@
-module;
-#include <limits.h>
-
 module telar.runtime.shell_integration.git_context;
 
 import std;
+import telar.sys.posix;
 
 namespace telar::runtime {
 

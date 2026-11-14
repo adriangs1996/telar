@@ -1,9 +1,7 @@
-module;
-#include <limits.h>
-
 export module telar.runtime.platform.descriptor_path;
 
 import std;
+import telar.sys.posix;
 
 // Interface: platform/descriptor_path.cppm
 export {

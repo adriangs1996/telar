@@ -1,6 +1,5 @@
 module;
 #include "tbc/annotations.hpp"
-#include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
 #include <ghostty/vt.h>
 

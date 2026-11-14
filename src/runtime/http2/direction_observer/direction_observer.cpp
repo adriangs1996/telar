@@ -1,11 +1,4 @@
 module;
-#include <cstdlib>
-#include <new>
-
-#include <cstdint>
-
-#include <cstddef>
-#include <cstring>
 #include <nghttp2/nghttp2.h>
 
 module telar.runtime.http2.direction_observer;

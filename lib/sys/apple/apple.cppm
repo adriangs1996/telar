@@ -4,12 +4,15 @@ module;
 #include <mach/mach.h>
 #include <mach/mach_vm.h>
 #include <net/if.h>
+#include <net/if_dl.h>
 #include <net/if_utun.h>
 #include <net/route.h>
 #include <netinet/in.h>
 #include <netinet/in_pcb.h>
 #include <netinet/tcp.h>
 #include <netinet/tcp_fsm.h>
+#include <netinet/tcp_var.h>
+#include <netinet6/in6_var.h>
 #include <pthread.h>
 #include <spawn.h>
 #include <stdio.h>
@@ -19,7 +22,9 @@ module;
 #include <sys/ioctl.h>
 #include <sys/kern_control.h>
 #include <sys/param.h>
+#include <sys/proc_info.h>
 #include <sys/socket.h>
+#include <sys/socketvar.h>
 #include <sys/sys_domain.h>
 #include <sys/sysctl.h>
 #include <sys/un.h>
@@ -33,13 +38,19 @@ export module telar.sys.apple;
 // using-declarations instead of including them.
 export {
   // Process information.
+  using ::in_sockinfo;
   using ::proc_bsdinfo;
+  using ::proc_bsdshortinfo;
+  using ::proc_fdinfo;
   using ::proc_listallpids;
   using ::proc_listpids;
   using ::proc_name;
   using ::proc_pidfdinfo;
   using ::proc_pidinfo;
   using ::proc_pidpath;
+  using ::proc_vnodepathinfo;
+  using ::socket_fdinfo;
+  using ::SOCKINFO_TCP;
   using ::sysctl;
   using ::sysctlbyname;
 
@@ -48,15 +59,36 @@ export {
   using ::kqueue;
 
   // Mach.
+  using ::host_cpu_load_info_data_t;
+  using ::host_info64_t;
   using ::host_statistics64;
   using ::kern_return_t;
   using ::mach_host_self;
+  using ::mach_msg_type_number_t;
   using ::mach_port_deallocate;
   using ::mach_port_t;
   using ::mach_vm_address_t;
   using ::mach_vm_read_overwrite;
   using ::mach_vm_size_t;
   using ::task_info;
+  using ::task_info_t;
+  using ::task_vm_info_data_t;
+  using ::vm_statistics64_data_t;
+
+  // The TCP control blocks the net.inet.tcp.pcblist64 sysctl returns.
+  using ::xinpcb64;
+  using ::xinpgen;
+  using ::xsocket64;
+  using ::xtcpcb64;
+
+  // Routing messages and link-layer addresses.
+  using ::rt_msghdr;
+  using ::sockaddr_dl;
+
+  // Kernel controls and utun.
+  using ::ctl_info;
+  using ::in6_aliasreq;
+  using ::sockaddr_ctl;
 
   // BSD and Darwin extensions.
   using ::arc4random_buf;
@@ -248,6 +280,10 @@ export {
   TELAR_SYS_EVENTS(TELAR_SYS_CONSTANT)
   TELAR_SYS_PROCESSES(TELAR_SYS_CONSTANT)
   TELAR_SYS_NETWORK(TELAR_SYS_CONSTANT)
+
+  // Darwin's private sockio.h defines these protocol attachments; the public SDK does not.
+  inline constexpr unsigned long SIOCPROTOATTACH = _IOWR('i', 80, ifreq);
+  inline constexpr unsigned long SIOCPROTOATTACH_IN6 = _IOWR('i', 110, in6_aliasreq);
 
   // Defined in apple.cpp, where the macros are.
   void EV_SET(telar::sys::captured::Event* event, uintptr_t ident, int16_t filter, uint16_t flags, uint32_t filter_flags, intptr_t data, void* user_data) noexcept;

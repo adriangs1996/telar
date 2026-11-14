@@ -1,24 +1,10 @@
 module;
-#include <cstdio>
-#include <cstdlib>
-#include <new>
-#include <stdlib.h>
-
-#include <cerrno>
-#include <csignal>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <poll.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <unistd.h>
-
-#include <net/if.h>
 #include <pcap/pcap.h>
-#include <pthread.h>
 
 module telar.runtime.traffic.capture;
+
+import telar.sys.socket;
+import telar.sys.process;
 
 namespace telar::runtime::traffic {
 

@@ -1,46 +1,12 @@
 module;
 #include "tbc/annotations.hpp"
-#include <new>
-#include <stdlib.h>
 
-#include <cerrno>
-#include <cstdio>
-#include <net/if.h>
-#include <sys/ioctl.h>
-#include <sys/socket.h>
-#include <sys/sockio.h>
-
-#include <cstddef>
-#include <fcntl.h>
-
-#include <limits.h>
-#include <sys/stat.h>
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <linux/fs.h>
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <sys/syscall.h>
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <unistd.h>
-#endif
-#include <cstdint>
-#include <cstdlib>
-#include <sys/file.h>
-#include <unistd.h>
-
-#include <arpa/inet.h>
 #include <pcap/pcap.h>
-
-#include <cstring>
-#include <net/if_dl.h>
-#include <net/route.h>
-#include <netinet/in.h>
-#include <poll.h>
 
 export module telar.runtime.redirect.record;
 
 import std;
+import telar.sys.socket;
 import telar.sys.posix;
 
 export import telar.runtime.redirect.pf_rules;
@@ -86,10 +52,10 @@ export {
         int flags = 0;
       };
 
-      static_assert(sizeof(InterfaceRequest) == 40 && offsetof(InterfaceRequest, flags) == 36);
+      static_assert(sizeof(InterfaceRequest) == 40 && __builtin_offsetof(InterfaceRequest, flags) == 36);
       enum class Operation : unsigned long {
-        set_flags = _IOWR('D', 89, InterfaceRequest),
-        clear_flags = _IOWR('D', 90, InterfaceRequest),
+        set_flags = sys::ioctlReadWrite<InterfaceRequest>('D', 89),
+        clear_flags = sys::ioctlReadWrite<InterfaceRequest>('D', 90),
       };
       static constexpr int skip_flag = 0x0100;
 
@@ -357,7 +323,7 @@ export {
         std::array<Byte, 3> padding;
       };
 
-      static_assert(sizeof(Header) == 64 && offsetof(Header, uid) == 44 && offsetof(Header, direction) == 60);
+      static_assert(sizeof(Header) == 64 && __builtin_offsetof(Header, uid) == 44 && __builtin_offsetof(Header, direction) == 60);
       enum class PfDirection : Byte {
         incoming = 1,
         outgoing = 2,
@@ -404,7 +370,7 @@ export {
 
         setCloseOnExec(pcap_fileno(capture_.get()));
         bpf_insn instructions[] = {
-            BPF_STMT(BPF_LD | BPF_W | BPF_ABS, offsetof(Header, uid)),
+            BPF_STMT(BPF_LD | BPF_W | BPF_ABS, __builtin_offsetof(Header, uid)),
             BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, htonl(uid_), 0, 1),
             BPF_STMT(BPF_RET | BPF_K, 65600),
             BPF_STMT(BPF_RET | BPF_K, 0),

@@ -1,5 +1,4 @@
 module;
-#include "shell_scripts.hpp"
 #include "tbc/annotations.hpp"
 
 export module telar.runtime.shell_integration;
@@ -10,6 +9,13 @@ export import telar.platform.process;
 export import telar.runtime.shell_integration.token;
 import telar.platform.primitives;
 import telar.base.text;
+
+// The scripts of shell_integration/, which the build compiles in.
+namespace telar::runtime::shell_scripts {
+
+#include "shell_scripts.inc"
+
+}
 
 namespace telar::runtime::shell_files {
 

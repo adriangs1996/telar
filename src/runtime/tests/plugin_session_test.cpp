@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "plugin_bootstrap.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
@@ -12,7 +11,6 @@ static_assert(true);
 #include "telar_platform/file_descriptor.hpp"
 #include "telar_platform/random_bytes.hpp"
 #include "telar_platform/trace.hpp"
-#include "traffic_api.hpp"
 #include <algorithm>
 #include <arpa/inet.h>
 #include <array>

@@ -1,8 +1,6 @@
 module;
 #include "tbc/annotations.hpp"
 
-#include <cstdint>
-
 export module telar.runtime.model.slot_store;
 
 import std;
@@ -297,7 +295,7 @@ export {
     // Kept whole: a container over the caller's value, from modules that import this one (Pane, Execution...).
     template <typename Value, std::size_t Capacity, Allocator Memory>
     class TBC_HOT_PATH SlotStore {
-      static_assert(Capacity > 0 && Capacity <= UINT16_MAX);
+      static_assert(Capacity > 0 && Capacity <= std::numeric_limits<std::uint16_t>::max());
 
     public:
       static constexpr std::size_t capacity = Capacity;

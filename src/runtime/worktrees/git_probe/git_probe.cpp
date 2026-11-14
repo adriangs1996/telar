@@ -1,10 +1,10 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <sys/stat.h>
 
 module telar.runtime.worktrees.git_probe;
 
 import std;
+import telar.sys.posix;
 import telar.base.diagnostics;
 import telar.base.text;
 import telar.base.text.utf8;

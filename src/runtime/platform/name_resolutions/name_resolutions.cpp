@@ -1,11 +1,6 @@
-module;
-#include <cerrno>
-#include <cstddef>
-#include <netdb.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-
 module telar.runtime.platform.name_resolutions;
+
+import telar.sys.socket;
 
 namespace telar::runtime {
 

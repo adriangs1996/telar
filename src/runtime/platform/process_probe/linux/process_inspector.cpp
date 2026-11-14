@@ -1,20 +1,9 @@
-module;
-#include <cerrno>
-#include <cstddef>
-
-#include <cstdint>
-#include <cstdio>
-#include <cstring>
-#include <dirent.h>
-#include <fcntl.h>
-#include <sys/socket.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
-
 module telar.runtime.platform.process_probe;
 
 import std;
+import telar.sys.socket;
+import telar.sys.process;
+import telar.sys.linux;
 import telar.sys.posix;
 
 import telar.runtime.platform.proc_file;

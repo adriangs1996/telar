@@ -1,37 +1,30 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <cstdlib>
-#include <new>
-#include <stdlib.h>
 
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
 
-#include <arpa/inet.h>
-#include <cassert>
-#include <cerrno>
-#include <cmath>
-#include <cstdio>
-#include <limits.h>
 #include <pcap/pcap.h>
-
-#include "traffic_api.hpp"
-
-#include "plugin_bootstrap.hpp"
-#include <fcntl.h>
-#include <sys/stat.h>
-
-#include <poll.h>
-#include <sys/uio.h>
-#include <unistd.h>
 
 module telar.runtime.plugins.run_worker;
 
+import telar.sys.posix;
+
 namespace telar::runtime::plugins {
+
+  namespace {
+
+    // The Lua a tap worker runs before its plugin, and the traffic API it hands the plugin.
+    constexpr std::string_view bootstrap{
+#include "plugin_bootstrap.inc"
+    };
+
+    constexpr std::string_view traffic_api{
+#include "traffic_api.inc"
+    };
+
+  }
 
   LuaEffects::LuaEffects(lua_State* state) noexcept
       : state_(state),
@@ -384,7 +377,7 @@ namespace telar::runtime::plugins {
                                                                                    : HttpVersion::http11;
     message.response = value.field("response").boolean(false);
     message.response_to_head = value.field("response_to_head").boolean(false);
-    message.stream = static_cast<std::uint32_t>(value.field("stream_id").boundedInteger(0, 0, INT32_MAX));
+    message.stream = static_cast<std::uint32_t>(value.field("stream_id").boundedInteger(0, 0, std::numeric_limits<std::int32_t>::max()));
     message.method = value.field("method").string();
     message.target = value.field("target").string();
     message.reason = value.field("reason").string();
@@ -500,7 +493,7 @@ namespace telar::runtime::plugins {
         }
 
         for (std::size_t index = 0; index < request.process_count; ++index) {
-          request.processes[index] = processes.element(index + 1).boundedInteger(0, 1, INT32_MAX);
+          request.processes[index] = processes.element(index + 1).boundedInteger(0, 1, std::numeric_limits<std::int32_t>::max());
         }
       }
     } else {

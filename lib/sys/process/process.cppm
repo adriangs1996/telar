@@ -91,7 +91,9 @@ export {
   using ::pthread_attr_t;
   using ::pthread_create;
   using ::pthread_detach;
+  using ::pthread_mutex_lock;
   using ::pthread_mutex_t;
+  using ::pthread_mutex_unlock;
   using ::pthread_self;
   using ::pthread_setname_np;
   using ::pthread_t;
@@ -137,7 +139,8 @@ export {
   X(VEOF)                      \
   X(VINTR)                     \
   X(VQUIT)                     \
-  X(VSUSP)
+  X(VSUSP)                     \
+  X(_POSIX_VDISABLE)
 
 // glibc declares these as enumerators and defines each macro as its own name.
 #define TELAR_SYS_ENUMERATORS(X) \
@@ -194,6 +197,7 @@ namespace telar::sys::captured {
 #undef VINTR
 #undef VQUIT
 #undef VSUSP
+#undef _POSIX_VDISABLE
 #undef PTHREAD_CREATE_DETACHED
 #undef RLIMIT_NOFILE
 #undef PTHREAD_MUTEX_INITIALIZER

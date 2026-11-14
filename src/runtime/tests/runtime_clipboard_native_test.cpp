@@ -16,7 +16,6 @@ static_assert(true);
 #include "../terminal/ghostty_handle.hpp"
 #include "../terminal/graphics_cursor.hpp"
 #include "../terminal/pty_response_queue.hpp"
-#include "cell_layout.hpp"
 #include "telar_base/diagnostics/config.hpp"
 #include "telar_base/diagnostics/limit_reach.hpp"
 #include "telar_base/memory/allocator.hpp"

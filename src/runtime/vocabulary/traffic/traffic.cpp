@@ -1,11 +1,6 @@
-module;
-#include <cerrno>
-#include <sys/socket.h>
-#include <sys/stat.h>
-#include <sys/un.h>
-#include <unistd.h>
-
 module telar.runtime.vocabulary.traffic;
+
+import telar.sys.socket;
 
 namespace telar::runtime::plugins {
 

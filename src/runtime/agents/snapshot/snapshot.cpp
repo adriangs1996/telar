@@ -1,11 +1,5 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <cerrno>
-#include <cstdint>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
 
 module telar.runtime.agents.snapshot;
 
@@ -727,7 +721,7 @@ namespace telar::runtime {
     std::size_t filled = 0;
 
     while (filled < limit) {
-      if (offset > static_cast<std::uint64_t>(INT64_MAX) - filled) {
+      if (offset > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()) - filled) {
         throw EncodingError{"Agent session file offset is outside its bounds"};
       }
 

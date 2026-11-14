@@ -1,10 +1,10 @@
 module;
 #include "tbc/annotations.hpp"
-#include <sys/types.h>
 
 export module telar.runtime.agents.description_generator;
 
 import std;
+import telar.sys.posix;
 import telar.tbc;
 
 export import telar.runtime.terminal.osc_scanner;

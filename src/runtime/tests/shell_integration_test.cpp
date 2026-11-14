@@ -9,8 +9,6 @@ static_assert(true);
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "command_specs.hpp"
-
 import std;
 import telar.base.memory.allocators;
 import telar.platform.fs;
@@ -932,7 +930,9 @@ void words() {
 
   // Command specs: offered for a command the shell runs, from the user's completions
   // directory when it compiles, else the one telar ships; an unchanged one is not sent again.
-  for (const auto& [name, source] : shipped::specs) {
+  const auto shipped = shippedSpecs();
+
+  for (const auto& [name, source] : shipped) {
     try {
       static_cast<void>(ebnf::command_spec::compile(source));
     } catch (const std::exception& error) {
@@ -941,7 +941,7 @@ void words() {
     }
   }
 
-  check(std::ranges::find(shipped::specs, std::string_view{"telar"}, &std::pair<std::string_view, std::string_view>::first) != shipped::specs.end());
+  check(std::ranges::find(shipped, std::string_view{"telar"}, &std::pair<std::string_view, std::string_view>::first) != shipped.end());
   make("bin/nmap", "", 0700);
   std::string reported = "gst";
   const auto spec = [&](std::string_view command, std::uint64_t known = 0) {

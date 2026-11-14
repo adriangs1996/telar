@@ -1,34 +1,11 @@
-module;
-#include <cerrno>
-#include <cstdint>
-#include <cstring>
-#include <fcntl.h>
-#include <unistd.h>
-
-#if defined(__linux__)
-
-#include <arpa/inet.h>
-#include <linux/if_ether.h>
-#include <linux/if_tun.h>
-#include <net/if.h>
-#include <sys/ioctl.h>
-#include <sys/uio.h>
-
-#endif
+module telar.runtime.platform.private_tunnel;
 
 #if defined(__APPLE__)
-
-#include <net/if.h>
-#include <net/if_utun.h>
-#include <netinet6/in6_var.h>
-#include <sys/ioctl.h>
-#include <sys/kern_control.h>
-#include <sys/socket.h>
-#include <sys/sys_domain.h>
-
+import telar.sys.apple;
 #endif
-
-module telar.runtime.platform.private_tunnel;
+#if defined(__linux__)
+import telar.sys.linux;
+#endif
 
 #if defined(__linux__)
 namespace telar::runtime {
@@ -155,8 +132,7 @@ namespace telar::runtime {
 
     // utun creation does not attach IP protocol handlers. PF's ifnet_output
     // needs them even though this interface has no configured IP addresses.
-    constexpr unsigned long attach_ipv4 = _IOWR('i', 80, ifreq); // SIOCPROTOATTACH
-    if (::ioctl(configuration.get(), attach_ipv4, &flags) != 0 && sys::lastError() != EEXIST) {
+    if (::ioctl(configuration.get(), SIOCPROTOATTACH, &flags) != 0 && sys::lastError() != EEXIST) {
       throw SystemError{"Attach discovery IPv4 protocol"};
     }
 
@@ -164,8 +140,7 @@ namespace telar::runtime {
     in6_aliasreq request{};
 
     std::copy(name_.view().begin(), name_.view().end(), request.ifra_name);
-    constexpr unsigned long attach_ipv6 = _IOWR('i', 110, in6_aliasreq); // SIOCPROTOATTACH_IN6
-    if (!ipv6 || (::ioctl(ipv6.get(), attach_ipv6, &request) != 0 && sys::lastError() != EEXIST)) {
+    if (!ipv6 || (::ioctl(ipv6.get(), SIOCPROTOATTACH_IN6, &request) != 0 && sys::lastError() != EEXIST)) {
       throw SystemError{"Attach discovery IPv6 protocol"};
     }
 

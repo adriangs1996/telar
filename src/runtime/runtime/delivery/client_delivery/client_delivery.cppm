@@ -1,8 +1,6 @@
 module;
 #include "tbc/annotations.hpp"
 #include "telar_platform/trace_macro.hpp"
-#include <cstddef>
-#include <cstdint>
 
 export module telar.runtime.runtime.delivery.client_delivery;
 

@@ -1,21 +1,7 @@
-module;
-
-#include <cerrno>
-#include <csignal>
-#include <cstdint>
-#include <cstring>
-#include <fcntl.h>
-#include <limits.h>
-#include <sys/file.h>
-#include <sys/socket.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <sys/un.h>
-#include <unistd.h>
-
 module telar.runtime.platform.local_listener;
 
 import std;
+import telar.sys.socket;
 
 import telar.platform.net;
 import telar.platform.error;

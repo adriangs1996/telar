@@ -147,7 +147,10 @@ Las unidades de módulo importan la biblioteca estándar con `import std;`
 (`CMAKE_CXX_MODULE_STD`; el bootstrap fija el valor experimental de CMake para su
 versión). En el fragmento global solo quedan las cabeceras C y sus envoltorios
 (`<cerrno>`, `<cstdio>`…), `<new>` y `<version>`: macros como `errno`, `assert` o
-`INT_MAX` y el `operator new` de colocación no viajan por un módulo. Una cabecera
+`INT_MAX` y el `operator new` de colocación no viajan por un módulo. Las unidades de la
+CLI y del runtime ya no incluyen ninguna: `errno` se lee con `telar::sys::lastError()`,
+`assert` es `TELAR_ASSERT` (`telar_base/diagnostics/config.hpp`), los límites salen de
+`std::numeric_limits` y las macros del sistema, de `telar.sys.*`. Una cabecera
 estándar textual en cada fragmento global se serializaba en cada BMI y cada
 importador la volvía a fusionar: un build Debug limpio del runtime bajó de 171 s
 a 26 s. Los módulos dueño de cabeceras siguen incluyéndolas textualmente, porque

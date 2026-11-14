@@ -1,33 +1,6 @@
 module;
 #include "tbc/annotations.hpp"
-#include "tbc/annotations.hpp"
 #include "telar_platform/trace_macro.hpp"
-#include <cstdlib>
-#include <new>
-#include <stdlib.h>
-
-#include <cassert>
-#include <cerrno>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-
-#include <limits.h>
-
-#include <climits>
-#include <poll.h>
-#include <sys/types.h>
-
-#include <csignal>
-#include <cstdio>
-#include <sys/uio.h>
-#include <unistd.h>
-
-#include <arpa/inet.h>
-
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <sys/socket.h>
 
 export module telar.runtime.plugins.worker;
 

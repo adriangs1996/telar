@@ -1,13 +1,5 @@
 module;
-#include <cstddef>
-#include <cstdint>
-#include <cstdio>
-#include <cstdlib>
 #include <ghostty/vt.h>
-#include <new>
-
-#include "cell_layout.hpp"
-#include <cstring>
 
 module telar.runtime.terminal.text_reader;
 
@@ -16,6 +8,7 @@ import std;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.runtime.terminal.control;
+import telar.runtime.terminal.grid;
 
 namespace telar::runtime {
 

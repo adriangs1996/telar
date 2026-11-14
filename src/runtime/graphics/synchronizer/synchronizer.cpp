@@ -1,10 +1,7 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <new>
 
 #include "telar_base/diagnostics/config.hpp"
-
-#include <fcntl.h>
 
 module telar.runtime.graphics.synchronizer;
 

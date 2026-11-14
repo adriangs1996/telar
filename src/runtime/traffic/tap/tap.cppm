@@ -1,19 +1,5 @@
 module;
 #include "tbc/annotations.hpp"
-#include <cstdio>
-#include <cstdlib>
-#include <new>
-#include <stdlib.h>
-
-#include <cassert>
-#include <cerrno>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <limits.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
 
 export module telar.runtime.traffic.tap;
 

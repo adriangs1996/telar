@@ -40,7 +40,6 @@ static_assert(true);
 #include <unistd.h>
 #endif
 #if (TELAR_DIAGNOSTICS)
-#include "cell_layout.hpp"
 #endif
 #if (TELAR_DIAGNOSTICS)
 #include <limits.h>

@@ -1,13 +1,11 @@
 module;
 #include "tbc/annotations.hpp"
-#include <cerrno>
-#include <cstddef>
-#include <netdb.h>
-#include <pthread.h>
 
 export module telar.runtime.platform.name_resolutions;
 
 import std;
+import telar.sys.socket;
+import telar.sys.process;
 import telar.sys.posix;
 
 export import telar.platform.net;

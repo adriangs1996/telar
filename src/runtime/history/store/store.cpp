@@ -1,7 +1,5 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <cstdint>
-#include <cstring>
 #include <sqlite3.h>
 
 module telar.runtime.history.store;
@@ -165,7 +163,7 @@ namespace telar::runtime {
     TELAR_TRACE("history.persistLaunchFailure");
     const auto& session = event.session;
     const auto& failure = event.failure;
-    if (session.pane > INT64_MAX || failure.generation > INT64_MAX || session.location.workspace.id > INT64_MAX || session.location.tab_id > INT64_MAX) {
+    if (session.pane > std::numeric_limits<std::int64_t>::max() || failure.generation > std::numeric_limits<std::int64_t>::max() || session.location.workspace.id > std::numeric_limits<std::int64_t>::max() || session.location.tab_id > std::numeric_limits<std::int64_t>::max()) {
       throw RequestError{FailureCode::resource_limit, "History identity exceeds the database integer range"};
     }
 
@@ -263,13 +261,13 @@ namespace telar::runtime {
       output_.reset();
       output_.bind(1, std::string_view{reinterpret_cast<const char*>(command.output.data()), command.output.size()});
       output_.bind(2, command.outputTruncated());
-      output_.bind(3, static_cast<std::int64_t>(std::min<std::uint64_t>(command.output_observed, INT64_MAX)));
+      output_.bind(3, static_cast<std::int64_t>(std::min<std::uint64_t>(command.output_observed, std::numeric_limits<std::int64_t>::max())));
       output_.finish();
     }
   }
 
   void PaneHistoryWriter::bindContext(Statement& statement, const HistorySession& session) {
-    if (session.pane > INT64_MAX || session.location.workspace.id > INT64_MAX || session.location.tab_id > INT64_MAX) {
+    if (session.pane > std::numeric_limits<std::int64_t>::max() || session.location.workspace.id > std::numeric_limits<std::int64_t>::max() || session.location.tab_id > std::numeric_limits<std::int64_t>::max()) {
       throw RequestError{FailureCode::resource_limit, "History identity exceeds the database integer range"};
     }
 

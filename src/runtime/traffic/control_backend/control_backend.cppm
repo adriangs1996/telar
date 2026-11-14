@@ -1,36 +1,11 @@
 module;
 #include "tbc/annotations.hpp"
-#include "tbc/annotations.hpp"
-#include <new>
-#include <stdlib.h>
 
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <limits.h>
-
-#include <arpa/inet.h>
-#include <cerrno>
-
-#include <cassert>
 #include <pcap/pcap.h>
-
-#include <csignal>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <poll.h>
-#include <sys/socket.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <sys/un.h>
-#include <unistd.h>
 
 #include <brotli/decode.h>
 #include <zlib.h>
 #include <zstd.h>
-#if (!(defined(__APPLE__)))
-#include <cstdlib>
-#endif
 #if (!(defined(__APPLE__)))
 #include <openssl/err.h>
 #endif
@@ -40,54 +15,20 @@ module;
 #if (!(defined(__APPLE__)))
 #include <openssl/x509.h>
 #endif
-#include <cstdio>
-#include <cstdlib>
-#include <fcntl.h>
-#include <openssl/sha.h>
-#include <sys/uio.h>
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <linux/fs.h>
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <sys/syscall.h>
-#endif
 #include <brotli/encode.h>
-#include <ctime>
-#include <dirent.h>
-#include <netdb.h>
 #include <nghttp2/nghttp2.h>
 #include <openssl/crypto.h>
 #include <openssl/err.h>
 #include <openssl/pem.h>
+#include <openssl/sha.h>
 #include <openssl/ssl.h>
 #include <openssl/x509v3.h>
-#if (defined(__APPLE__))
-#include <sys/event.h>
-#endif
-#if (defined(__linux__))
-#include <climits>
-#endif
-#if (defined(__linux__))
-#include <sched.h>
-#endif
-#if (defined(__linux__))
-#include <sys/epoll.h>
-#endif
-#if (defined(__linux__))
-#include <sys/syscall.h>
-#endif
-#include <ifaddrs.h>
-#include <net/if.h>
-#include <spawn.h>
-#include <sys/resource.h>
-#include <sys/wait.h>
-#if (defined(__APPLE__))
-#include <libproc.h>
-#endif
 
 export module telar.runtime.traffic.control_backend;
 
 import std;
+import telar.sys.socket;
+import telar.sys.process;
 import telar.sys.posix;
 import telar.tbc;
 

@@ -1,8 +1,5 @@
 module;
-#include <cassert>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
+#include "telar_base/diagnostics/config.hpp"
 
 module telar.runtime.platform.stream_read_buffer;
 
@@ -59,7 +56,7 @@ namespace telar::runtime {
 
   template <std::size_t Capacity>
   void StreamReadBuffer<Capacity>::consume(std::size_t count) noexcept {
-    assert(count <= length_ - offset_);
+    TELAR_ASSERT(count <= length_ - offset_);
     offset_ += count;
   }
 

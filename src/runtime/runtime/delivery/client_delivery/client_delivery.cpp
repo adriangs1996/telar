@@ -1,34 +1,15 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include "telar_render/sequence.hpp"
 #include <ghostty/vt.h>
-#include <new>
-#include <stdlib.h>
 #include <zlib.h>
 
-#include "cell_layout.hpp"
 #include "telar_base/diagnostics/config.hpp"
-#include <cassert>
-#include <cerrno>
-#include <csignal>
-#include <cstddef>
-#include <cstdint>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <fcntl.h>
-#include <limits.h>
-#include <sys/mman.h>
-#include <sys/types.h>
-#include <sys/uio.h>
-#include <sys/wait.h>
-#include <unistd.h>
-
-#include <dirent.h>
-#include <poll.h>
-#include <sys/stat.h>
 
 module telar.runtime.runtime.delivery.client_delivery;
+
+import telar.sys.process;
+
+import telar.runtime.terminal.control;
 
 namespace telar::runtime {
 

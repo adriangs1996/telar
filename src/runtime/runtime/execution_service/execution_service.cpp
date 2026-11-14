@@ -1,10 +1,10 @@
 module;
 #include "telar_base/diagnostics/config.hpp"
 #include "telar_platform/trace_macro.hpp"
-#include <csignal>
-#include <unistd.h>
 
 module telar.runtime.runtime.execution_service;
+
+import telar.sys.process;
 
 namespace telar::runtime {
 

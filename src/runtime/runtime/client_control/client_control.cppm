@@ -1,10 +1,8 @@
 module;
 #include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
-#include <cstddef>
-#include <cstdint>
 
-#include <clipboard.hpp>
+#include "clipboard.hpp"
 
 export module telar.runtime.runtime.client_control;
 
@@ -36,6 +34,15 @@ import telar.runtime.diagnostics.line;
 import telar.runtime.graphics.kitty;
 import telar.runtime.terminal.control;
 import telar.client;
+
+// The clipboard library's header stays in this global module fragment only, because Objective-C++
+// shares it; importers reach its names through these declarations instead of including it.
+export namespace telar::clipboard {
+  using telar::clipboard::content;
+  using telar::clipboard::error_message;
+  using telar::clipboard::read;
+  using telar::clipboard::read_error;
+}
 
 // Interface: runtime/agent_file_service.cppm
 export {

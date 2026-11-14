@@ -1,29 +1,9 @@
 module;
-#include <new>
-
-#include <cinttypes>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <cstdio>
-#include <cstring>
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
 
-#include "telar_platform/open_directory.h"
-#include <cerrno>
-#include <cstdlib>
-#include <dirent.h>
-#include <fcntl.h>
 #include <openssl/sha.h>
-#include <sys/stat.h>
-#include <unistd.h>
-
-#include <poll.h>
-#include <sys/uio.h>
-
-#include <cassert>
 
 module telar.runtime.plugins.tap_configuration;
 

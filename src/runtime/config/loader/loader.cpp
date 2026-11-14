@@ -1,8 +1,4 @@
 module;
-#include "config_bootstrap.hpp"
-#include <cerrno>
-#include <climits>
-#include <cstdlib>
 #include <lua.h>
 
 module telar.runtime.config.loader;

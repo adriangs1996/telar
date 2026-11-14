@@ -1,8 +1,6 @@
 module;
 #include <ghostty/vt.h>
 
-#include "terminal/ghostty_grid.hpp"
-
 export module telar.runtime.terminal.osc_scanner;
 
 import std;
