@@ -1,16 +1,10 @@
 module;
 #include "telar_platform/trace_macro.hpp"
 
-#include <openssl/ssl.h>
-
-#include <openssl/crypto.h>
-#include <openssl/err.h>
-#include <openssl/pem.h>
-#include <openssl/x509v3.h>
-
 module telar.runtime.tls.interception;
 
 import telar.sys.socket;
+import telar.tls;
 
 namespace telar::runtime {
 

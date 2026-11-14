@@ -1,10 +1,8 @@
-module;
-#include <openssl/sha.h>
-
 module telar.cli.machine_ssh;
 
 import telar.cli.base.command_error;
 import telar.cli.control_session;
+import telar.platform.sha256;
 import telar.sys.posix;
 import telar.sys.process;
 

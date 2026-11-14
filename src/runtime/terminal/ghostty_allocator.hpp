@@ -2,7 +2,7 @@
 
 #include "tbc/view.hpp"
 #include "telar_base/memory/allocator.hpp"
-#include <ghostty/vt.h>
+#include "telar_ghostty/vt.hpp"
 
 namespace telar::runtime {
 

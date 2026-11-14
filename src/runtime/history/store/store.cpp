@@ -1,10 +1,10 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <sqlite3.h>
 
 module telar.runtime.history.store;
 
 import std;
+import telar.native.sqlite;
 import telar.tbc;
 
 namespace telar::runtime {

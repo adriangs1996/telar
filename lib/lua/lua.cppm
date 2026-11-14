@@ -258,13 +258,34 @@ export {
   using ::lua_Integer;
   using ::lua_State;
 
+  using ::lua_absindex;
+  using ::lua_checkstack;
+  using ::lua_createtable;
+  using ::lua_error;
   using ::lua_getfield;
   using ::lua_getglobal;
+  using ::lua_geti;
+  using ::lua_gettop;
+  using ::lua_pushboolean;
+  using ::lua_pushcclosure;
+  using ::lua_pushinteger;
+  using ::lua_pushlightuserdata;
   using ::lua_pushlstring;
+  using ::lua_pushnil;
+  using ::lua_pushvalue;
   using ::lua_rawgeti;
+  using ::lua_rawlen;
+  using ::lua_rawseti;
   using ::lua_setfield;
+  using ::lua_setglobal;
+  using ::lua_seti;
   using ::lua_settop;
+  using ::lua_tointegerx;
+  using ::lua_tolstring;
   using ::lua_touserdata;
+  using ::lua_type;
+  using ::luaL_error;
+  using ::luaL_loadbufferx;
   using ::luaL_ref;
   using ::luaL_unref;
 }
@@ -275,7 +296,12 @@ export {
 // macros are functions defined in lua.cpp, where the macros are.
 #define TELAR_LUA_CONSTANTS(X) \
   X(LUA_NOREF)                 \
-  X(LUA_REGISTRYINDEX)
+  X(LUA_OK)                    \
+  X(LUA_REGISTRYINDEX)         \
+  X(LUA_TBOOLEAN)              \
+  X(LUA_TFUNCTION)             \
+  X(LUA_TSTRING)               \
+  X(LUA_TTABLE)
 
 namespace telar::runtime::lua::captured {
 
@@ -285,12 +311,26 @@ namespace telar::runtime::lua::captured {
 }
 
 #undef LUA_NOREF
+#undef LUA_OK
 #undef LUA_REGISTRYINDEX
+#undef LUA_TBOOLEAN
+#undef LUA_TFUNCTION
+#undef LUA_TSTRING
+#undef LUA_TTABLE
 #undef lua_call
+#undef lua_isfunction
+#undef lua_isnil
+#undef lua_istable
 #undef lua_newtable
+#undef lua_pcall
 #undef lua_pop
+#undef lua_pushcfunction
+#undef lua_pushliteral
 #undef lua_remove
 #undef lua_replace
+#undef lua_tointeger
+#undef lua_tostring
+#undef lua_upvalueindex
 
 #define TELAR_LUA_CONSTANT(name) inline constexpr auto name = telar::runtime::lua::captured::name##_;
 
@@ -298,8 +338,20 @@ export {
   TELAR_LUA_CONSTANTS(TELAR_LUA_CONSTANT)
 
   void lua_call(lua_State* state, int arguments, int results);
+  bool lua_isfunction(lua_State* state, int index);
+  bool lua_isnil(lua_State* state, int index);
+  bool lua_istable(lua_State* state, int index);
   void lua_newtable(lua_State* state);
+  int lua_pcall(lua_State* state, int arguments, int results, int handler);
   void lua_pop(lua_State* state, int count);
+  void lua_pushcfunction(lua_State* state, lua_CFunction function);
+  const char* lua_pushliteral(lua_State* state, const char* text);
   void lua_remove(lua_State* state, int index);
   void lua_replace(lua_State* state, int index);
+  lua_Integer lua_tointeger(lua_State* state, int index);
+  const char* lua_tostring(lua_State* state, int index);
+
+  constexpr int lua_upvalueindex(int index) noexcept {
+    return LUA_REGISTRYINDEX - index;
+  }
 }

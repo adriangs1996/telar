@@ -1,11 +1,11 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <ghostty/vt.h>
 
 #include "telar_base/diagnostics/config.hpp"
 
 module telar.runtime.terminal.text_reader;
 
+import telar.ghostty.vt;
 import telar.runtime.terminal.grid;
 
 namespace telar::runtime {
@@ -1199,11 +1199,7 @@ namespace telar::runtime {
     checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_MODIFY_OTHER_KEYS_2, &screen.input_modes.modify_other_keys_2));
     GhosttyString pointer{};
 
-#if defined(GHOSTTY_TELAR_STATE_VERSION) && GHOSTTY_TELAR_STATE_VERSION >= 2
     checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_MOUSE_SHAPE_NAME, &pointer));
-#else
-    checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_MOUSE_SHAPE, &pointer));
-#endif
     static constexpr std::array<std::string_view, 34> shapes{
         "default",
         "context_menu",

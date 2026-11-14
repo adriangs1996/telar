@@ -1,12 +1,10 @@
-module;
-#include <openssl/sha.h>
-
 module telar.cli.project_setup;
 
 import telar.cli.base.command_error;
 import telar.cli.control_session;
 import telar.client;
 import telar.platform.error;
+import telar.platform.sha256;
 import telar.sys.posix;
 
 namespace telar::runtime::cli::pane_agents {

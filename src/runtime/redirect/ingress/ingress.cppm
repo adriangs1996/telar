@@ -1,11 +1,10 @@
 module;
 #include "tbc/annotations.hpp"
 
-#include <pcap/pcap.h>
-
 export module telar.runtime.redirect.ingress;
 
 import std;
+import telar.native.pcap;
 import telar.sys.socket;
 import telar.sys.posix;
 import telar.tbc;

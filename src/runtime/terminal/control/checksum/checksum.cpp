@@ -1,7 +1,6 @@
-module;
-#include <ghostty/vt.h>
-
 module telar.runtime.terminal.control.checksum;
+
+import telar.ghostty.vt;
 
 namespace telar::runtime::control {
 

@@ -179,9 +179,10 @@ El inventario contiene 300 headers vivos, cada uno con su motivo concreto:
   Los fixtures compartidos sin macros son interfaces de módulo
   (`runtime-test-fixtures`, `cli-test-check`, `gui-test-fixtures`,
   `gui-test-font-fixture`); sus importadores ya no reciben la biblioteca estándar
-  textual. `assertions.hpp` sigue textual porque también la usan unidades `.mm`. Quien use la API C de ghostty sigue incluyendo
-  `<ghostty/vt.h>`: sus `static inline` de dos fragmentos globales distintos solo
-  se fusionan contra una copia textual en la unidad importadora.
+  textual. `assertions.hpp` sigue textual porque también la usan unidades `.mm`. Ningún importador llama a los
+  `static inline` de libghostty-vt: no cruzan un import, así que `telar.ghostty.vt`
+  captura los modos que construye `ghostty_mode_new` y `telar.ghostty.wuffs` llama a
+  los ayudantes del códec PNG desde su `.cpp`.
 
 ### Un módulo dueño por header textual
 
@@ -205,9 +206,16 @@ módulo lo incluyen (las de implementación también, porque las macros no cruza
 import), y el dueño exporta sus nombres con `using ::…;`. Las macros que leen los
 importadores se capturan como constantes y las que tienen forma de función pasan a
 funciones del `.cpp` del dueño, como en `telar.sys.*`. Lua es de `telar.lua`,
-FreeType y HarfBuzz de `telar.gui.fonts.face` y `<ghostty/vt/unicode.h>` de
-`telar.ghostty.unicode`, en `lib/ghostty`, por debajo de `telar.config` y de la
-GUI. Los headers solo de dueño (`telar.wire.pane_io`,
+FreeType y HarfBuzz de `telar.gui.fonts.face`, OpenSSL de `telar.tls` (salvo
+`<openssl/sha.h>` y `<openssl/md5.h>`, de `telar.platform.sha256`), md4c de
+`telar.render.markdown`. Las cabeceras de libghostty-vt son de `lib/ghostty`
+(`telar.ghostty.unicode`, `.vt` y `.wuffs`), por debajo de `telar.config` y de la
+GUI, y las de las bibliotecas nativas del runtime (zlib, Brotli, zstd, nghttp2,
+libpcap y SQLite) de `lib/native`, un módulo por biblioteca. Las cabeceras
+textuales que no pueden importar (la frontera SIMD de `telar.runtime.terminal.control`)
+reciben libghostty-vt y zlib por `telar_ghostty/vt.hpp` y `telar_native/zlib.hpp`,
+cuyos dueños son `telar.ghostty.vt` y `telar.native.zlib`: el checker cuenta cada
+cabecera de `header_owners` como unidad de su dueño. Los headers solo de dueño (`telar.wire.pane_io`,
 `telar.runtime.terminal.control`, …) no contienen código propio: son el punto de
 entrada de esos headers para los módulos.
 

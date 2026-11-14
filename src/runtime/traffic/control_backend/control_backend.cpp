@@ -1,29 +1,13 @@
-module;
-#include <pcap/pcap.h>
-
-#include <brotli/decode.h>
-#include <zlib.h>
-#include <zstd.h>
-#if (!(defined(__APPLE__)))
-
-#include <openssl/err.h>
-
-#include <openssl/pem.h>
-
-#include <openssl/x509.h>
-#endif
-#include <brotli/encode.h>
-#include <nghttp2/nghttp2.h>
-#include <openssl/crypto.h>
-#include <openssl/err.h>
-#include <openssl/pem.h>
-#include <openssl/sha.h>
-#include <openssl/ssl.h>
-#include <openssl/x509v3.h>
-
 module telar.runtime.traffic.control_backend;
 
+import telar.native.brotli;
+import telar.native.nghttp2;
+import telar.native.pcap;
+import telar.native.zlib;
+import telar.native.zstd;
+import telar.platform.sha256;
 import telar.sys.socket;
+import telar.tls;
 
 namespace telar::runtime::traffic::control {
 

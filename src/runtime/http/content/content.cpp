@@ -1,7 +1,6 @@
-module;
-#include <nghttp2/nghttp2.h>
-
 module telar.runtime.http.content;
+
+import telar.native.nghttp2;
 
 namespace telar::runtime {
 

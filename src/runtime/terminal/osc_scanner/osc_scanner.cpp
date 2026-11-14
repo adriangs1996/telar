@@ -1,9 +1,9 @@
 module;
 #include "telar_base/diagnostics/config.hpp"
-#include <ghostty/vt.h>
 
 module telar.runtime.terminal.osc_scanner;
 
+import telar.ghostty.vt;
 import telar.runtime.terminal.grid;
 
 namespace telar::runtime {

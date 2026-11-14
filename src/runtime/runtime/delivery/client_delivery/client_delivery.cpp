@@ -1,12 +1,12 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <ghostty/vt.h>
-#include <zlib.h>
 
 #include "telar_base/diagnostics/config.hpp"
 
 module telar.runtime.runtime.delivery.client_delivery;
 
+import telar.ghostty.vt;
+import telar.native.zlib;
 import telar.sys.process;
 
 import telar.runtime.terminal.control;

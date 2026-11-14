@@ -1,10 +1,8 @@
-module;
-#include <brotli/decode.h>
-#include <brotli/encode.h>
-#include <zlib.h>
-#include <zstd.h>
-
 module telar.runtime.proxy.intercepted_relay;
+
+import telar.native.brotli;
+import telar.native.zlib;
+import telar.native.zstd;
 
 namespace telar::runtime {
 

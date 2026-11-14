@@ -1,11 +1,11 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <ghostty/vt.h>
 
 #include "telar_base/diagnostics/config.hpp"
 
 module telar.runtime.graphics.pane_media;
 
+import telar.ghostty.vt;
 import telar.sys.posix;
 
 namespace telar::runtime {

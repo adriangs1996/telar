@@ -925,3 +925,48 @@ namespace telar::runtime::proxy_trust {
   }
 
 }
+
+// The parentheses keep each name from expanding as the macro the body calls.
+void(OPENSSL_free)(void* pointer) {
+  OPENSSL_free(pointer);
+}
+
+long(SSL_CTX_set1_verify_cert_store)(SSL_CTX* context, X509_STORE* store) {
+  return SSL_CTX_set1_verify_cert_store(context, store);
+}
+
+long(SSL_CTX_set_min_proto_version)(SSL_CTX* context, int version) {
+  return SSL_CTX_set_min_proto_version(context, version);
+}
+
+long(SSL_CTX_set_mode)(SSL_CTX* context, long mode) {
+  return SSL_CTX_set_mode(context, mode);
+}
+
+long(SSL_CTX_set_session_cache_mode)(SSL_CTX* context, long mode) {
+  return SSL_CTX_set_session_cache_mode(context, mode);
+}
+
+long(SSL_add1_chain_cert)(SSL* ssl, X509* certificate) {
+  return SSL_add1_chain_cert(ssl, certificate);
+}
+
+void*(SSL_get_app_data)(const SSL* ssl) {
+  return SSL_get_app_data(ssl);
+}
+
+int(SSL_set_app_data)(SSL* ssl, void* data) {
+  return SSL_set_app_data(ssl, data);
+}
+
+long(SSL_set_tlsext_host_name)(SSL* ssl, const char* name) {
+  return SSL_set_tlsext_host_name(ssl, name);
+}
+
+int(sk_X509_OBJECT_num)(const stack_st_X509_OBJECT* objects) {
+  return sk_X509_OBJECT_num(objects);
+}
+
+X509_OBJECT*(sk_X509_OBJECT_value)(const stack_st_X509_OBJECT* objects, int index) {
+  return sk_X509_OBJECT_value(objects, index);
+}

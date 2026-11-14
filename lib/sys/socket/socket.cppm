@@ -59,6 +59,7 @@ export {
   using ::if_nametoindex;
   using ::ifaddrs;
   using ::ifreq;
+  using ::in6addr_loopback;
   using ::inet_ntop;
   using ::inet_pton;
 }

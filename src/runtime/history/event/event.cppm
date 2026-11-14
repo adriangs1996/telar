@@ -2,8 +2,6 @@ module;
 #include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
 
-#include <sqlite3.h>
-
 export module telar.runtime.history.event;
 
 import std;
@@ -14,6 +12,7 @@ export import telar.runtime.transport.connection;
 
 export import telar.runtime.diagnostics.operation;
 import telar.base.diagnostics;
+import telar.native.sqlite;
 import telar.wire.vocabulary;
 import telar.wire.agents;
 import telar.wire.history;

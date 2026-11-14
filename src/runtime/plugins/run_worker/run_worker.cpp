@@ -1,14 +1,10 @@
 module;
 #include "telar_platform/trace_macro.hpp"
 
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-
-#include <pcap/pcap.h>
-
 module telar.runtime.plugins.run_worker;
 
+import telar.lua;
+import telar.native.pcap;
 import telar.sys.posix;
 
 namespace telar::runtime::plugins {

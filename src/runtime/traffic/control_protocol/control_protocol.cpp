@@ -1,7 +1,6 @@
-module;
-#include <pcap/pcap.h>
-
 module telar.runtime.traffic.control_protocol;
+
+import telar.native.pcap;
 
 namespace telar::runtime::traffic {
 

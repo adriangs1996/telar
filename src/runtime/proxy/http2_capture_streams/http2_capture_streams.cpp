@@ -1,11 +1,11 @@
 module;
 #include "telar_platform/trace_macro.hpp"
 
-#include <brotli/decode.h>
-#include <zlib.h>
-#include <zstd.h>
-
 module telar.runtime.proxy.http2_capture_streams;
+
+import telar.native.brotli;
+import telar.native.zlib;
+import telar.native.zstd;
 
 namespace telar::runtime {
 

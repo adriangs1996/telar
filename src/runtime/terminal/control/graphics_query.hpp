@@ -10,10 +10,10 @@
 #include "graphics_payload.hpp"
 #include "reply.hpp"
 #include "telar_config/graphics/limits.hpp"
+#include "telar_native/zlib.hpp"
 #include "telar_platform/graphics/child_shared_memory.hpp"
 #include <cassert>
 #include <charconv>
-#include <zlib.h>
 
 namespace telar::runtime::control {
 

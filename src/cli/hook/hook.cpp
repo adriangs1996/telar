@@ -1,9 +1,8 @@
 module;
 #include "telar_platform/trace_macro.hpp"
 
-#include <openssl/md5.h>
-
 module telar.cli.hook;
+import telar.platform.sha256;
 import telar.sys.posix;
 
 namespace telar::runtime::cli::hooks {

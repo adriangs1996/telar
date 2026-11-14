@@ -1,8 +1,8 @@
 #pragma once
 
 #include "ghostty_handle.hpp"
+#include "telar_ghostty/vt.hpp"
 #include <cstdint>
-#include <ghostty/vt.h>
 #include <optional>
 #include <utility>
 

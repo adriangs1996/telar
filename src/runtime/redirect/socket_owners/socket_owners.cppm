@@ -1,15 +1,10 @@
 module;
 #include "tbc/annotations.hpp"
 
-#if defined(__APPLE__)
-
-#include <pcap/pcap.h>
-
-#endif
-
 export module telar.runtime.redirect.socket_owners;
 
 import std;
+import telar.native.pcap;
 import telar.sys.socket;
 import telar.sys.process;
 import telar.sys.posix;

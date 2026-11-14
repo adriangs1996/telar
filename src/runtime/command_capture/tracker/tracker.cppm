@@ -1,11 +1,11 @@
 module;
 #include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
-#include <ghostty/vt.h>
 
 export module telar.runtime.command_capture.tracker;
 
 import std;
+import telar.ghostty.vt;
 import telar.tbc;
 import telar.base.text;
 import telar.wire.vocabulary;

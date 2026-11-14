@@ -1,11 +1,10 @@
 module;
-#include <lua.h>
-
 #include "tbc/annotations.hpp"
 
 export module telar.config.client;
 
 import std;
+import telar.lua;
 import telar.tbc;
 export import telar.config.core;
 import telar.base.diagnostics;

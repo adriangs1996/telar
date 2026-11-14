@@ -2,13 +2,12 @@ module;
 #include "tbc/annotations.hpp"
 #include "telar_platform/trace_macro.hpp"
 
-#include <brotli/decode.h>
-#include <zlib.h>
-#include <zstd.h>
-
 export module telar.runtime.exchange_capture.pipeline;
 
 import std;
+import telar.native.brotli;
+import telar.native.zlib;
+import telar.native.zstd;
 import telar.tbc;
 
 export import telar.runtime.vocabulary.exchange;

@@ -310,15 +310,26 @@ def module_of(text):
     return match[1] if match else None
 
 
-def textual_include_sites(files, macro_headers, owners, libraries):
+def unit_modules(files, owners):
+    """The module each source belongs to: the one a unit declares, and for a header listed in
+    `owners` the module of its owner interface, since only that module includes it."""
+    modules = {name: module_of((ROOT / name).read_text(errors='replace'))
+               for name in files if name.endswith(SOURCE_SUFFIXES)}
+    for owner, headers in owners.items():
+        modules.update({header: modules.get(owner) for header in headers})
+
+    return modules
+
+
+def textual_include_sites(files, macro_headers, owners, libraries, modules):
     """The includes rule 5 does not excuse, by file.
 
     lib/sys, Qt/moc adapters and C or Objective-C(++) sources may include, and so may the headers
     they reach: those headers stay textual because they cannot import. An owner module may include
     the headers it owns that cross that boundary, and the units of the module that `libraries`
-    names for a third-party header may include it. Any file may include a macro header or a
-    generated `.inc` data fragment, which the build writes outside the tree. Tests and tools are
-    out of the rule.
+    names for a third-party header may include it, the headers that module owns included. Any
+    file may include a macro header or a generated `.inc` data fragment, which the build writes
+    outside the tree. Tests and tools are out of the rule.
     """
     sources = {name: (ROOT / name).read_text(errors='replace') for name in files
                if name.endswith(SOURCE_SUFFIXES) and not re.search(r'/(tests|tools)/', name)}
@@ -336,7 +347,7 @@ def textual_include_sites(files, macro_headers, owners, libraries):
 
     def excused(unit, spelling):
         if spelling in libraries:
-            return module_of(sources[unit]) == libraries[spelling]
+            return modules.get(unit) == libraries[spelling]
 
         header = resolve(unit, spelling)
         if header is None and spelling.endswith('.inc') and not spelling.startswith('<'):
@@ -363,11 +374,9 @@ def check_includes(files, allowed, macro_headers, owners, libraries):
     `libraries` maps each third-party header to the one module whose units include it."""
     errors = []
 
-    included = set()
-    for name in files:
-        if name.endswith(('.cppm', '.cpp')):
-            text = (ROOT / name).read_text(errors='replace')
-            included |= {(module_of(text), spelling) for spelling in includes_of(text)}
+    modules = unit_modules(files, owners)
+    included = {(module, spelling) for name, module in modules.items() if module
+                for spelling in includes_of((ROOT / name).read_text(errors='replace'))}
     errors += [f'{owner} owns {spelling} but does not include it'
                for spelling, owner in sorted(libraries.items()) if (owner, spelling) not in included]
 
@@ -377,7 +386,7 @@ def check_includes(files, allowed, macro_headers, owners, libraries):
         elif includes_of((ROOT / header).read_text()):
             errors.append(f'macro header {header} includes other headers')
 
-    sites = textual_include_sites(files, set(macro_headers), owners, libraries)
+    sites = textual_include_sites(files, set(macro_headers), owners, libraries, modules)
 
     for name in sorted(sites.keys() | allowed.keys()):
         found, listed = sites.get(name, set()), set(allowed.get(name, ()))

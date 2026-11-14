@@ -1,9 +1,9 @@
 module;
-#include <ghostty/vt.h>
-
 #include "telar_base/diagnostics/config.hpp"
 
 module telar.runtime.terminal.graphics_storage;
+
+import telar.ghostty.vt;
 
 namespace telar::runtime {
 

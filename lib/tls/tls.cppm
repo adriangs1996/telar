@@ -2,6 +2,8 @@ module;
 #include "tbc/annotations.hpp"
 
 #include <openssl/crypto.h>
+#include <openssl/err.h>
+#include <openssl/pem.h>
 #include <openssl/ssl.h>
 #include <openssl/x509.h>
 
@@ -464,4 +466,137 @@ export {
     };
 
   }
+}
+
+// OpenSSL's headers stay in this module's global fragments only; importers reach the library
+// through these declarations instead of including them.
+export {
+  using ::ASN1_TIME;
+  using ::BIO;
+  using ::SSL;
+  using ::SSL_CTX;
+  using ::X509;
+  using ::X509_STORE;
+
+  using ::ASN1_TIME_compare;
+  using ::ASN1_TIME_free;
+  using ::ASN1_TIME_set;
+  using ::BIO_eof;
+  using ::BIO_free;
+  using ::BIO_new_file;
+  using ::d2i_X509;
+  using ::ERR_clear_error;
+  using ::i2d_X509;
+  using ::PEM_read_bio_X509_AUX;
+  using ::SSL_CTX_new;
+  using ::SSL_CTX_set_alpn_select_cb;
+  using ::SSL_CTX_set_num_tickets;
+  using ::SSL_CTX_set_options;
+  using ::SSL_CTX_set_verify;
+  using ::SSL_do_handshake;
+  using ::SSL_get0_alpn_selected;
+  using ::SSL_get0_param;
+  using ::SSL_get_error;
+  using ::SSL_new;
+  using ::SSL_pending;
+  using ::SSL_read_ex;
+  using ::SSL_set1_host;
+  using ::SSL_set_accept_state;
+  using ::SSL_set_alpn_protos;
+  using ::SSL_set_connect_state;
+  using ::SSL_set_fd;
+  using ::SSL_shutdown;
+  using ::SSL_use_certificate;
+  using ::SSL_use_PrivateKey;
+  using ::SSL_write_ex;
+  using ::TLS_client_method;
+  using ::TLS_server_method;
+  using ::X509_check_trust;
+  using ::X509_cmp;
+  using ::X509_free;
+  using ::X509_get0_notAfter;
+  using ::X509_get_default_cert_file_env;
+  using ::X509_OBJECT_get0_X509;
+  using ::X509_OBJECT_get_type;
+  using ::X509_STORE_add_cert;
+  using ::X509_STORE_free;
+  using ::X509_STORE_get0_objects;
+  using ::X509_STORE_new;
+  using ::X509_VERIFY_PARAM_set1_ip_asc;
+
+  using ::X509_LU_X509;
+}
+
+// Macros do not cross an import. Each constant the tree reads is captured while the headers still
+// define it, undefined, and exported under its own name. The function-like macros are functions
+// defined in tls.cpp, where the macros are.
+#define TELAR_TLS_CONSTANTS(X)           \
+  X(SSL_ERROR_WANT_READ)                 \
+  X(SSL_ERROR_WANT_WRITE)                \
+  X(SSL_ERROR_ZERO_RETURN)               \
+  X(SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER) \
+  X(SSL_MODE_ENABLE_PARTIAL_WRITE)       \
+  X(SSL_OP_IGNORE_UNEXPECTED_EOF)        \
+  X(SSL_OP_NO_COMPRESSION)               \
+  X(SSL_OP_NO_RENEGOTIATION)             \
+  X(SSL_SESS_CACHE_OFF)                  \
+  X(SSL_TLSEXT_ERR_ALERT_FATAL)          \
+  X(SSL_TLSEXT_ERR_NOACK)                \
+  X(SSL_TLSEXT_ERR_OK)                   \
+  X(SSL_VERIFY_PEER)                     \
+  X(TLS1_2_VERSION)                      \
+  X(X509_TRUST_REJECTED)                 \
+  X(X509_TRUST_SSL_SERVER)
+
+namespace telar::runtime::tls::captured {
+
+#define TELAR_TLS_CAPTURE(name) inline constexpr auto name##_ = name;
+  TELAR_TLS_CONSTANTS(TELAR_TLS_CAPTURE)
+
+}
+
+#undef SSL_ERROR_WANT_READ
+#undef SSL_ERROR_WANT_WRITE
+#undef SSL_ERROR_ZERO_RETURN
+#undef SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER
+#undef SSL_MODE_ENABLE_PARTIAL_WRITE
+#undef SSL_OP_IGNORE_UNEXPECTED_EOF
+#undef SSL_OP_NO_COMPRESSION
+#undef SSL_OP_NO_RENEGOTIATION
+#undef SSL_SESS_CACHE_OFF
+#undef SSL_TLSEXT_ERR_ALERT_FATAL
+#undef SSL_TLSEXT_ERR_NOACK
+#undef SSL_TLSEXT_ERR_OK
+#undef SSL_VERIFY_PEER
+#undef TLS1_2_VERSION
+#undef X509_TRUST_REJECTED
+#undef X509_TRUST_SSL_SERVER
+#undef OPENSSL_free
+#undef SSL_CTX_set1_verify_cert_store
+#undef SSL_CTX_set_min_proto_version
+#undef SSL_CTX_set_mode
+#undef SSL_CTX_set_session_cache_mode
+#undef SSL_add1_chain_cert
+#undef SSL_get_app_data
+#undef SSL_set_app_data
+#undef SSL_set_tlsext_host_name
+#undef sk_X509_OBJECT_num
+#undef sk_X509_OBJECT_value
+
+#define TELAR_TLS_CONSTANT(name) inline constexpr auto name = telar::runtime::tls::captured::name##_;
+
+export {
+  TELAR_TLS_CONSTANTS(TELAR_TLS_CONSTANT)
+
+  void OPENSSL_free(void* pointer);
+  long SSL_CTX_set1_verify_cert_store(SSL_CTX* context, X509_STORE* store);
+  long SSL_CTX_set_min_proto_version(SSL_CTX* context, int version);
+  long SSL_CTX_set_mode(SSL_CTX* context, long mode);
+  long SSL_CTX_set_session_cache_mode(SSL_CTX* context, long mode);
+  long SSL_add1_chain_cert(SSL* ssl, X509* certificate);
+  void* SSL_get_app_data(const SSL* ssl);
+  int SSL_set_app_data(SSL* ssl, void* data);
+  long SSL_set_tlsext_host_name(SSL* ssl, const char* name);
+  int sk_X509_OBJECT_num(const stack_st_X509_OBJECT* objects);
+  X509_OBJECT* sk_X509_OBJECT_value(const stack_st_X509_OBJECT* objects, int index);
 }

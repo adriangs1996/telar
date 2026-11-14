@@ -30,6 +30,39 @@ void(lua_replace)(lua_State* state, int index) {
   lua_replace(state, index);
 }
 
+bool(lua_isfunction)(lua_State* state, int index) {
+  return lua_isfunction(state, index);
+}
+
+bool(lua_isnil)(lua_State* state, int index) {
+  return lua_isnil(state, index);
+}
+
+bool(lua_istable)(lua_State* state, int index) {
+  return lua_istable(state, index);
+}
+
+int(lua_pcall)(lua_State* state, int arguments, int results, int handler) {
+  return lua_pcall(state, arguments, results, handler);
+}
+
+void(lua_pushcfunction)(lua_State* state, lua_CFunction function) {
+  lua_pushcfunction(state, function);
+}
+
+// lua_pushliteral pastes "" before a literal; the text here is already a pointer.
+auto(lua_pushliteral)(lua_State* state, const char* text) -> const char* {
+  return lua_pushstring(state, text);
+}
+
+lua_Integer(lua_tointeger)(lua_State* state, int index) {
+  return lua_tointeger(state, index);
+}
+
+auto(lua_tostring)(lua_State* state, int index) -> const char* {
+  return lua_tostring(state, index);
+}
+
 namespace telar::runtime::lua {
   namespace {
 

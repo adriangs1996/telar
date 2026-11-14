@@ -1,12 +1,6 @@
-module;
-#if defined(__APPLE__)
-
-#include <pcap/pcap.h>
-
-#endif
-
 module telar.runtime.redirect.socket_owners;
 
+import telar.native.pcap;
 import telar.sys.socket;
 import telar.sys.process;
 

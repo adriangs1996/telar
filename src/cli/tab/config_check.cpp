@@ -1,8 +1,3 @@
-module;
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-
 module telar.cli.tab;
 
 import std;

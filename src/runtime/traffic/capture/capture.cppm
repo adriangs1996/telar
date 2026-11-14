@@ -1,9 +1,7 @@
-module;
-#include <pcap/pcap.h>
-
 export module telar.runtime.traffic.capture;
 
 import std;
+import telar.native.pcap;
 import telar.sys.process;
 import telar.sys.posix;
 

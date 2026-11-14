@@ -1,13 +1,13 @@
 module;
 #include "tbc/annotations.hpp"
 #include "telar_platform/trace_macro.hpp"
-#include <ghostty/vt.h>
 
 #include "telar_base/diagnostics/config.hpp"
 
 export module telar.runtime.observation.processor;
 
 import std;
+import telar.ghostty.vt;
 import telar.sys.posix;
 import telar.tbc;
 

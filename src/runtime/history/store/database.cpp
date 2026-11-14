@@ -1,9 +1,7 @@
-module;
-#include <sqlite3.h>
-
 module telar.runtime.history.store;
 
 import std;
+import telar.native.sqlite;
 import telar.sys.posix;
 
 import telar.runtime.platform.descriptor_path;

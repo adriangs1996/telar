@@ -1,9 +1,7 @@
-module;
-#include <openssl/sha.h>
-
 module telar.git;
 
 import std;
+import telar.platform.sha256;
 import telar.sys.posix;
 
 namespace telar::git {
