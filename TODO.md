@@ -473,10 +473,11 @@ Cada tarea empieza localizando todas las copias, crea un módulo con una interfa
 - **Decidido (librerías de terceros):** cada librería externa (OpenSSL, ghostty, freetype, brotli, pcap, nghttp2, xcb, wayland, md4c…) se incluye solo en el fragmento global de un módulo dueño registrado en `modules.json`, y el resto importa ese módulo. Subtarea **f**: mover cada include de terceros a su dueño. Quedan como excepción de la regla 5 el linter de TBC (herramienta Clang sin módulos, 73 includes de Clang/LLVM) y los fragmentos de datos `.inc` generados.
 - **Qué hace:** la libc estándar pasa a `import std;` o `import std.compat;` (está en el toolchain y hoy nadie lo usa), las cabeceras del proyecto al módulo dueño y POSIX/Apple a `telar.sys.*`. Cada subtarea borra sus entradas de la allowlist de P2.3.
 
-### [ ] P6.6 · Los hubs dejan de ser dueños textuales
+### [x] P6.6 · Los hubs dejan de ser dueños textuales
 - **Depende de:** P4.2a, P4.3a, P4.4a
 - **Toca:** `base.memory`, `base.text`, `base.diagnostics` y `telar.config`, que incluyen entre 7 y 20 cabeceras de C++ en su fragmento global por compartir cabeceras con Objective-C++ y Qt.
 - **Qué hace:** lo que cruza a `.mm` y a Qt se reduce a una cabecera C o de tipos mínima. El resto pasa a código de módulo con `import std`.
+- **Resultado:** `be35fa9ba`. Los fragmentos globales de `base.memory.*`, `base.text` y `base.diagnostics` se quedan sin cabeceras estándar de C++ (`import std`); `TimedScope` y `constantTimeEqual` pasan a código de módulo (`constant_time.hpp` se borra) y `<algorithm>` sale de cuatro cabeceras compartidas. El checker ya no exime a los módulos dueños de "import std instead". `telar.config` ya no tenía cabeceras de C++, solo C (P6.4/P6.5). Medido en líneas preprocesadas del fragmento global: las 6 unidades de `base` de 215 869 a 81 257, `timing.hpp` de 47 961 a 662 y `allocator.hpp` (que carga cada adaptador Qt, `.mm` y cabecera textual del runtime) de 54 048 a 30 442, que no baja más porque Qt y la CLI nombran `Vector`, `String`, `Owned` y `SynchronizedAllocator`. Allowlist de includes: 3056.
 
 ### [x] P6.7 · Cabeceras pesadas que convierten módulos pequeños en sumideros
 - **Depende de:** P1.2
