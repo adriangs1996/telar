@@ -98,7 +98,7 @@ telar.runtime.config.loader
 telar.runtime.diagnostics.operation
 telar.runtime.diagnostics.runtime_counters
 telar.runtime.editors.remote_editor
-telar.runtime.exchange_capture.exchange
+telar.runtime.vocabulary.exchange
 telar.runtime.exchange_capture.pipeline
 telar.runtime.exchange_capture.producer
 telar.runtime.execution.execution
@@ -118,7 +118,7 @@ telar.runtime.model.client_layouts
 telar.runtime.model.slot_store
 telar.runtime.observation.processor
 telar.runtime.paths.query_task
-telar.runtime.persistence.launch_record
+telar.runtime.model.launch_record
 telar.runtime.persistence.session_store
 telar.runtime.platform.background_executor
 telar.runtime.platform.descriptor_path

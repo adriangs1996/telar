@@ -9,7 +9,7 @@ module;
 #include <cstdint>
 #include <cstring>
 
-export module telar.runtime.exchange_capture.exchange;
+export module telar.runtime.vocabulary.exchange;
 
 import std;
 

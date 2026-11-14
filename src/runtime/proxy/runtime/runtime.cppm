@@ -60,7 +60,7 @@ export module telar.runtime.proxy.runtime;
 
 import std;
 
-export import telar.runtime.exchange_capture.exchange;
+export import telar.runtime.vocabulary.exchange;
 export import telar.runtime.exchange_capture.pipeline;
 export import telar.runtime.exchange_capture.producer;
 export import telar.runtime.proxy.intercepted_relay;

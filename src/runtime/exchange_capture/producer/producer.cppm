@@ -25,7 +25,7 @@ export import telar.base.memory.allocators;
 export import telar.base.memory.containers;
 export import telar.base.memory.sensitive;
 
-export import telar.runtime.exchange_capture.exchange;
+export import telar.runtime.vocabulary.exchange;
 export import telar.runtime.http.content;
 
 export import telar.base.text;

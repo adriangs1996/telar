@@ -2152,7 +2152,7 @@
     "tbc/view.hpp",
     "telar_platform/trace_macro.hpp"
   ],
-  "src/runtime/exchange_capture/exchange/exchange.cppm": [
+  "src/runtime/vocabulary/exchange/exchange.cppm": [
     "<cassert>",
     "<cstddef>",
     "<cstdint>",
@@ -2523,7 +2523,7 @@
     "tbc/view.hpp",
     "telar_platform/trace_macro.hpp"
   ],
-  "src/runtime/persistence/launch_record/launch_record.cppm": [
+  "src/runtime/model/launch_record/launch_record.cppm": [
     "<cstddef>",
     "<cstdint>",
     "<cstdio>",
