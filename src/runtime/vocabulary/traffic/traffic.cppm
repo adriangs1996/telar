@@ -1,23 +1,25 @@
 module;
 #include "tbc/view.hpp"
-#include <cstdio>
-#include <cstdlib>
-#include <new>
 
-#include <cstddef>
+#include <cerrno>
 #include <cstdint>
+#include <limits.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/un.h>
+#include <unistd.h>
 
-#include <cassert>
-#include <cstring>
-
-export module telar.runtime.plugins.protocol;
+export module telar.runtime.vocabulary.traffic;
 
 import std;
 
 export import telar.plugins;
-
 export import telar.runtime.exchange_capture.exchange;
-import telar.base.diagnostics;
+export import telar.runtime.vocabulary.frames;
+
+export import telar.platform.error;
+import telar.platform.net;
+import telar.platform.primitives;
 import telar.wire.vocabulary;
 
 // Interface: plugins/effects.cppm
@@ -79,225 +81,6 @@ export {
       std::int64_t started_at_ms = 0;
       std::optional<HalfView> request;
       std::optional<HalfView> response;
-    };
-
-  }
-}
-
-// Interface: plugins/frame_output.cppm
-export {
-  namespace telar::runtime::plugins {
-
-    template <typename Output>
-    concept FrameOutput = requires(Output& output, std::span<const Byte> bytes, std::string_view text) {
-      { output.integer(std::uint64_t{}) } -> std::same_as<void>;
-      { output.integer(std::uint32_t{}) } -> std::same_as<void>;
-      { output.integer(std::uint16_t{}) } -> std::same_as<void>;
-      { output.integer(Byte{}) } -> std::same_as<void>;
-      { output.tag(std::byte{}) } -> std::same_as<void>;
-      { output.timestamp(std::int64_t{}) } -> std::same_as<void>;
-      { output.boolean(false) } -> std::same_as<void>;
-      { output.bytes(bytes) } -> std::same_as<void>;
-      { output.text(text) } -> std::same_as<void>;
-    };
-
-  }
-}
-
-// Interface: plugins/frame_reader.cppm
-export {
-  namespace telar::runtime::plugins {
-
-    // Reads fields from a frame, region `a`; the bytes and text it hands out view that frame.
-    class FrameReader {
-    public:
-      inline explicit FrameReader(tbc::view<std::span<const Byte>, tbc::lt::a> input) noexcept
-          : remaining_(input) {}
-
-      template <std::unsigned_integral Integer>
-      inline Integer integer() {
-        return LittleEndian<Integer>::decode(remaining_);
-      }
-
-      inline std::int64_t timestamp() {
-        return std::bit_cast<std::int64_t>(integer<std::uint64_t>());
-      }
-
-      inline bool boolean() {
-        return BoolByte::decode(remaining_);
-      }
-
-      template <typename Enum>
-        requires std::is_enum_v<Enum>
-      Enum tag(Enum maximum) {
-        const auto value = integer<Byte>();
-        if (value > static_cast<Byte>(maximum)) {
-          throw EncodingError{"Unknown tap enumeration value"};
-        }
-
-        return static_cast<Enum>(value);
-      }
-
-      template <typename Enum>
-        requires std::is_enum_v<Enum>
-      void require(Enum expected) {
-        if (integer<Byte>() != static_cast<Byte>(expected)) {
-          throw EncodingError{"Unexpected tap frame tag"};
-        }
-      }
-
-      inline tbc::view<std::span<const Byte>, tbc::lt::a> bytes() {
-        const auto length = integer<std::uint32_t>();
-        if (length > remaining_.size()) {
-          throw EncodingError{"Truncated tap field"};
-        }
-
-        const auto value = remaining_.first(length);
-
-        remaining_ = remaining_.subspan(length);
-        return value;
-      }
-
-      inline tbc::view<std::string_view, tbc::lt::a> text() {
-        const auto value = bytes();
-
-        return {reinterpret_cast<const char*>(value.data()), value.size()};
-      }
-
-      inline void finish() const {
-        if (!remaining_.empty()) {
-          throw EncodingError{"Trailing tap frame bytes"};
-        }
-      }
-
-    private:
-      tbc::view<std::span<const Byte>, tbc::lt::a> remaining_;
-    };
-
-  }
-}
-
-// Interface: plugins/frame_size.cppm
-export {
-  namespace telar::runtime::plugins {
-
-    class FrameSize {
-    public:
-      template <std::unsigned_integral Integer>
-      inline void integer(Integer) {
-        add(sizeof(Integer));
-      }
-
-      inline void timestamp(std::int64_t) {
-        integer(std::uint64_t{});
-      }
-
-      inline void boolean(bool) {
-        integer(Byte{});
-      }
-
-      template <typename Enum>
-        requires std::is_enum_v<Enum>
-      void tag(Enum) {
-        integer(Byte{});
-      }
-
-      inline void bytes(std::span<const Byte> value) {
-        if (value.size() > UINT32_MAX) {
-          throw EncodingError{"Tap field exceeds its frame buffer"};
-        }
-
-        integer(std::uint32_t{});
-        add(value.size());
-      }
-
-      inline void text(std::string_view value) {
-        bytes({reinterpret_cast<const Byte*>(value.data()), value.size()});
-      }
-
-      inline std::size_t finish() const noexcept {
-        return size_;
-      }
-
-    private:
-      inline void add(std::size_t count) {
-        size_ = checkedWireSize(size_, count);
-      }
-
-      std::size_t size_ = 0;
-    };
-
-    static_assert(FrameOutput<FrameSize>);
-
-  }
-}
-
-// Interface: plugins/frame_writer.cppm
-export {
-  namespace telar::runtime::plugins {
-
-    // Writes fields into a caller's buffer, region `a`, and hands back the part written.
-    class FrameWriter {
-    public:
-      inline explicit FrameWriter(tbc::view<std::span<Byte>, tbc::lt::a> output) noexcept
-          : output_(output),
-            remaining_(output) {}
-
-      template <std::unsigned_integral Integer>
-      inline void integer(Integer value) {
-        LittleEndian<Integer>::encode(value, remaining_);
-      }
-
-      inline void timestamp(std::int64_t value) {
-        integer(std::bit_cast<std::uint64_t>(value));
-      }
-
-      inline void boolean(bool value) {
-        BoolByte::encode(value, remaining_);
-      }
-
-      template <typename Enum>
-        requires std::is_enum_v<Enum>
-      void tag(Enum value) {
-        integer(static_cast<Byte>(value));
-      }
-
-      inline void bytes(std::span<const Byte> value) {
-        if (value.size() > UINT32_MAX || remaining_.size() < sizeof(std::uint32_t) || value.size() > remaining_.size() - sizeof(std::uint32_t)) {
-          throw EncodingError{"Tap field exceeds its frame buffer"};
-        }
-
-        integer(static_cast<std::uint32_t>(value.size()));
-        if (!value.empty()) {
-          std::memcpy(remaining_.data(), value.data(), value.size());
-        }
-
-        remaining_ = remaining_.subspan(value.size());
-      }
-
-      inline void text(std::string_view value) {
-        bytes({reinterpret_cast<const Byte*>(value.data()), value.size()});
-      }
-
-      inline void append(std::span<const Byte> value) {
-        if (value.size() > remaining_.size()) {
-          throw EncodingError{"Tap data exceeds its frame buffer"};
-        }
-
-        if (!value.empty()) {
-          std::memcpy(remaining_.data(), value.data(), value.size());
-        }
-
-        remaining_ = remaining_.subspan(value.size());
-      }
-
-      inline tbc::view<std::span<const Byte>, tbc::lt::a> finish() const noexcept {
-        return output_.first(output_.size() - remaining_.size());
-      }
-
-    private:
-      tbc::view<std::span<Byte>, tbc::lt::a> output_;
-      tbc::view<std::span<Byte>, tbc::lt::a> remaining_;
     };
 
   }
@@ -498,6 +281,101 @@ export {
         return half;
       }
     };
+
+  }
+}
+
+// Interface: plugins/service_spec.cppm
+export {
+  namespace telar::runtime::plugins {
+
+    struct ServiceSpec {
+      std::uint8_t package_index = 0;
+      std::uint64_t plugin_id = 0;
+      PackageDigest digest{};
+      std::uint64_t generation = 0;
+      FixedText<PackageLimits::id_bytes> name;
+      FixedText<PATH_MAX> entry;
+      Capabilities declared;
+      Capabilities granted;
+      std::shared_ptr<std::atomic<bool>> permission;
+
+      inline bool allows(Capability capability) const noexcept {
+        return authorized() && declared.contains(capability) && granted.contains(capability);
+      }
+
+      inline bool authorized() const noexcept {
+        return !permission || permission->load(std::memory_order_acquire);
+      }
+
+      // The capabilities that give a plugin the traffic bridge.
+      static constexpr std::array traffic_capabilities{Capability::traffic_observe, Capability::traffic_intercept, Capability::traffic_control, Capability::traffic_record};
+
+      inline bool traffic() const noexcept {
+        return std::ranges::any_of(traffic_capabilities, [&](Capability capability) {
+          return allows(capability);
+        });
+      }
+
+      inline bool stillAuthorized(Capabilities current) const noexcept {
+        return current.containsAll(declared.intersection(granted));
+      }
+    };
+
+  }
+}
+
+// Interface: traffic/connection.cppm
+export {
+  namespace telar::runtime::traffic {
+
+    inline FileDescriptor connect(std::string_view path) {
+      sockaddr_un address{};
+      if (path.empty() || path.front() != '/' || path.size() >= sizeof(address.sun_path) || path.contains('\0')) {
+        throw std::invalid_argument{"Invalid traffic endpoint"};
+      }
+
+      std::ranges::copy(path, address.sun_path);
+      address.sun_family = AF_UNIX;
+      struct stat before{};
+      if (::lstat(address.sun_path, &before) != 0 || !S_ISSOCK(before.st_mode) || (before.st_mode & 0077) != 0) {
+        throw SystemError{"Traffic endpoint must be a private socket", EACCES};
+      }
+
+      FileDescriptor socket{::socket(AF_UNIX, SOCK_STREAM, 0)};
+      if (!socket) {
+        throw SystemError{"Create traffic connection"};
+      }
+
+      setCloseOnExec(socket.get());
+      suppressSocketSignals(socket.get());
+      if (::connect(socket.get(), reinterpret_cast<const sockaddr*>(&address), sizeof(address)) != 0) {
+        throw SystemError{"Connect traffic endpoint"};
+      }
+
+      struct stat after{};
+      const auto credentials = peerCredentials(socket.get());
+      if (!credentials || credentials->user != before.st_uid || (::geteuid() != 0 && credentials->user != ::geteuid()) || ::lstat(address.sun_path, &after) != 0 || before.st_dev != after.st_dev || before.st_ino != after.st_ino) {
+        throw SystemError{"Traffic endpoint identity changed", EACCES};
+      }
+
+      return socket;
+    }
+
+    inline void sendAll(int socket, std::span<const Byte> bytes) {
+      while (!bytes.empty()) {
+        const auto count = ::send(socket, bytes.data(), bytes.size(), 0);
+        if (count < 0 && errno == EINTR) {
+          continue;
+        }
+
+        if (count <= 0) {
+          throw SystemError{"Send traffic frame"};
+        }
+
+        bytes = bytes.subspan(static_cast<std::size_t>(count));
+      }
+    }
 
   }
 }

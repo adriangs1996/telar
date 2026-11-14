@@ -2487,19 +2487,6 @@
     "<cstddef>",
     "<cstdint>"
   ],
-  "src/runtime/http1/intercepted_relay/intercepted_relay.cppm": [
-    "<brotli/decode.h>",
-    "<brotli/encode.h>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>",
-    "<zlib.h>",
-    "<zstd.h>",
-    "tbc/view.hpp"
-  ],
   "src/runtime/http2/direction_observer/direction_observer.cppm": [
     "<cstddef>",
     "<cstdint>",
@@ -2866,16 +2853,6 @@
     "tbc/view.hpp",
     "telar_platform/descriptor_path.hpp"
   ],
-  "src/runtime/plugins/protocol/protocol.cppm": [
-    "<cassert>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>",
-    "tbc/view.hpp"
-  ],
   "src/runtime/plugins/run_worker/run_worker.cppm": [
     "<arpa/inet.h>",
     "<cassert>",
@@ -2942,7 +2919,6 @@
     "<dirent.h>",
     "<fcntl.h>",
     "<lauxlib.h>",
-    "<limits.h>",
     "<lua.h>",
     "<lualib.h>",
     "<new>",
@@ -3017,6 +2993,19 @@
     "<zstd.h>",
     "tbc/view.hpp",
     "telar_platform/trace_macro.hpp"
+  ],
+  "src/runtime/proxy/intercepted_relay/intercepted_relay.cppm": [
+    "<brotli/decode.h>",
+    "<brotli/encode.h>",
+    "<cstddef>",
+    "<cstdint>",
+    "<cstdio>",
+    "<cstdlib>",
+    "<cstring>",
+    "<new>",
+    "<zlib.h>",
+    "<zstd.h>",
+    "tbc/view.hpp"
   ],
   "src/runtime/proxy/relay_direction/relay_direction.cppm": [
     "<arpa/inet.h>",
@@ -3667,9 +3656,7 @@
     "<pthread.h>",
     "<stdlib.h>",
     "<sys/socket.h>",
-    "<sys/stat.h>",
     "<sys/types.h>",
-    "<sys/un.h>",
     "<unistd.h>"
   ],
   "src/runtime/traffic/capture_analysis/capture_analysis.cppm": [
@@ -3771,6 +3758,20 @@
     "<cstring>",
     "<new>",
     "<unistd.h>"
+  ],
+  "src/runtime/vocabulary/frames/frames.cppm": [
+    "<cstdint>",
+    "tbc/view.hpp"
+  ],
+  "src/runtime/vocabulary/traffic/traffic.cppm": [
+    "<cerrno>",
+    "<cstdint>",
+    "<limits.h>",
+    "<sys/socket.h>",
+    "<sys/stat.h>",
+    "<sys/un.h>",
+    "<unistd.h>",
+    "tbc/view.hpp"
   ],
   "src/runtime/workspaces/git_probe/git_probe.cppm": [
     "<cassert>",

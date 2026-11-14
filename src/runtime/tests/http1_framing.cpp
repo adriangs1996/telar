@@ -9,7 +9,7 @@ static_assert(true);
 
 import std;
 import telar.runtime.http1.head;
-import telar.runtime.http1.intercepted_relay;
+import telar.runtime.proxy.intercepted_relay;
 
 struct Result {
   std::uint64_t length;

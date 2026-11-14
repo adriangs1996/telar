@@ -76,7 +76,7 @@ export import telar.runtime.platform.name_resolutions;
 
 export import telar.runtime.platform.private_tunnel;
 
-export import telar.runtime.plugins.protocol;
+export import telar.runtime.vocabulary.frames;
 
 export import telar.platform;
 export import telar.platform.error;

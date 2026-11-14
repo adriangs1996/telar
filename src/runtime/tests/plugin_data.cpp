@@ -13,7 +13,7 @@ static_assert(true);
 import std;
 import telar.base.memory.allocators;
 import telar.platform.primitives;
-import telar.runtime.plugins.protocol;
+import telar.runtime.vocabulary.traffic;
 import telar.plugins;
 import telar.vocabulary;
 

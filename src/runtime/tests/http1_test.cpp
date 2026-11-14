@@ -13,7 +13,7 @@ import telar.platform.primitives;
 import telar.runtime.tests.check;
 import telar.runtime.tests.test_byte_stream;
 import telar.runtime.http1.head;
-import telar.runtime.http1.intercepted_relay;
+import telar.runtime.proxy.intercepted_relay;
 import telar.runtime.proxy.runtime;
 
 using namespace telar;

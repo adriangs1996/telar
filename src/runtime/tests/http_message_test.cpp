@@ -16,7 +16,7 @@ import telar.base.memory.allocators;
 import telar.runtime.tests.check;
 import telar.runtime.tests.test_byte_stream;
 import telar.runtime.http.message;
-import telar.runtime.http1.intercepted_relay;
+import telar.runtime.proxy.intercepted_relay;
 
 using namespace telar;
 using namespace telar::runtime;

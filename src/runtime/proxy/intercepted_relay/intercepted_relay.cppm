@@ -14,7 +14,7 @@ module;
 #include <zlib.h>
 #include <zstd.h>
 
-export module telar.runtime.http1.intercepted_relay;
+export module telar.runtime.proxy.intercepted_relay;
 
 import std;
 

@@ -88,7 +88,6 @@ export module telar.runtime.traffic.control_backend;
 
 import std;
 
-export import telar.runtime.plugins.tap_configuration;
 export import telar.runtime.traffic.control_protocol;
 
 export import telar.runtime.platform.request_worker;
@@ -102,7 +101,7 @@ export import telar.platform.error;
 export import telar.platform.process;
 export import telar.platform.thread;
 
-export import telar.runtime.plugins.protocol;
+export import telar.runtime.vocabulary.traffic;
 export import telar.runtime.traffic.capture;
 
 export import telar.runtime.platform.launch_program;

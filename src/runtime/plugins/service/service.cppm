@@ -30,7 +30,7 @@ export module telar.runtime.plugins.service;
 
 import std;
 
-export import telar.runtime.plugins.protocol;
+export import telar.runtime.vocabulary.traffic;
 
 export import telar.plugins;
 export import telar.runtime.plugins.worker;
