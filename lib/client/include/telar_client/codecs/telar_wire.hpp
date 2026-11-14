@@ -1,6 +1,6 @@
 #pragma once
 
-#include "tbc/hot_path.hpp"
+#include "tbc/annotations.hpp"
 #include "tbc/view.hpp"
 
 #include <type_traits>
