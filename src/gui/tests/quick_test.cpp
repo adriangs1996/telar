@@ -41,7 +41,6 @@ static_assert(true);
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
 #include "telar_client/protocol/clients.hpp"
-#include "telar_client/protocol/history.hpp"
 #include "telar_client/protocol/runtime.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
@@ -178,6 +177,7 @@ import telar.base.text.utf8;
 import telar.plugins;
 import telar.gui.text.bounded_editor;
 import telar.gui.presentation.notification_center;
+import telar.wire.history;
 
 namespace telar::gui::test {
 

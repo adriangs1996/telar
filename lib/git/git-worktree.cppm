@@ -1,6 +1,3 @@
-module;
-#include <sys/stat.h>
-
 export module telar.git:worktree;
 
 import std;
@@ -8,6 +5,7 @@ import telar.base.memory.allocators;
 import telar.platform.primitives;
 import :format;
 import :objects;
+import telar.sys.posix;
 
 // The index (versions 2 to 4) and the two comparisons git status makes with
 // it: HEAD's tree against the index (staged) and the index against the

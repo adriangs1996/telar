@@ -1,6 +1,3 @@
-module;
-#include <sys/types.h>
-
 export module telar.platform.daemon;
 
 import std;
@@ -11,6 +8,7 @@ export import telar.platform.process;
 
 import telar.platform.error;
 import telar.platform.primitives;
+import telar.sys.posix;
 
 // Interface: telar_platform/daemon.cppm
 export {

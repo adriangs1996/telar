@@ -1,50 +1,19 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <new>
-#include <stdlib.h>
 
+#include <openssl/crypto.h>
 #include <openssl/err.h>
 #include <openssl/pem.h>
 #include <openssl/ssl.h>
 #include <openssl/x509v3.h>
-
-#include <arpa/inet.h>
-#include <cstddef>
-
-#include <cstdint>
-#include <cstring>
-
-#include <cstdlib>
-#include <ctime>
-
-#include <openssl/crypto.h>
-
-#include <cerrno>
-#include <cstdio>
-#include <fcntl.h>
-#include <limits.h>
-#include <sys/stat.h>
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <linux/fs.h>
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <sys/syscall.h>
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <unistd.h>
-#endif
-#include <unistd.h>
-
-#include "telar_platform/process_environment.h"
-
-#include <spawn.h>
-#include <sys/wait.h>
 
 module telar.tls;
 
 import std;
 import telar.sys.posix;
 import telar.tbc;
+import telar.sys.process;
+import telar.sys.socket;
 
 namespace telar::runtime {
 

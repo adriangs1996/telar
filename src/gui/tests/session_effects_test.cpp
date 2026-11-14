@@ -15,7 +15,6 @@ static_assert(true);
 #include "telar_client/codecs/telar_codec.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/protocol/agents.hpp"
 #include "telar_client/protocol/clients.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
 #include "telar_client/serializers/telar_frame.hpp"
@@ -59,6 +58,7 @@ import telar.gui.core.metrics;
 import telar.gui.platform.awake_clock;
 import telar.gui.presentation.frame_pacer;
 import telar.gui.presentation.notification_center;
+import telar.wire.agents;
 
 namespace {
 

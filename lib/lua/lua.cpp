@@ -1,27 +1,13 @@
 module;
-#include <cstddef>
-#include <cstdlib>
-#include <new>
-
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
-
-#include <cstring>
-#include <ctime>
-
-#include <cstdint>
-
-#include <cstdio>
-#include <limits.h>
-#include <sys/stat.h>
-
-#include <cmath>
 
 module telar.lua;
 
 import std;
 import telar.tbc;
+import telar.sys.posix;
 
 namespace telar::runtime::lua {
   namespace {

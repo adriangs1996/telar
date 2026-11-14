@@ -1,11 +1,8 @@
-module;
-#include <cinttypes>
-#include <cstdio>
-
 module telar.config.core;
 
 import std;
 import telar.tbc;
+import telar.sys.posix;
 
 namespace telar::runtime::config {
 
@@ -37,11 +34,11 @@ namespace telar::runtime::config {
       const auto* separator = entry.noun.empty() ? "" : " ";
 
       if (entry.requested) {
-        std::fprintf(stderr, "%" PRIu64 "%s%.*s; limit %" PRIu64 "\n", *entry.requested, separator, static_cast<int>(entry.noun.size()), entry.noun.data(), entry.value);
+        std::fprintf(stderr, "%llu%s%.*s; limit %llu\n", static_cast<unsigned long long>(*entry.requested), separator, static_cast<int>(entry.noun.size()), entry.noun.data(), static_cast<unsigned long long>(entry.value));
       } else if (entry.value == 0) {
         std::fputs("limit reached\n", stderr);
       } else {
-        std::fprintf(stderr, "limit %" PRIu64 "%s%.*s reached\n", entry.value, separator, static_cast<int>(entry.noun.size()), entry.noun.data());
+        std::fprintf(stderr, "limit %llu%s%.*s reached\n", static_cast<unsigned long long>(entry.value), separator, static_cast<int>(entry.noun.size()), entry.noun.data());
       }
     }
   }

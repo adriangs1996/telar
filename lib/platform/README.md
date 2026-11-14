@@ -8,14 +8,14 @@ family:
 | `telar.platform.error` | `SystemError` and the names the CLI prints for an errno |
 | `telar.platform.process` | `Command`, `CommandOutput`, `PipeProcess`, `PtyProcess`, `SpawnOptions`, executable paths and the login shell |
 | `telar.platform.thread` | starting, naming and identifying threads |
-| `telar.platform.fs` | private files and directories, descriptor-relative opening, bounded reads, atomic writes and temporary directories |
+| `telar.platform.fs` | private files and directories, descriptor-relative opening, bounded reads, atomic writes, temporary directories and the C `telarOpenDirectoryNoFollow` |
 | `telar.platform.paths` | the process environment, XDG directories, the runtime's socket and storage paths and its server options |
 | `telar.platform.daemon` | the runtime's background launch |
 | `telar.platform.events` | observation timestamps and deadlines |
 | `telar.platform.net` | nonblocking byte streams, socket addresses and options, peer credentials and `SocketStream` |
 | `telar.platform.sha256` | SHA-256 on OpenSSL, which its consumers link |
 | `telar.platform.graphics` | shared memory for images handed to the GUI |
-| `telar.platform.primitives` | the owner of the textual headers: owned descriptors, mapped regions, random bytes and debug tracing |
+| `telar.platform.primitives` | random bytes, debug tracing, and the owner of the textual headers for owned descriptors, mapped regions and graphics shared memory |
 
 There is no `telar.platform` module: import the family a file uses. Git checkout files and hardened git
 commands live in `telar.git.checkout`, in `lib/git/checkout`.

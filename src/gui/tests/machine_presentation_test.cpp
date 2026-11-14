@@ -15,8 +15,6 @@ static_assert(true);
 #include "telar_client/codecs/telar_codec.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/protocol/agents.hpp"
-#include "telar_client/protocol/layout.hpp"
 #include "telar_client/protocol/pane_io.hpp"
 #include "telar_client/protocol/runtime.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
@@ -53,6 +51,7 @@ import telar.gui.tests.agent_fixture;
 import telar.gui.tests.session_fixture;
 import telar.gui.layout.geometry;
 import telar.gui.application.session;
+import telar.wire.agents;
 import telar.wire.layout;
 import telar.wire.runtime;
 

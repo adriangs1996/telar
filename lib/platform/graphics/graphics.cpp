@@ -1,13 +1,7 @@
-module;
-#include <cstdio>
-#include <fcntl.h>
-#include <sys/mman.h>
-#include <sys/types.h>
-#include <unistd.h>
-
 module telar.platform.graphics;
 
 import std;
+import telar.sys.posix;
 
 namespace telar::runtime {
 

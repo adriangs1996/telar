@@ -1,84 +1,13 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
-
-#if (TELAR_DEBUG)
-#endif
-#if (TELAR_DEBUG)
-#endif
-
-#include "telar_platform/trace.hpp"
-#include <pthread.h>
-#if (TELAR_DEBUG)
-#include <cerrno>
-#endif
-#if (TELAR_DEBUG)
-#include <exception>
-#endif
-#if (TELAR_DEBUG)
-#include "telar_platform/file_descriptor.hpp"
-#endif
-#if (TELAR_DEBUG)
-#include <algorithm>
-#endif
-#if (TELAR_DEBUG)
-#include <array>
-#endif
-#if (TELAR_DEBUG)
-#include <fcntl.h>
-#endif
-#if (TELAR_DEBUG)
-#include <limits.h>
-#endif
-#if (TELAR_DEBUG)
-#include <string_view>
-#endif
-#if (TELAR_DEBUG)
-#include <sys/stat.h>
-#endif
-#if (TELAR_DEBUG)
-#include <cstdint>
-#endif
-#if (TELAR_DEBUG)
-#endif
-#if (TELAR_DEBUG)
-#include <unistd.h>
-#endif
-#if (TELAR_DEBUG)
-#include <atomic>
-#endif
-#if (TELAR_DEBUG)
-#include <condition_variable>
-#endif
-#if (TELAR_DEBUG)
-#include <cstdio>
-#endif
-#if (TELAR_DEBUG)
-#include <cstring>
-#endif
-#if (TELAR_DEBUG)
-#include <mutex>
-#endif
-
 #if TELAR_DEBUG
-#include <atomic>
-#include <condition_variable>
-#include <cstdio>
-#include <cstring>
-#include <fcntl.h>
-#include <mutex>
-
-#if (TELAR_DEBUG)
-#endif
-#if (TELAR_DEBUG)
-#endif
-
+// Outside the module: the sink imports telar.platform.fs and .thread, which import
+// telar.platform.primitives, whose interface declares these functions in the global module.
+import std;
 import telar.platform.error;
 import telar.platform.fs;
+import telar.platform.primitives;
 import telar.platform.thread;
-#if (TELAR_DEBUG)
-#endif
+import telar.sys.posix;
+import telar.sys.process;
 
 namespace telar::runtime::trace {
   namespace {
@@ -104,7 +33,7 @@ namespace telar::runtime::trace {
     bool writeAll(std::string_view bytes) noexcept {
       while (!bytes.empty()) {
         const auto count = ::write(sink.file.get(), bytes.data(), bytes.size());
-        if (count < 0 && errno == EINTR) {
+        if (count < 0 && sys::lastError() == EINTR) {
           continue;
         }
 
@@ -192,7 +121,7 @@ namespace telar::runtime::trace {
     auto parent = openPrivateParent(path);
     FileDescriptor file{::openat(parent.get(), std::strrchr(path, '/') + 1, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600)};
     if (!file) {
-      throw SystemError{"Create trace file", errno};
+      throw SystemError{"Create trace file", sys::lastError()};
     }
 
     sink.file = std::move(file);

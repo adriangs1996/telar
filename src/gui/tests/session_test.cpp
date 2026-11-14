@@ -16,11 +16,7 @@ static_assert(true);
 #include "telar_client/codecs/telar_codec.hpp"
 #include "telar_client/codecs/telar_value_codec.hpp"
 #include "telar_client/codecs/telar_wire.hpp"
-#include "telar_client/protocol/agents.hpp"
 #include "telar_client/protocol/clients.hpp"
-#include "telar_client/protocol/clipboard.hpp"
-#include "telar_client/protocol/history.hpp"
-#include "telar_client/protocol/layout.hpp"
 #include "telar_client/protocol/pane_io.hpp"
 #include "telar_client/protocol/runtime.hpp"
 #include "telar_client/serializers/telar_cells.hpp"
@@ -66,6 +62,7 @@ import telar.gui.history.browser;
 import telar.gui.input.copy_pointer;
 import telar.gui.input.key_encoder;
 import telar.gui.presentation.display_metrics;
+import telar.wire.agents;
 import telar.wire.clipboard;
 import telar.wire.history;
 import telar.wire.layout;

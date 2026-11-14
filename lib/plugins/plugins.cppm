@@ -1,9 +1,5 @@
 module;
 #include "tbc/annotations.hpp"
-#include <cstddef>
-#include <cstdint>
-
-#include <limits.h>
 
 export module telar.plugins;
 
@@ -21,6 +17,7 @@ import telar.platform.primitives;
 import telar.base.text;
 import telar.base.text.utf8;
 import telar.platform.error;
+import telar.sys.posix;
 
 // Interface: telar_plugins/action_protocol.cppm
 export {

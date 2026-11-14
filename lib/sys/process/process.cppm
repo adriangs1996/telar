@@ -47,6 +47,7 @@ export {
   using ::sigismember;
   using ::signal;
   using ::sigpending;
+  using ::sigprocmask;
   using ::sigset_t;
   using ::sigwait;
 
@@ -92,6 +93,7 @@ export {
   using ::pthread_create;
   using ::pthread_detach;
   using ::pthread_mutex_lock;
+  using ::pthread_join;
   using ::pthread_mutex_t;
   using ::pthread_mutex_unlock;
   using ::pthread_self;

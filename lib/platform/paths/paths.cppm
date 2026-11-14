@@ -1,8 +1,6 @@
 module;
 #include "tbc/annotations.hpp"
 
-#include <sys/un.h>
-
 export module telar.platform.paths;
 
 import std;
@@ -11,6 +9,7 @@ import telar.tbc;
 export import telar.base.memory.allocators;
 
 import telar.platform.fs;
+import telar.sys.socket;
 
 // Interface: telar_platform/process_environment.cppm
 export {

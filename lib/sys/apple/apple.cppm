@@ -1,6 +1,7 @@
 module;
 #include <fcntl.h>
 #include <libproc.h>
+#include <mach-o/dyld.h>
 #include <mach/mach.h>
 #include <mach/mach_vm.h>
 #include <net/if.h>
@@ -90,9 +91,13 @@ export {
   using ::in6_aliasreq;
   using ::sockaddr_ctl;
 
+  // The running executable.
+  using ::_NSGetExecutablePath;
+
   // BSD and Darwin extensions.
   using ::arc4random_buf;
   using ::attrlist;
+  using ::attrreference_t;
   using ::devname_r;
   using ::getattrlist;
   using ::getpeereid;

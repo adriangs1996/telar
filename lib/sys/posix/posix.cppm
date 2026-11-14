@@ -98,6 +98,7 @@ export {
   using ::shm_unlink;
 
   // Identity, environment and system limits.
+  using ::getdtablesize;
   using ::getegid;
   using ::geteuid;
   using ::gethostname;
@@ -172,7 +173,9 @@ export {
   X(FD_CLOEXEC)                 \
   X(F_DUPFD_CLOEXEC)            \
   X(F_GETFD)                    \
+  X(F_GETFL)                    \
   X(F_SETFD)                    \
+  X(F_SETFL)                    \
   X(LOCK_EX)                    \
   X(LOCK_NB)                    \
   X(O_APPEND)                   \
@@ -297,7 +300,9 @@ namespace telar::sys::captured {
 #undef FD_CLOEXEC
 #undef F_DUPFD_CLOEXEC
 #undef F_GETFD
+#undef F_GETFL
 #undef F_SETFD
+#undef F_SETFL
 #undef LOCK_EX
 #undef LOCK_NB
 #undef O_APPEND

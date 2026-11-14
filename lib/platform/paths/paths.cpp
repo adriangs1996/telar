@@ -1,11 +1,8 @@
-module;
-#include <cstdlib>
-#include <unistd.h>
-
 module telar.platform.paths;
 
 import std;
 import telar.tbc;
+import telar.sys.posix;
 
 namespace telar::runtime {
 

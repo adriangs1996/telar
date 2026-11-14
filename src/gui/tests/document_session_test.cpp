@@ -5,13 +5,13 @@ static_assert(true);
 
 #include "assertions.hpp"
 #include "telar_base/memory/allocator.hpp"
-#include "telar_client/protocol/content.hpp"
 
 import std;
 import telar.gui.tests.session_fixture;
 import telar.gui.application.workspace_replica;
 import telar.gui.application.session;
 import telar.render.markdown;
+import telar.wire.content;
 
 namespace {
 

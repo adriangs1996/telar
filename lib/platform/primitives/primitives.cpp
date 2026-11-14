@@ -1,15 +1,16 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
+module telar.platform.primitives;
+
+import std;
+import telar.platform.error;
+import telar.sys.posix;
+#if defined(__APPLE__)
+import telar.sys.apple;
+#else
+import telar.sys.linux;
 #endif
 
-#include "telar_platform/file_descriptor.hpp"
-#include <cerrno>
-#include <exception>
-#include <fcntl.h>
-
-import telar.platform.error;
-
+// The owned header declares these in the global module, so their definitions belong to it too.
+extern "C++" {
 namespace telar::runtime {
 
   FileDescriptor duplicateCloseOnExec(int descriptor, int minimum) {
@@ -33,6 +34,32 @@ namespace telar::runtime {
     if (flags < 0 || fcntl(descriptor, F_SETFD, flags | FD_CLOEXEC) < 0) {
       throw SystemError{"set close-on-exec descriptor"};
     }
+  }
+
+}
+}
+
+namespace telar::runtime {
+
+  void randomBytes(void* data, std::size_t size) noexcept {
+#if defined(__linux__)
+    auto* cursor = static_cast<unsigned char*>(data);
+    while (size != 0) {
+      const auto count = ::getrandom(cursor, size, 0);
+      if (count < 0) {
+        if (sys::lastError() == EINTR) {
+          continue;
+        }
+
+        std::abort();
+      }
+
+      cursor += count;
+      size -= static_cast<std::size_t>(count);
+    }
+#else
+    ::arc4random_buf(data, size);
+#endif
   }
 
 }
