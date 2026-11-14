@@ -38,10 +38,7 @@ export module telar.base.text;
 
 import telar.base.diagnostics;
 import telar.base.memory.allocators;
-
-// Aggregates JSON and UTF-8 while importers move to the module they use.
-export import telar.base.text.json;
-export import telar.base.text.utf8;
+import telar.base.text.json;
 
 // Owned textual headers stay in this global module fragment only; importers
 // reach their names through these declarations instead of including them.
