@@ -83,25 +83,19 @@ namespace {
     std::size_t size_;
   };
 
-}
+  // Runs the words with the telar under test on this machine, as SSH would run them
+  // on the other one.
+  class LocalCapture final : public telar::runtime::cli::repository::RepositoryCapture {
+  public:
+    LocalCapture(telar::Memory& memory, std::string_view binary)
+        : memory_(memory),
+          binary_(binary) {}
 
-int main(int argc, char** argv) {
-  using namespace telar;
-  using namespace telar::runtime;
-  using namespace telar::runtime::cli;
+    std::string operator()(std::span<const std::string_view> words, int descriptor) override {
+      using namespace telar;
+      using namespace telar::runtime;
+      using namespace telar::runtime::cli;
 
-  if (argc != 2) {
-    return 2;
-  }
-
-  SystemAllocator system;
-  constexpr std::size_t memory_budget = std::size_t{512} * 1024 * 1024;
-  BudgetAllocator memory{system, memory_budget};
-  const std::string_view binary = argv[1];
-
-  try {
-    const RepositoryOptions options{.action = RepositoryOptions::Action::prepare};
-    const auto prepared = repository::prepare(memory, options, binary, [&](std::span<const std::string_view> words, int descriptor) {
       std::optional<MappedBundle> bundle;
       std::vector<std::string_view> input;
 
@@ -115,12 +109,12 @@ int main(int argc, char** argv) {
         writeText("repository-prepare-probe: bundle " + std::to_string(bundle->text().size()) + " bytes\n", STDERR_FILENO);
       }
 
-      std::vector<std::string_view> arguments{binary};
+      std::vector<std::string_view> arguments{binary_};
 
       arguments.insert(arguments.end(), words.begin(), words.end());
-      Command command{memory, Launch{.arguments = arguments}, CommandPurpose::configured_helper};
+      Command command{memory_, Launch{.arguments = arguments}, CommandPurpose::configured_helper};
       constexpr std::size_t max_reply = 4 * 1024 * 1024;
-      CommandOutput output{memory, max_reply};
+      CommandOutput output{memory_, max_reply};
       const auto status = output.runWithInputDiagnostics(command, std::chrono::steady_clock::now() + repository::git_timeout, input, [](std::span<const Byte> bytes) {
         writeBytes(STDERR_FILENO, bytes);
         return true;
@@ -130,7 +124,35 @@ int main(int argc, char** argv) {
       }
 
       return std::string{output.text()};
-    });
+    }
+
+  private:
+    telar::Memory& memory_;
+    std::string_view binary_;
+  };
+
+}
+
+int main(int argc, char** argv) {
+  using namespace telar;
+  using namespace telar::runtime;
+  using namespace telar::runtime::cli;
+
+  if (argc != 2) {
+    return 2;
+  }
+
+  SystemAllocator system;
+  constexpr std::size_t memory_budget = std::size_t{512} * 1024 * 1024;
+  BudgetAllocator budget{system, memory_budget};
+  MemoryAdapter adapter{budget};
+  Memory& memory = adapter;
+  const std::string_view binary = argv[1];
+
+  try {
+    const RepositoryOptions options{.action = RepositoryOptions::Action::prepare};
+    LocalCapture capture{memory, binary};
+    const auto prepared = repository::prepare(memory, options, binary, capture);
 
     writeText(prepared.json());
     return 0;

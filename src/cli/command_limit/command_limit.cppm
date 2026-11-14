@@ -1,15 +1,5 @@
 module;
 #include "tbc/view.hpp"
-#include <cstddef>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <new>
-#include <stdlib.h>
-
-#include <cstdint>
-
-#include <cerrno>
 #include <unistd.h>
 
 export module telar.cli.command_limit;
@@ -33,147 +23,76 @@ export {
 
     using Arguments = std::span<char* const>;
 
-    [[noreturn]] inline void usage(const char* error) {
-      throw std::invalid_argument{error};
-    }
+    [[noreturn]] void usage(const char* error);
 
-    enum class Sign : std::uint8_t {
-      rejected,
-      accepted,
-    };
-
-    // A signed (`Sign::accepted`) or unsigned (`Sign::rejected`) integer in base
-    // 10: one optional sign, digits with inner underscores, and the error names
-    // `InvalidCharacter` and `Overflow`. An unsigned integer accepts "-0" when
-    // signs are accepted.
+    // The integer parsers are instantiated in the implementation unit for every
+    // standard integer type they accept, so that any width a caller names exists on
+    // every platform.
     template <typename Integer>
-    Integer parseDecimal(std::string_view text, Sign sign) {
-      const bool negative = sign == Sign::accepted && text.starts_with('-');
-      if (sign == Sign::accepted && (text.starts_with('+') || negative)) {
-        text.remove_prefix(1);
-      }
-
-      if (text.empty() || text.front() == '_' || text.back() == '_') {
-        usage("InvalidCharacter");
-      }
-
-      using Unsigned = std::make_unsigned_t<Integer>;
-      constexpr auto positive_limit = static_cast<Unsigned>(std::numeric_limits<Integer>::max());
-      constexpr auto negative_limit = std::is_signed_v<Integer> ? static_cast<Unsigned>(positive_limit + 1) : Unsigned{0};
-      const auto limit = negative ? negative_limit : positive_limit;
-      const auto parsed = unsignedNumber<Unsigned>(text, limit);
-      if (!parsed) {
-        usage(parsed.error() == NumberError::overflow ? "Overflow" : "InvalidCharacter");
-      }
-
-      const auto value = *parsed;
-
-      if constexpr (std::is_signed_v<Integer>) {
-        if (negative) {
-          return value == negative_limit ? std::numeric_limits<Integer>::min() : static_cast<Integer>(-static_cast<Integer>(value));
-        }
-      }
-
-      return static_cast<Integer>(value);
-    }
+    Integer parseInt(std::string_view text);
 
     template <typename Integer>
-    Integer parseInt(std::string_view text) {
-      return parseDecimal<Integer>(text, Sign::accepted);
-    }
-
-    template <typename Integer>
-    Integer parseUnsigned(std::string_view text) {
-      return parseDecimal<Integer>(text, Sign::rejected);
-    }
+    Integer parseUnsigned(std::string_view text);
 
     // `std.fmt.parseUnsigned(...) catch null`.
     template <typename Integer = std::uint64_t>
-    std::optional<Integer> maybeUnsigned(std::string_view text) noexcept {
-      try {
-        return parseUnsigned<Integer>(text);
-      } catch (const std::invalid_argument&) {
-        return std::nullopt;
-      }
-    }
+    std::optional<Integer> maybeUnsigned(std::string_view text) noexcept;
 
     // `std.fmt.parseUnsigned(...) catch return error.X`.
     template <typename Integer = std::uint64_t>
-    Integer number(std::string_view text, const char* error) {
-      const auto value = maybeUnsigned<Integer>(text);
-      if (!value) {
-        usage(error);
-      }
-
-      return *value;
-    }
+    Integer number(std::string_view text, const char* error);
 
     // `std.fmt.parseInt(...) catch return error.X`.
     template <typename Integer>
-    Integer signedNumber(std::string_view text, const char* error) {
-      try {
-        return parseInt<Integer>(text);
-      } catch (const std::invalid_argument&) {
-        usage(error);
-      }
-    }
+    Integer signedNumber(std::string_view text, const char* error);
+
+    extern template int parseInt<int>(std::string_view text);
+    extern template long parseInt<long>(std::string_view text);
+    extern template long long parseInt<long long>(std::string_view text);
+    extern template unsigned short parseInt<unsigned short>(std::string_view text);
+    extern template unsigned int parseInt<unsigned int>(std::string_view text);
+    extern template unsigned long parseInt<unsigned long>(std::string_view text);
+    extern template unsigned long long parseInt<unsigned long long>(std::string_view text);
+
+    extern template unsigned short parseUnsigned<unsigned short>(std::string_view text);
+    extern template std::optional<unsigned short> maybeUnsigned<unsigned short>(std::string_view text) noexcept;
+    extern template unsigned short number<unsigned short>(std::string_view text, const char* error);
+    extern template unsigned int parseUnsigned<unsigned int>(std::string_view text);
+    extern template std::optional<unsigned int> maybeUnsigned<unsigned int>(std::string_view text) noexcept;
+    extern template unsigned int number<unsigned int>(std::string_view text, const char* error);
+    extern template unsigned long parseUnsigned<unsigned long>(std::string_view text);
+    extern template std::optional<unsigned long> maybeUnsigned<unsigned long>(std::string_view text) noexcept;
+    extern template unsigned long number<unsigned long>(std::string_view text, const char* error);
+    extern template unsigned long long parseUnsigned<unsigned long long>(std::string_view text);
+    extern template std::optional<unsigned long long> maybeUnsigned<unsigned long long>(std::string_view text) noexcept;
+    extern template unsigned long long number<unsigned long long>(std::string_view text, const char* error);
+
+    extern template int signedNumber<int>(std::string_view text, const char* error);
+    extern template long signedNumber<long>(std::string_view text, const char* error);
+    extern template long long signedNumber<long long>(std::string_view text, const char* error);
 
     // A nonzero identity: tabs, panes, clients and workspaces start at 1.
-    inline std::uint64_t positive(std::string_view text, const char* error) {
-      const auto value = number(text, error);
-      if (value == 0) {
-        usage(error);
-      }
+    std::uint64_t positive(std::string_view text, const char* error);
 
-      return value;
-    }
-
-    // The word among `names` that `text` is, as the enum value at its position.
+    // The word among `names` that `text` is, as the enum value at its position. The
+    // implementation unit instantiates it for the protocol enums that commands parse.
     template <typename Enum, std::size_t Size>
-    Enum choice(std::string_view text, const char* error, const std::array<std::string_view, Size>& names) {
-      const auto found = std::ranges::find(names, text);
-      if (found == names.end()) {
-        usage(error);
-      }
-
-      return static_cast<Enum>(found - names.begin());
-    }
+    Enum choice(std::string_view text, const char* error, const std::array<std::string_view, Size>& names);
 
     // Consumes words left to right; `take` keeps each command's own missing-value
     // error.
     // Walks a command's words, region `a`; the words it hands out view them.
     class Cursor {
     public:
-      inline explicit Cursor(tbc::view<Arguments, tbc::lt::a> words) noexcept
-          : words_(words) {}
+      explicit Cursor(tbc::view<Arguments, tbc::lt::a> words) noexcept;
 
-      [[nodiscard]] inline bool empty() const noexcept {
-        return words_.empty();
-      }
+      [[nodiscard]] bool empty() const noexcept;
 
-      inline tbc::view<std::optional<std::string_view>, tbc::lt::a> next() noexcept {
-        if (words_.empty()) {
-          return std::nullopt;
-        }
+      tbc::view<std::optional<std::string_view>, tbc::lt::a> next() noexcept;
 
-        const std::string_view word = words_.front();
+      tbc::view<std::string_view, tbc::lt::a> take(const char* missing);
 
-        words_ = words_.subspan(1);
-        return word;
-      }
-
-      inline tbc::view<std::string_view, tbc::lt::a> take(const char* missing) {
-        const auto word = next();
-        if (!word) {
-          usage(missing);
-        }
-
-        return *word;
-      }
-
-      [[nodiscard]] inline tbc::view<Arguments, tbc::lt::a> rest() const noexcept {
-        return words_;
-      }
+      [[nodiscard]] tbc::view<Arguments, tbc::lt::a> rest() const noexcept;
 
     private:
       tbc::view<Arguments, tbc::lt::a> words_;
@@ -186,62 +105,19 @@ export {
 export {
   namespace telar::runtime::cli {
 
-    inline std::string quoteJson(std::string_view text, JsonEscapes escapes = JsonEscapes::standard) {
-      std::string result;
+    std::string quoteJson(std::string_view text, JsonEscapes escapes = JsonEscapes::standard);
 
-      result.reserve(text.size() + 2);
-      appendJsonText(result, text, escapes);
-      return result;
-    }
+    void writeBytes(int descriptor, std::span<const Byte> bytes);
 
-    inline void writeBytes(int descriptor, std::span<const Byte> bytes) {
-      while (!bytes.empty()) {
-        const auto count = ::write(descriptor, bytes.data(), bytes.size());
-        if (count < 0 && errno == EINTR) {
-          continue;
-        }
+    void writeText(std::string_view text, int descriptor = STDOUT_FILENO);
 
-        if (count <= 0) {
-          throw std::runtime_error{"WriteFailed"};
-        }
+    std::string_view textBytes(std::span<const Byte> bytes);
 
-        bytes = bytes.subspan(static_cast<std::size_t>(count));
-      }
-    }
+    std::uint64_t randomIdentity();
 
-    inline void writeText(std::string_view text, int descriptor = STDOUT_FILENO) {
-      writeBytes(descriptor, {reinterpret_cast<const Byte*>(text.data()), text.size()});
-    }
+    const char* jsonBoolean(bool value);
 
-    inline std::string_view textBytes(std::span<const Byte> bytes) {
-      return {reinterpret_cast<const char*>(bytes.data()), bytes.size()};
-    }
-
-    inline std::uint64_t randomIdentity() {
-      std::uint64_t value = 0;
-
-      while (value == 0) {
-        randomBytes(&value, sizeof(value));
-      }
-
-      return value;
-    }
-
-    inline const char* jsonBoolean(bool value) {
-      return value ? "true" : "false";
-    }
-
-    inline std::string_view commandErrorName(const std::exception& error) {
-      if (const auto* system = dynamic_cast<const SystemError*>(&error)) {
-        return sys::errorName(system->code());
-      }
-
-      if (std::string_view{error.what()} == "Runtime receive timed out") {
-        return "RuntimeTimeout";
-      }
-
-      return error.what();
-    }
+    std::string_view commandErrorName(const std::exception& error);
 
   }
 }
@@ -250,28 +126,9 @@ export {
 export {
   namespace telar::runtime::cli {
 
-    inline std::string limitDescription(const LimitReach& reach, std::uint64_t hits = 1) {
-      std::string output = std::string{reach.name} + ": ";
-      const auto noun = reach.noun.empty() ? "" : " " + std::string{reach.noun};
+    std::string limitDescription(const LimitReach& reach, std::uint64_t hits = 1);
 
-      if (reach.requested) {
-        output += std::format("{}{}; limit {}", *reach.requested, noun, reach.value);
-      } else if (reach.value == 0) {
-        output += "limit reached";
-      } else {
-        output += std::format("limit {}{} reached", reach.value, noun);
-      }
-
-      if (hits > 1) {
-        output += std::format(" ({} times)", hits);
-      }
-
-      return output;
-    }
-
-    inline void reportCommandLimit(const LimitReach& reach) {
-      writeText("telar: Limit reached: " + limitDescription(reach) + "\n", STDERR_FILENO);
-    }
+    void reportCommandLimit(const LimitReach& reach);
 
   }
 }

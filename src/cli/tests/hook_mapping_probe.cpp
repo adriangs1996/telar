@@ -21,22 +21,19 @@ import telar.base.text.json;
 import telar.base.text.utf8;
 import telar.platform.primitives;
 import telar.cli.hook;
+import telar.platform.paths;
 import telar.wire.vocabulary;
 
 using namespace telar;
 using namespace telar::runtime;
 using namespace telar::runtime::cli::hooks;
 
-struct EmptyEnvironment {
-  std::string_view lookup(const char*) const noexcept {
-    return {};
-  }
-};
-
 int main() {
   SystemAllocator system;
-  BudgetAllocator memory{system, 64 * 1024 * 1024};
-  String<decltype(memory)> input{AllocatorRef<char, decltype(memory)>{memory}};
+  BudgetAllocator budget{system, 64 * 1024 * 1024};
+  MemoryAdapter adapter{budget};
+  Memory& memory = adapter;
+  String<Memory> input{AllocatorRef<char, Memory>{memory}};
 
   input = R"({"hook_event_name":"PostToolUse","tool_name":"Write","tool_input":{"file_path":"fixture.txt","content":")";
   input.append(512 * 1024, 'x');
@@ -57,10 +54,11 @@ int main() {
     Reports reports;
     SessionFiles files;
 
-    map(payload, reports, files, EmptyEnvironment{});
+    // A Claude payload maps without reading the environment.
+    map(payload, reports, files, process_environment);
     checksum += reports.event.view().size();
     ++iterations;
   } while (std::chrono::steady_clock::now() < deadline);
 
-  std::printf("{\"iterations\":%zu,\"checksum\":%zu,\"allocations\":%zu,\"peak_bytes\":%zu}\n", iterations, checksum, memory.allocations(), memory.peakBytes());
+  std::printf("{\"iterations\":%zu,\"checksum\":%zu,\"allocations\":%zu,\"peak_bytes\":%zu}\n", iterations, checksum, budget.allocations(), budget.peakBytes());
 }

@@ -1,9 +1,6 @@
 module;
+#include "tbc/hot_path.hpp"
 #include "tbc/view.hpp"
-#include <cstddef>
-#include <cstdint>
-#include <sys/socket.h>
-#include <sys/time.h>
 
 export module telar.cli.control_session;
 
@@ -24,34 +21,7 @@ export {
 
     inline constexpr const char* missing_pane_context = "TELAR_PANE_ID is not set; run inside a telar pane or name a pane";
 
-    inline const char* controlFailureDescription(FailureCode code) noexcept {
-      switch (code) {
-      case FailureCode::pane_not_found:
-        return "pane not found or its generation is stale";
-      case FailureCode::pane_exited:
-        return "pane already exited";
-      case FailureCode::agent_blocked:
-        return "agent is waiting for a decision; answer it before prompting";
-      case FailureCode::invalid_request:
-        return "runtime rejected the request";
-      case FailureCode::worktree_not_found:
-        return "no tracked worktree matches that branch or title";
-      case FailureCode::workspace_not_found:
-        return "workspace not found";
-      case FailureCode::pane_focused:
-        return "that pane has the focus in an attached telar window, where a person may type; try again once another pane has it, or open tabs for automation with `telar tab create --background`";
-      case FailureCode::prompt_rate_limited:
-        return "prompt budget for that pane is spent; wait for its answer with `telar agent wait`";
-      case FailureCode::agent_not_working:
-        return "the agent is not working; nothing to interrupt";
-      case FailureCode::interrupt_unsupported:
-        return "that agent declares no interrupt key";
-      case FailureCode::foreign_process:
-        return "only a process inside that pane may report for its agent";
-      default:
-        return "runtime refused the request";
-      }
-    }
+    const char* controlFailureDescription(FailureCode code) noexcept;
 
   }
 }
@@ -70,21 +40,20 @@ export {
       void requestStop();
       [[noreturn]] void bridge();
 
+      // Generic over the protocol's messages, an open set, so it stays a template
+      // here.
       template <typename Message>
-      inline void send(const Message& message, std::span<Byte> buffer) {
+      TBC_HOT_PATH inline void send(const Message& message, std::span<Byte> buffer) {
         client_.send(message, buffer);
       }
 
-      inline tbc::view<std::span<const Byte>, tbc::lt::a> receive(tbc::view<std::span<Byte>, tbc::lt::a> buffer) {
+      // Every reply passes through here; its body also shows the lifetime checker
+      // that a receive leaves the session's other storage valid.
+      TBC_HOT_PATH inline tbc::view<std::span<const Byte>, tbc::lt::a> receive(tbc::view<std::span<Byte>, tbc::lt::a> buffer) {
         return client_.receiveFrame(buffer);
       }
 
-      inline void receiveTimeout(unsigned seconds) {
-        const timeval timeout{.tv_sec = static_cast<time_t>(seconds), .tv_usec = 0};
-        if (::setsockopt(client_.descriptor(), SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) != 0) {
-          throw SystemError{"Set runtime reply timeout"};
-        }
-      }
+      void receiveTimeout(unsigned seconds);
 
     private:
       static Client connect(const char* path);
@@ -101,18 +70,11 @@ export {
     // The runtime refused a request; `what()` is the text scripts read on stderr.
     class ControlFailure final : public std::runtime_error {
     public:
-      inline explicit ControlFailure(FailureCode code, std::string_view message = {})
-          : std::runtime_error{controlFailureDescription(code)},
-            code_(code),
-            message_(message) {}
+      explicit ControlFailure(FailureCode code, std::string_view message = {});
 
-      [[nodiscard]] inline FailureCode code() const noexcept {
-        return code_;
-      }
+      [[nodiscard]] FailureCode code() const noexcept;
 
-      inline std::string_view message() const noexcept {
-        return message_;
-      }
+      std::string_view message() const noexcept;
 
     private:
       FailureCode code_;
@@ -128,18 +90,15 @@ export {
     public:
       // `reply_bytes` bounds one reply and what decoding it may borrow; small fixed
       // replies, as hooks get, need far less than the protocol's 4 MiB frames.
-      inline ControlSession(Memory& memory, const char* socket, std::size_t reply_bytes = max_payload_size, std::size_t request_bytes = maximum_request_bytes)
-          : connection_(socket),
-            outgoing_(request_bytes, Byte{}, AllocatorRef<Byte, Memory>{memory}),
-            incoming_(reply_bytes, Byte{}, AllocatorRef<Byte, Memory>{memory}),
-            decoded_(reply_bytes, Byte{}, AllocatorRef<Byte, Memory>{memory}) {}
+      ControlSession(Memory& memory, const char* socket, std::size_t reply_bytes = max_payload_size, std::size_t request_bytes = maximum_request_bytes);
 
-      inline void receiveTimeout(unsigned seconds) {
-        connection_.receiveTimeout(seconds);
-      }
+      void receiveTimeout(unsigned seconds);
 
+      // The members generic over the protocol's messages keep their bodies here,
+      // marked TBC_HOT_PATH: the messages are an open set that no implementation
+      // unit can instantiate ahead.
       template <typename Request>
-      inline void send(Request request) {
+      TBC_HOT_PATH inline void send(Request request) {
         if constexpr (requires { request.request_id; }) {
           request.request_id = next_request_++;
         }
@@ -148,7 +107,7 @@ export {
       }
 
       template <typename Reply, typename Request>
-      inline Reply exchange(Request request) {
+      TBC_HOT_PATH inline Reply exchange(Request request) {
         request.request_id = next_request_++;
         connection_.send(request, outgoing_);
         return receive<Reply>(request.request_id);
@@ -156,7 +115,7 @@ export {
 
       // Subscription events may interleave with a reply; snapshots have no request id.
       template <typename Reply>
-      inline Reply receive(std::optional<std::uint64_t> request_id = std::nullopt) {
+      TBC_HOT_PATH inline Reply receive(std::optional<std::uint64_t> request_id = std::nullopt) {
         for (;;) {
           const auto frame = connection_.receive(incoming_);
           DecodeStorage storage{decoded_};
@@ -193,6 +152,8 @@ export {
       Vector<Byte, Memory> decoded_;
       std::uint64_t next_request_ = 1;
     };
+
+    extern template class ControlSession<Memory>;
 
   }
 }
