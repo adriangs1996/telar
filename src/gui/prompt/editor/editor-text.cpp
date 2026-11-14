@@ -1,4 +1,4 @@
-module telar.gui.prompt.text;
+module telar.gui.prompt.editor;
 
 import std;
 

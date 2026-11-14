@@ -2,7 +2,7 @@ module;
 #include <cstddef>
 #include <cstdint>
 
-export module telar.gui.prompt.text;
+export module telar.gui.prompt.editor:text;
 
 import std;
 

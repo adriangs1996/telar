@@ -6,7 +6,7 @@ export module telar.gui.prompt.editor;
 
 import std;
 
-export import telar.gui.prompt.text;
+export import :text;
 
 // The command editor's keyboard model, apart from Qt so it is testable: a key in, an edit and
 // maybe a request out. Two keymaps, readline's emacs bindings and vim's modal editing.

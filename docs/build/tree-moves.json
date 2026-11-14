@@ -757,7 +757,7 @@
     "src/gui-cpp/prompt/layout.cppm": "src/gui/prompt/layout/layout.cppm",
     "src/gui-cpp/prompt/line.cppm": "src/gui/prompt/line/line.cppm",
     "src/gui-cpp/prompt/routing.cppm": "src/gui/prompt/routing/routing.cppm",
-    "src/gui-cpp/prompt/text.cppm": "src/gui/prompt/text/text.cppm",
+    "src/gui-cpp/prompt/text.cppm": "src/gui/prompt/editor/editor-text.cppm",
     "src/gui-cpp/qt/ActionPointer.qml": "src/gui/qt/ActionPointer.qml",
     "src/gui-cpp/qt/ActivityFrame.qml": "src/gui/qt/ActivityFrame.qml",
     "src/gui-cpp/qt/ActivityList.qml": "src/gui/qt/ActivityList.qml",
