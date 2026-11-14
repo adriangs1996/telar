@@ -439,7 +439,7 @@ Cada tarea empieza localizando todas las copias, crea un módulo con una interfa
 | [x] P5.2 | Paste framing / paste encoder | 3 | módulo en platform | P1.2 |
 | [x] P5.3 | Hardening de git | 3 | `telar.platform.git` | P4.1a |
 | [x] P5.4 | `setup.json` | 2 | módulo dueño único (decidir capa) | P1.2 |
-| [ ] P5.5 | Login shell | 4 | `telar.platform.process` o `telar.sys.process` | P4.1a, P3.1 |
+| [x] P5.5 | Login shell | 4 | `telar.platform.process` o `telar.sys.process` | P4.1a, P3.1 |
 | [x] P5.6 | Nombres de errno | 8 | `telar.sys.posix` (`lastError()` y el nombre) | P3.1 |
 | [ ] P5.7 | Spawn con higiene de descriptores | — | `telar.platform.process` | P4.1a, P3.1 |
 
@@ -449,6 +449,7 @@ Cada tarea empieza localizando todas las copias, crea un módulo con una interfa
 - P5.3: `HardenedGit` en `telar.platform` (`e1d10a384`).
 - P5.4: `cli.project_setup::prepare` (`b12d9a859`).
 - P5.5: `loginShell` y `loginShellScript` en `telar.platform` (`8bfa863cd`). Quedan dos lecturas sueltas de `$SHELL`: en la CLI (`worktree_git`) y en `Command` de `telar.platform`.
+  - **Cerrada:** `Command` sin argumentos y `workspace create` sin comando usan `loginShell()`, que trata una ruta relativa igual que una vacía; las dos copias de esa regla en la GUI desaparecen. Test `testLoginShell` con `SHELL` absoluto, relativo y vacío. **Cambio visible:** con `SHELL=zsh` (relativo) la CLI usa el shell de la cuenta en vez de buscarlo en el `PATH` del runtime, como ya hacía la GUI.
 - P5.6: `systemErrorName` en `telar.platform` (`845c69d6d`), sin `lastError()`. Quedan copias en `runtime.runtime.execution_service`, `runtime.execution.execution` y en `worktree_git` e `history` de la CLI.
   - **Cerrada** (`9ac9af040`): `telar::sys::errorName(code, fallback)` y `telar::sys::lastError()` en `telar.sys.posix`; `systemErrorName` sale de `platform.error` y las copias del runtime y la CLI usan la tabla común. `ENOMEM`, `ENOBUFS` y `EBADF` se nombran igual en todos los mensajes.
 - P5.7: todos los spawns usan `SpawnOptions` (`be47a6b84`). Tres sitios repiten a mano "conservar los tres flujos estándar y cerrar el resto": `traffic.control_backend`, `machine_ssh` de la CLI y `tls` del runtime.
