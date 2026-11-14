@@ -77,7 +77,6 @@
   "process_layers": {
     "runtime": [
       "diagnostics",
-      "execution",
       "transport",
       "config",
       "suggestions",
@@ -190,7 +189,7 @@
     "src/runtime/traffic/control_protocol/control_protocol.cppm": "telar.runtime.traffic.control_protocol",
     "src/runtime/traffic/control_backend/control_backend.cppm": "telar.runtime.traffic.control_backend",
     "src/runtime/traffic/capture/capture.cppm": "telar.runtime.traffic.capture",
-    "src/runtime/traffic/tap/tap.cppm": "telar.runtime.traffic.tap",
+    "src/runtime/cli/server/server-tap.cppm": "telar.runtime.cli.server:tap",
     "src/runtime/metrics/host_sampler/host_sampler.cppm": "telar.runtime.metrics.host_sampler",
     "src/runtime/proxy/intercepted_relay/intercepted_relay.cppm": "telar.runtime.proxy.intercepted_relay",
     "src/runtime/http1/head/head.cppm": "telar.runtime.http1.head",
@@ -247,10 +246,10 @@
     "src/runtime/exchange_capture/pipeline/pipeline.cppm": "telar.runtime.exchange_capture.pipeline",
     "src/runtime/http/content/content.cppm": "telar.runtime.http.content",
     "src/runtime/http/message/message.cppm": "telar.runtime.http.message",
-    "src/runtime/execution/execution/execution.cppm": "telar.runtime.execution.execution",
+    "src/runtime/runtime/execution_service/execution_service-execution.cppm": "telar.runtime.runtime.execution_service:execution",
     "src/runtime/worktrees/git_probe/git_probe.cppm": "telar.runtime.worktrees.git_probe",
     "src/runtime/persistence/session_store/session_store.cppm": "telar.runtime.persistence.session_store",
-    "src/runtime/model/launch_record/launch_record.cppm": "telar.runtime.model.launch_record",
+    "src/runtime/model/client_layouts/client_layouts-launch_record.cppm": "telar.runtime.model.client_layouts:launch_record",
     "src/runtime/model/client_layouts/client_layouts.cppm": "telar.runtime.model.client_layouts",
     "src/runtime/model/slot_store/slot_store.cppm": "telar.runtime.model.slot_store",
     "src/runtime/history/store/store.cppm": "telar.runtime.history.store",
@@ -446,7 +445,7 @@
     "lib/render/terminal/terminal.cppm": "telar.render.terminal",
     "lib/render/markdown/markdown.cppm": "telar.render.markdown",
     "src/cli/render/render.cppm": "telar.cli.render",
-    "src/gui/terminal/fold_map/fold_map.cppm": "telar.gui.terminal.fold_map",
+    "src/gui/application/workspace_replica/workspace_replica-fold_map.cppm": "telar.gui.application.workspace_replica:fold_map",
     "lib/wire/vocabulary/vocabulary.cppm": "telar.wire.vocabulary",
     "lib/sys/posix/posix.cppm": "telar.sys.posix",
     "lib/sys/socket/socket.cppm": "telar.sys.socket",
@@ -944,10 +943,10 @@
     "src/runtime/config/loader/loader.cpp": "telar.runtime.config.loader",
     "src/runtime/diagnostics/operation/operation.cpp": "telar.runtime.diagnostics.operation",
     "src/runtime/diagnostics/runtime_counters/runtime_counters.cpp": "telar.runtime.diagnostics.runtime_counters",
-    "src/runtime/execution/execution/execution.cpp": "telar.runtime.execution.execution",
+    "src/runtime/runtime/execution_service/execution_service-execution.cpp": "telar.runtime.runtime.execution_service",
     "src/runtime/metrics/host_sampler/host_sampler.cpp": "telar.runtime.metrics.host_sampler",
     "src/runtime/model/client_layouts/client_layouts.cpp": "telar.runtime.model.client_layouts",
-    "src/runtime/model/launch_record/launch_record.cpp": "telar.runtime.model.launch_record",
+    "src/runtime/model/client_layouts/client_layouts-launch_record.cpp": "telar.runtime.model.client_layouts",
     "src/runtime/model/slot_store/slot_store.cpp": "telar.runtime.model.slot_store",
     "src/runtime/paths/query_task/query_task.cpp": "telar.runtime.paths.query_task",
     "src/runtime/persistence/session_store/session_store.cpp": "telar.runtime.persistence.session_store",
@@ -1162,7 +1161,7 @@
     "src/runtime/traffic/event_frame.cppm": "src/runtime/traffic/capture/capture.cppm",
     "src/runtime/traffic/package_port.cppm": "src/runtime/traffic/control_backend/control_backend.cppm",
     "src/runtime/traffic/recording_protocol.cppm": "src/runtime/traffic/control_protocol/control_protocol.cppm",
-    "src/runtime/traffic/tap/tap.cppm": "src/runtime/traffic/tap/tap.cppm",
+    "src/runtime/traffic/tap/tap.cppm": "src/runtime/cli/server/server-tap.cppm",
     "src/runtime/traffic/recordings.cppm": "src/runtime/traffic/control_backend/control_backend.cppm",
     "src/runtime/traffic/service.cppm": "src/runtime/traffic/control_backend/control_backend.cppm",
     "src/runtime/traffic/network_packet.cppm": "src/runtime/traffic/capture_analysis/capture_analysis.cppm",
@@ -1436,13 +1435,13 @@
     "src/runtime/http/message_codec.cppm": "src/runtime/http/message/message.cppm",
     "src/runtime/http/fields.cppm": "src/runtime/http/message/message.cppm",
     "src/runtime/http/message/message.cppm": "src/runtime/http/message/message.cppm",
-    "src/runtime/execution/execution/execution.cppm": "src/runtime/execution/execution/execution.cppm",
+    "src/runtime/execution/execution/execution.cppm": "src/runtime/runtime/execution_service/execution_service-execution.cppm",
     "src/runtime/worktrees/detection_probe.cppm": "src/runtime/worktrees/git_probe/git_probe.cppm",
     "src/runtime/worktrees/base_distance.cppm": "src/runtime/worktrees/git_probe/git_probe.cppm",
     "src/runtime/worktrees/git_probe/git_probe.cppm": "src/runtime/worktrees/git_probe/git_probe.cppm",
     "src/runtime/persistence/session_store/session_store.cppm": "src/runtime/persistence/session_store/session_store.cppm",
     "src/runtime/persistence/records.cppm": "src/runtime/persistence/session_store/session_store.cppm",
-    "src/runtime/persistence/launch_record/launch_record.cppm": "src/runtime/model/launch_record/launch_record.cppm",
+    "src/runtime/persistence/launch_record/launch_record.cppm": "src/runtime/model/client_layouts/client_layouts-launch_record.cppm",
     "src/runtime/persistence/writer.cppm": "src/runtime/persistence/session_store/session_store.cppm",
     "src/runtime/persistence/snapshot.cppm": "src/runtime/persistence/session_store/session_store.cppm",
     "src/runtime/persistence/reader.cppm": "src/runtime/persistence/session_store/session_store.cppm",
@@ -2013,7 +2012,7 @@
     "src/runtime/runtime/runtime_telemetry/runtime_telemetry.cppm": "src/runtime/runtime/runtime_telemetry/runtime_telemetry.cppm",
     "src/runtime/history/command/command.cppm": "src/runtime/history/command/command.cppm",
     "src/runtime/vocabulary/exchange/exchange.cppm": "src/runtime/vocabulary/exchange/exchange.cppm",
-    "src/runtime/model/launch_record/launch_record.cppm": "src/runtime/model/launch_record/launch_record.cppm"
+    "src/runtime/model/launch_record/launch_record.cppm": "src/runtime/model/client_layouts/client_layouts-launch_record.cppm"
   },
   "import_migration": {
     "telar.plugins.inspection": "telar.plugins",
@@ -2194,7 +2193,7 @@
     "telar.runtime.traffic.event_frame": "telar.runtime.traffic.capture",
     "telar.runtime.traffic.package_port": "telar.runtime.traffic.control_backend",
     "telar.runtime.traffic.recording_protocol": "telar.runtime.traffic.control_protocol",
-    "telar.runtime.traffic.tap": "telar.runtime.traffic.tap",
+    "telar.runtime.traffic.tap": "telar.runtime.cli.server",
     "telar.runtime.traffic.recordings": "telar.runtime.traffic.control_backend",
     "telar.runtime.traffic.service": "telar.runtime.traffic.control_backend",
     "telar.runtime.traffic.network_packet": "telar.runtime.traffic.capture_analysis",
@@ -2464,13 +2463,13 @@
     "telar.runtime.http.message_codec": "telar.runtime.http.message",
     "telar.runtime.http.fields": "telar.runtime.http.message",
     "telar.runtime.http.message": "telar.runtime.http.message",
-    "telar.runtime.execution.execution": "telar.runtime.execution.execution",
+    "telar.runtime.execution.execution": "telar.runtime.runtime.execution_service",
     "telar.runtime.worktrees.detection_probe": "telar.runtime.worktrees.git_probe",
     "telar.runtime.worktrees.base_distance": "telar.runtime.worktrees.git_probe",
     "telar.runtime.worktrees.git_probe": "telar.runtime.worktrees.git_probe",
     "telar.runtime.persistence.session_store": "telar.runtime.persistence.session_store",
     "telar.runtime.persistence.records": "telar.runtime.persistence.session_store",
-    "telar.runtime.persistence.launch_record": "telar.runtime.model.launch_record",
+    "telar.runtime.persistence.launch_record": "telar.runtime.model.client_layouts",
     "telar.runtime.persistence.writer": "telar.runtime.persistence.session_store",
     "telar.runtime.persistence.snapshot": "telar.runtime.persistence.session_store",
     "telar.runtime.persistence.reader": "telar.runtime.persistence.session_store",
@@ -3041,7 +3040,7 @@
     "telar.runtime.runtime.runtime_telemetry": "telar.runtime.runtime.runtime_telemetry",
     "telar.runtime.history.command": "telar.runtime.history.command",
     "telar.runtime.vocabulary.exchange": "telar.runtime.vocabulary.exchange",
-    "telar.runtime.model.launch_record": "telar.runtime.model.launch_record"
+    "telar.runtime.model.launch_record": "telar.runtime.model.client_layouts"
   },
   "header_owners": {
     "lib/base/diagnostics/diagnostics.cppm": [
@@ -3177,7 +3176,7 @@
     "src/gui/platform/clipboard_image_pipe/clipboard_image_pipe.cppm": [
       "src/gui/platform/clipboard_image_source.hpp"
     ],
-    "src/gui/terminal/fold_map/fold_map.cppm": [
+    "src/gui/application/workspace_replica/workspace_replica-fold_map.cppm": [
       "src/gui/terminal/fold_map.hpp"
     ]
   },

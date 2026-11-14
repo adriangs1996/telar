@@ -1,4 +1,4 @@
-export module telar.runtime.model.launch_record;
+export module telar.runtime.model.client_layouts:launch_record;
 
 import std;
 

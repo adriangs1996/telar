@@ -26,7 +26,7 @@ import telar.runtime.runtime.media_service;
 import telar.runtime.runtime.runtime;
 import telar.runtime.traffic.capture;
 import telar.runtime.traffic.control_backend;
-import telar.runtime.traffic.tap;
+import :tap;
 #ifdef __APPLE__
 import telar.runtime.redirect.socket_owners;
 #endif

@@ -122,7 +122,6 @@ add_library(runtime-core STATIC
   config/loader/loader.cpp
   diagnostics/operation/operation.cpp
   diagnostics/runtime_counters/runtime_counters.cpp
-  execution/execution/execution.cpp
   graphics/file_input/file_input.cpp
   graphics/pane_media/pane_media.cpp
   graphics/png_decoder.cpp
@@ -131,7 +130,7 @@ add_library(runtime-core STATIC
   history/store/database.cpp
   metrics/host_sampler/host_sampler.cpp
   model/client_layouts/client_layouts.cpp
-  model/launch_record/launch_record.cpp
+  model/client_layouts/client_layouts-launch_record.cpp
   model/slot_store/slot_store.cpp
   observation/processor/processor.cpp
   paths/query_task/query_task.cpp
@@ -154,6 +153,7 @@ add_library(runtime-core STATIC
   platform/system_certificates/system_certificates.cpp
   runtime/client_control/client_control.cpp
   runtime/delivery/client_delivery/client_delivery.cpp
+  runtime/execution_service/execution_service-execution.cpp
   runtime/execution_service/execution_service.cpp
   runtime/media_service/media_service.cpp
   runtime/runtime/runtime.cpp

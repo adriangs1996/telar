@@ -18,7 +18,7 @@ export import telar.platform.process;
 
 export import telar.runtime.proxy.runtime;
 
-export import telar.runtime.execution.execution;
+export import :execution;
 export import telar.runtime.shell_integration;
 import telar.base.text;
 import telar.base.text.utf8;
