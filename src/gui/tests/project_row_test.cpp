@@ -115,7 +115,9 @@ namespace {
     }
 
     Q_SLOT static void projectProjectionKeepsSummaryAndUrgentColor() {
-      SystemAllocator memory;
+      SystemAllocator system;
+      telar::MemoryAdapter adapter{system};
+      telar::ConcurrentMemory& memory = adapter;
       WorkspaceReplica replica{memory};
       const std::array entries{WorkspaceListEntry{.workspace = 1, .name = "project", .path = "/project"}, WorkspaceListEntry{.workspace = 2, .name = "task", .path = "/task"}};
       const std::array tasks{WorktreeListEntry{.worktree = 1, .source = 1, .workspace = 2, .path = "/task", .branch = "worktree-task"}};
@@ -127,7 +129,7 @@ namespace {
       agents[0].status = AgentStatus::working;
       agents[1].location.workspace.id = 1;
       agents[1].status = AgentStatus::failed;
-      const auto record = projectRecord(replica.projects().front(), replica, std::span<const Agent<SystemAllocator>>{agents}, true);
+      const auto record = projectRecord(replica.projects().front(), replica, std::span<const Agent<telar::ConcurrentMemory>>{agents}, true);
 
       QCOMPARE(record.value(QStringLiteral("detail")).toString(), QStringLiteral("\u2387 1 \u00b7 \u25cc 1 \u2713 0  /project"));
       QCOMPARE(record.value(QStringLiteral("attention")).toString(), QStringLiteral("! 1"));

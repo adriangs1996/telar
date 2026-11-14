@@ -61,8 +61,8 @@ namespace telar::gui::qt {
 
   NativeChromeText::NativeChromeText(QQuickItem* parent)
       : QQuickItem(parent),
-        glyphs_(memory_),
-        fit_(memory_),
+        glyphs_(adapter_),
+        fit_(adapter_),
         ancestors_(*this) {
     setFlag(ItemHasContents);
   }
@@ -275,7 +275,7 @@ namespace telar::gui::qt {
       if (fitted_) {
         const std::string_view text{utf8_.constData(), static_cast<std::size_t>(utf8_.size())};
         const auto measure = [&](std::string_view label) {
-          return static_cast<float>(label == text ? advance_ : fonts::TextLayout<SystemAllocator>::measure(*fonts_, label, {.pixel_height = pixel_height_, .preferred = emphasized_ ? fonts::FontRole::emphasized : fonts::FontRole::regular}));
+          return static_cast<float>(label == text ? advance_ : fonts::TextLayout<ConcurrentMemory>::measure(*fonts_, label, {.pixel_height = pixel_height_, .preferred = emphasized_ ? fonts::FontRole::emphasized : fonts::FontRole::regular}));
         };
 
         TextFit::Buffer buffer{};

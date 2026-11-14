@@ -88,7 +88,7 @@ namespace {
     const GraphicsHeader snapshot{.pane_id = 1, .revision = revision};
 
     runtime.send(GraphicsSnapshot{.header = snapshot, .phase = SnapshotPhase::begin});
-    constexpr auto overflow = GraphicsStore<SystemAllocator>::image_capacity + 1;
+    constexpr auto overflow = GraphicsStore<telar::ConcurrentMemory>::image_capacity + 1;
 
     for (std::uint32_t id = 1; id <= overflow; ++id) {
       runtime.send(GraphicsImage{.header = snapshot, .image = {.key = {.image_id = id, .generation = 1}, .format = ImageFormat::rgba, .width = image_side, .height = image_side, .byte_len = pixel_bytes}});

@@ -83,7 +83,7 @@ namespace {
   }
 
   void oversizedBatchesFoldWithoutEvictingTheirOwnAlerts() {
-    std::array<AgentStatusChange, AgentReplica<SystemAllocator>::capacity> changes;
+    std::array<AgentStatusChange, AgentReplica<telar::ConcurrentMemory>::capacity> changes;
 
     for (std::size_t index = 0; index < changes.size(); ++index) {
       changes[index] = {.pane_id = index + 1, .pane_index = static_cast<std::uint16_t>(index + 1), .current = AgentStatus::blocked};

@@ -126,8 +126,10 @@ namespace {
     }
   }
 
-  void naturalAndMixedRuns(FontFixture<SystemAllocator>& fonts) {
-    SystemAllocator memory;
+  void naturalAndMixedRuns(FontFixture<telar::ConcurrentMemory>& fonts) {
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     TextLayout layout{memory};
     constexpr std::string_view natural = "AVATAR fi ffi · Crème";
 
@@ -147,7 +149,7 @@ namespace {
     const auto primary_metrics = fonts.face(FontRole::primary).metrics(text_height);
     const auto expected = fonts.face(FontRole::regular).shape("AV ", text_height).advance() + fonts.face(FontRole::regular).shape(" fi ", text_height).advance() + fonts.face(FontRole::regular).shape(" end", text_height).advance() + (2 * primary_metrics.maximum_advance);
 
-    require(layout.advance() == expected && TextLayout<SystemAllocator>::measure(fonts, mixed_text, request) == expected, "measurement must preserve natural advances and fitted fallback cells");
+    require(layout.advance() == expected && TextLayout<telar::ConcurrentMemory>::measure(fonts, mixed_text, request) == expected, "measurement must preserve natural advances and fitted fallback cells");
     layout.shape(fonts, branch_symbol, request);
     require(layout.spans().size() == 1 && layout.spans().front().role == FontRole::primary, "an undiscovered cluster must temporarily use the configured face");
     constexpr std::string_view primary_text = "\u2387 AVATAR fi";
@@ -162,10 +164,12 @@ namespace {
     }
   }
 
-  void layoutOwnershipAndWarmReuse(FontFixture<SystemAllocator>& fonts) {
+  void layoutOwnershipAndWarmReuse(FontFixture<telar::ConcurrentMemory>& fonts) {
     SystemAllocator upstream;
     BudgetAllocator budget{upstream, std::numeric_limits<std::size_t>::max()};
-    AllocationGate memory{budget};
+    AllocationGate gate{budget};
+    telar::MemoryAdapter adapter{gate};
+    telar::Memory& memory = adapter;
 
     {
       TextLayout layout{memory};
@@ -182,7 +186,7 @@ namespace {
       }
 
       require(budget.allocations() == allocations, "warm mixed shaping must reuse injected glyph and span storage");
-      memory.permit(0);
+      gate.permit(0);
       bool rejected = false;
 
       try {
@@ -194,7 +198,7 @@ namespace {
       }
 
       require(rejected, "layout allocation must flow through the injected allocator");
-      memory.permit(std::nullopt);
+      gate.permit(std::nullopt);
       layout.shape(fonts, mixed_text, request);
       require(layout.spans().size() == mixed_span_count, "failed shaping must remain retryable");
     }
@@ -202,10 +206,12 @@ namespace {
     require(budget.liveBytes() == 0, "text layout destruction must release every injected allocation");
   }
 
-  void captionsRetainRunOriginsAndWarmStorage(FontFixture<SystemAllocator>& fonts) {
+  void captionsRetainRunOriginsAndWarmStorage(FontFixture<telar::ConcurrentMemory>& fonts) {
     SystemAllocator upstream;
     BudgetAllocator budget{upstream, std::numeric_limits<std::size_t>::max()};
-    AllocationGate memory{budget};
+    AllocationGate gate{budget};
+    telar::MemoryAdapter adapter{gate};
+    telar::Memory& memory = adapter;
 
     {
       TextLayout layout{memory};
@@ -237,7 +243,7 @@ namespace {
       require(layout.advance() == advance, "caption width must sum original rounded run widths");
       const auto allocations = budget.allocations();
 
-      memory.permit(0);
+      gate.permit(0);
       constexpr std::size_t repetitions = 100;
 
       for (std::size_t index = 0; index < repetitions; ++index) {
@@ -265,7 +271,9 @@ int main(int argc, char** argv) {
     queryPreservesWholeClusters();
     requestsBoundAndRetireWork();
     overflowRetriesRemainBounded();
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     FontFixture fonts{memory, std::filesystem::path{arguments[1]}};
 
     naturalAndMixedRuns(fonts);

@@ -9,6 +9,7 @@ static_assert(true);
 #include <cstdio>
 
 import std;
+import telar.base.memory.allocators;
 import telar.gui.core.primitives;
 import telar.gui.terminal.screen;
 import telar.gui.core.metrics;
@@ -38,7 +39,9 @@ namespace {
   void resourceLifetime() {
     SystemAllocator upstream;
     constexpr std::size_t allocation_budget = std::size_t{1} * 1024 * 1024;
-    BudgetAllocator memory{upstream, allocation_budget};
+    BudgetAllocator allocator{upstream, allocation_budget};
+    telar::MemoryAdapter adapter{allocator};
+    telar::Memory& memory = adapter;
     GraphicsBudget budget;
 
     {
@@ -77,7 +80,7 @@ namespace {
       require(rejected && !store.findImage({.image_id = 2, .generation = 1})->ready(), "misordered chunks must not expose partial bytes");
     }
 
-    require(memory.liveBytes() == 0 && budget.used == 0, "graphics ownership must release all allocations and budget");
+    require(allocator.liveBytes() == 0 && budget.used == 0, "graphics ownership must release all allocations and budget");
   }
 
   void placementGeometry() {

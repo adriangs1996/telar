@@ -400,11 +400,8 @@
     "<cstdint>"
   ],
   "src/gui/fonts/face/face-views.cppm": [
-    "<cmath>",
     "<cstddef>",
     "<cstdint>",
-    "<cstdio>",
-    "<cstring>",
     "<hb.h>"
   ],
   "src/gui/fonts/face/face.cpp": [
@@ -430,7 +427,6 @@
     "<cstddef>",
     "<cstdint>",
     "<cstdio>",
-    "<cstring>",
     "<freetype/freetype.h>",
     "<hb.h>",
     "platform/font.h"
@@ -443,60 +439,12 @@
     "<hb-ot.h>",
     "<hb.h>"
   ],
-  "src/gui/fonts/font_requests/font_requests.cppm": [
-    "<cmath>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstring>",
-    "<freetype/freetype.h>",
-    "<hb.h>",
-    "platform/font.h"
-  ],
   "src/gui/fonts/glyph_rasterizer/glyph_rasterizer.cpp": [
     "<cstddef>",
     "<cstdint>",
     "<cstring>",
     "platform/font.h",
     "platform/macos/glyph_rasterizer.h"
-  ],
-  "src/gui/fonts/row_text_layout/row_text_layout.cppm": [
-    "<cmath>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<freetype/freetype.h>",
-    "<ghostty/vt/unicode.h>",
-    "<hb.h>",
-    "<new>",
-    "platform/font.h"
-  ],
-  "src/gui/graphics/pauses/pauses.cppm": [
-    "<cmath>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstring>"
-  ],
-  "src/gui/graphics/placeholder/placeholder.cppm": [
-    "<cmath>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>"
-  ],
-  "src/gui/graphics/texture_cache/texture_cache.cppm": [
-    "<cmath>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>"
   ],
   "src/gui/history/browser/browser.cppm": [
     "<cstddef>",
@@ -651,105 +599,6 @@
   "src/gui/platform/window_lease/window_lease.cppm": [
     "<climits>"
   ],
-  "src/gui/presentation/activity_order/activity_order.cppm": [
-    "<cmath>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>"
-  ],
-  "src/gui/presentation/application_mark/application_mark.cppm": [
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstring>"
-  ],
-  "src/gui/presentation/display_metrics/display_metrics.cppm": [
-    "<cmath>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstring>"
-  ],
-  "src/gui/presentation/form_field_geometry/form_field_geometry.cppm": [
-    "<cmath>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstring>",
-    "<ghostty/vt/unicode.h>"
-  ],
-  "src/gui/presentation/frame_pacer/frame_pacer.cppm": [
-    "<cmath>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstring>"
-  ],
-  "src/gui/presentation/history_filter_geometry/history_filter_geometry.cppm": [
-    "<cmath>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>"
-  ],
-  "src/gui/presentation/history_inspection/history_inspection.cppm": [
-    "<cmath>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<ghostty/vt/unicode.h>",
-    "<new>"
-  ],
-  "src/gui/presentation/history_inspection_geometry/history_inspection_geometry.cppm": [
-    "<cmath>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<ghostty/vt/unicode.h>",
-    "<new>"
-  ],
-  "src/gui/presentation/history_meta_geometry/history_meta_geometry.cppm": [
-    "<cmath>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstring>",
-    "<ghostty/vt/unicode.h>",
-    "<stdlib.h>"
-  ],
-  "src/gui/presentation/notification_stack/notification_stack.cppm": [
-    "<cmath>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<ghostty/vt/unicode.h>",
-    "<new>"
-  ],
-  "src/gui/presentation/suggestion_geometry/suggestion_geometry.cppm": [
-    "<cmath>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstring>"
-  ],
-  "src/gui/presentation/suggestion_labels/suggestion_labels.cppm": [
-    "<cmath>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstring>"
-  ],
   "src/gui/prompt/completion/completion.cppm": [
     "<cstddef>",
     "<cstdint>"
@@ -814,7 +663,7 @@
   "src/gui/terminal/fold_map/fold_map.cppm": [
     "terminal/fold_map.hpp"
   ],
-  "src/gui/terminal/font_grid/font_grid.cppm": [
+  "src/gui/terminal/font_grid/font_grid.cpp": [
     "<cmath>",
     "<cstddef>",
     "<cstdint>",
@@ -828,10 +677,12 @@
     "<cstddef>",
     "<cstdint>"
   ],
-  "src/gui/terminal/glyphs/curve_cache/curve_cache.cppm": [
+  "src/gui/terminal/glyphs/curve_cache/curve_cache.cpp": [
     "<cmath>",
     "<cstddef>",
-    "<cstdint>",
+    "<cstdint>"
+  ],
+  "src/gui/terminal/glyphs/curve_cache/curve_cache.cppm": [
     "terminal/glyphs/box_edge_table.inc"
   ],
   "src/gui/text/bounded_editor/bounded_editor.cppm": [

@@ -1,6 +1,10 @@
+module;
+#include "tbc/annotations.hpp"
+
 export module telar.gui.terminal.row_cache;
 
 import std;
+import telar.base.memory.allocators;
 import telar.gui.core.primitives;
 import telar.gui.terminal.screen;
 import telar.wire.content;
@@ -39,70 +43,16 @@ export namespace telar::gui {
       std::uint16_t uri_length = 0;
     };
 
-    explicit RowCache(Memory& memory)
-        : cells_(AllocatorRef<CellValue, Memory>{memory}),
-          slots_(AllocatorRef<Slot, Memory>{memory}),
-          links_(AllocatorRef<Link, Memory>{memory}),
-          uris_(AllocatorRef<Byte, Memory>{memory}) {}
+    explicit RowCache(Memory& memory);
 
     // The rows' numbering: rows of another generation are forgotten, as are requests for them.
-    void number(std::uint64_t generation) {
-      if (generation != generation_) {
-        generation_ = generation;
-        forget();
-      }
-    }
+    void number(std::uint64_t generation);
 
-    [[nodiscard]] std::uint64_t generation() const noexcept {
-      return generation_;
-    }
+    [[nodiscard]] std::uint64_t generation() const noexcept;
 
     // Keeps the rows of `reply`, when they are numbered as the cache numbers rows and as wide
     // as `columns`. Whether any were kept.
-    bool store(const PaneRows& reply, std::uint16_t columns) {
-      settle(reply.request_id);
-      if (reply.generation != generation_ || reply.rows == 0 || reply.cols != columns || columns == 0) {
-        return false;
-      }
-
-      if (columns_ != columns) {
-        forget();
-        columns_ = columns;
-      }
-
-      if (slots_.empty()) {
-        slots_.resize(slot_count);
-        cells_.resize(slot_count * columns_);
-      }
-
-      auto reader = reply.reader();
-
-      for (std::uint16_t row = 0; row < reply.rows; ++row) {
-        const auto stable = reply.from + row;
-        auto& slot = slots_[stable % slot_count];
-        if (slot.held) {
-          dropLinks(slot.stable);
-        }
-
-        slot.stable = stable;
-        slot.flags = reply.text_metadata ? reply.text_metadata->row_flags[row] : Byte{0};
-        slot.revision = ++revision_;
-        slot.held = true;
-        const auto first = (stable % slot_count) * columns_;
-
-        for (std::uint16_t column = 0; column < columns_; ++column) {
-          const auto cell = reader.next();
-
-          cells_[first + column] = cell ? CellValue{*cell} : CellValue{};
-        }
-      }
-
-      if (reply.text_metadata) {
-        keepLinks(reply, *reply.text_metadata);
-      }
-
-      return true;
-    }
+    bool store(const PaneRows& reply, std::uint16_t columns);
 
     // A hyperlink on a held row as `links` shows it.
     struct LinkView {
@@ -111,9 +61,10 @@ export namespace telar::gui {
       std::string_view uri;
     };
 
-    // Calls `visit` with each hyperlink on held row `stable`.
+    // Calls `visit` with each hyperlink on held row `stable`. Generic over the caller's visitor,
+    // so it stays here.
     template <typename Visitor>
-    void links(std::uint64_t stable, Visitor&& visit) const {
+    TBC_HOT_PATH void links(std::uint64_t stable, Visitor&& visit) const {
       if (!holds(stable)) {
         return;
       }
@@ -125,84 +76,26 @@ export namespace telar::gui {
       }
     }
 
-    [[nodiscard]] std::optional<Row> find(std::uint64_t stable) const noexcept {
-      if (slots_.empty()) {
-        return std::nullopt;
-      }
+    [[nodiscard]] std::optional<Row> find(std::uint64_t stable) const noexcept;
 
-      const auto index = stable % slot_count;
-      const auto& slot = slots_[index];
-      if (!slot.held || slot.stable != stable) {
-        return std::nullopt;
-      }
-
-      return Row{.cells = std::span<const CellValue>{cells_}.subspan(index * columns_, columns_), .flags = slot.flags, .revision = slot.revision};
-    }
-
-    [[nodiscard]] bool holds(std::uint64_t stable) const noexcept {
-      return find(stable).has_value();
-    }
+    [[nodiscard]] bool holds(std::uint64_t stable) const noexcept;
 
     // The first of the rows from `first` to `last` neither held nor asked for, if any: the next
     // request starts there.
-    [[nodiscard]] std::optional<std::uint64_t> missing(std::uint64_t first, std::uint64_t last) const noexcept {
-      for (auto stable = first; stable <= last; ++stable) {
-        if (!holds(stable) && !asked(stable)) {
-          return stable;
-        }
-      }
+    [[nodiscard]] std::optional<std::uint64_t> missing(std::uint64_t first, std::uint64_t last) const noexcept;
 
-      return std::nullopt;
-    }
-
-    [[nodiscard]] bool full() const noexcept {
-      return std::ranges::all_of(pending_, [](const Pending& request) {
-        return request.id != 0;
-      });
-    }
+    [[nodiscard]] bool full() const noexcept;
 
     // A request for the rows from `from`, in flight until its reply or its failure settles it.
-    void ask(std::uint64_t request_id, std::uint64_t from, std::uint16_t count) noexcept {
-      for (auto& request : pending_) {
-        if (request.id == 0) {
-          request = {.id = request_id, .from = from, .count = count};
-          return;
-        }
-      }
-    }
+    void ask(std::uint64_t request_id, std::uint64_t from, std::uint16_t count) noexcept;
 
     // Whether `request_id` is one of the cache's, which it no longer waits for.
-    bool settle(std::uint64_t request_id) noexcept {
-      for (auto& request : pending_) {
-        if (request.id == request_id && request_id != 0) {
-          request = {};
-          return true;
-        }
-      }
-
-      return false;
-    }
+    bool settle(std::uint64_t request_id) noexcept;
 
     // Forgets every row and request, and gives the slots back.
-    void release() {
-      forget();
-      Vector<Slot, Memory> slots{slots_.get_allocator()};
+    void release();
 
-      slots_.swap(slots);
-      Vector<CellValue, Memory> cells{cells_.get_allocator()};
-
-      cells_.swap(cells);
-      Vector<Link, Memory> links{links_.get_allocator()};
-
-      links_.swap(links);
-      Vector<Byte, Memory> uris{uris_.get_allocator()};
-
-      uris_.swap(uris);
-    }
-
-    [[nodiscard]] bool empty() const noexcept {
-      return slots_.empty();
-    }
+    [[nodiscard]] bool empty() const noexcept;
 
   private:
     struct Slot {
@@ -218,64 +111,17 @@ export namespace telar::gui {
       std::uint16_t count = 0;
     };
 
-    [[nodiscard]] bool asked(std::uint64_t stable) const noexcept {
-      return std::ranges::any_of(pending_, [stable](const Pending& request) {
-        return request.id != 0 && stable >= request.from && stable < request.from + request.count;
-      });
-    }
+    [[nodiscard]] bool asked(std::uint64_t stable) const noexcept;
 
-    void forget() noexcept {
-      for (auto& slot : slots_) {
-        slot.held = false;
-      }
+    void forget() noexcept;
 
-      pending_ = {};
-      links_.clear();
-      uris_.clear();
-    }
-
-    void dropLinks(std::uint64_t stable) noexcept {
-      std::erase_if(links_, [stable](const Link& link) {
-        return link.stable == stable;
-      });
-    }
+    void dropLinks(std::uint64_t stable) noexcept;
 
     // The reply's hyperlinks by the row they are on, with copies of their targets.
-    void keepLinks(const PaneRows& reply, const TextMetadata& metadata) {
-      if (metadata.runs.empty()) {
-        return;
-      }
-
-      if (uris_.size() > uri_compaction_bytes) {
-        compactUris();
-      }
-
-      for (const auto& run : metadata.runs) {
-        if (run.link_index >= metadata.links.size() || reply.cols == 0) {
-          continue;
-        }
-
-        const auto& target = metadata.links[run.link_index];
-        const auto offset = uris_.size();
-
-        uris_.insert(uris_.end(), metadata.uris.begin() + target.offset, metadata.uris.begin() + target.offset + target.len);
-        links_.push_back({.stable = reply.from + (run.start / reply.cols), .column = static_cast<std::uint16_t>(run.start % reply.cols), .length = run.len, .uri_offset = static_cast<std::uint32_t>(offset), .uri_length = target.len});
-      }
-    }
+    void keepLinks(const PaneRows& reply, const TextMetadata& metadata);
 
     // Keeps only the targets of links still held.
-    void compactUris() {
-      Vector<Byte, Memory> kept{uris_.get_allocator()};
-
-      for (auto& link : links_) {
-        const auto offset = kept.size();
-
-        kept.insert(kept.end(), uris_.begin() + link.uri_offset, uris_.begin() + link.uri_offset + link.uri_length);
-        link.uri_offset = static_cast<std::uint32_t>(offset);
-      }
-
-      uris_.swap(kept);
-    }
+    void compactUris();
 
     Vector<CellValue, Memory> cells_;
     Vector<Slot, Memory> slots_;
@@ -286,5 +132,8 @@ export namespace telar::gui {
     std::uint64_t revision_ = 0;
     std::uint16_t columns_ = 0;
   };
+
+  extern template class RowCache<Memory>;
+  extern template class RowCache<ConcurrentMemory>;
 
 }

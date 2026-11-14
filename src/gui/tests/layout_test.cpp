@@ -56,10 +56,12 @@ namespace {
   void referenceToken() {
     SystemAllocator system;
     constexpr std::size_t memory_capacity = 8192;
-    BudgetAllocator memory{system, memory_capacity};
+    BudgetAllocator allocator{system, memory_capacity};
+    telar::MemoryAdapter adapter{allocator};
+    telar::Memory& memory = adapter;
 
     {
-      String<BudgetAllocator<SystemAllocator>> text{AllocatorRef<char, BudgetAllocator<SystemAllocator>>{memory}};
+      String<telar::Memory> text{AllocatorRef<char, telar::Memory>{memory}};
 
       require(LayoutToken::write(fixture_snapshot, text) == reference_layout_token, "export must match the reference token byte for byte");
       const auto preset = LayoutToken::read(reference_layout_token);
@@ -72,7 +74,7 @@ namespace {
       require(split != nullptr && split->axis == ClientLayoutAxis::vertical && split->ratio == fixture_ratio, "import must preserve the split axis and fraction");
     }
 
-    require(memory.liveBytes() == 0, "export storage must release its injected allocations");
+    require(allocator.liveBytes() == 0, "export storage must release its injected allocations");
   }
 
   void invalidTokens() {
@@ -103,8 +105,10 @@ namespace {
   }
 
   void emptySnapshot() {
-    SystemAllocator memory;
-    String<SystemAllocator> text{AllocatorRef<char, SystemAllocator>{memory}};
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
+    String<telar::ConcurrentMemory> text{AllocatorRef<char, telar::ConcurrentMemory>{memory}};
     const ClientLayoutSnapshot bootstrap;
 
     LayoutToken::write(bootstrap, text);
@@ -154,8 +158,10 @@ namespace {
     auto snapshot = fixture_snapshot;
 
     snapshot.tabs = tabs;
-    SystemAllocator memory;
-    String<SystemAllocator> text{AllocatorRef<char, SystemAllocator>{memory}};
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
+    String<telar::ConcurrentMemory> text{AllocatorRef<char, telar::ConcurrentMemory>{memory}};
 
     LayoutToken::write(snapshot, text);
     require(text.size() <= LayoutToken::text_capacity, "a complete tab must fit the CLI token capacity");

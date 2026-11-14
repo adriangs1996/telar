@@ -35,7 +35,9 @@ namespace {
   using namespace telar::gui::test;
 
   void workspaceMetadataAndRevisions() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     WorkspaceReplica replica{memory};
     const std::array projects{WorkspaceListEntry{.workspace = 2, .name = "task", .path = "/task"}, WorkspaceListEntry{.workspace = 1, .name = "project", .path = "/project", .tab_count = 3}};
     std::array rows{worktreeEntry()};
@@ -63,7 +65,9 @@ namespace {
   void pathPoolAndAllocationFailure() {
     SystemAllocator upstream;
     BudgetAllocator budget{upstream, std::numeric_limits<std::size_t>::max()};
-    AllocationGate memory{budget};
+    AllocationGate gate{budget};
+    telar::MemoryAdapter adapter{gate};
+    telar::Memory& memory = adapter;
 
     {
       WorkspaceReplica replica{memory};
@@ -81,13 +85,13 @@ namespace {
       tasks.front().path = path;
       replica.apply({.revision = 1, .entries = projects, .worktrees = tasks});
       replica.apply({.revision = 2, .entries = projects, .worktrees = tasks});
-      require(replica.entries().size() == WorkspaceReplica<decltype(memory)>::path_pool_bytes / maximum_path_bytes && replica.dropped() == 1, "the original path pool keeps only complete paths before its first overflow");
-      require(replica.worktrees().front().path.size() == Worktree<decltype(memory)>::retained_path_bytes, "task metadata keeps the original bounded checkout-path tail");
+      require(replica.entries().size() == WorkspaceReplica<std::remove_reference_t<std::remove_reference_t<decltype(memory)>>>::path_pool_bytes / maximum_path_bytes && replica.dropped() == 1, "the original path pool keeps only complete paths before its first overflow");
+      require(replica.worktrees().front().path.size() == Worktree<std::remove_reference_t<std::remove_reference_t<decltype(memory)>>>::retained_path_bytes, "task metadata keeps the original bounded checkout-path tail");
       const auto live = budget.liveBytes();
       const std::string title(80, 'x');
 
       tasks.front().title = title;
-      memory.permit(0);
+      gate.permit(0);
       bool rejected = false;
 
       try {
@@ -98,7 +102,7 @@ namespace {
 
       require(rejected && replica.revision() == 2 && replica.worktrees().front().title == "Fix the task", "worktree allocation failure must preserve the entire published snapshot");
       require(budget.liveBytes() == live, "rejected metadata must not leak storage");
-      memory.permit(std::nullopt);
+      gate.permit(std::nullopt);
       require(replica.apply({.revision = 3, .entries = projects, .worktrees = tasks}), "failed workspace snapshots must be retryable");
     }
 
@@ -107,7 +111,9 @@ namespace {
 
   void activityNestsTasksAndCommands() {
     SystemAllocator upstream;
-    BudgetAllocator memory{upstream, std::numeric_limits<std::size_t>::max()};
+    BudgetAllocator allocator{upstream, std::numeric_limits<std::size_t>::max()};
+    telar::MemoryAdapter adapter{allocator};
+    telar::Memory& memory = adapter;
     WorkspaceReplica workspaces{memory};
     AgentReplica agents{memory};
     const std::array projects{WorkspaceListEntry{.workspace = 1, .name = "project", .path = "/project"}, WorkspaceListEntry{.workspace = 2, .name = "task", .path = "/task"}};
@@ -125,20 +131,22 @@ namespace {
     reports.back().work_tree = task_worktree_id;
     reports.back().status = AgentStatus::blocked;
     require(agents.apply({.revision = 1, .entries = reports}, 0), "activity agents must commit");
-    using Order = ActivityOrder<decltype(memory)>;
+    using Order = ActivityOrder<std::remove_reference_t<std::remove_reference_t<decltype(memory)>>>;
     const std::array sources{Order::Source{.agents = agents.entries(), .workspaces = workspaces}};
     Order::Plan plan;
-    const auto allocations = memory.allocations();
+    const auto allocations = allocator.allocations();
 
     Order::write(sources, 0, plan);
-    require(memory.allocations() == allocations, "activity ordering must not allocate");
+    require(allocator.allocations() == allocations, "activity ordering must not allocate");
     require(plan.count == 3 && plan.entries.front().agent == 0 && plan.entries.front().coordinator, "the root agent must own its task and tracked command");
     require(plan.entries[1].agent == 1 && plan.entries[1].parent == 0 && plan.entries[1].depth == 1 && plan.entries[1].card == ActivityCard::task_full, "blocked tasks must be full cards nested under their creator");
     require(!plan.entries[2].agent && plan.entries[2].worktree == 1 && plan.entries[2].parent == 0, "an unrepresented tracked command must remain visible under its creator");
   }
 
   void exactReferencesAndCycles() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     WorkspaceReplica workspaces{memory};
     AgentReplica agents{memory};
     const std::array projects{WorkspaceListEntry{.workspace = 1, .name = "project", .path = "/project"}};
@@ -157,7 +165,7 @@ namespace {
     tasks.back().coordinator = coordinatorReference(1);
     require(workspaces.apply({.revision = 1, .entries = projects, .worktrees = tasks}), "cyclic workspaces must be retained");
     require(agents.apply({.revision = 1, .entries = reports}, 0), "cyclic agents must be retained");
-    using Order = ActivityOrder<SystemAllocator>;
+    using Order = ActivityOrder<telar::ConcurrentMemory>;
     const std::array sources{Order::Source{.agents = agents.entries(), .workspaces = workspaces}};
     Order::Plan plan;
 
@@ -174,7 +182,9 @@ namespace {
   }
 
   void crossMachineAliasesResolveDeterministically() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     WorkspaceReplica parent_workspaces{memory};
     WorkspaceReplica child_workspaces{memory};
     AgentReplica parents{memory};
@@ -201,7 +211,7 @@ namespace {
     parents.apply({.revision = 1, .entries = identified_parents}, 0);
     children.apply({.revision = 1, .entries = child_reports}, 0);
     require(children.entries().front().finalLine() == "A retained answer", "runtime task summaries must retain their owned final message");
-    using Order = ActivityOrder<SystemAllocator>;
+    using Order = ActivityOrder<telar::ConcurrentMemory>;
     const std::array sources{
         Order::Source{.slot = 0, .agents = parents.entries(), .workspaces = parent_workspaces},
         Order::Source{.slot = 1, .agents = parents.entries(), .workspaces = parent_workspaces},
@@ -215,7 +225,9 @@ namespace {
   }
 
   void otherMachinesListOnlyAgentsThatWait() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     WorkspaceReplica workspaces{memory};
     AgentReplica agents{memory};
     const std::array projects{WorkspaceListEntry{.workspace = 1, .name = "project", .path = "/project"}};
@@ -234,7 +246,7 @@ namespace {
     reports[2].pane_id = 3;
     reports[2].status = AgentStatus::failed;
     require(agents.apply({.revision = 1, .entries = reports}, 0), "agents must commit");
-    using Order = ActivityOrder<SystemAllocator>;
+    using Order = ActivityOrder<telar::ConcurrentMemory>;
     const std::array sources{
         Order::Source{.slot = 0, .agents = agents.entries(), .workspaces = workspaces},
         Order::Source{.slot = 1, .agents = agents.entries(), .workspaces = workspaces},

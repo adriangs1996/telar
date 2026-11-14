@@ -114,7 +114,9 @@ namespace {
     }
 
     Q_SLOT static void projectionKeepsOriginalLabelsAndBlockedReasons() {
-      SystemAllocator memory;
+      SystemAllocator system;
+      telar::MemoryAdapter adapter{system};
+      telar::ConcurrentMemory& memory = adapter;
       Agent agent{memory};
 
       agent.pane_id = pane_id;
@@ -159,7 +161,9 @@ namespace {
     }
 
     Q_SLOT static void cardRowsAndSelectionNeedNoController() {
-      SystemAllocator memory;
+      SystemAllocator system;
+      telar::MemoryAdapter adapter{system};
+      telar::ConcurrentMemory& memory = adapter;
       Agent agent{memory};
 
       agent.pane_id = pane_id;
@@ -209,7 +213,9 @@ namespace {
     }
 
     Q_SLOT static void offlineCardsRetireTheirHoveredBackground() {
-      SystemAllocator memory;
+      SystemAllocator system;
+      telar::MemoryAdapter adapter{system};
+      telar::ConcurrentMemory& memory = adapter;
       Agent agent{memory};
 
       agent.pane_id = pane_id;
@@ -236,7 +242,9 @@ namespace {
     }
 
     Q_SLOT static void onlyEnabledCardsShowThePointingCursor() {
-      SystemAllocator memory;
+      SystemAllocator system;
+      telar::MemoryAdapter adapter{system};
+      telar::ConcurrentMemory& memory = adapter;
       Agent agent{memory};
 
       agent.pane_id = pane_id;
@@ -262,7 +270,9 @@ namespace {
     }
 
     Q_SLOT static void deliveredHoverIdentityOverridesGeometricHover() {
-      SystemAllocator memory;
+      SystemAllocator system;
+      telar::MemoryAdapter adapter{system};
+      telar::ConcurrentMemory& memory = adapter;
       Agent agent{memory};
 
       agent.pane_id = pane_id;
@@ -289,7 +299,9 @@ namespace {
     }
 
     Q_SLOT static void projectsKeepTheirOrderBeforeAgentAttention() {
-      SystemAllocator memory;
+      SystemAllocator system;
+      telar::MemoryAdapter adapter{system};
+      telar::ConcurrentMemory& memory = adapter;
       std::array agents{Agent{memory}, Agent{memory}, Agent{memory}, Agent{memory}};
       const WorkspaceLocation first{.kind = WorkspaceLocation::Kind::workspace, .id = 1};
       const WorkspaceLocation second{.kind = WorkspaceLocation::Kind::workspace, .id = 2};
@@ -306,7 +318,7 @@ namespace {
       agents[2].status = AgentStatus::blocked;
       agents[2].location.workspace = second;
       agents[3].status = AgentStatus::blocked;
-      const auto plan = AgentOrder::arrange(std::span<const Agent<SystemAllocator>>{agents}, workspaces);
+      const auto plan = AgentOrder::arrange(std::span<const Agent<telar::ConcurrentMemory>>{agents}, workspaces);
 
       QCOMPARE(plan.count, agents.size());
       const std::array<std::size_t, 4> expected{3, 1, 0, 2};
@@ -318,7 +330,9 @@ namespace {
     }
 
     Q_SLOT static void statusDropsDurationBeforeItsWordAndGlyph() {
-      SystemAllocator memory;
+      SystemAllocator system;
+      telar::MemoryAdapter adapter{system};
+      telar::ConcurrentMemory& memory = adapter;
       Agent agent{memory};
 
       agent.status = AgentStatus::working;
@@ -348,7 +362,9 @@ namespace {
     }
 
     Q_SLOT static void activityCreatesOnlyVisibleCards() {
-      SystemAllocator memory;
+      SystemAllocator system;
+      telar::MemoryAdapter adapter{system};
+      telar::ConcurrentMemory& memory = adapter;
       Agent agent{memory};
       ListModel model;
       QList<QVariantMap> records;

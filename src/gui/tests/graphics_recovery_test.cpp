@@ -135,7 +135,9 @@ namespace {
   }
 
   void replacementDoesNotConsumeAnotherLogicalImageSlot() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     GraphicsBudget budget;
     GraphicsStore store{memory, budget};
 
@@ -155,7 +157,9 @@ namespace {
   }
 
   void supersededIncompleteHeadersStayWithinOneImageAllocation() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     GraphicsBudget budget;
     GraphicsStore store{memory, budget};
     constexpr std::uint64_t generations = decltype(store)::image_capacity * 2;
@@ -169,7 +173,9 @@ namespace {
   }
 
   void virtualPlacementIdentityDoesNotDependOnItsImage() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     GraphicsBudget budget;
     GraphicsStore store{memory, budget};
     const auto first = description(1);
@@ -189,7 +195,7 @@ namespace {
     const GraphicsHeader snapshot{.pane_id = 1, .revision = revision};
 
     deliver(client, GraphicsSnapshot{.header = snapshot, .phase = SnapshotPhase::begin});
-    constexpr auto image_count = GraphicsStore<SystemAllocator>::image_capacity + 1;
+    constexpr auto image_count = GraphicsStore<telar::ConcurrentMemory>::image_capacity + 1;
 
     for (std::uint32_t id = 1; id <= image_count; ++id) {
       deliver(client, GraphicsImage{.header = snapshot, .image = description(id)});

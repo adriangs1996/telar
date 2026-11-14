@@ -104,7 +104,9 @@ namespace {
   }
 
   void revisionsAndSourceReplacement() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     AgentReplica replica{memory};
     std::array entries{agentSnapshotEntry(initial_age), agentSnapshotEntry(initial_age)};
 
@@ -133,7 +135,9 @@ namespace {
   }
 
   void attachmentCapabilitiesFollowExactAgentIdentities() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     AgentReplica replica{memory};
     std::array entries{agentSnapshotEntry(), agentSnapshotEntry()};
 
@@ -155,7 +159,9 @@ namespace {
   }
 
   void statusChangesFollowCommittedIdentities() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     AgentReplica replica{memory};
     std::array entries{agentSnapshotEntry(), agentSnapshotEntry(), agentSnapshotEntry()};
 
@@ -225,7 +231,9 @@ namespace {
   };
 
   void allocationFailurePreservesTheReplica() {
-    RejectingAllocator memory;
+    RejectingAllocator rejecting;
+    telar::MemoryAdapter adapter{rejecting};
+    telar::Memory& memory = adapter;
 
     {
       AgentReplica replica{memory};
@@ -234,12 +242,12 @@ namespace {
       replica.apply({.revision = 1, .entries = entries}, second);
       replica.apply({.revision = 2, .entries = entries}, second);
       const auto interval = replica.entries().front().status_clock.interval();
-      const auto live_bytes = memory.liveBytes();
+      const auto live_bytes = rejecting.liveBytes();
       const std::string title(80, 'x');
 
       entries.front().session_title = title;
       entries.front().status = AgentStatus::blocked;
-      memory.setRejecting(true);
+      rejecting.setRejecting(true);
       bool rejected = false;
 
       try {
@@ -251,20 +259,22 @@ namespace {
       require(rejected && replica.revision() == 2, "allocation failure must not publish a revision");
       require(replica.statusChanges().empty(), "allocation failure must not publish status transitions");
       require(replica.entries().front().title == "Initial" && replica.entries().front().status == AgentStatus::working, "allocation failure must not partially replace metadata");
-      require(replica.entries().front().status_clock.interval() == interval && memory.liveBytes() == live_bytes, "allocation failure must preserve clocks and release temporary allocations");
-      memory.setRejecting(false);
+      require(replica.entries().front().status_clock.interval() == interval && rejecting.liveBytes() == live_bytes, "allocation failure must preserve clocks and release temporary allocations");
+      rejecting.setRejecting(false);
       require(replica.apply({.revision = 3, .entries = entries}, 4 * second), "a failed revision must be retryable");
       require(replica.statusChanges().size() == 1 && replica.statusChanges().front().current == AgentStatus::blocked, "successful retry must publish its transition once");
     }
 
-    require(memory.liveBytes() == 0, "replica destruction must release injected storage");
+    require(rejecting.liveBytes() == 0, "replica destruction must release injected storage");
   }
 
   void warmedSnapshotsReuseStorage() {
     SystemAllocator upstream;
     constexpr std::size_t budget_bytes = std::size_t{1024} * 1024;
     constexpr std::size_t title_bytes = 80;
-    BudgetAllocator memory{upstream, budget_bytes};
+    BudgetAllocator allocator{upstream, budget_bytes};
+    telar::MemoryAdapter adapter{allocator};
+    telar::Memory& memory = adapter;
     AgentReplica replica{memory};
     std::string title(title_bytes, 'x');
     std::array<AgentSnapshotEntry, decltype(replica)::capacity> entries;
@@ -278,7 +288,7 @@ namespace {
 
     replica.apply({.revision = 1, .entries = entries}, second);
     replica.apply({.revision = 2, .entries = entries}, second);
-    const auto allocations = memory.allocations();
+    const auto allocations = allocator.allocations();
     constexpr std::uint64_t revisions = 100;
     constexpr std::uint64_t alphabet_size = 26;
 
@@ -287,8 +297,8 @@ namespace {
       replica.apply({.revision = revision, .entries = entries}, revision * second);
     }
 
-    require(memory.allocations() == allocations, "repeated full snapshots with warmed string capacities must not allocate");
-    std::cout << "Warm agent snapshots: entries=" << entries.size() << ", additional_allocations=" << memory.allocations() - allocations << '\n';
+    require(allocator.allocations() == allocations, "repeated full snapshots with warmed string capacities must not allocate");
+    std::cout << "Warm agent snapshots: entries=" << entries.size() << ", additional_allocations=" << allocator.allocations() - allocations << '\n';
   }
 
   struct FakeClock {

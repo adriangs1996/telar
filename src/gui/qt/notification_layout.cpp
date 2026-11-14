@@ -249,7 +249,7 @@ namespace telar::gui::qt {
 
     catalog.request(text, role);
 
-    return static_cast<float>(fonts::TextLayout<SystemAllocator>::measure(fonts, text, {.pixel_height = pixels, .preferred = role}));
+    return static_cast<float>(fonts::TextLayout<ConcurrentMemory>::measure(fonts, text, {.pixel_height = pixels, .preferred = role}));
   }
 
   NotificationLayout::Content& NotificationLayout::content(const NotificationItem& item, float width) {

@@ -54,7 +54,7 @@ namespace telar::gui::qt {
 
   NativeChromeIcon::NativeChromeIcon(QQuickItem* parent)
       : QQuickItem(parent),
-        layout_(memory_),
+        layout_(adapter_),
         ancestors_(*this) {
     setFlag(ItemHasContents);
   }
@@ -148,7 +148,7 @@ namespace telar::gui::qt {
       fonts_ = ResidentFonts::shared(source_);
       display_scale_ = window() == nullptr ? 1 : window()->effectiveDevicePixelRatio();
       const auto pixels = std::clamp(std::round(static_cast<float>(pixel_size_ * display_scale_)), 1.0F, ChromeMetrics::maximum_text);
-      using Layout = fonts::IconLayout<SystemAllocator>;
+      using Layout = fonts::IconLayout<ConcurrentMemory>;
 
       pixel_height_ = static_cast<std::uint16_t>(std::min(pixels * Layout::oversample, static_cast<float>(Layout::maximum_pixel_height)));
       target_side_ = std::round(pixels * Layout::size_ratio);

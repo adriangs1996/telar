@@ -191,7 +191,9 @@ namespace {
   }
 
   void sharedAndInlineStoresHaveEquivalentGenerationsAndCredits() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     GraphicsBudget inline_budget;
     GraphicsBudget shared_budget;
     GraphicsStore inline_store{memory, inline_budget};
@@ -239,7 +241,11 @@ namespace {
       }
     } source;
 
-    SystemAllocator memory;
+    SystemAllocator system;
+
+    telar::MemoryAdapter adapter{system};
+
+    telar::ConcurrentMemory& memory = adapter;
     GraphicsBudget budget{.used = GraphicsBudget::global_capacity - pixels.size() + 1};
     GraphicsStore store{memory, budget};
     bool rejected = false;

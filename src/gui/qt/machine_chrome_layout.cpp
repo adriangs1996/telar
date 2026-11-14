@@ -226,7 +226,7 @@ namespace telar::gui::qt {
     tbc::raw(catalog_.data())->request(text, role);
     const auto size = mode_ == Mode::facts ? chrome_.small : chrome_.body;
 
-    return static_cast<float>(fonts::TextLayout<SystemAllocator>::measure(*fonts_, text, {.pixel_height = size, .preferred = role}));
+    return static_cast<float>(fonts::TextLayout<ConcurrentMemory>::measure(*fonts_, text, {.pixel_height = size, .preferred = role}));
   }
 
   QColor MachineChromeLayout::ink(std::string_view written) const {

@@ -49,7 +49,9 @@ namespace {
   }
 
   void supersededReferencedMetadataSurvivesCompletion() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     GraphicsBudget budget;
     GraphicsStore store{memory, budget};
     const auto previous = description(1);
@@ -66,7 +68,9 @@ namespace {
   }
 
   void deletingAVirtualPlacementReleasesItsRetiredGeneration() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     GraphicsBudget budget;
     GraphicsStore store{memory, budget};
     const auto previous = description(1);
@@ -81,7 +85,9 @@ namespace {
   }
 
   void anUnreferencedReplacementReleasesPixelsAtItsHeader() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     GraphicsBudget budget;
     GraphicsStore store{memory, budget};
     const auto previous = description(1);
@@ -95,7 +101,9 @@ namespace {
   }
 
   void invalidHeadersPreserveTheExistingGeneration() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     GraphicsBudget budget;
     GraphicsStore store{memory, budget};
     const auto previous = description(1);

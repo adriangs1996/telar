@@ -420,4 +420,42 @@ namespace telar::gui::fonts {
     return FT_IS_FIXED_WIDTH(face_.get()) != 0;
   }
 
+  ShapedRunView::ShapedRunView(std::span<const hb_glyph_info_t> glyphs, std::span<const hb_glyph_position_t> positions, bool right_to_left) noexcept
+      : glyphs_(glyphs),
+        positions_(positions),
+        right_to_left_(right_to_left) {}
+
+  std::size_t ShapedRunView::size() const noexcept {
+    return glyphs_.size();
+  }
+
+  bool ShapedRunView::rightToLeft() const noexcept {
+    return right_to_left_;
+  }
+
+  ShapedGlyph ShapedRunView::glyph(std::size_t index) const noexcept {
+    const auto& info = glyphs_[index];
+    const auto& position = positions_[index];
+
+    return {.index = info.codepoint, .cluster = info.cluster, .x_advance = position.x_advance, .y_advance = position.y_advance, .x_offset = position.x_offset, .y_offset = position.y_offset};
+  }
+
+  std::int32_t ShapedRunView::advance() const {
+    std::int64_t advance = 0;
+
+    for (const auto& position : positions_) {
+      advance += position.x_advance;
+    }
+
+    return FontMetrics::roundFixed(advance);
+  }
+
+  std::span<const std::uint8_t> GlyphBitmapView::row(std::size_t index) const noexcept {
+    return coverage.subspan(index * stride, width);
+  }
+
+  bool sameFontMatch(const FontMatch& left, const FontMatch& right) noexcept {
+    return left.face_index == right.face_index && std::strncmp(std::span{left.path}.data(), std::span{right.path}.data(), sizeof(left.path)) == 0 && std::strncmp(std::span{left.postscript}.data(), std::span{right.postscript}.data(), sizeof(left.postscript)) == 0 && left.variation.count == right.variation.count && std::ranges::equal(left.variation.tags, right.variation.tags) && std::ranges::equal(left.variation.values, right.variation.values);
+  }
+
 }

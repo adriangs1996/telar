@@ -771,7 +771,8 @@ namespace {
         .tabs = foreign_tabs,
     };
 
-    String<SystemAllocator> foreign_token{AllocatorRef<char, SystemAllocator>{memory}};
+    telar::MemoryAdapter adapter{memory};
+    String<telar::ConcurrentMemory> foreign_token{AllocatorRef<char, telar::ConcurrentMemory>{adapter}};
 
     LayoutToken::write(foreign_snapshot, foreign_token);
     command.request_id = 4;

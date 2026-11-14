@@ -93,7 +93,8 @@ namespace telar::gui::qt {
     void setAvailable(bool available);
 
     SystemAllocator memory_;
-    fonts::IconLayout<SystemAllocator> layout_;
+    MemoryAdapter<SystemAllocator> adapter_{memory_};
+    fonts::IconLayout<ConcurrentMemory> layout_;
     tbc::view<AncestorGeometry, tbc::lt::self> ancestors_;
     std::shared_ptr<const FontAsset> source_;
     std::shared_ptr<ResidentFonts> fonts_;

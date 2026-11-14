@@ -183,7 +183,7 @@ namespace telar::gui::qt {
       if (fonts_) {
         const auto utf8 = text.toUtf8();
         const std::string_view label{utf8.constData(), static_cast<std::size_t>(utf8.size())};
-        const auto width = fonts::TextLayout<SystemAllocator>::measure(*fonts_, label, {.pixel_height = pixels, .preferred = role});
+        const auto width = fonts::TextLayout<ConcurrentMemory>::measure(*fonts_, label, {.pixel_height = pixels, .preferred = role});
 
         if (catalog_) {
           catalog_->request(label, role);
