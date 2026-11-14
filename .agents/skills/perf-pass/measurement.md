@@ -29,7 +29,7 @@ inputs.
 | GUI command separators | `src/gui/tools/compare_separators.py` | `gui-separators-probe` |
 | GUI box, block and Braille glyph ink | `src/gui/tools/compare_glyph_ink.py` | `gui-glyph-ink-probe` |
 | Runtime PTY round trips | `src/runtime/tools/bench_control_pty.py` | `control-pty-latency-probe` |
-| Runtime PTY output to client frames | `src/runtime/tools/bench_runtime_probe.py` (`--count` for instructions and cycles) | `runtime-probe` |
+| Runtime PTY output to client frames | `src/runtime/tools/bench_runtime_probe.py` (`--count` for instructions and cycles, `--control` for a copy of the baseline) | `runtime-probe` |
 | Runtime control queries | `src/runtime/tools/bench_control_queries.py` | its own fixtures |
 | Complete GUI against Ghostty | `tools/gui_tui_latency.py` | the GUI and runtime |
 

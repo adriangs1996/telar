@@ -12,6 +12,11 @@ probe with the sample's frames and with two warmup frames, and reports the diffe
 runtime's retired instructions and elapsed cycles per frame: start-up, the probe's fixed
 requests and shutdown cancel out.
 
+With --control, a second copy of the baseline (the whole build directory, at a path of the same
+length) runs in every round beside the two, through all six orders: its ratios to the baseline show
+what the method reports for identical code, and a Mann-Whitney test tells whether the candidate's
+ratios separate from them.
+
 Build each variant in its own Release directory with
 
     tools/cpp configure runtime -B <dir> --config Release
@@ -22,6 +27,7 @@ series when another build runs or the load is too high, so start it on a quiet h
 """
 import argparse
 import hashlib
+import itertools
 import json
 import math
 import os
@@ -161,24 +167,50 @@ def counted(directory, case, frames):
     return per_frame, dump
 
 
+def separation(left, right):
+    """Two-sided p of a Mann-Whitney U test between two samples, normal approximation with ties."""
+    values = sorted([(value, 0) for value in left] + [(value, 1) for value in right])
+    ranks = [0.0] * len(values)
+    start = 0
+
+    while start < len(values):
+        end = start
+        while end < len(values) and values[end][0] == values[start][0]:
+            end += 1
+
+        for index in range(start, end):
+            ranks[index] = (start + end + 1) / 2
+
+        start = end
+
+    count, other = len(left), len(right)
+    statistic = sum(rank for rank, (_, group) in zip(ranks, values) if group == 0) - count * (count + 1) / 2
+    deviation = math.sqrt(count * other * (count + other + 1) / 12)
+    z = (statistic - count * other / 2) / deviation
+
+    return statistic, math.erfc(abs(z) / math.sqrt(2))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--baseline', type=Path, required=True, help='Release build directory of the baseline')
     parser.add_argument('--candidate', type=Path, required=True, help='Release build directory of the candidate')
     parser.add_argument('--output', type=Path, required=True, help='new directory for the report and the host gate')
     parser.add_argument('--case', action='append', choices=CASES, help='workload to run; repeat it for several, all by default')
-    parser.add_argument('--pairs', type=int, default=7)
+    parser.add_argument('--control', type=Path, help='a copy of the baseline directory, run in every round as a third variant')
+    parser.add_argument('--pairs', type=int, default=7, help='rounds; each runs every variant once')
     parser.add_argument('--sample-ms', type=float, default=200, help='target duration of each timed sample')
     parser.add_argument('--max-frames', type=int, default=20000)
     parser.add_argument('--count', action='store_true', help='count instructions and cycles per frame instead of timing')
     options = parser.parse_args()
-    if not 1 <= options.pairs <= 31 or not options.sample_ms > 0 or options.max_frames < 50:
-        parser.error('Expected 1..31 pairs, a positive sample duration and at least 50 frames')
+    if not 1 <= options.pairs <= 60 or not options.sample_ms > 0 or options.max_frames < 50:
+        parser.error('Expected 1..60 pairs, a positive sample duration and at least 50 frames')
 
     if options.count and platform.system() != 'Darwin':
         parser.error('--count reads the counters of macOS /usr/bin/time -l')
 
-    directories = {name: getattr(options, name).resolve() for name in ('baseline', 'candidate')}
+    names = ('baseline', 'candidate', 'control') if options.control else ('baseline', 'candidate')
+    directories = {name: getattr(options, name).resolve() for name in names}
     for name, directory in directories.items():
         for binary in ('telar-runtime', 'runtime-probe'):
             if not (directory / binary).is_file():
@@ -199,15 +231,18 @@ def main():
     for case in options.case or CASES:
         frames = frames_for(directories, case, options.sample_ms * 1e6, options.max_frames)
 
-        # Warm the page cache and the first allocations of both variants.
+        # Warm the page cache and the first allocations of every variant.
         for directory in directories.values():
             timed(directory, case, frames)
 
         pairs = []
         dumps = set()
 
+        orders = list(itertools.permutations(names))
+
         for index in range(options.pairs):
-            order = ['baseline', 'candidate'] if index % 2 == 0 else ['candidate', 'baseline']
+            # Every variant takes every position equally often.
+            order = orders[index % len(orders)] if options.control else orders[index % 2]
             pair = {}
 
             for name in order:
@@ -218,7 +253,7 @@ def main():
 
             pairs.append(pair)
 
-        # The oracle: both builds show the probe the same screens.
+        # The oracle: every build shows the probe the same screens.
         if len(dumps) != 1:
             raise ValueError(f'{case}: the dumps differ between runs: {sorted(dumps)}')
 
@@ -227,18 +262,30 @@ def main():
 
         for metric in metrics:
             value = (lambda pair, name: pair[name][metric]) if options.count else (lambda pair, name: pair[name])
-            ratios = [value(pair, 'candidate') / value(pair, 'baseline') for pair in pairs]
-            if not all(math.isfinite(ratio) and ratio > 0 for ratio in ratios):
-                raise ValueError(f'{case}: expected positive finite {metric}')
+            summary = {}
 
-            wins = sum(ratio < 1 for ratio in ratios)
-            result[metric] = dict(baseline_median=statistics.median(value(pair, 'baseline') for pair in pairs),
-                                  candidate_median=statistics.median(value(pair, 'candidate') for pair in pairs),
-                                  baseline_range=[min(value(pair, 'baseline') for pair in pairs), max(value(pair, 'baseline') for pair in pairs)],
-                                  candidate_range=[min(value(pair, 'candidate') for pair in pairs), max(value(pair, 'candidate') for pair in pairs)],
-                                  median_paired_ratio=statistics.median(ratios), candidate_wins=wins)
-            print(f"{case:16} {metric:12} {result[metric]['baseline_median']:14.1f} -> {result[metric]['candidate_median']:14.1f} per frame  "
-                  f"ratio {result[metric]['median_paired_ratio']:.4f}  wins {wins}/{options.pairs}", flush=True)
+            for name in names:
+                samples = [value(pair, name) for pair in pairs]
+                summary[name] = dict(median=statistics.median(samples), range=[min(samples), max(samples)])
+
+            ratios = {}
+            for name in names[1:]:
+                ratios[name] = [value(pair, name) / value(pair, 'baseline') for pair in pairs]
+                if not all(math.isfinite(ratio) and ratio > 0 for ratio in ratios[name]):
+                    raise ValueError(f'{case}: expected positive finite {metric}')
+
+                summary[name].update(ratios=ratios[name], median_paired_ratio=statistics.median(ratios[name]),
+                                     wins=sum(ratio < 1 for ratio in ratios[name]))
+
+            line = f"{case:16} {metric:12} {summary['baseline']['median']:14.1f} -> {summary['candidate']['median']:14.1f} per frame  " \
+                   f"ratio {summary['candidate']['median_paired_ratio']:.4f}  wins {summary['candidate']['wins']}/{options.pairs}"
+            if options.control:
+                statistic, p = separation(ratios['candidate'], ratios['control'])
+                summary['separation'] = dict(mann_whitney_u=statistic, p=p)
+                line += f"  control {summary['control']['median_paired_ratio']:.4f} wins {summary['control']['wins']}/{options.pairs}  separation p {p:.3f}"
+
+            result[metric] = summary
+            print(line, flush=True)
 
         results[case] = result
 
