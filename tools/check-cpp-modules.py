@@ -228,13 +228,8 @@ def check_module_paths(files):
         raise RuntimeError('Module units outside the folder of their module:\n  ' + '\n  '.join(errors))
 
 
-# Test doubles that implement a production module live in its folder (rule 1), so the path no
-# longer marks them as tests; only test executables link them.
-TEST_UNITS = {'src/gui/platform/profile_file/controlled_awake_clock.cpp'}
-
-
 def owned_units(files):
-    return sorted(name for name in files if name.endswith(('.cppm', '.cpp')) and name not in TEST_UNITS
+    return sorted(name for name in files if name.endswith(('.cppm', '.cpp'))
                   and not re.search(r'/(tests|tools)/', name) and global_fragment((ROOT / name).read_text()))
 
 

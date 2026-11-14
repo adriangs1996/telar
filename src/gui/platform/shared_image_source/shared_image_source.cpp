@@ -11,9 +11,11 @@ module;
 #include <sys/stat.h>
 #include <unistd.h>
 
-module telar.gui.platform.profile_file;
+module telar.gui.platform.shared_image_source;
 
 import std;
+
+import telar.wire.vocabulary;
 
 namespace telar::gui::platform {
 

@@ -39,7 +39,7 @@ static_assert(true);
 #include "application/dependencies.hpp"
 
 import telar.gui.machines.discovery;
-import telar.gui.platform.profile_file;
+import telar.gui.platform.shared_image_source;
 import telar.client;
 import telar.gui.transport.runtime_link;
 

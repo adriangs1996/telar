@@ -31,7 +31,7 @@ static_assert(true);
 #include "application/dependencies.hpp"
 
 import telar.gui.machines.profile_store;
-import telar.gui.platform.profile_file;
+import telar.gui.platform.file_stamp;
 
 namespace telar::gui::qt {
 

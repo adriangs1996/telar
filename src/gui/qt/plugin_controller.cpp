@@ -41,7 +41,7 @@ import telar.gui.application.workspace_replica;
 import telar.gui.config.plugin_query;
 import telar.gui.config.plugin_effects;
 import telar.gui.input.copy_pointer;
-import telar.gui.platform.profile_file;
+import telar.gui.platform.runtime_endpoint;
 
 namespace telar::gui::qt {
 

@@ -41,7 +41,7 @@ static_assert(true);
 #include <variant>
 
 import telar.gui.core.metrics;
-import telar.gui.platform.profile_file;
+import telar.gui.platform.awake_clock;
 import telar.gui.presentation.frame_pacer;
 
 namespace telar::gui::qt {

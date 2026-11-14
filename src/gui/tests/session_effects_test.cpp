@@ -56,7 +56,7 @@ import telar.gui.application.host_effects;
 import telar.gui.application.workspace_replica;
 import telar.gui.application.session;
 import telar.gui.core.metrics;
-import telar.gui.platform.profile_file;
+import telar.gui.platform.awake_clock;
 import telar.gui.presentation.frame_pacer;
 
 namespace {

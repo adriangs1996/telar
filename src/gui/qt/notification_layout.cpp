@@ -64,7 +64,7 @@ import telar.gui.application.workspace_replica;
 import telar.gui.core.metrics;
 import telar.gui.fonts.face;
 import telar.gui.fonts.row_text_layout;
-import telar.gui.platform.profile_file;
+import telar.gui.platform.awake_clock;
 import telar.gui.presentation.notification_stack;
 
 namespace telar::gui::qt {

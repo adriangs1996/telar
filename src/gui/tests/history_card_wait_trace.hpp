@@ -29,7 +29,7 @@ static_assert(true);
 #pragma once
 #include "qt/history_selection_layout.hpp"
 
-import telar.gui.platform.profile_file;
+import telar.gui.platform.awake_clock;
 
 namespace telar::gui::test {
 

@@ -29,7 +29,7 @@ static_assert(true);
 
 import telar.gui.layout.geometry;
 import telar.gui.presentation.tab_drop;
-import telar.gui.platform.profile_file;
+import telar.gui.platform.awake_clock;
 import telar.gui.presentation.frame_pacer;
 
 namespace telar::gui::test {

@@ -62,12 +62,3 @@ export {
     };
   }
 }
-
-// Interface: platform/managed_directory.cppm
-export {
-  namespace telar::gui::platform {
-
-    void prepareManagedDirectory(std::string_view path);
-
-  }
-}

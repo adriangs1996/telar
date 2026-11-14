@@ -43,7 +43,7 @@ static_assert(true);
 
 import telar.gui.application.host_effects;
 import telar.gui.machines.picker;
-import telar.gui.platform.profile_file;
+import telar.gui.platform.awake_clock;
 import telar.gui.presentation.activity_order;
 
 namespace telar::gui::qt {

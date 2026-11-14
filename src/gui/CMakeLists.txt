@@ -34,7 +34,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${TELAR_ROOT}/li
 
 include(cmake/fonts.cmake)
 
-add_library(gui-core STATIC terminal/glyphs/curve_cache/box_curve.cpp platform/profile_file/awake_clock.cpp platform/notification_commands/wall_clock.cpp)
+add_library(gui-core STATIC terminal/glyphs/curve_cache/box_curve.cpp platform/awake_clock/awake_clock.cpp platform/notification_commands/wall_clock.cpp)
 telar_modules(gui-core)
 target_link_libraries(gui-core PUBLIC telar::shell telar::render ebnf::ebnf)
 target_include_directories(gui-core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/generated" "${TELAR_ROOT}/lib/tbc/include")
@@ -48,8 +48,8 @@ target_link_libraries(gui-glyphs INTERFACE gui-core)
 add_library(gui-clock INTERFACE)
 target_link_libraries(gui-clock INTERFACE gui-core)
 
-add_library(gui-posix STATIC platform/clipboard_image_source.cpp platform/clipboard_image_file.c platform/private_file_stamp/peer_identity.cpp platform/notification_commands/window_lease.cpp platform/profile_file/profile_file.cpp  platform/notification_commands/stdio_socket.cpp platform/login_shell/managed_directory.cpp platform/private_file_stamp/process_group.cpp platform/process_group.c)
-target_sources(gui-posix PRIVATE platform/profile_file/shared_image_source.cpp)
+add_library(gui-posix STATIC platform/clipboard_image_source.cpp platform/clipboard_image_file.c platform/private_file_stamp/peer_identity.cpp platform/notification_commands/window_lease.cpp platform/profile_file/profile_file.cpp  platform/notification_commands/stdio_socket.cpp platform/managed_directory/managed_directory.cpp platform/private_file_stamp/process_group.cpp platform/process_group.c)
+target_sources(gui-posix PRIVATE platform/shared_image_source/shared_image_source.cpp)
 target_link_libraries(gui-posix PUBLIC gui-core Threads::Threads)
 add_executable(telar-gui-command platform/surface_command_main.c)
 target_compile_definitions(telar-gui-command PRIVATE "$<$<PLATFORM_ID:Linux>:_GNU_SOURCE>")
@@ -744,7 +744,7 @@ if(TELAR_GUI_NATIVE)
   target_sources(gui-quick PRIVATE qt/text_scene.cpp)
   target_sources(gui-quick PRIVATE qt/font_source.cpp qt/font_resolver.cpp)
   target_include_directories(gui-quick PUBLIC qt)
-  target_sources(gui-quick PRIVATE qt/bundled_fonts.cpp qt/terminal_font.cpp platform/profile_file/runtime_endpoint.cpp platform/login_shell/login_shell.cpp)
+  target_sources(gui-quick PRIVATE qt/bundled_fonts.cpp qt/terminal_font.cpp platform/runtime_endpoint/runtime_endpoint.cpp platform/login_shell/login_shell.cpp)
   target_link_libraries(gui-quick PUBLIC gui-core gui-config gui-platform gui-keyboard gui-fonts gui-machine-profiles Qt6::Quick Qt6::QuickControls2 Qt6::Network Qt6::Concurrent)
   # Most of a gui-quick compilation parses the same Qt headers again; the ones
   # that at least two in five Qt adapters include are parsed once per build.
@@ -1031,12 +1031,12 @@ if(TELAR_GUI_NATIVE)
     add_test(NAME gui-graphics-retention-scene COMMAND gui-graphics-retention-scene-test)
     set_tests_properties(gui-graphics-retention-scene PROPERTIES ENVIRONMENT "QT_QUICK_BACKEND=software;QT_QPA_PLATFORM=offscreen" TIMEOUT 30)
     add_dependencies(gui-lint gui-graphics-retention-scene-test)
-    qt_add_executable(gui-graphics-recovery-scene-test tests/graphics_recovery_scene_test.cpp platform/profile_file/controlled_awake_clock.cpp)
+    qt_add_executable(gui-graphics-recovery-scene-test tests/graphics_recovery_scene_test.cpp tests/controlled_awake_clock.cpp)
     target_link_libraries(gui-graphics-recovery-scene-test PRIVATE gui-quick gui-quickplugin Qt6::Test)
     add_test(NAME gui-graphics-recovery-scene COMMAND gui-graphics-recovery-scene-test)
     set_tests_properties(gui-graphics-recovery-scene PROPERTIES ENVIRONMENT "QT_QUICK_BACKEND=software;QT_QPA_PLATFORM=offscreen" TIMEOUT 30)
     add_dependencies(gui-lint gui-graphics-recovery-scene-test)
-    qt_add_executable(gui-pane-attention-test tests/pane_attention_test.cpp platform/profile_file/controlled_awake_clock.cpp)
+    qt_add_executable(gui-pane-attention-test tests/pane_attention_test.cpp tests/controlled_awake_clock.cpp)
     target_link_libraries(gui-pane-attention-test PRIVATE gui-quick gui-quickplugin Qt6::Test)
     qt_add_resources(gui-pane-attention-test gui-pane-attention-fixtures
       PREFIX "/telar/test-pane-attention"

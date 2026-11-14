@@ -79,6 +79,8 @@ telar.gui.model.replicas
 telar.gui.palette.navigation_label
 telar.gui.paths.label
 telar.gui.peek.screen
+telar.gui.platform.clipboard_image_pipe
+telar.gui.platform.file_stamp
 telar.gui.platform.notification_commands
 telar.gui.platform.private_file_stamp
 telar.gui.platform.profile_file

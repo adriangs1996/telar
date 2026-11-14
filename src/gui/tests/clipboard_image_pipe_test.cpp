@@ -32,7 +32,7 @@ static_assert(true);
 #include "platform/clipboard_image_source.hpp"
 
 import telar.gui.tests.erasure_allocator;
-import telar.gui.platform.profile_file;
+import telar.gui.platform.clipboard_image_pipe;
 
 namespace {
 

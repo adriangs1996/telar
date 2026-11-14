@@ -3,13 +3,13 @@ module;
 #include <cstdint>
 #include <ctime>
 
-module telar.gui.platform.profile_file;
+module telar.gui.platform.awake_clock;
 
 import std;
 
 namespace telar::gui::platform {
 
-  std::uint64_t AwakeClock::nowNanoseconds() noexcept {
+  extern "C++" std::uint64_t AwakeClock::nowNanoseconds() noexcept {
 #ifdef __APPLE__
     constexpr clockid_t awake_clock = CLOCK_UPTIME_RAW;
 #elifdef __linux__

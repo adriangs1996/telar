@@ -43,7 +43,7 @@ static_assert(true);
 import telar.gui.components.builtin_content;
 import telar.gui.config.plugin_query;
 import telar.gui.core.metrics;
-import telar.gui.platform.profile_file;
+import telar.gui.platform.file_stamp;
 import telar.gui.platform.private_file_stamp;
 import telar.plugins;
 

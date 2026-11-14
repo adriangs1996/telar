@@ -8,11 +8,11 @@ module;
 #include <sys/param.h>
 #include <sys/stat.h>
 
-module telar.gui.platform.login_shell;
+module telar.gui.platform.managed_directory;
 
 import std;
 
-import telar.gui.platform.profile_file;
+import telar.gui.platform.path_limits;
 import telar.platform;
 import telar.platform.primitives;
 
