@@ -411,6 +411,7 @@ Cada hub sigue el patrón agregador: `a` crea los módulos y deja el agregador, 
 - **Contexto:** 86 dependientes, 45 secciones, 4,3% de uso medio y 15 secciones que nadie usa desde fuera. Las 15 se borran o se pasan a internas en `a`.
 - **Resultado de a:** `7c0014718`. Cinco módulos y `telar.config` como agregador:
 - **Resultado de b:** `b113c9cab`. 90 unidades: 59 importan módulos estrechos (`.runtime` 25, `.core` 16, `.client` 10, `.snapshot` 3, `.gui` 2…) y 31 pierden el import. Compilan runtime, CLI y GUI. `.core` (lo compartido: avisos de límites, restricciones, proveedores de agentes, `IntegrationProvider`, `LocalModules`, `GraphicsLimits`), `.runtime`, `.client`, `.gui` (secciones `gui` y `theme`) y `.snapshot` (`SnapshotReader`, que valida el config entero y usan los tres procesos; dentro de `.runtime` habría obligado a importar `.client` y `.gui`). `docs/build/cpp-modules.md` actualizado. El `[x]` del título marca solo `a`.
+- **Resultado de c:** `fd239ac18`. `lib/config/config.cppm` borrado; `docs/build/cpp-modules.md` dice "un módulo por proceso" (cinco interfaces). Compilan runtime, CLI y GUI sobre la rama integrada. **P4.4 cerrada: con P4.1, P4.2 y P4.3, la fase 4 queda hecha salvo P4.5.**
 
 ### [ ] P4.5 · Un solo lector tipado del schema de config
 - **Depende de:** P4.4a
