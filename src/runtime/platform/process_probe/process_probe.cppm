@@ -1,21 +1,11 @@
 module;
 #include "tbc/annotations.hpp"
+#include "tbc/annotations.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <cstddef>
-#include <new>
-
 #include <cstdint>
-#include <cstring>
-
 #include <sys/types.h>
-
 #include <unistd.h>
-
-#include <cstdio>
-#include <cstdlib>
-#include <fcntl.h>
-#include <limits.h>
-#include <sys/stat.h>
 
 export module telar.runtime.platform.process_probe;
 
@@ -32,134 +22,22 @@ import telar.platform.primitives;
 export {
   namespace telar::runtime {
 
-    inline std::string_view processBasename(std::string_view path) noexcept {
-      const auto slash = path.find_last_of("/\\");
-
-      return path.substr(slash == std::string_view::npos ? 0 : slash + 1);
-    }
+    std::string_view processBasename(std::string_view path) noexcept;
 
     class ProcessArguments {
     public:
-      inline explicit ProcessArguments(std::string_view arguments) noexcept
-          : arguments_(arguments) {}
+      explicit ProcessArguments(std::string_view arguments) noexcept;
 
-      inline static ProcessArguments fromMacos(std::span<const char> buffer) noexcept {
-        if (buffer.size() <= sizeof(int)) {
-          return ProcessArguments{{}};
-        }
+      static ProcessArguments fromMacos(std::span<const char> buffer) noexcept;
 
-        int count = 0;
+      AgentProvider provider(const AgentManifests& manifests, std::string_view command) const noexcept;
 
-        std::memcpy(&count, buffer.data(), sizeof(count));
-        std::string_view remaining{buffer.data() + sizeof(count), buffer.size() - sizeof(count)};
-        const auto executable_end = remaining.find('\0');
-        if (count <= 0 || executable_end == std::string_view::npos) {
-          return ProcessArguments{{}};
-        }
-
-        const auto first_argument = remaining.find_first_not_of('\0', executable_end);
-        if (first_argument == std::string_view::npos) {
-          return ProcessArguments{{}};
-        }
-
-        remaining.remove_prefix(first_argument);
-        std::size_t length = 0;
-
-        for (int index = 0; index < count; ++index) {
-          const auto end = remaining.find('\0', length);
-          if (end == std::string_view::npos) {
-            return ProcessArguments{{}};
-          }
-
-          length = end + 1;
-        }
-
-        return ProcessArguments{remaining.substr(0, length)};
-      }
-
-      inline AgentProvider provider(const AgentManifests& manifests, std::string_view command) const noexcept {
-        auto detected = manifests.fromExecutable(processBasename(command));
-        if (detected != AgentProvider::unknown) {
-          return detected;
-        }
-
-        auto remaining = arguments_;
-        const auto first = next(remaining);
-        if (!first) {
-          return AgentProvider::unknown;
-        }
-
-        detected = manifests.fromExecutable(processBasename(*first));
-        if (detected != AgentProvider::unknown) {
-          return detected;
-        }
-
-        if (!genericRuntime(command) && !genericRuntime(*first)) {
-          return AgentProvider::unknown;
-        }
-
-        while (const auto argument = next(remaining)) {
-          if (argument->starts_with('-')) {
-            continue;
-          }
-
-          detected = manifests.fromExecutable(processBasename(*argument));
-          return detected == AgentProvider::unknown ? manifests.fromPath(*argument) : detected;
-        }
-
-        return AgentProvider::unknown;
-      }
-
-      inline SessionHost sessionHost(AgentProvider provider) const noexcept {
-        if (provider != AgentProvider::codex || arguments_.empty()) {
-          return SessionHost::unknown;
-        }
-
-        auto host = SessionHost::shared_server;
-        auto remaining = arguments_;
-
-        while (const auto argument = next(remaining)) {
-          if (isCodexBatchArgument(*argument)) {
-            return SessionHost::unknown;
-          }
-
-          if (*argument == codex_pane_argument) {
-            host = SessionHost::pane;
-          }
-        }
-
-        return host;
-      }
+      SessionHost sessionHost(AgentProvider provider) const noexcept;
 
     private:
-      inline static std::optional<std::string_view> next(std::string_view& remaining) noexcept {
-        const auto first = remaining.find_first_not_of('\0');
-        if (first == std::string_view::npos) {
-          return std::nullopt;
-        }
+      static std::optional<std::string_view> next(std::string_view& remaining) noexcept;
 
-        remaining.remove_prefix(first);
-        const auto end = remaining.find('\0');
-        const auto argument = remaining.substr(0, end);
-
-        remaining = end == std::string_view::npos ? std::string_view{} : remaining.substr(end + 1);
-        return argument;
-      }
-
-      inline static bool genericRuntime(std::string_view command) noexcept {
-        auto name = processBasename(command);
-        if (name.size() >= 4 && containsInsensitive(name.substr(name.size() - 4), ".exe")) {
-          name.remove_suffix(4);
-        }
-
-        for (const std::string_view candidate : {"node", "bun", "deno"}) {
-          if (name.size() == candidate.size() && containsInsensitive(name, candidate)) {
-            return true;
-          }
-        }
-
-        return false;
-      }
+      static bool genericRuntime(std::string_view command) noexcept;
 
       std::string_view arguments_;
     };
@@ -172,9 +50,7 @@ export {
   namespace telar::runtime {
 
     struct ProcessLineage {
-      inline std::span<const pid_t> ancestors() const noexcept {
-        return std::span{processes}.first(count);
-      }
+      std::span<const pid_t> ancestors() const noexcept;
 
       std::array<pid_t, 64> processes{};
       unsigned count = 0;
@@ -196,9 +72,7 @@ export {
       pid_t process_group = 0;
       bool operator==(const ProcessIdentity&) const = default;
 
-      inline bool sameInstance(const ProcessIdentity& other) const noexcept {
-        return pid == other.pid && started_seconds == other.started_seconds && started_microseconds == other.started_microseconds;
-      }
+      bool sameInstance(const ProcessIdentity& other) const noexcept;
     };
 
     struct IdentifiedProcess {
@@ -218,39 +92,18 @@ export {
       std::array<std::uint16_t, max_listed_ports> values{};
       std::uint8_t count = 0;
 
-      inline void add(std::uint16_t port) noexcept {
-        const auto end = values.begin() + count;
-        const auto at = std::lower_bound(values.begin(), end, port);
-        if (port == 0 || (at != end && *at == port) || (count == values.size() && at == end)) {
-          return;
-        }
+      void add(std::uint16_t port) noexcept;
 
-        if (count == values.size()) {
-          std::move_backward(at, end - 1, end);
-        } else {
-          std::move_backward(at, end, end + 1);
-          ++count;
-        }
+      [[nodiscard]] std::span<const std::uint16_t> view() const noexcept;
 
-        *at = port;
-      }
-
-      [[nodiscard]] inline std::span<const std::uint16_t> view() const noexcept {
-        return std::span{values}.first(count);
-      }
-
-      inline bool operator==(const ListeningPorts& other) const noexcept {
-        return std::ranges::equal(view(), other.view());
-      }
+      bool operator==(const ListeningPorts& other) const noexcept;
     };
 
     // Reads the operating system's process table: every query is const and keeps no state, so threads
     // share one inspector.
     class TBC_SHARED ProcessInspector {
     public:
-      inline explicit ProcessInspector(const AgentManifests& manifests = builtin_manifests, uid_t uid = ::geteuid()) noexcept
-          : manifests_(manifests),
-            uid_(uid) {}
+      explicit ProcessInspector(const AgentManifests& manifests = builtin_manifests, uid_t uid = ::geteuid()) noexcept;
 
       std::optional<ProcessIdentity> identity(pid_t process) const noexcept;
       std::optional<ProcessSnapshot> snapshot(pid_t process) const noexcept;
@@ -296,8 +149,9 @@ export {
       { inspector.lineage(process, root) } noexcept -> std::same_as<ProcessLineage>;
     };
 
+    // Kept whole: tests instantiate it with their own fake Inspector (descent_test's GatedLineageInspector).
     template <LineageInspector Inspector>
-    class DescentProbe {
+    class TBC_HOT_PATH DescentProbe {
     public:
       struct Request {
         std::array<DescentCheck, 32> checks;
@@ -344,25 +198,11 @@ export {
     struct ProcessCache {
       static constexpr unsigned acquisition_attempts = 6;
 
-      inline bool needsIdentification(pid_t foreground, bool recheck) const noexcept {
-        return foreground > 0 && (recheck || foreground != group || (identified.provider == AgentProvider::unknown && attempts < acquisition_attempts));
-      }
+      bool needsIdentification(pid_t foreground, bool recheck) const noexcept;
 
-      inline AgentProvider preferred(pid_t foreground) const noexcept {
-        return foreground == group ? identified.provider : AgentProvider::unknown;
-      }
+      AgentProvider preferred(pid_t foreground) const noexcept;
 
-      inline void update(pid_t foreground, const IdentifiedProcess& process, bool installed) noexcept {
-        attempts = process.provider != AgentProvider::unknown ? 0 : foreground == group ? std::min(attempts + 1, acquisition_attempts)
-                                                                                        : 1;
-        group = foreground;
-        identified = process;
-        if (identified.name.view().empty()) {
-          identified.name.assign("process");
-        }
-
-        hooks_installed = installed;
-      }
+      void update(pid_t foreground, const IdentifiedProcess& process, bool installed) noexcept;
 
       pid_t group = 0;
       IdentifiedProcess identified;
@@ -415,8 +255,10 @@ export {
     };
 
     // A stateless view of an inspector, shared as the inspector is.
+    // Kept whole: tests instantiate it with their own fake Inspector (process_identification_test's
+    // LeaderlessGroupInspector).
     template <ProcessProbeInspector Inspector>
-    class TBC_SHARED ProcessProbe {
+    class TBC_SHARED TBC_HOT_PATH ProcessProbe {
     public:
       static constexpr std::size_t batch_capacity = 16;
 

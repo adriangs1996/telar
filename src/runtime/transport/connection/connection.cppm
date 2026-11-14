@@ -1,15 +1,8 @@
 module;
-#include <cstdio>
-#include <cstdlib>
-#include <new>
-#include <unistd.h>
-
-#include <cerrno>
+#include "tbc/annotations.hpp"
 #include <cstddef>
-
-#include <cassert>
 #include <cstdint>
-#include <cstring>
+#include <unistd.h>
 
 export module telar.runtime.transport.connection;
 
@@ -43,104 +36,27 @@ export {
         rejected,
       };
 
-      inline explicit ClientHandshake(FileDescriptor descriptor, bool capacity_refused)
-          : descriptor_(std::move(descriptor)),
-            capacity_refused_(capacity_refused) {}
+      explicit ClientHandshake(FileDescriptor descriptor, bool capacity_refused);
 
-      inline void read() {
-        for (unsigned attempt = 0; attempt < 2 && (stage_ == Stage::prefix || stage_ == Stage::hello); ++attempt) {
-          const auto remaining = expected_bytes_ - used_bytes_;
-          const auto count = ::read(descriptor_.get(), bytes_.data() + used_bytes_, remaining);
-          if (count < 0 && socketWouldBlock(sys::lastError())) {
-            return;
-          }
+      void read();
 
-          if (count <= 0) {
-            throw SystemError{"read client handshake"};
-          }
+      void write();
 
-          used_bytes_ += static_cast<std::size_t>(count);
-          if (used_bytes_ != expected_bytes_) {
-            return;
-          }
+      int descriptor() const noexcept;
 
-          if (stage_ == Stage::prefix) {
-            std::span<const Byte> prefix{bytes_.data(), frame_prefix_size};
-            if (u32::decode(prefix) != HandshakeSchema<ClientHello>::payload_size) {
-              throw EncodingError{"Invalid client hello size"};
-            }
+      FileDescriptor takeDescriptor() noexcept;
 
-            expected_bytes_ += HandshakeSchema<ClientHello>::payload_size;
-            stage_ = Stage::hello;
-          } else {
-            negotiate();
-          }
-        }
-      }
+      Stage stage() const noexcept;
 
-      inline void write() {
-        if (stage_ != Stage::reply) {
-          return;
-        }
+      bool reservesClient() const noexcept;
 
-        const auto count = ::write(descriptor_.get(), bytes_.data() + used_bytes_, expected_bytes_ - used_bytes_);
-        if (count < 0 && socketWouldBlock(sys::lastError())) {
-          return;
-        }
-
-        if (count <= 0) {
-          throw SystemError{"write client handshake"};
-        }
-
-        used_bytes_ += static_cast<std::size_t>(count);
-        if (used_bytes_ == expected_bytes_) {
-          stage_ = accepted_ ? Stage::accepted : Stage::rejected;
-        }
-      }
-
-      inline int descriptor() const noexcept {
-        return descriptor_.get();
-      }
-
-      inline FileDescriptor takeDescriptor() noexcept {
-        return std::move(descriptor_);
-      }
-
-      inline Stage stage() const noexcept {
-        return stage_;
-      }
-
-      inline bool reservesClient() const noexcept {
-        return !capacity_refused_;
-      }
-
-      inline bool expired(std::chrono::steady_clock::time_point now) const noexcept {
-        return now - started_at_ >= std::chrono::seconds{2};
-      }
+      bool expired(std::chrono::steady_clock::time_point now) const noexcept;
 
     private:
-      inline void negotiate() {
-        const auto hello = HandshakeCodec::decode<ClientHello>(std::span<const Byte>{bytes_}.subspan(frame_prefix_size, HandshakeSchema<ClientHello>::payload_size));
-
-        accepted_ = !capacity_refused_ && hello.schema == handshake::schema_id;
-        if (accepted_) {
-          reply(ServerAccept{.schema = handshake::schema_id});
-        } else {
-          reply(ServerReject{.reason = capacity_refused_ ? HandshakeRejectReason::client_limit_reached : HandshakeRejectReason::incompatible_schema, .expected_schema = handshake::schema_id});
-        }
-      }
+      void negotiate();
 
       template <typename Message>
-      inline void reply(const Message& message) {
-        const auto payload = HandshakeCodec::encode(message);
-        std::span<Byte> output = bytes_;
-
-        u32::encode(payload.size(), output);
-        std::copy(payload.begin(), payload.end(), output.begin());
-        used_bytes_ = 0;
-        expected_bytes_ = frame_prefix_size + payload.size();
-        stage_ = Stage::reply;
-      }
+      void reply(const Message& message);
 
       FileDescriptor descriptor_;
       std::array<Byte, frame_prefix_size + HandshakeCodec::max_message_size> bytes_;
@@ -165,7 +81,8 @@ export {
     using DeferredResponse = std::variant<ReadPane, RequestTabSnapshot, RequestWorkspaceSnapshot, QueryLimits>;
 
     struct RejectDeferredResponse {
-      inline void operator()(const DeferredResponse&, auto&&) const {
+      // Generic over the caller's consumer, so it stays a template here.
+      TBC_HOT_PATH inline void operator()(const DeferredResponse&, auto&&) const {
         throw std::logic_error{"A deferred response requires an encoder"};
       }
     };
@@ -178,49 +95,25 @@ export {
     template <Allocator Memory>
     class DeferredResponses {
     public:
-      inline explicit DeferredResponses(Memory& memory)
-          : entries_(AllocatorRef<Entry, Memory>{memory}) {}
+      explicit DeferredResponses(Memory& memory);
 
-      inline void append(std::size_t offset, const DeferredResponse& response) {
-        entries_.push_back(Entry{offset, response});
-      }
+      void append(std::size_t offset, const DeferredResponse& response);
 
-      inline bool precedes(std::size_t offset) const noexcept {
-        return !entries_.empty() && entries_.front().offset <= offset;
-      }
+      bool precedes(std::size_t offset) const noexcept;
 
-      inline std::size_t offset() const noexcept {
-        return entries_.front().offset;
-      }
+      std::size_t offset() const noexcept;
 
-      inline const DeferredResponse& response() const noexcept {
-        return entries_.front().response;
-      }
+      const DeferredResponse& response() const noexcept;
 
-      inline bool empty() const noexcept {
-        return entries_.empty();
-      }
+      bool empty() const noexcept;
 
-      inline void clear() noexcept {
-        entries_.clear();
-      }
+      void clear() noexcept;
 
-      inline void resolved(std::size_t size) noexcept {
-        entries_.erase(entries_.begin());
-        for (auto& entry : entries_) {
-          entry.offset += size;
-        }
-      }
+      void resolved(std::size_t size) noexcept;
 
       // Offsets mark admission boundaries in the encoded byte queue. Removing a
       // higher-priority frame collapses any boundaries inside that byte range.
-      inline void eraseBytes(std::size_t offset, std::size_t count) noexcept {
-        for (auto& entry : entries_) {
-          if (entry.offset > offset) {
-            entry.offset -= std::min(count, entry.offset - offset);
-          }
-        }
-      }
+      void eraseBytes(std::size_t offset, std::size_t count) noexcept;
 
     private:
       struct Entry {
@@ -230,6 +123,12 @@ export {
 
       Vector<Entry, Memory> entries_;
     };
+
+    extern template class DeferredResponses<SystemAllocator>;
+    extern template class DeferredResponses<Memory>;
+    extern template class DeferredResponses<ConcurrentMemory>;
+    extern template class DeferredResponses<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>;
+    extern template class DeferredResponses<BudgetAllocator<SystemAllocator>>;
 
   }
 }
@@ -375,9 +274,7 @@ export {
 
     class ResponseQueueFull : public std::exception {
     public:
-      inline const char* what() const noexcept override {
-        return "Client response queue is full";
-      }
+      const char* what() const noexcept override;
     };
 
     template <Allocator Memory>
@@ -385,16 +282,13 @@ export {
     public:
       static constexpr std::size_t response_capacity = 128;
 
-      inline explicit OutgoingFrames(Memory& memory)
-          : bytes_(memory, byte_limit),
-            deferred_(memory) {}
+      explicit OutgoingFrames(Memory& memory);
 
-      inline void reserve(std::size_t capacity) {
-        bytes_.reserve(capacity);
-      }
+      void reserve(std::size_t capacity);
 
+      // Generic over the protocol's messages, an open set, so it stays a template here.
       template <typename Message>
-      inline void append(const Message& message) {
+      TBC_HOT_PATH inline void append(const Message& message) {
         static_assert(MessageSchema<Message>::direction == Direction::server);
         const auto lane = deliveryLane(MessageSchema<Message>::tag);
 
@@ -415,26 +309,14 @@ export {
         inserted(lane);
       }
 
-      inline void appendPayload(std::span<const Byte> payload) {
-        if (payload.empty() || payload.size() > max_payload_size) {
-          throw EncodingError{"Invalid outgoing payload size"};
-        }
-
-        const auto lane = deliveryLane(static_cast<ServerTag>(payload.front()));
-
-        requireCapacity(lane);
-        auto frame = bytes_.appendUninitialized(frame_prefix_size + payload.size());
-
-        u32::encode(static_cast<std::uint32_t>(payload.size()), frame);
-        std::copy(payload.begin(), payload.end(), frame.begin());
-        inserted(lane);
-      }
+      void appendPayload(std::span<const Byte> payload);
 
       // Appends a fixed-size confirmation whose fields are known only later, and returns where its
       // payload starts. Appending more frames may relocate storage but keeps the offset; nothing may be
-      // written out until the confirmation is completed.
+      // written out until the confirmation is completed. Generic over the protocol's messages, so it stays
+      // a template here.
       template <typename Message>
-      inline std::size_t reserve(const Message& message) {
+      TBC_HOT_PATH inline std::size_t reserve(const Message& message) {
         static_assert(MessageSchema<Message>::fixed_size);
         const auto offset = bytes_.size() + frame_prefix_size;
 
@@ -442,24 +324,27 @@ export {
         return offset;
       }
 
-      // Re-encodes a reserved confirmation in place.
+      // Re-encodes a reserved confirmation in place. Generic over the protocol's messages, so it stays a
+      // template here.
       template <typename Message>
-      inline void complete(std::size_t offset, const Message& message) {
+      TBC_HOT_PATH inline void complete(std::size_t offset, const Message& message) {
         std::array<Byte, MessageSchema<Message>::payload_size> payload;
 
         Codec::encode(message, payload);
         bytes_.overwrite(offset, payload);
       }
 
+      // Generic over the deferred requests, so it stays a template here.
       template <DeferredRequest Request>
-      inline void defer(const Request& request) {
+      TBC_HOT_PATH inline void defer(const Request& request) {
         requireCapacity(DeliveryLane::management);
         deferred_.append(bytes_.size(), request);
         inserted(DeliveryLane::management);
       }
 
+      // Generic over the caller's encoder, so it stays a template here.
       template <DeferredResponseEncoder Encoder = RejectDeferredResponse>
-      inline std::span<const Byte> prepare(std::size_t limit, Encoder&& encode = {}) {
+      TBC_HOT_PATH inline std::span<const Byte> prepare(std::size_t limit, Encoder&& encode = {}) {
         if (empty() || limit == 0) {
           return {};
         }
@@ -503,74 +388,30 @@ export {
         return bytes_.readable().subspan(offset, prepared_size_);
       }
 
-      inline void consume(std::size_t count) noexcept {
-        assert(count <= prepared_size_);
-        auto remaining = count;
-        const auto first_offset = active_offset_;
-        auto offset = first_offset;
+      void consume(std::size_t count) noexcept;
 
-        while (remaining >= active_remaining_ && active_remaining_ != 0) {
-          remaining -= active_remaining_;
-          offset += active_remaining_;
-          active_remaining_ = 0;
-          if (remaining != 0) {
-            start(offset, inspect(offset));
-          }
-        }
+      void clear() noexcept;
 
-        active_remaining_ -= remaining;
-        bytes_.erase(first_offset, count);
-        deferred_.eraseBytes(first_offset, count);
-        active_offset_ = first_offset;
-        prepared_size_ = 0;
-      }
+      void recordDrop() noexcept;
 
-      inline void clear() noexcept {
-        bytes_.clear();
-        deferred_.clear();
-        lane_counts_.fill(0);
-        pending_lanes_ = 0;
-        response_depth_ = 0;
-        active_offset_ = 0;
-        active_remaining_ = 0;
-        prepared_size_ = 0;
-      }
+      bool active() const noexcept;
 
-      inline void recordDrop() noexcept {
-        ++dropped_;
-      }
+      DeliveryLane nextLane() const noexcept;
 
-      inline bool active() const noexcept {
-        return active_remaining_ != 0;
-      }
+      bool empty() const noexcept;
 
-      inline DeliveryLane nextLane() const noexcept {
-        return pending_lanes_ == 0 ? DeliveryLane::count : static_cast<DeliveryLane>(std::countr_zero(pending_lanes_));
-      }
+      std::size_t size() const noexcept;
 
-      inline bool empty() const noexcept {
-        return bytes_.empty() && deferred_.empty();
-      }
+      std::size_t responseDepth() const noexcept;
 
-      inline std::size_t size() const noexcept {
-        return bytes_.size();
-      }
+      std::size_t responseHighWater() const noexcept;
 
-      inline std::size_t responseDepth() const noexcept {
-        return response_depth_;
-      }
-
-      inline std::size_t responseHighWater() const noexcept {
-        return high_water_;
-      }
-
-      inline std::uint64_t dropped() const noexcept {
-        return dropped_;
-      }
+      std::uint64_t dropped() const noexcept;
 
     private:
+      // Generic over the caller's encoder, so it stays a template here.
       template <DeferredResponseEncoder Encoder>
-      inline void resolve(Encoder& encode) {
+      TBC_HOT_PATH inline void resolve(Encoder& encode) {
         const auto offset = deferred_.offset();
         std::size_t resolved_size = 0;
 
@@ -608,43 +449,13 @@ export {
         DeliveryLane lane;
       };
 
-      inline Frame inspect(std::size_t offset) const noexcept {
-        auto payload = bytes_.readable().subspan(offset);
-        const auto size = u32::decode(payload);
+      Frame inspect(std::size_t offset) const noexcept;
 
-        return {frame_prefix_size + size, deliveryLane(static_cast<ServerTag>(payload.front()))};
-      }
+      void requireCapacity(DeliveryLane lane) const;
 
-      inline void requireCapacity(DeliveryLane lane) const {
-        if (responseLane(lane) && response_depth_ == response_capacity) {
-          throw ResponseQueueFull{};
-        }
-      }
+      void inserted(DeliveryLane lane) noexcept;
 
-      inline void inserted(DeliveryLane lane) noexcept {
-        const auto index = static_cast<std::size_t>(lane);
-
-        ++lane_counts_[index];
-        pending_lanes_ |= std::uint32_t{1} << index;
-        if (responseLane(lane)) {
-          ++response_depth_;
-          high_water_ = std::max(high_water_, response_depth_);
-        }
-      }
-
-      inline void start(std::size_t offset, Frame frame) noexcept {
-        const auto index = static_cast<std::size_t>(frame.lane);
-        if (--lane_counts_[index] == 0) {
-          pending_lanes_ &= ~(std::uint32_t{1} << index);
-        }
-
-        if (responseLane(frame.lane)) {
-          --response_depth_;
-        }
-
-        active_offset_ = offset;
-        active_remaining_ = frame.size;
-      }
+      void start(std::size_t offset, Frame frame) noexcept;
 
       static constexpr std::size_t byte_limit = 2 * (max_payload_size + frame_prefix_size);
       ByteQueue<Memory> bytes_;
@@ -659,6 +470,12 @@ export {
       std::size_t prepared_size_ = 0;
     };
 
+    extern template class OutgoingFrames<SystemAllocator>;
+    extern template class OutgoingFrames<Memory>;
+    extern template class OutgoingFrames<ConcurrentMemory>;
+    extern template class OutgoingFrames<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>;
+    extern template class OutgoingFrames<BudgetAllocator<SystemAllocator>>;
+
   }
 }
 
@@ -669,48 +486,27 @@ export {
     template <Allocator Memory>
     class Connection {
     public:
-      inline explicit Connection(Memory& memory, FileDescriptor descriptor)
-          : descriptor_(std::move(descriptor)),
-            input_(memory, input_limit),
-            output_(memory),
-            decode_bytes_(AllocatorRef<Byte, Memory>{memory}) {
-        input_.reserve(read_batch_size);
-        output_.reserve(read_batch_size);
-        decode_bytes_.resize(decode_capacity);
-      }
+      explicit Connection(Memory& memory, FileDescriptor descriptor);
 
-      inline bool read() {
-        std::array<Byte, read_batch_size> buffer;
-        const auto count = ::read(descriptor_.get(), buffer.data(), buffer.size());
-        if (count > 0) {
-          input_.append(std::span<const Byte>{buffer}.first(static_cast<std::size_t>(count)));
-          return true;
-        }
-
-        return count < 0 && socketWouldBlock(sys::lastError());
-      }
+      bool read();
 
       // A client's buffered frames and decode storage, which the runtime takes out of the connection while
       // the requests they carry change any client, this one included, as Rust's `mem::take` would.
       struct Frames {
-        inline explicit Frames(Memory& memory)
-            : input(memory, input_limit),
-              decode(AllocatorRef<Byte, Memory>{memory}) {}
+        explicit Frames(Memory& memory);
 
         ByteQueue<Memory> input;
         Vector<Byte, Memory> decode;
       };
 
       // Lends the connection's frames, or takes them back: the same exchange both ways.
-      inline void exchange(Frames& frames) noexcept {
-        input_.swap(frames.input);
-        decode_bytes_.swap(frames.decode);
-      }
+      void exchange(Frames& frames) noexcept;
 
       // Hands each complete frame to a visitor while the client is ready for more, at most one batch;
-      // whether a complete frame remains.
+      // whether a complete frame remains. Generic over the caller's predicate and visitor, so it stays a
+      // template here.
       template <typename Ready, typename Visitor>
-      inline static bool dispatch(Frames& frames, Ready&& ready, Visitor&& visitor) {
+      TBC_HOT_PATH inline static bool dispatch(Frames& frames, Ready&& ready, Visitor&& visitor) {
         constexpr unsigned messages_per_batch = 64;
 
         for (unsigned index = 0; index < messages_per_batch; ++index) {
@@ -741,8 +537,9 @@ export {
         return frames.input.size() >= frame_prefix_size;
       }
 
+      // Generic over the caller's encoder, so it stays a template here.
       template <DeferredResponseEncoder Encoder = RejectDeferredResponse>
-      inline void write(Encoder&& encode = {}) {
+      TBC_HOT_PATH inline void write(Encoder&& encode = {}) {
         constexpr std::size_t write_batch_size = 256 * 1024;
         const auto bytes = output_.prepare(write_batch_size, std::forward<Encoder>(encode));
         if (bytes.empty()) {
@@ -762,18 +559,21 @@ export {
         throw SystemError{"write runtime client"};
       }
 
+      // Generic over the protocol's messages, so it stays a template here.
       template <typename Message>
-      inline void send(const Message& message) {
+      TBC_HOT_PATH inline void send(const Message& message) {
         output_.append(message);
       }
 
+      // Generic over the deferred requests, so it stays a template here.
       template <DeferredRequest Request>
-      inline void defer(const Request& request) {
+      TBC_HOT_PATH inline void defer(const Request& request) {
         output_.defer(request);
       }
 
+      // Generic over the protocol's messages, so it stays a template here.
       template <typename Message>
-      inline bool trySend(const Message& message) {
+      TBC_HOT_PATH inline bool trySend(const Message& message) {
         try {
           output_.append(message);
           return true;
@@ -786,69 +586,40 @@ export {
         return false;
       }
 
-      // A confirmation reserved now and completed by its offset once its fields are known.
+      // A confirmation reserved now and completed by its offset once its fields are known. Generic over the
+      // protocol's messages, so it stays a template here.
       template <typename Message>
-      inline std::size_t reserve(const Message& message) {
+      TBC_HOT_PATH inline std::size_t reserve(const Message& message) {
         return output_.reserve(message);
       }
 
+      // Generic over the protocol's messages, so it stays a template here.
       template <typename Message>
-      inline void complete(std::size_t offset, const Message& message) {
+      TBC_HOT_PATH inline void complete(std::size_t offset, const Message& message) {
         output_.complete(offset, message);
       }
 
-      inline void sendPayload(std::span<const Byte> payload) {
-        output_.appendPayload(payload);
-      }
+      void sendPayload(std::span<const Byte> payload);
 
-      inline bool trySendPayload(std::span<const Byte> payload) {
-        try {
-          output_.appendPayload(payload);
-          return true;
-        } catch (const ResponseQueueFull&) {
-        } catch (const std::bad_alloc&) {
-        }
+      bool trySendPayload(std::span<const Byte> payload);
 
-        return false;
-      }
+      void closeImmediately() noexcept;
 
-      inline void closeImmediately() noexcept {
-        closing = true;
-        read_paused = true;
-        output_.clear();
-      }
+      std::size_t responseDepth() const noexcept;
 
-      inline std::size_t responseDepth() const noexcept {
-        return output_.responseDepth();
-      }
+      std::size_t responseHighWater() const noexcept;
 
-      inline std::size_t responseHighWater() const noexcept {
-        return output_.responseHighWater();
-      }
+      std::uint64_t droppedResponses() const noexcept;
 
-      inline std::uint64_t droppedResponses() const noexcept {
-        return output_.dropped();
-      }
+      bool writing() const noexcept;
 
-      inline bool writing() const noexcept {
-        return output_.active();
-      }
+      DeliveryLane nextLane() const noexcept;
 
-      inline DeliveryLane nextLane() const noexcept {
-        return output_.nextLane();
-      }
+      int descriptor() const noexcept;
 
-      inline int descriptor() const noexcept {
-        return descriptor_.get();
-      }
+      bool hasOutput() const noexcept;
 
-      inline bool hasOutput() const noexcept {
-        return !output_.empty();
-      }
-
-      inline std::size_t queuedBytes() const noexcept {
-        return output_.size();
-      }
+      std::size_t queuedBytes() const noexcept;
 
       bool negotiated = false;
       bool closing = false;
@@ -867,6 +638,11 @@ export {
       Vector<Byte, Memory> decode_bytes_;
     };
 
+    extern template class Connection<SystemAllocator>;
+    extern template class Connection<Memory>;
+    extern template class Connection<ConcurrentMemory>;
+    extern template class Connection<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>;
+
   }
 }
 
@@ -874,8 +650,9 @@ export {
 export {
   namespace telar::runtime {
 
+    // Kept whole: path_service_test instantiates it with its own allocator (GatedPathMemory).
     template <Allocator Memory>
-    class EncodedReply {
+    class TBC_HOT_PATH EncodedReply {
     public:
       inline explicit EncodedReply(Memory& memory)
           : bytes_(AllocatorRef<Byte, Memory>{memory}) {

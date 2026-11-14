@@ -1,11 +1,3 @@
-module;
-#include <cstddef>
-#include <cstdint>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <new>
-
 export module telar.runtime.model.launch_record;
 
 import std;
@@ -21,52 +13,24 @@ export {
     template <Allocator Memory>
     class LaunchRecord {
     public:
-      inline explicit LaunchRecord(Memory& memory)
-          : bytes_(AllocatorRef<char, Memory>{memory}) {}
+      explicit LaunchRecord(Memory& memory);
 
-      inline void capture(std::span<const String<Memory>> arguments, bool restorable) {
-        bytes_.clear();
-        count_ = 0;
-        if (!restorable) {
-          return;
-        }
-
-        std::size_t size = 0;
-
-        for (const auto& argument : arguments) {
-          size += argument.size() + 1;
-        }
-
-        if (arguments.size() > 64 || size > 128 * 1024) {
-          throw EncodingError{"Pane launch exceeds checkpoint limits"};
-        }
-
-        bytes_.reserve(size);
-        for (const auto& argument : arguments) {
-          bytes_.append(argument);
-          bytes_.push_back('\0');
-        }
-
-        count_ = static_cast<std::uint16_t>(arguments.size());
-      }
-
-      inline void restore(std::string_view arguments, std::uint16_t count) {
-        bytes_.assign(arguments);
-        count_ = count;
-      }
-
-      inline std::string_view bytes() const noexcept {
-        return bytes_;
-      }
-
-      inline std::uint16_t count() const noexcept {
-        return count_;
-      }
+      void capture(std::span<const String<Memory>> arguments, bool restorable);
+      void restore(std::string_view arguments, std::uint16_t count);
+      std::string_view bytes() const noexcept;
+      std::uint16_t count() const noexcept;
 
     private:
       String<Memory> bytes_;
       std::uint16_t count_ = 0;
     };
+
+    extern template class LaunchRecord<SystemAllocator>;
+    extern template class LaunchRecord<ConcurrentMemory>;
+    extern template LaunchRecord<Memory>::LaunchRecord(Memory& memory);
+    extern template void LaunchRecord<Memory>::capture(std::span<const String<Memory>> arguments, bool restorable);
+    extern template LaunchRecord<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>::LaunchRecord(SynchronizedAllocator<BudgetAllocator<SystemAllocator>>& memory);
+    extern template void LaunchRecord<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>::capture(std::span<const String<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>> arguments, bool restorable);
 
   }
 }

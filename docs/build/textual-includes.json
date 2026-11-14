@@ -1978,26 +1978,11 @@
     "<sys/types.h>"
   ],
   "src/runtime/cli/server/server.cppm": [
-    "<cerrno>",
-    "<csignal>",
-    "<cstdio>",
-    "<lauxlib.h>",
-    "<lua.h>",
-    "<sys/stat.h>",
-    "<sys/un.h>",
-    "<unistd.h>",
-    "config_bootstrap.hpp"
+    "<lua.h>"
   ],
   "src/runtime/command_capture/tracker/tracker.cppm": [
     "<ghostty/vt.h>",
     "terminal/ghostty_grid.hpp"
-  ],
-  "src/runtime/config/loader/loader.cppm": [
-    "<cerrno>",
-    "<climits>",
-    "<cstdlib>",
-    "<lua.h>",
-    "config_bootstrap.hpp"
   ],
   "src/runtime/diagnostics/line.hpp": [
     "<algorithm>",
@@ -2010,19 +1995,6 @@
   ],
   "src/runtime/diagnostics/line/line.cppm": [
     "diagnostics/line.hpp"
-  ],
-  "src/runtime/diagnostics/operation/operation.cppm": [
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdlib>",
-    "<new>",
-    "<sys/stat.h>"
-  ],
-  "src/runtime/diagnostics/runtime_counters/runtime_counters.cppm": [
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstring>"
   ],
   "src/runtime/diagnostics/timing.hpp": [
     "telar_base/diagnostics/timing.hpp"
@@ -2054,18 +2026,6 @@
     "<new>",
     "<zlib.h>",
     "<zstd.h>"
-  ],
-  "src/runtime/execution/execution/execution.cppm": [
-    "<cassert>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<limits.h>",
-    "<new>",
-    "<sys/types.h>",
-    "<unistd.h>"
   ],
   "src/runtime/graphics/child_file.hpp": [
     "<algorithm>",
@@ -2241,119 +2201,30 @@
     "<cstdint>"
   ],
   "src/runtime/model/client_layouts/client_layouts.cppm": [
-    "<cassert>",
     "<cerrno>",
-    "<csignal>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<fcntl.h>",
-    "<ghostty/vt.h>",
     "<limits.h>",
-    "<new>",
-    "<stdlib.h>",
-    "<sys/mman.h>",
-    "<sys/stat.h>",
     "<sys/types.h>",
     "<sys/uio.h>",
-    "<sys/wait.h>",
-    "<termios.h>",
     "<unistd.h>",
-    "<zlib.h>",
-    "cell_layout.hpp",
     "telar_render/sequence.hpp"
   ],
-  "src/runtime/model/launch_record/launch_record.cppm": [
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>"
-  ],
   "src/runtime/model/slot_store/slot_store.cppm": [
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>",
-    "<sys/mman.h>"
+    "<cstdint>"
   ],
   "src/runtime/observation/processor/processor.cppm": [
     "<ghostty/vt.h>",
     "<sys/types.h>"
   ],
-  "src/runtime/paths/query_task/query_task.cppm": [
-    "<cassert>",
-    "<cerrno>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<dirent.h>",
-    "<fcntl.h>",
-    "<limits.h>",
-    "<new>",
-    "<poll.h>",
-    "<sys/stat.h>",
-    "<sys/types.h>",
-    "<sys/wait.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/persistence/session_store/session_store.cppm": [
-    "<cassert>",
-    "<cerrno>",
-    "<climits>",
-    "<csignal>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<fcntl.h>",
-    "<ghostty/vt.h>",
-    "<limits.h>",
-    "<linux/fs.h>",
-    "<new>",
-    "<pthread.h>",
-    "<sched.h>",
-    "<stdlib.h>",
-    "<sys/epoll.h>",
-    "<sys/event.h>",
-    "<sys/file.h>",
-    "<sys/mman.h>",
-    "<sys/stat.h>",
-    "<sys/syscall.h>",
-    "<sys/types.h>",
-    "<sys/uio.h>",
-    "<sys/wait.h>",
-    "<unistd.h>",
-    "<zlib.h>",
-    "cell_layout.hpp"
-  ],
   "src/runtime/platform/descriptor_path/descriptor_path.cppm": [
-    "<limits.h>",
-    "telar_platform/descriptor_path.hpp"
+    "<limits.h>"
   ],
   "src/runtime/platform/event_loop/event_loop.cppm": [
-    "<cassert>",
-    "<cerrno>",
-    "<climits>",
     "<csignal>",
     "<cstddef>",
     "<cstdint>",
-    "<fcntl.h>",
-    "<sched.h>",
     "<signal.h>",
     "<sys/epoll.h>",
-    "<sys/event.h>",
-    "<sys/syscall.h>",
-    "<time.h>",
-    "<unistd.h>"
+    "<sys/event.h>"
   ],
   "src/runtime/platform/event_loop/macos/event_loop.cpp": [
     "<cassert>",
@@ -2371,23 +2242,6 @@
     "<sys/event.h>",
     "<sys/syscall.h>",
     "<time.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/platform/git_status/git_status.cppm": [
-    "<cassert>",
-    "<cerrno>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<fcntl.h>",
-    "<limits.h>",
-    "<new>",
-    "<poll.h>",
-    "<sys/stat.h>",
-    "<sys/types.h>",
-    "<sys/wait.h>",
     "<unistd.h>"
   ],
   "src/runtime/platform/host_metrics/linux/host_metrics.cpp": [
@@ -2438,35 +2292,16 @@
     "<cerrno>",
     "<cstddef>",
     "<netdb.h>",
-    "<netinet/in.h>",
-    "<pthread.h>",
-    "<sys/socket.h>"
+    "<pthread.h>"
   ],
   "src/runtime/platform/private_tunnel/private_tunnel.cppm": [
-    "<arpa/inet.h>",
-    "<cerrno>",
     "<cstdint>",
-    "<cstring>",
-    "<fcntl.h>",
-    "<linux/if_ether.h>",
-    "<linux/if_tun.h>",
     "<net/if.h>",
-    "<net/if_utun.h>",
-    "<netinet6/in6_var.h>",
-    "<sys/ioctl.h>",
-    "<sys/kern_control.h>",
-    "<sys/socket.h>",
-    "<sys/sys_domain.h>",
-    "<sys/uio.h>",
     "<unistd.h>"
   ],
   "src/runtime/platform/proc_file/proc_file.cppm": [
     "<cstdint>",
-    "<cstdio>",
-    "<errno.h>",
-    "<fcntl.h>",
-    "<sys/stat.h>",
-    "<unistd.h>"
+    "<sys/types.h>"
   ],
   "src/runtime/platform/process_probe/linux/process_inspector.cpp": [
     "<cerrno>",
@@ -2508,13 +2343,6 @@
   "src/runtime/platform/process_probe/process_probe.cppm": [
     "<cstddef>",
     "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<fcntl.h>",
-    "<limits.h>",
-    "<new>",
-    "<sys/stat.h>",
     "<sys/types.h>",
     "<unistd.h>"
   ],
@@ -2530,34 +2358,13 @@
     "<sys/types.h>",
     "<unistd.h>"
   ],
-  "src/runtime/platform/session_host/session_host.cppm": [
-    "<cstdio>",
-    "<cstdlib>",
-    "<fcntl.h>",
-    "<limits.h>",
-    "<sys/stat.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/platform/signals/signals.cppm": [
-    "<cerrno>",
-    "<cstdint>",
-    "<unistd.h>"
-  ],
   "src/runtime/platform/stream_read_buffer/stream_read_buffer.cppm": [
-    "<cassert>",
     "<cstddef>",
     "<cstdint>",
     "<cstring>"
   ],
   "src/runtime/platform/system_certificates/system_certificates.cppm": [
-    "<CoreFoundation/CoreFoundation.h>",
-    "<Security/Security.h>",
-    "<cerrno>",
-    "<cstdlib>",
-    "<openssl/err.h>",
-    "<openssl/pem.h>",
-    "<openssl/x509.h>",
-    "<unistd.h>"
+    "<CoreFoundation/CoreFoundation.h>"
   ],
   "src/runtime/plugins/run_worker/run_worker.cppm": [
     "<arpa/inet.h>",
@@ -2870,100 +2677,23 @@
     "<unistd.h>"
   ],
   "src/runtime/runtime/client_control/client_control.cppm": [
-    "<cassert>",
-    "<cerrno>",
     "<clipboard.hpp>",
     "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<fcntl.h>",
-    "<limits.h>",
-    "<new>",
-    "<stdlib.h>",
-    "<sys/stat.h>",
-    "<sys/types.h>",
-    "<unistd.h>"
+    "<cstdint>"
   ],
   "src/runtime/runtime/delivery/client_delivery/client_delivery.cppm": [
-    "<cassert>",
-    "<cerrno>",
-    "<csignal>",
     "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<dirent.h>",
-    "<fcntl.h>",
-    "<ghostty/vt.h>",
-    "<limits.h>",
-    "<new>",
-    "<poll.h>",
-    "<stdlib.h>",
-    "<sys/mman.h>",
-    "<sys/stat.h>",
-    "<sys/types.h>",
-    "<sys/uio.h>",
-    "<sys/wait.h>",
-    "<unistd.h>",
-    "<zlib.h>",
-    "cell_layout.hpp",
-    "telar_render/sequence.hpp"
+    "<cstdint>"
   ],
   "src/runtime/runtime/execution_service/execution_service.cppm": [
-    "<cassert>",
-    "<cerrno>",
-    "<climits>",
-    "<csignal>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<ghostty/vt.h>",
-    "<limits.h>",
-    "<new>",
-    "<stdlib.h>",
-    "<sys/stat.h>",
-    "<sys/types.h>",
-    "<unistd.h>"
-  ],
-  "src/runtime/runtime/runtime/runtime.cppm": [
-    "<cerrno>",
-    "<csignal>",
-    "<ghostty/vt.h>",
-    "<limits.h>",
-    "<sys/stat.h>",
-    "<sys/wait.h>",
-    "<unistd.h>"
+    "<ghostty/vt.h>"
   ],
   "src/runtime/runtime/runtime_telemetry/runtime_telemetry.cppm": [
-    "<cassert>",
-    "<cerrno>",
-    "<csignal>",
     "<cstddef>",
     "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<dirent.h>",
-    "<fcntl.h>",
-    "<ghostty/vt.h>",
     "<limits.h>",
-    "<mach/mach.h>",
-    "<new>",
-    "<pthread.h>",
-    "<stdlib.h>",
-    "<sys/mman.h>",
-    "<sys/stat.h>",
     "<sys/types.h>",
-    "<sys/uio.h>",
-    "<sys/wait.h>",
-    "<unistd.h>",
-    "<zlib.h>",
-    "cell_layout.hpp"
+    "<unistd.h>"
   ],
   "src/runtime/shell_integration/git_context/git_context.cppm": [
     "<limits.h>"
@@ -3351,14 +3081,8 @@
     "<unistd.h>"
   ],
   "src/runtime/transport/connection/connection.cppm": [
-    "<cassert>",
-    "<cerrno>",
     "<cstddef>",
     "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>",
     "<unistd.h>"
   ],
   "src/runtime/vocabulary/traffic/traffic.cppm": [
@@ -3921,5 +3645,220 @@
   ],
   "src/runtime/worktrees/git_probe/git_probe.cpp": [
     "<sys/stat.h>"
+  ],
+  "src/runtime/cli/server/server.cpp": [
+    "<arpa/inet.h>",
+    "<cerrno>",
+    "<csignal>",
+    "<cstdio>",
+    "<lauxlib.h>",
+    "<lua.h>",
+    "<sys/stat.h>",
+    "<sys/un.h>",
+    "<unistd.h>",
+    "config_bootstrap.hpp"
+  ],
+  "src/runtime/config/loader/loader.cpp": [
+    "<cerrno>",
+    "<climits>",
+    "<cstdlib>",
+    "<lua.h>",
+    "config_bootstrap.hpp"
+  ],
+  "src/runtime/diagnostics/operation/operation.cpp": [
+    "<sys/stat.h>"
+  ],
+  "src/runtime/metrics/host_sampler/host_sampler.cpp": [
+    "<cstdint>"
+  ],
+  "src/runtime/model/client_layouts/client_layouts.cpp": [
+    "<termios.h>",
+    "<unistd.h>"
+  ],
+  "src/runtime/paths/query_task/query_task.cpp": [
+    "<dirent.h>",
+    "<fcntl.h>",
+    "<limits.h>",
+    "<sys/stat.h>",
+    "<unistd.h>"
+  ],
+  "src/runtime/persistence/session_store/session_store.cpp": [
+    "<cerrno>",
+    "<cstdio>",
+    "<fcntl.h>",
+    "<limits.h>",
+    "<sys/file.h>",
+    "<sys/stat.h>",
+    "<unistd.h>"
+  ],
+  "src/runtime/platform/descriptor_path/descriptor_path.cpp": [
+    "<limits.h>",
+    "telar_platform/descriptor_path.hpp"
+  ],
+  "src/runtime/platform/event_loop/linux/event_loop.cpp": [
+    "<cassert>",
+    "<cerrno>",
+    "<climits>",
+    "<csignal>",
+    "<cstddef>",
+    "<cstdint>",
+    "<fcntl.h>",
+    "<sched.h>",
+    "<signal.h>",
+    "<sys/epoll.h>",
+    "<sys/syscall.h>",
+    "<time.h>",
+    "<unistd.h>"
+  ],
+  "src/runtime/platform/name_resolutions/name_resolutions.cpp": [
+    "<cerrno>",
+    "<cstddef>",
+    "<netdb.h>",
+    "<netinet/in.h>",
+    "<sys/socket.h>"
+  ],
+  "src/runtime/platform/private_tunnel/private_tunnel.cpp": [
+    "<arpa/inet.h>",
+    "<cerrno>",
+    "<cstdint>",
+    "<cstring>",
+    "<fcntl.h>",
+    "<linux/if_ether.h>",
+    "<linux/if_tun.h>",
+    "<net/if.h>",
+    "<net/if_utun.h>",
+    "<netinet6/in6_var.h>",
+    "<sys/ioctl.h>",
+    "<sys/kern_control.h>",
+    "<sys/socket.h>",
+    "<sys/sys_domain.h>",
+    "<sys/uio.h>",
+    "<unistd.h>"
+  ],
+  "src/runtime/platform/proc_file/proc_file.cpp": [
+    "<cstdint>",
+    "<cstdio>",
+    "<errno.h>",
+    "<fcntl.h>",
+    "<sys/stat.h>",
+    "<unistd.h>"
+  ],
+  "src/runtime/platform/session_host/session_host.cpp": [
+    "<cstdio>",
+    "<cstdlib>",
+    "<fcntl.h>",
+    "<limits.h>",
+    "<sys/stat.h>",
+    "<unistd.h>"
+  ],
+  "src/runtime/platform/signals/signals.cpp": [
+    "<cerrno>",
+    "<cstdint>",
+    "<unistd.h>"
+  ],
+  "src/runtime/platform/stream_read_buffer/stream_read_buffer.cpp": [
+    "<cassert>",
+    "<cstddef>",
+    "<cstdint>",
+    "<cstring>"
+  ],
+  "src/runtime/platform/system_certificates/system_certificates.cpp": [
+    "<CoreFoundation/CoreFoundation.h>",
+    "<Security/Security.h>",
+    "<cerrno>",
+    "<cstdlib>",
+    "<openssl/err.h>",
+    "<openssl/pem.h>",
+    "<openssl/x509.h>",
+    "<unistd.h>"
+  ],
+  "src/runtime/runtime/client_control/client_control.cpp": [
+    "<cassert>",
+    "<cerrno>",
+    "<clipboard.hpp>",
+    "<cstddef>",
+    "<cstdint>",
+    "<cstdio>",
+    "<cstdlib>",
+    "<cstring>",
+    "<fcntl.h>",
+    "<limits.h>",
+    "<new>",
+    "<stdlib.h>",
+    "<sys/stat.h>",
+    "<sys/types.h>",
+    "<unistd.h>"
+  ],
+  "src/runtime/runtime/delivery/client_delivery/client_delivery.cpp": [
+    "<cassert>",
+    "<cerrno>",
+    "<csignal>",
+    "<cstddef>",
+    "<cstdint>",
+    "<cstdio>",
+    "<cstdlib>",
+    "<cstring>",
+    "<dirent.h>",
+    "<fcntl.h>",
+    "<ghostty/vt.h>",
+    "<limits.h>",
+    "<new>",
+    "<poll.h>",
+    "<stdlib.h>",
+    "<sys/mman.h>",
+    "<sys/stat.h>",
+    "<sys/types.h>",
+    "<sys/uio.h>",
+    "<sys/wait.h>",
+    "<unistd.h>",
+    "<zlib.h>",
+    "cell_layout.hpp",
+    "telar_render/sequence.hpp"
+  ],
+  "src/runtime/runtime/execution_service/execution_service.cpp": [
+    "<csignal>",
+    "<unistd.h>"
+  ],
+  "src/runtime/runtime/runtime/runtime.cpp": [
+    "<cerrno>",
+    "<csignal>",
+    "<ghostty/vt.h>",
+    "<limits.h>",
+    "<sys/stat.h>",
+    "<unistd.h>"
+  ],
+  "src/runtime/runtime/runtime_telemetry/runtime_telemetry.cpp": [
+    "<cassert>",
+    "<cerrno>",
+    "<csignal>",
+    "<cstddef>",
+    "<cstdint>",
+    "<cstdio>",
+    "<cstdlib>",
+    "<cstring>",
+    "<dirent.h>",
+    "<fcntl.h>",
+    "<ghostty/vt.h>",
+    "<limits.h>",
+    "<mach/mach.h>",
+    "<new>",
+    "<pthread.h>",
+    "<stdlib.h>",
+    "<sys/mman.h>",
+    "<sys/stat.h>",
+    "<sys/types.h>",
+    "<sys/uio.h>",
+    "<sys/wait.h>",
+    "<unistd.h>",
+    "<zlib.h>",
+    "cell_layout.hpp"
+  ],
+  "src/runtime/transport/connection/connection.cpp": [
+    "<cassert>",
+    "<cerrno>",
+    "<cstddef>",
+    "<cstdint>",
+    "<cstring>",
+    "<unistd.h>"
   ]
 }

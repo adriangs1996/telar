@@ -40,28 +40,15 @@ export {
     template <ConcurrentAllocator Memory>
     class SuggestionService {
     public:
-      inline explicit SuggestionService(Memory& memory, SuggestionOptions options)
-          : engine_(memory, options) {}
+      explicit SuggestionService(Memory& memory, SuggestionOptions options);
 
-      inline bool available() const noexcept {
-        return engine_.available();
-      }
+      bool available() const noexcept;
 
-      inline void process(std::span<const Byte> payload, EncodedReply<Memory>& reply, const RequestContext& context = {}) {
-        std::array<Byte, 1024> scratch;
-        DecodeStorage storage{scratch};
-        const auto request = Codec::decode<SuggestCommand>(payload, storage);
+      void process(std::span<const Byte> payload, EncodedReply<Memory>& reply, const RequestContext& context = {});
 
-        engine_.suggest(request, context.prompt, reply);
-      }
+      void idle() noexcept;
 
-      inline void idle() noexcept {
-        engine_.idle();
-      }
-
-      inline void stop() noexcept {
-        engine_.stop();
-      }
+      void stop() noexcept;
 
     private:
       SuggestionEngine<Memory> engine_;
@@ -69,6 +56,8 @@ export {
 
     template <ConcurrentAllocator Memory>
     SuggestionService(Memory& memory, SuggestionOptions options) -> SuggestionService<Memory>;
+
+    extern template class SuggestionService<ConcurrentMemory>;
 
   }
 }
