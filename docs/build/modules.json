@@ -759,6 +759,9 @@
   },
   "macro_headers": [],
   "implementations": {
+    "lib/base/diagnostics/diagnostics.cpp": "telar.base.diagnostics",
+    "lib/base/text/text.cpp": "telar.base.text",
+    "lib/base/text/json/json.cpp": "telar.base.text.json",
     "lib/platform/process/pty_process.cpp": "telar.platform.process",
     "lib/shell/syntax/syntax.cpp": "telar.shell.syntax",
     "lib/platform/daemon/daemon.cpp": "telar.platform.daemon",
