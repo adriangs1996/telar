@@ -16,6 +16,7 @@ export import telar.runtime.platform.signals;
 
 export import telar.runtime.platform.name_resolutions;
 export import telar.runtime.platform.stream_read_buffer;
+import telar.base.text;
 import telar.platform.primitives;
 
 // Interface: proxy/origin_connection.cppm

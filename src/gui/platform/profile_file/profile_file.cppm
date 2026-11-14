@@ -10,7 +10,8 @@ import std;
 import telar.gui.core.primitives;
 import telar.gui.platform.path_limits;
 import telar.machines;
-import telar.platform;
+import telar.platform.error;
+import telar.platform.fs;
 import telar.platform.primitives;
 import telar.vocabulary;
 
