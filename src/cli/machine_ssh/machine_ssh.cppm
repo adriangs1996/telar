@@ -393,7 +393,7 @@ export {
       const auto argv = pointers(arguments);
 
       ::execvp(argv.front(), argv.data());
-      throw CommandError{systemErrorName(errno)};
+      throw CommandError{sys::errorName(errno)};
     }
 
     // Runs a program on this terminal: it keeps the standard streams and this process group, and

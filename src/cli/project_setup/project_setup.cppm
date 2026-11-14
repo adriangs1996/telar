@@ -450,7 +450,7 @@ export {
         return;
       } catch (const SystemError& error) {
         if (!start || (error.code() != ENOENT && error.code() != ECONNREFUSED)) {
-          throw CommandError{systemErrorName(error.code())};
+          throw CommandError{sys::errorName(error.code())};
         }
       }
 
@@ -1736,7 +1736,7 @@ export {
         }
 
         if (count < 0) {
-          throw std::runtime_error{file_transfer::fileError(errno)};
+          throw std::runtime_error{sys::errorName(errno)};
         }
 
         if (count == 0) {

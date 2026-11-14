@@ -619,8 +619,7 @@ export {
       auto resolved = std::filesystem::canonical(path, error);
 
       if (error) {
-        throw Failure{error == std::errc::no_such_file_or_directory ? "FileNotFound" : error == std::errc::not_a_directory ? "NotDir"
-                                                                                                                           : "AccessDenied"};
+        throw Failure{sys::errorName(error.value())};
       }
 
       if (!std::filesystem::is_directory(resolved, error)) {
@@ -709,9 +708,7 @@ export {
 
       // An errno a connection can meet is named as everywhere; anything else is described.
       inline static const char* connectionFailure(int code) noexcept {
-        const auto* name = systemErrorName(code);
-
-        return std::string_view{name} == "Unexpected" ? "the local runtime is not reachable" : name;
+        return sys::errorName(code, "the local runtime is not reachable");
       }
 
       // Rethrows the exception being handled as the failure the command reports.

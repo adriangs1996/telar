@@ -233,7 +233,7 @@ export {
 
     inline std::string_view commandErrorName(const std::exception& error) {
       if (const auto* system = dynamic_cast<const SystemError*>(&error)) {
-        return systemErrorName(system->code());
+        return sys::errorName(system->code());
       }
 
       if (std::string_view{error.what()} == "Runtime receive timed out") {

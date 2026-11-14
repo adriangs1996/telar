@@ -28,7 +28,6 @@ import std;
 
 import telar.config.snapshot;
 import telar.lua;
-import telar.platform.error;
 import telar.platform.fs;
 import telar.platform.paths;
 import telar.plugins;
@@ -253,7 +252,7 @@ namespace telar::runtime::cli {
 
       std::array<char, PATH_MAX> canonical;
       if (::realpath(path.c_str(), canonical.data()) == nullptr) {
-        const auto error = systemErrorName(errno);
+        const auto error = sys::errorName(errno);
 
         diagnostic("cannot resolve config '" + std::string{path} + "': " + error, error);
       }

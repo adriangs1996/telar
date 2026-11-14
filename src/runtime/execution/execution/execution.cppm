@@ -5,7 +5,6 @@ module;
 #include <unistd.h>
 
 #include <cassert>
-#include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -57,8 +56,7 @@ export {
         } catch (const SystemError& failure) {
           state = ExecutionState::failed;
           exit_code = 125;
-          failure_name = failure.code() == ENOENT ? "FileNotFound" : failure.code() == EACCES ? "AccessDenied"
-                                                                                              : "ExecutionSpawnFailed";
+          failure_name = sys::errorName(failure.code(), "ExecutionSpawnFailed");
           eof = true;
         }
       }

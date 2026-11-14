@@ -64,7 +64,7 @@ export {
 
     inline CommandError fileError(int code) {
       // readlink's EINVAL means the path is no link.
-      return CommandError{code == EINVAL ? "NotLink" : systemErrorName(code)};
+      return CommandError{code == EINVAL ? "NotLink" : sys::errorName(code)};
     }
 
     struct CliInstallOptions {
@@ -295,7 +295,7 @@ export {
       try {
         executePlugin(memory, options, environment);
       } catch (const SystemError& error) {
-        throw CommandError{systemErrorName(error.code())};
+        throw CommandError{sys::errorName(error.code())};
       } catch (const std::exception& error) {
         throw CommandError{error.what()};
       }

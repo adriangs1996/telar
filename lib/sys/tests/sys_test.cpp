@@ -1,3 +1,5 @@
+#include <errno.h>
+
 // Each module's names reach an importer that includes no system header.
 import telar.sys.posix;
 import telar.sys.process;
@@ -18,6 +20,15 @@ namespace {
       ::write(2, what, ::strnlen(what, 128));
       ::write(2, "\n", 1);
     }
+  }
+
+  bool same(const char* left, const char* right) {
+    while (*left != 0 && *left == *right) {
+      ++left;
+      ++right;
+    }
+
+    return *left == *right;
   }
 
 }
@@ -57,6 +68,16 @@ int main() {
 
   expect(::getrandom(random, sizeof(random), 0) == sizeof(random), "getrandom");
 #endif
+
+  errno = EAGAIN;
+  expect(telar::sys::lastError() == EAGAIN, "lastError");
+
+  // The errno names scripts read after `error: `: one for denied access, the fallback for anything else.
+  expect(same(telar::sys::errorName(EACCES), "AccessDenied") && same(telar::sys::errorName(EPERM), "AccessDenied"), "errorName access");
+  expect(same(telar::sys::errorName(EIO), "InputOutput") && same(telar::sys::errorName(EEXIST), "PathAlreadyExists"), "errorName files");
+  expect(same(telar::sys::errorName(ENOSPC), "NoSpaceLeft") && same(telar::sys::errorName(EINVAL), "InvalidArgument"), "errorName space");
+  expect(same(telar::sys::errorName(ENOMEM), "SystemResources") && same(telar::sys::errorName(EBADF), "InvalidDescriptor"), "errorName resources");
+  expect(same(telar::sys::errorName(EDOM), "Unexpected") && same(telar::sys::errorName(EDOM, "Spawn"), "Spawn"), "errorName fallback");
 
   return failures == 0 ? 0 : 1;
 }
