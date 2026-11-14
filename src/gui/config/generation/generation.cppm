@@ -1,9 +1,6 @@
 module;
 #include "tbc/annotations.hpp"
 
-#include <lauxlib.h>
-#include <lua.h>
-
 export module telar.gui.config.generation;
 
 import std;

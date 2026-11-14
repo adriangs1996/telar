@@ -45,7 +45,8 @@ def main():
         if owner not in interfaces:
             raise RuntimeError('Missing migrated definition owner: ' + source)
     allowed = json.loads((ROOT / 'docs/build/textual-includes.json').read_text())
-    includes = check_includes(owned, allowed, inventory['macro_headers'], inventory['header_owners'])
+    includes = check_includes(owned, allowed, inventory['macro_headers'], inventory['header_owners'],
+                              inventory['library_owners'])
     owned = check_header_owners(inventory['header_owners'], owned_units(owned))
     reexports = check_reexports(inventory['interfaces'],
                                 json.loads((ROOT / 'docs/build/reexports.json').read_text()))
@@ -300,12 +301,22 @@ def includes_of(text):
     return {spelling.strip('"') for spelling in ANY_INCLUDE_RE.findall(text)}
 
 
-def textual_include_sites(files, macro_headers, owners):
+UNIT_MODULE_RE = re.compile(r'^(?:export )?module ([\w.]+)(?::[\w.]+)?;', re.M)
+
+
+def module_of(text):
+    """The module a unit belongs to, its partitions included; None outside a named module."""
+    match = UNIT_MODULE_RE.search(text)
+    return match[1] if match else None
+
+
+def textual_include_sites(files, macro_headers, owners, libraries):
     """The includes rule 5 does not excuse, by file.
 
     lib/sys, Qt/moc adapters and C or Objective-C(++) sources may include, and so may the headers
     they reach: those headers stay textual because they cannot import. An owner module may include
-    the headers it owns that cross that boundary, and any file may include a macro header or a
+    the headers it owns that cross that boundary, and the units of the module that `libraries`
+    names for a third-party header may include it. Any file may include a macro header or a
     generated `.inc` data fragment, which the build writes outside the tree. Tests and tools are
     out of the rule.
     """
@@ -324,6 +335,9 @@ def textual_include_sites(files, macro_headers, owners):
         pending += [header for header in (resolve(name, s) for s in includes_of(text)) if header]
 
     def excused(unit, spelling):
+        if spelling in libraries:
+            return module_of(sources[unit]) == libraries[spelling]
+
         header = resolve(unit, spelling)
         if header is None and spelling.endswith('.inc') and not spelling.startswith('<'):
             return True
@@ -342,11 +356,20 @@ def textual_include_sites(files, macro_headers, owners):
     return sites
 
 
-def check_includes(files, allowed, macro_headers, owners):
+def check_includes(files, allowed, macro_headers, owners, libraries):
     """Rule 5: no #include outside the exceptions. docs/build/textual-includes.json lists, by
     file, the includes that exist today; the change that removes one removes its entry.
-    `macro_headers` lists the project's macro headers, which include nothing themselves."""
+    `macro_headers` lists the project's macro headers, which include nothing themselves.
+    `libraries` maps each third-party header to the one module whose units include it."""
     errors = []
+
+    included = set()
+    for name in files:
+        if name.endswith(('.cppm', '.cpp')):
+            text = (ROOT / name).read_text(errors='replace')
+            included |= {(module_of(text), spelling) for spelling in includes_of(text)}
+    errors += [f'{owner} owns {spelling} but does not include it'
+               for spelling, owner in sorted(libraries.items()) if (owner, spelling) not in included]
 
     for header in macro_headers:
         if header not in files:
@@ -354,7 +377,7 @@ def check_includes(files, allowed, macro_headers, owners):
         elif includes_of((ROOT / header).read_text()):
             errors.append(f'macro header {header} includes other headers')
 
-    sites = textual_include_sites(files, set(macro_headers), owners)
+    sites = textual_include_sites(files, set(macro_headers), owners, libraries)
 
     for name in sorted(sites.keys() | allowed.keys()):
         found, listed = sites.get(name, set()), set(allowed.get(name, ()))

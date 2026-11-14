@@ -3177,5 +3177,23 @@
     "src/gui/terminal/fold_map/fold_map.cppm": [
       "src/gui/terminal/fold_map.hpp"
     ]
+  },
+  "library_owners": {
+    "<freetype/freetype.h>": "telar.gui.fonts.face",
+    "<freetype/ftadvanc.h>": "telar.gui.fonts.face",
+    "<freetype/ftimage.h>": "telar.gui.fonts.face",
+    "<freetype/ftmm.h>": "telar.gui.fonts.face",
+    "<freetype/ftoutln.h>": "telar.gui.fonts.face",
+    "<freetype/ftsizes.h>": "telar.gui.fonts.face",
+    "<freetype/ftsynth.h>": "telar.gui.fonts.face",
+    "<freetype/fttypes.h>": "telar.gui.fonts.face",
+    "<freetype/tttables.h>": "telar.gui.fonts.face",
+    "<ghostty/vt/unicode.h>": "telar.config.runtime",
+    "<hb-ft.h>": "telar.gui.fonts.face",
+    "<hb-ot.h>": "telar.gui.fonts.face",
+    "<hb.h>": "telar.gui.fonts.face",
+    "<lauxlib.h>": "telar.lua",
+    "<lua.h>": "telar.lua",
+    "<lualib.h>": "telar.lua"
   }
 }

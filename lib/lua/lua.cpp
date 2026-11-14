@@ -9,6 +9,27 @@ import std;
 import telar.tbc;
 import telar.sys.posix;
 
+// The parentheses keep each name from expanding as the macro the body calls.
+void(lua_call)(lua_State* state, int arguments, int results) {
+  lua_call(state, arguments, results);
+}
+
+void(lua_newtable)(lua_State* state) {
+  lua_newtable(state);
+}
+
+void(lua_pop)(lua_State* state, int count) {
+  lua_pop(state, count);
+}
+
+void(lua_remove)(lua_State* state, int index) {
+  lua_remove(state, index);
+}
+
+void(lua_replace)(lua_State* state, int index) {
+  lua_replace(state, index);
+}
+
 namespace telar::runtime::lua {
   namespace {
 
