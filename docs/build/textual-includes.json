@@ -258,14 +258,11 @@
     "telar_platform/process_environment.h"
   ],
   "lib/platform/daemon/daemon.cppm": [
-    "<cstdlib>",
-    "<limits.h>",
     "<sys/types.h>"
   ],
-  "lib/platform/fs/fs.cppm": [
+  "lib/platform/fs/fs.cpp": [
     "<cerrno>",
     "<cstdio>",
-    "<cstdlib>",
     "<cstring>",
     "<dirent.h>",
     "<fcntl.h>",
@@ -277,7 +274,15 @@
     "<unistd.h>",
     "tbc/view.hpp"
   ],
-  "lib/platform/graphics/graphics.cppm": [
+  "lib/platform/fs/fs.cppm": [
+    "<dirent.h>",
+    "<limits.h>",
+    "<sys/stat.h>",
+    "<sys/types.h>",
+    "tbc/hot_path.hpp",
+    "tbc/view.hpp"
+  ],
+  "lib/platform/graphics/graphics.cpp": [
     "<cstdio>",
     "<fcntl.h>",
     "<sys/mman.h>",
@@ -332,10 +337,9 @@
     "telar_base/memory/allocator.hpp",
     "telar_platform/trace_macro.hpp"
   ],
-  "lib/platform/net/net.cppm": [
+  "lib/platform/net/net.cpp": [
     "<cerrno>",
     "<csignal>",
-    "<cstdint>",
     "<cstring>",
     "<netinet/in.h>",
     "<netinet/tcp.h>",
@@ -343,10 +347,20 @@
     "<sys/types.h>",
     "<unistd.h>"
   ],
-  "lib/platform/paths/paths.cppm": [
+  "lib/platform/net/net.cppm": [
+    "<netinet/in.h>",
+    "<sys/socket.h>",
+    "<sys/types.h>"
+  ],
+  "lib/platform/paths/paths.cpp": [
     "<cstdlib>",
+    "<unistd.h>",
+    "tbc/view.hpp"
+  ],
+  "lib/platform/paths/paths.cppm": [
     "<sys/un.h>",
-    "<unistd.h>"
+    "tbc/hot_path.hpp",
+    "tbc/view.hpp"
   ],
   "lib/platform/primitives/primitives.cppm": [
     "telar_platform/graphics/child_shared_memory.hpp",
@@ -370,28 +384,32 @@
     "<sys/wait.h>",
     "<unistd.h>"
   ],
-  "lib/platform/process/process.cppm": [
+  "lib/platform/process/process.cpp": [
     "<cerrno>",
     "<csignal>",
     "<cstdlib>",
     "<cstring>",
     "<dirent.h>",
     "<fcntl.h>",
-    "<libproc.h>",
     "<limits.h>",
-    "<linux/close_range.h>",
     "<mach-o/dyld.h>",
     "<poll.h>",
     "<pwd.h>",
     "<spawn.h>",
     "<sys/attr.h>",
     "<sys/stat.h>",
-    "<sys/syscall.h>",
     "<sys/types.h>",
-    "<sys/wait.h>",
     "<unistd.h>",
     "tbc/view.hpp",
     "telar_platform/process_environment.h"
+  ],
+  "lib/platform/process/process.cppm": [
+    "<limits.h>",
+    "<spawn.h>",
+    "<sys/types.h>",
+    "<sys/wait.h>",
+    "tbc/hot_path.hpp",
+    "tbc/view.hpp"
   ],
   "lib/platform/process/pty_process.cpp": [
     "<cerrno>",
@@ -412,6 +430,9 @@
     "<termios.h>",
     "<unistd.h>",
     "<util.h>"
+  ],
+  "lib/platform/sha256/sha256.cpp": [
+    "<openssl/sha.h>"
   ],
   "lib/platform/sha256/sha256.cppm": [
     "<openssl/sha.h>"
@@ -442,9 +463,12 @@
     "telar_platform/file_descriptor.hpp",
     "telar_platform/trace.hpp"
   ],
-  "lib/platform/thread/thread.cppm": [
+  "lib/platform/thread/thread.cpp": [
     "<pthread.h>",
     "<unistd.h>"
+  ],
+  "lib/platform/thread/thread.cppm": [
+    "tbc/hot_path.hpp"
   ],
   "lib/plugins/plugins.cppm": [
     "<cerrno>",

@@ -98,6 +98,34 @@ namespace telar::runtime {
     }
   }
 
+  int PipeProcess::input() const noexcept {
+    return input_.get();
+  }
+
+  int PipeProcess::output() const noexcept {
+    return output_.get();
+  }
+
+  int PipeProcess::error() const noexcept {
+    return error_.get();
+  }
+
+  pid_t PipeProcess::processId() const noexcept {
+    return process_id_;
+  }
+
+  void PipeProcess::closeInput() noexcept {
+    input_.reset();
+  }
+
+  void PipeProcess::closeOutput() noexcept {
+    output_.reset();
+  }
+
+  void PipeProcess::closeError() noexcept {
+    error_.reset();
+  }
+
   void PipeProcess::signal(int number) const noexcept {
     if (process_id_ > 0 && !exit_status_) {
       ::kill(-process_id_, number);

@@ -26,10 +26,15 @@ using namespace telar;
 using namespace telar::runtime;
 using namespace telar::runtime::cli;
 
-struct TestEnvironment {
-  std::array<std::pair<std::string_view, std::string_view>, 8> values{};
+struct TestEnvironment final : EnvironmentSource {
+  using Values = std::array<std::pair<std::string_view, std::string_view>, 8>;
 
-  std::string_view lookup(const char* name) const noexcept {
+  explicit TestEnvironment(const Values& entries) noexcept
+      : values(entries) {}
+
+  Values values{};
+
+  std::string_view lookup(const char* name) const noexcept override {
     for (const auto& [key, value] : values) {
       if (key == name) {
         return value;

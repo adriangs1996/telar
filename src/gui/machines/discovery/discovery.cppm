@@ -192,12 +192,17 @@ export {
 
     private:
       template <MachineRuntimeEnvironment Environment>
-      struct Lookup {
-        const Environment& source;
+      class Lookup final : public runtime::EnvironmentSource {
+      public:
+        inline explicit Lookup(const Environment& source) noexcept
+            : source_(source) {}
 
-        [[nodiscard]] inline std::string_view lookup(const char* name) const {
-          return source(name).value_or(std::string_view{});
+        [[nodiscard]] inline std::string_view lookup(const char* name) const override {
+          return source_(name).value_or(std::string_view{});
         }
+
+      private:
+        const Environment& source_;
       };
 
       inline explicit MachineRuntimeLocation(const runtime::cli::SocketLocation& location) noexcept

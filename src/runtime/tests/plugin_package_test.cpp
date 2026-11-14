@@ -27,7 +27,7 @@ namespace tap = telar::runtime::plugins;
 
 namespace {
 
-  class PackageFixture {
+  class PackageFixture final : public EnvironmentSource {
   public:
     PackageFixture()
         : temporary_("/tmp/telar-plugin-package-tests-XXXXXX"),
@@ -72,7 +72,7 @@ namespace {
       check(::chmod(path.c_str(), 0600) == 0);
     }
 
-    std::string_view lookup(const char* name) const noexcept {
+    std::string_view lookup(const char* name) const noexcept override {
       return std::string_view{name} == "XDG_CONFIG_HOME" ? std::string_view{root} : std::string_view{};
     }
 
