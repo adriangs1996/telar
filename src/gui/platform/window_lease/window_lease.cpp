@@ -13,7 +13,7 @@ module;
 #include <sys/types.h>
 #include <unistd.h>
 
-module telar.gui.platform.notification_commands;
+module telar.gui.platform.window_lease;
 
 import std;
 

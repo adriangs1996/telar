@@ -4,7 +4,7 @@ module;
 #include <sys/socket.h>
 #include <unistd.h>
 
-module telar.gui.platform.notification_commands;
+module telar.gui.platform.stdio_socket;
 
 import std;
 

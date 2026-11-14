@@ -44,7 +44,7 @@ import telar.gui.machines.discovery;
 import telar.gui.machines.profile_store;
 import telar.gui.platform.managed_directory;
 import telar.gui.platform.path_limits;
-import telar.gui.platform.notification_commands;
+import telar.gui.platform.stdio_socket;
 import telar.gui.transport.runtime_link;
 
 namespace telar::gui::qt {

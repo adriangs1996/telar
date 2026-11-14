@@ -1734,35 +1734,11 @@
     "<unistd.h>"
   ],
   "src/gui/platform/notification_commands/notification_commands.cppm": [
-    "<climits>",
     "<cstddef>",
     "<cstdint>",
     "<cstdio>",
     "<cstring>",
     "<sys/un.h>",
-    "<unistd.h>",
-    "tbc/view.hpp"
-  ],
-  "src/gui/platform/notification_commands/stdio_socket.cpp": [
-    "<cerrno>",
-    "<sys/socket.h>",
-    "<unistd.h>"
-  ],
-  "src/gui/platform/notification_commands/wall_clock.cpp": [
-    "<cstdint>",
-    "<ctime>"
-  ],
-  "src/gui/platform/notification_commands/window_lease.cpp": [
-    "<cerrno>",
-    "<climits>",
-    "<cstdint>",
-    "<cstdlib>",
-    "<cstring>",
-    "<fcntl.h>",
-    "<limits.h>",
-    "<sys/file.h>",
-    "<sys/stat.h>",
-    "<sys/types.h>",
     "<unistd.h>",
     "tbc/view.hpp"
   ],
@@ -1838,6 +1814,32 @@
     "<sys/mman.h>",
     "<sys/stat.h>",
     "<unistd.h>"
+  ],
+  "src/gui/platform/stdio_socket/stdio_socket.cpp": [
+    "<cerrno>",
+    "<sys/socket.h>",
+    "<unistd.h>"
+  ],
+  "src/gui/platform/wall_clock/wall_clock.cpp": [
+    "<cstdint>",
+    "<ctime>"
+  ],
+  "src/gui/platform/window_lease/window_lease.cpp": [
+    "<cerrno>",
+    "<climits>",
+    "<cstdint>",
+    "<cstdlib>",
+    "<cstring>",
+    "<fcntl.h>",
+    "<limits.h>",
+    "<sys/file.h>",
+    "<sys/stat.h>",
+    "<sys/types.h>",
+    "<unistd.h>",
+    "tbc/view.hpp"
+  ],
+  "src/gui/platform/window_lease/window_lease.cppm": [
+    "<climits>"
   ],
   "src/gui/presentation/activity_order/activity_order.cppm": [
     "<cmath>",
