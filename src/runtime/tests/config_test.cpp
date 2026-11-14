@@ -258,6 +258,22 @@ return {api_version=2,plugins=plugins,profiles={selected={plugins={{path='replac
   options.profile = {};
   check(memory.liveBytes() == 0);
 
+  // The runtime reads client.prompt.skin with the reader the GUI applies, so both accept the same skins.
+  for (const auto& [skin, accepted] : {std::pair{std::string_view{"glass"}, true}, std::pair{std::string_view{"neon"}, false}}) {
+    writeConfig(path, std::format("return {{api_version=2, client={{prompt={{mode='telar', skin='{}'}}}}}}", skin));
+    bool rejected = false;
+
+    try {
+      config::RuntimeValues values{memory};
+
+      config::Loader{memory, values}.load(options, ProcessEnvironment{});
+    } catch (const std::exception&) {
+      rejected = true;
+    }
+
+    check(rejected != accepted && memory.liveBytes() == 0);
+  }
+
   const auto outside = root + ".lua";
 
   writeConfig(outside, "return {api_version=2}");
