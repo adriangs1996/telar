@@ -23,7 +23,7 @@ export {
 
     // The release path of every secure container and of SensitiveAllocation, over any composed upstream.
     template <Allocator Upstream>
-    class TBC_SHARED TBC_HOT_PATH ErasingAllocator {
+    class TBC_SHARED TBC_GENERIC ErasingAllocator {
     public:
       static constexpr bool thread_safe = ConcurrentAllocator<Upstream>;
       static constexpr bool erasing = true;
@@ -108,7 +108,7 @@ export {
 
     // Bytes erased on release, allocated from an allocator in region `a`.
     template <Allocator Memory>
-    class TBC_HOT_PATH SensitiveAllocation {
+    class TBC_GENERIC SensitiveAllocation {
     public:
       inline explicit SensitiveAllocation(tbc::view<Memory&, tbc::lt::a> memory, std::size_t size)
           : memory_(&memory),
@@ -176,7 +176,7 @@ export {
 
     // Generic over its capacity, so no implementation unit can instantiate it for every importer.
     template <std::size_t Capacity>
-    class TBC_HOT_PATH SensitiveBuffer {
+    class TBC_GENERIC SensitiveBuffer {
     public:
       inline SensitiveBuffer() noexcept {}
 
@@ -204,7 +204,7 @@ export {
 
     // Generic over its capacity, so no implementation unit can instantiate it for every importer.
     template <std::size_t Capacity>
-    class TBC_HOT_PATH SensitiveText {
+    class TBC_GENERIC SensitiveText {
     public:
       inline SensitiveText() noexcept {}
 

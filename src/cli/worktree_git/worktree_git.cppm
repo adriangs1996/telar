@@ -169,7 +169,7 @@ export {
       // refusal's generic description. Generic over the protocol's messages, an
       // open set, so it stays a template here.
       template <typename Reply, typename Request>
-      TBC_HOT_PATH inline Reply exchange(Request request, bool reason = true) {
+      TBC_GENERIC inline Reply exchange(Request request, bool reason = true) {
         try {
           return session_->template exchange<Reply>(request);
         } catch (...) {

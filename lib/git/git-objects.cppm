@@ -235,7 +235,7 @@ namespace telar::git {
 
     // Calls `output` with each parent of `commit`; false when the graph is malformed.
     template <typename Output>
-    TBC_HOT_PATH bool parents(const Commit& commit, std::size_t maximum, Output&& output) const {
+    TBC_GENERIC bool parents(const Commit& commit, std::size_t maximum, Output&& output) const {
       // Stays generic over the caller's output, which the walk calls through a function pointer.
       using Target = std::remove_reference_t<Output>;
 

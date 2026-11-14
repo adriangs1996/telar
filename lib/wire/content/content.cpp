@@ -23,6 +23,10 @@ namespace telar {
     }
   }
 
+  CellReader PaneRows::reader() const {
+    return CellReader{cells, static_cast<std::uint32_t>(cols) * rows};
+  }
+
   void PaneRows::validate() const {
     const auto count = static_cast<std::uint32_t>(cols) * rows;
     if (rows > ReadPaneRows::maximum_rows || count > 130359 || (rows != 0 && cols == 0)) {

@@ -161,6 +161,20 @@ namespace telar::runtime::cli {
     return {};
   }
 
+  template <Allocator Memory>
+  String<Memory> xdgDirectory(Memory& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback) {
+    const auto found = findXdgDirectory(environment, variable, fallback);
+    String<Memory> path{found.base, AllocatorRef<char, Memory>{memory}};
+
+    path += found.suffix;
+    return path;
+  }
+
+  template String<Memory> xdgDirectory<Memory>(Memory& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
+  template String<ConcurrentMemory> xdgDirectory<ConcurrentMemory>(ConcurrentMemory& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
+  template String<SystemAllocator> xdgDirectory<SystemAllocator>(SystemAllocator& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
+  template String<BudgetAllocator<SystemAllocator>> xdgDirectory<BudgetAllocator<SystemAllocator>>(BudgetAllocator<SystemAllocator>& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
+
   SocketLocation SocketLocation::resolve(std::string_view explicit_path, const EnvironmentSource& environment, std::uint32_t user) {
     for (const auto candidate : {explicit_path, environment.lookup("TELAR_SOCKET"), environment.lookup("TELAR_SOCKET_PATH")}) {
       if (!candidate.empty()) {

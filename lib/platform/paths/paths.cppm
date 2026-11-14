@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.platform.paths;
 
 import std;
@@ -130,16 +127,15 @@ export {
 
     tbc::view<XdgDirectory, tbc::lt::a> findXdgDirectory(tbc::view<const EnvironmentSource&, tbc::lt::a> environment, const char* variable, tbc::view<std::string_view, tbc::lt::a> fallback);
 
-    // Stays in the interface because it is a template over the caller's allocator; it only joins
-    // the pieces into the caller's string.
+    // Joins the pieces into a string of the caller's allocator; built in paths.cpp for the
+    // allocators of telar.base.memory.allocators.
     template <Allocator Memory>
-    TBC_HOT_PATH String<Memory> xdgDirectory(Memory& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback) {
-      const auto found = findXdgDirectory(environment, variable, fallback);
-      String<Memory> path{found.base, AllocatorRef<char, Memory>{memory}};
+    String<Memory> xdgDirectory(Memory& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
 
-      path += found.suffix;
-      return path;
-    }
+    extern template String<Memory> xdgDirectory<Memory>(Memory& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
+    extern template String<ConcurrentMemory> xdgDirectory<ConcurrentMemory>(ConcurrentMemory& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
+    extern template String<SystemAllocator> xdgDirectory<SystemAllocator>(SystemAllocator& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
+    extern template String<BudgetAllocator<SystemAllocator>> xdgDirectory<BudgetAllocator<SystemAllocator>>(BudgetAllocator<SystemAllocator>& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
 
     // Where a runtime's socket is, as every telar process finds it: the explicit path, else
     // TELAR_SOCKET, else TELAR_SOCKET_PATH, else the managed `runtime.sock` in XDG_RUNTIME_DIR/telar

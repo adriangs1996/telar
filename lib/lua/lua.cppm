@@ -137,7 +137,7 @@ export {
 
       // Generic over the caller's visitor, so it stays here and hands the walk to visitNames.
       template <typename Visitor>
-      TBC_HOT_PATH void visitLoadedNames(lua_State* state, Visitor&& visit) const {
+      TBC_GENERIC void visitLoadedNames(lua_State* state, Visitor&& visit) const {
         using Target = std::remove_reference_t<Visitor>;
 
         visitNames(state, std::addressof(visit), [](void* target, std::string_view name) {
@@ -221,7 +221,7 @@ export {
 
       // Generic over the caller's consumer, so it stays here and hands the walk to visitFields.
       template <typename Consumer>
-      TBC_HOT_PATH void eachField(Consumer&& consume) const {
+      TBC_GENERIC void eachField(Consumer&& consume) const {
         using Target = std::remove_reference_t<Consumer>;
 
         visitFields(std::addressof(consume), [](void* target, std::string_view name, const Value& value) {

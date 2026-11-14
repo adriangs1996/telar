@@ -313,6 +313,94 @@ namespace telar::render {
     }
   }
 
+  template <Allocator Memory>
+  Document<Memory>::Document(Memory& memory)
+      : blocks(AllocatorRef<Block, Memory>{memory}),
+        cells(AllocatorRef<Cell, Memory>{memory}),
+        runs(AllocatorRef<Run, Memory>{memory}),
+        text(AllocatorRef<char, Memory>{memory}) {}
+
+  template <Allocator Memory>
+  std::string_view Document<Memory>::view(Span span) const noexcept {
+    return std::string_view{text}.substr(span.offset, span.size);
+  }
+
+  template <Allocator Memory>
+  std::span<const Run> Document<Memory>::runsOf(const Block& block) const noexcept {
+    return std::span<const Run>{runs}.subspan(block.first, block.count);
+  }
+
+  template <Allocator Memory>
+  std::span<const Run> Document<Memory>::runsOf(const Cell& cell) const noexcept {
+    return std::span<const Run>{runs}.subspan(cell.first, cell.count);
+  }
+
+  template <Allocator Memory>
+  std::span<const Cell> Document<Memory>::cellsOf(const Block& block) const noexcept {
+    return std::span<const Cell>{cells}.subspan(block.first, block.count);
+  }
+
+  template <Allocator Memory>
+  void Document<Memory>::clear() noexcept {
+    blocks.clear();
+    cells.clear();
+    runs.clear();
+    text.clear();
+  }
+
+  template struct Document<Memory>;
+
+  template <Allocator Memory>
+  std::optional<std::size_t> encodedSize(const Document<Memory>& document) noexcept {
+    const auto size = detail::encodedSize(document.blocks.size(), document.cells.size(), document.runs.size(), document.text.size());
+
+    return size <= max_document_bytes ? std::optional<std::size_t>{static_cast<std::size_t>(size)} : std::nullopt;
+  }
+
+  template <Allocator Memory>
+  void encode(const Document<Memory>& document, std::span<std::uint8_t> output) noexcept {
+    detail::encode(document.blocks, document.cells, document.runs, document.text, output);
+  }
+
+  template <Allocator Memory>
+  DecodeError decode(std::span<const std::uint8_t> input, Document<Memory>& document) {
+    document.clear();
+    detail::Counts counts;
+
+    auto error = detail::decodeHeader(input, counts);
+    if (error != DecodeError::none) {
+      return error;
+    }
+
+    document.blocks.resize(counts.blocks);
+    error = detail::decodeBlocks(input, document.blocks);
+    if (error == DecodeError::none) {
+      document.cells.resize(counts.cells);
+      error = detail::decodeCells(input, counts, document.cells);
+    }
+
+    if (error == DecodeError::none) {
+      document.runs.resize(counts.runs);
+      error = detail::decodeRuns(input, counts, document.runs);
+    }
+
+    if (error == DecodeError::none) {
+      error = detail::checkBlocks(input, counts, document.blocks);
+    }
+
+    if (error != DecodeError::none) {
+      document.clear();
+      return error;
+    }
+
+    document.text.assign(detail::text(input, counts));
+    return DecodeError::none;
+  }
+
+  template std::optional<std::size_t> encodedSize<Memory>(const Document<Memory>& document) noexcept;
+  template void encode<Memory>(const Document<Memory>& document, std::span<std::uint8_t> output) noexcept;
+  template DecodeError decode<Memory>(std::span<const std::uint8_t> input, Document<Memory>& document);
+
   bool appendSequence(const Document<Memory>& document, String<Memory>& output) {
     const auto size = encodedSize(document);
     if (!size) {

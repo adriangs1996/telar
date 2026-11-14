@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
 #include "telar_base/text/base64.hpp"
 #include "telar_base/text/decimal.hpp"
@@ -208,13 +207,14 @@ export {
       return {output.data(), 2 * bytes.size()};
     }
 
+    // Built in text.cpp for the base allocators of telar.base.memory.allocators.
     template <Allocator Memory>
-    TBC_HOT_PATH void appendLowerHex(String<Memory>& output, std::span<const std::uint8_t> bytes) {
-      const auto start = output.size();
+    void appendLowerHex(String<Memory>& output, std::span<const std::uint8_t> bytes);
 
-      output.resize(start + 2 * bytes.size());
-      static_cast<void>(encodeLowerHex(bytes, std::span{output}.subspan(start)));
-    }
+    extern template void appendLowerHex<Memory>(String<Memory>& output, std::span<const std::uint8_t> bytes);
+    extern template void appendLowerHex<ConcurrentMemory>(String<ConcurrentMemory>& output, std::span<const std::uint8_t> bytes);
+    extern template void appendLowerHex<SystemAllocator>(String<SystemAllocator>& output, std::span<const std::uint8_t> bytes);
+    extern template void appendLowerHex<BudgetAllocator<SystemAllocator>>(String<BudgetAllocator<SystemAllocator>>& output, std::span<const std::uint8_t> bytes);
 
     std::string lowerHex(std::span<const std::uint8_t> bytes);
 

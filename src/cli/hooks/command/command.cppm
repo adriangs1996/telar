@@ -45,7 +45,7 @@ export {
 
       // Generic over the caller's integer type, so it stays here and reads the field through text.
       template <typename Integer>
-      TBC_HOT_PATH inline std::optional<Integer> integer(std::string_view name) {
+      TBC_GENERIC inline std::optional<Integer> integer(std::string_view name) {
         const auto field = value(name);
         if (!field || field->encoded() == "null") {
           return std::nullopt;

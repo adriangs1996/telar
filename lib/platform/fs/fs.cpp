@@ -248,6 +248,25 @@ namespace telar::runtime {
     }
   }
 
+  template <Allocator Memory>
+  bool readPrivateFile(int directory, std::string_view name, Vector<unsigned char, Memory>& bytes, std::size_t limit) {
+    const auto opened = openPrivateFile(directory, name, limit);
+    if (!opened.file) {
+      return false;
+    }
+
+    bytes.resize(opened.size);
+    readPrivateFileBytes(opened.file.get(), bytes);
+    return true;
+  }
+
+  template bool readPrivateFile<Memory>(int directory, std::string_view name, Vector<unsigned char, Memory>& bytes, std::size_t limit);
+  template bool readPrivateFile<ConcurrentMemory>(int directory, std::string_view name, Vector<unsigned char, ConcurrentMemory>& bytes, std::size_t limit);
+  template bool readPrivateFile<SystemAllocator>(int directory, std::string_view name, Vector<unsigned char, SystemAllocator>& bytes, std::size_t limit);
+  template bool readPrivateFile<BudgetAllocator<SystemAllocator>>(int directory, std::string_view name, Vector<unsigned char, BudgetAllocator<SystemAllocator>>& bytes, std::size_t limit);
+  template bool readPrivateFile<ErasingAllocator<Memory>>(int directory, std::string_view name, Vector<unsigned char, ErasingAllocator<Memory>>& bytes, std::size_t limit);
+  template bool readPrivateFile<ErasingAllocator<ConcurrentMemory>>(int directory, std::string_view name, Vector<unsigned char, ErasingAllocator<ConcurrentMemory>>& bytes, std::size_t limit);
+
   FileReadError::FileReadError(FileReadFailure failure) noexcept
       : failure_(failure) {}
 
@@ -282,6 +301,34 @@ namespace telar::runtime {
 
     return file;
   }
+
+  template <Allocator Memory>
+  String<Memory> readFileContents(Memory& memory, int descriptor, std::size_t maximum_bytes) {
+    const auto size = boundedFileSize(descriptor, maximum_bytes);
+    String<Memory> source{AllocatorRef<char, Memory>{memory}};
+
+    source.resize(size);
+    readFileBytes(descriptor, source);
+    return source;
+  }
+
+  template <Allocator Memory>
+  String<Memory> readFile(Memory& memory, const char* path, std::size_t maximum_bytes) {
+    const auto file = openSourceFile(path);
+
+    return readFileContents(memory, file.get(), maximum_bytes);
+  }
+
+  template String<Memory> readFileContents<Memory>(Memory& memory, int descriptor, std::size_t maximum_bytes);
+  template String<ConcurrentMemory> readFileContents<ConcurrentMemory>(ConcurrentMemory& memory, int descriptor, std::size_t maximum_bytes);
+  template String<SystemAllocator> readFileContents<SystemAllocator>(SystemAllocator& memory, int descriptor, std::size_t maximum_bytes);
+  template String<BudgetAllocator<SystemAllocator>> readFileContents<BudgetAllocator<SystemAllocator>>(BudgetAllocator<SystemAllocator>& memory, int descriptor, std::size_t maximum_bytes);
+  template String<RecyclingAllocator<Memory>> readFileContents<RecyclingAllocator<Memory>>(RecyclingAllocator<Memory>& memory, int descriptor, std::size_t maximum_bytes);
+  template String<Memory> readFile<Memory>(Memory& memory, const char* path, std::size_t maximum_bytes);
+  template String<ConcurrentMemory> readFile<ConcurrentMemory>(ConcurrentMemory& memory, const char* path, std::size_t maximum_bytes);
+  template String<SystemAllocator> readFile<SystemAllocator>(SystemAllocator& memory, const char* path, std::size_t maximum_bytes);
+  template String<BudgetAllocator<SystemAllocator>> readFile<BudgetAllocator<SystemAllocator>>(BudgetAllocator<SystemAllocator>& memory, const char* path, std::size_t maximum_bytes);
+  template String<RecyclingAllocator<Memory>> readFile<RecyclingAllocator<Memory>>(RecyclingAllocator<Memory>& memory, const char* path, std::size_t maximum_bytes);
 
   int renameAt(int source_directory, const char* source, int destination_directory, const char* destination, RenameMode mode) noexcept {
 #if defined(__APPLE__)
@@ -336,6 +383,39 @@ namespace telar::runtime {
 
     return buffer.data();
   }
+
+  template <Allocator Memory>
+  void resolveRelativePath(String<Memory>& path, std::string_view directory) {
+    if (path.empty() || path.front() == '/') {
+      return;
+    }
+
+    String<Memory> resolved{path.get_allocator()};
+
+    resolved.resize(directory.size() + path.size() + 2);
+    resolved.resize(resolvePath(directory, path, resolved));
+    path = std::move(resolved);
+  }
+
+  template <Allocator Memory>
+  void resolveAbsolutePath(String<Memory>& path) {
+    if (path.starts_with('/')) {
+      return;
+    }
+
+    std::array<char, PATH_MAX> directory;
+
+    resolveRelativePath(path, workingDirectory(directory));
+  }
+
+  template void resolveRelativePath<Memory>(String<Memory>& path, std::string_view directory);
+  template void resolveRelativePath<ConcurrentMemory>(String<ConcurrentMemory>& path, std::string_view directory);
+  template void resolveRelativePath<SystemAllocator>(String<SystemAllocator>& path, std::string_view directory);
+  template void resolveRelativePath<BudgetAllocator<SystemAllocator>>(String<BudgetAllocator<SystemAllocator>>& path, std::string_view directory);
+  template void resolveAbsolutePath<Memory>(String<Memory>& path);
+  template void resolveAbsolutePath<ConcurrentMemory>(String<ConcurrentMemory>& path);
+  template void resolveAbsolutePath<SystemAllocator>(String<SystemAllocator>& path);
+  template void resolveAbsolutePath<BudgetAllocator<SystemAllocator>>(String<BudgetAllocator<SystemAllocator>>& path);
 
   TemporaryDirectory::TemporaryDirectory(std::string_view pattern) {
     if (pattern.empty() || pattern.front() != '/' || !pattern.ends_with("XXXXXX") || pattern.size() >= path_.size() || pattern.contains('\0')) {

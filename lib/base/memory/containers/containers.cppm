@@ -20,7 +20,7 @@ export {
   namespace telar::runtime {
 
     template <Allocator Memory>
-    class TBC_HOT_PATH ByteQueue {
+    class TBC_GENERIC ByteQueue {
     public:
       inline explicit ByteQueue(Memory& memory, std::size_t limit) noexcept
           : memory_(memory),
@@ -216,7 +216,7 @@ export {
 
     // The allocation hook of the C libraries, over the composed allocators that hand it their memory.
     template <Allocator Memory>
-    class TBC_SHARED TBC_HOT_PATH CAllocationBlocks {
+    class TBC_SHARED TBC_GENERIC CAllocationBlocks {
     public:
       inline explicit CAllocationBlocks(Memory& memory) noexcept
           : memory_(memory) {}
@@ -311,7 +311,7 @@ export {
     // value it carries, so no implementation unit can instantiate it for every importer.
     template <typename Value, std::size_t Capacity, ChannelPolicy policy = ChannelPolicy::best_effort>
       requires std::is_nothrow_move_constructible_v<Value> && std::is_nothrow_swappable_v<Value>
-    class TBC_SHARED TBC_HOT_PATH DropChannel {
+    class TBC_SHARED TBC_GENERIC DropChannel {
       static_assert(Capacity != 0);
 
     public:
@@ -461,7 +461,7 @@ export {
   namespace telar::runtime {
 
     template <std::size_t Capacity>
-    class TBC_HOT_PATH SlotIndexes {
+    class TBC_GENERIC SlotIndexes {
       static_assert(Capacity > 0);
 
     public:

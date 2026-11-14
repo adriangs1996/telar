@@ -64,7 +64,7 @@ export {
     // Stays in the interface: a small fixed-capacity text on the GUI's key encoder and runtime link
     // paths, used with dozens of caller-chosen capacities.
     template <std::size_t Capacity>
-    class TBC_HOT_PATH BoundedText {
+    class TBC_GENERIC BoundedText {
     public:
       inline void append(std::string_view text) {
         if (text.size() > Capacity - length_) {
@@ -256,7 +256,7 @@ export {
 
       // Generic over the caller's random source, so it stays here and hands the work to draw.
       template <MachineIdentityRandom Random>
-      [[nodiscard]] TBC_HOT_PATH static MachineId generate(Random& random) {
+      [[nodiscard]] TBC_GENERIC static MachineId generate(Random& random) {
         return draw(std::addressof(random), [](void* source, std::span<std::uint8_t> bytes) {
           static_cast<Random*>(source)->fill(bytes);
         });

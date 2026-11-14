@@ -32,7 +32,7 @@ export {
       tbc::view<std::string_view, tbc::lt::b> encoded() const noexcept;
 
       template <typename Consumer>
-      TBC_HOT_PATH void eachElement(Consumer&& consume) const {
+      TBC_GENERIC void eachElement(Consumer&& consume) const {
         auto input = bytes_;
 
         for (bool more = enter(input, '[', ']'); more; more = advance(input, ']')) {
@@ -44,7 +44,7 @@ export {
       }
 
       template <typename Consumer>
-      TBC_HOT_PATH void eachMember(Consumer&& consume) const {
+      TBC_GENERIC void eachMember(Consumer&& consume) const {
         auto input = bytes_;
 
         for (bool more = enter(input, '{', '}'); more; more = advance(input, '}')) {
@@ -62,13 +62,7 @@ export {
       bool boolean() const noexcept;
 
       template <Allocator Memory>
-      TBC_HOT_PATH void string(String<Memory>& output) const {
-        const auto encoded = stringContents();
-
-        output.clear();
-        output.resize(encoded.size());
-        output.resize(unescape(encoded, output.data()));
-      }
+      void string(String<Memory>& output) const;
 
       static tbc::view<JsonValue, tbc::lt::b> parse(tbc::view<std::string_view, tbc::lt::b> input, unsigned maximum_depth = 32);
 
@@ -93,6 +87,14 @@ export {
       unsigned maximum_depth_;
     };
 
+    // Built in json.cpp for the base allocators its callers use.
+    extern template void JsonValue::string<Memory>(String<Memory>& output) const;
+    extern template void JsonValue::string<ConcurrentMemory>(String<ConcurrentMemory>& output) const;
+    extern template void JsonValue::string<SystemAllocator>(String<SystemAllocator>& output) const;
+    extern template void JsonValue::string<BudgetAllocator<SystemAllocator>>(String<BudgetAllocator<SystemAllocator>>& output) const;
+    extern template void JsonValue::string<ErasingMemory>(String<ErasingMemory>& output) const;
+    extern template void JsonValue::string<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>(String<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>& output) const;
+
     // How a JSON string spells control bytes: `standard` uses every short escape JSON has; `control`
     // spells backspace and form feed as \u escapes and escapes DEL too, for text a terminal shows.
     enum class JsonEscapes : std::uint8_t {
@@ -103,7 +105,7 @@ export {
     // Passes `text` to `emit` as the inside of a JSON string literal, in pieces: runs of bytes that
     // need no escape, and each escape.
     template <typename Emit>
-    TBC_HOT_PATH void escapeJson(std::string_view text, JsonEscapes escapes, Emit&& emit) {
+    TBC_GENERIC void escapeJson(std::string_view text, JsonEscapes escapes, Emit&& emit) {
       constexpr std::string_view hex = "0123456789abcdef";
       constexpr unsigned char first_printable = 0x20;
       constexpr unsigned char delete_byte = 0x7f;
@@ -161,7 +163,7 @@ export {
 
     // Appends `text` to `output` as one JSON string literal, quotes included.
     template <typename Text>
-    TBC_HOT_PATH void appendJsonText(Text& output, std::string_view text, JsonEscapes escapes = JsonEscapes::standard) {
+    TBC_GENERIC void appendJsonText(Text& output, std::string_view text, JsonEscapes escapes = JsonEscapes::standard) {
       output.push_back('"');
       escapeJson(text, escapes, [&](std::string_view piece) {
         output.append(piece);
@@ -187,7 +189,7 @@ export {
   namespace telar::runtime {
 
     template <Allocator Memory, std::size_t Count>
-    class TBC_HOT_PATH JsonFields {
+    class TBC_GENERIC JsonFields {
     public:
       // The fields view the object's text and the names, and allocate scratch text, all in region `a`.
       inline explicit JsonFields(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<const JsonValue&, tbc::lt::a> object, tbc::view<const std::array<std::string_view, Count>&, tbc::lt::a> names)

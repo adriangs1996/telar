@@ -48,7 +48,7 @@ export {
 
     // A unique_ptr deleter used with every OpenSSL handle type; it stays inline so a release is one direct call.
     template <typename Value, auto Destroy>
-    struct TBC_HOT_PATH TlsDeleter {
+    struct TBC_GENERIC TlsDeleter {
       inline void operator()(Value* value) const noexcept {
         Destroy(value);
       }
@@ -226,7 +226,7 @@ export {
 
     // Generic over the caller's environment, so it stays here and hands the lookup to proxyAuthorityDirectoryFrom.
     template <Allocator Memory, EnvironmentLookup Environment>
-    TBC_HOT_PATH String<Memory> proxyAuthorityDirectory(Memory& memory, const Environment& environment) {
+    TBC_GENERIC String<Memory> proxyAuthorityDirectory(Memory& memory, const Environment& environment) {
       return proxyAuthorityDirectoryFrom(memory, std::addressof(environment), [](const void* target, const char* name) {
         return static_cast<const Environment*>(target)->lookup(name);
       });
@@ -307,7 +307,7 @@ export {
       // Generic over the caller's text type, so it stays here and forwards to the string_view constructor.
       template <typename Text>
         requires std::convertible_to<const Text&, std::string_view>
-      TBC_HOT_PATH Destination(const Text& path)
+      TBC_GENERIC Destination(const Text& path)
           : Destination(std::string_view{path}) {}
 
       Destination(Backend selected, std::string_view path);
@@ -335,7 +335,7 @@ export {
 
       // Generic over the caller's environment, so it stays here and hands the lookup to keychainFrom.
       template <EnvironmentLookup Environment>
-      TBC_HOT_PATH static String<ConcurrentMemory> keychain(ConcurrentMemory& memory, const Environment& environment) {
+      TBC_GENERIC static String<ConcurrentMemory> keychain(ConcurrentMemory& memory, const Environment& environment) {
         return keychainFrom(memory, std::addressof(environment), [](const void* target, const char* name) {
           return static_cast<const Environment*>(target)->lookup(name);
         });
@@ -343,7 +343,7 @@ export {
 
       // Generic over the caller's environment, so it stays here and hands the lookup to nativeDestinationFrom.
       template <EnvironmentLookup Environment>
-      TBC_HOT_PATH Destination nativeDestination(ConcurrentMemory& memory, const Environment& environment, std::optional<Backend> selected = std::nullopt) const {
+      TBC_GENERIC Destination nativeDestination(ConcurrentMemory& memory, const Environment& environment, std::optional<Backend> selected = std::nullopt) const {
         return nativeDestinationFrom(memory, selected, std::addressof(environment), [](const void* target, const char* name) {
           return static_cast<const Environment*>(target)->lookup(name);
         });

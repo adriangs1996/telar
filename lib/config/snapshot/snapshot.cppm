@@ -50,12 +50,12 @@ export {
 
     // The tables a configuration layers for a client: the root and then the selected profile's,
     // which overlays it. Each one is read after SnapshotReader validated the whole configuration.
-    // Stays in the interface: each member is a template over the caller's callable.
-    class TBC_HOT_PATH ConfigurationLayers {
+    // Each member is a template over the caller's callable, so each keeps its body here.
+    class ConfigurationLayers {
     public:
       // Hands `consume` the root and then the selected profile's configuration.
       template <typename Consume>
-      inline static void each(const lua::Value& root, std::string_view profile, Consume&& consume) {
+      TBC_GENERIC inline static void each(const lua::Value& root, std::string_view profile, Consume&& consume) {
         consume(root);
         if (!profile.empty()) {
           const auto profiles = root.field("profiles");
@@ -68,7 +68,7 @@ export {
       // Hands `consume` the root's client table and then the selected profile's, with the root's
       // as the one it inherits from.
       template <typename Consume>
-      inline static void clients(const lua::Value& root, std::string_view profile, Consume&& consume) {
+      TBC_GENERIC inline static void clients(const lua::Value& root, std::string_view profile, Consume&& consume) {
         const auto client = root.field("client");
 
         consume(client, static_cast<const lua::Value*>(nullptr));
@@ -80,7 +80,7 @@ export {
       // Hands `consume` the client table in effect and the one it inherits from, if any, and
       // returns what `consume` returns.
       template <typename Consume>
-      inline static decltype(auto) client(const lua::Value& root, std::string_view profile, Consume&& consume) {
+      TBC_GENERIC inline static decltype(auto) client(const lua::Value& root, std::string_view profile, Consume&& consume) {
         const auto client = root.field("client");
 
         if (profile.empty()) {
@@ -92,7 +92,7 @@ export {
 
       // Hands each `client.prompt` binding to `binding` in order.
       template <typename Binding>
-      [[nodiscard]] inline static ClientLayerSettings read(const lua::Value& configuration, Binding&& binding) {
+      [[nodiscard]] TBC_GENERIC inline static ClientLayerSettings read(const lua::Value& configuration, Binding&& binding) {
         return {
             .themes = ThemeReader::selection(configuration),
             .client = ClientReader::read(configuration.field("client"), std::forward<Binding>(binding)),
@@ -102,7 +102,7 @@ export {
 
     private:
       template <typename Consume>
-      inline static decltype(auto) overlay(const lua::Value& root, std::string_view profile, const lua::Value& client, Consume& consume) {
+      TBC_GENERIC inline static decltype(auto) overlay(const lua::Value& root, std::string_view profile, const lua::Value& client, Consume& consume) {
         const auto profiles = root.field("profiles");
         const auto selected = profiles.entry(profile);
         const auto configuration = selected.as("config");

@@ -47,14 +47,9 @@ namespace telar {
 
   static_assert(std::same_as<Byte, unsigned char>);
 
-  // The field codecs below run once per field of every message, so they stay inline.
-  [[nodiscard]] TBC_HOT_PATH inline std::span<const Byte> byteView(std::string_view text) noexcept {
-    return {reinterpret_cast<const Byte*>(text.data()), text.size()};
-  }
-
-  [[nodiscard]] TBC_HOT_PATH inline std::string_view textView(std::span<const Byte> bytes) noexcept {
-    return {reinterpret_cast<const char*>(bytes.data()), bytes.size()};
-  }
+  // The same bytes as text and as wire bytes, for the field codecs below.
+  [[nodiscard]] std::span<const Byte> byteView(std::string_view text) noexcept;
+  [[nodiscard]] std::string_view textView(std::span<const Byte> bytes) noexcept;
 
   inline constexpr std::size_t max_payload_size = MEGA_BYTES(4);
   inline constexpr std::size_t frame_prefix_size = sizeof(std::uint32_t);
@@ -235,22 +230,12 @@ namespace telar {
     }
   };
 
-  struct TBC_HOT_PATH BoolByte {
+  struct BoolByte {
     using value_type = bool;
     static constexpr std::size_t width = u8::width;
 
-    static void encode(bool value, std::span<Byte>& output) _throw(EncodingError) {
-      u8::encode(static_cast<Byte>(value), output);
-    }
-
-    static bool decode(_changes std::span<const Byte>& input) _throw(EncodingError) {
-      const auto value = u8::decode(input);
-      if (value > 1) {
-        throw EncodingError{"Bool value decode must be 0 or 1\0"};
-      }
-
-      return value != 0;
-    }
+    static void encode(bool value, std::span<Byte>& output) _throw(EncodingError);
+    static bool decode(_changes std::span<const Byte>& input) _throw(EncodingError);
   };
 
   template <typename WireCodec>

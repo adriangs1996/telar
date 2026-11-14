@@ -60,6 +60,19 @@ namespace telar::runtime {
     return text.substr(start, text.find_last_not_of(characters) - start + 1);
   }
 
+  template <Allocator Memory>
+  void appendLowerHex(String<Memory>& output, std::span<const std::uint8_t> bytes) {
+    const auto start = output.size();
+
+    output.resize(start + 2 * bytes.size());
+    static_cast<void>(encodeLowerHex(bytes, std::span{output}.subspan(start)));
+  }
+
+  template void appendLowerHex<Memory>(String<Memory>& output, std::span<const std::uint8_t> bytes);
+  template void appendLowerHex<ConcurrentMemory>(String<ConcurrentMemory>& output, std::span<const std::uint8_t> bytes);
+  template void appendLowerHex<SystemAllocator>(String<SystemAllocator>& output, std::span<const std::uint8_t> bytes);
+  template void appendLowerHex<BudgetAllocator<SystemAllocator>>(String<BudgetAllocator<SystemAllocator>>& output, std::span<const std::uint8_t> bytes);
+
   std::string lowerHex(std::span<const std::uint8_t> bytes) {
     std::string text(2 * bytes.size(), '\0');
 

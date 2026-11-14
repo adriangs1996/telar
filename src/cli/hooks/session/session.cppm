@@ -79,10 +79,10 @@ export {
       Session(Memory& memory, const char* socket, PaneTarget target);
 
       // The members generic over the protocol's messages keep their bodies here,
-      // marked TBC_HOT_PATH: the messages are an open set that no implementation
+      // marked TBC_GENERIC: the messages are an open set that no implementation
       // unit can instantiate ahead.
       template <typename Report>
-      TBC_HOT_PATH inline void report(Report value) noexcept {
+      TBC_GENERIC inline void report(Report value) noexcept {
         try {
           TELAR_TRACE("hooks.sendReport");
           exchange(value);
@@ -93,7 +93,7 @@ export {
       void reportLimit(std::uint64_t received, std::size_t capacity) noexcept;
 
       template <typename Reply = RequestCompleted, typename Report>
-      TBC_HOT_PATH inline Reply exchange(Report value) {
+      TBC_GENERIC inline Reply exchange(Report value) {
         if constexpr (requires { value.pane_id; value.pane_generation; }) {
           value.pane_id = target_.pane_id;
           value.pane_generation = target_.generation;

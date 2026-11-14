@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 #include "telar_render/sequence.hpp"
 
 export module telar.render.document;
@@ -127,44 +126,24 @@ export namespace telar::render {
     friend constexpr bool operator==(const Block&, const Block&) = default;
   };
 
-  // A data type: its accessors are one-line views that a client reads for every block it draws,
-  // and it takes whatever allocator the client's documents live in, so it stays here whole.
+  // A data type over the allocator a client's documents live in; built in document.cpp for Memory.
   template <Allocator Memory>
-  struct TBC_HOT_PATH Document {
-    explicit Document(Memory& memory)
-        : blocks(AllocatorRef<Block, Memory>{memory}),
-          cells(AllocatorRef<Cell, Memory>{memory}),
-          runs(AllocatorRef<Run, Memory>{memory}),
-          text(AllocatorRef<char, Memory>{memory}) {}
+  struct Document {
+    explicit Document(Memory& memory);
 
-    [[nodiscard]] std::string_view view(Span span) const noexcept {
-      return std::string_view{text}.substr(span.offset, span.size);
-    }
-
-    [[nodiscard]] std::span<const Run> runsOf(const Block& block) const noexcept {
-      return std::span<const Run>{runs}.subspan(block.first, block.count);
-    }
-
-    [[nodiscard]] std::span<const Run> runsOf(const Cell& cell) const noexcept {
-      return std::span<const Run>{runs}.subspan(cell.first, cell.count);
-    }
-
-    [[nodiscard]] std::span<const Cell> cellsOf(const Block& block) const noexcept {
-      return std::span<const Cell>{cells}.subspan(block.first, block.count);
-    }
-
-    void clear() noexcept {
-      blocks.clear();
-      cells.clear();
-      runs.clear();
-      text.clear();
-    }
+    [[nodiscard]] std::string_view view(Span span) const noexcept;
+    [[nodiscard]] std::span<const Run> runsOf(const Block& block) const noexcept;
+    [[nodiscard]] std::span<const Run> runsOf(const Cell& cell) const noexcept;
+    [[nodiscard]] std::span<const Cell> cellsOf(const Block& block) const noexcept;
+    void clear() noexcept;
 
     Vector<Block, Memory> blocks;
     Vector<Cell, Memory> cells;
     Vector<Run, Memory> runs;
     String<Memory> text;
   };
+
+  extern template struct Document<Memory>;
 
   // Encoding, little endian, fixed records in this order:
   //   header  "TRDC" u16 version u16 0, u32 blocks, u32 cells, u32 runs, u32 text bytes
@@ -217,19 +196,15 @@ export namespace telar::render {
   }
 
   // The encoded size, or nothing when the document exceeds max_document_bytes.
-  // Generic over the caller's allocator, as Document is; the work is detail's.
   template <Allocator Memory>
-  [[nodiscard]] TBC_HOT_PATH std::optional<std::size_t> encodedSize(const Document<Memory>& document) noexcept {
-    const auto size = detail::encodedSize(document.blocks.size(), document.cells.size(), document.runs.size(), document.text.size());
-
-    return size <= max_document_bytes ? std::optional<std::size_t>{static_cast<std::size_t>(size)} : std::nullopt;
-  }
+  [[nodiscard]] std::optional<std::size_t> encodedSize(const Document<Memory>& document) noexcept;
 
   // Writes exactly encodedSize(document) bytes into output.
   template <Allocator Memory>
-  TBC_HOT_PATH void encode(const Document<Memory>& document, std::span<std::uint8_t> output) noexcept {
-    detail::encode(document.blocks, document.cells, document.runs, document.text, output);
-  }
+  void encode(const Document<Memory>& document, std::span<std::uint8_t> output) noexcept;
+
+  extern template std::optional<std::size_t> encodedSize<Memory>(const Document<Memory>& document) noexcept;
+  extern template void encode<Memory>(const Document<Memory>& document, std::span<std::uint8_t> output) noexcept;
 
   // Appends the OSC that begins document, or returns false when the document
   // exceeds max_document_bytes. On the primary screen, appendEnd closes it.
@@ -240,41 +215,11 @@ export namespace telar::render {
 
   // Replaces document with the one input encodes. Input comes from any program
   // in a pane, so every count, range, enumeration and reserved byte is checked;
-  // on failure the document is left empty. Generic over the caller's allocator,
-  // it only sizes the document; detail reads and checks each part.
+  // on failure the document is left empty. It only sizes the document; detail
+  // reads and checks each part.
   template <Allocator Memory>
-  [[nodiscard]] TBC_HOT_PATH DecodeError decode(std::span<const std::uint8_t> input, Document<Memory>& document) {
-    document.clear();
-    detail::Counts counts;
+  [[nodiscard]] DecodeError decode(std::span<const std::uint8_t> input, Document<Memory>& document);
 
-    auto error = detail::decodeHeader(input, counts);
-    if (error != DecodeError::none) {
-      return error;
-    }
-
-    document.blocks.resize(counts.blocks);
-    error = detail::decodeBlocks(input, document.blocks);
-    if (error == DecodeError::none) {
-      document.cells.resize(counts.cells);
-      error = detail::decodeCells(input, counts, document.cells);
-    }
-
-    if (error == DecodeError::none) {
-      document.runs.resize(counts.runs);
-      error = detail::decodeRuns(input, counts, document.runs);
-    }
-
-    if (error == DecodeError::none) {
-      error = detail::checkBlocks(input, counts, document.blocks);
-    }
-
-    if (error != DecodeError::none) {
-      document.clear();
-      return error;
-    }
-
-    document.text.assign(detail::text(input, counts));
-    return DecodeError::none;
-  }
+  extern template DecodeError decode<Memory>(std::span<const std::uint8_t> input, Document<Memory>& document);
 
 }
