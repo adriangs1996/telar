@@ -33,19 +33,21 @@ namespace {
   }
 
   void replacementsOwnAliasedInputAndRejectAtomically() {
-    constexpr std::size_t capacity = 8;
-    BoundedEditor<capacity> editor;
+    constexpr auto capacity = Editor::capacity;
+    // The replacement below fills the field exactly, so that any further byte overflows it.
+    const std::string padding(capacity - std::string_view{"cdebcdef"}.size(), 'x');
+    Editor editor;
 
-    require(editor.setText("abcdef"), "valid bounded initialization must succeed");
+    require(editor.setText("abcdef" + padding), "valid bounded initialization must succeed");
     require(editor.replace(0, 1, editor.text().substr(2, 3)), "replacement must accept its own borrowed text");
-    require(editor.text() == "cdebcdef", "tail movement must not overwrite aliased input");
+    require(editor.text() == "cdebcdef" + padding, "tail movement must not overwrite aliased input");
     editor.selectRange(1, 4);
     const auto before = editor;
 
     require(!editor.replace(0, 0, "overflow"), "overflow must reject the complete edit");
     require(!editor.replace(0, 1, "\xff"), "replacement must reject invalid UTF-8");
     require(!editor.selectRange(0, capacity + 1), "selection must reject offsets beyond the field");
-    require(!editor.setText("oversized"), "initialization must reject oversized text");
+    require(!editor.setText(std::string(capacity + 1, 'x')), "initialization must reject oversized text");
     require(editor.text() == before.text() && editor.head() == before.head() && editor.anchor() == before.anchor() && editor.scroll() == before.scroll(), "rejected edits must preserve text, selection and scroll");
   }
 

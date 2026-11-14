@@ -85,7 +85,7 @@ namespace {
     };
   }
 
-  using BarContent = components::Content<components::Capacity{.nodes = 8, .text = 256, .samples = 64, .actions = 0}>;
+  using BarContent = components::BarContent;
 
   void appendNode(BarContent& content, components::Node node, std::string_view text = {}, std::string_view detail = {}, std::string_view url = {}) {
     components::Input input{};

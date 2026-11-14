@@ -312,6 +312,7 @@ namespace {
     using namespace telar::gui;
 
     SystemAllocator memory;
+    telar::MemoryAdapter adapter{memory};
     const auto payload = Codec::encode(PaneExited{.pane_id = 1, .kind = ExitKind::exited, .value = 0});
     std::array<Byte, frame_prefix_size + payload.size()> bytes{};
     std::span<Byte> output{bytes};
@@ -320,7 +321,7 @@ namespace {
     std::ranges::copy(payload, output.begin());
 
     for (std::size_t split = 0; split <= bytes.size(); ++split) {
-      FrameStream stream{memory};
+      FrameStream<telar::Memory> stream{adapter};
       std::size_t received = 0;
       const auto consume = [&](std::span<const Byte> frame) {
         require(Codec::decode<PaneExited>(frame).pane_id == 1, "fragmented payload");
@@ -332,7 +333,7 @@ namespace {
       require(received == 1, "every fragmentation must emit exactly one frame");
     }
 
-    FrameStream stream{memory};
+    FrameStream<telar::Memory> stream{adapter};
     const std::array<Byte, frame_prefix_size> invalid{};
     bool rejected = false;
     const auto ignore_payload = [](std::span<const Byte>) {
@@ -363,9 +364,10 @@ namespace {
     SystemAllocator upstream;
     constexpr std::size_t payload_bytes = 1;
     BudgetAllocator memory{upstream, payload_bytes};
+    telar::MemoryAdapter adapter{memory};
 
     {
-      FrameStream stream{memory};
+      FrameStream<telar::Memory> stream{adapter};
       std::array<Byte, (2 * frame_prefix_size) + payload_bytes> bytes{};
       std::span<Byte> output{bytes};
 

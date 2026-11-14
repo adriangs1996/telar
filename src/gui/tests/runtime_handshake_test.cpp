@@ -148,9 +148,10 @@ namespace {
   void framingRejectsBeforeAllocationAndCanUpgradeInsideTheConsumer() {
     SystemAllocator upstream;
     BudgetAllocator forbidden{upstream, 0};
+    telar::MemoryAdapter forbidden_memory{forbidden};
 
     {
-      FrameStream stream{forbidden};
+      FrameStream<telar::Memory> stream{forbidden_memory};
 
       stream.setMaximum(HandshakeCodec::max_message_size);
       std::array<Byte, frame_prefix_size> prefix{};
@@ -176,9 +177,10 @@ namespace {
     constexpr std::size_t next_payload_bytes = 32;
     constexpr std::size_t first_payload_bytes = 1;
     BudgetAllocator memory{upstream, allocation_budget};
+    telar::MemoryAdapter adapter{memory};
 
     {
-      FrameStream stream{memory};
+      FrameStream<telar::Memory> stream{adapter};
 
       stream.setMaximum(first_payload_bytes);
       std::array<Byte, (2 * frame_prefix_size) + first_payload_bytes + next_payload_bytes> bytes{};

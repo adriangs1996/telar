@@ -112,7 +112,9 @@ namespace {
 
   void rejectedRequestsAndPastesRemainRetryable() {
     SystemAllocator system;
-    BudgetAllocator memory{system, std::numeric_limits<std::size_t>::max()};
+    BudgetAllocator budget{system, std::numeric_limits<std::size_t>::max()};
+    telar::MemoryAdapter adapter{budget};
+    telar::Memory& memory = adapter;
     SuggestionTransport transport;
 
     {
@@ -159,7 +161,7 @@ namespace {
       require(client.submitSuggestion("task") && transport.count(ClientTag::pane_input) == 1 && transport.inputSince(before_input) == "\x1b[200~echo review\x1b[201~", "a retry must admit the entire bracketed command in one frame");
     }
 
-    require(memory.liveBytes() == 0, "suggestion requests and replies must release all injected session allocations");
+    require(budget.liveBytes() == 0, "suggestion requests and replies must release all injected session allocations");
   }
 
   void unsafeRuntimeTextCannotBecomeTerminalInput() {

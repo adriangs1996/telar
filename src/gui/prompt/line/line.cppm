@@ -2,6 +2,8 @@ module;
 #include <cstddef>
 #include <cstdint>
 
+#include "tbc/annotations.hpp"
+
 export module telar.gui.prompt.line;
 
 import std;
@@ -58,496 +60,143 @@ export namespace telar::gui::prompt {
     bool refined = false;
   };
 
+  // Whether the shell would read more of a command before running it, as Enter asks.
+  class Continuation {
+  public:
+    Continuation(const Continuation&) = delete;
+    Continuation& operator=(const Continuation&) = delete;
+
+    [[nodiscard]] virtual bool incomplete(std::string_view text) const = 0;
+
+  protected:
+    Continuation() noexcept = default;
+    ~Continuation() = default;
+  };
+
+  // A caller's callable behind Continuation, for the time of one key.
+  template <typename Incomplete>
+  class TBC_HOT_PATH ContinuationOf final : public Continuation {
+  public:
+    explicit ContinuationOf(Incomplete& incomplete) noexcept
+        : incomplete_(incomplete) {}
+
+    [[nodiscard]] bool incomplete(std::string_view text) const override {
+      return incomplete_(text);
+    }
+
+  private:
+    Incomplete& incomplete_;
+  };
+
   class Line {
   public:
     static constexpr std::size_t recent_capacity = 512;
 
-    explicit Line(Keymap keymap = Keymap::emacs)
-        : editor_(keymap) {}
+    explicit Line(Keymap keymap = Keymap::emacs);
 
-    Editor& editor() noexcept {
-      return editor_;
-    }
+    Editor& editor() noexcept;
 
-    [[nodiscard]] const Editor& editor() const noexcept {
-      return editor_;
-    }
+    [[nodiscard]] const Editor& editor() const noexcept;
 
-    [[nodiscard]] std::string_view delivery() const noexcept {
-      return delivery_;
-    }
+    [[nodiscard]] std::string_view delivery() const noexcept;
 
-    [[nodiscard]] std::uint64_t revision() const noexcept {
-      return revision_ + editor_.text().revision();
-    }
+    [[nodiscard]] std::uint64_t revision() const noexcept;
 
     // The command typed while another runs waits for it; Enter arms it to run when that one
     // succeeds.
-    [[nodiscard]] bool queued() const noexcept {
-      return armed_;
-    }
+    [[nodiscard]] bool queued() const noexcept;
 
     // While a program runs, typed lines go to it instead of the queue.
-    [[nodiscard]] bool answering() const noexcept {
-      return answering_;
-    }
+    [[nodiscard]] bool answering() const noexcept;
 
-    [[nodiscard]] std::uint32_t secretKeys() const noexcept {
-      return secret_keys_;
-    }
+    [[nodiscard]] std::uint32_t secretKeys() const noexcept;
 
-    [[nodiscard]] const std::vector<std::string>& recent() const noexcept {
-      return recent_;
-    }
+    [[nodiscard]] const std::vector<std::string>& recent() const noexcept;
 
-    void setKeymap(Keymap keymap) {
-      if (editor_.keymap() != keymap) {
-        editor_.setKeymap(keymap);
-        ++revision_;
-      }
-    }
+    void setKeymap(Keymap keymap);
+
+    // The rest of a command this one starts, from what this line sent (newest first) and then
+    // `history`, newest first. Only while typing at the end of a non-empty line.
+    [[nodiscard]] std::string_view suggestion(std::span<const std::string> history) const noexcept;
 
     // A key in the editor or the queue. `incomplete` tells whether the shell would wait for more
     // of the command, so Enter continues it on a new line.
-    // The rest of a command this one starts, from what this line sent (newest first) and then
-    // `history`, newest first. Only while typing at the end of a non-empty line.
-    [[nodiscard]] std::string_view suggestion(std::span<const std::string> history) const noexcept {
-      const auto& text = editor_.text();
-
-      if (textIsSmallAndInVimMode(text)) {
-        return {};
-      }
-
-      const auto view = text.view();
-
-      for (const auto& entry : std::views::reverse(recent_)) {
-        if (isCommandExtendedBy(entry, view)) {
-          return std::string_view{entry}.substr(view.size());
-        }
-      }
-
-      for (const auto& command : history) {
-        if (isCommandExtendedBy(command, view)) {
-          return std::string_view{command}.substr(view.size());
-        }
-      }
-
-      return {};
-    }
-
     template <typename Incomplete>
-    Outcome press(Surface surface, const KeyPress& key, Incomplete&& incomplete, std::span<const std::string> history = {}) {
-      delivery_.clear();
-      const auto rest = suggestion(history);
-      // → and Ctrl-E at the end take the whole suggestion, Alt-F its next word, as fish does.
-      if (!rest.empty()) {
-        const bool all = (key.key == Key::right && !key.modifiers.alt && !key.modifiers.shift) || key.key == Key::end || (key.key == Key::character && key.modifiers.control && (key.character == 'e' || key.character == 'f'));
-        const bool word = (key.key == Key::character && key.modifiers.alt && key.character == 'f') || (key.key == Key::right && key.modifiers.alt);
+    TBC_HOT_PATH Outcome press(Surface surface, const KeyPress& key, Incomplete&& incomplete, std::span<const std::string> history = {}) {
+      const ContinuationOf<std::remove_reference_t<Incomplete>> continuation{incomplete};
 
-        if (all || word) {
-          auto taken = rest;
-
-          if (word) {
-            const auto start = taken.find_first_not_of(' ');
-            const auto end = taken.find_first_of(" /", start == std::string_view::npos ? 0 : start);
-
-            taken = taken.substr(0, end == std::string_view::npos ? taken.size() : end + (taken[end] == '/' ? 1 : 0));
-          }
-
-          const std::string copy{taken};
-
-          editor_.text().insert(copy);
-          return Outcome::edited;
-        }
-      }
-
-      bool refining = false;
-
-      refining_ = false;
-
-      if (menu_) {
-        if (const auto outcome = menuKey(key, refining)) {
-          return *outcome;
-        }
-      }
-
-      if (surface == Surface::running && key.key == Key::enter && key.modifiers.alt) {
-        answering_ = !answering_;
-        ++revision_;
-        return Outcome::edited;
-      }
-
-      const auto outcome = handle(editor_.press(key), surface, incomplete);
-
-      return refining && menu_ ? refine(outcome) : outcome;
+      return pressKey(surface, key, continuation, history);
     }
 
     // A key the user bound to an action; the rest of the line answers it as for any key.
     template <typename Incomplete>
-    Outcome perform(Surface surface, Action action, Incomplete&& incomplete, std::span<const std::string> history = {}) {
-      delivery_.clear();
-      closeMenu();
-      if (action == Action::accept_suggestion) {
-        if (const auto rest = suggestion(history); !rest.empty()) {
-          const std::string copy{rest};
+    TBC_HOT_PATH Outcome perform(Surface surface, Action action, Incomplete&& incomplete, std::span<const std::string> history = {}) {
+      const ContinuationOf<std::remove_reference_t<Incomplete>> continuation{incomplete};
 
-          editor_.text().insert(copy);
-        }
-
-        return Outcome::edited;
-      }
-
-      return handle(editor_.perform(action), surface, incomplete);
+      return performAction(surface, action, continuation, history);
     }
 
-    void insertText(std::string_view text) {
-      closeMenu();
-      editor_.insertText(text);
-    }
+    // press and perform, with the caller's callable behind Continuation.
+    Outcome pressKey(Surface surface, const KeyPress& key, const Continuation& incomplete, std::span<const std::string> history = {});
+
+    Outcome performAction(Surface surface, Action action, const Continuation& incomplete, std::span<const std::string> history = {});
+
+    void insertText(std::string_view text);
 
     // Writes `text` over [begin, end) of the line, as a path chosen for the word there does.
-    void replaceText(std::size_t begin, std::size_t end, std::string_view text) {
-      closeMenu();
-      editor_.text().replace(begin, end, text);
-    }
+    void replaceText(std::size_t begin, std::size_t end, std::string_view text);
 
-    const std::optional<Menu>& menu() const noexcept {
-      return menu_;
-    }
+    const std::optional<Menu>& menu() const noexcept;
 
     // Offers `choices` for the word in [begin, end): one is written at once, more open the
     // menu. While `requests` are still looking for more, even one choice waits for them.
-    void offer(std::vector<Choice> choices, std::size_t begin, std::size_t end, std::vector<std::uint64_t> requests, shell::Dialect dialect, std::string label = {}) {
-      const bool whole = choices.size() <= Menu::capacity;
-      if (!whole) {
-        choices.resize(Menu::capacity);
-      }
-
-      auto all = choices;
-
-      menu_ = Menu{.choices = std::move(choices), .begin = begin, .end = end, .requests = std::move(requests), .dialect = dialect, .label = std::move(label), .all = std::move(all), .floor = end, .whole = whole, .refined = std::exchange(refining_, false)};
-      settle();
-      ++revision_;
-    }
+    void offer(std::vector<Choice> choices, std::size_t begin, std::size_t end, std::vector<std::uint64_t> requests, shell::Dialect dialect, std::string label = {});
 
     // What a pending request found, added to the menu it was asked for.
-    bool receive(std::uint64_t request, std::span<const Choice> paths, bool truncated = false) {
-      if (!menu_ || std::erase(menu_->requests, request) == 0) {
-        return false;
-      }
+    bool receive(std::uint64_t request, std::span<const Choice> paths, bool truncated = false);
 
-      menu_->whole = menu_->whole && !truncated && menu_->all.size() + paths.size() <= Menu::capacity;
-      // Answers to an older word join, narrowed to the word as it is now.
-      const auto word = typedWord();
-
-      for (const auto& path : paths) {
-        if (menu_->all.size() < Menu::capacity && std::ranges::none_of(menu_->all, [&](const Choice& choice) {
-              return choice.text == path.text;
-            })) {
-          menu_->all.push_back(path);
-          if (path.text.starts_with(word)) {
-            menu_->choices.push_back(path);
-          }
-        }
-      }
-
-      settle();
-      ++revision_;
-      return true;
-    }
-
-    bool pending(std::uint64_t request) const noexcept {
-      return menu_ && std::ranges::find(menu_->requests, request) != menu_->requests.end();
-    }
+    bool pending(std::uint64_t request) const noexcept;
 
     // The shell is back at its prompt after `succeeded` (or not): a queued command runs only
     // after a success, and otherwise stays as a draft.
-    Outcome promptReturned(bool succeeded) {
-      delivery_.clear();
-      secret_keys_ = 0;
-      answering_ = false;
-      if (!armed_) {
-        return Outcome::edited;
-      }
+    Outcome promptReturned(bool succeeded);
 
-      armed_ = false;
-      ++revision_;
-      if (!succeeded || editor_.text().empty()) {
-        return Outcome::edited;
-      }
+    void countSecretKey() noexcept;
 
-      delivery_.assign(editor_.text().view());
-      remember(delivery_);
-      editor_.clear();
-      return Outcome::run;
-    }
+    void clearSecret() noexcept;
 
-    void countSecretKey() noexcept {
-      ++secret_keys_;
-      ++revision_;
-    }
-
-    void clearSecret() noexcept {
-      if (secret_keys_ != 0) {
-        secret_keys_ = 0;
-        ++revision_;
-      }
-    }
-
-    void remember(std::string_view command) {
-      if (command.empty() || (!recent_.empty() && recent_.back() == command)) {
-        return;
-      }
-
-      if (recent_.size() == recent_capacity) {
-        recent_.erase(recent_.begin());
-      }
-
-      recent_.emplace_back(command);
-    }
+    void remember(std::string_view command);
 
   private:
-    [[nodiscard]] bool textIsSmallAndInVimMode(const Text& text) const {
-      return text.size() < 2 || text.cursor() != text.size() || menu_ || (editor_.keymap() == Keymap::vim && editor_.mode() != Mode::insert);
-    }
+    [[nodiscard]] bool textIsSmallAndInVimMode(const Text& text) const;
 
-    [[nodiscard]] static bool isCommandExtendedBy(std::string_view command, std::string_view text) {
-      return command.size() > text.size() && command.starts_with(text);
-    }
+    [[nodiscard]] static bool isCommandExtendedBy(std::string_view command, std::string_view text);
 
-    template <typename Incomplete>
-    Outcome handle(Request request, Surface surface, Incomplete&& incomplete) {
-      switch (request) {
-      case Request::none:
-        history_index_.reset();
-        return Outcome::edited;
-      case Request::submit:
-        return submit(surface, incomplete(editor_.text().view()));
-      case Request::history_previous:
-        return travel(-1);
-      case Request::history_next:
-        return travel(1);
-      case Request::cancel:
-        if (surface == Surface::running && editor_.text().empty()) {
-          return Outcome::terminal;
-        }
+    Outcome handle(Request request, Surface surface, const Continuation& incomplete);
 
-        editor_.clear();
-        armed_ = false;
-        history_index_.reset();
-        ++revision_;
-        return Outcome::edited;
-      case Request::end_of_file:
-        if (surface == Surface::running) {
-          return Outcome::terminal;
-        }
-
-        delivery_.assign("\x04");
-        return Outcome::bytes;
-      case Request::clear_screen:
-        delivery_.assign("\x0c");
-        return surface == Surface::editor ? Outcome::bytes : Outcome::ignored;
-      case Request::complete:
-        return Outcome::complete;
-      case Request::history_search:
-        return surface == Surface::editor ? Outcome::search_history : Outcome::edited;
-      case Request::unhandled:
-        return Outcome::ignored;
-      }
-
-      return Outcome::ignored;
-    }
-
-    void closeMenu() noexcept {
-      if (menu_) {
-        menu_.reset();
-        ++revision_;
-      }
-    }
+    void closeMenu() noexcept;
 
     // A menu with nothing left to wait for and one choice writes it; with none it closes.
-    void settle() {
-      if (!menu_->requests.empty()) {
-        return;
-      }
+    void settle();
 
-      if (menu_->choices.size() == 1 && !menu_->refined) {
-        accept();
-      } else if (menu_->choices.empty()) {
-        menu_.reset();
-      }
-    }
-
-    void accept() {
-      const auto& menu = *menu_;
-      const auto& choice = menu.choices[menu.selected];
-      auto word = quoteWord(choice.text, menu.dialect);
-
-      if (!choice.directory) {
-        word.push_back(' ');
-      }
-
-      const auto begin = menu.begin;
-      const auto end = std::min(menu.end, editor_.text().size());
-
-      menu_.reset();
-      editor_.text().replace(begin, end, word);
-      ++revision_;
-    }
+    void accept();
 
     // While the menu is open, Tab and the arrows move through it, Enter takes the choice and
     // Escape closes it; any other key closes it and edits as usual.
-    std::optional<Outcome> menuKey(const KeyPress& key, bool& refining) {
-      auto& menu = *menu_;
-      const auto count = menu.choices.size();
-      const bool forward = (key.key == Key::tab && !key.modifiers.shift) || key.key == Key::down || (key.key == Key::character && key.modifiers.control && key.character == 'n');
-      const bool backward = key.key == Key::backtab || (key.key == Key::tab && key.modifiers.shift) || key.key == Key::up || (key.key == Key::character && key.modifiers.control && key.character == 'p');
-      if (count != 0 && (forward || backward)) {
-        menu.selected = (menu.selected + (forward ? 1 : count - 1)) % count;
-        ++revision_;
-        return Outcome::edited;
-      }
-
-      if (key.key == Key::enter && count != 0) {
-        accept();
-        return Outcome::edited;
-      }
-
-      if (key.key == Key::escape) {
-        closeMenu();
-        return Outcome::edited;
-      }
-
-      // Typing in the word, or erasing it, refines the choices once the editor has the key.
-      const bool inserting = editor_.keymap() == Keymap::emacs || editor_.mode() == Mode::insert;
-      const bool plain = !key.modifiers.control && !key.modifiers.alt;
-      const bool typing = key.key == Key::character && plain && key.character > U' ' && key.character != 0x7f;
-      if (inserting && (typing || (key.key == Key::backspace && plain))) {
-        refining = true;
-        return std::nullopt;
-      }
-
-      closeMenu();
-      return std::nullopt;
-    }
+    std::optional<Outcome> menuKey(const KeyPress& key, bool& refining);
 
     // The word the menu completes, as typed so far.
-    std::string_view typedWord() const noexcept {
-      const auto text = editor_.text().view();
-      if (!menu_ || menu_->begin > menu_->end || menu_->end > text.size()) {
-        return {};
-      }
-
-      return text.substr(menu_->begin, menu_->end - menu_->begin);
-    }
+    std::string_view typedWord() const noexcept;
 
     // After a key typed or erased in the word: the choices that still start with it. Erasing
     // past where they were offered asks for them again; leaving the word closes the menu.
-    Outcome refine(Outcome outcome) {
-      auto& menu = *menu_;
-      const auto& text = editor_.text();
-      const auto cursor = text.cursor();
-      if (cursor < menu.begin || text.view().substr(menu.begin, cursor - menu.begin).find_first_of(" \t\n") != std::string_view::npos) {
-        closeMenu();
-        return outcome;
-      }
+    Outcome refine(Outcome outcome);
 
-      menu.end = cursor;
-      if (cursor < menu.floor || (!menu.whole && cursor != menu.floor)) {
-        menu_.reset();
-        refining_ = true;
-        ++revision_;
-        return Outcome::complete;
-      }
-
-      const auto word = typedWord();
-
-      menu.choices.clear();
-      for (const auto& choice : menu.all) {
-        if (choice.text.starts_with(word)) {
-          menu.choices.push_back(choice);
-        }
-      }
-
-      menu.selected = 0;
-      menu.refined = true;
-      if (menu.choices.empty() && menu.requests.empty()) {
-        closeMenu();
-      }
-
-      ++revision_;
-      return outcome;
-    }
-
-    Outcome submit(Surface surface, bool incomplete) {
-      if (incomplete) {
-        editor_.newline();
-        return Outcome::edited;
-      }
-
-      if (surface == Surface::running) {
-        if (answering_) {
-          delivery_.assign(editor_.text().view());
-          editor_.clear();
-          return Outcome::answer;
-        }
-
-        armed_ = !editor_.text().empty();
-        ++revision_;
-        return Outcome::edited;
-      }
-
-      // A blank line runs nothing: sent, the shell would only print its prompt again, which no
-      // command's separator covers.
-      if (editor_.text().view().find_first_not_of(" \t\n") == std::string_view::npos) {
-        if (!editor_.text().empty()) {
-          editor_.clear();
-          ++revision_;
-        }
-
-        return Outcome::edited;
-      }
-
-      delivery_.assign(editor_.text().view());
-      remember(delivery_);
-      editor_.clear();
-      history_index_.reset();
-      return Outcome::run;
-    }
+    Outcome submit(Surface surface, bool incomplete);
 
     // Up and Down past the editor's first and last line walk the commands sent from it, keeping
     // what was being written to come back to.
-    Outcome travel(int direction) {
-      if (recent_.empty()) {
-        return Outcome::edited;
-      }
-
-      if (!history_index_) {
-        if (direction > 0) {
-          return Outcome::edited;
-        }
-
-        draft_.assign(editor_.text().view());
-        history_index_ = recent_.size();
-      }
-
-      const auto next = static_cast<std::ptrdiff_t>(*history_index_) + direction;
-      if (next < 0) {
-        return Outcome::edited;
-      }
-
-      if (static_cast<std::size_t>(next) >= recent_.size()) {
-        history_index_.reset();
-        editor_.text().assign(draft_);
-      } else {
-        history_index_ = static_cast<std::size_t>(next);
-        editor_.text().assign(recent_[*history_index_]);
-      }
-
-      editor_.text().moveTo(editor_.text().size());
-      ++revision_;
-      return Outcome::edited;
-    }
+    Outcome travel(int direction);
 
     Editor editor_;
     std::vector<std::string> recent_;

@@ -164,7 +164,9 @@ namespace {
 
   void rejectedDeliveryKeepsThePickerAndPasteAtomic() {
     SystemAllocator system;
-    BudgetAllocator memory{system, std::numeric_limits<std::size_t>::max()};
+    BudgetAllocator budget{system, std::numeric_limits<std::size_t>::max()};
+    telar::MemoryAdapter adapter{budget};
+    telar::Memory& memory = adapter;
     PathTransport transport;
 
     {
@@ -192,7 +194,7 @@ namespace {
       require(client.pathPicker().phase() == PathPickerPhase::idle && !client.requestPaths({}), "disconnecting must retire disposable picker state");
     }
 
-    require(memory.liveBytes() == 0, "path searches must release every injected session allocation");
+    require(budget.liveBytes() == 0, "path searches must release every injected session allocation");
   }
 
 }

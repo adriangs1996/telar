@@ -1,15 +1,8 @@
 module;
-#include <cstdlib>
-#include <new>
-
+#include <cstddef>
 #include <cstdint>
 
-#include <cstddef>
-
-#include <cstring>
-
-#include <cmath>
-#include <ghostty/vt/unicode.h>
+#include "tbc/annotations.hpp"
 
 export module telar.gui.text.json_unsigned_integer;
 
@@ -18,7 +11,6 @@ import telar.tbc;
 
 export import telar.machines;
 
-import telar.base.diagnostics;
 import telar.gui.core.primitives;
 import telar.gui.text.bounded_editor;
 
@@ -54,7 +46,7 @@ export {
 
       template <LabelMeasure Measure>
       // The fitted text is the text itself or the prefix written into the buffer, region `a`.
-      [[nodiscard]] inline static tbc::view<std::string_view, tbc::lt::a> fit(tbc::view<std::string_view, tbc::lt::a> text, float width, Measure& measure, tbc::view<Buffer&, tbc::lt::a> buffer) {
+      [[nodiscard]] TBC_HOT_PATH inline static tbc::view<std::string_view, tbc::lt::a> fit(tbc::view<std::string_view, tbc::lt::a> text, float width, Measure& measure, tbc::view<Buffer&, tbc::lt::a> buffer) {
         if (!std::isfinite(width)) {
           throw std::invalid_argument{"InvalidTextFitWidth"};
         }
@@ -88,7 +80,7 @@ export {
 
     private:
       template <LabelMeasure Measure>
-      [[nodiscard]] inline static float measureText(Measure& measure, std::string_view text) {
+      [[nodiscard]] TBC_HOT_PATH inline static float measureText(Measure& measure, std::string_view text) {
         const auto width = static_cast<float>(measure(text));
         if (!std::isfinite(width) || width < 0) {
           throw std::invalid_argument{"InvalidTextFitMeasurement"};
@@ -103,21 +95,7 @@ export {
         std::size_t stored = 0;
       };
 
-      [[nodiscard]] inline static Prefixes collectPrefixes(std::string_view text) {
-        GraphemeCursor cursor{text};
-        Prefixes result;
-        std::size_t bytes = 0;
-
-        while (const auto cluster = cursor.next()) {
-          ++result.graphemes;
-          bytes += cluster->size();
-          if (bytes <= maximum_bytes - ellipsis.size()) {
-            result.bytes[++result.stored] = bytes;
-          }
-        }
-
-        return result;
-      }
+      [[nodiscard]] static Prefixes collectPrefixes(std::string_view text);
     };
 
   }

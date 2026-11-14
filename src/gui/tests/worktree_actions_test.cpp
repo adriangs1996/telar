@@ -93,7 +93,9 @@ namespace {
 
   void forgettingOnlyTargetsGoneCheckoutsWithoutTabs() {
     SystemAllocator system;
-    BudgetAllocator memory{system, std::numeric_limits<std::size_t>::max()};
+    BudgetAllocator budget{system, std::numeric_limits<std::size_t>::max()};
+    telar::MemoryAdapter adapter{budget};
+    telar::Memory& memory = adapter;
     Transport transport;
 
     {
@@ -124,7 +126,7 @@ namespace {
       require(client.forgetGoneWorktrees() == 0, "disconnected cleanup must not queue requests against stale state");
     }
 
-    require(memory.liveBytes() == 0, "worktree snapshots and cleanup must release all injected allocations");
+    require(budget.liveBytes() == 0, "worktree snapshots and cleanup must release all injected allocations");
   }
 
   void cleanupStopsAtCapacityAndReleasesRejectedDelivery() {

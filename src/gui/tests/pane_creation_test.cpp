@@ -370,7 +370,9 @@ namespace {
   std::size_t adoptSplitWithAllocationBudget(std::optional<std::size_t> budget) {
     SystemAllocator system;
     BudgetAllocator counted{system, std::numeric_limits<std::size_t>::max()};
-    AllocationGate memory{counted};
+    AllocationGate gate{counted};
+    telar::MemoryAdapter adapter{gate};
+    telar::Memory& memory = adapter;
     Transport transport;
     std::size_t allocations = 0;
 
@@ -382,7 +384,7 @@ namespace {
       const auto request = transport.last<CreatePane>();
       const auto before = counted.allocations();
 
-      memory.permit(budget);
+      gate.permit(budget);
       bool rejected = false;
 
       try {
@@ -392,7 +394,7 @@ namespace {
       }
 
       allocations = counted.allocations() - before;
-      memory.permit(std::nullopt);
+      gate.permit(std::nullopt);
       if (budget) {
         require(rejected && client.findPane(2) == nullptr && client.focusedPane()->id == 1 && client.activeTab()->layout.nodes().size() == 1, "a failed allocation must preserve the source and the semantic layout");
         require(transport.last<DetachPane>().pane_id == 2 && transport.last<PaneResize>().size.cols == client.workbenchGeometry().launchSize()->cols, "a failed adoption must release the new attachment and restore the source PTY");

@@ -134,14 +134,16 @@ namespace {
   void progressMessagesAreOwnedAndDeduplicated() {
     SystemAllocator upstream;
     BudgetAllocator budget{upstream, std::numeric_limits<std::size_t>::max()};
-    AllocationGate memory{budget};
+    AllocationGate gate{budget};
+    telar::MemoryAdapter adapter{gate};
+    telar::Memory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
     openFirstPane(client, transport);
     const auto allocations = budget.allocations();
 
-    memory.permit(0);
+    gate.permit(0);
     const PaneProgress report{.pane_id = 1, .state = PaneProgressState::set, .percent = quarter_percent};
 
     require(deliver(client, report) == Change::model, "progress must invalidate the projected tab");

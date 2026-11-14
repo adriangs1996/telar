@@ -80,7 +80,9 @@ namespace {
   void sessionLifecycle() {
     SystemAllocator system;
     constexpr std::size_t allocation_budget = std::size_t{16} * 1024 * 1024;
-    BudgetAllocator memory{system, allocation_budget};
+    BudgetAllocator budget{system, allocation_budget};
+    telar::MemoryAdapter adapter{budget};
+    telar::Memory& memory = adapter;
     Transport transport;
 
     {
@@ -145,12 +147,14 @@ namespace {
       require(transport.last<OpenPane>().target.id == 1 && !transport.last<OpenPane>().launch, "reconnect must restore the current pane from the runtime's owned layout snapshot");
     }
 
-    require(memory.liveBytes() == 0, "session must release injected allocations");
+    require(budget.liveBytes() == 0, "session must release injected allocations");
   }
 
   void detachedTabForegroundsAndAgentTitles() {
     SystemAllocator system;
-    BudgetAllocator memory{system, std::numeric_limits<std::size_t>::max()};
+    BudgetAllocator budget{system, std::numeric_limits<std::size_t>::max()};
+    telar::MemoryAdapter adapter{budget};
+    telar::Memory& memory = adapter;
     Transport transport;
 
     {
@@ -194,12 +198,14 @@ namespace {
       require(agent.provider_kind == AgentProvider::codex && agent.blocked_reason == AgentBlockedReason::permission, "agent cards must retain typed provider and blocked reason");
     }
 
-    require(memory.liveBytes() == 0, "foreground and agent-title metadata must release injected allocations");
+    require(budget.liveBytes() == 0, "foreground and agent-title metadata must release injected allocations");
   }
 
   void configuredWindowTitles() {
     SystemAllocator system;
-    BudgetAllocator memory{system, std::numeric_limits<std::size_t>::max()};
+    BudgetAllocator budget{system, std::numeric_limits<std::size_t>::max()};
+    telar::MemoryAdapter adapter{budget};
+    telar::Memory& memory = adapter;
     Transport transport;
 
     {
@@ -225,11 +231,11 @@ namespace {
 
       deliver(client, PaneTitle{.pane_id = 1, .title = "compiler"});
       deliver(client, PaneForeground{.pane_id = 1, .name = "nvim"});
-      const auto allocations = memory.allocations();
+      const auto allocations = budget.allocations();
       const auto rendered = client.windowTitle("host");
 
       require(rendered.view() == "project/nvim/compiler@host", "titles must follow current workspace, foreground and pane metadata");
-      require(memory.allocations() == allocations, "title projection must not allocate through the session allocator");
+      require(budget.allocations() == allocations, "title projection must not allocate through the session allocator");
       const std::array tabs{TabDescriptor{.tab_id = location.tab_id, .label = "manual"}};
 
       deliver(client, WorkspaceSnapshot{.request_id = 1, .workspace = location.workspace, .name = "renamed", .tabs = tabs});
@@ -245,7 +251,7 @@ namespace {
       require(client.windowTitle("host").view() == "Telar", "clearing a configured template must restore the original GUI default");
     }
 
-    require(memory.liveBytes() == 0, "title projection must preserve session allocation ownership");
+    require(budget.liveBytes() == 0, "title projection must preserve session allocation ownership");
   }
 
   void restoredLayoutAndFailure() {
