@@ -1,8 +1,6 @@
-module;
-#include <pcap/pcap.h>
-
 module telar.runtime.redirect.record;
 
+import telar.native.pcap;
 import telar.sys.socket;
 #if defined(__APPLE__)
 import telar.sys.apple;

@@ -1,9 +1,7 @@
-module;
-#include <openssl/sha.h>
-
 module telar.cli.worktree;
 
 import telar.cli.control_session;
+import telar.platform.sha256;
 import telar.sys.posix;
 import telar.tbc;
 

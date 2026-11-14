@@ -1,14 +1,12 @@
 module;
 #include "tbc/annotations.hpp"
 
-#include <brotli/decode.h>
-#include <brotli/encode.h>
-#include <zlib.h>
-#include <zstd.h>
-
 export module telar.runtime.proxy.intercepted_relay;
 
 import std;
+import telar.native.brotli;
+import telar.native.zlib;
+import telar.native.zstd;
 import telar.tbc;
 
 export import telar.runtime.platform.stream_read_buffer;
@@ -21,6 +19,7 @@ export import telar.runtime.http.message;
 export import telar.runtime.traffic.control_protocol;
 import telar.base.diagnostics;
 import telar.base.text;
+import telar.wire.vocabulary;
 
 // Interface: http1/observer.cppm
 export {

@@ -1,9 +1,7 @@
-module;
-#include <ghostty/vt.h>
-
 export module telar.runtime.terminal.control.engine;
 
 import std;
+import telar.ghostty.vt;
 import telar.tbc;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;

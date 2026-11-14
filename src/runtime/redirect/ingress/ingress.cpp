@@ -1,8 +1,6 @@
-module;
-#include <pcap/pcap.h>
-
 module telar.runtime.redirect.ingress;
 
+import telar.native.pcap;
 import telar.sys.socket;
 
 namespace telar::runtime::redirect {

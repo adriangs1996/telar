@@ -1,15 +1,11 @@
 module;
 #include "tbc/annotations.hpp"
 
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-
-#include <openssl/sha.h>
-
 export module telar.runtime.plugins.tap_configuration;
 
 import std;
+import telar.lua;
+import telar.platform.sha256;
 import telar.sys.posix;
 
 export import telar.config.client;

@@ -1,8 +1,8 @@
 #pragma once
 
 #include "tbc/view.hpp"
+#include "telar_ghostty/vt.hpp"
 #include <exception>
-#include <ghostty/vt.h>
 #include <source_location>
 #include <utility>
 

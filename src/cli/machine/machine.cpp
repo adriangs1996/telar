@@ -1,7 +1,5 @@
-module;
-#include <openssl/sha.h>
-
 module telar.cli.machine;
+import telar.platform.sha256;
 import telar.sys.posix;
 
 import telar.base.text;

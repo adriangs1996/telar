@@ -2,23 +2,10 @@ module;
 #include "tbc/annotations.hpp"
 #include "telar_platform/trace_macro.hpp"
 
-#include <nghttp2/nghttp2.h>
-
-#include <openssl/crypto.h>
-#include <openssl/err.h>
-#include <openssl/pem.h>
-#include <openssl/ssl.h>
-#include <openssl/x509v3.h>
-
-#include <openssl/sha.h>
-
-#if (!(defined(__APPLE__)))
-#include <openssl/x509.h>
-#endif
-
 export module telar.runtime.proxy.runtime;
 
 import std;
+import telar.native.nghttp2;
 import telar.sys.process;
 import telar.tbc;
 

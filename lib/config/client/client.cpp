@@ -1,9 +1,7 @@
-module;
-#include <lua.h>
-
 module telar.config.client;
 
 import std;
+import telar.lua;
 import telar.tbc;
 
 namespace telar::runtime::config {

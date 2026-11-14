@@ -1,23 +1,12 @@
 module;
 #include "telar_platform/trace_macro.hpp"
 
-#include <nghttp2/nghttp2.h>
-
-#include <openssl/crypto.h>
-#include <openssl/err.h>
-#include <openssl/pem.h>
-#include <openssl/ssl.h>
-#include <openssl/x509v3.h>
-
-#include <openssl/sha.h>
-
-#if (!(defined(__APPLE__)))
-#include <openssl/x509.h>
-#endif
-
 module telar.runtime.proxy.runtime;
 
+import telar.native.nghttp2;
+import telar.platform.sha256;
 import telar.sys.socket;
+import telar.tls;
 
 namespace telar::runtime {
 

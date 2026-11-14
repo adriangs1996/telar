@@ -1,15 +1,11 @@
 module;
 #include "telar_platform/trace_macro.hpp"
 
-#define ZSTD_STATIC_LINKING_ONLY
-
-#include <brotli/decode.h>
-
-#include <zlib.h>
-
-#include <zstd.h>
-
 module telar.runtime.exchange_capture.producer;
+
+import telar.native.brotli;
+import telar.native.zlib;
+import telar.native.zstd;
 
 namespace telar::runtime {
 

@@ -1,11 +1,7 @@
-module;
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-
-#include <openssl/sha.h>
-
 module telar.runtime.plugins.tap_configuration;
+
+import telar.lua;
+import telar.platform.sha256;
 
 namespace telar::runtime::plugins {
 

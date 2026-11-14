@@ -41,58 +41,27 @@
     "<stdexcept>",
     "backend.hpp"
   ],
-  "lib/clipboard/src/linux/wayland.cpp": [
-    "<cstring>",
-    "<fcntl.h>",
-    "<list>",
-    "<memory>",
-    "<optional>",
-    "<wayland-client.h>",
-    "backend.hpp",
-    "wlr-data-control-client-protocol.h"
-  ],
-  "lib/clipboard/src/linux/x11.cpp": [
-    "<cstdlib>",
-    "<cstring>",
-    "<limits>",
-    "<memory>",
-    "<utility>",
-    "<xcb/xcb.h>",
-    "<xcb/xcbext.h>",
-    "backend.hpp"
-  ],
   "lib/clipboard/src/unavailable.cpp": [
     "clipboard.hpp"
   ],
-  "lib/config/client/client.cpp": [
-    "<lua.h>"
+  "lib/clipboard/wayland/wayland.cpp": [
+    "../src/linux/backend.hpp",
+    "<fcntl.h>"
   ],
-  "lib/config/client/client.cppm": [
-    "<lua.h>"
+  "lib/clipboard/wayland/wayland.cppm": [
+    "../src/linux/backend.hpp"
   ],
-  "lib/config/gui/gui.cpp": [
-    "<lua.h>"
+  "lib/clipboard/x11/x11.cpp": [
+    "../src/linux/backend.hpp"
   ],
-  "lib/config/runtime/runtime.cpp": [
-    "<lua.h>"
+  "lib/clipboard/x11/x11.cppm": [
+    "../src/linux/backend.hpp"
   ],
-  "lib/config/runtime/runtime_reader.cpp": [
-    "<lua.h>"
+  "lib/ghostty/vt/vt.cppm": [
+    "telar_ghostty/vt.hpp"
   ],
-  "lib/config/snapshot/snapshot.cpp": [
-    "<lua.h>"
-  ],
-  "lib/git/git-format.cpp": [
-    "<openssl/sha.h>"
-  ],
-  "lib/git/git-format.cppm": [
-    "<openssl/sha.h>"
-  ],
-  "lib/git/git-objects.cpp": [
-    "<zlib.h>"
-  ],
-  "lib/git/git-objects.cppm": [
-    "<zlib.h>"
+  "lib/native/zlib/zlib.cppm": [
+    "telar_native/zlib.hpp"
   ],
   "lib/platform/include/telar_platform/descriptor_path.hpp": [
     "<array>",
@@ -132,12 +101,6 @@
     "telar_platform/graphics/child_shared_memory.hpp",
     "telar_platform/mapped_region.hpp"
   ],
-  "lib/platform/sha256/sha256.cpp": [
-    "<openssl/sha.h>"
-  ],
-  "lib/platform/sha256/sha256.cppm": [
-    "<openssl/sha.h>"
-  ],
   "lib/render/document/document.cpp": [
     "telar_render/sequence.hpp"
   ],
@@ -148,10 +111,6 @@
     "<cstddef>",
     "<cstdint>",
     "<string_view>"
-  ],
-  "lib/render/markdown/markdown.cpp": [
-    "entity.h",
-    "md4c.h"
   ],
   "lib/tbc/include/tbc/contracts.hpp": [
     "tbc/lifetime.hpp",
@@ -295,38 +254,6 @@
     "<string_view>",
     "tbc/view.hpp"
   ],
-  "lib/tls/tls.cpp": [
-    "<openssl/crypto.h>",
-    "<openssl/err.h>",
-    "<openssl/pem.h>",
-    "<openssl/ssl.h>",
-    "<openssl/x509v3.h>"
-  ],
-  "lib/tls/tls.cppm": [
-    "<openssl/crypto.h>",
-    "<openssl/ssl.h>",
-    "<openssl/x509.h>"
-  ],
-  "src/cli/hook/hook.cpp": [
-    "<openssl/md5.h>"
-  ],
-  "src/cli/machine/machine.cpp": [
-    "<openssl/sha.h>"
-  ],
-  "src/cli/machine_ssh/machine_ssh.cpp": [
-    "<openssl/sha.h>"
-  ],
-  "src/cli/project_setup/project_setup.cpp": [
-    "<openssl/sha.h>"
-  ],
-  "src/cli/tab/config_check.cpp": [
-    "<lauxlib.h>",
-    "<lua.h>",
-    "<lualib.h>"
-  ],
-  "src/cli/worktree/worktree.cpp": [
-    "<openssl/sha.h>"
-  ],
   "src/gui/platform/background_effect/background_effect.cppm": [
     "platform/window.hpp"
   ],
@@ -363,22 +290,6 @@
     "<array>",
     "terminal_input.hpp"
   ],
-  "src/runtime/cli/server/server.cpp": [
-    "<lauxlib.h>",
-    "<lua.h>"
-  ],
-  "src/runtime/cli/server/server.cppm": [
-    "<lua.h>"
-  ],
-  "src/runtime/command_capture/tracker/tracker.cpp": [
-    "<ghostty/vt.h>"
-  ],
-  "src/runtime/command_capture/tracker/tracker.cppm": [
-    "<ghostty/vt.h>"
-  ],
-  "src/runtime/config/loader/loader.cpp": [
-    "<lua.h>"
-  ],
   "src/runtime/diagnostics/line.hpp": [
     "<algorithm>",
     "<array>",
@@ -393,21 +304,6 @@
   ],
   "src/runtime/diagnostics/timing.hpp": [
     "telar_base/diagnostics/timing.hpp"
-  ],
-  "src/runtime/exchange_capture/pipeline/pipeline.cppm": [
-    "<brotli/decode.h>",
-    "<zlib.h>",
-    "<zstd.h>"
-  ],
-  "src/runtime/exchange_capture/producer/producer.cpp": [
-    "<brotli/decode.h>",
-    "<zlib.h>",
-    "<zstd.h>"
-  ],
-  "src/runtime/exchange_capture/producer/producer.cppm": [
-    "<brotli/decode.h>",
-    "<zlib.h>",
-    "<zstd.h>"
   ],
   "src/runtime/graphics/child_file.hpp": [
     "<algorithm>",
@@ -468,17 +364,10 @@
     "tbc/view.hpp",
     "telar_base/memory/allocator.hpp"
   ],
-  "src/runtime/graphics/pane_media/pane_media.cpp": [
-    "<ghostty/vt.h>"
-  ],
-  "src/runtime/graphics/pane_media/pane_media.cppm": [
-    "<ghostty/vt.h>"
-  ],
   "src/runtime/graphics/png_decoder.cpp": [
     "../diagnostics/line.hpp",
     "../terminal/ghostty_allocator.hpp",
     "../terminal/ghostty_handle.hpp",
-    "<ghostty/wuffs-v0.4.h>",
     "png_decoder.hpp",
     "telar_vocabulary/vocabulary.hpp"
   ],
@@ -499,48 +388,6 @@
     "tbc/view.hpp",
     "telar_platform/descriptor_path.hpp"
   ],
-  "src/runtime/history/event/event.cpp": [
-    "<sqlite3.h>"
-  ],
-  "src/runtime/history/event/event.cppm": [
-    "<sqlite3.h>"
-  ],
-  "src/runtime/history/store/database.cpp": [
-    "<sqlite3.h>"
-  ],
-  "src/runtime/history/store/store.cpp": [
-    "<sqlite3.h>"
-  ],
-  "src/runtime/history/store/store.cppm": [
-    "<sqlite3.h>"
-  ],
-  "src/runtime/http/content/content.cpp": [
-    "<nghttp2/nghttp2.h>"
-  ],
-  "src/runtime/http/content/content.cppm": [
-    "<nghttp2/nghttp2.h>"
-  ],
-  "src/runtime/http/message/message.cpp": [
-    "<brotli/decode.h>",
-    "<brotli/encode.h>",
-    "<zlib.h>",
-    "<zstd.h>"
-  ],
-  "src/runtime/http/message/message.cppm": [
-    "<brotli/decode.h>",
-    "<brotli/encode.h>",
-    "<zlib.h>",
-    "<zstd.h>"
-  ],
-  "src/runtime/http2/direction_observer/direction_observer.cpp": [
-    "<nghttp2/nghttp2.h>"
-  ],
-  "src/runtime/http2/direction_observer/direction_observer.cppm": [
-    "<nghttp2/nghttp2.h>"
-  ],
-  "src/runtime/observation/processor/processor.cppm": [
-    "<ghostty/vt.h>"
-  ],
   "src/runtime/platform/descriptor_path/descriptor_path.cpp": [
     "telar_platform/descriptor_path.hpp"
   ],
@@ -551,111 +398,10 @@
   ],
   "src/runtime/platform/system_certificates/system_certificates.cpp": [
     "<CoreFoundation/CoreFoundation.h>",
-    "<Security/Security.h>",
-    "<openssl/err.h>",
-    "<openssl/pem.h>",
-    "<openssl/x509.h>"
+    "<Security/Security.h>"
   ],
   "src/runtime/platform/system_certificates/system_certificates.cppm": [
     "<CoreFoundation/CoreFoundation.h>"
-  ],
-  "src/runtime/plugins/run_worker/run_worker.cpp": [
-    "<lauxlib.h>",
-    "<lua.h>",
-    "<lualib.h>",
-    "<pcap/pcap.h>"
-  ],
-  "src/runtime/plugins/run_worker/run_worker.cppm": [
-    "<lauxlib.h>",
-    "<lua.h>",
-    "<lualib.h>",
-    "<pcap/pcap.h>"
-  ],
-  "src/runtime/plugins/tap_configuration/tap_configuration.cpp": [
-    "<lauxlib.h>",
-    "<lua.h>",
-    "<lualib.h>",
-    "<openssl/sha.h>"
-  ],
-  "src/runtime/plugins/tap_configuration/tap_configuration.cppm": [
-    "<lauxlib.h>",
-    "<lua.h>",
-    "<lualib.h>",
-    "<openssl/sha.h>"
-  ],
-  "src/runtime/proxy/http2_capture_streams/http2_capture_streams.cpp": [
-    "<brotli/decode.h>",
-    "<zlib.h>",
-    "<zstd.h>"
-  ],
-  "src/runtime/proxy/http2_capture_streams/http2_capture_streams.cppm": [
-    "<brotli/decode.h>",
-    "<zlib.h>",
-    "<zstd.h>"
-  ],
-  "src/runtime/proxy/intercepted_relay/intercepted_relay.cpp": [
-    "<brotli/decode.h>",
-    "<brotli/encode.h>",
-    "<zlib.h>",
-    "<zstd.h>"
-  ],
-  "src/runtime/proxy/intercepted_relay/intercepted_relay.cppm": [
-    "<brotli/decode.h>",
-    "<brotli/encode.h>",
-    "<zlib.h>",
-    "<zstd.h>"
-  ],
-  "src/runtime/proxy/runtime/runtime.cpp": [
-    "<nghttp2/nghttp2.h>",
-    "<openssl/crypto.h>",
-    "<openssl/err.h>",
-    "<openssl/pem.h>",
-    "<openssl/sha.h>",
-    "<openssl/ssl.h>",
-    "<openssl/x509.h>",
-    "<openssl/x509v3.h>"
-  ],
-  "src/runtime/proxy/runtime/runtime.cppm": [
-    "<nghttp2/nghttp2.h>",
-    "<openssl/crypto.h>",
-    "<openssl/err.h>",
-    "<openssl/pem.h>",
-    "<openssl/sha.h>",
-    "<openssl/ssl.h>",
-    "<openssl/x509.h>",
-    "<openssl/x509v3.h>"
-  ],
-  "src/runtime/redirect/ingress/ingress.cpp": [
-    "<pcap/pcap.h>"
-  ],
-  "src/runtime/redirect/ingress/ingress.cppm": [
-    "<pcap/pcap.h>"
-  ],
-  "src/runtime/redirect/record/record.cpp": [
-    "<pcap/pcap.h>"
-  ],
-  "src/runtime/redirect/record/record.cppm": [
-    "<pcap/pcap.h>"
-  ],
-  "src/runtime/redirect/socket_owners/socket_owners.cpp": [
-    "<pcap/pcap.h>"
-  ],
-  "src/runtime/redirect/socket_owners/socket_owners.cppm": [
-    "<pcap/pcap.h>"
-  ],
-  "src/runtime/runtime/delivery/client_delivery/client_delivery.cpp": [
-    "<ghostty/vt.h>",
-    "<zlib.h>"
-  ],
-  "src/runtime/runtime/execution_service/execution_service.cppm": [
-    "<ghostty/vt.h>"
-  ],
-  "src/runtime/runtime/runtime/runtime.cpp": [
-    "<ghostty/vt.h>"
-  ],
-  "src/runtime/runtime/runtime_telemetry/runtime_telemetry.cpp": [
-    "<ghostty/vt.h>",
-    "<zlib.h>"
   ],
   "src/runtime/terminal/control/apc_borrow.hpp": [
     "<algorithm>",
@@ -674,12 +420,6 @@
     "<cstdint>",
     "<span>",
     "<string_view>"
-  ],
-  "src/runtime/terminal/control/checksum/checksum.cpp": [
-    "<ghostty/vt.h>"
-  ],
-  "src/runtime/terminal/control/checksum/checksum.cppm": [
-    "<ghostty/vt.h>"
   ],
   "src/runtime/terminal/control/classification.hpp": [
     "../../graphics/kitty_control.hpp",
@@ -728,12 +468,6 @@
     "reply.hpp",
     "vt_state.hpp"
   ],
-  "src/runtime/terminal/control/engine/engine.cpp": [
-    "<ghostty/vt.h>"
-  ],
-  "src/runtime/terminal/control/engine/engine.cppm": [
-    "<ghostty/vt.h>"
-  ],
   "src/runtime/terminal/control/graphics_base64_block.hpp": [
     "<cstdint>",
     "<cstring>"
@@ -766,11 +500,11 @@
     "../ghostty_allocator.hpp",
     "<cassert>",
     "<charconv>",
-    "<zlib.h>",
     "graphics_header.hpp",
     "graphics_payload.hpp",
     "reply.hpp",
     "telar_config/graphics/limits.hpp",
+    "telar_native/zlib.hpp",
     "telar_platform/graphics/child_shared_memory.hpp"
   ],
   "src/runtime/terminal/control/parameters.hpp": [
@@ -829,36 +563,21 @@
     "telar_base/memory/allocator.hpp"
   ],
   "src/runtime/terminal/ghostty_allocator.hpp": [
-    "<ghostty/vt.h>",
     "tbc/view.hpp",
-    "telar_base/memory/allocator.hpp"
+    "telar_base/memory/allocator.hpp",
+    "telar_ghostty/vt.hpp"
   ],
   "src/runtime/terminal/ghostty_handle.hpp": [
     "<exception>",
-    "<ghostty/vt.h>",
     "<source_location>",
     "<utility>",
-    "tbc/view.hpp"
+    "tbc/view.hpp",
+    "telar_ghostty/vt.hpp"
   ],
   "src/runtime/terminal/graphics_cursor.hpp": [
     "../graphics/kitty_cursor.hpp",
     "ghostty_handle.hpp",
     "telar_vocabulary/vocabulary.hpp"
-  ],
-  "src/runtime/terminal/graphics_storage/graphics_storage.cpp": [
-    "<ghostty/vt.h>"
-  ],
-  "src/runtime/terminal/graphics_storage/graphics_storage.cppm": [
-    "<ghostty/vt.h>"
-  ],
-  "src/runtime/terminal/grid/grid.cppm": [
-    "<ghostty/vt.h>"
-  ],
-  "src/runtime/terminal/osc_scanner/osc_scanner.cpp": [
-    "<ghostty/vt.h>"
-  ],
-  "src/runtime/terminal/osc_scanner/osc_scanner.cppm": [
-    "<ghostty/vt.h>"
   ],
   "src/runtime/terminal/pty_response_queue.hpp": [
     "../diagnostics/line.hpp",
@@ -871,82 +590,11 @@
     "<span>",
     "tbc/view.hpp"
   ],
-  "src/runtime/terminal/text_reader/cell_projection.cpp": [
-    "<ghostty/vt.h>"
-  ],
-  "src/runtime/terminal/text_reader/text_reader.cpp": [
-    "<ghostty/vt.h>"
-  ],
-  "src/runtime/terminal/text_reader/text_reader.cppm": [
-    "<ghostty/vt.h>"
-  ],
   "src/runtime/terminal/tracked_row.hpp": [
     "<cstdint>",
-    "<ghostty/vt.h>",
     "<optional>",
     "<utility>",
-    "ghostty_handle.hpp"
-  ],
-  "src/runtime/tls/interception/interception.cpp": [
-    "<openssl/crypto.h>",
-    "<openssl/err.h>",
-    "<openssl/pem.h>",
-    "<openssl/ssl.h>",
-    "<openssl/x509v3.h>"
-  ],
-  "src/runtime/tls/interception/interception.cppm": [
-    "<openssl/crypto.h>",
-    "<openssl/err.h>",
-    "<openssl/pem.h>",
-    "<openssl/ssl.h>",
-    "<openssl/x509v3.h>"
-  ],
-  "src/runtime/traffic/capture/capture.cpp": [
-    "<pcap/pcap.h>"
-  ],
-  "src/runtime/traffic/capture/capture.cppm": [
-    "<pcap/pcap.h>"
-  ],
-  "src/runtime/traffic/capture_analysis/capture_analysis.cpp": [
-    "<pcap/pcap.h>"
-  ],
-  "src/runtime/traffic/capture_analysis/capture_analysis.cppm": [
-    "<pcap/pcap.h>"
-  ],
-  "src/runtime/traffic/control_backend/control_backend.cpp": [
-    "<brotli/decode.h>",
-    "<brotli/encode.h>",
-    "<nghttp2/nghttp2.h>",
-    "<openssl/crypto.h>",
-    "<openssl/err.h>",
-    "<openssl/pem.h>",
-    "<openssl/sha.h>",
-    "<openssl/ssl.h>",
-    "<openssl/x509.h>",
-    "<openssl/x509v3.h>",
-    "<pcap/pcap.h>",
-    "<zlib.h>",
-    "<zstd.h>"
-  ],
-  "src/runtime/traffic/control_backend/control_backend.cppm": [
-    "<brotli/decode.h>",
-    "<brotli/encode.h>",
-    "<nghttp2/nghttp2.h>",
-    "<openssl/crypto.h>",
-    "<openssl/err.h>",
-    "<openssl/pem.h>",
-    "<openssl/sha.h>",
-    "<openssl/ssl.h>",
-    "<openssl/x509.h>",
-    "<openssl/x509v3.h>",
-    "<pcap/pcap.h>",
-    "<zlib.h>",
-    "<zstd.h>"
-  ],
-  "src/runtime/traffic/control_protocol/control_protocol.cpp": [
-    "<pcap/pcap.h>"
-  ],
-  "src/runtime/traffic/control_protocol/control_protocol.cppm": [
-    "<pcap/pcap.h>"
+    "ghostty_handle.hpp",
+    "telar_ghostty/vt.hpp"
   ]
 }

@@ -1,6 +1,3 @@
-module;
-#include <lua.h>
-
 module telar.runtime.config.loader;
 
 import telar.lua;

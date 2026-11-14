@@ -1,11 +1,10 @@
 module;
 #include "tbc/annotations.hpp"
 
-#include <nghttp2/nghttp2.h>
-
 export module telar.runtime.http2.direction_observer;
 
 import std;
+import telar.native.nghttp2;
 import telar.tbc;
 
 export import telar.base.memory.allocators;

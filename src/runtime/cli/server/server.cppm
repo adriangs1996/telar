@@ -1,9 +1,7 @@
-module;
-#include <lua.h>
-
 export module telar.runtime.cli.server;
 
 import std;
+import telar.lua;
 
 export import telar.config.client;
 export import telar.config.runtime;

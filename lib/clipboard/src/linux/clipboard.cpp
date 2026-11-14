@@ -3,6 +3,9 @@
 #include <new>
 #include <stdexcept>
 
+import telar.clipboard.wayland;
+import telar.clipboard.x11;
+
 namespace telar::clipboard {
   std::expected<content, read_error> read(std::size_t maximum_bytes) {
     const auto expires = linux_backend::clock::now() + linux_backend::read_timeout;

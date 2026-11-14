@@ -1,12 +1,12 @@
 module;
 #include "tbc/annotations.hpp"
-#include <zlib.h>
 
 export module telar.git:objects;
 
 import std;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
+import telar.native.zlib;
 import telar.platform.primitives;
 import :format;
 

@@ -1,9 +1,7 @@
-module;
-#include <sqlite3.h>
-
 export module telar.runtime.history.store;
 
 import std;
+import telar.native.sqlite;
 import telar.tbc;
 
 export import telar.runtime.platform.background_executor;

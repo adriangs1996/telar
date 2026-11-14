@@ -1,11 +1,10 @@
 module;
-#include <ghostty/vt.h>
-#include <zlib.h>
-
 #include "telar_base/diagnostics/config.hpp"
 
 module telar.runtime.runtime.runtime_telemetry;
 
+import telar.ghostty.vt;
+import telar.native.zlib;
 import telar.sys.process;
 #if defined(__APPLE__)
 import telar.sys.apple;

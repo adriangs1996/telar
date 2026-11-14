@@ -2,13 +2,12 @@ module;
 #include "tbc/annotations.hpp"
 #include "telar_platform/trace_macro.hpp"
 
-#include <brotli/decode.h>
-#include <zlib.h>
-#include <zstd.h>
-
 export module telar.runtime.proxy.http2_capture_streams;
 
 import std;
+import telar.native.brotli;
+import telar.native.zlib;
+import telar.native.zstd;
 import telar.sys.socket;
 import telar.sys.posix;
 import telar.tbc;

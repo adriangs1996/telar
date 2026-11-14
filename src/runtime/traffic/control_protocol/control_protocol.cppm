@@ -1,11 +1,10 @@
 module;
 #include "tbc/annotations.hpp"
 
-#include <pcap/pcap.h>
-
 export module telar.runtime.traffic.control_protocol;
 
 import std;
+import telar.native.pcap;
 import telar.tbc;
 
 export import telar.runtime.vocabulary.frames;

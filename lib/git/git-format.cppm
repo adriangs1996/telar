@@ -1,6 +1,3 @@
-module;
-#include <openssl/sha.h>
-
 export module telar.git:format;
 
 import std;

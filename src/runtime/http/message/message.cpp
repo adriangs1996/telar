@@ -1,11 +1,8 @@
-module;
-#define ZSTD_STATIC_LINKING_ONLY
-#include <brotli/decode.h>
-#include <brotli/encode.h>
-#include <zlib.h>
-#include <zstd.h>
-
 module telar.runtime.http.message;
+
+import telar.native.brotli;
+import telar.native.zlib;
+import telar.native.zstd;
 
 namespace telar::runtime {
 

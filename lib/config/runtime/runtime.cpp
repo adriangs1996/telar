@@ -1,9 +1,7 @@
-module;
-#include <lua.h>
-
 module telar.config.runtime;
 
 import std;
+import telar.lua;
 import telar.tbc;
 import telar.sys.socket;
 

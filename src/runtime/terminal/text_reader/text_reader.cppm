@@ -1,11 +1,10 @@
 module;
-#include <ghostty/vt.h>
-
 #include "telar_base/diagnostics/config.hpp"
 
 export module telar.runtime.terminal.text_reader;
 
 import std;
+import telar.ghostty.vt;
 import telar.tbc;
 
 export import telar.runtime.diagnostics.runtime_counters;

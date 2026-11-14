@@ -1,7 +1,3 @@
-module;
-#include <lauxlib.h>
-#include <lua.h>
-
 module telar.runtime.cli.server;
 
 import telar.sys.posix;

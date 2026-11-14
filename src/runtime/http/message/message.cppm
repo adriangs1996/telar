@@ -1,15 +1,12 @@
 module;
 #include "tbc/annotations.hpp"
 
-#define ZSTD_STATIC_LINKING_ONLY
-#include <brotli/decode.h>
-#include <brotli/encode.h>
-#include <zlib.h>
-#include <zstd.h>
-
 export module telar.runtime.http.message;
 
 import std;
+import telar.native.brotli;
+import telar.native.zlib;
+import telar.native.zstd;
 import telar.tbc;
 
 export import telar.runtime.http.content;
@@ -23,6 +20,7 @@ export import telar.runtime.http1.head;
 import telar.base.diagnostics;
 import telar.base.text;
 import telar.base.text.utf8;
+import telar.wire.vocabulary;
 
 // Interface: http/content_codec.cppm
 export {

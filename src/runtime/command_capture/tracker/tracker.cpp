@@ -1,13 +1,13 @@
 module;
 #include "telar_base/diagnostics/config.hpp"
 #include "telar_platform/trace_macro.hpp"
-#include <ghostty/vt.h>
 
 module telar.runtime.command_capture.tracker;
 
 import std;
 import telar.base.text;
 import telar.base.text.utf8;
+import telar.ghostty.vt;
 import telar.runtime.diagnostics.line;
 import telar.runtime.terminal.grid;
 

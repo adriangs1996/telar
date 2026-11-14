@@ -1,8 +1,9 @@
 module;
 #include "telar_base/diagnostics/config.hpp"
-#include <ghostty/vt.h>
 
 module telar.runtime.terminal.control.engine;
+
+import telar.ghostty.vt;
 
 namespace telar::runtime::control {
 

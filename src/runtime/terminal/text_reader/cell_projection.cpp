@@ -1,11 +1,9 @@
-module;
-#include <ghostty/vt.h>
-
 module telar.runtime.terminal.text_reader;
 
 import std;
 
 import telar.base.diagnostics;
+import telar.ghostty.vt;
 import telar.wire.vocabulary;
 import telar.runtime.terminal.control;
 import telar.runtime.terminal.grid;

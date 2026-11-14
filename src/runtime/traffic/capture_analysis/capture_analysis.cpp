@@ -1,8 +1,6 @@
-module;
-#include <pcap/pcap.h>
-
 module telar.runtime.traffic.capture_analysis;
 
+import telar.native.pcap;
 import telar.sys.socket;
 
 namespace telar::runtime::traffic {
@@ -43,10 +41,8 @@ namespace telar::runtime::traffic {
       return bytes.size() < 4 ? std::span<const Byte>{} : bytes.subspan(4);
     case DLT_LINUX_SLL:
       return bytes.size() < 16 ? std::span<const Byte>{} : bytes.subspan(16);
-#ifdef DLT_LINUX_SLL2
     case DLT_LINUX_SLL2:
       return bytes.size() < 20 ? std::span<const Byte>{} : bytes.subspan(20);
-#endif
     case DLT_RAW:
     case DLT_IPV4:
     case DLT_IPV6:

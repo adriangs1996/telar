@@ -1,9 +1,7 @@
-module;
-#include <lua.h>
-
 module telar.config.gui;
 
 import std;
+import telar.lua;
 
 namespace telar::runtime::config {
 

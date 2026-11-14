@@ -3,15 +3,11 @@ module;
 #include <CoreFoundation/CoreFoundation.h>
 #include <Security/Security.h>
 #endif
-#if (!(defined(__APPLE__)))
-#include <openssl/err.h>
-#include <openssl/pem.h>
-#include <openssl/x509.h>
-#endif
 
 module telar.runtime.platform.system_certificates;
 
 import telar.sys.posix;
+import telar.tls;
 
 #if defined(__linux__)
 namespace telar::runtime {

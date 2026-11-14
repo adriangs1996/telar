@@ -1,11 +1,9 @@
-module;
-#include <ghostty/vt.h>
-
 export module telar.runtime.terminal.control.checksum;
 
 import std;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
+import telar.ghostty.vt;
 import telar.runtime.terminal.control;
 import telar.runtime.terminal.grid;
 

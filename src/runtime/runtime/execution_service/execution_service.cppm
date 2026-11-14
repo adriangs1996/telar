@@ -1,11 +1,11 @@
 module;
 #include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
-#include <ghostty/vt.h>
 
 export module telar.runtime.runtime.execution_service;
 
 import std;
+import telar.ghostty.vt;
 import telar.tbc;
 
 export import telar.runtime.model.client_layouts;

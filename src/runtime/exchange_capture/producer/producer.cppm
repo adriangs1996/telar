@@ -1,14 +1,6 @@
 module;
 #include "telar_platform/trace_macro.hpp"
 
-#define ZSTD_STATIC_LINKING_ONLY
-
-#include <brotli/decode.h>
-
-#include <zlib.h>
-
-#include <zstd.h>
-
 #include "tbc/annotations.hpp"
 
 export module telar.runtime.exchange_capture.producer;
@@ -24,6 +16,9 @@ export import telar.runtime.http.content;
 import telar.base.diagnostics;
 import telar.base.memory.sensitive;
 import telar.base.text;
+import telar.native.brotli;
+import telar.native.zlib;
+import telar.native.zstd;
 import telar.platform.primitives;
 
 // Interface: exchange_capture/brotli_decoder.cppm

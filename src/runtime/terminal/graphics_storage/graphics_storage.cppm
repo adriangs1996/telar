@@ -1,11 +1,10 @@
 module;
-#include <ghostty/vt.h>
-
 #include "telar_base/diagnostics/config.hpp"
 
 export module telar.runtime.terminal.graphics_storage;
 
 import std;
+import telar.ghostty.vt;
 import telar.tbc;
 
 export import telar.runtime.diagnostics.operation;

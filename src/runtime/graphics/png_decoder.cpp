@@ -9,9 +9,9 @@ static_assert(true);
 #include "../terminal/ghostty_handle.hpp"
 #include "telar_base/diagnostics/config.hpp"
 #include "telar_vocabulary/vocabulary.hpp"
-#include <ghostty/wuffs-v0.4.h>
 
 import std;
+import telar.ghostty.wuffs;
 import telar.runtime.graphics.prepared_images;
 
 namespace telar::runtime {
@@ -85,7 +85,7 @@ namespace telar::runtime {
 
     auto* decoder = reinterpret_cast<wuffs_png__decoder*>(decoder_storage.data());
     auto status = wuffs_png__decoder__initialize(decoder, decoder_storage.size(), WUFFS_VERSION, WUFFS_INITIALIZE__LEAVE_INTERNAL_BUFFERS_UNINITIALIZED);
-    if (!wuffs_base__status__is_ok(&status)) {
+    if (!ghostty::wuffs::isOk(&status)) {
       return false;
     }
 
@@ -97,12 +97,12 @@ namespace telar::runtime {
     wuffs_base__image_config config{};
 
     status = wuffs_png__decoder__decode_image_config(decoder, &config, &source);
-    if (!wuffs_base__status__is_ok(&status)) {
+    if (!ghostty::wuffs::isOk(&status)) {
       return false;
     }
 
-    const auto width = wuffs_base__pixel_config__width(&config.pixcfg);
-    const auto height = wuffs_base__pixel_config__height(&config.pixcfg);
+    const auto width = ghostty::wuffs::pixelWidth(&config.pixcfg);
+    const auto height = ghostty::wuffs::pixelHeight(&config.pixcfg);
     constexpr std::size_t pixel_bytes = 4;
     if (width == 0 || height == 0 || width > std::numeric_limits<std::size_t>::max() / pixel_bytes / height) {
       return false;
@@ -110,7 +110,7 @@ namespace telar::runtime {
 
     const auto length = static_cast<std::size_t>(width) * height * pixel_bytes;
 
-    wuffs_base__pixel_config__set(&config.pixcfg, WUFFS_BASE__PIXEL_FORMAT__RGBA_NONPREMUL, WUFFS_BASE__PIXEL_SUBSAMPLING__NONE, width, height);
+    ghostty::wuffs::setPixelConfig(&config.pixcfg, WUFFS_BASE__PIXEL_FORMAT__RGBA_NONPREMUL, WUFFS_BASE__PIXEL_SUBSAMPLING__NONE, width, height);
     CodecBuffer pixels{allocator, length, limit, BufferAlignment::bytes};
     if (!pixels) {
       return false;
@@ -128,13 +128,13 @@ namespace telar::runtime {
 
     wuffs_base__pixel_buffer destination{};
 
-    status = wuffs_base__pixel_buffer__set_from_slice(&destination, &config.pixcfg, wuffs_base__make_slice_u8(pixels.data(), pixels.size()));
-    if (!wuffs_base__status__is_ok(&status)) {
+    status = ghostty::wuffs::setPixelBuffer(&destination, &config.pixcfg, ghostty::wuffs::makeSlice(pixels.data(), pixels.size()));
+    if (!ghostty::wuffs::isOk(&status)) {
       return false;
     }
 
-    status = wuffs_png__decoder__decode_frame(decoder, &destination, &source, WUFFS_BASE__PIXEL_BLEND__SRC, wuffs_base__make_slice_u8(workspace.data(), workspace.size()), nullptr);
-    if (!wuffs_base__status__is_ok(&status)) {
+    status = wuffs_png__decoder__decode_frame(decoder, &destination, &source, WUFFS_BASE__PIXEL_BLEND__SRC, ghostty::wuffs::makeSlice(workspace.data(), workspace.size()), nullptr);
+    if (!ghostty::wuffs::isOk(&status)) {
       return false;
     }
 
