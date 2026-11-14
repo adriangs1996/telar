@@ -94,20 +94,21 @@ namespace {
     bool valid_ = true;
   };
 
-  using Memory = BudgetAllocator<CountingMemory>;
+  using Budgeted = BudgetAllocator<CountingMemory>;
+  using Synchronized = SynchronizedAllocator<Budgeted>;
 
   struct Component {
-    GhosttyAllocatorBridge<Memory> allocator;
+    GhosttyAllocatorBridge<ConcurrentMemory> allocator;
     TerminalHandle terminal;
     RenderStateHandle render;
-    TerminalEffects<Memory> effects;
+    TerminalEffects effects;
     std::shared_ptr<PtyResponseQueue> responses;
-    control::Engine<Memory> controller;
+    control::Engine controller;
 
-    explicit Component(Memory& memory)
+    explicit Component(ConcurrentMemory& memory)
         : allocator{memory},
           effects{memory},
-          responses{std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, Memory>{memory})},
+          responses{std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, ConcurrentMemory>{memory})},
           controller{memory, *responses, true} {
       checkGhostty(ghostty_terminal_new(allocator.get(), terminal.output(), 80, 24));
       checkGhostty(ghostty_render_state_new(allocator.get(), render.output()));
@@ -209,7 +210,9 @@ int main(int argc, char** argv) {
 
     data.resize(static_cast<std::size_t>(input.gcount()));
     CountingMemory counter;
-    Memory memory{counter, 64 * 1024 * 1024};
+    Budgeted budgeted{counter, 64 * 1024 * 1024};
+    Synchronized synchronized{budgeted};
+    MemoryAdapter<Synchronized> memory{synchronized};
     std::array<Counters, 5> phases;
     Workload work{data, fragment};
 
@@ -245,7 +248,7 @@ int main(int argc, char** argv) {
     }
 
     phases[4] = counter.phase;
-    if (!counter.valid() || memory.liveBytes() != 0 || memory.failures() != 0) {
+    if (!counter.valid() || budgeted.liveBytes() != 0 || budgeted.failures() != 0) {
       throw std::runtime_error{"Accounting overflow, allocation failure or leaked owned bytes"};
     }
 
