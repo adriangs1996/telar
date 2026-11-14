@@ -162,7 +162,6 @@
   "interfaces": {
     "lib/plugins/plugins.cppm": "telar.plugins",
     "lib/tls/tls.cppm": "telar.tls",
-    "lib/base/memory/memory.cppm": "telar.base.memory",
     "lib/base/memory/allocators/allocators.cppm": "telar.base.memory.allocators",
     "lib/base/memory/containers/containers.cppm": "telar.base.memory.containers",
     "lib/base/memory/sensitive/sensitive.cppm": "telar.base.memory.sensitive",
