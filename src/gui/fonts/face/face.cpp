@@ -1,11 +1,4 @@
 module;
-#include <cstdio>
-
-#include "platform/font.h"
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
 #include <freetype/freetype.h>
 #include <freetype/ftadvanc.h>
 #include <freetype/ftimage.h>
@@ -26,8 +19,6 @@ import telar.gui.terminal.font_grid;
 import telar.gui.terminal.glyphs;
 import telar.base.diagnostics;
 import telar.base.text.utf8;
-
-#include "platform/font.h"
 
 namespace telar::gui::fonts {
   namespace {

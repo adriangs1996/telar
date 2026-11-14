@@ -1,7 +1,4 @@
 module;
-#include <cstddef>
-#include <cstdint>
-
 #include <hb.h>
 
 export module telar.gui.fonts.face:views;

@@ -1,13 +1,7 @@
-module;
-
-#include <cstdint>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <unistd.h>
-
 module telar.gui.platform.peer_identity;
 
 import std;
+import telar.sys.posix;
 
 import telar.platform.net;
 

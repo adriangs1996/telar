@@ -1,9 +1,7 @@
-module;
-#include <sys/stat.h>
-
 module telar.gui.platform.private_file_stamp;
 
 import std;
+import telar.sys.posix;
 
 namespace telar::gui::platform {
 

@@ -1,19 +1,7 @@
-module;
-#include <cerrno>
-#include <cstddef>
-#include <cstdio>
-#include <cstring>
-#include <limits.h>
-
-#include <cstdint>
-#include <fcntl.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <unistd.h>
-
 module telar.gui.platform.shared_image_source;
 
 import std;
+import telar.sys.posix;
 
 import telar.wire.vocabulary;
 

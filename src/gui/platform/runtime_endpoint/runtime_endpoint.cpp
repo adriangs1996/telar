@@ -1,39 +1,12 @@
-module;
-#include <cstdint>
-#include <cstdio>
-
-#include "telar_platform/process_environment.h"
-
-#include <cctype>
-#include <cerrno>
-#include <climits>
-#include <cstddef>
-#include <cstdlib>
-#include <cstring>
-#include <fcntl.h>
-#include <poll.h>
-#include <signal.h>
-#include <spawn.h>
-#include <sys/stat.h>
-#include <sys/un.h>
-#include <sys/wait.h>
-#include <unistd.h>
-#if (defined(__APPLE__))
-#include <mach-o/dyld.h>
-#include <sys/attr.h>
-#endif
-
 module telar.gui.platform.runtime_endpoint;
 
 import std;
+import telar.sys.posix;
+import telar.sys.socket;
 
 import telar.client;
 import telar.vocabulary;
 import telar.platform.process;
-
-#if defined(__APPLE__)
-#include <mach-o/dyld.h>
-#endif
 
 namespace telar::gui::platform {
   namespace {

@@ -1,8 +1,3 @@
-module;
-
-#include <cstddef>
-#include <cstdint>
-
 export module telar.gui.text.bounded_editor;
 
 import std;

@@ -1,13 +1,3 @@
-module;
-#include <unistd.h>
-
-#include <cerrno>
-#include <cstddef>
-#include <fcntl.h>
-#include <limits.h>
-#include <sys/param.h>
-#include <sys/stat.h>
-
 module telar.gui.platform.managed_directory;
 
 import std;

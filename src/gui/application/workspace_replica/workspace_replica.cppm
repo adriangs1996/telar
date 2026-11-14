@@ -1,15 +1,3 @@
-module;
-#include <cmath>
-#include <cstdio>
-#include <cstdlib>
-#include <new>
-
-#include <cstdint>
-
-#include <cstddef>
-
-#include <cstring>
-
 export module telar.gui.application.workspace_replica;
 
 import std;

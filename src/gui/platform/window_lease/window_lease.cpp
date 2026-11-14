@@ -1,17 +1,3 @@
-module;
-
-#include <cerrno>
-#include <climits>
-#include <cstdint>
-#include <cstdlib>
-#include <cstring>
-#include <fcntl.h>
-#include <limits.h>
-#include <sys/file.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
-
 module telar.gui.platform.window_lease;
 
 import std;

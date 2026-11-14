@@ -1,6 +1,3 @@
-module;
-#include <cmath>
-
 module telar.gui.attachments.marker_input;
 
 namespace telar::gui {

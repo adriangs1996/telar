@@ -45,3 +45,10 @@ export {
 
   }
 }
+
+// Owned textual headers stay in this global module fragment only; importers
+// reach their names through these declarations instead of including them.
+export namespace telar::gui::platform {
+  using platform::ClipboardImageError;
+  using platform::ClipboardImageFailure;
+}

@@ -540,7 +540,6 @@
     "src/gui/platform/macos/blur_symbols.h": "Objective-C++ ABI",
     "src/gui/platform/macos/font_smoothing.h": "Objective-C++ ABI",
     "src/gui/platform/macos/glyph_rasterizer.h": "Objective-C++ ABI",
-    "src/gui/platform/process_group.h": "C ABI",
     "src/gui/platform/scroll_event.hpp": "Objective-C++ ABI",
     "src/gui/platform/text_input.hpp": "Objective-C++ ABI",
     "src/gui/platform/window.hpp": "Objective-C++ ABI",
@@ -3165,6 +3164,18 @@
     ],
     "lib/tbc/tbc.cppm": [
       "lib/tbc/include/tbc/view.hpp"
+    ],
+    "src/gui/fonts/face/face.cppm": [
+      "src/gui/platform/font.h"
+    ],
+    "src/gui/fonts/glyph_rasterizer/glyph_rasterizer.cpp": [
+      "src/gui/platform/macos/glyph_rasterizer.h"
+    ],
+    "src/gui/platform/clipboard_image_pipe/clipboard_image_pipe.cppm": [
+      "src/gui/platform/clipboard_image_source.hpp"
+    ],
+    "src/gui/terminal/fold_map/fold_map.cppm": [
+      "src/gui/terminal/fold_map.hpp"
     ]
   }
 }

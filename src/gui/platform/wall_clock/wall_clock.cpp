@@ -1,11 +1,7 @@
-module;
-
-#include <cstdint>
-#include <ctime>
-
 module telar.gui.platform.wall_clock;
 
 import std;
+import telar.sys.posix;
 
 import telar.gui.core.unicode_scalar;
 

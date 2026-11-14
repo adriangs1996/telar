@@ -1,9 +1,3 @@
-module;
-
-#include <cstdint>
-
-#include <cstddef>
-
 export module telar.gui.core.unicode_scalar;
 
 import std;

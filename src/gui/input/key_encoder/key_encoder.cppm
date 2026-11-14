@@ -1,7 +1,5 @@
 module;
 #include "tbc/annotations.hpp"
-#include <cstddef>
-#include <cstdint>
 
 export module telar.gui.input.key_encoder;
 

@@ -1,8 +1,3 @@
-module;
-#include <cstdint>
-
-#include <cstddef>
-
 export module telar.gui.peek.screen;
 
 import std;

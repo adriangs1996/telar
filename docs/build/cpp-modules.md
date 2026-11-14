@@ -148,7 +148,7 @@ Las unidades de módulo importan la biblioteca estándar con `import std;`
 versión). En el fragmento global solo quedan las cabeceras C y sus envoltorios
 (`<cerrno>`, `<cstdio>`…), `<new>` y `<version>`: macros como `errno`, `assert` o
 `INT_MAX` y el `operator new` de colocación no viajan por un módulo. Las unidades de la
-CLI y del runtime ya no incluyen ninguna: `errno` se lee con `telar::sys::lastError()`,
+CLI, del runtime y de la GUI (fuera de Qt) ya no incluyen ninguna: `errno` se lee con `telar::sys::lastError()`,
 `assert` es `TELAR_ASSERT` (`telar_base/diagnostics/config.hpp`), los límites salen de
 `std::numeric_limits` y las macros del sistema, de `telar.sys.*`. Una cabecera
 estándar textual en cada fragmento global se serializaba en cada BMI y cada
@@ -203,8 +203,9 @@ header con dueño. Los headers solo de dueño (`telar.wire.pane_io`,
 `telar.runtime.terminal.control`, …) no contienen código propio: son el punto de
 entrada de esos headers para los módulos.
 
-Los generadores de bindings, temas, paleta y tablas gráficas producen fragmentos
-`.inc` de datos dentro de sus módulos propietarios. El código vendorizado conserva
+Los textos generados en el build (bootstraps de configuración, ayudas, scripts)
+son fragmentos `.inc` de datos dentro de sus módulos propietarios; las tablas
+escritas a mano (bindings, temas, paleta, bordes de caja) viven en su módulo. El código vendorizado conserva
 sus headers y lenguaje. El auth daemon solo contiene un `main` vacío: no tiene
 una API propia que justifique una interfaz de módulo artificial.
 

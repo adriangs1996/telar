@@ -1,8 +1,6 @@
 module;
 #include "tbc/annotations.hpp"
 
-#include <cstddef>
-#include <cstdint>
 #include <lauxlib.h>
 #include <lua.h>
 

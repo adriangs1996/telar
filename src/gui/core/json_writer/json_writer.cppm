@@ -1,9 +1,6 @@
 module;
 #include "tbc/annotations.hpp"
 
-#include <cstddef>
-#include <cstdint>
-
 export module telar.gui.core.json_writer;
 
 import std;

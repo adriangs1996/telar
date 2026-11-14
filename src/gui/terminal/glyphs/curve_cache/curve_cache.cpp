@@ -1,9 +1,3 @@
-module;
-
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-
 module telar.gui.terminal.glyphs.curve_cache;
 
 import std;
