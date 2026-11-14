@@ -364,6 +364,9 @@ if(BUILD_TESTING)
   add_executable(gui-screen-probe tools/screen_probe.cpp)
   target_link_libraries(gui-screen-probe PRIVATE gui-core)
   add_dependencies(gui-lint gui-screen-probe)
+  add_executable(gui-glyph-ink-probe tools/glyph_ink_probe.cpp)
+  target_link_libraries(gui-glyph-ink-probe PRIVATE gui-core)
+  add_dependencies(gui-lint gui-glyph-ink-probe)
   add_executable(gui-awake-clock-test tests/awake_clock_test.cpp)
   target_link_libraries(gui-awake-clock-test PRIVATE gui-clock)
   add_test(NAME gui-awake-clock COMMAND gui-awake-clock-test)
@@ -1385,7 +1388,7 @@ endforeach()
 # Probes and smoke tools run by hand or by tools/ scripts, never by CTest: building them on
 # every test run costs a full module compile each. `cmake --build out --target gui-probes`
 # builds the ones this platform and configuration define.
-set(gui_probes gui-screen-probe gui-font-coverage-probe gui-display-probe gui-runtime-compatibility-probe gui-text-scene-probe gui-terminal-scene-probe gui-configuration-reload-probe gui-separators-probe gui-animation-probe gui-host-effects-smoke)
+set(gui_probes gui-screen-probe gui-glyph-ink-probe gui-font-coverage-probe gui-display-probe gui-runtime-compatibility-probe gui-text-scene-probe gui-terminal-scene-probe gui-configuration-reload-probe gui-separators-probe gui-animation-probe gui-host-effects-smoke)
 set(gui_defined_probes)
 foreach(probe IN LISTS gui_probes)
   if(TARGET ${probe})

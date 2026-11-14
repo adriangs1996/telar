@@ -174,38 +174,21 @@ namespace telar::gui::glyphs {
   Block::Paint Block::quadrantInk(Rect cell, std::uint8_t mask) {
     const auto middle_x = split(cell.width, half_eighths);
     const auto middle_y = split(cell.height, half_eighths);
+    // A row with neither of its quadrants comes out with no width, which the ink skips.
     const auto band = [&](unsigned row, float top, float bottom) -> Rect {
-      const auto left = (mask & (upper_left << (2 * row))) != 0;
-      const auto right = (mask & (upper_right << (2 * row))) != 0;
-      if (!left && !right) {
-        return {};
-      }
-
-      const auto x = left ? 0 : middle_x;
-      const auto right_edge = right ? cell.width : middle_x;
+      const auto x = (mask & (upper_left << (2 * row))) != 0 ? 0 : middle_x;
+      const auto right_edge = (mask & (upper_right << (2 * row))) != 0 ? cell.width : middle_x;
 
       return {.x = x, .y = top, .width = right_edge - x, .height = bottom - top};
     };
 
     auto upper = band(0, 0, middle_y);
-    Paint result;
-
-    if ((mask & (lower_left | lower_right)) == 0) {
-      result.push(upper);
-
-      return result;
-    }
-
     const auto lower = band(1, middle_y, cell.height);
-    if (upper.empty() || lower.empty()) {
-      result.push(upper.empty() ? lower : upper);
-
-      return result;
-    }
+    Paint result;
 
     // Two bands that line up make one rectangle, as Ink::appendMerged would join them; with only
     // two, the ink needs no search for the band to join.
-    if (upper.x == lower.x && upper.width == lower.width && upper.bottom() == lower.y) {
+    if (!upper.empty() && !lower.empty() && upper.x == lower.x && upper.width == lower.width && upper.bottom() == lower.y) {
       upper.height += lower.height;
       result.push(upper);
 
