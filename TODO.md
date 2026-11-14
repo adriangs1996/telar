@@ -323,11 +323,12 @@ graph LR
 - **Cierra:** `input → config` y `components → config`.
 - **Resultado:** `ddc9844c2`. `default_bindings.inc` pasa de `gui/config/` a `gui/input/` (solo lo usaba `input.configuration`). `BindingContext`, `BindingEffects`, `InputExpression` y las descripciones de acciones pasan a `telar.gui.input.binding_effects`, que reexportan `plugin_effects` y `plugin_query`. Código movido sin cambios. `upward_imports` de 23 a 21. Compila la GUI sobre la rama integrada.
 
-### [ ] P3.14a · Módulo cajón `gui.platform.profile_file` y el ciclo con `login_shell`
+### [x] P3.14a · Módulo cajón `gui.platform.profile_file` y el ciclo con `login_shell`
 - **Depende de:** P1.2. Antes, revisar qué cubre el caso 34 de audit-39.
 - **Toca:** `gui.platform.profile_file` (implementa `awake_clock`, `runtime_endpoint`, `shared_image_source` y un fichero de test), `gui.platform.login_shell` (`managed_directory.cpp`, `runtime_endpoint.cpp`), `gui.attachments.catalog`, `gui.machines.discovery`.
 - **Qué hace:** cada unidad pasa a su propio módulo. `tests/controlled_awake_clock.cpp` deja de ser una unidad de un módulo de producción.
 - **Cierra:** `platform → attachments`, `platform → machines` y el ciclo `login_shell` ↔ `profile_file`.
+- **Resultado:** `aec8b60ed`. Las ocho interfaces de `profile_file` pasan a módulos propios en `gui/platform/` (`awake_clock`, `clipboard_image_pipe`, `clipboard_image_transfer`, `file_stamp`, `path_limits`, `runtime_endpoint`, `shared_image_source`) y `profile_file` se queda con `ProfileFile`; `managed_directory` sale de `login_shell`. El ciclo caía con un import que `runtime_endpoint.cpp` no usaba. `AwakeClock` se declara `extern "C++"` (como `ClipboardImageTransfer`), así que `tests/controlled_awake_clock.cpp` deja de ser unidad de un módulo de producción y el checker pierde `TEST_UNITS`. Al integrar con P4.1b, seis conflictos de imports. Compila la GUI.
 
 ### [ ] P3.14b · Módulo cajón `gui.platform.private_file_stamp`
 - **Depende de:** P1.2
