@@ -615,9 +615,10 @@ Para cada módulo: `extern template class X<Memory>;` en la interfaz, la instanc
 - **Rendimiento:** se mide con los benchmarks de hot path del área y cada pérdida se trata según "Ejecución": primero vectorización, reservas en el heap y trabajo por elemento; solo se acepta el coste de la llamada en sí.
 - **Hecho cuando:** todo `TBC_HOT_PATH` que queda marca una plantilla sobre un tipo del llamador, compila, pasan los tests del área y `check-cpp-modules.py`.
 
-### [ ] P9.10 · Quitar el parámetro de plantilla `Memory` donde ya no aporta
+### [x] P9.10 · Quitar el parámetro de plantilla `Memory` donde ya no aporta
 - **Depende de:** P9.1–P9.9
 - **Qué hace:** los servicios que solo se instancian con `Memory` dejan de ser plantillas y se borran los `extern template`.
+- **Resultado:** `616afb427`, fuera de `src/gui`. 212 plantillas de `lib/` y `src/` que solo se instanciaban con un tipo de memoria nombran `telar::Memory` o `ConcurrentMemory` y pierden su `extern template` y su instanciación (líneas `extern template` de 527 a 326; las 80 plantillas que quedan tienen más de una instancia). `Runtime`, `ExecutionService`, `MediaService`, `AgentService`, `Worker` y `ProxyRuntime` solo pierden `Memory` y siguen siendo plantilla por sus otros parámetros. También dejan de ser plantilla helpers de `.cpp`, los conceptos `PaneLauncher`, `AgentObservationSink`, `RuntimeStateSource` y `CaptureTap` y los alias `PaneStore`, `ClientStore` y `WorkspaceStore`. Pasan los 49 tests del runtime y la CLI y los 138 de la GUI. Sin lint de lifetimes ni benchmarks: lo que estaba inline sigue inline. `runtime-probes` (fuera del build por defecto) no compila; sin comprobar si ya fallaba antes. Quedan para P9.13 `Pane<Memory>` de `gui.application.workspace_replica` y siete cuerpos con `TBC_HOT_PATH` que ya no son plantilla (`agentScreenView`, `AgentScreenReader`, `AgentScreenInference::observe`, `commandScreen`, `captureCommandText`, `CommandBlocks`, `CommandTracker`).
 
 ### [ ] P9.11 · Cierre de la regla 3
 - **Depende de:** P9.1–P9.10 y P9.13
