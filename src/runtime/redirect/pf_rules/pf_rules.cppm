@@ -30,7 +30,7 @@ export import telar.runtime.redirect.direction;
 
 export import telar.runtime.redirect.ingress;
 
-export import telar.platform;
+export import telar.platform.net;
 export import telar.platform.error;
 
 export import telar.plugins;

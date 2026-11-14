@@ -122,7 +122,7 @@ import std;
 
 export import telar.runtime.redirect.pf_rules;
 export import telar.runtime.redirect.ingress;
-export import telar.platform;
+export import telar.platform.net;
 export import telar.platform.error;
 export import telar.platform.fs;
 export import telar.platform.process;

@@ -9,7 +9,7 @@ module telar.gui.platform.private_file_stamp;
 
 import std;
 
-import telar.platform;
+import telar.platform.net;
 
 namespace telar::gui::platform {
 

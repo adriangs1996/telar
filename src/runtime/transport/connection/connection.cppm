@@ -16,7 +16,7 @@ export module telar.runtime.transport.connection;
 import std;
 
 export import telar.client;
-export import telar.platform;
+export import telar.platform.net;
 export import telar.platform.error;
 
 export import telar.base.memory.allocators;

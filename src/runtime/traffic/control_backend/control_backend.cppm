@@ -97,7 +97,7 @@ export import telar.base.memory.containers;
 export import telar.base.memory.sensitive;
 export import telar.config.runtime;
 
-export import telar.platform;
+export import telar.platform.net;
 export import telar.platform.error;
 export import telar.platform.process;
 export import telar.platform.thread;

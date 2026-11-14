@@ -17,7 +17,7 @@ module telar.runtime.platform.launch_program;
 
 import std;
 
-import telar.platform;
+import telar.platform.net;
 import telar.platform.error;
 import telar.platform.fs;
 
