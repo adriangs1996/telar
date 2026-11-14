@@ -818,7 +818,26 @@
     "lib/render/document/document.cpp": "telar.render.document",
     "lib/render/markdown/markdown.cpp": "telar.render.markdown",
     "lib/render/terminal/terminal.cpp": "telar.render.terminal",
-    "lib/tls/tls.cpp": "telar.tls"
+    "lib/tls/tls.cpp": "telar.tls",
+    "src/cli/command_limit/command_limit.cpp": "telar.cli.command_limit",
+    "src/cli/control_session/control_session.cpp": "telar.cli.control_session",
+    "src/cli/history/history.cpp": "telar.cli.history",
+    "src/cli/hook/hook.cpp": "telar.cli.hook",
+    "src/cli/hooks/command/command.cpp": "telar.cli.hooks.command",
+    "src/cli/hooks/session/session.cpp": "telar.cli.hooks.session",
+    "src/cli/integration/settings/settings.cpp": "telar.cli.integration.settings",
+    "src/cli/machine/machine.cpp": "telar.cli.machine",
+    "src/cli/machine_ssh/machine_ssh.cpp": "telar.cli.machine_ssh",
+    "src/cli/output/output.cpp": "telar.cli.output",
+    "src/cli/plugin/plugin.cpp": "telar.cli.plugin",
+    "src/cli/project_setup/project_setup.cpp": "telar.cli.project_setup",
+    "src/cli/render/render.cpp": "telar.cli.render",
+    "src/cli/runtime_observer/runtime_observer.cpp": "telar.cli.runtime_observer",
+    "src/cli/server/server.cpp": "telar.cli.server",
+    "src/cli/tab/tab.cpp": "telar.cli.tab",
+    "src/cli/window/core.cpp": "telar.cli.window",
+    "src/cli/worktree/worktree.cpp": "telar.cli.worktree",
+    "src/cli/worktree_git/worktree_git.cpp": "telar.cli.worktree_git"
   },
   "merged_interfaces": {
     "lib/client/include/telar_client/codecs/telar_handshake.cppm": "lib/client/include/telar_client/serializers/telar_handshake.cppm"

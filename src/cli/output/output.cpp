@@ -1,0 +1,125 @@
+module;
+#include <cstddef>
+#include <cstdlib>
+#include <cstring>
+#include <new>
+
+#include <cstdint>
+
+#include <cstdio>
+
+module telar.cli.output;
+
+namespace telar::runtime::cli {
+
+  // Each family as it is typed, in the order of `Family`.
+  constexpr std::array<std::string_view, static_cast<std::size_t>(Family::count)> family_names{
+      "workspace",
+      "tab",
+      "pane",
+      "worktree",
+      "agent",
+      "exec",
+      "repository",
+      "project",
+      "file",
+      "machine",
+      "client",
+      "sidebar",
+      "workspace-list",
+      "layout",
+      "notification",
+      "command",
+      "config",
+      "completions",
+      "plugin",
+      "integration",
+      "hook",
+      "cli",
+      "gui",
+      "server",
+      "runtime",
+      "diagnostics",
+      "history",
+      "proxy",
+      "api",
+      "clipboard",
+      "render"
+  };
+
+  std::string_view familyName(Family family) noexcept {
+    return family_names.at(static_cast<std::size_t>(family));
+  }
+
+  std::optional<Family> parseFamily(std::string_view word) noexcept {
+    for (std::size_t index = 0; index < family_names.size(); ++index) {
+      if (family_names.at(index) == word) {
+        return static_cast<Family>(index);
+      }
+    }
+
+    return std::nullopt;
+  }
+
+  Failure::Failure(std::string_view message, int status, std::optional<FailureCode> code)
+      : std::runtime_error{std::string{message}},
+        status_(status),
+        code_(code) {}
+
+  int Failure::status() const noexcept {
+    return status_;
+  }
+
+  std::optional<FailureCode> Failure::code() const noexcept {
+    return code_;
+  }
+
+  template <Allocator Memory>
+  Output<Memory>::Output(Memory& memory)
+      : data(AllocatorRef<char, Memory>{memory}) {}
+
+  template <Allocator Memory>
+  Output<Memory>& Output<Memory>::text(std::string_view value) {
+    data.append(value);
+    return *this;
+  }
+
+  template <Allocator Memory>
+  Output<Memory>& Output<Memory>::boolean(bool value) {
+    return text(value ? "true" : "false");
+  }
+
+  template <Allocator Memory>
+  Output<Memory>& Output<Memory>::json(std::string_view value, JsonEscapes escapes) {
+    appendJsonText(data, value, escapes);
+    return *this;
+  }
+
+  template <Allocator Memory>
+  void Output<Memory>::flush() {
+    std::fwrite(data.data(), 1, data.size(), stdout);
+    std::fflush(stdout);
+    data.clear();
+  }
+
+  template <Allocator Memory>
+  template <typename Integer>
+  Output<Memory>& Output<Memory>::number(Integer value) {
+    std::array<char, 32> buffer;
+    const auto end = std::to_chars(buffer.data(), buffer.data() + buffer.size(), value).ptr;
+
+    data.append(buffer.data(), end);
+    return *this;
+  }
+
+  template class Output<Memory>;
+  template Output<Memory>& Output<Memory>::number<int>(int value);
+  template Output<Memory>& Output<Memory>::number<long>(long value);
+  template Output<Memory>& Output<Memory>::number<long long>(long long value);
+  template Output<Memory>& Output<Memory>::number<unsigned char>(unsigned char value);
+  template Output<Memory>& Output<Memory>::number<unsigned short>(unsigned short value);
+  template Output<Memory>& Output<Memory>::number<unsigned int>(unsigned int value);
+  template Output<Memory>& Output<Memory>::number<unsigned long>(unsigned long value);
+  template Output<Memory>& Output<Memory>::number<unsigned long long>(unsigned long long value);
+
+}

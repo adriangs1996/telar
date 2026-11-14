@@ -123,12 +123,14 @@ namespace {
 int main() {
   try {
     SystemAllocator system;
-    BudgetAllocator memory{system, 16 * 1024 * 1024};
+    BudgetAllocator budget{system, 16 * 1024 * 1024};
+    MemoryAdapter adapter{budget};
+    Memory& memory = adapter;
 
     testSettings(memory);
     testMixedHooks(memory);
     testJsonDocument(memory);
-    check(memory.liveBytes() == 0);
+    check(budget.liveBytes() == 0);
     std::puts("Integration tests passed");
     return 0;
   } catch (const std::exception& error) {

@@ -1,12 +1,6 @@
 module;
+#include "tbc/hot_path.hpp"
 #include "tbc/view.hpp"
-#include <cstddef>
-#include <cstdio>
-#include <cstdlib>
-#include <new>
-
-#include <cstdint>
-
 #include <cstring>
 
 export module telar.cli.hooks.command;
@@ -30,35 +24,7 @@ export {
       AgentProvider provider;
       std::string_view socket;
 
-      inline static HookOptions parse(std::span<char* const> arguments) {
-        if (arguments.empty()) {
-          throw std::invalid_argument{"Missing hook agent"};
-        }
-
-        std::optional<AgentProvider> provider;
-
-        for (const auto candidate : {AgentProvider::claude, AgentProvider::codex, AgentProvider::pi, AgentProvider::cursor, AgentProvider::opencode}) {
-          if (describeProvider(candidate).name == arguments.front()) {
-            provider = candidate;
-          }
-        }
-
-        if (!provider) {
-          throw std::invalid_argument{"Unknown hook agent"};
-        }
-
-        HookOptions options{.provider = *provider, .socket = {}};
-
-        for (std::size_t index = 1; index < arguments.size(); index += 2) {
-          if (std::string_view{arguments[index]} != "--socket" || index + 1 >= arguments.size()) {
-            throw std::invalid_argument{"Unknown hook option"};
-          }
-
-          options.socket = arguments[index + 1];
-        }
-
-        return options;
-      }
+      static HookOptions parse(std::span<char* const> arguments);
     };
 
   }
@@ -68,8 +34,11 @@ export {
 export {
   namespace telar::runtime::cli::hooks {
 
+    // The hook reads every agent event through this class. Its accessors only fill
+    // caches that leave earlier borrows valid, which the lifetime checker sees only
+    // in their bodies, so they stay here.
     template <Allocator Memory>
-    class Object {
+    class TBC_HOT_PATH Object {
     public:
       inline explicit Object(Memory& memory, JsonValue value, bool reject_duplicates = false)
           : memory_(memory),
@@ -246,47 +215,12 @@ export {
   namespace telar::runtime::cli::hooks {
 
     template <Allocator Memory>
-    void validateUnicodeEscapes(Memory& memory, std::string_view input) {
-      if (!input.contains("\\u")) {
-        return;
-      }
-
-      String<Memory> decoded{AllocatorRef<char, Memory>{memory}};
-      std::optional<std::size_t> start;
-
-      for (std::size_t index = 0; index < input.size(); ++index) {
-        if (start && input[index] == '\\') {
-          ++index;
-        } else if (input[index] == '"') {
-          if (start) {
-            const auto token = input.substr(*start, index - *start + 1);
-            if (token.contains("\\u")) {
-              JsonValue{token}.string(decoded);
-            }
-
-            start.reset();
-          } else {
-            start = index;
-          }
-        }
-      }
-    }
+    void validateUnicodeEscapes(Memory& memory, std::string_view input);
+    extern template void validateUnicodeEscapes<Memory>(Memory& memory, std::string_view input);
 
     template <Allocator Memory>
-    void validateDynamicValue(Memory& memory, JsonValue value) {
-      if (value.encoded().starts_with('{')) {
-        Object fields{memory, value};
-
-        fields.requireUnique();
-        fields.eachValue([&](JsonValue child) {
-          validateDynamicValue(memory, child);
-        });
-      } else if (value.encoded().starts_with('[')) {
-        value.eachElement([&](JsonValue child) {
-          validateDynamicValue(memory, child);
-        });
-      }
-    }
+    void validateDynamicValue(Memory& memory, JsonValue value);
+    extern template void validateDynamicValue<Memory>(Memory& memory, JsonValue value);
 
   }
 }
@@ -295,8 +229,11 @@ export {
 export {
   namespace telar::runtime::cli::hooks {
 
+    // The hook reads every agent event through this class. Its accessors only fill
+    // caches that leave earlier borrows valid, which the lifetime checker sees only
+    // in their bodies, so they stay here.
     template <Allocator Memory>
-    class Payload {
+    class TBC_HOT_PATH Payload {
     public:
       inline explicit Payload(Memory& memory, AgentProvider provider, JsonValue input)
           : Payload(memory, provider, Object<Memory>{memory, input, true}) {}
@@ -470,51 +407,16 @@ export {
 export {
   namespace telar::runtime::cli::hooks {
 
-    inline std::string_view sessionReference(std::string_view text) noexcept {
-      if (text.empty() || text.size() > 64 || text.front() == '-') {
-        return {};
-      }
+    std::string_view sessionReference(std::string_view text) noexcept;
 
-      for (const unsigned char byte : text) {
-        const bool allowed = (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9') || byte == '.' || byte == '_' || byte == '-' || byte == ':';
-        if (!allowed) {
-          return {};
-        }
-      }
+    void eventLine(FixedText<96>& output, std::string_view text);
 
-      return text;
-    }
+    std::string_view validPrefix(std::string_view text) noexcept;
 
-    inline std::string_view validPrefix(std::string_view text) noexcept {
-      while (!text.empty()) {
-        try {
-          validateUtf8(text);
-          return text;
-        } catch (const EncodingError&) {
-          text.remove_suffix(1);
-        }
-      }
-
-      return {};
-    }
-
-    inline void eventLine(FixedText<96>& output, std::string_view text) {
-      const auto control = std::ranges::find_if(text, [](unsigned char byte) {
-        return byte < 0x20 || byte == 0x7f;
-      });
-
-      const auto prefix = utf8Prefix(text.substr(0, static_cast<std::size_t>(control - text.begin())), 96);
-
-      try {
-        validateUtf8(prefix);
-        output.assign(prefix);
-      } catch (const EncodingError&) {
-        output.assign({});
-      }
-    }
-
+    // Writes only `output`; the hook's mapping calls it with borrows of the
+    // reports live, and the body shows the lifetime checker so.
     template <std::size_t Capacity>
-    void displayText(FixedText<Capacity>& output, std::string_view text, bool multiline) {
+    TBC_HOT_PATH void displayText(FixedText<Capacity>& output, std::string_view text, bool multiline) {
       std::array<char, Capacity> bytes;
       std::size_t length = 0;
 
@@ -539,26 +441,7 @@ export {
       output.assign(validPrefix(result));
     }
 
-    inline bool defaultOpenCodeTitle(std::string_view title) noexcept {
-      constexpr std::string_view shape = "0000-00-00T00:00:00.000Z";
-
-      for (const auto prefix : {std::string_view{"New session - "}, std::string_view{"Child session - "}}) {
-        if (!title.starts_with(prefix) || title.size() != prefix.size() + shape.size()) {
-          continue;
-        }
-
-        title.remove_prefix(prefix.size());
-        for (std::size_t index = 0; index < shape.size(); ++index) {
-          if (shape[index] == '0' ? title[index] < '0' || title[index] > '9' : title[index] != shape[index]) {
-            return false;
-          }
-        }
-
-        return true;
-      }
-
-      return false;
-    }
+    bool defaultOpenCodeTitle(std::string_view title) noexcept;
 
   }
 }
@@ -568,65 +451,8 @@ export {
   namespace telar::runtime::cli::hooks {
 
     template <Allocator Memory>
-    std::optional<std::int32_t> commandExitCode(Payload<Memory>& input) {
-      if (input.provider == AgentProvider::claude) {
-        return input.event() == "PostToolUse" ? std::optional<std::int32_t>{0} : std::nullopt;
-      }
-
-      if (input.provider == AgentProvider::codex) {
-        return std::nullopt;
-      }
-
-      if (input.provider != AgentProvider::cursor) {
-        return input.fields.template integer<std::int32_t>("exit_code");
-      }
-
-      if (input.event() != "postToolUse" || input.fields.text("tool_name") != "Shell") {
-        return std::nullopt;
-      }
-
-      try {
-        Object output{input.memory, JsonValue::parse(input.fields.text("tool_output")), true};
-
-        return output.template integer<std::int32_t>("exitCode");
-      } catch (const std::exception&) {
-        return std::nullopt;
-      }
-    }
-
-    template <Allocator Memory>
-    std::optional<ReportAgentCommand> commandReport(Payload<Memory>& input) {
-      if ((input.provider == AgentProvider::claude || input.provider == AgentProvider::codex) && input.subagent()) {
-        return std::nullopt;
-      }
-
-      const auto event = input.toolEvent();
-      const bool started = event == "PreToolUse" || event == "tool_execution_start" || event == "tool.execute.before";
-      const bool finished = event == "PostToolUse" || event == "tool_execution_end" || event == "tool.execute.after";
-      if (!started && !finished) {
-        return std::nullopt;
-      }
-
-      const auto provider = describeProvider(input.provider).name;
-      const auto* manifest = builtin_manifests.find(input.provider);
-      const auto field = manifest == nullptr ? std::string_view{} : manifest->commandField(input.fields.text("tool_name"));
-      const auto command = input.tools.stringField(field);
-      if (!command || command->empty()) {
-        return std::nullopt;
-      }
-
-      const auto cwd = input.fields.text("cwd");
-
-      return ReportAgentCommand{
-          .phase = started ? AgentCommandPhase::started : AgentCommandPhase::finished,
-          .provider = provider,
-          .tool_call_id = input.fields.text(input.provider == AgentProvider::pi || input.provider == AgentProvider::opencode ? "tool_call_id" : "tool_use_id"),
-          .command = *command,
-          .cwd = input.provider == AgentProvider::cursor && cwd.empty() ? input.workspace() : cwd,
-          .session = sessionReference(input.session()),
-          .exit_code = started ? std::nullopt : commandExitCode(input),
-      };
-    }
+    std::optional<ReportAgentCommand> commandReport(Payload<Memory>& input);
+    extern template std::optional<ReportAgentCommand> commandReport<Memory>(Payload<Memory>& input);
 
   }
 }
@@ -635,8 +461,10 @@ export {
 export {
   namespace telar::runtime::cli::hooks {
 
+    // The hook's lifecycle mapping calls these on every event with borrows of the
+    // payload live; their bodies show the lifetime checker which they keep.
     template <Allocator Memory>
-    void toolEvent(FixedText<96>& output, Payload<Memory>& input) {
+    TBC_HOT_PATH void toolEvent(FixedText<96>& output, Payload<Memory>& input) {
       const auto name = input.fields.text("tool_name");
       if (name.empty()) {
         output.assign({});
@@ -666,7 +494,7 @@ export {
     }
 
     template <Allocator Memory>
-    bool questionEvent(FixedText<96>& output, Payload<Memory>& input) {
+    TBC_HOT_PATH bool questionEvent(FixedText<96>& output, Payload<Memory>& input) {
       const auto questions = input.tools.value("questions");
       if (!questions || !questions->encoded().starts_with('[')) {
         return false;
@@ -690,12 +518,7 @@ export {
       return found;
     }
 
-    inline void backgroundEvent(FixedText<96>& output, std::size_t count) {
-      std::array<char, 96> buffer;
-      const auto length = std::snprintf(buffer.data(), buffer.size(), "waiting for %zu background %s", count, count == 1 ? "agent" : "agents");
-
-      output.assign({buffer.data(), static_cast<std::size_t>(length)});
-    }
+    void backgroundEvent(FixedText<96>& output, std::size_t count);
 
   }
 }
