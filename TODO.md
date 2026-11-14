@@ -508,6 +508,9 @@ Cada tarea empieza localizando todas las copias, crea un módulo con una interfa
 - **Resultado de b:** `446e6430d`. `RowCache` pasa a código de módulo en `telar.gui.terminal.row_cache`; `screen` se queda con `CellValue`, `Screen`, `FrameApplication` y `CellPosition`, que tienen que seguir textuales porque los nombran los adaptadores Qt. Builds reales: tocar `content.hpp` recompila 59 unidades en vez de 123; el fragmento global apenas baja (46 137 → 45 788, de ellas 4 150 → 3 801 del proyecto).
 - **Resultado de c:** `8df10ddb6`. El fragmento global de `gui.attachments.catalog` se queda con lo que usa el Objective-C++ del portapapeles (`types`, `secure_erase`, `sensitive_bytes`, `capture`); los marcadores y `AttachmentCatalog` pasan a código de módulo y se borran 5 cabeceras. Fragmento: 65 504 → 56 232 líneas, 6 298 → 741 del proyecto. **P6.7 cerrada.**
 
+- **P6.5d** (`4565f2c4e`): las 31 unidades de la CLI dejan los includes de C, C++ y POSIX (`import std`, `telar.sys.posix`, `.socket`, `.process`); las cabeceras generadas pasan a fragmentos `.inc` dentro de un único módulo dueño (`telar.cli.server`, `telar.cli.integration.settings`, `telar.cli.machine`, `config_check`), y la regla 5 acepta un `.inc` generado fuera del árbol. Solo quedan `<openssl/sha.h>`, `<openssl/md5.h>` y Lua, para la subtarea f. Allowlist de includes: 2563.
+- **P6.5e:** sin cambios. `src/auth-daemon` es un `main` vacío sin includes ni entradas en la allowlist.
+
 ### [ ] P6.8 · Cierre de includes
 - **Depende de:** P2.3, P6.1–P6.7
 - **Hecho cuando:** la allowlist de la regla 5 está vacía y P0.2 da la nueva cifra de líneas en fragmentos globales.
@@ -564,7 +567,7 @@ Para cada módulo: `extern template class X<Memory>;` en la interfaz, la instanc
 | [x] P9.4 | `telar.base.memory.*` (solo lo que no es primitiva) | P4.2c, P6.6, P8.1, P2.4 |
 | [ ] P9.5 | `telar.config.*` | P4.4c, P4.5, P8.1, P2.4 |
 | [x] P9.6 | Resto de `lib/`: git, tls, plugins, lua, machines, render, shell | P1.2, P8.1, P2.4 |
-| [ ] P9.7 | Runtime, una subtarea por dominio en paralelo (terminal, panes, agents, history, traffic/{proxy,tls,http,redirect}, plugins, graphics…) | P8.1, P0.5, P2.4 y las tareas de P3 del dominio |
+| [x] P9.7 | Runtime, una subtarea por dominio en paralelo (terminal, panes, agents, history, traffic/{proxy,tls,http,redirect}, plugins, graphics…) | P8.1, P0.5, P2.4 y las tareas de P3 del dominio |
 | [x] P9.7a | Runtime: `terminal`, `graphics`, `vocabulary`, `observation` | P2.5 |
 | [x] P9.7b | Runtime: `proxy`, `tls`, `http`, `http1`, `http2`, `redirect`, `traffic`, `plugins`, `exchange_capture` | P2.5 |
 | [x] P9.7c | Runtime: `agents`, `history`, `command_capture`, `shell_integration`, `suggestions`, `editors`, `worktrees`, `workspaces` | P2.5 |
