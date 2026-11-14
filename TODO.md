@@ -271,11 +271,12 @@ graph LR
 - **Cierra:** `agents → model`, `persistence → model` y `persistence → runtime`. La arista `diagnostics → model` la cierra P3.7.
 - **Resultado:** `6533c068a`. `AgentSnapshotBuilder` lee el modelo entero, así que sube a `runtime.runtime`, su único usuario, en vez de bajar el modelo (como `BackgroundExecutor` en P3.6). `Restore` recibe el servicio de paneles como parámetro de plantilla acotado por un concept nuevo, `PaneLauncher` (`launch` y `flushInput`), y `SessionStore` pierde `Poller` y `History`. `persistence → model` ya no subía con el orden actual. `upward_imports` de 36 a 34. El módulo sigue llamándose `agents.snapshot` aunque el builder ya no está ahí.
 
-### [ ] P3.11a · `telar.platform.net`
+### [x] P3.11a · `telar.platform.net`
 - **Depende de:** P1.2. Antes, revisar qué dejó hecho el caso 31 de audit-39.
 - **Toca:** `telar.platform` (nueva familia `net`), `runtime.proxy.relay_direction` y sus importadores (tls, traffic, redirect, plugins).
 - **Qué hace:** socket, address y would-block salen de `relay_direction` a `telar.platform.net`.
 - **audit-39:** `socketWouldBlock` y `earliest` ya están en `telar.platform` (`3c491c53c`), y existen `NetworkAddress::ipv4/ipv6` (`bd74f143f`). Queda crear la familia `net` y llevar allí `NetworkAddress` y `SocketStream`, que siguen en `relay_direction`. Las seis aristas siguen abiertas.
+- **Resultado:** `0d14f0c2e`. `telar.platform.net` (`lib/platform/net/`) con `NetworkAddress`, `configureProxySocket`, `openOriginSocket`, `SocketStream`, el contrato de byte stream y las funciones de socket que quedaban en el agregador. El resolver DNS (`SystemNameResolver`, `NameResolutions`) no puede ir a `lib` porque avisa por `CompletionSignal`, así que va a `telar.runtime.platform.name_resolutions`, por debajo de proxy y redirect; `ProxyTarget` pasa a `telar.base.text`. `OriginConnection` y `RelayDirection` se quedan en `relay_direction`. Se rompen los ciclos proxy ↔ tls, redirect y traffic. Al integrar con P4.1b y P4.2b, cuatro conflictos de imports. Compilan runtime, CLI y GUI. `upward_imports` de 21 a 20.
 - **Cierra:** `plugins → proxy`, `redirect → proxy` (3), `tls → proxy`, `traffic → proxy` (2). Con eso caen los ciclos proxy ↔ tls, proxy ↔ redirect y proxy ↔ traffic.
 
 ### [ ] P3.11b · `traffic.vocabulary`
