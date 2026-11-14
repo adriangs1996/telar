@@ -160,7 +160,7 @@ export namespace telar::git {
 
     // The remotes the repository's config names, from the last read().
     template <typename Visit>
-    TBC_HOT_PATH void remotes(Visit&& visit) noexcept {
+    TBC_GENERIC void remotes(Visit&& visit) noexcept {
       // Stays generic over the caller's visitor, which the reader calls through a function pointer.
       using Target = std::remove_reference_t<Visit>;
 
@@ -176,7 +176,7 @@ export namespace telar::git {
     // then packed ones, each a valid ref name, at most `limit` of them, a name possibly twice.
     // Reads only what it lists; nothing is followed out of the git directory.
     template <typename Visit>
-    TBC_HOT_PATH void branches(std::size_t limit, Visit&& visit) const noexcept {
+    TBC_GENERIC void branches(std::size_t limit, Visit&& visit) const noexcept {
       // Stays generic over the caller's visitor, which the reader calls through a function pointer.
       using Target = std::remove_reference_t<Visit>;
 

@@ -59,7 +59,7 @@ export {
     // The value of `name` in `names` as an enum whose values follow the table. Stays in the
     // interface because it is a template over the caller's enum; the lookup is out of line.
     template <typename Enum, std::size_t Count>
-    [[nodiscard]] TBC_HOT_PATH std::optional<Enum> optionalChoice(const lua::Value& value, const std::array<std::string_view, Count>& names) {
+    [[nodiscard]] TBC_GENERIC std::optional<Enum> optionalChoice(const lua::Value& value, const std::array<std::string_view, Count>& names) {
       const auto index = optionalChoiceIndex(value, names);
 
       return index ? std::optional{static_cast<Enum>(*index)} : std::nullopt;
@@ -72,7 +72,7 @@ export {
 
     // Stays in the interface because it is a template over the caller's integer type.
     template <typename Integer>
-    [[nodiscard]] TBC_HOT_PATH std::optional<Integer> optionalWhole(const lua::Value& value, Bounds<double> bounds) {
+    [[nodiscard]] TBC_GENERIC std::optional<Integer> optionalWhole(const lua::Value& value, Bounds<double> bounds) {
       const auto number = optionalWholeValue(value, bounds);
 
       return number ? std::optional{static_cast<Integer>(*number)} : std::nullopt;

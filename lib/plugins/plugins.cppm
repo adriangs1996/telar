@@ -315,10 +315,10 @@ export {
     template <Allocator Memory, typename Inspector>
     class PackageCopyStorage {
     public:
-      TBC_HOT_PATH explicit PackageCopyStorage(Memory& memory) noexcept
+      TBC_GENERIC explicit PackageCopyStorage(Memory& memory) noexcept
           : memory_(&memory) {}
 
-      TBC_HOT_PATH auto copy(const Package& package, int destination, std::string_view path) -> Package {
+      TBC_GENERIC auto copy(const Package& package, int destination, std::string_view path) -> Package {
         return copyPackage<Memory>(*memory_, package, destination, path, [](Memory& memory, std::string_view copied) {
           return Inspector::inspect(memory, copied);
         });
@@ -368,21 +368,21 @@ export {
     class PackageInspection {
     public:
       template <Allocator Memory>
-      TBC_HOT_PATH static Package inspectConfigured(Memory& memory, std::string_view directory, std::string_view path) {
+      TBC_GENERIC static Package inspectConfigured(Memory& memory, std::string_view directory, std::string_view path) {
         Hash hash;
 
         return inspectConfiguredPackage(memory, directory, path, hashing(hash));
       }
 
       template <Allocator Memory>
-      TBC_HOT_PATH static Package inspect(Memory& memory, std::string_view path) {
+      TBC_GENERIC static Package inspect(Memory& memory, std::string_view path) {
         Hash hash;
 
         return inspectPackage(memory, path, hashing(hash));
       }
 
     private:
-      TBC_HOT_PATH static PackageHashing hashing(Hash& hash) noexcept {
+      TBC_GENERIC static PackageHashing hashing(Hash& hash) noexcept {
         return {
             .hash = std::addressof(hash),
             .update = [](void* target, std::string_view bytes) {
@@ -481,14 +481,14 @@ export {
     template <Allocator Memory, typename Inspector>
     class PackageRegistryStorage {
     public:
-      TBC_HOT_PATH explicit PackageRegistryStorage(Memory& memory, std::string_view directory, std::span<const ConfiguredPlugin> specifications)
+      TBC_GENERIC explicit PackageRegistryStorage(Memory& memory, std::string_view directory, std::span<const ConfiguredPlugin> specifications)
           : packages_(AllocatorRef<Package, Memory>{memory}) {
         registerPackages<Memory>(packages_, memory, directory, specifications, [](Memory& memory, std::string_view directory, std::string_view path) {
           return Inspector::inspectConfigured(memory, directory, path);
         });
       }
 
-      TBC_HOT_PATH std::span<const Package> packages() const noexcept {
+      TBC_GENERIC std::span<const Package> packages() const noexcept {
         return packages_;
       }
 
@@ -523,13 +523,13 @@ export {
     public:
       // Generic over the caller's environment, so it stays here and hands the path to trustFile.
       template <Allocator Memory, EnvironmentLookup Environment>
-      TBC_HOT_PATH static String<Memory> trust(Memory& memory, const Environment& environment) {
+      TBC_GENERIC static String<Memory> trust(Memory& memory, const Environment& environment) {
         return trustFile(cli::RuntimePaths<Memory>::configHome(memory, environment));
       }
 
       // Generic over the caller's environment, so it stays here and hands the path to installationDirectory.
       template <Allocator Memory, EnvironmentLookup Environment>
-      TBC_HOT_PATH static String<Memory> installation(Memory& memory, const Environment& environment, const Package& package) {
+      TBC_GENERIC static String<Memory> installation(Memory& memory, const Environment& environment, const Package& package) {
         return installationDirectory(cli::xdgDirectory(memory, environment, "XDG_DATA_HOME", "/.local/share"), package);
       }
 

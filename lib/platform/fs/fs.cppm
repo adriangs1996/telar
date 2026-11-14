@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 #include "telar_platform/open_directory.h"
 
 export module telar.platform.fs;
@@ -9,6 +8,7 @@ import telar.tbc;
 
 export import telar.base.memory.allocators;
 
+import telar.base.memory.sensitive;
 import telar.platform.error;
 import telar.platform.primitives;
 import telar.sys.posix;
@@ -86,19 +86,17 @@ export {
     // Fills `bytes` from `file` and checks that the file ends there.
     void readPrivateFileBytes(int file, std::span<unsigned char> bytes);
 
-    // Stays in the interface because it is a template over the caller's allocator; it only sizes
-    // the caller's buffer.
+    // Sizes the caller's buffer and fills it; built in fs.cpp for the base allocators
+    // its callers use.
     template <Allocator Memory>
-    TBC_HOT_PATH bool readPrivateFile(int directory, std::string_view name, Vector<unsigned char, Memory>& bytes, std::size_t limit) {
-      const auto opened = openPrivateFile(directory, name, limit);
-      if (!opened.file) {
-        return false;
-      }
+    bool readPrivateFile(int directory, std::string_view name, Vector<unsigned char, Memory>& bytes, std::size_t limit);
 
-      bytes.resize(opened.size);
-      readPrivateFileBytes(opened.file.get(), bytes);
-      return true;
-    }
+    extern template bool readPrivateFile<Memory>(int directory, std::string_view name, Vector<unsigned char, Memory>& bytes, std::size_t limit);
+    extern template bool readPrivateFile<ConcurrentMemory>(int directory, std::string_view name, Vector<unsigned char, ConcurrentMemory>& bytes, std::size_t limit);
+    extern template bool readPrivateFile<SystemAllocator>(int directory, std::string_view name, Vector<unsigned char, SystemAllocator>& bytes, std::size_t limit);
+    extern template bool readPrivateFile<BudgetAllocator<SystemAllocator>>(int directory, std::string_view name, Vector<unsigned char, BudgetAllocator<SystemAllocator>>& bytes, std::size_t limit);
+    extern template bool readPrivateFile<ErasingAllocator<Memory>>(int directory, std::string_view name, Vector<unsigned char, ErasingAllocator<Memory>>& bytes, std::size_t limit);
+    extern template bool readPrivateFile<ErasingAllocator<ConcurrentMemory>>(int directory, std::string_view name, Vector<unsigned char, ErasingAllocator<ConcurrentMemory>>& bytes, std::size_t limit);
 
   }
 }
@@ -131,24 +129,24 @@ export {
 
     FileDescriptor openSourceFile(const char* path);
 
-    // These two stay in the interface because they are templates over the caller's allocator; they
-    // only size the caller's string.
+    // These two read into a string of the caller's allocator; built in fs.cpp for the base allocators
+    // its callers use.
     template <Allocator Memory>
-    TBC_HOT_PATH String<Memory> readFileContents(Memory& memory, int descriptor, std::size_t maximum_bytes) {
-      const auto size = boundedFileSize(descriptor, maximum_bytes);
-      String<Memory> source{AllocatorRef<char, Memory>{memory}};
-
-      source.resize(size);
-      readFileBytes(descriptor, source);
-      return source;
-    }
+    String<Memory> readFileContents(Memory& memory, int descriptor, std::size_t maximum_bytes);
 
     template <Allocator Memory>
-    TBC_HOT_PATH String<Memory> readFile(Memory& memory, const char* path, std::size_t maximum_bytes) {
-      const auto file = openSourceFile(path);
+    String<Memory> readFile(Memory& memory, const char* path, std::size_t maximum_bytes);
 
-      return readFileContents(memory, file.get(), maximum_bytes);
-    }
+    extern template String<Memory> readFileContents<Memory>(Memory& memory, int descriptor, std::size_t maximum_bytes);
+    extern template String<ConcurrentMemory> readFileContents<ConcurrentMemory>(ConcurrentMemory& memory, int descriptor, std::size_t maximum_bytes);
+    extern template String<SystemAllocator> readFileContents<SystemAllocator>(SystemAllocator& memory, int descriptor, std::size_t maximum_bytes);
+    extern template String<BudgetAllocator<SystemAllocator>> readFileContents<BudgetAllocator<SystemAllocator>>(BudgetAllocator<SystemAllocator>& memory, int descriptor, std::size_t maximum_bytes);
+    extern template String<RecyclingAllocator<Memory>> readFileContents<RecyclingAllocator<Memory>>(RecyclingAllocator<Memory>& memory, int descriptor, std::size_t maximum_bytes);
+    extern template String<Memory> readFile<Memory>(Memory& memory, const char* path, std::size_t maximum_bytes);
+    extern template String<ConcurrentMemory> readFile<ConcurrentMemory>(ConcurrentMemory& memory, const char* path, std::size_t maximum_bytes);
+    extern template String<SystemAllocator> readFile<SystemAllocator>(SystemAllocator& memory, const char* path, std::size_t maximum_bytes);
+    extern template String<BudgetAllocator<SystemAllocator>> readFile<BudgetAllocator<SystemAllocator>>(BudgetAllocator<SystemAllocator>& memory, const char* path, std::size_t maximum_bytes);
+    extern template String<RecyclingAllocator<Memory>> readFile<RecyclingAllocator<Memory>>(RecyclingAllocator<Memory>& memory, const char* path, std::size_t maximum_bytes);
 
   }
 }
@@ -178,31 +176,22 @@ export {
 
     std::string_view workingDirectory(std::span<char, PATH_MAX> buffer);
 
-    // These two stay in the interface because they are templates over the caller's allocator; they
-    // only size the caller's string.
+    // These two resolve a path in a string of the caller's allocator; built in fs.cpp for the base
+    // allocators its callers use.
     template <Allocator Memory>
-    TBC_HOT_PATH void resolveRelativePath(String<Memory>& path, std::string_view directory) {
-      if (path.empty() || path.front() == '/') {
-        return;
-      }
-
-      String<Memory> resolved{path.get_allocator()};
-
-      resolved.resize(directory.size() + path.size() + 2);
-      resolved.resize(resolvePath(directory, path, resolved));
-      path = std::move(resolved);
-    }
+    void resolveRelativePath(String<Memory>& path, std::string_view directory);
 
     template <Allocator Memory>
-    TBC_HOT_PATH void resolveAbsolutePath(String<Memory>& path) {
-      if (path.starts_with('/')) {
-        return;
-      }
+    void resolveAbsolutePath(String<Memory>& path);
 
-      std::array<char, PATH_MAX> directory;
-
-      resolveRelativePath(path, workingDirectory(directory));
-    }
+    extern template void resolveRelativePath<Memory>(String<Memory>& path, std::string_view directory);
+    extern template void resolveRelativePath<ConcurrentMemory>(String<ConcurrentMemory>& path, std::string_view directory);
+    extern template void resolveRelativePath<SystemAllocator>(String<SystemAllocator>& path, std::string_view directory);
+    extern template void resolveRelativePath<BudgetAllocator<SystemAllocator>>(String<BudgetAllocator<SystemAllocator>>& path, std::string_view directory);
+    extern template void resolveAbsolutePath<Memory>(String<Memory>& path);
+    extern template void resolveAbsolutePath<ConcurrentMemory>(String<ConcurrentMemory>& path);
+    extern template void resolveAbsolutePath<SystemAllocator>(String<SystemAllocator>& path);
+    extern template void resolveAbsolutePath<BudgetAllocator<SystemAllocator>>(String<BudgetAllocator<SystemAllocator>>& path);
 
   }
 }

@@ -25,7 +25,7 @@ namespace telar::git {
   // malformed line, as git refuses such a file. `scratch` holds the unescaped
   // subsection and value; it grows once to twice the file size.
   template <Allocator Memory, typename Visitor>
-  TBC_HOT_PATH bool parseConfig(std::string_view text, String<Memory>& scratch, Visitor&& visit) {
+  TBC_GENERIC bool parseConfig(std::string_view text, String<Memory>& scratch, Visitor&& visit) {
     // Stays generic over the caller's visitor, which the parser calls through a function pointer.
     using Target = std::remove_reference_t<Visitor>;
 

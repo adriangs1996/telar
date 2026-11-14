@@ -307,30 +307,12 @@ namespace telar {
     }
   };
 
-  struct TBC_HOT_PATH PercentSentinel {
+  struct PercentSentinel {
     using value_type = std::optional<Byte>;
     static constexpr std::size_t width = 1;
 
-    static void encode(value_type value, std::span<Byte>& output) {
-      if (value && *value > 100) {
-        throw EncodingError{"Invalid progress percentage"};
-      }
-
-      u8::encode(value.value_or(255), output);
-    }
-
-    static value_type decode(std::span<const Byte>& input) {
-      const auto value = u8::decode(input);
-      if (value == 255) {
-        return std::nullopt;
-      }
-
-      if (value > 100) {
-        throw EncodingError{"Invalid progress percentage"};
-      }
-
-      return value;
-    }
+    static void encode(value_type value, std::span<Byte>& output);
+    static value_type decode(std::span<const Byte>& input);
   };
 
   template <typename ValueCodec>

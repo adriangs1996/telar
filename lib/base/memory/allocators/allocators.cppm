@@ -45,7 +45,7 @@ export {
 
     // An allocator combinator on every allocation path, over any composed upstream.
     template <Allocator Upstream>
-    class TBC_SHARED TBC_HOT_PATH BufferAllocator {
+    class TBC_SHARED TBC_GENERIC BufferAllocator {
     public:
       static constexpr bool thread_safe = false;
 

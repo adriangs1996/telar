@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.wire.content;
 
 // Reading and searching what a pane shows: text, rows, documents, blocks and
@@ -169,9 +166,7 @@ export extern "C++" {
       std::span<const Byte> cells{};
 
       // A reader over the message's cells, which borrows them.
-      [[nodiscard]] TBC_HOT_PATH CellReader reader() const {
-        return CellReader{cells, static_cast<std::uint32_t>(cols) * rows};
-      }
+      [[nodiscard]] CellReader reader() const;
 
       void validate() const;
     };

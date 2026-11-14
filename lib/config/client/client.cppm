@@ -24,7 +24,7 @@ namespace telar::runtime::config {
     // returns how many it kept, if the table is present. Stays in the interface because it is a
     // template over the caller's callable.
     template <typename Validator>
-    TBC_HOT_PATH static std::optional<std::size_t> validate(const lua::Value& table, tbc::view<LimitReach, tbc::lt::b> reach, tbc::view<LimitNotices&, tbc::lt::b> limits, Validator&& validate_definition) {
+    TBC_GENERIC static std::optional<std::size_t> validate(const lua::Value& table, tbc::view<LimitReach, tbc::lt::b> reach, tbc::view<LimitNotices&, tbc::lt::b> limits, Validator&& validate_definition) {
       if (!table.present()) {
         return std::nullopt;
       }
@@ -477,7 +477,7 @@ export {
       // Stays in the interface, as do the other templates of this class, because it is a template
       // over the client's colors.
       template <UiColors Colors>
-      [[nodiscard]] TBC_HOT_PATH static ComponentValues<typename Colors::Color> read(const lua::Value& value, const ComponentShape& shape, const Colors& colors) {
+      [[nodiscard]] TBC_GENERIC static ComponentValues<typename Colors::Color> read(const lua::Value& value, const ComponentShape& shape, const Colors& colors) {
         ComponentValues<typename Colors::Color> result;
 
         if (shape.form == ComponentForm::text) {
@@ -534,7 +534,7 @@ export {
       // Hands a component's action, which cannot be a function, to `consume` and returns what it
       // returns.
       template <typename Consume>
-      TBC_HOT_PATH static decltype(auto) action(const lua::Value& value, const ComponentShape& shape, Consume&& consume) {
+      TBC_GENERIC static decltype(auto) action(const lua::Value& value, const ComponentShape& shape, Consume&& consume) {
         const auto action = value.field(shape.action_field);
         if (action.is(LUA_TFUNCTION)) {
           action.fail("cannot be a callback in a component");
@@ -545,7 +545,7 @@ export {
 
     private:
       template <typename Colors, typename Values>
-      TBC_HOT_PATH static void style(const lua::Value& value, const Colors& colors, Values& result) {
+      TBC_GENERIC static void style(const lua::Value& value, const Colors& colors, Values& result) {
         result.foreground = color(value.field("fg"), colors);
         result.background = color(value.field("bg"), colors);
         result.bold = value.field("bold").boolean(false);
@@ -556,7 +556,7 @@ export {
       }
 
       template <typename Colors>
-      TBC_HOT_PATH static std::optional<typename Colors::Color> color(const lua::Value& value, const Colors& colors) {
+      TBC_GENERIC static std::optional<typename Colors::Color> color(const lua::Value& value, const Colors& colors) {
         if (!value.present()) {
           return std::nullopt;
         }
@@ -583,7 +583,7 @@ export {
       static std::optional<double> number(const lua::Value& value);
 
       template <typename Values>
-      TBC_HOT_PATH static void samples(const lua::Value& value, Values& result) {
+      TBC_GENERIC static void samples(const lua::Value& value, Values& result) {
         const auto maximum = value.field("max");
         const auto values = value.field("values");
         const auto total = values.listLength();
@@ -703,7 +703,7 @@ export {
     // A walk that hands each node to `builder.node(value, shape, position)`. Stays in the interface
     // because it is a template over the caller's builder; it only forwards to it.
     template <typename Builder>
-    class TBC_HOT_PATH ComponentWalker final : public ComponentTreeWalker {
+    class TBC_GENERIC ComponentWalker final : public ComponentTreeWalker {
     public:
       inline ComponentWalker(lua_State& state, Builder& builder, LimitNotices& limits) noexcept
           : ComponentTreeWalker(state, limits),
@@ -856,7 +856,7 @@ export {
     // its index. Each view the sink gets is one of the result's strings. Stays in the interface
     // because it is a template over the client's colors and sink.
     template <UiColors Colors, typename Sink>
-    class TBC_HOT_PATH ElementReader {
+    class TBC_GENERIC ElementReader {
     public:
       using Element = ElementSetting<typename Colors::Color>;
       using Kind = ElementKind;
@@ -1366,7 +1366,7 @@ export {
       // Hands each argument of the definition's `field` list to `visit`, in order. Stays in the
       // interface because it is a template over the caller's callable.
       template <typename Visit>
-      TBC_HOT_PATH static void read(const lua::Value& definition, const char* field, Visit&& visit) {
+      TBC_GENERIC static void read(const lua::Value& definition, const char* field, Visit&& visit) {
         const auto command = definition.field(field);
         const auto count = command.listLength();
 
@@ -1445,7 +1445,7 @@ export {
       // slots, an empty one with a nil source. Stays in the interface because it is a template
       // over the caller's callable.
       template <typename Visit>
-      TBC_HOT_PATH static void sources(const lua::Value& client, Visit&& visit) {
+      TBC_GENERIC static void sources(const lua::Value& client, Visit&& visit) {
         const auto bars = client.field("bars");
         if (!bars.present()) {
           return;
@@ -1648,7 +1648,7 @@ export {
       // and returns how many it lists. Stays in the interface because it is a template over the
       // caller's callable; each entry is read out of line.
       template <typename Visit>
-      TBC_HOT_PATH static std::size_t read(const lua::Value& bindings, KeyChord prefix, Visit&& visit) {
+      TBC_GENERIC static std::size_t read(const lua::Value& bindings, KeyChord prefix, Visit&& visit) {
         if (!bindings.present()) {
           return 0;
         }
@@ -1705,7 +1705,7 @@ export {
       // Hands `consume` each word after the command, in the order parse reads them. Stays in the
       // interface because it is a template over the caller's callable.
       template <typename Consume>
-      TBC_HOT_PATH void eachArgument(Consume&& consume) const {
+      TBC_GENERIC void eachArgument(Consume&& consume) const {
         consume(std::string_view{entry});
         consume(std::string_view{action});
         consume(std::string_view{context.sidebar_visible ? "1" : "0"});
@@ -1772,7 +1772,7 @@ export {
       // and returns how many it dropped past them. Stays in the interface, as does `action`,
       // because it is a template over the caller's callable.
       template <typename Visit>
-      TBC_HOT_PATH static std::size_t actions(const lua::Value& result, std::size_t maximum, Visit&& visit) {
+      TBC_GENERIC static std::size_t actions(const lua::Value& result, std::size_t maximum, Visit&& visit) {
         if (!result.is(LUA_TTABLE)) {
           result.fail("must be an action or an array of actions");
         }
@@ -1795,7 +1795,7 @@ export {
 
     private:
       template <typename Visit>
-      TBC_HOT_PATH static void action(const lua::Value& value, Visit& visit) {
+      TBC_GENERIC static void action(const lua::Value& value, Visit& visit) {
         if (value.is(LUA_TFUNCTION)) {
           value.fail("cannot return a recursive callback");
         }
@@ -1828,7 +1828,7 @@ export {
       // Hands each option of `items` to `visit` with its value, in order. Stays in the interface,
       // as does `definition`, because it is a template over the caller's callable.
       template <typename Visit>
-      TBC_HOT_PATH static void read(const lua::Value& items, Visit&& visit) {
+      TBC_GENERIC static void read(const lua::Value& items, Visit&& visit) {
         const auto count = items.arraySize();
 
         for (std::size_t index = 1; index <= count; ++index) {
@@ -1841,7 +1841,7 @@ export {
 
       // The options a pick definition lists.
       template <typename Visit>
-      TBC_HOT_PATH static void definition(const lua::Value& pick, Visit&& visit) {
+      TBC_GENERIC static void definition(const lua::Value& pick, Visit&& visit) {
         read(pick.field("items"), std::forward<Visit>(visit));
       }
 
@@ -1898,7 +1898,7 @@ export {
       // interface because it is a template over the caller's callables; each definition is read
       // out of line.
       template <typename Panel, typename Pick>
-      TBC_HOT_PATH static DefinitionCounts read(const lua::Value& client, LimitNotices& limits, Panel&& panel, Pick&& pick) {
+      TBC_GENERIC static DefinitionCounts read(const lua::Value& client, LimitNotices& limits, Panel&& panel, Pick&& pick) {
         DefinitionCounts counts;
 
         counts.panels = NamedDefinitionsValidator::validate(client.field("panels"), {"panels.max_panels", "panels", NamedDefinitionsValidator::maximum_definitions, {}, {}}, limits, [&](std::string_view name, const lua::Value& definition, std::size_t index) {
@@ -2034,7 +2034,7 @@ export {
       // Hands each binding to `binding` in order. Stays in the interface because it is a template
       // over the caller's callable.
       template <typename Binding>
-      [[nodiscard]] TBC_HOT_PATH static PromptSettings read(const lua::Value& table, Binding&& binding) {
+      [[nodiscard]] TBC_GENERIC static PromptSettings read(const lua::Value& table, Binding&& binding) {
         PromptSettings settings;
 
         if (!table.present()) {
@@ -2148,7 +2148,7 @@ export {
       // the other templates of this class, because it is a template over the caller's callable; the
       // rest of the table is read out of line.
       template <typename Binding>
-      [[nodiscard]] TBC_HOT_PATH static ClientSettings read(const lua::Value& client, Binding&& binding) {
+      [[nodiscard]] TBC_GENERIC static ClientSettings read(const lua::Value& client, Binding&& binding) {
         auto settings = readSettings(client);
 
         if (client.present()) {
@@ -2161,7 +2161,7 @@ export {
       // Hands each `client.keybindings` entry to `visit` with its action, `prefix` in front of the
       // prefixed ones, and returns how many it lists, if it lists them.
       template <typename Visit>
-      [[nodiscard]] TBC_HOT_PATH static std::optional<std::size_t> bindings(const lua::Value& client, KeyChord prefix, Visit&& visit) {
+      [[nodiscard]] TBC_GENERIC static std::optional<std::size_t> bindings(const lua::Value& client, KeyChord prefix, Visit&& visit) {
         if (!listsBindings(client)) {
           return std::nullopt;
         }
@@ -2171,7 +2171,7 @@ export {
 
       // Hands each `client.components` function to `visit` with its index in component_slots.
       template <typename Visit>
-      TBC_HOT_PATH static void slots(const lua::Value& client, Visit&& visit) {
+      TBC_GENERIC static void slots(const lua::Value& client, Visit&& visit) {
         const auto components = client.field("components");
         if (!components.present()) {
           return;

@@ -191,7 +191,7 @@ export {
     public:
       template <typename Consumer>
         requires(!std::same_as<std::remove_cvref_t<Consumer>, BytesConsumer> && std::invocable<Consumer&, std::span<const Byte>>)
-      TBC_HOT_PATH BytesConsumer(Consumer&& consumer) noexcept
+      TBC_GENERIC BytesConsumer(Consumer&& consumer) noexcept
           : consumer_(const_cast<void*>(static_cast<const void*>(std::addressof(consumer)))),
             consume_([](void* consumer, std::span<const Byte> bytes) {
               auto& consume = *static_cast<std::remove_reference_t<Consumer>*>(consumer);

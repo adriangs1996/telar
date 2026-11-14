@@ -314,6 +314,22 @@ namespace telar::runtime {
     return stringToken(input);
   }
 
+  template <Allocator Memory>
+  void JsonValue::string(String<Memory>& output) const {
+    const auto encoded = stringContents();
+
+    output.clear();
+    output.resize(encoded.size());
+    output.resize(unescape(encoded, output.data()));
+  }
+
+  template void JsonValue::string<Memory>(String<Memory>& output) const;
+  template void JsonValue::string<ConcurrentMemory>(String<ConcurrentMemory>& output) const;
+  template void JsonValue::string<SystemAllocator>(String<SystemAllocator>& output) const;
+  template void JsonValue::string<BudgetAllocator<SystemAllocator>>(String<BudgetAllocator<SystemAllocator>>& output) const;
+  template void JsonValue::string<ErasingMemory>(String<ErasingMemory>& output) const;
+  template void JsonValue::string<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>(String<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>& output) const;
+
   std::size_t JsonValue::unescape(std::string_view encoded, char* output) {
     std::size_t written = 0;
 
