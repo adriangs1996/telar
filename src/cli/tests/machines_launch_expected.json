@@ -616,6 +616,20 @@
     "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
   },
   {
+    "name": "ssh-forward-terminal",
+    "status": 37,
+    "stdout": "-t\n-o\nBatchMode=yes\n-o\nServerAliveInterval=15\n-o\nServerAliveCountMax=4\n-o\nForwardAgent=no\n-o\nControlMaster=auto\n-o\nControlPersist=600\n-o\nControlPath=@ROOT@/ssh-2c17b04763ae\n--\nhost\n/opt/telar dispatch-argv ad29ya3RyZWU acmVtb3Zl aYnJhbmNo aLS1mb3JjZQ\n",
+    "stderr": "",
+    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+  },
+  {
+    "name": "ssh-forward-terminal-stdin",
+    "status": 37,
+    "stdout": "-T\n-o\nBatchMode=yes\n-o\nServerAliveInterval=15\n-o\nServerAliveCountMax=4\n-o\nForwardAgent=no\n-o\nControlMaster=auto\n-o\nControlPersist=600\n-o\nControlPath=@ROOT@/ssh-2c17b04763ae\n--\nhost\n/opt/telar dispatch-argv ad29ya3RyZWU acmVtb3Zl aYnJhbmNo aLS1mb3JjZQ\n",
+    "stderr": "",
+    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+  },
+  {
     "name": "check-reachable",
     "status": 0,
     "stdout": "box\thost\treachable\n  home\t@ROOT@/home\n  shell\t/bin/sh\n  socket\t@ROOT@/remote.sock\n  schema\t@SCHEMA@ (matches this telar)\n",

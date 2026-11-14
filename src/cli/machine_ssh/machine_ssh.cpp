@@ -656,10 +656,10 @@ namespace telar::runtime::cli::machine {
   }
 
   template <Allocator Memory>
-  std::vector<std::string> ssh(Memory& memory, std::string_view destination, std::string_view command) {
+  std::vector<std::string> ssh(Memory& memory, std::string_view destination, std::string_view command, bool terminal) {
     auto argv = sshOptions(memory, destination);
 
-    argv.insert(argv.begin(), {"ssh", "-T"});
+    argv.insert(argv.begin(), {"ssh", terminal ? "-t" : "-T"});
     argv.insert(argv.end(), {"--", std::string{destination}, std::string{command}});
     return argv;
   }
@@ -700,7 +700,12 @@ namespace telar::runtime::cli::machine {
 
   template <Allocator Memory, typename Words>
   int forward(Memory& memory, const MachineProfile& profile, const Words& words) {
-    return launch::inherit(ssh(memory, profile.destination(), remoteCommand(profile, words)));
+    // A terminal there lets the command ask the person here, as a removal that needs
+    // confirmation does. It merges stderr into stdout and writes \r\n, so it is only
+    // given when both ends here are a terminal; anyone else gets none, as before.
+    const bool terminal = ::isatty(STDIN_FILENO) && ::isatty(STDOUT_FILENO);
+
+    return launch::inherit(ssh(memory, profile.destination(), remoteCommand(profile, words), terminal));
   }
 
   template <Allocator Memory, typename Words>
@@ -1608,7 +1613,7 @@ namespace telar::runtime::cli::machine::filter {
 namespace telar::runtime::cli::machine {
 
   template MachineProfiles load<Memory>(Memory& memory, const std::string& path);
-  template std::vector<std::string> ssh<Memory>(Memory& memory, std::string_view destination, std::string_view command);
+  template std::vector<std::string> ssh<Memory>(Memory& memory, std::string_view destination, std::string_view command, bool terminal);
 
 }
 
