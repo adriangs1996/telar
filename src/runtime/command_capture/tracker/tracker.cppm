@@ -19,9 +19,8 @@ export import telar.runtime.diagnostics.runtime_counters;
 export import telar.runtime.shell_integration.token;
 export import telar.runtime.terminal.text_reader;
 
-// The work is in tracker.cpp, on Memory-free types. What stays here are the shells that the
-// runtime's templates instantiate per allocator and per sink, and the tests over SystemAllocator:
-// each keeps its terminal and its buffers, and hands the rest to the type it derives from.
+// The work is in tracker.cpp. What stays here are the relays over the caller's sinks, which hand
+// each sink to that work behind a virtual call.
 export namespace telar::runtime {
 
   template <typename Sink>
@@ -39,7 +38,7 @@ export namespace telar::runtime {
   };
 
   template <CapturedCommandSink Sink>
-  class TBC_HOT_PATH CapturedCommandRelay final : public CapturedCommandEmitter {
+  class TBC_GENERIC CapturedCommandRelay final : public CapturedCommandEmitter {
   public:
     inline explicit CapturedCommandRelay(tbc::view<Sink&, tbc::lt::a> sink) noexcept
         : sink_(sink) {}
@@ -125,7 +124,7 @@ export namespace telar::runtime {
   };
 
   template <CommandCompletionSink Sink>
-  class TBC_HOT_PATH CommandZoneRelay final : public CommandZoneSink {
+  class TBC_GENERIC CommandZoneRelay final : public CommandZoneSink {
   public:
     inline explicit CommandZoneRelay(tbc::view<Sink&, tbc::lt::a> sink) noexcept
         : sink_(sink) {}
@@ -160,7 +159,7 @@ export namespace telar::runtime {
     // A shell over scan, for any sink: the sink only hears of a finished sequence, so the
     // bytes are read without a virtual call.
     template <CommandCompletionSink Sink>
-    TBC_HOT_PATH inline void feed(std::span<const Byte> bytes, ObservationTime time, Sink& sink) {
+    TBC_GENERIC inline void feed(std::span<const Byte> bytes, ObservationTime time, Sink& sink) {
       CommandZoneRelay<Sink> relay{sink};
 
       scan(bytes, time, relay);
@@ -257,41 +256,24 @@ export namespace telar::runtime {
   };
 
   template <Allocator Memory>
-  class TBC_HOT_PATH CommandOutputTail {
+  class CommandOutputTail {
   public:
     static constexpr std::size_t capacity = CommandOutputWindow::capacity;
 
-    inline explicit CommandOutputTail(Memory& memory, bool enabled)
-        : bytes_(AllocatorRef<std::uint8_t, Memory>{memory}) {
-      if (enabled) {
-        enable();
-      }
-    }
+    explicit CommandOutputTail(Memory& memory, bool enabled);
 
-    inline void enable() {
-      bytes_.resize(capacity);
-    }
-
-    inline void append(std::span<const std::uint8_t> bytes) noexcept {
-      window_.append(bytes_, bytes);
-    }
-
-    inline std::span<const std::uint8_t> bytes() const noexcept {
-      return window_.bytes(bytes_);
-    }
-
-    inline std::uint64_t observed() const noexcept {
-      return window_.observed();
-    }
-
-    inline void clear() noexcept {
-      window_.clear();
-    }
+    void enable();
+    void append(std::span<const std::uint8_t> bytes) noexcept;
+    std::span<const std::uint8_t> bytes() const noexcept;
+    std::uint64_t observed() const noexcept;
+    void clear() noexcept;
 
   private:
     Vector<std::uint8_t, Memory> bytes_;
     CommandOutputWindow window_;
   };
+
+  extern template class CommandOutputTail<ConcurrentMemory>;
 
   // The terminal a selection reads, as it is at the call.
   struct CommandScreen {
@@ -299,9 +281,7 @@ export namespace telar::runtime {
     std::uint16_t columns = 0;
   };
 
-  TBC_HOT_PATH inline CommandScreen commandScreen(Terminal& terminal) noexcept {
-    return {terminal.handle(), terminal.screen.cols};
-  }
+  CommandScreen commandScreen(Terminal& terminal) noexcept;
 
   // Receives a formatted selection into a buffer, keeping what fits.
   class CommandTextWriter {
@@ -354,16 +334,7 @@ export namespace telar::runtime {
   };
 
   // Reads `selection` into `destination`. Whether it was cut short, or nothing when it is empty.
-  TBC_HOT_PATH inline std::optional<bool> captureCommandText(Terminal& terminal, const GhosttySelection& selection, Vector<Byte, ConcurrentMemory>& destination) {
-    destination.resize(CommandSelection::buffer_bytes);
-    CommandTextWriter writer{destination};
-
-    formatTerminalSelection(terminal, selection, true, TrailingSpaces::trimmed, writer.ghostty());
-    const auto captured = writer.finish();
-
-    destination.resize(writer.length());
-    return captured;
-  }
+  std::optional<bool> captureCommandText(Terminal& terminal, const GhosttySelection& selection, Vector<Byte, ConcurrentMemory>& destination);
 
   // The commands a pane's integrated shell ran, each anchored to the row its prompt starts on
   // in the pane's own terminal, so a client can mark them in the scrollback and jump to them.
@@ -456,25 +427,14 @@ export namespace telar::runtime {
     bool closing_ = false;
   };
 
-  class TBC_HOT_PATH CommandBlocks final : public CommandBlockRing {
+  class CommandBlocks final : public CommandBlockRing {
   public:
-    inline CommandBlocks(ConcurrentMemory& memory, Terminal& terminal)
-        : CommandBlockRing(terminal.handle()),
-          terminal_(terminal),
-          text_(AllocatorRef<Byte, ConcurrentMemory>{memory}) {}
+    CommandBlocks(ConcurrentMemory& memory, Terminal& terminal);
 
   private:
-    inline CommandScreen screen() const noexcept override {
-      return commandScreen(terminal_);
-    }
-
-    inline std::optional<bool> capture(const GhosttySelection& selection) override {
-      return captureCommandText(terminal_, selection, text_);
-    }
-
-    inline std::span<const Byte> captured() const noexcept override {
-      return text_;
-    }
+    CommandScreen screen() const noexcept override;
+    std::optional<bool> capture(const GhosttySelection& selection) override;
+    std::span<const Byte> captured() const noexcept override;
 
     Terminal& terminal_;
     Vector<Byte, ConcurrentMemory> text_;
@@ -550,89 +510,47 @@ export namespace telar::runtime {
     bool saw_foreground_child_ = false;
   };
 
-  class TBC_HOT_PATH CommandTracker final : public CommandTrackerCore {
+  class CommandTracker final : public CommandTrackerCore {
   public:
-    inline explicit CommandTracker(ConcurrentMemory& memory, Terminal& terminal, std::string_view directory, bool capture_output = false, std::optional<ShellToken> shell_token = std::nullopt)
-        : CommandTrackerCore(terminal.handle(), directory, shell_token),
-          terminal_(terminal),
-          output_(AllocatorRef<std::uint8_t, ConcurrentMemory>{memory}),
-          command_(AllocatorRef<Byte, ConcurrentMemory>{memory}),
-          submitted_(AllocatorRef<Byte, ConcurrentMemory>{memory}) {
-      if (capture_output) {
-        enableOutputCapture();
-      }
-    }
+    explicit CommandTracker(ConcurrentMemory& memory, Terminal& terminal, std::string_view directory, bool capture_output = false, std::optional<ShellToken> shell_token = std::nullopt);
 
-    inline void enableOutputCapture() {
-      output_.resize(CommandOutputWindow::capacity);
-    }
+    void enableOutputCapture();
 
     // The text of the command a client is about to type at the prompt. The submission that
     // follows records it as the command instead of reading the command back from the screen.
-    inline void submitCommand(std::span<const Byte> text) {
-      submitted_.assign(text.begin(), text.end());
-    }
+    void submitCommand(std::span<const Byte> text);
 
+    // Generic over the caller's sink, as the relay that hands it each command.
     template <CapturedCommandSink Sink>
-    inline std::size_t input(const CommandByteObservation& observation, Sink& sink) {
+    TBC_GENERIC inline std::size_t input(const CommandByteObservation& observation, Sink& sink) {
       CapturedCommandRelay<Sink> relay{sink};
 
       return CommandTrackerCore::input(observation, relay);
     }
 
     template <CapturedCommandSink Sink>
-    inline void output(CommandByteObservation observation, Sink& sink) {
+    TBC_GENERIC inline void output(CommandByteObservation observation, Sink& sink) {
       CapturedCommandRelay<Sink> relay{sink};
 
       CommandTrackerCore::output(observation, relay);
     }
 
     template <CapturedCommandSink Sink>
-    inline void complete(CommandCompletion completion, Sink& sink) {
+    TBC_GENERIC inline void complete(CommandCompletion completion, Sink& sink) {
       CapturedCommandRelay<Sink> relay{sink};
 
       CommandTrackerCore::complete(completion, relay);
     }
 
   private:
-    inline CommandScreen screen() const noexcept override {
-      return commandScreen(terminal_);
-    }
-
-    inline void feedTerminal(std::span<const Byte> bytes) override {
-      terminal_.feed(bytes);
-      terminal_.discardResponses();
-    }
-
-    inline std::optional<bool> capture(const GhosttySelection& selection) override {
-      return captureCommandText(terminal_, selection, command_);
-    }
-
-    inline std::span<const Byte> command() const noexcept override {
-      return command_;
-    }
-
-    inline void clearCommand() noexcept override {
-      command_.clear();
-    }
-
-    inline bool adoptSubmitted() noexcept override {
-      if (submitted_.empty()) {
-        return false;
-      }
-
-      command_.swap(submitted_);
-      submitted_.clear();
-      return true;
-    }
-
-    inline void clearSubmitted() noexcept override {
-      submitted_.clear();
-    }
-
-    inline std::span<std::uint8_t> outputStorage() noexcept override {
-      return output_;
-    }
+    CommandScreen screen() const noexcept override;
+    void feedTerminal(std::span<const Byte> bytes) override;
+    std::optional<bool> capture(const GhosttySelection& selection) override;
+    std::span<const Byte> command() const noexcept override;
+    void clearCommand() noexcept override;
+    bool adoptSubmitted() noexcept override;
+    void clearSubmitted() noexcept override;
+    std::span<std::uint8_t> outputStorage() noexcept override;
 
     Terminal& terminal_;
     Vector<std::uint8_t, ConcurrentMemory> output_;

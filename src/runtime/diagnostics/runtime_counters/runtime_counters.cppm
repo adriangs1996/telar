@@ -55,7 +55,7 @@ export {
 
       // Counts each graphics message a client is sent; the messages are an open set no unit can instantiate ahead.
       template <typename Message>
-      TBC_HOT_PATH inline void record(const Message& message) {
+      TBC_GENERIC inline void record(const Message& message) {
         accumulate(messages);
         accumulate(bytes, Codec::encodedSize(message));
         if constexpr (std::same_as<Message, GraphicsImage> || std::same_as<Message, GraphicsSharedImage>) {

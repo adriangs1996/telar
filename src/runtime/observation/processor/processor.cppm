@@ -113,7 +113,7 @@ export {
 
       // Generic over the caller's history sink, so it stays here.
       template <HistoryEventSink History>
-      TBC_HOT_PATH inline ScreenObservationResult observe(const AgentManifests& manifests, AgentProvider provider, History& history, bool inspect_screen = true) noexcept {
+      TBC_GENERIC inline ScreenObservationResult observe(const AgentManifests& manifests, AgentProvider provider, History& history, bool inspect_screen = true) noexcept {
         TELAR_TRACE("observation.replay");
         TELAR_DIAGNOSTIC(AllocationScope allocation_scope{AllocationPath::observation});
         ScreenObservationResult result;
@@ -194,7 +194,7 @@ export {
 
     private:
       template <HistoryEventSink History>
-      struct TBC_HOT_PATH CommandRelay {
+      struct TBC_GENERIC CommandRelay {
         const HistorySession& session;
         History& history;
         std::atomic<std::uint64_t>& injected_submissions;
@@ -253,7 +253,7 @@ export {
 
     // Generic over the caller's process probe and history sink, so it stays here whole.
     template <PaneProcessProbe Probe, HistoryEventSink History>
-    class TBC_HOT_PATH ObservationProcessor {
+    class TBC_GENERIC ObservationProcessor {
     public:
       struct RequestEntry {
         std::uint64_t pane = 0;

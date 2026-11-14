@@ -369,7 +369,7 @@ export {
 
       // Generic over the caller's predicate, so it stays here.
       template <typename Consumer>
-      TBC_HOT_PATH inline void discardUnwantedTransfers(const Consumer& wanted) noexcept {
+      TBC_GENERIC inline void discardUnwantedTransfers(const Consumer& wanted) noexcept {
         prepared_.discardUnwanted(wanted);
         requests_.discardUnwanted(wanted);
       }

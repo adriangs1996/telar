@@ -79,7 +79,7 @@ export {
 
     struct RejectDeferredResponse {
       // Generic over the caller's consumer, so it stays a template here.
-      TBC_HOT_PATH inline void operator()(const DeferredResponse&, auto&&) const {
+      TBC_GENERIC inline void operator()(const DeferredResponse&, auto&&) const {
         throw std::logic_error{"A deferred response requires an encoder"};
       }
     };
@@ -285,7 +285,7 @@ export {
 
       // Generic over the protocol's messages, an open set, so it stays a template here.
       template <typename Message>
-      TBC_HOT_PATH inline void append(const Message& message) {
+      TBC_GENERIC inline void append(const Message& message) {
         static_assert(MessageSchema<Message>::direction == Direction::server);
         const auto lane = deliveryLane(MessageSchema<Message>::tag);
 
@@ -313,7 +313,7 @@ export {
       // written out until the confirmation is completed. Generic over the protocol's messages, so it stays
       // a template here.
       template <typename Message>
-      TBC_HOT_PATH inline std::size_t reserve(const Message& message) {
+      TBC_GENERIC inline std::size_t reserve(const Message& message) {
         static_assert(MessageSchema<Message>::fixed_size);
         const auto offset = bytes_.size() + frame_prefix_size;
 
@@ -324,7 +324,7 @@ export {
       // Re-encodes a reserved confirmation in place. Generic over the protocol's messages, so it stays a
       // template here.
       template <typename Message>
-      TBC_HOT_PATH inline void complete(std::size_t offset, const Message& message) {
+      TBC_GENERIC inline void complete(std::size_t offset, const Message& message) {
         std::array<Byte, MessageSchema<Message>::payload_size> payload;
 
         Codec::encode(message, payload);
@@ -333,7 +333,7 @@ export {
 
       // Generic over the deferred requests, so it stays a template here.
       template <DeferredRequest Request>
-      TBC_HOT_PATH inline void defer(const Request& request) {
+      TBC_GENERIC inline void defer(const Request& request) {
         requireCapacity(DeliveryLane::management);
         deferred_.append(bytes_.size(), request);
         inserted(DeliveryLane::management);
@@ -341,7 +341,7 @@ export {
 
       // Generic over the caller's encoder, so it stays a template here.
       template <DeferredResponseEncoder Encoder = RejectDeferredResponse>
-      TBC_HOT_PATH inline std::span<const Byte> prepare(std::size_t limit, Encoder&& encode = {}) {
+      TBC_GENERIC inline std::span<const Byte> prepare(std::size_t limit, Encoder&& encode = {}) {
         if (empty() || limit == 0) {
           return {};
         }
@@ -408,7 +408,7 @@ export {
     private:
       // Generic over the caller's encoder, so it stays a template here.
       template <DeferredResponseEncoder Encoder>
-      TBC_HOT_PATH inline void resolve(Encoder& encode) {
+      TBC_GENERIC inline void resolve(Encoder& encode) {
         const auto offset = deferred_.offset();
         std::size_t resolved_size = 0;
 
@@ -503,7 +503,7 @@ export {
       // whether a complete frame remains. Generic over the caller's predicate and visitor, so it stays a
       // template here.
       template <typename Ready, typename Visitor>
-      TBC_HOT_PATH inline static bool dispatch(Frames& frames, Ready&& ready, Visitor&& visitor) {
+      TBC_GENERIC inline static bool dispatch(Frames& frames, Ready&& ready, Visitor&& visitor) {
         constexpr unsigned messages_per_batch = 64;
 
         for (unsigned index = 0; index < messages_per_batch; ++index) {
@@ -536,7 +536,7 @@ export {
 
       // Generic over the caller's encoder, so it stays a template here.
       template <DeferredResponseEncoder Encoder = RejectDeferredResponse>
-      TBC_HOT_PATH inline void write(Encoder&& encode = {}) {
+      TBC_GENERIC inline void write(Encoder&& encode = {}) {
         constexpr std::size_t write_batch_size = 256 * 1024;
         const auto bytes = output_.prepare(write_batch_size, std::forward<Encoder>(encode));
         if (bytes.empty()) {
@@ -558,19 +558,19 @@ export {
 
       // Generic over the protocol's messages, so it stays a template here.
       template <typename Message>
-      TBC_HOT_PATH inline void send(const Message& message) {
+      TBC_GENERIC inline void send(const Message& message) {
         output_.append(message);
       }
 
       // Generic over the deferred requests, so it stays a template here.
       template <DeferredRequest Request>
-      TBC_HOT_PATH inline void defer(const Request& request) {
+      TBC_GENERIC inline void defer(const Request& request) {
         output_.defer(request);
       }
 
       // Generic over the protocol's messages, so it stays a template here.
       template <typename Message>
-      TBC_HOT_PATH inline bool trySend(const Message& message) {
+      TBC_GENERIC inline bool trySend(const Message& message) {
         try {
           output_.append(message);
           return true;
@@ -586,13 +586,13 @@ export {
       // A confirmation reserved now and completed by its offset once its fields are known. Generic over the
       // protocol's messages, so it stays a template here.
       template <typename Message>
-      TBC_HOT_PATH inline std::size_t reserve(const Message& message) {
+      TBC_GENERIC inline std::size_t reserve(const Message& message) {
         return output_.reserve(message);
       }
 
       // Generic over the protocol's messages, so it stays a template here.
       template <typename Message>
-      TBC_HOT_PATH inline void complete(std::size_t offset, const Message& message) {
+      TBC_GENERIC inline void complete(std::size_t offset, const Message& message) {
         output_.complete(offset, message);
       }
 
@@ -649,7 +649,7 @@ export {
 
     // Kept whole: path_service_test instantiates it with its own allocator (GatedPathMemory).
     template <Allocator Memory>
-    class TBC_HOT_PATH EncodedReply {
+    class TBC_GENERIC EncodedReply {
     public:
       inline explicit EncodedReply(Memory& memory)
           : bytes_(AllocatorRef<Byte, Memory>{memory}) {

@@ -110,7 +110,7 @@ export {
 
       // Generic over the caller's admission, a callable; the handshake advances in the implementation unit.
       template <typename Admit>
-      TBC_HOT_PATH inline void event(const Event& event, const Admit& admit) {
+      TBC_GENERIC inline void event(const Event& event, const Admit& admit) {
         auto descriptor = advance(event);
         if (!descriptor) {
           return;
@@ -203,15 +203,15 @@ export {
   namespace telar::runtime {
 
     // Generic over the pane type of its caller; an empty observer importers inline away.
-    struct TBC_HOT_PATH IgnorePaneInput {
+    struct IgnorePaneInput {
       template <typename PaneType>
-      inline void operator()(const PaneType&, std::span<const Byte>) const noexcept {}
+      TBC_GENERIC inline void operator()(const PaneType&, std::span<const Byte>) const noexcept {}
     };
 
     // Kept whole: tests instantiate it with their own fake Poller and History (launch_failure_test's
     // FailingPoller and QueuedHistory).
     template <EventLoop Poller, HistoryEventSink History = DiscardedHistory>
-    class TBC_HOT_PATH PaneService {
+    class TBC_GENERIC PaneService {
     public:
       // The panes it launches keep the allocator, and the service keeps what it is given, all in region `a`.
       inline explicit PaneService(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<Poller&, tbc::lt::a> poller, tbc::view<LimitService&, tbc::lt::a> limits, tbc::view<PaneLaunchOptions, tbc::lt::a> options, tbc::view<History&, tbc::lt::a> history = discarded_history)

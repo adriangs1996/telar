@@ -135,7 +135,7 @@ export {
       // Generic over the caller's text, so it stays here.
       template <typename Text>
         requires std::convertible_to<const Text&, std::string_view>
-      TBC_HOT_PATH inline CaptureHost(const Text& value) noexcept {
+      TBC_GENERIC inline CaptureHost(const Text& value) noexcept {
         const std::string_view text{value};
 
         oversized_ = text.size() > capacity;

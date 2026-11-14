@@ -1268,4 +1268,129 @@ namespace telar::runtime {
     }
   }
 
+  template <Allocator Memory>
+  CommandOutputTail<Memory>::CommandOutputTail(Memory& memory, bool enabled)
+      : bytes_(AllocatorRef<std::uint8_t, Memory>{memory}) {
+    if (enabled) {
+      enable();
+    }
+  }
+
+  template <Allocator Memory>
+  void CommandOutputTail<Memory>::enable() {
+    bytes_.resize(capacity);
+  }
+
+  template <Allocator Memory>
+  void CommandOutputTail<Memory>::append(std::span<const std::uint8_t> bytes) noexcept {
+    window_.append(bytes_, bytes);
+  }
+
+  template <Allocator Memory>
+  std::span<const std::uint8_t> CommandOutputTail<Memory>::bytes() const noexcept {
+    return window_.bytes(bytes_);
+  }
+
+  template <Allocator Memory>
+  std::uint64_t CommandOutputTail<Memory>::observed() const noexcept {
+    return window_.observed();
+  }
+
+  template <Allocator Memory>
+  void CommandOutputTail<Memory>::clear() noexcept {
+    window_.clear();
+  }
+
+  template class CommandOutputTail<ConcurrentMemory>;
+
+  CommandScreen commandScreen(Terminal& terminal) noexcept {
+    return {terminal.handle(), terminal.screen.cols};
+  }
+
+  std::optional<bool> captureCommandText(Terminal& terminal, const GhosttySelection& selection, Vector<Byte, ConcurrentMemory>& destination) {
+    destination.resize(CommandSelection::buffer_bytes);
+    CommandTextWriter writer{destination};
+
+    formatTerminalSelection(terminal, selection, true, TrailingSpaces::trimmed, writer.ghostty());
+    const auto captured = writer.finish();
+
+    destination.resize(writer.length());
+    return captured;
+  }
+
+  CommandBlocks::CommandBlocks(ConcurrentMemory& memory, Terminal& terminal)
+      : CommandBlockRing(terminal.handle()),
+        terminal_(terminal),
+        text_(AllocatorRef<Byte, ConcurrentMemory>{memory}) {}
+
+  CommandScreen CommandBlocks::screen() const noexcept {
+    return commandScreen(terminal_);
+  }
+
+  std::optional<bool> CommandBlocks::capture(const GhosttySelection& selection) {
+    return captureCommandText(terminal_, selection, text_);
+  }
+
+  std::span<const Byte> CommandBlocks::captured() const noexcept {
+    return text_;
+  }
+
+  CommandTracker::CommandTracker(ConcurrentMemory& memory, Terminal& terminal, std::string_view directory, bool capture_output, std::optional<ShellToken> shell_token)
+      : CommandTrackerCore(terminal.handle(), directory, shell_token),
+        terminal_(terminal),
+        output_(AllocatorRef<std::uint8_t, ConcurrentMemory>{memory}),
+        command_(AllocatorRef<Byte, ConcurrentMemory>{memory}),
+        submitted_(AllocatorRef<Byte, ConcurrentMemory>{memory}) {
+    if (capture_output) {
+      enableOutputCapture();
+    }
+  }
+
+  void CommandTracker::enableOutputCapture() {
+    output_.resize(CommandOutputWindow::capacity);
+  }
+
+  void CommandTracker::submitCommand(std::span<const Byte> text) {
+    submitted_.assign(text.begin(), text.end());
+  }
+
+  CommandScreen CommandTracker::screen() const noexcept {
+    return commandScreen(terminal_);
+  }
+
+  void CommandTracker::feedTerminal(std::span<const Byte> bytes) {
+    terminal_.feed(bytes);
+    terminal_.discardResponses();
+  }
+
+  std::optional<bool> CommandTracker::capture(const GhosttySelection& selection) {
+    return captureCommandText(terminal_, selection, command_);
+  }
+
+  std::span<const Byte> CommandTracker::command() const noexcept {
+    return command_;
+  }
+
+  void CommandTracker::clearCommand() noexcept {
+    command_.clear();
+  }
+
+  bool CommandTracker::adoptSubmitted() noexcept {
+    if (submitted_.empty()) {
+      return false;
+    }
+
+    command_.swap(submitted_);
+    submitted_.clear();
+    return true;
+  }
+
+  void CommandTracker::clearSubmitted() noexcept {
+    submitted_.clear();
+  }
+
+  std::span<std::uint8_t> CommandTracker::outputStorage() noexcept {
+    return output_;
+  }
+
 }

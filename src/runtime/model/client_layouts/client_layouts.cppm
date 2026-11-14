@@ -218,11 +218,9 @@ export {
   namespace telar::runtime {
 
     class Pane {
-      // Kept whole: the default writer of write, which stays here, on every PTY write.
-      struct TBC_HOT_PATH ResponseWriter {
-        inline ssize_t operator()(int descriptor, std::span<const iovec> vectors) const {
-          return ::writev(descriptor, vectors.data(), static_cast<int>(vectors.size()));
-        }
+      // The default writer of write: writev on the PTY.
+      struct ResponseWriter {
+        ssize_t operator()(int descriptor, std::span<const iovec> vectors) const;
       };
 
     public:
@@ -244,7 +242,7 @@ export {
       // syscall result consumes the admitted prefix; EINTR/EAGAIN retain it.
       // Generic over the caller's writer: control_desktop_test passes its own.
       template <typename WriteResponses = ResponseWriter>
-      TBC_HOT_PATH inline void write(WriteResponses write_responses = {}) {
+      TBC_GENERIC inline void write(WriteResponses write_responses = {}) {
         const auto batch = pty_responses->peekBatch();
         const bool response = batch.count != 0;
         const auto bytes = input.readable();
@@ -549,7 +547,7 @@ export {
     // connection may hold part of a frame, and every broadcast treats that failure alike.
     // Generic over the caller's predicate and sender, and run for every message sent to all clients.
     template <typename Admits, typename Send>
-    TBC_HOT_PATH inline void deliver(ClientStore& clients, Admits&& admits, Send&& send) noexcept {
+    TBC_GENERIC inline void deliver(ClientStore& clients, Admits&& admits, Send&& send) noexcept {
       for (auto* client : clients.items()) {
         if (client == nullptr || client->connection.closing || !admits(*client)) {
           continue;
@@ -566,7 +564,7 @@ export {
     // Sends `message` to each open client `admits` accepts, as deliver does; how many queued it.
     // Generic over the caller's predicate and message, as deliver.
     template <typename Admits, typename Message>
-    TBC_HOT_PATH inline std::size_t broadcast(ClientStore& clients, Admits&& admits, const Message& message) noexcept {
+    TBC_GENERIC inline std::size_t broadcast(ClientStore& clients, Admits&& admits, const Message& message) noexcept {
       std::size_t delivered = 0;
 
       deliver(clients, admits, [&](ClientSession& client) {
@@ -639,42 +637,7 @@ export {
 
       void retain(const RuntimeModel& model, std::uint64_t identity, const UpdateClientLayout& update);
 
-      // Kept here (P9.12): out of line, the lifetime checker's summary takes the whole receiver as
-      // mutated, and Runtime::writeClient's StateProjection, which borrows these layouts, then
-      // overlaps the client it publishes to (tbc-invalidated-borrow).
-      TBC_HOT_PATH inline void publish(const RuntimeModel& model, ClientSession& client) {
-        auto* record = find(client.identity);
-        if (record == nullptr) {
-          client.connection.send(ClientLayoutSnapshot{});
-          return;
-        }
-
-        std::array<ClientTabLayout, maximum_tabs> tabs;
-        std::size_t count = 0;
-        std::optional<TabLocation> active;
-
-        for (std::size_t index = 0; index < record->tab_count; ++index) {
-          const auto tab = record->tabAt(index);
-          if (!current(model, tab)) {
-            continue;
-          }
-
-          tabs[count++] = tab;
-          if (sameLocation(tab.location, record->active_tab)) {
-            active = tab.location;
-          }
-        }
-
-        record->last_used = ++clock_;
-        client.connection.send(ClientLayoutSnapshot{
-            .restored = true,
-            .sidebar_visible = record->sidebar_visible,
-            .sidebar_width = record->sidebar_width,
-            .workspace_list_collapsed = record->workspace_list_collapsed,
-            .active_tab = active,
-            .tabs = std::span{tabs}.first(count),
-        });
-      }
+      void publish(const RuntimeModel& model, ClientSession& client);
 
       std::optional<std::uint64_t> focusedPane(std::uint64_t identity) const noexcept;
 
@@ -682,7 +645,7 @@ export {
 
       // Generic over the caller's consumer, which each record is handed to.
       template <typename Consumer>
-      TBC_HOT_PATH inline void exportRecords(const RuntimeModel& model, Consumer&& consume) const {
+      TBC_GENERIC inline void exportRecords(const RuntimeModel& model, Consumer&& consume) const {
         std::array<ClientTabLayout, maximum_tabs> tabs;
 
         for (const auto& record : records_) {

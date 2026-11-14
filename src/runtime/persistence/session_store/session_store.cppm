@@ -154,7 +154,7 @@ export {
 
       // Generic over the caller's consumer, which each record is handed to.
       template <typename Consumer>
-      TBC_HOT_PATH inline void read(Consumer&& consume) {
+      TBC_GENERIC inline void read(Consumer&& consume) {
         std::size_t pane_count = 0;
 
         for (;;) {
@@ -267,7 +267,7 @@ export {
 
     // Kept whole: generic over the pane launcher, PaneService in telar.runtime.runtime, which imports this module.
     template <PaneLauncher Panes>
-    class TBC_HOT_PATH Restore {
+    class TBC_GENERIC Restore {
     public:
       // The panes it launches keep the allocator, so everything the restore reaches lives in region `a`.
       inline explicit Restore(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<RuntimeModel&, tbc::lt::a> model, tbc::view<Panes&, tbc::lt::a> panes, tbc::view<ClientLayouts&, tbc::lt::a> layouts, bool resume_agents)
@@ -553,7 +553,7 @@ export {
     // only the stamps that tell whether the session changed.
     // Kept whole: generic over the agents, AgentService in telar.runtime.runtime and persistence_test's SnapshotAgents.
     template <AgentSource Agents>
-    class TBC_HOT_PATH Snapshot {
+    class TBC_GENERIC Snapshot {
     public:
       // The bytes view the buffer.
       inline static tbc::view<std::span<const Byte>, tbc::lt::a> encode(const RuntimeModel& model, const ClientLayouts& layouts, const Agents& agents, tbc::view<std::span<Byte>, tbc::lt::a> buffer, std::size_t& dropped) {
@@ -666,7 +666,7 @@ export {
 
     // Kept whole: generic over the agents, AgentService in telar.runtime.runtime, which imports this module.
     template <AgentSource Agents>
-    class TBC_HOT_PATH SessionStore {
+    class TBC_GENERIC SessionStore {
       using Clock = std::chrono::steady_clock;
 
     public:

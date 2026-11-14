@@ -147,7 +147,7 @@ export {
 
     // Kept whole: tests instantiate it with their own fake Inspector (descent_test's GatedLineageInspector).
     template <LineageInspector Inspector>
-    class TBC_HOT_PATH DescentProbe {
+    class TBC_GENERIC DescentProbe {
     public:
       struct Request {
         std::array<DescentCheck, 32> checks;
@@ -254,7 +254,7 @@ export {
     // Kept whole: tests instantiate it with their own fake Inspector (process_identification_test's
     // LeaderlessGroupInspector).
     template <ProcessProbeInspector Inspector>
-    class TBC_SHARED TBC_HOT_PATH ProcessProbe {
+    class TBC_SHARED TBC_GENERIC ProcessProbe {
     public:
       static constexpr std::size_t batch_capacity = 16;
 

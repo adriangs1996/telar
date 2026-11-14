@@ -39,7 +39,7 @@ export {
     public:
       // Stays generic over the caller's consumer, which the reader calls through a function pointer.
       template <typename Consumer>
-      TBC_HOT_PATH inline static void read(Consumer&& consume) {
+      TBC_GENERIC inline static void read(Consumer&& consume) {
         using Target = std::remove_reference_t<Consumer>;
 
         readBundle(const_cast<std::remove_const_t<Target>*>(std::addressof(consume)), [](void* target, std::span<const std::uint8_t> bytes) {
@@ -62,7 +62,7 @@ export {
     public:
       // Stays generic over the caller's consumer, which the reader calls through a function pointer.
       template <typename Consumer>
-      TBC_HOT_PATH inline static void read(Consumer&& consume) {
+      TBC_GENERIC inline static void read(Consumer&& consume) {
         using Target = std::remove_reference_t<Consumer>;
         const auto sink = [](void* target, std::span<const std::uint8_t> bytes) {
           (*static_cast<Target*>(target))(bytes);

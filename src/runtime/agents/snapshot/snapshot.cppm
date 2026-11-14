@@ -197,7 +197,7 @@ export {
 
       // The predicate is the caller's type, so this member keeps its body here.
       template <typename Predicate>
-      TBC_HOT_PATH inline void removeIf(Predicate&& predicate) {
+      TBC_GENERIC inline void removeIf(Predicate&& predicate) {
         if (std::erase_if(records_, [&](const auto& agent) {
               return predicate(*agent);
             }) != 0) {

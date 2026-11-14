@@ -112,7 +112,7 @@ export {
     // Generic over the protocol's history messages and the reply's allocator, an open
     // set no implementation unit can instantiate ahead.
     template <typename Message, Allocator Memory>
-    TBC_HOT_PATH void replyHistoryFailure(const Message& request, EncodedReply<Memory>& reply, bool available) {
+    TBC_GENERIC void replyHistoryFailure(const Message& request, EncodedReply<Memory>& reply, bool available) {
       if constexpr (std::same_as<Message, ImportHistory> || std::same_as<Message, ReportAgentCommand>) {
         reply.send(RequestCompleted{.request_id = request.request_id});
       } else if constexpr (std::same_as<Message, DeleteHistory> || std::same_as<Message, PruneHistory>) {
@@ -158,7 +158,7 @@ export {
 
       // Chosen at compile time from the message type, for every history request.
       template <typename Message>
-      TBC_HOT_PATH inline diagnostics::OperationCounters* operation() noexcept {
+      TBC_GENERIC inline diagnostics::OperationCounters* operation() noexcept {
         if constexpr (std::same_as<Message, QueryHistory>) {
           return &queries;
         } else if constexpr (std::same_as<Message, ImportHistory> || std::same_as<Message, ReportAgentCommand>) {

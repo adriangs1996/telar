@@ -60,7 +60,7 @@ export {
 
       // Kept here: the message is any of the protocol's, an open set no unit can instantiate ahead.
       template <typename Message>
-      TBC_HOT_PATH inline void submit(std::uint64_t client, const Message& message, const RequestContext& context = {}) {
+      TBC_GENERIC inline void submit(std::uint64_t client, const Message& message, const RequestContext& context = {}) {
         if constexpr (std::same_as<Message, FindPaths>) {
           path_service_.submit(client, message);
         } else if constexpr (std::same_as<Message, OpenEditor>) {
@@ -82,7 +82,7 @@ export {
 
       // Kept here: the consumer is the caller's callable, an open set no unit can instantiate ahead.
       template <typename Consumer>
-      TBC_HOT_PATH inline void collect(Consumer&& consumer) {
+      TBC_GENERIC inline void collect(Consumer&& consumer) {
         history_.collect(consumer);
         path_service_.collect(consumer);
         editor_.collect(consumer);
@@ -91,7 +91,7 @@ export {
 
       // Kept here: the reply is the caller's, an open set no unit can instantiate ahead.
       template <typename Reply>
-      TBC_HOT_PATH inline bool tryPaths(std::uint64_t client, const FindPaths& request, Reply& reply) {
+      TBC_GENERIC inline bool tryPaths(std::uint64_t client, const FindPaths& request, Reply& reply) {
         return path_service_.tryQuery(client, request, reply);
       }
 
@@ -103,7 +103,7 @@ export {
 
       // Kept here: the consumer is the caller's callable, an open set no unit can instantiate ahead.
       template <typename Consumer>
-      TBC_HOT_PATH inline void collectWorktrees(Consumer&& consume) {
+      TBC_GENERIC inline void collectWorktrees(Consumer&& consume) {
         worktrees_.collect(consume);
       }
 
@@ -219,7 +219,7 @@ export {
     // Generates session descriptions on a worker; the agents it describes are lent to each call.
     // Kept whole: Agents is the runtime's AgentService, from a module that imports this one.
     template <ConcurrentAllocator Memory, DescriptionObserver Agents, HistoryEventSink History>
-    class TBC_HOT_PATH DescriptionService {
+    class TBC_GENERIC DescriptionService {
     public:
       inline explicit DescriptionService(Memory& memory, History& history, const DescriptionOptions& options)
           : history_(history) {
@@ -323,7 +323,7 @@ export {
     // Kept whole: tests instantiate it with their own fake Index and Memory (path_service_test's GatedPathIndex).
     template <ConcurrentAllocator Memory, typename Index = PathIndex>
       requires PathSearchIndex<Index, Memory>
-    class TBC_HOT_PATH PathService {
+    class TBC_GENERIC PathService {
     public:
       inline explicit PathService(Memory& memory)
           : memory_(memory),
@@ -528,7 +528,7 @@ export {
 
     // Kept whole: tests instantiate it with their own fake Probe (workspace_git_test's ControlledGitProbe).
     template <WorkspaceGitObserver Probe>
-    class TBC_HOT_PATH WorkspaceGitService {
+    class TBC_GENERIC WorkspaceGitService {
     public:
       using Clock = std::chrono::steady_clock;
       static constexpr auto probe_interval = std::chrono::seconds{5};
