@@ -4,9 +4,6 @@ static_assert(true);
 #endif
 
 #include "../application/dependencies.hpp"
-#include "../attachments/catalog.hpp"
-#include "../attachments/marker_removal.hpp"
-#include "../attachments/marker_screen.hpp"
 #include "../attachments/types.hpp"
 #include "../platform/clipboard_image_source.hpp"
 #include "attachment_preview.hpp"
@@ -33,12 +30,10 @@ static_assert(true);
 #pragma once
 
 #include "application/dependencies.hpp"
-#include "attachments/catalog.hpp"
-#include "attachments/marker_removal.hpp"
-#include "attachments/marker_screen.hpp"
 #include "attachments/types.hpp"
 #include "platform/clipboard_image_source.hpp"
 
+import telar.gui.attachments.catalog;
 import telar.gui.attachments.marker_input;
 import telar.gui.input.key_encoder;
 

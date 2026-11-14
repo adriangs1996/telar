@@ -1297,6 +1297,9 @@
     "<new>",
     "tbc/view.hpp"
   ],
+  "src/gui/attachments/catalog/catalog.cppm": [
+    "<cassert>"
+  ],
   "src/gui/attachments/marker_input/marker_input.cppm": [
     "<cmath>",
     "<cstddef>",

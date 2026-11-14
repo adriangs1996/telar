@@ -5,9 +5,6 @@ static_assert(true);
 
 #include "attachment_shelf.hpp"
 #include "../application/dependencies.hpp"
-#include "../attachments/catalog.hpp"
-#include "../attachments/marker_removal.hpp"
-#include "../attachments/marker_screen.hpp"
 #include "../attachments/types.hpp"
 #include "../platform/clipboard_image_source.hpp"
 #include "attachment_preview.hpp"
@@ -36,12 +33,10 @@ static_assert(true);
 #include <utility>
 
 #include "application/dependencies.hpp"
-#include "attachments/catalog.hpp"
-#include "attachments/marker_removal.hpp"
-#include "attachments/marker_screen.hpp"
 #include "attachments/types.hpp"
 #include "platform/clipboard_image_source.hpp"
 
+import telar.gui.attachments.catalog;
 import telar.gui.input.key_encoder;
 
 namespace telar::gui::qt {

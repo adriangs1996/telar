@@ -1,7 +1,4 @@
 #include "assertions.hpp"
-#include "attachments/marker_screen.hpp"
-#include "attachments/numeric_markers.hpp"
-#include "attachments/path_markers.hpp"
 #include "terminal/cell_position.hpp"
 #include "terminal/screen.hpp"
 #include <array>
@@ -12,6 +9,8 @@
 #include <optional>
 #include <span>
 #include <string_view>
+
+import telar.gui.attachments.catalog;
 
 namespace {
 

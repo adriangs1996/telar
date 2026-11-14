@@ -16,6 +16,7 @@ telar.gui.application.host_effects
 telar.gui.application.session
 telar.gui.application.sound_playback
 telar.gui.application.workspace_replica
+telar.gui.attachments.catalog
 telar.gui.attachments.marker_input
 telar.gui.components.builtin_content
 telar.gui.components.configuration
