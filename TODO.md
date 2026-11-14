@@ -388,6 +388,7 @@ Cada hub sigue el patrón agregador: `a` crea los módulos y deja el agregador, 
 - **Contexto:** 167 dependientes, 7% de uso medio.
 - **Resultado de a:** `4536d6696`. `telar.base.memory.allocators` (dueño de `allocator.hpp` y `allocation_statistics.hpp`, más `BufferAllocator`), `.sensitive` (`eraseSensitive`, `ErasingAllocator`, `RecyclingAllocator`, `SensitiveAllocation`, `SensitiveBuffer`, `SensitiveText`) y `.containers` (`fixed_text.hpp`, `ByteQueue`, `ByteStorage`, `CAllocationBlocks`, `DropChannel`, `RetainedStream`, `SlotIndexes`). `RecyclingAllocator` va a sensitive y no a allocators: borra cada bloque con `eraseSensitive`, y en allocators crearía un ciclo. `telar.base.memory` queda como agregador sin cuerpos. Compilan los tres procesos. **b y c siguen abiertas**: el `[x]` del título marca solo `a`.
 - **Resultado de b:** `4ddd9d0bb`. 228 ficheros: cada importador trae solo las familias que usa (`allocators` en 191 unidades, `containers` en 55, `sensitive` en 32), los `export import` reexportan solo lo que su interfaz necesita y 34 unidades pierden el import. `telar.platform` deja de reexportar la memoria. Ningún fichero importa ya `telar.base.memory` salvo el agregador. Compilan runtime, CLI y GUI sobre la rama integrada.
+- **Resultado de c:** `881d53943`. `lib/base/memory/memory.cppm` borrado. Compilan base, runtime, CLI y GUI sobre la rama integrada. **P4.2 cerrada.**
 
 ### [x] P4.3a/b/c · `telar.base.text`: JSON aparte
 - **Depende de:** a: P1.2 · b: P4.3a · c: P4.3b
