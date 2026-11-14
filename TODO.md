@@ -617,9 +617,10 @@ Para cada módulo: `extern template class X<Memory>;` en la interfaz, la instanc
 - **Rendimiento:** se mide en Release con los benchmarks de hot path del área (`.agents/skills/perf-pass/measurement.md`) y cada pérdida se trata según "Ejecución": primero vectorización, reservas en el heap y trabajo por elemento; solo se acepta el coste de la llamada en sí.
 - **Hecho cuando (cada área):** ningún `TBC_HOT_PATH` del área queda sin medición anotada, toda plantilla sobre un tipo del llamador lleva `TBC_GENERIC`, compila en Debug y en Release con sus probes, pasan los tests del área, `check-cpp-modules.py` y `tbc-lint` sobre los ficheros tocados.
 
-#### [ ] P9.13a · La marca `TBC_GENERIC`
+#### [x] P9.13a · La marca `TBC_GENERIC`
 - **Qué hace:** añade `TBC_GENERIC` (`[[clang::annotate("tbc::generic")]]`) a `tbc/annotations.hpp` y al README de tbc. El check de interface-bodies (`lib/tbc/linter/interface_bodies.cpp`) acepta un cuerpo marcado así en una interfaz y lo rechaza si la declaración no es una plantilla ni miembro de una. No cambia ningún uso fuera de `lib/tbc`.
 - **Hecho cuando:** los tests de tbc cubren los dos casos (plantilla aceptada, no plantilla rechazada) y pasan.
+- **Resultado:** `e324cb84b`, solo `lib/tbc`. El check acepta `TBC_GENERIC` en una plantilla o en un miembro de una (sobre una plantilla de clase cubre a todos sus miembros; sobre una de variable, a las lambdas que la inicializan) y da un diagnóstico propio si no: una especialización completa cuenta como no plantilla. El diagnóstico general sugiere también `TBC_GENERIC`. De paso deja de recorrer las instanciaciones implícitas de las plantillas de variable, que daban el mismo aviso dos veces y un falso positivo con la marca. Tests nuevos en `interface_bodies_test.py`; tbc pasa 17 de 17 en Debug y en Release.
 
 #### [ ] P9.13b · `lib/` y la CLI
 - **Depende de:** P9.13a y P6.5f. Unos 94 usos en `lib/` y 8 en `src/cli`.
