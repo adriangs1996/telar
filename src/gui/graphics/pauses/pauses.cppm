@@ -110,19 +110,19 @@ export {
       // The callers' callables are erased here so that the work stays in pauses.cpp.
       template <typename Request, typename Notice>
         requires std::invocable<const Request&, std::uint64_t> && std::invocable<const Notice&, std::uint64_t>
-      TBC_HOT_PATH void pause(std::uint64_t pane_id, std::uint64_t now_ns, const Request& request, const Notice& notice) {
+      TBC_GENERIC void pause(std::uint64_t pane_id, std::uint64_t now_ns, const Request& request, const Notice& notice) {
         pause(pane_id, now_ns, PaneCall<void>::of(request), PaneCall<void>::of(notice));
       }
 
       template <typename Request>
         requires std::invocable<const Request&, std::uint64_t>
-      TBC_HOT_PATH void resumeDue(std::uint64_t now_ns, const Request& request) {
+      TBC_GENERIC void resumeDue(std::uint64_t now_ns, const Request& request) {
         resumeDue(now_ns, PaneCall<void>::of(request));
       }
 
       template <typename Request>
         requires std::invocable<const Request&, std::uint64_t>
-      TBC_HOT_PATH void focus(Focus event, const Request& request) {
+      TBC_GENERIC void focus(Focus event, const Request& request) {
         focus(event, PaneCall<void>::of(request));
       }
 
@@ -130,7 +130,7 @@ export {
 
       template <typename Mirrored>
         requires std::predicate<const Mirrored&, std::uint64_t>
-      TBC_HOT_PATH void forgetClosed(const Mirrored& mirrored) {
+      TBC_GENERIC void forgetClosed(const Mirrored& mirrored) {
         forgetClosed(PaneCall<bool>::of(mirrored));
       }
 
@@ -145,7 +145,7 @@ export {
 
         // Generic over the caller's callable, so it stays here.
         template <typename Callable>
-        TBC_HOT_PATH static PaneCall of(const Callable& callable) noexcept {
+        TBC_GENERIC static PaneCall of(const Callable& callable) noexcept {
           return {
               .context = &callable,
               .call = [](const void* context, std::uint64_t pane_id) -> Result {

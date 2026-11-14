@@ -17,6 +17,65 @@ namespace telar::gui::glyphs {
     }
   }
 
+  template <std::size_t Capacity>
+  Ink<Capacity>::Ink(float coverage) noexcept
+      : coverage_(coverage) {}
+
+  template <std::size_t Capacity>
+  float Ink<Capacity>::coverage() const noexcept {
+    return coverage_;
+  }
+
+  template <std::size_t Capacity>
+  std::span<const Rect> Ink<Capacity>::rectangles() const noexcept {
+    return std::span{rectangles_}.first(count_);
+  }
+
+  template <std::size_t Capacity>
+  void Ink<Capacity>::push(Rect rectangle) {
+    if (rectangle.empty()) {
+      return;
+    }
+
+    if (count_ == Capacity) {
+      throw std::length_error{"GlyphRectangleBudgetExceeded"};
+    }
+
+    rectangles_[count_++] = rectangle;
+  }
+
+  template <std::size_t Capacity>
+  void Ink<Capacity>::appendMerged(Rect rectangle) {
+    if (rectangle.empty()) {
+      return;
+    }
+
+    for (auto& previous : std::span{rectangles_}.first(count_)) {
+      if (previous.x == rectangle.x && previous.width == rectangle.width && previous.bottom() == rectangle.y) {
+        previous.height += rectangle.height;
+
+        return;
+      }
+    }
+
+    push(rectangle);
+  }
+
+  template <std::size_t Capacity>
+  void Ink<Capacity>::translate(Point origin) noexcept {
+    for (auto& rectangle : std::span{rectangles_}.first(count_)) {
+      rectangle.x += origin.x;
+      rectangle.y += origin.y;
+    }
+  }
+
+  // Braille shares the stroke capacity of Box, so its ink is the same instance.
+  static_assert(Braille::dot_count == Box::stroke_capacity);
+
+  template class Ink<2>;
+  template class Ink<Box::stroke_capacity>;
+  template class Ink<Box::rectangle_capacity>;
+
   Block::Paint Block::draw(Rect cell, std::uint32_t codepoint) {
     validateCell(cell);
     if (codepoint < Symbol::first_block || codepoint > Symbol::last_block) {
@@ -115,22 +174,46 @@ namespace telar::gui::glyphs {
   Block::Paint Block::quadrantInk(Rect cell, std::uint8_t mask) {
     const auto middle_x = split(cell.width, half_eighths);
     const auto middle_y = split(cell.height, half_eighths);
-    const std::array<float, 2> tops{0, middle_y};
-    const std::array<float, 2> bottoms{middle_y, cell.height};
-    Paint result;
-
-    for (std::size_t row = 0; row < tops.size(); ++row) {
+    const auto band = [&](unsigned row, float top, float bottom) -> Rect {
       const auto left = (mask & (upper_left << (2 * row))) != 0;
       const auto right = (mask & (upper_right << (2 * row))) != 0;
       if (!left && !right) {
-        continue;
+        return {};
       }
 
       const auto x = left ? 0 : middle_x;
       const auto right_edge = right ? cell.width : middle_x;
 
-      result.appendMerged({.x = x, .y = tops[row], .width = right_edge - x, .height = bottoms[row] - tops[row]});
+      return {.x = x, .y = top, .width = right_edge - x, .height = bottom - top};
+    };
+
+    auto upper = band(0, 0, middle_y);
+    Paint result;
+
+    if ((mask & (lower_left | lower_right)) == 0) {
+      result.push(upper);
+
+      return result;
     }
+
+    const auto lower = band(1, middle_y, cell.height);
+    if (upper.empty() || lower.empty()) {
+      result.push(upper.empty() ? lower : upper);
+
+      return result;
+    }
+
+    // Two bands that line up make one rectangle, as Ink::appendMerged would join them; with only
+    // two, the ink needs no search for the band to join.
+    if (upper.x == lower.x && upper.width == lower.width && upper.bottom() == lower.y) {
+      upper.height += lower.height;
+      result.push(upper);
+
+      return result;
+    }
+
+    result.push(upper);
+    result.push(lower);
 
     return result;
   }

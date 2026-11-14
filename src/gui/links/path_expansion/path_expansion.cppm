@@ -231,7 +231,7 @@ export {
       using PathText = runtime::FixedText<maximum_bytes>;
 
       template <PathEnvironment Environment>
-      [[nodiscard]] TBC_HOT_PATH static PathText expand(PathExpansionInput input, const Environment& environment) {
+      [[nodiscard]] TBC_GENERIC static PathText expand(PathExpansionInput input, const Environment& environment) {
         const Lookup<Environment> lookup{environment};
 
         return expandWith(input, lookup);
@@ -251,7 +251,7 @@ export {
       };
 
       template <PathEnvironment Environment>
-      class TBC_HOT_PATH Lookup final : public Variables {
+      class TBC_GENERIC Lookup final : public Variables {
       public:
         explicit Lookup(const Environment& source) noexcept
             : source_(source) {}

@@ -82,7 +82,7 @@ export {
     class MachineRuntimeLocation {
     public:
       template <MachineRuntimeEnvironment Environment>
-      [[nodiscard]] TBC_HOT_PATH static MachineRuntimeLocation resolve(const Environment& environment, std::uint32_t user) {
+      [[nodiscard]] TBC_GENERIC static MachineRuntimeLocation resolve(const Environment& environment, std::uint32_t user) {
         const Lookup<Environment> lookup{environment};
 
         return resolveFrom(lookup, user);
@@ -97,7 +97,7 @@ export {
     private:
       // The caller's environment behind the source SocketLocation reads.
       template <MachineRuntimeEnvironment Environment>
-      class TBC_HOT_PATH Lookup final : public runtime::EnvironmentSource {
+      class TBC_GENERIC Lookup final : public runtime::EnvironmentSource {
       public:
         explicit Lookup(const Environment& source) noexcept
             : source_(source) {}

@@ -136,7 +136,7 @@ export {
 
       // Generic over the caller's label and publisher, so it stays here.
       template <AgentAlertLabel Resolve, NotificationPublisher Publish>
-      TBC_HOT_PATH static std::size_t publish(std::span<const AgentStatusChange> changes, Resolve resolve, Publish publish_notification) {
+      TBC_GENERIC static std::size_t publish(std::span<const AgentStatusChange> changes, Resolve resolve, Publish publish_notification) {
         const auto count = static_cast<std::size_t>(std::ranges::count_if(changes, alertable));
         const auto individual = count > NotificationCenter::capacity ? NotificationCenter::capacity - 1 : count;
         std::size_t published = 0;

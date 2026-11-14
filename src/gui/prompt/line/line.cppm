@@ -72,7 +72,7 @@ export namespace telar::gui::prompt {
 
   // A caller's callable behind Continuation, for the time of one key.
   template <typename Incomplete>
-  class TBC_HOT_PATH ContinuationOf final : public Continuation {
+  class TBC_GENERIC ContinuationOf final : public Continuation {
   public:
     explicit ContinuationOf(Incomplete& incomplete) noexcept
         : incomplete_(incomplete) {}
@@ -119,7 +119,7 @@ export namespace telar::gui::prompt {
     // A key in the editor or the queue. `incomplete` tells whether the shell would wait for more
     // of the command, so Enter continues it on a new line.
     template <typename Incomplete>
-    TBC_HOT_PATH Outcome press(Surface surface, const KeyPress& key, Incomplete&& incomplete, std::span<const std::string> history = {}) {
+    TBC_GENERIC Outcome press(Surface surface, const KeyPress& key, Incomplete&& incomplete, std::span<const std::string> history = {}) {
       const ContinuationOf<std::remove_reference_t<Incomplete>> continuation{incomplete};
 
       return pressKey(surface, key, continuation, history);
@@ -127,7 +127,7 @@ export namespace telar::gui::prompt {
 
     // A key the user bound to an action; the rest of the line answers it as for any key.
     template <typename Incomplete>
-    TBC_HOT_PATH Outcome perform(Surface surface, Action action, Incomplete&& incomplete, std::span<const std::string> history = {}) {
+    TBC_GENERIC Outcome perform(Surface surface, Action action, Incomplete&& incomplete, std::span<const std::string> history = {}) {
       const ContinuationOf<std::remove_reference_t<Incomplete>> continuation{incomplete};
 
       return performAction(surface, action, continuation, history);

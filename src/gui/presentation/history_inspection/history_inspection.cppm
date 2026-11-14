@@ -298,7 +298,7 @@ export {
       // Stays here: generic over the caller's router.
       template <PrefixHintRouter Router>
       // The labels of the hints a router binds are literals.
-      [[nodiscard]] TBC_HOT_PATH static tbc::view<ModeHints, tbc::lt::static_storage> resolve(const Router& router) noexcept {
+      [[nodiscard]] TBC_GENERIC static tbc::view<ModeHints, tbc::lt::static_storage> resolve(const Router& router) noexcept {
         ModeHints result;
 
         for (const auto& [action, label] : actions) {
