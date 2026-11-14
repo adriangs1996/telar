@@ -144,24 +144,6 @@
   "lib/client/include/telar_client/protocol/worktrees.hpp": [
     "../serializers/telar_messages.hpp"
   ],
-  "lib/client/include/telar_client/serializers/telar_protocol.hpp": [
-    "../protocol/agents.hpp",
-    "../protocol/clients.hpp",
-    "../protocol/clipboard.hpp",
-    "../protocol/content.hpp",
-    "../protocol/editor.hpp",
-    "../protocol/execution.hpp",
-    "../protocol/graphics.hpp",
-    "../protocol/history.hpp",
-    "../protocol/layout.hpp",
-    "../protocol/pane_io.hpp",
-    "../protocol/runtime.hpp",
-    "../protocol/worktrees.hpp"
-  ],
-  "lib/client/protocol/protocol.cppm": [
-    "<exception>",
-    "telar_client/serializers/telar_protocol.hpp"
-  ],
   "lib/clipboard/main.cpp": [
     "<cstdio>",
     "<print>",

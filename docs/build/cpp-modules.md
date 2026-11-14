@@ -183,7 +183,7 @@ ese módulo, y cada importador vuelve a fusionar las copias. Con un concepto com
 `ConcurrentAllocator` repetido en casi cien BMIs, restringir un template con él
 llegó a costar 8 s y 23 MB de BMI en un módulo de 30 líneas (`traffic.tap`).
 `python3 tools/check-cpp-modules.py` rechaza un fragmento global que incluya un
-header con dueño. Los headers solo de dueño (`telar.client.protocol`,
+header con dueño. Los headers solo de dueño (`telar.wire.pane_io`,
 `telar.platform.primitives`, `telar.runtime.terminal.control`, …) no contienen
 código propio: son el punto de entrada de esos headers para los módulos.
 
