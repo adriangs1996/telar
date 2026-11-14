@@ -379,9 +379,11 @@ graph LR
 - **Hecho cuando:** core no incluye ni importa nada de application ni de input.
 - **Resultado:** `9904e212c`. `primitives` incluye `core/memory.hpp` en vez de `application/dependencies.hpp` y deja de exportar `ApplicationAllocator` y `ApplicationMemory`, que solo usan fuentes Qt y Objective-C++. La rueda del ratón pasa a `telar.gui.input.wheel_accumulator`.
 
-### [ ] P3.17 · Cierre de capas
+### [x] P3.17 · Cierre de capas
 - **Depende de:** P2.1, P3.6–P3.16
 - **Hecho cuando:** la allowlist de la regla 2 está vacía, el checker no encuentra ciclos (tampoco a través de unidades de implementación) y P0.2 da 0 aristas hacia arriba. Se ejecuta la suite completa.
+- **Resultado:** `d735bc3c4`. `upward_imports` vacía; el checker busca ciclos también a través de los imports de los `.cpp` (comprobado con un ciclo temporal que la versión anterior no veía) y no encuentra ninguno; `module-metrics.py` da 0 aristas hacia arriba y 0 ciclos. Los dos ciclos que quedaban se rompen con `telar.runtime.model.launch_record` y `telar.runtime.vocabulary.exchange` (antes `exchange_capture.exchange`); el resto, reordenando `process_layers`; `gui.machines.discovery` deja de importar `notification_commands`. Suite completa: falla `runtime-tests` en checks con plazo de tiempo bajo carga alta (`observation_test.cpp:176`, `process_identification_test.cpp:355`; un binario sin estos cambios falla igual) y `gui-quick` por su límite de 90 s, los dos ya conocidos. **Fase 3 cerrada.**
+- **Fuera del plan, para arreglar aparte:** los checks con plazo de tiempo de `runtime-tests` fallan con la máquina cargada.
 
 ---
 
