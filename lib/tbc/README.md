@@ -80,7 +80,8 @@ text_a longerText(text_a first, text_a second) {
 
 A telar module unit imports the same declarations as `telar.tbc` instead of
 including `<tbc/view.hpp>`, and includes `<tbc/annotations.hpp>`, which includes
-nothing, when it needs `TBC_SHARED`, `TBC_CONSTRUCTS`, `TBC_RAW` or `TBC_HOT_PATH`.
+nothing, when it needs `TBC_SHARED`, `TBC_CONSTRUCTS`, `TBC_RAW`, `TBC_HOT_PATH`
+or `TBC_GENERIC`.
 
 [`docs/contracts.md`](docs/contracts.md) describes the signature design. Repeated
 `lt::a` denotes a common region, not one particular argument or allocation.
@@ -271,6 +272,20 @@ export template <typename type>
 class TBC_HOT_PATH Vector {
   // ...
 };
+```
+
+- Templates over a type their caller chooses, marked `TBC_GENERIC`: a protocol
+  message, a visitor, a callable or an output type that no `extern template`
+  can instantiate in advance. The mark is reported on a function that is
+  neither a template nor a member of one, including a full specialization,
+  which is an ordinary function. On a class template, it covers the bodies of
+  all its members; on a variable template, the lambdas that initialize it.
+
+```cpp
+export template <typename message>
+TBC_GENERIC void send(Connection& connection, const message& value) {
+  // ...
+}
 ```
 
 What the global module fragment includes and what follows `module :private;`

@@ -16,7 +16,11 @@ del sys.argv[1:]
 
 CHECK = "[tbc-interface-body]"
 # A case marks each line it expects a report on with one of these comments.
-MARKS = {"// body": "function body in the interface", "// not inline": "is not inline"}
+MARKS = {
+    "// body": "function body in the interface",
+    "// not inline": "is not inline",
+    "// not template": "neither a template nor a member of one",
+}
 REPORT = re.compile(r"^(?P<file>[^\s:][^:]*):(?P<line>\d+):\d+: (?:warning|error): (?P<message>.*)$", re.MULTILINE)
 
 
@@ -277,6 +281,129 @@ class InterfaceBodiesTest(Fixture):
             };
 
             int used = Vector<int>{}.front();
+            """)
+
+    def test_marked_generic_templates_stay(self):
+        self.check("""
+            module;
+
+            #include <tbc/annotations.hpp>
+
+            export module demo;
+
+            export template <typename message>
+            TBC_GENERIC void send(const message &value) {
+            }
+
+            export template <typename type>
+            class Channel {
+            public:
+              template <typename visitor>
+              TBC_GENERIC void visit(visitor &&each) {
+                each(value_);
+              }
+
+              TBC_GENERIC type get() const {
+                return value_;
+              }
+
+              void set(type value);
+
+            private:
+              type value_{};
+            };
+
+            template <typename type>
+            TBC_GENERIC void Channel<type>::set(type value) {
+              value_ = value;
+            }
+
+            export template <typename type>
+            class TBC_GENERIC Queue {
+            public:
+              type front() const {
+                return value_;
+              }
+
+              struct Iterator {
+                type operator*() const {
+                  return {};
+                }
+              };
+
+            private:
+              type value_{};
+            };
+
+            export template <typename type>
+            TBC_GENERIC inline auto convert = [](type value) {
+              return value;
+            };
+
+            int used = Channel<int>{}.get() + Queue<int>{}.front() + convert<int>(1);
+            """)
+
+    def test_marked_generic_non_templates_are_reported(self):
+        self.check("""
+            module;
+
+            #include <tbc/annotations.hpp>
+
+            export module demo;
+
+            export TBC_GENERIC inline int next(int value) { // not template
+              return value + 1;
+            }
+
+            export class Cursor {
+            public:
+              TBC_GENERIC inline int advance() { // not template
+                return ++position_;
+              }
+
+            private:
+              int position_ = 0;
+            };
+
+            export class TBC_GENERIC Plain {
+            public:
+              inline void run() { // not template
+              }
+            };
+
+            export template <typename type>
+            TBC_GENERIC type twice(type value) {
+              return value + value;
+            }
+
+            // A full specialization is an ordinary function, which its implementation unit can define.
+            template <>
+            inline int twice<int>(int value) { // not template
+              return value * 2;
+            }
+
+            export template <typename type>
+            class TBC_GENERIC Box {
+            public:
+              type get() const {
+                return value_;
+              }
+
+            private:
+              type value_{};
+            };
+
+            template <>
+            class Box<bool> {
+            public:
+              inline bool get() const { // not template
+                return true;
+              }
+            };
+
+            export TBC_GENERIC inline auto hot = [](int value) { // not template
+              return value;
+            };
             """)
 
     def test_lambdas_that_initialize_variables_are_bodies(self):
