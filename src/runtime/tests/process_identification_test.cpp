@@ -168,14 +168,12 @@ static void testProcessCache() {
   check(cache.preferred(43) == AgentProvider::unknown);
 }
 
-static void testGroupMembers(SystemAllocator& memory, const std::filesystem::path& root) {
-  const auto codex = (root / "codex").string();
-  const auto claude = (root / "claude").string();
+// The members run this test binary under each agent's name as their first argument: copies
+// under those names would be new executables, and deleting them while Gatekeeper still
+// assesses them crashes syspolicyd and leaves every launch waiting on it in _dyld_start.
+static void testGroupMembers(SystemAllocator& memory) {
   const ExecutablePath executable;
-
-  std::filesystem::copy_file(executable.c_str(), codex);
-  std::filesystem::copy_file(executable.c_str(), claude);
-  const std::array<std::string_view, 6> arguments{"/bin/sh", "-c", "\"$1\" --process-identification-fixture & \"$2\" --process-identification-fixture & wait", "fixture", codex, claude};
+  const std::array<std::string_view, 5> arguments{"/bin/sh", "-c", "\"$1\" --process-identification-fixture codex & \"$1\" --process-identification-fixture claude & wait", "fixture", executable.view()};
   Command command{memory, Launch{.cwd = "/", .arguments = arguments}, CommandPurpose::administration};
   PipeProcess process{command.specification({})};
   ProcessInspector inspector;
@@ -391,6 +389,6 @@ void testProcessIdentification() {
   testListeningPortsOrder();
   testListeningPorts();
   testTerminalForegroundSnapshot(memory);
-  testGroupMembers(memory, root);
+  testGroupMembers(memory);
   std::filesystem::remove_all(root);
 }
