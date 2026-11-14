@@ -65,15 +65,7 @@ namespace telar {
     std::uint64_t request_id{};
     std::span<const ClientDescriptor> entries{};
 
-    void validate() const {
-      for (std::size_t i = 0; i < entries.size(); ++i) {
-        for (std::size_t j = 0; j < i; ++j) {
-          if (entries[i].id == entries[j].id) {
-            throw EncodingError{"Duplicate client identity"};
-          }
-        }
-      }
-    }
+    void validate() const;
   };
 
   template <>

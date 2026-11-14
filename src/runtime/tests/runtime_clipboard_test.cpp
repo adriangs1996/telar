@@ -17,7 +17,6 @@ static_assert(true);
 #include "../terminal/ghostty_handle.hpp"
 #include "../terminal/graphics_cursor.hpp"
 #include "../terminal/pty_response_queue.hpp"
-#include "cell_layout.hpp"
 #include "telar_base/diagnostics/config.hpp"
 #include "telar_base/diagnostics/limit_reach.hpp"
 #include "telar_base/memory/allocator.hpp"
@@ -84,7 +83,7 @@ using namespace telar;
 using namespace telar::runtime;
 
 #ifdef TELAR_TEST_NATIVE_CLIPBOARD
-void nativeClipboardTests(SystemAllocator& memory);
+void nativeClipboardTests(ConcurrentMemory& memory);
 #endif
 
 namespace {
@@ -136,12 +135,12 @@ namespace {
     }
   }
 
-  void transferTests(SystemAllocator& memory) {
+  void transferTests(ConcurrentMemory& memory) {
     RuntimeModel model{memory};
-    ClientStore<SystemAllocator> clients{memory};
+    ClientStore<ConcurrentMemory> clients{memory};
     ClientPeer first{memory, model, clients, ClientRole::control};
     ClientPeer other{memory, model, clients, ClientRole::control};
-    RuntimeClipboardService<SystemAllocator, Reader> service;
+    RuntimeClipboardService<ConcurrentMemory, Reader> service;
 
     Reader::blocked = true;
     service.read(clients, first.session().id, {.request_id = 1});
@@ -244,7 +243,9 @@ namespace {
 }
 
 int main() {
-  SystemAllocator memory;
+  SystemAllocator system;
+  MemoryAdapter adapter{system};
+  ConcurrentMemory& memory = adapter;
 
   transferTests(memory);
   bounds();

@@ -85,7 +85,8 @@ Fuera de las excepciones no hay `#include`. Pueden incluir `lib/sys`, los adapta
 Qt/moc (los ficheros que incluyen una cabecera `<Q…>`), las fuentes C y Objective-C(++)
 y las cabeceras que todos ellos alcanzan, porque no pueden importar módulos. Un módulo
 dueño puede incluir las cabeceras de `header_owners` que cruzan esa frontera, y
-cualquier fichero puede incluir una cabecera de `macro_headers`, que no incluye nada.
+cualquier fichero puede incluir una cabecera de `macro_headers`, que no incluye nada, o
+un fragmento `.inc` de datos que genera el build fuera del árbol.
 Los tests y las herramientas quedan fuera de la regla. [textual-includes.json](textual-includes.json) lista por
 fichero los includes que quedan; quien quita uno borra su entrada, y una entrada que
 ya no está en el fichero también hace fallar el checker.
@@ -146,7 +147,10 @@ Las unidades de módulo importan la biblioteca estándar con `import std;`
 (`CMAKE_CXX_MODULE_STD`; el bootstrap fija el valor experimental de CMake para su
 versión). En el fragmento global solo quedan las cabeceras C y sus envoltorios
 (`<cerrno>`, `<cstdio>`…), `<new>` y `<version>`: macros como `errno`, `assert` o
-`INT_MAX` y el `operator new` de colocación no viajan por un módulo. Una cabecera
+`INT_MAX` y el `operator new` de colocación no viajan por un módulo. Las unidades de la
+CLI y del runtime ya no incluyen ninguna: `errno` se lee con `telar::sys::lastError()`,
+`assert` es `TELAR_ASSERT` (`telar_base/diagnostics/config.hpp`), los límites salen de
+`std::numeric_limits` y las macros del sistema, de `telar.sys.*`. Una cabecera
 estándar textual en cada fragmento global se serializaba en cada BMI y cada
 importador la volvía a fusionar: un build Debug limpio del runtime bajó de 171 s
 a 26 s. Los módulos dueño de cabeceras siguen incluyéndolas textualmente, porque

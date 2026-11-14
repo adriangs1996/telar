@@ -1,31 +1,25 @@
-module;
-#include <cstddef>
-#include <new>
-#include <stdlib.h>
-
-#include <cstdlib>
-
-#include <cerrno>
-#include <cstdio>
-#include <fcntl.h>
-#include <limits.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <linux/fs.h>
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <sys/syscall.h>
-#endif
-#include <cstdint>
-
-#include "integration_assets.hpp"
-#include <cstring>
-
 module telar.cli.integration.settings;
 import telar.sys.posix;
 
+namespace telar::runtime::cli::integration::assets {
+
+#include "integration_assets.inc"
+
+}
+
 namespace telar::runtime::cli::integration {
+
+  std::optional<std::string_view> skillText(std::string_view name) noexcept {
+    if (name == "telar") {
+      return assets::telar_skill;
+    }
+
+    if (name == "coordinator") {
+      return assets::coordinator_skill;
+    }
+
+    return std::nullopt;
+  }
 
   template <Allocator Memory>
   String<Memory> joinPath(Memory& memory, std::string_view directory, std::string_view name) {

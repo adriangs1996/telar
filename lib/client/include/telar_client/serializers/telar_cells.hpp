@@ -37,7 +37,7 @@ namespace telar {
     Kind kind = Kind::default_color;
     std::array<Byte, 3> channels{};
 
-    bool operator==(const CellColor& other) const {
+    constexpr bool operator==(const CellColor& other) const {
       if (kind != other.kind) {
         return false;
       }
@@ -48,7 +48,8 @@ namespace telar {
     }
   };
 
-  struct CellStyle {
+  // Every cell of a frame is validated and coded on its own, so the cell types keep their bodies.
+  struct TBC_HOT_PATH CellStyle {
     std::uint16_t flags = 0;
     CellColor foreground{}, background{}, underline_color{};
     bool operator==(const CellStyle&) const = default;
@@ -60,7 +61,7 @@ namespace telar {
     }
   };
 
-  struct Cell {
+  struct TBC_HOT_PATH Cell {
     CellWidth width = CellWidth::single;
     CellStyle style{};
     std::span<const Byte> text{};
@@ -76,7 +77,7 @@ namespace telar {
   };
 
   template <>
-  struct BodySchema<CellColor> {
+  struct TBC_HOT_PATH BodySchema<CellColor> {
     static constexpr bool fixed_size = false;
     static constexpr std::size_t min_width = 1;
 
@@ -105,7 +106,7 @@ namespace telar {
   };
 
   template <>
-  struct BodySchema<CellStyle>
+  struct TBC_HOT_PATH BodySchema<CellStyle>
       : Serializer<Field<&CellStyle::flags, u16, "flags">, Field<&CellStyle::foreground, ValueCodec<CellColor>, "foreground">, Field<&CellStyle::background, ValueCodec<CellColor>, "background">, Field<&CellStyle::underline_color, ValueCodec<CellColor>, "underline_color">> {
     static void validate(const CellStyle& value) {
       value.validate();

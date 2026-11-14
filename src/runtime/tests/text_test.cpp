@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "cell_layout.hpp"
 #include "telar_base/diagnostics/config.hpp"
 #include <cassert>
 #include <cstddef>
@@ -85,7 +84,10 @@ static void testInputScanning() {
 void testText() {
   testInputScanning();
   SystemAllocator system;
-  BudgetAllocator memory{system, 32 * 1024 * 1024};
+  BudgetAllocator budget{system, 32 * 1024 * 1024};
+  SynchronizedAllocator synchronized{budget};
+  MemoryAdapter adapter{synchronized};
+  ConcurrentMemory& memory = adapter;
   Terminal terminal{memory, TerminalSize{.cols = 20, .rows = 4, .cell_width_px = 0, .cell_height_px = 0}};
 
   check(terminal.outputSettled());

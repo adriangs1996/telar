@@ -183,7 +183,10 @@ static void testClosedGeneration() {
 
 static void testResponseOutbox() {
   SystemAllocator system;
-  BudgetAllocator memory{system, 4096};
+  BudgetAllocator budget{system, 4096};
+  SynchronizedAllocator synchronized{budget};
+  MemoryAdapter adapter{synchronized};
+  ConcurrentMemory& memory = adapter;
   const auto shared_queue = std::make_shared<PtyResponseQueue>();
   auto& queue = *shared_queue;
   const std::array<std::uint8_t, 3> ack{'A', 'C', 'K'};
@@ -230,7 +233,7 @@ static void testResponseOutbox() {
       outbox.append(message);
     }
 
-    check(memory.liveBytes() == 4096);
+    check(budget.liveBytes() == 4096);
     bool failed = false;
 
     try {
@@ -241,7 +244,7 @@ static void testResponseOutbox() {
 
     check(failed && outbox.pending());
     check(outbox.drain() && queue.snapshot().messages == 3);
-    check(memory.liveBytes() == 0);
+    check(budget.liveBytes() == 0);
     queue.clear();
     outbox.append(ack);
     queue.close();
@@ -250,7 +253,7 @@ static void testResponseOutbox() {
     check(!outbox.pending() && queue.empty());
   }
 
-  check(memory.liveBytes() == 0 && queue.snapshot().dropped == 0);
+  check(budget.liveBytes() == 0 && queue.snapshot().dropped == 0);
 }
 
 static void testWorkerPublicationFailure() {
@@ -296,7 +299,9 @@ static void testWorkerPriority() {
   std::atomic<bool> drained = false;
   std::atomic<std::size_t> yielded = 0;
   std::jthread worker{[&] {
-    SystemAllocator memory;
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    ConcurrentMemory& memory = adapter;
     ResponseOutbox outbox{memory, shared_queue};
 
     for (unsigned index = 0; index < 100; ++index) {

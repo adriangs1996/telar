@@ -3,12 +3,8 @@
 static_assert(true);
 #endif
 
-// Templates instantiated here use the SDK's static inline byte swaps; without a
-// textual declaration clang emits them twice (duplicate _OSSwapInt32).
-#include <arpa/inet.h>
-#include <cstdio>
-
 import std;
+import telar.sys.posix;
 import telar.base.memory.allocators;
 import telar.platform.error;
 import telar.platform.paths;

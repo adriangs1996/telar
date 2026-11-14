@@ -1,0 +1,104 @@
+module telar.runtime.model.slot_store;
+
+namespace telar::runtime {
+
+  ClientRole classifyRequest(ClientTag tag) noexcept {
+    return ClientRequests::role(tag);
+  }
+
+  PaneText ExitedPanes::Record::response(const ReadPane& request) const noexcept {
+    std::string_view text{bytes.data(), length};
+    const auto last = text.find_last_not_of("\n ");
+
+    text = last == std::string_view::npos ? std::string_view{} : text.substr(0, last + 1);
+    auto start = text.size();
+    unsigned lines = 0;
+
+    while (start != 0) {
+      if (text[start - 1] == '\n' && ++lines == request.rows) {
+        break;
+      }
+
+      --start;
+    }
+
+    return PaneText{.request_id = request.request_id, .pane_id = pane_id, .truncated = start == 0 && truncated, .text = text.substr(start), .exit_code = exit_code};
+  }
+
+  void ExitedPanes::record(std::uint64_t pane_id, std::uint64_t generation, const PaneText& text) noexcept {
+    auto& entry = entries_[next_];
+
+    entry.pane_id = pane_id;
+    entry.generation = generation;
+    entry.exit_code = text.exit_code.value_or(0);
+    entry.length = std::min(text.text.size(), maximum_bytes);
+    entry.truncated = text.truncated || entry.length != text.text.size();
+    std::copy_n(text.text.end() - entry.length, entry.length, entry.bytes.begin());
+    next_ = (next_ + 1) % capacity;
+  }
+
+  const ExitedPanes::Record* ExitedPanes::find(std::uint64_t pane_id, std::uint64_t generation) const noexcept {
+    for (std::size_t offset = 0; offset < capacity; ++offset) {
+      const auto& entry = entries_[(next_ + capacity - 1 - offset) % capacity];
+      if (pane_id != 0 && entry.pane_id == pane_id && (generation == 0 || entry.generation == generation)) {
+        return &entry;
+      }
+    }
+
+    return nullptr;
+  }
+
+  bool HeldTabs::contains(TabLocation location) const noexcept {
+    return find(location).has_value();
+  }
+
+  bool HeldTabs::insert(TabLocation location) noexcept {
+    if (contains(location)) {
+      return true;
+    }
+
+    if (count_ == capacity) {
+      return false;
+    }
+
+    locations_[count_++] = location;
+    return true;
+  }
+
+  bool HeldTabs::erase(TabLocation location) noexcept {
+    const auto index = find(location);
+    if (!index) {
+      return false;
+    }
+
+    locations_[*index] = locations_[--count_];
+    return true;
+  }
+
+  std::optional<TabLocation> HeldTabs::pop() noexcept {
+    if (count_ == 0) {
+      return std::nullopt;
+    }
+
+    return locations_[--count_];
+  }
+
+  std::optional<std::size_t> HeldTabs::find(TabLocation location) const noexcept {
+    for (std::size_t index = 0; index < count_; ++index) {
+      const auto& candidate = locations_[index];
+      if (candidate.workspace.kind == location.workspace.kind && candidate.workspace.id == location.workspace.id && candidate.tab_id == location.tab_id) {
+        return index;
+      }
+    }
+
+    return std::nullopt;
+  }
+
+  void advanceIdentityCounter(std::uint64_t& counter, std::uint64_t next) noexcept {
+    // Zero marks exhaustion after the last nonzero identity; restoring an older counter must not reopen it.
+    if (counter != 0) {
+      counter = next == 0 ? 0 : std::max(counter, next);
+    }
+  }
+
+}

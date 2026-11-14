@@ -1,10 +1,8 @@
-module;
-#include <sys/stat.h>
-#include <sys/un.h>
-
 export module telar.runtime.platform.local_listener;
 
 import std;
+import telar.sys.posix;
+import telar.sys.socket;
 
 import telar.platform.primitives;
 
@@ -24,15 +22,11 @@ export {
       LocalListener(const LocalListener&) = delete;
       LocalListener& operator=(const LocalListener&) = delete;
 
-      inline int descriptor() const noexcept {
-        return socket_.get();
-      }
+      int descriptor() const noexcept;
 
       FileDescriptor accept(LocalPeerPolicy policy = LocalPeerPolicy::same_user);
 
-      inline std::string_view path() const noexcept {
-        return path_.data();
-      }
+      std::string_view path() const noexcept;
 
     private:
       void removeStaleSocket(const sockaddr_un& address);

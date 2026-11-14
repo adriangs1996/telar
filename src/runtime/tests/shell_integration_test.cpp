@@ -9,8 +9,6 @@ static_assert(true);
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "command_specs.hpp"
-
 import std;
 import telar.base.memory.allocators;
 import telar.platform.fs;
@@ -62,7 +60,7 @@ namespace {
     return path;
   }
 
-  std::vector<std::string> spawnedArguments(Command<SystemAllocator>& command) {
+  std::vector<std::string> spawnedArguments(Command<ConcurrentMemory>& command) {
     const auto specification = command.specification(TerminalSize{80, 24, 0, 0});
     std::vector<std::string> arguments;
 
@@ -73,18 +71,18 @@ namespace {
     return arguments;
   }
 
-  void preparation(SystemAllocator& memory) {
+  void preparation(ConcurrentMemory& memory) {
     TemporaryDirectory home{"/tmp/telar-shell-XXXXXX"};
-    const auto directory = ShellIntegration<SystemAllocator>::install(memory, home.path());
+    const auto directory = ShellIntegration<ConcurrentMemory>::install(memory, home.path());
 
     check(directory.starts_with(text(home.path()) + "/telar/shell-integration/"));
     struct stat state{};
 
     check(::stat(directory.c_str(), &state) == 0 && (state.st_mode & 0077) == 0);
     check(::stat((text(directory) + "/zsh/.zshenv").c_str(), &state) == 0 && (state.st_mode & 0777) == 0600);
-    check(ShellIntegration<SystemAllocator>::install(memory, home.path()) == directory);
+    check(ShellIntegration<ConcurrentMemory>::install(memory, home.path()) == directory);
 
-    const ShellIntegration<SystemAllocator> integration{memory, directory};
+    const ShellIntegration<ConcurrentMemory> integration{memory, directory};
 
     {
       const std::array<std::string_view, 3> arguments{"/bin/zsh", "-l", "-i"};
@@ -139,7 +137,7 @@ namespace {
       const std::array<std::string_view, 1> arguments{"/bin/zsh"};
       Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
 
-      check(!ShellIntegration<SystemAllocator>{memory, ""}.apply(command));
+      check(!ShellIntegration<ConcurrentMemory>{memory, ""}.apply(command));
       check(!command.environment("ZDOTDIR") || command.environment("ZDOTDIR") != text(directory) + "/zsh");
     }
 
@@ -211,7 +209,7 @@ namespace {
   // Runs a real shell through the integration, in a home that only sets a prompt, and reads its
   // marks the way the runtime does: only signed ones count. With `bare`, telar's editor stands in
   // for the prompt, so the shell draws none of the user's.
-  void signsCommands(SystemAllocator& memory, const ShellIntegration<SystemAllocator>& integration, const std::string& shell, std::string_view home, bool bare = false) {
+  void signsCommands(ConcurrentMemory& memory, const ShellIntegration<ConcurrentMemory>& integration, const std::string& shell, std::string_view home, bool bare = false) {
     const std::array<std::string_view, 3> arguments{shell, "-l", "-i"};
     Command command{memory, Launch{.cwd = home, .arguments = arguments}};
 
@@ -283,7 +281,7 @@ namespace {
   }
 
   // Runs `arguments` on a terminal until it exits, feeding its output to `zones`.
-  void runOnTerminal(SystemAllocator& memory, std::span<const std::string_view> arguments, std::string_view home, std::span<const std::pair<std::string_view, std::string_view>> environment, CommandZones& zones) {
+  void runOnTerminal(ConcurrentMemory& memory, std::span<const std::string_view> arguments, std::string_view home, std::span<const std::pair<std::string_view, std::string_view>> environment, CommandZones& zones) {
     Command command{memory, Launch{.cwd = home, .arguments = arguments}};
 
     command.setEnvironment("HOME", home);
@@ -315,9 +313,9 @@ namespace {
 
   // The integrated shell's `ssh` brings the integration only to an interactive session. A
   // stand-in ssh records what it was asked to run, and prints a configuration for -G.
-  void sshArguments(SystemAllocator& memory) {
+  void sshArguments(ConcurrentMemory& memory) {
     TemporaryDirectory home{"/tmp/telar-shell-XXXXXX"};
-    const auto directory = ShellIntegration<SystemAllocator>::install(memory, home.path());
+    const auto directory = ShellIntegration<ConcurrentMemory>::install(memory, home.path());
     const auto programs = text(home.path()) + "/bin";
 
     check(::mkdir(programs.c_str(), 0700) == 0);
@@ -371,7 +369,7 @@ namespace {
   // scripts under that host's own home and starts the login shell with them, which answers the
   // nonce and signs its marks with a token of its own.
   // With `bare`, the pane's shell runs in telar's prompt mode, which `ssh` passes on after the nonce.
-  void remoteShell(SystemAllocator& memory, std::string_view directory, const std::string& shell, bool bare = false) {
+  void remoteShell(ConcurrentMemory& memory, std::string_view directory, const std::string& shell, bool bare = false) {
     TemporaryDirectory home{"/tmp/telar-remote-XXXXXX"};
 
     writeUserPrompt(text(home.path()));
@@ -446,11 +444,11 @@ namespace {
     check(completions.marks == "UD" && !zones.remote() && zones.remoteDirectory().empty());
   }
 
-  void shells(SystemAllocator& memory) {
+  void shells(ConcurrentMemory& memory) {
     TemporaryDirectory home{"/tmp/telar-shell-XXXXXX"};
 
     writeUserPrompt(text(home.path()));
-    const ShellIntegration<SystemAllocator> integration{memory, ShellIntegration<SystemAllocator>::install(memory, home.path())};
+    const ShellIntegration<ConcurrentMemory> integration{memory, ShellIntegration<ConcurrentMemory>::install(memory, home.path())};
 
     if (const auto zsh = findProgram("zsh")) {
       signsCommands(memory, integration, *zsh, home.path());
@@ -479,7 +477,7 @@ namespace {
       std::puts("shell integration: fish not installed, skipped");
     }
 
-    const auto directory = ShellIntegration<SystemAllocator>::install(memory, home.path());
+    const auto directory = ShellIntegration<ConcurrentMemory>::install(memory, home.path());
 
     for (const auto name : {"zsh", "bash", "fish"}) {
       if (const auto shell = findProgram(name)) {
@@ -498,21 +496,21 @@ namespace {
 
 // A pane follows its integrated shell from the output it reads: at the prompt, running a
 // program, and the line discipline that program sets, as a password prompt does.
-void paneState(SystemAllocator& memory) {
+void paneState(ConcurrentMemory& memory) {
   const auto zsh = findProgram("zsh");
   if (!zsh) {
     return;
   }
 
   TemporaryDirectory home{"/tmp/telar-shell-XXXXXX"};
-  const ShellIntegration<SystemAllocator> integration{memory, ShellIntegration<SystemAllocator>::install(memory, home.path())};
+  const ShellIntegration<ConcurrentMemory> integration{memory, ShellIntegration<ConcurrentMemory>::install(memory, home.path())};
   const std::array<std::string_view, 3> arguments{*zsh, "-l", "-i"};
   Command command{memory, Launch{.cwd = home.path(), .arguments = arguments}};
 
   command.setEnvironment("HOME", home.path());
   command.removeEnvironment("ZDOTDIR");
   RuntimeModel model{memory};
-  auto owned = makeOwned<Pane<SystemAllocator>>(memory, memory, 7, TabLocation{}, command, PaneLaunch{TerminalSize{80, 24, 8, 16}, model.media_budget, model.graphics_limits, integration.apply(command)});
+  auto owned = makeOwned<Pane<ConcurrentMemory>>(memory, memory, 7, TabLocation{}, command, PaneLaunch{TerminalSize{80, 24, 8, 16}, model.media_budget, model.graphics_limits, integration.apply(command)});
   auto& pane = *owned;
 
   check(pane.shell_state.pane_id == 7 && pane.shell_state.shell == IntegratedShell::zsh);
@@ -628,7 +626,7 @@ void paneState(SystemAllocator& memory) {
 
 // A real `ssh` to the host TELAR_SSH_TEST_HOST names, reached without a password: the pane
 // follows the remote shell's prompts and commands, and its own shell's again once ssh exits.
-void sshSession(SystemAllocator& memory) {
+void sshSession(ConcurrentMemory& memory) {
   const char* host = std::getenv("TELAR_SSH_TEST_HOST");
   const auto zsh = findProgram("zsh");
   if (host == nullptr || !zsh) {
@@ -636,14 +634,14 @@ void sshSession(SystemAllocator& memory) {
   }
 
   TemporaryDirectory home{"/tmp/telar-shell-XXXXXX"};
-  const ShellIntegration<SystemAllocator> integration{memory, ShellIntegration<SystemAllocator>::install(memory, home.path()), true};
+  const ShellIntegration<ConcurrentMemory> integration{memory, ShellIntegration<ConcurrentMemory>::install(memory, home.path()), true};
   const std::array<std::string_view, 3> arguments{*zsh, "-l", "-i"};
   Command command{memory, Launch{.cwd = home.path(), .arguments = arguments}};
 
   command.setEnvironment("HOME", home.path());
   command.removeEnvironment("ZDOTDIR");
   RuntimeModel model{memory};
-  auto owned = makeOwned<Pane<SystemAllocator>>(memory, memory, 7, TabLocation{}, command, PaneLaunch{TerminalSize{80, 24, 8, 16}, model.media_budget, model.graphics_limits, integration.apply(command)});
+  auto owned = makeOwned<Pane<ConcurrentMemory>>(memory, memory, 7, TabLocation{}, command, PaneLaunch{TerminalSize{80, 24, 8, 16}, model.media_budget, model.graphics_limits, integration.apply(command)});
   auto& pane = *owned;
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{30};
   const auto until = [&](auto ready) {
@@ -710,9 +708,9 @@ void sshSession(SystemAllocator& memory) {
 
 // An ssh whose remote shell takes over keeps its block open, the remote commands after it,
 // until the pane's shell is back and ends it with ssh's status.
-void sessionBlocks(SystemAllocator& memory) {
-  Terminal<SystemAllocator> terminal{memory, TerminalSize{40, 12, 8, 16}};
-  CommandBlocks<SystemAllocator> blocks{memory, terminal};
+void sessionBlocks(ConcurrentMemory& memory) {
+  Terminal<ConcurrentMemory> terminal{memory, TerminalSize{40, 12, 8, 16}};
+  CommandBlocks<ConcurrentMemory> blocks{memory, terminal};
   const auto now = std::chrono::steady_clock::now();
   const auto run = [&](std::string_view line) {
     blocks.mark('A', now);
@@ -750,10 +748,10 @@ void sessionBlocks(SystemAllocator& memory) {
 // `clear` at a prompt takes the commands off the screen, whichever way it erases it: ncurses'
 // erases the scrollback too, and its blocks go; busybox's (CUP, ED 0) keeps the scrollback,
 // where the screen moves with its blocks, so the commands after it never land on their rows.
-void clearedBlocks(SystemAllocator& memory) {
+void clearedBlocks(ConcurrentMemory& memory) {
   for (const std::string_view clear : {"\x1b[H\x1b[2J\x1b[3J", "\x1b[H\x1b[J"}) {
-    Terminal<SystemAllocator> terminal{memory, TerminalSize{40, 12, 8, 16}};
-    CommandBlocks<SystemAllocator> blocks{memory, terminal};
+    Terminal<ConcurrentMemory> terminal{memory, TerminalSize{40, 12, 8, 16}};
+    CommandBlocks<ConcurrentMemory> blocks{memory, terminal};
     const auto now = std::chrono::steady_clock::now();
     // The shell's marks reach the terminal too, which flags its prompt rows.
     const auto mark = [&](char action, std::string_view sequence) {
@@ -932,7 +930,9 @@ void words() {
 
   // Command specs: offered for a command the shell runs, from the user's completions
   // directory when it compiles, else the one telar ships; an unchanged one is not sent again.
-  for (const auto& [name, source] : shipped::specs) {
+  const auto shipped = shippedSpecs();
+
+  for (const auto& [name, source] : shipped) {
     try {
       static_cast<void>(ebnf::command_spec::compile(source));
     } catch (const std::exception& error) {
@@ -941,7 +941,7 @@ void words() {
     }
   }
 
-  check(std::ranges::find(shipped::specs, std::string_view{"telar"}, &std::pair<std::string_view, std::string_view>::first) != shipped::specs.end());
+  check(std::ranges::find(shipped, std::string_view{"telar"}, &std::pair<std::string_view, std::string_view>::first) != shipped.end());
   make("bin/nmap", "", 0700);
   std::string reported = "gst";
   const auto spec = [&](std::string_view command, std::uint64_t known = 0) {
@@ -998,7 +998,9 @@ void words() {
 }
 
 void testShellIntegration() {
-  SystemAllocator memory;
+  SystemAllocator system;
+  MemoryAdapter adapter{system};
+  ConcurrentMemory& memory = adapter;
 
   detection();
   preparation(memory);

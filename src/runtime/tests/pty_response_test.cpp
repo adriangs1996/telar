@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "cell_layout.hpp"
 #include "telar_base/diagnostics/config.hpp"
 #include <cassert>
 #include <cstddef>
@@ -36,10 +35,15 @@ static std::span<const Byte> responseBytes(std::string_view text) {
 
 static void testSharedTerminalResponses() {
   SystemAllocator system;
-  BudgetAllocator memory{system, 16 * 1024 * 1024};
-  const auto queue = std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, decltype(memory)>{memory});
+  BudgetAllocator budget{system, 16 * 1024 * 1024};
+  SynchronizedAllocator synchronized{budget};
+  MemoryAdapter adapter{synchronized};
+  ConcurrentMemory& memory = adapter;
+  const auto queue = std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, ConcurrentMemory>{memory});
   Terminal terminal{memory, TerminalSize{80, 24, 0, 0}, TerminalPurpose::separate_media, queue};
-  MediaTerminal media{memory, TerminalSize{80, 24, 0, 0}, GraphicsLimits{}, queue};
+  MediaBudget media_budget{GraphicsLimits::maximum_global_bytes};
+  MediaAllocator media_memory{memory, media_budget, GraphicsLimits::maximum_pane_bytes};
+  MediaTerminal media{media_memory, TerminalSize{80, 24, 0, 0}, GraphicsLimits{}, queue};
 
   for (std::size_t index = 0; index < PtyResponseQueue::message_capacity; ++index) {
     media.reply(responseBytes("graphics reply"));

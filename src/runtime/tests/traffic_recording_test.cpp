@@ -48,10 +48,12 @@ static tr::Event packet(std::uint64_t sequence, std::span<const Byte> bytes) {
 static void retained() {
   SystemAllocator system;
   BudgetAllocator budget{system, 16 * 1024 * 1024};
-  SynchronizedAllocator memory{budget};
+  SynchronizedAllocator synchronized{budget};
+  MemoryAdapter adapter{synchronized};
+  ConcurrentMemory& memory = adapter;
 
   {
-    tr::Recordings<decltype(memory), Clock> recordings{memory};
+    tr::Recordings<ConcurrentMemory, Clock> recordings{memory};
     SensitiveAllocation output{memory, rec::Limits::page_bytes};
     const auto start = rec::Protocol::page(recordings.handle({.operation = rec::Operation::start, .max_bytes = 4096, .max_events = 3, .max_age_ms = 10, .selection = tr::Selection::packets}, output.bytes()));
 
@@ -105,7 +107,9 @@ static void retained() {
 static void pagesAndExport() {
   SystemAllocator system;
   BudgetAllocator budget{system, 16 * 1024 * 1024};
-  SynchronizedAllocator memory{budget};
+  SynchronizedAllocator synchronized{budget};
+  MemoryAdapter adapter{synchronized};
+  ConcurrentMemory& memory = adapter;
 
   {
     tr::Recordings recordings{memory};
@@ -151,7 +155,9 @@ static void pagesAndExport() {
 static void budgetsAndScopes() {
   SystemAllocator system;
   BudgetAllocator budget{system, 16 * 1024 * 1024};
-  SynchronizedAllocator memory{budget};
+  SynchronizedAllocator synchronized{budget};
+  MemoryAdapter adapter{synchronized};
+  ConcurrentMemory& memory = adapter;
 
   {
     tr::Recordings recordings{memory};
@@ -186,7 +192,9 @@ static void budgetsAndScopes() {
 static void runtimeLimits() {
   SystemAllocator system;
   BudgetAllocator budget{system, 16 * 1024 * 1024};
-  SynchronizedAllocator memory{budget};
+  SynchronizedAllocator synchronized{budget};
+  MemoryAdapter adapter{synchronized};
+  ConcurrentMemory& memory = adapter;
 
   {
     tr::Recordings recordings{memory};

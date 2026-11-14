@@ -95,7 +95,9 @@ int main(int argc, char** argv) {
     std::size_t failure_count = 0;
     std::size_t thrown_count = 0;
     {
-      SynchronizedAllocator memory{audit};
+      SynchronizedAllocator synchronized{audit};
+      MemoryAdapter adapter{synchronized};
+      ConcurrentMemory& memory = adapter;
       SqliteAllocator sqlite_memory{memory};
       HistoryStore store{memory, ":memory:"};
       EncodedReply reply{memory};

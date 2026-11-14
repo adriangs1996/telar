@@ -115,6 +115,9 @@ export {
 export {
   namespace telar::runtime::cli::integration {
 
+    // The agent skill `telar --skill NAME` prints, `telar` or `coordinator`, or nullopt for any other name.
+    std::optional<std::string_view> skillText(std::string_view name) noexcept;
+
     template <Allocator Memory, EnvironmentLookup Environment>
     int runSettings(Memory& memory, const IntegrationOptions& options, const Environment& environment, std::string_view executable);
     extern template int runSettings<Memory, ProcessEnvironment>(Memory& memory, const IntegrationOptions& options, const ProcessEnvironment& environment, std::string_view executable);

@@ -1,29 +1,11 @@
 module;
-#include <new>
+#include "tbc/annotations.hpp"
 
-#include <cinttypes>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <cstdio>
-#include <cstring>
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
 
-#include "telar_platform/open_directory.h"
-#include <cerrno>
-#include <cstdlib>
-#include <dirent.h>
-#include <fcntl.h>
 #include <openssl/sha.h>
-#include <sys/stat.h>
-#include <unistd.h>
-
-#include <poll.h>
-#include <sys/uio.h>
-
-#include <cassert>
 
 export module telar.runtime.plugins.tap_configuration;
 
@@ -52,193 +34,22 @@ export {
 
     class ActionEncoder {
     public:
-      inline explicit ActionEncoder(const config::RetainedActionValidator& validator)
-          : validator_(validator) {}
+      explicit ActionEncoder(const config::RetainedActionValidator& validator);
 
-      inline std::span<const Byte> encode(const lua::Value& result) {
-        auto output = std::span{storage_}.subspan(1);
-        Byte count = 0;
-
-        if (result.field("kind").present()) {
-          count = static_cast<Byte>(append(result, output));
-        } else {
-          const auto length = std::min(result.listLength(), ActionProtocol::maximum_effects);
-
-          for (std::size_t index = 0; index < length; ++index) {
-            count += static_cast<Byte>(append(result.element(static_cast<lua_Integer>(index) + 1), output));
-          }
-        }
-
-        storage_[0] = count;
-        return std::span{storage_}.first(storage_.size() - output.size());
-      }
+      std::span<const Byte> encode(const lua::Value& result);
 
     private:
-      inline bool append(const lua::Value& value, std::span<Byte>& output) const {
-        if (value.is(LUA_TFUNCTION)) {
-          value.fail("cannot return another callback");
-        }
+      bool append(const lua::Value& value, std::span<Byte>& output) const;
 
-        if (!validator_.validate(value)) {
-          return false;
-        }
+      static void tag(ActionTag value, std::span<Byte>& output);
 
-        if (value.is(LUA_TSTRING)) {
-          builtin(value.string(), output);
-        } else {
-          const auto kind = value.field("kind");
-          const auto name = kind.string();
-          if (name == "notification") {
-            notification(value, output);
-          } else if (name == "select-tab" || name == "select-workspace") {
-            tag(name == "select-tab" ? ActionTag::select_tab : ActionTag::select_workspace, output);
-            u8::encode(static_cast<Byte>(value.field("index").integer() - 1), output);
-          } else if (name == "select-tab-offset") {
-            tag(ActionTag::tab_offset, output);
-            u8::encode(static_cast<Byte>(value.field("offset").integer()), output);
-          } else if (name == "split-pane" || name == "focus-pane" || name == "resize-pane" || name == "resize-sidebar" || name == "move-tab") {
-            directional(name, value.field("direction").string(), output);
-          } else {
-            builtin(name, output);
-          }
-        }
+      static void directional(std::string_view name, std::string_view direction, std::span<Byte>& output);
 
-        return true;
-      }
+      static void builtin(std::string_view name, std::span<Byte>& output);
 
-      inline static void tag(ActionTag value, std::span<Byte>& output) {
-        u8::encode(static_cast<Byte>(value), output);
-      }
+      static void text(std::string_view value, std::span<Byte>& output);
 
-      inline static void directional(std::string_view name, std::string_view direction, std::span<Byte>& output) {
-        constexpr auto kinds = std::to_array<std::pair<std::string_view, ActionTag>>({
-            {"split-pane", ActionTag::split},
-            {"focus-pane", ActionTag::focus},
-            {"resize-pane", ActionTag::resize},
-            {"resize-sidebar", ActionTag::resize_sidebar},
-            {"move-tab", ActionTag::move_tab},
-        });
-
-        const auto* found = std::ranges::find(kinds, name, &decltype(kinds)::value_type::first);
-        if (found == kinds.end()) {
-          throw lua::Error{"Unsupported directional plugin effect"};
-        }
-
-        const auto kind = found->second;
-        constexpr std::array directions{"left", "right", "up", "down"};
-        Byte index = 0;
-
-        if (kind == ActionTag::split) {
-          index = static_cast<Byte>(direction == "vertical");
-        } else if (kind == ActionTag::move_tab) {
-          index = static_cast<Byte>(direction == "next");
-        } else {
-          index = static_cast<Byte>(std::ranges::find(directions, direction) - directions.begin());
-        }
-
-        tag(kind, output);
-        u8::encode(index, output);
-      }
-
-      inline static void builtin(std::string_view name, std::span<Byte>& output) {
-        constexpr auto simple = std::to_array<std::pair<std::string_view, ActionTag>>({
-            {"toggle-sidebar", ActionTag::sidebar},
-            {"close-pane", ActionTag::close_pane},
-            {"new-tab", ActionTag::new_tab},
-            {"rename-tab", ActionTag::rename_tab},
-            {"close-tab", ActionTag::close_tab},
-            {"detach", ActionTag::detach},
-            {"toggle-pane-fullscreen", ActionTag::fullscreen},
-            {"toggle-workspace-list", ActionTag::workspace_list},
-            {"new-workspace", ActionTag::new_workspace},
-            {"rename-workspace", ActionTag::rename_workspace},
-            {"leave-worktree", ActionTag::leave_worktree},
-        });
-
-        for (const auto& [known, value] : simple) {
-          if (name == known) {
-            tag(value, output);
-            return;
-          }
-        }
-
-        if (name == "next-tab" || name == "previous-tab") {
-          tag(ActionTag::tab_offset, output);
-          u8::encode(name == "next-tab" ? Byte{1} : std::bit_cast<Byte>(std::int8_t{-1}), output);
-          return;
-        }
-
-        constexpr auto stems = std::to_array<std::pair<std::string_view, std::string_view>>({
-            {"resize-sidebar-", "resize-sidebar"},
-            {"move-tab-", "move-tab"},
-            {"split-", "split-pane"},
-            {"focus-", "focus-pane"},
-            {"resize-", "resize-pane"},
-        });
-
-        for (const auto& [prefix, kind] : stems) {
-          if (name.starts_with(prefix)) {
-            directional(kind, name.substr(prefix.size()), output);
-            return;
-          }
-        }
-
-        for (const auto& [prefix, kind] : {std::pair{std::string_view{"select-tab-"}, ActionTag::select_tab}, std::pair{std::string_view{"select-workspace-"}, ActionTag::select_workspace}}) {
-          if (name.starts_with(prefix)) {
-            // The configuration admitted 1..255; the encoder still refuses anything else.
-            const auto index = unsignedNumber<unsigned>(name.substr(prefix.size()), std::numeric_limits<Byte>::max()).value_or(0);
-            if (index == 0) {
-              throw std::invalid_argument{"Invalid tab or workspace index"};
-            }
-
-            tag(kind, output);
-            u8::encode(static_cast<Byte>(index - 1), output);
-            return;
-          }
-        }
-
-        throw lua::Error{"Action is not supported by the plugin worker protocol"};
-      }
-
-      inline static void text(std::string_view value, std::span<Byte>& output) {
-        u16::encode(static_cast<std::uint16_t>(value.size()), output);
-        if (value.size() > output.size()) {
-          throw EncodingError{"Plugin result exceeds its bounds"};
-        }
-
-        std::ranges::copy(value, output.begin());
-        output = output.subspan(value.size());
-      }
-
-      inline static void notification(const lua::Value& value, std::span<Byte>& output) {
-        tag(ActionTag::notification, output);
-        const auto level = value.field("level");
-        constexpr std::array levels{"info", "success", "warning", "failure"};
-
-        u8::encode(level.present() ? static_cast<Byte>(std::ranges::find(levels, level.string()) - levels.begin()) : Byte{0}, output);
-        u32::encode(static_cast<std::uint32_t>(value.field("duration_ms").boundedInteger(default_notification_duration_ms, min_notification_duration_ms, max_notification_duration_ms)), output);
-        constexpr std::array targets{"pane_id", "tab_id", "workspace_id"};
-        Byte target_kind = 0;
-        std::uint64_t target_id = 0;
-
-        for (std::size_t index = 0; index < targets.size(); ++index) {
-          const auto target = value.field(targets[index]);
-          if (target.present()) {
-            target_kind = static_cast<Byte>(index + 1);
-            target_id = static_cast<std::uint64_t>(target.integer());
-          }
-        }
-
-        u8::encode(target_kind, output);
-        if (target_kind != 0) {
-          u64::encode(target_id, output);
-        }
-
-        text(utf8Prefix(value.field("title").string(), max_notification_title_bytes), output);
-        const auto body = value.field("body");
-
-        text(body.present() ? utf8Prefix(body.string(), max_notification_message_bytes) : std::string_view{}, output);
-      }
+      static void notification(const lua::Value& value, std::span<Byte>& output);
 
       const config::RetainedActionValidator& validator_;
       std::array<Byte, ActionProtocol::maximum_bytes> storage_;
@@ -254,44 +65,19 @@ export {
     template <Allocator Memory>
     class PackageSnapshots {
     public:
-      inline explicit PackageSnapshots(Memory& memory) noexcept
-          : memory_(memory) {}
+      explicit PackageSnapshots(Memory& memory) noexcept;
 
-      inline Package copy(const Package& package, std::size_t index) {
-        if (!directory_) {
-          directory_.emplace("/tmp/telar-tap-workers-XXXXXX");
-        }
+      Package copy(const Package& package, std::size_t index);
 
-        std::array<char, 32> name;
-        constexpr std::string_view prefix = "package-";
-
-        std::copy(prefix.begin(), prefix.end(), name.begin());
-        const auto suffix = std::to_chars(name.data() + prefix.size(), name.data() + name.size() - 1, index);
-        if (suffix.ec != std::errc{}) {
-          throw std::length_error{"Plugin package index exceeds its limit"};
-        }
-
-        *suffix.ptr = '\0';
-        if (::mkdirat(directory_->descriptor(), name.data(), 0700) != 0) {
-          throw SystemError{"Create plugin snapshot"};
-        }
-
-        auto target = openBeneath(directory_->descriptor(), name.data(), O_RDONLY | O_DIRECTORY);
-        String<Memory> destination{directory_->path(), AllocatorRef<char, Memory>{memory_}};
-
-        destination += '/';
-        destination += name.data();
-        return PackageCopy{memory_}.copy(package, target.get(), destination);
-      }
-
-      inline std::string_view path() const noexcept {
-        return directory_ ? directory_->path() : std::string_view{};
-      }
+      std::string_view path() const noexcept;
 
     private:
       Memory& memory_;
       std::optional<TemporaryDirectory> directory_;
     };
+
+    extern template class PackageSnapshots<Memory>;
+    extern template class PackageSnapshots<ConcurrentMemory>;
 
   }
 }
@@ -307,17 +93,18 @@ export {
     };
 
     struct BlockingPipeWait {
-      inline bool active() const noexcept {
+      constexpr bool active() const noexcept {
         return true;
       }
 
-      inline bool ready(int, short) const noexcept {
+      constexpr bool ready(int, short) const noexcept {
         return true;
       }
     };
 
+    // Generic over the caller's wait, and called for every frame a tap worker exchanges.
     template <PipeWait Wait = BlockingPipeWait>
-    class PipeStream {
+    class TBC_HOT_PATH PipeStream {
     public:
       inline explicit PipeStream(int input, int output, Wait wait = {}) noexcept
           : input_(input),
@@ -415,20 +202,7 @@ export {
 
     class RestartWindow {
     public:
-      inline bool record(std::chrono::milliseconds now) noexcept {
-        if (count_ < restarts_.size()) {
-          restarts_[count_++] = now;
-          return count_ == restarts_.size() && now - restarts_.front() <= Limits::restart_window;
-        }
-
-        if (now - restarts_.front() <= Limits::restart_window) {
-          return true;
-        }
-
-        std::move(restarts_.begin() + 1, restarts_.end(), restarts_.begin());
-        restarts_.back() = now;
-        return false;
-      }
+      bool record(std::chrono::milliseconds now) noexcept;
 
     private:
       std::array<std::chrono::milliseconds, Limits::restarts> restarts_;
@@ -446,45 +220,27 @@ export {
     public:
       class Charge {
       public:
-        inline explicit Charge(CaptureQuota& quota, std::size_t bytes) noexcept
-            : quota_(quota),
-              bytes_(bytes) {}
+        explicit Charge(CaptureQuota& quota, std::size_t bytes) noexcept;
 
-        inline ~Charge() {
-          quota_.release(bytes_);
-        }
+        ~Charge();
 
         Charge(const Charge&) = delete;
         Charge& operator=(const Charge&) = delete;
 
-        inline Charge(Charge&& other) noexcept
-            : quota_(other.quota_),
-              bytes_(std::exchange(other.bytes_, 0)) {}
+        Charge(Charge&& other) noexcept;
 
       private:
         CaptureQuota& quota_;
         std::size_t bytes_;
       };
 
-      inline explicit TapBudget(std::size_t limit = Limits::held_bytes) noexcept
-          : quota_(limit) {}
+      explicit TapBudget(std::size_t limit = Limits::held_bytes) noexcept;
 
-      inline std::optional<Charge> charge(std::size_t bytes) noexcept {
-        if (!quota_.reserveExact(bytes)) {
-          dropped_.fetch_add(1, std::memory_order_relaxed);
-          return std::nullopt;
-        }
+      std::optional<Charge> charge(std::size_t bytes) noexcept;
 
-        return Charge{quota_, bytes};
-      }
+      std::size_t used() const noexcept;
 
-      inline std::size_t used() const noexcept {
-        return quota_.used();
-      }
-
-      inline std::uint64_t dropped() const noexcept {
-        return dropped_.load(std::memory_order_relaxed);
-      }
+      std::uint64_t dropped() const noexcept;
 
     private:
       CaptureQuota quota_;
@@ -500,19 +256,16 @@ export {
 
     template <Allocator Memory>
     struct SharedExchange {
-      inline explicit SharedExchange(TapBudget::Charge charge, std::uint64_t event_id, CapturedExchange<Memory> exchange) noexcept
-          : charge(std::move(charge)),
-            event_id(event_id),
-            exchange(std::move(exchange)) {}
+      explicit SharedExchange(TapBudget::Charge charge, std::uint64_t event_id, CapturedExchange<Memory> exchange) noexcept;
 
-      inline static std::size_t capturedBytes(const CapturedExchange<Memory>& exchange) noexcept {
-        return (exchange.request ? exchange.request->capturedBytes() : 0) + (exchange.response ? exchange.response->capturedBytes() : 0);
-      }
+      static std::size_t capturedBytes(const CapturedExchange<Memory>& exchange) noexcept;
 
       TapBudget::Charge charge;
       std::uint64_t event_id;
       CapturedExchange<Memory> exchange;
     };
+
+    extern template struct SharedExchange<ConcurrentMemory>;
 
   }
 }
@@ -524,8 +277,9 @@ export {
     template <Allocator Memory>
     class TapConfiguration {
     public:
+      // Generic over the caller's environment.
       template <EnvironmentLookup Environment>
-      inline explicit TapConfiguration(Memory& memory, std::string_view directory, std::span<const ConfiguredPlugin> configured, const Environment& environment)
+      TBC_HOT_PATH explicit TapConfiguration(Memory& memory, std::string_view directory, std::span<const ConfiguredPlugin> configured, const Environment& environment)
           : snapshots_(memory) {
         if (directory.empty()) {
           return;
@@ -566,13 +320,11 @@ export {
         }
       }
 
-      inline std::span<const ServiceSpec> specifications() const noexcept {
-        return std::span{specifications_}.first(count_);
-      }
+      std::span<const ServiceSpec> specifications() const noexcept;
 
     private:
       template <EnvironmentLookup Environment>
-      inline static TrustStore loadTrust(Memory& memory, const Environment& environment) {
+      TBC_HOT_PATH static TrustStore loadTrust(Memory& memory, const Environment& environment) {
         return TrustStore::load(memory, Paths::trust(memory, environment));
       }
 
@@ -581,6 +333,9 @@ export {
       std::array<ServiceSpec, Limits::workers> specifications_;
       std::size_t count_ = 0;
     };
+
+    extern template class TapConfiguration<Memory>;
+    extern template class TapConfiguration<ConcurrentMemory>;
 
     template <Allocator Memory, EnvironmentLookup Environment>
     TapConfiguration(Memory& memory, std::string_view directory, std::span<const ConfiguredPlugin> configured, const Environment& environment) -> TapConfiguration<Memory>;

@@ -1,9 +1,7 @@
-module;
-#include <unistd.h>
-
 export module telar.cli.command_limit;
 
 import std;
+import telar.sys.posix;
 import telar.tbc;
 
 import telar.base.diagnostics;

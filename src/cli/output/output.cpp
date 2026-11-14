@@ -1,14 +1,6 @@
-module;
-#include <cstddef>
-#include <cstdlib>
-#include <cstring>
-#include <new>
-
-#include <cstdint>
-
-#include <cstdio>
-
 module telar.cli.output;
+
+import telar.sys.posix;
 
 namespace telar::runtime::cli {
 

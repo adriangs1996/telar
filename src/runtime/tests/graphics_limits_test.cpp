@@ -28,7 +28,7 @@ static std::span<const Byte> graphicsBytes(std::string_view text) {
 
 class GraphicsLimitFixture {
 public:
-  explicit GraphicsLimitFixture(SystemAllocator& memory)
+  explicit GraphicsLimitFixture(ConcurrentMemory& memory)
       : graphics(memory),
         allocator_(memory) {
     checkGhostty(ghostty_terminal_new(allocator_.get(), terminal_.output(), 20, 8));
@@ -56,10 +56,10 @@ public:
     });
   }
 
-  GraphicsStorage<SystemAllocator> graphics;
+  GraphicsStorage<ConcurrentMemory> graphics;
 
 private:
-  GhosttyAllocatorBridge<SystemAllocator> allocator_;
+  GhosttyAllocatorBridge<ConcurrentMemory> allocator_;
   TerminalHandle terminal_;
 };
 
@@ -71,7 +71,7 @@ static std::string place(std::uint32_t image, std::uint32_t placement, bool plac
   return "\x1b_Ga=p,i=" + std::to_string(image) + ",p=" + std::to_string(placement) + ",C=1,c=1,r=1,q=2" + (placeholders ? ",U=1;" : ";") + "\x1b\\";
 }
 
-static void testImageEviction(SystemAllocator& memory) {
+static void testImageEviction(ConcurrentMemory& memory) {
   GraphicsLimitFixture fixture{memory};
 
   for (unsigned identity = 1; identity <= 80; ++identity) {
@@ -112,7 +112,7 @@ static void testImageEviction(SystemAllocator& memory) {
   check(restored == GHOSTTY_TERMINAL_SCREEN_ALTERNATE);
 }
 
-static void testPlacementEviction(SystemAllocator& memory) {
+static void testPlacementEviction(ConcurrentMemory& memory) {
   GraphicsLimitFixture fixture{memory};
 
   fixture.feed(transmit(1) + transmit(2));
@@ -149,7 +149,7 @@ static void testPlacementEviction(SystemAllocator& memory) {
   }) == 1);
 }
 
-static void testIncompleteUploads(SystemAllocator& memory) {
+static void testIncompleteUploads(ConcurrentMemory& memory) {
   GraphicsLimitFixture fixture{memory};
   GraphicsUploadLimits limits{6, 2};
   const auto feed = [&](std::string_view bytes) {
@@ -183,8 +183,10 @@ static void testIncompleteUploads(SystemAllocator& memory) {
   check(fixture.contains(10));
 }
 
-static void testUploadResponse(SystemAllocator& memory) {
-  MediaTerminal terminal{memory, TerminalSize{20, 8, 8, 16}, GraphicsLimits{.pane_bytes = 12}};
+static void testUploadResponse(ConcurrentMemory& memory) {
+  MediaBudget budget{GraphicsLimits::maximum_global_bytes};
+  MediaAllocator allocator{memory, budget, GraphicsLimits::maximum_pane_bytes};
+  MediaTerminal terminal{allocator, TerminalSize{20, 8, 8, 16}, GraphicsLimits{.pane_bytes = 12}};
 
   terminal.feed(graphicsBytes("\x1b_Ga=t,f=32,s=3,v=1,i=81,m=1,q=2;AAAAAAAAAAAA\x1b\\"));
   const auto response = terminal.responses();
@@ -193,7 +195,7 @@ static void testUploadResponse(SystemAllocator& memory) {
   check(terminal.takeUploadLimits().bytes);
 }
 
-static void testGeneratedChunkFraming(SystemAllocator& memory) {
+static void testGeneratedChunkFraming(ConcurrentMemory& memory) {
   GraphicsLimitFixture fixture{memory};
   const auto generated = std::string{"\x1b_Ga=t,f=32,s=64,v=64,i=7,m=1,q=2;"} + std::string(4096, 'A') + "\x1b\\";
 
@@ -217,7 +219,9 @@ static void testGeneratedChunkFraming(SystemAllocator& memory) {
 }
 
 void testGraphicsLimits() {
-  SystemAllocator memory;
+  SystemAllocator system;
+  MemoryAdapter adapter{system};
+  ConcurrentMemory& memory = adapter;
 
   testImageEviction(memory);
   testPlacementEviction(memory);

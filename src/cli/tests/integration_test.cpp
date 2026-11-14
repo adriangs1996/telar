@@ -30,7 +30,6 @@ static_assert(true);
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <sys/syscall.h>
 #endif
-#include "integration_assets.hpp"
 #include <algorithm>
 #include <cstring>
 #include <limits>

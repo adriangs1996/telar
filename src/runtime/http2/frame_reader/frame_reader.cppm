@@ -1,9 +1,5 @@
 module;
-
-#include <cstddef>
-#include <cstdint>
-
-#include <cstring>
+#include "tbc/annotations.hpp"
 
 export module telar.runtime.http2.frame_reader;
 
@@ -41,13 +37,9 @@ export {
       Http2FrameKind kind = Http2FrameKind::data;
       std::uint8_t flags = 0;
 
-      inline bool has(Http2Flag flag) const noexcept {
-        return (flags & static_cast<std::uint8_t>(flag)) != 0;
-      }
+      bool has(Http2Flag flag) const noexcept;
 
-      inline bool containsHeaders() const noexcept {
-        return kind == Http2FrameKind::headers || kind == Http2FrameKind::push_promise || kind == Http2FrameKind::continuation;
-      }
+      bool containsHeaders() const noexcept;
     };
 
   }
@@ -72,11 +64,12 @@ export {
 
     class Http2FrameReader {
     public:
+      // Generic over the caller's receiver, and called for every chunk the relay reads.
       template <typename Receiver>
         requires requires(Receiver receive, const Http2FrameEvent& event) {
           { receive(event) } noexcept -> std::same_as<void>;
         }
-      inline void feed(std::span<const std::uint8_t> input, Receiver receive) noexcept {
+      TBC_HOT_PATH void feed(std::span<const std::uint8_t> input, Receiver receive) noexcept {
         while (!input.empty()) {
           if (header_length_ != header_.size()) {
             const auto count = std::min(header_.size() - header_length_, input.size());
@@ -106,18 +99,10 @@ export {
         }
       }
 
-      inline bool incomplete() const noexcept {
-        return header_length_ != 0;
-      }
+      bool incomplete() const noexcept;
 
     private:
-      inline void decodeHeader() noexcept {
-        frame_.length = (std::size_t{header_[0]} << 16) | (std::size_t{header_[1]} << 8) | header_[2];
-        frame_.kind = static_cast<Http2FrameKind>(header_[3]);
-        frame_.flags = header_[4];
-        frame_.stream = (static_cast<std::uint32_t>(header_[5] & stream_high_mask) << 24) | (std::uint32_t{header_[6]} << 16) | (std::uint32_t{header_[7]} << 8) | header_[8];
-        payload_offset_ = 0;
-      }
+      void decodeHeader() noexcept;
 
       static constexpr std::uint8_t stream_high_mask = 0x7f;
       std::array<std::uint8_t, Http2Frame::header_bytes> header_;
@@ -136,48 +121,20 @@ export {
     template <std::size_t Capacity>
     class Http2StreamIds {
     public:
-      inline bool start(std::uint32_t stream) noexcept {
-        if (stream == 0 || std::ranges::find(ids_, stream) != ids_.end()) {
-          return false;
-        }
+      bool start(std::uint32_t stream) noexcept;
 
-        const auto available = std::ranges::find(ids_, 0);
-        if (available == ids_.end()) {
-          return false;
-        }
+      bool finish(std::uint32_t stream) noexcept;
 
-        *available = stream;
-        ++count_;
-        return true;
-      }
+      bool full() const noexcept;
 
-      inline bool finish(std::uint32_t stream) noexcept {
-        if (stream == 0) {
-          return false;
-        }
-
-        const auto existing = std::ranges::find(ids_, stream);
-        if (existing == ids_.end()) {
-          return false;
-        }
-
-        *existing = 0;
-        --count_;
-        return true;
-      }
-
-      inline bool full() const noexcept {
-        return count_ == Capacity;
-      }
-
-      inline std::uint32_t size() const noexcept {
-        return count_;
-      }
+      std::uint32_t size() const noexcept;
 
     private:
       std::array<std::uint32_t, Capacity> ids_{};
       std::uint32_t count_ = 0;
     };
+
+    extern template class Http2StreamIds<256>;
 
   }
 }
@@ -196,72 +153,19 @@ export {
         bool event_stream = false;
       };
 
-      inline bool startRequest(std::uint32_t stream) noexcept {
-        return requests_.start(stream);
-      }
+      bool startRequest(std::uint32_t stream) noexcept;
 
-      inline void finishRequest(std::uint32_t stream) noexcept {
-        requests_.finish(stream);
-      }
+      void finishRequest(std::uint32_t stream) noexcept;
 
-      inline bool requestsFull() const noexcept {
-        return requests_.full();
-      }
+      bool requestsFull() const noexcept;
 
-      inline bool setResponse(Response response) noexcept {
-        if (response.stream == 0) {
-          return false;
-        }
+      bool setResponse(Response response) noexcept;
 
-        Response* available = nullptr;
+      Response response(std::uint32_t stream) const noexcept;
 
-        for (auto& entry : responses_) {
-          if (entry.stream == response.stream) {
-            entry = response;
-            return true;
-          }
+      void finishResponse(std::uint32_t stream) noexcept;
 
-          if (entry.stream == 0 && available == nullptr) {
-            available = &entry;
-          }
-        }
-
-        if (available == nullptr) {
-          return false;
-        }
-
-        *available = response;
-        ++response_count_;
-        return true;
-      }
-
-      inline Response response(std::uint32_t stream) const noexcept {
-        for (const auto& entry : responses_) {
-          if (entry.stream == stream) {
-            return entry;
-          }
-        }
-
-        return {};
-      }
-
-      inline void finishResponse(std::uint32_t stream) noexcept {
-        if (stream == 0) {
-          return;
-        }
-
-        for (auto& entry : responses_) {
-          if (entry.stream == stream) {
-            entry = {};
-            --response_count_;
-            return;
-          }
-        }
-      }
-
-      inline bool hasResponses() const noexcept {
-        return response_count_ != 0;
-      }
+      bool hasResponses() const noexcept;
 
     private:
       Http2StreamIds<capacity> requests_;

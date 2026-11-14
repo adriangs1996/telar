@@ -227,7 +227,7 @@ static void transfer(int source, int destination, std::string_view text) {
   check(result == text);
 }
 
-static void targetsAndRules(SystemAllocator& memory) {
+static void targetsAndRules(Memory& memory) {
   for (const auto value : {"example.com:443", "127.0.0.1:0", "127.0.0.1:65536", "::1:443", "[fe80::1]:443", "224.0.0.1:443", "[::]:443", "127.0.0.1:44\n3", "127.0.0.1;bad:443"}) {
     rejects([&] {
       redir::Target::parse(value);
@@ -551,7 +551,7 @@ struct FakeLoopback {
   }
 };
 
-static void lifecycle(SystemAllocator& memory) {
+static void lifecycle(Memory& memory) {
   redir::PfIdentity identity{memory, "/tmp/fixture.sock.redirect"};
   FakeLoopback loopback;
 
@@ -721,7 +721,7 @@ struct FakeInterface {
   }
 };
 
-static void loopbackLeases(SystemAllocator& memory) {
+static void loopbackLeases(Memory& memory) {
   using Parser = redir::PfLoopback<FakeCommand>;
 
   check(Parser::parse("No ALTQ support in kernel\nlo0 (skip)\n"));
@@ -1343,12 +1343,13 @@ static void transparentTls(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory
 
 int main() {
   SystemAllocator system;
+  MemoryAdapter plain{system};
 
-  targetsAndRules(system);
+  targetsAndRules(plain);
   incomingListeners();
   discoveredPackets();
-  lifecycle(system);
-  loopbackLeases(system);
+  lifecycle(plain);
+  loopbackLeases(plain);
   BudgetAllocator budget{system, 64 * 1024 * 1024};
   SynchronizedAllocator synchronized{budget};
   MemoryAdapter adapter{synchronized};

@@ -1,9 +1,7 @@
-module;
-#include <limits.h>
-
 export module telar.cli.hook;
 
 import std;
+import telar.sys.posix;
 import telar.tbc;
 
 export import telar.cli.hooks.command;

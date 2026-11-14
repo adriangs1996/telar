@@ -1,16 +1,3 @@
-module;
-#include <cstddef>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <new>
-#include <stdlib.h>
-
-#include <cstdint>
-
-#include <cerrno>
-#include <unistd.h>
-
 module telar.cli.command_limit;
 
 import telar.sys.posix;

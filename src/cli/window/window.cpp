@@ -1,24 +1,3 @@
-module;
-#include <new>
-
-#include <cerrno>
-#include <cstddef>
-#include <cstdint>
-#include <cstdlib>
-#include <cstring>
-#include <limits.h>
-#include <sys/socket.h>
-#include <sys/time.h>
-#include <sys/un.h>
-#include <unistd.h>
-#if (defined(__APPLE__))
-#include <mach-o/dyld.h>
-#endif
-#include <cmath>
-#include <cstdio>
-#include <fcntl.h>
-#include <sys/stat.h>
-
 module telar.cli.window;
 
 import std;
@@ -38,6 +17,7 @@ import telar.platform.primitives;
 import telar.cli.control_session;
 import telar.client;
 import telar.sys.posix;
+import telar.sys.process;
 import telar.tls;
 
 namespace telar::runtime::cli::window {

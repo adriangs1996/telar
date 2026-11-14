@@ -1,12 +1,5 @@
 module;
-#include <cstddef>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <new>
-#include <sys/mman.h>
-
-#include <cstdint>
+#include "tbc/annotations.hpp"
 
 export module telar.runtime.model.slot_store;
 
@@ -62,8 +55,9 @@ export {
 
     // Every request a client may send, with what the runtime does with it; dispatch, roles and
     // lanes all derive from this one list.
+    // Kept whole: generic over the requests and the caller's consumer, and read on every decoded request.
     template <typename... Requests>
-    struct ClientRequestList {
+    struct TBC_HOT_PATH ClientRequestList {
       // Calls `consume.template operator()<Message>()` for the request `tag` names, when its lane is at
       // least `Lane`; false when no such request has that tag.
       template <RequestLane Lane = RequestLane::runtime, typename Consumer>
@@ -192,9 +186,7 @@ export {
         ClientRequest<OpenEditor, ClientRole::interactive, RequestLane::worker>,
         ClientRequest<SuggestCommand, ClientRole::interactive, RequestLane::worker>>;
 
-    inline ClientRole classifyRequest(ClientTag tag) noexcept {
-      return ClientRequests::role(tag);
-    }
+    ClientRole classifyRequest(ClientTag tag) noexcept;
 
     struct PendingClientCommand {
       std::uint64_t target;
@@ -231,48 +223,12 @@ export {
         std::size_t length = 0;
         bool truncated = false;
 
-        inline PaneText response(const ReadPane& request) const noexcept {
-          std::string_view text{bytes.data(), length};
-          const auto last = text.find_last_not_of("\n ");
-
-          text = last == std::string_view::npos ? std::string_view{} : text.substr(0, last + 1);
-          auto start = text.size();
-          unsigned lines = 0;
-
-          while (start != 0) {
-            if (text[start - 1] == '\n' && ++lines == request.rows) {
-              break;
-            }
-
-            --start;
-          }
-
-          return PaneText{.request_id = request.request_id, .pane_id = pane_id, .truncated = start == 0 && truncated, .text = text.substr(start), .exit_code = exit_code};
-        }
+        PaneText response(const ReadPane& request) const noexcept;
       };
 
-      inline void record(std::uint64_t pane_id, std::uint64_t generation, const PaneText& text) noexcept {
-        auto& entry = entries_[next_];
+      void record(std::uint64_t pane_id, std::uint64_t generation, const PaneText& text) noexcept;
 
-        entry.pane_id = pane_id;
-        entry.generation = generation;
-        entry.exit_code = text.exit_code.value_or(0);
-        entry.length = std::min(text.text.size(), maximum_bytes);
-        entry.truncated = text.truncated || entry.length != text.text.size();
-        std::copy_n(text.text.end() - entry.length, entry.length, entry.bytes.begin());
-        next_ = (next_ + 1) % capacity;
-      }
-
-      inline const Record* find(std::uint64_t pane_id, std::uint64_t generation) const noexcept {
-        for (std::size_t offset = 0; offset < capacity; ++offset) {
-          const auto& entry = entries_[(next_ + capacity - 1 - offset) % capacity];
-          if (pane_id != 0 && entry.pane_id == pane_id && (generation == 0 || entry.generation == generation)) {
-            return &entry;
-          }
-        }
-
-        return nullptr;
-      }
+      const Record* find(std::uint64_t pane_id, std::uint64_t generation) const noexcept;
 
     private:
       std::array<Record, capacity> entries_{};
@@ -290,52 +246,16 @@ export {
     public:
       static constexpr std::size_t capacity = 64;
 
-      inline bool contains(TabLocation location) const noexcept {
-        return find(location).has_value();
-      }
+      bool contains(TabLocation location) const noexcept;
 
-      inline bool insert(TabLocation location) noexcept {
-        if (contains(location)) {
-          return true;
-        }
+      bool insert(TabLocation location) noexcept;
 
-        if (count_ == capacity) {
-          return false;
-        }
+      bool erase(TabLocation location) noexcept;
 
-        locations_[count_++] = location;
-        return true;
-      }
-
-      inline bool erase(TabLocation location) noexcept {
-        const auto index = find(location);
-        if (!index) {
-          return false;
-        }
-
-        locations_[*index] = locations_[--count_];
-        return true;
-      }
-
-      inline std::optional<TabLocation> pop() noexcept {
-        if (count_ == 0) {
-          return std::nullopt;
-        }
-
-        return locations_[--count_];
-      }
+      std::optional<TabLocation> pop() noexcept;
 
     private:
-      inline std::optional<std::size_t> find(TabLocation location) const noexcept {
-        for (std::size_t index = 0; index < count_; ++index) {
-          const auto& candidate = locations_[index];
-          if (candidate.workspace.kind == location.workspace.kind && candidate.workspace.id == location.workspace.id && candidate.tab_id == location.tab_id) {
-            return index;
-          }
-        }
-
-        return std::nullopt;
-      }
+      std::optional<std::size_t> find(TabLocation location) const noexcept;
 
       std::array<TabLocation, capacity> locations_;
       std::size_t count_ = 0;
@@ -348,12 +268,7 @@ export {
 export {
   namespace telar::runtime {
 
-    inline void advanceIdentityCounter(std::uint64_t& counter, std::uint64_t next) noexcept {
-      // Zero marks exhaustion after the last nonzero identity; restoring an older counter must not reopen it.
-      if (counter != 0) {
-        counter = next == 0 ? 0 : std::max(counter, next);
-      }
-    }
+    void advanceIdentityCounter(std::uint64_t& counter, std::uint64_t next) noexcept;
 
   }
 }
@@ -377,9 +292,10 @@ export {
 export {
   namespace telar::runtime {
 
+    // Kept whole: a container over the caller's value, from modules that import this one (Pane, Execution...).
     template <typename Value, std::size_t Capacity, Allocator Memory>
-    class SlotStore {
-      static_assert(Capacity > 0 && Capacity <= UINT16_MAX);
+    class TBC_HOT_PATH SlotStore {
+      static_assert(Capacity > 0 && Capacity <= std::numeric_limits<std::uint16_t>::max());
 
     public:
       static constexpr std::size_t capacity = Capacity;

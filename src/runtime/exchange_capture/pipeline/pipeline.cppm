@@ -1,21 +1,10 @@
 module;
+#include "tbc/annotations.hpp"
 #include "telar_platform/trace_macro.hpp"
-#include <cstdlib>
-#include <new>
-#include <unistd.h>
-
-#include <cstdint>
-
-#include <cassert>
-#include <cstddef>
-#include <cstring>
 
 #include <brotli/decode.h>
-#include <pthread.h>
 #include <zlib.h>
 #include <zstd.h>
-
-#include <cerrno>
 
 export module telar.runtime.exchange_capture.pipeline;
 
@@ -43,9 +32,7 @@ export {
     };
 
     struct CaptureWallClock {
-      inline static std::int64_t now() noexcept {
-        return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-      }
+      static std::int64_t now() noexcept;
     };
 
   }
@@ -72,63 +59,11 @@ export {
       };
 
       // The joiner holds halves until their peers arrive, and the halves keep their quota: region `a`.
-      inline explicit CaptureJoiner(tbc::view<Memory&, tbc::lt::a> memory, std::chrono::milliseconds timeout) noexcept
-          : memory_(memory),
-            timeout_ms_(timeout.count()) {}
+      explicit CaptureJoiner(tbc::view<Memory&, tbc::lt::a> memory, std::chrono::milliseconds timeout) noexcept;
 
-      inline tbc::view<Result, tbc::lt::a> push(std::int64_t now_ms, tbc::view<Half, tbc::lt::a> half) noexcept {
-        Result result{State::pending, CapturedExchange<Memory>{memory_}};
-        const auto existing = find(half->key);
-        if (existing) {
-          auto& entry = *slots_[*existing];
-          if (entry.half->side == half->side) {
-            result.state = State::partial;
-          } else {
-            result.state = State::complete;
-            result.exchange.include(std::move(entry.half));
-            slots_[*existing].reset();
-            occupied_.erase(*existing);
-          }
+      tbc::view<Result, tbc::lt::a> push(std::int64_t now_ms, tbc::view<Half, tbc::lt::a> half) noexcept;
 
-          result.exchange.include(std::move(half));
-          return result;
-        }
-
-        const auto available = occupied_.firstUnused();
-        if (!available) {
-          result.state = State::full;
-          result.exchange.include(std::move(half));
-          return result;
-        }
-
-        const auto maximum_time = std::numeric_limits<std::int64_t>::max();
-        const auto deadline = now_ms > maximum_time - timeout_ms_ ? maximum_time : now_ms + timeout_ms_;
-
-        slots_[*available].emplace(std::move(half), deadline);
-        occupied_.insert(*available);
-        return result;
-      }
-
-      inline tbc::view<std::optional<CapturedExchange<Memory>>, tbc::lt::a> expire(std::int64_t now_ms) noexcept {
-        std::optional<std::size_t> expired;
-
-        occupied_.forEach([&](std::size_t index) {
-          if (!expired && slots_[index]->expires_at_ms <= now_ms) {
-            expired = index;
-          }
-        });
-
-        if (!expired) {
-          return std::nullopt;
-        }
-
-        CapturedExchange<Memory> result{memory_};
-
-        result.include(std::move(slots_[*expired]->half));
-        slots_[*expired].reset();
-        occupied_.erase(*expired);
-        return result;
-      }
+      tbc::view<std::optional<CapturedExchange<Memory>>, tbc::lt::a> expire(std::int64_t now_ms) noexcept;
 
       static constexpr std::size_t capacity = 256;
 
@@ -138,23 +73,15 @@ export {
         std::int64_t expires_at_ms;
       };
 
-      inline std::optional<std::size_t> find(CaptureKey key) const noexcept {
-        std::optional<std::size_t> found;
-
-        occupied_.forEach([&](std::size_t index) {
-          if (slots_[index]->half->key == key) {
-            found = index;
-          }
-        });
-
-        return found;
-      }
+      std::optional<std::size_t> find(CaptureKey key) const noexcept;
 
       tbc::view<Memory&, tbc::lt::a> memory_;
       std::int64_t timeout_ms_;
       tbc::view<std::array<std::optional<Entry>, capacity>, tbc::lt::a> slots_;
       SlotIndexes<capacity> occupied_;
     };
+
+    extern template class CaptureJoiner<ConcurrentMemory>;
 
   }
 }
@@ -172,31 +99,18 @@ export {
 
       using Result = std::optional<typename CaptureProducer<Memory>::Half>;
 
-      inline explicit CaptureReceiver(CaptureProducer<Memory>& producer) noexcept
-          : producer_(producer) {}
+      explicit CaptureReceiver(CaptureProducer<Memory>& producer) noexcept;
 
-      inline Result observe(const Request& request) noexcept {
-        if (!named_) {
-          setThreadName("telar.capture");
-          named_ = true;
-        }
+      Result observe(const Request& request) noexcept;
 
-        auto half = producer_.receive();
-        if (half && request.decode) {
-          producer_.decodeBody(**half);
-        }
-
-        return half;
-      }
-
-      inline void stop() noexcept {
-        producer_.close();
-      }
+      void stop() noexcept;
 
     private:
       CaptureProducer<Memory>& producer_;
       bool named_ = false;
     };
+
+    extern template class CaptureReceiver<ConcurrentMemory>;
 
   }
 }
@@ -212,12 +126,12 @@ export {
     };
 
     struct IgnoreCaptureTap {
-      inline bool listening() const noexcept {
+      constexpr bool listening() const noexcept {
         return false;
       }
 
       template <Allocator Memory>
-      inline void submit(CapturedExchange<Memory>&) noexcept {}
+      constexpr void submit(CapturedExchange<Memory>&) noexcept {}
     };
 
   }
@@ -227,9 +141,10 @@ export {
 export {
   namespace telar::runtime {
 
+    // Generic over the caller's tap and clock.
     template <ConcurrentAllocator Memory, typename Tap, CaptureClock Clock = CaptureWallClock>
       requires CaptureTap<Tap, Memory>
-    class CapturePipeline {
+    class TBC_HOT_PATH CapturePipeline {
     public:
       inline explicit CapturePipeline(Memory& memory, CaptureProducer<Memory>& producer, ProxyCaptureLimits limits, Tap& tap)
           : tap_(tap),

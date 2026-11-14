@@ -1,0 +1,110 @@
+module telar.runtime.exchange_capture.pipeline;
+
+namespace telar::runtime {
+
+  std::int64_t CaptureWallClock::now() noexcept {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+  }
+
+  template <Allocator Memory>
+  CaptureJoiner<Memory>::CaptureJoiner(tbc::view<Memory&, tbc::lt::a> memory, std::chrono::milliseconds timeout) noexcept
+      : memory_(memory),
+        timeout_ms_(timeout.count()) {}
+
+  template <Allocator Memory>
+  auto CaptureJoiner<Memory>::push(std::int64_t now_ms, tbc::view<Half, tbc::lt::a> half) noexcept -> tbc::view<Result, tbc::lt::a> {
+    Result result{State::pending, CapturedExchange<Memory>{memory_}};
+    const auto existing = find(half->key);
+    if (existing) {
+      auto& entry = *slots_[*existing];
+      if (entry.half->side == half->side) {
+        result.state = State::partial;
+      } else {
+        result.state = State::complete;
+        result.exchange.include(std::move(entry.half));
+        slots_[*existing].reset();
+        occupied_.erase(*existing);
+      }
+
+      result.exchange.include(std::move(half));
+      return result;
+    }
+
+    const auto available = occupied_.firstUnused();
+    if (!available) {
+      result.state = State::full;
+      result.exchange.include(std::move(half));
+      return result;
+    }
+
+    const auto maximum_time = std::numeric_limits<std::int64_t>::max();
+    const auto deadline = now_ms > maximum_time - timeout_ms_ ? maximum_time : now_ms + timeout_ms_;
+
+    slots_[*available].emplace(std::move(half), deadline);
+    occupied_.insert(*available);
+    return result;
+  }
+
+  template <Allocator Memory>
+  tbc::view<std::optional<CapturedExchange<Memory>>, tbc::lt::a> CaptureJoiner<Memory>::expire(std::int64_t now_ms) noexcept {
+    std::optional<std::size_t> expired;
+
+    occupied_.forEach([&](std::size_t index) {
+      if (!expired && slots_[index]->expires_at_ms <= now_ms) {
+        expired = index;
+      }
+    });
+
+    if (!expired) {
+      return std::nullopt;
+    }
+
+    CapturedExchange<Memory> result{memory_};
+
+    result.include(std::move(slots_[*expired]->half));
+    slots_[*expired].reset();
+    occupied_.erase(*expired);
+    return result;
+  }
+
+  template <Allocator Memory>
+  std::optional<std::size_t> CaptureJoiner<Memory>::find(CaptureKey key) const noexcept {
+    std::optional<std::size_t> found;
+
+    occupied_.forEach([&](std::size_t index) {
+      if (slots_[index]->half->key == key) {
+        found = index;
+      }
+    });
+
+    return found;
+  }
+
+  template <ConcurrentAllocator Memory>
+  CaptureReceiver<Memory>::CaptureReceiver(CaptureProducer<Memory>& producer) noexcept
+      : producer_(producer) {}
+
+  template <ConcurrentAllocator Memory>
+  auto CaptureReceiver<Memory>::observe(const Request& request) noexcept -> Result {
+    if (!named_) {
+      setThreadName("telar.capture");
+      named_ = true;
+    }
+
+    auto half = producer_.receive();
+    if (half && request.decode) {
+      producer_.decodeBody(**half);
+    }
+
+    return half;
+  }
+
+  template <ConcurrentAllocator Memory>
+  void CaptureReceiver<Memory>::stop() noexcept {
+    producer_.close();
+  }
+
+  template class CaptureJoiner<ConcurrentMemory>;
+  template class CaptureReceiver<ConcurrentMemory>;
+
+}

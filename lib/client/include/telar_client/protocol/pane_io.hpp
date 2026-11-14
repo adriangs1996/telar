@@ -120,11 +120,7 @@ namespace telar {
     std::string_view text{};
     std::optional<std::uint64_t> sender{};
 
-    void validate() const {
-      if (text.empty() && mode != PaneTextMode::raw_enter) {
-        throw EncodingError{"Empty pane text"};
-      }
-    }
+    void validate() const;
   };
 
   template <>
@@ -158,11 +154,7 @@ namespace telar {
     std::optional<std::array<Byte, 3>> cursor{};
     std::optional<std::array<Byte, 48>> palette{};
 
-    void validate() const {
-      if (focused && !visible) {
-        throw EncodingError{"A focused pane must be visible"};
-      }
-    }
+    void validate() const;
 
     bool operator==(const ConfigurePaneDesktop&) const = default;
   };
@@ -249,16 +241,7 @@ namespace telar {
     PaneProgressState state{};
     std::optional<Byte> percent{};
 
-    void validate() const {
-      if ((state == PaneProgressState::remove || state == PaneProgressState::indeterminate) &&
-          percent) {
-        throw EncodingError{"Unexpected progress percent"};
-      }
-
-      if (state == PaneProgressState::set && !percent) {
-        throw EncodingError{"Missing progress percent"};
-      }
-    }
+    void validate() const;
   };
 
   template <>
@@ -298,11 +281,7 @@ namespace telar {
 
     bool operator==(const PaneShell&) const = default;
 
-    void validate() const {
-      if (shell == IntegratedShell::none && phase != ShellPhase::unknown) {
-        throw EncodingError{"Shell phase without an integrated shell"};
-      }
-    }
+    void validate() const;
   };
 
   template <>

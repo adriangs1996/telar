@@ -15,19 +15,19 @@ PaneHeaderLayout {
     // Mod content for the header's pieces, by slot name.
     readonly property var elements: record.elements ?? ({})
     readonly property var builtins: ({pane_mark: markPiece, pane_program: programPiece, pane_context: contextPiece, pane_status: statusPiece, pane_progress: progressPiece})
-    // Preserve program and state before the mark, context and progress.
-    readonly property bool compact: statusChip.implicitWidth > 0 && width < statusChip.implicitWidth + 4 * typography.body + (18 + 20 + 6 + 8) * ratio
-    readonly property real tileWidth: compact ? 0 : (elements.pane_mark ? markHost.implicitWidth : 18 * ratio)
+    // The agent's state is a dot on the pane's tile; a mod may still place the worded chip.
+    readonly property string statusColor: record.agent?.statusColor ?? ""
+    readonly property real tileWidth: elements.pane_mark ? markHost.implicitWidth : 18 * ratio
     readonly property real contextGap: 8 * ratio
     readonly property real programWidth: elements.pane_program ? programHost.implicitWidth : nameLabel.implicitWidth
     readonly property real contextWidth: elements.pane_context ? contextHost.implicitWidth : contextLabel.text.length > 0 ? contextLabel.implicitWidth : 0
     measurements: ({
         index: root.tileWidth,
         name: root.programWidth + (root.contextWidth > 0 ? root.contextGap + root.contextWidth : 0),
-        chip: root.elements.pane_status ? statusHost.implicitWidth : statusChip.implicitWidth,
+        chip: root.elements.pane_status ? statusHost.implicitWidth : 0,
         paused: root.record.imagesPaused ? pausedLabel.implicitWidth : 0,
-        progress: root.compact ? 0 : root.elements.pane_progress ? progressHost.implicitWidth : progress.fullWidth,
-        compactProgress: root.compact ? 0 : root.elements.pane_progress ? progressHost.implicitWidth : progress.compactWidth,
+        progress: root.elements.pane_progress ? progressHost.implicitWidth : progress.fullWidth,
+        compactProgress: root.elements.pane_progress ? progressHost.implicitWidth : progress.compactWidth,
         needsAttention: root.record.needsAttention ?? false
     })
 
@@ -44,6 +44,7 @@ PaneHeaderLayout {
         typography: root.typography
         ratio: root.ratio
         number: root.prefixPending ? root.record.index : ""
+        statusColor: root.statusColor
     }
 
     ChromeText {
@@ -54,7 +55,7 @@ PaneHeaderLayout {
         width: Math.min(root.nameBounds.width, implicitWidth)
         height: root.nameBounds.height
         visible: !root.elements.pane_program
-        text: (root.compact && root.prefixPending ? root.record.index + " " : "") + root.record.program
+        text: root.record.program
         pixelSize: root.typography.title
         color: root.focused ? root.colors.chromeText : root.colors.text
         emphasized: true
@@ -87,21 +88,6 @@ PaneHeaderLayout {
         color: root.colors.yellow
         elide: Text.ElideNone
         visible: root.pausedBounds.width > 0
-    }
-
-    PaneStatusChip {
-        id: statusChip
-        objectName: "paneStatus"
-        x: root.chipBounds.x
-        y: root.chipBounds.y
-        width: root.chipBounds.width
-        height: root.chipBounds.height
-        record: root.record.agent ?? ({})
-        colors: root.colors
-        typography: root.typography
-        geometry: root.style
-        needsAttention: root.record.needsAttention ?? false
-        visible: root.chipBounds.width > 0 && !root.elements.pane_status
     }
 
     PaneProgress {
@@ -187,6 +173,7 @@ PaneHeaderLayout {
             colors: root.colors
             typography: root.typography
             ratio: root.ratio
+            statusColor: root.statusColor
         }
     }
 

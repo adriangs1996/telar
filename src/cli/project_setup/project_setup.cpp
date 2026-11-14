@@ -1,43 +1,5 @@
 module;
-#include <new>
-#include <stdlib.h>
-
-#include <cstdint>
-
-#include <cerrno>
-#include <cstddef>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <limits.h>
-#include <sys/socket.h>
-#include <sys/time.h>
-#include <sys/un.h>
-#include <unistd.h>
-#if (defined(__APPLE__))
-#include <mach-o/dyld.h>
-#endif
-#include <csignal>
-#include <dirent.h>
-#include <fcntl.h>
-#include <spawn.h>
-#include <sys/stat.h>
-#include <sys/wait.h>
-
-#include <poll.h>
-
 #include <openssl/sha.h>
-
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <linux/fs.h>
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <sys/syscall.h>
-#endif
-#if (defined(__linux__))
-#include <sys/syscall.h>
-#endif
-#include <cmath>
 
 module telar.cli.project_setup;
 

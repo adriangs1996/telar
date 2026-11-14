@@ -47,8 +47,9 @@ def iterations_for(binaries, case, target_ns, maximum):
     return max(100, min(maximum, int(target_ns / max(per_iteration, 1))))
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+def main(probe_name=PROBE, description=__doc__):
+    """Alternate the two builds of probe_name; bench_command_capture.py runs it for its own probe."""
+    parser = argparse.ArgumentParser(description=description, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--baseline', type=Path, required=True, help='Release build directory of the baseline')
     parser.add_argument('--candidate', type=Path, required=True, help='Release build directory of the candidate')
     parser.add_argument('--output', type=Path, required=True, help='new directory for the report and the host gate')
@@ -60,10 +61,10 @@ def main():
     if not 1 <= options.pairs <= 31 or not options.sample_ms > 0 or options.max_iterations < 100:
         parser.error('Expected 1..31 pairs, a positive sample duration and at least 100 iterations')
 
-    binaries = {name: (getattr(options, name) / PROBE).resolve() for name in ('baseline', 'candidate')}
+    binaries = {name: (getattr(options, name) / probe_name).resolve() for name in ('baseline', 'candidate')}
     for name, binary in binaries.items():
         if not binary.is_file():
-            parser.error(f'No {PROBE} in the {name} directory; build it with --target {PROBE}')
+            parser.error(f'No {probe_name} in the {name} directory; build it with --target {probe_name}')
 
     cases = probe(binaries['baseline'], '--list').split()
     if probe(binaries['candidate'], '--list').split() != cases:

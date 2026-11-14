@@ -1,14 +1,7 @@
 module;
-#include <cstdio>
-#include <cstdlib>
-#include <new>
-
-#include <cstdint>
-
+#include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
-#include <cstddef>
 
-#include <cstring>
 #include <sqlite3.h>
 
 export module telar.runtime.history.event;
@@ -86,26 +79,9 @@ export {
     template <Allocator Memory>
     class HistoryEvent {
     public:
-      inline explicit HistoryEvent(Memory& memory, const HistoryEventView& event)
-          : event_(event),
-            workspace_(event.session.workspace_path, AllocatorRef<char, Memory>{memory}),
-            shell_(event.session.shell, AllocatorRef<char, Memory>{memory}),
-            command_(event.command.command, AllocatorRef<char, Memory>{memory}),
-            directory_(event.command.directory, AllocatorRef<char, Memory>{memory}),
-            output_(event.command.output.begin(), event.command.output.end(), AllocatorRef<Byte, Memory>{memory}),
-            cause_(event.failure.cause, AllocatorRef<char, Memory>{memory}) {}
+      explicit HistoryEvent(Memory& memory, const HistoryEventView& event);
 
-      inline HistoryEventView view() const noexcept {
-        auto result = event_;
-
-        result.session.workspace_path = workspace_;
-        result.session.shell = shell_;
-        result.command.command = command_;
-        result.command.directory = directory_;
-        result.command.output = output_;
-        result.failure.cause = cause_;
-        return result;
-      }
+      HistoryEventView view() const noexcept;
 
     private:
       HistoryEventView event_;
@@ -117,15 +93,15 @@ export {
       String<Memory> cause_;
     };
 
+    extern template class HistoryEvent<ConcurrentMemory>;
+
     template <typename Sink>
     concept HistoryEventSink = requires(Sink& sink, const HistoryEventView& event) {
       { sink.recordHistory(event) } noexcept -> std::same_as<bool>;
     };
 
     struct DiscardedHistory {
-      inline bool recordHistory(const HistoryEventView&) noexcept {
-        return true;
-      }
+      bool recordHistory(const HistoryEventView& event) noexcept;
     };
 
     inline DiscardedHistory discarded_history;
@@ -137,8 +113,10 @@ export {
 export {
   namespace telar::runtime {
 
+    // Generic over the protocol's history messages and the reply's allocator, an open
+    // set no implementation unit can instantiate ahead.
     template <typename Message, Allocator Memory>
-    void replyHistoryFailure(const Message& request, EncodedReply<Memory>& reply, bool available) {
+    TBC_HOT_PATH void replyHistoryFailure(const Message& request, EncodedReply<Memory>& reply, bool available) {
       if constexpr (std::same_as<Message, ImportHistory> || std::same_as<Message, ReportAgentCommand>) {
         reply.send(RequestCompleted{.request_id = request.request_id});
       } else if constexpr (std::same_as<Message, DeleteHistory> || std::same_as<Message, PruneHistory>) {
@@ -182,8 +160,9 @@ export {
       diagnostics::OperationCounters writes;
       diagnostics::OperationCounters queries;
 
+      // Chosen at compile time from the message type, for every history request.
       template <typename Message>
-      inline diagnostics::OperationCounters* operation() noexcept {
+      TBC_HOT_PATH inline diagnostics::OperationCounters* operation() noexcept {
         if constexpr (std::same_as<Message, QueryHistory>) {
           return &queries;
         } else if constexpr (std::same_as<Message, ImportHistory> || std::same_as<Message, ReportAgentCommand>) {
@@ -193,9 +172,7 @@ export {
         }
       }
 
-      inline HistoryMetrics snapshot(bool available) const noexcept {
-        return {.available = available, .writes = writes.snapshot(), .queries = queries.snapshot()};
-      }
+      HistoryMetrics snapshot(bool available) const noexcept;
 #endif
     };
 
@@ -209,38 +186,8 @@ export {
     template <ConcurrentAllocator Memory>
     class SqliteAllocator {
     public:
-      inline explicit SqliteAllocator(Memory& memory) {
-        if (active_ != nullptr || sqlite3_config(SQLITE_CONFIG_GETMALLOC, &previous_) != SQLITE_OK) {
-          throw std::logic_error{"SQLite allocation must be configured before opening databases"};
-        }
-
-        sqlite3_mem_methods methods{
-            &allocate,
-            &deallocate,
-            &reallocate,
-            &allocationSize,
-            &roundedSize,
-            &initialize,
-            &shutdown,
-            &memory,
-        };
-        if (sqlite3_config(SQLITE_CONFIG_MALLOC, &methods) != SQLITE_OK) {
-          throw std::logic_error{"Cannot install the SQLite allocator"};
-        }
-
-        if (sqlite3_initialize() != SQLITE_OK) {
-          sqlite3_shutdown();
-          sqlite3_config(SQLITE_CONFIG_MALLOC, &previous_);
-          active_ = nullptr;
-          throw std::bad_alloc{};
-        }
-      }
-
-      inline ~SqliteAllocator() {
-        sqlite3_shutdown();
-        sqlite3_config(SQLITE_CONFIG_MALLOC, &previous_);
-        active_ = nullptr;
-      }
+      explicit SqliteAllocator(Memory& memory);
+      ~SqliteAllocator();
 
       SqliteAllocator(const SqliteAllocator&) = delete;
       SqliteAllocator& operator=(const SqliteAllocator&) = delete;
@@ -250,64 +197,13 @@ export {
         int bytes;
       };
 
-      inline static int initialize(void* context) noexcept {
-        active_ = static_cast<Memory*>(context);
-        return SQLITE_OK;
-      }
-
-      inline static void shutdown(void*) noexcept {}
-
-      inline static void* allocate(int bytes) noexcept {
-        if (bytes <= 0) {
-          return nullptr;
-        }
-
-        auto* header = static_cast<Header*>(active_->allocate(sizeof(Header) + static_cast<std::size_t>(bytes), alignof(Header)));
-        if (header == nullptr) {
-          return nullptr;
-        }
-
-        header->bytes = bytes;
-        return header + 1;
-      }
-
-      inline static void deallocate(void* pointer) noexcept {
-        if (pointer == nullptr) {
-          return;
-        }
-
-        auto* header = static_cast<Header*>(pointer) - 1;
-
-        active_->deallocate(header, sizeof(Header) + static_cast<std::size_t>(header->bytes), alignof(Header));
-      }
-
-      inline static void* reallocate(void* pointer, int bytes) noexcept {
-        if (bytes == 0) {
-          deallocate(pointer);
-          return nullptr;
-        }
-
-        void* replacement = allocate(bytes);
-        if (replacement != nullptr && pointer != nullptr) {
-          std::memcpy(replacement, pointer, static_cast<std::size_t>(std::min(allocationSize(pointer), bytes)));
-          deallocate(pointer);
-        }
-
-        return replacement;
-      }
-
-      inline static int allocationSize(void* pointer) noexcept {
-        return (static_cast<Header*>(pointer) - 1)->bytes;
-      }
-
-      inline static int roundedSize(int bytes) noexcept {
-        constexpr int alignment = alignof(Header);
-        if (bytes <= 0 || bytes > std::numeric_limits<int>::max() - alignment + 1) {
-          return 0;
-        }
-
-        return (bytes + alignment - 1) & ~(alignment - 1);
-      }
+      static int initialize(void* context) noexcept;
+      static void shutdown(void*) noexcept;
+      static void* allocate(int bytes) noexcept;
+      static void deallocate(void* pointer) noexcept;
+      static void* reallocate(void* pointer, int bytes) noexcept;
+      static int allocationSize(void* pointer) noexcept;
+      static int roundedSize(int bytes) noexcept;
 
       inline static Memory* active_ = nullptr;
       sqlite3_mem_methods previous_{};
@@ -315,6 +211,8 @@ export {
 
     template <ConcurrentAllocator Memory>
     SqliteAllocator(Memory& memory) -> SqliteAllocator<Memory>;
+
+    extern template class SqliteAllocator<ConcurrentMemory>;
 
   }
 }

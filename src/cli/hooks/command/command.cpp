@@ -1,13 +1,3 @@
-module;
-#include <cstddef>
-#include <cstdio>
-#include <cstdlib>
-#include <new>
-
-#include <cstdint>
-
-#include <cstring>
-
 module telar.cli.hooks.command;
 
 namespace telar::runtime::cli::hooks {

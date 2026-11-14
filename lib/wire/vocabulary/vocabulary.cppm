@@ -60,6 +60,8 @@ export namespace telar {
   using telar::CountedSpan;
   using telar::Cursor;
   using telar::CursorShape;
+  using telar::Decoded;
+  using telar::DecodeInput;
   using telar::DecodeStorage;
   using telar::decodeValue;
   using telar::default_notification_duration_ms;

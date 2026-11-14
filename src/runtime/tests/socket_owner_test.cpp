@@ -166,8 +166,9 @@ static void socketOwner(bool ipv6) {
   const auto peer = listener.accept();
 
   check(static_cast<bool>(peer));
-  SystemAllocator memory;
-  redirect::SocketAccounts accounts{memory};
+  SystemAllocator system;
+  MemoryAdapter adapter{system};
+  redirect::SocketAccounts accounts{static_cast<Memory&>(adapter)};
 
   accounts.validate();
   check(accounts.peer(peer.get()) == ::geteuid());
@@ -270,7 +271,7 @@ static void accountSnapshot(bool ipv6) {
   std::memcpy(bytes.data() + sizeof(header), &client, sizeof(client));
   std::memcpy(bytes.data() + sizeof(header) + sizeof(client), &peer, sizeof(peer));
   std::memcpy(bytes.data() + bytes.size() - sizeof(header), &header, sizeof(header));
-  using Accounts = redirect::SocketAccounts<SystemAllocator>;
+  using Accounts = redirect::SocketAccounts<Memory>;
 
   check(Accounts::decode(bytes, origin.endpoint.storage, server.endpoint.storage) == 501);
   check(Accounts::decode(bytes, server.endpoint.storage, origin.endpoint.storage) == 0);

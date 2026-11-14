@@ -196,7 +196,9 @@ static void checkMessageFailures() {
 
 static void checkConnectionOrdering() {
   ProxyCounters counters;
-  SystemAllocator connection_memory;
+  SystemAllocator system;
+  MemoryAdapter adapter{system};
+  ConcurrentMemory& connection_memory = adapter;
   Http1Connection connection{connection_memory, counters};
   TestByteStream child;
   TestByteStream origin;
@@ -231,7 +233,9 @@ static void checkConnectionEndings() {
            "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
        }) {
     ProxyCounters counters;
-    SystemAllocator connection_memory;
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    ConcurrentMemory& connection_memory = adapter;
     Http1Connection connection{connection_memory, counters};
     TestByteStream child;
     TestByteStream origin;
@@ -247,7 +251,9 @@ static void checkConnectionEndings() {
 
   for (const bool response : {false, true}) {
     ProxyCounters counters;
-    SystemAllocator connection_memory;
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    ConcurrentMemory& connection_memory = adapter;
     Http1Connection connection{connection_memory, counters};
     TestByteStream child;
     TestByteStream origin;

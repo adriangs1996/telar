@@ -1,18 +1,5 @@
 module;
-#include <cstdio>
-#include <cstdlib>
-#include <new>
-#include <stdlib.h>
-
-#include <cassert>
-#include <cerrno>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <limits.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
+#include "tbc/annotations.hpp"
 
 export module telar.runtime.traffic.tap;
 
@@ -26,8 +13,9 @@ import telar.platform.primitives;
 export {
   namespace telar::runtime::traffic {
 
+    // Generic over the caller's plugins, and called for every captured exchange.
     template <ConcurrentAllocator Memory, typename Plugins>
-    class Tap {
+    class TBC_HOT_PATH Tap {
     public:
       inline explicit Tap(Plugins& plugins, Service<Memory>* traffic) noexcept
           : plugins_(plugins),

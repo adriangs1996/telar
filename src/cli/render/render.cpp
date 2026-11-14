@@ -1,14 +1,3 @@
-module;
-#include <cerrno>
-#include <csignal>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <fcntl.h>
-#include <sys/ioctl.h>
-#include <termios.h>
-#include <unistd.h>
-
 module telar.cli.render;
 
 import telar.sys.posix;

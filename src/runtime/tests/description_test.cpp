@@ -102,7 +102,7 @@ static void testQueryEditing() {
   }));
 }
 
-static void testGenerator(SystemAllocator& memory) {
+static void testGenerator(ConcurrentMemory& memory) {
   const std::array cases{
       std::pair{"cat >/dev/null; printf '  \"Fix café\"  \\n'", DescriptionStatus::success},
       std::pair{"cat >/dev/null; printf 'one\\ntwo'", DescriptionStatus::invalid_output},
@@ -172,7 +172,9 @@ static void testTitlePersistence(SystemAllocator& memory) {
   HistorySessionTitle title{.session = session.id, .source = AgentTitleSource::generated, .state = AgentTitleState::ready};
 
   title.title.assign("Fix parser");
-  HistoryEvent owned{memory, HistoryEventView{.kind = HistoryEventKind::session_title, .session = {}, .title = title}};
+  MemoryAdapter adapter{memory};
+  ConcurrentMemory& owner = adapter;
+  HistoryEvent owned{owner, HistoryEventView{.kind = HistoryEventKind::session_title, .session = {}, .title = title}};
 
   title.title.assign("Changed later");
   writer.persist(owned.view());
@@ -197,9 +199,10 @@ static void testTitlePersistence(SystemAllocator& memory) {
 
 void testDescriptions() {
   SystemAllocator memory;
+  MemoryAdapter adapter{memory};
 
   testQueryEditing();
-  testGenerator(memory);
+  testGenerator(adapter);
   testProcessInput(memory);
   testTitlePersistence(memory);
 }

@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "cell_layout.hpp"
 #include "telar_base/diagnostics/config.hpp"
 #include <cassert>
 #include <cerrno>
@@ -93,9 +92,11 @@ static void testProjection() {
 }
 
 static void testDelivery() {
-  SystemAllocator memory;
+  SystemAllocator system;
+  MemoryAdapter adapter{system};
+  ConcurrentMemory& memory = adapter;
   RuntimeModel model{memory};
-  ClientStore<SystemAllocator> clients{memory};
+  ClientStore<ConcurrentMemory> clients{memory};
   ClientPeer client{memory, model, clients, ClientRole::interactive};
   FakeHostMetrics probe;
 

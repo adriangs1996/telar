@@ -1,30 +1,6 @@
 module;
-#include "telar_platform/trace_macro.hpp"
-#include <cstdlib>
-#include <new>
-#include <stdlib.h>
-
-#include <cstddef>
-#include <cstdint>
-
 #include "tbc/annotations.hpp"
-#include <arpa/inet.h>
-#include <cassert>
-#include <cerrno>
-#include <climits>
-#include <csignal>
-#include <cstdio>
-#include <cstring>
-#include <fcntl.h>
-#include <limits.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <poll.h>
-#include <sys/socket.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <sys/uio.h>
-#include <unistd.h>
+#include "telar_platform/trace_macro.hpp"
 
 export module telar.runtime.plugins.service;
 
@@ -58,16 +34,17 @@ export {
     };
 
     struct IgnoreEvents {
-      inline int descriptor() const noexcept {
+      constexpr int descriptor() const noexcept {
         return -1;
       }
 
-      inline TapMetrics metrics() const noexcept {
+      constexpr TapMetrics metrics() const noexcept {
         return {};
       }
 
+      // Generic over the caller's consumer.
       template <typename Consumer>
-      inline void collect(Consumer&&) const noexcept {}
+      TBC_HOT_PATH constexpr void collect(Consumer&&) const noexcept {}
     };
 
   }
@@ -83,123 +60,26 @@ export {
     template <ConcurrentAllocator Memory>
     class TBC_SHARED Service {
     public:
-      inline explicit Service(Memory& memory, std::span<const ServiceSpec> specifications, const char* executable, std::string_view trace_prefix = {}, traffic::PackagePort* traffic = nullptr)
-          : memory_(memory),
-            workers_(AllocatorRef<Owned<Worker<Memory>, Memory>, Memory>{memory}) {
-        if (specifications.empty()) {
-          return;
-        }
+      explicit Service(Memory& memory, std::span<const ServiceSpec> specifications, const char* executable, std::string_view trace_prefix = {}, traffic::PackagePort* traffic = nullptr);
 
-        if (specifications.size() > Limits::workers) {
-          throw std::invalid_argument{"Too many tap workers"};
-        }
-
-        cancellation_.emplace();
-        results_.activate();
-        workers_.reserve(specifications.size());
-        try {
-          for (const auto& specification : specifications) {
-            workers_.push_back(makeOwned<Worker<Memory>>(memory, memory, specification, results_, budget_, WorkerLaunch{.executable = executable, .cancellation = *cancellation_, .trace_prefix = trace_prefix, .traffic = traffic}));
-          }
-        } catch (...) {
-          stop();
-          throw;
-        }
-      }
-
-      inline ~Service() {
-        stop();
-      }
+      ~Service();
 
       Service(const Service&) = delete;
       Service& operator=(const Service&) = delete;
 
-      inline void watchTrust(std::string_view path) {
-        if (workers_.empty()) {
-          return;
-        }
+      void watchTrust(std::string_view path);
 
-        if (stopped_.load(std::memory_order_acquire) || trust_monitor_.joinable() || path.empty()) {
-          throw std::invalid_argument{"Invalid plugin trust monitor"};
-        }
+      void stop() noexcept;
 
-        trust_path_.assign(path);
-        refreshTrust();
-        trust_monitor_ = std::jthread{[this] {
-          pollfd wake{cancellation_->descriptor(), POLLIN, 0};
+      bool listening() const noexcept;
 
-          while (!cancellation_->requested()) {
-            const auto ready = ::poll(&wake, 1, static_cast<int>(Limits::trust_check_interval.count()));
-            if (ready < 0 && sys::lastError() == EINTR) {
-              continue;
-            }
+      int descriptor() const noexcept;
 
-            if (ready != 0) {
-              return;
-            }
+      void submit(CapturedExchange<Memory>& captured) noexcept;
 
-            refreshTrust();
-          }
-        }};
-      }
-
-      inline void stop() noexcept {
-        if (stopped_.exchange(true, std::memory_order_acq_rel)) {
-          return;
-        }
-
-        if (cancellation_) {
-          cancellation_->request();
-        }
-
-        if (trust_monitor_.joinable()) {
-          trust_monitor_.join();
-        }
-
-        for (const auto& worker : workers_) {
-          worker->stop();
-        }
-
-        results_.close();
-      }
-
-      inline bool listening() const noexcept {
-        return std::ranges::any_of(workers_, [](const auto& worker) {
-          return !worker->revoked() && worker->specification().allows(Capability::proxy_tap);
-        });
-      }
-
-      inline int descriptor() const noexcept {
-        return results_.descriptor();
-      }
-
-      inline void submit(CapturedExchange<Memory>& captured) noexcept {
-        TELAR_TRACE("plugins.submitExchange");
-        auto owned = std::move(captured);
-
-        if (!listening() || stopped_.load(std::memory_order_acquire)) {
-          return;
-        }
-
-        auto charged = budget_.charge(SharedExchange<Memory>::capturedBytes(owned));
-        if (!charged) {
-          return;
-        }
-
-        const auto event_id = next_event_.fetch_add(1, std::memory_order_relaxed);
-
-        try {
-          auto shared = std::allocate_shared<SharedExchange<Memory>>(AllocatorRef<SharedExchange<Memory>, Memory>{memory_}, std::move(*charged), event_id, std::move(owned));
-
-          for (const auto& worker : workers_) {
-            worker->submit(shared);
-          }
-        } catch (const std::bad_alloc&) {
-        }
-      }
-
+      // Generic over the caller's consumer.
       template <typename Consumer>
-      inline void collect(Consumer&& consumer) {
+      TBC_HOT_PATH void collect(Consumer&& consumer) {
         results_.collect([&](const auto& result) {
           if (result.package_index < workers_.size() && !workers_[result.package_index]->revoked() && result.authorized(workers_[result.package_index]->specification())) {
             consumer(result.batch());
@@ -207,42 +87,12 @@ export {
         });
       }
 
-      inline TapMetrics metrics() const noexcept {
-        TapMetrics totals{.dropped_bytes = budget_.dropped()};
+      TapMetrics metrics() const noexcept;
 
-        for (const auto& worker : workers_) {
-          const auto metrics = worker->metrics();
-
-          totals.dropped_queue += metrics.dropped;
-          totals.timeouts += metrics.timeouts;
-          totals.disabled += metrics.disabled;
-        }
-
-        return totals;
-      }
-
-      inline std::size_t heldBytes() const noexcept {
-        return budget_.used();
-      }
+      std::size_t heldBytes() const noexcept;
 
     private:
-      inline void refreshTrust() noexcept {
-        try {
-          const auto trust = TrustStore::load(memory_, trust_path_.view());
-
-          for (const auto& worker : workers_) {
-            const auto& specification = worker->specification();
-            if (!specification.stillAuthorized(trust.granted(specification.name.view(), specification.digest))) {
-              worker->revoke();
-            }
-          }
-        } catch (...) {
-          // An unreadable, unsafe or invalid store cannot keep an old grant alive.
-          for (const auto& worker : workers_) {
-            worker->revoke();
-          }
-        }
-      }
+      void refreshTrust() noexcept;
 
       Memory& memory_;
       TapBudget budget_;
@@ -256,18 +106,17 @@ export {
       std::atomic<bool> stopped_{false};
     };
 
+    extern template class Service<ConcurrentMemory>;
+
     template <ConcurrentAllocator Memory>
     Service(Memory& memory, std::span<const ServiceSpec> specifications, const char* executable, std::string_view trace_prefix = {}) -> Service<Memory>;
 
     template <ConcurrentAllocator Memory>
     class ShutdownGuard {
     public:
-      inline explicit ShutdownGuard(Service<Memory>& service) noexcept
-          : service_(service) {}
+      explicit ShutdownGuard(Service<Memory>& service) noexcept;
 
-      inline ~ShutdownGuard() {
-        service_.stop();
-      }
+      ~ShutdownGuard();
 
       ShutdownGuard(const ShutdownGuard&) = delete;
       ShutdownGuard& operator=(const ShutdownGuard&) = delete;
@@ -275,6 +124,8 @@ export {
     private:
       Service<Memory>& service_;
     };
+
+    extern template class ShutdownGuard<ConcurrentMemory>;
 
     template <ConcurrentAllocator Memory>
     ShutdownGuard(Service<Memory>& service) -> ShutdownGuard<Memory>;

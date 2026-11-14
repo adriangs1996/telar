@@ -1,41 +1,5 @@
 module;
-#include <stdlib.h>
-
-#include <cerrno>
-#include <cstdint>
-#include <cstdio>
-#include <cstdlib>
-#include <fcntl.h>
-#include <limits.h>
-#include <poll.h>
-#include <signal.h>
-#include <spawn.h>
-#include <sys/wait.h>
-#include <unistd.h>
-#if (defined(__APPLE__))
-#include <mach-o/dyld.h>
-#endif
-#include <cstddef>
-#include <cstring>
-#include <new>
-#include <sys/stat.h>
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <linux/fs.h>
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <sys/syscall.h>
-#endif
 #include <openssl/sha.h>
-#include <sys/file.h>
-#include <sys/un.h>
-
-#include <cctype>
-
-#include <sys/socket.h>
-#include <sys/time.h>
-
-#include "help_texts.hpp"
-#include "machine_assets.hpp"
 
 module telar.cli.machine;
 import telar.sys.posix;
@@ -48,6 +12,12 @@ import telar.client;
 import telar.tls;
 
 import telar.tbc;
+
+namespace telar::runtime::cli::machine::assets {
+
+#include "machine_assets.inc"
+
+}
 
 namespace telar::runtime::cli::machine {
 

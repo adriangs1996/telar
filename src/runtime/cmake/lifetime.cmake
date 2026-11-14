@@ -12,6 +12,6 @@ include("${runtime_directory}/../../cmake/lifetime_check.cmake")
 telar_lifetime_jobs(jobs)
 # The runtime's database also compiles the CLI and the telar libraries it links.
 telar_lifetime_check("${runtime_directory}" "${runtime_build_directory}"
-  "/(src/(runtime|cli)/|lib/(base|client|config|git|lua|machines|platform|plugins|render|shell|sys|tls|vocabulary)/).*\\.(cpp|cppm)$"
-  "/(src/(runtime|cli)/|lib/(base|client|config|git|lua|machines|platform|plugins|render|shell|sys|tls|vocabulary)/)(.*/)?(tests|out(-[^/]*)?)/"
+  "/(src/(runtime|cli)/|lib/(base|client|config|git|lua|machines|platform|plugins|render|shell|sys|tls|vocabulary|wire)/).*\\.(cpp|cppm)$"
+  "/(src/(runtime|cli)/|lib/(base|client|config|git|lua|machines|platform|plugins|render|shell|sys|tls|vocabulary|wire)/)(.*/)?(tests|out(-[^/]*)?)/"
   "${jobs}")

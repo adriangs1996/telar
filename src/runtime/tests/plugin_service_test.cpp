@@ -113,8 +113,10 @@ namespace {
 
   void testResultDeliveryBound() {
     SystemAllocator system;
-    BudgetAllocator memory{system, 1024 * 1024};
-    tap::ResultQueue<decltype(memory)> results;
+    BudgetAllocator budget{system, 1024 * 1024};
+    MemoryAdapter adapter{budget};
+    Memory& memory = adapter;
+    tap::ResultQueue<Memory> results;
 
     results.activate();
     const auto identity = specification("echo");
@@ -122,7 +124,7 @@ namespace {
       SensitiveAllocation storage{memory, 64};
       const auto size = tap::Protocol::encodeEffects(storage.bytes(), event_id, {}).size();
 
-      results.publish(makeOwned<tap::Result<decltype(memory)>>(memory, identity, std::move(storage), 0, size));
+      results.publish(makeOwned<tap::Result<Memory>>(memory, identity, std::move(storage), 0, size));
     };
 
     publish(1);
@@ -148,14 +150,16 @@ namespace {
     pollfd ready{results.descriptor(), POLLIN, 0};
 
     check(::poll(&ready, 1, 0) == 0);
-    check(memory.liveBytes() == 0);
+    check(budget.liveBytes() == 0);
   }
 
   void testConcurrentResults() {
     SystemAllocator system;
     BudgetAllocator budget{system, 1024 * 1024};
-    SynchronizedAllocator memory{budget};
-    tap::ResultQueue<decltype(memory)> results;
+    SynchronizedAllocator synchronized{budget};
+    MemoryAdapter adapter{synchronized};
+    ConcurrentMemory& memory = adapter;
+    tap::ResultQueue<ConcurrentMemory> results;
 
     results.activate();
     const auto identity = specification("echo");
@@ -163,7 +167,7 @@ namespace {
       SensitiveAllocation storage{memory, 64};
       const auto size = tap::Protocol::encodeEffects(storage.bytes(), event_id, {}).size();
 
-      results.publish(makeOwned<tap::Result<decltype(memory)>>(memory, identity, std::move(storage), 0, size));
+      results.publish(makeOwned<tap::Result<ConcurrentMemory>>(memory, identity, std::move(storage), 0, size));
     };
 
     for (std::uint64_t index = 0; index <= tap::Limits::queue_depth; ++index) {
@@ -216,7 +220,9 @@ namespace {
   void testDelivery() {
     SystemAllocator system;
     BudgetAllocator budget{system, 8 * 1024 * 1024};
-    SynchronizedAllocator memory{budget};
+    SynchronizedAllocator synchronized{budget};
+    MemoryAdapter adapter{synchronized};
+    ConcurrentMemory& memory = adapter;
     CaptureQuota quota{65536};
     const ExecutablePath executable;
 
@@ -281,7 +287,9 @@ namespace {
   void testWorkerFailures() {
     SystemAllocator system;
     BudgetAllocator budget{system, 8 * 1024 * 1024};
-    SynchronizedAllocator memory{budget};
+    SynchronizedAllocator synchronized{budget};
+    MemoryAdapter adapter{synchronized};
+    ConcurrentMemory& memory = adapter;
     CaptureQuota quota{65536};
     const ExecutablePath executable;
 
