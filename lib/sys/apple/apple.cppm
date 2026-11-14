@@ -165,10 +165,6 @@ namespace telar::sys::captured {
   // The kevent function hides the struct's name, and an export cannot redeclare it.
   using Event = struct kevent;
 
-  inline void EV_SET_(Event* event, uintptr_t ident, int16_t filter, uint16_t flags, uint32_t filter_flags, intptr_t data, void* user_data) noexcept {
-    EV_SET(event, ident, filter, flags, filter_flags, data, user_data);
-  }
-
 }
 
 #undef ATTR_BIT_MAP_COUNT
@@ -253,26 +249,23 @@ export {
   TELAR_SYS_PROCESSES(TELAR_SYS_CONSTANT)
   TELAR_SYS_NETWORK(TELAR_SYS_CONSTANT)
 
-  inline void EV_SET(telar::sys::captured::Event* event, uintptr_t ident, int16_t filter, uint16_t flags, uint32_t filter_flags, intptr_t data, void* user_data) noexcept {
-    telar::sys::captured::EV_SET_(event, ident, filter, flags, filter_flags, data, user_data);
-  }
+  // Defined in apple.cpp, where the macros are.
+  void EV_SET(telar::sys::captured::Event* event, uintptr_t ident, int16_t filter, uint16_t flags, uint32_t filter_flags, intptr_t data, void* user_data) noexcept;
 
   // Darwin's macro reads the port its runtime caches at startup.
-  inline mach_port_t mach_task_self() noexcept {
-    return ::mach_task_self_;
-  }
+  mach_port_t mach_task_self() noexcept;
 }
 
 // Members that the headers reach through a macro have no name an importer can spell.
 export namespace telar::sys {
 
   // The local IPv4 address of a TCP control block.
-  inline const in_addr& localAddress(const xinpcb64& block) noexcept {
+  inline constexpr const in_addr& localAddress(const xinpcb64& block) noexcept {
     return block.inp_laddr;
   }
 
   // The foreign IPv4 address of a TCP control block.
-  inline const in_addr& foreignAddress(const xinpcb64& block) noexcept {
+  inline constexpr const in_addr& foreignAddress(const xinpcb64& block) noexcept {
     return block.inp_faddr;
   }
 

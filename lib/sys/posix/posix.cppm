@@ -392,48 +392,13 @@ export {
 export namespace telar::sys {
 
   // The calling thread's errno.
-  inline int lastError() noexcept {
-    return errno;
-  }
+  int lastError() noexcept;
 
   // Sets the calling thread's errno, for a caller that reports its failure the way a system call does.
-  inline void setLastError(int code) noexcept {
-    errno = code;
-  }
+  void setLastError(int code) noexcept;
 
   // The name telar reports for an errno: a token scripts read after `error: ` and history stores
   // as a failure cause. An errno without a name gets the caller's fallback.
-  inline const char* errorName(int code, const char* fallback = "Unexpected") noexcept {
-    switch (code) {
-    case ENOENT:
-      return "FileNotFound";
-    case ECONNREFUSED:
-      return "ConnectionRefused";
-    case EACCES:
-    case EPERM:
-      return "AccessDenied";
-    case ENOTDIR:
-      return "NotDir";
-    case ENAMETOOLONG:
-      return "NameTooLong";
-    case ELOOP:
-      return "SymLinkLoop";
-    case EEXIST:
-      return "PathAlreadyExists";
-    case ENOSPC:
-      return "NoSpaceLeft";
-    case EINVAL:
-      return "InvalidArgument";
-    case EIO:
-      return "InputOutput";
-    case ENOMEM:
-    case ENOBUFS:
-      return "SystemResources";
-    case EBADF:
-      return "InvalidDescriptor";
-    default:
-      return fallback;
-    }
-  }
+  const char* errorName(int code, const char* fallback = "Unexpected") noexcept;
 
 }

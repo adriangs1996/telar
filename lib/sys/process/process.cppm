@@ -158,19 +158,6 @@ namespace telar::sys::captured {
   inline const auto SIG_ERR_ = SIG_ERR;
   inline const auto SIG_IGN_ = SIG_IGN;
 
-  // Darwin reads the status through its address, which no constant expression allows.
-  inline bool WIFEXITED_(int status) noexcept {
-    return WIFEXITED(status);
-  }
-
-  inline int WEXITSTATUS_(int status) noexcept {
-    return WEXITSTATUS(status);
-  }
-
-  inline int WTERMSIG_(int status) noexcept {
-    return WTERMSIG(status);
-  }
-
 }
 
 #undef NSIG
@@ -231,24 +218,18 @@ export {
   inline const auto SIG_ERR = telar::sys::captured::SIG_ERR_;
   inline const auto SIG_IGN = telar::sys::captured::SIG_IGN_;
 
-  inline bool WIFEXITED(int status) noexcept {
-    return telar::sys::captured::WIFEXITED_(status);
-  }
-
-  inline int WEXITSTATUS(int status) noexcept {
-    return telar::sys::captured::WEXITSTATUS_(status);
-  }
-
-  inline int WTERMSIG(int status) noexcept {
-    return telar::sys::captured::WTERMSIG_(status);
-  }
+  // Darwin reads the status through its address, which no constant expression allows, so these
+  // are defined in process.cpp, where the macros are.
+  bool WIFEXITED(int status) noexcept;
+  int WEXITSTATUS(int status) noexcept;
+  int WTERMSIG(int status) noexcept;
 }
 
 // Members that the headers reach through a macro have no name an importer can spell.
 export namespace telar::sys {
 
   // The handler a sigaction installs, the member each libc wraps in a union behind sa_handler.
-  inline auto& signalHandler(struct sigaction& action) noexcept {
+  inline constexpr auto& signalHandler(struct sigaction& action) noexcept {
     return action.sa_handler;
   }
 

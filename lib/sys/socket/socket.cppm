@@ -139,44 +139,9 @@ namespace telar::sys::captured {
     return CMSG_SPACE(length);
   }
 
-  inline unsigned char* CMSG_DATA_(cmsghdr* header) noexcept {
-    return CMSG_DATA(header);
-  }
-
-  inline cmsghdr* CMSG_FIRSTHDR_(msghdr* message) noexcept {
-    return CMSG_FIRSTHDR(message);
-  }
-
-  // musl's macro compares a length with a pointer difference.
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wsign-compare"
-
-  inline cmsghdr* CMSG_NXTHDR_(msghdr* message, cmsghdr* header) noexcept {
-    return CMSG_NXTHDR(message, header);
-  }
-
-#pragma clang diagnostic pop
-
-  // Address classes. The IPv6 ones stay out of line: Darwin's and an optimizing glibc's macros
-  // call a static byte swap that an inline body would expose to importers.
+  // Address classes.
   inline constexpr bool IN_MULTICAST_(in_addr_t address) noexcept {
     return IN_MULTICAST(address);
-  }
-
-  bool IN6_IS_ADDR_LINKLOCAL_(const in6_addr* address) noexcept {
-    return IN6_IS_ADDR_LINKLOCAL(address);
-  }
-
-  bool IN6_IS_ADDR_MULTICAST_(const in6_addr* address) noexcept {
-    return IN6_IS_ADDR_MULTICAST(address);
-  }
-
-  bool IN6_IS_ADDR_UNSPECIFIED_(const in6_addr* address) noexcept {
-    return IN6_IS_ADDR_UNSPECIFIED(address);
-  }
-
-  bool IN6_IS_ADDR_V4MAPPED_(const in6_addr* address) noexcept {
-    return IN6_IS_ADDR_V4MAPPED(address);
   }
 
 }
@@ -266,37 +231,21 @@ export {
     return telar::sys::captured::CMSG_SPACE_(length);
   }
 
-  inline unsigned char* CMSG_DATA(cmsghdr* header) noexcept {
-    return telar::sys::captured::CMSG_DATA_(header);
-  }
-
-  inline cmsghdr* CMSG_FIRSTHDR(msghdr* message) noexcept {
-    return telar::sys::captured::CMSG_FIRSTHDR_(message);
-  }
-
-  inline cmsghdr* CMSG_NXTHDR(msghdr* message, cmsghdr* header) noexcept {
-    return telar::sys::captured::CMSG_NXTHDR_(message, header);
-  }
+  // The pointer arithmetic the macros do is no constant expression, and Darwin's and an optimizing
+  // glibc's address classes call a static byte swap that an inline body would expose to importers,
+  // so these are defined in socket.cpp, where the macros are.
+  unsigned char* CMSG_DATA(cmsghdr* header) noexcept;
+  cmsghdr* CMSG_FIRSTHDR(msghdr* message) noexcept;
+  cmsghdr* CMSG_NXTHDR(msghdr* message, cmsghdr* header) noexcept;
 
   inline constexpr bool IN_MULTICAST(in_addr_t address) noexcept {
     return telar::sys::captured::IN_MULTICAST_(address);
   }
 
-  inline bool IN6_IS_ADDR_LINKLOCAL(const in6_addr* address) noexcept {
-    return telar::sys::captured::IN6_IS_ADDR_LINKLOCAL_(address);
-  }
-
-  inline bool IN6_IS_ADDR_MULTICAST(const in6_addr* address) noexcept {
-    return telar::sys::captured::IN6_IS_ADDR_MULTICAST_(address);
-  }
-
-  inline bool IN6_IS_ADDR_UNSPECIFIED(const in6_addr* address) noexcept {
-    return telar::sys::captured::IN6_IS_ADDR_UNSPECIFIED_(address);
-  }
-
-  inline bool IN6_IS_ADDR_V4MAPPED(const in6_addr* address) noexcept {
-    return telar::sys::captured::IN6_IS_ADDR_V4MAPPED_(address);
-  }
+  bool IN6_IS_ADDR_LINKLOCAL(const in6_addr* address) noexcept;
+  bool IN6_IS_ADDR_MULTICAST(const in6_addr* address) noexcept;
+  bool IN6_IS_ADDR_UNSPECIFIED(const in6_addr* address) noexcept;
+  bool IN6_IS_ADDR_V4MAPPED(const in6_addr* address) noexcept;
 
 #if defined(__APPLE__)
   // Darwin defines the byte-order conversions only as macros, over static functions an inline
@@ -331,17 +280,17 @@ export {
 export namespace telar::sys {
 
   // The interface name an ifreq carries.
-  inline auto& interfaceName(ifreq& request) noexcept {
+  inline constexpr auto& interfaceName(ifreq& request) noexcept {
     return request.ifr_name;
   }
 
   // The interface flags an ifreq carries.
-  inline auto& interfaceFlags(ifreq& request) noexcept {
+  inline constexpr auto& interfaceFlags(ifreq& request) noexcept {
     return request.ifr_flags;
   }
 
   // The sixteen bytes of an IPv6 address.
-  inline auto& addressBytes(in6_addr& address) noexcept {
+  inline constexpr auto& addressBytes(in6_addr& address) noexcept {
     return address.s6_addr;
   }
 
