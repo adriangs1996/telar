@@ -12,7 +12,7 @@
 
 import std;
 import telar.base.memory.allocators;
-import telar.client.protocol;
+import telar.wire.vocabulary;
 import telar.config.core;
 import telar.runtime.graphics.kitty;
 import telar.runtime.graphics.pane_media;

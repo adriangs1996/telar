@@ -13,7 +13,7 @@ import std;
 
 export import telar.runtime.diagnostics.operation;
 import telar.base.memory.allocators;
-import telar.client.protocol;
+import telar.wire.vocabulary;
 import telar.runtime.terminal.control;
 
 // Interface: graphics/storage_limits.cppm
