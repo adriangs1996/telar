@@ -745,7 +745,8 @@
     "lib/base/include/telar_base/text/decimal.hpp": "Headers that cannot import modules, as the kitty and glyph parsers, include it; module units import its owner module",
     "lib/platform/include/telar_platform/descriptor_path.hpp": "Headers that cannot import modules, as the graphics temporary path, include it",
     "src/runtime/terminal/ghostty_grid.hpp": "Needs the generated cell layout, which only runtime-core units include",
-    "src/gui/platform/macos/cf_reference.hpp": "Objective-C++ sources include it; Objective-C++ cannot import the C++ modules"
+    "src/gui/platform/macos/cf_reference.hpp": "Objective-C++ sources include it; Objective-C++ cannot import the C++ modules",
+    "lib/tbc/tests/spec/units/cross_unit/node.hpp": "Textual spec fixture shared by the cross-unit cases and the unit that defines their bodies"
   },
   "macro_headers": [],
   "implementations": {
