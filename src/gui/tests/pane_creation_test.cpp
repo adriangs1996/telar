@@ -66,7 +66,7 @@ namespace {
   using namespace telar::gui;
   using namespace telar::gui::test;
 
-  const Tab<SystemAllocator>* tabIn(const Session<SystemAllocator, Transport>& client, TabLocation location) {
+  const Tab<telar::ConcurrentMemory>* tabIn(const Session<telar::ConcurrentMemory, Transport>& client, TabLocation location) {
     for (const auto& tab : client.tabs()) {
       if (sameTab(tab->location, location)) {
         return tab.get();
@@ -77,7 +77,9 @@ namespace {
   }
 
   void newTabsKeepTheWorkbenchSizeAfterAChildResize() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -100,7 +102,9 @@ namespace {
   }
 
   void splitRequestsStartAtTheirChildSize() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -115,7 +119,9 @@ namespace {
   }
 
   void splitRepliesWithoutAnIdentityRefreshTheRuntimeGeneration() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -168,7 +174,9 @@ namespace {
   constexpr WorkbenchGeometry framed_geometry{.area = {.width = 1010, .height = 850}, .grid = {.cell_width_px = 20, .cell_height_px = 40, .scale = 2}, .layout_metrics = {.border = 1, .gap = 1}};
 
   void aRejectedSplitRestoresTheSinglePane() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -198,7 +206,9 @@ namespace {
     });
 
     for (const auto& entry : cases) {
-      SystemAllocator memory;
+      SystemAllocator system;
+      telar::MemoryAdapter adapter{system};
+      telar::ConcurrentMemory& memory = adapter;
       Transport transport;
       Session client{memory, transport};
 
@@ -225,7 +235,9 @@ namespace {
 
   void splitDeliveryFailuresRestoreTheSourceAndReleaseOwnership() {
     for (const bool reject_resize : std::array{false, true}) {
-      SystemAllocator memory;
+      SystemAllocator system;
+      telar::MemoryAdapter adapter{system};
+      telar::ConcurrentMemory& memory = adapter;
       Transport transport;
       Session client{memory, transport};
 
@@ -253,7 +265,9 @@ namespace {
   }
 
   void runtimeFailureRestoresCurrentGeometryAndBusyRequestsDoNotOverlap() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -275,7 +289,7 @@ namespace {
     require(transport.count(ClientTag::create_pane) == 2, "runtime rejection must release the pane operation");
   }
 
-  TabLocation openAnotherTab(Session<SystemAllocator, Transport>& client, const Transport& transport) {
+  TabLocation openAnotherTab(Session<telar::ConcurrentMemory, Transport>& client, const Transport& transport) {
     client.createTab();
     const auto request = transport.last<CreateTab>();
     const TabLocation location{.workspace = request.workspace, .tab_id = 2};
@@ -286,7 +300,9 @@ namespace {
   }
 
   void lateSplitConfirmationPreservesTheActiveTabAndDuplicateOwnership() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -308,7 +324,9 @@ namespace {
   }
 
   void confirmationCannotRecreateARemovedTab() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -324,7 +342,9 @@ namespace {
   }
 
   void aVanishedSourceUsesTheSurvivingTabMembership() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -343,7 +363,9 @@ namespace {
   }
 
   void anEmptyWorkbenchCannotCreateOrResizeProcesses() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -370,7 +392,9 @@ namespace {
   std::size_t adoptSplitWithAllocationBudget(std::optional<std::size_t> budget) {
     SystemAllocator system;
     BudgetAllocator counted{system, std::numeric_limits<std::size_t>::max()};
-    AllocationGate memory{counted};
+    AllocationGate gate{counted};
+    telar::MemoryAdapter adapter{gate};
+    telar::Memory& memory = adapter;
     Transport transport;
     std::size_t allocations = 0;
 
@@ -382,7 +406,7 @@ namespace {
       const auto request = transport.last<CreatePane>();
       const auto before = counted.allocations();
 
-      memory.permit(budget);
+      gate.permit(budget);
       bool rejected = false;
 
       try {
@@ -392,7 +416,7 @@ namespace {
       }
 
       allocations = counted.allocations() - before;
-      memory.permit(std::nullopt);
+      gate.permit(std::nullopt);
       if (budget) {
         require(rejected && client.findPane(2) == nullptr && client.focusedPane()->id == 1 && client.activeTab()->layout.nodes().size() == 1, "a failed allocation must preserve the source and the semantic layout");
         require(transport.last<DetachPane>().pane_id == 2 && transport.last<PaneResize>().size.cols == client.workbenchGeometry().launchSize()->cols, "a failed adoption must release the new attachment and restore the source PTY");
@@ -415,7 +439,9 @@ namespace {
   }
 
   void routedCommandsRejectBusyAndUnavailableCreation() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -449,7 +475,9 @@ namespace {
   }
 
   void routedTabsRejectAnExistingTabOperation() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 

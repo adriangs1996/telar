@@ -68,7 +68,9 @@ namespace {
   constexpr WorktreeListEntry second_gone_checkout{.worktree = second_checkout_id, .source = project_id, .state = WorktreeState::gone, .path = "/project/other", .branch = "other"};
 
   void leavingAWorktreeOpensItsProjectWithoutALaunchCommand() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -93,7 +95,9 @@ namespace {
 
   void forgettingOnlyTargetsGoneCheckoutsWithoutTabs() {
     SystemAllocator system;
-    BudgetAllocator memory{system, std::numeric_limits<std::size_t>::max()};
+    BudgetAllocator allocator{system, std::numeric_limits<std::size_t>::max()};
+    telar::MemoryAdapter adapter{allocator};
+    telar::Memory& memory = adapter;
     Transport transport;
 
     {
@@ -124,11 +128,13 @@ namespace {
       require(client.forgetGoneWorktrees() == 0, "disconnected cleanup must not queue requests against stale state");
     }
 
-    require(memory.liveBytes() == 0, "worktree snapshots and cleanup must release all injected allocations");
+    require(allocator.liveBytes() == 0, "worktree snapshots and cleanup must release all injected allocations");
   }
 
   void cleanupStopsAtCapacityAndReleasesRejectedDelivery() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 

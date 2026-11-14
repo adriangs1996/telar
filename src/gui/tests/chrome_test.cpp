@@ -756,7 +756,9 @@ namespace {
     }
 
     Q_SLOT static void tabCaptionsUseOnlyAnEligibleFocusedAgent() {
-      SystemAllocator memory;
+      SystemAllocator system;
+      telar::MemoryAdapter adapter{system};
+      telar::ConcurrentMemory& memory = adapter;
       GraphicsBudget budget;
       const telar::TabLocation location{.workspace = {.kind = telar::WorkspaceLocation::Kind::workspace, .id = 1}, .tab_id = 1};
       Tab tab{memory, location};
@@ -776,7 +778,7 @@ namespace {
       agents.back().title = "Session title";
       for (const auto state : {telar::AgentTitleState::placeholder, telar::AgentTitleState::pending, telar::AgentTitleState::ready, telar::AgentTitleState::failed}) {
         agents.back().title_state = state;
-        const auto record = tabRecord(tab, &pane, std::array<const Pane<SystemAllocator>*, 1>{&pane}, std::span<const Agent<SystemAllocator>>{agents}, true);
+        const auto record = tabRecord(tab, &pane, std::array<const Pane<telar::ConcurrentMemory>*, 1>{&pane}, std::span<const Agent<telar::ConcurrentMemory>>{agents}, true);
 
         QCOMPARE(record.value(QStringLiteral("label")).toString(), state == telar::AgentTitleState::placeholder ? QStringLiteral("telar · Python") : QStringLiteral("Session title"));
         QCOMPARE(record.value(QStringLiteral("application")).toString(), QStringLiteral("Python"));
@@ -784,14 +786,16 @@ namespace {
 
       agents.front().location = location;
       agents.front().title_state = telar::AgentTitleState::placeholder;
-      QCOMPARE(tabRecord(tab, &pane, std::array<const Pane<SystemAllocator>*, 1>{&pane}, std::span<const Agent<SystemAllocator>>{agents}, true).value(QStringLiteral("label")).toString(), QStringLiteral("telar · Python"));
+      QCOMPARE(tabRecord(tab, &pane, std::array<const Pane<telar::ConcurrentMemory>*, 1>{&pane}, std::span<const Agent<telar::ConcurrentMemory>>{agents}, true).value(QStringLiteral("label")).toString(), QStringLiteral("telar · Python"));
       tab.label = "Review";
       tab.fullscreen = true;
-      QCOMPARE(tabRecord(tab, &pane, std::array<const Pane<SystemAllocator>*, 1>{&pane}, std::span<const Agent<SystemAllocator>>{agents}, true).value(QStringLiteral("label")).toString(), QStringLiteral("Review ⛶"));
+      QCOMPARE(tabRecord(tab, &pane, std::array<const Pane<telar::ConcurrentMemory>*, 1>{&pane}, std::span<const Agent<telar::ConcurrentMemory>>{agents}, true).value(QStringLiteral("label")).toString(), QStringLiteral("Review ⛶"));
     }
 
     Q_SLOT static void unloadedTabsShowTheirListedPanes() {
-      SystemAllocator memory;
+      SystemAllocator system;
+      telar::MemoryAdapter adapter{system};
+      telar::ConcurrentMemory& memory = adapter;
       const telar::TabLocation location{.workspace = {.kind = telar::WorkspaceLocation::Kind::workspace, .id = 1}, .tab_id = 2};
       Tab tab{memory, location};
       const std::array panes{telar::TabPane{.pane_id = 4, .foreground = "zsh", .cwd = "/work/telar"}, telar::TabPane{.pane_id = 5, .foreground = "nvim", .cwd = "/work/other"}};
@@ -802,7 +806,7 @@ namespace {
       agents.front().pane_id = 5;
       agents.front().location = location;
       agents.front().status = telar::AgentStatus::blocked;
-      const auto record = tabRecord(tab, static_cast<const Pane<SystemAllocator>*>(nullptr), std::array<const Pane<SystemAllocator>*, 0>{}, std::span<const Agent<SystemAllocator>>{agents}, false);
+      const auto record = tabRecord(tab, static_cast<const Pane<telar::ConcurrentMemory>*>(nullptr), std::array<const Pane<telar::ConcurrentMemory>*, 0>{}, std::span<const Agent<telar::ConcurrentMemory>>{agents}, false);
 
       QCOMPARE(record.value(QStringLiteral("title")).toString(), QStringLiteral("zsh"));
       QCOMPARE(record.value(QStringLiteral("path")).toString(), QStringLiteral("/work/telar"));
@@ -815,7 +819,7 @@ namespace {
       QVERIFY(!cards[1].toMap().value(QStringLiteral("attentionColor")).toString().isEmpty());
 
       tab.loaded = true;
-      QVERIFY(tabRecord(tab, static_cast<const Pane<SystemAllocator>*>(nullptr), std::array<const Pane<SystemAllocator>*, 0>{}, std::span<const Agent<SystemAllocator>>{agents}, false).value(QStringLiteral("cards")).toList().isEmpty());
+      QVERIFY(tabRecord(tab, static_cast<const Pane<telar::ConcurrentMemory>*>(nullptr), std::array<const Pane<telar::ConcurrentMemory>*, 0>{}, std::span<const Agent<telar::ConcurrentMemory>>{agents}, false).value(QStringLiteral("cards")).toList().isEmpty());
     }
 
     Q_SLOT static void transitioningTabsUseAnAlreadyScheduledFrame() {

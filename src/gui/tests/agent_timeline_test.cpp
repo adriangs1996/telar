@@ -101,7 +101,9 @@ namespace {
   constexpr auto second = StatusAgeInterval::nanoseconds_per_second;
 
   QVariantMap workingRecord() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Agent agent{memory};
 
     agent.pane_id = 1;
@@ -324,7 +326,9 @@ namespace {
     }
 
     Q_SLOT static void activityModelPreservesElapsedAgeAcrossRevisions() {
-      SystemAllocator memory;
+      SystemAllocator system;
+      telar::MemoryAdapter adapter{system};
+      telar::ConcurrentMemory& memory = adapter;
       AgentReplica replica{memory};
       constexpr auto elapsed_before_mount = 3 * second;
       constexpr std::uint32_t reported_age = 58;

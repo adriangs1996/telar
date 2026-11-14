@@ -97,7 +97,7 @@ namespace {
     }
   };
 
-  using Client = Session<SystemAllocator, Transport, platform::AwakeClock, Effects>;
+  using Client = Session<telar::ConcurrentMemory, Transport, platform::AwakeClock, Effects>;
   static_assert(HostEffects<Effects> && std::is_empty_v<DiscardHostEffects>);
 
   struct InputClock {
@@ -140,11 +140,13 @@ namespace {
     }
   };
 
-  using InputClient = Session<SystemAllocator, Transport, InputClock, InputEffects>;
+  using InputClient = Session<telar::ConcurrentMemory, Transport, InputClock, InputEffects>;
   static_assert(PaneInputObserver<InputEffects> && !PaneInputObserver<DiscardHostEffects>);
 
   void acceptedInputObservesTheQueuedPaneIdentity() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     InputObservations observations;
     InputClient client{memory, transport, InputEffects{transport, observations}};
@@ -173,7 +175,9 @@ namespace {
   }
 
   void emptyRejectedAndProtocolInputDoNotGrantGrace() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     InputObservations observations;
     InputClient client{memory, transport, InputEffects{transport, observations}};
@@ -204,7 +208,9 @@ namespace {
   }
 
   void acceptedPrefixRetainsItsGraceWhenTheNextChunkFails() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     InputObservations observations;
     InputClient client{memory, transport, InputEffects{transport, observations}};
@@ -224,9 +230,11 @@ namespace {
   }
 
   void absentObserverDoesNotReadTheClock() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
-    Session<SystemAllocator, Transport, InputClock> client{memory, transport};
+    Session<telar::ConcurrentMemory, Transport, InputClock> client{memory, transport};
 
     openFirstPane(client, transport);
     const auto previous_reads = InputClock::reads;
@@ -236,7 +244,9 @@ namespace {
   }
 
   void systemDeliveryKeepsEveryPublicationAndDoesNotReplaceTheCenter() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Recorder recorder;
     Client client{memory, transport, Effects{recorder}};
@@ -262,7 +272,9 @@ namespace {
   }
 
   void wireDeliveryAndCommittedAgentAlertsUseTheSameHostBoundary() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Recorder recorder;
     Client client{memory, transport, Effects{recorder}};
@@ -292,7 +304,9 @@ namespace {
   }
 
   void soundsRequireExactAgentIdentityAndCoalesceThroughCompletion() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Recorder recorder;
     Client client{memory, transport, Effects{recorder}};
@@ -329,7 +343,9 @@ namespace {
   }
 
   void policyReloadAndAdmissionFailureDoNotLeavePlaybackReserved() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Recorder recorder;
     Client client{memory, transport, Effects{recorder}};

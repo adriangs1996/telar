@@ -109,8 +109,9 @@ namespace telar::gui::qt {
 
     tbc::view<QQuickWindow&, tbc::lt::a> window_;
     SystemAllocator memory_;
-    fonts::TextLayout<SystemAllocator> layout_;
-    fonts::RowTextLayout<SystemAllocator> row_;
+    MemoryAdapter<SystemAllocator> adapter_{memory_};
+    fonts::TextLayout<ConcurrentMemory> layout_;
+    fonts::RowTextLayout<ConcurrentMemory> row_;
     std::optional<Batch> batch_;
     std::shared_ptr<const FontCollection> collection_;
     std::shared_ptr<ResidentFonts> fonts_;

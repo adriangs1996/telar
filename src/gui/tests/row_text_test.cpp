@@ -52,7 +52,7 @@ namespace {
   using namespace telar::gui::fonts;
   using namespace telar::gui::test;
 
-  constexpr std::size_t columns = TextRuns<SystemAllocator>::maximum_cells;
+  constexpr std::size_t columns = TextRuns<telar::ConcurrentMemory>::maximum_cells;
   constexpr std::uint16_t pixel_height = 15;
   constexpr std::uint16_t cell_width = 9;
 
@@ -67,10 +67,12 @@ namespace {
     return cells;
   }
 
-  void storageIsReusedAcrossCursorAndSelectionChanges(FontFixture<SystemAllocator>& fonts) {
+  void storageIsReusedAcrossCursorAndSelectionChanges(FontFixture<telar::ConcurrentMemory>& fonts) {
     SystemAllocator upstream;
     BudgetAllocator budget{upstream, std::numeric_limits<std::size_t>::max()};
-    AllocationGate memory{budget};
+    AllocationGate gate{budget};
+    telar::MemoryAdapter adapter{gate};
+    telar::Memory& memory = adapter;
 
     {
       RowTextLayout layout{memory};
@@ -80,7 +82,7 @@ namespace {
       layout.shape(fonts, cells, request);
       const auto retained_bytes = budget.liveBytes();
 
-      memory.permit(0);
+      gate.permit(0);
       for (std::size_t column = 0; column < cells.size(); ++column) {
         request.cursor = column;
         request.selection = {.anchor = 0, .head = static_cast<int>(column)};
@@ -93,8 +95,10 @@ namespace {
     require(budget.liveBytes() == 0, "row layout must release every allocator-owned buffer");
   }
 
-  void fontAndGridChangesRetireCachedPositions(FontFixture<SystemAllocator>& fonts, FontFixture<SystemAllocator>& alternate) {
-    SystemAllocator memory;
+  void fontAndGridChangesRetireCachedPositions(FontFixture<telar::ConcurrentMemory>& fonts, FontFixture<telar::ConcurrentMemory>& alternate) {
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     RowTextLayout layout{memory};
     std::array<CellValue, 2> cells;
 
@@ -118,8 +122,10 @@ namespace {
 
   // A short cell outside ASCII lays out the same whether the row shapes it or recalls what it kept
   // of it: one glyph of the primary face, a combining pair, a ligature's letter, a face's fallback.
-  void keptClustersLayOutAsShaped(FontFixture<SystemAllocator>& fonts) {
-    SystemAllocator memory;
+  void keptClustersLayOutAsShaped(FontFixture<telar::ConcurrentMemory>& fonts) {
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     RowTextLayout layout{memory};
     constexpr std::array<std::string_view, 9> texts{"á", "ñ", "ß", "λ", "ж", "e\u0301", "→", "漢", "\U0001F600"};
     std::array<CellValue, texts.size() * 2> cells;
@@ -165,13 +171,15 @@ namespace {
     }
   }
 
-  void failedStorageCanBeRetried(FontFixture<SystemAllocator>& fonts) {
+  void failedStorageCanBeRetried(FontFixture<telar::ConcurrentMemory>& fonts) {
     SystemAllocator upstream;
-    AllocationGate memory{upstream};
+    AllocationGate gate{upstream};
+    telar::MemoryAdapter adapter{gate};
+    telar::Memory& memory = adapter;
     RowTextLayout layout{memory};
     const auto cells = sourceCells();
 
-    memory.permit(0);
+    gate.permit(0);
     bool failed = false;
 
     try {
@@ -181,7 +189,7 @@ namespace {
     }
 
     require(failed, "row buffers must honor the injected allocator");
-    memory.permit(std::nullopt);
+    gate.permit(std::nullopt);
     layout.shape(fonts, cells, {.pixel_height = pixel_height, .cell_width = cell_width});
     require(layout.spans().size() == cells.size(), "a failed first allocation must leave the layout reusable");
   }
@@ -196,7 +204,9 @@ int main(int argc, char** argv) {
   }
 
   try {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     const std::filesystem::path assets{arguments[1]};
     FontFixture fonts{memory, assets};
     FontFixture alternate{memory, assets, "IBMPlexSans-Regular.ttf"};

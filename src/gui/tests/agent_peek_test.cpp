@@ -119,7 +119,7 @@ namespace {
       require(PeekInput::command(text) == command, "peek slash words retain exact case and only trim spaces and tabs");
     }
 
-    using Screen = PeekScreen<SystemAllocator>;
+    using Screen = PeekScreen<telar::ConcurrentMemory>;
     constexpr std::uint16_t two_rows = 2;
 
     require(Screen::lastLines("one\ntwo\nthree \r\n\t", two_rows) == "two\nthree", "peek clips its recent lines from the oldest visible row and trims only the tail");
@@ -193,7 +193,9 @@ namespace {
   }
 
   void rejectedTransportReleasesOnlyItsOwnAdmission() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     PeekTransport transport;
     Session client{memory, transport};
 
@@ -243,7 +245,9 @@ namespace {
   }
 
   void snapshotsRefreshMetadataWithoutAttachingThePeekedPane() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -275,7 +279,9 @@ namespace {
   }
 
   void peekMessagesAndInterruptsKeepTheOriginalProtocol() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -306,7 +312,9 @@ namespace {
   }
 
   void diffLaunchQuotesItsBranchAsAnArgumentAndWaitsForHandoff() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -338,7 +346,9 @@ namespace {
   }
 
   void openingTaskPeekDetachesBeforeItsCanonicalPaneHandoff() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -373,7 +383,9 @@ namespace {
   }
 
   void aBusyTaskPeekOpenClosesWithoutLeavingItsCurrentWorkspace() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -392,7 +404,9 @@ namespace {
   }
 
   void aMissingTaskPaneRetriesItsWorkspaceOnlyOnce() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -414,7 +428,9 @@ namespace {
   }
 
   void aRejectedTaskOpenRestoresItsDepartingAttachment() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     PeekTransport transport;
     Session client{memory, transport};
 
@@ -442,7 +458,9 @@ namespace {
   }
 
   void aPartialTaskDepartureRepairsOnlyItsAcceptedDetaches() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -476,7 +494,9 @@ namespace {
   }
 
   void aDiffArrivalWithPendingPeekReadKeepsItsCurrentWorkspace() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -501,7 +521,9 @@ namespace {
   }
 
   void peekReadFailuresRetryAndRejectedActionsNotifyTheirPane() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 

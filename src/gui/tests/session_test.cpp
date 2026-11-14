@@ -80,7 +80,9 @@ namespace {
   void sessionLifecycle() {
     SystemAllocator system;
     constexpr std::size_t allocation_budget = std::size_t{16} * 1024 * 1024;
-    BudgetAllocator memory{system, allocation_budget};
+    BudgetAllocator allocator{system, allocation_budget};
+    telar::MemoryAdapter adapter{allocator};
+    telar::Memory& memory = adapter;
     Transport transport;
 
     {
@@ -145,12 +147,14 @@ namespace {
       require(transport.last<OpenPane>().target.id == 1 && !transport.last<OpenPane>().launch, "reconnect must restore the current pane from the runtime's owned layout snapshot");
     }
 
-    require(memory.liveBytes() == 0, "session must release injected allocations");
+    require(allocator.liveBytes() == 0, "session must release injected allocations");
   }
 
   void detachedTabForegroundsAndAgentTitles() {
     SystemAllocator system;
-    BudgetAllocator memory{system, std::numeric_limits<std::size_t>::max()};
+    BudgetAllocator allocator{system, std::numeric_limits<std::size_t>::max()};
+    telar::MemoryAdapter adapter{allocator};
+    telar::Memory& memory = adapter;
     Transport transport;
 
     {
@@ -194,12 +198,14 @@ namespace {
       require(agent.provider_kind == AgentProvider::codex && agent.blocked_reason == AgentBlockedReason::permission, "agent cards must retain typed provider and blocked reason");
     }
 
-    require(memory.liveBytes() == 0, "foreground and agent-title metadata must release injected allocations");
+    require(allocator.liveBytes() == 0, "foreground and agent-title metadata must release injected allocations");
   }
 
   void configuredWindowTitles() {
     SystemAllocator system;
-    BudgetAllocator memory{system, std::numeric_limits<std::size_t>::max()};
+    BudgetAllocator allocator{system, std::numeric_limits<std::size_t>::max()};
+    telar::MemoryAdapter adapter{allocator};
+    telar::Memory& memory = adapter;
     Transport transport;
 
     {
@@ -225,11 +231,11 @@ namespace {
 
       deliver(client, PaneTitle{.pane_id = 1, .title = "compiler"});
       deliver(client, PaneForeground{.pane_id = 1, .name = "nvim"});
-      const auto allocations = memory.allocations();
+      const auto allocations = allocator.allocations();
       const auto rendered = client.windowTitle("host");
 
       require(rendered.view() == "project/nvim/compiler@host", "titles must follow current workspace, foreground and pane metadata");
-      require(memory.allocations() == allocations, "title projection must not allocate through the session allocator");
+      require(allocator.allocations() == allocations, "title projection must not allocate through the session allocator");
       const std::array tabs{TabDescriptor{.tab_id = location.tab_id, .label = "manual"}};
 
       deliver(client, WorkspaceSnapshot{.request_id = 1, .workspace = location.workspace, .name = "renamed", .tabs = tabs});
@@ -245,11 +251,13 @@ namespace {
       require(client.windowTitle("host").view() == "Telar", "clearing a configured template must restore the original GUI default");
     }
 
-    require(memory.liveBytes() == 0, "title projection must preserve session allocation ownership");
+    require(allocator.liveBytes() == 0, "title projection must preserve session allocation ownership");
   }
 
   void restoredLayoutAndFailure() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
     constexpr std::uint64_t client_identity = 9;
@@ -282,7 +290,9 @@ namespace {
   }
 
   void pendingAttachmentKeepsTheLatestViewport() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -329,7 +339,9 @@ namespace {
   }
 
   void staleHistory() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -347,7 +359,9 @@ namespace {
   }
 
   void routedCommands() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -406,7 +420,9 @@ namespace {
   }
 
   void routedSidebarResize() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -451,7 +467,9 @@ namespace {
   }
 
   void routedCopyRange() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -497,7 +515,9 @@ namespace {
   }
 
   void pointerSelectionLifecycle() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -537,7 +557,9 @@ namespace {
   }
 
   void editorNavigation() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -594,7 +616,9 @@ namespace {
   }
 
   void focusedScrollRouting() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -672,7 +696,9 @@ namespace {
   }
 
   void routedLayoutRoundtrip() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -718,7 +744,9 @@ namespace {
   }
 
   void routedLayoutGuards() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -768,7 +796,7 @@ namespace {
         .tabs = foreign_tabs,
     };
 
-    String<SystemAllocator> foreign_token{AllocatorRef<char, SystemAllocator>{memory}};
+    String<telar::ConcurrentMemory> foreign_token{AllocatorRef<char, telar::ConcurrentMemory>{memory}};
 
     LayoutToken::write(foreign_snapshot, foreign_token);
     command.request_id = 4;
@@ -784,7 +812,9 @@ namespace {
   }
 
   void routedWorkspaceList() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -814,7 +844,9 @@ namespace {
   }
 
   void historyReplay() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -889,7 +921,9 @@ namespace {
   }
 
   void historyScopesAndVisits() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -941,7 +975,9 @@ namespace {
   }
 
   void agentNavigationUsesCommittedGenerationsAndExistingPanes() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -984,11 +1020,13 @@ namespace {
   }
 
   void uncachedHistoryReplay() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
-    using Storage = HistoryPageStorage<decltype(memory)>;
-    using Browser = HistoryBrowser<decltype(memory)>;
+    using Storage = HistoryPageStorage<std::remove_reference_t<decltype(memory)>>;
+    using Browser = HistoryBrowser<std::remove_reference_t<decltype(memory)>>;
     constexpr auto command_bytes = Browser::maximum_command_bytes;
     constexpr auto cached_entries = Storage::command_cache_bytes / command_bytes;
     const std::string command(command_bytes, 'x');
@@ -1042,7 +1080,9 @@ namespace {
   }
 
   void historyQueryBounds() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -1058,7 +1098,9 @@ namespace {
   }
 
   void bracketedHistoryReplay() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -1096,7 +1138,9 @@ namespace {
   }
 
   void routedHostCommands() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -1141,7 +1185,9 @@ namespace {
   }
 
   void canonicalRemoval() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -1164,7 +1210,9 @@ namespace {
   }
 
   void linkContextRevisions() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 

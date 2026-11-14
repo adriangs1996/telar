@@ -36,6 +36,35 @@ include(cmake/fonts.cmake)
 
 add_library(gui-core STATIC terminal/glyphs/curve_cache/box_curve.cpp platform/awake_clock/awake_clock.cpp platform/wall_clock/wall_clock.cpp)
 telar_modules(gui-core)
+target_sources(gui-core PRIVATE
+  fonts/text_runs/text_runs.cpp
+  graphics/pauses/pauses.cpp
+  graphics/placeholder/placeholder.cpp
+  graphics/texture_cache/texture_cache.cpp
+  layout/geometry/geometry.cpp
+  layout/snapshots/snapshots.cpp
+  model/records/records.cpp
+  model/replicas/replicas.cpp
+  presentation/activity_order/activity_order.cpp
+  presentation/application_mark/application_mark.cpp
+  presentation/display_metrics/display_metrics.cpp
+  presentation/form_field_geometry/form_field_geometry.cpp
+  presentation/frame_pacer/frame_pacer.cpp
+  presentation/history_filter_geometry/history_filter_geometry.cpp
+  presentation/history_inspection/history_inspection.cpp
+  presentation/history_inspection_geometry/history_inspection_geometry.cpp
+  presentation/history_meta_geometry/history_meta_geometry.cpp
+  presentation/history_pointer/history_pointer.cpp
+  presentation/notification_center/notification_center.cpp
+  presentation/notification_stack/notification_stack.cpp
+  presentation/suggestion_geometry/suggestion_geometry.cpp
+  presentation/suggestion_labels/suggestion_labels.cpp
+  presentation/tab_drop/tab_drop.cpp
+  terminal/font_grid/font_grid.cpp
+  terminal/glyphs/curve_cache/curve_cache.cpp
+  terminal/glyphs/glyphs.cpp
+  terminal/row_cache/row_cache.cpp
+  terminal/selection/selection.cpp)
 target_link_libraries(gui-core PUBLIC telar::shell telar::render ebnf::ebnf)
 target_include_directories(gui-core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/generated" "${TELAR_ROOT}/lib/tbc/include")
 target_link_libraries(gui-core PUBLIC telar::config telar::machines gui-harfbuzz)
@@ -515,7 +544,7 @@ if(BUILD_TESTING)
 endif()
 
 if(TELAR_GUI_NATIVE)
-  add_library(gui-fonts STATIC fonts/face/face.cpp fonts/face/ligature_coverage.cpp)
+  add_library(gui-fonts STATIC fonts/face/face.cpp fonts/face/ligature_coverage.cpp fonts/font_requests/font_requests.cpp fonts/row_text_layout/row_text_layout.cpp)
   target_link_libraries(gui-fonts PUBLIC gui-core gui-harfbuzz)
   target_link_libraries(gui-editor-context INTERFACE gui-fonts)
   target_compile_options(gui-fonts PRIVATE -ffp-contract=off)

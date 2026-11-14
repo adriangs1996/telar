@@ -40,7 +40,7 @@ namespace telar::gui::qt {
 
   NativeCellText::NativeCellText(QQuickItem* parent)
       : QQuickItem(parent),
-        layout_(memory_),
+        layout_(adapter_, maximum_text_bytes),
         ancestors_(*this) {
     setFlag(ItemHasContents);
   }

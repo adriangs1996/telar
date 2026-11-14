@@ -123,12 +123,12 @@ namespace telar::gui::qt {
 
     // The text fitted to the item's width, shaped apart from the full text it is cut from.
     struct FittedText {
-      explicit FittedText(SystemAllocator& memory)
+      explicit FittedText(ConcurrentMemory& memory)
           : glyphs(memory) {}
 
       void shape(ResidentFonts& fonts, std::string_view text, fonts::TextRequest request);
 
-      fonts::TextLayout<SystemAllocator> glyphs;
+      fonts::TextLayout<ConcurrentMemory> glyphs;
       TextFit::Buffer text{};
       std::size_t bytes = 0;
       std::int32_t advance = 0;
@@ -136,7 +136,8 @@ namespace telar::gui::qt {
     };
 
     SystemAllocator memory_;
-    fonts::TextLayout<SystemAllocator> glyphs_;
+    MemoryAdapter<SystemAllocator> adapter_{memory_};
+    fonts::TextLayout<ConcurrentMemory> glyphs_;
     FittedText fit_;
     // The ancestors are watched through this item, which stays where Qt made it.
     tbc::view<AncestorGeometry, tbc::lt::self> ancestors_;

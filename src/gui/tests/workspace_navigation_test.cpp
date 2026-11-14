@@ -93,7 +93,9 @@ namespace {
   }
 
   void aWorkspaceReturnRestoresItsTreeAfterCanonicalMembership() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -124,7 +126,9 @@ namespace {
   }
 
   void aMissingBookmarkRetriesItsWorkspaceOnlyOnce() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -147,7 +151,9 @@ namespace {
   }
 
   void canonicalArrivalUsesTheSavedTreeOfItsActualTab() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -179,7 +185,9 @@ namespace {
   }
 
   void aNewConnectionForgetsPreviousNavigationAndSavedTrees() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -221,7 +229,9 @@ namespace {
   }
 
   void lateMetadataCannotActivateTheDepartedWorkspace() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -238,7 +248,9 @@ namespace {
   }
 
   void linkedCheckoutsDoNotConsumeProjectPositions() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -362,7 +374,9 @@ namespace {
   }
 
   void unknownSelectionDoesNotContactTheRuntime() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -375,7 +389,9 @@ namespace {
   }
 
   void selectingTheActiveWorkspaceIsAnIdleNoOp() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -388,7 +404,9 @@ namespace {
   }
 
   void uncachedSelectionOpensTheRuntimeWorkspaceAfterDetaching() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -416,7 +434,9 @@ namespace {
   }
 
   void aPendingOperationFencesWorkspaceSelection() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -430,7 +450,9 @@ namespace {
   }
 
   void disconnectedSelectionDoesNotUseRetainedMetadata() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -444,7 +466,9 @@ namespace {
   }
 
   void worktreeActionsUseTheSharedRuntimeHandoff() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 

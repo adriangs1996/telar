@@ -145,7 +145,9 @@ namespace {
     }
 
     Q_SLOT static void projectionRejectsOtherPaneGenerationsAndUsesTheProgram() {
-      SystemAllocator memory;
+      SystemAllocator system;
+      telar::MemoryAdapter adapter{system};
+      telar::ConcurrentMemory& memory = adapter;
       GraphicsBudget budget;
       Pane pane{memory, 1, budget};
 
@@ -154,14 +156,14 @@ namespace {
       pane.attachment_generation = 3;
       pane.title = "Ignore OSC title";
       pane.cwd = "/ignore/cwd";
-      std::array<Agent<SystemAllocator>, 1> agents{Agent{memory}};
+      std::array<Agent<telar::ConcurrentMemory>, 1> agents{Agent{memory}};
       auto& agent = agents.front();
 
       agent.pane_id = pane.id;
       agent.location = pane.location;
       agent.pane_generation = 1;
       agent.status = AgentStatus::ready;
-      const auto span = std::span<const Agent<SystemAllocator>>{agents};
+      const auto span = std::span<const Agent<telar::ConcurrentMemory>>{agents};
       auto record = paneChromeRecord(pane, span, 2);
 
       QCOMPARE(record.value(QStringLiteral("program")).toString(), QStringLiteral("shell"));
@@ -179,7 +181,9 @@ namespace {
     }
 
     Q_SLOT static void projectionAddsSafeSessionTitleOrDirectoryContext() {
-      SystemAllocator memory;
+      SystemAllocator system;
+      telar::MemoryAdapter adapter{system};
+      telar::ConcurrentMemory& memory = adapter;
       GraphicsBudget budget;
       Pane pane{memory, 1, budget};
 
@@ -188,9 +192,9 @@ namespace {
       pane.foreground = "zsh";
       pane.cwd = "/projects/telar";
       pane.title = "Test\n\tresults";
-      QCOMPARE(paneChromeRecord(pane, std::span<const Agent<SystemAllocator>>{}, 1).value(QStringLiteral("context")).toString(), QStringLiteral("/projects/telar"));
+      QCOMPARE(paneChromeRecord(pane, std::span<const Agent<telar::ConcurrentMemory>>{}, 1).value(QStringLiteral("context")).toString(), QStringLiteral("/projects/telar"));
       pane.title.clear();
-      std::array<Agent<SystemAllocator>, 1> agents{Agent{memory}};
+      std::array<Agent<telar::ConcurrentMemory>, 1> agents{Agent{memory}};
       auto& agent = agents.front();
 
       agent.pane_id = pane.id;
@@ -198,12 +202,12 @@ namespace {
       agent.location = pane.location;
       agent.title_state = AgentTitleState::ready;
       agent.title = "Fix session restore";
-      auto record = paneChromeRecord(pane, std::span<const Agent<SystemAllocator>>{agents}, 1);
+      auto record = paneChromeRecord(pane, std::span<const Agent<telar::ConcurrentMemory>>{agents}, 1);
 
       QCOMPARE(record.value(QStringLiteral("context")).toString(), QStringLiteral("Fix session restore"));
       QCOMPARE(record.value(QStringLiteral("program")).toString(), QStringLiteral("zsh"));
       ++agent.pane_generation;
-      record = paneChromeRecord(pane, std::span<const Agent<SystemAllocator>>{agents}, 1);
+      record = paneChromeRecord(pane, std::span<const Agent<telar::ConcurrentMemory>>{agents}, 1);
       QCOMPARE(record.value(QStringLiteral("context")).toString(), QStringLiteral("/projects/telar"));
     }
 

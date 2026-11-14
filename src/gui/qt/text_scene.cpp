@@ -68,8 +68,8 @@ namespace telar::gui::qt {
 
   TextScene::TextScene(tbc::view<QQuickWindow&, tbc::lt::a> window)
       : window_(window),
-        layout_(memory_),
-        row_(memory_) {}
+        layout_(adapter_),
+        row_(adapter_) {}
 
   void TextScene::configure(const FontConfiguration& font, FontGrid grid, const std::shared_ptr<const FontCollection>& collection) {
     constexpr std::array hinting{fonts::GlyphHinting::native, fonts::GlyphHinting::light, fonts::GlyphHinting::full};

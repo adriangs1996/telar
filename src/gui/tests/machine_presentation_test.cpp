@@ -85,7 +85,9 @@ namespace {
   }
 
   void hiddenStartupKeepsMetadataWithoutOpeningAPane() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -101,7 +103,9 @@ namespace {
   }
 
   void aHiddenRestoredLayoutOwnsItsDataUntilPresentation() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -137,7 +141,9 @@ namespace {
   }
 
   void rapidReturnDoesNotDuplicateAnOpeningAlreadyInFlight() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -153,7 +159,9 @@ namespace {
 
   void hidingReleasesScreensAndReturningReopensTheFocusedPane() {
     SystemAllocator system;
-    BudgetAllocator memory{system, std::numeric_limits<std::size_t>::max()};
+    BudgetAllocator allocator{system, std::numeric_limits<std::size_t>::max()};
+    telar::MemoryAdapter adapter{allocator};
+    telar::Memory& memory = adapter;
     Transport transport;
 
     {
@@ -164,11 +172,11 @@ namespace {
 
       client.toggleFullscreen();
       deliverSingleCell(client, {.pane_id = 1, .frame_id = 1, .scroll = {.total_rows = 1}});
-      const auto retained = memory.liveBytes();
+      const auto retained = allocator.liveBytes();
 
       client.setPresented(false);
       require(client.ready() && !client.presented() && client.activeTab() == nullptr && client.panes().empty(), "hiding must retire the workspace and all pane-owned screen storage while retaining the connection");
-      require(memory.liveBytes() < retained, "hiding must release allocator-owned pane and screen storage");
+      require(allocator.liveBytes() < retained, "hiding must release allocator-owned pane and screen storage");
       require(transport.count(ClientTag::detach_pane) == 1 && transport.detaching.size() == 1, "hiding must release input ownership before detaching the pane exactly once");
       require(transport.count(ClientTag::close_pane) == 0 && transport.count(ClientTag::runtime_stop) == 0, "hiding must preserve the runtime's processes");
       require(!client.settlePresentation(), "completed departure must be idempotent");
@@ -183,11 +191,13 @@ namespace {
       require(client.activeTab() != nullptr && client.activeTab()->focused_pane == 1 && client.activeTab()->fullscreen, "returning must retain focus and fullscreen layout state");
     }
 
-    require(memory.liveBytes() == 0, "presentation and restoration must release every session allocation on destruction");
+    require(allocator.liveBytes() == 0, "presentation and restoration must release every session allocation on destruction");
   }
 
   void hidingWaitsForCanonicalSnapshotsBeforeDetaching() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -210,7 +220,9 @@ namespace {
   }
 
   void hidingWaitsForAnAttachmentAndHandlesItsLateReply() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -230,7 +242,9 @@ namespace {
   }
 
   void metadataDoesNotReattachAHiddenMachine() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -249,7 +263,9 @@ namespace {
   }
 
   void hiddenCompletionRemainsUnacknowledgedUntilPresentation() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -266,7 +282,9 @@ namespace {
   }
 
   void failedSnapshotsDoNotPreventDeparture() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -287,7 +305,9 @@ namespace {
   }
 
   void disconnectionReleasesAHiddenWorkspaceWithoutSendingDetaches() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -299,7 +319,9 @@ namespace {
   }
 
   void returningBeforeDepartureSettlesKeepsTheWorkspace() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -316,7 +338,9 @@ namespace {
   }
 
   void aMissingRememberedPaneFallsBackToItsSourceWorkspaceOnce() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -336,7 +360,9 @@ namespace {
   }
 
   void aPartialDetachCanRetryWithoutDroppingPendingScreens() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 

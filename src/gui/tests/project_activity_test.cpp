@@ -45,7 +45,9 @@ namespace {
   using namespace telar::gui::test;
 
   void projectCountsAndAttention() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     WorkspaceReplica workspaces{memory};
     const std::array entries{
         WorkspaceListEntry{.workspace = 1, .name = "project", .path = "/project"},
@@ -75,7 +77,7 @@ namespace {
     agents[3].status_age_s = older_status_age;
     agents[4].status = AgentStatus::failed;
     agents[4].status_age_s = 2;
-    const auto activity = ProjectActivity::derive(workspaces, std::span<const Agent<SystemAllocator>>{agents}, 1);
+    const auto activity = ProjectActivity::derive(workspaces, std::span<const Agent<telar::ConcurrentMemory>>{agents}, 1);
 
     require(activity.worktrees == 2 && activity.working == 1 && activity.finished == 1, "only task agents in this project contribute to worktree progress");
     require(activity.waiting == 2 && activity.urgent == 4, "project attention must use the shared priority rather than status severity");
@@ -85,7 +87,7 @@ namespace {
     require(activity.attentionLabel().view() == "! 2", "attention must count both blocked and failed agents");
     agents[3].location.workspace.kind = WorkspaceLocation::Kind::worktree;
     agents[4].location.workspace.id = 3;
-    const auto filtered = ProjectActivity::derive(workspaces, std::span<const Agent<SystemAllocator>>{agents}, 1);
+    const auto filtered = ProjectActivity::derive(workspaces, std::span<const Agent<telar::ConcurrentMemory>>{agents}, 1);
 
     require(filtered.waiting == 0 && !filtered.urgent, "unattached worktree locations and other projects must not request attention here");
   }
@@ -93,7 +95,9 @@ namespace {
   void summaryOverflowAndWarmReuse() {
     SystemAllocator upstream;
     BudgetAllocator budget{upstream, std::numeric_limits<std::size_t>::max()};
-    AllocationGate memory{budget};
+    AllocationGate gate{budget};
+    telar::MemoryAdapter adapter{gate};
+    telar::Memory& memory = adapter;
 
     {
       WorkspaceReplica workspaces{memory};
@@ -104,11 +108,11 @@ namespace {
       workspaces.apply({.revision = 1, .entries = entries, .worktrees = tasks});
       const auto allocations = budget.allocations();
 
-      memory.permit(0);
+      gate.permit(0);
       constexpr std::size_t repetitions = 100;
 
       for (std::size_t index = 0; index < repetitions; ++index) {
-        const auto activity = ProjectActivity::derive(workspaces, std::span<const Agent<decltype(memory)>>{}, 1);
+        const auto activity = ProjectActivity::derive(workspaces, std::span<const Agent<std::remove_reference_t<std::remove_reference_t<decltype(memory)>>>>{}, 1);
         ProjectActivity::Text text;
 
         require(!activity.summary(text), "an overflowing summary must preserve the original path fallback");
@@ -116,7 +120,7 @@ namespace {
       }
 
       require(budget.allocations() == allocations, "project projection must not allocate through the injected allocator");
-      const auto missing = ProjectActivity::derive(workspaces, std::span<const Agent<decltype(memory)>>{}, 2);
+      const auto missing = ProjectActivity::derive(workspaces, std::span<const Agent<std::remove_reference_t<std::remove_reference_t<decltype(memory)>>>>{}, 2);
       ProjectActivity::Text text;
 
       require(!missing.summary(text), "a missing project must not publish a summary");

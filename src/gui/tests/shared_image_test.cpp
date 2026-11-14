@@ -191,7 +191,9 @@ namespace {
   }
 
   void sharedAndInlineStoresHaveEquivalentGenerationsAndCredits() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     GraphicsBudget inline_budget;
     GraphicsBudget shared_budget;
     GraphicsStore inline_store{memory, inline_budget};
@@ -239,7 +241,11 @@ namespace {
       }
     } source;
 
-    SystemAllocator memory;
+    SystemAllocator system;
+
+    telar::MemoryAdapter adapter{system};
+
+    telar::ConcurrentMemory& memory = adapter;
     GraphicsBudget budget{.used = GraphicsBudget::global_capacity - pixels.size() + 1};
     GraphicsStore store{memory, budget};
     bool rejected = false;
@@ -254,9 +260,11 @@ namespace {
   }
 
   void missingPixelsRequestRecoveryAndReturnCreditAtSnapshot() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     ImageTransport transport;
-    Session<SystemAllocator, ImageTransport> client{memory, transport};
+    Session<telar::ConcurrentMemory, ImageTransport> client{memory, transport};
 
     test::openFirstPane(client, transport);
     require(transport.last<ConfigureGraphics>().shared, "a capable local transport must request shared graphics");
@@ -271,9 +279,11 @@ namespace {
   }
 
   void ignoredImagesReleaseNamesAndRemoteImagesCannotOpenObjects() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     ImageTransport local;
-    Session<SystemAllocator, ImageTransport> client{memory, local};
+    Session<telar::ConcurrentMemory, ImageTransport> client{memory, local};
 
     test::openFirstPane(client, local);
     PublishedImage ignored;
@@ -284,7 +294,7 @@ namespace {
     ImageTransport remote;
 
     remote.local = false;
-    Session<SystemAllocator, ImageTransport> remote_client{memory, remote};
+    Session<telar::ConcurrentMemory, ImageTransport> remote_client{memory, remote};
 
     test::openFirstPane(remote_client, remote);
     require(!remote.last<ConfigureGraphics>().shared, "remote transports must retain inline delivery");

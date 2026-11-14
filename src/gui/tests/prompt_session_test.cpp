@@ -88,7 +88,9 @@ namespace {
   }
 
   void lineRunsCommands() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -192,7 +194,9 @@ namespace {
   }
 
   void lineHidesTerminalCursor() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -224,7 +228,9 @@ namespace {
   // A command is marked found or missing while it is typed: an answer that lists every command
   // under a prefix settles the longer words typed after it without asking again.
   void commandsSettleAsTyped() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -255,7 +261,9 @@ namespace {
   // A prompt request the runtime fails, or a lost connection never answers, settles quietly
   // instead of waiting forever.
   void promptRequestsSettleOnFailure() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -300,7 +308,9 @@ namespace {
 
   // Commands run after the history loaded replace its oldest entries instead of growing it.
   void promptHistoryStaysBounded() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -329,7 +339,9 @@ namespace {
 
   // A pane that leaves the model takes its prompt and the requests it made with it.
   void paneRemovalForgetsPrompt() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -360,7 +372,9 @@ namespace {
   }
 
   void lineCompletes() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -556,7 +570,9 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
   }
 
   void lineBindings() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -599,7 +615,9 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
 // The command blocks, from the editor: stepped through from vim's normal mode, their output
 // selected in copy mode or copied whole, their command copied, and left for the prompt.
 void lineBlocks() {
-  SystemAllocator memory;
+  SystemAllocator system;
+  telar::MemoryAdapter adapter{system};
+  telar::ConcurrentMemory& memory = adapter;
   Transport transport;
   Session client{memory, transport};
 
@@ -681,7 +699,9 @@ void lineBlocks() {
 
 // On a selected block the view moves, folds, jumps and searches the block's output.
 void lineBlockMotions() {
-  SystemAllocator memory;
+  SystemAllocator system;
+  telar::MemoryAdapter adapter{system};
+  telar::ConcurrentMemory& memory = adapter;
   Transport transport;
   Session client{memory, transport};
 
@@ -791,7 +811,9 @@ void lineBlockMotions() {
 // Ctrl-R and the path search start from the command the line holds, and the path chosen
 // replaces the word it started from.
 void lineSearches() {
-  SystemAllocator memory;
+  SystemAllocator system;
+  telar::MemoryAdapter adapter{system};
+  telar::ConcurrentMemory& memory = adapter;
   Transport transport;
   Session client{memory, transport};
 

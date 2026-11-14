@@ -249,8 +249,10 @@ namespace {
     constexpr std::uint64_t from = 100;
     constexpr std::uint16_t count = 4;
     constexpr std::uint64_t third = from + 2;
-    SystemAllocator memory;
-    RowCache<SystemAllocator> cache{memory};
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
+    RowCache<telar::ConcurrentMemory> cache{memory};
 
     cache.number(generation);
     require(cache.empty() && !cache.find(0), "a cache holds nothing before its first rows");
@@ -262,7 +264,7 @@ namespace {
     const auto row = cache.find(third);
 
     require(row && row->cells.size() == 1 && row->cells.front().utf8() == "c", "a row is found by its stable number");
-    require(!cache.find(third + RowCache<SystemAllocator>::slot_count), "a slot answers only for the row it holds");
+    require(!cache.find(third + RowCache<telar::ConcurrentMemory>::slot_count), "a slot answers only for the row it holds");
     const RowsReply stale{{.request_id = request + 1, .generation = generation - 1, .from = from}, 1};
 
     require(!cache.store(stale.reply, 1), "rows of another generation are not kept");
@@ -289,15 +291,17 @@ namespace {
     const std::array runs{MetadataRun{.start = columns + linked_column, .len = linked_cells, .link_index = 0}};
     const auto uri_bytes = byteView(uri);
     const PaneRows reply{.request_id = 1, .pane_id = 1, .generation = generation, .from = from, .cols = columns, .rows = rows, .text_metadata = TextMetadata{.row_flags = flags, .links = links, .runs = runs, .uris = uri_bytes}, .cells = CellRunCodec::encode(cells, encoded)};
-    SystemAllocator memory;
-    RowCache<SystemAllocator> cache{memory};
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
+    RowCache<telar::ConcurrentMemory> cache{memory};
 
     cache.number(generation);
     require(cache.store(reply, columns), "rows with links are kept");
     std::string kept;
     std::uint16_t kept_column = 0;
 
-    cache.links(from + 1, [&](const RowCache<SystemAllocator>::LinkView& link) {
+    cache.links(from + 1, [&](const RowCache<telar::ConcurrentMemory>::LinkView& link) {
       kept.assign(link.uri);
       kept_column = link.column;
       require(link.length == linked_cells, "a kept link covers its cells");
@@ -306,14 +310,14 @@ namespace {
     require(kept == uri && kept_column == linked_column, "a kept row keeps its link and target");
     bool none = true;
 
-    cache.links(from, [&](const RowCache<SystemAllocator>::LinkView&) {
+    cache.links(from, [&](const RowCache<telar::ConcurrentMemory>::LinkView&) {
       none = false;
     });
 
     require(none, "a row without links has none");
 
     // The second kept row drawn first, as a folded view may draw it.
-    Screen<SystemAllocator> drawn{memory};
+    Screen<telar::ConcurrentMemory> drawn{memory};
     const auto row = cache.find(from + 1);
     const std::array spans{row->cells, std::span<const CellValue>{}};
     const std::array<Byte, rows> drawn_flags{row->flags, 0};
@@ -333,9 +337,11 @@ namespace {
     constexpr std::uint64_t dropped = 12;
     constexpr std::uint64_t first = 500;
     constexpr std::uint64_t last = 700;
-    constexpr std::uint64_t second_from = first + RowCache<SystemAllocator>::request_rows;
+    constexpr std::uint64_t second_from = first + RowCache<telar::ConcurrentMemory>::request_rows;
     constexpr std::uint16_t kept = 3;
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -374,7 +380,9 @@ namespace {
     constexpr std::uint32_t third_row = 60;
     constexpr std::uint64_t trimmed = 7;
     constexpr std::uint32_t dropped = 2;
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 

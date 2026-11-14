@@ -89,7 +89,9 @@ namespace {
   }
 
   void committedSnapshotsAcknowledgeTheAlreadyFocusedPane() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -117,7 +119,9 @@ namespace {
   }
 
   void onlyTheFocusedTabAndCommittedGenerationAreEligible() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 

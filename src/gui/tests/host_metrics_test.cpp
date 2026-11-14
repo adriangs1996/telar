@@ -107,7 +107,9 @@ namespace {
   }
 
   void connectionReplacementAcceptsARevisionRestart() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     telar::gui::test::Transport transport;
     Session session{memory, transport};
 

@@ -1,11 +1,7 @@
 module;
-#include <cstdio>
-#include <cstring>
-
 #include <cstddef>
 #include <cstdint>
 
-#include <cmath>
 #include <hb.h>
 
 export module telar.gui.fonts.face:views;
@@ -79,38 +75,15 @@ export {
 
     class ShapedRunView {
     public:
-      [[nodiscard]] inline std::size_t size() const noexcept {
-        return glyphs_.size();
-      }
-
-      [[nodiscard]] inline bool rightToLeft() const noexcept {
-        return right_to_left_;
-      }
-
-      [[nodiscard]] inline ShapedGlyph glyph(std::size_t index) const noexcept {
-        const auto& info = glyphs_[index];
-        const auto& position = positions_[index];
-
-        return {.index = info.codepoint, .cluster = info.cluster, .x_advance = position.x_advance, .y_advance = position.y_advance, .x_offset = position.x_offset, .y_offset = position.y_offset};
-      }
-
-      [[nodiscard]] inline std::int32_t advance() const {
-        std::int64_t advance = 0;
-
-        for (const auto& position : positions_) {
-          advance += position.x_advance;
-        }
-
-        return FontMetrics::roundFixed(advance);
-      }
+      [[nodiscard]] std::size_t size() const noexcept;
+      [[nodiscard]] bool rightToLeft() const noexcept;
+      [[nodiscard]] ShapedGlyph glyph(std::size_t index) const noexcept;
+      [[nodiscard]] std::int32_t advance() const;
 
     private:
       friend class Face;
 
-      inline ShapedRunView(std::span<const hb_glyph_info_t> glyphs, std::span<const hb_glyph_position_t> positions, bool right_to_left) noexcept
-          : glyphs_(glyphs),
-            positions_(positions),
-            right_to_left_(right_to_left) {}
+      ShapedRunView(std::span<const hb_glyph_info_t> glyphs, std::span<const hb_glyph_position_t> positions, bool right_to_left) noexcept;
 
       std::span<const hb_glyph_info_t> glyphs_;
       std::span<const hb_glyph_position_t> positions_;

@@ -110,9 +110,11 @@ namespace {
 
   void windowLimitUsesTheSharedReportAndNotificationLedger() {
     Clock::now_ns = 0;
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     RecoveryTransport transport;
-    Session<SystemAllocator, RecoveryTransport, Clock> client{memory, transport};
+    Session<telar::ConcurrentMemory, RecoveryTransport, Clock> client{memory, transport};
 
     openFirstPane(client, transport);
     constexpr LimitReach reach{.name = ImagePlacementSelection::limit_name, .noun = ImagePlacementSelection::limit_noun, .value = ImagePlacementSelection::capacity, .requested = ImagePlacementSelection::capacity + 1};
@@ -138,7 +140,9 @@ namespace {
   }
 
   void replacementDoesNotConsumeAnotherLogicalImageSlot() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     GraphicsBudget budget;
     GraphicsStore store{memory, budget};
 
@@ -158,7 +162,9 @@ namespace {
   }
 
   void supersededIncompleteHeadersStayWithinOneImageAllocation() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     GraphicsBudget budget;
     GraphicsStore store{memory, budget};
     constexpr std::uint64_t generations = decltype(store)::image_capacity * 2;
@@ -172,7 +178,9 @@ namespace {
   }
 
   void virtualPlacementIdentityDoesNotDependOnItsImage() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     GraphicsBudget budget;
     GraphicsStore store{memory, budget};
     const auto first = description(1);
@@ -192,7 +200,7 @@ namespace {
     const GraphicsHeader snapshot{.pane_id = 1, .revision = revision};
 
     deliver(client, GraphicsSnapshot{.header = snapshot, .phase = SnapshotPhase::begin});
-    constexpr auto image_count = GraphicsStore<SystemAllocator>::image_capacity + 1;
+    constexpr auto image_count = GraphicsStore<telar::ConcurrentMemory>::image_capacity + 1;
 
     for (std::uint32_t id = 1; id <= image_count; ++id) {
       deliver(client, GraphicsImage{.header = snapshot, .image = description(id)});
@@ -202,9 +210,11 @@ namespace {
   }
 
   void repeatedOversizedSnapshotsUseThePaneBudget() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
-    Session<SystemAllocator, Transport, Clock> client{memory, transport};
+    Session<telar::ConcurrentMemory, Transport, Clock> client{memory, transport};
 
     openFirstPane(client, transport);
     constexpr std::uint64_t failed_snapshots = 4;
@@ -222,9 +232,11 @@ namespace {
 
   void pausedDeletesReturnCreditAndACompleteSnapshotClearsTheMarker() {
     Clock::now_ns = 0;
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     RecoveryTransport transport;
-    Session<SystemAllocator, RecoveryTransport, Clock> client{memory, transport};
+    Session<telar::ConcurrentMemory, RecoveryTransport, Clock> client{memory, transport};
 
     openFirstPane(client, transport);
     deliver(client, PaneForeground{.pane_id = 1, .name = "nvim"});
@@ -255,9 +267,11 @@ namespace {
 
   void resumeDeadlineAndFocusKeepTheBackoff() {
     Clock::now_ns = 0;
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     RecoveryTransport transport;
-    Session<SystemAllocator, RecoveryTransport, Clock> client{memory, transport};
+    Session<telar::ConcurrentMemory, RecoveryTransport, Clock> client{memory, transport};
 
     openFirstPane(client, transport);
     for (std::uint64_t revision = 1; revision <= 4; ++revision) {
@@ -288,9 +302,11 @@ namespace {
 
   void failedReportsRetainHitsAndNeverDropTheLink() {
     Clock::now_ns = 0;
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     RecoveryTransport transport;
-    Session<SystemAllocator, RecoveryTransport, Clock> client{memory, transport};
+    Session<telar::ConcurrentMemory, RecoveryTransport, Clock> client{memory, transport};
 
     openFirstPane(client, transport);
     transport.reject_reports = true;
@@ -309,9 +325,11 @@ namespace {
   void criticalDeliveryAndMalformedImagesRecoverTheRuntimeLink() {
     for (const bool malformed : {false, true}) {
       Clock::now_ns = 0;
-      SystemAllocator memory;
+      SystemAllocator system;
+      telar::MemoryAdapter adapter{system};
+      telar::ConcurrentMemory& memory = adapter;
       RecoveryTransport transport;
-      Session<SystemAllocator, RecoveryTransport, Clock> client{memory, transport};
+      Session<telar::ConcurrentMemory, RecoveryTransport, Clock> client{memory, transport};
 
       openFirstPane(client, transport);
       transport.reject_graphics = !malformed;
@@ -333,9 +351,11 @@ namespace {
 
   void snapshotMismatchRequestsRecoveryWithoutALimitNotice() {
     Clock::now_ns = 0;
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
-    Session<SystemAllocator, Transport, Clock> client{memory, transport};
+    Session<telar::ConcurrentMemory, Transport, Clock> client{memory, transport};
 
     openFirstPane(client, transport);
     deliver(client, GraphicsSnapshot{.header = header, .phase = SnapshotPhase::begin});

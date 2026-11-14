@@ -134,7 +134,9 @@ namespace {
     }
 
     Q_SLOT static void fullTaskShowsFactsPlanAndFinalAnswer() {
-      SystemAllocator memory;
+      SystemAllocator system;
+      telar::MemoryAdapter adapter{system};
+      telar::ConcurrentMemory& memory = adapter;
       Agent agent{memory};
       Worktree task{memory};
 
@@ -209,7 +211,9 @@ namespace {
     }
 
     Q_SLOT static void compactClockChangesModeAndCatchesUp() {
-      SystemAllocator memory;
+      SystemAllocator system;
+      telar::MemoryAdapter adapter{system};
+      telar::ConcurrentMemory& memory = adapter;
       Agent agent{memory};
       Worktree task{memory};
 
@@ -245,7 +249,9 @@ namespace {
     }
 
     Q_SLOT static void trackedCommandsKeepTheirOutcomeAndNavigationIdentity() {
-      SystemAllocator memory;
+      SystemAllocator system;
+      telar::MemoryAdapter adapter{system};
+      telar::ConcurrentMemory& memory = adapter;
       Worktree task{memory};
 
       task.id = command_worktree_id;
@@ -285,7 +291,9 @@ namespace {
     }
 
     Q_SLOT static void orderedActivityProjectsVariableCardsIntoTheList() {
-      SystemAllocator memory;
+      SystemAllocator system;
+      telar::MemoryAdapter adapter{system};
+      telar::ConcurrentMemory& memory = adapter;
       WorkspaceReplica workspaces{memory};
       AgentReplica agents{memory};
       const std::array projects{WorkspaceListEntry{.workspace = 1, .name = "project", .path = "/project"}};
@@ -300,7 +308,7 @@ namespace {
       reports.back().pane_id = 2;
       reports.back().work_tree = task_worktree_id;
       QVERIFY(agents.apply({.revision = 1, .entries = reports}, platform::AwakeClock::nowNanoseconds()));
-      using Order = ActivityOrder<SystemAllocator>;
+      using Order = ActivityOrder<telar::ConcurrentMemory>;
       const std::array sources{Order::Source{.agents = agents.entries(), .workspaces = workspaces}};
       Order::Plan plan;
 

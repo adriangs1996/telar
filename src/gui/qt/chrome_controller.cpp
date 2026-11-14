@@ -240,7 +240,7 @@ namespace telar::gui::qt {
 
       catalog.request(view, role);
 
-      return static_cast<float>(fonts::TextLayout<SystemAllocator>::measure(*fonts, view, {.pixel_height = pixels, .preferred = role}));
+      return static_cast<float>(fonts::TextLayout<ConcurrentMemory>::measure(*fonts, view, {.pixel_height = pixels, .preferred = role}));
     };
 
     const auto card = AgentCardGeometry::derive(chrome);

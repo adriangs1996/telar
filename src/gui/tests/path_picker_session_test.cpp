@@ -93,7 +93,9 @@ namespace {
   }
 
   void searchesUseTheRuntimeAndRetainOnlyCurrentResults() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     PathTransport transport;
     Session client{memory, transport};
 
@@ -122,7 +124,9 @@ namespace {
   }
 
   void directoryNavigationKeepsTheOpeningAnchor() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     PathTransport transport;
     Session client{memory, transport};
 
@@ -164,7 +168,9 @@ namespace {
 
   void rejectedDeliveryKeepsThePickerAndPasteAtomic() {
     SystemAllocator system;
-    BudgetAllocator memory{system, std::numeric_limits<std::size_t>::max()};
+    BudgetAllocator allocator{system, std::numeric_limits<std::size_t>::max()};
+    telar::MemoryAdapter adapter{allocator};
+    telar::Memory& memory = adapter;
     PathTransport transport;
 
     {
@@ -192,7 +198,7 @@ namespace {
       require(client.pathPicker().phase() == PathPickerPhase::idle && !client.requestPaths({}), "disconnecting must retire disposable picker state");
     }
 
-    require(memory.liveBytes() == 0, "path searches must release every injected session allocation");
+    require(allocator.liveBytes() == 0, "path searches must release every injected session allocation");
   }
 
 }
