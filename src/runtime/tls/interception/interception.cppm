@@ -46,7 +46,7 @@ import std;
 export import telar.tls;
 
 export import telar.runtime.platform.stream_read_buffer;
-export import telar.runtime.platform.launch_program;
+export import telar.runtime.platform.tunnel_sockets;
 import telar.base.diagnostics;
 import telar.platform.primitives;
 

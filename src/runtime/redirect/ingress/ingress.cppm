@@ -81,7 +81,7 @@ export import telar.runtime.plugins.protocol;
 export import telar.platform.net;
 export import telar.platform.error;
 export import telar.runtime.platform.request_worker;
-export import telar.runtime.platform.launch_program;
+export import telar.runtime.platform.local_listener;
 
 export import telar.client;
 import telar.base.diagnostics;

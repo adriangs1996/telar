@@ -16,7 +16,7 @@ module telar.runtime.platform.process_probe;
 
 import std;
 
-import telar.runtime.platform.launch_program;
+import telar.runtime.platform.proc_file;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.platform.primitives;

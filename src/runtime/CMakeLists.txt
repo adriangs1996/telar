@@ -122,7 +122,7 @@ add_library(runtime-core STATIC
   platform/process_probe/process_inspector.cpp
   platform/process_probe/${TELAR_PLATFORM}/process_inspector.cpp
   platform/host_metrics/${TELAR_PLATFORM}/host_metrics.cpp
-  platform/launch_program/local_listener.cpp
+  platform/local_listener/local_listener.cpp
   history/store/database.cpp
   terminal/text_reader/cell_projection.cpp)
 telar_modules(runtime-core)
@@ -143,7 +143,7 @@ target_link_libraries(runtime-core PUBLIC ebnf::ebnf)
 target_link_libraries(runtime-core PUBLIC "${ZLIB_LIBRARY}" "${BROTLI_DECODER_LIBRARY}" "${BROTLI_ENCODER_LIBRARY}" "${BROTLI_COMMON_LIBRARY}" "${ZSTD_LIBRARY}")
 target_link_libraries(runtime-core PUBLIC ghostty-vt "${SQLITE3_LIBRARY}" Threads::Threads OpenSSL::SSL OpenSSL::Crypto)
 if(APPLE)
-  target_sources(runtime-core PRIVATE platform/system_certificates/macos/event_loop.cpp)
+  target_sources(runtime-core PRIVATE platform/event_loop/macos/event_loop.cpp)
   target_link_libraries(runtime-core PUBLIC "-framework IOKit" "-framework CoreFoundation" "-framework Security")
 else()
   target_compile_definitions(runtime-core PUBLIC _GNU_SOURCE)

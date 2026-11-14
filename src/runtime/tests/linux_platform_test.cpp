@@ -53,7 +53,7 @@ static_assert(true);
 import std;
 import telar.platform.primitives;
 import telar.runtime.tests.check;
-import telar.runtime.platform.launch_program;
+import telar.runtime.platform.proc_file;
 import telar.runtime.platform.process_probe;
 import telar.runtime.platform.system_certificates;
 import telar.runtime.redirect.socket_owners;

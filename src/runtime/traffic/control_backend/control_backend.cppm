@@ -105,7 +105,7 @@ export import telar.platform.thread;
 export import telar.runtime.plugins.protocol;
 export import telar.runtime.traffic.capture;
 
-export import telar.runtime.platform.launch_program;
+export import telar.runtime.platform.local_listener;
 export import telar.runtime.platform.signals;
 export import telar.runtime.traffic.capture_analysis;
 

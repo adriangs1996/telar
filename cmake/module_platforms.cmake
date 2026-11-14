@@ -5,4 +5,5 @@ set(TELAR_MACOS_MODULES
 )
 set(TELAR_LINUX_MODULES
   lib/sys/linux/linux.cppm
+  src/runtime/platform/proc_file/proc_file.cppm
 )

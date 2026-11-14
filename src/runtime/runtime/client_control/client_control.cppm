@@ -48,7 +48,6 @@ import telar.wire.worktrees;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
 import telar.runtime.graphics.kitty;
-import telar.runtime.platform.launch_program;
 import telar.runtime.terminal.control;
 
 // Interface: runtime/agent_file_service.cppm
