@@ -58,7 +58,7 @@ static_assert(true);
 import telar.gui.application.workspace_replica;
 import telar.gui.core.metrics;
 import telar.gui.history.browser;
-import telar.gui.platform.notification_commands;
+import telar.gui.platform.wall_clock;
 import telar.gui.presentation.history_filter_geometry;
 import telar.gui.presentation.history_inspection;
 import telar.gui.text.json_unsigned_integer;

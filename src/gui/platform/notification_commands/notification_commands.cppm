@@ -11,7 +11,6 @@ module;
 #include <cstdint>
 
 #include "tbc/view.hpp"
-#include <climits>
 
 export module telar.gui.platform.notification_commands;
 
@@ -20,10 +19,7 @@ import std;
 export import telar.gui.text.notification_payload;
 
 export import telar.gui.text.json_unsigned_integer;
-
-export import telar.gui.core.unicode_scalar;
 import telar.base.diagnostics;
-import telar.platform.primitives;
 import telar.wire.vocabulary;
 
 // Interface: platform/command_line.cppm
@@ -177,62 +173,6 @@ export {
 #else
     using NativeSoundCommands = LinuxSoundCommands;
 #endif
-
-  }
-}
-
-// Interface: platform/stdio_socket.cppm
-export {
-  namespace telar::gui::platform {
-
-    struct StdioSocket {
-      StdioSocket() = default;
-
-      runtime::FileDescriptor local;
-      runtime::FileDescriptor child;
-    };
-
-    [[nodiscard]] StdioSocket openStdioSocket();
-    [[nodiscard]] int bindStandardIo(int descriptor) noexcept;
-
-  }
-}
-
-// Interface: platform/wall_clock.cppm
-export {
-  namespace telar::gui::platform {
-
-    struct WallClock {
-      [[nodiscard]] static CalendarSample sample() noexcept;
-    };
-
-  }
-}
-
-// Interface: platform/window_lease.cppm
-export {
-  namespace telar::gui::platform {
-
-    class WindowLease {
-    public:
-      static constexpr unsigned maximum_windows = 64;
-
-      explicit WindowLease(std::string_view endpoint);
-      ~WindowLease();
-      WindowLease(const WindowLease&) = delete;
-      WindowLease& operator=(const WindowLease&) = delete;
-      WindowLease(WindowLease&&) = delete;
-      WindowLease& operator=(WindowLease&&) = delete;
-
-      [[nodiscard]] unsigned slot() const noexcept;
-      [[nodiscard]] std::string_view endpoint() const noexcept;
-
-    private:
-      std::array<char, PATH_MAX> canonical_endpoint_{};
-      std::size_t endpoint_length_ = 0;
-      unsigned slot_ = 0;
-      int descriptor_ = -1;
-    };
 
   }
 }

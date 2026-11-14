@@ -34,7 +34,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${TELAR_ROOT}/li
 
 include(cmake/fonts.cmake)
 
-add_library(gui-core STATIC terminal/glyphs/curve_cache/box_curve.cpp platform/awake_clock/awake_clock.cpp platform/notification_commands/wall_clock.cpp)
+add_library(gui-core STATIC terminal/glyphs/curve_cache/box_curve.cpp platform/awake_clock/awake_clock.cpp platform/wall_clock/wall_clock.cpp)
 telar_modules(gui-core)
 target_link_libraries(gui-core PUBLIC telar::shell telar::render ebnf::ebnf)
 target_include_directories(gui-core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/generated" "${TELAR_ROOT}/lib/tbc/include")
@@ -48,7 +48,7 @@ target_link_libraries(gui-glyphs INTERFACE gui-core)
 add_library(gui-clock INTERFACE)
 target_link_libraries(gui-clock INTERFACE gui-core)
 
-add_library(gui-posix STATIC platform/clipboard_image_source.cpp platform/clipboard_image_file.c platform/private_file_stamp/peer_identity.cpp platform/notification_commands/window_lease.cpp platform/profile_file/profile_file.cpp  platform/notification_commands/stdio_socket.cpp platform/managed_directory/managed_directory.cpp platform/private_file_stamp/process_group.cpp platform/process_group.c)
+add_library(gui-posix STATIC platform/clipboard_image_source.cpp platform/clipboard_image_file.c platform/private_file_stamp/peer_identity.cpp platform/window_lease/window_lease.cpp platform/profile_file/profile_file.cpp  platform/stdio_socket/stdio_socket.cpp platform/managed_directory/managed_directory.cpp platform/private_file_stamp/process_group.cpp platform/process_group.c)
 target_sources(gui-posix PRIVATE platform/shared_image_source/shared_image_source.cpp)
 target_link_libraries(gui-posix PUBLIC gui-core Threads::Threads)
 add_executable(telar-gui-command platform/surface_command_main.c)

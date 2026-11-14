@@ -3,7 +3,7 @@ module;
 #include <cstdint>
 #include <ctime>
 
-module telar.gui.platform.notification_commands;
+module telar.gui.platform.wall_clock;
 
 import std;
 

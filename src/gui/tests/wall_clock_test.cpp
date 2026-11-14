@@ -7,7 +7,7 @@ static_assert(true);
 #include <ctime>
 
 import std;
-import telar.gui.platform.notification_commands;
+import telar.gui.platform.wall_clock;
 
 namespace {
 
