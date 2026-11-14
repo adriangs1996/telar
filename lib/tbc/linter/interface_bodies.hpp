@@ -36,8 +36,8 @@ namespace tbc_lint {
 
   // Reports the function bodies of a module interface unit: an interface carries declarations, and its
   // bodies belong to an implementation unit, so that changing one recompiles that unit and not every
-  // importer. Constexpr and consteval functions, whose bodies importers evaluate, and the hot paths
-  // marked TBC_HOT_PATH may stay.
+  // importer. Constexpr and consteval functions, whose bodies importers evaluate, the hot paths marked
+  // TBC_HOT_PATH and the templates over a caller's type marked TBC_GENERIC may stay.
   class interface_body_check final : public clang::ASTConsumer {
   public:
     interface_body_check(interface_modules& modules, bool errors);

@@ -21,6 +21,7 @@ namespace tbc_lint {
     enum class violation : std::uint8_t {
       body,
       not_inline,
+      not_template,
     };
 
     struct body {
@@ -28,28 +29,33 @@ namespace tbc_lint {
       violation kind;
     };
 
-    bool annotated(const clang::Decl& declaration) {
-      return llvm::any_of(declaration.redecls(), [](const clang::Decl* redeclaration) {
-        return llvm::any_of(redeclaration->specific_attrs<clang::AnnotateAttr>(), [](const clang::AnnotateAttr* attribute) {
-          return attribute->getAnnotation() == "tbc::hot_path";
+    // TBC_HOT_PATH keeps a body for importers to inline; TBC_GENERIC, one that only the caller's type
+    // can instantiate.
+    constexpr llvm::StringLiteral hot_path = "tbc::hot_path";
+    constexpr llvm::StringLiteral generic = "tbc::generic";
+
+    bool annotated(const clang::Decl& declaration, llvm::StringRef mark) {
+      return llvm::any_of(declaration.redecls(), [mark](const clang::Decl* redeclaration) {
+        return llvm::any_of(redeclaration->specific_attrs<clang::AnnotateAttr>(), [mark](const clang::AnnotateAttr* attribute) {
+          return attribute->getAnnotation() == mark;
         });
       });
     }
 
-    // A class marked as a hot path covers its members, and a class template covers its specializations.
-    bool insideMarkedClass(const clang::DeclContext* context, bool lexical) {
+    // A marked class covers its members, and a marked class template covers its specializations.
+    bool insideMarkedClass(const clang::DeclContext* context, bool lexical, llvm::StringRef mark) {
       for (; context != nullptr; context = lexical ? context->getLexicalParent() : context->getParent()) {
         const auto* record = llvm::dyn_cast<clang::CXXRecordDecl>(context);
         if (record == nullptr) {
           continue;
         }
 
-        if (annotated(*record)) {
+        if (annotated(*record, mark)) {
           return true;
         }
 
         const auto* specialization = llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(record);
-        if (specialization != nullptr && annotated(*specialization->getSpecializedTemplate()->getTemplatedDecl())) {
+        if (specialization != nullptr && annotated(*specialization->getSpecializedTemplate()->getTemplatedDecl(), mark)) {
           return true;
         }
       }
@@ -59,8 +65,8 @@ namespace tbc_lint {
 
     // The semantic parents reach the class of a member defined outside it; the lexical ones, the class
     // that defines a friend.
-    bool marked(const clang::Decl& declaration) {
-      return annotated(declaration) || insideMarkedClass(declaration.getDeclContext(), false) || insideMarkedClass(declaration.getLexicalDeclContext(), true);
+    bool marked(const clang::Decl& declaration, llvm::StringRef mark) {
+      return annotated(declaration, mark) || insideMarkedClass(declaration.getDeclContext(), false, mark) || insideMarkedClass(declaration.getLexicalDeclContext(), true, mark);
     }
 
     // Collects the bodies a module interface unit keeps in its purview. A body's local classes and
@@ -101,7 +107,10 @@ namespace tbc_lint {
         } else if (const auto* variable_pattern = llvm::dyn_cast<clang::VarTemplateDecl>(&declaration)) {
           visit(*variable_pattern->getTemplatedDecl());
         } else if (const auto* variable = llvm::dyn_cast<clang::VarDecl>(&declaration)) {
-          lambdas(variable->getInit(), *variable);
+          // An instantiated variable template repeats the lambdas of its pattern.
+          if (variable->getTemplateSpecializationKind() != clang::TSK_ImplicitInstantiation) {
+            lambdas(variable->getInit(), *variable);
+          }
         } else if (const auto* field = llvm::dyn_cast<clang::FieldDecl>(&declaration)) {
           lambdas(field->getInClassInitializer(), *field);
         } else if (const auto* friendship = llvm::dyn_cast<clang::FriendDecl>(&declaration)) {
@@ -118,7 +127,8 @@ namespace tbc_lint {
       }
 
       // Constexpr and consteval bodies are what importers evaluate, so they belong to the interface. A
-      // marked template reaches importers as it is; any other marked function only when it is inline.
+      // hot path that is a template reaches importers as it is; any other one only when it is inline. A
+      // generic body must be a template or a member of one, which a full specialization is not.
       void check(const clang::FunctionDecl& function) {
         if (!function.doesThisDeclarationHaveABody() || function.isDefaulted() || function.isDeleted() || function.isConstexpr()) {
           return;
@@ -129,16 +139,29 @@ namespace tbc_lint {
         }
 
         const auto* primary = function.getPrimaryTemplate();
-        const auto hot = marked(function) || (primary != nullptr && annotated(*primary->getTemplatedDecl()));
-        if (!hot) {
+        const auto carries = [&](llvm::StringRef mark) {
+          return marked(function, mark) || (primary != nullptr && annotated(*primary->getTemplatedDecl(), mark));
+        };
+
+        const auto templated = function.isTemplated();
+        if (carries(generic)) {
+          if (!templated) {
+            bodies_.push_back(body{.location = function.getLocation(), .kind = violation::not_template});
+          }
+
+          return;
+        }
+
+        if (!carries(hot_path)) {
           bodies_.push_back(body{.location = function.getLocation(), .kind = violation::body});
-        } else if (!function.isTemplated() && !function.isInlined()) {
+        } else if (!templated && !function.isInlined()) {
           bodies_.push_back(body{.location = function.getLocation(), .kind = violation::not_inline});
         }
       }
 
       // A lambda that initializes a variable or a field is a body of its own. One of a constexpr variable
-      // that importers can evaluate stays, as a constexpr function does.
+      // that importers can evaluate stays, as a constexpr function does, and one of a generic variable
+      // only when that variable is a template or a member of one.
       void lambdas(const clang::Stmt* statement, const clang::DeclaratorDecl& owner) {
         if (statement == nullptr) {
           return;
@@ -147,7 +170,15 @@ namespace tbc_lint {
         if (const auto* lambda = llvm::dyn_cast<clang::LambdaExpr>(statement)) {
           const auto* variable = llvm::dyn_cast<clang::VarDecl>(&owner);
           const auto evaluated = variable != nullptr && variable->isConstexpr() && lambda->getCallOperator()->isConstexpr();
-          if (!evaluated && !marked(owner)) {
+          if (evaluated) {
+            return;
+          }
+
+          if (marked(owner, generic)) {
+            if (!owner.isTemplated()) {
+              bodies_.push_back(body{.location = lambda->getBeginLoc(), .kind = violation::not_template});
+            }
+          } else if (!marked(owner, hot_path)) {
             bodies_.push_back(body{.location = lambda->getBeginLoc(), .kind = violation::body});
           }
 
@@ -264,11 +295,20 @@ namespace tbc_lint {
     }
 
     const auto severity = errors_ ? clang::DiagnosticsEngine::Error : clang::DiagnosticsEngine::Warning;
-    const auto in_interface = diagnostics.getCustomDiagID(severity, "function body in the interface of module '%0'; define it in an implementation unit, or mark a hot path TBC_HOT_PATH [tbc-interface-body]");
+    const auto in_interface = diagnostics.getCustomDiagID(severity, "function body in the interface of module '%0'; define it in an implementation unit, mark a hot path TBC_HOT_PATH, or mark a template over its caller's type TBC_GENERIC [tbc-interface-body]");
     const auto not_inline = diagnostics.getCustomDiagID(severity, "hot path in the interface of module '%0' is not inline, so importers cannot inline its body [tbc-interface-body]");
+    const auto not_template = diagnostics.getCustomDiagID(severity, "TBC_GENERIC body in the interface of module '%0' is neither a template nor a member of one; define it in an implementation unit [tbc-interface-body]");
+
+    const auto identifier = [&](violation kind) {
+      if (kind == violation::body) {
+        return in_interface;
+      }
+
+      return kind == violation::not_inline ? not_inline : not_template;
+    };
 
     for (const auto& found : bodies) {
-      diagnostics.Report(found.location, found.kind == violation::body ? in_interface : not_inline) << module;
+      diagnostics.Report(found.location, identifier(found.kind)) << module;
     }
   }
 }
