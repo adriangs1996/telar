@@ -470,10 +470,11 @@ Cada tarea empieza localizando todas las copias, crea un módulo con una interfa
 - **audit-39:** `73136591c` lo quitó de `proxy/runtime.cppm`. Queda el de `traffic.control_backend`, que no lo usa; en `system_certificates` está incluido dos veces y sí lo usa, así que solo sobra el duplicado; y el `<print>` sigue en `runtime.cli.server`.
 - **Resultado:** `3e840f6d6` quita `Security.h` y `CoreFoundation.h` de `traffic.control_backend`, el bloque duplicado de `system_certificates` (también el de OpenSSL en Linux) y `<print>` de `runtime.cli.server`. Compilado y probado en macOS; en Linux no se ha compilado. Tres tests siguen incluyendo `Security.h` (`linux_platform_test`, `tls_trust_test`, `traffic_control_test`): son de la pasada de tests, fuera de alcance.
 
-### [ ] P6.2 · Partir `tbc/view.hpp`
+### [x] P6.2 · Partir `tbc/view.hpp`
 - **Depende de:** P1.2
 - **Qué hace:** una cabecera mínima solo con las anotaciones TBC (`TBC_SHARED`) y un módulo con el resto. Los `UINT*_MAX` pasan a `std::numeric_limits`.
 - **Contexto:** 98 unidades de módulo y 456 mil líneas; 68 de ellas no usan ninguna macro suya.
+- **Resultado:** `1e26112e0`. `tbc/annotations.hpp` (solo `TBC_SHARED`, `TBC_CONSTRUCTS` y `TBC_RAW`, sin includes) y el módulo `telar.tbc` (`lib/tbc/tbc.cppm`), que envuelve `view.hpp` en su fragmento global y exporta `tbc::view`, `tbc::raw` y `tbc::lt::*`. `view.hpp` se queda para Qt, `.mm` y los tests de tbc, con `telar.tbc` como dueño. 139 unidades migradas: 124 importan `telar.tbc`, 19 incluyen `annotations.hpp`, 17 se quedan sin fragmento global. `UINT*_MAX` → `std::numeric_limits`. Target `telar::tbc` y capa `tbc` en `modules.json`. Runtime: las 103 unidades afectadas de 583 153 a 470 178 líneas de fragmento global. Allowlist de includes: 3002 tras integrar.
 
 ### [ ] P6.3 · Cabeceras de macros del proyecto (categoría C)
 - **Depende de:** P6.2
@@ -562,6 +563,10 @@ Para cada módulo: `extern template class X<Memory>;` en la interfaz, la instanc
 | [ ] P9.5 | `telar.config.*` | P4.4c, P4.5, P8.1, P2.4 |
 | [x] P9.6 | Resto de `lib/`: git, tls, plugins, lua, machines, render, shell | P1.2, P8.1, P2.4 |
 | [ ] P9.7 | Runtime, una subtarea por dominio en paralelo (terminal, panes, agents, history, traffic/{proxy,tls,http,redirect}, plugins, graphics…) | P8.1, P0.5, P2.4 y las tareas de P3 del dominio |
+| [ ] P9.7a | Runtime: `terminal`, `graphics`, `vocabulary`, `observation` | P2.5 |
+| [ ] P9.7b | Runtime: `proxy`, `tls`, `http`, `http1`, `redirect`, `traffic`, `plugins`, `exchange_capture` | P2.5 |
+| [ ] P9.7c | Runtime: `agents`, `history`, `command_capture`, `shell_integration`, `suggestions`, `editors`, `worktrees`, `workspaces` | P2.5 |
+| [ ] P9.7d | Runtime: `runtime`, `model`, `persistence`, `platform`, `transport`, `diagnostics`, `metrics`, `execution`, `cli` y el resto | P2.5 |
 | [ ] P9.8 | GUI, una subtarea por dominio. `gui.application.session` (5815 líneas) pasa a `session/session.cppm` con `prompt.cpp`, `blocks.cpp`, `copy_mode.cpp`… | P8.1, P0.5, P2.4 y las tareas de P3 del dominio |
 | [x] P9.9 | CLI | P8.1, P2.4, P3.15a–c |
 
