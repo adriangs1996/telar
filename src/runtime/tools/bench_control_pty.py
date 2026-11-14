@@ -46,7 +46,7 @@ def stop_owned_process(process):
         time.sleep(0.005)
 
 
-def run(binary, probe, allow_loss=False):
+def run(binary, probe, allow_loss=False, case=None):
     with tempfile.TemporaryDirectory(prefix='telar-control-pty-', dir='/tmp') as directory:
         root = Path(directory)
         endpoint = root / 'runtime.sock'
@@ -66,7 +66,7 @@ def run(binary, probe, allow_loss=False):
                         raise RuntimeError('Owned runtime failed to start')
                     time.sleep(0.01)
                 report = root / 'report.json'
-                result = subprocess.run([str(probe), str(endpoint), str(report)], env=environment,
+                result = subprocess.run([str(probe), str(endpoint), str(report), *([case] if case else [])], env=environment,
                                         capture_output=True, text=True, timeout=40)
                 if result.returncode:
                     log.flush()
@@ -110,6 +110,7 @@ def main():
     parser.add_argument('--baseline-probe', type=Path, help='Same child workload built against the original baseline wire headers')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--pairs', type=int, default=7)
+    parser.add_argument('--case', help='Measure only this workload (for example graphics-png-512x512); the saturation check still runs')
     parser.add_argument('--allow-baseline-loss', action='store_true', help='Explicitly retain the defective original baseline; native still requires all5000 byte-exact replies')
     args = parser.parse_args()
     if args.pairs < 1:
@@ -125,7 +126,7 @@ def main():
             observations.append({'pair': index + 1, 'variant': name, 'position': 'before',
                                  'builds': build_processes(process_snapshot(False))})
             probe = args.baseline_probe if name == 'baseline' and args.baseline_probe else args.probe
-            pair[name] = run(getattr(args, name).resolve(), probe.resolve(), allow_loss=name == 'baseline' and args.allow_baseline_loss)
+            pair[name] = run(getattr(args, name).resolve(), probe.resolve(), allow_loss=name == 'baseline' and args.allow_baseline_loss, case=args.case)
             observations.append({'pair': index + 1, 'variant': name, 'position': 'after',
                                  'builds': build_processes(process_snapshot(False))})
         pairs.append(pair)

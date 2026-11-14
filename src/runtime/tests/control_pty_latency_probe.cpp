@@ -292,7 +292,8 @@ static void saturate(std::ostream& output) {
          << ",\"child_write_eagain\":" << child_write_eagain << ",\"recovery_replies\":1}";
 }
 
-static int child(const char* report_path) {
+// `only` names the one workload to measure; empty measures all of them.
+static int child(const char* report_path, std::string_view only) {
   termios settings;
 
   check(::tcgetattr(STDIN_FILENO, &settings) == 0);
@@ -329,11 +330,20 @@ static int child(const char* report_path) {
       Workload{"graphics-png-512x512", std::string{control_test::png_512_query}, 1, '\\', false, "\x1b_Gi=9;OK\x1b\\"},
   };
 
-  for (std::size_t index = 0; index < workloads.size(); ++index) {
-    output << (index ? "," : "");
-    measure(output, workloads[index]);
+  bool first = true;
+
+  for (const auto& workload : workloads) {
+    if (!only.empty() && workload.name != only) {
+      continue;
+    }
+
+    output << (first ? "" : ",");
+    measure(output, workload);
     output.flush();
+    first = false;
   }
+
+  check(!first);
 
   output << "},";
   measureOrder(output);
@@ -352,11 +362,12 @@ static int child(const char* report_path) {
 }
 
 int main(int argc, char** argv) {
-  if (argc == 3 && std::string_view{argv[1]} == "--latency-child") {
-    return child(argv[2]);
+  if ((argc == 3 || argc == 4) && std::string_view{argv[1]} == "--latency-child") {
+    return child(argv[2], argc == 4 ? argv[3] : "");
   }
 
-  if (argc != 3) {
+  // ENDPOINT REPORT [WORKLOAD]
+  if (argc != 3 && argc != 4) {
     return 2;
   }
 
@@ -364,7 +375,8 @@ int main(int argc, char** argv) {
     ProtocolPeer peer{argv[1]};
 
     peer.send(RequestRuntimeState{.client_identity = 102, .interactive = true});
-    const std::array<std::string_view, 3> arguments{argv[0], "--latency-child", argv[2]};
+    const std::array<std::string_view, 4> all_arguments{argv[0], "--latency-child", argv[2], argc == 4 ? argv[3] : ""};
+    const auto arguments = std::span{all_arguments}.first(argc == 4 ? 4 : 3);
     const auto opened = peer.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = {80, 24, 0, 0}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
     const auto deadline = Clock::now() + std::chrono::seconds{30};
     std::string last_screen;
