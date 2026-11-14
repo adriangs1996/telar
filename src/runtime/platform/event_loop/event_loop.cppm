@@ -26,6 +26,7 @@ import std;
 export import telar.platform.error;
 import telar.base.memory.allocators;
 import telar.platform.primitives;
+import telar.sys.process;
 
 // Interface: platform/event_loop.cppm
 export {
@@ -108,7 +109,7 @@ export {
       inline std::array<Registration, NSIG> registrations;
 
       inline void notify(int number) noexcept {
-        const int saved_error = errno;
+        const int saved_error = sys::lastError();
         auto& registration = registrations[number];
         registration.writers.fetch_add(1);
         const auto destination = registration.destination.load();
@@ -117,10 +118,10 @@ export {
           ssize_t count;
           do {
             count = ::write(destination - 1, &value, sizeof(value));
-          } while (count < 0 && errno == EINTR);
+          } while (count < 0 && sys::lastError() == EINTR);
         }
         registration.writers.fetch_sub(1);
-        errno = saved_error;
+        sys::setLastError(saved_error);
       }
 
     }
@@ -213,7 +214,7 @@ export {
         }
 
         struct sigaction action{};
-        action.sa_handler = &linux_signals::notify;
+        sys::signalHandler(action) = &linux_signals::notify;
         action.sa_flags = SA_RESTART;
         ::sigemptyset(&action.sa_mask);
         int unclaimed = 0;
@@ -244,7 +245,7 @@ export {
         const auto count = static_cast<int>(::syscall(SYS_epoll_pwait2, queue_.get(), kernel_events_.data(), kernel_events_.size(), &duration, nullptr, 0));
 #endif
         if (count < 0) {
-          if (errno == EINTR) {
+          if (sys::lastError() == EINTR) {
             return {};
           }
           throw SystemError{"Wait for runtime event"};
@@ -307,7 +308,7 @@ export {
         event.data.u64 = (static_cast<std::uint64_t>(interest.generation) << descriptor_bits) | static_cast<std::uint32_t>(descriptor);
         auto operation = interest.installed ? EPOLL_CTL_MOD : EPOLL_CTL_ADD;
         if (::epoll_ctl(queue_.get(), operation, descriptor, &event) != 0) {
-          if (operation != EPOLL_CTL_MOD || errno != ENOENT || ::epoll_ctl(queue_.get(), EPOLL_CTL_ADD, descriptor, &event) != 0) {
+          if (operation != EPOLL_CTL_MOD || sys::lastError() != ENOENT || ::epoll_ctl(queue_.get(), EPOLL_CTL_ADD, descriptor, &event) != 0) {
             throw SystemError{"Register runtime event"};
           }
         }

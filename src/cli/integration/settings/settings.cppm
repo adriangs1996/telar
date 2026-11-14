@@ -133,7 +133,7 @@ export {
     std::optional<String<Memory>> read(Memory& memory, const String<Memory>& path, std::size_t maximum_bytes) {
       FileDescriptor file{::open(path.c_str(), O_RDONLY | O_CLOEXEC | O_NONBLOCK | O_NOCTTY)};
       if (!file) {
-        if (errno == ENOENT) {
+        if (sys::lastError() == ENOENT) {
           return std::nullopt;
         }
 
@@ -160,7 +160,7 @@ export {
       for (std::size_t index = 1; index < path.size(); ++index) {
         if (directory[index] == '/') {
           directory[index] = '\0';
-          if (::mkdir(directory.data(), 0777) != 0 && errno != EEXIST) {
+          if (::mkdir(directory.data(), 0777) != 0 && sys::lastError() != EEXIST) {
             throw SystemError{"Create integration directory"};
           }
 
@@ -266,7 +266,7 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
     Ownership skillOwnership(const String<Memory>& path, const Skill& skill) noexcept {
       struct stat state{};
       if (::stat(path.c_str(), &state) != 0) {
-        return errno == ENOENT ? Ownership::absent : Ownership::foreign;
+        return sys::lastError() == ENOENT ? Ownership::absent : Ownership::foreign;
       }
 
       std::array<char, 1024> buffer;

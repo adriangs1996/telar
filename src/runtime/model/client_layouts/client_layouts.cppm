@@ -434,7 +434,7 @@ export {
             continue;
           }
 
-          if (count < 0 && socketWouldBlock(errno)) {
+          if (count < 0 && socketWouldBlock(sys::lastError())) {
             return observed(true);
           }
 
@@ -541,13 +541,13 @@ export {
           return;
         }
 
-        if (count < 0 && socketWouldBlock(errno)) {
+        if (count < 0 && socketWouldBlock(sys::lastError())) {
           return;
         }
 
         input.clear();
         pty_responses->clear();
-        throw std::system_error{count < 0 ? errno : EIO, std::generic_category(), "PTY write failed"};
+        throw std::system_error{count < 0 ? sys::lastError() : EIO, std::generic_category(), "PTY write failed"};
       }
 
       inline bool hasInput() const noexcept {

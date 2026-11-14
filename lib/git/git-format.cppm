@@ -287,7 +287,7 @@ namespace telar::git {
   inline ReadStatus openRegular(int directory, const char* name, FileDescriptor& file, struct stat& status) noexcept {
     file.reset(::openat(directory, name, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC | O_NOCTTY));
     if (!file) {
-      return errno == ENOENT || errno == ENOTDIR ? ReadStatus::missing : ReadStatus::invalid;
+      return sys::lastError() == ENOENT || sys::lastError() == ENOTDIR ? ReadStatus::missing : ReadStatus::invalid;
     }
 
     if (::fstat(file.get(), &status) != 0 || !S_ISREG(status.st_mode) || status.st_size < 0) {
@@ -307,7 +307,7 @@ namespace telar::git {
       const auto count = ::read(descriptor, destination + offset, size - offset);
       if (count > 0) {
         offset += static_cast<std::size_t>(count);
-      } else if (count < 0 && errno == EINTR) {
+      } else if (count < 0 && sys::lastError() == EINTR) {
         continue;
       } else {
         return false;
@@ -319,7 +319,7 @@ namespace telar::git {
 
     do {
       count = ::read(descriptor, &extra, 1);
-    } while (count < 0 && errno == EINTR);
+    } while (count < 0 && sys::lastError() == EINTR);
 
     return count == 0;
   }
@@ -336,7 +336,7 @@ namespace telar::git {
       const auto count = ::pread(descriptor, bytes + done, size - done, static_cast<off_t>(offset + done));
       if (count > 0) {
         done += static_cast<std::size_t>(count);
-      } else if (count < 0 && errno == EINTR) {
+      } else if (count < 0 && sys::lastError() == EINTR) {
         continue;
       } else {
         return false;

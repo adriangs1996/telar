@@ -34,6 +34,7 @@ module;
 module telar.platform.process;
 
 import std;
+import telar.sys.posix;
 
 #ifdef __APPLE__
 #include <util.h>
@@ -66,13 +67,13 @@ namespace telar::runtime {
   }
 
   [[noreturn]] static void reportSpawnFailure(int descriptor) noexcept {
-    const int failure = errno;
+    const int failure = sys::lastError();
     const auto* bytes = reinterpret_cast<const char*>(&failure);
     std::size_t written = 0;
 
     while (written < sizeof(failure)) {
       const auto count = ::write(descriptor, bytes + written, sizeof(failure) - written);
-      if (count < 0 && errno == EINTR) {
+      if (count < 0 && sys::lastError() == EINTR) {
         continue;
       }
 
@@ -162,7 +163,7 @@ namespace telar::runtime {
 
     while (received < sizeof(failure)) {
       const auto count = ::read(status_reader.get(), reinterpret_cast<char*>(&failure) + received, sizeof(failure) - received);
-      if (count < 0 && errno == EINTR) {
+      if (count < 0 && sys::lastError() == EINTR) {
         continue;
       }
 
@@ -171,7 +172,7 @@ namespace telar::runtime {
       }
 
       if (count < 0) {
-        failure = errno;
+        failure = sys::lastError();
         received = sizeof(failure);
         break;
       }
@@ -181,7 +182,7 @@ namespace telar::runtime {
 
     if (received != 0) {
       ::kill(process_id_, SIGKILL);
-      while (::waitpid(process_id_, nullptr, 0) < 0 && errno == EINTR) {
+      while (::waitpid(process_id_, nullptr, 0) < 0 && sys::lastError() == EINTR) {
       }
 
       process_id_ = -1;
@@ -197,7 +198,7 @@ namespace telar::runtime {
     shutdown();
     master_.reset();
 
-    while (::waitpid(process_id_, nullptr, 0) < 0 && errno == EINTR) {
+    while (::waitpid(process_id_, nullptr, 0) < 0 && sys::lastError() == EINTR) {
     }
   }
 

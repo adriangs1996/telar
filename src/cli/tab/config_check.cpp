@@ -252,7 +252,7 @@ namespace telar::runtime::cli {
 
       std::array<char, PATH_MAX> canonical;
       if (::realpath(path.c_str(), canonical.data()) == nullptr) {
-        const auto error = sys::errorName(errno);
+        const auto error = sys::errorName(sys::lastError());
 
         diagnostic("cannot resolve config '" + std::string{path} + "': " + error, error);
       }

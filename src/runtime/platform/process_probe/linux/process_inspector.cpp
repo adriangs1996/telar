@@ -75,7 +75,7 @@ namespace telar::runtime {
       bool header = true;
       while (count < sockets.size()) {
         const auto read = ::read(file.get(), buffer.data() + kept, buffer.size() - kept);
-        if (read < 0 && errno == EINTR) {
+        if (read < 0 && sys::lastError() == EINTR) {
           continue;
         }
 

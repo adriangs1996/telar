@@ -46,7 +46,7 @@ export {
         const auto separator = name[index];
 
         name[index] = '\0';
-        if (::mkdir(name.data(), 0700) != 0 && errno != EEXIST) {
+        if (::mkdir(name.data(), 0700) != 0 && sys::lastError() != EEXIST) {
           throw SystemError{"Create private directory"};
         }
 
@@ -128,10 +128,10 @@ export {
 
       inline const dirent* next() {
         for (;;) {
-          errno = 0;
+          sys::setLastError(0);
           const auto* entry = ::readdir(stream_);
           if (entry == nullptr) {
-            if (errno != 0) {
+            if (sys::lastError() != 0) {
               throw SystemError{"Read directory entry"};
             }
 
@@ -180,7 +180,7 @@ export {
           length += static_cast<std::size_t>(count);
         } else if (count == 0) {
           break;
-        } else if (errno != EINTR) {
+        } else if (sys::lastError() != EINTR) {
           return std::nullopt;
         }
       }
@@ -247,7 +247,7 @@ export {
       terminated[name.size()] = '\0';
       FileDescriptor file{::openat(directory, terminated.data(), O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)};
       if (!file) {
-        if (errno == ENOENT) {
+        if (sys::lastError() == ENOENT) {
           return false;
         }
 
@@ -268,7 +268,7 @@ export {
 
       while (offset < bytes.size()) {
         const auto count = ::read(file.get(), bytes.data() + offset, bytes.size() - offset);
-        if (count < 0 && errno == EINTR) {
+        if (count < 0 && sys::lastError() == EINTR) {
           continue;
         }
 
@@ -284,7 +284,7 @@ export {
 
       do {
         count = ::read(file.get(), &extra, 1);
-      } while (count < 0 && errno == EINTR);
+      } while (count < 0 && sys::lastError() == EINTR);
 
       if (count != 0) {
         throw SystemError{"Private file changed while reading", EIO};
@@ -336,7 +336,7 @@ export {
 
       while (offset < source.size()) {
         const auto count = ::read(descriptor, source.data() + offset, source.size() - offset);
-        if (count < 0 && errno == EINTR) {
+        if (count < 0 && sys::lastError() == EINTR) {
           continue;
         }
 
@@ -352,7 +352,7 @@ export {
 
       do {
         extra_count = ::read(descriptor, &extra, 1);
-      } while (extra_count < 0 && errno == EINTR);
+      } while (extra_count < 0 && sys::lastError() == EINTR);
 
       if (extra_count != 0) {
         throw FileReadError{FileReadFailure::changed};
@@ -481,7 +481,7 @@ export {
 
         directory_.reset(::open(path_.data(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
         if (!directory_ || ::fstat(directory_.get(), &identity_) != 0 || ::fchmod(directory_.get(), 0700) != 0) {
-          const auto error = errno;
+          const auto error = sys::lastError();
 
           ::rmdir(path_.data());
           throw SystemError{"Open temporary directory", error};
@@ -543,12 +543,12 @@ export {
     inline int writeDescriptor(int descriptor, std::span<const std::uint8_t> bytes) noexcept {
       while (!bytes.empty()) {
         const auto count = ::write(descriptor, bytes.data(), bytes.size());
-        if (count < 0 && errno == EINTR) {
+        if (count < 0 && sys::lastError() == EINTR) {
           continue;
         }
 
         if (count <= 0) {
-          return count == 0 ? EIO : errno;
+          return count == 0 ? EIO : sys::lastError();
         }
 
         bytes = bytes.subspan(static_cast<std::size_t>(count));
@@ -586,16 +586,16 @@ export {
         std::snprintf(temporary.data(), temporary.size(), ".telar-write-%016llx.tmp", static_cast<unsigned long long>(nonce));
         FileDescriptor file{::openat(directory, temporary.data(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600)};
         if (!file) {
-          if (errno == EEXIST) {
+          if (sys::lastError() == EEXIST) {
             continue;
           }
 
-          return errno;
+          return sys::lastError();
         }
 
         const int written = writeDescriptor(file.get(), bytes);
         if (written != 0 || ::fsync(file.get()) != 0) {
-          const int failure = written != 0 ? written : errno;
+          const int failure = written != 0 ? written : sys::lastError();
 
           file.reset();
           ::unlinkat(directory, temporary.data(), 0);
@@ -605,7 +605,7 @@ export {
         file.reset();
 
         if (renameAt(directory, temporary.data(), directory, destination.data(), mode) != 0) {
-          const int failure = errno;
+          const int failure = sys::lastError();
 
           ::unlinkat(directory, temporary.data(), 0);
           return failure;

@@ -154,6 +154,7 @@ export import telar.base.memory.sensitive;
 
 export import telar.runtime.redirect.record;
 import telar.runtime.vocabulary.traffic;
+import telar.sys.apple;
 
 #endif
 
@@ -621,7 +622,7 @@ export {
             return;
           }
 
-          if (errno != ENOMEM && errno != EINTR) {
+          if (sys::lastError() != ENOMEM && sys::lastError() != EINTR) {
             throw SystemError{"Read TCP account snapshot"};
           }
         }
@@ -638,7 +639,7 @@ export {
           const auto& origin = reinterpret_cast<const sockaddr_in&>(local);
           const auto& server = reinterpret_cast<const sockaddr_in&>(peer);
 
-          return pcb.inp_lport == server.sin_port && pcb.inp_fport == origin.sin_port && pcb.inp_laddr.s_addr == server.sin_addr.s_addr && pcb.inp_faddr.s_addr == origin.sin_addr.s_addr;
+          return pcb.inp_lport == server.sin_port && pcb.inp_fport == origin.sin_port && sys::localAddress(pcb).s_addr == server.sin_addr.s_addr && sys::foreignAddress(pcb).s_addr == origin.sin_addr.s_addr;
         }
 
         if (local.ss_family == AF_INET6 && (pcb.inp_vflag & INP_IPV6)) {
@@ -765,7 +766,7 @@ export {
       for (const auto family : families) {
         FileDescriptor file{::open(family == AF_INET ? "/proc/net/tcp" : "/proc/net/tcp6", O_RDONLY | O_CLOEXEC | O_NOFOLLOW)};
         if (!file) {
-          if (family == AF_INET6 && errno == ENOENT) {
+          if (family == AF_INET6 && sys::lastError() == ENOENT) {
             continue;
           }
           throw SystemError{"Open TCP socket table"};
@@ -778,7 +779,7 @@ export {
         bool header = true;
         for (;;) {
           const auto count = ::read(file.get(), buffer.data(), buffer.size());
-          if (count < 0 && errno == EINTR) {
+          if (count < 0 && sys::lastError() == EINTR) {
             continue;
           }
           if (count < 0) {
@@ -938,7 +939,7 @@ export {
 
           socket_fdinfo information{};
           if (::proc_pidfdinfo(selected.pid, descriptor.proc_fd, PROC_PIDFDSOCKETINFO, &information, sizeof(information)) != sizeof(information)) {
-            if (errno != EBADF && errno != ESRCH) {
+            if (sys::lastError() != EBADF && sys::lastError() != ESRCH) {
               result.complete = false;
             }
 
@@ -1003,7 +1004,7 @@ export {
             }
             std::array<char, 64> target;
             const auto length = ::readlinkat(directory.descriptor(), entry->d_name, target.data(), target.size());
-            if (length < 0 && errno == ENOENT) {
+            if (length < 0 && sys::lastError() == ENOENT) {
               continue;
             }
             if (length <= 0 || static_cast<std::size_t>(length) >= target.size()) {
@@ -1090,7 +1091,7 @@ export {
         FileDescriptor child{::accept(socket_.get(), nullptr, nullptr)};
         if (child) {
           configureProxySocket(child.get());
-        } else if (!socketWouldBlock(errno)) {
+        } else if (!socketWouldBlock(sys::lastError())) {
           throw SystemError{"Accept redirected TCP connection"};
         }
 
@@ -1282,7 +1283,7 @@ export {
           }
 
           constexpr int poll_ms = 100;
-          if (::poll(descriptors.data(), descriptors.size(), poll_ms) < 0 && errno != EINTR) {
+          if (::poll(descriptors.data(), descriptors.size(), poll_ms) < 0 && sys::lastError() != EINTR) {
             throw SystemError{"Poll transparent TCP helper"};
           }
 
@@ -1340,7 +1341,7 @@ export {
               if (::getsockopt(connected.connection.origin.get(), SOL_SOCKET, SO_ERROR, &failure, &length) == 0 && failure == 0) {
                 handoff(connected.connection, connected.flow, uid);
               } else if (flows_[connected.flow]->incoming) {
-                std::fprintf(stderr, "telar redirect: incoming origin connection failed: %s\n", std::strerror(failure ? failure : errno));
+                std::fprintf(stderr, "telar redirect: incoming origin connection failed: %s\n", std::strerror(failure ? failure : sys::lastError()));
               }
             } else if (std::chrono::steady_clock::now() >= pending->deadline) {
               if (flows_[pending->flow]->incoming) {
@@ -1461,7 +1462,7 @@ export {
             const auto count = ::recv(socket, bytes.data(), bytes.size(), MSG_DONTWAIT);
             if (count > 0) {
               bytes = bytes.subspan(static_cast<std::size_t>(count));
-            } else if (count == 0 || !socketWouldBlock(errno)) {
+            } else if (count == 0 || !socketWouldBlock(sys::lastError())) {
               throw SystemError{"Redirect runtime disconnected", ECONNRESET};
             }
           }
@@ -1511,10 +1512,10 @@ export {
           Connection connection{.child = std::move(child), .origin = openOriginSocket(target.endpoint.storage.ss_family), .target = target};
           if (::connect(connection.origin.get(), target.endpoint.address(), target.endpoint.length) == 0) {
             handoff(connection, index, uid);
-          } else if (errno == EINPROGRESS || errno == EINTR) {
+          } else if (sys::lastError() == EINPROGRESS || sys::lastError() == EINTR) {
             slot->emplace(Pending{.connection = std::move(connection), .deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10}, .flow = index});
           } else if ((*flow)->incoming) {
-            std::fprintf(stderr, "telar redirect: incoming origin connection failed: %s\n", std::strerror(errno));
+            std::fprintf(stderr, "telar redirect: incoming origin connection failed: %s\n", std::strerror(sys::lastError()));
           }
         }
       }

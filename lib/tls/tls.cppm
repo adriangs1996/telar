@@ -650,7 +650,7 @@ export {
 
         do {
           waited = ::waitpid(child, &status, 0);
-        } while (waited < 0 && errno == EINTR);
+        } while (waited < 0 && sys::lastError() == EINTR);
 
         if (waited < 0) {
           throw SystemError{"Wait for proxy trust command"};
@@ -842,7 +842,7 @@ export {
       inline FileDescriptor open() const {
         // A path that names no directory holds no trust record.
         FileDescriptor descriptor{::open(directory_.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
-        if (!descriptor && errno != ENOENT && errno != ENOTDIR) {
+        if (!descriptor && sys::lastError() != ENOENT && sys::lastError() != ENOTDIR) {
           throw SystemError{"Open proxy authority directory"};
         }
 
@@ -1106,7 +1106,7 @@ export {
           return true;
         }
 
-        if (errno == ENOENT) {
+        if (sys::lastError() == ENOENT) {
           return false;
         }
 
@@ -1115,13 +1115,13 @@ export {
 
       inline void restore(const Filename& temporary, const char* canonical) const noexcept {
         if (::renameat(directory_, canonical, directory_, temporary.data()) != 0) {
-          std::fprintf(stderr, "telar proxy trust: could not roll back %s: %s\n", canonical, std::strerror(errno));
+          std::fprintf(stderr, "telar proxy trust: could not roll back %s: %s\n", canonical, std::strerror(sys::lastError()));
         }
       }
 
       inline void restorePrevious(const Filename& previous, const char* canonical) const noexcept {
         if (::renameat(directory_, previous.data(), directory_, canonical) != 0) {
-          std::fprintf(stderr, "telar proxy trust: could not restore %s: %s\n", canonical, std::strerror(errno));
+          std::fprintf(stderr, "telar proxy trust: could not restore %s: %s\n", canonical, std::strerror(sys::lastError()));
         }
       }
 

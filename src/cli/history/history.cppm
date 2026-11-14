@@ -181,7 +181,7 @@ export {
 
       FileDescriptor current{::open("/", O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
       if (!current) {
-        throw std::runtime_error{sys::errorName(errno)};
+        throw std::runtime_error{sys::errorName(sys::lastError())};
       }
 
       std::size_t start = 1;
@@ -201,16 +201,16 @@ export {
 
         const std::string name{component};
         auto next = ::openat(current.get(), name.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
-        if (next < 0 && errno == ENOENT && create) {
-          if (::mkdirat(current.get(), name.c_str(), 0700) != 0 && errno != EEXIST) {
-            throw std::runtime_error{sys::errorName(errno)};
+        if (next < 0 && sys::lastError() == ENOENT && create) {
+          if (::mkdirat(current.get(), name.c_str(), 0700) != 0 && sys::lastError() != EEXIST) {
+            throw std::runtime_error{sys::errorName(sys::lastError())};
           }
 
           next = ::openat(current.get(), name.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
         }
 
         if (next < 0) {
-          throw std::runtime_error{sys::errorName(errno)};
+          throw std::runtime_error{sys::errorName(sys::lastError())};
         }
 
         current.reset(next);
@@ -218,7 +218,7 @@ export {
 
       struct stat inode{};
       if (::fstat(current.get(), &inode) != 0) {
-        throw std::runtime_error{sys::errorName(errno)};
+        throw std::runtime_error{sys::errorName(sys::lastError())};
       }
 
       if (inode.st_uid != ::getuid() || (inode.st_mode & 0022) != 0) {
@@ -240,7 +240,7 @@ export {
     inline FileDescriptor openRegular(int parent, const char* name) {
       FileDescriptor file{::openat(parent, name, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)};
       if (!file) {
-        throw std::runtime_error{errno == ENOENT ? sys::errorName(ENOENT) : "UnsafeTransferFile"};
+        throw std::runtime_error{sys::lastError() == ENOENT ? sys::errorName(ENOENT) : "UnsafeTransferFile"};
       }
 
       struct stat inode{};
@@ -264,12 +264,12 @@ export {
 
       for (;;) {
         const auto count = ::read(input, buffer.data(), buffer.size());
-        if (count < 0 && errno == EINTR) {
+        if (count < 0 && sys::lastError() == EINTR) {
           continue;
         }
 
         if (count < 0) {
-          throw std::runtime_error{sys::errorName(errno)};
+          throw std::runtime_error{sys::errorName(sys::lastError())};
         }
 
         if (count == 0) {
@@ -292,7 +292,7 @@ export {
       }
 #endif
       if (result != 0) {
-        throw std::runtime_error{sys::errorName(errno)};
+        throw std::runtime_error{sys::errorName(sys::lastError())};
       }
     }
 
@@ -312,7 +312,7 @@ export {
         auto file = openRegular(parent.get(), name.c_str());
         struct stat inode{};
         if (::fstat(file.get(), &inode) != 0) {
-          throw std::runtime_error{sys::errorName(errno)};
+          throw std::runtime_error{sys::errorName(sys::lastError())};
         }
 
         checkSize(static_cast<std::uint64_t>(inode.st_size));
@@ -323,7 +323,7 @@ export {
       const auto temporary = std::format(".telar-file-{:016x}{:016x}", randomIdentity(), randomIdentity());
       FileDescriptor file{::openat(parent.get(), temporary.c_str(), O_CREAT | O_EXCL | O_WRONLY | O_CLOEXEC, 0600)};
       if (!file) {
-        throw std::runtime_error{sys::errorName(errno)};
+        throw std::runtime_error{sys::errorName(sys::lastError())};
       }
 
       try {
@@ -333,7 +333,7 @@ export {
         }
 
         if (::fsync(file.get()) != 0) {
-          throw std::runtime_error{sys::errorName(errno)};
+          throw std::runtime_error{sys::errorName(sys::lastError())};
         }
 
         publish(parent.get(), temporary.c_str(), name.c_str());
@@ -481,7 +481,7 @@ export {
       const auto base = endpoint.substr(slash + 1);
       std::unique_ptr<DIR, decltype(&::closedir)> directory{::opendir(parent.c_str()), &::closedir};
       if (!directory) {
-        throw std::runtime_error{errno == ENOENT ? "DiagnosticLogsNotFound" : sys::errorName(errno)};
+        throw std::runtime_error{sys::lastError() == ENOENT ? "DiagnosticLogsNotFound" : sys::errorName(sys::lastError())};
       }
 
       const auto logs = findLogs(directory.get(), base, options);
@@ -504,12 +504,12 @@ export {
 
         while (count < bytes.size()) {
           const auto read = ::pread(file.get(), bytes.data() + count, bytes.size() - count, offset + count);
-          if (read < 0 && errno == EINTR) {
+          if (read < 0 && sys::lastError() == EINTR) {
             continue;
           }
 
           if (read < 0) {
-            throw std::runtime_error{sys::errorName(errno)};
+            throw std::runtime_error{sys::errorName(sys::lastError())};
           }
 
           if (read == 0) {
@@ -1081,7 +1081,7 @@ export {
       FileDescriptor file{::open(path.c_str(), O_RDONLY | O_CLOEXEC)};
       struct stat inode{};
       if (!file || ::fstat(file.get(), &inode) != 0) {
-        throw std::runtime_error{sys::errorName(errno)};
+        throw std::runtime_error{sys::errorName(sys::lastError())};
       }
 
       const auto size = static_cast<std::uint64_t>(inode.st_size);
@@ -1091,12 +1091,12 @@ export {
 
       while (used < text.size()) {
         const auto count = ::pread(file.get(), text.data() + used, text.size() - used, static_cast<off_t>(offset + used));
-        if (count < 0 && errno == EINTR) {
+        if (count < 0 && sys::lastError() == EINTR) {
           continue;
         }
 
         if (count < 0) {
-          throw std::runtime_error{sys::errorName(errno)};
+          throw std::runtime_error{sys::errorName(sys::lastError())};
         }
 
         if (count == 0) {

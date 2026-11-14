@@ -205,7 +205,7 @@ export {
         }
 
         std::array<pollfd, 3> descriptors{{{process_->output(), POLLIN, 0}, {process_->error(), POLLIN, 0}, {writing ? process_->input() : -1, POLLOUT, 0}}};
-        if (::poll(descriptors.data(), descriptors.size(), 20) < 0 && errno != EINTR) {
+        if (::poll(descriptors.data(), descriptors.size(), 20) < 0 && sys::lastError() != EINTR) {
           throw SystemError{"Poll suggestion engine"};
         }
 
@@ -227,7 +227,7 @@ export {
             }
 
             process_->closeError();
-          } else if (!socketWouldBlock(errno)) {
+          } else if (!socketWouldBlock(sys::lastError())) {
             throw SystemError{"Read suggestion engine"};
           }
         }
@@ -246,7 +246,7 @@ export {
           const auto count = ::write(process_->input(), bytes.data(), bytes.size());
           if (count > 0) {
             bytes.remove_prefix(static_cast<std::size_t>(count));
-          } else if (count < 0 && socketWouldBlock(errno)) {
+          } else if (count < 0 && socketWouldBlock(sys::lastError())) {
             poll(true);
           } else {
             throw Rejected{};

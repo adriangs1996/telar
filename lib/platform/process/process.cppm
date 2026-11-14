@@ -564,7 +564,7 @@ export {
           std::array<pollfd, 3> descriptors{{{process.output(), POLLIN, 0}, {process.error(), POLLIN, 0}, {process.input(), POLLOUT, 0}}};
           const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - Clock::now()).count();
           const int result = ::poll(descriptors.data(), descriptors.size(), static_cast<int>(std::clamp<std::int64_t>(remaining, 0, 20)));
-          if (result < 0 && errno != EINTR) {
+          if (result < 0 && sys::lastError() != EINTR) {
             throw SystemError{"Wait for command output"};
           }
 
@@ -594,7 +594,7 @@ export {
               } else {
                 process.closeError();
               }
-            } else if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
+            } else if (sys::lastError() != EAGAIN && sys::lastError() != EWOULDBLOCK && sys::lastError() != EINTR) {
               throw SystemError{"Read command output"};
             }
           }
@@ -623,7 +623,7 @@ export {
           const auto count = ::write(process.input(), input.front().data() + offset, input.front().size() - offset);
           if (count > 0) {
             offset += static_cast<std::size_t>(count);
-          } else if (count < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
+          } else if (count < 0 && sys::lastError() != EAGAIN && sys::lastError() != EWOULDBLOCK && sys::lastError() != EINTR) {
             throw SystemError{"Write command input"};
           } else {
             return;
@@ -845,7 +845,7 @@ export {
         posix_spawnattr_setsigmask(&attributes, &empty);
         posix_spawnattr_setsigdefault(&attributes, &defaults);
         posix_spawnattr_setpgroup(&attributes, 0);
-#if defined(POSIX_SPAWN_CLOEXEC_DEFAULT)
+#if defined(__APPLE__)
         flags |= POSIX_SPAWN_CLOEXEC_DEFAULT;
 #endif
         checkSpawn(posix_spawnattr_setflags(&attributes, flags | POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK));

@@ -677,12 +677,12 @@ export {
       inline static auto writeFile(const FileDescriptor& destination, std::string_view bytes) noexcept -> int {
         while (!bytes.empty()) {
           const auto count = ::write(destination.get(), bytes.data(), bytes.size());
-          if (count < 0 && errno == EINTR) {
+          if (count < 0 && sys::lastError() == EINTR) {
             continue;
           }
 
           if (count <= 0) {
-            return count == 0 ? EIO : errno;
+            return count == 0 ? EIO : sys::lastError();
           }
 
           bytes.remove_prefix(static_cast<std::size_t>(count));
@@ -857,7 +857,7 @@ export {
         PackageCopy{memory_}.copy(package, copied.get(), staged_path);
 
         if (renameAt(staging.descriptor(), staged_package, directory.get(), path.c_str() + separator + 1, RenameMode::create_only) != 0) {
-          if (errno == EEXIST && existing(package, path.c_str())) {
+          if (sys::lastError() == EEXIST && existing(package, path.c_str())) {
             return;
           }
 
@@ -869,7 +869,7 @@ export {
       inline bool existing(const Package& package, const char* path) {
         struct stat state{};
         if (::lstat(path, &state) != 0) {
-          if (errno == ENOENT) {
+          if (sys::lastError() == ENOENT) {
             return false;
           }
 

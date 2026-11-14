@@ -128,7 +128,7 @@ export {
 
           while (!cancellation_->requested()) {
             const auto ready = ::poll(&wake, 1, static_cast<int>(Limits::trust_check_interval.count()));
-            if (ready < 0 && errno == EINTR) {
+            if (ready < 0 && sys::lastError() == EINTR) {
               continue;
             }
 

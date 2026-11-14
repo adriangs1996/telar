@@ -37,6 +37,7 @@ export import telar.plugins;
 import telar.base.diagnostics;
 import telar.platform.primitives;
 import telar.vocabulary;
+import telar.sys.socket;
 
 // Interface: redirect/flow_key.cppm
 export {
@@ -290,7 +291,7 @@ export {
 
         do {
           sent = ::write(socket.get(), bytes.data(), message.rtm_msglen);
-        } while (sent < 0 && errno == EINTR);
+        } while (sent < 0 && sys::lastError() == EINTR);
 
         if (sent != message.rtm_msglen) {
           throw SystemError{"Request original route"};
@@ -300,7 +301,7 @@ export {
 
         while (std::chrono::steady_clock::now() < deadline) {
           pollfd ready{socket.get(), POLLIN, 0};
-          if (::poll(&ready, 1, 25) < 0 && errno != EINTR) {
+          if (::poll(&ready, 1, 25) < 0 && sys::lastError() != EINTR) {
             throw SystemError{"Wait for original route"};
           }
 
@@ -309,7 +310,7 @@ export {
           }
 
           const auto received = ::read(socket.get(), bytes.data(), bytes.size());
-          if (received < 0 && socketWouldBlock(errno)) {
+          if (received < 0 && socketWouldBlock(sys::lastError())) {
             continue;
           }
 
@@ -388,7 +389,7 @@ export {
               std::memcpy(&address, bytes.data() + offset, sizeof(address));
               if (IN6_IS_ADDR_LINKLOCAL(&address.sin6_addr)) {
                 // Darwin embeds the interface scope in the second 16-bit word.
-                std::fill_n(address.sin6_addr.s6_addr + sizeof(std::uint16_t), sizeof(std::uint16_t), Byte{0});
+                std::fill_n(sys::addressBytes(address.sin6_addr) + sizeof(std::uint16_t), sizeof(std::uint16_t), Byte{0});
               }
 
               addressText(path.gateway, AF_INET6, &address.sin6_addr);

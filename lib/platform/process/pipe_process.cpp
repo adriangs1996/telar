@@ -18,6 +18,7 @@ module;
 module telar.platform.process;
 
 import std;
+import telar.sys.posix;
 
 namespace telar::runtime {
   namespace {
@@ -62,7 +63,7 @@ namespace telar::runtime {
     auto error = makePipe();
 
     setNonblocking(input[1].get());
-#if defined(F_SETNOSIGPIPE)
+#if defined(__APPLE__)
     if (::fcntl(input[1].get(), F_SETNOSIGPIPE, 1) < 0) {
       throw SystemError{"Suppress pipe signals"};
     }
@@ -93,7 +94,7 @@ namespace telar::runtime {
       ::kill(process_id_, SIGKILL);
       int status;
 
-      while (::waitpid(process_id_, &status, 0) < 0 && errno == EINTR) {
+      while (::waitpid(process_id_, &status, 0) < 0 && sys::lastError() == EINTR) {
       }
     }
   }

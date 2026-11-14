@@ -9,6 +9,7 @@ module;
 export module telar.gui.platform.clipboard_image_pipe;
 
 import std;
+import telar.sys.posix;
 
 export {
   namespace telar::gui::platform {
@@ -35,7 +36,7 @@ export {
         while (true) {
           waitReadable(descriptor, deadline);
           const auto count = ::read(descriptor, chunk.bytes.data(), chunk.bytes.size());
-          if (count < 0 && (errno == EINTR || errno == EAGAIN)) {
+          if (count < 0 && (sys::lastError() == EINTR || sys::lastError() == EAGAIN)) {
             continue;
           }
 
@@ -99,7 +100,7 @@ export {
 
           pollfd waiting{.fd = descriptor, .events = POLLIN, .revents = 0};
           const auto ready = ::poll(&waiting, 1, static_cast<int>(remaining.count()));
-          if (ready < 0 && errno == EINTR) {
+          if (ready < 0 && sys::lastError() == EINTR) {
             continue;
           }
 

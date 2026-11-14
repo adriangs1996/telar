@@ -1251,7 +1251,7 @@ export {
           return;
         }
 
-        if (count < 0 && socketWouldBlock(errno)) {
+        if (count < 0 && socketWouldBlock(sys::lastError())) {
           return;
         }
 
@@ -1424,7 +1424,7 @@ export {
           const auto count = ::write(execution.process->input(), bytes.data(), bytes.size());
           if (count > 0) {
             execution.input.consume(static_cast<std::size_t>(count));
-          } else if (count < 0 && !socketWouldBlock(errno)) {
+          } else if (count < 0 && !socketWouldBlock(sys::lastError())) {
             execution.eof = true;
             execution.input.clear();
           }

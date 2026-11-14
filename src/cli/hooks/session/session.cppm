@@ -59,7 +59,7 @@ export {
 
         for (;;) {
           const auto received = ::read(file.get(), window.data() + held, window.size() - held);
-          if (received < 0 && errno == EINTR) {
+          if (received < 0 && sys::lastError() == EINTR) {
             continue;
           }
 

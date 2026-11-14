@@ -680,7 +680,7 @@ export {
 
     inline int commandFailure(const char* family, const std::exception& error) {
       const auto* system = dynamic_cast<const SystemError*>(&error);
-      const auto socket_timeout = dynamic_cast<const SocketError*>(&error) && (errno == EAGAIN || errno == EWOULDBLOCK);
+      const auto socket_timeout = dynamic_cast<const SocketError*>(&error) && (sys::lastError() == EAGAIN || sys::lastError() == EWOULDBLOCK);
       const auto timeout = socket_timeout || (system && (system->code() == EAGAIN || system->code() == EWOULDBLOCK));
 
       std::fprintf(stderr, "%s: %s\n", family, timeout ? "RuntimeTimeout" : error.what());
@@ -1731,12 +1731,12 @@ export {
 
       for (;;) {
         const auto count = ::read(file.get(), bytes.data(), bytes.size());
-        if (count < 0 && errno == EINTR) {
+        if (count < 0 && sys::lastError() == EINTR) {
           continue;
         }
 
         if (count < 0) {
-          throw std::runtime_error{sys::errorName(errno)};
+          throw std::runtime_error{sys::errorName(sys::lastError())};
         }
 
         if (count == 0) {

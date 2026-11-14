@@ -26,6 +26,7 @@ import std;
 export import telar.base.text.utf8;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
+import telar.sys.posix;
 
 // The connection reports request failures with it; the rest of the wire
 // vocabulary stays with telar.wire.vocabulary.
@@ -303,10 +304,10 @@ export {
 
         std::memcpy(client._address.sun_path, socket_path, path_length + 1);
 
-#ifdef SOCK_CLOEXEC
+#if defined(__linux__)
         client._fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
 #else
-        // Without SOCK_CLOEXEC a fork between these two calls can still inherit it.
+        // Darwin has no SOCK_CLOEXEC: a fork between these two calls can still inherit it.
         client._fd = socket(AF_UNIX, SOCK_STREAM, 0);
         if (client._fd >= 0 && fcntl(client._fd, F_SETFD, FD_CLOEXEC) < 0) {
           client.deinit();
@@ -323,7 +324,7 @@ export {
           throw SocketError{"Error configuring runtime I/O timeout"};
         }
 
-#ifdef SO_NOSIGPIPE
+#if defined(__APPLE__)
         const int enabled = 1;
         if (setsockopt(client._fd, SOL_SOCKET, SO_NOSIGPIPE, &enabled, sizeof(enabled)) < 0) {
           client.deinit();
@@ -334,7 +335,7 @@ export {
         auto address_ptr = reinterpret_cast<sockaddr*>(&client._address);
 
         while (connect(client._fd, address_ptr, sizeof(client._address)) < 0) {
-          if (errno == EINTR) {
+          if (sys::lastError() == EINTR) {
             continue;
           }
 
@@ -463,17 +464,18 @@ export {
 
       inline void writeAll(const std::uint8_t* bytes, std::size_t size) _throw(SocketError) {
         while (size != 0) {
-#ifdef MSG_NOSIGNAL
+#if defined(__linux__)
           const auto count = ::send(_fd, bytes, size, MSG_NOSIGNAL);
 #else
+          // SO_NOSIGPIPE already keeps a closed peer from raising SIGPIPE.
           const auto count = ::send(_fd, bytes, size, 0);
 #endif
-          if (count < 0 && errno == EINTR) {
+          if (count < 0 && sys::lastError() == EINTR) {
             continue;
           }
 
           if (count <= 0) {
-            if (count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            if (count < 0 && (sys::lastError() == EAGAIN || sys::lastError() == EWOULDBLOCK)) {
               throw SocketError{"Runtime send timed out"};
             }
 
@@ -488,12 +490,12 @@ export {
       inline void readAll(std::uint8_t* bytes, std::size_t size) _throw(SocketError) {
         while (size != 0) {
           const auto count = recv(_fd, bytes, size, 0);
-          if (count < 0 && errno == EINTR) {
+          if (count < 0 && sys::lastError() == EINTR) {
             continue;
           }
 
           if (count < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            if (sys::lastError() == EAGAIN || sys::lastError() == EWOULDBLOCK) {
               throw SocketError{"Runtime receive timed out"};
             }
 

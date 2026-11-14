@@ -122,7 +122,7 @@ export {
           }
 
           constexpr int poll_ms = 100;
-          if (::poll(descriptors.data(), descriptors.size(), poll_ms) < 0 && errno != EINTR) {
+          if (::poll(descriptors.data(), descriptors.size(), poll_ms) < 0 && sys::lastError() != EINTR) {
             throw SystemError{"Poll packet capture"};
           }
 
@@ -206,7 +206,7 @@ export {
       inline void drainControl() {
         std::array<Byte, Limits::metadata_bytes> bytes;
         const auto count = ::recv(socket_.get(), bytes.data(), bytes.size(), MSG_DONTWAIT);
-        if (count == 0 || (count < 0 && !socketWouldBlock(errno))) {
+        if (count == 0 || (count < 0 && !socketWouldBlock(sys::lastError()))) {
           throw SystemError{"Traffic runtime disconnected", ECONNRESET};
         }
       }
@@ -226,12 +226,12 @@ export {
         // Only a wholly unsent frame may be dropped under capture backpressure.
         const auto bytes = std::span<const Byte>{output_}.first(prefix.size() + payload.size());
         const auto count = ::send(socket_.get(), bytes.data(), bytes.size(), 0);
-        if (count < 0 && socketWouldBlock(errno)) {
+        if (count < 0 && socketWouldBlock(sys::lastError())) {
           ++dropped_;
           return;
         }
 
-        if (count < 0 && errno == EINTR) {
+        if (count < 0 && sys::lastError() == EINTR) {
           ++dropped_;
           return;
         }
@@ -251,7 +251,7 @@ export {
           const auto written = ::send(socket_.get(), remaining.data(), remaining.size(), 0);
           if (written > 0) {
             remaining = remaining.subspan(static_cast<std::size_t>(written));
-          } else if (written == 0 || !socketWouldBlock(errno)) {
+          } else if (written == 0 || !socketWouldBlock(sys::lastError())) {
             throw SystemError{"Publish partial capture frame"};
           }
 

@@ -35,6 +35,7 @@ import std;
 export import telar.platform.error;
 import telar.base.memory.containers;
 import telar.platform.primitives;
+import telar.sys.socket;
 
 #if defined(__linux__)
 // Interface: platform/linux/private_tunnel.cppm
@@ -51,13 +52,13 @@ export {
 
         ifreq request{};
         constexpr std::string_view pattern = "telar%d";
-        std::ranges::copy(pattern, request.ifr_name);
-        request.ifr_flags = IFF_TUN;
+        std::ranges::copy(pattern, sys::interfaceName(request));
+        sys::interfaceFlags(request) = IFF_TUN;
         if (::ioctl(tunnel_.get(), TUNSETIFF, &request) != 0) {
           throw SystemError{"Create private tunnel"};
         }
-        name_.assign(request.ifr_name);
-        index_ = ::if_nametoindex(request.ifr_name);
+        name_.assign(sys::interfaceName(request));
+        index_ = ::if_nametoindex(sys::interfaceName(request));
         if (index_ == 0) {
           throw SystemError{"Read private tunnel index"};
         }
@@ -66,7 +67,7 @@ export {
         if (!configuration || ::ioctl(configuration.get(), SIOCGIFFLAGS, &request) != 0) {
           throw SystemError{"Read private tunnel flags"};
         }
-        request.ifr_flags |= IFF_UP;
+        sys::interfaceFlags(request) |= IFF_UP;
         if (::ioctl(configuration.get(), SIOCSIFFLAGS, &request) != 0) {
           throw SystemError{"Enable private tunnel"};
         }
@@ -75,7 +76,7 @@ export {
       inline ssize_t write(std::span<const std::uint8_t> bytes) const noexcept {
         constexpr std::size_t family_bytes = sizeof(std::uint32_t);
         if (bytes.size() < family_bytes) {
-          errno = EINVAL;
+          sys::setLastError(EINVAL);
           return -1;
         }
 
@@ -83,7 +84,7 @@ export {
         std::memcpy(&family, bytes.data(), sizeof(family));
         family = ntohl(family);
         if (family != AF_INET && family != AF_INET6) {
-          errno = EAFNOSUPPORT;
+          sys::setLastError(EAFNOSUPPORT);
           return -1;
         }
 
@@ -164,12 +165,12 @@ export {
         FileDescriptor configuration{::socket(AF_INET, SOCK_DGRAM, 0)};
         ifreq flags{};
 
-        std::copy(name_.view().begin(), name_.view().end(), flags.ifr_name);
+        std::copy(name_.view().begin(), name_.view().end(), sys::interfaceName(flags));
         if (!configuration || ::ioctl(configuration.get(), SIOCGIFFLAGS, &flags) != 0) {
           throw SystemError{"Read discovery interface flags"};
         }
 
-        flags.ifr_flags |= IFF_UP;
+        sys::interfaceFlags(flags) |= IFF_UP;
         if (::ioctl(configuration.get(), SIOCSIFFLAGS, &flags) != 0) {
           throw SystemError{"Enable redirect discovery interface"};
         }
@@ -177,7 +178,7 @@ export {
         // utun creation does not attach IP protocol handlers. PF's ifnet_output
         // needs them even though this interface has no configured IP addresses.
         constexpr unsigned long attach_ipv4 = _IOWR('i', 80, ifreq); // SIOCPROTOATTACH
-        if (::ioctl(configuration.get(), attach_ipv4, &flags) != 0 && errno != EEXIST) {
+        if (::ioctl(configuration.get(), attach_ipv4, &flags) != 0 && sys::lastError() != EEXIST) {
           throw SystemError{"Attach discovery IPv4 protocol"};
         }
 
@@ -186,7 +187,7 @@ export {
 
         std::copy(name_.view().begin(), name_.view().end(), request.ifra_name);
         constexpr unsigned long attach_ipv6 = _IOWR('i', 110, in6_aliasreq); // SIOCPROTOATTACH_IN6
-        if (!ipv6 || (::ioctl(ipv6.get(), attach_ipv6, &request) != 0 && errno != EEXIST)) {
+        if (!ipv6 || (::ioctl(ipv6.get(), attach_ipv6, &request) != 0 && sys::lastError() != EEXIST)) {
           throw SystemError{"Attach discovery IPv6 protocol"};
         }
 

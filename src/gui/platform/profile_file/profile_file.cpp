@@ -101,11 +101,11 @@ namespace telar::gui::platform {
           return;
         }
 
-        if (errno == EINTR) {
+        if (sys::lastError() == EINTR) {
           continue;
         }
 
-        if (errno != EWOULDBLOCK && errno != EAGAIN) {
+        if (sys::lastError() != EWOULDBLOCK && sys::lastError() != EAGAIN) {
           throw runtime::SystemError{"Lock machine profiles"};
         }
 

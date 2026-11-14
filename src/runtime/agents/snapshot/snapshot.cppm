@@ -916,7 +916,7 @@ export {
           }
 
           const auto count = ::pread(descriptor, bytes_.data() + filled, limit - filled, static_cast<off_t>(offset + filled));
-          if (count < 0 && errno == EINTR) {
+          if (count < 0 && sys::lastError() == EINTR) {
             continue;
           }
 

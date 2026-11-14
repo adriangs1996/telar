@@ -515,7 +515,7 @@ export namespace telar::git {
 
       FileDescriptor current{::open(start.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
       if (!current) {
-        return errno == ENOENT || errno == ENOTDIR ? Discovered::none : Discovered::error;
+        return sys::lastError() == ENOENT || sys::lastError() == ENOTDIR ? Discovered::none : Discovered::error;
       }
 
       struct stat current_status{};
@@ -552,7 +552,7 @@ export namespace telar::git {
           } else {
             return Discovered::invalid;
           }
-        } else if (errno != ENOENT && errno != ENOTDIR) {
+        } else if (sys::lastError() != ENOENT && sys::lastError() != ENOTDIR) {
           return Discovered::error;
         }
 

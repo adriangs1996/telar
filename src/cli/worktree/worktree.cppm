@@ -400,8 +400,8 @@ export {
       }
 
       while (::flock(file.get(), LOCK_EX) != 0) {
-        if (errno != EINTR) {
-          throw std::runtime_error{sys::errorName(errno)};
+        if (sys::lastError() != EINTR) {
+          throw std::runtime_error{sys::errorName(sys::lastError())};
         }
       }
 
@@ -412,11 +412,11 @@ export {
     void clearPriorStage(Memory& memory, const std::string& stage, std::string_view identity) {
       struct stat state{};
       if (::lstat(stage.c_str(), &state) != 0) {
-        if (errno == ENOENT) {
+        if (sys::lastError() == ENOENT) {
           return;
         }
 
-        throw std::runtime_error{sys::errorName(errno)};
+        throw std::runtime_error{sys::errorName(sys::lastError())};
       }
 
       if (!S_ISDIR(state.st_mode)) {
@@ -438,12 +438,12 @@ export {
 
       for (;;) {
         const auto count = ::read(STDIN_FILENO, bytes.data(), bytes.size());
-        if (count < 0 && errno == EINTR) {
+        if (count < 0 && sys::lastError() == EINTR) {
           continue;
         }
 
         if (count < 0) {
-          throw std::runtime_error{sys::errorName(errno)};
+          throw std::runtime_error{sys::errorName(sys::lastError())};
         }
 
         if (count == 0) {
@@ -480,20 +480,20 @@ export {
       clearPriorStage(memory, stage, options.identity);
       const auto stage_name = base + ".stage";
       if (::mkdirat(parent.get(), stage_name.c_str(), 0700) != 0) {
-        throw std::runtime_error{sys::errorName(errno)};
+        throw std::runtime_error{sys::errorName(sys::lastError())};
       }
 
       StagingDirectory cleanup{stage};
       auto directory = file_transfer::openDirectory(stage);
       FileDescriptor owner{::openat(directory.get(), "owner", O_CREAT | O_EXCL | O_WRONLY | O_CLOEXEC, 0600)};
       if (!owner) {
-        throw std::runtime_error{sys::errorName(errno)};
+        throw std::runtime_error{sys::errorName(sys::lastError())};
       }
 
       writeText(options.identity, owner.get());
       FileDescriptor bundle{::openat(directory.get(), "history.bundle", O_CREAT | O_EXCL | O_WRONLY | O_CLOEXEC, 0600)};
       if (!bundle) {
-        throw std::runtime_error{sys::errorName(errno)};
+        throw std::runtime_error{sys::errorName(sys::lastError())};
       }
 
       receiveBundle(bundle.get(), options.bytes);
@@ -502,7 +502,7 @@ export {
       const auto root = existing.value_or(staged_repository);
 
       if (!existing && ::mkdirat(directory.get(), "repository", 0700) != 0) {
-        throw std::runtime_error{sys::errorName(errno)};
+        throw std::runtime_error{sys::errorName(sys::lastError())};
       }
 
       Git git{memory, root};
@@ -666,7 +666,7 @@ export {
       const auto base = environment.lookup("TMPDIR");
       const auto temporary = std::format("{}/telar-transfer-{:016x}{:016x}", base.empty() ? "/tmp" : base, randomIdentity(), randomIdentity());
       if (::mkdir(temporary.c_str(), 0700) != 0) {
-        throw std::runtime_error{sys::errorName(errno)};
+        throw std::runtime_error{sys::errorName(sys::lastError())};
       }
 
       StagingDirectory cleanup{temporary};
@@ -674,12 +674,12 @@ export {
       // created, private to this process, must not be one.
       FileDescriptor directory{::open(temporary.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
       if (!directory) {
-        throw std::runtime_error{sys::errorName(errno)};
+        throw std::runtime_error{sys::errorName(sys::lastError())};
       }
 
       FileDescriptor bundle{::openat(directory.get(), "history.bundle", O_CREAT | O_EXCL | O_RDWR | O_CLOEXEC, 0600)};
       if (!bundle) {
-        throw std::runtime_error{sys::errorName(errno)};
+        throw std::runtime_error{sys::errorName(sys::lastError())};
       }
 
       const auto ref = "refs/telar/transfer/" + std::filesystem::path{temporary}.filename().string();
@@ -703,11 +703,11 @@ export {
         git.bundle(revisions, bundle.get());
         struct stat inode{};
         if (::fstat(bundle.get(), &inode) != 0) {
-          throw std::runtime_error{sys::errorName(errno)};
+          throw std::runtime_error{sys::errorName(sys::lastError())};
         }
 
         if (::lseek(bundle.get(), 0, SEEK_SET) != 0) {
-          throw std::runtime_error{sys::errorName(errno)};
+          throw std::runtime_error{sys::errorName(sys::lastError())};
         }
 
         const auto size = std::to_string(inode.st_size);
