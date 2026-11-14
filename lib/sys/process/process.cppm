@@ -15,6 +15,9 @@ module;
 #include <pty.h>
 #endif
 
+// POSIX defines environ without a header that has to declare it, and Darwin's declare none.
+extern "C" char** environ;
+
 export module telar.sys.process;
 
 // The C headers stay in this global module fragment only; importers reach their
@@ -22,6 +25,7 @@ export module telar.sys.process;
 export {
   // Processes and process groups.
   using ::_exit;
+  using ::environ;
   using ::execv;
   using ::execve;
   using ::execvp;

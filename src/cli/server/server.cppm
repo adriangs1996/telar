@@ -1,3 +1,5 @@
+module;
+
 export module telar.cli.server;
 
 import std;
@@ -17,6 +19,11 @@ import telar.platform.process;
 // Interface: help.cppm
 export {
   namespace telar::runtime::cli {
+
+    // The version `telar --version`, the root help and machine setup report.
+    inline constexpr std::string_view version{
+#include "version.inc"
+    };
 
     // What a `--help` asks about: the root when `family` is empty, a family when
     // `command` is empty, otherwise one command of the family.

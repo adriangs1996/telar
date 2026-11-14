@@ -1,48 +1,7 @@
-module;
-#include <stdlib.h>
-
-#include <cerrno>
-#include <cstdint>
-#include <cstdlib>
-#include <limits.h>
-#if (defined(__APPLE__))
-#include <mach-o/dyld.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <unistd.h>
-#endif
-#include "help_texts.hpp"
-#include <cstddef>
-#include <cstdio>
-#include <cstring>
-#include <fcntl.h>
-#include <new>
-#include <poll.h>
-#include <signal.h>
-#include <spawn.h>
-#include <sys/stat.h>
-#include <sys/wait.h>
-#include <unistd.h>
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <linux/fs.h>
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <sys/syscall.h>
-#endif
-#include "machine_assets.hpp"
-#include <cctype>
-#include <csignal>
-#include <dirent.h>
-#include <openssl/sha.h>
-#include <pwd.h>
-#include <sys/file.h>
-#include <sys/socket.h>
-#include <sys/time.h>
-#include <sys/un.h>
-
 module telar.cli.launch_commands;
 
 import std;
+import telar.sys.posix;
 
 import telar.cli.plugin;
 import telar.cli.server;

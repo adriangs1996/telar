@@ -1,23 +1,3 @@
-module;
-#include <cstdio>
-#include <new>
-#include <stdlib.h>
-
-#include <cerrno>
-#include <cstddef>
-#include <cstdint>
-#include <unistd.h>
-
-#include <cstring>
-#include <sys/socket.h>
-#include <sys/time.h>
-#include <sys/un.h>
-
-#include <cstdlib>
-#include <fcntl.h>
-#include <limits.h>
-#include <sys/stat.h>
-
 module telar.cli.runtime_observer;
 
 import telar.sys.posix;

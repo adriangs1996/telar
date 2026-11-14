@@ -85,7 +85,8 @@ Fuera de las excepciones no hay `#include`. Pueden incluir `lib/sys`, los adapta
 Qt/moc (los ficheros que incluyen una cabecera `<Q…>`), las fuentes C y Objective-C(++)
 y las cabeceras que todos ellos alcanzan, porque no pueden importar módulos. Un módulo
 dueño puede incluir las cabeceras de `header_owners` que cruzan esa frontera, y
-cualquier fichero puede incluir una cabecera de `macro_headers`, que no incluye nada.
+cualquier fichero puede incluir una cabecera de `macro_headers`, que no incluye nada, o
+un fragmento `.inc` de datos que genera el build fuera del árbol.
 Los tests y las herramientas quedan fuera de la regla. [textual-includes.json](textual-includes.json) lista por
 fichero los includes que quedan; quien quita uno borra su entrada, y una entrada que
 ya no está en el fichero también hace fallar el checker.

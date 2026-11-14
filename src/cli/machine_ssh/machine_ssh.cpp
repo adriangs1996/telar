@@ -1,56 +1,12 @@
 module;
-#include <stdlib.h>
-
-#include <cerrno>
-#include <cstdint>
-#include <cstdlib>
-#include <limits.h>
-#if (defined(__APPLE__))
-#include <mach-o/dyld.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <unistd.h>
-#endif
-#include <fcntl.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <unistd.h>
-
-#include "telar_platform/process_environment.h"
-
-#include <cstdio>
-#include <poll.h>
-#include <signal.h>
-#include <spawn.h>
-#include <sys/wait.h>
-
-#include <cstddef>
-#include <cstring>
-#include <new>
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <linux/fs.h>
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <sys/syscall.h>
-#endif
-#include <sys/file.h>
-
 #include <openssl/sha.h>
-#include <sys/un.h>
-
-#include <cctype>
-
-#include <csignal>
-#include <dirent.h>
-#include <pwd.h>
-#include <sys/socket.h>
-#include <sys/time.h>
 
 module telar.cli.machine_ssh;
 
 import telar.cli.base.command_error;
 import telar.cli.control_session;
 import telar.sys.posix;
+import telar.sys.process;
 
 namespace telar::runtime::cli::config_receive {
 

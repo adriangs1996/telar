@@ -3,95 +3,8 @@
 static_assert(true);
 #endif
 
-#include "telar_base/memory/allocator.hpp"
-#include "telar_client/codecs/telar_codec.hpp"
-#include "telar_client/serializers/telar_serializer.hpp"
-#include "telar_platform/random_bytes.hpp"
-#include <algorithm>
-#include <array>
-#include <cerrno>
-#include <charconv>
-#include <concepts>
-#include <cstddef>
-#include <cstdint>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <exception>
-#include <limits.h>
-#include <limits>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string>
-#include <string_view>
-#include <sys/socket.h>
-#include <sys/time.h>
-#include <sys/un.h>
-#include <type_traits>
-#include <unistd.h>
-#include <variant>
-#if (defined(__APPLE__))
-#include <mach-o/dyld.h>
-#endif
-#if (!(defined(__APPLE__)))
-#endif
-#include "telar_client/serializers/telar_messages.hpp"
-#include "telar_platform/file_descriptor.hpp"
-#include <chrono>
-#include <csignal>
-#include <dirent.h>
-#include <fcntl.h>
-#include <format>
-#include <spawn.h>
-#include <sys/stat.h>
-#include <sys/wait.h>
-#include <thread>
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <linux/fs.h>
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <sys/syscall.h>
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#endif
-#include <filesystem>
-#if (defined(__linux__))
-#include <sys/syscall.h>
-#endif
-#include "help_texts.hpp"
-#include "integration_assets.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/program_identity.hpp"
-#include "telar_base/text/utf8.hpp"
-#include "telar_client/codecs/telar_value_codec.hpp"
-#include "telar_platform/open_directory.h"
-#include "telar_platform/trace.hpp"
-#include <arpa/inet.h>
-#include <atomic>
-#include <bit>
-#include <cassert>
-#include <climits>
-#include <cmath>
-#include <ctime>
-#include <dlfcn.h>
-#include <memory>
-#include <new>
-#include <openssl/crypto.h>
-#include <openssl/err.h>
-#include <openssl/md5.h>
-#include <openssl/pem.h>
-#include <openssl/sha.h>
-#include <openssl/ssl.h>
-#include <openssl/x509v3.h>
-#include <poll.h>
-#include <pwd.h>
-#include <signal.h>
-#include <sys/file.h>
-#include <sys/types.h>
-#include <system_error>
-#include <utility>
-#include <vector>
+import std;
+import telar.sys.posix;
 
 import telar.cli.project_setup;
 import telar.cli.runtime_observer;
@@ -121,14 +34,12 @@ namespace telar::runtime::cli {
     }
 
     int printSkill(std::span<char* const> words) {
-      const std::string_view which = words.size() > 1 ? words[1] : "telar";
-      if (which != "telar" && which != "coordinator") {
+      const auto text = integration::skillText(words.size() > 1 ? words[1] : "telar");
+      if (!text) {
         throw std::invalid_argument{"UnknownSkill"};
       }
 
-      const auto text = which == "telar" ? integration::assets::telar_skill : integration::assets::coordinator_skill;
-
-      std::fwrite(text.data(), 1, text.size(), stdout);
+      std::fwrite(text->data(), 1, text->size(), stdout);
       return 0;
     }
 

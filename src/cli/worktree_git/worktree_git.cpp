@@ -1,34 +1,3 @@
-module;
-#include <new>
-#include <stdlib.h>
-
-#include <cassert>
-#include <cerrno>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <limits.h>
-#include <poll.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <unistd.h>
-
-#include <cstdlib>
-
-#include <cstdio>
-#include <sys/socket.h>
-#include <sys/time.h>
-#include <sys/un.h>
-#if (defined(__APPLE__))
-#include <mach-o/dyld.h>
-#endif
-#include <csignal>
-#include <dirent.h>
-#include <fcntl.h>
-#include <pwd.h>
-#include <spawn.h>
-#include <sys/stat.h>
-
 module telar.cli.worktree_git;
 
 import telar.cli.control_session;
@@ -562,7 +531,7 @@ namespace telar::runtime::cli::sessions {
       return *id;
     }
 
-    const auto value = ::getenv(variable);
+    const auto value = std::getenv(variable);
     if (!value) {
       throw std::runtime_error{"MissingCurrentIdentity"};
     }
