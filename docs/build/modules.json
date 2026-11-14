@@ -8,6 +8,7 @@
     "vocabulary": [],
     "ghostty": [],
     "native": [],
+    "clipboard": [],
     "shell": [],
     "ebnf": [
       "tbc"
@@ -450,6 +451,8 @@
     "lib/native/sqlite/sqlite.cppm": "telar.native.sqlite",
     "lib/native/zlib/zlib.cppm": "telar.native.zlib",
     "lib/native/zstd/zstd.cppm": "telar.native.zstd",
+    "lib/clipboard/wayland/wayland.cppm": "telar.clipboard.wayland",
+    "lib/clipboard/x11/x11.cppm": "telar.clipboard.x11",
     "lib/machines/machines.cppm": "telar.machines",
     "lib/render/document/document.cppm": "telar.render.document",
     "lib/render/terminal/terminal.cppm": "telar.render.terminal",
@@ -857,6 +860,8 @@
     "lib/lua/lua.cpp": "telar.lua",
     "lib/ghostty/wuffs/wuffs.cpp": "telar.ghostty.wuffs",
     "lib/native/zlib/zlib.cpp": "telar.native.zlib",
+    "lib/clipboard/wayland/wayland.cpp": "telar.clipboard.wayland",
+    "lib/clipboard/x11/x11.cpp": "telar.clipboard.x11",
     "lib/machines/machines.cpp": "telar.machines",
     "lib/plugins/plugins.cpp": "telar.plugins",
     "lib/render/document/document.cpp": "telar.render.document",
@@ -3232,9 +3237,13 @@
     "<openssl/x509v3.h>": "telar.tls",
     "<pcap/pcap.h>": "telar.native.pcap",
     "<sqlite3.h>": "telar.native.sqlite",
+    "<wayland-client.h>": "telar.clipboard.wayland",
+    "<xcb/xcb.h>": "telar.clipboard.x11",
+    "<xcb/xcbext.h>": "telar.clipboard.x11",
     "<zlib.h>": "telar.native.zlib",
     "<zstd.h>": "telar.native.zstd",
     "entity.h": "telar.render.markdown",
-    "md4c.h": "telar.render.markdown"
+    "md4c.h": "telar.render.markdown",
+    "wlr-data-control-client-protocol.h": "telar.clipboard.wayland"
   }
 }

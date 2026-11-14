@@ -208,7 +208,8 @@ importadores se capturan como constantes y las que tienen forma de función pasa
 funciones del `.cpp` del dueño, como en `telar.sys.*`. Lua es de `telar.lua`,
 FreeType y HarfBuzz de `telar.gui.fonts.face`, OpenSSL de `telar.tls` (salvo
 `<openssl/sha.h>` y `<openssl/md5.h>`, de `telar.platform.sha256`), md4c de
-`telar.render.markdown`. Las cabeceras de libghostty-vt son de `lib/ghostty`
+`telar.render.markdown`, libxcb de `telar.clipboard.x11` y libwayland-client de
+`telar.clipboard.wayland`. Las cabeceras de libghostty-vt son de `lib/ghostty`
 (`telar.ghostty.unicode`, `.vt` y `.wuffs`), por debajo de `telar.config` y de la
 GUI, y las de las bibliotecas nativas del runtime (zlib, Brotli, zstd, nghttp2,
 libpcap y SQLite) de `lib/native`, un módulo por biblioteca. Las cabeceras

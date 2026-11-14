@@ -4,6 +4,10 @@ if(TARGET telar-clipboard)
 endif()
 option(TELAR_CLIPBOARD_NATIVE "Build native graphical-session clipboard access" ON)
 set(clipboard_source_dir "${CMAKE_CURRENT_LIST_DIR}/..")
+# The Linux backends are modules that own their libraries' headers; the reader imports both.
+if(TELAR_CLIPBOARD_NATIVE AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  include("${clipboard_source_dir}/../../cmake/cpp_modules.cmake")
+endif()
 add_library(telar-clipboard STATIC)
 target_compile_features(telar-clipboard PUBLIC cxx_std_23)
 # The header-only tbc annotations state the API's lifetime contracts.
@@ -36,8 +40,10 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     COMMAND "${WAYLAND_SCANNER}" private-code "${clipboard_protocol}" "${clipboard_protocol_code}"
     DEPENDS "${clipboard_protocol}" VERBATIM)
   target_sources(telar-clipboard PRIVATE
-    "${clipboard_source_dir}/src/linux/clipboard.cpp" "${clipboard_source_dir}/src/linux/wayland.cpp"
-    "${clipboard_source_dir}/src/linux/x11.cpp" "${clipboard_protocol_header}" "${clipboard_protocol_code}")
+    "${clipboard_source_dir}/src/linux/clipboard.cpp" "${clipboard_source_dir}/wayland/wayland.cpp"
+    "${clipboard_source_dir}/x11/x11.cpp" "${clipboard_protocol_header}" "${clipboard_protocol_code}")
+  target_sources(telar-clipboard PRIVATE FILE_SET CXX_MODULES BASE_DIRS "${clipboard_source_dir}"
+    FILES "${clipboard_source_dir}/wayland/wayland.cppm" "${clipboard_source_dir}/x11/x11.cppm")
   target_include_directories(telar-clipboard PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
   target_link_libraries(telar-clipboard PUBLIC PkgConfig::CLIPBOARD_LINUX)
 else()

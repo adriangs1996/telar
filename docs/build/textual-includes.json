@@ -41,28 +41,21 @@
     "<stdexcept>",
     "backend.hpp"
   ],
-  "lib/clipboard/src/linux/wayland.cpp": [
-    "<cstring>",
-    "<fcntl.h>",
-    "<list>",
-    "<memory>",
-    "<optional>",
-    "<wayland-client.h>",
-    "backend.hpp",
-    "wlr-data-control-client-protocol.h"
-  ],
-  "lib/clipboard/src/linux/x11.cpp": [
-    "<cstdlib>",
-    "<cstring>",
-    "<limits>",
-    "<memory>",
-    "<utility>",
-    "<xcb/xcb.h>",
-    "<xcb/xcbext.h>",
-    "backend.hpp"
-  ],
   "lib/clipboard/src/unavailable.cpp": [
     "clipboard.hpp"
+  ],
+  "lib/clipboard/wayland/wayland.cpp": [
+    "../src/linux/backend.hpp",
+    "<fcntl.h>"
+  ],
+  "lib/clipboard/wayland/wayland.cppm": [
+    "../src/linux/backend.hpp"
+  ],
+  "lib/clipboard/x11/x11.cpp": [
+    "../src/linux/backend.hpp"
+  ],
+  "lib/clipboard/x11/x11.cppm": [
+    "../src/linux/backend.hpp"
   ],
   "lib/ghostty/vt/vt.cppm": [
     "telar_ghostty/vt.hpp"

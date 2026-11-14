@@ -20,6 +20,10 @@ dependencies, for headless installations.
 
 Requires CMake 3.25+, Ninja, and a C++23 compiler. On Linux, also install
 pkg-config, the Wayland client and XCB development packages, and `wayland-scanner`.
+The Linux backends are C++ modules (`telar.clipboard.wayland` and `telar.clipboard.x11`),
+each the only owner of its library's headers, so a native Linux build needs the
+toolchain that `cmake/cpp_modules.cmake` requires: configure with
+`-DCMAKE_TOOLCHAIN_FILE=<cache>/toolchain.cmake` from `tools/bootstrap-cpp.py`.
 On Arch/Omarchy:
 
 ```sh
