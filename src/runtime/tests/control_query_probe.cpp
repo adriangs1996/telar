@@ -64,8 +64,11 @@ namespace {
     }
 
     SystemAllocator system;
-    BudgetAllocator<SystemAllocator> memory{system, 64 * 1024 * 1024};
-    Terminal<BudgetAllocator<SystemAllocator>> terminal;
+    BudgetAllocator<SystemAllocator> budget{system, 64 * 1024 * 1024};
+    SynchronizedAllocator<BudgetAllocator<SystemAllocator>> synchronized{budget};
+    MemoryAdapter<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>> adapter{synchronized};
+    ConcurrentMemory& memory = adapter;
+    Terminal<ConcurrentMemory> terminal;
     std::unique_ptr<control_test::MemoryClipboard> clipboard;
 
     explicit Probe(TerminalSize size)

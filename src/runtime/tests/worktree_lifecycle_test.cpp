@@ -80,13 +80,15 @@ static void testProgramLabels() {
 }
 
 static void testDeferredClosure(bool worktree) {
-  SystemAllocator memory;
+  SystemAllocator system;
+  MemoryAdapter adapter{system};
+  ConcurrentMemory& memory = adapter;
   RuntimeModel model{memory};
-  ClientStore<SystemAllocator> clients{memory};
-  LimitService<SystemAllocator> limits;
-  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
+  ClientStore<ConcurrentMemory> clients{memory};
+  LimitService<ConcurrentMemory> limits;
+  NativeEventLoop<ConcurrentMemory> poller{memory};
   PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/closure-fixture.sock"}};
-  WorkspaceService<SystemAllocator, decltype(poller)> workspaces{memory};
+  WorkspaceService<ConcurrentMemory, decltype(poller)> workspaces{memory};
   ClientPeer owner{memory, model, clients, ClientRole::interactive};
   ClientPeer observer{memory, model, clients, ClientRole::interactive};
   constexpr TerminalSize size{80, 24, 0, 0};

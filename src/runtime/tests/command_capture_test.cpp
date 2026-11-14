@@ -41,9 +41,11 @@ struct CommandRecord {
 };
 
 struct CaptureFixture {
-  SystemAllocator memory;
-  Terminal<SystemAllocator> terminal{memory, {20, 4, 8, 16}, TerminalPurpose::observation};
-  CommandTracker<SystemAllocator> tracker{memory, terminal, "/initial", true};
+  SystemAllocator system;
+  MemoryAdapter<SystemAllocator> adapter{system};
+  ConcurrentMemory& memory = adapter;
+  Terminal<ConcurrentMemory> terminal{memory, {20, 4, 8, 16}, TerminalPurpose::observation};
+  CommandTracker<ConcurrentMemory> tracker{memory, terminal, "/initial", true};
   std::vector<CommandRecord> commands;
 
   void emit(const CapturedCommand& command) {
@@ -236,7 +238,9 @@ static void testDiscardedEdits() {
 }
 
 static void testOutputTailBounds() {
-  SystemAllocator memory;
+  SystemAllocator system;
+  MemoryAdapter<SystemAllocator> adapter{system};
+  ConcurrentMemory& memory = adapter;
   CommandOutputTail tail{memory, true};
 
   tail.append(byteSpan(std::string(60'000, 'a')));
@@ -254,13 +258,13 @@ static void testCaptureBoundsAndResize() {
   CaptureFixture large;
 
   large.output("$ ");
-  const std::string command = std::string(CommandSelection<SystemAllocator>::maximum_bytes - 1, 'a') + "🙂";
+  const std::string command = std::string(CommandSelection<ConcurrentMemory>::maximum_bytes - 1, 'a') + "🙂";
 
   large.input(command + "\r");
   large.output(command + "\r\n");
   large.finish();
   check(large.commands.size() == 1 && large.commands[0].metadata.truncated);
-  check(large.commands[0].command == command.substr(0, CommandSelection<SystemAllocator>::maximum_bytes - 1));
+  check(large.commands[0].command == command.substr(0, CommandSelection<ConcurrentMemory>::maximum_bytes - 1));
 
   CaptureFixture resized;
 

@@ -36,11 +36,14 @@ static void testCaptureGrowthAndErasure() {
     SystemAllocator upstream;
   } inspected;
 
+  SynchronizedAllocator synchronized{inspected};
+  MemoryAdapter adapter{synchronized};
+  ConcurrentMemory& memory = adapter;
   CaptureQuota quota{600};
   const std::array<std::uint8_t, 300> fragment{73};
 
   {
-    CaptureBuffer buffer{inspected, quota, 1024};
+    CaptureBuffer buffer{memory, quota, 1024};
 
     check(buffer.append(std::span{fragment}.first(200)) == 200);
     check(quota.used() == 256);
@@ -58,14 +61,17 @@ static void testCaptureGrowthAndErasure() {
 
 static void testCaptureFailuresAndMetadata() {
   SystemAllocator system;
-  BudgetAllocator memory{system, 300};
+  BudgetAllocator budget{system, 300};
+  SynchronizedAllocator synchronized{budget};
+  MemoryAdapter adapter{synchronized};
+  ConcurrentMemory& memory = adapter;
   CaptureQuota quota{2048};
   ProxyCaptureLimits limits{.part_bytes = 512, .exchange_bytes = 1024, .total_bytes = 2048, .enabled = true};
 
   {
     CaptureHalf half{memory, quota, limits, CaptureStart{.host = "example.test"}};
 
-    check(quota.used() == 0 && memory.liveBytes() == 0);
+    check(quota.used() == 0 && budget.liveBytes() == 0);
     half.appendHead("POST /request HTTP/1.1\r\nContent-Encoding: gzip\r\n\r\n");
     check(half.method() == "POST" && half.target() == "/request" && half.encoding() == "gzip");
     check(!half.append(CapturePart::response_head, "wrong side"));
@@ -78,7 +84,7 @@ static void testCaptureFailuresAndMetadata() {
     check(half.encoding().size() == 128 && half.body.truncated);
   }
 
-  check(memory.liveBytes() == 0 && quota.used() == 0);
+  check(budget.liveBytes() == 0 && quota.used() == 0);
 
   limits.part_bytes = 10;
   limits.exchange_bytes = 30;
@@ -97,12 +103,15 @@ static void testCaptureFailuresAndMetadata() {
 
 static void testCaptureJoinOwnership() {
   SystemAllocator system;
-  BudgetAllocator memory{system, 8 * 1024 * 1024};
+  BudgetAllocator budget{system, 8 * 1024 * 1024};
+  SynchronizedAllocator synchronized{budget};
+  MemoryAdapter adapter{synchronized};
+  ConcurrentMemory& memory = adapter;
   CaptureQuota quota{4096};
   ProxyCaptureLimits limits;
-  using Joiner = CaptureJoiner<decltype(memory)>;
+  using Joiner = CaptureJoiner<ConcurrentMemory>;
   auto half = [&](std::uint64_t connection, CaptureSide side) {
-    return makeOwned<CaptureHalf<decltype(memory)>>(memory, memory, quota, limits, CaptureStart{.key = {connection, 1}, .side = side});
+    return makeOwned<CaptureHalf<ConcurrentMemory>>(memory, memory, quota, limits, CaptureStart{.key = {connection, 1}, .side = side});
   };
 
   {
@@ -130,7 +139,7 @@ static void testCaptureJoinOwnership() {
     check(joiner.push(31, half(2, CaptureSide::response)).state == Joiner::State::complete);
   }
 
-  check(memory.liveBytes() == 0 && quota.used() == 0);
+  check(budget.liveBytes() == 0 && quota.used() == 0);
 }
 
 static void testConcurrentCaptureQuota() {

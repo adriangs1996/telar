@@ -47,11 +47,13 @@ struct RecordedAgents {
 };
 
 struct ReporterFixture {
-  SystemAllocator memory;
-  RuntimeModel<SystemAllocator> model{memory};
-  ClientStore<SystemAllocator> clients{memory};
+  SystemAllocator system;
+  MemoryAdapter<SystemAllocator> adapter{system};
+  ConcurrentMemory& memory = adapter;
+  RuntimeModel<ConcurrentMemory> model{memory};
+  ClientStore<ConcurrentMemory> clients{memory};
   RecordedAgents agents;
-  DeferredReports<SystemAllocator, RecordedAgents> reports;
+  DeferredReports<ConcurrentMemory, RecordedAgents> reports;
   ClientPeer first{memory, model, clients, ClientRole::control};
   ClientPeer second{memory, model, clients, ClientRole::control};
   ReporterIdentity reporter{1, 1, AgentProvider::codex};
@@ -60,7 +62,7 @@ struct ReporterFixture {
     const std::array<std::string_view, 1> arguments{"/bin/cat"};
     Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
 
-    model.panes.insert(1, makeOwned<Pane<SystemAllocator>>(memory, memory, 1, TabLocation{}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits}));
+    model.panes.insert(1, makeOwned<Pane<ConcurrentMemory>>(memory, memory, 1, TabLocation{}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits}));
     agents.current.observeProcess(ProcessIdentity{42, 1, 1, 0, 42}, AgentProvider::claude);
     agents.current.setProcessContext(SessionHost::pane, false, agents.current.process_identity);
     for (auto* client : {&first.session(), &second.session()}) {
@@ -70,7 +72,7 @@ struct ReporterFixture {
     }
   }
 
-  Pane<SystemAllocator>& pane() const {
+  Pane<ConcurrentMemory>& pane() const {
     return *model.panes.find(1);
   }
 
@@ -81,18 +83,18 @@ struct ReporterFixture {
 
     for (const auto identity : due.ids()) {
       auto& client = *clients.find(identity);
-      Vector<Byte, SystemAllocator> payload{AllocatorRef<Byte, SystemAllocator>{memory}};
+      Vector<Byte, ConcurrentMemory> payload{AllocatorRef<Byte, ConcurrentMemory>{memory}};
 
       reports.open(client, payload);
       if (!client.connection.closing) {
         consume(client, std::span<const Byte>{payload});
       }
 
-      DeferredReports<SystemAllocator, RecordedAgents>::close(client, payload);
+      DeferredReports<ConcurrentMemory, RecordedAgents>::close(client, payload);
     }
   }
 
-  ReportDecision evaluate(ClientSession<SystemAllocator>& client, std::span<const Byte> payload) {
+  ReportDecision evaluate(ClientSession<ConcurrentMemory>& client, std::span<const Byte> payload) {
     return reports.evaluate(model.panes, agents, client, reporter, payload);
   }
 };
@@ -189,7 +191,7 @@ static void testTimeoutAndClosedPane() {
     check(false);
   });
 
-  DeferredReport<SystemAllocator> wrapping{fixture.memory};
+  DeferredReport<ConcurrentMemory> wrapping{fixture.memory};
 
   wrapping.required_recheck = UINT32_MAX;
   check(wrapping.rechecked(0) && !wrapping.rechecked(UINT32_MAX - 1));

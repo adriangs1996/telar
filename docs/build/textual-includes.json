@@ -2153,20 +2153,6 @@
     "<algorithm>",
     "<cstdint>"
   ],
-  "src/runtime/graphics/file_input/file_input.cppm": [
-    "<cerrno>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<fcntl.h>",
-    "<limits.h>",
-    "<new>",
-    "<sys/mman.h>",
-    "<sys/stat.h>",
-    "<unistd.h>"
-  ],
   "src/runtime/graphics/kitty/kitty.cppm": [
     "graphics/kitty_cursor.hpp",
     "graphics/media_budget.hpp",
@@ -2212,20 +2198,9 @@
     "telar_base/memory/allocator.hpp"
   ],
   "src/runtime/graphics/pane_media/pane_media.cppm": [
-    "<cassert>",
-    "<cerrno>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
     "<fcntl.h>",
     "<ghostty/vt.h>",
     "<limits.h>",
-    "<new>",
-    "<stdlib.h>",
-    "<sys/mman.h>",
-    "<sys/stat.h>",
     "<unistd.h>",
     "telar_render/sequence.hpp"
   ],
@@ -2251,38 +2226,11 @@
     "<span>",
     "tbc/view.hpp"
   ],
-  "src/runtime/graphics/prepared_images/prepared_images.cppm": [
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<fcntl.h>",
-    "<ghostty/vt.h>",
-    "<new>",
-    "<stdlib.h>",
-    "<sys/mman.h>",
-    "<unistd.h>"
-  ],
   "src/runtime/graphics/query_resources.hpp": [
     "telar_config/graphics/limits.hpp"
   ],
   "src/runtime/graphics/synchronizer/synchronizer.cppm": [
-    "<cassert>",
-    "<cerrno>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<fcntl.h>",
-    "<ghostty/vt.h>",
-    "<limits.h>",
-    "<new>",
-    "<stdlib.h>",
-    "<sys/mman.h>",
-    "<sys/stat.h>",
-    "<unistd.h>"
+    "<fcntl.h>"
   ],
   "src/runtime/graphics/temporary_path.hpp": [
     "<cstdio>",
@@ -2409,20 +2357,8 @@
     "<sys/mman.h>"
   ],
   "src/runtime/observation/processor/processor.cppm": [
-    "<cassert>",
-    "<cerrno>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
     "<ghostty/vt.h>",
-    "<limits.h>",
-    "<new>",
-    "<stdlib.h>",
-    "<sys/stat.h>",
-    "<sys/types.h>",
-    "<unistd.h>"
+    "<sys/types.h>"
   ],
   "src/runtime/paths/query_task/query_task.cppm": [
     "<cassert>",
@@ -3209,7 +3145,6 @@
     "vt_state.hpp"
   ],
   "src/runtime/terminal/control/engine/engine.cppm": [
-    "<cassert>",
     "<ghostty/vt.h>"
   ],
   "src/runtime/terminal/control/graphics_base64_block.hpp": [
@@ -3330,20 +3265,10 @@
     "telar_vocabulary/vocabulary.hpp"
   ],
   "src/runtime/terminal/graphics_storage/graphics_storage.cppm": [
-    "<cstddef>",
-    "<cstdint>",
     "<ghostty/vt.h>"
   ],
   "src/runtime/terminal/osc_scanner/osc_scanner.cppm": [
-    "<cassert>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
     "<ghostty/vt.h>",
-    "<new>",
-    "cell_layout.hpp",
     "terminal/ghostty_grid.hpp"
   ],
   "src/runtime/terminal/pty_response_queue.hpp": [
@@ -3368,23 +3293,8 @@
     "cell_layout.hpp"
   ],
   "src/runtime/terminal/text_reader/text_reader.cppm": [
-    "<cassert>",
-    "<cerrno>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<fcntl.h>",
     "<ghostty/vt.h>",
-    "<limits.h>",
-    "<new>",
-    "<stdlib.h>",
-    "<sys/mman.h>",
-    "<sys/stat.h>",
     "<unistd.h>",
-    "<zlib.h>",
-    "cell_layout.hpp",
     "telar_render/sequence.hpp",
     "terminal/ghostty_grid.hpp",
     "terminal/tracked_row.hpp"
@@ -3552,22 +3462,10 @@
     "<new>",
     "<unistd.h>"
   ],
-  "src/runtime/vocabulary/exchange/exchange.cppm": [
-    "<cassert>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>"
-  ],
   "src/runtime/vocabulary/traffic/traffic.cppm": [
-    "<cerrno>",
     "<cstdint>",
     "<limits.h>",
-    "<sys/socket.h>",
-    "<sys/stat.h>",
-    "<sys/un.h>",
-    "<unistd.h>"
+    "<sys/socket.h>"
   ],
   "src/runtime/workspaces/git_probe/git_probe.cppm": [
     "<cassert>",
@@ -3601,6 +3499,65 @@
     "<sys/stat.h>",
     "<sys/types.h>",
     "<sys/wait.h>",
+    "<unistd.h>"
+  ],
+  "src/runtime/graphics/file_input/file_input.cpp": [
+    "<cstdint>",
+    "<fcntl.h>",
+    "<unistd.h>"
+  ],
+  "src/runtime/graphics/pane_media/pane_media.cpp": [
+    "<fcntl.h>",
+    "<ghostty/vt.h>",
+    "<limits.h>",
+    "<sys/mman.h>",
+    "<sys/stat.h>",
+    "<unistd.h>",
+    "telar_render/sequence.hpp"
+  ],
+  "src/runtime/graphics/prepared_images/prepared_images.cpp": [
+    "<new>",
+    "<sys/mman.h>"
+  ],
+  "src/runtime/graphics/synchronizer/synchronizer.cpp": [
+    "<fcntl.h>",
+    "<new>"
+  ],
+  "src/runtime/terminal/control/checksum/checksum.cpp": [
+    "<ghostty/vt.h>",
+    "cell_layout.hpp"
+  ],
+  "src/runtime/terminal/control/engine/engine.cpp": [
+    "<cassert>",
+    "<ghostty/vt.h>"
+  ],
+  "src/runtime/terminal/graphics_storage/graphics_storage.cpp": [
+    "<ghostty/vt.h>"
+  ],
+  "src/runtime/terminal/osc_scanner/osc_scanner.cpp": [
+    "<cassert>",
+    "<cstdint>",
+    "<ghostty/vt.h>",
+    "cell_layout.hpp",
+    "terminal/ghostty_grid.hpp"
+  ],
+  "src/runtime/terminal/text_reader/text_reader.cpp": [
+    "<cassert>",
+    "<ghostty/vt.h>",
+    "<unistd.h>",
+    "cell_layout.hpp",
+    "telar_render/sequence.hpp",
+    "terminal/ghostty_grid.hpp",
+    "terminal/tracked_row.hpp"
+  ],
+  "src/runtime/vocabulary/exchange/exchange.cpp": [
+    "<cassert>"
+  ],
+  "src/runtime/vocabulary/traffic/traffic.cpp": [
+    "<cerrno>",
+    "<sys/socket.h>",
+    "<sys/stat.h>",
+    "<sys/un.h>",
     "<unistd.h>"
   ]
 }

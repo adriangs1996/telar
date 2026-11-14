@@ -69,8 +69,8 @@ import telar.runtime.agents.snapshot;
 using namespace telar;
 using namespace telar::runtime;
 
-static void testMonotonicIdentities(SystemAllocator& memory) {
-  SlotStore<std::uint64_t, 32, SystemAllocator> store{memory};
+static void testMonotonicIdentities(ConcurrentMemory& memory) {
+  SlotStore<std::uint64_t, 32, ConcurrentMemory> store{memory};
   std::array<std::uint64_t, 32> identities{};
   std::uint64_t counter = 63;
   std::minstd_rand random{71};
@@ -104,8 +104,8 @@ static void testMonotonicIdentities(SystemAllocator& memory) {
   check(exhausted);
 }
 
-static void testIndependentHandles(SystemAllocator& memory) {
-  SlotStore<std::uint64_t, 3, SystemAllocator> store{memory};
+static void testIndependentHandles(ConcurrentMemory& memory) {
+  SlotStore<std::uint64_t, 3, ConcurrentMemory> store{memory};
   constexpr std::uint64_t high_identity = UINT64_MAX - 1;
   const auto first = store.insert(high_identity, makeOwned<std::uint64_t>(memory, high_identity));
 
@@ -122,8 +122,8 @@ static void testIndependentHandles(SystemAllocator& memory) {
   check(store.findHandle(UINT64_MAX) == nullptr);
 }
 
-static void testExhaustedIdentities(SystemAllocator& memory) {
-  SlotStore<std::uint64_t, 3, SystemAllocator> store{memory};
+static void testExhaustedIdentities(ConcurrentMemory& memory) {
+  SlotStore<std::uint64_t, 3, ConcurrentMemory> store{memory};
 
   store.advanceCounter(UINT64_MAX);
   check(store.nextId() == UINT64_MAX);
@@ -220,13 +220,13 @@ static void testCheckpointValidation() {
   }
 }
 
-static void testRestore(SystemAllocator& memory) {
+static void testRestore(ConcurrentMemory& memory) {
   std::array<Byte, 4096> buffer;
   const auto fixture = checkpointFixture(buffer);
   RuntimeModel model{memory};
-  ClientStore<SystemAllocator> clients{memory};
-  LimitService<SystemAllocator> limits;
-  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
+  ClientStore<ConcurrentMemory> clients{memory};
+  LimitService<ConcurrentMemory> limits;
+  NativeEventLoop<ConcurrentMemory> poller{memory};
   PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/unused-checkpoint-test.sock"}};
   ClientLayouts layouts{memory};
   checkpoint::Restore restore{memory, model, panes, layouts, false};
@@ -247,14 +247,14 @@ static void testRestore(SystemAllocator& memory) {
   check(workspace->tabs.front().panes[0] == 1);
 }
 
-static void testAtomicFile(SystemAllocator& memory) {
+static void testAtomicFile(ConcurrentMemory& memory) {
   std::array<char, 64> directory{};
 
   std::strcpy(directory.data(), "/tmp/telar-checkpoint-test-XXXXXX");
   check(::mkdtemp(directory.data()) != nullptr);
   const auto path = std::string{directory.data()} + "/session.ckpt";
   checkpoint::FileStore file{memory, path};
-  Vector<Byte, SystemAllocator> loaded{AllocatorRef<Byte, SystemAllocator>{memory}};
+  Vector<Byte, ConcurrentMemory> loaded{AllocatorRef<Byte, ConcurrentMemory>{memory}};
 
   check(!file.load(loaded));
   std::array<Byte, 4096> buffer;
@@ -309,15 +309,15 @@ struct SnapshotAgents {
   std::uint64_t version = 0;
 };
 
-static void testSnapshotChanges(SystemAllocator& memory) {
+static void testSnapshotChanges(ConcurrentMemory& memory) {
   RuntimeModel model{memory};
-  ClientStore<SystemAllocator> clients{memory};
-  LimitService<SystemAllocator> limits;
-  NativeEventLoop<SystemAllocator> poller{memory};
+  ClientStore<ConcurrentMemory> clients{memory};
+  LimitService<ConcurrentMemory> limits;
+  NativeEventLoop<ConcurrentMemory> poller{memory};
   PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/unused-checkpoint-test.sock"}};
   ClientLayouts layouts{memory};
   SnapshotAgents agents;
-  checkpoint::Snapshot<SystemAllocator, SnapshotAgents> snapshot;
+  checkpoint::Snapshot<ConcurrentMemory, SnapshotAgents> snapshot;
   const auto expect = [&](bool changed) {
     check(snapshot.changed(model, layouts, agents) == changed);
     check(!snapshot.changed(model, layouts, agents));
@@ -384,7 +384,7 @@ static void testSnapshotChanges(SystemAllocator& memory) {
   expect(true);
 }
 
-static void testLargePaneIdentity(SystemAllocator& memory) {
+static void testLargePaneIdentity(ConcurrentMemory& memory) {
   constexpr std::uint64_t identity = UINT64_MAX - 2;
   std::array<Byte, 4096> buffer;
   checkpoint::Writer writer{buffer, checkpoint::Counters{2, 2, identity + 1, 10}};
@@ -394,9 +394,9 @@ static void testLargePaneIdentity(SystemAllocator& memory) {
 
   writer.append(checkpoint::PaneRecord{identity, 1, 1, "/tmp", 80, 24, 3, {arguments, sizeof(arguments) - 1}});
   RuntimeModel model{memory};
-  ClientStore<SystemAllocator> clients{memory};
-  LimitService<SystemAllocator> limits;
-  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
+  ClientStore<ConcurrentMemory> clients{memory};
+  LimitService<ConcurrentMemory> limits;
+  NativeEventLoop<ConcurrentMemory> poller{memory};
   PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/unused-checkpoint-test.sock"}};
   ClientLayouts layouts{memory};
   checkpoint::Restore restore{memory, model, panes, layouts, false};
@@ -417,7 +417,9 @@ static void testLargePaneIdentity(SystemAllocator& memory) {
 }
 
 void testPersistence() {
-  SystemAllocator memory;
+  SystemAllocator system;
+  MemoryAdapter adapter{system};
+  ConcurrentMemory& memory = adapter;
 
   testMonotonicIdentities(memory);
   testIndependentHandles(memory);

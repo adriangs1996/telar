@@ -249,7 +249,9 @@ namespace {
 void testLaunchFailures() {
   SystemAllocator system;
   BudgetAllocator budget{system, 64 * 1024 * 1024};
-  SynchronizedAllocator memory{budget};
+  SynchronizedAllocator synchronized{budget};
+  MemoryAdapter adapter{synchronized};
+  ConcurrentMemory& memory = adapter;
 
   checkLaunchPersistence(memory);
   checkLaunchEventOwnership(memory);

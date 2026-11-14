@@ -43,12 +43,12 @@ using traffic_test::tcp;
 void testProxyTransport();
 
 struct Control : FlowControl {
-  explicit Control(SystemAllocator& memory)
+  explicit Control(ConcurrentMemory& memory)
       : broker(memory) {
     broker.configure({.host = "fixture.test", .visibility = 3});
   }
 
-  Interception<SystemAllocator> broker;
+  Interception<ConcurrentMemory> broker;
   std::uint64_t ticket = 0;
   std::size_t requests = 0;
   std::string forwarded;
@@ -108,7 +108,7 @@ struct PartialStream {
   void halfClose() noexcept {}
 };
 
-static void gates(SystemAllocator& memory) {
+static void gates(ConcurrentMemory& memory) {
   for (const auto verdict : {Verdict::allow, Verdict::replace, Verdict::reject}) {
     Control control{memory};
     FlowState gate;
@@ -178,7 +178,7 @@ static void gates(SystemAllocator& memory) {
   check(broker.poll(disconnected, bytes).verdict == Verdict::allow);
 }
 
-static void composition(SystemAllocator& memory) {
+static void composition(ConcurrentMemory& memory) {
   Interception broker{memory};
   const InterceptionRule rule{.host = "fixture.test", .visibility = 3, .timeout_ms = 5000};
 
@@ -278,13 +278,13 @@ static void composition(SystemAllocator& memory) {
   check(broker.poll(canceled, output).verdict == Verdict::reject && take(66, original) == 0);
 
   for (unsigned count = 0; count < 64; ++count) {
-    check(broker.begin({.host = "fixture.test", .bytes = original}) != Interception<SystemAllocator>::rejected_ticket);
+    check(broker.begin({.host = "fixture.test", .bytes = original}) != Interception<ConcurrentMemory>::rejected_ticket);
   }
 
-  check(broker.begin({.host = "fixture.test", .bytes = original}) == Interception<SystemAllocator>::rejected_ticket);
+  check(broker.begin({.host = "fixture.test", .bytes = original}) == Interception<ConcurrentMemory>::rejected_ticket);
 }
 
-static void reconstruction(SystemAllocator& memory) {
+static void reconstruction(ConcurrentMemory& memory) {
   for (bool ipv6 : {false, true}) {
     TcpFlows flows{memory};
     std::string outbound, inbound;
@@ -334,7 +334,7 @@ static void reconstruction(SystemAllocator& memory) {
   }
 }
 
-static void passiveGaps(SystemAllocator& memory) {
+static void passiveGaps(ConcurrentMemory& memory) {
   TcpFlows flows{memory};
   std::string output;
   std::size_t gaps = 0;
@@ -378,14 +378,14 @@ static void passiveGaps(SystemAllocator& memory) {
   check(gaps == 3 && output == "abcdef");
 }
 
-static void applicationDetection(SystemAllocator& memory) {
+static void applicationDetection(ConcurrentMemory& memory) {
   for (const bool fragmented : {false, true}) {
     ProxyCaptureLimits limits;
 
     limits.enabled = true;
     CaptureProducer captures{memory, limits};
     ProxyCounters counters;
-    ApplicationRelay relay{memory, ConnectionObservation<SystemAllocator>{counters, &captures, 31}, "fixture.test"};
+    ApplicationRelay relay{memory, ConnectionObservation<ConcurrentMemory>{counters, &captures, 31}, "fixture.test"};
     TestByteStream child, origin;
 
     child.input = "GET /plain HTTP/1.1\r\nHost: fixture.test\r\n\r\n";
@@ -414,7 +414,9 @@ static void applicationDetection(SystemAllocator& memory) {
 }
 
 int main() {
-  SystemAllocator memory;
+  SystemAllocator system;
+  MemoryAdapter adapter{system};
+  ConcurrentMemory& memory = adapter;
 
   gates(memory);
   composition(memory);

@@ -1,13 +1,6 @@
 module;
-#include <cstdlib>
-#include <new>
-
-#include <cassert>
-#include <cstddef>
-
 #include "tbc/annotations.hpp"
-#include <cstdint>
-#include <cstring>
+#include "tbc/annotations.hpp"
 
 export module telar.runtime.vocabulary.exchange;
 
@@ -29,45 +22,15 @@ export {
     // done through it.
     class TBC_SHARED CaptureQuota {
     public:
-      inline explicit CaptureQuota(std::size_t limit) noexcept
-          : limit_(limit) {}
+      explicit CaptureQuota(std::size_t limit) noexcept;
 
-      inline bool reserveExact(std::size_t requested) noexcept {
-        auto current = used_.load(std::memory_order_relaxed);
+      bool reserveExact(std::size_t requested) noexcept;
 
-        while (requested <= limit_ - current) {
-          if (used_.compare_exchange_weak(current, current + requested, std::memory_order_relaxed)) {
-            return true;
-          }
-        }
+      std::size_t reserveAtMost(std::size_t requested) noexcept;
 
-        return false;
-      }
+      void release(std::size_t bytes) noexcept;
 
-      inline std::size_t reserveAtMost(std::size_t requested) noexcept {
-        auto current = used_.load(std::memory_order_relaxed);
-
-        for (;;) {
-          const auto granted = std::min(requested, limit_ - current);
-          if (granted == 0 || used_.compare_exchange_weak(current, current + granted, std::memory_order_relaxed)) {
-            return granted;
-          }
-        }
-      }
-
-      inline void release(std::size_t bytes) noexcept {
-        if (bytes == 0) {
-          return;
-        }
-
-        [[maybe_unused]] const auto previous = used_.fetch_sub(bytes, std::memory_order_relaxed);
-
-        assert(previous >= bytes);
-      }
-
-      inline std::size_t used() const noexcept {
-        return used_.load(std::memory_order_relaxed);
-      }
+      std::size_t used() const noexcept;
 
     private:
       const std::size_t limit_;
@@ -84,94 +47,31 @@ export {
     template <Allocator Memory>
     class CaptureBuffer {
     public:
-      inline explicit CaptureBuffer(Memory& memory, CaptureQuota& quota, std::size_t limit) noexcept
-          : memory_(memory),
-            quota_(quota),
-            limit_(limit) {}
+      explicit CaptureBuffer(Memory& memory, CaptureQuota& quota, std::size_t limit) noexcept;
 
-      inline ~CaptureBuffer() {
-        memory_.deallocate(storage_, capacity_, alignof(std::uint8_t));
-        quota_.release(capacity_);
-      }
+      ~CaptureBuffer();
 
       CaptureBuffer(const CaptureBuffer&) = delete;
       CaptureBuffer& operator=(const CaptureBuffer&) = delete;
 
-      inline std::size_t append(std::span<const std::uint8_t> input) noexcept {
-        const auto allowed = std::min(input.size(), limit_ - size_);
-        const auto accepted = reserveAdditional(allowed);
-        if (accepted != 0) {
-          std::memcpy(storage_ + size_, input.data(), accepted);
-          size_ += accepted;
-        }
+      std::size_t append(std::span<const std::uint8_t> input) noexcept;
 
-        truncated = truncated || accepted != input.size();
-        return accepted;
-      }
+      void reset() noexcept;
 
-      inline void reset() noexcept {
-        eraseSensitive(storage_, size_);
-        size_ = 0;
-        truncated = false;
-      }
+      std::span<const std::uint8_t> bytes() const noexcept;
 
-      inline std::span<const std::uint8_t> bytes() const noexcept {
-        return {storage_, size_};
-      }
+      std::size_t size() const noexcept;
 
-      inline std::size_t size() const noexcept {
-        return size_;
-      }
+      std::size_t capacity() const noexcept;
 
-      inline std::size_t capacity() const noexcept {
-        return capacity_;
-      }
-
-      inline std::size_t remaining() const noexcept {
-        return limit_ - size_;
-      }
+      std::size_t remaining() const noexcept;
 
       bool truncated = false;
 
     private:
-      inline std::size_t grownCapacity(std::size_t needed) const noexcept {
-        auto capacity = std::min(limit_, std::max(initial_capacity, capacity_));
+      std::size_t grownCapacity(std::size_t needed) const noexcept;
 
-        while (capacity < needed) {
-          capacity = capacity > limit_ / 2 ? limit_ : capacity * 2;
-        }
-
-        return capacity;
-      }
-
-      inline std::size_t reserveAdditional(std::size_t bytes) noexcept {
-        if (bytes <= capacity_ - size_) {
-          return bytes;
-        }
-
-        // The old allocation remains charged until the replacement has been copied.
-        const auto replacement_capacity = quota_.reserveAtMost(grownCapacity(size_ + bytes));
-        if (replacement_capacity <= capacity_) {
-          quota_.release(replacement_capacity);
-          return capacity_ - size_;
-        }
-
-        auto* replacement = static_cast<std::uint8_t*>(memory_.allocate(replacement_capacity, alignof(std::uint8_t)));
-        if (replacement == nullptr) {
-          quota_.release(replacement_capacity);
-          return capacity_ - size_;
-        }
-
-        if (size_ != 0) {
-          std::memcpy(replacement, storage_, size_);
-        }
-
-        memory_.deallocate(storage_, capacity_, alignof(std::uint8_t));
-        quota_.release(capacity_);
-        storage_ = replacement;
-        capacity_ = replacement_capacity;
-        return std::min(bytes, capacity_ - size_);
-      }
+      std::size_t reserveAdditional(std::size_t bytes) noexcept;
 
       static constexpr std::size_t initial_capacity = 256;
       ErasingAllocator<Memory> memory_;
@@ -181,6 +81,8 @@ export {
       std::size_t size_ = 0;
       std::size_t capacity_ = 0;
     };
+
+    extern template class CaptureBuffer<telar::ConcurrentMemory>;
 
   }
 }
@@ -234,22 +136,19 @@ export {
 
       inline CaptureHost() noexcept = default;
 
+      // Generic over the caller's text, so it stays here.
       template <typename Text>
         requires std::convertible_to<const Text&, std::string_view>
-      inline CaptureHost(const Text& value) noexcept {
+      TBC_HOT_PATH inline CaptureHost(const Text& value) noexcept {
         const std::string_view text{value};
 
         oversized_ = text.size() > capacity;
         text_.append(text.substr(0, capacity));
       }
 
-      inline std::string_view view() const noexcept {
-        return text_.view();
-      }
+      std::string_view view() const noexcept;
 
-      inline bool oversized() const noexcept {
-        return oversized_;
-      }
+      bool oversized() const noexcept;
 
     private:
       SensitiveText<capacity> text_;
@@ -275,132 +174,39 @@ export {
     class CaptureHalf {
     public:
       // The half keeps the allocator and the quota, region `a`, and copies what it starts from.
-      inline explicit CaptureHalf(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<CaptureQuota&, tbc::lt::a> quota, const ProxyCaptureLimits& limits, CaptureStart start)
-          : key(start.key),
-            side(start.side),
-            protocol(start.protocol),
-            started_at_ms(start.started_at_ms),
-            head(memory, quota, limits.part_bytes),
-            body(memory, quota, limits.part_bytes),
-            maximum_bytes_(std::max(std::size_t{1}, limits.exchange_bytes / 2)) {
-        host_.append(start.host.view());
-      }
+      explicit CaptureHalf(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<CaptureQuota&, tbc::lt::a> quota, const ProxyCaptureLimits& limits, CaptureStart start);
 
-      inline bool append(CapturePart part, std::span<const std::uint8_t> input) noexcept {
-        auto* selected = select(part);
-        if (selected == nullptr) {
-          return false;
-        }
+      bool append(CapturePart part, std::span<const std::uint8_t> input) noexcept;
 
-        const auto part_room = selected->remaining();
-        const auto half_room = remaining();
-        const auto allowed = std::min({input.size(), part_room, half_room});
-        if (allowed != input.size()) {
-          if (part_room <= half_room) {
-            truncation.part = true;
-          } else {
-            truncation.exchange = true;
-          }
-        }
+      bool append(CapturePart part, std::string_view input) noexcept;
 
-        const auto accepted = selected->append(input.first(allowed));
-        if (accepted != allowed) {
-          truncation.total = true;
-        }
+      void appendHead(std::string_view bytes) noexcept;
 
-        selected->truncated = selected->truncated || accepted != input.size();
-        return accepted == input.size() && !selected->truncated;
-      }
+      void setMethod(std::string_view value) noexcept;
 
-      inline bool append(CapturePart part, std::string_view input) noexcept {
-        return append(part, {reinterpret_cast<const std::uint8_t*>(input.data()), input.size()});
-      }
+      void setTarget(std::string_view value) noexcept;
 
-      inline void appendHead(std::string_view bytes) noexcept {
-        append(headPart(), bytes);
-        if (side == CaptureSide::request) {
-          const auto line_end = bytes.find("\r\n");
-          if (line_end == std::string_view::npos) {
-            return;
-          }
+      void setEncoding(std::string_view value) noexcept;
 
-          TextFields fields{bytes.substr(0, line_end), " "};
-          const auto method = fields.next();
-          const auto target = fields.next();
-          if (!method || !target) {
-            return;
-          }
+      void finish(CaptureOutcome result, std::int64_t timestamp) noexcept;
 
-          setMethod(*method);
-          setTarget(*target);
-        }
+      CapturePart headPart() const noexcept;
 
-        TextFields lines{bytes, "\r\n"};
+      CapturePart bodyPart() const noexcept;
 
-        lines.next();
-        while (const auto line = lines.next()) {
-          const auto colon = line->find(':');
-          if (colon != std::string_view::npos && asciiEqualIgnoreCase(trimText(line->substr(0, colon), " \t"), "content-encoding")) {
-            setEncoding(trimText(line->substr(colon + 1), " \t"));
-            return;
-          }
-        }
-      }
+      std::size_t capturedBytes() const noexcept;
 
-      inline void setMethod(std::string_view value) noexcept {
-        setRouteField(head.truncated, method_, value);
-      }
+      std::size_t remaining() const noexcept;
 
-      inline void setTarget(std::string_view value) noexcept {
-        setRouteField(head.truncated, target_, value);
-      }
+      std::size_t bodyLimit() const noexcept;
 
-      inline void setEncoding(std::string_view value) noexcept {
-        encoding_.clear();
-        encoding_.append(value.substr(0, maximum_encoding_bytes));
-        body.truncated = body.truncated || value.size() > maximum_encoding_bytes;
-      }
+      std::string_view host() const noexcept;
 
-      inline void finish(CaptureOutcome result, std::int64_t timestamp) noexcept {
-        outcome = result;
-        finished_at_ms = timestamp;
-      }
+      std::string_view method() const noexcept;
 
-      inline CapturePart headPart() const noexcept {
-        return side == CaptureSide::request ? CapturePart::request_head : CapturePart::response_head;
-      }
+      std::string_view target() const noexcept;
 
-      inline CapturePart bodyPart() const noexcept {
-        return side == CaptureSide::request ? CapturePart::request_body : CapturePart::response_body;
-      }
-
-      inline std::size_t capturedBytes() const noexcept {
-        return head.size() + body.size();
-      }
-
-      inline std::size_t remaining() const noexcept {
-        return maximum_bytes_ - capturedBytes();
-      }
-
-      inline std::size_t bodyLimit() const noexcept {
-        return maximum_bytes_ - head.size();
-      }
-
-      inline std::string_view host() const noexcept {
-        return host_.view();
-      }
-
-      inline std::string_view method() const noexcept {
-        return method_.view();
-      }
-
-      inline std::string_view target() const noexcept {
-        return target_.view();
-      }
-
-      inline std::string_view encoding() const noexcept {
-        return encoding_.view();
-      }
+      std::string_view encoding() const noexcept;
 
       static constexpr std::size_t maximum_host_bytes = CaptureHost::capacity;
       static constexpr std::size_t maximum_method_bytes = 32;
@@ -420,30 +226,9 @@ export {
 
     private:
       template <std::size_t Capacity>
-      inline static void setRouteField(bool& truncated, SensitiveText<Capacity>& field, std::string_view value) noexcept {
-        if (value.size() > Capacity) {
-          truncated = true;
-          return;
-        }
+      static void setRouteField(bool& truncated, SensitiveText<Capacity>& field, std::string_view value) noexcept;
 
-        field.clear();
-        field.append(value);
-      }
-
-      inline CaptureBuffer<Memory>* select(CapturePart part) noexcept {
-        switch (part) {
-        case CapturePart::request_head:
-          return side == CaptureSide::request ? &head : nullptr;
-        case CapturePart::request_body:
-          return side == CaptureSide::request ? &body : nullptr;
-        case CapturePart::response_head:
-          return side == CaptureSide::response ? &head : nullptr;
-        case CapturePart::response_body:
-          return side == CaptureSide::response ? &body : nullptr;
-        }
-
-        return nullptr;
-      }
+      CaptureBuffer<Memory>* select(CapturePart part) noexcept;
 
       const std::size_t maximum_bytes_;
       SensitiveText<maximum_host_bytes> host_;
@@ -451,6 +236,8 @@ export {
       SensitiveText<maximum_target_bytes> target_;
       SensitiveText<maximum_encoding_bytes> encoding_;
     };
+
+    extern template class CaptureHalf<telar::ConcurrentMemory>;
 
   }
 }
@@ -464,17 +251,15 @@ export {
       using Half = Owned<CaptureHalf<Memory>, Memory>;
 
       // The halves keep the quota they were captured under, region `a`.
-      inline explicit CapturedExchange(tbc::view<Memory&, tbc::lt::a> memory) noexcept
-          : request(nullptr, AllocationDeleter<CaptureHalf<Memory>, Memory>{memory}),
-            response(nullptr, AllocationDeleter<CaptureHalf<Memory>, Memory>{memory}) {}
+      explicit CapturedExchange(tbc::view<Memory&, tbc::lt::a> memory) noexcept;
 
-      inline void include(tbc::view<Half, tbc::lt::a> half) noexcept {
-        (half->side == CaptureSide::request ? request : response) = std::move(half);
-      }
+      void include(tbc::view<Half, tbc::lt::a> half) noexcept;
 
       tbc::view<Half, tbc::lt::a> request;
       tbc::view<Half, tbc::lt::a> response;
     };
+
+    extern template struct CapturedExchange<telar::ConcurrentMemory>;
 
   }
 }
@@ -490,68 +275,7 @@ export {
 
     class FlateEnvelope {
     public:
-      inline static std::optional<std::size_t> bodyOffset(std::span<const std::uint8_t> input, FlateContainer container) noexcept {
-        if (container == FlateContainer::zlib) {
-          constexpr std::size_t header_size = 2;
-          constexpr unsigned compression_method = 8;
-          constexpr unsigned maximum_window_bits = 7;
-          if (input.size() < header_size || (input[0] & 15) != compression_method || (input[0] >> 4) > maximum_window_bits) {
-            return std::nullopt;
-          }
-
-          return header_size;
-        }
-
-        constexpr std::size_t header_size = 10;
-        constexpr std::uint8_t magic_first = 0x1f;
-        constexpr std::uint8_t magic_second = 0x8b;
-        constexpr std::uint8_t compression_method = 8;
-        if (input.size() < header_size || input[0] != magic_first || input[1] != magic_second || input[2] != compression_method) {
-          return std::nullopt;
-        }
-
-        const auto flags = input[3];
-        auto offset = header_size;
-
-        if (flags & static_cast<unsigned>(GzipFlag::extra)) {
-          if (input.size() - offset < sizeof(std::uint16_t)) {
-            return std::nullopt;
-          }
-
-          const auto length = static_cast<std::size_t>(input[offset] | (input[offset + 1] << 8));
-
-          offset += sizeof(std::uint16_t);
-          if (length > input.size() - offset) {
-            return std::nullopt;
-          }
-
-          offset += length;
-        }
-
-        for (const auto field : {GzipFlag::name, GzipFlag::comment}) {
-          if (flags & static_cast<unsigned>(field)) {
-            while (offset < input.size() && input[offset] != 0) {
-              ++offset;
-            }
-
-            if (offset == input.size()) {
-              return std::nullopt;
-            }
-
-            ++offset;
-          }
-        }
-
-        if (flags & static_cast<unsigned>(GzipFlag::header_checksum)) {
-          if (input.size() - offset < sizeof(std::uint16_t)) {
-            return std::nullopt;
-          }
-
-          offset += sizeof(std::uint16_t);
-        }
-
-        return offset;
-      }
+      static std::optional<std::size_t> bodyOffset(std::span<const std::uint8_t> input, FlateContainer container) noexcept;
 
       static constexpr std::size_t footerSize(FlateContainer container) noexcept {
         return container == FlateContainer::gzip ? 2 * sizeof(std::uint32_t) : sizeof(std::uint32_t);
@@ -600,11 +324,11 @@ export {
     };
 
     struct IgnoreCaptureEvents {
-      inline int descriptor() const noexcept {
+      constexpr int descriptor() const noexcept {
         return -1;
       }
 
-      inline bool collect() noexcept {
+      constexpr bool collect() noexcept {
         return false;
       }
     };

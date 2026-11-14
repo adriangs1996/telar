@@ -205,7 +205,7 @@ static void kernelLossAccounting() {
   check(wrapping.count() == before + 5);
 }
 
-static void offlineDelivery(SystemAllocator& memory, const std::string& path, const std::string& directory) {
+static void offlineDelivery(ConcurrentMemory& memory, const std::string& path, const std::string& directory) {
   const auto udp = packet(17, std::string_view{"a\0b", 3});
   const auto tcp = packet(6, "ignored");
   const auto file_path = directory + "/fixture.pcap";
@@ -482,8 +482,11 @@ int main() {
   codecAndFilters();
   kernelLossAccounting();
   SystemAllocator system;
+  MemoryAdapter system_memory{system};
   BudgetAllocator budget{system, 64 * 1024 * 1024};
-  SynchronizedAllocator memory{budget};
+  SynchronizedAllocator synchronized{budget};
+  MemoryAdapter adapter{synchronized};
+  ConcurrentMemory& memory = adapter;
   std::array<char, 64> temporary{};
 
   std::strcpy(temporary.data(), "/tmp/telar-traffic-XXXXXX");
@@ -494,7 +497,7 @@ int main() {
   {
     Service service{memory, path, true};
 
-    offlineDelivery(system, path, directory);
+    offlineDelivery(system_memory, path, directory);
     backpressureAndIsolation(path);
     exchangeDelivery(service, memory, path);
     interceptionDelivery(service, path);

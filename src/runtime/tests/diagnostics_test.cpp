@@ -288,7 +288,9 @@ namespace {
 
 #if TELAR_DIAGNOSTICS
   void testFrameCounters() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    ConcurrentMemory& memory = adapter;
     Terminal terminal{memory, telar::TerminalSize{20, 4, 8, 16}};
     FrameSync frames{memory, 1};
     FrameCounters counters;
@@ -380,11 +382,13 @@ namespace {
     const auto path = endpoint + ".runtime-" + std::to_string(::getpid()) + ".log";
     SystemAllocator system;
     BudgetAllocator budget{system, 32 * 1024 * 1024};
-    SynchronizedAllocator memory{budget};
+    SynchronizedAllocator synchronized{budget};
+    MemoryAdapter adapter{synchronized};
+    ConcurrentMemory& memory = adapter;
 
     {
       RuntimeModel model{memory};
-      ClientStore<decltype(memory)> clients{memory};
+      ClientStore<ConcurrentMemory> clients{memory};
 
       model.metrics.panes.pty_bytes = 72;
       model.metrics.client_messages = 9;

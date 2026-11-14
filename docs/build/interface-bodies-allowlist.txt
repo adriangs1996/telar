@@ -100,14 +100,9 @@ telar.runtime.config.loader
 telar.runtime.diagnostics.operation
 telar.runtime.diagnostics.runtime_counters
 telar.runtime.editors.remote_editor
-telar.runtime.vocabulary.exchange
 telar.runtime.exchange_capture.pipeline
 telar.runtime.exchange_capture.producer
 telar.runtime.execution.execution
-telar.runtime.graphics.file_input
-telar.runtime.graphics.pane_media
-telar.runtime.graphics.prepared_images
-telar.runtime.graphics.synchronizer
 telar.runtime.history.event
 telar.runtime.history.store
 telar.runtime.http.content
@@ -118,7 +113,6 @@ telar.runtime.http2.frame_reader
 telar.runtime.metrics.host_sampler
 telar.runtime.model.client_layouts
 telar.runtime.model.slot_store
-telar.runtime.observation.processor
 telar.runtime.paths.query_task
 telar.runtime.model.launch_record
 telar.runtime.persistence.session_store
@@ -162,13 +156,6 @@ telar.runtime.shell_integration.git_context
 telar.runtime.shell_integration.token
 telar.runtime.shell_integration.words
 telar.runtime.suggestions.engine
-telar.runtime.terminal.control.checksum
-telar.runtime.terminal.control.clipboard
-telar.runtime.terminal.control.engine
-telar.runtime.terminal.control.glyph
-telar.runtime.terminal.graphics_storage
-telar.runtime.terminal.osc_scanner
-telar.runtime.terminal.text_reader
 telar.runtime.tls.interception
 telar.runtime.tls.system_root_bundle
 telar.runtime.traffic.capture
@@ -177,7 +164,5 @@ telar.runtime.traffic.control_backend
 telar.runtime.traffic.control_protocol
 telar.runtime.traffic.tap
 telar.runtime.transport.connection
-telar.runtime.vocabulary.frames
-telar.runtime.vocabulary.traffic
 telar.runtime.workspaces.git_probe
 telar.runtime.worktrees.git_probe

@@ -100,14 +100,14 @@ private:
   std::string encoded_;
 };
 
-static void process(PaneMedia<SystemAllocator>& media, std::string_view bytes) {
+static void process(PaneMedia<ConcurrentMemory>& media, std::string_view bytes) {
   media.output(inputBytes(bytes));
   check(media.seal());
   check(!media.process());
   media.complete();
 }
 
-static void testAtomicPipeline(SystemAllocator& memory, GraphicsInputMedium medium, bool shared_transport) {
+static void testAtomicPipeline(ConcurrentMemory& memory, GraphicsInputMedium medium, bool shared_transport) {
   MediaBudget budget{GraphicsLimits::maximum_global_bytes};
 
   {
@@ -191,7 +191,7 @@ static void testAtomicPipeline(SystemAllocator& memory, GraphicsInputMedium medi
   check(budget.used() == 0);
 }
 
-static void testMappingOwnership(SystemAllocator& memory) {
+static void testMappingOwnership(ConcurrentMemory& memory) {
   MediaBudget budget{8192};
   MediaAllocator allocator{memory, budget, 8192};
 
@@ -240,7 +240,9 @@ static void testMappingOwnership(SystemAllocator& memory) {
 }
 
 void testAtomicRuntime() {
-  SystemAllocator memory;
+  SystemAllocator system;
+  MemoryAdapter adapter{system};
+  ConcurrentMemory& memory = adapter;
 
   testMappingOwnership(memory);
   for (const auto medium : {GraphicsInputMedium::file, GraphicsInputMedium::shared_memory}) {

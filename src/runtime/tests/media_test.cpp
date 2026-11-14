@@ -70,7 +70,7 @@ static void testCursorCommands() {
   check(observe("a=T,c=4294967295,r=4294967295") == DisplayCells{UINT32_MAX, UINT32_MAX});
 }
 
-static void testMediaCursor(SystemAllocator& memory) {
+static void testMediaCursor(ConcurrentMemory& memory) {
   Terminal terminal{memory, TerminalSize{10, 4, 8, 16}, TerminalPurpose::separate_media};
 
   terminal.feed(mediaBytes("x\x1b_Ga=T,s=16,v=32,i=1,q=2;invalid\x1b\\z"));
@@ -85,17 +85,17 @@ static void testMediaCursor(SystemAllocator& memory) {
   check(terminal.screen.cells[20].text[0] == 'z');
 }
 
-static void testMediaBatches(SystemAllocator& memory) {
+static void testMediaBatches(ConcurrentMemory& memory) {
   MediaBudget budget{GraphicsLimits::maximum_global_bytes};
 
   {
-    auto media = std::make_shared<PaneMedia<SystemAllocator>>(memory, budget, GraphicsLimits{}, TerminalSize{10, 4, 8, 16});
-    MediaProcessor<SystemAllocator> processor;
+    auto media = std::make_shared<PaneMedia<ConcurrentMemory>>(memory, budget, GraphicsLimits{}, TerminalSize{10, 4, 8, 16});
+    MediaProcessor<ConcurrentMemory> processor;
     ObservationWorker<decltype(processor)&> worker{std::in_place, processor};
 
     media->output(mediaBytes("\x1b_Ga=T,s=1,v=1,i=7,q=2,m=1;/wAA"));
     check(media->seal());
-    MediaProcessor<SystemAllocator>::Request request;
+    MediaProcessor<ConcurrentMemory>::Request request;
 
     request.entries[request.count++].media = media;
     check(worker.submit(request));
@@ -224,7 +224,7 @@ static std::string encodedPath(std::string_view path) {
   return encoded;
 }
 
-static void testFileInput(SystemAllocator& memory) {
+static void testFileInput(ConcurrentMemory& memory) {
   std::array<char, 64> directory;
 
   std::strcpy(directory.data(), "/tmp/telar-media-test-XXXXXX");
@@ -279,7 +279,7 @@ static void testFileInput(SystemAllocator& memory) {
   std::filesystem::remove_all(root);
 }
 
-static void testFrozenImages(SystemAllocator& memory) {
+static void testFrozenImages(ConcurrentMemory& memory) {
   MediaBudget budget{1024};
   MediaAllocator allocator{memory, budget, 768};
   const std::array<Byte, 4> pixels{255, 0, 0, 255};
@@ -323,7 +323,10 @@ static void testFrozenImages(SystemAllocator& memory) {
   check(transferred && budget.used() == 0);
   check(::shm_unlink(name.data()) == 0);
 
-  BudgetAllocator failing_memory{memory, 1};
+  BudgetAllocator failing_allocator{memory, 1};
+  SynchronizedAllocator failing_synchronized{failing_allocator};
+  MemoryAdapter failing_adapter{failing_synchronized};
+  ConcurrentMemory& failing_memory = failing_adapter;
   MediaAllocator failing_budget{failing_memory, budget, 768};
   bool failed = false;
 
@@ -333,10 +336,10 @@ static void testFrozenImages(SystemAllocator& memory) {
     failed = true;
   }
 
-  check(failed && budget.used() == 0 && failing_memory.liveBytes() == 0);
+  check(failed && budget.used() == 0 && failing_allocator.liveBytes() == 0);
 }
 
-static void testTransferPreparation(SystemAllocator& memory) {
+static void testTransferPreparation(ConcurrentMemory& memory) {
   MediaBudget budget{1024};
   MediaAllocator allocator{memory, budget, 768};
   const std::array<Byte, 4> pixels{255, 0, 0, 255};
@@ -404,7 +407,7 @@ static void testTransferPreparation(SystemAllocator& memory) {
 }
 
 #if TELAR_DIAGNOSTICS
-static void testGraphicsStorageMetrics(SystemAllocator& memory) {
+static void testGraphicsStorageMetrics(ConcurrentMemory& memory) {
   MediaBudget budget{GraphicsLimits::maximum_global_bytes};
   PaneMedia media{memory, budget, GraphicsLimits{}, TerminalSize{10, 4, 8, 16}};
 
@@ -454,7 +457,9 @@ static void testGraphicsStorageMetrics(SystemAllocator& memory) {
 #endif
 
 void testMedia() {
-  SystemAllocator memory;
+  SystemAllocator system;
+  MemoryAdapter adapter{system};
+  ConcurrentMemory& memory = adapter;
 
   testBase64();
   testCursorCommands();

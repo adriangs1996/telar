@@ -858,7 +858,22 @@
     "src/cli/tab/tab.cpp": "telar.cli.tab",
     "src/cli/window/core.cpp": "telar.cli.window",
     "src/cli/worktree/worktree.cpp": "telar.cli.worktree",
-    "src/cli/worktree_git/worktree_git.cpp": "telar.cli.worktree_git"
+    "src/cli/worktree_git/worktree_git.cpp": "telar.cli.worktree_git",
+    "src/runtime/terminal/control/checksum/checksum.cpp": "telar.runtime.terminal.control.checksum",
+    "src/runtime/terminal/control/clipboard/clipboard.cpp": "telar.runtime.terminal.control.clipboard",
+    "src/runtime/terminal/control/engine/engine.cpp": "telar.runtime.terminal.control.engine",
+    "src/runtime/vocabulary/exchange/exchange.cpp": "telar.runtime.vocabulary.exchange",
+    "src/runtime/graphics/file_input/file_input.cpp": "telar.runtime.graphics.file_input",
+    "src/runtime/vocabulary/frames/frames.cpp": "telar.runtime.vocabulary.frames",
+    "src/runtime/terminal/control/glyph/glyph.cpp": "telar.runtime.terminal.control.glyph",
+    "src/runtime/terminal/graphics_storage/graphics_storage.cpp": "telar.runtime.terminal.graphics_storage",
+    "src/runtime/terminal/osc_scanner/osc_scanner.cpp": "telar.runtime.terminal.osc_scanner",
+    "src/runtime/graphics/pane_media/pane_media.cpp": "telar.runtime.graphics.pane_media",
+    "src/runtime/graphics/prepared_images/prepared_images.cpp": "telar.runtime.graphics.prepared_images",
+    "src/runtime/observation/processor/processor.cpp": "telar.runtime.observation.processor",
+    "src/runtime/graphics/synchronizer/synchronizer.cpp": "telar.runtime.graphics.synchronizer",
+    "src/runtime/terminal/text_reader/text_reader.cpp": "telar.runtime.terminal.text_reader",
+    "src/runtime/vocabulary/traffic/traffic.cpp": "telar.runtime.vocabulary.traffic"
   },
   "merged_interfaces": {
     "lib/client/include/telar_client/codecs/telar_handshake.cppm": "lib/client/include/telar_client/serializers/telar_handshake.cppm"

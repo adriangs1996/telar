@@ -333,18 +333,18 @@ namespace {
     check(global.used() == 0);
   }
 
-  void mediaAcknowledgements(SystemAllocator& memory) {
+  void mediaAcknowledgements(ConcurrentMemory& memory) {
     auto queue = std::make_shared<PtyResponseQueue>();
     MediaBudget budget{GraphicsLimits::maximum_global_bytes};
-    auto media = std::make_shared<PaneMedia<SystemAllocator>>(memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue);
-    MediaProcessor<SystemAllocator> processor;
+    auto media = std::make_shared<PaneMedia<ConcurrentMemory>>(memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue);
+    MediaProcessor<ConcurrentMemory> processor;
     ObservationWorker<decltype(processor)&> worker{std::in_place, processor};
 #if TELAR_DIAGNOSTICS
     bool initial = true;
 #endif
     const auto process = [&] {
       check(media->seal());
-      MediaProcessor<SystemAllocator>::Request request;
+      MediaProcessor<ConcurrentMemory>::Request request;
 
       request.entries[request.count++].media = media;
       check(worker.submit(request));
@@ -489,15 +489,17 @@ namespace {
   };
 
   void mediaAllocationFailure() {
-    FailingResponseAllocator memory;
+    FailingResponseAllocator failing;
+    MemoryAdapter adapter{failing};
+    ConcurrentMemory& memory = adapter;
     auto queue = std::make_shared<PtyResponseQueue>();
     MediaBudget budget{GraphicsLimits::maximum_global_bytes};
-    auto media = std::make_shared<PaneMedia<FailingResponseAllocator>>(memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue);
-    MediaProcessor<FailingResponseAllocator> processor;
+    auto media = std::make_shared<PaneMedia<ConcurrentMemory>>(memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue);
+    MediaProcessor<ConcurrentMemory> processor;
     ObservationWorker<decltype(processor)&> worker{std::in_place, processor};
     const auto process = [&] {
       check(media->seal());
-      MediaProcessor<FailingResponseAllocator>::Request request;
+      MediaProcessor<ConcurrentMemory>::Request request;
 
       request.entries[request.count++].media = media;
       check(worker.submit(request));
@@ -522,10 +524,10 @@ namespace {
       commands.append(command);
     }
 
-    memory.fail.store(true, std::memory_order_relaxed);
+    failing.fail.store(true, std::memory_order_relaxed);
     media->output(bytes(commands));
     process();
-    check(memory.failures.load(std::memory_order_relaxed) != 0);
+    check(failing.failures.load(std::memory_order_relaxed) != 0);
     check(media->failed() && media->terminal() == nullptr && queue->closed());
     check(queue->snapshot().messages == borrowed.count && borrowed.message(0).front() == 'N');
     check(!media->seal() && media->idle());
@@ -534,7 +536,10 @@ namespace {
 
   void interactiveAllocationFailure() {
     FailingResponseAllocator upstream;
-    BudgetAllocator memory{upstream, 64 * 1024 * 1024};
+    BudgetAllocator budget{upstream, 64 * 1024 * 1024};
+    SynchronizedAllocator synchronized{budget};
+    MemoryAdapter adapter{synchronized};
+    ConcurrentMemory& memory = adapter;
 
     {
       auto queue = std::make_shared<PtyResponseQueue>();
@@ -572,20 +577,22 @@ namespace {
       check(terminal.responses().empty());
     }
 
-    check(memory.liveBytes() == 0);
+    check(budget.liveBytes() == 0);
   }
 
   void cancelBusyMedia() {
-    FailingResponseAllocator memory;
+    FailingResponseAllocator failing;
+    MemoryAdapter adapter{failing};
+    ConcurrentMemory& memory = adapter;
     auto queue = std::make_shared<PtyResponseQueue>();
     MediaBudget budget{GraphicsLimits::maximum_global_bytes};
-    auto media = std::make_shared<PaneMedia<FailingResponseAllocator>>(memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue);
-    MediaProcessor<FailingResponseAllocator> processor;
+    auto media = std::make_shared<PaneMedia<ConcurrentMemory>>(memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue);
+    MediaProcessor<ConcurrentMemory> processor;
     ObservationWorker<decltype(processor)&> worker{std::in_place, processor};
     constexpr std::string_view command = "\x1b_Ga=t,f=24,s=1,v=1,i=7;/wAA\x1b\\";
     const auto submit = [&] {
       check(media->seal());
-      MediaProcessor<FailingResponseAllocator>::Request request;
+      MediaProcessor<ConcurrentMemory>::Request request;
 
       request.entries[request.count++].media = media;
       check(worker.submit(request));
@@ -608,16 +615,16 @@ namespace {
       commands.append(command);
     }
 
-    memory.pause.store(true, std::memory_order_relaxed);
+    failing.pause.store(true, std::memory_order_relaxed);
     media->output(bytes(commands));
     submit();
-    while (!memory.entered.load(std::memory_order_acquire)) {
+    while (!failing.entered.load(std::memory_order_acquire)) {
       std::this_thread::yield();
     }
 
     media->cancel();
     check(media->busy() && queue->closed());
-    memory.resume.store(true, std::memory_order_release);
+    failing.resume.store(true, std::memory_order_release);
     worker.wait([&](const auto&) {
       media->complete();
     });
@@ -638,10 +645,13 @@ namespace {
 
     for (std::size_t split = 0; split <= input.size(); ++split) {
       SystemAllocator system;
-      BudgetAllocator memory{system, 64 * 1024 * 1024};
+      BudgetAllocator memory_budget{system, 64 * 1024 * 1024};
+      SynchronizedAllocator synchronized{memory_budget};
+      MemoryAdapter adapter{synchronized};
+      ConcurrentMemory& memory = adapter;
       MediaBudget budget{GraphicsLimits::maximum_global_bytes};
       auto queue = std::make_shared<PtyResponseQueue>();
-      auto shared_media = std::make_shared<PaneMedia<decltype(memory)>>(memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue);
+      auto shared_media = std::make_shared<PaneMedia<ConcurrentMemory>>(memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue);
       auto& media = *shared_media;
       Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, queue};
 
@@ -672,10 +682,13 @@ namespace {
     }
 
     SystemAllocator system;
-    BudgetAllocator memory{system, 64 * 1024 * 1024};
+    BudgetAllocator memory_budget{system, 64 * 1024 * 1024};
+    SynchronizedAllocator synchronized{memory_budget};
+    MemoryAdapter adapter{synchronized};
+    ConcurrentMemory& memory = adapter;
     MediaBudget budget{GraphicsLimits::maximum_global_bytes};
     auto queue = std::make_shared<PtyResponseQueue>();
-    auto shared_media = std::make_shared<PaneMedia<decltype(memory)>>(memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue);
+    auto shared_media = std::make_shared<PaneMedia<ConcurrentMemory>>(memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue);
     auto& media = *shared_media;
     Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, queue};
 
@@ -704,13 +717,15 @@ namespace {
 
   void orderedResizeFailure() {
     for (bool start_worker : {false, true}) {
-      SystemAllocator memory;
+      SystemAllocator system;
+      MemoryAdapter adapter{system};
+      ConcurrentMemory& memory = adapter;
       RuntimeModel model{memory};
-      ClientStore<SystemAllocator> clients{memory};
-      LimitService<SystemAllocator> limits;
-      NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
+      ClientStore<ConcurrentMemory> clients{memory};
+      LimitService<ConcurrentMemory> limits;
+      NativeEventLoop<ConcurrentMemory> poller{memory};
       PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/control-resize-failure.sock"}};
-      MediaService<SystemAllocator, decltype(poller), decltype(limits)> service{poller, limits};
+      MediaService<ConcurrentMemory, decltype(poller), decltype(limits)> service{poller, limits};
       const std::array<std::string_view, 1> arguments{"/bin/cat"};
       const Launch launch{.cwd = "/tmp", .arguments = arguments};
       const TabLocation location{.workspace = {.id = 7}, .tab_id = 1};
@@ -814,10 +829,13 @@ namespace {
     const auto name = encoded(bytes(path));
     const auto frame = std::string{AtomicFrame::cursor_save} + std::string{AtomicFrame::prefix} + "a=T,t=f,f=32,s=1,v=1,i=7,p=1,C=1,q=2;" + name + std::string{AtomicFrame::suffix} + std::string{AtomicFrame::cursor_restore};
     SystemAllocator system;
-    BudgetAllocator memory{system, 64 * 1024 * 1024};
+    BudgetAllocator memory_budget{system, 64 * 1024 * 1024};
+    SynchronizedAllocator synchronized{memory_budget};
+    MemoryAdapter adapter{synchronized};
+    ConcurrentMemory& memory = adapter;
     MediaBudget budget{GraphicsLimits::maximum_global_bytes};
     auto queue = std::make_shared<PtyResponseQueue>();
-    auto shared_media = std::make_shared<PaneMedia<decltype(memory)>>(memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue);
+    auto shared_media = std::make_shared<PaneMedia<ConcurrentMemory>>(memory, budget, GraphicsLimits{}, TerminalSize{80, 24, 9, 18}, queue);
     auto& media = *shared_media;
     Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, queue};
 
@@ -939,7 +957,10 @@ namespace {
 
   void pngPixelFormats() {
     SystemAllocator system;
-    BudgetAllocator memory{system, 64 * 1024 * 1024};
+    BudgetAllocator budget{system, 64 * 1024 * 1024};
+    SynchronizedAllocator synchronized{budget};
+    MemoryAdapter adapter{synchronized};
+    ConcurrentMemory& memory = adapter;
     GhosttyAllocatorBridge allocator{memory};
     constexpr std::array<std::array<Byte, 4>, 4> palette{{{255, 0, 0, 255}, {0, 255, 0, 128}, {0, 0, 0, 0}, {0, 0, 255, 255}}};
     constexpr std::array<unsigned, 9> indices{0, 1, 2, 3, 0, 1, 2, 3, 0};
@@ -956,7 +977,7 @@ namespace {
       check(decoded.width == 3 && decoded.height == 3 && decoded.data_len == expected.size());
       check(std::equal(expected.begin(), expected.end(), decoded.data));
       ghostty_free(allocator.get(), decoded.data, decoded.data_len);
-      check(memory.liveBytes() == 0);
+      check(budget.liveBytes() == 0);
     };
 
     constexpr std::array<Byte, 6> indexed{0, 0x18, 0, 0xc4, 0, 0xb0};
@@ -1088,7 +1109,10 @@ namespace {
     };
 
     SystemAllocator system;
-    BudgetAllocator memory{system, 64 * 1024 * 1024};
+    BudgetAllocator budget{system, 64 * 1024 * 1024};
+    SynchronizedAllocator synchronized{budget};
+    MemoryAdapter adapter{synchronized};
+    ConcurrentMemory& memory = adapter;
     GhosttyAllocatorBridge allocator{memory};
 
     for (std::size_t length = 0; length <= png.size(); ++length) {
@@ -1105,7 +1129,7 @@ namespace {
         ghostty_free(allocator.get(), image.data, image.data_len);
       }
 
-      check(memory.liveBytes() == 0);
+      check(budget.liveBytes() == 0);
     }
 
     for (std::size_t position = 0; position < png.size(); ++position) {
@@ -1117,12 +1141,12 @@ namespace {
         ghostty_free(allocator.get(), image.data, image.data_len);
       }
 
-      check(memory.liveBytes() == 0);
+      check(budget.liveBytes() == 0);
     }
 
     GhosttySysImage image{};
 
-    check(!decodePngImage(allocator.get(), png, image, 2) && memory.liveBytes() == 0);
+    check(!decodePngImage(allocator.get(), png, image, 2) && budget.liveBytes() == 0);
 
     for (unsigned permitted = 0; permitted <= 3; ++permitted) {
       FailingCodecAllocator upstream{{}, permitted};
@@ -1146,7 +1170,11 @@ namespace {
 int main() {
   installPngDecoder();
   SystemAllocator system;
-  BudgetAllocator memory{system, 64 * 1024 * 1024};
+  MemoryAdapter system_memory{system};
+  BudgetAllocator budget{system, 64 * 1024 * 1024};
+  SynchronizedAllocator synchronized{budget};
+  MemoryAdapter adapter{synchronized};
+  ConcurrentMemory& memory = adapter;
 
   cursorChunkInterleaving(memory);
   localMedia(memory);
@@ -1157,7 +1185,7 @@ int main() {
   pngBudgetRecovery(memory);
   sharedPaneBudget(memory);
   interactiveAcknowledgements(memory);
-  mediaAcknowledgements(system);
+  mediaAcknowledgements(system_memory);
   mediaAllocationFailure();
   interactiveAllocationFailure();
   cancelBusyMedia();
@@ -1168,6 +1196,6 @@ int main() {
   checkedAtomicSharedMemory();
   pngFailureCleanup();
   pngPixelFormats();
-  check(memory.liveBytes() == 0);
+  check(budget.liveBytes() == 0);
   std::puts("Native graphics query file, shared memory and budget tests passed");
 }
