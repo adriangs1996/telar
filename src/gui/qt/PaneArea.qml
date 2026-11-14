@@ -31,6 +31,9 @@ Item {
             readonly property bool framed: record.framed
             readonly property var elements: record.chrome?.elements ?? ({})
             readonly property bool drawnHeader: elements.pane_header !== undefined
+            readonly property var fullscreenEntries: record.fullscreenEntries ?? []
+            // The pane selectors take a share of the header, and never the room its buttons and a short title need.
+            readonly property real selectorRoom: Math.min(0.4 * frameWidth, frameWidth - 200 * root.ratio)
             x: record.visualBounds.x
             y: record.visualBounds.y
             width: record.visualBounds.width
@@ -118,7 +121,7 @@ Item {
                 y: pane.record.frame.y
                 width: Math.max(0, pane.frameWidth - bandInset - (paneActions.visible ? paneActions.width + 4 * root.ratio : 0))
                 height: pane.framed ? Math.min(pane.frameHeight, pane.record.content.y - y, root.application.windowGeometry.paneHeader) : 0
-                visible: pane.framed && !pane.record.fullscreen && !pane.drawnHeader
+                visible: pane.framed && !pane.drawnHeader
                 record: pane.record.chrome
                 controller: root.application
                 colors: root.application.colors
@@ -141,12 +144,15 @@ Item {
                 id: paneActions
                 x: pane.record.frame.x + pane.frameWidth - width - 6 * root.ratio
                 y: pane.record.frame.y + (header.height - height) / 2
-                visible: pane.framed && !pane.record.fullscreen && !pane.drawnHeader && !pane.elements.pane_actions && (pane.record.focused || paneHover.hovered) && header.height >= height && pane.frameWidth > width + 80 * root.ratio
+                visible: pane.framed && !pane.drawnHeader && !pane.elements.pane_actions && (pane.record.focused || paneHover.hovered) && header.height >= height && pane.frameWidth > width + 80 * root.ratio
                 controller: root.application
                 paneKey: pane.record.key
                 colors: root.application.colors
                 typography: root.application.windowGeometry.typography
                 ratio: root.ratio
+                entries: pane.fullscreenEntries
+                prefixPending: root.application.prefixPending
+                entryRoom: pane.selectorRoom
             }
 
             // A mod's whole header, or only its actions, in place of the QML ones.
@@ -156,7 +162,7 @@ Item {
                 y: header.y
                 width: Math.max(0, pane.frameWidth - header.bandInset - 4 * root.ratio)
                 height: pane.framed ? Math.min(pane.frameHeight, pane.record.content.y - pane.record.frame.y, root.application.windowGeometry.paneHeader) : 0
-                visible: pane.drawnHeader && pane.framed && !pane.record.fullscreen
+                visible: pane.drawnHeader && pane.framed
                 content: pane.elements.pane_header ?? null
                 colors: root.application.colors
                 typography: root.application.windowGeometry.typography
@@ -171,7 +177,7 @@ Item {
                 y: pane.record.frame.y + (header.height - height) / 2
                 width: implicitWidth
                 height: Math.min(implicitHeight, header.height)
-                visible: !pane.drawnHeader && pane.elements.pane_actions !== undefined && pane.framed && !pane.record.fullscreen
+                visible: !pane.drawnHeader && pane.elements.pane_actions !== undefined && pane.framed
                 content: pane.elements.pane_actions ?? null
                 colors: root.application.colors
                 typography: root.application.windowGeometry.typography
@@ -188,6 +194,9 @@ Item {
                     colors: root.application.colors
                     typography: root.application.windowGeometry.typography
                     ratio: root.ratio
+                    entries: pane.fullscreenEntries
+                    prefixPending: root.application.prefixPending
+                    entryRoom: pane.selectorRoom
                 }
             }
 
@@ -396,24 +405,6 @@ Item {
                     grid: root.application.windowGeometry.typography.grid
                     ratio: root.ratio
                     focusTarget: terminal
-                }
-            }
-
-            Loader {
-                y: pane.height - height
-                width: pane.width
-                height: Math.min(pane.height, root.application.windowGeometry.typography.grid.cellHeight)
-                active: pane.framed && pane.record.fullscreen
-                sourceComponent: FullscreenStrip {
-                    objectName: "paneFullscreenStrip"
-                    entries: pane.record.fullscreenEntries ?? []
-                    record: pane.record.chrome
-                    colors: root.application.colors
-                    typography: root.application.windowGeometry.typography
-                    ratio: root.ratio
-                    bandHeight: root.application.windowGeometry.paneHeader
-                    onSelected: key => root.application.execute(GuiController.Action.focus_pane, key)
-                    onLeaveFullscreen: root.application.execute(GuiController.Action.fullscreen)
                 }
             }
 

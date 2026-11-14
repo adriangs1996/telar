@@ -452,6 +452,9 @@ namespace {
       require(placement.content.bottom() + metrics.border == placement.bounds.bottom(), "independent headers must retain the bottom border");
     }
 
+    const auto fullscreen = layout.arrange(area, metrics, 1);
+
+    require(fullscreen.size() == 1 && fullscreen.front().content == metrics.content(area), "a fullscreen pane must reserve the same header as a tiled one");
     require(split->existing_content == metrics.content({.width = 49, .height = 19}), "prospective and committed split sizes must reserve the same header");
     require(!layout.prospectiveSplit({.width = 20, .height = 10}, ClientLayoutAxis::vertical, 1, metrics), "a split must refuse to consume the last content row");
     require(metrics.content({.width = 2, .height = 2}).empty(), "tiny headers must saturate instead of underflowing");
