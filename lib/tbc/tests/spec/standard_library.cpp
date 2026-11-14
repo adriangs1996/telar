@@ -487,7 +487,7 @@ std::vector<std::string_view> emplacedViewParameter(const std::string& text) {
 
 // CASE: std.pointer_element_escape
 // PAIR: std.pointer_element
-// SOURCE: src/gui/platform/profile_file/runtime_endpoint.cpp :: spawn
+// SOURCE: src/gui/platform/runtime_endpoint/runtime_endpoint.cpp :: spawn
 // STATUS: implemented
 // CONTRACT: A pointer element, pushed or emplaced, designates the object it points to.
 // SCENARIO: The stored pointers designate a local that dies before the returned vector.
@@ -503,7 +503,7 @@ std::vector<const int*> pointerElementEscape() {
 
 // CASE: std.pointer_element_position
 // PAIR: std.pointer_element
-// SOURCE: src/gui/platform/profile_file/runtime_endpoint.cpp :: spawn
+// SOURCE: src/gui/platform/runtime_endpoint/runtime_endpoint.cpp :: spawn
 // STATUS: implemented
 // CONTRACT: The position an insertion or an emplacement takes is not stored as an element.
 // SCENARIO: The stored pointers designate the caller's object, inserted at a position of the local vector; accept.

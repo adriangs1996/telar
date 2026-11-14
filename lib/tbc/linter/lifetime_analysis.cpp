@@ -3,6 +3,8 @@
 
 #include <clang/AST/ExprCXX.h>
 #include <clang/AST/ExprObjC.h>
+#include <clang/AST/GlobalDecl.h>
+#include <clang/AST/Mangle.h>
 #include <clang/AST/ParentMapContext.h>
 #include <clang/Analysis/CFG.h>
 #include <clang/Basic/Diagnostic.h>
@@ -14,6 +16,8 @@
 #include <llvm/ADT/SetVector.h>
 #include <llvm/ADT/SmallPtrSet.h>
 #include <llvm/ADT/SmallVector.h>
+#include <llvm/ADT/StringMap.h>
+#include <llvm/Support/raw_ostream.h>
 
 #include <algorithm>
 #include <memory>
@@ -995,14 +999,141 @@ namespace tbc_lint {
       bool queued = false;
     };
 
+    // A place a summary invalidates, named so that another unit can find it: a parameter by its
+    // position, or a field of the receiver by its position among the fields of the receiver's class.
+    struct exported_invalidation {
+      bool receiver = false;
+      unsigned index = 0;
+      storage_kind level = storage_kind::object;
+      bool designated = false;
+      storage_range range;
+
+      [[nodiscard]] bool samePlace(const exported_invalidation& other) const {
+        return receiver == other.receiver && index == other.index && level == other.level && designated == other.designated;
+      }
+    };
+
+    // What a function another unit defines can invalidate, which is all its callers read of a call known
+    // by its declaration.
+    struct exported_summary {
+      // A unit that defines the function computed what no other unit can read, so callers know it by
+      // its declaration alone.
+      bool opaque = false;
+      bool invalidates_environment = false;
+      llvm::SmallVector<exported_invalidation, 2> invalidates;
+
+      void merge(const exported_summary& other) {
+        opaque = opaque || other.opaque;
+        invalidates_environment = invalidates_environment || other.invalidates_environment;
+        for (const auto& place : other.invalidates) {
+          const auto found = std::ranges::find_if(invalidates, [&](const exported_invalidation& entry) {
+            return entry.samePlace(place);
+          });
+          if (found == invalidates.end()) {
+            invalidates.push_back(place);
+          } else {
+            found->range = found->range.widen(place.range);
+          }
+        }
+      }
+    };
+
+    using summary_table = llvm::StringMap<exported_summary>;
+
+    // Whether another unit can call a function it knows only by its declaration. A function with internal
+    // linkage has a definition in each unit that calls it, constructors and destructors are not calls
+    // whose invalidations a summary describes, and nothing calls `main`.
+    bool callableElsewhere(const clang::FunctionDecl& function) {
+      return !llvm::isa<clang::CXXConstructorDecl, clang::CXXDestructorDecl>(function) && function.isExternallyVisible() && !function.isDependentContext() && !function.isMain();
+    }
+
+    // The name the linker knows a function by, which every unit that declares it agrees on.
+    std::optional<std::string> linkageName(clang::MangleContext& mangler, const clang::FunctionDecl& function) {
+      if (!callableElsewhere(function)) {
+        return std::nullopt;
+      }
+
+      std::string name;
+      llvm::raw_string_ostream stream(name);
+
+      if (mangler.shouldMangleDeclName(&function)) {
+        mangler.mangleName(clang::GlobalDecl(&function), stream);
+      } else if (const auto* identifier = function.getIdentifier()) {
+        stream << identifier->getName();
+      } else {
+        return std::nullopt;
+      }
+
+      return name;
+    }
+
+    // A call whose callers see its body, as Rust checks a closure with the function that defines it and
+    // derives memberwise special members: a lambda's call operator, or a member the compiler writes. Any
+    // other call is known only by its declaration.
+    bool transparentCallee(const clang::FunctionDecl* callee) {
+      const auto* method = llvm::dyn_cast_or_null<clang::CXXMethodDecl>(callee);
+
+      return method != nullptr && (method->getParent()->isLambda() || method->isDefaulted());
+    }
+
+    // What a function's summary invalidates, in terms another unit can read. It is opaque when part of
+    // it names a variable only this unit knows, such as a global, or a field inside a parameter.
+    exported_summary exportSummary(const clang::FunctionDecl& definition, const function_summary& summary) {
+      llvm::SmallVector<const clang::FieldDecl*, 8> fields;
+      const auto* method = llvm::dyn_cast<clang::CXXMethodDecl>(&definition);
+
+      if (method != nullptr && method->isInstance() && method->getParent()->getDefinition() != nullptr) {
+        recordFields(*method->getParent()->getDefinition(), fields);
+      }
+
+      exported_summary result{.opaque = false, .invalidates_environment = summary.invalidates_environment, .invalidates = {}};
+
+      for (const auto& [target, range] : summary.invalidates) {
+        if (!target.path.empty() || !target.select.empty()) {
+          return exported_summary{.opaque = true, .invalidates_environment = false, .invalidates = {}};
+        }
+
+        exported_invalidation place{.level = target.level, .designated = target.designated, .range = range};
+        const auto* parameter = llvm::dyn_cast<clang::ParmVarDecl>(target.variable);
+
+        if (parameter != nullptr && parameter->getDeclContext() == &definition) {
+          place.index = parameter->getFunctionScopeIndex();
+        } else if (const auto found = llvm::find(fields, target.variable); found != fields.end()) {
+          place.receiver = true;
+          place.index = static_cast<unsigned>(found - fields.begin());
+        } else {
+          return exported_summary{.opaque = true, .invalidates_environment = false, .invalidates = {}};
+        }
+
+        result.invalidates.push_back(place);
+      }
+
+      return result;
+    }
+
     // Functions are solved in the order the translation unit declares them, so results never depend on addresses.
     struct inference_cache {
       llvm::DenseMap<const clang::FunctionDecl*, std::unique_ptr<function_entry>> functions;
       llvm::SmallVector<const clang::FunctionDecl*, 32> order;
+      // What the functions other units define invalidate, and the entries read from it for callees this
+      // unit only declares; a null entry is a callee no unit summarized.
+      const summary_table* imports = nullptr;
+      llvm::DenseMap<const clang::FunctionDecl*, std::unique_ptr<function_entry>> imported;
+      std::unique_ptr<clang::MangleContext> mangler;
 
       void clear() {
         functions.clear();
         order.clear();
+        imported.clear();
+        mangler.reset();
+      }
+
+      clang::MangleContext& mangling(clang::ASTContext& context) {
+        if (mangler == nullptr) {
+          mangler.reset(context.createMangleContext());
+        }
+
+        return *mangler;
       }
     };
 
@@ -2818,24 +2949,77 @@ namespace tbc_lint {
 
         const auto found = cache_.functions.find(callee->getCanonicalDecl());
         if (found == cache_.functions.end()) {
-          return nullptr;
+          return importedDeclaration(*callee);
         }
 
         found->second->dependents.insert(function_.getCanonicalDecl());
         return found->second.get();
       }
 
+      // A callee whose body another unit defines is known by the summary that unit computed, stated in
+      // terms of this unit's declaration of it. It never changes while this unit is solved.
+      function_entry* importedDeclaration(const clang::FunctionDecl& callee) {
+        if (cache_.imports == nullptr || callee.getDefinition() != nullptr || transparent(&callee)) {
+          return nullptr;
+        }
+
+        const auto* declaration = callee.getCanonicalDecl();
+        if (const auto found = cache_.imported.find(declaration); found != cache_.imported.end()) {
+          return found->second.get();
+        }
+
+        auto entry = importSummary(*declaration);
+        auto* known = entry.get();
+
+        cache_.imported.try_emplace(declaration, std::move(entry));
+        return known;
+      }
+
+      std::unique_ptr<function_entry> importSummary(const clang::FunctionDecl& declaration) {
+        const auto name = linkageName(cache_.mangling(context_), declaration);
+        const auto found = name ? cache_.imports->find(*name) : cache_.imports->end();
+        if (found == cache_.imports->end() || found->second.opaque) {
+          return nullptr;
+        }
+
+        llvm::SmallVector<const clang::FieldDecl*, 8> fields;
+        const auto* method = llvm::dyn_cast<clang::CXXMethodDecl>(&declaration);
+
+        if (method != nullptr && method->isInstance() && method->getParent()->getDefinition() != nullptr) {
+          recordFields(*method->getParent()->getDefinition(), fields);
+        }
+
+        auto entry = std::make_unique<function_entry>();
+
+        entry->definition = &declaration;
+        entry->summary.invalidates_environment = found->second.invalidates_environment;
+        for (const auto& place : found->second.invalidates) {
+          const clang::ValueDecl* variable = nullptr;
+
+          if (place.receiver && place.index < fields.size()) {
+            variable = fields[place.index];
+          } else if (!place.receiver && place.index < declaration.getNumParams()) {
+            variable = declaration.getParamDecl(place.index);
+          }
+
+          // A declaration that disagrees with the definition the summary was computed from is known by
+          // its declaration alone.
+          if (variable == nullptr) {
+            return nullptr;
+          }
+
+          entry->summary.invalidates.push_back({.target = {.variable = variable, .level = place.level, .designated = place.designated}, .range = place.range});
+        }
+
+        return entry;
+      }
+
       function_entry* knownFunction(const clang::CallExpr& call) {
         return knownDeclaration(call.getDirectCallee());
       }
 
-      // A call whose callers see its body, as Rust checks a closure with the function that defines it
-      // and derives memberwise special members: a lambda's call operator, or a member the compiler
-      // writes. Any other call is known only by its declaration.
       [[nodiscard]] static bool transparent(const clang::FunctionDecl* callee) {
-        const auto* method = llvm::dyn_cast_or_null<clang::CXXMethodDecl>(callee);
-
-        return method != nullptr && (method->getParent()->isLambda() || method->isDefaulted());
+        return transparentCallee(callee);
       }
 
       // The summary of a call whose body its callers see.
@@ -5421,13 +5605,56 @@ namespace tbc_lint {
     };
   }
 
-  struct lifetime_analysis::implementation {
-    inference_cache cache;
+  struct unit_summaries::implementation {
+    summary_table functions;
+    std::size_t definitions = 0;
   };
 
-  lifetime_analysis::lifetime_analysis(bool errors)
+  unit_summaries::unit_summaries()
+      : implementation_(std::make_unique<implementation>()) {}
+
+  unit_summaries::~unit_summaries() = default;
+  unit_summaries::unit_summaries(unit_summaries&&) noexcept = default;
+  unit_summaries& unit_summaries::operator=(unit_summaries&&) noexcept = default;
+
+  std::size_t unit_summaries::definitions() const {
+    return implementation_->definitions;
+  }
+
+  struct summary_index::implementation {
+    summary_table functions;
+  };
+
+  summary_index::summary_index()
+      : implementation_(std::make_unique<implementation>()) {}
+
+  summary_index::~summary_index() = default;
+
+  void summary_index::add(const unit_summaries& unit) {
+    for (const auto& entry : unit.implementation_->functions) {
+      implementation_->functions[entry.getKey()].merge(entry.getValue());
+    }
+  }
+
+  struct lifetime_analysis::implementation {
+    inference_cache cache;
+    // Where a summarizing analysis writes; null when it checks.
+    unit_summaries::implementation* output = nullptr;
+  };
+
+  lifetime_analysis::lifetime_analysis(bool errors, const summary_index* index)
       : implementation_(std::make_unique<implementation>()),
-        errors_(errors) {}
+        errors_(errors) {
+    if (index != nullptr) {
+      implementation_->cache.imports = &index->implementation_->functions;
+    }
+  }
+
+  lifetime_analysis::lifetime_analysis(unit_summaries& output)
+      : implementation_(std::make_unique<implementation>()),
+        errors_(false) {
+    implementation_->output = output.implementation_.get();
+  }
 
   lifetime_analysis::~lifetime_analysis() = default;
 
@@ -5436,9 +5663,29 @@ namespace tbc_lint {
     implementation_->cache.clear();
   }
 
+  // A summarizing analysis starts from the functions its unit's own file defines that other units can
+  // call, which they may know only by their declarations; it reaches the rest through their calls.
   void lifetime_analysis::analyze(const clang::FunctionDecl& function, clang::ASTContext& context) {
     const auto* definition = function.getDefinition();
-    if (definition == nullptr || definition->getBody() == nullptr || definition->isDependentContext()) {
+    if (definition == nullptr) {
+      return;
+    }
+
+    auto* output = implementation_->output;
+    if (output == nullptr) {
+      add(*definition, context);
+      return;
+    }
+
+    ++output->definitions;
+    const auto& sources = context.getSourceManager();
+    if (callableElsewhere(*definition) && !transparentCallee(definition) && sources.isInMainFile(sources.getExpansionLoc(definition->getLocation()))) {
+      add(*definition, context);
+    }
+  }
+
+  void lifetime_analysis::add(const clang::FunctionDecl& definition, clang::ASTContext& context) {
+    if (definition.getBody() == nullptr || definition.isDependentContext()) {
       return;
     }
 
@@ -5448,13 +5695,13 @@ namespace tbc_lint {
     options.AddImplicitDtors = true;
     options.AddTemporaryDtors = true;
     options.AddLifetime = true;
-    auto graph = clang::CFG::buildCFG(definition, definition->getBody(), &context, options);
+    auto graph = clang::CFG::buildCFG(&definition, definition.getBody(), &context, options);
     if (!graph) {
-      if (containsViews(definition->getReturnType())) {
+      if (implementation_->output == nullptr && containsViews(definition.getReturnType())) {
         auto& diagnostics = context.getDiagnostics();
         const auto id = diagnostics.getCustomDiagID(errors_ ? clang::DiagnosticsEngine::Error : clang::DiagnosticsEngine::Warning, "cannot analyze borrowed result [tbc-missing-contract]");
 
-        diagnostics.Report(definition->getLocation(), id);
+        diagnostics.Report(definition.getLocation(), id);
       }
 
       return;
@@ -5462,11 +5709,11 @@ namespace tbc_lint {
 
     auto entry = std::make_unique<function_entry>();
 
-    entry->definition = definition;
+    entry->definition = &definition;
     entry->graph = std::move(graph);
     auto& cache = implementation_->cache;
-    if (cache.functions.try_emplace(definition->getCanonicalDecl(), std::move(entry)).second) {
-      cache.order.push_back(definition->getCanonicalDecl());
+    if (cache.functions.try_emplace(definition.getCanonicalDecl(), std::move(entry)).second) {
+      cache.order.push_back(definition.getCanonicalDecl());
     }
   }
 
@@ -5503,7 +5750,7 @@ namespace tbc_lint {
 
           const auto* definition = callee != nullptr ? callee->getDefinition() : nullptr;
           if (definition != nullptr && !cache.functions.contains(definition->getCanonicalDecl()) && !sources.isInSystemHeader(sources.getExpansionLoc(definition->getLocation()))) {
-            analyze(*definition, context);
+            add(*definition, context);
           }
 
           if (definition != nullptr && cache.functions.contains(definition->getCanonicalDecl())) {
@@ -5568,6 +5815,11 @@ namespace tbc_lint {
       }
     }
 
+    if (auto* output = implementation_->output) {
+      exportSummaries(context, *output);
+      return;
+    }
+
     llvm::SmallVector<function_entry*, 32> ordered;
 
     for (const auto* key : cache.order) {
@@ -5582,6 +5834,26 @@ namespace tbc_lint {
       function_analysis analysis(*entry->definition, context, errors_, reported_, cache);
 
       analysis.run(*entry->graph, true);
+    }
+  }
+
+  // Each function the unit's file defines that other units can call, by the name they all know it by.
+  void lifetime_analysis::exportSummaries(clang::ASTContext& context, unit_summaries::implementation& output) {
+    auto& cache = implementation_->cache;
+    const auto& sources = context.getSourceManager();
+
+    for (const auto* key : cache.order) {
+      const auto& entry = *cache.functions.find(key)->second;
+      if (transparentCallee(entry.definition) || !sources.isInMainFile(sources.getExpansionLoc(entry.definition->getLocation()))) {
+        continue;
+      }
+
+      const auto name = linkageName(cache.mangling(context), *entry.definition);
+      if (!name) {
+        continue;
+      }
+
+      output.functions[*name].merge(exportSummary(*entry.definition, entry.summary));
     }
   }
 }

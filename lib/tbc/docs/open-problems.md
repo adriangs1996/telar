@@ -120,7 +120,9 @@ for instance by calling a member function on the returned reference. Declaring
 them as `tbc::view<const InputConfiguration &> input() const noexcept;` and so on
 resolves the calls, and the checker verifies that contract when it checks the
 defining source file. That needs the services to include `tbc/view.hpp`, which
-none does yet. Cross-translation-unit summaries would infer these instead.
+none does yet. The summaries the first pass reads from other units cover what a
+call invalidates, not its result, which follows the declaration as a Rust call
+follows the signature.
 
 ## In-progress `lib/ebnf` edits
 

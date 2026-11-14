@@ -3,6 +3,7 @@
 #include "lifetime_analysis.hpp"
 
 #include <clang/ASTMatchers/ASTMatchFinder.h>
+#include <clang/Basic/Diagnostic.h>
 #include <clang/Basic/DiagnosticOptions.h>
 #include <clang/Frontend/FrontendAction.h>
 #include <clang/Frontend/MultiplexConsumer.h>
@@ -10,6 +11,7 @@
 #include <clang/Tooling/ArgumentsAdjusters.h>
 #include <clang/Tooling/CommonOptionsParser.h>
 #include <clang/Tooling/Tooling.h>
+#include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/SmallPtrSet.h>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/Regex.h>
@@ -17,11 +19,15 @@
 #include <llvm/Support/VirtualFileSystem.h>
 #include <llvm/Support/raw_ostream.h>
 
+#include <algorithm>
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <functional>
 #include <memory>
 #include <mutex>
+#include <numeric>
 #include <optional>
 #include <string>
 #include <vector>
@@ -29,8 +35,11 @@
 namespace {
   class borrow_check final : public clang::ast_matchers::MatchFinder::MatchCallback {
   public:
-    explicit borrow_check(bool errors)
-        : analysis_(errors) {}
+    borrow_check(bool errors, const tbc_lint::summary_index* index)
+        : analysis_(errors, index) {}
+
+    explicit borrow_check(tbc_lint::unit_summaries& output)
+        : analysis_(output) {}
 
     void run(const clang::ast_matchers::MatchFinder::MatchResult& result) override {
       if (result.Nodes.getNodeAs<clang::TranslationUnitDecl>("unit") != nullptr) {
@@ -73,6 +82,8 @@ namespace {
     std::string header_filter;
     tbc_lint::blank_line_fixes& fixes;
     tbc_lint::interface_modules& interfaces;
+    // What the functions of every checked unit invalidate; null with a single unit, which sees all it defines.
+    const tbc_lint::summary_index* summaries;
   };
 
   // Runs the matchers of the lifetime and blank-lines checks, when there are any, after the
@@ -118,6 +129,54 @@ namespace {
     const settings& settings_;
   };
 
+  // The process-wide file system changes the process's working directory for each compile command;
+  // a physical one keeps its own, which concurrent units need.
+  std::unique_ptr<clang::tooling::ClangTool> unitTool(const clang::tooling::CompilationDatabase& compilations, const std::string& source) {
+    auto tool = std::make_unique<clang::tooling::ClangTool>(compilations, std::vector<std::string>{source}, std::make_shared<clang::PCHContainerOperations>(), llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem>(llvm::vfs::createPhysicalFileSystem().release()));
+
+    tool->appendArgumentsAdjuster(clang::tooling::getInsertArgumentAdjuster("-resource-dir=" TBC_CLANG_RESOURCE_DIR, clang::tooling::ArgumentInsertPosition::END));
+    return tool;
+  }
+
+  // Summarizes what the functions one translation unit defines invalidate. Its diagnostics are left to
+  // the check that follows.
+  void summarizeUnit(const clang::tooling::CompilationDatabase& compilations, const std::string& source, tbc_lint::unit_summaries& output) {
+    clang::ast_matchers::MatchFinder finder;
+    borrow_check summaries(output);
+
+    finder.addMatcher(clang::ast_matchers::translationUnitDecl().bind("unit"), &summaries);
+    finder.addMatcher(clang::ast_matchers::functionDecl(clang::ast_matchers::isDefinition(), clang::ast_matchers::unless(clang::ast_matchers::isExpansionInSystemHeader())).bind("function"), &summaries);
+
+    clang::IgnoringDiagConsumer ignored;
+    const auto tool = unitTool(compilations, source);
+
+    tool->setDiagnosticConsumer(&ignored);
+    tool->run(clang::tooling::newFrontendActionFactory(&finder).get());
+  }
+
+  // Runs one task per source, in the given order, in parallel unless one thread is all there is.
+  template <typename task>
+  void eachSource(llvm::ArrayRef<std::size_t> order, unsigned jobs, const task& run) {
+    const auto strategy = llvm::heavyweight_hardware_concurrency(jobs);
+    if (order.size() <= 1 || strategy.compute_thread_count() <= 1) {
+      for (const auto index : order) {
+        run(index);
+      }
+
+      return;
+    }
+
+    llvm::DefaultThreadPool pool(strategy);
+
+    for (const auto index : order) {
+      pool.async([&run, index] {
+        run(index);
+      });
+    }
+
+    pool.wait();
+  }
+
   // Checks one translation unit with its own tool and analysis, so units can run on separate threads.
   // Its diagnostics are buffered, so that the output of parallel units never interleaves.
   int checkUnit(const clang::tooling::CompilationDatabase& compilations, const std::string& source, const settings& settings, std::string& output) {
@@ -125,7 +184,7 @@ namespace {
     std::optional<borrow_check> borrows;
 
     if (settings.lifetime) {
-      borrows.emplace(settings.errors);
+      borrows.emplace(settings.errors, settings.summaries);
       finder.addMatcher(clang::ast_matchers::translationUnitDecl().bind("unit"), &*borrows);
       finder.addMatcher(clang::ast_matchers::functionDecl(clang::ast_matchers::isDefinition(), clang::ast_matchers::unless(clang::ast_matchers::isExpansionInSystemHeader())).bind("function"), &*borrows);
     }
@@ -142,15 +201,12 @@ namespace {
 
     options.setShowColors(settings.colors ? clang::ShowColorsKind::On : clang::ShowColorsKind::Off);
     clang::TextDiagnosticPrinter printer(stream, options);
-    // The process-wide file system changes the process's working directory for each compile command;
-    // a physical one keeps its own, which concurrent units need.
-    clang::tooling::ClangTool tool(compilations, {source}, std::make_shared<clang::PCHContainerOperations>(), llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem>(llvm::vfs::createPhysicalFileSystem().release()));
+    const auto tool = unitTool(compilations, source);
 
-    tool.setDiagnosticConsumer(&printer);
-    tool.appendArgumentsAdjuster(clang::tooling::getInsertArgumentAdjuster("-resource-dir=" TBC_CLANG_RESOURCE_DIR, clang::tooling::ArgumentInsertPosition::END));
+    tool->setDiagnosticConsumer(&printer);
     unit_actions actions(settings.lifetime || settings.blank_lines ? &finder : nullptr, settings);
 
-    return tool.run(&actions);
+    return tool->run(&actions);
   }
 }
 
@@ -208,10 +264,38 @@ int main(int argc, const char** argv) try {
     allowed = std::move(*modules);
   }
 
+  const auto& compilations = options->getCompilations();
+  const auto& sources = options->getSourcePathList();
+  const bool lifetime = checks.getBits() == 0 || checks.isSet(checker::lifetime);
+  // A first pass summarizes what the functions each unit defines invalidate, once per unit, so that a
+  // call into another unit is known by its body's effects rather than by its declaration alone.
+  std::optional<tbc_lint::summary_index> summaries;
+  std::vector<std::size_t> order(sources.size());
+
+  std::ranges::iota(order, 0);
+  if (lifetime && sources.size() > 1) {
+    std::vector<tbc_lint::unit_summaries> units(sources.size());
+
+    eachSource(order, jobs, [&](std::size_t index) {
+      summarizeUnit(compilations, sources[index], units[index]);
+    });
+
+    summaries.emplace();
+    for (const auto& unit : units) {
+      summaries->add(unit);
+    }
+
+    // The units with the most definitions take longest to check, so they start first and the last
+    // one to finish is a short one.
+    std::ranges::stable_sort(order, std::greater{}, [&](std::size_t index) {
+      return units[index].definitions();
+    });
+  }
+
   tbc_lint::blank_line_fixes fixes;
   tbc_lint::interface_modules interfaces(std::move(allowed));
   const settings configuration{
-      .lifetime = checks.getBits() == 0 || checks.isSet(checker::lifetime),
+      .lifetime = lifetime,
       .blank_lines = blank_lines,
       .interface_bodies = interface_bodies,
       .errors = warnings_as_errors,
@@ -219,39 +303,22 @@ int main(int argc, const char** argv) try {
       .header_filter = header_filter,
       .fixes = fixes,
       .interfaces = interfaces,
+      .summaries = summaries ? &*summaries : nullptr,
   };
 
-  const auto& compilations = options->getCompilations();
-  const auto& sources = options->getSourcePathList();
   std::mutex print;
   std::atomic<bool> failed = false;
-  const auto check = [&](const std::string& source) {
+
+  eachSource(order, jobs, [&](std::size_t index) {
     std::string output;
-    const bool unit_failed = checkUnit(compilations, source, configuration, output) != 0;
+    const bool unit_failed = checkUnit(compilations, sources[index], configuration, output) != 0;
     const std::scoped_lock lock(print);
 
     llvm::errs() << output;
     if (unit_failed) {
       failed = true;
     }
-  };
-
-  const auto strategy = llvm::heavyweight_hardware_concurrency(jobs);
-  if (sources.size() <= 1 || strategy.compute_thread_count() <= 1) {
-    for (const auto& source : sources) {
-      check(source);
-    }
-  } else {
-    llvm::DefaultThreadPool pool(strategy);
-
-    for (const auto& source : sources) {
-      pool.async([&check, &source] {
-        check(source);
-      });
-    }
-
-    pool.wait();
-  }
+  });
 
   if (fix && !fixes.apply(llvm::errs())) {
     return 1;
