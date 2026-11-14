@@ -170,7 +170,7 @@ export {
 
       // Stays here: generic over the caller's sink, which the facts reach through a function pointer.
       template <HistoryFactSink Sink>
-      TBC_HOT_PATH static void visit(const HistoryFactData& data, Sink& sink) {
+      TBC_GENERIC static void visit(const HistoryFactData& data, Sink& sink) {
         auto call = [&sink](std::string_view text, PaletteRole color) {
           sink(text, color);
         };
@@ -405,7 +405,7 @@ export {
       // The lines view the wrapped text, region `a`, but for a shortened last line, which the text owns.
       // Stays here: generic over the caller's measure, which the wrapping calls through a function pointer.
       template <LabelMeasure Measure>
-      TBC_HOT_PATH void wrap(tbc::view<std::string_view, tbc::lt::a> text, float width, Measure& measure) {
+      TBC_GENERIC void wrap(tbc::view<std::string_view, tbc::lt::a> text, float width, Measure& measure) {
         auto call = [&measure](std::string_view part) -> float {
           return measure(part);
         };

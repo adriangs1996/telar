@@ -241,7 +241,7 @@ export {
 
     // A caller's action reader as ComponentActions. Generic over the caller's reader.
     template <typename Reader>
-    class TBC_HOT_PATH ComponentActionsOf final : public ComponentActions {
+    class TBC_GENERIC ComponentActionsOf final : public ComponentActions {
     public:
       explicit ComponentActionsOf(const Reader& reader) noexcept
           : reader_(reader) {}
@@ -549,17 +549,17 @@ export {
       [[nodiscard]] const Definitions& definitions() const noexcept;
 
       template <typename Actions>
-      TBC_HOT_PATH void readFixed(const Actions& actions, runtime::config::LimitNotices& limits) {
+      TBC_GENERIC void readFixed(const Actions& actions, runtime::config::LimitNotices& limits) {
         readFixedSources(ComponentActionsOf<Actions>{actions}, limits);
       }
 
       template <typename Actions>
-      TBC_HOT_PATH void readBar(Position position, const runtime::lua::Value& value, const Actions& actions, runtime::config::LimitNotices& limits) {
+      TBC_GENERIC void readBar(Position position, const runtime::lua::Value& value, const Actions& actions, runtime::config::LimitNotices& limits) {
         readBarContent(position, value, ComponentActionsOf<Actions>{actions}, limits);
       }
 
       template <typename Actions>
-      TBC_HOT_PATH void readPanel(const runtime::lua::Value& value, const Actions& actions, runtime::config::LimitNotices& limits) {
+      TBC_GENERIC void readPanel(const runtime::lua::Value& value, const Actions& actions, runtime::config::LimitNotices& limits) {
         readPanelContent(value, ComponentActionsOf<Actions>{actions}, limits);
       }
 
@@ -572,7 +572,7 @@ export {
       [[nodiscard]] bool contains(BindingAction action) const noexcept;
 
       template <typename Visitor>
-      TBC_HOT_PATH void visitActions(const Visitor& visitor) const {
+      TBC_GENERIC void visitActions(const Visitor& visitor) const {
         const auto visit = [&](const auto& content) {
           for (const auto& node : content.nodes()) {
             if (const auto action = content.action(node)) {

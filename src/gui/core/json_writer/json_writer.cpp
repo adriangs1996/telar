@@ -191,6 +191,13 @@ namespace telar::gui {
     length_ += writeNumber(buffer_.subspan(length_), value);
   }
 
+  template <std::same_as<bool> Boolean>
+  void JsonWriter::write(Boolean value) {
+    append(value ? "true" : "false");
+  }
+
+  template void JsonWriter::write<bool>(bool value);
+
   void JsonWriter::write(std::nullptr_t) {
     append("null");
   }

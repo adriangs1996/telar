@@ -233,6 +233,17 @@ Those counters exclude fixture storage and framework allocations. Timing include
 frame descriptor selection and application, excludes encoding, and does not measure
 native presentation latency or runtime performance.
 
+`gui-glyph-ink-probe` draws the block, straight box and Braille glyphs as the terminal
+scene does, without Qt, and times one frame of them. Before timing, the driver checks
+that both builds print the same rectangles for every glyph over cells from 0×0 to
+40×80, and every pair must report the same checksum:
+
+```sh
+python3 src/gui/tools/compare_glyph_ink.py out-A/gui-glyph-ink-probe out-B/gui-glyph-ink-probe out-glyph-ink-pairs
+```
+
+`--workloads` picks among `block`, `quadrant`, `slab`, `box`, `braille` and `all`.
+
 The standalone Qt binding-storage oracle compares experimental inline storage
 with the actual private `QRhiBatchedBindings` container. It checks 4,123 binding
 sequences, copying, clearing, repeated finish and dynamic fallback. Supply the

@@ -152,7 +152,7 @@ export {
 
       // Generic over the caller's cosine, so it stays here; a few float operations per frame.
       template <Cosine Function = StandardCosine>
-      [[nodiscard]] TBC_HOT_PATH static Frame indeterminate(std::uint64_t now_ns) noexcept {
+      [[nodiscard]] TBC_GENERIC static Frame indeterminate(std::uint64_t now_ns) noexcept {
         const auto phase = static_cast<float>(now_ns % period_ns) / static_cast<float>(period_ns);
         const auto angle = phase * 2 * std::numbers::pi_v<float>;
         const auto cosine = Function::evaluate(angle);

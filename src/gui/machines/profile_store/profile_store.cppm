@@ -64,7 +64,7 @@ export {
 
     struct MachineProfileEdits {
       template <MachineIdentityRandom Random>
-      TBC_HOT_PATH static void apply(MachineProfiles& profiles, const MachineEdit& edit, Random& random, std::string_view local_fallback) {
+      TBC_GENERIC static void apply(MachineProfiles& profiles, const MachineEdit& edit, Random& random, std::string_view local_fallback) {
         if (edit.kind != MachineEditKind::add) {
           change(profiles, edit, local_fallback);
           return;
@@ -136,7 +136,7 @@ export {
 
     // Generic over the caller's storage, a file in production and fakes in tests.
     template <Allocator Memory, MachineProfileStorage<Memory> Storage>
-    class TBC_HOT_PATH MachineProfileStore {
+    class TBC_GENERIC MachineProfileStore {
     public:
       inline MachineProfileStore(Memory& memory, Storage& storage) noexcept
           : memory_(memory),

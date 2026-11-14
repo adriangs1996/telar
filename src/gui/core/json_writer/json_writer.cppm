@@ -121,17 +121,17 @@ export {
       explicit JsonWriter(tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept;
 
       template <typename Consumer>
-      TBC_HOT_PATH void object(Consumer&& consume) {
+      TBC_GENERIC void object(Consumer&& consume) {
         container(Container::object, std::forward<Consumer>(consume));
       }
 
       template <typename Consumer>
-      TBC_HOT_PATH void array(Consumer&& consume) {
+      TBC_GENERIC void array(Consumer&& consume) {
         container(Container::array, std::forward<Consumer>(consume));
       }
 
       template <typename Value>
-      TBC_HOT_PATH void member(std::string_view name, const Value& value) {
+      TBC_GENERIC void member(std::string_view name, const Value& value) {
         separator();
         write(name);
         append(":");
@@ -139,7 +139,7 @@ export {
       }
 
       template <typename Value>
-      TBC_HOT_PATH void element(const Value& value) {
+      TBC_GENERIC void element(const Value& value) {
         separator();
         write(value);
       }
@@ -147,7 +147,7 @@ export {
       [[nodiscard]] tbc::view<std::string_view, tbc::lt::a> view() const noexcept;
 
       template <typename Value>
-      TBC_HOT_PATH void value(const Value& value) {
+      TBC_GENERIC void value(const Value& value) {
         write(value);
       }
 
@@ -160,7 +160,7 @@ export {
       };
 
       template <typename Consumer>
-      TBC_HOT_PATH void container(Container kind, Consumer&& consume) {
+      TBC_GENERIC void container(Container kind, Consumer&& consume) {
         open(kind);
         const auto previous = std::exchange(first_, true);
 
@@ -180,22 +180,21 @@ export {
 
       template <typename Text>
         requires(std::is_array_v<Text> && std::same_as<std::remove_extent_t<Text>, char>)
-      TBC_HOT_PATH void write(const Text& text) {
+      TBC_GENERIC void write(const Text& text) {
         const auto bytes = std::span{text};
         const auto end = std::ranges::find(bytes, '\0');
 
         write(std::string_view{bytes.data(), static_cast<std::size_t>(end - bytes.begin())});
       }
 
+      // A template so that no pointer or number converts to it; instantiated only for bool.
       template <std::same_as<bool> Boolean>
-      TBC_HOT_PATH void write(Boolean value) {
-        append(value ? "true" : "false");
-      }
+      void write(Boolean value);
 
       void write(std::nullptr_t);
 
       template <typename Value>
-      TBC_HOT_PATH void write(const std::optional<Value>& value) {
+      TBC_GENERIC void write(const std::optional<Value>& value) {
         if (value) {
           write(*value);
         } else {
@@ -205,7 +204,7 @@ export {
 
       template <std::integral Number>
         requires(!std::same_as<Number, bool>)
-      TBC_HOT_PATH void write(Number value) {
+      TBC_GENERIC void write(Number value) {
         if constexpr (std::is_signed_v<Number>) {
           writeSigned(value);
         } else {
@@ -218,7 +217,7 @@ export {
 
       template <typename Consumer>
         requires std::invocable<Consumer, JsonWriter&>
-      TBC_HOT_PATH void write(Consumer&& consume) {
+      TBC_GENERIC void write(Consumer&& consume) {
         std::invoke(std::forward<Consumer>(consume), *this);
       }
 
@@ -226,6 +225,8 @@ export {
       std::size_t length_ = 0;
       bool first_ = true;
     };
+
+    extern template void JsonWriter::write<bool>(bool value);
 
   }
 }

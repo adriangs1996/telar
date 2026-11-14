@@ -632,8 +632,9 @@ Para cada módulo: `extern template class X<Memory>;` en la interfaz, la instanc
 #### [ ] P9.13d · Runtime, el resto
 - **Depende de:** P9.13a y P6.5f. `runtime`, `platform`, `transport`, `vocabulary`, `model`, `command_capture`, `agents`, `persistence`, `paths`, `shell_integration`, `observation`, `graphics`, `history`, `terminal`, `diagnostics` y `cli`: unos 115 usos.
 
-#### [ ] P9.13e · GUI
+#### [x] P9.13e · GUI
 - **Depende de:** P9.13a. Unos 76 usos en 27 ficheros.
+- **Resultado:** `cfe745f7a`, `2c456a996`. En `src/gui` no queda ningún `TBC_HOT_PATH`: 74 pasan a `TBC_GENERIC` (proveedores de fuentes, visitantes, sinks, medidas, callables, la acción de `KeyRouter`/`BindingMap`, `Delivery`, `Storage` y capacidades que fijan otros módulos, como `PasteEncoding::encode` y `RankedMatches`) y 2 salen a su `.cpp` con `extern template`: `Ink<Capacity>` (2, 8 y 21) y `JsonWriter::write<bool>`. `Pane<Memory>` ya tenía sus cuerpos fuera desde `cf2296da6`. Fuera de la interfaz, `Ink<2>::appendMerged` dejó de insertarse en `Block::quadrantInk` y los glifos de bloque perdían un 8 %; `quadrantInk` une ahora sus franjas sin esa llamada y sin selects, porque `push` ya descarta los rectángulos de ancho 0 (de 231,8 a 225,1 instrucciones y de 34,1 a 33,0 ciclos por glifo de cuadrante; `--dump` idéntico a A en unos 7 millones de rectángulos). Probe nuevo, `gui-glyph-ink-probe` con `compare_glyph_ink.py`. Medido en `Personal`, Release, 7 pares contra `511deab78`: `quadrant` −2,6 % (7/7), `block` −2,7 % (7/7), `slab` −0,5 % (5/7), `box` −0,2 % (6/7), `braille` −0,3 % (4/7), `all` +0,1 % (2/7, cajas y Braille con código idéntico); escenas de terminal y de texto sin pérdida consistente y 0 píxeles de diferencia. Sobre el árbol integrado (`988b9ccd8`), en Debug y en Release compila con `gui-probes` y pasan los 138 tests. `tbc-lint` sobre los ficheros tocados: interface-bodies y líneas en blanco limpios; lifetimes da 7 diagnósticos previos de `lib/ebnf`.
 
 ### [x] P9.10 · Quitar el parámetro de plantilla `Memory` donde ya no aporta
 - **Depende de:** P9.1–P9.9

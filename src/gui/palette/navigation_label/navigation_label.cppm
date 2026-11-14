@@ -101,7 +101,7 @@ export {
 
     // Generic over the caller's target and capacity, so it stays whole for each importer.
     template <std::semiregular Target, std::size_t Capacity>
-    class TBC_HOT_PATH RankedMatches {
+    class TBC_GENERIC RankedMatches {
       static_assert(Capacity > 0);
 
     public:

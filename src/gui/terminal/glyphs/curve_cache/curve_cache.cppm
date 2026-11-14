@@ -17,55 +17,18 @@ export {
 
     void validateCell(Rect cell);
 
-    // Generic over the capacity the glyph kind picks; filled once per drawn glyph.
+    // The rectangles of a drawn glyph, at most the capacity its glyph kind picks: Block, Box and
+    // Braille below, instantiated for each in curve_cache.cpp.
     template <std::size_t Capacity>
-    class TBC_HOT_PATH Ink {
+    class Ink {
     public:
-      inline explicit Ink(float coverage = 1) noexcept
-          : coverage_(coverage) {}
+      explicit Ink(float coverage = 1) noexcept;
 
-      [[nodiscard]] inline float coverage() const noexcept {
-        return coverage_;
-      }
-
-      [[nodiscard]] inline std::span<const Rect> rectangles() const noexcept {
-        return std::span{rectangles_}.first(count_);
-      }
-
-      inline void push(Rect rectangle) {
-        if (rectangle.empty()) {
-          return;
-        }
-
-        if (count_ == Capacity) {
-          throw std::length_error{"GlyphRectangleBudgetExceeded"};
-        }
-
-        rectangles_[count_++] = rectangle;
-      }
-
-      inline void appendMerged(Rect rectangle) {
-        if (rectangle.empty()) {
-          return;
-        }
-
-        for (auto& previous : std::span{rectangles_}.first(count_)) {
-          if (previous.x == rectangle.x && previous.width == rectangle.width && previous.bottom() == rectangle.y) {
-            previous.height += rectangle.height;
-
-            return;
-          }
-        }
-
-        push(rectangle);
-      }
-
-      inline void translate(Point origin) noexcept {
-        for (auto& rectangle : std::span{rectangles_}.first(count_)) {
-          rectangle.x += origin.x;
-          rectangle.y += origin.y;
-        }
-      }
+      [[nodiscard]] float coverage() const noexcept;
+      [[nodiscard]] std::span<const Rect> rectangles() const noexcept;
+      void push(Rect rectangle);
+      void appendMerged(Rect rectangle);
+      void translate(Point origin) noexcept;
 
     private:
       std::array<Rect, Capacity> rectangles_{};
@@ -420,6 +383,10 @@ export {
       [[nodiscard]] static Grid integerGrid(Rect cell) noexcept;
     };
 
+    extern template class Ink<2>;
+    extern template class Ink<Box::stroke_capacity>;
+    extern template class Ink<Box::rectangle_capacity>;
+
   }
 }
 
@@ -429,7 +396,7 @@ export {
 
     // Generic over the payload the renderer caches; looked up once per drawn curve glyph.
     template <std::movable Payload>
-    class TBC_HOT_PATH CurveCache {
+    class TBC_GENERIC CurveCache {
     public:
       static constexpr std::size_t capacity = 56;
       static constexpr std::uint16_t raster_limit = 256;

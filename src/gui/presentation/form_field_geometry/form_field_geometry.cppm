@@ -60,7 +60,7 @@ export {
 
       // Generic over the caller's sink, so it stays here; it runs per history row painted.
       template <HistoryMatchSink Sink>
-      TBC_HOT_PATH void paint(std::string_view text, Rect bounds, float cell_width, Sink& sink) {
+      TBC_GENERIC void paint(std::string_view text, Rect bounds, float cell_width, Sink& sink) {
         GraphemeCursor cursor{text};
         std::uint32_t column = 0;
 
@@ -127,7 +127,7 @@ export {
       // The footer places only its own literal hints; the status is measured, not kept.
       // Generic over the caller's measure, so it stays here.
       template <TextColumnMeasure MeasureColumns>
-      [[nodiscard]] TBC_HOT_PATH static tbc::view<PathPickerFooter, tbc::lt::static_storage> measure(CellRectangle row, std::string_view status, bool mac_style, MeasureColumns measure_columns) {
+      [[nodiscard]] TBC_GENERIC static tbc::view<PathPickerFooter, tbc::lt::static_storage> measure(CellRectangle row, std::string_view status, bool mac_style, MeasureColumns measure_columns) {
         PathPickerFooter result;
         const auto& labels = mac_style ? mac_hints : pc_hints;
         std::uint32_t used = measure_columns(status) + status_gap;

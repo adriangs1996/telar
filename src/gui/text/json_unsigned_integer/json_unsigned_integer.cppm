@@ -43,7 +43,7 @@ export {
 
       template <LabelMeasure Measure>
       // The fitted text is the text itself or the prefix written into the buffer, region `a`.
-      [[nodiscard]] TBC_HOT_PATH inline static tbc::view<std::string_view, tbc::lt::a> fit(tbc::view<std::string_view, tbc::lt::a> text, float width, Measure& measure, tbc::view<Buffer&, tbc::lt::a> buffer) {
+      [[nodiscard]] TBC_GENERIC inline static tbc::view<std::string_view, tbc::lt::a> fit(tbc::view<std::string_view, tbc::lt::a> text, float width, Measure& measure, tbc::view<Buffer&, tbc::lt::a> buffer) {
         if (!std::isfinite(width)) {
           throw std::invalid_argument{"InvalidTextFitWidth"};
         }
@@ -77,7 +77,7 @@ export {
 
     private:
       template <LabelMeasure Measure>
-      [[nodiscard]] TBC_HOT_PATH inline static float measureText(Measure& measure, std::string_view text) {
+      [[nodiscard]] TBC_GENERIC inline static float measureText(Measure& measure, std::string_view text) {
         const auto width = static_cast<float>(measure(text));
         if (!std::isfinite(width) || width < 0) {
           throw std::invalid_argument{"InvalidTextFitMeasurement"};
