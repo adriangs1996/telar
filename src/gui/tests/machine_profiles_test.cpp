@@ -114,7 +114,9 @@ namespace {
 
   void versionsAndJsonRoundTripsPreserveEveryField() {
     SystemAllocator system;
-    BudgetAllocator memory{system, MachineLimits::file_bytes};
+    BudgetAllocator budget{system, MachineLimits::file_bytes};
+    telar::MemoryAdapter adapter{budget};
+    telar::Memory& memory = adapter;
     auto const* source = R"({"version":1,"local_label":"local","machines":[{"id":"m-000000000001","label":"box","destination":"dev@é'box","color":"#a0B1c2","enabled":false}]})";
     auto profiles = MachineProfileCodec::parse(memory, source);
 
@@ -131,11 +133,13 @@ namespace {
       require(profile.program() == "/home/dev/.local/bin/telar" && profile.login(MachineAgent::codex) == MachineLogin::done, "JSON round trips must retain installed program paths and agent login metadata");
     }
 
-    require(memory.liveBytes() == 0, "parsed profiles must own inline text and release every temporary allocation");
+    require(budget.liveBytes() == 0, "parsed profiles must own inline text and release every temporary allocation");
   }
 
   void strictJsonRejectsUnknownDuplicatedAndWronglyTypedFields() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::Memory& memory = adapter;
     const auto invalid = std::to_array<std::string_view>({
         R"({"version":1,"machines":[],"unknown":true})",
         R"({"version":1,"version":1,"machines":[]})",
@@ -215,7 +219,9 @@ namespace {
 
   void allocationRejectionReleasesEveryTemporary() {
     SystemAllocator system;
-    BudgetAllocator memory{system, 0};
+    BudgetAllocator budget{system, 0};
+    telar::MemoryAdapter adapter{budget};
+    telar::Memory& memory = adapter;
     const auto source = std::string{R"({"version":1,"machines":[{"id":"m-000000000001","label":"box","destination":")"} + std::string(MachineLimits::destination_bytes, 'x') + R"("}]})";
     bool rejected = false;
 
@@ -225,7 +231,7 @@ namespace {
       rejected = true;
     }
 
-    require(rejected && memory.liveBytes() == 0 && memory.failures() != 0, "allocation rejection must stay observable and release every parser temporary");
+    require(rejected && budget.liveBytes() == 0 && budget.failures() != 0, "allocation rejection must stay observable and release every parser temporary");
   }
 
 }

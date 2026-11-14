@@ -1350,7 +1350,9 @@ int main() {
   lifecycle(system);
   loopbackLeases(system);
   BudgetAllocator budget{system, 64 * 1024 * 1024};
-  TlsTestMemory memory{budget};
+  SynchronizedAllocator synchronized{budget};
+  MemoryAdapter adapter{synchronized};
+  TlsTestMemory& memory = adapter;
   std::array<char, 64> temporary{};
 
   std::strcpy(temporary.data(), "/tmp/telar-redirect-XXXXXX");

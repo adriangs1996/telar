@@ -21,7 +21,7 @@ if(NOT TARGET telar-git-checkout)
   add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/checkout" "${CMAKE_BINARY_DIR}/telar-git-checkout")
 endif()
 
-add_library(telar-git STATIC)
+add_library(telar-git STATIC git.cpp git-config.cpp git-format.cpp git-history.cpp git-objects.cpp git-worktree.cpp)
 add_library(telar::git ALIAS telar-git)
 telar_modules(telar-git EXCLUDE checkout)
 target_link_libraries(telar-git PUBLIC telar::platform telar::git-checkout OpenSSL::Crypto "${ZLIB_LIBRARY}")

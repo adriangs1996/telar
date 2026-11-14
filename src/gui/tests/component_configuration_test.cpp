@@ -210,8 +210,8 @@ return {api_version = 2, client = {
     require(inherited_binding && inherited_binding->index == 0 && reindexed.components().definitions().panels().size() == 1, "inherited bindings must resolve panel names against the selected profile rather than reuse base indices");
   }
 
-  template <typename Memory>
-  void footerValidation(Memory& memory) {
+  template <typename Memory, typename Budget>
+  void footerValidation(Memory& memory, const Budget& budget) {
     struct InvalidFooter {
       std::string_view source;
       std::string_view diagnostic;
@@ -240,7 +240,7 @@ return {api_version = 2, client = {
       }
 
       require(rejected, "sidebar footer must reject excess slots and tabs in base or selected profile");
-      require(memory.liveBytes() == 0, "failed footer configuration must release every injected allocation");
+      require(budget.liveBytes() == 0, "failed footer configuration must release every injected allocation");
     }
 
     constexpr std::string_view valid = R"(
@@ -511,16 +511,18 @@ int main() {
   try {
     SystemAllocator system;
     constexpr std::size_t allocation_budget = std::size_t{8} * 1024 * 1024;
-    BudgetAllocator memory{system, allocation_budget};
+    BudgetAllocator budget{system, allocation_budget};
+    telar::MemoryAdapter adapter{budget};
+    telar::Memory& memory = adapter;
 
     builtinContent();
     profilesAndDefinitions(memory);
-    footerValidation(memory);
+    footerValidation(memory, budget);
     renderLifetime(memory);
     pickRendering(memory);
     elementRendering(memory);
     exampleMods(memory);
-    require(memory.liveBytes() == 0, "component configuration teardown must release every injected allocation");
+    require(budget.liveBytes() == 0, "component configuration teardown must release every injected allocation");
     std::cout << "Component configuration profiles, context, actions and render lifetime passed\n";
   } catch (const std::exception& error) {
     std::cerr << error.what() << '\n';

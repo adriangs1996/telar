@@ -38,7 +38,8 @@ using namespace telar;
 using namespace telar::runtime;
 
 export {
-  using TlsTestMemory = SynchronizedAllocator<BudgetAllocator<SystemAllocator>>;
+  // What production passes: the runtime's allocator behind ConcurrentMemory.
+  using TlsTestMemory = ConcurrentMemory;
 
   class AuthorityDirectory {
   public:

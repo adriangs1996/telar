@@ -84,7 +84,7 @@ export namespace telar::runtime {
 
     // User specs come from `completions` in the configuration directory the runtime resolved.
     inline explicit WordReader(std::string_view configuration_directory = {})
-        : git_(memory_) {
+        : git_(erased_) {
       if (!configuration_directory.empty()) {
         completions_.assign(configuration_directory).append("/completions");
       }
@@ -843,7 +843,8 @@ export namespace telar::runtime {
 
     std::string completions_;
     SystemAllocator memory_;
-    git::StatusReader<SystemAllocator> git_;
+    MemoryAdapter<SystemAllocator> erased_{memory_};
+    git::StatusReader<Memory> git_;
     // Whether each user spec, by digest, compiled: a spec is compiled once, not per request.
     std::unordered_map<std::uint64_t, bool> compiled_;
   };

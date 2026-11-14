@@ -31,8 +31,6 @@ telar.config.core
 telar.config.gui
 telar.config.runtime
 telar.config.snapshot
-telar.git
-telar.git.checkout
 telar.gui.application.host_effects
 telar.gui.application.session
 telar.gui.application.sound_playback
@@ -110,12 +108,6 @@ telar.gui.text.bounded_editor
 telar.gui.text.json_unsigned_integer
 telar.gui.text.notification_payload
 telar.gui.transport.runtime_link
-telar.lua
-telar.machines
-telar.plugins
-telar.render.document
-telar.render.markdown
-telar.render.terminal
 telar.runtime.agents.description_generator
 telar.runtime.agents.screen_inference
 telar.runtime.agents.snapshot
@@ -206,4 +198,3 @@ telar.runtime.vocabulary.frames
 telar.runtime.vocabulary.traffic
 telar.runtime.workspaces.git_probe
 telar.runtime.worktrees.git_probe
-telar.tls

@@ -112,7 +112,8 @@ namespace {
     constexpr std::size_t allocation_budget = std::size_t{128} * 1024;
     BudgetAllocator memory{system, allocation_budget};
     MemoryFile file;
-    MachineProfileStore store{memory, file};
+    telar::MemoryAdapter erased{memory};
+    MachineProfileStore<telar::Memory, MemoryFile> store{erased, file};
 
     require(store.load().rows().empty(), "a missing profile file must load as an empty list");
     Random random;
@@ -143,7 +144,8 @@ namespace {
 
     file.source.assign("{\"version\":1,\"machines\":[]}\n");
     const auto original = file.source;
-    MachineProfileStore store{memory, file};
+    telar::MemoryAdapter erased{memory};
+    MachineProfileStore<telar::Memory, MemoryFile> store{erased, file};
     Random random;
     const std::array invalid{
         MachineEdit{.kind = MachineEditKind::add, .label = "valid", .value = "dev@valid"},
@@ -176,7 +178,8 @@ namespace {
   void everyTransactionReloadsExternalChangesAndRespectsTheLocalAlias() {
     SystemAllocator memory;
     MemoryFile file;
-    MachineProfileStore store{memory, file};
+    telar::MemoryAdapter erased{memory};
+    MachineProfileStore<telar::Memory, MemoryFile> store{erased, file};
     Random random;
     const std::array first{MachineEdit{.kind = MachineEditKind::add, .label = "build", .value = "dev@build"}};
 
@@ -205,7 +208,8 @@ namespace {
     MemoryFile file;
 
     file.source.assign("{\"version\":1,\"machines\":[]}\n");
-    MachineProfileStore store{memory, file};
+    telar::MemoryAdapter erased{memory};
+    MachineProfileStore<telar::Memory, MemoryFile> store{erased, file};
     Random random;
     bool failed = false;
 

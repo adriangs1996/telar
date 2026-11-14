@@ -28,7 +28,8 @@ void testProxyAuthentication();
 
 template <Allocator Memory>
 static void readProxy(Memory& memory, ProxyOptions<Memory>& options, std::string_view source) {
-  lua::Vm vm{memory};
+  MemoryAdapter erased{memory};
+  lua::Vm<telar::Memory> vm{erased};
 
   vm.execute(source, "@proxy-test");
   config::ProxyReader<Memory>::read(lua::Value{vm.state(), -1, "config.runtime.proxy"}, options);

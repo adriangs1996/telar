@@ -16,6 +16,7 @@ static_assert(true);
 #include <cstring>
 #include <exception>
 #include <iostream>
+#include <limits.h>
 #include <optional>
 #include <span>
 #include <stdexcept>
@@ -32,7 +33,8 @@ namespace {
 
   using namespace telar::gui;
   using telar::gui::test::require;
-  constexpr std::size_t path_capacity = 64;
+  // The capacity the library compiles discovery for, as the CLI and the GUI use it.
+  constexpr std::size_t path_capacity = PATH_MAX;
   using Discovery = MachineDiscovery<path_capacity>;
 
   template <typename Operation>

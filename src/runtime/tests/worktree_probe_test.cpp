@@ -28,7 +28,7 @@ import telar.vocabulary;
 using namespace telar;
 using namespace telar::runtime;
 
-static void runGit(SystemAllocator& memory, const std::string& root, std::initializer_list<std::string_view> arguments) {
+static void runGit(ConcurrentMemory& memory, const std::string& root, std::initializer_list<std::string_view> arguments) {
   std::array<std::string_view, 32> complete;
   std::size_t count = 0;
 
@@ -48,7 +48,7 @@ static void runGit(SystemAllocator& memory, const std::string& root, std::initia
 
 // A workspace counts untracked files as uncommitted work, as git status --porcelain lists them,
 // and ignored ones as nothing.
-static void untrackedFiles(SystemAllocator& memory) {
+static void untrackedFiles(ConcurrentMemory& memory) {
   std::array<char, 64> directory{};
 
   std::strcpy(directory.data(), "/tmp/telar-git-test.XXXXXX");
@@ -72,7 +72,9 @@ static void untrackedFiles(SystemAllocator& memory) {
 }
 
 void testWorktreeProbe() {
-  SystemAllocator memory;
+  SystemAllocator system;
+  MemoryAdapter adapter{system};
+  ConcurrentMemory& memory = adapter;
 
   untrackedFiles(memory);
   std::array<char, 64> directory{};

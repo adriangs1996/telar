@@ -804,7 +804,21 @@
     "src/gui/platform/window_lease/window_lease.cpp": "telar.gui.platform.window_lease",
     "src/gui/platform/stdio_socket/stdio_socket.cpp": "telar.gui.platform.stdio_socket",
     "lib/base/memory/containers/containers.cpp": "telar.base.memory.containers",
-    "lib/base/memory/sensitive/sensitive.cpp": "telar.base.memory.sensitive"
+    "lib/base/memory/sensitive/sensitive.cpp": "telar.base.memory.sensitive",
+    "lib/git/checkout/checkout.cpp": "telar.git.checkout",
+    "lib/git/git-config.cpp": "telar.git",
+    "lib/git/git-format.cpp": "telar.git",
+    "lib/git/git-history.cpp": "telar.git",
+    "lib/git/git-objects.cpp": "telar.git",
+    "lib/git/git-worktree.cpp": "telar.git",
+    "lib/git/git.cpp": "telar.git",
+    "lib/lua/lua.cpp": "telar.lua",
+    "lib/machines/machines.cpp": "telar.machines",
+    "lib/plugins/plugins.cpp": "telar.plugins",
+    "lib/render/document/document.cpp": "telar.render.document",
+    "lib/render/markdown/markdown.cpp": "telar.render.markdown",
+    "lib/render/terminal/terminal.cpp": "telar.render.terminal",
+    "lib/tls/tls.cpp": "telar.tls"
   },
   "merged_interfaces": {
     "lib/client/include/telar_client/codecs/telar_handshake.cppm": "lib/client/include/telar_client/serializers/telar_handshake.cppm"

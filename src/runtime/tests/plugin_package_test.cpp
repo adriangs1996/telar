@@ -117,7 +117,9 @@ namespace {
     PackageFixture fixture;
     const auto source = fixture.package("sample");
     SystemAllocator system;
-    BudgetAllocator memory{system, 32 * 1024 * 1024};
+    BudgetAllocator budget{system, 32 * 1024 * 1024};
+    MemoryAdapter adapter{budget};
+    Memory& memory = adapter;
     const auto original = tap::PackageInspector::inspect(memory, source);
     std::string snapshot_root;
 
@@ -141,7 +143,7 @@ namespace {
 
     check(!std::filesystem::exists(snapshot_root));
     check(std::filesystem::exists(source + "/plugin.json"));
-    check(memory.liveBytes() == 0);
+    check(budget.liveBytes() == 0);
 
     {
       tap::PackageSnapshots snapshots{memory};
@@ -156,13 +158,15 @@ namespace {
     }
 
     check(!std::filesystem::exists(snapshot_root));
-    check(memory.liveBytes() == 0);
+    check(budget.liveBytes() == 0);
   }
 
   void testTapConfiguration() {
     PackageFixture fixture;
     SystemAllocator system;
-    BudgetAllocator memory{system, 32 * 1024 * 1024};
+    BudgetAllocator budget{system, 32 * 1024 * 1024};
+    MemoryAdapter adapter{budget};
+    Memory& memory = adapter;
     const auto source = fixture.package("sample");
     auto package = tap::PackageInspector::inspect(memory, source);
     const auto specifications = std::to_array({configured("missing", false), configured("./sample")});
@@ -190,7 +194,7 @@ namespace {
     }
 
     check(!std::filesystem::exists(snapshot_path));
-    check(memory.liveBytes() == 0);
+    check(budget.liveBytes() == 0);
 
     fixture.trust(PackageFixture::grant(package, "[\"notifications\"]"));
     {
@@ -230,13 +234,15 @@ namespace {
       check(configuration.specifications().empty());
     }
 
-    check(memory.liveBytes() == 0);
+    check(budget.liveBytes() == 0);
   }
 
   void testTapWorkerLimit() {
     PackageFixture fixture;
     SystemAllocator system;
-    BudgetAllocator memory{system, 32 * 1024 * 1024};
+    BudgetAllocator budget{system, 32 * 1024 * 1024};
+    MemoryAdapter adapter{budget};
+    Memory& memory = adapter;
     std::array<tap::ConfiguredPlugin, tap::Limits::workers + 1> specifications;
     std::string grants;
 
@@ -265,7 +271,7 @@ namespace {
       tap::TapConfiguration configuration{memory, fixture.root, std::span{specifications}, fixture};
     });
 
-    check(memory.liveBytes() == 0);
+    check(budget.liveBytes() == 0);
   }
 
 }

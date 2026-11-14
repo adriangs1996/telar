@@ -175,7 +175,9 @@ namespace {
 
   void callbackCommandsRetainValuesAcrossInvocations() {
     SystemAllocator system;
-    BudgetAllocator memory{system, std::numeric_limits<std::size_t>::max()};
+    BudgetAllocator budget{system, std::numeric_limits<std::size_t>::max()};
+    telar::MemoryAdapter adapter{budget};
+    telar::Memory& memory = adapter;
 
     {
       const ConfigurationSourceText source{
@@ -217,11 +219,13 @@ namespace {
       require(requireValue(generation.commandTab(fixed)).arguments[1] == "fixed", "callback mutation must preserve configured command values");
     }
 
-    require(memory.liveBytes() == 0, "command generations must release every injected allocation");
+    require(budget.liveBytes() == 0, "command generations must release every injected allocation");
   }
 
   void aLargeBatchCanExpireItsEarlierRecentRows() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     const ConfigurationSourceText source{
         .source = R"(
         local arguments={};for i=1,32 do arguments[i]=string.rep('x',128) end
@@ -255,7 +259,9 @@ namespace {
   }
 
   void commandRequestsPreserveLaunchAndRecoverFromDeliveryFailure() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
     const auto command = sampleCommand();
@@ -288,7 +294,9 @@ namespace {
   std::size_t adoptCommandWithAllocationBudget(std::optional<std::size_t> budget, bool discover_before_confirmation) {
     SystemAllocator system;
     BudgetAllocator counted{system, std::numeric_limits<std::size_t>::max()};
-    AllocationGate memory{counted};
+    AllocationGate gate{counted};
+    telar::MemoryAdapter adapter{gate};
+    telar::Memory& memory = adapter;
     Transport transport;
     std::size_t allocations = 0;
 
@@ -313,7 +321,7 @@ namespace {
       const auto previous_count = client.tabs().size();
       const auto before = counted.allocations();
 
-      memory.permit(budget);
+      gate.permit(budget);
       bool rejected = false;
 
       try {
@@ -323,7 +331,7 @@ namespace {
       }
 
       allocations = counted.allocations() - before;
-      memory.permit(std::nullopt);
+      gate.permit(std::nullopt);
       if (budget) {
         require(rejected && client.tabs().size() == previous_count && client.focusedPane()->id == 1 && client.findPane(2) == nullptr, "failed command adoption must preserve existing tabs, panes and focus");
         if (discover_before_confirmation) {
@@ -353,7 +361,9 @@ namespace {
   }
 
   void discoveryBeforeConfirmationDoesNotDuplicateTheCreatedTab() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -375,7 +385,9 @@ namespace {
   }
 
   void confirmationCannotReplaceALiveTab() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -393,7 +405,7 @@ namespace {
     require(rejected && client.tabs().size() == 1 && client.focusedPane()->id == 1, "a correlated reply must not replace an already adopted tab");
   }
 
-  void openThreeTabs(Session<SystemAllocator, Transport>& client, Transport& transport) {
+  void openThreeTabs(Session<telar::ConcurrentMemory, Transport>& client, Transport& transport) {
     openFirstPane(client, transport);
     for (std::uint16_t position = 1; position <= 2; ++position) {
       client.createTab();
@@ -405,7 +417,9 @@ namespace {
   }
 
   void commandsShareOperationOwnershipWithRenameMoveAndClose() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -438,7 +452,9 @@ namespace {
   }
 
   void draggingRetainsTheExplicitSourceAndCanonicalOperationOwner() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     Transport transport;
     Session client{memory, transport};
 
@@ -489,7 +505,9 @@ namespace {
     });
 
     for (const auto& entry : cases) {
-      SystemAllocator memory;
+      SystemAllocator system;
+      telar::MemoryAdapter adapter{system};
+      telar::ConcurrentMemory& memory = adapter;
       Transport transport;
       Session client{memory, transport};
 

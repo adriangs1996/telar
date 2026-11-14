@@ -96,7 +96,9 @@ int main(int argc, char** argv) {
 
   SystemAllocator system;
   constexpr std::size_t memory_budget = std::size_t{512} * 1024 * 1024;
-  BudgetAllocator memory{system, memory_budget};
+  BudgetAllocator budget{system, memory_budget};
+  MemoryAdapter adapter{budget};
+  Memory& memory = adapter;
   const std::string_view binary = argv[1];
 
   try {

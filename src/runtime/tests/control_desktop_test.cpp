@@ -77,7 +77,8 @@ namespace {
   }
 
   void policyConfiguration(SystemAllocator& memory) {
-    lua::Vm vm{memory};
+    MemoryAdapter erased{memory};
+    lua::Vm<Memory> vm{erased};
 
     vm.execute("return {clipboard_read='allow', clipboard_write='deny', title_report=true, checksum_report=true, color_format='8-bit', answerback='telar'}", "control-policy");
     control::Policy policy;

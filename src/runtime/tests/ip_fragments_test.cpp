@@ -315,7 +315,9 @@ static void malformedAndPieceLimits(TlsTestMemory& memory) {
 int main() {
   SystemAllocator system;
   BudgetAllocator budget{system, 32 * 1024 * 1024};
-  TlsTestMemory memory{budget};
+  SynchronizedAllocator synchronized{budget};
+  MemoryAdapter adapter{synchronized};
+  TlsTestMemory& memory = adapter;
 
   reconstructed(memory);
   rejectedAndIsolated(memory);

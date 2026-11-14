@@ -109,7 +109,9 @@ namespace {
   void configuredActionsRetainTheirCompiledValuesWithoutAllocating() {
     SystemAllocator system;
     constexpr std::size_t budget_bytes = std::size_t{8} * 1024 * 1024;
-    BudgetAllocator memory{system, budget_bytes};
+    BudgetAllocator budget{system, budget_bytes};
+    telar::MemoryAdapter adapter{budget};
+    telar::Memory& memory = adapter;
 
     {
       ConfigurationGeneration generation{memory, source};
@@ -122,7 +124,7 @@ namespace {
 
       require(expected && expected->level == NotificationLevel::warning && expected->duration_ms == duration_ms && expected->target.kind == NotificationTarget::Kind::pane && expected->target.id == pane_id, "description lookup must preserve severity, duration and semantic target");
       static_cast<void>(generation.invoke(generation.input().configured[2].action, {}));
-      const auto allocations = memory.allocations();
+      const auto allocations = budget.allocations();
       constexpr std::size_t repetitions = 100;
 
       for (std::size_t index = 0; index < repetitions; ++index) {
@@ -131,15 +133,17 @@ namespace {
         require(notification && notification->title.view() == "Retained notice" && notification->level == NotificationLevel::warning, "Lua table mutation must not rewrite an already compiled action");
       }
 
-      require(memory.allocations() == allocations, "repeated configured notification lookup must not allocate through the injected allocator");
+      require(budget.allocations() == allocations, "repeated configured notification lookup must not allocate through the injected allocator");
       require(!generation.notificationAction(generation.input().configured[3].action), "other extended action families must retain their unsupported status");
     }
 
-    require(memory.liveBytes() == 0, "notification descriptions must not retain their configuration allocator after destruction");
+    require(budget.liveBytes() == 0, "notification descriptions must not retain their configuration allocator after destruction");
   }
 
   void callbackDescriptionsOwnTextAndRetireTheirRegistryReferences() {
-    SystemAllocator memory;
+    SystemAllocator system;
+    telar::MemoryAdapter adapter{system};
+    telar::ConcurrentMemory& memory = adapter;
     ConfigurationGeneration generation{memory, source};
     const auto callback = generation.input().configured[1].action;
     const auto first = generation.invoke(callback, {});
