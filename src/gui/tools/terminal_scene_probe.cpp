@@ -71,7 +71,7 @@ static_assert(true);
 #include "terminal/screen.hpp"
 
 import telar.gui.core.metrics;
-import telar.config;
+import telar.config.gui;
 import telar.gui.fonts.face;
 import telar.gui.graphics.texture_cache;
 import telar.gui.terminal.selection;

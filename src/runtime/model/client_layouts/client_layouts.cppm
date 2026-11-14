@@ -55,7 +55,7 @@ export import telar.base.diagnostics;
 
 export import telar.client;
 
-export import telar.config;
+export import telar.config.runtime;
 import telar.wire.vocabulary;
 import telar.wire.clipboard;
 import telar.wire.layout;

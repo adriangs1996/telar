@@ -19,6 +19,7 @@ export import telar.gui.core.json_writer;
 export import telar.gui.input.copy_pointer;
 export import telar.gui.input.key_encoder;
 import telar.base.diagnostics;
+import telar.config.gui;
 import telar.wire.vocabulary;
 
 // Interface: config/query.cppm

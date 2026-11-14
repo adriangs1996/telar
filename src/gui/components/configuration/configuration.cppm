@@ -22,10 +22,11 @@ import std;
 export import telar.gui.core.metrics;
 export import telar.gui.input.copy_pointer;
 export import telar.gui.presentation.history_filter_geometry;
-export import telar.config;
+export import telar.config.client;
 
 export import telar.lua;
 
+export import telar.base.memory.containers;
 export import telar.base.text;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;

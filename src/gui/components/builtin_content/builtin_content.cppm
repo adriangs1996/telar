@@ -23,7 +23,7 @@ export import telar.gui.input.binding_effects;
 
 export import telar.gui.text.json_unsigned_integer;
 
-export import telar.config;
+export import telar.config.client;
 
 export import telar.lua;
 

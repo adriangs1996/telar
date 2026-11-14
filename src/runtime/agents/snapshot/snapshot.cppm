@@ -32,7 +32,7 @@ export module telar.runtime.agents.snapshot;
 
 import std;
 
-export import telar.config;
+export import telar.config.runtime;
 
 export import telar.runtime.platform.process_probe;
 export import telar.runtime.agents.description_generator;

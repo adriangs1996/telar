@@ -9,7 +9,7 @@ export module telar.runtime.config.loader;
 
 import std;
 
-export import telar.config;
+export import telar.config.snapshot;
 export import telar.lua;
 export import telar.platform.error;
 export import telar.platform.fs;

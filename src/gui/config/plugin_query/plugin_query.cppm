@@ -20,7 +20,7 @@ import std;
 export import telar.gui.input.key_encoder;
 
 export import telar.gui.input.copy_pointer;
-export import telar.config;
+export import telar.config.client;
 
 export import telar.gui.core.json_writer;
 

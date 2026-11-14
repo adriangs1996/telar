@@ -27,7 +27,8 @@ import std;
 export import telar.gui.input.copy_pointer;
 export import telar.gui.input.binding_effects;
 export import telar.gui.input.key_encoder;
-export import telar.config;
+export import telar.config.client;
+export import telar.config.runtime;
 
 export import telar.gui.config.plugin_query;
 

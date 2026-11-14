@@ -18,7 +18,7 @@ import std;
 export import telar.gui.core.metrics;
 import telar.base.diagnostics;
 import telar.base.memory.allocators;
-import telar.config;
+import telar.config.core;
 import telar.gui.core.primitives;
 import telar.wire.graphics;
 import telar.wire.vocabulary;

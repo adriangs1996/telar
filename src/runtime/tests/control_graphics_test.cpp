@@ -45,7 +45,7 @@ import std;
 import telar.base.diagnostics;
 import telar.base.memory.allocators;
 import telar.base.text;
-import telar.config;
+import telar.config.core;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
 import telar.runtime.graphics.kitty;

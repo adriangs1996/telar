@@ -13,7 +13,7 @@ export module telar.cli.hooks.command;
 
 import std;
 
-export import telar.config;
+export import telar.config.runtime;
 
 export import telar.base.text;
 import telar.base.diagnostics;

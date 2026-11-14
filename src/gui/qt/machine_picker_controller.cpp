@@ -46,7 +46,7 @@ import telar.gui.machines.picker;
 import telar.gui.palette.navigation_label;
 import telar.gui.platform.runtime_endpoint;
 import telar.gui.presentation.suggestion_geometry;
-import telar.config;
+import telar.config.client;
 import telar.gui.text.json_unsigned_integer;
 
 namespace telar::gui::qt {

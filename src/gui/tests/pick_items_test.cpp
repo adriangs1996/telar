@@ -18,7 +18,7 @@ import telar.base.memory.allocators;
 import telar.base.text;
 import telar.gui.core.primitives;
 import telar.gui.components.builtin_content;
-import telar.config;
+import telar.config.core;
 import telar.lua;
 
 namespace {

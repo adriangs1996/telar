@@ -25,7 +25,7 @@ export module telar.gui.config.generation;
 import std;
 
 export import telar.gui.config.plugin_query;
-export import telar.config;
+export import telar.config.snapshot;
 export import telar.lua;
 export import telar.plugins;
 

@@ -74,7 +74,7 @@ import telar.gui.config.plugin_query;
 import telar.gui.config.generation;
 import telar.gui.input.copy_pointer;
 import telar.gui.presentation.tab_drop;
-import telar.config;
+import telar.config.client;
 
 import telar.gui.config.gui_query;
 

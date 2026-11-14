@@ -26,7 +26,7 @@ module telar.cli.tab;
 
 import std;
 
-import telar.config;
+import telar.config.snapshot;
 import telar.lua;
 import telar.platform.error;
 import telar.platform.fs;

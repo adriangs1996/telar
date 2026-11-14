@@ -37,8 +37,6 @@ export import telar.cli.window;
 
 export import telar.cli.command_limit;
 
-export import telar.config;
-
 export import telar.cli.worktree_git;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;

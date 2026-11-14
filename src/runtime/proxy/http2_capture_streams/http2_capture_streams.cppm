@@ -38,7 +38,7 @@ export import telar.runtime.redirect.ingress;
 export import telar.runtime.tls.interception;
 export import telar.runtime.proxy.authenticate;
 
-export import telar.config;
+export import telar.config.runtime;
 
 export import telar.runtime.http2.direction_observer;
 

@@ -55,7 +55,7 @@ import telar.runtime.graphics.kitty;
 import telar.runtime.terminal.control;
 import telar.runtime.tests.client_peer;
 import telar.runtime.runtime.runtime;
-import telar.config;
+import telar.config.runtime;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
 
