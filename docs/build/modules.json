@@ -945,7 +945,13 @@
     "src/runtime/runtime/media_service/media_service.cpp": "telar.runtime.runtime.media_service",
     "src/runtime/runtime/runtime/runtime.cpp": "telar.runtime.runtime.runtime",
     "src/runtime/runtime/runtime_telemetry/runtime_telemetry.cpp": "telar.runtime.runtime.runtime_telemetry",
-    "src/runtime/transport/connection/connection.cpp": "telar.runtime.transport.connection"
+    "src/runtime/transport/connection/connection.cpp": "telar.runtime.transport.connection",
+    "lib/config/client/client.cpp": "telar.config.client",
+    "lib/config/core/core.cpp": "telar.config.core",
+    "lib/config/gui/gui.cpp": "telar.config.gui",
+    "lib/config/runtime/runtime.cpp": "telar.config.runtime",
+    "lib/config/runtime/runtime_reader.cpp": "telar.config.runtime",
+    "lib/config/snapshot/snapshot.cpp": "telar.config.snapshot"
   },
   "merged_interfaces": {
     "lib/client/include/telar_client/codecs/telar_handshake.cppm": "lib/client/include/telar_client/serializers/telar_handshake.cppm"

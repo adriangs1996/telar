@@ -121,25 +121,33 @@
   "lib/clipboard/src/unavailable.cpp": [
     "clipboard.hpp"
   ],
-  "lib/config/client/client.cppm": [
+  "lib/config/client/client.cpp": [
     "<cstdint>",
     "<lua.h>"
   ],
-  "lib/config/core/core.cppm": [
+  "lib/config/client/client.cppm": [
+    "<lua.h>"
+  ],
+  "lib/config/core/core.cpp": [
     "<cinttypes>",
     "<cstdio>"
   ],
-  "lib/config/gui/gui.cppm": [
+  "lib/config/gui/gui.cpp": [
+    "<lua.h>"
+  ],
+  "lib/config/runtime/runtime.cpp": [
+    "<arpa/inet.h>",
+    "<cstdint>",
     "<lua.h>"
   ],
   "lib/config/runtime/runtime.cppm": [
-    "<arpa/inet.h>",
-    "<cstdint>",
+    "<limits.h>"
+  ],
+  "lib/config/runtime/runtime_reader.cpp": [
     "<ghostty/vt/unicode.h>",
-    "<limits.h>",
     "<lua.h>"
   ],
-  "lib/config/snapshot/snapshot.cppm": [
+  "lib/config/snapshot/snapshot.cpp": [
     "<lua.h>"
   ],
   "lib/ebnf/lexer/lexer.cppm": [
