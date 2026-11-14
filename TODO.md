@@ -279,11 +279,12 @@ graph LR
 - **Resultado:** `0d14f0c2e`. `telar.platform.net` (`lib/platform/net/`) con `NetworkAddress`, `configureProxySocket`, `openOriginSocket`, `SocketStream`, el contrato de byte stream y las funciones de socket que quedaban en el agregador. El resolver DNS (`SystemNameResolver`, `NameResolutions`) no puede ir a `lib` porque avisa por `CompletionSignal`, así que va a `telar.runtime.platform.name_resolutions`, por debajo de proxy y redirect; `ProxyTarget` pasa a `telar.base.text`. `OriginConnection` y `RelayDirection` se quedan en `relay_direction`. Se rompen los ciclos proxy ↔ tls, redirect y traffic. Al integrar con P4.1b y P4.2b, cuatro conflictos de imports. Compilan runtime, CLI y GUI. `upward_imports` de 21 a 20.
 - **Cierra:** `plugins → proxy`, `redirect → proxy` (3), `tls → proxy`, `traffic → proxy` (2). Con eso caen los ciclos proxy ↔ tls, proxy ↔ redirect y proxy ↔ traffic.
 
-### [ ] P3.11b · `traffic.vocabulary`
+### [x] P3.11b · `traffic.vocabulary`
 - **Depende de:** P1.2. Comparte `traffic.control_backend` con P3.11a: no se ejecutan a la vez.
 - **Toca:** `runtime.plugins.protocol`, `runtime.plugins.tap_configuration`, `runtime.traffic.control_protocol`, `runtime.traffic.control_backend`, `runtime.http.message`, `runtime.http1.intercepted_relay`, `runtime.redirect.ingress`, `runtime.redirect.socket_owners`.
 - **Qué hace:** lo que comparten proxy, plugins, traffic y http pasa a un módulo de vocabulario por debajo de todos ellos.
 - **audit-39:** no lo cubre. `43f4b712e` añadió `HttpInterceptionSlot` como unidad `http/interception_slot.cppm` del módulo `http1.intercepted_relay`, otra unidad fuera de la carpeta de su módulo para P1.2.
+- **Resultado:** `2ae197abe`. Componente nuevo `runtime/vocabulary` con `telar.runtime.vocabulary.frames` (codec de frames) y `telar.runtime.vocabulary.traffic` (lo que había en `plugins.protocol`, `ServiceSpec` y `connect`/`sendAll`); `plugins.protocol` desaparece. `http1.intercepted_relay` pasa a `telar.runtime.proxy.intercepted_relay`, junto a su único importador. Caen los ciclos plugins ↔ traffic, http ↔ plugins, http ↔ http1 y redirect ↔ traffic. `upward_imports` de 20 a 7.
 - **Cierra:** `traffic → plugins` (3), `redirect → plugins`, `redirect → traffic`, `http → plugins`, `http1 → http`, `http1 → traffic`. Con eso caen los ciclos plugins ↔ traffic y http ↔ plugins.
 
 ### [x] P3.12a · Sacar `PaneLayout` y la geometría de `gui.application.sound_playback`
@@ -340,9 +341,10 @@ graph LR
 - **Depende de:** P1.2. Toca `host_effects`, igual que P3.12c.
 - **Toca:** sus unidades `stdio_socket`, `wall_clock` y `window_lease`.
 
-### [ ] P3.14d · Módulos cajón del runtime
+### [x] P3.14d · Módulos cajón del runtime
 - **Depende de:** P1.2
 - **Toca:** `runtime.platform.system_certificates` (contiene `event_loop`) y `runtime.platform.launch_program` (contiene `local_listener`).
+- **Resultado:** `204f10bb3`. `system_certificates` se queda con `SystemCertificates`; salen `runtime.platform.event_loop` (con `macos/event_loop.cpp`) y `runtime.platform.descriptor_path`. `launch_program` se queda con `launchedProgram`; salen `runtime.platform.local_listener`, `.tunnel_sockets` y `.proc_file` (solo Linux, en `TELAR_LINUX_MODULES`). Código movido sin cambios.
 
 ### [x] P3.15a · Ciclo `cli.tab` ↔ `cli.integration.settings`
 - **Depende de:** P1.2
@@ -360,10 +362,11 @@ graph LR
 - **Cierra:** `hooks → (root)`.
 - **Resultado:** `849a9af15`. `ControlFailure`, `RuntimeConnection` (con su `.cpp`) y `ControlSession` pasan sin cambios a `telar.cli.control_session`; `hooks.session` importa solo ese módulo y `runtime_observer` lo reexporta. Compila el CLI en Release y pasan sus 12 tests.
 
-### [ ] P3.16 · `gui.core.primitives` sin application ni input
+### [x] P3.16 · `gui.core.primitives` sin application ni input
 - **Depende de:** P1.2
 - **Toca:** `gui.core.primitives`, que incluye `application/dependencies.hpp` e `input/wheel_accumulator.hpp`.
 - **Hecho cuando:** core no incluye ni importa nada de application ni de input.
+- **Resultado:** `9904e212c`. `primitives` incluye `core/memory.hpp` en vez de `application/dependencies.hpp` y deja de exportar `ApplicationAllocator` y `ApplicationMemory`, que solo usan fuentes Qt y Objective-C++. La rueda del ratón pasa a `telar.gui.input.wheel_accumulator`.
 
 ### [ ] P3.17 · Cierre de capas
 - **Depende de:** P2.1, P3.6–P3.16
@@ -381,6 +384,7 @@ Cada hub sigue el patrón agregador: `a` crea los módulos y deja el agregador, 
 - **Contexto:** 127 dependientes, 34 secciones, cada importador usa de media el 8%.
 - **Resultado de a:** `284a6e6ba`. `telar.platform` reexporta un módulo por familia en `lib/platform/<familia>/`: `error`, `process` (con login shell y ruta del ejecutable), `thread`, `fs`, `paths`, `daemon`, `events` (`ObservationTime`, `earliest`), y dos que el plan no nombraba, `sha256` y `graphics`. La familia git va a `telar.git.checkout` (lib/git), que importan directamente sus 5 importadores y 3 tests, porque `platform` no puede reexportar algo de una capa superior; `git` puede importar `vocabulary`. `socketWouldBlock`, `suppressSocketSignals` y `peerCredentials` se quedan en el agregador para P3.11a. Compilan runtime, CLI, GUI y `lib/git` sobre la rama integrada. El `[x]` del título marca solo `a`.
 - **Resultado de b:** `7e2002561`. 110 unidades importan solo sus familias (`error` 61, `fs` 53, `process` 37, `paths` 26…), 4 pierden el import y 17 siguen con el agregador porque usan las funciones de socket que P3.11a lleva a `net`. Lo que llegaba de rebote (`base.memory`, `base.text`) se importa directamente. Al integrar con P4.2b, nueve conflictos de imports y dos interfaces que perdían `FixedText` (`telar.plugins`, `telar.config.gui`), que ahora hacen `export import telar.base.memory.containers`. Compilan runtime, CLI, GUI y `lib/git`.
+- **Resultado de c:** `7f37d863c`. Los 17 importadores que quedaban pasan a `telar.platform.net` y `lib/platform/platform.cppm` desaparece. Al integrar, `gui.platform.profile_file` (P3.14a) importaba aún el agregador y pasa a `platform.error` y `platform.fs`. **P4.1 cerrada.**
 
 ### [x] P4.2a/b/c · `telar.base.memory` por familias
 - **Depende de:** a: P1.2 · b: P4.2a · c: P4.2b
@@ -394,12 +398,14 @@ Cada hub sigue el patrón agregador: `a` crea los módulos y deja el agregador, 
 - **Depende de:** a: P1.2 · b: P4.3a · c: P4.3b
 - **Qué hace:** `json`, `json_error`, `json_fields` y `json_node` a `telar.base.text.json`. ASCII, `fields`, `hostname` y `schema_version` se quedan en su propio módulo.
 - **Resultado de a:** `450f8127a`. `telar.base.text.json` (`JsonError`, `JsonValue`, `JsonEscapes`, `escapeJson`, `appendJsonText`, `JsonFields`, `JsonKind`, `JsonNode`), con `import std` y dependiendo solo de `base.memory.allocators` y de un módulo nuevo, `telar.base.text.utf8` (dueño de `utf8.hpp`), sin el cual había un ciclo entre el JSON y `SchemaVersion`. `telar.base.text` hace `export import` de los dos. **En b, los importadores que solo usan UTF-8 pasan a `telar.base.text.utf8`.** El `[x]` del título marca solo `a`.
+- **Resultado de b:** `683e960ef`. De 134 importadores: `telar.base.text.json` en 31, `.utf8` en 41, `telar.base.text` en 57, y 51 pierden el import; `telar.platform` y `telar.config` dejan de reexportarlo, `telar.client` reexporta solo UTF-8. El árbol compila con el agregador sin reexports, así que c puede quitarlos. Al integrar con P4.4b y P4.1c, 29 conflictos de imports (regla: `config` y `platform` de P4.4b/P4.1c, `base.text` de P4.3b), y `proxy.relay_direction` importa `telar.base.text` directamente.
 
 ### [x] P4.4a/b/c · `telar.config` por proceso
 - **Depende de:** a: P1.2 · b: P4.4a · c: P4.4b
 - **Decidido:** módulos separados (`telar.config.core`, `.runtime`, `.client`, `.gui`), no particiones: una partición no se puede importar desde fuera de su módulo, así que no corta la cascada entre procesos. La tarea `a` actualiza la regla "un módulo por biblioteca" de `docs/build/cpp-modules.md`.
 - **Contexto:** 86 dependientes, 45 secciones, 4,3% de uso medio y 15 secciones que nadie usa desde fuera. Las 15 se borran o se pasan a internas en `a`.
-- **Resultado de a:** `7c0014718`. Cinco módulos y `telar.config` como agregador: `.core` (lo compartido: avisos de límites, restricciones, proveedores de agentes, `IntegrationProvider`, `LocalModules`, `GraphicsLimits`), `.runtime`, `.client`, `.gui` (secciones `gui` y `theme`) y `.snapshot` (`SnapshotReader`, que valida el config entero y usan los tres procesos; dentro de `.runtime` habría obligado a importar `.client` y `.gui`). `docs/build/cpp-modules.md` actualizado. El `[x]` del título marca solo `a`.
+- **Resultado de a:** `7c0014718`. Cinco módulos y `telar.config` como agregador:
+- **Resultado de b:** `b113c9cab`. 90 unidades: 59 importan módulos estrechos (`.runtime` 25, `.core` 16, `.client` 10, `.snapshot` 3, `.gui` 2…) y 31 pierden el import. Compilan runtime, CLI y GUI. `.core` (lo compartido: avisos de límites, restricciones, proveedores de agentes, `IntegrationProvider`, `LocalModules`, `GraphicsLimits`), `.runtime`, `.client`, `.gui` (secciones `gui` y `theme`) y `.snapshot` (`SnapshotReader`, que valida el config entero y usan los tres procesos; dentro de `.runtime` habría obligado a importar `.client` y `.gui`). `docs/build/cpp-modules.md` actualizado. El `[x]` del título marca solo `a`.
 
 ### [ ] P4.5 · Un solo lector tipado del schema de config
 - **Depende de:** P4.4a
