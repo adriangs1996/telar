@@ -139,13 +139,37 @@ uses only the callee's signature:
   that reference designates. This summary is the one thing the checker infers
   across calls, because C++ picks a non-const accessor such as `operator[]` by
   the object's constness rather than by its use; every `&mut` would otherwise
-  conflict, which Rust code never meets. A project function without a visible
-  body, or a virtual one that is not `final`, may invalidate every input it can
-  mutate. What the receiver reaches through its own reference fields it borrows
+  conflict, which Rust code never meets. The summary of a function that another
+  unit of the same run defines is read from that unit (see below). A project
+  function no checked unit defines, or a virtual one that is not `final`, may
+  invalidate every input it can mutate. What the receiver reaches through its own reference fields it borrows
   exclusively, as a Rust `&mut` field is: a call that mutates through one
   invalidates every other borrow of that object, never the receiver's own.
   Nothing a reference to const designates, nor a constant with static storage,
   is invalidated through it, as a Rust `&T` lends nothing to mutate.
+
+### Functions another unit defines
+
+When `tbc-lint` checks several translation units, a first pass summarizes, once
+per unit, what each function that unit's own source file defines can invalidate:
+which parameters, through a reference or what a pointer designates, and whether
+the receiver or the environment. Each summary is the one that unit solves for the
+function, recursion included, and it is keyed by the function's linkage name, on
+which every unit that declares it agrees. A unit that sees only the declaration,
+such as a caller of a module's implementation unit or of a template instantiated
+explicitly elsewhere, invalidates what the summary says instead of every mutable
+input. A function several units define invalidates what any of them does.
+
+The summary keeps no more than a call through a visible body reads, so a call
+into another unit is checked as if its body were visible, with one difference:
+the first pass summarizes each unit without the summaries of other units, so a
+function that calls into a third unit keeps that call's declared invalidations.
+A summary that names something only its unit knows, such as a global or a field
+inside a parameter, is not exported, and the callers fall back to the
+declaration. Constructors and destructors, virtual calls that may reach an
+override, and indirect calls stay known by their declarations. A single checked
+unit has no other unit to read, so its calls into functions defined elsewhere
+keep their declared invalidations.
 
 A closure is checked with the function that defines it, as Rust does, so its
 call keeps which fields it reads and mutates. So are the members the compiler

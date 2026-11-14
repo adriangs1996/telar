@@ -141,7 +141,10 @@ standard library's modeled effects within it. A call is known by its declaration
 its result follows elision or labels, it keeps only what its labels let it keep,
 and it uses everything it receives. What it can invalidate is the one effect
 summarized across calls, an input at a time, never field by field, as Rust's
-`&mut` lends a whole object. A closure is checked with its enclosing function.
+`&mut` lends a whole object. When several sources are checked, a first pass
+summarizes that effect for the functions each one defines, so a call into
+another unit invalidates what its body does rather than every input it can
+mutate; see [`docs/contracts.md`](docs/contracts.md#functions-another-unit-defines). A closure is checked with its enclosing function.
 An object never borrows itself, and a call's mutable argument never overlaps
 another argument.
 
@@ -324,7 +327,7 @@ cmake --build --preset debug --target spec-check
 
 The first command validates fixture syntax/metadata, the runner, and implemented
 regressions. `spec-check` deliberately fails on unmet pending specifications.
-The corpus has 344 cases: 293 implemented regressions and 51 explicitly pending
+The corpus has 360 cases: 309 implemented regressions and 51 explicitly pending
 requirements. Fixtures are never linked or executed. Provenance validation requires the surrounding Telar checkout.
 
 ## Format and static analysis

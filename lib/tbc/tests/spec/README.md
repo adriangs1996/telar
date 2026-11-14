@@ -32,12 +32,12 @@ comparison. Notes are permitted but their wording and locations are not yet part
 of the assertion. There is no message-substring match that can accidentally
 accept a different rule's warning.
 
-The corpus contains **354 cases in 164 groups**: 181 accepted and 173 rejected
-examples. There are 303 implemented regressions and 51 explicitly pending
+The corpus contains **360 cases in 167 groups**: 184 accepted and 176 rejected
+examples. There are 309 implemented regressions and 51 explicitly pending
 requirements. The original 58 cases are supplemented by 73 inference cases,
 35 pointer and lambda cases, 43 standard-library cases, 16 third-party library
 cases, 44 storage-place cases, 2 system-macro cases, 2 elided-contract cases,
-4 retention-path cases, 3 static-result cases, 2 opaque-constructor cases, 14 elision, self-field and labeled-field cases, and 54 declaration cases.
+4 retention-path cases, 3 static-result cases, 2 opaque-constructor cases, 14 elision, self-field and labeled-field cases, 54 declaration cases, and 6 cross-unit cases.
 A passing pending positive case does not establish support for its contract.
 
 ## Source inventory
@@ -61,6 +61,7 @@ A passing pending positive case does not establish support for its contract.
 | `callbacks.cpp` | 7 | GUI machine-profile workers use owning request fields; runtime `OwnedPathQuery::assign` copies root/query text. Compare retained captures with synchronous layout callbacks and context-bounded queued invocation in `qt/window_images.cpp`. A lifetime guard for one context does not protect unrelated captures. |
 | `contracts.cpp` | 27 | Contrast a result tied to region `a` with an independent `b` input, and a function allowed to return either of two `a` inputs. Check an out-of-line method's elided result against its receiver. A `static_storage` result outlives a dying argument at the call site, and its definition may return only literals or static objects. Retain the modeled/unmodeled call-boundary requirements. A constructor without a visible body retains the arguments whose parameters share a region with a field of its class, or, with no labeled field, every argument that can lend. An unannotated declaration follows Rust's lifetime elision, and its out-of-line definition is checked against it, except for an override of a library virtual; a deduced return type is no contract. A field labeled `lt::self` borrows only its pinned object, and those internal borrows survive calls that mutate it and may carry a region the object already keeps; what a labeled field owns is in its region. |
 | `control_flow.cpp` | 8 | Conditional ByteQueue growth and allocator cleanup during exceptions motivate CFG-sensitive checks. One invalidating path is enough if it reaches a use; an early return or an owned copy can remove the conflict. `PtyResponseQueue::append` and `Reply::publish`: one retaining path is enough too, whatever value selects it, while separate copying and retaining functions are checked apart. An owner retained beside a view keeps alive only the object it owns. |
+| `cross_unit.cpp` | 6 | `JsonNode<Memory>` in `lib/base/text/json`, whose accessors and explicit instantiations live in the implementation unit, and the CLI's `HistoryPathVisitor`: a call into a function another unit defines invalidates what its body does. A non-const lookup ends no borrow of its receiver and an append does; a recursive count mutates nothing and a recursive truncation clears; a call to a final override is known by its body, a virtual one that may reach any override is not. |
 | `access_validity.cpp` | 4 | Glyph bitmap row slicing and allocator null checks motivate bounds/nullability requirements in addition to borrow lifetimes. Unproven bounds are not a claim that every runtime index is actually invalid. |
 
 ### Deliberate reductions and preconditions
@@ -81,6 +82,11 @@ The history swap model refers to vector row allocations. It does **not** assert
 that every string-view into an arbitrary small-string-optimized command buffer
 survives every swap. The actual operation's allocator checks and the exact
 referenced resource remain part of the contract.
+
+A fixture whose cases call into other translation units keeps them in
+`units/<fixture>/`: the runner checks the fixture and each `.cpp` there in one
+run, so the first pass summarizes their functions. A diagnostic in a companion
+unit belongs to no case and fails the run.
 
 The linter detects invalid memory uses, not aliasing. Two overlapping mutable
 references are legal C++, so Rust's exclusive-access rules are not a target.

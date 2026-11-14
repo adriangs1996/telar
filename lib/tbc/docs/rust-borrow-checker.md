@@ -1029,7 +1029,8 @@ applies these rules to C++:
   definition is checked against its declaration.
 - C++ chooses a non-const accessor by the object's constness rather than by its
   use, so a call's ability to invalidate an input is summarized across calls, an
-  input at a time, never field by field. Rust needs no such summary.
+  input at a time, never field by field, also into functions that another
+  checked unit defines. Rust needs no such summary.
 - Exclusivity is upheld where `noalias` matters to the callee: a call's mutable
   argument may not overlap another argument, and an object may not borrow itself
   except through a pinned `lt::self` field.

@@ -16,6 +16,7 @@ import sys
 PROJECT = Path(__file__).resolve().parent.parent
 REPOSITORY = PROJECT.parent.parent
 CORPUS = Path(__file__).resolve().parent / "spec"
+UNITS = "units"
 FIELD = re.compile(r"^// (CASE|PAIR|SOURCE|STATUS|CONTRACT|SCENARIO): (.+)$")
 EXPECTED = re.compile(r"// expected-error \[(tbc-[a-z-]+)\]\s*$")
 DIAGNOSTIC = re.compile(r"^(.+):(\d+):(\d+): (warning|error|fatal error): .*\[(tbc-[a-z-]+)\]$")
@@ -78,6 +79,12 @@ def load_cases(directory=CORPUS, repository=REPOSITORY):
     return cases
 
 
+def companion_units(source):
+    """The other translation units a fixture's cases call into, checked in the same run."""
+    directory = source.parent / UNITS / source.stem
+    return sorted(directory.glob("*.cpp")) if directory.is_dir() else []
+
+
 def compare_diagnostics(cases, output, source):
     actual = defaultdict(Counter)
     problems = []
@@ -132,13 +139,14 @@ def main(argv=None):
     matched = 0
     checked = 0
     for source, file_cases in by_source.items():
-        compiled = run([options.compiler, *flags, "-fsyntax-only", str(source)])
-        if compiled.returncode:
-            failures.append(f"Invalid C++ fixture {source.name}:\n{compiled.stderr}")
+        units = [source, *companion_units(source)]
+        invalid = [(unit, compiled) for unit in units if (compiled := run([options.compiler, *flags, "-fsyntax-only", str(unit)])).returncode]
+        for unit, compiled in invalid:
+            failures.append(f"Invalid C++ fixture {unit.name}:\n{compiled.stderr}")
+        if invalid or options.mode == "validate":
             continue
-        if options.mode == "validate":
-            continue
-        result = run([options.linter, "--warnings-as-errors", str(source), "--", *flags, "-ferror-limit=0"])
+        # Diagnostics in a companion unit belong to no case, so they fail as unassigned.
+        result = run([options.linter, "--warnings-as-errors", *map(str, units), "--", *flags, "-ferror-limit=0"])
         actual, problems = compare_diagnostics(file_cases, result.stderr, source)
         failures.extend(problems)
         # Non-tbc compiler errors, crashes and timeouts must not look like missing rules.
