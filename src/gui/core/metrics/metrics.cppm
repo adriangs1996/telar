@@ -431,6 +431,11 @@ export {
 
       [[nodiscard]] Rect intersect(Rect other) const noexcept;
 
+      // Replaces each rectangle with its intersection with area, as intersect does for one. A
+      // caller with many rectangles makes one call per batch, so the loop stays in this unit,
+      // where it vectorizes.
+      static void intersectEach(std::span<Rect> rectangles, Rect area) noexcept;
+
       [[nodiscard]] Rect inset(float horizontal, float vertical) const noexcept;
 
       [[nodiscard]] bool empty() const noexcept;

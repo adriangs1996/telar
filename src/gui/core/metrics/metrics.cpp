@@ -186,6 +186,12 @@ namespace telar::gui {
     return {.x = left, .y = top, .width = std::max(0.0F, std::min(right(), other.right()) - left), .height = std::max(0.0F, std::min(bottom(), other.bottom()) - top)};
   }
 
+  void Rect::intersectEach(std::span<Rect> rectangles, Rect area) noexcept {
+    for (auto& rectangle : rectangles) {
+      rectangle = rectangle.intersect(area);
+    }
+  }
+
   Rect Rect::inset(float horizontal, float vertical) const noexcept {
     return {.x = x + horizontal, .y = y + vertical, .width = std::max(0.0F, width - horizontal * 2), .height = std::max(0.0F, height - vertical * 2)};
   }
