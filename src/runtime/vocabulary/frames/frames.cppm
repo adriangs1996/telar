@@ -1,3 +1,6 @@
+module;
+#include "tbc/hot_path.hpp"
+
 export module telar.runtime.vocabulary.frames;
 
 import std;
@@ -32,25 +35,21 @@ export {
     // Reads fields from a frame, region `a`; the bytes and text it hands out view that frame.
     class FrameReader {
     public:
-      inline explicit FrameReader(tbc::view<std::span<const Byte>, tbc::lt::a> input) noexcept
-          : remaining_(input) {}
+      explicit FrameReader(tbc::view<std::span<const Byte>, tbc::lt::a> input) noexcept;
 
+      // Generic over the caller's integer and enumeration types, so these stay here.
       template <std::unsigned_integral Integer>
-      inline Integer integer() {
+      TBC_HOT_PATH inline Integer integer() {
         return LittleEndian<Integer>::decode(remaining_);
       }
 
-      inline std::int64_t timestamp() {
-        return std::bit_cast<std::int64_t>(integer<std::uint64_t>());
-      }
+      std::int64_t timestamp();
 
-      inline bool boolean() {
-        return BoolByte::decode(remaining_);
-      }
+      bool boolean();
 
       template <typename Enum>
         requires std::is_enum_v<Enum>
-      Enum tag(Enum maximum) {
+      TBC_HOT_PATH Enum tag(Enum maximum) {
         const auto value = integer<Byte>();
         if (value > static_cast<Byte>(maximum)) {
           throw EncodingError{"Unknown tap enumeration value"};
@@ -61,35 +60,17 @@ export {
 
       template <typename Enum>
         requires std::is_enum_v<Enum>
-      void require(Enum expected) {
+      TBC_HOT_PATH void require(Enum expected) {
         if (integer<Byte>() != static_cast<Byte>(expected)) {
           throw EncodingError{"Unexpected tap frame tag"};
         }
       }
 
-      inline tbc::view<std::span<const Byte>, tbc::lt::a> bytes() {
-        const auto length = integer<std::uint32_t>();
-        if (length > remaining_.size()) {
-          throw EncodingError{"Truncated tap field"};
-        }
+      tbc::view<std::span<const Byte>, tbc::lt::a> bytes();
 
-        const auto value = remaining_.first(length);
+      tbc::view<std::string_view, tbc::lt::a> text();
 
-        remaining_ = remaining_.subspan(length);
-        return value;
-      }
-
-      inline tbc::view<std::string_view, tbc::lt::a> text() {
-        const auto value = bytes();
-
-        return {reinterpret_cast<const char*>(value.data()), value.size()};
-      }
-
-      inline void finish() const {
-        if (!remaining_.empty()) {
-          throw EncodingError{"Trailing tap frame bytes"};
-        }
-      }
+      void finish() const;
 
     private:
       tbc::view<std::span<const Byte>, tbc::lt::a> remaining_;
@@ -104,46 +85,30 @@ export {
 
     class FrameSize {
     public:
+      // Generic over the caller's integer and enumeration types, so these stay here.
       template <std::unsigned_integral Integer>
-      inline void integer(Integer) {
+      TBC_HOT_PATH inline void integer(Integer) {
         add(sizeof(Integer));
       }
 
-      inline void timestamp(std::int64_t) {
-        integer(std::uint64_t{});
-      }
+      void timestamp(std::int64_t);
 
-      inline void boolean(bool) {
-        integer(Byte{});
-      }
+      void boolean(bool);
 
       template <typename Enum>
         requires std::is_enum_v<Enum>
-      void tag(Enum) {
+      TBC_HOT_PATH void tag(Enum) {
         integer(Byte{});
       }
 
-      inline void bytes(std::span<const Byte> value) {
-        if (value.size() > std::numeric_limits<std::uint32_t>::max()) {
-          throw EncodingError{"Tap field exceeds its frame buffer"};
-        }
+      void bytes(std::span<const Byte> value);
 
-        integer(std::uint32_t{});
-        add(value.size());
-      }
+      void text(std::string_view value);
 
-      inline void text(std::string_view value) {
-        bytes({reinterpret_cast<const Byte*>(value.data()), value.size()});
-      }
-
-      inline std::size_t finish() const noexcept {
-        return size_;
-      }
+      std::size_t finish() const noexcept;
 
     private:
-      inline void add(std::size_t count) {
-        size_ = checkedWireSize(size_, count);
-      }
+      void add(std::size_t count);
 
       std::size_t size_ = 0;
     };
@@ -160,61 +125,31 @@ export {
     // Writes fields into a caller's buffer, region `a`, and hands back the part written.
     class FrameWriter {
     public:
-      inline explicit FrameWriter(tbc::view<std::span<Byte>, tbc::lt::a> output) noexcept
-          : output_(output),
-            remaining_(output) {}
+      explicit FrameWriter(tbc::view<std::span<Byte>, tbc::lt::a> output) noexcept;
 
+      // Generic over the caller's integer and enumeration types, so these stay here.
       template <std::unsigned_integral Integer>
-      inline void integer(Integer value) {
+      TBC_HOT_PATH inline void integer(Integer value) {
         LittleEndian<Integer>::encode(value, remaining_);
       }
 
-      inline void timestamp(std::int64_t value) {
-        integer(std::bit_cast<std::uint64_t>(value));
-      }
+      void timestamp(std::int64_t value);
 
-      inline void boolean(bool value) {
-        BoolByte::encode(value, remaining_);
-      }
+      void boolean(bool value);
 
       template <typename Enum>
         requires std::is_enum_v<Enum>
-      void tag(Enum value) {
+      TBC_HOT_PATH void tag(Enum value) {
         integer(static_cast<Byte>(value));
       }
 
-      inline void bytes(std::span<const Byte> value) {
-        if (value.size() > std::numeric_limits<std::uint32_t>::max() || remaining_.size() < sizeof(std::uint32_t) || value.size() > remaining_.size() - sizeof(std::uint32_t)) {
-          throw EncodingError{"Tap field exceeds its frame buffer"};
-        }
+      void bytes(std::span<const Byte> value);
 
-        integer(static_cast<std::uint32_t>(value.size()));
-        if (!value.empty()) {
-          std::memcpy(remaining_.data(), value.data(), value.size());
-        }
+      void text(std::string_view value);
 
-        remaining_ = remaining_.subspan(value.size());
-      }
+      void append(std::span<const Byte> value);
 
-      inline void text(std::string_view value) {
-        bytes({reinterpret_cast<const Byte*>(value.data()), value.size()});
-      }
-
-      inline void append(std::span<const Byte> value) {
-        if (value.size() > remaining_.size()) {
-          throw EncodingError{"Tap data exceeds its frame buffer"};
-        }
-
-        if (!value.empty()) {
-          std::memcpy(remaining_.data(), value.data(), value.size());
-        }
-
-        remaining_ = remaining_.subspan(value.size());
-      }
-
-      inline tbc::view<std::span<const Byte>, tbc::lt::a> finish() const noexcept {
-        return output_.first(output_.size() - remaining_.size());
-      }
+      tbc::view<std::span<const Byte>, tbc::lt::a> finish() const noexcept;
 
     private:
       tbc::view<std::span<Byte>, tbc::lt::a> output_;

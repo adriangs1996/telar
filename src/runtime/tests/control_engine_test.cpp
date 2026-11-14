@@ -62,8 +62,7 @@ namespace {
     return result;
   }
 
-  template <Allocator Memory>
-  void streamOrder(Memory& memory) {
+  void streamOrder(ConcurrentMemory& memory) {
     Terminal terminal{memory, TerminalSize{80, 24, 0, 0}, TerminalPurpose::separate_media};
 
     terminal.feed(bytes("abc\x1b[6n\x1b[5;9H\x1b[6n"));
@@ -87,8 +86,7 @@ namespace {
     require(drain(terminal).empty());
   }
 
-  template <Allocator Memory>
-  void cursorRequestVariants(Memory& memory) {
+  void cursorRequestVariants(ConcurrentMemory& memory) {
     struct Query {
       std::string_view body;
       std::string_view reply;
@@ -138,8 +136,7 @@ namespace {
     }
   }
 
-  template <Allocator Memory>
-  void ordinaryControlBoundaries(Memory& memory) {
+  void ordinaryControlBoundaries(ConcurrentMemory& memory) {
     Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
 
     struct Prefix {
@@ -192,9 +189,8 @@ namespace {
     }
   }
 
-  template <Allocator Memory>
-  void cursorStateViews(Memory& memory) {
-    GhosttyAllocatorBridge<Memory> allocator{memory};
+  void cursorStateViews(ConcurrentMemory& memory) {
+    GhosttyAllocatorBridge<ConcurrentMemory> allocator{memory};
     TerminalHandle terminal;
     RenderStateHandle render;
 
@@ -292,8 +288,7 @@ namespace {
     require(invalid_fields == std::array<std::uint16_t, 6>{});
   }
 
-  template <Allocator Memory>
-  void saturation(Memory& memory) {
+  void saturation(ConcurrentMemory& memory) {
     Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
     std::string requests;
     std::string expected;
@@ -323,10 +318,9 @@ namespace {
     require(!terminal.hasPendingControl());
   }
 
-  template <Allocator Memory>
-  void borrowedRequestResume(Memory& memory) {
+  void borrowedRequestResume(ConcurrentMemory& memory) {
     const auto check = [&](std::string request, std::string_view expected_reply) {
-      auto responses = std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, Memory>{memory});
+      auto responses = std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, ConcurrentMemory>{memory});
       Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, responses};
       std::string expected(PtyResponseQueue::message_capacity, 'N');
 
@@ -368,9 +362,8 @@ namespace {
     check(std::move(palette), replies);
   }
 
-  template <Allocator Memory>
-  void sealedReplyOwnership(Memory& memory) {
-    using Response = control::Reply<Memory>;
+  void sealedReplyOwnership(ConcurrentMemory& memory) {
+    using Response = control::Reply<ConcurrentMemory>;
     static_assert(!std::is_copy_constructible_v<Response> && !std::is_move_constructible_v<Response>);
     static_assert(!std::is_copy_assignable_v<Response> && !std::is_move_assignable_v<Response>);
     const std::string payload(PtyResponseQueue::message_byte_capacity * 2, 'R');
@@ -467,7 +460,10 @@ namespace {
 
   void emptyReplyCleanup() {
     control_test::OneShotAllocator upstream;
-    BudgetAllocator memory{upstream, 64 * 1024 * 1024};
+    BudgetAllocator budget{upstream, 64 * 1024 * 1024};
+    SynchronizedAllocator synchronized{budget};
+    MemoryAdapter adapter{synchronized};
+    ConcurrentMemory& memory = adapter;
 
     {
       const std::string payload(PtyResponseQueue::message_byte_capacity * 2, 'E');
@@ -483,25 +479,25 @@ namespace {
         failed = true;
       }
 
-      require(failed && reply.size() == 0 && memory.liveBytes() == 0);
+      require(failed && reply.size() == 0 && budget.liveBytes() == 0);
       reply.clear();
       reply.clear();
 
       reply.append(payload);
-      const auto reserved = memory.liveBytes();
+      const auto reserved = budget.liveBytes();
       const auto upstream_reserved = upstream.liveBytes();
 
       require(reserved != 0 && upstream_reserved != 0);
       reply.clear();
       reply.clear();
-      require(reply.size() == 0 && memory.liveBytes() == reserved && upstream.liveBytes() == upstream_reserved);
+      require(reply.size() == 0 && budget.liveBytes() == reserved && upstream.liveBytes() == upstream_reserved);
 
       reply.append("inline");
       require(reply.publish(queue));
       reply.clear();
       reply.clear();
       reply.discard();
-      require(memory.liveBytes() == 0 && upstream.liveBytes() == 0);
+      require(budget.liveBytes() == 0 && upstream.liveBytes() == 0);
       reply.append("overwritten");
       reply.clear();
       const auto copied = queue.peek();
@@ -510,12 +506,15 @@ namespace {
       queue.consume(copied->size());
     }
 
-    require(upstream.failures() == 1 && upstream.liveBytes() == 0 && memory.liveBytes() == 0);
+    require(upstream.failures() == 1 && upstream.liveBytes() == 0 && budget.liveBytes() == 0);
   }
 
   void sealAllocationRecovery() {
     control_test::OneShotAllocator upstream;
-    BudgetAllocator memory{upstream, 64 * 1024 * 1024};
+    BudgetAllocator budget{upstream, 64 * 1024 * 1024};
+    SynchronizedAllocator synchronized{budget};
+    MemoryAdapter adapter{synchronized};
+    ConcurrentMemory& memory = adapter;
 
     {
       const std::string payload(PtyResponseQueue::message_byte_capacity * 2, 'F');
@@ -542,12 +541,11 @@ namespace {
       queue.consume(message->size());
     }
 
-    require(upstream.failures() == 1 && upstream.liveBytes() == 0 && memory.liveBytes() == 0);
+    require(upstream.failures() == 1 && upstream.liveBytes() == 0 && budget.liveBytes() == 0);
   }
 
-  template <Allocator Memory>
-  void statusWorkerPriority(Memory& memory) {
-    auto responses = std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, Memory>{memory});
+  void statusWorkerPriority(ConcurrentMemory& memory) {
+    auto responses = std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, ConcurrentMemory>{memory});
     Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, responses};
 
     require(responses->retainWorkerPriority());
@@ -561,9 +559,8 @@ namespace {
     require(!terminal.hasPendingControl() && responses->snapshot().dropped == 0);
   }
 
-  template <Allocator Memory>
-  void statusBytePressure(Memory& memory) {
-    auto responses = std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, Memory>{memory});
+  void statusBytePressure(ConcurrentMemory& memory) {
+    auto responses = std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, ConcurrentMemory>{memory});
     Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, responses};
     auto owner = std::make_shared<std::vector<Byte>>(PtyResponseQueue::total_byte_capacity, 'x');
     const std::weak_ptr lifetime{owner};
@@ -578,8 +575,7 @@ namespace {
     require(lifetime.expired() && !terminal.hasPendingControl() && responses->snapshot().dropped == 0);
   }
 
-  template <Allocator Memory>
-  void cursorEncodings(Memory& memory) {
+  void cursorEncodings(ConcurrentMemory& memory) {
     control::Reply reply{memory};
     PtyResponseQueue queue;
     constexpr auto maximum = std::numeric_limits<std::uint16_t>::max();
@@ -603,8 +599,7 @@ namespace {
     }
   }
 
-  template <Allocator Memory>
-  void colorEncodings(Memory& memory) {
+  void colorEncodings(ConcurrentMemory& memory) {
     Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
 
     for (const auto format : {control::ColorFormat::eight_bit, control::ColorFormat::sixteen_bit, control::ColorFormat::none}) {
@@ -651,8 +646,7 @@ namespace {
     }
   }
 
-  template <Allocator Memory>
-  void kittyUnsignedColors(Memory& memory) {
+  void kittyUnsignedColors(ConcurrentMemory& memory) {
     Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
     constexpr std::string_view prepare = "\x1b]21;0=#123456;1=#123456;255=#123456\x1b\\";
     constexpr std::string_view reply = "\x1b]21;1=rgb:12/34/56\x1b\\";
@@ -712,8 +706,7 @@ namespace {
     }
   }
 
-  template <Allocator Memory>
-  void longPaletteReply(Memory& memory) {
+  void longPaletteReply(ConcurrentMemory& memory) {
     Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
 
     terminal.feed(bytes("\x1b]4;0;#000000\x1b\\"));
@@ -734,12 +727,13 @@ namespace {
     require(!terminal.hasPendingControl());
   }
 
-  template <Allocator Memory>
-  void uniqueReplies(Memory& memory) {
+  void uniqueReplies(ConcurrentMemory& memory) {
     auto responses = std::make_shared<PtyResponseQueue>();
     Terminal interactive{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, responses};
     Terminal observer{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::observation, responses};
-    MediaTerminal media{memory, TerminalSize{80, 24, 9, 18}, GraphicsLimits{}, responses};
+    MediaBudget media_budget{GraphicsLimits::maximum_global_bytes};
+    MediaAllocator media_memory{memory, media_budget, GraphicsLimits::maximum_pane_bytes};
+    MediaTerminal media{media_memory, TerminalSize{80, 24, 9, 18}, GraphicsLimits{}, responses};
     const auto request = bytes("\x1b[5n\x1bP+q544E\x1b\\\x1b_Ga=q,i=9,s=1,v=1;AAAAAA==\x1b\\\x1b_25a1;q;cp=E0A0\x1b\\");
 
     observer.feed(request);
@@ -749,8 +743,7 @@ namespace {
     require(drain(interactive) == "\x1b[0n\x1bP1+r544E=787465726D2D323536636F6C6F72\x1b\\\x1b_Gi=9;OK\x1b\\\x1b_25a1;q;cp=e0a0;status=\x1b\\");
   }
 
-  template <Allocator Memory>
-  void rowStateViews(Memory& memory) {
+  void rowStateViews(ConcurrentMemory& memory) {
     Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
 
     for (const TerminalSize size : {TerminalSize{80, 24, 9, 18}, TerminalSize{120, 12, 9, 18}, TerminalSize{40, 48, 9, 18}}) {
@@ -788,8 +781,7 @@ namespace {
     require(terminal.responses().empty());
   }
 
-  template <Allocator Memory>
-  void normalizedGraphemeBatches(Memory& memory) {
+  void normalizedGraphemeBatches(ConcurrentMemory& memory) {
     Terminal terminal{memory, TerminalSize{80, 2, 9, 18}, TerminalPurpose::separate_media};
     std::string input;
     std::array<std::vector<std::uint32_t>, 80> expected;
@@ -868,8 +860,7 @@ namespace {
     require(ghostty_grid_ref_grapheme_batch(&reference, ascending.data(), ascending.size(), &batch) == GHOSTTY_INVALID_VALUE);
   }
 
-  template <Allocator Memory>
-  void graphemeChecksums(Memory& memory) {
+  void graphemeChecksums(ConcurrentMemory& memory) {
     for (const std::uint16_t columns : {16, 80, 256, 257}) {
       for (const unsigned density : {1, 7, 8, 9, 16, 80, 256, 257}) {
         if (density > columns) {
@@ -916,8 +907,7 @@ namespace {
     }
   }
 
-  template <Allocator Memory>
-  void asciiGraphemeChecksums(Memory& memory) {
+  void asciiGraphemeChecksums(ConcurrentMemory& memory) {
     for (const bool styled : {false, true}) {
       Terminal terminal{memory, TerminalSize{100, 2, 9, 18}, TerminalPurpose::separate_media};
 
@@ -947,8 +937,7 @@ namespace {
     }
   }
 
-  template <Allocator Memory>
-  void variedGraphemeRows(Memory& memory) {
+  void variedGraphemeRows(ConcurrentMemory& memory) {
     Terminal terminal{memory, TerminalSize{256, 4, 9, 18}, TerminalPurpose::separate_media};
 
     terminal.controlPolicy().checksum_report = true;
@@ -986,8 +975,7 @@ namespace {
     require(size > 0 && drain(terminal, 3) == std::string_view{reply.data(), static_cast<std::size_t>(size)});
   }
 
-  template <Allocator Memory>
-  void abortedControl(Memory& memory) {
+  void abortedControl(ConcurrentMemory& memory) {
     Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
 
     terminal.feed(bytes("\x1b[?2031;2033;1004;2048h"));
@@ -1000,8 +988,7 @@ namespace {
     require(!terminal.hasPendingControl());
   }
 
-  template <Allocator Memory>
-  void clipboardWrites(Memory& memory) {
+  void clipboardWrites(ConcurrentMemory& memory) {
     Terminal terminal{memory, TerminalSize{80, 24, 9, 18}};
 
     terminal.feed(bytes("\x1b]52;c;aGVsbG8=\x1b\\"));
@@ -1019,8 +1006,7 @@ namespace {
     require(drain(terminal).empty());
   }
 
-  template <Allocator Memory>
-  void ignoredControlSecurity(Memory& memory) {
+  void ignoredControlSecurity(ConcurrentMemory& memory) {
     for (const auto purpose : {TerminalPurpose::interactive, TerminalPurpose::separate_media, TerminalPurpose::observation}) {
       Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, purpose};
 
@@ -1052,8 +1038,7 @@ namespace {
     return GHOSTTY_CLIPBOARD_WRITE_RESULT_DENIED;
   }
 
-  template <Allocator Memory>
-  void noForeignQueries(Memory& memory) {
+  void noForeignQueries(ConcurrentMemory& memory) {
     for (const auto purpose : {TerminalPurpose::separate_media, TerminalPurpose::observation}) {
       Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, purpose};
 
@@ -1080,8 +1065,7 @@ namespace {
     require(foreign_replies == 0 && foreign_clipboard == 0);
   }
 
-  template <Allocator Memory>
-  void deferredEffects(Memory& memory) {
+  void deferredEffects(ConcurrentMemory& memory) {
     Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
     std::string request;
 
@@ -1105,8 +1089,7 @@ namespace {
     require(terminal.screen.cursor.x == 1);
   }
 
-  template <Allocator Memory>
-  void sizeEncodings(Memory& memory) {
+  void sizeEncodings(ConcurrentMemory& memory) {
     using control::SizeReport;
     constexpr std::array<std::uint16_t, 7> dimensions{0, 1, 9, 10, 99, 100, UINT16_MAX};
     PtyResponseQueue queue;
@@ -1156,8 +1139,7 @@ namespace {
     }
   }
 
-  template <Allocator Memory>
-  void reports(Memory& memory) {
+  void reports(ConcurrentMemory& memory) {
     Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
 
     terminal.feed(bytes("\x1b[?2031;2033;1004;2048h"));
@@ -1180,8 +1162,7 @@ namespace {
     require(drain(terminal).empty());
   }
 
-  template <Allocator Memory>
-  void reportQueueResume(Memory& memory) {
+  void reportQueueResume(ConcurrentMemory& memory) {
     Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
 
     terminal.feed(bytes("\x1b[?2031h"));
@@ -1204,8 +1185,7 @@ namespace {
     require(!terminal.hasPendingControl() && terminal.responses().empty());
   }
 
-  template <Allocator Memory>
-  void reportLifecycle(Memory& memory) {
+  void reportLifecycle(ConcurrentMemory& memory) {
     Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
     constexpr std::string_view modes = "\x1b[?2031;2033;1004;2048;5522";
     const auto command = [&](char final) {
@@ -1286,9 +1266,8 @@ namespace {
 
 }
 
-template <Allocator Memory>
-void asciiBridgeContract(Memory& memory) {
-  GhosttyAllocatorBridge<Memory> allocator{memory};
+void asciiBridgeContract(ConcurrentMemory& memory) {
+  GhosttyAllocatorBridge<ConcurrentMemory> allocator{memory};
   TerminalHandle candidate;
   TerminalHandle reference;
 
@@ -1490,10 +1469,13 @@ void asciiBridgeContract(Memory& memory) {
 
 void semanticAsciiWriteFailure() {
   control_test::OneShotAllocator upstream;
-  BudgetAllocator memory{upstream, 64 * 1024 * 1024};
+  BudgetAllocator budget{upstream, 64 * 1024 * 1024};
+  SynchronizedAllocator synchronized{budget};
+  MemoryAdapter adapter{synchronized};
+  ConcurrentMemory& memory = adapter;
 
   {
-    auto queue = std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, decltype(memory)>{memory});
+    auto queue = std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, ConcurrentMemory>{memory});
     Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, queue};
     const std::string text(control::ascii_detail::codepoint_capacity * 2, 'x');
     const auto input = text + "\x1b]2;unavailable\x1b\\" + text + "\x1b[5n";
@@ -1519,15 +1501,18 @@ void semanticAsciiWriteFailure() {
     require(queue->closed() && queue->empty() && !terminal.hasPendingControl());
   }
 
-  require(memory.liveBytes() == 0 && upstream.liveBytes() == 0);
+  require(budget.liveBytes() == 0 && upstream.liveBytes() == 0);
 }
 
 void semanticWriteFailure() {
   control_test::OneShotAllocator upstream;
-  BudgetAllocator memory{upstream, 64 * 1024 * 1024};
+  BudgetAllocator budget{upstream, 64 * 1024 * 1024};
+  SynchronizedAllocator synchronized{budget};
+  MemoryAdapter adapter{synchronized};
+  ConcurrentMemory& memory = adapter;
 
   {
-    auto queue = std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, decltype(memory)>{memory});
+    auto queue = std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, ConcurrentMemory>{memory});
 
     {
       Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, queue};
@@ -1564,13 +1549,15 @@ void semanticWriteFailure() {
     }
   }
 
-  require(memory.liveBytes() == 0 && upstream.liveBytes() == 0);
+  require(budget.liveBytes() == 0 && upstream.liveBytes() == 0);
 }
 
 int main(int argc, char** argv) {
   SystemAllocator system;
   BudgetAllocator budget{system, 64 * 1024 * 1024};
-  SynchronizedAllocator memory{budget};
+  SynchronizedAllocator synchronized{budget};
+  MemoryAdapter adapter{synchronized};
+  ConcurrentMemory& memory = adapter;
 
   if (argc == 2) {
     if (std::string_view{argv[1]} == "security") {

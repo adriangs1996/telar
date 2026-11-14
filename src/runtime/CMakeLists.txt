@@ -124,7 +124,22 @@ add_library(runtime-core STATIC
   platform/host_metrics/${TELAR_PLATFORM}/host_metrics.cpp
   platform/local_listener/local_listener.cpp
   history/store/database.cpp
-  terminal/text_reader/cell_projection.cpp)
+  terminal/text_reader/cell_projection.cpp
+  terminal/text_reader/text_reader.cpp
+  terminal/control/checksum/checksum.cpp
+  terminal/control/glyph/glyph.cpp
+  terminal/control/clipboard/clipboard.cpp
+  terminal/control/engine/engine.cpp
+  terminal/graphics_storage/graphics_storage.cpp
+  terminal/osc_scanner/osc_scanner.cpp
+  graphics/file_input/file_input.cpp
+  graphics/pane_media/pane_media.cpp
+  graphics/prepared_images/prepared_images.cpp
+  graphics/synchronizer/synchronizer.cpp
+  vocabulary/exchange/exchange.cpp
+  vocabulary/frames/frames.cpp
+  vocabulary/traffic/traffic.cpp
+  observation/processor/processor.cpp)
 telar_modules(runtime-core)
 set_target_properties(runtime-core telar-lua-vm telar-platform PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(runtime-core PUBLIC . "${CMAKE_CURRENT_BINARY_DIR}/generated" "${CMAKE_CURRENT_SOURCE_DIR}/../../lib/tbc/include")

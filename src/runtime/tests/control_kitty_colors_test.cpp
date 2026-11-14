@@ -176,12 +176,15 @@ namespace {
     const auto input = request(large_items);
     const auto answer = expected(large_items, "\x1b\\");
     control_test::OneShotAllocator upstream;
-    BudgetAllocator memory{upstream, memory_limit};
+    BudgetAllocator budget{upstream, memory_limit};
+    SynchronizedAllocator synchronized{budget};
+    MemoryAdapter adapter{synchronized};
+    ConcurrentMemory& memory = adapter;
 
     {
       control::Reply reply{memory};
       control::Policy policy;
-      control::ColorQueries<std::remove_cvref_t<decltype(memory)>> colors;
+      control::ColorQueries<std::remove_cvref_t<ConcurrentMemory>> colors;
       PtyResponseQueue queue;
 
       upstream.failNext();
@@ -195,7 +198,7 @@ namespace {
 
       require(failed && upstream.failures() == 1 && queue.empty());
       reply.discard();
-      require(memory.liveBytes() == 0 && upstream.liveBytes() == 0);
+      require(budget.liveBytes() == 0 && upstream.liveBytes() == 0);
 
       require(colors.handle({state, reply, policy}, sequence(input, control::Ending::escape), true));
       require(reply.size() == answer.size());
@@ -213,13 +216,16 @@ namespace {
       require(drain(queue, 17) == answer);
     }
 
-    require(memory.liveBytes() == 0 && upstream.liveBytes() == 0);
+    require(budget.liveBytes() == 0 && upstream.liveBytes() == 0);
   }
 } // namespace
 
 int main() {
   SystemAllocator system;
-  BudgetAllocator memory{system, memory_limit};
+  BudgetAllocator budget{system, memory_limit};
+  SynchronizedAllocator synchronized{budget};
+  MemoryAdapter adapter{synchronized};
+  ConcurrentMemory& memory = adapter;
   Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
   control::VtState state;
 
@@ -227,7 +233,7 @@ int main() {
   state.bind(terminal.handle(), nullptr, true);
   control::Reply reply{memory};
   control::Policy policy;
-  control::ColorQueries<std::remove_cvref_t<decltype(memory)>> colors;
+  control::ColorQueries<std::remove_cvref_t<ConcurrentMemory>> colors;
 
   channelValues(state, colors, reply, policy);
   ownedReplies(state, colors, reply, policy);

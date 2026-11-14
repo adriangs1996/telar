@@ -1,23 +1,11 @@
 module;
+#include "tbc/hot_path.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <ghostty/vt.h>
-#include <new>
-#include <stdlib.h>
-
-#include <cstdint>
 
 #include "telar_base/diagnostics/config.hpp"
-#include <cassert>
-#include <cstddef>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
 
-#include <cerrno>
-#include <limits.h>
-#include <sys/stat.h>
 #include <sys/types.h>
-#include <unistd.h>
 
 export module telar.runtime.observation.processor;
 
@@ -65,15 +53,9 @@ export {
     };
 
     struct ObservationBatch {
-      inline void clear() noexcept {
-        byte_count = 0;
-        event_count = 0;
-        reset_before = false;
-      }
+      void clear() noexcept;
 
-      inline std::span<const Byte> bytesOf(const ObservationEvent& event) const noexcept {
-        return std::span{bytes}.subspan(event.offset, event.length);
-      }
+      std::span<const Byte> bytesOf(const ObservationEvent& event) const noexcept;
 
       static constexpr std::size_t byte_capacity = 128 * 1024;
       static constexpr std::size_t event_capacity = 512;
@@ -105,93 +87,35 @@ export {
     template <Allocator Memory>
     class PaneObserver {
     public:
-      inline explicit PaneObserver(Memory& memory, TerminalSize size, std::string_view directory = {}, bool capture_output = false, std::optional<ShellToken> shell_token = std::nullopt)
-          : terminal_(memory, size, TerminalPurpose::observation),
-            tracker_(memory, terminal_, directory, capture_output, shell_token),
-            workspace_path_(AllocatorRef<char, Memory>{memory}),
-            shell_(AllocatorRef<char, Memory>{memory}),
-            initial_size_(size) {}
+      explicit PaneObserver(Memory& memory, TerminalSize size, std::string_view directory = {}, bool capture_output = false, std::optional<ShellToken> shell_token = std::nullopt);
 
-      inline void configureHistory(const HistorySession& session, bool capture_output = false) {
-        workspace_path_.assign(session.workspace_path);
-        shell_.assign(session.shell);
-        // The session kept views the observer's own copies of its texts.
-        auto kept = session;
+      void configureHistory(const HistorySession& session, bool capture_output = false);
 
-        kept.workspace_path = workspace_path_;
-        kept.shell = shell_;
-        session_ = kept;
-        if (capture_output) {
-          tracker_.enableOutputCapture();
-        }
-      }
+      void updateDirectory(std::string_view directory);
 
-      inline void updateDirectory(std::string_view directory) {
-        tracker_.updateDirectory(directory);
-      }
+      std::string_view observedDirectory() const noexcept;
 
-      inline std::string_view observedDirectory() const noexcept {
-        return tracker_.directory();
-      }
+      void noteInjectedSubmission() noexcept;
 
-      inline void noteInjectedSubmission() noexcept {
-        injected_submissions_.fetch_add(1, std::memory_order_relaxed);
-      }
+      void bytes(ObservationKind kind, std::span<const Byte> bytes, std::optional<bool> shell_foreground) noexcept;
 
-      inline void bytes(ObservationKind kind, std::span<const Byte> bytes, std::optional<bool> shell_foreground) noexcept {
-        auto& batch = batches_[active_];
-        if (batch.event_count == ObservationBatch::event_capacity || bytes.size() > ObservationBatch::byte_capacity - batch.byte_count) {
-          drop(bytes.size());
-        }
+      void resize(TerminalSize size) noexcept;
 
-        if (bytes.size() > ObservationBatch::byte_capacity) {
-          return;
-        }
+      void shellExit(int code) noexcept;
 
-        const auto offset = batch.byte_count;
+      void finishSession() noexcept;
 
-        std::copy(bytes.begin(), bytes.end(), batch.bytes.begin() + offset);
-        batch.byte_count += bytes.size();
-        batch.events[batch.event_count++] = {kind, ObservationTime::now(), static_cast<std::uint32_t>(offset), static_cast<std::uint32_t>(bytes.size()), shell_foreground};
-      }
+      bool idle() const noexcept;
 
-      inline void resize(TerminalSize size) noexcept {
-        control(ObservationEvent{.kind = ObservationKind::resize, .time = ObservationTime::now(), .size = size});
-      }
+      bool seal(bool allow_empty = false) noexcept;
 
-      inline void shellExit(int code) noexcept {
-        control(ObservationEvent{.kind = ObservationKind::shell_exit, .time = ObservationTime::now(), .exit_code = code});
-      }
+      void complete() noexcept;
 
-      inline void finishSession() noexcept {
-        control(ObservationEvent{.kind = ObservationKind::session_end, .time = ObservationTime::now()});
-      }
+      std::optional<LimitReach> takeDrop() noexcept;
 
-      inline bool idle() const noexcept {
-        return !sealed_ && batches_[active_].event_count == 0;
-      }
-
-      inline bool seal(bool allow_empty = false) noexcept {
-        if (sealed_ || (!allow_empty && batches_[active_].event_count == 0)) {
-          return false;
-        }
-
-        sealed_ = active_;
-        active_ ^= 1;
-        return true;
-      }
-
-      inline void complete() noexcept {
-        batches_[*sealed_].clear();
-        sealed_.reset();
-      }
-
-      inline std::optional<LimitReach> takeDrop() noexcept {
-        return std::exchange(drop_, std::nullopt);
-      }
-
+      // Generic over the caller's history sink, so it stays here.
       template <HistoryEventSink History>
-      inline ScreenObservationResult observe(const AgentManifests& manifests, AgentProvider provider, History& history, bool inspect_screen = true) noexcept {
+      TBC_HOT_PATH inline ScreenObservationResult observe(const AgentManifests& manifests, AgentProvider provider, History& history, bool inspect_screen = true) noexcept {
         TELAR_TRACE("observation.replay");
         TELAR_DIAGNOSTIC(AllocationScope allocation_scope{AllocationPath::observation});
         ScreenObservationResult result;
@@ -266,17 +190,13 @@ export {
         return result;
       }
 
-      inline ScreenObservationResult observe(const AgentManifests& manifests, AgentProvider provider, bool inspect_screen = true) noexcept {
-        DiscardedHistory history;
-
-        return observe(manifests, provider, history, inspect_screen);
-      }
+      ScreenObservationResult observe(const AgentManifests& manifests, AgentProvider provider, bool inspect_screen = true) noexcept;
 
       std::shared_ptr<PaneObserver> retired_next;
 
     private:
       template <HistoryEventSink History>
-      struct CommandRelay {
+      struct TBC_HOT_PATH CommandRelay {
         const HistorySession& session;
         History& history;
         std::atomic<std::uint64_t>& injected_submissions;
@@ -300,26 +220,9 @@ export {
         }
       };
 
-      inline void control(const ObservationEvent& event) noexcept {
-        auto& batch = batches_[active_];
-        if (batch.event_count == ObservationBatch::event_capacity) {
-          drop(0);
-        }
+      void control(const ObservationEvent& event) noexcept;
 
-        batch.events[batch.event_count++] = event;
-      }
-
-      inline void drop(std::size_t incoming) noexcept {
-        auto& batch = batches_[active_];
-        if (batch.event_count == ObservationBatch::event_capacity) {
-          drop_ = LimitReach{.name = "history.observer_batch_events", .noun = "events", .value = ObservationBatch::event_capacity, .requested = batch.event_count + 1};
-        } else {
-          drop_ = LimitReach{.name = "history.observer_batch_bytes", .noun = "bytes", .value = ObservationBatch::byte_capacity, .requested = batch.byte_count + incoming};
-        }
-
-        batch.clear();
-        batch.reset_before = true;
-      }
+      void drop(std::size_t incoming) noexcept;
 
       std::array<ObservationBatch, 2> batches_;
       unsigned active_ = 0;
@@ -338,6 +241,8 @@ export {
       std::atomic<std::uint64_t> injected_submissions_{0};
     };
 
+    extern template class PaneObserver<telar::ConcurrentMemory>;
+
   }
 }
 
@@ -350,8 +255,9 @@ export {
       { probe.directory(process) } noexcept -> std::same_as<FixedText<4096>>;
     };
 
+    // Generic over the caller's process probe and history sink, so it stays here whole.
     template <Allocator Memory, PaneProcessProbe Probe, HistoryEventSink History>
-    class ObservationProcessor {
+    class TBC_HOT_PATH ObservationProcessor {
     public:
       struct RequestEntry {
         std::uint64_t pane = 0;

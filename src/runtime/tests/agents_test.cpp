@@ -77,7 +77,7 @@ struct TestProcessInspector {
 };
 
 template <typename Verification>
-static void verifyAndWait(Verification& verification, RuntimeModel<SystemAllocator>& model, ClientStore<SystemAllocator>& clients, ClientPeer& reporter, const VerifyPaneDescent& request) {
+static void verifyAndWait(Verification& verification, RuntimeModel<ConcurrentMemory>& model, ClientStore<ConcurrentMemory>& clients, ClientPeer& reporter, const VerifyPaneDescent& request) {
   verification.verify(model.panes, reporter.session(), request);
   verification.schedule(clients);
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
@@ -89,12 +89,12 @@ static void verifyAndWait(Verification& verification, RuntimeModel<SystemAllocat
   }
 }
 
-static void feedAgent(Terminal<SystemAllocator>& terminal, std::string_view text, auto&... media) {
+static void feedAgent(Terminal<ConcurrentMemory>& terminal, std::string_view text, auto&... media) {
   terminal.feed({reinterpret_cast<const Byte*>(text.data()), text.size()}, media...);
   terminal.refresh();
 }
 
-static void testScreenEvidence(SystemAllocator& memory) {
+static void testScreenEvidence(ConcurrentMemory& memory) {
   Terminal terminal{memory, TerminalSize{80, 24, 8, 16}};
 
   feedAgent(terminal, "\x1b]0;◐ Working\x1b\\\x1b[22;1H❯ ");
@@ -137,17 +137,17 @@ static void testScreenEvidence(SystemAllocator& memory) {
   check(AgentScreenReader{wide}.observe(AgentProvider::codex).status == AgentStatus::ready);
 }
 
-static void testReportsAndIdentity(SystemAllocator& memory) {
+static void testReportsAndIdentity(ConcurrentMemory& memory) {
   RuntimeModel model{memory};
-  ClientStore<SystemAllocator> clients{memory};
-  LimitService<SystemAllocator> limits;
-  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
+  ClientStore<ConcurrentMemory> clients{memory};
+  LimitService<ConcurrentMemory> limits;
+  NativeEventLoop<ConcurrentMemory> poller{memory};
   PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/unused-agent-test.sock"}};
-  WorkspaceService<SystemAllocator, decltype(poller)> workspaces{memory};
+  WorkspaceService<ConcurrentMemory, decltype(poller)> workspaces{memory};
   ClientLayouts layouts{memory};
   TestProcessInspector inspector;
-  AgentService<SystemAllocator, decltype(poller)> agents{memory};
-  DescentService<SystemAllocator, decltype(inspector)> verification{inspector};
+  AgentService<ConcurrentMemory, decltype(poller)> agents{memory};
+  DescentService<ConcurrentMemory, decltype(inspector)> verification{inspector};
   ClientPeer reporter{memory, model, clients, ClientRole::control};
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
 
@@ -205,7 +205,7 @@ static void testReportsAndIdentity(SystemAllocator& memory) {
   agents.reportTitle(model, reporter.session(), ReportAgentTitle{.request_id = 31, .pane_id = pane.id, .pane_generation = pane.generation, .provider = AgentProvider::claude});
   reporter.receive<RequestCompleted>();
 
-  const std::vector<Byte> blocked_input(Pane<SystemAllocator>::input_limit, 'a');
+  const std::vector<Byte> blocked_input(Pane<ConcurrentMemory>::input_limit, 'a');
 
   pane.input.append(blocked_input);
   const auto input_revision = pane.input_revision;
@@ -274,17 +274,17 @@ static void testProgressAndPromptBudget() {
   check(budget.spend(1, 2, now + std::chrono::seconds{60}));
 }
 
-static void testReporterCredentials(SystemAllocator& memory) {
+static void testReporterCredentials(ConcurrentMemory& memory) {
   RuntimeModel model{memory};
-  ClientStore<SystemAllocator> clients{memory};
-  LimitService<SystemAllocator> limits;
-  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
+  ClientStore<ConcurrentMemory> clients{memory};
+  LimitService<ConcurrentMemory> limits;
+  NativeEventLoop<ConcurrentMemory> poller{memory};
   PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/unused-credentials-test.sock"}};
-  WorkspaceService<SystemAllocator, decltype(poller)> workspaces{memory};
+  WorkspaceService<ConcurrentMemory, decltype(poller)> workspaces{memory};
   ClientLayouts layouts{memory};
   TestProcessInspector inspector;
-  AgentService<SystemAllocator, decltype(poller)> agents{memory};
-  DescentService<SystemAllocator, decltype(inspector)> verification{inspector};
+  AgentService<ConcurrentMemory, decltype(poller)> agents{memory};
+  DescentService<ConcurrentMemory, decltype(inspector)> verification{inspector};
   ClientPeer reporter{memory, model, clients, ClientRole::control};
   ClientPeer other_client{memory, model, clients, ClientRole::control};
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
@@ -333,7 +333,7 @@ static void testReporterCredentials(SystemAllocator& memory) {
   const RegisterWorktree from_exited{.request_id = 9, .source = pane.location.workspace.id, .created_by = pane.id, .path = "/tmp", .branch = "exited"};
 
   check(rejected([&] {
-    WorktreeService<SystemAllocator, decltype(poller)>::registerEntry(model, reporter.session(), from_exited);
+    WorktreeService<ConcurrentMemory, decltype(poller)>::registerEntry(model, reporter.session(), from_exited);
   },
       FailureCode::foreign_process));
   pane.exit_status.reset();
@@ -444,15 +444,15 @@ static void testEvidencePrecedence() {
   check(claude.description_phase == DescriptionPhase::waiting_query);
 }
 
-static void testDescriptionQueue(SystemAllocator& memory) {
+static void testDescriptionQueue(ConcurrentMemory& memory) {
   RuntimeModel model{memory};
-  ClientStore<SystemAllocator> clients{memory};
-  LimitService<SystemAllocator> limits;
-  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
+  ClientStore<ConcurrentMemory> clients{memory};
+  LimitService<ConcurrentMemory> limits;
+  NativeEventLoop<ConcurrentMemory> poller{memory};
   PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/unused-description-test.sock"}};
-  WorkspaceService<SystemAllocator, decltype(poller)> workspaces{memory};
+  WorkspaceService<ConcurrentMemory, decltype(poller)> workspaces{memory};
   ClientLayouts layouts{memory};
-  AgentService<SystemAllocator, decltype(poller)> agents{memory};
+  AgentService<ConcurrentMemory, decltype(poller)> agents{memory};
 
   agents.enableDescriptions(true);
   ClientPeer reporter{memory, model, clients, ClientRole::control};
@@ -519,7 +519,9 @@ static void testDescriptionQueue(SystemAllocator& memory) {
 }
 
 void testAgents() {
-  SystemAllocator memory;
+  SystemAllocator system;
+  MemoryAdapter adapter{system};
+  ConcurrentMemory& memory = adapter;
 
   testScreenEvidence(memory);
   testReportsAndIdentity(memory);

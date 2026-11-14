@@ -82,12 +82,12 @@ import telar.runtime.tests.check;
 using namespace telar;
 using namespace telar::runtime;
 
-void nativeClipboardTests(SystemAllocator& memory) {
+void nativeClipboardTests(ConcurrentMemory& memory) {
   telar::gui::test::PrivateClipboard isolated;
   RuntimeModel model{memory};
-  ClientStore<SystemAllocator> clients{memory};
+  ClientStore<ConcurrentMemory> clients{memory};
   ClientPeer client{memory, model, clients, ClientRole::control};
-  RuntimeClipboardService<SystemAllocator> service;
+  RuntimeClipboardService<ConcurrentMemory> service;
   auto collect = [&] {
     pollfd ready{.fd = service.descriptor(), .events = POLLIN, .revents = 0};
 

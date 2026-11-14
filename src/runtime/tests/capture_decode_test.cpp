@@ -124,7 +124,9 @@ void testCaptureDecoding() {
 static void testCapturePublication() {
   SystemAllocator system;
   BudgetAllocator budget{system, 8 * 1024 * 1024};
-  SynchronizedAllocator memory{budget};
+  SynchronizedAllocator synchronized{budget};
+  MemoryAdapter adapter{synchronized};
+  ConcurrentMemory& memory = adapter;
   ProxyCaptureLimits limits{.part_bytes = 64, .exchange_bytes = 128, .total_bytes = 32768, .enabled = true};
   CaptureProducer producer{memory, limits};
 
@@ -154,7 +156,9 @@ static void testCapturePublication() {
 }
 
 static void testDecodedCaptureCounters() {
-  SystemAllocator memory;
+  SystemAllocator system;
+  MemoryAdapter adapter{system};
+  ConcurrentMemory& memory = adapter;
   ProxyCaptureLimits limits{.part_bytes = 32, .exchange_bytes = 64, .total_bytes = 4096, .enabled = true};
   CaptureProducer producer{memory, limits};
   auto half = producer.start({});
@@ -177,9 +181,10 @@ static void testDecodedCaptureCounters() {
   producer.decodeBody(*malformed);
   check(producer.metrics().decode_failed == 1 && malformed->body.size() == 6 && !malformed->body_decoded);
 
-  BudgetAllocator failing{memory, 0};
+  BudgetAllocator failing{system, 0};
   SynchronizedAllocator synchronized{failing};
-  CaptureProducer exhausted{synchronized, limits};
+  MemoryAdapter exhausted_memory{synchronized};
+  CaptureProducer exhausted{static_cast<ConcurrentMemory&>(exhausted_memory), limits};
 
   check(!exhausted.start({}) && exhausted.metrics().skipped == 1 && exhausted.metrics().started == 0);
 }

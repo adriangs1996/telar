@@ -64,10 +64,10 @@ import telar.wire.vocabulary;
 using namespace telar;
 using namespace telar::runtime;
 
-static void testNotificationCapacity(SystemAllocator& memory) {
+static void testNotificationCapacity(ConcurrentMemory& memory) {
   RuntimeModel model{memory};
-  ClientStore<SystemAllocator> clients{memory};
-  LimitService<SystemAllocator> limits;
+  ClientStore<ConcurrentMemory> clients{memory};
+  LimitService<ConcurrentMemory> limits;
   ClientPeer requester{memory, model, clients, ClientRole::interactive};
   ClientPeer observer{memory, model, clients, ClientRole::interactive};
 
@@ -75,7 +75,7 @@ static void testNotificationCapacity(SystemAllocator& memory) {
     requester.session().connection.send(RequestCompleted{.request_id = index + 1});
   }
 
-  ClientControl<SystemAllocator>::notify(clients, requester.session().id, ShowNotification{.request_id = 128, .notification = NotificationBody{.title = "Capacity", .message = "Reserved"}});
+  ClientControl<ConcurrentMemory>::notify(clients, requester.session().id, ShowNotification{.request_id = 128, .notification = NotificationBody{.title = "Capacity", .message = "Reserved"}});
   check(requester.session().connection.responseDepth() == 128);
   check(requester.session().connection.droppedResponses() == 1);
   check(observer.receive<Notification>().message == "Reserved");
@@ -92,7 +92,7 @@ static void testNotificationCapacity(SystemAllocator& memory) {
   bool refused = false;
 
   try {
-    ClientControl<SystemAllocator>::notify(clients, requester.session().id, ShowNotification{.request_id = 129, .notification = NotificationBody{.title = "Capacity", .message = "Refused"}});
+    ClientControl<ConcurrentMemory>::notify(clients, requester.session().id, ShowNotification{.request_id = 129, .notification = NotificationBody{.title = "Capacity", .message = "Refused"}});
   } catch (const ResponseQueueFull&) {
     refused = true;
   }
@@ -102,10 +102,10 @@ static void testNotificationCapacity(SystemAllocator& memory) {
   check(!observer.session().connection.hasOutput());
 }
 
-static void testSaturatedCommandTarget(SystemAllocator& memory) {
+static void testSaturatedCommandTarget(ConcurrentMemory& memory) {
   RuntimeModel model{memory};
-  ClientStore<SystemAllocator> clients{memory};
-  LimitService<SystemAllocator> limits;
+  ClientStore<ConcurrentMemory> clients{memory};
+  LimitService<ConcurrentMemory> limits;
   ClientPeer requester{memory, model, clients, ClientRole::control};
   ClientPeer target{memory, model, clients, ClientRole::interactive};
 
@@ -123,7 +123,7 @@ static void testSaturatedCommandTarget(SystemAllocator& memory) {
   bool refused = false;
 
   try {
-    ClientControl<SystemAllocator>::requestCommand(clients, requester.session().id, request);
+    ClientControl<ConcurrentMemory>::requestCommand(clients, requester.session().id, request);
   } catch (const RequestError& error) {
     refused = error.code() == FailureCode::invalid_request && std::string_view{error.what()} == "ResponseQueueFull";
   }
@@ -136,13 +136,13 @@ static void testSaturatedCommandTarget(SystemAllocator& memory) {
   check(!target.session().connection.closing && target.session().connection.droppedResponses() == 1);
 }
 
-static void testClosureResync(SystemAllocator& memory) {
+static void testClosureResync(ConcurrentMemory& memory) {
   RuntimeModel model{memory};
-  ClientStore<SystemAllocator> clients{memory};
-  LimitService<SystemAllocator> limits;
-  NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
+  ClientStore<ConcurrentMemory> clients{memory};
+  LimitService<ConcurrentMemory> limits;
+  NativeEventLoop<ConcurrentMemory> poller{memory};
   PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/response-capacity.sock"}};
-  WorkspaceService<SystemAllocator, decltype(poller)> workspaces{memory};
+  WorkspaceService<ConcurrentMemory, decltype(poller)> workspaces{memory};
   ClientPeer owner{memory, model, clients, ClientRole::interactive};
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
 
@@ -174,10 +174,10 @@ static void testClosureResync(SystemAllocator& memory) {
   panes.remove(model, clients, opened.pane_id);
 }
 
-static void testCommandRouting(SystemAllocator& memory) {
+static void testCommandRouting(ConcurrentMemory& memory) {
   RuntimeModel model{memory};
-  ClientStore<SystemAllocator> clients{memory};
-  LimitService<SystemAllocator> limits;
+  ClientStore<ConcurrentMemory> clients{memory};
+  LimitService<ConcurrentMemory> limits;
   ClientPeer requester{memory, model, clients, ClientRole::control};
   ClientPeer target{memory, model, clients, ClientRole::interactive};
   ClientPeer impostor{memory, model, clients, ClientRole::interactive};
@@ -185,7 +185,7 @@ static void testCommandRouting(SystemAllocator& memory) {
   target.session().identity = 123;
   impostor.session().identity = 456;
 
-  ClientControl<SystemAllocator>::list(clients, requester.session().id, QueryClients{.request_id = 1});
+  ClientControl<ConcurrentMemory>::list(clients, requester.session().id, QueryClients{.request_id = 1});
   const auto list = requester.receive<ClientList>();
 
   check(list.entries.size() == 2);
@@ -198,7 +198,7 @@ static void testCommandRouting(SystemAllocator& memory) {
   request.route = ClientRoute{target.session().id, target.session().generation};
   request.action = ClientAction::sidebar_resize;
   request.value = 40;
-  ClientControl<SystemAllocator>::requestCommand(clients, requester.session().id, request);
+  ClientControl<ConcurrentMemory>::requestCommand(clients, requester.session().id, request);
   const auto forwarded = target.receive<ClientCommand>();
 
   check(forwarded.route.id == requester.session().id);
@@ -208,23 +208,23 @@ static void testCommandRouting(SystemAllocator& memory) {
 
   static_cast<ClientCommand&>(completion) = forwarded;
   completion.status = ClientCommandStatus::applied;
-  ClientControl<SystemAllocator>::completeCommand(clients, impostor.session().id, completion);
+  ClientControl<ConcurrentMemory>::completeCommand(clients, impostor.session().id, completion);
   check(requester.session().pending_command.has_value());
   completion.action = ClientAction::sidebar_hide;
-  ClientControl<SystemAllocator>::completeCommand(clients, target.session().id, completion);
+  ClientControl<ConcurrentMemory>::completeCommand(clients, target.session().id, completion);
   check(requester.session().pending_command.has_value());
 
   completion.action = request.action;
-  ClientControl<SystemAllocator>::completeCommand(clients, target.session().id, completion);
+  ClientControl<ConcurrentMemory>::completeCommand(clients, target.session().id, completion);
   const auto result = requester.receive<ClientCommandResult>();
 
   check(result.request_id == 2 && result.route.id == target.session().id);
   check(!requester.session().pending_command);
 
   request.request_id = 3;
-  ClientControl<SystemAllocator>::requestCommand(clients, requester.session().id, request);
+  ClientControl<ConcurrentMemory>::requestCommand(clients, requester.session().id, request);
   target.receive<ClientCommand>();
-  ClientControl<SystemAllocator>::abandon(clients, target.session().id);
+  ClientControl<ConcurrentMemory>::abandon(clients, target.session().id);
   check(requester.receive<RequestFailed>().request_id == 3);
   check(!requester.session().pending_command);
 
@@ -238,27 +238,27 @@ static void testCommandRouting(SystemAllocator& memory) {
   bool rejected = false;
 
   try {
-    ClientControl<SystemAllocator>::requestCommand(clients, requester.session().id, request);
+    ClientControl<ConcurrentMemory>::requestCommand(clients, requester.session().id, request);
   } catch (const RequestError&) {
     rejected = true;
   }
 
   check(rejected);
 
-  ClientControl<SystemAllocator>::notify(clients, requester.session().id, ShowNotification{.request_id = 4, .notification = NotificationBody{.title = "Build", .message = "Finished"}});
+  ClientControl<ConcurrentMemory>::notify(clients, requester.session().id, ShowNotification{.request_id = 4, .notification = NotificationBody{.title = "Build", .message = "Finished"}});
   check(requester.receive<NotificationShown>().delivered_clients == 2);
   check(replacement.receive<Notification>().message == "Finished");
   check(impostor.receive<Notification>().title == "Build");
 
-  ClientControl<SystemAllocator>::detach(clients, requester.session().id, DetachClient{.request_id = 5, .client_id = replacement.session().id, .client_generation = replacement.session().generation});
+  ClientControl<ConcurrentMemory>::detach(clients, requester.session().id, DetachClient{.request_id = 5, .client_id = replacement.session().id, .client_generation = replacement.session().generation});
   check(requester.receive<RequestCompleted>().request_id == 5);
   check(replacement.session().connection.closing);
 }
 
-static void testFocusAndLayouts(SystemAllocator& memory) {
+static void testFocusAndLayouts(ConcurrentMemory& memory) {
   RuntimeModel model{memory};
-  ClientStore<SystemAllocator> clients{memory};
-  LimitService<SystemAllocator> limits;
+  ClientStore<ConcurrentMemory> clients{memory};
+  LimitService<ConcurrentMemory> limits;
   ClientLayouts layouts{memory};
   ClientPeer requester{memory, model, clients, ClientRole::control};
   ClientPeer target{memory, model, clients, ClientRole::interactive};
@@ -267,34 +267,34 @@ static void testFocusAndLayouts(SystemAllocator& memory) {
   target.session().identity = reconnect.session().identity = 123;
 
   const auto workspace_id = model.workspaces.nextId();
-  auto workspace = makeOwned<Workspace<SystemAllocator>>(memory, memory, workspace_id, "/tmp", "Test");
+  auto workspace = makeOwned<Workspace<ConcurrentMemory>>(memory, memory, workspace_id, "/tmp", "Test");
 
   workspace->tabs.emplace_back(memory, 1, "Shell");
   const TabLocation location{WorkspaceLocation{.id = workspace_id}, 1};
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
   Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
   const auto pane_id = model.panes.nextId();
-  auto pane = makeOwned<Pane<SystemAllocator>>(memory, memory, pane_id, location, command, PaneLaunch{TerminalSize{80, 24, 0, 0}, model.media_budget, model.graphics_limits});
+  auto pane = makeOwned<Pane<ConcurrentMemory>>(memory, memory, pane_id, location, command, PaneLaunch{TerminalSize{80, 24, 0, 0}, model.media_budget, model.graphics_limits});
   constexpr std::uint64_t pane_generation = 34;
 
   pane->generation = pane_generation;
   workspace->tabs[0].panes.push_back(pane_id);
   model.workspaces.insert(workspace_id, std::move(workspace));
   model.panes.insert(pane_id, std::move(pane));
-  target.session().attachments.push_back(makeOwned<Attachment<SystemAllocator>>(memory, memory, target.session().graphics_credit, pane_id, model.panes.find(pane_id)->media));
+  target.session().attachments.push_back(makeOwned<Attachment<ConcurrentMemory>>(memory, memory, target.session().graphics_credit, pane_id, model.panes.find(pane_id)->media));
   target.session().last_input_pane = pane_id;
   target.session().last_input_sequence = 7;
 
-  ClientControl<SystemAllocator>::requestFocus(model.panes, clients, requester.session().id, RequestPaneFocus{.request_id = 1, .pane_id = pane_id, .pane_generation = pane_generation, .direction = PaneDirection::right});
+  ClientControl<ConcurrentMemory>::requestFocus(model.panes, clients, requester.session().id, RequestPaneFocus{.request_id = 1, .pane_id = pane_id, .pane_generation = pane_generation, .direction = PaneDirection::right});
   const auto forwarded = target.receive<PaneFocusCommand>();
 
   check(forwarded.requester.id == requester.session().id && forwarded.pane_id == pane_id);
   CompletePaneFocus completion{.requester = forwarded.requester, .request_id = 1, .pane_id = pane_id, .pane_generation = pane_generation + 1, .outcome = PaneFocusOutcome::focused, .focused_pane_id = pane_id};
 
-  ClientControl<SystemAllocator>::completeFocus(clients, target.session().id, completion);
+  ClientControl<ConcurrentMemory>::completeFocus(clients, target.session().id, completion);
   check(requester.session().pending_focus.has_value());
   completion.pane_generation = pane_generation;
-  ClientControl<SystemAllocator>::completeFocus(clients, target.session().id, completion);
+  ClientControl<ConcurrentMemory>::completeFocus(clients, target.session().id, completion);
   check(requester.receive<PaneFocusResult>().focused_pane_id == pane_id);
   check(requester.session().connection.closing);
 
@@ -342,10 +342,10 @@ struct PluginEventsFixture {
   }
 };
 
-static void testPluginDelivery(SystemAllocator& memory) {
+static void testPluginDelivery(ConcurrentMemory& memory) {
   RuntimeModel model{memory};
-  ClientStore<SystemAllocator> clients{memory};
-  LimitService<SystemAllocator> limits;
+  ClientStore<ConcurrentMemory> clients{memory};
+  LimitService<ConcurrentMemory> limits;
   PluginDelivery delivery{limits};
   ClientPeer target{memory, model, clients, ClientRole::interactive};
   ClientPeer requester{memory, model, clients, ClientRole::control};
@@ -392,7 +392,9 @@ static void testPluginDelivery(SystemAllocator& memory) {
 }
 
 void testClientControl() {
-  SystemAllocator memory;
+  SystemAllocator system;
+  MemoryAdapter adapter{system};
+  ConcurrentMemory& memory = adapter;
 
   testNotificationCapacity(memory);
   testSaturatedCommandTarget(memory);

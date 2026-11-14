@@ -23,7 +23,10 @@ using namespace telar::runtime;
 
 void testFrameSync() {
   SystemAllocator system;
-  BudgetAllocator memory{system, 16 * 1024 * 1024};
+  BudgetAllocator budget{system, 16 * 1024 * 1024};
+  SynchronizedAllocator synchronized{budget};
+  MemoryAdapter adapter{synchronized};
+  ConcurrentMemory& memory = adapter;
   Screen screen{memory};
 
   screen.resize(80, 24);
@@ -58,7 +61,7 @@ void testFrameSync() {
   check(frame.spans[0].reader().next()->text[0] == 'X');
   check(sync.acknowledge(2));
 
-  const auto allocations = memory.allocations();
+  const auto allocations = budget.allocations();
 
   ++screen.revision;
   check(sync.prepare(screen).empty());
@@ -66,7 +69,7 @@ void testFrameSync() {
   storage = DecodeStorage{decoded};
   frame = Codec::decode<PaneFrame>(sync.prepare(screen), storage);
   check(frame.base_frame_id == 0);
-  check(memory.allocations() == allocations);
+  check(budget.allocations() == allocations);
   check(sync.acknowledge(frame.frame_id));
   for (const bool enabled : {true, false}) {
     screen.input_modes.paste_events = enabled;

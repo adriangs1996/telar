@@ -28,6 +28,7 @@ export namespace telar::runtime {
   using telar::runtime::ghosttySized;
   using telar::runtime::GraphicsCursor;
   using telar::runtime::GraphicsQueryResources;
+  using telar::runtime::MediaAllocator;
   using telar::runtime::PtyResponseQueue;
   using telar::runtime::RenderStateHandle;
   using telar::runtime::RowCellsHandle;

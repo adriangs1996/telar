@@ -32,31 +32,34 @@ static std::string atomicFrame(std::string_view name, unsigned image = 1, unsign
   return wrapped ? std::string{AtomicFrame::cursor_save} + frame + std::string{AtomicFrame::cursor_restore} : frame;
 }
 
-struct AtomicSourceFixture {
+struct AtomicSourceFixture final : AtomicFrameSource {
+  explicit AtomicSourceFixture(std::set<std::string> available = {})
+      : names(std::move(available)) {}
+
   std::set<std::string> names{};
   std::vector<std::string> probes{};
   std::vector<std::string> released{};
 
-  bool available(const AtomicFrameResource& resource) {
+  bool available(const AtomicFrameResource& resource) override {
     probes.emplace_back(resource.encoded_name);
     return resource.byte_count <= resource.limit && names.contains(std::string{resource.encoded_name});
   }
 
-  void release(const AtomicFrameResource& resource) {
+  void release(const AtomicFrameResource& resource) override {
     released.emplace_back(resource.encoded_name);
   }
 };
 
-struct AtomicSinkFixture {
+struct AtomicSinkFixture final : AtomicFrameSink {
   std::string output_bytes{};
   std::vector<std::string> frames{};
   bool accept = false;
 
-  void output(std::span<const std::uint8_t> bytes) {
+  void output(std::span<const std::uint8_t> bytes) override {
     output_bytes.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
   }
 
-  bool atomicFrame(const AtomicFrameView& frame) {
+  bool atomicFrame(const AtomicFrameView& frame) override {
     check(frame.command_start < frame.command_end && frame.command_end <= frame.bytes.size());
     frames.emplace_back(frame.encoded_name);
     return accept;
@@ -98,7 +101,7 @@ static void testAtomicSelection() {
   const auto first = atomicFrame("first");
   const auto second = atomicFrame("second", 9, 2);
   const auto newest = atomicFrame("newest");
-  AtomicSourceFixture source{.names = {"first", "second", "newest"}};
+  AtomicSourceFixture source{std::set<std::string>{"first", "second", "newest"}};
   AtomicSinkFixture sink;
   auto statistics = AtomicFrameFilter::feed(atomicBytes("before" + first + second + newest + "after"), 24, source, sink);
 
@@ -107,23 +110,23 @@ static void testAtomicSelection() {
   check(sink.frames == std::vector<std::string>{"second", "newest"});
   check(statistics.discarded == 1 && statistics.forwarded == 2 && statistics.unavailable == 0);
 
-  source = {.names = {"first", "second"}};
+  source = AtomicSourceFixture{std::set<std::string>{"first", "second"}};
   sink = {};
   statistics = AtomicFrameFilter::feed(atomicBytes(first + newest), 24, source, sink);
   check(sink.output_bytes == first && source.probes == std::vector<std::string>{"newest", "first"});
   check(source.released == std::vector<std::string>{"newest"} && statistics.discarded == 1);
 
-  source = {};
+  source = AtomicSourceFixture{};
   sink = {};
   statistics = AtomicFrameFilter::feed(atomicBytes(first + newest), 24, source, sink);
   check(sink.output_bytes.empty() && source.released.size() == 2 && statistics.unavailable == 2);
 
-  source = {.names = {"first", "newest"}};
+  source = AtomicSourceFixture{std::set<std::string>{"first", "newest"}};
   sink = {};
   statistics = AtomicFrameFilter::feed(atomicBytes(first + "separator" + newest), 24, source, sink);
   check(sink.output_bytes == first + "separator" + newest && statistics.forwarded == 2 && source.released.empty());
 
-  source = {.names = {"first", "newest"}};
+  source = AtomicSourceFixture{std::set<std::string>{"first", "newest"}};
   sink = {};
   statistics = AtomicFrameFilter::feed(atomicBytes(atomicFrame("first", 1, 2, true) + newest), 24, source, sink);
   check(sink.output_bytes == std::string{AtomicFrame::cursor_save} + newest && statistics.discarded == 1);
@@ -136,7 +139,7 @@ static void testAtomicBoundsAndTransport() {
     group += atomicFrame(std::to_string(index));
   }
 
-  AtomicSourceFixture source{.names = {"0"}};
+  AtomicSourceFixture source{std::set<std::string>{"0"}};
   AtomicSinkFixture sink;
   auto statistics = AtomicFrameFilter::feed(atomicBytes(group), 24, source, sink);
 
@@ -147,31 +150,33 @@ static void testAtomicBoundsAndTransport() {
     group += atomicFrame("same", image);
   }
 
-  source = {.names = {"same"}};
+  source = AtomicSourceFixture{std::set<std::string>{"same"}};
   sink = {};
   statistics = AtomicFrameFilter::feed(atomicBytes(group), 24, source, sink);
   check(sink.output_bytes == group && source.probes.empty() && source.released.empty() && statistics.forwarded == 0);
 
   const auto frame = atomicFrame("same");
 
-  source = {.names = {"same"}};
+  source = AtomicSourceFixture{std::set<std::string>{"same"}};
   sink = {};
   statistics = AtomicFrameFilter::feed(atomicBytes(frame), 23, source, sink);
   check(statistics.unavailable == 1 && sink.output_bytes.empty());
 
-  source = {.names = {"same"}};
-  sink = {.accept = true};
+  source = AtomicSourceFixture{std::set<std::string>{"same"}};
+  sink = {};
+  sink.accept = true;
   statistics = AtomicFrameFilter::feed(atomicBytes(frame), 24, source, sink);
   check(statistics.direct == 1 && statistics.forwarded == 1 && statistics.file == 0 && sink.output_bytes.empty());
 
   auto file = frame;
 
   file.replace(file.find("t=s"), 3, "t=f");
-  source = {.names = {"same"}};
+  source = AtomicSourceFixture{std::set<std::string>{"same"}};
   sink = {};
   statistics = AtomicFrameFilter::feed(atomicBytes(file), 24, source, sink);
   check(statistics.unavailable == 1 && statistics.forwarded == 0 && sink.output_bytes.empty());
-  sink = {.accept = true};
+  sink = {};
+  sink.accept = true;
   statistics = AtomicFrameFilter::feed(atomicBytes(file), 24, source, sink);
   check(statistics.file == 1 && statistics.direct == 1 && statistics.forwarded == 1);
 }

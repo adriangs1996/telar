@@ -17,13 +17,16 @@ using namespace telar::runtime;
 namespace {
   struct ComponentProbe {
     SystemAllocator system;
-    BudgetAllocator<SystemAllocator> memory{system, 64 * 1024 * 1024};
-    GhosttyAllocatorBridge<decltype(memory)> allocator{memory};
+    BudgetAllocator<SystemAllocator> budget{system, 64 * 1024 * 1024};
+    SynchronizedAllocator<BudgetAllocator<SystemAllocator>> synchronized{budget};
+    MemoryAdapter<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>> adapter{synchronized};
+    ConcurrentMemory& memory = adapter;
+    GhosttyAllocatorBridge<ConcurrentMemory> allocator{memory};
     TerminalHandle terminal;
     RenderStateHandle render;
-    TerminalEffects<decltype(memory)> effects{memory};
-    std::shared_ptr<PtyResponseQueue> responses = std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, decltype(memory)>{memory});
-    control::Engine<decltype(memory)> controller{memory, *responses, true};
+    TerminalEffects<ConcurrentMemory> effects{memory};
+    std::shared_ptr<PtyResponseQueue> responses = std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, ConcurrentMemory>{memory});
+    control::Engine<ConcurrentMemory> controller{memory, *responses, true};
 
     ComponentProbe() {
       checkGhostty(ghostty_terminal_new(allocator.get(), terminal.output(), 80, 24));

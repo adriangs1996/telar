@@ -2215,18 +2215,9 @@
     "<algorithm>",
     "<cstdint>"
   ],
-  "src/runtime/graphics/file_input/file_input.cppm": [
-    "<cerrno>",
-    "<cstddef>",
+  "src/runtime/graphics/file_input/file_input.cpp": [
     "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
     "<fcntl.h>",
-    "<limits.h>",
-    "<new>",
-    "<sys/mman.h>",
-    "<sys/stat.h>",
     "<unistd.h>"
   ],
   "src/runtime/graphics/kitty/kitty.cppm": [
@@ -2273,24 +2264,24 @@
     "tbc/view.hpp",
     "telar_base/memory/allocator.hpp"
   ],
-  "src/runtime/graphics/pane_media/pane_media.cppm": [
-    "<cassert>",
-    "<cerrno>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
+  "src/runtime/graphics/pane_media/pane_media.cpp": [
     "<fcntl.h>",
     "<ghostty/vt.h>",
     "<limits.h>",
-    "<new>",
-    "<stdlib.h>",
     "<sys/mman.h>",
     "<sys/stat.h>",
     "<unistd.h>",
     "telar_base/diagnostics/config.hpp",
     "telar_platform/trace_macro.hpp",
+    "telar_render/sequence.hpp"
+  ],
+  "src/runtime/graphics/pane_media/pane_media.cppm": [
+    "<fcntl.h>",
+    "<ghostty/vt.h>",
+    "<limits.h>",
+    "<unistd.h>",
+    "tbc/hot_path.hpp",
+    "telar_base/diagnostics/config.hpp",
     "telar_render/sequence.hpp"
   ],
   "src/runtime/graphics/png_decoder.cpp": [
@@ -2316,42 +2307,28 @@
     "<span>",
     "tbc/view.hpp"
   ],
-  "src/runtime/graphics/prepared_images/prepared_images.cppm": [
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<fcntl.h>",
-    "<ghostty/vt.h>",
+  "src/runtime/graphics/prepared_images/prepared_images.cpp": [
     "<new>",
-    "<stdlib.h>",
     "<sys/mman.h>",
-    "<unistd.h>",
     "telar_base/diagnostics/config.hpp",
     "telar_platform/trace_macro.hpp"
+  ],
+  "src/runtime/graphics/prepared_images/prepared_images.cppm": [
+    "tbc/hot_path.hpp",
+    "telar_base/diagnostics/config.hpp"
   ],
   "src/runtime/graphics/query_resources.hpp": [
     "telar_config/graphics/limits.hpp"
   ],
-  "src/runtime/graphics/synchronizer/synchronizer.cppm": [
-    "<cassert>",
-    "<cerrno>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
+  "src/runtime/graphics/synchronizer/synchronizer.cpp": [
     "<fcntl.h>",
-    "<ghostty/vt.h>",
-    "<limits.h>",
     "<new>",
-    "<stdlib.h>",
-    "<sys/mman.h>",
-    "<sys/stat.h>",
-    "<unistd.h>",
     "telar_base/diagnostics/config.hpp",
     "telar_platform/trace_macro.hpp"
+  ],
+  "src/runtime/graphics/synchronizer/synchronizer.cppm": [
+    "<fcntl.h>",
+    "telar_base/diagnostics/config.hpp"
   ],
   "src/runtime/graphics/temporary_path.hpp": [
     "<cstdio>",
@@ -2483,20 +2460,9 @@
     "<sys/mman.h>"
   ],
   "src/runtime/observation/processor/processor.cppm": [
-    "<cassert>",
-    "<cerrno>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
     "<ghostty/vt.h>",
-    "<limits.h>",
-    "<new>",
-    "<stdlib.h>",
-    "<sys/stat.h>",
     "<sys/types.h>",
-    "<unistd.h>",
+    "tbc/hot_path.hpp",
     "telar_base/diagnostics/config.hpp",
     "telar_platform/trace_macro.hpp"
   ],
@@ -3268,6 +3234,10 @@
     "<span>",
     "<string_view>"
   ],
+  "src/runtime/terminal/control/checksum/checksum.cpp": [
+    "<ghostty/vt.h>",
+    "cell_layout.hpp"
+  ],
   "src/runtime/terminal/control/checksum/checksum.cppm": [
     "<ghostty/vt.h>",
     "cell_layout.hpp"
@@ -3279,6 +3249,9 @@
     "parameters.hpp",
     "sequence.hpp",
     "telar_render/sequence.hpp"
+  ],
+  "src/runtime/terminal/control/clipboard/clipboard.cppm": [
+    "tbc/hot_path.hpp"
   ],
   "src/runtime/terminal/control/color_queries.hpp": [
     "<algorithm>",
@@ -3319,8 +3292,11 @@
     "reply.hpp",
     "vt_state.hpp"
   ],
-  "src/runtime/terminal/control/engine/engine.cppm": [
+  "src/runtime/terminal/control/engine/engine.cpp": [
     "<cassert>",
+    "<ghostty/vt.h>"
+  ],
+  "src/runtime/terminal/control/engine/engine.cppm": [
     "<ghostty/vt.h>"
   ],
   "src/runtime/terminal/control/graphics_base64_block.hpp": [
@@ -3440,22 +3416,23 @@
     "ghostty_handle.hpp",
     "telar_vocabulary/vocabulary.hpp"
   ],
-  "src/runtime/terminal/graphics_storage/graphics_storage.cppm": [
-    "<cstddef>",
-    "<cstdint>",
+  "src/runtime/terminal/graphics_storage/graphics_storage.cpp": [
     "<ghostty/vt.h>",
     "telar_base/diagnostics/config.hpp"
   ],
-  "src/runtime/terminal/osc_scanner/osc_scanner.cppm": [
-    "<cassert>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
+  "src/runtime/terminal/graphics_storage/graphics_storage.cppm": [
     "<ghostty/vt.h>",
-    "<new>",
+    "telar_base/diagnostics/config.hpp"
+  ],
+  "src/runtime/terminal/osc_scanner/osc_scanner.cpp": [
+    "<cassert>",
+    "<cstdint>",
+    "<ghostty/vt.h>",
     "cell_layout.hpp",
+    "terminal/ghostty_grid.hpp"
+  ],
+  "src/runtime/terminal/osc_scanner/osc_scanner.cppm": [
+    "<ghostty/vt.h>",
     "terminal/ghostty_grid.hpp"
   ],
   "src/runtime/terminal/pty_response_queue.hpp": [
@@ -3479,26 +3456,21 @@
     "<new>",
     "cell_layout.hpp"
   ],
-  "src/runtime/terminal/text_reader/text_reader.cppm": [
+  "src/runtime/terminal/text_reader/text_reader.cpp": [
     "<cassert>",
-    "<cerrno>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<fcntl.h>",
     "<ghostty/vt.h>",
-    "<limits.h>",
-    "<new>",
-    "<stdlib.h>",
-    "<sys/mman.h>",
-    "<sys/stat.h>",
     "<unistd.h>",
-    "<zlib.h>",
     "cell_layout.hpp",
     "telar_base/diagnostics/config.hpp",
     "telar_platform/trace_macro.hpp",
+    "telar_render/sequence.hpp",
+    "terminal/ghostty_grid.hpp",
+    "terminal/tracked_row.hpp"
+  ],
+  "src/runtime/terminal/text_reader/text_reader.cppm": [
+    "<ghostty/vt.h>",
+    "<unistd.h>",
+    "telar_base/diagnostics/config.hpp",
     "telar_render/sequence.hpp",
     "terminal/ghostty_grid.hpp",
     "terminal/tracked_row.hpp"
@@ -3669,23 +3641,27 @@
     "<new>",
     "<unistd.h>"
   ],
-  "src/runtime/vocabulary/exchange/exchange.cppm": [
-    "<cassert>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdlib>",
-    "<cstring>",
-    "<new>",
-    "tbc/annotations.hpp"
+  "src/runtime/vocabulary/exchange/exchange.cpp": [
+    "<cassert>"
   ],
-  "src/runtime/vocabulary/traffic/traffic.cppm": [
+  "src/runtime/vocabulary/exchange/exchange.cppm": [
+    "tbc/annotations.hpp",
+    "tbc/hot_path.hpp"
+  ],
+  "src/runtime/vocabulary/frames/frames.cppm": [
+    "tbc/hot_path.hpp"
+  ],
+  "src/runtime/vocabulary/traffic/traffic.cpp": [
     "<cerrno>",
-    "<cstdint>",
-    "<limits.h>",
     "<sys/socket.h>",
     "<sys/stat.h>",
     "<sys/un.h>",
     "<unistd.h>"
+  ],
+  "src/runtime/vocabulary/traffic/traffic.cppm": [
+    "<cstdint>",
+    "<limits.h>",
+    "<sys/socket.h>"
   ],
   "src/runtime/workspaces/git_probe/git_probe.cppm": [
     "<cassert>",
