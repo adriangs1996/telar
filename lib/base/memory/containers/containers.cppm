@@ -1,26 +1,11 @@
 module;
 #include "tbc/view.hpp"
 #include "telar_base/memory/fixed_text.hpp"
-#include <algorithm>
-#include <array>
-#include <atomic>
-#include <bit>
 #include <cassert>
-#include <condition_variable>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <limits>
-#include <memory>
-#include <mutex>
-#include <new>
-#include <optional>
-#include <span>
-#include <type_traits>
-#include <utility>
 
 export module telar.base.memory.containers;
 
+import std;
 import telar.base.memory.allocators;
 
 // Owned textual headers stay in this global module fragment only; importers

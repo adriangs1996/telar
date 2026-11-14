@@ -1,18 +1,10 @@
 module;
-#include "telar_base/diagnostics/timing.hpp"
-#include <cstring>
-#include <stdexcept>
-#include <string_view>
-
 #include "telar_base/diagnostics/limit_reach.hpp"
-#include <algorithm>
-#include <array>
-#include <chrono>
-#include <limits>
-#include <span>
+#include "telar_base/diagnostics/timing.hpp"
 
 export module telar.base.diagnostics;
 
+import std;
 import telar.base.memory.containers;
 
 // Owned textual headers stay in this global module fragment only; importers
@@ -20,8 +12,38 @@ import telar.base.memory.containers;
 export namespace telar {
   using telar::accumulate;
   using telar::LimitReach;
-  using telar::TimedScope;
   using telar::Timing;
+}
+
+export {
+  namespace telar {
+
+    class TimedScope {
+    public:
+      using Clock = std::chrono::steady_clock;
+
+      inline explicit TimedScope(Timing& timing) noexcept
+          : TimedScope(&timing) {}
+
+      inline explicit TimedScope(Timing* timing) noexcept
+          : timing_(timing),
+            started_(timing == nullptr ? Clock::time_point{} : Clock::now()) {}
+
+      inline ~TimedScope() {
+        if (timing_ != nullptr) {
+          timing_->observe(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - started_).count());
+        }
+      }
+
+      TimedScope(const TimedScope&) = delete;
+      TimedScope& operator=(const TimedScope&) = delete;
+
+    private:
+      Timing* timing_;
+      Clock::time_point started_;
+    };
+
+  }
 }
 
 // Interface: telar_base/diagnostics/limit_ledger.cppm

@@ -2,7 +2,6 @@
 
 #include "tbc/view.hpp"
 #include "telar_base/memory/allocation_statistics.hpp"
-#include <algorithm>
 #include <concepts>
 #include <cstddef>
 #include <cstdlib>
@@ -64,7 +63,7 @@ namespace telar {
       }
 
       live_bytes_ += size;
-      peak_bytes_ = std::max(peak_bytes_, live_bytes_);
+      peak_bytes_ = live_bytes_ > peak_bytes_ ? live_bytes_ : peak_bytes_;
       ++allocations_;
       TELAR_DIAGNOSTIC(recordAllocation(size));
       return pointer;

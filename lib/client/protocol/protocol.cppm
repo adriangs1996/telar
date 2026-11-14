@@ -1,6 +1,5 @@
 module;
 #include "telar_client/serializers/telar_protocol.hpp"
-#include <exception>
 
 export module telar.client.protocol;
 
