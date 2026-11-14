@@ -1,5 +1,5 @@
 module;
-#include "tbc/hot_path.hpp"
+#include "tbc/annotations.hpp"
 
 #include "telar_config/graphics/limits.hpp"
 

@@ -1,7 +1,7 @@
 module;
 #include <lua.h>
 
-#include "tbc/hot_path.hpp"
+#include "tbc/annotations.hpp"
 
 export module telar.config.client;
 
