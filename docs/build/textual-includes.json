@@ -2104,19 +2104,6 @@
     "<cstdint>",
     "terminal/glyphs/box_edge_table.inc"
   ],
-  "src/gui/terminal/row_cache.hpp": [
-    "<algorithm>",
-    "<cstdint>",
-    "<optional>",
-    "<span>",
-    "<string_view>",
-    "core/memory.hpp",
-    "telar_client/protocol/content.hpp",
-    "terminal/screen.hpp"
-  ],
-  "src/gui/terminal/screen/screen.cppm": [
-    "terminal/row_cache.hpp"
-  ],
   "src/gui/text/bounded_editor/bounded_editor.cppm": [
     "<cstddef>",
     "<cstdint>",

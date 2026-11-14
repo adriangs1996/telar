@@ -51,6 +51,7 @@ import telar.base.text;
 import telar.base.text.utf8;
 import telar.gui.core.primitives;
 import telar.gui.input.wheel_accumulator;
+import telar.gui.terminal.row_cache;
 import telar.gui.terminal.screen;
 import telar.wire.agents;
 import telar.wire.clients;

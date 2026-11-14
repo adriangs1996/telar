@@ -27,6 +27,7 @@ export import telar.gui.presentation.notification_center;
 export import telar.render.document;
 import telar.base.diagnostics;
 import telar.gui.core.primitives;
+import telar.gui.terminal.row_cache;
 import telar.gui.terminal.screen;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
