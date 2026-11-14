@@ -240,7 +240,8 @@ def check_header_owners(owners, units):
     """A header an owner module re-exports stays out of every other global fragment.
 
     Each module that includes it textually would carry its own copy of the header's
-    declarations, and importers would merge those copies again.
+    declarations, and importers would merge those copies again. No global fragment, an
+    owner's included, names a C++ library header: the owned headers reach it on their own.
     """
     owner_of = {}
     for owner, owned in owners.items():
@@ -255,12 +256,10 @@ def check_header_owners(owners, units):
                 raise RuntimeError(f'{owner} owns {header} but does not include it')
             owner_of[header] = owner
     for unit in units:
-        if unit in owners:
-            continue
         fragment = global_fragment((ROOT / unit).read_text())
         for spelling in INCLUDE_RE.findall(fragment):
             header = resolve(unit, spelling)
-            if header in owner_of:
+            if header in owner_of and owner_of[header] != unit:
                 raise RuntimeError(f'{unit} includes {header}; import the module of {owner_of[header]} instead')
         for header in STANDARD_RE.findall(fragment):
             if header in CPP_STANDARD_HEADERS:

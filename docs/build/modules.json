@@ -753,7 +753,6 @@
     "src/gui/qt/document_view.hpp": "Qt moc/QML integration",
     "src/gui/terminal/fold_map.hpp": "Qt adapters include it; module units import its owner module",
     "lib/base/include/telar_base/text/decimal.hpp": "Headers that cannot import modules, as the kitty and glyph parsers, include it; module units import its owner module",
-    "lib/base/include/telar_base/text/constant_time.hpp": "The clipboard grants header includes it; module units import its owner module",
     "lib/platform/include/telar_platform/descriptor_path.hpp": "Headers that cannot import modules, as the graphics temporary path, include it",
     "src/runtime/terminal/ghostty_grid.hpp": "Needs the generated cell layout, which only runtime-core units include",
     "src/gui/platform/macos/cf_reference.hpp": "Objective-C++ sources include it; Objective-C++ cannot import the C++ modules"
@@ -2872,7 +2871,6 @@
     "lib/base/text/text.cppm": [
       "lib/base/include/telar_base/program_identity.hpp",
       "lib/base/include/telar_base/text/base64.hpp",
-      "lib/base/include/telar_base/text/constant_time.hpp",
       "lib/base/include/telar_base/text/decimal.hpp"
     ],
     "lib/base/text/utf8/utf8.cppm": [

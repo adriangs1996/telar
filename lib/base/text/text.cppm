@@ -2,40 +2,14 @@ module;
 #include "tbc/view.hpp"
 #include "telar_base/program_identity.hpp"
 #include "telar_base/text/base64.hpp"
-#include <chrono>
-#include <cstddef>
-#include <cstdlib>
-#include <memory>
-#include <mutex>
-#include <new>
-#include <string>
-#include <utility>
-#include <vector>
-
-#include <string_view>
-
-#include <concepts>
-#include <limits>
-#include <optional>
-
-#include <initializer_list>
-
-#include <cstdint>
-#include <span>
-
-#include <algorithm>
-
-#include <array>
-#include <cassert>
-
-#include <arpa/inet.h>
-#include <netinet/in.h>
-
-#include "telar_base/text/constant_time.hpp"
 #include "telar_base/text/decimal.hpp"
+#include <arpa/inet.h>
+#include <cassert>
+#include <netinet/in.h>
 
 export module telar.base.text;
 
+import std;
 import telar.base.diagnostics;
 import telar.base.memory.allocators;
 import telar.base.text.json;
@@ -43,7 +17,6 @@ import telar.base.text.json;
 // Owned textual headers stay in this global module fragment only; importers
 // reach their names through these declarations instead of including them.
 export namespace telar::runtime {
-  using telar::runtime::constantTimeEqual;
   using telar::runtime::NumberError;
   using telar::runtime::parseExact;
   using telar::runtime::unsignedDecimal;
@@ -95,6 +68,28 @@ export {
       }
 
       return true;
+    }
+
+  }
+}
+
+export {
+  namespace telar::runtime {
+
+    // Whether two secrets of public length are equal, in time that depends on the length alone, so
+    // how long a forged candidate takes to fail reveals nothing of the secret.
+    inline bool constantTimeEqual(std::string_view left, std::string_view right) noexcept {
+      if (left.size() != right.size()) {
+        return false;
+      }
+
+      unsigned difference = 0;
+
+      for (std::size_t index = 0; index < left.size(); ++index) {
+        difference |= static_cast<unsigned char>(left[index]) ^ static_cast<unsigned char>(right[index]);
+      }
+
+      return difference == 0;
     }
 
   }

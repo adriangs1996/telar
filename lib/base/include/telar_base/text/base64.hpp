@@ -1,6 +1,5 @@
 #pragma once
 
-#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <optional>
@@ -98,8 +97,10 @@ namespace telar::runtime::base64 {
       const auto& first = encoded_pairs[value >> pair_bits];
       const auto& second = encoded_pairs[value & pair_mask];
 
-      std::copy(first.begin(), first.end(), destination.data() + written);
-      std::copy(second.begin(), second.end(), destination.data() + written + first.size());
+      destination[written] = first[0];
+      destination[written + 1] = first[1];
+      destination[written + 2] = second[0];
+      destination[written + 3] = second[1];
       offset += 3;
       written += 4;
     }
@@ -108,7 +109,8 @@ namespace telar::runtime::base64 {
       const auto value = (static_cast<std::uint32_t>(bytes[offset]) << 16) | (remaining == 2 ? static_cast<std::uint32_t>(bytes[offset + 1]) << 8 : 0);
       const auto& first = encoded_pairs[value >> pair_bits];
 
-      std::copy(first.begin(), first.end(), destination.data() + written);
+      destination[written] = first[0];
+      destination[written + 1] = first[1];
       destination[written + 2] = remaining == 2 ? alphabet[(value >> 6) & (alphabet.size() - 1)] : '=';
       destination[written + 3] = '=';
       written += 4;

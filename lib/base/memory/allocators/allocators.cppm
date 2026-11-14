@@ -1,11 +1,9 @@
 module;
 #include "telar_base/memory/allocator.hpp"
-#include <cstddef>
-#include <cstdint>
-#include <memory>
-#include <span>
 
 export module telar.base.memory.allocators;
+
+import std;
 
 // Owned textual headers stay in this global module fragment only; importers
 // reach their names through these declarations instead of including them.
