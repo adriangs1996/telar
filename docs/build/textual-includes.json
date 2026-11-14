@@ -850,7 +850,6 @@
     "<new>"
   ],
   "src/cli/hooks/command/command.cppm": [
-    "<cstring>",
     "tbc/hot_path.hpp"
   ],
   "src/cli/hooks/session/session.cpp": [

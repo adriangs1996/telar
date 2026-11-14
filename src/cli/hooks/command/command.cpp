@@ -13,6 +13,308 @@ module telar.cli.hooks.command;
 namespace telar::runtime::cli::hooks {
 
   template <Allocator Memory>
+  Object<Memory>::Object(Memory& memory, JsonValue value, bool reject_duplicates)
+      : memory_(memory),
+        members_(AllocatorRef<Member, Memory>{memory}),
+        reject_duplicates_(reject_duplicates) {
+    if (!value.encoded().starts_with('{')) {
+      throw std::invalid_argument{"Expected hook object"};
+    }
+
+    value.eachMember([&](JsonValue key, JsonValue entry) {
+      String<Memory> name{AllocatorRef<char, Memory>{memory_}};
+
+      key.string(name);
+      members_.push_back(Member{.name = std::move(name), .value = entry, .text = std::nullopt, .position = members_.size()});
+    });
+
+    indexMembers();
+  }
+
+  template <Allocator Memory>
+  std::optional<JsonValue> Object<Memory>::value(std::string_view name) const {
+    const auto* member = find(name);
+    if (member != nullptr) {
+      checkUnique(*member);
+    }
+
+    return member == nullptr ? std::nullopt : std::optional{member->value};
+  }
+
+  template <Allocator Memory>
+  std::optional<std::string_view> Object<Memory>::optionalText(std::string_view name) {
+    auto* member = find(name);
+    if (member == nullptr) {
+      return std::nullopt;
+    }
+
+    checkUnique(*member);
+    if (member->value.encoded() == "null") {
+      return std::nullopt;
+    }
+
+    return decode(*member);
+  }
+
+  template <Allocator Memory>
+  std::string_view Object<Memory>::text(std::string_view name) {
+    auto* member = find(name);
+
+    return member == nullptr ? std::string_view{} : decode(*member);
+  }
+
+  template <Allocator Memory>
+  std::optional<std::string_view> Object<Memory>::stringField(std::string_view name) {
+    const auto field = value(name);
+
+    return field && field->encoded().starts_with('"') ? optionalText(name) : std::nullopt;
+  }
+
+  template <Allocator Memory>
+  std::optional<bool> Object<Memory>::boolean(std::string_view name) const {
+    const auto field = value(name);
+    if (!field || field->encoded() == "null") {
+      return std::nullopt;
+    }
+
+    if (field->encoded() != "true" && field->encoded() != "false") {
+      throw std::invalid_argument{"Expected hook boolean"};
+    }
+
+    return field->boolean();
+  }
+
+  template <Allocator Memory>
+  void Object<Memory>::requireUnique() const {
+    for (const auto& member : members_) {
+      if (member.duplicate) {
+        throw std::invalid_argument{"Duplicate hook field"};
+      }
+    }
+  }
+
+  template <Allocator Memory>
+  template <typename Consumer>
+  void Object<Memory>::eachValue(Consumer&& consume) const {
+    for (const auto& member : members_) {
+      consume(member.value);
+    }
+  }
+
+  template <Allocator Memory>
+  auto Object<Memory>::find(std::string_view name) noexcept -> Member* {
+    const auto found = std::lower_bound(members_.begin(), members_.end(), name, [](const Member& member, std::string_view key) {
+      return member.name < key;
+    });
+
+    return found != members_.end() && found->name == name ? &*found : nullptr;
+  }
+
+  template <Allocator Memory>
+  auto Object<Memory>::find(std::string_view name) const noexcept -> const Member* {
+    return const_cast<Object*>(this)->find(name);
+  }
+
+  template <Allocator Memory>
+  void Object<Memory>::indexMembers() {
+    std::ranges::sort(members_, [](const Member& left, const Member& right) {
+      return left.name == right.name ? left.position < right.position : left.name < right.name;
+    });
+
+    std::size_t unique = 0;
+
+    for (std::size_t index = 0; index < members_.size(); ++index) {
+      if (unique != 0 && members_[unique - 1].name == members_[index].name) {
+        members_[unique - 1] = std::move(members_[index]);
+        members_[unique - 1].duplicate = true;
+      } else {
+        if (unique != index) {
+          members_[unique] = std::move(members_[index]);
+        }
+
+        ++unique;
+      }
+    }
+
+    members_.erase(members_.begin() + unique, members_.end());
+  }
+
+  template <Allocator Memory>
+  auto Object<Memory>::decode(tbc::view<Member&, tbc::lt::a> member) -> tbc::view<std::string_view, tbc::lt::a> {
+    checkUnique(member);
+    if (!member.text) {
+      String<Memory> decoded{AllocatorRef<char, Memory>{memory_}};
+
+      member.value.string(decoded);
+      member.text = std::move(decoded);
+    }
+
+    return *member.text;
+  }
+
+  template <Allocator Memory>
+  void Object<Memory>::checkUnique(const Member& member) const {
+    if (reject_duplicates_ && member.duplicate) {
+      throw std::invalid_argument{"Duplicate hook field"};
+    }
+  }
+
+  template <Allocator Memory>
+  Payload<Memory>::Payload(Memory& memory, AgentProvider provider, JsonValue input)
+      : Payload(memory, provider, Object<Memory>{memory, input, true}) {}
+
+  template <Allocator Memory>
+  Payload<Memory>::Payload(Memory& memory, AgentProvider provider, Object<Memory> input)
+      : memory(memory),
+        provider(provider),
+        fields(std::move(input)),
+        tools(memory, toolObject(fields)) {
+    if (const auto tool_input = fields.value("tool_input")) {
+      if (tool_input->encoded().starts_with('{')) {
+        tools.requireUnique();
+        tools.eachValue([&](JsonValue child) {
+          validateDynamicValue(memory, child);
+        });
+      } else {
+        validateDynamicValue(memory, *tool_input);
+      }
+    }
+
+    for (const auto name : {"tool_name", "cwd"}) {
+      fields.text(name);
+    }
+
+    if (provider == AgentProvider::pi || provider == AgentProvider::opencode) {
+      for (const auto name : {"event", "session_id", "tool_call_id"}) {
+        fields.text(name);
+      }
+
+      fields.template integer<std::int32_t>("exit_code");
+      if (provider == AgentProvider::pi) {
+        fields.boolean("idle");
+        strictBoolean("blocked");
+        fields.optionalText("name");
+      } else {
+        strictBoolean("busy");
+        fields.optionalText("title");
+        blockedReason();
+      }
+    } else {
+      for (const auto name : {"hook_event_name", "tool_use_id"}) {
+        fields.text(name);
+      }
+
+      if (provider == AgentProvider::cursor) {
+        for (const auto name : {"conversation_id", "tool_output", "chat_meta"}) {
+          fields.text(name);
+        }
+
+        if (const auto roots = fields.value("workspace_roots")) {
+          roots->eachElement([&](JsonValue root) {
+            String<Memory> decoded{AllocatorRef<char, Memory>{memory}};
+
+            root.string(decoded);
+            if (!workspace_) {
+              workspace_ = std::move(decoded);
+            }
+          });
+        }
+      } else {
+        fields.optionalText("agent_id");
+        for (const auto name : {"session_id", "transcript_path"}) {
+          fields.text(name);
+        }
+
+        if (provider == AgentProvider::claude) {
+          for (const auto name : {"session_title", "notification_type", "message", "last_assistant_message", "new_cwd"}) {
+            fields.text(name);
+          }
+
+          if (const auto tasks = fields.value("background_tasks")) {
+            tasks->eachElement([&](JsonValue value) {
+              Object task{memory, value, true};
+              const auto type = task.text("type");
+              const auto status = task.text("status");
+
+              running_subagents += type == "subagent" && status == "running";
+            });
+          }
+        } else {
+          fields.text("source");
+          fields.text("state_database");
+          fields.optionalText("last_assistant_message");
+          fields.template integer<std::size_t>("running_subagents");
+        }
+      }
+    }
+  }
+
+  template <Allocator Memory>
+  std::string_view Payload<Memory>::event() {
+    return fields.text(provider == AgentProvider::pi || provider == AgentProvider::opencode ? "event" : "hook_event_name");
+  }
+
+  template <Allocator Memory>
+  std::string_view Payload<Memory>::session() {
+    return fields.text(provider == AgentProvider::cursor ? "conversation_id" : "session_id");
+  }
+
+  template <Allocator Memory>
+  bool Payload<Memory>::subagent() {
+    return !fields.optionalText("agent_id").value_or("").empty();
+  }
+
+  template <Allocator Memory>
+  std::string_view Payload<Memory>::workspace() const noexcept {
+    return workspace_ ? std::string_view{*workspace_} : std::string_view{};
+  }
+
+  template <Allocator Memory>
+  std::string_view Payload<Memory>::toolEvent() {
+    const auto name = event();
+
+    if (provider != AgentProvider::cursor) {
+      return name;
+    }
+
+    if (name == "preToolUse") {
+      return "PreToolUse";
+    }
+
+    if (name == "postToolUse" || name == "postToolUseFailure") {
+      return "PostToolUse";
+    }
+
+    return name;
+  }
+
+  template <Allocator Memory>
+  AgentBlockedReason Payload<Memory>::blockedReason() {
+    const auto name = fields.value("blocked") ? fields.text("blocked") : "none";
+    constexpr std::array names{"none", "permission", "question", "plan", "other"};
+    const auto found = std::ranges::find(names, name);
+    if (found == names.end()) {
+      throw std::invalid_argument{"Unknown hook blocked reason"};
+    }
+
+    return static_cast<AgentBlockedReason>(found - names.begin());
+  }
+
+  template <Allocator Memory>
+  void Payload<Memory>::strictBoolean(std::string_view name) {
+    if (fields.value(name) && !fields.boolean(name).has_value()) {
+      throw std::invalid_argument{"Expected hook boolean"};
+    }
+  }
+
+  template <Allocator Memory>
+  JsonValue Payload<Memory>::toolObject(const Object<Memory>& fields) {
+    const auto value = fields.value("tool_input");
+
+    return value && value->encoded().starts_with('{') ? *value : JsonValue{"{}"};
+  }
+
+  template <Allocator Memory>
   void validateUnicodeEscapes(Memory& memory, std::string_view input) {
     if (!input.contains("\\u")) {
       return;
@@ -83,6 +385,32 @@ namespace telar::runtime::cli::hooks {
     return {};
   }
 
+  template <std::size_t Capacity>
+  void displayText(FixedText<Capacity>& output, std::string_view text, bool multiline) {
+    std::array<char, Capacity> bytes;
+    std::size_t length = 0;
+
+    for (const unsigned char byte : text) {
+      if (length == bytes.size() || (!multiline && byte == '\n')) {
+        break;
+      }
+
+      if ((byte >= 0x20 && byte != 0x7f) || (multiline && (byte == '\n' || byte == '\t'))) {
+        bytes[length++] = static_cast<char>(byte);
+      }
+    }
+
+    std::string_view result{bytes.data(), length};
+
+    if (multiline) {
+      const auto first = result.find_first_not_of(" \n\t");
+
+      result = first == std::string_view::npos ? std::string_view{} : result.substr(first, result.find_last_not_of(" \n\t") - first + 1);
+    }
+
+    output.assign(validPrefix(result));
+  }
+
   void eventLine(FixedText<96>& output, std::string_view text) {
     const auto control = std::ranges::find_if(text, [](unsigned char byte) {
       return byte < 0x20 || byte == 0x7f;
@@ -117,6 +445,61 @@ namespace telar::runtime::cli::hooks {
     }
 
     return false;
+  }
+
+  template <Allocator Memory>
+  void toolEvent(FixedText<96>& output, Payload<Memory>& input) {
+    const auto name = input.fields.text("tool_name");
+    if (name.empty()) {
+      output.assign({});
+      return;
+    }
+
+    std::array<char, 192> buffer;
+    std::size_t length = 0;
+    const auto append = [&](std::string_view text) {
+      const auto count = std::min(text.size(), buffer.size() - length);
+
+      std::memcpy(buffer.data() + length, text.data(), count);
+      length += count;
+    };
+
+    append("» ");
+    append(name);
+    for (const auto key : {"command", "cmd", "file_path", "filePath", "filepath", "path", "pattern", "url", "query", "prompt", "description"}) {
+      if (const auto argument = input.tools.stringField(key); argument && !argument->empty()) {
+        append(" ");
+        append(*argument);
+        break;
+      }
+    }
+
+    eventLine(output, {buffer.data(), length});
+  }
+
+  template <Allocator Memory>
+  bool questionEvent(FixedText<96>& output, Payload<Memory>& input) {
+    const auto questions = input.tools.value("questions");
+    if (!questions || !questions->encoded().starts_with('[')) {
+      return false;
+    }
+
+    bool first = true;
+    bool found = false;
+
+    questions->eachElement([&](JsonValue value) {
+      if (!std::exchange(first, false) || !value.encoded().starts_with('{')) {
+        return;
+      }
+
+      Object question{input.memory, value};
+      if (const auto text = question.stringField("question"); text && !text->empty()) {
+        eventLine(output, *text);
+        found = true;
+      }
+    });
+
+    return found;
   }
 
   template <Allocator Memory>
@@ -187,6 +570,12 @@ namespace telar::runtime::cli::hooks {
     output.assign({buffer.data(), static_cast<std::size_t>(length)});
   }
 
+  template class Object<Memory>;
+  template class Payload<Memory>;
+  template void displayText<96>(FixedText<96>& output, std::string_view text, bool multiline);
+  template void displayText<2048>(FixedText<2048>& output, std::string_view text, bool multiline);
+  template void toolEvent<Memory>(FixedText<96>& output, Payload<Memory>& input);
+  template bool questionEvent<Memory>(FixedText<96>& output, Payload<Memory>& input);
   template std::optional<ReportAgentCommand> commandReport<Memory>(Payload<Memory>& input);
   template void validateUnicodeEscapes<Memory>(Memory& memory, std::string_view input);
   template void validateDynamicValue<Memory>(Memory& memory, JsonValue value);

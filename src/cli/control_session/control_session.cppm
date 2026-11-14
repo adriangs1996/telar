@@ -47,11 +47,7 @@ export {
         client_.send(message, buffer);
       }
 
-      // Every reply passes through here; its body also shows the lifetime checker
-      // that a receive leaves the session's other storage valid.
-      TBC_HOT_PATH inline tbc::view<std::span<const Byte>, tbc::lt::a> receive(tbc::view<std::span<Byte>, tbc::lt::a> buffer) {
-        return client_.receiveFrame(buffer);
-      }
+      tbc::view<std::span<const Byte>, tbc::lt::a> receive(tbc::view<std::span<Byte>, tbc::lt::a> buffer);
 
       void receiveTimeout(unsigned seconds);
 

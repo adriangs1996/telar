@@ -243,44 +243,13 @@ export {
 
       static tbc::view<JsonNode, tbc::lt::a> parse(tbc::view<Memory&, tbc::lt::a> memory, std::string_view source);
 
-      // The accessors and erase stay here because the lifetime checker learns only from a body what
-      // a non-const method leaves untouched; callers keep borrows of a node across them.
-      TBC_HOT_PATH JsonKind kind() const noexcept {
-        return kind_;
-      }
-
-      TBC_HOT_PATH std::string_view text() const noexcept {
-        return text_;
-      }
-
-      TBC_HOT_PATH std::span<JsonNode> children() noexcept {
-        return children_;
-      }
-
-      TBC_HOT_PATH std::span<const JsonNode> children() const noexcept {
-        return children_;
-      }
-
-      TBC_HOT_PATH JsonNode* find(std::string_view name) noexcept {
-        if (kind_ != JsonKind::object) {
-          return nullptr;
-        }
-
-        const auto found = std::ranges::find_if(children_, [name](const auto& child) {
-          return child.name_ == name;
-        });
-
-        return found == children_.end() ? nullptr : &*found;
-      }
-
-      TBC_HOT_PATH const JsonNode* find(std::string_view name) const noexcept {
-        return const_cast<JsonNode*>(this)->find(name);
-      }
-
-      TBC_HOT_PATH void erase(std::size_t index) {
-        children_.erase(children_.begin() + index);
-      }
-
+      JsonKind kind() const noexcept;
+      std::string_view text() const noexcept;
+      std::span<JsonNode> children() noexcept;
+      std::span<const JsonNode> children() const noexcept;
+      JsonNode* find(std::string_view name) noexcept;
+      const JsonNode* find(std::string_view name) const noexcept;
+      void erase(std::size_t index);
       JsonNode& ensure(std::string_view name, JsonKind kind);
       void setString(std::string_view name, std::string_view value);
       void setLiteral(std::string_view name, std::string_view value);
@@ -303,8 +272,11 @@ export {
     };
 
     // Instantiated in json.cpp for the type-erased allocators and for the compositions of base
-    // allocators the tests still name. No extern template declaration: it would hide the bodies
-    // above from the lifetime checker.
+    // allocators the tests still name.
+    extern template class JsonNode<Memory>;
+    extern template class JsonNode<ConcurrentMemory>;
+    extern template class JsonNode<SystemAllocator>;
+    extern template class JsonNode<BudgetAllocator<SystemAllocator>>;
 
   }
 }
