@@ -124,6 +124,20 @@ add_library(runtime-core STATIC
   platform/host_metrics/${TELAR_PLATFORM}/host_metrics.cpp
   platform/local_listener/local_listener.cpp
   history/store/database.cpp
+  agents/description_generator/description_generator.cpp
+  agents/screen_inference/screen_inference.cpp
+  agents/snapshot/snapshot.cpp
+  command_capture/tracker/tracker.cpp
+  editors/remote_editor/remote_editor.cpp
+  history/event/event.cpp
+  history/store/store.cpp
+  shell_integration/git_context/git_context.cpp
+  shell_integration/shell_integration.cpp
+  shell_integration/token/token.cpp
+  shell_integration/words/words.cpp
+  suggestions/engine/engine.cpp
+  workspaces/git_probe/git_probe.cpp
+  worktrees/git_probe/git_probe.cpp
   terminal/text_reader/cell_projection.cpp)
 telar_modules(runtime-core)
 set_target_properties(runtime-core telar-lua-vm telar-platform PROPERTIES POSITION_INDEPENDENT_CODE ON)

@@ -2025,67 +2025,28 @@
     "<cstring>",
     "<new>"
   ],
-  "src/runtime/agents/description_generator/description_generator.cppm": [
-    "<cassert>",
+  "src/runtime/agents/description_generator/description_generator.cpp": [
     "<cerrno>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<limits.h>",
-    "<new>",
-    "<poll.h>",
-    "<sys/types.h>",
-    "<sys/wait.h>",
-    "<unistd.h>",
     "telar_platform/trace_macro.hpp"
+  ],
+  "src/runtime/agents/description_generator/description_generator.cppm": [
+    "<sys/types.h>",
+    "tbc/hot_path.hpp"
   ],
   "src/runtime/agents/screen_inference/screen_inference.cppm": [
-    "<cassert>",
-    "<cerrno>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<fcntl.h>",
-    "<ghostty/vt.h>",
-    "<limits.h>",
-    "<new>",
-    "<stdlib.h>",
-    "<sys/mman.h>",
-    "<sys/stat.h>",
-    "<unistd.h>",
-    "<zlib.h>",
-    "cell_layout.hpp",
-    "telar_base/diagnostics/config.hpp"
+    "tbc/hot_path.hpp"
   ],
-  "src/runtime/agents/snapshot/snapshot.cppm": [
-    "<cassert>",
+  "src/runtime/agents/snapshot/snapshot.cpp": [
     "<cerrno>",
-    "<csignal>",
-    "<cstddef>",
     "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
     "<fcntl.h>",
-    "<ghostty/vt.h>",
-    "<limits.h>",
-    "<new>",
-    "<sqlite3.h>",
-    "<stdlib.h>",
-    "<sys/mman.h>",
     "<sys/stat.h>",
     "<sys/types.h>",
-    "<sys/uio.h>",
-    "<sys/wait.h>",
     "<unistd.h>",
-    "<zlib.h>",
-    "cell_layout.hpp",
-    "telar_base/diagnostics/config.hpp",
     "telar_platform/trace_macro.hpp"
+  ],
+  "src/runtime/agents/snapshot/snapshot.cppm": [
+    "tbc/hot_path.hpp"
   ],
   "src/runtime/cli/server/server.cppm": [
     "<cerrno>",
@@ -2098,11 +2059,17 @@
     "<unistd.h>",
     "config_bootstrap.hpp"
   ],
-  "src/runtime/command_capture/tracker/tracker.cppm": [
+  "src/runtime/command_capture/tracker/tracker.cpp": [
     "<ghostty/vt.h>",
     "cell_layout.hpp",
     "telar_base/diagnostics/config.hpp",
     "telar_platform/trace_macro.hpp",
+    "terminal/ghostty_grid.hpp"
+  ],
+  "src/runtime/command_capture/tracker/tracker.cppm": [
+    "<ghostty/vt.h>",
+    "tbc/hot_path.hpp",
+    "telar_base/diagnostics/config.hpp",
     "terminal/ghostty_grid.hpp"
   ],
   "src/runtime/config/loader/loader.cppm": [
@@ -2141,24 +2108,16 @@
   "src/runtime/diagnostics/timing.hpp": [
     "telar_base/diagnostics/timing.hpp"
   ],
-  "src/runtime/editors/remote_editor/remote_editor.cppm": [
-    "<cassert>",
-    "<cerrno>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
+  "src/runtime/editors/remote_editor/remote_editor.cpp": [
     "<dirent.h>",
     "<fcntl.h>",
     "<limits.h>",
-    "<new>",
-    "<poll.h>",
     "<sys/stat.h>",
-    "<sys/types.h>",
-    "<sys/wait.h>",
     "<unistd.h>",
     "telar_platform/trace_macro.hpp"
+  ],
+  "src/runtime/editors/remote_editor/remote_editor.cppm": [
+    "<sys/types.h>"
   ],
   "src/runtime/exchange_capture/pipeline/pipeline.cppm": [
     "<brotli/decode.h>",
@@ -2361,14 +2320,19 @@
     "tbc/view.hpp",
     "telar_platform/descriptor_path.hpp"
   ],
+  "src/runtime/history/event/event.cpp": [
+    "<cstring>",
+    "<sqlite3.h>",
+    "telar_base/diagnostics/config.hpp"
+  ],
   "src/runtime/history/event/event.cppm": [
     "<cstddef>",
     "<cstdint>",
     "<cstdio>",
     "<cstdlib>",
-    "<cstring>",
     "<new>",
     "<sqlite3.h>",
+    "tbc/hot_path.hpp",
     "telar_base/diagnostics/config.hpp"
   ],
   "src/runtime/history/store/database.cpp": [
@@ -2383,18 +2347,21 @@
     "<sys/stat.h>",
     "<unistd.h>"
   ],
+  "src/runtime/history/store/store.cpp": [
+    "<cstdint>",
+    "<cstring>",
+    "<sqlite3.h>",
+    "telar_platform/trace_macro.hpp"
+  ],
   "src/runtime/history/store/store.cppm": [
     "<cassert>",
     "<cstddef>",
-    "<cstdint>",
     "<cstdio>",
     "<cstdlib>",
-    "<cstring>",
     "<new>",
     "<sqlite3.h>",
     "<sys/types.h>",
-    "<unistd.h>",
-    "telar_platform/trace_macro.hpp"
+    "<unistd.h>"
   ],
   "src/runtime/http/content/content.cppm": [
     "<cstddef>",
@@ -3213,18 +3180,25 @@
     "cell_layout.hpp",
     "telar_base/diagnostics/config.hpp"
   ],
-  "src/runtime/shell_integration/git_context/git_context.cppm": [
+  "src/runtime/shell_integration/git_context/git_context.cpp": [
     "<limits.h>"
   ],
-  "src/runtime/shell_integration/shell_integration.cppm": [
+  "src/runtime/shell_integration/git_context/git_context.cppm": [
+    "<limits.h>",
+    "tbc/hot_path.hpp"
+  ],
+  "src/runtime/shell_integration/shell_integration.cpp": [
     "<cerrno>",
     "<fcntl.h>",
     "<limits.h>",
     "<sys/stat.h>",
-    "<unistd.h>",
-    "shell_scripts.hpp"
+    "<unistd.h>"
   ],
-  "src/runtime/shell_integration/words/words.cppm": [
+  "src/runtime/shell_integration/shell_integration.cppm": [
+    "shell_scripts.hpp",
+    "tbc/hot_path.hpp"
+  ],
+  "src/runtime/shell_integration/words/words.cpp": [
     "<dirent.h>",
     "<fcntl.h>",
     "<libproc.h>",
@@ -3234,19 +3208,13 @@
     "<unistd.h>",
     "command_specs.hpp"
   ],
-  "src/runtime/suggestions/engine/engine.cppm": [
-    "<cassert>",
-    "<cerrno>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
+  "src/runtime/shell_integration/words/words.cppm": [
     "<limits.h>",
-    "<new>",
+    "tbc/hot_path.hpp"
+  ],
+  "src/runtime/suggestions/engine/engine.cpp": [
+    "<cerrno>",
     "<poll.h>",
-    "<sys/types.h>",
-    "<sys/wait.h>",
     "<unistd.h>",
     "telar_platform/trace_macro.hpp"
   ],
@@ -3687,40 +3655,11 @@
     "<sys/un.h>",
     "<unistd.h>"
   ],
-  "src/runtime/workspaces/git_probe/git_probe.cppm": [
-    "<cassert>",
-    "<cerrno>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<fcntl.h>",
-    "<limits.h>",
-    "<new>",
-    "<poll.h>",
-    "<sys/stat.h>",
-    "<sys/types.h>",
-    "<sys/wait.h>",
-    "<unistd.h>",
+  "src/runtime/workspaces/git_probe/git_probe.cpp": [
     "telar_platform/trace_macro.hpp"
   ],
-  "src/runtime/worktrees/git_probe/git_probe.cppm": [
-    "<cassert>",
-    "<cerrno>",
-    "<cstddef>",
-    "<cstdint>",
-    "<cstdio>",
-    "<cstdlib>",
-    "<cstring>",
-    "<fcntl.h>",
-    "<limits.h>",
-    "<new>",
-    "<poll.h>",
+  "src/runtime/worktrees/git_probe/git_probe.cpp": [
     "<sys/stat.h>",
-    "<sys/types.h>",
-    "<sys/wait.h>",
-    "<unistd.h>",
     "telar_platform/trace_macro.hpp"
   ]
 }

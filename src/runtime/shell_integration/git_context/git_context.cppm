@@ -1,4 +1,5 @@
 module;
+#include "tbc/hot_path.hpp"
 #include <limits.h>
 
 export module telar.runtime.shell_integration.git_context;
@@ -35,9 +36,7 @@ export namespace telar::runtime {
 
     bool operator==(const ShellGitSummary&) const noexcept = default;
 
-    inline PaneGit message(std::uint64_t pane) const noexcept {
-      return PaneGit{.pane_id = pane, .repository = repository, .detached = detached, .branch = branch.view(), .divergence_known = divergence_known, .ahead = ahead, .behind = behind, .changes_known = changes_known, .staged = staged, .unstaged = unstaged, .conflicted = conflicted};
-    }
+    PaneGit message(std::uint64_t pane) const noexcept;
   };
 
   struct ShellGitResult {
@@ -53,41 +52,11 @@ export namespace telar::runtime {
     using Request = ShellGitRequest;
     using Result = ShellGitResult;
 
-    inline ShellGitReader()
-        : reader_(erased_) {}
+    ShellGitReader();
 
-    inline Result observe(const Request& request) noexcept {
-      Result result{.pane = request.pane, .generation = request.generation, .summary = {}};
-      const auto& status = reader_.read(request.directory.view());
-      auto& summary = result.summary;
+    Result observe(const Request& request) noexcept;
 
-      summary.repository = status.repository == git::RepositoryState::ready;
-      if (!summary.repository) {
-        return result;
-      }
-
-      summary.detached = status.head == git::HeadState::detached;
-      if (summary.detached) {
-        std::array<char, 2 * git::maximum_hash_size> digits{};
-
-        summary.branch.assign(status.head_id.hex(digits, 7));
-      } else {
-        summary.branch.assign(std::string_view{status.branch}.substr(0, 255));
-      }
-
-      summary.divergence_known = status.divergence == git::Accuracy::exact;
-      summary.ahead = status.ahead;
-      summary.behind = status.behind;
-      summary.changes_known = status.staged == git::Accuracy::exact && status.unstaged == git::Accuracy::exact;
-      const auto& changes = status.changes;
-
-      summary.staged = changes.staged_added + changes.staged_modified + changes.staged_deleted;
-      summary.unstaged = changes.unstaged_modified + changes.unstaged_deleted + changes.intent_to_add;
-      summary.conflicted = changes.conflicted;
-      return result;
-    }
-
-    inline void stop() noexcept {}
+    void stop() noexcept;
 
   private:
     SystemAllocator memory_;
@@ -98,32 +67,17 @@ export namespace telar::runtime {
   // One read at a time: while one runs, the latest request of each other pane waits.
   class ShellGitService {
   public:
-    inline ShellGitService()
-        : worker_(std::in_place) {}
+    ShellGitService();
 
-    inline void request(std::uint64_t pane, std::uint64_t generation, std::string_view directory) {
-      if (directory.empty() || directory.front() != '/' || directory.size() >= PATH_MAX) {
-        return;
-      }
+    void request(std::uint64_t pane, std::uint64_t generation, std::string_view directory);
 
-      ShellGitRequest next{.pane = pane, .generation = generation, .directory = {}};
-
-      next.directory.assign(directory);
-      queue_.dropWaiting([&](const ShellGitRequest& entry) {
-        return entry.pane == pane;
-      });
-
-      queue_.request(worker_, next);
-    }
-
+    // The consumer is the caller's type; the queue's collect is a template over it too.
     template <typename Consumer>
-    inline void collect(Consumer&& consume) {
+    TBC_HOT_PATH inline void collect(Consumer&& consume) {
       queue_.collect(worker_, std::forward<Consumer>(consume));
     }
 
-    inline int descriptor() const noexcept {
-      return worker_.descriptor();
-    }
+    int descriptor() const noexcept;
 
   private:
     ObservationWorker<ShellGitReader> worker_;

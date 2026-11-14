@@ -91,15 +91,10 @@ telar.gui.text.bounded_editor
 telar.gui.text.json_unsigned_integer
 telar.gui.text.notification_payload
 telar.gui.transport.runtime_link
-telar.runtime.agents.description_generator
-telar.runtime.agents.screen_inference
-telar.runtime.agents.snapshot
 telar.runtime.cli.server
-telar.runtime.command_capture.tracker
 telar.runtime.config.loader
 telar.runtime.diagnostics.operation
 telar.runtime.diagnostics.runtime_counters
-telar.runtime.editors.remote_editor
 telar.runtime.vocabulary.exchange
 telar.runtime.exchange_capture.pipeline
 telar.runtime.exchange_capture.producer
@@ -108,8 +103,6 @@ telar.runtime.graphics.file_input
 telar.runtime.graphics.pane_media
 telar.runtime.graphics.prepared_images
 telar.runtime.graphics.synchronizer
-telar.runtime.history.event
-telar.runtime.history.store
 telar.runtime.http.content
 telar.runtime.http.message
 telar.runtime.http1.head
@@ -157,11 +150,6 @@ telar.runtime.runtime.execution_service
 telar.runtime.runtime.media_service
 telar.runtime.runtime.runtime
 telar.runtime.runtime.runtime_telemetry
-telar.runtime.shell_integration
-telar.runtime.shell_integration.git_context
-telar.runtime.shell_integration.token
-telar.runtime.shell_integration.words
-telar.runtime.suggestions.engine
 telar.runtime.terminal.control.checksum
 telar.runtime.terminal.control.clipboard
 telar.runtime.terminal.control.engine
@@ -179,5 +167,3 @@ telar.runtime.traffic.tap
 telar.runtime.transport.connection
 telar.runtime.vocabulary.frames
 telar.runtime.vocabulary.traffic
-telar.runtime.workspaces.git_probe
-telar.runtime.worktrees.git_probe

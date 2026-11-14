@@ -100,6 +100,26 @@ namespace telar::runtime {
     return sqlite3_exec(database_, sql, nullptr, nullptr, nullptr) == SQLITE_OK;
   }
 
+  sqlite3* Database::handle() const noexcept {
+    return database_;
+  }
+
+  Transaction::Transaction(Database& database)
+      : database_(database) {
+    database_.execute("BEGIN IMMEDIATE");
+  }
+
+  Transaction::~Transaction() {
+    if (!committed_) {
+      database_.tryExecute("ROLLBACK");
+    }
+  }
+
+  void Transaction::commit() {
+    database_.execute("COMMIT");
+    committed_ = true;
+  }
+
   Statement::Statement(Database& database, std::string_view sql) {
     checkSqlite(sqlite3_prepare_v3(database.handle(), sql.data(), static_cast<int>(sql.size()), 0, &statement_, nullptr));
   }
