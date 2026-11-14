@@ -569,6 +569,9 @@ Para cada módulo: `extern template class X<Memory>;` en la interfaz, la instanc
 | [ ] P9.7c | Runtime: `agents`, `history`, `command_capture`, `shell_integration`, `suggestions`, `editors`, `worktrees`, `workspaces` | P2.5 |
 | [ ] P9.7d | Runtime: `runtime`, `model`, `persistence`, `platform`, `transport`, `diagnostics`, `metrics`, `execution`, `cli` y el resto | P2.5 |
 | [ ] P9.8 | GUI, una subtarea por dominio. `gui.application.session` (5815 líneas) pasa a `session/session.cppm` con `prompt.cpp`, `blocks.cpp`, `copy_mode.cpp`… | P8.1, P0.5, P2.4 y las tareas de P3 del dominio |
+| [ ] P9.8a | GUI: `application` (incluido `gui.application.session`) | P2.5 |
+| [ ] P9.8b | GUI: `terminal`, `fonts`, `graphics`, `presentation`, `layout`, `model` | P2.5 |
+| [ ] P9.8c | GUI: `input`, `prompt`, `components`, `config`, `platform`, `machines`, `attachments`, `history`, `text` y el resto | P2.5 |
 | [x] P9.9 | CLI | P8.1, P2.4, P3.15a–c |
 
 - **Hecho cuando (cada una):** compila, pasan los tests del área, y en runtime y GUI los benchmarks de hot path no empeoran respecto a P0.5 o la diferencia está justificada.
