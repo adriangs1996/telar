@@ -8,7 +8,7 @@ static_assert(true);
 #include <exception>
 #include <fcntl.h>
 
-import telar.platform;
+import telar.platform.error;
 
 namespace telar::runtime {
 

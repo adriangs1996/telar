@@ -37,7 +37,8 @@ import telar.base.text;
 import telar.platform.primitives;
 import telar.runtime.tests.check;
 import telar.runtime.tests.tls_fixture;
-import telar.platform;
+import telar.platform.error;
+import telar.platform.fs;
 import telar.tls;
 
 using namespace telar;

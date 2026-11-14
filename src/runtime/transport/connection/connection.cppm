@@ -17,6 +17,7 @@ import std;
 
 export import telar.client;
 export import telar.platform;
+export import telar.platform.error;
 
 export import telar.base.memory.allocators;
 export import telar.base.memory.containers;

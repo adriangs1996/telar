@@ -17,8 +17,9 @@ export module telar.cli.command_limit;
 import std;
 
 export import telar.cli.output;
-export import telar.platform;
+export import telar.platform.error;
 import telar.base.diagnostics;
+import telar.base.text;
 import telar.vocabulary;
 import telar.platform.primitives;
 

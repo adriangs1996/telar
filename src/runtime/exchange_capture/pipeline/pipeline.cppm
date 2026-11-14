@@ -26,7 +26,7 @@ export import telar.runtime.exchange_capture.exchange;
 export import telar.base.memory.allocators;
 export import telar.base.memory.containers;
 
-export import telar.platform;
+export import telar.platform.thread;
 export import telar.runtime.exchange_capture.producer;
 
 export import telar.runtime.platform.request_worker;

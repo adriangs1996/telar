@@ -57,7 +57,9 @@ export import telar.cli.tab;
 
 export import telar.cli.command_limit;
 
-export import telar.platform;
+export import telar.platform.fs;
+export import telar.platform.paths;
+export import telar.platform.process;
 
 export import telar.cli.machine_ssh;
 import telar.cli.project_setup;

@@ -9,7 +9,7 @@ export module telar.config.core;
 
 import std;
 export import telar.lua;
-export import telar.platform;
+export import telar.platform.paths;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 

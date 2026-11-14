@@ -13,7 +13,8 @@ static_assert(true);
 
 import std;
 import telar.base.memory.allocators;
-import telar.platform;
+import telar.platform.fs;
+import telar.platform.process;
 import telar.platform.primitives;
 import telar.runtime.tests.check;
 import telar.ebnf.matcher;

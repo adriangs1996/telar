@@ -57,25 +57,10 @@ export module telar.runtime.platform.system_certificates;
 
 import std;
 
-export import telar.platform;
+export import telar.platform.error;
 import telar.base.diagnostics;
+import telar.base.memory.allocators;
 import telar.platform.primitives;
-
-#if (defined(__linux__))
-export import telar.platform;
-#endif
-
-#if defined(__linux__)
-
-export import telar.platform;
-
-#endif
-
-#if defined(__APPLE__)
-
-export import telar.platform;
-
-#endif
 
 #if (defined(__APPLE__))
 

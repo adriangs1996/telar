@@ -40,7 +40,7 @@ static_assert(true);
 
 import telar.gui.core.unicode_scalar;
 import telar.gui.fonts.face;
-import telar.platform;
+import telar.platform.fs;
 
 namespace {
 

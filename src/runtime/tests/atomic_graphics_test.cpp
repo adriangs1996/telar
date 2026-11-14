@@ -13,6 +13,7 @@ static_assert(true);
 #include <unistd.h>
 
 import std;
+import telar.base.text;
 import telar.platform.primitives;
 import telar.runtime.graphics.kitty;
 import telar.runtime.tests.check;

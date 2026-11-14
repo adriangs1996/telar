@@ -20,8 +20,9 @@ export module telar.runtime.platform.launch_program;
 
 import std;
 
+import telar.base.text;
 import telar.platform.primitives;
-export import telar.platform;
+export import telar.platform.process;
 
 #if defined(__linux__)
 

@@ -15,6 +15,7 @@ export module telar.config.runtime;
 import std;
 export import telar.config.core;
 export import telar.plugins;
+export import telar.platform.events;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 

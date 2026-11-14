@@ -35,7 +35,8 @@ import telar.wire.vocabulary;
 
 export import telar.gui.machines.discovery;
 
-export import telar.platform;
+export import telar.platform.error;
+export import telar.platform.fs;
 
 // Interface: platform/awake_clock.cppm
 export {

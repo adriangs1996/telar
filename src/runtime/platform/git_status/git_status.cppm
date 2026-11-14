@@ -21,7 +21,7 @@ export module telar.runtime.platform.git_status;
 
 import std;
 
-export import telar.platform;
+export import telar.platform.process;
 import telar.base.diagnostics;
 import telar.vocabulary;
 import telar.git.checkout;

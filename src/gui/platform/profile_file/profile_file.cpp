@@ -29,7 +29,8 @@ module telar.gui.platform.profile_file;
 import std;
 
 import telar.gui.platform.private_file_stamp;
-import telar.platform;
+import telar.platform.error;
+import telar.platform.fs;
 import telar.gui.text.json_unsigned_integer;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;

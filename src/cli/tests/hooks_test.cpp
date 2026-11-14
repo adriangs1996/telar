@@ -24,7 +24,7 @@ import telar.base.text;
 import telar.cli.tests.check;
 import telar.platform.primitives;
 import telar.cli.hook;
-import telar.platform;
+import telar.platform.fs;
 import telar.wire.vocabulary;
 
 using namespace telar;

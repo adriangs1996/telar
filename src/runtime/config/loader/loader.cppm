@@ -11,7 +11,9 @@ import std;
 
 export import telar.config;
 export import telar.lua;
-export import telar.platform;
+export import telar.platform.error;
+export import telar.platform.fs;
+export import telar.platform.paths;
 
 export namespace telar::runtime::config {
 

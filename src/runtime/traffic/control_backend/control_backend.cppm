@@ -98,6 +98,9 @@ export import telar.base.memory.sensitive;
 export import telar.config;
 
 export import telar.platform;
+export import telar.platform.error;
+export import telar.platform.process;
+export import telar.platform.thread;
 
 export import telar.runtime.plugins.protocol;
 export import telar.runtime.traffic.capture;

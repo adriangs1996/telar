@@ -34,7 +34,7 @@ import telar.runtime.history.event;
 import telar.runtime.history.store;
 import telar.runtime.platform.request_worker;
 import telar.runtime.runtime.media_service;
-import telar.platform;
+import telar.platform.fs;
 import telar.wire.agents;
 import telar.wire.clients;
 import telar.wire.history;

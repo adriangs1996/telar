@@ -58,7 +58,7 @@ import telar.runtime.platform.launch_program;
 import telar.runtime.platform.process_probe;
 import telar.runtime.platform.system_certificates;
 import telar.runtime.redirect.socket_owners;
-import telar.platform;
+import telar.platform.fs;
 import telar.tls;
 
 using namespace telar;

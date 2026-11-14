@@ -41,7 +41,8 @@ export module telar.runtime.redirect.record;
 
 import std;
 
-export import telar.platform;
+export import telar.platform.error;
+export import telar.platform.fs;
 
 export import telar.runtime.redirect.pf_rules;
 import telar.base.diagnostics;

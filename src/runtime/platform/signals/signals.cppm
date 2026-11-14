@@ -9,7 +9,7 @@ export module telar.runtime.platform.signals;
 
 import std;
 
-import telar.platform;
+import telar.platform.error;
 import telar.platform.primitives;
 
 // Interface: platform/completion_signal.cppm

@@ -63,7 +63,7 @@ import telar.runtime.tests.check;
 import telar.runtime.diagnostics.operation;
 import telar.runtime.runtime.runtime_telemetry;
 import telar.runtime.diagnostics.runtime_counters;
-import telar.platform;
+import telar.platform.fs;
 import telar.runtime.terminal.text_reader;
 import telar.vocabulary;
 

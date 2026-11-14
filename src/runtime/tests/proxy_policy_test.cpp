@@ -17,7 +17,7 @@ import telar.base.memory.allocators;
 import telar.runtime.tests.check;
 import telar.config;
 import telar.lua;
-import telar.platform;
+import telar.platform.process;
 import telar.runtime.proxy.runtime;
 import telar.vocabulary;
 

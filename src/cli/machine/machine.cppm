@@ -54,7 +54,9 @@ export import telar.cli.integration.settings;
 
 export import telar.cli.runtime_observer;
 
-export import telar.platform;
+export import telar.platform.paths;
+export import telar.platform.process;
+export import telar.platform.sha256;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.wire.clients;

@@ -33,7 +33,10 @@ export module telar.cli.hook;
 import std;
 
 export import telar.cli.hooks.command;
-export import telar.platform;
+export import telar.platform.error;
+export import telar.platform.fs;
+export import telar.platform.paths;
+export import telar.platform.process;
 
 export import telar.cli.hooks.session;
 

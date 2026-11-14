@@ -18,7 +18,8 @@ import std;
 
 export import telar.base.memory.allocators;
 export import telar.base.memory.containers;
-export import telar.platform;
+export import telar.platform.error;
+export import telar.platform.fs;
 import telar.base.diagnostics;
 import telar.platform.primitives;
 

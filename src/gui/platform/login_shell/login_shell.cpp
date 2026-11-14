@@ -3,7 +3,7 @@ module;
 module telar.gui.platform.login_shell;
 
 import std;
-import telar.platform;
+import telar.platform.process;
 
 namespace telar::gui::platform::login_shell {
   Command::Command()

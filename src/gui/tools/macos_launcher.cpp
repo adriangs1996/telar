@@ -12,7 +12,7 @@ static_assert(true);
 #include <unistd.h>
 
 import std;
-import telar.platform;
+import telar.platform.process;
 
 namespace {
 

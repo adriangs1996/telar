@@ -27,7 +27,8 @@ export import telar.cli.command_limit;
 export import telar.cli.control_session;
 export import telar.client;
 
-export import telar.platform;
+export import telar.platform.error;
+export import telar.platform.paths;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.wire.agents;

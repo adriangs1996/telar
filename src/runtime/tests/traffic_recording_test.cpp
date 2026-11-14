@@ -21,7 +21,7 @@ import telar.base.memory.allocators;
 import telar.base.memory.sensitive;
 import telar.platform.primitives;
 import telar.runtime.tests.check;
-import telar.platform;
+import telar.platform.fs;
 import telar.runtime.traffic.control_backend;
 import telar.wire.vocabulary;
 

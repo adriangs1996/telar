@@ -74,10 +74,9 @@ static_assert(true);
 #if (TELAR_DEBUG)
 #endif
 
-import telar.platform;
-#if (TELAR_DEBUG)
-import telar.platform;
-#endif
+import telar.platform.error;
+import telar.platform.fs;
+import telar.platform.thread;
 #if (TELAR_DEBUG)
 #endif
 

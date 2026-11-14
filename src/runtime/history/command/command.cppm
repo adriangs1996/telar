@@ -3,7 +3,7 @@ export module telar.runtime.history.command;
 import std;
 import telar.wire.vocabulary;
 
-export import telar.platform;
+export import telar.platform.events;
 
 export namespace telar::runtime {
 

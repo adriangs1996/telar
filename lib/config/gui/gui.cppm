@@ -4,6 +4,7 @@ module;
 export module telar.config.gui;
 
 import std;
+export import telar.base.memory.containers;
 export import telar.config.core;
 
 // Interface: telar_config/gui_reader.cppm

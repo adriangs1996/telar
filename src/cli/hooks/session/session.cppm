@@ -23,8 +23,6 @@ export module telar.cli.hooks.session;
 
 import std;
 
-export import telar.platform;
-
 export import telar.cli.control_session;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;

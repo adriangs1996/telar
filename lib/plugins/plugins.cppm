@@ -31,9 +31,13 @@ export module telar.plugins;
 
 import std;
 
+export import telar.base.memory.containers;
 export import telar.base.text;
 
-export import telar.platform;
+export import telar.platform.error;
+export import telar.platform.fs;
+export import telar.platform.paths;
+export import telar.platform.sha256;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.platform.primitives;

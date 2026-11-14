@@ -11,7 +11,7 @@ export module telar.git:format;
 
 import std;
 import telar.base.memory.allocators;
-import telar.platform;
+import telar.platform.sha256;
 import telar.platform.primitives;
 
 // Byte-level primitives every other part of the reader shares: object ids,

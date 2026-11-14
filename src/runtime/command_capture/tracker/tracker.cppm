@@ -8,13 +8,14 @@ module;
 export module telar.runtime.command_capture.tracker;
 
 import std;
+import telar.base.text;
 import telar.wire.vocabulary;
 import telar.wire.content;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
 import telar.runtime.terminal.control;
 
-export import telar.platform;
+export import telar.platform.events;
 export import telar.runtime.history.command;
 export import telar.runtime.diagnostics.runtime_counters;
 export import telar.runtime.shell_integration.token;

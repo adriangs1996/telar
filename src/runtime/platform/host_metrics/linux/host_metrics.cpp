@@ -18,7 +18,7 @@ module telar.runtime.platform.host_metrics;
 
 import std;
 
-import telar.platform;
+import telar.platform.fs;
 import telar.base.diagnostics;
 import telar.platform.primitives;
 

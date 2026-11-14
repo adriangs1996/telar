@@ -10,7 +10,8 @@ static_assert(true);
 
 import std;
 import telar.base.memory.allocators;
-import telar.platform;
+import telar.platform.error;
+import telar.platform.paths;
 import telar.platform.primitives;
 import telar.runtime.terminal.control;
 import telar.runtime.cli.server;

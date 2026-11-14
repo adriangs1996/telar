@@ -29,7 +29,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.machines.profile_store;
-import telar.platform;
+import telar.platform.fs;
 
 namespace telar::gui::qt {
 

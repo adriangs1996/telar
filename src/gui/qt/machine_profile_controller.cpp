@@ -40,7 +40,7 @@ static_assert(true);
 #include "platform/environment.hpp"
 
 import telar.gui.platform.login_shell;
-import telar.platform;
+import telar.platform.process;
 import telar.gui.machines.discovery;
 import telar.gui.machines.picker;
 import telar.gui.machines.profile_store;

@@ -62,7 +62,7 @@ static_assert(true);
 
 import telar.gui.config.plugin_query;
 import telar.gui.config.plugin_effects;
-import telar.platform;
+import telar.platform.fs;
 import telar.plugins;
 
 namespace {

@@ -34,7 +34,7 @@ import telar.base.memory.sensitive;
 import telar.platform.primitives;
 import telar.runtime.tests.check;
 import telar.runtime.plugins.service;
-import telar.platform;
+import telar.platform.process;
 
 using namespace telar;
 using namespace telar::runtime;

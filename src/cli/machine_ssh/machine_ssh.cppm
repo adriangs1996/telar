@@ -53,7 +53,11 @@ import std;
 
 export import telar.cli.command_limit;
 export import telar.cli.plugin;
-export import telar.platform;
+export import telar.platform.daemon;
+export import telar.platform.error;
+export import telar.platform.fs;
+export import telar.platform.paths;
+export import telar.platform.process;
 
 export import telar.cli.server;
 

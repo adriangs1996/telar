@@ -24,7 +24,7 @@ static_assert(true);
 #include "platform/font.h"
 
 import telar.base.memory.allocators;
-import telar.platform;
+import telar.platform.fs;
 
 using namespace telar;
 using namespace telar::gui;
