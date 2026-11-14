@@ -1,8 +1,9 @@
 module;
 #include "telar_platform/descriptor_path.hpp"
-#include <limits.h>
 
 module telar.runtime.platform.descriptor_path;
+
+import telar.sys.posix;
 
 import telar.platform.error;
 

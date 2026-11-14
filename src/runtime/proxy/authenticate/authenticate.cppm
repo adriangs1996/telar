@@ -1,30 +1,3 @@
-module;
-#include <new>
-#include <stdlib.h>
-
-#include <cstddef>
-#include <cstdint>
-#include <cstdlib>
-#include <cstring>
-
-#include <arpa/inet.h>
-
-#include <cerrno>
-#include <cstdio>
-#include <fcntl.h>
-#include <limits.h>
-#include <sys/stat.h>
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <linux/fs.h>
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <sys/syscall.h>
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <unistd.h>
-#endif
-#include <unistd.h>
-
 export module telar.runtime.proxy.authenticate;
 
 import std;

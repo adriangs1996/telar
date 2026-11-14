@@ -69,13 +69,13 @@ file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
 file(REAL_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../lib/config/bootstrap.lua" telar_config_bootstrap_file)
 file(READ "${telar_config_bootstrap_file}" TELAR_CONFIG_BOOTSTRAP)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${telar_config_bootstrap_file}")
-configure_file(config/bootstrap.hpp.in "${CMAKE_CURRENT_BINARY_DIR}/generated/config_bootstrap.hpp" @ONLY)
+configure_file(config/bootstrap.inc.in "${CMAKE_CURRENT_BINARY_DIR}/generated/config_bootstrap.inc" @ONLY)
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/plugins/bootstrap.lua" TELAR_PLUGIN_BOOTSTRAP)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/plugins/bootstrap.lua")
-configure_file(plugins/bootstrap.hpp.in "${CMAKE_CURRENT_BINARY_DIR}/generated/plugin_bootstrap.hpp" @ONLY)
+configure_file(plugins/bootstrap.inc.in "${CMAKE_CURRENT_BINARY_DIR}/generated/plugin_bootstrap.inc" @ONLY)
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/plugins/traffic_api.lua" TELAR_TRAFFIC_API)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/plugins/traffic_api.lua")
-configure_file(plugins/traffic_api.hpp.in "${CMAKE_CURRENT_BINARY_DIR}/generated/traffic_api.hpp" @ONLY)
+configure_file(plugins/traffic_api.inc.in "${CMAKE_CURRENT_BINARY_DIR}/generated/traffic_api.inc" @ONLY)
 # The shell integration scripts are compiled in: remote hosts receive only the executables.
 foreach(script IN ITEMS "ZSHENV=zshenv.zsh" "ZSH=telar.zsh" "BASH=telar.bash" "FISH=telar.fish" "SSH=ssh.sh" "REMOTE=remote.sh")
   string(REPLACE "=" ";" script "${script}")
@@ -84,30 +84,30 @@ foreach(script IN ITEMS "ZSHENV=zshenv.zsh" "ZSH=telar.zsh" "BASH=telar.bash" "F
   file(READ "${CMAKE_CURRENT_SOURCE_DIR}/shell_integration/${script_file}" TELAR_SHELL_${script_name})
   set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shell_integration/${script_file}")
 endforeach()
-configure_file(shell_integration/scripts.hpp.in "${CMAKE_CURRENT_BINARY_DIR}/generated/shell_scripts.hpp" @ONLY)
+configure_file(shell_integration/scripts.inc.in "${CMAKE_CURRENT_BINARY_DIR}/generated/shell_scripts.inc" @ONLY)
 # The remote command `ssh` sends is encoded at compile time, which takes more steps than the
 # compiler allows by default.
 set_source_files_properties(shell_integration/shell_integration.cppm PROPERTIES COMPILE_OPTIONS "-fconstexpr-steps=16777216")
 add_custom_command(
-  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/cell_layout.hpp"
+  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/cell_layout.inc"
   COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_cell_layout.py"
-          "$<TARGET_FILE:ghostty-manifest>" "${CMAKE_CURRENT_BINARY_DIR}/generated/cell_layout.hpp"
+          "$<TARGET_FILE:ghostty-manifest>" "${CMAKE_CURRENT_BINARY_DIR}/generated/cell_layout.inc"
   DEPENDS ghostty-manifest tools/generate_cell_layout.py
   VERBATIM)
-add_custom_target(cell-layout DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/generated/cell_layout.hpp")
+add_custom_target(cell-layout DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/generated/cell_layout.inc")
 # The completion specs the runtime offers: lib/ebnf/specs, and telar's own, written from the
 # CLI's help files so it lists the commands this build has.
 file(GLOB telar_command_spec_files CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/../../lib/ebnf/specs/*.ebnf")
 file(GLOB_RECURSE telar_cli_help_files CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/../cli/help/*.txt")
 add_custom_command(
-  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/command_specs.hpp"
+  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/command_specs.inc"
   COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_command_specs.py"
           --specs "${CMAKE_CURRENT_SOURCE_DIR}/../../lib/ebnf/specs"
           --help-dir "${CMAKE_CURRENT_SOURCE_DIR}/../cli/help"
-          --output "${CMAKE_CURRENT_BINARY_DIR}/generated/command_specs.hpp"
+          --output "${CMAKE_CURRENT_BINARY_DIR}/generated/command_specs.inc"
   DEPENDS tools/generate_command_specs.py ${telar_command_spec_files} ${telar_cli_help_files}
   VERBATIM)
-add_custom_target(command-specs DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/generated/command_specs.hpp")
+add_custom_target(command-specs DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/generated/command_specs.inc")
 
 if(APPLE)
   set(TELAR_PLATFORM macos)

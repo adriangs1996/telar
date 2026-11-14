@@ -1,7 +1,6 @@
-module;
-#include <sys/stat.h>
-
 module telar.runtime.diagnostics.operation;
+
+import telar.sys.posix;
 
 namespace telar::runtime::diagnostics {
 

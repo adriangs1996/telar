@@ -1,20 +1,13 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <cstdlib>
-#include <new>
 
 #define ZSTD_STATIC_LINKING_ONLY
-#include <cstddef>
-#include <cstring>
 
 #include <brotli/decode.h>
-#include <cstdint>
 
 #include <zlib.h>
 
 #include <zstd.h>
-
-#include <cassert>
 
 module telar.runtime.exchange_capture.producer;
 

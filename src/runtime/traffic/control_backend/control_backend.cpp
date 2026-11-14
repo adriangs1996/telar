@@ -1,33 +1,10 @@
 module;
-#include <new>
-#include <stdlib.h>
-
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <limits.h>
-
-#include <arpa/inet.h>
-#include <cerrno>
-
-#include <cassert>
 #include <pcap/pcap.h>
-
-#include <csignal>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <poll.h>
-#include <sys/socket.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <sys/un.h>
-#include <unistd.h>
 
 #include <brotli/decode.h>
 #include <zlib.h>
 #include <zstd.h>
 #if (!(defined(__APPLE__)))
-#include <cstdlib>
 
 #include <openssl/err.h>
 
@@ -35,48 +12,18 @@ module;
 
 #include <openssl/x509.h>
 #endif
-#include <cstdio>
-#include <cstdlib>
-#include <fcntl.h>
-#include <openssl/sha.h>
-#include <sys/uio.h>
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <linux/fs.h>
-
-#include <sys/syscall.h>
-#endif
 #include <brotli/encode.h>
-#include <ctime>
-#include <dirent.h>
-#include <netdb.h>
 #include <nghttp2/nghttp2.h>
 #include <openssl/crypto.h>
 #include <openssl/err.h>
 #include <openssl/pem.h>
+#include <openssl/sha.h>
 #include <openssl/ssl.h>
 #include <openssl/x509v3.h>
-#if (defined(__APPLE__))
-#include <sys/event.h>
-#endif
-#if (defined(__linux__))
-#include <climits>
-
-#include <sched.h>
-
-#include <sys/epoll.h>
-
-#include <sys/syscall.h>
-#endif
-#include <ifaddrs.h>
-#include <net/if.h>
-#include <spawn.h>
-#include <sys/resource.h>
-#include <sys/wait.h>
-#if (defined(__APPLE__))
-#include <libproc.h>
-#endif
 
 module telar.runtime.traffic.control_backend;
+
+import telar.sys.socket;
 
 namespace telar::runtime::traffic::control {
 

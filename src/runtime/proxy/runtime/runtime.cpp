@@ -1,60 +1,23 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <cstdlib>
-#include <errno.h>
-#include <new>
-#include <unistd.h>
-
-#include <cstdint>
-
-#include <cassert>
-#include <cstddef>
-#include <cstring>
-
-#if (defined(__linux__))
-#include <cerrno>
-
-#include <climits>
-#endif
-#include <fcntl.h>
-
-#include <netinet/in.h>
-#include <sys/socket.h>
-
-#include <cstdio>
-#include <netdb.h>
 
 #include <nghttp2/nghttp2.h>
 
-#include <arpa/inet.h>
-
-#include <stdlib.h>
-
-#include <ctime>
-#include <limits.h>
 #include <openssl/crypto.h>
 #include <openssl/err.h>
 #include <openssl/pem.h>
 #include <openssl/ssl.h>
 #include <openssl/x509v3.h>
-#include <sys/stat.h>
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <linux/fs.h>
-#endif
 
-#include <sys/types.h>
-
-#include <poll.h>
-
-#include <dirent.h>
 #include <openssl/sha.h>
 
 #if (!(defined(__APPLE__)))
 #include <openssl/x509.h>
 #endif
-#include <sys/resource.h>
 
 module telar.runtime.proxy.runtime;
+
+import telar.sys.socket;
 
 namespace telar::runtime {
 

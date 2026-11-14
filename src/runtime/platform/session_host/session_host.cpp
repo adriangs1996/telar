@@ -1,12 +1,6 @@
-module;
-#include <cstdio>
-#include <cstdlib>
-#include <fcntl.h>
-#include <limits.h>
-#include <sys/stat.h>
-#include <unistd.h>
-
 module telar.runtime.platform.session_host;
+
+import telar.sys.posix;
 
 namespace telar::runtime {
 

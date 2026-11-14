@@ -2,12 +2,6 @@ module;
 #include "tbc/annotations.hpp"
 
 #include "telar_base/diagnostics/config.hpp"
-#include <cstddef>
-#include <cstdint>
-
-#include <limits.h>
-#include <sys/types.h>
-#include <unistd.h>
 
 export module telar.runtime.runtime.runtime_telemetry;
 

@@ -1,12 +1,5 @@
 module;
 #include "tbc/annotations.hpp"
-#include <cstdio>
-#include <cstdlib>
-#include <new>
-
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
 
 #include <pcap/pcap.h>
 

@@ -1,23 +1,9 @@
-module;
-#include <cstddef>
-#include <stdlib.h>
-
-#include <arpa/inet.h>
-#include <cstdint>
-#include <cstdio>
-#include <cstring>
-#include <libproc.h>
-#include <sys/proc_info.h>
-#include <sys/socket.h>
-#include <sys/stat.h>
-#include <sys/sysctl.h>
-#include <sys/types.h>
-#include <sys/un.h>
-#include <unistd.h>
-
 module telar.runtime.platform.process_probe;
 
 import std;
+import telar.sys.posix;
+import telar.sys.socket;
+import telar.sys.apple;
 
 import telar.base.diagnostics;
 import telar.wire.vocabulary;

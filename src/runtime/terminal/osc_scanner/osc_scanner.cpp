@@ -1,13 +1,10 @@
 module;
-#include <cassert>
+#include "telar_base/diagnostics/config.hpp"
 #include <ghostty/vt.h>
 
-#include <cstdint>
-
-#include "cell_layout.hpp"
-#include "terminal/ghostty_grid.hpp"
-
 module telar.runtime.terminal.osc_scanner;
+
+import telar.runtime.terminal.grid;
 
 namespace telar::runtime {
 
@@ -149,7 +146,7 @@ namespace telar::runtime {
       has_parameter_ = true;
       const auto next = static_cast<std::uint32_t>(parameter_) * 10 + byte - '0';
 
-      parameter_ = static_cast<std::uint16_t>(next > UINT16_MAX ? UINT16_MAX : next);
+      parameter_ = static_cast<std::uint16_t>(next > std::numeric_limits<std::uint16_t>::max() ? std::numeric_limits<std::uint16_t>::max() : next);
       return;
     }
 
@@ -304,7 +301,7 @@ namespace telar::runtime {
     std::uint16_t length;
 
     std::memcpy(&length, data + consumed_, header_bytes);
-    assert(length <= size_ - consumed_ - header_bytes);
+    TELAR_ASSERT(length <= size_ - consumed_ - header_bytes);
     return length;
   }
 

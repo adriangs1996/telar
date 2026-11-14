@@ -1,17 +1,3 @@
-module;
-#include <cstddef>
-#include <cstdlib>
-#include <new>
-
-#include <cassert>
-#include <cerrno>
-#include <cstdint>
-#include <cstring>
-#include <fcntl.h>
-#include <limits.h>
-#include <sys/stat.h>
-#include <unistd.h>
-
 export module telar.runtime.tls.system_root_bundle;
 
 import std;

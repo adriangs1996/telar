@@ -1,10 +1,10 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <cerrno>
 
 module telar.runtime.agents.description_generator;
 
 import std;
+import telar.sys.posix;
 import telar.tbc;
 
 namespace telar::runtime {

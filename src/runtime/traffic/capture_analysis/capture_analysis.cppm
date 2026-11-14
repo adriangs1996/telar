@@ -1,19 +1,13 @@
 module;
 #include "tbc/annotations.hpp"
-#include <cstdio>
-#include <cstdlib>
-#include <new>
 
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
 #include <pcap/pcap.h>
-
-#include <arpa/inet.h>
 
 export module telar.runtime.traffic.capture_analysis;
 
 import std;
+import telar.sys.posix;
+import telar.sys.socket;
 import telar.tbc;
 
 export import telar.runtime.traffic.control_protocol;

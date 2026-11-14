@@ -1,13 +1,4 @@
 module;
-#include <cstdio>
-#include <cstdlib>
-#include <new>
-
-#include <cstdint>
-
-#include <cstddef>
-#include <cstring>
-
 #include <brotli/decode.h>
 #include <brotli/encode.h>
 #include <zlib.h>

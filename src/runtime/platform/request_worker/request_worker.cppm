@@ -1,20 +1,6 @@
 module;
-#include <cstdio>
-#include <cstdlib>
-#include <new>
-
-#include <cerrno>
-#include <cstdint>
-
-#include <cassert>
-
-#include "tbc/annotations.hpp"
 #include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
-#include <cstddef>
-#include <cstring>
-#include <sys/types.h>
-#include <unistd.h>
 
 export module telar.runtime.platform.request_worker;
 
@@ -297,18 +283,18 @@ export {
       }
 
       inline Value& operator[](std::size_t offset) noexcept {
-        assert(offset < count_);
+        TELAR_ASSERT(offset < count_);
         return *slots_[(head_ + offset) % Capacity];
       }
 
       inline const Value& operator[](std::size_t offset) const noexcept {
-        assert(offset < count_);
+        TELAR_ASSERT(offset < count_);
         return *slots_[(head_ + offset) % Capacity];
       }
 
       template <typename... Arguments>
       inline Value& emplace(Arguments&&... arguments) {
-        assert(!full());
+        TELAR_ASSERT(!full());
         auto& value = slots_[(head_ + count_) % Capacity].emplace(std::forward<Arguments>(arguments)...);
 
         ++count_;
@@ -316,13 +302,13 @@ export {
       }
 
       inline void removeLast() noexcept {
-        assert(!empty());
+        TELAR_ASSERT(!empty());
         --count_;
         slots_[(head_ + count_) % Capacity].reset();
       }
 
       inline Value take() noexcept {
-        assert(!empty());
+        TELAR_ASSERT(!empty());
         auto value = std::move(*slots_[head_]);
 
         slots_[head_].reset();
@@ -332,7 +318,7 @@ export {
       }
 
       inline void swap(RequestQueue& other) noexcept {
-        assert(slots_.get_allocator() == other.slots_.get_allocator());
+        TELAR_ASSERT(slots_.get_allocator() == other.slots_.get_allocator());
         slots_.swap(other.slots_);
         std::swap(head_, other.head_);
         std::swap(count_, other.count_);

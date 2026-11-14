@@ -1,15 +1,7 @@
-module;
-#include <cstddef>
-#include <cstdio>
-
-#include <cstdint>
-#include <cstring>
-#include <sys/types.h>
-#include <unistd.h>
-
 module telar.runtime.platform.process_probe;
 
 import std;
+import telar.sys.posix;
 
 import telar.base.diagnostics;
 import telar.wire.vocabulary;

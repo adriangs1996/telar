@@ -226,6 +226,7 @@
     "src/runtime/terminal/osc_scanner/osc_scanner.cppm": "telar.runtime.terminal.osc_scanner",
     "src/runtime/terminal/text_reader/text_reader.cppm": "telar.runtime.terminal.text_reader",
     "src/runtime/terminal/graphics_storage/graphics_storage.cppm": "telar.runtime.terminal.graphics_storage",
+    "src/runtime/terminal/grid/grid.cppm": "telar.runtime.terminal.grid",
     "src/runtime/agents/snapshot/snapshot.cppm": "telar.runtime.agents.snapshot",
     "src/runtime/agents/screen_inference/screen_inference.cppm": "telar.runtime.agents.screen_inference",
     "src/runtime/agents/description_generator/description_generator.cppm": "telar.runtime.agents.description_generator",
@@ -754,7 +755,6 @@
     "src/gui/terminal/fold_map.hpp": "Qt adapters include it; module units import its owner module",
     "lib/base/include/telar_base/text/decimal.hpp": "Headers that cannot import modules, as the kitty and glyph parsers, include it; module units import its owner module",
     "lib/platform/include/telar_platform/descriptor_path.hpp": "Headers that cannot import modules, as the graphics temporary path, include it",
-    "src/runtime/terminal/ghostty_grid.hpp": "Needs the generated cell layout, which only runtime-core units include",
     "src/gui/platform/macos/cf_reference.hpp": "Objective-C++ sources include it; Objective-C++ cannot import the C++ modules",
     "lib/tbc/tests/spec/units/cross_unit/node.hpp": "Textual spec fixture shared by the cross-unit cases and the unit that defines their bodies",
     "lib/tbc/include/tbc/annotations.hpp": "Project macro header: the TBC annotations tbc-lint reads on declarations; includes nothing",
@@ -3088,6 +3088,9 @@
       "src/runtime/graphics/png_decoder.hpp",
       "src/runtime/graphics/query_resources.hpp",
       "src/runtime/graphics/temporary_path.hpp"
+    ],
+    "src/runtime/runtime/client_control/client_control.cppm": [
+      "lib/clipboard/includes/clipboard.hpp"
     ],
     "src/runtime/terminal/control/control.cppm": [
       "src/runtime/terminal/control/apc_borrow.hpp",

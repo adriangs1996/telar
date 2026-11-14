@@ -1,5 +1,4 @@
 module;
-#include "cell_layout.hpp"
 #include "telar_base/diagnostics/config.hpp"
 #include <cassert>
 #include <cerrno>

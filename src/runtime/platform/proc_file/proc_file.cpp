@@ -1,11 +1,3 @@
-module;
-#include <cstdint>
-#include <cstdio>
-#include <errno.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <unistd.h>
-
 module telar.runtime.platform.proc_file;
 
 namespace telar::runtime {

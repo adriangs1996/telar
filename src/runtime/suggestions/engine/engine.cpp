@@ -1,8 +1,5 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <cerrno>
-#include <poll.h>
-#include <unistd.h>
 
 module telar.runtime.suggestions.engine;
 

@@ -5,11 +5,10 @@ module;
 
 #include "telar_base/diagnostics/config.hpp"
 
-#include <sys/types.h>
-
 export module telar.runtime.observation.processor;
 
 import std;
+import telar.sys.posix;
 import telar.tbc;
 
 export import telar.config.runtime;

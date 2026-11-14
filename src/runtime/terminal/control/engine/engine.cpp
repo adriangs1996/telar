@@ -1,5 +1,5 @@
 module;
-#include <cassert>
+#include "telar_base/diagnostics/config.hpp"
 #include <ghostty/vt.h>
 
 module telar.runtime.terminal.control.engine;
@@ -91,7 +91,7 @@ namespace telar::runtime::control {
 
   template <Allocator Memory>
   std::size_t Engine<Memory>::feedAtomicMedia(std::span<const std::uint8_t> input) {
-    assert(media_boundaries_ && !blocked() && parser_.ground());
+    TELAR_ASSERT(media_boundaries_ && !blocked() && parser_.ground());
     media_boundaries_ = false;
     try {
       const auto consumed = feed(input);
@@ -398,7 +398,7 @@ namespace telar::runtime::control {
   std::size_t Engine<Memory>::ordinaryAscii(std::span<const std::uint8_t> input) {
     std::array<std::uint32_t, ascii_detail::codepoint_capacity> codepoints;
 
-    assert(input.size() >= ascii_detail::gate_bytes);
+    TELAR_ASSERT(input.size() >= ascii_detail::gate_bytes);
 
     // ordinaryRun has already validated these bytes synchronously. Only the
     // remaining input needs stop detection; the C bridge still validates all.

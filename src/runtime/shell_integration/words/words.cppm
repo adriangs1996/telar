@@ -1,10 +1,10 @@
 module;
 #include "tbc/annotations.hpp"
-#include <limits.h>
 
 export module telar.runtime.shell_integration.words;
 
 import std;
+import telar.sys.posix;
 
 export import telar.git;
 export import telar.wire.vocabulary;
@@ -58,6 +58,9 @@ export namespace telar::runtime {
     // The words an alias stands for, when the command is one.
     std::string expansion;
   };
+
+  // The completion specs telar ships, by the command they describe.
+  std::span<const std::pair<std::string_view, std::string_view>> shippedSpecs() noexcept;
 
   class WordReader {
   public:

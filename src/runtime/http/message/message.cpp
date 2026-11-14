@@ -1,14 +1,7 @@
 module;
-#include <cstdio>
-#include <cstdlib>
-#include <new>
-
 #define ZSTD_STATIC_LINKING_ONLY
 #include <brotli/decode.h>
 #include <brotli/encode.h>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
 #include <zlib.h>
 #include <zstd.h>
 

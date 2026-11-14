@@ -1,8 +1,6 @@
 module;
-#include "cell_layout.hpp"
 #include "telar_base/diagnostics/config.hpp"
 #include "telar_platform/trace_macro.hpp"
-#include "terminal/ghostty_grid.hpp"
 #include <ghostty/vt.h>
 
 module telar.runtime.command_capture.tracker;
@@ -11,6 +9,7 @@ import std;
 import telar.base.text;
 import telar.base.text.utf8;
 import telar.runtime.diagnostics.line;
+import telar.runtime.terminal.grid;
 
 namespace telar::runtime {
 
@@ -185,7 +184,7 @@ namespace telar::runtime {
 
   void CommandInputScanner::sequence(Byte byte, bool pasted) noexcept {
     if (byte >= '0' && byte <= '9') {
-      parameter_ = std::min<unsigned>(UINT16_MAX, parameter_ * 10 + byte - '0');
+      parameter_ = std::min<unsigned>(std::numeric_limits<std::uint16_t>::max(), parameter_ * 10 + byte - '0');
       has_parameter_ = true;
       return;
     }
@@ -516,7 +515,7 @@ namespace telar::runtime {
       return;
     }
 
-    observed_ += std::min<std::uint64_t>(bytes.size(), UINT64_MAX - observed_);
+    observed_ += std::min<std::uint64_t>(bytes.size(), std::numeric_limits<std::uint64_t>::max() - observed_);
     if (bytes.size() >= capacity) {
       std::copy(bytes.end() - capacity, bytes.end(), storage.begin());
       length_ = capacity;

@@ -1,45 +1,15 @@
 module;
 #include <ghostty/vt.h>
-#include <new>
-#include <stdlib.h>
 #include <zlib.h>
 
 #include "telar_base/diagnostics/config.hpp"
-#include <cstddef>
-#include <cstdint>
-
-#include <cerrno>
-#include <csignal>
-#include <cstdio>
-#include <cstring>
-#include <dirent.h>
-#include <fcntl.h>
-#include <limits.h>
-#include <sys/stat.h>
-
-#include <pthread.h>
-
-#if (defined(__APPLE__))
-#include <mach/mach.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <unistd.h>
-#endif
-
-#include "cell_layout.hpp"
-#include <cassert>
-#include <cstdlib>
-#include <sys/mman.h>
-#include <sys/types.h>
-#include <sys/uio.h>
-#include <sys/wait.h>
-#include <unistd.h>
-
-#if (TELAR_DIAGNOSTICS) && (defined(__APPLE__))
-#include <mach/mach.h>
-#endif
 
 module telar.runtime.runtime.runtime_telemetry;
+
+import telar.sys.process;
+#if defined(__APPLE__)
+import telar.sys.apple;
+#endif
 
 namespace telar::runtime::diagnostics {
 

@@ -16,7 +16,6 @@ static_assert(true);
 #if (TELAR_DIAGNOSTICS)
 #include <sys/stat.h>
 #endif
-#include "cell_layout.hpp"
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>

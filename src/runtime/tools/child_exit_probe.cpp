@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "cell_layout.hpp"
 #include <csignal>
 #include <cstring>
 #include <ghostty/vt.h>

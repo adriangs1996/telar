@@ -1,19 +1,3 @@
-module;
-#include <cstdint>
-#include <unistd.h>
-
-#if defined(__linux__)
-
-#include <net/if.h>
-
-#endif
-
-#if defined(__APPLE__)
-
-#include <net/if.h>
-
-#endif
-
 export module telar.runtime.platform.private_tunnel;
 
 import std;

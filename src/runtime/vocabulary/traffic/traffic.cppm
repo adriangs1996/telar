@@ -1,8 +1,3 @@
-module;
-#include <cstdint>
-#include <limits.h>
-#include <sys/socket.h>
-
 export module telar.runtime.vocabulary.traffic;
 
 import std;
@@ -103,7 +98,7 @@ export {
     class Protocol {
     public:
       template <Allocator Memory>
-      static tbc::view<std::span<const Byte>, tbc::lt::a> encodeExchange(tbc::view<std::span<Byte>, tbc::lt::a> output, ExchangeIdentity identity, const CapturedExchange<Memory>& exchange, std::size_t part_limit = SIZE_MAX);
+      static tbc::view<std::span<const Byte>, tbc::lt::a> encodeExchange(tbc::view<std::span<Byte>, tbc::lt::a> output, ExchangeIdentity identity, const CapturedExchange<Memory>& exchange, std::size_t part_limit = std::numeric_limits<std::size_t>::max());
 
       template <Allocator Memory>
       static std::size_t exchangeBytes(const CapturedExchange<Memory>& exchange);
@@ -122,7 +117,7 @@ export {
 
     private:
       template <FrameOutput Output, Allocator Memory>
-      static void writeExchange(Output& writer, ExchangeIdentity identity, const CapturedExchange<Memory>& exchange, std::size_t part_limit = SIZE_MAX);
+      static void writeExchange(Output& writer, ExchangeIdentity identity, const CapturedExchange<Memory>& exchange, std::size_t part_limit = std::numeric_limits<std::size_t>::max());
 
       static ExchangeProtocol exchangeProtocol(CaptureProtocol protocol);
 

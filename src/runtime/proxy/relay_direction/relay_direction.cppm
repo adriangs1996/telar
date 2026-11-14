@@ -1,15 +1,10 @@
 module;
 #include "tbc/annotations.hpp"
 
-#include <arpa/inet.h>
-#include <cerrno>
-#include <cstdint>
-#include <netinet/in.h>
-#include <sys/socket.h>
-
 export module telar.runtime.proxy.relay_direction;
 
 import std;
+import telar.sys.socket;
 import telar.sys.posix;
 
 export import telar.platform.net;

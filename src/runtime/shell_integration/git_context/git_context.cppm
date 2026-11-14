@@ -1,10 +1,10 @@
 module;
 #include "tbc/annotations.hpp"
-#include <limits.h>
 
 export module telar.runtime.shell_integration.git_context;
 
 import std;
+import telar.sys.posix;
 
 export import telar.git;
 export import telar.wire.pane_io;

@@ -1,28 +1,8 @@
-module;
-#include <cstdio>
-#include <cstdlib>
-#include <new>
-#include <unistd.h>
-
-#include <arpa/inet.h>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <netinet/in.h>
-#include <sys/socket.h>
-
-#include <cerrno>
-#include <fcntl.h>
-#include <sys/ioctl.h>
-
-#include <net/if.h>
-#include <poll.h>
-#if defined(__APPLE__)
-#include <net/if_dl.h>
-#include <net/route.h>
-#endif
-
 module telar.runtime.redirect.pf_rules;
+
+#if defined(__APPLE__)
+import telar.sys.apple;
+#endif
 
 namespace telar::runtime::redirect {
 
@@ -182,7 +162,7 @@ namespace telar::runtime::redirect {
   }
 
   RoutePath RoutePath::lookup(const Target& target, unsigned scope) {
-    if (scope > UINT16_MAX) {
+    if (scope > std::numeric_limits<std::uint16_t>::max()) {
       throw std::invalid_argument{"Invalid route interface scope"};
     }
 

@@ -1,23 +1,5 @@
 module;
-#include <new>
-#include <stdlib.h>
-
-#include <cerrno>
-#include <cstdint>
-#include <fcntl.h>
-#include <sys/stat.h>
-
 #include "telar_base/diagnostics/config.hpp"
-#include <cassert>
-#include <cstddef>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <limits.h>
-#include <sys/types.h>
-#include <unistd.h>
-
-#include <clipboard.hpp>
 
 module telar.runtime.runtime.client_control;
 

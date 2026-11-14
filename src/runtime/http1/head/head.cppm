@@ -1,9 +1,3 @@
-module;
-
-#include <cstddef>
-
-#include <cstdint>
-
 export module telar.runtime.http1.head;
 
 import std;

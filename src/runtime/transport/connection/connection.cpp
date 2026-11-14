@@ -1,10 +1,5 @@
 module;
-#include <cassert>
-#include <cerrno>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <unistd.h>
+#include "telar_base/diagnostics/config.hpp"
 
 module telar.runtime.transport.connection;
 
@@ -197,7 +192,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   void OutgoingFrames<Memory>::consume(std::size_t count) noexcept {
-    assert(count <= prepared_size_);
+    TELAR_ASSERT(count <= prepared_size_);
     auto remaining = count;
     const auto first_offset = active_offset_;
     auto offset = first_offset;

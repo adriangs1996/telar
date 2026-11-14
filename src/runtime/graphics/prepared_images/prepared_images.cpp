@@ -1,12 +1,11 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <new>
-
-#include <sys/mman.h>
 
 #include "telar_base/diagnostics/config.hpp"
 
 module telar.runtime.graphics.prepared_images;
+
+import telar.sys.posix;
 
 namespace telar::runtime {
 

@@ -1,13 +1,7 @@
-module;
-#include <cerrno>
-#include <fcntl.h>
-#include <limits.h>
-#include <sys/stat.h>
-#include <unistd.h>
-
 module telar.runtime.shell_integration;
 
 import std;
+import telar.sys.posix;
 import telar.platform.error;
 import telar.platform.fs;
 

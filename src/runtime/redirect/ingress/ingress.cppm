@@ -1,76 +1,12 @@
 module;
 #include "tbc/annotations.hpp"
-#include <cstdlib>
-#include <new>
 
-#include <arpa/inet.h>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <netinet/in.h>
-#include <sys/socket.h>
-
-#if (defined(__APPLE__))
-#include <cerrno>
-#endif
-#if (defined(__APPLE__))
-#include <net/if.h>
-#endif
-#if (defined(__APPLE__))
-#include <net/if_utun.h>
-#endif
-#if (defined(__APPLE__))
-#include <netinet6/in6_var.h>
-#endif
-#if (defined(__APPLE__))
-#include <sys/ioctl.h>
-#endif
-#if (defined(__APPLE__))
-#include <sys/kern_control.h>
-#endif
-#if (defined(__APPLE__))
-#include <sys/sys_domain.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <fcntl.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <linux/if_ether.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <linux/if_tun.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <net/if.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <sys/ioctl.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <sys/uio.h>
-#endif
 #include <pcap/pcap.h>
-#include <sys/ioctl.h>
-
-#include <cerrno>
-#include <csignal>
-#include <netinet/tcp.h>
-#include <sys/uio.h>
-
-#include <fcntl.h>
-#include <poll.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <sys/un.h>
-#include <unistd.h>
-
-#include <cstdio>
-#include <netdb.h>
-#include <pthread.h>
 
 export module telar.runtime.redirect.ingress;
 
 import std;
+import telar.sys.socket;
 import telar.sys.posix;
 import telar.tbc;
 

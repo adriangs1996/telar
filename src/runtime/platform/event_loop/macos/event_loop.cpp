@@ -1,45 +1,11 @@
 module;
-#include <cassert>
-#include <cstddef>
-#include <cstdlib>
-#include <errno.h>
-#include <new>
-#include <time.h>
-#include <unistd.h>
-
-#include <cstdint>
-#if (defined(__APPLE__))
-#include <sys/event.h>
-#endif
-#if (defined(__linux__))
-#include <cerrno>
-#endif
-#if (defined(__linux__))
-#include <climits>
-#endif
-#if (defined(__linux__))
-#include <csignal>
-#endif
-#if (defined(__linux__))
-#include <fcntl.h>
-#endif
-#if (defined(__linux__))
-#include <sched.h>
-#endif
-#if (defined(__linux__))
-#include <sys/epoll.h>
-#endif
-#if (defined(__linux__))
-#include <sys/syscall.h>
-#endif
-#if (defined(__linux__))
-#include <unistd.h>
-#endif
-#include <csignal>
+#include "telar_base/diagnostics/config.hpp"
 
 module telar.runtime.platform.event_loop;
 
 import std;
+import telar.sys.process;
+import telar.sys.apple;
 import telar.sys.posix;
 import telar.tbc;
 
@@ -103,7 +69,7 @@ namespace telar::runtime {
   }
 
   tbc::view<std::span<const Event>, tbc::lt::a> Kqueue::wait(std::chrono::nanoseconds timeout, tbc::view<std::span<Event>, tbc::lt::a> events) {
-    assert(events.size() >= event_capacity);
+    TELAR_ASSERT(events.size() >= event_capacity);
     timeout = std::max(timeout, std::chrono::nanoseconds::zero());
     const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(timeout);
     const timespec duration{.tv_sec = seconds.count(), .tv_nsec = (timeout - seconds).count()};

@@ -1,26 +1,10 @@
 module;
-#include <cstdio>
-#include <cstdlib>
-#include <new>
-#include <stdlib.h>
-
-#include <cerrno>
-#include <csignal>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <poll.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <unistd.h>
-
-#include <net/if.h>
 #include <pcap/pcap.h>
-#include <pthread.h>
 
 export module telar.runtime.traffic.capture;
 
 import std;
+import telar.sys.process;
 import telar.sys.posix;
 
 export import telar.runtime.traffic.control_protocol;

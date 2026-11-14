@@ -1,19 +1,15 @@
 module;
 #include "tbc/annotations.hpp"
-#include <cstddef>
-#include <cstdint>
-#if (defined(__APPLE__))
-#include <sys/event.h>
-#endif
-#if (defined(__linux__))
-#include <csignal>
-#include <signal.h>
-#include <sys/epoll.h>
-#endif
 
 export module telar.runtime.platform.event_loop;
 
 import std;
+#if defined(__APPLE__)
+import telar.sys.apple;
+#endif
+#if defined(__linux__)
+import telar.sys.linux;
+#endif
 import telar.sys.posix;
 import telar.tbc;
 

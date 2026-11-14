@@ -1,6 +1,4 @@
 module;
-#include <cstdint>
-
 #include "telar_base/diagnostics/config.hpp"
 
 module telar.runtime.metrics.host_sampler;

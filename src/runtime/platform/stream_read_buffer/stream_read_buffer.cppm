@@ -1,8 +1,5 @@
 module;
 #include "tbc/annotations.hpp"
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
 
 export module telar.runtime.platform.stream_read_buffer;
 

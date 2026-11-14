@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "cell_layout.hpp"
 #include "telar_base/diagnostics/config.hpp"
 #include "telar_render/sequence.hpp"
 #include <cassert>

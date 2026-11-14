@@ -221,8 +221,8 @@ headers with:
 just runtime-editor
 ```
 
-This builds the existing `cell-layout` target to generate `cell_layout.hpp`;
-the other generated headers are refreshed during CMake configuration.
+This builds the existing `cell-layout` target to generate `cell_layout.inc`;
+the other generated fragments are refreshed during CMake configuration.
 
 `.clangd-build.json` declares the same commands for Neovim configurations that
 support build-on-save. They run asynchronously on save

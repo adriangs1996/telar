@@ -1,62 +1,9 @@
 module;
-#include <cstdlib>
-#include <new>
-
-#include <arpa/inet.h>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <netinet/in.h>
-#include <sys/socket.h>
-
-#if (defined(__APPLE__))
-#include <cerrno>
-
-#include <net/if.h>
-
-#include <net/if_utun.h>
-
-#include <netinet6/in6_var.h>
-
-#include <sys/ioctl.h>
-
-#include <sys/kern_control.h>
-
-#include <sys/sys_domain.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <fcntl.h>
-
-#include <linux/if_ether.h>
-
-#include <linux/if_tun.h>
-
-#include <net/if.h>
-
-#include <sys/ioctl.h>
-
-#include <sys/uio.h>
-#endif
 #include <pcap/pcap.h>
-#include <sys/ioctl.h>
-
-#include <cerrno>
-#include <csignal>
-#include <netinet/tcp.h>
-#include <sys/uio.h>
-
-#include <fcntl.h>
-#include <poll.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <sys/un.h>
-#include <unistd.h>
-
-#include <cstdio>
-#include <netdb.h>
-#include <pthread.h>
 
 module telar.runtime.redirect.ingress;
+
+import telar.sys.socket;
 
 namespace telar::runtime::redirect {
 
@@ -136,7 +83,7 @@ namespace telar::runtime::redirect {
 
     setCloseOnExec(descriptor);
     unsigned complete = 1;
-    constexpr unsigned long complete_headers = _IOW('B', 117, unsigned int); // Darwin BIOCSHDRCMPLT
+    constexpr unsigned long complete_headers = sys::ioctlWrite<unsigned int>('B', 117); // Darwin BIOCSHDRCMPLT
     if (::ioctl(descriptor, complete_headers, &complete) != 0) {
       throw SystemError{"Configure complete loopback injection headers"};
     }

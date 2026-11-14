@@ -1,125 +1,17 @@
 module;
 #include "tbc/annotations.hpp"
-#include <cstdio>
-#include <cstdlib>
-#include <new>
-#include <stdlib.h>
-
-#include <arpa/inet.h>
-#include <cerrno>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <ifaddrs.h>
-#include <net/if.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-
-#include <csignal>
-#include <limits.h>
-#include <netinet/tcp.h>
-#include <poll.h>
-#include <sys/types.h>
-
-#if defined(__APPLE__)
-#include <net/if_dl.h>
-#include <net/route.h>
-#endif
-
-#include <unistd.h>
 
 #if defined(__APPLE__)
 
-#include <netinet/in_pcb.h>
-#include <netinet/tcp_fsm.h>
-#include <netinet/tcp_var.h>
-#include <sys/socketvar.h>
-#include <sys/sysctl.h>
-
-#endif
-
-#if defined(__linux__)
-
-#include <fcntl.h>
-
-#endif
-
-#if (defined(__APPLE__))
-#include <libproc.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <fcntl.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <dirent.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <cstdio>
-#endif
-
-#if defined(__APPLE__)
-
-#include <sys/stat.h>
-#include <sys/un.h>
-#if (defined(__APPLE__))
-#include <net/if_utun.h>
-#endif
-#if (defined(__APPLE__))
-#include <netinet6/in6_var.h>
-#endif
-#if (defined(__APPLE__))
-#include <sys/ioctl.h>
-#endif
-#if (defined(__APPLE__))
-#include <sys/kern_control.h>
-#endif
-#if (defined(__APPLE__))
-#include <sys/sys_domain.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <fcntl.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <linux/if_ether.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <linux/if_tun.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <sys/ioctl.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <sys/uio.h>
-#endif
-#include <cstdio>
-#include <fcntl.h>
 #include <pcap/pcap.h>
-#include <sys/ioctl.h>
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <linux/fs.h>
-#endif
-#if (defined(__linux__) && !defined(__GLIBC__))
-#include <sys/syscall.h>
-#endif
-#include <cstdlib>
-#include <sys/file.h>
-#include <sys/sockio.h>
-#include <sys/uio.h>
-#if (defined(__APPLE__))
-#include <libproc.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <dirent.h>
-#endif
-#if (!(defined(__APPLE__)))
-#include <cstdio>
-#endif
 
 #endif
 
 export module telar.runtime.redirect.socket_owners;
 
 import std;
+import telar.sys.socket;
+import telar.sys.process;
 import telar.sys.posix;
 
 export import telar.runtime.redirect.pf_rules;

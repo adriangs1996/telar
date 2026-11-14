@@ -1,3 +1,5 @@
+module;
+
 export module telar.runtime.config.loader;
 
 import std;
@@ -6,6 +8,11 @@ import telar.config.snapshot;
 export import telar.platform.paths;
 
 export namespace telar::runtime::config {
+
+  // The Lua that every configuration VM runs first.
+  inline constexpr std::string_view bootstrap{
+#include "config_bootstrap.inc"
+  };
 
   template <Allocator Memory>
   class Loader {

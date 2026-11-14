@@ -1,15 +1,11 @@
 module;
 #include "tbc/annotations.hpp"
-#include "tbc/annotations.hpp"
 #include "telar_platform/trace_macro.hpp"
-#include <cstddef>
-#include <cstdint>
-#include <sys/types.h>
-#include <unistd.h>
 
 export module telar.runtime.platform.process_probe;
 
 import std;
+import telar.sys.posix;
 import telar.tbc;
 
 export import telar.runtime.platform.session_host;

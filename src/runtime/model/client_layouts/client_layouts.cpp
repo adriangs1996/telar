@@ -1,9 +1,9 @@
 module;
 #include "telar_base/diagnostics/config.hpp"
-#include <termios.h>
-#include <unistd.h>
 
 module telar.runtime.model.client_layouts;
+
+import telar.sys.process;
 
 namespace telar::runtime {
 

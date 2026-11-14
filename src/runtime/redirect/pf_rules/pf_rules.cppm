@@ -1,27 +1,3 @@
-module;
-#include <cstdio>
-#include <cstdlib>
-#include <new>
-#include <unistd.h>
-
-#include <arpa/inet.h>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <netinet/in.h>
-#include <sys/socket.h>
-
-#include <cerrno>
-#include <fcntl.h>
-#include <sys/ioctl.h>
-
-#include <net/if.h>
-#include <poll.h>
-#if defined(__APPLE__)
-#include <net/if_dl.h>
-#include <net/route.h>
-#endif
-
 export module telar.runtime.redirect.pf_rules;
 
 import std;
@@ -89,7 +65,7 @@ export {
       };
 
       static_assert(sizeof(Request) == 84);
-      static constexpr unsigned long lookup = _IOWR('D', 23, Request);
+      static constexpr unsigned long lookup = sys::ioctlReadWrite<Request>('D', 23);
 
     public:
       NatLookup();

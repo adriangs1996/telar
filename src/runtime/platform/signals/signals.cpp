@@ -1,8 +1,3 @@
-module;
-#include <cerrno>
-#include <cstdint>
-#include <unistd.h>
-
 module telar.runtime.platform.signals;
 
 namespace telar::runtime {

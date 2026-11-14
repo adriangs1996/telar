@@ -1,17 +1,12 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include "telar_render/sequence.hpp"
 #include <ghostty/vt.h>
-#include <limits.h>
-#include <sys/stat.h>
-#include <unistd.h>
 
 #include "telar_base/diagnostics/config.hpp"
 
-#include <fcntl.h>
-#include <sys/mman.h>
-
 module telar.runtime.graphics.pane_media;
+
+import telar.sys.posix;
 
 namespace telar::runtime {
 

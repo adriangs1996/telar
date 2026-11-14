@@ -1,12 +1,4 @@
 module;
-#include <cstdio>
-#include <cstdlib>
-#include <new>
-
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-
 #include <pcap/pcap.h>
 
 module telar.runtime.traffic.control_protocol;
@@ -399,7 +391,7 @@ namespace telar::runtime::traffic::control {
     const auto processes = std::span{request.processes}.first(request.process_count);
 
     for (std::size_t index = 0; index < processes.size(); ++index) {
-      if (processes[index] == 0 || processes[index] > INT32_MAX || std::ranges::find(processes.first(index), processes[index]) != processes.first(index).end()) {
+      if (processes[index] == 0 || processes[index] > std::numeric_limits<std::int32_t>::max() || std::ranges::find(processes.first(index), processes[index]) != processes.first(index).end()) {
         throw EncodingError{"Invalid or duplicate selected process"};
       }
     }

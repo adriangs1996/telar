@@ -18,7 +18,6 @@ static_assert(true);
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <unistd.h>
 #endif
-#include "cell_layout.hpp"
 #include "telar_base/diagnostics/config.hpp"
 #include <cassert>
 #include <csignal>

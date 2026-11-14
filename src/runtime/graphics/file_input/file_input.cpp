@@ -1,9 +1,3 @@
-module;
-#include <fcntl.h>
-#include <unistd.h>
-
-#include <cstdint>
-
 module telar.runtime.graphics.file_input;
 
 namespace telar::runtime {
@@ -76,7 +70,7 @@ namespace telar::runtime {
 
     const auto pixels = static_cast<std::uint64_t>(*width) * *height;
     const auto bytes_per_pixel = *depth == rgb_depth ? 3 : 4;
-    if (pixels > SIZE_MAX / bytes_per_pixel) {
+    if (pixels > std::numeric_limits<std::size_t>::max() / bytes_per_pixel) {
       return std::nullopt;
     }
 

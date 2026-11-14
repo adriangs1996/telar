@@ -1,9 +1,7 @@
-module;
-#include <sys/types.h>
-
 export module telar.runtime.editors.remote_editor;
 
 import std;
+import telar.sys.posix;
 import telar.tbc;
 
 export import telar.runtime.platform.background_executor;

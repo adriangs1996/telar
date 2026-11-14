@@ -1,25 +1,7 @@
 module;
 #include "telar_platform/trace_macro.hpp"
-#include <new>
-#include <stdlib.h>
-
-#include <cerrno>
-#include <csignal>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <sys/socket.h>
-#include <unistd.h>
-
-#include <arpa/inet.h>
-#include <cstdlib>
-#include <netdb.h>
-#include <pthread.h>
 
 #include <brotli/decode.h>
-#include <cassert>
 #include <zlib.h>
 #include <zstd.h>
 

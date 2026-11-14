@@ -1,8 +1,6 @@
 module;
 #include "telar_base/diagnostics/config.hpp"
 
-#include <fcntl.h>
-
 export module telar.runtime.graphics.synchronizer;
 
 import std;

@@ -1,14 +1,11 @@
 module;
 #include "telar_base/diagnostics/config.hpp"
 #include "telar_platform/trace_macro.hpp"
-#include <cerrno>
-#include <csignal>
 #include <ghostty/vt.h>
-#include <limits.h>
-#include <sys/stat.h>
-#include <unistd.h>
 
 module telar.runtime.runtime.runtime;
+
+import telar.sys.process;
 
 namespace telar::runtime {
 
