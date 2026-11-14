@@ -1368,8 +1368,10 @@ replaces them with the prefix-mode hints.
 
 `telar.action.toggle_pane_fullscreen()` makes the focused pane occupy the whole
 tab inside its own border, and the tab bar marks the tab with a fullscreen
-icon. The native window puts pane selectors and a leave-fullscreen control
-below the content. In fullscreen, left/right focus selects the previous/next
+icon. The pane keeps its header, where the fullscreen button gains one tile
+per pane of the tab: a tile selects its pane and carries a dot in the color of
+its agent's state, and the button leaves fullscreen. Panes that do not fit are
+counted beside the tiles. In fullscreen, left/right focus selects the previous/next
 pane without wrapping, and up/down focus does nothing. These rules apply to
 pane-focus actions, not arrow keys forwarded to the child.
 

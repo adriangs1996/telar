@@ -11,9 +11,14 @@ NativeRoundedRectangle {
     property real ratio: 1
     property string number
     property string attentionColor
+    // The palette role of the agent's state, drawn as a dot on the card's corner.
+    property string statusColor
+    // Recedes the card and its mark; the state dot keeps its strength.
+    property bool dimmed: false
 
     readonly property color ink: mark.ink ?? root.colors.text
-    color: attentionColor.length > 0 ? root.colors[attentionColor] : (mark.tile ?? root.colors.surface1)
+    readonly property real strength: dimmed ? 0.5 : 1
+    color: Qt.alpha(attentionColor.length > 0 ? root.colors[attentionColor] : (mark.tile ?? root.colors.surface1), strength)
 
     ApplicationMark {
         readonly property real side: Math.round(Math.min(parent.width, parent.height) * 0.72)
@@ -28,6 +33,7 @@ NativeRoundedRectangle {
         pixelSize: side
         primaryFamily: root.typography.primaryFamily ?? ""
         primaryStyle: root.typography.primaryStyle ?? ""
+        opacity: root.strength
         visible: root.number.length === 0
     }
 
@@ -41,5 +47,19 @@ NativeRoundedRectangle {
         horizontalAlignment: Text.AlignHCenter
         elide: Text.ElideNone
         visible: root.number.length > 0
+    }
+
+    NativeRoundedRectangle {
+        objectName: "applicationStatus"
+        readonly property real side: 7 * root.ratio
+        x: parent.width - side + 3 * root.ratio
+        y: -3 * root.ratio
+        width: side
+        height: side
+        radius: side / 2
+        color: root.statusColor.length > 0 ? root.colors[root.statusColor] : "transparent"
+        borderColor: root.colors.paneBackground ?? root.colors.panel_bg
+        borderWidth: 1.5 * root.ratio
+        visible: root.statusColor.length > 0
     }
 }

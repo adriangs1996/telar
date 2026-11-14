@@ -59,6 +59,9 @@ it draws, and returns an element.
 
 A piece slot draws in the box the default piece had. When the whole component
 slot is set, its pieces are drawn only where it places them with `ui.builtin`.
+`pane_status` is the exception: the default header shows an agent's state as a
+dot on the pane's mark and leaves the worded chip out, so this slot, or its
+built-in piece, is what brings the chip back at the end of the title.
 
 Items are plain tables. Text that comes from a terminal, such as titles and
 paths, arrives without control characters.

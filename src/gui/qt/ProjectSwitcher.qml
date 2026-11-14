@@ -85,24 +85,12 @@ Item {
                 visible: (project.record.attention ?? "").length > 0
             }
 
-            ToolTip {
-                id: tip
+            ChromeToolTip {
                 visible: project.hovered
-                delay: 500
                 text: project.record.name + "\n" + (project.record.path ?? "")
-                contentItem: Text {
-                    text: tip.text
-                    textFormat: Text.PlainText
-                    color: root.colors.text
-                    font.pixelSize: root.typography.small
-                }
-                background: NativeRoundedRectangle {
-                    radius: ChromeStyle.controlRadius * root.ratio
-                    color: root.colors.panel_bg
-                    borderColor: root.colors.text
-                    borderAlpha: ChromeStyle.outlineAlpha
-                    borderWidth: 1 / Screen.devicePixelRatio
-                }
+                colors: root.colors
+                typography: root.typography
+                ratio: root.ratio
             }
 
             Accessible.role: Accessible.PageTab
