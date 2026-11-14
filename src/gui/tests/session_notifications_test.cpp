@@ -74,7 +74,12 @@ namespace {
     }
   };
 
-  using Client = Session<SystemAllocator, Transport, Clock>;
+  // A session that reads `Clock`.
+  struct Client : test::TestSession<SystemAllocator> {
+    Client(SystemAllocator& memory, Transport& transport)
+        : TestSession(memory, transport, &Clock::nowNanoseconds) {}
+  };
+
   constexpr std::uint64_t second = 1'000'000'000;
 
   void wireMessagesOwnTextAndRetainStructuredActions() {

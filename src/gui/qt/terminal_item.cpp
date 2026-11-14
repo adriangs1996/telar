@@ -266,7 +266,7 @@ namespace telar::gui::qt {
     emit paneIdChanged();
   }
 
-  Pane<ApplicationAllocator>* TerminalItem::pane() const noexcept {
+  Pane<Memory>* TerminalItem::pane() const noexcept {
     return application_ == nullptr ? nullptr : application_->pane(pane_id_);
   }
 
@@ -471,7 +471,7 @@ namespace telar::gui::qt {
   // cursor. Scrolled up, the cursor may sit below the view with the prompt's first rows still at
   // its bottom: those count only past `live_from`, where the last command's rows end, counted
   // from the top of the scrollback, and run to the view's last row.
-  static PromptRows promptRows(const Screen<ApplicationAllocator>& screen, bool editing, std::uint64_t live_from) {
+  static PromptRows promptRows(const Screen<Memory>& screen, bool editing, std::uint64_t live_from) {
     const auto rows = static_cast<std::size_t>(screen.rows());
     if (!editing || rows == 0) {
       return {};
@@ -530,7 +530,7 @@ namespace telar::gui::qt {
     return QStringLiteral("interrupted");
   }
 
-  std::size_t TerminalItem::liveSession(const Pane<ApplicationAllocator>& pane) noexcept {
+  std::size_t TerminalItem::liveSession(const Pane<Memory>& pane) noexcept {
     const auto& blocks = pane.blocks;
     auto first = blocks.size();
 
@@ -964,7 +964,7 @@ namespace telar::gui::qt {
 
   // Changes whenever the rows drawn do: the screen's, the view's top, its folds, or a row drawn
   // from beyond the screen.
-  std::uint64_t TerminalItem::viewRevision(const Pane<ApplicationAllocator>& current) const noexcept {
+  std::uint64_t TerminalItem::viewRevision(const Pane<Memory>& current) const noexcept {
     constexpr std::uint64_t prime = 0x100000001b3;
     auto revision = current.screen.revision();
 

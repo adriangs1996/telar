@@ -159,7 +159,7 @@ namespace telar::gui::qt {
         title = toQString(PeekLabels::title(*agent, task));
         facts = toQString(PeekLabels::facts(*agent, task).view());
         const auto geometry = PeekGeometry::measure(session().workbenchGeometry().cellArea());
-        const auto visible = PeekScreen<ApplicationAllocator>::lastLines(session().peek().text(), geometry.screen.height);
+        const auto visible = PeekScreen<Memory>::lastLines(session().peek().text(), geometry.screen.height);
 
         lines = toQString(visible).split(QLatin1Char('\n'));
       }

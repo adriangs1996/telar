@@ -264,7 +264,7 @@ namespace {
     telar::MemoryAdapter adapter{system};
     telar::ConcurrentMemory& memory = adapter;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
     const auto command = sampleCommand();
 
     require(client.createCommandTab(command) == TabCreationOutcome::unavailable, "a command requires an attached focused launch source");
@@ -302,7 +302,7 @@ namespace {
     std::size_t allocations = 0;
 
     {
-      Session client{memory, transport};
+      TestSession client{memory, transport};
 
       openFirstPane(client, transport);
       client.createTab();
@@ -366,7 +366,7 @@ namespace {
     telar::MemoryAdapter adapter{system};
     telar::ConcurrentMemory& memory = adapter;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     const auto command = sampleCommand();
@@ -390,7 +390,7 @@ namespace {
     telar::MemoryAdapter adapter{system};
     telar::ConcurrentMemory& memory = adapter;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     client.createTab();
@@ -406,7 +406,7 @@ namespace {
     require(rejected && client.tabs().size() == 1 && client.focusedPane()->id == 1, "a correlated reply must not replace an already adopted tab");
   }
 
-  void openThreeTabs(Session<telar::ConcurrentMemory, Transport>& client, Transport& transport) {
+  void openThreeTabs(Session& client, Transport& transport) {
     openFirstPane(client, transport);
     for (std::uint16_t position = 1; position <= 2; ++position) {
       client.createTab();
@@ -422,7 +422,7 @@ namespace {
     telar::MemoryAdapter adapter{system};
     telar::ConcurrentMemory& memory = adapter;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openThreeTabs(client, transport);
     const auto command = sampleCommand();
@@ -457,7 +457,7 @@ namespace {
     telar::MemoryAdapter adapter{system};
     telar::ConcurrentMemory& memory = adapter;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openThreeTabs(client, transport);
     const auto workspace = client.activeTab()->location.workspace;
@@ -510,7 +510,7 @@ namespace {
       telar::MemoryAdapter adapter{system};
       telar::ConcurrentMemory& memory = adapter;
       Transport transport;
-      Session client{memory, transport};
+      TestSession client{memory, transport};
 
       openThreeTabs(client, transport);
       const auto workspace = client.activeTab()->location.workspace;

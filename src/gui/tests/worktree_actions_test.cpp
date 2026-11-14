@@ -68,7 +68,7 @@ namespace {
   void leavingAWorktreeOpensItsProjectWithoutALaunchCommand() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     require(!client.leaveWorktree(), "an unconnected client must not request a workspace handoff");
     openFirstPane(client, transport);
@@ -97,7 +97,7 @@ namespace {
     Transport transport;
 
     {
-      Session client{memory, transport};
+      TestSession client{memory, transport};
 
       openFirstPane(client, transport);
       const std::array worktrees{
@@ -130,7 +130,7 @@ namespace {
   void cleanupStopsAtCapacityAndReleasesRejectedDelivery() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     const std::array worktrees{gone_checkout};

@@ -22,83 +22,24 @@ export {
 
     class SoundPlayback {
     public:
-      inline explicit SoundPlayback(SoundPolicy configuration = {}) noexcept
-          : configuration_(configuration) {}
+      explicit SoundPlayback(SoundPolicy configuration = {}) noexcept;
 
-      [[nodiscard]] inline SoundPolicy configuration() const noexcept {
-        return configuration_;
-      }
+      [[nodiscard]] SoundPolicy configuration() const noexcept;
 
-      [[nodiscard]] inline bool active() const noexcept {
-        return active_;
-      }
+      [[nodiscard]] bool active() const noexcept;
 
-      [[nodiscard]] inline std::optional<AgentSound> queued() const noexcept {
-        return queued_;
-      }
+      [[nodiscard]] std::optional<AgentSound> queued() const noexcept;
 
-      [[nodiscard]] inline SoundRequestOutcome request(AgentSound kind) noexcept {
-        if (!allows(kind)) {
-          return {};
-        }
+      [[nodiscard]] SoundRequestOutcome request(AgentSound kind) noexcept;
 
-        if (active_) {
-          queued_ = queued_ == AgentSound::needs_input || kind == AgentSound::needs_input ? AgentSound::needs_input : AgentSound::ready;
+      [[nodiscard]] std::optional<AgentSound> complete();
 
-          return {.state = SoundRequestOutcome::State::queued};
-        }
+      void schedulingFailed();
 
-        active_ = true;
-
-        return {.state = SoundRequestOutcome::State::start, .sound = kind};
-      }
-
-      [[nodiscard]] inline std::optional<AgentSound> complete() {
-        if (!active_) {
-          throw std::logic_error{"NoActiveSoundPlayback"};
-        }
-
-        active_ = false;
-        const auto next = std::exchange(queued_, std::nullopt);
-        if (!next || !allows(*next)) {
-          return std::nullopt;
-        }
-
-        active_ = true;
-
-        return next;
-      }
-
-      inline void schedulingFailed() {
-        if (!active_ || queued_) {
-          throw std::logic_error{"InvalidSoundSchedulingFailure"};
-        }
-
-        active_ = false;
-      }
-
-      inline void configure(SoundPolicy configuration) noexcept {
-        configuration_ = configuration;
-        if (queued_ && !allows(*queued_)) {
-          queued_.reset();
-        }
-      }
+      void configure(SoundPolicy configuration) noexcept;
 
     private:
-      [[nodiscard]] inline bool allows(AgentSound kind) const noexcept {
-        if (!configuration_.enabled) {
-          return false;
-        }
-
-        switch (kind) {
-        case AgentSound::ready:
-          return configuration_.ready;
-        case AgentSound::needs_input:
-          return configuration_.needs_input;
-        }
-
-        return false;
-      }
+      [[nodiscard]] bool allows(AgentSound kind) const noexcept;
 
       SoundPolicy configuration_;
       std::optional<AgentSound> queued_;

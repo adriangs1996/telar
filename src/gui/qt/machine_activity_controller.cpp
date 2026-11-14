@@ -59,7 +59,7 @@ namespace telar::gui::qt {
 
   namespace {
 
-    using Order = ActivityOrder<ApplicationAllocator>;
+    using Order = ActivityOrder<Memory>;
 
     bool containsActivityPointer(const QQuickItem& card, QPointF position) {
       if (!card.isVisible() || !card.isEnabled()) {

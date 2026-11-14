@@ -58,11 +58,12 @@ import telar.gui.platform.window_lease;
 
 namespace telar::gui::qt {
 
-  using GuiSession = Session<ApplicationAllocator, RuntimeConnection, platform::AwakeClock, ApplicationEffects>;
+  using GuiSession = Session;
 
   struct MachineClient {
     MachineClientKey key;
     RuntimeConnection connection;
+    ApplicationEffects effects;
     GuiSession session;
     std::optional<platform::WindowLease> identity_lease;
     std::uint64_t identity = 0;
@@ -75,7 +76,8 @@ namespace telar::gui::qt {
     explicit MachineClient(ApplicationAllocator& memory, Application& application, MachineClientKey admission)
         : key(admission),
           connection(memory),
-          session(memory, connection, ApplicationEffects{.application = application, .source = admission}) {}
+          effects(application, admission),
+          session(memory, connection, effects) {}
   };
 
 }

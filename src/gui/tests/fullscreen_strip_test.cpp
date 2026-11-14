@@ -132,7 +132,9 @@ namespace {
     }
 
     Q_SLOT static void projectionUsesProgramOrderAndCurrentPaneGeneration() {
-      SystemAllocator memory;
+      SystemAllocator system;
+      telar::MemoryAdapter adapter{system};
+      telar::Memory& memory = adapter;
       GraphicsBudget budget;
       constexpr std::uint64_t pane_id = 7;
       Pane pane{memory, pane_id, budget};
@@ -141,14 +143,14 @@ namespace {
       pane.generation = 2;
       pane.attachment_generation = 3;
       pane.foreground = "claude";
-      std::array<Agent<SystemAllocator>, 1> agents{{Agent<SystemAllocator>{memory}}};
+      std::array<Agent<Memory>, 1> agents{{Agent<Memory>{memory}}};
       auto& agent = agents.front();
 
       agent.location = pane.location;
       agent.pane_id = pane.id;
       agent.pane_generation = pane.generation;
       agent.status = AgentStatus::blocked;
-      const auto source = std::span<const Agent<SystemAllocator>>{agents};
+      const auto source = std::span<const Agent<Memory>>{agents};
       const FullscreenPaneEntry entry{.pane_id = pane.id, .index = 4};
       const auto record = fullscreenPaneRecord(&pane, source, entry);
 
@@ -160,7 +162,7 @@ namespace {
       QVERIFY(fullscreenPaneRecord(&pane, source, entry).value(QStringLiteral("attentionColor")).toString().isEmpty());
       agent.pane_generation = pane.generation;
       QVERIFY(fullscreenPaneRecord(&pane, source, {.pane_id = pane.id, .index = 4, .focused = true}).value(QStringLiteral("attentionColor")).toString().isEmpty());
-      const auto missing = fullscreenPaneRecord<SystemAllocator>(nullptr, source, entry);
+      const auto missing = fullscreenPaneRecord<Memory>(nullptr, source, entry);
 
       QCOMPARE(missing.value(QStringLiteral("program")).toString(), QStringLiteral("shell"));
       QCOMPARE(missing.value(QStringLiteral("key")).toString(), QString::number(pane.id));

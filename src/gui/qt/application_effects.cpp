@@ -29,6 +29,7 @@ static_assert(true);
 #include <variant>
 
 import telar.gui.text.notification_payload;
+import telar.gui.platform.awake_clock;
 import telar.gui.presentation.frame_pacer;
 
 namespace telar::gui::qt {
@@ -48,9 +49,9 @@ namespace telar::gui::qt {
     return true;
   }
 
-  void ApplicationEffects::notePaneInput(FramePacer::Pane pane, std::uint64_t now_ns) noexcept {
+  void ApplicationEffects::notePaneInput(FramePacer::Pane pane) noexcept {
     if (application.findClient(source) != nullptr && source.machine.slot == application.machines_.active() && application.frame_pacer_) {
-      application.frame_pacer_->noteInput(pane, now_ns);
+      application.frame_pacer_->noteInput(pane, platform::AwakeClock::nowNanoseconds());
     }
   }
 

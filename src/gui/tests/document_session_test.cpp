@@ -45,7 +45,7 @@ namespace {
   void partsAssembleIntoTheDocument() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     auto* pane = client.findPane(1);
@@ -66,7 +66,7 @@ namespace {
   void corruptDocumentsDoNotShow() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     auto bytes = encoded("text");

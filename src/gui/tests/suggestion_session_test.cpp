@@ -59,18 +59,14 @@ namespace {
 
   class SuggestionTransport : public Transport {
   public:
-    template <typename Message>
-    void send(const Message& message) {
-      if constexpr (std::same_as<Message, SuggestCommand>) {
-        if (reject_request) {
-          throw std::length_error{"Suggestion queue is full"};
-        }
+    void send(std::span<const Byte> message) override {
+      const auto tag = static_cast<ClientTag>(message.front());
+      if (tag == MessageSchema<SuggestCommand>::tag && reject_request) {
+        throw std::length_error{"Suggestion queue is full"};
       }
 
-      if constexpr (std::same_as<Message, PaneInput>) {
-        if (reject_paste) {
-          throw std::length_error{"Paste queue is full"};
-        }
+      if (tag == MessageSchema<PaneInput>::tag && reject_paste) {
+        throw std::length_error{"Paste queue is full"};
       }
 
       Transport::send(message);
@@ -83,7 +79,7 @@ namespace {
   void requestingAndEditingKeepOneCurrentResponse() {
     SystemAllocator memory;
     SuggestionTransport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     client.beginSuggestion();
     require(!client.submitSuggestion("task") && client.suggestion().phase() == SuggestionPhase::failed && transport.count(ClientTag::suggest_command) == 0, "a missing pane must fail locally instead of asking without context");
@@ -117,7 +113,7 @@ namespace {
     SuggestionTransport transport;
 
     {
-      Session client{memory, transport};
+      TestSession client{memory, transport};
 
       openFirstPane(client, transport);
       client.beginSuggestion();
@@ -166,7 +162,7 @@ namespace {
   void unsafeRuntimeTextCannotBecomeTerminalInput() {
     SystemAllocator memory;
     SuggestionTransport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     client.beginSuggestion();

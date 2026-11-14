@@ -18,7 +18,7 @@ namespace telar::gui::qt {
     using render::BlockKind;
     using render::Callout;
     using render::Marker;
-    using Document = render::Document<ApplicationAllocator>;
+    using Document = render::Document<Memory>;
 
     QString fromUtf8(std::string_view text) {
       return QString::fromUtf8(text.data(), static_cast<qsizetype>(text.size()));
@@ -129,7 +129,7 @@ namespace telar::gui::qt {
         return &pane->document;
       }
 
-      using Inline = Pane<ApplicationAllocator>::InlineDocument;
+      using Inline = Pane<Memory>::InlineDocument;
       const auto found = std::ranges::find(pane->inline_documents, document_id, &Inline::id);
       if (found == pane->inline_documents.end()) {
         return nullptr;

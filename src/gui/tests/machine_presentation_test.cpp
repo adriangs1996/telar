@@ -86,7 +86,7 @@ namespace {
   void hiddenStartupKeepsMetadataWithoutOpeningAPane() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     client.setPresented(false);
     client.connected(1);
@@ -102,7 +102,7 @@ namespace {
   void aHiddenRestoredLayoutOwnsItsDataUntilPresentation() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     client.setPresented(false);
     client.connected(1);
@@ -138,7 +138,7 @@ namespace {
   void rapidReturnDoesNotDuplicateAnOpeningAlreadyInFlight() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     client.setPresented(false);
@@ -158,7 +158,7 @@ namespace {
     Transport transport;
 
     {
-      Session client{memory, transport};
+      TestSession client{memory, transport};
 
       openFirstPane(client, transport);
       const auto location = client.activeTab()->location;
@@ -190,7 +190,7 @@ namespace {
   void hidingWaitsForCanonicalSnapshotsBeforeDetaching() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     client.connected(1);
     deliver(client, ClientLayoutSnapshot{});
@@ -213,7 +213,7 @@ namespace {
   void hidingWaitsForAnAttachmentAndHandlesItsLateReply() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     const auto location = client.activeTab()->location;
@@ -233,7 +233,7 @@ namespace {
   void metadataDoesNotReattachAHiddenMachine() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     const auto location = client.activeTab()->location;
@@ -252,7 +252,7 @@ namespace {
   void hiddenCompletionRemainsUnacknowledgedUntilPresentation() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openWithPendingWorkspaceSnapshot(client, transport);
     std::array entries{agentSnapshotEntry()};
@@ -269,7 +269,7 @@ namespace {
   void failedSnapshotsDoNotPreventDeparture() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     client.connected(1);
     deliver(client, ClientLayoutSnapshot{});
@@ -290,7 +290,7 @@ namespace {
   void disconnectionReleasesAHiddenWorkspaceWithoutSendingDetaches() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openWithPendingWorkspaceSnapshot(client, transport);
     client.setPresented(false);
@@ -302,7 +302,7 @@ namespace {
   void returningBeforeDepartureSettlesKeepsTheWorkspace() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openWithPendingWorkspaceSnapshot(client, transport);
     const auto location = client.activeTab()->location;
@@ -319,7 +319,7 @@ namespace {
   void aMissingRememberedPaneFallsBackToItsSourceWorkspaceOnce() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     client.setPresented(false);
@@ -339,7 +339,7 @@ namespace {
   void aPartialDetachCanRetryWithoutDroppingPendingScreens() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     const auto location = client.activeTab()->location;

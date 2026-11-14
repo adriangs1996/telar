@@ -62,18 +62,14 @@ namespace {
 
   class PathTransport : public Transport {
   public:
-    template <typename Message>
-    void send(const Message& message) {
-      if constexpr (std::same_as<Message, FindPaths>) {
-        if (reject_paths) {
-          throw std::length_error{"Path queue is full"};
-        }
+    void send(std::span<const Byte> message) override {
+      const auto tag = static_cast<ClientTag>(message.front());
+      if (tag == MessageSchema<FindPaths>::tag && reject_paths) {
+        throw std::length_error{"Path queue is full"};
       }
 
-      if constexpr (std::same_as<Message, PaneInput>) {
-        if (reject_paste) {
-          throw std::length_error{"Input queue is full"};
-        }
+      if (tag == MessageSchema<PaneInput>::tag && reject_paste) {
+        throw std::length_error{"Input queue is full"};
       }
 
       Transport::send(message);
@@ -94,7 +90,7 @@ namespace {
   void searchesUseTheRuntimeAndRetainOnlyCurrentResults() {
     SystemAllocator memory;
     PathTransport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     require(!client.beginPathPicker(), "a disconnected client must not open the path picker");
     openFirstPane(client, transport);
@@ -123,7 +119,7 @@ namespace {
   void directoryNavigationKeepsTheOpeningAnchor() {
     SystemAllocator memory;
     PathTransport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     deliver(client, PaneCwd{.pane_id = 1, .cwd = "/work"});
@@ -169,7 +165,7 @@ namespace {
     PathTransport transport;
 
     {
-      Session client{memory, transport};
+      TestSession client{memory, transport};
 
       openFirstPane(client, transport);
       deliver(client, PaneCwd{.pane_id = 1, .cwd = "/work"});

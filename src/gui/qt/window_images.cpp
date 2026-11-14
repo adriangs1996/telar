@@ -224,7 +224,7 @@ namespace telar::gui::qt {
     return LimitReach{.name = ImagePlacementSelection::limit_name, .noun = ImagePlacementSelection::limit_noun, .value = ImagePlacementSelection::capacity, .requested = placements_.selected().size() + placements_.dropped()};
   }
 
-  void WindowImages::observeCatalog(const GraphicsStore<ApplicationAllocator>& store) noexcept {
+  void WindowImages::observeCatalog(const GraphicsStore<Memory>& store) noexcept {
     if (global_retained_bytes_ != store.globalRetainedBytes()) {
       global_retained_bytes_ = store.globalRetainedBytes();
       wakeWaitingScenes();
@@ -598,7 +598,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void WindowImages::requestImage(GraphicsScene& scene, const GraphicsStore<ApplicationAllocator>& store, const Image& image) {
+  void WindowImages::requestImage(GraphicsScene& scene, const GraphicsStore<Memory>& store, const Image& image) {
     const auto& description = image.description();
     const ImageTextureIdentity identity{.catalog = store.lifetime(), .image_id = description.key.image_id, .generation = description.key.generation};
     const auto admission = residency_.request({.identity = identity, .size = {.width = description.width, .height = description.height}, .retained_bytes = store.globalRetainedBytes(), .now_ns = now_ns_});
@@ -623,7 +623,7 @@ namespace telar::gui::qt {
     }
   }
 
-  std::optional<WindowImage> WindowImages::resolve(GraphicsScene& scene, const GraphicsStore<ApplicationAllocator>& store, ImageKey key) {
+  std::optional<WindowImage> WindowImages::resolve(GraphicsScene& scene, const GraphicsStore<Memory>& store, ImageKey key) {
     if (const auto* image = store.readyImage(key)) {
       requestImage(scene, store, *image);
     }

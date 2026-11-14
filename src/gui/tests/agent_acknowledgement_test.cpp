@@ -59,6 +59,7 @@ namespace {
   using telar::gui::test::deliver;
   using telar::gui::test::openFirstPane;
   using telar::gui::test::require;
+  using telar::gui::test::TestSession;
   using telar::gui::test::Transport;
 
   std::size_t countAcknowledgements(const Transport& transport) {
@@ -67,31 +68,33 @@ namespace {
     }));
   }
 
+  FocusedAgent focused(const AgentSnapshotEntry& agent) {
+    return {.pane_id = agent.pane_id, .pane_generation = agent.pane_generation, .status = agent.status};
+  }
+
   void eachFocusedCompletionIsTakenOnce() {
     auto agent = agentSnapshotEntry();
     AgentAcknowledgement acknowledgement;
 
-    require(!acknowledgement.take(&agent), "working agents must not consume an acknowledgement");
+    require(!acknowledgement.take(focused(agent)), "working agents must not consume an acknowledgement");
     agent.status = AgentStatus::done;
-    const auto first = acknowledgement.take(&agent);
+    const auto first = acknowledgement.take(focused(agent));
 
     require(first && first->pane_id == agent.pane_id && first->pane_generation == agent.pane_generation, "an unseen completion must retain its exact identity");
-    require(!acknowledgement.take(&agent), "a retained completion must be acknowledged only once");
-    const AgentSnapshotEntry* absent = nullptr;
-
-    require(!acknowledgement.take(absent) && !acknowledgement.take(&agent), "missing focus must retain the current completion reservation");
+    require(!acknowledgement.take(focused(agent)), "a retained completion must be acknowledged only once");
+    require(!acknowledgement.take(std::nullopt) && !acknowledgement.take(focused(agent)), "missing focus must retain the current completion reservation");
     agent.status = AgentStatus::working;
-    require(!acknowledgement.take(&agent), "a later turn must release the matching reservation");
+    require(!acknowledgement.take(focused(agent)), "a later turn must release the matching reservation");
     agent.status = AgentStatus::done;
-    require(acknowledgement.take(&agent).has_value(), "a later completion of the same agent must be acknowledged again");
+    require(acknowledgement.take(focused(agent)).has_value(), "a later completion of the same agent must be acknowledged again");
     ++agent.pane_generation;
-    require(acknowledgement.take(&agent).has_value(), "pane reuse must not inherit an older generation's acknowledgement");
+    require(acknowledgement.take(focused(agent)).has_value(), "pane reuse must not inherit an older generation's acknowledgement");
   }
 
   void committedSnapshotsAcknowledgeTheAlreadyFocusedPane() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     std::array entries{agentSnapshotEntry()};
@@ -119,7 +122,7 @@ namespace {
   void onlyTheFocusedTabAndCommittedGenerationAreEligible() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     std::array entries{agentSnapshotEntry()};

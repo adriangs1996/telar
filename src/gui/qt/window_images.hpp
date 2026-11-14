@@ -42,7 +42,7 @@ namespace telar::gui::qt {
 
   struct ImagePlacementSource {
     QQuickItem* owner = nullptr;
-    const GraphicsStore<ApplicationAllocator>* store = nullptr;
+    const GraphicsStore<Memory>* store = nullptr;
     QSizeF cell;
   };
 
@@ -72,11 +72,11 @@ namespace telar::gui::qt {
     void attach(GraphicsScene& scene) noexcept;
     void detach(GraphicsScene& scene) noexcept;
     void beginCatalogSnapshot() noexcept;
-    void observeCatalog(const GraphicsStore<ApplicationAllocator>& store) noexcept;
+    void observeCatalog(const GraphicsStore<Memory>& store) noexcept;
     // The reach names the selection's declared limit.
     [[nodiscard]] tbc::view<std::optional<LimitReach>, tbc::lt::static_storage> preparePlacements(std::span<const ImagePlacementSource> sources);
     [[nodiscard]] const ImagePlacementSelection& placements() const noexcept;
-    [[nodiscard]] std::optional<WindowImage> resolve(GraphicsScene& scene, const GraphicsStore<ApplicationAllocator>& store, ImageKey key);
+    [[nodiscard]] std::optional<WindowImage> resolve(GraphicsScene& scene, const GraphicsStore<Memory>& store, ImageKey key);
     void append(GraphicsScene& scene, QSGNode& parent, ImageTextureHandle handle, const ImageGeometry& geometry);
     void requestUpdate(const GraphicsScene& scene);
     [[nodiscard]] WindowImageStatistics statistics() const noexcept;
@@ -90,7 +90,7 @@ namespace telar::gui::qt {
     };
 
     using Residency = ImageResidency<Resources>;
-    using Image = GraphicsStore<ApplicationAllocator>::Image;
+    using Image = GraphicsStore<Memory>::Image;
 
     struct CatalogRows {
       GraphicsLifetime lifetime;
@@ -127,7 +127,7 @@ namespace telar::gui::qt {
     void cancelTimer();
     void wakeWaitingScenes() noexcept;
     void notifyReady(const GraphicsScene& scene, ImageTextureIdentity identity) noexcept;
-    void requestImage(GraphicsScene& scene, const GraphicsStore<ApplicationAllocator>& store, const Image& image);
+    void requestImage(GraphicsScene& scene, const GraphicsStore<Memory>& store, const Image& image);
     void indexCatalogs() noexcept;
     [[nodiscard]] std::size_t catalogBucket(GraphicsLifetime lifetime) const noexcept;
     [[nodiscard]] bool upload(ImageTextureHandle handle, const Image& image);

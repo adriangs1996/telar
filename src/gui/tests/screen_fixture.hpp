@@ -33,11 +33,11 @@ namespace telar::gui::test {
     logical,
   };
 
-  inline LinkGrid screenGrid(const Screen<ApplicationAllocator>& screen) {
+  inline LinkGrid screenGrid(const Screen<Memory>& screen) {
     return {.cells = screen.cells(), .columns = screen.columns(), .rows = screen.rows(), .scroll = screen.scroll(), .row_flags = screen.rowFlags()};
   }
 
-  inline QString screenText(const Screen<ApplicationAllocator>& screen, ScreenTextLayout layout = ScreenTextLayout::physical) {
+  inline QString screenText(const Screen<Memory>& screen, ScreenTextLayout layout = ScreenTextLayout::physical) {
     QString text;
     const auto grid = screenGrid(screen);
 

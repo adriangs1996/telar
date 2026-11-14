@@ -83,7 +83,7 @@ namespace {
     Transport transport;
 
     {
-      Session client{memory, transport};
+      TestSession client{memory, transport};
 
       openFirstPane(client, transport);
       require(client.focusedPane() != nullptr && client.focusedPane()->id == 1, "opened pane must receive focus");
@@ -155,7 +155,7 @@ namespace {
     Transport transport;
 
     {
-      Session client{memory, transport};
+      TestSession client{memory, transport};
 
       openFirstPane(client, transport);
       const auto location = client.activeTab()->location;
@@ -206,7 +206,7 @@ namespace {
     Transport transport;
 
     {
-      Session client{memory, transport};
+      TestSession client{memory, transport};
 
       require(client.windowTitle("host").view() == "Telar", "the GUI default title must match the original even without a pane");
       openFirstPane(client, transport);
@@ -254,7 +254,7 @@ namespace {
   void restoredLayoutAndFailure() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
     constexpr std::uint64_t client_identity = 9;
     constexpr std::uint64_t pane_id = 11;
     constexpr std::uint16_t sidebar_columns = 32;
@@ -287,7 +287,7 @@ namespace {
   void pendingAttachmentKeepsTheLatestViewport() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     const auto original = client.activeTab()->location;
@@ -334,7 +334,7 @@ namespace {
   void staleHistory() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     client.queryHistory("old");
@@ -352,7 +352,7 @@ namespace {
   void routedCommands() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     ClientCommand command;
@@ -411,7 +411,7 @@ namespace {
   void routedSidebarResize() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     constexpr std::uint16_t host_columns = 120;
@@ -456,7 +456,7 @@ namespace {
   void routedCopyRange() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     client.split(ClientLayoutAxis::vertical);
@@ -502,7 +502,7 @@ namespace {
   void pointerSelectionLifecycle() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     constexpr std::uint32_t history_rows = 3;
@@ -542,7 +542,7 @@ namespace {
   void editorNavigation() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     client.navigateDirection(PaneDirection::left);
     require(transport.sent.empty(), "navigation without a focused pane must have no effects");
@@ -599,7 +599,7 @@ namespace {
   void focusedScrollRouting() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     client.scrollFocused(ScrollDirection::up);
     require(transport.sent.empty(), "focused scrolling without a pane must have no effects");
@@ -677,7 +677,7 @@ namespace {
   void routedLayoutRoundtrip() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     client.split(ClientLayoutAxis::vertical);
@@ -723,7 +723,7 @@ namespace {
   void routedLayoutGuards() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     ClientCommand command;
@@ -789,7 +789,7 @@ namespace {
   void routedWorkspaceList() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     const auto* focused = client.focusedPane();
@@ -819,7 +819,7 @@ namespace {
   void historyReplay() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     client.queryHistory("recent");
@@ -894,7 +894,7 @@ namespace {
   void historyScopesAndVisits() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     client.queryHistory("unknown directory", {.scope = HistoryScope::cwd});
@@ -946,7 +946,7 @@ namespace {
   void agentNavigationUsesCommittedGenerationsAndExistingPanes() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     constexpr std::uint64_t destination_id = 2;
@@ -989,7 +989,7 @@ namespace {
   void uncachedHistoryReplay() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
     using Storage = HistoryPageStorage<decltype(memory)>;
     using Browser = HistoryBrowser<decltype(memory)>;
     constexpr auto command_bytes = Browser::maximum_command_bytes;
@@ -1047,7 +1047,7 @@ namespace {
   void historyQueryBounds() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     using Client = decltype(client);
@@ -1063,7 +1063,7 @@ namespace {
   void bracketedHistoryReplay() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     const std::array cells{Cell{.text = byteView(" ")}};
@@ -1101,7 +1101,7 @@ namespace {
   void routedHostCommands() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     ClientCommand command{.request_id = 1, .route = {.id = 2, .generation = 3}, .action = ClientAction::client_open_history, .text = "borrowed request"};
@@ -1146,7 +1146,7 @@ namespace {
   void canonicalRemoval() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     client.createTab();
@@ -1169,7 +1169,7 @@ namespace {
   void linkContextRevisions() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     const auto original = client.viewVersion();

@@ -72,8 +72,8 @@ namespace telar::gui::qt {
   };
 
   struct TerminalPresentation {
-    const Screen<ApplicationAllocator>& screen;
-    const GraphicsStore<ApplicationAllocator>& graphics;
+    const Screen<Memory>& screen;
+    const GraphicsStore<Memory>& graphics;
     const Configuration& configuration;
     const TerminalFont& font;
     const QString& preedit;
@@ -117,7 +117,7 @@ namespace telar::gui::qt {
     std::span<const MatchMark> matches;
     // The drawn rows as a screen of their own, which a hovered link's cells are counted on while
     // the view draws its own rows.
-    const Screen<ApplicationAllocator>* link_screen = nullptr;
+    const Screen<Memory>* link_screen = nullptr;
 
     [[nodiscard]] std::size_t rowCount() const noexcept {
       return rows.empty() ? screen.rows() : rows.size();

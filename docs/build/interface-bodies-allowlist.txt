@@ -7,10 +7,6 @@
 telar.base.editors
 telar.base.history
 telar.client
-telar.gui.application.host_effects
-telar.gui.application.session
-telar.gui.application.sound_playback
-telar.gui.application.workspace_replica
 telar.gui.fonts.face
 telar.gui.fonts.font_requests
 telar.gui.fonts.row_text_layout

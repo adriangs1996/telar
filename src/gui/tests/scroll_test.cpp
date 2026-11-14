@@ -338,7 +338,7 @@ namespace {
     constexpr std::uint16_t kept = 3;
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     const FrameBody frame{.pane_id = 1, .frame_id = 1, .scroll = {.total_rows = total, .offset = total - 1}};
@@ -361,7 +361,7 @@ namespace {
     require(client.takeDroppedRows(1) == dropped && client.takeDroppedRows(1) == 0, "the view learns how many rows the scrollback dropped, once");
 
     Transport legacy_transport;
-    Session legacy{memory, legacy_transport};
+    TestSession legacy{memory, legacy_transport};
 
     legacy.connected(1, false);
     require(!legacy.readsRows(), "a runtime without scrollback rows is not asked for them");
@@ -377,7 +377,7 @@ namespace {
     constexpr std::uint32_t dropped = 2;
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     const FrameBody frame{.pane_id = 1, .frame_id = 1, .scroll = {.total_rows = total, .offset = total - 1}};

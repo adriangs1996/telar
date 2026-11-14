@@ -66,16 +66,7 @@ export {
 
     template <Allocator Memory>
     struct Pane {
-      inline explicit Pane(Memory& memory, std::uint64_t identity, GraphicsBudget& budget)
-          : id(identity),
-            screen(memory),
-            rows(memory),
-            graphics(memory, budget),
-            title(AllocatorRef<char, Memory>{memory}),
-            cwd(AllocatorRef<char, Memory>{memory}),
-            foreground(AllocatorRef<char, Memory>{memory}),
-            document(memory),
-            document_parts(AllocatorRef<Byte, Memory>{memory}) {}
+      explicit Pane(Memory& memory, std::uint64_t identity, GraphicsBudget& budget);
 
       std::uint64_t id;
       std::uint64_t generation = 0;
@@ -120,10 +111,7 @@ export {
       // `generation` numbers them, drawn in their place once whole and valid. The view measures it
       // in `view_rows` rows, none until it did.
       struct InlineDocument {
-        InlineDocument(Memory& memory, std::uint64_t identity)
-            : id(identity),
-              document(memory),
-              parts(AllocatorRef<Byte, Memory>{memory}) {}
+        InlineDocument(Memory& memory, std::uint64_t identity);
 
         std::uint64_t id;
         std::uint64_t generation = 0;
@@ -168,21 +156,10 @@ export {
     // The application a tab shows: the pane's foreground, else the one the tab remembers for its
     // foreground pane. The name views either the tab or the pane, region `a`.
     template <Allocator Memory>
-    [[nodiscard]] inline tbc::view<std::string_view, tbc::lt::a> tabApplicationName(tbc::view<const Tab<Memory>&, tbc::lt::a> tab, tbc::view<std::type_identity_t<const Pane<Memory>*>, tbc::lt::a> pane) noexcept {
-      constexpr std::string_view fallback = "shell";
+    [[nodiscard]] tbc::view<std::string_view, tbc::lt::a> tabApplicationName(tbc::view<const Tab<Memory>&, tbc::lt::a> tab, tbc::view<std::type_identity_t<const Pane<Memory>*>, tbc::lt::a> pane) noexcept;
 
-      if (pane != nullptr) {
-        if (!pane->foreground.empty()) {
-          return pane->foreground;
-        }
-
-        if (pane->id != tab.foreground_pane) {
-          return fallback;
-        }
-      }
-
-      return tab.foreground.empty() ? fallback : std::string_view{tab.foreground};
-    }
+    extern template struct Pane<Memory>;
+    extern template std::string_view tabApplicationName<Memory>(const Tab<Memory>& tab, const Pane<Memory>* pane) noexcept;
 
   }
 }

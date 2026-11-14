@@ -94,7 +94,7 @@ namespace {
   void aWorkspaceReturnRestoresItsTreeAfterCanonicalMembership() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     deliver(client, WorkspaceList{.revision = 1, .entries = entries});
@@ -125,7 +125,7 @@ namespace {
   void aMissingBookmarkRetriesItsWorkspaceOnlyOnce() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     deliver(client, WorkspaceList{.revision = 1, .entries = entries});
@@ -148,7 +148,7 @@ namespace {
   void canonicalArrivalUsesTheSavedTreeOfItsActualTab() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     client.connected(1);
     const TabLocation remembered{.workspace = first_workspace, .tab_id = 1};
@@ -180,7 +180,7 @@ namespace {
   void aNewConnectionForgetsPreviousNavigationAndSavedTrees() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     deliver(client, WorkspaceList{.revision = 1, .entries = entries});
@@ -222,7 +222,7 @@ namespace {
   void lateMetadataCannotActivateTheDepartedWorkspace() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     deliver(client, WorkspaceList{.revision = 1, .entries = entries});
@@ -239,7 +239,7 @@ namespace {
   void linkedCheckoutsDoNotConsumeProjectPositions() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     deliver(client, WorkspaceList{.revision = 1, .entries = entries, .worktrees = worktrees});
@@ -363,7 +363,7 @@ namespace {
   void unknownSelectionDoesNotContactTheRuntime() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     deliver(client, WorkspaceList{.revision = 1, .entries = entries});
@@ -376,7 +376,7 @@ namespace {
   void selectingTheActiveWorkspaceIsAnIdleNoOp() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     deliver(client, WorkspaceList{.revision = 1, .entries = entries});
@@ -389,7 +389,7 @@ namespace {
   void uncachedSelectionOpensTheRuntimeWorkspaceAfterDetaching() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     deliver(client, WorkspaceList{.revision = 1, .entries = entries});
@@ -417,7 +417,7 @@ namespace {
   void aPendingOperationFencesWorkspaceSelection() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     deliver(client, WorkspaceList{.revision = 1, .entries = entries});
@@ -431,7 +431,7 @@ namespace {
   void disconnectedSelectionDoesNotUseRetainedMetadata() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     deliver(client, WorkspaceList{.revision = 1, .entries = entries});
@@ -445,7 +445,7 @@ namespace {
   void worktreeActionsUseTheSharedRuntimeHandoff() {
     SystemAllocator memory;
     Transport transport;
-    Session client{memory, transport};
+    TestSession client{memory, transport};
 
     openFirstPane(client, transport);
     deliver(client, WorkspaceList{.revision = 1, .entries = entries, .worktrees = worktrees});

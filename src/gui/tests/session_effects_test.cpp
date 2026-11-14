@@ -73,10 +73,13 @@ namespace {
     bool throw_notification = false;
   };
 
-  struct Effects {
+  struct Effects final : HostEffects {
+    explicit Effects(Recorder& recorded)
+        : recorder(recorded) {}
+
     Recorder& recorder;
 
-    bool postNotification(const NotificationPayload& payload) {
+    bool postNotification(const NotificationPayload& payload) override {
       if (recorder.throw_notification) {
         throw std::runtime_error{"Injected notification admission failure"};
       }
@@ -86,7 +89,7 @@ namespace {
       return true;
     }
 
-    bool playSound(AgentSound sound) {
+    bool playSound(AgentSound sound) override {
       if (!recorder.accept_sound) {
         return false;
       }
@@ -97,8 +100,20 @@ namespace {
     }
   };
 
-  using Client = Session<SystemAllocator, Transport, platform::AwakeClock, Effects>;
-  static_assert(HostEffects<Effects> && std::is_empty_v<DiscardHostEffects>);
+  template <typename Host>
+  struct HostedEffects {
+    Host effects;
+  };
+
+  // A session that keeps its effects.
+  template <typename Host>
+  struct EffectsClient : private HostedEffects<Host>, TestSession<SystemAllocator> {
+    EffectsClient(SystemAllocator& memory, Transport& transport, Host effects, MonotonicNow now = &platform::AwakeClock::nowNanoseconds)
+        : HostedEffects<Host>{effects},
+          TestSession(memory, transport, this->effects, now) {}
+  };
+
+  using Client = EffectsClient<Effects>;
 
   struct InputClock {
     static inline std::uint64_t now_ns = FramePacer::nanoseconds_per_second;
@@ -131,17 +146,19 @@ namespace {
         : transport(output),
           observations(recorded) {}
 
-    void notePaneInput(FramePacer::Pane pane, std::uint64_t now_ns) noexcept {
+    void notePaneInput(FramePacer::Pane pane) noexcept override {
       if (observations.count == observations.entries.size()) {
         std::terminate();
       }
 
-      observations.entries[observations.count++] = {.pane = pane, .at_ns = now_ns, .queued_inputs = transport.count(ClientTag::pane_input)};
+      observations.entries[observations.count++] = {.pane = pane, .at_ns = InputClock::nowNanoseconds(), .queued_inputs = transport.count(ClientTag::pane_input)};
     }
   };
 
-  using InputClient = Session<SystemAllocator, Transport, InputClock, InputEffects>;
-  static_assert(PaneInputObserver<InputEffects> && !PaneInputObserver<DiscardHostEffects>);
+  struct InputClient : EffectsClient<InputEffects> {
+    InputClient(SystemAllocator& memory, Transport& transport, InputEffects effects)
+        : EffectsClient(memory, transport, effects, &InputClock::nowNanoseconds) {}
+  };
 
   void acceptedInputObservesTheQueuedPaneIdentity() {
     SystemAllocator memory;
@@ -226,13 +243,13 @@ namespace {
   void absentObserverDoesNotReadTheClock() {
     SystemAllocator memory;
     Transport transport;
-    Session<SystemAllocator, Transport, InputClock> client{memory, transport};
+    TestSession client{memory, transport, &InputClock::nowNanoseconds};
 
     openFirstPane(client, transport);
     const auto previous_reads = InputClock::reads;
 
     client.input(1, "without observer");
-    require(InputClock::reads == previous_reads, "an absent input observer must compile out clock sampling");
+    require(InputClock::reads == previous_reads, "an absent input observer must not read the clock");
   }
 
   void systemDeliveryKeepsEveryPublicationAndDoesNotReplaceTheCenter() {

@@ -35,6 +35,22 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${TELAR_ROOT}/li
 include(cmake/fonts.cmake)
 
 add_library(gui-core STATIC terminal/glyphs/curve_cache/box_curve.cpp platform/awake_clock/awake_clock.cpp platform/wall_clock/wall_clock.cpp)
+# The session reads shared images, so their source links with it.
+target_sources(gui-core PRIVATE
+  application/host_effects/host_effects.cpp
+  application/session/agents.cpp
+  application/session/blocks.cpp
+  application/session/commands.cpp
+  application/session/copy_mode.cpp
+  application/session/graphics.cpp
+  application/session/history.cpp
+  application/session/layout.cpp
+  application/session/prompt.cpp
+  application/session/session.cpp
+  application/session/terminal.cpp
+  application/sound_playback/sound_playback.cpp
+  application/workspace_replica/workspace_replica.cpp
+  platform/shared_image_source/shared_image_source.cpp)
 telar_modules(gui-core)
 # The implementation units of the input, prompt, components, config, platform, machines,
 # attachments, history, text and remaining domain interfaces.
@@ -95,7 +111,7 @@ add_library(gui-clock INTERFACE)
 target_link_libraries(gui-clock INTERFACE gui-core)
 
 add_library(gui-posix STATIC platform/clipboard_image_source.cpp platform/clipboard_image_file.c platform/peer_identity/peer_identity.cpp platform/window_lease/window_lease.cpp platform/profile_file/profile_file.cpp  platform/stdio_socket/stdio_socket.cpp platform/managed_directory/managed_directory.cpp platform/process_group/process_group.cpp platform/process_group.c)
-target_sources(gui-posix PRIVATE platform/shared_image_source/shared_image_source.cpp platform/clipboard_image_pipe/clipboard_image_pipe.cpp)
+target_sources(gui-posix PRIVATE platform/clipboard_image_pipe/clipboard_image_pipe.cpp)
 target_link_libraries(gui-posix PUBLIC gui-core Threads::Threads)
 add_executable(telar-gui-command platform/surface_command_main.c)
 target_compile_definitions(telar-gui-command PRIVATE "$<$<PLATFORM_ID:Linux>:_GNU_SOURCE>")
