@@ -61,9 +61,12 @@ def main():
     allowed = json.loads((ROOT / 'docs/build/textual-includes.json').read_text())
     includes = check_includes(owned, allowed, inventory['macro_headers'], inventory['header_owners'])
     owned = check_header_owners(inventory['header_owners'], owned_units(owned))
+    reexports = check_reexports(inventory['interfaces'],
+                                json.loads((ROOT / 'docs/build/reexports.json').read_text()))
     print(f'{len(graph)} module interfaces, acyclic imports, {upward} upward imports left, '
           f'{len(headers)} justified textual boundaries, {includes} textual includes left, '
-          f'{owned} headers reached only through their owner module')
+          f'{owned} headers reached only through their owner module, '
+          f'{reexports} re-exports without a type left')
 
 
 IMPORT_RE = re.compile(r'^(?:export )?import ([\w.:]+);', re.M)
@@ -352,6 +355,218 @@ def check_includes(files, allowed, macro_headers, owners):
         raise RuntimeError('Includes outside the exceptions of rule 5:\n  ' + '\n  '.join(errors))
 
     return sum(len(spellings) for spellings in sites.values())
+
+
+TOKEN_RE = re.compile(r'''
+    //[^\n]*|/\*.*?\*/
+  | ^[ \t]*\#(?:\\\n|[^\n])*
+  | (?P<literal>(?:u8|[uUL])?R"(?P<delimiter>[^(\s]*)\(.*?\)(?P=delimiter)"
+      | (?:u8|[uUL])?"(?:\\.|[^"\\\n])*"|(?:u8|[uUL])?'(?:\\.|[^'\\\n])*')
+  | (?P<number>\d[\w.']*)
+  | (?P<token>[A-Za-z_]\w*|::|->|\S)
+''', re.S | re.M | re.X)
+IDENTIFIER_RE = re.compile(r'[A-Za-z_]\w*')
+TYPE_KEYWORDS = {'class', 'struct', 'union', 'enum', 'concept'}
+# What may follow the name a type declaration introduces; `<` would be a specialization.
+DECLARED_FOLLOWERS = {'{', ';', ':', 'final', '='}
+FUNCTION_QUALIFIERS = {'const', 'noexcept', 'override', 'final', 'mutable', 'volatile', '&'}
+TRAILING_RETURN_RE = re.compile(r'[A-Za-z_]\w*|::|<|>|,|\*|&|0')
+
+
+def tokens(text):
+    """The code tokens of a unit: comments and directives dropped, literals reduced to placeholders."""
+    found = []
+    for match in TOKEN_RE.finditer(text):
+        if match['literal']:
+            found.append('""')
+        elif match['number']:
+            found.append('0')
+        elif match['token']:
+            found.append(match['token'])
+
+    return found
+
+
+def skip_balanced(found, index, opening, closing):
+    """The index right after the bracket that closes the one at `index`."""
+    depth = 0
+    while index < len(found):
+        depth += (found[index] == opening) - (found[index] == closing)
+        index += 1
+        if depth == 0:
+            break
+
+    return index
+
+
+def function_body(found, index, scopes):
+    """Whether the brace at `index` opens a function body: it follows a parameter list, a
+    trailing return type or, inside a class, a member initializer list."""
+    before = index - 1
+    while found[before] in FUNCTION_QUALIFIERS:
+        before -= 1
+    if found[before] == ')':
+        return True
+    if found[before] == '}':
+        return bool(scopes) and scopes[-1][0] != 'namespace'
+
+    while TRAILING_RETURN_RE.fullmatch(found[before]) and found[before] not in TYPE_KEYWORDS:
+        before -= 1
+
+    return found[before] == '->'
+
+
+def declared_type(found, index):
+    """The name a type declaration starting at the keyword at `index` introduces, if any."""
+    if found[index - 1] in ('<', ',', 'friend', 'using', 'typename'):
+        return None
+
+    index += 1
+    while found[index] in ('class', 'struct', 'alignas', '['):
+        if found[index] == '[':
+            index = skip_balanced(found, index, '[', ']')
+        elif found[index] == 'alignas':
+            index = skip_balanced(found, index + 1, '(', ')')
+        else:
+            index += 1
+    name = found[index]
+
+    return name if IDENTIFIER_RE.fullmatch(name) and found[index + 1] in DECLARED_FOLLOWERS else None
+
+
+class Interface:
+    """What rule 4 reads from the interface units of a module, outside function bodies, which
+    importers never need to name."""
+
+    def __init__(self):
+        self.reexports = set()
+        # Each type an exported namespace declares, or re-declares through `using`, with the
+        # segments of the namespaces around it.
+        self.exported = {}
+        # Every type the module declares, exported or not, at any depth.
+        self.declared = set()
+        # The names its exported declarations mention: alone, or as (qualifier, name).
+        self.unqualified = set()
+        self.qualified = set()
+
+    def names_type_of(self, target):
+        """Whether these exported declarations name a type `target` exports. An unqualified name
+        the module declares itself is its own type, and a qualified one has to be qualified by
+        a namespace the type lives in."""
+        return (any(name in target.exported for name in self.unqualified - self.declared)
+                or any(qualifier in target.exported.get(name, ()) for qualifier, name in self.qualified))
+
+    def read(self, text):
+        found = tokens(text) + [';']
+        start = next(index for index, token in enumerate(found)
+                     if token == 'module' and found[index + 1] not in (';', ':'))
+        scopes = []
+        pending_export, pending_namespace = False, None
+        index = found.index(';', start) + 1
+
+        while index < len(found):
+            token = found[index]
+            if token == 'module' and found[index + 1:index + 3] == [':', 'private']:
+                break
+            if token == 'import' and found[index - 1] in (';', '{', '}', 'export'):
+                end = found.index(';', index)
+                if found[index - 1] == 'export':
+                    self.reexports.add(''.join(found[index + 1:end]))
+                index = end + 1
+                pending_export = False
+                continue
+
+            exporting = pending_export or any(export for _, export, _ in scopes)
+            if token == 'export':
+                pending_export = True
+            elif token == 'namespace':
+                end = index + 1
+                while IDENTIFIER_RE.fullmatch(found[end]) or found[end] == '::':
+                    end += 1
+                pending_namespace = [name for name in found[index + 1:end] if name != '::']
+                index = end
+                continue
+            elif token == '{':
+                if pending_namespace is not None or found[index - 1] in ('export', '""'):
+                    scopes.append(('namespace', pending_export, pending_namespace or []))
+                elif function_body(found, index, scopes):
+                    index = skip_balanced(found, index, '{', '}')
+                    pending_export = False
+                    continue
+                else:
+                    scopes.append(('class', pending_export, []))
+                pending_export, pending_namespace = False, None
+            elif token == '}':
+                if scopes:
+                    scopes.pop()
+            elif token == ';':
+                pending_export, pending_namespace = False, None
+            elif IDENTIFIER_RE.fullmatch(token):
+                self.declare(found, index, scopes, exporting)
+                if exporting:
+                    self.mention(found, index)
+            index += 1
+
+    def mention(self, found, index):
+        if found[index - 1] == '::' and IDENTIFIER_RE.fullmatch(found[index - 2]):
+            self.qualified.add((found[index - 2], found[index]))
+        else:
+            self.unqualified.add(found[index])
+
+    def declare(self, found, index, scopes, exporting):
+        token = found[index]
+        name = None
+        if token in TYPE_KEYWORDS:
+            name = declared_type(found, index)
+        elif token == 'using' and found[index + 1] not in ('namespace', 'enum'):
+            end = found.index(';', index)
+            if found[index + 2] == '=':
+                name = found[index + 1]
+            # A using-declaration re-declares a type, or a function this rule leaves aside.
+            elif found[end - 1][0].isupper():
+                name = found[end - 1]
+        elif token == 'typedef':
+            name = found[found.index(';', index) - 1]
+        if not name:
+            return
+
+        self.declared.add(name)
+        if exporting and all(kind == 'namespace' for kind, _, _ in scopes):
+            segments = self.exported.setdefault(name, set())
+            segments.update(segment for _, _, names in scopes for segment in names)
+
+
+def check_reexports(interfaces, allowed):
+    """Rule 4: an interface re-exports a module only when its exported declarations name a type
+    of that module, outside function bodies: importers need that type to use the interface, and
+    anything else they import themselves. docs/build/reexports.json lists, by module, the
+    re-exports that break the rule today; the change that removes one removes its entry.
+
+    The rule reads tokens, not the AST: a type counts once its name appears where it can mean
+    that type (see Interface.names_type_of)."""
+    modules = {}
+    for source, name in interfaces.items():
+        modules.setdefault(name.split(':')[0], Interface()).read((ROOT / source).read_text())
+
+    sites = {}
+    for name, interface in sorted(modules.items()):
+        for target in sorted(interface.reexports):
+            if target.startswith(':') or target.split(':')[0] == name or target == 'std':
+                continue
+            if not interface.names_type_of(modules[target]):
+                sites.setdefault(name, set()).add(target)
+
+    errors = []
+    for name in sorted(sites.keys() | allowed.keys()):
+        found, listed = sites.get(name, set()), set(allowed.get(name, ()))
+        errors += [f'{name} re-exports {target}, but its exported declarations name no type of it; '
+                   'import it instead' for target in sorted(found - listed)]
+        errors += [f'{name} no longer re-exports {target} without naming a type of it; '
+                   'remove it from reexports.json' for target in sorted(listed - found)]
+    if errors:
+        raise RuntimeError('Re-exports against rule 4:\n  ' + '\n  '.join(errors))
+
+    return sum(len(targets) for targets in sites.values())
 
 
 if __name__ == '__main__':
