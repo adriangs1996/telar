@@ -1,6 +1,5 @@
 module;
 #include "cell_layout.hpp"
-#include "tbc/view.hpp"
 #include <ghostty/vt.h>
 
 export module telar.runtime.terminal.control.checksum;

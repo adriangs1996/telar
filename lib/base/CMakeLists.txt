@@ -10,11 +10,11 @@ target_compile_features(telar-base PUBLIC cxx_std_23)
 target_include_directories(telar-base PUBLIC
   "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
   "$<INSTALL_INTERFACE:include>")
-# The header-only lifetime annotations its interfaces declare; a parent project may provide them.
+# The lifetime annotations its interfaces declare, and their telar.tbc module; a parent project may provide them.
 if(NOT TARGET tbc::tbc)
   add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../tbc" "${CMAKE_CURRENT_BINARY_DIR}/tbc")
 endif()
-target_link_libraries(telar-base PUBLIC tbc::tbc)
+target_link_libraries(telar-base PUBLIC telar::tbc)
 
 telar_editor_flags(telar-base)
 
@@ -71,10 +71,12 @@ endif()
 include(CMakePackageConfigHelpers)
 set(telar_base_package_directory "lib/cmake/telar-base")
 set_target_properties(telar-base PROPERTIES EXPORT_NAME base)
+# The package carries the telar.tbc module its interfaces import, under the same telar::tbc name.
+set_target_properties(telar-tbc PROPERTIES EXPORT_NAME tbc)
 configure_package_config_file(cmake/telar-base-config.cmake.in
   "${CMAKE_CURRENT_BINARY_DIR}/telar-base-config.cmake"
   INSTALL_DESTINATION "${telar_base_package_directory}")
-install(TARGETS telar-base EXPORT telar-base-targets
+install(TARGETS telar-base telar-tbc EXPORT telar-base-targets
   ARCHIVE DESTINATION lib
   FILE_SET CXX_MODULES DESTINATION share/telar-base/modules)
 install(DIRECTORY include/ DESTINATION include FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h")

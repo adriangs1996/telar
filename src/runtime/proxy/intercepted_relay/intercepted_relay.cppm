@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <new>
@@ -17,6 +16,7 @@ module;
 export module telar.runtime.proxy.intercepted_relay;
 
 import std;
+import telar.tbc;
 
 export import telar.runtime.platform.stream_read_buffer;
 export import telar.runtime.http1.head;

@@ -1,6 +1,5 @@
 module;
 #include "tbc/hot_path.hpp"
-#include "tbc/view.hpp"
 
 #include <openssl/crypto.h>
 #include <openssl/ssl.h>
@@ -14,6 +13,7 @@ module;
 export module telar.tls;
 
 import std;
+import telar.tbc;
 
 export import telar.base.memory.allocators;
 export import telar.base.memory.containers;

@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <cstdio>
 #include <cstdlib>
@@ -23,6 +22,7 @@ module;
 export module telar.runtime.paths.query_task;
 
 import std;
+import telar.tbc;
 
 export import telar.runtime.transport.connection;
 import telar.base.diagnostics;

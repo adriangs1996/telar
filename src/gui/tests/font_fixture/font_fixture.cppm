@@ -1,6 +1,5 @@
 module;
 #include "platform/font.h"
-#include "tbc/view.hpp"
 #include <cerrno>
 #include <cmath>
 #include <cstddef>
@@ -14,6 +13,7 @@ module;
 export module telar.gui.tests.font_fixture;
 
 import std;
+import telar.tbc;
 export import telar.gui.core.primitives;
 export import telar.base.memory.allocators;
 export import telar.gui.fonts.face;

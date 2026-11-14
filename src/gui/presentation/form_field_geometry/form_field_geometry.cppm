@@ -6,12 +6,12 @@ module;
 #include <cstddef>
 #include <cstdint>
 
-#include "tbc/view.hpp"
 #include <ghostty/vt/unicode.h>
 
 export module telar.gui.presentation.form_field_geometry;
 
 import std;
+import telar.tbc;
 
 export import telar.gui.core.metrics;
 export import telar.gui.terminal.font_grid;

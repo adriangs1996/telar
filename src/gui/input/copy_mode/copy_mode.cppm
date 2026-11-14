@@ -1,9 +1,7 @@
-module;
-#include "tbc/view.hpp"
-
 export module telar.gui.input.copy_mode;
 
 import std;
+import telar.tbc;
 
 export import telar.gui.terminal.font_grid;
 export import telar.gui.input.key_encoder;

@@ -35,7 +35,6 @@ module;
 #if (defined(__linux__) && !defined(__GLIBC__))
 #include <unistd.h>
 #endif
-#include "tbc/view.hpp"
 #include <cstdlib>
 #include <unistd.h>
 
@@ -43,6 +42,7 @@ export module telar.runtime.tls.interception;
 
 import std;
 import telar.sys.posix;
+import telar.tbc;
 
 export import telar.tls;
 

@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include <cstdlib>
 #include <new>
 
@@ -72,6 +71,7 @@ export module telar.runtime.redirect.ingress;
 
 import std;
 import telar.sys.posix;
+import telar.tbc;
 
 export import telar.runtime.platform.name_resolutions;
 

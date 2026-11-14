@@ -1,6 +1,4 @@
 module;
-#include "tbc/view.hpp"
-
 #include "telar_platform/process_environment.h"
 
 #include <cerrno>
@@ -26,6 +24,7 @@ module telar.platform.process;
 
 import std;
 import telar.sys.posix;
+import telar.tbc;
 
 namespace telar::runtime {
 

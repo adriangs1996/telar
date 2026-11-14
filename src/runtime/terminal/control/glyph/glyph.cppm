@@ -1,9 +1,7 @@
-module;
-#include "tbc/view.hpp"
-
 export module telar.runtime.terminal.control.glyph;
 
 import std;
+import telar.tbc;
 import telar.base.memory.allocators;
 import telar.base.text;
 import telar.runtime.terminal.control;

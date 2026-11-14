@@ -1,6 +1,5 @@
 module;
 
-#include "tbc/view.hpp"
 #include <cerrno>
 #include <climits>
 #include <cstdint>
@@ -16,6 +15,7 @@ module;
 module telar.gui.platform.window_lease;
 
 import std;
+import telar.tbc;
 
 import telar.platform.fs;
 import telar.sys.posix;

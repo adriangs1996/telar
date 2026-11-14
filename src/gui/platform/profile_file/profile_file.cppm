@@ -1,11 +1,11 @@
 module;
-#include "tbc/view.hpp"
 #include <cerrno>
 #include <fcntl.h>
 
 export module telar.gui.platform.profile_file;
 
 import std;
+import telar.tbc;
 
 import telar.gui.core.primitives;
 import telar.gui.platform.path_limits;

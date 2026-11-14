@@ -14,7 +14,7 @@ module;
 
 #include <zstd.h>
 
-#include "tbc/view.hpp"
+#include "tbc/annotations.hpp"
 #include <cassert>
 
 export module telar.runtime.exchange_capture.producer;

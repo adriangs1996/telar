@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include "telar_client/codecs/telar_annotations.hpp"
 #include <cstdio>
 #include <cstdlib>
@@ -22,6 +21,7 @@ module;
 export module telar.client;
 
 import std;
+import telar.tbc;
 
 export import telar.base.text.utf8;
 import telar.base.diagnostics;

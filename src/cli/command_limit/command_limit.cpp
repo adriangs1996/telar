@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
@@ -15,6 +14,7 @@ module;
 module telar.cli.command_limit;
 
 import telar.sys.posix;
+import telar.tbc;
 import telar.wire.vocabulary;
 
 namespace telar::runtime::cli {

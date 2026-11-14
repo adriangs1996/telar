@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include <stdlib.h>
 
 #include <cerrno>
@@ -51,6 +50,7 @@ module telar.cli.worktree;
 
 import telar.cli.control_session;
 import telar.sys.posix;
+import telar.tbc;
 
 namespace telar::runtime::cli::repository {
 

@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <cstddef>
 #include <cstdio>
@@ -18,6 +17,7 @@ module;
 export module telar.runtime.history.store;
 
 import std;
+import telar.tbc;
 
 export import telar.runtime.platform.background_executor;
 

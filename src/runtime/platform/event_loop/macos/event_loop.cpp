@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include <cassert>
 #include <cstddef>
 #include <cstdlib>
@@ -42,6 +41,7 @@ module telar.runtime.platform.event_loop;
 
 import std;
 import telar.sys.posix;
+import telar.tbc;
 
 import telar.platform.error;
 import telar.platform.primitives;

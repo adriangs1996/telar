@@ -6,12 +6,12 @@ module;
 #include <cstdint>
 #include <cstring>
 
-#include "tbc/view.hpp"
 #include <ghostty/vt/unicode.h>
 
 export module telar.gui.paths.label;
 
 import std;
+import telar.tbc;
 
 export import telar.gui.text.json_unsigned_integer;
 

@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include <ghostty/vt.h>
 
 #include <cstddef>
@@ -10,6 +9,7 @@ module;
 export module telar.runtime.terminal.graphics_storage;
 
 import std;
+import telar.tbc;
 
 export import telar.runtime.diagnostics.operation;
 import telar.base.memory.allocators;
@@ -144,7 +144,7 @@ export {
 
         checkGhostty(ghostty_kitty_graphics_get(storage, GHOSTTY_KITTY_GRAPHICS_DATA_IMAGE_ITERATOR, &iterator));
         std::optional<std::uint32_t> oldest;
-        std::uint64_t oldest_generation = UINT64_MAX;
+        std::uint64_t oldest_generation = std::numeric_limits<std::uint64_t>::max();
 
         while (const auto image = ghostty_kitty_graphics_image_next(iterator)) {
           if (placed) {

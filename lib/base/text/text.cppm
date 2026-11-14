@@ -1,6 +1,5 @@
 module;
 #include "tbc/hot_path.hpp"
-#include "tbc/view.hpp"
 #include "telar_base/program_identity.hpp"
 #include "telar_base/text/base64.hpp"
 #include "telar_base/text/decimal.hpp"
@@ -10,6 +9,7 @@ module;
 export module telar.base.text;
 
 import std;
+import telar.tbc;
 import telar.base.diagnostics;
 import telar.base.memory.allocators;
 import telar.base.text.json;

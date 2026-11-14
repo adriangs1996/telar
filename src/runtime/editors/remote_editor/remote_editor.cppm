@@ -4,7 +4,6 @@ module;
 #include <cstdlib>
 #include <new>
 
-#include "tbc/view.hpp"
 #include <cassert>
 #include <cerrno>
 #include <cstddef>
@@ -22,6 +21,7 @@ module;
 export module telar.runtime.editors.remote_editor;
 
 import std;
+import telar.tbc;
 
 export import telar.runtime.platform.background_executor;
 export import telar.runtime.transport.connection;

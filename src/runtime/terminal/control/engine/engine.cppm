@@ -1,11 +1,11 @@
 module;
-#include "tbc/view.hpp"
 #include <cassert>
 #include <ghostty/vt.h>
 
 export module telar.runtime.terminal.control.engine;
 
 import std;
+import telar.tbc;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.base.text;

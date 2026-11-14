@@ -1,9 +1,7 @@
-module;
-#include "tbc/view.hpp"
-
 export module telar.gui.layout.snapshots;
 
 import std;
+import telar.tbc;
 
 export import telar.gui.layout.geometry;
 import telar.base.memory.allocators;

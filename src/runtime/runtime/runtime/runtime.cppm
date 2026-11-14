@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include "telar_base/diagnostics/config.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <cerrno>
@@ -14,6 +13,7 @@ export module telar.runtime.runtime.runtime;
 
 import std;
 import telar.sys.posix;
+import telar.tbc;
 
 export import telar.runtime.agents.screen_inference;
 export import telar.runtime.agents.snapshot;
@@ -137,7 +137,7 @@ export {
               .status = agent->status,
               .blocked_reason = agent->blocked_reason,
               .last_event = agent->event.view(),
-              .status_age_s = static_cast<std::uint32_t>(std::clamp<std::int64_t>((now - agent->changed_at) / 1000, 0, UINT32_MAX)),
+              .status_age_s = static_cast<std::uint32_t>(std::clamp<std::int64_t>((now - agent->changed_at) / 1000, 0, std::numeric_limits<std::uint32_t>::max())),
               .source = agent->source,
               .authority = agent->authority,
               .confidence = agent->confidence,

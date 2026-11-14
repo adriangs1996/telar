@@ -8,13 +8,13 @@ module;
 
 #include <cstring>
 
-#include "tbc/view.hpp"
 #include <cmath>
 #include <ghostty/vt/unicode.h>
 
 export module telar.gui.text.json_unsigned_integer;
 
 import std;
+import telar.tbc;
 
 export import telar.machines;
 

@@ -1,7 +1,6 @@
 module;
 #include <cstdio>
 
-#include "tbc/view.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -9,6 +8,7 @@ module;
 export module telar.gui.machines.picker;
 
 import std;
+import telar.tbc;
 
 export import telar.gui.machines.discovery;
 

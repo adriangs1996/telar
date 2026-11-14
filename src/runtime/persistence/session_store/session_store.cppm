@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <ghostty/vt.h>
 #include <stdlib.h>
@@ -57,6 +56,7 @@ export module telar.runtime.persistence.session_store;
 
 import std;
 import telar.sys.posix;
+import telar.tbc;
 
 export import telar.platform.process;
 
@@ -769,7 +769,7 @@ export {
       }
 
       inline void text16(std::string_view value) {
-        if (value.size() > UINT16_MAX) {
+        if (value.size() > std::numeric_limits<std::uint16_t>::max()) {
           throw EncodingError{"Checkpoint text exceeds its length field"};
         }
 

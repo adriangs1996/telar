@@ -1,10 +1,10 @@
 module;
 #include "tbc/hot_path.hpp"
-#include "tbc/view.hpp"
 
 export module telar.cli.control_session;
 
 import std;
+import telar.tbc;
 
 export import telar.client;
 

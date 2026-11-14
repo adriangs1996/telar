@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <ghostty/vt.h>
 #include <limits.h>
@@ -24,6 +23,7 @@ module;
 export module telar.runtime.graphics.synchronizer;
 
 import std;
+import telar.tbc;
 
 export import telar.runtime.graphics.prepared_images;
 

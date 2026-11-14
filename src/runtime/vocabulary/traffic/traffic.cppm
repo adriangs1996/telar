@@ -1,6 +1,4 @@
 module;
-#include "tbc/view.hpp"
-
 #include <cerrno>
 #include <cstdint>
 #include <limits.h>
@@ -13,6 +11,7 @@ export module telar.runtime.vocabulary.traffic;
 
 import std;
 import telar.sys.posix;
+import telar.tbc;
 
 export import telar.plugins;
 export import telar.runtime.vocabulary.exchange;

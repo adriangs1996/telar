@@ -1,11 +1,7 @@
-module;
-#include "tbc/view.hpp"
-
-#include <cstdint>
-
 export module telar.runtime.vocabulary.frames;
 
 import std;
+import telar.tbc;
 
 import telar.wire.vocabulary;
 
@@ -128,7 +124,7 @@ export {
       }
 
       inline void bytes(std::span<const Byte> value) {
-        if (value.size() > UINT32_MAX) {
+        if (value.size() > std::numeric_limits<std::uint32_t>::max()) {
           throw EncodingError{"Tap field exceeds its frame buffer"};
         }
 
@@ -188,7 +184,7 @@ export {
       }
 
       inline void bytes(std::span<const Byte> value) {
-        if (value.size() > UINT32_MAX || remaining_.size() < sizeof(std::uint32_t) || value.size() > remaining_.size() - sizeof(std::uint32_t)) {
+        if (value.size() > std::numeric_limits<std::uint32_t>::max() || remaining_.size() < sizeof(std::uint32_t) || value.size() > remaining_.size() - sizeof(std::uint32_t)) {
           throw EncodingError{"Tap field exceeds its frame buffer"};
         }
 

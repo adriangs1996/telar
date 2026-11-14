@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <new>
 #include <stdlib.h>
@@ -45,6 +44,7 @@ module telar.tls;
 
 import std;
 import telar.sys.posix;
+import telar.tbc;
 
 namespace telar::runtime {
 

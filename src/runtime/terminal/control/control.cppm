@@ -1,6 +1,4 @@
 module;
-#include "tbc/view.hpp"
-
 #include "terminal/control/ascii_ordinary.hpp"
 #include "terminal/control/capabilities.hpp"
 #include "terminal/control/classification.hpp"

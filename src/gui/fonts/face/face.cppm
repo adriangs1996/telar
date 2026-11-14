@@ -8,7 +8,6 @@ module;
 #include <hb.h>
 
 #include "platform/font.h"
-#include "tbc/view.hpp"
 #include <cstring>
 
 #include <cmath>
@@ -16,6 +15,7 @@ module;
 export module telar.gui.fonts.face;
 
 import std;
+import telar.tbc;
 
 export import telar.gui.terminal.font_grid;
 import telar.base.diagnostics;

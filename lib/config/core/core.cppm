@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include <cinttypes>
 #include <cstdio>
 
@@ -8,6 +7,7 @@ module;
 export module telar.config.core;
 
 import std;
+import telar.tbc;
 export import telar.lua;
 export import telar.platform.paths;
 import telar.base.diagnostics;

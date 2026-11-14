@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <ghostty/vt.h>
 #include <new>
@@ -23,6 +22,7 @@ module;
 export module telar.runtime.observation.processor;
 
 import std;
+import telar.tbc;
 
 export import telar.config.runtime;
 

@@ -4,13 +4,13 @@ module;
 
 #include <cstring>
 
-#include "tbc/view.hpp"
 #include <cassert>
 #include <cstddef>
 
 export module telar.runtime.platform.stream_read_buffer;
 
 import std;
+import telar.tbc;
 
 export import telar.base.memory.sensitive;
 export import telar.platform.net;
@@ -191,7 +191,7 @@ export {
 export {
   namespace telar::runtime {
 
-    inline constexpr std::uint64_t maximum_event_identity = UINT64_MAX >> 3;
+    inline constexpr std::uint64_t maximum_event_identity = std::numeric_limits<std::uint64_t>::max() >> 3;
 
     enum class EventSource : std::uint64_t {
       listener = 0,

@@ -1,6 +1,3 @@
-module;
-#include "tbc/view.hpp"
-
 export module telar.gui.model.records;
 
 import std;

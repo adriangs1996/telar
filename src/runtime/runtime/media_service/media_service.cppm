@@ -1,11 +1,12 @@
 module;
-#include "tbc/view.hpp"
+#include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
 #include "telar_platform/trace_macro.hpp"
 
 export module telar.runtime.runtime.media_service;
 
 import std;
+import telar.tbc;
 
 export import telar.runtime.history.event;
 export import telar.runtime.platform.request_worker;

@@ -1,6 +1,4 @@
 module;
-#include "tbc/view.hpp"
-
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
@@ -20,6 +18,7 @@ module telar.platform.fs;
 
 import std;
 import telar.sys.posix;
+import telar.tbc;
 
 namespace telar::runtime {
   namespace {

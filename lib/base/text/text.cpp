@@ -1,10 +1,10 @@
 module;
-#include "tbc/view.hpp"
 #include <arpa/inet.h>
 
 module telar.base.text;
 
 import std;
+import telar.tbc;
 
 namespace telar::runtime {
 

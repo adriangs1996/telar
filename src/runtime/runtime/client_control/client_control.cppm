@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include <new>
 #include <stdlib.h>
 
@@ -23,6 +22,7 @@ module;
 export module telar.runtime.runtime.client_control;
 
 import std;
+import telar.tbc;
 
 export import telar.runtime.agents.snapshot;
 export import telar.runtime.platform.request_worker;

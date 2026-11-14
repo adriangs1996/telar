@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include <new>
 #include <stdlib.h>
 
@@ -30,6 +29,8 @@ module;
 #include <sys/wait.h>
 
 module telar.cli.tab;
+
+import telar.tbc;
 
 // Older glibc keeps these in libdl. Keep the CLI linkable there; history
 // discovery reports unavailability when no loader is present. A static

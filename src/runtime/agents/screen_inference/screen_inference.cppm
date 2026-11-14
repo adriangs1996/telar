@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include <cerrno>
 #include <ghostty/vt.h>
 #include <new>
@@ -25,6 +24,7 @@ module;
 export module telar.runtime.agents.screen_inference;
 
 import std;
+import telar.tbc;
 
 export import telar.config.runtime;
 

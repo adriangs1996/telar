@@ -10,11 +10,10 @@ module;
 
 #include <cstdint>
 
-#include "tbc/view.hpp"
-
 export module telar.gui.platform.notification_commands;
 
 import std;
+import telar.tbc;
 
 export import telar.gui.text.notification_payload;
 

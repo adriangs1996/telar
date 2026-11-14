@@ -1,10 +1,10 @@
 module;
 #include "tbc/hot_path.hpp"
-#include "tbc/view.hpp"
 
 export module telar.base.text.json;
 
 import std;
+import telar.tbc;
 import telar.base.memory.allocators;
 import telar.base.text.utf8;
 

@@ -1,5 +1,5 @@
 module;
-#include "tbc/view.hpp"
+#include "tbc/annotations.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <new>
@@ -13,6 +13,7 @@ module;
 export module telar.runtime.traffic.control_protocol;
 
 import std;
+import telar.tbc;
 
 export import telar.runtime.vocabulary.frames;
 export import telar.runtime.http.message;
@@ -965,7 +966,7 @@ export {
         writer.integer<std::uint32_t>(0x1a2b3c4d);
         writer.integer<std::uint16_t>(1);
         writer.integer<std::uint16_t>(0);
-        writer.integer<std::uint64_t>(UINT64_MAX);
+        writer.integer<std::uint64_t>(std::numeric_limits<std::uint64_t>::max());
         writer.integer<std::uint32_t>(section_bytes);
       }
 
@@ -974,7 +975,7 @@ export {
       }
 
       inline static void packet(plugins::FrameWriter& writer, const Event& event, std::uint32_t interface) {
-        if (event.kind != Kind::packet || event.link_type > UINT16_MAX) {
+        if (event.kind != Kind::packet || event.link_type > std::numeric_limits<std::uint16_t>::max()) {
           throw EncodingError{"Packet cannot be represented in PCAPNG"};
         }
 

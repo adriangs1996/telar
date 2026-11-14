@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -11,6 +10,7 @@ module;
 export module telar.gui.history.browser;
 
 import std;
+import telar.tbc;
 
 import telar.base.diagnostics;
 import telar.base.memory.allocators;

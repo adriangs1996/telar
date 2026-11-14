@@ -8,12 +8,12 @@ module;
 
 #include <cstddef>
 
-#include "tbc/view.hpp"
 #include <cstring>
 
 export module telar.gui.application.workspace_replica;
 
 import std;
+import telar.tbc;
 
 export import telar.gui.graphics.texture_cache;
 export import telar.render.document;

@@ -1,5 +1,5 @@
 module;
-#include "tbc/view.hpp"
+#include "tbc/annotations.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <cstdlib>
 #include <new>
@@ -32,6 +32,7 @@ export module telar.runtime.plugins.worker;
 
 import std;
 import telar.sys.posix;
+import telar.tbc;
 
 export import telar.runtime.platform.stream_read_buffer;
 export import telar.runtime.vocabulary.traffic;

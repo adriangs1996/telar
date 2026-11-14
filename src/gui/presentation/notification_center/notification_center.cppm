@@ -1,9 +1,7 @@
-module;
-#include "tbc/view.hpp"
-
 export module telar.gui.presentation.notification_center;
 
 import std;
+import telar.tbc;
 
 export import telar.gui.model.records;
 export import telar.gui.text.json_unsigned_integer;

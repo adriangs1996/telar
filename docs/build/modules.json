@@ -1,10 +1,14 @@
 {
   "library_layers": {
-    "base": [],
+    "base": [
+      "tbc"
+    ],
     "sys": [],
     "vocabulary": [],
     "shell": [],
-    "ebnf": [],
+    "ebnf": [
+      "tbc"
+    ],
     "wire": [
       "base",
       "vocabulary"
@@ -12,10 +16,12 @@
     "client": [
       "base",
       "sys",
-      "wire"
+      "wire",
+      "tbc"
     ],
     "lua": [
-      "base"
+      "base",
+      "tbc"
     ],
     "render": [
       "base"
@@ -23,6 +29,7 @@
     "platform": [
       "base",
       "sys",
+      "tbc",
       "vocabulary"
     ],
     "machines": [
@@ -33,12 +40,14 @@
       "base",
       "platform",
       "sys",
-      "vocabulary"
+      "vocabulary",
+      "tbc"
     ],
     "tls": [
       "base",
       "platform",
-      "sys"
+      "sys",
+      "tbc"
     ],
     "plugins": [
       "base",
@@ -53,8 +62,10 @@
       "lua",
       "platform",
       "plugins",
+      "tbc",
       "wire"
-    ]
+    ],
+    "tbc": []
   },
   "process_layers": {
     "runtime": [
@@ -455,7 +466,8 @@
     "src/gui/text/notification_payload/notification_payload.cppm": "telar.gui.text.notification_payload",
     "src/gui/platform/stdio_socket/stdio_socket.cppm": "telar.gui.platform.stdio_socket",
     "src/gui/platform/wall_clock/wall_clock.cppm": "telar.gui.platform.wall_clock",
-    "src/gui/platform/window_lease/window_lease.cppm": "telar.gui.platform.window_lease"
+    "src/gui/platform/window_lease/window_lease.cppm": "telar.gui.platform.window_lease",
+    "lib/tbc/tbc.cppm": "telar.tbc"
   },
   "textual_boundaries": {
     "lib/clipboard/includes/clipboard.hpp": "Native clipboard ABI shared with Objective-C++ and platform backends",
@@ -466,7 +478,7 @@
     "lib/tbc/include/tbc/detail/attributes.hpp": "Consumer-side preprocessor annotations inspected by Clang AST tooling",
     "lib/tbc/include/tbc/hot_path.hpp": "Consumer-side preprocessor annotations inspected by Clang AST tooling",
     "lib/tbc/include/tbc/lifetime.hpp": "Consumer-side preprocessor annotations inspected by Clang AST tooling",
-    "lib/tbc/include/tbc/view.hpp": "Consumer-side preprocessor annotations inspected by Clang AST tooling",
+    "lib/tbc/include/tbc/view.hpp": "Lifetime vocabulary for sources that cannot import telar.tbc, which owns it",
     "lib/tbc/linter/lifetime_analysis.hpp": "Private Clang AST adapter; must use the SDK declarations of the selected linter toolchain",
     "lib/tbc/linter/blank_lines.hpp": "Private Clang AST adapter; must use the SDK declarations of the selected linter toolchain",
     "lib/tbc/linter/interface_bodies.hpp": "Private Clang AST adapter; must use the SDK declarations of the selected linter toolchain",
@@ -744,7 +756,8 @@
     "lib/platform/include/telar_platform/descriptor_path.hpp": "Headers that cannot import modules, as the graphics temporary path, include it",
     "src/runtime/terminal/ghostty_grid.hpp": "Needs the generated cell layout, which only runtime-core units include",
     "src/gui/platform/macos/cf_reference.hpp": "Objective-C++ sources include it; Objective-C++ cannot import the C++ modules",
-    "lib/tbc/tests/spec/units/cross_unit/node.hpp": "Textual spec fixture shared by the cross-unit cases and the unit that defines their bodies"
+    "lib/tbc/tests/spec/units/cross_unit/node.hpp": "Textual spec fixture shared by the cross-unit cases and the unit that defines their bodies",
+    "lib/tbc/include/tbc/annotations.hpp": "Consumer-side preprocessor annotations inspected by Clang AST tooling; includes nothing"
   },
   "macro_headers": [],
   "implementations": {
@@ -3041,6 +3054,9 @@
     ],
     "lib/wire/worktrees/worktrees.cppm": [
       "lib/client/include/telar_client/protocol/worktrees.hpp"
+    ],
+    "lib/tbc/tbc.cppm": [
+      "lib/tbc/include/tbc/view.hpp"
     ]
   }
 }

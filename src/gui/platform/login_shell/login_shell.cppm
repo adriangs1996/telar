@@ -1,9 +1,7 @@
-module;
-#include "tbc/view.hpp"
-
 export module telar.gui.platform.login_shell;
 
 import std;
+import telar.tbc;
 
 // Interface: platform/external_links.cppm
 export {

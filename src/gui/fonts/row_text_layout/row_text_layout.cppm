@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <new>
@@ -17,6 +16,7 @@ module;
 export module telar.gui.fonts.row_text_layout;
 
 import std;
+import telar.tbc;
 
 export import telar.gui.fonts.face;
 export import telar.gui.text.bounded_editor;

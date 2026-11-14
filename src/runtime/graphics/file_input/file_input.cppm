@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
@@ -18,6 +17,7 @@ module;
 export module telar.runtime.graphics.file_input;
 
 import std;
+import telar.tbc;
 
 import telar.base.diagnostics;
 import telar.base.memory.allocators;

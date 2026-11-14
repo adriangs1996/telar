@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <new>
@@ -14,6 +13,7 @@ module;
 export module telar.runtime.traffic.capture_analysis;
 
 import std;
+import telar.tbc;
 
 export import telar.runtime.traffic.control_protocol;
 
@@ -285,7 +285,7 @@ export {
 
     private:
       inline static void validate(const DatagramEvent& event) {
-        if (static_cast<Byte>(event.transport) > static_cast<Byte>(DatagramTransport::icmpv6) || event.original_bytes > UINT16_MAX || event.bytes.size() > event.original_bytes || event.truncated != (event.bytes.size() < event.original_bytes) || (event.transport == DatagramTransport::icmp && event.ipv6) || (event.transport == DatagramTransport::icmpv6 && !event.ipv6)) {
+        if (static_cast<Byte>(event.transport) > static_cast<Byte>(DatagramTransport::icmpv6) || event.original_bytes > std::numeric_limits<std::uint16_t>::max() || event.bytes.size() > event.original_bytes || event.truncated != (event.bytes.size() < event.original_bytes) || (event.transport == DatagramTransport::icmp && event.ipv6) || (event.transport == DatagramTransport::icmpv6 && !event.ipv6)) {
           throw EncodingError{"Invalid datagram metadata"};
         }
 
@@ -358,7 +358,7 @@ export {
 
     public:
       static constexpr std::size_t maximum_datagrams = 32;
-      static constexpr std::size_t maximum_payload = UINT16_MAX;
+      static constexpr std::size_t maximum_payload = std::numeric_limits<std::uint16_t>::max();
       static constexpr std::size_t maximum_prefix = 256;
       static constexpr auto lifetime = std::chrono::seconds{60};
 
@@ -604,7 +604,7 @@ export {
           entry.length = end;
         }
 
-        if (entry.prefix != 0 && entry.length && entry.prefix - (entry.key.ipv6 ? 40 : 0) + *entry.length > UINT16_MAX) {
+        if (entry.prefix != 0 && entry.length && entry.prefix - (entry.key.ipv6 ? 40 : 0) + *entry.length > std::numeric_limits<std::uint16_t>::max()) {
           return "ip_fragment_size_limit";
         }
 
@@ -627,7 +627,7 @@ export {
           }
 
           while (sum >> 16) {
-            sum = (sum & UINT16_MAX) + (sum >> 16);
+            sum = (sum & std::numeric_limits<std::uint16_t>::max()) + (sum >> 16);
           }
 
           const auto checksum = static_cast<std::uint16_t>(~sum);

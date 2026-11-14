@@ -7,7 +7,7 @@ module;
 #include <cstddef>
 #include <cstdint>
 
-#include "tbc/view.hpp"
+#include "tbc/annotations.hpp"
 #include <arpa/inet.h>
 #include <cassert>
 #include <cerrno>
@@ -30,6 +30,7 @@ export module telar.runtime.plugins.service;
 
 import std;
 import telar.sys.posix;
+import telar.tbc;
 
 export import telar.runtime.vocabulary.traffic;
 

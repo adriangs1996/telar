@@ -1,12 +1,13 @@
 module;
+#include "tbc/annotations.hpp"
 #include "tbc/hot_path.hpp"
-#include "tbc/view.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include <cassert>
 
 export module telar.base.memory.containers;
 
 import std;
+import telar.tbc;
 import telar.base.memory.allocators;
 
 // Owned textual headers stay in this global module fragment only; importers

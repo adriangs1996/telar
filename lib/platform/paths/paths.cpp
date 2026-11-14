@@ -1,12 +1,11 @@
 module;
-#include "tbc/view.hpp"
-
 #include <cstdlib>
 #include <unistd.h>
 
 module telar.platform.paths;
 
 import std;
+import telar.tbc;
 
 namespace telar::runtime {
 

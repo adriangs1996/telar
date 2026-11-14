@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include <new>
 #include <stdlib.h>
 
@@ -29,6 +28,7 @@ module;
 export module telar.runtime.proxy.authenticate;
 
 import std;
+import telar.tbc;
 
 export import telar.base.memory.allocators;
 export import telar.base.text;

@@ -1,10 +1,10 @@
 module;
-#include "tbc/view.hpp"
 #include <unistd.h>
 
 export module telar.cli.command_limit;
 
 import std;
+import telar.tbc;
 
 import telar.base.diagnostics;
 import telar.base.text;

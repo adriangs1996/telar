@@ -6,13 +6,13 @@ module;
 #include <cstddef>
 #include <cstdint>
 
-#include "tbc/view.hpp"
 #include <cmath>
 #include <cstring>
 
 export module telar.gui.presentation.activity_order;
 
 import std;
+import telar.tbc;
 
 export import telar.gui.presentation.application_mark;
 export import telar.gui.model.replicas;

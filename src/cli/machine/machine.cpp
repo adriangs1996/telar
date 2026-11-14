@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include <stdlib.h>
 
 #include <cerrno>
@@ -47,6 +46,8 @@ import telar.cli.control_session;
 import telar.cli.server;
 import telar.client;
 import telar.tls;
+
+import telar.tbc;
 
 namespace telar::runtime::cli::machine {
 

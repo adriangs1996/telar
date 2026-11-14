@@ -1,9 +1,7 @@
-module;
-#include "tbc/view.hpp"
-
 export module telar.cli.integration.settings;
 
 import std;
+import telar.tbc;
 
 export import telar.config.core;
 export import telar.platform.paths;

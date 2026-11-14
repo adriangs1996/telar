@@ -1,6 +1,5 @@
 module;
 #include "tbc/hot_path.hpp"
-#include "tbc/view.hpp"
 
 #include <dirent.h>
 #include <limits.h>
@@ -10,6 +9,7 @@ module;
 export module telar.platform.fs;
 
 import std;
+import telar.tbc;
 
 export import telar.base.memory.allocators;
 

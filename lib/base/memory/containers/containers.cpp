@@ -1,9 +1,7 @@
-module;
-#include "tbc/view.hpp"
-
 module telar.base.memory.containers;
 
 import std;
+import telar.tbc;
 import telar.base.memory.allocators;
 
 namespace telar::runtime {

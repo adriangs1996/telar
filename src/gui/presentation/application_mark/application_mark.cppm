@@ -3,13 +3,13 @@ module;
 
 #include <cstdint>
 
-#include "tbc/view.hpp"
 #include <cstddef>
 #include <cstring>
 
 export module telar.gui.presentation.application_mark;
 
 import std;
+import telar.tbc;
 
 import telar.base.diagnostics;
 import telar.config.core;

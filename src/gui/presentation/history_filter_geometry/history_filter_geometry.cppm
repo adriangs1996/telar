@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <new>
@@ -13,6 +12,7 @@ module;
 export module telar.gui.presentation.history_filter_geometry;
 
 import std;
+import telar.tbc;
 
 export import telar.gui.core.metrics;
 export import telar.gui.core.json_writer;

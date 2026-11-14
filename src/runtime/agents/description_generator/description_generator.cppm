@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include "telar_platform/trace_macro.hpp"
 #include <cstdio>
 #include <cstdlib>
@@ -20,6 +19,7 @@ module;
 export module telar.runtime.agents.description_generator;
 
 import std;
+import telar.tbc;
 
 export import telar.runtime.terminal.osc_scanner;
 export import telar.base.memory.allocators;

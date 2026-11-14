@@ -1,5 +1,5 @@
 module;
-#include "tbc/view.hpp"
+#include "tbc/annotations.hpp"
 #include <new>
 #include <stdlib.h>
 
@@ -88,6 +88,7 @@ export module telar.runtime.traffic.control_backend;
 
 import std;
 import telar.sys.posix;
+import telar.tbc;
 
 export import telar.runtime.traffic.control_protocol;
 
@@ -315,7 +316,7 @@ export {
         return result;
       }
 
-      inline void configure(Owner owner, InterceptionRule rule, std::uint64_t order = UINT64_MAX) {
+      inline void configure(Owner owner, InterceptionRule rule, std::uint64_t order = std::numeric_limits<std::uint64_t>::max()) {
         std::scoped_lock lock{mutex_};
 
         if (owner == 0 || registration(owner)) {
@@ -592,7 +593,7 @@ export {
         completion_.drain();
       }
 
-      static constexpr std::uint64_t rejected_ticket = UINT64_MAX;
+      static constexpr std::uint64_t rejected_ticket = std::numeric_limits<std::uint64_t>::max();
 
     private:
       inline auto registration(Owner owner) noexcept -> Registration* {
@@ -838,7 +839,7 @@ export {
 
             const auto size = Protocol::encodedSize(event);
             const auto index_bytes = session.entries.capacity() * sizeof(std::optional<Entry>);
-            if (size > session.budget - index_bytes || session.next == UINT64_MAX) {
+            if (size > session.budget - index_bytes || session.next == std::numeric_limits<std::uint64_t>::max()) {
               ++session.dropped;
               continue;
             }
@@ -1775,7 +1776,7 @@ export {
           const auto rule = InterceptionCodec::readRule(reader);
 
           peer.http = command == InterceptionCodec::Command::http_rule;
-          const auto order = peer.package ? peer.package->order : UINT64_MAX;
+          const auto order = peer.package ? peer.package->order : std::numeric_limits<std::uint64_t>::max();
 
           if (peer.http) {
             http_interception_.configure(peer.owner, rule, order);

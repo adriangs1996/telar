@@ -1,5 +1,4 @@
 module;
-#include "tbc/view.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <new>
@@ -12,6 +11,7 @@ module;
 export module telar.gui.application.session;
 
 import std;
+import telar.tbc;
 
 export import telar.gui.application.host_effects;
 export import telar.gui.application.workspace_replica;
@@ -3295,7 +3295,7 @@ export {
         // Each document drawn in place of its rows, in the rows the view measured it in, while the
         // rows are numbered as the runtime numbered them for it.
         for (const auto& document : pane.inline_documents) {
-          if (document.shown && document.view_rows != 0 && document.generation == pane.scrollback_generation && document.first_row >= pane.scrollback_trimmed && document.first_row - pane.scrollback_trimmed <= UINT32_MAX) {
+          if (document.shown && document.view_rows != 0 && document.generation == pane.scrollback_generation && document.first_row >= pane.scrollback_trimmed && document.first_row - pane.scrollback_trimmed <= std::numeric_limits<std::uint32_t>::max()) {
             spans.push_back({.first = static_cast<std::uint32_t>(document.first_row - pane.scrollback_trimmed), .count = document.rows, .shown = document.view_rows});
           }
         }
