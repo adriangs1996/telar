@@ -4,7 +4,7 @@ The foundations the runtime, the GUI and the `telar` CLI share: UTF-8 (`text/utf
 JSON (`text/json/`), ASCII and other text codecs (`text/`), which `telar.base.text`
 still re-exports together, allocators (`memory/allocators/`), sensitive
 buffers (`memory/sensitive/`) and fixed-capacity containers (`memory/containers/`),
-which `telar.base.memory` still re-exports together, the diagnostics switches and timing
+each its own module, the diagnostics switches and timing
 (`diagnostics/`), the editor kinds (`editors/`), the history search policy
 (`history/`), and the program name and version children see (`program_identity.hpp`).
 It is C++23 with compiled standard module interfaces, with no dependency on the client protocol or runtime.

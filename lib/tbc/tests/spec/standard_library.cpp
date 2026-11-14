@@ -206,7 +206,7 @@ std::string_view findParameter(const std::vector<std::string>& owners) {
 
 // CASE: std.exchange_dangling
 // PAIR: std.exchange
-// SOURCE: lib/base/memory/memory.cppm :: SensitiveAllocation
+// SOURCE: lib/base/memory/sensitive/sensitive.cppm :: SensitiveAllocation
 // STATUS: implemented
 // CONTRACT: std::exchange returns a copy of its object's previous value.
 // SCENARIO: The previous view's source dies before it is read.
@@ -224,7 +224,7 @@ void exchangeDangling() {
 
 // CASE: std.exchange_live
 // PAIR: std.exchange
-// SOURCE: lib/base/memory/memory.cppm :: SensitiveAllocation
+// SOURCE: lib/base/memory/sensitive/sensitive.cppm :: SensitiveAllocation
 // STATUS: implemented
 // CONTRACT: An exchanged previous value may be read while its source is alive.
 // SCENARIO: The source outlives the read; accept.
