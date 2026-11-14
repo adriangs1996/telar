@@ -190,8 +190,7 @@ namespace telar::runtime {
     cancel(control);
   }
 
-  template <ConcurrentAllocator Memory>
-  Http1InterceptedRelay<Memory>::Http1InterceptedRelay(Memory& memory, HttpRelayContext context, bool response)
+  Http1InterceptedRelay::Http1InterceptedRelay(ConcurrentMemory& memory, HttpRelayContext context, bool response)
       : memory_(memory),
         secure_(memory),
         control_(context.control),
@@ -202,13 +201,11 @@ namespace telar::runtime {
     parser_.reset(response);
   }
 
-  template <ConcurrentAllocator Memory>
-  Http1InterceptedRelay<Memory>::~Http1InterceptedRelay() {
+  Http1InterceptedRelay::~Http1InterceptedRelay() {
     interception_.cancel(control_);
   }
 
-  template <ConcurrentAllocator Memory>
-  void Http1InterceptedRelay<Memory>::reset(bool response, bool response_to_head) noexcept {
+  void Http1InterceptedRelay::reset(bool response, bool response_to_head) noexcept {
     interception_.cancel(control_);
     parser_.reset(response, response_to_head);
     message_.response = response;
@@ -226,8 +223,7 @@ namespace telar::runtime {
     waiting_ = StreamReadiness::writable;
   }
 
-  template <ConcurrentAllocator Memory>
-  auto Http1InterceptedRelay<Memory>::state() const noexcept -> State {
+  auto Http1InterceptedRelay::state() const noexcept -> State {
     if (mode_ == Mode::failed) {
       return State::failed;
     }
@@ -247,38 +243,31 @@ namespace telar::runtime {
     return parser_.state();
   }
 
-  template <ConcurrentAllocator Memory>
-  auto Http1InterceptedRelay<Memory>::head() const noexcept -> const std::optional<Http1Head>& {
+  auto Http1InterceptedRelay::head() const noexcept -> const std::optional<Http1Head>& {
     return mode_ == Mode::streaming && !hasPrefix() ? parser_.head() : forwarded_head_;
   }
 
-  template <ConcurrentAllocator Memory>
-  bool Http1InterceptedRelay<Memory>::started() const noexcept {
+  bool Http1InterceptedRelay::started() const noexcept {
     return parser_.started();
   }
 
-  template <ConcurrentAllocator Memory>
-  bool Http1InterceptedRelay<Memory>::originalHead() const noexcept {
+  bool Http1InterceptedRelay::originalHead() const noexcept {
     return original_head_.value_or(parser_.head() && parser_.head()->head_request);
   }
 
-  template <ConcurrentAllocator Memory>
-  void Http1InterceptedRelay<Memory>::destinationHead(bool head) noexcept {
+  void Http1InterceptedRelay::destinationHead(bool head) noexcept {
     destination_head_ = head;
   }
 
-  template <ConcurrentAllocator Memory>
-  bool Http1InterceptedRelay<Memory>::captureIncomplete() const noexcept {
+  bool Http1InterceptedRelay::captureIncomplete() const noexcept {
     return synthetic_;
   }
 
-  template <ConcurrentAllocator Memory>
-  auto Http1InterceptedRelay<Memory>::sourceInterest() const noexcept -> StreamReadiness {
+  auto Http1InterceptedRelay::sourceInterest() const noexcept -> StreamReadiness {
     return mode_ == Mode::failed || mode_ == Mode::waiting || (hasPrefix() && mode_ != Mode::buffering) ? StreamReadiness::none : parser_.sourceInterest();
   }
 
-  template <ConcurrentAllocator Memory>
-  auto Http1InterceptedRelay<Memory>::destinationInterest() const noexcept -> StreamReadiness {
+  auto Http1InterceptedRelay::destinationInterest() const noexcept -> StreamReadiness {
     if (!continue_.remaining().empty()) {
       return StreamReadiness::completion;
     }
@@ -294,8 +283,7 @@ namespace telar::runtime {
     return hasPrefix() ? waiting_ : parser_.destinationInterest();
   }
 
-  template <ConcurrentAllocator Memory>
-  auto Http1InterceptedRelay<Memory>::deadline() const noexcept -> std::optional<Time> {
+  auto Http1InterceptedRelay::deadline() const noexcept -> std::optional<Time> {
     if (interception_.waiting()) {
       return interception_.deadline(control_);
     }
@@ -303,23 +291,19 @@ namespace telar::runtime {
     return mode_ == Mode::buffering ? std::optional{interception_.collectUntil()} : std::nullopt;
   }
 
-  template <ConcurrentAllocator Memory>
-  StaticReply& Http1InterceptedRelay<Memory>::continueReply() noexcept {
+  StaticReply& Http1InterceptedRelay::continueReply() noexcept {
     return continue_;
   }
 
-  template <ConcurrentAllocator Memory>
-  const StaticReply& Http1InterceptedRelay<Memory>::continueReply() const noexcept {
+  const StaticReply& Http1InterceptedRelay::continueReply() const noexcept {
     return continue_;
   }
 
-  template <ConcurrentAllocator Memory>
-  bool Http1InterceptedRelay<Memory>::hasPrefix() const noexcept {
+  bool Http1InterceptedRelay::hasPrefix() const noexcept {
     return write_offset_ != wire_.size();
   }
 
-  template <ConcurrentAllocator Memory>
-  void Http1InterceptedRelay<Memory>::readHead(std::string_view bytes) noexcept {
+  void Http1InterceptedRelay::readHead(std::string_view bytes) noexcept {
     const auto& policy = interception_.select(control_, identity_.event(direction_));
     const bool repair = message_.response && message_.response_to_head != destination_head_;
 
@@ -372,8 +356,7 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  void Http1InterceptedRelay<Memory>::unavailable(std::string_view reason) noexcept {
+  void Http1InterceptedRelay::unavailable(std::string_view reason) noexcept {
     if (mode_ == Mode::failed || mode_ == Mode::streaming) {
       return;
     }
@@ -393,8 +376,7 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  void Http1InterceptedRelay<Memory>::finish() noexcept {
+  void Http1InterceptedRelay::finish() noexcept {
     try {
       if (!message_.bodyless()) {
         message_.decodeBody(message_.body);
@@ -411,8 +393,7 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  void Http1InterceptedRelay<Memory>::resolve() noexcept {
+  void Http1InterceptedRelay::resolve() noexcept {
     if (!interception_.waiting()) {
       return;
     }
@@ -435,8 +416,7 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  void Http1InterceptedRelay<Memory>::forward(bool changed) {
+  void Http1InterceptedRelay::forward(bool changed) {
     const bool source_head = message_.response_to_head;
     const bool repair = message_.response && source_head != destination_head_;
     if (changed || regenerate_ || repair) {
@@ -465,21 +445,18 @@ namespace telar::runtime {
     interception_.release();
   }
 
-  template <ConcurrentAllocator Memory>
-  void Http1InterceptedRelay<Memory>::repairHead() {
+  void Http1InterceptedRelay::repairHead() {
     synthetic_ = true;
     message_.headers.set("Connection", "close");
     forward(false);
   }
 
-  template <ConcurrentAllocator Memory>
-  void Http1InterceptedRelay<Memory>::fail(std::string_view reason) noexcept {
+  void Http1InterceptedRelay::fail(std::string_view reason) noexcept {
     interception_.unavailable(control_, identity_.event(direction_), reason);
     mode_ = Mode::failed;
   }
 
   template class HttpInterceptionSlot<ConcurrentMemory>;
-  template class Http1InterceptedRelay<ConcurrentMemory>;
   template class HttpInterceptionSlot<SynchronizedAllocator<BudgetAllocator<ConcurrentMemory>>>;
 
 }

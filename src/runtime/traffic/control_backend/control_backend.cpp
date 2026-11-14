@@ -80,8 +80,8 @@ namespace telar::runtime::traffic {
     return writer.finish();
   }
 
-  template <ConcurrentAllocator Memory, std::size_t maximum_bytes>
-  Interception<Memory, maximum_bytes>::Registration::Registration(Memory& memory, Owner owner, InterceptionRule rule, std::uint64_t generation, std::uint64_t order)
+  template <std::size_t maximum_bytes>
+  Interception<maximum_bytes>::Registration::Registration(ConcurrentMemory& memory, Owner owner, InterceptionRule rule, std::uint64_t generation, std::uint64_t order)
       : route{owner, generation, rule.timeout_ms, rule.fail_closed, order},
         hosts(memory),
         directions(rule.directions),
@@ -93,8 +93,8 @@ namespace telar::runtime::traffic {
     hosts.finish();
   }
 
-  template <ConcurrentAllocator Memory, std::size_t maximum_bytes>
-  Interception<Memory, maximum_bytes>::Pending::Pending(Secure& memory, std::uint64_t ticket, const FlowEvent& event, std::span<const Route> matches)
+  template <std::size_t maximum_bytes>
+  Interception<maximum_bytes>::Pending::Pending(Secure& memory, std::uint64_t ticket, const FlowEvent& event, std::span<const Route> matches)
       : ticket(ticket),
         decision_ticket(ticket),
         id(event.id),
@@ -111,13 +111,13 @@ namespace telar::runtime::traffic {
     std::ranges::copy(matches, chain.begin());
   }
 
-  template <ConcurrentAllocator Memory, std::size_t maximum_bytes>
-  auto Interception<Memory, maximum_bytes>::Pending::event() const noexcept -> FlowEvent {
+  template <std::size_t maximum_bytes>
+  auto Interception<maximum_bytes>::Pending::event() const noexcept -> FlowEvent {
     return {.id = id, .direction = direction, .visibility = visibility, .source = source, .offset = offset, .ticket = decision_ticket, .client = client.view(), .server = server.view(), .host = host.view(), .reason = reason.view(), .bytes = bytes};
   }
 
-  template <ConcurrentAllocator Memory, std::size_t maximum_bytes>
-  Interception<Memory, maximum_bytes>::Interception(Memory& memory, CompletionSignal* completion, CompletionSignal* requests)
+  template <std::size_t maximum_bytes>
+  Interception<maximum_bytes>::Interception(ConcurrentMemory& memory, CompletionSignal* completion, CompletionSignal* requests)
       : upstream_(memory),
         memory_(memory),
         completion_(completion ? *completion : wake_),
@@ -126,13 +126,13 @@ namespace telar::runtime::traffic {
     next_ >>= 1;
   }
 
-  template <ConcurrentAllocator Memory, std::size_t maximum_bytes>
-  void Interception<Memory, maximum_bytes>::configure(InterceptionRule rule) {
+  template <std::size_t maximum_bytes>
+  void Interception<maximum_bytes>::configure(InterceptionRule rule) {
     configure(default_owner, rule);
   }
 
-  template <ConcurrentAllocator Memory, std::size_t maximum_bytes>
-  auto Interception<Memory, maximum_bytes>::policy(const FlowEvent& event) noexcept -> HttpPolicy {
+  template <std::size_t maximum_bytes>
+  auto Interception<maximum_bytes>::policy(const FlowEvent& event) noexcept -> HttpPolicy {
     if (active_.load(std::memory_order_acquire) == 0) {
       return {};
     }
@@ -150,8 +150,8 @@ namespace telar::runtime::traffic {
     return result;
   }
 
-  template <ConcurrentAllocator Memory, std::size_t maximum_bytes>
-  void Interception<Memory, maximum_bytes>::configure(Owner owner, InterceptionRule rule, std::uint64_t order) {
+  template <std::size_t maximum_bytes>
+  void Interception<maximum_bytes>::configure(Owner owner, InterceptionRule rule, std::uint64_t order) {
     std::scoped_lock lock{mutex_};
 
     if (owner == 0 || registration(owner)) {
@@ -169,8 +169,8 @@ namespace telar::runtime::traffic {
     throw EncodingError{"Interception registration limit reached"};
   }
 
-  template <ConcurrentAllocator Memory, std::size_t maximum_bytes>
-  void Interception<Memory, maximum_bytes>::disconnect(Owner owner) noexcept {
+  template <std::size_t maximum_bytes>
+  void Interception<maximum_bytes>::disconnect(Owner owner) noexcept {
     std::scoped_lock lock{mutex_};
 
     for (auto& slot : registrations_) {
@@ -187,8 +187,8 @@ namespace telar::runtime::traffic {
     }
   }
 
-  template <ConcurrentAllocator Memory, std::size_t maximum_bytes>
-  void Interception<Memory, maximum_bytes>::setAvailable(Owner owner, bool available) noexcept {
+  template <std::size_t maximum_bytes>
+  void Interception<maximum_bytes>::setAvailable(Owner owner, bool available) noexcept {
     std::scoped_lock lock{mutex_};
     auto* entry = registration(owner);
     if (!entry || (!available && !entry->available)) {
@@ -208,8 +208,8 @@ namespace telar::runtime::traffic {
     }
   }
 
-  template <ConcurrentAllocator Memory, std::size_t maximum_bytes>
-  bool Interception<Memory, maximum_bytes>::pending(Owner owner, std::uint64_t ticket) noexcept {
+  template <std::size_t maximum_bytes>
+  bool Interception<maximum_bytes>::pending(Owner owner, std::uint64_t ticket) noexcept {
     std::scoped_lock lock{mutex_};
     const auto* entry = registration(owner);
     if (!entry || !entry->available) {
@@ -225,8 +225,8 @@ namespace telar::runtime::traffic {
     return false;
   }
 
-  template <ConcurrentAllocator Memory, std::size_t maximum_bytes>
-  auto Interception<Memory, maximum_bytes>::begin(const FlowEvent& event) noexcept -> std::uint64_t {
+  template <std::size_t maximum_bytes>
+  auto Interception<maximum_bytes>::begin(const FlowEvent& event) noexcept -> std::uint64_t {
     if (active_.load(std::memory_order_acquire) == 0) {
       return 0;
     }
@@ -280,13 +280,13 @@ namespace telar::runtime::traffic {
     return fail_closed ? rejected_ticket : 0;
   }
 
-  template <ConcurrentAllocator Memory, std::size_t maximum_bytes>
-  void Interception<Memory, maximum_bytes>::decide(std::uint64_t ticket, Verdict verdict, std::span<const Byte> bytes) {
+  template <std::size_t maximum_bytes>
+  void Interception<maximum_bytes>::decide(std::uint64_t ticket, Verdict verdict, std::span<const Byte> bytes) {
     decide(default_owner, ticket, verdict, bytes);
   }
 
-  template <ConcurrentAllocator Memory, std::size_t maximum_bytes>
-  void Interception<Memory, maximum_bytes>::decide(Owner owner, std::uint64_t ticket, Verdict verdict, std::span<const Byte> bytes) {
+  template <std::size_t maximum_bytes>
+  void Interception<maximum_bytes>::decide(Owner owner, std::uint64_t ticket, Verdict verdict, std::span<const Byte> bytes) {
     if (verdict == Verdict::pending || bytes.size() > maximum_bytes || (verdict != Verdict::replace && !bytes.empty())) {
       throw EncodingError{"Invalid stream decision"};
     }
@@ -312,8 +312,8 @@ namespace telar::runtime::traffic {
     // Late responses are harmless and must never apply to a different chunk.
   }
 
-  template <ConcurrentAllocator Memory, std::size_t maximum_bytes>
-  auto Interception<Memory, maximum_bytes>::poll(std::uint64_t ticket, std::span<Byte> replacement) noexcept -> FlowControl::Decision {
+  template <std::size_t maximum_bytes>
+  auto Interception<maximum_bytes>::poll(std::uint64_t ticket, std::span<Byte> replacement) noexcept -> FlowControl::Decision {
     if (ticket == rejected_ticket) {
       return {.verdict = Verdict::reject};
     }
@@ -349,8 +349,8 @@ namespace telar::runtime::traffic {
     return {.verdict = Verdict::reject};
   }
 
-  template <ConcurrentAllocator Memory, std::size_t maximum_bytes>
-  auto Interception<Memory, maximum_bytes>::pending(std::uint64_t ticket) noexcept -> bool {
+  template <std::size_t maximum_bytes>
+  auto Interception<maximum_bytes>::pending(std::uint64_t ticket) noexcept -> bool {
     std::scoped_lock lock{mutex_};
 
     for (const auto& slot : pending_) {
@@ -362,28 +362,28 @@ namespace telar::runtime::traffic {
     return false;
   }
 
-  template <ConcurrentAllocator Memory, std::size_t maximum_bytes>
-  int Interception<Memory, maximum_bytes>::requestDescriptor() const noexcept {
+  template <std::size_t maximum_bytes>
+  int Interception<maximum_bytes>::requestDescriptor() const noexcept {
     return request_signal_.descriptor();
   }
 
-  template <ConcurrentAllocator Memory, std::size_t maximum_bytes>
-  void Interception<Memory, maximum_bytes>::drainRequests() noexcept {
+  template <std::size_t maximum_bytes>
+  void Interception<maximum_bytes>::drainRequests() noexcept {
     request_signal_.drain();
   }
 
-  template <ConcurrentAllocator Memory, std::size_t maximum_bytes>
-  auto Interception<Memory, maximum_bytes>::completionSignal() noexcept -> CompletionSignal& {
+  template <std::size_t maximum_bytes>
+  auto Interception<maximum_bytes>::completionSignal() noexcept -> CompletionSignal& {
     return completion_;
   }
 
-  template <ConcurrentAllocator Memory, std::size_t maximum_bytes>
-  auto Interception<Memory, maximum_bytes>::requestSignal() noexcept -> CompletionSignal& {
+  template <std::size_t maximum_bytes>
+  auto Interception<maximum_bytes>::requestSignal() noexcept -> CompletionSignal& {
     return request_signal_;
   }
 
-  template <ConcurrentAllocator Memory, std::size_t maximum_bytes>
-  void Interception<Memory, maximum_bytes>::cancel(std::uint64_t ticket) noexcept {
+  template <std::size_t maximum_bytes>
+  void Interception<maximum_bytes>::cancel(std::uint64_t ticket) noexcept {
     std::scoped_lock lock{mutex_};
 
     for (auto& slot : pending_) {
@@ -394,8 +394,8 @@ namespace telar::runtime::traffic {
     }
   }
 
-  template <ConcurrentAllocator Memory, std::size_t maximum_bytes>
-  std::optional<FlowControl::Time> Interception<Memory, maximum_bytes>::deadline(std::uint64_t ticket) noexcept {
+  template <std::size_t maximum_bytes>
+  std::optional<FlowControl::Time> Interception<maximum_bytes>::deadline(std::uint64_t ticket) noexcept {
     std::lock_guard lock{mutex_};
 
     for (const auto& slot : pending_) {
@@ -407,18 +407,18 @@ namespace telar::runtime::traffic {
     return std::chrono::steady_clock::now();
   }
 
-  template <ConcurrentAllocator Memory, std::size_t maximum_bytes>
-  int Interception<Memory, maximum_bytes>::descriptor() const noexcept {
+  template <std::size_t maximum_bytes>
+  int Interception<maximum_bytes>::descriptor() const noexcept {
     return completion_.descriptor();
   }
 
-  template <ConcurrentAllocator Memory, std::size_t maximum_bytes>
-  void Interception<Memory, maximum_bytes>::drain() noexcept {
+  template <std::size_t maximum_bytes>
+  void Interception<maximum_bytes>::drain() noexcept {
     completion_.drain();
   }
 
-  template <ConcurrentAllocator Memory, std::size_t maximum_bytes>
-  auto Interception<Memory, maximum_bytes>::registration(Owner owner) noexcept -> Registration* {
+  template <std::size_t maximum_bytes>
+  auto Interception<maximum_bytes>::registration(Owner owner) noexcept -> Registration* {
     for (auto& slot : registrations_) {
       if (slot && slot->route.owner == owner) {
         return &*slot;
@@ -428,8 +428,8 @@ namespace telar::runtime::traffic {
     return nullptr;
   }
 
-  template <ConcurrentAllocator Memory, std::size_t maximum_bytes>
-  auto Interception<Memory, maximum_bytes>::registration(const Registrations& registrations, Owner owner) noexcept -> const Registration* {
+  template <std::size_t maximum_bytes>
+  auto Interception<maximum_bytes>::registration(const Registrations& registrations, Owner owner) noexcept -> const Registration* {
     for (const auto& slot : registrations) {
       if (slot && slot->route.owner == owner) {
         return &*slot;
@@ -439,13 +439,13 @@ namespace telar::runtime::traffic {
     return nullptr;
   }
 
-  template <ConcurrentAllocator Memory, std::size_t maximum_bytes>
-  Verdict Interception<Memory, maximum_bytes>::failure(const Pending& pending) noexcept {
+  template <std::size_t maximum_bytes>
+  Verdict Interception<maximum_bytes>::failure(const Pending& pending) noexcept {
     return pending.chain[pending.step].fail_closed ? Verdict::reject : Verdict::allow;
   }
 
-  template <ConcurrentAllocator Memory, std::size_t maximum_bytes>
-  void Interception<Memory, maximum_bytes>::advance(Pending& pending, Verdict verdict, const Registrations& registrations, std::uint64_t& next, CompletionSignal& completion, CompletionSignal& requests) noexcept {
+  template <std::size_t maximum_bytes>
+  void Interception<maximum_bytes>::advance(Pending& pending, Verdict verdict, const Registrations& registrations, std::uint64_t& next, CompletionSignal& completion, CompletionSignal& requests) noexcept {
     for (;;) {
       if (verdict == Verdict::reject || ++pending.step == pending.routes) {
         pending.verdict = verdict == Verdict::reject ? Verdict::reject : pending.replaced ? Verdict::replace
@@ -503,14 +503,12 @@ namespace telar::runtime::traffic::recording {
 
 namespace telar::runtime::traffic {
 
-  template <ConcurrentAllocator Memory>
-  Service<Memory>::Peer::Peer(SensitiveMemory& memory, FileDescriptor socket, uid_t uid)
+  Service::Peer::Peer(SensitiveMemory& memory, FileDescriptor socket, uid_t uid)
       : socket(std::move(socket)),
         uid(uid),
         input(AllocatorRef<Byte, SensitiveMemory>{memory}) {}
 
-  template <ConcurrentAllocator Memory>
-  Service<Memory>::Service(Memory& memory, std::string_view path, bool allow_interception)
+  Service::Service(ConcurrentMemory& memory, std::string_view path, bool allow_interception)
       : upstream_(memory),
         memory_(memory),
         listener_(path),
@@ -525,30 +523,25 @@ namespace telar::runtime::traffic {
     });
   }
 
-  template <ConcurrentAllocator Memory>
-  Service<Memory>::~Service() {
+  Service::~Service() {
     stopping_.store(true, std::memory_order_release);
     wake_.notify();
     thread_.join();
   }
 
-  template <ConcurrentAllocator Memory>
-  bool Service<Memory>::listening() const noexcept {
+  bool Service::listening() const noexcept {
     return exchange_subscribers_.load(std::memory_order_acquire) != 0 || recordings_.selects(Selection::exchanges);
   }
 
-  template <ConcurrentAllocator Memory>
-  tbc::view<std::span<const Byte>, tbc::lt::a> Service<Memory>::recording(const recording::Request& request, tbc::view<std::span<Byte>, tbc::lt::a> output, recording::Owner owner) {
+  tbc::view<std::span<const Byte>, tbc::lt::a> Service::recording(const recording::Request& request, tbc::view<std::span<Byte>, tbc::lt::a> output, recording::Owner owner) {
     return recordings_.handle(request, output, std::move(owner));
   }
 
-  template <ConcurrentAllocator Memory>
-  void Service<Memory>::packageControl(control::PackagePort* port) noexcept {
+  void Service::packageControl(control::PackagePort* port) noexcept {
     package_control_.store(port, std::memory_order_release);
   }
 
-  template <ConcurrentAllocator Memory>
-  FileDescriptor Service<Memory>::openControl(const plugins::ServiceSpec& package) {
+  FileDescriptor Service::openControl(const plugins::ServiceSpec& package) {
     const auto port = package_control_.load(std::memory_order_acquire);
     if (!port) {
       throw SystemError{"Package control is starting", EAGAIN};
@@ -557,13 +550,11 @@ namespace telar::runtime::traffic {
     return port->openPackage(package);
   }
 
-  template <ConcurrentAllocator Memory>
-  void Service<Memory>::revokePackage(const plugins::ServiceSpec& package) noexcept {
+  void Service::revokePackage(const plugins::ServiceSpec& package) noexcept {
     recordings_.revoke(recording::Owner::package(package));
   }
 
-  template <ConcurrentAllocator Memory>
-  PackageChannel Service<Memory>::openPackage(const plugins::ServiceSpec& specification, std::uint32_t registration) {
+  PackageChannel Service::openPackage(const plugins::ServiceSpec& specification, std::uint32_t registration) {
     const bool observe = specification.allows(plugins::Capability::traffic_observe);
     const bool intercept = specification.allows(plugins::Capability::traffic_intercept);
     if ((!observe && !intercept) || specification.plugin_id == 0 || specification.generation == 0) {
@@ -589,19 +580,16 @@ namespace telar::runtime::traffic {
     return {std::move(client), owner};
   }
 
-  template <ConcurrentAllocator Memory>
-  void Service<Memory>::setPackageAvailable(std::uint64_t owner, bool available) noexcept {
+  void Service::setPackageAvailable(std::uint64_t owner, bool available) noexcept {
     interception_.setAvailable(owner, available);
     http_interception_.setAvailable(owner, available);
   }
 
-  template <ConcurrentAllocator Memory>
-  bool Service<Memory>::packagePending(std::uint64_t owner, std::uint64_t ticket, bool http) noexcept {
+  bool Service::packagePending(std::uint64_t owner, std::uint64_t ticket, bool http) noexcept {
     return http ? http_interception_.pending(owner, ticket) : interception_.pending(owner, ticket);
   }
 
-  template <ConcurrentAllocator Memory>
-  void Service<Memory>::packageFailure(const plugins::ServiceSpec& specification, FlowEvent event) noexcept {
+  void Service::packageFailure(const plugins::ServiceSpec& specification, FlowEvent event) noexcept {
     std::array<char, 128> reason;
     const auto name = specification.name.view();
     const auto length = std::snprintf(reason.data(), reason.size(), "app_callback_error:%.*s", static_cast<int>(name.size()), name.data());
@@ -611,28 +599,24 @@ namespace telar::runtime::traffic {
     observeFlow(Kind::flow_error, event);
   }
 
-  template <ConcurrentAllocator Memory>
-  auto Service<Memory>::captureStatus() const noexcept -> CaptureStatus {
+  auto Service::captureStatus() const noexcept -> CaptureStatus {
     std::lock_guard lock{capture_mutex_};
 
     return capture_status_;
   }
 
-  template <ConcurrentAllocator Memory>
-  std::uint64_t Service<Memory>::stopCapture() noexcept {
+  std::uint64_t Service::stopCapture() noexcept {
     const auto revision = capture_stop_.fetch_add(1, std::memory_order_release) + 1;
 
     wake_.notify();
     return revision;
   }
 
-  template <ConcurrentAllocator Memory>
-  bool Service<Memory>::captureStopped(std::uint64_t revision) const noexcept {
+  bool Service::captureStopped(std::uint64_t revision) const noexcept {
     return capture_stopped_.load(std::memory_order_acquire) >= revision;
   }
 
-  template <ConcurrentAllocator Memory>
-  void Service<Memory>::submit(CapturedExchange<Memory>& exchange) noexcept {
+  void Service::submit(CapturedExchange& exchange) noexcept {
     if (!listening()) {
       return;
     }
@@ -650,8 +634,7 @@ namespace telar::runtime::traffic {
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  void Service<Memory>::observeFlow(Kind kind, const FlowEvent& flow) noexcept {
+  void Service::observeFlow(Kind kind, const FlowEvent& flow) noexcept {
     if (kind != Kind::intercept_request && flow_subscribers_.load(std::memory_order_acquire) == 0 && !recordings_.selects(Selection::flows)) {
       return;
     }
@@ -669,73 +652,59 @@ namespace telar::runtime::traffic {
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  std::uint64_t Service<Memory>::intercept(const FlowEvent& event) noexcept {
+  std::uint64_t Service::intercept(const FlowEvent& event) noexcept {
     return interception_.begin(event);
   }
 
-  template <ConcurrentAllocator Memory>
-  auto Service<Memory>::poll(std::uint64_t ticket, std::span<Byte> replacement) noexcept -> Decision {
+  auto Service::poll(std::uint64_t ticket, std::span<Byte> replacement) noexcept -> Decision {
     return interception_.poll(ticket, replacement);
   }
 
-  template <ConcurrentAllocator Memory>
-  void Service<Memory>::cancel(std::uint64_t ticket) noexcept {
+  void Service::cancel(std::uint64_t ticket) noexcept {
     interception_.cancel(ticket);
   }
 
-  template <ConcurrentAllocator Memory>
-  auto Service<Memory>::deadline(std::uint64_t ticket) noexcept -> std::optional<Time> {
+  auto Service::deadline(std::uint64_t ticket) noexcept -> std::optional<Time> {
     return interception_.deadline(ticket);
   }
 
-  template <ConcurrentAllocator Memory>
-  int Service<Memory>::descriptor() const noexcept {
+  int Service::descriptor() const noexcept {
     return interception_.descriptor();
   }
 
-  template <ConcurrentAllocator Memory>
-  void Service<Memory>::drain() noexcept {
+  void Service::drain() noexcept {
     interception_.drain();
   }
 
-  template <ConcurrentAllocator Memory>
-  HttpControl* Service<Memory>::http() noexcept {
+  HttpControl* Service::http() noexcept {
     return allow_interception_ ? this : nullptr;
   }
 
-  template <ConcurrentAllocator Memory>
-  HttpPolicy Service<Memory>::policy(const FlowEvent& context) noexcept {
+  HttpPolicy Service::policy(const FlowEvent& context) noexcept {
     return http_interception_.policy(context);
   }
 
-  template <ConcurrentAllocator Memory>
-  std::uint64_t Service<Memory>::interceptHttp(const FlowEvent& event) noexcept {
+  std::uint64_t Service::interceptHttp(const FlowEvent& event) noexcept {
     return http_interception_.begin(event);
   }
 
-  template <ConcurrentAllocator Memory>
-  auto Service<Memory>::pollHttp(std::uint64_t ticket, std::span<Byte> replacement) noexcept -> Decision {
+  auto Service::pollHttp(std::uint64_t ticket, std::span<Byte> replacement) noexcept -> Decision {
     return http_interception_.poll(ticket, replacement);
   }
 
-  template <ConcurrentAllocator Memory>
-  void Service<Memory>::cancelHttp(std::uint64_t ticket) noexcept {
+  void Service::cancelHttp(std::uint64_t ticket) noexcept {
     http_interception_.cancel(ticket);
   }
 
-  template <ConcurrentAllocator Memory>
-  auto Service<Memory>::httpDeadline(std::uint64_t ticket) noexcept -> std::optional<Time> {
+  auto Service::httpDeadline(std::uint64_t ticket) noexcept -> std::optional<Time> {
     return http_interception_.deadline(ticket);
   }
 
-  template <ConcurrentAllocator Memory>
-  void Service<Memory>::httpUnavailable(const FlowEvent& event) noexcept {
+  void Service::httpUnavailable(const FlowEvent& event) noexcept {
     observeFlow(Kind::flow_error, event);
   }
 
-  template <ConcurrentAllocator Memory>
-  void Service<Memory>::run() noexcept {
+  void Service::run() noexcept {
     while (!stopping_.load(std::memory_order_acquire)) {
       try {
         step();
@@ -745,8 +714,7 @@ namespace telar::runtime::traffic {
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  void Service<Memory>::step() {
+  void Service::step() {
     std::array<pollfd, maximum_peers + 3> descriptors{};
 
     descriptors[0] = {.fd = listener_.descriptor(), .events = POLLIN, .revents = 0};
@@ -904,8 +872,7 @@ namespace telar::runtime::traffic {
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  void Service<Memory>::accept() {
+  void Service::accept() {
     auto socket = listener_.accept(LocalPeerPolicy::same_user_or_root);
     if (!socket) {
       return;
@@ -924,8 +891,7 @@ namespace telar::runtime::traffic {
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  void Service<Memory>::read(Peer& peer) {
+  void Service::read(Peer& peer) {
     constexpr std::size_t frames_per_tick = 32;
 
     for (std::size_t frame = 0; frame < frames_per_tick; ++frame) {
@@ -1014,8 +980,7 @@ namespace telar::runtime::traffic {
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  bool Service<Memory>::greet(Peer& peer) {
+  bool Service::greet(Peer& peer) {
     if (peer.package && peer.package->permission && !peer.package->permission->load(std::memory_order_acquire)) {
       throw EncodingError{"Package traffic permission revoked"};
     }
@@ -1101,8 +1066,7 @@ namespace telar::runtime::traffic {
     return true;
   }
 
-  template <ConcurrentAllocator Memory>
-  void Service<Memory>::control(Peer& peer) {
+  void Service::control(Peer& peer) {
     if (peer.package && peer.package->permission && !peer.package->permission->load(std::memory_order_acquire)) {
       throw EncodingError{"Package traffic permission revoked"};
     }
@@ -1147,16 +1111,14 @@ namespace telar::runtime::traffic {
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  auto Service<Memory>::encode(const Event& event) -> std::shared_ptr<Frame> {
+  auto Service::encode(const Event& event) -> std::shared_ptr<Frame> {
     auto frame = std::allocate_shared<Frame>(AllocatorRef<Frame, SensitiveMemory>{memory_}, upstream_, Protocol::encodedSize(event));
 
     Protocol::encode(frame->bytes.bytes(), event);
     return frame;
   }
 
-  template <ConcurrentAllocator Memory>
-  void Service<Memory>::publish(const Event& event, std::shared_ptr<Frame> shared) {
+  void Service::publish(const Event& event, std::shared_ptr<Frame> shared) {
     shared = recordings_.record(event, std::move(shared));
     for (auto& peer : peers_) {
       if (!peer || peer->failed) {
@@ -1187,8 +1149,7 @@ namespace telar::runtime::traffic {
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  void Service<Memory>::enqueue(Peer& peer, std::shared_ptr<Frame> frame) {
+  void Service::enqueue(Peer& peer, std::shared_ptr<Frame> frame) {
     if (peer.count == peer.queue.size()) {
       ++peer.dropped;
       return;
@@ -1202,8 +1163,7 @@ namespace telar::runtime::traffic {
     ++peer.count;
   }
 
-  template <ConcurrentAllocator Memory>
-  void Service<Memory>::write(Peer& peer) {
+  void Service::write(Peer& peer) {
     for (std::size_t round = 0; round < Limits::pending_frames && peer.count != 0; ++round) {
       auto& delivery = peer.queue[peer.head];
       const auto prefix = std::span<const Byte>{delivery.prefix};
@@ -1230,13 +1190,11 @@ namespace telar::runtime::traffic {
 
 namespace telar::runtime::traffic::control {
 
-  template <Allocator Memory>
-  TrustCommand<Memory>::TrustCommand(Memory& memory, const std::atomic<bool>& cancelled) noexcept
+  TrustCommand::TrustCommand(ConcurrentMemory& memory, const std::atomic<bool>& cancelled) noexcept
       : memory_(memory),
         cancelled_(cancelled) {}
 
-  template <Allocator Memory>
-  void TrustCommand<Memory>::run(std::span<const std::string_view> arguments) {
+  void TrustCommand::run(std::span<const std::string_view> arguments) {
     bool allowed = !arguments.empty() && arguments.front() == "/usr/bin/security";
 #if defined(__linux__)
     constexpr std::array executables{"/usr/bin/trust", "/usr/bin/install", "/usr/bin/rm", "/usr/sbin/update-ca-certificates"};
@@ -1256,19 +1214,16 @@ namespace telar::runtime::traffic::control {
 
 namespace telar::runtime::traffic {
 
-  template class Service<ConcurrentMemory>;
-  template class Interception<ConcurrentMemory>;
+  template class Interception<>;
 
 }
 
 namespace telar::runtime::traffic::control {
 
-  template class TrustCommand<ConcurrentMemory>;
-
 }
 
 namespace telar::runtime::traffic {
 
-  template class Interception<ConcurrentMemory, HttpMessageLimits::message_bytes>;
+  template class Interception<HttpMessageLimits::message_bytes>;
 
 }

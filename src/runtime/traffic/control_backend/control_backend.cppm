@@ -108,9 +108,9 @@ export {
     // Each chunk snapshots registration order. A new ticket authenticates every step of the chain.
     // Decides intercepted exchanges with the hooks registered for them. Proxy threads offer exchanges and
     // the control thread decides them, at once, under its mutex.
-    template <ConcurrentAllocator Memory, std::size_t maximum_bytes = FlowControl::chunk_bytes>
+    template <std::size_t maximum_bytes = FlowControl::chunk_bytes>
     class TBC_SHARED Interception {
-      using Secure = ErasingAllocator<Memory>;
+      using Secure = ErasingAllocator<ConcurrentMemory>;
       using Owner = std::uint64_t;
 
       struct Route {
@@ -122,10 +122,10 @@ export {
       };
 
       struct Registration {
-        Registration(Memory& memory, Owner owner, InterceptionRule rule, std::uint64_t generation, std::uint64_t order);
+        Registration(ConcurrentMemory& memory, Owner owner, InterceptionRule rule, std::uint64_t generation, std::uint64_t order);
 
         Route route;
-        ProxyHostPolicy<Memory> hosts;
+        ProxyHostPolicy<ConcurrentMemory> hosts;
         Byte directions;
         Byte visibility;
         bool available = true;
@@ -158,7 +158,7 @@ export {
       using Registrations = std::array<std::optional<Registration>, Limits::subscribers>;
 
     public:
-      explicit Interception(Memory& memory, CompletionSignal* completion = nullptr, CompletionSignal* requests = nullptr);
+      explicit Interception(ConcurrentMemory& memory, CompletionSignal* completion = nullptr, CompletionSignal* requests = nullptr);
 
       void configure(InterceptionRule rule);
 
@@ -238,7 +238,7 @@ export {
       static void advance(Pending& pending, Verdict verdict, const Registrations& registrations, std::uint64_t& next, CompletionSignal& completion, CompletionSignal& requests) noexcept;
 
       static constexpr Owner default_owner = 1;
-      Memory& upstream_;
+      ConcurrentMemory& upstream_;
       Secure memory_;
       std::mutex mutex_;
       Registrations registrations_;
@@ -252,9 +252,9 @@ export {
       std::atomic<std::size_t> active_{0};
     };
 
-    extern template class Interception<ConcurrentMemory, HttpMessageLimits::message_bytes>;
+    extern template class Interception<HttpMessageLimits::message_bytes>;
 
-    extern template class Interception<ConcurrentMemory>;
+    extern template class Interception<>;
 
   }
 }
@@ -317,18 +317,18 @@ export {
 
     // Recording sessions proxy threads append to and clients page through, under its mutex.
     // Generic over the caller's clock.
-    template <ConcurrentAllocator Memory, typename Clock = std::chrono::steady_clock>
+    template <typename Clock = std::chrono::steady_clock>
     class TBC_SHARED TBC_HOT_PATH Recordings {
       using Request = recording::Request;
 
       struct Entry {
         std::uint64_t cursor;
         typename Clock::time_point created;
-        std::shared_ptr<EventFrame<Memory>> frame;
+        std::shared_ptr<EventFrame> frame;
       };
 
       struct Session {
-        inline explicit Session(Memory& memory, const Request& request, std::uint64_t id, recording::Owner owner)
+        inline explicit Session(ConcurrentMemory& memory, const Request& request, std::uint64_t id, recording::Owner owner)
             : id(id),
               owner(std::move(owner)),
               budget(request.max_bytes),
@@ -336,7 +336,7 @@ export {
               selection(request.selection),
               filter(request.filter),
               host(memory),
-              entries(AllocatorRef<std::optional<Entry>, Memory>{memory}) {
+              entries(AllocatorRef<std::optional<Entry>, ConcurrentMemory>{memory}) {
           if (!request.host.empty() && !host.append(request.host)) {
             throw EncodingError{"Invalid recording host scope"};
           }
@@ -373,8 +373,8 @@ export {
         std::chrono::milliseconds age;
         Selection selection;
         Filter filter;
-        ProxyHostPolicy<Memory> host;
-        Vector<std::optional<Entry>, Memory> entries;
+        ProxyHostPolicy<ConcurrentMemory> host;
+        Vector<std::optional<Entry>, ConcurrentMemory> entries;
         std::size_t bytes = 0;
         std::size_t head = 0;
         std::size_t count = 0;
@@ -386,7 +386,7 @@ export {
 
     public:
       // Frames it records come from its allocator, region `a`.
-      inline explicit Recordings(tbc::view<Memory&, tbc::lt::a> memory) noexcept
+      inline explicit Recordings(tbc::view<ConcurrentMemory&, tbc::lt::a> memory) noexcept
           : memory_(memory) {
         randomBytes(&next_id_, sizeof(next_id_));
       }
@@ -396,7 +396,7 @@ export {
       }
 
       // The frame recorded: the one given, or one allocated here.
-      inline tbc::view<std::shared_ptr<EventFrame<Memory>>, tbc::lt::a> record(const Event& event, tbc::view<std::shared_ptr<EventFrame<Memory>>, tbc::lt::a> shared = {}) noexcept {
+      inline tbc::view<std::shared_ptr<EventFrame>, tbc::lt::a> record(const Event& event, tbc::view<std::shared_ptr<EventFrame>, tbc::lt::a> shared = {}) noexcept {
         if (!selected(Selection::all, event.kind) || interest_.load(std::memory_order_acquire) == 0) {
           return shared;
         }
@@ -434,7 +434,7 @@ export {
             }
 
             if (!shared) {
-              shared = std::allocate_shared<EventFrame<Memory>>(AllocatorRef<EventFrame<Memory>, Memory>{memory_}, memory_, size);
+              shared = std::allocate_shared<EventFrame>(AllocatorRef<EventFrame, ConcurrentMemory>{memory_}, memory_, size);
               Protocol::encode(shared->bytes.bytes(), event);
             }
 
@@ -670,7 +670,7 @@ export {
         return public_event && (mask & static_cast<Byte>(bit)) != 0;
       }
 
-      inline static bool matches(const ProxyHostPolicy<Memory>& scope, const Event& event) {
+      inline static bool matches(const ProxyHostPolicy<ConcurrentMemory>& scope, const Event& event) {
         if (scope.patterns().empty()) {
           return true;
         }
@@ -698,7 +698,7 @@ export {
         interest_.store(mask, std::memory_order_release);
       }
 
-      tbc::view<Memory&, tbc::lt::a> memory_;
+      tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
       tbc::view<std::array<std::optional<Session>, recording::Limits::sessions>, tbc::lt::a> sessions_;
       std::uint64_t next_id_;
       std::mutex mutex_;
@@ -714,13 +714,12 @@ export {
   namespace telar::runtime::traffic {
 
     // The traffic control service: its own thread serves clients while proxy threads report flows to it.
-    template <ConcurrentAllocator Memory>
     class TBC_SHARED Service : public FlowControl, public HttpControl, public PackagePort {
-      using SensitiveMemory = ErasingAllocator<Memory>;
+      using SensitiveMemory = ErasingAllocator<ConcurrentMemory>;
       using Bytes = Vector<Byte, SensitiveMemory>;
       static constexpr std::size_t maximum_peers = Limits::subscribers * 2 + 1;
 
-      using Frame = EventFrame<Memory>;
+      using Frame = EventFrame;
 
       struct Delivery {
         std::shared_ptr<Frame> frame;
@@ -768,7 +767,7 @@ export {
       };
 
     public:
-      explicit Service(Memory& memory, std::string_view path, bool allow_interception = false);
+      explicit Service(ConcurrentMemory& memory, std::string_view path, bool allow_interception = false);
 
       ~Service();
 
@@ -812,7 +811,7 @@ export {
 
       bool captureStopped(std::uint64_t revision) const noexcept;
 
-      void submit(CapturedExchange<Memory>& exchange) noexcept;
+      void submit(CapturedExchange& exchange) noexcept;
 
       void observeFlow(Kind kind, const FlowEvent& flow) noexcept override;
 
@@ -863,7 +862,7 @@ export {
 
       static void write(Peer& peer);
 
-      Memory& upstream_;
+      ConcurrentMemory& upstream_;
       SensitiveMemory memory_;
       LocalListener listener_;
       CompletionSignal wake_;
@@ -873,10 +872,10 @@ export {
       std::chrono::steady_clock::time_point heartbeat_ = std::chrono::steady_clock::now();
       bool producer_ = false;
       std::atomic<std::uint64_t> next_owner_{0};
-      Interception<Memory> interception_;
-      Interception<Memory, HttpMessageLimits::message_bytes> http_interception_;
-      CaptureAnalysis<Memory> analysis_;
-      Recordings<Memory> recordings_;
+      Interception<> interception_;
+      Interception<HttpMessageLimits::message_bytes> http_interception_;
+      CaptureAnalysis analysis_;
+      Recordings<> recordings_;
       bool allow_interception_;
       DropChannel<std::shared_ptr<Frame>, Limits::pending_frames> injections_;
       DropChannel<Attachment, Limits::subscribers, ChannelPolicy::keep_oldest> attachments_;
@@ -893,8 +892,6 @@ export {
       std::atomic<control::PackagePort*> package_control_{nullptr};
     };
 
-    extern template class Service<ConcurrentMemory>;
-
   }
 }
 
@@ -902,19 +899,16 @@ export {
 export {
   namespace telar::runtime::traffic::control {
 
-    template <Allocator Memory>
     class TrustCommand : public proxy_trust::TrustCommandRunner {
     public:
-      explicit TrustCommand(Memory& memory, const std::atomic<bool>& cancelled) noexcept;
+      explicit TrustCommand(ConcurrentMemory& memory, const std::atomic<bool>& cancelled) noexcept;
 
       void run(std::span<const std::string_view> arguments) override;
 
     private:
-      Memory& memory_;
+      ConcurrentMemory& memory_;
       const std::atomic<bool>& cancelled_;
     };
-
-    extern template class TrustCommand<ConcurrentMemory>;
 
     struct Configuration {
       std::string_view endpoint;
@@ -927,13 +921,13 @@ export {
     };
 
     // Generic over the caller's proxy.
-    template <ConcurrentAllocator Memory, typename Proxy>
+    template <typename Proxy>
     class TBC_HOT_PATH Backend {
       using Clock = std::chrono::steady_clock;
 
     public:
       // What it keeps of its owner, and what its replies view of it, is region `a`.
-      inline explicit Backend(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<Proxy&, tbc::lt::a> proxy, tbc::view<traffic::Service<Memory>*, tbc::lt::a> capture, tbc::view<Configuration, tbc::lt::a> configuration)
+      inline explicit Backend(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<Proxy&, tbc::lt::a> proxy, tbc::view<traffic::Service*, tbc::lt::a> capture, tbc::view<Configuration, tbc::lt::a> configuration)
           : memory_(memory),
             proxy_(proxy),
             capture_(capture),
@@ -961,7 +955,7 @@ export {
       inline void tick() noexcept {
         reap(capture_child_);
         reap(redirect_child_);
-        if (capture_cancelled_ && capture_child_ > 0 && capture_ && capture_->captureStatus().state != traffic::Service<Memory>::CaptureState::idle) {
+        if (capture_cancelled_ && capture_child_ > 0 && capture_ && capture_->captureStatus().state != traffic::Service::CaptureState::idle) {
           capture_->stopCapture();
         }
 
@@ -975,7 +969,7 @@ export {
 
       inline tbc::view<std::span<const Byte>, tbc::lt::a> handle(const Request& request, tbc::view<std::span<Byte>, tbc::lt::a> output, const std::atomic<bool>& cancelled, const plugins::ServiceSpec* package = nullptr) {
         Reply reply;
-        std::optional<SensitiveAllocation<Memory>> recording_output;
+        std::optional<SensitiveAllocation<ConcurrentMemory>> recording_output;
         std::array<char, 1025> error{};
 
         try {
@@ -1095,13 +1089,13 @@ export {
           const auto capture = capture_->captureStatus();
 
           switch (capture.state) {
-          case traffic::Service<Memory>::CaptureState::idle:
+          case traffic::Service::CaptureState::idle:
             status.capture = CaptureState::idle;
             break;
-          case traffic::Service<Memory>::CaptureState::live:
+          case traffic::Service::CaptureState::live:
             status.capture = CaptureState::live;
             break;
-          case traffic::Service<Memory>::CaptureState::offline:
+          case traffic::Service::CaptureState::offline:
             status.capture = CaptureState::offline;
             break;
           }
@@ -1168,11 +1162,11 @@ export {
           return;
         }
 
-        if (capture && capture_->captureStatus().state == traffic::Service<Memory>::CaptureState::live) {
+        if (capture && capture_->captureStatus().state == traffic::Service::CaptureState::live) {
           return;
         }
 
-        if ((capture && capture_->captureStatus().state == traffic::Service<Memory>::CaptureState::offline) || (!capture && proxy_.redirectStatus() != redirect::MonitorState::idle && proxy_.redirectStatus() != redirect::MonitorState::cleanup_required)) {
+        if ((capture && capture_->captureStatus().state == traffic::Service::CaptureState::offline) || (!capture && proxy_.redirectStatus() != redirect::MonitorState::idle && proxy_.redirectStatus() != redirect::MonitorState::cleanup_required)) {
           reply.result = Result::busy;
           reply.message = "An existing helper must stop before its selection changes";
           return;
@@ -1238,7 +1232,7 @@ export {
         checkSpawn(::posix_spawn(&started, specification.executable, &spawn.actions, &spawn.attributes, specification.arguments, specification.environment));
         child = started;
         const auto ready = [&] {
-          return capture ? capture_->captureStatus().state == traffic::Service<Memory>::CaptureState::live : proxy_.redirectStatus() == redirect::MonitorState::active;
+          return capture ? capture_->captureStatus().state == traffic::Service::CaptureState::live : proxy_.redirectStatus() == redirect::MonitorState::active;
         };
 
         wait([&] {
@@ -1296,9 +1290,9 @@ export {
         }
       }
 
-      tbc::view<Memory&, tbc::lt::a> memory_;
+      tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
       tbc::view<Proxy&, tbc::lt::a> proxy_;
-      tbc::view<traffic::Service<Memory>*, tbc::lt::a> capture_;
+      tbc::view<traffic::Service*, tbc::lt::a> capture_;
       tbc::view<Configuration, tbc::lt::a> configuration_;
       static_assert(Limits::processes == redirect::SocketOwners::maximum_processes);
       static_assert(Limits::targets == redirect::Target::maximum_targets);

@@ -8,8 +8,7 @@ import telar.sys.process;
 
 namespace telar::runtime {
 
-  template <Allocator Memory>
-  void LimitService<Memory>::receive(RuntimeLimits& limits, ClientSession<Memory>& client, const ReportLimit& message) {
+  void LimitService::receive(RuntimeLimits& limits, ClientSession& client, const ReportLimit& message) {
     if (!admit(limits, client)) {
       return;
     }
@@ -20,8 +19,7 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  void LimitService<Memory>::report(const LimitReach& reach) noexcept {
+  void LimitService::report(const LimitReach& reach) noexcept {
     if (reports_ == reached_.size()) {
       dropped_ = saturatedAdd(dropped_, 1);
       return;
@@ -36,13 +34,11 @@ namespace telar::runtime {
     copy.requested = reach.requested;
   }
 
-  template <Allocator Memory>
-  void LimitService<Memory>::query(ClientSession<Memory>& client, const QueryLimits& request) {
+  void LimitService::query(ClientSession& client, const QueryLimits& request) {
     client.connection.defer(request);
   }
 
-  template <Allocator Memory>
-  void LimitService<Memory>::deliver(RuntimeModel<Memory>& model, ClientStore<Memory>& clients) noexcept {
+  void LimitService::deliver(RuntimeModel& model, ClientStore& clients) noexcept {
     for (const auto& reached : std::span{reached_}.first(reports_)) {
       const auto recorded = model.limits.runtime.record({reached.name.view(), reached.noun.view(), reached.value, reached.requested, reached.route.view()}, 1);
       if (recorded.show) {
@@ -66,15 +62,13 @@ namespace telar::runtime {
     shows_ = 0;
   }
 
-  template <Allocator Memory>
-  void LimitService<Memory>::queueShow(Ledger ledger, std::size_t slot) noexcept {
+  void LimitService::queueShow(Ledger ledger, std::size_t slot) noexcept {
     if (shows_ < shown_.size()) {
       shown_[shows_++] = {ledger, slot};
     }
   }
 
-  template <Allocator Memory>
-  bool LimitService<Memory>::admit(RuntimeLimits& limits, ClientSession<Memory>& client) noexcept {
+  bool LimitService::admit(RuntimeLimits& limits, ClientSession& client) noexcept {
     const auto now = std::chrono::steady_clock::now();
     if (now - client.limit_report_window >= std::chrono::seconds{1}) {
       client.limit_report_window = now;
@@ -90,8 +84,7 @@ namespace telar::runtime {
     return true;
   }
 
-  template <Allocator Memory>
-  void LimitService<Memory>::show(ClientStore<Memory>& clients, const LimitLedger::Row& row) noexcept {
+  void LimitService::show(ClientStore& clients, const LimitLedger::Row& row) noexcept {
     std::array<char, 256> text{};
     const auto reach = row.reach();
     const char* separator = reach.noun.empty() ? "" : " ";
@@ -111,26 +104,24 @@ namespace telar::runtime {
 
     const Notification notification{NotificationBody{.level = NotificationLevel::warning, .duration_ms = 8000, .title = "Limit reached", .message = {text.data(), static_cast<std::size_t>(length)}}};
 
-    broadcast(clients, [](const ClientSession<Memory>& client) {
+    broadcast(clients, [](const ClientSession& client) {
       return client.role == ClientRole::interactive;
     },
         notification);
   }
 
-  template class LimitService<ConcurrentMemory>;
-
-  template <Allocator Memory, EventLoop Poller>
-  ClientAdmission<Memory, Poller>::ClientAdmission(Poller& poller, LimitService<Memory>& limits)
+  template <EventLoop Poller>
+  ClientAdmission<Poller>::ClientAdmission(Poller& poller, LimitService& limits)
       : poller_(poller),
         limits_(limits) {}
 
-  template <Allocator Memory, EventLoop Poller>
-  ClientAdmission<Memory, Poller>::~ClientAdmission() {
+  template <EventLoop Poller>
+  ClientAdmission<Poller>::~ClientAdmission() {
     clear();
   }
 
-  template <Allocator Memory, EventLoop Poller>
-  void ClientAdmission<Memory, Poller>::begin(std::size_t clients, FileDescriptor descriptor) {
+  template <EventLoop Poller>
+  void ClientAdmission<Poller>::begin(std::size_t clients, FileDescriptor descriptor) {
     constexpr std::size_t maximum_clients = client_capacity;
     std::size_t reserved = 0;
 
@@ -165,8 +156,8 @@ namespace telar::runtime {
     limits_.report({"clients.max_pending_handshakes", "handshakes", capacity, {}, {}});
   }
 
-  template <Allocator Memory, EventLoop Poller>
-  void ClientAdmission<Memory, Poller>::expire(std::chrono::steady_clock::time_point now) noexcept {
+  template <EventLoop Poller>
+  void ClientAdmission<Poller>::expire(std::chrono::steady_clock::time_point now) noexcept {
     if (count_ == 0) {
       return;
     }
@@ -178,8 +169,8 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory, EventLoop Poller>
-  void ClientAdmission<Memory, Poller>::clear() noexcept {
+  template <EventLoop Poller>
+  void ClientAdmission<Poller>::clear() noexcept {
     for (std::size_t slot = 0; slot < capacity; ++slot) {
       if (pending_[slot]) {
         drop(slot);
@@ -187,8 +178,8 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory, EventLoop Poller>
-  std::optional<FileDescriptor> ClientAdmission<Memory, Poller>::advance(const Event& event) {
+  template <EventLoop Poller>
+  std::optional<FileDescriptor> ClientAdmission<Poller>::advance(const Event& event) {
     const auto slot = eventIdentity(event.token) % capacity;
     auto& pending = pending_[slot];
     if (!pending || event.token != token(slot) || event.descriptor != pending->descriptor()) {
@@ -230,22 +221,21 @@ namespace telar::runtime {
     return std::nullopt;
   }
 
-  template <Allocator Memory, EventLoop Poller>
-  std::uint64_t ClientAdmission<Memory, Poller>::token(std::size_t slot) const noexcept {
+  template <EventLoop Poller>
+  std::uint64_t ClientAdmission<Poller>::token(std::size_t slot) const noexcept {
     return eventToken(EventSource::handshake, generations_[slot] * capacity + slot);
   }
 
-  template <Allocator Memory, EventLoop Poller>
-  void ClientAdmission<Memory, Poller>::drop(std::size_t slot) noexcept {
+  template <EventLoop Poller>
+  void ClientAdmission<Poller>::drop(std::size_t slot) noexcept {
     poller_.remove(pending_[slot]->descriptor());
     pending_[slot].reset();
     --count_;
   }
 
-  template class ClientAdmission<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>>;
+  template class ClientAdmission<NativeEventLoop<ConcurrentMemory>>;
 
-  template <Allocator Memory>
-  void notifyWorkspaceObservers(ClientStore<Memory>& clients, std::uint64_t workspace, std::uint64_t origin, std::optional<std::uint64_t> previous) noexcept {
+  void notifyWorkspaceObservers(ClientStore& clients, std::uint64_t workspace, std::uint64_t origin, std::optional<std::uint64_t> previous) noexcept {
     for (auto* client : clients.items()) {
       if (client != nullptr && client->id != origin && client->connection.negotiated && !client->connection.closing && client->workspace == workspace) {
         client->workspace_resync = ResyncRequired{.workspace = {.id = workspace}, .previous_workspace = previous};
@@ -253,8 +243,7 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  std::optional<std::uint64_t> previousWorkspace(const WorkspaceStore<Memory>& workspaces, std::uint64_t identity) noexcept {
+  std::optional<std::uint64_t> previousWorkspace(const WorkspaceStore& workspaces, std::uint64_t identity) noexcept {
     const auto items = workspaces.items();
 
     for (std::size_t index = 0; index < items.size(); ++index) {
@@ -275,11 +264,7 @@ namespace telar::runtime {
     return std::nullopt;
   }
 
-  template void notifyWorkspaceObservers<ConcurrentMemory>(ClientStore<ConcurrentMemory>& clients, std::uint64_t workspace, std::uint64_t origin, std::optional<std::uint64_t> previous) noexcept;
-  template std::optional<std::uint64_t> previousWorkspace<ConcurrentMemory>(const WorkspaceStore<ConcurrentMemory>& workspaces, std::uint64_t identity) noexcept;
-
-  template <Allocator Memory>
-  bool acquireGeometry(PaneStore<Memory>& panes, [[maybe_unused]] diagnostics::RuntimeCounters& metrics, const ClientSession<Memory>& client, Workspace<Memory>& workspace) {
+  bool acquireGeometry(PaneStore& panes, [[maybe_unused]] diagnostics::RuntimeCounters& metrics, const ClientSession& client, Workspace& workspace) {
     if (workspace.geometry_client) {
       TELAR_DIAGNOSTIC(if (*workspace.geometry_client != client.id) { diagnostics::accumulate(metrics.geometry_rejections); });
       return *workspace.geometry_client == client.id;
@@ -298,26 +283,20 @@ namespace telar::runtime {
     return true;
   }
 
-  template <Allocator Memory>
-  void releaseGeometry(ClientStore<Memory>& clients, std::uint64_t client, Workspace<Memory>& workspace) noexcept {
+  void releaseGeometry(ClientStore& clients, std::uint64_t client, Workspace& workspace) noexcept {
     if (workspace.geometry_client == client) {
       workspace.geometry_client.reset();
       notifyWorkspaceObservers(clients, workspace.id, client);
     }
   }
 
-  template <Allocator Memory>
-  void releaseAllGeometry(WorkspaceStore<Memory>& workspaces, ClientStore<Memory>& clients, std::uint64_t client) noexcept {
+  void releaseAllGeometry(WorkspaceStore& workspaces, ClientStore& clients, std::uint64_t client) noexcept {
     for (auto* workspace : workspaces.items()) {
       if (workspace != nullptr) {
         releaseGeometry(clients, client, *workspace);
       }
     }
   }
-
-  template bool acquireGeometry<ConcurrentMemory>(PaneStore<ConcurrentMemory>& panes, diagnostics::RuntimeCounters& metrics, const ClientSession<ConcurrentMemory>& client, Workspace<ConcurrentMemory>& workspace);
-  template void releaseGeometry<ConcurrentMemory>(ClientStore<ConcurrentMemory>& clients, std::uint64_t client, Workspace<ConcurrentMemory>& workspace) noexcept;
-  template void releaseAllGeometry<ConcurrentMemory>(WorkspaceStore<ConcurrentMemory>& workspaces, ClientStore<ConcurrentMemory>& clients, std::uint64_t client) noexcept;
 
   std::string_view launchFailureCause(const std::exception& error) noexcept {
     if (dynamic_cast<const std::bad_alloc*>(&error) != nullptr) {
@@ -335,15 +314,15 @@ namespace telar::runtime {
     return "Unexpected";
   }
 
-  template <Allocator Memory, EventLoop Poller>
-  ExecutionService<Memory, Poller>::ExecutionService(Memory& memory, Poller& poller, LimitService<Memory>& limits)
+  template <EventLoop Poller>
+  ExecutionService<Poller>::ExecutionService(ConcurrentMemory& memory, Poller& poller, LimitService& limits)
       : memory_(memory),
         poller_(poller),
         limits_(limits),
         executions_(memory) {}
 
-  template <Allocator Memory, EventLoop Poller>
-  ExecutionService<Memory, Poller>::~ExecutionService() {
+  template <EventLoop Poller>
+  ExecutionService<Poller>::~ExecutionService() {
     for (auto* execution : executions_.items()) {
       if (execution != nullptr) {
         unwatch(poller_, *execution);
@@ -351,8 +330,8 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory, EventLoop Poller>
-  void ExecutionService<Memory, Poller>::request(RuntimeModel<Memory>& model, ClientSession<Memory>& client, const ExecutionRequest& request) {
+  template <EventLoop Poller>
+  void ExecutionService<Poller>::request(RuntimeModel& model, ClientSession& client, const ExecutionRequest& request) {
     TELAR_TRACE("execution.request");
     if (request.action == ExecutionAction::list) {
       list(client, request);
@@ -404,8 +383,8 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory, EventLoop Poller>
-  void ExecutionService<Memory, Poller>::event(const Event& event) {
+  template <EventLoop Poller>
+  void ExecutionService<Poller>::event(const Event& event) {
     auto* execution = executions_.find(eventIdentity(event.token));
     if (execution == nullptr || !execution->process) {
       return;
@@ -446,8 +425,8 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory, EventLoop Poller>
-  bool ExecutionService<Memory, Poller>::refresh(RuntimeModel<Memory>& model) noexcept {
+  template <EventLoop Poller>
+  bool ExecutionService<Poller>::refresh(RuntimeModel& model) noexcept {
     bool running = false;
 
     for (auto* execution : executions_.items()) {
@@ -478,8 +457,8 @@ namespace telar::runtime {
     return running;
   }
 
-  template <Allocator Memory, EventLoop Poller>
-  void ExecutionService<Memory, Poller>::disconnect(std::uint64_t client_id) {
+  template <EventLoop Poller>
+  void ExecutionService<Poller>::disconnect(std::uint64_t client_id) {
     for (auto* execution : executions_.items()) {
       if (execution != nullptr && execution->input_owner == client_id) {
         execution->input_owner.reset();
@@ -489,8 +468,8 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory, EventLoop Poller>
-  Execution<Memory>* ExecutionService<Memory, Poller>::find(std::uint64_t identity) const noexcept {
+  template <EventLoop Poller>
+  Execution<ConcurrentMemory>* ExecutionService<Poller>::find(std::uint64_t identity) const noexcept {
     for (auto* execution : executions_.items()) {
       if (execution != nullptr && execution->id == identity) {
         return execution;
@@ -500,8 +479,8 @@ namespace telar::runtime {
     return nullptr;
   }
 
-  template <Allocator Memory, EventLoop Poller>
-  Execution<Memory>& ExecutionService<Memory, Poller>::start(RuntimeModel<Memory>& model, std::uint64_t client_id, const ExecutionRequest& request) {
+  template <EventLoop Poller>
+  Execution<ConcurrentMemory>& ExecutionService<Poller>::start(RuntimeModel& model, std::uint64_t client_id, const ExecutionRequest& request) {
     if (executions_.size() == capacity) {
       limits_.report(LimitReach{.name = "executions.capacity", .noun = "retained executions", .value = capacity, .requested = capacity + 1});
       throw RequestError{FailureCode::resource_limit, "ExecutionLimitReached"};
@@ -515,7 +494,7 @@ namespace telar::runtime {
     }
 
     const std::string_view cwd = request.cwd.empty() ? std::string_view{workspace->path} : request.cwd;
-    auto execution = makeOwned<Execution<Memory>>(memory_, memory_, token, request, workspace_id, cwd);
+    auto execution = makeOwned<Execution<ConcurrentMemory>>(memory_, memory_, token, request, workspace_id, cwd);
 
     execution->input_owner = request.stdin_open ? std::optional{client_id} : std::nullopt;
     try {
@@ -532,8 +511,8 @@ namespace telar::runtime {
     return *executions_.find(token);
   }
 
-  template <Allocator Memory, EventLoop Poller>
-  std::uint64_t ExecutionService<Memory, Poller>::administration(RuntimeModel<Memory>& model) {
+  template <EventLoop Poller>
+  std::uint64_t ExecutionService<Poller>::administration(RuntimeModel& model) {
     if (model.workspaces.find(administration_) != nullptr) {
       return administration_;
     }
@@ -544,7 +523,7 @@ namespace telar::runtime {
     }
 
     const auto identity = model.workspaces.nextId();
-    auto workspace = makeOwned<Workspace<Memory>>(memory_, memory_, identity, home, "Administration");
+    auto workspace = makeOwned<Workspace>(memory_, memory_, identity, home, "Administration");
 
     model.workspaces.insert(identity, std::move(workspace));
     administration_ = identity;
@@ -552,8 +531,8 @@ namespace telar::runtime {
     return identity;
   }
 
-  template <Allocator Memory, EventLoop Poller>
-  void ExecutionService<Memory, Poller>::releaseAdministration(RuntimeModel<Memory>& model) noexcept {
+  template <EventLoop Poller>
+  void ExecutionService<Poller>::releaseAdministration(RuntimeModel& model) noexcept {
     if (administration_ == 0) {
       return;
     }
@@ -573,8 +552,8 @@ namespace telar::runtime {
     administration_ = 0;
   }
 
-  template <Allocator Memory, EventLoop Poller>
-  void ExecutionService<Memory, Poller>::receiveInput(Execution<Memory>& execution, std::uint64_t client_id, const ExecutionRequest& request) {
+  template <EventLoop Poller>
+  void ExecutionService<Poller>::receiveInput(Execution<ConcurrentMemory>& execution, std::uint64_t client_id, const ExecutionRequest& request) {
     if (execution.input_owner != client_id) {
       throw RequestError{FailureCode::invalid_request, "ExecutionInputOwned"};
     }
@@ -595,7 +574,7 @@ namespace telar::runtime {
       throw RequestError{FailureCode::invalid_request, "ExecutionInputClosed"};
     }
 
-    if (request.bytes.size() > Execution<Memory>::input_capacity - execution.input.size()) {
+    if (request.bytes.size() > Execution<ConcurrentMemory>::input_capacity - execution.input.size()) {
       throw RequestError{FailureCode::invalid_request, "ExecutionBusy"};
     }
 
@@ -603,8 +582,8 @@ namespace telar::runtime {
     execution.input_written += request.bytes.size();
   }
 
-  template <Allocator Memory, EventLoop Poller>
-  void ExecutionService<Memory, Poller>::flushInput(Poller& poller, Execution<Memory>& execution) {
+  template <EventLoop Poller>
+  void ExecutionService<Poller>::flushInput(Poller& poller, Execution<ConcurrentMemory>& execution) {
     if (!execution.process || execution.process->input() < 0) {
       return;
     }
@@ -632,8 +611,8 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory, EventLoop Poller>
-  void ExecutionService<Memory, Poller>::closeInput(Poller& poller, Execution<Memory>& execution) noexcept {
+  template <EventLoop Poller>
+  void ExecutionService<Poller>::closeInput(Poller& poller, Execution<ConcurrentMemory>& execution) noexcept {
     if (execution.process && execution.process->input() >= 0) {
       poller.remove(execution.process->input());
       execution.process->closeInput();
@@ -641,8 +620,8 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory, EventLoop Poller>
-  void ExecutionService<Memory, Poller>::unwatch(Poller& poller, Execution<Memory>& execution) noexcept {
+  template <EventLoop Poller>
+  void ExecutionService<Poller>::unwatch(Poller& poller, Execution<ConcurrentMemory>& execution) noexcept {
     if (!execution.process) {
       return;
     }
@@ -654,8 +633,8 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory, EventLoop Poller>
-  void ExecutionService<Memory, Poller>::send(ClientSession<Memory>& client, const Execution<Memory>& execution, const ExecutionRequest& request, bool started) {
+  template <EventLoop Poller>
+  void ExecutionService<Poller>::send(ClientSession& client, const Execution<ConcurrentMemory>& execution, const ExecutionRequest& request, bool started) {
     const auto state = started && execution.state == ExecutionState::running ? ExecutionState::starting : execution.state;
     std::array<Byte, 4096> output;
     std::array<Byte, 4096> error;
@@ -663,7 +642,7 @@ namespace telar::runtime {
     const auto error_offset = std::max(request.stderr_offset, execution.error.retainedOffset());
     // Output older than the retained megabyte is gone; report that limit.
     if (output_offset != request.stdout_offset || error_offset != request.stderr_offset) {
-      limits_.report(LimitReach{.name = "executions.retained_bytes", .noun = "bytes per stream", .value = Execution<Memory>::retained_capacity, .requested = std::max(execution.output.total(), execution.error.total())});
+      limits_.report(LimitReach{.name = "executions.retained_bytes", .noun = "bytes per stream", .value = Execution<ConcurrentMemory>::retained_capacity, .requested = std::max(execution.output.total(), execution.error.total())});
     }
 
     client.connection.send(ExecutionReply{
@@ -675,7 +654,7 @@ namespace telar::runtime {
         .stdout_total = execution.output.total(),
         .stderr_total = execution.error.total(),
         .input_offset = execution.input_written,
-        .input_available = Execution<Memory>::input_capacity - execution.input.size(),
+        .input_available = Execution<ConcurrentMemory>::input_capacity - execution.input.size(),
         .state = state,
         .exit_code = execution.exit_code,
         .stdin_open = !execution.eof,
@@ -685,9 +664,9 @@ namespace telar::runtime {
     });
   }
 
-  template <Allocator Memory, EventLoop Poller>
-  void ExecutionService<Memory, Poller>::list(ClientSession<Memory>& client, const ExecutionRequest& request) {
-    const Execution<Memory>* selected = nullptr;
+  template <EventLoop Poller>
+  void ExecutionService<Poller>::list(ClientSession& client, const ExecutionRequest& request) {
+    const Execution<ConcurrentMemory>* selected = nullptr;
 
     for (const auto* execution : executions_.items()) {
       if (execution != nullptr && execution->id > request.execution_id && (selected == nullptr || execution->id < selected->id)) {
@@ -707,6 +686,6 @@ namespace telar::runtime {
     client.connection.send(reply);
   }
 
-  template class ExecutionService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>>;
+  template class ExecutionService<NativeEventLoop<ConcurrentMemory>>;
 
 }

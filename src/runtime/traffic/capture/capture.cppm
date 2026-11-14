@@ -47,7 +47,6 @@ export {
 
     // This helper accepts no executable code, routing commands, CA keys or subscriber filters.
     // Its only privileged operations are opening capture devices and reading their packets.
-    template <Allocator Memory>
     class Capture {
       struct Device {
         explicit Device(pcap_t* value, std::string_view interface, std::uint32_t identity);
@@ -113,11 +112,6 @@ export {
       bool offline_ = false;
     };
 
-    extern template class Capture<Memory>;
-
-    template <Allocator Memory>
-    Capture(Memory& memory, FileDescriptor socket) -> Capture<Memory>;
-
   }
 }
 
@@ -125,14 +119,11 @@ export {
 export {
   namespace telar::runtime::traffic {
 
-    template <Allocator Memory>
     struct EventFrame {
-      explicit EventFrame(Memory& memory, std::size_t size);
+      explicit EventFrame(ConcurrentMemory& memory, std::size_t size);
 
-      SensitiveAllocation<Memory> bytes;
+      SensitiveAllocation<ConcurrentMemory> bytes;
     };
-
-    extern template struct EventFrame<ConcurrentMemory>;
 
   }
 }

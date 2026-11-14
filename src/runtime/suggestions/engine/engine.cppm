@@ -18,15 +18,14 @@ export {
       std::chrono::milliseconds idle_timeout{300'000};
     };
 
-    template <Allocator Memory>
     class SuggestionEngine {
     public:
-      explicit SuggestionEngine(Memory& memory, SuggestionOptions options);
+      explicit SuggestionEngine(ConcurrentMemory& memory, SuggestionOptions options);
 
       bool available() const noexcept;
       void stop() noexcept;
       void idle() noexcept;
-      void suggest(const SuggestCommand& request, std::string_view prompt, EncodedReply<Memory>& reply);
+      void suggest(const SuggestCommand& request, std::string_view prompt, EncodedReply<ConcurrentMemory>& reply);
 
     private:
       using Clock = std::chrono::steady_clock;
@@ -41,19 +40,17 @@ export {
       void nextLine();
 
       static constexpr std::size_t maximum_record = 64 * 1024;
-      Memory& memory_;
+      ConcurrentMemory& memory_;
       SuggestionOptions options_;
       std::optional<PipeProcess> process_;
-      ByteQueue<Memory> input_;
-      String<Memory> line_;
-      String<Memory> text_;
-      String<Memory> encoded_;
+      ByteQueue<ConcurrentMemory> input_;
+      String<ConcurrentMemory> line_;
+      String<ConcurrentMemory> text_;
+      String<ConcurrentMemory> encoded_;
       Clock::time_point deadline_{};
       Clock::time_point last_used_{};
       std::atomic<bool> stopping_{false};
     };
-
-    extern template class SuggestionEngine<ConcurrentMemory>;
 
   }
 }
@@ -62,10 +59,7 @@ export {
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory>
-    String<Memory> suggestionPrompt(Memory& memory, std::string_view cwd, std::string_view screen, std::string_view request);
-
-    extern template String<ConcurrentMemory> suggestionPrompt<ConcurrentMemory>(ConcurrentMemory& memory, std::string_view cwd, std::string_view screen, std::string_view request);
+    String<ConcurrentMemory> suggestionPrompt(ConcurrentMemory& memory, std::string_view cwd, std::string_view screen, std::string_view request);
 
   }
 }

@@ -69,14 +69,14 @@ void testDescent() {
   MemoryAdapter adapter{system};
   ConcurrentMemory& memory = adapter;
   RuntimeModel model{memory};
-  ClientStore<ConcurrentMemory> clients{memory};
+  ClientStore clients{memory};
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
   Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
 
-  model.panes.insert(1, makeOwned<Pane<ConcurrentMemory>>(memory, memory, 1, TabLocation{}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits}));
+  model.panes.insert(1, makeOwned<Pane>(memory, memory, 1, TabLocation{}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits}));
   auto& pane = *model.panes.find(1);
   GatedLineageInspector inspector;
-  DescentService<ConcurrentMemory, decltype(inspector)> service{inspector};
+  DescentService<decltype(inspector)> service{inspector};
   ClientPeer first{memory, model, clients, ClientRole::control};
   ClientPeer second{memory, model, clients, ClientRole::control};
 

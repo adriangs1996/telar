@@ -13,14 +13,12 @@ import telar.git.checkout;
 
 namespace telar::runtime {
 
-  template <Allocator Memory>
-  GitBaseDistance<Memory>::GitBaseDistance(Memory& memory, const std::atomic<bool>& cancelled) noexcept
+  GitBaseDistance::GitBaseDistance(ConcurrentMemory& memory, const std::atomic<bool>& cancelled) noexcept
       : memory_(memory),
         cancelled_(cancelled) {}
 
-  template <Allocator Memory>
   template <std::size_t Capacity>
-  FixedText<Capacity> GitBaseDistance<Memory>::line(std::string_view root, Clock::time_point deadline, std::initializer_list<std::string_view> arguments) {
+  FixedText<Capacity> GitBaseDistance::line(std::string_view root, Clock::time_point deadline, std::initializer_list<std::string_view> arguments) {
     GitRepository git{memory_, root, deadline, cancelled_};
     constexpr std::size_t maximum_output = 4096;
     const auto output = git.run(arguments, false, maximum_output);
@@ -35,8 +33,7 @@ namespace telar::runtime {
     return result;
   }
 
-  template <Allocator Memory>
-  GitDistance GitBaseDistance<Memory>::read(std::string_view root, std::string_view base, Clock::time_point deadline) {
+  GitDistance GitBaseDistance::read(std::string_view root, std::string_view base, Clock::time_point deadline) {
     if (base.empty() || base.starts_with('-')) {
       reject();
     }
@@ -46,7 +43,7 @@ namespace telar::runtime {
     GitDistance result;
 
     parseDiff(difference.view(), result);
-    String<Memory> range{ancestor.view(), AllocatorRef<char, Memory>{memory_}};
+    String<ConcurrentMemory> range{ancestor.view(), AllocatorRef<char, ConcurrentMemory>{memory_}};
 
     range += "..HEAD";
     const auto count = line<32>(root, deadline, {"rev-list", "--count", range, "--"});
@@ -61,8 +58,7 @@ namespace telar::runtime {
     return result;
   }
 
-  template <Allocator Memory>
-  void GitBaseDistance<Memory>::parseDiff(std::string_view output, GitDistance& result) noexcept {
+  void GitBaseDistance::parseDiff(std::string_view output, GitDistance& result) noexcept {
     while (!output.empty()) {
       const auto delimiter = output.find(',');
       const auto part = trimText(output.substr(0, delimiter), " \n");
@@ -90,12 +86,9 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  void GitBaseDistance<Memory>::reject() {
+  void GitBaseDistance::reject() {
     throw RequestError{FailureCode::invalid_request, "Git distance unavailable"};
   }
-
-  template class GitBaseDistance<ConcurrentMemory>;
 
   WorktreeDetectionResult WorktreeDetectionProbe::observe(const Request& request) noexcept {
     TELAR_TRACE("worktrees.detect");
@@ -116,25 +109,22 @@ namespace telar::runtime {
 
   void WorktreeDetectionProbe::stop() noexcept {}
 
-  template <ConcurrentAllocator Memory>
-  WorktreeGitProbe<Memory>::WorktreeGitProbe(Memory& memory)
+  WorktreeGitProbe::WorktreeGitProbe(ConcurrentMemory& memory)
       : memory_(memory),
         status_(memory),
         distance_(memory, cancelled_) {}
 
-  template <ConcurrentAllocator Memory>
-  void WorktreeGitProbe<Memory>::stop() noexcept {
+  void WorktreeGitProbe::stop() noexcept {
     cancelled_ = true;
     status_.stop();
   }
 
-  template <ConcurrentAllocator Memory>
-  WorktreeProbeResult WorktreeGitProbe<Memory>::observe(const Request& request) noexcept {
+  WorktreeProbeResult WorktreeGitProbe::observe(const Request& request) noexcept {
     TELAR_TRACE("worktrees.gitProbe");
     Result result{.identity = request.identity};
 
     try {
-      String<Memory> path{request.path.view(), AllocatorRef<char, Memory>{memory_}};
+      String<ConcurrentMemory> path{request.path.view(), AllocatorRef<char, ConcurrentMemory>{memory_}};
       struct stat filesystem_status{};
       if (::stat(path.c_str(), &filesystem_status) != 0 || !S_ISDIR(filesystem_status.st_mode)) {
         return result;
@@ -184,20 +174,16 @@ namespace telar::runtime {
     return result;
   }
 
-  template <ConcurrentAllocator Memory>
-  void WorktreeGitProbe<Memory>::assignBranch(FixedText<200>& destination, std::string_view value) {
+  void WorktreeGitProbe::assignBranch(FixedText<200>& destination, std::string_view value) {
     DisplayText16<200, false>::validate(value);
     destination.assign(value);
   }
 
-  template <ConcurrentAllocator Memory>
-  void WorktreeGitProbe<Memory>::discoverBase(std::string_view root, FixedText<200>& base) {
+  void WorktreeGitProbe::discoverBase(std::string_view root, FixedText<200>& base) {
     LinkedWorktree reader;
     if (const auto branch = reader.mainBranch(root)) {
       assignBranch(base, *branch);
     }
   }
-
-  template class WorktreeGitProbe<ConcurrentMemory>;
 
 }

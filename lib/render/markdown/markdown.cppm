@@ -17,9 +17,6 @@ export namespace telar::render::markdown {
     parser,             // md4c failed, as when it could not allocate
   };
 
-  template <Allocator Memory>
   [[nodiscard]] Error render(std::string_view source, Document<Memory>& document);
-
-  extern template Error render(std::string_view source, Document<Memory>& document);
 
 }

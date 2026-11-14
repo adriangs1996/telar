@@ -38,9 +38,7 @@ export {
 export {
   namespace telar::runtime::cli {
 
-    template <Allocator Memory>
     int runMachine(Memory& memory, const MachineOptions& options);
-    extern template int runMachine<Memory>(Memory& memory, const MachineOptions& options);
 
   }
 }

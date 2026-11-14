@@ -16,7 +16,6 @@ import telar.platform.primitives;
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory>
     class RemoteEditor {
     private:
       using Clock = std::chrono::steady_clock;
@@ -35,9 +34,9 @@ export {
       };
 
     public:
-      explicit RemoteEditor(Memory& memory);
+      explicit RemoteEditor(ConcurrentMemory& memory);
 
-      void open(const OpenEditor& request, const RequestContext& context, EncodedReply<Memory>& reply);
+      void open(const OpenEditor& request, const RequestContext& context, EncodedReply<ConcurrentMemory>& reply);
 
     private:
       static constexpr std::size_t output_limit = 16 * 1024;
@@ -55,15 +54,13 @@ export {
       void discoverEmacs(Session& session);
       void emacsEndpoint(Session& session, std::string_view endpoint);
 
-      Memory& memory_;
-      CommandOutput<Memory> output_;
-      String<Memory> expression_;
-      String<Memory> path_;
-      String<Memory> editor_;
+      ConcurrentMemory& memory_;
+      CommandOutput<ConcurrentMemory> output_;
+      String<ConcurrentMemory> expression_;
+      String<ConcurrentMemory> path_;
+      String<ConcurrentMemory> editor_;
       ProcessInspector inspector_;
     };
-
-    extern template class RemoteEditor<ConcurrentMemory>;
 
   }
 }

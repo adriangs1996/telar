@@ -69,9 +69,9 @@ export {
 
     // A failure after the arguments parsed prints `error: NAME` with the error
     // name.
-    template <Allocator Memory, EnvironmentLookup Environment>
+    template <EnvironmentLookup Environment>
     void runPlugin(Memory& memory, const PluginOptions& options, const Environment& environment);
-    extern template void runPlugin<Memory, ProcessEnvironment>(Memory& memory, const PluginOptions& options, const ProcessEnvironment& environment);
+    extern template void runPlugin<ProcessEnvironment>(Memory& memory, const PluginOptions& options, const ProcessEnvironment& environment);
 
   }
 }
@@ -102,9 +102,9 @@ export {
 export {
   namespace telar::runtime::cli {
 
-    template <ConcurrentAllocator Memory, EnvironmentLookup Environment>
-    int runProxyTrust(Memory& memory, const ProxyTrustOptions& options, const Environment& environment);
-    extern template int runProxyTrust<ConcurrentMemory, ProcessEnvironment>(ConcurrentMemory& memory, const ProxyTrustOptions& options, const ProcessEnvironment& environment);
+    template <EnvironmentLookup Environment>
+    int runProxyTrust(ConcurrentMemory& memory, const ProxyTrustOptions& options, const Environment& environment);
+    extern template int runProxyTrust<ProcessEnvironment>(ConcurrentMemory& memory, const ProxyTrustOptions& options, const ProcessEnvironment& environment);
 
   }
 }

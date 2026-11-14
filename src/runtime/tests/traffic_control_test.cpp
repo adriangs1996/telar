@@ -238,7 +238,7 @@ static void captureControl(TlsTestMemory& memory) {
   const auto base = std::string{directory.path()} + "/runtime.sock";
   traffic::Service capture{memory, base + ".traffic"};
   ProxyOptions options{memory};
-  ProxyRuntime<TlsTestMemory, NativeEventLoop<TlsTestMemory>, SystemNameResolver> proxy{memory, options, base, false};
+  ProxyRuntime<NativeEventLoop<TlsTestMemory>, SystemNameResolver> proxy{memory, options, base, false};
   traffic_control::Backend backend{memory, proxy, &capture, traffic_control::Configuration{.endpoint = base, .executable = "/fixture/runtime", .administration = true}};
   traffic_control::Service service{memory, base + ".network", backend};
   auto status = request(base + ".network", {});
@@ -295,7 +295,7 @@ static void destinationAuthorization(TlsTestMemory& memory) {
   const auto base = std::string{directory.path()} + "/runtime.sock";
   const auto missing_executable = std::string{directory.path()} + "/missing-runtime";
   ProxyOptions options{memory};
-  ProxyRuntime<TlsTestMemory, NativeEventLoop<TlsTestMemory>, SystemNameResolver> proxy{memory, options, base, false};
+  ProxyRuntime<NativeEventLoop<TlsTestMemory>, SystemNameResolver> proxy{memory, options, base, false};
   traffic::Service capture{memory, base + ".traffic"};
   traffic_control::Backend backend{memory, proxy, &capture, traffic_control::Configuration{.endpoint = base, .executable = missing_executable, .redirect = true, .administration = true}};
   traffic_control::Service service{memory, base + ".network", backend};
@@ -330,7 +330,7 @@ static void packageControl(TlsTestMemory& memory) {
   const auto base = std::string{directory.path()} + "/runtime.sock";
   traffic::Service capture{memory, base + ".traffic"};
   ProxyOptions options{memory};
-  ProxyRuntime<TlsTestMemory, NativeEventLoop<TlsTestMemory>, SystemNameResolver> proxy{memory, options, base, false};
+  ProxyRuntime<NativeEventLoop<TlsTestMemory>, SystemNameResolver> proxy{memory, options, base, false};
   traffic_control::Backend backend{memory, proxy, &capture, traffic_control::Configuration{.endpoint = base, .executable = "/fixture/runtime", .administration = true}};
   traffic_control::Service service{memory, base + ".network", backend};
   const auto package = [](app::Capability capability, Byte digest) {
@@ -493,7 +493,7 @@ static void authorityControl(TlsTestMemory& memory) {
   options.enabled = true;
   options.authority_directory = directory.path();
   options.capture.enabled = false;
-  ProxyRuntime<TlsTestMemory, NativeEventLoop<TlsTestMemory>, SystemNameResolver> proxy{memory, options, std::string{directory.path()} + "/runtime.sock", false};
+  ProxyRuntime<NativeEventLoop<TlsTestMemory>, SystemNameResolver> proxy{memory, options, std::string{directory.path()} + "/runtime.sock", false};
   const auto original = proxy.authorityStatus(true);
 
   check(original.active && original.accepting && original.trust == proxy_trust::Status::absent);

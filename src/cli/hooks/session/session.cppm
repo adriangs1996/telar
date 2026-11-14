@@ -74,7 +74,6 @@ export {
 
     // The hook's conversation with the runtime: every report carries the pane and
     // provider the hook runs for, and the runtime first verifies the reporter's ancestry.
-    template <Allocator Memory>
     class Session {
     public:
       Session(Memory& memory, const char* socket, PaneTarget target);
@@ -110,11 +109,9 @@ export {
     private:
       static constexpr std::size_t reply_bytes = 2048;
 
-      ControlSession<Memory> control_;
+      ControlSession control_;
       PaneTarget target_;
     };
-
-    extern template class Session<Memory>;
 
   }
 }

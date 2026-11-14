@@ -14,10 +14,10 @@ export {
   namespace telar::runtime::traffic {
 
     // Generic over the caller's plugins, and called for every captured exchange.
-    template <ConcurrentAllocator Memory, typename Plugins>
+    template <typename Plugins>
     class TBC_HOT_PATH Tap {
     public:
-      inline explicit Tap(Plugins& plugins, Service<Memory>* traffic) noexcept
+      inline explicit Tap(Plugins& plugins, Service* traffic) noexcept
           : plugins_(plugins),
             traffic_(traffic) {}
 
@@ -29,7 +29,7 @@ export {
         return plugins_.listening() || (traffic_ && traffic_->listening());
       }
 
-      inline void submit(CapturedExchange<Memory>& exchange) noexcept {
+      inline void submit(CapturedExchange& exchange) noexcept {
         if (traffic_) {
           traffic_->submit(exchange);
         }
@@ -39,7 +39,7 @@ export {
 
     private:
       Plugins& plugins_;
-      Service<Memory>* traffic_;
+      Service* traffic_;
     };
 
   }

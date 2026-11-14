@@ -299,8 +299,7 @@ export namespace telar::runtime {
     std::uint16_t columns = 0;
   };
 
-  template <Allocator Memory>
-  TBC_HOT_PATH inline CommandScreen commandScreen(Terminal<Memory>& terminal) noexcept {
+  TBC_HOT_PATH inline CommandScreen commandScreen(Terminal& terminal) noexcept {
     return {terminal.handle(), terminal.screen.cols};
   }
 
@@ -355,8 +354,7 @@ export namespace telar::runtime {
   };
 
   // Reads `selection` into `destination`. Whether it was cut short, or nothing when it is empty.
-  template <Allocator Memory>
-  TBC_HOT_PATH inline std::optional<bool> captureCommandText(Terminal<Memory>& terminal, const GhosttySelection& selection, Vector<Byte, Memory>& destination) {
+  TBC_HOT_PATH inline std::optional<bool> captureCommandText(Terminal& terminal, const GhosttySelection& selection, Vector<Byte, ConcurrentMemory>& destination) {
     destination.resize(CommandSelection::buffer_bytes);
     CommandTextWriter writer{destination};
 
@@ -458,13 +456,12 @@ export namespace telar::runtime {
     bool closing_ = false;
   };
 
-  template <Allocator Memory>
   class TBC_HOT_PATH CommandBlocks final : public CommandBlockRing {
   public:
-    inline CommandBlocks(Memory& memory, Terminal<Memory>& terminal)
+    inline CommandBlocks(ConcurrentMemory& memory, Terminal& terminal)
         : CommandBlockRing(terminal.handle()),
           terminal_(terminal),
-          text_(AllocatorRef<Byte, Memory>{memory}) {}
+          text_(AllocatorRef<Byte, ConcurrentMemory>{memory}) {}
 
   private:
     inline CommandScreen screen() const noexcept override {
@@ -479,8 +476,8 @@ export namespace telar::runtime {
       return text_;
     }
 
-    Terminal<Memory>& terminal_;
-    Vector<Byte, Memory> text_;
+    Terminal& terminal_;
+    Vector<Byte, ConcurrentMemory> text_;
   };
 
   // Captures the commands typed at a pane's prompt, with their directory, duration, status and
@@ -553,15 +550,14 @@ export namespace telar::runtime {
     bool saw_foreground_child_ = false;
   };
 
-  template <Allocator Memory>
   class TBC_HOT_PATH CommandTracker final : public CommandTrackerCore {
   public:
-    inline explicit CommandTracker(Memory& memory, Terminal<Memory>& terminal, std::string_view directory, bool capture_output = false, std::optional<ShellToken> shell_token = std::nullopt)
+    inline explicit CommandTracker(ConcurrentMemory& memory, Terminal& terminal, std::string_view directory, bool capture_output = false, std::optional<ShellToken> shell_token = std::nullopt)
         : CommandTrackerCore(terminal.handle(), directory, shell_token),
           terminal_(terminal),
-          output_(AllocatorRef<std::uint8_t, Memory>{memory}),
-          command_(AllocatorRef<Byte, Memory>{memory}),
-          submitted_(AllocatorRef<Byte, Memory>{memory}) {
+          output_(AllocatorRef<std::uint8_t, ConcurrentMemory>{memory}),
+          command_(AllocatorRef<Byte, ConcurrentMemory>{memory}),
+          submitted_(AllocatorRef<Byte, ConcurrentMemory>{memory}) {
       if (capture_output) {
         enableOutputCapture();
       }
@@ -638,11 +634,11 @@ export namespace telar::runtime {
       return output_;
     }
 
-    Terminal<Memory>& terminal_;
-    Vector<std::uint8_t, Memory> output_;
-    Vector<Byte, Memory> command_;
+    Terminal& terminal_;
+    Vector<std::uint8_t, ConcurrentMemory> output_;
+    Vector<Byte, ConcurrentMemory> command_;
     // Survives a previous command's completion, which the input typing this one triggers.
-    Vector<Byte, Memory> submitted_;
+    Vector<Byte, ConcurrentMemory> submitted_;
   };
 
 }

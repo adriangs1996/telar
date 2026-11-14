@@ -112,7 +112,6 @@ namespace telar::runtime::cli {
     }
   }
 
-  template <Allocator Memory>
   RuntimeStart startRuntime(Memory& memory, const ServerOptions& options, const RuntimePaths<Memory>& paths) {
     constexpr auto start_window = std::chrono::seconds{10};
     constexpr auto poll_interval = std::chrono::milliseconds{10};
@@ -168,7 +167,6 @@ namespace telar::runtime::cli {
     std::puts("telar runtime is stopping");
   }
 
-  template <Allocator Memory>
   [[noreturn]] void execRuntime(Memory& memory, std::span<char* const> arguments) {
     const ExecutablePath runtime{runtime_program};
     Vector<char*, Memory> command{AllocatorRef<char*, Memory>{memory}};
@@ -181,7 +179,6 @@ namespace telar::runtime::cli {
     throw SystemError{"Start telar-runtime, which must be installed beside telar"};
   }
 
-  template <Allocator Memory>
   void runServer(Memory& memory, std::span<char* const> arguments) {
     const auto options = ServerOptions::parse(arguments);
     if (options.action != ServerAction::stop && options.action != ServerAction::endpoint && options.action != ServerAction::bridge) {
@@ -205,9 +202,5 @@ namespace telar::runtime::cli {
       return;
     }
   }
-
-  template RuntimeStart startRuntime<Memory>(Memory& memory, const ServerOptions& options, const RuntimePaths<Memory>& paths);
-  template void execRuntime<Memory>(Memory& memory, std::span<char* const> arguments);
-  template void runServer<Memory>(Memory& memory, std::span<char* const> arguments);
 
 }

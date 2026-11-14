@@ -10,23 +10,20 @@ import telar.runtime.terminal.grid;
 
 namespace telar::runtime {
 
-  template <Allocator Memory>
-  TextMetadataCapture<Memory>::TextMetadataCapture(tbc::view<Memory&, tbc::lt::a> memory)
-      : links_(AllocatorRef<MetadataLink, Memory>{memory}),
-        runs_(AllocatorRef<MetadataRun, Memory>{memory}),
-        uris_(AllocatorRef<Byte, Memory>{memory}) {
+  TextMetadataCapture::TextMetadataCapture(tbc::view<ConcurrentMemory&, tbc::lt::a> memory)
+      : links_(AllocatorRef<MetadataLink, ConcurrentMemory>{memory}),
+        runs_(AllocatorRef<MetadataRun, ConcurrentMemory>{memory}),
+        uris_(AllocatorRef<Byte, ConcurrentMemory>{memory}) {
     links_.reserve(maximum_links);
     runs_.reserve(maximum_runs);
     uris_.reserve(maximum_uri_bytes);
   }
 
-  template <Allocator Memory>
-  tbc::view<TextMetadata, tbc::lt::a> TextMetadataCapture<Memory>::view(tbc::view<std::span<const Byte>, tbc::lt::a> row_flags) const noexcept {
+  tbc::view<TextMetadata, tbc::lt::a> TextMetadataCapture::view(tbc::view<std::span<const Byte>, tbc::lt::a> row_flags) const noexcept {
     return TextMetadata{.status = status_, .row_flags = row_flags, .links = links_, .runs = runs_, .uris = uris_};
   }
 
-  template <Allocator Memory>
-  void TextMetadataCapture<Memory>::capture(GhosttyRenderState state, GhosttyRenderStateRowIterator iterator, std::span<const Byte> row_flags, std::uint16_t columns) {
+  void TextMetadataCapture::capture(GhosttyRenderState state, GhosttyRenderStateRowIterator iterator, std::span<const Byte> row_flags, std::uint16_t columns) {
     links_.clear();
     runs_.clear();
     uris_.clear();
@@ -45,13 +42,11 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  tbc::view<std::string_view, tbc::lt::a> TextMetadataCapture<Memory>::stringView(tbc::view<GhosttyString, tbc::lt::a> value) noexcept {
+  tbc::view<std::string_view, tbc::lt::a> TextMetadataCapture::stringView(tbc::view<GhosttyString, tbc::lt::a> value) noexcept {
     return {reinterpret_cast<const char*>(value.ptr), value.len};
   }
 
-  template <Allocator Memory>
-  std::size_t TextMetadataCapture<Memory>::hash(const Identity& identity) noexcept {
+  std::size_t TextMetadataCapture::hash(const Identity& identity) noexcept {
     std::size_t value = identity.implicit_id;
 
     for (const auto text : {identity.uri, identity.explicit_id}) {
@@ -63,8 +58,7 @@ namespace telar::runtime {
     return value;
   }
 
-  template <Allocator Memory>
-  std::optional<std::uint16_t> TextMetadataCapture<Memory>::intern(tbc::view<LinkTable&, tbc::lt::a> table, tbc::view<Identity, tbc::lt::a> identity) {
+  std::optional<std::uint16_t> TextMetadataCapture::intern(tbc::view<LinkTable&, tbc::lt::a> table, tbc::view<Identity, tbc::lt::a> identity) {
     auto slot = hash(identity) % table.slots.size();
 
     while (table.slots[slot] != 0) {
@@ -90,8 +84,7 @@ namespace telar::runtime {
     return index;
   }
 
-  template <Allocator Memory>
-  void TextMetadataCapture<Memory>::captureRow(LinkTable& table, GhosttyRenderStateRowIterator iterator, std::uint32_t row_start) {
+  void TextMetadataCapture::captureRow(LinkTable& table, GhosttyRenderStateRowIterator iterator, std::uint32_t row_start) {
     auto reference = ghosttySized<GhosttyGridRef>();
     GhosttyCellsView cells{};
 
@@ -144,15 +137,13 @@ namespace telar::runtime {
     return Cell{width, style, std::span<const Byte>{text}.first(length)};
   }
 
-  template <Allocator Memory>
-  Screen<Memory>::Screen(Memory& memory)
-      : cells(AllocatorRef<ScreenCell, Memory>{memory}),
-        row_revisions(AllocatorRef<std::uint64_t, Memory>{memory}),
-        row_flags(AllocatorRef<Byte, Memory>{memory}),
+  Screen::Screen(ConcurrentMemory& memory)
+      : cells(AllocatorRef<ScreenCell, ConcurrentMemory>{memory}),
+        row_revisions(AllocatorRef<std::uint64_t, ConcurrentMemory>{memory}),
+        row_flags(AllocatorRef<Byte, ConcurrentMemory>{memory}),
         metadata(memory) {}
 
-  template <Allocator Memory>
-  void Screen<Memory>::reserve(std::uint16_t columns, std::uint16_t lines) {
+  void Screen::reserve(std::uint16_t columns, std::uint16_t lines) {
     constexpr std::size_t maximum_cells = 130359;
     const auto count = static_cast<std::size_t>(columns) * lines;
     if (columns == 0 || lines == 0 || count > maximum_cells) {
@@ -164,8 +155,7 @@ namespace telar::runtime {
     row_flags.reserve(lines);
   }
 
-  template <Allocator Memory>
-  void Screen<Memory>::resize(std::uint16_t columns, std::uint16_t lines) {
+  void Screen::resize(std::uint16_t columns, std::uint16_t lines) {
     reserve(columns, lines);
     cells.resize(static_cast<std::size_t>(columns) * lines);
     row_revisions.resize(lines);
@@ -177,26 +167,23 @@ namespace telar::runtime {
     std::fill(row_revisions.begin(), row_revisions.end(), revision);
   }
 
-  template <Allocator Memory>
-  TerminalEffects<Memory>::TerminalEffects(Memory& memory)
-      : clipboard(AllocatorRef<Byte, Memory>{memory}),
-        document(AllocatorRef<Byte, Memory>{memory}),
-        inline_documents(AllocatorRef<InlineDocument, Memory>{memory}) {}
+  TerminalEffects::TerminalEffects(ConcurrentMemory& memory)
+      : clipboard(AllocatorRef<Byte, ConcurrentMemory>{memory}),
+        document(AllocatorRef<Byte, ConcurrentMemory>{memory}),
+        inline_documents(AllocatorRef<InlineDocument, ConcurrentMemory>{memory}) {}
 
-  template <Allocator Memory>
-  void TerminalEffects<Memory>::keepInline(Vector<Byte, Memory> bytes, TrackedRow first, TrackedRow end, bool end_inclusive) {
+  void TerminalEffects::keepInline(Vector<Byte, ConcurrentMemory> bytes, TrackedRow first, TrackedRow end, bool end_inclusive) {
     while (!inline_documents.empty() && (inline_documents.size() >= ::telar::render::max_pane_documents || inline_bytes + bytes.size() > ::telar::render::max_pane_document_bytes)) {
       inline_bytes -= inline_documents.front().bytes.size();
       inline_documents.erase(inline_documents.begin());
     }
 
     inline_bytes += bytes.size();
-    inline_documents.push_back(InlineDocument{.id = next_document_id++, .bytes = std::move(bytes), .first = std::move(first), .end = std::move(end), .end_inclusive = end_inclusive, .row = 0, .rows = 0, .contents = Vector<std::uint64_t, Memory>{inline_documents.get_allocator()}});
+    inline_documents.push_back(InlineDocument{.id = next_document_id++, .bytes = std::move(bytes), .first = std::move(first), .end = std::move(end), .end_inclusive = end_inclusive, .row = 0, .rows = 0, .contents = Vector<std::uint64_t, ConcurrentMemory>{inline_documents.get_allocator()}});
     ++inline_revision;
   }
 
-  template <Allocator Memory>
-  void TerminalEffects<Memory>::placeInline(GhosttyTerminal terminal) noexcept {
+  void TerminalEffects::placeInline(GhosttyTerminal terminal) noexcept {
     for (auto document = inline_documents.begin(); document != inline_documents.end();) {
       const auto first = document->first.row(terminal);
       const auto end = document->end.row(terminal);
@@ -219,8 +206,7 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  void TerminalEffects<Memory>::closeDocument() noexcept {
+  void TerminalEffects::closeDocument() noexcept {
     if (!document.empty()) {
       document.clear();
       document.shrink_to_fit();
@@ -228,8 +214,7 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  void TerminalEffects<Memory>::refresh(GhosttyTerminal terminal) {
+  void TerminalEffects::refresh(GhosttyTerminal terminal) {
     if (title_pending) {
       GhosttyString value{};
 
@@ -247,18 +232,15 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  std::string_view TerminalEffects<Memory>::title() const noexcept {
+  std::string_view TerminalEffects::title() const noexcept {
     return {title_.data(), title_length_};
   }
 
-  template <Allocator Memory>
-  std::string_view TerminalEffects<Memory>::cwd() const noexcept {
+  std::string_view TerminalEffects::cwd() const noexcept {
     return {cwd_.data(), cwd_length_};
   }
 
-  template <Allocator Memory>
-  void TerminalEffects<Memory>::setProgress(PaneProgressState state, std::optional<Byte> percent) noexcept {
+  void TerminalEffects::setProgress(PaneProgressState state, std::optional<Byte> percent) noexcept {
     if (state == progress_state && percent == progress_percent) {
       return;
     }
@@ -268,8 +250,7 @@ namespace telar::runtime {
     ++progress_revision;
   }
 
-  template <Allocator Memory>
-  void TerminalEffects<Memory>::updateTitle(std::string_view raw) {
+  void TerminalEffects::updateTitle(std::string_view raw) {
     std::array<char, 256> candidate{};
     std::size_t length = 0;
 
@@ -306,8 +287,7 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  void TerminalEffects<Memory>::updateCwd(std::string_view raw) {
+  void TerminalEffects::updateCwd(std::string_view raw) {
     bool encoded = false;
 
     for (const auto prefix : {std::string_view{"file://"}, std::string_view{"kitty-shell-cwd://"}}) {
@@ -383,22 +363,20 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  FrameSync<Memory>::FrameSync(tbc::view<Memory&, tbc::lt::a> memory, std::uint64_t pane_id)
+  FrameSync::FrameSync(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, std::uint64_t pane_id)
       : pane_id_(pane_id),
-        baseline_(AllocatorRef<ScreenCell, Memory>{memory}),
-        cell_bytes_(AllocatorRef<Byte, Memory>{memory}),
-        payload_(AllocatorRef<Byte, Memory>{memory}),
-        spans_(AllocatorRef<FrameSpan, Memory>{memory}),
-        metadata_bytes_(AllocatorRef<Byte, Memory>{memory}),
-        previous_metadata_(AllocatorRef<Byte, Memory>{memory}) {
+        baseline_(AllocatorRef<ScreenCell, ConcurrentMemory>{memory}),
+        cell_bytes_(AllocatorRef<Byte, ConcurrentMemory>{memory}),
+        payload_(AllocatorRef<Byte, ConcurrentMemory>{memory}),
+        spans_(AllocatorRef<FrameSpan, ConcurrentMemory>{memory}),
+        metadata_bytes_(AllocatorRef<Byte, ConcurrentMemory>{memory}),
+        previous_metadata_(AllocatorRef<Byte, ConcurrentMemory>{memory}) {
     spans_.reserve(maximum_spans);
     metadata_bytes_.resize(maximum_metadata_bytes);
     previous_metadata_.reserve(maximum_metadata_bytes);
   }
 
-  template <Allocator Memory>
-  bool FrameSync<Memory>::acknowledge(std::uint64_t frame_id) noexcept {
+  bool FrameSync::acknowledge(std::uint64_t frame_id) noexcept {
     TELAR_DIAGNOSTIC(diagnostics::TimedScope timing{counters_.ack});
     if (frame_id == 0 || frame_id != outstanding_id_) {
       return false;
@@ -409,33 +387,27 @@ namespace telar::runtime {
     return true;
   }
 
-  template <Allocator Memory>
-  void FrameSync<Memory>::requestSnapshot() noexcept {
+  void FrameSync::requestSnapshot() noexcept {
     snapshot_pending_ = true;
   }
 
-  template <Allocator Memory>
-  bool FrameSync<Memory>::needsSnapshot(const Screen<Memory>& screen) const noexcept {
+  bool FrameSync::needsSnapshot(const Screen& screen) const noexcept {
     return snapshot_pending_ || screen.cols != previous_header_.cols || screen.rows != previous_header_.rows;
   }
 
-  template <Allocator Memory>
-  bool FrameSync<Memory>::waitingForAck() const noexcept {
+  bool FrameSync::waitingForAck() const noexcept {
     return outstanding_id_ != 0;
   }
 
-  template <Allocator Memory>
-  bool FrameSync<Memory>::waitingForAck(const Screen<Memory>& screen) const noexcept {
+  bool FrameSync::waitingForAck(const Screen& screen) const noexcept {
     return waitingForAck() && screen.cols == previous_header_.cols && screen.rows == previous_header_.rows;
   }
 
-  template <Allocator Memory>
-  std::uint64_t FrameSync<Memory>::observedRevision() const noexcept {
+  std::uint64_t FrameSync::observedRevision() const noexcept {
     return observed_revision_;
   }
 
-  template <Allocator Memory>
-  std::span<const Byte> FrameSync<Memory>::prepare(const Screen<Memory>& screen) {
+  std::span<const Byte> FrameSync::prepare(const Screen& screen) {
     TELAR_TRACE("frame_sync.prepare");
     TELAR_DIAGNOSTIC(diagnostics::TimedScope timing{counters_.encode});
     if (screen.cols != previous_header_.cols || screen.rows != previous_header_.rows) {
@@ -521,14 +493,12 @@ namespace telar::runtime {
   }
 
 #if TELAR_DIAGNOSTICS
-  template <Allocator Memory>
-  diagnostics::FrameCounters FrameSync<Memory>::takeCounters() noexcept {
+  diagnostics::FrameCounters FrameSync::takeCounters() noexcept {
     return std::exchange(counters_, {});
   }
 #endif
 
-  template <Allocator Memory>
-  FrameBody FrameSync<Memory>::frameHeader(const Screen<Memory>& screen) const noexcept {
+  FrameBody FrameSync::frameHeader(const Screen& screen) const noexcept {
     FrameBody header{};
 
     header.pane_id = pane_id_;
@@ -542,8 +512,7 @@ namespace telar::runtime {
     return header;
   }
 
-  template <Allocator Memory>
-  bool FrameSync<Memory>::sameHeader(const FrameBody& left, const FrameBody& right) noexcept {
+  bool FrameSync::sameHeader(const FrameBody& left, const FrameBody& right) noexcept {
     const auto fields = [](const FrameBody& frame) {
       return std::tie(frame.cursor.visible, frame.cursor.x, frame.cursor.y, frame.cursor.shape, frame.cursor.blink, frame.mouse.tracking, frame.mouse.sgr, frame.mouse.pixels, frame.input_modes.cursor_keys, frame.input_modes.keypad_keys, frame.input_modes.bracketed_paste, frame.input_modes.paste_events, frame.input_modes.focus_events, frame.input_modes.alternate_scroll, frame.input_modes.alternate_screen, frame.input_modes.kitty_keyboard_flags, frame.input_modes.modify_other_keys_2, frame.pointer_shape, frame.scroll.total_rows, frame.scroll.offset);
     };
@@ -551,8 +520,7 @@ namespace telar::runtime {
     return fields(left) == fields(right);
   }
 
-  template <Allocator Memory>
-  void FrameSync<Memory>::appendDamage(const Screen<Memory>& screen, std::size_t& written) {
+  void FrameSync::appendDamage(const Screen& screen, std::size_t& written) {
     for (std::size_t row = 0; row < screen.rows; ++row) {
       if (screen.row_revisions[row] <= observed_revision_) {
         continue;
@@ -590,8 +558,7 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  void FrameSync<Memory>::appendSpan(std::span<const ScreenCell> cells, std::size_t start, std::size_t& written) {
+  void FrameSync::appendSpan(std::span<const ScreenCell> cells, std::size_t start, std::size_t& written) {
     auto output = std::span<Byte>{cell_bytes_}.subspan(written);
     const Byte* begin = output.data();
 
@@ -606,8 +573,7 @@ namespace telar::runtime {
   }
 
 #if TELAR_DIAGNOSTICS
-  template <Allocator Memory>
-  void FrameSync<Memory>::recordFrame(std::size_t bytes, bool snapshot) noexcept {
+  void FrameSync::recordFrame(std::size_t bytes, bool snapshot) noexcept {
     diagnostics::accumulate(counters_.frames);
     diagnostics::accumulate(counters_.frame_bytes, bytes);
     diagnostics::accumulate(counters_.frame_spans, spans_.size());
@@ -619,13 +585,12 @@ namespace telar::runtime {
   }
 #endif
 
-  template <Allocator Memory>
-  Terminal<Memory>::Terminal(tbc::view<Memory&, tbc::lt::a> memory, TerminalSize size, TerminalPurpose purpose, tbc::view<std::shared_ptr<PtyResponseQueue>, tbc::lt::a> responses, tbc::view<GraphicsQueryResources, tbc::lt::a> resources)
+  Terminal::Terminal(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, TerminalSize size, TerminalPurpose purpose, tbc::view<std::shared_ptr<PtyResponseQueue>, tbc::lt::a> responses, tbc::view<GraphicsQueryResources, tbc::lt::a> resources)
       : screen(memory),
         effects(memory),
         graphics(memory),
         allocator_(memory),
-        responses_(responses ? std::move(responses) : std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, Memory>{memory})),
+        responses_(responses ? std::move(responses) : std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, ConcurrentMemory>{memory})),
         response_outbox_(memory, responses_),
         control_(memory, *responses_, purpose != TerminalPurpose::observation, resources),
         pending_control_input_(memory, control_input_limit),
@@ -671,8 +636,7 @@ namespace telar::runtime {
     resize(size);
   }
 
-  template <Allocator Memory>
-  tbc::view<std::span<const Byte>, tbc::lt::b> Terminal<Memory>::encodeKey(GhosttyKey key, GhosttyMods modifiers, tbc::view<std::span<Byte>, tbc::lt::b> destination) {
+  tbc::view<std::span<const Byte>, tbc::lt::b> Terminal::encodeKey(GhosttyKey key, GhosttyMods modifiers, tbc::view<std::span<Byte>, tbc::lt::b> destination) {
     GhosttyHandle<GhosttyKeyEncoder, ghostty_key_encoder_free> encoder;
     GhosttyHandle<GhosttyKeyEvent, ghostty_key_event_free> event;
 
@@ -692,85 +656,70 @@ namespace telar::runtime {
     return destination.first(length);
   }
 
-  template <Allocator Memory>
-  Terminal<Memory>::~Terminal() {
+  Terminal::~Terminal() {
     effects.inline_documents.clear();
   }
 
-  template <Allocator Memory>
-  void Terminal<Memory>::feed(std::span<const Byte> bytes) {
+  void Terminal::feed(std::span<const Byte> bytes) {
     TELAR_ASSERT(media_ == nullptr);
     feedWith(bytes, nullptr);
   }
 
-  template <Allocator Memory>
-  void Terminal<Memory>::feed(std::span<const Byte> bytes, TerminalMedia& media) {
+  void Terminal::feed(std::span<const Byte> bytes, TerminalMedia& media) {
     feedWith(bytes, attached(media));
   }
 
-  template <Allocator Memory>
-  void Terminal<Memory>::resumeControl() {
+  void Terminal::resumeControl() {
     TELAR_ASSERT(media_ == nullptr);
     resumeWith(nullptr);
   }
 
-  template <Allocator Memory>
-  void Terminal<Memory>::resumeControl(TerminalMedia& media) {
+  void Terminal::resumeControl(TerminalMedia& media) {
     resumeWith(attached(media));
   }
 
-  template <Allocator Memory>
-  void Terminal<Memory>::attachMedia(TerminalMedia& media) noexcept {
+  void Terminal::attachMedia(TerminalMedia& media) noexcept {
     TELAR_ASSERT(purpose_ == TerminalPurpose::separate_media && media_ == nullptr);
     media.requireOrderedInput();
     media_ = &media;
     control_.enableMediaBoundaries();
   }
 
-  template <Allocator Memory>
-  bool Terminal<Memory>::hasPendingControl() const noexcept {
+  bool Terminal::hasPendingControl() const noexcept {
     return response_outbox_.pending() || control_.blocked() || !pending_control_input_.empty();
   }
 
-  template <Allocator Memory>
-  void Terminal<Memory>::configureClientFacts(control::ClientFacts facts) {
+  void Terminal::configureClientFacts(control::ClientFacts facts) {
     control_.configureFacts(facts);
     control_.publishReports();
   }
 
-  template <Allocator Memory>
-  control::Policy& Terminal<Memory>::controlPolicy() noexcept {
+  control::Policy& Terminal::controlPolicy() noexcept {
     return control_.policy;
   }
 
-  template <Allocator Memory>
-  control::Clipboard<Memory>& Terminal<Memory>::clipboardControl() noexcept {
+  control::Clipboard& Terminal::clipboardControl() noexcept {
     return control_.clipboard();
   }
 
-  template <Allocator Memory>
-  bool Terminal<Memory>::pasteEvents() const noexcept {
+  bool Terminal::pasteEvents() const noexcept {
     return control_.pasteEvents();
   }
 
-  template <Allocator Memory>
-  void Terminal<Memory>::resize(TerminalSize size) {
+  void Terminal::resize(TerminalSize size) {
     TELAR_ASSERT(media_ == nullptr);
     resizeWith(size, nullptr);
   }
 
-  template <Allocator Memory>
-  void Terminal<Memory>::resize(TerminalSize size, TerminalMedia& media) {
+  void Terminal::resize(TerminalSize size, TerminalMedia& media) {
     resizeWith(size, attached(media));
   }
 
-  template <Allocator Memory>
-  bool Terminal<Memory>::hasSize(TerminalSize size) const noexcept {
+  bool Terminal::hasSize(TerminalSize size) const noexcept {
     return size_ == size;
   }
 
-  template <Allocator Memory>
-  void Terminal<Memory>::configureColors(const ConfigureTerminalColors& colors) {
+  void Terminal::configureColors(const ConfigureTerminalColors& colors) {
     const auto foreground = colors.foreground ? GhosttyColorRgb{(*colors.foreground)[0], (*colors.foreground)[1], (*colors.foreground)[2]} : GhosttyColorRgb{255, 255, 255};
     const auto background = colors.background ? GhosttyColorRgb{(*colors.background)[0], (*colors.background)[1], (*colors.background)[2]} : GhosttyColorRgb{};
 
@@ -790,8 +739,7 @@ namespace telar::runtime {
     force_ = true;
   }
 
-  template <Allocator Memory>
-  void Terminal<Memory>::configureCursorColor(std::optional<std::array<Byte, 3>> color) {
+  void Terminal::configureCursorColor(std::optional<std::array<Byte, 3>> color) {
     const GhosttyColorRgb rgb = color ? GhosttyColorRgb{(*color)[0], (*color)[1], (*color)[2]} : GhosttyColorRgb{};
 
     checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_COLOR_CURSOR, color ? &rgb : nullptr));
@@ -799,24 +747,21 @@ namespace telar::runtime {
     dirty_ = true;
   }
 
-  template <Allocator Memory>
-  bool Terminal<Memory>::mode(GhosttyMode mode) const {
+  bool Terminal::mode(GhosttyMode mode) const {
     GhosttyTerminalModeConfig query{.mode = mode, .value = false};
 
     checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_MODE, &query));
     return query.value;
   }
 
-  template <Allocator Memory>
-  bool Terminal<Memory>::outputSettled() const {
+  bool Terminal::outputSettled() const {
     bool ground = false;
 
     checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_VT_GROUND, &ground));
     return ground && control_.ground() && !hasPendingControl() && !mode(GHOSTTY_MODE_SYNC_OUTPUT);
   }
 
-  template <Allocator Memory>
-  void Terminal<Memory>::refresh() {
+  void Terminal::refresh() {
     TELAR_TRACE("terminal.refresh");
     if (!dirty_) {
       return;
@@ -874,8 +819,7 @@ namespace telar::runtime {
     force_ = false;
   }
 
-  template <Allocator Memory>
-  void Terminal<Memory>::scrollTo(std::uint32_t row) {
+  void Terminal::scrollTo(std::uint32_t row) {
     GhosttyTerminalScrollViewport viewport{.tag = GHOSTTY_SCROLL_VIEWPORT_ROW, .value = {.row = row}};
 
     ghostty_terminal_scroll_viewport(terminal_.get(), viewport);
@@ -883,8 +827,7 @@ namespace telar::runtime {
     force_ = true;
   }
 
-  template <Allocator Memory>
-  void Terminal<Memory>::scrollToBottom() {
+  void Terminal::scrollToBottom() {
     GhosttyTerminalScrollViewport viewport{.tag = GHOSTTY_SCROLL_VIEWPORT_BOTTOM, .value = {}};
 
     ghostty_terminal_scroll_viewport(terminal_.get(), viewport);
@@ -892,18 +835,15 @@ namespace telar::runtime {
     force_ = true;
   }
 
-  template <Allocator Memory>
-  std::uint64_t Terminal<Memory>::scrollbackGeneration() const noexcept {
+  std::uint64_t Terminal::scrollbackGeneration() const noexcept {
     return scrollback_generation_;
   }
 
-  template <Allocator Memory>
-  std::uint64_t Terminal<Memory>::scrollbackTrimmed() const noexcept {
+  std::uint64_t Terminal::scrollbackTrimmed() const noexcept {
     return scrollback_trimmed_;
   }
 
-  template <Allocator Memory>
-  std::uint32_t Terminal<Memory>::followScrollback() {
+  std::uint32_t Terminal::followScrollback() {
     if (!primaryScreen()) {
       return 0;
     }
@@ -936,31 +876,26 @@ namespace telar::runtime {
     return dropped;
   }
 
-  template <Allocator Memory>
-  std::span<const Byte> Terminal<Memory>::responses() const noexcept {
+  std::span<const Byte> Terminal::responses() const noexcept {
     return responses_->readable();
   }
 
-  template <Allocator Memory>
-  void Terminal<Memory>::consumeResponses(std::size_t count) {
+  void Terminal::consumeResponses(std::size_t count) {
     responses_->consume(count);
     resumeControl();
   }
 
-  template <Allocator Memory>
-  void Terminal<Memory>::consumeResponses(std::size_t count, TerminalMedia& media) {
+  void Terminal::consumeResponses(std::size_t count, TerminalMedia& media) {
     responses_->consume(count);
     resumeControl(media);
   }
 
-  template <Allocator Memory>
-  void Terminal<Memory>::discardResponses() noexcept {
+  void Terminal::discardResponses() noexcept {
     response_outbox_.discard();
     responses_->clear();
   }
 
-  template <Allocator Memory>
-  void Terminal<Memory>::abortControl() noexcept {
+  void Terminal::abortControl() noexcept {
     media_ = nullptr;
     control_.discard();
     response_outbox_.discard();
@@ -968,34 +903,28 @@ namespace telar::runtime {
     responses_->close();
   }
 
-  template <Allocator Memory>
-  bool Terminal<Memory>::dirty() const noexcept {
+  bool Terminal::dirty() const noexcept {
     return dirty_;
   }
 
-  template <Allocator Memory>
-  std::uint64_t Terminal<Memory>::contentRevision() const noexcept {
+  std::uint64_t Terminal::contentRevision() const noexcept {
     return content_revision_;
   }
 
-  template <Allocator Memory>
-  std::size_t Terminal<Memory>::totalRows() const {
+  std::size_t Terminal::totalRows() const {
     return telar::runtime::totalRows(handle());
   }
 
-  template <Allocator Memory>
-  GhosttyTerminal Terminal<Memory>::handle() const noexcept {
+  GhosttyTerminal Terminal::handle() const noexcept {
     return terminal_.get();
   }
 
-  template <Allocator Memory>
-  const GhosttyAllocator* Terminal<Memory>::allocator() const noexcept {
+  const GhosttyAllocator* Terminal::allocator() const noexcept {
     return allocator_.get();
   }
 
 #if TELAR_DIAGNOSTICS
-  template <Allocator Memory>
-  diagnostics::TerminalStorageSnapshot Terminal<Memory>::storageMetrics() const {
+  diagnostics::TerminalStorageSnapshot Terminal::storageMetrics() const {
     std::size_t page_bytes = 0;
 
     checkGhostty(ghostty_terminal_page_bytes(terminal_.get(), &page_bytes));
@@ -1003,14 +932,12 @@ namespace telar::runtime {
   }
 #endif
 
-  template <Allocator Memory>
-  TerminalMedia* Terminal<Memory>::attached(TerminalMedia& media) const noexcept {
+  TerminalMedia* Terminal::attached(TerminalMedia& media) const noexcept {
     TELAR_ASSERT(media_ == nullptr || media_ == &media);
     return media_ != nullptr ? &media : nullptr;
   }
 
-  template <Allocator Memory>
-  void Terminal<Memory>::feedWith(std::span<const Byte> bytes, TerminalMedia* media) {
+  void Terminal::feedWith(std::span<const Byte> bytes, TerminalMedia* media) {
     TELAR_TRACE("terminal.feed");
     ++content_revision_;
     resumeWith(media);
@@ -1026,8 +953,7 @@ namespace telar::runtime {
     finishControlInput();
   }
 
-  template <Allocator Memory>
-  void Terminal<Memory>::resumeWith(TerminalMedia* media) {
+  void Terminal::resumeWith(TerminalMedia* media) {
     const bool pending = hasPendingControl();
     if (!pending) {
       return;
@@ -1054,8 +980,7 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  void Terminal<Memory>::resizeWith(TerminalSize size, TerminalMedia* media) {
+  void Terminal::resizeWith(TerminalSize size, TerminalMedia* media) {
     if (hasSize(size)) {
       return;
     }
@@ -1082,8 +1007,7 @@ namespace telar::runtime {
     force_ = true;
   }
 
-  template <Allocator Memory>
-  std::size_t Terminal<Memory>::feedControl(std::span<const Byte> bytes, TerminalMedia* media) {
+  std::size_t Terminal::feedControl(std::span<const Byte> bytes, TerminalMedia* media) {
     const auto atomic = media != nullptr && control_.ground() && !control_.blocked() ? media->atomicPrefix(bytes) : 0;
     const auto consumed = atomic != 0 ? control_.feedAtomicMedia(bytes.first(atomic)) : control_.feed(bytes);
 
@@ -1105,8 +1029,7 @@ namespace telar::runtime {
     return consumed;
   }
 
-  template <Allocator Memory>
-  void Terminal<Memory>::finishControlInput() {
+  void Terminal::finishControlInput() {
     response_outbox_.drain();
     dirty_ = true;
     effects.refresh(terminal_.get());
@@ -1122,18 +1045,15 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  void Terminal<Memory>::titleChanged(GhosttyTerminal, void* context) noexcept {
+  void Terminal::titleChanged(GhosttyTerminal, void* context) noexcept {
     static_cast<Terminal*>(context)->effects.title_pending = true;
   }
 
-  template <Allocator Memory>
-  void Terminal<Memory>::cwdChanged(GhosttyTerminal, void* context) noexcept {
+  void Terminal::cwdChanged(GhosttyTerminal, void* context) noexcept {
     static_cast<Terminal*>(context)->effects.cwd_pending = true;
   }
 
-  template <Allocator Memory>
-  GhosttyClipboardWriteResult Terminal<Memory>::clipboardWrite(GhosttyTerminal, void* context, const GhosttyClipboardWrite* write) noexcept {
+  GhosttyClipboardWriteResult Terminal::clipboardWrite(GhosttyTerminal, void* context, const GhosttyClipboardWrite* write) noexcept {
     // Clipboard protocols are owned by the native controller. A backend
     // callback indicates a filter failure and must never bypass its policy.
     (void)context;
@@ -1141,8 +1061,7 @@ namespace telar::runtime {
     return GHOSTTY_CLIPBOARD_WRITE_RESULT_DENIED;
   }
 
-  template <Allocator Memory>
-  void Terminal<Memory>::progressReported(GhosttyTerminal, void* context, const GhosttyTerminalProgressReport* report) noexcept {
+  void Terminal::progressReported(GhosttyTerminal, void* context, const GhosttyTerminalProgressReport* report) noexcept {
     if (report->size < sizeof(GhosttyTerminalProgressReport)) {
       return;
     }
@@ -1152,8 +1071,7 @@ namespace telar::runtime {
     static_cast<Terminal*>(context)->effects.setProgress(static_cast<PaneProgressState>(report->state), percent);
   }
 
-  template <Allocator Memory>
-  bool Terminal<Memory>::reportSize(GhosttyTerminal, void* context, GhosttySizeReportSize* output) noexcept {
+  bool Terminal::reportSize(GhosttyTerminal, void* context, GhosttySizeReportSize* output) noexcept {
     const auto size = static_cast<Terminal*>(context)->size_;
     if (size.cell_width_px == 0 || size.cell_height_px == 0) {
       return false;
@@ -1163,8 +1081,7 @@ namespace telar::runtime {
     return true;
   }
 
-  template <Allocator Memory>
-  void Terminal<Memory>::receiveResponse(GhosttyTerminal, void* context, const Byte* bytes, std::size_t count) noexcept {
+  void Terminal::receiveResponse(GhosttyTerminal, void* context, const Byte* bytes, std::size_t count) noexcept {
     auto& terminal = *static_cast<Terminal*>(context);
 
     constexpr std::string_view graphics_prefix = "\x1b_G";
@@ -1178,8 +1095,7 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  Byte Terminal<Memory>::readRowFlags(GhosttyRenderStateRowIterator iterator) {
+  Byte Terminal::readRowFlags(GhosttyRenderStateRowIterator iterator) {
     GhosttyRow row{};
 
     checkGhostty(ghostty_render_state_row_get(iterator, GHOSTTY_RENDER_STATE_ROW_DATA_RAW, &row));
@@ -1223,8 +1139,7 @@ namespace telar::runtime {
     return flags;
   }
 
-  template <Allocator Memory>
-  void Terminal<Memory>::updateCursor() {
+  void Terminal::updateCursor() {
     auto cursor = ghosttySized<GhosttyRenderStateCursor>();
 
     checkGhostty(ghostty_render_state_get(render_state_.get(), GHOSTTY_RENDER_STATE_DATA_CURSOR, &cursor));
@@ -1263,8 +1178,7 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  void Terminal<Memory>::updateModes() {
+  void Terminal::updateModes() {
     screen.input_modes.cursor_keys = mode(GHOSTTY_MODE_DECCKM);
     screen.input_modes.keypad_keys = mode(GHOSTTY_MODE_KEYPAD_KEYS);
     screen.input_modes.bracketed_paste = mode(GHOSTTY_MODE_BRACKETED_PASTE);
@@ -1341,16 +1255,14 @@ namespace telar::runtime {
     screen.mouse.pixels = mode(GHOSTTY_MODE_SGR_PIXELS_MOUSE);
   }
 
-  template <Allocator Memory>
-  bool Terminal<Memory>::primaryScreen() const {
+  bool Terminal::primaryScreen() const {
     GhosttyTerminalScreen active{};
 
     checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_ACTIVE_SCREEN, &active));
     return active == GHOSTTY_TERMINAL_SCREEN_PRIMARY;
   }
 
-  template <Allocator Memory>
-  void Terminal<Memory>::checkInline() {
+  void Terminal::checkInline() {
     if (effects.inline_documents.empty() || !primaryScreen()) {
       return;
     }
@@ -1390,8 +1302,7 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  void Terminal<Memory>::trackScrollbackOrigin() {
+  void Terminal::trackScrollbackOrigin() {
     scrollback_origin_ = TrackedRow::active(terminal_.get(), 0);
     const auto row = scrollbackOriginRow();
     if (!row) {
@@ -1402,13 +1313,11 @@ namespace telar::runtime {
     scrollback_origin_row_ = *row;
   }
 
-  template <Allocator Memory>
-  std::optional<std::uint32_t> Terminal<Memory>::scrollbackOriginRow() const {
+  std::optional<std::uint32_t> Terminal::scrollbackOriginRow() const {
     return scrollback_origin_.row(terminal_.get());
   }
 
-  template <Allocator Memory>
-  void Terminal<Memory>::updateScroll() {
+  void Terminal::updateScroll() {
     GhosttyTerminalScrollbar scrollbar{};
 
     checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_SCROLLBAR, &scrollbar));
@@ -1416,13 +1325,11 @@ namespace telar::runtime {
     screen.scroll.offset = static_cast<std::uint32_t>(std::min<std::uint64_t>(scrollbar.offset, std::numeric_limits<std::uint32_t>::max()));
   }
 
-  template <Allocator Memory>
-  ScrollbackRows<Memory>::ScrollbackRows(tbc::view<Memory&, tbc::lt::a> memory)
-      : cells_(AllocatorRef<Byte, Memory>{memory}),
-        runs_(AllocatorRef<MetadataRun, Memory>{memory}) {}
+  ScrollbackRows::ScrollbackRows(tbc::view<ConcurrentMemory&, tbc::lt::a> memory)
+      : cells_(AllocatorRef<Byte, ConcurrentMemory>{memory}),
+        runs_(AllocatorRef<MetadataRun, ConcurrentMemory>{memory}) {}
 
-  template <Allocator Memory>
-  tbc::view<PaneRows, tbc::lt::a> ScrollbackRows<Memory>::read(tbc::view<Terminal<Memory>&, tbc::lt::a> terminal, const ReadPaneRows& request) {
+  tbc::view<PaneRows, tbc::lt::a> ScrollbackRows::read(tbc::view<Terminal&, tbc::lt::a> terminal, const ReadPaneRows& request) {
     terminal.followScrollback();
     terminal.refresh();
     const auto trimmed = terminal.scrollbackTrimmed();
@@ -1476,8 +1383,7 @@ namespace telar::runtime {
     return reply;
   }
 
-  template <Allocator Memory>
-  void formatTerminalSelection(Terminal<Memory>& terminal, const GhosttySelection& selection, bool unwrap, TrailingSpaces spaces, GhosttyWriter writer) {
+  void formatTerminalSelection(Terminal& terminal, const GhosttySelection& selection, bool unwrap, TrailingSpaces spaces, GhosttyWriter writer) {
     auto options = ghosttySized<GhosttyFormatterTerminalOptions>();
 
     options.emit = GHOSTTY_FORMATTER_FORMAT_PLAIN;
@@ -1492,13 +1398,11 @@ namespace telar::runtime {
     checkGhostty(ghostty_formatter_format(formatter.get(), writer));
   }
 
-  template <Allocator Memory>
-  TextReader<Memory>::TextReader(Memory& memory, Terminal<Memory>& terminal, std::size_t capacity)
+  TextReader::TextReader(ConcurrentMemory& memory, Terminal& terminal, std::size_t capacity)
       : terminal_(terminal),
         storage_(memory, capacity) {}
 
-  template <Allocator Memory>
-  void TextReader<Memory>::read(PaneTextSource source, std::uint16_t wanted_rows) {
+  void TextReader::read(PaneTextSource source, std::uint16_t wanted_rows) {
     const auto tag = source == PaneTextSource::screen ? GHOSTTY_POINT_TAG_ACTIVE : GHOSTTY_POINT_TAG_SCREEN;
     auto rows = source == PaneTextSource::screen ? terminal_.screen.rows : totalRows();
     const auto blank_limit = static_cast<std::size_t>(wanted_rows) + terminal_.screen.rows;
@@ -1520,8 +1424,7 @@ namespace telar::runtime {
     format(selection, false, TrailingSpaces::kept);
   }
 
-  template <Allocator Memory>
-  void TextReader<Memory>::copy(const CopySelection& request) {
+  void TextReader::copy(const CopySelection& request) {
     const auto columns = terminal_.screen.cols;
     const auto bottom = totalRows() - 1;
     GhosttyPointCoordinate start{
@@ -1547,33 +1450,27 @@ namespace telar::runtime {
     format(selection, true, TrailingSpaces::trimmed);
   }
 
-  template <Allocator Memory>
-  std::span<const Byte> TextReader<Memory>::bytes() const noexcept {
+  std::span<const Byte> TextReader::bytes() const noexcept {
     return std::span<const Byte>{storage_.bytes()}.first(length_);
   }
 
-  template <Allocator Memory>
-  std::string_view TextReader<Memory>::text() const noexcept {
+  std::string_view TextReader::text() const noexcept {
     return {reinterpret_cast<const char*>(storage_.bytes().data()), length_};
   }
 
-  template <Allocator Memory>
-  bool TextReader<Memory>::truncated() const noexcept {
+  bool TextReader::truncated() const noexcept {
     return wrapped_;
   }
 
-  template <Allocator Memory>
-  std::uint32_t TextReader<Memory>::totalRows() const {
+  std::uint32_t TextReader::totalRows() const {
     return static_cast<std::uint32_t>(std::min<std::size_t>(terminal_.totalRows(), std::numeric_limits<std::uint32_t>::max()));
   }
 
-  template <Allocator Memory>
-  GhosttyGridRef TextReader<Memory>::reference(GhosttyPointTag tag, GhosttyPointCoordinate coordinate) const {
+  GhosttyGridRef TextReader::reference(GhosttyPointTag tag, GhosttyPointCoordinate coordinate) const {
     return gridReference(terminal_.handle(), tag, coordinate);
   }
 
-  template <Allocator Memory>
-  bool TextReader<Memory>::rowIsBlank(GhosttyPointTag tag, std::uint32_t row) const {
+  bool TextReader::rowIsBlank(GhosttyPointTag tag, std::uint32_t row) const {
     auto cell_ref = reference(tag, {0, row});
 
     for (std::uint16_t column = 0; column < terminal_.screen.cols; ++column) {
@@ -1589,8 +1486,7 @@ namespace telar::runtime {
     return true;
   }
 
-  template <Allocator Memory>
-  void TextReader<Memory>::format(const GhosttySelection& selection, bool unwrap, TrailingSpaces spaces) {
+  void TextReader::format(const GhosttySelection& selection, bool unwrap, TrailingSpaces spaces) {
     formatTerminalSelection(terminal_, selection, unwrap, spaces, GhosttyWriter{.write = receive, .userdata = this});
 
     if (!wrapped_) {
@@ -1617,8 +1513,7 @@ namespace telar::runtime {
     length_ = bytes.size() - start;
   }
 
-  template <Allocator Memory>
-  bool TextReader<Memory>::receive(void* context, const Byte* bytes, std::size_t count) noexcept {
+  bool TextReader::receive(void* context, const Byte* bytes, std::size_t count) noexcept {
     auto& self = *static_cast<TextReader*>(context);
 
     while (count != 0) {
@@ -1637,21 +1532,5 @@ namespace telar::runtime {
 
     return true;
   }
-
-  template class TextMetadataCapture<telar::ConcurrentMemory>;
-
-  template class Screen<telar::ConcurrentMemory>;
-
-  template class TerminalEffects<telar::ConcurrentMemory>;
-
-  template class FrameSync<telar::ConcurrentMemory>;
-
-  template class Terminal<telar::ConcurrentMemory>;
-
-  template class ScrollbackRows<telar::ConcurrentMemory>;
-
-  template void formatTerminalSelection<telar::ConcurrentMemory>(Terminal<telar::ConcurrentMemory>& terminal, const GhosttySelection& selection, bool unwrap, TrailingSpaces spaces, GhosttyWriter writer);
-
-  template class TextReader<telar::ConcurrentMemory>;
 
 }

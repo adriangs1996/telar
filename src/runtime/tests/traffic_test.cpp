@@ -304,8 +304,7 @@ static void backpressureAndIsolation(const std::string& path) {
   check(receive(healthy.get()).event().kind == Kind::statistics);
 }
 
-template <ConcurrentAllocator Memory>
-static void exchangeDelivery(Service<Memory>& service, Memory& memory, const std::string& path) {
+static void exchangeDelivery(Service& service, ConcurrentMemory& memory, const std::string& path) {
   auto client = subscriber(path, "", Selection::exchanges);
 
   check(service.listening());
@@ -313,7 +312,7 @@ static void exchangeDelivery(Service<Memory>& service, Memory& memory, const std
 
   limits.enabled = true;
   CaptureProducer producer{memory, limits};
-  CapturedExchange<Memory> exchange{memory};
+  CapturedExchange exchange{memory};
 
   exchange.request = producer.start({.key = {37, 3}, .protocol = CaptureProtocol::http2, .host = "fixture.test", .started_at_ms = 1});
   exchange.response = producer.start({.key = {37, 3}, .side = CaptureSide::response, .protocol = CaptureProtocol::http2, .host = "fixture.test", .started_at_ms = 1});
@@ -350,8 +349,7 @@ static void exchangeDelivery(Service<Memory>& service, Memory& memory, const std
   }
 }
 
-template <ConcurrentAllocator Memory>
-static void interceptionDelivery(Service<Memory>& service, const std::string& path) {
+static void interceptionDelivery(Service& service, const std::string& path) {
   auto owner = traffic::connect(path);
   std::array<Byte, Limits::frame_bytes> output;
 
@@ -367,7 +365,7 @@ static void interceptionDelivery(Service<Memory>& service, const std::string& pa
   const std::array<Byte, 3> original{'a', 0, 'b'};
 
   struct Request {
-    Service<Memory>& service;
+    Service& service;
     std::span<const Byte> bytes;
     std::uint64_t ticket = 0;
   } request{service, original};

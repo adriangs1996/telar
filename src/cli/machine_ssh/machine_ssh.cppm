@@ -71,9 +71,7 @@ export {
     extern template Output capture<Memory>(Memory& memory, const std::vector<std::string>& arguments, std::string_view input, std::chrono::seconds timeout);
 
     // As `capture`, with the contents of an open regular file as the input, or none for -1.
-    template <Allocator Memory>
     Output captureFile(Memory& memory, const std::vector<std::string>& arguments, int file, std::chrono::seconds timeout);
-    extern template Output captureFile<Memory>(Memory& memory, const std::vector<std::string>& arguments, int file, std::chrono::seconds timeout);
 
     std::string quote(std::string_view value);
 
@@ -123,9 +121,7 @@ export {
 
     std::string profilesPath();
 
-    template <Allocator Memory>
     MachineProfiles load(Memory& memory, const std::string& path);
-    extern template MachineProfiles load<Memory>(Memory& memory, const std::string& path);
 
     std::string localLabel(const MachineProfiles& profiles);
 
@@ -141,9 +137,7 @@ export {
 
     int report(const std::exception& error);
 
-    template <Allocator Memory>
     int list(Memory& memory, const MachineProfiles& profiles, bool json);
-    extern template int list<Memory>(Memory& memory, const MachineProfiles& profiles, bool json);
 
   }
 }
@@ -160,14 +154,10 @@ export {
     std::string decode(std::string_view word);
 
     // The SSH argv that runs `command` there, with a terminal there only when `terminal`.
-    template <Allocator Memory>
     std::vector<std::string> ssh(Memory& memory, std::string_view destination, std::string_view command, bool terminal = false);
-    extern template std::vector<std::string> ssh<Memory>(Memory& memory, std::string_view destination, std::string_view command, bool terminal);
 
     // `GIT_SSH_COMMAND` for Git traffic to `destination` over the same options.
-    template <Allocator Memory>
     std::string gitSshCommand(Memory& memory, std::string_view destination);
-    extern template std::string gitSshCommand<Memory>(Memory& memory, std::string_view destination);
 
     // The shell command that runs `words` as one telar command there.
     template <typename Words>
@@ -177,10 +167,10 @@ export {
     // Runs one telar command on the machine with this terminal's streams and
     // returns its exit status. When stdin and stdout are a terminal, so is the
     // command's there, so it can ask the person here.
-    template <Allocator Memory, typename Words>
+    template <typename Words>
     int forward(Memory& memory, const MachineProfile& profile, const Words& words);
-    extern template int forward<Memory, std::vector<std::string>>(Memory& memory, const MachineProfile& profile, const std::vector<std::string>& words);
-    extern template int forward<Memory, std::span<char* const>>(Memory& memory, const MachineProfile& profile, const std::span<char* const>& words);
+    extern template int forward<std::vector<std::string>>(Memory& memory, const MachineProfile& profile, const std::vector<std::string>& words);
+    extern template int forward<std::span<char* const>>(Memory& memory, const MachineProfile& profile, const std::span<char* const>& words);
 
     // Runs one telar command on the machine, reading `input` (or nothing), and
     // returns its stdout. Its stderr passes through; a failure throws `failure`.
@@ -190,19 +180,13 @@ export {
     extern template std::string capture<Memory, std::vector<std::string>>(Memory& memory, const MachineProfile& profile, const std::vector<std::string>& words, const char* failure, int input);
 
     // The saved machine `label` names, or nullopt for this machine's own label.
-    template <Allocator Memory>
     std::optional<MachineProfile> resolve(Memory& memory, std::string_view label);
-    extern template std::optional<MachineProfile> resolve<Memory>(Memory& memory, std::string_view label);
 
     MachineError sshFailure(const launch::Output& output);
 
-    template <Allocator Memory>
     Discovery discover(Memory& memory, const MachineProfile& profile, std::string& detail);
-    extern template Discovery discover<Memory>(Memory& memory, const MachineProfile& profile, std::string& detail);
 
-    template <Allocator Memory>
     int check(Memory& memory, const MachineProfile& profile, bool json);
-    extern template int check<Memory>(Memory& memory, const MachineProfile& profile, bool json);
 
   }
 }
@@ -215,9 +199,7 @@ export {
 
     std::string stripJsonc(std::string_view bytes);
 
-    template <Allocator Memory>
     void json(Memory& memory, const JsonValue& value, String<Memory>& output, std::vector<std::string>& dropped);
-    extern template void json<Memory>(Memory& memory, const JsonValue& value, String<Memory>& output, std::vector<std::string>& dropped);
 
     std::string toml(std::string_view bytes, std::vector<std::string>& dropped);
 
@@ -255,9 +237,7 @@ export {
 
     void relaunchLogin(std::span<char* const> words);
 
-    template <Allocator Memory>
     int openWindow(Memory& memory, const WindowOptions& options);
-    extern template int openWindow<Memory>(Memory& memory, const WindowOptions& options);
 
   }
 }

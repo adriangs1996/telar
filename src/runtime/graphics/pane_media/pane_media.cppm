@@ -179,10 +179,9 @@ export {
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory>
     class MediaTerminal final : public MediaInputSink {
     public:
-      explicit MediaTerminal(Memory& memory, TerminalSize size, GraphicsLimits limits, std::shared_ptr<PtyResponseQueue> responses = {});
+      explicit MediaTerminal(telar::runtime::MediaAllocator<ConcurrentMemory>& memory, TerminalSize size, GraphicsLimits limits, std::shared_ptr<PtyResponseQueue> responses = {});
 
       void feed(std::span<const Byte> bytes);
 
@@ -232,7 +231,7 @@ export {
 
       GraphicsUploadLimits::Reached takeUploadLimits() noexcept;
 
-      GraphicsStorage<Memory> graphics;
+      GraphicsStorage<telar::runtime::MediaAllocator<ConcurrentMemory>> graphics;
 
     private:
       struct ResponseFailure {};
@@ -243,17 +242,15 @@ export {
 
       static void receiveResponse(GhosttyTerminal, void* context, const Byte* bytes, std::size_t count) noexcept;
 
-      control::Parser<Memory> control_parser_;
-      GhosttyAllocatorBridge<Memory> allocator_;
+      control::Parser<telar::runtime::MediaAllocator<ConcurrentMemory>> control_parser_;
+      GhosttyAllocatorBridge<telar::runtime::MediaAllocator<ConcurrentMemory>> allocator_;
       TerminalHandle terminal_;
       std::shared_ptr<PtyResponseQueue> responses_;
-      ResponseOutbox<Memory> response_outbox_;
+      ResponseOutbox<telar::runtime::MediaAllocator<ConcurrentMemory>> response_outbox_;
       std::size_t storage_limit_;
       GraphicsUploadLimits uploads_;
       bool response_failed_ = false;
     };
-
-    extern template class MediaTerminal<telar::runtime::MediaAllocator<telar::ConcurrentMemory>>;
 
   }
 }
@@ -262,22 +259,19 @@ export {
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory>
     class AtomicFrameLoader {
     public:
-      explicit AtomicFrameLoader(MediaAllocator<Memory>& memory, MediaTerminal<MediaAllocator<Memory>>& terminal, PreparedImages<Memory>& prepared) noexcept;
+      explicit AtomicFrameLoader(MediaAllocator<ConcurrentMemory>& memory, MediaTerminal& terminal, PreparedImages& prepared) noexcept;
 
       bool load(const AtomicFrameView& frame, bool shared_transport);
 
     private:
       void place(AtomicFrameKey key);
 
-      MediaAllocator<Memory>& memory_;
-      MediaTerminal<MediaAllocator<Memory>>& terminal_;
-      PreparedImages<Memory>& prepared_;
+      MediaAllocator<ConcurrentMemory>& memory_;
+      MediaTerminal& terminal_;
+      PreparedImages& prepared_;
     };
-
-    extern template class AtomicFrameLoader<telar::ConcurrentMemory>;
 
   }
 }
@@ -286,10 +280,9 @@ export {
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory>
     class MediaInput final : public AtomicFrameSink {
     public:
-      explicit MediaInput(MediaAllocator<Memory>& memory, MediaTerminal<MediaAllocator<Memory>>& terminal, PreparedImages<Memory>& prepared, const std::atomic<unsigned>& shared_clients) noexcept;
+      explicit MediaInput(MediaAllocator<ConcurrentMemory>& memory, MediaTerminal& terminal, PreparedImages& prepared, const std::atomic<unsigned>& shared_clients) noexcept;
 
       AtomicFrameFilter::Statistics feed(std::span<const Byte> bytes);
 
@@ -303,25 +296,20 @@ export {
     private:
       class CheckedSource final : public AtomicFrameSource {
       public:
-        explicit CheckedSource(MediaTerminal<MediaAllocator<Memory>>& terminal) noexcept;
+        explicit CheckedSource(MediaTerminal& terminal) noexcept;
 
         bool available(const AtomicFrameResource& resource) override;
 
         void release(const AtomicFrameResource& resource) override;
 
       private:
-        MediaTerminal<MediaAllocator<Memory>>& terminal_;
+        MediaTerminal& terminal_;
       };
 
-      MediaTerminal<MediaAllocator<Memory>>& terminal_;
-      AtomicFrameLoader<Memory> atomic_frames_;
+      MediaTerminal& terminal_;
+      AtomicFrameLoader atomic_frames_;
       const std::atomic<unsigned>& shared_clients_;
     };
-
-    extern template class MediaInput<telar::ConcurrentMemory>;
-
-    template <Allocator Memory>
-    MediaInput(MediaAllocator<Memory>& memory, MediaTerminal<MediaAllocator<Memory>>& terminal, PreparedImages<Memory>& prepared, const std::atomic<unsigned>& shared_clients) -> MediaInput<Memory>;
 
   }
 }
@@ -330,12 +318,11 @@ export {
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory>
     class PaneMedia final : public TerminalMedia {
     public:
-      using AllocatedMemory = MediaAllocator<Memory>;
+      using AllocatedMemory = MediaAllocator<ConcurrentMemory>;
 
-      explicit PaneMedia(Memory& memory, MediaBudget& budget, GraphicsLimits limits, TerminalSize size, std::shared_ptr<PtyResponseQueue> responses = {});
+      explicit PaneMedia(ConcurrentMemory& memory, MediaBudget& budget, GraphicsLimits limits, TerminalSize size, std::shared_ptr<PtyResponseQueue> responses = {});
 
       void requireOrderedInput() noexcept override;
 
@@ -378,7 +365,7 @@ export {
 
       void noteSharedTransport(bool added) noexcept;
 
-      std::optional<FrozenImage<Memory>> takeTransfer(ImageKey key, bool shared);
+      std::optional<FrozenImage> takeTransfer(ImageKey key, bool shared);
 
       // Generic over the caller's predicate, so it stays here.
       template <typename Consumer>
@@ -389,7 +376,7 @@ export {
 
       bool idle() const noexcept override;
 
-      MediaTerminal<AllocatedMemory>* terminal() noexcept;
+      MediaTerminal* terminal() noexcept;
 
       std::uint64_t takeDroppedBytes() noexcept;
 
@@ -405,11 +392,11 @@ export {
       void dropActive(std::size_t incoming) noexcept;
 
       AllocatedMemory memory_;
-      PreparedImages<Memory> prepared_;
-      TransferRequests<Memory> requests_;
+      PreparedImages prepared_;
+      TransferRequests requests_;
       std::shared_ptr<PtyResponseQueue> responses_;
       GraphicsLimits limits_;
-      std::optional<MediaTerminal<AllocatedMemory>> terminal_;
+      std::optional<MediaTerminal> terminal_;
       std::array<MediaBatch, 2> batches_;
       KittyFraming framing_;
       TerminalSize current_size_;
@@ -441,8 +428,6 @@ export {
 
       std::atomic<unsigned> shared_clients_{0};
     };
-
-    extern template class PaneMedia<telar::ConcurrentMemory>;
 
   }
 }

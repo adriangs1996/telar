@@ -48,7 +48,7 @@ struct Control : FlowControl {
     broker.configure({.host = "fixture.test", .visibility = 3});
   }
 
-  Interception<ConcurrentMemory> broker;
+  Interception<> broker;
   std::uint64_t ticket = 0;
   std::size_t requests = 0;
   std::string forwarded;
@@ -278,10 +278,10 @@ static void composition(ConcurrentMemory& memory) {
   check(broker.poll(canceled, output).verdict == Verdict::reject && take(66, original) == 0);
 
   for (unsigned count = 0; count < 64; ++count) {
-    check(broker.begin({.host = "fixture.test", .bytes = original}) != Interception<ConcurrentMemory>::rejected_ticket);
+    check(broker.begin({.host = "fixture.test", .bytes = original}) != Interception<>::rejected_ticket);
   }
 
-  check(broker.begin({.host = "fixture.test", .bytes = original}) == Interception<ConcurrentMemory>::rejected_ticket);
+  check(broker.begin({.host = "fixture.test", .bytes = original}) == Interception<>::rejected_ticket);
 }
 
 static void reconstruction(ConcurrentMemory& memory) {
@@ -385,7 +385,7 @@ static void applicationDetection(ConcurrentMemory& memory) {
     limits.enabled = true;
     CaptureProducer captures{memory, limits};
     ProxyCounters counters;
-    ApplicationRelay relay{memory, ConnectionObservation<ConcurrentMemory>{counters, &captures, 31}, "fixture.test"};
+    ApplicationRelay relay{memory, ConnectionObservation{counters, &captures, 31}, "fixture.test"};
     TestByteStream child, origin;
 
     child.input = "GET /plain HTTP/1.1\r\nHost: fixture.test\r\n\r\n";

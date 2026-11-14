@@ -358,12 +358,10 @@ namespace telar::runtime {
     return accepted;
   }
 
-  template <Allocator Memory>
-  CaptureContentDecoder<Memory>::CaptureContentDecoder(Memory& memory) noexcept
+  CaptureContentDecoder::CaptureContentDecoder(Memory& memory) noexcept
       : memory_(memory) {}
 
-  template <Allocator Memory>
-  DecodedBody<Memory> CaptureContentDecoder<Memory>::decode(std::span<const std::uint8_t> input, std::string_view encoding, std::size_t limit) {
+  DecodedBody<Memory> CaptureContentDecoder::decode(std::span<const std::uint8_t> input, std::string_view encoding, std::size_t limit) {
     TELAR_TRACE("proxy.decodeCapture");
     if (limit == 0 || limit == std::numeric_limits<std::size_t>::max()) {
       throw std::length_error{"Invalid capture decode limit"};
@@ -416,8 +414,7 @@ namespace telar::runtime {
     return decoded ? std::move(*decoded) : raw(input, limit, false);
   }
 
-  template <Allocator Memory>
-  DecodedBody<Memory> CaptureContentDecoder<Memory>::raw(std::span<const std::uint8_t> input, std::size_t limit, bool failed) {
+  DecodedBody<Memory> CaptureContentDecoder::raw(std::span<const std::uint8_t> input, std::size_t limit, bool failed) {
     const auto accepted = std::min(input.size(), limit);
     DecodedBody<Memory> result{memory_, accepted};
 
@@ -428,8 +425,7 @@ namespace telar::runtime {
     return result;
   }
 
-  template <Allocator Memory>
-  std::optional<DecodedBody<Memory>> CaptureContentDecoder<Memory>::decodeOne(std::span<const std::uint8_t> input, ContentCoding coding, std::size_t limit) {
+  std::optional<DecodedBody<Memory>> CaptureContentDecoder::decodeOne(std::span<const std::uint8_t> input, ContentCoding coding, std::size_t limit) {
     const bool zstd = coding == ContentCoding::zstd;
     const bool brotli = coding == ContentCoding::brotli;
     const auto container = coding == ContentCoding::gzip ? FlateContainer::gzip : FlateContainer::zlib;
@@ -467,8 +463,7 @@ namespace telar::runtime {
     return result;
   }
 
-  template <Allocator Memory>
-  std::optional<DecodedBody<Memory>> CaptureContentDecoder<Memory>::decodeSmallFlate(std::span<const std::uint8_t> input, FlateContainer container, std::size_t limit) {
+  std::optional<DecodedBody<Memory>> CaptureContentDecoder::decodeSmallFlate(std::span<const std::uint8_t> input, FlateContainer container, std::size_t limit) {
     // Keep the reference's validation boundary beyond the requested prefix before truncating.
     SensitiveBuffer<FlateDecoder<Memory>::minimum_output_capacity> temporary;
     const auto decoded = FlateDecoder{memory_}.decode(input, temporary.bytes(), container, limit + 1);
@@ -486,8 +481,7 @@ namespace telar::runtime {
     return result;
   }
 
-  template <ConcurrentAllocator Memory>
-  CaptureProducer<Memory>::CaptureProducer(Memory& memory, ProxyCaptureLimits limits)
+  CaptureProducer::CaptureProducer(ConcurrentMemory& memory, ProxyCaptureLimits limits)
       : memory_(memory),
         limits_(limits),
         quota_(limits.total_bytes) {
@@ -496,9 +490,8 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  auto CaptureProducer<Memory>::start(CaptureStart context) noexcept -> Half {
-    Half absent{nullptr, AllocationDeleter<CaptureHalf<Memory>, Memory>{memory_}};
+  auto CaptureProducer::start(CaptureStart context) noexcept -> Half {
+    Half absent{nullptr, AllocationDeleter<CaptureHalf, ConcurrentMemory>{memory_}};
 
     if (!limits_.enabled) {
       return absent;
@@ -506,7 +499,7 @@ namespace telar::runtime {
 
     if (!context.host.oversized()) {
       try {
-        auto half = makeOwned<CaptureHalf<Memory>>(memory_, memory_, quota_, limits_, context);
+        auto half = makeOwned<CaptureHalf>(memory_, memory_, quota_, limits_, context);
 
         if (context.side == CaptureSide::request) {
           started_.fetch_add(1, std::memory_order_relaxed);
@@ -521,8 +514,7 @@ namespace telar::runtime {
     return absent;
   }
 
-  template <ConcurrentAllocator Memory>
-  bool CaptureProducer<Memory>::publish(Half half) noexcept {
+  bool CaptureProducer::publish(Half half) noexcept {
     if (half->head.truncated || half->body.truncated) {
       truncated_.fetch_add(1, std::memory_order_relaxed);
     }
@@ -531,28 +523,23 @@ namespace telar::runtime {
     return channel_.publish(std::move(half));
   }
 
-  template <ConcurrentAllocator Memory>
-  auto CaptureProducer<Memory>::receive() -> std::optional<Half> {
+  auto CaptureProducer::receive() -> std::optional<Half> {
     return channel_.receive();
   }
 
-  template <ConcurrentAllocator Memory>
-  auto CaptureProducer<Memory>::tryReceive() noexcept -> std::optional<Half> {
+  auto CaptureProducer::tryReceive() noexcept -> std::optional<Half> {
     return channel_.tryReceive();
   }
 
-  template <ConcurrentAllocator Memory>
-  void CaptureProducer<Memory>::close() noexcept {
+  void CaptureProducer::close() noexcept {
     channel_.close();
   }
 
-  template <ConcurrentAllocator Memory>
-  std::size_t CaptureProducer<Memory>::reservedBytes() const noexcept {
+  std::size_t CaptureProducer::reservedBytes() const noexcept {
     return quota_.used();
   }
 
-  template <ConcurrentAllocator Memory>
-  void CaptureProducer<Memory>::decodeBody(CaptureHalf<Memory>& half) noexcept {
+  void CaptureProducer::decodeBody(CaptureHalf& half) noexcept {
     if (half.encoding().empty() || asciiEqualIgnoreCase(half.encoding(), "identity")) {
       half.body_decoded = true;
       return;
@@ -597,8 +584,7 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  CaptureMetrics CaptureProducer<Memory>::metrics() const noexcept {
+  CaptureMetrics CaptureProducer::metrics() const noexcept {
     const auto queue = channel_.metrics();
 
     return {
@@ -615,8 +601,7 @@ namespace telar::runtime {
     };
   }
 
-  template <ConcurrentAllocator Memory>
-  void CaptureProducer<Memory>::countTruncation(CaptureTruncation truncation) noexcept {
+  void CaptureProducer::countTruncation(CaptureTruncation truncation) noexcept {
     if (truncation.part) {
       truncated_part_.fetch_add(1, std::memory_order_relaxed);
     }
@@ -629,8 +614,5 @@ namespace telar::runtime {
       truncated_total_.fetch_add(1, std::memory_order_relaxed);
     }
   }
-
-  template class CaptureContentDecoder<Memory>;
-  template class CaptureProducer<ConcurrentMemory>;
 
 }

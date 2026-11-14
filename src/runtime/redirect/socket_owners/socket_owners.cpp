@@ -77,12 +77,10 @@ namespace telar::runtime::redirect {
 
 #if defined(__APPLE__)
 
-  template <Allocator Memory>
-  PfCommand<Memory>::PfCommand(Memory& memory) noexcept
+  PfCommand::PfCommand(Memory& memory) noexcept
       : memory_(memory) {}
 
-  template <Allocator Memory>
-  String<Memory> PfCommand<Memory>::run(std::span<const std::string_view> arguments, std::string_view input) {
+  String<Memory> PfCommand::run(std::span<const std::string_view> arguments, std::string_view input) {
     constexpr std::size_t maximum_arguments = 12;
     if (arguments.size() >= maximum_arguments) {
       throw std::invalid_argument{"Too many PF command arguments"};
@@ -181,18 +179,15 @@ namespace telar::runtime::redirect {
 
 #if defined(__APPLE__)
 
-  template <Allocator Memory>
-  SocketAccounts<Memory>::SocketAccounts(Memory& memory) noexcept
+  SocketAccounts::SocketAccounts(Memory& memory) noexcept
       : memory_(memory) {}
 
-  template <Allocator Memory>
-  void SocketAccounts<Memory>::validate() {
+  void SocketAccounts::validate() {
     refresh();
     decode(snapshot_->bytes().first(size_), {}, {});
   }
 
-  template <Allocator Memory>
-  std::optional<uid_t> SocketAccounts<Memory>::peer(int descriptor) {
+  std::optional<uid_t> SocketAccounts::peer(int descriptor) {
     sockaddr_storage local{}, remote{};
     socklen_t length = sizeof(local);
     if (::getsockname(descriptor, reinterpret_cast<sockaddr*>(&local), &length) != 0) {
@@ -218,8 +213,7 @@ namespace telar::runtime::redirect {
     return {};
   }
 
-  template <Allocator Memory>
-  std::optional<uid_t> SocketAccounts<Memory>::decode(std::span<const Byte> bytes, const sockaddr_storage& local, const sockaddr_storage& peer) {
+  std::optional<uid_t> SocketAccounts::decode(std::span<const Byte> bytes, const sockaddr_storage& local, const sockaddr_storage& peer) {
     if (bytes.size() < sizeof(xinpgen)) {
       throw EncodingError{"Incomplete TCP account snapshot"};
     }
@@ -283,8 +277,7 @@ namespace telar::runtime::redirect {
     return account;
   }
 
-  template <Allocator Memory>
-  void SocketAccounts<Memory>::refresh() {
+  void SocketAccounts::refresh() {
     for (unsigned attempt = 0; attempt < 3; ++attempt) {
       std::size_t needed = 0;
       if (::sysctlbyname("net.inet.tcp.pcblist64", nullptr, &needed, nullptr, 0) != 0) {
@@ -312,8 +305,7 @@ namespace telar::runtime::redirect {
     throw SystemError{"TCP account snapshot changed repeatedly", EAGAIN};
   }
 
-  template <Allocator Memory>
-  bool SocketAccounts<Memory>::matches(const xinpcb64& pcb, const sockaddr_storage& local, const sockaddr_storage& peer) noexcept {
+  bool SocketAccounts::matches(const xinpcb64& pcb, const sockaddr_storage& local, const sockaddr_storage& peer) noexcept {
     if (local.ss_family != peer.ss_family) {
       return false;
     }
@@ -680,8 +672,7 @@ namespace telar::runtime::redirect {
     return ::sigpending(&pending) == 0 && (sigismember(&pending, SIGINT) || sigismember(&pending, SIGTERM));
   }
 
-  template <Allocator Memory>
-  Helper<Memory>::Helper(Memory& memory, std::string_view endpoint, std::span<const Target> targets, std::span<const ProcessIdentity> processes, Direction direction)
+  Helper::Helper(Memory& memory, std::string_view endpoint, std::span<const Target> targets, std::span<const ProcessIdentity> processes, Direction direction)
       : memory_(memory),
         endpoint_(endpoint, AllocatorRef<char, Memory>{memory}),
         direction_(direction) {
@@ -705,8 +696,7 @@ namespace telar::runtime::redirect {
     }
   }
 
-  template <Allocator Memory>
-  String<Memory> Helper<Memory>::plan(uid_t uid, const PfIdentity<Memory>& identity, bool dry_run) {
+  String<Memory> Helper::plan(uid_t uid, const PfIdentity<Memory>& identity, bool dry_run) {
     std::array<FlowKey, maximum_flows> keys;
     std::array<FlowKey, maximum_flows> incoming;
     std::array<Bypass, maximum_flows> bypasses;
@@ -734,8 +724,7 @@ namespace telar::runtime::redirect {
     return pfRules(memory_, std::span{mappings_}.first(count_), scope);
   }
 
-  template <Allocator Memory>
-  void Helper<Memory>::run(const PfIdentity<Memory>& identity) {
+  void Helper::run(const PfIdentity<Memory>& identity) {
     if (::geteuid() != 0) {
       throw std::invalid_argument{"Transparent redirection requires the privileged helper"};
     }
@@ -910,8 +899,7 @@ namespace telar::runtime::redirect {
     ::send(monitor.get(), &stopped, 1, 0);
   }
 
-  template <Allocator Memory>
-  void Helper<Memory>::readAll(int socket, std::span<Byte> bytes) {
+  void Helper::readAll(int socket, std::span<Byte> bytes) {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
 
     while (!bytes.empty()) {
@@ -932,8 +920,7 @@ namespace telar::runtime::redirect {
     }
   }
 
-  template <Allocator Memory>
-  void Helper<Memory>::accept(std::size_t listener, uid_t uid) {
+  void Helper::accept(std::size_t listener, uid_t uid) {
     for (std::size_t round = 0; round < maximum_accept_batch; ++round) {
       auto child = listeners_[listener]->accept();
       if (!child) {
@@ -979,8 +966,7 @@ namespace telar::runtime::redirect {
     }
   }
 
-  template <Allocator Memory>
-  void Helper<Memory>::handoff(const Connection& connection, std::size_t flow, uid_t uid) {
+  void Helper::handoff(const Connection& connection, std::size_t flow, uid_t uid) {
     if (flows_[flow]->incoming && (!accounts_ || accounts_->peer(connection.origin.get()) != uid)) {
       std::fprintf(stderr, "telar redirect: rejected incoming origin without the runtime account\n");
       flows_[flow]->deadline = std::chrono::steady_clock::now();
@@ -1005,9 +991,6 @@ namespace telar::runtime::redirect {
     }
   }
 
-  template class PfCommand<Memory>;
-  template class SocketAccounts<Memory>;
-  template class Helper<Memory>;
 #endif
 
 }

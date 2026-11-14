@@ -49,10 +49,10 @@ struct ReporterFixture {
   SystemAllocator system;
   MemoryAdapter<SystemAllocator> adapter{system};
   ConcurrentMemory& memory = adapter;
-  RuntimeModel<ConcurrentMemory> model{memory};
-  ClientStore<ConcurrentMemory> clients{memory};
+  RuntimeModel model{memory};
+  ClientStore clients{memory};
   RecordedAgents agents;
-  DeferredReports<ConcurrentMemory, RecordedAgents> reports;
+  DeferredReports<RecordedAgents> reports;
   ClientPeer first{memory, model, clients, ClientRole::control};
   ClientPeer second{memory, model, clients, ClientRole::control};
   ReporterIdentity reporter{1, 1, AgentProvider::codex};
@@ -61,7 +61,7 @@ struct ReporterFixture {
     const std::array<std::string_view, 1> arguments{"/bin/cat"};
     Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
 
-    model.panes.insert(1, makeOwned<Pane<ConcurrentMemory>>(memory, memory, 1, TabLocation{}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits}));
+    model.panes.insert(1, makeOwned<Pane>(memory, memory, 1, TabLocation{}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits}));
     agents.current.observeProcess(ProcessIdentity{42, 1, 1, 0, 42}, AgentProvider::claude);
     agents.current.setProcessContext(SessionHost::pane, false, agents.current.process_identity);
     for (auto* client : {&first.session(), &second.session()}) {
@@ -71,7 +71,7 @@ struct ReporterFixture {
     }
   }
 
-  Pane<ConcurrentMemory>& pane() const {
+  Pane& pane() const {
     return *model.panes.find(1);
   }
 
@@ -89,11 +89,11 @@ struct ReporterFixture {
         consume(client, std::span<const Byte>{payload});
       }
 
-      DeferredReports<ConcurrentMemory, RecordedAgents>::close(client, payload);
+      DeferredReports<RecordedAgents>::close(client, payload);
     }
   }
 
-  ReportDecision evaluate(ClientSession<ConcurrentMemory>& client, std::span<const Byte> payload) {
+  ReportDecision evaluate(ClientSession& client, std::span<const Byte> payload) {
     return reports.evaluate(model.panes, agents, client, reporter, payload);
   }
 };

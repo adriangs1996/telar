@@ -304,15 +304,13 @@ namespace telar::runtime {
     return SSL_TLSEXT_ERR_ALERT_FATAL;
   }
 
-  template <ConcurrentAllocator Memory>
-  TlsTrustStore<Memory>::TlsTrustStore(Memory& memory, const TlsLibrary<Memory>& library) {
+  TlsTrustStore::TlsTrustStore(ConcurrentMemory& memory, const TlsLibrary& library) {
     requireTls(library.uses(memory), "TLS trust allocator does not match its library");
     store_.reset(X509_STORE_new());
     requireTls(store_ != nullptr, "Allocate TLS trust store");
   }
 
-  template <ConcurrentAllocator Memory>
-  void TlsTrustStore<Memory>::addDer(std::span<const unsigned char> encoded) {
+  void TlsTrustStore::addDer(std::span<const unsigned char> encoded) {
     requireTls(!encoded.empty() && encoded.size() <= maximum_certificate_bytes, "Invalid TLS root certificate size");
     auto* position = encoded.data();
     TlsCertificate certificate{d2i_X509(nullptr, &position, static_cast<long>(encoded.size()))};
@@ -321,8 +319,7 @@ namespace telar::runtime {
     add(certificate.get());
   }
 
-  template <ConcurrentAllocator Memory>
-  void TlsTrustStore<Memory>::add(X509* certificate) {
+  void TlsTrustStore::add(X509* certificate) {
     TlsHandle<ASN1_TIME, ASN1_TIME_free> now{ASN1_TIME_set(nullptr, std::time(nullptr))};
 
     requireTls(now != nullptr, "Read TLS trust validation time");
@@ -351,18 +348,15 @@ namespace telar::runtime {
     ++count_;
   }
 
-  template <ConcurrentAllocator Memory>
-  X509_STORE* TlsTrustStore<Memory>::native() const noexcept {
+  X509_STORE* TlsTrustStore::native() const noexcept {
     return store_.get();
   }
 
-  template <ConcurrentAllocator Memory>
-  std::size_t TlsTrustStore<Memory>::count() const noexcept {
+  std::size_t TlsTrustStore::count() const noexcept {
     return count_;
   }
 
-  template <ConcurrentAllocator Memory>
-  TlsContexts<Memory>::TlsContexts(Memory& memory, const TlsLibrary<Memory>& library, const TlsTrustStore<Memory>& trust) {
+  TlsContexts::TlsContexts(ConcurrentMemory& memory, const TlsLibrary& library, const TlsTrustStore& trust) {
     requireTls(library.uses(memory), "TLS contexts allocator does not match its library");
     origin_.reset(SSL_CTX_new(TLS_client_method()));
     child_.reset(SSL_CTX_new(TLS_server_method()));
@@ -383,18 +377,15 @@ namespace telar::runtime {
     SSL_CTX_set_alpn_select_cb(child_.get(), &AlpnSelection::select, nullptr);
   }
 
-  template <ConcurrentAllocator Memory>
-  SSL_CTX* TlsContexts<Memory>::origin() const noexcept {
+  SSL_CTX* TlsContexts::origin() const noexcept {
     return origin_.get();
   }
 
-  template <ConcurrentAllocator Memory>
-  SSL_CTX* TlsContexts<Memory>::child() const noexcept {
+  SSL_CTX* TlsContexts::child() const noexcept {
     return child_.get();
   }
 
-  template <ConcurrentAllocator Memory>
-  TlsSession<Memory>::TlsSession(tbc::view<const TlsContexts<Memory>&, tbc::lt::a> contexts, tbc::view<std::shared_ptr<const CertificateAuthority<Memory>>, tbc::lt::a> authority, TunnelSockets sockets, std::string_view hostname, tbc::view<Memory&, tbc::lt::a> memory, tbc::view<Owned<AlpnOffer, Memory>, tbc::lt::a> offer)
+  TlsSession::TlsSession(tbc::view<const TlsContexts&, tbc::lt::a> contexts, tbc::view<std::shared_ptr<const CertificateAuthority>, tbc::lt::a> authority, TunnelSockets sockets, std::string_view hostname, tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<Owned<AlpnOffer, ConcurrentMemory>, tbc::lt::a> offer)
       : contexts_(contexts),
         authority_(std::move(authority)),
         sockets_(sockets),
@@ -405,8 +396,7 @@ namespace telar::runtime {
     hostname_.assign(hostname);
   }
 
-  template <ConcurrentAllocator Memory>
-  TlsSession<Memory>::~TlsSession() {
+  TlsSession::~TlsSession() {
     if (child_) {
       SSL_shutdown(child_.get());
     }
@@ -416,8 +406,7 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  auto TlsSession<Memory>::advance() noexcept -> State {
+  auto TlsSession::advance() noexcept -> State {
     TELAR_TRACE("tls.advanceHandshake");
     try {
       if (state_ == State::initialize) {
@@ -467,18 +456,15 @@ namespace telar::runtime {
     return state_;
   }
 
-  template <ConcurrentAllocator Memory>
-  auto TlsSession<Memory>::state() const noexcept -> State {
+  auto TlsSession::state() const noexcept -> State {
     return state_;
   }
 
-  template <ConcurrentAllocator Memory>
-  auto TlsSession<Memory>::failure() const noexcept -> Failure {
+  auto TlsSession::failure() const noexcept -> Failure {
     return state_ == State::failed ? failure_ : Failure::none;
   }
 
-  template <ConcurrentAllocator Memory>
-  StreamReadiness TlsSession<Memory>::waiting(TlsSide side) const noexcept {
+  StreamReadiness TlsSession::waiting(TlsSide side) const noexcept {
     if (side == TlsSide::child) {
       return state_ == State::offer ? (offer_after_ == std::chrono::steady_clock::time_point{} ? StreamReadiness::readable : StreamReadiness::none) : state_ == State::child ? child_waiting_
                                                                                                                                                                              : StreamReadiness::none;
@@ -487,13 +473,11 @@ namespace telar::runtime {
     return state_ == State::origin ? origin_waiting_ : StreamReadiness::none;
   }
 
-  template <ConcurrentAllocator Memory>
-  std::optional<std::chrono::steady_clock::time_point> TlsSession<Memory>::deadline() const noexcept {
+  std::optional<std::chrono::steady_clock::time_point> TlsSession::deadline() const noexcept {
     return state_ == State::offer && offer_after_ != std::chrono::steady_clock::time_point{} ? std::optional{offer_after_} : std::nullopt;
   }
 
-  template <ConcurrentAllocator Memory>
-  HttpProtocol TlsSession<Memory>::protocol() const noexcept {
+  HttpProtocol TlsSession::protocol() const noexcept {
     const auto selected = selection_.protocol();
     if (selected.size() == 2 && selected[0] == 'h' && selected[1] == '2') {
       return HttpProtocol::http2;
@@ -504,13 +488,15 @@ namespace telar::runtime {
     return std::ranges::equal(selected, http11) ? HttpProtocol::http11 : HttpProtocol::other;
   }
 
-  template <ConcurrentAllocator Memory>
-  bool TlsSession<Memory>::unnegotiated() const noexcept {
+  bool TlsSession::unnegotiated() const noexcept {
     return selection_.protocol().empty();
   }
 
-  template <ConcurrentAllocator Memory>
-  StreamResult TlsSession<Memory>::read(TlsSide side, std::span<std::uint8_t> destination) noexcept {
+  auto& TlsSession::input(TlsSide side) noexcept {
+    return side == TlsSide::child ? child_input_ : origin_input_;
+  }
+
+  StreamResult TlsSession::read(TlsSide side, std::span<std::uint8_t> destination) noexcept {
     auto& buffer = input(side);
     if (!buffer.empty()) {
       return {StreamResult::State::data, buffer.copyTo(destination)};
@@ -519,8 +505,7 @@ namespace telar::runtime {
     return readNative(side, destination);
   }
 
-  template <ConcurrentAllocator Memory>
-  StreamResult TlsSession<Memory>::write(TlsSide side, std::span<const std::uint8_t> bytes) noexcept {
+  StreamResult TlsSession::write(TlsSide side, std::span<const std::uint8_t> bytes) noexcept {
     if (state_ != State::established) {
       return {StreamResult::State::failed};
     }
@@ -533,8 +518,7 @@ namespace telar::runtime {
     return result == 1 ? StreamResult{StreamResult::State::data, sent} : ioFailure(connection, result);
   }
 
-  template <ConcurrentAllocator Memory>
-  StreamResult TlsSession<Memory>::peek(TlsSide side, std::span<std::uint8_t> destination) noexcept {
+  StreamResult TlsSession::peek(TlsSide side, std::span<std::uint8_t> destination) noexcept {
     const auto visible = peekView(side, destination.size());
     if (!visible.bytes.empty()) {
       std::memcpy(destination.data(), visible.bytes.data(), visible.bytes.size());
@@ -543,33 +527,28 @@ namespace telar::runtime {
     return {visible.state, visible.bytes.size(), visible.waiting};
   }
 
-  template <ConcurrentAllocator Memory>
-  StreamView TlsSession<Memory>::peekView(TlsSide side, std::size_t maximum) noexcept {
+  StreamView TlsSession::peekView(TlsSide side, std::size_t maximum) noexcept {
     return input(side).peek([&](std::span<std::uint8_t> destination) noexcept {
       return readNative(side, destination);
     },
         maximum);
   }
 
-  template <ConcurrentAllocator Memory>
-  void TlsSession<Memory>::consume(TlsSide side, std::size_t count) noexcept {
+  void TlsSession::consume(TlsSide side, std::size_t count) noexcept {
     input(side).consume(count);
   }
 
-  template <ConcurrentAllocator Memory>
-  bool TlsSession<Memory>::buffered(TlsSide side) const noexcept {
+  bool TlsSession::buffered(TlsSide side) const noexcept {
     const auto& buffer = side == TlsSide::child ? child_input_ : origin_input_;
 
     return state_ == State::established && (!buffer.empty() || SSL_pending(endpoint(side)) > 0);
   }
 
-  template <ConcurrentAllocator Memory>
-  void TlsSession<Memory>::halfClose(TlsSide side) noexcept {
+  void TlsSession::halfClose(TlsSide side) noexcept {
     ::shutdown(side == TlsSide::child ? sockets_.child : sockets_.origin, SHUT_WR);
   }
 
-  template <ConcurrentAllocator Memory>
-  StreamResult TlsSession<Memory>::readNative(TlsSide side, std::span<std::uint8_t> destination) noexcept {
+  StreamResult TlsSession::readNative(TlsSide side, std::span<std::uint8_t> destination) noexcept {
     if (state_ != State::established) {
       return {StreamResult::State::failed};
     }
@@ -582,13 +561,7 @@ namespace telar::runtime {
     return result == 1 ? StreamResult{StreamResult::State::data, received} : ioFailure(connection, result);
   }
 
-  template <ConcurrentAllocator Memory>
-  auto& TlsSession<Memory>::input(TlsSide side) noexcept {
-    return side == TlsSide::child ? child_input_ : origin_input_;
-  }
-
-  template <ConcurrentAllocator Memory>
-  void TlsSession<Memory>::initialize() {
+  void TlsSession::initialize() {
     failure_ = Failure::context;
     origin_.reset(SSL_new(contexts_.origin()));
     child_.reset(SSL_new(contexts_.child()));
@@ -615,8 +588,7 @@ namespace telar::runtime {
     state_ = State::offer;
   }
 
-  template <ConcurrentAllocator Memory>
-  bool TlsSession<Memory>::handshake(SSL* connection, StreamReadiness& waiting) {
+  bool TlsSession::handshake(SSL* connection, StreamReadiness& waiting) {
     ERR_clear_error();
     const int result = SSL_do_handshake(connection);
     if (result == 1) {
@@ -631,8 +603,7 @@ namespace telar::runtime {
     return false;
   }
 
-  template <ConcurrentAllocator Memory>
-  void TlsSession<Memory>::mirrorProtocol() {
+  void TlsSession::mirrorProtocol() {
     const unsigned char* selected = nullptr;
     unsigned length = 0;
 
@@ -640,8 +611,7 @@ namespace telar::runtime {
     requireTls(selection_.assign({selected, length}), "Invalid TLS origin ALPN selection");
   }
 
-  template <ConcurrentAllocator Memory>
-  StreamResult TlsSession<Memory>::ioFailure(SSL* connection, int result) noexcept {
+  StreamResult TlsSession::ioFailure(SSL* connection, int result) noexcept {
     switch (SSL_get_error(connection, result)) {
     case SSL_ERROR_WANT_READ:
       return {StreamResult::State::blocked, 0, StreamReadiness::readable};
@@ -654,90 +624,69 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  SSL* TlsSession<Memory>::endpoint(TlsSide side) const noexcept {
+  SSL* TlsSession::endpoint(TlsSide side) const noexcept {
     return side == TlsSide::child ? child_.get() : origin_.get();
   }
 
-  template <ConcurrentAllocator Memory>
-  TlsInterception<Memory>::TlsInterception(tbc::view<const TlsContexts<Memory>&, tbc::lt::a> contexts, tbc::view<std::shared_ptr<const CertificateAuthority<Memory>>, tbc::lt::a> authority) noexcept
+  TlsInterception::TlsInterception(tbc::view<const TlsContexts&, tbc::lt::a> contexts, tbc::view<std::shared_ptr<const CertificateAuthority>, tbc::lt::a> authority) noexcept
       : contexts_(contexts),
         replacement_(std::move(authority)) {}
 
-  template <ConcurrentAllocator Memory>
-  tbc::view<Owned<TlsSession<Memory>, Memory>, tbc::lt::a> TlsInterception<Memory>::open(tbc::view<Memory&, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname, tbc::view<Owned<AlpnOffer, Memory>, tbc::lt::a> offer) const {
+  tbc::view<Owned<TlsSession, ConcurrentMemory>, tbc::lt::a> TlsInterception::open(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname, tbc::view<Owned<AlpnOffer, ConcurrentMemory>, tbc::lt::a> offer) const {
     requireTls(!suspended_.load(std::memory_order_acquire), "TLS authority synchronization is in progress");
-    return makeOwned<TlsSession<Memory>>(memory, contexts_, snapshot(), sockets, hostname, memory, std::move(offer));
+    return makeOwned<TlsSession>(memory, contexts_, snapshot(), sockets, hostname, memory, std::move(offer));
   }
 
-  template <ConcurrentAllocator Memory>
-  tbc::view<Owned<TlsSession<Memory>, Memory>, tbc::lt::a> TlsInterception<Memory>::open(tbc::view<Memory&, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname) const {
-    return open(memory, sockets, hostname, Owned<AlpnOffer, Memory>{nullptr, AllocationDeleter<AlpnOffer, Memory>{memory}});
+  tbc::view<Owned<TlsSession, ConcurrentMemory>, tbc::lt::a> TlsInterception::open(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname) const {
+    return open(memory, sockets, hostname, Owned<AlpnOffer, ConcurrentMemory>{nullptr, AllocationDeleter<AlpnOffer, ConcurrentMemory>{memory}});
   }
 
-  template <ConcurrentAllocator Memory>
-  tbc::view<std::shared_ptr<const CertificateAuthority<Memory>>, tbc::lt::a> TlsInterception<Memory>::snapshot() const noexcept {
+  tbc::view<std::shared_ptr<const CertificateAuthority>, tbc::lt::a> TlsInterception::snapshot() const noexcept {
     std::lock_guard lock{mutex_};
 
     return replacement_;
   }
 
-  template <ConcurrentAllocator Memory>
-  void TlsInterception<Memory>::replace(tbc::view<std::shared_ptr<const CertificateAuthority<Memory>>, tbc::lt::a> authority) noexcept {
+  void TlsInterception::replace(tbc::view<std::shared_ptr<const CertificateAuthority>, tbc::lt::a> authority) noexcept {
     std::lock_guard lock{mutex_};
 
     replacement_.swap(authority);
   }
 
-  template <ConcurrentAllocator Memory>
-  void TlsInterception<Memory>::suspend(bool value) noexcept {
+  void TlsInterception::suspend(bool value) noexcept {
     suspended_.store(value, std::memory_order_release);
   }
 
-  template <ConcurrentAllocator Memory>
-  bool TlsInterception<Memory>::suspended() const noexcept {
+  bool TlsInterception::suspended() const noexcept {
     return suspended_.load(std::memory_order_acquire);
   }
 
-  template <ConcurrentAllocator Memory>
-  TlsStream<Memory>::TlsStream(TlsSession<Memory>& session, TlsSide side) noexcept
+  TlsStream::TlsStream(TlsSession& session, TlsSide side) noexcept
       : session_(session),
         side_(side) {}
 
-  template <ConcurrentAllocator Memory>
-  StreamResult TlsStream<Memory>::read(std::span<std::uint8_t> destination) noexcept {
+  StreamResult TlsStream::read(std::span<std::uint8_t> destination) noexcept {
     return session_.read(side_, destination);
   }
 
-  template <ConcurrentAllocator Memory>
-  StreamResult TlsStream<Memory>::peek(std::span<std::uint8_t> destination) noexcept {
+  StreamResult TlsStream::peek(std::span<std::uint8_t> destination) noexcept {
     return session_.peek(side_, destination);
   }
 
-  template <ConcurrentAllocator Memory>
-  StreamView TlsStream<Memory>::peekView(std::size_t maximum) noexcept {
+  StreamView TlsStream::peekView(std::size_t maximum) noexcept {
     return session_.peekView(side_, maximum);
   }
 
-  template <ConcurrentAllocator Memory>
-  void TlsStream<Memory>::consume(std::size_t count) noexcept {
+  void TlsStream::consume(std::size_t count) noexcept {
     session_.consume(side_, count);
   }
 
-  template <ConcurrentAllocator Memory>
-  StreamResult TlsStream<Memory>::write(std::span<const std::uint8_t> bytes) noexcept {
+  StreamResult TlsStream::write(std::span<const std::uint8_t> bytes) noexcept {
     return session_.write(side_, bytes);
   }
 
-  template <ConcurrentAllocator Memory>
-  void TlsStream<Memory>::halfClose() noexcept {
+  void TlsStream::halfClose() noexcept {
     session_.halfClose(side_);
   }
-
-  template class TlsTrustStore<ConcurrentMemory>;
-  template class TlsContexts<ConcurrentMemory>;
-  template class TlsSession<ConcurrentMemory>;
-  template class TlsInterception<ConcurrentMemory>;
-  template class TlsStream<ConcurrentMemory>;
 
 }

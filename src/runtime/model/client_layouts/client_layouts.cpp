@@ -7,39 +7,32 @@ import telar.sys.process;
 
 namespace telar::runtime {
 
-  template <Allocator Memory>
-  PendingClipboard<Memory>::PendingClipboard(Memory& memory)
-      : bytes_(AllocatorRef<Byte, Memory>{memory}) {}
+  PendingClipboard::PendingClipboard(ConcurrentMemory& memory)
+      : bytes_(AllocatorRef<Byte, ConcurrentMemory>{memory}) {}
 
-  template <Allocator Memory>
-  void PendingClipboard<Memory>::replace(std::uint64_t pane, std::span<const Byte> bytes) {
+  void PendingClipboard::replace(std::uint64_t pane, std::span<const Byte> bytes) {
     if (bytes.size() > capacity) {
       throw EncodingError{"Selection exceeds the clipboard limit"};
     }
 
-    Vector<Byte, Memory> replacement{bytes.begin(), bytes.end(), bytes_.get_allocator()};
+    Vector<Byte, ConcurrentMemory> replacement{bytes.begin(), bytes.end(), bytes_.get_allocator()};
 
     bytes_.swap(replacement);
     pane_ = pane;
     pending_ = true;
   }
 
-  template <Allocator Memory>
-  bool PendingClipboard<Memory>::pending() const noexcept {
+  bool PendingClipboard::pending() const noexcept {
     return pending_;
   }
 
-  template <Allocator Memory>
-  PaneClipboard PendingClipboard<Memory>::message() const noexcept {
+  PaneClipboard PendingClipboard::message() const noexcept {
     return {.pane_id = pane_, .bytes = bytes_};
   }
 
-  template <Allocator Memory>
-  void PendingClipboard<Memory>::delivered() noexcept {
+  void PendingClipboard::delivered() noexcept {
     pending_ = false;
   }
-
-  template class PendingClipboard<ConcurrentMemory>;
 
   SentDocuments::Item* SentDocuments::find(std::uint64_t id) noexcept {
     const auto kept = std::span{items}.first(count);
@@ -72,27 +65,22 @@ namespace telar::runtime {
     trimmed = at_trimmed;
   }
 
-  template <Allocator Memory>
-  Attachment<Memory>::Attachment(Memory& memory, GraphicsCreditBudget& budget, std::uint64_t pane, std::shared_ptr<PaneMedia<Memory>> media)
+  Attachment::Attachment(ConcurrentMemory& memory, GraphicsCreditBudget& budget, std::uint64_t pane, std::shared_ptr<PaneMedia> media)
       : pane_id(pane),
         frames(memory, pane),
         graphics(budget, pane, std::move(media)) {}
 
-  template Attachment<ConcurrentMemory>::Attachment(ConcurrentMemory& memory, GraphicsCreditBudget& budget, std::uint64_t pane, std::shared_ptr<PaneMedia<ConcurrentMemory>> media);
-
-  template <Allocator Memory>
-  ClientSession<Memory>::ClientSession(Memory& memory, std::uint64_t identity, FileDescriptor descriptor)
+  ClientSession::ClientSession(ConcurrentMemory& memory, std::uint64_t identity, FileDescriptor descriptor)
       : id(identity),
         generation(identity),
         connection(memory, std::move(descriptor)),
-        attachments(AllocatorRef<Owned<Attachment<Memory>, Memory>, Memory>{memory}),
+        attachments(AllocatorRef<Owned<Attachment, ConcurrentMemory>, ConcurrentMemory>{memory}),
         clipboard(memory),
         deferred_report(memory) {
     attachments.reserve(attachment_capacity);
   }
 
-  template <Allocator Memory>
-  std::size_t ClientSession<Memory>::availableAttachmentSlot() const {
+  std::size_t ClientSession::availableAttachmentSlot() const {
     std::uint64_t occupied = 0;
 
     for (const auto& entry : attachments) {
@@ -106,13 +94,11 @@ namespace telar::runtime {
     return std::countr_zero(~occupied);
   }
 
-  template <Allocator Memory>
-  std::uint32_t ClientSession<Memory>::observerBit() const noexcept {
+  std::uint32_t ClientSession::observerBit() const noexcept {
     return event_identity == 0 ? 0 : std::uint32_t{1} << (event_identity % client_capacity);
   }
 
-  template <Allocator Memory>
-  Attachment<Memory>* ClientSession<Memory>::attachment(std::uint64_t pane_id) const noexcept {
+  Attachment* ClientSession::attachment(std::uint64_t pane_id) const noexcept {
     for (const auto& entry : attachments) {
       if (entry->pane_id == pane_id) {
         return entry.get();
@@ -122,25 +108,21 @@ namespace telar::runtime {
     return nullptr;
   }
 
-  template <Allocator Memory>
-  bool ClientSession<Memory>::verifiedFor(const Pane<Memory>& pane) const noexcept {
+  bool ClientSession::verifiedFor(const Pane& pane) const noexcept {
     return verified_pane == pane.id && verified_generation == pane.generation;
   }
 
-  template class ClientSession<ConcurrentMemory>;
-
-  template <Allocator Memory>
-  Pane<Memory>::Pane(Memory& memory, std::uint64_t identity, TabLocation location, Command<Memory>& command, PaneLaunch settings)
+  Pane::Pane(ConcurrentMemory& memory, std::uint64_t identity, TabLocation location, Command<ConcurrentMemory>& command, PaneLaunch settings)
       : id(identity),
         location(location),
         launch(memory),
-        pty_responses(std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, Memory>{memory})),
-        observer(std::allocate_shared<PaneObserver<Memory>>(AllocatorRef<PaneObserver<Memory>, Memory>{memory}, memory, settings.size, command.cwd(), false, settings.shell ? std::optional{settings.shell->token} : std::nullopt)),
-        media(std::allocate_shared<PaneMedia<Memory>>(AllocatorRef<PaneMedia<Memory>, Memory>{memory}, memory, settings.media_budget, settings.graphics, settings.size, pty_responses)),
+        pty_responses(std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, ConcurrentMemory>{memory})),
+        observer(std::allocate_shared<PaneObserver>(AllocatorRef<PaneObserver, ConcurrentMemory>{memory}, memory, settings.size, command.cwd(), false, settings.shell ? std::optional{settings.shell->token} : std::nullopt)),
+        media(std::allocate_shared<PaneMedia>(AllocatorRef<PaneMedia, ConcurrentMemory>{memory}, memory, settings.media_budget, settings.graphics, settings.size, pty_responses)),
         terminal(memory, settings.size, TerminalPurpose::separate_media, pty_responses, GraphicsQueryResources{settings.graphics, settings.media_budget, &media->queryUsage()}),
         input(memory, input_limit),
         scrollback_rows(memory),
-        cwd(command.cwd(), AllocatorRef<char, Memory>{memory}) {
+        cwd(command.cwd(), AllocatorRef<char, ConcurrentMemory>{memory}) {
     randomBytes(history_session.data(), history_session.size());
     input.reserve(input_limit);
     launch.capture(command.arguments(), command.restorable());
@@ -160,8 +142,7 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  bool Pane<Memory>::read(ReadMode mode) {
+  bool Pane::read(ReadMode mode) {
     constexpr std::size_t batch_byte_limit = 64 * 1024;
     constexpr unsigned batch_read_limit = 8;
     std::array<Byte, read_buffer_size> buffer;
@@ -249,8 +230,7 @@ namespace telar::runtime {
     return observed(true);
   }
 
-  template <Allocator Memory>
-  void Pane<Memory>::observeShell() noexcept {
+  void Pane::observeShell() noexcept {
     if (!shell_zones) {
       return;
     }
@@ -293,13 +273,11 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  bool Pane<Memory>::hasInput() const noexcept {
+  bool Pane::hasInput() const noexcept {
     return !input.empty() || !pty_responses->empty();
   }
 
-  template <Allocator Memory>
-  void Pane<Memory>::requestClose() noexcept {
+  void Pane::requestClose() noexcept {
     if (close_requested) {
       return;
     }
@@ -308,8 +286,7 @@ namespace telar::runtime {
     process->shutdown();
   }
 
-  template <Allocator Memory>
-  void Pane<Memory>::enqueueInput(std::span<const Byte> bytes) {
+  void Pane::enqueueInput(std::span<const Byte> bytes) {
     input.append(bytes);
     TELAR_DIAGNOSTIC(if (counters != nullptr) {
       diagnostics::accumulate(counters->input_events);
@@ -324,18 +301,15 @@ namespace telar::runtime {
     needs_foreground_observation = true;
   }
 
-  template <Allocator Memory>
-  void Pane<Memory>::submitCommand(std::span<const Byte> text) {
+  void Pane::submitCommand(std::span<const Byte> text) {
     observer->bytes(ObservationKind::command, text, shellForeground());
   }
 
-  template <Allocator Memory>
-  void Pane<Memory>::resumeControl() {
+  void Pane::resumeControl() {
     terminal.resumeControl(*media);
   }
 
-  template <Allocator Memory>
-  void Pane<Memory>::resize(TerminalSize size) {
+  void Pane::resize(TerminalSize size) {
     if (terminal.hasSize(size)) {
       return;
     }
@@ -350,8 +324,7 @@ namespace telar::runtime {
     media->resize(size);
   }
 
-  template <Allocator Memory>
-  std::optional<bool> Pane<Memory>::shellForeground() const noexcept {
+  std::optional<bool> Pane::shellForeground() const noexcept {
     if (shell_markers) {
       return std::nullopt;
     }
@@ -361,13 +334,11 @@ namespace telar::runtime {
     return foreground ? std::optional<bool>{*foreground == process->processId()} : std::nullopt;
   }
 
-  template <Allocator Memory>
-  std::optional<std::int32_t> Pane<Memory>::exitCode() const noexcept {
+  std::optional<std::int32_t> Pane::exitCode() const noexcept {
     return exit_status ? std::optional{shellExitCode(*exit_status)} : std::nullopt;
   }
 
-  template <Allocator Memory>
-  void Pane<Memory>::ShellCompletions::complete(CommandCompletion completion) noexcept {
+  void Pane::ShellCompletions::complete(CommandCompletion completion) noexcept {
     ++state.commands;
     state.status = completion.exit_code.value_or(0);
     if (count != 0 && kept[count - 1].action == 'D') {
@@ -375,20 +346,17 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  void Pane<Memory>::ShellCompletions::mark(CommandMark mark) noexcept {
+  void Pane::ShellCompletions::mark(CommandMark mark) noexcept {
     if (count < kept.size()) {
       kept[count++] = Mark{.action = mark.action, .end = mark.end, .status = std::nullopt};
     }
   }
 
-  template <Allocator Memory>
-  auto Pane<Memory>::ShellCompletions::marks() const noexcept -> std::span<const Mark> {
+  auto Pane::ShellCompletions::marks() const noexcept -> std::span<const Mark> {
     return std::span<const Mark>{kept}.first(count);
   }
 
-  template <Allocator Memory>
-  void Pane<Memory>::timeLink(std::chrono::steady_clock::duration elapsed) noexcept {
+  void Pane::timeLink(std::chrono::steady_clock::duration elapsed) noexcept {
     constexpr double longest_ms = 5000;
     const auto sample = std::chrono::duration<double, std::milli>(elapsed).count();
     if (!shell_state.remote || sample > longest_ms) {
@@ -404,8 +372,7 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  void Pane<Memory>::expireProgress(std::optional<bool> shell_foreground) noexcept {
+  void Pane::expireProgress(std::optional<bool> shell_foreground) noexcept {
     if (terminal.effects.progress_state == PaneProgressState::remove) {
       return;
     }
@@ -422,8 +389,7 @@ namespace telar::runtime {
   }
 
 #if TELAR_DIAGNOSTICS
-  template <Allocator Memory>
-  void Pane<Memory>::recordRead(std::size_t size, bool folded) noexcept {
+  void Pane::recordRead(std::size_t size, bool folded) noexcept {
     if (counters == nullptr) {
       return;
     }
@@ -434,29 +400,22 @@ namespace telar::runtime {
   }
 #endif
 
-  template class Pane<ConcurrentMemory>;
-
-  template <Allocator Memory>
-  Tab<Memory>::Tab(Memory& memory, std::uint64_t identity, std::string_view name)
+  Tab::Tab(ConcurrentMemory& memory, std::uint64_t identity, std::string_view name)
       : id(identity),
-        label(name, AllocatorRef<char, Memory>{memory}),
-        panes(AllocatorRef<std::uint64_t, Memory>{memory}) {
+        label(name, AllocatorRef<char, ConcurrentMemory>{memory}),
+        panes(AllocatorRef<std::uint64_t, ConcurrentMemory>{memory}) {
     panes.reserve(64);
   }
 
-  template struct Tab<ConcurrentMemory>;
-
-  template <Allocator Memory>
-  Workspace<Memory>::Workspace(Memory& memory, std::uint64_t identity, std::string_view directory, std::string_view label)
+  Workspace::Workspace(ConcurrentMemory& memory, std::uint64_t identity, std::string_view directory, std::string_view label)
       : id(identity),
-        path(directory, AllocatorRef<char, Memory>{memory}),
-        name(label, AllocatorRef<char, Memory>{memory}),
-        tabs(AllocatorRef<Tab<Memory>, Memory>{memory}) {
+        path(directory, AllocatorRef<char, ConcurrentMemory>{memory}),
+        name(label, AllocatorRef<char, ConcurrentMemory>{memory}),
+        tabs(AllocatorRef<Tab, ConcurrentMemory>{memory}) {
     tabs.reserve(64);
   }
 
-  template <Allocator Memory>
-  Tab<Memory>* Workspace<Memory>::tab(std::uint64_t tab_id) noexcept {
+  Tab* Workspace::tab(std::uint64_t tab_id) noexcept {
     for (auto& entry : tabs) {
       if (entry.id == tab_id) {
         return &entry;
@@ -466,13 +425,11 @@ namespace telar::runtime {
     return nullptr;
   }
 
-  template <Allocator Memory>
-  const Tab<Memory>* Workspace<Memory>::tab(std::uint64_t tab_id) const noexcept {
+  const Tab* Workspace::tab(std::uint64_t tab_id) const noexcept {
     return const_cast<Workspace*>(this)->tab(tab_id);
   }
 
-  template <Allocator Memory>
-  std::string_view Workspace<Memory>::displayName() const noexcept {
+  std::string_view Workspace::displayName() const noexcept {
     if (!name.empty()) {
       return name;
     }
@@ -488,16 +445,13 @@ namespace telar::runtime {
     return utf8Prefix(basename.empty() ? directory : basename, 256);
   }
 
-  template class Workspace<ConcurrentMemory>;
-
-  template <Allocator Memory>
-  Worktree<Memory>::Worktree(Memory& memory, std::uint64_t identity, const RegisterWorktree& request)
+  Worktree::Worktree(ConcurrentMemory& memory, std::uint64_t identity, const RegisterWorktree& request)
       : id(identity),
         source(request.source),
         created_by(request.created_by),
         coordinator(request.coordinator),
         origin(request.origin),
-        path(request.path, AllocatorRef<char, Memory>{memory}) {
+        path(request.path, AllocatorRef<char, ConcurrentMemory>{memory}) {
     branch.assign(request.branch);
     base.assign(request.base);
     title.assign(request.title);
@@ -505,20 +459,15 @@ namespace telar::runtime {
     dispatched_from.assign(request.dispatched_from);
   }
 
-  template <Allocator Memory>
-  WorktreeListEntry Worktree<Memory>::entry() const noexcept {
+  WorktreeListEntry Worktree::entry() const noexcept {
     return {.worktree = id, .source = source, .workspace = workspace, .created_by = created_by, .origin = origin, .state = state, .path = path, .branch = branch.view(), .base = base.view(), .title = title.view(), .brief = brief.view(), .dispatched_from = dispatched_from.view(), .coordinator = coordinator, .diff_added = diff_added, .diff_removed = diff_removed, .diff_files = diff_files, .commits_ahead = commits_ahead, .command_label = command_label.view(), .command_state = command_state, .command_exit = command_exit};
   }
 
-  template struct Worktree<ConcurrentMemory>;
-
-  template <Allocator Memory>
-  Worktrees<Memory>::Worktrees(Memory& memory)
+  Worktrees::Worktrees(ConcurrentMemory& memory)
       : memory_(memory),
         entries_(memory) {}
 
-  template <Allocator Memory>
-  WorktreeRegistered Worktrees<Memory>::registerEntry(const RegisterWorktree& request, std::uint64_t restored_identity) {
+  WorktreeRegistered Worktrees::registerEntry(const RegisterWorktree& request, std::uint64_t restored_identity) {
     for (auto* entry : entries_.items()) {
       if (entry == nullptr || entry->path != request.path) {
         continue;
@@ -544,30 +493,26 @@ namespace telar::runtime {
     }
 
     const auto identity = restored_identity == 0 ? entries_.nextId() : restored_identity;
-    auto entry = makeOwned<Worktree<Memory>>(memory_, memory_, identity, request);
+    auto entry = makeOwned<Worktree>(memory_, memory_, identity, request);
 
     entries_.insert(identity, std::move(entry));
     return {request.request_id, identity, true};
   }
 
-  template <Allocator Memory>
-  Worktree<Memory>* Worktrees<Memory>::find(std::uint64_t identity) noexcept {
+  Worktree* Worktrees::find(std::uint64_t identity) noexcept {
     return entries_.find(identity);
   }
 
-  template <Allocator Memory>
-  std::span<Worktree<Memory>* const> Worktrees<Memory>::items() const noexcept {
+  std::span<Worktree* const> Worktrees::items() const noexcept {
     return entries_.items();
   }
 
-  template <Allocator Memory>
-  void Worktrees<Memory>::remove(std::uint64_t identity) noexcept {
+  void Worktrees::remove(std::uint64_t identity) noexcept {
     entries_.erase(identity);
   }
 
-  template <Allocator Memory>
-  Worktree<Memory>* Worktrees<Memory>::containing(std::string_view path) noexcept {
-    Worktree<Memory>* selected = nullptr;
+  Worktree* Worktrees::containing(std::string_view path) noexcept {
+    Worktree* selected = nullptr;
 
     for (auto* entry : entries_.items()) {
       if (entry == nullptr || !path.starts_with(entry->path)) {
@@ -587,8 +532,7 @@ namespace telar::runtime {
     return selected;
   }
 
-  template <Allocator Memory>
-  std::uint64_t Worktrees<Memory>::sourceFor(std::uint64_t workspace) const noexcept {
+  std::uint64_t Worktrees::sourceFor(std::uint64_t workspace) const noexcept {
     for (const auto* entry : entries_.items()) {
       if (entry != nullptr && entry->workspace == workspace) {
         return entry->source;
@@ -598,10 +542,7 @@ namespace telar::runtime {
     return workspace;
   }
 
-  template class Worktrees<ConcurrentMemory>;
-
-  template <Allocator Memory>
-  bool tabHeld(const ClientStore<Memory>& clients, TabLocation location) noexcept {
+  bool tabHeld(const ClientStore& clients, TabLocation location) noexcept {
     for (const auto* client : clients.items()) {
       if (client != nullptr && !client->connection.closing && client->held_tabs.contains(location)) {
         return true;
@@ -611,8 +552,7 @@ namespace telar::runtime {
     return false;
   }
 
-  template <Allocator Memory>
-  ClientSession<Memory>& requireClient(ClientStore<Memory>& clients, std::uint64_t identity) {
+  ClientSession& requireClient(ClientStore& clients, std::uint64_t identity) {
     auto* client = clients.find(identity);
     if (client == nullptr) {
       throw RequestError{FailureCode::invalid_request, "Client does not exist"};
@@ -621,36 +561,31 @@ namespace telar::runtime {
     return *client;
   }
 
-  template <Allocator Memory>
-  tbc::view<Pane<Memory>*, tbc::lt::a> findPane(tbc::view<PaneStore<Memory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept {
+  tbc::view<Pane*, tbc::lt::a> findPane(tbc::view<PaneStore&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept {
     auto* pane = panes.find(identity);
 
     return pane != nullptr && pane->generation == generation ? pane : nullptr;
   }
 
-  template <Allocator Memory>
-  tbc::view<const Pane<Memory>*, tbc::lt::a> findPane(tbc::view<const PaneStore<Memory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept {
+  tbc::view<const Pane*, tbc::lt::a> findPane(tbc::view<const PaneStore&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept {
     const auto* pane = panes.find(identity);
 
     return pane != nullptr && pane->generation == generation ? pane : nullptr;
   }
 
-  template <Allocator Memory>
-  tbc::view<Pane<Memory>*, tbc::lt::a> livePane(tbc::view<PaneStore<Memory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept {
+  tbc::view<Pane*, tbc::lt::a> livePane(tbc::view<PaneStore&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept {
     auto* pane = findPane(panes, identity, generation);
 
     return pane != nullptr && !pane->exit_status && !pane->close_requested ? pane : nullptr;
   }
 
-  template <Allocator Memory>
-  tbc::view<const Pane<Memory>*, tbc::lt::a> livePane(tbc::view<const PaneStore<Memory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept {
+  tbc::view<const Pane*, tbc::lt::a> livePane(tbc::view<const PaneStore&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept {
     const auto* pane = findPane(panes, identity, generation);
 
     return pane != nullptr && !pane->exit_status && !pane->close_requested ? pane : nullptr;
   }
 
-  template <Allocator Memory>
-  tbc::view<Pane<Memory>&, tbc::lt::a> requireReporterPane(tbc::view<PaneStore<Memory>&, tbc::lt::a> panes, const ClientSession<Memory>& client, std::uint64_t identity, std::uint64_t generation) {
+  tbc::view<Pane&, tbc::lt::a> requireReporterPane(tbc::view<PaneStore&, tbc::lt::a> panes, const ClientSession& client, std::uint64_t identity, std::uint64_t generation) {
     auto* pane = findPane(panes, identity, generation);
     if (pane == nullptr || pane->exit_status) {
       throw RequestError{FailureCode::pane_not_found, "Pane not found"};
@@ -663,32 +598,19 @@ namespace telar::runtime {
     return *pane;
   }
 
-  template bool tabHeld<ConcurrentMemory>(const ClientStore<ConcurrentMemory>& clients, TabLocation location) noexcept;
-  template ClientSession<ConcurrentMemory>& requireClient<ConcurrentMemory>(ClientStore<ConcurrentMemory>& clients, std::uint64_t identity);
-  template tbc::view<Pane<ConcurrentMemory>*, tbc::lt::a> findPane<ConcurrentMemory>(tbc::view<PaneStore<ConcurrentMemory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
-  template tbc::view<const Pane<ConcurrentMemory>*, tbc::lt::a> findPane<ConcurrentMemory>(tbc::view<const PaneStore<ConcurrentMemory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
-  template tbc::view<Pane<ConcurrentMemory>*, tbc::lt::a> livePane<ConcurrentMemory>(tbc::view<PaneStore<ConcurrentMemory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
-  template tbc::view<const Pane<ConcurrentMemory>*, tbc::lt::a> livePane<ConcurrentMemory>(tbc::view<const PaneStore<ConcurrentMemory>&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
-  template tbc::view<Pane<ConcurrentMemory>&, tbc::lt::a> requireReporterPane<ConcurrentMemory>(tbc::view<PaneStore<ConcurrentMemory>&, tbc::lt::a> panes, const ClientSession<ConcurrentMemory>& client, std::uint64_t identity, std::uint64_t generation);
-
-  template <Allocator Memory>
-  RuntimeModel<Memory>::RuntimeModel(Memory& memory, GraphicsLimits graphics)
+  RuntimeModel::RuntimeModel(ConcurrentMemory& memory, GraphicsLimits graphics)
       : graphics_limits(graphics),
         media_budget(graphics.global_bytes),
         panes(memory),
         workspaces(memory),
         worktrees(memory) {}
 
-  template struct RuntimeModel<ConcurrentMemory>;
-
-  template <Allocator Memory>
-  ClientLayouts<Memory>::ClientLayouts(Memory& memory)
-      : records_(AllocatorRef<Record, Memory>{memory}) {
+  ClientLayouts::ClientLayouts(ConcurrentMemory& memory)
+      : records_(AllocatorRef<Record, ConcurrentMemory>{memory}) {
     records_.reserve(maximum_identities);
   }
 
-  template <Allocator Memory>
-  void ClientLayouts<Memory>::retain(const RuntimeModel<Memory>& model, std::uint64_t identity, const UpdateClientLayout& update) {
+  void ClientLayouts::retain(const RuntimeModel& model, std::uint64_t identity, const UpdateClientLayout& update) {
     if (identity == 0) {
       throw RequestError{FailureCode::invalid_request, "Client layout requires a subscribed identity"};
     }
@@ -753,8 +675,7 @@ namespace telar::runtime {
     ++clock_;
   }
 
-  template <Allocator Memory>
-  std::optional<std::uint64_t> ClientLayouts<Memory>::focusedPane(std::uint64_t identity) const noexcept {
+  std::optional<std::uint64_t> ClientLayouts::focusedPane(std::uint64_t identity) const noexcept {
     for (const auto& record : records_) {
       if (record.identity != identity) {
         continue;
@@ -771,20 +692,17 @@ namespace telar::runtime {
     return std::nullopt;
   }
 
-  template <Allocator Memory>
-  std::uint64_t ClientLayouts<Memory>::revision() const noexcept {
+  std::uint64_t ClientLayouts::revision() const noexcept {
     return clock_;
   }
 
-  template <Allocator Memory>
-  ClientTabLayout ClientLayouts<Memory>::Record::tabAt(std::size_t index) const noexcept {
+  ClientTabLayout ClientLayouts::Record::tabAt(std::size_t index) const noexcept {
     const auto& tab = tabs[index];
 
     return ClientTabLayout{tab.location, tab.focused_pane, tab.fullscreen, tab.workspace_active, std::span{nodes}.subspan(tab.node_start, tab.node_count)};
   }
 
-  template <Allocator Memory>
-  void ClientLayouts<Memory>::Record::append(const ClientTabLayout& tab) {
+  void ClientLayouts::Record::append(const ClientTabLayout& tab) {
     if (tab_count == maximum_tabs || tab.nodes.size() > maximum_nodes - node_count) {
       throw std::bad_alloc{};
     }
@@ -794,18 +712,15 @@ namespace telar::runtime {
     node_count += tab.nodes.size();
   }
 
-  template <Allocator Memory>
-  bool ClientLayouts<Memory>::sameWorkspace(WorkspaceLocation left, WorkspaceLocation right) noexcept {
+  bool ClientLayouts::sameWorkspace(WorkspaceLocation left, WorkspaceLocation right) noexcept {
     return left.kind == right.kind && left.id == right.id;
   }
 
-  template <Allocator Memory>
-  bool ClientLayouts<Memory>::sameLocation(TabLocation left, TabLocation right) noexcept {
+  bool ClientLayouts::sameLocation(TabLocation left, TabLocation right) noexcept {
     return sameWorkspace(left.workspace, right.workspace) && left.tab_id == right.tab_id;
   }
 
-  template <Allocator Memory>
-  bool ClientLayouts<Memory>::current(const RuntimeModel<Memory>& model, const ClientTabLayout& layout) noexcept {
+  bool ClientLayouts::current(const RuntimeModel& model, const ClientTabLayout& layout) noexcept {
     auto* workspace = model.workspaces.find(layout.location.workspace.id);
     auto* tab = workspace == nullptr ? nullptr : workspace->tab(layout.location.tab_id);
     if (layout.location.workspace.kind != WorkspaceLocation::Kind::workspace || tab == nullptr) {
@@ -830,8 +745,7 @@ namespace telar::runtime {
     return pane_count == tab->panes.size();
   }
 
-  template <Allocator Memory>
-  typename ClientLayouts<Memory>::Record* ClientLayouts<Memory>::find(std::uint64_t identity) noexcept {
+  ClientLayouts::Record* ClientLayouts::find(std::uint64_t identity) noexcept {
     for (auto& record : records_) {
       if (record.identity == identity) {
         return &record;
@@ -840,7 +754,5 @@ namespace telar::runtime {
 
     return nullptr;
   }
-
-  template class ClientLayouts<ConcurrentMemory>;
 
 }

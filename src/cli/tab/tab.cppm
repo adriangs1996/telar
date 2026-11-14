@@ -45,9 +45,7 @@ export {
 export {
   namespace telar::runtime::cli::sessions {
 
-    template <Allocator Memory>
     int tab(Memory& memory, const TabOptions& options);
-    extern template int tab<Memory>(Memory& memory, const TabOptions& options);
 
   }
 }

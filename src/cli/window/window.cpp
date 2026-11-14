@@ -23,7 +23,7 @@ import telar.tls;
 namespace telar::runtime::cli::window {
 
   using Text = String<Memory>;
-  using Session = ControlSession<Memory>;
+  using Session = ControlSession;
   constexpr std::size_t memory_budget = 32 * 1024 * 1024;
   constexpr unsigned receive_timeout = 30;
   constexpr std::size_t maximum_command_text = 4096;

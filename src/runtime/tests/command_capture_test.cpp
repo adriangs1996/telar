@@ -43,8 +43,8 @@ struct CaptureFixture {
   SystemAllocator system;
   MemoryAdapter<SystemAllocator> adapter{system};
   ConcurrentMemory& memory = adapter;
-  Terminal<ConcurrentMemory> terminal{memory, {20, 4, 8, 16}, TerminalPurpose::observation};
-  CommandTracker<ConcurrentMemory> tracker{memory, terminal, "/initial", true};
+  Terminal terminal{memory, {20, 4, 8, 16}, TerminalPurpose::observation};
+  CommandTracker tracker{memory, terminal, "/initial", true};
   std::vector<CommandRecord> commands;
 
   void emit(const CapturedCommand& command) {

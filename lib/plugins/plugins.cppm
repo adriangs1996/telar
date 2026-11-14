@@ -232,10 +232,7 @@ export {
 export {
   namespace telar::runtime::plugins {
 
-    template <Allocator Memory>
     void appendInspection(String<Memory>& output, const Package& package);
-
-    extern template void appendInspection<Memory>(String<Memory>& output, const Package& package);
 
   }
 }
@@ -430,7 +427,6 @@ export {
 export {
   namespace telar::runtime::plugins {
 
-    template <Allocator Memory>
     class PackageInstallation {
     public:
       explicit PackageInstallation(Memory& memory) noexcept;
@@ -443,11 +439,6 @@ export {
       static constexpr const char* staged_package = "package";
       Memory& memory_;
     };
-
-    template <Allocator Memory>
-    PackageInstallation(Memory& memory) -> PackageInstallation<Memory>;
-
-    extern template class PackageInstallation<Memory>;
 
   }
 }
@@ -546,13 +537,11 @@ export {
       template <Allocator Memory>
       static String<Memory> trustFile(String<Memory> home);
 
-      template <Allocator Memory>
       static String<Memory> installationDirectory(String<Memory> data, const Package& package);
     };
 
     extern template String<Memory> Paths::trustFile<Memory>(String<Memory> home);
     extern template String<ConcurrentMemory> Paths::trustFile<ConcurrentMemory>(String<ConcurrentMemory> home);
-    extern template String<Memory> Paths::installationDirectory<Memory>(String<Memory> data, const Package& package);
 
   }
 }
@@ -581,7 +570,6 @@ export {
       void upsert(const Manifest& manifest, const PackageDigest& digest, Capabilities capabilities);
       bool revoke(std::string_view id);
 
-      template <Allocator Memory>
       String<Memory> json(Memory& memory) const;
 
       static PackageDigest parseDigest(std::string_view text);
@@ -597,7 +585,6 @@ export {
     extern template TrustStore TrustStore::load<ConcurrentMemory>(ConcurrentMemory& memory, std::string_view path);
     extern template TrustStore TrustStore::parse<Memory>(Memory& memory, std::string_view bytes);
     extern template TrustStore TrustStore::parse<ConcurrentMemory>(ConcurrentMemory& memory, std::string_view bytes);
-    extern template String<Memory> TrustStore::json<Memory>(Memory& memory) const;
 
   }
 }
@@ -606,18 +593,11 @@ export {
 export {
   namespace telar::runtime::plugins {
 
-    template <Allocator Memory>
     void saveTrust(Memory& memory, const TrustStore& store, String<Memory> path);
 
-    template <Allocator Memory>
     void updateTrust(Memory& memory, const Package& package, Capabilities capabilities, String<Memory> path);
 
-    template <Allocator Memory>
     void revokeTrust(Memory& memory, std::string_view id, String<Memory> path);
-
-    extern template void saveTrust<Memory>(Memory& memory, const TrustStore& store, String<Memory> path);
-    extern template void updateTrust<Memory>(Memory& memory, const Package& package, Capabilities capabilities, String<Memory> path);
-    extern template void revokeTrust<Memory>(Memory& memory, std::string_view id, String<Memory> path);
 
   }
 }

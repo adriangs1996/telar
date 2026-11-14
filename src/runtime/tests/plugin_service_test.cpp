@@ -52,12 +52,11 @@ namespace {
     }
   }
 
-  template <Allocator Memory>
-  CapturedExchange<Memory> captured(Memory& memory, CaptureQuota& quota) {
+  CapturedExchange captured(ConcurrentMemory& memory, CaptureQuota& quota) {
     CapturedExchange exchange{memory};
     const ProxyCaptureLimits limits{.part_bytes = 1024, .exchange_bytes = 2048, .total_bytes = 4096, .enabled = true};
 
-    exchange.request = makeOwned<CaptureHalf<Memory>>(memory, memory, quota, limits, CaptureStart{.key = {1, 1}, .side = CaptureSide::request, .protocol = CaptureProtocol::http1, .host = "test", .started_at_ms = 1});
+    exchange.request = makeOwned<CaptureHalf>(memory, memory, quota, limits, CaptureStart{.key = {1, 1}, .side = CaptureSide::request, .protocol = CaptureProtocol::http1, .host = "test", .started_at_ms = 1});
     exchange.request->appendHead("GET / HTTP/1.1\r\n\r\n");
     return exchange;
   }

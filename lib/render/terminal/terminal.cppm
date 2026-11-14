@@ -10,9 +10,6 @@ export namespace telar::render::terminal {
 
   inline constexpr std::uint16_t min_width = 20;
 
-  template <Allocator Memory, Allocator Output>
-  void render(const Document<Memory>& document, std::uint16_t width, String<Output>& output);
-
-  extern template void render(const Document<Memory>& document, std::uint16_t width, String<Memory>& output);
+  void render(const Document<Memory>& document, std::uint16_t width, String<Memory>& output);
 
 }

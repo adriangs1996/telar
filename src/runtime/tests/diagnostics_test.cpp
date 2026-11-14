@@ -387,7 +387,7 @@ namespace {
 
     {
       RuntimeModel model{memory};
-      ClientStore<ConcurrentMemory> clients{memory};
+      ClientStore clients{memory};
 
       model.metrics.panes.pty_bytes = 72;
       model.metrics.client_messages = 9;

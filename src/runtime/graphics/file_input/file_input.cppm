@@ -155,10 +155,9 @@ export {
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory>
     class ImageAllocation {
     public:
-      explicit ImageAllocation(MediaAllocator<Memory>& memory, std::size_t byte_count) noexcept;
+      explicit ImageAllocation(MediaAllocator<ConcurrentMemory>& memory, std::size_t byte_count) noexcept;
 
       ~ImageAllocation();
 
@@ -177,15 +176,10 @@ export {
 
     private:
       static constexpr std::size_t placeholder_bytes = 1;
-      MediaAllocator<Memory>& memory_;
+      MediaAllocator<ConcurrentMemory>& memory_;
       std::uint8_t* placeholder_ = nullptr;
       std::size_t reserved_bytes_ = 0;
     };
-
-    extern template class ImageAllocation<telar::ConcurrentMemory>;
-
-    template <Allocator Memory>
-    ImageAllocation(MediaAllocator<Memory>& memory, std::size_t byte_count) -> ImageAllocation<Memory>;
 
   }
 }

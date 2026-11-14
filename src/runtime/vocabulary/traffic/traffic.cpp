@@ -4,16 +4,14 @@ import telar.sys.socket;
 
 namespace telar::runtime::plugins {
 
-  template <Allocator Memory>
-  tbc::view<std::span<const Byte>, tbc::lt::a> Protocol::encodeExchange(tbc::view<std::span<Byte>, tbc::lt::a> output, ExchangeIdentity identity, const CapturedExchange<Memory>& exchange, std::size_t part_limit) {
+  tbc::view<std::span<const Byte>, tbc::lt::a> Protocol::encodeExchange(tbc::view<std::span<Byte>, tbc::lt::a> output, ExchangeIdentity identity, const CapturedExchange& exchange, std::size_t part_limit) {
     FrameWriter writer{output};
 
     writeExchange(writer, identity, exchange, part_limit);
     return writer.finish();
   }
 
-  template <Allocator Memory>
-  std::size_t Protocol::exchangeBytes(const CapturedExchange<Memory>& exchange) {
+  std::size_t Protocol::exchangeBytes(const CapturedExchange& exchange) {
     FrameSize size;
 
     writeExchange(size, {}, exchange);
@@ -105,8 +103,8 @@ namespace telar::runtime::plugins {
     return reply;
   }
 
-  template <FrameOutput Output, Allocator Memory>
-  void Protocol::writeExchange(Output& writer, ExchangeIdentity identity, const CapturedExchange<Memory>& exchange, std::size_t part_limit) {
+  template <FrameOutput Output>
+  void Protocol::writeExchange(Output& writer, ExchangeIdentity identity, const CapturedExchange& exchange, std::size_t part_limit) {
     const auto* representative = exchange.request ? exchange.request.get() : exchange.response.get();
     if (representative == nullptr) {
       throw EncodingError{"Cannot encode an empty capture"};
@@ -139,8 +137,8 @@ namespace telar::runtime::plugins {
     throw EncodingError{"Unknown captured protocol"};
   }
 
-  template <FrameOutput Output, Allocator Memory>
-  void Protocol::writeHalf(Output& writer, const CaptureHalf<Memory>* half, std::size_t part_limit) {
+  template <FrameOutput Output>
+  void Protocol::writeHalf(Output& writer, const CaptureHalf* half, std::size_t part_limit) {
     writer.boolean(half != nullptr);
     if (half == nullptr) {
       return;
@@ -193,9 +191,6 @@ namespace telar::runtime::plugins {
   bool ServiceSpec::stillAuthorized(Capabilities current) const noexcept {
     return current.containsAll(declared.intersection(granted));
   }
-
-  template tbc::view<std::span<const Byte>, tbc::lt::a> Protocol::encodeExchange<telar::ConcurrentMemory>(tbc::view<std::span<Byte>, tbc::lt::a> output, ExchangeIdentity identity, const CapturedExchange<telar::ConcurrentMemory>& exchange, std::size_t part_limit);
-  template std::size_t Protocol::exchangeBytes<telar::ConcurrentMemory>(const CapturedExchange<telar::ConcurrentMemory>& exchange);
 
 }
 

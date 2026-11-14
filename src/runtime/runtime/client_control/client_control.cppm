@@ -100,45 +100,42 @@ export {
 
     // Requests between clients. Each call is given the client table and the requester's identity, and
     // looks up the clients it reaches, as two elements of one Rust map are borrowed one after the other.
-    template <Allocator Memory>
     class ClientControl {
     public:
-      static void list(ClientStore<Memory>& clients, std::uint64_t requester_id, const QueryClients& request);
+      static void list(ClientStore& clients, std::uint64_t requester_id, const QueryClients& request);
 
-      static void detach(ClientStore<Memory>& clients, std::uint64_t requester_id, const DetachClient& request);
+      static void detach(ClientStore& clients, std::uint64_t requester_id, const DetachClient& request);
 
-      static void requestCommand(ClientStore<Memory>& clients, std::uint64_t requester_id, const RequestClientCommand& request);
+      static void requestCommand(ClientStore& clients, std::uint64_t requester_id, const RequestClientCommand& request);
 
-      static void completeCommand(ClientStore<Memory>& clients, std::uint64_t sender_id, const CompleteClientCommand& completion);
+      static void completeCommand(ClientStore& clients, std::uint64_t sender_id, const CompleteClientCommand& completion);
 
-      static void requestFocus(const PaneStore<Memory>& panes, ClientStore<Memory>& clients, std::uint64_t requester_id, const RequestPaneFocus& request);
+      static void requestFocus(const PaneStore& panes, ClientStore& clients, std::uint64_t requester_id, const RequestPaneFocus& request);
 
-      static void completeFocus(ClientStore<Memory>& clients, std::uint64_t sender_id, const CompletePaneFocus& completion);
+      static void completeFocus(ClientStore& clients, std::uint64_t sender_id, const CompletePaneFocus& completion);
 
       // Shows a notification on the interactive clients and tells the requester how many received it. The
       // confirmation takes its place in the requester's queue first, so a full queue refuses the request
       // before anything is shown; its count is filled in by offset once the clients are reached.
-      static void notify(ClientStore<Memory>& clients, std::uint64_t requester_id, const ShowNotification& request);
+      static void notify(ClientStore& clients, std::uint64_t requester_id, const ShowNotification& request);
 
-      static std::uint8_t publish(ClientStore<Memory>& clients, const NotificationBody& body);
+      static std::uint8_t publish(ClientStore& clients, const NotificationBody& body);
 
-      static void abandon(ClientStore<Memory>& clients, std::uint64_t departed) noexcept;
+      static void abandon(ClientStore& clients, std::uint64_t departed) noexcept;
 
     private:
-      static void requireRole(const ClientSession<Memory>& client, ClientRole expected);
+      static void requireRole(const ClientSession& client, ClientRole expected);
 
-      static bool routable(const ClientSession<Memory>* client) noexcept;
+      static bool routable(const ClientSession* client) noexcept;
 
-      static ClientSession<Memory>* resolve(ClientStore<Memory>& clients, ClientRoute target) noexcept;
+      static ClientSession* resolve(ClientStore& clients, ClientRoute target) noexcept;
 
-      static ClientRoute route(const ClientSession<Memory>& client) noexcept;
+      static ClientRoute route(const ClientSession& client) noexcept;
 
-      static ClientSession<Memory>* focusOrigin(ClientStore<Memory>& clients, std::uint64_t pane_id) noexcept;
+      static ClientSession* focusOrigin(ClientStore& clients, std::uint64_t pane_id) noexcept;
 
-      static void failAbandoned(ClientSession<Memory>& client, std::uint64_t request_id) noexcept;
+      static void failAbandoned(ClientSession& client, std::uint64_t request_id) noexcept;
     };
-
-    extern template class ClientControl<ConcurrentMemory>;
 
   }
 }
@@ -173,7 +170,7 @@ export {
     // Holds a report back until the pane's process is checked again. A held report keeps its payload in
     // its client; the runtime takes it out to replay it.
     // Kept whole: tests instantiate it with their own fake Agents (deferred_reports_test's RecordedAgents).
-    template <Allocator Memory, ReporterAgents Agents>
+    template <ReporterAgents Agents>
     class TBC_HOT_PATH DeferredReports {
     public:
       // The clients whose held reports are due, in the order they were held.
@@ -186,7 +183,7 @@ export {
         }
       };
 
-      inline ReportDecision evaluate(PaneStore<Memory>& panes, const Agents& agents, ClientSession<Memory>& client, ReporterIdentity reporter, std::span<const Byte> payload) {
+      inline ReportDecision evaluate(PaneStore& panes, const Agents& agents, ClientSession& client, ReporterIdentity reporter, std::span<const Byte> payload) {
         if (reporter.provider == AgentProvider::unknown) {
           return ReportDecision::accepted;
         }
@@ -224,7 +221,7 @@ export {
         return ReportDecision::deferred;
       }
 
-      inline void cancel(ClientSession<Memory>& client) noexcept {
+      inline void cancel(ClientSession& client) noexcept {
         if (client.deferred_report.pending) {
           client.deferred_report.pending = false;
           client.connection.read_paused = false;
@@ -233,14 +230,14 @@ export {
       }
 
       // Marks whether each due report's process was checked again.
-      inline Due due(ClientStore<Memory>& clients, const PaneStore<Memory>& panes, const Agents& agents, ObservationTime now) const {
+      inline Due due(ClientStore& clients, const PaneStore& panes, const Agents& agents, ObservationTime now) const {
         Due due;
 
         if (pending_ == 0) {
           return due;
         }
 
-        std::array<const ClientSession<Memory>*, client_capacity> ready;
+        std::array<const ClientSession*, client_capacity> ready;
 
         for (auto* client : clients.items()) {
           if (client == nullptr || !client->deferred_report.pending) {
@@ -274,7 +271,7 @@ export {
 
       // Releases a due report to be answered and exchanges its payload with the caller's empty one, which
       // must share the client's allocator, as Rust's `mem::swap`.
-      inline void open(ClientSession<Memory>& client, Vector<Byte, Memory>& payload) noexcept {
+      inline void open(ClientSession& client, Vector<Byte, ConcurrentMemory>& payload) noexcept {
         cancel(client);
         client.deferred_report.answering = true;
         client.connection.read_paused = false;
@@ -282,7 +279,7 @@ export {
       }
 
       // Ends the answer and gives the payload's storage back to the client.
-      inline static void close(ClientSession<Memory>& client, Vector<Byte, Memory>& payload) noexcept {
+      inline static void close(ClientSession& client, Vector<Byte, ConcurrentMemory>& payload) noexcept {
         payload.clear();
         payload.swap(client.deferred_report.payload);
         client.deferred_report.answering = false;
@@ -295,7 +292,7 @@ export {
         return agent == nullptr || agent->evidence.accepts(reporter.provider);
       }
 
-      inline static std::optional<RejectedReporter> reportingRejection(const Agents& agents, const ClientSession<Memory>& client, const Pane<Memory>& pane) noexcept {
+      inline static std::optional<RejectedReporter> reportingRejection(const Agents& agents, const ClientSession& client, const Pane& pane) noexcept {
         const auto* agent = agents.find(pane.id, pane.generation);
         if (agent == nullptr || !agent->agent_identity || !agent->process_identity) {
           return std::nullopt;
@@ -336,13 +333,13 @@ export {
     // Checks on a worker that a client's process descends from a pane. A request is held in its client
     // until the caller schedules the held checks.
     // Kept whole: tests instantiate it with their own fake Inspector (agents_test's TestProcessInspector).
-    template <ConcurrentAllocator Memory, LineageInspector Inspector>
+    template <LineageInspector Inspector>
     class TBC_HOT_PATH DescentService {
     public:
       inline explicit DescentService(const Inspector& inspector)
           : worker_(std::in_place, inspector) {}
 
-      inline static void verify(const PaneStore<Memory>& panes, ClientSession<Memory>& client, const VerifyPaneDescent& request) {
+      inline static void verify(const PaneStore& panes, ClientSession& client, const VerifyPaneDescent& request) {
         const auto* pane = findPane(panes, request.pane_id, request.pane_generation);
         if (pane == nullptr || pane->exit_status) {
           throw RequestError{FailureCode::pane_not_found, "Pane not found"};
@@ -363,7 +360,7 @@ export {
         client.connection.read_paused = true;
       }
 
-      inline void collect(ClientStore<Memory>& clients, const PaneStore<Memory>& panes) {
+      inline void collect(ClientStore& clients, const PaneStore& panes) {
         if (!pending_) {
           return;
         }
@@ -383,7 +380,7 @@ export {
       }
 
       // Submits the held checks no worker runs yet.
-      inline void schedule(ClientStore<Memory>& clients) {
+      inline void schedule(ClientStore& clients) {
         if (pending_) {
           return;
         }
@@ -407,7 +404,7 @@ export {
       }
 
     private:
-      inline static void finish(ClientStore<Memory>& clients, const PaneStore<Memory>& panes, const typename DescentProbe<Inspector>::Completion& completed) noexcept {
+      inline static void finish(ClientStore& clients, const PaneStore& panes, const typename DescentProbe<Inspector>::Completion& completed) noexcept {
         const auto& check = completed.check;
         auto* client = clients.find(check.client);
         if (client == nullptr || client->generation != check.client_generation) {
@@ -511,8 +508,7 @@ export {
         });
       }
 
-      template <Allocator Memory>
-      inline void publish(ClientSession<Memory>& client) const {
+      inline void publish(ClientSession& client) const {
         if (!client.subscribed || client.metrics_revision == sampler_.revision()) {
           return;
         }
@@ -555,8 +551,8 @@ export {
 export {
   namespace telar::runtime {
 
-    template <typename Agents, typename Memory>
-    concept AgentObservationSink = Allocator<Memory> && requires(Agents& agents, Pane<Memory>& pane, AgentSignal signal, ObservationTime time) {
+    template <typename Agents>
+    concept AgentObservationSink = requires(Agents& agents, Pane& pane, AgentSignal signal, ObservationTime time) {
       { agents.find(pane.id, pane.generation) } -> std::convertible_to<const Agent*>;
       { agents.observeScreen(pane, signal, time) } -> std::same_as<void>;
       { agents.observeProcess(pane, ProcessProbeResult{}) } -> std::same_as<void>;
@@ -569,17 +565,17 @@ export {
 
     // Observes pane screens and processes on a worker. The model and the agents are lent to each call.
     // Kept whole: tests instantiate it with their own fakes (observation_test's UnusedAgents and DirectoryOnlyProbe).
-    template <ConcurrentAllocator Memory, typename Agents, ObservationLimitSink Limits, PaneProcessProbe Probe, HistoryEventSink History>
-      requires AgentObservationSink<Agents, Memory>
+    template <typename Agents, ObservationLimitSink Limits, PaneProcessProbe Probe, HistoryEventSink History>
+      requires AgentObservationSink<Agents>
     class TBC_HOT_PATH PaneObservationService {
-      using Processor = ObservationProcessor<Memory, Probe, History>;
+      using Processor = ObservationProcessor<Probe, History>;
 
     public:
       inline explicit PaneObservationService(Limits& limits, const AgentManifests& manifests, Probe& probe, History& history)
           : limits_(limits),
             worker_(std::in_place, manifests, probe, history) {}
 
-      inline void refresh(RuntimeModel<Memory>& model, Agents& agents) {
+      inline void refresh(RuntimeModel& model, Agents& agents) {
         collect(model, agents);
         if (pending_) {
           return;
@@ -610,7 +606,7 @@ export {
         }
       }
 
-      inline void observe(RuntimeModel<Memory>& model, Agents& agents, std::uint64_t pane_id) {
+      inline void observe(RuntimeModel& model, Agents& agents, std::uint64_t pane_id) {
         collect(model, agents);
         auto* pane = model.panes.find(pane_id);
         if (pending_ || pane == nullptr) {
@@ -625,7 +621,7 @@ export {
         }
       }
 
-      inline void collect(RuntimeModel<Memory>& model, Agents& agents) {
+      inline void collect(RuntimeModel& model, Agents& agents) {
         if (!pending_) {
           return;
         }
@@ -635,7 +631,7 @@ export {
         });
       }
 
-      inline void finish(RuntimeModel<Memory>& model) noexcept {
+      inline void finish(RuntimeModel& model) noexcept {
         for (;;) {
           worker_.wait([&](const typename Processor::Result& result) {
             pending_ = false;
@@ -669,7 +665,7 @@ export {
       }
 
     private:
-      inline void apply(RuntimeModel<Memory>& model, Agents& agents, const typename Processor::Result& result) {
+      inline void apply(RuntimeModel& model, Agents& agents, const typename Processor::Result& result) {
         pending_ = false;
         for (const auto& entry : std::span{result.entries}.first(result.count)) {
           entry.observer->complete();
@@ -723,7 +719,7 @@ export {
       }
 
       // The request shares the observers of region `a`.
-      inline static void enqueueRetired(tbc::view<RuntimeModel<Memory>&, tbc::lt::a> model, tbc::view<typename Processor::Request&, tbc::lt::a> request) noexcept {
+      inline static void enqueueRetired(tbc::view<RuntimeModel&, tbc::lt::a> model, tbc::view<typename Processor::Request&, tbc::lt::a> request) noexcept {
         auto* link = &model.retired_observers;
 
         while (*link && request.count < request.entries.size()) {
@@ -746,7 +742,7 @@ export {
 
       // A sole pane discovers its foreground group on the worker; others read it here. A program's
       // listening ports are read again every `ports_interval`, output or not.
-      inline void enqueue(tbc::view<typename Processor::Request&, tbc::lt::a> request, const Agents& agents, tbc::view<Pane<Memory>&, tbc::lt::a> pane, bool sole, std::chrono::steady_clock::time_point now) {
+      inline void enqueue(tbc::view<typename Processor::Request&, tbc::lt::a> request, const Agents& agents, tbc::view<Pane&, tbc::lt::a> pane, bool sole, std::chrono::steady_clock::time_point now) {
         if (auto drop = pane.observer->takeDrop()) {
           limits_.report(*drop);
         }
@@ -786,12 +782,12 @@ export {
         }
       }
 
-      inline static bool observes(const Pane<Memory>& pane, const ProcessProbeResult& observation) {
+      inline static bool observes(const Pane& pane, const ProcessProbeResult& observation) {
         return pane.generation == observation.request.generation && !pane.exit_status && pane.process->processId() == observation.request.root && pane.process->foregroundProcessGroup().value_or(0) == observation.request.foreground;
       }
 
       // Whether the pane list changed, for an observation of the pane's current process.
-      inline static bool applyPorts(Pane<Memory>& pane, const ProcessProbeResult& observation) {
+      inline static bool applyPorts(Pane& pane, const ProcessProbeResult& observation) {
         if (pane.listening_ports == observation.ports) {
           return false;
         }
@@ -802,7 +798,7 @@ export {
       }
 
       // Whether the pane list changed, for an observation of the pane's current process.
-      inline static bool applyProcess(Agents& agents, Pane<Memory>& pane, const ProcessProbeResult& observation) {
+      inline static bool applyProcess(Agents& agents, Pane& pane, const ProcessProbeResult& observation) {
         pane.process_cache = observation.cache;
         bool listed = false;
 
@@ -858,7 +854,7 @@ export {
     // One bounded capture at a time. Pulling one chunk per request keeps a slow
     // consumer from filling the response queue or stalling terminal delivery.
     // Kept whole: tests instantiate it with their own fake Reader (runtime_clipboard_test's Reader).
-    template <Allocator Memory, typename Reader = RuntimeClipboardReader>
+    template <typename Reader = RuntimeClipboardReader>
     class TBC_HOT_PATH RuntimeClipboardService {
     public:
       using Clock = std::chrono::steady_clock;
@@ -870,7 +866,7 @@ export {
           : worker_(std::in_place, std::forward<Arguments>(reader)...) {}
 
       // A transfer whose owner left, closed or timed out ends before the request is weighed.
-      inline void read(ClientStore<Memory>& clients, std::uint64_t client_id, const ReadRuntimeClipboard& request) {
+      inline void read(ClientStore& clients, std::uint64_t client_id, const ReadRuntimeClipboard& request) {
         expire(clients, Clock::now());
         auto& client = requireClient(clients, client_id);
 
@@ -896,7 +892,7 @@ export {
         expires_ = Clock::now() + transfer_timeout;
       }
 
-      inline void collect(ClientStore<Memory>& clients) {
+      inline void collect(ClientStore& clients) {
         worker_.collect([&](typename Reader::Result& result) {
           pending_ = false;
           auto* client = clients.find(owner_);
@@ -923,7 +919,7 @@ export {
         });
       }
 
-      inline void expire(const ClientStore<Memory>& clients, Clock::time_point now) noexcept {
+      inline void expire(const ClientStore& clients, Clock::time_point now) noexcept {
         if (!pending_ && owner_ != 0) {
           const auto* client = clients.find(owner_);
           if (now >= expires_ || client == nullptr || client->generation != generation_ || client->connection.closing) {
@@ -945,7 +941,7 @@ export {
         return clipboard::error_message(error);
       }
 
-      inline void send(ClientSession<Memory>& client, std::uint64_t request) {
+      inline void send(ClientSession& client, std::uint64_t request) {
         const auto bytes = std::span<const Byte>{content_.bytes}.subspan(offset_);
         const auto part = bytes.first(std::min(bytes.size(), runtime_clipboard_chunk_bytes));
 
@@ -984,7 +980,7 @@ export {
   namespace telar::runtime {
 
     // Kept whole: tests instantiate it with their own fake Probe (worktree_detection_test's GatedWorktreeDetector).
-    template <Allocator Memory, WorktreeDetector Probe>
+    template <WorktreeDetector Probe>
     class TBC_HOT_PATH WorktreeDetectionService {
     public:
       // The probe is built in place on its worker from the arguments.
@@ -992,7 +988,7 @@ export {
       inline explicit WorktreeDetectionService(Arguments&&... probe)
           : worker_(std::in_place, std::forward<Arguments>(probe)...) {}
 
-      inline void tick(RuntimeModel<Memory>& model) {
+      inline void tick(RuntimeModel& model) {
         collect(model);
         if (pending_) {
           return;
@@ -1021,7 +1017,7 @@ export {
         }
       }
 
-      inline void collect(RuntimeModel<Memory>& model) {
+      inline void collect(RuntimeModel& model) {
         worker_.collect([&](const WorktreeDetectionResult& result) {
           pending_ = false;
           auto* pane = findPane(model.panes, result.pane, result.generation);

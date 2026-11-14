@@ -251,7 +251,6 @@ namespace telar::git {
     return ReadStatus::ok;
   }
 
-  template <Allocator Memory>
   ReadStatus readWhole(int directory, const char* name, String<Memory>& bytes, std::size_t limit, Fingerprint* fingerprint) {
     bytes.clear();
     FileDescriptor file;
@@ -283,8 +282,6 @@ namespace telar::git {
 
     return ReadStatus::ok;
   }
-
-  template ReadStatus readWhole<Memory>(int directory, const char* name, String<Memory>& bytes, std::size_t limit, Fingerprint* fingerprint);
 
   FileDescriptor openDirectory(int directory, const char* name) noexcept {
     return FileDescriptor{::openat(directory, name, O_RDONLY | O_DIRECTORY | O_CLOEXEC)};

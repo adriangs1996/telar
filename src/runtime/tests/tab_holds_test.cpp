@@ -87,11 +87,11 @@ static void testHeldTabLifecycle() {
   MemoryAdapter adapter{system};
   ConcurrentMemory& memory = adapter;
   RuntimeModel model{memory};
-  ClientStore<ConcurrentMemory> clients{memory};
-  LimitService<ConcurrentMemory> limits;
+  ClientStore clients{memory};
+  LimitService limits;
   NativeEventLoop<ConcurrentMemory> poller{memory};
   PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/tab-holds.sock"}};
-  WorkspaceService<ConcurrentMemory, decltype(poller)> workspaces{memory};
+  WorkspaceService<decltype(poller)> workspaces{memory};
   ClientPeer owner{memory, model, clients, ClientRole::interactive};
   ClientPeer holder{memory, model, clients, ClientRole::control};
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
@@ -146,15 +146,15 @@ static void testHeldTabRelease() {
   MemoryAdapter adapter{system};
   ConcurrentMemory& memory = adapter;
   RuntimeModel model{memory};
-  ClientStore<ConcurrentMemory> clients{memory};
-  LimitService<ConcurrentMemory> limits;
+  ClientStore clients{memory};
+  LimitService limits;
   NativeEventLoop<ConcurrentMemory> poller{memory};
   PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/tab-holds.sock"}};
-  WorkspaceService<ConcurrentMemory, decltype(poller)> workspaces{memory};
+  WorkspaceService<decltype(poller)> workspaces{memory};
   ClientPeer owner{memory, model, clients, ClientRole::control};
   ClientPeer holder{memory, model, clients, ClientRole::control};
   const auto workspace_id = model.workspaces.nextId();
-  auto workspace = makeOwned<Workspace<ConcurrentMemory>>(memory, memory, workspace_id, "/tmp", "Held tabs");
+  auto workspace = makeOwned<Workspace>(memory, memory, workspace_id, "/tmp", "Held tabs");
 
   for (std::size_t index = 0; index < HeldTabs::capacity; ++index) {
     workspace->tabs.emplace_back(memory, index + 1, "Empty");
@@ -162,7 +162,7 @@ static void testHeldTabRelease() {
 
   model.workspaces.insert(workspace_id, std::move(workspace));
   const auto other_id = model.workspaces.nextId();
-  auto other = makeOwned<Workspace<ConcurrentMemory>>(memory, memory, other_id, "/", "Other workspace");
+  auto other = makeOwned<Workspace>(memory, memory, other_id, "/", "Other workspace");
 
   other->tabs.emplace_back(memory, HeldTabs::capacity + 1, "Empty");
   model.workspaces.insert(other_id, std::move(other));

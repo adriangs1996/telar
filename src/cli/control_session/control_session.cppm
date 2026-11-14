@@ -81,7 +81,6 @@ export {
     // workspaces or agents has: each request gets the next id, and `exchange` returns
     // the reply that answers it or throws the runtime's refusal as `ControlFailure`.
     // A decoded reply borrows the session's storage until the next exchange.
-    template <Allocator Memory>
     class ControlSession {
     public:
       // `reply_bytes` bounds one reply and what decoding it may borrow; small fixed
@@ -148,8 +147,6 @@ export {
       Vector<Byte, Memory> decoded_;
       std::uint64_t next_request_ = 1;
     };
-
-    extern template class ControlSession<Memory>;
 
   }
 }

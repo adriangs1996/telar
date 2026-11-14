@@ -67,15 +67,10 @@ export {
 
       bool has(Status status) const;
 
-      template <Allocator Memory>
       int refuse(Memory& memory, const std::string& label, const std::string& destination, std::string_view reason) const;
 
-      template <Allocator Memory>
       int finish(Memory& memory, const std::string& label, const std::string& destination) const;
     };
-
-    extern template int SetupReport::refuse<Memory>(Memory& memory, const std::string& label, const std::string& destination, std::string_view reason) const;
-    extern template int SetupReport::finish<Memory>(Memory& memory, const std::string& label, const std::string& destination) const;
 
   }
 }
@@ -97,9 +92,7 @@ export {
   namespace telar::runtime::cli::window {
 
     // Re-encode parsed JSON with the standard string escapes and two-space indentation.
-    template <Allocator Memory>
     void appendJson(String<Memory>& output, const JsonValue& value, bool pretty, unsigned depth = 0);
-    extern template void appendJson<Memory>(String<Memory>& output, const JsonValue& value, bool pretty, unsigned depth);
 
   }
 }

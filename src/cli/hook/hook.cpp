@@ -8,8 +8,7 @@ import telar.sys.posix;
 
 namespace telar::runtime::cli::hooks {
 
-  template <Allocator Memory>
-  tbc::view<std::optional<ReportAgent>, tbc::lt::a> claudeLifecycle(tbc::view<Payload<Memory>&, tbc::lt::a> input, tbc::view<FixedText<96>&, tbc::lt::a> event) {
+  tbc::view<std::optional<ReportAgent>, tbc::lt::a> claudeLifecycle(tbc::view<Payload&, tbc::lt::a> input, tbc::view<FixedText<96>&, tbc::lt::a> event) {
     const auto name = input.event();
 
     if (input.subagent()) {
@@ -63,8 +62,7 @@ namespace telar::runtime::cli::hooks {
     return report;
   }
 
-  template <Allocator Memory>
-  tbc::view<std::optional<ReportAgent>, tbc::lt::a> codexLifecycle(tbc::view<Payload<Memory>&, tbc::lt::a> input, tbc::view<FixedText<96>&, tbc::lt::a> event, tbc::view<std::string_view, tbc::lt::a> database) {
+  tbc::view<std::optional<ReportAgent>, tbc::lt::a> codexLifecycle(tbc::view<Payload&, tbc::lt::a> input, tbc::view<FixedText<96>&, tbc::lt::a> event, tbc::view<std::string_view, tbc::lt::a> database) {
     const auto name = input.event();
 
     if (input.subagent()) {
@@ -112,8 +110,7 @@ namespace telar::runtime::cli::hooks {
     return report;
   }
 
-  template <Allocator Memory>
-  std::optional<ReportAgent> piLifecycle(Payload<Memory>& input) {
+  std::optional<ReportAgent> piLifecycle(Payload& input) {
     const auto name = input.event();
     ReportAgent report{.session = sessionReference(input.session())};
 
@@ -140,8 +137,7 @@ namespace telar::runtime::cli::hooks {
     return report;
   }
 
-  template <Allocator Memory>
-  tbc::view<std::optional<ReportAgent>, tbc::lt::a> openCodeLifecycle(tbc::view<Payload<Memory>&, tbc::lt::a> input, tbc::view<FixedText<96>&, tbc::lt::a> event) {
+  tbc::view<std::optional<ReportAgent>, tbc::lt::a> openCodeLifecycle(tbc::view<Payload&, tbc::lt::a> input, tbc::view<FixedText<96>&, tbc::lt::a> event) {
     const auto name = input.event();
     const auto blocked = input.blockedReason();
     ReportAgent report{.session = sessionReference(input.session())};
@@ -175,8 +171,7 @@ namespace telar::runtime::cli::hooks {
     return report;
   }
 
-  template <Allocator Memory>
-  tbc::view<std::optional<ReportAgent>, tbc::lt::a> cursorLifecycle(tbc::view<Payload<Memory>&, tbc::lt::a> input, tbc::view<FixedText<96>&, tbc::lt::a> event, tbc::view<std::string_view, tbc::lt::a> metadata) {
+  tbc::view<std::optional<ReportAgent>, tbc::lt::a> cursorLifecycle(tbc::view<Payload&, tbc::lt::a> input, tbc::view<FixedText<96>&, tbc::lt::a> event, tbc::view<std::string_view, tbc::lt::a> metadata) {
     const auto name = input.event();
     ReportAgent report{.session = sessionReference(input.session()), .session_file = metadata.size() <= 1024 ? metadata : "", .session_file_kind = AgentSessionFileKind::cursor_meta};
 
@@ -205,8 +200,7 @@ namespace telar::runtime::cli::hooks {
     return found == names.end() ? std::nullopt : std::optional{static_cast<AgentPlanStatus>(found - names.begin())};
   }
 
-  template <Allocator Memory>
-  void setPlan(tbc::view<Payload<Memory>&, tbc::lt::a> input, tbc::view<Reports&, tbc::lt::a> reports, tbc::view<ReportAgentProgress&, tbc::lt::a> report) {
+  void setPlan(tbc::view<Payload&, tbc::lt::a> input, tbc::view<Reports&, tbc::lt::a> reports, tbc::view<ReportAgentProgress&, tbc::lt::a> report) {
     const bool todo = input.fields.text("tool_name") == "TodoWrite";
     const auto items = input.tools.value(todo ? "todos" : "plan");
     if (!items || !items->encoded().starts_with('[')) {
@@ -242,8 +236,7 @@ namespace telar::runtime::cli::hooks {
     report.plan_text = reports.step.view();
   }
 
-  template <Allocator Memory>
-  void updatePlan(tbc::view<Payload<Memory>&, tbc::lt::a> input, tbc::view<Reports&, tbc::lt::a> reports, tbc::view<ReportAgentProgress&, tbc::lt::a> report) {
+  void updatePlan(tbc::view<Payload&, tbc::lt::a> input, tbc::view<Reports&, tbc::lt::a> reports, tbc::view<ReportAgentProgress&, tbc::lt::a> report) {
     if (input.event() == "SessionStart") {
       report.plan_op = AgentPlanOp::set;
       return;
@@ -278,8 +271,7 @@ namespace telar::runtime::cli::hooks {
     }
   }
 
-  template <Allocator Memory>
-  tbc::view<std::optional<ReportAgentProgress>, tbc::lt::a> progressReport(tbc::view<Payload<Memory>&, tbc::lt::a> input, tbc::view<Reports&, tbc::lt::a> reports) {
+  tbc::view<std::optional<ReportAgentProgress>, tbc::lt::a> progressReport(tbc::view<Payload&, tbc::lt::a> input, tbc::view<Reports&, tbc::lt::a> reports) {
     if ((input.provider != AgentProvider::claude && input.provider != AgentProvider::codex) || input.subagent()) {
       return std::nullopt;
     }
@@ -308,8 +300,7 @@ namespace telar::runtime::cli::hooks {
     return report.cwd.empty() && report.plan_op == AgentPlanOp::none && report.final_message.empty() ? std::nullopt : std::optional{report};
   }
 
-  template <Allocator Memory>
-  std::optional<ReportAgentTitle> titleReport(Payload<Memory>& input) {
+  std::optional<ReportAgentTitle> titleReport(Payload& input) {
     std::optional<std::string_view> title;
 
     if (input.provider == AgentProvider::claude) {
@@ -332,9 +323,9 @@ namespace telar::runtime::cli::hooks {
     return title ? std::optional{ReportAgentTitle{.title = utf8Prefix(*title, 96)}} : std::nullopt;
   }
 
-  template <Allocator Memory, EnvironmentLookup Environment>
+  template <EnvironmentLookup Environment>
   // The reports view the payload, the files and their own texts, all region `a`.
-  void map(tbc::view<Payload<Memory>&, tbc::lt::a> input, tbc::view<Reports&, tbc::lt::a> reports, tbc::view<SessionFiles&, tbc::lt::a> files, const Environment& environment) {
+  void map(tbc::view<Payload&, tbc::lt::a> input, tbc::view<Reports&, tbc::lt::a> reports, tbc::view<SessionFiles&, tbc::lt::a> files, const Environment& environment) {
     TELAR_TRACE("hooks.mapReports");
     reports.command = commandReport(input);
     reports.title = titleReport(input);
@@ -402,7 +393,7 @@ namespace telar::runtime::cli::hooks {
     });
   }
 
-  template <Allocator Memory, EnvironmentLookup Environment>
+  template <EnvironmentLookup Environment>
   class Worktrees {
   public:
     explicit Worktrees(Memory& memory, const Environment& environment, std::string_view socket)
@@ -415,7 +406,7 @@ namespace telar::runtime::cli::hooks {
           base_(AllocatorRef<char, Memory>{memory}),
           path_(AllocatorRef<char, Memory>{memory}) {}
 
-    void answer(Object<Memory>& input) {
+    void answer(Object& input) {
       TELAR_TRACE("hooks.worktree");
       if (input.text("hook_event_name") == "WorktreeCreate") {
         create(input);
@@ -502,7 +493,7 @@ namespace telar::runtime::cli::hooks {
       }
     }
 
-    void create(Object<Memory>& input) {
+    void create(Object& input) {
       std::array<char, PATH_MAX> current;
       auto cwd = input.text("cwd");
       if (cwd.empty()) {
@@ -582,7 +573,7 @@ namespace telar::runtime::cli::hooks {
       session.template exchange<WorktreeRegistered>(RegisterWorktree{.source = *workspace, .created_by = target->pane_id, .path = path_, .branch = branch_, .base = base_});
     }
 
-    void remove(Object<Memory>& input) {
+    void remove(Object& input) {
       path_ = input.text("worktree_path");
       if (!path_.starts_with('/') || path_.contains('\0')) {
         throw std::runtime_error{"InvalidWorktreePath"};
@@ -664,11 +655,11 @@ namespace telar::runtime::cli::hooks {
     String<Memory> path_;
   };
 
-  template <Allocator Memory, EnvironmentLookup Environment>
-  Worktrees(Memory& memory, const Environment& environment, std::string_view socket) -> Worktrees<Memory, Environment>;
+  template <EnvironmentLookup Environment>
+  Worktrees(Memory& memory, const Environment& environment, std::string_view socket) -> Worktrees<Environment>;
 
-  template <Allocator Memory, EnvironmentLookup Environment>
-  std::optional<int> answerWorktree(Memory& memory, const Environment& environment, Object<Memory>& fields, std::string_view socket) {
+  template <EnvironmentLookup Environment>
+  std::optional<int> answerWorktree(Memory& memory, const Environment& environment, Object& fields, std::string_view socket) {
     try {
       for (const auto name : {"hook_event_name", "cwd", "name", "worktree_path"}) {
         fields.text(name);
@@ -694,7 +685,7 @@ namespace telar::runtime::cli::hooks {
 
 namespace telar::runtime::cli {
 
-  template <Allocator Memory, EnvironmentLookup Environment>
+  template <EnvironmentLookup Environment>
   int runHook(Memory& memory, const HookOptions& options, const Environment& environment) noexcept {
 #if TELAR_DEBUG
     std::optional<trace::Session<Memory>> tracing;
@@ -766,20 +757,18 @@ namespace telar::runtime::cli {
     return status;
   }
 
-  template int runHook<Memory, ProcessEnvironment>(Memory& memory, const HookOptions& options, const ProcessEnvironment& environment) noexcept;
+  template int runHook<ProcessEnvironment>(Memory& memory, const HookOptions& options, const ProcessEnvironment& environment) noexcept;
 
 }
 
 namespace telar::runtime::cli::hooks {
 
-  template void map<Memory, ProcessEnvironment>(tbc::view<Payload<Memory>&, tbc::lt::a> input, tbc::view<Reports&, tbc::lt::a> reports, tbc::view<SessionFiles&, tbc::lt::a> files, const ProcessEnvironment& environment);
+  template void map<ProcessEnvironment>(tbc::view<Payload&, tbc::lt::a> input, tbc::view<Reports&, tbc::lt::a> reports, tbc::view<SessionFiles&, tbc::lt::a> files, const ProcessEnvironment& environment);
 
-  template <Allocator Memory>
-  Input<Memory>::Input(Memory& memory)
+  Input::Input(Memory& memory)
       : text_(AllocatorRef<char, Memory>{memory}) {}
 
-  template <Allocator Memory>
-  void Input<Memory>::read(int descriptor) {
+  void Input::read(int descriptor) {
     TELAR_TRACE("hooks.readInput");
     std::array<char, 4096> buffer;
 
@@ -806,23 +795,19 @@ namespace telar::runtime::cli::hooks {
     }
   }
 
-  template <Allocator Memory>
-  bool Input<Memory>::limited() const noexcept {
+  bool Input::limited() const noexcept {
     return received_ > maximum_bytes;
   }
 
-  template <Allocator Memory>
-  std::uint64_t Input<Memory>::received() const noexcept {
+  std::uint64_t Input::received() const noexcept {
     return received_;
   }
 
-  template <Allocator Memory>
-  std::string_view Input<Memory>::text() const noexcept {
+  std::string_view Input::text() const noexcept {
     return text_;
   }
 
-  template <Allocator Memory>
-  void Input<Memory>::keepWholeMembers() {
+  void Input::keepWholeMembers() {
     const auto opening = text_.find_first_not_of(" \r\n\t");
     if (opening == std::string_view::npos || text_[opening] != '{') {
       text_ = "{}";
@@ -885,8 +870,7 @@ namespace telar::runtime::cli::hooks {
     }
   }
 
-  template <Allocator Memory>
-  bool Input<Memory>::completeMember(std::size_t start, std::size_t end, String<Memory>& candidate) {
+  bool Input::completeMember(std::size_t start, std::size_t end, String<Memory>& candidate) {
     if (std::string_view{text_.data() + start, end - start}.find_first_not_of(" \r\n\t") == std::string_view::npos) {
       return false;
     }
@@ -941,8 +925,8 @@ namespace telar::runtime::cli::hooks {
     }
   }
 
-  template <Allocator Memory, EnvironmentLookup Environment>
-  std::string_view SessionFiles::cursor(Payload<Memory>& input, const Environment& environment) noexcept {
+  template <EnvironmentLookup Environment>
+  std::string_view SessionFiles::cursor(Payload& input, const Environment& environment) noexcept {
     try {
       if (input.event() != "sessionStart" && input.event() != "beforeSubmitPrompt") {
         return {};
@@ -1033,7 +1017,5 @@ namespace telar::runtime::cli::hooks {
   tbc::view<std::optional<std::string_view>, tbc::lt::a> SessionFiles::join(std::string_view root, std::string_view suffix, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept {
     return root.empty() ? std::nullopt : GitFiles::join(root, suffix, buffer);
   }
-
-  template class Input<Memory>;
 
 }

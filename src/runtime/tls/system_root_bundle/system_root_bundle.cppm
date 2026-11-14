@@ -13,10 +13,9 @@ import telar.platform.primitives;
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory>
     class SystemRootBundle {
     public:
-      explicit SystemRootBundle(Memory& memory);
+      explicit SystemRootBundle(ConcurrentMemory& memory);
 
       std::span<const std::uint8_t> bytes() const noexcept;
 
@@ -28,13 +27,8 @@ export {
           "/etc/pki/tls/certs/ca-bundle.crt",
           "/etc/ssl/ca-bundle.pem"
       };
-      ByteQueue<Memory> bytes_;
+      ByteQueue<ConcurrentMemory> bytes_;
     };
-
-    extern template class SystemRootBundle<ConcurrentMemory>;
-
-    template <Allocator Memory>
-    SystemRootBundle(Memory& memory) -> SystemRootBundle<Memory>;
 
   }
 }

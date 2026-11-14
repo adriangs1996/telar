@@ -510,7 +510,7 @@ void paneState(ConcurrentMemory& memory) {
   command.setEnvironment("HOME", home.path());
   command.removeEnvironment("ZDOTDIR");
   RuntimeModel model{memory};
-  auto owned = makeOwned<Pane<ConcurrentMemory>>(memory, memory, 7, TabLocation{}, command, PaneLaunch{TerminalSize{80, 24, 8, 16}, model.media_budget, model.graphics_limits, integration.apply(command)});
+  auto owned = makeOwned<Pane>(memory, memory, 7, TabLocation{}, command, PaneLaunch{TerminalSize{80, 24, 8, 16}, model.media_budget, model.graphics_limits, integration.apply(command)});
   auto& pane = *owned;
 
   check(pane.shell_state.pane_id == 7 && pane.shell_state.shell == IntegratedShell::zsh);
@@ -641,7 +641,7 @@ void sshSession(ConcurrentMemory& memory) {
   command.setEnvironment("HOME", home.path());
   command.removeEnvironment("ZDOTDIR");
   RuntimeModel model{memory};
-  auto owned = makeOwned<Pane<ConcurrentMemory>>(memory, memory, 7, TabLocation{}, command, PaneLaunch{TerminalSize{80, 24, 8, 16}, model.media_budget, model.graphics_limits, integration.apply(command)});
+  auto owned = makeOwned<Pane>(memory, memory, 7, TabLocation{}, command, PaneLaunch{TerminalSize{80, 24, 8, 16}, model.media_budget, model.graphics_limits, integration.apply(command)});
   auto& pane = *owned;
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{30};
   const auto until = [&](auto ready) {
@@ -709,8 +709,8 @@ void sshSession(ConcurrentMemory& memory) {
 // An ssh whose remote shell takes over keeps its block open, the remote commands after it,
 // until the pane's shell is back and ends it with ssh's status.
 void sessionBlocks(ConcurrentMemory& memory) {
-  Terminal<ConcurrentMemory> terminal{memory, TerminalSize{40, 12, 8, 16}};
-  CommandBlocks<ConcurrentMemory> blocks{memory, terminal};
+  Terminal terminal{memory, TerminalSize{40, 12, 8, 16}};
+  CommandBlocks blocks{memory, terminal};
   const auto now = std::chrono::steady_clock::now();
   const auto run = [&](std::string_view line) {
     blocks.mark('A', now);
@@ -750,8 +750,8 @@ void sessionBlocks(ConcurrentMemory& memory) {
 // where the screen moves with its blocks, so the commands after it never land on their rows.
 void clearedBlocks(ConcurrentMemory& memory) {
   for (const std::string_view clear : {"\x1b[H\x1b[2J\x1b[3J", "\x1b[H\x1b[J"}) {
-    Terminal<ConcurrentMemory> terminal{memory, TerminalSize{40, 12, 8, 16}};
-    CommandBlocks<ConcurrentMemory> blocks{memory, terminal};
+    Terminal terminal{memory, TerminalSize{40, 12, 8, 16}};
+    CommandBlocks blocks{memory, terminal};
     const auto now = std::chrono::steady_clock::now();
     // The shell's marks reach the terminal too, which flags its prompt rows.
     const auto mark = [&](char action, std::string_view sequence) {

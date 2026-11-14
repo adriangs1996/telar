@@ -51,7 +51,7 @@ static void testExchangeProtocol() {
           continue;
         }
 
-        auto half = makeOwned<CaptureHalf<ConcurrentMemory>>(memory, memory, quota, limits, CaptureStart{.key = {UINT64_MAX, UINT32_MAX}, .side = side, .protocol = protocol, .host = "example.test", .started_at_ms = INT64_MIN});
+        auto half = makeOwned<CaptureHalf>(memory, memory, quota, limits, CaptureStart{.key = {UINT64_MAX, UINT32_MAX}, .side = side, .protocol = protocol, .host = "example.test", .started_at_ms = INT64_MIN});
 
         half->setMethod("POST");
         half->setTarget("/resource");

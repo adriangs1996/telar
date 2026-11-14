@@ -81,9 +81,9 @@ using namespace telar::runtime;
 void nativeClipboardTests(ConcurrentMemory& memory) {
   telar::gui::test::PrivateClipboard isolated;
   RuntimeModel model{memory};
-  ClientStore<ConcurrentMemory> clients{memory};
+  ClientStore clients{memory};
   ClientPeer client{memory, model, clients, ClientRole::control};
-  RuntimeClipboardService<ConcurrentMemory> service;
+  RuntimeClipboardService<> service;
   auto collect = [&] {
     pollfd ready{.fd = service.descriptor(), .events = POLLIN, .revents = 0};
 

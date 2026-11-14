@@ -32,9 +32,6 @@ export namespace telar::runtime::cli::render_command {
     static RenderOptions parse(std::span<char* const> words);
   };
 
-  template <Allocator Memory>
   int run(Memory& memory, const RenderOptions& options);
-
-  extern template int run<Memory>(Memory& memory, const RenderOptions& options);
 
 }

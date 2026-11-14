@@ -5,10 +5,9 @@ module telar.runtime.plugins.service;
 
 namespace telar::runtime::plugins {
 
-  template <ConcurrentAllocator Memory>
-  Service<Memory>::Service(Memory& memory, std::span<const ServiceSpec> specifications, const char* executable, std::string_view trace_prefix, traffic::PackagePort* traffic)
+  Service::Service(ConcurrentMemory& memory, std::span<const ServiceSpec> specifications, const char* executable, std::string_view trace_prefix, traffic::PackagePort* traffic)
       : memory_(memory),
-        workers_(AllocatorRef<Owned<Worker<Memory>, Memory>, Memory>{memory}) {
+        workers_(AllocatorRef<Owned<Worker<>, ConcurrentMemory>, ConcurrentMemory>{memory}) {
     if (specifications.empty()) {
       return;
     }
@@ -22,7 +21,7 @@ namespace telar::runtime::plugins {
     workers_.reserve(specifications.size());
     try {
       for (const auto& specification : specifications) {
-        workers_.push_back(makeOwned<Worker<Memory>>(memory, memory, specification, results_, budget_, WorkerLaunch{.executable = executable, .cancellation = *cancellation_, .trace_prefix = trace_prefix, .traffic = traffic}));
+        workers_.push_back(makeOwned<Worker<>>(memory, memory, specification, results_, budget_, WorkerLaunch{.executable = executable, .cancellation = *cancellation_, .trace_prefix = trace_prefix, .traffic = traffic}));
       }
     } catch (...) {
       stop();
@@ -30,13 +29,11 @@ namespace telar::runtime::plugins {
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  Service<Memory>::~Service() {
+  Service::~Service() {
     stop();
   }
 
-  template <ConcurrentAllocator Memory>
-  void Service<Memory>::watchTrust(std::string_view path) {
+  void Service::watchTrust(std::string_view path) {
     if (workers_.empty()) {
       return;
     }
@@ -65,8 +62,7 @@ namespace telar::runtime::plugins {
     }};
   }
 
-  template <ConcurrentAllocator Memory>
-  void Service<Memory>::stop() noexcept {
+  void Service::stop() noexcept {
     if (stopped_.exchange(true, std::memory_order_acq_rel)) {
       return;
     }
@@ -86,20 +82,17 @@ namespace telar::runtime::plugins {
     results_.close();
   }
 
-  template <ConcurrentAllocator Memory>
-  bool Service<Memory>::listening() const noexcept {
+  bool Service::listening() const noexcept {
     return std::ranges::any_of(workers_, [](const auto& worker) {
       return !worker->revoked() && worker->specification().allows(Capability::proxy_tap);
     });
   }
 
-  template <ConcurrentAllocator Memory>
-  int Service<Memory>::descriptor() const noexcept {
+  int Service::descriptor() const noexcept {
     return results_.descriptor();
   }
 
-  template <ConcurrentAllocator Memory>
-  void Service<Memory>::submit(CapturedExchange<Memory>& captured) noexcept {
+  void Service::submit(CapturedExchange& captured) noexcept {
     TELAR_TRACE("plugins.submitExchange");
     auto owned = std::move(captured);
 
@@ -107,7 +100,7 @@ namespace telar::runtime::plugins {
       return;
     }
 
-    auto charged = budget_.charge(SharedExchange<Memory>::capturedBytes(owned));
+    auto charged = budget_.charge(SharedExchange::capturedBytes(owned));
     if (!charged) {
       return;
     }
@@ -115,7 +108,7 @@ namespace telar::runtime::plugins {
     const auto event_id = next_event_.fetch_add(1, std::memory_order_relaxed);
 
     try {
-      auto shared = std::allocate_shared<SharedExchange<Memory>>(AllocatorRef<SharedExchange<Memory>, Memory>{memory_}, std::move(*charged), event_id, std::move(owned));
+      auto shared = std::allocate_shared<SharedExchange>(AllocatorRef<SharedExchange, ConcurrentMemory>{memory_}, std::move(*charged), event_id, std::move(owned));
 
       for (const auto& worker : workers_) {
         worker->submit(shared);
@@ -124,8 +117,7 @@ namespace telar::runtime::plugins {
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  TapMetrics Service<Memory>::metrics() const noexcept {
+  TapMetrics Service::metrics() const noexcept {
     TapMetrics totals{.dropped_bytes = budget_.dropped()};
 
     for (const auto& worker : workers_) {
@@ -139,13 +131,11 @@ namespace telar::runtime::plugins {
     return totals;
   }
 
-  template <ConcurrentAllocator Memory>
-  std::size_t Service<Memory>::heldBytes() const noexcept {
+  std::size_t Service::heldBytes() const noexcept {
     return budget_.used();
   }
 
-  template <ConcurrentAllocator Memory>
-  void Service<Memory>::refreshTrust() noexcept {
+  void Service::refreshTrust() noexcept {
     try {
       const auto trust = TrustStore::load(memory_, trust_path_.view());
 
@@ -163,16 +153,11 @@ namespace telar::runtime::plugins {
     }
   }
 
-  template <ConcurrentAllocator Memory>
-  ShutdownGuard<Memory>::ShutdownGuard(Service<Memory>& service) noexcept
+  ShutdownGuard::ShutdownGuard(Service& service) noexcept
       : service_(service) {}
 
-  template <ConcurrentAllocator Memory>
-  ShutdownGuard<Memory>::~ShutdownGuard() {
+  ShutdownGuard::~ShutdownGuard() {
     service_.stop();
   }
-
-  template class Service<ConcurrentMemory>;
-  template class ShutdownGuard<ConcurrentMemory>;
 
 }

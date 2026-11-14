@@ -11,7 +11,6 @@ import :objects;
 namespace telar::git {
 
   // The commits a shallow clone cut off from their parents.
-  template <Allocator Memory>
   class ShallowCommits {
   public:
     explicit ShallowCommits(Memory& memory) noexcept;
@@ -31,14 +30,11 @@ namespace telar::git {
     bool valid_ = true;
   };
 
-  extern template class ShallowCommits<Memory>;
-
   struct Divergence {
     std::uint32_t ahead = 0;
     std::uint32_t behind = 0;
   };
 
-  template <Allocator Memory>
   class DivergenceWalk {
   public:
     explicit DivergenceWalk(Memory& memory) noexcept;
@@ -46,12 +42,12 @@ namespace telar::git {
     // Counts the commits only `left` reaches (ahead) and only `right` reaches
     // (behind). Returns nullopt when an object is unreadable or the walk would
     // visit more than limits.walk_commits commits.
-    std::optional<Divergence> count(ObjectDatabase<Memory>& objects, const CommitGraph<Memory>& graph, const ShallowCommits<Memory>& shallow, const Limits& limits, const ObjectId& left, const ObjectId& right);
+    std::optional<Divergence> count(ObjectDatabase& objects, const CommitGraph& graph, const ShallowCommits& shallow, const Limits& limits, const ObjectId& left, const ObjectId& right);
 
     std::uint64_t commits_read = 0;
 
   private:
-    std::optional<Divergence> walk(const CommitGraph<Memory>& graph);
+    std::optional<Divergence> walk(const CommitGraph& graph);
 
     static constexpr std::uint8_t left_flag = 1;
     static constexpr std::uint8_t right_flag = 2;
@@ -98,9 +94,9 @@ namespace telar::git {
 
     bool expand(std::uint32_t index);
 
-    ObjectDatabase<Memory>* objects_ = nullptr;
-    const CommitGraph<Memory>* graph_ = nullptr;
-    const ShallowCommits<Memory>* shallow_ = nullptr;
+    ObjectDatabase* objects_ = nullptr;
+    const CommitGraph* graph_ = nullptr;
+    const ShallowCommits* shallow_ = nullptr;
     const Limits* limits_ = nullptr;
     Vector<Node, Memory> nodes_;
     Vector<std::uint32_t, Memory> slots_;
@@ -112,7 +108,5 @@ namespace telar::git {
     std::uint32_t behind_ = 0;
     std::size_t interesting_ = 0;
   };
-
-  extern template class DivergenceWalk<Memory>;
 
 }

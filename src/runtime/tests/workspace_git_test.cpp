@@ -141,9 +141,9 @@ public:
   Result next;
 };
 
-using GitService = WorkspaceGitService<ConcurrentMemory, ControlledGitProbe&>;
+using GitService = WorkspaceGitService<ControlledGitProbe&>;
 
-static void collect(RuntimeModel<ConcurrentMemory>& model, GitService& service, GitService::Clock::time_point now) {
+static void collect(RuntimeModel& model, GitService& service, GitService::Clock::time_point now) {
   pollfd completion{.fd = service.descriptor(), .events = POLLIN, .revents = 0};
 
   check(::poll(&completion, 1, 1000) == 1);
@@ -164,12 +164,12 @@ static void testObservationLifecycle() {
   MemoryAdapter adapter{system};
   ConcurrentMemory& memory = adapter;
   RuntimeModel model{memory};
-  ClientStore<ConcurrentMemory> clients{memory};
-  LimitService<ConcurrentMemory> limits;
+  ClientStore clients{memory};
+  LimitService limits;
   ControlledGitProbe probe;
   GitService service{limits, probe};
-  auto first = makeOwned<Workspace<ConcurrentMemory>>(memory, memory, 7, "/first", "first");
-  auto second = makeOwned<Workspace<ConcurrentMemory>>(memory, memory, 9, "/second", "second");
+  auto first = makeOwned<Workspace>(memory, memory, 7, "/first", "first");
+  auto second = makeOwned<Workspace>(memory, memory, 9, "/second", "second");
   auto& workspace = *first;
 
   model.workspaces.insert(7, std::move(first));

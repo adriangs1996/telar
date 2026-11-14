@@ -279,24 +279,21 @@ namespace telar::runtime {
     statement.bind(6, session.workspace_path);
   }
 
-  template <Allocator Memory>
-  HistoryRows<Memory>::HistoryRows(Memory& memory)
+  HistoryRows::HistoryRows(ConcurrentMemory& memory)
       : text_(memory, max_payload_size),
-        entries_(AllocatorRef<HistoryEntry, Memory>{memory}) {
+        entries_(AllocatorRef<HistoryEntry, ConcurrentMemory>{memory}) {
     text_.reserve(max_payload_size);
     entries_.reserve(maximum_entries);
     clear();
   }
 
-  template <Allocator Memory>
-  void HistoryRows<Memory>::clear() noexcept {
+  void HistoryRows::clear() noexcept {
     text_.clear();
     entries_.clear();
     encoded_bytes_ = result_header_bytes;
   }
 
-  template <Allocator Memory>
-  bool HistoryRows<Memory>::append(const Statement& row) {
+  bool HistoryRows::append(const Statement& row) {
     const auto stored = view(row);
     const auto bytes = ValueCodec<HistoryEntry>::encodedSize(stored);
     if (entries_.size() == maximum_entries || bytes > max_payload_size - encoded_bytes_) {
@@ -315,21 +312,18 @@ namespace telar::runtime {
     return true;
   }
 
-  template <Allocator Memory>
-  std::string_view HistoryRows<Memory>::copy(std::string_view text) {
+  std::string_view HistoryRows::copy(std::string_view text) {
     const auto offset = text_.size();
 
     text_.append(std::span{reinterpret_cast<const Byte*>(text.data()), text.size()});
     return {reinterpret_cast<const char*>(text_.readable().data() + offset), text.size()};
   }
 
-  template <Allocator Memory>
-  std::span<const HistoryEntry> HistoryRows<Memory>::entries() const noexcept {
+  std::span<const HistoryEntry> HistoryRows::entries() const noexcept {
     return entries_;
   }
 
-  template <Allocator Memory>
-  HistoryEntry HistoryRows<Memory>::view(const Statement& row) {
+  HistoryEntry HistoryRows::view(const Statement& row) {
     auto entry = header(row);
 
     entry.provider = row.text(11);
@@ -339,8 +333,7 @@ namespace telar::runtime {
     return entry;
   }
 
-  template <Allocator Memory>
-  tbc::view<HistoryEntry, tbc::lt::static_storage> HistoryRows<Memory>::header(const Statement& row) {
+  tbc::view<HistoryEntry, tbc::lt::static_storage> HistoryRows::header(const Statement& row) {
     if (row.integer(0) <= 0 || row.integer(1) <= 0) {
       throw RequestError{FailureCode::internal, "Invalid stored history identity"};
     }
@@ -361,8 +354,6 @@ namespace telar::runtime {
         .command_truncated = row.integer(12) != 0,
     };
   }
-
-  template class HistoryRows<ConcurrentMemory>;
 
   void migrateHistory(Database& database) {
     database.execute(history_schema);
@@ -432,8 +423,7 @@ END;
 )sql");
   }
 
-  template <Allocator Memory>
-  HistoryStore<Memory>::HistoryStore(Memory& memory, const char* path, const HistoryFilters& filters)
+  HistoryStore::HistoryStore(ConcurrentMemory& memory, const char* path, const HistoryFilters& filters)
       : memory_(memory),
         filters_(filters),
         database_(path),
@@ -442,8 +432,7 @@ END;
     indexed_ = enableHistoryIndex(database_);
   }
 
-  template <Allocator Memory>
-  void HistoryStore<Memory>::reportAgentCommand(const ReportAgentCommand& request, const RequestContext& context, EncodedReply<Memory>& reply) {
+  void HistoryStore::reportAgentCommand(const ReportAgentCommand& request, const RequestContext& context, EncodedReply<ConcurrentMemory>& reply) {
     if (!filters_.allowsAgent(request.command, request.cwd)) {
       reply.send(RequestCompleted{.request_id = request.request_id});
       return;
@@ -457,8 +446,7 @@ END;
     reply.send(RequestCompleted{.request_id = request.request_id});
   }
 
-  template <Allocator Memory>
-  void HistoryStore<Memory>::record(const HistoryEventView& event) {
+  void HistoryStore::record(const HistoryEventView& event) {
     if (!accepts(event)) {
       return;
     }
@@ -479,13 +467,11 @@ END;
     pane_writer_->persist(event);
   }
 
-  template <Allocator Memory>
-  bool HistoryStore<Memory>::accepts(const HistoryEventView& event) const noexcept {
+  bool HistoryStore::accepts(const HistoryEventView& event) const noexcept {
     return event.kind != HistoryEventKind::command_finished || filters_.allowsPane(event.command.command, event.command.directory);
   }
 
-  template <Allocator Memory>
-  void HistoryStore<Memory>::importEntries(const ImportHistory& request, EncodedReply<Memory>& reply) {
+  void HistoryStore::importEntries(const ImportHistory& request, EncodedReply<ConcurrentMemory>& reply) {
     const auto sequence = integer(request.base_sequence);
     if (request.entries.size() > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max() - sequence)) {
       throw RequestError{FailureCode::invalid_request, "History import sequence overflows"};
@@ -517,8 +503,7 @@ END;
     reply.send(RequestCompleted{.request_id = request.request_id});
   }
 
-  template <Allocator Memory>
-  void HistoryStore<Memory>::query(QueryHistory request, EncodedReply<Memory>& reply) {
+  void HistoryStore::query(QueryHistory request, EncodedReply<ConcurrentMemory>& reply) {
     rows_.clear();
     if (request.snapshot_id == 0) {
       Statement boundary{database_, "SELECT COALESCE(MAX(id), 0) FROM command"};
@@ -561,7 +546,7 @@ END;
       statement.bind(8, request.offset);
     }
 
-    HashSet seen{0, std::hash<std::uint64_t>{}, std::equal_to<std::uint64_t>{}, AllocatorRef<std::uint64_t, Memory>{memory_}};
+    HashSet seen{0, std::hash<std::uint64_t>{}, std::equal_to<std::uint64_t>{}, AllocatorRef<std::uint64_t, ConcurrentMemory>{memory_}};
     std::uint32_t skipped = 0;
     bool more = false;
 
@@ -586,8 +571,7 @@ END;
     reply.send(HistoryResults{.request_id = request.request_id, .snapshot_id = request.snapshot_id, .has_more = more, .entries = rows_.entries()});
   }
 
-  template <Allocator Memory>
-  void HistoryStore<Memory>::remove(const DeleteHistory& request, EncodedReply<Memory>& reply) {
+  void HistoryStore::remove(const DeleteHistory& request, EncodedReply<ConcurrentMemory>& reply) {
     Statement statement{database_, "DELETE FROM command WHERE id = ?1"};
 
     statement.bind(1, integer(request.id));
@@ -595,8 +579,7 @@ END;
     reply.send(HistoryPruned{.request_id = request.request_id, .removed = static_cast<std::uint64_t>(sqlite3_changes64(database_.handle()))});
   }
 
-  template <Allocator Memory>
-  void HistoryStore<Memory>::prune(const PruneHistory& request, EncodedReply<Memory>& reply) {
+  void HistoryStore::prune(const PruneHistory& request, EncodedReply<ConcurrentMemory>& reply) {
     auto sql = string("DELETE FROM command WHERE 1=1");
 
     appendMatch(sql, request.match);
@@ -621,8 +604,7 @@ END;
     reply.send(HistoryPruned{.request_id = request.request_id, .removed = static_cast<std::uint64_t>(sqlite3_changes64(database_.handle()))});
   }
 
-  template <Allocator Memory>
-  void HistoryStore<Memory>::readOutput(const ReadHistoryOutput& request, EncodedReply<Memory>& reply) {
+  void HistoryStore::readOutput(const ReadHistoryOutput& request, EncodedReply<ConcurrentMemory>& reply) {
     Statement statement{database_, "SELECT content, truncated, observed_bytes FROM command_output WHERE command_id = ?1"};
 
     statement.bind(1, integer(request.id));
@@ -639,8 +621,7 @@ END;
     reply.send(result);
   }
 
-  template <Allocator Memory>
-  void HistoryStore<Memory>::stats(const HistoryStatsQuery& request, EncodedReply<Memory>& reply) {
+  void HistoryStore::stats(const HistoryStatsQuery& request, EncodedReply<ConcurrentMemory>& reply) {
     rows_.clear();
     auto filters = string(" WHERE 1=1");
 
@@ -695,8 +676,7 @@ END;
     reply.send(result);
   }
 
-  template <Allocator Memory>
-  void HistoryStore<Memory>::queryFuzzy(const QueryHistory& request, EncodedReply<Memory>& reply) {
+  void HistoryStore::queryFuzzy(const QueryHistory& request, EncodedReply<ConcurrentMemory>& reply) {
     // The newest candidates, newest first: SQLite stops at the limit through the started_at
     // index instead of every command being read and scored on each keystroke.
     auto sql = string("SELECT id, command FROM command WHERE id <= ?1");
@@ -709,12 +689,12 @@ END;
 
     statement.bind(1, integer(request.snapshot_id));
     bindFilters(statement, request);
-    Vector<RankedEntry, Memory> ranked{AllocatorRef<RankedEntry, Memory>{memory_}};
+    Vector<RankedEntry, ConcurrentMemory> ranked{AllocatorRef<RankedEntry, ConcurrentMemory>{memory_}};
 
     ranked.reserve(maximum_fuzzy_candidates);
-    HashSet seen{0, std::hash<std::uint64_t>{}, std::equal_to<std::uint64_t>{}, AllocatorRef<std::uint64_t, Memory>{memory_}};
+    HashSet seen{0, std::hash<std::uint64_t>{}, std::equal_to<std::uint64_t>{}, AllocatorRef<std::uint64_t, ConcurrentMemory>{memory_}};
 
-    Vector<FuzzyCandidate, Memory> candidates{AllocatorRef<FuzzyCandidate, Memory>{memory_}};
+    Vector<FuzzyCandidate, ConcurrentMemory> candidates{AllocatorRef<FuzzyCandidate, ConcurrentMemory>{memory_}};
 
     candidates.reserve(maximum_fuzzy_candidates);
     while (statement.next()) {
@@ -767,13 +747,11 @@ END;
     reply.send(HistoryResults{.request_id = request.request_id, .snapshot_id = request.snapshot_id, .has_more = start + rows_.entries().size() < ranked.size(), .entries = rows_.entries()});
   }
 
-  template <Allocator Memory>
-  String<Memory> HistoryStore<Memory>::string(std::string_view value) const {
-    return String<Memory>{value, AllocatorRef<char, Memory>{memory_}};
+  String<ConcurrentMemory> HistoryStore::string(std::string_view value) const {
+    return String<ConcurrentMemory>{value, AllocatorRef<char, ConcurrentMemory>{memory_}};
   }
 
-  template <Allocator Memory>
-  std::int64_t HistoryStore<Memory>::integer(std::uint64_t value) {
+  std::int64_t HistoryStore::integer(std::uint64_t value) {
     if (value > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())) {
       throw RequestError{FailureCode::invalid_request, "History identity exceeds the database integer range"};
     }
@@ -781,15 +759,13 @@ END;
     return static_cast<std::int64_t>(value);
   }
 
-  template <Allocator Memory>
-  void HistoryStore<Memory>::checkRow(Statement& statement) {
+  void HistoryStore::checkRow(Statement& statement) {
     if (!statement.next()) {
       throw RequestError{FailureCode::internal, "Expected history row is absent"};
     }
   }
 
-  template <Allocator Memory>
-  bool HistoryStore<Memory>::useIndex(std::string_view query) const noexcept {
+  bool HistoryStore::useIndex(std::string_view query) const noexcept {
     std::size_t characters = 0;
 
     for (const unsigned char byte : query) {
@@ -799,15 +775,13 @@ END;
     return indexed_ && characters >= 3;
   }
 
-  template <Allocator Memory>
-  void HistoryStore<Memory>::appendMatch(String<Memory>& sql, std::string_view query) const {
+  void HistoryStore::appendMatch(String<ConcurrentMemory>& sql, std::string_view query) const {
     if (!query.empty()) {
       sql += useIndex(query) ? " AND id IN (SELECT rowid FROM command_fts WHERE command_fts MATCH ?3)" : " AND instr(lower(command), lower(?3)) > 0";
     }
   }
 
-  template <Allocator Memory>
-  void HistoryStore<Memory>::bindMatch(Statement& statement, std::string_view query) const {
+  void HistoryStore::bindMatch(Statement& statement, std::string_view query) const {
     if (query.empty()) {
       return;
     }
@@ -830,8 +804,7 @@ END;
     statement.bind(3, std::string_view{quoted});
   }
 
-  template <Allocator Memory>
-  void HistoryStore<Memory>::appendScope(String<Memory>& sql, HistoryScope scope) {
+  void HistoryStore::appendScope(String<ConcurrentMemory>& sql, HistoryScope scope) {
     switch (scope) {
     case HistoryScope::global:
       break;
@@ -847,8 +820,7 @@ END;
     }
   }
 
-  template <Allocator Memory>
-  void HistoryStore<Memory>::bindScope(Statement& statement, HistoryScope scope, const HistoryScopeValue& value) {
+  void HistoryStore::bindScope(Statement& statement, HistoryScope scope, const HistoryScopeValue& value) {
     if (scope == HistoryScope::pane) {
       statement.bind(6, integer(std::get<std::uint64_t>(value)));
     } else if (scope != HistoryScope::global) {
@@ -856,8 +828,7 @@ END;
     }
   }
 
-  template <Allocator Memory>
-  void HistoryStore<Memory>::appendFilters(String<Memory>& sql, const QueryHistory& request) {
+  void HistoryStore::appendFilters(String<ConcurrentMemory>& sql, const QueryHistory& request) {
     if (request.failed_only) {
       sql += " AND exit_code IS NOT NULL AND exit_code <> 0";
     }
@@ -869,15 +840,12 @@ END;
     appendScope(sql, request.scope);
   }
 
-  template <Allocator Memory>
-  void HistoryStore<Memory>::bindFilters(Statement& statement, const QueryHistory& request) {
+  void HistoryStore::bindFilters(Statement& statement, const QueryHistory& request) {
     if (request.author != HistoryAuthorFilter::all) {
       statement.bind(5, static_cast<std::int64_t>(request.author == HistoryAuthorFilter::agent));
     }
 
     bindScope(statement, request.scope, request.scope_value);
   }
-
-  template class HistoryStore<ConcurrentMemory>;
 
 }

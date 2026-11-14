@@ -61,19 +61,13 @@ export {
 
     // Launches the sibling runtime where none listens and waits up to ten seconds
     // for its socket.
-    template <Allocator Memory>
     RuntimeStart startRuntime(Memory& memory, const ServerOptions& options, const RuntimePaths<Memory>& paths);
-    extern template RuntimeStart startRuntime<Memory>(Memory& memory, const ServerOptions& options, const RuntimePaths<Memory>& paths);
 
     // `telar server` runs the runtime in this process: the runtime executable installed
     // beside this one replaces it with the same arguments, so signals and exit status are its own.
-    template <Allocator Memory>
     [[noreturn]] void execRuntime(Memory& memory, std::span<char* const> arguments);
-    extern template void execRuntime<Memory>(Memory& memory, std::span<char* const> arguments);
 
-    template <Allocator Memory>
     void runServer(Memory& memory, std::span<char* const> arguments);
-    extern template void runServer<Memory>(Memory& memory, std::span<char* const> arguments);
 
   }
 }

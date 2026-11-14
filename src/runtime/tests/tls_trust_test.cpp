@@ -157,7 +157,7 @@ static void nativeTrustChains() {
   check(!nativeTrusted(issuer, expired, "origin.test"));
 }
 
-static bool trusted(TlsTrustStore<TlsTestMemory>& store, const CertificatePair& issuer) {
+static bool trusted(TlsTrustStore& store, const CertificatePair& issuer) {
   const auto leaf = issuer.mint("origin.test");
   TlsHandle<X509_STORE_CTX, X509_STORE_CTX_free> verification{X509_STORE_CTX_new()};
 
@@ -168,7 +168,7 @@ static bool trusted(TlsTrustStore<TlsTestMemory>& store, const CertificatePair& 
   return X509_verify_cert(verification.get()) == 1;
 }
 
-void testTlsTrust(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory>& library) {
+void testTlsTrust(TlsTestMemory& memory, const TlsLibrary& library) {
   TlsTrustStore store{memory, library};
 
   check(store.count() == 0);

@@ -99,7 +99,7 @@ private:
   std::string encoded_;
 };
 
-static void process(PaneMedia<ConcurrentMemory>& media, std::string_view bytes) {
+static void process(PaneMedia& media, std::string_view bytes) {
   media.output(inputBytes(bytes));
   check(media.seal());
   check(!media.process());

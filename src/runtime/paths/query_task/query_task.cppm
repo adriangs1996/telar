@@ -117,16 +117,15 @@ export {
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory>
     class PathIndexBuilder {
     public:
       // Builds into the storage it is given; the directories it tracks view it, region `a`.
-      explicit PathIndexBuilder(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<PathIndexStorage<Memory>&, tbc::lt::a> storage);
+      explicit PathIndexBuilder(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<PathIndexStorage<ConcurrentMemory>&, tbc::lt::a> storage);
 
       void build(const char* root) noexcept;
 
     private:
-      using Directories = std::unordered_set<std::string_view, std::hash<std::string_view>, std::equal_to<std::string_view>, AllocatorRef<std::string_view, Memory>>;
+      using Directories = std::unordered_set<std::string_view, std::hash<std::string_view>, std::equal_to<std::string_view>, AllocatorRef<std::string_view, ConcurrentMemory>>;
 
       static bool acceptable(std::string_view relative) noexcept;
 
@@ -142,11 +141,9 @@ export {
 
       void list(int directory, std::string_view prefix);
 
-      tbc::view<Memory&, tbc::lt::a> memory_;
-      tbc::view<PathIndexStorage<Memory>&, tbc::lt::a> storage_;
+      tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
+      tbc::view<PathIndexStorage<ConcurrentMemory>&, tbc::lt::a> storage_;
     };
-
-    extern template class PathIndexBuilder<ConcurrentMemory>;
 
   }
 }
@@ -155,10 +152,9 @@ export {
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory>
     class PathIndex {
     public:
-      explicit PathIndex(Memory& memory);
+      explicit PathIndex(ConcurrentMemory& memory);
 
       void stop() noexcept;
 
@@ -261,14 +257,12 @@ export {
 
       bool better(const Candidate& left, const Candidate& right, bool browse) const noexcept;
 
-      String<Memory> root_;
-      PathIndexStorage<Memory> storage_;
+      String<ConcurrentMemory> root_;
+      PathIndexStorage<ConcurrentMemory> storage_;
       // Builds into storage_.
-      tbc::view<PathIndexBuilder<Memory>, tbc::lt::self> builder_;
-      FuzzyMatch<Memory> matcher_;
+      tbc::view<PathIndexBuilder, tbc::lt::self> builder_;
+      FuzzyMatch<ConcurrentMemory> matcher_;
     };
-
-    extern template class PathIndex<ConcurrentMemory>;
 
   }
 }
@@ -301,7 +295,7 @@ export {
     };
 
     // Kept whole: path_service_test instantiates it with its own GatedPathMemory and GatedPathIndex.
-    template <Allocator Memory, typename Index = PathIndex<Memory>>
+    template <Allocator Memory, typename Index = PathIndex>
       requires PathSearchIndex<Index, Memory>
     class TBC_HOT_PATH PathQueryTask {
     public:

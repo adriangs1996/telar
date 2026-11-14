@@ -33,7 +33,6 @@ export {
   namespace telar::runtime::cli::hooks {
 
     // The hook reads every agent event through this class.
-    template <Allocator Memory>
     class Object {
     public:
       explicit Object(Memory& memory, JsonValue value, bool reject_duplicates = false);
@@ -86,11 +85,6 @@ export {
       bool reject_duplicates_;
     };
 
-    template <Allocator Memory>
-    Object(Memory& memory, JsonValue value, bool reject_duplicates = false) -> Object<Memory>;
-
-    extern template class Object<Memory>;
-
   }
 }
 
@@ -98,13 +92,9 @@ export {
 export {
   namespace telar::runtime::cli::hooks {
 
-    template <Allocator Memory>
     void validateUnicodeEscapes(Memory& memory, std::string_view input);
-    extern template void validateUnicodeEscapes<Memory>(Memory& memory, std::string_view input);
 
-    template <Allocator Memory>
     void validateDynamicValue(Memory& memory, JsonValue value);
-    extern template void validateDynamicValue<Memory>(Memory& memory, JsonValue value);
 
   }
 }
@@ -114,13 +104,12 @@ export {
   namespace telar::runtime::cli::hooks {
 
     // The hook reads every agent event through this class.
-    template <Allocator Memory>
     class Payload {
     public:
       explicit Payload(Memory& memory, AgentProvider provider, JsonValue input);
 
       // Its tools view its own fields, so it stays where it is built.
-      explicit Payload(Memory& memory, AgentProvider provider, Object<Memory> input);
+      explicit Payload(Memory& memory, AgentProvider provider, Object input);
 
       Payload(const Payload&) = delete;
       Payload& operator=(const Payload&) = delete;
@@ -134,24 +123,16 @@ export {
 
       Memory& memory;
       AgentProvider provider;
-      Object<Memory> fields;
-      tbc::view<Object<Memory>, tbc::lt::self> tools;
+      Object fields;
+      tbc::view<Object, tbc::lt::self> tools;
       std::size_t running_subagents = 0;
 
     private:
       void strictBoolean(std::string_view name);
-      static JsonValue toolObject(const Object<Memory>& fields);
+      static JsonValue toolObject(const Object& fields);
 
       std::optional<String<Memory>> workspace_;
     };
-
-    template <Allocator Memory>
-    Payload(Memory& memory, AgentProvider provider, JsonValue input) -> Payload<Memory>;
-
-    template <Allocator Memory>
-    Payload(Memory& memory, AgentProvider provider, Object<Memory> input) -> Payload<Memory>;
-
-    extern template class Payload<Memory>;
 
   }
 }
@@ -181,9 +162,7 @@ export {
 export {
   namespace telar::runtime::cli::hooks {
 
-    template <Allocator Memory>
-    std::optional<ReportAgentCommand> commandReport(Payload<Memory>& input);
-    extern template std::optional<ReportAgentCommand> commandReport<Memory>(Payload<Memory>& input);
+    std::optional<ReportAgentCommand> commandReport(Payload& input);
 
   }
 }
@@ -192,13 +171,9 @@ export {
 export {
   namespace telar::runtime::cli::hooks {
 
-    template <Allocator Memory>
-    void toolEvent(FixedText<96>& output, Payload<Memory>& input);
-    extern template void toolEvent<Memory>(FixedText<96>& output, Payload<Memory>& input);
+    void toolEvent(FixedText<96>& output, Payload& input);
 
-    template <Allocator Memory>
-    bool questionEvent(FixedText<96>& output, Payload<Memory>& input);
-    extern template bool questionEvent<Memory>(FixedText<96>& output, Payload<Memory>& input);
+    bool questionEvent(FixedText<96>& output, Payload& input);
 
     void backgroundEvent(FixedText<96>& output, std::size_t count);
 

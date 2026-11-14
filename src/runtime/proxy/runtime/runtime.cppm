@@ -99,10 +99,10 @@ export {
   namespace telar::runtime {
 
     // Generic over the caller's clock.
-    template <ConcurrentAllocator Memory, CaptureClock Clock = CaptureWallClock>
+    template <CaptureClock Clock = CaptureWallClock>
     class TBC_HOT_PATH Http1Capture {
     public:
-      inline explicit Http1Capture(Memory& memory, CaptureProducer<Memory>* producer, CaptureStart context) noexcept
+      inline explicit Http1Capture(ConcurrentMemory& memory, CaptureProducer* producer, CaptureStart context) noexcept
           : producer_(producer),
             context_(context),
             exchange_(memory) {}
@@ -157,7 +157,7 @@ export {
       }
 
     private:
-      using Half = typename CaptureProducer<Memory>::Half;
+      using Half = CaptureProducer::Half;
 
       inline Half& select(CaptureSide side) noexcept {
         return side == CaptureSide::request ? exchange_.request : exchange_.response;
@@ -171,13 +171,10 @@ export {
         }
       }
 
-      CaptureProducer<Memory>* producer_;
+      CaptureProducer* producer_;
       CaptureStart context_;
-      CapturedExchange<Memory> exchange_;
+      CapturedExchange exchange_;
     };
-
-    template <ConcurrentAllocator Memory>
-    Http1Capture(Memory& memory, CaptureProducer<Memory>* producer, CaptureStart context) -> Http1Capture<Memory>;
 
   }
 }
@@ -269,12 +266,12 @@ export {
     // An HTTP/1 exchange on a connection; without an HttpControl in its context, its relays forward
     // each message as it comes.
     // Generic over the caller's capture policy, and called for every read the relay makes.
-    template <ConcurrentAllocator Memory, Http1CapturePolicy Capture = IgnoreHttp1Capture>
+    template <Http1CapturePolicy Capture = IgnoreHttp1Capture>
     class TBC_HOT_PATH Http1Connection {
-      using Relay = Http1InterceptedRelay<Memory>;
+      using Relay = Http1InterceptedRelay;
 
     public:
-      inline Http1Connection(Memory& memory, ProxyCounters& counters, Capture capture = {}, HttpRelayContext context = {})
+      inline Http1Connection(ConcurrentMemory& memory, ProxyCounters& counters, Capture capture = {}, HttpRelayContext context = {})
           : counters_(counters),
             capture_(std::move(capture)),
             request_(memory, context, false),
@@ -572,15 +569,12 @@ export {
 export {
   namespace telar::runtime {
 
-    template <ConcurrentAllocator Memory>
     struct ConnectionObservation {
       ProxyCounters& counters;
-      CaptureProducer<Memory>* captures;
+      CaptureProducer* captures;
       std::uint64_t identity;
       traffic::FlowControl* flows = nullptr;
     };
-
-    extern template struct ConnectionObservation<ConcurrentMemory>;
 
   }
 }
@@ -891,10 +885,10 @@ export {
   namespace telar::runtime {
 
     // Generic over the caller's clock.
-    template <ConcurrentAllocator Memory, CaptureClock Clock = CaptureWallClock>
+    template <CaptureClock Clock = CaptureWallClock>
     class TBC_HOT_PATH Http2Capture {
     public:
-      inline explicit Http2Capture(CaptureProducer<Memory>* producer, ProxyCounters& counters, CaptureStart context) noexcept
+      inline explicit Http2Capture(CaptureProducer* producer, ProxyCounters& counters, CaptureStart context) noexcept
           : request_(producer, counters, context, CaptureSide::request),
             response_(producer, counters, context, CaptureSide::response) {}
 
@@ -931,16 +925,13 @@ export {
       }
 
     private:
-      inline Http2CaptureStreams<Memory, Clock>& select(Http2Direction direction) noexcept {
+      inline Http2CaptureStreams<Clock>& select(Http2Direction direction) noexcept {
         return direction == Http2Direction::request ? request_ : response_;
       }
 
-      Http2CaptureStreams<Memory, Clock> request_;
-      Http2CaptureStreams<Memory, Clock> response_;
+      Http2CaptureStreams<Clock> request_;
+      Http2CaptureStreams<Clock> response_;
     };
-
-    template <ConcurrentAllocator Memory>
-    Http2Capture(CaptureProducer<Memory>* producer, ProxyCounters& counters, CaptureStart context) -> Http2Capture<Memory>;
 
   }
 }
@@ -2217,12 +2208,11 @@ export {
 export {
   namespace telar::runtime {
 
-    template <ConcurrentAllocator Memory>
     class ApplicationRelay {
     public:
       // The relays it builds keep the allocator and the observation it was given, region `a`, which
       // outlives the relay. The relay copies the host, and is lent the flow on each advance.
-      explicit ApplicationRelay(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<ConnectionObservation<Memory>, tbc::lt::a> observation, std::string_view hostname);
+      explicit ApplicationRelay(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<ConnectionObservation, tbc::lt::a> observation, std::string_view hostname);
 
       void select(HttpProtocol protocol, bool unnegotiated) noexcept;
 
@@ -2295,9 +2285,9 @@ export {
       [[nodiscard]] auto interest(TlsSide side) const noexcept -> SocketInterest;
 
     private:
-      using Http1 = Http1Connection<Memory, Http1Capture<Memory>>;
-      using Http2 = Http2Connection<Memory, Http2Capture<Memory>>;
-      using Http2Endpoint = Http2EndpointConnection<Memory, Http2Capture<Memory>>;
+      using Http1 = Http1Connection<Http1Capture<>>;
+      using Http2 = Http2Connection<ConcurrentMemory, Http2Capture<>>;
+      using Http2Endpoint = Http2EndpointConnection<ConcurrentMemory, Http2Capture<>>;
 
       void identify() noexcept;
 
@@ -2359,12 +2349,12 @@ export {
           return duplex_.advance(child, origin, readiness);
         }
 
-        tbc::view<Memory&, tbc::lt::a> memory_;
-        tbc::view<ConnectionObservation<Memory>, tbc::lt::a> observation_;
+        tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
+        tbc::view<ConnectionObservation, tbc::lt::a> observation_;
         FixedText<ProxyHostname::maximum_bytes> hostname_;
-        tbc::view<Owned<Http1, Memory>, tbc::lt::a> http1_;
-        tbc::view<Owned<Http2, Memory>, tbc::lt::a> http2_;
-        tbc::view<Owned<Http2Endpoint, Memory>, tbc::lt::a> http2_endpoint_;
+        tbc::view<Owned<Http1, ConcurrentMemory>, tbc::lt::a> http1_;
+        tbc::view<Owned<Http2, ConcurrentMemory>, tbc::lt::a> http2_;
+        tbc::view<Owned<Http2Endpoint, ConcurrentMemory>, tbc::lt::a> http2_endpoint_;
         DuplexRelay<> duplex_;
         bool failed_ = false;
       };
@@ -2376,7 +2366,6 @@ export {
       bool selected_ = false;
     };
 
-    extern template class ApplicationRelay<ConcurrentMemory>;
   }
 }
 
@@ -2384,11 +2373,10 @@ export {
 export {
   namespace telar::runtime {
 
-    template <ConcurrentAllocator Memory>
     class PlainTunnel {
     public:
       // The tunnel keeps the allocator and the observation, region `a`, and copies the host.
-      explicit PlainTunnel(tbc::view<Memory&, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname, tbc::view<ConnectionObservation<Memory>, tbc::lt::a> observation);
+      explicit PlainTunnel(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname, tbc::view<ConnectionObservation, tbc::lt::a> observation);
 
       // `flow` is the connection's flow, or null when no hook watches it.
       bool advance(TunnelReadiness readiness, FlowState* flow) noexcept;
@@ -2409,10 +2397,8 @@ export {
 
     private:
       TunnelSockets sockets_;
-      tbc::view<ApplicationRelay<Memory>, tbc::lt::a> application_;
+      tbc::view<ApplicationRelay, tbc::lt::a> application_;
     };
-
-    extern template class PlainTunnel<ConcurrentMemory>;
 
   }
 }
@@ -2421,13 +2407,12 @@ export {
 export {
   namespace telar::runtime {
 
-    template <ConcurrentAllocator Memory>
     class TlsTunnel {
     public:
       // The tunnel keeps the allocator, the interception and the observation, region `a`, and its session
       // and relay copy the host.
       // `offer` is the child's ClientHello when the handshake already read it, or null.
-      explicit TlsTunnel(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<const TlsInterception<Memory>&, tbc::lt::a> interception, TunnelSockets sockets, std::string_view hostname, tbc::view<Owned<AlpnOffer, Memory>, tbc::lt::a> offer, tbc::view<ConnectionObservation<Memory>, tbc::lt::a> observation);
+      explicit TlsTunnel(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<const TlsInterception&, tbc::lt::a> interception, TunnelSockets sockets, std::string_view hostname, tbc::view<Owned<AlpnOffer, ConcurrentMemory>, tbc::lt::a> offer, tbc::view<ConnectionObservation, tbc::lt::a> observation);
 
       // `flow` is the connection's flow, or null when no hook watches it.
       auto advance(TunnelReadiness readiness, FlowState* flow) noexcept -> bool;
@@ -2451,13 +2436,11 @@ export {
     private:
       tbc::view<std::string_view, tbc::lt::static_storage> recordFailure() noexcept;
 
-      tbc::view<ConnectionObservation<Memory>, tbc::lt::a> observation_;
-      tbc::view<Owned<TlsSession<Memory>, Memory>, tbc::lt::a> session_;
-      tbc::view<ApplicationRelay<Memory>, tbc::lt::a> application_;
+      tbc::view<ConnectionObservation, tbc::lt::a> observation_;
+      tbc::view<Owned<TlsSession, ConcurrentMemory>, tbc::lt::a> session_;
+      tbc::view<ApplicationRelay, tbc::lt::a> application_;
       bool failed_ = false;
     };
-
-    extern template class TlsTunnel<ConcurrentMemory>;
 
   }
 }
@@ -2466,15 +2449,14 @@ export {
 export {
   namespace telar::runtime {
 
-    template <ConcurrentAllocator Memory>
     class ConnectionTransport {
     public:
       // The transport keeps the allocator, and the interception and observation it opens with, region `a`.
-      explicit ConnectionTransport(tbc::view<Memory&, tbc::lt::a> memory) noexcept;
+      explicit ConnectionTransport(tbc::view<ConcurrentMemory&, tbc::lt::a> memory) noexcept;
 
       // Generic over the caller's resolver.
       template <HostnameResolver Resolver>
-      TBC_HOT_PATH void open(tbc::view<const TlsInterception<Memory>&, tbc::lt::a> interception, tbc::view<ConnectHandshake<Memory, Resolver>&, tbc::lt::a> handshake, tbc::view<ConnectionObservation<Memory>, tbc::lt::a> observation) {
+      TBC_HOT_PATH void open(tbc::view<const TlsInterception&, tbc::lt::a> interception, tbc::view<ConnectHandshake<ConcurrentMemory, Resolver>&, tbc::lt::a> handshake, tbc::view<ConnectionObservation, tbc::lt::a> observation) {
         if (observation.flows) {
           flow_ = makeOwned<FlowState>(memory_);
           flow_->open(observation.flows, observation.identity, handshake.childDescriptor(), handshake.originDescriptor(), handshake.hostname());
@@ -2483,9 +2465,9 @@ export {
         const TunnelSockets sockets{handshake.childDescriptor(), handshake.originDescriptor()};
 
         if (handshake.intercept()) {
-          tls_ = makeOwned<TlsTunnel<Memory>>(memory_, memory_, interception, sockets, handshake.hostname(), handshake.takeOffer(), observation);
+          tls_ = makeOwned<TlsTunnel>(memory_, memory_, interception, sockets, handshake.hostname(), handshake.takeOffer(), observation);
         } else {
-          plain_ = makeOwned<PlainTunnel<Memory>>(memory_, memory_, sockets, handshake.hostname(), observation);
+          plain_ = makeOwned<PlainTunnel>(memory_, memory_, sockets, handshake.hostname(), observation);
           observation.counters.record(ProxyCounter::passthrough_connection);
         }
       }
@@ -2515,13 +2497,11 @@ export {
       void error(tbc::view<std::string_view, tbc::lt::static_storage> value) noexcept;
 
     private:
-      tbc::view<Memory&, tbc::lt::a> memory_;
-      tbc::view<Owned<FlowState, Memory>, tbc::lt::a> flow_;
-      tbc::view<Owned<PlainTunnel<Memory>, Memory>, tbc::lt::a> plain_;
-      tbc::view<Owned<TlsTunnel<Memory>, Memory>, tbc::lt::a> tls_;
+      tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
+      tbc::view<Owned<FlowState, ConcurrentMemory>, tbc::lt::a> flow_;
+      tbc::view<Owned<PlainTunnel, ConcurrentMemory>, tbc::lt::a> plain_;
+      tbc::view<Owned<TlsTunnel, ConcurrentMemory>, tbc::lt::a> tls_;
     };
-
-    extern template class ConnectionTransport<ConcurrentMemory>;
 
   }
 }
@@ -2530,25 +2510,22 @@ export {
 export {
   namespace telar::runtime {
 
-    template <ConcurrentAllocator Memory>
     // What every connection reports to: the counters and the capture producer, which are shared, so an
     // observation it hands out stays valid whatever is done through it.
     class TBC_SHARED ProxyObservations {
     public:
-      explicit ProxyObservations(Memory& memory, ProxyCaptureLimits limits, traffic::FlowControl* flows = nullptr);
+      explicit ProxyObservations(ConcurrentMemory& memory, ProxyCaptureLimits limits, traffic::FlowControl* flows = nullptr);
 
-      ConnectionObservation<Memory> connection() noexcept;
+      ConnectionObservation connection() noexcept;
 
       ProxyCounters counters;
-      CaptureProducer<Memory> captures;
+      CaptureProducer captures;
 
     private:
       bool capture_enabled_;
       traffic::FlowControl* flows_;
       std::uint64_t next_connection_ = 1;
     };
-
-    extern template class ProxyObservations<ConcurrentMemory>;
 
   }
 }
@@ -2558,27 +2535,27 @@ export {
   namespace telar::runtime {
 
     // Generic over the caller's resolver.
-    template <ConcurrentAllocator Memory, HostnameResolver Resolver>
+    template <HostnameResolver Resolver>
     class TBC_HOT_PATH ProxyConnection {
     public:
       using Time = ProxyConnectionPolicy::Time;
 
       // A connection keeps the allocator, the options, the secret and the counters of the service that
       // accepted it, and the interception and observations it advances through: region `a`.
-      inline explicit ProxyConnection(tbc::view<Memory&, tbc::lt::a> memory, FileDescriptor child, tbc::view<const ProxyOptions<Memory>&, tbc::lt::a> options, tbc::view<const ProxySecret&, tbc::lt::a> secret, tbc::view<ProxyCounters&, tbc::lt::a> counters)
+      inline explicit ProxyConnection(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, FileDescriptor child, tbc::view<const ProxyOptions<ConcurrentMemory>&, tbc::lt::a> options, tbc::view<const ProxySecret&, tbc::lt::a> secret, tbc::view<ProxyCounters&, tbc::lt::a> counters)
           : counters_(counters),
             handshake_(memory, std::move(child), options, secret, counters),
             transport_(memory),
             policy_(ProxyConnectionPolicy::Clock::now()) {}
 
-      inline explicit ProxyConnection(tbc::view<Memory&, tbc::lt::a> memory, redirect::Connection connection, tbc::view<const ProxyOptions<Memory>&, tbc::lt::a> options, tbc::view<const ProxySecret&, tbc::lt::a> secret, tbc::view<ProxyCounters&, tbc::lt::a> counters)
+      inline explicit ProxyConnection(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, redirect::Connection connection, tbc::view<const ProxyOptions<ConcurrentMemory>&, tbc::lt::a> options, tbc::view<const ProxySecret&, tbc::lt::a> secret, tbc::view<ProxyCounters&, tbc::lt::a> counters)
           : counters_(counters),
             redirect_lifetime_(std::move(connection.lifetime)),
             handshake_(memory, std::move(connection), options, secret, counters),
             transport_(memory),
             policy_(ProxyConnectionPolicy::Clock::now()) {}
 
-      inline void advance(tbc::view<const TlsInterception<Memory>&, tbc::lt::a> interception, tbc::view<ProxyObservations<Memory>&, tbc::lt::a> observations, TunnelReadiness readiness, Time now) noexcept {
+      inline void advance(tbc::view<const TlsInterception&, tbc::lt::a> interception, tbc::view<ProxyObservations&, tbc::lt::a> observations, TunnelReadiness readiness, Time now) noexcept {
         if (closed_) {
           return;
         }
@@ -2704,7 +2681,7 @@ export {
       }
 
     private:
-      using Handshake = ConnectHandshake<Memory, Resolver>;
+      using Handshake = ConnectHandshake<ConcurrentMemory, Resolver>;
       using Phase = ProxyConnectionPolicy::Phase;
 
       inline void enter(Phase phase, Time now) noexcept {
@@ -2717,9 +2694,9 @@ export {
       tbc::view<ProxyCounters&, tbc::lt::a> counters_;
       FileDescriptor redirect_lifetime_;
       tbc::view<Handshake, tbc::lt::a> handshake_;
-      tbc::view<ConnectionTransport<Memory>, tbc::lt::a> transport_;
+      tbc::view<ConnectionTransport, tbc::lt::a> transport_;
       ProxyConnectionPolicy policy_;
-      tbc::view<std::optional<ConnectionObservation<Memory>>, tbc::lt::a> observation_;
+      tbc::view<std::optional<ConnectionObservation>, tbc::lt::a> observation_;
       bool closed_ = false;
     };
 
@@ -2950,14 +2927,14 @@ export {
 export {
   namespace telar::runtime {
 
-    template <ConcurrentAllocator Memory, EventLoop Poller, HostnameResolver Resolver>
+    template <EventLoop Poller, HostnameResolver Resolver>
     // The proxy's worker thread. It keeps `this`, and the connections it accepts keep its options, its
     // secret and its observations, so it stays where it was built; other threads only stop it and read
     // atomics, which is audited here.
     // Generic over the caller's event loop and resolver.
     class TBC_SHARED TBC_HOT_PATH ProxyService {
     public:
-      inline explicit ProxyService(Memory& memory, const ProxyOptions<Memory>& options, const ProxySecret& secret, const TlsInterception<Memory>& interception, ProxyListener listener, traffic::FlowControl* flows = nullptr)
+      inline explicit ProxyService(ConcurrentMemory& memory, const ProxyOptions<ConcurrentMemory>& options, const ProxySecret& secret, const TlsInterception& interception, ProxyListener listener, traffic::FlowControl* flows = nullptr)
           : memory_(memory),
             options_(options),
             secret_(secret),
@@ -2997,11 +2974,11 @@ export {
         return observations_.counters;
       }
 
-      inline CaptureProducer<Memory>& captures() noexcept {
+      inline CaptureProducer& captures() noexcept {
         return observations_.captures;
       }
 
-      inline const CaptureProducer<Memory>& captures() const noexcept {
+      inline const CaptureProducer& captures() const noexcept {
         return observations_.captures;
       }
 
@@ -3034,14 +3011,14 @@ export {
     private:
       using Policy = ProxyConnectionPolicy;
       using Time = Policy::Time;
-      using Connection = ProxyConnection<Memory, Resolver>;
+      using Connection = ProxyConnection<Resolver>;
 
       struct Slot {
-        inline explicit Slot(Owned<Connection, Memory> connection, std::uint64_t generation) noexcept
+        inline explicit Slot(Owned<Connection, ConcurrentMemory> connection, std::uint64_t generation) noexcept
             : connection(std::move(connection)),
               child_generation(generation) {}
 
-        Owned<Connection, Memory> connection;
+        Owned<Connection, ConcurrentMemory> connection;
         SocketWatch child;
         SocketWatch origin;
         std::uint64_t child_generation;
@@ -3212,7 +3189,7 @@ export {
         }
       }
 
-      inline void keep(Owned<Connection, Memory> connection, std::size_t index, Time now) {
+      inline void keep(Owned<Connection, ConcurrentMemory> connection, std::size_t index, Time now) {
         slots_[index].emplace(std::move(connection), nextGeneration());
         occupied_.insert(index);
         active_.fetch_add(1, std::memory_order_relaxed);
@@ -3345,12 +3322,12 @@ export {
       static constexpr auto descriptor_backoff = std::chrono::milliseconds{100};
       static_assert(Policy::capacity == 1 << slot_bits);
 
-      Memory& memory_;
-      const ProxyOptions<Memory>& options_;
+      ConcurrentMemory& memory_;
+      const ProxyOptions<ConcurrentMemory>& options_;
       const ProxySecret& secret_;
-      const TlsInterception<Memory>& interception_;
+      const TlsInterception& interception_;
       ProxyListener listener_;
-      ProxyObservations<Memory> observations_;
+      ProxyObservations observations_;
       Poller poller_;
       CompletionSignal stop_signal_;
       CompletionSignal resolution_signal_;
@@ -3379,19 +3356,19 @@ export {
   namespace telar::runtime {
 
     // Generic over the caller's event loop, resolver and tap.
-    template <ConcurrentAllocator Memory, EventLoop Poller, HostnameResolver Resolver, typename Tap = IgnoreCaptureTap>
-      requires CaptureTap<Tap, Memory>
+    template <EventLoop Poller, HostnameResolver Resolver, typename Tap = IgnoreCaptureTap>
+      requires CaptureTap<Tap>
     class TBC_HOT_PATH ProxyRuntime {
     public:
-      inline explicit ProxyRuntime(Memory& memory, const ProxyOptions<Memory>& options, std::string_view endpoint, bool inherit_legacy)
+      inline explicit ProxyRuntime(ConcurrentMemory& memory, const ProxyOptions<ConcurrentMemory>& options, std::string_view endpoint, bool inherit_legacy)
         requires std::same_as<Tap, IgnoreCaptureTap>
           : ProxyRuntime(memory, options, endpoint, inherit_legacy, ignored_tap_) {}
 
-      inline explicit ProxyRuntime(Memory& memory, const ProxyOptions<Memory>& options, std::string_view endpoint, bool inherit_legacy, Tap& tap)
+      inline explicit ProxyRuntime(ConcurrentMemory& memory, const ProxyOptions<ConcurrentMemory>& options, std::string_view endpoint, bool inherit_legacy, Tap& tap)
           : memory_(memory),
             authority_directory_(directoryPath(memory, options)),
-            certificate_path_(AllocatorRef<char, Memory>{memory}),
-            bundle_path_(AllocatorRef<char, Memory>{memory}) {
+            certificate_path_(AllocatorRef<char, ConcurrentMemory>{memory}),
+            bundle_path_(AllocatorRef<char, ConcurrentMemory>{memory}) {
         TELAR_TRACE("proxy.startRuntime");
         const auto& path = authority_directory_;
         const proxy_trust::Paths trust_paths{memory, path};
@@ -3424,7 +3401,7 @@ export {
         }
 
         const auto authority_kind = system_trusted ? AuthorityKind::system_trust : AuthorityKind::private_local;
-        auto authority = std::allocate_shared<CertificateAuthority<Memory>>(AllocatorRef<CertificateAuthority<Memory>, Memory>{memory}, CertificateAuthority<Memory>::loadOrCreate(memory, *library_, directory.get(), authority_kind));
+        auto authority = std::allocate_shared<CertificateAuthority>(AllocatorRef<CertificateAuthority, ConcurrentMemory>{memory}, CertificateAuthority::loadOrCreate(memory, *library_, directory.get(), authority_kind));
 
         publishAuthority(*authority, directory.get());
         trust_.emplace(memory, *library_);
@@ -3455,14 +3432,14 @@ export {
                             ? ProxyScope::wildcard
                             : ProxyScope::exact;
         using Identity = ProxyClientConfiguration::Identity;
-        auto identity = std::allocate_shared<Identity>(AllocatorRef<Identity, Memory>{memory}, Identity{.status = status_, .secret = *secret_, .https_proxy = options.pane_https_proxy});
+        auto identity = std::allocate_shared<Identity>(AllocatorRef<Identity, ConcurrentMemory>{memory}, Identity{.status = status_, .secret = *secret_, .https_proxy = options.pane_https_proxy});
 
         identity->certificate.assign(certificate_path_);
         identity->bundle.assign(bundle_path_);
         client_ = std::move(identity);
         service_.emplace(memory, options, *secret_, *interception_, std::move(listener), flowControl(tap));
         if (options.transparent_redirect) {
-          String<Memory> redirect_path{endpoint, AllocatorRef<char, Memory>{memory}};
+          String<ConcurrentMemory> redirect_path{endpoint, AllocatorRef<char, ConcurrentMemory>{memory}};
 
           redirect_path += redirect::socket_suffix;
           redirect_.emplace(redirect_path, *service_);
@@ -3586,7 +3563,7 @@ export {
           prepared.commit();
         }
 
-        auto authority = std::allocate_shared<CertificateAuthority<Memory>>(AllocatorRef<CertificateAuthority<Memory>, Memory>{memory_}, CertificateAuthority<Memory>::loadOrCreate(memory_, *library_, directory.get(), kind));
+        auto authority = std::allocate_shared<CertificateAuthority>(AllocatorRef<CertificateAuthority, ConcurrentMemory>{memory_}, CertificateAuthority::loadOrCreate(memory_, *library_, directory.get(), kind));
 
         publishAuthority(*authority, directory.get());
         interception_->replace(std::move(authority));
@@ -3596,7 +3573,7 @@ export {
     private:
       static constexpr std::string_view active_certificate = "ca-active-cert.pem";
 
-      inline void publishAuthority(const CertificateAuthority<Memory>& authority, int directory) {
+      inline void publishAuthority(const CertificateAuthority& authority, int directory) {
         const PemDocument certificate{authority.certificate()};
         if (const auto error = writePrivateFile(directory, active_certificate, certificate.bytes(), PrivateFileMode::replace)) {
           throw SystemError{"Publish active TLS certificate", error};
@@ -3613,7 +3590,7 @@ export {
         return nullptr;
       }
 
-      inline static String<Memory> directoryPath(Memory& memory, const ProxyOptions<Memory>& options) {
+      inline static String<ConcurrentMemory> directoryPath(ConcurrentMemory& memory, const ProxyOptions<ConcurrentMemory>& options) {
         if (!options.authority_directory.empty()) {
           return options.authority_directory;
         }
@@ -3633,20 +3610,20 @@ export {
         }
       }
 
-      Memory& memory_;
-      String<Memory> authority_directory_;
-      String<Memory> certificate_path_;
-      String<Memory> bundle_path_;
+      ConcurrentMemory& memory_;
+      String<ConcurrentMemory> authority_directory_;
+      String<ConcurrentMemory> certificate_path_;
+      String<ConcurrentMemory> bundle_path_;
       ProxyStatus status_{};
-      std::optional<TlsLibrary<Memory>> library_;
-      std::optional<TlsTrustStore<Memory>> trust_;
-      std::optional<TlsContexts<Memory>> contexts_;
-      std::optional<TlsInterception<Memory>> interception_;
+      std::optional<TlsLibrary> library_;
+      std::optional<TlsTrustStore> trust_;
+      std::optional<TlsContexts> contexts_;
+      std::optional<TlsInterception> interception_;
       std::optional<ProxySecret> secret_;
       std::shared_ptr<const ProxyClientConfiguration::Identity> client_;
-      std::optional<ProxyService<Memory, Poller, Resolver>> service_;
-      std::optional<CapturePipeline<Memory, Tap>> captures_;
-      std::optional<redirect::Ingress<ProxyService<Memory, Poller, Resolver>>> redirect_;
+      std::optional<ProxyService<Poller, Resolver>> service_;
+      std::optional<CapturePipeline<Tap>> captures_;
+      std::optional<redirect::Ingress<ProxyService<Poller, Resolver>>> redirect_;
       inline static IgnoreCaptureTap ignored_tap_;
     };
 

@@ -96,17 +96,12 @@ export {
     // Repository preparation: bundles `options.from`, less what the other
     // machine's clone already holds, and has that machine's telar receive it
     // through `capture`.
-    template <Allocator Memory>
     PreparedRepository prepare(Memory& memory, const RepositoryOptions& options, std::string_view remote_program, RepositoryCapture& capture);
-    extern template PreparedRepository prepare<Memory>(Memory& memory, const RepositoryOptions& options, std::string_view remote_program, RepositoryCapture& capture);
 
     // Shared by `repository prepare` and `worktree create --machine`.
-    template <Allocator Memory>
     PreparedRepository prepare(Memory& memory, const RepositoryOptions& options, const machines::MachineProfile& profile);
 
-    template <Allocator Memory>
     int run(Memory& memory, const RepositoryOptions& options);
-    extern template int run<Memory>(Memory& memory, const RepositoryOptions& options);
 
   }
 }
@@ -115,9 +110,7 @@ export {
 export {
   namespace telar::runtime::cli::sessions {
 
-    template <Allocator Memory>
     int worktree(Memory& memory, const WorktreeOptions& options);
-    extern template int worktree<Memory>(Memory& memory, const WorktreeOptions& options);
 
   }
 }

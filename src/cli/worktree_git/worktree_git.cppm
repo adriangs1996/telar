@@ -48,7 +48,6 @@ export {
     inline constexpr std::size_t max_bundle_bytes = 256 * 1024 * 1024;
     inline constexpr std::chrono::seconds git_timeout{600};
 
-    template <Allocator Memory>
     class Git {
     public:
       Git(Memory& memory, std::string_view root);
@@ -67,11 +66,7 @@ export {
       HardenedGit<Memory> git_;
     };
 
-    extern template class Git<Memory>;
-
-    template <Allocator Memory>
-    void ready(Git<Memory>& git, std::string_view commit);
-    extern template void ready<Memory>(Git<Memory>& git, std::string_view commit);
+    void ready(Git& git, std::string_view commit);
 
   }
 }
@@ -166,7 +161,6 @@ export {
     // Catalog subscriptions also carry unrelated broadcasts. Keep them on a separate
     // connection from exchanges. The protocol is ControlSession's; Channel adds
     // the sessions commands' runtime start and their descriptions of failures.
-    template <Allocator Memory>
     class Channel {
     public:
       Channel(Memory& memory, std::optional<std::string_view> socket, bool start);
@@ -188,7 +182,7 @@ export {
       const char* socket() const;
 
       // The conversation itself, for commands shared with families that hold a bare session.
-      ControlSession<Memory>& control() noexcept;
+      ControlSession& control() noexcept;
 
     private:
       static ServerOptions socketOptions(std::optional<std::string_view> socket);
@@ -201,10 +195,8 @@ export {
 
       static constexpr unsigned reply_timeout_seconds = 30;
       RuntimePaths<Memory> paths_;
-      std::optional<ControlSession<Memory>> session_;
+      std::optional<ControlSession> session_;
     };
-
-    extern template class Channel<Memory>;
 
     void checkLocation(TabLocation actual, TabLocation expected);
 
@@ -217,9 +209,7 @@ export {
 export {
   namespace telar::runtime::cli::sessions {
 
-    template <Allocator Memory>
     int workspace(Memory& memory, const WorkspaceOptions& options);
-    extern template int workspace<Memory>(Memory& memory, const WorkspaceOptions& options);
 
   }
 }
@@ -241,7 +231,6 @@ export {
       ~WorktreeFilter() = default;
     };
 
-    template <Allocator Memory>
     class WorktreeGit {
     public:
       explicit WorktreeGit(Memory& memory);
@@ -272,8 +261,6 @@ export {
     private:
       Memory& memory_;
     };
-
-    extern template class WorktreeGit<Memory>;
 
   }
 }

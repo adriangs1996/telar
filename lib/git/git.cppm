@@ -60,7 +60,6 @@ export namespace telar::git {
     std::uint64_t bytes_hashed = 0;
   };
 
-  template <Allocator Memory>
   struct Status {
     explicit Status(Memory& memory);
 
@@ -87,8 +86,6 @@ export namespace telar::git {
 
     ReadWork work;
   };
-
-  extern template struct Status<Memory>;
 
 }
 
@@ -143,12 +140,11 @@ export namespace telar::git {
   //
   //   telar::SystemAllocator system;
   //   telar::MemoryAdapter memory{system};
-  //   telar::git::StatusReader<telar::Memory> reader{memory};
+  //   telar::git::StatusReader reader{memory};
   //   const auto &status = reader.read("/home/user/project");
   //   if (status.repository == telar::git::RepositoryState::ready && status.head == telar::git::HeadState::branch) {
   //     // status.branch, status.ahead, status.changes.unstaged_modified...
   //   }
-  template <Allocator Memory>
   class StatusReader {
   public:
     explicit StatusReader(Memory& memory, Limits limits = {});
@@ -158,9 +154,9 @@ export namespace telar::git {
 
     // Reads the repository that contains `directory`, an absolute path. Never
     // throws: failures and limits show as unknown parts of the status.
-    const Status<Memory>& read(std::string_view directory) noexcept;
+    const Status& read(std::string_view directory) noexcept;
 
-    const Status<Memory>& status() const noexcept;
+    const Status& status() const noexcept;
 
     // The remotes the repository's config names, from the last read().
     template <typename Visit>
@@ -244,7 +240,7 @@ export namespace telar::git {
 
     Memory& memory_;
     Limits limits_;
-    Status<Memory> status_;
+    Status status_;
     FileDescriptor worktree_;
     FileDescriptor gitdir_;
 
@@ -262,13 +258,13 @@ export namespace telar::git {
     bool packed_loaded_ = false;
     bool refs_current_ = false;
     ReadStatus packed_state_ = ReadStatus::missing;
-    ObjectDatabase<Memory> objects_;
-    CommitGraph<Memory> graph_;
-    ShallowCommits<Memory> shallow_;
-    DivergenceWalk<Memory> walk_;
-    Index<Memory> index_;
-    StagedComparison<Memory> staged_;
-    UnstagedComparison<Memory> unstaged_;
+    ObjectDatabase objects_;
+    CommitGraph graph_;
+    ShallowCommits shallow_;
+    DivergenceWalk walk_;
+    Index index_;
+    StagedComparison staged_;
+    UnstagedComparison unstaged_;
     bool divergence_current_ = false;
     ObjectId divergence_left_;
     ObjectId divergence_right_;
@@ -288,7 +284,5 @@ export namespace telar::git {
     String<Memory> configured_worktree_{AllocatorRef<char, Memory>{memory_}};
     Vector<ObjectId, Memory> parents_;
   };
-
-  extern template class StatusReader<Memory>;
 
 }

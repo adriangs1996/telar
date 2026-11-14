@@ -116,7 +116,7 @@ public:
   std::atomic<bool> released{false};
 };
 
-static void collect(RuntimeModel<ConcurrentMemory>& model, WorktreeDetectionService<ConcurrentMemory, GatedWorktreeDetector&>& service) {
+static void collect(RuntimeModel& model, WorktreeDetectionService<GatedWorktreeDetector&>& service) {
   pollfd completion{.fd = service.descriptor(), .events = POLLIN, .revents = 0};
 
   check(::poll(&completion, 1, 1000) == 1);
@@ -137,14 +137,14 @@ static void testDetectionLifecycle() {
   MemoryAdapter adapter{system};
   ConcurrentMemory& memory = adapter;
   RuntimeModel model{memory};
-  ClientStore<ConcurrentMemory> clients{memory};
+  ClientStore clients{memory};
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
   Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
 
-  model.panes.insert(1, makeOwned<Pane<ConcurrentMemory>>(memory, memory, 1, TabLocation{.workspace = {.id = 7}, .tab_id = 1}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits}));
+  model.panes.insert(1, makeOwned<Pane>(memory, memory, 1, TabLocation{.workspace = {.id = 7}, .tab_id = 1}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits}));
   auto& pane = *model.panes.find(1);
   GatedWorktreeDetector probe;
-  WorktreeDetectionService<ConcurrentMemory, GatedWorktreeDetector&> service{probe};
+  WorktreeDetectionService<GatedWorktreeDetector&> service{probe};
 
   service.tick(model);
   pane.cwd = "/tmp/changed";

@@ -99,7 +99,7 @@ namespace {
     check(writePrivateFile(directory, "ca-system-cert.pem", certificate.bytes(), PrivateFileMode::replace) == 0);
   }
 
-  void testTrustLifecycle(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory>& library) {
+  void testTrustLifecycle(TlsTestMemory& memory, const TlsLibrary& library) {
     AuthorityDirectory directory;
     const auto path = directoryPath(directory);
     const proxy_trust::Paths paths{memory, path};
@@ -132,7 +132,7 @@ namespace {
     }
 
     writeAuthority(directory.descriptor.get(), std::chrono::hours{12});
-    auto near_expiration = CertificateAuthority<TlsTestMemory>::loadExisting(memory, library, directory.descriptor.get(), AuthorityKind::system_trust);
+    auto near_expiration = CertificateAuthority::loadExisting(memory, library, directory.descriptor.get(), AuthorityKind::system_trust);
     auto old_record = record;
 
     old_record.fingerprint = near_expiration->fingerprint();
@@ -166,7 +166,7 @@ namespace {
     check(service.inspect().status == proxy_trust::Status::installed);
   }
 
-  void testTrustFailures(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory>& library) {
+  void testTrustFailures(TlsTestMemory& memory, const TlsLibrary& library) {
     AuthorityDirectory directory;
     const auto path = directoryPath(directory);
     const proxy_trust::Paths paths{memory, path};
@@ -208,14 +208,14 @@ namespace {
     writeAuthority(directory.descriptor.get(), std::chrono::hours{12});
     auto previous = record;
 
-    previous.fingerprint = CertificateAuthority<TlsTestMemory>::loadExisting(memory, library, directory.descriptor.get(), AuthorityKind::system_trust)->fingerprint();
+    previous.fingerprint = CertificateAuthority::loadExisting(memory, library, directory.descriptor.get(), AuthorityKind::system_trust)->fingerprint();
     previous.write(memory, directory.descriptor.get());
     commands.fail_at = commands.commands.size() + 2;
     rejects([&] {
       service.rotateIfNeeded();
     });
 
-    check(CertificateAuthority<TlsTestMemory>::loadExisting(memory, library, directory.descriptor.get(), AuthorityKind::system_trust)->fingerprint() == previous.fingerprint);
+    check(CertificateAuthority::loadExisting(memory, library, directory.descriptor.get(), AuthorityKind::system_trust)->fingerprint() == previous.fingerprint);
     check(proxy_trust::Record::read(memory, directory.descriptor.get())->fingerprint == previous.fingerprint);
     check(fileCount(path) == 3);
 
@@ -231,7 +231,7 @@ namespace {
       service.install(previous);
     });
 
-    check(CertificateAuthority<TlsTestMemory>::loadExisting(memory, library, directory.descriptor.get(), AuthorityKind::system_trust)->fingerprint() == previous.fingerprint);
+    check(CertificateAuthority::loadExisting(memory, library, directory.descriptor.get(), AuthorityKind::system_trust)->fingerprint() == previous.fingerprint);
     check(fileCount(path) == 3 && commands.commands.back()[1] == "delete-certificate");
   }
 
@@ -267,7 +267,7 @@ namespace {
     check(proxyAuthorityDirectory(memory, Environment{"/data"}) == "/data/telar/proxy");
   }
 
-  void testLinuxTrustStores(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory>& library) {
+  void testLinuxTrustStores(TlsTestMemory& memory, const TlsLibrary& library) {
     for (const auto backend : {proxy_trust::Backend::trust, proxy_trust::Backend::update_ca_certificates}) {
       AuthorityDirectory directory;
       const auto path = directoryPath(directory);
@@ -288,7 +288,7 @@ namespace {
       }
 
       writeAuthority(directory.descriptor.get(), std::chrono::hours{12});
-      auto expiring = CertificateAuthority<TlsTestMemory>::loadExisting(memory, library, directory.descriptor.get(), AuthorityKind::system_trust);
+      auto expiring = CertificateAuthority::loadExisting(memory, library, directory.descriptor.get(), AuthorityKind::system_trust);
       auto previous = installed;
 
       previous.fingerprint = expiring->fingerprint();
@@ -334,7 +334,7 @@ namespace {
 
 }
 
-void testProxyTrust(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory>& library) {
+void testProxyTrust(TlsTestMemory& memory, const TlsLibrary& library) {
   testTrustCommandDescriptors(memory);
   testTrustRecords(memory);
   testTrustLifecycle(memory, library);
@@ -342,7 +342,7 @@ void testProxyTrust(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory>& libr
   testLinuxTrustStores(memory, library);
 }
 
-void createProxyTrustFixture(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory>& library, std::string_view directory) {
+void createProxyTrustFixture(TlsTestMemory& memory, const TlsLibrary& library, std::string_view directory) {
   const proxy_trust::Paths paths{memory, directory};
   const auto keychain = paths.keychain(memory, ProcessEnvironment{});
   TrustCommands commands;

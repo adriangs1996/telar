@@ -72,11 +72,11 @@ int main() {
   MemoryAdapter adapter{system};
   ConcurrentMemory& memory = adapter;
   RuntimeModel model{memory};
-  ClientStore<ConcurrentMemory> clients{memory};
-  LimitService<ConcurrentMemory> limits;
+  ClientStore clients{memory};
+  LimitService limits;
   NativeEventLoop<ConcurrentMemory> poller{memory};
   PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/viewport-delta.sock"}};
-  WorkspaceService<ConcurrentMemory, decltype(poller)> workspaces{memory};
+  WorkspaceService<decltype(poller)> workspaces{memory};
   ClientPeer first{memory, model, clients, ClientRole::interactive};
   ClientPeer second{memory, model, clients, ClientRole::interactive};
   const std::array<std::string_view, 1> arguments{"/bin/cat"};
@@ -90,7 +90,7 @@ int main() {
     corpus += std::to_string(row) + " \x1b[32mviewport\x1b[0m \x1b]8;;https://example.test/" + std::to_string(row) + "\x1b\\link\x1b]8;;\x1b\\\r\n";
   }
   pane.terminal.feed(byteView(corpus), *pane.media);
-  std::array<telar::gui::Screen<ConcurrentMemory>, 2> screens{telar::gui::Screen<ConcurrentMemory>{memory}, telar::gui::Screen<ConcurrentMemory>{memory}};
+  std::array<telar::gui::Screen, 2> screens{telar::gui::Screen{memory}, telar::gui::Screen{memory}};
   auto now = std::chrono::steady_clock::now();
   std::uint64_t frames = 0;
   std::uint64_t snapshots = 0;

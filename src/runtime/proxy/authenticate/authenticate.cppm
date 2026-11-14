@@ -108,7 +108,6 @@ export {
 
     class ProxySecretFile {
     public:
-      template <Allocator Memory>
       static std::optional<ProxySecret> load(Memory& memory, int directory);
 
       template <Allocator Memory>
@@ -119,7 +118,6 @@ export {
       static constexpr std::size_t maximum_file_bytes = ProxySecret::hexadecimal_bytes + 8;
     };
 
-    extern template std::optional<ProxySecret> ProxySecretFile::load<Memory>(Memory& memory, int directory);
     extern template ProxySecret ProxySecretFile::ensure<Memory>(Memory& memory, int directory);
     extern template ProxySecret ProxySecretFile::ensure<ConcurrentMemory>(ConcurrentMemory& memory, int directory);
 

@@ -5,8 +5,7 @@ module telar.runtime.runtime.client_control;
 
 namespace telar::runtime {
 
-  template <Allocator Memory>
-  void ClientControl<Memory>::list(ClientStore<Memory>& clients, std::uint64_t requester_id, const QueryClients& request) {
+  void ClientControl::list(ClientStore& clients, std::uint64_t requester_id, const QueryClients& request) {
     std::array<ClientDescriptor, client_capacity> entries;
     std::size_t count = 0;
 
@@ -28,8 +27,7 @@ namespace telar::runtime {
     requireClient(clients, requester_id).connection.send(ClientList{.request_id = request.request_id, .entries = std::span{entries}.first(count)});
   }
 
-  template <Allocator Memory>
-  void ClientControl<Memory>::detach(ClientStore<Memory>& clients, std::uint64_t requester_id, const DetachClient& request) {
+  void ClientControl::detach(ClientStore& clients, std::uint64_t requester_id, const DetachClient& request) {
     auto& requester = requireClient(clients, requester_id);
 
     requireRole(requester, ClientRole::control);
@@ -42,8 +40,7 @@ namespace telar::runtime {
     target->connection.closing = true;
   }
 
-  template <Allocator Memory>
-  void ClientControl<Memory>::requestCommand(ClientStore<Memory>& clients, std::uint64_t requester_id, const RequestClientCommand& request) {
+  void ClientControl::requestCommand(ClientStore& clients, std::uint64_t requester_id, const RequestClientCommand& request) {
     auto& requester = requireClient(clients, requester_id);
 
     requireRole(requester, ClientRole::control);
@@ -68,8 +65,7 @@ namespace telar::runtime {
     requester.pending_command = PendingClientCommand{target->id, request.request_id, request.action, request.target_id};
   }
 
-  template <Allocator Memory>
-  void ClientControl<Memory>::completeCommand(ClientStore<Memory>& clients, std::uint64_t sender_id, const CompleteClientCommand& completion) {
+  void ClientControl::completeCommand(ClientStore& clients, std::uint64_t sender_id, const CompleteClientCommand& completion) {
     const auto& sender = requireClient(clients, sender_id);
 
     requireRole(sender, ClientRole::interactive);
@@ -91,8 +87,7 @@ namespace telar::runtime {
     requester->pending_command.reset();
   }
 
-  template <Allocator Memory>
-  void ClientControl<Memory>::requestFocus(const PaneStore<Memory>& panes, ClientStore<Memory>& clients, std::uint64_t requester_id, const RequestPaneFocus& request) {
+  void ClientControl::requestFocus(const PaneStore& panes, ClientStore& clients, std::uint64_t requester_id, const RequestPaneFocus& request) {
     auto& requester = requireClient(clients, requester_id);
 
     requireRole(requester, ClientRole::control);
@@ -125,8 +120,7 @@ namespace telar::runtime {
     requester.pending_focus = PendingPaneFocus{target->id, request.request_id, pane->id, pane->generation};
   }
 
-  template <Allocator Memory>
-  void ClientControl<Memory>::completeFocus(ClientStore<Memory>& clients, std::uint64_t sender_id, const CompletePaneFocus& completion) {
+  void ClientControl::completeFocus(ClientStore& clients, std::uint64_t sender_id, const CompletePaneFocus& completion) {
     const auto& sender = requireClient(clients, sender_id);
 
     requireRole(sender, ClientRole::interactive);
@@ -145,8 +139,7 @@ namespace telar::runtime {
     requester->connection.closing = true;
   }
 
-  template <Allocator Memory>
-  void ClientControl<Memory>::notify(ClientStore<Memory>& clients, std::uint64_t requester_id, const ShowNotification& request) {
+  void ClientControl::notify(ClientStore& clients, std::uint64_t requester_id, const ShowNotification& request) {
     NotificationShown confirmation{.request_id = request.request_id};
     const auto offset = requireClient(clients, requester_id).connection.reserve(confirmation);
 
@@ -154,19 +147,17 @@ namespace telar::runtime {
     requireClient(clients, requester_id).connection.complete(offset, confirmation);
   }
 
-  template <Allocator Memory>
-  std::uint8_t ClientControl<Memory>::publish(ClientStore<Memory>& clients, const NotificationBody& body) {
+  std::uint8_t ClientControl::publish(ClientStore& clients, const NotificationBody& body) {
     Notification notification;
 
     static_cast<NotificationBody&>(notification) = body;
-    return static_cast<std::uint8_t>(broadcast(clients, [](const ClientSession<Memory>& client) {
+    return static_cast<std::uint8_t>(broadcast(clients, [](const ClientSession& client) {
       return client.role == ClientRole::interactive;
     },
         notification));
   }
 
-  template <Allocator Memory>
-  void ClientControl<Memory>::abandon(ClientStore<Memory>& clients, std::uint64_t departed) noexcept {
+  void ClientControl::abandon(ClientStore& clients, std::uint64_t departed) noexcept {
     for (auto* client : clients.items()) {
       if (client == nullptr || client->id == departed) {
         continue;
@@ -185,33 +176,28 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  void ClientControl<Memory>::requireRole(const ClientSession<Memory>& client, ClientRole expected) {
+  void ClientControl::requireRole(const ClientSession& client, ClientRole expected) {
     if (client.role != expected) {
       throw RequestError{FailureCode::invalid_request, "Invalid client role"};
     }
   }
 
-  template <Allocator Memory>
-  bool ClientControl<Memory>::routable(const ClientSession<Memory>* client) noexcept {
+  bool ClientControl::routable(const ClientSession* client) noexcept {
     return client != nullptr && !client->connection.closing && client->role == ClientRole::interactive && client->identity != 0;
   }
 
-  template <Allocator Memory>
-  ClientSession<Memory>* ClientControl<Memory>::resolve(ClientStore<Memory>& clients, ClientRoute target) noexcept {
+  ClientSession* ClientControl::resolve(ClientStore& clients, ClientRoute target) noexcept {
     auto* client = clients.find(target.id);
 
     return client != nullptr && client->generation == target.generation ? client : nullptr;
   }
 
-  template <Allocator Memory>
-  ClientRoute ClientControl<Memory>::route(const ClientSession<Memory>& client) noexcept {
+  ClientRoute ClientControl::route(const ClientSession& client) noexcept {
     return ClientRoute{client.id, client.generation};
   }
 
-  template <Allocator Memory>
-  ClientSession<Memory>* ClientControl<Memory>::focusOrigin(ClientStore<Memory>& clients, std::uint64_t pane_id) noexcept {
-    ClientSession<Memory>* selected = nullptr;
+  ClientSession* ClientControl::focusOrigin(ClientStore& clients, std::uint64_t pane_id) noexcept {
+    ClientSession* selected = nullptr;
 
     for (auto* client : clients.items()) {
       if (client == nullptr || client->connection.closing || client->role != ClientRole::interactive || client->last_input_pane != pane_id || client->attachment(pane_id) == nullptr || client->last_input_sequence == 0) {
@@ -226,16 +212,13 @@ namespace telar::runtime {
     return selected;
   }
 
-  template <Allocator Memory>
-  void ClientControl<Memory>::failAbandoned(ClientSession<Memory>& client, std::uint64_t request_id) noexcept {
+  void ClientControl::failAbandoned(ClientSession& client, std::uint64_t request_id) noexcept {
     try {
       client.connection.send(RequestFailed{.request_id = request_id, .code = FailureCode::invalid_request, .message = "Target client disconnected before confirming the operation"});
     } catch (...) {
       client.connection.closeImmediately();
     }
   }
-
-  template class ClientControl<ConcurrentMemory>;
 
   RuntimeClipboardReader::Result RuntimeClipboardReader::observe(const Request&) noexcept {
     return clipboard::read(runtime_clipboard_max_bytes);

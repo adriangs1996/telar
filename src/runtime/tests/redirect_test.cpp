@@ -810,9 +810,9 @@ static void loopbackLeases(Memory& memory) {
   check(!store.content && interface.skip);
 }
 
-static void relay(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory>& library, const std::string& path) {
+static void relay(TlsTestMemory& memory, const TlsLibrary& library, const std::string& path) {
   AuthorityDirectory directory;
-  const auto authority = std::make_shared<const CertificateAuthority<TlsTestMemory>>(CertificateAuthority<TlsTestMemory>::loadOrCreate(memory, library, directory.descriptor.get(), AuthorityKind::private_local));
+  const auto authority = std::make_shared<const CertificateAuthority>(CertificateAuthority::loadOrCreate(memory, library, directory.descriptor.get(), AuthorityKind::private_local));
   TlsTrustStore trust{memory, library};
   TlsContexts contexts{memory, library, trust};
   TlsInterception interception{contexts, authority};
@@ -822,7 +822,7 @@ static void relay(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory>& librar
   check(options.intercept_hosts.append("*"));
   options.intercept_hosts.finish();
   const auto secret = ProxySecret::generate();
-  ProxyService<TlsTestMemory, NativeEventLoop<TlsTestMemory>, SystemNameResolver> service{memory, options, secret, interception, ProxyListener::bind(std::nullopt, {})};
+  ProxyService<NativeEventLoop<TlsTestMemory>, SystemNameResolver> service{memory, options, secret, interception, ProxyListener::bind(std::nullopt, {})};
 
   {
     redir::Ingress<decltype(service), SameUser> ingress{path, service};
@@ -912,9 +912,9 @@ static void relay(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory>& librar
   }
 }
 
-static void opaqueTls(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory>& library) {
+static void opaqueTls(TlsTestMemory& memory, const TlsLibrary& library) {
   AuthorityDirectory directory;
-  const auto authority = std::make_shared<const CertificateAuthority<TlsTestMemory>>(CertificateAuthority<TlsTestMemory>::loadOrCreate(memory, library, directory.descriptor.get(), AuthorityKind::private_local));
+  const auto authority = std::make_shared<const CertificateAuthority>(CertificateAuthority::loadOrCreate(memory, library, directory.descriptor.get(), AuthorityKind::private_local));
   TlsTrustStore trust{memory, library};
   TlsContexts contexts{memory, library, trust};
   TlsInterception interception{contexts, authority};
@@ -923,7 +923,7 @@ static void opaqueTls(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory>& li
   check(options.intercept_hosts.append("*"));
   options.intercept_hosts.finish();
   const auto secret = ProxySecret::generate();
-  ProxyService<TlsTestMemory, NativeEventLoop<TlsTestMemory>, SystemNameResolver> service{memory, options, secret, interception, ProxyListener::bind(std::nullopt, {})};
+  ProxyService<NativeEventLoop<TlsTestMemory>, SystemNameResolver> service{memory, options, secret, interception, ProxyListener::bind(std::nullopt, {})};
   TcpPair downstream;
   TcpPair upstream;
 
@@ -1160,11 +1160,11 @@ static void exchangeHttp2Tls(TlsTestMemory& memory, SSL* client, SSL* server) {
   check(response_sink.status == "202" && response_sink.body == std::string("tls\0edited", 10));
 }
 
-static void transparentTls(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory>& library, TransparentTlsCase scenario = {}) {
+static void transparentTls(TlsTestMemory& memory, const TlsLibrary& library, TransparentTlsCase scenario = {}) {
   const auto [trusted_origin, http, numeric_ipv6, edit, http2, mode] = scenario;
   const bool excluded = mode == TransparentTlsMode::excluded_pinned;
   AuthorityDirectory directory;
-  const auto authority = std::make_shared<const CertificateAuthority<TlsTestMemory>>(CertificateAuthority<TlsTestMemory>::loadOrCreate(memory, library, directory.descriptor.get(), AuthorityKind::private_local));
+  const auto authority = std::make_shared<const CertificateAuthority>(CertificateAuthority::loadOrCreate(memory, library, directory.descriptor.get(), AuthorityKind::private_local));
   auto issuer = CertificatePair::authority("Transparent origin", CertificatePair::private_lifetime);
   const auto hostname = numeric_ipv6 ? "::1" : "origin.test";
   auto leaf = issuer.mint(hostname);
@@ -1195,7 +1195,7 @@ static void transparentTls(TlsTestMemory& memory, const TlsLibrary<TlsTestMemory
   }
 
   auto& flows = owner ? static_cast<TlsFlowObserver&>(*owner) : observer;
-  ProxyService<TlsTestMemory, NativeEventLoop<TlsTestMemory>, SystemNameResolver> service{memory, options, secret, interception, ProxyListener::bind(std::nullopt, {}), &flows};
+  ProxyService<NativeEventLoop<TlsTestMemory>, SystemNameResolver> service{memory, options, secret, interception, ProxyListener::bind(std::nullopt, {}), &flows};
   TcpPair downstream{numeric_ipv6};
   TcpPair upstream{numeric_ipv6};
 

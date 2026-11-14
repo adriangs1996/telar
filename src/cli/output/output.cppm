@@ -85,7 +85,6 @@ export {
 
     // A command's stdout, built in memory and written once, so a failure halfway
     // prints nothing of the result.
-    template <Allocator Memory>
     class Output {
     public:
       explicit Output(Memory& memory);
@@ -105,15 +104,14 @@ export {
       String<Memory> data;
     };
 
-    extern template class Output<Memory>;
-    extern template Output<Memory>& Output<Memory>::number<int>(int value);
-    extern template Output<Memory>& Output<Memory>::number<long>(long value);
-    extern template Output<Memory>& Output<Memory>::number<long long>(long long value);
-    extern template Output<Memory>& Output<Memory>::number<unsigned char>(unsigned char value);
-    extern template Output<Memory>& Output<Memory>::number<unsigned short>(unsigned short value);
-    extern template Output<Memory>& Output<Memory>::number<unsigned int>(unsigned int value);
-    extern template Output<Memory>& Output<Memory>::number<unsigned long>(unsigned long value);
-    extern template Output<Memory>& Output<Memory>::number<unsigned long long>(unsigned long long value);
+    extern template Output& Output::number<int>(int value);
+    extern template Output& Output::number<long>(long value);
+    extern template Output& Output::number<long long>(long long value);
+    extern template Output& Output::number<unsigned char>(unsigned char value);
+    extern template Output& Output::number<unsigned short>(unsigned short value);
+    extern template Output& Output::number<unsigned int>(unsigned int value);
+    extern template Output& Output::number<unsigned long>(unsigned long value);
+    extern template Output& Output::number<unsigned long long>(unsigned long long value);
 
   }
 }

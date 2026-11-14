@@ -280,14 +280,12 @@ namespace telar::runtime::plugins {
     return dropped_.load(std::memory_order_relaxed);
   }
 
-  template <Allocator Memory>
-  SharedExchange<Memory>::SharedExchange(TapBudget::Charge charge, std::uint64_t event_id, CapturedExchange<Memory> exchange) noexcept
+  SharedExchange::SharedExchange(TapBudget::Charge charge, std::uint64_t event_id, CapturedExchange exchange) noexcept
       : charge(std::move(charge)),
         event_id(event_id),
         exchange(std::move(exchange)) {}
 
-  template <Allocator Memory>
-  std::size_t SharedExchange<Memory>::capturedBytes(const CapturedExchange<Memory>& exchange) noexcept {
+  std::size_t SharedExchange::capturedBytes(const CapturedExchange& exchange) noexcept {
     return (exchange.request ? exchange.request->capturedBytes() : 0) + (exchange.response ? exchange.response->capturedBytes() : 0);
   }
 
@@ -298,7 +296,6 @@ namespace telar::runtime::plugins {
 
   template class PackageSnapshots<Memory>;
   template class PackageSnapshots<ConcurrentMemory>;
-  template struct SharedExchange<ConcurrentMemory>;
   template class TapConfiguration<Memory>;
   template class TapConfiguration<ConcurrentMemory>;
 

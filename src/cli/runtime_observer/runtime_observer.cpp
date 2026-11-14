@@ -305,7 +305,6 @@ namespace telar::runtime::cli::api {
 
 namespace telar::runtime::cli::runtime_clipboard {
 
-  template <Allocator Memory>
   int run(Memory& memory, const Options& options) {
     // Text may also contain terminal escape sequences. Reject before capturing.
     if (::isatty(STDOUT_FILENO)) {
@@ -465,7 +464,6 @@ namespace telar::runtime::cli {
     }
   }
 
-  template <Allocator Memory>
   int runRuntime(Memory& memory, const RuntimeOptions& options) {
     try {
       observeRuntime(memory, options);
@@ -483,13 +481,9 @@ namespace telar::runtime::cli {
     }
   }
 
-  template int runRuntime<Memory>(Memory& memory, const RuntimeOptions& options);
-
 }
 
 namespace telar::runtime::cli::runtime_clipboard {
-
-  template int run<Memory>(Memory& memory, const Options& options);
 
   Options Options::parse(Arguments words) {
     if (words.empty() || std::string_view{words.front()} != "get") {

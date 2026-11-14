@@ -1,6 +1,5 @@
 module;
 #include "tbc/annotations.hpp"
-#include "tbc/annotations.hpp"
 
 export module telar.runtime.vocabulary.exchange;
 
@@ -44,10 +43,9 @@ export {
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory>
     class CaptureBuffer {
     public:
-      explicit CaptureBuffer(Memory& memory, CaptureQuota& quota, std::size_t limit) noexcept;
+      explicit CaptureBuffer(ConcurrentMemory& memory, CaptureQuota& quota, std::size_t limit) noexcept;
 
       ~CaptureBuffer();
 
@@ -74,15 +72,13 @@ export {
       std::size_t reserveAdditional(std::size_t bytes) noexcept;
 
       static constexpr std::size_t initial_capacity = 256;
-      ErasingAllocator<Memory> memory_;
+      ErasingAllocator<ConcurrentMemory> memory_;
       CaptureQuota& quota_;
       const std::size_t limit_;
       std::uint8_t* storage_ = nullptr;
       std::size_t size_ = 0;
       std::size_t capacity_ = 0;
     };
-
-    extern template class CaptureBuffer<telar::ConcurrentMemory>;
 
   }
 }
@@ -170,11 +166,10 @@ export {
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory>
     class CaptureHalf {
     public:
       // The half keeps the allocator and the quota, region `a`, and copies what it starts from.
-      explicit CaptureHalf(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<CaptureQuota&, tbc::lt::a> quota, const ProxyCaptureLimits& limits, CaptureStart start);
+      explicit CaptureHalf(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<CaptureQuota&, tbc::lt::a> quota, const ProxyCaptureLimits& limits, CaptureStart start);
 
       bool append(CapturePart part, std::span<const std::uint8_t> input) noexcept;
 
@@ -221,14 +216,14 @@ export {
       std::uint16_t status_code = 0;
       bool body_decoded = false;
       CaptureTruncation truncation;
-      tbc::view<CaptureBuffer<Memory>, tbc::lt::a> head;
-      tbc::view<CaptureBuffer<Memory>, tbc::lt::a> body;
+      tbc::view<CaptureBuffer, tbc::lt::a> head;
+      tbc::view<CaptureBuffer, tbc::lt::a> body;
 
     private:
       template <std::size_t Capacity>
       static void setRouteField(bool& truncated, SensitiveText<Capacity>& field, std::string_view value) noexcept;
 
-      CaptureBuffer<Memory>* select(CapturePart part) noexcept;
+      CaptureBuffer* select(CapturePart part) noexcept;
 
       const std::size_t maximum_bytes_;
       SensitiveText<maximum_host_bytes> host_;
@@ -237,8 +232,6 @@ export {
       SensitiveText<maximum_encoding_bytes> encoding_;
     };
 
-    extern template class CaptureHalf<telar::ConcurrentMemory>;
-
   }
 }
 
@@ -246,20 +239,17 @@ export {
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory>
     struct CapturedExchange {
-      using Half = Owned<CaptureHalf<Memory>, Memory>;
+      using Half = Owned<CaptureHalf, ConcurrentMemory>;
 
       // The halves keep the quota they were captured under, region `a`.
-      explicit CapturedExchange(tbc::view<Memory&, tbc::lt::a> memory) noexcept;
+      explicit CapturedExchange(tbc::view<ConcurrentMemory&, tbc::lt::a> memory) noexcept;
 
       void include(tbc::view<Half, tbc::lt::a> half) noexcept;
 
       tbc::view<Half, tbc::lt::a> request;
       tbc::view<Half, tbc::lt::a> response;
     };
-
-    extern template struct CapturedExchange<telar::ConcurrentMemory>;
 
   }
 }

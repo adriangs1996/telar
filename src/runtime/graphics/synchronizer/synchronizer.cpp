@@ -62,8 +62,7 @@ namespace telar::runtime {
     return available_;
   }
 
-  template <ConcurrentAllocator Memory>
-  auto MediaProcessor<Memory>::observe(tbc::view<const Request&, tbc::lt::a> request) noexcept -> tbc::view<Result, tbc::lt::a> {
+  auto MediaProcessor::observe(tbc::view<const Request&, tbc::lt::a> request) noexcept -> tbc::view<Result, tbc::lt::a> {
     TELAR_TRACE("media.worker");
     auto result = request;
 
@@ -75,37 +74,31 @@ namespace telar::runtime {
     return result;
   }
 
-  template <ConcurrentAllocator Memory>
-  void MediaProcessor<Memory>::stop() noexcept {}
+  void MediaProcessor::stop() noexcept {}
 
-  template <Allocator Memory>
-  GraphicsSynchronizer<Memory>::GraphicsSynchronizer(tbc::view<GraphicsCreditBudget&, tbc::lt::a> budget, std::uint64_t pane, tbc::view<std::shared_ptr<PaneMedia<Memory>>, tbc::lt::a> media)
+  GraphicsSynchronizer::GraphicsSynchronizer(tbc::view<GraphicsCreditBudget&, tbc::lt::a> budget, std::uint64_t pane, tbc::view<std::shared_ptr<PaneMedia>, tbc::lt::a> media)
       : media_(std::move(media)),
         credit_(budget),
         pane_(pane) {}
 
-  template <Allocator Memory>
-  GraphicsSynchronizer<Memory>::~GraphicsSynchronizer() {
+  GraphicsSynchronizer::~GraphicsSynchronizer() {
     if (shared_) {
       media_->noteSharedTransport(false);
     }
   }
 
-  template <Allocator Memory>
   template <Allocator GraphicsMemory>
-  bool GraphicsSynchronizer<Memory>::synchronized(const GraphicsStorage<GraphicsMemory>& storage) const noexcept {
+  bool GraphicsSynchronizer::synchronized(const GraphicsStorage<GraphicsMemory>& storage) const noexcept {
     return snapshot_ == SnapshotState::idle && !transfer_ && observed_revision_ == storage.revision();
   }
 
 #if TELAR_DIAGNOSTICS
-  template <Allocator Memory>
-  std::size_t GraphicsSynchronizer<Memory>::transferBytes() const noexcept {
+  std::size_t GraphicsSynchronizer::transferBytes() const noexcept {
     return transfer_ ? transfer_->frozen.byteCount() : 0;
   }
 #endif
 
-  template <Allocator Memory>
-  void GraphicsSynchronizer<Memory>::requestSnapshot() noexcept {
+  void GraphicsSynchronizer::requestSnapshot() noexcept {
     transfer_.reset();
     known_images_.fill({});
     known_placements_.fill({});
@@ -113,8 +106,7 @@ namespace telar::runtime {
     observed_revision_ = 0;
   }
 
-  template <Allocator Memory>
-  void GraphicsSynchronizer<Memory>::configure(bool shared) noexcept {
+  void GraphicsSynchronizer::configure(bool shared) noexcept {
     if (shared_ != shared) {
       shared_ = shared;
       media_->noteSharedTransport(shared);
@@ -122,32 +114,27 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  void GraphicsSynchronizer<Memory>::returnCredit(std::uint64_t bytes) noexcept {
+  void GraphicsSynchronizer::returnCredit(std::uint64_t bytes) noexcept {
     credit_.returnBytes(bytes);
   }
 
 #if TELAR_DIAGNOSTICS
-  template <Allocator Memory>
-  diagnostics::GraphicsCounters GraphicsSynchronizer<Memory>::takeCounters() noexcept {
+  diagnostics::GraphicsCounters GraphicsSynchronizer::takeCounters() noexcept {
     return std::exchange(counters_, {});
   }
 #endif
 
-  template <Allocator Memory>
-  bool GraphicsSynchronizer<Memory>::wantsImage(ImageKey key, bool shared) const noexcept {
+  bool GraphicsSynchronizer::wantsImage(ImageKey key, bool shared) const noexcept {
     return shared_ == shared && !knows(key) && (!transfer_ || !sameImage(transfer_->image.key, key));
   }
 
-  template <Allocator Memory>
-  void GraphicsSynchronizer<Memory>::abandon(std::uint64_t revision) noexcept {
+  void GraphicsSynchronizer::abandon(std::uint64_t revision) noexcept {
     transfer_.reset();
     snapshot_ = SnapshotState::idle;
     observed_revision_ = revision;
   }
 
-  template <Allocator Memory>
-  bool GraphicsSynchronizer<Memory>::advanceTransfer(Connection<Memory>& connection) {
+  bool GraphicsSynchronizer::advanceTransfer(Connection<ConcurrentMemory>& connection) {
     if (!transfer_) {
       TELAR_DIAGNOSTIC(if (snapshot_ != SnapshotState::idle || observed_revision_ != available_revision_) { diagnostics::accumulate(counters_.stage_deferred); });
       return false;
@@ -160,9 +147,8 @@ namespace telar::runtime {
     return publishTransfer(connection, GraphicsHeader{.pane_id = pane_, .revision = transfer_->revision});
   }
 
-  template <Allocator Memory>
   template <Allocator GraphicsMemory>
-  bool GraphicsSynchronizer<Memory>::publish(Connection<Memory>& connection, const GraphicsStorage<GraphicsMemory>& storage) {
+  bool GraphicsSynchronizer::publish(Connection<ConcurrentMemory>& connection, const GraphicsStorage<GraphicsMemory>& storage) {
     TELAR_TRACE("graphics.publish");
     if (connection.queuedBytes() > maximum_queue_bytes) {
       return false;
@@ -249,9 +235,8 @@ namespace telar::runtime {
     return false;
   }
 
-  template <Allocator Memory>
   template <Allocator GraphicsMemory>
-  auto GraphicsSynchronizer<Memory>::stage(const GraphicsStorage<GraphicsMemory>& storage) -> StageResult {
+  auto GraphicsSynchronizer::stage(const GraphicsStorage<GraphicsMemory>& storage) -> StageResult {
     TELAR_TRACE("graphics.stage");
     initialize(storage);
     if (transfer_) {
@@ -293,9 +278,8 @@ namespace telar::runtime {
     return StageResult::idle;
   }
 
-  template <Allocator Memory>
   template <Allocator GraphicsMemory>
-  void GraphicsSynchronizer<Memory>::stageAtMediaBoundary(const GraphicsStorage<GraphicsMemory>& storage) noexcept {
+  void GraphicsSynchronizer::stageAtMediaBoundary(const GraphicsStorage<GraphicsMemory>& storage) noexcept {
     TELAR_DIAGNOSTIC(available_revision_ = storage.revision());
     if (transfer_ || synchronized(storage)) {
       return;
@@ -310,9 +294,8 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
   template <typename Message>
-  void GraphicsSynchronizer<Memory>::send(Connection<Memory>& connection, const Message& message) {
+  void GraphicsSynchronizer::send(Connection<ConcurrentMemory>& connection, const Message& message) {
     connection.send(message);
     TELAR_DIAGNOSTIC({
       counters_.record(message);
@@ -321,9 +304,8 @@ namespace telar::runtime {
     });
   }
 
-  template <Allocator Memory>
   template <Allocator GraphicsMemory>
-  void GraphicsSynchronizer<Memory>::initialize(const GraphicsStorage<GraphicsMemory>& storage) noexcept {
+  void GraphicsSynchronizer::initialize(const GraphicsStorage<GraphicsMemory>& storage) noexcept {
     TELAR_DIAGNOSTIC(available_revision_ = storage.revision());
     if (!initialized_) {
       initialized_ = true;
@@ -333,8 +315,7 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  bool GraphicsSynchronizer<Memory>::publishTransfer(Connection<Memory>& connection, GraphicsHeader header) {
+  bool GraphicsSynchronizer::publishTransfer(Connection<ConcurrentMemory>& connection, GraphicsHeader header) {
     auto& transfer = *transfer_;
 
     header.revision = transfer.revision;
@@ -380,15 +361,13 @@ namespace telar::runtime {
     return false;
   }
 
-  template <Allocator Memory>
-  bool GraphicsSynchronizer<Memory>::knows(ImageKey key) const noexcept {
+  bool GraphicsSynchronizer::knows(ImageKey key) const noexcept {
     return std::ranges::any_of(known_images_, [&](ImageKey known) {
       return sameImage(known, key);
     });
   }
 
-  template <Allocator Memory>
-  GraphicsPlacement& GraphicsSynchronizer<Memory>::placementSlot(std::uint64_t identity) {
+  GraphicsPlacement& GraphicsSynchronizer::placementSlot(std::uint64_t identity) {
     auto existing = std::ranges::find_if(known_placements_, [&](const auto& placement) {
       return placement.virtual_id == identity;
     });
@@ -406,16 +385,13 @@ namespace telar::runtime {
     return *empty;
   }
 
-  template class MediaProcessor<telar::ConcurrentMemory>;
-
-  template class GraphicsSynchronizer<telar::ConcurrentMemory>;
-  template bool GraphicsSynchronizer<telar::ConcurrentMemory>::synchronized<telar::ConcurrentMemory>(const GraphicsStorage<telar::ConcurrentMemory>& storage) const noexcept;
-  template bool GraphicsSynchronizer<telar::ConcurrentMemory>::publish<telar::ConcurrentMemory>(Connection<telar::ConcurrentMemory>& connection, const GraphicsStorage<telar::ConcurrentMemory>& storage);
-  template GraphicsSynchronizer<telar::ConcurrentMemory>::StageResult GraphicsSynchronizer<telar::ConcurrentMemory>::stage<telar::ConcurrentMemory>(const GraphicsStorage<telar::ConcurrentMemory>& storage);
-  template void GraphicsSynchronizer<telar::ConcurrentMemory>::stageAtMediaBoundary<telar::ConcurrentMemory>(const GraphicsStorage<telar::ConcurrentMemory>& storage) noexcept;
-  template bool GraphicsSynchronizer<telar::ConcurrentMemory>::synchronized<telar::runtime::MediaAllocator<telar::ConcurrentMemory>>(const GraphicsStorage<telar::runtime::MediaAllocator<telar::ConcurrentMemory>>& storage) const noexcept;
-  template bool GraphicsSynchronizer<telar::ConcurrentMemory>::publish<telar::runtime::MediaAllocator<telar::ConcurrentMemory>>(Connection<telar::ConcurrentMemory>& connection, const GraphicsStorage<telar::runtime::MediaAllocator<telar::ConcurrentMemory>>& storage);
-  template GraphicsSynchronizer<telar::ConcurrentMemory>::StageResult GraphicsSynchronizer<telar::ConcurrentMemory>::stage<telar::runtime::MediaAllocator<telar::ConcurrentMemory>>(const GraphicsStorage<telar::runtime::MediaAllocator<telar::ConcurrentMemory>>& storage);
-  template void GraphicsSynchronizer<telar::ConcurrentMemory>::stageAtMediaBoundary<telar::runtime::MediaAllocator<telar::ConcurrentMemory>>(const GraphicsStorage<telar::runtime::MediaAllocator<telar::ConcurrentMemory>>& storage) noexcept;
+  template bool GraphicsSynchronizer::synchronized<telar::ConcurrentMemory>(const GraphicsStorage<telar::ConcurrentMemory>& storage) const noexcept;
+  template bool GraphicsSynchronizer::publish<telar::ConcurrentMemory>(Connection<telar::ConcurrentMemory>& connection, const GraphicsStorage<telar::ConcurrentMemory>& storage);
+  template GraphicsSynchronizer::StageResult GraphicsSynchronizer::stage<telar::ConcurrentMemory>(const GraphicsStorage<telar::ConcurrentMemory>& storage);
+  template void GraphicsSynchronizer::stageAtMediaBoundary<telar::ConcurrentMemory>(const GraphicsStorage<telar::ConcurrentMemory>& storage) noexcept;
+  template bool GraphicsSynchronizer::synchronized<telar::runtime::MediaAllocator<telar::ConcurrentMemory>>(const GraphicsStorage<telar::runtime::MediaAllocator<telar::ConcurrentMemory>>& storage) const noexcept;
+  template bool GraphicsSynchronizer::publish<telar::runtime::MediaAllocator<telar::ConcurrentMemory>>(Connection<telar::ConcurrentMemory>& connection, const GraphicsStorage<telar::runtime::MediaAllocator<telar::ConcurrentMemory>>& storage);
+  template GraphicsSynchronizer::StageResult GraphicsSynchronizer::stage<telar::runtime::MediaAllocator<telar::ConcurrentMemory>>(const GraphicsStorage<telar::runtime::MediaAllocator<telar::ConcurrentMemory>>& storage);
+  template void GraphicsSynchronizer::stageAtMediaBoundary<telar::runtime::MediaAllocator<telar::ConcurrentMemory>>(const GraphicsStorage<telar::runtime::MediaAllocator<telar::ConcurrentMemory>>& storage) noexcept;
 
 }

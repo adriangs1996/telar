@@ -127,22 +127,18 @@ namespace telar::runtime::cli::hooks {
     return !lifecycle && !command && !title && !progress;
   }
 
-  template <Allocator Memory>
-  Session<Memory>::Session(Memory& memory, const char* socket, PaneTarget target)
+  Session::Session(Memory& memory, const char* socket, PaneTarget target)
       : control_(memory, socket, reply_bytes),
         target_(target) {
     control_.receiveTimeout(30);
     exchange(VerifyPaneDescent{});
   }
 
-  template <Allocator Memory>
-  void Session<Memory>::reportLimit(std::uint64_t received, std::size_t capacity) noexcept {
+  void Session::reportLimit(std::uint64_t received, std::size_t capacity) noexcept {
     try {
       control_.send(ReportLimit{.reach = {.name = "hooks.max_input_bytes", .noun = "bytes", .value = capacity, .requested = received}, .hits = 1});
     } catch (const std::exception&) {
     }
   }
-
-  template class Session<Memory>;
 
 }

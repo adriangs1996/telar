@@ -10,18 +10,16 @@ import telar.sys.posix;
 
 namespace telar::runtime {
 
-  template <Allocator Memory>
-  RemoteEditor<Memory>::RemoteEditor(Memory& memory)
+  RemoteEditor::RemoteEditor(ConcurrentMemory& memory)
       : memory_(memory),
         output_(memory, output_limit),
-        expression_(AllocatorRef<char, Memory>{memory}),
-        path_(AllocatorRef<char, Memory>{memory}),
-        editor_(AllocatorRef<char, Memory>{memory}) {
+        expression_(AllocatorRef<char, ConcurrentMemory>{memory}),
+        path_(AllocatorRef<char, ConcurrentMemory>{memory}),
+        editor_(AllocatorRef<char, ConcurrentMemory>{memory}) {
     expression_.reserve(10 * 1024);
   }
 
-  template <Allocator Memory>
-  void RemoteEditor<Memory>::open(const OpenEditor& request, const RequestContext& context, EncodedReply<Memory>& reply) {
+  void RemoteEditor::open(const OpenEditor& request, const RequestContext& context, EncodedReply<ConcurrentMemory>& reply) {
     TELAR_TRACE("editor.open");
     path_.assign(request.path);
     editor_.assign(request.editor);
@@ -65,8 +63,7 @@ namespace telar::runtime {
     reply.send(result);
   }
 
-  template <Allocator Memory>
-  std::string_view RemoteEditor<Memory>::command(Session& session, std::span<const std::string_view> arguments) {
+  std::string_view RemoteEditor::command(Session& session, std::span<const std::string_view> arguments) {
     if (session.commands_left-- == 0 || Clock::now() >= session.deadline) {
       throw RequestError{FailureCode::resource_limit, "Editor command limit reached"};
     }
@@ -79,15 +76,13 @@ namespace telar::runtime {
     return output_.text();
   }
 
-  template <Allocator Memory>
-  bool RemoteEditor<Memory>::ownedPath(const char* path, bool directory) noexcept {
+  bool RemoteEditor::ownedPath(const char* path, bool directory) noexcept {
     struct stat status{};
 
     return path[0] == '/' && ::lstat(path, &status) == 0 && status.st_uid == ::geteuid() && (status.st_mode & 0022) == 0 && (directory ? S_ISDIR(status.st_mode) : S_ISSOCK(status.st_mode));
   }
 
-  template <Allocator Memory>
-  void RemoteEditor<Memory>::scan(Session& session, std::string_view root, bool descend) {
+  void RemoteEditor::scan(Session& session, std::string_view root, bool descend) {
     if (session.opened != nullptr || root.size() >= PATH_MAX) {
       return;
     }
@@ -140,8 +135,7 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  void RemoteEditor<Memory>::discoverNeovim(Session& session) {
+  void RemoteEditor::discoverNeovim(Session& session) {
     if (const char* root = std::getenv("XDG_RUNTIME_DIR")) {
       scan(session, root, true);
     }
@@ -169,10 +163,9 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  void RemoteEditor<Memory>::discoverVim(Session& session) {
+  void RemoteEditor::discoverVim(Session& session) {
     const std::array<std::string_view, 2> arguments{editor_, "--serverlist"};
-    String<Memory> names{AllocatorRef<char, Memory>{memory_}};
+    String<ConcurrentMemory> names{AllocatorRef<char, ConcurrentMemory>{memory_}};
 
     try {
       names.assign(command(session, arguments));
@@ -196,8 +189,7 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  tbc::view<const EditorCandidate*, tbc::lt::a> RemoteEditor<Memory>::candidate(const Session& session, pid_t pid) const noexcept {
+  tbc::view<const EditorCandidate*, tbc::lt::a> RemoteEditor::candidate(const Session& session, pid_t pid) const noexcept {
     const auto current = inspector_.identity(pid);
     if (!current) {
       return nullptr;
@@ -212,8 +204,7 @@ namespace telar::runtime {
     return nullptr;
   }
 
-  template <Allocator Memory>
-  void RemoteEditor<Memory>::quote(std::string_view value, bool lisp) {
+  void RemoteEditor::quote(std::string_view value, bool lisp) {
     const char delimiter = lisp ? '"' : '\'';
 
     expression_.push_back(delimiter);
@@ -231,16 +222,14 @@ namespace telar::runtime {
     expression_.push_back(delimiter);
   }
 
-  template <Allocator Memory>
-  void RemoteEditor<Memory>::number(std::uint32_t value) {
+  void RemoteEditor::number(std::uint32_t value) {
     std::array<char, 16> bytes;
     const auto result = std::to_chars(bytes.data(), bytes.data() + bytes.size(), value);
 
     expression_.append(bytes.data(), result.ptr);
   }
 
-  template <Allocator Memory>
-  void RemoteEditor<Memory>::vimEndpoint(Session& session, std::string_view endpoint) {
+  void RemoteEditor::vimEndpoint(Session& session, std::string_view endpoint) {
     const std::string_view option = session.kind == EditorKind::neovim ? "--server" : "--servername";
     const std::array<std::string_view, 5> identity_arguments{editor_, option, endpoint, "--remote-expr", "getpid() . \"\\n\" . hostname()"};
     std::string_view identity;
@@ -296,8 +285,7 @@ namespace telar::runtime {
     session.opened = target;
   }
 
-  template <Allocator Memory>
-  void RemoteEditor<Memory>::discoverEmacs(Session& session) {
+  void RemoteEditor::discoverEmacs(Session& session) {
     if (const char* socket = std::getenv("EMACS_SOCKET_NAME"); socket != nullptr && ownedPath(socket, false)) {
       emacsEndpoint(session, socket);
     }
@@ -325,8 +313,7 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  void RemoteEditor<Memory>::emacsEndpoint(Session& session, std::string_view endpoint) {
+  void RemoteEditor::emacsEndpoint(Session& session, std::string_view endpoint) {
     if (session.opened != nullptr) {
       return;
     }
@@ -395,7 +382,5 @@ namespace telar::runtime {
       }
     }
   }
-
-  template class RemoteEditor<ConcurrentMemory>;
 
 }

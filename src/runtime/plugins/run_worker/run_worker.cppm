@@ -213,7 +213,6 @@ export {
 export {
   namespace telar::runtime::plugins {
 
-    template <Allocator Memory>
     class Host {
     public:
       explicit Host(Memory& memory, const char* entry_path, const ServiceSpec* traffic = nullptr);
@@ -274,11 +273,6 @@ export {
       std::optional<LuaTraffic<SensitiveMemory>> traffic_;
     };
 
-    extern template class Host<Memory>;
-
-    template <Allocator Memory>
-    Host(Memory& memory, const char* entry_path) -> Host<Memory>;
-
   }
 }
 
@@ -286,9 +280,7 @@ export {
 export {
   namespace telar::runtime::plugins {
 
-    template <Allocator Memory>
     void runWorker(Memory& memory, const char* entry_path, bool traffic = false);
-    extern template void runWorker<Memory>(Memory& memory, const char* entry_path, bool traffic);
 
   }
 }

@@ -429,9 +429,8 @@ export {
     };
 
     // The parser retains a blocked fragment while a buffered prefix drains during fail-open fallback.
-    template <ConcurrentAllocator Memory>
     class Http1InterceptedRelay {
-      using Secure = ErasingAllocator<Memory>;
+      using Secure = ErasingAllocator<ConcurrentMemory>;
       using Bytes = Vector<Byte, Secure>;
       enum class Mode {
         undecided,
@@ -585,7 +584,7 @@ export {
       using Time = traffic::FlowControl::Time;
 
       // The relay copies the flow's identity, so its events view the relay and not the flow.
-      Http1InterceptedRelay(Memory& memory, HttpRelayContext context, bool response);
+      Http1InterceptedRelay(ConcurrentMemory& memory, HttpRelayContext context, bool response);
 
       ~Http1InterceptedRelay();
 
@@ -717,14 +716,14 @@ export {
 
       static constexpr std::size_t maximum_wire_body = HttpMessageLimits::body_bytes + Http1Head::capacity;
       static constexpr std::string_view continue_response = "HTTP/1.1 100 Continue\r\n\r\n";
-      Memory& memory_;
+      ConcurrentMemory& memory_;
       Secure secure_;
       traffic::HttpControl* control_;
       traffic::FlowIdentity identity_;
       traffic::Direction direction_;
-      HttpMessage<Memory> message_;
+      HttpMessage<ConcurrentMemory> message_;
       Bytes wire_;
-      using Slot = HttpInterceptionSlot<Memory>;
+      using Slot = HttpInterceptionSlot<ConcurrentMemory>;
       Slot interception_;
       Http1MessageRelay parser_;
       std::optional<Http1Head> forwarded_head_;
@@ -737,8 +736,6 @@ export {
       bool separator_lf_ = false;
       bool destination_head_ = false, synthetic_ = false, head_parsed_ = false;
     };
-
-    extern template class Http1InterceptedRelay<ConcurrentMemory>;
 
   }
 }

@@ -229,13 +229,11 @@ namespace telar::runtime {
   template class PathIndexStorage<SystemAllocator>;
   template class PathIndexStorage<ConcurrentMemory>;
 
-  template <Allocator Memory>
-  PathIndexBuilder<Memory>::PathIndexBuilder(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<PathIndexStorage<Memory>&, tbc::lt::a> storage)
+  PathIndexBuilder::PathIndexBuilder(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<PathIndexStorage<ConcurrentMemory>&, tbc::lt::a> storage)
       : memory_(memory),
         storage_(storage) {}
 
-  template <Allocator Memory>
-  void PathIndexBuilder<Memory>::build(const char* root) noexcept {
+  void PathIndexBuilder::build(const char* root) noexcept {
     TELAR_TRACE("paths.build");
     try {
       FileDescriptor directory{::open(root, O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
@@ -259,8 +257,7 @@ namespace telar::runtime {
     storage_.finish();
   }
 
-  template <Allocator Memory>
-  bool PathIndexBuilder<Memory>::acceptable(std::string_view relative) noexcept {
+  bool PathIndexBuilder::acceptable(std::string_view relative) noexcept {
     try {
       DisplayText16<1024, false>::validate(relative);
       return !relative.empty();
@@ -269,8 +266,7 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  bool PathIndexBuilder<Memory>::insideGit(std::string_view path) noexcept {
+  bool PathIndexBuilder::insideGit(std::string_view path) noexcept {
     std::array<char, 4102> marker;
 
     while (!path.empty() && path.ends_with('/')) {
@@ -297,8 +293,7 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  bool PathIndexBuilder<Memory>::appendTracked(std::string_view relative, tbc::view<Directories&, tbc::lt::a> directories) {
+  bool PathIndexBuilder::appendTracked(std::string_view relative, tbc::view<Directories&, tbc::lt::a> directories) {
     if (!acceptable(relative)) {
       return true;
     }
@@ -319,12 +314,11 @@ namespace telar::runtime {
     return storage_.append(relative, PathKind::file);
   }
 
-  template <Allocator Memory>
-  void PathIndexBuilder<Memory>::tracked(const char* root) {
+  void PathIndexBuilder::tracked(const char* root) {
     try {
       const auto configuration_deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
       GitRepository git{memory_, root, configuration_deadline, storage_.cancelled};
-      Directories directories{0, std::hash<std::string_view>{}, std::equal_to<std::string_view>{}, AllocatorRef<std::string_view, Memory>{memory_}};
+      Directories directories{0, std::hash<std::string_view>{}, std::equal_to<std::string_view>{}, AllocatorRef<std::string_view, ConcurrentMemory>{memory_}};
       std::array<char, 1024> relative;
       std::size_t length = 0;
       bool oversized = false;
@@ -356,8 +350,7 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  FileDescriptor PathIndexBuilder<Memory>::openRelative(int root, std::string_view relative) {
+  FileDescriptor PathIndexBuilder::openRelative(int root, std::string_view relative) {
     FileDescriptor current{::fcntl(root, F_DUPFD_CLOEXEC, 3)};
 
     while (current && !relative.empty()) {
@@ -381,8 +374,7 @@ namespace telar::runtime {
     return current;
   }
 
-  template <Allocator Memory>
-  void PathIndexBuilder<Memory>::walk(int root) {
+  void PathIndexBuilder::walk(int root) {
     list(root, {});
     for (std::size_t index = 0; index < storage_.count; ++index) {
       if (storage_.cancelled.load(std::memory_order_relaxed) || storage_.truncated) {
@@ -402,8 +394,7 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory>
-  void PathIndexBuilder<Memory>::list(int directory, std::string_view prefix) {
+  void PathIndexBuilder::list(int directory, std::string_view prefix) {
     FileDescriptor copy{::fcntl(directory, F_DUPFD_CLOEXEC, 3)};
     std::unique_ptr<DIR, decltype(&::closedir)> stream{::fdopendir(copy.get()), ::closedir};
     if (!stream) {
@@ -450,45 +441,36 @@ namespace telar::runtime {
     }
   }
 
-  template class PathIndexBuilder<ConcurrentMemory>;
-
-  template <Allocator Memory>
-  PathIndex<Memory>::PathIndex(Memory& memory)
-      : root_(AllocatorRef<char, Memory>{memory}),
+  PathIndex::PathIndex(ConcurrentMemory& memory)
+      : root_(AllocatorRef<char, ConcurrentMemory>{memory}),
         storage_(memory),
         builder_(memory, storage_),
         matcher_(memory) {
     root_.reserve(4096);
   }
 
-  template <Allocator Memory>
-  void PathIndex<Memory>::stop() noexcept {
+  void PathIndex::stop() noexcept {
     storage_.cancelled.store(true, std::memory_order_relaxed);
   }
 
-  template <Allocator Memory>
-  std::string_view PathIndex<Memory>::root() const noexcept {
+  std::string_view PathIndex::root() const noexcept {
     return root_;
   }
 
-  template <Allocator Memory>
-  void PathIndex<Memory>::reset(std::string_view root) {
+  void PathIndex::reset(std::string_view root) {
     root_.assign(root);
     storage_.reset();
   }
 
-  template <Allocator Memory>
-  void PathIndex<Memory>::build() noexcept {
+  void PathIndex::build() noexcept {
     builder_.build(root_.c_str());
   }
 
-  template <Allocator Memory>
-  bool PathIndex<Memory>::complete() const noexcept {
+  bool PathIndex::complete() const noexcept {
     return storage_.complete.load(std::memory_order_acquire);
   }
 
-  template <Allocator Memory>
-  bool PathIndex<Memory>::canQueryInline(const FindPaths& request) const noexcept {
+  bool PathIndex::canQueryInline(const FindPaths& request) const noexcept {
     constexpr std::size_t maximum_inline_entries = 256;
     constexpr std::size_t maximum_inline_steps = 16 * 1024;
     const auto query_length = std::max<std::size_t>(1, request.query.size());
@@ -496,13 +478,11 @@ namespace telar::runtime {
     return complete() && !request.refresh && root_ == request.root && storage_.count <= maximum_inline_entries && storage_.bytes_used <= maximum_inline_steps / query_length;
   }
 
-  template <Allocator Memory>
-  std::string_view PathIndex<Memory>::path(const IndexedPath& entry) const noexcept {
+  std::string_view PathIndex::path(const IndexedPath& entry) const noexcept {
     return storage_.path(entry);
   }
 
-  template <Allocator Memory>
-  std::size_t PathIndex<Memory>::depth(std::string_view path) noexcept {
+  std::size_t PathIndex::depth(std::string_view path) noexcept {
     if (path.ends_with('/')) {
       path.remove_suffix(1);
     }
@@ -510,8 +490,7 @@ namespace telar::runtime {
     return std::count(path.begin(), path.end(), '/');
   }
 
-  template <Allocator Memory>
-  bool PathIndex<Memory>::better(const Candidate& left, const Candidate& right, bool browse) const noexcept {
+  bool PathIndex::better(const Candidate& left, const Candidate& right, bool browse) const noexcept {
     const auto& left_entry = storage_.entry(left.entry);
     const auto& right_entry = storage_.entry(right.entry);
     const auto left_path = path(left_entry);
@@ -537,8 +516,6 @@ namespace telar::runtime {
 
     return left_path < right_path;
   }
-
-  template class PathIndex<ConcurrentMemory>;
 
   void OwnedPathQuery::assign(const FindPaths& request) {
     request_id = request.request_id;

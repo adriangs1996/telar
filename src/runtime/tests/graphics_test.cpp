@@ -33,7 +33,7 @@ import telar.runtime.tests.check;
 using namespace telar;
 using namespace telar::runtime;
 
-static void feedGraphics(Terminal<ConcurrentMemory>& terminal, std::string_view bytes) {
+static void feedGraphics(Terminal& terminal, std::string_view bytes) {
   terminal.feed({reinterpret_cast<const Byte*>(bytes.data()), bytes.size()});
 }
 
@@ -173,9 +173,9 @@ static void testGraphicsProjection(ConcurrentMemory& memory) {
 
 static void testGraphicsTransfer(ConcurrentMemory& memory, bool shared) {
   RuntimeModel model{memory};
-  ClientStore<ConcurrentMemory> clients{memory};
+  ClientStore clients{memory};
   ClientPeer peer{memory, model, clients, ClientRole::control};
-  auto media = std::allocate_shared<PaneMedia<ConcurrentMemory>>(AllocatorRef<PaneMedia<ConcurrentMemory>, ConcurrentMemory>{memory}, memory, model.media_budget, model.graphics_limits, TerminalSize{80, 24, 8, 16});
+  auto media = std::allocate_shared<PaneMedia>(AllocatorRef<PaneMedia, ConcurrentMemory>{memory}, memory, model.media_budget, model.graphics_limits, TerminalSize{80, 24, 8, 16});
   auto& terminal = *media->terminal();
   GraphicsSynchronizer sync{peer.session().graphics_credit, 42, media};
   const auto feed = [&](std::string_view text) {
@@ -260,9 +260,9 @@ static void testGraphicsTransfer(ConcurrentMemory& memory, bool shared) {
 
 static void testIdleBoundaryTransfer(ConcurrentMemory& memory, bool shared, std::size_t placement_count) {
   RuntimeModel model{memory};
-  ClientStore<ConcurrentMemory> clients{memory};
+  ClientStore clients{memory};
   ClientPeer peer{memory, model, clients, ClientRole::control};
-  auto media = std::allocate_shared<PaneMedia<ConcurrentMemory>>(AllocatorRef<PaneMedia<ConcurrentMemory>, ConcurrentMemory>{memory}, memory, model.media_budget, model.graphics_limits, TerminalSize{80, 24, 8, 16});
+  auto media = std::allocate_shared<PaneMedia>(AllocatorRef<PaneMedia, ConcurrentMemory>{memory}, memory, model.media_budget, model.graphics_limits, TerminalSize{80, 24, 8, 16});
   GraphicsSynchronizer sync{peer.session().graphics_credit, 42, media};
   using StageResult = decltype(sync)::StageResult;
 

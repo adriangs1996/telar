@@ -67,7 +67,7 @@ namespace {
     SynchronizedAllocator<BudgetAllocator<SystemAllocator>> synchronized{budget};
     MemoryAdapter<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>> adapter{synchronized};
     ConcurrentMemory& memory = adapter;
-    Terminal<ConcurrentMemory> terminal;
+    Terminal terminal;
     std::unique_ptr<control_test::MemoryClipboard> clipboard;
 
     explicit Probe(TerminalSize size)

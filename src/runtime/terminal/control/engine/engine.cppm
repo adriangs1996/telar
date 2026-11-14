@@ -20,11 +20,10 @@ export import telar.runtime.terminal.control.clipboard;
 
 export namespace telar::runtime::control {
 
-  template <Allocator Memory>
   class Engine {
   public:
     // What the engine keeps of its terminal, its allocator, response queue and resources included, is region `a`.
-    explicit Engine(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<PtyResponseQueue&, tbc::lt::a> responses, bool enabled, tbc::view<GraphicsQueryResources, tbc::lt::a> resources = {});
+    explicit Engine(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<PtyResponseQueue&, tbc::lt::a> responses, bool enabled, tbc::view<GraphicsQueryResources, tbc::lt::a> resources = {});
 
     void bind(tbc::view<GhosttyTerminal, tbc::lt::a> terminal, tbc::view<GhosttyRenderState, tbc::lt::a> render, bool separate_media) noexcept;
 
@@ -74,13 +73,13 @@ export namespace telar::runtime::control {
 
     void externalColorsChanged() noexcept;
 
-    Clipboard<Memory>& clipboard() noexcept;
+    Clipboard& clipboard() noexcept;
 
     // A document that stands for the rows its program wrote between the sequences that began and
     // ended it, on the primary screen; `end` is the row after them, or their last row when the
     // cursor stopped within it.
     struct Zone {
-      Vector<std::uint8_t, Memory> bytes;
+      Vector<std::uint8_t, ConcurrentMemory> bytes;
       TrackedRow first;
       TrackedRow end;
       bool end_inclusive = false;
@@ -90,7 +89,7 @@ export namespace telar::runtime::control {
     std::optional<Zone> takeZone() noexcept;
 
     // Moves the document a program wrote since the last call into into.
-    bool takeDocument(Vector<std::uint8_t, Memory>& into) noexcept;
+    bool takeDocument(Vector<std::uint8_t, ConcurrentMemory>& into) noexcept;
 
     bool pasteEvents() const noexcept;
 
@@ -182,17 +181,17 @@ export namespace telar::runtime::control {
     static constexpr unsigned screen_request = 19;
     static constexpr unsigned title_request = 21;
 
-    tbc::view<Parser<Memory>, tbc::lt::a> parser_;
-    tbc::view<Reply<Memory>, tbc::lt::a> reply_;
+    tbc::view<Parser<ConcurrentMemory>, tbc::lt::a> parser_;
+    tbc::view<Reply<ConcurrentMemory>, tbc::lt::a> reply_;
     tbc::view<VtState, tbc::lt::a> state_;
-    tbc::view<Checksum<Memory>, tbc::lt::a> checksum_;
-    tbc::view<Clipboard<Memory>, tbc::lt::a> clipboard_;
-    tbc::view<GraphicsQueries<Memory>, tbc::lt::a> graphics_queries_;
-    tbc::view<Reports<Memory>, tbc::lt::a> reports_;
-    ColorQueries<Memory> colors_;
-    tbc::view<Vector<std::uint8_t, Memory>, tbc::lt::a> document_;
+    tbc::view<Checksum, tbc::lt::a> checksum_;
+    tbc::view<Clipboard, tbc::lt::a> clipboard_;
+    tbc::view<GraphicsQueries<ConcurrentMemory>, tbc::lt::a> graphics_queries_;
+    tbc::view<Reports<ConcurrentMemory>, tbc::lt::a> reports_;
+    ColorQueries<ConcurrentMemory> colors_;
+    tbc::view<Vector<std::uint8_t, ConcurrentMemory>, tbc::lt::a> document_;
     std::optional<Zone> open_zone_;
-    tbc::view<Vector<Zone, Memory>, tbc::lt::a> zones_;
+    tbc::view<Vector<Zone, ConcurrentMemory>, tbc::lt::a> zones_;
     ClientFacts facts_;
     tbc::view<PtyResponseQueue::Producer, tbc::lt::a> responses_;
     bool enabled_;
@@ -211,7 +210,5 @@ export namespace telar::runtime::control {
     std::size_t capability_offset_ = 0;
     bool paste_events_ = false;
   };
-
-  extern template class Engine<telar::ConcurrentMemory>;
 
 }

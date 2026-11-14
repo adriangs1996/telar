@@ -9,10 +9,9 @@ import telar.sys.process;
 
 namespace telar::runtime {
 
-  template <Allocator Memory>
-  void AgentSnapshotBuilder<Memory>::publish(ClientSession<Memory>& client, const RuntimeModel<Memory>& model, const AgentRegistry<Memory>& registry) {
+  void AgentSnapshotBuilder::publish(ClientSession& client, const RuntimeModel& model, const AgentRegistry<ConcurrentMemory>& registry) {
     // The entries view the model, the registry and these texts only while the snapshot is sent.
-    std::array<AgentSnapshotEntry, AgentRegistry<Memory>::capacity> entries;
+    std::array<AgentSnapshotEntry, AgentRegistry<ConcurrentMemory>::capacity> entries;
     auto& directories = directories_;
     auto& placeholders = placeholders_;
     std::size_t count = 0;
@@ -97,19 +96,17 @@ namespace telar::runtime {
     client.agent_workspace_revision = model.workspace_revision;
   }
 
-  template class AgentSnapshotBuilder<ConcurrentMemory>;
-
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  AgentService<Memory, Poller, History>::AgentService(Memory& memory)
+  template <EventLoop Poller, HistoryEventSink History>
+  AgentService<Poller, History>::AgentService(ConcurrentMemory& memory)
       : agents_(memory) {}
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void AgentService<Memory, Poller, History>::enableDescriptions(bool enabled) noexcept {
+  template <EventLoop Poller, HistoryEventSink History>
+  void AgentService<Poller, History>::enableDescriptions(bool enabled) noexcept {
     descriptions_.enable(enabled);
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void AgentService<Memory, Poller, History>::observeInput(const Pane<Memory>& pane, std::span<const Byte> bytes) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void AgentService<Poller, History>::observeInput(const Pane& pane, std::span<const Byte> bytes) {
     if (descriptions_.enabled()) {
       if (auto* agent = agents_.find(pane.id, pane.generation)) {
         agent->observeInput(bytes);
@@ -117,18 +114,18 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  std::optional<DescriptionRequest> AgentService<Memory, Poller, History>::nextDescription() {
+  template <EventLoop Poller, HistoryEventSink History>
+  std::optional<DescriptionRequest> AgentService<Poller, History>::nextDescription() {
     return descriptions_.nextDescription(agents_);
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  std::optional<HistorySessionTitle> AgentService<Memory, Poller, History>::completeDescription(const DescriptionResult& result) {
+  template <EventLoop Poller, HistoryEventSink History>
+  std::optional<HistorySessionTitle> AgentService<Poller, History>::completeDescription(const DescriptionResult& result) {
     return descriptions_.completeDescription(agents_, result);
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void AgentService<Memory, Poller, History>::report(RuntimeModel<Memory>& model, ClientSession<Memory>& client, const ReportAgent& request) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void AgentService<Poller, History>::report(RuntimeModel& model, ClientSession& client, const ReportAgent& request) {
     auto& pane = authorize(model.panes, client, request.pane_id, request.pane_generation, request.provider);
     auto* existing = agents_.find(pane.id, pane.generation);
     if (existing == nullptr && request.state == AgentReportState::continuing) {
@@ -161,8 +158,8 @@ namespace telar::runtime {
     client.connection.send(RequestCompleted{.request_id = request.request_id});
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void AgentService<Memory, Poller, History>::reportSession(RuntimeModel<Memory>& model, ClientSession<Memory>& client, const ReportAgentSession& request) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void AgentService<Poller, History>::reportSession(RuntimeModel& model, ClientSession& client, const ReportAgentSession& request) {
     auto& pane = require(model.panes, request.pane_id, request.pane_generation);
 
     ensure(pane).setSession(request.session);
@@ -170,8 +167,8 @@ namespace telar::runtime {
     client.connection.send(RequestCompleted{.request_id = request.request_id});
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void AgentService<Memory, Poller, History>::reportTitle(RuntimeModel<Memory>& model, ClientSession<Memory>& client, const ReportAgentTitle& request) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void AgentService<Poller, History>::reportTitle(RuntimeModel& model, ClientSession& client, const ReportAgentTitle& request) {
     auto& pane = authorize(model.panes, client, request.pane_id, request.pane_generation, request.provider);
     auto& agent = ensure(pane);
 
@@ -183,8 +180,8 @@ namespace telar::runtime {
     client.connection.send(RequestCompleted{.request_id = request.request_id});
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  std::optional<SessionFileRequest> AgentService<Memory, Poller, History>::nextSessionFile(std::chrono::steady_clock::time_point now) const {
+  template <EventLoop Poller, HistoryEventSink History>
+  std::optional<SessionFileRequest> AgentService<Poller, History>::nextSessionFile(std::chrono::steady_clock::time_point now) const {
     if (!has_session_files_) {
       return std::nullopt;
     }
@@ -205,8 +202,8 @@ namespace telar::runtime {
     return selected == nullptr ? std::nullopt : std::optional{SessionFileRequest{selected->pane, selected->generation, selected->file_watch}};
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void AgentService<Memory, Poller, History>::completeSessionFile(const SessionFileResult& result, std::chrono::steady_clock::time_point now) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void AgentService<Poller, History>::completeSessionFile(const SessionFileResult& result, std::chrono::steady_clock::time_point now) {
     auto* agent = agents_.find(result.request.pane, result.request.generation);
     if (agent == nullptr) {
       return;
@@ -230,8 +227,8 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  bool AgentService<Memory, Poller, History>::reportProgress(RuntimeModel<Memory>& model, ClientSession<Memory>& client, const ReportAgentProgress& request) {
+  template <EventLoop Poller, HistoryEventSink History>
+  bool AgentService<Poller, History>::reportProgress(RuntimeModel& model, ClientSession& client, const ReportAgentProgress& request) {
     auto& pane = authorize(model.panes, client, request.pane_id, request.pane_generation, request.provider);
     auto& agent = ensure(pane);
 
@@ -258,13 +255,13 @@ namespace telar::runtime {
     return applied;
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  tbc::view<Pane<Memory>&, tbc::lt::a> AgentService<Memory, Poller, History>::validateCommand(tbc::view<RuntimeModel<Memory>&, tbc::lt::a> model, ClientSession<Memory>& client, const ReportAgentCommand& request) {
+  template <EventLoop Poller, HistoryEventSink History>
+  tbc::view<Pane&, tbc::lt::a> AgentService<Poller, History>::validateCommand(tbc::view<RuntimeModel&, tbc::lt::a> model, ClientSession& client, const ReportAgentCommand& request) {
     return authorize(model.panes, client, request.pane_id, request.pane_generation, model.manifests.named(request.provider));
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void AgentService<Memory, Poller, History>::sendText(RuntimeModel<Memory>& model, Panes& panes, ClientSession<Memory>& client, const SendPaneText& request, bool focused) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void AgentService<Poller, History>::sendText(RuntimeModel& model, Panes& panes, ClientSession& client, const SendPaneText& request, bool focused) {
     auto& pane = Panes::requireGeneration(model.panes, request.pane_id, request.pane_generation);
     if (pane.exit_status || pane.output_closed) {
       throw RequestError{FailureCode::pane_exited, "Pane already exited"};
@@ -303,13 +300,13 @@ namespace telar::runtime {
       length = static_cast<std::size_t>(std::snprintf(prefix.data(), prefix.size(), "[telar: from %.*s, pane %llu] ", static_cast<int>(name.size()), name.data(), static_cast<unsigned long long>(sender->id)));
     }
 
-    panes.sendText(model.panes, client, request, {prefix.data(), length}, [this](const Pane<Memory>& target, std::span<const Byte> bytes) {
+    panes.sendText(model.panes, client, request, {prefix.data(), length}, [this](const Pane& target, std::span<const Byte> bytes) {
       observeInput(target, bytes);
     });
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void AgentService<Memory, Poller, History>::acknowledge(const AcknowledgeAgent& request) noexcept {
+  template <EventLoop Poller, HistoryEventSink History>
+  void AgentService<Poller, History>::acknowledge(const AcknowledgeAgent& request) noexcept {
     if (auto* agent = agents_.find(request.pane_id, request.pane_generation); agent != nullptr && agent->status == AgentStatus::done) {
       agent->acknowledged = true;
       if (agent->project(wallMilliseconds())) {
@@ -318,8 +315,8 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void AgentService<Memory, Poller, History>::interrupt(RuntimeModel<Memory>& model, Panes& panes, ClientSession<Memory>& client, const InterruptAgent& request, bool focused) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void AgentService<Poller, History>::interrupt(RuntimeModel& model, Panes& panes, ClientSession& client, const InterruptAgent& request, bool focused) {
     auto& pane = Panes::requireGeneration(model.panes, request.pane_id, request.pane_generation);
     if (pane.exit_status) {
       throw RequestError{FailureCode::pane_exited, "Pane already exited"};
@@ -364,8 +361,8 @@ namespace telar::runtime {
     client.connection.send(RequestCompleted{.request_id = request.request_id});
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  bool AgentService<Memory, Poller, History>::focused(const ClientStore<Memory>& clients, const ClientLayouts<Memory>& layouts, std::uint64_t pane) noexcept {
+  template <EventLoop Poller, HistoryEventSink History>
+  bool AgentService<Poller, History>::focused(const ClientStore& clients, const ClientLayouts& layouts, std::uint64_t pane) noexcept {
     for (const auto* client : clients.items()) {
       if (client != nullptr && client->role == ClientRole::interactive && !client->connection.closing && layouts.focusedPane(client->identity) == pane) {
         return true;
@@ -375,30 +372,30 @@ namespace telar::runtime {
     return false;
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  bool AgentService<Memory, Poller, History>::blocked(const Pane<Memory>& pane) const noexcept {
+  template <EventLoop Poller, HistoryEventSink History>
+  bool AgentService<Poller, History>::blocked(const Pane& pane) const noexcept {
     const auto* agent = agents_.find(pane.id, pane.generation);
 
     return agent != nullptr && agent->status == AgentStatus::blocked;
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void AgentService<Memory, Poller, History>::query(const RuntimeModel<Memory>& model, ClientSession<Memory>& client) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void AgentService<Poller, History>::query(const RuntimeModel& model, ClientSession& client) {
     snapshots_.publish(client, model, agents_);
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  std::uint64_t AgentService<Memory, Poller, History>::revision() const noexcept {
+  template <EventLoop Poller, HistoryEventSink History>
+  std::uint64_t AgentService<Poller, History>::revision() const noexcept {
     return agents_.revision();
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  const Agent* AgentService<Memory, Poller, History>::find(std::uint64_t pane, std::uint64_t generation) const noexcept {
+  template <EventLoop Poller, HistoryEventSink History>
+  const Agent* AgentService<Poller, History>::find(std::uint64_t pane, std::uint64_t generation) const noexcept {
     return agents_.find(pane, generation);
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void AgentService<Memory, Poller, History>::observeProcess(Pane<Memory>& pane, std::optional<ProcessIdentity> identity, AgentProvider provider) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void AgentService<Poller, History>::observeProcess(Pane& pane, std::optional<ProcessIdentity> identity, AgentProvider provider) {
     auto* agent = agents_.find(pane.id, pane.generation);
     if (agent != nullptr && agent->process_identity && provider == AgentProvider::unknown) {
       agents_.removeIf([&](const Agent& record) {
@@ -413,7 +410,7 @@ namespace telar::runtime {
     }
 
     if (agent == nullptr) {
-      if (agents_.records().size() == AgentRegistry<Memory>::capacity) {
+      if (agents_.records().size() == AgentRegistry<ConcurrentMemory>::capacity) {
         return;
       }
 
@@ -445,8 +442,8 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void AgentService<Memory, Poller, History>::observeProcess(Pane<Memory>& pane, const ProcessProbeResult& observation) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void AgentService<Poller, History>::observeProcess(Pane& pane, const ProcessProbeResult& observation) {
     observeProcess(pane, observation.identity, observation.provider);
     auto* agent = agents_.find(pane.id, pane.generation);
     if (agent == nullptr) {
@@ -470,8 +467,8 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void AgentService<Memory, Poller, History>::observeScreen(Pane<Memory>& pane, const AgentSignal& signal, ObservationTime time) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void AgentService<Poller, History>::observeScreen(Pane& pane, const AgentSignal& signal, ObservationTime time) {
     auto* agent = agents_.find(pane.id, pane.generation);
     if (agent == nullptr) {
       return;
@@ -488,8 +485,8 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void AgentService<Memory, Poller, History>::refresh(RuntimeModel<Memory>& model, Panes& panes, const ClientStore<Memory>& clients, const ClientLayouts<Memory>& layouts, std::chrono::steady_clock::time_point now) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void AgentService<Poller, History>::refresh(RuntimeModel& model, Panes& panes, const ClientStore& clients, const ClientLayouts& layouts, std::chrono::steady_clock::time_point now) {
     agents_.removeIf([&](const Agent& agent) {
       return findPane(model.panes, agent.pane, agent.generation) == nullptr || (!agent.evidence.choose(wallMilliseconds()) && agent.observed_at != 0);
     });
@@ -525,18 +522,18 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  Agent& AgentService<Memory, Poller, History>::ensure(Pane<Memory>& pane) {
+  template <EventLoop Poller, HistoryEventSink History>
+  Agent& AgentService<Poller, History>::ensure(Pane& pane) {
     auto& agent = agents_.ensure(pane.id, pane.generation);
 
     agent.session_id = pane.history_session;
     return agent;
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void AgentService<Memory, Poller, History>::deliverSounds(ClientStore<Memory>& clients) noexcept {
+  template <EventLoop Poller, HistoryEventSink History>
+  void AgentService<Poller, History>::deliverSounds(ClientStore& clients) noexcept {
     for (const auto& notification : sounds_.queued()) {
-      broadcast(clients, [](const ClientSession<Memory>& client) {
+      broadcast(clients, [](const ClientSession& client) {
         return client.subscribed;
       },
           notification);
@@ -545,9 +542,9 @@ namespace telar::runtime {
     sounds_.clear();
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void AgentService<Memory, Poller, History>::projected(std::uint64_t pane, std::uint64_t generation) noexcept {
-    const auto pending = DescriptionQueue<Memory>::pending(agents_);
+  template <EventLoop Poller, HistoryEventSink History>
+  void AgentService<Poller, History>::projected(std::uint64_t pane, std::uint64_t generation) noexcept {
+    const auto pending = DescriptionQueue::pending(agents_);
 
     if (auto* agent = agents_.find(pane, generation)) {
       descriptions_.project(pending, *agent);
@@ -557,13 +554,13 @@ namespace telar::runtime {
     agents_.changed();
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  bool AgentService<Memory, Poller, History>::alerts(const Agent& agent, AgentStatus previous) noexcept {
+  template <EventLoop Poller, HistoryEventSink History>
+  bool AgentService<Poller, History>::alerts(const Agent& agent, AgentStatus previous) noexcept {
     return (agent.status == AgentStatus::done && previous == AgentStatus::working) || (agent.status == AgentStatus::blocked && previous != AgentStatus::blocked);
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  bool AgentService<Memory, Poller, History>::settleInterrupt(Panes& panes, bool focused, Pane<Memory>& pane, Agent& agent, std::chrono::steady_clock::time_point now) {
+  template <EventLoop Poller, HistoryEventSink History>
+  bool AgentService<Poller, History>::settleInterrupt(Panes& panes, bool focused, Pane& pane, Agent& agent, std::chrono::steady_clock::time_point now) {
     bool settled = false;
 
     if (hasIdleScreen(agent.provider)) {
@@ -616,8 +613,8 @@ namespace telar::runtime {
     return false;
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  Pane<Memory>& AgentService<Memory, Poller, History>::require(PaneStore<Memory>& panes, std::uint64_t identity, std::uint64_t generation) {
+  template <EventLoop Poller, HistoryEventSink History>
+  Pane& AgentService<Poller, History>::require(PaneStore& panes, std::uint64_t identity, std::uint64_t generation) {
     auto& pane = Panes::requireGeneration(panes, identity, generation);
     if (generation == 0 || pane.exit_status) {
       throw RequestError{FailureCode::pane_not_found, "Pane not found"};
@@ -626,8 +623,8 @@ namespace telar::runtime {
     return pane;
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  tbc::view<Pane<Memory>&, tbc::lt::a> AgentService<Memory, Poller, History>::authorize(tbc::view<PaneStore<Memory>&, tbc::lt::a> panes, const ClientSession<Memory>& client, std::uint64_t pane_id, std::uint64_t generation, AgentProvider provider) {
+  template <EventLoop Poller, HistoryEventSink History>
+  tbc::view<Pane&, tbc::lt::a> AgentService<Poller, History>::authorize(tbc::view<PaneStore&, tbc::lt::a> panes, const ClientSession& client, std::uint64_t pane_id, std::uint64_t generation, AgentProvider provider) {
     TELAR_TRACE("agents.authorize");
     auto& pane = require(panes, pane_id, generation);
 
@@ -646,8 +643,8 @@ namespace telar::runtime {
     return pane;
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void AgentService<Memory, Poller, History>::SoundQueue::push(const Agent& agent) noexcept {
+  template <EventLoop Poller, HistoryEventSink History>
+  void AgentService<Poller, History>::SoundQueue::push(const Agent& agent) noexcept {
     if (count_ < entries_.size()) {
       entries_[count_++] = AgentSoundNotification{
           .pane_id = agent.pane,
@@ -657,18 +654,18 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  std::span<const AgentSoundNotification> AgentService<Memory, Poller, History>::SoundQueue::queued() const noexcept {
+  template <EventLoop Poller, HistoryEventSink History>
+  std::span<const AgentSoundNotification> AgentService<Poller, History>::SoundQueue::queued() const noexcept {
     return std::span{entries_}.first(count_);
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void AgentService<Memory, Poller, History>::SoundQueue::clear() noexcept {
+  template <EventLoop Poller, HistoryEventSink History>
+  void AgentService<Poller, History>::SoundQueue::clear() noexcept {
     count_ = 0;
   }
 
-  template class AgentService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>, RuntimeBackground>;
-  template class AgentService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>, DiscardedHistory>;
+  template class AgentService<NativeEventLoop<ConcurrentMemory>, RuntimeBackground>;
+  template class AgentService<NativeEventLoop<ConcurrentMemory>, DiscardedHistory>;
 
   void ownDirectory(tbc::view<Launch&, tbc::lt::a> launch, tbc::view<LaunchDirectory&, tbc::lt::a> storage, std::string_view directory) {
     if (directory.size() > 4096) {
@@ -679,8 +676,7 @@ namespace telar::runtime {
     launch.cwd = storage.view();
   }
 
-  template <Allocator Memory>
-  tbc::view<Launch, tbc::lt::a> resolveLaunchDirectory(const RuntimeModel<Memory>& model, const ClientSession<Memory>& client, tbc::view<Launch, tbc::lt::a> launch, tbc::view<LaunchDirectory&, tbc::lt::a> directory, LaunchDirectoryScope scope) {
+  tbc::view<Launch, tbc::lt::a> resolveLaunchDirectory(const RuntimeModel& model, const ClientSession& client, tbc::view<Launch, tbc::lt::a> launch, tbc::view<LaunchDirectory&, tbc::lt::a> directory, LaunchDirectoryScope scope) {
     if (launch.cwd_source == 0) {
       return launch;
     }
@@ -709,14 +705,10 @@ namespace telar::runtime {
     return launch;
   }
 
-  template tbc::view<Launch, tbc::lt::a> resolveLaunchDirectory<ConcurrentMemory>(const RuntimeModel<ConcurrentMemory>& model, const ClientSession<ConcurrentMemory>& client, tbc::view<Launch, tbc::lt::a> launch, tbc::view<LaunchDirectory&, tbc::lt::a> directory, LaunchDirectoryScope scope);
-
-  template <Allocator Memory>
-  PluginDelivery<Memory>::PluginDelivery(LimitService<Memory>& limits) noexcept
+  PluginDelivery::PluginDelivery(LimitService& limits) noexcept
       : limits_(limits) {}
 
-  template <Allocator Memory>
-  void PluginDelivery<Memory>::reportMetrics(const plugins::TapMetrics& now) {
+  void PluginDelivery::reportMetrics(const plugins::TapMetrics& now) {
     reportGrowth(now.dropped_queue, previous_.dropped_queue, {"plugins.tap.queue_depth", "exchanges", plugins::Limits::queue_depth});
     reportGrowth(now.dropped_bytes, previous_.dropped_bytes, {"plugins.tap.max_held_bytes", "bytes", plugins::Limits::held_bytes});
     reportGrowth(now.timeouts, previous_.timeouts, {"plugins.tap.reply_timeout_ms", "ms", std::chrono::duration_cast<std::chrono::milliseconds>(plugins::Limits::reply_deadline).count()});
@@ -724,8 +716,7 @@ namespace telar::runtime {
     previous_ = now;
   }
 
-  template <Allocator Memory>
-  void PluginDelivery<Memory>::publish(ClientStore<Memory>& clients, const NotificationBody& body) {
+  void PluginDelivery::publish(ClientStore& clients, const NotificationBody& body) {
     const Notification notification{body};
     std::array<Byte, validation_bytes> validation;
     std::span<Byte> remaining{validation};
@@ -736,24 +727,21 @@ namespace telar::runtime {
       return;
     }
 
-    ClientControl<Memory>::publish(clients, notification);
+    ClientControl::publish(clients, notification);
   }
 
-  template <Allocator Memory>
-  void PluginDelivery<Memory>::reportGrowth(std::uint64_t current, std::uint64_t previous, const LimitReach& reach) {
+  void PluginDelivery::reportGrowth(std::uint64_t current, std::uint64_t previous, const LimitReach& reach) {
     if (current > previous) {
       limits_.report(reach);
     }
   }
 
-  template class PluginDelivery<ConcurrentMemory>;
-
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  WorkspaceService<Memory, Poller, History>::WorkspaceService(Memory& memory)
+  template <EventLoop Poller, HistoryEventSink History>
+  WorkspaceService<Poller, History>::WorkspaceService(ConcurrentMemory& memory)
       : memory_(memory) {}
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  Workspace<Memory>& WorkspaceService<Memory, Poller, History>::require(WorkspaceStore<Memory>& workspaces, WorkspaceLocation location) {
+  template <EventLoop Poller, HistoryEventSink History>
+  Workspace& WorkspaceService<Poller, History>::require(WorkspaceStore& workspaces, WorkspaceLocation location) {
     auto* workspace = workspaces.find(location.id);
     if (location.kind != WorkspaceLocation::Kind::workspace || workspace == nullptr) {
       throw RequestError{FailureCode::workspace_not_found, "Workspace does not exist"};
@@ -762,8 +750,8 @@ namespace telar::runtime {
     return *workspace;
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  Tab<Memory>& WorkspaceService<Memory, Poller, History>::requireTab(WorkspaceStore<Memory>& workspaces, TabLocation location) {
+  template <EventLoop Poller, HistoryEventSink History>
+  Tab& WorkspaceService<Poller, History>::requireTab(WorkspaceStore& workspaces, TabLocation location) {
     auto* tab = require(workspaces, location.workspace).tab(location.tab_id);
     if (tab == nullptr) {
       throw RequestError{FailureCode::tab_not_found, "Tab does not exist"};
@@ -772,24 +760,24 @@ namespace telar::runtime {
     return *tab;
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  tbc::view<const ConfigureTerminalColors*, tbc::lt::a> WorkspaceService<Memory, Poller, History>::ownerColors(const WorkspaceStore<Memory>& workspaces, tbc::view<const ClientStore<Memory>&, tbc::lt::a> clients, std::uint64_t workspace) noexcept {
+  template <EventLoop Poller, HistoryEventSink History>
+  tbc::view<const ConfigureTerminalColors*, tbc::lt::a> WorkspaceService<Poller, History>::ownerColors(const WorkspaceStore& workspaces, tbc::view<const ClientStore&, tbc::lt::a> clients, std::uint64_t workspace) noexcept {
     const auto* found = workspaces.find(workspace);
     const auto* owner = found != nullptr && found->geometry_client ? clients.find(*found->geometry_client) : nullptr;
 
     return owner == nullptr ? nullptr : &owner->colors;
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  bool WorkspaceService<Memory, Poller, History>::ownerBarePrompt(const WorkspaceStore<Memory>& workspaces, const ClientStore<Memory>& clients, std::uint64_t workspace) noexcept {
+  template <EventLoop Poller, HistoryEventSink History>
+  bool WorkspaceService<Poller, History>::ownerBarePrompt(const WorkspaceStore& workspaces, const ClientStore& clients, std::uint64_t workspace) noexcept {
     const auto* found = workspaces.find(workspace);
     const auto* owner = found != nullptr && found->geometry_client ? clients.find(*found->geometry_client) : nullptr;
 
     return owner != nullptr && owner->bare_prompt;
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void WorkspaceService<Memory, Poller, History>::open(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients, std::uint64_t client_id, const OpenPane& request) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorkspaceService<Poller, History>::open(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const OpenPane& request) {
     std::optional<std::uint64_t> pane;
     bool created = false;
 
@@ -809,7 +797,7 @@ namespace telar::runtime {
 
       LaunchDirectory directory;
       auto launch = resolveLaunchDirectory(model, requireClient(clients, client_id), *request.launch, directory);
-      const Workspace<Memory>* workspace = nullptr;
+      const Workspace* workspace = nullptr;
 
       for (const auto* candidate : model.workspaces.items()) {
         if (candidate != nullptr && candidate->path == launch.cwd) {
@@ -840,8 +828,8 @@ namespace telar::runtime {
     sendOpened(client, request.request_id, Panes::require(model.panes, *pane), created);
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void WorkspaceService<Memory, Poller, History>::createWorkspace(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients, std::uint64_t client_id, const CreateWorkspace& request) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorkspaceService<Poller, History>::createWorkspace(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreateWorkspace& request) {
     LaunchDirectory directory;
     auto launch = resolveLaunchDirectory(model, requireClient(clients, client_id), request.launch, directory);
 
@@ -854,8 +842,8 @@ namespace telar::runtime {
     sendOpened(requireClient(clients, client_id), request.request_id, Panes::require(model.panes, pane), true, GenerationField::omitted);
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void WorkspaceService<Memory, Poller, History>::createTab(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients, std::uint64_t client_id, const CreateTab& request) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorkspaceService<Poller, History>::createTab(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreateTab& request) {
     if (!acquireGeometry(model.panes, model.metrics, requireClient(clients, client_id), require(model.workspaces, request.workspace))) {
       throw RequestError{FailureCode::resource_limit, "workspace geometry is leased by another client"};
     }
@@ -895,8 +883,8 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  std::uint64_t WorkspaceService<Memory, Poller, History>::launchBackground(RuntimeModel<Memory>& model, Panes& panes, const ConfigureTerminalColors* owner_colors, bool bare_prompt, const LaunchTab& request) {
+  template <EventLoop Poller, HistoryEventSink History>
+  std::uint64_t WorkspaceService<Poller, History>::launchBackground(RuntimeModel& model, Panes& panes, const ConfigureTerminalColors* owner_colors, bool bare_prompt, const LaunchTab& request) {
     if (request.launch.cwd_source != 0) {
       throw RequestError{FailureCode::invalid_request, "A background tab requires an explicit working directory"};
     }
@@ -932,8 +920,8 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void WorkspaceService<Memory, Poller, History>::launchTab(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients, std::uint64_t client_id, const LaunchTab& request) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorkspaceService<Poller, History>::launchTab(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const LaunchTab& request) {
     const auto pane = launchBackground(model, panes, ownerColors(model.workspaces, clients, request.workspace), ownerBarePrompt(model.workspaces, clients, request.workspace), request);
     const auto& launched = Panes::require(model.panes, pane);
 
@@ -941,8 +929,8 @@ namespace telar::runtime {
     sendOpened(requireClient(clients, client_id), request.request_id, launched, false);
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void WorkspaceService<Memory, Poller, History>::createPane(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients, std::uint64_t client_id, const CreatePane& request) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorkspaceService<Poller, History>::createPane(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreatePane& request) {
     const auto* workspace = model.workspaces.find(request.location.workspace.id);
     const auto* tab = workspace == nullptr ? nullptr : workspace->tab(request.location.tab_id);
     if (request.location.workspace.kind != WorkspaceLocation::Kind::workspace || tab == nullptr || (!firstPane(model.panes, *tab) && !tabHeld(clients, request.location))) {
@@ -954,16 +942,16 @@ namespace telar::runtime {
     sendOpened(requireClient(clients, client_id), request.request_id, Panes::require(model.panes, pane), true, GenerationField::omitted);
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void WorkspaceService<Memory, Poller, History>::renameWorkspace(RuntimeModel<Memory>& model, ClientSession<Memory>& client, const RenameWorkspace& request) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorkspaceService<Poller, History>::renameWorkspace(RuntimeModel& model, ClientSession& client, const RenameWorkspace& request) {
     require(model.workspaces, request.workspace).name.assign(request.name);
     ++model.workspace_revision;
     notify(request.workspace.id, client.id);
     workspaceSnapshot(model, client, RequestWorkspaceSnapshot{request.request_id, request.workspace});
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void WorkspaceService<Memory, Poller, History>::renameTab(RuntimeModel<Memory>& model, ClientSession<Memory>& client, const RenameTab& request) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorkspaceService<Poller, History>::renameTab(RuntimeModel& model, ClientSession& client, const RenameTab& request) {
     auto& tab = requireTab(model.workspaces, request.location);
 
     tab.label.assign(request.label);
@@ -972,8 +960,8 @@ namespace telar::runtime {
     client.connection.send(TabRenamed{.request_id = request.request_id, .location = request.location, .label = tab.label});
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void WorkspaceService<Memory, Poller, History>::moveTab(RuntimeModel<Memory>& model, ClientSession<Memory>& client, const MoveTab& request) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorkspaceService<Poller, History>::moveTab(RuntimeModel& model, ClientSession& client, const MoveTab& request) {
     auto& workspace = require(model.workspaces, request.location.workspace);
     auto* tab = workspace.tab(request.location.tab_id);
     if (tab == nullptr) {
@@ -1014,8 +1002,8 @@ namespace telar::runtime {
     client.connection.send(TabMoved{.request_id = request.request_id, .location = request.location, .position = static_cast<std::uint16_t>(to)});
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void WorkspaceService<Memory, Poller, History>::closePane(RuntimeModel<Memory>& model, const ClientSession<Memory>& client, const ClosePane& request) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorkspaceService<Poller, History>::closePane(RuntimeModel& model, const ClientSession& client, const ClosePane& request) {
     if (client.attachment(request.pane_id) == nullptr) {
       throw RequestError{FailureCode::pane_not_found, "pane not attached"};
     }
@@ -1023,8 +1011,8 @@ namespace telar::runtime {
     Panes::require(model.panes, request.pane_id).requestClose();
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void WorkspaceService<Memory, Poller, History>::collectExited(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorkspaceService<Poller, History>::collectExited(RuntimeModel& model, Panes& panes, ClientStore& clients) {
     for (std::size_t slot = 0; slot < model.panes.items().size(); ++slot) {
       auto* pane = model.panes.items()[slot];
       if (pane == nullptr || !pane->output_closed || !pane->exit_status || pane->observers != 0) {
@@ -1050,8 +1038,8 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void WorkspaceService<Memory, Poller, History>::holdTab(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients, std::uint64_t client_id, const HoldTab& request) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorkspaceService<Poller, History>::holdTab(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const HoldTab& request) {
     TELAR_TRACE("runtime.holdTab");
     const auto* workspace = model.workspaces.find(request.location.workspace.id);
     if (request.location.workspace.kind != WorkspaceLocation::Kind::workspace || workspace == nullptr || workspace->tab(request.location.tab_id) == nullptr) {
@@ -1072,8 +1060,8 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void WorkspaceService<Memory, Poller, History>::releaseHeldTabs(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients, std::uint64_t client_id) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorkspaceService<Poller, History>::releaseHeldTabs(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id) {
     while (auto* client = clients.find(client_id)) {
       const auto location = client->held_tabs.pop();
       if (!location) {
@@ -1084,8 +1072,8 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void WorkspaceService<Memory, Poller, History>::closeTab(RuntimeModel<Memory>& model, ClientSession<Memory>& client, const CloseTab& request) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorkspaceService<Poller, History>::closeTab(RuntimeModel& model, ClientSession& client, const CloseTab& request) {
     auto closed = removeTab(model, request.location);
 
     notify(request.location.workspace.id, client.id, closed.previous_workspace);
@@ -1093,21 +1081,21 @@ namespace telar::runtime {
     client.connection.send(closed);
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void WorkspaceService<Memory, Poller, History>::closeWorkspace(RuntimeModel<Memory>& model, ClientStore<Memory>& clients, std::uint64_t identity) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorkspaceService<Poller, History>::closeWorkspace(RuntimeModel& model, ClientStore& clients, std::uint64_t identity) {
     auto* workspace = model.workspaces.find(identity);
 
     while (workspace != nullptr && !workspace->tabs.empty()) {
       const auto closed = removeTab(model, TabLocation{WorkspaceLocation{.id = identity}, workspace->tabs.front().id});
 
-      broadcastTabClosed(clients, closed, [](const ClientSession<Memory>&) {});
+      broadcastTabClosed(clients, closed, [](const ClientSession&) {});
 
       workspace = model.workspaces.find(identity);
     }
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void WorkspaceService<Memory, Poller, History>::tabSnapshot(RuntimeModel<Memory>& model, ClientStore<Memory>& clients, std::uint64_t client_id, const RequestTabSnapshot& request) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorkspaceService<Poller, History>::tabSnapshot(RuntimeModel& model, ClientStore& clients, std::uint64_t client_id, const RequestTabSnapshot& request) {
     const auto* workspace = model.workspaces.find(request.location.workspace.id);
     const auto* tab = workspace == nullptr ? nullptr : workspace->tab(request.location.tab_id);
     if (request.location.workspace.kind != WorkspaceLocation::Kind::workspace || tab == nullptr || (!firstPane(model.panes, *tab) && !tabHeld(clients, request.location))) {
@@ -1117,8 +1105,8 @@ namespace telar::runtime {
     requireClient(clients, client_id).connection.defer(request);
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void WorkspaceService<Memory, Poller, History>::workspaceSnapshot(RuntimeModel<Memory>& model, ClientSession<Memory>& client, const RequestWorkspaceSnapshot& request) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorkspaceService<Poller, History>::workspaceSnapshot(RuntimeModel& model, ClientSession& client, const RequestWorkspaceSnapshot& request) {
     const auto* workspace = model.workspaces.find(request.workspace.id);
     if (request.workspace.kind != WorkspaceLocation::Kind::workspace || workspace == nullptr) {
       throw RequestError{FailureCode::workspace_not_found, "workspace not found"};
@@ -1130,8 +1118,8 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void WorkspaceService<Memory, Poller, History>::publishList(const RuntimeModel<Memory>& model, ClientSession<Memory>& client) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorkspaceService<Poller, History>::publishList(const RuntimeModel& model, ClientSession& client) {
     std::array<WorkspaceListEntry, 64> entries{};
     std::size_t count = 0;
 
@@ -1148,7 +1136,7 @@ namespace telar::runtime {
       }
     }
 
-    std::array<WorktreeListEntry, Worktrees<Memory>::capacity> worktrees;
+    std::array<WorktreeListEntry, Worktrees::capacity> worktrees;
     std::size_t worktree_count = 0;
 
     for (const auto* entry : model.worktrees.items()) {
@@ -1161,8 +1149,8 @@ namespace telar::runtime {
     client.workspace_revision = model.workspace_revision;
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void WorkspaceService<Memory, Poller, History>::deliverNotices(ClientStore<Memory>& clients) noexcept {
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorkspaceService<Poller, History>::deliverNotices(ClientStore& clients) noexcept {
     if (overflowed_) {
       for (auto* client : clients.items()) {
         if (client != nullptr && client->workspace && client->connection.negotiated && !client->connection.closing) {
@@ -1179,8 +1167,8 @@ namespace telar::runtime {
     overflowed_ = false;
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void WorkspaceService<Memory, Poller, History>::notify(std::uint64_t workspace, std::uint64_t origin, std::optional<std::uint64_t> previous) noexcept {
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorkspaceService<Poller, History>::notify(std::uint64_t workspace, std::uint64_t origin, std::optional<std::uint64_t> previous) noexcept {
     if (notice_count_ == notices_.size()) {
       overflowed_ = true;
       return;
@@ -1189,8 +1177,8 @@ namespace telar::runtime {
     notices_[notice_count_++] = {workspace, origin, previous};
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void WorkspaceService<Memory, Poller, History>::releaseEmptyTab(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients, TabLocation location) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorkspaceService<Poller, History>::releaseEmptyTab(RuntimeModel& model, Panes& panes, ClientStore& clients, TabLocation location) {
     auto* workspace = model.workspaces.find(location.workspace.id);
     auto* tab = workspace == nullptr ? nullptr : workspace->tab(location.tab_id);
     if (tab == nullptr || !tab->panes.empty() || tabHeld(clients, location)) {
@@ -1201,7 +1189,7 @@ namespace telar::runtime {
     std::array<std::uint64_t, client_capacity> viewers{};
     std::size_t count = 0;
 
-    broadcastTabClosed(clients, closed, [&](const ClientSession<Memory>& client) {
+    broadcastTabClosed(clients, closed, [&](const ClientSession& client) {
       viewers[count++] = client.id;
     });
 
@@ -1212,13 +1200,13 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
+  template <EventLoop Poller, HistoryEventSink History>
   template <typename Seen>
-  void WorkspaceService<Memory, Poller, History>::broadcastTabClosed(ClientStore<Memory>& clients, const TabClosed& closed, Seen&& seen) noexcept {
-    deliver(clients, [&](const ClientSession<Memory>& client) {
+  void WorkspaceService<Poller, History>::broadcastTabClosed(ClientStore& clients, const TabClosed& closed, Seen&& seen) noexcept {
+    deliver(clients, [&](const ClientSession& client) {
       return client.connection.negotiated && client.workspace == closed.location.workspace.id;
     },
-        [&](ClientSession<Memory>& client) {
+        [&](ClientSession& client) {
           seen(client);
           if (!client.connection.trySend(closed)) {
             client.workspace_resync = ResyncRequired{.workspace = closed.location.workspace, .workspace_closed = closed.workspace_closed, .previous_workspace = closed.previous_workspace};
@@ -1226,8 +1214,8 @@ namespace telar::runtime {
         });
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  TabClosed WorkspaceService<Memory, Poller, History>::removeTab(RuntimeModel<Memory>& model, TabLocation location) {
+  template <EventLoop Poller, HistoryEventSink History>
+  TabClosed WorkspaceService<Poller, History>::removeTab(RuntimeModel& model, TabLocation location) {
     auto* workspace = model.workspaces.find(location.workspace.id);
     auto* tab = workspace == nullptr ? nullptr : workspace->tab(location.tab_id);
     if (location.workspace.kind != WorkspaceLocation::Kind::workspace || tab == nullptr) {
@@ -1255,8 +1243,8 @@ namespace telar::runtime {
     return TabClosed{.location = location, .workspace_closed = workspace_closed, .previous_workspace = previous};
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void WorkspaceService<Memory, Poller, History>::leaveEmptyViews(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients, std::uint64_t workspace) noexcept {
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorkspaceService<Poller, History>::leaveEmptyViews(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t workspace) noexcept {
     for (const auto* pane : model.panes.items()) {
       if (pane != nullptr && pane->location.workspace.id == workspace && pane->exit_status) {
         return;
@@ -1277,8 +1265,8 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void WorkspaceService<Memory, Poller, History>::retainFinalText(ExitedPanes& exited, Pane<Memory>& pane) noexcept {
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorkspaceService<Poller, History>::retainFinalText(ExitedPanes& exited, Pane& pane) noexcept {
     const auto exit_code = pane.exitCode();
 
     try {
@@ -1297,14 +1285,14 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  std::uint64_t WorkspaceService<Memory, Poller, History>::createRoot(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients, std::uint64_t client_id, const Launch& launch, TerminalSize size, std::string_view name, bool replace_view) {
+  template <EventLoop Poller, HistoryEventSink History>
+  std::uint64_t WorkspaceService<Poller, History>::createRoot(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const Launch& launch, TerminalSize size, std::string_view name, bool replace_view) {
     if (model.next_tab_id == 0 || model.workspaces.nextCounter() == 0) {
       throw RequestError{FailureCode::resource_limit, "could not create workspace"};
     }
 
     const auto workspace_id = model.workspaces.nextId();
-    auto workspace = makeOwned<Workspace<Memory>>(memory_, memory_, workspace_id, launch.cwd, name);
+    auto workspace = makeOwned<Workspace>(memory_, memory_, workspace_id, launch.cwd, name);
     const auto tab_id = model.next_tab_id;
 
     workspace->tabs.emplace_back(memory_, tab_id, std::string_view{});
@@ -1338,8 +1326,8 @@ namespace telar::runtime {
     return *pane;
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  std::uint64_t WorkspaceService<Memory, Poller, History>::nextTabIdentity(const RuntimeModel<Memory>& model) {
+  template <EventLoop Poller, HistoryEventSink History>
+  std::uint64_t WorkspaceService<Poller, History>::nextTabIdentity(const RuntimeModel& model) {
     if (model.next_tab_id == 0) {
       throw RequestError{FailureCode::spawn_failed, "could not start the command"};
     }
@@ -1347,8 +1335,8 @@ namespace telar::runtime {
     return model.next_tab_id;
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  std::uint64_t WorkspaceService<Memory, Poller, History>::createAt(RuntimeModel<Memory>& model, Panes& panes, ClientStore<Memory>& clients, std::uint64_t client_id, TabLocation location, Launch launch, TerminalSize size) {
+  template <EventLoop Poller, HistoryEventSink History>
+  std::uint64_t WorkspaceService<Poller, History>::createAt(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, TabLocation location, Launch launch, TerminalSize size) {
     requireTab(model.workspaces, location);
     auto& client = requireClient(clients, client_id);
     if (!acquireGeometry(model.panes, model.metrics, client, require(model.workspaces, location.workspace))) {
@@ -1381,13 +1369,13 @@ namespace telar::runtime {
     return pane;
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  std::optional<std::uint64_t> WorkspaceService<Memory, Poller, History>::firstPane(const PaneStore<Memory>& panes, const Workspace<Memory>& workspace) noexcept {
+  template <EventLoop Poller, HistoryEventSink History>
+  std::optional<std::uint64_t> WorkspaceService<Poller, History>::firstPane(const PaneStore& panes, const Workspace& workspace) noexcept {
     return workspace.tabs.empty() ? std::nullopt : firstPane(panes, workspace.tabs.front());
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  std::optional<std::uint64_t> WorkspaceService<Memory, Poller, History>::firstPane(const PaneStore<Memory>& panes, const Tab<Memory>& tab) noexcept {
+  template <EventLoop Poller, HistoryEventSink History>
+  std::optional<std::uint64_t> WorkspaceService<Poller, History>::firstPane(const PaneStore& panes, const Tab& tab) noexcept {
     for (const auto identity : tab.panes) {
       if (const auto* pane = panes.find(identity); pane != nullptr && !pane->close_requested && !pane->exit_status) {
         return identity;
@@ -1397,8 +1385,8 @@ namespace telar::runtime {
     return std::nullopt;
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void WorkspaceService<Memory, Poller, History>::createDirectories(std::string_view path) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorkspaceService<Poller, History>::createDirectories(std::string_view path) {
     if (path.empty() || path.size() >= PATH_MAX || path.front() != '/') {
       throw RequestError{FailureCode::invalid_request, "Working directory must be an absolute path"};
     }
@@ -1422,8 +1410,8 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void WorkspaceService<Memory, Poller, History>::sendOpened(ClientSession<Memory>& client, std::uint64_t request, const Pane<Memory>& pane, bool created, GenerationField generation) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorkspaceService<Poller, History>::sendOpened(ClientSession& client, std::uint64_t request, const Pane& pane, bool created, GenerationField generation) {
     client.connection.send(PaneOpened{
         .request_id = request,
         .pane_id = pane.id,
@@ -1433,16 +1421,16 @@ namespace telar::runtime {
     });
   }
 
-  template class WorkspaceService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>, RuntimeBackground>;
-  template class WorkspaceService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>, DiscardedHistory>;
+  template class WorkspaceService<NativeEventLoop<ConcurrentMemory>, RuntimeBackground>;
+  template class WorkspaceService<NativeEventLoop<ConcurrentMemory>, DiscardedHistory>;
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  WorktreeService<Memory, Poller, History>::WorktreeService(Memory& memory, LimitService<Memory>& limits)
+  template <EventLoop Poller, HistoryEventSink History>
+  WorktreeService<Poller, History>::WorktreeService(ConcurrentMemory& memory, LimitService& limits)
       : memory_(memory),
         limits_(limits) {}
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void WorktreeService<Memory, Poller, History>::registerEntry(RuntimeModel<Memory>& model, ClientSession<Memory>& client, const RegisterWorktree& request) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorktreeService<Poller, History>::registerEntry(RuntimeModel& model, ClientSession& client, const RegisterWorktree& request) {
     Workspaces::require(model.workspaces, WorkspaceLocation{.id = request.source});
     if (request.created_by) {
       const auto* pane = findPane(model.panes, *request.created_by, client.verified_generation);
@@ -1457,8 +1445,8 @@ namespace telar::runtime {
     client.connection.send(result);
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void WorktreeService<Memory, Poller, History>::launch(RuntimeModel<Memory>& model, Workspaces& workspaces, Panes& panes, ClientStore<Memory>& clients, std::uint64_t client_id, const LaunchWorktree& request) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorktreeService<Poller, History>::launch(RuntimeModel& model, Workspaces& workspaces, Panes& panes, ClientStore& clients, std::uint64_t client_id, const LaunchWorktree& request) {
     const auto& entry = require(model.worktrees, request.worktree);
     auto* found = entry.workspace ? model.workspaces.find(*entry.workspace) : nullptr;
     const bool created = found == nullptr;
@@ -1467,7 +1455,7 @@ namespace telar::runtime {
     if (created) {
       workspace = model.workspaces.nextId();
       const auto title = entry.title.view().empty() ? entry.branch.view() : entry.title.view();
-      auto owned = makeOwned<Workspace<Memory>>(memory_, memory_, workspace, entry.path, utf8Prefix(title, 128));
+      auto owned = makeOwned<Workspace>(memory_, memory_, workspace, entry.path, utf8Prefix(title, 128));
 
       model.workspaces.insertProvisional(workspace, std::move(owned));
     }
@@ -1507,8 +1495,8 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void WorktreeService<Memory, Poller, History>::forget(RuntimeModel<Memory>& model, Workspaces& workspaces, ClientStore<Memory>& clients, std::uint64_t client_id, const ForgetWorktree& request) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorktreeService<Poller, History>::forget(RuntimeModel& model, Workspaces& workspaces, ClientStore& clients, std::uint64_t client_id, const ForgetWorktree& request) {
     if (const auto workspace = require(model.worktrees, request.worktree).workspace) {
       workspaces.closeWorkspace(model, clients, *workspace);
     }
@@ -1520,15 +1508,15 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
+  template <EventLoop Poller, HistoryEventSink History>
   template <typename Background>
-  void WorktreeService<Memory, Poller, History>::observe(const RuntimeModel<Memory>& model, Background& background) {
+  void WorktreeService<Poller, History>::observe(const RuntimeModel& model, Background& background) {
     if (observing_) {
       return;
     }
 
     const auto now = std::chrono::steady_clock::now();
-    const Worktree<Memory>* selected = nullptr;
+    const Worktree* selected = nullptr;
 
     for (const auto* entry : model.worktrees.items()) {
       if (entry == nullptr || entry->state == WorktreeState::gone) {
@@ -1559,8 +1547,8 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void WorktreeService<Memory, Poller, History>::observed(RuntimeModel<Memory>& model, const WorktreeProbeResult& result) {
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorktreeService<Poller, History>::observed(RuntimeModel& model, const WorktreeProbeResult& result) {
     if (observing_ != result.identity) {
       return;
     }
@@ -1616,8 +1604,8 @@ namespace telar::runtime {
     model.workspace_revision += changed;
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  void WorktreeService<Memory, Poller, History>::refresh(RuntimeModel<Memory>& model) noexcept {
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorktreeService<Poller, History>::refresh(RuntimeModel& model) noexcept {
     for (auto* entry : model.worktrees.items()) {
       if (entry == nullptr) {
         continue;
@@ -1640,8 +1628,8 @@ namespace telar::runtime {
     }
   }
 
-  template <Allocator Memory, EventLoop Poller, HistoryEventSink History>
-  Worktree<Memory>& WorktreeService<Memory, Poller, History>::require(Worktrees<Memory>& worktrees, std::uint64_t identity) {
+  template <EventLoop Poller, HistoryEventSink History>
+  Worktree& WorktreeService<Poller, History>::require(Worktrees& worktrees, std::uint64_t identity) {
     auto* entry = worktrees.find(identity);
     if (entry == nullptr) {
       throw RequestError{FailureCode::worktree_not_found, "worktree not found"};
@@ -1650,12 +1638,12 @@ namespace telar::runtime {
     return *entry;
   }
 
-  template class WorktreeService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>, RuntimeBackground>;
-  template class WorktreeService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>, DiscardedHistory>;
+  template class WorktreeService<NativeEventLoop<ConcurrentMemory>, RuntimeBackground>;
+  template class WorktreeService<NativeEventLoop<ConcurrentMemory>, DiscardedHistory>;
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  Runtime<Memory, Poller, Background>::Runtime(Memory& memory, Poller& poller, Background& background, const RuntimeOptions& options, ProxyClientConfiguration proxy)
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  Runtime<Poller, Background>::Runtime(ConcurrentMemory& memory, Poller& poller, Background& background, const RuntimeOptions& options, ProxyClientConfiguration proxy)
       : memory_(memory),
         poller_(poller),
         background_(background),
@@ -1687,7 +1675,7 @@ namespace telar::runtime {
     model_.manifests = *options.manifests;
     agents_.enableDescriptions(descriptions_.enabled());
     if (options.fresh && !options.session.path.empty()) {
-      checkpoint::FileStore<Memory>::setAside(memory, options.session.path);
+      checkpoint::FileStore<ConcurrentMemory>::setAside(memory, options.session.path);
     }
 
     session_.configure(model_, panes_, client_layouts_, options.session);
@@ -1715,17 +1703,17 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::run() {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::run() {
     IgnoreCaptureEvents captures;
 
     run(captures);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  bool Runtime<Memory, Poller, Background>::route(const Event& event) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  bool Runtime<Poller, Background>::route(const Event& event) {
     if (event.kind == EventKind::signal) {
       if (event.descriptor == SIGCHLD) {
         children_exited_ = true;
@@ -1765,9 +1753,9 @@ namespace telar::runtime {
     return true;
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::accept() {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::accept() {
     constexpr unsigned accept_batch = 16;
 
     for (unsigned index = 0; index < accept_batch; ++index) {
@@ -1784,11 +1772,11 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::admitClient(FileDescriptor descriptor) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::admitClient(FileDescriptor descriptor) {
     const auto identity = clients_.nextId();
-    auto client = makeOwned<ClientSession<Memory>>(memory_, memory_, identity, std::move(descriptor));
+    auto client = makeOwned<ClientSession>(memory_, memory_, identity, std::move(descriptor));
 
     client->connection.negotiated = true;
     client->peer_identity = process_inspector_.peer(client->connection.descriptor());
@@ -1808,9 +1796,9 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::dropClient(std::uint64_t identity) noexcept {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::dropClient(std::uint64_t identity) noexcept {
     auto* client = clients_.find(identity);
     if (client == nullptr) {
       return;
@@ -1834,17 +1822,17 @@ namespace telar::runtime {
     clients_.erase(identity);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::deliverQueued() noexcept {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::deliverQueued() noexcept {
     limits_.deliver(model_, clients_);
     agents_.deliverSounds(clients_);
     workspaces_.deliverNotices(clients_);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::clientEvent(const Event& event) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::clientEvent(const Event& event) {
     auto* client = clients_.findHandle(eventIdentity(event.token));
     if (client == nullptr || client->connection.descriptor() != event.descriptor) {
       TELAR_DIAGNOSTIC(diagnostics::accumulate(model_.metrics.stale_client_messages));
@@ -1877,9 +1865,9 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::paneEvent(const Event& event) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::paneEvent(const Event& event) {
     TELAR_TRACE("runtime.paneEvent");
     auto* pane = model_.panes.findHandle(eventIdentity(event.token));
     if (pane == nullptr || pane->process->descriptor() != event.descriptor) {
@@ -1891,7 +1879,7 @@ namespace telar::runtime {
 
     try {
       if (event.kind == EventKind::readable) {
-        const auto mode = model_.panes.size() == 1 ? Pane<Memory>::ReadMode::burst : Pane<Memory>::ReadMode::once;
+        const auto mode = model_.panes.size() == 1 ? Pane::ReadMode::burst : Pane::ReadMode::once;
         if (!pane->read(mode)) {
           poller_.remove(pane->process->descriptor());
         }
@@ -1909,16 +1897,16 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::receive(std::uint64_t identity) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::receive(std::uint64_t identity) {
     Frames frames{memory_};
 
     requireClient(clients_, identity).connection.exchange(frames);
     bool remaining = false;
 
     try {
-      remaining = Connection<Memory>::dispatch(
+      remaining = Connection<ConcurrentMemory>::dispatch(
           frames,
           [&] {
             const auto* client = clients_.find(identity);
@@ -1945,10 +1933,10 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
   template <typename Message>
-  void Runtime<Memory, Poller, Background>::request(std::uint64_t identity, std::span<const Byte> payload, DecodeStorage& storage) {
+  void Runtime<Poller, Background>::request(std::uint64_t identity, std::span<const Byte> payload, DecodeStorage& storage) {
     const auto message = [&] {
       TELAR_DIAGNOSTIC(diagnostics::TimedScope timing{model_.metrics.decode});
       return Codec::decode<Message>(payload, storage);
@@ -2009,17 +1997,17 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::fail(std::uint64_t identity, const RequestFailed& failure) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::fail(std::uint64_t identity, const RequestFailed& failure) {
     if (auto* client = clients_.find(identity)) {
       client->connection.send(failure);
     }
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::dispatch(std::uint64_t identity, std::span<const Byte> payload, DecodeStorage& storage) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::dispatch(std::uint64_t identity, std::span<const Byte> payload, DecodeStorage& storage) {
     TELAR_TRACE("runtime.dispatch");
     TELAR_DIAGNOSTIC(diagnostics::accumulate(model_.metrics.client_messages));
     const bool recognized = dispatchRequest(static_cast<ClientTag>(payload.front()), [&]<typename Message> {
@@ -2031,104 +2019,104 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const ReportLimit& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const ReportLimit& message) {
     limits_.receive(model_.limits, requireClient(clients_, identity), message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const QueryLimits& message) {
-    LimitService<Memory>::query(requireClient(clients_, identity), message);
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const QueryLimits& message) {
+    LimitService::query(requireClient(clients_, identity), message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const LaunchTab& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const LaunchTab& message) {
     workspaces_.launchTab(model_, panes_, clients_, identity, message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const RegisterWorktree& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const RegisterWorktree& message) {
     Worktrees::registerEntry(model_, requireClient(clients_, identity), message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const LaunchWorktree& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const LaunchWorktree& message) {
     worktrees_.launch(model_, workspaces_, panes_, clients_, identity, message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const ForgetWorktree& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const ForgetWorktree& message) {
     Worktrees::forget(model_, workspaces_, clients_, identity, message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const ExecutionRequest& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const ExecutionRequest& message) {
     executions_.request(model_, requireClient(clients_, identity), message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const VerifyPaneDescent& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const VerifyPaneDescent& message) {
     Descents::verify(model_.panes, requireClient(clients_, identity), message);
     descents_.schedule(clients_);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const ReportAgent& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const ReportAgent& message) {
     agents_.report(model_, requireClient(clients_, identity), message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const ReportAgentTitle& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const ReportAgentTitle& message) {
     agents_.reportTitle(model_, requireClient(clients_, identity), message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const ReportAgentSession& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const ReportAgentSession& message) {
     agents_.reportSession(model_, requireClient(clients_, identity), message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const ReportAgentProgress& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const ReportAgentProgress& message) {
     if (!agents_.reportProgress(model_, requireClient(clients_, identity), message)) {
       limits_.report(LimitReach{.name = "agents.max_tasks", .noun = "tasks", .value = AgentProgress::task_capacity, .requested = AgentProgress::task_capacity + 1, .route = "agents"});
     }
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const InterruptAgent& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const InterruptAgent& message) {
     const bool focused = Agents::focused(clients_, client_layouts_, message.pane_id);
 
     agents_.interrupt(model_, panes_, requireClient(clients_, identity), message, focused);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t, const AcknowledgeAgent& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t, const AcknowledgeAgent& message) {
     agents_.acknowledge(message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const QueryAgents&) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const QueryAgents&) {
     requireClient(clients_, identity).agent_snapshot_requested = true;
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const ReportAgentCommand& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const ReportAgentCommand& message) {
     auto& client = requireClient(clients_, identity);
     const auto& pane = agents_.validateCommand(model_, client, message);
     const auto location = pane.location;
@@ -2139,9 +2127,9 @@ namespace telar::runtime {
     client.connection.send(RequestCompleted{.request_id = message.request_id});
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const CompleteWords& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const CompleteWords& message) {
     auto& client = requireClient(clients_, identity);
     const auto* pane = model_.panes.find(message.pane_id);
     if (pane == nullptr) {
@@ -2161,9 +2149,9 @@ namespace telar::runtime {
     words_.request(request);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const RequestCommandSpec& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const RequestCommandSpec& message) {
     auto& client = requireClient(clients_, identity);
     const auto* pane = model_.panes.find(message.pane_id);
     if (pane == nullptr) {
@@ -2182,9 +2170,9 @@ namespace telar::runtime {
     words_.request(request);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  WordRequest Runtime<Memory, Poller, Background>::makeWordRequest(const ClientSession<Memory>& client, std::uint64_t request_id, CompletionProvider provider, std::string_view prefix, const Pane<Memory>& pane) const {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  WordRequest Runtime<Poller, Background>::makeWordRequest(const ClientSession& client, std::uint64_t request_id, CompletionProvider provider, std::string_view prefix, const Pane& pane) const {
     WordRequest request{.client = client.id, .request = request_id, .provider = provider, .prefix = {}, .directory = {}, .home = {}, .path = {}};
 
     request.prefix.assign(prefix);
@@ -2197,18 +2185,18 @@ namespace telar::runtime {
     return request;
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const FindPaths& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const FindPaths& message) {
     auto& client = requireClient(clients_, identity);
     if (!background_.tryPaths(client.id, message, client.connection)) {
       submitBackground(background_, client, message);
     }
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const OpenEditor& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const OpenEditor& message) {
     // Generation 0 names whatever generation the pane has, as an editor asked from a client
     // that predates generations does.
     const auto* source = message.pane_generation == 0 ? model_.panes.find(message.pane_id) : findPane(model_.panes, message.pane_id, message.pane_generation);
@@ -2247,9 +2235,9 @@ namespace telar::runtime {
     client.editor_generation = source->generation;
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const SuggestCommand& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const SuggestCommand& message) {
     auto& client = requireClient(clients_, identity);
 
     if (!background_.suggestionsAvailable()) {
@@ -2277,203 +2265,203 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const OpenPane& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const OpenPane& message) {
     workspaces_.open(model_, panes_, clients_, identity, message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const CreatePane& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const CreatePane& message) {
     workspaces_.createPane(model_, panes_, clients_, identity, message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const ClosePane& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const ClosePane& message) {
     Workspaces::closePane(model_, requireClient(clients_, identity), message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const CreateWorkspace& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const CreateWorkspace& message) {
     workspaces_.createWorkspace(model_, panes_, clients_, identity, message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const RenameWorkspace& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const RenameWorkspace& message) {
     workspaces_.renameWorkspace(model_, requireClient(clients_, identity), message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const CreateTab& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const CreateTab& message) {
     workspaces_.createTab(model_, panes_, clients_, identity, message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const RenameTab& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const RenameTab& message) {
     workspaces_.renameTab(model_, requireClient(clients_, identity), message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const CloseTab& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const CloseTab& message) {
     workspaces_.closeTab(model_, requireClient(clients_, identity), message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const HoldTab& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const HoldTab& message) {
     workspaces_.holdTab(model_, panes_, clients_, identity, message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const MoveTab& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const MoveTab& message) {
     workspaces_.moveTab(model_, requireClient(clients_, identity), message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const RequestTabSnapshot& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const RequestTabSnapshot& message) {
     Workspaces::tabSnapshot(model_, clients_, identity, message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const RequestWorkspaceSnapshot& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const RequestWorkspaceSnapshot& message) {
     Workspaces::workspaceSnapshot(model_, requireClient(clients_, identity), message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const PaneInput& message) {
-    panes_.input(model_, clients_, identity, message, [&agents = agents_](const Pane<Memory>& pane, std::span<const Byte> bytes) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const PaneInput& message) {
+    panes_.input(model_, clients_, identity, message, [&agents = agents_](const Pane& pane, std::span<const Byte> bytes) {
       agents.observeInput(pane, bytes);
     });
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const PaneCommand& message) {
-    panes_.command(model_, clients_, identity, message, [&agents = agents_](const Pane<Memory>& pane, std::span<const Byte> bytes) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const PaneCommand& message) {
+    panes_.command(model_, clients_, identity, message, [&agents = agents_](const Pane& pane, std::span<const Byte> bytes) {
       agents.observeInput(pane, bytes);
     });
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const ConfigureShellPrompt& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const ConfigureShellPrompt& message) {
     requireClient(clients_, identity).bare_prompt = message.bare;
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const PaneResize& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const PaneResize& message) {
     panes_.resize(model_, requireClient(clients_, identity), message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const ReadRuntimeClipboard& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const ReadRuntimeClipboard& message) {
     runtime_clipboard_.read(clients_, identity, message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const CompleteClipboardDesktop& message) {
-    if (auto* pane = ClipboardService<Memory>::complete(model_.panes, requireClient(clients_, identity), message)) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const CompleteClipboardDesktop& message) {
+    if (auto* pane = ClipboardService::complete(model_.panes, requireClient(clients_, identity), message)) {
       panes_.flushInput(*pane);
       media_.updateReadInterest(*pane);
     }
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const PastePaneClipboard& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const PastePaneClipboard& message) {
     panes_.pasteClipboard(model_, clients_, identity, message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const ConfigurePaneDesktop& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const ConfigurePaneDesktop& message) {
     panes_.configureDesktop(model_, clients_, identity, message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const ConfigureTerminalColors& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const ConfigureTerminalColors& message) {
     panes_.configureColors(model_, requireClient(clients_, identity), message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const SearchPane& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const SearchPane& message) {
     Panes::search(model_.panes, requireClient(clients_, identity), message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const SearchPaneRows& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const SearchPaneRows& message) {
     Panes::search(model_.panes, requireClient(clients_, identity), message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const ReadPaneRows& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const ReadPaneRows& message) {
     Panes::readRows(model_.panes, requireClient(clients_, identity), message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const CopySelection& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const CopySelection& message) {
     panes_.copySelection(model_.panes, requireClient(clients_, identity), message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const ReadPane& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const ReadPane& message) {
     Panes::readText(requireClient(clients_, identity), message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const SendPaneText& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const SendPaneText& message) {
     const bool focused = Agents::focused(clients_, client_layouts_, message.pane_id);
 
     agents_.sendText(model_, panes_, requireClient(clients_, identity), message, focused);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const DetachPane& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const DetachPane& message) {
     panes_.detach(model_, clients_, identity, message.pane_id);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const FrameAck& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const FrameAck& message) {
     if (auto* attachment = requireClient(clients_, identity).attachment(message.pane_id)) {
       attachment->frames.acknowledge(message.frame_id);
       TELAR_DIAGNOSTIC(model_.metrics.frames.merge(attachment->frames.takeCounters()));
     }
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const RequestSnapshot& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const RequestSnapshot& message) {
     if (auto* attachment = requireClient(clients_, identity).attachment(message.pane_id)) {
       attachment->frames.requestSnapshot();
     }
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const SetPaneViewport& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const SetPaneViewport& message) {
     if (auto* attachment = requireClient(clients_, identity).attachment(message.pane_id)) {
       // At or past the bottom the view follows the output, as before any scroll; a row
       // above it stays put while output grows.
@@ -2490,15 +2478,15 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const ConfigureFrameInterval& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const ConfigureFrameInterval& message) {
     requireClient(clients_, identity).frame_interval = std::chrono::nanoseconds{message.interval_ns};
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const RequestRuntimeState& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const RequestRuntimeState& message) {
     auto& client = requireClient(clients_, identity);
     if (client.identity != 0 && client.identity != message.client_identity) {
       throw EncodingError{"Subscribed client identity cannot change"};
@@ -2514,98 +2502,98 @@ namespace telar::runtime {
     client.agent_snapshot_requested = true;
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const QueryClients& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const QueryClients& message) {
     Control::list(clients_, identity, message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const DetachClient& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const DetachClient& message) {
     Control::detach(clients_, identity, message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const RequestClientCommand& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const RequestClientCommand& message) {
     Control::requestCommand(clients_, identity, message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const CompleteClientCommand& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const CompleteClientCommand& message) {
     Control::completeCommand(clients_, identity, message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const RequestPaneFocus& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const RequestPaneFocus& message) {
     Control::requestFocus(model_.panes, clients_, identity, message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const CompletePaneFocus& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const CompletePaneFocus& message) {
     Control::completeFocus(clients_, identity, message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const ShowNotification& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const ShowNotification& message) {
     Control::notify(clients_, identity, message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const UpdateClientLayout& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const UpdateClientLayout& message) {
     client_layouts_.retain(model_, requireClient(clients_, identity).identity, message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const QueryHistory& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const QueryHistory& message) {
     auto& client = requireClient(clients_, identity);
 
     submitBackground(background_, client, message, RequestContext{.persistent_client = client.role == ClientRole::interactive});
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const ImportHistory& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const ImportHistory& message) {
     auto& client = requireClient(clients_, identity);
 
     submitBackground(background_, client, message);
     client.connection.send(RequestCompleted{.request_id = message.request_id});
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const DeleteHistory& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const DeleteHistory& message) {
     submitBackground(background_, requireClient(clients_, identity), message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const PruneHistory& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const PruneHistory& message) {
     submitBackground(background_, requireClient(clients_, identity), message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const ReadHistoryOutput& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const ReadHistoryOutput& message) {
     submitBackground(background_, requireClient(clients_, identity), message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const HistoryStatsQuery& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const HistoryStatsQuery& message) {
     submitBackground(background_, requireClient(clients_, identity), message);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const ConfigureGraphics& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const ConfigureGraphics& message) {
     auto& client = requireClient(clients_, identity);
 
     client.shared_graphics = message.shared;
@@ -2614,32 +2602,32 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const GraphicsCredit& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const GraphicsCredit& message) {
     if (auto* attachment = requireClient(clients_, identity).attachment(message.pane_id)) {
       attachment->graphics.returnCredit(message.bytes);
     }
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t identity, const RequestGraphicsSnapshot& message) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const RequestGraphicsSnapshot& message) {
     if (auto* attachment = requireClient(clients_, identity).attachment(message.pane_id)) {
       attachment->graphics.requestSnapshot();
     }
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::handle(std::uint64_t, const RuntimeStop&) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t, const RuntimeStop&) {
     model_.stopping = true;
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
   template <typename Message>
-  void Runtime<Memory, Poller, Background>::submitBackground(Background& background, const ClientSession<Memory>& client, const Message& message, RequestContext context) {
+  void Runtime<Poller, Background>::submitBackground(Background& background, const ClientSession& client, const Message& message, RequestContext context) {
     if constexpr (std::same_as<Message, OpenEditor>) {
       if (client.editor_source != 0) {
         throw RequestError{FailureCode::resource_limit, "An editor request is already pending"};
@@ -2649,15 +2637,15 @@ namespace telar::runtime {
     background.submit(client.id, message, context);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  bool Runtime<Memory, Poller, Background>::isHistoryRequest(ClientTag tag) noexcept {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  bool Runtime<Poller, Background>::isHistoryRequest(ClientTag tag) noexcept {
     return ClientRequests::lane(tag) == RequestLane::history;
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::collectBackground() {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::collectBackground() {
     TELAR_TRACE("runtime.collectBackground");
     session_.collect();
     observations_.collect(model_, agents_);
@@ -2695,9 +2683,9 @@ namespace telar::runtime {
     });
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::deliverWords(const WordResult& result) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::deliverWords(const WordResult& result) {
     auto* client = clients_.find(result.client);
     if (client == nullptr) {
       return;
@@ -2718,9 +2706,9 @@ namespace telar::runtime {
     client->connection.send(CompletionWords{.request_id = result.request, .truncated = result.truncated, .words = words});
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::deliverBackgroundReply(std::uint64_t client_id, ClientTag request_tag, std::span<const Byte> payload) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::deliverBackgroundReply(std::uint64_t client_id, ClientTag request_tag, std::span<const Byte> payload) {
     if (request_tag == ClientTag::import_history) {
       return;
     }
@@ -2764,9 +2752,9 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::deliverEditorReply(const PaneStore<Memory>& panes, ClientSession<Memory>& client, std::span<const Byte> payload) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::deliverEditorReply(const PaneStore& panes, ClientSession& client, std::span<const Byte> payload) {
     std::array<Byte, 256> scratch;
     DecodeStorage storage{scratch};
     auto reply = Codec::decode<EditorOpened>(payload, storage);
@@ -2781,9 +2769,9 @@ namespace telar::runtime {
     client.connection.send(reply);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  std::chrono::nanoseconds Runtime<Memory, Poller, Background>::publish(Clock::time_point now) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  std::chrono::nanoseconds Runtime<Poller, Background>::publish(Clock::time_point now) {
     TELAR_TRACE("runtime.publish");
     admissions_.expire(now);
     runtime_clipboard_.expire(clients_, now);
@@ -2802,7 +2790,7 @@ namespace telar::runtime {
     for (auto* pane : model_.panes.items()) {
       if (pane != nullptr) {
         try {
-          if (ClipboardService<Memory>::advance(clients_, *pane, now) && !pane->output_closed) {
+          if (ClipboardService::advance(clients_, *pane, now) && !pane->output_closed) {
             panes_.flushInput(*pane);
             media_.updateReadInterest(*pane);
           }
@@ -2912,9 +2900,9 @@ namespace telar::runtime {
     return timeout;
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  std::chrono::nanoseconds Runtime<Memory, Poller, Background>::writeClient(std::uint64_t identity, Clock::time_point now) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  std::chrono::nanoseconds Runtime<Poller, Background>::writeClient(std::uint64_t identity, Clock::time_point now) {
     StateProjection state{workspaces_, agents_, metrics_, client_layouts_, proxy_};
     const auto result = ClientDelivery{memory_, model_}.write(requireClient(clients_, identity), state, now);
     if (result.detach_pane) {
@@ -2924,9 +2912,9 @@ namespace telar::runtime {
     return result.timeout;
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::updateWriteInterest(Poller& poller, ClientSession<Memory>& client) {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::updateWriteInterest(Poller& poller, ClientSession& client) {
     const bool enabled = client.connection.hasOutput();
     if (enabled != client.connection.write_interest) {
       poller.writeInterest(client.connection.descriptor(), eventToken(EventSource::client, client.event_identity), enabled);
@@ -2940,9 +2928,9 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::answerDeferredReports() {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::answerDeferredReports() {
     const auto due = deferred_reports_.due(clients_, model_.panes, agents_, ObservationTime::now());
 
     for (const auto identity : due.ids()) {
@@ -2951,7 +2939,7 @@ namespace telar::runtime {
         continue;
       }
 
-      Vector<Byte, Memory> payload{AllocatorRef<Byte, Memory>{memory_}};
+      Vector<Byte, ConcurrentMemory> payload{AllocatorRef<Byte, ConcurrentMemory>{memory_}};
 
       deferred_reports_.open(*client, payload);
       Frames frames{memory_};
@@ -2974,7 +2962,7 @@ namespace telar::runtime {
 
       if (auto* current = clients_.find(identity)) {
         current->connection.exchange(frames);
-        DeferredReports<Memory, Agents>::close(*current, payload);
+        DeferredReports<Agents>::close(*current, payload);
         if (answered) {
           updateWriteInterest(poller_, *current);
         }
@@ -2982,9 +2970,9 @@ namespace telar::runtime {
     }
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  void Runtime<Memory, Poller, Background>::stop() noexcept {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::stop() noexcept {
     admissions_.clear();
     session_.finish(model_, client_layouts_, agents_);
     for (std::size_t slot = 0; slot < clients_.items().size(); ++slot) {
@@ -3015,14 +3003,14 @@ namespace telar::runtime {
     media_.finish(model_);
   }
 
-  template <ConcurrentAllocator Memory, EventLoop Poller, typename Background>
-    requires BackgroundExecutor<Background, Memory>
-  std::string_view Runtime<Memory, Poller, Background>::runtimePath() {
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  std::string_view Runtime<Poller, Background>::runtimePath() {
     const char* path = std::getenv("PATH");
 
     return path == nullptr ? std::string_view{"/usr/bin:/bin"} : std::string_view{path};
   }
 
-  template class Runtime<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>, RuntimeBackground>;
+  template class Runtime<NativeEventLoop<ConcurrentMemory>, RuntimeBackground>;
 
 }

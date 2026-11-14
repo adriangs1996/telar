@@ -231,12 +231,10 @@ namespace telar::runtime::traffic {
     }
   }
 
-  template <Allocator Memory>
-  IpFragments<Memory>::IpFragments(Memory& memory) noexcept
+  IpFragments::IpFragments(ConcurrentMemory& memory) noexcept
       : memory_(memory) {}
 
-  template <Allocator Memory>
-  auto IpFragments<Memory>::parse(std::span<const Byte> bytes) noexcept -> std::optional<Fragment> {
+  auto IpFragments::parse(std::span<const Byte> bytes) noexcept -> std::optional<Fragment> {
     if (bytes.empty()) {
       return {};
     }
@@ -312,8 +310,7 @@ namespace telar::runtime::traffic {
     return part;
   }
 
-  template <Allocator Memory>
-  void IpFragments<Memory>::initialize(Entry& entry, Event event, const Key& key) noexcept {
+  void IpFragments::initialize(Entry& entry, Event event, const Key& key) noexcept {
     entry.key = key;
     event.bytes = {};
     event.interface = {};
@@ -321,8 +318,7 @@ namespace telar::runtime::traffic {
     entry.created = Clock::now();
   }
 
-  template <Allocator Memory>
-  tbc::view<std::string_view, tbc::lt::static_storage> IpFragments<Memory>::append(Entry& entry, const Fragment& part) {
+  tbc::view<std::string_view, tbc::lt::static_storage> IpFragments::append(Entry& entry, const Fragment& part) {
     const auto end = part.offset + part.payload.size();
     if (entry.length && (end > *entry.length || (!part.more && end != *entry.length))) {
       return "ip_fragment_conflicting_length";
@@ -373,8 +369,7 @@ namespace telar::runtime::traffic {
     return {};
   }
 
-  template <Allocator Memory>
-  std::span<const Byte> IpFragments<Memory>::assembled(Entry& entry) {
+  std::span<const Byte> IpFragments::assembled(Entry& entry) {
     auto bytes = entry.storage->bytes().subspan(maximum_prefix - entry.prefix, entry.prefix + *entry.length);
     const auto length = bytes.size() - (entry.key.ipv6 ? 40 : 0);
     const auto offset = entry.key.ipv6 ? 4u : 2u;
@@ -451,8 +446,7 @@ namespace telar::runtime::traffic {
     return packet;
   }
 
-  template <ConcurrentAllocator Memory>
-  std::size_t TcpFlows<Memory>::Hash::operator()(const Key& key) const noexcept {
+  std::size_t TcpFlows::Hash::operator()(const Key& key) const noexcept {
     std::size_t hash = key.session;
     auto add = [&](unsigned value) {
       hash = (hash ^ value) * 1099511628211ull;
@@ -475,36 +469,27 @@ namespace telar::runtime::traffic {
     return hash;
   }
 
-  template <ConcurrentAllocator Memory>
-  TcpFlows<Memory>::Side::Side(Secure& memory)
+  TcpFlows::Side::Side(Secure& memory)
       : pending(AllocatorRef<Segment, Secure>{memory}) {}
 
-  template <ConcurrentAllocator Memory>
-  TcpFlows<Memory>::Flow::Flow(Secure& memory, std::uint64_t id, bool reverse, bool offline)
+  TcpFlows::Flow::Flow(Secure& memory, std::uint64_t id, bool reverse, bool offline)
       : id(id),
         reverse(reverse),
         offline(offline),
         outbound(memory),
         inbound(memory) {}
 
-  template <ConcurrentAllocator Memory>
-  TcpFlows<Memory>::TcpFlows(Memory& memory)
+  TcpFlows::TcpFlows(ConcurrentMemory& memory)
       : memory_(memory),
         flows_(0, Hash{}, std::equal_to<Key>{}, AllocatorRef<Entry, Secure>{memory_}) {}
 
-  template <ConcurrentAllocator Memory>
-  std::int32_t TcpFlows<Memory>::distance(std::uint32_t a, std::uint32_t b) noexcept {
+  std::int32_t TcpFlows::distance(std::uint32_t a, std::uint32_t b) noexcept {
     return std::bit_cast<std::int32_t>(a - b);
   }
 
-  template <ConcurrentAllocator Memory>
-  CaptureAnalysis<Memory>::CaptureAnalysis(Memory& memory)
+  CaptureAnalysis::CaptureAnalysis(ConcurrentMemory& memory)
       : memory_(memory),
         fragments_(memory),
         tcp_(memory) {}
-
-  template class IpFragments<ConcurrentMemory>;
-  template class TcpFlows<ConcurrentMemory>;
-  template class CaptureAnalysis<ConcurrentMemory>;
 
 }

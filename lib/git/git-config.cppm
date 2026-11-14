@@ -19,8 +19,6 @@ namespace telar::git {
     std::optional<std::string_view> value;
   };
 
-  // Instantiated for Memory in git-config.cpp, the only instantiation the module uses.
-  template <Allocator Memory>
   bool parseConfigEntries(std::string_view text, String<Memory>& scratch, void* target, bool (*visit)(void*, const ConfigEntry&));
 
   // Visits each variable of `text` in order and returns false on the first

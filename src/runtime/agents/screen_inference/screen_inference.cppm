@@ -83,7 +83,7 @@ export {
       std::string_view text() const noexcept;
     };
 
-    // What the agent readers look at in a screen, whatever allocator the screen uses.
+    // What the agent readers look at in a screen.
     struct AgentScreenView {
       std::span<const ScreenCell> cells;
       std::span<const Byte> row_flags;
@@ -92,9 +92,7 @@ export {
       Cursor cursor{};
     };
 
-    // The screen comes with the allocator its caller chose, the tests' included.
-    template <Allocator Memory>
-    TBC_HOT_PATH inline AgentScreenView agentScreenView(const Screen<Memory>& screen) noexcept {
+    TBC_HOT_PATH inline AgentScreenView agentScreenView(const Screen& screen) noexcept {
       return AgentScreenView{
           .cells = std::span{screen.cells},
           .row_flags = std::span{screen.row_flags},
@@ -106,9 +104,7 @@ export {
 
     class AgentScreenReader {
     public:
-      // The terminal comes with the allocator its caller chose, the tests' included.
-      template <Allocator Memory>
-      TBC_HOT_PATH inline explicit AgentScreenReader(const Terminal<Memory>& terminal, const AgentManifests& manifests = builtin_manifests)
+      TBC_HOT_PATH inline explicit AgentScreenReader(const Terminal& terminal, const AgentManifests& manifests = builtin_manifests)
           : AgentScreenReader(agentScreenView(terminal.screen), terminal.effects.title(), manifests) {}
 
       AgentScreenReader(AgentScreenView screen, std::string_view title, const AgentManifests& manifests) noexcept;
@@ -154,9 +150,7 @@ export {
 
     class AgentScreenInference {
     public:
-      // The terminal comes with the allocator its caller chose; the inference itself is not generic.
-      template <Allocator Memory>
-      TBC_HOT_PATH inline std::optional<AgentSignal> observe(Terminal<Memory>& terminal, const AgentManifests& manifests, AgentProvider provider, ObservationTime now) {
+      TBC_HOT_PATH inline std::optional<AgentSignal> observe(Terminal& terminal, const AgentManifests& manifests, AgentProvider provider, ObservationTime now) {
         if (!terminal.outputSettled()) {
           return std::nullopt;
         }

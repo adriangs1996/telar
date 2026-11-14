@@ -24,9 +24,9 @@ namespace {
     GhosttyAllocatorBridge<ConcurrentMemory> allocator{memory};
     TerminalHandle terminal;
     RenderStateHandle render;
-    TerminalEffects<ConcurrentMemory> effects{memory};
+    TerminalEffects effects{memory};
     std::shared_ptr<PtyResponseQueue> responses = std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, ConcurrentMemory>{memory});
-    control::Engine<ConcurrentMemory> controller{memory, *responses, true};
+    control::Engine controller{memory, *responses, true};
 
     ComponentProbe() {
       checkGhostty(ghostty_terminal_new(allocator.get(), terminal.output(), 80, 24));

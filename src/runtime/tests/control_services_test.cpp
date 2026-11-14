@@ -63,8 +63,8 @@ using namespace telar::runtime;
 
 static void testLimits(ConcurrentMemory& memory) {
   RuntimeModel model{memory};
-  ClientStore<ConcurrentMemory> clients{memory};
-  LimitService<ConcurrentMemory> limits;
+  ClientStore clients{memory};
+  LimitService limits;
   ClientPeer reporter{memory, model, clients, ClientRole::control};
   ClientPeer observer{memory, model, clients, ClientRole::interactive};
   const ReportLimit report{.reach = {.name = "test.capacity", .noun = "items", .value = 10, .requested = 11, .route = "testing"}, .hits = 3};
@@ -116,8 +116,8 @@ static void testWorktreeOwnership(ConcurrentMemory& memory) {
 
 static void testExecutions(ConcurrentMemory& memory) {
   RuntimeModel model{memory};
-  ClientStore<ConcurrentMemory> clients{memory};
-  LimitService<ConcurrentMemory> limits;
+  ClientStore clients{memory};
+  LimitService limits;
   NativeEventLoop<ConcurrentMemory> poller{memory};
   ExecutionService executions{memory, poller, limits};
   ClientPeer owner{memory, model, clients, ClientRole::control};

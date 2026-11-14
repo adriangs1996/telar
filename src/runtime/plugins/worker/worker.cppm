@@ -416,9 +416,8 @@ export {
 export {
   namespace telar::runtime::plugins {
 
-    template <ConcurrentAllocator Memory>
     class TrafficBridge {
-      using Secure = ErasingAllocator<Memory>;
+      using Secure = ErasingAllocator<ConcurrentMemory>;
 
       struct Connection {
         explicit Connection(tbc::view<Secure&, tbc::lt::a> memory, TrafficRegistration registration, traffic::PackageChannel channel);
@@ -430,7 +429,7 @@ export {
         std::array<Byte, traffic::Protocol::prefix_bytes> prefix;
         std::size_t prefix_bytes = 0;
         std::uint64_t dropped = 0;
-        tbc::view<std::optional<SensitiveAllocation<Memory>>, tbc::lt::a> input;
+        tbc::view<std::optional<SensitiveAllocation<ConcurrentMemory>>, tbc::lt::a> input;
         std::size_t received = 0;
         bool registration_ack;
         bool ready = false;
@@ -442,9 +441,9 @@ export {
     public:
       // The bridge keeps the allocator and the port, region `a`, and its own copy of the specification. The
       // session it talks to is the worker's, lent to each call.
-      explicit TrafficBridge(tbc::view<Memory&, tbc::lt::a> memory, const ServiceSpec& specification, tbc::view<traffic::PackagePort&, tbc::lt::a> port);
+      explicit TrafficBridge(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const ServiceSpec& specification, tbc::view<traffic::PackagePort&, tbc::lt::a> port);
 
-      void attach(Session<Memory>& session);
+      void attach(Session<ConcurrentMemory>& session);
 
       void detach() noexcept;
 
@@ -454,7 +453,7 @@ export {
 
       // `session` is the worker's session, or null while it restarts.
       template <typename Consumer>
-      TBC_HOT_PATH void step(Session<Memory>* session, int wake, const CancellationSignal& cancellation, Consumer&& consume, bool immediate = false) {
+      TBC_HOT_PATH void step(Session<ConcurrentMemory>* session, int wake, const CancellationSignal& cancellation, Consumer&& consume, bool immediate = false) {
         for (std::size_t index = 0; index < connections_.size(); ++index) {
           auto& connection = connections_[index];
           if (!connection || connection->registration.stage != TrafficStage::control) {
@@ -553,7 +552,7 @@ export {
             const auto readiness = descriptors[index + 3].revents;
 
             if (stage == TrafficStage::control) {
-              std::optional<SensitiveAllocation<Memory>> frame;
+              std::optional<SensitiveAllocation<ConcurrentMemory>> frame;
 
               try {
                 if (readiness & (POLLERR | POLLNVAL)) {
@@ -598,7 +597,7 @@ export {
             }
 
             if (readiness & (POLLIN | POLLHUP)) {
-              std::optional<SensitiveAllocation<Memory>> frame;
+              std::optional<SensitiveAllocation<ConcurrentMemory>> frame;
 
               try {
                 frame = read(memory_, *connection);
@@ -630,7 +629,7 @@ export {
     private:
       // A control connection is spent once its event is sent; the callback's reply may change the table.
       template <typename Consumer>
-      TBC_HOT_PATH void dispatchControl(Session<Memory>* session, std::size_t index, std::span<const Byte> frame, std::string_view error, Consumer&& consume) {
+      TBC_HOT_PATH void dispatchControl(Session<ConcurrentMemory>* session, std::size_t index, std::span<const Byte> frame, std::string_view error, Consumer&& consume) {
         auto& connection = connections_[index];
 
         if (!session) {
@@ -660,13 +659,13 @@ export {
 
       // The result owns the reply and finds its effects again where the outcome saw them.
       template <typename Consumer>
-      TBC_HOT_PATH void publishEffects(std::uint64_t event_id, SensitiveAllocation<Memory> response, std::span<const Byte> effects, Consumer&& consume) {
+      TBC_HOT_PATH void publishEffects(std::uint64_t event_id, SensitiveAllocation<ConcurrentMemory> response, std::span<const Byte> effects, Consumer&& consume) {
         if (effects.empty()) {
           return;
         }
 
         const auto offset = static_cast<std::size_t>(effects.data() - response.bytes().data());
-        auto result = makeOwned<Result<Memory>>(memory_, specification_, std::move(response), offset, effects.size(), true);
+        auto result = makeOwned<Result<ConcurrentMemory>>(memory_, specification_, std::move(response), offset, effects.size(), true);
         if (result->event_id != event_id) {
           throw EncodingError{"Stale traffic notification"};
         }
@@ -678,7 +677,7 @@ export {
 
       // The connection is named by its slot, as the callback's reply may change the table it lives in.
       template <typename Consumer>
-      TBC_HOT_PATH void dispatch(Session<Memory>* session, std::size_t index, std::span<const Byte> frame, std::uint64_t dropped, Consumer&& consume) {
+      TBC_HOT_PATH void dispatch(Session<ConcurrentMemory>* session, std::size_t index, std::span<const Byte> frame, std::uint64_t dropped, Consumer&& consume) {
         auto& connection = *connections_[index];
         const auto event = traffic::Protocol::decode(frame);
         const bool control = event.kind == traffic::Kind::intercept_request || event.kind == traffic::Kind::http_intercept_request;
@@ -736,21 +735,19 @@ export {
       static void write(Connection& connection);
 
       // A complete frame leaves the connection; it borrows only the allocator.
-      static tbc::view<std::optional<SensitiveAllocation<Memory>>, tbc::lt::a> read(tbc::view<Memory&, tbc::lt::a> memory, Connection& connection);
+      static tbc::view<std::optional<SensitiveAllocation<ConcurrentMemory>>, tbc::lt::a> read(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, Connection& connection);
 
-      tbc::view<Memory&, tbc::lt::a> memory_;
+      tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
       tbc::view<Secure, tbc::lt::a> secure_;
       ServiceSpec specification_;
       tbc::view<traffic::PackagePort&, tbc::lt::a> port_;
       tbc::view<std::array<std::optional<Connection>, TrafficLimits::registrations>, tbc::lt::a> connections_;
-      tbc::view<Owned<TrafficReply, Memory>, tbc::lt::a> reply_;
+      tbc::view<Owned<TrafficReply, ConcurrentMemory>, tbc::lt::a> reply_;
       std::uint64_t next_event_ = 0;
       std::uint64_t errors_ = 0;
       std::uint64_t dropped_observations_ = 0;
       bool transport_failed_ = false;
     };
-
-    extern template class TrafficBridge<ConcurrentMemory>;
 
   }
 }
@@ -784,19 +781,19 @@ export {
     // the session, the bridge and the thread's state belong to its thread alone. That split is audited
     // here, so the worker is TBC_SHARED; its thread keeps `this`, so it stays where it was built.
     // Generic over the caller's clock.
-    template <ConcurrentAllocator Memory, WorkerClock Clock = std::chrono::steady_clock>
+    template <WorkerClock Clock = std::chrono::steady_clock>
     class TBC_SHARED TBC_HOT_PATH Worker {
     public:
-      using Shared = std::shared_ptr<SharedExchange<Memory>>;
+      using Shared = std::shared_ptr<SharedExchange>;
 
-      inline explicit Worker(Memory& memory, const ServiceSpec& specification, ResultQueue<Memory>& results, TapBudget& budget, WorkerLaunch launch)
+      inline explicit Worker(ConcurrentMemory& memory, const ServiceSpec& specification, ResultQueue<ConcurrentMemory>& results, TapBudget& budget, WorkerLaunch launch)
           : memory_(memory),
             specification_(bindPermissions(memory, specification)),
             results_(results),
             budget_(budget),
             launch_(launch),
-            entry_(specification.entry.view(), AllocatorRef<char, Memory>{memory}),
-            trace_path_(AllocatorRef<char, Memory>{memory}),
+            entry_(specification.entry.view(), AllocatorRef<char, ConcurrentMemory>{memory}),
+            trace_path_(AllocatorRef<char, ConcurrentMemory>{memory}),
             thread_([this] {
               run();
             }) {}
@@ -854,10 +851,10 @@ export {
       }
 
     private:
-      inline static ServiceSpec bindPermissions(Memory& memory, const ServiceSpec& specification) {
+      inline static ServiceSpec bindPermissions(ConcurrentMemory& memory, const ServiceSpec& specification) {
         auto bound = specification;
         if (!bound.permission) {
-          bound.permission = std::allocate_shared<std::atomic<bool>>(AllocatorRef<std::atomic<bool>, Memory>{memory}, true);
+          bound.permission = std::allocate_shared<std::atomic<bool>>(AllocatorRef<std::atomic<bool>, ConcurrentMemory>{memory}, true);
         }
 
         return bound;
@@ -895,7 +892,7 @@ export {
             if (!session_) {
               ensureSession(true);
               if (!bridge_) {
-                bridge_ = makeOwned<TrafficBridge<Memory>>(memory_, memory_, specification_, *launch_.traffic);
+                bridge_ = makeOwned<TrafficBridge>(memory_, memory_, specification_, *launch_.traffic);
               }
 
               bridge_->attach(*session_);
@@ -910,7 +907,7 @@ export {
               continue;
             }
 
-            bridge_->step(session_ ? &*session_ : nullptr, wake_.descriptor(), cancellation_, [&](OwnedResult<Memory> result) {
+            bridge_->step(session_ ? &*session_ : nullptr, wake_.descriptor(), cancellation_, [&](OwnedResult<ConcurrentMemory> result) {
               results_.publish(std::move(result));
             },
                 requests_.metrics().queued != 0);
@@ -926,7 +923,7 @@ export {
         }
       }
 
-      inline void process(const SharedExchange<Memory>& shared) noexcept {
+      inline void process(const SharedExchange& shared) noexcept {
         TELAR_TRACE("plugins.processExchange");
         try {
           ensureSession(false);
@@ -936,7 +933,7 @@ export {
         }
 
         try {
-          const auto size = SharedExchange<Memory>::capturedBytes(shared.exchange) + Limits::frame_overhead;
+          const auto size = SharedExchange::capturedBytes(shared.exchange) + Limits::frame_overhead;
           auto charged = budget_.charge(size);
           if (!charged) {
             return;
@@ -1023,18 +1020,18 @@ export {
 #endif
       }
 
-      Memory& memory_;
+      ConcurrentMemory& memory_;
       ServiceSpec specification_;
-      ResultQueue<Memory>& results_;
+      ResultQueue<ConcurrentMemory>& results_;
       TapBudget& budget_;
       WorkerLaunch launch_;
-      String<Memory> entry_;
-      String<Memory> trace_path_;
+      String<ConcurrentMemory> entry_;
+      String<ConcurrentMemory> trace_path_;
       [[maybe_unused]] std::uint64_t session_number_ = 0;
       tbc::view<DropChannel<Shared, Limits::queue_depth, ChannelPolicy::keep_newest>, tbc::lt::a> requests_;
       CancellationSignal cancellation_;
-      std::optional<Session<Memory>> session_;
-      Owned<TrafficBridge<Memory>, Memory> bridge_{nullptr, AllocationDeleter<TrafficBridge<Memory>, Memory>{memory_}};
+      std::optional<Session<ConcurrentMemory>> session_;
+      Owned<TrafficBridge, ConcurrentMemory> bridge_{nullptr, AllocationDeleter<TrafficBridge, ConcurrentMemory>{memory_}};
       CompletionSignal wake_;
       std::uint64_t callback_errors_base_ = 0;
       RestartWindow restarts_;

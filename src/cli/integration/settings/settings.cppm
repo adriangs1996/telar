@@ -50,9 +50,7 @@ export {
 export {
   namespace telar::runtime::cli::integration {
 
-    template <Allocator Memory>
     std::optional<String<Memory>> read(Memory& memory, const String<Memory>& path, std::size_t maximum_bytes);
-    extern template std::optional<String<Memory>> read<Memory>(Memory& memory, const String<Memory>& path, std::size_t maximum_bytes);
 
   }
 }
@@ -61,9 +59,9 @@ export {
 export {
   namespace telar::runtime::cli::integration {
 
-    template <Allocator Memory, EnvironmentLookup Environment>
+    template <EnvironmentLookup Environment>
     int runExtension(Memory& memory, const IntegrationOptions& options, const Environment& environment, std::string_view executable);
-    extern template int runExtension<Memory, ProcessEnvironment>(Memory& memory, const IntegrationOptions& options, const ProcessEnvironment& environment, std::string_view executable);
+    extern template int runExtension<ProcessEnvironment>(Memory& memory, const IntegrationOptions& options, const ProcessEnvironment& environment, std::string_view executable);
 
   }
 }
@@ -72,7 +70,6 @@ export {
 export {
   namespace telar::runtime::cli::integration {
 
-    template <Allocator Memory>
     class HookSettings {
     public:
       explicit HookSettings(Memory& memory, Provider provider, std::string_view executable);
@@ -103,11 +100,6 @@ export {
       String<Memory> worktree_command_;
     };
 
-    extern template class HookSettings<Memory>;
-
-    template <Allocator Memory>
-    HookSettings(Memory& memory, Provider provider, std::string_view executable) -> HookSettings<Memory>;
-
   }
 }
 
@@ -118,9 +110,9 @@ export {
     // The agent skill `telar --skill NAME` prints, `telar` or `coordinator`, or nullopt for any other name.
     std::optional<std::string_view> skillText(std::string_view name) noexcept;
 
-    template <Allocator Memory, EnvironmentLookup Environment>
+    template <EnvironmentLookup Environment>
     int runSettings(Memory& memory, const IntegrationOptions& options, const Environment& environment, std::string_view executable);
-    extern template int runSettings<Memory, ProcessEnvironment>(Memory& memory, const IntegrationOptions& options, const ProcessEnvironment& environment, std::string_view executable);
+    extern template int runSettings<ProcessEnvironment>(Memory& memory, const IntegrationOptions& options, const ProcessEnvironment& environment, std::string_view executable);
 
   }
 }

@@ -34,8 +34,7 @@ namespace telar::runtime::control {
     return result;
   }
 
-  template <Allocator Memory>
-  void glyph(std::string_view request, Reply<Memory>& reply) {
+  void glyph(std::string_view request, Reply<ConcurrentMemory>& reply) {
     if (request.empty() || (request.size() > 1 && request[1] != ';')) {
       return;
     }
@@ -83,7 +82,5 @@ namespace telar::runtime::control {
       break;
     }
   }
-
-  template void glyph<telar::ConcurrentMemory>(std::string_view request, Reply<telar::ConcurrentMemory>& reply);
 
 }

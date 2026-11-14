@@ -192,12 +192,12 @@ namespace {
       available[index] = result.available[index];
     }
 
-    check(ClipboardService<ConcurrentMemory>::complete(panes, client.session(), CompleteClipboardDesktop{
-                                                                                    .ticket = task.ticket,
-                                                                                    .status = result.status,
-                                                                                    .contents = std::span{contents}.first(result.contents.size()),
-                                                                                    .available = std::span{available}.first(result.available.size()),
-                                                                                }) == &pane);
+    check(ClipboardService::complete(panes, client.session(), CompleteClipboardDesktop{
+                                                                  .ticket = task.ticket,
+                                                                  .status = result.status,
+                                                                  .contents = std::span{contents}.first(result.contents.size()),
+                                                                  .available = std::span{available}.first(result.available.size()),
+                                                              }) == &pane);
   }
 
   void protocolAndPermissions(auto& memory) {
@@ -297,7 +297,7 @@ namespace {
     clipboard.routes(routes, routes[0]);
     terminal.feed(bytes(request));
     task = take(terminal);
-    clipboard.expire(control::Clipboard<ConcurrentMemory>::Clock::now() + std::chrono::seconds{31});
+    clipboard.expire(control::Clipboard::Clock::now() + std::chrono::seconds{31});
     terminal.resumeControl();
     check(drain(terminal) == "\x1b]5522;type=read:status=EPERM:id=x\x1b\\");
 
@@ -530,11 +530,11 @@ namespace {
 
   void actualRouting(ConcurrentMemory& memory) {
     RuntimeModel model{memory};
-    ClientStore<ConcurrentMemory> clients{memory};
-    LimitService<ConcurrentMemory> limits;
+    ClientStore clients{memory};
+    LimitService limits;
     NativeEventLoop<ConcurrentMemory> poller{memory};
     PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/clipboard.sock"}};
-    WorkspaceService<ConcurrentMemory, decltype(poller)> workspaces{memory};
+    WorkspaceService<decltype(poller)> workspaces{memory};
     ClientPeer first{memory, model, clients, ClientRole::interactive};
     ClientPeer second{memory, model, clients, ClientRole::interactive};
     const std::array<std::string_view, 1> arguments{"/bin/cat"};
@@ -550,7 +550,7 @@ namespace {
     desktop.focused = true;
     panes.configureDesktop(model, clients, second.session().id, desktop);
     pane.terminal.feed(bytes("\x1b]5522;type=read:id=route;dGV4dC9wbGFpbg==\x1b\\"), *pane.media);
-    ClipboardService<ConcurrentMemory> service;
+    ClipboardService service;
 
     service.advance(clients, pane, std::chrono::steady_clock::now());
     const auto request = second.receive<ClipboardDesktopRequest>();
@@ -653,11 +653,11 @@ namespace {
 
   void closeBeforeExecution(ConcurrentMemory& memory) {
     RuntimeModel model{memory};
-    ClientStore<ConcurrentMemory> clients{memory};
-    LimitService<ConcurrentMemory> limits;
+    ClientStore clients{memory};
+    LimitService limits;
     NativeEventLoop<ConcurrentMemory> poller{memory};
     PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/clipboard-close.sock"}};
-    WorkspaceService<ConcurrentMemory, decltype(poller)> workspaces{memory};
+    WorkspaceService<decltype(poller)> workspaces{memory};
     ClientPeer client{memory, model, clients, ClientRole::interactive};
     const std::array<std::string_view, 1> arguments{"/bin/cat"};
 
@@ -667,7 +667,7 @@ namespace {
 
     panes.configureDesktop(model, clients, client.session().id, desktop);
     pane.terminal.feed(bytes("\x1b]5522;type=write:id=close\x1b\\\x1b]5522;type=wdata\x1b\\"), *pane.media);
-    ClipboardService<ConcurrentMemory> service;
+    ClipboardService service;
 
     service.advance(clients, pane, std::chrono::steady_clock::now());
     const OwnedClipboardTask task{client.receive<ClipboardDesktopRequest>()};
@@ -709,11 +709,11 @@ namespace {
     for (const auto transition : transitions) {
       for (const auto stage : {Stage::requested, Stage::prepared, Stage::committed}) {
         RuntimeModel model{memory};
-        ClientStore<ConcurrentMemory> clients{memory};
-        LimitService<ConcurrentMemory> limits;
+        ClientStore clients{memory};
+        LimitService limits;
         NativeEventLoop<ConcurrentMemory> poller{memory};
         PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/clipboard-reset.sock"}};
-        WorkspaceService<ConcurrentMemory, decltype(poller)> workspaces{memory};
+        WorkspaceService<decltype(poller)> workspaces{memory};
         ClientPeer client{memory, model, clients, ClientRole::interactive};
         const std::array<std::string_view, 1> arguments{"/bin/cat"};
 
@@ -721,7 +721,7 @@ namespace {
         auto& pane = panes.require(model.panes, client.receive<PaneOpened>().pane_id);
 
         panes.configureDesktop(model, clients, client.session().id, ConfigurePaneDesktop{.pane_id = pane.id, .pane_generation = pane.generation, .visible = true, .clipboard = true});
-        ClipboardService<ConcurrentMemory> service;
+        ClipboardService service;
         const auto password = pasteGrant(model, clients, panes, client, pane);
 
         pane.terminal.feed(bytes("\x1b]5522;type=write:id=reset\x1b\\\x1b]5522;type=wdata\x1b\\"), *pane.media);
@@ -830,11 +830,11 @@ namespace {
 
     for (const auto cancellation : {Cancellation::expired, Cancellation::closing, Cancellation::unannounced}) {
       RuntimeModel model{memory};
-      ClientStore<ConcurrentMemory> clients{memory};
-      LimitService<ConcurrentMemory> limits;
+      ClientStore clients{memory};
+      LimitService limits;
       NativeEventLoop<ConcurrentMemory> poller{memory};
       PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/clipboard-pressure.sock"}};
-      WorkspaceService<ConcurrentMemory, decltype(poller)> workspaces{memory};
+      WorkspaceService<decltype(poller)> workspaces{memory};
       ClientPeer client{memory, model, clients, ClientRole::interactive};
       const std::array<std::string_view, 1> arguments{"/bin/cat"};
 
@@ -843,7 +843,7 @@ namespace {
 
       panes.configureDesktop(model, clients, client.session().id, ConfigurePaneDesktop{.pane_id = pane.id, .pane_generation = pane.generation, .visible = true, .clipboard = true});
       pane.terminal.feed(bytes("\x1b]5522;type=write:id=pressure\x1b\\\x1b]5522;type=wdata\x1b\\"), *pane.media);
-      ClipboardService<ConcurrentMemory> service;
+      ClipboardService service;
       auto& clipboard = pane.terminal.clipboardControl();
       std::optional<OwnedClipboardTask> task;
 
@@ -940,11 +940,11 @@ namespace {
     for (const auto change : {Change::hidden, Change::clipboard_disabled, Change::control_only, Change::pane_reused}) {
       for (const auto stage : {Stage::requested, Stage::prepared, Stage::committed}) {
         RuntimeModel model{memory};
-        ClientStore<ConcurrentMemory> clients{memory};
-        LimitService<ConcurrentMemory> limits;
+        ClientStore clients{memory};
+        LimitService limits;
         NativeEventLoop<ConcurrentMemory> poller{memory};
         PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/clipboard-capability.sock"}};
-        WorkspaceService<ConcurrentMemory, decltype(poller)> workspaces{memory};
+        WorkspaceService<decltype(poller)> workspaces{memory};
         ClientPeer client{memory, model, clients, ClientRole::interactive};
         const std::array<std::string_view, 1> arguments{"/bin/cat"};
         const Launch launch{.cwd = "/tmp", .arguments = arguments};
@@ -960,7 +960,7 @@ namespace {
         ConfigurePaneDesktop desktop{.pane_id = pane->id, .pane_generation = pane->generation, .visible = true, .clipboard = true};
 
         panes.configureDesktop(model, clients, client.session().id, desktop);
-        ClipboardService<ConcurrentMemory> service;
+        ClipboardService service;
         const auto password = pasteGrant(model, clients, panes, client, *pane);
 
         pane->terminal.feed(bytes("\x1b]5522;type=write:id=old\x1b\\\x1b]5522;type=wdata\x1b\\"), *pane->media);
@@ -1061,8 +1061,8 @@ namespace {
 
     {
       RuntimeModel model{memory};
-      ClientStore<ConcurrentMemory> clients{memory};
-      LimitService<ConcurrentMemory> limits;
+      ClientStore clients{memory};
+      LimitService limits;
       NativeEventLoop<ConcurrentMemory> poller{memory};
       PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/control-failure.sock"}};
       const std::array<std::string_view, 1> arguments{"/bin/cat"};

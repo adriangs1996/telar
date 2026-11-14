@@ -51,19 +51,18 @@ export {
     // Limits the runtime and its clients reach. Any service may report one: a report is copied into a
     // fixed queue, and the runtime delivers the queue once no client is borrowed, recording each limit and
     // showing it to interactive clients. Nothing the service holds moves, so many services keep it.
-    template <Allocator Memory>
     class TBC_SHARED LimitService {
     public:
       // Records a client's report at once, so a query in the same batch sees it; a control client's report
       // that is due is shown at the next delivery.
-      void receive(RuntimeLimits& limits, ClientSession<Memory>& client, const ReportLimit& message);
+      void receive(RuntimeLimits& limits, ClientSession& client, const ReportLimit& message);
 
       void report(const LimitReach& reach) noexcept;
 
-      static void query(ClientSession<Memory>& client, const QueryLimits& request);
+      static void query(ClientSession& client, const QueryLimits& request);
 
       // Records the reported limits and shows those that are due.
-      void deliver(RuntimeModel<Memory>& model, ClientStore<Memory>& clients) noexcept;
+      void deliver(RuntimeModel& model, ClientStore& clients) noexcept;
 
     private:
       enum class Ledger : std::uint8_t {
@@ -81,9 +80,9 @@ export {
 
       void queueShow(Ledger ledger, std::size_t slot) noexcept;
 
-      static bool admit(RuntimeLimits& limits, ClientSession<Memory>& client) noexcept;
+      static bool admit(RuntimeLimits& limits, ClientSession& client) noexcept;
 
-      static void show(ClientStore<Memory>& clients, const LimitLedger::Row& row) noexcept;
+      static void show(ClientStore& clients, const LimitLedger::Row& row) noexcept;
 
       static constexpr unsigned reports_per_second = 32;
       std::array<Reached, 32> reached_{};
@@ -93,8 +92,6 @@ export {
       std::size_t shows_ = 0;
     };
 
-    extern template class LimitService<ConcurrentMemory>;
-
   }
 }
 
@@ -102,10 +99,10 @@ export {
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory, EventLoop Poller>
+    template <EventLoop Poller>
     class ClientAdmission {
     public:
-      explicit ClientAdmission(Poller& poller, LimitService<Memory>& limits);
+      explicit ClientAdmission(Poller& poller, LimitService& limits);
 
       ~ClientAdmission();
 
@@ -142,10 +139,10 @@ export {
       std::array<std::uint64_t, capacity> generations_{};
       std::size_t count_ = 0;
       Poller& poller_;
-      LimitService<Memory>& limits_;
+      LimitService& limits_;
     };
 
-    extern template class ClientAdmission<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>>;
+    extern template class ClientAdmission<NativeEventLoop<ConcurrentMemory>>;
 
   }
 }
@@ -154,14 +151,9 @@ export {
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory>
-    void notifyWorkspaceObservers(ClientStore<Memory>& clients, std::uint64_t workspace, std::uint64_t origin, std::optional<std::uint64_t> previous = {}) noexcept;
+    void notifyWorkspaceObservers(ClientStore& clients, std::uint64_t workspace, std::uint64_t origin, std::optional<std::uint64_t> previous = {}) noexcept;
 
-    template <Allocator Memory>
-    std::optional<std::uint64_t> previousWorkspace(const WorkspaceStore<Memory>& workspaces, std::uint64_t identity) noexcept;
-
-    extern template void notifyWorkspaceObservers<ConcurrentMemory>(ClientStore<ConcurrentMemory>& clients, std::uint64_t workspace, std::uint64_t origin, std::optional<std::uint64_t> previous) noexcept;
-    extern template std::optional<std::uint64_t> previousWorkspace<ConcurrentMemory>(const WorkspaceStore<ConcurrentMemory>& workspaces, std::uint64_t identity) noexcept;
+    std::optional<std::uint64_t> previousWorkspace(const WorkspaceStore& workspaces, std::uint64_t identity) noexcept;
 
   }
 }
@@ -171,18 +163,11 @@ export {
   namespace telar::runtime {
 
     // The panes of a workspace whose geometry a client takes follow that client's colors.
-    template <Allocator Memory>
-    bool acquireGeometry(PaneStore<Memory>& panes, [[maybe_unused]] diagnostics::RuntimeCounters& metrics, const ClientSession<Memory>& client, Workspace<Memory>& workspace);
+    bool acquireGeometry(PaneStore& panes, [[maybe_unused]] diagnostics::RuntimeCounters& metrics, const ClientSession& client, Workspace& workspace);
 
-    template <Allocator Memory>
-    void releaseGeometry(ClientStore<Memory>& clients, std::uint64_t client, Workspace<Memory>& workspace) noexcept;
+    void releaseGeometry(ClientStore& clients, std::uint64_t client, Workspace& workspace) noexcept;
 
-    template <Allocator Memory>
-    void releaseAllGeometry(WorkspaceStore<Memory>& workspaces, ClientStore<Memory>& clients, std::uint64_t client) noexcept;
-
-    extern template bool acquireGeometry<ConcurrentMemory>(PaneStore<ConcurrentMemory>& panes, diagnostics::RuntimeCounters& metrics, const ClientSession<ConcurrentMemory>& client, Workspace<ConcurrentMemory>& workspace);
-    extern template void releaseGeometry<ConcurrentMemory>(ClientStore<ConcurrentMemory>& clients, std::uint64_t client, Workspace<ConcurrentMemory>& workspace) noexcept;
-    extern template void releaseAllGeometry<ConcurrentMemory>(WorkspaceStore<ConcurrentMemory>& workspaces, ClientStore<ConcurrentMemory>& clients, std::uint64_t client) noexcept;
+    void releaseAllGeometry(WorkspaceStore& workspaces, ClientStore& clients, std::uint64_t client) noexcept;
 
   }
 }
@@ -225,11 +210,11 @@ export {
 
     // Kept whole: tests instantiate it with their own fake Poller and History (launch_failure_test's
     // FailingPoller and QueuedHistory).
-    template <Allocator Memory, EventLoop Poller, HistoryEventSink History = DiscardedHistory>
+    template <EventLoop Poller, HistoryEventSink History = DiscardedHistory>
     class TBC_HOT_PATH PaneService {
     public:
       // The panes it launches keep the allocator, and the service keeps what it is given, all in region `a`.
-      inline explicit PaneService(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<Poller&, tbc::lt::a> poller, tbc::view<LimitService<Memory>&, tbc::lt::a> limits, tbc::view<PaneLaunchOptions, tbc::lt::a> options, tbc::view<History&, tbc::lt::a> history = discarded_history)
+      inline explicit PaneService(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<Poller&, tbc::lt::a> poller, tbc::view<LimitService&, tbc::lt::a> limits, tbc::view<PaneLaunchOptions, tbc::lt::a> options, tbc::view<History&, tbc::lt::a> history = discarded_history)
           : memory_(memory),
             poller_(poller),
             limits_(limits),
@@ -239,7 +224,7 @@ export {
             control_policy_(options.control_policy),
             shell_integration_(memory, options.shell_integration, options.ssh_integration) {}
 
-      inline static Pane<Memory>& require(PaneStore<Memory>& panes, std::uint64_t identity) {
+      inline static Pane& require(PaneStore& panes, std::uint64_t identity) {
         auto* pane = panes.find(identity);
         if (pane == nullptr) {
           throw RequestError{FailureCode::pane_not_found, "Pane does not exist"};
@@ -250,7 +235,7 @@ export {
 
       // Generation 0 names whatever generation the pane has, as requests from clients that predate
       // generations do.
-      inline static Pane<Memory>& requireGeneration(PaneStore<Memory>& panes, std::uint64_t identity, std::uint64_t generation) {
+      inline static Pane& requireGeneration(PaneStore& panes, std::uint64_t identity, std::uint64_t generation) {
         auto& pane = require(panes, identity);
 
         if (generation != 0 && findPane(panes, identity, generation) == nullptr) {
@@ -262,7 +247,7 @@ export {
 
       // A new pane in a tab, in the colors of the workspace's geometry owner when there is one.
       // `bare_prompt`: the client it is for draws telar's editor, so its shell prints no prompt.
-      inline tbc::view<Pane<Memory>&, tbc::lt::a> launch(tbc::view<RuntimeModel<Memory>&, tbc::lt::a> model, const ConfigureTerminalColors* owner_colors, bool bare_prompt, const Launch& launch, TabLocation location, TerminalSize size) {
+      inline tbc::view<Pane&, tbc::lt::a> launch(tbc::view<RuntimeModel&, tbc::lt::a> model, const ConfigureTerminalColors* owner_colors, bool bare_prompt, const Launch& launch, TabLocation location, TerminalSize size) {
         const auto identity = allocateIdentity(model);
 
         if (launch.environment_mode != EnvironmentMode::inherit_runtime || !launch.environment.empty()) {
@@ -274,11 +259,11 @@ export {
         return launchPrepared(model, owner_colors, bare_prompt, command, location, size, identity);
       }
 
-      inline tbc::view<Pane<Memory>&, tbc::lt::a> launch(tbc::view<RuntimeModel<Memory>&, tbc::lt::a> model, const ConfigureTerminalColors* owner_colors, bool bare_prompt, Command<Memory>& command, TabLocation location, TerminalSize size, std::uint64_t restored_identity = 0) {
+      inline tbc::view<Pane&, tbc::lt::a> launch(tbc::view<RuntimeModel&, tbc::lt::a> model, const ConfigureTerminalColors* owner_colors, bool bare_prompt, Command<ConcurrentMemory>& command, TabLocation location, TerminalSize size, std::uint64_t restored_identity = 0) {
         return launchPrepared(model, owner_colors, bare_prompt, command, location, size, allocateIdentity(model, restored_identity));
       }
 
-      inline tbc::view<Attachment<Memory>&, tbc::lt::a> attach(RuntimeModel<Memory>& model, tbc::view<ClientSession<Memory>&, tbc::lt::a> client, std::uint64_t pane_id, TerminalSize size) {
+      inline tbc::view<Attachment&, tbc::lt::a> attach(RuntimeModel& model, tbc::view<ClientSession&, tbc::lt::a> client, std::uint64_t pane_id, TerminalSize size) {
         auto* workspace = model.workspaces.find(require(model.panes, pane_id).location.workspace.id);
         if (workspace == nullptr) {
           throw RequestError{FailureCode::workspace_not_found, "Workspace does not exist"};
@@ -302,7 +287,7 @@ export {
         const auto slot = client.availableAttachmentSlot();
         // The attachment shares the pane's media through its own handle.
         auto media = pane.media;
-        auto attachment = makeOwned<Attachment<Memory>>(memory_, memory_, client.graphics_credit, pane.id, std::move(media));
+        auto attachment = makeOwned<Attachment>(memory_, memory_, client.graphics_credit, pane.id, std::move(media));
 
         attachment->slot = slot;
         attachment->graphics.configure(client.shared_graphics);
@@ -316,7 +301,7 @@ export {
         return result;
       }
 
-      inline void detach(RuntimeModel<Memory>& model, ClientStore<Memory>& clients, std::uint64_t client_id, std::uint64_t identity) noexcept {
+      inline void detach(RuntimeModel& model, ClientStore& clients, std::uint64_t client_id, std::uint64_t identity) noexcept {
         if (!release(model, clients, client_id, identity)) {
           return;
         }
@@ -327,7 +312,7 @@ export {
       }
 
       // Drops a client's attachment to a pane; whether it had one.
-      inline bool release(RuntimeModel<Memory>& model, ClientStore<Memory>& clients, std::uint64_t client_id, std::uint64_t identity) noexcept {
+      inline bool release(RuntimeModel& model, ClientStore& clients, std::uint64_t client_id, std::uint64_t identity) noexcept {
         auto* client = clients.find(client_id);
         if (client == nullptr) {
           return false;
@@ -346,14 +331,14 @@ export {
         return removed != 0;
       }
 
-      inline void detachAll(RuntimeModel<Memory>& model, ClientStore<Memory>& clients, std::uint64_t client_id) noexcept {
+      inline void detachAll(RuntimeModel& model, ClientStore& clients, std::uint64_t client_id) noexcept {
         auto* client = clients.find(client_id);
         if (client == nullptr) {
           return;
         }
 
         const auto bit = client->observerBit();
-        std::array<std::uint64_t, ClientSession<Memory>::attachment_capacity> detached{};
+        std::array<std::uint64_t, ClientSession::attachment_capacity> detached{};
         std::size_t count = 0;
 
         for (const auto& attachment : client->attachments) {
@@ -379,7 +364,7 @@ export {
         }
       }
 
-      inline void remove(RuntimeModel<Memory>& model, ClientStore<Memory>& clients, std::uint64_t identity) noexcept {
+      inline void remove(RuntimeModel& model, ClientStore& clients, std::uint64_t identity) noexcept {
         auto* pane = model.panes.find(identity);
         if (pane == nullptr) {
           return;
@@ -421,7 +406,7 @@ export {
       }
 
       template <typename Observer = IgnorePaneInput>
-      inline void input(RuntimeModel<Memory>& model, ClientStore<Memory>& clients, std::uint64_t client_id, const PaneInput& request, const Observer& observe = {}) {
+      inline void input(RuntimeModel& model, ClientStore& clients, std::uint64_t client_id, const PaneInput& request, const Observer& observe = {}) {
         if (const auto* client = clients.find(client_id); client == nullptr || client->attachment(request.pane_id) == nullptr) {
           return;
         }
@@ -439,7 +424,7 @@ export {
         }
 
         recordInputOrigin(model, clients, client_id, request.pane_id);
-        ClipboardService<Memory>::configure(clients, require(model.panes, request.pane_id));
+        ClipboardService::configure(clients, require(model.panes, request.pane_id));
       }
 
       inline static std::size_t typedSize(bool paste, std::span<const Byte> text, std::span<const Byte> enter) noexcept {
@@ -449,7 +434,7 @@ export {
       // Types a line at a pane: the prefix and the text, as one paste when `paste`, then `enter`. The
       // prefix ends in a space, so no terminator spans it and the text.
       template <typename Observer>
-      inline static void type(Pane<Memory>& pane, bool paste, std::span<const Byte> prefix, std::span<const Byte> text, std::span<const Byte> enter, const Observer& observe) {
+      inline static void type(Pane& pane, bool paste, std::span<const Byte> prefix, std::span<const Byte> text, std::span<const Byte> enter, const Observer& observe) {
         const auto forward = [&](std::span<const Byte> bytes) {
           pane.enqueueInput(bytes);
           observe(pane, bytes);
@@ -475,7 +460,7 @@ export {
       }
 
       // Writes a paste to a pane's input queue, framed when its program asked for bracketed paste.
-      inline static void paste(Pane<Memory>& pane, std::span<const Byte> text, bool bracketed) {
+      inline static void paste(Pane& pane, std::span<const Byte> text, bool bracketed) {
         BracketedPaste::encode(textView(text), bracketed, [&](std::string_view bytes) {
           pane.enqueueInput({reinterpret_cast<const Byte*>(bytes.data()), bytes.size()});
         });
@@ -485,17 +470,17 @@ export {
         return {reinterpret_cast<const char*>(bytes.data()), bytes.size()};
       }
 
-      inline bool admitInput(Pane<Memory>& pane, std::size_t bytes) {
-        if (bytes <= Pane<Memory>::input_limit - pane.input.size()) {
+      inline bool admitInput(Pane& pane, std::size_t bytes) {
+        if (bytes <= Pane::input_limit - pane.input.size()) {
           return true;
         }
 
         TELAR_DIAGNOSTIC(diagnostics::accumulate(pane.input_dropped_bytes, bytes));
-        limits_.report(LimitReach{.name = "panes.input_queue_capacity", .noun = "queued input bytes", .value = Pane<Memory>::input_limit, .requested = saturatedAdd(pane.input.size(), bytes)});
+        limits_.report(LimitReach{.name = "panes.input_queue_capacity", .noun = "queued input bytes", .value = Pane::input_limit, .requested = saturatedAdd(pane.input.size(), bytes)});
         return false;
       }
 
-      inline void resize(RuntimeModel<Memory>& model, ClientSession<Memory>& client, const PaneResize& request) {
+      inline void resize(RuntimeModel& model, ClientSession& client, const PaneResize& request) {
         if (client.attachment(request.pane_id) == nullptr) {
           return;
         }
@@ -508,7 +493,7 @@ export {
         require(model.panes, request.pane_id).resize(request.size);
       }
 
-      inline void flushInput(Pane<Memory>& pane) {
+      inline void flushInput(Pane& pane) {
         if (pane.output_closed) {
           return;
         }
@@ -531,7 +516,7 @@ export {
         }
       }
 
-      inline void failOutput(Pane<Memory>& pane) noexcept {
+      inline void failOutput(Pane& pane) noexcept {
         pane.terminal.abortControl();
         pane.media->cancel();
         pane.requestClose();
@@ -539,7 +524,7 @@ export {
         poller_.remove(pane.process->descriptor());
       }
 
-      inline void configureDesktop(RuntimeModel<Memory>& model, ClientStore<Memory>& clients, std::uint64_t client_id, const ConfigurePaneDesktop& request) {
+      inline void configureDesktop(RuntimeModel& model, ClientStore& clients, std::uint64_t client_id, const ConfigurePaneDesktop& request) {
         const auto pane = requireGeneration(model.panes, request.pane_id, request.pane_generation).id;
         auto* client = clients.find(client_id);
         auto* attachment = client == nullptr ? nullptr : client->attachment(pane);
@@ -556,7 +541,7 @@ export {
         flushInput(require(model.panes, pane));
       }
 
-      inline void configureColors(RuntimeModel<Memory>& model, ClientSession<Memory>& client, const ConfigureTerminalColors& request) {
+      inline void configureColors(RuntimeModel& model, ClientSession& client, const ConfigureTerminalColors& request) {
         if (client.colors.foreground == request.foreground && client.colors.background == request.background && client.colors.palette == request.palette) {
           return;
         }
@@ -571,11 +556,11 @@ export {
         }
       }
 
-      inline static void readText(ClientSession<Memory>& client, const ReadPane& request) {
+      inline static void readText(ClientSession& client, const ReadPane& request) {
         client.connection.defer(request);
       }
 
-      inline void copySelection(PaneStore<Memory>& panes, ClientSession<Memory>& client, const CopySelection& request) {
+      inline void copySelection(PaneStore& panes, ClientSession& client, const CopySelection& request) {
         if (client.attachment(request.pane_id) == nullptr) {
           return;
         }
@@ -595,7 +580,7 @@ export {
       // A command a client runs at the prompt of a pane it shows. Its text is recorded for the
       // command's history, then typed as a prompt sent with sendText is.
       template <typename Observer = IgnorePaneInput>
-      inline void command(RuntimeModel<Memory>& model, ClientStore<Memory>& clients, std::uint64_t client_id, const PaneCommand& request, const Observer& observe = {}) {
+      inline void command(RuntimeModel& model, ClientStore& clients, std::uint64_t client_id, const PaneCommand& request, const Observer& observe = {}) {
         if (const auto* client = clients.find(client_id); client == nullptr || client->attachment(request.pane_id) == nullptr) {
           return;
         }
@@ -616,11 +601,11 @@ export {
         }
 
         recordInputOrigin(model, clients, client_id, request.pane_id);
-        ClipboardService<Memory>::configure(clients, require(model.panes, request.pane_id));
+        ClipboardService::configure(clients, require(model.panes, request.pane_id));
       }
 
       template <typename Observer = IgnorePaneInput>
-      inline void sendText(PaneStore<Memory>& panes, ClientSession<Memory>& client, const SendPaneText& request, std::string_view prefix = {}, const Observer& observe = {}) {
+      inline void sendText(PaneStore& panes, ClientSession& client, const SendPaneText& request, std::string_view prefix = {}, const Observer& observe = {}) {
         auto& pane = requireGeneration(panes, request.pane_id, request.pane_generation);
         if (pane.output_closed) {
           throw RequestError{FailureCode::pane_exited, "Pane process has exited"};
@@ -633,7 +618,7 @@ export {
         const auto required = prefix.size() + typedSize(paste, text, enter);
         if (!admitInput(pane, required)) {
           std::array<char, 160> message;
-          const auto length = std::snprintf(message.data(), message.size(), "the pane's input queue holds its limit of %zu bytes; the program in it is not reading input", Pane<Memory>::input_limit);
+          const auto length = std::snprintf(message.data(), message.size(), "the pane's input queue holds its limit of %zu bytes; the program in it is not reading input", Pane::input_limit);
 
           client.connection.send(RequestFailed{.request_id = request.request_id, .code = FailureCode::resource_limit, .message = {message.data(), static_cast<std::size_t>(length)}});
           return;
@@ -649,10 +634,10 @@ export {
         client.connection.send(RequestCompleted{.request_id = request.request_id});
       }
 
-      inline void pasteClipboard(RuntimeModel<Memory>& model, ClientStore<Memory>& clients, std::uint64_t client_id, const PastePaneClipboard& request) {
+      inline void pasteClipboard(RuntimeModel& model, ClientStore& clients, std::uint64_t client_id, const PastePaneClipboard& request) {
         auto& pane = requireGeneration(model.panes, request.pane_id, request.pane_generation);
         auto* client = clients.find(client_id);
-        if (client == nullptr || !ClipboardService<Memory>::eligible(*client, pane) || pane.output_closed) {
+        if (client == nullptr || !ClipboardService::eligible(*client, pane) || pane.output_closed) {
           throw RequestError{FailureCode::invalid_request, "Clipboard paste requires a live visible attachment"};
         }
 
@@ -684,7 +669,7 @@ export {
       // A search of the whole scrollback, or of some rows of it.
       template <typename Request>
         requires std::same_as<Request, SearchPane> || std::same_as<Request, SearchPaneRows>
-      inline static void search(PaneStore<Memory>& panes, ClientSession<Memory>& client, const Request& request) {
+      inline static void search(PaneStore& panes, ClientSession& client, const Request& request) {
         auto& pane = require(panes, request.pane_id);
         if (client.role == ClientRole::interactive && client.attachment(pane.id) == nullptr) {
           throw RequestError{FailureCode::pane_not_found, "Pane is not attached"};
@@ -698,7 +683,7 @@ export {
       }
 
       // Rows of an attached pane's scrollback, which its client draws while it scrolls.
-      inline static void readRows(PaneStore<Memory>& panes, ClientSession<Memory>& client, const ReadPaneRows& request) {
+      inline static void readRows(PaneStore& panes, ClientSession& client, const ReadPaneRows& request) {
         auto& pane = require(panes, request.pane_id);
         if (client.attachment(pane.id) == nullptr) {
           throw RequestError{FailureCode::pane_not_found, "Pane is not attached"};
@@ -707,7 +692,7 @@ export {
         client.connection.send(pane.scrollback_rows.read(pane.terminal, request));
       }
 
-      inline static bool advanceSearch(PaneStore<Memory>& panes, ClientSession<Memory>& client) {
+      inline static bool advanceSearch(PaneStore& panes, ClientSession& client) {
         if (!client.search) {
           return false;
         }
@@ -727,7 +712,7 @@ export {
       }
 
     private:
-      inline static void recordInputOrigin(RuntimeModel<Memory>& model, ClientStore<Memory>& clients, std::uint64_t client_id, std::uint64_t pane) noexcept {
+      inline static void recordInputOrigin(RuntimeModel& model, ClientStore& clients, std::uint64_t client_id, std::uint64_t pane) noexcept {
         ++model.input_sequence;
         if (model.input_sequence == 0) {
           for (auto* session : clients.items()) {
@@ -747,7 +732,7 @@ export {
 
       // Visibility is the union of explicit live reports. The oldest visible
       // reporter supplies theme facts; focus and the geometry lease cannot steal it.
-      inline static void refreshDesktop(RuntimeModel<Memory>& model, const ClientStore<Memory>& clients, std::uint64_t identity) {
+      inline static void refreshDesktop(RuntimeModel& model, const ClientStore& clients, std::uint64_t identity) {
         auto& pane = require(model.panes, identity);
         control::ClientFacts facts;
         const ConfigurePaneDesktop* theme = nullptr;
@@ -792,7 +777,7 @@ export {
         }
 
         pane.terminal.configureClientFacts(facts);
-        ClipboardService<Memory>::configure(clients, pane);
+        ClipboardService::configure(clients, pane);
       }
 
       struct Identity {
@@ -800,7 +785,7 @@ export {
         std::uint64_t generation;
       };
 
-      inline static Identity allocateIdentity(RuntimeModel<Memory>& model, std::uint64_t restored_identity = 0) {
+      inline static Identity allocateIdentity(RuntimeModel& model, std::uint64_t restored_identity = 0) {
         if (model.panes.size() + std::max(model.retired_observer_count, model.retired_media_count) >= pane_capacity) {
           throw RequestError{FailureCode::resource_limit, "Pane capacity is occupied by active processes or pending observations"};
         }
@@ -815,7 +800,7 @@ export {
         return {identity, model.next_pane_generation++};
       }
 
-      inline tbc::view<Pane<Memory>&, tbc::lt::a> launchPrepared(tbc::view<RuntimeModel<Memory>&, tbc::lt::a> model, const ConfigureTerminalColors* owner_colors, bool bare_prompt, Command<Memory>& command, TabLocation location, TerminalSize size, Identity identity) {
+      inline tbc::view<Pane&, tbc::lt::a> launchPrepared(tbc::view<RuntimeModel&, tbc::lt::a> model, const ConfigureTerminalColors* owner_colors, bool bare_prompt, Command<ConcurrentMemory>& command, TabLocation location, TerminalSize size, Identity identity) {
         const auto setIdentity = [&](std::string_view name, std::uint64_t value) {
           std::array<char, 32> text{};
           const auto converted = std::to_chars(text.data(), text.data() + text.size(), value);
@@ -834,7 +819,7 @@ export {
 
         proxy_.apply(command);
         const auto shell = shell_integration_.apply(command, bare_prompt);
-        auto pane = makeOwned<Pane<Memory>>(memory_, memory_, identity.id, location, command, PaneLaunch{size, model.media_budget, model.graphics_limits, shell});
+        auto pane = makeOwned<Pane>(memory_, memory_, identity.id, location, command, PaneLaunch{size, model.media_budget, model.graphics_limits, shell});
 
         TELAR_DIAGNOSTIC(pane->counters = &model.metrics.panes);
         pane->generation = identity.generation;
@@ -878,7 +863,7 @@ export {
         return *model.panes.find(identity.id);
       }
 
-      inline void refreshAfterDetach(RuntimeModel<Memory>& model, const ClientStore<Memory>& clients, std::uint64_t identity) noexcept {
+      inline void refreshAfterDetach(RuntimeModel& model, const ClientStore& clients, std::uint64_t identity) noexcept {
         try {
           refreshDesktop(model, clients, identity);
           flushInput(require(model.panes, identity));
@@ -891,14 +876,14 @@ export {
 
       static constexpr std::size_t pane_capacity = 256;
 
-      tbc::view<Memory&, tbc::lt::a> memory_;
+      tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
       tbc::view<Poller&, tbc::lt::a> poller_;
-      tbc::view<LimitService<Memory>&, tbc::lt::a> limits_;
+      tbc::view<LimitService&, tbc::lt::a> limits_;
       tbc::view<History&, tbc::lt::a> history_;
       tbc::view<std::string_view, tbc::lt::a> socket_path_;
       ProxyClientConfiguration proxy_;
       control::Policy control_policy_;
-      tbc::view<ShellIntegration<Memory>, tbc::lt::a> shell_integration_;
+      tbc::view<ShellIntegration<ConcurrentMemory>, tbc::lt::a> shell_integration_;
     };
 
   }
@@ -908,54 +893,54 @@ export {
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory, EventLoop Poller>
+    template <EventLoop Poller>
     class ExecutionService {
     public:
-      explicit ExecutionService(Memory& memory, Poller& poller, LimitService<Memory>& limits);
+      explicit ExecutionService(ConcurrentMemory& memory, Poller& poller, LimitService& limits);
 
       ~ExecutionService();
 
-      void request(RuntimeModel<Memory>& model, ClientSession<Memory>& client, const ExecutionRequest& request);
+      void request(RuntimeModel& model, ClientSession& client, const ExecutionRequest& request);
 
       void event(const Event& event);
 
-      bool refresh(RuntimeModel<Memory>& model) noexcept;
+      bool refresh(RuntimeModel& model) noexcept;
 
       void disconnect(std::uint64_t client_id);
 
     private:
-      Execution<Memory>* find(std::uint64_t identity) const noexcept;
+      Execution<ConcurrentMemory>* find(std::uint64_t identity) const noexcept;
 
-      Execution<Memory>& start(RuntimeModel<Memory>& model, std::uint64_t client_id, const ExecutionRequest& request);
+      Execution<ConcurrentMemory>& start(RuntimeModel& model, std::uint64_t client_id, const ExecutionRequest& request);
 
-      std::uint64_t administration(RuntimeModel<Memory>& model);
+      std::uint64_t administration(RuntimeModel& model);
 
-      void releaseAdministration(RuntimeModel<Memory>& model) noexcept;
+      void releaseAdministration(RuntimeModel& model) noexcept;
 
-      void receiveInput(Execution<Memory>& execution, std::uint64_t client_id, const ExecutionRequest& request);
+      void receiveInput(Execution<ConcurrentMemory>& execution, std::uint64_t client_id, const ExecutionRequest& request);
 
-      static void flushInput(Poller& poller, Execution<Memory>& execution);
+      static void flushInput(Poller& poller, Execution<ConcurrentMemory>& execution);
 
-      static void closeInput(Poller& poller, Execution<Memory>& execution) noexcept;
+      static void closeInput(Poller& poller, Execution<ConcurrentMemory>& execution) noexcept;
 
-      static void unwatch(Poller& poller, Execution<Memory>& execution) noexcept;
+      static void unwatch(Poller& poller, Execution<ConcurrentMemory>& execution) noexcept;
 
       // The reply to the request that started an execution says `starting`,
       // before the spawning thread confirms the child; later replies report it
       // running.
-      void send(ClientSession<Memory>& client, const Execution<Memory>& execution, const ExecutionRequest& request, bool started = false);
+      void send(ClientSession& client, const Execution<ConcurrentMemory>& execution, const ExecutionRequest& request, bool started = false);
 
-      void list(ClientSession<Memory>& client, const ExecutionRequest& request);
+      void list(ClientSession& client, const ExecutionRequest& request);
 
       static constexpr std::size_t capacity = 32;
-      Memory& memory_;
+      ConcurrentMemory& memory_;
       Poller& poller_;
-      LimitService<Memory>& limits_;
-      SlotStore<Execution<Memory>, capacity, Memory> executions_;
+      LimitService& limits_;
+      SlotStore<Execution<ConcurrentMemory>, capacity, ConcurrentMemory> executions_;
       std::uint64_t administration_ = 0;
     };
 
-    extern template class ExecutionService<ConcurrentMemory, NativeEventLoop<ConcurrentMemory>>;
+    extern template class ExecutionService<NativeEventLoop<ConcurrentMemory>>;
 
   }
 }

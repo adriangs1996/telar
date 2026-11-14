@@ -19,7 +19,7 @@ import telar.git;
 namespace {
 
   namespace git = telar::git;
-  using Reader = git::StatusReader<telar::Memory>;
+  using Reader = git::StatusReader;
 
   int failures = 0;
   int checks = 0;

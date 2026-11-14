@@ -208,12 +208,10 @@ export {
 export {
   namespace telar::runtime::diagnostics {
 
-    template <Allocator Memory>
-    void writeRuntimeSample(Line& line, RuntimeModel<Memory>& model, const ClientStore<Memory>& clients);
+    void writeRuntimeSample(Line& line, RuntimeModel& model, const ClientStore& clients);
 
     // The sample reads counters that only a diagnostics build keeps.
 #if TELAR_DIAGNOSTICS
-    extern template void writeRuntimeSample<ConcurrentMemory>(Line& line, RuntimeModel<ConcurrentMemory>& model, const ClientStore<ConcurrentMemory>& clients);
 #endif
 
   }
@@ -235,8 +233,8 @@ export {
       explicit RuntimeTelemetry(std::string_view endpoint, ProxyStatus proxy) noexcept;
 
       // Kept here: Captures and Background are the runtime's services, from modules that import this one.
-      template <Allocator Memory, typename Captures, typename Background>
-      TBC_HOT_PATH inline std::chrono::nanoseconds tick(RuntimeModel<Memory>& model, const ClientStore<Memory>& clients, Memory& memory, const Captures& captures, const Background& background, Clock::time_point now) noexcept {
+      template <typename Captures, typename Background>
+      TBC_HOT_PATH inline std::chrono::nanoseconds tick(RuntimeModel& model, const ClientStore& clients, ConcurrentMemory& memory, const Captures& captures, const Background& background, Clock::time_point now) noexcept {
         if (now < next_sample_) {
           return next_sample_ - now;
         }

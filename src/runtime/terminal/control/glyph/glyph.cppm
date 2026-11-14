@@ -14,9 +14,6 @@ export namespace telar::runtime::control {
 
   // The current C++ clients have no session-glyph renderer. Advertise an empty
   // format set and reject registrations, rather than claiming invisible glyphs.
-  template <Allocator Memory>
-  void glyph(std::string_view request, Reply<Memory>& reply);
-
-  extern template void glyph<telar::ConcurrentMemory>(std::string_view request, Reply<telar::ConcurrentMemory>& reply);
+  void glyph(std::string_view request, Reply<ConcurrentMemory>& reply);
 
 }

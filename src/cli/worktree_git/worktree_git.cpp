@@ -103,8 +103,7 @@ namespace telar::runtime::cli::repository {
     return std::string{origin};
   }
 
-  template <Allocator Memory>
-  void ready(Git<Memory>& git, std::string_view commit) {
+  void ready(Git& git, std::string_view commit) {
     if (git.read({"rev-parse", "--is-shallow-repository"}) != "false") {
       throw std::runtime_error{"ShallowRepositoryUnsupported"};
     }
@@ -272,8 +271,7 @@ namespace telar::runtime::cli::sessions {
     return *chosen;
   }
 
-  template <Allocator Memory>
-  void workspaceEntry(Output<Memory>& output, const WorkspaceListEntry& entry, bool json) {
+  void workspaceEntry(Output& output, const WorkspaceListEntry& entry, bool json) {
     if (json) {
       output.text("{\"workspace_id\":").number(entry.workspace).text(",\"name\":").json(entry.name).text(",\"path\":").json(entry.path).text(",\"tab_count\":").number(entry.tab_count).text(",\"branch\":").json(entry.branch).text(",\"dirty\":").boolean(entry.dirty).text("}");
     } else {
@@ -281,7 +279,6 @@ namespace telar::runtime::cli::sessions {
     }
   }
 
-  template <Allocator Memory>
   int workspace(Memory& memory, const WorkspaceOptions& options) {
     try {
       using Action = WorkspaceOptions::Action;
@@ -427,13 +424,9 @@ namespace telar::runtime::cli::sessions {
     }
   }
 
-  template int workspace<Memory>(Memory& memory, const WorkspaceOptions& options);
-
 }
 
 namespace telar::runtime::cli::repository {
-
-  template void ready<Memory>(Git<Memory>& git, std::string_view commit);
 
 }
 
@@ -446,8 +439,7 @@ namespace telar::runtime::cli::sessions {
 
 namespace telar::runtime::cli::repository {
 
-  template <Allocator Memory>
-  Git<Memory>::Git(Memory& memory, std::string_view root)
+  Git::Git(Memory& memory, std::string_view root)
       : memory_(memory),
         git_(memory, root) {
     git_.inspect([&](Command<Memory>& command) {
@@ -458,13 +450,11 @@ namespace telar::runtime::cli::repository {
         });
   }
 
-  template <Allocator Memory>
-  std::string Git<Memory>::read(std::initializer_list<std::string_view> arguments) {
+  std::string Git::read(std::initializer_list<std::string_view> arguments) {
     return read(std::span{arguments.begin(), arguments.size()});
   }
 
-  template <Allocator Memory>
-  std::string Git<Memory>::read(std::span<const std::string_view> arguments) {
+  std::string Git::read(std::span<const std::string_view> arguments) {
     auto [status, output] = git_.with(arguments, [&](Command<Memory>& command) {
       return execute(command, true);
     });
@@ -475,8 +465,7 @@ namespace telar::runtime::cli::repository {
     return std::string{trimText(output, " \r\n")};
   }
 
-  template <Allocator Memory>
-  void Git<Memory>::bundle(std::span<const std::string_view> revisions, int descriptor) {
+  void Git::bundle(std::span<const std::string_view> revisions, int descriptor) {
     std::vector<std::string_view> args{"bundle", "create", "-"};
 
     args.insert(args.end(), revisions.begin(), revisions.end());
@@ -499,8 +488,7 @@ namespace telar::runtime::cli::repository {
     }
   }
 
-  template <Allocator Memory>
-  std::pair<int, std::string> Git<Memory>::execute(Command<Memory>& command, bool bounded) {
+  std::pair<int, std::string> Git::execute(Command<Memory>& command, bool bounded) {
     constexpr std::size_t max_configuration_bytes = 64 * 1024;
     CommandOutput output{memory_, bounded ? max_git_output : max_configuration_bytes};
     const auto status = output.run(command, std::chrono::steady_clock::now() + git_timeout, true);
@@ -515,8 +503,6 @@ namespace telar::runtime::cli::repository {
 
     return {status, std::string{output.text()}};
   }
-
-  template class Git<Memory>;
 
 }
 
@@ -728,8 +714,7 @@ namespace telar::runtime::cli::sessions {
     return self;
   }
 
-  template <Allocator Memory>
-  Channel<Memory>::Channel(Memory& memory, std::optional<std::string_view> socket, bool start)
+  Channel::Channel(Memory& memory, std::optional<std::string_view> socket, bool start)
       : paths_(memory, socketOptions(socket), process_environment) {
     std::optional<RuntimeConnection> probe;
     if (start && !connectExisting(probe, paths_.socket.c_str()) && startRuntime(memory, socketOptions(socket), paths_) != RuntimeStart::listening) {
@@ -745,8 +730,7 @@ namespace telar::runtime::cli::sessions {
     session_->receiveTimeout(reply_timeout_seconds);
   }
 
-  template <Allocator Memory>
-  WorkspaceList Channel<Memory>::catalog() {
+  WorkspaceList Channel::catalog() {
     try {
       session_->send(RequestRuntimeState{.client_identity = randomIdentity(), .interactive = false});
       return session_->template receive<WorkspaceList>();
@@ -755,31 +739,26 @@ namespace telar::runtime::cli::sessions {
     }
   }
 
-  template <Allocator Memory>
-  const char* Channel<Memory>::socket() const {
+  const char* Channel::socket() const {
     return paths_.socket.c_str();
   }
 
-  template <Allocator Memory>
-  ControlSession<Memory>& Channel<Memory>::control() noexcept {
+  ControlSession& Channel::control() noexcept {
     return *session_;
   }
 
-  template <Allocator Memory>
-  ServerOptions Channel<Memory>::socketOptions(std::optional<std::string_view> socket) {
+  ServerOptions Channel::socketOptions(std::optional<std::string_view> socket) {
     ServerOptions options;
 
     options.socket = socket.value_or("");
     return options;
   }
 
-  template <Allocator Memory>
-  const char* Channel<Memory>::connectionFailure(int code) noexcept {
+  const char* Channel::connectionFailure(int code) noexcept {
     return sys::errorName(code, "the local runtime is not reachable");
   }
 
-  template <Allocator Memory>
-  void Channel<Memory>::rethrowTranslated(bool reason) {
+  void Channel::rethrowTranslated(bool reason) {
     try {
       throw;
     } catch (const ControlFailure& failure) {
@@ -801,12 +780,10 @@ namespace telar::runtime::cli::sessions {
     }
   }
 
-  template <Allocator Memory>
-  WorktreeGit<Memory>::WorktreeGit(Memory& memory)
+  WorktreeGit::WorktreeGit(Memory& memory)
       : memory_(memory) {}
 
-  template <Allocator Memory>
-  std::string WorktreeGit<Memory>::run(std::span<const std::string_view> arguments, const char* failure, bool stream, bool hardened, std::span<const std::pair<std::string_view, std::string_view>> environment) {
+  std::string WorktreeGit::run(std::span<const std::string_view> arguments, const char* failure, bool stream, bool hardened, std::span<const std::pair<std::string_view, std::string_view>> environment) {
     Command command{memory_, Launch{.arguments = arguments}, CommandPurpose::configured_helper};
 
     for (const auto& [name, value] : environment) {
@@ -863,13 +840,11 @@ namespace telar::runtime::cli::sessions {
     return kept;
   }
 
-  template <Allocator Memory>
-  std::string WorktreeGit<Memory>::run(std::initializer_list<std::string_view> arguments, const char* failure, bool stream, bool hardened) {
+  std::string WorktreeGit::run(std::initializer_list<std::string_view> arguments, const char* failure, bool stream, bool hardened) {
     return run(std::span{arguments.begin(), arguments.size()}, failure, stream, hardened);
   }
 
-  template <Allocator Memory>
-  std::string WorktreeGit<Memory>::line(std::initializer_list<std::string_view> arguments, bool hardened) {
+  std::string WorktreeGit::line(std::initializer_list<std::string_view> arguments, bool hardened) {
     auto value = run(arguments, "NotARepository", false, hardened);
     const auto start = value.find_first_not_of(" \r\n"), end = value.find_last_not_of(" \r\n");
     if (start == std::string::npos) {
@@ -879,8 +854,7 @@ namespace telar::runtime::cli::sessions {
     return value.substr(start, end - start + 1);
   }
 
-  template <Allocator Memory>
-  std::string WorktreeGit<Memory>::root(std::string_view directory) {
+  std::string WorktreeGit::root(std::string_view directory) {
     auto common = line({"git", "-C", directory, "rev-parse", "--path-format=absolute", "--git-common-dir"});
 
     while (common.ends_with('/')) {
@@ -896,13 +870,11 @@ namespace telar::runtime::cli::sessions {
     return common;
   }
 
-  template <Allocator Memory>
-  std::string WorktreeGit<Memory>::currentBranch(std::string_view directory) {
+  std::string WorktreeGit::currentBranch(std::string_view directory) {
     return line({"git", "-C", directory, "rev-parse", "--abbrev-ref", "HEAD"});
   }
 
-  template <Allocator Memory>
-  bool WorktreeGit<Memory>::succeeds(std::initializer_list<std::string_view> arguments, bool hardened) {
+  bool WorktreeGit::succeeds(std::initializer_list<std::string_view> arguments, bool hardened) {
     try {
       run(arguments, "NotARepository", false, hardened);
       return true;
@@ -911,8 +883,7 @@ namespace telar::runtime::cli::sessions {
     }
   }
 
-  template <Allocator Memory>
-  void WorktreeGit<Memory>::add(std::string_view root, std::string_view directory, std::string_view branch, std::string_view base) {
+  void WorktreeGit::add(std::string_view root, std::string_view directory, std::string_view branch, std::string_view base) {
     const auto reference = "refs/heads/" + std::string{branch};
     if (succeeds({"git", "-C", root, "rev-parse", "--verify", "--quiet", reference})) {
       run({"git", "-C", root, "worktree", "add", "--", directory, branch}, "git worktree add failed");
@@ -921,8 +892,7 @@ namespace telar::runtime::cli::sessions {
     }
   }
 
-  template <Allocator Memory>
-  bool WorktreeGit<Memory>::merged(std::string_view root, std::string_view branch) {
+  bool WorktreeGit::merged(std::string_view root, std::string_view branch) {
     try {
       repository::Git git{memory_, root};
       std::string against = "HEAD";
@@ -1094,8 +1064,7 @@ namespace telar::runtime::cli::sessions {
     return self;
   }
 
-  template <Allocator Memory>
-  std::vector<GitWorktree> WorktreeGit<Memory>::listed(std::string_view directory, const WorktreeFilter& keep) {
+  std::vector<GitWorktree> WorktreeGit::listed(std::string_view directory, const WorktreeFilter& keep) {
     const auto main = root(directory);
     const auto bytes = run({"git", "-C", main, "worktree", "list", "--porcelain"});
     std::vector<GitWorktree> result;
@@ -1126,9 +1095,5 @@ namespace telar::runtime::cli::sessions {
 
     return result;
   }
-
-  template class Channel<Memory>;
-
-  template class WorktreeGit<Memory>;
 
 }

@@ -109,9 +109,9 @@ static void testCaptureJoinOwnership() {
   ConcurrentMemory& memory = adapter;
   CaptureQuota quota{4096};
   ProxyCaptureLimits limits;
-  using Joiner = CaptureJoiner<ConcurrentMemory>;
+  using Joiner = CaptureJoiner;
   auto half = [&](std::uint64_t connection, CaptureSide side) {
-    return makeOwned<CaptureHalf<ConcurrentMemory>>(memory, memory, quota, limits, CaptureStart{.key = {connection, 1}, .side = side});
+    return makeOwned<CaptureHalf>(memory, memory, quota, limits, CaptureStart{.key = {connection, 1}, .side = side});
   };
 
   {

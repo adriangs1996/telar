@@ -32,7 +32,6 @@ namespace telar::git {
 
   // Routes zlib's allocations to the reader's allocator. zlib frees without a
   // size, which CAllocationBlocks records in front of each block.
-  template <Allocator Memory>
   class Inflater {
   public:
     explicit Inflater(Memory& memory) noexcept;
@@ -54,11 +53,7 @@ namespace telar::git {
     bool ready_ = false;
   };
 
-  extern template class Inflater<Memory>;
-
   // Sizes `string` without zeroing it; the inflater overwrites every byte.
-  // Instantiated for Memory in git-objects.cpp, the only instantiation the module uses.
-  template <Allocator Memory>
   void resizeForOverwrite(String<Memory>& string, std::size_t size);
 
   struct CommitHeader {
@@ -68,8 +63,6 @@ namespace telar::git {
 
   // Parses the header of a commit, or of its first bytes: the tree, the
   // parents (appended to `parents`) and the committer time.
-  // Instantiated for Memory in git-objects.cpp, the only instantiation the module uses.
-  template <Allocator Memory>
   bool parseCommit(std::string_view content, ObjectFormat format, std::size_t maximum_parents, CommitHeader& header, Vector<ObjectId, Memory>& parents);
 
   inline constexpr std::uint32_t mode_type_mask = 0170000;
@@ -122,7 +115,6 @@ namespace telar::git {
 
   inline constexpr std::size_t pack_index_header = 8 + 256 * 4;
 
-  template <Allocator Memory>
   class ObjectDatabase {
   public:
     explicit ObjectDatabase(Memory& memory) noexcept;
@@ -182,7 +174,7 @@ namespace telar::git {
     ObjectFormat format_ = ObjectFormat::sha1;
     FileDescriptor objects_;
     Fingerprint packs_identity_;
-    Inflater<Memory> inflater_;
+    Inflater inflater_;
     Vector<Pack, Memory> packs_;
     Vector<Link, Memory> chain_;
     std::size_t last_pack_ = 0;
@@ -194,13 +186,10 @@ namespace telar::git {
     std::array<std::uint8_t, 16384> chunk_;
   };
 
-  extern template class ObjectDatabase<Memory>;
-
   // The commit-graph file, or the layers of a split chain. Only each layer's
   // fanout is kept in memory; commits are read with pread when the walk needs
   // them, so a large graph costs a descriptor, not its size, per reader.
   // Positions are global across layers, lower layers first.
-  template <Allocator Memory>
   class CommitGraph {
   public:
     static constexpr std::uint32_t no_parent = 0x70000000u;
@@ -269,7 +258,5 @@ namespace telar::git {
     ObjectFormat format_ = ObjectFormat::sha1;
     bool loaded_ = false;
   };
-
-  extern template class CommitGraph<Memory>;
 
 }

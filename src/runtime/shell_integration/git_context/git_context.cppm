@@ -61,7 +61,7 @@ export namespace telar::runtime {
   private:
     SystemAllocator memory_;
     MemoryAdapter<SystemAllocator> erased_{memory_};
-    git::StatusReader<Memory> reader_;
+    git::StatusReader reader_;
   };
 
   // One read at a time: while one runs, the latest request of each other pane waits.

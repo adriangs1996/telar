@@ -20,7 +20,6 @@ namespace telar::git {
 
   }
 
-  template <Allocator Memory>
   bool parseConfigEntries(std::string_view text, String<Memory>& scratch, void* target, bool (*visit)(void*, const ConfigEntry&)) {
     scratch.resize(2 * text.size() + 2);
     char* const subsection_buffer = scratch.data();
@@ -272,8 +271,6 @@ namespace telar::git {
       }
     }
   }
-
-  template bool parseConfigEntries<Memory>(std::string_view text, String<Memory>& scratch, void* target, bool (*visit)(void*, const ConfigEntry&));
 
   std::optional<bool> configBoolean(std::optional<std::string_view> value) noexcept {
     if (!value) {

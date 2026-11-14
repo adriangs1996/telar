@@ -23,10 +23,9 @@ import telar.runtime.diagnostics.operation;
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory>
     class FrozenImage {
     public:
-      explicit FrozenImage(Memory& memory, MediaAllocator<Memory>& budget, std::span<const std::uint8_t> pixels, bool shared);
+      explicit FrozenImage(ConcurrentMemory& memory, MediaAllocator<ConcurrentMemory>& budget, std::span<const std::uint8_t> pixels, bool shared);
 
       ~FrozenImage();
 
@@ -58,16 +57,14 @@ export {
 
       void take(FrozenImage& other) noexcept;
 
-      Memory* memory_ = nullptr;
-      MediaAllocator<Memory>* budget_ = nullptr;
+      ConcurrentMemory* memory_ = nullptr;
+      MediaAllocator<ConcurrentMemory>* budget_ = nullptr;
       std::uint8_t* pixels_ = nullptr;
       std::size_t byte_count_ = 0;
       std::size_t reserved_bytes_ = 0;
       std::array<char, 32> name_{};
       bool owns_name_ = false;
     };
-
-    extern template class FrozenImage<telar::ConcurrentMemory>;
 
   }
 }
@@ -76,16 +73,15 @@ export {
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory>
     class PreparedImages {
     public:
-      explicit PreparedImages(Memory& memory, MediaAllocator<Memory>& budget) noexcept;
+      explicit PreparedImages(ConcurrentMemory& memory, MediaAllocator<ConcurrentMemory>& budget) noexcept;
 
       void prepare(std::span<const GraphicsImageView> images) noexcept;
 
-      std::optional<FrozenImage<Memory>> take(ImageKey key) noexcept;
+      std::optional<FrozenImage> take(ImageKey key) noexcept;
 
-      bool put(ImageKey key, FrozenImage<Memory>&& image) noexcept;
+      bool put(ImageKey key, FrozenImage&& image) noexcept;
 
       // Generic over the caller's predicate, so it stays here.
       template <typename Consumer>
@@ -108,7 +104,7 @@ export {
     private:
       struct Entry {
         ImageKey key;
-        FrozenImage<Memory> frozen;
+        FrozenImage frozen;
       };
 
       void retain(std::span<const GraphicsImageView> images) noexcept;
@@ -120,16 +116,14 @@ export {
       void remember(ImageKey key) noexcept;
 
       static constexpr std::size_t prepared_capacity = 4;
-      Memory& memory_;
-      MediaAllocator<Memory>& budget_;
+      ConcurrentMemory& memory_;
+      MediaAllocator<ConcurrentMemory>& budget_;
       std::array<std::optional<Entry>, prepared_capacity> entries_;
       std::array<ImageKey, graphics_image_count * 2> frozen_{};
 #if TELAR_DIAGNOSTICS
       std::uint64_t prepared_count_ = 0;
 #endif
     };
-
-    extern template class PreparedImages<telar::ConcurrentMemory>;
 
   }
 }
@@ -138,14 +132,13 @@ export {
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory>
     class TransferRequests {
     public:
-      explicit TransferRequests(Memory& memory, MediaAllocator<Memory>& budget) noexcept;
+      explicit TransferRequests(ConcurrentMemory& memory, MediaAllocator<ConcurrentMemory>& budget) noexcept;
 
       bool request(ImageKey key, bool shared) noexcept;
 
-      std::optional<FrozenImage<Memory>> take(ImageKey key, bool shared);
+      std::optional<FrozenImage> take(ImageKey key, bool shared);
 
       void process(std::span<const GraphicsImageView> images) noexcept;
 
@@ -176,15 +169,13 @@ export {
         ImageKey key;
         bool shared;
         State state = State::pending;
-        std::optional<FrozenImage<Memory>> frozen{};
+        std::optional<FrozenImage> frozen{};
       };
 
-      Memory& memory_;
-      MediaAllocator<Memory>& budget_;
+      ConcurrentMemory& memory_;
+      MediaAllocator<ConcurrentMemory>& budget_;
       std::array<std::optional<Entry>, 8> entries_;
     };
-
-    extern template class TransferRequests<telar::ConcurrentMemory>;
 
   }
 }

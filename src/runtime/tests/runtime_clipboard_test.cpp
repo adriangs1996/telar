@@ -134,10 +134,10 @@ namespace {
 
   void transferTests(ConcurrentMemory& memory) {
     RuntimeModel model{memory};
-    ClientStore<ConcurrentMemory> clients{memory};
+    ClientStore clients{memory};
     ClientPeer first{memory, model, clients, ClientRole::control};
     ClientPeer other{memory, model, clients, ClientRole::control};
-    RuntimeClipboardService<ConcurrentMemory, Reader> service;
+    RuntimeClipboardService<Reader> service;
 
     Reader::blocked = true;
     service.read(clients, first.session().id, {.request_id = 1});

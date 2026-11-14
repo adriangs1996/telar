@@ -42,10 +42,9 @@ export {
 export {
   namespace telar::runtime {
 
-    template <Allocator Memory>
     class CaptureJoiner {
     public:
-      using Half = typename CapturedExchange<Memory>::Half;
+      using Half = CapturedExchange::Half;
       enum class State {
         pending,
         complete,
@@ -55,15 +54,15 @@ export {
 
       struct Result {
         State state;
-        CapturedExchange<Memory> exchange;
+        CapturedExchange exchange;
       };
 
       // The joiner holds halves until their peers arrive, and the halves keep their quota: region `a`.
-      explicit CaptureJoiner(tbc::view<Memory&, tbc::lt::a> memory, std::chrono::milliseconds timeout) noexcept;
+      explicit CaptureJoiner(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, std::chrono::milliseconds timeout) noexcept;
 
       tbc::view<Result, tbc::lt::a> push(std::int64_t now_ms, tbc::view<Half, tbc::lt::a> half) noexcept;
 
-      tbc::view<std::optional<CapturedExchange<Memory>>, tbc::lt::a> expire(std::int64_t now_ms) noexcept;
+      tbc::view<std::optional<CapturedExchange>, tbc::lt::a> expire(std::int64_t now_ms) noexcept;
 
       static constexpr std::size_t capacity = 256;
 
@@ -75,13 +74,11 @@ export {
 
       std::optional<std::size_t> find(CaptureKey key) const noexcept;
 
-      tbc::view<Memory&, tbc::lt::a> memory_;
+      tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
       std::int64_t timeout_ms_;
       tbc::view<std::array<std::optional<Entry>, capacity>, tbc::lt::a> slots_;
       SlotIndexes<capacity> occupied_;
     };
-
-    extern template class CaptureJoiner<ConcurrentMemory>;
 
   }
 }
@@ -90,27 +87,24 @@ export {
 export {
   namespace telar::runtime {
 
-    template <ConcurrentAllocator Memory>
     class CaptureReceiver {
     public:
       struct Request {
         bool decode;
       };
 
-      using Result = std::optional<typename CaptureProducer<Memory>::Half>;
+      using Result = std::optional<CaptureProducer::Half>;
 
-      explicit CaptureReceiver(CaptureProducer<Memory>& producer) noexcept;
+      explicit CaptureReceiver(CaptureProducer& producer) noexcept;
 
       Result observe(const Request& request) noexcept;
 
       void stop() noexcept;
 
     private:
-      CaptureProducer<Memory>& producer_;
+      CaptureProducer& producer_;
       bool named_ = false;
     };
-
-    extern template class CaptureReceiver<ConcurrentMemory>;
 
   }
 }
@@ -119,8 +113,8 @@ export {
 export {
   namespace telar::runtime {
 
-    template <typename Tap, typename Memory>
-    concept CaptureTap = Allocator<Memory> && requires(Tap& tap, CapturedExchange<Memory>& exchange) {
+    template <typename Tap>
+    concept CaptureTap = requires(Tap& tap, CapturedExchange& exchange) {
       { tap.listening() } noexcept -> std::same_as<bool>;
       { tap.submit(exchange) } noexcept -> std::same_as<void>;
     };
@@ -130,8 +124,7 @@ export {
         return false;
       }
 
-      template <Allocator Memory>
-      constexpr void submit(CapturedExchange<Memory>&) noexcept {}
+      constexpr void submit(CapturedExchange&) noexcept {}
     };
 
   }
@@ -142,11 +135,11 @@ export {
   namespace telar::runtime {
 
     // Generic over the caller's tap and clock.
-    template <ConcurrentAllocator Memory, typename Tap, CaptureClock Clock = CaptureWallClock>
-      requires CaptureTap<Tap, Memory>
+    template <typename Tap, CaptureClock Clock = CaptureWallClock>
+      requires CaptureTap<Tap>
     class TBC_HOT_PATH CapturePipeline {
     public:
-      inline explicit CapturePipeline(Memory& memory, CaptureProducer<Memory>& producer, ProxyCaptureLimits limits, Tap& tap)
+      inline explicit CapturePipeline(ConcurrentMemory& memory, CaptureProducer& producer, ProxyCaptureLimits limits, Tap& tap)
           : tap_(tap),
             joiner_(memory, limits.join_timeout),
             worker_(std::in_place, producer) {
@@ -174,7 +167,7 @@ export {
 
           worker_.submit({tap_.listening()});
           auto joined = joiner_.push(now, std::move(*half));
-          using State = typename CaptureJoiner<Memory>::State;
+          using State = CaptureJoiner::State;
 
           if (joined.state != State::pending) {
             tap_.submit(joined.exchange);
@@ -188,8 +181,8 @@ export {
 
     private:
       Tap& tap_;
-      CaptureJoiner<Memory> joiner_;
-      ObservationWorker<CaptureReceiver<Memory>> worker_;
+      CaptureJoiner joiner_;
+      ObservationWorker<CaptureReceiver> worker_;
     };
 
   }

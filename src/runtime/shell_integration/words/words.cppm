@@ -90,7 +90,7 @@ export namespace telar::runtime {
     std::string completions_;
     SystemAllocator memory_;
     MemoryAdapter<SystemAllocator> erased_{memory_};
-    git::StatusReader<Memory> git_;
+    git::StatusReader git_;
     // Whether each user spec, by digest, compiled: a spec is compiled once, not per request.
     std::unordered_map<std::uint64_t, bool> compiled_;
   };

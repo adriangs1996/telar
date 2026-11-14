@@ -105,14 +105,13 @@ export namespace telar::runtime::control {
     std::span<const std::uint8_t> data;
   };
 
-  template <Allocator Memory>
   class ClipboardWrite {
   public:
     static constexpr std::size_t maximum_mimes = 64;
     static constexpr std::size_t maximum_aliases = 64;
 
     // Copies the metadata; it keeps only its allocator, region `a`.
-    explicit ClipboardWrite(tbc::view<Memory&, tbc::lt::a> memory, const ClipboardMetadata& metadata, std::size_t limit);
+    explicit ClipboardWrite(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const ClipboardMetadata& metadata, std::size_t limit);
 
     // Its contents view its own spool and names, so it stays where it is built.
     ClipboardWrite(const ClipboardWrite&) = delete;
@@ -147,8 +146,8 @@ export namespace telar::runtime::control {
     void reserve(std::size_t count);
 
     static constexpr std::size_t initial_capacity = 4096;
-    tbc::view<Memory&, tbc::lt::a> memory_;
-    tbc::view<Vector<std::uint8_t, Memory>, tbc::lt::a> spool_;
+    tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
+    tbc::view<Vector<std::uint8_t, ConcurrentMemory>, tbc::lt::a> spool_;
     std::size_t limit_;
     std::array<Entry, maximum_mimes> entries_;
     std::array<Alias, maximum_aliases> aliases_;
@@ -160,8 +159,6 @@ export namespace telar::runtime::control {
     std::array<char, 4> group_;
     std::size_t group_size_ = 0;
   };
-
-  extern template class ClipboardWrite<telar::ConcurrentMemory>;
 
   inline constexpr std::size_t clipboard_chunk_bytes = 4096;
 
@@ -176,27 +173,14 @@ export namespace telar::runtime::control {
     Ending ending = Ending::escape;
   };
 
-  template <Allocator Memory>
-  void clipboardBase64(Reply<Memory>& reply, std::span<const std::uint8_t> input);
+  void clipboardBase64(Reply<ConcurrentMemory>& reply, std::span<const std::uint8_t> input);
 
-  extern template void clipboardBase64<telar::ConcurrentMemory>(Reply<telar::ConcurrentMemory>& reply, std::span<const std::uint8_t> input);
+  void clipboardBase64(Reply<ConcurrentMemory>& reply, std::string_view input);
 
-  template <Allocator Memory>
-  void clipboardBase64(Reply<Memory>& reply, std::string_view input);
+  void clipboardPacket(Reply<ConcurrentMemory>& reply, const ClipboardPacket& packet);
 
-  extern template void clipboardBase64<telar::ConcurrentMemory>(Reply<telar::ConcurrentMemory>& reply, std::string_view input);
+  void clipboardReadSuccess(Reply<ConcurrentMemory>& reply, const ClipboardPacket& request, std::span<const ClipboardContentView> contents, std::span<const std::string_view> available, bool listing);
 
-  template <Allocator Memory>
-  void clipboardPacket(Reply<Memory>& reply, const ClipboardPacket& packet);
-
-  extern template void clipboardPacket<telar::ConcurrentMemory>(Reply<telar::ConcurrentMemory>& reply, const ClipboardPacket& packet);
-
-  template <Allocator Memory>
-  void clipboardReadSuccess(Reply<Memory>& reply, const ClipboardPacket& request, std::span<const ClipboardContentView> contents, std::span<const std::string_view> available, bool listing);
-
-  extern template void clipboardReadSuccess<telar::ConcurrentMemory>(Reply<telar::ConcurrentMemory>& reply, const ClipboardPacket& request, std::span<const ClipboardContentView> contents, std::span<const std::string_view> available, bool listing);
-
-  template <Allocator Memory>
   class Clipboard {
   public:
     using Clock = std::chrono::steady_clock;
@@ -204,13 +188,13 @@ export namespace telar::runtime::control {
     static constexpr std::size_t maximum_encoded_bytes = (maximum_bytes + 2) / 3 * 4;
     static constexpr auto request_timeout = std::chrono::seconds{30};
 
-    explicit Clipboard(Memory& memory);
+    explicit Clipboard(ConcurrentMemory& memory);
 
     void routes(std::span<const ClipboardRoute> routes, std::optional<ClipboardRoute> preferred);
 
     void traditional(std::string_view payload, const Policy& policy);
 
-    void kitty(std::string_view payload, Ending ending, const Policy& policy, Reply<Memory>& reply);
+    void kitty(std::string_view payload, Ending ending, const Policy& policy, Reply<ConcurrentMemory>& reply);
 
     // All views are synchronous. Connection::send must copy/encode them before
     // returning; only the owning Pending crosses event-loop turns.
@@ -269,7 +253,7 @@ export namespace telar::runtime::control {
   private:
     // A pending request; its views lend its own texts and contents, so it stays where it is built.
     struct Pending {
-      explicit Pending(Memory& memory);
+      explicit Pending(ConcurrentMemory& memory);
 
       Pending(const Pending&) = delete;
       Pending& operator=(const Pending&) = delete;
@@ -287,8 +271,8 @@ export namespace telar::runtime::control {
       tbc::view<std::array<std::string_view, 4>, tbc::lt::self> mime_views;
       tbc::view<std::array<ClipboardRepresentation, 128>, tbc::lt::self> content_views;
       std::size_t mime_count = 0;
-      Vector<std::uint8_t, Memory> text;
-      Owned<ClipboardWrite<Memory>, Memory> transaction;
+      Vector<std::uint8_t, ConcurrentMemory> text;
+      Owned<ClipboardWrite, ConcurrentMemory> transaction;
       bool write = false;
       bool listing = false;
       bool prompt = false;
@@ -307,9 +291,9 @@ export namespace telar::runtime::control {
     template <base64::Padding Rule = base64::Padding::required>
     bool decode(std::string_view encoded);
 
-    static void status(const ClipboardMetadata& metadata, ClipboardStatus status, Ending ending, Reply<Memory>& reply);
+    static void status(const ClipboardMetadata& metadata, ClipboardStatus status, Ending ending, Reply<ConcurrentMemory>& reply);
 
-    void abort(ClipboardStatus result, Ending ending, Reply<Memory>& reply);
+    void abort(ClipboardStatus result, Ending ending, Reply<ConcurrentMemory>& reply);
 
     void cancelPending() noexcept;
 
@@ -318,9 +302,9 @@ export namespace telar::runtime::control {
     // Uses only the grants, so the metadata may live in what this sequence holds.
     static std::optional<ClipboardRoute> authorizedRoute(ClipboardGrants& grants, const ClipboardMetadata& metadata, bool write, bool exempt);
 
-    void read(const ClipboardMetadata& metadata, std::string_view data, Ending ending, const Policy& policy, Reply<Memory>& reply);
+    void read(const ClipboardMetadata& metadata, std::string_view data, Ending ending, const Policy& policy, Reply<ConcurrentMemory>& reply);
 
-    void commit(Ending ending, const Policy& policy, Reply<Memory>& reply);
+    void commit(Ending ending, const Policy& policy, Reply<ConcurrentMemory>& reply);
 
     class ReplyBuilder {
     public:
@@ -331,23 +315,23 @@ export namespace telar::runtime::control {
       ReplyBuilder(const ReplyBuilder&) = delete;
       ReplyBuilder& operator=(const ReplyBuilder&) = delete;
 
-      Reply<Memory>& reply() noexcept;
+      Reply<ConcurrentMemory>& reply() noexcept;
 
       void commit();
 
     private:
       Clipboard& owner_;
-      Reply<Memory>& reply_;
+      Reply<ConcurrentMemory>& reply_;
       bool committed_ = false;
     };
 
     ReplyBuilder buildReply();
 
-    Memory& memory_;
-    Vector<std::uint8_t, Memory> decoded_;
-    Owned<ClipboardWrite<Memory>, Memory> transaction_;
-    Owned<Pending, Memory> pending_;
-    std::array<Reply<Memory>, 2> asynchronous_replies_;
+    ConcurrentMemory& memory_;
+    Vector<std::uint8_t, ConcurrentMemory> decoded_;
+    Owned<ClipboardWrite, ConcurrentMemory> transaction_;
+    Owned<Pending, ConcurrentMemory> pending_;
+    std::array<Reply<ConcurrentMemory>, 2> asynchronous_replies_;
     std::size_t reply_head_ = 0;
     std::size_t reply_count_ = 0;
     ClipboardGrants grants_;
@@ -356,7 +340,5 @@ export namespace telar::runtime::control {
     std::optional<ClipboardRoute> preferred_;
     std::optional<Cancellation> cancellation_;
   };
-
-  extern template class Clipboard<telar::ConcurrentMemory>;
 
 }

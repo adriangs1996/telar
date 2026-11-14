@@ -313,14 +313,13 @@ namespace telar::render {
     }
   }
 
-  template <Allocator Memory, Allocator Output>
-  bool appendSequence(const Document<Memory>& document, String<Output>& output) {
+  bool appendSequence(const Document<Memory>& document, String<Memory>& output) {
     const auto size = encodedSize(document);
     if (!size) {
       return false;
     }
 
-    Vector<std::uint8_t, Output> bytes(*size, AllocatorRef<std::uint8_t, Output>{output.get_allocator().memory()});
+    Vector<std::uint8_t, Memory> bytes(*size, AllocatorRef<std::uint8_t, Memory>{output.get_allocator().memory()});
 
     encode(document, bytes);
     const auto encoded = (*size + 2) / 3 * 4;
@@ -335,14 +334,10 @@ namespace telar::render {
     return true;
   }
 
-  template <Allocator Output>
-  void appendEnd(String<Output>& output) {
+  void appendEnd(String<Memory>& output) {
     output.append("\x1b]");
     output.append(sequence_end);
     output.append("\x1b\\");
   }
-
-  template bool appendSequence(const Document<Memory>& document, String<Memory>& output);
-  template void appendEnd(String<Memory>& output);
 
 }

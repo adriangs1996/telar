@@ -254,18 +254,15 @@ export {
 export {
   namespace telar::runtime::plugins {
 
-    template <Allocator Memory>
     struct SharedExchange {
-      explicit SharedExchange(TapBudget::Charge charge, std::uint64_t event_id, CapturedExchange<Memory> exchange) noexcept;
+      explicit SharedExchange(TapBudget::Charge charge, std::uint64_t event_id, CapturedExchange exchange) noexcept;
 
-      static std::size_t capturedBytes(const CapturedExchange<Memory>& exchange) noexcept;
+      static std::size_t capturedBytes(const CapturedExchange& exchange) noexcept;
 
       TapBudget::Charge charge;
       std::uint64_t event_id;
-      CapturedExchange<Memory> exchange;
+      CapturedExchange exchange;
     };
-
-    extern template struct SharedExchange<ConcurrentMemory>;
 
   }
 }

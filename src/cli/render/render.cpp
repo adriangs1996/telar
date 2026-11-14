@@ -244,7 +244,6 @@ namespace telar::runtime::cli::render_command {
     return 0;
   }
 
-  template <Allocator Memory>
   int run(Memory& memory, const RenderOptions& options) {
     const bool from_stdin = options.path.empty() || options.path == "-";
     if (from_stdin && ::isatty(STDIN_FILENO) == 1) {
@@ -316,7 +315,5 @@ namespace telar::runtime::cli::render_command {
 
     return 0;
   }
-
-  template int run<Memory>(Memory& memory, const RenderOptions& options);
 
 }

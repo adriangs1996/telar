@@ -34,7 +34,6 @@ namespace telar::runtime::cli::integration {
     return path;
   }
 
-  template <Allocator Memory>
   std::optional<String<Memory>> read(Memory& memory, const String<Memory>& path, std::size_t maximum_bytes) {
     FileDescriptor file{::open(path.c_str(), O_RDONLY | O_CLOEXEC | O_NONBLOCK | O_NOCTTY)};
     if (!file) {
@@ -260,7 +259,7 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
     static constexpr std::size_t maximum_bytes = 64 * 1024;
   };
 
-  template <Allocator Memory, EnvironmentLookup Environment>
+  template <EnvironmentLookup Environment>
   int runExtension(Memory& memory, const IntegrationOptions& options, const Environment& environment, std::string_view executable) {
     const auto provider = Provider::describe(options.provider);
     const auto extension = Extension::describe(options.provider);
@@ -338,8 +337,7 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
     return legacy;
   }
 
-  template <Allocator Memory>
-  bool reportLegacy(Memory& memory, const String<Memory>& path, const HookSettings<Memory>& hooks, Provider provider) {
+  bool reportLegacy(Memory& memory, const String<Memory>& path, const HookSettings& hooks, Provider provider) {
     const auto source = read(memory, path, maximum_settings_bytes);
     if (!source) {
       return false;
@@ -365,7 +363,7 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
     return false;
   }
 
-  template <Allocator Memory, EnvironmentLookup Environment>
+  template <EnvironmentLookup Environment>
   int runSettings(Memory& memory, const IntegrationOptions& options, const Environment& environment, std::string_view executable) {
     const auto provider = Provider::describe(options.provider);
     String<Memory> path{options.settings, AllocatorRef<char, Memory>{memory}};
@@ -444,10 +442,8 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
     return 0;
   }
 
-  template int runExtension<Memory, ProcessEnvironment>(Memory& memory, const IntegrationOptions& options, const ProcessEnvironment& environment, std::string_view executable);
-  template int runSettings<Memory, ProcessEnvironment>(Memory& memory, const IntegrationOptions& options, const ProcessEnvironment& environment, std::string_view executable);
-
-  template std::optional<String<Memory>> read<Memory>(Memory& memory, const String<Memory>& path, std::size_t maximum_bytes);
+  template int runExtension<ProcessEnvironment>(Memory& memory, const IntegrationOptions& options, const ProcessEnvironment& environment, std::string_view executable);
+  template int runSettings<ProcessEnvironment>(Memory& memory, const IntegrationOptions& options, const ProcessEnvironment& environment, std::string_view executable);
 
 }
 
@@ -501,8 +497,7 @@ namespace telar::runtime::cli {
 
 namespace telar::runtime::cli::integration {
 
-  template <Allocator Memory>
-  HookSettings<Memory>::HookSettings(Memory& memory, Provider provider, std::string_view executable)
+  HookSettings::HookSettings(Memory& memory, Provider provider, std::string_view executable)
       : memory_(memory),
         provider_(provider),
         marker_{" hook ", AllocatorRef<char, Memory>{memory}},
@@ -521,8 +516,7 @@ namespace telar::runtime::cli::integration {
     command_ += worktree_command_;
   }
 
-  template <Allocator Memory>
-  bool HookSettings<Memory>::installed(const JsonNode<Memory>& settings, std::string_view event) const noexcept {
+  bool HookSettings::installed(const JsonNode<Memory>& settings, std::string_view event) const noexcept {
     const auto* hooks = settings.find("hooks");
     const auto* entries = hooks == nullptr ? nullptr : hooks->find(event);
     if (entries == nullptr || entries->kind() != JsonKind::array) {
@@ -534,8 +528,7 @@ namespace telar::runtime::cli::integration {
     });
   }
 
-  template <Allocator Memory>
-  bool HookSettings<Memory>::install(JsonNode<Memory>& settings) const {
+  bool HookSettings::install(JsonNode<Memory>& settings) const {
     bool changed = false;
 
     if (provider_.flat_hooks && settings.find("version") == nullptr) {
@@ -554,8 +547,7 @@ namespace telar::runtime::cli::integration {
     return changed;
   }
 
-  template <Allocator Memory>
-  bool HookSettings<Memory>::uninstall(JsonNode<Memory>& settings) const {
+  bool HookSettings::uninstall(JsonNode<Memory>& settings) const {
     auto* hooks = settings.find("hooks");
     if (hooks == nullptr || hooks->kind() != JsonKind::object) {
       return false;
@@ -567,16 +559,14 @@ namespace telar::runtime::cli::integration {
     return lifecycle_changed || worktrees_changed;
   }
 
-  template <Allocator Memory>
-  bool HookSettings<Memory>::isOwnCommand(const JsonNode<Memory>& hook) const noexcept {
+  bool HookSettings::isOwnCommand(const JsonNode<Memory>& hook) const noexcept {
     const auto* command = hook.find("command");
 
     return command != nullptr && command->kind() == JsonKind::string && command->text().ends_with(marker_);
   }
 
-  template <Allocator Memory>
   template <typename Node>
-  tbc::view<Node*, tbc::lt::a> HookSettings<Memory>::findHook(tbc::view<Node&, tbc::lt::a> entry) const noexcept {
+  tbc::view<Node*, tbc::lt::a> HookSettings::findHook(tbc::view<Node&, tbc::lt::a> entry) const noexcept {
     if (provider_.flat_hooks) {
       return isOwnCommand(entry) ? &entry : nullptr;
     }
@@ -595,8 +585,7 @@ namespace telar::runtime::cli::integration {
     return nullptr;
   }
 
-  template <Allocator Memory>
-  bool HookSettings<Memory>::installEvents(JsonNode<Memory>& hooks, std::span<const std::string_view> events, std::string_view command, std::string_view timeout) const {
+  bool HookSettings::installEvents(JsonNode<Memory>& hooks, std::span<const std::string_view> events, std::string_view command, std::string_view timeout) const {
     bool changed = false;
 
     for (const auto event : events) {
@@ -629,8 +618,7 @@ namespace telar::runtime::cli::integration {
     return changed;
   }
 
-  template <Allocator Memory>
-  JsonNode<Memory> HookSettings<Memory>::newEntry(std::string_view command, std::string_view timeout) const {
+  JsonNode<Memory> HookSettings::newEntry(std::string_view command, std::string_view timeout) const {
     JsonNode<Memory> hook{memory_};
 
     if (!provider_.flat_hooks) {
@@ -649,8 +637,7 @@ namespace telar::runtime::cli::integration {
     return entry;
   }
 
-  template <Allocator Memory>
-  bool HookSettings<Memory>::removeEvents(JsonNode<Memory>& hooks, std::span<const std::string_view> events) const {
+  bool HookSettings::removeEvents(JsonNode<Memory>& hooks, std::span<const std::string_view> events) const {
     bool changed = false;
 
     for (const auto event : events) {
@@ -693,7 +680,5 @@ namespace telar::runtime::cli::integration {
 
     return changed;
   }
-
-  template class HookSettings<Memory>;
 
 }

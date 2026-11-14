@@ -35,7 +35,7 @@ export import telar.wire.vocabulary;
 export {
   class ClientPeer {
   public:
-    explicit ClientPeer(telar::ConcurrentMemory& memory, telar::runtime::RuntimeModel<telar::ConcurrentMemory>& model, telar::runtime::ClientStore<telar::ConcurrentMemory>& clients, telar::runtime::ClientRole role)
+    explicit ClientPeer(telar::ConcurrentMemory& memory, telar::runtime::RuntimeModel& model, telar::runtime::ClientStore& clients, telar::runtime::ClientRole role)
         : memory_(memory),
           model_(model),
           clients_(clients),
@@ -48,7 +48,7 @@ export {
 
       check(::setsockopt(peer_.get(), SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) == 0);
       telar::runtime::setNonblocking(sockets[0]);
-      auto client = telar::makeOwned<telar::runtime::ClientSession<telar::ConcurrentMemory>>(memory, memory, id_, telar::runtime::FileDescriptor{sockets[0]});
+      auto client = telar::makeOwned<telar::runtime::ClientSession>(memory, memory, id_, telar::runtime::FileDescriptor{sockets[0]});
 
       client->role = role;
       client->connection.negotiated = true;
@@ -57,7 +57,7 @@ export {
       clients.find(id_)->event_identity = handle;
     }
 
-    telar::runtime::ClientSession<telar::ConcurrentMemory>& session() const {
+    telar::runtime::ClientSession& session() const {
       auto* client = clients_.find(id_);
 
       check(client != nullptr);
@@ -115,8 +115,8 @@ export {
     }
 
     telar::ConcurrentMemory& memory_;
-    telar::runtime::RuntimeModel<telar::ConcurrentMemory>& model_;
-    telar::runtime::ClientStore<telar::ConcurrentMemory>& clients_;
+    telar::runtime::RuntimeModel& model_;
+    telar::runtime::ClientStore& clients_;
     std::uint64_t id_;
     telar::runtime::FileDescriptor peer_;
     std::array<telar::Byte, 64 * 1024 + 1024> payload_;
