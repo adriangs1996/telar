@@ -3,6 +3,9 @@ module;
 
 module telar.runtime.plugins.service;
 
+import telar.platform.primitives;
+import telar.plugins;
+
 namespace telar::runtime::plugins {
 
   Service::Service(ConcurrentMemory& memory, std::span<const ServiceSpec> specifications, const char* executable, std::string_view trace_prefix, traffic::PackagePort* traffic)

@@ -11,9 +11,6 @@ import telar.tbc;
 import telar.runtime.vocabulary.traffic;
 
 import telar.runtime.plugins.worker;
-import telar.base.diagnostics;
-import telar.platform.primitives;
-import telar.plugins;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.runtime.platform.signals;

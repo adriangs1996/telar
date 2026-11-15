@@ -4,11 +4,17 @@ module;
 module telar.runtime.plugins.run_worker;
 
 import telar.lua;
-import telar.native.pcap;
 import telar.sys.posix;
 import telar.plugins;
 import telar.runtime.redirect.direction;
 import telar.runtime.vocabulary.frames;
+import telar.config.runtime;
+import telar.platform.error;
+import telar.platform.fs;
+import telar.platform.primitives;
+import telar.runtime.plugins.tap_configuration;
+import telar.runtime.traffic.capture_analysis;
+import telar.runtime.traffic.control_backend;
 
 namespace telar::runtime::plugins {
 

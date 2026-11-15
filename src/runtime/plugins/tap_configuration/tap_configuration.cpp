@@ -1,7 +1,7 @@
 module telar.runtime.plugins.tap_configuration;
 
 import telar.lua;
-import telar.platform.sha256;
+import telar.base.text.utf8;
 
 namespace telar::runtime::plugins {
 

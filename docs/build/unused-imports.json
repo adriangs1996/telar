@@ -603,38 +603,6 @@
   "src/gui/transport/runtime_link/runtime_link.cppm": [
     "telar.base.diagnostics"
   ],
-  "src/runtime/plugins/run_worker/run_worker.cpp": [
-    "telar.native.pcap"
-  ],
-  "src/runtime/plugins/run_worker/run_worker.cppm": [
-    "telar.base.diagnostics",
-    "telar.config.runtime",
-    "telar.native.pcap",
-    "telar.platform.error",
-    "telar.platform.fs",
-    "telar.platform.primitives",
-    "telar.runtime.plugins.tap_configuration",
-    "telar.runtime.traffic.capture_analysis",
-    "telar.runtime.traffic.control_backend"
-  ],
-  "src/runtime/plugins/service/service.cppm": [
-    "telar.base.diagnostics",
-    "telar.platform.primitives",
-    "telar.plugins"
-  ],
-  "src/runtime/plugins/tap_configuration/tap_configuration.cpp": [
-    "telar.platform.sha256"
-  ],
-  "src/runtime/plugins/tap_configuration/tap_configuration.cppm": [
-    "telar.base.diagnostics",
-    "telar.base.text.utf8",
-    "telar.platform.sha256",
-    "telar.runtime.platform.stream_read_buffer"
-  ],
-  "src/runtime/plugins/worker/worker.cppm": [
-    "telar.base.diagnostics",
-    "telar.runtime.platform.request_worker"
-  ],
   "src/runtime/proxy/authenticate/authenticate.cppm": [
     "telar.base.diagnostics",
     "telar.base.memory.sensitive",
