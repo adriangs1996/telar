@@ -603,34 +603,6 @@
   "src/gui/transport/runtime_link/runtime_link.cppm": [
     "telar.base.diagnostics"
   ],
-  "src/runtime/platform/process_probe/linux/process_inspector.cpp": [
-    "telar.base.diagnostics"
-  ],
-  "src/runtime/platform/process_probe/macos/process_inspector.cpp": [
-    "telar.base.diagnostics"
-  ],
-  "src/runtime/platform/process_probe/process_inspector.cpp": [
-    "telar.base.diagnostics"
-  ],
-  "src/runtime/platform/process_probe/process_probe.cppm": [
-    "telar.base.diagnostics"
-  ],
-  "src/runtime/platform/request_worker/request_worker.cppm": [
-    "telar.base.diagnostics",
-    "telar.platform.primitives"
-  ],
-  "src/runtime/platform/session_host/session_host.cppm": [
-    "telar.config.core",
-    "telar.platform.paths",
-    "telar.platform.primitives"
-  ],
-  "src/runtime/platform/signals/signals.cppm": [
-    "telar.platform.error",
-    "telar.sys.posix"
-  ],
-  "src/runtime/platform/system_certificates/system_certificates.cppm": [
-    "telar.platform.error"
-  ],
   "src/runtime/plugins/run_worker/run_worker.cpp": [
     "telar.native.pcap"
   ],

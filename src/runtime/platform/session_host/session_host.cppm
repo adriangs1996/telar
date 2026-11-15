@@ -3,9 +3,6 @@ export module telar.runtime.platform.session_host;
 import std;
 
 import telar.wire.vocabulary;
-import telar.platform.primitives;
-import telar.config.core;
-import telar.platform.paths;
 
 // Interface: agents/session_host.cppm
 export {

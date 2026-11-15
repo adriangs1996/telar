@@ -10,7 +10,6 @@ import telar.tbc;
 
 import telar.runtime.platform.session_host;
 import telar.config.runtime;
-import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.platform.primitives;
 import telar.base.memory.containers;

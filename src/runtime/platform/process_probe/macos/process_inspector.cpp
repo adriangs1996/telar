@@ -5,7 +5,6 @@ import telar.sys.posix;
 import telar.sys.socket;
 import telar.sys.apple;
 
-import telar.base.diagnostics;
 import telar.wire.vocabulary;
 
 namespace telar::runtime {

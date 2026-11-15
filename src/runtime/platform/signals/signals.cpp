@@ -1,5 +1,8 @@
 module telar.runtime.platform.signals;
 
+import telar.platform.error;
+import telar.sys.posix;
+
 namespace telar::runtime {
 
   CompletionSignal::CompletionSignal() {
