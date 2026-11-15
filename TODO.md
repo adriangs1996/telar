@@ -732,6 +732,48 @@ Para cada módulo: `extern template class X<Memory>;` en la interfaz, la instanc
 
 ---
 
+## Fase 12 · Dependencias explícitas (pedido de Adrian tras P11.1)
+
+Adrian: "Agreguemos también el check de imports sin usar", después de preguntar por qué hace falta `export import` y de confirmar que prohibirlos deja ver todas las dependencias reales. La lectura de que quiere las dos cosas (regla 4 estricta y el check nuevo) es del supervisor.
+
+- **Hecho cuando (toda la fase):** `docs/build/reexports.json` y la allowlist de imports sin usar están vacías, el checker en verde, los tres árboles compilan y pasan sus tests en Debug y en Release en macOS, el job `linux` pasa en la VM, y `tools/module-metrics.py` se vuelve a ejecutar y `docs/build/refactor-comparison.md` se actualiza. **No debe cambiar el código generado:** se compara el desensamblado normalizado de los binarios Release antes y después; si es idéntico no se mide rendimiento, y si cambia se explica y se mide según "Ejecución".
+- **Máquinas:** mientras corra la comparación de `gui-quick` bajo carga en esta máquina, los builds van a `Personal`.
+
+### [ ] P12.1 · Regla 4 estricta
+- **Qué hace:** `check-cpp-modules.py` rechaza todo `export import` salvo el de particiones propias (`export import :p`, que el estándar exige), también `std`. Cada fichero importa lo que nombra. Ejemplo de por qué la regla actual se queda corta: `remote_editor.cppm` hace `export import telar.platform.process` solo por `ProcessInspector inspector_`, un miembro privado. Entra estricta desde el principio, con `docs/build/reexports.json` como allowlist de lo que hay hoy (566 líneas de `export import` fuera de particiones: runtime 315 en 72 ficheros, GUI 180 en 62, CLI 33 en 16, `lib/` 38), y las tareas de limpieza la vacían.
+- **Hecho cuando:** el checker aplica la regla nueva, `reexports.json` lista exactamente lo que hay hoy y el checker pasa. Sin cambios en C++.
+
+### [ ] P12.2a · Limpieza de la regla 4 en `lib/`
+- **Depende de:** P12.1. Va primero porque quitar un re-export de `lib/` obliga a sus importadores de los tres árboles a importar lo que nombran.
+- **Hecho cuando:** `lib/` sale de `reexports.json`, compilan y pasan los tres árboles en Debug y en Release con sus probes, tbc y el checker.
+
+### [ ] P12.2b · Limpieza de la regla 4 en el runtime
+- **Depende de:** P12.2a. Unas 315 líneas en 72 ficheros.
+
+### [ ] P12.2c · Limpieza de la regla 4 en la GUI
+- **Depende de:** P12.2a. Unas 180 líneas en 62 ficheros.
+
+### [ ] P12.2d · Limpieza de la regla 4 en la CLI
+- **Depende de:** P12.2a. Unas 33 líneas en 16 ficheros.
+
+### [ ] P12.3 · Regla de import sin usar: mecanismo (pendiente de decidir)
+- **Requisitos:** un import que el fichero no necesita hace fallar el checker. Cero falsos positivos demostrados: cada import que marque se quita y el árbol compila y pasa tests; si quitarlo rompe la compilación, se corrige la regla, no se deja el import marcado. Los imports necesarios que no nombran nada del módulo (especializaciones como `std::formatter` o `std::hash`, operadores y funciones que llegan por ADL) se tratan de forma explícita y con el motivo escrito, no en silencio. Corre en el tiempo del checker normal, no en el de `tbc-lint` sobre el árbol.
+- **Opción 1, por tokens en `check-cpp-modules.py`, como la regla 4:** para cada `import M` de una unidad, el checker conoce lo que `M` declara en sus interfaces (tipos, funciones, variables, conceptos, enumeradores, espacios de nombres) y mira si la unidad nombra alguno fuera de comentarios y literales. Rápido (segundos, el mismo recorrido que ya hace). Riesgos: un nombre que exportan dos módulos cuenta como uso de los dos (falso negativo, no falso positivo); no ve los usos implícitos (especializaciones, ADL, operadores, conversiones) ni los nombres que mete una macro al expandirse (`TELAR_ASSERT`, las anotaciones de TBC), que darían falsos positivos si no se declaran.
+- **Opción 2, por AST en tbc:** una herramienta de Clang que, por unidad, recorre los `Decl` referenciados (incluidas llamadas resueltas por ADL, operadores y especializaciones instanciadas) y compara su módulo dueño (`Decl::getOwningModule`) con los imports. Es exacta para lo que el compilador usa. Riesgos: necesita los BMI y compilar cada unidad, así que corre en tiempo de build o de `tbc-lint`, no del checker; depende de la API de Clang de la toolchain fijada.
+- **Opción 3, empírica:** quitar cada import y compilar la unidad (`-fsyntax-only`). Exacta para "hace falta para compilar", pero muy lenta (una compilación por import) y no ve el caso peligroso: quitar un import que aporta una sobrecarga por ADL puede seguir compilando con otra sobrecarga y cambiar el comportamiento sin error.
+- **Opción 4, recomendada: tokens con usos implícitos declarados, y validación empírica en la limpieza.** La regla es la 1. Los módulos que aportan usos implícitos (especializaciones de `std::formatter`/`std::hash`, operadores o funciones libres sobre tipos que no son suyos, que se encuentran por ADL) y las macros cuya expansión nombra un módulo se declaran en `modules.json` con su motivo, y un import de esos módulos cuenta como usado solo si la unidad nombra alguno de los tipos a los que se aplican. Cada import que la regla marque en la limpieza se quita y se demuestra con build y tests (opción 3 como prueba de la regla, no como regla), y el desensamblado normalizado sin cambios del cierre de la fase cubre el riesgo de una sobrecarga cambiada en silencio. Riesgo que queda: un uso implícito no declarado aparece como falso positivo; se detecta en la limpieza al no compilar, y se arregla declarándolo.
+
+### [ ] P12.4 · Regla de import sin usar: implementación
+- **Depende de:** P12.3 decidida.
+
+### [ ] P12.5 · Limpieza de imports sin usar
+- **Depende de:** P12.4 y P12.2a–d (al quitar los re-exports aparecen interfaces que importan módulos que ya no usan).
+
+### [ ] P12.6 · Cierre de la fase 12
+- **Depende de:** P12.1–P12.5. Ejecuta el "Hecho cuando" de la fase: Linux, métricas, comparación y desensamblado.
+
+---
+
 ## Fuera de alcance
 
 - La pasada de includes de los tests (19,9 M de líneas, 12,2 M de cabeceras de fixtures).
