@@ -75,8 +75,7 @@ export namespace telar::runtime {
 
 }
 
-// Base64 with the standard alphabet. decode is constexpr like encode: it reads and writes only
-// the spans it receives.
+// Base64 with the standard alphabet.
 export namespace telar::runtime::base64 {
 
   inline constexpr std::string_view alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -97,59 +96,14 @@ export namespace telar::runtime::base64 {
     return pairs;
   }();
 
+  // The bytes `encoded` stands for, written to the front of `destination`; none when it is not
+  // base64 under `Rule` or does not fit. Built in text.cpp for the three rules.
   template <Padding Rule = Padding::canonical>
-  constexpr std::optional<std::size_t> decode(std::string_view encoded, std::span<std::uint8_t> destination) noexcept {
-    const auto remainder = encoded.size() % 4;
-    if (remainder != 0 && (Rule != Padding::optional || remainder == 1)) {
-      return std::nullopt;
-    }
+  std::optional<std::size_t> decode(std::string_view encoded, std::span<std::uint8_t> destination) noexcept;
 
-    std::size_t written = 0;
-    const auto complete = encoded.size() - remainder;
-
-    for (std::size_t offset = 0; offset < complete; offset += 4) {
-      const auto first = alphabet.find(encoded[offset]);
-      const auto second = alphabet.find(encoded[offset + 1]);
-      const auto third = alphabet.find(encoded[offset + 2]);
-      const auto fourth = alphabet.find(encoded[offset + 3]);
-      const bool padding = encoded[offset + 3] == '=';
-      const bool double_padding = encoded[offset + 2] == '=';
-      const auto count = double_padding ? 1 : padding ? 2
-                                                      : 3;
-      if (first == std::string_view::npos || second == std::string_view::npos ||
-          (!double_padding && third == std::string_view::npos) || (!padding && fourth == std::string_view::npos) ||
-          (double_padding && (!padding || (Rule == Padding::canonical && (second & 15) != 0))) ||
-          (Rule == Padding::canonical && padding && !double_padding && (third & 3) != 0) ||
-          (padding && offset + 4 != encoded.size()) || static_cast<std::size_t>(count) > destination.size() - written) {
-        return std::nullopt;
-      }
-
-      destination[written++] = static_cast<std::uint8_t>((first << 2) | (second >> 4));
-      if (count > 1) {
-        destination[written++] = static_cast<std::uint8_t>((second << 4) | (third >> 2));
-      }
-
-      if (count > 2) {
-        destination[written++] = static_cast<std::uint8_t>((third << 6) | fourth);
-      }
-    }
-
-    if (remainder != 0) {
-      const auto first = alphabet.find(encoded[complete]);
-      const auto second = alphabet.find(encoded[complete + 1]);
-      const auto third = remainder == 3 ? alphabet.find(encoded[complete + 2]) : 0;
-      if (first == std::string_view::npos || second == std::string_view::npos || third == std::string_view::npos || remainder - 1 > destination.size() - written) {
-        return std::nullopt;
-      }
-
-      destination[written++] = static_cast<std::uint8_t>((first << 2) | (second >> 4));
-      if (remainder == 3) {
-        destination[written++] = static_cast<std::uint8_t>((second << 4) | (third >> 2));
-      }
-    }
-
-    return written;
-  }
+  extern template std::optional<std::size_t> decode<Padding::canonical>(std::string_view encoded, std::span<std::uint8_t> destination) noexcept;
+  extern template std::optional<std::size_t> decode<Padding::required>(std::string_view encoded, std::span<std::uint8_t> destination) noexcept;
+  extern template std::optional<std::size_t> decode<Padding::optional>(std::string_view encoded, std::span<std::uint8_t> destination) noexcept;
 
   inline constexpr std::optional<std::size_t> encode(std::span<const std::uint8_t> bytes, std::span<char> destination) noexcept {
     const auto complete_groups = bytes.size() / 3;
