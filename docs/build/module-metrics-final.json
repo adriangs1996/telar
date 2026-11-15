@@ -1,11 +1,11 @@
 {
-  "commit": "0f73c298662d146e1f51a071bcbb13d688b7cf29",
+  "commit": "9c717526009f956f96bdb7eb7c8811035df26e1b",
   "graph": {
     "modules": 315,
     "components": 93,
-    "interface_lines": 72547,
+    "interface_lines": 72581,
     "implementation_lines": 112035,
-    "interface_share": 0.393,
+    "interface_share": 0.3931,
     "edges": 2227,
     "export_import_edges": 590,
     "implementation_only_edges": 316,
@@ -163,30 +163,30 @@
   },
   "machines": {
     "Adrians-MacBook-Pro": {
-      "commit": "0f73c298662d146e1f51a071bcbb13d688b7cf29",
+      "commit": "9c717526009f956f96bdb7eb7c8811035df26e1b",
       "date": "2026-11-15",
       "system": "Darwin 25.6.0 arm64",
       "cpus": 8,
       "memory_mib": 16384,
       "cold_build": {
         "runtime": {
-          "configure_seconds": 3.6,
-          "configure_peak_memory_mib": 146,
-          "configure_load_average": 2.2,
-          "build_seconds": 25.0,
-          "build_peak_memory_mib": 1253,
-          "build_load_average": 2.8
+          "configure_seconds": 3.8,
+          "configure_peak_memory_mib": 104,
+          "configure_load_average": 2.7,
+          "build_seconds": 26.7,
+          "build_peak_memory_mib": 1220,
+          "build_load_average": 3.6
         },
         "gui": {
-          "configure_seconds": 22.8,
+          "configure_seconds": 25.6,
           "configure_peak_memory_mib": 118,
-          "configure_load_average": 3.0,
-          "build_seconds": 79.6,
-          "build_peak_memory_mib": 2634,
-          "build_load_average": 4.0
+          "configure_load_average": 4.5,
+          "build_seconds": 81.1,
+          "build_peak_memory_mib": 2602,
+          "build_load_average": 5.9
         },
-        "build_seconds": 104.6,
-        "peak_memory_mib": 2634
+        "build_seconds": 107.8,
+        "peak_memory_mib": 2602
       },
       "compile_units": {
         "runtime": 850,
@@ -221,6 +221,111 @@
           "lib/tls/tls.cpp": 9479,
           "lib/base/text/utf8/utf8.cppm": 9390,
           "lib/tls/tls.cppm": 8727,
+          "src/gui/graphics/placeholder/placeholder.cpp": 8567
+        }
+      },
+      "ninja_rebuilds": {
+        "telar.tbc": {
+          "runtime": 373,
+          "gui": 540,
+          "total": 913
+        },
+        "telar.base.memory.allocators": {
+          "runtime": 369,
+          "gui": 533,
+          "total": 902
+        },
+        "telar.base.memory.containers": {
+          "runtime": 369,
+          "gui": 526,
+          "total": 895
+        },
+        "telar.base.diagnostics": {
+          "runtime": 369,
+          "gui": 525,
+          "total": 894
+        },
+        "telar.base.text.utf8": {
+          "runtime": 369,
+          "gui": 526,
+          "total": 895
+        },
+        "telar.base.text.json": {
+          "runtime": 369,
+          "gui": 524,
+          "total": 893
+        },
+        "telar.sys.socket": {
+          "runtime": 378,
+          "gui": 535,
+          "total": 913
+        },
+        "telar.base.text": {
+          "runtime": 369,
+          "gui": 523,
+          "total": 892
+        }
+      }
+    },
+    "Adrians-Laptop": {
+      "commit": "a02a326bc70188771205fb686ddd6957eb7e11e8",
+      "date": "2026-11-15",
+      "system": "Darwin 25.6.0 arm64",
+      "cpus": 10,
+      "memory_mib": 32768,
+      "cold_build": {
+        "runtime": {
+          "configure_seconds": 3.7,
+          "configure_peak_memory_mib": 95,
+          "configure_load_average": 3.9,
+          "build_seconds": 17.0,
+          "build_peak_memory_mib": 1668,
+          "build_load_average": 7.6
+        },
+        "gui": {
+          "configure_seconds": 12.5,
+          "configure_peak_memory_mib": 116,
+          "configure_load_average": 11.5,
+          "build_seconds": 55.1,
+          "build_peak_memory_mib": 4478,
+          "build_load_average": 15.5
+        },
+        "build_seconds": 72.1,
+        "peak_memory_mib": 4478
+      },
+      "compile_units": {
+        "runtime": 850,
+        "gui": 1195
+      },
+      "global_fragment": {
+        "units": 593,
+        "lines": 738086,
+        "median": 0,
+        "largest": {
+          "src/gui/platform/login_shell/host_name.cpp": 52182,
+          "src/gui/terminal/screen/screen.cppm": 45153,
+          "src/gui/core/primitives/primitives.cppm": 44562,
+          "lib/ghostty/wuffs/wuffs.cpp": 42522,
+          "lib/ghostty/wuffs/wuffs.cppm": 42522,
+          "lib/wire/pane_io/pane_io.cppm": 40683,
+          "lib/wire/vocabulary/vocabulary.cppm": 40455,
+          "src/gui/platform/clipboard_image_pipe/clipboard_image_pipe.cppm": 40233,
+          "lib/wire/runtime/runtime.cppm": 40167,
+          "lib/wire/clients/clients.cppm": 40164,
+          "src/gui/attachments/catalog/catalog.cppm": 40015,
+          "lib/base/memory/allocators/allocators.cppm": 30445,
+          "src/runtime/platform/frameworks/frameworks.cppm": 27698,
+          "lib/clipboard/clipboard.cppm": 24513,
+          "src/gui/input/wheel_accumulator/wheel_accumulator.cppm": 24154,
+          "src/runtime/terminal/control/graphics_payload.cpp": 14305,
+          "src/runtime/terminal/control/vt_state.cpp": 14305,
+          "lib/sys/apple/apple.cppm": 13638,
+          "lib/base/memory/containers/containers.cppm": 10298,
+          "lib/base/diagnostics/diagnostics.cppm": 10127,
+          "lib/vocabulary/vocabulary.cppm": 9732,
+          "lib/tls/tls.cpp": 9482,
+          "lib/base/text/utf8/utf8.cppm": 9390,
+          "lib/tls/tls.cppm": 8730,
           "src/gui/graphics/placeholder/placeholder.cpp": 8567
         }
       },
