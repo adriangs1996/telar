@@ -7,7 +7,6 @@ import std;
 
 import telar.platform.process;
 import telar.runtime.shell_integration.token;
-import telar.platform.primitives;
 import telar.base.text;
 import telar.base.memory.allocators;
 import telar.wire.vocabulary;

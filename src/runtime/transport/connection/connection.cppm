@@ -10,7 +10,6 @@ import telar.client;
 
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
-import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.wire.content;
 import telar.wire.layout;

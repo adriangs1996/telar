@@ -1,5 +1,7 @@
 module telar.runtime.runtime.execution_service;
 
+import telar.platform.error;
+
 namespace telar::runtime {
 
   template <Allocator Memory>

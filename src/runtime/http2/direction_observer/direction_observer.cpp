@@ -1,6 +1,7 @@
 module telar.runtime.http2.direction_observer;
 
 import telar.native.nghttp2;
+import telar.runtime.http1.head;
 
 namespace telar::runtime {
 

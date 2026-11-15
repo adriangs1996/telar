@@ -4,6 +4,7 @@ module;
 module telar.runtime.workspaces.git_probe;
 
 import std;
+import telar.platform.primitives;
 
 namespace telar::runtime {
 

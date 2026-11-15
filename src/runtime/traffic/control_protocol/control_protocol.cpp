@@ -1,6 +1,7 @@
 module telar.runtime.traffic.control_protocol;
 
 import telar.native.pcap;
+import telar.base.text.utf8;
 
 namespace telar::runtime::traffic {
 

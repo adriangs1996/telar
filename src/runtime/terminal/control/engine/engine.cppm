@@ -4,14 +4,11 @@ import std;
 import telar.ghostty.vt;
 import telar.tbc;
 import telar.base.memory.allocators;
-import telar.base.memory.containers;
 import telar.base.text;
 import telar.config.runtime;
-import telar.base.text.utf8;
 import telar.vocabulary;
 import telar.runtime.terminal.control;
 import telar.runtime.terminal.control.checksum;
-import telar.runtime.terminal.control.glyph;
 
 // Engine::clipboard() hands out the clipboard state machine.
 import telar.runtime.terminal.control.clipboard;

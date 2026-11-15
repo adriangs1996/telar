@@ -2,6 +2,7 @@ module telar.runtime.platform.system_certificates;
 
 import telar.sys.posix;
 import telar.tls;
+import telar.platform.error;
 #if defined(__APPLE__)
 import telar.runtime.platform.frameworks;
 #endif

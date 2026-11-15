@@ -3,7 +3,6 @@ module telar.runtime.platform.process_probe;
 import std;
 import telar.sys.posix;
 
-import telar.base.diagnostics;
 import telar.wire.vocabulary;
 
 namespace telar::runtime {

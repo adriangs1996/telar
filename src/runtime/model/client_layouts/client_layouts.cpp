@@ -4,6 +4,8 @@ module;
 module telar.runtime.model.client_layouts;
 
 import telar.sys.process;
+import telar.base.text.utf8;
+import telar.platform.events;
 
 namespace telar::runtime {
 

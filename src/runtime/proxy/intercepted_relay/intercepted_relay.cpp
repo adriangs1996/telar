@@ -1,9 +1,5 @@
 module telar.runtime.proxy.intercepted_relay;
 
-import telar.native.brotli;
-import telar.native.zlib;
-import telar.native.zstd;
-
 namespace telar::runtime {
 
   void Http1MessageRelay::reset(bool response, bool response_to_head) noexcept {

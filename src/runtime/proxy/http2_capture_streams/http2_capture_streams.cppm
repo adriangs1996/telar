@@ -5,9 +5,6 @@ module;
 export module telar.runtime.proxy.http2_capture_streams;
 
 import std;
-import telar.native.brotli;
-import telar.native.zlib;
-import telar.native.zstd;
 import telar.sys.socket;
 import telar.sys.posix;
 import telar.tbc;
@@ -29,7 +26,6 @@ import telar.runtime.http2.direction_observer;
 import telar.runtime.exchange_capture.pipeline;
 import telar.runtime.exchange_capture.producer;
 import telar.runtime.http2.frame_reader;
-import telar.base.diagnostics;
 import telar.platform.primitives;
 import telar.runtime.http1.head;
 import telar.base.text;

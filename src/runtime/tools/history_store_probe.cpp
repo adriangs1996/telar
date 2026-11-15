@@ -11,7 +11,6 @@ static_assert(true);
 #include <unistd.h>
 
 import std;
-import telar.base.diagnostics;
 import telar.base.memory.allocators;
 import telar.wire.vocabulary;
 import telar.wire.agents;

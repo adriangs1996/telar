@@ -3,7 +3,6 @@ module;
 
 module telar.runtime.proxy.runtime;
 
-import telar.native.nghttp2;
 import telar.platform.sha256;
 import telar.sys.socket;
 import telar.tls;

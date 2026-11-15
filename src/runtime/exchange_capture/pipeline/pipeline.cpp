@@ -1,5 +1,7 @@
 module telar.runtime.exchange_capture.pipeline;
 
+import telar.platform.thread;
+
 namespace telar::runtime {
 
   std::int64_t CaptureWallClock::now() noexcept {

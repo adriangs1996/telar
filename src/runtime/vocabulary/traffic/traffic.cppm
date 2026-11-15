@@ -8,8 +8,6 @@ import telar.plugins;
 import telar.runtime.vocabulary.exchange;
 import telar.runtime.vocabulary.frames;
 
-import telar.platform.error;
-import telar.platform.net;
 import telar.platform.primitives;
 import telar.wire.vocabulary;
 import telar.base.memory.containers;

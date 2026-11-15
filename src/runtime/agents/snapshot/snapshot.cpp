@@ -8,6 +8,7 @@ import telar.sys.posix;
 import telar.base.text.json;
 import telar.base.text.utf8;
 import telar.runtime.history.store;
+import telar.platform.error;
 
 namespace telar::runtime {
 

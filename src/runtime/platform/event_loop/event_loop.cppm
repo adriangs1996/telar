@@ -10,11 +10,9 @@ import telar.sys.apple;
 #if defined(__linux__)
 import telar.sys.linux_api;
 #endif
-import telar.sys.posix;
 import telar.tbc;
 
 import telar.base.memory.allocators;
-import telar.platform.error;
 import telar.platform.primitives;
 import telar.sys.process;
 

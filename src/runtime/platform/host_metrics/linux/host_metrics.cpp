@@ -7,7 +7,6 @@ import std;
 import telar.sys.posix;
 
 import telar.platform.fs;
-import telar.base.diagnostics;
 import telar.platform.primitives;
 
 namespace telar::runtime {

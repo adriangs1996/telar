@@ -4,7 +4,6 @@ import std;
 import telar.sys.posix;
 
 import telar.base.memory.containers;
-import telar.platform.error;
 import telar.platform.primitives;
 import telar.sys.socket;
 

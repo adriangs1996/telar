@@ -1,5 +1,7 @@
 module telar.runtime.platform.private_tunnel;
 
+import telar.platform.error;
+
 #if defined(__APPLE__)
 import telar.sys.apple;
 #endif

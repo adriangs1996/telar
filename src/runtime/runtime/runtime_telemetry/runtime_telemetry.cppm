@@ -15,14 +15,6 @@ import telar.runtime.platform.request_worker;
 import telar.wire.runtime;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
-import telar.runtime.terminal.kitty;
-import telar.runtime.terminal.control;
-import telar.platform.fs;
-import telar.runtime.diagnostics.operation;
-
-#if (!(defined(__APPLE__)))
-import telar.runtime.platform.proc_file;
-#endif
 
 import telar.runtime.vocabulary.exchange;
 import telar.runtime.proxy.http2_capture_streams;

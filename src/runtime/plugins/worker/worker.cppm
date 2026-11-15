@@ -25,10 +25,8 @@ import telar.runtime.traffic.control_backend;
 import telar.runtime.traffic.control_protocol;
 
 import telar.runtime.platform.signals;
-import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.platform.primitives;
-import telar.runtime.platform.request_worker;
 import telar.base.text;
 import telar.runtime.vocabulary.frames;
 

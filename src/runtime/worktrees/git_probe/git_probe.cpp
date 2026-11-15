@@ -5,11 +5,11 @@ module telar.runtime.worktrees.git_probe;
 
 import std;
 import telar.sys.posix;
-import telar.base.diagnostics;
 import telar.base.text;
 import telar.base.text.utf8;
 import telar.wire.vocabulary;
 import telar.git.checkout;
+import telar.platform.primitives;
 
 namespace telar::runtime {
 

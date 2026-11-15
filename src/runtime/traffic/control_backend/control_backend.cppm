@@ -4,12 +4,6 @@ module;
 export module telar.runtime.traffic.control_backend;
 
 import std;
-import telar.native.brotli;
-import telar.native.nghttp2;
-import telar.native.pcap;
-import telar.native.zlib;
-import telar.native.zstd;
-import telar.platform.sha256;
 import telar.sys.socket;
 import telar.sys.process;
 import telar.sys.posix;
@@ -31,15 +25,12 @@ import telar.runtime.traffic.capture_analysis;
 
 import telar.runtime.redirect.socket_owners;
 import telar.runtime.redirect.ingress;
-import telar.base.diagnostics;
 import telar.tls;
 import telar.wire.vocabulary;
 import telar.platform.primitives;
 import telar.platform.error;
 import telar.platform.net;
 import telar.platform.process;
-import telar.platform.thread;
-import telar.runtime.platform.request_worker;
 import telar.base.text;
 import telar.plugins;
 import telar.runtime.http.message;

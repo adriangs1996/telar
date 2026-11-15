@@ -1,10 +1,11 @@
 module telar.runtime.redirect.socket_owners;
 
-import telar.native.pcap;
 import telar.sys.socket;
 import telar.sys.process;
 import telar.config.runtime;
 import telar.runtime.vocabulary.frames;
+import telar.base.text.utf8;
+import telar.platform.net;
 
 namespace telar::runtime::redirect {
 

@@ -3,6 +3,7 @@ module telar.runtime.traffic.capture_analysis;
 import telar.native.pcap;
 import telar.sys.socket;
 import telar.runtime.vocabulary.frames;
+import telar.base.text.utf8;
 
 namespace telar::runtime::traffic {
 

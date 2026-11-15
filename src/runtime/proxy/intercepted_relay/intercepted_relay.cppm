@@ -4,9 +4,6 @@ module;
 export module telar.runtime.proxy.intercepted_relay;
 
 import std;
-import telar.native.brotli;
-import telar.native.zlib;
-import telar.native.zstd;
 import telar.tbc;
 
 import telar.runtime.platform.stream_read_buffer;
@@ -17,7 +14,6 @@ import telar.base.memory.sensitive;
 
 import telar.runtime.http.message;
 import telar.runtime.traffic.control_protocol;
-import telar.base.diagnostics;
 import telar.base.text;
 import telar.wire.vocabulary;
 import telar.platform.net;

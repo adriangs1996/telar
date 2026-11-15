@@ -8,7 +8,6 @@ import telar.runtime.platform.background_executor;
 import telar.runtime.transport.connection;
 import telar.base.editors;
 import telar.platform.process;
-import telar.wire.vocabulary;
 import telar.wire.editor;
 import telar.platform.primitives;
 import telar.base.memory.allocators;

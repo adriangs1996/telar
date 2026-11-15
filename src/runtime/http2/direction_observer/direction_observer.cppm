@@ -12,9 +12,7 @@ import telar.base.memory.sensitive;
 
 import telar.runtime.http2.frame_reader;
 import telar.runtime.http.content;
-import telar.base.diagnostics;
 import telar.base.text;
-import telar.runtime.http1.head;
 
 // Interface: http2/event.cppm
 export {

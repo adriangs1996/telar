@@ -4,9 +4,7 @@ module;
 export module telar.runtime.http.message;
 
 import std;
-import telar.native.brotli;
 import telar.native.zlib;
-import telar.native.zstd;
 import telar.tbc;
 
 import telar.runtime.http.content;
@@ -17,7 +15,6 @@ import telar.base.memory.sensitive;
 import telar.runtime.vocabulary.frames;
 
 import telar.runtime.http1.head;
-import telar.base.diagnostics;
 import telar.base.text;
 import telar.base.text.utf8;
 import telar.wire.vocabulary;

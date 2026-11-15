@@ -1,5 +1,10 @@
 module telar.runtime.redirect.pf_rules;
 
+import telar.base.text.utf8;
+import telar.platform.error;
+import telar.platform.net;
+import telar.plugins;
+
 #if defined(__APPLE__)
 import telar.sys.apple;
 #endif

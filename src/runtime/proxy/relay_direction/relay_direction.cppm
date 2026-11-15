@@ -11,11 +11,7 @@ import telar.platform.net;
 
 import telar.runtime.platform.name_resolutions;
 import telar.base.text;
-import telar.platform.error;
 import telar.platform.primitives;
-import telar.platform.thread;
-import telar.runtime.platform.signals;
-import telar.runtime.platform.stream_read_buffer;
 
 // Interface: proxy/origin_connection.cppm
 export {

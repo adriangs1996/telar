@@ -7,6 +7,8 @@ module telar.runtime.runtime.media_service;
 
 import telar.runtime.model.slot_store;
 import telar.runtime.platform.stream_read_buffer;
+import telar.platform.error;
+import telar.wire.agents;
 
 namespace telar::runtime {
 

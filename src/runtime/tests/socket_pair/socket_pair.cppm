@@ -9,7 +9,6 @@ export module telar.runtime.tests.socket_pair;
 
 import std;
 import telar.platform.primitives;
-import telar.runtime.proxy.relay_direction;
 import telar.runtime.tests.check;
 import telar.platform.net;
 

@@ -6,8 +6,6 @@ export module telar.runtime.cli.server:tap;
 import std;
 
 import telar.runtime.traffic.control_backend;
-import telar.base.diagnostics;
-import telar.platform.primitives;
 import telar.runtime.traffic.control_protocol;
 import telar.runtime.vocabulary.exchange;
 

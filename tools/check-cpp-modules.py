@@ -2,6 +2,7 @@
 """Check module ownership and paths, import cycles, re-exports, unused imports and the documented
 textual boundaries."""
 import argparse
+import collections
 import functools
 import json
 import os
@@ -778,9 +779,37 @@ def declaration(found, index, closing):
     return statement_end(found, index, closing), names
 
 
-def declarations(found):
+# An X-macro list, `#define LIST(X) X(a) X(b) LIST2(X)`: an interface that expands it at namespace
+# scope declares a, b and what LIST2 lists. The tokens drop directives, so its items come from here.
+MACRO_LIST_RE = re.compile(r'^[ \t]*\#[ \t]*define[ \t]+(\w+)\([ \t]*(\w+)[ \t]*\)((?:\\\n|[^\n])*)', re.M)
+MACRO_ITEM_RE = re.compile(r'(\w+)\s*\(\s*(\w+)\s*\)')
+
+
+def macro_lists(text):
+    """The X-macro lists a unit defines, each with the names it expands to."""
+    lists = {}
+    for name, parameter, body in MACRO_LIST_RE.findall(text):
+        items = MACRO_ITEM_RE.findall(body)
+        if items and all(parameter in item for item in items) and not MACRO_ITEM_RE.sub('', body).replace('\\', '').strip():
+            lists[name] = [(macro == parameter, argument if macro == parameter else macro) for macro, argument in items]
+
+    def expand(name, seen):
+        names = []
+        for direct, value in lists[name]:
+            if direct:
+                names.append(value)
+            elif value in lists and value not in seen:
+                names += expand(value, seen | {name})
+
+        return names
+
+    return {name: expand(name, {name}) for name in lists}
+
+
+def declarations(found, lists={}):
     """What a module unit declares at namespace scope, from its tokens: the names it exports,
-    every name it declares, and its namespaces."""
+    every name it declares, and its namespaces. `lists` holds the unit's X-macro lists
+    (macro_lists), whose expansion declares their items."""
     exported, every, namespaces = set(), set(), set()
     closing = closing_braces(found)
     scopes, index = [], 0
@@ -832,7 +861,10 @@ def declarations(found):
             index += 3
             continue
 
-        index, names = declaration(found, index, closing)
+        if token in lists and found[index + 1] == '(':
+            index, names = skip_group(found, index + 1, closing), lists[token]
+        else:
+            index, names = declaration(found, index, closing)
         every.update(names)
         if exporting:
             exported.update(names)
@@ -849,7 +881,7 @@ def provided_names(sources, interfaces, reexports, implicit):
     and the macros whose expansion names it."""
     own = {}
     for source, text in sources.items():
-        exported, every, namespaces = declarations(tokens(text))
+        exported, every, namespaces = declarations(tokens(text), macro_lists(text))
         module = interfaces[source]
         primary = module.split(':')[0]
         own.setdefault(primary, [set(), set(), set()])
@@ -887,6 +919,13 @@ def provided_names(sources, interfaces, reexports, implicit):
     for module in own:
         provide(module)
 
+    # A namespace that only one module declares names that module when it qualifies a name, as
+    # `cell_layout::wide`, whose declaration the checker may not see; unit_names spells such a
+    # use `cell_layout::`.
+    owners = collections.Counter(space for module, (_, _, spaces) in own.items() if ':' not in module for space in spaces)
+    for names, spaces in provided.values():
+        names.update(space + '::' for space in spaces if owners[space] == 1)
+
     return {module: (frozenset(name.encode() for name in names), frozenset(name.encode() for name in spaces))
             for module, (names, spaces) in provided.items()}
 
@@ -906,11 +945,14 @@ UNIT_MODULE_BYTES_RE = re.compile(rb'^[ \t]*(?:export[ \t]+)?module[ \t]+([\w.]+
 NAMESPACE_USE_RE = re.compile(rb'namespace\s+(?:\w+\s*=\s*)?([\w:\s]+);')
 IDENTIFIER_BYTES = bytes(byte if chr(byte).isascii() and (chr(byte).isalnum() or byte == ord('_')) else 32
                          for byte in range(256))
+# The identifiers with their colons, so that a qualified name reads as one token.
+QUALIFIED_BYTES = bytes(byte if byte == ord(':') else IDENTIFIER_BYTES[byte] for byte in range(256))
 
 
 def unit_names(text):
-    """What a unit names outside comments and literals, the namespaces it names by themselves,
-    the modules it imports without re-exporting them, as spelled, and its module."""
+    """What a unit names outside comments and literals, each qualifier also as `name::`, the
+    namespaces it names by themselves, the modules it imports without re-exporting them, as
+    spelled, and its module."""
     if b'import' not in text:
         return set(), set(), set(), None
 
@@ -922,6 +964,8 @@ def unit_names(text):
     module = UNIT_MODULE_BYTES_RE.search(preamble)
     names = set(UNIT_DECLARATION_RE.sub(b' ', preamble).translate(IDENTIFIER_BYTES).split())
     names.update(code.translate(IDENTIFIER_BYTES).split())
+    names.update(qualifier + b'::' for token in code.translate(QUALIFIED_BYTES).split() if b'::' in token
+                 for qualifier in token.split(b'::')[:-1] if qualifier)
     namespaces = {match.split(b'::')[-1].strip() for match in NAMESPACE_USE_RE.findall(code)}
 
     return names, namespaces, imports, module[1] if module else None

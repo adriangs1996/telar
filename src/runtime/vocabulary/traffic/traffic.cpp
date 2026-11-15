@@ -1,6 +1,8 @@
 module telar.runtime.vocabulary.traffic;
 
 import telar.sys.socket;
+import telar.platform.error;
+import telar.platform.net;
 
 namespace telar::runtime::plugins {
 

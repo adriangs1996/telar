@@ -17,11 +17,7 @@ import telar.config.runtime;
 import telar.wire.vocabulary;
 import telar.wire.agents;
 import telar.wire.history;
-import telar.wire.runtime;
 import telar.platform.primitives;
-import telar.base.diagnostics;
-import telar.base.history;
-import telar.client;
 import telar.runtime.history.command;
 
 // Interface: history/database.cppm

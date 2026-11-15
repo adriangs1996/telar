@@ -24,7 +24,6 @@ import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
-import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;

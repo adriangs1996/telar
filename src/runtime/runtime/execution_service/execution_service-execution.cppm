@@ -5,12 +5,8 @@ import std;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.platform.process;
-import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.wire.execution;
-import telar.platform.primitives;
-import telar.platform.error;
-import telar.sys.posix;
 
 // Interface: execution/execution.cppm
 export {

@@ -13,12 +13,10 @@ import telar.runtime.diagnostics.operation;
 import telar.runtime.platform.background_executor;
 import telar.runtime.transport.connection;
 
-import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.wire.editor;
 import telar.wire.history;
 import telar.wire.runtime;
-import telar.platform.primitives;
 import telar.base.text.json;
 import telar.client;
 import telar.platform.thread;

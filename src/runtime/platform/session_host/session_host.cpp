@@ -1,6 +1,9 @@
 module telar.runtime.platform.session_host;
 
 import telar.sys.posix;
+import telar.config.core;
+import telar.platform.paths;
+import telar.platform.primitives;
 
 namespace telar::runtime {
 

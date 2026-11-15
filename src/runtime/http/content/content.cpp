@@ -1,6 +1,7 @@
 module telar.runtime.http.content;
 
 import telar.native.nghttp2;
+import telar.base.text;
 
 namespace telar::runtime {
 

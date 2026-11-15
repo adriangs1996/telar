@@ -1,6 +1,8 @@
 module telar.runtime.tls.system_root_bundle;
 
 import telar.sys.posix;
+import telar.platform.error;
+import telar.platform.fs;
 
 namespace telar::runtime {
 

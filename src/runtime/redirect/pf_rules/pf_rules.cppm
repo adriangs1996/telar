@@ -7,12 +7,7 @@ import telar.runtime.redirect.direction;
 
 import telar.runtime.redirect.ingress;
 
-import telar.base.diagnostics;
-import telar.base.text.utf8;
-import telar.platform.error;
-import telar.platform.net;
 import telar.platform.primitives;
-import telar.plugins;
 import telar.vocabulary;
 import telar.sys.socket;
 import telar.base.memory.allocators;

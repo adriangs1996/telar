@@ -6,6 +6,8 @@ module;
 module telar.runtime.graphics.prepared_images;
 
 import telar.sys.posix;
+import telar.platform.primitives;
+import telar.runtime.diagnostics.line;
 
 namespace telar::runtime {
 

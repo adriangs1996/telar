@@ -4,7 +4,6 @@ module;
 export module telar.runtime.plugins.run_worker;
 
 import std;
-import telar.native.pcap;
 import telar.sys.posix;
 import telar.tbc;
 
@@ -19,15 +18,7 @@ import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.base.memory.sensitive;
 
-import telar.base.diagnostics;
 import telar.wire.vocabulary;
-import telar.platform.primitives;
-import telar.config.runtime;
-import telar.platform.error;
-import telar.platform.fs;
-import telar.runtime.plugins.tap_configuration;
-import telar.runtime.traffic.capture_analysis;
-import telar.runtime.traffic.control_backend;
 import telar.base.text;
 import telar.runtime.traffic.control_protocol;
 import telar.runtime.vocabulary.exchange;

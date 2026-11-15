@@ -4,7 +4,6 @@ module;
 export module telar.runtime.traffic.capture_analysis;
 
 import std;
-import telar.native.pcap;
 import telar.sys.posix;
 import telar.sys.socket;
 import telar.tbc;
@@ -13,8 +12,6 @@ import telar.runtime.traffic.control_protocol;
 
 import telar.base.memory.allocators;
 import telar.base.memory.sensitive;
-import telar.base.diagnostics;
-import telar.base.text.utf8;
 import telar.vocabulary;
 
 // Interface: traffic/network_packet.cppm
