@@ -4,7 +4,7 @@ import std;
 import telar.sys.posix;
 import telar.tbc;
 #if defined(__linux__)
-import telar.sys.linux;
+import telar.sys.linux_api;
 #endif
 #if defined(__APPLE__)
 import telar.sys.apple;

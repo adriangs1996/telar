@@ -5,7 +5,7 @@ module telar.runtime.platform.event_loop;
 
 import telar.sys.posix;
 import telar.sys.process;
-import telar.sys.linux;
+import telar.sys.linux_api;
 
 namespace telar::runtime {
   namespace linux_signals {

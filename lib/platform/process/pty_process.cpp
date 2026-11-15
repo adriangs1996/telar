@@ -7,7 +7,7 @@ import telar.sys.process;
 import telar.sys.apple;
 #endif
 #if defined(__linux__)
-import telar.sys.linux;
+import telar.sys.linux_api;
 #endif
 
 namespace telar::runtime {

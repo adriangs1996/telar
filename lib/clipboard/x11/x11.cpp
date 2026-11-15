@@ -6,7 +6,7 @@ module telar.clipboard.x11;
 
 import std;
 import telar.clipboard;
-import telar.clipboard.linux;
+import telar.clipboard.transfer;
 import telar.sys.posix;
 
 namespace telar::clipboard::linux_backend {

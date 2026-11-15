@@ -6,7 +6,7 @@ set(TELAR_MACOS_MODULES
   src/runtime/redirect/record/record.cppm
 )
 set(TELAR_LINUX_MODULES
-  lib/sys/linux/linux.cppm
+  lib/sys/linux_api/linux_api.cppm
   src/runtime/platform/proc_file/proc_file.cppm
   src/gui/platform/background_effect/background_effect.cppm
 )

@@ -1,4 +1,4 @@
-export module telar.clipboard.linux;
+export module telar.clipboard.transfer;
 
 import std;
 import telar.clipboard;

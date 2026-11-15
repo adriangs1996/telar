@@ -5,7 +5,7 @@ import telar.sys.socket;
 #if defined(__APPLE__)
 import telar.sys.apple;
 #else
-import telar.sys.linux;
+import telar.sys.linux_api;
 #endif
 
 namespace {

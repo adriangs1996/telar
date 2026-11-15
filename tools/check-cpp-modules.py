@@ -12,6 +12,10 @@ SCOPES = ('lib/', 'src/runtime/', 'src/cli/',
 # The first segment after `telar.` that names a process tree in src/; any other module is a library.
 PROCESSES = {'runtime': 'src/runtime', 'gui': 'src/gui', 'cli': 'src/cli'}
 PLATFORMS = ('linux', 'macos')
+# Clang predefines these as object-like macros in the GNU modes, which CMake gives a
+# consumer of the installed package by default (-std=gnu++23), and a macro cannot be
+# a module name component there.
+GNU_MACROS = {'linux', 'unix'}
 # Rule 5 checks every source in SCOPES except those under a tests/ or tools/ folder and those
 # under these directories. Only whole directories leave the rule: a file that breaks it goes in
 # textual-includes.json until the change that fixes it.
@@ -43,6 +47,8 @@ def main():
         if not match or match[1] != inventory['interfaces'][source] or match[1] in graph:
             raise RuntimeError('Invalid or duplicate module ownership: ' + source)
         name = match[1]
+        if GNU_MACROS & set(name.replace(':', '.').split('.')):
+            raise RuntimeError(f'{source} names {name}, but a GNU mode predefines one of its components as a macro')
         graph[name] = imports_of(name, text)
         if '#include' in text and not text.startswith('module;'):
             raise RuntimeError('Textual dependencies need a global fragment: ' + source)

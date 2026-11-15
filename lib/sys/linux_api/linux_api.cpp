@@ -2,7 +2,7 @@ module;
 #include <errno.h>
 #include <spawn.h>
 
-module telar.sys.linux;
+module telar.sys.linux_api;
 
 namespace telar::sys {
 

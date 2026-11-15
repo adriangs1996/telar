@@ -15,7 +15,7 @@ module;
 #include <linux/fs.h>
 #endif
 
-export module telar.sys.linux;
+export module telar.sys.linux_api;
 
 // Linux only (cmake/module_platforms.cmake). The C headers stay in this global
 // module fragment only; importers reach their declarations through these

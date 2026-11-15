@@ -2,7 +2,7 @@
 // telar.clipboard, whose header declares read in the global module.
 import std;
 import telar.clipboard;
-import telar.clipboard.linux;
+import telar.clipboard.transfer;
 import telar.clipboard.wayland;
 import telar.clipboard.x11;
 

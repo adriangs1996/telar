@@ -6,8 +6,8 @@ module telar.clipboard.wayland;
 
 import std;
 import telar.clipboard;
-import telar.clipboard.linux;
-import telar.sys.linux;
+import telar.clipboard.transfer;
+import telar.sys.linux_api;
 import telar.sys.posix;
 
 namespace telar::clipboard::linux_backend {

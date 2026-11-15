@@ -4,7 +4,7 @@ module telar.runtime.platform.private_tunnel;
 import telar.sys.apple;
 #endif
 #if defined(__linux__)
-import telar.sys.linux;
+import telar.sys.linux_api;
 #endif
 
 #if defined(__linux__)

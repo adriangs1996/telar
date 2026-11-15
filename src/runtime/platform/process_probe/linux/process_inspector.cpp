@@ -3,7 +3,7 @@ module telar.runtime.platform.process_probe;
 import std;
 import telar.sys.socket;
 import telar.sys.process;
-import telar.sys.linux;
+import telar.sys.linux_api;
 import telar.sys.posix;
 
 import telar.runtime.platform.proc_file;

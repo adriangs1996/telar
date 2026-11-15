@@ -45,11 +45,11 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     COMMAND "${WAYLAND_SCANNER}" private-code "${clipboard_protocol}" "${clipboard_protocol_code}"
     DEPENDS "${clipboard_protocol}" VERBATIM)
   target_sources(telar-clipboard PRIVATE
-    "${clipboard_source_dir}/src/linux/clipboard.cpp" "${clipboard_source_dir}/linux/linux.cpp"
+    "${clipboard_source_dir}/src/linux/clipboard.cpp" "${clipboard_source_dir}/transfer/transfer.cpp"
     "${clipboard_source_dir}/wayland/wayland.cpp" "${clipboard_source_dir}/x11/x11.cpp"
     "${clipboard_protocol_header}" "${clipboard_protocol_code}")
   target_sources(telar-clipboard PRIVATE FILE_SET clipboard_linux TYPE CXX_MODULES BASE_DIRS "${clipboard_source_dir}"
-    FILES "${clipboard_source_dir}/linux/linux.cppm" "${clipboard_source_dir}/wayland/wayland.cppm"
+    FILES "${clipboard_source_dir}/transfer/transfer.cppm" "${clipboard_source_dir}/wayland/wayland.cppm"
     "${clipboard_source_dir}/x11/x11.cppm")
   target_include_directories(telar-clipboard PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
   target_link_libraries(telar-clipboard PUBLIC PkgConfig::CLIPBOARD_LINUX)

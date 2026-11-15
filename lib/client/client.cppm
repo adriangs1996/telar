@@ -16,7 +16,7 @@ import telar.sys.socket;
 import telar.sys.apple;
 #endif
 #if defined(__linux__)
-import telar.sys.linux;
+import telar.sys.linux_api;
 #endif
 
 // The connection reports request failures with it; the rest of the wire

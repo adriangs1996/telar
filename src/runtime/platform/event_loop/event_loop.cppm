@@ -8,7 +8,7 @@ import std;
 import telar.sys.apple;
 #endif
 #if defined(__linux__)
-import telar.sys.linux;
+import telar.sys.linux_api;
 #endif
 import telar.sys.posix;
 import telar.tbc;

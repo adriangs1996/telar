@@ -6,7 +6,7 @@ import telar.sys.posix;
 #if defined(__APPLE__)
 import telar.sys.apple;
 #else
-import telar.sys.linux;
+import telar.sys.linux_api;
 #endif
 
 // The owned header declares these in the global module, so their definitions belong to it too.
