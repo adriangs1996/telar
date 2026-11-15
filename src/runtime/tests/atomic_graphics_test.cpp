@@ -224,7 +224,9 @@ static void testAtomicResources() {
   std::snprintf(shared_name.data(), shared_name.size(), "/tlratom%08x%08x", ::arc4random(), ::arc4random());
   FileDescriptor shared{::shm_open(shared_name.data(), O_CREAT | O_EXCL | O_RDWR, 0600)};
 
-  check(shared && ::ftruncate(shared.get(), 8) == 0);
+  // As large as the upload: available refuses a smaller object, which only macOS's page
+  // rounding of shared memory sizes would hide.
+  check(shared && ::ftruncate(shared.get(), 16) == 0);
   const auto encoded_shared = encodedName(shared_name.data());
   const AtomicFrameResource shared_resource{encoded_shared, 16, 16, GraphicsInputMedium::shared_memory};
 
