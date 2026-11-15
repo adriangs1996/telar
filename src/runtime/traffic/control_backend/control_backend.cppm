@@ -831,7 +831,9 @@ export {
 
       void accept();
 
-      void read(Peer& peer);
+      // Not inlined: step runs on every wake of the traffic thread and reads only from the peers that are
+      // ready; its locals in step's frame would put every wake on deeper stack pages.
+      [[gnu::noinline]] void read(Peer& peer);
 
       bool greet(Peer& peer);
 

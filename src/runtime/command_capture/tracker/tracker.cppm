@@ -212,9 +212,11 @@ export namespace telar::runtime {
     static constexpr std::string_view private_code = "6973";
 
     void finishSequence(ObservationTime time, CommandZoneSink& sink, std::size_t end);
-    bool privateReport(std::string_view body);
+    // Not inlined: finishSequence runs for every OSC a pane prints, and these two only for OSC 6973 and
+    // OSC 7; their buffers in its frame would put every prompt mark (OSC 133) on deeper stack pages.
+    [[gnu::noinline]] bool privateReport(std::string_view body);
     void semantic(std::string_view body, ObservationTime time, CommandZoneSink& sink, std::size_t end);
-    void directoryReport(std::string_view body);
+    [[gnu::noinline]] void directoryReport(std::string_view body);
 
 #if TELAR_DIAGNOSTICS
     diagnostics::CommandCaptureCounters metrics_;

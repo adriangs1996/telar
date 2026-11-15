@@ -189,7 +189,9 @@ export {
 
       std::optional<DecodedBody<Memory>> decodeOne(std::span<const std::uint8_t> input, ContentCoding coding, std::size_t limit);
 
-      std::optional<DecodedBody<Memory>> decodeSmallFlate(std::span<const std::uint8_t> input, FlateContainer container, std::size_t limit);
+      // Not inlined: CaptureProducer::decodeBody decodes every captured body with a coding, and only a
+      // small flate limit needs this buffer; in its frame it would sit above every other decoder.
+      [[gnu::noinline]] std::optional<DecodedBody<Memory>> decodeSmallFlate(std::span<const std::uint8_t> input, FlateContainer container, std::size_t limit);
 
       Memory& memory_;
     };
