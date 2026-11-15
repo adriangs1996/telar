@@ -7,14 +7,7 @@ import std;
 import telar.cli.output;
 
 import telar.platform.paths;
-import telar.base.diagnostics;
-import telar.cli.base.command_error;
 import telar.cli.control_session;
-import telar.cli.runtime_observer;
-import telar.platform.daemon;
-import telar.platform.error;
-import telar.platform.primitives;
-import telar.platform.process;
 import telar.base.memory.allocators;
 
 // Interface: help.cppm

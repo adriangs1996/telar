@@ -7,6 +7,12 @@ import telar.platform.error;
 import telar.platform.sha256;
 import telar.sys.posix;
 import telar.platform.paths;
+import telar.base.text.utf8;
+import telar.cli.server;
+import telar.platform.primitives;
+import telar.wire.layout;
+import telar.wire.pane_io;
+import telar.wire.runtime;
 
 namespace telar::runtime::cli::pane_agents {
 

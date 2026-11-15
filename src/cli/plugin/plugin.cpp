@@ -4,6 +4,10 @@ module telar.cli.plugin;
 
 import telar.cli.base.command_error;
 import telar.sys.posix;
+import telar.platform.error;
+import telar.platform.fs;
+import telar.platform.primitives;
+import telar.platform.process;
 
 namespace telar::runtime::cli {
 
