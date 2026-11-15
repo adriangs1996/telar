@@ -100,6 +100,31 @@ reales: un re-export las esconde aunque la interfaz exportada nombre un tipo del
 Los tests y las herramientas también siguen la regla. [reexports.json](reexports.json)
 lista por fichero los re-exports que hay hoy; quien quita uno borra su entrada, y una
 entrada que ya no existe también hace fallar el checker.
+Ningún fichero importa un módulo que no usa (regla 6). Un `import M` cuenta como usado si el
+fichero nombra, fuera de comentarios y literales, algo que `M` declara en sus interfaces: tipos,
+funciones, variables, conceptos, enumeradores y alias que exporta, o que le llegan por los
+re-exports que `M` todavía tiene en `reexports.json`. Un import de partición (`import :p`)
+cuenta lo que la partición declara, exportado o no. No cuentan los miembros de una clase, los
+parámetros ni las variables locales, y tampoco las definiciones cualificadas (`Foo::bar`), que
+definen algo declarado antes. Un espacio de nombres cuenta cuando se nombra por sí mismo, en un
+`using namespace` o en un alias; como cualificador no, porque todos los módulos declaran
+`telar`. El checker lo mira por tokens, como la regla 4, en todos los ficheros que importan
+(interfaces, unidades de implementación y cabeceras, tests y herramientas incluidos), y deja
+fuera `std`, los `export import` (son de la regla 4) y los módulos que el inventario no conoce.
+Un nombre que exportan dos módulos cuenta como uso de los dos: la regla puede dejar pasar un
+import sobrante, no marcar uno necesario por ese motivo.
+Lo que la regla no ve por tokens se declara en `implicit_uses` de [modules.json](modules.json):
+un módulo que aporta especializaciones (`std::formatter`, `std::hash`) u operadores y funciones
+que se encuentran por ADL sobre tipos que no son suyos, o una macro cuya expansión lo nombra.
+Cada entrada lleva `module`, `names` (los tipos a los que se aplica o las macros) y `reason`,
+y un import de ese módulo cuenta como usado si el fichero nombra alguno de esos nombres. La
+lista empieza vacía y solo crece con casos demostrados: un import que la regla marcó, se quitó
+y rompió la compilación o cambió el desensamblado.
+[unused-imports.json](unused-imports.json) lista por fichero los imports sin usar que hay hoy
+(480 en 225 ficheros: runtime 227, GUI 108, CLI 101, `lib/` 31 y 13 en tests). El checker
+falla con un import sin usar fuera de la lista y con una entrada que ya no lo es. Otras tareas
+cambian imports a la vez, así que `python3 tools/check-cpp-modules.py --write-unused-imports`
+reescribe la lista con lo que la regla marca y después comprueba como siempre.
 
 | Área | Interfaces finales | Organización |
 | --- | ---: | --- |

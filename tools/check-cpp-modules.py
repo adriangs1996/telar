@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Check module ownership and paths, import cycles and the documented textual boundaries."""
+"""Check module ownership and paths, import cycles, re-exports, unused imports and the documented
+textual boundaries."""
+import argparse
+import functools
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -29,13 +32,28 @@ OUTSIDE_RULE_5 = ('lib/tbc/',)
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--write-unused-imports', action='store_true',
+                        help=f'rewrite {UNUSED_IMPORTS} with the unused imports found today, then check')
+    arguments = parser.parse_args()
+
     inventory = json.loads((ROOT / 'docs/build/modules.json').read_text())
     files = subprocess.check_output(['git', 'ls-files', '--cached', '--others', '--exclude-standard'],
                                     cwd=ROOT, text=True).splitlines()
     owned = {name for name in files if name.startswith(SCOPES) and (ROOT / name).is_file()}
+    units = {name: (ROOT / name).read_bytes() for name in owned if name.endswith(IMPORTING_SUFFIXES)}
     interfaces = {name for name in owned if name.endswith('.cppm')}
     if interfaces != set(inventory['interfaces']):
         raise RuntimeError('Update the interface inventory: ' + str(interfaces ^ set(inventory['interfaces'])))
+
+    # Other changes move imports at the same time, so the allowlist is rewritten before any
+    # other check can stop the run.
+    sources = {source: (ROOT / source).read_text() for source in inventory['interfaces']}
+    allowed_reexports = json.loads((ROOT / 'docs/build/reexports.json').read_text())
+    provided = provided_names(sources, inventory['interfaces'], allowed_reexports, inventory['implicit_uses'])
+    if arguments.write_unused_imports:
+        write_unused_imports(unused_import_sites(units, provided))
+
     headers = {name for name in owned if name.endswith(('.h', '.hpp'))}
     boundaries = inventory['textual_boundaries']
     if headers != set(boundaries):
@@ -64,12 +82,12 @@ def main():
     includes = check_includes(owned, allowed, inventory['macro_headers'], inventory['header_owners'],
                               inventory['library_owners'])
     owned = check_header_owners(inventory['header_owners'], owned_units(owned))
-    reexports = check_reexports({source: (ROOT / source).read_text() for source in inventory['interfaces']},
-                                json.loads((ROOT / 'docs/build/reexports.json').read_text()))
+    reexports = check_reexports(sources, allowed_reexports)
+    unused = check_unused_imports(units, provided, json.loads((ROOT / UNUSED_IMPORTS).read_text()))
     print(f'{len(graph)} module interfaces, acyclic imports, {upward} upward imports left, '
           f'{len(headers)} justified textual boundaries, {includes} textual includes left, '
           f'{owned} headers reached only through their owner module, '
-          f'{reexports} re-exports left')
+          f'{reexports} re-exports left, {unused} unused imports left')
 
 
 IMPORT_RE = re.compile(r'^(?:export )?import ([\w.:]+);', re.M)
@@ -449,8 +467,11 @@ TOKEN_RE = re.compile(r'''
 ''', re.S | re.M | re.X)
 
 
+@functools.cache
 def tokens(text):
-    """The code tokens of a unit: comments and directives dropped, literals reduced to placeholders."""
+    """The code tokens of a unit: comments and directives dropped, literals reduced to placeholders.
+    Rule 4 and the declarations of rule 6 read the same interfaces, so each is tokenized once; the
+    list is shared and nobody modifies it."""
     found = []
     for match in TOKEN_RE.finditer(text):
         if match['literal']:
@@ -494,6 +515,458 @@ def check_reexports(sources, allowed):
                    for target in sorted(listed - found)]
     if errors:
         raise RuntimeError('Re-exports against rule 4:\n  ' + '\n  '.join(errors))
+
+    return sum(len(targets) for targets in sites.values())
+
+
+
+UNUSED_IMPORTS = 'docs/build/unused-imports.json'
+IMPORTING_SUFFIXES = ('.cppm', '.cpp', '.hpp', '.h')
+CLASS_KEYS = {'class', 'struct', 'union', 'enum'}
+# A declaration ends its head at the first of these outside angle brackets.
+TERMINATORS = {'(', '=', '{', ';', '[', ','}
+# Their parentheses hold an expression or a type, not the parameters of the name before them.
+SPECIFIER_CALLS = {'alignas', 'decltype', 'noexcept', 'requires', 'explicit', '__attribute__', '__declspec'}
+KEYWORDS = set('''alignas alignof and asm auto bool break case catch char char8_t char16_t char32_t class
+co_await co_return co_yield concept const consteval constexpr constinit const_cast continue decltype
+default delete do double dynamic_cast else enum explicit export extern false final float for friend goto
+if import inline int long module mutable namespace new noexcept not nullptr operator or override private
+protected public register reinterpret_cast requires return short signed sizeof static static_assert
+static_cast struct switch template this thread_local throw true try typedef typeid typename union
+unsigned using virtual void volatile wchar_t while'''.split())
+
+
+def identifier(token):
+    return (token[0].isalpha() or token[0] == '_') and token not in KEYWORDS
+
+
+def closing_braces(found):
+    """The index of the `}` that closes each `{`."""
+    closing, pending = {}, []
+    for index in [index for index, token in enumerate(found) if token == '{' or token == '}']:
+        if found[index] == '{':
+            pending.append(index)
+        elif pending:
+            closing[pending.pop()] = index
+
+    return closing
+
+
+def skip_group(found, index, closing):
+    """The index after the group that opens at `index`: parentheses, brackets or braces."""
+    if found[index] == '{':
+        return closing.get(index, len(found) - 1) + 1
+
+    depth = 0
+    while index < len(found):
+        token = found[index]
+        if token == '{':
+            index = closing.get(index, len(found) - 1)
+        elif token == '(' or token == '[':
+            depth += 1
+        elif token == ')' or token == ']':
+            depth -= 1
+            if depth == 0:
+                return index + 1
+
+        index += 1
+
+    return index
+
+
+def skip_angles(found, index, closing):
+    """The index after the template argument or parameter list that opens at `index`."""
+    depth = 0
+    while index < len(found):
+        token = found[index]
+        if token in ('(', '[', '{'):
+            index = skip_group(found, index, closing)
+            continue
+
+        if token == '<':
+            depth += 1
+        elif token == '>':
+            depth -= 1
+            if depth == 0:
+                return index + 1
+        elif token == ';':
+            return index
+
+        index += 1
+
+    return index
+
+
+def statement_end(found, index, closing):
+    """The index after the `;` that ends the declaration running at `index`."""
+    while index < len(found) and found[index] != ';':
+        if found[index] in ('(', '[', '{'):
+            index = skip_group(found, index, closing)
+        else:
+            index += 1
+
+    return index + 1
+
+
+def name_before(found, index):
+    """The unqualified name that ends right before `index`, its template arguments skipped; None
+    for a qualified name, which defines something declared before."""
+    index -= 1
+    if found[index] == '>':
+        depth = 0
+        while index > 0:
+            depth += {'>': 1, '<': -1}.get(found[index], 0)
+            if depth == 0:
+                break
+
+            index -= 1
+
+        index -= 1
+
+    if index < 0 or not identifier(found[index]) or found[index - 1] in ('::', '~', '.', '->'):
+        return None
+
+    return found[index]
+
+
+def function_end(found, index, closing):
+    """The index after a function declaration whose parameters open at `index`: its `;`, or
+    the body that follows a constructor's member initializers."""
+    index = skip_group(found, index, closing)
+    initializers = False
+    while index < len(found):
+        token = found[index]
+        if token == ';':
+            return index + 1
+        if token == '{':
+            if not initializers or found[index - 1] in (')', '}'):
+                return skip_group(found, index, closing)
+        elif token == ':':
+            initializers = True
+        elif token == '(' or token == '[':
+            index = skip_group(found, index, closing)
+            continue
+
+        index += 1
+
+    return index
+
+
+def class_declaration(found, index, closing, names):
+    """Read the class, union or enum whose key is at `index`: its name and, for an enum, its
+    enumerators. A class key that only elaborates the type of a function hands over to it."""
+    enum = found[index] == 'enum'
+    index += 1
+    if enum and found[index] in ('class', 'struct'):
+        index += 1
+    while found[index] == '[' or found[index] in SPECIFIER_CALLS:
+        index = skip_group(found, index + (found[index] != '['), closing)
+    # Annotation macros such as TBC_SHARED stand between the key and the name.
+    while identifier(found[index]) and identifier(found[index + 1]):
+        index += 1
+    if identifier(found[index]) and found[index + 1] != '::':
+        names.append(found[index])
+
+    while index < len(found):
+        token = found[index]
+        if token == ';':
+            return index + 1
+        if token == '<':
+            index = skip_angles(found, index, closing)
+            continue
+
+        if token == '(':
+            name = name_before(found, index)
+            if name:
+                names.append(name)
+
+            return function_end(found, index, closing)
+        if token == '{':
+            body = skip_group(found, index, closing)
+            if enum:
+                names += enumerators(found, index, body - 1, closing)
+
+            return statement_end(found, body, closing)
+        index += 1
+
+    return index
+
+
+def enumerators(found, start, end, closing):
+    """The enumerators of the enum body between the braces at `start` and `end`."""
+    names, index, expecting = [], start + 1, True
+    while index < end:
+        token = found[index]
+        if token in ('(', '[', '{'):
+            index = skip_group(found, index, closing)
+            continue
+
+        if expecting and identifier(token):
+            names.append(token)
+        expecting = token == ','
+        index += 1
+
+    return names
+
+
+def declaration(found, index, closing):
+    """The index after the namespace-scope declaration at `index` and the names it declares:
+    types, functions, variables, concepts and aliases. Class members, parameters, locals,
+    operators and qualified definitions are left out."""
+    while found[index] == 'template':
+        index += 1
+        if found[index] == '<':
+            index = skip_angles(found, index, closing)
+
+    first = found[index]
+    if first == 'using':
+        end = statement_end(found, index, closing)
+        if found[index + 1] in ('namespace', 'enum'):
+            return end, []
+        if found[index + 2] == '=':
+            return end, [found[index + 1]]
+
+        # A using-declaration declares the last component of the name it qualifies.
+        return end, [found[end - 2]] if identifier(found[end - 2]) else []
+    if first == 'typedef':
+        end = statement_end(found, index, closing)
+        head = found[index:end]
+        pointer = [head[at + 2] for at in range(len(head) - 3) if head[at] == '(' and head[at + 1] == '*']
+        name = pointer[0] if pointer else name_before(found, end - 1)
+        return end, [name] if name and identifier(name) else []
+    if first == 'concept':
+        return statement_end(found, index, closing), [found[index + 1]]
+
+    names, angles = [], 0
+    while index < len(found):
+        token = found[index]
+        if token == '[' and found[index + 1] == '[':
+            index = skip_group(found, index, closing)
+            continue
+
+        if token in SPECIFIER_CALLS and found[index + 1] == '(':
+            index = skip_group(found, index + 1, closing)
+            continue
+
+        if token == 'operator':
+            index += 3 if found[index + 1] == '(' else 1
+            while index < len(found) and found[index] not in ('(', ';'):
+                index += 1
+
+            if found[index] == ';':
+                return index + 1, []
+            return function_end(found, index, closing), []
+        if token == '<':
+            angles += 1
+        elif token == '>':
+            angles = max(angles - 1, 0)
+        elif angles == 0 and token in CLASS_KEYS:
+            return class_declaration(found, index, closing, names), names
+        elif angles == 0 and token in TERMINATORS:
+            break
+        index += 1
+
+    if index >= len(found):
+        return index, []
+
+    name = name_before(found, index)
+    if name:
+        names.append(name)
+    if found[index] == '(':
+        return function_end(found, index, closing), names
+
+    return statement_end(found, index, closing), names
+
+
+def declarations(found):
+    """What a module unit declares at namespace scope, from its tokens: the names it exports,
+    every name it declares, and its namespaces."""
+    exported, every, namespaces = set(), set(), set()
+    closing = closing_braces(found)
+    scopes, index = [], 0
+    while index < len(found):
+        token = found[index]
+        if token == '}':
+            if scopes:
+                scopes.pop()
+            index += 1
+            continue
+
+        if token == ';':
+            index += 1
+            continue
+
+        exporting = bool(scopes) and scopes[-1]
+        if token == 'export':
+            exporting = True
+            index += 1
+            token = found[index] if index < len(found) else ';'
+        if token == '{':
+            scopes.append(exporting)
+            index += 1
+            continue
+
+        if token in ('module', 'import'):
+            index = statement_end(found, index, closing)
+            continue
+
+        if token == 'inline' and found[index + 1] == 'namespace':
+            index += 1
+            token = 'namespace'
+        if token == 'namespace':
+            end = index + 1
+            while end < len(found) and found[end] not in ('{', '=', ';'):
+                end += 1
+
+            if found[end] == '{':
+                namespaces.update(name for name in found[index + 1:end] if name != '::')
+                scopes.append(exporting)
+                index = end + 1
+            else:
+                namespaces.add(found[index + 1])
+                index = statement_end(found, end, closing)
+            continue
+
+        if token == 'extern' and found[index + 1] == '""' and found[index + 2] == '{':
+            scopes.append(exporting)
+            index += 3
+            continue
+
+        index, names = declaration(found, index, closing)
+        every.update(names)
+        if exporting:
+            exported.update(names)
+
+    return exported, every, namespaces
+
+
+def provided_names(sources, interfaces, reexports, implicit):
+    """For each module and each partition, the names whose use makes an import of it needed,
+    as bytes, and its namespaces. A module provides what its interface units export, a
+    partition what it declares, and both what reaches them through the re-exports still listed
+    in reexports.json. `implicit` (`implicit_uses` in modules.json) adds the names a module
+    serves without declaring them: the types its specializations and ADL functions apply to,
+    and the macros whose expansion names it."""
+    own = {}
+    for source, text in sources.items():
+        exported, every, namespaces = declarations(tokens(text))
+        module = interfaces[source]
+        primary = module.split(':')[0]
+        own.setdefault(primary, [set(), set(), set()])
+        own[primary][0] |= exported
+        own[primary][2] |= namespaces
+        if ':' in module:
+            own[module] = [every, set(), namespaces]
+        own[primary][1].update(target for target in reexports.get(source, ()) if target != 'std')
+        if module != primary:
+            own[module][1].update(target for target in reexports.get(source, ()) if target != 'std')
+
+    errors = []
+    for entry in implicit:
+        if entry.get('module') not in own or not entry.get('names') or not entry.get('reason'):
+            errors.append(f'implicit use {entry} needs a known module, the names it applies to and a reason')
+        else:
+            own[entry['module']][0].update(entry['names'])
+    if errors:
+        raise RuntimeError('Invalid implicit uses in modules.json:\n  ' + '\n  '.join(errors))
+
+    provided = {}
+
+    def provide(module):
+        if module not in provided:
+            names, targets, namespaces = own[module]
+            provided[module] = (set(names), set(namespaces))
+            for target in targets:
+                if target in own:
+                    reached, spaces = provide(target)
+                    provided[module][0].update(reached)
+                    provided[module][1].update(spaces)
+
+        return provided[module]
+
+    for module in own:
+        provide(module)
+
+    return {module: (frozenset(name.encode() for name in names), frozenset(name.encode() for name in spaces))
+            for module, (names, spaces) in provided.items()}
+
+
+# Comments, literals and the header names of includes, which name nothing. A character literal
+# holds an escape or up to four characters, so that the separators of 10'000 cannot open one
+# that swallows the code up to the next quote. Each branch starts with a fixed character: an
+# encoding prefix (u8, u, U, L) stays behind as a name of its own, because matching it here
+# would make `re` try the pattern at every u, U and L of the text, seven times slower.
+UNIT_JUNK_RE = re.compile(rb'''//[^\n]*|/\*.*?\*/|R"([^(\s]*)\(.*?\)\1"|"(?:\\.|[^"\\\n])*"
+  |'(?:\\.[^'\\\n]*|[^'\\\n]{1,4})'|\#[ \t]*include[ \t]*<[^>\n]*>''', re.S | re.X)
+UNIT_DECLARATION_RE = re.compile(rb'^[ \t]*(?:export[ \t]+)?(?:import|module)\b[^;]*;', re.M)
+UNIT_IMPORT_RE = re.compile(rb'^[ \t]*(export[ \t]+)?import[ \t]+([\w.:]+)[ \t]*;', re.M)
+UNIT_MODULE_BYTES_RE = re.compile(rb'^[ \t]*(?:export[ \t]+)?module[ \t]+([\w.]+)(?::[\w.]+)?[ \t]*;', re.M)
+# A namespace is named by itself in a using-directive and in an alias; elsewhere it only
+# qualifies another name, and every module declares `telar`.
+NAMESPACE_USE_RE = re.compile(rb'namespace\s+(?:\w+\s*=\s*)?([\w:\s]+);')
+IDENTIFIER_BYTES = bytes(byte if chr(byte).isascii() and (chr(byte).isalnum() or byte == ord('_')) else 32
+                         for byte in range(256))
+
+
+def unit_names(text):
+    """What a unit names outside comments and literals, the namespaces it names by themselves,
+    the modules it imports without re-exporting them, as spelled, and its module."""
+    if b'import' not in text:
+        return set(), set(), set(), None
+
+    text = UNIT_JUNK_RE.sub(b' ', text)
+    # Imports and the module declaration precede the code; their names are not uses.
+    end = text.find(b';', text.rfind(b'import')) + 1
+    preamble, code = text[:end], text[end:]
+    imports = {match[2] for match in UNIT_IMPORT_RE.finditer(preamble) if not match[1]}
+    module = UNIT_MODULE_BYTES_RE.search(preamble)
+    names = set(UNIT_DECLARATION_RE.sub(b' ', preamble).translate(IDENTIFIER_BYTES).split())
+    names.update(code.translate(IDENTIFIER_BYTES).split())
+    namespaces = {match.split(b'::')[-1].strip() for match in NAMESPACE_USE_RE.findall(code)}
+
+    return names, namespaces, imports, module[1] if module else None
+
+
+def unused_import_sites(units, provided):
+    """The imports of each unit that name nothing their module provides, as spelled. `units`
+    maps each file to its bytes. std is left out, and so is a module the inventory does not
+    know: the checker cannot tell what it declares."""
+    sites = {}
+    for name, text in units.items():
+        names, namespaces, imports, module = unit_names(text)
+        for spelling in imports:
+            target = (module or b'') + spelling if spelling.startswith(b':') else spelling
+            found = provided.get(target.decode())
+            if spelling == b'std' or found is None:
+                continue
+
+            if found[0].isdisjoint(names) and found[1].isdisjoint(namespaces):
+                sites.setdefault(name, set()).add(spelling.decode())
+
+    return sites
+
+
+def write_unused_imports(sites):
+    (ROOT / UNUSED_IMPORTS).write_text(
+        json.dumps({name: sorted(found) for name, found in sorted(sites.items())}, indent=2) + '\n')
+
+
+def check_unused_imports(units, provided, allowed):
+    """Rule 6: a unit imports only the modules it uses. An import is used when the unit names,
+    outside comments and literals, something the module provides (provided_names). Tests and
+    tools are in the rule too. docs/build/unused-imports.json lists, by file, the unused imports
+    that exist today; the change that removes one removes its entry, and
+    `--write-unused-imports` rewrites the list after changes that move imports."""
+    sites = unused_import_sites(units, provided)
+    errors = []
+    for name in sorted(sites.keys() | allowed.keys()):
+        found, listed = sites.get(name, set()), set(allowed.get(name, ()))
+        errors += [f'{name} imports {target} but names nothing it provides; remove the import'
+                   for target in sorted(found - listed)]
+        errors += [f'{name} no longer has an unused import of {target}; remove it from unused-imports.json'
+                   for target in sorted(listed - found)]
+    if errors:
+        raise RuntimeError('Imports against rule 6:\n  ' + '\n  '.join(errors))
 
     return sum(len(targets) for targets in sites.values())
 
