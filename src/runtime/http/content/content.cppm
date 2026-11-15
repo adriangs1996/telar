@@ -10,7 +10,6 @@ import telar.tbc;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.base.memory.sensitive;
-import telar.base.text;
 
 // Interface: http/content_codings.cppm
 export {

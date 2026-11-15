@@ -603,44 +603,6 @@
   "src/gui/transport/runtime_link/runtime_link.cppm": [
     "telar.base.diagnostics"
   ],
-  "src/runtime/http/content/content.cppm": [
-    "telar.base.text"
-  ],
-  "src/runtime/http/message/message.cppm": [
-    "telar.base.diagnostics",
-    "telar.native.brotli",
-    "telar.native.zstd"
-  ],
-  "src/runtime/http2/direction_observer/direction_observer.cppm": [
-    "telar.base.diagnostics",
-    "telar.runtime.http1.head"
-  ],
-  "src/runtime/metrics/host_sampler/host_sampler.cppm": [
-    "telar.base.diagnostics",
-    "telar.runtime.diagnostics.line"
-  ],
-  "src/runtime/model/client_layouts/client_layouts-launch_record.cppm": [
-    "telar.base.diagnostics",
-    "telar.base.text.utf8"
-  ],
-  "src/runtime/model/client_layouts/client_layouts.cppm": [
-    "telar.client",
-    "telar.platform.events"
-  ],
-  "src/runtime/model/slot_store/slot_store.cppm": [
-    "telar.base.diagnostics"
-  ],
-  "src/runtime/observation/processor/processor.cppm": [
-    "telar.runtime.terminal.kitty"
-  ],
-  "src/runtime/paths/query_task/query_task.cppm": [
-    "telar.base.diagnostics",
-    "telar.sys.posix"
-  ],
-  "src/runtime/persistence/session_store/session_store.cppm": [
-    "telar.runtime.diagnostics.line",
-    "telar.runtime.terminal.kitty"
-  ],
   "src/runtime/platform/event_loop/event_loop.cppm": [
     "telar.platform.error",
     "telar.sys.posix"

@@ -39,8 +39,6 @@ import telar.render.document;
 import telar.runtime.diagnostics.line;
 import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
-import telar.client;
-import telar.platform.events;
 import telar.platform.net;
 import telar.config.core;
 import telar.runtime.command_capture.tracker;
