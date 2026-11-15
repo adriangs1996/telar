@@ -132,7 +132,7 @@ void unwindPreservesOwnedCopy() {
 
 // CASE: flow.conditional_retention
 // PAIR: flow.retention_paths
-// SOURCE: src/runtime/terminal/pty_response_queue.hpp :: PtyResponseQueue::append
+// SOURCE: src/runtime/terminal/control/control-pty_response_queue.cppm :: PtyResponseQueue::append
 // STATUS: implemented
 // CONTRACT: A function that retains an argument on one path retains it for every call.
 // SCENARIO: The queue copies a reply without an owner, but one store keeps either the copy or the reply depending on a field; the local reply dies before the read.
@@ -149,7 +149,7 @@ void conditionalRetention() {
 
 // CASE: flow.split_retention_copied
 // PAIR: flow.retention_paths
-// SOURCE: src/runtime/terminal/pty_response_queue.hpp :: PtyResponseQueue::append
+// SOURCE: src/runtime/terminal/control/control-pty_response_queue.cppm :: PtyResponseQueue::append
 // STATUS: implemented
 // CONTRACT: A function that only copies an argument does not retain it.
 // SCENARIO: Copying and retaining are separate functions; the copying one keeps nothing of the local reply.
@@ -166,7 +166,7 @@ void splitRetentionCopied() {
 
 // CASE: flow.unrelated_owner
 // PAIR: flow.reply_owner
-// SOURCE: src/runtime/terminal/control/reply.hpp :: Reply::publish
+// SOURCE: src/runtime/terminal/control/control-reply.cppm :: Reply::publish
 // STATUS: implemented
 // CONTRACT: An owner retained beside a view keeps alive only the object it owns.
 // SCENARIO: The retaining function keeps the local reply; the owner is unrelated to its bytes, so the read is rejected.
@@ -183,7 +183,7 @@ void unrelatedOwner() {
 
 // CASE: flow.shared_owner_alive
 // PAIR: flow.reply_owner
-// SOURCE: src/runtime/terminal/control/reply.hpp :: Reply::publish
+// SOURCE: src/runtime/terminal/control/control-reply.cppm :: Reply::publish
 // STATUS: pending
 // CONTRACT: An owner retained beside a view keeps alive only the object it owns.
 // SCENARIO: The queue keeps a copy of the shared owner of the reply's bytes, so the local owner's destruction does not destroy them; accept.

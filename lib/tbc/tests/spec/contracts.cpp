@@ -113,7 +113,7 @@ void staticResultCaller() {
 
 // CASE: contract.static_result_definition
 // PAIR: contract.static_result
-// SOURCE: lib/clipboard/src/linux/backend.hpp :: formats
+// SOURCE: lib/clipboard/transfer/transfer.cppm :: formats
 // STATUS: implemented
 // CONTRACT: A static result may come from a string literal or an object with static storage duration.
 // SCENARIO: Both returns name storage that no caller can outlive; accept.
