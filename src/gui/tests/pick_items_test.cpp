@@ -54,16 +54,25 @@ namespace {
 
       PickItemsReader::read(root.field("valid"), items, limits);
       require(items.size() == 2 && items.at(1).selected && items.at(1).swatch.has_value(), "a pick must retain selection and swatch metadata");
-      for (const auto* const name : {"invalid", "bad_metadata"}) {
+
+      struct Failure {
+        const char* name;
+        std::size_t read;
+      };
+
+      PickItems failed;
+
+      for (const auto failure : {Failure{.name = "invalid", .read = 1}, Failure{.name = "bad_metadata", .read = 0}}) {
         bool rejected = false;
 
+        PickItemsReader::read(root.field("valid"), failed, limits);
         try {
-          PickItemsReader::read(root.field(name), items, limits);
+          PickItemsReader::read(root.field(failure.name), failed, limits);
         } catch (const std::exception&) {
           rejected = true;
         }
 
-        require(rejected && items.size() == 2 && items.at(1).label == "á λ", "a failed list parse must retain the preceding complete list");
+        require(rejected && failed.size() == failure.read, "a failed list parse must replace the list with the options read before the failure");
       }
     }
 

@@ -337,9 +337,9 @@ namespace telar::gui::components {
   }
 
   void PickItemsReader::lines(std::string_view text, PickItems& output, runtime::config::LimitNotices& limits) {
-    PickItems next;
     std::array<char, PickItems::maximum_label_bytes> label{};
 
+    output.clear();
     while (!text.empty()) {
       const auto newline = text.find('\n');
       const auto line = text.substr(0, newline);
@@ -362,22 +362,19 @@ namespace telar::gui::components {
 
       input.label = {label.data(), shown.size()};
       input.value = option;
-      next.keep(input);
+      output.keep(input);
     }
 
-    output = next;
     output.report(limits);
   }
 
   template <typename Read>
   void PickItemsReader::keep(const Read& read, PickItems& output, runtime::config::LimitNotices& limits) {
-    PickItems next;
-
+    output.clear();
     read([&](const runtime::config::PickItemSetting& option, const runtime::lua::Value&) {
-      next.keep({.label = option.label, .detail = option.detail.value_or(std::string_view{}), .value = option.value, .swatch = option.swatch, .selected = option.selected});
+      output.keep({.label = option.label, .detail = option.detail.value_or(std::string_view{}), .value = option.value, .swatch = option.swatch, .selected = option.selected});
     });
 
-    output = next;
     output.report(limits);
   }
 
