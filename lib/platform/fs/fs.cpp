@@ -3,6 +3,7 @@ module telar.platform.fs;
 import std;
 import telar.sys.posix;
 import telar.tbc;
+import telar.platform.error;
 #if defined(__linux__)
 import telar.sys.linux_api;
 #endif

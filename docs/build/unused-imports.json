@@ -1,33 +1,4 @@
 {
-  "lib/platform/daemon/daemon.cppm": [
-    "telar.platform.error"
-  ],
-  "lib/platform/fs/fs.cppm": [
-    "telar.platform.error"
-  ],
-  "lib/platform/net/net.cppm": [
-    "telar.platform.error"
-  ],
-  "lib/platform/paths/paths.cppm": [
-    "telar.platform.fs"
-  ],
-  "lib/platform/process/process.cppm": [
-    "telar.platform.error"
-  ],
-  "lib/plugins/plugins.cppm": [
-    "telar.base.diagnostics",
-    "telar.base.text.utf8",
-    "telar.platform.error",
-    "telar.platform.primitives"
-  ],
-  "lib/tls/tls.cppm": [
-    "telar.base.diagnostics",
-    "telar.base.memory.sensitive",
-    "telar.base.text.utf8",
-    "telar.platform.error",
-    "telar.platform.fs",
-    "telar.platform.process"
-  ],
   "src/cli/command_limit/command_limit.cppm": [
     "telar.platform.error",
     "telar.platform.primitives"

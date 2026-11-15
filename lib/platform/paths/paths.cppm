@@ -5,7 +5,6 @@ import telar.tbc;
 
 import telar.base.memory.allocators;
 
-import telar.platform.fs;
 import telar.sys.socket;
 
 // Interface: telar_platform/process_environment.cppm

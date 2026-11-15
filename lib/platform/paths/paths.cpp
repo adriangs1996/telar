@@ -3,6 +3,7 @@ module telar.platform.paths;
 import std;
 import telar.tbc;
 import telar.sys.posix;
+import telar.platform.fs;
 
 namespace telar::runtime {
 

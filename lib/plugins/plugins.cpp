@@ -2,6 +2,9 @@ module telar.plugins;
 
 import std;
 import telar.sys.posix;
+import telar.base.text.utf8;
+import telar.platform.error;
+import telar.platform.primitives;
 
 namespace telar::runtime::plugins {
   namespace {

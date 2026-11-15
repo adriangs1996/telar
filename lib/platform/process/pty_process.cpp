@@ -3,6 +3,7 @@ module telar.platform.process;
 import std;
 import telar.sys.posix;
 import telar.sys.process;
+import telar.platform.error;
 #if defined(__APPLE__)
 import telar.sys.apple;
 #endif

@@ -9,7 +9,6 @@ import telar.tbc;
 import telar.base.memory.allocators;
 
 import telar.base.memory.sensitive;
-import telar.platform.error;
 import telar.platform.primitives;
 import telar.sys.posix;
 
