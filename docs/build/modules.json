@@ -519,9 +519,7 @@
     "lib/base/include/telar_base/diagnostics/timing.hpp": "Objective-C++ ABI",
     "lib/base/include/telar_base/memory/allocation_statistics.hpp": "Objective-C++ ABI",
     "lib/base/include/telar_base/memory/allocator.hpp": "Objective-C++ ABI",
-    "lib/base/include/telar_base/memory/fixed_text.hpp": "Per-consumer SIMD test specialization",
-    "lib/base/include/telar_base/text/base64.hpp": "Per-consumer SIMD test specialization",
-    "lib/base/include/telar_base/text/decimal.hpp": "Headers that cannot import modules, as the kitty and glyph parsers, include it; module units import its owner module",
+    "lib/base/include/telar_base/memory/fixed_text.hpp": "Qt adapters include it; module units import its owner module",
     "lib/base/include/telar_base/text/utf8.hpp": "Qt adapters include it; module units import its owner module",
     "lib/client/include/telar_client/codecs/telar_annotations.hpp": "Project macro header: the codec annotations _throw and _changes; includes nothing",
     "lib/client/include/telar_client/codecs/telar_cells.hpp": "Included by other textual headers and tests; module units import its owner module",
@@ -536,21 +534,15 @@
     "lib/client/include/telar_client/serializers/telar_messages.hpp": "Qt adapters include it; module units import its owner module",
     "lib/client/include/telar_client/serializers/telar_serializer.hpp": "Qt adapters include it; module units import its owner module",
     "lib/clipboard/includes/clipboard.hpp": "Native clipboard ABI shared with Objective-C++",
-    "lib/config/include/telar_config/graphics/limits.hpp": "Per-consumer SIMD test specialization",
-    "lib/config/include/telar_config/terminal/control/policy.hpp": "Per-consumer SIMD test specialization",
+    "lib/config/include/telar_config/graphics/limits.hpp": "Qt adapters include it; module units import its owner module",
+    "lib/config/include/telar_config/terminal/control/policy.hpp": "Qt adapters include it; module units import its owner module",
     "lib/ebnf/tests/parser_assertions.hpp": "Textual test fixture, including compiler diagnostic and macro expansion locations",
     "lib/ebnf/tests/spec_support.hpp": "Textual test fixture shared by the shipped specs' GoogleTest files",
-    "lib/ghostty/include/telar_ghostty/vt.hpp": "Third-party C API for the textual headers that cannot import its owner module",
-    "lib/native/include/telar_native/zlib.hpp": "Third-party C API for the textual headers that cannot import its owner module",
-    "lib/platform/include/telar_platform/descriptor_path.hpp": "Headers that cannot import modules, as the graphics temporary path, include it",
+    "lib/ghostty/include/telar_ghostty/modes.hpp": "Project macro header: TELAR_GHOSTTY_MODES, the modes telar.ghostty.vt captures and the ghostty-modes test checks; includes nothing",
     "lib/platform/include/telar_platform/file_descriptor.hpp": "Objective-C++ ABI",
-    "lib/platform/include/telar_platform/graphics/child_name.hpp": "Per-consumer SIMD test specialization",
-    "lib/platform/include/telar_platform/graphics/child_shared_memory.hpp": "Per-consumer SIMD test specialization",
-    "lib/platform/include/telar_platform/mapped_region.hpp": "Per-consumer SIMD test specialization",
     "lib/platform/include/telar_platform/open_directory.h": "C ABI",
     "lib/platform/include/telar_platform/process_environment.h": "C ABI for the process environment",
     "lib/platform/include/telar_platform/trace_macro.hpp": "Project macro header: TELAR_TRACE; includes nothing",
-    "lib/render/include/telar_render/sequence.hpp": "Included by other textual headers and by the global fragments of telar-render and the runtime",
     "lib/tbc/include/tbc/annotations.hpp": "Project macro header: the TBC annotations tbc-lint reads on declarations; includes nothing",
     "lib/tbc/include/tbc/contracts.hpp": "Consumer-side preprocessor annotations inspected by Clang AST tooling",
     "lib/tbc/include/tbc/detail/attributes.hpp": "Consumer-side preprocessor annotations inspected by Clang AST tooling",
@@ -750,13 +742,12 @@
     "src/gui/tests/terminal_cursor_fixture.hpp": "Qt adapter dependency",
     "src/gui/tests/wire_runtime.hpp": "Qt adapter dependency",
     "src/gui/tools/animation_presentation.hpp": "Objective-C++ ABI",
-    "src/runtime/diagnostics/line.hpp": "Per-consumer SIMD test specialization",
-    "src/runtime/diagnostics/timing.hpp": "Per-consumer SIMD test specialization",
     "src/runtime/tests/fixtures/control_parser_156.hpp": "Test or tool support (local textual fixture)"
   },
   "macro_headers": [
     "lib/base/include/telar_base/diagnostics/config.hpp",
     "lib/client/include/telar_client/codecs/telar_annotations.hpp",
+    "lib/ghostty/include/telar_ghostty/modes.hpp",
     "lib/platform/include/telar_platform/trace_macro.hpp",
     "lib/tbc/include/tbc/annotations.hpp"
   ],
@@ -951,6 +942,7 @@
     "src/runtime/cli/server/server.cpp": "telar.runtime.cli.server",
     "src/runtime/config/loader/loader.cpp": "telar.runtime.config.loader",
     "src/runtime/diagnostics/operation/operation.cpp": "telar.runtime.diagnostics.operation",
+    "src/runtime/diagnostics/line/line.cpp": "telar.runtime.diagnostics.line",
     "src/runtime/diagnostics/runtime_counters/runtime_counters.cpp": "telar.runtime.diagnostics.runtime_counters",
     "src/runtime/runtime/execution_service/execution_service-execution.cpp": "telar.runtime.runtime.execution_service",
     "src/runtime/metrics/host_sampler/host_sampler.cpp": "telar.runtime.metrics.host_sampler",
@@ -3069,10 +3061,6 @@
     "lib/base/memory/containers/containers.cppm": [
       "lib/base/include/telar_base/memory/fixed_text.hpp"
     ],
-    "lib/base/text/text.cppm": [
-      "lib/base/include/telar_base/text/base64.hpp",
-      "lib/base/include/telar_base/text/decimal.hpp"
-    ],
     "lib/base/text/utf8/utf8.cppm": [
       "lib/base/include/telar_base/text/utf8.hpp"
     ],
@@ -3086,10 +3074,7 @@
       "lib/platform/include/telar_platform/open_directory.h"
     ],
     "lib/platform/primitives/primitives.cppm": [
-      "lib/platform/include/telar_platform/file_descriptor.hpp",
-      "lib/platform/include/telar_platform/graphics/child_name.hpp",
-      "lib/platform/include/telar_platform/graphics/child_shared_memory.hpp",
-      "lib/platform/include/telar_platform/mapped_region.hpp"
+      "lib/platform/include/telar_platform/file_descriptor.hpp"
     ],
     "src/gui/attachments/catalog/catalog.cppm": [
       "src/gui/attachments/capture.hpp",
@@ -3110,10 +3095,6 @@
     "src/gui/terminal/screen/screen.cppm": [
       "src/gui/terminal/cell_position.hpp",
       "src/gui/terminal/screen.hpp"
-    ],
-    "src/runtime/diagnostics/line/line.cppm": [
-      "src/runtime/diagnostics/line.hpp",
-      "src/runtime/diagnostics/timing.hpp"
     ],
     "lib/clipboard/clipboard.cppm": [
       "lib/clipboard/includes/clipboard.hpp"
@@ -3154,12 +3135,6 @@
     ],
     "src/gui/application/workspace_replica/workspace_replica-fold_map.cppm": [
       "src/gui/terminal/fold_map.hpp"
-    ],
-    "lib/ghostty/vt/vt.cppm": [
-      "lib/ghostty/include/telar_ghostty/vt.hpp"
-    ],
-    "lib/native/zlib/zlib.cppm": [
-      "lib/native/include/telar_native/zlib.hpp"
     ]
   },
   "library_owners": {

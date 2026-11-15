@@ -1,11 +1,7 @@
 #pragma once
 
-// libghostty-vt's C API for the textual headers that cannot import telar.ghostty.vt, which owns
-// this header; module units import that module instead.
-#include <ghostty/vt.h>
-
-// The modes the tree reads. telar.ghostty.vt exports each as a constant, and the runtime's
-// ghostty-modes test checks every one against the header's own ghostty_mode_new.
+// The libghostty-vt modes the tree reads. telar.ghostty.vt exports each as a constant, and the
+// runtime's ghostty-modes test checks every one against the header's own ghostty_mode_new.
 #define TELAR_GHOSTTY_MODES(X)     \
   X(GHOSTTY_MODE_ALT_SCROLL)       \
   X(GHOSTTY_MODE_ANY_MOUSE)        \

@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "../../gui/tests/platform/private_clipboard.hpp"
-#include "../diagnostics/line.hpp"
 #include "telar_base/diagnostics/config.hpp"
 #include "telar_base/diagnostics/limit_reach.hpp"
 #include "telar_base/memory/allocator.hpp"
@@ -17,8 +16,6 @@ static_assert(true);
 #include "telar_client/serializers/telar_serializer.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "telar_platform/file_descriptor.hpp"
-#include "telar_platform/graphics/child_shared_memory.hpp"
-#include "telar_platform/mapped_region.hpp"
 #include <algorithm>
 #include <array>
 #include <atomic>

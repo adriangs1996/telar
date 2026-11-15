@@ -1,6 +1,3 @@
-module;
-#include "telar_render/sequence.hpp"
-
 module telar.render.document;
 
 import std;

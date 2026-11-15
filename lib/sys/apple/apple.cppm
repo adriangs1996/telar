@@ -114,6 +114,7 @@ export {
   X(ATTR_CMN_NAME)               \
   X(CLOCK_UPTIME_RAW)            \
   X(FSOPT_NOFOLLOW)              \
+  X(F_GETPATH)                   \
   X(F_SETNOSIGPIPE)              \
   X(MAXCOMLEN)                   \
   X(POSIX_SPAWN_CLOEXEC_DEFAULT) \
@@ -208,6 +209,7 @@ namespace telar::sys::captured {
 #undef ATTR_CMN_NAME
 #undef CLOCK_UPTIME_RAW
 #undef FSOPT_NOFOLLOW
+#undef F_GETPATH
 #undef F_SETNOSIGPIPE
 #undef MAXCOMLEN
 #undef POSIX_SPAWN_CLOEXEC_DEFAULT

@@ -1,10 +1,10 @@
 module;
-#include "telar_native/zlib.hpp"
+#include <zlib.h>
 
 export module telar.native.zlib;
 
-// zlib's header stays in this global module fragment and in telar_native/zlib.hpp, which the
-// textual headers include; importers reach it through these declarations instead.
+// zlib's header stays in this global module fragment only; importers reach it through these
+// declarations instead.
 export {
   using ::Bytef;
   using ::uInt;

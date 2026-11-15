@@ -20,7 +20,6 @@ static_assert(true);
 #include "telar_client/serializers/telar_messages.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "telar_platform/file_descriptor.hpp"
-#include "telar_platform/mapped_region.hpp"
 #include <algorithm>
 #include <array>
 #include <atomic>

@@ -1,17 +1,51 @@
-module;
-#include "telar_platform/descriptor_path.hpp"
-
 module telar.runtime.platform.descriptor_path;
 
 import telar.sys.posix;
+#if defined(__APPLE__)
+import telar.sys.apple;
+#endif
 
 import telar.platform.error;
 
 namespace telar::runtime {
 
+  namespace {
+
+    // The path the open file `descriptor` has now, written terminated into `path`; false, with
+    // errno set, when the system cannot tell or the path does not fit.
+    bool resolve(int descriptor, std::array<char, PATH_MAX>& path) noexcept {
+#if defined(__APPLE__)
+      return ::fcntl(descriptor, F_GETPATH, path.data()) == 0;
+#elif defined(__linux__)
+      std::array<char, sizeof("/proc/self/fd/") + std::numeric_limits<int>::digits10 + 1> link{};
+
+      std::snprintf(link.data(), link.size(), "/proc/self/fd/%d", descriptor);
+
+      const auto length = ::readlink(link.data(), path.data(), path.size());
+      if (length <= 0) {
+        return false;
+      }
+
+      if (static_cast<std::size_t>(length) >= path.size()) {
+        sys::setLastError(ENAMETOOLONG);
+        return false;
+      }
+
+      path[static_cast<std::size_t>(length)] = '\0';
+      return true;
+#else
+      static_cast<void>(descriptor);
+      static_cast<void>(path);
+      sys::setLastError(ENOTSUP);
+      return false;
+#endif
+    }
+
+  }
+
   std::array<char, PATH_MAX> descriptorPath(int descriptor) {
     std::array<char, PATH_MAX> path{};
-    if (!descriptorPath(descriptor, path)) {
+    if (!resolve(descriptor, path)) {
       throw SystemError{"Resolve open file path"};
     }
 
