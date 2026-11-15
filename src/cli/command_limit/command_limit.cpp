@@ -3,6 +3,8 @@ module telar.cli.command_limit;
 import telar.sys.posix;
 import telar.tbc;
 import telar.wire.vocabulary;
+import telar.platform.error;
+import telar.platform.primitives;
 
 namespace telar::runtime::cli {
 

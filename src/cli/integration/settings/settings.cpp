@@ -1,5 +1,9 @@
 module telar.cli.integration.settings;
 import telar.sys.posix;
+import telar.cli.base.command_error;
+import telar.platform.error;
+import telar.platform.fs;
+import telar.platform.primitives;
 
 namespace telar::runtime::cli::integration::assets {
 

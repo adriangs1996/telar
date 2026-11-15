@@ -3,6 +3,7 @@ module;
 
 module telar.cli.hooks.session;
 import telar.sys.posix;
+import telar.wire.pane_io;
 
 namespace telar::runtime::cli::hooks {
 

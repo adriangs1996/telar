@@ -1,24 +1,4 @@
 {
-  "src/cli/command_limit/command_limit.cppm": [
-    "telar.platform.error",
-    "telar.platform.primitives"
-  ],
-  "src/cli/control_session/control_session.cppm": [
-    "telar.base.diagnostics",
-    "telar.platform.error",
-    "telar.platform.primitives"
-  ],
-  "src/cli/control_session/runtime_connection.cpp": [
-    "telar.base.diagnostics",
-    "telar.platform.primitives"
-  ],
-  "src/cli/history/history.cppm": [
-    "telar.base.diagnostics",
-    "telar.cli.server",
-    "telar.platform.error",
-    "telar.platform.fs",
-    "telar.wire.runtime"
-  ],
   "src/cli/hook/hook.cppm": [
     "telar.base.diagnostics",
     "telar.base.memory.containers",
@@ -33,26 +13,6 @@
     "telar.wire.runtime",
     "telar.wire.vocabulary",
     "telar.wire.worktrees"
-  ],
-  "src/cli/hooks/command/command.cppm": [
-    "telar.base.diagnostics",
-    "telar.base.text.utf8",
-    "telar.config.runtime"
-  ],
-  "src/cli/hooks/session/session.cppm": [
-    "telar.base.diagnostics",
-    "telar.wire.pane_io"
-  ],
-  "src/cli/integration/settings/integration.cpp": [
-    "telar.base.diagnostics",
-    "telar.platform.primitives"
-  ],
-  "src/cli/integration/settings/settings.cppm": [
-    "telar.base.diagnostics",
-    "telar.cli.base.command_error",
-    "telar.platform.error",
-    "telar.platform.fs",
-    "telar.platform.primitives"
   ],
   "src/cli/launch_commands/launch_commands.cpp": [
     "telar.base.diagnostics",

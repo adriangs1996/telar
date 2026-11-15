@@ -7,10 +7,8 @@ import telar.sys.socket;
 
 import telar.platform.net;
 import telar.platform.error;
-import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.wire.runtime;
-import telar.platform.primitives;
 
 namespace telar::runtime::cli {
 

@@ -1,6 +1,8 @@
 module telar.cli.hooks.command;
 
 import telar.config.core;
+import telar.base.text.utf8;
+import telar.config.runtime;
 
 namespace telar::runtime::cli::hooks {
 

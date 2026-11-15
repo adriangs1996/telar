@@ -2,6 +2,10 @@ module telar.cli.history;
 
 import telar.cli.control_session;
 import telar.sys.posix;
+import telar.base.diagnostics;
+import telar.cli.server;
+import telar.platform.fs;
+import telar.wire.runtime;
 
 namespace telar::runtime::cli::file_transfer {
 

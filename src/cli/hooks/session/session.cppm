@@ -8,10 +8,8 @@ import std;
 import telar.tbc;
 
 import telar.cli.control_session;
-import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.wire.agents;
-import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.git.checkout;
 import telar.platform.primitives;
