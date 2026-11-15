@@ -2,9 +2,9 @@ export module telar.cli.worktree;
 
 import std;
 
-export import telar.cli.worktree_git;
+import telar.cli.worktree_git;
 
-export import telar.cli.command_limit;
+import telar.cli.command_limit;
 
 import telar.cli.machine_ssh;
 import telar.cli.project_setup;
@@ -26,6 +26,8 @@ import telar.cli.tab;
 import telar.platform.fs;
 import telar.platform.paths;
 import telar.platform.process;
+import telar.machines;
+import telar.base.memory.allocators;
 
 // Interface: repository_options.cppm
 export {

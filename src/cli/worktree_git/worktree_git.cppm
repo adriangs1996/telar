@@ -6,14 +6,14 @@ export module telar.cli.worktree_git;
 import std;
 import telar.tbc;
 
-export import telar.cli.command_limit;
+import telar.cli.command_limit;
 
-export import telar.platform.paths;
-export import telar.platform.process;
+import telar.platform.paths;
+import telar.platform.process;
 
 import telar.cli.output;
 
-export import telar.base.memory.allocators;
+import telar.base.memory.allocators;
 import telar.base.diagnostics;
 import telar.base.text;
 import telar.base.text.json;

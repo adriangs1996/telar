@@ -6,6 +6,7 @@ static_assert(true);
 import std;
 import telar.sys.posix;
 import telar.cli.tab;
+import telar.cli.window;
 
 int main(int argc, char** argv) {
   using namespace telar::runtime::cli;

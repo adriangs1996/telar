@@ -27,6 +27,8 @@ import telar.cli.hook;
 import telar.platform.fs;
 import telar.platform.paths;
 import telar.wire.vocabulary;
+import telar.cli.hooks.command;
+import telar.cli.hooks.session;
 
 using namespace telar;
 using namespace telar::runtime;

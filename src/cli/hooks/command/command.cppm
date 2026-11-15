@@ -6,7 +6,7 @@ export module telar.cli.hooks.command;
 import std;
 import telar.tbc;
 
-export import telar.base.text.json;
+import telar.base.text.json;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.wire.agents;

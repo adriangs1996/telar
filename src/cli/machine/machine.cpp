@@ -12,6 +12,8 @@ import telar.tls;
 
 import telar.tbc;
 import telar.platform.fs;
+import telar.cli.plugin;
+import telar.base.text.json;
 
 namespace telar::runtime::cli::machine::assets {
 

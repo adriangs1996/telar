@@ -37,6 +37,7 @@ static_assert(true);
 import telar.cli.tests.check;
 import telar.cli.integration.settings;
 import telar.cli.tab;
+import telar.base.text.json;
 
 using namespace telar;
 using namespace telar::runtime;

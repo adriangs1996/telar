@@ -91,6 +91,7 @@
   ],
   "src/cli/history/history.cppm": [
     "telar.base.diagnostics",
+    "telar.cli.server",
     "telar.platform.error",
     "telar.platform.fs",
     "telar.wire.runtime"
@@ -137,6 +138,7 @@
   "src/cli/machine/machine.cppm": [
     "telar.base.diagnostics",
     "telar.cli.command_limit",
+    "telar.cli.integration.settings",
     "telar.cli.runtime_observer",
     "telar.platform.paths",
     "telar.platform.primitives",
@@ -148,6 +150,7 @@
   "src/cli/machine_ssh/machine_ssh.cppm": [
     "telar.base.diagnostics",
     "telar.cli.command_limit",
+    "telar.cli.server",
     "telar.client",
     "telar.platform.daemon",
     "telar.platform.error",
@@ -160,6 +163,7 @@
   ],
   "src/cli/plugin/plugin.cppm": [
     "telar.base.diagnostics",
+    "telar.cli.server",
     "telar.platform.error",
     "telar.platform.fs",
     "telar.platform.primitives",
@@ -168,6 +172,7 @@
   "src/cli/project_setup/project_setup.cppm": [
     "telar.base.diagnostics",
     "telar.base.text.utf8",
+    "telar.cli.server",
     "telar.platform.primitives",
     "telar.wire.layout",
     "telar.wire.pane_io",
@@ -222,6 +227,7 @@
   "src/cli/worktree/worktree.cppm": [
     "telar.base.diagnostics",
     "telar.base.text.utf8",
+    "telar.cli.tab",
     "telar.platform.fs",
     "telar.platform.primitives",
     "telar.platform.process",
@@ -237,6 +243,7 @@
   "src/cli/worktree_git/worktree_git.cppm": [
     "telar.base.diagnostics",
     "telar.base.memory.containers",
+    "telar.cli.server",
     "telar.platform.error",
     "telar.wire.pane_io",
     "telar.wire.runtime"

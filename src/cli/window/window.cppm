@@ -2,11 +2,11 @@ export module telar.cli.window;
 
 import std;
 
-export import telar.cli.output;
+import telar.cli.output;
 
-export import telar.cli.plugin;
+import telar.cli.plugin;
 
-export import telar.base.text.json;
+import telar.base.text.json;
 
 import telar.base.diagnostics;
 import telar.base.text.utf8;

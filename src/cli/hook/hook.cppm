@@ -4,13 +4,13 @@ import std;
 import telar.sys.posix;
 import telar.tbc;
 
-export import telar.cli.hooks.command;
-export import telar.platform.paths;
+import telar.cli.hooks.command;
+import telar.platform.paths;
 import telar.platform.process;
 
-export import telar.cli.hooks.session;
+import telar.cli.hooks.session;
 
-export import telar.base.memory.allocators;
+import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.cli.worktree_git;
 import telar.base.diagnostics;

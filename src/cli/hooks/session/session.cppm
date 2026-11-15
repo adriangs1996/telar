@@ -7,7 +7,7 @@ export module telar.cli.hooks.session;
 import std;
 import telar.tbc;
 
-export import telar.cli.control_session;
+import telar.cli.control_session;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.wire.agents;

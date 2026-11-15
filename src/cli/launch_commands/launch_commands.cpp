@@ -10,6 +10,8 @@ import telar.cli.window;
 import telar.cli.machine_ssh;
 import telar.base.diagnostics;
 import telar.platform.primitives;
+import telar.machines;
+import telar.cli.output;
 
 namespace telar::runtime::cli {
   namespace {

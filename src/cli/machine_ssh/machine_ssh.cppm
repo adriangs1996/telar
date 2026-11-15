@@ -3,9 +3,9 @@ export module telar.cli.machine_ssh;
 import std;
 import telar.sys.posix;
 
-export import telar.machines;
+import telar.machines;
 
-export import telar.base.text.json;
+import telar.base.text.json;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.platform.primitives;

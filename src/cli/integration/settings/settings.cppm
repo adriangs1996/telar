@@ -3,10 +3,10 @@ export module telar.cli.integration.settings;
 import std;
 import telar.tbc;
 
-export import telar.config.core;
-export import telar.platform.paths;
+import telar.config.core;
+import telar.platform.paths;
 
-export import telar.base.text.json;
+import telar.base.text.json;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.platform.primitives;

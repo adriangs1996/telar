@@ -6,7 +6,7 @@ import std;
 
 import telar.cli.output;
 
-export import telar.platform.paths;
+import telar.platform.paths;
 import telar.base.diagnostics;
 import telar.cli.base.command_error;
 import telar.cli.control_session;

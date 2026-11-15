@@ -4,6 +4,7 @@ module;
 module telar.cli.hook;
 import telar.platform.sha256;
 import telar.sys.posix;
+import telar.cli.control_session;
 
 namespace telar::runtime::cli::hooks {
 
