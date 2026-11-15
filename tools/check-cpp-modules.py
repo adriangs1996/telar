@@ -64,12 +64,12 @@ def main():
     includes = check_includes(owned, allowed, inventory['macro_headers'], inventory['header_owners'],
                               inventory['library_owners'])
     owned = check_header_owners(inventory['header_owners'], owned_units(owned))
-    reexports = check_reexports(inventory['interfaces'],
+    reexports = check_reexports({source: (ROOT / source).read_text() for source in inventory['interfaces']},
                                 json.loads((ROOT / 'docs/build/reexports.json').read_text()))
     print(f'{len(graph)} module interfaces, acyclic imports, {upward} upward imports left, '
           f'{len(headers)} justified textual boundaries, {includes} textual includes left, '
           f'{owned} headers reached only through their owner module, '
-          f'{reexports} re-exports without a type left')
+          f'{reexports} re-exports left')
 
 
 IMPORT_RE = re.compile(r'^(?:export )?import ([\w.:]+);', re.M)
@@ -447,14 +447,6 @@ TOKEN_RE = re.compile(r'''
   | (?P<number>\d[\w.']*)
   | (?P<token>[A-Za-z_]\w*|::|->|\S)
 ''', re.S | re.M | re.X)
-IDENTIFIER_RE = re.compile(r'[A-Za-z_]\w*')
-TYPE_KEYWORDS = {'class', 'struct', 'union', 'enum', 'concept'}
-# An attribute macro between the keyword and the name, as TBC_SHARED or TBC_HOT_PATH.
-ATTRIBUTE_MACRO_RE = re.compile(r'[A-Z][A-Z0-9]*_[A-Z0-9_]+')
-# What may follow the name a type declaration introduces; `<` would be a specialization.
-DECLARED_FOLLOWERS = {'{', ';', ':', 'final', '='}
-FUNCTION_QUALIFIERS = {'const', 'noexcept', 'override', 'final', 'mutable', 'volatile', '&'}
-TRAILING_RETURN_RE = re.compile(r'[A-Za-z_]\w*|::|<|>|,|\*|&|0')
 
 
 def tokens(text):
@@ -471,182 +463,38 @@ def tokens(text):
     return found
 
 
-def skip_balanced(found, index, opening, closing):
-    """The index right after the bracket that closes the one at `index`."""
-    depth = 0
-    while index < len(found):
-        depth += (found[index] == opening) - (found[index] == closing)
-        index += 1
-        if depth == 0:
-            break
+def reexports_of(text):
+    """The modules a unit re-exports. `export import :p` is left out: the standard needs it for
+    a primary interface to export its own partition."""
+    found = [';'] + tokens(text) + [';']
 
-    return index
+    return {''.join(found[index + 1:found.index(';', index)])
+            for index, token in enumerate(found)
+            if token == 'import' and found[index - 1] == 'export' and found[index + 1] != ':'}
 
 
-def function_body(found, index, scopes):
-    """Whether the brace at `index` opens a function body: it follows a parameter list, a
-    trailing return type or, inside a class, a member initializer list."""
-    before = index - 1
-    while found[before] in FUNCTION_QUALIFIERS:
-        before -= 1
-    if found[before] == ')':
-        return True
-    if found[before] == '}':
-        return bool(scopes) and scopes[-1][0] != 'namespace'
-
-    while TRAILING_RETURN_RE.fullmatch(found[before]) and found[before] not in TYPE_KEYWORDS:
-        before -= 1
-
-    return found[before] == '->'
-
-
-def declared_type(found, index):
-    """The name a type declaration starting at the keyword at `index` introduces, if any."""
-    if found[index - 1] in ('<', ',', 'friend', 'using', 'typename'):
-        return None
-
-    index += 1
-    while found[index] in ('class', 'struct', 'alignas', '[') or ATTRIBUTE_MACRO_RE.fullmatch(found[index]) and IDENTIFIER_RE.fullmatch(found[index + 1]):
-        if found[index] == '[':
-            index = skip_balanced(found, index, '[', ']')
-        elif found[index] == 'alignas':
-            index = skip_balanced(found, index + 1, '(', ')')
-        else:
-            index += 1
-    name = found[index]
-
-    return name if IDENTIFIER_RE.fullmatch(name) and found[index + 1] in DECLARED_FOLLOWERS else None
-
-
-class Interface:
-    """What rule 4 reads from the interface units of a module, outside function bodies, which
-    importers never need to name."""
-
-    def __init__(self):
-        self.reexports = set()
-        # Each type an exported namespace declares, or re-declares through `using`, with the
-        # segments of the namespaces around it.
-        self.exported = {}
-        # Every type the module declares, exported or not, at any depth.
-        self.declared = set()
-        # The names its exported declarations mention: alone, or as (qualifier, name).
-        self.unqualified = set()
-        self.qualified = set()
-
-    def names_type_of(self, target):
-        """Whether these exported declarations name a type `target` exports. An unqualified name
-        the module declares itself is its own type, and a qualified one has to be qualified by
-        a namespace the type lives in."""
-        return (any(name in target.exported for name in self.unqualified - self.declared)
-                or any(qualifier in target.exported.get(name, ()) for qualifier, name in self.qualified))
-
-    def read(self, text):
-        found = tokens(text) + [';']
-        start = next(index for index, token in enumerate(found)
-                     if token == 'module' and found[index + 1] not in (';', ':'))
-        scopes = []
-        pending_export, pending_namespace = False, None
-        index = found.index(';', start) + 1
-
-        while index < len(found):
-            token = found[index]
-            if token == 'module' and found[index + 1:index + 3] == [':', 'private']:
-                break
-            if token == 'import' and found[index - 1] in (';', '{', '}', 'export'):
-                end = found.index(';', index)
-                if found[index - 1] == 'export':
-                    self.reexports.add(''.join(found[index + 1:end]))
-                index = end + 1
-                pending_export = False
-                continue
-
-            exporting = pending_export or any(export for _, export, _ in scopes)
-            if token == 'export':
-                pending_export = True
-            elif token == 'namespace':
-                end = index + 1
-                while IDENTIFIER_RE.fullmatch(found[end]) or found[end] == '::':
-                    end += 1
-                pending_namespace = [name for name in found[index + 1:end] if name != '::']
-                index = end
-                continue
-            elif token == '{':
-                if pending_namespace is not None or found[index - 1] in ('export', '""'):
-                    scopes.append(('namespace', pending_export, pending_namespace or []))
-                elif function_body(found, index, scopes):
-                    index = skip_balanced(found, index, '{', '}')
-                    pending_export = False
-                    continue
-                else:
-                    scopes.append(('class', pending_export, []))
-                pending_export, pending_namespace = False, None
-            elif token == '}':
-                if scopes:
-                    scopes.pop()
-            elif token == ';':
-                pending_export, pending_namespace = False, None
-            elif IDENTIFIER_RE.fullmatch(token):
-                self.declare(found, index, scopes, exporting)
-                if exporting:
-                    self.mention(found, index)
-            index += 1
-
-    def mention(self, found, index):
-        if found[index - 1] == '::' and IDENTIFIER_RE.fullmatch(found[index - 2]):
-            self.qualified.add((found[index - 2], found[index]))
-        else:
-            self.unqualified.add(found[index])
-
-    def declare(self, found, index, scopes, exporting):
-        token = found[index]
-        name = None
-        if token in TYPE_KEYWORDS:
-            name = declared_type(found, index)
-        elif token == 'using' and found[index + 1] not in ('namespace', 'enum'):
-            end = found.index(';', index)
-            if found[index + 2] == '=':
-                name = found[index + 1]
-            # A using-declaration re-declares a type, or a function this rule leaves aside.
-            elif found[end - 1][0].isupper():
-                name = found[end - 1]
-        elif token == 'typedef':
-            name = found[found.index(';', index) - 1]
-        if not name:
-            return
-
-        self.declared.add(name)
-        if exporting and all(kind == 'namespace' for kind, _, _ in scopes):
-            segments = self.exported.setdefault(name, set())
-            segments.update(segment for _, _, names in scopes for segment in names)
-
-
-def check_reexports(interfaces, allowed):
-    """Rule 4: an interface re-exports a module only when its exported declarations name a type
-    of that module, outside function bodies: importers need that type to use the interface, and
-    anything else they import themselves. docs/build/reexports.json lists, by module, the
-    re-exports that break the rule today; the change that removes one removes its entry.
-
-    The rule reads tokens, not the AST: a type counts once its name appears where it can mean
-    that type (see Interface.names_type_of)."""
-    modules = {}
-    for source, name in interfaces.items():
-        modules.setdefault(name.split(':')[0], Interface()).read((ROOT / source).read_text())
-
+def check_reexports(sources, allowed):
+    """Rule 4: no `export import` but that of an own partition, std included. Each file imports
+    the modules it names, so its imports show every dependency it really has. Tests and tools
+    are out of the rule. docs/build/reexports.json lists, by file, the re-exports that exist
+    today; the change that removes one removes its entry. `sources` maps each interface to its
+    text."""
     sites = {}
-    for name, interface in sorted(modules.items()):
-        for target in sorted(interface.reexports):
-            if target.startswith(':') or target.split(':')[0] == name or target == 'std':
-                continue
-            if not interface.names_type_of(modules[target]):
-                sites.setdefault(name, set()).add(target)
+    for name, text in sorted(sources.items()):
+        if re.search(r'/(tests|tools)/', name):
+            continue
+
+        targets = reexports_of(text)
+        if targets:
+            sites[name] = targets
 
     errors = []
     for name in sorted(sites.keys() | allowed.keys()):
         found, listed = sites.get(name, set()), set(allowed.get(name, ()))
-        errors += [f'{name} re-exports {target}, but its exported declarations name no type of it; '
-                   'import it instead' for target in sorted(found - listed)]
-        errors += [f'{name} no longer re-exports {target} without naming a type of it; '
-                   'remove it from reexports.json' for target in sorted(listed - found)]
+        errors += [f'{name} re-exports {target}; import it where it is named instead'
+                   for target in sorted(found - listed)]
+        errors += [f'{name} no longer re-exports {target}; remove it from reexports.json'
+                   for target in sorted(listed - found)]
     if errors:
         raise RuntimeError('Re-exports against rule 4:\n  ' + '\n  '.join(errors))
 

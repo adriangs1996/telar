@@ -1,1 +1,910 @@
-{}
+{
+  "lib/client/client.cppm": [
+    "telar.base.text.utf8"
+  ],
+  "lib/config/client/client.cppm": [
+    "telar.config.core"
+  ],
+  "lib/config/core/core.cppm": [
+    "telar.lua",
+    "telar.platform.paths"
+  ],
+  "lib/config/gui/gui.cppm": [
+    "telar.base.memory.containers",
+    "telar.config.core"
+  ],
+  "lib/config/runtime/runtime.cppm": [
+    "telar.config.core",
+    "telar.platform.events",
+    "telar.plugins"
+  ],
+  "lib/config/snapshot/snapshot.cppm": [
+    "telar.config.client",
+    "telar.config.gui",
+    "telar.config.runtime"
+  ],
+  "lib/ebnf/matcher/matcher.cppm": [
+    "telar.ebnf.parser"
+  ],
+  "lib/ebnf/parser/parser.cppm": [
+    "telar.ebnf.lexer"
+  ],
+  "lib/git/checkout/checkout.cppm": [
+    "telar.base.memory.allocators",
+    "telar.platform.process"
+  ],
+  "lib/git/git.cppm": [
+    "telar.base.memory.allocators"
+  ],
+  "lib/lua/lua.cppm": [
+    "telar.base.text.json"
+  ],
+  "lib/machines/machines.cppm": [
+    "telar.base.text.json"
+  ],
+  "lib/platform/daemon/daemon.cppm": [
+    "telar.base.memory.allocators",
+    "telar.platform.paths",
+    "telar.platform.process"
+  ],
+  "lib/platform/fs/fs.cppm": [
+    "telar.base.memory.allocators"
+  ],
+  "lib/platform/paths/paths.cppm": [
+    "telar.base.memory.allocators"
+  ],
+  "lib/platform/process/process.cppm": [
+    "telar.base.memory.allocators",
+    "telar.base.memory.containers",
+    "telar.base.memory.sensitive"
+  ],
+  "lib/plugins/plugins.cppm": [
+    "telar.base.memory.containers",
+    "telar.base.text.json",
+    "telar.platform.fs",
+    "telar.platform.paths",
+    "telar.platform.sha256"
+  ],
+  "lib/render/document/document.cppm": [
+    "telar.base.memory.allocators"
+  ],
+  "lib/render/markdown/markdown.cppm": [
+    "telar.render.document"
+  ],
+  "lib/render/terminal/terminal.cppm": [
+    "telar.render.document"
+  ],
+  "lib/tls/tls.cppm": [
+    "telar.base.memory.allocators",
+    "telar.base.memory.containers",
+    "telar.platform.paths"
+  ],
+  "src/cli/control_session/control_session.cppm": [
+    "telar.client"
+  ],
+  "src/cli/history/history.cppm": [
+    "telar.cli.command_limit",
+    "telar.platform.paths"
+  ],
+  "src/cli/hook/hook.cppm": [
+    "telar.base.memory.allocators",
+    "telar.cli.hooks.command",
+    "telar.cli.hooks.session",
+    "telar.platform.paths"
+  ],
+  "src/cli/hooks/command/command.cppm": [
+    "telar.base.text.json"
+  ],
+  "src/cli/hooks/session/session.cppm": [
+    "telar.cli.control_session"
+  ],
+  "src/cli/integration/settings/settings.cppm": [
+    "telar.base.text.json",
+    "telar.config.core",
+    "telar.platform.paths"
+  ],
+  "src/cli/machine/machine.cppm": [
+    "telar.cli.machine_ssh"
+  ],
+  "src/cli/machine_ssh/machine_ssh.cppm": [
+    "telar.base.text.json",
+    "telar.machines"
+  ],
+  "src/cli/plugin/plugin.cppm": [
+    "telar.cli.command_limit",
+    "telar.platform.paths",
+    "telar.plugins"
+  ],
+  "src/cli/project_setup/project_setup.cppm": [
+    "telar.cli.command_limit",
+    "telar.cli.output"
+  ],
+  "src/cli/runtime_observer/runtime_observer.cppm": [
+    "telar.cli.command_limit"
+  ],
+  "src/cli/server/server.cppm": [
+    "telar.platform.paths"
+  ],
+  "src/cli/tab/tab.cppm": [
+    "telar.cli.window",
+    "telar.cli.worktree_git"
+  ],
+  "src/cli/window/window.cppm": [
+    "telar.base.text.json",
+    "telar.cli.output",
+    "telar.cli.plugin"
+  ],
+  "src/cli/worktree/worktree.cppm": [
+    "telar.cli.command_limit",
+    "telar.cli.worktree_git"
+  ],
+  "src/cli/worktree_git/worktree_git.cppm": [
+    "telar.base.memory.allocators",
+    "telar.cli.command_limit",
+    "telar.platform.paths",
+    "telar.platform.process"
+  ],
+  "src/gui/application/host_effects/host_effects.cppm": [
+    "telar.gui.core.json_writer",
+    "telar.gui.presentation.frame_pacer",
+    "telar.gui.text.json_unsigned_integer",
+    "telar.gui.text.notification_payload"
+  ],
+  "src/gui/application/session/session.cppm": [
+    "telar.config.client",
+    "telar.config.runtime",
+    "telar.gui.application.host_effects",
+    "telar.gui.application.sound_playback",
+    "telar.gui.application.workspace_replica",
+    "telar.gui.core.metrics",
+    "telar.gui.core.unicode_scalar",
+    "telar.gui.graphics.pauses",
+    "telar.gui.graphics.texture_cache",
+    "telar.gui.history.browser",
+    "telar.gui.input.copy_mode",
+    "telar.gui.input.copy_pointer",
+    "telar.gui.input.key_encoder",
+    "telar.gui.layout.geometry",
+    "telar.gui.layout.snapshots",
+    "telar.gui.links.cell_links",
+    "telar.gui.links.path_expansion",
+    "telar.gui.paths.label",
+    "telar.gui.peek.screen",
+    "telar.gui.platform.awake_clock",
+    "telar.gui.presentation.application_mark",
+    "telar.gui.presentation.client_view_state",
+    "telar.gui.presentation.display_metrics",
+    "telar.gui.presentation.tab_drop",
+    "telar.gui.prompt.line",
+    "telar.gui.suggestions.state",
+    "telar.gui.terminal.font_grid"
+  ],
+  "src/gui/application/sound_playback/sound_playback.cppm": [
+    "telar.gui.core.metrics"
+  ],
+  "src/gui/application/workspace_replica/workspace_replica.cppm": [
+    "telar.gui.graphics.texture_cache",
+    "telar.render.document"
+  ],
+  "src/gui/attachments/marker_input/marker_input.cppm": [
+    "telar.gui.input.key_encoder"
+  ],
+  "src/gui/components/builtin_content/builtin_content.cppm": [
+    "telar.config.client",
+    "telar.gui.components.configuration",
+    "telar.gui.input.binding_effects",
+    "telar.gui.text.json_unsigned_integer",
+    "telar.lua"
+  ],
+  "src/gui/components/configuration/configuration.cppm": [
+    "telar.base.memory.containers",
+    "telar.config.client",
+    "telar.gui.core.metrics",
+    "telar.gui.input.copy_pointer",
+    "telar.lua"
+  ],
+  "src/gui/config/generation/generation.cppm": [
+    "telar.gui.components.builtin_content",
+    "telar.gui.components.configuration",
+    "telar.gui.config.plugin_query",
+    "telar.gui.core.metrics",
+    "telar.gui.input.configuration",
+    "telar.gui.input.copy_pointer",
+    "telar.gui.input.key_encoder",
+    "telar.lua"
+  ],
+  "src/gui/config/gui_query/gui_query.cppm": [
+    "telar.gui.core.json_writer",
+    "telar.gui.core.metrics",
+    "telar.gui.presentation.client_view_state"
+  ],
+  "src/gui/config/plugin_effects/plugin_effects.cppm": [
+    "telar.config.client",
+    "telar.config.runtime",
+    "telar.gui.core.json_writer",
+    "telar.gui.input.binding_effects",
+    "telar.gui.input.copy_pointer",
+    "telar.plugins"
+  ],
+  "src/gui/config/plugin_query/plugin_query.cppm": [
+    "telar.config.client",
+    "telar.gui.core.json_writer",
+    "telar.gui.input.binding_effects",
+    "telar.gui.input.configuration",
+    "telar.gui.input.copy_pointer",
+    "telar.gui.input.key_encoder",
+    "telar.plugins"
+  ],
+  "src/gui/fonts/face/face-views.cppm": [
+    "telar.gui.terminal.font_grid"
+  ],
+  "src/gui/fonts/face/face.cppm": [
+    "telar.gui.terminal.font_grid"
+  ],
+  "src/gui/fonts/font_requests/font_requests.cppm": [
+    "telar.gui.fonts.face"
+  ],
+  "src/gui/fonts/glyph_rasterizer/glyph_rasterizer.cppm": [
+    "telar.gui.fonts.face"
+  ],
+  "src/gui/fonts/row_text_layout/row_text_layout.cppm": [
+    "telar.gui.core.metrics",
+    "telar.gui.fonts.face",
+    "telar.gui.fonts.text_runs",
+    "telar.gui.terminal.font_grid",
+    "telar.gui.terminal.selection",
+    "telar.gui.text.bounded_editor"
+  ],
+  "src/gui/fonts/text_runs/text_runs.cppm": [
+    "telar.gui.fonts.face"
+  ],
+  "src/gui/graphics/pauses/pauses.cppm": [
+    "telar.gui.layout.geometry"
+  ],
+  "src/gui/graphics/placeholder/placeholder.cppm": [
+    "telar.gui.core.metrics"
+  ],
+  "src/gui/input/binding_effects/binding_effects.cppm": [
+    "telar.config.client",
+    "telar.gui.input.copy_pointer",
+    "telar.gui.input.key_encoder"
+  ],
+  "src/gui/input/child_mouse/child_mouse.cppm": [
+    "telar.gui.core.metrics"
+  ],
+  "src/gui/input/configuration/configuration.cppm": [
+    "telar.gui.input.copy_pointer",
+    "telar.gui.input.key_encoder"
+  ],
+  "src/gui/input/copy_mode/copy_mode.cppm": [
+    "telar.gui.input.copy_pointer",
+    "telar.gui.input.key_encoder",
+    "telar.gui.terminal.font_grid",
+    "telar.gui.terminal.selection"
+  ],
+  "src/gui/input/copy_pointer/copy_pointer.cppm": [
+    "telar.gui.terminal.font_grid"
+  ],
+  "src/gui/input/key_encoder/key_encoder.cppm": [
+    "telar.config.client",
+    "telar.gui.core.unicode_scalar",
+    "telar.gui.text.json_unsigned_integer"
+  ],
+  "src/gui/layout/geometry/geometry.cppm": [
+    "telar.gui.core.metrics",
+    "telar.gui.core.unicode_scalar"
+  ],
+  "src/gui/layout/snapshots/snapshots.cppm": [
+    "telar.gui.layout.geometry"
+  ],
+  "src/gui/links/cell_links/cell_links.cppm": [
+    "telar.gui.links.path_expansion",
+    "telar.gui.text.json_unsigned_integer"
+  ],
+  "src/gui/links/link_hover/link_hover.cppm": [
+    "telar.gui.core.metrics",
+    "telar.gui.core.unicode_scalar",
+    "telar.gui.links.cell_links",
+    "telar.gui.links.path_expansion"
+  ],
+  "src/gui/links/path_expansion/path_expansion.cppm": [
+    "telar.gui.text.json_unsigned_integer"
+  ],
+  "src/gui/machines/discovery/discovery.cppm": [
+    "telar.machines"
+  ],
+  "src/gui/machines/picker/picker.cppm": [
+    "telar.gui.machines.discovery",
+    "telar.gui.machines.profile_store",
+    "telar.gui.palette.navigation_label"
+  ],
+  "src/gui/machines/profile_store/profile_store.cppm": [
+    "telar.gui.machines.discovery"
+  ],
+  "src/gui/model/records/records.cppm": [
+    "telar.gui.layout.geometry"
+  ],
+  "src/gui/model/replicas/replicas.cppm": [
+    "telar.gui.model.records"
+  ],
+  "src/gui/palette/navigation_label/navigation_label.cppm": [
+    "telar.gui.text.json_unsigned_integer"
+  ],
+  "src/gui/paths/label/label.cppm": [
+    "telar.gui.text.json_unsigned_integer"
+  ],
+  "src/gui/peek/screen/screen.cppm": [
+    "telar.gui.palette.navigation_label",
+    "telar.gui.suggestions.state"
+  ],
+  "src/gui/platform/notification_commands/notification_commands.cppm": [
+    "telar.gui.text.json_unsigned_integer",
+    "telar.gui.text.notification_payload"
+  ],
+  "src/gui/platform/wall_clock/wall_clock.cppm": [
+    "telar.gui.core.unicode_scalar"
+  ],
+  "src/gui/presentation/activity_order/activity_order.cppm": [
+    "telar.gui.core.metrics",
+    "telar.gui.model.replicas",
+    "telar.gui.presentation.application_mark",
+    "telar.gui.text.json_unsigned_integer"
+  ],
+  "src/gui/presentation/display_metrics/display_metrics.cppm": [
+    "telar.gui.core.json_writer",
+    "telar.gui.core.metrics"
+  ],
+  "src/gui/presentation/form_field_geometry/form_field_geometry.cppm": [
+    "telar.gui.core.metrics",
+    "telar.gui.core.unicode_scalar",
+    "telar.gui.terminal.font_grid",
+    "telar.gui.text.bounded_editor"
+  ],
+  "src/gui/presentation/frame_pacer/frame_pacer.cppm": [
+    "telar.gui.core.metrics",
+    "telar.gui.layout.geometry"
+  ],
+  "src/gui/presentation/history_filter_geometry/history_filter_geometry.cppm": [
+    "telar.gui.core.json_writer",
+    "telar.gui.core.metrics",
+    "telar.gui.history.browser",
+    "telar.gui.machines.picker",
+    "telar.gui.text.json_unsigned_integer"
+  ],
+  "src/gui/presentation/history_inspection/history_inspection.cppm": [
+    "telar.gui.core.metrics",
+    "telar.gui.core.unicode_scalar",
+    "telar.gui.history.browser",
+    "telar.gui.input.copy_pointer",
+    "telar.gui.input.key_encoder",
+    "telar.gui.text.bounded_editor",
+    "telar.gui.text.json_unsigned_integer"
+  ],
+  "src/gui/presentation/history_inspection_geometry/history_inspection_geometry.cppm": [
+    "telar.gui.core.metrics",
+    "telar.gui.layout.geometry",
+    "telar.gui.presentation.history_inspection"
+  ],
+  "src/gui/presentation/history_meta_geometry/history_meta_geometry.cppm": [
+    "telar.gui.core.metrics",
+    "telar.gui.presentation.history_filter_geometry",
+    "telar.gui.text.json_unsigned_integer"
+  ],
+  "src/gui/presentation/history_pointer/history_pointer.cppm": [
+    "telar.gui.core.metrics",
+    "telar.gui.history.browser",
+    "telar.gui.presentation.history_filter_geometry",
+    "telar.gui.presentation.history_meta_geometry"
+  ],
+  "src/gui/presentation/notification_center/notification_center.cppm": [
+    "telar.gui.model.records",
+    "telar.gui.text.json_unsigned_integer"
+  ],
+  "src/gui/presentation/notification_stack/notification_stack.cppm": [
+    "telar.gui.core.metrics",
+    "telar.gui.presentation.notification_center",
+    "telar.gui.text.json_unsigned_integer"
+  ],
+  "src/gui/presentation/suggestion_geometry/suggestion_geometry.cppm": [
+    "telar.gui.core.metrics"
+  ],
+  "src/gui/presentation/suggestion_labels/suggestion_labels.cppm": [
+    "telar.gui.core.unicode_scalar",
+    "telar.gui.suggestions.state"
+  ],
+  "src/gui/presentation/tab_drop/tab_drop.cppm": [
+    "telar.gui.core.metrics",
+    "telar.gui.presentation.frame_pacer"
+  ],
+  "src/gui/prompt/completion/completion.cppm": [
+    "telar.ebnf.matcher",
+    "telar.shell.syntax"
+  ],
+  "src/gui/prompt/layout/layout.cppm": [
+    "telar.shell.syntax"
+  ],
+  "src/gui/prompt/line/line.cppm": [
+    "telar.gui.prompt.completion",
+    "telar.gui.prompt.editor",
+    "telar.gui.prompt.routing"
+  ],
+  "src/gui/prompt/routing/routing.cppm": [
+    "telar.wire.pane_io"
+  ],
+  "src/gui/terminal/font_grid/font_grid.cppm": [
+    "telar.gui.core.metrics"
+  ],
+  "src/gui/terminal/glyphs/curve_cache/curve_cache.cppm": [
+    "telar.gui.core.metrics",
+    "telar.gui.terminal.font_grid",
+    "telar.gui.terminal.glyphs"
+  ],
+  "src/gui/text/json_unsigned_integer/json_unsigned_integer.cppm": [
+    "telar.machines"
+  ],
+  "src/gui/transport/runtime_link/runtime_link.cppm": [
+    "telar.client",
+    "telar.gui.machines.discovery",
+    "telar.gui.machines.picker",
+    "telar.gui.text.json_unsigned_integer"
+  ],
+  "src/runtime/agents/description_generator/description_generator.cppm": [
+    "telar.base.memory.allocators",
+    "telar.base.memory.containers",
+    "telar.base.memory.sensitive",
+    "telar.platform.events",
+    "telar.platform.process",
+    "telar.runtime.terminal.osc_scanner"
+  ],
+  "src/runtime/agents/screen_inference/screen_inference.cppm": [
+    "telar.config.runtime",
+    "telar.runtime.terminal.text_reader"
+  ],
+  "src/runtime/agents/snapshot/snapshot.cppm": [
+    "telar.config.runtime",
+    "telar.platform.events",
+    "telar.runtime.agents.description_generator",
+    "telar.runtime.platform.process_probe"
+  ],
+  "src/runtime/cli/server/server-tap.cppm": [
+    "telar.runtime.traffic.control_backend"
+  ],
+  "src/runtime/cli/server/server.cppm": [
+    "telar.config.client",
+    "telar.config.runtime",
+    "telar.platform.paths"
+  ],
+  "src/runtime/command_capture/tracker/tracker.cppm": [
+    "telar.platform.events",
+    "telar.runtime.diagnostics.runtime_counters",
+    "telar.runtime.history.command",
+    "telar.runtime.shell_integration.token",
+    "telar.runtime.terminal.text_reader"
+  ],
+  "src/runtime/config/loader/loader.cppm": [
+    "telar.platform.paths"
+  ],
+  "src/runtime/editors/remote_editor/remote_editor.cppm": [
+    "telar.base.editors",
+    "telar.platform.process",
+    "telar.runtime.platform.background_executor",
+    "telar.runtime.transport.connection"
+  ],
+  "src/runtime/exchange_capture/pipeline/pipeline.cppm": [
+    "telar.base.memory.allocators",
+    "telar.base.memory.containers",
+    "telar.runtime.exchange_capture.producer",
+    "telar.runtime.platform.request_worker",
+    "telar.runtime.vocabulary.exchange"
+  ],
+  "src/runtime/exchange_capture/producer/producer.cppm": [
+    "telar.base.memory.allocators",
+    "telar.base.memory.containers",
+    "telar.runtime.http.content",
+    "telar.runtime.vocabulary.exchange"
+  ],
+  "src/runtime/graphics/pane_media/pane_media.cppm": [
+    "telar.runtime.diagnostics.operation",
+    "telar.runtime.diagnostics.runtime_counters",
+    "telar.runtime.graphics.file_input",
+    "telar.runtime.graphics.prepared_images",
+    "telar.runtime.terminal.osc_scanner"
+  ],
+  "src/runtime/graphics/prepared_images/prepared_images.cppm": [
+    "telar.platform.graphics",
+    "telar.runtime.terminal.graphics_storage"
+  ],
+  "src/runtime/graphics/synchronizer/synchronizer.cppm": [
+    "telar.runtime.diagnostics.runtime_counters",
+    "telar.runtime.graphics.pane_media",
+    "telar.runtime.graphics.prepared_images",
+    "telar.runtime.transport.connection"
+  ],
+  "src/runtime/history/command/command.cppm": [
+    "telar.platform.events"
+  ],
+  "src/runtime/history/event/event.cppm": [
+    "telar.runtime.diagnostics.operation",
+    "telar.runtime.history.command",
+    "telar.runtime.transport.connection"
+  ],
+  "src/runtime/history/store/store.cppm": [
+    "telar.base.memory.allocators",
+    "telar.base.memory.containers",
+    "telar.config.runtime",
+    "telar.runtime.history.event",
+    "telar.runtime.platform.background_executor",
+    "telar.runtime.transport.connection"
+  ],
+  "src/runtime/http/content/content.cppm": [
+    "telar.base.memory.allocators",
+    "telar.base.memory.containers",
+    "telar.base.memory.sensitive"
+  ],
+  "src/runtime/http/message/message.cppm": [
+    "telar.base.memory.allocators",
+    "telar.base.memory.sensitive",
+    "telar.runtime.http.content",
+    "telar.runtime.http1.head",
+    "telar.runtime.vocabulary.frames"
+  ],
+  "src/runtime/http2/direction_observer/direction_observer.cppm": [
+    "telar.base.memory.allocators",
+    "telar.base.memory.sensitive",
+    "telar.runtime.http.content",
+    "telar.runtime.http2.frame_reader"
+  ],
+  "src/runtime/metrics/host_sampler/host_sampler.cppm": [
+    "telar.runtime.diagnostics.runtime_counters",
+    "telar.runtime.platform.host_metrics"
+  ],
+  "src/runtime/model/client_layouts/client_layouts.cppm": [
+    "telar.base.diagnostics",
+    "telar.base.memory.allocators",
+    "telar.base.memory.containers",
+    "telar.config.runtime",
+    "telar.platform.process",
+    "telar.runtime.agents.description_generator",
+    "telar.runtime.agents.screen_inference",
+    "telar.runtime.diagnostics.runtime_counters",
+    "telar.runtime.graphics.pane_media",
+    "telar.runtime.graphics.synchronizer",
+    "telar.runtime.model.slot_store",
+    "telar.runtime.observation.processor",
+    "telar.runtime.platform.process_probe",
+    "telar.runtime.shell_integration.git_context",
+    "telar.runtime.terminal.osc_scanner",
+    "telar.runtime.terminal.text_reader",
+    "telar.runtime.transport.connection"
+  ],
+  "src/runtime/model/slot_store/slot_store.cppm": [
+    "telar.runtime.shell_integration.token"
+  ],
+  "src/runtime/observation/processor/processor.cppm": [
+    "telar.config.runtime",
+    "telar.runtime.agents.screen_inference",
+    "telar.runtime.command_capture.tracker",
+    "telar.runtime.diagnostics.runtime_counters",
+    "telar.runtime.history.event",
+    "telar.runtime.platform.process_probe",
+    "telar.runtime.platform.request_worker"
+  ],
+  "src/runtime/paths/query_task/query_task.cppm": [
+    "telar.runtime.transport.connection"
+  ],
+  "src/runtime/persistence/session_store/session_store.cppm": [
+    "telar.platform.process",
+    "telar.runtime.model.client_layouts",
+    "telar.runtime.platform.request_worker"
+  ],
+  "src/runtime/platform/background_executor/background_executor.cppm": [
+    "telar.runtime.platform.process_probe",
+    "telar.runtime.suggestions.engine",
+    "telar.runtime.transport.connection"
+  ],
+  "src/runtime/platform/git_status/git_status.cppm": [
+    "telar.platform.process"
+  ],
+  "src/runtime/platform/name_resolutions/name_resolutions.cppm": [
+    "telar.platform.net",
+    "telar.runtime.platform.signals"
+  ],
+  "src/runtime/platform/process_probe/process_probe.cppm": [
+    "telar.config.runtime",
+    "telar.runtime.platform.session_host"
+  ],
+  "src/runtime/platform/request_worker/request_worker.cppm": [
+    "telar.runtime.diagnostics.operation",
+    "telar.runtime.platform.background_executor",
+    "telar.runtime.platform.signals",
+    "telar.runtime.transport.connection"
+  ],
+  "src/runtime/platform/stream_read_buffer/stream_read_buffer.cppm": [
+    "telar.base.memory.sensitive",
+    "telar.platform.net"
+  ],
+  "src/runtime/plugins/run_worker/run_worker.cppm": [
+    "telar.base.memory.allocators",
+    "telar.base.memory.containers",
+    "telar.base.memory.sensitive",
+    "telar.lua",
+    "telar.runtime.http.message",
+    "telar.runtime.plugins.worker",
+    "telar.runtime.vocabulary.traffic"
+  ],
+  "src/runtime/plugins/service/service.cppm": [
+    "telar.runtime.plugins.worker",
+    "telar.runtime.vocabulary.traffic"
+  ],
+  "src/runtime/plugins/tap_configuration/tap_configuration.cppm": [
+    "telar.config.client",
+    "telar.platform.fs",
+    "telar.platform.paths",
+    "telar.plugins",
+    "telar.runtime.vocabulary.exchange",
+    "telar.runtime.vocabulary.traffic"
+  ],
+  "src/runtime/plugins/worker/worker.cppm": [
+    "telar.base.memory.allocators",
+    "telar.base.memory.containers",
+    "telar.base.memory.sensitive",
+    "telar.platform.error",
+    "telar.platform.net",
+    "telar.platform.process",
+    "telar.plugins",
+    "telar.runtime.platform.signals",
+    "telar.runtime.platform.stream_read_buffer",
+    "telar.runtime.plugins.tap_configuration",
+    "telar.runtime.traffic.control_backend",
+    "telar.runtime.traffic.control_protocol",
+    "telar.runtime.vocabulary.traffic"
+  ],
+  "src/runtime/proxy/authenticate/authenticate.cppm": [
+    "telar.base.memory.allocators",
+    "telar.base.text",
+    "telar.config.runtime"
+  ],
+  "src/runtime/proxy/http2_capture_streams/http2_capture_streams.cppm": [
+    "telar.base.memory.allocators",
+    "telar.base.memory.containers",
+    "telar.base.memory.sensitive",
+    "telar.config.runtime",
+    "telar.runtime.exchange_capture.pipeline",
+    "telar.runtime.exchange_capture.producer",
+    "telar.runtime.http2.direction_observer",
+    "telar.runtime.http2.frame_reader",
+    "telar.runtime.platform.stream_read_buffer",
+    "telar.runtime.proxy.authenticate",
+    "telar.runtime.proxy.relay_direction",
+    "telar.runtime.redirect.ingress",
+    "telar.runtime.tls.interception"
+  ],
+  "src/runtime/proxy/intercepted_relay/intercepted_relay.cppm": [
+    "telar.base.memory.allocators",
+    "telar.base.memory.sensitive",
+    "telar.runtime.http.message",
+    "telar.runtime.http1.head",
+    "telar.runtime.platform.stream_read_buffer",
+    "telar.runtime.traffic.control_protocol"
+  ],
+  "src/runtime/proxy/relay_direction/relay_direction.cppm": [
+    "telar.platform.net",
+    "telar.runtime.platform.name_resolutions"
+  ],
+  "src/runtime/proxy/runtime/runtime.cppm": [
+    "telar.base.memory.allocators",
+    "telar.base.memory.containers",
+    "telar.base.memory.sensitive",
+    "telar.platform.net",
+    "telar.platform.process",
+    "telar.runtime.exchange_capture.pipeline",
+    "telar.runtime.exchange_capture.producer",
+    "telar.runtime.http.message",
+    "telar.runtime.http2.direction_observer",
+    "telar.runtime.http2.frame_reader",
+    "telar.runtime.platform.event_loop",
+    "telar.runtime.platform.stream_read_buffer",
+    "telar.runtime.platform.tunnel_sockets",
+    "telar.runtime.proxy.authenticate",
+    "telar.runtime.proxy.http2_capture_streams",
+    "telar.runtime.proxy.intercepted_relay",
+    "telar.runtime.proxy.relay_direction",
+    "telar.runtime.redirect.ingress",
+    "telar.runtime.tls.interception",
+    "telar.runtime.traffic.control_protocol",
+    "telar.runtime.vocabulary.exchange",
+    "telar.tls"
+  ],
+  "src/runtime/redirect/ingress/ingress.cppm": [
+    "telar.platform.net",
+    "telar.runtime.platform.local_listener",
+    "telar.runtime.platform.name_resolutions",
+    "telar.runtime.platform.private_tunnel"
+  ],
+  "src/runtime/redirect/pf_rules/pf_rules.cppm": [
+    "telar.runtime.redirect.direction",
+    "telar.runtime.redirect.ingress"
+  ],
+  "src/runtime/redirect/record/record.cppm": [
+    "telar.runtime.redirect.pf_rules"
+  ],
+  "src/runtime/redirect/socket_owners/socket_owners.cppm": [
+    "telar.base.memory.allocators",
+    "telar.base.memory.containers",
+    "telar.base.memory.sensitive",
+    "telar.platform.process",
+    "telar.runtime.platform.process_probe",
+    "telar.runtime.redirect.ingress",
+    "telar.runtime.redirect.pf_rules",
+    "telar.runtime.redirect.record"
+  ],
+  "src/runtime/runtime/client_control/client_control.cppm": [
+    "telar.runtime.agents.snapshot",
+    "telar.runtime.metrics.host_sampler",
+    "telar.runtime.model.client_layouts",
+    "telar.runtime.observation.processor",
+    "telar.runtime.platform.process_probe",
+    "telar.runtime.platform.request_worker",
+    "telar.runtime.worktrees.git_probe"
+  ],
+  "src/runtime/runtime/delivery/client_delivery/client_delivery.cppm": [
+    "telar.runtime.editors.remote_editor",
+    "telar.runtime.model.client_layouts"
+  ],
+  "src/runtime/runtime/execution_service/execution_service-execution.cppm": [
+    "telar.base.memory.allocators",
+    "telar.base.memory.containers",
+    "telar.platform.process"
+  ],
+  "src/runtime/runtime/execution_service/execution_service.cppm": [
+    "telar.base.diagnostics",
+    "telar.platform.process",
+    "telar.runtime.model.client_layouts",
+    "telar.runtime.platform.event_loop",
+    "telar.runtime.proxy.runtime",
+    "telar.runtime.shell_integration",
+    "telar.runtime.transport.connection"
+  ],
+  "src/runtime/runtime/media_service/media_service.cppm": [
+    "telar.runtime.agents.description_generator",
+    "telar.runtime.agents.snapshot",
+    "telar.runtime.diagnostics.operation",
+    "telar.runtime.graphics.synchronizer",
+    "telar.runtime.history.event",
+    "telar.runtime.history.store",
+    "telar.runtime.paths.query_task",
+    "telar.runtime.platform.background_executor",
+    "telar.runtime.platform.request_worker",
+    "telar.runtime.runtime.execution_service",
+    "telar.runtime.workspaces.git_probe",
+    "telar.runtime.worktrees.git_probe"
+  ],
+  "src/runtime/runtime/runtime/runtime.cppm": [
+    "telar.config.runtime",
+    "telar.runtime.agents.description_generator",
+    "telar.runtime.agents.screen_inference",
+    "telar.runtime.agents.snapshot",
+    "telar.runtime.model.client_layouts",
+    "telar.runtime.persistence.session_store",
+    "telar.runtime.platform.background_executor",
+    "telar.runtime.platform.local_listener",
+    "telar.runtime.platform.process_probe",
+    "telar.runtime.plugins.service",
+    "telar.runtime.runtime.client_control",
+    "telar.runtime.runtime.execution_service",
+    "telar.runtime.runtime.media_service",
+    "telar.runtime.runtime.runtime_telemetry",
+    "telar.runtime.vocabulary.exchange",
+    "telar.runtime.worktrees.git_probe"
+  ],
+  "src/runtime/runtime/runtime_telemetry/runtime_telemetry.cppm": [
+    "telar.runtime.history.event",
+    "telar.runtime.model.client_layouts",
+    "telar.runtime.platform.request_worker",
+    "telar.runtime.proxy.http2_capture_streams",
+    "telar.runtime.vocabulary.exchange"
+  ],
+  "src/runtime/shell_integration/git_context/git_context.cppm": [
+    "telar.git",
+    "telar.runtime.platform.request_worker",
+    "telar.wire.pane_io"
+  ],
+  "src/runtime/shell_integration/shell_integration.cppm": [
+    "telar.platform.process",
+    "telar.runtime.shell_integration.token"
+  ],
+  "src/runtime/shell_integration/token/token.cppm": [
+    "telar.wire.vocabulary"
+  ],
+  "src/runtime/shell_integration/words/words.cppm": [
+    "telar.git",
+    "telar.runtime.platform.request_worker",
+    "telar.wire.editor",
+    "telar.wire.vocabulary"
+  ],
+  "src/runtime/suggestions/engine/engine.cppm": [
+    "telar.platform.process",
+    "telar.runtime.transport.connection"
+  ],
+  "src/runtime/terminal/control/control.cppm": [
+    "telar.runtime.terminal.ghostty",
+    "telar.runtime.terminal.kitty"
+  ],
+  "src/runtime/terminal/control/engine/engine.cppm": [
+    "telar.runtime.terminal.control.clipboard"
+  ],
+  "src/runtime/terminal/graphics_storage/graphics_storage.cppm": [
+    "telar.runtime.diagnostics.operation"
+  ],
+  "src/runtime/terminal/osc_scanner/osc_scanner.cppm": [
+    "telar.base.memory.allocators"
+  ],
+  "src/runtime/terminal/text_reader/text_reader.cppm": [
+    "telar.base.memory.allocators",
+    "telar.base.memory.containers",
+    "telar.runtime.diagnostics.operation",
+    "telar.runtime.diagnostics.runtime_counters",
+    "telar.runtime.terminal.graphics_storage",
+    "telar.runtime.terminal.osc_scanner"
+  ],
+  "src/runtime/tls/interception/interception.cppm": [
+    "telar.runtime.platform.stream_read_buffer",
+    "telar.runtime.platform.tunnel_sockets",
+    "telar.tls"
+  ],
+  "src/runtime/tls/system_root_bundle/system_root_bundle.cppm": [
+    "telar.base.memory.allocators",
+    "telar.base.memory.containers"
+  ],
+  "src/runtime/traffic/capture/capture.cppm": [
+    "telar.base.memory.allocators",
+    "telar.base.memory.containers",
+    "telar.base.memory.sensitive",
+    "telar.runtime.traffic.control_protocol"
+  ],
+  "src/runtime/traffic/capture_analysis/capture_analysis.cppm": [
+    "telar.base.memory.allocators",
+    "telar.base.memory.sensitive",
+    "telar.runtime.traffic.control_protocol"
+  ],
+  "src/runtime/traffic/control_backend/control_backend.cppm": [
+    "telar.base.memory.allocators",
+    "telar.base.memory.containers",
+    "telar.base.memory.sensitive",
+    "telar.config.runtime",
+    "telar.runtime.platform.local_listener",
+    "telar.runtime.platform.signals",
+    "telar.runtime.redirect.ingress",
+    "telar.runtime.redirect.socket_owners",
+    "telar.runtime.traffic.capture",
+    "telar.runtime.traffic.capture_analysis",
+    "telar.runtime.traffic.control_protocol",
+    "telar.runtime.vocabulary.traffic"
+  ],
+  "src/runtime/traffic/control_protocol/control_protocol.cppm": [
+    "telar.runtime.http.message",
+    "telar.runtime.redirect.direction",
+    "telar.runtime.vocabulary.frames"
+  ],
+  "src/runtime/transport/connection/connection.cppm": [
+    "telar.base.memory.allocators",
+    "telar.base.memory.containers",
+    "telar.client"
+  ],
+  "src/runtime/vocabulary/exchange/exchange.cppm": [
+    "telar.base.memory.allocators",
+    "telar.base.memory.sensitive",
+    "telar.config.runtime"
+  ],
+  "src/runtime/vocabulary/traffic/traffic.cppm": [
+    "telar.plugins",
+    "telar.runtime.vocabulary.exchange",
+    "telar.runtime.vocabulary.frames"
+  ],
+  "src/runtime/workspaces/git_probe/git_probe.cppm": [
+    "telar.runtime.platform.git_status"
+  ],
+  "src/runtime/worktrees/git_probe/git_probe.cppm": [
+    "telar.runtime.platform.git_status"
+  ]
+}
