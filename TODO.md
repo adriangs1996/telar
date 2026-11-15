@@ -752,8 +752,9 @@ Adrian: "Agreguemos también el check de imports sin usar", después de pregunta
 ### [ ] P12.2b · Limpieza de la regla 4 en el runtime
 - **Depende de:** P12.2a. Unas 315 líneas en 72 ficheros.
 
-### [ ] P12.2c · Limpieza de la regla 4 en la GUI
+### [x] P12.2c · Limpieza de la regla 4 en la GUI
 - **Depende de:** P12.2a. Unas 180 líneas en 62 ficheros.
+- **Resultado:** `dbf9b0cda`. Los 196 `export import` de `src/gui` (62 interfaces y 9 fixtures de `src/gui/tests`) pasan a `import`; 83 imports nuevos en 53 ficheros, pedidos por el compilador salvo cinco puestos a mano porque el error no nombraba el módulo (`qt/configuration_loader.hpp`, `tests/agent_peek_test.cpp`, y tres `.cpp` de `qt/` sin bloque de imports). La GUI compila en Debug y en Release con `gui-probes` y pasan sus 138 tests; tbc 17. Los tres binarios Release son idénticos byte a byte a la base `198e5a5d1`. Integrada sobre P12.2d (`4527232c6`): `reexports.json` queda en 338 (el runtime y sus fixtures) y `unused-imports.json`, regenerado, en 576.
 
 ### [x] P12.2d · Limpieza de la regla 4 en la CLI
 - **Depende de:** P12.2a. Unas 33 líneas en 16 ficheros.
