@@ -8,6 +8,7 @@ module telar.lua;
 import std;
 import telar.tbc;
 import telar.sys.posix;
+import telar.base.text.utf8;
 
 // The parentheses keep each name from expanding as the macro the body calls.
 void(lua_call)(lua_State* state, int arguments, int results) {

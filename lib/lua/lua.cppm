@@ -13,7 +13,6 @@ import telar.base.text.json;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.base.text;
-import telar.base.text.utf8;
 import telar.sys.posix;
 
 // Interface: telar_lua/vm.cppm

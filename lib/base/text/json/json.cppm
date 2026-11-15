@@ -6,7 +6,6 @@ export module telar.base.text.json;
 import std;
 import telar.tbc;
 import telar.base.memory.allocators;
-import telar.base.text.utf8;
 
 // Interface: telar_base/text/json_error.cppm
 export {

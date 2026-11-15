@@ -1,31 +1,4 @@
 {
-  "lib/base/text/json/json.cppm": [
-    "telar.base.text.utf8"
-  ],
-  "lib/base/text/text.cppm": [
-    "telar.base.diagnostics"
-  ],
-  "lib/client/client.cppm": [
-    "telar.base.diagnostics"
-  ],
-  "lib/config/client/client.cppm": [
-    "telar.wire.clients"
-  ],
-  "lib/config/core/core.cppm": [
-    "telar.base.text.utf8"
-  ],
-  "lib/config/runtime/runtime.cppm": [
-    "telar.base.diagnostics"
-  ],
-  "lib/git/git-config.cppm": [
-    ":format"
-  ],
-  "lib/lua/lua.cppm": [
-    "telar.base.text.utf8"
-  ],
-  "lib/machines/machines.cppm": [
-    "telar.base.text.utf8"
-  ],
   "lib/platform/daemon/daemon.cppm": [
     "telar.platform.error"
   ],
@@ -46,9 +19,6 @@
     "telar.base.text.utf8",
     "telar.platform.error",
     "telar.platform.primitives"
-  ],
-  "lib/render/document/document.cppm": [
-    "telar.base.text.utf8"
   ],
   "lib/tls/tls.cppm": [
     "telar.base.diagnostics",

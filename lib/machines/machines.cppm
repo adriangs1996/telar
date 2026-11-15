@@ -11,7 +11,6 @@ import telar.base.text.json;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.base.text;
-import telar.base.text.utf8;
 import telar.client;
 import telar.sys.posix;
 

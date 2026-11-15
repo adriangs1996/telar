@@ -8,7 +8,6 @@ import telar.tbc;
 import telar.config.core;
 import telar.plugins;
 import telar.platform.events;
-import telar.base.diagnostics;
 import telar.base.text;
 import telar.wire.vocabulary;
 import telar.sys.posix;
