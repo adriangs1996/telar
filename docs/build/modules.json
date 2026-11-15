@@ -751,6 +751,7 @@
     "lib/platform/include/telar_platform/trace_macro.hpp",
     "lib/tbc/include/tbc/annotations.hpp"
   ],
+  "implicit_uses": [],
   "implementations": {
     "lib/wire/agents/agents.cpp": "telar.wire.agents",
     "lib/wire/clients/clients.cpp": "telar.wire.clients",
