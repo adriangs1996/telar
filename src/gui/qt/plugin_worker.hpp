@@ -61,6 +61,8 @@ static_assert(true);
 import telar.gui.config.plugin_effects;
 import telar.platform.fs;
 import telar.plugins;
+import telar.gui.input.binding_effects;
+import telar.config.client;
 
 namespace telar::gui::qt {
 

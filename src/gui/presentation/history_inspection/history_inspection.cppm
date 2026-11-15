@@ -6,16 +6,16 @@ export module telar.gui.presentation.history_inspection;
 import std;
 import telar.tbc;
 
-export import telar.gui.core.unicode_scalar;
-export import telar.gui.core.metrics;
-export import telar.gui.text.json_unsigned_integer;
+import telar.gui.core.unicode_scalar;
+import telar.gui.core.metrics;
+import telar.gui.text.json_unsigned_integer;
 
-export import telar.gui.history.browser;
+import telar.gui.history.browser;
 
-export import telar.gui.text.bounded_editor;
+import telar.gui.text.bounded_editor;
 
-export import telar.gui.input.copy_pointer;
-export import telar.gui.input.key_encoder;
+import telar.gui.input.copy_pointer;
+import telar.gui.input.key_encoder;
 import telar.gui.core.primitives;
 import telar.wire.vocabulary;
 

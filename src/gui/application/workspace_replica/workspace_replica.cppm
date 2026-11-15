@@ -3,8 +3,8 @@ export module telar.gui.application.workspace_replica;
 import std;
 import telar.tbc;
 
-export import telar.gui.graphics.texture_cache;
-export import telar.render.document;
+import telar.gui.graphics.texture_cache;
+import telar.render.document;
 import telar.base.diagnostics;
 import telar.gui.core.primitives;
 import telar.gui.core.unicode_scalar;
@@ -19,6 +19,7 @@ import telar.wire.pane_io;
 import telar.wire.vocabulary;
 export import :fold_map;
 import telar.base.memory.allocators;
+import telar.gui.model.records;
 
 // Interface: application/records.cppm
 export {

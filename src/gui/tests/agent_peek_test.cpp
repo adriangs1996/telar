@@ -64,6 +64,7 @@ import telar.wire.content;
 import telar.wire.layout;
 import telar.wire.runtime;
 import telar.wire.worktrees;
+import telar.gui.application.host_effects;
 
 namespace {
 

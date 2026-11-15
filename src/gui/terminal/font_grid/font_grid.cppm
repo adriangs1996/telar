@@ -2,7 +2,7 @@ export module telar.gui.terminal.font_grid;
 
 import std;
 
-export import telar.gui.core.metrics;
+import telar.gui.core.metrics;
 import telar.base.memory.allocators;
 import telar.gui.core.primitives;
 import telar.gui.terminal.screen;

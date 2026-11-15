@@ -6,7 +6,7 @@ export module telar.gui.text.json_unsigned_integer;
 import std;
 import telar.tbc;
 
-export import telar.machines;
+import telar.machines;
 
 import telar.gui.core.primitives;
 import telar.gui.text.bounded_editor;

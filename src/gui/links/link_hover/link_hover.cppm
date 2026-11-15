@@ -2,12 +2,12 @@ export module telar.gui.links.link_hover;
 
 import std;
 
-export import telar.gui.core.metrics;
-export import telar.gui.links.cell_links;
+import telar.gui.core.metrics;
+import telar.gui.links.cell_links;
 
-export import telar.gui.core.unicode_scalar;
+import telar.gui.core.unicode_scalar;
 
-export import telar.gui.links.path_expansion;
+import telar.gui.links.path_expansion;
 import telar.base.diagnostics;
 import telar.gui.core.primitives;
 import telar.gui.terminal.screen;

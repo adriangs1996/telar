@@ -1,6 +1,7 @@
 module telar.gui.application.session;
 
 import std;
+import telar.ebnf.matcher;
 
 namespace telar::gui {
 

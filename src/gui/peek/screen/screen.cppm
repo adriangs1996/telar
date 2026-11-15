@@ -2,9 +2,9 @@ export module telar.gui.peek.screen;
 
 import std;
 
-export import telar.gui.suggestions.state;
+import telar.gui.suggestions.state;
 
-export import telar.gui.palette.navigation_label;
+import telar.gui.palette.navigation_label;
 import telar.base.memory.allocators;
 import telar.wire.content;
 import telar.wire.vocabulary;

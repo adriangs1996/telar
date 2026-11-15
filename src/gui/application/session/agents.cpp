@@ -1,6 +1,7 @@
 module telar.gui.application.session;
 
 import std;
+import telar.gui.text.notification_payload;
 
 namespace telar::gui {
 

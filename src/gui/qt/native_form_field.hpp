@@ -39,6 +39,7 @@ static_assert(true);
 
 import telar.gui.presentation.form_field_geometry;
 import telar.gui.text.bounded_editor;
+import telar.gui.terminal.font_grid;
 
 namespace telar::gui::qt {
 

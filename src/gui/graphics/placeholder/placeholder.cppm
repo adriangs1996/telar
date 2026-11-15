@@ -5,7 +5,7 @@ export module telar.gui.graphics.placeholder;
 
 import std;
 
-export import telar.gui.core.metrics;
+import telar.gui.core.metrics;
 
 import telar.gui.core.primitives;
 import telar.gui.terminal.screen;

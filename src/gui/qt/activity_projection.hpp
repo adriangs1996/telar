@@ -39,6 +39,7 @@ static_assert(true);
 import telar.gui.application.workspace_replica;
 import telar.gui.core.metrics;
 import telar.gui.presentation.activity_order;
+import telar.gui.model.replicas;
 
 namespace telar::gui::qt {
 

@@ -56,6 +56,7 @@ import telar.gui.core.metrics;
 import telar.gui.presentation.tab_drop;
 import telar.gui.presentation.activity_order;
 import telar.gui.presentation.frame_pacer;
+import telar.gui.layout.geometry;
 
 namespace telar::gui::qt {
 

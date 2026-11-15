@@ -13,6 +13,7 @@ import telar.gui.layout.snapshots;
 import telar.gui.core.unicode_scalar;
 import telar.wire.layout;
 import telar.wire.vocabulary;
+import telar.gui.layout.geometry;
 
 namespace {
 

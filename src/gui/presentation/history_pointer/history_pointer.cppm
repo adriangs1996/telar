@@ -2,10 +2,10 @@ export module telar.gui.presentation.history_pointer;
 
 import std;
 
-export import telar.gui.core.metrics;
-export import telar.gui.history.browser;
-export import telar.gui.presentation.history_filter_geometry;
-export import telar.gui.presentation.history_meta_geometry;
+import telar.gui.core.metrics;
+import telar.gui.history.browser;
+import telar.gui.presentation.history_filter_geometry;
+import telar.gui.presentation.history_meta_geometry;
 
 // Interface: input/history_action_capture.cppm
 export {

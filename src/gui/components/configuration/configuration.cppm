@@ -5,19 +5,20 @@ export module telar.gui.components.configuration;
 
 import std;
 
-export import telar.gui.core.metrics;
-export import telar.gui.input.copy_pointer;
-export import telar.config.client;
+import telar.gui.core.metrics;
+import telar.gui.input.copy_pointer;
+import telar.config.client;
 
-export import telar.lua;
+import telar.lua;
 
-export import telar.base.memory.containers;
+import telar.base.memory.containers;
 import telar.base.diagnostics;
 import telar.base.text;
 import telar.base.text.utf8;
 import telar.gui.presentation.history_filter_geometry;
 import telar.wire.vocabulary;
 import telar.config.core;
+import telar.gui.core.json_writer;
 
 // Interface: components/node.cppm
 export {

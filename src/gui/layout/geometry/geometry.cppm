@@ -2,8 +2,8 @@ export module telar.gui.layout.geometry;
 
 import std;
 
-export import telar.gui.core.metrics;
-export import telar.gui.core.unicode_scalar;
+import telar.gui.core.metrics;
+import telar.gui.core.unicode_scalar;
 import telar.wire.layout;
 import telar.wire.vocabulary;
 import telar.gui.core.primitives;

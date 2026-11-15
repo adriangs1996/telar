@@ -13,8 +13,9 @@ import telar.gui.core.primitives;
 import telar.gui.input.copy_pointer;
 import telar.platform.primitives;
 import telar.plugins;
-export import telar.gui.config.plugin_effects;
-export import telar.wire.vocabulary;
+import telar.gui.config.plugin_effects;
+import telar.wire.vocabulary;
+import telar.gui.input.binding_effects;
 
 export {
   namespace telar::gui::test {

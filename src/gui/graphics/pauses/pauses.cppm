@@ -5,7 +5,7 @@ export module telar.gui.graphics.pauses;
 
 import std;
 
-export import telar.gui.layout.geometry;
+import telar.gui.layout.geometry;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 

@@ -3,9 +3,9 @@ export module telar.gui.links.cell_links;
 import std;
 import telar.tbc;
 
-export import telar.gui.links.path_expansion;
+import telar.gui.links.path_expansion;
 
-export import telar.gui.text.json_unsigned_integer;
+import telar.gui.text.json_unsigned_integer;
 import telar.base.diagnostics;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;

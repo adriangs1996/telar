@@ -2,8 +2,8 @@ export module telar.gui.prompt.completion;
 
 import std;
 
-export import telar.shell.syntax;
-export import telar.ebnf.matcher;
+import telar.shell.syntax;
+import telar.ebnf.matcher;
 
 // Tab completion for telar's command editor: the shell lexer finds the command and the word
 // under the cursor, and the command's EBNF spec says what may come there. Literal choices are

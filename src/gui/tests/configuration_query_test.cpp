@@ -63,6 +63,8 @@ import telar.gui.core.metrics;
 import telar.gui.core.json_writer;
 import telar.gui.input.copy_pointer;
 import telar.base.text.json;
+import telar.gui.input.configuration;
+import telar.gui.input.key_encoder;
 
 namespace {
 

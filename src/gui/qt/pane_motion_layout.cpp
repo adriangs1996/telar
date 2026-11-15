@@ -8,6 +8,8 @@
 #include <array>
 #include <cstddef>
 
+import telar.gui.layout.geometry;
+
 namespace telar::gui::qt {
 
   PaneMotionLayout::PaneMotionLayout(QQuickItem* parent)

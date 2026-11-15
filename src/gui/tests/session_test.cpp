@@ -67,6 +67,7 @@ import telar.wire.clipboard;
 import telar.wire.history;
 import telar.wire.layout;
 import telar.wire.runtime;
+import telar.gui.layout.geometry;
 
 namespace {
 

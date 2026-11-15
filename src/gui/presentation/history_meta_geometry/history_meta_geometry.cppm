@@ -6,11 +6,11 @@ export module telar.gui.presentation.history_meta_geometry;
 import std;
 import telar.tbc;
 
-export import telar.gui.core.metrics;
+import telar.gui.core.metrics;
 
-export import telar.gui.presentation.history_filter_geometry;
+import telar.gui.presentation.history_filter_geometry;
 
-export import telar.gui.text.json_unsigned_integer;
+import telar.gui.text.json_unsigned_integer;
 import telar.base.memory.containers;
 import telar.gui.core.primitives;
 import telar.wire.vocabulary;

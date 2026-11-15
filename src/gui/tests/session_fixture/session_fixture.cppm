@@ -6,9 +6,9 @@ module;
 export module telar.gui.tests.session_fixture;
 
 import std;
-export import telar.base.memory.allocators;
-export import telar.gui.application.host_effects;
-export import telar.gui.application.session;
+import telar.base.memory.allocators;
+import telar.gui.application.host_effects;
+import telar.gui.application.session;
 import telar.wire.clients;
 import telar.wire.clipboard;
 import telar.wire.editor;
@@ -17,7 +17,8 @@ import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.worktrees;
-export import telar.wire.vocabulary;
+import telar.wire.vocabulary;
+import telar.gui.platform.awake_clock;
 
 export {
   namespace telar::gui::test {

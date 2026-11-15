@@ -6,11 +6,11 @@ export module telar.gui.presentation.form_field_geometry;
 import std;
 import telar.tbc;
 
-export import telar.gui.core.metrics;
-export import telar.gui.terminal.font_grid;
-export import telar.gui.text.bounded_editor;
+import telar.gui.core.metrics;
+import telar.gui.terminal.font_grid;
+import telar.gui.text.bounded_editor;
 
-export import telar.gui.core.unicode_scalar;
+import telar.gui.core.unicode_scalar;
 import telar.base.diagnostics;
 import telar.base.text;
 import telar.gui.core.primitives;

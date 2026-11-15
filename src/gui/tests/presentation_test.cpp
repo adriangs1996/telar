@@ -20,6 +20,8 @@ import telar.gui.presentation.history_inspection;
 import telar.gui.presentation.frame_pacer;
 import telar.gui.presentation.application_mark;
 import telar.gui.presentation.notification_stack;
+import telar.gui.layout.geometry;
+import telar.gui.core.unicode_scalar;
 
 namespace {
 

@@ -5,9 +5,10 @@ export module telar.gui.prompt.line;
 
 import std;
 
-export import telar.gui.prompt.editor;
-export import telar.gui.prompt.routing;
-export import telar.gui.prompt.completion;
+import telar.gui.prompt.editor;
+import telar.gui.prompt.routing;
+import telar.gui.prompt.completion;
+import telar.shell.syntax;
 
 // One pane's command editor: the line being written or queued, the commands sent from it, and
 // what the owner must do next. It knows nothing of Qt or the transport, so tests drive it as the

@@ -3,15 +3,16 @@ export module telar.gui.presentation.activity_order;
 import std;
 import telar.tbc;
 
-export import telar.gui.presentation.application_mark;
-export import telar.gui.model.replicas;
+import telar.gui.presentation.application_mark;
+import telar.gui.model.replicas;
 
-export import telar.gui.core.metrics;
-export import telar.gui.text.json_unsigned_integer;
+import telar.gui.core.metrics;
+import telar.gui.text.json_unsigned_integer;
 import telar.base.memory.allocators;
 import telar.gui.core.primitives;
 import telar.gui.terminal.screen;
 import telar.wire.vocabulary;
+import telar.gui.model.records;
 
 // Interface: presentation/agent_order.cppm
 export {

@@ -6,6 +6,7 @@ import telar.base.memory.allocators;
 import telar.gui.terminal.glyphs;
 import telar.gui.terminal.screen;
 import telar.wire.vocabulary;
+import telar.gui.core.metrics;
 
 namespace telar::gui {
 

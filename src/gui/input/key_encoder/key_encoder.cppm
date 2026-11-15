@@ -5,11 +5,11 @@ export module telar.gui.input.key_encoder;
 
 import std;
 
-export import telar.config.client;
+import telar.config.client;
 
-export import telar.gui.core.unicode_scalar;
+import telar.gui.core.unicode_scalar;
 
-export import telar.gui.text.json_unsigned_integer;
+import telar.gui.text.json_unsigned_integer;
 import telar.base.diagnostics;
 import telar.base.text;
 import telar.wire.vocabulary;

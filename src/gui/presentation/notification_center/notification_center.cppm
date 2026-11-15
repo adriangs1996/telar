@@ -6,8 +6,8 @@ export module telar.gui.presentation.notification_center;
 import std;
 import telar.tbc;
 
-export import telar.gui.model.records;
-export import telar.gui.text.json_unsigned_integer;
+import telar.gui.model.records;
+import telar.gui.text.json_unsigned_integer;
 import telar.base.diagnostics;
 import telar.base.memory.containers;
 import telar.base.text.utf8;

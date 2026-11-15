@@ -2,9 +2,9 @@ export module telar.gui.input.binding_effects;
 
 import std;
 
-export import telar.config.client;
-export import telar.gui.input.copy_pointer;
-export import telar.gui.input.key_encoder;
+import telar.config.client;
+import telar.gui.input.copy_pointer;
+import telar.gui.input.key_encoder;
 import telar.base.memory.containers;
 import telar.wire.vocabulary;
 

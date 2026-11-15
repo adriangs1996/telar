@@ -5,7 +5,7 @@ export module telar.gui.machines.discovery;
 
 import std;
 
-export import telar.machines;
+import telar.machines;
 
 import telar.platform.paths;
 

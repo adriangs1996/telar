@@ -5,7 +5,7 @@ export module telar.gui.palette.navigation_label;
 
 import std;
 
-export import telar.gui.text.json_unsigned_integer;
+import telar.gui.text.json_unsigned_integer;
 
 import telar.base.history;
 import telar.wire.vocabulary;

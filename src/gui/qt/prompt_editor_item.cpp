@@ -15,6 +15,8 @@ static_assert(true);
 #include <algorithm>
 #include <exception>
 
+import telar.shell.syntax;
+
 namespace telar::gui::qt {
 
   // How long a typed character takes to rise into place, and a completed one to sweep in; a

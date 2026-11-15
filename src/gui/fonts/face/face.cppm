@@ -9,7 +9,7 @@ export module telar.gui.fonts.face;
 import std;
 import telar.tbc;
 
-export import telar.gui.terminal.font_grid;
+import telar.gui.terminal.font_grid;
 import telar.base.diagnostics;
 export import :views;
 

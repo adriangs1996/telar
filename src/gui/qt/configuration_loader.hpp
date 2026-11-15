@@ -46,6 +46,8 @@ import telar.gui.core.metrics;
 import telar.gui.platform.file_stamp;
 import telar.gui.platform.private_file_stamp;
 import telar.plugins;
+import telar.gui.components.configuration;
+import telar.config.client;
 
 namespace telar::gui {
 

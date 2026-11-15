@@ -4,7 +4,7 @@ module;
 export module telar.gui.tests.agent_fixture;
 
 import std;
-export import telar.wire.vocabulary;
+import telar.wire.vocabulary;
 
 export {
   namespace telar::gui::test {

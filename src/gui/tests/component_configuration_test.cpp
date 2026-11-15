@@ -61,6 +61,8 @@ import telar.gui.input.copy_pointer;
 import telar.gui.presentation.history_filter_geometry;
 
 import telar.gui.config.gui_query;
+import telar.gui.core.json_writer;
+import telar.gui.input.binding_effects;
 
 namespace {
 

@@ -3,15 +3,15 @@ export module telar.gui.components.builtin_content;
 import std;
 import telar.tbc;
 
-export import telar.gui.components.configuration;
+import telar.gui.components.configuration;
 
-export import telar.gui.input.binding_effects;
+import telar.gui.input.binding_effects;
 
-export import telar.gui.text.json_unsigned_integer;
+import telar.gui.text.json_unsigned_integer;
 
-export import telar.config.client;
+import telar.config.client;
 
-export import telar.lua;
+import telar.lua;
 
 import telar.base.diagnostics;
 import telar.base.history;
@@ -20,6 +20,8 @@ import telar.gui.core.json_writer;
 import telar.wire.vocabulary;
 import telar.base.memory.allocators;
 import telar.config.core;
+import telar.gui.input.copy_pointer;
+import telar.gui.core.metrics;
 
 // Interface: components/builtin_content.cppm
 export {

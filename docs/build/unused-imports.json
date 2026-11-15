@@ -241,9 +241,16 @@
     "telar.wire.pane_io",
     "telar.wire.runtime"
   ],
+  "src/gui/application/host_effects/host_effects.cppm": [
+    "telar.gui.presentation.display_metrics"
+  ],
   "src/gui/application/session/session.cppm": [
     "telar.base.text.utf8",
+    "telar.gui.input.configuration",
     "telar.gui.input.wheel_accumulator",
+    "telar.gui.presentation.activity_order",
+    "telar.gui.presentation.frame_pacer",
+    "telar.gui.presentation.notification_stack",
     "telar.gui.terminal.row_cache",
     "telar.gui.terminal.screen",
     "telar.platform.events"
@@ -251,7 +258,10 @@
   "src/gui/application/workspace_replica/workspace_replica.cppm": [
     "telar.base.diagnostics",
     "telar.gui.core.unicode_scalar",
+    "telar.gui.layout.geometry",
+    "telar.gui.model.replicas",
     "telar.gui.presentation.application_mark",
+    "telar.gui.presentation.notification_center",
     "telar.gui.text.json_unsigned_integer"
   ],
   "src/gui/components/builtin_content/builtin_content.cppm": [
@@ -266,17 +276,23 @@
   ],
   "src/gui/config/generation/generation.cppm": [
     "telar.base.diagnostics",
-    "telar.config.snapshot"
+    "telar.config.snapshot",
+    "telar.gui.config.gui_query",
+    "telar.gui.config.plugin_effects"
   ],
   "src/gui/config/gui_query/gui_query.cppm": [
-    "telar.base.diagnostics"
+    "telar.base.diagnostics",
+    "telar.gui.input.key_encoder"
   ],
   "src/gui/config/plugin_effects/plugin_effects.cppm": [
     "telar.base.diagnostics",
+    "telar.gui.config.plugin_query",
+    "telar.gui.input.key_encoder",
     "telar.platform.primitives"
   ],
   "src/gui/config/plugin_query/plugin_query.cppm": [
     "telar.base.diagnostics",
+    "telar.gui.config.gui_query",
     "telar.gui.core.unicode_scalar"
   ],
   "src/gui/core/json_writer/json_writer.cppm": [
@@ -284,6 +300,9 @@
   ],
   "src/gui/core/metrics/metrics.cppm": [
     "telar.base.diagnostics"
+  ],
+  "src/gui/fonts/face/face-views.cppm": [
+    "telar.gui.terminal.font_grid"
   ],
   "src/gui/fonts/face/face.cpp": [
     "telar.base.diagnostics"
@@ -296,6 +315,7 @@
   ],
   "src/gui/fonts/row_text_layout/row_text_layout.cpp": [
     "telar.base.diagnostics",
+    "telar.gui.fonts.font_requests",
     "telar.gui.terminal.glyphs",
     "telar.tbc",
     "telar.wire.vocabulary"
@@ -357,7 +377,8 @@
     "telar.base.history"
   ],
   "src/gui/machines/profile_store/profile_store.cppm": [
-    "telar.base.diagnostics"
+    "telar.base.diagnostics",
+    "telar.gui.text.json_unsigned_integer"
   ],
   "src/gui/model/records/records.cpp": [
     "telar.base.memory.containers",
@@ -451,7 +472,8 @@
     "telar.gui.terminal.screen"
   ],
   "src/gui/presentation/suggestion_geometry/suggestion_geometry.cpp": [
-    "telar.gui.core.primitives"
+    "telar.gui.core.primitives",
+    "telar.gui.machines.discovery"
   ],
   "src/gui/presentation/suggestion_geometry/suggestion_geometry.cppm": [
     "telar.gui.core.primitives",
@@ -462,7 +484,38 @@
   ],
   "src/gui/presentation/suggestion_labels/suggestion_labels.cppm": [
     "telar.base.diagnostics",
+    "telar.gui.presentation.activity_order",
     "telar.gui.presentation.application_mark"
+  ],
+  "src/gui/qt/activity_projection.hpp": [
+    "telar.gui.application.workspace_replica"
+  ],
+  "src/gui/qt/agent_projection.hpp": [
+    "telar.gui.application.workspace_replica"
+  ],
+  "src/gui/qt/application.hpp": [
+    "telar.gui.config.plugin_query"
+  ],
+  "src/gui/qt/attachment_controller.cpp": [
+    "telar.gui.presentation.display_metrics"
+  ],
+  "src/gui/qt/binding_controller.cpp": [
+    "telar.gui.config.plugin_effects",
+    "telar.gui.config.plugin_query"
+  ],
+  "src/gui/qt/chrome_controller.cpp": [
+    "telar.gui.application.workspace_replica"
+  ],
+  "src/gui/qt/component_controller.cpp": [
+    "telar.gui.application.host_effects",
+    "telar.gui.application.workspace_replica",
+    "telar.gui.config.plugin_query"
+  ],
+  "src/gui/qt/component_projection.hpp": [
+    "telar.gui.config.plugin_query"
+  ],
+  "src/gui/qt/deadline_timer.hpp": [
+    "telar.gui.application.workspace_replica"
   ],
   "src/gui/qt/history_footer_layout.cpp": [
     "telar.gui.history.browser"
@@ -470,8 +523,28 @@
   "src/gui/qt/history_inspection_layout.cpp": [
     "telar.gui.history.browser"
   ],
+  "src/gui/qt/key_bindings.cpp": [
+    "telar.gui.config.gui_query"
+  ],
+  "src/gui/qt/key_bindings.hpp": [
+    "telar.gui.config.gui_query"
+  ],
+  "src/gui/qt/link_status_controller.cpp": [
+    "telar.gui.presentation.display_metrics",
+    "telar.gui.transport.runtime_link"
+  ],
+  "src/gui/qt/machine_activity_controller.cpp": [
+    "telar.gui.application.workspace_replica"
+  ],
+  "src/gui/qt/machine_chrome_layout.cpp": [
+    "telar.gui.application.workspace_replica",
+    "telar.gui.presentation.display_metrics"
+  ],
   "src/gui/qt/machine_client.hpp": [
     "telar.gui.platform.awake_clock"
+  ],
+  "src/gui/qt/machine_controller.cpp": [
+    "telar.gui.application.host_effects"
   ],
   "src/gui/qt/machine_profile_controller.cpp": [
     "telar.gui.platform.login_shell"
@@ -479,17 +552,51 @@
   "src/gui/qt/modal_reveal_layout.cpp": [
     "telar.gui.presentation.suggestion_labels"
   ],
+  "src/gui/qt/mode_projection.hpp": [
+    "telar.gui.input.key_encoder"
+  ],
   "src/gui/qt/native_agent_status.cpp": [
     "telar.gui.presentation.application_mark"
   ],
+  "src/gui/qt/notification_controller.cpp": [
+    "telar.gui.application.workspace_replica"
+  ],
+  "src/gui/qt/notification_layout.cpp": [
+    "telar.gui.application.workspace_replica"
+  ],
+  "src/gui/qt/notification_layout.hpp": [
+    "telar.gui.application.workspace_replica"
+  ],
+  "src/gui/qt/pane_projection.hpp": [
+    "telar.gui.presentation.history_inspection"
+  ],
+  "src/gui/qt/path_picker_controller.cpp": [
+    "telar.gui.presentation.form_field_geometry"
+  ],
+  "src/gui/qt/plugin_controller.cpp": [
+    "telar.gui.application.workspace_replica",
+    "telar.gui.config.plugin_query"
+  ],
+  "src/gui/qt/pointer_dispatcher.cpp": [
+    "telar.gui.links.link_hover"
+  ],
   "src/gui/qt/project_projection.hpp": [
     "telar.gui.application.workspace_replica"
+  ],
+  "src/gui/qt/sidebar_projection.hpp": [
+    "telar.gui.presentation.notification_stack"
+  ],
+  "src/gui/qt/terminal_item.hpp": [
+    "telar.gui.input.configuration"
   ],
   "src/gui/suggestions/state/state.cpp": [
     "telar.base.diagnostics"
   ],
   "src/gui/terminal/font_grid/font_grid.cpp": [
     "telar.base.diagnostics"
+  ],
+  "src/gui/terminal/glyphs/curve_cache/curve_cache.cpp": [
+    "telar.gui.terminal.font_grid"
   ],
   "src/gui/tests/font_fixture/font_fixture.cppm": [
     "telar.platform.primitives"
@@ -503,6 +610,9 @@
   "src/gui/tests/plugin_effect_cases/plugin_effect_cases.cppm": [
     "telar.gui.core.primitives",
     "telar.platform.primitives"
+  ],
+  "src/gui/tests/quick_test.cpp": [
+    "telar.gui.config.plugin_query"
   ],
   "src/gui/text/json_unsigned_integer/json_unsigned_integer.cppm": [
     "telar.gui.core.primitives",

@@ -5,13 +5,13 @@ export module telar.gui.transport.runtime_link;
 
 import std;
 
-export import telar.client;
+import telar.client;
 
-export import telar.gui.machines.discovery;
+import telar.gui.machines.discovery;
 
-export import telar.gui.text.json_unsigned_integer;
+import telar.gui.text.json_unsigned_integer;
 
-export import telar.gui.machines.picker;
+import telar.gui.machines.picker;
 import telar.base.diagnostics;
 import telar.base.memory.allocators;
 import telar.gui.core.primitives;

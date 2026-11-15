@@ -2,7 +2,7 @@ export module telar.gui.prompt.layout;
 
 import std;
 
-export import telar.shell.syntax;
+import telar.shell.syntax;
 
 // Places the command on the line's cell grid: runs of one style per row, wrapping at the
 // line's width so nothing is ever cut, and where the caret and the selection fall. Pure, so

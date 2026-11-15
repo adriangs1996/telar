@@ -5,7 +5,7 @@ export module telar.gui.fonts.face:views;
 
 import std;
 
-export import telar.gui.terminal.font_grid;
+import telar.gui.terminal.font_grid;
 
 // Interface: fonts/font_role.cppm
 export {

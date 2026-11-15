@@ -6,15 +6,16 @@ export module telar.gui.presentation.notification_stack;
 import std;
 import telar.tbc;
 
-export import telar.gui.text.json_unsigned_integer;
+import telar.gui.text.json_unsigned_integer;
 
-export import telar.gui.presentation.notification_center;
+import telar.gui.presentation.notification_center;
 
-export import telar.gui.core.metrics;
+import telar.gui.core.metrics;
 import telar.base.memory.allocators;
 import telar.gui.core.primitives;
 import telar.gui.terminal.screen;
 import telar.wire.vocabulary;
+import telar.gui.model.records;
 
 // Interface: presentation/agent_card_labels.cppm
 export {
