@@ -19,7 +19,6 @@ import telar.base.memory.allocators;
 import telar.gui.fonts.face;
 import telar.gui.fonts.font_requests;
 import telar.platform.fs;
-import telar.platform.primitives;
 
 export {
   namespace telar::gui::test {

@@ -235,41 +235,6 @@
     "telar.wire.pane_io",
     "telar.wire.runtime"
   ],
-  "src/gui/suggestions/state/state.cpp": [
-    "telar.base.diagnostics"
-  ],
-  "src/gui/terminal/font_grid/font_grid.cpp": [
-    "telar.base.diagnostics"
-  ],
-  "src/gui/terminal/glyphs/curve_cache/curve_cache.cpp": [
-    "telar.gui.terminal.font_grid"
-  ],
-  "src/gui/tests/font_fixture/font_fixture.cppm": [
-    "telar.platform.primitives"
-  ],
-  "src/gui/tests/machine_profile_store_test.cpp": [
-    "telar.client"
-  ],
-  "src/gui/tests/plugin_catalog_cases/plugin_catalog_cases.cppm": [
-    "telar.gui.core.primitives"
-  ],
-  "src/gui/tests/plugin_effect_cases/plugin_effect_cases.cppm": [
-    "telar.gui.core.primitives",
-    "telar.platform.primitives"
-  ],
-  "src/gui/tests/quick_test.cpp": [
-    "telar.gui.config.plugin_query"
-  ],
-  "src/gui/text/json_unsigned_integer/json_unsigned_integer.cppm": [
-    "telar.gui.core.primitives",
-    "telar.gui.text.bounded_editor"
-  ],
-  "src/gui/text/notification_payload/notification_payload.cppm": [
-    "telar.gui.text.json_unsigned_integer"
-  ],
-  "src/gui/transport/runtime_link/runtime_link.cppm": [
-    "telar.base.diagnostics"
-  ],
   "src/runtime/agents/description_generator/description_generator.cppm": [
     "telar.base.diagnostics",
     "telar.base.text",

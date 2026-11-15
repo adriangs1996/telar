@@ -9,9 +9,7 @@ module;
 export module telar.gui.tests.plugin_effect_cases;
 
 import std;
-import telar.gui.core.primitives;
 import telar.gui.input.copy_pointer;
-import telar.platform.primitives;
 import telar.plugins;
 import telar.gui.config.plugin_effects;
 import telar.wire.vocabulary;

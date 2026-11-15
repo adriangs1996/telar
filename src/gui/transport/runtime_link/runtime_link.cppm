@@ -12,7 +12,6 @@ import telar.gui.machines.discovery;
 import telar.gui.text.json_unsigned_integer;
 
 import telar.gui.machines.picker;
-import telar.base.diagnostics;
 import telar.base.memory.allocators;
 import telar.gui.core.primitives;
 import telar.wire.vocabulary;

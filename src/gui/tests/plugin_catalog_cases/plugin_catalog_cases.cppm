@@ -9,7 +9,6 @@ export module telar.gui.tests.plugin_catalog_cases;
 
 import std;
 import telar.gui.config.plugin_query;
-import telar.gui.core.primitives;
 import telar.wire.clients;
 import telar.wire.vocabulary;
 import telar.plugins;

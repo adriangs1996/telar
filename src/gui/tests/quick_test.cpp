@@ -160,7 +160,6 @@ static_assert(true);
 import telar.gui.tests.json_fixture;
 import telar.gui.application.workspace_replica;
 import telar.gui.components.configuration;
-import telar.gui.config.plugin_query;
 import telar.gui.graphics.placeholder;
 import telar.gui.history.browser;
 import telar.gui.input.copy_pointer;

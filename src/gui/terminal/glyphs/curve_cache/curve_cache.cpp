@@ -3,7 +3,6 @@ module telar.gui.terminal.glyphs.curve_cache;
 import std;
 
 import telar.gui.core.metrics;
-import telar.gui.terminal.font_grid;
 import telar.gui.terminal.glyphs;
 
 namespace telar::gui::glyphs {
