@@ -4,6 +4,7 @@ import telar.lua;
 import telar.platform.error;
 import telar.platform.fs;
 import telar.sys.posix;
+import telar.config.core;
 
 namespace telar::runtime::config {
 

@@ -2,6 +2,8 @@ module telar.config.snapshot;
 
 import std;
 import telar.lua;
+import telar.config.core;
+import telar.plugins;
 
 namespace telar::runtime::config {
 

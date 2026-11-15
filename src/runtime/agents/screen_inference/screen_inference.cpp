@@ -2,6 +2,7 @@ module telar.runtime.agents.screen_inference;
 
 import std;
 import telar.tbc;
+import telar.config.core;
 
 namespace telar::runtime {
 

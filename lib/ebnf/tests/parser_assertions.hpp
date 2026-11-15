@@ -22,6 +22,7 @@ static_assert(true);
 #include <string>
 
 import telar.ebnf.parser;
+import telar.ebnf.lexer;
 
 namespace ebnf {
   constexpr auto tokenKindName(token_kind kind) -> std::string_view {

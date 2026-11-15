@@ -8,6 +8,7 @@ import telar.gui.platform.path_limits;
 import telar.platform.fs;
 import telar.platform.primitives;
 import telar.vocabulary;
+import telar.base.memory.allocators;
 
 export {
   namespace telar::gui::platform {

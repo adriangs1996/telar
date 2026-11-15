@@ -4,9 +4,11 @@ module;
 export module telar.config.snapshot;
 
 import std;
-export import telar.config.client;
-export import telar.config.gui;
-export import telar.config.runtime;
+import telar.config.client;
+import telar.config.gui;
+import telar.config.runtime;
+import telar.base.memory.allocators;
+import telar.lua;
 
 // Interface: telar_config/snapshot_reader.cppm
 export {

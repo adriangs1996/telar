@@ -7,6 +7,7 @@ import telar.sys.socket;
 import telar.client;
 import telar.vocabulary;
 import telar.platform.process;
+import telar.base.memory.allocators;
 
 namespace telar::gui::platform {
   namespace {

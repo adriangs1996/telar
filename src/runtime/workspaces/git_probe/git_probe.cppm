@@ -4,6 +4,8 @@ import std;
 
 export import telar.runtime.platform.git_status;
 import telar.platform.primitives;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
 
 // Interface: workspaces/git_probe.cppm
 export {

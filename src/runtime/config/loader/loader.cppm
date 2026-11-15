@@ -6,6 +6,8 @@ import std;
 
 import telar.config.snapshot;
 export import telar.platform.paths;
+import telar.base.memory.allocators;
+import telar.config.runtime;
 
 export namespace telar::runtime::config {
 

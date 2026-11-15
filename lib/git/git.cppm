@@ -4,7 +4,7 @@ module;
 export module telar.git;
 
 import std;
-export import telar.base.memory.allocators;
+import telar.base.memory.allocators;
 import telar.platform.primitives;
 export import :format;
 import :config;

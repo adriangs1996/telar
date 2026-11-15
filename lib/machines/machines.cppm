@@ -7,7 +7,7 @@ export module telar.machines;
 // what discovery learns of the runtime on each.
 import std;
 
-export import telar.base.text.json;
+import telar.base.text.json;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.base.text;

@@ -1,7 +1,7 @@
 export module telar.render.document;
 
 import std;
-export import telar.base.memory.allocators;
+import telar.base.memory.allocators;
 import telar.base.text;
 import telar.base.text.utf8;
 

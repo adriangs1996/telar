@@ -13,6 +13,7 @@ import telar.base.text.utf8;
 import telar.cli.command_limit;
 import telar.plugins;
 import telar.wire.vocabulary;
+import telar.base.memory.allocators;
 
 // Interface: machines/setup_report.cppm
 export {

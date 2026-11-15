@@ -15,6 +15,7 @@ import telar.platform.daemon;
 import telar.platform.error;
 import telar.platform.primitives;
 import telar.platform.process;
+import telar.base.memory.allocators;
 
 // Interface: help.cppm
 export {

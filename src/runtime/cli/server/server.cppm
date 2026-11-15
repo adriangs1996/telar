@@ -6,6 +6,8 @@ import telar.lua;
 export import telar.config.client;
 export import telar.config.runtime;
 export import telar.platform.paths;
+import telar.base.memory.allocators;
+import telar.config.core;
 
 export namespace telar::runtime::cli {
 

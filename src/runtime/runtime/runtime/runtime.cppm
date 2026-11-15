@@ -58,6 +58,7 @@ import telar.runtime.platform.stream_read_buffer;
 import telar.runtime.runtime.delivery.client_delivery;
 import telar.runtime.suggestions.engine;
 import telar.runtime.shell_integration.words;
+import telar.config.core;
 
 // The workers runRuntime builds for the runtime (telar.runtime.cli.server); the services below are
 // instantiated for them.

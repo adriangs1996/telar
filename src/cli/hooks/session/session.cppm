@@ -15,6 +15,8 @@ import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.git.checkout;
 import telar.platform.primitives;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
 
 // Interface: hooks/codex_subagents.cppm
 export {

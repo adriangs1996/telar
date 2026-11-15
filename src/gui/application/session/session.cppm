@@ -58,6 +58,8 @@ import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
 import telar.wire.worktrees;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
 
 // Interface: application/session.cppm
 export {

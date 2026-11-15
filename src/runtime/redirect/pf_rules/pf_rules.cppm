@@ -15,6 +15,8 @@ import telar.platform.primitives;
 import telar.plugins;
 import telar.vocabulary;
 import telar.sys.socket;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
 
 // Interface: redirect/flow_key.cppm
 export {

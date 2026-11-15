@@ -12,6 +12,7 @@ import telar.platform.error;
 import telar.platform.net;
 import telar.platform.primitives;
 import telar.wire.vocabulary;
+import telar.base.memory.containers;
 
 // Interface: plugins/effects.cppm
 export {

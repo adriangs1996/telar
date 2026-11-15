@@ -76,6 +76,7 @@ import telar.config.client;
 import telar.gui.config.gui_query;
 import telar.wire.layout;
 import telar.wire.runtime;
+import telar.config.core;
 
 namespace {
 

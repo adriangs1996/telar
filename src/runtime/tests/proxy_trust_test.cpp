@@ -37,6 +37,7 @@ import telar.runtime.platform.descriptor_path;
 import telar.tls;
 import telar.platform.error;
 import telar.platform.fs;
+import telar.platform.paths;
 
 using namespace telar;
 using namespace telar::runtime;

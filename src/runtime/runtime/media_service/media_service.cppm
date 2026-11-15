@@ -39,6 +39,7 @@ export import telar.runtime.paths.query_task;
 export import telar.runtime.workspaces.git_probe;
 
 import telar.runtime.runtime.delivery.client_delivery;
+import telar.config.core;
 
 // Interface: runtime/background_pool.cppm
 export {

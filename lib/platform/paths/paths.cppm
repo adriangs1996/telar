@@ -3,7 +3,7 @@ export module telar.platform.paths;
 import std;
 import telar.tbc;
 
-export import telar.base.memory.allocators;
+import telar.base.memory.allocators;
 
 import telar.platform.fs;
 import telar.sys.socket;

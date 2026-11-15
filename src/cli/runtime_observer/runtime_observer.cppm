@@ -19,6 +19,7 @@ import telar.cli.control_session;
 import telar.client;
 import telar.platform.error;
 import telar.platform.paths;
+import telar.base.memory.allocators;
 
 // Interface: api_schema.cppm
 export {

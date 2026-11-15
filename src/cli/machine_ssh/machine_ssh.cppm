@@ -20,6 +20,7 @@ import telar.platform.error;
 import telar.platform.fs;
 import telar.platform.paths;
 import telar.platform.process;
+import telar.base.memory.allocators;
 
 // Interface: config_receive.cppm
 export {

@@ -6,7 +6,7 @@ export module telar.config.client;
 import std;
 import telar.lua;
 import telar.tbc;
-export import telar.config.core;
+import telar.config.core;
 import telar.base.diagnostics;
 import telar.base.text;
 import telar.base.text.utf8;

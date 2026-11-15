@@ -57,6 +57,7 @@ import telar.gui.presentation.history_inspection;
 import telar.gui.presentation.history_inspection_geometry;
 import telar.gui.presentation.activity_order;
 import telar.config.gui;
+import telar.config.core;
 
 namespace telar::gui::qt {
 

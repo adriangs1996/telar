@@ -9,6 +9,7 @@ export import telar.platform.process;
 export import telar.runtime.shell_integration.token;
 import telar.platform.primitives;
 import telar.base.text;
+import telar.base.memory.allocators;
 
 // The scripts of shell_integration/, which the build compiles in.
 namespace telar::runtime::shell_scripts {

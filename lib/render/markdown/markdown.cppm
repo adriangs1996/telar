@@ -1,7 +1,8 @@
 export module telar.render.markdown;
 
 import std;
-export import telar.render.document;
+import telar.render.document;
+import telar.base.memory.allocators;
 
 // Renders GitHub-flavoured Markdown into a Document. The source is never
 // fetched from or resolved against anything: links and images stay text.
