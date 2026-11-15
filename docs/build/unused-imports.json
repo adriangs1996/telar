@@ -238,38 +238,6 @@
   "src/gui/presentation/activity_order/activity_order.cppm": [
     "telar.gui.terminal.screen"
   ],
-  "src/gui/presentation/display_metrics/display_metrics.cpp": [
-    "telar.gui.core.primitives"
-  ],
-  "src/gui/presentation/display_metrics/display_metrics.cppm": [
-    "telar.base.diagnostics",
-    "telar.gui.core.primitives"
-  ],
-  "src/gui/presentation/form_field_geometry/form_field_geometry.cpp": [
-    "telar.gui.core.primitives"
-  ],
-  "src/gui/presentation/form_field_geometry/form_field_geometry.cppm": [
-    "telar.base.diagnostics",
-    "telar.gui.core.primitives"
-  ],
-  "src/gui/presentation/history_filter_geometry/history_filter_geometry.cpp": [
-    "telar.gui.core.primitives"
-  ],
-  "src/gui/presentation/history_filter_geometry/history_filter_geometry.cppm": [
-    "telar.gui.core.primitives"
-  ],
-  "src/gui/presentation/history_inspection/history_inspection.cppm": [
-    "telar.gui.core.primitives"
-  ],
-  "src/gui/presentation/history_inspection_geometry/history_inspection_geometry.cpp": [
-    "telar.gui.core.primitives"
-  ],
-  "src/gui/presentation/history_inspection_geometry/history_inspection_geometry.cppm": [
-    "telar.gui.core.primitives"
-  ],
-  "src/gui/presentation/history_meta_geometry/history_meta_geometry.cppm": [
-    "telar.gui.core.primitives"
-  ],
   "src/gui/presentation/notification_center/notification_center.cpp": [
     "telar.gui.core.primitives"
   ],

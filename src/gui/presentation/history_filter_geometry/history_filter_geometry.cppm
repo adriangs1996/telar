@@ -10,7 +10,6 @@ import telar.gui.text.json_unsigned_integer;
 import telar.gui.history.browser;
 
 import telar.gui.machines.picker;
-import telar.gui.core.primitives;
 import telar.wire.vocabulary;
 
 // Interface: presentation/bar_metrics.cppm

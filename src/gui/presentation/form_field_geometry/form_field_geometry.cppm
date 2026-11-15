@@ -11,9 +11,7 @@ import telar.gui.terminal.font_grid;
 import telar.gui.text.bounded_editor;
 
 import telar.gui.core.unicode_scalar;
-import telar.base.diagnostics;
 import telar.base.text;
-import telar.gui.core.primitives;
 import telar.gui.terminal.screen;
 
 // Interface: presentation/form_field_geometry.cppm

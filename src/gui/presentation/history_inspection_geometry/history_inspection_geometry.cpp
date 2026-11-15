@@ -1,7 +1,6 @@
 module telar.gui.presentation.history_inspection_geometry;
 
 import std;
-import telar.gui.core.primitives;
 
 namespace telar::gui {
 

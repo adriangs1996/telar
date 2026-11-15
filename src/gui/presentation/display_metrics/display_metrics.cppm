@@ -8,8 +8,6 @@ import std;
 import telar.gui.core.metrics;
 
 import telar.gui.core.json_writer;
-import telar.base.diagnostics;
-import telar.gui.core.primitives;
 import telar.wire.vocabulary;
 
 // Interface: presentation/chrome_surfaces.cppm
