@@ -93,14 +93,13 @@ directorio en `OUTSIDE_RULE_5`, junto al motivo de cada uno. TBC es una herramie
 su linter usa las cabeceras de Clang/LLVM, que no se pueden importar. [textual-includes.json](textual-includes.json) listaba por
 fichero los includes que quedaban y está vacía: un include fuera de esas excepciones
 hace fallar el checker.
-Una interfaz solo hace `export import` de un módulo si sus declaraciones exportadas
-nombran un tipo de ese módulo fuera de los cuerpos de función: es lo único que sus
-importadores necesitan nombrar, y lo demás lo importan ellos. La regla lee tokens, no
-el AST: un nombre sin cualificar que la interfaz declara también es el suyo, y uno
-cualificado cuenta si el cualificador es un namespace del tipo. Las particiones propias
-y `std` quedan fuera. [reexports.json](reexports.json) lista por módulo los re-exports
-que no cumplen; quien quita uno borra su entrada, y una entrada que ya cumple o ya no
-existe también hace fallar el checker.
+Ninguna interfaz hace `export import`, tampoco de `std`, salvo el de sus propias
+particiones (`export import :p`), que el estándar exige para exportarlas. Cada fichero
+importa los módulos que nombra, así que sus imports muestran todas sus dependencias
+reales: un re-export las esconde aunque la interfaz exportada nombre un tipo del módulo.
+Los tests y las herramientas también siguen la regla. [reexports.json](reexports.json)
+lista por fichero los re-exports que hay hoy; quien quita uno borra su entrada, y una
+entrada que ya no existe también hace fallar el checker.
 
 | Área | Interfaces finales | Organización |
 | --- | ---: | --- |
