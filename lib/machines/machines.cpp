@@ -2,6 +2,7 @@ module telar.machines;
 
 import std;
 import telar.sys.posix;
+import telar.base.text.utf8;
 
 namespace telar::runtime::machines {
 

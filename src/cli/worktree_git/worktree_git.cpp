@@ -3,6 +3,11 @@ module telar.cli.worktree_git;
 import telar.cli.control_session;
 import telar.client;
 import telar.sys.posix;
+import telar.base.memory.containers;
+import telar.cli.server;
+import telar.platform.error;
+import telar.wire.pane_io;
+import telar.wire.runtime;
 
 namespace telar::runtime::cli::repository {
 

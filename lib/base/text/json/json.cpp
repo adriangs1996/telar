@@ -2,6 +2,7 @@ module telar.base.text.json;
 
 import std;
 import telar.tbc;
+import telar.base.text.utf8;
 
 namespace telar {
 

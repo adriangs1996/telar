@@ -7,12 +7,9 @@ import std;
 import telar.tbc;
 
 import telar.base.text.json;
-import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.wire.agents;
 import telar.base.text;
-import telar.base.text.utf8;
-import telar.config.runtime;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 

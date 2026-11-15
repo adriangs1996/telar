@@ -5,7 +5,6 @@ export module telar.git:config;
 
 import std;
 import telar.base.memory.allocators;
-import :format;
 
 // A strict reader of git's config syntax. It only reports variables: nothing
 // it reads is executed, and include/includeIf are ordinary, ignored entries.

@@ -8,9 +8,6 @@ import telar.cli.plugin;
 
 import telar.base.text.json;
 
-import telar.base.diagnostics;
-import telar.base.text.utf8;
-import telar.cli.command_limit;
 import telar.plugins;
 import telar.wire.vocabulary;
 import telar.base.memory.allocators;

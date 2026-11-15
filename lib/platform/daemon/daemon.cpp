@@ -4,6 +4,7 @@ import std;
 import telar.sys.posix;
 import telar.sys.process;
 import telar.sys.socket;
+import telar.platform.error;
 
 namespace telar::runtime::cli {
 

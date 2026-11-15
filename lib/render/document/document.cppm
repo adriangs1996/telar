@@ -3,7 +3,6 @@ export module telar.render.document;
 import std;
 import telar.base.memory.allocators;
 import telar.base.text;
-import telar.base.text.utf8;
 
 export namespace telar::render {
 

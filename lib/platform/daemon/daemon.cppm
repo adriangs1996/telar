@@ -6,7 +6,6 @@ import telar.base.memory.allocators;
 import telar.platform.paths;
 import telar.platform.process;
 
-import telar.platform.error;
 import telar.platform.primitives;
 import telar.sys.posix;
 

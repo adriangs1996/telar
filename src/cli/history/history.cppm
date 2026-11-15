@@ -7,15 +7,10 @@ import telar.cli.command_limit;
 
 import telar.platform.paths;
 
-import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.wire.history;
-import telar.wire.runtime;
 import telar.platform.primitives;
 import telar.cli.runtime_observer;
-import telar.cli.server;
-import telar.platform.error;
-import telar.platform.fs;
 import telar.cli.control_session;
 import telar.base.memory.allocators;
 

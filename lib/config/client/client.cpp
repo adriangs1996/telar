@@ -3,6 +3,7 @@ module telar.config.client;
 import std;
 import telar.lua;
 import telar.tbc;
+import telar.wire.clients;
 
 namespace telar::runtime::config {
 

@@ -8,16 +8,9 @@ import std;
 import telar.tbc;
 
 import telar.base.text.utf8;
-import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.sys.posix;
 import telar.sys.socket;
-#if defined(__APPLE__)
-import telar.sys.apple;
-#endif
-#if defined(__linux__)
-import telar.sys.linux_api;
-#endif
 
 // The connection reports request failures with it; the rest of the wire
 // vocabulary stays with telar.wire.vocabulary.

@@ -2,7 +2,6 @@ export module telar.cli.output;
 
 import std;
 
-import telar.base.diagnostics;
 import telar.base.memory.allocators;
 import telar.base.text.json;
 import telar.vocabulary;

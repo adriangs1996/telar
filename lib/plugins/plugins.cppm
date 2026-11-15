@@ -11,12 +11,8 @@ import telar.base.text.json;
 import telar.platform.fs;
 import telar.platform.paths;
 import telar.platform.sha256;
-import telar.base.diagnostics;
 import telar.wire.vocabulary;
-import telar.platform.primitives;
 import telar.base.text;
-import telar.base.text.utf8;
-import telar.platform.error;
 import telar.sys.posix;
 import telar.base.memory.allocators;
 

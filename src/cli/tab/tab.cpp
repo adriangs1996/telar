@@ -5,6 +5,11 @@ import telar.sys.posix;
 import telar.tbc;
 import telar.cli.output;
 import telar.platform.process;
+import telar.cli.command_limit;
+import telar.platform.primitives;
+import telar.wire.layout;
+import telar.wire.pane_io;
+import telar.wire.vocabulary;
 
 // Older glibc keeps these in libdl. Keep the CLI linkable there; history
 // discovery reports unavailability when no loader is present. A static

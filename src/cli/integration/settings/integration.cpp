@@ -4,9 +4,7 @@ import std;
 
 import telar.platform.paths;
 import telar.platform.process;
-import telar.base.diagnostics;
 import telar.wire.vocabulary;
-import telar.platform.primitives;
 
 namespace telar::runtime::cli {
 

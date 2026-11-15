@@ -8,12 +8,9 @@ import telar.tbc;
 
 import telar.client;
 
-import telar.base.diagnostics;
 import telar.base.memory.allocators;
 import telar.wire.vocabulary;
 import telar.wire.runtime;
-import telar.platform.primitives;
-import telar.platform.error;
 
 // Interface: control_failure.cppm
 export {

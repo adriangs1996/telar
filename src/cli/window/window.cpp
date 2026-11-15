@@ -19,6 +19,8 @@ import telar.client;
 import telar.sys.posix;
 import telar.sys.process;
 import telar.tls;
+import telar.base.text.utf8;
+import telar.cli.command_limit;
 
 namespace telar::runtime::cli::window {
 

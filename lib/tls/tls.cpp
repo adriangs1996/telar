@@ -14,6 +14,11 @@ import telar.sys.posix;
 import telar.tbc;
 import telar.sys.process;
 import telar.sys.socket;
+import telar.base.memory.sensitive;
+import telar.base.text.utf8;
+import telar.platform.error;
+import telar.platform.fs;
+import telar.platform.process;
 
 namespace telar::runtime {
 

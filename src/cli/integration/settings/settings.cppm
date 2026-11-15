@@ -7,12 +7,7 @@ import telar.config.core;
 import telar.platform.paths;
 
 import telar.base.text.json;
-import telar.base.diagnostics;
 import telar.wire.vocabulary;
-import telar.platform.primitives;
-import telar.cli.base.command_error;
-import telar.platform.error;
-import telar.platform.fs;
 import telar.base.memory.allocators;
 
 // Interface: integration_options.cppm

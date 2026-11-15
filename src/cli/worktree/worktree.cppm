@@ -8,24 +8,10 @@ import telar.cli.command_limit;
 
 import telar.cli.machine_ssh;
 import telar.cli.project_setup;
-import telar.base.diagnostics;
-import telar.wire.vocabulary;
-import telar.wire.agents;
-import telar.wire.clients;
-import telar.wire.content;
-import telar.wire.layout;
-import telar.wire.pane_io;
-import telar.wire.runtime;
-import telar.wire.worktrees;
-import telar.platform.primitives;
 import telar.base.text;
 import telar.base.text.json;
-import telar.base.text.utf8;
 import telar.cli.history;
-import telar.cli.tab;
-import telar.platform.fs;
 import telar.platform.paths;
-import telar.platform.process;
 import telar.machines;
 import telar.base.memory.allocators;
 

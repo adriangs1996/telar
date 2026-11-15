@@ -4,6 +4,7 @@ import std;
 import telar.ghostty.unicode;
 import telar.lua;
 import telar.tbc;
+import telar.base.diagnostics;
 
 // Apart from runtime.cpp because an agent icon is measured with libghostty-vt: only the processes
 // that read the `runtime` table pull this unit in, and the CLI, which reads the manifests, links no

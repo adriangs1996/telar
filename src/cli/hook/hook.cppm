@@ -6,26 +6,13 @@ import telar.tbc;
 
 import telar.cli.hooks.command;
 import telar.platform.paths;
-import telar.platform.process;
 
 import telar.cli.hooks.session;
 
 import telar.base.memory.allocators;
-import telar.base.memory.containers;
 import telar.cli.worktree_git;
-import telar.base.diagnostics;
-import telar.wire.vocabulary;
-import telar.wire.agents;
-import telar.wire.layout;
-import telar.wire.runtime;
-import telar.wire.worktrees;
-import telar.git.checkout;
-import telar.platform.primitives;
 import telar.base.text;
 import telar.base.text.json;
-import telar.base.text.utf8;
-import telar.platform.error;
-import telar.platform.fs;
 
 // Interface: hooks/input.cppm
 export {

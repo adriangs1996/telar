@@ -3,6 +3,7 @@ module telar.config.core;
 import std;
 import telar.tbc;
 import telar.sys.posix;
+import telar.base.text.utf8;
 
 namespace telar::runtime::config {
 

@@ -6,16 +6,6 @@ import telar.cli.machine_ssh;
 
 import telar.cli.window;
 
-import telar.base.diagnostics;
-import telar.wire.vocabulary;
-import telar.wire.clients;
-import telar.platform.primitives;
-import telar.cli.command_limit;
-import telar.cli.integration.settings;
-import telar.cli.runtime_observer;
-import telar.platform.paths;
-import telar.platform.process;
-import telar.platform.sha256;
 import telar.base.memory.allocators;
 import telar.machines;
 

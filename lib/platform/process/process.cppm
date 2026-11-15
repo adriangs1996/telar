@@ -11,7 +11,6 @@ import telar.base.memory.containers;
 import telar.base.memory.sensitive;
 
 import telar.base.text;
-import telar.platform.error;
 import telar.platform.primitives;
 import telar.vocabulary;
 import telar.sys.posix;

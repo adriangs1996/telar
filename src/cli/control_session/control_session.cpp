@@ -1,6 +1,7 @@
 module telar.cli.control_session;
 
 import telar.sys.socket;
+import telar.platform.error;
 
 namespace telar::runtime::cli {
 
