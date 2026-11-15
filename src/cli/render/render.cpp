@@ -2,6 +2,9 @@ module telar.cli.render;
 
 import telar.sys.posix;
 import telar.sys.process;
+import telar.render.document;
+import telar.render.markdown;
+import telar.render.terminal;
 
 namespace telar::runtime::cli::render_command {
 

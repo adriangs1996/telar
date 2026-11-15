@@ -1,23 +1,4 @@
 {
-  "src/cli/hook/hook.cppm": [
-    "telar.base.diagnostics",
-    "telar.base.memory.containers",
-    "telar.base.text.utf8",
-    "telar.git.checkout",
-    "telar.platform.error",
-    "telar.platform.fs",
-    "telar.platform.primitives",
-    "telar.platform.process",
-    "telar.wire.agents",
-    "telar.wire.layout",
-    "telar.wire.runtime",
-    "telar.wire.vocabulary",
-    "telar.wire.worktrees"
-  ],
-  "src/cli/launch_commands/launch_commands.cpp": [
-    "telar.base.diagnostics",
-    "telar.platform.primitives"
-  ],
   "src/cli/machine/machine.cppm": [
     "telar.base.diagnostics",
     "telar.cli.command_limit",
@@ -41,9 +22,6 @@
     "telar.platform.primitives",
     "telar.wire.vocabulary"
   ],
-  "src/cli/output/output.cppm": [
-    "telar.base.diagnostics"
-  ],
   "src/cli/plugin/plugin.cppm": [
     "telar.base.diagnostics",
     "telar.cli.server",
@@ -60,11 +38,6 @@
     "telar.wire.layout",
     "telar.wire.pane_io",
     "telar.wire.runtime"
-  ],
-  "src/cli/render/render.cppm": [
-    "telar.render.document",
-    "telar.render.markdown",
-    "telar.render.terminal"
   ],
   "src/cli/runtime_observer/runtime_observer.cppm": [
     "telar.base.diagnostics",

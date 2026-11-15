@@ -3,9 +3,6 @@ export module telar.cli.render;
 import std;
 import telar.base.memory.allocators;
 import telar.base.text;
-import telar.render.document;
-import telar.render.markdown;
-import telar.render.terminal;
 
 // `telar render KIND [FILE]`: renders content into a document. Inside a Telar
 // pane it prints styled terminal text that the window shows natively in place,

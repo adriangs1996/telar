@@ -5,6 +5,18 @@ module telar.cli.hook;
 import telar.platform.sha256;
 import telar.sys.posix;
 import telar.cli.control_session;
+import telar.base.memory.containers;
+import telar.base.text.utf8;
+import telar.git.checkout;
+import telar.platform.error;
+import telar.platform.fs;
+import telar.platform.primitives;
+import telar.platform.process;
+import telar.wire.agents;
+import telar.wire.layout;
+import telar.wire.runtime;
+import telar.wire.vocabulary;
+import telar.wire.worktrees;
 
 namespace telar::runtime::cli::hooks {
 
