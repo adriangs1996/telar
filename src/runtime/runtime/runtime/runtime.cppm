@@ -410,8 +410,10 @@ export {
 
       static void forget(RuntimeModel& model, Workspaces& workspaces, ClientStore& clients, std::uint64_t client_id, const ForgetWorktree& request);
 
+      // Not inlined: publish() calls it on every wake, and its locals in publish()'s frame would span stack
+      // pages that each cost a page fault after a pane's fork() (see Connection::read).
       template <typename Background>
-      void observe(const RuntimeModel& model, Background& background);
+      [[gnu::noinline]] void observe(const RuntimeModel& model, Background& background);
 
       void observed(RuntimeModel& model, const WorktreeProbeResult& result);
 

@@ -52,7 +52,9 @@ export {
       inline explicit AgentFileService(Memory& memory)
           : worker_(std::in_place, memory) {}
 
-      inline void tick(Agents& agents, std::chrono::steady_clock::time_point now) {
+      // Not inlined: publish() calls it on every wake, and its locals in publish()'s frame would span stack
+      // pages that each cost a page fault after a pane's fork() (see Connection::read).
+      [[gnu::noinline]] inline void tick(Agents& agents, std::chrono::steady_clock::time_point now) {
         collect(agents);
         if (!pending_) {
           if (const auto request = agents.nextSessionFile(now)) {
@@ -565,7 +567,9 @@ export {
           : limits_(limits),
             worker_(std::in_place, manifests, probe, history) {}
 
-      inline void refresh(RuntimeModel& model, Agents& agents) {
+      // Not inlined: publish() calls it on every wake, and its locals in publish()'s frame would span stack
+      // pages that each cost a page fault after a pane's fork() (see Connection::read).
+      [[gnu::noinline]] inline void refresh(RuntimeModel& model, Agents& agents) {
         collect(model, agents);
         if (pending_) {
           return;
@@ -978,7 +982,9 @@ export {
       inline explicit WorktreeDetectionService(Arguments&&... probe)
           : worker_(std::in_place, std::forward<Arguments>(probe)...) {}
 
-      inline void tick(RuntimeModel& model) {
+      // Not inlined: publish() calls it on every wake, and its locals in publish()'s frame would span stack
+      // pages that each cost a page fault after a pane's fork() (see Connection::read).
+      [[gnu::noinline]] inline void tick(RuntimeModel& model) {
         collect(model);
         if (pending_) {
           return;
