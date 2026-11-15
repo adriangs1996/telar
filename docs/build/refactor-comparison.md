@@ -60,3 +60,22 @@ Unidades que lista `ninja -n` al tocar la interfaz de cada hub. Línea base, de 
 ## Lectura
 
 Tocar la interfaz de un hub recompila casi lo mismo que predice `ninja -n`, y en proporción algo más que antes (del 37,5–41,6 % del árbol al 43,6–44,6 %), con casi el doble de unidades porque cada módulo tiene su interfaz y su implementación separadas. Tocar una implementación recompila una sola unidad; en la línea base el 94,8 % del código estaba en interfaces, así que casi cualquier cambio pasaba por una, y ahora es el 39,3 %. No quedan aristas hacia arriba ni ciclos, y hay 97 `export import` menos. Las líneas en fragmentos globales bajan a un 41 % con 2,6 veces más unidades y la mediana por unidad pasa de unas 3500 a 0. El build en frío y su pico de memoria bajan en las dos máquinas. El camino crítico sigue en 21 módulos.
+
+## Fase 12: dependencias explícitas
+
+Después de P11.1 (`9c7175260`), la fase 12 prohíbe `export import` salvo el de particiones propias y añade la regla de imports sin usar. Medido en `docs/build/module-metrics-p12.json` (`c3fff39b8` en `Adrians-MacBook-Pro`, `0593ddad1` en `Adrians-Laptop`; el grafo es el mismo en los dos).
+
+| Cifra | P11.1 | Fase 12 |
+| --- | --- | --- |
+| Aristas | 2227 | 2279 |
+| `export import` | 590 | 24 (todos de particiones propias) |
+| Camino crítico | 21 módulos | 20 módulos |
+| Código en interfaces | 39,3 % | 39,2 % |
+| `telar.base.memory.allocators`, dependientes | 246 | 245 |
+| `telar.tbc`, dependientes | 250 | 247 |
+
+`Adrians-MacBook-Pro`: build en frío 107,8 → 102,9 s (pico 2602 → 2444 MiB); líneas en fragmentos globales 737 199 → 737 199; `ninja -n` al tocar `telar.base.memory.allocators` 902 → 901 unidades.
+
+`Adrians-Laptop`: build en frío 72,1 → 71,7 s (pico 4478 → 4697 MiB); líneas en fragmentos globales 738 086 → 738 086; `ninja -n` al tocar `telar.base.memory.allocators` 902 → 901 unidades.
+
+Las aristas suben porque cada fichero importa ahora lo que nombra en vez de recibirlo por un re-export: las dependencias que antes eran implícitas quedan escritas. El código generado no cambia: el desensamblado de `telar-runtime`, `telar` y `telar-gui` en Release de `0593ddad1` es idéntico, instrucción a instrucción, al de `9c7175260` (el único cambio posterior, `c3fff39b8`, saca de un bloque de macOS un import que también hace falta en Linux), y solo cambian datos (números de línea de `std::source_location`, rutas, marcas de tiempo de recursos y la firma).
