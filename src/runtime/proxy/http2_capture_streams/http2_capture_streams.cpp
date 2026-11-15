@@ -3,7 +3,6 @@ module;
 
 module telar.runtime.proxy.http2_capture_streams;
 
-
 namespace telar::runtime {
 
   ConnectHead::ConnectHead() noexcept {}

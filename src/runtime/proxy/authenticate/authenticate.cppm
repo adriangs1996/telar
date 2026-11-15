@@ -8,7 +8,6 @@ import telar.base.text;
 
 import telar.config.runtime;
 
-
 // Interface: proxy/secret.cppm
 export {
   namespace telar::runtime {

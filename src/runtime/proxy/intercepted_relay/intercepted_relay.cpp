@@ -1,6 +1,5 @@
 module telar.runtime.proxy.intercepted_relay;
 
-
 namespace telar::runtime {
 
   void Http1MessageRelay::reset(bool response, bool response_to_head) noexcept {

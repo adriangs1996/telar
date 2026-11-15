@@ -5,7 +5,6 @@ export module telar.runtime.platform.system_certificates;
 
 import std;
 
-
 #if defined(__linux__)
 // Interface: platform/linux/system_certificates.cppm
 export {
