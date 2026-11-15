@@ -8,8 +8,8 @@ import telar.sys.socket;
 import telar.sys.process;
 import telar.sys.posix;
 
-export import telar.platform.net;
-export import telar.runtime.platform.signals;
+import telar.platform.net;
+import telar.runtime.platform.signals;
 
 import telar.base.text;
 import telar.platform.error;

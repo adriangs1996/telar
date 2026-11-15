@@ -12,10 +12,10 @@ module;
 export module telar.runtime.tests.protocol_peer;
 
 import std;
-export import telar.client;
+import telar.client;
 import telar.wire.pane_io;
 import telar.wire.runtime;
-export import telar.wire.vocabulary;
+import telar.wire.vocabulary;
 
 export {
   class ProtocolFailure : public std::runtime_error {

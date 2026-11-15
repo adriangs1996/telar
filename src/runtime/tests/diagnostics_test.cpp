@@ -42,6 +42,9 @@ import telar.runtime.diagnostics.runtime_counters;
 import telar.platform.fs;
 import telar.runtime.terminal.text_reader;
 import telar.vocabulary;
+import telar.runtime.model.client_layouts;
+import telar.runtime.proxy.http2_capture_streams;
+import telar.runtime.vocabulary.exchange;
 
 using namespace telar;
 using namespace telar::runtime;

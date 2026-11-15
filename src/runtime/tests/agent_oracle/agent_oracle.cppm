@@ -2,7 +2,8 @@ export module telar.runtime.tests.agent_oracle;
 
 import std;
 import telar.wire.agents;
-export import telar.runtime.tests.protocol_peer;
+import telar.runtime.tests.protocol_peer;
+import telar.wire.vocabulary;
 
 using namespace telar;
 

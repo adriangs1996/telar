@@ -21,6 +21,7 @@ import telar.platform.primitives;
 import telar.runtime.tests.check;
 import telar.tls;
 import telar.runtime.tls.interception;
+import telar.platform.net;
 
 using namespace telar;
 using namespace telar::runtime;

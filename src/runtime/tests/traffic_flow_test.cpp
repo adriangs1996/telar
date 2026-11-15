@@ -33,6 +33,11 @@ import telar.runtime.traffic.control_backend;
 import telar.runtime.traffic.capture_analysis;
 import telar.runtime.proxy.runtime;
 import telar.wire.vocabulary;
+import telar.config.runtime;
+import telar.platform.net;
+import telar.runtime.exchange_capture.producer;
+import telar.runtime.proxy.http2_capture_streams;
+import telar.runtime.traffic.control_protocol;
 
 using namespace telar;
 using namespace telar::runtime;

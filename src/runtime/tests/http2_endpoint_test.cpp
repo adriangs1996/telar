@@ -25,6 +25,9 @@ import telar.runtime.tests.test_byte_stream;
 import telar.runtime.proxy.runtime;
 import telar.runtime.traffic.control_backend;
 import telar.vocabulary;
+import telar.runtime.http.message;
+import telar.runtime.traffic.control_protocol;
+import telar.runtime.proxy.http2_capture_streams;
 
 using namespace telar;
 using namespace telar::runtime;

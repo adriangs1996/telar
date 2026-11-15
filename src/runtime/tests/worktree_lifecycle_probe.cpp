@@ -11,6 +11,7 @@ import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.worktrees;
+import telar.wire.vocabulary;
 
 using namespace telar;
 

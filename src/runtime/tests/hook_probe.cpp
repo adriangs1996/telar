@@ -9,6 +9,8 @@ import telar.runtime.tests.hook_fixture;
 import telar.runtime.tests.hook_worktree_fixture;
 import telar.wire.agents;
 import telar.wire.pane_io;
+import telar.runtime.tests.protocol_peer;
+import telar.wire.vocabulary;
 
 using namespace telar;
 using namespace telar::runtime;

@@ -16,6 +16,7 @@ import telar.wire.agents;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
+import telar.runtime.tests.protocol_peer;
 
 using namespace telar;
 

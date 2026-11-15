@@ -2,11 +2,13 @@ export module telar.runtime.suggestions.engine;
 
 import std;
 
-export import telar.runtime.transport.connection;
-export import telar.platform.process;
+import telar.runtime.transport.connection;
+import telar.platform.process;
 import telar.wire.vocabulary;
 import telar.wire.editor;
 import telar.platform.primitives;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
 
 // Interface: suggestions/engine.cppm
 export {

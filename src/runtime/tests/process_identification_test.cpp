@@ -33,6 +33,8 @@ import telar.runtime.platform.process_probe;
 import telar.platform.process;
 import telar.wire.agents;
 import telar.wire.vocabulary;
+import telar.config.runtime;
+import telar.runtime.platform.session_host;
 
 using namespace telar;
 using namespace telar::runtime;

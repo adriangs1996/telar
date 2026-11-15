@@ -58,6 +58,11 @@ import telar.runtime.runtime.media_service;
 import telar.platform.graphics;
 import telar.runtime.terminal.text_reader;
 import telar.wire.vocabulary;
+import telar.runtime.graphics.file_input;
+import telar.runtime.graphics.pane_media;
+import telar.runtime.model.client_layouts;
+import telar.runtime.platform.event_loop;
+import telar.runtime.terminal.ghostty;
 
 using namespace telar;
 using namespace telar::runtime;

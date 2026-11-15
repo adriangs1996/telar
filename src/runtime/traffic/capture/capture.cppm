@@ -5,11 +5,11 @@ import telar.native.pcap;
 import telar.sys.process;
 import telar.sys.posix;
 
-export import telar.runtime.traffic.control_protocol;
+import telar.runtime.traffic.control_protocol;
 
-export import telar.base.memory.allocators;
-export import telar.base.memory.containers;
-export import telar.base.memory.sensitive;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
+import telar.base.memory.sensitive;
 import telar.base.diagnostics;
 import telar.vocabulary;
 import telar.platform.primitives;

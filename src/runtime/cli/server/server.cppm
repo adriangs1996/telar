@@ -3,9 +3,9 @@ export module telar.runtime.cli.server;
 import std;
 import telar.lua;
 
-export import telar.config.client;
-export import telar.config.runtime;
-export import telar.platform.paths;
+import telar.config.client;
+import telar.config.runtime;
+import telar.platform.paths;
 import telar.base.memory.allocators;
 import telar.config.core;
 

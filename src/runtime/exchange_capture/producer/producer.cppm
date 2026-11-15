@@ -7,11 +7,11 @@ export module telar.runtime.exchange_capture.producer;
 
 import std;
 
-export import telar.base.memory.allocators;
-export import telar.base.memory.containers;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
 
-export import telar.runtime.vocabulary.exchange;
-export import telar.runtime.http.content;
+import telar.runtime.vocabulary.exchange;
+import telar.runtime.http.content;
 
 import telar.base.diagnostics;
 import telar.base.memory.sensitive;
@@ -20,6 +20,7 @@ import telar.native.brotli;
 import telar.native.zlib;
 import telar.native.zstd;
 import telar.platform.primitives;
+import telar.config.runtime;
 
 // Interface: exchange_capture/brotli_decoder.cppm
 export {

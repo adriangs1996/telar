@@ -3,6 +3,8 @@ module;
 
 module telar.runtime.runtime.client_control;
 
+import telar.runtime.transport.connection;
+
 namespace telar::runtime {
 
   void ClientControl::list(ClientStore& clients, std::uint64_t requester_id, const QueryClients& request) {

@@ -4,9 +4,9 @@ import std;
 import telar.sys.posix;
 import telar.tbc;
 
-export import telar.plugins;
-export import telar.runtime.vocabulary.exchange;
-export import telar.runtime.vocabulary.frames;
+import telar.plugins;
+import telar.runtime.vocabulary.exchange;
+import telar.runtime.vocabulary.frames;
 
 import telar.platform.error;
 import telar.platform.net;

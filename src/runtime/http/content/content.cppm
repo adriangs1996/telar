@@ -7,9 +7,9 @@ import std;
 import telar.native.nghttp2;
 import telar.tbc;
 
-export import telar.base.memory.allocators;
-export import telar.base.memory.containers;
-export import telar.base.memory.sensitive;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
+import telar.base.memory.sensitive;
 import telar.base.text;
 
 // Interface: http/content_codings.cppm

@@ -47,6 +47,11 @@ import telar.runtime.proxy.http2_capture_streams;
 import telar.runtime.proxy.runtime;
 import telar.runtime.proxy.relay_direction;
 import telar.platform.error;
+import telar.config.runtime;
+import telar.platform.net;
+import telar.runtime.platform.event_loop;
+import telar.runtime.platform.name_resolutions;
+import telar.runtime.proxy.authenticate;
 
 using namespace telar;
 using namespace telar::runtime;

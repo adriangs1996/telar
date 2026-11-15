@@ -52,6 +52,7 @@ import telar.config.client;
 import telar.config.core;
 import telar.config.runtime;
 import telar.lua;
+import telar.platform.paths;
 
 using namespace telar::runtime;
 using namespace telar;

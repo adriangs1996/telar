@@ -3,10 +3,10 @@ export module telar.runtime.proxy.authenticate;
 import std;
 import telar.tbc;
 
-export import telar.base.memory.allocators;
-export import telar.base.text;
+import telar.base.memory.allocators;
+import telar.base.text;
 
-export import telar.config.runtime;
+import telar.config.runtime;
 
 import telar.base.diagnostics;
 import telar.base.memory.sensitive;

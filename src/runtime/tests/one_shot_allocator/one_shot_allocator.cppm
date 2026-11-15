@@ -4,7 +4,7 @@ module;
 export module telar.runtime.tests.one_shot_allocator;
 
 import std;
-export import telar.base.memory.allocators;
+import telar.base.memory.allocators;
 
 export {
   namespace telar::control_test {

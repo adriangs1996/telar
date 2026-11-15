@@ -5,6 +5,7 @@ export module telar.runtime.terminal.grid;
 import std;
 import telar.ghostty.vt;
 import telar.runtime.terminal.control;
+import telar.runtime.terminal.ghostty;
 
 // The fields of a packed GhosttyCell, generated from the libghostty-vt manifest.
 export namespace telar::runtime::cell_layout {

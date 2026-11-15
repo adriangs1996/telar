@@ -10,6 +10,7 @@ import telar.runtime.terminal.control;
 import telar.runtime.terminal.control.engine;
 import telar.runtime.terminal.text_reader;
 import telar.vocabulary;
+import telar.runtime.terminal.ghostty;
 
 using namespace telar;
 using namespace telar::runtime;

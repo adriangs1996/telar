@@ -11,21 +11,27 @@ import telar.ghostty.vt;
 import telar.sys.posix;
 import telar.tbc;
 
-export import telar.config.runtime;
+import telar.config.runtime;
 
-export import telar.runtime.agents.screen_inference;
-export import telar.runtime.command_capture.tracker;
-export import telar.runtime.diagnostics.runtime_counters;
-export import telar.runtime.history.event;
+import telar.runtime.agents.screen_inference;
+import telar.runtime.command_capture.tracker;
+import telar.runtime.diagnostics.runtime_counters;
+import telar.runtime.history.event;
 
-export import telar.runtime.platform.request_worker;
-export import telar.runtime.platform.process_probe;
+import telar.runtime.platform.request_worker;
+import telar.runtime.platform.process_probe;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
 import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
+import telar.platform.events;
+import telar.runtime.history.command;
+import telar.runtime.shell_integration.token;
+import telar.runtime.terminal.text_reader;
 
 // Interface: observation/batch.cppm
 export {

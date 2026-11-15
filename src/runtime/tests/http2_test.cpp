@@ -23,6 +23,8 @@ import telar.runtime.http2.direction_observer;
 import telar.runtime.proxy.runtime;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
+import telar.runtime.http2.frame_reader;
+import telar.runtime.proxy.http2_capture_streams;
 
 using namespace telar;
 using namespace telar::runtime;

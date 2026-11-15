@@ -7,15 +7,16 @@ import std;
 import telar.sys.posix;
 import telar.tbc;
 
-export import telar.tls;
+import telar.tls;
 
-export import telar.runtime.platform.stream_read_buffer;
-export import telar.runtime.platform.tunnel_sockets;
+import telar.runtime.platform.stream_read_buffer;
+import telar.runtime.platform.tunnel_sockets;
 import telar.base.diagnostics;
 import telar.base.text;
 import telar.platform.primitives;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
+import telar.platform.net;
 
 // Interface: tls/alpn_offer.cppm
 export {

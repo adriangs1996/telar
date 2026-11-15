@@ -6,11 +6,12 @@ export module telar.runtime.shell_integration.words;
 import std;
 import telar.sys.posix;
 
-export import telar.git;
-export import telar.wire.vocabulary;
-export import telar.wire.editor;
-export import telar.runtime.platform.request_worker;
+import telar.git;
+import telar.wire.vocabulary;
+import telar.wire.editor;
+import telar.runtime.platform.request_worker;
 import telar.base.memory.allocators;
+import telar.base.memory.containers;
 
 // The values a completion spec leaves to the runtime, found where the shell runs: commands on
 // its PATH, the repository's branches, the hosts in the SSH configuration and the targets of

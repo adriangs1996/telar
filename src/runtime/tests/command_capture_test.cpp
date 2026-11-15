@@ -24,6 +24,9 @@ import telar.runtime.terminal.control;
 import telar.runtime.tests.check;
 import telar.runtime.command_capture.tracker;
 import telar.wire.vocabulary;
+import telar.runtime.history.command;
+import telar.runtime.shell_integration.token;
+import telar.runtime.terminal.text_reader;
 
 using namespace telar;
 using namespace telar::runtime;

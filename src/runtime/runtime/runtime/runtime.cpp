@@ -6,6 +6,11 @@ module telar.runtime.runtime.runtime;
 
 import telar.ghostty.vt;
 import telar.sys.process;
+import telar.platform.error;
+import telar.platform.paths;
+import telar.plugins;
+import telar.runtime.platform.git_status;
+import telar.runtime.terminal.text_reader;
 
 namespace telar::runtime {
 

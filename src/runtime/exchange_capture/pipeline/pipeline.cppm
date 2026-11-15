@@ -10,16 +10,17 @@ import telar.native.zlib;
 import telar.native.zstd;
 import telar.tbc;
 
-export import telar.runtime.vocabulary.exchange;
-export import telar.base.memory.allocators;
-export import telar.base.memory.containers;
+import telar.runtime.vocabulary.exchange;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
 
-export import telar.runtime.exchange_capture.producer;
+import telar.runtime.exchange_capture.producer;
 
-export import telar.runtime.platform.request_worker;
+import telar.runtime.platform.request_worker;
 import telar.base.diagnostics;
 import telar.platform.primitives;
 import telar.platform.thread;
+import telar.config.runtime;
 
 // Interface: exchange_capture/clock.cppm
 export {

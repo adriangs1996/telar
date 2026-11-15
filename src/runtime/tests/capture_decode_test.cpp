@@ -19,6 +19,8 @@ import telar.platform.primitives;
 import telar.runtime.tests.check;
 import telar.runtime.tests.erasure_checking_allocator;
 import telar.runtime.exchange_capture.producer;
+import telar.config.runtime;
+import telar.runtime.vocabulary.exchange;
 
 using namespace telar;
 using namespace telar::runtime;

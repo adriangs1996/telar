@@ -7,9 +7,9 @@ import std;
 import telar.sys.socket;
 import telar.sys.posix;
 
-export import telar.platform.net;
+import telar.platform.net;
 
-export import telar.runtime.platform.name_resolutions;
+import telar.runtime.platform.name_resolutions;
 import telar.base.text;
 import telar.platform.error;
 import telar.platform.primitives;

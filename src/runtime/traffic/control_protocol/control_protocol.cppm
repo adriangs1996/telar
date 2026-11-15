@@ -7,14 +7,15 @@ import std;
 import telar.native.pcap;
 import telar.tbc;
 
-export import telar.runtime.vocabulary.frames;
-export import telar.runtime.http.message;
+import telar.runtime.vocabulary.frames;
+import telar.runtime.http.message;
 
-export import telar.runtime.redirect.direction;
+import telar.runtime.redirect.direction;
 import telar.base.diagnostics;
 import telar.base.text;
 import telar.base.text.utf8;
 import telar.vocabulary;
+import telar.base.memory.containers;
 
 // Interface: traffic/protocol.cppm
 export {

@@ -9,14 +9,14 @@ import telar.native.zlib;
 import telar.native.zstd;
 import telar.tbc;
 
-export import telar.runtime.http.content;
+import telar.runtime.http.content;
 
-export import telar.base.memory.allocators;
-export import telar.base.memory.sensitive;
+import telar.base.memory.allocators;
+import telar.base.memory.sensitive;
 
-export import telar.runtime.vocabulary.frames;
+import telar.runtime.vocabulary.frames;
 
-export import telar.runtime.http1.head;
+import telar.runtime.http1.head;
 import telar.base.diagnostics;
 import telar.base.text;
 import telar.base.text.utf8;

@@ -18,6 +18,8 @@ import telar.runtime.terminal.control;
 import telar.runtime.tests.check;
 import telar.runtime.graphics.pane_media;
 import telar.wire.vocabulary;
+import telar.runtime.terminal.ghostty;
+import telar.runtime.terminal.graphics_storage;
 
 using namespace telar;
 using namespace telar::runtime;

@@ -26,6 +26,8 @@ import telar.runtime.tests.control_clipboard_fixture;
 import telar.runtime.terminal.text_reader;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
+import telar.runtime.terminal.ghostty;
+import telar.runtime.tests.clipboard_task;
 
 using namespace telar;
 using namespace telar::runtime;

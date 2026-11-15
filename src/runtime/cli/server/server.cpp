@@ -23,8 +23,19 @@ import telar.runtime.runtime.runtime;
 import telar.runtime.traffic.capture;
 import telar.runtime.traffic.control_backend;
 import :tap;
+import telar.plugins;
+import telar.runtime.platform.event_loop;
+import telar.runtime.shell_integration;
+import telar.runtime.vocabulary.traffic;
+import telar.runtime.suggestions.engine;
+import telar.runtime.platform.name_resolutions;
 #ifdef __APPLE__
 import telar.runtime.redirect.socket_owners;
+import telar.runtime.platform.process_probe;
+import telar.runtime.redirect.direction;
+import telar.runtime.redirect.ingress;
+import telar.runtime.redirect.record;
+import telar.runtime.redirect.pf_rules;
 #endif
 
 namespace telar::runtime::cli {

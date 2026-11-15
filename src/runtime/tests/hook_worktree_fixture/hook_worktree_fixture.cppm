@@ -11,6 +11,10 @@ import telar.wire.content;
 import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.worktrees;
+import telar.runtime.tests.protocol_peer;
+import telar.vocabulary;
+import telar.wire.runtime;
+import telar.wire.vocabulary;
 
 export {
   namespace hook_fixture {

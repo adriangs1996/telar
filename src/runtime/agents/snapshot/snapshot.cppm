@@ -5,12 +5,12 @@ export module telar.runtime.agents.snapshot;
 
 import std;
 
-export import telar.config.runtime;
+import telar.config.runtime;
 
-export import telar.runtime.platform.process_probe;
-export import telar.runtime.agents.description_generator;
+import telar.runtime.platform.process_probe;
+import telar.runtime.agents.description_generator;
 
-export import telar.platform.events;
+import telar.platform.events;
 
 import telar.wire.vocabulary;
 import telar.wire.agents;
@@ -20,6 +20,9 @@ import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
 import telar.client;
 import telar.platform.error;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
+import telar.runtime.platform.session_host;
 
 // Interface: agents/evidence_state.cppm
 export {

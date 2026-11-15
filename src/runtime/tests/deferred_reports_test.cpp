@@ -33,6 +33,14 @@ import telar.runtime.tests.client_peer;
 import telar.runtime.runtime.client_control;
 import telar.wire.vocabulary;
 import telar.runtime.tests.check;
+import telar.platform.events;
+import telar.platform.process;
+import telar.runtime.agents.description_generator;
+import telar.runtime.agents.snapshot;
+import telar.runtime.model.client_layouts;
+import telar.runtime.model.slot_store;
+import telar.runtime.platform.session_host;
+import telar.runtime.platform.process_probe;
 
 using namespace telar;
 using namespace telar::runtime;

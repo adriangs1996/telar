@@ -29,6 +29,8 @@ import telar.runtime.graphics.pane_media;
 import telar.runtime.shell_integration.token;
 import telar.runtime.terminal.control;
 import telar.runtime.terminal.text_reader;
+import telar.runtime.history.command;
+import telar.runtime.terminal.ghostty;
 
 using namespace telar;
 using namespace telar::runtime;

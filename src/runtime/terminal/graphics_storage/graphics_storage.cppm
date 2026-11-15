@@ -7,10 +7,12 @@ import std;
 import telar.ghostty.vt;
 import telar.tbc;
 
-export import telar.runtime.diagnostics.operation;
+import telar.runtime.diagnostics.operation;
 import telar.base.memory.allocators;
 import telar.wire.vocabulary;
 import telar.runtime.terminal.control;
+import telar.runtime.terminal.ghostty;
+import telar.runtime.terminal.kitty;
 
 // Interface: graphics/storage_limits.cppm
 export {

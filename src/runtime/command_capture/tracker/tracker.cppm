@@ -13,11 +13,14 @@ import telar.wire.content;
 import telar.platform.primitives;
 import telar.runtime.terminal.control;
 
-export import telar.platform.events;
-export import telar.runtime.history.command;
-export import telar.runtime.diagnostics.runtime_counters;
-export import telar.runtime.shell_integration.token;
-export import telar.runtime.terminal.text_reader;
+import telar.platform.events;
+import telar.runtime.history.command;
+import telar.runtime.diagnostics.runtime_counters;
+import telar.runtime.shell_integration.token;
+import telar.runtime.terminal.text_reader;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
+import telar.runtime.terminal.ghostty;
 
 // The work is in tracker.cpp. What stays here are the relays over the caller's sinks, which hand
 // each sink to that work behind a virtual call.

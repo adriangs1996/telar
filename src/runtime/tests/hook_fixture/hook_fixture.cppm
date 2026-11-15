@@ -12,12 +12,12 @@ module;
 export module telar.runtime.tests.hook_fixture;
 
 import std;
-export import telar.runtime.tests.protocol_peer;
+import telar.runtime.tests.protocol_peer;
 import telar.base.memory.allocators;
 import telar.platform.primitives;
 import telar.platform.process;
 import telar.wire.agents;
-export import telar.wire.vocabulary;
+import telar.wire.vocabulary;
 
 export {
   namespace hook_fixture {

@@ -20,6 +20,9 @@ import telar.base.memory.allocators;
 import telar.platform.primitives;
 import telar.runtime.tests.check;
 import telar.runtime.plugins.tap_configuration;
+import telar.platform.fs;
+import telar.plugins;
+import telar.platform.paths;
 
 using namespace telar;
 using namespace telar::runtime;

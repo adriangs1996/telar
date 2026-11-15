@@ -24,6 +24,8 @@ import telar.runtime.tests.check;
 import telar.platform.fs;
 import telar.runtime.traffic.control_backend;
 import telar.wire.vocabulary;
+import telar.runtime.traffic.control_protocol;
+import telar.runtime.vocabulary.frames;
 
 using namespace telar;
 using namespace telar::runtime;

@@ -6,9 +6,9 @@ export module telar.runtime.shell_integration.git_context;
 import std;
 import telar.sys.posix;
 
-export import telar.git;
-export import telar.wire.pane_io;
-export import telar.runtime.platform.request_worker;
+import telar.git;
+import telar.wire.pane_io;
+import telar.runtime.platform.request_worker;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 

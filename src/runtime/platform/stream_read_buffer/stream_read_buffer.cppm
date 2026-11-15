@@ -6,8 +6,8 @@ export module telar.runtime.platform.stream_read_buffer;
 import std;
 import telar.tbc;
 
-export import telar.base.memory.sensitive;
-export import telar.platform.net;
+import telar.base.memory.sensitive;
+import telar.platform.net;
 
 // Interface: platform/byte_stream.cppm
 export {

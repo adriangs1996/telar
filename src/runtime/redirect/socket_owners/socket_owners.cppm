@@ -9,11 +9,11 @@ import telar.sys.socket;
 import telar.sys.process;
 import telar.sys.posix;
 
-export import telar.runtime.redirect.pf_rules;
-export import telar.runtime.redirect.ingress;
-export import telar.platform.process;
+import telar.runtime.redirect.pf_rules;
+import telar.runtime.redirect.ingress;
+import telar.platform.process;
 
-export import telar.runtime.platform.process_probe;
+import telar.runtime.platform.process_probe;
 import telar.base.diagnostics;
 import telar.base.text;
 import telar.base.text.utf8;
@@ -22,12 +22,13 @@ import telar.platform.fs;
 import telar.platform.net;
 import telar.platform.primitives;
 import telar.vocabulary;
+import telar.runtime.redirect.direction;
 
 #if defined(__APPLE__)
 
-export import telar.base.memory.allocators;
-export import telar.base.memory.containers;
-export import telar.base.memory.sensitive;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
+import telar.base.memory.sensitive;
 
 #endif
 
@@ -36,7 +37,7 @@ export import telar.base.memory.sensitive;
 
 #if defined(__APPLE__)
 
-export import telar.runtime.redirect.record;
+import telar.runtime.redirect.record;
 import telar.runtime.vocabulary.traffic;
 import telar.sys.apple;
 

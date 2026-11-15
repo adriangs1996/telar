@@ -4,16 +4,16 @@ import std;
 import telar.native.sqlite;
 import telar.tbc;
 
-export import telar.runtime.platform.background_executor;
+import telar.runtime.platform.background_executor;
 
-export import telar.runtime.history.event;
+import telar.runtime.history.event;
 
-export import telar.base.memory.allocators;
-export import telar.base.memory.containers;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
 
-export import telar.runtime.transport.connection;
+import telar.runtime.transport.connection;
 
-export import telar.config.runtime;
+import telar.config.runtime;
 import telar.wire.vocabulary;
 import telar.wire.agents;
 import telar.wire.history;
@@ -22,6 +22,7 @@ import telar.platform.primitives;
 import telar.base.diagnostics;
 import telar.base.history;
 import telar.client;
+import telar.runtime.history.command;
 
 // Interface: history/database.cppm
 export {

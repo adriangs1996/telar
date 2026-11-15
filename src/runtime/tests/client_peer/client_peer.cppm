@@ -20,8 +20,8 @@ module;
 export module telar.runtime.tests.client_peer;
 
 import std;
-export import telar.base.memory.allocators;
-export import telar.platform.primitives;
+import telar.base.memory.allocators;
+import telar.platform.primitives;
 
 import telar.base.diagnostics;
 import telar.runtime.diagnostics.line;
@@ -29,8 +29,9 @@ import telar.runtime.terminal.kitty;
 import telar.runtime.runtime.delivery.client_delivery;
 import telar.runtime.terminal.control;
 import telar.runtime.tests.check;
-export import telar.runtime.model.client_layouts;
-export import telar.wire.vocabulary;
+import telar.runtime.model.client_layouts;
+import telar.wire.vocabulary;
+import telar.runtime.model.slot_store;
 
 export {
   class ClientPeer {

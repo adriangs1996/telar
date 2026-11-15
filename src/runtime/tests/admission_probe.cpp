@@ -13,6 +13,8 @@ import telar.runtime.tests.check;
 import telar.runtime.tests.protocol_peer;
 import telar.wire.clients;
 import telar.wire.runtime;
+import telar.client;
+import telar.wire.vocabulary;
 
 using namespace telar;
 using namespace telar::runtime;

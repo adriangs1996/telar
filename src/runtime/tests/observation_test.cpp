@@ -39,6 +39,13 @@ import telar.runtime.observation.processor;
 import telar.runtime.platform.request_worker;
 import telar.runtime.runtime.client_control;
 import telar.wire.vocabulary;
+import telar.platform.events;
+import telar.platform.process;
+import telar.runtime.agents.snapshot;
+import telar.runtime.history.event;
+import telar.runtime.model.client_layouts;
+import telar.runtime.platform.process_probe;
+import telar.runtime.model.slot_store;
 
 using namespace telar;
 using namespace telar::runtime;

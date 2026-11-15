@@ -11,6 +11,7 @@ import telar.runtime.tests.control_png_pty_inputs;
 import telar.runtime.tests.protocol_peer;
 import telar.wire.content;
 import telar.wire.pane_io;
+import telar.wire.vocabulary;
 
 using namespace telar;
 using Clock = std::chrono::steady_clock;

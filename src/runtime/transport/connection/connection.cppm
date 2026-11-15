@@ -6,10 +6,10 @@ export module telar.runtime.transport.connection;
 import std;
 import telar.sys.posix;
 
-export import telar.client;
+import telar.client;
 
-export import telar.base.memory.allocators;
-export import telar.base.memory.containers;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.wire.content;

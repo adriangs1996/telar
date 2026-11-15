@@ -2,11 +2,12 @@ export module telar.runtime.platform.background_executor;
 
 import std;
 
-export import telar.runtime.platform.process_probe;
-export import telar.runtime.suggestions.engine;
-export import telar.runtime.transport.connection;
+import telar.runtime.platform.process_probe;
+import telar.runtime.suggestions.engine;
+import telar.runtime.transport.connection;
 import telar.wire.vocabulary;
 import telar.wire.editor;
+import telar.base.memory.allocators;
 
 // Interface: runtime/request_context.cppm
 export {

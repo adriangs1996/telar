@@ -4,13 +4,15 @@ import std;
 import telar.sys.posix;
 import telar.tbc;
 
-export import telar.runtime.platform.background_executor;
-export import telar.runtime.transport.connection;
-export import telar.base.editors;
-export import telar.platform.process;
+import telar.runtime.platform.background_executor;
+import telar.runtime.transport.connection;
+import telar.base.editors;
+import telar.platform.process;
 import telar.wire.vocabulary;
 import telar.wire.editor;
 import telar.platform.primitives;
+import telar.base.memory.allocators;
+import telar.runtime.platform.process_probe;
 
 // Interface: editors/remote_editor.cppm
 export {

@@ -7,11 +7,11 @@ export module telar.runtime.persistence.session_store;
 import std;
 import telar.tbc;
 
-export import telar.platform.process;
+import telar.platform.process;
 
-export import telar.runtime.model.client_layouts;
+import telar.runtime.model.client_layouts;
 
-export import telar.runtime.platform.request_worker;
+import telar.runtime.platform.request_worker;
 import telar.wire.vocabulary;
 import telar.wire.layout;
 import telar.wire.worktrees;
@@ -20,6 +20,10 @@ import telar.runtime.diagnostics.line;
 import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
 import telar.runtime.agents.snapshot;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
+import telar.runtime.agents.screen_inference;
+import telar.runtime.model.slot_store;
 
 // Interface: persistence/records.cppm
 export {

@@ -37,6 +37,10 @@ import telar.runtime.tests.check;
 import telar.runtime.tests.client_peer;
 import telar.runtime.runtime.media_service;
 import telar.wire.runtime;
+import telar.runtime.model.client_layouts;
+import telar.runtime.model.slot_store;
+import telar.runtime.runtime.execution_service;
+import telar.runtime.workspaces.git_probe;
 
 using namespace telar;
 using namespace telar::runtime;

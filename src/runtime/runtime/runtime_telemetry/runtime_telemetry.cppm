@@ -9,9 +9,9 @@ import std;
 import telar.sys.posix;
 import telar.tbc;
 
-export import telar.runtime.history.event;
+import telar.runtime.history.event;
 
-export import telar.runtime.platform.request_worker;
+import telar.runtime.platform.request_worker;
 import telar.wire.runtime;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
@@ -24,10 +24,11 @@ import telar.runtime.diagnostics.operation;
 import telar.runtime.platform.proc_file;
 #endif
 
-export import telar.runtime.vocabulary.exchange;
-export import telar.runtime.proxy.http2_capture_streams;
+import telar.runtime.vocabulary.exchange;
+import telar.runtime.proxy.http2_capture_streams;
 
-export import telar.runtime.model.client_layouts;
+import telar.runtime.model.client_layouts;
+import telar.base.memory.allocators;
 
 #if (TELAR_DIAGNOSTICS)
 

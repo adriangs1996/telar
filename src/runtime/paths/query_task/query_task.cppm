@@ -7,13 +7,15 @@ export module telar.runtime.paths.query_task;
 import std;
 import telar.tbc;
 
-export import telar.runtime.transport.connection;
+import telar.runtime.transport.connection;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.wire.editor;
 import telar.wire.runtime;
 import telar.platform.primitives;
 import telar.sys.posix;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
 
 // Interface: paths/fuzzy_match.cppm
 export {

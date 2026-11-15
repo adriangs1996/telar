@@ -25,6 +25,7 @@ import telar.runtime.tests.check;
 import telar.runtime.terminal.text_reader;
 import telar.wire.content;
 import telar.wire.vocabulary;
+import telar.runtime.terminal.ghostty;
 
 using namespace telar;
 using namespace telar::runtime;

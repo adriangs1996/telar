@@ -60,6 +60,10 @@ import telar.platform.error;
 import telar.platform.fs;
 import telar.platform.process;
 import telar.wire.vocabulary;
+import telar.runtime.history.event;
+import telar.runtime.history.store;
+import telar.runtime.model.client_layouts;
+import telar.runtime.platform.event_loop;
 
 using namespace telar;
 using namespace telar::runtime;

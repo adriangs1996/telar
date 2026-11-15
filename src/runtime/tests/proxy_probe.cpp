@@ -38,6 +38,7 @@ import telar.wire.content;
 import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.runtime;
+import telar.wire.vocabulary;
 
 using namespace telar;
 using namespace telar::runtime;

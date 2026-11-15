@@ -61,6 +61,12 @@ import telar.runtime.plugins.worker;
 import telar.platform.error;
 import telar.platform.fs;
 import telar.platform.process;
+import telar.base.memory.sensitive;
+import telar.config.runtime;
+import telar.plugins;
+import telar.runtime.platform.signals;
+import telar.runtime.vocabulary.exchange;
+import telar.runtime.vocabulary.traffic;
 
 using namespace telar;
 using namespace telar::runtime;

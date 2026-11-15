@@ -12,6 +12,8 @@ import telar.platform.primitives;
 import telar.runtime.terminal.control;
 import telar.runtime.cli.server;
 import telar.runtime.plugins.run_worker;
+import telar.runtime.plugins.worker;
+import telar.runtime.terminal.ghostty;
 
 auto main(int argc, char** argv) -> int {
   using namespace telar;

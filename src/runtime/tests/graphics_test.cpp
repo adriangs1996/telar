@@ -29,6 +29,10 @@ import telar.wire.graphics;
 import telar.wire.history;
 import telar.wire.vocabulary;
 import telar.runtime.tests.check;
+import telar.runtime.graphics.pane_media;
+import telar.runtime.model.client_layouts;
+import telar.runtime.model.slot_store;
+import telar.runtime.terminal.graphics_storage;
 
 using namespace telar;
 using namespace telar::runtime;

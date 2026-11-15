@@ -35,6 +35,11 @@ import telar.runtime.traffic.capture;
 import telar.runtime.traffic.control_backend;
 import telar.runtime.exchange_capture.producer;
 import telar.vocabulary;
+import telar.config.runtime;
+import telar.runtime.traffic.control_protocol;
+import telar.runtime.vocabulary.exchange;
+import telar.runtime.vocabulary.frames;
+import telar.runtime.vocabulary.traffic;
 
 using namespace telar;
 using namespace telar::runtime;

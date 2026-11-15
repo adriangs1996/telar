@@ -61,6 +61,8 @@ import telar.runtime.runtime.client_control;
 import telar.runtime.terminal.control;
 import telar.runtime.tests.check;
 import telar.wire.clipboard;
+import telar.runtime.model.client_layouts;
+import telar.runtime.model.slot_store;
 
 using namespace telar;
 using namespace telar::runtime;

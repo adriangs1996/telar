@@ -64,6 +64,11 @@ import telar.runtime.runtime.execution_service;
 import telar.wire.vocabulary;
 import telar.platform.error;
 import telar.runtime.agents.snapshot;
+import telar.runtime.model.slot_store;
+import telar.platform.process;
+import telar.runtime.model.client_layouts;
+import telar.runtime.platform.event_loop;
+import telar.runtime.platform.stream_read_buffer;
 
 using namespace telar;
 using namespace telar::runtime;

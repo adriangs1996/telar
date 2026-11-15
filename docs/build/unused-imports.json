@@ -638,7 +638,8 @@
     "telar.base.diagnostics",
     "telar.base.text",
     "telar.platform.error",
-    "telar.platform.primitives"
+    "telar.platform.primitives",
+    "telar.runtime.platform.process_probe"
   ],
   "src/runtime/agents/screen_inference/screen_inference.cppm": [
     "telar.base.diagnostics",
@@ -813,7 +814,10 @@
     "telar.native.pcap",
     "telar.platform.error",
     "telar.platform.fs",
-    "telar.platform.primitives"
+    "telar.platform.primitives",
+    "telar.runtime.plugins.tap_configuration",
+    "telar.runtime.traffic.capture_analysis",
+    "telar.runtime.traffic.control_backend"
   ],
   "src/runtime/plugins/service/service.cppm": [
     "telar.base.diagnostics",
@@ -827,10 +831,12 @@
   "src/runtime/plugins/tap_configuration/tap_configuration.cppm": [
     "telar.base.diagnostics",
     "telar.base.text.utf8",
-    "telar.platform.sha256"
+    "telar.platform.sha256",
+    "telar.runtime.platform.stream_read_buffer"
   ],
   "src/runtime/plugins/worker/worker.cppm": [
-    "telar.base.diagnostics"
+    "telar.base.diagnostics",
+    "telar.runtime.platform.request_worker"
   ],
   "src/runtime/proxy/authenticate/authenticate.cpp": [
     "telar.sys.posix"
@@ -867,7 +873,8 @@
   "src/runtime/proxy/relay_direction/relay_direction.cppm": [
     "telar.platform.error",
     "telar.platform.thread",
-    "telar.runtime.platform.signals"
+    "telar.runtime.platform.signals",
+    "telar.runtime.platform.stream_read_buffer"
   ],
   "src/runtime/proxy/runtime/runtime.cpp": [
     "telar.native.nghttp2"
@@ -877,7 +884,8 @@
     "telar.platform.sha256"
   ],
   "src/runtime/redirect/ingress/ingress.cppm": [
-    "telar.base.diagnostics"
+    "telar.base.diagnostics",
+    "telar.runtime.platform.request_worker"
   ],
   "src/runtime/redirect/pf_rules/pf_rules.cppm": [
     "telar.base.diagnostics",
@@ -923,6 +931,7 @@
   "src/runtime/runtime/execution_service/execution_service.cppm": [
     "telar.platform.error",
     "telar.platform.net",
+    "telar.runtime.shell_integration.words",
     "telar.runtime.terminal.kitty",
     "telar.wire.clients",
     "telar.wire.layout"
@@ -938,6 +947,7 @@
     "telar.client",
     "telar.runtime.diagnostics.line",
     "telar.runtime.platform.launch_program",
+    "telar.runtime.suggestions.engine",
     "telar.runtime.terminal.kitty"
   ],
   "src/runtime/runtime/runtime_telemetry/runtime_telemetry.cpp": [
@@ -983,7 +993,9 @@
     "telar.config.core"
   ],
   "src/runtime/terminal/control/control.cppm": [
-    "telar.ghostty.vt"
+    "telar.ghostty.vt",
+    "telar.runtime.terminal.ghostty",
+    "telar.runtime.terminal.kitty"
   ],
   "src/runtime/terminal/control/engine/engine.cppm": [
     "telar.base.memory.containers",
@@ -1017,8 +1029,20 @@
     "telar.base.diagnostics",
     "telar.runtime.diagnostics.line"
   ],
+  "src/runtime/tests/http2_oracle_stream/http2_oracle_stream.cppm": [
+    "telar.runtime.platform.stream_read_buffer"
+  ],
+  "src/runtime/tests/main.cpp": [
+    "telar.runtime.terminal.control"
+  ],
   "src/runtime/tests/packet_fixture/packet_fixture.cppm": [
     "telar.runtime.traffic.control_protocol"
+  ],
+  "src/runtime/tests/socket_pair/socket_pair.cppm": [
+    "telar.runtime.proxy.relay_direction"
+  ],
+  "src/runtime/tests/test_byte_stream/test_byte_stream.cppm": [
+    "telar.runtime.platform.stream_read_buffer"
   ],
   "src/runtime/tls/interception/interception.cppm": [
     "telar.base.diagnostics"
@@ -1038,7 +1062,8 @@
   "src/runtime/traffic/capture/capture.cppm": [
     "telar.base.diagnostics",
     "telar.platform.error",
-    "telar.platform.net"
+    "telar.platform.net",
+    "telar.runtime.vocabulary.traffic"
   ],
   "src/runtime/traffic/capture_analysis/capture_analysis.cpp": [
     "telar.native.pcap"
@@ -1065,7 +1090,8 @@
     "telar.native.zlib",
     "telar.native.zstd",
     "telar.platform.sha256",
-    "telar.platform.thread"
+    "telar.platform.thread",
+    "telar.runtime.platform.request_worker"
   ],
   "src/runtime/traffic/control_protocol/control_protocol.cppm": [
     "telar.base.diagnostics",

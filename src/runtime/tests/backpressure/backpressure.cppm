@@ -4,7 +4,8 @@ import std;
 import telar.runtime.tests.check;
 import telar.wire.clients;
 import telar.wire.content;
-export import telar.runtime.tests.protocol_peer;
+import telar.runtime.tests.protocol_peer;
+import telar.wire.vocabulary;
 
 export {
   inline void waitForText(ProtocolPeer& peer, std::uint64_t pane, std::string_view expected) {
