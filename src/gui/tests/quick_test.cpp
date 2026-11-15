@@ -5786,6 +5786,10 @@ return {api_version=2, client={keybindings={
       client_->loadConfiguration(path, {}, {});
       QVERIFY2(client_->error().isEmpty(), qPrintable(client_->error()));
       QTRY_VERIFY_WITH_TIMEOUT(componentGroup(QStringLiteral("Bar panel")) != nullptr, runtime_wait_ms);
+      // The bar lays its groups out a frame after they appear. Pointing earlier hovers one spot and
+      // clicks another, so Qt delivers the press right after a synthesized move and the open
+      // tooltip loses it.
+      QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       auto* panel_button = componentGroup(QStringLiteral("Bar panel"));
       auto* pick_button = componentGroup(QStringLiteral("Bar pick"));
 
