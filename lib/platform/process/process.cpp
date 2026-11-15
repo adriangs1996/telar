@@ -8,7 +8,7 @@ import telar.sys.process;
 import telar.sys.apple;
 #endif
 #if defined(__linux__)
-import telar.sys.linux;
+import telar.sys.linux_api;
 #endif
 
 namespace telar::runtime {
@@ -590,9 +590,12 @@ namespace telar::runtime {
   }
 
   void SpawnOptions::closeOthers() {
-#if defined(__GLIBC__)
-    checkSpawn(::posix_spawn_file_actions_addclosefrom_np(&actions, STDERR_FILENO + 1));
-#elif defined(__linux__)
+#if defined(__linux__)
+    if (const int added = sys::addSpawnCloseFrom(&actions, STDERR_FILENO + 1); added != ENOSYS) {
+      checkSpawn(added);
+      return;
+    }
+
     DIR* descriptors = ::opendir("/proc/self/fd");
     if (descriptors == nullptr) {
       throw SystemError{"List open descriptors"};

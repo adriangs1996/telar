@@ -15,7 +15,7 @@ module;
 #include <linux/fs.h>
 #endif
 
-export module telar.sys.linux;
+export module telar.sys.linux_api;
 
 // Linux only (cmake/module_platforms.cmake). The C headers stay in this global
 // module fragment only; importers reach their declarations through these
@@ -34,16 +34,23 @@ export {
   using ::posix_spawn_file_actions_addchdir_np;
   using ::syscall;
   using ::ucred;
+
+  // The kernel's TUN device: the packet header a tunnel reads and writes.
+  using ::tun_pi;
 }
 
-// musl declares none of these; its callers reach the kernel through syscall.
-#if defined(__GLIBC__)
-export {
-  using ::epoll_pwait2;
-  using ::posix_spawn_file_actions_addclosefrom_np;
-  using ::renameat2;
+// glibc wraps these calls and musl does not. Only a unit that includes a libc header sees
+// __GLIBC__, and importers include none, so the choice is made here: renameat2 and epoll_pwait2
+// go through syscall on both (SYS_renameat2, SYS_epoll_pwait2 below), and the spawn action
+// below is defined in linux.cpp.
+export namespace telar::sys {
+
+  // Adds a posix_spawn action that closes every descriptor from `lowest` up, as glibc's
+  // posix_spawn_file_actions_addclosefrom_np does. ENOSYS where the libc has no such action
+  // (musl): the caller closes them another way.
+  int addSpawnCloseFrom(posix_spawn_file_actions_t* actions, int lowest) noexcept;
+
 }
-#endif
 
 // Macros do not cross an import. Each one the tree reads is captured while the headers still
 // define it, undefined, and exported under its own name, so `EPOLL_CTL_ADD` reads the same to an
@@ -58,6 +65,7 @@ export {
   X(RENAME_NOREPLACE)          \
   X(SO_PEERCRED)               \
   X(SYS_close_range)           \
+  X(SYS_epoll_pwait2)          \
   X(SYS_renameat2)             \
   X(TCP_KEEPIDLE)              \
   X(TUNSETIFF)
@@ -73,17 +81,12 @@ export {
   X(MSG_NOSIGNAL)                \
   X(SOCK_CLOEXEC)
 
-// The system calls musl has no wrapper for.
-#define TELAR_SYS_MUSL_SYSCALLS(X) \
-  X(SYS_epoll_pwait2)
-
 namespace telar::sys::captured {
 
 #define TELAR_SYS_CAPTURE(name) inline constexpr auto name##_ = name;
   TELAR_SYS_CONSTANTS(TELAR_SYS_CAPTURE)
 #if !defined(__GLIBC__)
   TELAR_SYS_ENUMERATORS(TELAR_SYS_CAPTURE)
-  TELAR_SYS_MUSL_SYSCALLS(TELAR_SYS_CAPTURE)
 #endif
 
 }
@@ -120,7 +123,4 @@ namespace telar::sys::captured {
 export {
   TELAR_SYS_CONSTANTS(TELAR_SYS_CONSTANT)
   TELAR_SYS_ENUMERATORS(TELAR_SYS_ENUMERATOR)
-#if !defined(__GLIBC__)
-  TELAR_SYS_MUSL_SYSCALLS(TELAR_SYS_CONSTANT)
-#endif
 }

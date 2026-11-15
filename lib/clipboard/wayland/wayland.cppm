@@ -2,7 +2,7 @@ export module telar.clipboard.wayland;
 
 import std;
 import telar.clipboard;
-import telar.clipboard.linux;
+import telar.clipboard.transfer;
 
 // The Wayland backend of the Linux reader. libwayland-client's header and the generated
 // wlr-data-control protocol stay in this module's units; the reader imports this declaration

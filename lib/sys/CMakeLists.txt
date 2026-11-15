@@ -10,6 +10,8 @@ add_library(telar::sys ALIAS telar-sys)
 telar_modules(telar-sys)
 if(APPLE)
   target_sources(telar-sys PRIVATE apple/apple.cpp)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  target_sources(telar-sys PRIVATE linux_api/linux_api.cpp)
 endif()
 target_compile_features(telar-sys PUBLIC cxx_std_23)
 # The libraries that define what the modules declare.

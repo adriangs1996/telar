@@ -1,4 +1,4 @@
-module telar.clipboard.linux;
+module telar.clipboard.transfer;
 
 import std;
 import telar.sys.posix;
