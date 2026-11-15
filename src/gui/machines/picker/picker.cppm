@@ -3,11 +3,11 @@ export module telar.gui.machines.picker;
 import std;
 import telar.tbc;
 
-export import telar.gui.machines.discovery;
+import telar.gui.machines.discovery;
 
-export import telar.gui.machines.profile_store;
+import telar.gui.machines.profile_store;
 
-export import telar.gui.palette.navigation_label;
+import telar.gui.palette.navigation_label;
 import telar.base.history;
 import telar.base.memory.containers;
 

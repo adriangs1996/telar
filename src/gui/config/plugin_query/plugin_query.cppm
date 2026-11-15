@@ -3,17 +3,17 @@ export module telar.gui.config.plugin_query;
 import std;
 import telar.tbc;
 
-export import telar.gui.input.key_encoder;
+import telar.gui.input.key_encoder;
 
-export import telar.gui.input.copy_pointer;
-export import telar.config.client;
+import telar.gui.input.copy_pointer;
+import telar.config.client;
 
-export import telar.gui.core.json_writer;
+import telar.gui.core.json_writer;
 
-export import telar.gui.input.binding_effects;
-export import telar.gui.input.configuration;
+import telar.gui.input.binding_effects;
+import telar.gui.input.configuration;
 
-export import telar.plugins;
+import telar.plugins;
 import telar.base.diagnostics;
 import telar.gui.config.gui_query;
 import telar.gui.core.primitives;

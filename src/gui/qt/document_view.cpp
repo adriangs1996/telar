@@ -11,6 +11,8 @@ static_assert(true);
 #include <span>
 #include <string_view>
 
+import telar.render.document;
+
 namespace telar::gui::qt {
   namespace {
 

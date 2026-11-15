@@ -2,11 +2,11 @@ export module telar.gui.presentation.history_inspection_geometry;
 
 import std;
 
-export import telar.gui.core.metrics;
+import telar.gui.core.metrics;
 
-export import telar.gui.presentation.history_inspection;
+import telar.gui.presentation.history_inspection;
 
-export import telar.gui.layout.geometry;
+import telar.gui.layout.geometry;
 import telar.gui.core.primitives;
 import telar.gui.presentation.history_filter_geometry;
 

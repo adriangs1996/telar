@@ -12,6 +12,7 @@ import telar.gui.config.plugin_query;
 import telar.gui.core.primitives;
 import telar.wire.clients;
 import telar.wire.vocabulary;
+import telar.plugins;
 
 export {
   namespace telar::gui::test {

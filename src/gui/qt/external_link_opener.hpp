@@ -30,6 +30,7 @@ static_assert(true);
 import telar.gui.links.link_hover;
 import telar.gui.links.cell_links;
 import telar.gui.platform.login_shell;
+import telar.gui.links.path_expansion;
 
 namespace telar::gui::qt {
 

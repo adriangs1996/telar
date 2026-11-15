@@ -3,7 +3,7 @@ export module telar.gui.paths.label;
 import std;
 import telar.tbc;
 
-export import telar.gui.text.json_unsigned_integer;
+import telar.gui.text.json_unsigned_integer;
 
 import telar.base.memory.containers;
 import telar.base.text;

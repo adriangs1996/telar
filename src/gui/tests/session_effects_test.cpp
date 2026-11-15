@@ -59,6 +59,7 @@ import telar.gui.platform.awake_clock;
 import telar.gui.presentation.frame_pacer;
 import telar.gui.presentation.notification_center;
 import telar.wire.agents;
+import telar.gui.text.notification_payload;
 
 namespace {
 

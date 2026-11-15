@@ -2,7 +2,7 @@ export module telar.gui.input.child_mouse;
 
 import std;
 
-export import telar.gui.core.metrics;
+import telar.gui.core.metrics;
 import telar.gui.input.wheel_accumulator;
 import telar.wire.vocabulary;
 

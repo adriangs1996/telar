@@ -2,9 +2,9 @@ export module telar.gui.presentation.frame_pacer;
 
 import std;
 
-export import telar.gui.layout.geometry;
+import telar.gui.layout.geometry;
 
-export import telar.gui.core.metrics;
+import telar.gui.core.metrics;
 import telar.wire.vocabulary;
 
 // Interface: presentation/attention_fades.cppm

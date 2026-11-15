@@ -12,6 +12,8 @@ import telar.gui.application.workspace_replica;
 import telar.gui.application.session;
 import telar.render.markdown;
 import telar.wire.content;
+import telar.wire.vocabulary;
+import telar.render.document;
 
 namespace {
 

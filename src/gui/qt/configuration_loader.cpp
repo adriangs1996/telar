@@ -70,6 +70,7 @@ import telar.gui.platform.private_file_stamp;
 import telar.gui.presentation.suggestion_geometry;
 
 import telar.gui.config.gui_query;
+import telar.gui.input.binding_effects;
 
 namespace telar::gui::qt {
 

@@ -27,6 +27,8 @@ import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
+import telar.gui.model.replicas;
+import telar.gui.model.records;
 
 namespace {
 

@@ -5,7 +5,7 @@ export module telar.gui.machines.profile_store;
 
 import std;
 
-export import telar.gui.machines.discovery;
+import telar.gui.machines.discovery;
 
 import telar.base.diagnostics;
 import telar.base.memory.allocators;
@@ -13,6 +13,7 @@ import telar.base.memory.containers;
 import telar.gui.core.primitives;
 import telar.gui.text.json_unsigned_integer;
 import telar.wire.vocabulary;
+import telar.machines;
 
 // Interface: machines/field_rules.cppm
 // Shared with the CLI: telar.machines defines it.

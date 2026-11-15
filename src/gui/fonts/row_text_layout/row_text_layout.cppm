@@ -6,15 +6,15 @@ export module telar.gui.fonts.row_text_layout;
 import std;
 import telar.tbc;
 
-export import telar.gui.fonts.face;
-export import telar.gui.text.bounded_editor;
+import telar.gui.fonts.face;
+import telar.gui.text.bounded_editor;
 
-export import telar.gui.terminal.font_grid;
+import telar.gui.terminal.font_grid;
 
-export import telar.gui.core.metrics;
+import telar.gui.core.metrics;
 
-export import telar.gui.fonts.text_runs;
-export import telar.gui.terminal.selection;
+import telar.gui.fonts.text_runs;
+import telar.gui.terminal.selection;
 import telar.gui.terminal.glyphs;
 import telar.base.diagnostics;
 import telar.base.memory.allocators;

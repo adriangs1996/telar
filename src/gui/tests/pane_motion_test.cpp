@@ -26,6 +26,7 @@ static_assert(true);
 #include "qt/pane_motion_layout.hpp"
 
 import telar.gui.presentation.frame_pacer;
+import telar.gui.core.metrics;
 
 namespace {
 

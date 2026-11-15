@@ -11,6 +11,7 @@ import telar.gui.prompt.editor;
 import telar.gui.prompt.routing;
 import telar.gui.prompt.layout;
 import telar.wire.vocabulary;
+import telar.wire.pane_io;
 
 using namespace telar::gui::prompt;
 

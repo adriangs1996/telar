@@ -4,9 +4,9 @@ import std;
 import telar.sys.socket;
 import telar.tbc;
 
-export import telar.gui.text.notification_payload;
+import telar.gui.text.notification_payload;
 
-export import telar.gui.text.json_unsigned_integer;
+import telar.gui.text.json_unsigned_integer;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 

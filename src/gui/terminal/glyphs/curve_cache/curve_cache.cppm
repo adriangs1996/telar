@@ -5,11 +5,11 @@ export module telar.gui.terminal.glyphs.curve_cache;
 
 import std;
 
-export import telar.gui.core.metrics;
+import telar.gui.core.metrics;
 
-export import telar.gui.terminal.glyphs;
+import telar.gui.terminal.glyphs;
 
-export import telar.gui.terminal.font_grid;
+import telar.gui.terminal.font_grid;
 
 // Interface: terminal/glyphs/ink.cppm
 export {

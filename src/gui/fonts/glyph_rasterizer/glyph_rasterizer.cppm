@@ -2,7 +2,7 @@ export module telar.gui.fonts.glyph_rasterizer;
 
 import std;
 
-export import telar.gui.fonts.face;
+import telar.gui.fonts.face;
 
 export {
   extern "C" {

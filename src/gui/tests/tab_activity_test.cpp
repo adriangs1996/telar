@@ -56,6 +56,7 @@ import telar.gui.graphics.placeholder;
 import telar.gui.graphics.texture_cache;
 import telar.gui.presentation.display_metrics;
 import telar.gui.presentation.activity_order;
+import telar.gui.model.records;
 
 namespace {
 

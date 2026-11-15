@@ -2,7 +2,7 @@ export module telar.gui.application.sound_playback;
 
 import std;
 
-export import telar.gui.core.metrics;
+import telar.gui.core.metrics;
 import telar.wire.vocabulary;
 
 // Interface: application/sound_playback.cppm

@@ -33,6 +33,7 @@ static_assert(true);
 
 import telar.gui.application.host_effects;
 import telar.gui.platform.notification_commands;
+import telar.gui.text.notification_payload;
 
 namespace telar::gui::qt {
 

@@ -60,6 +60,8 @@ import telar.lua;
 
 import telar.config.snapshot;
 import telar.gui.config.gui_query;
+import telar.config.runtime;
+import telar.gui.input.binding_effects;
 
 namespace {
 

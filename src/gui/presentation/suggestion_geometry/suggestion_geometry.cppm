@@ -2,7 +2,7 @@ export module telar.gui.presentation.suggestion_geometry;
 
 import std;
 
-export import telar.gui.core.metrics;
+import telar.gui.core.metrics;
 
 import telar.gui.core.primitives;
 import telar.gui.machines.discovery;

@@ -3,9 +3,9 @@ export module telar.gui.config.gui_query;
 import std;
 import telar.tbc;
 
-export import telar.gui.presentation.client_view_state;
-export import telar.gui.core.metrics;
-export import telar.gui.core.json_writer;
+import telar.gui.presentation.client_view_state;
+import telar.gui.core.metrics;
+import telar.gui.core.json_writer;
 
 import telar.base.diagnostics;
 import telar.config.gui;

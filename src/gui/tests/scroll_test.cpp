@@ -25,6 +25,7 @@ import telar.gui.terminal.row_cache;
 import telar.gui.terminal.screen;
 import telar.gui.links.cell_links;
 import telar.wire.content;
+import telar.wire.vocabulary;
 
 namespace {
 

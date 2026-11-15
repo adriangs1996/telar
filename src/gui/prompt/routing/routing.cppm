@@ -2,7 +2,7 @@ export module telar.gui.prompt.routing;
 
 import std;
 
-export import telar.wire.pane_io;
+import telar.wire.pane_io;
 
 // Who gets the keyboard of a pane in telar's prompt mode, from what the runtime reports about
 // its shell. Anything uncertain falls back to the terminal as it is today: telar's editor only

@@ -3,13 +3,13 @@ export module telar.gui.application.host_effects;
 import std;
 import telar.tbc;
 
-export import telar.gui.text.json_unsigned_integer;
+import telar.gui.text.json_unsigned_integer;
 
-export import telar.gui.presentation.frame_pacer;
+import telar.gui.presentation.frame_pacer;
 
-export import telar.gui.text.notification_payload;
+import telar.gui.text.notification_payload;
 
-export import telar.gui.core.json_writer;
+import telar.gui.core.json_writer;
 import telar.base.diagnostics;
 import telar.base.memory.containers;
 import telar.gui.platform.shared_image_source;

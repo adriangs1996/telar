@@ -1,6 +1,7 @@
 module telar.gui.application.session;
 
 import std;
+import telar.render.document;
 
 namespace telar::gui {
 

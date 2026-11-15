@@ -6,7 +6,7 @@ export module telar.gui.links.path_expansion;
 import std;
 import telar.tbc;
 
-export import telar.gui.text.json_unsigned_integer;
+import telar.gui.text.json_unsigned_integer;
 import telar.base.diagnostics;
 import telar.base.editors;
 import telar.base.memory.containers;

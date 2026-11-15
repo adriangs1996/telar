@@ -5,7 +5,7 @@ export module telar.gui.fonts.font_requests;
 
 import std;
 
-export import telar.gui.fonts.face;
+import telar.gui.fonts.face;
 
 // Interface: fonts/font_coverage.cppm
 export {
