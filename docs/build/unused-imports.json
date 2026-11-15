@@ -235,37 +235,6 @@
     "telar.wire.pane_io",
     "telar.wire.runtime"
   ],
-  "src/gui/components/builtin_content/builtin_content.cppm": [
-    "telar.base.diagnostics",
-    "telar.base.history",
-    "telar.base.text.utf8"
-  ],
-  "src/gui/components/configuration/configuration.cppm": [
-    "telar.base.diagnostics",
-    "telar.base.text.utf8",
-    "telar.wire.vocabulary"
-  ],
-  "src/gui/config/generation/generation.cppm": [
-    "telar.base.diagnostics",
-    "telar.config.snapshot",
-    "telar.gui.config.gui_query",
-    "telar.gui.config.plugin_effects"
-  ],
-  "src/gui/config/gui_query/gui_query.cppm": [
-    "telar.base.diagnostics",
-    "telar.gui.input.key_encoder"
-  ],
-  "src/gui/config/plugin_effects/plugin_effects.cppm": [
-    "telar.base.diagnostics",
-    "telar.gui.config.plugin_query",
-    "telar.gui.input.key_encoder",
-    "telar.platform.primitives"
-  ],
-  "src/gui/config/plugin_query/plugin_query.cppm": [
-    "telar.base.diagnostics",
-    "telar.gui.config.gui_query",
-    "telar.gui.core.unicode_scalar"
-  ],
   "src/gui/core/json_writer/json_writer.cppm": [
     "telar.base.text.utf8"
   ],

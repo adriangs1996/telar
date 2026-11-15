@@ -11,11 +11,7 @@ import telar.config.runtime;
 import telar.plugins;
 
 import telar.gui.core.json_writer;
-import telar.base.diagnostics;
-import telar.gui.config.plugin_query;
 import telar.gui.core.primitives;
-import telar.gui.input.key_encoder;
-import telar.platform.primitives;
 import telar.wire.vocabulary;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;

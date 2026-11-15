@@ -7,10 +7,8 @@ import telar.gui.presentation.client_view_state;
 import telar.gui.core.metrics;
 import telar.gui.core.json_writer;
 
-import telar.base.diagnostics;
 import telar.config.gui;
 import telar.gui.input.copy_pointer;
-import telar.gui.input.key_encoder;
 import telar.wire.vocabulary;
 
 // Interface: config/query.cppm

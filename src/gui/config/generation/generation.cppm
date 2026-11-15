@@ -18,10 +18,6 @@ import telar.gui.core.metrics;
 
 import telar.gui.components.configuration;
 import telar.gui.components.builtin_content;
-import telar.base.diagnostics;
-import telar.config.snapshot;
-import telar.gui.config.gui_query;
-import telar.gui.config.plugin_effects;
 import telar.gui.core.primitives;
 import telar.gui.presentation.suggestion_geometry;
 import telar.plugins;

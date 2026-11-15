@@ -1,5 +1,9 @@
 module telar.gui.config.generation;
 
+import telar.config.snapshot;
+import telar.gui.config.gui_query;
+import telar.gui.config.plugin_effects;
+
 namespace telar::gui {
 
   namespace {
