@@ -12,7 +12,7 @@ copying the headers into their own BMIs.
 | `telar.sys.socket` | sockets, addresses, name resolution and interfaces |
 | `telar.sys.process` | processes, signals, `posix_spawn`, resource limits, terminals and threads |
 | `telar.sys.apple` | Darwin only: `libproc`, `sysctl`, kqueue, Mach and the `_np` extensions |
-| `telar.sys.linux` | Linux only: epoll, `getrandom` and the glibc extensions |
+| `telar.sys.linux` | Linux only: epoll, `getrandom`, the kernel calls glibc wraps and musl does not, and `telar::sys::addSpawnCloseFrom()` |
 
 `sys` is the lowest layer: it imports nothing from telar, and `telar-base`,
 `telar-platform` and the libraries above them build on it.
@@ -33,7 +33,10 @@ set through `telar::sys::setLastError()`, and the struct members a header names
 through a macro through accessors such as `telar::sys::signalHandler(action)`.
 A name that exists on one platform only lives in `telar.sys.apple` or
 `telar.sys.linux`, and code that depends on it checks the platform
-(`__APPLE__`, `__linux__`), not the macro.
+(`__APPLE__`, `__linux__`), not the macro. The same goes for the libc: `__GLIBC__`
+exists only in a unit that includes a libc header, and importers include none, so
+a choice between glibc and musl is made inside `lib/sys` and exported as one name
+that works on both.
 
 ```cmake
 add_subdirectory("${TELAR_ROOT}/lib/sys" "${CMAKE_CURRENT_BINARY_DIR}/telar-sys")

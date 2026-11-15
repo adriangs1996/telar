@@ -129,12 +129,9 @@ namespace telar::runtime {
     timeout = std::max(timeout, std::chrono::nanoseconds::zero());
     const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(timeout);
     const timespec duration{.tv_sec = seconds.count(), .tv_nsec = (timeout - seconds).count()};
-#if defined(__GLIBC__)
-    const auto count = ::epoll_pwait2(queue_.get(), kernel_events_.data(), kernel_events_.size(), &duration, nullptr);
-#else
-    // musl declares no epoll_pwait2; the kernel call takes the mask's size.
+    // glibc's epoll_pwait2 and musl, which declares none, both reach this kernel call; with no
+    // mask, the kernel ignores the mask's size.
     const auto count = static_cast<int>(::syscall(SYS_epoll_pwait2, queue_.get(), kernel_events_.data(), kernel_events_.size(), &duration, nullptr, 0));
-#endif
     if (count < 0) {
       if (sys::lastError() == EINTR) {
         return {};

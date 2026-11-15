@@ -156,6 +156,7 @@ export {
   X(ENOENT)                 \
   X(ENOMEM)                 \
   X(ENOSPC)                 \
+  X(ENOSYS)                 \
   X(ENOTDIR)                \
   X(ENOTSUP)                \
   X(ENXIO)                  \
@@ -286,6 +287,7 @@ namespace telar::sys::captured {
 #undef ENOENT
 #undef ENOMEM
 #undef ENOSPC
+#undef ENOSYS
 #undef ENOTDIR
 #undef ENOTSUP
 #undef ENXIO
