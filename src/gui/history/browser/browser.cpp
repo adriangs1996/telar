@@ -1,6 +1,5 @@
 module telar.gui.history.browser;
 
-import telar.base.diagnostics;
 import telar.base.text.utf8;
 
 namespace telar::gui {

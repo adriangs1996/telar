@@ -50,7 +50,6 @@ static_assert(true);
 #include "application/dependencies.hpp"
 #include "core/memory.hpp"
 
-import telar.gui.application.workspace_replica;
 import telar.gui.machines.picker;
 import telar.gui.presentation.application_mark;
 import telar.gui.presentation.activity_order;

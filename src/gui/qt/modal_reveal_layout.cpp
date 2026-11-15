@@ -17,8 +17,6 @@ static_assert(true);
 #include <limits>
 #include <optional>
 
-import telar.gui.presentation.suggestion_labels;
-
 namespace telar::gui::qt {
 
   ModalRevealLayout::ModalRevealLayout(QQuickItem* parent)

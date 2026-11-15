@@ -1,5 +1,7 @@
 module telar.gui.machines.picker;
 
+import telar.base.history;
+
 namespace telar::gui {
 
   void MachineRow::write(MachineFields fields) {

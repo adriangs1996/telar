@@ -2,7 +2,6 @@ export module telar.gui.core.metrics;
 
 import std;
 
-import telar.base.diagnostics;
 import telar.base.memory.containers;
 import telar.base.text;
 import telar.gui.core.primitives;

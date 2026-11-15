@@ -58,7 +58,6 @@ import telar.gui.presentation.history_pointer;
 import telar.gui.history.browser;
 import telar.gui.application.workspace_replica;
 import telar.gui.input.configuration;
-import telar.gui.links.link_hover;
 
 namespace telar::gui::qt {
 

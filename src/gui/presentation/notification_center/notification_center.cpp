@@ -4,7 +4,6 @@ import std;
 import telar.tbc;
 
 import telar.base.text.utf8;
-import telar.gui.core.primitives;
 import telar.gui.core.unicode_scalar;
 import telar.wire.vocabulary;
 

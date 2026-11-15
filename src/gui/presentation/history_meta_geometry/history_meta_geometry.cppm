@@ -12,7 +12,6 @@ import telar.gui.presentation.history_filter_geometry;
 
 import telar.gui.text.json_unsigned_integer;
 import telar.base.memory.containers;
-import telar.gui.core.primitives;
 import telar.wire.vocabulary;
 
 // Interface: presentation/history_row_geometry.cppm

@@ -6,7 +6,6 @@ module telar.gui.graphics.placeholder;
 import std;
 
 import telar.gui.core.json_writer;
-import telar.gui.core.primitives;
 import telar.gui.presentation.activity_order;
 import telar.gui.terminal.screen;
 import telar.wire.vocabulary;

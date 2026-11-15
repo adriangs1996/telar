@@ -1,5 +1,7 @@
 module telar.gui.text.notification_payload;
 
+import telar.gui.text.json_unsigned_integer;
+
 namespace telar::gui {
 
   template <std::size_t Capacity>

@@ -1,6 +1,8 @@
 module telar.gui.application.session;
 
 import std;
+import telar.gui.presentation.frame_pacer;
+import telar.platform.events;
 
 namespace telar::gui {
 

@@ -60,7 +60,6 @@ static_assert(true);
 
 #include "core/memory.hpp"
 
-import telar.gui.application.workspace_replica;
 import telar.gui.core.metrics;
 import telar.gui.fonts.face;
 import telar.gui.fonts.row_text_layout;
@@ -68,7 +67,6 @@ import telar.gui.machines.discovery;
 import telar.gui.machines.picker;
 import telar.gui.presentation.activity_order;
 import telar.gui.presentation.application_mark;
-import telar.gui.presentation.display_metrics;
 import telar.gui.presentation.frame_pacer;
 import telar.gui.presentation.history_inspection_geometry;
 import telar.gui.presentation.suggestion_geometry;

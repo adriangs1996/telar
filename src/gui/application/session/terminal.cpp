@@ -1,6 +1,10 @@
 module telar.gui.application.session;
 
 import std;
+import telar.gui.input.configuration;
+import telar.gui.input.wheel_accumulator;
+import telar.gui.terminal.row_cache;
+import telar.gui.terminal.screen;
 import telar.render.document;
 
 namespace telar::gui {

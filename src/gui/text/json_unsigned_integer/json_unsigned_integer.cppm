@@ -8,9 +8,6 @@ import telar.tbc;
 
 import telar.machines;
 
-import telar.gui.core.primitives;
-import telar.gui.text.bounded_editor;
-
 // Interface: text/bounded_text.cppm
 // Shared with the CLI: telar.machines defines it.
 export namespace telar::gui {

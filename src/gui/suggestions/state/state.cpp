@@ -1,7 +1,5 @@
 module telar.gui.suggestions.state;
 
-import telar.base.diagnostics;
-
 namespace telar::gui {
 
   void SuggestionState::begin() noexcept {

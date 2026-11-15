@@ -6,13 +6,11 @@ import telar.tbc;
 import telar.gui.links.path_expansion;
 
 import telar.gui.text.json_unsigned_integer;
-import telar.base.diagnostics;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.base.text;
 import telar.gui.core.primitives;
 import telar.gui.terminal.screen;
-import telar.wire.vocabulary;
 
 // Interface: links/uri_view.cppm
 export {

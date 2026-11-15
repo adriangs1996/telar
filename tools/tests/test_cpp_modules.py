@@ -197,6 +197,33 @@ export {
                 self.assertEqual(sites({'src/gui/view/view.cpp': unit(body, 'telar.sys.process')}, interfaces),
                                  {'src/gui/view/view.cpp': {'telar.sys.process'}})
 
+    def test_the_items_of_an_exported_x_macro_list_are_names_of_the_module(self):
+        signals = ('telar.sys.process', '''module;
+#include <signal.h>
+export module telar.sys.process;
+
+#define SIGNALS(X) \\
+  X(SIGINT)        \\
+  X(SIGTERM)
+#define WAITS(X) \\
+  X(WNOHANG)     \\
+  SIGNALS(X)
+#define CONSTANT(name) inline constexpr auto name = captured::name##_;
+
+export {
+  SIGNALS(CONSTANT)
+  WAITS(CONSTANT)
+}
+''')
+        interfaces = {'lib/sys/process/process.cppm': signals}
+        for body in ('int signal = SIGTERM;', 'int flags = WNOHANG;'):
+            with self.subTest(body=body):
+                self.assertEqual(sites({'src/gui/view/view.cpp': unit(body, 'telar.sys.process')}, interfaces), {})
+        for body in ('int signal = SIGNALS;', 'int value = name;'):
+            with self.subTest(body=body):
+                self.assertEqual(sites({'src/gui/view/view.cpp': unit(body, 'telar.sys.process')}, interfaces),
+                                 {'src/gui/view/view.cpp': {'telar.sys.process'}})
+
     def test_a_name_that_reaches_the_module_through_a_listed_reexport_uses_it(self):
         interfaces = {'lib/base/color/color.cppm': COLOR, 'src/gui/theme/theme.cppm': THEME}
         reexports = {'src/gui/theme/theme.cppm': ['telar.base.color']}

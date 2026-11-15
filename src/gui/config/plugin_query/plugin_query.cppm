@@ -14,10 +14,7 @@ import telar.gui.input.binding_effects;
 import telar.gui.input.configuration;
 
 import telar.plugins;
-import telar.base.diagnostics;
-import telar.gui.config.gui_query;
 import telar.gui.core.primitives;
-import telar.gui.core.unicode_scalar;
 import telar.wire.vocabulary;
 import telar.base.memory.allocators;
 

@@ -10,7 +10,6 @@ import telar.gui.core.metrics;
 import telar.gui.text.json_unsigned_integer;
 import telar.base.memory.allocators;
 import telar.gui.core.primitives;
-import telar.gui.terminal.screen;
 import telar.wire.vocabulary;
 import telar.gui.model.records;
 

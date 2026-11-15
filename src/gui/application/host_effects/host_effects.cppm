@@ -13,7 +13,6 @@ import telar.gui.core.json_writer;
 import telar.base.diagnostics;
 import telar.base.memory.containers;
 import telar.gui.platform.shared_image_source;
-import telar.gui.presentation.display_metrics;
 import telar.wire.agents;
 import telar.wire.clients;
 import telar.wire.vocabulary;

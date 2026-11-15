@@ -38,7 +38,6 @@ import telar.gui.platform.awake_clock;
 import telar.gui.presentation.suggestion_labels;
 import telar.gui.presentation.activity_order;
 import telar.gui.presentation.display_metrics;
-import telar.gui.presentation.application_mark;
 
 namespace telar::gui::qt {
 

@@ -13,9 +13,6 @@ import telar.config.client;
 
 import telar.lua;
 
-import telar.base.diagnostics;
-import telar.base.history;
-import telar.base.text.utf8;
 import telar.gui.core.json_writer;
 import telar.wire.vocabulary;
 import telar.base.memory.allocators;

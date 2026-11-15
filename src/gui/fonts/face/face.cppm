@@ -10,7 +10,6 @@ import std;
 import telar.tbc;
 
 import telar.gui.terminal.font_grid;
-import telar.base.diagnostics;
 export import :views;
 
 // Interface: fonts/glyph_bitmap_view.cppm

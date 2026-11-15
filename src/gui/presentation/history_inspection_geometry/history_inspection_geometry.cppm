@@ -7,7 +7,6 @@ import telar.gui.core.metrics;
 import telar.gui.presentation.history_inspection;
 
 import telar.gui.layout.geometry;
-import telar.gui.core.primitives;
 import telar.gui.presentation.history_filter_geometry;
 
 // Interface: presentation/chrome_style.cppm

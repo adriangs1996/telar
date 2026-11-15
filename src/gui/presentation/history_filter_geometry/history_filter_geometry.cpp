@@ -3,7 +3,6 @@ module telar.gui.presentation.history_filter_geometry;
 import std;
 import telar.tbc;
 
-import telar.gui.core.primitives;
 import telar.wire.vocabulary;
 
 namespace telar::gui {

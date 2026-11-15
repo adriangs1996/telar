@@ -53,7 +53,6 @@ static_assert(true);
 import telar.gui.application.session;
 import telar.gui.machines.discovery;
 import telar.gui.machines.picker;
-import telar.gui.platform.awake_clock;
 import telar.gui.platform.window_lease;
 
 namespace telar::gui::qt {

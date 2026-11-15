@@ -2,9 +2,7 @@ module telar.gui.model.replicas;
 
 import std;
 
-import telar.base.diagnostics;
 import telar.base.memory.allocators;
-import telar.base.memory.containers;
 import telar.wire.agents;
 import telar.wire.layout;
 import telar.wire.pane_io;

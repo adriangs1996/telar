@@ -1,5 +1,7 @@
 module telar.gui.config.plugin_query;
 
+import telar.gui.core.unicode_scalar;
+
 namespace telar::gui {
 
   template <Allocator Memory>

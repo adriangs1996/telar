@@ -5,6 +5,7 @@ import std;
 import telar.base.diagnostics;
 import telar.base.text;
 import telar.base.text.utf8;
+import telar.wire.vocabulary;
 
 namespace telar::gui::components {
 

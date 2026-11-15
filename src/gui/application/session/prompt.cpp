@@ -1,7 +1,9 @@
 module telar.gui.application.session;
 
 import std;
+import telar.base.text.utf8;
 import telar.ebnf.matcher;
+import telar.gui.input.configuration;
 
 namespace telar::gui {
 

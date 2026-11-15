@@ -17,7 +17,6 @@ static_assert(true);
 
 #pragma once
 
-import telar.gui.application.workspace_replica;
 import telar.gui.presentation.notification_center;
 
 namespace telar::gui::qt {

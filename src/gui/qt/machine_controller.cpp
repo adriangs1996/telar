@@ -41,7 +41,6 @@ static_assert(true);
 
 #include "core/memory.hpp"
 
-import telar.gui.application.host_effects;
 import telar.gui.machines.picker;
 import telar.gui.platform.awake_clock;
 import telar.gui.presentation.activity_order;

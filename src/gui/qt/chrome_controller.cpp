@@ -37,7 +37,6 @@ static_assert(true);
 #include <variant>
 
 import telar.gui.layout.geometry;
-import telar.gui.application.workspace_replica;
 import telar.gui.fonts.face;
 import telar.gui.fonts.row_text_layout;
 import telar.gui.presentation.activity_order;

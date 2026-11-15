@@ -47,7 +47,6 @@ static_assert(true);
 
 #include "core/memory.hpp"
 
-import telar.gui.application.workspace_replica;
 import telar.gui.core.metrics;
 import telar.gui.presentation.notification_stack;
 import telar.gui.presentation.history_meta_geometry;
