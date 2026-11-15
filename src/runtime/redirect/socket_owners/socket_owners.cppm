@@ -13,6 +13,7 @@ import telar.runtime.redirect.ingress;
 import telar.platform.process;
 
 import telar.runtime.platform.process_probe;
+import telar.base.memory.containers;
 import telar.base.text;
 import telar.platform.error;
 import telar.platform.fs;
@@ -23,7 +24,6 @@ import telar.runtime.redirect.direction;
 #if defined(__APPLE__)
 
 import telar.base.memory.allocators;
-import telar.base.memory.containers;
 import telar.base.memory.sensitive;
 
 #endif
