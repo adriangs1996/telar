@@ -6,6 +6,7 @@ module telar.runtime.exchange_capture.producer;
 import telar.native.brotli;
 import telar.native.zlib;
 import telar.native.zstd;
+import telar.base.memory.sensitive;
 
 namespace telar::runtime {
 

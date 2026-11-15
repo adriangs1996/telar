@@ -603,45 +603,6 @@
   "src/gui/transport/runtime_link/runtime_link.cppm": [
     "telar.base.diagnostics"
   ],
-  "src/runtime/exchange_capture/pipeline/pipeline.cppm": [
-    "telar.base.diagnostics",
-    "telar.native.brotli",
-    "telar.native.zlib",
-    "telar.native.zstd",
-    "telar.platform.thread"
-  ],
-  "src/runtime/exchange_capture/producer/producer.cppm": [
-    "telar.base.diagnostics",
-    "telar.base.memory.sensitive"
-  ],
-  "src/runtime/graphics/file_input/file_input.cppm": [
-    "telar.base.diagnostics"
-  ],
-  "src/runtime/graphics/pane_media/pane_media.cppm": [
-    "telar.base.diagnostics",
-    "telar.runtime.diagnostics.line"
-  ],
-  "src/runtime/graphics/prepared_images/prepared_images.cppm": [
-    "telar.base.diagnostics",
-    "telar.platform.primitives",
-    "telar.runtime.diagnostics.line",
-    "telar.runtime.diagnostics.operation"
-  ],
-  "src/runtime/graphics/synchronizer/synchronizer.cppm": [
-    "telar.base.diagnostics",
-    "telar.runtime.diagnostics.line",
-    "telar.wire.graphics"
-  ],
-  "src/runtime/history/event/event.cppm": [
-    "telar.base.diagnostics",
-    "telar.runtime.diagnostics.line"
-  ],
-  "src/runtime/history/store/store.cppm": [
-    "telar.base.diagnostics",
-    "telar.base.history",
-    "telar.client",
-    "telar.wire.runtime"
-  ],
   "src/runtime/http/content/content.cppm": [
     "telar.base.text"
   ],

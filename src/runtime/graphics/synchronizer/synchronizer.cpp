@@ -5,6 +5,9 @@ module;
 
 module telar.runtime.graphics.synchronizer;
 
+import telar.runtime.diagnostics.line;
+import telar.wire.graphics;
+
 namespace telar::runtime {
 
   bool GraphicsCreditBudget::acquire(std::size_t bytes) noexcept {

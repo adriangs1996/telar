@@ -9,6 +9,7 @@ import telar.ghostty.vt;
 import telar.sys.posix;
 import telar.render.document;
 import telar.platform.graphics;
+import telar.runtime.diagnostics.line;
 
 namespace telar::runtime {
 

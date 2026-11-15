@@ -13,8 +13,6 @@ import telar.base.memory.containers;
 import telar.runtime.vocabulary.exchange;
 import telar.runtime.http.content;
 
-import telar.base.diagnostics;
-import telar.base.memory.sensitive;
 import telar.base.text;
 import telar.native.brotli;
 import telar.native.zlib;

@@ -11,13 +11,11 @@ import telar.runtime.history.command;
 import telar.runtime.transport.connection;
 
 import telar.runtime.diagnostics.operation;
-import telar.base.diagnostics;
 import telar.native.sqlite;
 import telar.wire.vocabulary;
 import telar.wire.agents;
 import telar.wire.history;
 import telar.wire.runtime;
-import telar.runtime.diagnostics.line;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 

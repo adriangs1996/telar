@@ -6,6 +6,10 @@ module telar.runtime.history.store;
 import std;
 import telar.native.sqlite;
 import telar.tbc;
+import telar.base.diagnostics;
+import telar.base.history;
+import telar.client;
+import telar.wire.runtime;
 
 namespace telar::runtime {
 

@@ -5,9 +5,6 @@ module;
 export module telar.runtime.exchange_capture.pipeline;
 
 import std;
-import telar.native.brotli;
-import telar.native.zlib;
-import telar.native.zstd;
 import telar.tbc;
 
 import telar.runtime.vocabulary.exchange;
@@ -17,9 +14,7 @@ import telar.base.memory.containers;
 import telar.runtime.exchange_capture.producer;
 
 import telar.runtime.platform.request_worker;
-import telar.base.diagnostics;
 import telar.platform.primitives;
-import telar.platform.thread;
 import telar.config.runtime;
 
 // Interface: exchange_capture/clock.cppm

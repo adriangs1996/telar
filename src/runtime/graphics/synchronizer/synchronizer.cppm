@@ -12,11 +12,8 @@ import telar.runtime.graphics.pane_media;
 
 import telar.runtime.diagnostics.runtime_counters;
 import telar.runtime.transport.connection;
-import telar.base.diagnostics;
 import telar.wire.vocabulary;
-import telar.wire.graphics;
 import telar.platform.primitives;
-import telar.runtime.diagnostics.line;
 import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
 import telar.base.memory.allocators;
