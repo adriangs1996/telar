@@ -439,6 +439,40 @@
     "telar.gui.terminal.font_grid",
     "telar.gui.terminal.glyphs"
   ],
+  "src/gui/tests/activity_fixture/activity_fixture.cppm": [
+    "telar.wire.vocabulary"
+  ],
+  "src/gui/tests/agent_fixture/agent_fixture.cppm": [
+    "telar.wire.vocabulary"
+  ],
+  "src/gui/tests/allocation_gate/allocation_gate.cppm": [
+    "telar.gui.core.primitives"
+  ],
+  "src/gui/tests/erasure_allocator/erasure_allocator.cppm": [
+    "telar.gui.core.primitives"
+  ],
+  "src/gui/tests/font_fixture/font_fixture.cppm": [
+    "telar.base.memory.allocators",
+    "telar.gui.core.primitives",
+    "telar.gui.fonts.face"
+  ],
+  "src/gui/tests/json_fixture/json_fixture.cppm": [
+    "telar.base.text.json"
+  ],
+  "src/gui/tests/metrics_fixture/metrics_fixture.cppm": [
+    "telar.wire.runtime",
+    "telar.wire.vocabulary"
+  ],
+  "src/gui/tests/plugin_effect_cases/plugin_effect_cases.cppm": [
+    "telar.gui.config.plugin_effects",
+    "telar.wire.vocabulary"
+  ],
+  "src/gui/tests/session_fixture/session_fixture.cppm": [
+    "telar.base.memory.allocators",
+    "telar.gui.application.host_effects",
+    "telar.gui.application.session",
+    "telar.wire.vocabulary"
+  ],
   "src/gui/text/json_unsigned_integer/json_unsigned_integer.cppm": [
     "telar.machines"
   ],
@@ -846,6 +880,59 @@
     "telar.runtime.diagnostics.runtime_counters",
     "telar.runtime.terminal.graphics_storage",
     "telar.runtime.terminal.osc_scanner"
+  ],
+  "src/runtime/tests/agent_oracle/agent_oracle.cppm": [
+    "telar.runtime.tests.protocol_peer"
+  ],
+  "src/runtime/tests/backpressure/backpressure.cppm": [
+    "telar.runtime.tests.protocol_peer"
+  ],
+  "src/runtime/tests/client_peer/client_peer.cppm": [
+    "telar.base.memory.allocators",
+    "telar.platform.primitives",
+    "telar.runtime.model.client_layouts",
+    "telar.wire.vocabulary"
+  ],
+  "src/runtime/tests/clipboard_task/clipboard_task.cppm": [
+    "telar.wire.clipboard",
+    "telar.wire.vocabulary"
+  ],
+  "src/runtime/tests/control_clipboard_fixture/control_clipboard_fixture.cppm": [
+    "telar.runtime.tests.clipboard_task"
+  ],
+  "src/runtime/tests/erasure_checking_allocator/erasure_checking_allocator.cppm": [
+    "telar.base.memory.allocators"
+  ],
+  "src/runtime/tests/hook_fixture/hook_fixture.cppm": [
+    "telar.runtime.tests.protocol_peer",
+    "telar.wire.vocabulary"
+  ],
+  "src/runtime/tests/http2_fixture/http2_fixture.cppm": [
+    "telar.runtime.http2.frame_reader"
+  ],
+  "src/runtime/tests/http2_oracle/http2_oracle.cppm": [
+    "telar.runtime.http2.direction_observer"
+  ],
+  "src/runtime/tests/http2_oracle_stream/http2_oracle_stream.cppm": [
+    "telar.runtime.tests.http2_oracle"
+  ],
+  "src/runtime/tests/one_shot_allocator/one_shot_allocator.cppm": [
+    "telar.base.memory.allocators"
+  ],
+  "src/runtime/tests/packet_fixture/packet_fixture.cppm": [
+    "telar.vocabulary"
+  ],
+  "src/runtime/tests/protocol_peer/protocol_peer.cppm": [
+    "telar.client",
+    "telar.wire.vocabulary"
+  ],
+  "src/runtime/tests/socket_pair/socket_pair.cppm": [
+    "telar.platform.primitives"
+  ],
+  "src/runtime/tests/tls_fixture/tls_fixture.cppm": [
+    "telar.base.memory.allocators",
+    "telar.platform.primitives",
+    "telar.tls"
   ],
   "src/runtime/tls/interception/interception.cppm": [
     "telar.runtime.platform.stream_read_buffer",

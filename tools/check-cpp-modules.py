@@ -476,14 +476,11 @@ def reexports_of(text):
 def check_reexports(sources, allowed):
     """Rule 4: no `export import` but that of an own partition, std included. Each file imports
     the modules it names, so its imports show every dependency it really has. Tests and tools
-    are out of the rule. docs/build/reexports.json lists, by file, the re-exports that exist
+    are in the rule too. docs/build/reexports.json lists, by file, the re-exports that exist
     today; the change that removes one removes its entry. `sources` maps each interface to its
     text."""
     sites = {}
     for name, text in sorted(sources.items()):
-        if re.search(r'/(tests|tools)/', name):
-            continue
-
         targets = reexports_of(text)
         if targets:
             sites[name] = targets

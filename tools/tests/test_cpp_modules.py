@@ -64,13 +64,16 @@ export
 
         self.assertEqual(checker.check_reexports(sources, allowed), 3)
 
-    def test_leaves_tests_and_tools_out(self):
+    def test_applies_to_tests_and_tools(self):
         sources = {
             'src/gui/tests/fixture/fixture.cppm': 'export module fixture;\nexport import telar.wire.vocabulary;\n',
             'src/runtime/tools/probe/probe.cppm': 'export module probe;\nexport import std;\n',
         }
 
-        self.assertEqual(checker.check_reexports(sources, {}), 0)
+        with self.assertRaisesRegex(RuntimeError, 'src/gui/tests/fixture/fixture.cppm re-exports telar.wire.vocabulary'):
+            checker.check_reexports(sources, {})
+        with self.assertRaisesRegex(RuntimeError, 'src/runtime/tools/probe/probe.cppm re-exports std'):
+            checker.check_reexports(sources, {})
 
 
 if __name__ == '__main__':

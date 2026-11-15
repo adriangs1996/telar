@@ -97,7 +97,7 @@ Ninguna interfaz hace `export import`, tampoco de `std`, salvo el de sus propias
 particiones (`export import :p`), que el estándar exige para exportarlas. Cada fichero
 importa los módulos que nombra, así que sus imports muestran todas sus dependencias
 reales: un re-export las esconde aunque la interfaz exportada nombre un tipo del módulo.
-Los tests y las herramientas quedan fuera de la regla. [reexports.json](reexports.json)
+Los tests y las herramientas también siguen la regla. [reexports.json](reexports.json)
 lista por fichero los re-exports que hay hoy; quien quita uno borra su entrada, y una
 entrada que ya no existe también hace fallar el checker.
 
