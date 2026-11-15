@@ -7,7 +7,7 @@ static_assert(true);
 #include <cstdio>
 
 import std;
-import telar.runtime.graphics.kitty;
+import telar.runtime.terminal.kitty;
 import telar.runtime.tests.check;
 import telar.runtime.graphics.file_input;
 

@@ -4,6 +4,7 @@ module;
 module telar.runtime.terminal.control.engine;
 
 import telar.ghostty.vt;
+import telar.render.document;
 
 namespace telar::runtime::control {
 
@@ -119,16 +120,8 @@ namespace telar::runtime::control {
   std::size_t Engine::ordinaryRun(std::span<const std::uint8_t> input, std::size_t offset) {
     history_erased_ = false;
     homed_ = false;
-    const auto remaining = input.subspan(offset);
-    if (ascii_detail::eligible(remaining) && state_.canWriteAscii()) {
-      return offset + ordinaryAscii(remaining);
-    }
-
-    const auto end = styledOrdinaryLength(input, offset);
-
     responses_.release();
-    state_.writeNonGraphics(input.subspan(offset, end - offset));
-    return end;
+    return state_.writeOrdinaryRun(input, offset);
   }
 
   void Engine::escapeBoundary() {
@@ -364,28 +357,6 @@ namespace telar::runtime::control {
       zones_.push_back(std::move(zone));
     } catch (const std::bad_alloc&) {
     }
-  }
-
-  std::size_t Engine::ordinaryAscii(std::span<const std::uint8_t> input) {
-    std::array<std::uint32_t, ascii_detail::codepoint_capacity> codepoints;
-
-    TELAR_ASSERT(input.size() >= ascii_detail::gate_bytes);
-
-    // ordinaryRun has already validated these bytes synchronously. Only the
-    // remaining input needs stop detection; the C bridge still validates all.
-#if (defined(__aarch64__) && defined(__AARCH64EL__)) || defined(__SSE2__)
-    for (std::size_t offset = 0; offset < ascii_detail::gate_bytes; offset += styled_detail::vector_bytes) {
-      ascii_detail::widenBlock(ascii_detail::load(input.data() + offset), codepoints.data() + offset);
-    }
-#else
-    std::copy_n(input.data(), ascii_detail::gate_bytes, codepoints.data());
-#endif
-
-    const auto count = ascii_detail::gate_bytes + ascii_detail::widen(input.subspan(ascii_detail::gate_bytes), std::span{codepoints}.subspan(ascii_detail::gate_bytes));
-
-    responses_.release();
-    state_.writeAscii(std::span{codepoints}.first(count));
-    return count;
   }
 
   Engine::ReleaseProducer::~ReleaseProducer() {
@@ -685,7 +656,9 @@ namespace telar::runtime::control {
     }
   }
 
-  void Engine::reportCursor(bool extended) {
+  // Out of line, as in the textual control headers: the cursor report inlines into this body,
+  // and the requests that share csi() and status() do not carry its frame.
+  [[gnu::noinline]] void Engine::reportCursor(bool extended) {
     if (!enabled_) {
       return;
     }

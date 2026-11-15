@@ -1,18 +1,12 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
-
-#include "png_decoder.hpp"
-#include "../diagnostics/line.hpp"
-#include "../terminal/ghostty_allocator.hpp"
-#include "../terminal/ghostty_handle.hpp"
-#include "telar_base/diagnostics/config.hpp"
-#include "telar_vocabulary/vocabulary.hpp"
-
+// Defines what telar.runtime.terminal.kitty declares outside any module.
 import std;
+import telar.ghostty.vt;
 import telar.ghostty.wuffs;
-import telar.runtime.graphics.prepared_images;
+import telar.tbc;
+import telar.vocabulary;
+import telar.runtime.terminal.ghostty;
+import telar.runtime.terminal.graphics_storage;
+import telar.runtime.terminal.kitty;
 
 namespace telar::runtime {
   namespace {

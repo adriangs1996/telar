@@ -1,12 +1,11 @@
-#include "terminal/control/ascii_ordinary.hpp"
-#include <array>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
 #include <sys/mman.h>
 #include <unistd.h>
 
+import std;
+import telar.runtime.terminal.control;
+
 using namespace telar::runtime::control;
+using styled_detail::Isa;
 
 namespace {
   std::size_t checked = 0;
@@ -17,6 +16,9 @@ namespace {
     }
   }
 
+  // The widening of each instruction set: the target's vectors, which production runs, and the
+  // byte loop of a target without them.
+  template <Isa Set>
   void verify(std::span<const std::uint8_t> input, std::span<std::uint32_t> output) {
     constexpr std::uint32_t canary = 0xdecafbad;
     auto* before = output.data() - 1;
@@ -29,7 +31,7 @@ namespace {
       ++expected;
     }
 
-    const auto actual = ascii_detail::widen(input, output);
+    const auto actual = Set == Isa::vector ? ascii_detail::widen(input, output) : ascii_detail::widenScalar(input, output);
 
     require(actual == expected && *before == canary);
     for (std::size_t index = 0; index < actual; ++index) {
@@ -42,8 +44,13 @@ namespace {
       eligible = input[index] < 0x80 && input[index] != 0x05 && input[index] != 0x1b;
     }
 
-    require(ascii_detail::eligible(input) == eligible);
+    require((Set == Isa::vector ? ascii_detail::eligible(input) : ascii_detail::eligibleScalar(input)) == eligible);
     ++checked;
+  }
+
+  void verify(std::span<const std::uint8_t> input, std::span<std::uint32_t> output) {
+    verify<Isa::vector>(input, output);
+    verify<Isa::scalar>(input, output);
   }
 }
 

@@ -7,6 +7,7 @@ module telar.runtime.graphics.pane_media;
 
 import telar.ghostty.vt;
 import telar.sys.posix;
+import telar.render.document;
 
 namespace telar::runtime {
 

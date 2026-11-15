@@ -24,7 +24,7 @@ import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
-import telar.runtime.graphics.kitty;
+import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
 
 // Interface: observation/batch.cppm

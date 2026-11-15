@@ -55,7 +55,7 @@ import telar.base.memory.allocators;
 import telar.base.text.utf8;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
-import telar.runtime.graphics.kitty;
+import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
 import telar.runtime.tests.check;
 import telar.runtime.persistence.session_store;

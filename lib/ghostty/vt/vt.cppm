@@ -9,6 +9,7 @@ import std;
 // the textual headers include; importers reach it through these declarations instead.
 export {
   using ::GhosttyAllocator;
+  using ::GhosttyAllocatorVtable;
   using ::GhosttyCell;
   using ::GhosttyCellContentTag;
   using ::GhosttyCellsView;
@@ -17,6 +18,7 @@ export {
   using ::GhosttyClipboardWriteResult;
   using ::GhosttyCodepointsBuffer;
   using ::GhosttyColorRgb;
+  using ::GhosttyFormatter;
   using ::GhosttyFormatterScreenExtra;
   using ::GhosttyFormatterTerminalExtra;
   using ::GhosttyFormatterTerminalOptions;
@@ -44,6 +46,7 @@ export {
   using ::GhosttyRenderStateDirty;
   using ::GhosttyRenderStateRowCells;
   using ::GhosttyRenderStateRowIterator;
+  using ::GhosttyResult;
   using ::GhosttyRow;
   using ::GhosttyRowSemanticPrompt;
   using ::GhosttySelection;
@@ -52,7 +55,10 @@ export {
   using ::GhosttyStyle;
   using ::GhosttyStyleColor;
   using ::GhosttyStyleId;
+  using ::GhosttySysImage;
   using ::GhosttyTerminal;
+  using ::GhosttyTerminalCursorState;
+  using ::GhosttyTerminalData;
   using ::GhosttyTerminalModeConfig;
   using ::GhosttyTerminalProgressReport;
   using ::GhosttyTerminalScreen;
@@ -62,7 +68,9 @@ export {
   using ::GhosttyWriter;
 
   using ::ghostty_formatter_format;
+  using ::ghostty_formatter_free;
   using ::ghostty_formatter_terminal_new;
+  using ::ghostty_free;
   using ::ghostty_grid_ref_cell;
   using ::ghostty_grid_ref_cells;
   using ::ghostty_grid_ref_grapheme_batch;
@@ -100,20 +108,28 @@ export {
   using ::ghostty_kitty_graphics_placement_remove;
   using ::ghostty_kitty_graphics_placement_source_rect;
   using ::ghostty_render_state_clean;
+  using ::ghostty_render_state_free;
   using ::ghostty_render_state_get;
   using ::ghostty_render_state_new;
+  using ::ghostty_render_state_row_cells_free;
   using ::ghostty_render_state_row_cells_get;
   using ::ghostty_render_state_row_cells_new;
   using ::ghostty_render_state_row_cells_select;
   using ::ghostty_render_state_row_get;
+  using ::ghostty_render_state_row_iterator_free;
   using ::ghostty_render_state_row_iterator_new;
   using ::ghostty_render_state_row_iterator_next;
   using ::ghostty_render_state_row_iterator_next_dirty;
   using ::ghostty_render_state_update;
   using ::ghostty_row_get;
+  using ::ghostty_sys_set;
+  using ::ghostty_terminal_cursor_snapshot;
+  using ::ghostty_terminal_free;
   using ::ghostty_terminal_get;
+  using ::ghostty_terminal_get_multi;
   using ::ghostty_terminal_grid_ref;
   using ::ghostty_terminal_grid_ref_track;
+  using ::ghostty_terminal_index;
   using ::ghostty_terminal_new;
   using ::ghostty_terminal_page_bytes;
   using ::ghostty_terminal_point_from_grid_ref;
@@ -122,6 +138,7 @@ export {
   using ::ghostty_terminal_scroll_viewport;
   using ::ghostty_terminal_set;
   using ::ghostty_terminal_vt_write;
+  using ::ghostty_terminal_vt_write_ascii;
   using ::ghostty_tracked_grid_ref_free;
   using ::ghostty_tracked_grid_ref_set;
   using ::ghostty_tracked_grid_ref_snapshot;
@@ -200,13 +217,19 @@ export {
   using ::GHOSTTY_STYLE_COLOR_PALETTE;
   using ::GHOSTTY_STYLE_COLOR_RGB;
   using ::GHOSTTY_SUCCESS;
+  using ::GHOSTTY_SYS_OPT_DECODE_PNG;
   using ::GHOSTTY_TERMINAL_DATA_ACTIVE_SCREEN;
+  using ::GHOSTTY_TERMINAL_DATA_COLOR_BACKGROUND;
   using ::GHOSTTY_TERMINAL_DATA_COLOR_BACKGROUND_OVERRIDE;
+  using ::GHOSTTY_TERMINAL_DATA_COLOR_CURSOR;
+  using ::GHOSTTY_TERMINAL_DATA_COLOR_FOREGROUND;
   using ::GHOSTTY_TERMINAL_DATA_COLOR_FOREGROUND_OVERRIDE;
+  using ::GHOSTTY_TERMINAL_DATA_COLOR_PALETTE;
   using ::GHOSTTY_TERMINAL_DATA_COLOR_PALETTE_DEFAULT;
   using ::GHOSTTY_TERMINAL_DATA_COLOR_PALETTE_OVERRIDES;
   using ::GHOSTTY_TERMINAL_DATA_COLS;
   using ::GHOSTTY_TERMINAL_DATA_CURSOR_IS_DEFAULT;
+  using ::GHOSTTY_TERMINAL_DATA_CURSOR_STYLE;
   using ::GHOSTTY_TERMINAL_DATA_CURSOR_X;
   using ::GHOSTTY_TERMINAL_DATA_CURSOR_Y;
   using ::GHOSTTY_TERMINAL_DATA_KITTY_GRAPHICS;
@@ -215,7 +238,12 @@ export {
   using ::GHOSTTY_TERMINAL_DATA_MODIFY_OTHER_KEYS_2;
   using ::GHOSTTY_TERMINAL_DATA_MOUSE_SHAPE_NAME;
   using ::GHOSTTY_TERMINAL_DATA_PWD;
+  using ::GHOSTTY_TERMINAL_DATA_ROWS;
   using ::GHOSTTY_TERMINAL_DATA_SCROLLBAR;
+  using ::GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_BOTTOM;
+  using ::GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_LEFT;
+  using ::GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_RIGHT;
+  using ::GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_TOP;
   using ::GHOSTTY_TERMINAL_DATA_TITLE;
   using ::GHOSTTY_TERMINAL_DATA_TOTAL_ROWS;
   using ::GHOSTTY_TERMINAL_DATA_VT_GROUND;
@@ -227,6 +255,8 @@ export {
   using ::GHOSTTY_TERMINAL_OPT_COLOR_CURSOR;
   using ::GHOSTTY_TERMINAL_OPT_COLOR_FOREGROUND;
   using ::GHOSTTY_TERMINAL_OPT_COLOR_PALETTE;
+  using ::GHOSTTY_TERMINAL_OPT_CURSOR_PENDING_WRAP;
+  using ::GHOSTTY_TERMINAL_OPT_CURSOR_X;
   using ::GHOSTTY_TERMINAL_OPT_DEFAULT_CURSOR_BLINK;
   using ::GHOSTTY_TERMINAL_OPT_GLYPH_PROTOCOL;
   using ::GHOSTTY_TERMINAL_OPT_KITTY_IMAGE_MEDIUM_FILE;
@@ -234,6 +264,7 @@ export {
   using ::GHOSTTY_TERMINAL_OPT_KITTY_IMAGE_MEDIUM_TEMP_FILE;
   using ::GHOSTTY_TERMINAL_OPT_KITTY_IMAGE_STORAGE_LIMIT;
   using ::GHOSTTY_TERMINAL_OPT_KITTY_PROTOCOL;
+  using ::GHOSTTY_TERMINAL_OPT_MODE;
   using ::GHOSTTY_TERMINAL_OPT_PROGRESS_REPORT;
   using ::GHOSTTY_TERMINAL_OPT_PWD_CHANGED;
   using ::GHOSTTY_TERMINAL_OPT_SCROLLBACK_MAX_BYTES;
@@ -251,13 +282,24 @@ export {
 // expression can call, so the capture packs the same bits. The captures are exported too: an
 // importer that also includes the header, as the ghostty-modes test does, can only reach them,
 // and that test checks each against the header's ghostty_mode_new.
-#define TELAR_GHOSTTY_CONSTANTS(X) \
-  X(GHOSTTY_MODS_CTRL)             \
+#define TELAR_GHOSTTY_CONSTANTS(X)       \
+  X(GHOSTTY_MODS_CTRL)                   \
+  X(GHOSTTY_TELAR_ASCII_CODEPOINT_LIMIT) \
   TELAR_GHOSTTY_MODES(X)
+
+export namespace telar::ghostty {
+
+  // ghostty_mode_new for a mode known only at run time, as a mode report reads it. The captures
+  // below pack their bits through it.
+  constexpr GhosttyMode mode(std::uint16_t value, bool ansi) noexcept {
+    return static_cast<GhosttyMode>((value & 0x7FFF) | (static_cast<std::uint16_t>(ansi) << 15));
+  }
+
+}
 
 export namespace telar::ghostty::captured {
 
-#define ghostty_mode_new(value, ansi) static_cast<GhosttyMode>(((value) & 0x7FFF) | (static_cast<std::uint16_t>(ansi) << 15))
+#define ghostty_mode_new(value, ansi) telar::ghostty::mode(value, ansi)
 #define TELAR_GHOSTTY_CAPTURE(name) inline constexpr auto name##_ = name;
   TELAR_GHOSTTY_CONSTANTS(TELAR_GHOSTTY_CAPTURE)
 #undef ghostty_mode_new
@@ -265,6 +307,7 @@ export namespace telar::ghostty::captured {
 }
 
 #undef GHOSTTY_MODS_CTRL
+#undef GHOSTTY_TELAR_ASCII_CODEPOINT_LIMIT
 #undef GHOSTTY_MODE_ALT_SCROLL
 #undef GHOSTTY_MODE_ANY_MOUSE
 #undef GHOSTTY_MODE_BRACKETED_PASTE

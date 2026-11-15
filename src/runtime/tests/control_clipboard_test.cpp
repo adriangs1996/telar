@@ -46,7 +46,7 @@ import telar.base.memory.allocators;
 import telar.config.runtime;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
-import telar.runtime.graphics.kitty;
+import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
 import telar.runtime.terminal.control.clipboard;
 import telar.runtime.tests.client_peer;

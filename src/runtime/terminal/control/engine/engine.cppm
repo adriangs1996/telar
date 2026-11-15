@@ -102,8 +102,6 @@ export namespace telar::runtime::control {
 
     void closeZone() noexcept;
 
-    [[gnu::noinline]] std::size_t ordinaryAscii(std::span<const std::uint8_t> input);
-
     struct ReleaseProducer {
       PtyResponseQueue::Producer& producer;
 
