@@ -335,11 +335,9 @@ namespace telar::runtime {
     const auto flags = mode == RenameMode::create_only ? RENAME_EXCL : 0;
 
     return ::renameatx_np(source_directory, source, destination_directory, destination, flags);
-#elif defined(__GLIBC__)
-    const auto flags = mode == RenameMode::create_only ? RENAME_NOREPLACE : 0;
-    return ::renameat2(source_directory, source, destination_directory, destination, flags);
 #else
-    // musl declares no renameat2; the kernel call is the same.
+    // glibc's renameat2 and musl, which declares none, both reach this kernel call. No libc
+    // header reaches this unit, so __GLIBC__ cannot tell them apart here.
     const unsigned flags = mode == RenameMode::create_only ? RENAME_NOREPLACE : 0;
     return static_cast<int>(::syscall(SYS_renameat2, source_directory, source, destination_directory, destination, flags));
 #endif

@@ -276,7 +276,7 @@ namespace {
           return root.release();
         }
 
-        const QJsonObject result{{"iterations", static_cast<int>(options_.iterations)}, {"warmup", static_cast<int>(options_.warmup)}, {"elapsed_ns", elapsed_}, {"apply_ns", total_apply_elapsed_}, {"apply_and_paint_ns", elapsed_ + total_apply_elapsed_}, {"render_each_frame", options_.render_each_frame}, {"snapshot_workload", options_.snapshot_workload}, {"colored_backgrounds", options_.colored_backgrounds}, {"columns", static_cast<int>(columns_)}, {"rows", static_cast<int>(rows_)}, {"scale", options_.scale}, {"font", options_.family}, {"thicken", options_.thicken}, {"fixed_pitch", resolved_.font.fixed_pitch}};
+        const QJsonObject result{{"iterations", static_cast<int>(options_.iterations)}, {"warmup", static_cast<int>(options_.warmup)}, {"elapsed_ns", qint64{elapsed_}}, {"apply_ns", qint64{total_apply_elapsed_}}, {"apply_and_paint_ns", qint64{elapsed_ + total_apply_elapsed_}}, {"render_each_frame", options_.render_each_frame}, {"snapshot_workload", options_.snapshot_workload}, {"colored_backgrounds", options_.colored_backgrounds}, {"columns", static_cast<int>(columns_)}, {"rows", static_cast<int>(rows_)}, {"scale", options_.scale}, {"font", options_.family}, {"thicken", options_.thicken}, {"fixed_pitch", resolved_.font.fixed_pitch}};
 
         std::cout << QJsonDocument{result}.toJson(QJsonDocument::Compact).constData() << '\n';
       } catch (...) {

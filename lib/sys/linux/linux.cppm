@@ -58,6 +58,7 @@ export {
   X(RENAME_NOREPLACE)          \
   X(SO_PEERCRED)               \
   X(SYS_close_range)           \
+  X(SYS_renameat2)             \
   X(TCP_KEEPIDLE)              \
   X(TUNSETIFF)
 
@@ -74,8 +75,7 @@ export {
 
 // The system calls musl has no wrapper for.
 #define TELAR_SYS_MUSL_SYSCALLS(X) \
-  X(SYS_epoll_pwait2)              \
-  X(SYS_renameat2)
+  X(SYS_epoll_pwait2)
 
 namespace telar::sys::captured {
 

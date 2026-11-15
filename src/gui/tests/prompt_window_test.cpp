@@ -5,6 +5,7 @@ static_assert(true);
 
 #include "../application/dependencies.hpp"
 #include "../qt/application.hpp"
+#include "../qt/key_adapter.hpp"
 #include "frame_fixture.hpp"
 #include "gui_wait.hpp"
 #include "qml_fixture.hpp"
@@ -34,9 +35,6 @@ static_assert(true);
 #include <tuple>
 #include <utility>
 #if (defined(__APPLE__))
-#endif
-#if (defined(__APPLE__))
-#include "../qt/key_adapter.hpp"
 #endif
 #if (defined(__APPLE__))
 #endif

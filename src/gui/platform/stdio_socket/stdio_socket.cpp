@@ -5,6 +5,9 @@ import std;
 import telar.platform.error;
 import telar.sys.posix;
 import telar.sys.socket;
+#if defined(__linux__)
+import telar.sys.linux;
+#endif
 
 namespace telar::gui::platform {
 
