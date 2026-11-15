@@ -16,12 +16,10 @@ import telar.runtime.platform.private_tunnel;
 import telar.platform.net;
 import telar.runtime.platform.local_listener;
 
-import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.platform.primitives;
 import telar.client;
 import telar.platform.error;
-import telar.runtime.platform.request_worker;
 import telar.runtime.vocabulary.frames;
 import telar.base.text;
 import telar.base.memory.containers;

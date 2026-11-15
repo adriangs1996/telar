@@ -2,6 +2,8 @@ module telar.runtime.redirect.record;
 
 import telar.native.pcap;
 import telar.sys.socket;
+import telar.platform.error;
+import telar.platform.fs;
 #if defined(__APPLE__)
 import telar.sys.apple;
 #endif

@@ -603,31 +603,6 @@
   "src/gui/transport/runtime_link/runtime_link.cppm": [
     "telar.base.diagnostics"
   ],
-  "src/runtime/redirect/ingress/ingress.cppm": [
-    "telar.base.diagnostics",
-    "telar.runtime.platform.request_worker"
-  ],
-  "src/runtime/redirect/pf_rules/pf_rules.cppm": [
-    "telar.base.diagnostics",
-    "telar.base.text.utf8",
-    "telar.platform.error",
-    "telar.platform.net",
-    "telar.plugins"
-  ],
-  "src/runtime/redirect/record/record.cppm": [
-    "telar.base.diagnostics",
-    "telar.platform.error",
-    "telar.platform.fs"
-  ],
-  "src/runtime/redirect/socket_owners/socket_owners.cpp": [
-    "telar.native.pcap"
-  ],
-  "src/runtime/redirect/socket_owners/socket_owners.cppm": [
-    "telar.base.diagnostics",
-    "telar.base.text.utf8",
-    "telar.native.pcap",
-    "telar.platform.net"
-  ],
   "src/runtime/runtime/client_control/client_control.cppm": [
     "telar.runtime.terminal.kitty"
   ],

@@ -4,7 +4,6 @@ module;
 export module telar.runtime.redirect.socket_owners;
 
 import std;
-import telar.native.pcap;
 import telar.sys.socket;
 import telar.sys.process;
 import telar.sys.posix;
@@ -14,12 +13,9 @@ import telar.runtime.redirect.ingress;
 import telar.platform.process;
 
 import telar.runtime.platform.process_probe;
-import telar.base.diagnostics;
 import telar.base.text;
-import telar.base.text.utf8;
 import telar.platform.error;
 import telar.platform.fs;
-import telar.platform.net;
 import telar.platform.primitives;
 import telar.vocabulary;
 import telar.runtime.redirect.direction;
