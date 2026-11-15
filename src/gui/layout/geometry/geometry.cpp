@@ -2,7 +2,6 @@ module telar.gui.layout.geometry;
 
 import std;
 
-import telar.wire.layout;
 import telar.wire.vocabulary;
 import telar.gui.core.primitives;
 

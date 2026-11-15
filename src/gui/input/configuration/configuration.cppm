@@ -4,7 +4,6 @@ import std;
 
 import telar.gui.input.copy_pointer;
 import telar.gui.input.key_encoder;
-import telar.wire.vocabulary;
 
 // Interface: config/default_bindings.cppm
 export {

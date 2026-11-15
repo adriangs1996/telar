@@ -3,8 +3,6 @@ export module telar.gui.input.copy_pointer;
 import std;
 
 import telar.gui.terminal.font_grid;
-import telar.gui.core.primitives;
-import telar.gui.terminal.screen;
 
 // Interface: input/action.cppm
 export {

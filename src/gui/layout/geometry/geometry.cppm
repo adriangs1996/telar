@@ -4,10 +4,8 @@ import std;
 
 import telar.gui.core.metrics;
 import telar.gui.core.unicode_scalar;
-import telar.wire.layout;
 import telar.wire.vocabulary;
 import telar.gui.core.primitives;
-import telar.base.text.utf8;
 
 // Interface: application/pane_bottom_reservation.cppm
 export {

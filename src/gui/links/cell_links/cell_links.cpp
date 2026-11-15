@@ -1,5 +1,7 @@
 module telar.gui.links.cell_links;
 
+import telar.wire.vocabulary;
+
 namespace telar::gui {
 
   template <Allocator Memory>

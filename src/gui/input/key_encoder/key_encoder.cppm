@@ -10,7 +10,6 @@ import telar.config.client;
 import telar.gui.core.unicode_scalar;
 
 import telar.gui.text.json_unsigned_integer;
-import telar.base.diagnostics;
 import telar.base.text;
 import telar.wire.vocabulary;
 

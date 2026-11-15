@@ -235,41 +235,6 @@
     "telar.wire.pane_io",
     "telar.wire.runtime"
   ],
-  "src/gui/input/configuration/configuration.cppm": [
-    "telar.wire.vocabulary"
-  ],
-  "src/gui/input/copy_mode/copy_mode.cppm": [
-    "telar.base.diagnostics",
-    "telar.gui.core.primitives",
-    "telar.gui.terminal.screen"
-  ],
-  "src/gui/input/copy_pointer/copy_pointer.cppm": [
-    "telar.gui.core.primitives",
-    "telar.gui.terminal.screen"
-  ],
-  "src/gui/input/key_encoder/key_encoder.cppm": [
-    "telar.base.diagnostics"
-  ],
-  "src/gui/layout/geometry/geometry.cpp": [
-    "telar.wire.layout"
-  ],
-  "src/gui/layout/geometry/geometry.cppm": [
-    "telar.base.text.utf8",
-    "telar.wire.layout"
-  ],
-  "src/gui/links/cell_links/cell_links.cppm": [
-    "telar.base.diagnostics",
-    "telar.wire.vocabulary"
-  ],
-  "src/gui/links/link_hover/link_hover.cppm": [
-    "telar.base.diagnostics",
-    "telar.gui.core.primitives",
-    "telar.gui.terminal.screen"
-  ],
-  "src/gui/links/path_expansion/path_expansion.cppm": [
-    "telar.base.diagnostics",
-    "telar.gui.core.primitives"
-  ],
   "src/gui/machines/picker/picker.cppm": [
     "telar.base.history"
   ],

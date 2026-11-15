@@ -1,6 +1,7 @@
 module telar.gui.input.configuration;
 
 import std;
+import telar.wire.vocabulary;
 
 namespace telar::gui {
 
