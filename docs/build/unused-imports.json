@@ -6,9 +6,7 @@
     "telar.base.diagnostics"
   ],
   "lib/client/client.cppm": [
-    "telar.base.diagnostics",
-    "telar.sys.apple",
-    "telar.sys.linux_api"
+    "telar.base.diagnostics"
   ],
   "lib/config/client/client.cppm": [
     "telar.wire.clients"
@@ -42,9 +40,6 @@
   ],
   "lib/platform/process/process.cppm": [
     "telar.platform.error"
-  ],
-  "lib/platform/thread/thread.cpp": [
-    "telar.sys.posix"
   ],
   "lib/plugins/plugins.cppm": [
     "telar.base.diagnostics",
