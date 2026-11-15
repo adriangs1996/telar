@@ -718,6 +718,7 @@ Para cada módulo: `extern template class X<Memory>;` en la interfaz, la instanc
 ### [ ] P11.1 · Medición final frente a la línea base
 - **Depende de:** P3.17, P6.8, P7.2, P9.11, P10.1–P10.3
 - **Hecho cuando:** P0.2 se vuelve a ejecutar y el resultado se compara en `docs/build/` con la línea base. Cifras a comparar: código en interfaces (94,7%), dependientes del hub de protocolo (148), dependientes de `base.memory` (167), aristas hacia arriba (55 → 0), ciclos (5 → 0), `export import` (681), líneas en fragmentos globales (4,84 M), unidades recompiladas al tocar cada hub y longitud del camino crítico (20 módulos). Se ejecuta la suite completa.
+- **Pregunta abierta (antes de cerrar):** en `server-cli-tests`, la firma (a) "Runtime closed the connection" sale 17 de 200 en la cabeza y 3 de 200 en `main` con la misma carga (Fisher exacto, p = 0,002): el refactor cambió algo entre la salida encolada a un cliente y `stop()`. Puede ser inocuo (`stop()` llega antes) o que la cola de salida de los clientes se vacíe más despacio bajo carga, que sería latencia de escritura. Se resuelve con datos, en `main` y en la cabeza, en reposo y con carga: cuánta salida queda en cola al llegar `stop()` y cuánto tarda en vaciarse la cola de un cliente. Que el arreglo de `fix-server-cli-checkpoint` elimine la firma no responde la pregunta.
 
 ---
 
