@@ -5,9 +5,6 @@ import std;
 import telar.gui.core.unicode_scalar;
 
 import telar.gui.suggestions.state;
-import telar.base.diagnostics;
-import telar.gui.presentation.activity_order;
-import telar.gui.presentation.application_mark;
 import telar.wire.vocabulary;
 
 // Interface: presentation/agent_animation.cppm

@@ -235,37 +235,6 @@
     "telar.wire.pane_io",
     "telar.wire.runtime"
   ],
-  "src/gui/presentation/activity_order/activity_order.cppm": [
-    "telar.gui.terminal.screen"
-  ],
-  "src/gui/presentation/notification_center/notification_center.cpp": [
-    "telar.gui.core.primitives"
-  ],
-  "src/gui/presentation/notification_center/notification_center.cppm": [
-    "telar.base.diagnostics",
-    "telar.base.text.utf8",
-    "telar.gui.core.primitives",
-    "telar.gui.core.unicode_scalar"
-  ],
-  "src/gui/presentation/notification_stack/notification_stack.cppm": [
-    "telar.gui.terminal.screen"
-  ],
-  "src/gui/presentation/suggestion_geometry/suggestion_geometry.cpp": [
-    "telar.gui.core.primitives",
-    "telar.gui.machines.discovery"
-  ],
-  "src/gui/presentation/suggestion_geometry/suggestion_geometry.cppm": [
-    "telar.gui.core.primitives",
-    "telar.gui.machines.discovery"
-  ],
-  "src/gui/presentation/suggestion_labels/suggestion_labels.cpp": [
-    "telar.gui.presentation.application_mark"
-  ],
-  "src/gui/presentation/suggestion_labels/suggestion_labels.cppm": [
-    "telar.base.diagnostics",
-    "telar.gui.presentation.activity_order",
-    "telar.gui.presentation.application_mark"
-  ],
   "src/gui/qt/activity_projection.hpp": [
     "telar.gui.application.workspace_replica"
   ],

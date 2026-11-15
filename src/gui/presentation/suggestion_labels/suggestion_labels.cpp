@@ -2,7 +2,6 @@ module telar.gui.presentation.suggestion_labels;
 
 import std;
 import telar.gui.presentation.activity_order;
-import telar.gui.presentation.application_mark;
 import telar.wire.vocabulary;
 import telar.gui.model.records;
 

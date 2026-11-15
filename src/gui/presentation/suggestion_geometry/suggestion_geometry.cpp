@@ -1,8 +1,6 @@
 module telar.gui.presentation.suggestion_geometry;
 
 import std;
-import telar.gui.core.primitives;
-import telar.gui.machines.discovery;
 
 namespace telar::gui {
 

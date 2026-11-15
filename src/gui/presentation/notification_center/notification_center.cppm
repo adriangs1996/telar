@@ -8,11 +8,7 @@ import telar.tbc;
 
 import telar.gui.model.records;
 import telar.gui.text.json_unsigned_integer;
-import telar.base.diagnostics;
 import telar.base.memory.containers;
-import telar.base.text.utf8;
-import telar.gui.core.primitives;
-import telar.gui.core.unicode_scalar;
 import telar.wire.vocabulary;
 
 // Interface: application/notification_item.cppm
