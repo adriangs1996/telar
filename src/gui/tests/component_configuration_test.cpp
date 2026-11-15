@@ -363,17 +363,20 @@ return {api_version = 2, client = {
     invocation.output = "Result λ";
     generation.renderPick(2, invocation, items);
     require(items.size() == 1 && items.at(0).label == "Result λ" && items.at(0).detail == "Working λ", "pick callbacks must receive command output and readonly client context");
+
+    components::PickItems failed;
+
     for (const auto* const failure : {"infinite", "immutable", "invalid"}) {
       invocation.output = failure;
       bool rejected = false;
 
       try {
-        generation.renderPick(2, invocation, items);
+        generation.renderPick(2, invocation, failed);
       } catch (const std::exception&) {
         rejected = true;
       }
 
-      require(rejected && items.size() == 1 && items.at(0).label == "Result λ", "failed pick callbacks must retain the previous complete list");
+      require(rejected, "failed pick callbacks must report their failure");
     }
 
     generation.renderPick(0, invocation, items);

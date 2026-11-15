@@ -252,6 +252,9 @@ export {
 export {
   namespace telar::gui::components {
 
+    // Each read replaces output in place: a PickItems takes 432 KiB, too large to stage on
+    // the Lua thread's stack. After a failure output holds the options read before it, so a
+    // caller that must keep its last complete list reads into a fresh PickItems.
     class PickItemsReader {
     public:
       static void read(const runtime::lua::Value& value, PickItems& output, runtime::config::LimitNotices& limits);
