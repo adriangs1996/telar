@@ -235,29 +235,6 @@
     "telar.wire.pane_io",
     "telar.wire.runtime"
   ],
-  "src/gui/application/host_effects/host_effects.cppm": [
-    "telar.gui.presentation.display_metrics"
-  ],
-  "src/gui/application/session/session.cppm": [
-    "telar.base.text.utf8",
-    "telar.gui.input.configuration",
-    "telar.gui.input.wheel_accumulator",
-    "telar.gui.presentation.activity_order",
-    "telar.gui.presentation.frame_pacer",
-    "telar.gui.presentation.notification_stack",
-    "telar.gui.terminal.row_cache",
-    "telar.gui.terminal.screen",
-    "telar.platform.events"
-  ],
-  "src/gui/application/workspace_replica/workspace_replica.cppm": [
-    "telar.base.diagnostics",
-    "telar.gui.core.unicode_scalar",
-    "telar.gui.layout.geometry",
-    "telar.gui.model.replicas",
-    "telar.gui.presentation.application_mark",
-    "telar.gui.presentation.notification_center",
-    "telar.gui.text.json_unsigned_integer"
-  ],
   "src/gui/components/builtin_content/builtin_content.cppm": [
     "telar.base.diagnostics",
     "telar.base.history",
