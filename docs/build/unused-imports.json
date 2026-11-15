@@ -701,7 +701,6 @@
     "telar.base.diagnostics"
   ],
   "src/runtime/observation/processor/processor.cppm": [
-    "telar.platform.primitives",
     "telar.runtime.terminal.kitty"
   ],
   "src/runtime/paths/query_task/query_task.cppm": [
@@ -725,8 +724,7 @@
     "telar.base.diagnostics"
   ],
   "src/runtime/platform/host_metrics/macos/host_metrics.cpp": [
-    "telar.base.diagnostics",
-    "telar.platform.primitives"
+    "telar.base.diagnostics"
   ],
   "src/runtime/platform/private_tunnel/private_tunnel.cppm": [
     "telar.platform.error"
@@ -741,8 +739,7 @@
     "telar.base.diagnostics"
   ],
   "src/runtime/platform/process_probe/process_probe.cppm": [
-    "telar.base.diagnostics",
-    "telar.platform.primitives"
+    "telar.base.diagnostics"
   ],
   "src/runtime/platform/request_worker/request_worker.cppm": [
     "telar.base.diagnostics",

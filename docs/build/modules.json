@@ -751,7 +751,13 @@
     "lib/platform/include/telar_platform/trace_macro.hpp",
     "lib/tbc/include/tbc/annotations.hpp"
   ],
-  "implicit_uses": [],
+  "implicit_uses": [
+    {
+      "module": "telar.platform.primitives",
+      "names": ["TELAR_TRACE"],
+      "reason": "telar_platform/trace_macro.hpp: in Debug, TELAR_TRACE expands to ::telar::runtime::trace::Scope and literal, which this module exports"
+    }
+  ],
   "implementations": {
     "lib/wire/agents/agents.cpp": "telar.wire.agents",
     "lib/wire/clients/clients.cpp": "telar.wire.clients",
