@@ -5,6 +5,19 @@ import telar.platform.sha256;
 import telar.sys.posix;
 import telar.tbc;
 import telar.cli.output;
+import telar.base.text.utf8;
+import telar.cli.tab;
+import telar.platform.fs;
+import telar.platform.primitives;
+import telar.platform.process;
+import telar.wire.agents;
+import telar.wire.clients;
+import telar.wire.content;
+import telar.wire.layout;
+import telar.wire.pane_io;
+import telar.wire.runtime;
+import telar.wire.vocabulary;
+import telar.wire.worktrees;
 
 namespace telar::runtime::cli::repository {
 

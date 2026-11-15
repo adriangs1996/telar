@@ -1,33 +1,4 @@
 {
-  "src/cli/window/window.cppm": [
-    "telar.base.diagnostics",
-    "telar.base.text.utf8",
-    "telar.cli.command_limit"
-  ],
-  "src/cli/worktree/worktree.cppm": [
-    "telar.base.diagnostics",
-    "telar.base.text.utf8",
-    "telar.cli.tab",
-    "telar.platform.fs",
-    "telar.platform.primitives",
-    "telar.platform.process",
-    "telar.wire.agents",
-    "telar.wire.clients",
-    "telar.wire.content",
-    "telar.wire.layout",
-    "telar.wire.pane_io",
-    "telar.wire.runtime",
-    "telar.wire.vocabulary",
-    "telar.wire.worktrees"
-  ],
-  "src/cli/worktree_git/worktree_git.cppm": [
-    "telar.base.diagnostics",
-    "telar.base.memory.containers",
-    "telar.cli.server",
-    "telar.platform.error",
-    "telar.wire.pane_io",
-    "telar.wire.runtime"
-  ],
   "src/gui/application/host_effects/host_effects.cppm": [
     "telar.gui.presentation.display_metrics"
   ],

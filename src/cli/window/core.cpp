@@ -1,6 +1,8 @@
 module telar.cli.window;
 
 import telar.sys.posix;
+import telar.base.text.utf8;
+import telar.cli.command_limit;
 
 // The bodies of the window interface that cli-core carries, since
 // telar-config-check parses its options too; window.cpp builds only into the

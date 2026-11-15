@@ -14,19 +14,13 @@ import telar.platform.process;
 import telar.cli.output;
 
 import telar.base.memory.allocators;
-import telar.base.diagnostics;
 import telar.base.text;
 import telar.base.text.json;
 import telar.wire.vocabulary;
 import telar.wire.layout;
-import telar.wire.pane_io;
-import telar.wire.runtime;
 import telar.git.checkout;
 import telar.platform.primitives;
-import telar.base.memory.containers;
 import telar.cli.runtime_observer;
-import telar.cli.server;
-import telar.platform.error;
 import telar.cli.control_session;
 
 // Interface: repository_identity.cppm
