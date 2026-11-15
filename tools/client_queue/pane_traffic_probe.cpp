@@ -9,6 +9,9 @@
 #include <chrono>
 #include <string_view>
 #include <vector>
+#elif QUEUE_TRACE_BASE
+import std;
+import telar.runtime.tests.protocol_peer;
 #else
 import std;
 import telar.runtime.tests.protocol_peer;

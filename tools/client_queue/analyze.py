@@ -20,6 +20,7 @@ run for the frame latencies, whose frames within a run are not independent; pool
 Counts use Fisher's exact test.
 """
 import argparse
+import bisect
 from collections import defaultdict
 import json
 import math
@@ -29,7 +30,7 @@ import re
 import struct
 
 RECORD = struct.Struct("<QQIIIIBBHI")
-KINDS = ("message", "dropped", "drain", "snapshot", "write", "stop_request", "mismatch", "publish")
+KINDS = ("message", "dropped", "drain", "snapshot", "write", "stop_request", "mismatch", "publish", "mark")
 LANES = ("stopping", "management", "resync", "clipboard", "layout", "proxy", "shell", "scrollback", "cells",
          "agents", "metrics", "workspaces", "panes", "cwd", "foreground", "title", "progress", "git", "blocks",
          "exit", "graphics", "document", "observation", "count")
@@ -47,6 +48,12 @@ def lane_names(path):
 PUBLISH_PHASES = (("admissions, clipboard and media", "bytes"), ("panes", "extra"), ("executions", "mask"),
                   ("observations, deferred reports, agents and detection", "queue"),
                   ("worktrees, workspaces, session, metrics, git and queued notices", "frames"))
+# From a reply being queued: the rest of receive(), the write interest update, the rest of the event batch,
+# captures and plugin delivery, the start of publish() and its first three calls (instrument.py's marks).
+SEGMENTS = (("rest of receive()", 10), ("updateWriteInterest()", 11), ("rest of the event batch", 12),
+            ("captures and plugin delivery", 13), ("admissions_.expire()", 20), ("runtime_clipboard_.expire()", 21),
+            ("media_.collect()", 22))
+SEED_REPLIES = ("PaneOpened (OpenPane)", "WorkspaceSnapshot (RenameWorkspace)", "PaneOpened (CreatePane)", "TabCreated (CreateTab)")
 EAGAIN = 35 if __import__("sys").platform == "darwin" else 11
 STOPPING_FRAME = 5
 
@@ -150,6 +157,45 @@ def ordering(items, queue, lanes_of, replies=4):
     if snapshot is None or len(answered) < replies:
         return None
 
+    publishes = sorted((item for item in items if item["kind"] == "publish"), key=lambda item: item["first"])
+    marks = defaultdict(list)
+    counters = defaultdict(dict)
+    for item in items:
+        if item["kind"] == "mark":
+            marks[item["phase"]].append(item["first"])
+            counters[item["phase"]][item["first"]] = (item["bytes"], item["extra"])
+    for times in marks.values():
+        times.sort()
+    starts = [item["first"] for item in publishes]
+    per_reply = []
+    for index in answered[:replies]:
+        reply = messages[index]
+        following = bisect.bisect_left(starts, reply["first"])
+        call = publishes[following] if following < len(publishes) else None
+        segments = {}
+        faults = {}
+        cursor = reply["first"]
+        previous = None
+        for label, mark in SEGMENTS:
+            times = marks.get(mark, [])
+            position = bisect.bisect_left(times, cursor)
+            if position == len(times):
+                break
+            segments[label] = times[position] - cursor
+            cursor = times[position]
+            current = counters[mark][cursor]
+            if previous is not None and current[0]:
+                faults[label] = (current[0] - previous[0], current[1] - previous[1])
+            previous = current
+        per_reply.append({
+            "segments": segments,
+            "faults": faults,
+            "latency": reply["second"] - reply["first"],
+            "to_publish": call["first"] - reply["first"] if call else None,
+            "publish": call["second"] - call["first"] if call else None,
+            "phases": {phase: call[field] for phase, field in PUBLISH_PHASES} if call else {},
+        })
+
     last = messages[answered[replies - 1]]["second"]
     first_cells = names.index("cells") if "cells" in names else len(names)
     cells = [item for item, name in zip(messages, names) if name == "cells" and item["second"] < snapshot["second"]]
@@ -159,6 +205,7 @@ def ordering(items, queue, lanes_of, replies=4):
         "cells_between_replies": sum(item["second"] < last for item in cells),
         "bytes_after_last_reply": sum(item["bytes"] for item in messages if last < item["second"] < snapshot["second"]),
         "lost": snapshot["bytes"] > 0,
+        "replies": per_reply,
     }
 
 
@@ -309,6 +356,25 @@ def main():
                              ("cells_between_replies", "cells frames written between the replies"), ("bytes_after_last_reply", "bytes written after the last reply, before stop() (B)")):
             values = [[len(row[field]) if isinstance(row[field], list) else row[field] for row in side] for side in orderings]
             report.setdefault("ordering", []).append({"field": field, **compare(title, *values, names)})
+        print("\n runtime #0: the four replies of checkpoint-probe seed (us)")
+        for index, title in enumerate(SEED_REPLIES):
+            for field, label in (("latency", "queued -> written"), ("to_publish", "queued -> next publish()"), ("publish", "that publish() before its clients")):
+                values = [[row["replies"][index][field] * microseconds for row in side if row["replies"][index][field] is not None] for side in orderings]
+                report.setdefault("replies", []).append({"reply": title, "field": field, **compare(f"{title}: {label}", *values, names)})
+            if index in (0, 2, 3):
+                for label, _ in SEGMENTS:
+                    values = [[row["replies"][index]["segments"][label] * microseconds for row in side if label in row["replies"][index]["segments"]] for side in orderings]
+                    if min(len(values[0]), len(values[1])) >= 2:
+                        report.setdefault("replies", []).append({"reply": title, "segment": label, **compare(f"{title}: {label}", *values, names)})
+                for label, _ in SEGMENTS:
+                    for slot, kind in ((0, "page faults"), (1, "copy-on-write faults")):
+                        values = [[row["replies"][index]["faults"][label][slot] for row in side if label in row["replies"][index]["faults"]] for side in orderings]
+                        if min(len(values[0]), len(values[1])) >= 2:
+                            report.setdefault("replies", []).append({"reply": title, "segment": label, "faults": kind, **compare(f"{title}: {kind} in {label}", *values, names)})
+                for phase, _ in PUBLISH_PHASES:
+                    values = [[row["replies"][index]["phases"][phase] * microseconds for row in side if row["replies"][index]["phases"]] for side in orderings]
+                    report.setdefault("replies", []).append({"reply": title, "phase": phase, **compare(f"{title}: that publish(), {phase}", *values, names)})
+
         none = [(sum(row["cells_between_replies"] == 0 for row in side), len(side)) for side in orderings]
         p = fisher(none[0][0], none[0][1] - none[0][0], none[1][0], none[1][1] - none[1][0])
         print(f"  no cells frame between the replies: {names[0]} {none[0][0]}/{none[0][1]}, {names[1]} {none[1][0]}/{none[1][1]}, Fisher p = {p:.3g}")

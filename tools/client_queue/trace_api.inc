@@ -10,6 +10,7 @@ namespace telar::runtime::queue_trace {
     stop_request,
     mismatch,
     publish,
+    mark,
   };
 
   // 40 bytes, read by analyze.py. The meaning of each field depends on the kind.
@@ -37,4 +38,7 @@ namespace telar::runtime::queue_trace {
   QUEUE_TRACE_INLINE void flush() noexcept;
 
   QUEUE_TRACE_INLINE std::uint32_t nextQueue() noexcept;
+
+  // Page faults and copy-on-write faults of this process so far; zero where the platform has no counter.
+  QUEUE_TRACE_INLINE void faults(std::uint32_t& all, std::uint32_t& copy_on_write) noexcept;
 }

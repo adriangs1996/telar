@@ -84,6 +84,25 @@ namespace telar::runtime::queue_trace {
     current.flushed = end;
   }
 
+  QUEUE_TRACE_INLINE void faults(std::uint32_t& all, std::uint32_t& copy_on_write) noexcept {
+#if defined(__APPLE__)
+    task_events_info_data_t events{};
+    mach_msg_type_number_t count = TASK_EVENTS_INFO_COUNT;
+
+    if (::task_info(::mach_task_self(), TASK_EVENTS_INFO, reinterpret_cast<task_info_t>(&events), &count) == KERN_SUCCESS) {
+      all = static_cast<std::uint32_t>(events.faults);
+      copy_on_write = static_cast<std::uint32_t>(events.cow_faults);
+    }
+#else
+    rusage usage{};
+
+    if (::getrusage(RUSAGE_SELF, &usage) == 0) {
+      all = static_cast<std::uint32_t>(usage.ru_minflt);
+      copy_on_write = 0;
+    }
+#endif
+  }
+
   QUEUE_TRACE_INLINE std::uint32_t nextQueue() noexcept {
     return detail::state().queues.fetch_add(1, std::memory_order_relaxed) + 1;
   }
