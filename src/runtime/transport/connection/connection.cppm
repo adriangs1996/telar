@@ -485,7 +485,9 @@ export {
     public:
       explicit Connection(Memory& memory, FileDescriptor descriptor);
 
-      bool read();
+      // Not inlined: its 64 KiB buffer would join the frame of every caller for as long as that caller
+      // runs, and after a pane's fork() each stack page the runtime writes again costs a page fault.
+      [[gnu::noinline]] bool read();
 
       // A client's buffered frames and decode storage, which the runtime takes out of the connection while
       // the requests they carry change any client, this one included, as Rust's `mem::take` would.

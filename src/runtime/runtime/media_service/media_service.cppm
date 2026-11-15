@@ -232,7 +232,9 @@ export {
         return worker_.has_value();
       }
 
-      inline void tick(Agents& agents) {
+      // Not inlined: publish() calls it on every wake, and its locals in publish()'s frame would span stack
+      // pages that each cost a page fault after a pane's fork() (see Connection::read).
+      [[gnu::noinline]] inline void tick(Agents& agents) {
         if (!worker_) {
           return;
         }
@@ -539,7 +541,9 @@ export {
           : limits_(limits),
             worker_(std::in_place, std::forward<Arguments>(probe)...) {}
 
-      inline std::chrono::nanoseconds tick(RuntimeModel& model, Clock::time_point now) {
+      // Not inlined: publish() calls it on every wake, and its locals in publish()'s frame would span stack
+      // pages that each cost a page fault after a pane's fork() (see Connection::read).
+      [[gnu::noinline]] inline std::chrono::nanoseconds tick(RuntimeModel& model, Clock::time_point now) {
         collect(model, now);
         if (pending_) {
           return probe_interval;
