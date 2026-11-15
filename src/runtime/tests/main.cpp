@@ -10,7 +10,6 @@ static_assert(true);
 #include <unistd.h>
 
 import std;
-import telar.runtime.terminal.control;
 import telar.runtime.tests.check;
 import telar.platform.error;
 import telar.runtime.terminal.ghostty;

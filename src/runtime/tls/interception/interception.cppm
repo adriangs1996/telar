@@ -11,7 +11,6 @@ import telar.tls;
 
 import telar.runtime.platform.stream_read_buffer;
 import telar.runtime.platform.tunnel_sockets;
-import telar.base.diagnostics;
 import telar.base.text;
 import telar.platform.primitives;
 import telar.base.memory.allocators;

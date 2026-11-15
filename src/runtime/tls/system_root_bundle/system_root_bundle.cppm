@@ -4,10 +4,6 @@ import std;
 
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
-import telar.base.diagnostics;
-import telar.platform.error;
-import telar.platform.fs;
-import telar.platform.primitives;
 
 // Interface: tls/system_root_bundle.cppm
 export {

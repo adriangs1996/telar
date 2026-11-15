@@ -23,9 +23,6 @@ import std;
 import telar.base.memory.allocators;
 import telar.platform.primitives;
 
-import telar.base.diagnostics;
-import telar.runtime.diagnostics.line;
-import telar.runtime.terminal.kitty;
 import telar.runtime.runtime.delivery.client_delivery;
 import telar.runtime.terminal.control;
 import telar.runtime.tests.check;

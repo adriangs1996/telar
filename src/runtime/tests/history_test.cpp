@@ -24,10 +24,8 @@ static_assert(true);
 #include <sys/stat.h>
 
 import std;
-import telar.base.diagnostics;
 import telar.base.memory.allocators;
 import telar.platform.primitives;
-import telar.runtime.diagnostics.line;
 import telar.runtime.tests.check;
 import telar.runtime.history.event;
 import telar.runtime.history.store;

@@ -603,45 +603,6 @@
   "src/gui/transport/runtime_link/runtime_link.cppm": [
     "telar.base.diagnostics"
   ],
-  "src/runtime/tests/client_peer/client_peer.cppm": [
-    "telar.base.diagnostics",
-    "telar.runtime.diagnostics.line",
-    "telar.runtime.terminal.kitty"
-  ],
-  "src/runtime/tests/history_capacity_test.cpp": [
-    "telar.platform.primitives"
-  ],
-  "src/runtime/tests/history_test.cpp": [
-    "telar.base.diagnostics",
-    "telar.runtime.diagnostics.line"
-  ],
-  "src/runtime/tests/http2_oracle_stream/http2_oracle_stream.cppm": [
-    "telar.runtime.platform.stream_read_buffer"
-  ],
-  "src/runtime/tests/main.cpp": [
-    "telar.runtime.terminal.control"
-  ],
-  "src/runtime/tests/packet_fixture/packet_fixture.cppm": [
-    "telar.runtime.traffic.control_protocol"
-  ],
-  "src/runtime/tests/socket_pair/socket_pair.cppm": [
-    "telar.runtime.proxy.relay_direction"
-  ],
-  "src/runtime/tests/test_byte_stream/test_byte_stream.cppm": [
-    "telar.runtime.platform.stream_read_buffer"
-  ],
-  "src/runtime/tls/interception/interception.cppm": [
-    "telar.base.diagnostics"
-  ],
-  "src/runtime/tls/system_root_bundle/system_root_bundle.cppm": [
-    "telar.base.diagnostics",
-    "telar.platform.error",
-    "telar.platform.fs",
-    "telar.platform.primitives"
-  ],
-  "src/runtime/tools/history_store_probe.cpp": [
-    "telar.base.diagnostics"
-  ],
   "src/runtime/traffic/capture/capture.cppm": [
     "telar.base.diagnostics",
     "telar.platform.error",
