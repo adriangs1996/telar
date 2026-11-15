@@ -766,9 +766,10 @@ Adrian: "Agreguemos también el check de imports sin usar", después de pregunta
 
 - **Decidido (supervisor; Adrian puede revertirlo): opción 4.** Es la única que corre en el tiempo del checker, sigue el criterio de tokens de la regla 4 y sus errores caen del lado seguro: un nombre exportado por dos módulos da un falso negativo, y un uso implícito sin declarar da un falso positivo que no compila al quitarlo.
 
-### [ ] P12.4 · Regla de import sin usar: implementación
+### [x] P12.4 · Regla de import sin usar: implementación
 - **Depende de:** P12.3 decidida.
 - **Condición:** la lista de usos implícitos y de macros de `modules.json` empieza vacía y solo crece con casos demostrados: cada entrada nace de un import que la regla marcó, se quitó y rompió la compilación o cambió el desensamblado. Nada de entradas preventivas.
+- **Resultado:** `6e89c0294`, regla 6 de `check-cpp-modules.py`. Un `import M` cuenta como usado si el fichero nombra, fuera de comentarios y literales, algo que `M` exporta (tipos, funciones, variables, conceptos, enumeradores y alias) o que le llega por los re-exports que `M` aún tiene en `reexports.json`; un `import :p` cuenta todo lo que declara la partición. No cuentan miembros, parámetros, locales ni definiciones cualificadas. Un espacio de nombres solo cuenta nombrado por sí mismo (`using namespace`, alias), no como cualificador: todos los módulos declaran `telar`. Entran interfaces, implementaciones y cabeceras, tests y tools incluidos; quedan fuera `std`, los `export import` (regla 4) y los módulos que el inventario no conoce. `implicit_uses` en `modules.json` empieza vacía, y cada entrada exige `module`, `names` y `reason`. Allowlist `docs/build/unused-imports.json`: 480 imports en 225 ficheros (runtime 227, GUI 108, CLI 101, `lib/` 31, tests 13; el más frecuente `telar.base.diagnostics`, 116, muchos por `TELAR_TRACE`/`TELAR_ASSERT`); `--write-unused-imports` la regenera. El checker pasa de 1,72 a 2,00 s de media en `Personal`. 35 tests de tools, 12 nuevos.
 
 ### [ ] P12.5 · Limpieza de imports sin usar
 - **Depende de:** P12.4 y P12.2a–d (al quitar los re-exports aparecen interfaces que importan módulos que ya no usan).
