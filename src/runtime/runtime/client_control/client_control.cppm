@@ -7,18 +7,18 @@ export module telar.runtime.runtime.client_control;
 import std;
 import telar.tbc;
 
-export import telar.runtime.agents.snapshot;
-export import telar.runtime.platform.request_worker;
+import telar.runtime.agents.snapshot;
+import telar.runtime.platform.request_worker;
 
-export import telar.runtime.model.client_layouts;
+import telar.runtime.model.client_layouts;
 
-export import telar.runtime.platform.process_probe;
+import telar.runtime.platform.process_probe;
 
-export import telar.runtime.metrics.host_sampler;
+import telar.runtime.metrics.host_sampler;
 
-export import telar.runtime.observation.processor;
+import telar.runtime.observation.processor;
 
-export import telar.runtime.worktrees.git_probe;
+import telar.runtime.worktrees.git_probe;
 import telar.wire.vocabulary;
 import telar.wire.agents;
 import telar.wire.clients;
@@ -33,6 +33,16 @@ import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
 import telar.client;
 import telar.clipboard;
+import telar.base.diagnostics;
+import telar.base.memory.allocators;
+import telar.config.runtime;
+import telar.platform.events;
+import telar.runtime.agents.description_generator;
+import telar.runtime.model.slot_store;
+import telar.runtime.history.event;
+import telar.runtime.platform.host_metrics;
+import telar.platform.process;
+import telar.runtime.diagnostics.runtime_counters;
 
 // Interface: runtime/agent_file_service.cppm
 export {

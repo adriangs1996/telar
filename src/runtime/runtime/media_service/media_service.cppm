@@ -8,12 +8,12 @@ export module telar.runtime.runtime.media_service;
 import std;
 import telar.tbc;
 
-export import telar.runtime.history.event;
-export import telar.runtime.platform.request_worker;
-export import telar.runtime.worktrees.git_probe;
+import telar.runtime.history.event;
+import telar.runtime.platform.request_worker;
+import telar.runtime.worktrees.git_probe;
 
-export import telar.runtime.history.store;
-export import telar.runtime.platform.background_executor;
+import telar.runtime.history.store;
+import telar.runtime.platform.background_executor;
 import telar.wire.vocabulary;
 import telar.wire.agents;
 import telar.wire.editor;
@@ -24,22 +24,33 @@ import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
 import telar.platform.error;
 #if (TELAR_DIAGNOSTICS)
-export import telar.runtime.diagnostics.operation;
+import telar.runtime.diagnostics.operation;
 #endif
 
-export import telar.runtime.agents.snapshot;
+import telar.runtime.agents.snapshot;
 
-export import telar.runtime.agents.description_generator;
+import telar.runtime.agents.description_generator;
 
-export import telar.runtime.graphics.synchronizer;
-export import telar.runtime.runtime.execution_service;
+import telar.runtime.graphics.synchronizer;
+import telar.runtime.runtime.execution_service;
 
-export import telar.runtime.paths.query_task;
+import telar.runtime.paths.query_task;
 
-export import telar.runtime.workspaces.git_probe;
+import telar.runtime.workspaces.git_probe;
 
 import telar.runtime.runtime.delivery.client_delivery;
 import telar.config.core;
+import telar.base.memory.allocators;
+import telar.config.runtime;
+import telar.runtime.diagnostics.runtime_counters;
+import telar.runtime.graphics.pane_media;
+import telar.runtime.model.client_layouts;
+import telar.runtime.platform.event_loop;
+import telar.runtime.platform.signals;
+import telar.runtime.terminal.graphics_storage;
+import telar.runtime.transport.connection;
+import telar.base.diagnostics;
+import telar.runtime.platform.git_status;
 
 // Interface: runtime/background_pool.cppm
 export {

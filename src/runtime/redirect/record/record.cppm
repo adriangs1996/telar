@@ -8,7 +8,7 @@ import telar.native.pcap;
 import telar.sys.socket;
 import telar.sys.posix;
 
-export import telar.runtime.redirect.pf_rules;
+import telar.runtime.redirect.pf_rules;
 import telar.base.diagnostics;
 import telar.base.memory.containers;
 import telar.base.text;
@@ -18,6 +18,7 @@ import telar.platform.primitives;
 import telar.platform.process;
 import telar.vocabulary;
 import telar.base.memory.allocators;
+import telar.runtime.redirect.direction;
 
 // Interface: redirect/log_interface.cppm
 export {

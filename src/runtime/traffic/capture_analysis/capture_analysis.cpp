@@ -2,6 +2,7 @@ module telar.runtime.traffic.capture_analysis;
 
 import telar.native.pcap;
 import telar.sys.socket;
+import telar.runtime.vocabulary.frames;
 
 namespace telar::runtime::traffic {
 

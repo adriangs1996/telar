@@ -9,17 +9,18 @@ import telar.native.zlib;
 import telar.native.zstd;
 import telar.tbc;
 
-export import telar.runtime.platform.stream_read_buffer;
-export import telar.runtime.http1.head;
+import telar.runtime.platform.stream_read_buffer;
+import telar.runtime.http1.head;
 
-export import telar.base.memory.allocators;
-export import telar.base.memory.sensitive;
+import telar.base.memory.allocators;
+import telar.base.memory.sensitive;
 
-export import telar.runtime.http.message;
-export import telar.runtime.traffic.control_protocol;
+import telar.runtime.http.message;
+import telar.runtime.traffic.control_protocol;
 import telar.base.diagnostics;
 import telar.base.text;
 import telar.wire.vocabulary;
+import telar.platform.net;
 
 // Interface: http1/observer.cppm
 export {

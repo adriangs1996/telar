@@ -28,6 +28,13 @@ import telar.runtime.tests.http2_fixture;
 import telar.runtime.tests.test_byte_stream;
 import telar.runtime.exchange_capture.pipeline;
 import telar.runtime.proxy.runtime;
+import telar.config.runtime;
+import telar.runtime.exchange_capture.producer;
+import telar.runtime.http1.head;
+import telar.runtime.http2.direction_observer;
+import telar.runtime.http2.frame_reader;
+import telar.runtime.proxy.http2_capture_streams;
+import telar.runtime.vocabulary.exchange;
 
 using namespace telar;
 using namespace telar::runtime;

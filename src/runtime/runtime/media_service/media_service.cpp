@@ -5,6 +5,9 @@ module;
 
 module telar.runtime.runtime.media_service;
 
+import telar.runtime.model.slot_store;
+import telar.runtime.platform.stream_read_buffer;
+
 namespace telar::runtime {
 
   template <typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>

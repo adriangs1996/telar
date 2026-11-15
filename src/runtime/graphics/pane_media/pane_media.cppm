@@ -9,13 +9,13 @@ import std;
 import telar.ghostty.vt;
 import telar.sys.posix;
 
-export import telar.runtime.graphics.file_input;
+import telar.runtime.graphics.file_input;
 
-export import telar.runtime.terminal.osc_scanner;
-export import telar.runtime.graphics.prepared_images;
+import telar.runtime.terminal.osc_scanner;
+import telar.runtime.graphics.prepared_images;
 
-export import telar.runtime.diagnostics.runtime_counters;
-export import telar.runtime.diagnostics.operation;
+import telar.runtime.diagnostics.runtime_counters;
+import telar.runtime.diagnostics.operation;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.config.core;
@@ -24,6 +24,9 @@ import telar.runtime.diagnostics.line;
 import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
 import telar.runtime.terminal.text_reader;
+import telar.base.memory.allocators;
+import telar.runtime.terminal.ghostty;
+import telar.runtime.terminal.graphics_storage;
 
 // Interface: graphics/atomic_frame_filter.cppm
 export {

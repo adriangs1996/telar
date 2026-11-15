@@ -4,13 +4,13 @@ import std;
 import telar.sys.posix;
 import telar.tbc;
 
-export import telar.runtime.terminal.osc_scanner;
-export import telar.base.memory.allocators;
-export import telar.base.memory.containers;
-export import telar.base.memory.sensitive;
+import telar.runtime.terminal.osc_scanner;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
+import telar.base.memory.sensitive;
 
-export import telar.platform.events;
-export import telar.platform.process;
+import telar.platform.events;
+import telar.platform.process;
 
 import telar.base.diagnostics;
 import telar.wire.vocabulary;

@@ -8,27 +8,27 @@ import std;
 import telar.sys.posix;
 import telar.tbc;
 
-export import telar.runtime.agents.description_generator;
-export import telar.runtime.graphics.synchronizer;
-export import telar.runtime.platform.process_probe;
-export import telar.runtime.terminal.osc_scanner;
-export import telar.runtime.terminal.text_reader;
-export import telar.runtime.transport.connection;
-export import telar.runtime.model.slot_store;
+import telar.runtime.agents.description_generator;
+import telar.runtime.graphics.synchronizer;
+import telar.runtime.platform.process_probe;
+import telar.runtime.terminal.osc_scanner;
+import telar.runtime.terminal.text_reader;
+import telar.runtime.transport.connection;
+import telar.runtime.model.slot_store;
 
-export import telar.runtime.agents.screen_inference;
-export import telar.runtime.diagnostics.runtime_counters;
-export import telar.runtime.graphics.pane_media;
-export import telar.runtime.observation.processor;
-export import telar.runtime.shell_integration.git_context;
+import telar.runtime.agents.screen_inference;
+import telar.runtime.diagnostics.runtime_counters;
+import telar.runtime.graphics.pane_media;
+import telar.runtime.observation.processor;
+import telar.runtime.shell_integration.git_context;
 export import :launch_record;
-export import telar.base.memory.allocators;
-export import telar.base.memory.containers;
-export import telar.platform.process;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
+import telar.platform.process;
 
-export import telar.base.diagnostics;
+import telar.base.diagnostics;
 
-export import telar.config.runtime;
+import telar.config.runtime;
 import telar.wire.vocabulary;
 import telar.wire.clipboard;
 import telar.wire.layout;
@@ -43,6 +43,7 @@ import telar.client;
 import telar.platform.events;
 import telar.platform.net;
 import telar.config.core;
+import telar.runtime.command_capture.tracker;
 
 // Interface: model/pending_clipboard.cppm
 export {

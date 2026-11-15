@@ -25,6 +25,8 @@ import telar.runtime.tests.check;
 import telar.runtime.runtime.media_service;
 import telar.wire.editor;
 import telar.wire.vocabulary;
+import telar.runtime.paths.query_task;
+import telar.runtime.transport.connection;
 
 using namespace telar;
 using namespace telar::runtime;

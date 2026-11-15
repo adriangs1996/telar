@@ -13,6 +13,7 @@ import std;
 import telar.runtime.terminal.control;
 import telar.runtime.tests.check;
 import telar.platform.error;
+import telar.runtime.terminal.ghostty;
 
 int main(int argc, char** argv) {
   if (argc == 2 && std::strcmp(argv[1], "--process-identification-fixture") == 0) {

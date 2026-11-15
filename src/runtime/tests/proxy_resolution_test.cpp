@@ -18,6 +18,9 @@ import std;
 import telar.platform.primitives;
 import telar.runtime.tests.check;
 import telar.runtime.proxy.relay_direction;
+import telar.platform.net;
+import telar.runtime.platform.name_resolutions;
+import telar.runtime.platform.signals;
 
 using namespace telar;
 using namespace telar::runtime;

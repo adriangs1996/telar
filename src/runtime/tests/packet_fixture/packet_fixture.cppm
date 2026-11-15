@@ -7,7 +7,7 @@ export module telar.runtime.tests.packet_fixture;
 
 import std;
 import telar.runtime.traffic.control_protocol;
-export import telar.vocabulary;
+import telar.vocabulary;
 
 export {
   namespace telar::runtime::traffic_test {

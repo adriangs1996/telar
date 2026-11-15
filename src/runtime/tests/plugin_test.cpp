@@ -13,6 +13,10 @@ import telar.base.memory.allocators;
 import telar.runtime.tests.check;
 import telar.runtime.vocabulary.traffic;
 import telar.wire.vocabulary;
+import telar.config.runtime;
+import telar.plugins;
+import telar.runtime.vocabulary.exchange;
+import telar.runtime.vocabulary.frames;
 
 using namespace telar;
 using namespace telar::runtime;

@@ -20,6 +20,10 @@ import telar.runtime.tests.test_byte_stream;
 import telar.runtime.proxy.intercepted_relay;
 import telar.runtime.proxy.runtime;
 import telar.wire.vocabulary;
+import telar.runtime.http.message;
+import telar.runtime.http1.head;
+import telar.runtime.proxy.http2_capture_streams;
+import telar.runtime.traffic.control_protocol;
 
 using namespace telar;
 using namespace telar::runtime;

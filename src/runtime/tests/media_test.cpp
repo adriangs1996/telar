@@ -31,6 +31,10 @@ import telar.runtime.platform.request_worker;
 import telar.runtime.terminal.text_reader;
 import telar.wire.vocabulary;
 import telar.base.text;
+import telar.runtime.graphics.file_input;
+import telar.runtime.graphics.pane_media;
+import telar.runtime.graphics.prepared_images;
+import telar.runtime.terminal.graphics_storage;
 
 using namespace telar;
 using namespace telar::runtime;

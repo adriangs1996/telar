@@ -6,6 +6,9 @@ module telar.runtime.plugins.run_worker;
 import telar.lua;
 import telar.native.pcap;
 import telar.sys.posix;
+import telar.plugins;
+import telar.runtime.redirect.direction;
+import telar.runtime.vocabulary.frames;
 
 namespace telar::runtime::plugins {
 

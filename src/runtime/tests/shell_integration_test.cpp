@@ -25,6 +25,10 @@ import telar.wire.content;
 import telar.wire.editor;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
+import telar.runtime.model.client_layouts;
+import telar.runtime.shell_integration.token;
+import telar.runtime.terminal.text_reader;
+import telar.runtime.model.slot_store;
 
 using namespace telar;
 using namespace telar::runtime;

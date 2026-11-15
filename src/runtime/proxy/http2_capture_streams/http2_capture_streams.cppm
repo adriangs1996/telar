@@ -12,26 +12,30 @@ import telar.sys.socket;
 import telar.sys.posix;
 import telar.tbc;
 
-export import telar.runtime.platform.stream_read_buffer;
-export import telar.runtime.proxy.relay_direction;
-export import telar.base.memory.allocators;
-export import telar.base.memory.containers;
-export import telar.base.memory.sensitive;
+import telar.runtime.platform.stream_read_buffer;
+import telar.runtime.proxy.relay_direction;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
+import telar.base.memory.sensitive;
 
-export import telar.runtime.redirect.ingress;
-export import telar.runtime.tls.interception;
-export import telar.runtime.proxy.authenticate;
+import telar.runtime.redirect.ingress;
+import telar.runtime.tls.interception;
+import telar.runtime.proxy.authenticate;
 
-export import telar.config.runtime;
+import telar.config.runtime;
 
-export import telar.runtime.http2.direction_observer;
+import telar.runtime.http2.direction_observer;
 
-export import telar.runtime.exchange_capture.pipeline;
-export import telar.runtime.exchange_capture.producer;
-export import telar.runtime.http2.frame_reader;
+import telar.runtime.exchange_capture.pipeline;
+import telar.runtime.exchange_capture.producer;
+import telar.runtime.http2.frame_reader;
 import telar.base.diagnostics;
 import telar.platform.primitives;
 import telar.runtime.http1.head;
+import telar.base.text;
+import telar.platform.net;
+import telar.runtime.vocabulary.exchange;
+import telar.runtime.platform.name_resolutions;
 
 // Interface: proxy/responses.cppm
 export {

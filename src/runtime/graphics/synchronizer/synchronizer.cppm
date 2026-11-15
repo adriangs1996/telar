@@ -6,12 +6,12 @@ export module telar.runtime.graphics.synchronizer;
 import std;
 import telar.tbc;
 
-export import telar.runtime.graphics.prepared_images;
+import telar.runtime.graphics.prepared_images;
 
-export import telar.runtime.graphics.pane_media;
+import telar.runtime.graphics.pane_media;
 
-export import telar.runtime.diagnostics.runtime_counters;
-export import telar.runtime.transport.connection;
+import telar.runtime.diagnostics.runtime_counters;
+import telar.runtime.transport.connection;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.wire.graphics;
@@ -19,6 +19,8 @@ import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
 import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
+import telar.base.memory.allocators;
+import telar.runtime.terminal.graphics_storage;
 
 // Interface: graphics/credit.cppm
 export {

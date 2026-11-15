@@ -35,6 +35,12 @@ import telar.platform.primitives;
 import telar.runtime.tests.check;
 import telar.runtime.plugins.service;
 import telar.platform.process;
+import telar.config.runtime;
+import telar.plugins;
+import telar.runtime.plugins.tap_configuration;
+import telar.runtime.plugins.worker;
+import telar.runtime.vocabulary.exchange;
+import telar.runtime.vocabulary.traffic;
 
 using namespace telar;
 using namespace telar::runtime;

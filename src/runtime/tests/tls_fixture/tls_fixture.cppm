@@ -30,9 +30,9 @@ export module telar.runtime.tests.tls_fixture;
 
 import std;
 import telar.runtime.tests.check;
-export import telar.platform.primitives;
-export import telar.base.memory.allocators;
-export import telar.tls;
+import telar.platform.primitives;
+import telar.base.memory.allocators;
+import telar.tls;
 
 using namespace telar;
 using namespace telar::runtime;

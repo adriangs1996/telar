@@ -15,22 +15,22 @@ import telar.sys.process;
 import telar.sys.posix;
 import telar.tbc;
 
-export import telar.runtime.traffic.control_protocol;
+import telar.runtime.traffic.control_protocol;
 
-export import telar.base.memory.allocators;
-export import telar.base.memory.containers;
-export import telar.base.memory.sensitive;
-export import telar.config.runtime;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
+import telar.base.memory.sensitive;
+import telar.config.runtime;
 
-export import telar.runtime.vocabulary.traffic;
-export import telar.runtime.traffic.capture;
+import telar.runtime.vocabulary.traffic;
+import telar.runtime.traffic.capture;
 
-export import telar.runtime.platform.local_listener;
-export import telar.runtime.platform.signals;
-export import telar.runtime.traffic.capture_analysis;
+import telar.runtime.platform.local_listener;
+import telar.runtime.platform.signals;
+import telar.runtime.traffic.capture_analysis;
 
-export import telar.runtime.redirect.socket_owners;
-export import telar.runtime.redirect.ingress;
+import telar.runtime.redirect.socket_owners;
+import telar.runtime.redirect.ingress;
 import telar.base.diagnostics;
 import telar.tls;
 import telar.wire.vocabulary;
@@ -41,6 +41,12 @@ import telar.platform.process;
 import telar.platform.thread;
 import telar.runtime.platform.request_worker;
 import telar.base.text;
+import telar.plugins;
+import telar.runtime.http.message;
+import telar.runtime.platform.process_probe;
+import telar.runtime.redirect.direction;
+import telar.runtime.vocabulary.exchange;
+import telar.runtime.vocabulary.frames;
 
 // Interface: traffic/control_access.cppm
 export {

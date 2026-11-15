@@ -1,6 +1,7 @@
 module telar.runtime.terminal.control.checksum;
 
 import telar.ghostty.vt;
+import telar.runtime.terminal.ghostty;
 
 namespace telar::runtime::control {
 

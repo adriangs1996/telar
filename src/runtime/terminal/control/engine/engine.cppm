@@ -14,7 +14,9 @@ import telar.runtime.terminal.control.checksum;
 import telar.runtime.terminal.control.glyph;
 
 // Engine::clipboard() hands out the clipboard state machine.
-export import telar.runtime.terminal.control.clipboard;
+import telar.runtime.terminal.control.clipboard;
+import telar.runtime.terminal.ghostty;
+import telar.runtime.terminal.kitty;
 
 export namespace telar::runtime::control {
 

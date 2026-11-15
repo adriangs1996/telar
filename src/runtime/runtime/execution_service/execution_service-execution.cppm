@@ -2,9 +2,9 @@ export module telar.runtime.runtime.execution_service:execution;
 
 import std;
 
-export import telar.base.memory.allocators;
-export import telar.base.memory.containers;
-export import telar.platform.process;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
+import telar.platform.process;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.wire.execution;

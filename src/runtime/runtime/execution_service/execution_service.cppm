@@ -8,18 +8,18 @@ import std;
 import telar.ghostty.vt;
 import telar.tbc;
 
-export import telar.runtime.model.client_layouts;
-export import telar.base.diagnostics;
+import telar.runtime.model.client_layouts;
+import telar.base.diagnostics;
 
-export import telar.runtime.platform.event_loop;
-export import telar.runtime.transport.connection;
+import telar.runtime.platform.event_loop;
+import telar.runtime.transport.connection;
 
-export import telar.platform.process;
+import telar.platform.process;
 
-export import telar.runtime.proxy.runtime;
+import telar.runtime.proxy.runtime;
 
 export import :execution;
-export import telar.runtime.shell_integration;
+import telar.runtime.shell_integration;
 import telar.base.text;
 import telar.base.text.utf8;
 import telar.wire.vocabulary;
@@ -43,6 +43,10 @@ import telar.runtime.runtime.delivery.client_delivery;
 import telar.runtime.shell_integration.words;
 import telar.runtime.terminal.text_reader;
 import telar.sys.posix;
+import telar.config.runtime;
+import telar.runtime.diagnostics.runtime_counters;
+import telar.runtime.history.event;
+import telar.runtime.model.slot_store;
 
 // Interface: runtime/limit_service.cppm
 export {

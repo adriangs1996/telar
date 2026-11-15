@@ -6,6 +6,7 @@ module telar.runtime.runtime.runtime_telemetry;
 import telar.ghostty.vt;
 import telar.native.zlib;
 import telar.sys.process;
+import telar.base.text;
 #if defined(__APPLE__)
 import telar.sys.apple;
 #endif

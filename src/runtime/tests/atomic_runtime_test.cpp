@@ -29,6 +29,8 @@ import telar.runtime.graphics.pane_media;
 import telar.runtime.terminal.text_reader;
 import telar.vocabulary;
 import telar.base.text;
+import telar.platform.graphics;
+import telar.runtime.graphics.file_input;
 
 using namespace telar;
 using namespace telar::runtime;

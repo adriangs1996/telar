@@ -8,28 +8,29 @@ import std;
 import telar.sys.posix;
 import telar.tbc;
 
-export import telar.runtime.platform.stream_read_buffer;
-export import telar.runtime.vocabulary.traffic;
-export import telar.base.memory.allocators;
-export import telar.base.memory.containers;
-export import telar.base.memory.sensitive;
-export import telar.platform.net;
-export import telar.platform.error;
-export import telar.platform.process;
+import telar.runtime.platform.stream_read_buffer;
+import telar.runtime.vocabulary.traffic;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
+import telar.base.memory.sensitive;
+import telar.platform.net;
+import telar.platform.error;
+import telar.platform.process;
 
-export import telar.runtime.plugins.tap_configuration;
+import telar.runtime.plugins.tap_configuration;
 
-export import telar.plugins;
+import telar.plugins;
 
-export import telar.runtime.traffic.control_backend;
-export import telar.runtime.traffic.control_protocol;
+import telar.runtime.traffic.control_backend;
+import telar.runtime.traffic.control_protocol;
 
-export import telar.runtime.platform.signals;
+import telar.runtime.platform.signals;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.platform.primitives;
 import telar.runtime.platform.request_worker;
 import telar.base.text;
+import telar.runtime.vocabulary.frames;
 
 // Interface: plugins/frame_channel.cppm
 export {

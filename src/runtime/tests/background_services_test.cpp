@@ -34,6 +34,10 @@ import telar.wire.editor;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
 import telar.platform.error;
+import telar.platform.process;
+import telar.runtime.platform.background_executor;
+import telar.runtime.transport.connection;
+import telar.runtime.platform.process_probe;
 
 using namespace telar;
 using namespace telar::runtime;

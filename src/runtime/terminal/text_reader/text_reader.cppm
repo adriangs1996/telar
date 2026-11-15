@@ -7,14 +7,14 @@ import std;
 import telar.ghostty.vt;
 import telar.tbc;
 
-export import telar.runtime.diagnostics.runtime_counters;
+import telar.runtime.diagnostics.runtime_counters;
 
-export import telar.runtime.diagnostics.operation;
-export import telar.runtime.terminal.graphics_storage;
+import telar.runtime.diagnostics.operation;
+import telar.runtime.terminal.graphics_storage;
 
-export import telar.runtime.terminal.osc_scanner;
-export import telar.base.memory.allocators;
-export import telar.base.memory.containers;
+import telar.runtime.terminal.osc_scanner;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.wire.clipboard;
@@ -25,6 +25,9 @@ import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
 import telar.runtime.terminal.control;
 import telar.runtime.terminal.control.engine;
+import telar.runtime.terminal.control.clipboard;
+import telar.runtime.terminal.ghostty;
+import telar.runtime.terminal.kitty;
 
 // Interface: terminal/text_metadata.cppm
 export {

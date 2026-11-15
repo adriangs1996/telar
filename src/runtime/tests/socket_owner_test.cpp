@@ -99,6 +99,9 @@ import telar.runtime.tests.check;
 import telar.runtime.redirect.socket_owners;
 import telar.runtime.redirect.pf_rules;
 import telar.wire.vocabulary;
+import telar.runtime.redirect.direction;
+import telar.runtime.redirect.ingress;
+import telar.runtime.platform.process_probe;
 
 using namespace telar;
 using namespace telar::runtime;

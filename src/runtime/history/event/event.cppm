@@ -6,11 +6,11 @@ export module telar.runtime.history.event;
 
 import std;
 
-export import telar.runtime.history.command;
+import telar.runtime.history.command;
 
-export import telar.runtime.transport.connection;
+import telar.runtime.transport.connection;
 
-export import telar.runtime.diagnostics.operation;
+import telar.runtime.diagnostics.operation;
 import telar.base.diagnostics;
 import telar.native.sqlite;
 import telar.wire.vocabulary;
@@ -18,6 +18,8 @@ import telar.wire.agents;
 import telar.wire.history;
 import telar.wire.runtime;
 import telar.runtime.diagnostics.line;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
 
 // Interface: history/launch_failure.cppm
 export {

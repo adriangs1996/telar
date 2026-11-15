@@ -19,6 +19,8 @@ import std;
 import telar.platform.primitives;
 import telar.runtime.tests.check;
 import telar.runtime.redirect.ingress;
+import telar.platform.net;
+import telar.runtime.platform.name_resolutions;
 
 using namespace telar;
 using namespace telar::runtime;

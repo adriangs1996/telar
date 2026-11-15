@@ -63,6 +63,17 @@ import telar.runtime.tests.http2_fixture;
 import telar.runtime.tests.tls_fixture;
 import telar.runtime.proxy.runtime;
 import telar.runtime.tests.check;
+import telar.config.runtime;
+import telar.platform.net;
+import telar.runtime.http2.direction_observer;
+import telar.runtime.http2.frame_reader;
+import telar.runtime.platform.event_loop;
+import telar.runtime.platform.name_resolutions;
+import telar.runtime.proxy.authenticate;
+import telar.runtime.proxy.http2_capture_streams;
+import telar.runtime.tls.interception;
+import telar.runtime.vocabulary.exchange;
+import telar.tls;
 
 using namespace telar;
 using namespace telar::runtime;

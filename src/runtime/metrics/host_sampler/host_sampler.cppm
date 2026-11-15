@@ -5,8 +5,8 @@ export module telar.runtime.metrics.host_sampler;
 
 import std;
 
-export import telar.runtime.diagnostics.runtime_counters;
-export import telar.runtime.platform.host_metrics;
+import telar.runtime.diagnostics.runtime_counters;
+import telar.runtime.platform.host_metrics;
 import telar.base.diagnostics;
 import telar.runtime.diagnostics.line;
 

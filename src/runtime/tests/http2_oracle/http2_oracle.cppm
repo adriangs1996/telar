@@ -5,7 +5,7 @@ module;
 export module telar.runtime.tests.http2_oracle;
 
 import std;
-export import telar.runtime.http2.direction_observer;
+import telar.runtime.http2.direction_observer;
 
 export {
   struct Http2OracleInput {

@@ -18,6 +18,7 @@ import telar.platform.primitives;
 import telar.runtime.terminal.kitty;
 import telar.runtime.tests.check;
 import telar.runtime.graphics.pane_media;
+import telar.runtime.graphics.file_input;
 
 using namespace telar;
 using namespace telar::runtime;

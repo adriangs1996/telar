@@ -7,7 +7,7 @@ export module telar.runtime.tests.http2_fixture;
 
 import std;
 import telar.runtime.tests.check;
-export import telar.runtime.http2.frame_reader;
+import telar.runtime.http2.frame_reader;
 
 export {
   inline std::string hpackFields(std::span<const std::pair<std::string_view, std::string_view>> fields) {

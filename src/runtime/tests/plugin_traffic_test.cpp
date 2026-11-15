@@ -62,6 +62,13 @@ import telar.platform.fs;
 import telar.runtime.traffic.capture;
 import telar.runtime.traffic.capture_analysis;
 import telar.runtime.traffic.control_backend;
+import telar.base.memory.sensitive;
+import telar.plugins;
+import telar.runtime.http.message;
+import telar.runtime.plugins.worker;
+import telar.runtime.traffic.control_protocol;
+import telar.runtime.vocabulary.frames;
+import telar.runtime.vocabulary.traffic;
 
 using namespace telar;
 using namespace telar::runtime;

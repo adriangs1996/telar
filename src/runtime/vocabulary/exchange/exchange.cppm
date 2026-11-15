@@ -6,10 +6,10 @@ export module telar.runtime.vocabulary.exchange;
 import std;
 import telar.tbc;
 
-export import telar.base.memory.allocators;
-export import telar.base.memory.sensitive;
+import telar.base.memory.allocators;
+import telar.base.memory.sensitive;
 
-export import telar.config.runtime;
+import telar.config.runtime;
 import telar.base.diagnostics;
 import telar.base.text;
 

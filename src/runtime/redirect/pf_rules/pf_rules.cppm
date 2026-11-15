@@ -3,9 +3,9 @@ export module telar.runtime.redirect.pf_rules;
 import std;
 import telar.sys.posix;
 
-export import telar.runtime.redirect.direction;
+import telar.runtime.redirect.direction;
 
-export import telar.runtime.redirect.ingress;
+import telar.runtime.redirect.ingress;
 
 import telar.base.diagnostics;
 import telar.base.text.utf8;

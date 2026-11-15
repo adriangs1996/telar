@@ -6,6 +6,8 @@ import telar.runtime.tests.agent_oracle;
 import telar.wire.agents;
 import telar.wire.pane_io;
 import telar.wire.runtime;
+import telar.runtime.tests.protocol_peer;
+import telar.wire.vocabulary;
 
 using namespace telar;
 

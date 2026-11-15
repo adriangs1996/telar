@@ -13,6 +13,7 @@ import telar.platform.primitives;
 import telar.runtime.tests.check;
 import telar.runtime.transport.connection;
 import telar.wire.vocabulary;
+import telar.client;
 
 using namespace telar;
 using namespace telar::runtime;

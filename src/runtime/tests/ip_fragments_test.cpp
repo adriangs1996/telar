@@ -16,6 +16,7 @@ import telar.runtime.tests.packet_fixture;
 import telar.runtime.tests.tls_fixture;
 import telar.runtime.traffic.capture_analysis;
 import telar.vocabulary;
+import telar.runtime.traffic.control_protocol;
 
 using namespace telar;
 using namespace telar::runtime;

@@ -7,11 +7,11 @@ import std;
 import telar.native.nghttp2;
 import telar.tbc;
 
-export import telar.base.memory.allocators;
-export import telar.base.memory.sensitive;
+import telar.base.memory.allocators;
+import telar.base.memory.sensitive;
 
-export import telar.runtime.http2.frame_reader;
-export import telar.runtime.http.content;
+import telar.runtime.http2.frame_reader;
+import telar.runtime.http.content;
 import telar.base.diagnostics;
 import telar.base.text;
 import telar.runtime.http1.head;

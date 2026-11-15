@@ -21,6 +21,8 @@ import telar.runtime.tests.tls_fixture;
 import telar.runtime.traffic.capture_analysis;
 import telar.runtime.traffic.control_backend;
 import telar.vocabulary;
+import telar.runtime.traffic.control_protocol;
+import telar.runtime.vocabulary.frames;
 
 using namespace telar;
 using namespace telar::runtime;

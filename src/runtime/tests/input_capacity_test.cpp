@@ -53,6 +53,10 @@ import telar.wire.clients;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
+import telar.runtime.model.client_layouts;
+import telar.runtime.model.slot_store;
+import telar.runtime.platform.event_loop;
+import telar.runtime.runtime.execution_service;
 #if (TELAR_DIAGNOSTICS)
 import telar.runtime.runtime.runtime_telemetry;
 #endif

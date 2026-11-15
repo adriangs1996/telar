@@ -5,7 +5,7 @@ export module telar.runtime.config.loader;
 import std;
 
 import telar.config.snapshot;
-export import telar.platform.paths;
+import telar.platform.paths;
 import telar.base.memory.allocators;
 import telar.config.runtime;
 

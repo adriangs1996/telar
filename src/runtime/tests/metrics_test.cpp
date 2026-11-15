@@ -32,6 +32,10 @@ import telar.runtime.platform.stream_read_buffer;
 import telar.runtime.runtime.client_control;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
+import telar.runtime.metrics.host_sampler;
+import telar.runtime.model.client_layouts;
+import telar.runtime.model.slot_store;
+import telar.runtime.platform.host_metrics;
 
 using namespace telar;
 using namespace telar::runtime;

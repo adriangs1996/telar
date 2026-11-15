@@ -59,6 +59,15 @@ import telar.wire.runtime;
 import telar.wire.vocabulary;
 import telar.wire.worktrees;
 import telar.runtime.tests.check;
+import telar.runtime.model.client_layouts;
+import telar.runtime.platform.process_probe;
+import telar.runtime.terminal.text_reader;
+import telar.runtime.agents.screen_inference;
+import telar.runtime.agents.description_generator;
+import telar.runtime.agents.snapshot;
+import telar.runtime.model.slot_store;
+import telar.runtime.platform.event_loop;
+import telar.runtime.runtime.execution_service;
 
 using namespace telar;
 using namespace telar::runtime;

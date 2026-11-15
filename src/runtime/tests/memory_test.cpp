@@ -15,6 +15,7 @@ import telar.runtime.tests.check;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.base.memory.sensitive;
+import telar.runtime.terminal.ghostty;
 
 using namespace telar;
 using namespace telar::runtime;

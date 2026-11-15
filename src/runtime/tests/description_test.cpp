@@ -26,6 +26,8 @@ import telar.runtime.agents.description_generator;
 import telar.runtime.history.store;
 import telar.runtime.platform.request_worker;
 import telar.wire.vocabulary;
+import telar.platform.process;
+import telar.runtime.history.event;
 
 using namespace telar;
 using namespace telar::runtime;

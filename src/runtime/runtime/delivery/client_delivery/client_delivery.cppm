@@ -7,9 +7,9 @@ export module telar.runtime.runtime.delivery.client_delivery;
 import std;
 import telar.tbc;
 
-export import telar.runtime.model.client_layouts;
+import telar.runtime.model.client_layouts;
 
-export import telar.runtime.editors.remote_editor;
+import telar.runtime.editors.remote_editor;
 import telar.wire.vocabulary;
 import telar.wire.clipboard;
 import telar.wire.content;
@@ -22,6 +22,12 @@ import telar.runtime.diagnostics.line;
 import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control.clipboard;
 import telar.runtime.terminal.text_reader;
+import telar.base.diagnostics;
+import telar.base.memory.allocators;
+import telar.runtime.diagnostics.runtime_counters;
+import telar.runtime.model.slot_store;
+import telar.runtime.platform.background_executor;
+import telar.runtime.transport.connection;
 
 // Interface: runtime/clipboard_service.cppm
 export {

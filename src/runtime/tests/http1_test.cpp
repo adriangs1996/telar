@@ -15,6 +15,7 @@ import telar.runtime.tests.test_byte_stream;
 import telar.runtime.http1.head;
 import telar.runtime.proxy.intercepted_relay;
 import telar.runtime.proxy.runtime;
+import telar.runtime.proxy.http2_capture_streams;
 
 using namespace telar;
 using namespace telar::runtime;

@@ -9,27 +9,27 @@ import std;
 import telar.sys.posix;
 import telar.tbc;
 
-export import telar.runtime.agents.screen_inference;
-export import telar.runtime.agents.snapshot;
-export import telar.runtime.model.client_layouts;
-export import telar.runtime.platform.process_probe;
-export import telar.runtime.runtime.media_service;
-export import telar.runtime.runtime.execution_service;
+import telar.runtime.agents.screen_inference;
+import telar.runtime.agents.snapshot;
+import telar.runtime.model.client_layouts;
+import telar.runtime.platform.process_probe;
+import telar.runtime.runtime.media_service;
+import telar.runtime.runtime.execution_service;
 
-export import telar.runtime.agents.description_generator;
-export import telar.runtime.persistence.session_store;
-export import telar.config.runtime;
+import telar.runtime.agents.description_generator;
+import telar.runtime.persistence.session_store;
+import telar.config.runtime;
 
-export import telar.runtime.plugins.service;
-export import telar.runtime.runtime.client_control;
+import telar.runtime.plugins.service;
+import telar.runtime.runtime.client_control;
 
-export import telar.runtime.platform.local_listener;
-export import telar.runtime.worktrees.git_probe;
+import telar.runtime.platform.local_listener;
+import telar.runtime.worktrees.git_probe;
 
-export import telar.runtime.runtime.runtime_telemetry;
-export import telar.runtime.vocabulary.exchange;
+import telar.runtime.runtime.runtime_telemetry;
+import telar.runtime.vocabulary.exchange;
 
-export import telar.runtime.platform.background_executor;
+import telar.runtime.platform.background_executor;
 
 import telar.wire.vocabulary;
 import telar.wire.agents;
@@ -59,6 +59,19 @@ import telar.runtime.runtime.delivery.client_delivery;
 import telar.runtime.suggestions.engine;
 import telar.runtime.shell_integration.words;
 import telar.config.core;
+import telar.base.diagnostics;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
+import telar.platform.events;
+import telar.runtime.history.event;
+import telar.runtime.platform.event_loop;
+import telar.runtime.model.slot_store;
+import telar.runtime.platform.host_metrics;
+import telar.runtime.proxy.runtime;
+import telar.runtime.shell_integration.git_context;
+import telar.runtime.transport.connection;
+import telar.runtime.vocabulary.traffic;
+import telar.runtime.workspaces.git_probe;
 
 // The workers runRuntime builds for the runtime (telar.runtime.cli.server); the services below are
 // instantiated for them.

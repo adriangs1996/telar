@@ -24,6 +24,7 @@ import telar.runtime.tests.check;
 import telar.runtime.workspaces.git_probe;
 import telar.runtime.worktrees.git_probe;
 import telar.vocabulary;
+import telar.platform.process;
 
 using namespace telar;
 using namespace telar::runtime;

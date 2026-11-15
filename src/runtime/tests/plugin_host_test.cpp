@@ -46,6 +46,9 @@ static_assert(true);
 import telar.runtime.tests.check;
 import telar.runtime.plugins.run_worker;
 import telar.base.text.utf8;
+import telar.plugins;
+import telar.runtime.vocabulary.exchange;
+import telar.runtime.vocabulary.traffic;
 
 using namespace telar;
 using namespace telar::runtime;

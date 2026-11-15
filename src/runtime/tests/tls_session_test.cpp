@@ -42,6 +42,9 @@ import telar.runtime.tests.check;
 import telar.runtime.tests.socket_pair;
 import telar.runtime.tests.tls_fixture;
 import telar.runtime.tls.interception;
+import telar.platform.net;
+import telar.tls;
+import telar.runtime.platform.tunnel_sockets;
 
 using namespace telar;
 using namespace telar::runtime;

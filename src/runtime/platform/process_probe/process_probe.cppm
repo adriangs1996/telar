@@ -8,8 +8,8 @@ import std;
 import telar.sys.posix;
 import telar.tbc;
 
-export import telar.runtime.platform.session_host;
-export import telar.config.runtime;
+import telar.runtime.platform.session_host;
+import telar.config.runtime;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.platform.primitives;

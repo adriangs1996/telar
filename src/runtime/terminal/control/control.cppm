@@ -4,8 +4,8 @@ import telar.ghostty.vt;
 
 // The terminal's handles and kitty graphics name types of this interface: VtState tracks rows,
 // and graphics queries borrow media budgets.
-export import telar.runtime.terminal.ghostty;
-export import telar.runtime.terminal.kitty;
+import telar.runtime.terminal.ghostty;
+import telar.runtime.terminal.kitty;
 
 export import :capabilities;
 export import :classification;

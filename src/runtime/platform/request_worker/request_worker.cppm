@@ -7,11 +7,11 @@ export module telar.runtime.platform.request_worker;
 import std;
 import telar.tbc;
 
-export import telar.runtime.platform.signals;
+import telar.runtime.platform.signals;
 
-export import telar.runtime.diagnostics.operation;
-export import telar.runtime.platform.background_executor;
-export import telar.runtime.transport.connection;
+import telar.runtime.diagnostics.operation;
+import telar.runtime.platform.background_executor;
+import telar.runtime.transport.connection;
 
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
@@ -22,6 +22,7 @@ import telar.platform.primitives;
 import telar.base.text.json;
 import telar.client;
 import telar.platform.thread;
+import telar.base.memory.allocators;
 
 // Interface: platform/observation_worker.cppm
 export {

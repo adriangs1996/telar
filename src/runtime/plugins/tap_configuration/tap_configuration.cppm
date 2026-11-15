@@ -8,14 +8,14 @@ import telar.lua;
 import telar.platform.sha256;
 import telar.sys.posix;
 
-export import telar.config.client;
-export import telar.plugins;
+import telar.config.client;
+import telar.plugins;
 
-export import telar.platform.fs;
-export import telar.platform.paths;
+import telar.platform.fs;
+import telar.platform.paths;
 
-export import telar.runtime.vocabulary.exchange;
-export import telar.runtime.vocabulary.traffic;
+import telar.runtime.vocabulary.exchange;
+import telar.runtime.vocabulary.traffic;
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.platform.primitives;
@@ -23,6 +23,8 @@ import telar.platform.error;
 import telar.runtime.platform.stream_read_buffer;
 import telar.base.text.utf8;
 import telar.base.text;
+import telar.base.memory.allocators;
+import telar.platform.net;
 
 // Interface: plugins/action_encoder.cppm
 export {

@@ -59,6 +59,10 @@ import telar.runtime.platform.system_certificates;
 import telar.runtime.redirect.socket_owners;
 import telar.platform.fs;
 import telar.tls;
+import telar.config.runtime;
+import telar.platform.net;
+import telar.runtime.redirect.ingress;
+import telar.runtime.redirect.pf_rules;
 
 using namespace telar;
 using namespace telar::runtime;

@@ -5,6 +5,7 @@ module telar.runtime.terminal.osc_scanner;
 
 import telar.ghostty.vt;
 import telar.runtime.terminal.grid;
+import telar.runtime.terminal.ghostty;
 
 namespace telar::runtime {
 

@@ -12,6 +12,11 @@ import telar.base.memory.allocators;
 import telar.platform.primitives;
 import telar.runtime.plugins.service;
 import telar.vocabulary;
+import telar.config.runtime;
+import telar.plugins;
+import telar.runtime.vocabulary.exchange;
+import telar.runtime.vocabulary.traffic;
+import telar.platform.error;
 
 using namespace telar;
 using namespace telar::runtime;

@@ -23,6 +23,8 @@ import telar.wire.clients;
 import telar.wire.history;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
+import telar.runtime.platform.background_executor;
+import telar.runtime.transport.connection;
 
 using namespace telar;
 using namespace telar::runtime;

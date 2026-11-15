@@ -20,6 +20,7 @@ import telar.lua;
 import telar.platform.process;
 import telar.runtime.proxy.runtime;
 import telar.vocabulary;
+import telar.runtime.proxy.authenticate;
 
 using namespace telar;
 using namespace telar::runtime;

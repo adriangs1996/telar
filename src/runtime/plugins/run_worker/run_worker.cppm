@@ -8,16 +8,16 @@ import telar.native.pcap;
 import telar.sys.posix;
 import telar.tbc;
 
-export import telar.runtime.vocabulary.traffic;
-export import telar.lua;
+import telar.runtime.vocabulary.traffic;
+import telar.lua;
 
-export import telar.runtime.http.message;
+import telar.runtime.http.message;
 
-export import telar.runtime.plugins.worker;
+import telar.runtime.plugins.worker;
 
-export import telar.base.memory.allocators;
-export import telar.base.memory.containers;
-export import telar.base.memory.sensitive;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
+import telar.base.memory.sensitive;
 
 import telar.base.diagnostics;
 import telar.wire.vocabulary;
@@ -29,6 +29,8 @@ import telar.runtime.plugins.tap_configuration;
 import telar.runtime.traffic.capture_analysis;
 import telar.runtime.traffic.control_backend;
 import telar.base.text;
+import telar.runtime.traffic.control_protocol;
+import telar.runtime.vocabulary.exchange;
 
 // Interface: plugins/lua_effects.cppm
 export {
