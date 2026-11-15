@@ -7,8 +7,6 @@ import telar.lua;
 import telar.platform.fs;
 import telar.platform.paths;
 import telar.plugins;
-import telar.base.diagnostics;
-import telar.platform.primitives;
 import telar.sys.posix;
 import telar.config.client;
 import telar.config.core;

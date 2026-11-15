@@ -1,6 +1,17 @@
 module telar.cli.runtime_observer;
 
 import telar.sys.posix;
+import telar.base.text.json;
+import telar.cli.control_session;
+import telar.client;
+import telar.platform.error;
+import telar.wire.agents;
+import telar.wire.clipboard;
+import telar.wire.content;
+import telar.wire.layout;
+import telar.wire.pane_io;
+import telar.wire.runtime;
+import telar.wire.vocabulary;
 
 namespace telar::runtime::cli {
 

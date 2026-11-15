@@ -4,20 +4,7 @@ import std;
 
 import telar.cli.command_limit;
 
-import telar.base.diagnostics;
 import telar.base.text;
-import telar.base.text.json;
-import telar.wire.vocabulary;
-import telar.wire.agents;
-import telar.wire.clipboard;
-import telar.wire.content;
-import telar.wire.layout;
-import telar.wire.pane_io;
-import telar.wire.runtime;
-import telar.platform.primitives;
-import telar.cli.control_session;
-import telar.client;
-import telar.platform.error;
 import telar.platform.paths;
 import telar.base.memory.allocators;
 

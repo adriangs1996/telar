@@ -1,31 +1,4 @@
 {
-  "src/cli/runtime_observer/runtime_observer.cppm": [
-    "telar.base.diagnostics",
-    "telar.base.text.json",
-    "telar.cli.control_session",
-    "telar.client",
-    "telar.platform.error",
-    "telar.platform.primitives",
-    "telar.wire.agents",
-    "telar.wire.clipboard",
-    "telar.wire.content",
-    "telar.wire.layout",
-    "telar.wire.pane_io",
-    "telar.wire.runtime",
-    "telar.wire.vocabulary"
-  ],
-  "src/cli/tab/config_check.cpp": [
-    "telar.base.diagnostics",
-    "telar.platform.primitives"
-  ],
-  "src/cli/tab/tab.cppm": [
-    "telar.base.diagnostics",
-    "telar.cli.command_limit",
-    "telar.platform.primitives",
-    "telar.wire.layout",
-    "telar.wire.pane_io",
-    "telar.wire.vocabulary"
-  ],
   "src/cli/window/window.cppm": [
     "telar.base.diagnostics",
     "telar.base.text.utf8",
