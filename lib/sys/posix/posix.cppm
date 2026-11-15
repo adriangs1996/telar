@@ -232,7 +232,10 @@ export {
 // glibc declares these as enumerators and defines each macro as its own name.
 #define TELAR_SYS_ENUMERATORS(X) \
   X(DT_DIR)                      \
-  X(DT_REG)
+  X(DT_REG)                      \
+  X(_SC_CLK_TCK)                 \
+  X(_SC_NPROCESSORS_ONLN)        \
+  X(_SC_PAGESIZE)
 
 namespace telar::sys::captured {
 
@@ -352,6 +355,9 @@ namespace telar::sys::captured {
 #undef RTLD_NOW
 #undef DT_DIR
 #undef DT_REG
+#undef _SC_CLK_TCK
+#undef _SC_NPROCESSORS_ONLN
+#undef _SC_PAGESIZE
 #undef S_ISDIR
 #undef S_ISREG
 #undef S_ISSOCK

@@ -502,11 +502,11 @@ namespace telar::runtime::redirect {
 
     return rules;
   }
-#endif
 
   template class PfIdentity<Memory>;
   template class PfIdentity<ConcurrentMemory>;
   template String<Memory> pfRules<Memory>(Memory& memory, std::span<const Mapping> mappings, const PfScope& scope);
   template String<ConcurrentMemory> pfRules<ConcurrentMemory>(ConcurrentMemory& memory, std::span<const Mapping> mappings, const PfScope& scope);
+#endif
 
 }

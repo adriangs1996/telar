@@ -8,6 +8,7 @@ import telar.sys.posix;
 
 import telar.runtime.platform.proc_file;
 import telar.base.diagnostics;
+import telar.base.text;
 import telar.wire.vocabulary;
 import telar.platform.primitives;
 

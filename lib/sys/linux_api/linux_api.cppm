@@ -34,6 +34,9 @@ export {
   using ::posix_spawn_file_actions_addchdir_np;
   using ::syscall;
   using ::ucred;
+
+  // The kernel's TUN device: the packet header a tunnel reads and writes.
+  using ::tun_pi;
 }
 
 // glibc wraps these calls and musl does not. Only a unit that includes a libc header sees
