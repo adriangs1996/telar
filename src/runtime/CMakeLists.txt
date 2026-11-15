@@ -121,6 +121,7 @@ endif()
 add_library(runtime-core STATIC
   cli/server/server.cpp
   config/loader/loader.cpp
+  diagnostics/line/line.cpp
   diagnostics/operation/operation.cpp
   diagnostics/runtime_counters/runtime_counters.cpp
   graphics/file_input/file_input.cpp

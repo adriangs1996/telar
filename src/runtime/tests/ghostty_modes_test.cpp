@@ -1,5 +1,6 @@
-#include "telar_ghostty/vt.hpp"
+#include "telar_ghostty/modes.hpp"
 #include <cstdio>
+#include <ghostty/vt.h>
 
 import telar.ghostty.vt;
 

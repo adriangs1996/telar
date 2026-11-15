@@ -11,7 +11,6 @@ include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/native_libraries.cmake")
 add_library(telar-native STATIC zlib/zlib.cpp)
 add_library(telar::native ALIAS telar-native)
 telar_modules(telar-native)
-target_include_directories(telar-native PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_include_directories(telar-native SYSTEM PUBLIC "${TELAR_NATIVE_INCLUDE_DIR}")
 
 telar_editor_flags(telar-native)

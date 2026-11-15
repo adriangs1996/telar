@@ -195,6 +195,7 @@ export {
 // File modes, access checks, seeks, mappings, polls and the standard descriptors.
 #define TELAR_SYS_FILE_CONSTANTS(X) \
   X(F_OK)                           \
+  X(MAP_SHARED)                     \
   X(POLLERR)                        \
   X(POLLHUP)                        \
   X(POLLIN)                         \
@@ -260,6 +261,9 @@ namespace telar::sys::captured {
     return S_ISSOCK(mode);
   }
 
+  // An integer cast to a pointer, which no constant expression can hold.
+  inline void* const MAP_FAILED_ = MAP_FAILED;
+
 }
 
 #undef EACCES
@@ -323,6 +327,8 @@ namespace telar::sys::captured {
 #undef O_RDWR
 #undef O_WRONLY
 #undef F_OK
+#undef MAP_FAILED
+#undef MAP_SHARED
 #undef POLLERR
 #undef POLLHUP
 #undef POLLIN
@@ -390,6 +396,8 @@ export {
   inline constexpr bool S_ISSOCK(mode_t mode) noexcept {
     return telar::sys::captured::S_ISSOCK_(mode);
   }
+
+  inline void* const MAP_FAILED = telar::sys::captured::MAP_FAILED_;
 
   // Darwin's stream macros name __stdinp, __stdoutp and __stderrp; glibc and musl declare the
   // streams under their own names.

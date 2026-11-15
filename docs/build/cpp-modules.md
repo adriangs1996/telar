@@ -90,9 +90,9 @@ cualquier fichero puede incluir una cabecera de `macro_headers`, que no incluye 
 un fragmento `.inc` de datos que genera el build fuera del árbol.
 Los tests, las herramientas y `lib/tbc` quedan fuera de la regla: el alcance se declara por
 directorio en `OUTSIDE_RULE_5`, junto al motivo de cada uno. TBC es una herramienta de build;
-su linter usa las cabeceras de Clang/LLVM, que no se pueden importar. [textual-includes.json](textual-includes.json) lista por
-fichero los includes que quedan; quien quita uno borra su entrada, y una entrada que
-ya no está en el fichero también hace fallar el checker.
+su linter usa las cabeceras de Clang/LLVM, que no se pueden importar. [textual-includes.json](textual-includes.json) listaba por
+fichero los includes que quedaban y está vacía: un include fuera de esas excepciones
+hace fallar el checker.
 Una interfaz solo hace `export import` de un módulo si sus declaraciones exportadas
 nombran un tipo de ese módulo fuera de los cuerpos de función: es lo único que sus
 importadores necesitan nombrar, y lo demás lo importan ellos. La regla lee tokens, no
@@ -161,7 +161,7 @@ esas cabeceras también las usan Objective-C++ y Qt.
 
 ### Fronteras textuales restantes
 
-El inventario contiene 300 headers vivos, cada uno con su motivo concreto:
+El inventario contiene 229 headers vivos, cada uno con su motivo concreto:
 
 - Qt/moc y adaptadores que comparten sus declaraciones: `moc` necesita sus headers
   de clases y metatipos. El agregado generado se incluye desde una unidad C++ que
@@ -171,9 +171,6 @@ El inventario contiene 300 headers vivos, cada uno con su motivo concreto:
   incompatibilidad de modo de lenguaje en Clang 23.1.5. La clausura de tipos que
   cruza esa frontera permanece textual; el resto de cada dominio usa módulos.
   El test de clipboard del runtime se separa en C++ y un pequeño helper `.mm`.
-- Especialización SIMD por importador: los tests escalar/vectorial necesitan
-  recompilar esas funciones con macros distintas. El parser y sus tipos comunes
-  conservan esa frontera, sin crear una segunda API completa.
 - Contratos del preprocesador: macros de diagnósticos/traza y anotaciones TBC.
   El linter inspecciona expansiones y ubicaciones de origen; sus adaptadores del
   AST usan directamente el SDK de Clang con el que se construye la herramienta.
@@ -187,7 +184,8 @@ El inventario contiene 300 headers vivos, cada uno con su motivo concreto:
   captura los modos que construye `ghostty_mode_new` y `telar.ghostty.wuffs` llama a
   los ayudantes del códec PNG desde su `.cpp`. La captura repite el empaquetado de
   bits de `ghostty_mode_new`; `ghostty-modes-tests` compara cada modo de
-  `TELAR_GHOSTTY_MODES` (en `telar_ghostty/vt.hpp`) con la función real.
+  `TELAR_GHOSTTY_MODES` (en la cabecera de macros `telar_ghostty/modes.hpp`) con la
+  función real.
 
 ### Un módulo dueño por header textual
 
@@ -198,7 +196,8 @@ incluye en su fragmento global y reexporta sus nombres con
 dueño y mantiene en su fragmento global únicamente headers estándar, de sistema,
 de terceros y las cabeceras de macros del proyecto que lista `macro_headers`
 (`telar_base/diagnostics/config.hpp`, `telar_platform/trace_macro.hpp`,
-`tbc/annotations.hpp` y `telar_client/codecs/telar_annotations.hpp`).
+`tbc/annotations.hpp`, `telar_client/codecs/telar_annotations.hpp` y
+`telar_ghostty/modes.hpp`).
 
 Cada copia textual de un header en un fragmento global se serializa en el BMI de
 ese módulo, y cada importador vuelve a fusionar las copias. Con un concepto como
@@ -219,13 +218,11 @@ de macOS de `telar.runtime.platform.frameworks`, que solo usa el runtime, el ún
 los enlaza. Las cabeceras de libghostty-vt son de `lib/ghostty`
 (`telar.ghostty.unicode`, `.vt` y `.wuffs`), por debajo de `telar.config` y de la
 GUI, y las de las bibliotecas nativas del runtime (zlib, Brotli, zstd, nghttp2,
-libpcap y SQLite) de `lib/native`, un módulo por biblioteca. Las cabeceras
-textuales que no pueden importar (la frontera SIMD de `telar.runtime.terminal.control`)
-reciben libghostty-vt y zlib por `telar_ghostty/vt.hpp` y `telar_native/zlib.hpp`,
-cuyos dueños son `telar.ghostty.vt` y `telar.native.zlib`: el checker cuenta cada
-cabecera de `header_owners` como unidad de su dueño. Los headers solo de dueño (`telar.wire.pane_io`,
-`telar.runtime.terminal.control`, …) no contienen código propio: son el punto de
-entrada de esos headers para los módulos.
+libpcap y SQLite) de `lib/native`, un módulo por biblioteca. El checker cuenta
+cada cabecera de `header_owners` como unidad de su dueño, así que una cabecera
+con dueño puede incluir las de terceros de ese módulo. Los headers solo de dueño
+(`telar.wire.pane_io`, …) no contienen código propio: son el punto de entrada de
+esos headers para los módulos.
 
 Los textos generados en el build (bootstraps de configuración, ayudas, scripts)
 son fragmentos `.inc` de datos dentro de sus módulos propietarios; las tablas

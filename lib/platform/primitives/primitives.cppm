@@ -1,10 +1,10 @@
 module;
-#include "telar_platform/graphics/child_shared_memory.hpp"
-#include "telar_platform/mapped_region.hpp"
+#include "telar_platform/file_descriptor.hpp"
 
 export module telar.platform.primitives;
 
 import std;
+import telar.tbc;
 
 // The descriptors, mappings and shared memory below are POSIX objects: their
 // importers reach the system calls that operate on them from telar.sys.
@@ -17,14 +17,63 @@ import telar.base.memory.allocators;
 // Owned textual headers stay in this global module fragment only; importers
 // reach their names through these declarations instead of including them.
 export namespace telar::runtime {
-  using telar::runtime::copyGraphicsName;
-  using telar::runtime::decodeGraphicsName;
   using telar::runtime::duplicateCloseOnExec;
   using telar::runtime::FileDescriptor;
-  using telar::runtime::GraphicsChildSharedMemory;
-  using telar::runtime::MappedRegion;
   using telar::runtime::setCloseOnExec;
   using telar::runtime::setNonblocking;
+}
+
+export namespace telar::runtime {
+
+  // A shared mapping of a descriptor's first `length` bytes, unmapped when it goes; empty when
+  // the system refuses it.
+  class MappedRegion {
+  public:
+    MappedRegion() noexcept = default;
+    explicit MappedRegion(int descriptor, std::size_t length, int protection) noexcept;
+    ~MappedRegion();
+
+    MappedRegion(const MappedRegion&) = delete;
+    MappedRegion& operator=(const MappedRegion&) = delete;
+
+    constexpr MappedRegion(MappedRegion&& other) noexcept
+        : bytes_(std::exchange(other.bytes_, {})) {}
+
+    MappedRegion& operator=(MappedRegion&& other) noexcept;
+
+    constexpr explicit operator bool() const noexcept {
+      return !bytes_.empty();
+    }
+
+    constexpr std::span<std::uint8_t> bytes() const noexcept {
+      return bytes_;
+    }
+
+    bool protect(int protection) noexcept;
+
+  private:
+    void reset() noexcept;
+
+    std::span<std::uint8_t> bytes_;
+  };
+
+  // The name a graphics client gives a shared memory object, terminated in the caller's
+  // destination: copied from its decoded bytes, or decoded from base64. None when it is empty,
+  // holds a NUL or does not fit.
+  tbc::view<const char*, tbc::lt::a> copyGraphicsName(std::span<const std::uint8_t> decoded, tbc::view<std::span<std::uint8_t>, tbc::lt::a> destination) noexcept;
+  tbc::view<const char*, tbc::lt::a> decodeGraphicsName(std::string_view encoded, tbc::view<std::span<std::uint8_t>, tbc::lt::a> destination) noexcept;
+
+  // The POSIX shared memory a graphics client names in a kitty transmission, opened read-only.
+  class GraphicsChildSharedMemory {
+  public:
+    static FileDescriptor open(std::string_view encoded_name, std::span<std::uint8_t> name) noexcept;
+    static FileDescriptor openDecoded(std::span<const std::uint8_t> decoded_name, std::span<std::uint8_t> name) noexcept;
+
+    // Fills `output` from `offset`; false when the object is shorter or cannot be read.
+    static bool read(int descriptor, std::span<std::uint8_t> output, std::uint64_t offset) noexcept;
+    static void release(std::string_view encoded_name) noexcept;
+  };
+
 }
 
 export namespace telar::runtime {

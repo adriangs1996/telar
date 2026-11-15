@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "telar_base/diagnostics/config.hpp"
-#include "telar_render/sequence.hpp"
 #include <cassert>
 #include <cerrno>
 #include <csignal>
@@ -46,6 +45,7 @@ import telar.base.memory.allocators;
 import telar.base.text;
 import telar.base.text.utf8;
 import telar.platform.primitives;
+import telar.render.document;
 import telar.runtime.diagnostics.line;
 import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;

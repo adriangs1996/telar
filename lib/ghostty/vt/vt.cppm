@@ -1,12 +1,13 @@
 module;
-#include "telar_ghostty/vt.hpp"
+#include "telar_ghostty/modes.hpp"
+#include <ghostty/vt.h>
 
 export module telar.ghostty.vt;
 
 import std;
 
-// libghostty-vt's C API stays in this global module fragment and in telar_ghostty/vt.hpp, which
-// the textual headers include; importers reach it through these declarations instead.
+// libghostty-vt's C API stays in this global module fragment only; importers reach it through
+// these declarations instead.
 export {
   using ::GhosttyAllocator;
   using ::GhosttyAllocatorVtable;
