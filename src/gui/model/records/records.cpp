@@ -3,9 +3,6 @@ module telar.gui.model.records;
 import std;
 
 import telar.base.memory.allocators;
-import telar.base.memory.containers;
-import telar.wire.agents;
-import telar.wire.layout;
 import telar.wire.vocabulary;
 
 namespace telar::gui {

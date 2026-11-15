@@ -3,7 +3,6 @@ export module telar.gui.model.replicas;
 import std;
 
 import telar.gui.model.records;
-import telar.base.diagnostics;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.wire.agents;

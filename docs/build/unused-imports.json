@@ -235,42 +235,6 @@
     "telar.wire.pane_io",
     "telar.wire.runtime"
   ],
-  "src/gui/machines/picker/picker.cppm": [
-    "telar.base.history"
-  ],
-  "src/gui/machines/profile_store/profile_store.cppm": [
-    "telar.base.diagnostics",
-    "telar.gui.text.json_unsigned_integer"
-  ],
-  "src/gui/model/records/records.cpp": [
-    "telar.base.memory.containers",
-    "telar.wire.agents",
-    "telar.wire.layout"
-  ],
-  "src/gui/model/records/records.cppm": [
-    "telar.base.diagnostics",
-    "telar.wire.agents",
-    "telar.wire.layout"
-  ],
-  "src/gui/model/replicas/replicas.cpp": [
-    "telar.base.diagnostics",
-    "telar.base.memory.containers"
-  ],
-  "src/gui/model/replicas/replicas.cppm": [
-    "telar.base.diagnostics"
-  ],
-  "src/gui/paths/label/label.cpp": [
-    "telar.base.diagnostics"
-  ],
-  "src/gui/platform/managed_directory/managed_directory.cpp": [
-    "telar.platform.primitives"
-  ],
-  "src/gui/platform/notification_commands/notification_commands.cppm": [
-    "telar.base.diagnostics"
-  ],
-  "src/gui/platform/profile_file/profile_file.cpp": [
-    "telar.base.diagnostics"
-  ],
   "src/gui/presentation/activity_order/activity_order.cppm": [
     "telar.gui.terminal.screen"
   ],

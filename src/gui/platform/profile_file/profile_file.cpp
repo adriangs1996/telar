@@ -8,7 +8,6 @@ import telar.platform.error;
 import telar.machines;
 import telar.platform.fs;
 import telar.gui.text.json_unsigned_integer;
-import telar.base.diagnostics;
 import telar.wire.vocabulary;
 import telar.gui.core.primitives;
 import telar.platform.primitives;

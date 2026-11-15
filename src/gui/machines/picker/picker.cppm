@@ -8,7 +8,6 @@ import telar.gui.machines.discovery;
 import telar.gui.machines.profile_store;
 
 import telar.gui.palette.navigation_label;
-import telar.base.history;
 import telar.base.memory.containers;
 
 // Interface: machines/machine_row.cppm

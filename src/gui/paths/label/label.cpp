@@ -2,7 +2,6 @@ module telar.gui.paths.label;
 
 import std;
 
-import telar.base.diagnostics;
 import telar.base.text.utf8;
 import telar.gui.core.unicode_scalar;
 import telar.gui.input.key_encoder;
