@@ -92,7 +92,6 @@ static_assert(true);
 #include "input/wheel_accumulator.hpp"
 
 import telar.gui.components.builtin_content;
-import telar.gui.config.plugin_query;
 import telar.gui.core.unicode_scalar;
 import telar.gui.core.metrics;
 import telar.gui.history.browser;

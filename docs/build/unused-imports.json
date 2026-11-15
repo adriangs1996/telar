@@ -235,52 +235,6 @@
     "telar.wire.pane_io",
     "telar.wire.runtime"
   ],
-  "src/gui/qt/activity_projection.hpp": [
-    "telar.gui.application.workspace_replica"
-  ],
-  "src/gui/qt/agent_projection.hpp": [
-    "telar.gui.application.workspace_replica"
-  ],
-  "src/gui/qt/application.hpp": [
-    "telar.gui.config.plugin_query"
-  ],
-  "src/gui/qt/attachment_controller.cpp": [
-    "telar.gui.presentation.display_metrics"
-  ],
-  "src/gui/qt/binding_controller.cpp": [
-    "telar.gui.config.plugin_effects",
-    "telar.gui.config.plugin_query"
-  ],
-  "src/gui/qt/chrome_controller.cpp": [
-    "telar.gui.application.workspace_replica"
-  ],
-  "src/gui/qt/component_controller.cpp": [
-    "telar.gui.application.host_effects",
-    "telar.gui.application.workspace_replica",
-    "telar.gui.config.plugin_query"
-  ],
-  "src/gui/qt/component_projection.hpp": [
-    "telar.gui.config.plugin_query"
-  ],
-  "src/gui/qt/deadline_timer.hpp": [
-    "telar.gui.application.workspace_replica"
-  ],
-  "src/gui/qt/history_footer_layout.cpp": [
-    "telar.gui.history.browser"
-  ],
-  "src/gui/qt/history_inspection_layout.cpp": [
-    "telar.gui.history.browser"
-  ],
-  "src/gui/qt/key_bindings.cpp": [
-    "telar.gui.config.gui_query"
-  ],
-  "src/gui/qt/key_bindings.hpp": [
-    "telar.gui.config.gui_query"
-  ],
-  "src/gui/qt/link_status_controller.cpp": [
-    "telar.gui.presentation.display_metrics",
-    "telar.gui.transport.runtime_link"
-  ],
   "src/gui/qt/machine_activity_controller.cpp": [
     "telar.gui.application.workspace_replica"
   ],

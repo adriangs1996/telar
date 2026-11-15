@@ -60,7 +60,6 @@ import telar.gui.attachments.marker_input;
 import telar.gui.input.key_encoder;
 import telar.gui.machines.picker;
 import telar.gui.presentation.suggestion_labels;
-import telar.gui.presentation.display_metrics;
 
 namespace telar::gui::qt {
 

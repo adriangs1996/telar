@@ -44,7 +44,6 @@ static_assert(true);
 #include <utility>
 #include <variant>
 
-import telar.gui.history.browser;
 import telar.gui.presentation.history_pointer;
 import telar.gui.presentation.history_filter_geometry;
 import telar.gui.core.metrics;

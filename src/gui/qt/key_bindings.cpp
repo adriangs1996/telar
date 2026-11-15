@@ -47,8 +47,6 @@ import telar.gui.input.key_encoder;
 import telar.gui.input.configuration;
 import telar.gui.presentation.history_inspection;
 
-import telar.gui.config.gui_query;
-
 namespace telar::gui::qt {
 
   namespace {

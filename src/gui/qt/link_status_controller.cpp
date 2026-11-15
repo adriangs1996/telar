@@ -33,9 +33,7 @@ static_assert(true);
 #include <system_error>
 
 import telar.gui.machines.picker;
-import telar.gui.presentation.display_metrics;
 import telar.gui.presentation.suggestion_geometry;
-import telar.gui.transport.runtime_link;
 
 namespace telar::gui::qt {
 

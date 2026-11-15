@@ -64,11 +64,8 @@ static_assert(true);
 #include <utility>
 #include <variant>
 
-import telar.gui.application.host_effects;
-import telar.gui.application.workspace_replica;
 import telar.gui.components.builtin_content;
 import telar.gui.components.configuration;
-import telar.gui.config.plugin_query;
 import telar.gui.input.copy_pointer;
 import telar.gui.links.cell_links;
 
