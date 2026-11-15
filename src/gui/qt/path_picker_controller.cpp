@@ -41,7 +41,6 @@ static_assert(true);
 #include "qt/utf16_encoding.hpp"
 
 import telar.gui.paths.label;
-import telar.gui.presentation.form_field_geometry;
 import telar.gui.text.bounded_editor;
 
 namespace telar::gui::qt {

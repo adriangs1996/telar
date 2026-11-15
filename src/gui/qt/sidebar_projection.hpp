@@ -42,7 +42,6 @@ import telar.gui.presentation.history_inspection_geometry;
 import telar.gui.presentation.display_metrics;
 import telar.gui.presentation.suggestion_geometry;
 import telar.gui.presentation.activity_order;
-import telar.gui.presentation.notification_stack;
 
 namespace telar::gui::qt {
 

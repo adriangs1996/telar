@@ -49,7 +49,6 @@ static_assert(true);
 
 import telar.gui.core.metrics;
 import telar.gui.input.child_mouse;
-import telar.gui.input.configuration;
 import telar.gui.input.key_encoder;
 import telar.gui.links.link_hover;
 import telar.gui.links.path_expansion;

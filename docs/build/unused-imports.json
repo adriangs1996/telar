@@ -235,62 +235,6 @@
     "telar.wire.pane_io",
     "telar.wire.runtime"
   ],
-  "src/gui/qt/machine_activity_controller.cpp": [
-    "telar.gui.application.workspace_replica"
-  ],
-  "src/gui/qt/machine_chrome_layout.cpp": [
-    "telar.gui.application.workspace_replica",
-    "telar.gui.presentation.display_metrics"
-  ],
-  "src/gui/qt/machine_client.hpp": [
-    "telar.gui.platform.awake_clock"
-  ],
-  "src/gui/qt/machine_controller.cpp": [
-    "telar.gui.application.host_effects"
-  ],
-  "src/gui/qt/machine_profile_controller.cpp": [
-    "telar.gui.platform.login_shell"
-  ],
-  "src/gui/qt/modal_reveal_layout.cpp": [
-    "telar.gui.presentation.suggestion_labels"
-  ],
-  "src/gui/qt/mode_projection.hpp": [
-    "telar.gui.input.key_encoder"
-  ],
-  "src/gui/qt/native_agent_status.cpp": [
-    "telar.gui.presentation.application_mark"
-  ],
-  "src/gui/qt/notification_controller.cpp": [
-    "telar.gui.application.workspace_replica"
-  ],
-  "src/gui/qt/notification_layout.cpp": [
-    "telar.gui.application.workspace_replica"
-  ],
-  "src/gui/qt/notification_layout.hpp": [
-    "telar.gui.application.workspace_replica"
-  ],
-  "src/gui/qt/pane_projection.hpp": [
-    "telar.gui.presentation.history_inspection"
-  ],
-  "src/gui/qt/path_picker_controller.cpp": [
-    "telar.gui.presentation.form_field_geometry"
-  ],
-  "src/gui/qt/plugin_controller.cpp": [
-    "telar.gui.application.workspace_replica",
-    "telar.gui.config.plugin_query"
-  ],
-  "src/gui/qt/pointer_dispatcher.cpp": [
-    "telar.gui.links.link_hover"
-  ],
-  "src/gui/qt/project_projection.hpp": [
-    "telar.gui.application.workspace_replica"
-  ],
-  "src/gui/qt/sidebar_projection.hpp": [
-    "telar.gui.presentation.notification_stack"
-  ],
-  "src/gui/qt/terminal_item.hpp": [
-    "telar.gui.input.configuration"
-  ],
   "src/gui/suggestions/state/state.cpp": [
     "telar.base.diagnostics"
   ],

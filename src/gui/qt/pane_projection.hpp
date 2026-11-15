@@ -48,8 +48,6 @@ import telar.gui.core.metrics;
 import telar.gui.presentation.activity_order;
 import telar.gui.presentation.application_mark;
 
-import telar.gui.presentation.history_inspection;
-
 namespace telar::gui::qt {
 
   struct FullscreenPaneEntry {
