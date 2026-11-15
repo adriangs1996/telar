@@ -11,14 +11,20 @@ telar_managed_build(NAME "OpenSSL ${TELAR_OPENSSL_VERSION}" RECIPE "${CMAKE_CURR
   FILES CMakeLists.txt manifest.cmake immediate-cleanup.patch RESULT TELAR_OPENSSL_PREFIX)
 
 # Forget what an earlier configuration found, which may be the system's
-# OpenSSL or another managed build.
-foreach(variable IN ITEMS OPENSSL_INCLUDE_DIR OPENSSL_CRYPTO_LIBRARY OPENSSL_SSL_LIBRARY OPENSSL_ROOT_DIR)
+# OpenSSL or another managed build, pkg-config's answer included.
+foreach(variable IN ITEMS OPENSSL_INCLUDE_DIR OPENSSL_CRYPTO_LIBRARY OPENSSL_SSL_LIBRARY OPENSSL_ROOT_DIR __pkg_config_checked__OPENSSL)
   unset(${variable} CACHE)
 endforeach()
 
 set(OPENSSL_ROOT_DIR "${TELAR_OPENSSL_PREFIX}")
 set(OPENSSL_USE_STATIC_LIBS TRUE)
+# FindOpenSSL takes the static libraries' dependencies from pkg-config's
+# openssl.pc. Without this, it reads the system's, and a system OpenSSL built
+# with zlib, Brotli or Zstd adds those libraries to the managed one.
+set(telar_pkg_config_path "$ENV{PKG_CONFIG_PATH}")
+set(ENV{PKG_CONFIG_PATH} "${TELAR_OPENSSL_PREFIX}/lib/pkgconfig")
 find_package(OpenSSL ${TELAR_OPENSSL_VERSION} EXACT REQUIRED COMPONENTS SSL Crypto)
+set(ENV{PKG_CONFIG_PATH} "${telar_pkg_config_path}")
 # The shared managed installation is consumed across sibling subdirectories.
 set_property(TARGET OpenSSL::SSL OpenSSL::Crypto PROPERTY IMPORTED_GLOBAL TRUE)
 foreach(path IN ITEMS OPENSSL_INCLUDE_DIR OPENSSL_CRYPTO_LIBRARY OPENSSL_SSL_LIBRARY)
