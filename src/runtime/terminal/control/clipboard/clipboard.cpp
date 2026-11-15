@@ -1,5 +1,7 @@
 module telar.runtime.terminal.control.clipboard;
 
+import telar.base.text.utf8;
+
 namespace telar::runtime::control {
 
   std::string_view clipboardStatusName(ClipboardStatus status) noexcept {

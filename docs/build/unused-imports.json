@@ -603,53 +603,6 @@
   "src/gui/transport/runtime_link/runtime_link.cppm": [
     "telar.base.diagnostics"
   ],
-  "src/runtime/shell_integration/shell_integration.cppm": [
-    "telar.platform.primitives"
-  ],
-  "src/runtime/shell_integration/words/words.cpp": [
-    "telar.base.memory.containers"
-  ],
-  "src/runtime/suggestions/engine/engine.cpp": [
-    "telar.base.diagnostics"
-  ],
-  "src/runtime/suggestions/engine/engine.cppm": [
-    "telar.platform.primitives",
-    "telar.wire.vocabulary"
-  ],
-  "src/runtime/terminal/control/checksum/checksum.cppm": [
-    "telar.base.memory.containers"
-  ],
-  "src/runtime/terminal/control/clipboard/clipboard.cppm": [
-    "telar.base.text.utf8",
-    "telar.wire.vocabulary"
-  ],
-  "src/runtime/terminal/control/control-graphics_query.cppm": [
-    ":graphics_header",
-    "telar.config.core"
-  ],
-  "src/runtime/terminal/control/control.cppm": [
-    "telar.runtime.terminal.ghostty",
-    "telar.runtime.terminal.kitty"
-  ],
-  "src/runtime/terminal/control/engine/engine.cppm": [
-    "telar.base.memory.containers",
-    "telar.base.text.utf8",
-    "telar.runtime.terminal.control.glyph"
-  ],
-  "src/runtime/terminal/osc_scanner/osc_scanner.cppm": [
-    "telar.base.diagnostics",
-    "telar.base.memory.sensitive",
-    "telar.base.text.utf8",
-    "telar.runtime.diagnostics.line"
-  ],
-  "src/runtime/terminal/text_reader/cell_projection.cpp": [
-    "telar.base.diagnostics"
-  ],
-  "src/runtime/terminal/text_reader/text_reader.cppm": [
-    "telar.base.diagnostics",
-    "telar.platform.primitives",
-    "telar.runtime.diagnostics.line"
-  ],
   "src/runtime/tests/client_peer/client_peer.cppm": [
     "telar.base.diagnostics",
     "telar.runtime.diagnostics.line",

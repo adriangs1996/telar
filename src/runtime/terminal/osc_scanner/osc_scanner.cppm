@@ -3,14 +3,10 @@ export module telar.runtime.terminal.osc_scanner;
 import std;
 
 import telar.base.memory.allocators;
-import telar.base.diagnostics;
-import telar.base.text.utf8;
 import telar.ghostty.vt;
 import telar.wire.vocabulary;
 import telar.wire.content;
-import telar.runtime.diagnostics.line;
 import telar.runtime.terminal.control;
-import telar.base.memory.sensitive;
 import telar.runtime.terminal.kitty;
 
 // Interface: terminal/frame_pacer.cppm

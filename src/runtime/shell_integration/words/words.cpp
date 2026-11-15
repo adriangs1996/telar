@@ -5,7 +5,6 @@ import telar.sys.posix;
 #if defined(__APPLE__)
 import telar.sys.apple;
 #endif
-import telar.base.memory.containers;
 import telar.base.text;
 import telar.base.text.json;
 import telar.platform.fs;

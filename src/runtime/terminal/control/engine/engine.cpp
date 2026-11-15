@@ -5,6 +5,8 @@ module telar.runtime.terminal.control.engine;
 
 import telar.ghostty.vt;
 import telar.render.document;
+import telar.base.text.utf8;
+import telar.runtime.terminal.control.glyph;
 
 namespace telar::runtime::control {
 

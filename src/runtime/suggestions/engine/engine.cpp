@@ -5,11 +5,12 @@ module telar.runtime.suggestions.engine;
 
 import std;
 import telar.sys.posix;
-import telar.base.diagnostics;
 import telar.base.text;
 import telar.base.text.json;
 import telar.platform.error;
 import telar.platform.net;
+import telar.platform.primitives;
+import telar.wire.vocabulary;
 
 namespace telar::runtime {
 

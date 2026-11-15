@@ -9,11 +9,9 @@ import telar.ghostty.vt;
 import telar.native.zlib;
 import telar.sys.posix;
 import telar.base.memory.allocators;
-import telar.config.core;
 import telar.platform.primitives;
 import telar.runtime.terminal.ghostty;
 import telar.runtime.terminal.kitty;
-import :graphics_header;
 import :graphics_payload;
 import :reply;
 

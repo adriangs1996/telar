@@ -4,6 +4,7 @@ import std;
 import telar.sys.posix;
 import telar.platform.error;
 import telar.platform.fs;
+import telar.platform.primitives;
 
 namespace telar::runtime {
 
