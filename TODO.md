@@ -755,8 +755,9 @@ Adrian: "Agreguemos también el check de imports sin usar", después de pregunta
 ### [ ] P12.2c · Limpieza de la regla 4 en la GUI
 - **Depende de:** P12.2a. Unas 180 líneas en 62 ficheros.
 
-### [ ] P12.2d · Limpieza de la regla 4 en la CLI
+### [x] P12.2d · Limpieza de la regla 4 en la CLI
 - **Depende de:** P12.2a. Unas 33 líneas en 16 ficheros.
+- **Resultado:** `455de1deb`. Los 33 `export import` de 16 interfaces de `src/cli` pasan a `import` (en `machine.cppm` se borra uno duplicado); 26 imports nuevos en 15 ficheros, cada uno pedido por el compilador; nada fuera de `src/cli` importa módulos de la CLI. `reexports.json` de 567 a 534 y `unused-imports.json` de 517 a 524 (siete interfaces que solo usaban lo que reexportaban `telar.cli.server`, `telar.cli.tab` o `telar.cli.integration.settings`). En Debug y en Release pasan la CLI (12), el runtime (49, con `runtime-probes`) y tbc (17); `telar` recompilado sale idéntico byte a byte y `telar-runtime` y `telar-gui` no se reenlazan. El commit de P12.2a (`345fdeb8d`), ya integrado, lleva `Co-Authored-By` y no se reescribe.
 
 ### [x] P12.3 · Regla de import sin usar: mecanismo
 - **Requisitos:** un import que el fichero no necesita hace fallar el checker. Cero falsos positivos demostrados: cada import que marque se quita y el árbol compila y pasa tests; si quitarlo rompe la compilación, se corrige la regla, no se deja el import marcado. Los imports necesarios que no nombran nada del módulo (especializaciones como `std::formatter` o `std::hash`, operadores y funciones que llegan por ADL) se tratan de forma explícita y con el motivo escrito, no en silencio. Corre en el tiempo del checker normal, no en el de `tbc-lint` sobre el árbol.
