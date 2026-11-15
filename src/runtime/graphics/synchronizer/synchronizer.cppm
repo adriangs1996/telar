@@ -141,8 +141,10 @@ export {
       template <Allocator GraphicsMemory>
       bool publish(Connection<ConcurrentMemory>& connection, const GraphicsStorage<GraphicsMemory>& storage);
 
+      // Not inlined: publish runs for every attached pane on every frame and stages only when the images
+      // changed; its locals in that frame would put every frame's calls on deeper stack pages.
       template <Allocator GraphicsMemory>
-      StageResult stage(const GraphicsStorage<GraphicsMemory>& storage);
+      [[gnu::noinline]] StageResult stage(const GraphicsStorage<GraphicsMemory>& storage);
 
       template <Allocator GraphicsMemory>
       void stageAtMediaBoundary(const GraphicsStorage<GraphicsMemory>& storage) noexcept;

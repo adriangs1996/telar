@@ -273,7 +273,9 @@ export {
         return std::move(hello_);
       }
 
-      inline void advance(bool origin_writable, Time now) noexcept {
+      // Not inlined: ProxyConnection::advance runs on every event of a connection and calls it only until
+      // the CONNECT is answered; its locals in that frame would put every relayed event on deeper stack pages.
+      [[gnu::noinline]] inline void advance(bool origin_writable, Time now) noexcept {
         TELAR_TRACE("proxy.connectHandshake");
         if (state_ == State::probing) {
           probe(now);

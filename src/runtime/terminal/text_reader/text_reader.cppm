@@ -38,7 +38,9 @@ export {
 
       tbc::view<TextMetadata, tbc::lt::a> view(tbc::view<std::span<const Byte>, tbc::lt::a> row_flags) const noexcept;
 
-      void capture(GhosttyRenderState state, GhosttyRenderStateRowIterator iterator, std::span<const Byte> row_flags, std::uint16_t columns);
+      // Not inlined: Terminal::refresh runs on every frame and captures only when rows with links
+      // changed; the link table in its frame would put every frame's calls on deeper stack pages.
+      [[gnu::noinline]] void capture(GhosttyRenderState state, GhosttyRenderStateRowIterator iterator, std::span<const Byte> row_flags, std::uint16_t columns);
 
     private:
       struct Identity {

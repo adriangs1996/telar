@@ -73,7 +73,10 @@ export {
 
     class AgentSnapshotBuilder {
     public:
-      void publish(ClientSession& client, const RuntimeModel& model, const AgentRegistry<ConcurrentMemory>& registry);
+      // Not inlined: StateProjection::prepare runs for every lane of every client write and publishes the
+      // agents only when they changed; its locals in that frame would put each write on stack pages that
+      // cost a page fault after a pane's fork() (see Connection::read).
+      [[gnu::noinline]] void publish(ClientSession& client, const RuntimeModel& model, const AgentRegistry<ConcurrentMemory>& registry);
 
     private:
       std::array<FixedText<48>, AgentRegistry<ConcurrentMemory>::capacity> directories_;
@@ -330,7 +333,10 @@ export {
 
       static void workspaceSnapshot(RuntimeModel& model, ClientSession& client, const RequestWorkspaceSnapshot& request);
 
-      static void publishList(const RuntimeModel& model, ClientSession& client);
+      // Not inlined: StateProjection::prepare runs for every lane of every client write and publishes the
+      // list only when it changed; its locals in that frame would put each write on stack pages that cost
+      // a page fault after a pane's fork() (see Connection::read).
+      [[gnu::noinline]] static void publishList(const RuntimeModel& model, ClientSession& client);
 
       // Marks the clients viewing the workspaces changed since the last delivery for a resync.
       void deliverNotices(ClientStore& clients) noexcept;

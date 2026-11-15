@@ -173,9 +173,11 @@ export {
 
       Binding* find(std::uint32_t id) noexcept;
 
-      std::uint32_t registerControl(lua_State* state);
+      // Not inlined, as registerCallback and decide: call() runs one of them per Lua call, and inlined,
+      // every call would carry the largest of their frames.
+      [[gnu::noinline]] std::uint32_t registerControl(lua_State* state);
 
-      std::uint32_t registerCallback(lua_State* state, bool intercept);
+      [[gnu::noinline]] std::uint32_t registerCallback(lua_State* state, bool intercept);
 
       // Binds the function at stack index 2 to `registration` in a free slot, under a new id.
       std::uint32_t bind(lua_State* state, TrafficRegistration registration);
@@ -186,7 +188,7 @@ export {
 
       static void interception(const lua::Value& options, TrafficRegistration& registration);
 
-      bool decide(lua_State* state);
+      [[gnu::noinline]] bool decide(lua_State* state);
 
       ServiceSpec specification_;
       std::array<Binding, TrafficLimits::registrations> bindings_;
