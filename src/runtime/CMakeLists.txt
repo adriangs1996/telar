@@ -205,7 +205,6 @@ target_sources(runtime-core PRIVATE
   redirect/direction/direction.cpp
   redirect/ingress/ingress.cpp
   redirect/pf_rules/pf_rules.cpp
-  redirect/record/record.cpp
   redirect/socket_owners/socket_owners.cpp
   tls/interception/interception.cpp
   tls/system_root_bundle/system_root_bundle.cpp
@@ -232,6 +231,8 @@ target_link_libraries(runtime-core PUBLIC "${ZLIB_LIBRARY}" "${BROTLI_DECODER_LI
 target_link_libraries(runtime-core PUBLIC ghostty-vt "${SQLITE3_LIBRARY}" Threads::Threads OpenSSL::SSL OpenSSL::Crypto)
 if(APPLE)
   target_link_libraries(runtime-core PUBLIC "-framework IOKit" "-framework CoreFoundation" "-framework Security")
+  # The interface of telar.runtime.redirect.record is macOS only (cmake/module_platforms.cmake).
+  target_sources(runtime-core PRIVATE redirect/record/record.cpp)
 else()
   target_compile_definitions(runtime-core PUBLIC _GNU_SOURCE)
   target_sources(runtime-core PRIVATE platform/proc_file/proc_file.cpp)
