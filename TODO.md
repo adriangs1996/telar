@@ -779,6 +779,8 @@ Adrian: "Agreguemos también el check de imports sin usar", después de pregunta
 - **Depende de:** P12.4 y P12.2a–d (al quitar los re-exports aparecen interfaces que importan módulos que ya no usan).
 - **Condición:** el caso peligroso es el que no rompe (quitar un import y que compile con otra sobrecarga). Además del desensamblado del cierre, se compara el desensamblado normalizado de los binarios Release por lote de limpieza, para que un cambio se pueda atribuir a un import concreto.
 
+- **Reparto:** sin re-exports, quitar un import solo afecta a su unidad, así que va por árbol en paralelo: P12.5a el runtime (264 en 111 ficheros), P12.5b la GUI (169 en 107) y P12.5c la CLI y `lib/` (127 en 23 y 34 en 21). Cada import marcado se quita y se demuestra con build y tests; si quitarlo rompe la compilación, se corrige la regla o se declara el uso implícito con su motivo (en un commit aparte), nunca se deja marcado. El desensamblado normalizado se compara por lote.
+
 ### [ ] P12.6 · Cierre de la fase 12
 - **Depende de:** P12.1–P12.5. Ejecuta el "Hecho cuando" de la fase: Linux, métricas, comparación y desensamblado.
 
