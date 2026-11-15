@@ -188,3 +188,165 @@ límite único no distingue hilos: el hilo principal lleva marcos de 1677,6 KiB
 que caben de sobra, y lo que importa son los hilos de 512 KiB. Se queda el
 inventario, que se repite con `tools/stack-frames.py` cuando cambie el reparto
 de cuerpos o de hilos.
+
+### Crecimiento desde la base del refactor
+
+Las dos regresiones de marcos de ThinLTO (el SIGBUS de `gui-quick` y
+`dcc40ec38`) tienen la misma forma: el enlazador inserta en una función un
+cuerpo con locales grandes que solo corre en un caso raro, y desde entonces
+cada llamada a esa función reserva el marco entero y todo lo que llama queda
+más abajo en la pila. Tras el `fork()` de cada pane, cada página de pila que el
+runtime vuelve a escribir cuesta un fallo de página.
+
+Para buscarlas de forma directa se compilaron en Release la base del refactor
+`d1ab27cb6` (sin ThinLTO) y `61b218258` (con ThinLTO), y se comparó con el
+análisis de `tools/stack-frames.py` el marco de cada función de `telar-runtime`,
+`telar` y `telar-gui`. Los nombres se emparejan desmangleados, sin el módulo al
+que pertenecen y con las pilas de asignadores de la base
+(`SynchronizedAllocator<BudgetAllocator<SystemAllocator>>`,
+`BudgetAllocator<SystemAllocator>`) escritas como `ConcurrentMemory` y `Memory`;
+lo que no casa así se compara por el nombre cualificado sin argumentos de
+plantilla ni parámetros, contra el mayor marco de ese nombre en la base. Lo que
+la función inserta son las llamadas directas de la base que ya no hace.
+
+Han crecido 4 KiB o más 40 funciones de `telar-runtime`, 8 de `telar` y 39 de
+`telar-gui`, contando las que no tienen pareja en la base. Una inserción solo
+es una regresión cuando lo insertado es condicional: si la función lo llama
+siempre, la base ya pagaba ese marco un nivel más abajo y la pila tocada es la
+misma.
+
+#### Arregladas
+
+Las ocho del camino caliente con inserción condicional, como en `dcc40ec38`:
+`[[gnu::noinline]]` en la declaración de lo insertado, sin mover cuerpos. Marcos
+en bytes; la pila más profunda, por llamadas directas.
+
+| Función | Base | Cabeza | Arreglo | Más profunda (cabeza → arreglo) | Lo insertado | Hilo | Camino |
+| --- | ---: | ---: | ---: | ---: | --- | --- | --- |
+| `StateProjection::prepare` | 80 | 24 112 | 80 | 39 280 → 19 984 | `WorkspaceService::publishList`, `AgentSnapshotBuilder::publish` (solo si cambiaron) | principal, bucle de `Runtime` | cada carril de cada escritura a un cliente |
+| `Terminal::refresh` | 128 | 11 520 | 208 | 15 776 → 14 784 | `TextMetadataCapture::capture` (solo si cambian filas con enlaces) | principal; también el observador de panes | cada frame con el terminal sucio |
+| `GraphicsSynchronizer::publish` | 192 | 10 528 | 192 | 11 008 → 11 120 | `stage` (solo si cambian las imágenes) | principal | cada pane adjunto en cada frame |
+| `CommandZones::finishSequence` | 0 | 8 240 | 160 | 8 352 → 8 480 | `privateReport` (OSC 6973), `directoryReport` (OSC 7) | principal (`Pane::read`) y el observador de panes | cada OSC que imprime un pane, por byte de PTY |
+| `traffic::Service::step` | 1 360 | 18 464 | dentro de la entrada del hilo, 1 904 | | `Service::read` (solo los pares listos) | hilo de `traffic::Service` (512 KiB) | cada vuelta de `poll` |
+| `ProxyService::advance` | 112 | 4 208 | 256 | 29 744 → 25 792 | `ConnectHandshake::advance` (hasta responder al `CONNECT`) | hilo del proxy (512 KiB) | cada evento de un túnel |
+| `CaptureProducer::decodeBody` | 160 | 66 032 | 512 | 99 536 → 66 400 | `decodeSmallFlate`, con su búfer de 64 KiB (solo flate con límite pequeño) | `ObservationWorker` de captura (512 KiB) | cada cuerpo capturado con codificación |
+| `LuaTraffic::call` | 1 040 | 30 816 | 1 088 | 33 680 → 29 376 | `registerCallback`, `registerControl`, `decide` (una por llamada) | proceso del worker de plugins, principal | cada llamada de un plugin a la API de tráfico |
+
+`ProxyService::advance` sigue insertando `ProxyConnection::advance`, que llama
+siempre. Frente a la cabeza, el arreglo solo hace crecer la entrada del hilo de
+`traffic::Service` (de 80 a 1 904 B), que se entra una vez. `telar` sale
+idéntico byte a byte.
+
+Medido en local, Release, en reposo, la cabeza contra la cabeza con el arreglo:
+
+- `bench_runtime_probe.py` con una copia de la cabeza como A′: en tiempo,
+  12 rondas, ninguna de las 11 cargas se separa de A′ (p de 0,166 a 0,862). En
+  instrucciones y ciclos del runtime, 7 rondas, tampoco (p ≥ 0,085). Las dos
+  cargas que ganan 1 de 7, `sparse` en instrucciones (1,0003) y `colors` en
+  ciclos (1,049), tienen A′ en 1/7 y 3/7. Esta herramienta abre un pane y solo
+  mide frames, así que no ve los fallos de página tras un `fork()`.
+- `tools/client_queue`, escenario `server-cli`, como en `dcc40ec38`: dos series
+  de 200 vueltas por lado en bloques intercalados, con el orden de los lados
+  invertido en la segunda. La latencia de un frame desde que se encola hasta que
+  se escribe, por la mediana de cada vuelta, baja de 2,84 a 2,68 µs (p = 5e-7) y
+  de 2,85 a 2,75 µs (p = 5e-4). El carril `management` queda en 25,9 frente a
+  26,0 µs (p = 0,47) en la primera serie y pierde de 25,4 a 26,7 µs (p = 0,024)
+  en la segunda. `CreatePane` pierde en las dos, de 23,5 a 24,1 µs (p = 0,045) y
+  de 23,6 a 24,6 µs (p = 0,004), y `OpenPane` en la segunda, de 28,6 a 30,1 µs
+  (p = 0,001).
+- Esa pérdida es colocación. Cae en el resto de `receive()`,
+  `updateWriteInterest()` y el resto del lote de eventos (de 42 a 125 ns, dos
+  tics del reloj), que no llaman a nada de lo arreglado. `clientEvent`,
+  `receive`, `updateWriteInterest`, `writeClient`, `run`, `Kqueue::wait`,
+  `Kqueue::readInterest`, `Connection::read` y `Connection::write` dan el mismo
+  desensamblado normalizado en los dos binarios medidos, a 0x1164 bytes de
+  distancia (`run`, en la misma dirección); solo cambian `publish` y
+  `paneEvent`. Con `--faults`, 40 vueltas por lado, los fallos de página y de
+  copia en escritura de cada tramo hasta `publish()` son los mismos o menos.
+
+#### Se quedan
+
+`telar-runtime`:
+
+- **Entradas que se ejecutan una vez:** `cli::runTraffic` (15 520 → 286 784,
+  inserta `runRedirect`; hilo principal del comando `traffic`), el constructor
+  de `Runtime` (1 328 → 32 656), `traffic::control::Backend::start`
+  (1 984 → 8 816) y las entradas de hilo (`__thread_proxy`) del
+  `ObservationWorker` de procesos (48 → 192 640, pila más profunda 298 KiB de
+  512), del `ObservationWorker` de descendientes (12 064), del servicio de
+  control de tráfico (9 952), de tres `RequestWorker` (8 672, 7 840 y 7 808), de
+  `ProxyService` (7 584) y de `WorkspaceGitProbe` (4 368). Su marco se reserva
+  una vez por hilo.
+- **Solo al parar:** `PaneObservationService::finish` (3 488 → 39 088).
+- **Inserción incondicional:** `PaneMedia::process` (256 → 25 024, hilo de media)
+  llama a `AtomicFrameFilter::feed` en cada evento de salida del lote, y la base
+  ya pagaba sus 26 KiB en cada llamada; la pila más profunda baja de 184 a
+  47 KiB.
+- **Una petición concreta de un cliente**, no cada evento: las lambdas de
+  `Runtime::dispatch` de `CompleteWords` y `RequestCommandSpec` (64 → 10 688,
+  construyen un `WordRequest` de 10 KiB en cada llamada), `CreateWorkspace`
+  (5 520), `CreateTab` (4 656) y `LaunchWorktree` (4 384), y
+  `ExecutionService::request` (224 → 8 432, `telar exec`). Lo insertado corre
+  en cada llamada, y la base lo pagaba un nivel más abajo.
+- **Una vez por conexión:** `makeOwned<Http2EndpointConnection>` (1 200 → 7 008),
+  en el proxy.
+- **Sondas de git en workers, por intervalo:** `WorktreeGitProbe::observe`
+  (5 600 → 10 208), `UnstagedComparison::scan` (4 320 → 8 816),
+  `ObjectDatabase::open` (0 → 6 688), `StatusReader::readReferences`
+  (0 → 4 304) y la lambda de `parseConfig` de `readUpstream` (4 112, sin pareja).
+- **Configuración y plugins, al cargar:** `BasicActionValidator::commandTab`
+  (624 → 4 880), la lambda de `eachField` de `CommandTabStorage` (10 320),
+  `inspectPackage` (8 400) y `registerPackages` (6 544), estas tres sin pareja.
+- **Sin pareja porque cambiaron de sitio, sin crecer:** `writeAsciiRun`
+  (16 400) es la `Engine::ordinaryAscii` de la base (16 384, el mismo búfer de
+  4096 codepoints); `ExecutionService::event` (16 400) vivía dentro de
+  `Runtime::run` (19 584 en la base, 3 296 en la cabeza) y
+  `CommandTrackerCore::resetObservation` (16 704) dentro de
+  `PaneObserver::observe` (16 896 en la base, 544 en la cabeza).
+
+`telar`: todos son comandos que se ejecutan una vez en el hilo principal
+(8 MiB): `repository::run` (784 → 66 256), `MachineProfileCodec::parse`
+(320 → 16 832), `config_receive::run` (352 → 16 752), `sessions::worktree`
+(1 008 → 11 792), `machine::Logins::run` (1 040 → 11 088), `runMachine`
+(10 784 → 20 368), `execution::run` (1 376 → 6 816) e `inspectPackage` (8 400,
+sin pareja).
+
+`telar-gui`, ninguna tiene inserción condicional en un camino por frame o por
+evento:
+
+- **Por frame, inserción incondicional:** la ranura de `beforeSynchronizing` de
+  `Application::observeFrames` (0 → 18 464) llama a `prepareFrame` en cada
+  frame (más profunda 18 912 → 18 976); la de `frameSwapped` (0 → 4 320) inserta
+  `present` y `TerminalItem::presentFrame`, que corre para cada pane de cada
+  frame (13,1 → 13,0 KiB hasta `refreshLinkHover`).
+- **Por lectura de un proceso, inserción incondicional:** las ranuras de
+  `readyRead` de `CommandProcess` (0 y 32 → 10 048) y de `RemoteBridge`
+  (0 → 8 208) llaman siempre a `drain`. `CommandProcess::finish`
+  (10 048 → 21 088) y la ranura de salida de `RemoteBridge` (0 → 8 208) corren
+  cuando el proceso termina.
+- **Por cambio de actividad, inserción incondicional:** `ActivityOrder::write`
+  (228 528 → 331 008, hilo principal) inserta `emitForest`, que llama siempre;
+  la más profunda baja de 350 a 332 KiB.
+- **Configuración, en el hilo `telar-lua` (512 KiB):** el constructor de
+  `ConfigurationGeneration` (128 → 28 592, la más profunda baja de 86,9 a
+  55,5 KiB), `ConfigurationLoader::prepare` (384 → 7 744) y, sin pareja,
+  `InputConfiguration::compile` (26 752), `ElementReader::box` (15 696) y la
+  lambda de `eachField` (10 320).
+- **Acciones del usuario o cambios de máquinas:** `Application::startPlugin`
+  (112 → 13 424), `HostCommands::operator()` (0 → 10 688),
+  `applyMachineProfiles` (160 → 10 528), `Session::executeCommand` (0 → 6 336),
+  `openLink` (4 208 → 8 384), `MachineProfileCodec::parse` (320 → 16 832) y,
+  sin pareja, `CommandOutput::execute` (16 480), `PathExpansion::expandWith`
+  (12 352), `Session::openAnchoredFile` (8 352), `inspectPackage` (8 400),
+  `registerPackages` (6 544) y `Session::descendPath` (5 184).
+- **Una vez, en `QThreadPool`:** las tareas de `MachineProfilesSource::start`
+  (10 624 → 22 832), `PluginWorker::start` (80 → 6 720) y
+  `WindowFontCatalog::start` (336 → 5 184), y `makeOwned` de
+  `PluginWorkerSnapshot` (128 → 6 672). `makeOwned` de `FontCache::Generation`
+  (128 → 4 528) se entra solo al crear una generación.
+- **Código generado o de terceros:** cinco `validateLookupSignatures` de
+  `qmlcachegen` (96 → 4 432–4 512), al cargar el QML; en HarfBuzz, la creación
+  de los aceleradores CFF (0 → 8 288 y 8 320, una vez por cara) y
+  `hb_ot_draw_glyph` (272 → 4 816) y `hb_ot_get_glyph_extents` (0 → 4 608), que
+  solo corren al rasterizar un glifo que no está en caché. No son declaraciones
+  de telar.
