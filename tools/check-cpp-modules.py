@@ -2,6 +2,7 @@
 """Check module ownership and paths, import cycles, re-exports, unused imports and the documented
 textual boundaries."""
 import argparse
+import collections
 import functools
 import json
 import os
@@ -918,6 +919,13 @@ def provided_names(sources, interfaces, reexports, implicit):
     for module in own:
         provide(module)
 
+    # A namespace that only one module declares names that module when it qualifies a name, as
+    # `cell_layout::wide`, whose declaration the checker may not see; unit_names spells such a
+    # use `cell_layout::`.
+    owners = collections.Counter(space for module, (_, _, spaces) in own.items() if ':' not in module for space in spaces)
+    for names, spaces in provided.values():
+        names.update(space + '::' for space in spaces if owners[space] == 1)
+
     return {module: (frozenset(name.encode() for name in names), frozenset(name.encode() for name in spaces))
             for module, (names, spaces) in provided.items()}
 
@@ -937,11 +945,14 @@ UNIT_MODULE_BYTES_RE = re.compile(rb'^[ \t]*(?:export[ \t]+)?module[ \t]+([\w.]+
 NAMESPACE_USE_RE = re.compile(rb'namespace\s+(?:\w+\s*=\s*)?([\w:\s]+);')
 IDENTIFIER_BYTES = bytes(byte if chr(byte).isascii() and (chr(byte).isalnum() or byte == ord('_')) else 32
                          for byte in range(256))
+# The identifiers with their colons, so that a qualified name reads as one token.
+QUALIFIED_BYTES = bytes(byte if byte == ord(':') else IDENTIFIER_BYTES[byte] for byte in range(256))
 
 
 def unit_names(text):
-    """What a unit names outside comments and literals, the namespaces it names by themselves,
-    the modules it imports without re-exporting them, as spelled, and its module."""
+    """What a unit names outside comments and literals, each qualifier also as `name::`, the
+    namespaces it names by themselves, the modules it imports without re-exporting them, as
+    spelled, and its module."""
     if b'import' not in text:
         return set(), set(), set(), None
 
@@ -953,6 +964,8 @@ def unit_names(text):
     module = UNIT_MODULE_BYTES_RE.search(preamble)
     names = set(UNIT_DECLARATION_RE.sub(b' ', preamble).translate(IDENTIFIER_BYTES).split())
     names.update(code.translate(IDENTIFIER_BYTES).split())
+    names.update(qualifier + b'::' for token in code.translate(QUALIFIED_BYTES).split() if b'::' in token
+                 for qualifier in token.split(b'::')[:-1] if qualifier)
     namespaces = {match.split(b'::')[-1].strip() for match in NAMESPACE_USE_RE.findall(code)}
 
     return names, namespaces, imports, module[1] if module else None

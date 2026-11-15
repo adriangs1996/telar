@@ -617,8 +617,7 @@
     "telar.wire.vocabulary"
   ],
   "src/runtime/terminal/control/checksum/checksum.cppm": [
-    "telar.base.memory.containers",
-    "telar.runtime.terminal.grid"
+    "telar.base.memory.containers"
   ],
   "src/runtime/terminal/control/clipboard/clipboard.cppm": [
     "telar.base.text.utf8",
@@ -644,8 +643,7 @@
     "telar.runtime.diagnostics.line"
   ],
   "src/runtime/terminal/text_reader/cell_projection.cpp": [
-    "telar.base.diagnostics",
-    "telar.runtime.terminal.grid"
+    "telar.base.diagnostics"
   ],
   "src/runtime/terminal/text_reader/text_reader.cppm": [
     "telar.base.diagnostics",

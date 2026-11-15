@@ -143,13 +143,32 @@ class UnusedImports(unittest.TestCase):
                                  {'src/gui/view/view.cpp': {'telar.base.geometry'}})
 
     def test_a_namespace_counts_when_named_by_itself_not_as_a_qualifier(self):
+        # Every module declares telar, as telar.base.color does here.
+        interfaces = {**self.interfaces, 'lib/base/color/color.cppm': COLOR}
         uses = {
             'src/gui/view/view.cpp': unit('using namespace telar::layout;\n', 'telar.base.geometry'),
             'src/gui/view/alias.cpp': unit('namespace shapes = telar::layout;\n', 'telar.base.geometry'),
             'src/gui/view/qualified.cpp': unit('namespace telar { int x = telar::other; }\n', 'telar.base.geometry'),
         }
 
-        self.assertEqual(sites(uses, self.interfaces), {'src/gui/view/qualified.cpp': {'telar.base.geometry'}})
+        self.assertEqual(sites(uses, interfaces), {'src/gui/view/qualified.cpp': {'telar.base.geometry'}})
+
+    def test_a_qualifier_counts_when_only_that_module_declares_the_namespace(self):
+        cells = ('telar.runtime.terminal.grid', 'export module telar.runtime.terminal.grid;\n'
+                 'export namespace telar::runtime::cell_layout {\n#include "cell_layout.inc"\n}\n')
+        control = ('telar.runtime.terminal.control', 'export module telar.runtime.terminal.control;\n'
+                   'export namespace telar::runtime { struct Parameters {}; }\n')
+        interfaces = {'src/runtime/terminal/grid/grid.cppm': cells, 'src/runtime/terminal/control/control.cppm': control}
+        units = {
+            'src/gui/view/view.cpp': unit('auto wide = telar::runtime::cell_layout::wide(0);\n', 'telar.runtime.terminal.grid'),
+            'src/gui/view/runtime.cpp': unit('auto value = telar::runtime::other;\n', 'telar.runtime.terminal.control'),
+            'src/gui/view/local.cpp': unit('int cell_layout = 0;\n', 'telar.runtime.terminal.grid'),
+        }
+
+        self.assertEqual(sites(units, interfaces), {
+            'src/gui/view/runtime.cpp': {'telar.runtime.terminal.control'},
+            'src/gui/view/local.cpp': {'telar.runtime.terminal.grid'},
+        })
 
     def test_the_items_of_an_exported_x_macro_list_are_names_of_the_module(self):
         signals = ('telar.sys.process', '''module;
