@@ -603,56 +603,6 @@
   "src/gui/transport/runtime_link/runtime_link.cppm": [
     "telar.base.diagnostics"
   ],
-  "src/runtime/runtime/client_control/client_control.cppm": [
-    "telar.runtime.terminal.kitty"
-  ],
-  "src/runtime/runtime/delivery/client_delivery/client_delivery.cpp": [
-    "telar.native.zlib"
-  ],
-  "src/runtime/runtime/delivery/client_delivery/client_delivery.cppm": [
-    "telar.runtime.diagnostics.line",
-    "telar.runtime.terminal.kitty",
-    "telar.wire.pane_io"
-  ],
-  "src/runtime/runtime/execution_service/execution_service-execution.cppm": [
-    "telar.base.diagnostics",
-    "telar.platform.error",
-    "telar.platform.primitives",
-    "telar.sys.posix"
-  ],
-  "src/runtime/runtime/execution_service/execution_service.cppm": [
-    "telar.platform.error",
-    "telar.platform.net",
-    "telar.runtime.shell_integration.words",
-    "telar.runtime.terminal.kitty",
-    "telar.wire.clients",
-    "telar.wire.layout"
-  ],
-  "src/runtime/runtime/media_service/media_service.cppm": [
-    "telar.platform.error",
-    "telar.runtime.diagnostics.line",
-    "telar.wire.agents"
-  ],
-  "src/runtime/runtime/runtime/runtime.cppm": [
-    "telar.base.editors",
-    "telar.base.text.utf8",
-    "telar.client",
-    "telar.runtime.diagnostics.line",
-    "telar.runtime.platform.launch_program",
-    "telar.runtime.suggestions.engine",
-    "telar.runtime.terminal.kitty"
-  ],
-  "src/runtime/runtime/runtime_telemetry/runtime_telemetry.cpp": [
-    "telar.ghostty.vt",
-    "telar.native.zlib"
-  ],
-  "src/runtime/runtime/runtime_telemetry/runtime_telemetry.cppm": [
-    "telar.platform.fs",
-    "telar.runtime.diagnostics.operation",
-    "telar.runtime.platform.proc_file",
-    "telar.runtime.terminal.control",
-    "telar.runtime.terminal.kitty"
-  ],
   "src/runtime/shell_integration/shell_integration.cppm": [
     "telar.platform.primitives"
   ],

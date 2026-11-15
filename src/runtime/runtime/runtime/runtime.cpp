@@ -11,6 +11,11 @@ import telar.platform.paths;
 import telar.plugins;
 import telar.runtime.platform.git_status;
 import telar.runtime.terminal.text_reader;
+import telar.base.editors;
+import telar.base.text.utf8;
+import telar.runtime.platform.launch_program;
+import telar.runtime.suggestions.engine;
+import telar.runtime.diagnostics.line;
 
 namespace telar::runtime {
 

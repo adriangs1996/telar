@@ -6,11 +6,12 @@ module;
 module telar.runtime.runtime.delivery.client_delivery;
 
 import telar.ghostty.vt;
-import telar.native.zlib;
 import telar.sys.process;
 
 import telar.runtime.terminal.control;
 import telar.render.document;
+import telar.wire.pane_io;
+import telar.runtime.diagnostics.line;
 
 namespace telar::runtime {
 

@@ -15,14 +15,11 @@ import telar.runtime.worktrees.git_probe;
 import telar.runtime.history.store;
 import telar.runtime.platform.background_executor;
 import telar.wire.vocabulary;
-import telar.wire.agents;
 import telar.wire.editor;
 import telar.wire.history;
 import telar.platform.primitives;
-import telar.runtime.diagnostics.line;
 import telar.runtime.terminal.kitty;
 import telar.runtime.terminal.control;
-import telar.platform.error;
 #if (TELAR_DIAGNOSTICS)
 import telar.runtime.diagnostics.operation;
 #endif

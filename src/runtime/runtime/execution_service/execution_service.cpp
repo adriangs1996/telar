@@ -5,6 +5,10 @@ module;
 module telar.runtime.runtime.execution_service;
 
 import telar.sys.process;
+import telar.platform.error;
+import telar.platform.net;
+import telar.wire.clients;
+import telar.wire.layout;
 
 namespace telar::runtime {
 

@@ -3,12 +3,14 @@ module;
 
 module telar.runtime.runtime.runtime_telemetry;
 
-import telar.ghostty.vt;
-import telar.native.zlib;
 import telar.sys.process;
 import telar.base.text;
+import telar.platform.fs;
+import telar.runtime.diagnostics.operation;
 #if defined(__APPLE__)
 import telar.sys.apple;
+#else
+import telar.runtime.platform.proc_file;
 #endif
 
 namespace telar::runtime::diagnostics {
