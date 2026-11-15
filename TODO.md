@@ -744,9 +744,10 @@ Adrian: "Agreguemos también el check de imports sin usar", después de pregunta
 - **Hecho cuando:** el checker aplica la regla nueva, `reexports.json` lista exactamente lo que hay hoy y el checker pasa. Sin cambios en C++.
 - **Resultado:** `a3c3bfe26`, `6b3b780dd`. El checker rechaza todo `export import` salvo `export import :p`, también en tests y tools; `reexports.json` pasa a ir por fichero, como `textual-includes.json`, y lista 605 re-exports en 195 ficheros: runtime 315 (más 23 en 15 fixtures de `src/runtime/tests`), GUI 180 (más 16 en 9 fixtures de `src/gui/tests`), CLI 33 y `lib/` 38; ninguno de `std`. El checker falla con un re-export fuera de la lista y con una entrada que ya no existe. Se borra el análisis de tipos de la regla anterior (`Interface`, `declared_type`, `function_body`), que queda en `a91ebfafa`. 23 tests de tools, 8 nuevos.
 
-### [ ] P12.2a · Limpieza de la regla 4 en `lib/`
+### [x] P12.2a · Limpieza de la regla 4 en `lib/`
 - **Depende de:** P12.1. Va primero porque quitar un re-export de `lib/` obliga a sus importadores de los tres árboles a importar lo que nombran.
 - **Hecho cuando:** `lib/` sale de `reexports.json`, compilan y pasan los tres árboles en Debug y en Release con sus probes, tbc y el checker.
+- **Resultado:** `345fdeb8d`. Los 38 `export import` de 21 interfaces de `lib/` pasan a `import`; los ficheros que llegaban a un módulo solo por esos re-exports lo importan (80 imports en 59 ficheros de los cuatro árboles, tests incluidos, cada uno pedido por el compilador). `reexports.json` de 605 a 567. En Debug y en Release compilan los tres árboles con sus probes y pasan runtime 49, CLI 12, GUI 138, ebnf 284, render 1, git 1 y tbc 17. Desensamblado normalizado de `telar-runtime`, `telar` y `telar-gui` en Release idéntico a la base `885ce183d` compilada en el mismo worktree (contra un worktree aparte solo cambiaban offsets de página por la longitud de las rutas de fuente). Al integrarla, `unused-imports.json` se regenera (`943675e50`): de 480 a 517, por las interfaces que importaban para reexportar y ya no usan lo que importan.
 
 ### [ ] P12.2b · Limpieza de la regla 4 en el runtime
 - **Depende de:** P12.2a. Unas 315 líneas en 72 ficheros.
