@@ -778,9 +778,37 @@ def declaration(found, index, closing):
     return statement_end(found, index, closing), names
 
 
-def declarations(found):
+# An X-macro list, `#define LIST(X) X(a) X(b) LIST2(X)`: an interface that expands it at namespace
+# scope declares a, b and what LIST2 lists. The tokens drop directives, so its items come from here.
+MACRO_LIST_RE = re.compile(r'^[ \t]*\#[ \t]*define[ \t]+(\w+)\([ \t]*(\w+)[ \t]*\)((?:\\\n|[^\n])*)', re.M)
+MACRO_ITEM_RE = re.compile(r'(\w+)\s*\(\s*(\w+)\s*\)')
+
+
+def macro_lists(text):
+    """The X-macro lists a unit defines, each with the names it expands to."""
+    lists = {}
+    for name, parameter, body in MACRO_LIST_RE.findall(text):
+        items = MACRO_ITEM_RE.findall(body)
+        if items and all(parameter in item for item in items) and not MACRO_ITEM_RE.sub('', body).replace('\\', '').strip():
+            lists[name] = [(macro == parameter, argument if macro == parameter else macro) for macro, argument in items]
+
+    def expand(name, seen):
+        names = []
+        for direct, value in lists[name]:
+            if direct:
+                names.append(value)
+            elif value in lists and value not in seen:
+                names += expand(value, seen | {name})
+
+        return names
+
+    return {name: expand(name, {name}) for name in lists}
+
+
+def declarations(found, lists={}):
     """What a module unit declares at namespace scope, from its tokens: the names it exports,
-    every name it declares, and its namespaces."""
+    every name it declares, and its namespaces. `lists` holds the unit's X-macro lists
+    (macro_lists), whose expansion declares their items."""
     exported, every, namespaces = set(), set(), set()
     closing = closing_braces(found)
     scopes, index = [], 0
@@ -832,7 +860,10 @@ def declarations(found):
             index += 3
             continue
 
-        index, names = declaration(found, index, closing)
+        if token in lists and found[index + 1] == '(':
+            index, names = skip_group(found, index + 1, closing), lists[token]
+        else:
+            index, names = declaration(found, index, closing)
         every.update(names)
         if exporting:
             exported.update(names)
@@ -849,7 +880,7 @@ def provided_names(sources, interfaces, reexports, implicit):
     and the macros whose expansion names it."""
     own = {}
     for source, text in sources.items():
-        exported, every, namespaces = declarations(tokens(text))
+        exported, every, namespaces = declarations(tokens(text), macro_lists(text))
         module = interfaces[source]
         primary = module.split(':')[0]
         own.setdefault(primary, [set(), set(), set()])
