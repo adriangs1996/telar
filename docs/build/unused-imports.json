@@ -235,49 +235,6 @@
     "telar.wire.pane_io",
     "telar.wire.runtime"
   ],
-  "src/gui/core/json_writer/json_writer.cppm": [
-    "telar.base.text.utf8"
-  ],
-  "src/gui/core/metrics/metrics.cppm": [
-    "telar.base.diagnostics"
-  ],
-  "src/gui/fonts/face/face-views.cppm": [
-    "telar.gui.terminal.font_grid"
-  ],
-  "src/gui/fonts/face/face.cpp": [
-    "telar.base.diagnostics"
-  ],
-  "src/gui/fonts/face/face.cppm": [
-    "telar.base.diagnostics"
-  ],
-  "src/gui/fonts/font_requests/font_requests.cpp": [
-    "telar.base.diagnostics"
-  ],
-  "src/gui/fonts/row_text_layout/row_text_layout.cpp": [
-    "telar.base.diagnostics",
-    "telar.gui.fonts.font_requests",
-    "telar.gui.terminal.glyphs",
-    "telar.tbc",
-    "telar.wire.vocabulary"
-  ],
-  "src/gui/fonts/row_text_layout/row_text_layout.cppm": [
-    "telar.base.diagnostics"
-  ],
-  "src/gui/graphics/pauses/pauses.cppm": [
-    "telar.base.diagnostics"
-  ],
-  "src/gui/graphics/placeholder/placeholder.cpp": [
-    "telar.gui.core.primitives"
-  ],
-  "src/gui/graphics/placeholder/placeholder.cppm": [
-    "telar.gui.core.primitives"
-  ],
-  "src/gui/graphics/texture_cache/texture_cache.cppm": [
-    "telar.base.diagnostics"
-  ],
-  "src/gui/history/browser/browser.cpp": [
-    "telar.base.diagnostics"
-  ],
   "src/gui/input/configuration/configuration.cppm": [
     "telar.wire.vocabulary"
   ],

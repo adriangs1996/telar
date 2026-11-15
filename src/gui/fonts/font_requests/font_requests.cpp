@@ -2,7 +2,6 @@ module telar.gui.fonts.font_requests;
 
 import std;
 
-import telar.base.diagnostics;
 import telar.gui.core.json_writer;
 import telar.gui.core.unicode_scalar;
 

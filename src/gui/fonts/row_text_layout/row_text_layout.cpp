@@ -1,15 +1,10 @@
 module telar.gui.fonts.row_text_layout;
 
 import std;
-import telar.tbc;
 
-import telar.base.diagnostics;
 import telar.gui.core.json_writer;
 import telar.gui.core.primitives;
-import telar.gui.fonts.font_requests;
-import telar.gui.terminal.glyphs;
 import telar.gui.terminal.screen;
-import telar.wire.vocabulary;
 
 namespace telar::gui::fonts {
 

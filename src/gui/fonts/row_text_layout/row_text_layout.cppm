@@ -16,7 +16,6 @@ import telar.gui.core.metrics;
 import telar.gui.fonts.text_runs;
 import telar.gui.terminal.selection;
 import telar.gui.terminal.glyphs;
-import telar.base.diagnostics;
 import telar.base.memory.allocators;
 import telar.gui.core.primitives;
 import telar.gui.terminal.screen;

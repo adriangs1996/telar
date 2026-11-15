@@ -17,7 +17,6 @@ import telar.tbc;
 
 import telar.gui.terminal.font_grid;
 import telar.gui.terminal.glyphs;
-import telar.base.diagnostics;
 import telar.base.text.utf8;
 
 namespace telar::gui::fonts {

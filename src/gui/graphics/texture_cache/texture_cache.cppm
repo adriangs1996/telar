@@ -5,7 +5,6 @@ export module telar.gui.graphics.texture_cache;
 
 import std;
 
-import telar.base.diagnostics;
 import telar.base.memory.allocators;
 import telar.config.core;
 import telar.gui.core.metrics;
