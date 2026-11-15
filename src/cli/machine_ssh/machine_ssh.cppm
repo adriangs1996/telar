@@ -6,18 +6,9 @@ import telar.sys.posix;
 import telar.machines;
 
 import telar.base.text.json;
-import telar.base.diagnostics;
-import telar.wire.vocabulary;
-import telar.platform.primitives;
 import telar.base.text;
-import telar.cli.command_limit;
 import telar.cli.output;
 import telar.cli.plugin;
-import telar.cli.server;
-import telar.client;
-import telar.platform.daemon;
-import telar.platform.error;
-import telar.platform.fs;
 import telar.platform.paths;
 import telar.platform.process;
 import telar.base.memory.allocators;

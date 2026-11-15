@@ -14,6 +14,14 @@ import telar.tbc;
 import telar.platform.fs;
 import telar.cli.plugin;
 import telar.base.text.json;
+import telar.cli.command_limit;
+import telar.cli.integration.settings;
+import telar.cli.runtime_observer;
+import telar.platform.paths;
+import telar.platform.primitives;
+import telar.platform.process;
+import telar.wire.clients;
+import telar.wire.vocabulary;
 
 namespace telar::runtime::cli::machine::assets {
 

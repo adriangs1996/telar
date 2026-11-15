@@ -1,27 +1,4 @@
 {
-  "src/cli/machine/machine.cppm": [
-    "telar.base.diagnostics",
-    "telar.cli.command_limit",
-    "telar.cli.integration.settings",
-    "telar.cli.runtime_observer",
-    "telar.platform.paths",
-    "telar.platform.primitives",
-    "telar.platform.process",
-    "telar.platform.sha256",
-    "telar.wire.clients",
-    "telar.wire.vocabulary"
-  ],
-  "src/cli/machine_ssh/machine_ssh.cppm": [
-    "telar.base.diagnostics",
-    "telar.cli.command_limit",
-    "telar.cli.server",
-    "telar.client",
-    "telar.platform.daemon",
-    "telar.platform.error",
-    "telar.platform.fs",
-    "telar.platform.primitives",
-    "telar.wire.vocabulary"
-  ],
   "src/cli/plugin/plugin.cppm": [
     "telar.base.diagnostics",
     "telar.cli.server",
