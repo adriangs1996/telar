@@ -756,18 +756,22 @@ Adrian: "Agreguemos también el check de imports sin usar", después de pregunta
 ### [ ] P12.2d · Limpieza de la regla 4 en la CLI
 - **Depende de:** P12.2a. Unas 33 líneas en 16 ficheros.
 
-### [ ] P12.3 · Regla de import sin usar: mecanismo (pendiente de decidir)
+### [x] P12.3 · Regla de import sin usar: mecanismo
 - **Requisitos:** un import que el fichero no necesita hace fallar el checker. Cero falsos positivos demostrados: cada import que marque se quita y el árbol compila y pasa tests; si quitarlo rompe la compilación, se corrige la regla, no se deja el import marcado. Los imports necesarios que no nombran nada del módulo (especializaciones como `std::formatter` o `std::hash`, operadores y funciones que llegan por ADL) se tratan de forma explícita y con el motivo escrito, no en silencio. Corre en el tiempo del checker normal, no en el de `tbc-lint` sobre el árbol.
 - **Opción 1, por tokens en `check-cpp-modules.py`, como la regla 4:** para cada `import M` de una unidad, el checker conoce lo que `M` declara en sus interfaces (tipos, funciones, variables, conceptos, enumeradores, espacios de nombres) y mira si la unidad nombra alguno fuera de comentarios y literales. Rápido (segundos, el mismo recorrido que ya hace). Riesgos: un nombre que exportan dos módulos cuenta como uso de los dos (falso negativo, no falso positivo); no ve los usos implícitos (especializaciones, ADL, operadores, conversiones) ni los nombres que mete una macro al expandirse (`TELAR_ASSERT`, las anotaciones de TBC), que darían falsos positivos si no se declaran.
 - **Opción 2, por AST en tbc:** una herramienta de Clang que, por unidad, recorre los `Decl` referenciados (incluidas llamadas resueltas por ADL, operadores y especializaciones instanciadas) y compara su módulo dueño (`Decl::getOwningModule`) con los imports. Es exacta para lo que el compilador usa. Riesgos: necesita los BMI y compilar cada unidad, así que corre en tiempo de build o de `tbc-lint`, no del checker; depende de la API de Clang de la toolchain fijada.
 - **Opción 3, empírica:** quitar cada import y compilar la unidad (`-fsyntax-only`). Exacta para "hace falta para compilar", pero muy lenta (una compilación por import) y no ve el caso peligroso: quitar un import que aporta una sobrecarga por ADL puede seguir compilando con otra sobrecarga y cambiar el comportamiento sin error.
 - **Opción 4, recomendada: tokens con usos implícitos declarados, y validación empírica en la limpieza.** La regla es la 1. Los módulos que aportan usos implícitos (especializaciones de `std::formatter`/`std::hash`, operadores o funciones libres sobre tipos que no son suyos, que se encuentran por ADL) y las macros cuya expansión nombra un módulo se declaran en `modules.json` con su motivo, y un import de esos módulos cuenta como usado solo si la unidad nombra alguno de los tipos a los que se aplican. Cada import que la regla marque en la limpieza se quita y se demuestra con build y tests (opción 3 como prueba de la regla, no como regla), y el desensamblado normalizado sin cambios del cierre de la fase cubre el riesgo de una sobrecarga cambiada en silencio. Riesgo que queda: un uso implícito no declarado aparece como falso positivo; se detecta en la limpieza al no compilar, y se arregla declarándolo.
 
+- **Decidido (supervisor; Adrian puede revertirlo): opción 4.** Es la única que corre en el tiempo del checker, sigue el criterio de tokens de la regla 4 y sus errores caen del lado seguro: un nombre exportado por dos módulos da un falso negativo, y un uso implícito sin declarar da un falso positivo que no compila al quitarlo.
+
 ### [ ] P12.4 · Regla de import sin usar: implementación
 - **Depende de:** P12.3 decidida.
+- **Condición:** la lista de usos implícitos y de macros de `modules.json` empieza vacía y solo crece con casos demostrados: cada entrada nace de un import que la regla marcó, se quitó y rompió la compilación o cambió el desensamblado. Nada de entradas preventivas.
 
 ### [ ] P12.5 · Limpieza de imports sin usar
 - **Depende de:** P12.4 y P12.2a–d (al quitar los re-exports aparecen interfaces que importan módulos que ya no usan).
+- **Condición:** el caso peligroso es el que no rompe (quitar un import y que compile con otra sobrecarga). Además del desensamblado del cierre, se compara el desensamblado normalizado de los binarios Release por lote de limpieza, para que un cambio se pueda atribuir a un import concreto.
 
 ### [ ] P12.6 · Cierre de la fase 12
 - **Depende de:** P12.1–P12.5. Ejecuta el "Hecho cuando" de la fase: Linux, métricas, comparación y desensamblado.
