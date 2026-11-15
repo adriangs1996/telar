@@ -4,6 +4,7 @@ import telar.cli.control_session;
 import telar.platform.sha256;
 import telar.sys.posix;
 import telar.tbc;
+import telar.cli.output;
 
 namespace telar::runtime::cli::repository {
 

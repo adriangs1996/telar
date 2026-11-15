@@ -6,6 +6,7 @@ import telar.client;
 import telar.platform.error;
 import telar.platform.sha256;
 import telar.sys.posix;
+import telar.platform.paths;
 
 namespace telar::runtime::cli::pane_agents {
 

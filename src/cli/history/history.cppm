@@ -3,9 +3,9 @@ export module telar.cli.history;
 import std;
 import telar.tbc;
 
-export import telar.cli.command_limit;
+import telar.cli.command_limit;
 
-export import telar.platform.paths;
+import telar.platform.paths;
 
 import telar.base.diagnostics;
 import telar.wire.vocabulary;

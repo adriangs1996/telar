@@ -21,6 +21,10 @@ import telar.cli.worktree_git;
 import telar.cli.render;
 import telar.cli.base.command_error;
 import telar.platform.error;
+import telar.base.memory.allocators;
+import telar.cli.output;
+import telar.cli.hooks.command;
+import telar.platform.paths;
 
 namespace telar::runtime::cli {
   namespace {

@@ -3,9 +3,9 @@ export module telar.cli.project_setup;
 import std;
 import telar.tbc;
 
-export import telar.cli.command_limit;
+import telar.cli.command_limit;
 
-export import telar.cli.output;
+import telar.cli.output;
 
 import telar.base.diagnostics;
 import telar.wire.vocabulary;

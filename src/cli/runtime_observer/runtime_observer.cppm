@@ -2,7 +2,7 @@ export module telar.cli.runtime_observer;
 
 import std;
 
-export import telar.cli.command_limit;
+import telar.cli.command_limit;
 
 import telar.base.diagnostics;
 import telar.base.text;

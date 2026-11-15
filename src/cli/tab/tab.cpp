@@ -3,6 +3,8 @@ module telar.cli.tab;
 import telar.sys.posix;
 
 import telar.tbc;
+import telar.cli.output;
+import telar.platform.process;
 
 // Older glibc keeps these in libdl. Keep the CLI linkable there; history
 // discovery reports unavailability when no loader is present. A static

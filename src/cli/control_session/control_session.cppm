@@ -6,7 +6,7 @@ export module telar.cli.control_session;
 import std;
 import telar.tbc;
 
-export import telar.client;
+import telar.client;
 
 import telar.base.diagnostics;
 import telar.base.memory.allocators;

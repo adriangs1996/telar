@@ -48,6 +48,9 @@ import telar.base.memory.allocators;
 import telar.platform.primitives;
 import telar.cli.worktree;
 import telar.vocabulary;
+import telar.cli.command_limit;
+import telar.platform.process;
+import telar.cli.worktree_git;
 
 namespace {
 

@@ -3,10 +3,10 @@ export module telar.cli.plugin;
 import std;
 import telar.tbc;
 
-export import telar.cli.command_limit;
-export import telar.platform.paths;
+import telar.cli.command_limit;
+import telar.platform.paths;
 
-export import telar.plugins;
+import telar.plugins;
 
 import telar.base.diagnostics;
 import telar.wire.vocabulary;

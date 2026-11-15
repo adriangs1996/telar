@@ -2,8 +2,6 @@ export module telar.cli.machine;
 
 import std;
 
-export import telar.cli.machine_ssh;
-
 import telar.cli.machine_ssh;
 
 import telar.cli.window;
@@ -19,6 +17,7 @@ import telar.platform.paths;
 import telar.platform.process;
 import telar.platform.sha256;
 import telar.base.memory.allocators;
+import telar.machines;
 
 // Interface: machines/setup.cppm
 export {
