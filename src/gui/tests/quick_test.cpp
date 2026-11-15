@@ -2275,7 +2275,17 @@ return {api_version = 2, client = {
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 2, runtime_wait_ms);
       client_->execute(Application::Action::split_vertical);
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 3, runtime_wait_ms);
-      QTest::qWait(frame_settle_ms);
+      // A new pane grows from zero size while the layout animates; a loaded machine can still be
+      // on the first animation frame after any fixed wait.
+      const auto settled = [this] {
+        const auto surfaces = test::visualItems(*window_->contentItem(), QStringLiteral("paneSurface"));
+
+        return surfaces.size() == 3 && std::ranges::all_of(surfaces, [](const QQuickItem* surface) {
+          return surface->isVisible() && !surface->parentItem()->property("resizing").toBool();
+        });
+      };
+
+      QTRY_VERIFY_WITH_TIMEOUT(settled(), runtime_wait_ms);
       const auto surfaces = test::visualItems(*window_->contentItem(), QStringLiteral("paneSurface"));
       const auto frames = test::visualItems(*window_->contentItem(), QStringLiteral("paneFrame"));
 
@@ -2430,10 +2440,12 @@ return {api_version=2, client={keybindings={
 
       client_->loadConfiguration(configuration_path, {}, {});
       QCOMPARE(client_->error(), QString{});
+      // alt+h runs a Lua callback, whose result reaches the event loop after the Lua thread
+      // returns; alt+l waits behind it.
       QTest::keyClick(window_, Qt::Key_H, Qt::AltModifier);
-      QVERIFY(client_->panes()->data(client_->panes()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("focused")).toBool());
+      QTRY_VERIFY_WITH_TIMEOUT(client_->panes()->data(client_->panes()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("focused")).toBool(), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_L, Qt::AltModifier);
-      QVERIFY(client_->panes()->data(client_->panes()->index(1, 0), ListModel::record_role).toMap().value(QStringLiteral("focused")).toBool());
+      QTRY_VERIFY_WITH_TIMEOUT(client_->panes()->data(client_->panes()->index(1, 0), ListModel::record_role).toMap().value(QStringLiteral("focused")).toBool(), runtime_wait_ms);
       QCOMPARE(client_->error(), QString{});
       client_->execute(Application::Action::close_pane, split_id);
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rowCount(), 1, runtime_wait_ms);
@@ -5743,6 +5755,8 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(!client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
       QTRY_VERIFY_WITH_TIMEOUT(client_->componentPanel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      // The panel opens empty; its nodes arrive when the Lua thread renders it.
+      QTRY_VERIFY_WITH_TIMEOUT(componentItem(QStringLiteral("button"), QStringLiteral("Dismiss")) != nullptr, runtime_wait_ms);
       const auto* dismiss_action = componentItem(QStringLiteral("button"), QStringLiteral("Dismiss"));
 
       QVERIFY(dismiss_action != nullptr);
@@ -7709,10 +7723,41 @@ return {api_version=2, client={keybindings={
         const auto* pane = firstPane();
 
         QVERIFY(pane != nullptr);
-        QTRY_COMPARE_WITH_TIMEOUT(pane->acknowledged_frame, pane->screen.frameId(), runtime_wait_ms);
-        window_->hide();
-        QTRY_VERIFY_WITH_TIMEOUT(!window_->isExposed(), runtime_wait_ms);
-        QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
+        // The runtime holds a pane's next frame until the client acknowledges the last one, and a
+        // hidden window acknowledges nothing. A frame that lands while the window hides would
+        // hold back the frame this test waits for, so the window shows again and hides once more.
+        const auto hidden = [this] {
+          return !window_->isExposed();
+        };
+
+        const auto exposed = [this] {
+          return window_->isExposed();
+        };
+
+        const auto hidden_with_frames_acknowledged = [&] {
+          if (pane->acknowledged_frame != pane->screen.frameId()) {
+            return false;
+          }
+
+          window_->hide();
+
+          if (!QTest::qWaitFor(hidden, runtime_wait_ms)) {
+            return false;
+          }
+
+          QCoreApplication::sendPostedEvents(client_.get(), QEvent::MetaCall);
+
+          if (pane->acknowledged_frame == pane->screen.frameId()) {
+            return true;
+          }
+
+          window_->show();
+          static_cast<void>(QTest::qWaitFor(exposed, runtime_wait_ms));
+
+          return false;
+        };
+
+        QTRY_VERIFY_WITH_TIMEOUT(hidden_with_frames_acknowledged(), runtime_wait_ms);
         const auto previous_frame = pane->screen.frameId();
         const auto acknowledged = pane->acknowledged_frame;
 
