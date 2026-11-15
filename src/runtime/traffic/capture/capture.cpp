@@ -3,6 +3,9 @@ module telar.runtime.traffic.capture;
 import telar.native.pcap;
 import telar.sys.socket;
 import telar.sys.process;
+import telar.platform.error;
+import telar.platform.net;
+import telar.runtime.vocabulary.traffic;
 
 namespace telar::runtime::traffic {
 

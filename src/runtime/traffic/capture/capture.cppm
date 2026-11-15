@@ -10,12 +10,8 @@ import telar.runtime.traffic.control_protocol;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.base.memory.sensitive;
-import telar.base.diagnostics;
 import telar.vocabulary;
 import telar.platform.primitives;
-import telar.platform.error;
-import telar.platform.net;
-import telar.runtime.vocabulary.traffic;
 
 // Interface: traffic/kernel_drops.cppm
 export {

@@ -602,58 +602,5 @@
   ],
   "src/gui/transport/runtime_link/runtime_link.cppm": [
     "telar.base.diagnostics"
-  ],
-  "src/runtime/traffic/capture/capture.cppm": [
-    "telar.base.diagnostics",
-    "telar.platform.error",
-    "telar.platform.net",
-    "telar.runtime.vocabulary.traffic"
-  ],
-  "src/runtime/traffic/capture_analysis/capture_analysis.cppm": [
-    "telar.base.diagnostics",
-    "telar.base.text.utf8",
-    "telar.native.pcap"
-  ],
-  "src/runtime/traffic/control_backend/control_backend.cpp": [
-    "telar.native.brotli",
-    "telar.native.nghttp2",
-    "telar.native.pcap",
-    "telar.native.zlib",
-    "telar.native.zstd",
-    "telar.platform.sha256"
-  ],
-  "src/runtime/traffic/control_backend/control_backend.cppm": [
-    "telar.base.diagnostics",
-    "telar.native.brotli",
-    "telar.native.nghttp2",
-    "telar.native.pcap",
-    "telar.native.zlib",
-    "telar.native.zstd",
-    "telar.platform.sha256",
-    "telar.platform.thread",
-    "telar.runtime.platform.request_worker"
-  ],
-  "src/runtime/traffic/control_protocol/control_protocol.cppm": [
-    "telar.base.diagnostics",
-    "telar.base.text.utf8"
-  ],
-  "src/runtime/transport/connection/connection.cppm": [
-    "telar.base.diagnostics"
-  ],
-  "src/runtime/vocabulary/exchange/exchange.cppm": [
-    "telar.base.diagnostics"
-  ],
-  "src/runtime/vocabulary/traffic/traffic.cppm": [
-    "telar.platform.error",
-    "telar.platform.net"
-  ],
-  "src/runtime/workspaces/git_probe/git_probe.cppm": [
-    "telar.platform.primitives"
-  ],
-  "src/runtime/worktrees/git_probe/git_probe.cpp": [
-    "telar.base.diagnostics"
-  ],
-  "src/runtime/worktrees/git_probe/git_probe.cppm": [
-    "telar.platform.primitives"
   ]
 }

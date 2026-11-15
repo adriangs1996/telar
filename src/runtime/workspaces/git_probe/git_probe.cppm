@@ -3,7 +3,6 @@ export module telar.runtime.workspaces.git_probe;
 import std;
 
 import telar.runtime.platform.git_status;
-import telar.platform.primitives;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 

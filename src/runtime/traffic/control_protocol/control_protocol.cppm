@@ -11,9 +11,7 @@ import telar.runtime.vocabulary.frames;
 import telar.runtime.http.message;
 
 import telar.runtime.redirect.direction;
-import telar.base.diagnostics;
 import telar.base.text;
-import telar.base.text.utf8;
 import telar.vocabulary;
 import telar.base.memory.containers;
 
